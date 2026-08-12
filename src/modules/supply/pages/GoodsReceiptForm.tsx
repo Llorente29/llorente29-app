@@ -44,6 +44,7 @@ import {
 import {
   listPurchaseOrderLines,
   listPurchaseOrders,
+  getPurchaseOrderById,
   type PurchaseOrder,
   type PurchaseOrderLine,
 } from '@/modules/supply/services/purchaseOrderService'
@@ -570,6 +571,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [orderMatchOverridden, setOrderMatchOverridden] = useState(false) // "cambiar" tras auto-enlazar
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [pickedOrderId, setPickedOrderId] = useState<string | null>(null)
+  // ENCARGO CODE (12/08) — fix/enlace-pedido-recepcion, Corrección A/B: un
+  // borrador YA enlazado (prefill.purchaseOrderId) no vuelve a buscar
+  // candidatos ni se pisa solo — se muestra tal cual, con "Cambiar" opt-in.
+  // "Cambiar" activa esto y a partir de ahí se comporta como no-enlazado.
+  const [existingLinkOverridden, setExistingLinkOverridden] = useState(false)
+  const [existingLinkedOrder, setExistingLinkedOrder] = useState<PurchaseOrder | null>(null)
 
   const [draft, setDraft] = useState<DraftLine[]>([])
   const [search, setSearch] = useState(focusSearch ?? '')
@@ -849,21 +856,42 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     }
   }
 
-  const linkedOrderId = order?.id ?? prefill?.purchaseOrderId ?? pickedOrderId ?? null
+  // ENCARGO CODE (12/08) — fix/enlace-pedido-recepcion, Corrección A: la
+  // guarda ANTES era `order || correcting`, y `correcting = !!prefill` — eso
+  // apagaba la búsqueda de candidatos (y con ella, todo el bloque de enlazar
+  // pedido, §1690 más abajo) en TODA sesión de oficina que abre un borrador,
+  // enlazado o no. Corregir un borrador y crear uno nuevo no son lo mismo: la
+  // guarda correcta es sobre si YA hay un pedido enlazado (para no
+  // rebuscar ni pisarlo), no sobre el hecho de estar corrigiendo.
+  const linkedOrderId = order?.id
+    ?? (prefill?.purchaseOrderId && !existingLinkOverridden ? prefill.purchaseOrderId : null)
+    ?? pickedOrderId
+    ?? null
 
-  // Candidatos de pedido: modo CIEGO (manual o revisión de OCR SIN pedido ya
-  // enlazado), cuando ya hay proveedor+local. La revisión de OCR es este mismo
-  // componente (ocrPrefill sin order) — el selector le sirve igual. Mismo
-  // criterio de "pendiente" que OrderReceiveFlow (enviado / recibido_parcial),
-  // MÁS la ventana de vigencia (dockPendingWindow*Days, configurable): los
-  // "enviado" fuera de ventana no son candidatos aquí ni en el muelle — solo
-  // lo vivo. Los "recibido_parcial" no se filtran por ventana. Sin
-  // expected_date: se usa order_date como referencia (igual que en
-  // OrderReceiveFlow) — "sin fecha" no es "candidato para siempre".
+  // Candidatos de pedido: modo CIEGO (manual o revisión de OCR/borrador SIN
+  // pedido ya enlazado, o con el enlace existente descartado con "Cambiar"),
+  // cuando ya hay proveedor+local. La revisión de OCR/borrador es este mismo
+  // componente (ocrPrefill o prefill sin pedido) — el selector le sirve
+  // igual. Mismo criterio de "pendiente" que OrderReceiveFlow (enviado /
+  // recibido_parcial), MÁS la ventana de vigencia (dockPendingWindow*Days,
+  // configurable): los "enviado" fuera de ventana no son candidatos aquí ni
+  // en el muelle — solo lo vivo. Los "recibido_parcial" no se filtran por
+  // ventana. Sin expected_date: se usa order_date como referencia (igual
+  // que en OrderReceiveFlow) — "sin fecha" no es "candidato para siempre".
   useEffect(() => {
-    if (order || correcting) { setCandidateOrders([]); return }
+    // ENCARGO CODE (12/08) — Corrección C hace que loadingOrders bloquee el
+    // guardado (antes solo pintaba un spinner cosmético). Los dos retornos
+    // tempranos de abajo TIENEN que apagarlo explícitamente: si no, una
+    // corrida anterior que dejó loadingOrders=true (efecto cancelado a medio
+    // fetch al cambiar de guarda) se queda pegada y el botón de guardar no
+    // vuelve a habilitarse nunca — la propia corrida "cancelled" nunca llega
+    // a su finally() porque cancelled ya es true para entonces.
+    if (order || (prefill?.purchaseOrderId && !existingLinkOverridden)) {
+      setCandidateOrders([]); setLoadingOrders(false); return
+    }
     if (!supplierId || !locationId) {
       setCandidateOrders([]); setPickedOrderId(null); setOrderMatchMode('none'); setOrderMatchOverridden(false)
+      setLoadingOrders(false)
       return
     }
     let cancelled = false
@@ -905,8 +933,24 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         if (cancelled) return
         setCandidateLineCounts(new Map(linesByOrder.map(([id, ls]) => [id, ls.length])))
 
-        // Solo se auto-decide en OCR (principio rector: el trabajador de muelle
-        // nunca elige a mano el caso normal). El picker manual sigue igual.
+        // ENCARGO CODE (12/08) — candidato único = enlaza solo SIEMPRE, con o
+        // sin OCR. No necesita desempate por solape (no hay nada que
+        // desempatar): "No preguntes lo que puedes deducir" — el mismo
+        // principio que ya regía el modo OCR se extiende a la oficina
+        // revisando un borrador (§3.1 del encargo: candidato único queda
+        // preseleccionado también ahí, que no pasa ocrPrefill).
+        if (filtered.length === 1) {
+          setOrderMatchOverridden(false)
+          setOrderMatchMode('auto')
+          setPickedOrderId(filtered[0].id)
+          return
+        }
+
+        // Con 2+ candidatos, el desempate por solape de líneas solo puede
+        // aplicarse en OCR (es el único momento con líneas de albarán que
+        // comparar). Sin OCR, se deja en 'none': el picker manual de
+        // siempre lista los candidatos (proveedor+fecha+nº líneas a la
+        // vista) — sigue siendo una elección de un vistazo, no un desplegable.
         if (!fromOcr || !ocrPrefill) {
           setOrderMatchMode('none'); setOrderMatchOverridden(false)
           return
@@ -924,7 +968,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         const top = ranked[0]
         const topScore = scores.get(top.id) ?? 0
         const secondScore = ranked[1] ? (scores.get(ranked[1].id) ?? 0) : 0
-        const dominant = filtered.length === 1 || (topScore >= 0.5 && topScore - secondScore >= 0.25)
+        const dominant = topScore >= 0.5 && topScore - secondScore >= 0.25
         setOrderMatchOverridden(false)
         if (dominant) {
           setOrderMatchMode('auto')
@@ -940,8 +984,21 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       .finally(() => { if (!cancelled) setLoadingOrders(false) })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId, supplierId, locationId, order, correcting, fromOcr,
+  }, [accountId, supplierId, locationId, order, prefill?.purchaseOrderId, existingLinkOverridden, fromOcr,
       supplySettings.dockPendingWindowBeforeDays, supplySettings.dockPendingWindowAfterDays])
+
+  // ENCARGO CODE (12/08) — trae el código/fecha del pedido YA enlazado (para
+  // mostrarlo con "Cambiar"), sin volver a listar candidatos. Se limpia si
+  // se pulsa "Cambiar" (existingLinkOverridden) — a partir de ahí manda el
+  // efecto de candidatos de arriba.
+  useEffect(() => {
+    if (!prefill?.purchaseOrderId || existingLinkOverridden) { setExistingLinkedOrder(null); return }
+    let cancelled = false
+    getPurchaseOrderById(prefill.purchaseOrderId)
+      .then(o => { if (!cancelled) setExistingLinkedOrder(o) })
+      .catch(() => { if (!cancelled) setExistingLinkedOrder(null) })
+    return () => { cancelled = true }
+  }, [prefill?.purchaseOrderId, existingLinkOverridden])
 
   // Auto-casado por recipe_item_id contra el pedido elegido (modo ciego, manual
   // u OCR). NO bloquea: lo que no casa se queda sin purchase_order_line_id
@@ -1468,8 +1525,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       if (reviewingDraft && prefill) {
         // En sitio: actualiza cabecera + limpia líneas para reescribirlas. NO crea
         // recepción nueva ni anula (el borrador nunca posteó).
+        // ENCARGO CODE (12/08): purchaseOrderId: linkedOrderId — sin esto, la
+        // sesión donde la oficina de verdad confirma nunca escribía el enlace
+        // aunque el formulario lo calculara bien (ver GoodsReceiptUpdate).
         const updated = await updateGoodsReceipt(prefill.sourceReceiptId, {
           supplierId: supplierId || null,
+          purchaseOrderId: linkedOrderId,
           supplierDocNumber: supplierDoc.trim() || null,
           receiptDate,
         })
@@ -1677,9 +1738,30 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         </div>
       </div>
 
-      {/* "¿De qué pedido viene?" — modo ciego, con proveedor+local ya resueltos.
-          PRINCIPIO RECTOR del muelle: en OCR el trabajador NUNCA elige a mano
-          el caso normal. Tres presentaciones según orderMatchMode:
+      {/* ENCARGO CODE (12/08) — Corrección B: pedido YA enlazado (borrador que
+          venía con purchase_order_id, típicamente al confirmar en oficina).
+          Se muestra tal cual, con "Cambiar" opt-in — no se rebusca ni se pisa
+          solo. Al pulsar "Cambiar", existingLinkOverridden pasa a true y el
+          bloque de abajo (candidatos) toma el relevo como si no hubiera
+          enlace previo. */}
+      {!order && prefill?.purchaseOrderId && !existingLinkOverridden && (
+        <div className="flex items-center gap-2 flex-wrap px-3 py-2 rounded-md bg-accent-bg/50 border border-accent/20 text-xs text-text-secondary">
+          <Truck size={13} className="text-accent shrink-0" />
+          <span>
+            Enlazada a <strong className="text-text-primary">{existingLinkedOrder?.code ?? 'un pedido'}</strong>
+            {existingLinkedOrder?.expectedDate ? ` del ${formatShortDate(existingLinkedOrder.expectedDate)}` : ''}.
+          </span>
+          <button type="button" onClick={() => setExistingLinkOverridden(true)} disabled={saving}
+            className="ml-auto text-accent underline hover:opacity-80 disabled:opacity-50 shrink-0">
+            Cambiar
+          </button>
+        </div>
+      )}
+
+      {/* "¿De qué pedido viene?" — modo ciego (sin pedido enlazado, o con el
+          enlace existente descartado con "Cambiar"), con proveedor+local ya
+          resueltos. PRINCIPIO RECTOR del muelle: en OCR el trabajador NUNCA
+          elige a mano el caso normal. Tres presentaciones según orderMatchMode:
             - 'auto' (1 candidato o score dominante): línea discreta + "Cambiar".
             - 'ambiguous' (2-3 candidatos, sin ganador claro): tarjetas grandes,
               UNA pregunta ("¿Es este?").
@@ -1687,7 +1769,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           orderMatchOverridden (clic en "Cambiar", o respuesta a la pregunta)
           pasa al MISMO picker de botones de siempre — el de "Contar a mano"
           no cambia de lógica, solo de cuándo se muestra. */}
-      {!order && !correcting && supplierId && locationId && (fromOcr ? (
+      {!order && !(prefill?.purchaseOrderId && !existingLinkOverridden) && supplierId && locationId && (fromOcr ? (
         <>
           {loadingOrders && (
             <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
@@ -2326,15 +2408,23 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                 <span className="text-sm text-text-secondary">
                   {filled.length} con cantidad · {willPost} entrarán a stock
                   {filled.length - willPost > 0 && ` · ${filled.length - willPost} sin mapear`}
+                  {/* ENCARGO CODE (12/08) — Corrección C: visible, no un spinner
+                      mudo. Mismo texto que explica por qué los botones de abajo
+                      están deshabilitados mientras se busca el pedido. */}
+                  {loadingOrders && (
+                    <span className="inline-flex items-center gap-1 ml-2 text-text-tertiary">
+                      <Loader2 size={12} className="animate-spin" /> Buscando pedidos…
+                    </span>
+                  )}
                 </span>
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => persist(false)} disabled={saving || filled.length === 0}
+                  <button type="button" onClick={() => persist(false)} disabled={saving || filled.length === 0 || loadingOrders}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save size={15} />}
                     {canConfirm ? 'Guardar borrador' : 'Guardar (la oficina confirma)'}
                   </button>
                   {canConfirm && (
-                    <button type="button" onClick={startReview} disabled={saving || filled.length === 0}
+                    <button type="button" onClick={startReview} disabled={saving || filled.length === 0 || loadingOrders}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
                       <Check size={15} />
                       Revisar y confirmar
