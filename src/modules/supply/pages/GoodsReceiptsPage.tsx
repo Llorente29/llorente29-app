@@ -231,6 +231,10 @@ export default function GoodsReceiptsPage() {
           qtyReceived: l.qtyReceived,
           unitCost: l.unitCost,
           purchaseOrderLineId: l.purchaseOrderLineId,
+          // ENCARGO CODE (12/08) fix/recepcion-fromocr-borrador: sin esto el
+          // casado automático no tenía con qué casar al revisar un borrador.
+          rawText: l.rawText,
+          supplierCode: l.supplierCode,
         })),
       }
       setPrefill(pf)
@@ -309,6 +313,8 @@ export default function GoodsReceiptsPage() {
           qtyReceived: l.qtyReceived,
           unitCost: l.unitCost,
           purchaseOrderLineId: l.purchaseOrderLineId,
+          rawText: l.rawText,
+          supplierCode: l.supplierCode,
         })),
       }
       setPrefill(pf)
