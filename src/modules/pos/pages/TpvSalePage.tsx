@@ -597,18 +597,43 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
                   const familyColor = brands.find(b => b.id === brandId)?.color || 'var(--tpv-accent)'
                   const longName = (p.shortName ?? p.name).length > 20
                   return (
+                    // ENCARGO CODE (12/08): fotos de vuelta a la tarjeta —
+                    // Foodint tiene 96,4% de cobertura y esta pantalla la
+                    // usan camareros con poca formación; sin foto no hay
+                    // reconocimiento a un toque. El atenuado de "agotado"
+                    // vive en un wrapper INTERNO (no en el <button>), para
+                    // que "Sin stock" quede fuera de esa opacidad — un
+                    // distintivo al 55% sobre una foto deja de leerse, que
+                    // es justo el riesgo que este mismo encargo señala.
                     <button
                       key={p.id}
                       onClick={() => handleProductTap(p)}
                       disabled={!p.isAvailable}
                       style={{ borderLeftColor: familyColor, borderLeftWidth: 6 }}
-                      className={`relative min-h-tpv-product rounded-tpv border border-tpv-line bg-tpv-surface-2 text-left p-3 flex flex-col justify-between transition-base ${longName ? 'col-span-2' : ''} ${p.isAvailable ? 'active:scale-[0.98]' : 'opacity-55 cursor-not-allowed'}`}
+                      className={`relative min-h-tpv-product rounded-tpv border border-tpv-line bg-tpv-surface-2 text-left overflow-hidden flex flex-col transition-base ${longName ? 'col-span-2' : ''} ${p.isAvailable ? 'active:scale-[0.98]' : 'cursor-not-allowed'}`}
                     >
+                      <div className={`flex flex-col h-full transition-base ${p.isAvailable ? '' : 'opacity-55'}`}>
+                        <div className="relative w-full h-20 shrink-0 border-b border-tpv-line-strong overflow-hidden bg-tpv-surface">
+                          {p.photoUrl ? (
+                            <img src={p.photoUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+                          ) : (
+                            // Sin foto: nunca un hueco vacío — fondo del color de
+                            // familia (mismo tinte que el borde izquierdo) + nombre.
+                            <div className="w-full h-full flex items-center justify-center px-2" style={{ backgroundColor: `${familyColor}22` }}>
+                              <span className="text-tpv-mod font-bold text-center leading-tight line-clamp-2" style={{ color: familyColor }}>
+                                {p.shortName ?? p.name}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 flex flex-col justify-between p-2.5 min-w-0">
+                          <span className="text-tpv-name font-bold text-tpv-txt leading-tight line-clamp-2">{p.shortName ?? p.name}</span>
+                          <span className="text-tpv-tile-price font-extrabold text-tpv-txt mt-1">{eur(p.price)}</span>
+                        </div>
+                      </div>
                       {!p.isAvailable && (
-                        <span className="absolute top-2 right-2 bg-tpv-danger text-white text-[10px] font-extrabold uppercase rounded px-1.5 py-0.5">Sin stock</span>
+                        <span className="absolute top-1.5 right-1.5 z-10 bg-tpv-danger text-white text-[10px] font-extrabold uppercase rounded px-1.5 py-0.5 shadow-lg">Sin stock</span>
                       )}
-                      <span className="text-tpv-name font-bold text-tpv-txt leading-tight">{p.shortName ?? p.name}</span>
-                      <span className="text-tpv-tile-price font-extrabold text-tpv-txt">{eur(p.price)}</span>
                     </button>
                   )
                 })}

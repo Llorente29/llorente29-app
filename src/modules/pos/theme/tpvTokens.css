@@ -24,15 +24,23 @@
   --tpv-surface: #181B22;
   --tpv-surface-2: #20242E;
   --tpv-line: #2E3440;
+  --tpv-line-strong: #6B7690;  /* borde con peso — separa tarjeta/foto de su fondo */
 
   /* Texto */
   --tpv-txt: #FFFFFF;
   --tpv-txt-2: #A8B0BF;
 
   /* Semánticos — nunca un color crudo en un componente */
-  --tpv-accent: #3B82F6;  /* seleccionado, en curso */
+  /* ENCARGO CODE (12/08): --accent y --warn medidos por Julio 11/08 con
+     fallo real (--accent daba 3,68:1 con blanco, por debajo del 4,5:1
+     exigido). Valores nuevos medidos (fórmula WCAG de luminancia relativa,
+     no estimados): --accent #2563EB sobre blanco = 5,17:1. --accent-text
+     #60A5FA sobre --tpv-surface (#181B22, fondo real del diálogo de
+     producto) = 6,78:1; sobre --tpv-surface-2 (#20242E) = 6,10:1. */
+  --tpv-accent: #2563EB;       /* seleccionado, en curso */
+  --tpv-accent-text: #60A5FA;  /* texto/icono de acento sobre fondo oscuro */
   --tpv-ok: #16A34A;      /* cobrado, confirmado, acción principal */
-  --tpv-warn: #D97706;    /* atención: tiempo excedido, sin dispositivo */
+  --tpv-warn: #F59E0B;    /* atención: tiempo excedido, sin dispositivo */
   --tpv-danger: #DC2626;  /* destructivo, agotado */
   --tpv-note: #EAB308;    /* nota de cocina, producto estrella */
 
