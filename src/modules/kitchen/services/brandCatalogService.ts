@@ -258,10 +258,16 @@ export async function listCategoriesWithProducts(
     categoryId: (i.menu_category_id as string) ?? null,
     recipeItemId: (i.recipe_item_id as string) ?? null,
     isActive: i.is_active !== false,
-    isAvailable:
-      i.is_available !== false
-      && !blockedByExternalId.has((i.external_id as string) ?? '')
-      && !blockedByRecipeItemId.has((i.recipe_item_id as string) ?? ''),
+    // ENCARGO CODE (12/08, fix 2): con locationId, isAvailable DEJA de leer
+    // is_available — no se combina con la columna muerta, se sustituye. Un
+    // AND con is_available reintroducía el bug (3 bebidas is_available=false
+    // pero sin fila real en product_availability seguían desapareciendo).
+    // Sin locationId (Kitchen/Storefront), comportamiento idéntico al de
+    // siempre: is_available sigue siendo la única fuente.
+    isAvailable: locationId
+      ? !blockedByExternalId.has((i.external_id as string) ?? '')
+        && !blockedByRecipeItemId.has((i.recipe_item_id as string) ?? '')
+      : i.is_available !== false,
     modifierGroupCount: groupCountByItem.get(i.id as string) ?? 0,
     comboSlotCount: slotCountByCombo.get(i.id as string) ?? 0,
     position: Number(i.position ?? 0),
