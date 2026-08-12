@@ -223,6 +223,84 @@ type ExistingRow = {
   last_synced_at: string | null;
 };
 
+// ── Colapsa las filas de catálogo agotadas por organization_product_id (el
+//    MISMO producto puede tener varias filas: una por catálogo/canal — carta
+//    base y Glovo, p.ej.) y cruza con menu_item para saber cuántas de ellas
+//    están EN Folvy. Un producto agotado en un solo catálogo (solo en Glovo,
+//    p.ej.) SIGUE contando como agotado — es agotado POR CANAL, no un error;
+//    se conserva el detalle de en qué canales está caído (channels_disabled),
+//    lo usará la pantalla ("en Glovo" vs "en toda la carta"). Combos u otros
+//    productos sin organizationProductId quedan fuera de este colapso (deuda
+//    conocida, no resuelta aquí). ──
+async function summarizeDisabledProducts(
+  sb: SupabaseClient,
+  accountId: string,
+  rows: any[],
+): Promise<any> {
+  const catalogRowsDisabled = rows.filter((r) => r.is_enabled === false).length;
+
+  const byProduct = new Map<string, {
+    product_name: string | null;
+    brand_name: string | null;
+    channels_disabled: Set<string>;
+    catalog_rows: number;
+    rows_disabled: number;
+  }>();
+  for (const r of rows) {
+    const orgProdId = r.organization_product_id as string | null;
+    if (!orgProdId) continue;
+    let g = byProduct.get(orgProdId);
+    if (!g) {
+      g = { product_name: null, brand_name: null, channels_disabled: new Set(), catalog_rows: 0, rows_disabled: 0 };
+      byProduct.set(orgProdId, g);
+    }
+    g.catalog_rows++;
+    if (r.is_enabled === false) {
+      g.rows_disabled++;
+      g.product_name = g.product_name ?? r.product_name;
+      g.brand_name = g.brand_name ?? r.external_brand_name;
+      if (r.external_channel) g.channels_disabled.add(r.external_channel);
+    }
+  }
+
+  const disabledOrgProdIds = [...byProduct.entries()].filter(([, g]) => g.rows_disabled > 0).map(([id]) => id);
+
+  const inFolvySet = new Set<string>();
+  if (disabledOrgProdIds.length > 0) {
+    const { data: items, error } = await sb
+      .from("menu_item")
+      .select("external_id")
+      .eq("account_id", accountId)
+      .eq("external_source", "lastapp")
+      .is("archived_at", null)
+      .in("external_id", disabledOrgProdIds);
+    if (error) throw new Error(`select menu_item (summary): ${error.message}`);
+    for (const it of items ?? []) inFolvySet.add(it.external_id as string);
+  }
+
+  const productsInFolvy = disabledOrgProdIds
+    .filter((id) => inFolvySet.has(id))
+    .map((id) => {
+      const g = byProduct.get(id)!;
+      return {
+        organization_product_id: id,
+        product_name: g.product_name,
+        brand_name: g.brand_name,
+        catalog_rows: g.catalog_rows,
+        rows_disabled: g.rows_disabled,
+        fully_disabled: g.rows_disabled === g.catalog_rows,
+        channels_disabled: [...g.channels_disabled],
+      };
+    });
+
+  return {
+    catalog_rows_disabled: catalogRowsDisabled,
+    distinct_products_disabled: disabledOrgProdIds.length,
+    distinct_products_disabled_in_folvy: productsInFolvy.length,
+    products_in_folvy: productsInFolvy,
+  };
+}
+
 async function syncLocation(
   sb: SupabaseClient,
   accountId: string,
@@ -336,6 +414,8 @@ async function syncLocation(
   const newlyMissingIds = missingIds.filter((id) => !existingByCatProd.get(id)!.missing_since);
   const reappearedFromMissing = [...seenIds].filter((id) => existingByCatProd.has(id) && !!existingByCatProd.get(id)!.missing_since);
 
+  const disabledProductsSummary = await summarizeDisabledProducts(sb, accountId, rows);
+
   if (!dryRun) {
     if (rows.length > 0) {
       const { error: upErr } = await sb
@@ -360,6 +440,7 @@ async function syncLocation(
     catalogs_found: catalogMap.size,
     catalog_failures: catalogFailures,
     _debug_catalog_discovery: catalogDebug,
+    disabled_products_summary: disabledProductsSummary,
     ...stats,
     missing_now: newlyMissingIds.length,
     still_missing: missingIds.length - newlyMissingIds.length,
