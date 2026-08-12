@@ -27,8 +27,15 @@
 //
 // Deploy: --no-verify-jwt (lo invocará un cron con secreto interno).
 
-import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+// Local (no ../_shared/cors.ts): el bundler de deploy no resuelve imports
+// fuera de la carpeta de la función. Mismo contenido que _shared/cors.ts.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 const LASTAPP_BASE = "https://api.last.app/v2";
 
