@@ -207,6 +207,16 @@ interface DraftLine {
   // esto solo desbloquea el botón Confirmar cuando la persona lo decide a
   // propósito, en vez de dejarlo bloqueado en silencio.
   skipStock?: boolean
+  // ENCARGO CODE (12/08) R1' (feat/recepcion-casado-automatico): el humano
+  // eligió o quitó el casado a mano → el efecto de casado automático no
+  // vuelve a tocar esta línea (mismo patrón que formatTouched).
+  matchTouched?: boolean
+  // §2.2 — propuesta por nombre razonable (candidato único). A diferencia de
+  // recipeItemId, esto NUNCA se aplica solo: pide un toque explícito ("¿Es
+  // esto?" en Fila 1.5) porque no es una señal que un humano ya confirmara
+  // antes (a diferencia del código o el texto exacto aprendido).
+  suggestedRecipeItemId?: string | null
+  suggestedName?: string | null
 }
 
 function parseNum(v: string): number | null {
@@ -549,6 +559,34 @@ function wizardToPack(
   return { count: 1, innerBase: per * fu.factor, innerName: 'Ud', container: wz.containerName.trim() || (wz.shape === 'peso' ? friendlyUnit(baseAbbr).label : 'Ud') }
 }
 
+// ── R1' (12/08): casado automático desde la memoria por proveedor ──────────
+// ENCARGO CODE feat/recepcion-casado-automatico. `learn_from_receipt` escribe
+// en article_supplier (código/texto/formato) al confirmar cada recepción,
+// pero `run_mapping` (el casado que sí se consulta hoy) nunca lee ese texto
+// aprendido — solo recipe_item.name/alt_names. Lo que falta es leerlo, en
+// cliente, con la MISMA normalización en los dos lados (reutiliza
+// normalizeWords/wordSet de arriba, ya usado por el casado P1.b
+// pedido↔albarán — no se inventa un segundo normalizador para lo mismo).
+// Determinista, sin IA, sin tocar el motor — solo lectura de datos ya
+// cargados (catalogByItem, el mismo catálogo que resuelve el formato).
+const MATCH_STOPWORDS = new Set(['con', 'sin', 'del', 'las', 'los', 'una', 'uno', 'caja', 'cajas', 'paquete', 'unidades', 'unidad'])
+// Singular/plural naive (quita "es"/"s" final) para que "servilleta" (línea)
+// case con "servilletas" (nombre del artículo) — no es lingüística fina, es
+// suficiente para la propuesta §2.2, que además exige candidato ÚNICO: un
+// falso negativo aquí solo cuesta un caso más a mano, nunca un casado malo.
+function stem(w: string): string {
+  if (w.length > 5 && w.endsWith('es')) return w.slice(0, -2)
+  if (w.length > 4 && w.endsWith('s')) return w.slice(0, -1)
+  return w
+}
+// Palabras con peso de un nombre (wordSet ya filtra <3 letras); quita además
+// el relleno de packaging ("caja", "unidades"…) que aparece en casi todos los
+// artículos del proveedor y no distingue nada. Solo para la propuesta §2.2
+// (nombre razonable, candidato ÚNICO) — nunca decide si hay más de uno.
+function significantWords(s: string): Set<string> {
+  return new Set([...wordSet(s)].filter(w => !MATCH_STOPWORDS.has(w)).map(stem))
+}
+
 export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, confirmPolicy = 'always', initialSupplierId, focusSearch, onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
   const op = useOperativeLocation()
@@ -652,7 +690,11 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       ? { ...x, recipeItemId, matchedName: name, matchSemaphore: semaphore, matchType,
           // reinicia el formato: lo resolverá el efecto para el artículo recién casado
           purchaseFormatId: null, formatLabel: null, formatQtyInBase: null,
-          baseUnit: null, formatSuggested: false, formatTouched: false, skipStock: false }
+          baseUnit: null, formatSuggested: false, formatTouched: false, skipStock: false,
+          // ENCARGO CODE (12/08) R1' — la persona decidió: el casado automático
+          // (efecto de abajo) ya no vuelve a tocar esta línea, y la propuesta
+          // por nombre (si la había) se limpia — ya no pinta nada.
+          matchTouched: true, suggestedRecipeItemId: null, suggestedName: null }
       : x))
     setPickerKey(null)
   }
@@ -660,8 +702,22 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     setDraft(d => d.map(x => x.key === key
       ? { ...x, recipeItemId: null, matchedName: null, matchSemaphore: null, matchType: null,
           purchaseFormatId: null, formatLabel: null, formatQtyInBase: null,
-          baseUnit: null, formatSuggested: false, formatTouched: false, skipStock: false }
+          baseUnit: null, formatSuggested: false, formatTouched: false, skipStock: false,
+          matchTouched: true, suggestedRecipeItemId: null, suggestedName: null }
       : x))
+  }
+  // R1' §2.2 — "¿Es esto?" (Fila 1.5): acepta la propuesta por nombre con UN
+  // toque explícito (nunca automático) o la descarta para ir directo a buscar.
+  function acceptSuggestion(line: DraftLine) {
+    if (!line.suggestedRecipeItemId || !line.suggestedName) return
+    chooseMatch(line.key, line.suggestedRecipeItemId, line.suggestedName, 'yellow', 'learned_fuzzy')
+  }
+  function dismissSuggestion(key: string) {
+    // matchTouched: true — si no, el efecto de la propuesta la vuelve a poner
+    // en el siguiente render (recalcula desde el mismo catálogo, sin memoria
+    // de que la persona ya dijo que no). A partir de aquí busca a mano.
+    setDraft(d => d.map(x => x.key === key ? { ...x, suggestedRecipeItemId: null, suggestedName: null, matchTouched: true } : x))
+    setPickerKey(key)
   }
   function toggleSkipStock(key: string) {
     setDraft(d => d.map(l => l.key === key ? { ...l, skipStock: !l.skipStock } : l))
@@ -727,6 +783,106 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       .catch(() => { if (!cancelled) setCatalogByItem(new Map()) })
     return () => { cancelled = true }
   }, [fromOcr, accountId, supplierId])
+
+  // ── R1' — índices de lectura sobre el MISMO catálogo, por código/texto/
+  // palabra. No son consultas nuevas: catalogByItem ya está cargado para el
+  // formato (Tramo A); esto solo lo reorganiza para buscar al revés (de lo
+  // que dice el albarán, hacia el artículo que ya se compró con ese texto).
+  const catalogByCode = useMemo(() => {
+    const m = new Map<string, SupplierCatalogEntry>()
+    for (const e of catalogByItem.values()) {
+      if (e.supplierCode && e.supplierCode.trim() !== '') m.set(e.supplierCode.trim().toLowerCase(), e)
+    }
+    return m
+  }, [catalogByItem])
+  const catalogByText = useMemo(() => {
+    const m = new Map<string, SupplierCatalogEntry>()
+    for (const e of catalogByItem.values()) {
+      if (e.supplierItemName) m.set(normalizeWords(e.supplierItemName), e)
+    }
+    return m
+  }, [catalogByItem])
+  const catalogWordIndex = useMemo(() => {
+    const idx = new Map<string, SupplierCatalogEntry[]>()
+    for (const e of catalogByItem.values()) {
+      for (const w of significantWords(e.itemName)) {
+        const arr = idx.get(w) ?? []
+        arr.push(e)
+        idx.set(w, arr)
+      }
+    }
+    return idx
+  }, [catalogByItem])
+
+  // ── R1' — casado automático (ENCARGO CODE feat/recepcion-casado-automatico,
+  // §2.1). Para cada línea OCR sin artículo y sin tocar a mano (matchTouched),
+  // busca en el catálogo del proveedor por orden de certeza:
+  //   1) supplier_code exacto      → auto-casa, verde, matchType 'code'
+  //   2) supplier_item_name exacto → auto-casa, verde, matchType 'learned'
+  // Solo estos dos SON casado automático: son señales que un humano ya
+  // confirmó alguna vez (el código lo dio el proveedor; el texto exacto es
+  // justo lo que learn_from_receipt grabó tras una recepción confirmada).
+  // Nunca pisa un casado que ya exista (recipeItemId) ni uno que el humano
+  // haya tocado o quitado (matchTouched) — mismo patrón que el formato
+  // (formatTouched). Arrastra SOLO el artículo: el formato lo resuelve el
+  // efecto de Tramo A en cuanto ve el recipeItemId puesto (misma cadena que
+  // ya usa un casado manual desde LineMatchPicker).
+  useEffect(() => {
+    if (!fromOcr || catalogByItem.size === 0) return
+    setDraft(d => {
+      let changed = false
+      const next = d.map(l => {
+        if (l.recipeItemId || l.matchTouched) return l
+        const text = (l.rawText ?? l.productName ?? '').trim()
+        let entry: SupplierCatalogEntry | undefined
+        let matchType: string | null = null
+        if (l.supplierCode && l.supplierCode.trim() !== '') {
+          entry = catalogByCode.get(l.supplierCode.trim().toLowerCase())
+          if (entry) matchType = 'code'
+        }
+        if (!entry && text) {
+          entry = catalogByText.get(normalizeWords(text))
+          if (entry) matchType = 'learned'
+        }
+        if (!entry) return l
+        changed = true
+        return { ...l, recipeItemId: entry.recipeItemId, matchedName: entry.itemName, matchSemaphore: 'green' as const, matchType }
+      })
+      return changed ? next : d
+    })
+  }, [fromOcr, catalogByItem, catalogByCode, catalogByText])
+
+  // ── R1' §2.2 — "nombre razonable, candidato ÚNICO": NO se auto-aplica.
+  // Medido en datos reales (12/08, cuenta Foodint): de 4 casos que esta regla
+  // proponía como candidato único, 3 eran incorrectos (un catálogo con pocos
+  // artículos hace que una palabra genérica como "kraft" o "bolsa" parezca
+  // "única" sin serlo de verdad — papel de horno y una tarrina de cartón
+  // cayeron sobre "Bolsas de papel kraft..." solo por compartir esa palabra).
+  // Con "el stock entra al recibir" (diseño de la sesión), un auto-casado
+  // equivocado aquí es el MISMO error que el Pan de Pita — silencioso y ya
+  // dentro del stock. Por eso esto queda como SUGERENCIA que pide un toque
+  // explícito (nunca automática): rellena suggestedRecipeItemId/Name, no
+  // recipeItemId. Ver Fila 1.5 ("¿Es esto?") y acceptSuggestion/dismissSuggestion.
+  useEffect(() => {
+    if (!fromOcr || catalogByItem.size === 0) return
+    setDraft(d => {
+      let changed = false
+      const next = d.map(l => {
+        if (l.recipeItemId || l.matchTouched) return l
+        const text = (l.rawText ?? l.productName ?? '').trim()
+        if (!text) return l.suggestedRecipeItemId ? { ...l, suggestedRecipeItemId: null, suggestedName: null } : l
+        const candidates = new Set<SupplierCatalogEntry>()
+        for (const w of significantWords(text)) {
+          for (const e of catalogWordIndex.get(w) ?? []) candidates.add(e)
+        }
+        const only = candidates.size === 1 ? [...candidates][0] : null
+        if ((only?.recipeItemId ?? null) === (l.suggestedRecipeItemId ?? null)) return l
+        changed = true
+        return { ...l, suggestedRecipeItemId: only?.recipeItemId ?? null, suggestedName: only?.itemName ?? null }
+      })
+      return changed ? next : d
+    })
+  }, [fromOcr, catalogByItem, catalogWordIndex])
 
   // "Ajustar como el albarán": fija el DESGLOSE (Caja = count × interior) en la línea.
   // El total (formatQtyInBase) se deriva del desglose; al persistir, ensurePackTree
@@ -1668,7 +1824,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           docAmount: l.lineAmount ?? null,     // lo que el albarán DICE (importe)
           discrepancyReason: discrepancyReasons[l.key] ?? null,  // motivo del descuadre (panel de repaso)
           mapSource: l.recipeItemId ? (l.matchType ?? 'manual') : 'unmapped',
-          mapNeedsReview: unmapped,
+          // ENCARGO CODE (12/08) R1' §2.2: un casado por nombre razonable
+          // (matchSemaphore 'yellow') queda con artículo puesto —posteará a
+          // stock igual, "casado automático... con la opción de modificarlo"—
+          // pero SIN certeza determinista, así que pide revisión igual que
+          // "nunca casado silencioso" exige.
+          mapNeedsReview: unmapped || l.matchSemaphore === 'yellow',
           position: position++,
         })
       }
@@ -2079,28 +2240,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                         {/* Fila 1: artículo + estado/avisos */}
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            {fromOcr ? (
-                              <div className="space-y-1">
-                                {l.recipeItemId ? (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className={`inline-block w-2 h-2 rounded-full ${l.matchSemaphore === 'green' ? 'bg-success' : 'bg-warning'}`} />
-                                    <span className="text-base font-medium text-text-primary">{l.matchedName}</span>
-                                    {l.matchType && <span className="text-[10px] text-text-secondary">({matchTypeLabel(l.matchType)})</span>}
-                                  </div>
-                                ) : (
-                                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-warning-bg text-warning border border-warning/20">sin casar</span>
-                                )}
-                                <button type="button" onClick={() => setPickerKey(l.key)} disabled={saving}
-                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-base disabled:opacity-50 ${
-                                    l.recipeItemId
-                                      ? 'border-border-default bg-card text-text-secondary hover:bg-page'
-                                      : 'border-accent bg-accent text-text-on-accent hover:opacity-90'
-                                  }`}>
-                                  {l.recipeItemId ? 'Cambiar artículo' : '➜ Casar artículo'}
-                                  {lineMatch[l.key]?.loading ? ' · buscando…' : ''}
-                                </button>
-                              </div>
-                            ) : (
+                            {!fromOcr && (
                               <span className="text-base font-medium text-text-primary">{l.productName}</span>
                             )}
 
@@ -2171,6 +2311,58 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             )}
                           </div>
                         </div>
+
+                        {/* Fila 1.5: artículo — mismo patrón que Fila 2 (formato): estado
+                            SIEMPRE visible + botón grande de ancho completo, mismo sitio y
+                            mismo gesto tanto si el casado automático ya resolvió la línea
+                            como si no. ENCARGO CODE (12/08) R1' feat/recepcion-casado-
+                            automatico. Reutiliza LineMatchPicker tal cual — ya trae
+                            propuestas + buscador + "Crear artículo nuevo"; no se duplica. */}
+                        {fromOcr && (
+                          <div className="mt-2">
+                            {l.recipeItemId ? (
+                              <div className="rounded-md border border-border-default bg-page px-3 py-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${l.matchSemaphore === 'green' ? 'bg-success' : 'bg-warning'}`} />
+                                  <span className="text-sm font-medium text-text-primary">{l.matchedName}</span>
+                                  {l.matchType && <span className="text-[11px] text-text-secondary">({matchTypeLabel(l.matchType)})</span>}
+                                </div>
+                              </div>
+                            ) : l.suggestedRecipeItemId && l.suggestedName ? (
+                              // R1' §2.2 — propuesta por nombre razonable: pide un toque
+                              // explícito, nunca se aplica sola (ver el efecto que la rellena).
+                              <div className="rounded-md border border-accent/30 bg-accent-bg/40 px-3 py-2">
+                                <p className="text-sm text-text-primary">¿Es esto <span className="font-medium">{l.suggestedName}</span>?</p>
+                                <div className="mt-1.5 flex items-center gap-2">
+                                  <button type="button" disabled={saving} onClick={() => acceptSuggestion(l)}
+                                    className="px-3 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
+                                    Sí, es este
+                                  </button>
+                                  <button type="button" disabled={saving} onClick={() => dismissSuggestion(l.key)}
+                                    className="px-3 py-1.5 rounded-md text-sm border border-border-default bg-card text-text-secondary hover:bg-page disabled:opacity-50">
+                                    No, buscar otro
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-md border border-warning/40 bg-warning-bg/60 px-3 py-2 flex items-center gap-1.5 text-warning">
+                                <AlertTriangle size={14} className="shrink-0" />
+                                <span className="text-sm font-medium">Sin reconocer: esta línea no entrará a stock hasta que la cases.</span>
+                              </div>
+                            )}
+                            {/* Con propuesta pendiente, "No, buscar otro" ya abre el picker —
+                                un solo botón de más sería el mismo gesto dos veces. */}
+                            {!(l.suggestedRecipeItemId && l.suggestedName) && (
+                              <button type="button" onClick={() => setPickerKey(l.key)} disabled={saving}
+                                className={l.recipeItemId
+                                  ? 'mt-1.5 w-full py-3 rounded-md text-sm font-medium border border-border-default bg-card text-text-primary hover:bg-page transition-base disabled:opacity-50'
+                                  : 'mt-1.5 w-full py-3 rounded-md text-sm font-semibold border-2 border-warning bg-warning-bg text-warning hover:bg-warning/10 transition-base disabled:opacity-50'}>
+                                {l.recipeItemId ? 'Cambiar artículo' : 'Casar artículo'}
+                                {lineMatch[l.key]?.loading ? ' · buscando…' : ''}
+                              </button>
+                            )}
+                          </div>
+                        )}
 
                         {/* Fila 2: formato — SIEMPRE visible, nunca un enlace mudo.
                             ENCARGO CODE (12/08) fix/recepcion-selector-formato: sustituye
