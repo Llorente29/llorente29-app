@@ -1,39 +1,42 @@
 // supabase/functions/last-catalog-sync/index.ts
 //
-// ENCARGO `last-catalog-sync` (SOLO LECTURA sobre Last.app; NO escribe en
-// Last; NO toca HubRise). Puebla `last_product_mirror`: espejo de
-// disponibilidad (enabled/agotado) por PRODUCTO × LOCAL en Last.
+// ENCARGO `last-catalog-sync` v2 (SOLO LECTURA sobre Last.app; NO escribe en
+// Last; NO toca HubRise). Puebla `external_catalog_product` — el espejo de
+// disponibilidad que YA EXISTÍA (no se crea tabla nueva) — con sellos de
+// antigüedad: disabled_since / missing_since / last_synced_at.
 //
-// Dos modos, mismo endpoint:
-//   mode=probe -> descubre la ruta REST de disponibilidad por local (no se
-//                 conoce todavía; ver CONFIRMED_ROUTE más abajo). Solo lectura,
-//                 no escribe en Folvy.
-//   mode=sync  -> usa la ruta ya CONFIRMADA para volcar el catálogo de un
-//                 local (o de toda la organización) a last_product_mirror.
-//                 Si CONFIRMED_ROUTE es null, devuelve error explícito: no
-//                 hay volcado sin ruta confirmada (nada de suponer la ruta).
+// RUTA CONFIRMADA (12/08, ver lastapp-set-price/index.ts, en producción
+// desde julio):
+//   GET /catalogs/{catalogId}   headers: Authorization: Bearer, locationID
+//   -> categories[].products[] con: id, name, price, enabled,
+//      organizationProductId, type…
+// No hay lista paginada de productos por local: se recorren CATÁLOGOS. Una
+// marca puede tener VARIOS catálogos por local (carta base + canal) — se
+// recorren TODOS o el espejo dice "disponible" cuando en Glovo está caído.
 //
-// Patrón de auth/token calcado de lastapp-catalog-import / lastapp-sync-catalog:
-//   - Auth de entrada dual: x-internal-key (LASTAPP_INTERNAL_KEY) o JWT con
-//     claim folvy.is_platform_admin.
-//   - Token de Last: external_integration.token_secret_name por
-//     (account_id, source='lastapp', external_org_id) -> Deno.env.get(nombre).
-//     Nunca hardcodear el secreto.
-//   - Throttle a ~12.5 req/s + reintento ante 429 (límite real de Last: 15/s).
+// UPSERT ONLY. NUNCA se borra una fila: lastapp-webhook lee esta tabla en
+// cada pedido (catalogByCatProd) para resolver la marca del ticket. Un
+// producto que desaparece del catálogo se marca con missing_since, nunca
+// se elimina — borrar rompería la ingesta de pedidos en vivo.
 //
-// Multi-tenant: TODAS las consultas/escrituras van filtradas por account_id.
-// external_org_id se pasa SIEMPRE explícito (sin él, Last responde por la
-// organización por defecto y da una foto falsa del negocio propio).
+// Sellos (lo que da valor al informe, no solo el estado actual):
+//   disabled_since: sella en la transición enabled true->false. Mientras
+//                   siga false NO se toca (es la antigüedad del agotado).
+//   missing_since : sella (solo si estaba null) en las filas del local NO
+//                   vistas en esta pasada. Se limpia a null si reaparece.
+//   last_synced_at: se refresca SIEMPRE en cada producto visto — es lo que
+//                   vigila el watchdog de espejo rancio.
 //
-// Deploy: --no-verify-jwt (lo invocará un cron con secreto interno).
+// Auth de entrada dual + patrón de token: igual que lastapp-catalog-import.
+// Deploy: --no-verify-jwt (lo invoca un cron con secreto interno).
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Local (no ../_shared/cors.ts): el bundler de deploy no resuelve imports
-// fuera de la carpeta de la función. Mismo contenido que _shared/cors.ts.
+// fuera de la carpeta de la función.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -76,59 +79,6 @@ function decodeFolvyClaims(jwt: string): FolvyClaims {
   }
 }
 
-// ═══════════════════════ Descubrimiento de la ruta (§3) ═══════════════════
-//
-// FIJAR AQUÍ la ruta una vez `mode=probe` la confirme contra producción
-// (ver §3.5 del encargo). Mientras sea null, `mode=sync` devuelve error
-// explícito en vez de suponer una ruta.
-const CONFIRMED_ROUTE: string | null = null;
-
-type ProbeCandidate = {
-  key: string;
-  label: string;
-  request: (locationExtId: string, limit: number, offset: number) => {
-    path: string;
-    headers: Record<string, string>;
-  };
-};
-
-const PROBE_CANDIDATES: ProbeCandidate[] = [
-  {
-    key: "locations_products",
-    label: "/locations/{locationId}/products",
-    request: (locId, limit, offset) => ({
-      path: `/locations/${locId}/products?limit=${limit}&offset=${offset}`,
-      headers: { "LocationID": locId },
-    }),
-  },
-  {
-    key: "locations_catalog_products",
-    label: "/locations/{locationId}/catalog/products",
-    request: (locId, limit, offset) => ({
-      path: `/locations/${locId}/catalog/products?limit=${limit}&offset=${offset}`,
-      headers: { "LocationID": locId },
-    }),
-  },
-  {
-    key: "products_query_locationId",
-    label: "/products?locationId={locationId}",
-    request: (locId, limit, offset) => ({
-      path: `/products?locationId=${locId}&limit=${limit}&offset=${offset}`,
-      headers: { "LocationID": locId },
-    }),
-  },
-  {
-    key: "locations_availability",
-    label: "/locations/{locationId}/availability",
-    request: (locId, limit, offset) => ({
-      path: `/locations/${locId}/availability?limit=${limit}&offset=${offset}`,
-      headers: { "LocationID": locId },
-    }),
-  },
-];
-
-// ── Llamada cruda a Last: NUNCA lanza, devuelve status/ok/body para que el
-//    probe pueda registrar rutas que fallan sin abortar las siguientes. ──
 async function lastFetchRaw(
   path: string,
   token: string,
@@ -161,7 +111,6 @@ async function lastFetchRaw(
   }
 }
 
-// Llamada que SÍ lanza (para pasos que deben abortar si fallan, p.ej. /locations).
 async function lastGet(path: string, token: string, headers: Record<string, string>): Promise<any> {
   const r = await lastFetchRaw(path, token, headers);
   if (!r.ok) throw new Error(`Last.app ${path} -> ${r.status} ${r.bodyText ?? ""}`);
@@ -176,23 +125,11 @@ function extractList(json: any): any[] {
   }
   return [];
 }
-function extractTotal(json: any): number | null {
-  if (!json || typeof json !== "object") return null;
-  for (const key of ["totalCount", "total", "count"]) {
-    if (typeof json[key] === "number") return json[key];
-  }
-  return null;
-}
 
-// ═══════════════════════ Token de la integración (§2) ═════════════════════
-async function resolveIntegration(
-  sb: SupabaseClient,
-  accountId: string,
-  orgId: string,
-): Promise<{ token: string; ownershipType: string | null } | { error: string }> {
+async function resolveToken(sb: SupabaseClient, accountId: string, orgId: string): Promise<{ token: string } | { error: string }> {
   const { data: integ, error } = await sb
     .from("external_integration")
-    .select("token_secret_name, ownership_type")
+    .select("token_secret_name")
     .eq("account_id", accountId)
     .eq("source", "lastapp")
     .eq("external_org_id", orgId)
@@ -201,205 +138,228 @@ async function resolveIntegration(
   if (!integ) return { error: "Integration not found for that account_id/external_org_id" };
   const token = Deno.env.get(integ.token_secret_name) ?? "";
   if (!token) return { error: `Secret ${integ.token_secret_name} not set` };
-  return { token, ownershipType: integ.ownership_type ?? null };
+  return { token };
 }
 
-// ═══════════════════════ mode=probe (§3) ═══════════════════════════════════
-async function runProbe(token: string, locationExtId: string) {
-  const probes: any[] = [];
-  let confirmed: string | null = null;
-
-  for (const c of PROBE_CANDIDATES) {
-    const { path, headers } = c.request(locationExtId, 1, 0);
-    const r = await lastFetchRaw(path, token, headers);
-    const list = extractList(r.body);
-    const first = list[0] ?? null;
-    const hasEnabled = !!first && typeof first === "object" && "enabled" in first;
-    probes.push({
-      key: c.key,
-      route: c.label,
-      path,
-      status: r.status,
-      ok: r.ok,
-      sample_keys: first ? Object.keys(first) : [],
-      has_enabled_field: hasEnabled,
-      total_hint: extractTotal(r.body),
-      error: r.ok ? null : r.bodyText,
-    });
-    if (!confirmed && r.ok && hasEnabled) confirmed = c.key;
-  }
-
-  return {
-    confirmed,
-    probes,
-    next_step: confirmed
-      ? `Ruta confirmada: "${confirmed}". Fija CONFIRMED_ROUTE = "${confirmed}" en el código y redeploy antes de usar mode=sync.`
-      : "Ninguna ruta candidata respondió 200 con campo `enabled`. No suponer la ruta: añadir más candidatas o inspeccionar manualmente.",
-  };
-}
-
-// ═══════════════════════ mode=sync (§4) ═══════════════════════════════════
-async function fetchAllLocationProducts(token: string, locationExtId: string): Promise<any[]> {
-  const candidate = PROBE_CANDIDATES.find((c) => c.key === CONFIRMED_ROUTE);
-  if (!candidate) {
-    throw new Error(`CONFIRMED_ROUTE "${CONFIRMED_ROUTE}" no reconocida en PROBE_CANDIDATES`);
-  }
-  const PAGE = 50;
-  let offset = 0;
-  const out: any[] = [];
-  while (true) {
-    const { path, headers } = candidate.request(locationExtId, PAGE, offset);
-    const r = await lastFetchRaw(path, token, headers);
-    if (!r.ok) {
-      throw new Error(`${candidate.label} @ ${locationExtId} offset=${offset} -> ${r.status} ${r.bodyText ?? ""}`);
-    }
-    const rows = extractList(r.body);
-    out.push(...rows);
-    if (rows.length < PAGE) break;
-    offset += PAGE;
+// ── Recorre brands[].catalogs (puede anidar por canal) y devuelve un mapa
+//    catalogId -> {brand, channel} de MEJOR ESFUERZO (no autoritativo: ver
+//    nota en resolveLocationCatalogs). "todos los catálogos, no solo
+//    default" — una marca puede tener varios (carta base + canal). ──
+function collectBrandChannelByCatalog(brands: any[]): Map<string, { brand: string; channel: string }> {
+  const out = new Map<string, { brand: string; channel: string }>();
+  for (const b of brands ?? []) {
+    const brandName: string = b?.name ?? "";
+    const cats = b?.catalogs ?? {};
+    const walk = (v: any, channel: string) => {
+      if (typeof v === "string" && v) {
+        if (!out.has(v)) out.set(v, { brand: brandName, channel });
+      } else if (v && typeof v === "object") {
+        for (const vv of Object.values(v)) walk(vv, channel);
+      }
+    };
+    for (const [chKey, v] of Object.entries(cats)) walk(v, chKey);
   }
   return out;
 }
 
+// Infiere el canal a partir del nombre del catálogo (fallback cuando el walk
+// de brands[] no lo mapea — mismo heurístico que lastapp-sync-catalog).
+function channelFromName(name: string | null | undefined): string {
+  const n = (name ?? "").toLowerCase();
+  if (n.includes("glovo")) return "glovo";
+  if (n.includes("uber")) return "uber";
+  if (n.includes("just")) return "justeat";
+  if (n.includes("deliveroo")) return "deliveroo";
+  return "unknown";
+}
+
+// ── Lista AUTORITATIVA de catálogos de un local: GET /catalogs?locationId=.
+//    El walk de brands[].catalogs (vía /locations/{id}) NO es exhaustivo por
+//    sí solo — verificado en vivo el 12/08 contra Foodint Carabanchel: el
+//    walk encontró 8 catálogos (208 productos) cuando la medición a mano
+//    (y /catalogs?locationId=) dan la carta completa. Mismo patrón que
+//    lastapp-sync-catalog: /catalogs?locationId= manda; brands[].catalogs
+//    solo aporta la etiqueta de marca/canal cuando la tiene. ──
+async function resolveLocationCatalogs(
+  token: string,
+  locationExtId: string,
+): Promise<{ catalogMap: Map<string, { brand: string; channel: string }>; debug: any }> {
+  const [catsResp, detail] = await Promise.all([
+    lastGet(`/catalogs?locationId=${locationExtId}`, token, { "LocationID": locationExtId }),
+    lastGet(`/locations/${locationExtId}`, token, { "LocationID": locationExtId }),
+  ]);
+  const brandChannelByCatalog = collectBrandChannelByCatalog(Array.isArray(detail?.brands) ? detail.brands : []);
+
+  const rawList = extractList(catsResp);
+  const catalogMap = new Map<string, { brand: string; channel: string }>();
+  const deletedCount = rawList.filter((c) => c?.deleted === true).length;
+  for (const c of rawList) {
+    if (!c?.id || c?.deleted === true) continue;
+    const mapped = brandChannelByCatalog.get(c.id);
+    catalogMap.set(String(c.id), mapped ?? { brand: c.name ?? "", channel: channelFromName(c.name) });
+  }
+  // Diagnóstico temporal (12/08): comprobar si /catalogs?locationId= viene
+  // paginado (metadatos de totalCount/total/count por encima del array
+  // devuelto) o si el array crudo ya trae menos de lo esperado.
+  const debug = {
+    catsResp_is_array: Array.isArray(catsResp),
+    catsResp_keys: catsResp && typeof catsResp === "object" && !Array.isArray(catsResp) ? Object.keys(catsResp) : null,
+    raw_list_length: rawList.length,
+    deleted_count: deletedCount,
+    total_hint: (catsResp && typeof catsResp === "object" && !Array.isArray(catsResp))
+      ? (catsResp.totalCount ?? catsResp.total ?? catsResp.count ?? null)
+      : null,
+    brands_count: Array.isArray(detail?.brands) ? detail.brands.length : 0,
+  };
+  return { catalogMap, debug };
+}
+
 type ExistingRow = {
-  external_product_id: string;
-  enabled: boolean;
+  catalog_product_id: string;
+  is_enabled: boolean | null;
   disabled_since: string | null;
+  disabled_since_known: boolean | null;
   missing_since: string | null;
-  first_seen_at: string;
+  last_synced_at: string | null;
 };
 
 async function syncLocation(
   sb: SupabaseClient,
   accountId: string,
   orgId: string,
-  ownershipType: string | null,
   token: string,
   locationExtId: string,
   dryRun: boolean,
   nowIso: string,
 ): Promise<any> {
-  const products = await fetchAllLocationProducts(token, locationExtId);
+  const { catalogMap, debug: catalogDebug } = await resolveLocationCatalogs(token, locationExtId);
 
-  // Folvy location_id (si el local está mapeado; nullable si no).
-  const { data: locMap } = await sb
-    .from("external_location_map")
-    .select("location_id")
+  // Estado previo del local (TODOS los catálogos), para sellos y para
+  // detectar qué ha dejado de verse en esta pasada.
+  const { data: existingRows, error: exErr } = await sb
+    .from("external_catalog_product")
+    .select("catalog_product_id, is_enabled, disabled_since, disabled_since_known, missing_since, last_synced_at")
     .eq("account_id", accountId)
     .eq("source", "lastapp")
-    .eq("external_location_id", locationExtId)
-    .maybeSingle();
-  const folvyLocationId = locMap?.location_id ?? null;
-
-  // Estado previo del espejo para este local (para disabled_since/missing_since).
-  const { data: existingRows, error: exErr } = await sb
-    .from("last_product_mirror")
-    .select("external_product_id, enabled, disabled_since, missing_since, first_seen_at")
-    .eq("account_id", accountId)
     .eq("external_location_id", locationExtId);
-  if (exErr) throw new Error(`select last_product_mirror: ${exErr.message}`);
-  const existingByExtId = new Map<string, ExistingRow>();
-  for (const r of existingRows ?? []) existingByExtId.set(r.external_product_id as string, r as ExistingRow);
-
-  // Cruce con menu_item (in_folvy / menu_item_id / brand_id), en un solo select.
-  const productIds = [...new Set(products.map((p) => String(p.id ?? p.productId ?? p.external_id ?? "")).filter(Boolean))];
-  const menuItemByExtId = new Map<string, { id: string; brand_id: string | null }>();
-  if (productIds.length > 0) {
-    const { data: items, error: miErr } = await sb
-      .from("menu_item")
-      .select("id, brand_id, external_id")
-      .eq("account_id", accountId)
-      .eq("external_source", "lastapp")
-      .is("archived_at", null)
-      .in("external_id", productIds);
-    if (miErr) throw new Error(`select menu_item: ${miErr.message}`);
-    for (const it of items ?? []) menuItemByExtId.set(it.external_id as string, { id: it.id as string, brand_id: it.brand_id as string | null });
-  }
+  if (exErr) throw new Error(`select external_catalog_product: ${exErr.message}`);
+  const existingByCatProd = new Map<string, ExistingRow>();
+  for (const r of existingRows ?? []) existingByCatProd.set(r.catalog_product_id as string, r as ExistingRow);
 
   const seenIds = new Set<string>();
   const rows: any[] = [];
-  const stats = { seen: 0, new: 0, disabled_now: 0, reappeared: 0, still_disabled: 0, in_folvy: 0 };
+  const catalogFailures: any[] = [];
+  const stats = {
+    catalogs_seen: 0, catalogs_failed: 0, seen: 0, new: 0,
+    disabled_now: 0, reappeared: 0, still_disabled: 0,
+    first_sync_disabled_unknown: 0, // primer barrido de la fila, agotado sin fecha conocida (§0)
+  };
 
-  for (const p of products) {
-    const extId = String(p.id ?? p.productId ?? p.external_id ?? "");
-    if (!extId) continue;
-    seenIds.add(extId);
-    stats.seen++;
+  for (const [catId, info] of catalogMap) {
+    try {
+      const catalog = await lastGet(`/catalogs/${catId}`, token, { "locationID": locationExtId });
+      stats.catalogs_seen++;
+      const categories = Array.isArray(catalog?.categories) ? catalog.categories : [];
+      for (const cat of categories) {
+        const products = Array.isArray(cat?.products) ? cat.products : [];
+        for (const p of products) {
+          const catProdId = p?.id ? String(p.id) : "";
+          if (!catProdId) continue;
+          seenIds.add(catProdId);
+          stats.seen++;
 
-    const enabled = p.enabled !== false;
-    const name = typeof p.name === "string" ? p.name : null;
-    const priceCents = typeof p.price === "number" ? p.price : (typeof p.priceCents === "number" ? p.priceCents : null);
-    const mi = menuItemByExtId.get(extId) ?? null;
-    const inFolvy = mi !== null;
-    if (inFolvy) stats.in_folvy++;
+          const enabled = p.enabled !== false;
+          const prev = existingByCatProd.get(catProdId);
+          // §0 (ENCARGO pantalla-agotados-last): el PRIMER barrido de una
+          // fila (nunca tocada por last-catalog-sync, last_synced_at null)
+          // NO puede saber desde cuándo lleva agotado un producto que ya
+          // viene enabled=false — sellar now() sería una fecha inventada
+          // ("agotado desde hoy" para algo caído hace semanas). Se declara
+          // desconocido en vez de rellenarlo con un valor plausible.
+          const isFirstSync = !prev || prev.last_synced_at === null;
+          let disabledSince: string | null;
+          let disabledSinceKnown: boolean;
+          if (isFirstSync) {
+            if (!prev) stats.new++;
+            if (enabled) {
+              disabledSince = null;
+              disabledSinceKnown = true;
+            } else {
+              disabledSince = null;
+              disabledSinceKnown = false;
+              stats.first_sync_disabled_unknown++;
+            }
+          } else if (prev!.is_enabled !== false && !enabled) {
+            stats.disabled_now++;
+            disabledSince = nowIso;
+            disabledSinceKnown = true;
+          } else if (prev!.is_enabled === false && enabled) {
+            stats.reappeared++;
+            disabledSince = null;
+            disabledSinceKnown = true;
+          } else {
+            if (!enabled) stats.still_disabled++;
+            disabledSince = prev!.disabled_since;
+            disabledSinceKnown = prev!.disabled_since_known ?? true;
+          }
 
-    const prev = existingByExtId.get(extId);
-    let disabledSince: string | null;
-    let firstSeenAt: string;
-    if (!prev) {
-      stats.new++;
-      disabledSince = enabled ? null : nowIso;
-      firstSeenAt = nowIso;
-    } else {
-      firstSeenAt = prev.first_seen_at;
-      if (prev.enabled && !enabled) {
-        stats.disabled_now++;
-        disabledSince = nowIso;
-      } else if (!prev.enabled && enabled) {
-        stats.reappeared++;
-        disabledSince = null;
-      } else {
-        if (!enabled) stats.still_disabled++;
-        disabledSince = prev.disabled_since;
+          rows.push({
+            account_id: accountId,
+            source: "lastapp",
+            external_org_id: orgId,
+            external_location_id: locationExtId,
+            external_catalog_id: catId,
+            external_brand_name: info.brand || null,
+            external_channel: info.channel || null,
+            catalog_product_id: catProdId,
+            organization_product_id: p.organizationProductId ? String(p.organizationProductId) : null,
+            product_name: typeof p.name === "string" ? p.name : null,
+            price_cents: typeof p.price === "number" ? p.price : null,
+            product_type: typeof p.type === "string" ? p.type : "PRODUCT",
+            is_enabled: enabled,
+            seen_in_catalog_at: nowIso,
+            last_synced_at: nowIso,
+            updated_at: nowIso,
+            disabled_since: disabledSince,
+            disabled_since_known: disabledSinceKnown,
+            missing_since: null,
+          });
+        }
       }
+    } catch (e) {
+      stats.catalogs_failed++;
+      catalogFailures.push({ external_catalog_id: catId, brand: info.brand, error: String(e) });
     }
-
-    rows.push({
-      account_id: accountId,
-      location_id: folvyLocationId,
-      external_org_id: orgId,
-      external_location_id: locationExtId,
-      external_product_id: extId,
-      last_name: name,
-      last_price_cents: priceCents,
-      enabled,
-      menu_item_id: mi?.id ?? null,
-      brand_id: mi?.brand_id ?? null,
-      ownership_type: ownershipType,
-      in_folvy: inFolvy,
-      first_seen_at: firstSeenAt,
-      last_seen_at: nowIso,
-      disabled_since: disabledSince,
-      missing_since: null,
-    });
   }
 
-  const missingIds = [...existingByExtId.keys()].filter((id) => !seenIds.has(id));
-  const newlyMissingIds = missingIds.filter((id) => !existingByExtId.get(id)!.missing_since);
-  const reappearedFromMissing = [...seenIds].filter((id) => existingByExtId.has(id) && existingByExtId.get(id)!.missing_since);
+  const missingIds = [...existingByCatProd.keys()].filter((id) => !seenIds.has(id));
+  const newlyMissingIds = missingIds.filter((id) => !existingByCatProd.get(id)!.missing_since);
+  const reappearedFromMissing = [...seenIds].filter((id) => existingByCatProd.has(id) && !!existingByCatProd.get(id)!.missing_since);
 
   if (!dryRun) {
     if (rows.length > 0) {
       const { error: upErr } = await sb
-        .from("last_product_mirror")
-        .upsert(rows, { onConflict: "account_id,external_location_id,external_product_id" });
-      if (upErr) throw new Error(`upsert last_product_mirror: ${upErr.message}`);
+        .from("external_catalog_product")
+        .upsert(rows, { onConflict: "account_id,source,catalog_product_id,external_location_id" });
+      if (upErr) throw new Error(`upsert external_catalog_product: ${upErr.message}`);
     }
     if (newlyMissingIds.length > 0) {
       const { error: missErr } = await sb
-        .from("last_product_mirror")
+        .from("external_catalog_product")
         .update({ missing_since: nowIso })
         .eq("account_id", accountId)
+        .eq("source", "lastapp")
         .eq("external_location_id", locationExtId)
-        .in("external_product_id", newlyMissingIds);
+        .in("catalog_product_id", newlyMissingIds);
       if (missErr) throw new Error(`update missing_since: ${missErr.message}`);
     }
   }
 
   return {
     external_location_id: locationExtId,
-    folvy_location_id: folvyLocationId,
-    ok: true,
+    catalogs_found: catalogMap.size,
+    catalog_failures: catalogFailures,
+    _debug_catalog_discovery: catalogDebug,
     ...stats,
     missing_now: newlyMissingIds.length,
     still_missing: missingIds.length - newlyMissingIds.length,
@@ -407,7 +367,6 @@ async function syncLocation(
   };
 }
 
-// ═══════════════════════ Handler ═══════════════════════════════════════════
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
@@ -433,40 +392,16 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const mode = body.mode;
   const accountId = body.account_id;
   const orgId = body.external_org_id;
-  if (mode !== "probe" && mode !== "sync") {
-    return jsonResponse({ error: 'mode debe ser "probe" o "sync"' }, 400);
-  }
   if (!accountId || !orgId) {
     return jsonResponse({ error: "account_id y external_org_id requeridos" }, 400);
   }
 
   const sb = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceKey);
 
-  const integ = await resolveIntegration(sb, accountId, orgId);
+  const integ = await resolveToken(sb, accountId, orgId);
   if ("error" in integ) return jsonResponse({ error: integ.error }, 404);
-
-  if (mode === "probe") {
-    const locationId = body.location_id;
-    if (!locationId) return jsonResponse({ error: "location_id requerido en mode=probe" }, 400);
-    try {
-      const result = await runProbe(integ.token, String(locationId));
-      return jsonResponse({ ok: true, mode: "probe", account_id: accountId, external_org_id: orgId, location_id: locationId, ...result });
-    } catch (e) {
-      return jsonResponse({ ok: false, mode: "probe", error: String(e) }, 500);
-    }
-  }
-
-  // mode === "sync"
-  if (!CONFIRMED_ROUTE) {
-    return jsonResponse({
-      ok: false,
-      mode: "sync",
-      error: "CONFIRMED_ROUTE no está fijada todavía. Ejecuta mode=probe contra un local real, confirma la ruta y fíjala en el código antes de sincronizar.",
-    }, 409);
-  }
 
   const dryRun = body.dry_run === true;
   const nowIso = new Date().toISOString();
@@ -481,7 +416,7 @@ Deno.serve(async (req: Request) => {
       const locations: any[] = extractList(locResp);
       locationIds = locations.filter((l) => l?.id && l?.deleted !== true).map((l) => String(l.id));
     } catch (e) {
-      return jsonResponse({ ok: false, mode: "sync", error: `listando locations de la org: ${String(e)}` }, 500);
+      return jsonResponse({ ok: false, error: `listando locations de la org: ${String(e)}` }, 500);
     }
   }
 
@@ -489,7 +424,7 @@ Deno.serve(async (req: Request) => {
   const failed: any[] = [];
   for (const locId of locationIds) {
     try {
-      const r = await syncLocation(sb, accountId, orgId, integ.ownershipType, integ.token, locId, dryRun, nowIso);
+      const r = await syncLocation(sb, accountId, orgId, integ.token, locId, dryRun, nowIso);
       byLocation.push(r);
     } catch (e) {
       failed.push({ external_location_id: locId, error: String(e) });
@@ -498,20 +433,21 @@ Deno.serve(async (req: Request) => {
 
   const totals = byLocation.reduce(
     (acc, r) => {
+      acc.catalogs_found += r.catalogs_found;
+      acc.catalogs_failed += r.catalogs_failed;
       acc.seen += r.seen;
       acc.new += r.new;
       acc.disabled_now += r.disabled_now;
       acc.reappeared += r.reappeared;
       acc.missing_now += r.missing_now;
-      acc.in_folvy += r.in_folvy;
+      acc.first_sync_disabled_unknown += r.first_sync_disabled_unknown;
       return acc;
     },
-    { seen: 0, new: 0, disabled_now: 0, reappeared: 0, missing_now: 0, in_folvy: 0 },
+    { catalogs_found: 0, catalogs_failed: 0, seen: 0, new: 0, disabled_now: 0, reappeared: 0, missing_now: 0, first_sync_disabled_unknown: 0 },
   );
 
   return jsonResponse({
     ok: failed.length === 0,
-    mode: "sync",
     dry_run: dryRun,
     account_id: accountId,
     external_org_id: orgId,
