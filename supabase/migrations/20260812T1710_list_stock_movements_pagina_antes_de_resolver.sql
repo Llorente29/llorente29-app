@@ -1,0 +1,15 @@
+-- 20260812T1710_list_stock_movements_pagina_antes_de_resolver.sql
+-- Aplicada: 2026-08-12 por MCP
+-- RESULTADO: NO mejoro nada (1.211 -> 1.472 ms, mismos 4.974 buffers).
+-- Se documenta igualmente porque ESTA APLICADA en produccion. El cambio en si
+-- es correcto (no resolver referencias de filas que se descartan), solo que el
+-- cuello estaba en otro sitio. Superada por la 1740.
+--
+-- INTENTO 1 de 4 contra el timeout de Almacen > Movimientos.
+-- Hipotesis: el CTE `resolved` calculaba la columna `reference` para TODAS las
+-- filas del periodo y solo despues aplicaba limit/offset. Se introdujo el CTE
+-- `pagina` (orden + limit + offset) y `resolved` paso a construirse sobre el.
+-- Los agregados siguen sobre `filtrado` completo, asi que las cifras no cambian.
+--
+-- NO reejecutar contra produccion: superada por 20260812T1740.
+-- (Cuerpo completo en la 1740, que es la version vigente de esta funcion.)

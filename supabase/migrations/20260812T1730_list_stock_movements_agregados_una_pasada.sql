@@ -1,0 +1,14 @@
+-- 20260812T1730_list_stock_movements_agregados_una_pasada.sql
+-- Aplicada: 2026-08-12 por MCP
+-- RESULTADO: temporales a disco 3.625 -> 727, pero buffers 4.974 -> 51.642 y
+-- tiempo 1.952 ms. Mejoro una cosa y empeoro otra: al no materializar, el CTE
+-- se recalculaba. Superada por la 1740.
+--
+-- INTENTO 3 de 4.
+-- Hipotesis (correcta a medias): el CTE `filtrado` se materializaba CUATRO
+-- veces, una por agregado (total, sum_in, sum_out, units). La pista fue
+-- "temp read=3625 written=1450" en el EXPLAIN: escritura a disco.
+-- Se unificaron los cuatro agregados en un solo CTE `agregados`.
+--
+-- NO reejecutar contra produccion: superada por 20260812T1740.
+-- (Cuerpo completo en la 1740, que es la version vigente de esta funcion.)
