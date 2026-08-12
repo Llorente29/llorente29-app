@@ -3,8 +3,9 @@
 -- ENCARGO CODE — TPV: leer la disponibilidad de donde debe (146 productos
 -- inabribles)
 -- ============================================================================
--- Aplicada: (pendiente — la ejecuta Julio y verifica; no marcar como aplicada
---            por escribir este fichero)
+-- Aplicada: 2026-08-12 (Julio, verificado en vivo). pos_item_config confirmado
+--   SECURITY DEFINER, sin duplicar, filtrando por local. Recuento real:
+--   Alcalá 149 → 3 bloqueados, Carabanchel 138 → 0 (aislamiento por local ok).
 --
 -- SÍNTOMA (Julio): "el TPV tiene muchas cosas agotadas y es falso". Confirmado.
 --
