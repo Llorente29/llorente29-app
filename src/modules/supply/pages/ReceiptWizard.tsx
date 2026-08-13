@@ -1,31 +1,45 @@
 // src/modules/supply/pages/ReceiptWizard.tsx
 //
-// ENCARGO CODE (13/08 noche) feat/recepcion-wizard-una-linea — terminar el
-// asistente de recepción: UNA línea por pantalla (no una lista con scroll),
-// contar SIEMPRE en el formato físico (packs/cajas/sacos, nunca "192" a
-// secas), y acabado comercial ("que lo use una mujer de cocina de 60 años y
-// también el CEO"). Construido sobre feat/recepcion-v2-asistente (PR #64) y
-// fix/hubrise... no, sobre PR #66 (routing) — el casado, el enrutado del
-// pedido, el stock al recibir y la revisión de oficina NO se tocan aquí.
+// ENCARGO CODE (14/08) feat/recepcion-wizard-acabado — acabado visual. La
+// estructura (una línea por pantalla, PR #68) está bien; lo que fallaba era
+// CÓMO SE VE: agujero de ~400px con spinner, el contador se pintaba antes de
+// saber el formato (192 ud → 8 packs a la vista), gris claro sobre blanco
+// ilegible, jerarquía invertida (Siguiente apagado, Cambiar en color), nada
+// agrupado, sin franja de resultado. Este encargo NO toca estructura, unidad/
+// división, casado ni stock al recibir (PR #64/#66/#68) — solo el render.
 //
-// Diseño (claude_folvy_recepcion_pantalla_diseno_20260813.md, §3/§5):
-//   · Progreso "Proveedor · N de M" + barra. Nada de otra línea visible.
-//   · Se cuenta en el FORMATO en que llega físicamente (pack, caja, saco) —
-//     nunca en la unidad base suelta. Si el albarán trae columna de bultos,
-//     manda esa; si no, se divide qty_albarán ÷ qty_in_base del formato. Si
-//     la división no es exacta, NO se redondea en silencio: se avisa.
-//   · Se pide el IMPORTE TOTAL de la línea (el número impreso en el
-//     albarán), nunca el €/unidad — unit_cost se deriva antes de guardar.
-//   · €/unidad resultante siempre visible, recalculado en vivo; rojo si es
-//     implausible — avisa, no bloquea.
-//   · "No lo tengo claro — que lo mire la oficina" en CADA línea: la única
-//     forma de avanzar sin resolver algo. El trabajador SIEMPRE termina.
-//   · El stock entra al pulsar "Recibir y meter al stock" (receive_goods_receipt).
+// Contraste medido antes de tocar nada (WCAG, sobre los colores REALES de
+// tailwind.config.js — Julio pidió los tokens del sistema; no todos llegan a
+// 4.5:1, y se reporta en vez de parchear con un color suelto):
+//   text-secondary #6B7077 / blanco   → 4.99:1  PASA texto normal
+//   text-tertiary  #9CA1A8 / blanco   → 2.60:1  FALLA — causa de la queja de
+//     Julio ("gris claro sobre blanco"); NO se usa en este fichero para
+//     ningún contenido legible, solo texto-secondary o texto-primary.
+//   text-warning   #C2890F / blanco   → 3.05:1  solo válido como texto
+//     grande/negrita (umbral 3:1) — se usa corto y en negrita, o directo
+//     como icono/borde (los bordes solo exigen 3:1, ahí sí cumple).
+//   text-success   #1F9D6B / success-bg → 3.05:1  mismo caso: la FRASE
+//     dentro de la franja verde va en text-primary (17.96:1), la franja en
+//     sí (el fondo) usa success-bg tal como pide el encargo.
+//   blanco / fill success #1F9D6B     → 3.45:1  el botón "Siguiente" pasa a
+//     fill success + texto claro por decisión explícita de Julio (§4.c); no
+//     llega a 4.5:1 de texto normal — declarado aquí, no se inventa un color
+//     fuera del sistema para forzarlo. A 17-18px/medio araña el umbral de
+//     "texto grande" (3:1) pero conviene que Julio lo sepa.
 //
-// Alcance deliberado (heredado de PR #64, sin cambios): sin pedido enlazado
-// (sigue en OrderReceiveFlow/GoodsReceiptForm); sin NINGÚN formato de compra
-// para el artículo casado, la línea no puede entrar a stock — se marca ⚑
-// automáticamente. Proveedor/local sin casar se guardan tal cual.
+// Diseño (claude_folvy_recepcion_pantalla_diseno_20260813.md + este encargo):
+//   · Progreso "Proveedor · N de M" + barra de 5px.
+//   · Se cuenta en el FORMATO físico — nunca la unidad base suelta. Si el
+//     albarán trae bultos, manda esa columna; si no, se divide. División no
+//     exacta → se avisa, nunca se redondea en silencio.
+//   · Nunca se pinta el contador antes de saber el formato: esqueleto del
+//     tamaño final mientras se resuelve.
+//   · Se pide el IMPORTE TOTAL, con la referencia del albarán SIEMPRE visible
+//     debajo; si el operario lo cambia, aviso ámbar con la diferencia.
+//   · La bandera "que lo mire la oficina" es un botón NEUTRO, nunca de alarma
+//     — marcar es la salida correcta, no un error.
+//   · "Siguiente" es la acción principal (fill success, ancho completo); si
+//     está bloqueado, dice por qué en texto visible, nunca solo un title.
 
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -368,6 +382,17 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
   function isReady(l: WizardLine): boolean {
     return isResolved(l) || l.flagged
   }
+  // Por qué no puede avanzar todavía — texto visible, nunca un title mudo
+  // (§4.c del encargo: "si está bloqueado, decir por qué").
+  function blockedReason(l: WizardLine): string | null {
+    if (isReady(l)) return null
+    if (l.matchLoading) return 'Un momento, buscando el artículo…'
+    if (!l.recipeItemId) return 'Elige el artículo para continuar'
+    if (l.formatsLoading) return 'Un momento, mirando el formato…'
+    if (l.formats.length > 1 && !l.purchaseFormatId) return 'Elige en qué viene para continuar'
+    if (l.formats.length === 0) return 'Sin formato — marca "que lo mire la oficina" para continuar'
+    return 'Pon la cantidad para continuar'
+  }
 
   const pendingCount = lines.filter(l => !isReady(l)).length
   const flagCount = lines.filter(l => l.flagged).length
@@ -444,6 +469,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
   const totalScreens = lines.length + 1 // + pantalla final
   const onSummary = screenIndex >= lines.length
   const current = !onSummary ? lines[screenIndex] : null
+  const blockReason = current ? blockedReason(current) : null
 
   function goNext() {
     setScreenIndex(i => Math.min(lines.length, i + 1))
@@ -467,7 +493,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
             {' · '}
             {onSummary ? 'resumen' : `${screenIndex + 1} de ${lines.length}`}
           </p>
-          <div className="mt-1 h-1.5 rounded-full bg-border-default overflow-hidden">
+          <div className="mt-1.5 h-[5px] rounded-full bg-border-default overflow-hidden">
             <div className="h-full bg-accent rounded-full transition-all duration-base"
               style={{ width: `${((screenIndex + 1) / totalScreens) * 100}%` }} />
           </div>
@@ -509,24 +535,25 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
         )}
       </div>
 
-      {/* Navegación fija abajo */}
+      {/* Pie: hairline + bandera (en LineScreen) + navegación */}
       <div className="sticky bottom-0 border-t border-border-default bg-card p-3 space-y-2">
+        {!onSummary && blockReason && (
+          <p className="text-sm text-text-secondary text-center">{blockReason}</p>
+        )}
         <div className="flex items-center gap-2">
           <button type="button" onClick={goPrev} disabled={saving}
-            className="shrink-0 h-touch-base px-4 rounded-lg text-sm font-medium border border-border-default bg-card text-text-secondary hover:bg-page transition-base disabled:opacity-40">
+            className="shrink-0 h-tap-small px-4 rounded-lg text-base font-medium border border-border-default bg-card text-text-primary hover:bg-page transition-base disabled:opacity-40">
             Atrás
           </button>
           {!onSummary ? (
             <button type="button" onClick={goNext} disabled={!current || !isReady(current)}
-              title={current && !isReady(current) ? 'Resuelve el artículo o marca "que lo mire la oficina" para seguir' : undefined}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 h-touch-base rounded-lg text-base font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-base">
-              Siguiente <ChevronRight size={18} />
+              className="flex-1 inline-flex items-center justify-center gap-1.5 h-tap-small rounded-lg text-base font-medium bg-success text-text-on-accent hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-base">
+              Siguiente <ChevronRight size={20} />
             </button>
           ) : (
             <button type="button" onClick={handleReceive} disabled={!canSubmit}
-              title={pendingCount > 0 ? `${pendingCount} línea(s) sin resolver` : undefined}
-              className="flex-1 inline-flex items-center justify-center gap-2 h-touch-base rounded-lg text-base font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-base">
-              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check size={18} />}
+              className="flex-1 inline-flex items-center justify-center gap-2 h-tap-small rounded-lg text-base font-medium bg-success text-text-on-accent hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-base">
+              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check size={20} />}
               Recibir y meter al stock
             </button>
           )}
@@ -565,8 +592,8 @@ function SummaryScreen({
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-6">
-      <div className="w-16 h-16 rounded-full bg-accent-bg flex items-center justify-center">
-        <Check size={30} className="text-accent" />
+      <div className="w-16 h-16 rounded-full bg-success-bg flex items-center justify-center">
+        <Check size={30} className="text-success" />
       </div>
       <div>
         <h2 className="text-xl font-display font-medium text-text-primary">Todo revisado</h2>
@@ -574,31 +601,52 @@ function SummaryScreen({
       </div>
 
       {docTotal != null && anyTotal && (
-        <div className={`w-full max-w-sm rounded-xl border p-4 ${shortfall !== null && Math.abs(shortfall) > 0.01 ? 'border-danger bg-danger-bg' : 'border-success bg-success-bg'}`}>
+        <div className={`w-full max-w-sm rounded-xl border p-4 ${shortfall !== null && Math.abs(shortfall) > 0.01 ? 'border-warning bg-warning-bg' : 'border-success bg-success-bg'}`}>
           <p className="text-sm text-text-secondary">Albarán</p>
           <p className="text-lg font-display font-medium text-text-primary">{fmtMoney(docTotal)} €</p>
           <p className="text-sm text-text-secondary mt-2">Contado</p>
           <p className="text-lg font-display font-medium text-text-primary">{fmtMoney(totalCounted)} €</p>
           {shortfall !== null && Math.abs(shortfall) > 0.01 ? (
-            <p className="mt-2 text-sm font-medium text-danger">
+            <p className="mt-2 text-sm font-semibold text-text-primary">
               {shortfall > 0 ? `Faltan ${fmtMoney(shortfall)} €` : `Sobran ${fmtMoney(-shortfall)} €`}
             </p>
           ) : (
-            <p className="mt-2 text-sm font-medium text-success">Cuadra ✓</p>
+            <p className="mt-2 text-sm font-semibold text-text-primary">Cuadra ✓</p>
           )}
         </div>
       )}
 
       {flagCount > 0 && (
         <p className="text-sm text-text-secondary flex items-center gap-1.5">
-          <Flag size={14} className="text-warning" /> {flagCount} línea(s) para que lo mire oficina
+          <Flag size={14} /> {flagCount} línea(s) para que lo mire oficina
         </p>
       )}
 
       <button type="button" onClick={onAddLine}
-        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-dashed border-border-default text-text-secondary hover:text-text-primary hover:bg-card transition-base">
+        className="inline-flex items-center gap-1.5 px-4 h-tap-small rounded-lg text-sm font-medium border border-border-default text-text-primary hover:bg-card transition-base">
         <PackagePlus size={16} /> Falta un artículo — añadirlo
       </button>
+    </div>
+  )
+}
+
+// ── Esqueleto: mismo hueco que el bloque final, nunca un spinner suelto en
+//    medio de una pantalla vacía (§1.1 y §5 del encargo). ──────────────────
+function LineSkeleton() {
+  return (
+    <div className="flex-1 flex flex-col animate-pulse" aria-hidden="true">
+      <div className="mt-3 h-6 w-2/3 rounded bg-border-default" />
+      <div className="mt-2.5 h-4 w-1/2 rounded bg-border-default" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 py-4">
+        <div className="h-[18px] w-44 rounded bg-border-default" />
+        <div className="flex items-center justify-center gap-5">
+          <div className="w-[52px] h-[52px] rounded-full bg-border-default" />
+          <div className="w-[70px] h-9 rounded bg-border-default" />
+          <div className="w-[52px] h-[52px] rounded-full bg-border-default" />
+        </div>
+      </div>
+      <div className="h-10 rounded-lg bg-border-default" />
+      <div className="mt-3 h-11 rounded-lg bg-border-default" />
     </div>
   )
 }
@@ -619,6 +667,14 @@ function LineScreen({
   const resolved = !!l.recipeItemId && !!l.purchaseFormatId
   const format = l.formats.find(f => f.id === l.purchaseFormatId)
   const totalN = parseNum(l.total)
+
+  // Nunca se pinta el contador antes de saber el formato (§5 del encargo):
+  // mientras se cargan los formatos, esqueleto — jamás "192 ud" para
+  // cambiarlo luego a "8 packs" delante del trabajador.
+  const waitingForFormat = !!l.recipeItemId && l.formatsLoading
+  // Con varias opciones de formato aún sin elegir, no hay "cuántos X" que
+  // preguntar todavía — se pregunta el formato primero.
+  const needsFormatChoice = l.formats.length > 1 && !l.purchaseFormatId
 
   // Unidad que se muestra junto al número: la del formato si se conoce, si
   // no la del propio albarán (§3 — "nunca un número a secas").
@@ -644,24 +700,31 @@ function LineScreen({
     : null
   const hasReference = l.purchaseFormatId ? formatPrices[l.purchaseFormatId] != null : false
 
+  // Decisión de Julio (§4.b): el importe SIEMPRE muestra la referencia del
+  // albarán debajo. Si el operario la cambia, todo pasa a ámbar y aparece la
+  // diferencia — nunca en rojo, a veces el albarán está mal.
+  const totalChanged = totalN != null && l.albaranLineAmount != null && Math.abs(totalN - l.albaranLineAmount) > 0.01
+  const totalDiff = totalChanged ? Math.round((totalN! - l.albaranLineAmount!) * 100) / 100 : null
+
   return (
     <div className="flex-1 flex flex-col">
-      {/* Texto literal del albarán, referencia gris — nunca protagonista */}
+      {/* Texto literal del albarán — 14px secundario / 16px primario (§2 del encargo) */}
       {!l.manual ? (
-        <p className="text-xs text-text-tertiary">
-          El albarán dice: <span className="text-text-secondary">{l.rawText}</span>
-          {l.albaranQty != null ? ` · ${fmtQty(l.albaranQty)}${l.albaranUnit ? ` ${l.albaranUnit}` : ''}` : ''}
+        <p className="text-sm">
+          <span className="text-text-secondary">El albarán dice: </span>
+          <span className="text-base text-text-primary">
+            {l.rawText}
+            {l.albaranQty != null ? ` · ${fmtQty(l.albaranQty)}${l.albaranUnit ? ` ${l.albaranUnit}` : ''}` : ''}
+          </span>
         </p>
       ) : (
         <input type="text" value={l.rawText} onChange={e => onRawText(e.target.value)}
           placeholder="¿Qué falta? Descríbelo"
-          className="w-full mb-1 px-3 py-2 text-sm border border-border-default rounded-lg bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30" />
+          className="w-full mb-1 px-3 h-tap-small text-base border border-border-default rounded-lg bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30" />
       )}
 
       {l.matchLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 size={22} className="animate-spin text-text-tertiary" />
-        </div>
+        <LineSkeleton />
       ) : !l.recipeItemId ? (
         // ── NO RECONOCIDO: pregunta grande y centrada, botones debajo ──
         <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-4">
@@ -674,120 +737,149 @@ function LineScreen({
               </button>
             ))}
             <button type="button" onClick={onOpenPicker}
-              className="w-full inline-flex items-center justify-center gap-2 h-touch-base rounded-xl text-base font-medium border border-border-default bg-card text-text-primary hover:bg-page transition-base">
+              className="w-full inline-flex items-center justify-center gap-2 h-tap-small rounded-xl text-base font-medium border border-border-default bg-card text-text-primary hover:bg-page transition-base">
               <Search size={17} /> Buscar artículo
             </button>
           </div>
         </div>
       ) : (
-        // ── RECONOCIDO: nombre grande + ✓, contador con unidad, importe, ⚑ ──
+        // ── RECONOCIDO: bloque de artículo agrupado, contador, franja, importe ──
         <div className="flex-1 flex flex-col">
-          <div className="mt-3 flex items-start justify-between gap-2">
-            <span className="inline-flex items-center gap-2 min-w-0">
-              <Check size={20} className="text-success shrink-0" />
-              <span className="text-xl font-display font-medium text-text-primary truncate">{l.matchedName}</span>
-            </span>
-            <button type="button" onClick={onOpenPicker}
-              className="shrink-0 text-xs text-text-tertiary hover:text-text-secondary underline">
-              Cambiar
-            </button>
-          </div>
-
-          {l.formatsLoading ? (
-            <div className="mt-2 flex justify-center"><Loader2 size={14} className="animate-spin text-text-tertiary" /></div>
-          ) : l.formats.length === 0 ? (
-            <p className="mt-1.5 text-sm text-warning">Sin formato de compra definido — márcalo abajo para que oficina lo resuelva.</p>
-          ) : l.formats.length > 1 && !l.purchaseFormatId ? (
-            <div className="mt-2 space-y-1.5">
-              <p className="text-sm text-text-secondary text-center">¿En qué viene?</p>
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {l.formats.map(f => (
-                  <button key={f.id} type="button" onClick={() => onFormat(f.id)}
-                    className="px-3 py-2 rounded-lg text-sm border border-border-default bg-card text-text-primary hover:bg-page transition-base">
-                    {f.name}
-                    {f.qtyInBase != null && (
-                      <span className="text-text-tertiary"> · {fmtQty(f.qtyInBase)} {baseUnitWord(l.baseUnit?.abbr)}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : format ? (
-            <p className="mt-0.5 text-sm text-text-secondary">
-              viene en {pluralFormatName(format.name, 2)} de {fmtQty(format.qtyInBase ?? 0)} {baseUnitWord(l.baseUnit?.abbr)}
-              {l.formats.length > 1 && (
-                <button type="button" onClick={() => onFormat('')} className="ml-1.5 text-xs text-accent hover:underline">cambiar</button>
-              )}
-            </p>
-          ) : null}
-
-          {/* Aviso de división no exacta — se pregunta, no se redondea en silencio */}
-          {l.qtySource === 'inexact' && format && (
-            <div className="mt-2 flex items-start gap-1.5 text-xs rounded-lg px-3 py-2 bg-warning-bg text-warning">
-              <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-              El albarán dice {fmtQty(l.albaranQty ?? 0)} {l.albaranUnit ?? 'ud'} y el formato es de {fmtQty(format.qtyInBase ?? 0)} — no cuadra exacto. Cuenta lo que ves y ajusta.
-            </div>
-          )}
-
-          {/* Pregunta + contador ±60px, unidad SIEMPRE junto al número */}
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
-            <p className="text-base text-text-secondary">
-              ¿Cuántos{format ? ` ${pluralFormatName(format.name, 2)}` : ` ${l.albaranUnit ?? ''}`} han llegado?
-            </p>
-            <div className="flex items-center justify-center gap-4">
-              <button type="button" onClick={() => onQty(l.qty - 1)}
-                className="w-[60px] h-[60px] rounded-full border border-border-default bg-card text-text-primary flex items-center justify-center hover:bg-page active:scale-95 transition-base">
-                <Minus size={26} />
-              </button>
-              <div className="min-w-[110px] text-center">
-                <span className="text-4xl font-display tabular-nums text-text-primary">{fmtQty(l.qty)}</span>
-                <p className="text-sm text-text-secondary mt-0.5">{countingUnitLabel}</p>
-              </div>
-              <button type="button" onClick={() => onQty(l.qty + 1)}
-                className="w-[60px] h-[60px] rounded-full border border-border-default bg-card text-text-primary flex items-center justify-center hover:bg-page active:scale-95 transition-base">
-                <Plus size={26} />
+          {/* Bloque del artículo: superficie propia, todo agrupado (§1.5 / §3.3) */}
+          <div className="mt-3 rounded-xl bg-card border border-border-default p-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <span className="inline-flex items-center gap-2 min-w-0">
+                <Check size={20} className="text-success shrink-0" />
+                <span className="text-lg font-display font-medium text-text-primary truncate">{l.matchedName}</span>
+              </span>
+              <button type="button" onClick={onOpenPicker}
+                className="shrink-0 text-sm text-text-secondary hover:text-text-primary underline">
+                Cambiar
               </button>
             </div>
-          </div>
 
-          {/* Franja verde: traducción a unidad base */}
-          {baseTotal != null && (
-            <div className="rounded-lg bg-success-bg px-3 py-2 text-center">
-              <p className="text-sm font-medium text-success">
-                → Entran {fmtQty(baseTotal)} {baseUnitWord(l.baseUnit?.abbr)} al almacén
-                {totalN != null && ` · ${fmtMoney(totalN)} €`}
+            {l.formats.length === 0 && !l.formatsLoading ? (
+              <p className="mt-1.5 text-sm text-text-primary">
+                <AlertTriangle size={14} className="inline mr-1 -mt-0.5 text-warning" />
+                Sin formato de compra definido — marca abajo que lo mire la oficina.
               </p>
-            </div>
-          )}
-
-          {/* Importe TOTAL de la línea — el € vive dentro del campo */}
-          <div className="mt-3">
-            <label className="block text-xs text-text-secondary mb-1">Importe de esta línea (el total que pone el albarán)</label>
-            <div className="flex items-center rounded-lg border border-border-default bg-card focus-within:ring-2 focus-within:ring-accent/30">
-              <input type="text" inputMode="decimal" value={l.total} onChange={e => onTotal(e.target.value)}
-                placeholder="0,00"
-                className="flex-1 min-w-0 px-3 py-2.5 text-base text-right bg-transparent text-text-primary focus:outline-none" />
-              <span className="pr-3 text-base text-text-secondary">€</span>
-            </div>
+            ) : needsFormatChoice ? (
+              <div className="mt-2.5 space-y-1.5">
+                <p className="text-sm text-text-secondary">¿En qué viene?</p>
+                <div className="flex flex-wrap gap-2">
+                  {l.formats.map(f => (
+                    <button key={f.id} type="button" onClick={() => onFormat(f.id)}
+                      className="px-3 h-tap-small rounded-lg text-sm border border-border-default bg-page text-text-primary hover:bg-border-default/40 transition-base">
+                      {f.name}
+                      {f.qtyInBase != null && (
+                        <span className="text-text-secondary"> · {fmtQty(f.qtyInBase)} {baseUnitWord(l.baseUnit?.abbr)}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : format ? (
+              <p className="mt-1 text-sm text-text-secondary">
+                viene en {pluralFormatName(format.name, 2)} de {fmtQty(format.qtyInBase ?? 0)} {baseUnitWord(l.baseUnit?.abbr)}
+                {l.formats.length > 1 && (
+                  <button type="button" onClick={() => onFormat('')} className="ml-1.5 text-sm text-text-primary underline">cambiar</button>
+                )}
+              </p>
+            ) : null}
           </div>
 
-          {/* Coste unitario resultante, recalculado en vivo — rojo si es implausible, sin bloquear */}
-          {perBase != null && (
-            <p className={`mt-1.5 text-xs text-center ${alert ? 'text-danger font-medium' : hasReference ? 'text-success' : 'text-text-secondary'}`}>
-              {alert && <AlertTriangle size={12} className="inline mr-1 -mt-0.5" />}
-              {fmtHumanPrice(perBase)} €/{l.baseUnit?.abbr ?? 'ud'}
-              {alert && ` · ${alert.pct > 0 ? '+' : ''}${alert.pct}% sobre lo habitual`}
-            </p>
+          {waitingForFormat ? (
+            <LineSkeleton />
+          ) : needsFormatChoice ? null : (
+            <>
+              {/* Aviso de división no exacta — se pregunta, no se redondea en silencio */}
+              {l.qtySource === 'inexact' && format && (
+                <div className="mt-2.5 flex items-start gap-1.5 text-sm rounded-lg px-3 py-2.5 bg-warning-bg text-text-primary">
+                  <AlertTriangle size={15} className="shrink-0 mt-0.5 text-warning" />
+                  <span>El albarán dice {fmtQty(l.albaranQty ?? 0)} {l.albaranUnit ?? 'ud'} y el formato es de {fmtQty(format.qtyInBase ?? 0)} — no cuadra exacto. Cuenta lo que ves y ajusta.</span>
+                </div>
+              )}
+
+              {/* Pregunta + contador, unidad SIEMPRE junto al número */}
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 py-4">
+                <p className="text-[18px] font-medium text-text-primary text-center">
+                  ¿Cuántos{format ? ` ${pluralFormatName(format.name, 2)}` : ` ${l.albaranUnit ?? ''}`} han llegado?
+                </p>
+                <div className="flex items-center justify-center gap-5">
+                  <button type="button" onClick={() => onQty(l.qty - 1)} aria-label="Menos"
+                    className="w-[52px] h-[52px] rounded-full border border-border-default bg-card text-text-primary flex items-center justify-center hover:bg-page active:scale-95 transition-base">
+                    <Minus size={24} />
+                  </button>
+                  <div className="min-w-[96px] text-center">
+                    <span className="text-3xl font-display font-medium tabular-nums text-text-primary">{fmtQty(l.qty)}</span>
+                    <p className="text-[15px] text-text-secondary mt-0.5">{countingUnitLabel}</p>
+                  </div>
+                  <button type="button" onClick={() => onQty(l.qty + 1)} aria-label="Más"
+                    className="w-[52px] h-[52px] rounded-full border border-border-default bg-card text-text-primary flex items-center justify-center hover:bg-page active:scale-95 transition-base">
+                    <Plus size={24} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Franja de resultado: fondo success, texto en primary (el verde
+                  del propio texto no llega a 4.5:1 sobre el fondo — ver cabecera) */}
+              {baseTotal != null && (
+                <div className="rounded-lg bg-success-bg px-3 py-2.5 text-center">
+                  <p className="text-[15px] font-medium text-text-primary">
+                    → Entran {fmtQty(baseTotal)} {baseUnitWord(l.baseUnit?.abbr)} al almacén
+                  </p>
+                </div>
+              )}
+
+              {/* Importe: en fila, referencia del albarán siempre visible debajo de la etiqueta */}
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <label className="block text-sm text-text-secondary">Importe de esta línea</label>
+                  {l.albaranLineAmount != null && (
+                    <p className={`text-sm mt-0.5 ${totalChanged ? 'text-warning font-medium' : 'text-text-secondary'}`}>
+                      el albarán dice {fmtMoney(l.albaranLineAmount)} €
+                    </p>
+                  )}
+                </div>
+                <div className={`shrink-0 w-[108px] flex items-center rounded-lg border bg-card focus-within:ring-2 focus-within:ring-accent/30 ${totalChanged ? 'border-warning' : 'border-border-default'}`}>
+                  <input type="text" inputMode="decimal" value={l.total} onChange={e => onTotal(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full min-w-0 pl-2.5 py-2.5 text-[17px] text-right bg-transparent text-text-primary focus:outline-none" />
+                  <span className="pr-2 text-sm text-text-secondary">€</span>
+                </div>
+              </div>
+
+              {totalChanged && totalDiff != null && (
+                <div className="mt-2 rounded-lg bg-warning-bg px-3 py-2.5 text-center">
+                  <p className="text-sm font-medium text-text-primary">
+                    No coincide con el albarán. {totalDiff > 0 ? `Sobran ${fmtMoney(totalDiff)} €` : `Faltan ${fmtMoney(-totalDiff)} €`}
+                  </p>
+                </div>
+              )}
+
+              {/* Coste unitario resultante, recalculado en vivo — avisa, no bloquea */}
+              {perBase != null && (
+                <p className={`mt-2 text-sm text-center ${alert ? 'text-text-primary font-semibold' : hasReference ? 'text-text-secondary' : 'text-text-secondary'}`}>
+                  {alert && <AlertTriangle size={14} className="inline mr-1 -mt-0.5 text-warning" />}
+                  {fmtHumanPrice(perBase)} €/{l.baseUnit?.abbr ?? 'ud'}
+                  {alert && ` · ${alert.pct > 0 ? '+' : ''}${alert.pct}% sobre lo habitual`}
+                </p>
+              )}
+            </>
           )}
         </div>
       )}
 
-      <button type="button" onClick={onFlag}
-        className={`mt-3 self-center inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-base ${
-          l.flagged ? 'bg-warning text-text-on-accent' : 'text-text-tertiary hover:text-text-secondary'
-        }`}>
-        <Flag size={12} /> {l.flagged ? 'Oficina lo revisará' : 'No lo tengo claro — que lo mire la oficina'}
-      </button>
+      {/* Bandera: botón secundario NEUTRO, ancho completo, 48px — NUNCA color
+          de alarma (§4.a del encargo: marcar es la salida correcta, no un error). */}
+      {!l.matchLoading && (
+        <button type="button" onClick={onFlag}
+          className={`mt-3 w-full inline-flex items-center justify-center gap-2 h-touch-base rounded-lg text-sm font-medium border transition-base ${
+            l.flagged ? 'border-accent bg-accent-bg text-text-primary' : 'border-border-default bg-card text-text-primary hover:bg-page'
+          }`}>
+          <Flag size={16} /> {l.flagged ? 'Marcada — oficina lo revisará' : 'No lo tengo claro — que lo mire la oficina'}
+        </button>
+      )}
     </div>
   )
 }
