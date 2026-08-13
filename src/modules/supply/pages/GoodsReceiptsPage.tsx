@@ -31,8 +31,11 @@ import {
   listGoodsReceiptLines,
   voidReceipt,
   postPendingReceipt,
+  getReceiptDocTotal,
+  getReceiptCorrectionStreak,
   type GoodsReceipt,
   type GoodsReceiptStatus,
+  type CorrectionStreak,
   getSupplySettings,
   saveSupplySettings,
   type SupplySettings,
@@ -171,6 +174,29 @@ export default function GoodsReceiptsPage() {
     return () => { cancelled = true }
   }, [activeAccountId, accountsLoading, resolvedLocationId, reloadTick])
 
+  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §5 — "¿sigue haciendo falta
+  // revisar?" Solo lectura, por local (un local a la vez elegido — con "todos
+  // los locales" no se muestra, mezclar locales no dice nada útil de UNO). Usa
+  // los ids ya cargados arriba (receipts, ya viene ordenado por receipt_date
+  // desc) — no repite la consulta de recepciones, solo lee sus líneas.
+  const [streak, setStreak] = useState<CorrectionStreak | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const confirmedIds = resolvedLocationId
+      ? receipts.filter(r => r.status === 'confirmado').slice(0, 60).map(r => r.id)
+      : []
+    // Sin local elegido o sin recepciones confirmadas: resuelve a null igual,
+    // pero SIEMPRE por la vía async (nunca setState síncrono en el cuerpo del
+    // efecto — mismo criterio que el resto del fetching de esta página).
+    const fetchPromise = confirmedIds.length > 0
+      ? getReceiptCorrectionStreak(confirmedIds)
+      : Promise.resolve(null)
+    fetchPromise
+      .then(s => { if (!cancelled) setStreak(s) })
+      .catch(() => { if (!cancelled) setStreak(null) })
+    return () => { cancelled = true }
+  }, [receipts, resolvedLocationId])
+
   const supplierNameById = useMemo(() => {
     const m = new Map<string, string>()
     suppliers.forEach(s => m.set(s.id, s.name))
@@ -215,6 +241,15 @@ export default function GoodsReceiptsPage() {
         listGoodsReceiptLines(id),
       ])
       if (!r) throw new Error('No se pudo recuperar la recepción.')
+      // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — el total que leyó la
+      // IA ya vive en goods_receipt_ai_session (se escribió al escanear); se lee
+      // de vuelta para el cuadre. Best-effort: sin OCR (r.aiSessionId null) o si
+      // falla, el cuadre simplemente no se muestra — no rompe abrir la recepción.
+      let docTotal: number | null = null
+      if (r.aiSessionId) {
+        try { docTotal = await getReceiptDocTotal(r.aiSessionId) }
+        catch (e) { console.error('handleReviewDraft: no se pudo leer el total del albarán', e) }
+      }
       const pf: ReceiptPrefill = {
         sourceReceiptId: r.id,
         supplierId: r.supplierId ?? '',
@@ -224,6 +259,7 @@ export default function GoodsReceiptsPage() {
         isDraft: true,
         code: r.code,
         rawDocumentUrl: r.rawDocumentUrl,
+        docTotal,
         lines: lines.map(l => ({
           recipeItemId: l.recipeItemId,
           productName: l.productName,
@@ -235,6 +271,12 @@ export default function GoodsReceiptsPage() {
           // casado automático no tenía con qué casar al revisar un borrador.
           rawText: l.rawText,
           supplierCode: l.supplierCode,
+          // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — igual que
+          // rawText/supplierCode arriba: YA existían en BBDD y no se leían de
+          // vuelta (se perdía el cuadre por línea y el motivo ya puesto).
+          docQty: l.docQty,
+          docAmount: l.docAmount,
+          discrepancyReason: l.discrepancyReason,
         })),
       }
       setPrefill(pf)
@@ -300,12 +342,20 @@ export default function GoodsReceiptsPage() {
         listGoodsReceiptLines(id),
       ])
       if (!r) throw new Error('No se pudo recuperar la recepción.')
+      // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — mismo cuadre que en
+      // handleReviewDraft (ver comentario allí). No bloquea si falla.
+      let docTotal: number | null = null
+      if (r.aiSessionId) {
+        try { docTotal = await getReceiptDocTotal(r.aiSessionId) }
+        catch (e) { console.error('handleCorrect: no se pudo leer el total del albarán', e) }
+      }
       const pf: ReceiptPrefill = {
         sourceReceiptId: r.id,
         supplierId: r.supplierId ?? '',
         locationId: r.locationId,
         purchaseOrderId: r.purchaseOrderId,
         supplierDocNumber: r.supplierDocNumber,
+        docTotal,
         lines: lines.map(l => ({
           recipeItemId: l.recipeItemId,
           productName: l.productName,
@@ -315,6 +365,9 @@ export default function GoodsReceiptsPage() {
           purchaseOrderLineId: l.purchaseOrderLineId,
           rawText: l.rawText,
           supplierCode: l.supplierCode,
+          docQty: l.docQty,
+          docAmount: l.docAmount,
+          discrepancyReason: l.discrepancyReason,
         })),
       }
       setPrefill(pf)
@@ -415,6 +468,36 @@ export default function GoodsReceiptsPage() {
           </button>
         </div>
       </div>
+
+      {/* ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §5 — solo lectura + una
+          propuesta, nada automático. Sin botón que escriba receipt_approval=
+          'directo': ese valor no lo consume ninguna pantalla todavía (modo
+          directo es P4, encargo aparte) — sería un estado huérfano. */}
+      {streak && streak.totalCount > 0 && (
+        <div className="p-3 rounded-md border border-border-default bg-page space-y-1.5">
+          <p className="text-sm font-medium text-text-primary">¿Sigue haciendo falta revisar?</p>
+          <p className="text-xs text-text-secondary">
+            La revisión se apaga sola cuando cocina acierte {streak.streakGoal} recepciones seguidas.
+          </p>
+          <div className="flex items-center gap-6 pt-0.5">
+            <div>
+              <p className="text-lg font-display tabular-nums text-text-primary">{streak.correctedCount} de {streak.totalCount}</p>
+              <p className="text-[11px] text-text-secondary">Corregidas por oficina</p>
+            </div>
+            <div>
+              <p className={`text-lg font-display tabular-nums ${streak.metGoal ? 'text-success' : 'text-text-primary'}`}>
+                {streak.streak} de {streak.streakGoal}
+              </p>
+              <p className="text-[11px] text-text-secondary">Seguidas sin fallo</p>
+            </div>
+          </div>
+          {streak.metGoal && (
+            <p className="text-xs text-success pt-0.5">
+              Racha cumplida — ya podrías pasar este local a confirmación directa (sin revisión de oficina).
+            </p>
+          )}
+        </div>
+      )}
 
       {flash && (
         <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm">{flash}</div>

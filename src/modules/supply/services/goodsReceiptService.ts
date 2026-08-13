@@ -24,6 +24,22 @@ import { createRecipeItem, updateRecipeItem, recomputeRecipeItem } from '@/modul
 import { createSupplier } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 
+// ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §4/§5 — vocabulario del motivo
+// que pone LA OFICINA al cambiar una cantidad que ya había contado quien
+// recibió (GoodsReceiptForm, picker inline). Vive aquí (no en la página) porque
+// §5 (racha de correcciones) también lo necesita para leer discrepancy_reason y
+// distinguir "lo puso la oficina al corregir" de "lo puso el dropdown del panel
+// de repaso" (mismo campo, otro origen — no se crea columna nueva). El prefijo
+// es invisible en pantalla: officeReasonDisplay lo quita al mostrarlo.
+export const OFFICE_QTY_REASON_PREFIX = 'cambio oficina: '
+export const OFFICE_QTY_REASONS = ['lo dice el albarán', 'llamé a cocina', 'error evidente'] as const
+export function isOfficeQtyReason(stored: string | null | undefined): boolean {
+  return !!stored && stored.startsWith(OFFICE_QTY_REASON_PREFIX)
+}
+export function officeReasonDisplay(stored: string): string {
+  return isOfficeQtyReason(stored) ? stored.slice(OFFICE_QTY_REASON_PREFIX.length) : stored
+}
+
 // ── Tipos de dominio (camelCase) ──
 export type GoodsReceiptStatus = 'borrador' | 'confirmado' | 'anulado'
 export type GoodsReceiptSource = 'manual' | 'ocr'
@@ -574,6 +590,87 @@ export async function getGoodsReceiptById(id: string): Promise<GoodsReceipt | nu
     .maybeSingle()
   if (error) throw new Error(`Error obteniendo recepción ${id}: ${error.message}`)
   return data ? rowToReceipt(data as Row) : null
+}
+
+/**
+ * Total del albarán leído por la IA (ENCARGO CODE 13/08 fix/recepcion-p2-oficina,
+ * §3). YA vive en goods_receipt_ai_session.parsed_result.document.grand_total
+ * (se escribe al escanear, se lee de vuelta al revisar un borrador guardado) —
+ * no es una columna nueva, es cablear un dato que ya está. null si el albarán
+ * no vino de OCR o la IA no leyó un total.
+ */
+export async function getReceiptDocTotal(aiSessionId: string): Promise<number | null> {
+  requireSupabase()
+  const { data, error } = await from('goods_receipt_ai_session')
+    .select('parsed_result')
+    .eq('id', aiSessionId)
+    .maybeSingle()
+  if (error) throw new Error(`Error obteniendo el total leído del albarán: ${error.message}`)
+  const row = data as Row | null
+  const parsed = row?.parsed_result as { document?: { grand_total?: number | string | null } } | null
+  const total = parsed?.document?.grand_total
+  return total === null || total === undefined ? null : Number(total)
+}
+
+// ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §5 — umbral de racha (diseño
+// claude_folvy_recepcion_pantalla_diseno_20260813.md §6): 30 recepciones
+// CONSECUTIVAS sin corrección de cantidad, no un porcentaje (un porcentaje se
+// cumple con fallos recientes; una racha demuestra que el proceso está estable
+// AHORA). Al alcanzarlo, Folvy PROPONE pasar el local a confirmación directa —
+// no lo cambia solo (ese modo, P4, es un encargo aparte: hoy no hay pantalla
+// que lo consuma).
+export const CORRECTION_STREAK_GOAL = 30
+
+export interface CorrectionStreak {
+  correctedCount: number   // de las últimas `totalCount` recepciones confirmadas
+  totalCount: number
+  streak: number           // seguidas sin corrección, contando desde la más reciente
+  streakGoal: number
+  metGoal: boolean          // streak >= streakGoal
+}
+
+/**
+ * Racha de recepciones confirmadas SIN que la oficina tuviera que corregir una
+ * cantidad (ENCARGO CODE 13/08 fix/recepcion-p2-oficina, §5). Recibe los ids de
+ * recepciones CONFIRMADAS ya cargados por el llamador (lista de Recepciones,
+ * ya filtrada por local), del más reciente al más antiguo — no vuelve a
+ * consultar goods_receipt, solo lee sus líneas. "Corregida" = alguna línea con
+ * discrepancy_reason puesto por el picker de oficina (isOfficeQtyReason) — NO
+ * cualquier discrepancy_reason (el dropdown del panel de repaso usa el mismo
+ * campo para otra cosa: por qué difiere de lo pedido/del albarán).
+ */
+export async function getReceiptCorrectionStreak(
+  confirmedReceiptIdsRecentFirst: string[],
+): Promise<CorrectionStreak> {
+  requireSupabase()
+  if (confirmedReceiptIdsRecentFirst.length === 0) {
+    return { correctedCount: 0, totalCount: 0, streak: 0, streakGoal: CORRECTION_STREAK_GOAL, metGoal: false }
+  }
+  const { data, error } = await from('goods_receipt_line')
+    .select('goods_receipt_id, discrepancy_reason')
+    .in('goods_receipt_id', confirmedReceiptIdsRecentFirst)
+  if (error) throw new Error(`Error calculando la racha de correcciones: ${error.message}`)
+
+  const correctedIds = new Set<string>()
+  for (const row of (data as Row[]) ?? []) {
+    if (isOfficeQtyReason(row.discrepancy_reason as string | null)) {
+      correctedIds.add(row.goods_receipt_id as string)
+    }
+  }
+
+  let streak = 0
+  for (const id of confirmedReceiptIdsRecentFirst) {
+    if (correctedIds.has(id)) break
+    streak++
+  }
+
+  return {
+    correctedCount: correctedIds.size,
+    totalCount: confirmedReceiptIdsRecentFirst.length,
+    streak,
+    streakGoal: CORRECTION_STREAK_GOAL,
+    metGoal: streak >= CORRECTION_STREAK_GOAL,
+  }
 }
 
 export async function createGoodsReceipt(input: GoodsReceiptInsert): Promise<GoodsReceipt> {

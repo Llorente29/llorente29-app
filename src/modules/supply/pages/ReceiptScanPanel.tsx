@@ -89,6 +89,10 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
   function buildOcrPrefill(header: Awaited<ReturnType<typeof resolveReceiptHeader>>): OcrPrefill {
     return {
       aiSessionId: result!.sessionId,
+      // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — grand_total ya se lee
+      // (se muestra arriba como "Total") pero se descartaba aquí; ahora viaja
+      // hasta el cuadre de oficina.
+      docTotal: result!.document.grand_total ?? null,
       supplierId: header.supplierId,
       proposedSupplierName: result!.document.supplier_name ?? null,
       proposedSupplierNif: result!.document.supplier_tax_id ?? null,
