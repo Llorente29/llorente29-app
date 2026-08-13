@@ -135,12 +135,17 @@ export function onPrintJobExhausted(cb: ExhaustedListener): () => void {
 // construcción (módulos independientes, ver comentario de latido más abajo);
 // esto solo le añade backoff (Tarea B) para no esperar el intervalo fijo
 // completo tras un fallo de red.
-async function tick(): Promise<void> {
-  if (busy || !deviceToken) return;
+//
+// fix/sondeo-adaptativo-tablet (13/08), Tarea B1: devuelve si hubo trabajo
+// (false = cola vacía) para que runPollingLoop pueda alejar el ritmo cuando
+// no hay nada que imprimir — la causa raíz del incidente del 13/08 era
+// exactamente esto: claim_print_jobs sondeando cada 3s toda la noche.
+async function tick(): Promise<boolean> {
+  if (busy || !deviceToken) return true; // no es una racha vacía real, es un ciclo saltado
   busy = true;
   try {
     const jobs = await rpc('claim_print_jobs', { p_device_token: deviceToken, p_limit: 10 });
-    if (!Array.isArray(jobs) || jobs.length === 0) return;
+    if (!Array.isArray(jobs) || jobs.length === 0) return false;
 
     for (const job of jobs) {
       const { job_id, doc_type, payload, printer, config, attempts } = job;
@@ -183,6 +188,7 @@ async function tick(): Promise<void> {
         if (attempts >= 3) notifyPrintExhausted({ docType: doc_type, printerName: printer?.name || '?', error: errorMsg });
       }
     }
+    return true;
   } catch (e: any) {
     console.error('[folvy-print] claim:', e?.message || e);
     // Se relanza para que runPollingLoop lo cuente como fallo y aplique
@@ -205,7 +211,10 @@ export function startPrintWorker(opts: { token: string; pollMs?: number }) {
   const ms = opts.pollMs || 3000;
   // fix/tablet-robustez (12/08), Tarea B: backoff en fallo (1s,2s,5s,10s,30s,
   // luego cada 30s), vuelve a los 3s normales en cuanto un reclamo funciona.
-  pollHandle = runPollingLoop({ call: tick, normalIntervalMs: ms });
+  // fix/sondeo-adaptativo-tablet (13/08), Tarea B1: sin trabajo 20 ciclos
+  // seguidos (~1 min a 3s) sube progresivamente hasta 45s; vuelve a los 3s
+  // AL INSTANTE en cuanto haya un job que reclamar (ver wake() en pantalla).
+  pollHandle = runPollingLoop({ call: tick, normalIntervalMs: ms, idleIntervalMs: 45_000, idleAfter: 20 });
   console.log(`[folvy-print] worker iniciado (sondeo ${ms} ms)`);
 }
 

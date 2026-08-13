@@ -11,6 +11,14 @@
 // (reintenta siempre). Esa distinción es el corazón del incidente del 11/08:
 // un timeout de 3s en kds_board se confundió con un token revocado y pidió
 // vincular de nuevo una tablet que seguía perfectamente vinculada.
+//
+// fix/sondeo-adaptativo-tablet (13/08, Encargo B): backoff ante INACTIVIDAD,
+// que conviven con el de fallo de arriba sin pisarlo (ver runPollingLoop):
+//   - Fallo -> esperar más para no machacar una base que va mal (ya existía).
+//   - Inactividad -> esperar más porque no hay nada que hacer (esto es nuevo).
+// Causa raíz: docs/claude_folvy_incidente_20260813_conexiones_causa_raiz.md —
+// 3 tablets, cocinas cerradas, ~18.000 peticiones en 2,5h porque sondean a
+// ritmo fijo y nadie les dijo nunca que no hay nada que hacer.
 
 export type RetryState =
   | { phase: 'trying'; attempt: number; slow: boolean }
@@ -28,36 +36,87 @@ function delayFor(attempt: number): number {
 // de error, que varía entre fetch nativo y el cliente de Supabase.
 const SLOW_THRESHOLD_MS = 2000
 
+// B2: "local cerrado" — no hay una señal fiable única (RECON: business_hours
+// existe pero no todos los locales lo tienen cargado, y de todas formas no
+// reacciona a un toque en pantalla). Se usa la señal explícita del propio
+// encargo: 60 min SEGUIDOS sin actividad real (ningún poll con trabajo) tira
+// el ritmo al suelo, pase lo que pase con idleIntervalMs. Vuelve al instante
+// en cuanto haya trabajo o alguien toque la pantalla (ver wake()).
+const CLOSED_AFTER_MS = 60 * 60 * 1000
+const CLOSED_INTERVAL_MS = 5 * 60 * 1000
+
 export interface RetryLoopHandle {
   cancel: () => void
+  /** Actividad real del usuario (toque en pantalla) — Tarea B2: descarta lo
+   *  que quede de la espera actual y sondea ya, al ritmo normal. */
+  wake: () => void
 }
 
-/** Bucle RECURRENTE (latido, reclamo de trabajos de impresión — Tarea B):
- *  a diferencia de runRetryLoop (que termina al primer éxito), este sigue
- *  llamando para siempre a la cadencia normal; si falla, se aleja con el
- *  mismo backoff y vuelve a la cadencia normal en cuanto un intento
- *  funciona. Nunca distingue rechazo explícito — no aplica aquí, el
- *  latido/reclamo no muestran pantalla de vincular. */
+/** Bucle RECURRENTE (latido, reclamo de trabajos de impresión, lecturas del
+ *  pase — Tarea B): a diferencia de runRetryLoop (que termina al primer
+ *  éxito), este sigue llamando para siempre a la cadencia normal; si falla,
+ *  se aleja con el mismo backoff y vuelve a la cadencia normal en cuanto un
+ *  intento funciona. Nunca distingue rechazo explícito — no aplica aquí, el
+ *  latido/reclamo no muestran pantalla de vincular.
+ *
+ *  Ritmo adaptativo por INACTIVIDAD (opcional, Tarea B1+B2): `call` informa
+ *  si hubo trabajo devolviendo `false` explícito cuando NO lo hubo (vacío);
+ *  cualquier otra cosa (`true`/`void`) cuenta como actividad y reinicia AL
+ *  INSTANTE al ritmo normal, sin histéresis. Sin `idleIntervalMs`+`idleAfter`
+ *  el bucle se comporta exactamente como antes (ritmo fijo + backoff de
+ *  fallo) — así el latido (que no pasa estas opciones) queda intacto.
+ *  Tras `idleAfter` ciclos vacíos seguidos, el intervalo sube PROGRESIVAMENTE
+ *  (dobla cada ciclo, nunca de golpe) hasta `idleIntervalMs`. Si la racha
+ *  vacía sigue 60 min reales (B2, "local cerrado"), el suelo baja más, a
+ *  1 llamada cada 5 min, independientemente de `idleIntervalMs`.
+ *  El backoff de fallo y el de inactividad NO se interfieren: un fallo no
+ *  reinicia la racha de inactividad, solo pausa su avance mientras reintenta. */
 export function runPollingLoop(opts: {
-  call: () => Promise<void>
+  call: () => Promise<boolean | void>
   normalIntervalMs: number
+  idleIntervalMs?: number
+  idleAfter?: number
 }): RetryLoopHandle {
   let cancelled = false
   let consecutiveFailures = 0
+  let consecutiveIdle = 0
+  let idleSinceMs: number | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+
+  function nextDelay(): number {
+    const { normalIntervalMs, idleIntervalMs, idleAfter } = opts
+    if (!idleIntervalMs || !idleAfter || consecutiveIdle < idleAfter) return normalIntervalMs
+    if (idleSinceMs !== null && Date.now() - idleSinceMs >= CLOSED_AFTER_MS) {
+      return CLOSED_INTERVAL_MS
+    }
+    const ticksPastThreshold = consecutiveIdle - idleAfter + 1
+    const ratio = idleIntervalMs / normalIntervalMs
+    const factor = Math.min(2 ** ticksPastThreshold, ratio)
+    return Math.min(Math.round(normalIntervalMs * factor), idleIntervalMs)
+  }
 
   function schedule(ms: number) {
     if (cancelled) return
+    if (timer) clearTimeout(timer)
     timer = setTimeout(() => { void tick() }, ms)
   }
 
   async function tick(): Promise<void> {
     if (cancelled) return
     try {
-      await opts.call()
+      const hadWork = await opts.call()
       consecutiveFailures = 0
-      schedule(opts.normalIntervalMs)
+      if (hadWork === false) {
+        consecutiveIdle += 1
+        if (idleSinceMs === null) idleSinceMs = Date.now()
+      } else {
+        consecutiveIdle = 0
+        idleSinceMs = null
+      }
+      schedule(nextDelay())
     } catch {
+      // No toca consecutiveIdle/idleSinceMs: el fallo no cuenta como
+      // actividad ni la interrumpe, solo aplaza el próximo intento.
       const delay = delayFor(consecutiveFailures)
       consecutiveFailures += 1
       schedule(delay)
@@ -70,6 +129,13 @@ export function runPollingLoop(opts: {
     cancel() {
       cancelled = true
       if (timer) clearTimeout(timer)
+    },
+    wake() {
+      if (cancelled) return
+      consecutiveIdle = 0
+      idleSinceMs = null
+      if (timer) { clearTimeout(timer); timer = null }
+      void tick()
     },
   }
 }
@@ -116,6 +182,11 @@ export function runRetryLoop<T>(opts: {
     cancel() {
       cancelled = true
       if (timer) clearTimeout(timer)
+    },
+    wake() {
+      if (cancelled) return
+      if (timer) { clearTimeout(timer); timer = null }
+      void tick()
     },
   }
 }

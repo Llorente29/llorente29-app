@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutGrid, Columns3, RefreshCw, Volume2, VolumeX } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import { playNewTicketSound } from '@/modules/kds/kdsUtils'
 import { markLine as kdsMarkLine } from '@/modules/kds/services/kdsService'
 import CookModePanel from '@/modules/kds/components/CookModePanel'
@@ -28,6 +29,23 @@ import ClosuresChip from '@/modules/kds/components/ClosuresChip'
 import ClosureAnomalyAlarm from '@/modules/kds/components/ClosureAnomalyAlarm'
 
 const POLL_MS = 10_000
+// fix/sondeo-adaptativo-tablet (13/08), Tarea B1: sin cambios ~5 min (30
+// ciclos a 10s) sube progresivamente hasta 60s; vuelve a los 10s AL INSTANTE
+// en cuanto cambie algo (pedido nuevo, cambio de estado) o alguien toque
+// "Actualizar" (ver wake()).
+const FEED_IDLE_MS = 60_000
+const FEED_IDLE_AFTER = 30
+
+// Huella de "qué se ve en pantalla" para decidir si el poll trajo trabajo.
+// Deliberadamente SIN `minutos` (cuenta atrás viva, cambia solo por el
+// reloj) — solo lo que de verdad importa para el pase: qué pedidos hay y en
+// qué estado/hito de reparto están.
+function feedFingerprint(orders: OrderFeedItem[]): string {
+  return orders
+    .map(o => `${o.sale_id}:${o.order_status}:${o.delivery_state ?? ''}:${o.ready_at ?? ''}:${o.delivered_at ?? ''}`)
+    .sort()
+    .join('|')
+}
 
 type FilterKey = 'activos' | 'nuevos' | 'curso' | 'cerrados' | 'incidencias'
 type ViewKey = 'grid' | 'kanban'
@@ -80,8 +98,15 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
   const firstLoad = useRef(true)
   const soundRef = useRef(true)
   soundRef.current = soundOn
+  const lastFingerprintRef = useRef<string | null>(null)
+  const pollHandleRef = useRef<RetryLoopHandle | null>(null)
 
-  const refresh = useCallback(async () => {
+  // Devuelve si hubo trabajo (huella distinta a la última vez) para que
+  // runPollingLoop pueda alejar el ritmo cuando el pase lleva rato quieto
+  // (Tarea B1). Un fallo se RELANZA (no se traga) para que el backoff de
+  // fallo, ya existente, también aplique aquí — antes este poll no lo tenía.
+  const refresh = useCallback(async (): Promise<boolean> => {
+    let hadWork: boolean
     try {
       const res = await getOrdersFeed(locationId, token)
       const next = res.orders ?? []
@@ -90,14 +115,18 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
         if (fresh) playNewTicketSound()
       }
       knownIds.current = new Set(next.map(o => o.sale_id))
+      const fp = feedFingerprint(next)
+      hadWork = firstLoad.current || fp !== lastFingerprintRef.current
+      lastFingerprintRef.current = fp
       firstLoad.current = false
       setOrders(next)
       setError(null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando los pedidos')
-    } finally {
       setLoading(false)
+      throw e
     }
+    setLoading(false)
     // Banner del día (KPI cocina): best-effort, no bloquea ni rompe el feed. Pero NO
     // silencioso: un fallo aquí (p. ej. RPC caída) debe ser diagnosticable en consola.
     try {
@@ -105,6 +134,7 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
     } catch (e) {
       console.warn('[KPI cocina] banner no cargó:', e)
     }
+    return hadWork
   }, [locationId, token])
 
   const advance = useCallback(async (saleId: string, next: OrderStatus) => {
@@ -117,8 +147,10 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
       setError(e instanceof Error ? e.message : 'No se pudo actualizar el pedido')
     } finally {
       // Confirma el éxito o REVIERTE el pintado optimista con la verdad del feed
-      // (si la RPC falló, el servidor conserva el estado anterior).
-      void refresh()
+      // (si la RPC falló, el servidor conserva el estado anterior). Un fallo del
+      // propio refresh no debe volver a pisar el mensaje de error de arriba —
+      // el próximo ciclo del poll ya lo reintenta con su propio backoff.
+      void refresh().catch(() => { /* runPollingLoop reintentará */ })
     }
   }, [refresh, token])
 
@@ -137,22 +169,29 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
   const markLineHandler = useCallback(async (lineId: string) => {
     try {
       await kdsMarkLine(lineId, token)
-      await refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo marcar la línea')
+      return
     }
-  }, [refresh])
+    try { await refresh() } catch { /* runPollingLoop reintentará */ }
+  }, [refresh, token])
 
+  // Carga inicial + poll adaptativo (Tarea B1). Un único bucle: runPollingLoop
+  // ya hace el primer sondeo al crearse, así que no hace falta un refresh()
+  // aparte al montar (evitaría una doble llamada).
   useEffect(() => {
     firstLoad.current = true
+    knownIds.current = new Set()
+    lastFingerprintRef.current = null
     setLoading(true)
-    void refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationId])
-
-  useEffect(() => {
-    const id = window.setInterval(() => { void refresh() }, POLL_MS)
-    return () => window.clearInterval(id)
+    const handle = runPollingLoop({
+      call: refresh,
+      normalIntervalMs: POLL_MS,
+      idleIntervalMs: FEED_IDLE_MS,
+      idleAfter: FEED_IDLE_AFTER,
+    })
+    pollHandleRef.current = handle
+    return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
   // Reloj vivo del chip de cocina: UN tick por minuto para todas las tarjetas.
@@ -166,7 +205,10 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
     if (!isSupabaseEnabled || !supabase) return
     const ch = supabase
       .channel(`orders-feed-${locationId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sale' }, () => { void refresh() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sale' }, () => {
+        if (pollHandleRef.current) pollHandleRef.current.wake()
+        else void refresh().catch(() => {})
+      })
       .subscribe()
     return () => { void supabase!.removeChannel(ch) }
   }, [locationId, token, refresh])
@@ -217,7 +259,7 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
           >
             {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
-          <button onClick={() => void refresh()} title="Actualizar" className="p-2 rounded-lg bg-card text-text-secondary border border-default hover:text-text-primary hover:bg-page">
+          <button onClick={() => pollHandleRef.current?.wake()} title="Actualizar" className="p-2 rounded-lg bg-card text-text-secondary border border-default hover:text-text-primary hover:bg-page">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
           <div className="flex bg-accent-bg rounded-xl p-0.5 gap-0.5">

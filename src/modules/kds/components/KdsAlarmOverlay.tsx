@@ -9,15 +9,22 @@
 // Se monta A NIVEL DE RUTA (KdsKioskRoute / TabletStationRoute), no dentro de KdsBoard,
 // para verse aunque la pestaña activa no sea "Cocina". Poll cada 10 s + Realtime
 // (solo sesión; el kiosco/tablet por token vive del poll, como el resto del KDS).
+//
+// fix/sondeo-adaptativo-tablet (13/08), Tarea B1: sin alarmas vivas ~5 min
+// (30 ciclos a 10s) el poll se aleja progresivamente hasta 60s; vuelve al
+// instante en cuanto aparezca una alarma.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Phone, Check, Bell, BellOff } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import { getAlarms, ackAlarm, type KdsAlarm } from '../services/kdsService'
 import { playAlarmSound } from '../kdsUtils'
 
 const POLL_MS = 10_000
 const SOUND_MS = 4_000
+const ALARM_IDLE_MS = 60_000
+const ALARM_IDLE_AFTER = 30
 
 interface KdsAlarmOverlayProps {
   /** Local (sesión). En kiosco/tablet va null: la RPC deriva el local del token. */
@@ -41,21 +48,30 @@ export default function KdsAlarmOverlay({ locationId, token, variant = 'fixed' }
   const [ackingId, setAckingId] = useState<string | null>(null)
   const soundOnRef = useRef(soundOn)
   soundOnRef.current = soundOn
+  const pollHandleRef = useRef<RetryLoopHandle | null>(null)
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await getAlarms(locationId, token)
-      setAlarms(res.alarms ?? [])
-    } catch {
-      /* Silencioso: un fallo de la alarma NUNCA debe romper la pantalla de cocina. */
-    }
+  // NOTA: ya no se traga el fallo (antes sí, "un fallo de la alarma nunca
+  // debe romper la pantalla") — sigue sin romperla (nada renderiza el
+  // rechazo), pero ahora runPollingLoop se entera y aplica el backoff de
+  // fallo, que antes faltaba en este poll.
+  const refresh = useCallback(async (): Promise<boolean> => {
+    const res = await getAlarms(locationId, token)
+    const list = res.alarms ?? []
+    setAlarms(list)
+    return list.length > 0
   }, [locationId, token])
 
-  // Carga inicial + poll fiable (fallback del kiosco por token).
+  // Poll adaptativo (Tarea B1) — fallback fiable del kiosco por token.
+  // runPollingLoop ya hace el primer sondeo al crearse.
   useEffect(() => {
-    void refresh()
-    const id = window.setInterval(() => { void refresh() }, POLL_MS)
-    return () => window.clearInterval(id)
+    const handle = runPollingLoop({
+      call: refresh,
+      normalIntervalMs: POLL_MS,
+      idleIntervalMs: ALARM_IDLE_MS,
+      idleAfter: ALARM_IDLE_AFTER,
+    })
+    pollHandleRef.current = handle
+    return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
   // Realtime (solo con sesión; el token no autentica Realtime por RLS).
@@ -65,7 +81,10 @@ export default function KdsAlarmOverlay({ locationId, token, variant = 'fixed' }
     const sb = supabase
     const ch = sb
       .channel(`kds-alarms-${locationId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sale' }, () => { void refresh() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sale' }, () => {
+        if (pollHandleRef.current) pollHandleRef.current.wake()
+        else void refresh().catch(() => {})
+      })
       .subscribe()
     return () => { void sb.removeChannel(ch) }
   }, [locationId, token, refresh])
@@ -85,7 +104,7 @@ export default function KdsAlarmOverlay({ locationId, token, variant = 'fixed' }
     // Optimista: quita la alarma al instante; el poll reconcilia si falla.
     setAlarms(prev => prev.filter(a => a.sale_id !== saleId))
     try { await ackAlarm(saleId, token) }
-    catch { void refresh() }
+    catch { void refresh().catch(() => {}) }
     finally { setAckingId(null) }
   }, [token, refresh])
 
