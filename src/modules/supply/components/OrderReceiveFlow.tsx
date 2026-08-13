@@ -36,6 +36,7 @@ import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import GoodsReceiptForm, { type OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
+import ReceiptWizard from '@/modules/supply/pages/ReceiptWizard'
 import { getSupplySettings, listOrderLineReceived, type SupplySettings } from '@/modules/supply/services/goodsReceiptService'
 
 interface Props {
@@ -198,9 +199,29 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
     )
   }
 
-  // ── Recepción con el albarán leído (fusión pedido+OCR si picked; OCR suelto
-  //    si null — el caso normal del muelle: aquí GoodsReceiptForm busca el
-  //    pedido solo, sin preguntar nada salvo que sea ambiguo) ──
+  // ── Recepción con el albarán leído, SIN pedido detrás — el caso normal del
+  //    muelle (botón primario del aterrizaje, escanear-primero). ENCARGO CODE
+  //    (13/08) feat/recepcion-v2-asistente: este es el mismo camino "OCR
+  //    ciego" que GoodsReceiptsPage ya enruta al asistente — antes de esto,
+  //    OrderReceiveFlow (que es el camino REAL del móvil del trabajador,
+  //    TrabajadorApp, no tocado en el encargo original por error de alcance)
+  //    seguía abriendo el formulario grande aquí, dejando el asistente
+  //    inalcanzable en producción. Bug reportado por Julio 13/08.
+  if (step === 'form-scan' && ocr && !picked) {
+    return (
+      <ReceiptWizard
+        accountId={accountId}
+        locationId={locationId ?? null}
+        ocrPrefill={ocr}
+        onBack={backFromFlow}
+        onDone={(msg) => { backToLanding(); onSaved(msg) }}
+      />
+    )
+  }
+
+  // ── Recepción con el albarán leído, CONTRA UN PEDIDO elegido a propósito
+  //    (fusión pedido+OCR: el formato ya viene dado, GoodsReceiptForm casa
+  //    las líneas contra las del pedido) ──
   if (step === 'form-scan' && ocr) {
     return (
       <GoodsReceiptForm
