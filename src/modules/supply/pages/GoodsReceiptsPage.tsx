@@ -30,9 +30,11 @@ import {
   getGoodsReceiptById,
   listGoodsReceiptLines,
   voidReceipt,
+  archiveGoodsReceipt,
   postPendingReceipt,
   getReceiptDocTotal,
   getReceiptCorrectionStreak,
+  getLineCounts,
   type GoodsReceipt,
   type GoodsReceiptStatus,
   type CorrectionStreak,
@@ -46,16 +48,19 @@ import PostPendingModal, { type PendingLine } from '@/modules/supply/components/
 import type { Supplier } from '@/types/kitchen'
 import GoodsReceiptForm, { type ReceiptPrefill, type OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
+import ReceiptWizard from '@/modules/supply/pages/ReceiptWizard'
 import OrderReceiveFlow from '@/modules/supply/components/OrderReceiveFlow'
 
 const STATUS_LABEL: Record<GoodsReceiptStatus, string> = {
   borrador: 'Borrador',
+  recibido: 'Recibido',
   confirmado: 'Confirmado',
   anulado: 'Anulado',
 }
 
 const STATUS_CLASS: Record<GoodsReceiptStatus, string> = {
   borrador: 'bg-page text-text-secondary border-border-default',
+  recibido: 'bg-accent-bg text-accent border-accent/20',
   confirmado: 'bg-success-bg text-success border-success/20',
   anulado: 'bg-danger-bg text-danger border-danger/20',
 }
@@ -66,7 +71,7 @@ function formatDate(value: string | null): string {
     .format(new Date(value))
 }
 
-type View = 'list' | 'form' | 'scan' | 'receive-order'
+type View = 'list' | 'form' | 'scan' | 'receive-order' | 'wizard'
 
 export default function GoodsReceiptsPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -197,6 +202,22 @@ export default function GoodsReceiptsPage() {
     return () => { cancelled = true }
   }, [receipts, resolvedLocationId])
 
+  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, §"8 borradores
+  // atascados" — código/fecha/autor YA están en la fila; solo falta el nº de
+  // líneas para que Julio decida cuáles recibir (revisar y confirmar) y
+  // cuáles descartar sin abrir cada uno. Los borradores YA salen primero en
+  // `visible` (rank 0) — no se duplica la lista en una pantalla aparte.
+  const [borradorLineCounts, setBorradorLineCounts] = useState<Record<string, number>>({})
+  useEffect(() => {
+    let cancelled = false
+    const ids = receipts.filter(r => r.status === 'borrador').map(r => r.id)
+    const fetchPromise = ids.length > 0 ? getLineCounts(ids) : Promise.resolve({})
+    fetchPromise
+      .then(counts => { if (!cancelled) setBorradorLineCounts(counts) })
+      .catch(() => { if (!cancelled) setBorradorLineCounts({}) })
+    return () => { cancelled = true }
+  }, [receipts])
+
   const supplierNameById = useMemo(() => {
     const m = new Map<string, string>()
     suppliers.forEach(s => m.set(s.id, s.name))
@@ -261,6 +282,7 @@ export default function GoodsReceiptsPage() {
         rawDocumentUrl: r.rawDocumentUrl,
         docTotal,
         lines: lines.map(l => ({
+          id: l.id,
           recipeItemId: l.recipeItemId,
           productName: l.productName,
           purchaseFormatId: l.purchaseFormatId,
@@ -277,6 +299,7 @@ export default function GoodsReceiptsPage() {
           docQty: l.docQty,
           docAmount: l.docAmount,
           discrepancyReason: l.discrepancyReason,
+          flaggedForOffice: l.flaggedForOffice,
         })),
       }
       setPrefill(pf)
@@ -284,6 +307,79 @@ export default function GoodsReceiptsPage() {
       setView('form')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo abrir la recepción.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — abre una
+  // recepción 'recibido' (el asistente ya metió el stock) para que oficina
+  // verifique. Mismo patrón que handleReviewDraft, pero marca isReceived (no
+  // isDraft): persist() en GoodsReceiptForm toma la rama que NO borra y
+  // recrea líneas — las ajusta en sitio.
+  async function handleReviewReceived(id: string) {
+    setBusyId(id); setFlash(null); setError(null)
+    try {
+      const [r, lines] = await Promise.all([
+        getGoodsReceiptById(id),
+        listGoodsReceiptLines(id),
+      ])
+      if (!r) throw new Error('No se pudo recuperar la recepción.')
+      let docTotal: number | null = null
+      if (r.aiSessionId) {
+        try { docTotal = await getReceiptDocTotal(r.aiSessionId) }
+        catch (e) { console.error('handleReviewReceived: no se pudo leer el total del albarán', e) }
+      }
+      const pf: ReceiptPrefill = {
+        sourceReceiptId: r.id,
+        supplierId: r.supplierId ?? '',
+        locationId: r.locationId,
+        purchaseOrderId: r.purchaseOrderId,
+        supplierDocNumber: r.supplierDocNumber,
+        isReceived: true,
+        code: r.code,
+        rawDocumentUrl: r.rawDocumentUrl,
+        docTotal,
+        receivedByName: r.createdByName,
+        receivedAt: r.receivedAt,
+        lines: lines.map(l => ({
+          id: l.id,
+          recipeItemId: l.recipeItemId,
+          productName: l.productName,
+          purchaseFormatId: l.purchaseFormatId,
+          qtyReceived: l.qtyReceived,
+          unitCost: l.unitCost,
+          purchaseOrderLineId: l.purchaseOrderLineId,
+          rawText: l.rawText,
+          supplierCode: l.supplierCode,
+          docQty: l.docQty,
+          docAmount: l.docAmount,
+          discrepancyReason: l.discrepancyReason,
+          flaggedForOffice: l.flaggedForOffice,
+        })),
+      }
+      setPrefill(pf)
+      setQuickReceipt(null)
+      setView('form')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo abrir la recepción.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente — "descartar" un
+  // borrador atascado (no encaja/duplicado/prueba): no hay stock que
+  // revertir (nunca posteó), así que archivar (is_active=false) es
+  // suficiente y reversible en BBDD si hiciera falta — no un borrado físico.
+  async function handleDiscardDraft(id: string) {
+    setBusyId(id); setFlash(null); setError(null)
+    try {
+      await archiveGoodsReceipt(id)
+      setFlash('Borrador descartado.')
+      setReloadTick(t => t + 1)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo descartar el borrador.')
     } finally {
       setBusyId(null)
     }
@@ -357,6 +453,7 @@ export default function GoodsReceiptsPage() {
         supplierDocNumber: r.supplierDocNumber,
         docTotal,
         lines: lines.map(l => ({
+          id: l.id,
           recipeItemId: l.recipeItemId,
           productName: l.productName,
           purchaseFormatId: l.purchaseFormatId,
@@ -368,6 +465,7 @@ export default function GoodsReceiptsPage() {
           docQty: l.docQty,
           docAmount: l.docAmount,
           discrepancyReason: l.discrepancyReason,
+          flaggedForOffice: l.flaggedForOffice,
         })),
       }
       setPrefill(pf)
@@ -386,7 +484,25 @@ export default function GoodsReceiptsPage() {
       <ReceiptScanPanel
         accountId={activeAccountId}
         onBack={() => { setView('list'); setReloadTick(t => t + 1) }}
-        onCreateReceipt={(ocr) => { setPrefill(null); setOcrPrefill(ocr); setQuickReceipt(null); setView('form') }}
+        // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo A — el
+        // escaneo ciego (sin pedido detrás) ya no abre GoodsReceiptForm: abre
+        // el asistente móvil, una línea por pantalla. El escaneo CONTRA
+        // PEDIDO (OrderReceiveFlow) es un camino aparte, no tocado — sigue en
+        // el form grande (el formato ya viene dado por el pedido).
+        onCreateReceipt={(ocr) => { setOcrPrefill(ocr); setQuickReceipt(null); setView('wizard') }}
+      />
+    )
+  }
+
+  // ── Vista ASISTENTE: una línea por pantalla, "Recibir y meter al stock" ──
+  if (view === 'wizard' && activeAccountId && ocrPrefill) {
+    return (
+      <ReceiptWizard
+        accountId={activeAccountId}
+        locationId={resolvedLocationId}
+        ocrPrefill={ocrPrefill}
+        onBack={() => { setView('scan'); setOcrPrefill(null); setReloadTick(t => t + 1) }}
+        onDone={(msg) => { setView('list'); setOcrPrefill(null); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
       />
     )
   }
@@ -547,6 +663,12 @@ export default function GoodsReceiptsPage() {
                   <CardField label="Local" value={locationNameById.get(r.locationId) ?? '—'} />
                   <CardField label="Fecha" value={formatDate(r.receiptDate)} />
                   <CardField label="Nº albarán" value={r.supplierDocNumber ?? '—'} />
+                  {r.status === 'borrador' && (
+                    <>
+                      <CardField label="Quién lo dejó" value={r.createdByName ?? '—'} />
+                      <CardField label="Líneas" value={String(borradorLineCounts[r.id] ?? '—')} />
+                    </>
+                  )}
                 </div>
                 {r.needsReview && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-danger bg-danger-bg border border-danger/30 rounded-md px-2 py-1.5">
@@ -554,7 +676,7 @@ export default function GoodsReceiptsPage() {
                   </div>
                 )}
                 <div className="mt-2">
-                  <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onVoid={handleVoid} onCorrect={handleCorrect} onPostPending={handlePostPending} />
+                  <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onReviewReceived={handleReviewReceived} onVoid={handleVoid} onCorrect={handleCorrect} onPostPending={handlePostPending} onDiscard={handleDiscardDraft} />
                 </div>
               </div>
             ))}
@@ -576,7 +698,14 @@ export default function GoodsReceiptsPage() {
               <tbody>
                 {visible.map(r => (
                   <tr key={r.id} className="border-t border-border-default">
-                    <td className="px-3 py-2 text-text-primary">{r.code ?? '—'}</td>
+                    <td className="px-3 py-2 text-text-primary">
+                      {r.code ?? '—'}
+                      {r.status === 'borrador' && (
+                        <span className="block text-[11px] text-text-tertiary font-normal">
+                          {r.createdByName ?? 'quién lo dejó: —'} · {borradorLineCounts[r.id] ?? '—'} línea(s)
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-text-primary">{r.supplierId ? supplierNameById.get(r.supplierId) ?? '—' : '—'}</td>
                     <td className="px-3 py-2 text-text-secondary">{locationNameById.get(r.locationId) ?? '—'}</td>
                     <td className="px-3 py-2 text-text-secondary">{formatDate(r.receiptDate)}</td>
@@ -593,7 +722,7 @@ export default function GoodsReceiptsPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end">
-                        <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onVoid={handleVoid} onCorrect={handleCorrect} onPostPending={handlePostPending} />
+                        <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onReviewReceived={handleReviewReceived} onVoid={handleVoid} onCorrect={handleCorrect} onPostPending={handlePostPending} onDiscard={handleDiscardDraft} />
                       </div>
                     </td>
                   </tr>
@@ -732,25 +861,52 @@ export default function GoodsReceiptsPage() {
 }
 
 function RowActions({
-  r, busy, onReview, onVoid, onCorrect, onPostPending,
+  r, busy, onReview, onReviewReceived, onVoid, onCorrect, onPostPending, onDiscard,
 }: {
   r: GoodsReceipt
   busy: boolean
   onReview: (id: string) => void
+  onReviewReceived: (id: string) => void
   onVoid: (id: string) => void
   onCorrect: (id: string) => void
   onPostPending: (id: string) => void
+  onDiscard: (id: string) => void
 }) {
   if (r.status === 'borrador') {
     return (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onReview(r.id)}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+        >
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye size={15} />}
+          Revisar y confirmar
+        </button>
+        <button
+          type="button"
+          onClick={() => { if (window.confirm('¿Descartar este borrador? No entró a stock, así que no hay nada que revertir.')) onDiscard(r.id) }}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm border border-border-default bg-card text-text-secondary hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+        >
+          Descartar
+        </button>
+      </div>
+    )
+  }
+  {/* ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo B/C — el stock ya
+      entró (vía el asistente); oficina VERIFICA y cierra, no revisa a ciegas. */}
+  if (r.status === 'recibido') {
+    return (
       <button
         type="button"
-        onClick={() => onReview(r.id)}
+        onClick={() => onReviewReceived(r.id)}
         disabled={busy}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
       >
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye size={15} />}
-        Revisar y confirmar
+        Verificar y confirmar
       </button>
     )
   }

@@ -41,7 +41,11 @@ export function officeReasonDisplay(stored: string): string {
 }
 
 // ── Tipos de dominio (camelCase) ──
-export type GoodsReceiptStatus = 'borrador' | 'confirmado' | 'anulado'
+// ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo B — 'recibido' es el
+// estado nuevo entre 'borrador' y 'confirmado': el stock YA entró (vía el
+// asistente), pendiente de verificación de oficina. Ver
+// 20260813T2000_recepcion_v2_recibido_status.sql.
+export type GoodsReceiptStatus = 'borrador' | 'recibido' | 'confirmado' | 'anulado'
 export type GoodsReceiptSource = 'manual' | 'ocr'
 
 export interface GoodsReceipt {
@@ -96,6 +100,12 @@ export interface GoodsReceiptLine {
   mapSource: string | null
   mapConfidence: number | null
   mapNeedsReview: boolean
+  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo A/C — la ⚑ "que lo
+  // mire la oficina" del asistente. Columna NUEVA (no reutiliza mapNeedsReview,
+  // que ya significa otra cosa: certeza del casado). Determina el orden en la
+  // pantalla de oficina (⚑ primero) y NO cuenta como fallo de cocina en la
+  // racha de correcciones (§6 del diseño): solo una corrección SIN marcar la rompe.
+  flaggedForOffice: boolean
   position: number
   notes: string | null
   createdAt: string
@@ -158,6 +168,7 @@ export interface GoodsReceiptLineInsert {
   mapSource?: string | null
   mapConfidence?: number | null
   mapNeedsReview?: boolean
+  flaggedForOffice?: boolean
   docQty?: number | null
   docAmount?: number | null
   discrepancyReason?: string | null
@@ -178,6 +189,7 @@ export interface GoodsReceiptLineUpdate {
   mapSource?: string | null
   mapConfidence?: number | null
   mapNeedsReview?: boolean
+  flaggedForOffice?: boolean
   docQty?: number | null
   docAmount?: number | null
   discrepancyReason?: string | null
@@ -207,6 +219,17 @@ function requireSupabase(): void {
       'Supabase no está configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env.'
     )
   }
+}
+
+// Llamada a RPC recién creadas por migración (aún no en el `database.ts`
+// generado — mismo patrón ya usado por getPriceDrift para price_drift_for).
+async function rpcUntyped(
+  fn: string,
+  args: Record<string, unknown>,
+): Promise<{ data: unknown; error: { message: string } | null }> {
+  return (supabase! as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  }).rpc(fn, args)
 }
 
 type Row = Record<string, unknown>
@@ -270,6 +293,7 @@ function rowToReceiptLine(row: Row): GoodsReceiptLine {
     mapSource: (row.map_source as string | null) ?? null,
     mapConfidence: (row.map_confidence as number | null) ?? null,
     mapNeedsReview: Boolean(row.map_needs_review),
+    flaggedForOffice: Boolean(row.flagged_for_office),
     position: (row.position as number) ?? 0,
     notes: (row.notes as string | null) ?? null,
     createdAt: row.created_at as string,
@@ -336,6 +360,7 @@ function lineInsertToRow(input: GoodsReceiptLineInsert): Row {
     map_source: input.mapSource ?? null,
     map_confidence: input.mapConfidence ?? null,
     map_needs_review: input.mapNeedsReview ?? false,
+    flagged_for_office: input.flaggedForOffice ?? false,
     position: input.position ?? 0,
     notes: input.notes ?? null,
   }
@@ -358,6 +383,7 @@ function lineUpdateToRow(patch: GoodsReceiptLineUpdate): Row {
   if (patch.mapSource !== undefined) row.map_source = patch.mapSource
   if (patch.mapConfidence !== undefined) row.map_confidence = patch.mapConfidence
   if (patch.mapNeedsReview !== undefined) row.map_needs_review = patch.mapNeedsReview
+  if (patch.flaggedForOffice !== undefined) row.flagged_for_office = patch.flaggedForOffice
   if (patch.position !== undefined) row.position = patch.position
   if (patch.notes !== undefined) row.notes = patch.notes
   return row
@@ -634,10 +660,17 @@ export interface CorrectionStreak {
  * cantidad (ENCARGO CODE 13/08 fix/recepcion-p2-oficina, §5). Recibe los ids de
  * recepciones CONFIRMADAS ya cargados por el llamador (lista de Recepciones,
  * ya filtrada por local), del más reciente al más antiguo — no vuelve a
- * consultar goods_receipt, solo lee sus líneas. "Corregida" = alguna línea con
- * discrepancy_reason puesto por el picker de oficina (isOfficeQtyReason) — NO
- * cualquier discrepancy_reason (el dropdown del panel de repaso usa el mismo
- * campo para otra cosa: por qué difiere de lo pedido/del albarán).
+ * consultar goods_receipt, solo lee sus líneas. "Corregida" = alguna línea SIN
+ * ⚑ (flagged_for_office=false) con discrepancy_reason puesto por el picker de
+ * oficina (isOfficeQtyReason) — NO cualquier discrepancy_reason (el dropdown
+ * del panel de repaso usa el mismo campo para otra cosa: por qué difiere de lo
+ * pedido/del albarán).
+ *
+ * ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — matiz del
+ * asistente: una línea que cocina marcó ⚑ ("que lo mire la oficina") y que
+ * oficina corrige NO cuenta como fallo de cocina — cocina ya avisó que no
+ * estaba segura. Solo rompe la racha una corrección SOBRE UNA LÍNEA SIN
+ * MARCAR (cocina dio por buena una cantidad que resultó ser otra).
  */
 export async function getReceiptCorrectionStreak(
   confirmedReceiptIdsRecentFirst: string[],
@@ -647,13 +680,13 @@ export async function getReceiptCorrectionStreak(
     return { correctedCount: 0, totalCount: 0, streak: 0, streakGoal: CORRECTION_STREAK_GOAL, metGoal: false }
   }
   const { data, error } = await from('goods_receipt_line')
-    .select('goods_receipt_id, discrepancy_reason')
+    .select('goods_receipt_id, discrepancy_reason, flagged_for_office')
     .in('goods_receipt_id', confirmedReceiptIdsRecentFirst)
   if (error) throw new Error(`Error calculando la racha de correcciones: ${error.message}`)
 
   const correctedIds = new Set<string>()
   for (const row of (data as Row[]) ?? []) {
-    if (isOfficeQtyReason(row.discrepancy_reason as string | null)) {
+    if (isOfficeQtyReason(row.discrepancy_reason as string | null) && !row.flagged_for_office) {
       correctedIds.add(row.goods_receipt_id as string)
     }
   }
@@ -822,6 +855,120 @@ export async function confirmReceipt(receiptId: string): Promise<ConfirmReceiptR
   }
 
   return { postedLines, skippedLines, recalculatedItems }
+}
+
+/**
+ * ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo B — el botón del
+ * asistente ("Recibir y meter al stock"): postea al ledger vía
+ * receive_goods_receipt (misma lógica de movimientos que confirm_goods_receipt,
+ * server-side no duplicada — ver la migración) y deja status='recibido'. El
+ * stock entra AQUÍ, no al confirmar de oficina; confirm_goods_receipt sobre un
+ * 'recibido' ya no vuelve a postear, solo cierra.
+ *
+ * Hace el mismo trabajo que confirmReceipt() tras postear (flip de estrategia
+ * de coste, ripple RAW→platos, aprendizaje de memoria/alias) porque para el
+ * asistente ESTE es el momento real de "recibir mercancía" — no falta esperar
+ * a que oficina confirme para que la memoria aprenda o el coste se propague.
+ */
+export async function receiveGoodsReceipt(receiptId: string): Promise<ConfirmReceiptResult> {
+  requireSupabase()
+
+  const { data, error } = await rpcUntyped('receive_goods_receipt', {
+    p_receipt_id: receiptId,
+  })
+  if (error) throw new Error(`Error recibiendo la recepción: ${error.message}`)
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    { posted_lines?: number; skipped_lines?: number } | null
+  const postedLines = Number(row?.posted_lines ?? 0)
+  const skippedLines = Number(row?.skipped_lines ?? 0)
+
+  const lines = await listGoodsReceiptLines(receiptId)
+  const itemIds = Array.from(
+    new Set(
+      lines.filter(l => l.recipeItemId && l.unitCost !== null && l.purchaseFormatId).map(l => l.recipeItemId as string),
+    ),
+  )
+
+  // Flip de estrategia ANTES de recalcular: los artículos que estaban en
+  // 'fixed' pasan a 'last_purchase' para que el precio recibido pise el coste.
+  if (itemIds.length > 0) {
+    try { await ensureLastPurchaseStrategy(itemIds) }
+    catch (e) { console.error('receiveGoodsReceipt: no se pudo ajustar la estrategia de coste', e) }
+  }
+
+  let recalculatedItems = 0
+  for (const itemId of itemIds) {
+    try { await cascadeFromItem(itemId); recalculatedItems++ }
+    catch (e) { console.error(`receiveGoodsReceipt: cascada de coste falló para ${itemId}`, e) }
+  }
+
+  // Memoria por proveedor + alias de intermediario: no son fatales si fallan.
+  try { await learnFromReceipt(receiptId) }
+  catch (e) { console.error('receiveGoodsReceipt: recibida OK pero el aprendizaje falló', e) }
+  try { await learnSupplierAlias(receiptId) }
+  catch (e) { console.error('receiveGoodsReceipt: recibida OK pero el alias de intermediario falló', e) }
+
+  return { postedLines, skippedLines, recalculatedItems }
+}
+
+export interface AdjustReceiptLineInput {
+  recipeItemId: string | null
+  purchaseFormatId: string | null
+  qtyReceived: number
+  unitCost: number | null
+  discrepancyReason: string | null
+}
+
+/**
+ * ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — la oficina
+ * corrige una línea de un albarán YA 'recibido' (el stock ya entró). Llama a
+ * adjust_goods_receipt_line (reversa el movimiento viejo + postea el nuevo,
+ * ledger append-only — mismo patrón que void_goods_receipt) y actualiza la
+ * línea EN SITIO. NUNCA borra y recrea la línea: su id es la referencia
+ * (source_id) del movimiento ya posteado, y el asistente/oficina la necesitan
+ * estable para poder seguir corrigiendo. Propaga el coste RAW→platos si el
+ * artículo resultante tiene precio.
+ */
+export async function adjustGoodsReceiptLine(
+  lineId: string,
+  input: AdjustReceiptLineInput,
+): Promise<void> {
+  requireSupabase()
+  const { error } = await rpcUntyped('adjust_goods_receipt_line', {
+    p_line_id: lineId,
+    p_recipe_item_id: input.recipeItemId,
+    p_purchase_format_id: input.purchaseFormatId,
+    p_qty_received: input.qtyReceived,
+    p_unit_cost: input.unitCost,
+    p_discrepancy_reason: input.discrepancyReason,
+  })
+  if (error) throw new Error(`Error ajustando la línea: ${error.message}`)
+
+  if (input.recipeItemId && input.unitCost !== null && input.purchaseFormatId) {
+    try { await cascadeFromItem(input.recipeItemId) }
+    catch (e) { console.error(`adjustGoodsReceiptLine: cascada de coste falló para ${input.recipeItemId}`, e) }
+  }
+}
+
+/**
+ * Nº de líneas por recepción — para el listado de borradores atascados (código,
+ * fecha, autor, LÍNEAS) sin traer cada línea completa. Una sola consulta.
+ */
+export async function getLineCounts(receiptIds: string[]): Promise<Record<string, number>> {
+  requireSupabase()
+  const ids = Array.from(new Set(receiptIds.filter(Boolean)))
+  if (ids.length === 0) return {}
+  const { data, error } = await from('goods_receipt_line')
+    .select('goods_receipt_id')
+    .in('goods_receipt_id', ids)
+  if (error) { console.error('[goodsReceiptService] getLineCounts', error); return {} }
+  const counts: Record<string, number> = {}
+  for (const row of (data as Row[] | null) ?? []) {
+    const id = row.goods_receipt_id as string
+    counts[id] = (counts[id] ?? 0) + 1
+  }
+  return counts
 }
 
 /**
