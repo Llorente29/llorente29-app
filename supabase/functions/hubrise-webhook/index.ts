@@ -107,13 +107,49 @@ function channelSlug(channel: string | null | undefined): string | null {
 }
 
 // service_type HubRise (delivery|collection|eat_in) -> service_type canónico.
-function mapServiceType(st: string | null | undefined): string | null {
+// ENCARGO CODE (13/08 noche) fix/hubrise-service-type-reparto — "delivery" YA
+// NO es platform_delivery a secas: HubRise manda ese mismo valor genérico para
+// CUALQUIER plataforma, y no dice quién reparte. Quién reparte (own_delivery
+// vs platform_delivery) es una decisión de negocio (plataforma × tipo de
+// marca) resuelta antes de llamar aquí, vía resolveDeliveryServiceType /
+// channel_delivery_policy — se pasa ya resuelta en deliveryServiceType.
+function mapServiceType(st: string | null | undefined, deliveryServiceType: string): string | null {
   if (!st) return null;
   const t = st.toLowerCase();
-  if (t === "delivery") return "platform_delivery";
+  if (t === "delivery") return deliveryServiceType;
   if (t === "collection") return "pickup";
   if (t === "eat_in") return "eat_in";
   return null;
+}
+
+// ── Quién reparte: plataforma × tipo de marca (channel_delivery_policy) ─────
+// ENCARGO CODE (13/08 noche) fix/hubrise-service-type-reparto — antes esto era
+// una constante ("delivery" -> "platform_delivery" siempre), y por eso Just
+// Eat de marca PROPIA nunca disparaba el reparto propio (tg_auto_dispatch
+// exige service_type='own_delivery'). Ahora es configuración (Tramo 2): sin
+// canal o sin marca resuelta, o sin fila para (cuenta, canal, tipo de marca)
+// -> 'platform_delivery' (seguro: no despachar es recuperable; despachar de
+// más cuesta dinero real). resolve_dispatch/tg_auto_dispatch NO se tocan: ya
+// tienen su propio guard por marca (own_delivery_enabled) y funcionan bien
+// una vez el pedido ENTRA con el service_type correcto.
+async function resolveDeliveryServiceType(
+  sb: SupabaseClient, accountId: string, chSlug: string | null, brandId: string | null,
+): Promise<string> {
+  if (!chSlug || !brandId) return "platform_delivery";
+
+  const { data: brand, error: bErr } = await sb.from("brand")
+    .select("ownership_type").eq("id", brandId).maybeSingle();
+  if (bErr) console.error(`resolveDeliveryServiceType brand ${brandId}: ${bErr.message}`);
+  const ownershipType = (brand as { ownership_type?: string } | null)?.ownership_type ?? "own";
+
+  const { data: policy, error: pErr } = await sb.from("channel_delivery_policy")
+    .select("service_type")
+    .eq("account_id", accountId)
+    .eq("channel_slug", chSlug)
+    .eq("ownership_type", ownershipType)
+    .maybeSingle();
+  if (pErr) console.error(`resolveDeliveryServiceType policy ${accountId}/${chSlug}/${ownershipType}: ${pErr.message}`);
+  return (policy as { service_type?: string } | null)?.service_type ?? "platform_delivery";
 }
 
 // estado HubRise -> estado canónico de la venta.
@@ -243,7 +279,8 @@ async function resolveAutoAccept(
 // NO se re-adapta (un update tardío no corrompe una venta consolidada).
 async function upsertSale(
   sb: SupabaseClient, accountId: string, locationId: string | null,
-  order: Record<string, unknown>, caches: { brandId: string | null; channelId: string | null },
+  order: Record<string, unknown>,
+  caches: { brandId: string | null; channelId: string | null; deliveryServiceType: string },
 ): Promise<{ id: string; status: string; isNew: boolean } | null> {
   const orderId = order["id"] as string | undefined;
   if (!orderId) return null;
@@ -266,7 +303,7 @@ async function upsertSale(
     discount_amount: sumDiscounts(order),
     tax: null,          // HubRise da tax_rate por línea; total de impuesto no directo (futuro)
     taxable_base: null,
-    service_type: mapServiceType(order["service_type"] as string | null),
+    service_type: mapServiceType(order["service_type"] as string | null, caches.deliveryServiceType),
     raw_products: JSON.stringify(order["items"] ?? []),
     raw_tab: JSON.stringify(order),
   };
@@ -468,10 +505,16 @@ Deno.serve(async (req: Request) => {
       } else {
         const brandId = await resolveBrand(
           sb, loc.accountId, hubriseLocationId, (order["connection_name"] as string | null) ?? null);
-        const channelId = await resolveChannel(
-          sb, loc.accountId, channelSlug(order["channel"] as string | null));
+        const chSlug = channelSlug(order["channel"] as string | null);
+        const channelId = await resolveChannel(sb, loc.accountId, chSlug);
+        // Solo importa (y solo se consulta) cuando el pedido es de reparto —
+        // collection/eat_in ignoran este valor en mapServiceType.
+        const rawServiceType = ((order["service_type"] as string | null) ?? "").toLowerCase();
+        const deliveryServiceType = rawServiceType === "delivery"
+          ? await resolveDeliveryServiceType(sb, loc.accountId, chSlug, brandId)
+          : "platform_delivery";
 
-        const r = await upsertSale(sb, loc.accountId, loc.locationId, order, { brandId, channelId });
+        const r = await upsertSale(sb, loc.accountId, loc.locationId, order, { brandId, channelId, deliveryServiceType });
 
         if (r && canon === "closed" && r.status === "open") {
           // completed -> consolidar coste + consumo.
