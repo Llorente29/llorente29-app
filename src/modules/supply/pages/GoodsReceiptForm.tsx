@@ -790,12 +790,26 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // Catálogo del proveedor (para HEREDAR el formato si el artículo ya lo tiene
   // con él) + caché de unidad base por artículo + ref al draft para el efecto async.
   const [catalogByItem, setCatalogByItem] = useState<Map<string, SupplierCatalogEntry>>(new Map())
+  // ENCARGO CODE (13/08) fix/recepcion-casado-no-casa, §6 — el array SIN colapsar
+  // de getSupplierCatalog. catalogByItem colapsa a UNA fila por recipeItemId (le
+  // basta para heredar formato); si un artículo tiene dos article_supplier del
+  // MISMO proveedor (dos denominaciones/códigos), esa colisión pierde una — y con
+  // ella su código. catalogByCode/catalogByText indexan desde AQUÍ, no desde el
+  // mapa ya colapsado, para no heredar esa pérdida.
+  const [catalogEntries, setCatalogEntries] = useState<SupplierCatalogEntry[]>([])
   const baseUnitCache = useRef<Map<string, BaseUnitInfo | null>>(new Map())
   const draftRef = useRef<DraftLine[]>([])
   useEffect(() => { draftRef.current = draft }, [draft])
 
+  // ENCARGO CODE (13/08) fix/recepcion-casado-no-casa, §4 — antes el fallo se
+  // tragaba en silencio (catch mudo): el catálogo quedaba vacío y NINGUNA línea
+  // casaba nunca, indistinguible de "este proveedor no tiene memoria". Ahora se
+  // dice en pantalla. (RECON del 13/08: en producción, contra un token real,
+  // las dos consultas de getSupplierCatalog responden 200 con datos correctos —
+  // el catch mudo no era la causa del caso Cloudtown, pero seguía siendo un
+  // fallo real sin síntoma para cualquier proveedor donde SÍ falle.)
   useEffect(() => {
-    if (!needsResolution || !supplierId) { setCatalogByItem(new Map()); return }
+    if (!needsResolution || !supplierId) { setCatalogByItem(new Map()); setCatalogEntries([]); return }
     let cancelled = false
     getSupplierCatalog(accountId, supplierId)
       .then(entries => {
@@ -803,8 +817,17 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         const m = new Map<string, SupplierCatalogEntry>()
         entries.forEach(e => m.set(e.recipeItemId, e))
         setCatalogByItem(m)
+        setCatalogEntries(entries)
       })
-      .catch(() => { if (!cancelled) setCatalogByItem(new Map()) })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        setCatalogByItem(new Map())
+        setCatalogEntries([])
+        setError(
+          (e instanceof Error ? e.message : 'Error desconocido') +
+          ' — no se pudo cargar el catálogo de este proveedor: nada casará solo.'
+        )
+      })
     return () => { cancelled = true }
   }, [needsResolution, accountId, supplierId])
 
@@ -812,20 +835,23 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // palabra. No son consultas nuevas: catalogByItem ya está cargado para el
   // formato (Tramo A); esto solo lo reorganiza para buscar al revés (de lo
   // que dice el albarán, hacia el artículo que ya se compró con ese texto).
+  // catalogByCode/catalogByText leen catalogEntries (SIN colapsar, §6 arriba);
+  // catalogWordIndex sigue en catalogByItem.values() porque itemName es del
+  // recipe_item (idéntico en toda fila duplicada) — ahí no hay nada que perder.
   const catalogByCode = useMemo(() => {
     const m = new Map<string, SupplierCatalogEntry>()
-    for (const e of catalogByItem.values()) {
+    for (const e of catalogEntries) {
       if (e.supplierCode && e.supplierCode.trim() !== '') m.set(e.supplierCode.trim().toLowerCase(), e)
     }
     return m
-  }, [catalogByItem])
+  }, [catalogEntries])
   const catalogByText = useMemo(() => {
     const m = new Map<string, SupplierCatalogEntry>()
-    for (const e of catalogByItem.values()) {
+    for (const e of catalogEntries) {
       if (e.supplierItemName) m.set(normalizeWords(e.supplierItemName), e)
     }
     return m
-  }, [catalogByItem])
+  }, [catalogEntries])
   const catalogWordIndex = useMemo(() => {
     const idx = new Map<string, SupplierCatalogEntry[]>()
     for (const e of catalogByItem.values()) {
@@ -860,6 +886,21 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // needsResolution (fromOcr || correcting). También rellena `matchedName`
   // para una línea YA casada que llega sin nombre para mostrar (el borrador
   // no lo transporta — ver handleReviewDraft/ReceiptPrefillLine).
+  //
+  // ENCARGO CODE (13/08) fix/recepcion-casado-no-casa — CAUSA RAÍZ real (no
+  // era el catch mudo, descartado por RECON contra producción: las dos
+  // consultas de getSupplierCatalog responden 200 con el dato correcto).
+  // Es una CARRERA: este efecto Y el de "Tramo B" (build(), más abajo,
+  // ~línea 1470) llaman los DOS a getSupplierCatalog por su cuenta, en
+  // paralelo — build() para precargar `draft` desde prefill/pedido/catálogo,
+  // este para el índice de casado. Si catalogByItem llega ANTES de que
+  // build() ponga las líneas en `draft` (que es la carrera que gana casi
+  // siempre: este efecto se declara antes en el componente, su llamada sale
+  // primero), el efecto corre sobre un draft VACÍO — no casa nada porque no
+  // hay nada que casar — y como `draft` no estaba en las dependencias, nunca
+  // se repite cuando build() por fin rellena las líneas. Añadir `draft` aquí
+  // no crea un bucle: setDraft ya devuelve la MISMA referencia si `changed`
+  // queda en false, así que una vez casado, el efecto no se re-dispara solo.
   useEffect(() => {
     if (!needsResolution || catalogByItem.size === 0) return
     setDraft(d => {
@@ -890,7 +931,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       })
       return changed ? next : d
     })
-  }, [needsResolution, catalogByItem, catalogByCode, catalogByText])
+  }, [needsResolution, catalogByItem, catalogByCode, catalogByText, draft])
 
   // ── R1' §2.2 — "nombre razonable, candidato ÚNICO": NO se auto-aplica.
   // Medido en datos reales (12/08, cuenta Foodint): de 4 casos que esta regla
@@ -903,6 +944,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // dentro del stock. Por eso esto queda como SUGERENCIA que pide un toque
   // explícito (nunca automática): rellena suggestedRecipeItemId/Name, no
   // recipeItemId. Ver Fila 1.5 ("¿Es esto?") y acceptSuggestion/dismissSuggestion.
+  //
+  // ENCARGO CODE (13/08) fix/recepcion-casado-no-casa — misma carrera que el
+  // efecto de arriba (§2.1): `draft` en dependencias para que corra también
+  // cuando build() rellena las líneas DESPUÉS de que el catálogo ya cargó.
   useEffect(() => {
     if (!needsResolution || catalogByItem.size === 0) return
     setDraft(d => {
@@ -922,7 +967,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       })
       return changed ? next : d
     })
-  }, [needsResolution, catalogByItem, catalogWordIndex])
+  }, [needsResolution, catalogByItem, catalogWordIndex, draft])
 
   // "Ajustar como el albarán": fija el DESGLOSE (Caja = count × interior) en la línea.
   // El total (formatQtyInBase) se deriva del desglose; al persistir, ensurePackTree
@@ -1759,10 +1804,27 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   )
   const canConfirm = confirmPolicy === 'always' || locApproval !== 'oficina'
 
+  // ENCARGO CODE (13/08) fix/recepcion-casado-no-casa, §5 — antes se podía
+  // pulsar "Revisar y confirmar" con "0 entrarán a stock": esa mercancía se
+  // registraba y NUNCA entraba al inventario. Ya pasó de verdad: ALB-00106 y
+  // ALB-00107 se confirmaron con 21 líneas sin casar. Bloquea aquí, en el
+  // botón que Julio vio activo — no solo dentro del panel de resumen (que ya
+  // bloqueaba "sin formato" desde el 12/08; "sin reconocer" se le suma ahora).
+  // Descartar una línea (skipStock, "no inventariar") es un acto deliberado y
+  // NO bloquea: summary.notEnterLines ya excluye esas (campo `excluded`).
   function startReview() {
     if (!fromOcr && !supplierId) { setError('Elige un proveedor.'); return }
     if (!locationId) { setError('No hay un local operativo definido. Revisa el aviso de local arriba.'); return }
     if (filled.length === 0) { setError('Pon cantidad recibida en al menos un artículo.'); return }
+    const notArticle = summary.notEnterLines.filter(ne => ne.reason === 'sin reconocer' && !ne.excluded).length
+    const notFormat = summary.notEnterLines.filter(ne => ne.reason === 'sin formato' && !ne.excluded).length
+    const n = notArticle + notFormat
+    if (n > 0) {
+      const why = notArticle > 0 && notFormat > 0 ? 'falta el artículo o el formato'
+        : notArticle > 0 ? 'falta el artículo' : 'falta el formato'
+      setError(`${n === 1 ? '1 línea' : `${n} líneas`} no ${n === 1 ? 'entrará' : 'entrarán'} a stock: ${why}.`)
+      return
+    }
     setError(null)
     setReviewing(true)
   }
@@ -2631,7 +2693,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                     {canConfirm ? 'Guardar borrador' : 'Guardar (la oficina confirma)'}
                   </button>
                   {canConfirm && (
-                    <button type="button" onClick={startReview} disabled={saving || filled.length === 0 || loadingOrders}
+                    <button type="button" onClick={startReview}
+                      disabled={saving || filled.length === 0 || loadingOrders || summary.sinMapear > 0}
+                      title={summary.sinMapear > 0 ? `${summary.sinMapear} línea(s) no entrarán a stock: falta el artículo o el formato.` : undefined}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
                       <Check size={15} />
                       Revisar y confirmar
@@ -2789,10 +2853,17 @@ function ReviewPanel({
   // ENCARGO CODE (12/08) — fix/recepcion-selector-formato, §3.5: Confirmar
   // bloqueado mientras haya líneas CON CANTIDAD y sin formato, salvo que la
   // persona haya marcado "no inventariar esta línea" a propósito (excluded).
-  // "sin reconocer" no bloquea aquí (es un problema previo — casar el
-  // artículo — que ya tiene su propio camino, sin cambios en este encargo).
   const missingFormatLines = summary.notEnterLines.filter(ne => ne.reason === 'sin formato' && !ne.excluded)
   const blockedByFormat = missingFormatLines.length > 0
+  // ENCARGO CODE (13/08) fix/recepcion-casado-no-casa, §5 — "sin reconocer" SÍ
+  // bloquea ahora: hasta el 12/08 no lo hacía ("es un problema previo, con su
+  // propio camino") y por eso ALB-00106/ALB-00107 se confirmaron con 21 líneas
+  // sin casar — mercancía registrada que nunca entró a stock, sin que nadie lo
+  // decidiera a propósito. Descartar una línea (excluded) sigue sin bloquear:
+  // eso SÍ es un acto deliberado ("no inventariar"), no el resultado de no hacer nada.
+  const missingArticleLines = summary.notEnterLines.filter(ne => ne.reason === 'sin reconocer' && !ne.excluded)
+  const blockedByArticle = missingArticleLines.length > 0
+  const blockedFromConfirm = blockedByFormat || blockedByArticle
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4" onClick={onCancel}>
       <div className="bg-card w-full sm:max-w-lg max-h-[92vh] rounded-t-xl sm:rounded-xl shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
@@ -2847,6 +2918,16 @@ function ReviewPanel({
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {blockedByArticle && (
+              <div className="rounded-md border border-danger/30 bg-danger-bg px-3 py-2 flex items-start gap-1.5">
+                <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" />
+                <p className="text-sm text-danger">
+                  {missingArticleLines.length === 1 ? '1 línea no entrará a stock: falta el artículo.' : `${missingArticleLines.length} líneas no entrarán a stock: falta el artículo.`}
+                  {' '}Vuelve, cásala o marca "no inventariar esta línea".
+                </p>
               </div>
             )}
 
@@ -2942,7 +3023,8 @@ function ReviewPanel({
             className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50">
             Volver a contar
           </button>
-          <button type="button" onClick={onConfirm} disabled={saving || blockedByFormat} title={blockedByFormat ? 'Falta el formato en alguna línea con cantidad' : undefined}
+          <button type="button" onClick={onConfirm} disabled={saving || blockedFromConfirm}
+            title={blockedByArticle ? 'Falta casar el artículo en alguna línea con cantidad' : blockedByFormat ? 'Falta el formato en alguna línea con cantidad' : undefined}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base ${summary.anomaly ? 'bg-warning' : 'bg-accent'}`}>
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check size={14} />}
             {summary.anomaly ? 'He contado, confirmar' : 'Confirmar'}
