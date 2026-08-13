@@ -133,12 +133,14 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
       const ocr = buildOcrPrefill(header)
       // C2.2.b.5 — anti-duplicado: ¿ya existe un albarán igual (proveedor + nº) no anulado?
       const dup = await findDuplicateReceipt(accountId, header.supplierId || null, header.supplierDocNumber)
+      console.log('[DEBUG-wizard-routing] ReceiptScanPanel.handleCreate', { dup, docNumber: header.supplierDocNumber })
       if (dup) {
         setPendingOcr(ocr)
         setDupHit(dup)
         setCreating(false)
         return
       }
+      console.log('[DEBUG-wizard-routing] ReceiptScanPanel llamando a onCreateReceipt (sin duplicado)')
       onCreateReceipt(ocr)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo preparar la recepción.')
@@ -375,7 +377,7 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
                 className="px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page transition-base">
                 Cancelar
               </button>
-              <button type="button" onClick={() => { if (pendingOcr) onCreateReceipt(pendingOcr); setDupHit(null); setPendingOcr(null) }}
+              <button type="button" onClick={() => { console.log('[DEBUG-wizard-routing] "Crear de todos modos" pulsado'); if (pendingOcr) onCreateReceipt(pendingOcr); setDupHit(null); setPendingOcr(null) }}
                 className="px-3 py-2 rounded-md text-sm font-medium bg-warning text-text-on-accent hover:opacity-90 transition-base">
                 Crear de todos modos
               </button>

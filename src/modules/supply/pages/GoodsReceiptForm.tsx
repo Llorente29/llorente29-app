@@ -682,6 +682,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — ¿revisión de un
   // 'recibido' del asistente? El stock YA entró; oficina verifica, no re-cuenta.
   const reviewingReceived = correcting && !!prefill?.isReceived
+  console.log('[DEBUG-wizard-routing] GoodsReceiptForm montado', {
+    againstOrder, correcting, fromOcr, reviewingDraft, reviewingReceived,
+  })
   const fixedHeader = againstOrder || correcting   // en OCR la cabecera es editable (propuesta)
   // ENCARGO CODE (12/08) fix/recepcion-fromocr-borrador. `fromOcr` significa
   // "esta sesión trae ocrPrefill" (escaneo en vivo) — NO "esta línea necesita
