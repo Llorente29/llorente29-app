@@ -184,17 +184,27 @@ export default function GoodsReceiptsPage() {
   // los locales" no se muestra, mezclar locales no dice nada útil de UNO). Usa
   // los ids ya cargados arriba (receipts, ya viene ordenado por receipt_date
   // desc) — no repite la consulta de recepciones, solo lee sus líneas.
+  //
+  // ENCARGO CODE (14/08) fix/recepcion-lista-recibido, §3 — candidatos =
+  // 'recibido' o 'confirmado' (antes solo 'confirmado': mezclaba el histórico
+  // entero del flujo clásico con las recepciones del asistente).
+  // getReceiptCorrectionStreak filtra a las del asistente y aplica el tope.
+  // 200 en bruto es margen de sobra para llegar a 60 del asistente sin barrer
+  // toda la tabla.
   const [streak, setStreak] = useState<CorrectionStreak | null>(null)
   useEffect(() => {
     let cancelled = false
-    const confirmedIds = resolvedLocationId
-      ? receipts.filter(r => r.status === 'confirmado').slice(0, 60).map(r => r.id)
+    const candidates = resolvedLocationId
+      ? receipts
+          .filter(r => r.status === 'confirmado' || r.status === 'recibido')
+          .slice(0, 200)
+          .map(r => ({ id: r.id, status: r.status }))
       : []
-    // Sin local elegido o sin recepciones confirmadas: resuelve a null igual,
-    // pero SIEMPRE por la vía async (nunca setState síncrono en el cuerpo del
-    // efecto — mismo criterio que el resto del fetching de esta página).
-    const fetchPromise = confirmedIds.length > 0
-      ? getReceiptCorrectionStreak(confirmedIds)
+    // Sin local elegido o sin candidatos: resuelve a null igual, pero SIEMPRE
+    // por la vía async (nunca setState síncrono en el cuerpo del efecto —
+    // mismo criterio que el resto del fetching de esta página).
+    const fetchPromise = candidates.length > 0
+      ? getReceiptCorrectionStreak(candidates)
       : Promise.resolve(null)
     fetchPromise
       .then(s => { if (!cancelled) setStreak(s) })
@@ -240,16 +250,26 @@ export default function GoodsReceiptsPage() {
           const doc = (r.supplierDocNumber ?? '').toLowerCase()
           return code.includes(q) || sup.includes(q) || doc.includes(q)
         })
-    // Lo accionable primero: BORRADORES arriba (pendientes de confirmar), luego el
-    // resto; dentro de cada grupo, por fecha de recepción descendente (lo reciente
-    // antes). Así la oficina ve de un vistazo lo que tiene que revisar.
-    const rank = (s: string) => (s === 'borrador' ? 0 : s === 'confirmado' ? 1 : 2)
+    // Lo accionable primero: BORRADORES y RECIBIDO arriba (esperan acción —
+    // confirmar o revisar), luego CONFIRMADO/ANULADO (histórico); dentro de
+    // cada grupo, por fecha de recepción descendente (lo reciente antes). Así
+    // la oficina ve de un vistazo lo que tiene que revisar.
+    //
+    // ENCARGO CODE (14/08) fix/recepcion-lista-recibido, §2 — 'recibido' caía
+    // en el mismo rango que 'confirmado'/'anulado' (rango 2): con 99
+    // confirmadas por delante, una recepción 'recibido' quedaba enterrada al
+    // fondo de la lista — "no aparece en pantalla" aunque la fila existiera.
+    const rank = (s: string) => (s === 'borrador' ? 0 : s === 'recibido' ? 1 : s === 'confirmado' ? 2 : 3)
     return [...base].sort((a, b) => {
       const dr = rank(a.status) - rank(b.status)
       if (dr !== 0) return dr
       return (b.receiptDate ?? '').localeCompare(a.receiptDate ?? '')
     })
   }, [receipts, search, supplierNameById])
+
+  // ENCARGO CODE (14/08) fix/recepcion-lista-recibido, §2.2 — contador visible:
+  // es lo único que espera acción de la oficina (lo confirmado es histórico).
+  const recibidoCount = useMemo(() => receipts.filter(r => r.status === 'recibido').length, [receipts])
 
   // Revisar y confirmar un BORRADOR: lee la recepción + líneas + la foto del
   // albarán y abre el form EN SITIO (isDraft). La oficina ve lo que se contó,
@@ -590,6 +610,18 @@ export default function GoodsReceiptsPage() {
           </button>
         </div>
       </div>
+
+      {/* ENCARGO CODE (14/08) fix/recepcion-lista-recibido, §2.2 — "la oficina
+          no puede confirmar lo que no ve": destacado arriba, es lo único que
+          espera acción de oficina (lo confirmado es histórico). */}
+      {!loading && !error && recibidoCount > 0 && (
+        <div className="p-3 rounded-md border border-accent/30 bg-accent-bg flex items-center gap-2">
+          <Eye size={16} className="text-accent shrink-0" />
+          <p className="text-sm font-medium text-text-primary">
+            {recibidoCount} recepción{recibidoCount === 1 ? '' : 'es'} {recibidoCount === 1 ? 'espera' : 'esperan'} tu revisión
+          </p>
+        </div>
+      )}
 
       {/* ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §5 — solo lectura + una
           propuesta, nada automático. Sin botón que escriba receipt_approval=
