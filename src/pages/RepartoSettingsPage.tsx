@@ -17,6 +17,7 @@ import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabase'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import BrandDeliverySection from '@/modules/integrations/components/BrandDeliverySection'
+import ChannelDeliveryPolicySection from '@/modules/integrations/components/ChannelDeliveryPolicySection'
 
 async function rpc<T = unknown>(fn: string, args: Record<string, unknown>): Promise<{ data: T | null; error: { message: string } | null }> {
   if (!supabase) return { data: null, error: { message: 'Supabase no configurado' } }
@@ -830,6 +831,9 @@ export default function RepartoSettingsPage() {
 
       {/* E) Reparto propio por marca */}
       {activeAccountId && <BrandDeliverySection accountId={activeAccountId} />}
+
+      {/* E.2) Quién reparte según plataforma (ENCARGO CODE 13/08 noche fix/hubrise-service-type-reparto) */}
+      {activeAccountId && <ChannelDeliveryPolicySection accountId={activeAccountId} />}
 
       {/* F) Zonas (enlace) */}
       <Card className="p-5">
