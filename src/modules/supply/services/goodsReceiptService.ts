@@ -648,23 +648,34 @@ export async function getReceiptDocTotal(aiSessionId: string): Promise<number | 
 export const CORRECTION_STREAK_GOAL = 30
 
 export interface CorrectionStreak {
-  correctedCount: number   // de las últimas `totalCount` recepciones confirmadas
+  correctedCount: number   // de las últimas `totalCount` recepciones DEL ASISTENTE
   totalCount: number
-  streak: number           // seguidas sin corrección, contando desde la más reciente
+  streak: number           // seguidas sin corrección, contando desde la más reciente (nunca > streakGoal)
   streakGoal: number
   metGoal: boolean          // streak >= streakGoal
 }
 
 /**
- * Racha de recepciones confirmadas SIN que la oficina tuviera que corregir una
- * cantidad (ENCARGO CODE 13/08 fix/recepcion-p2-oficina, §5). Recibe los ids de
- * recepciones CONFIRMADAS ya cargados por el llamador (lista de Recepciones,
- * ya filtrada por local), del más reciente al más antiguo — no vuelve a
- * consultar goods_receipt, solo lee sus líneas. "Corregida" = alguna línea SIN
- * ⚑ (flagged_for_office=false) con discrepancy_reason puesto por el picker de
- * oficina (isOfficeQtyReason) — NO cualquier discrepancy_reason (el dropdown
- * del panel de repaso usa el mismo campo para otra cosa: por qué difiere de lo
- * pedido/del albarán).
+ * Racha de recepciones DEL ASISTENTE (no el histórico entero) SIN que la
+ * oficina tuviera que corregir una cantidad (ENCARGO CODE 13/08
+ * fix/recepcion-p2-oficina, §5; recorte de alcance ENCARGO CODE 14/08
+ * fix/recepcion-lista-recibido, §3). Recibe los candidatos ya cargados por el
+ * llamador (recepciones 'recibido' o 'confirmado', ya filtradas por local),
+ * del más reciente al más antiguo.
+ *
+ * "Del asistente" = status='recibido' (el flujo clásico nunca pasa por ahí),
+ * o alguna línea con la ⚑ (flagged_for_office) — columna que solo escribe el
+ * asistente, ninguna recepción del flujo clásico puede tenerla en true. No
+ * hay columna que sobreviva la transición recibido→confirmado (añadirla es
+ * migración, fuera de este encargo si hace falta) así que una recepción del
+ * asistente con TODAS sus líneas sin marcar deja de detectarse en cuanto se
+ * confirma — error hacia el lado seguro: cuenta de menos, nunca de más, así
+ * que nunca dispara antes de tiempo la propuesta de confirmación directa.
+ *
+ * "Corregida" = alguna línea SIN ⚑ (flagged_for_office=false) con
+ * discrepancy_reason puesto por el picker de oficina (isOfficeQtyReason) — NO
+ * cualquier discrepancy_reason (el dropdown del panel de repaso usa el mismo
+ * campo para otra cosa: por qué difiere de lo pedido/del albarán).
  *
  * ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — matiz del
  * asistente: una línea que cocina marcó ⚑ ("que lo mire la oficina") y que
@@ -673,33 +684,40 @@ export interface CorrectionStreak {
  * MARCAR (cocina dio por buena una cantidad que resultó ser otra).
  */
 export async function getReceiptCorrectionStreak(
-  confirmedReceiptIdsRecentFirst: string[],
+  candidatesRecentFirst: { id: string; status: GoodsReceiptStatus }[],
 ): Promise<CorrectionStreak> {
   requireSupabase()
-  if (confirmedReceiptIdsRecentFirst.length === 0) {
+  if (candidatesRecentFirst.length === 0) {
     return { correctedCount: 0, totalCount: 0, streak: 0, streakGoal: CORRECTION_STREAK_GOAL, metGoal: false }
   }
   const { data, error } = await from('goods_receipt_line')
     .select('goods_receipt_id, discrepancy_reason, flagged_for_office')
-    .in('goods_receipt_id', confirmedReceiptIdsRecentFirst)
+    .in('goods_receipt_id', candidatesRecentFirst.map(r => r.id))
   if (error) throw new Error(`Error calculando la racha de correcciones: ${error.message}`)
+  const lines = (data as Row[]) ?? []
+
+  const flaggedIds = new Set(lines.filter(l => l.flagged_for_office).map(l => l.goods_receipt_id as string))
+  const assistantRecentFirst = candidatesRecentFirst
+    .filter(r => r.status === 'recibido' || flaggedIds.has(r.id))
+    .slice(0, 60)
 
   const correctedIds = new Set<string>()
-  for (const row of (data as Row[]) ?? []) {
+  for (const row of lines) {
     if (isOfficeQtyReason(row.discrepancy_reason as string | null) && !row.flagged_for_office) {
       correctedIds.add(row.goods_receipt_id as string)
     }
   }
 
   let streak = 0
-  for (const id of confirmedReceiptIdsRecentFirst) {
-    if (correctedIds.has(id)) break
+  for (const r of assistantRecentFirst) {
+    if (correctedIds.has(r.id)) break
     streak++
+    if (streak >= CORRECTION_STREAK_GOAL) break
   }
 
   return {
-    correctedCount: correctedIds.size,
-    totalCount: confirmedReceiptIdsRecentFirst.length,
+    correctedCount: assistantRecentFirst.filter(r => correctedIds.has(r.id)).length,
+    totalCount: assistantRecentFirst.length,
     streak,
     streakGoal: CORRECTION_STREAK_GOAL,
     metGoal: streak >= CORRECTION_STREAK_GOAL,
