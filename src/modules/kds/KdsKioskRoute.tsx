@@ -15,7 +15,7 @@ import { MonitorPlay, LogOut, Loader2 } from 'lucide-react'
 import KdsBoard from './components/KdsBoard'
 import KdsAlarmOverlay from './components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from './components/AvailabilityNoticeOverlay'
-import { getBoard } from './services/kdsService'
+import { useDeviceTokenValidation, tokenValidationMessage } from '../tablet/hooks/useDeviceTokenValidation'
 
 const TOKEN_KEY = 'kds_device_token'
 
@@ -29,13 +29,13 @@ function clearToken(): void {
   try { window.localStorage.removeItem(TOKEN_KEY) } catch { /* noop */ }
 }
 
-type Status = 'idle' | 'checking' | 'valid' | 'invalid'
-
 export default function KdsKioskRoute() {
   const [token, setToken] = useState<string | null>(null)
-  const [status, setStatus] = useState<Status>('idle')
   const [pasteValue, setPasteValue] = useState('')
-  const [error, setError] = useState<string | null>(null)
+
+  // fix/tablet-robustez (12/08): device_location_by_token (~16ms), no
+  // kds_board (~1-2s) — mismo fix que /estacion, mismo hook compartido.
+  const validation = useDeviceTokenValidation(token, () => { clearToken(); setToken(null) })
 
   // Resolución inicial del token: ?token= en la URL (lo guarda y limpia la URL)
   // o el que hubiera en localStorage de una vinculación previa.
@@ -52,22 +52,6 @@ export default function KdsKioskRoute() {
     setToken(readStoredToken())
   }, [])
 
-  // Valida el token contra la RPC (una llamada de prueba a kds_board(null, token)).
-  useEffect(() => {
-    if (!token) { setStatus('idle'); return }
-    let cancelled = false
-    setStatus('checking')
-    setError(null)
-    getBoard(null, token)
-      .then(() => { if (!cancelled) setStatus('valid') })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        setStatus('invalid')
-        setError(e instanceof Error ? e.message : 'Token no válido')
-      })
-    return () => { cancelled = true }
-  }, [token])
-
   function handleLink() {
     const t = pasteValue.trim()
     if (!t) return
@@ -79,12 +63,11 @@ export default function KdsKioskRoute() {
   function handleUnlink() {
     clearToken()
     setToken(null)
-    setStatus('idle')
-    setError(null)
   }
 
-  // ── Pantalla de vinculación (sin token o token inválido) ──────────────────
-  if (!token || status === 'invalid') {
+  // ── Pantalla de vinculación — SOLO ante rechazo explícito ─────────────────
+  if (!token || validation.kind === 'rejected') {
+    const rejectedMessage = validation.kind === 'rejected' ? validation.message : null
     return (
       <div className="fixed inset-0 bg-zinc-950 text-zinc-100 flex items-center justify-center p-6">
         <div className="w-full max-w-md text-center">
@@ -94,9 +77,9 @@ export default function KdsKioskRoute() {
             Pega el token del dispositivo (lo generas en Ajustes de cocina → Dispositivos) o abre la
             URL del kiosco que copiaste allí.
           </p>
-          {status === 'invalid' && error && (
+          {rejectedMessage && (
             <div className="mt-4 rounded-lg bg-red-500/15 text-red-200 ring-1 ring-red-500/40 px-3 py-2 text-sm">
-              El token no es válido o fue revocado. {error}
+              {rejectedMessage}
             </div>
           )}
           <div className="mt-6 flex flex-col gap-2">
@@ -121,11 +104,16 @@ export default function KdsKioskRoute() {
     )
   }
 
-  // ── Comprobando token ─────────────────────────────────────────────────────
-  if (status === 'checking') {
+  // ── Validando — red/lentitud NUNCA piden vincular, reintentan solos ──────
+  if (validation.kind === 'idle' || validation.kind === 'trying') {
+    const msg = tokenValidationMessage(validation) ?? 'Conectando con la cocina…'
     return (
-      <div className="fixed inset-0 bg-zinc-950 text-zinc-400 flex items-center justify-center gap-2">
-        <Loader2 className="animate-spin" size={20} /> Conectando con la cocina…
+      <div className="fixed inset-0 bg-zinc-950 text-zinc-400 flex flex-col items-center justify-center gap-2 text-center px-6">
+        <Loader2 className="animate-spin" size={20} />
+        <span>{msg}</span>
+        {validation.kind === 'trying' && validation.attempt > 0 && (
+          <span className="text-xs text-zinc-600">Intento {validation.attempt}</span>
+        )}
       </div>
     )
   }
