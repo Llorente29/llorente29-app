@@ -14,12 +14,26 @@
 //
 // Si no hay nada cerrado, no se pinta nada (mismo criterio ambiental que
 // ClosedBrandsCard/LocationStatusCard).
+//
+// fix/sondeo-adaptativo-resto (13/08, Encargo B-bis): location_status y
+// closed_brands eran dos de las tres RPC que se escaparon del encargo B —
+// sondeaban a 30s fijos sin freno, ~4 peticiones/min entre las dos tablets
+// del pase. Sin cambios ~2 min (4 ciclos a 30s) el intervalo sube hasta 60s
+// — NUNCA más lento en horario de servicio: si una marca se cierra desde la
+// oficina, la tablet tiene que enterarse en un tiempo razonable, así que el
+// techo se queda corto (60s) a propósito. Con el local sin actividad real
+// 60 min, baja al suelo general de 5 min (B2, ver retryBackoff.ts).
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Store, ChevronDown, ChevronUp } from 'lucide-react'
+import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import { getClosedBrands, getLocationStatus, type ClosedBrand, type LocationStatus } from '../services/kdsService'
 import LocationStatusCard from './LocationStatusCard'
 import ClosedBrandsCard from './ClosedBrandsCard'
+
+const POLL_MS = 30_000
+const IDLE_MS = 60_000
+const IDLE_AFTER = 4
 
 interface Props {
   accountId?: string | null
@@ -27,28 +41,48 @@ interface Props {
   token?: string | null
 }
 
+// Huella de "qué se ve cerrado": estado del local + marcas cerradas (id +
+// hasta cuándo). Un cambio aquí es justo lo que el chip existe para avisar.
+function closuresFingerprint(location: LocationStatus | null, brands: ClosedBrand[]): string {
+  const loc = location ? `${location.mode}:${location.resume_at ?? ''}:${location.connected ? 1 : 0}` : ''
+  const b = brands.map(x => `${x.brand_id}:${x.resume_at ?? ''}`).sort().join(',')
+  return `${loc}|${b}`
+}
+
 export default function ClosuresChip({ accountId, locationId, token }: Props) {
   const [brands, setBrands] = useState<ClosedBrand[]>([])
   const [location, setLocation] = useState<LocationStatus | null>(null)
   const [open, setOpen] = useState(false)
+  const lastFingerprintRef = useRef<string | null>(null)
+  const pollHandleRef = useRef<RetryLoopHandle | null>(null)
 
-  const refresh = useCallback(async () => {
-    try {
-      const [b, l] = await Promise.all([
-        getClosedBrands(accountId ?? null, token),
-        getLocationStatus(locationId, token),
-      ])
-      setBrands(b)
-      setLocation(l)
-    } catch {
-      /* Silencioso: un fallo del chip NUNCA debe romper Pedidos. */
-    }
+  // NOTA: ya no se traga el fallo (antes sí, "un fallo del chip nunca debe
+  // romper Pedidos") — sigue sin romper la pantalla (nada pinta el rechazo),
+  // pero ahora runPollingLoop se entera y aplica el backoff de fallo, que
+  // antes faltaba en este poll.
+  const refresh = useCallback(async (): Promise<boolean> => {
+    const [b, l] = await Promise.all([
+      getClosedBrands(accountId ?? null, token),
+      getLocationStatus(locationId, token),
+    ])
+    setBrands(b)
+    setLocation(l)
+    const fp = closuresFingerprint(l, b)
+    const hadWork = lastFingerprintRef.current === null || fp !== lastFingerprintRef.current
+    lastFingerprintRef.current = fp
+    return hadWork
   }, [accountId, locationId, token])
 
   useEffect(() => {
-    void refresh()
-    const id = window.setInterval(() => { void refresh() }, 30_000)
-    return () => window.clearInterval(id)
+    lastFingerprintRef.current = null
+    const handle = runPollingLoop({
+      call: refresh,
+      normalIntervalMs: POLL_MS,
+      idleIntervalMs: IDLE_MS,
+      idleAfter: IDLE_AFTER,
+    })
+    pollHandleRef.current = handle
+    return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
   const locationClosed = !!location && location.connected && location.mode !== 'normal'
@@ -75,7 +109,7 @@ export default function ClosuresChip({ accountId, locationId, token }: Props) {
   return (
     <div className="px-5 pt-3 bg-page">
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); pollHandleRef.current?.wake() }}
         className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl border border-danger/30 bg-danger-bg text-danger text-[13.5px] font-bold"
       >
         <span className="w-2 h-2 rounded-full bg-danger shrink-0" aria-hidden />

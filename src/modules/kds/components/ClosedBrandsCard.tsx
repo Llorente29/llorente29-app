@@ -13,11 +13,25 @@
 //
 // No se muestra nada si no hay ninguna marca cerrada (ambiental de verdad:
 // no ocupa sitio cuando no aporta).
+//
+// fix/sondeo-adaptativo-resto (13/08, Encargo B-bis): closed_brands es una de
+// las tres RPC que se escaparon del encargo B. Este es su SEGUNDO sitio de
+// sondeo (el primero es ClosuresChip) — se llega aquí también desde
+// Disponibilidad (accesible por token en tablet, ver AvailabilityBoard) y
+// desde el detalle expandido del propio chip, así que sondeaba por duplicado.
+// Mismo techo/suelo que ClosuresChip para el mismo dato: sin cambios ~2 min
+// (4 ciclos a 30s) sube hasta 60s; con el local sin actividad real 60 min,
+// suelo general de 5 min (B2).
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Store, Unlock, Loader2, AlertTriangle } from 'lucide-react'
+import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import { getClosedBrands, setBrandStatus, setBrandStatusByToken, type ClosedBrand } from '../services/kdsService'
 import { themeCls } from '../lib/theme'
+
+const POLL_MS = 30_000
+const IDLE_MS = 60_000
+const IDLE_AFTER = 4
 
 interface Props {
   accountId?: string | null
@@ -25,18 +39,30 @@ interface Props {
   dark?: boolean
 }
 
+function brandsFingerprint(brands: ClosedBrand[]): string {
+  return brands.map(b => `${b.brand_id}:${b.resume_at ?? ''}`).sort().join(',')
+}
+
 export default function ClosedBrandsCard({ accountId, token, dark = false }: Props) {
   const [brands, setBrands] = useState<ClosedBrand[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const lastFingerprintRef = useRef<string | null>(null)
+  const pollHandleRef = useRef<RetryLoopHandle | null>(null)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<boolean> => {
     try {
-      setBrands(await getClosedBrands(accountId ?? null, token))
+      const list = await getClosedBrands(accountId ?? null, token)
+      setBrands(list)
       setError(null)
+      const fp = brandsFingerprint(list)
+      const hadWork = lastFingerprintRef.current === null || fp !== lastFingerprintRef.current
+      lastFingerprintRef.current = fp
+      return hadWork
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error cargando marcas cerradas')
+      throw e
     } finally {
       setLoading(false)
     }
@@ -44,9 +70,15 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
 
   useEffect(() => {
     setLoading(true)
-    void refresh()
-    const id = window.setInterval(() => { void refresh() }, 30_000)
-    return () => window.clearInterval(id)
+    lastFingerprintRef.current = null
+    const handle = runPollingLoop({
+      call: refresh,
+      normalIntervalMs: POLL_MS,
+      idleIntervalMs: IDLE_MS,
+      idleAfter: IDLE_AFTER,
+    })
+    pollHandleRef.current = handle
+    return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
   async function reopen(brandId: string) {
@@ -54,12 +86,14 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
     try {
       if (token) await setBrandStatusByToken(token, brandId, 'normal')
       else await setBrandStatus(brandId, 'normal')
-      await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo reabrir')
-    } finally {
       setBusyId(null)
+      return
     }
+    try { await refresh() } catch { /* runPollingLoop reintentará */ }
+    pollHandleRef.current?.wake()
+    setBusyId(null)
   }
 
   if (loading || brands.length === 0) return null
