@@ -14,15 +14,25 @@
 // (se reabre, o se le pone una hora) — no se puede posponer un olvido.
 //
 // Poll cada 30 s (no es tan urgente como un reparto fallido en curso).
+//
+// fix/sondeo-adaptativo-resto (13/08, Encargo B-bis): anomalous_brand_closures
+// era una de las tres RPC que se escaparon del encargo B — sondeaba a 30s
+// fijos, ~4/min entre las dos tablets del pase. Es un vigía de anomalías, no
+// un dato de servicio (availability-watchdog ya avisa por email cada 15 min):
+// sin cambios ~5 min (10 ciclos a 30s) el intervalo sube hasta 2 min. Con el
+// local sin actividad real 60 min, baja al suelo general de 5 min (B2).
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Unlock, Loader2 } from 'lucide-react'
+import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import {
   getAnomalousBrandClosures, setBrandStatus, setBrandStatusByToken,
   type AnomalousBrandClosure,
 } from '../services/kdsService'
 
 const POLL_MS = 30_000
+const IDLE_MS = 120_000
+const IDLE_AFTER = 10
 
 interface Props {
   accountId?: string | null
@@ -33,19 +43,26 @@ interface Props {
 export default function ClosureAnomalyAlarm({ accountId, token, variant = 'fixed' }: Props) {
   const [closures, setClosures] = useState<AnomalousBrandClosure[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
+  const pollHandleRef = useRef<RetryLoopHandle | null>(null)
 
-  const refresh = useCallback(async () => {
-    try {
-      setClosures(await getAnomalousBrandClosures(accountId ?? null, token))
-    } catch {
-      /* Silencioso: un fallo de la alarma NUNCA debe romper la pantalla de cocina. */
-    }
+  // NOTA: ya no se traga el fallo (antes sí) — sigue sin romper la pantalla
+  // (nada renderiza el rechazo), pero ahora runPollingLoop aplica el backoff
+  // de fallo, que antes faltaba en este poll.
+  const refresh = useCallback(async (): Promise<boolean> => {
+    const list = await getAnomalousBrandClosures(accountId ?? null, token)
+    setClosures(list)
+    return list.length > 0
   }, [accountId, token])
 
   useEffect(() => {
-    void refresh()
-    const id = window.setInterval(() => { void refresh() }, POLL_MS)
-    return () => window.clearInterval(id)
+    const handle = runPollingLoop({
+      call: refresh,
+      normalIntervalMs: POLL_MS,
+      idleIntervalMs: IDLE_MS,
+      idleAfter: IDLE_AFTER,
+    })
+    pollHandleRef.current = handle
+    return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
   async function reopen(brandId: string) {
@@ -54,6 +71,7 @@ export default function ClosureAnomalyAlarm({ accountId, token, variant = 'fixed
       if (token) await setBrandStatusByToken(token, brandId, 'normal')
       else await setBrandStatus(brandId, 'normal')
       await refresh()
+      pollHandleRef.current?.wake()
     } catch {
       /* el poll siguiente reconcilia */
     } finally {
