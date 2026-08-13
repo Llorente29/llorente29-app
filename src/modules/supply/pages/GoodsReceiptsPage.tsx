@@ -478,6 +478,8 @@ export default function GoodsReceiptsPage() {
     }
   }
 
+  console.log('[DEBUG-wizard-routing] render', { view, hasActiveAccountId: !!activeAccountId, hasOcrPrefill: !!ocrPrefill })
+
   // ── Vista SCAN: escanear albarán (OCR) ──
   if (view === 'scan' && activeAccountId) {
     return (
@@ -489,7 +491,11 @@ export default function GoodsReceiptsPage() {
         // el asistente móvil, una línea por pantalla. El escaneo CONTRA
         // PEDIDO (OrderReceiveFlow) es un camino aparte, no tocado — sigue en
         // el form grande (el formato ya viene dado por el pedido).
-        onCreateReceipt={(ocr) => { setOcrPrefill(ocr); setQuickReceipt(null); setView('wizard') }}
+        onCreateReceipt={(ocr) => {
+          console.log('[DEBUG-wizard-routing] GoodsReceiptsPage.onCreateReceipt recibido', { hasOcr: !!ocr, lines: ocr?.lines?.length })
+          setOcrPrefill(ocr); setQuickReceipt(null); setView('wizard')
+          console.log('[DEBUG-wizard-routing] setView(\'wizard\') llamado')
+        }}
       />
     )
   }
