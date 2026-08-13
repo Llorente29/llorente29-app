@@ -10,12 +10,19 @@
 // Poll cada 20 s (no es tan urgente como la alarma de reparto: no lleva sonido
 // ni Realtime, para no competir con ella). "Hecho" sella el acuse en BBDD
 // (sobrevive recargas y kiosk↔tablet del mismo local).
+//
+// fix/sondeo-adaptativo-tablet (13/08), Tarea B1: sin avisos vivos ~5 min (15
+// ciclos a 20s) el poll se aleja progresivamente hasta 5 min; vuelve al
+// instante en cuanto aparezca un aviso.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { PlugZap, Check } from 'lucide-react'
+import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import { getAvailabilityNotices, ackAvailabilityNotice, type AvailabilityNotice } from '../services/kdsService'
 
 const POLL_MS = 20_000
+const NOTICE_IDLE_MS = 5 * 60_000
+const NOTICE_IDLE_AFTER = 15
 
 interface AvailabilityNoticeOverlayProps {
   /** Local (sesión). En kiosco/tablet va null: la RPC deriva el local del token. */
@@ -35,27 +42,34 @@ function integratorLabel(code: string): string {
 export default function AvailabilityNoticeOverlay({ locationId, token, variant = 'fixed' }: AvailabilityNoticeOverlayProps) {
   const [notices, setNotices] = useState<AvailabilityNotice[]>([])
   const [ackingId, setAckingId] = useState<string | null>(null)
+  const pollHandleRef = useRef<RetryLoopHandle | null>(null)
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await getAvailabilityNotices(locationId, token)
-      setNotices(res.notices ?? [])
-    } catch {
-      /* Silencioso: un fallo del aviso NUNCA debe romper la pantalla de cocina. */
-    }
+  // NOTA: ya no se traga el fallo (antes sí) — sigue sin romper la pantalla
+  // (nada renderiza el rechazo), pero ahora runPollingLoop aplica el backoff
+  // de fallo, que antes faltaba en este poll.
+  const refresh = useCallback(async (): Promise<boolean> => {
+    const res = await getAvailabilityNotices(locationId, token)
+    const list = res.notices ?? []
+    setNotices(list)
+    return list.length > 0
   }, [locationId, token])
 
   useEffect(() => {
-    void refresh()
-    const id = window.setInterval(() => { void refresh() }, POLL_MS)
-    return () => window.clearInterval(id)
+    const handle = runPollingLoop({
+      call: refresh,
+      normalIntervalMs: POLL_MS,
+      idleIntervalMs: NOTICE_IDLE_MS,
+      idleAfter: NOTICE_IDLE_AFTER,
+    })
+    pollHandleRef.current = handle
+    return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
   const handleAck = useCallback(async (noticeId: string) => {
     setAckingId(noticeId)
     setNotices(prev => prev.filter(n => n.id !== noticeId)) // optimista
     try { await ackAvailabilityNotice(noticeId, token) }
-    catch { void refresh() }
+    catch { void refresh().catch(() => {}) }
     finally { setAckingId(null) }
   }, [token, refresh])
 
