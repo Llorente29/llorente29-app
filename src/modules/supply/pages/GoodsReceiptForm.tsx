@@ -75,6 +75,9 @@ import {
   driftAlertFor,
   lineActualPerBase,
   expiryAlertFor,
+  OFFICE_QTY_REASON_PREFIX,
+  OFFICE_QTY_REASONS,
+  officeReasonDisplay,
   type LineMatchCandidate,
   type SupplySettings,
   type SupplierPriceRef,
@@ -95,6 +98,10 @@ export interface ReceiptPrefill {
   isDraft?: boolean
   code?: string | null
   rawDocumentUrl?: string | null
+  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — total del albarán leído
+  // por la IA (goods_receipt_ai_session.parsed_result.document.grand_total, YA
+  // EXISTE — se lee vía getReceiptDocTotal). null si no hubo OCR o no lo leyó.
+  docTotal?: number | null
 }
 export interface ReceiptPrefillLine {
   recipeItemId: string | null
@@ -111,6 +118,16 @@ export interface ReceiptPrefillLine {
   // needsResolution ya no bloquee dónde se muestran.
   rawText: string | null
   supplierCode: string | null
+  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — doc_qty/doc_amount/
+  // discrepancy_reason YA EXISTEN en goods_receipt_line y YA se escriben al
+  // crear la línea, pero handleReviewDraft/handleCorrect no los leían de
+  // vuelta: al reabrir un borrador se perdía el cuadre por línea ("cuentas X €
+  // · el albarán dice Y €") Y, más grave, el discrepancy_reason ya puesto se
+  // borraba en el siguiente guardado (persist() escribe siempre
+  // discrepancyReasons[key] ?? null, y ese estado nace vacío en cada montaje).
+  docQty: number | null
+  docAmount: number | null
+  discrepancyReason: string | null
 }
 
 // Propuesta OCR (C2.2.a-2): cabecera resuelta + líneas leídas del albarán.
@@ -118,6 +135,13 @@ export interface ReceiptPrefillLine {
 // llegan SIN artículo (recipeItemId null): el casado a artículos es C2.2.b.
 export interface OcrPrefill {
   aiSessionId: string | null
+  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — la IA YA lee el total
+  // del albarán (result.document.grand_total) y YA se muestra en ReceiptScanPanel
+  // ("Total") — pero se descartaba aquí, así que nunca llegaba a la oficina para
+  // el cuadre. Cablearlo, no inventar una columna nueva (persistido en
+  // goods_receipt_ai_session.parsed_result, se lee de vuelta al revisar un
+  // borrador vía getReceiptDocTotal).
+  docTotal: number | null
   supplierId: string            // '' si no casó
   proposedSupplierName: string | null   // emisor leído (para prerellenar el alta si no casa)
   proposedSupplierNif: string | null
@@ -186,6 +210,14 @@ interface DraftLine {
   lineAmount?: number | null   // importe de línea del albarán (OCR), dato duro p/ aviso de precio
   albaranUnit?: string | null  // unidad de la cantidad leída del albarán (ud/caja/kg…)
   albaranQty?: number | null   // cantidad ORIGINAL del albarán (antes de convertir a formato)
+  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §4 — lo que contó QUIEN
+  // RECIBIÓ (cocina/muelle), solo en revisión de BORRADOR (isDraft). Si
+  // oficina edita `qty` y difiere de esto, pide motivo (picker inline) —
+  // es el ÚNICO dato que oficina no puede verificar por sí misma (no vio
+  // la mercancía). null = no hay referencia previa (línea nueva, o no es
+  // revisión de borrador) → editar no pide motivo.
+  originalQty?: string | null
+  discrepancyReason?: string | null   // motivo YA guardado (se precarga al reabrir el borrador)
   convertedNote?: string | null // "480 ud → 6 cajas": referencia visible de la conversión
   poLineId: string | null
   lotCode: string | null       // hueco FEFO/APPCC (se persiste; UI en su frente)
@@ -232,6 +264,22 @@ function parseNum(v: string): number | null {
   const n = Number(v.replace(',', '.'))
   return Number.isFinite(n) ? n : null
 }
+
+// ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §2 — precarga de campos EDITABLES
+// (Recibido, €/formato): `String(41.507)` da "41.507" con PUNTO — un oficinista
+// español lo lee como "cuarenta y un mil quinientos siete". parseNum ya acepta
+// coma (v.replace(',', '.')), así que precargar con coma redondea el viaje sin
+// romper el reparseo. SIN agrupación de miles: con agrupación, parseNum no la
+// limpia y el número se rompe al reeditar.
+function numToInputStr(n: number): string {
+  return n.toLocaleString('es-ES', { useGrouping: false, maximumFractionDigits: 6 })
+}
+
+// ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §4 — motivo al cambiar la
+// cantidad EN OFICINA (decisión de Julio 13/08): es el único dato que la
+// oficina no puede verificar (no vio la mercancía). Vocabulario/prefijo
+// (OFFICE_QTY_REASON_PREFIX etc.) vive en goodsReceiptService.ts porque §5
+// (racha de correcciones) también lo necesita para leer discrepancy_reason.
 
 function formatShortDate(iso: string | null): string {
   if (!iso) return '—'
@@ -386,7 +434,7 @@ function rescaleCostToFormat(
   const next = rescaleLastPriceToFormat(prevCost, prevQtyInBase, nextQtyInBase, refPerBase)
   if (next === null) return ''   // sin ancla → vaciar, que el humano lo ponga
   // Redondeo a céntimo para el campo editable (el cálculo fino de stock es server-side).
-  return String(Math.round(next * 100) / 100)
+  return numToInputStr(Math.round(next * 100) / 100)
 }
 
 // Detalle de una línea recibida POR ENCIMA de lo pendiente (para el resumen).
@@ -528,13 +576,13 @@ function wizardFromPack(
   // m===1 + base en ud → "Caja N Ud" (sin capa interior real); si no, paquetes con contenido.
   if (isUnit && pack.m === 1) {
     w.shape = 'caja'; w.boxHas = 'directas'
-    w.perInner = String(pack.n)
+    w.perInner = numToInputStr(pack.n)
     w.containerName = pack.container ?? 'Caja'
     w.innerName = 'Ud'
   } else {
     w.shape = 'caja'; w.boxHas = 'paquetes'
-    w.count = String(pack.n)
-    w.perInner = String(pack.m)   // en unidad amigable (kg/L/ud)
+    w.count = numToInputStr(pack.n)
+    w.perInner = numToInputStr(pack.m)   // en unidad amigable (kg/L/ud)
     w.containerName = pack.container ?? 'Caja'
     w.innerName = pack.innerLabel || 'Paquete'
   }
@@ -1364,7 +1412,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       alreadyReceived: null,
       pending: null,
       qty: '',   // RECIBIDO A CIEGAS: nace vacío SIEMPRE; la cantidad del albarán queda como referencia (albaranQty)
-      unitCost: l.unitCost != null ? String(l.unitCost) : '',
+      unitCost: l.unitCost != null ? numToInputStr(l.unitCost) : '',
       lineAmount: l.lineAmount ?? null,
       albaranUnit: l.albaranUnit ?? null,
       albaranQty: l.qty ?? null,                  // cantidad original del albarán (antes de convertir)
@@ -1496,6 +1544,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         lines = prefill.lines.map((l, i) => {
           const cat = resolveFmt(l.purchaseFormatId, l.recipeItemId)
           const ref = refFor(l.purchaseOrderLineId)
+          // Revisión de BORRADOR → precarga lo que contó el trabajador (para verlo
+          // y ajustar). Corrección de una CONFIRMADA → vacío (se re-cuenta).
+          const startQty = prefill.isDraft && l.qtyReceived != null ? numToInputStr(l.qtyReceived) : ''
           return {
             key: `pf-${i}`,
             recipeItemId: l.recipeItemId,
@@ -1506,10 +1557,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             qtyOrdered: ref.qtyOrdered,
             alreadyReceived: ref.already,
             pending: ref.pending,
-            // Revisión de BORRADOR → precarga lo que contó el trabajador (para verlo
-            // y ajustar). Corrección de una CONFIRMADA → vacío (se re-cuenta).
-            qty: prefill.isDraft && l.qtyReceived != null ? String(l.qtyReceived) : '',
-            unitCost: l.unitCost != null ? String(l.unitCost) : (cat?.lastPrice != null ? String(cat.lastPrice) : ''),
+            qty: startQty,
+            unitCost: l.unitCost != null ? numToInputStr(l.unitCost) : (cat?.lastPrice != null ? numToInputStr(cat.lastPrice) : ''),
             poLineId: l.purchaseOrderLineId,
             lotCode: null,
             expiryDate: null,
@@ -1519,6 +1568,15 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             // matchedName se queda null a propósito: el efecto de casado lo
             // rellena desde catalogByItem en cuanto carga (ver "tier 0").
             rawText: l.rawText, supplierCode: l.supplierCode, matchedName: null, matchSemaphore: null, matchType: null,
+            // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3/§4 — cuadre por
+            // línea (docQty/docAmount, ya existían en BBDD, no se leían de
+            // vuelta) + motivo ya guardado (se precarga, no se pierde al
+            // reabrir) + referencia de lo que contó cocina (originalQty, para
+            // el picker de motivo al editar en oficina, solo en BORRADOR).
+            lineAmount: l.docAmount,
+            albaranQty: l.docQty,
+            originalQty: prefill.isDraft ? startQty : null,
+            discrepancyReason: l.discrepancyReason,
           }
         })
       } else if (againstOrder && order) {
@@ -1537,7 +1595,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             alreadyReceived: ref.already,
             pending: ref.pending,
             qty: '',
-            unitCost: l.estUnitPrice != null ? String(l.estUnitPrice) : (cat?.lastPrice != null ? String(cat.lastPrice) : ''),
+            unitCost: l.estUnitPrice != null ? numToInputStr(l.estUnitPrice) : (cat?.lastPrice != null ? numToInputStr(cat.lastPrice) : ''),
             poLineId: l.id,
             lotCode: null,
             expiryDate: null,
@@ -1556,14 +1614,23 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           alreadyReceived: null,
           pending: null,
           qty: '',
-          unitCost: e.lastPrice != null ? String(e.lastPrice) : '',
+          unitCost: e.lastPrice != null ? numToInputStr(e.lastPrice) : '',
           poLineId: null,
           lotCode: null,
           expiryDate: null,
           rawText: null, supplierCode: null, matchedName: null, matchSemaphore: null, matchType: null,
         }))
       }
-      if (!cancelled) setDraft(lines)
+      if (!cancelled) {
+        setDraft(lines)
+        // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — hidrata el motivo YA
+        // guardado (si lo hay) en el estado que persist()/ReviewPanel leen. Sin
+        // esto, reabrir un borrador con un motivo ya puesto lo borraba en el
+        // siguiente guardado (persist() escribe discrepancyReasons[key] ?? null).
+        const reasons: Record<string, string> = {}
+        for (const l of lines) if (l.discrepancyReason) reasons[l.key] = l.discrepancyReason
+        setDiscrepancyReasons(reasons)
+      }
     }
 
     build()
@@ -1580,7 +1647,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   }
   // Acelerador opt-in: rellena Recibido con el pendiente (solo líneas con pendiente>0).
   function fillWithPending() {
-    setDraft(d => d.map(l => (l.pending !== null && l.pending > 0) ? { ...l, qty: String(l.pending) } : l))
+    setDraft(d => d.map(l => (l.pending !== null && l.pending > 0) ? { ...l, qty: numToInputStr(l.pending) } : l))
   }
 
   const hasReference = useMemo(() => draft.some(l => l.pending !== null), [draft])
@@ -1599,6 +1666,23 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     () => filled.filter(l => l.recipeItemId && qtyInBaseFromFormat(parseNum(l.qty)!, l.formatQtyInBase) !== null).length,
     [filled],
   )
+
+  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — cuadre del dinero: el
+  // trabajo real de la oficina. docTotal sale de OCR en vivo (ocrPrefill) o del
+  // borrador guardado (prefill, vía getReceiptDocTotal) — nunca los dos a la
+  // vez. contado = Σ qty × precio de las líneas CON cantidad (mismo criterio
+  // que "filled"); null si ninguna línea tiene los dos datos.
+  const docTotal = ocrPrefill?.docTotal ?? prefill?.docTotal ?? null
+  const contado = useMemo(() => {
+    let sum = 0
+    let any = false
+    for (const l of filled) {
+      const q = parseNum(l.qty)
+      const c = parseNum(l.unitCost)
+      if (q !== null && c !== null) { sum += q * c; any = true }
+    }
+    return any ? sum : null
+  }, [filled])
 
   // Deriva de precio por artículo casado. Depende solo de (cuenta, item, ventana),
   // no del proveedor ni del precio tecleado → se recarga cuando cambia el conjunto
@@ -1822,7 +1906,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     if (n > 0) {
       const why = notArticle > 0 && notFormat > 0 ? 'falta el artículo o el formato'
         : notArticle > 0 ? 'falta el artículo' : 'falta el formato'
-      setError(`${n === 1 ? '1 línea' : `${n} líneas`} no ${n === 1 ? 'entrará' : 'entrarán'} a stock: ${why}.`)
+      setError(`${n === 1 ? '1 línea' : `${n} líneas`} no ${n === 1 ? 'entrará' : 'entrarán'} al almacén: ${why}.`)
       return
     }
     setError(null)
@@ -1979,7 +2063,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         catch (e) { console.error('persist: corregida OK pero no se pudo anular la original', e); voidNote = ' · OJO: anula la anterior a mano' }
       }
 
-      const parts = [`${res.postedLines} línea(s) a stock`]
+      const parts = [`${res.postedLines} línea(s) al almacén`]
       if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear (revisar)`)
       if (res.recalculatedItems > 0) parts.push(`coste actualizado en ${res.recalculatedItems} ingrediente(s)`)
       onSaved(`Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}${learnNote}${voidNote}.`)
@@ -1996,12 +2080,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const subtitle = againstOrder
     ? 'Cuenta lo que ha llegado y escríbelo. Lo pedido y lo pendiente están a la derecha como referencia.'
     : reviewingDraft
-      ? 'Esto contó quien recibió. Revisa la foto del albarán y las líneas; ajusta lo que falte y confirma — entra a stock con su coste.'
+      ? 'Esto contó quien recibió. Revisa la foto del albarán y las líneas; ajusta lo que falte y confirma — entra al almacén con su coste.'
       : correcting
       ? 'Corrige lo que falló y confirma. La recepción anterior se anulará solo al confirmar esta.'
       : fromOcr
-        ? 'Esto leyó la IA del albarán. Revisa proveedor, local, cantidades y el formato de cada línea; al confirmar, entra a stock con su coste.'
-        : 'Cuenta lo que ha llegado y escríbelo. Al confirmar, entra a stock.'
+        ? 'Esto leyó la IA del albarán. Revisa proveedor, local, cantidades y el formato de cada línea; al confirmar, entra al almacén con su coste.'
+        : 'Cuenta lo que ha llegado y escríbelo. Al confirmar, entra al almacén.'
 
   return (
     <div className="space-y-4">
@@ -2398,9 +2482,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                               <div className="flex items-center gap-1.5 flex-wrap justify-end">
                                 {cmp && <span className={`text-[10px] px-1 py-0.5 rounded border ${cmp.cls}`}>{cmp.label}</span>}
                                 {willEnter ? (
-                                  <span className="text-[10px] px-1 py-0.5 rounded bg-success-bg text-success border border-success/20">a stock</span>
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-success-bg text-success border border-success/20">entra al almacén</span>
                                 ) : (
-                                  <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20">sin mapear</span>
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20">sin reconocer</span>
                                 )}
                                 {/* Los avisos de PRECIO (puntual + pactado + deriva) ya no van aquí:
                                     se muestran legibles junto al campo de precio (Fila 3). */}
@@ -2458,7 +2542,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             ) : (
                               <div className="rounded-md border border-warning/40 bg-warning-bg/60 px-3 py-2 flex items-center gap-1.5 text-warning">
                                 <AlertTriangle size={14} className="shrink-0" />
-                                <span className="text-sm font-medium">Sin reconocer: esta línea no entrará a stock hasta que la cases.</span>
+                                <span className="text-sm font-medium">Sin reconocer: esta línea no entrará al almacén hasta que la cases.</span>
                               </div>
                             )}
                             {/* Con propuesta pendiente, "No, buscar otro" ya abre el picker —
@@ -2488,7 +2572,11 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                           {!needsResolution ? (
                             <p className="text-[11px] text-text-secondary">formato: {l.formatLabel ?? '—'}</p>
                           ) : !l.recipeItemId ? (
-                            <span className="text-[11px] text-text-tertiary">casa el artículo primero</span>
+                            // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §1 — antes decía
+                            // "casa el artículo primero" aquí incluso cuando la Fila 1.5 (arriba)
+                            // ya está enseñando el aviso o la propuesta de casado: redundante y
+                            // confuso ("ya lo estoy viendo arriba, ¿por qué me lo repite?").
+                            null
                           ) : (() => {
                             const hasFormat = l.formatQtyInBase != null && l.formatQtyInBase > 0
                             const container = (l.formatName ?? 'Formato').trim() || 'Formato'
@@ -2529,12 +2617,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                 </div>
                               ) : l.skipStock ? (
                                 <div className="rounded-md border border-border-default bg-page px-3 py-2">
-                                  <p className="text-sm text-text-secondary">Sin formato — excluida a propósito, no entra a stock.</p>
+                                  <p className="text-sm text-text-secondary">Sin formato — excluida a propósito, no entra al almacén.</p>
                                 </div>
                               ) : (
                                 <div className="rounded-md border border-warning/40 bg-warning-bg/60 px-3 py-2 flex items-center gap-1.5 text-warning">
                                   <AlertTriangle size={14} className="shrink-0" />
-                                  <span className="text-sm font-medium">Sin formato: esta línea no entrará a stock.</span>
+                                  <span className="text-sm font-medium">Sin formato: esta línea no entrará al almacén.</span>
                                 </div>
                               )}
 
@@ -2560,7 +2648,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                         {/* Fila 3: recibido (a ciegas) + € / formato */}
                         <div className="mt-2.5 flex items-end gap-4 flex-wrap">
                           <div>
-                            <label className="block text-[11px] text-text-secondary mb-1">Recibido <span className="text-text-tertiary">(cuéntalo)</span></label>
+                            <label className="block text-[11px] text-text-secondary mb-1">¿Cuántos han llegado?</label>
                             <div className="flex items-center gap-1.5">
                               <input type="text" inputMode="decimal" value={l.qty} onChange={e => setQty(l.key, e.target.value)} disabled={saving} placeholder="0"
                                 className={`w-20 px-2 py-1.5 text-lg text-center font-medium rounded-md border bg-page text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 ${hasQty ? 'border-accent/50' : 'border-accent/30 bg-accent-bg/30'}`} />
@@ -2587,11 +2675,60 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             })()}
                           </div>
                           <div>
-                            <label className="block text-[11px] text-text-secondary mb-1">€ / {((l.formatName ?? '').trim() || 'formato').toLowerCase()}</label>
+                            {/* ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §1 — el encargo pedía
+                                "Importe de la línea", pero este campo es unit_cost: precio de UN
+                                {formato} (paquete/caja…), no el total de la línea (qty × precio) — lo
+                                usa confirm_goods_receipt para derivar €/base. Etiquetarlo como
+                                "Importe de la línea" haría que alguien tecleara el total ahí y
+                                reventara el coste silenciosamente. Se quita el "€/" críptico sin
+                                cambiar lo que el campo significa — a confirmar con Julio. */}
+                            <label className="block text-[11px] text-text-secondary mb-1">Importe por {((l.formatName ?? '').trim() || 'formato').toLowerCase()}</label>
                             <input type="text" inputMode="decimal" value={l.unitCost} onChange={e => setCost(l.key, e.target.value)} disabled={saving} placeholder="—"
                               className="w-24 px-2 py-1.5 text-sm text-right border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
                           </div>
                         </div>
+
+                        {/* ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §4 — motivo al cambiar
+                            la cantidad EN OFICINA. Solo si hay referencia de lo que contó cocina
+                            (originalQty, solo en revisión de BORRADOR) y el número cambió de
+                            verdad (comparación NUMÉRICA, no de texto — "2" y "2.0" no son un
+                            cambio). Un toque, no un formulario; no bloquea nada. */}
+                        {correcting && l.originalQty != null && (() => {
+                          const origN = parseNum(l.originalQty)
+                          const curN = parseNum(l.qty)
+                          return origN !== null && curN !== null && curN !== origN
+                        })() && (
+                          discrepancyReasons[l.key] ? (
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-text-secondary">
+                              <span>Motivo: <span className="font-medium text-text-primary">{officeReasonDisplay(discrepancyReasons[l.key])}</span></span>
+                              <button type="button" disabled={saving}
+                                onClick={() => setDiscrepancyReasons(r => { const n = { ...r }; delete n[l.key]; return n })}
+                                className="underline text-text-tertiary hover:text-text-primary disabled:opacity-50">
+                                cambiar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="mt-1.5 rounded-md border border-accent/30 bg-accent-bg/30 px-2.5 py-2 space-y-1.5">
+                              <p className="text-[11px] text-text-secondary">Cocina contó {l.originalQty} — ¿por qué cambias?</p>
+                              <div className="flex gap-1.5 flex-wrap">
+                                {OFFICE_QTY_REASONS.map(reason => (
+                                  <button key={reason} type="button" disabled={saving}
+                                    onClick={() => setDiscrepancyReasons(r => ({ ...r, [l.key]: OFFICE_QTY_REASON_PREFIX + reason }))}
+                                    className="px-2 py-1 rounded-md text-[11px] font-medium border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50">
+                                    {reason}
+                                  </button>
+                                ))}
+                              </div>
+                              <input type="text" placeholder="otro motivo…" disabled={saving}
+                                onBlur={e => {
+                                  const v = e.target.value.trim()
+                                  if (v) setDiscrepancyReasons(r => ({ ...r, [l.key]: OFFICE_QTY_REASON_PREFIX + v }))
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                className="w-full px-2 py-1 text-[11px] border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                            </div>
+                          )
+                        )}
 
                         {/* Avisos de PRECIO legibles, junto al precio (donde está el ojo al teclear).
                             En unidad humana (€/kg, €/L, €/ud), no en €/base crudo. */}
@@ -2673,10 +2810,36 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                 )}
               </div>
 
+              {/* ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — cuadre del dinero:
+                  "el trabajo real de la oficina". Siempre visible cuando hay algo
+                  contado. Sin total del albarán (no vino de OCR, o la IA no lo leyó):
+                  no se inventa nada, solo se enseña lo contado. No bloquea. */}
+              {contado !== null && (
+                <div className="px-1 text-sm">
+                  {docTotal !== null ? (() => {
+                    const diff = Math.round((docTotal - contado) * 100) / 100
+                    const cuadra = Math.abs(diff) <= 0.01
+                    return (
+                      <span className={cuadra ? 'text-success' : 'text-danger'}>
+                        Albarán {docTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        {' · '}contado {contado.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        {cuadra
+                          ? '  ✓'
+                          : `  · ${diff > 0 ? 'faltan' : 'sobran'} ${Math.abs(diff).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                      </span>
+                    )
+                  })() : (
+                    <span className="text-text-secondary">
+                      contado {contado.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <span className="text-sm text-text-secondary">
-                  {filled.length} con cantidad · {willPost} entrarán a stock
-                  {filled.length - willPost > 0 && ` · ${filled.length - willPost} sin mapear`}
+                  {filled.length} con cantidad · {willPost} entrarán al almacén
+                  {filled.length - willPost > 0 && ` · ${filled.length - willPost} sin reconocer`}
                   {/* ENCARGO CODE (12/08) — Corrección C: visible, no un spinner
                       mudo. Mismo texto que explica por qué los botones de abajo
                       están deshabilitados mientras se busca el pedido. */}
@@ -2695,7 +2858,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                   {canConfirm && (
                     <button type="button" onClick={startReview}
                       disabled={saving || filled.length === 0 || loadingOrders || summary.sinMapear > 0}
-                      title={summary.sinMapear > 0 ? `${summary.sinMapear} línea(s) no entrarán a stock: falta el artículo o el formato.` : undefined}
+                      title={summary.sinMapear > 0 ? `${summary.sinMapear} línea(s) no entrarán al almacén: falta el artículo o el formato.` : undefined}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
                       <Check size={15} />
                       Revisar y confirmar
@@ -2925,7 +3088,7 @@ function ReviewPanel({
               <div className="rounded-md border border-danger/30 bg-danger-bg px-3 py-2 flex items-start gap-1.5">
                 <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" />
                 <p className="text-sm text-danger">
-                  {missingArticleLines.length === 1 ? '1 línea no entrará a stock: falta el artículo.' : `${missingArticleLines.length} líneas no entrarán a stock: falta el artículo.`}
+                  {missingArticleLines.length === 1 ? '1 línea no entrará al almacén: falta el artículo.' : `${missingArticleLines.length} líneas no entrarán al almacén: falta el artículo.`}
                   {' '}Vuelve, cásala o marca "no inventariar esta línea".
                 </p>
               </div>
@@ -2935,7 +3098,7 @@ function ReviewPanel({
               <div className="rounded-md border border-danger/30 bg-danger-bg px-3 py-2 flex items-start gap-1.5">
                 <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" />
                 <p className="text-sm text-danger">
-                  {missingFormatLines.length === 1 ? '1 línea no entrará a stock: falta el formato.' : `${missingFormatLines.length} líneas no entrarán a stock: falta el formato.`}
+                  {missingFormatLines.length === 1 ? '1 línea no entrará al almacén: falta el formato.' : `${missingFormatLines.length} líneas no entrarán al almacén: falta el formato.`}
                   {' '}Vuelve, elige el formato o marca "no inventariar esta línea".
                 </p>
               </div>
