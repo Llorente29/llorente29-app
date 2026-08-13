@@ -15,10 +15,11 @@
 -- MCP (0 pedidos activos y 0 terminales en la franja 2h-6h en el momento de
 -- escribir esto, sin servicio en curso).
 --
--- ⚠️ SIN APLICAR — pendiente de que Julio confirme que 2h no oculta en pantalla
--- ningún pedido cerrado que el pase todavía necesite consultar (p.ej. una
--- reimpresión de un pedido cerrado hace 3h). El histórico de ventas (Tabs/otras
--- pantallas) no depende de esta función y no se ve afectado.
+-- APLICADA: 2026-08-13 por MCP, aprobada por Julio ("B3 APROBADA, ventana de 2
+-- horas... el pase es operativo — lo cerrado hace más de 2h ya se entregó, y
+-- para consultar histórico hay otras pantallas"). Verificado tras aplicar: la
+-- definición viva ya no contiene 'interval ''6 hours''' (0 ocurrencias
+-- residuales) y la RPC sigue ejecutando sin error contra un token real.
 --
 -- CÓMO: sustitución quirúrgica sobre la definición VIVA (pg_get_functiondef), NO
 -- reescritura del cuerpo entero — es la función de las 3 tablets del pase y la que
