@@ -294,7 +294,19 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     setPickerLineId(null)
     if (!line) return
     const { formatId, qtyInBaseFactor } = await resolveFormatForItem(recipeItemId)
-    const qty = line.qtyReceived > 0 ? line.qtyReceived : (line.docQty ?? 1)
+    // ENCARGO CODE (15/08) — Ley 1 y Ley 2 se mueven juntas: si el formato
+    // cambia (típico al corregir una línea cuya ficha estaba mal — Carne de
+    // Birria/Pollo Mechado del ALB-00115, Bolsa 2 kg → Caja 6 kg), la
+    // cantidad recibida NO puede quedarse como estaba: esa cifra se contó
+    // (o se forzó a mano) bajo el formato VIEJO. Si se mantiene, "corregir"
+    // el formato multiplica la cantidad real por el error que se acaba de
+    // arreglar (6.000 g → 18.000 g). Vuelve a derivarse del papel (doc_qty)
+    // en cuanto el formato deja de ser el mismo; si el formato no cambió
+    // (solo se afinó el nombre del artículo), se respeta lo ya contado.
+    const formatChanged = formatId !== line.purchaseFormatId
+    const qty = (!formatChanged && line.qtyReceived > 0)
+      ? line.qtyReceived
+      : (line.docQty ?? (line.qtyReceived > 0 ? line.qtyReceived : 1))
     const unitCost = qtyInBaseFactor && line.docAmount != null ? line.docAmount / qty : (line.unitCost ?? null)
     await persistLineResolution(line, {
       recipeItemId, purchaseFormatId: formatId, qtyReceived: qty, unitCost,
