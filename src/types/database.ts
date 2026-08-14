@@ -17961,8 +17961,26 @@ export type Database = {
           p_action: string
           p_preset?: string
           p_reason?: string
+          p_entity_id?: string
         }
         Returns: undefined
+      }
+      confirm_goods_receipt_order_link: {
+        Args: { p_account_id: string; p_receipt_id: string; p_order_id: string }
+        Returns: undefined
+      }
+      pending_albaran_sin_pedido_detail: {
+        Args: { p_account_id: string; p_location_id: string }
+        Returns: {
+          receipt_id: string
+          receipt_code: string
+          supplier_name: string
+          received_at: string
+          candidate_order_id: string
+          candidate_order_code: string
+          candidate_expected_date: string
+          candidate_score: number
+        }[]
       }
       dispatch_watchdog_scan: {
         Args: { p_grace_minutes?: number }

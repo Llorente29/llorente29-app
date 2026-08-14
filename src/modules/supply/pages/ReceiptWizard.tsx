@@ -413,7 +413,13 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
     [lines],
   )
   const anyTotal = lines.some(l => parseNum(l.total) != null)
-  const docTotal = ocrPrefill.docTotal
+  // ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §A.2 — compara
+  // contra la base imponible, nunca contra el total con IVA. Sin base
+  // (solo grand_total), no se inventa un descuadre: docTotal queda null y
+  // el bloque de abajo avisa qué compara, sin marcar diferencia.
+  const docTotal = ocrPrefill.docTotal?.base ?? null
+  const docOnlyGrandTotal = ocrPrefill.docTotal != null && docTotal == null && ocrPrefill.docTotal.grandTotal != null
+  const docGrandTotal = ocrPrefill.docTotal?.grandTotal ?? null
   const shortfall = docTotal != null && anyTotal ? Math.round((docTotal - totalCounted) * 100) / 100 : null
 
   const canSubmit = lines.length > 0 && pendingCount === 0 && !!effectiveLocationId && !saving
@@ -547,6 +553,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
         {onSummary && (
           <SummaryScreen
             docTotal={docTotal} totalCounted={totalCounted} anyTotal={anyTotal} shortfall={shortfall}
+            docOnlyGrandTotal={docOnlyGrandTotal} docGrandTotal={docGrandTotal}
             flagCount={flagCount} lineCount={lines.length}
             onAddLine={addLine}
           />
@@ -598,12 +605,16 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
 
 // ── Pantalla final: cuadre + marcadas ⚑ + añadir artículo + terminar ────────
 function SummaryScreen({
-  docTotal, totalCounted, anyTotal, shortfall, flagCount, lineCount, onAddLine,
+  docTotal, totalCounted, anyTotal, shortfall, docOnlyGrandTotal, docGrandTotal, flagCount, lineCount, onAddLine,
 }: {
   docTotal: number | null
   totalCounted: number
   anyTotal: boolean
   shortfall: number | null
+  // ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §A.2 — cuando el
+  // albarán solo trae total con IVA (sin base), no se inventa un descuadre.
+  docOnlyGrandTotal: boolean
+  docGrandTotal: number | null
   flagCount: number
   lineCount: number
   onAddLine: () => void
@@ -620,7 +631,7 @@ function SummaryScreen({
 
       {docTotal != null && anyTotal && (
         <div className={`w-full max-w-sm rounded-xl border p-4 ${shortfall !== null && Math.abs(shortfall) > 0.01 ? 'border-warning bg-warning-bg' : 'border-success bg-success-bg'}`}>
-          <p className="text-sm text-text-secondary">Albarán</p>
+          <p className="text-sm text-text-secondary">Albarán (base, sin IVA)</p>
           <p className="text-lg font-display font-medium text-text-primary">{fmtMoney(docTotal)} €</p>
           <p className="text-sm text-text-secondary mt-2">Contado</p>
           <p className="text-lg font-display font-medium text-text-primary">{fmtMoney(totalCounted)} €</p>
@@ -631,6 +642,16 @@ function SummaryScreen({
           ) : (
             <p className="mt-2 text-sm font-semibold text-text-primary">Cuadra ✓</p>
           )}
+        </div>
+      )}
+
+      {docOnlyGrandTotal && anyTotal && docGrandTotal != null && (
+        <div className="w-full max-w-sm rounded-xl border border-border-default bg-card p-4">
+          <p className="text-sm text-text-primary">
+            El albarán solo da el total con IVA ({fmtMoney(docGrandTotal)} €). Comparo con lo que cuentas sin IVA.
+          </p>
+          <p className="text-sm text-text-secondary mt-2">Contado</p>
+          <p className="text-lg font-display font-medium text-text-primary">{fmtMoney(totalCounted)} €</p>
         </div>
       )}
 
