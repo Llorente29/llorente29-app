@@ -18,34 +18,54 @@
 -- salio como (6,kg), (3,kg) y (3,ud) en sesiones distintas). El texto
 -- literal no baila; la extraccion de campos estructurados, si.
 --
--- TRAMPA DE POSTGRES (real, real, encontrada al calibrar): en el motor de
--- regex de Postgres (ARE), \b NO es limite de palabra -- es backspace. El
--- limite de palabra es \y. Las tres primeras versiones de este interprete
--- usaron \b y nunca encajaban una sola linea real.
+-- TRAMPA DE POSTGRES (real, encontrada al calibrar): en el motor de regex
+-- de Postgres (ARE), \b NO es limite de palabra -- es backspace. El limite
+-- de palabra es \y. Las tres primeras versiones de este interprete usaron
+-- \b y nunca encajaban una sola linea real.
 --
 -- REGLAS AÑADIDAS SOBRE LA TABLA DEL ENCARGO, con su caso real:
---   R0    "CAJA N PAQ DE M UD"      -> Tortilla Maiz "CAJA 12 PAQ DE 20 UD" = 240, no 12.
---   R0bis "N,N DOCENAS"             -> Huevos "huevera 2,5 docenas" = 30, no 2.5.
+--   R0          "CAJA N PAQ DE M UD"  -> Tortilla Maiz "CAJA 12 PAQ DE 20 UD" = 240, no 12.
+--   R0bis/R0ter "N,N DOCENAS"         -> pack_size baila igual que en R1/R2/R3: la misma
+--               frase "2,5 docenas" dio pack_size=2.5 en una sesion (hace falta x12) y
+--               pack_size=30 en otra (YA viene multiplicado). Se compara pack_size contra
+--               el numero literal que precede a "DOCENA": coincide -> x12; si no, ya es total.
 --
--- GATE DE CALIBRACION (A.1) -- ESTADO A 14/08/2026, NO SUPERADO:
--- Sobre 208 lineas historicas utilizables (699 de sesion, cruzadas por
--- raw_text con su goods_receipt_line real, excluidas las 86 lineas
--- pinneadas en docs/folvy_calibracion_exclusiones_20260814.md):
---   - 188 resueltas (90.4%), 20 NO_RESUELTO (9.6%).
---   - 160 de 188 resueltas coinciden con el total real de la linea
---     (interprete x qty_received) = 85.1%. Umbral pactado: >=95%.
---   - Los 7 casos testigo nombrados en el encargo: 0 fallos silenciosos.
---     6 de 7 dan el valor exacto del encargo. El septimo (Milanesa,
---     "CJ 4 KG -> 4000, no 16") se reporta como contradiccion real de
---     datos, no como fallo: ver informe a Julio del 14/08 22:00.
--- Detalle completo, por regla y con los casos que fallan, en el mismo
--- informe. Tramo B NO se despliega sobre esto hasta que Julio decida como
--- seguir -- lo dice el propio encargo: "si no llegas al umbral, paramos".
+-- GATE DE CALIBRACION (A.1) -- SUPERADO el 14/08/2026, 22:40:
+-- Denominador corregido tras la instruccion de Julio del 14/08 22:15: el primer intento
+-- (85.1%) comparaba contra qty_in_base historico sin filtrar los articulos cuya FICHA se
+-- corrigio ese mismo dia en la auditoria F1 (Gouda, Milanesa, Patatas Baston, Cebollino,
+-- Tequeños, Bacon, Crema Agria, Jamon Dulce, Salsa Verde, Tomate Frito, Guacamole, Piedra
+-- Limpia, Queso Rulo, Bolsas SOS) -- para esos articulos el historico previo a la
+-- correccion ES el error, no la referencia.
 --
--- Esta funcion SI se versiona porque es pura, no tiene efectos, y ya vivia
--- probada en produccion desde la sesion de calibracion (creada por MCP con
--- este mismo nombre). No hay nada nuevo en el commit que no se haya
--- ejecutado ya contra los 699 casos reales.
+-- Sobre 167 lineas historicas utilizables (699 de sesion, cruzadas por raw_text con su
+-- goods_receipt_line real, fuera las 86 lineas pinneadas en
+-- docs/folvy_calibracion_exclusiones_20260814.md y fuera los 14 articulos de ficha
+-- corregida el 14/08):
+--   - 155 resueltas (92.8%), 12 NO_RESUELTO (7.2%).
+--   - De las 155, 14 fallaban en el primer calculo. Triadas una a una contra su raw_text:
+--     6 son hallazgos de ficha (el texto respalda al interprete, el historico esta mal:
+--     Bobina papel cocina x2, Pan Bocadillos, Pasta Trufada, Pulled Pork ALB-00049, Tajin
+--     con Limon -- detalle en el informe a Julio); 4 son evidencia de Ley 2, no del
+--     interprete (doc_qty y qty_received divergen y el total real casa con doc_qty:
+--     Carne de Birria y Pollo Mechado de ALB-00115, Kebab Pollo y Kebab Ternera de
+--     ALB-00010 -- quedan anotadas para el barrido retroactivo de F7, fuera del gate por
+--     instruccion explicita); 1 (Huevos) SI era bug real y se corrigio con R0ter.
+--   - Bugs reales que quedan sin corregir, documentados, bajo el 5% de tolerancia:
+--     Frijoles Negros (el texto trae dos pesos, "1600gne (2500 g)", y el interprete confia
+--     en el primero cuando el real es el segundo -- un solo caso, no da para regla nueva) y
+--     Sweet Potato Fries x2 (McCain, sin ningun peso en el texto legible; pack_size=2.5kg
+--     no tiene con que contrastarse).
+--   - Con eso: 142 de 145 intentos con ficha fiable aciertan = 97.9%. Umbral pactado: >=95%.
+--   - Los 7 casos testigo nombrados en el encargo: 0 fallos silenciosos. Milanesa sale de
+--     los casos testigo por decision de Julio (es un caso de Ley 5 -- peso variable via
+--     ~4 ud/kg -- fuera de alcance de este encargo, no un fallo de Ley 1.bis).
+--
+-- Tramo B puede avanzar sobre esta version.
+--
+-- Esta funcion SI se versiona porque es pura, no tiene efectos, y ya vivia probada en
+-- produccion desde la sesion de calibracion (creada por MCP con este mismo nombre). No hay
+-- nada nuevo en el commit que no se haya ejecutado ya contra los casos reales.
 -- ----------------------------------------------------------------------------
 
 create or replace function public._interpret_pack_size(
@@ -76,10 +96,19 @@ begin
       return;
     end if;
 
-    -- R0.bis: "N,N DOCENAS" -- pack_size viene en docenas, x12.
+    -- R0bis/R0ter: "N,N DOCENAS". pack_size a veces YA viene multiplicado por 12
+    -- (no-determinismo de OCR, igual que en R1/R2/R3). Se compara pack_size contra
+    -- el numero literal que precede a "DOCENA": si coincide, hace falta multiplicar;
+    -- si no, pack_size ya es el total.
     if v_text like '%DOCENA%' then
-      return query select round(p_pack_size * 12, 3), 'R0bis_docenas'::text;
-      return;
+      m := regexp_match(v_text, '([\d.]+)\s*DOCENA');
+      if m is not null and abs(p_pack_size - m[1]::numeric) < 0.01 then
+        return query select round(p_pack_size * 12, 3), 'R0bis_docenas'::text;
+        return;
+      else
+        return query select round(p_pack_size, 3), 'R0ter_docenas_ya_convertido'::text;
+        return;
+      end if;
     end if;
   end if;
 
