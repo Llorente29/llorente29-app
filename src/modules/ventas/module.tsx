@@ -4,6 +4,13 @@
 // Añadida la pagina "Economia / Margenes" (EconomiaPlataformasPage), que lee la
 // economia real de plataforma (channel_settlement + channel_settlement_order) via
 // la RPC channel_economics_dashboard. Convive con el Resumen de ventas (que lee `sale`).
+//
+// ENCARGO CODE (14/08) "claves de Supply" — los 3 items que muestran food
+// cost/márgenes (economia, margen-final, margen) exigen AHORA show_costes
+// ADEMÁS de show_ventas_analisis (AND, ver requiredPermission como array en
+// shell/types.ts): antes bastaba con show_ventas_analisis, que ninguna de
+// las 2 plantillas actuales tiene en false — dejaba el food cost visible
+// por esta vía aunque show_costes fuera false.
 
 import { BarChart3, LineChart, Bike, Wallet, Percent, UtensilsCrossed, Target, Star, TrendingUp, Lightbulb, Store } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
@@ -48,9 +55,9 @@ export const ventasModule: ModuleDefinition = {
     items: [
       { id: 'ventas_dashboard',  label: 'Resumen de ventas',   icon: BarChart3, path: '',         requiredPermission: 'show_ventas_analisis' },
       { id: 'ventas_recos',      label: 'Recomendaciones',     icon: Lightbulb,        path: 'recomendaciones', requiredPermission: 'show_ventas_analisis' },
-      { id: 'ventas_economia',   label: 'Economia / Margenes', icon: Wallet,           path: 'economia',     requiredPermission: 'show_ventas_analisis' },
-      { id: 'ventas_margenfin',  label: 'Margen final',        icon: Target,           path: 'margen-final', requiredPermission: 'show_ventas_analisis' },
-      { id: 'ventas_margen',     label: 'Food cost / Plato',   icon: UtensilsCrossed,  path: 'margen',       requiredPermission: 'show_ventas_analisis' },
+      { id: 'ventas_economia',   label: 'Economia / Margenes', icon: Wallet,           path: 'economia',     requiredPermission: ['show_ventas_analisis', 'show_costes'] },
+      { id: 'ventas_margenfin',  label: 'Margen final',        icon: Target,           path: 'margen-final', requiredPermission: ['show_ventas_analisis', 'show_costes'] },
+      { id: 'ventas_margen',     label: 'Food cost / Plato',   icon: UtensilsCrossed,  path: 'margen',       requiredPermission: ['show_ventas_analisis', 'show_costes'] },
       { id: 'ventas_cedidas',    label: 'Cedidas (CTB)',       icon: Store,            path: 'cedidas',      requiredPermission: 'show_ventas_analisis' },
       { id: 'ventas_calidad',    label: 'Calidad',             icon: Star,             path: 'calidad',      requiredPermission: 'show_ventas_analisis' },
       { id: 'ventas_tendencia',  label: 'Tendencia',           icon: TrendingUp,       path: 'tendencia',    requiredPermission: 'show_ventas_analisis' },
