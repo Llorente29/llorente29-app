@@ -14,7 +14,12 @@
 //   - C3: Facturas (three-way match + OCR) → eslabón al coste.
 //   - Luego: Inventario, Previsión, Planificación.
 //
-// Gating: requiredRole 'manager' (el aprovisionamiento lo gestiona admin/manager).
+// Gating: requiredRole 'manager' a nivel de módulo, más requiredPermission
+// por item (ENCARGO CODE 14/08 — antes NINGÚN item de este módulo tenía
+// requiredPermission; cualquier manager/admin veía las 5 pantallas,
+// show_inventory incluido, sin que esa columna gatease nada realmente).
+// Comunicar a CTB sube a requiredRole: 'admin' (decisión de Julio, no
+// manager) — comunica datos a la gestoría, no es operativa de local.
 
 import { Truck, ClipboardList, PackageCheck, FileText, Boxes, Send } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
@@ -45,11 +50,11 @@ export const supplyModule: ModuleDefinition = {
   // C2 añade Recepciones. Al construir C3 se añaden Facturas, etc.
   sidebar: {
     items: [
-      { id: 'supply_orders', label: 'Pedidos', icon: ClipboardList, path: '' },
-      { id: 'supply_receipts', label: 'Recepciones', icon: PackageCheck, path: 'recepciones' },
-      { id: 'supply_invoices', label: 'Facturas', icon: FileText, path: 'facturas' },
-      { id: 'supply_inventory', label: 'Almacén', icon: Boxes, path: 'inventario' },
-      { id: 'supply_ctb', label: 'Comunicar a CTB', icon: Send, path: 'comunicar-ctb' },
+      { id: 'supply_orders', label: 'Pedidos', icon: ClipboardList, path: '', requiredPermission: 'show_pedidos' },
+      { id: 'supply_receipts', label: 'Recepciones', icon: PackageCheck, path: 'recepciones', requiredPermission: 'show_recepcion' },
+      { id: 'supply_invoices', label: 'Facturas', icon: FileText, path: 'facturas', requiredPermission: 'show_facturas' },
+      { id: 'supply_inventory', label: 'Almacén', icon: Boxes, path: 'inventario', requiredPermission: 'show_inventory' },
+      { id: 'supply_ctb', label: 'Comunicar a CTB', icon: Send, path: 'comunicar-ctb', requiredRole: 'admin' },
     ],
   },
 }

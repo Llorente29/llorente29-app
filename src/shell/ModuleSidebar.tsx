@@ -28,7 +28,7 @@ export default function ModuleSidebar({
 }: ModuleSidebarProps) {
   // Gating por permiso granular Y por rol mínimo. Un item se muestra si
   // pasa AMBOS filtros:
-  //   - Permiso: si declara requiredPermission, hasPermission(clave) === true.
+  //   - Permiso: si declara requiredPermission (string o string[], AND si es array), hasPermission(clave) === true para todas.
   //   - Rol: si declara requiredRole, roleInActiveAccount === requiredRole
   //     (los admin de cuenta pasan siempre el filtro de rol).
   // El `role` viene del propio hook usePermissions (que lo lee del context
@@ -36,7 +36,7 @@ export default function ModuleSidebar({
   // deuda B-8 que ya está documentada en usePermissions.
   const { hasPermission, role } = usePermissions()
   const visibleItems = sidebar.items.filter(item => {
-    const passesPermission = !item.requiredPermission || hasPermission(item.requiredPermission)
+    const passesPermission = !item.requiredPermission || (Array.isArray(item.requiredPermission) ? item.requiredPermission.every(hasPermission) : hasPermission(item.requiredPermission))
     const passesRole = !item.requiredRole || role === item.requiredRole || role === 'admin'
     return passesPermission && passesRole
   })

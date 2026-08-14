@@ -2,6 +2,15 @@
 //
 // ModuleDefinition del módulo Folvy Kitchen (escandallo de cocina).
 // Sigue el patrón canónico de appcc/module.tsx.
+//
+// ENCARGO CODE (14/08) — Proveedores, Platos, Rentabilidad e Ingeniería de
+// menús ahora exigen show_proveedores/show_costes además de requiredRole:
+// 'manager' (antes solo tenían el rol, ninguna columna de manager_permissions
+// los gateaba). 'Platos' (kitchen_recipes) bajo show_costes por decisión
+// explícita de Julio: el coste/escandallo se ve dentro de la pantalla
+// normal de editar el plato, sin separación posible hoy — "sin rediseñar
+// la pantalla, simplemente el rol no entra ahí". Quien no tenga show_costes
+// tampoco puede editar platos/menús desde aquí.
 import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
@@ -58,10 +67,10 @@ export const kitchenModule: ModuleDefinition = {
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
       { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },
-      { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,             path: 'proveedores',      requiredRole: 'manager' },
-      { id: 'kitchen_recipes',       label: 'Platos',              icon: BookOpen,          path: 'recetas',          requiredRole: 'manager' },
-      { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,        path: 'rentabilidad',     requiredRole: 'manager' },
-      { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,            path: 'ingenieria-menus', requiredRole: 'manager' },
+      { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,             path: 'proveedores',      requiredRole: 'manager', requiredPermission: 'show_proveedores' },
+      { id: 'kitchen_recipes',       label: 'Platos',              icon: BookOpen,          path: 'recetas',          requiredRole: 'manager', requiredPermission: 'show_costes' },
+      { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,        path: 'rentabilidad',     requiredRole: 'manager', requiredPermission: 'show_costes' },
+      { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,            path: 'ingenieria-menus', requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_offers',        label: 'Ofertas del agente',  icon: Megaphone,         path: 'ofertas',          requiredRole: 'manager' },
       { id: 'kitchen_offer_rules',   label: 'Reglas de ofertas',   icon: Sliders,           path: 'ofertas-reglas',   requiredRole: 'manager' },
       { id: 'kitchen_settings',      label: 'Ajustes',             icon: SlidersHorizontal, path: 'ajustes',          requiredRole: 'manager' },

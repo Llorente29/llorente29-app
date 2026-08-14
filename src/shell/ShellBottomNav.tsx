@@ -57,7 +57,7 @@ function isModuleVisible(
   const items = module.sidebar?.items
   if (!items || items.length === 0) return false
   return items.some(item => {
-    const passesPermission = !item.requiredPermission || hasPermission(item.requiredPermission)
+    const passesPermission = !item.requiredPermission || (Array.isArray(item.requiredPermission) ? item.requiredPermission.every(hasPermission) : hasPermission(item.requiredPermission))
     const passesRole = !item.requiredRole || role === item.requiredRole || role === 'admin'
     return passesPermission && passesRole
   })

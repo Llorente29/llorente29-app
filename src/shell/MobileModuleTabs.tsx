@@ -25,7 +25,7 @@ export default function MobileModuleTabs({
   // y helpers del Shell se extrae a un sitio común y se quita la repetición.
   const { hasPermission, role } = usePermissions()
   const visibleItems = sidebar.items.filter(item => {
-    const passesPermission = !item.requiredPermission || hasPermission(item.requiredPermission)
+    const passesPermission = !item.requiredPermission || (Array.isArray(item.requiredPermission) ? item.requiredPermission.every(hasPermission) : hasPermission(item.requiredPermission))
     const passesRole = !item.requiredRole || role === item.requiredRole || role === 'admin'
     return passesPermission && passesRole
   })

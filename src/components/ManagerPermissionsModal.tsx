@@ -15,6 +15,7 @@ import {
   RefreshCw, Calendar, ClipboardList, FileText, Wallet, DollarSign, Settings2,
   Leaf, AlertTriangle,
   FlaskConical, BarChart3, Brain, Bike, Package, MapPin, Bell,
+  PackageCheck, Truck, Store, Boxes, Coins,
   type LucideIcon,
 } from 'lucide-react'
 import { Modal, Button, Card, Alert } from './ui'
@@ -76,14 +77,25 @@ const PERMISSION_ITEMS: PermissionItem[] = [
   { key: 'showVentasAnalisis',        label: 'Análisis de Ventas',  Icon: BarChart3, section: 'Inventario' },
   { key: 'showPrediccionPersonal',    label: 'Predicción Personal', Icon: Brain, section: 'Inventario' },
   { key: 'showZonasPedido',           label: 'Zonas de Pedido',     Icon: Bike, section: 'Inventario', sensitive: true },
-  { key: 'showInventory',             label: 'Inventario',          Icon: Package, section: 'Inventario' },
+  { key: 'showInventory',             label: 'Almacén (ver stock)', Icon: Package, section: 'Inventario' },
+
+  // Compras y Almacén (ENCARGO CODE 14/08 — separación de show_inventory,
+  // que antes no gateaba nada de esto: Supply/Kitchen se veían por rol,
+  // no por permiso). show_costes es la sensible — mismo criterio que
+  // "Ver salarios": false por defecto en toda plantilla.
+  { key: 'showRecepcion',             label: 'Recepción de pedidos', Icon: PackageCheck, section: 'Compras y Almacén' },
+  { key: 'showPedidos',               label: 'Pedidos a proveedor', Icon: Truck, section: 'Compras y Almacén' },
+  { key: 'showProveedores',           label: 'Proveedores (catálogo y precios)', Icon: Store, section: 'Compras y Almacén', sensitive: true },
+  { key: 'showInventarios',           label: 'Recuentos de inventario', Icon: Boxes, section: 'Compras y Almacén' },
+  { key: 'showFacturas',              label: 'Facturas de proveedor', Icon: FileText, section: 'Compras y Almacén' },
+  { key: 'showCostes',                label: 'Costes, escandallos y márgenes', Icon: Coins, section: 'Compras y Almacén', sensitive: true },
 
   // Configuración
   { key: 'showLocations',             label: 'Locales',             Icon: MapPin, section: 'Configuración', sensitive: true },
   { key: 'showTspoonSettings',        label: 'Avisos',              Icon: Bell, section: 'Configuración', sensitive: true },
 ]
 
-const SECTIONS = ['Principal', 'Personal', 'APPCC', 'Inventario', 'Configuración']
+const SECTIONS = ['Principal', 'Personal', 'APPCC', 'Inventario', 'Compras y Almacén', 'Configuración']
 
 export default function ManagerPermissionsModal({ userProfileId, userName, onClose, onSaved }: Props) {
   const [perms, setPerms] = useState<ManagerPermissions | null>(null)

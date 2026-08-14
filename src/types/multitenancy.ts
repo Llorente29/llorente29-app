@@ -484,7 +484,8 @@ export interface UserProfileUpdate {
 
 /**
  * Tabla 1:1 con user_profiles. PK = user_profile_id (NO id propio).
- * 30 booleanos hoy. Cuando lleguemos a 40-50 migrar a modelo flexible
+ * 37 booleanos hoy (31 + 6 de Supply/Almacén, ENCARGO CODE 14/08). Cuando
+ * lleguemos a 40-50 migrar a modelo flexible
  * (clave/valor sobre tabla permissions). Ver deuda en CONTEXTO §11.
  */
 export interface ManagerPermissions {
@@ -523,6 +524,16 @@ export interface ManagerPermissions {
   /** Nullable en BBDD (default false). Tratado como boolean en cliente. */
   showAppccToday: boolean
   showAppccIncidents: boolean
+  // ENCARGO CODE (14/08) — separación de show_inventory en claves granulares
+  // de Supply/Almacén. show_inventory se mantiene con su alcance reducido a
+  // "ver el almacén y el stock" (InventoryPage); estas 5 gatean el resto.
+  showRecepcion: boolean
+  showPedidos: boolean
+  showProveedores: boolean
+  showInventarios: boolean
+  showFacturas: boolean
+  /** La sensible — costes, escandallos y márgenes. Mismo criterio que showSalaries: false por defecto en toda plantilla, fuera del backfill de compatibilidad. */
+  showCostes: boolean
   createdAt: string | null
   updatedAt: string | null
 }

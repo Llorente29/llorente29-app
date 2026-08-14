@@ -9630,16 +9630,22 @@ export type Database = {
           show_bolsa_horas: boolean
           show_calendario: boolean
           show_cambios_pendientes: boolean
+          show_costes: boolean
           show_dashboard: boolean
+          show_facturas: boolean
           show_fichajes_global: boolean
           show_history: boolean
           show_incidents: boolean
           show_informes_personal: boolean
+          show_inventarios: boolean
           show_inventory: boolean
           show_kiosko_fichaje: boolean
           show_locations: boolean
+          show_pedidos: boolean
           show_plantilla_turnos: boolean
           show_prediccion_personal: boolean
+          show_proveedores: boolean
+          show_recepcion: boolean
           show_salaries: boolean
           show_scheduled: boolean
           show_solicitudes_pendientes: boolean
@@ -9666,16 +9672,22 @@ export type Database = {
           show_bolsa_horas?: boolean
           show_calendario?: boolean
           show_cambios_pendientes?: boolean
+          show_costes?: boolean
           show_dashboard?: boolean
+          show_facturas?: boolean
           show_fichajes_global?: boolean
           show_history?: boolean
           show_incidents?: boolean
           show_informes_personal?: boolean
+          show_inventarios?: boolean
           show_inventory?: boolean
           show_kiosko_fichaje?: boolean
           show_locations?: boolean
+          show_pedidos?: boolean
           show_plantilla_turnos?: boolean
           show_prediccion_personal?: boolean
+          show_proveedores?: boolean
+          show_recepcion?: boolean
           show_salaries?: boolean
           show_scheduled?: boolean
           show_solicitudes_pendientes?: boolean
@@ -9702,16 +9714,22 @@ export type Database = {
           show_bolsa_horas?: boolean
           show_calendario?: boolean
           show_cambios_pendientes?: boolean
+          show_costes?: boolean
           show_dashboard?: boolean
+          show_facturas?: boolean
           show_fichajes_global?: boolean
           show_history?: boolean
           show_incidents?: boolean
           show_informes_personal?: boolean
+          show_inventarios?: boolean
           show_inventory?: boolean
           show_kiosko_fichaje?: boolean
           show_locations?: boolean
+          show_pedidos?: boolean
           show_plantilla_turnos?: boolean
           show_prediccion_personal?: boolean
+          show_proveedores?: boolean
+          show_recepcion?: boolean
           show_salaries?: boolean
           show_scheduled?: boolean
           show_solicitudes_pendientes?: boolean

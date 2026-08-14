@@ -91,6 +91,12 @@ export const DEFAULT_PERMISSIONS: Omit<ManagerPermissions, 'userProfileId' | 'cr
   canApproveVacations: true,
   showAppccToday: false,
   showAppccIncidents: false,
+  showRecepcion: true,
+  showPedidos: true,
+  showProveedores: true,
+  showInventarios: true,
+  showFacturas: true,
+  showCostes: false,
 }
 
 /**
@@ -108,19 +114,24 @@ export function defaultPermissions(): typeof DEFAULT_PERMISSIONS {
 // TypeScript, no una tabla: si una plantilla se equivoca de clave, el
 // `Omit<..., 'userProfileId'|'createdAt'|'updatedAt'>` de abajo NO COMPILA
 // — no puede inventarse un permiso que no existe. Aplicar una plantilla
-// escribe las 31 columnas reales de manager_permissions vía savePermissions;
+// escribe las 37 columnas reales de manager_permissions vía savePermissions;
 // las casillas siguen siendo editables una a una después (no es una jaula).
 //
-// Valores aprobados por Julio (14/08). show_salaries y show_informes_personal
-// (gatea Nóminas, tan sensible como salarios) en false en las dos. Plantilla
-// "Solo lectura" retirada por decisión de Julio: el modelo solo gatea
-// visibilidad de pantalla, no acciones dentro de ella, y el nombre prometía
-// algo que el sistema de permisos no puede garantizar todavía.
-// No hay claves de Supply/Almacén/Recepción en manager_permissions: ese
-// módulo no está gateado por esta tabla hoy (cualquier manager/admin ya lo ve
-// por rol, sin mirar ninguna columna — ver ENCARGO CODE 14/08 "claves de
-// Supply", rama aparte). "Oficina" solo puede tocar los toggles que sí
-// existen (inventario, ventas, zonas de pedido, fichas técnicas).
+// Valores aprobados por Julio (14/08, con una ronda de correcciones).
+// show_salaries en false en las dos, sin excepción. show_informes_personal
+// (gatea Nóminas, además de los informes de fichaje/gestoría — una sola
+// clave para las cuatro pantallas, no hay forma de separarlas hoy) en true
+// para "Responsable de local" (edita el cuadrante y aprueba vacaciones; no
+// ver las horas de su equipo sería incoherente) y en false para "Oficina".
+// Plantilla "Solo lectura" retirada por decisión de Julio: el modelo solo
+// gatea visibilidad de pantalla, no acciones dentro de ella, y el nombre
+// prometía algo que el sistema de permisos no puede garantizar todavía.
+//
+// Las 6 claves de Supply/Almacén (show_recepcion, show_pedidos,
+// show_proveedores, show_inventarios, show_facturas, show_costes) — ver
+// ENCARGO CODE 14/08 "claves de Supply" — en true para las dos salvo
+// show_costes, que nace en false en las dos y NO entra en el backfill de
+// compatibilidad de la migración, mismo criterio que show_salaries.
 type PermissionTemplateValues = Omit<ManagerPermissions, 'userProfileId' | 'createdAt' | 'updatedAt'>
 
 export interface PermissionTemplate {
@@ -139,7 +150,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplate[] = [
       showDashboard: true, showStaff: true, showAhoraMismo: true,
       showFichajesGlobal: true, showKioskoFichaje: true, showSolicitudesPendientes: true,
       showTurnosAbiertos: true, showCambiosPendientes: true, showCalendario: true,
-      showPlantillaTurnos: true, showInformesPersonal: false, showBolsaHoras: true,
+      showPlantillaTurnos: true, showInformesPersonal: true, showBolsaHoras: true,
       showTasks: true, showScheduled: true, showTemplates: false,
       showIncidents: true, showAudits: true, showHistory: true,
       showTspoon: false, showVentasAnalisis: false, showPrediccionPersonal: false,
@@ -147,6 +158,8 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplate[] = [
       showTspoonSettings: false, showSalaries: false,
       canManageEmployees: false, canEditSchedule: true, canApproveVacations: true,
       showAppccToday: true, showAppccIncidents: true,
+      showRecepcion: true, showPedidos: true, showProveedores: true,
+      showInventarios: true, showFacturas: true, showCostes: false,
     },
   },
   {
@@ -165,6 +178,8 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplate[] = [
       showTspoonSettings: false, showSalaries: false,
       canManageEmployees: false, canEditSchedule: false, canApproveVacations: false,
       showAppccToday: false, showAppccIncidents: false,
+      showRecepcion: true, showPedidos: true, showProveedores: true,
+      showInventarios: true, showFacturas: true, showCostes: false,
     },
   },
 ] as const
@@ -210,6 +225,12 @@ export function permissionTemplateValuesToRow(values: PermissionTemplateValues):
     can_approve_vacations: values.canApproveVacations,
     show_appcc_today: values.showAppccToday,
     show_appcc_incidents: values.showAppccIncidents,
+    show_recepcion: values.showRecepcion,
+    show_pedidos: values.showPedidos,
+    show_proveedores: values.showProveedores,
+    show_inventarios: values.showInventarios,
+    show_facturas: values.showFacturas,
+    show_costes: values.showCostes,
   }
 }
 
@@ -255,6 +276,12 @@ export function rowToManagerPermissions(row: RowManagerPermissions): ManagerPerm
     canApproveVacations: row.can_approve_vacations,
     showAppccToday: row.show_appcc_today ?? false,
     showAppccIncidents: row.show_appcc_incidents ?? false,
+    showRecepcion: row.show_recepcion,
+    showPedidos: row.show_pedidos,
+    showProveedores: row.show_proveedores,
+    showInventarios: row.show_inventarios,
+    showFacturas: row.show_facturas,
+    showCostes: row.show_costes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -302,6 +329,12 @@ function managerPermissionsToInsertRow(
     can_approve_vacations: perms.canApproveVacations,
     show_appcc_today: perms.showAppccToday,
     show_appcc_incidents: perms.showAppccIncidents,
+    show_recepcion: perms.showRecepcion,
+    show_pedidos: perms.showPedidos,
+    show_proveedores: perms.showProveedores,
+    show_inventarios: perms.showInventarios,
+    show_facturas: perms.showFacturas,
+    show_costes: perms.showCostes,
   }
 }
 
@@ -342,6 +375,12 @@ function patchToUpdateRow(patch: ManagerPermissionsPatch): RowManagerPermissions
   if (patch.canApproveVacations !== undefined) row.can_approve_vacations = patch.canApproveVacations
   if (patch.showAppccToday !== undefined) row.show_appcc_today = patch.showAppccToday
   if (patch.showAppccIncidents !== undefined) row.show_appcc_incidents = patch.showAppccIncidents
+  if (patch.showRecepcion !== undefined) row.show_recepcion = patch.showRecepcion
+  if (patch.showPedidos !== undefined) row.show_pedidos = patch.showPedidos
+  if (patch.showProveedores !== undefined) row.show_proveedores = patch.showProveedores
+  if (patch.showInventarios !== undefined) row.show_inventarios = patch.showInventarios
+  if (patch.showFacturas !== undefined) row.show_facturas = patch.showFacturas
+  if (patch.showCostes !== undefined) row.show_costes = patch.showCostes
   return row
 }
 
