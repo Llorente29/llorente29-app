@@ -175,6 +175,24 @@ const PENDING_KIND_META: Record<string, PendingKindMeta> = {
     buttonText: () => 'Ir a Recepciones',
     destination: () => '/supply/recepciones',
   },
+  // ENCARGO CODE (15/08) feat/ficha-por-producto, Tramo E — sin pantalla
+  // dedicada donde filtrar: texto honesto, manda al catálogo (Fuentes de
+  // compra vive en la ficha de cada artículo, no hay un listado propio).
+  ficha_contradice_historico: {
+    text: n => `${n} ficha${n === 1 ? '' : 's'} de proveedor no cuadra${n === 1 ? '' : 'n'} con lo que de verdad ha llegado`,
+    buttonText: () => 'Ir a Catálogo',
+    destination: () => '/kitchen',
+  },
+  codigo_ambiguo: {
+    text: n => `${n} código${n === 1 ? '' : 's'} de proveedor apunta${n === 1 ? '' : 'n'} a más de un artículo`,
+    buttonText: () => 'Ir a Catálogo',
+    destination: () => '/kitchen',
+  },
+  fichas_sin_verificar: {
+    text: n => `${n} ficha${n === 1 ? '' : 's'} creada${n === 1 ? '' : 's'} sola${n === 1 ? '' : 's'} desde un albarán, sin que nadie las confirme`,
+    buttonText: () => 'Ir a Catálogo',
+    destination: () => '/kitchen',
+  },
 }
 
 export function pendingKindMeta(kind: string): PendingKindMeta {

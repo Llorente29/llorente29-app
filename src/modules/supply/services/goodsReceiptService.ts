@@ -1909,6 +1909,14 @@ export async function saveSupplySettings(
 // y PACTADO (negotiated_price), ambos en €/UNIDAD BASE. Mapa recipe_item_id ->
 // { lastPrice, negotiatedPrice }. Una sola consulta por proveedor. Alimenta los
 // dos avisos de recepción (puntual usa formatPrices; pactado usa negotiatedPrice).
+//
+// ENCARGO CODE (15/08) feat/ficha-por-producto, Tramo F — desde que un mismo
+// proveedor puede tener DOS fichas del mismo artículo (dos supplier_code
+// distintos), el bucle de abajo podía pisar la entrada del mapa con la fila
+// que llegara última de Postgres (orden no garantizado). Mismo criterio que
+// ya usan kitchen_recompute_raw_cost/supplier_format_prices en la base:
+// preferida > más reciente. Se ordena así y solo se toma la PRIMERA fila por
+// artículo.
 export interface SupplierPriceRef { lastPrice: number | null; negotiatedPrice: number | null }
 export async function getSupplierLastPrices(
   accountId: string, supplierId: string,
@@ -1918,10 +1926,14 @@ export async function getSupplierLastPrices(
     .select('recipe_item_id, last_price, negotiated_price')
     .eq('account_id', accountId)
     .eq('supplier_id', supplierId)
+    .order('is_preferred', { ascending: false })
+    .order('updated_at', { ascending: false })
   if (error) { console.error('[goodsReceiptService] getSupplierLastPrices', error); return {} }
   const map: Record<string, SupplierPriceRef> = {}
   for (const r of (data as Row[] | null) ?? []) {
-    map[r.recipe_item_id as string] = {
+    const itemId = r.recipe_item_id as string
+    if (map[itemId]) continue
+    map[itemId] = {
       lastPrice: r.last_price != null ? Number(r.last_price) : null,
       negotiatedPrice: r.negotiated_price != null ? Number(r.negotiated_price) : null,
     }
