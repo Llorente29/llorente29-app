@@ -166,6 +166,15 @@ const PENDING_KIND_META: Record<string, PendingKindMeta> = {
     buttonText: () => 'Ir a Inventarios',
     destination: () => '/supply/inventario',
   },
+  // ENCARGO CODE (14/08) feat/formatos-documento-decide, D.4 — vigía de la
+  // fuente (Ley 1.bis): la extracción de OCR ha empeorado esta semana en
+  // este local. Sin pantalla dedicada donde filtrar todavía — texto
+  // honesto, manda a Recepciones para que se mire a mano.
+  formatos_extraccion_degradada: {
+    text: n => `${n} línea${n === 1 ? '' : 's'} de albarán sin código o formato leído esta semana`,
+    buttonText: () => 'Ir a Recepciones',
+    destination: () => '/supply/recepciones',
+  },
 }
 
 export function pendingKindMeta(kind: string): PendingKindMeta {

@@ -1546,6 +1546,43 @@ export async function resolveGoodsReceiptLineFormat(params: {
   }
 }
 
+// ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 — aviso de
+// coste fuera de rango antes de confirmar. goods_receipt_cost_warnings
+// compara €/base contra la mediana histórica del artículo (umbral 1,8×);
+// ack_goods_receipt_cost_warning registra quién y cuándo acepta seguir.
+export interface CostWarning {
+  lineId: string
+  recipeItemId: string
+  productName: string
+  unitCostPerBase: number
+  medianCostPerBase: number
+  ratio: number
+}
+export async function getGoodsReceiptCostWarnings(accountId: string, receiptId: string): Promise<CostWarning[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('goods_receipt_cost_warnings', {
+    p_account_id: accountId,
+    p_receipt_id: receiptId,
+  })
+  if (error) throw new Error(`Error comprobando el coste de la recepción: ${error.message}`)
+  return ((data as Row[]) ?? []).map(r => ({
+    lineId: r.line_id as string,
+    recipeItemId: r.recipe_item_id as string,
+    productName: r.product_name as string,
+    unitCostPerBase: Number(r.unit_cost_per_base),
+    medianCostPerBase: Number(r.median_cost_per_base),
+    ratio: Number(r.ratio),
+  }))
+}
+export async function ackGoodsReceiptCostWarning(accountId: string, receiptId: string): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('ack_goods_receipt_cost_warning', {
+    p_account_id: accountId,
+    p_receipt_id: receiptId,
+  })
+  if (error) throw new Error(`Error registrando la confirmación del aviso de coste: ${error.message}`)
+}
+
 // Etiqueta legible del tipo de casado, para la UI.
 export function matchTypeLabel(mt: string): string {
   switch (mt) {

@@ -16926,6 +16926,10 @@ export type Database = {
       }
       _st_within: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       _user_can_manage_admins: { Args: { p_user_id: string }; Returns: boolean }
+      ack_goods_receipt_cost_warning: {
+        Args: { p_account_id: string; p_receipt_id: string }
+        Returns: undefined
+      }
       adapt_folvy_shop_order: { Args: { p_sale_id: string }; Returns: number }
       adapt_hubrise_order: { Args: { p_sale_id: string }; Returns: number }
       adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
@@ -18275,6 +18279,17 @@ export type Database = {
       }
       get_sale_ticket: { Args: { p_sale_id: string }; Returns: Json }
       gettransactionid: { Args: never; Returns: unknown }
+      goods_receipt_cost_warnings: {
+        Args: { p_account_id: string; p_receipt_id: string }
+        Returns: {
+          line_id: string
+          recipe_item_id: string
+          product_name: string
+          unit_cost_per_base: number
+          median_cost_per_base: number
+          ratio: number
+        }[]
+      }
       has_permission: {
         Args: { p_account_id: string; p_permission_key: string }
         Returns: boolean

@@ -22,11 +22,14 @@ import {
   updateGoodsReceiptLine,
   confirmReceipt,
   matchReceiptLine,
+  getGoodsReceiptCostWarnings,
+  ackGoodsReceiptCostWarning,
   OFFICE_QTY_REASON_PREFIX,
   OFFICE_QTY_REASONS,
   type GoodsReceipt,
   type GoodsReceiptLine,
   type LineMatchCandidate,
+  type CostWarning,
 } from '@/modules/supply/services/goodsReceiptService'
 import { getSupplierCatalog, listSupplyLocations, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
 import { listSuppliers, createPurchaseFormat } from '@/modules/kitchen/services/purchaseFormatService'
@@ -123,6 +126,12 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   const [saving, setSaving] = useState(false)
   const [closedPeriodNote, setClosedPeriodNote] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 — aviso
+  // bloqueante-suave de coste fuera de rango. null = aún no comprobado;
+  // [] = comprobado y sin avisos; costWarningsAcked = el trabajador ya
+  // pulsó "es correcto, continuar" en ESTA sesión de pantalla.
+  const [costWarnings, setCostWarnings] = useState<CostWarning[] | null>(null)
+  const [costWarningsAcked, setCostWarningsAcked] = useState(false)
 
   // ── Carga ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -370,10 +379,40 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   }
 
   // ── Cierre ───────────────────────────────────────────────────────────
+  // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 — antes
+  // de confirmar, comprueba el coste por línea contra la mediana del
+  // artículo. Con avisos y sin confirmar aún ⇒ los enseña y para (aviso
+  // bloqueante-suave); "es correcto, continuar" registra quién y cuándo
+  // (ackGoodsReceiptCostWarning) y entonces sí cierra.
   async function handleClose() {
     if (!receipt || !allDecided) return
     setSaving(true); setError(null)
     try {
+      if (!costWarningsAcked) {
+        const warnings = await getGoodsReceiptCostWarnings(accountId, receipt.id)
+        if (warnings.length > 0) {
+          setCostWarnings(warnings)
+          setSaving(false)
+          return
+        }
+      }
+      await confirmReceipt(receipt.id)
+      onSaved(`Recepción ${receipt.code ?? ''} verificada y cerrada.`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo cerrar el albarán.')
+      setSaving(false)
+    }
+  }
+  // "Es correcto, continuar" del aviso de coste: registra quién y cuándo, y
+  // cierra directamente (no delega a handleClose — costWarningsAcked no
+  // estaría actualizado todavía dentro de este mismo evento).
+  async function acceptCostWarningsAndClose() {
+    if (!receipt) return
+    setCostWarnings(null)
+    setCostWarningsAcked(true)
+    setSaving(true); setError(null)
+    try {
+      await ackGoodsReceiptCostWarning(accountId, receipt.id)
       await confirmReceipt(receipt.id)
       onSaved(`Recepción ${receipt.code ?? ''} verificada y cerrada.`)
     } catch (err: unknown) {
@@ -486,6 +525,32 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
           )
         })}
       </div>
+
+      {/* ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 —
+          aviso bloqueante-suave: el coste de una o más líneas se desvía
+          mucho de lo habitual para ese artículo. No impide cerrar, pero
+          exige un clic explícito que queda registrado (quién y cuándo). */}
+      {costWarnings && costWarnings.length > 0 && (
+        <div className="rounded-lg border border-warning bg-page p-4 space-y-3">
+          <p className="text-sm font-medium text-text-primary">
+            {costWarnings.length === 1 ? 'Una línea' : `${costWarnings.length} líneas`} con un coste que no cuadra con lo habitual:
+          </p>
+          <ul className="space-y-1">
+            {costWarnings.map(w => (
+              <li key={w.lineId} className="text-sm text-text-secondary">
+                <span className="text-text-primary font-medium">{w.productName}</span>: suele entrar a {fmtMoney(w.medianCostPerBase)}/base
+                y esta línea sale a {fmtMoney(w.unitCostPerBase)}/base ({w.ratio}×). Revisa cantidad y formato.
+              </li>
+            ))}
+          </ul>
+          <div className="flex justify-end">
+            <button type="button" onClick={acceptCostWarningsAndClose} disabled={saving}
+              className="px-4 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
+              Es correcto, continuar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ══ PIE ══ */}
       <div className="bg-card border border-border-default rounded-lg px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
