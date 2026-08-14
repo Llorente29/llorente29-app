@@ -31,6 +31,11 @@ export interface CreateEmployeeInput {
   birthDate?: string
   trialPeriodDays?: number
   role?: 'worker' | 'manager' // C1: rol del user_profile. Por defecto el server lo pone a 'worker'. NUNCA admin desde el alta.
+  // ENCARGO CODE (14/08) feat/f0-responsable-de-local, §4.bis — obligatorios
+  // si role='manager' (el server también lo exige, defensa en profundidad).
+  // managerPermissions ya en snake_case (columnas reales de manager_permissions).
+  managerLocationIds?: string[]
+  managerPermissions?: Record<string, boolean>
 }
 
 export interface CreateEmployeeResult {
@@ -245,6 +250,10 @@ export async function grantEmployeeAccess(
   username: string,
   password: string,
   role: 'worker' | 'manager',
+  // ENCARGO CODE (14/08) feat/f0-responsable-de-local, §4.bis — obligatorios
+  // si role='manager' (el server también lo exige).
+  managerLocationIds?: string[],
+  managerPermissions?: Record<string, boolean>,
 ): Promise<{ ok: boolean; username?: string; role?: 'worker' | 'manager'; error?: string }> {
   if (!supabase) return { ok: false, error: 'Supabase no disponible' }
 
@@ -267,6 +276,8 @@ export async function grantEmployeeAccess(
         username,
         password,
         role,
+        managerLocationIds,
+        managerPermissions,
       }),
     })
 

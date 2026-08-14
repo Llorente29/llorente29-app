@@ -43,6 +43,14 @@ interface EmployeeData {
   birthDate?: string;
   trialPeriodDays?: number;
   role?: "worker" | "manager"; // C1: rol del user_profile. Por defecto "worker". NUNCA admin desde el alta.
+  // ENCARGO CODE (14/08) feat/f0-responsable-de-local, §4.bis — si role='manager',
+  // AMBOS son obligatorios (validado server-side, defensa en profundidad): la
+  // creación del usuario y la aplicación de sus locales/permisos son un solo
+  // paso, no dos. managerPermissions ya viene en snake_case (columnas reales
+  // de manager_permissions) — el cliente arma el objeto desde una plantilla
+  // TypeScript (B.3); el server solo persiste, no conoce las plantillas.
+  managerLocationIds?: string[];
+  managerPermissions?: Record<string, boolean>;
 }
 
 interface Payload {
@@ -53,6 +61,10 @@ interface Payload {
   // Campos usados por la acción grant_access (dar acceso a un employee preexistente).
   username?: string;
   role?: "worker" | "manager";
+  // ENCARGO CODE (14/08) feat/f0-responsable-de-local, §4.bis — mismo motivo
+  // que en EmployeeData: obligatorios cuando role='manager', mismo paso.
+  managerLocationIds?: string[];
+  managerPermissions?: Record<string, boolean>;
   // Usado por generate_access_link: a dónde aterriza el trabajador tras verificar
   // el enlace (pantalla de claim). Debe estar en la allowlist de Redirect URLs de
   // Supabase Auth. Opcional: sin él, Supabase redirige al SITE_URL por defecto.
@@ -98,6 +110,47 @@ function normalizeUsername(raw: string): string {
 
 function syntheticEmailFor(username: string): string {
   return `${username}@${SYNTHETIC_EMAIL_DOMAIN}`;
+}
+
+// ────────────────────────────────────────
+// ENCARGO CODE (14/08) feat/f0-responsable-de-local, §4.bis — "una cuenta
+// con rol Responsable de local sin su fila en manager_permissions no ve
+// absolutamente nada. La creación del usuario y la aplicación de su
+// plantilla de permisos son un solo paso, no dos."
+//
+// Escribe manager_locations + manager_permissions para un user_profile
+// recién creado con role='manager'. Validación server-side (defensa en
+// profundidad, no solo UI): exige al menos 1 local. Compartida por
+// handleCreate y handleGrantAccess para no duplicar la lógica.
+// ────────────────────────────────────────
+// deno-lint-ignore no-explicit-any
+async function applyManagerSetup(
+  admin: any,
+  userProfileId: string,
+  locationIds: string[] | undefined,
+  permissions: Record<string, boolean> | undefined,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!locationIds || locationIds.length === 0) {
+    return { ok: false, error: "Un responsable de local necesita al menos un local asignado." };
+  }
+
+  const { error: locErr } = await admin
+    .from("manager_locations")
+    .insert(locationIds.map((location_id) => ({ user_profile_id: userProfileId, location_id })));
+  if (locErr) {
+    return { ok: false, error: `manager_locations insert failed: ${locErr.message}` };
+  }
+
+  if (permissions && Object.keys(permissions).length > 0) {
+    const { error: permErr } = await admin
+      .from("manager_permissions")
+      .insert({ user_profile_id: userProfileId, ...permissions });
+    if (permErr) {
+      return { ok: false, error: `manager_permissions insert failed: ${permErr.message}` };
+    }
+  }
+
+  return { ok: true };
 }
 
 // ────────────────────────────────────────
@@ -301,6 +354,33 @@ async function handleCreate(admin: any, payload: Payload, actorUserId: string, c
     await admin.from("employees").delete().eq("id", newEmployee.id);
     await admin.auth.admin.deleteUser(authUserId);
     return errorResponse(`Profile insert failed: ${profileInsertErr.message}`, 500);
+  }
+
+  // 5-bis) Si es manager: locales + permisos EN EL MISMO PASO (§4.bis). Si
+  //    falla, rollback en cascada completo — no se deja un manager a medias.
+  if (requestedRole === "manager") {
+    const { data: newProfile, error: newProfileErr } = await admin
+      .from("user_profiles")
+      .select("id")
+      .eq("user_id", authUserId)
+      .single();
+
+    if (newProfileErr || !newProfile) {
+      await admin.from("user_profiles").delete().eq("user_id", authUserId);
+      await admin.from("employees").delete().eq("id", newEmployee.id);
+      await admin.auth.admin.deleteUser(authUserId);
+      return errorResponse(`No se pudo releer el perfil recién creado: ${newProfileErr?.message || "unknown"}`, 500);
+    }
+
+    const setup = await applyManagerSetup(admin, newProfile.id, emp.managerLocationIds, emp.managerPermissions);
+    if (!setup.ok) {
+      await admin.from("manager_locations").delete().eq("user_profile_id", newProfile.id);
+      await admin.from("manager_permissions").delete().eq("user_profile_id", newProfile.id);
+      await admin.from("user_profiles").delete().eq("id", newProfile.id);
+      await admin.from("employees").delete().eq("id", newEmployee.id);
+      await admin.auth.admin.deleteUser(authUserId);
+      return errorResponse(setup.error, 400);
+    }
   }
 
   // 6) Audit log.
@@ -670,6 +750,32 @@ async function handleGrantAccess(admin: any, payload: Payload, actorUserId: stri
     await admin.from("employees").update({ username: null }).eq("id", employee.id);
     await admin.auth.admin.deleteUser(authUserId);
     return errorResponse(`Profile insert failed: ${profileInsertErr.message}`, 500);
+  }
+
+  // j-bis) Si es manager: locales + permisos EN EL MISMO PASO (§4.bis).
+  if (requestedRole === "manager") {
+    const { data: newProfile, error: newProfileErr } = await admin
+      .from("user_profiles")
+      .select("id")
+      .eq("user_id", authUserId)
+      .single();
+
+    if (newProfileErr || !newProfile) {
+      await admin.from("user_profiles").delete().eq("user_id", authUserId);
+      await admin.from("employees").update({ username: null }).eq("id", employee.id);
+      await admin.auth.admin.deleteUser(authUserId);
+      return errorResponse(`No se pudo releer el perfil recién creado: ${newProfileErr?.message || "unknown"}`, 500);
+    }
+
+    const setup = await applyManagerSetup(admin, newProfile.id, payload.managerLocationIds, payload.managerPermissions);
+    if (!setup.ok) {
+      await admin.from("manager_locations").delete().eq("user_profile_id", newProfile.id);
+      await admin.from("manager_permissions").delete().eq("user_profile_id", newProfile.id);
+      await admin.from("user_profiles").delete().eq("id", newProfile.id);
+      await admin.from("employees").update({ username: null }).eq("id", employee.id);
+      await admin.auth.admin.deleteUser(authUserId);
+      return errorResponse(setup.error, 400);
+    }
   }
 
   // k) Audit log.

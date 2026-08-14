@@ -24,6 +24,7 @@ import {
   grantEmployeeAccess,
 } from '../services/employeeAuthService'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
+import { PERMISSION_TEMPLATES, permissionTemplateValuesToRow } from '@/modules/multitenancy/services/managerPermissionsService'
 import {
   fetchEmployeeDailyDetail, fetchEmployeeBalance, fetchTeamHoursSummary,
   type EmployeeDailyDetailRow, type EmployeeBalanceRow,
@@ -489,6 +490,12 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   const [grantedCredentials, setGrantedCredentials] = useState<{ username: string; password: string } | null>(null)
   const [grantError, setGrantError] = useState<string | null>(null)
   const [grantCopied, setGrantCopied] = useState(false)
+  // ENCARGO CODE (14/08) feat/f0-responsable-de-local, B.2/§4.bis.
+  const [grantManagerLocationIds, setGrantManagerLocationIds] = useState<string[]>([])
+  const [grantTemplateKey, setGrantTemplateKey] = useState<string | null>(null)
+  function toggleGrantManagerLocation(id: string) {
+    setGrantManagerLocationIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
 
   // F4.3 — "Fichajes": día a día anclado a la entrada (employee_daily_detail).
   const [dailyPeriod, setDailyPeriod] = useState<PeriodValue>(() => makePeriodValue('mensual', toISODate(new Date())))
@@ -1563,12 +1570,66 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                         className="mt-1"
                       />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-text-primary">Encargado</p>
-                        <p className="text-xs text-text-secondary">Accede a gestión y también a su portal.</p>
+                        <p className="text-sm font-medium text-text-primary">Responsable de local</p>
+                        <p className="text-xs text-text-secondary">Accede a gestión y también a su portal. Puede gestionar los locales que le asignes. No ve el resto.</p>
                       </div>
                     </label>
                   </div>
                 </div>
+
+                {/* ENCARGO CODE (14/08) feat/f0-responsable-de-local, B.2/§4.bis. */}
+                {grantRole === 'manager' && (
+                  <>
+                    <div>
+                      <Label>Locales que gestiona</Label>
+                      <div className="space-y-1.5 mt-1">
+                        {locations.map(l => (
+                          <label key={l.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-default hover:border-accent cursor-pointer text-sm text-text-primary transition-base">
+                            <input
+                              type="checkbox"
+                              checked={grantManagerLocationIds.includes(l.id)}
+                              onChange={() => toggleGrantManagerLocation(l.id)}
+                              disabled={grantSubmitting}
+                              className="accent-accent"
+                            />
+                            <span>{l.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {grantManagerLocationIds.length === 0 && (
+                        <p className="text-[11px] text-danger mt-1">
+                          Elige al menos un local, o este usuario no verá nada.
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <Label>Plantilla de permisos</Label>
+                      <div className="space-y-1.5 mt-1">
+                        {PERMISSION_TEMPLATES.map(t => (
+                          <label
+                            key={t.key}
+                            className={`flex items-start gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm transition-base ${
+                              grantTemplateKey === t.key ? 'border-accent bg-accent-bg' : 'border-border-default hover:border-accent'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="grantPermissionTemplate"
+                              checked={grantTemplateKey === t.key}
+                              onChange={() => setGrantTemplateKey(t.key)}
+                              disabled={grantSubmitting}
+                              className="mt-1 accent-accent"
+                            />
+                            <span>
+                              <span className="block font-medium text-text-primary">{t.label}</span>
+                              <span className="block text-[11px] text-text-secondary">{t.description}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <Label>Usuario</Label>
@@ -1621,7 +1682,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                   <Button
                     variant="primary"
                     size="sm"
-                    disabled={grantSubmitting}
+                    disabled={grantSubmitting || (grantRole === 'manager' && (grantManagerLocationIds.length === 0 || !grantTemplateKey))}
                     onClick={async () => {
                       setGrantError(null)
                       const cleanUsername = slugForUsername(grantUsername)
@@ -1633,8 +1694,21 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                         setGrantError('La contraseña debe tener al menos 6 caracteres.')
                         return
                       }
+                      if (grantRole === 'manager' && grantManagerLocationIds.length === 0) {
+                        setGrantError('Elige al menos un local, o este usuario no verá nada.')
+                        return
+                      }
+                      if (grantRole === 'manager' && !grantTemplateKey) {
+                        setGrantError('Elige una plantilla de permisos, o este responsable no verá nada al entrar.')
+                        return
+                      }
+                      const template = grantTemplateKey ? PERMISSION_TEMPLATES.find(t => t.key === grantTemplateKey) : null
                       setGrantSubmitting(true)
-                      const result = await grantEmployeeAccess(emp.id, cleanUsername, grantPassword, grantRole)
+                      const result = await grantEmployeeAccess(
+                        emp.id, cleanUsername, grantPassword, grantRole,
+                        grantRole === 'manager' ? grantManagerLocationIds : undefined,
+                        template ? permissionTemplateValuesToRow(template.values) : undefined,
+                      )
                       setGrantSubmitting(false)
                       if (result.ok) {
                         setGrantedCredentials({ username: result.username || cleanUsername, password: grantPassword })
@@ -2322,6 +2396,18 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
   const [password, setPassword] = useState(() => generatePassword())
   const [appRole, setAppRole] = useState<'worker' | 'manager'>('worker') // Trabajador por defecto
 
+  // ENCARGO CODE (14/08) feat/f0-responsable-de-local, B.2/§4.bis — locales
+  // que GESTIONA (manager_locations), distinto de "Locales adicionales"
+  // (employees.assigned_locations, dónde trabaja físicamente). Y la
+  // plantilla de permisos: obligatoria si appRole='manager', mismo alta que
+  // el usuario — no un paso aparte que alguien pueda olvidar.
+  const [managerLocationIds, setManagerLocationIds] = useState<string[]>([])
+  const [templateKey, setTemplateKey] = useState<string | null>(null)
+
+  function toggleManagerLocation(id: string) {
+    setManagerLocationIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
   // Tras crear con acceso: credenciales a mostrar (sustituye el form por la
   // pantalla de "apunta estos datos"). Si es null, se muestra el formulario.
   const [created, setCreated] = useState<CreatedCredentials | null>(null)
@@ -2370,6 +2456,17 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
         setError('La contraseña debe tener al menos 6 caracteres.')
         return
       }
+      // ENCARGO CODE (14/08) §4.bis: mismo paso, no uno aparte.
+      if (appRole === 'manager' && managerLocationIds.length === 0) {
+        setError('Elige al menos un local, o este usuario no verá nada.')
+        return
+      }
+      if (appRole === 'manager' && !templateKey) {
+        setError('Elige una plantilla de permisos, o este responsable no verá nada al entrar.')
+        return
+      }
+
+      const template = templateKey ? PERMISSION_TEMPLATES.find(t => t.key === templateKey) : null
 
       setSubmitting(true)
       const result = await createEmployeeWithAccount({
@@ -2381,6 +2478,8 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
         pin: pin || undefined,
         locationId,
         assignedLocations: assigned.length > 1 ? assigned : undefined,
+        managerLocationIds: appRole === 'manager' ? managerLocationIds : undefined,
+        managerPermissions: template ? permissionTemplateValuesToRow(template.values) : undefined,
       })
       setSubmitting(false)
 
@@ -2580,12 +2679,72 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
                     className="mt-1"
                   />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-text-primary">Encargado</p>
-                    <p className="text-xs text-text-secondary">Accede a gestión y también a su portal.</p>
+                    <p className="text-sm font-medium text-text-primary">Responsable de local</p>
+                    <p className="text-xs text-text-secondary">Accede a gestión y también a su portal. Puede gestionar los locales que le asignes. No ve el resto.</p>
                   </div>
                 </label>
               </div>
             </div>
+
+            {/* ENCARGO CODE (14/08) feat/f0-responsable-de-local, B.2/§4.bis —
+                locales que GESTIONA (manager_locations) + plantilla de
+                permisos, obligatorios los dos, mismo alta. */}
+            {appRole === 'manager' && (
+              <>
+                <div>
+                  <Label>Locales que gestiona</Label>
+                  <div className="space-y-1.5 mt-1">
+                    {locations.map(l => (
+                      <label key={l.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-default hover:border-accent cursor-pointer text-sm text-text-primary transition-base">
+                        <input
+                          type="checkbox"
+                          checked={managerLocationIds.includes(l.id)}
+                          onChange={() => toggleManagerLocation(l.id)}
+                          disabled={submitting}
+                          className="accent-accent"
+                        />
+                        <span>{l.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {managerLocationIds.length === 0 && (
+                    <p className="text-[11px] text-danger mt-1 inline-flex items-center gap-1">
+                      <AlertTriangle size={11} /> Elige al menos un local, o este usuario no verá nada.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label>Plantilla de permisos</Label>
+                  <div className="space-y-1.5 mt-1">
+                    {PERMISSION_TEMPLATES.map(t => (
+                      <label
+                        key={t.key}
+                        className={`flex items-start gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm transition-base ${
+                          templateKey === t.key ? 'border-accent bg-accent-bg' : 'border-border-default hover:border-accent'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="newEmployeePermissionTemplate"
+                          checked={templateKey === t.key}
+                          onChange={() => setTemplateKey(t.key)}
+                          disabled={submitting}
+                          className="mt-1 accent-accent"
+                        />
+                        <span>
+                          <span className="block font-medium text-text-primary">{t.label}</span>
+                          <span className="block text-[11px] text-text-secondary">{t.description}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-text-secondary mt-1">
+                    Es un punto de partida: podrás ajustar casilla a casilla después, desde Usuarios y Accesos.
+                  </p>
+                </div>
+              </>
+            )}
+
             <div>
               <Label>Usuario</Label>
               <Input
@@ -2629,7 +2788,12 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
           <Button variant="outline" size="sm" onClick={onCancel} disabled={submitting}>
             Cancelar
           </Button>
-          <Button variant="primary" size="sm" onClick={handleSubmit} disabled={submitting}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSubmit}
+            disabled={submitting || (withAppAccess && appRole === 'manager' && (managerLocationIds.length === 0 || !templateKey))}
+          >
             {submitting ? 'Creando…' : 'Crear empleado'}
           </Button>
         </div>
