@@ -218,6 +218,55 @@ export async function createPurchaseFormat(input: PurchaseFormatInsert): Promise
   return rowToPurchaseFormat(data)
 }
 
+// ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo C — Ley 3: un
+// formato con stock_movement asociado no se edita. `updatePurchaseFormat`
+// sigue existiendo para el resto de campos (nombre, etc.); un trigger en la
+// base (`trg_recipe_item_purchase_format_immutable`) bloquea qty_in_base si
+// hay movimientos, así que esta comprobación es para dar el aviso ANTES de
+// intentarlo, no la única defensa.
+export async function purchaseFormatHasStockMovements(formatId: string): Promise<boolean> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('purchase_format_has_stock_movements', { p_format_id: formatId })
+  if (error) {
+    // Fallback conservador: si el RPC falla, se asume que SÍ tiene movimientos
+    // (nunca se arriesga a permitir editar qty_in_base sin comprobarlo — el
+    // trigger de la base es la defensa real de todos modos, esto solo mejora
+    // el aviso).
+    console.error('[purchaseFormatService] purchaseFormatHasStockMovements', error)
+    return true
+  }
+  return !!data
+}
+
+// Archiva el formato viejo, crea uno nuevo con el mismo nombre y el contenido
+// corregido, y repunta la ficha del proveedor a él. Es la ÚNICA vía para
+// cambiar qty_in_base de un formato que ya tiene movimientos — el trigger de
+// la base lo bloquea si se intenta por updatePurchaseFormat directo.
+export async function archiveAndReplacePurchaseFormat(params: {
+  accountId: string
+  itemId: string
+  oldFormatId: string
+  name: string
+  qtyInBase: number
+  articleSupplierId: string
+  createdBy: string | null
+  createdByName: string | null
+}): Promise<PurchaseFormat> {
+  requireSupabase()
+  const created = await createPurchaseFormat({
+    accountId: params.accountId,
+    itemId: params.itemId,
+    name: params.name,
+    qtyInBase: params.qtyInBase,
+    source: 'manual',
+    createdBy: params.createdBy,
+    createdByName: params.createdByName,
+  })
+  await updatePurchaseFormat(params.oldFormatId, { isActive: false, archivedAt: new Date().toISOString() })
+  await updateArticleSupplier(params.articleSupplierId, { purchaseFormatId: created.id })
+  return created
+}
+
 export async function updatePurchaseFormat(
   id: string,
   patch: PurchaseFormatUpdate

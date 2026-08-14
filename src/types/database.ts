@@ -19192,6 +19192,10 @@ export type Database = {
         Args: { p_location_id: string }
         Returns: Json
       }
+      purchase_format_has_stock_movements: {
+        Args: { p_format_id: string }
+        Returns: boolean
+      }
       quality_dashboard: {
         Args: {
           p_account: string
