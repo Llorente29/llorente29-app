@@ -111,16 +111,20 @@ export function defaultPermissions(): typeof DEFAULT_PERMISSIONS {
 // escribe las 31 columnas reales de manager_permissions vía savePermissions;
 // las casillas siguen siendo editables una a una después (no es una jaula).
 //
-// Valores propuestos por Code (14/08) — PENDIENTES de aprobación de Julio
-// antes de mergear (tal como pide el encargo). No hay claves de Supply/
-// Almacén/Recepción en manager_permissions: ese módulo no está gateado por
-// esta tabla hoy (cualquier manager/admin ya lo ve por rol). "Oficina" solo
-// puede tocar los toggles que sí existen (inventario, ventas, zonas de
-// pedido, fichas técnicas, informes) — no se inventa un "showRecepcion".
+// Valores aprobados por Julio (14/08). show_salaries y show_informes_personal
+// (gatea Nóminas, tan sensible como salarios) en false en las dos. Plantilla
+// "Solo lectura" retirada por decisión de Julio: el modelo solo gatea
+// visibilidad de pantalla, no acciones dentro de ella, y el nombre prometía
+// algo que el sistema de permisos no puede garantizar todavía.
+// No hay claves de Supply/Almacén/Recepción en manager_permissions: ese
+// módulo no está gateado por esta tabla hoy (cualquier manager/admin ya lo ve
+// por rol, sin mirar ninguna columna — ver ENCARGO CODE 14/08 "claves de
+// Supply", rama aparte). "Oficina" solo puede tocar los toggles que sí
+// existen (inventario, ventas, zonas de pedido, fichas técnicas).
 type PermissionTemplateValues = Omit<ManagerPermissions, 'userProfileId' | 'createdAt' | 'updatedAt'>
 
 export interface PermissionTemplate {
-  key: 'responsable_de_local' | 'oficina' | 'solo_lectura'
+  key: 'responsable_de_local' | 'oficina'
   label: string
   description: string
   values: PermissionTemplateValues
@@ -153,7 +157,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplate[] = [
       showDashboard: true, showStaff: false, showAhoraMismo: false,
       showFichajesGlobal: false, showKioskoFichaje: false, showSolicitudesPendientes: false,
       showTurnosAbiertos: false, showCambiosPendientes: false, showCalendario: false,
-      showPlantillaTurnos: false, showInformesPersonal: true, showBolsaHoras: false,
+      showPlantillaTurnos: false, showInformesPersonal: false, showBolsaHoras: false,
       showTasks: false, showScheduled: false, showTemplates: false,
       showIncidents: false, showAudits: false, showHistory: false,
       showTspoon: true, showVentasAnalisis: true, showPrediccionPersonal: false,
@@ -161,24 +165,6 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplate[] = [
       showTspoonSettings: false, showSalaries: false,
       canManageEmployees: false, canEditSchedule: false, canApproveVacations: false,
       showAppccToday: false, showAppccIncidents: false,
-    },
-  },
-  {
-    key: 'solo_lectura',
-    label: 'Solo lectura',
-    description: 'Ver sin tocar.',
-    values: {
-      showDashboard: true, showStaff: true, showAhoraMismo: true,
-      showFichajesGlobal: true, showKioskoFichaje: true, showSolicitudesPendientes: true,
-      showTurnosAbiertos: true, showCambiosPendientes: true, showCalendario: true,
-      showPlantillaTurnos: true, showInformesPersonal: false, showBolsaHoras: true,
-      showTasks: true, showScheduled: true, showTemplates: true,
-      showIncidents: true, showAudits: true, showHistory: true,
-      showTspoon: true, showVentasAnalisis: true, showPrediccionPersonal: true,
-      showZonasPedido: false, showInventory: true, showLocations: false,
-      showTspoonSettings: false, showSalaries: false,
-      canManageEmployees: false, canEditSchedule: false, canApproveVacations: false,
-      showAppccToday: true, showAppccIncidents: true,
     },
   },
 ] as const
