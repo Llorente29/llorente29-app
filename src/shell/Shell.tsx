@@ -23,7 +23,7 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
-import ShellTopBar, { HOME_KEY } from './ShellTopBar'
+import ShellTopBar, { HOME_KEY, PENDIENTES_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
 import MobileModuleTabs from './MobileModuleTabs'
 import ShellBottomNav from './ShellBottomNav'
@@ -37,6 +37,8 @@ import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
 import { listAccounts } from '@/modules/multitenancy/services/accountsService'
 import type { Account } from '@/types/multitenancy'
 import { FolvyAIBubble } from '../modules/folvy-ai/components/FolvyAIBubble'
+import PendientesPage from '../modules/pendientes/PendientesPage'
+import { usePendingBoard } from '../modules/pendientes/hooks/usePendingBoard'
 
 const SETTINGS_BASE = 'configuracion'
 
@@ -49,6 +51,10 @@ export default function Shell() {
   const location = useLocation()
   const { userProfile, accounts, activeAccount, activeAccountId, setActiveAccountId } = useApp()
   const { isPlatformAdmin } = usePlatformAdmin()
+  // ENCARGO CODE (14/08) Pendientes Fase 1, B.1 — un solo fetch aquí; el
+  // contador se pasa al TopBar y decide el aterrizaje en Home. NUNCA cuenta
+  // 'salud' (solo ahora+semana, ver usePendingBoard).
+  const { actionableCount: pendingActionableCount, loading: pendingLoading } = usePendingBoard()
 
   // Lista de cuentas para el selector. Usuario normal: solo SUS cuentas (accounts
   // del contexto). Platform admin: TODAS (puede gestionar cualquier cliente).
@@ -115,14 +121,28 @@ export default function Shell() {
   const moduleBasePath = segments[0] ?? ''            // '' = Home
   const itemPathFromUrl = segments.slice(1).join('/') // resto = path del item
 
-  const activeModule = moduleBasePath === ''
+  const pendientesActive = moduleBasePath === PENDIENTES_KEY
+  const activeModule = (moduleBasePath === '' || pendientesActive)
     ? null
     : moduleBasePath === SETTINGS_BASE
       ? configuracionModule          // módulo especial: no está en el registry
       : getModuleByBasePath(moduleBasePath)
 
   const settingsActive = moduleBasePath === SETTINGS_BASE
-  const activeKey = (activeModule && !settingsActive) ? activeModule.id : HOME_KEY
+  const activeKey = pendientesActive
+    ? PENDIENTES_KEY
+    : (activeModule && !settingsActive) ? activeModule.id : HOME_KEY
+
+  // B.1 — aterrizaje: al entrar a Home (raíz), si hay algo en ahora+semana,
+  // /pendientes es la pantalla de aterrizaje. Si no hay nada, NO se muestra
+  // — se entra donde se entraba antes. Espera a que cargue (pendingLoading)
+  // para no redirigir en falso con el contador todavía a 0.
+  useEffect(() => {
+    if (moduleBasePath === '' && !pendingLoading && pendingActionableCount > 0) {
+      navigate('/pendientes', { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleBasePath, pendingLoading, pendingActionableCount])
 
   const activeItem = activeModule
     ? (activeModule.sidebar.items.find(i => i.path === itemPathFromUrl)
@@ -138,6 +158,10 @@ export default function Shell() {
   function goToKey(key: string) {
     if (key === HOME_KEY) {
       navigate('/')
+      return
+    }
+    if (key === PENDIENTES_KEY) {
+      navigate('/pendientes')
       return
     }
     const mod = getModuleById(key)
@@ -195,6 +219,7 @@ export default function Shell() {
         activeAccount={shownAccount}
         accounts={selectorAccounts}
         onSwitchAccount={isPlatformAdmin ? switchAccount : undefined}
+        pendingCount={pendingActionableCount}
       />
 
       {/* Banda "Estás gestionando: [cliente]" — EXCLUSIVO platform admin. Deja
@@ -243,6 +268,12 @@ export default function Shell() {
             </main>
           </div>
         )
+      ) : pendientesActive ? (
+        <main className="flex-1 w-full min-w-0">
+          <div style={contentStyle}>
+            <PendientesPage />
+          </div>
+        </main>
       ) : (
         <main className="flex-1 w-full min-w-0">
           <div style={contentStyle}>
@@ -263,6 +294,7 @@ export default function Shell() {
           onSelect={goToKey}
           onOpenAI={() => setAiOpen(true)}
           aiActive={aiOpen}
+          pendingCount={pendingActionableCount}
         />
       )}
     </div>

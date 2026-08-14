@@ -12,8 +12,8 @@
 // El héroe usa el ISOTIPO de Folvy "El ciclo" (anillo abierto + punto verde) con un
 // latido ligerísimo (punto que late + halo tenue), respetando reduced-motion.
 
-import { Home } from 'lucide-react'
-import { HOME_KEY } from './ShellTopBar'
+import { Home, Inbox } from 'lucide-react'
+import { HOME_KEY, PENDIENTES_KEY } from './ShellTopBar'
 import { getOrderedModules } from './moduleRegistry'
 import { isMobileOverflowModule } from './shellMobileNav'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
@@ -35,12 +35,15 @@ interface ShellBottomNavProps {
   onOpenAI: () => void
   // ¿El panel de IA está abierto? (para resaltar el héroe).
   aiActive?: boolean
+  // Suma ahora+semana de pending_board (ENCARGO CODE 14/08). 0 = sin badge.
+  pendingCount?: number
 }
 
 interface NavEntry {
   key: string
   label: string
   Icon: IconType
+  badge?: number
 }
 
 // Etiqueta corta para la barra (sin el prefijo de marca "Folvy ").
@@ -63,7 +66,7 @@ function isModuleVisible(
   })
 }
 
-export default function ShellBottomNav({ activeKey, onSelect, onOpenAI, aiActive = false }: ShellBottomNavProps) {
+export default function ShellBottomNav({ activeKey, onSelect, onOpenAI, aiActive = false, pendingCount = 0 }: ShellBottomNavProps) {
   const { hasPermission, role } = usePermissions()
 
   // Módulos visibles, EXCLUYENDO los del overflow (van al menú del avatar).
@@ -71,9 +74,10 @@ export default function ShellBottomNav({ activeKey, onSelect, onOpenAI, aiActive
     .filter(m => isModuleVisible(m, hasPermission, role))
     .filter(m => !isMobileOverflowModule(m.id))
 
-  // Pestañas de la barra: Inicio + módulos de barra.
+  // Pestañas de la barra: Inicio + Pendientes (con badge) + módulos de barra.
   const entries: NavEntry[] = [
     { key: HOME_KEY, label: 'Inicio', Icon: Home },
+    { key: PENDIENTES_KEY, label: 'Pendientes', Icon: Inbox, badge: pendingCount },
     ...barModules.map(m => ({ key: m.id, label: shortLabel(m.name), Icon: m.icon })),
   ]
 
@@ -100,6 +104,7 @@ export default function ShellBottomNav({ activeKey, onSelect, onOpenAI, aiActive
           label={entry.label}
           Icon={entry.Icon}
           active={entry.key === activeKey}
+          badge={entry.badge}
           onClick={() => onSelect(entry.key)}
         />
       ))}
@@ -112,6 +117,7 @@ export default function ShellBottomNav({ activeKey, onSelect, onOpenAI, aiActive
           label={entry.label}
           Icon={entry.Icon}
           active={entry.key === activeKey}
+          badge={entry.badge}
           onClick={() => onSelect(entry.key)}
         />
       ))}
@@ -165,12 +171,13 @@ function AIHero({ active, onClick }: { active: boolean; onClick: () => void }) {
 
 // ─── Pestaña individual de la barra inferior ────────────────────────────────
 function BottomTab({
-  label, Icon, active, onClick,
+  label, Icon, active, onClick, badge,
 }: {
   label: string
   Icon: IconType
   active: boolean
   onClick: () => void
+  badge?: number
 }) {
   return (
     <button
@@ -187,7 +194,25 @@ function BottomTab({
         color: active ? GREEN : MUTED,
       }}
     >
-      <Icon size={22} />
+      <span style={{ position: 'relative', display: 'inline-flex' }}>
+        <Icon size={22} />
+        {!!badge && badge > 0 && (
+          <span
+            aria-label={`${badge} pendientes`}
+            style={{
+              position: 'absolute', top: -4, right: -8,
+              minWidth: 16, height: 16, padding: '0 3px',
+              borderRadius: 999,
+              background: '#E0492E',
+              color: '#fff',
+              fontSize: 9.5, fontWeight: 700, lineHeight: '16px',
+              textAlign: 'center',
+            }}
+          >
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </span>
       <span
         style={{
           fontSize: 10.5, fontWeight: 500, lineHeight: 1,
