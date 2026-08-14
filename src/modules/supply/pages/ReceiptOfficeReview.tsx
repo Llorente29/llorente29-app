@@ -262,7 +262,10 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
 
   async function persistLineResolution(
     line: GoodsReceiptLine,
-    args: { recipeItemId: string | null; purchaseFormatId: string | null; qtyReceived: number; unitCost: number | null; mapSource: string | null },
+    args: {
+      recipeItemId: string | null; purchaseFormatId: string | null; qtyReceived: number; unitCost: number | null
+      mapSource: string | null; needsReview?: boolean; discrepancyReason?: string | null
+    },
   ) {
     setSaving(true); setError(null)
     try {
@@ -271,14 +274,14 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         purchaseFormatId: args.purchaseFormatId,
         qtyReceived: args.qtyReceived,
         unitCost: args.unitCost,
-        discrepancyReason: line.discrepancyReason,
+        discrepancyReason: args.discrepancyReason ?? line.discrepancyReason,
         notGoods: false,
         notGoodsKind: null,
       })
       await updateGoodsReceiptLine(line.id, {
         mapSource: args.mapSource,
-        mapNeedsReview: false,
-        flaggedForOffice: false,
+        mapNeedsReview: args.needsReview ?? false,
+        flaggedForOffice: args.needsReview ?? false,
       })
       if (res.closedPeriodNote) setClosedPeriodNote(res.closedPeriodNote)
       setReloadTick(t => t + 1)
@@ -297,20 +300,53 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     // ENCARGO CODE (15/08) — Ley 1 y Ley 2 se mueven juntas: si el formato
     // cambia (típico al corregir una línea cuya ficha estaba mal — Carne de
     // Birria/Pollo Mechado del ALB-00115, Bolsa 2 kg → Caja 6 kg), la
-    // cantidad recibida NO puede quedarse como estaba: esa cifra se contó
-    // (o se forzó a mano) bajo el formato VIEJO. Si se mantiene, "corregir"
-    // el formato multiplica la cantidad real por el error que se acaba de
-    // arreglar (6.000 g → 18.000 g). Vuelve a derivarse del papel (doc_qty)
-    // en cuanto el formato deja de ser el mismo; si el formato no cambió
-    // (solo se afinó el nombre del artículo), se respeta lo ya contado.
+    // cantidad recibida NO puede heredarse del formato VIEJO. Orden de
+    // prioridad (Julio, 15/08):
+    //   1) doc_qty si existe — lo dice el papel.
+    //   2) si no, CONSERVAR EL TOTAL: la mercancía que entró no cambia
+    //      porque cambiemos cómo la describimos — qty_nueva =
+    //      qty_in_base_vieja / factor_nuevo, y el coste se reescala igual
+    //      (unit_cost_nuevo = unit_cost_viejo × qty_vieja / qty_nueva) para
+    //      que el importe total tampoco se mueva.
+    //   3) si esa división no da un número limpio, NO SE ADIVINA (mismo
+    //      criterio que NO_RESUELTO en el intérprete): se guarda el total
+    //      preservado tal cual (sin redondear — el total sigue intacto) y
+    //      la línea queda marcada para que la mire un humano, con el
+    //      motivo explícito.
     const formatChanged = formatId !== line.purchaseFormatId
-    const qty = (!formatChanged && line.qtyReceived > 0)
-      ? line.qtyReceived
-      : (line.docQty ?? (line.qtyReceived > 0 ? line.qtyReceived : 1))
-    const unitCost = qtyInBaseFactor && line.docAmount != null ? line.docAmount / qty : (line.unitCost ?? null)
+    let qty: number
+    let unitCost: number | null
+    let needsReview = false
+    let discrepancyReason: string | null = line.discrepancyReason
+
+    if (!formatChanged) {
+      qty = line.qtyReceived > 0 ? line.qtyReceived : (line.docQty ?? 1)
+      unitCost = qtyInBaseFactor && line.docAmount != null ? line.docAmount / qty : (line.unitCost ?? null)
+    } else if (line.docQty != null && line.docQty > 0) {
+      qty = line.docQty
+      unitCost = qtyInBaseFactor && line.docAmount != null
+        ? line.docAmount / qty
+        : (line.unitCost != null && line.qtyReceived > 0 ? line.unitCost * line.qtyReceived / qty : (line.unitCost ?? null))
+    } else if (qtyInBaseFactor && line.qtyInBase != null && line.qtyInBase > 0) {
+      const rawQty = line.qtyInBase / qtyInBaseFactor
+      const rounded = Math.round(rawQty)
+      const clean = rounded > 0 && Math.abs(rawQty - rounded) < 0.02
+      qty = clean ? rounded : rawQty
+      unitCost = line.unitCost != null && line.qtyReceived > 0 ? line.unitCost * line.qtyReceived / qty : (line.unitCost ?? null)
+      if (!clean) {
+        needsReview = true
+        discrepancyReason = `Formato cambiado sin dato del papel: ${line.qtyInBase} en base ÷ ${qtyInBaseFactor} = ${rawQty.toFixed(3)}, no es un número limpio. Revisa a mano.`
+      }
+    } else {
+      qty = line.qtyReceived > 0 ? line.qtyReceived : 1
+      unitCost = line.unitCost ?? null
+      needsReview = true
+      discrepancyReason = 'Formato cambiado sin poder recalcular la cantidad (sin doc_qty ni total anterior). Revisa a mano.'
+    }
+
     await persistLineResolution(line, {
       recipeItemId, purchaseFormatId: formatId, qtyReceived: qty, unitCost,
-      mapSource: matchType ?? 'manual',
+      mapSource: matchType ?? 'manual', needsReview, discrepancyReason,
     })
   }
 
