@@ -10,6 +10,7 @@
 // catálogo del proveedor (flujo A). Tabla en escritorio, tarjetas en móvil.
 
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Truck, ChevronRight, Search } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
@@ -72,6 +73,13 @@ export default function SupplyOrdersPage() {
   const [view, setView] = useState<View>('list')
   const [tab, setTab] = useState<Tab>('todos')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  // ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §0.2 — filtro
+  // real desde /pendientes. ?estado=vencido → pedido_vencido (enviado +
+  // expected_date pasada); ?estado=borrador → pedido_borrador_atascado
+  // (borrador + más de 7 días).
+  const [searchParams] = useSearchParams()
+  const estadoFiltro = searchParams.get('estado')
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (accountsLoading) return
@@ -106,13 +114,22 @@ export default function SupplyOrdersPage() {
 
   const visibleOrders = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (q === '') return orders
-    return orders.filter(o => {
-      const code = (o.code ?? '').toLowerCase()
-      const sup = (o.supplierId ? supplierNameById.get(o.supplierId) ?? '' : '').toLowerCase()
-      return code.includes(q) || sup.includes(q)
-    })
-  }, [orders, search, supplierNameById])
+    let base = q === ''
+      ? orders
+      : orders.filter(o => {
+          const code = (o.code ?? '').toLowerCase()
+          const sup = (o.supplierId ? supplierNameById.get(o.supplierId) ?? '' : '').toLowerCase()
+          return code.includes(q) || sup.includes(q)
+        })
+    if (estadoFiltro === 'vencido') {
+      const today = new Date().toISOString().slice(0, 10)
+      base = base.filter(o => o.status === 'enviado' && !!o.expectedDate && o.expectedDate < today)
+    } else if (estadoFiltro === 'borrador') {
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      base = base.filter(o => o.status === 'borrador' && new Date(o.createdAt).getTime() < sevenDaysAgo)
+    }
+    return base
+  }, [orders, search, supplierNameById, estadoFiltro])
 
   // ── Vista BUILDER: nuevo pedido sobre el catálogo del proveedor ──
   if (view === 'builder') {
@@ -176,6 +193,15 @@ export default function SupplyOrdersPage() {
           Saneado (colgados)
         </button>
       </div>
+
+      {estadoFiltro && tab === 'todos' && (
+        <div className="flex items-center gap-2 text-sm text-text-secondary">
+          <span>Filtrado desde Pendientes.</span>
+          <button type="button" onClick={() => navigate('/supply')} className="text-accent hover:underline">
+            Quitar filtro
+          </button>
+        </div>
+      )}
 
       {tab === 'pendientes' && (
         !activeAccountId ? null : !resolvedLocationId ? (

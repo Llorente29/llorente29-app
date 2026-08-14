@@ -140,24 +140,31 @@ const PENDING_KIND_META: Record<string, PendingKindMeta> = {
     destination: () => '/supply?estado=borrador',
   },
   recuento_abierto: {
+    // Sin filtro cableado en InventoryPage todavía (14/08, §0.2) — texto
+    // honesto en vez de un botón que promete filtrar y no filtra.
     text: n => `${n} recuento${n === 1 ? '' : 's'} de inventario sin cerrar`,
-    buttonText: n => `Revisar ${n === 1 ? 'el' : 'los'} ${n} recuento${n === 1 ? '' : 's'}`,
-    destination: () => '/supply/inventario?estado=abierto',
+    buttonText: () => 'Ir a Inventarios',
+    destination: () => '/supply/inventario',
   },
   recuento_sin_aprobar: {
     text: n => `${n} recuento${n === 1 ? '' : 's'} contado${n === 1 ? '' : 's'} y sin aprobar`,
-    buttonText: n => `Aprobar ${n === 1 ? 'el' : 'los'} ${n} recuento${n === 1 ? '' : 's'}`,
-    destination: () => '/supply/inventario?estado=sin_aprobar',
+    buttonText: () => 'Ir a Inventarios',
+    destination: () => '/supply/inventario',
   },
   linea_sin_coste: {
+    // No cableado (14/08): es un filtro por LÍNEA de albarán, no por
+    // recepción — GoodsReceiptsPage filtra por status de la recepción, no
+    // tiene forma barata de saber qué recepción contiene una línea sin
+    // coste sin una consulta aparte. Hasta que exista esa consulta, texto
+    // honesto: dice adónde va, no promete filtrar.
     text: n => `${n} entrada${n === 1 ? '' : 's'} de género sin precio: no cuentan en tu coste`,
-    buttonText: n => `Revisar ${n === 1 ? 'la' : 'las'} ${n} línea${n === 1 ? '' : 's'}`,
-    destination: () => '/supply/recepciones?estado=sin_coste',
+    buttonText: () => 'Ir a Recepciones',
+    destination: () => '/supply/recepciones',
   },
   stock_negativo: {
     text: n => `${n} artículo${n === 1 ? '' : 's'} en negativo`,
-    buttonText: () => 'Ver Almacén',
-    destination: () => '/supply/inventario?vista=teorico_vs_real',
+    buttonText: () => 'Ir a Inventarios',
+    destination: () => '/supply/inventario',
   },
 }
 
