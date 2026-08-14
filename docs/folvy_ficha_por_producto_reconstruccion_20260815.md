@@ -107,6 +107,38 @@ dentro). Puede ser un patrón de negocio real, no ruido — no se crea sola, par
 
 ---
 
+## Tramo D — las 5 colisiones nombradas por el encargo, con evidencia real
+
+Confirmadas exactas contra `article_supplier` (antes de la reconstrucción del Tramo C). Ninguna se
+resuelve aquí — la migración pasa sin tocarlas (el índice A.1 lo garantiza). Evidencia real de sus
+propias líneas de recepción:
+
+**`431964` (MAKRO) — Alubias rojas / Frijoles Negros.** Las 3 líneas históricas de este código
+comparten el mismo `raw_text`: *"alubia cocida roja lata 1600gne (2500 g)"* — dice **roja**
+explícitamente. 2 de las 3 quedaron casadas a "Frijoles Negros" (negras) y solo 1 al artículo
+correcto ("Alubias rojas"). **Lectura: error de casado, no colisión real** — el texto contradice
+directamente el artículo en 2 de 3 líneas.
+
+**`165871` (MAKRO) — Servilletas 30x40 / Servilleta natural 30x40cm.** Mismo `raw_text` exacto
+("METRO PROFESSIONAL Servilleta natural 30x40cm 150 unidades") en 2 de las 3 líneas, cada una casada
+a un `recipe_item` DISTINTO. **Lectura: artículo duplicado en el catálogo**, no dos productos reales.
+
+**`60440` (EUROPASTRY) — Bollo cocido / Pan Bocadillos.** Mismo `raw_text` ("Bollo Cocido 100g
+(26u)"/"(28u)") en las 9 líneas; 1 casó a "Bollo cocido", 8 a "Pan Bocadillos". Sin evidencia textual
+que distinga los dos artículos — **Julio decide** si son el mismo pan con dos nombres o dos usos
+reales.
+
+**`530502025` (CLOUDTOWN, dos `supplier_id` — los 4 proveedores "Cloudtown" de la deuda técnica
+vuelven a aparecer aquí).** Las **12 líneas históricas reales** de este código, sin excepción, tienen
+`raw_text` "TARRICO TRES LECHES CAJA 15 UD DE 212 ML" y están casadas a "Tarta 3 Leches". **Ninguna
+línea real usa "Tortilla Trigo 30 cm"** — la ficha que apunta a Tortilla Trigo (Tramo C,
+`ficha_otro_articulo`) no tiene ni una sola línea que la respalde. **Lectura: la ficha está
+simplemente mal, no es una colisión de dos productos reales** — pero como el propio índice A.1 la
+deja pasar sin bloquear, queda igual para que Julio la corrija explícitamente (no se autocorrige
+aquí, seguimos "no se resuelve, solo se presenta").
+
+---
+
 ## 35 candidatas "no_existe" sin evidencia suficiente para crear sola
 
 Sin intérprete disponible y con 1-2 usos históricos únicamente. No se listan una a una aquí (bajo
