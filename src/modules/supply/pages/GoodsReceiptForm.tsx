@@ -65,7 +65,7 @@ import {
   getItemBaseUnit,
   getItemHomeAreas,
   ensureLastPurchaseStrategy,
-  formatQtyInBaseFromPack,
+  resolveGoodsReceiptLineFormat,
   getSupplySettings,
   getSupplierFormatPrices,
   getSupplierLastPrices,
@@ -368,50 +368,6 @@ function defaultFormatName(_packUnit: string | null, base: BaseUnitInfo | null):
     case 'unit': return 'Unidad'
     default: return 'Formato'
   }
-}
-
-// Elige, entre los formatos del artículo, el que mejor casa con la línea del albarán.
-// Estrategia (IA propone, humano decide): (1) si el nombre del formato del albarán
-// (packUnit/formatName) coincide con el nombre de un formato → ese; (2) si no, el que
-// más se acerque a packSize (contenido leído); (3) si nada casa → el preferente (1er
-// elemento, ya viene ordenado por tamaño asc) y se marca como "a revisar el formato".
-// Devuelve { option, confident }: confident=false ⇒ pintar semáforo ámbar de formato.
-function pickFormatForLine(
-  formats: SupplierFormatOption[],
-  packUnit: string | null,
-  packSize: number | null,
-  preferredId: string | null,
-): { option: SupplierFormatOption | null; confident: boolean } {
-  if (!formats || formats.length === 0) return { option: null, confident: false }
-  // Un solo formato posible: no hay ENTRE QUÉ elegir, así que no hay incertidumbre
-  // que confirmar (ENCARGO CODE 12/08, §3.4: "un solo formato activo →
-  // preseleccionado sin preguntar"). Sin este atajo, un packUnit/packSize del
-  // albarán que no casara con el único formato lo dejaba marcado "a revisar" sin
-  // motivo real.
-  if (formats.length === 1) return { option: formats[0], confident: true }
-  const norm = (s: string | null) => (s ?? '').trim().toLowerCase()
-  // (1) match por nombre de unidad del albarán
-  if (packUnit) {
-    const byName = formats.find(f => norm(f.name) === norm(packUnit))
-    if (byName) return { option: byName, confident: true }
-  }
-  // (2) match por contenido aproximado (packSize en unidad base)
-  if (packSize != null && packSize > 0) {
-    let best: SupplierFormatOption | null = null
-    let bestDiff = Infinity
-    for (const f of formats) {
-      if (f.qtyInBase == null) continue
-      const diff = Math.abs(f.qtyInBase - packSize)
-      if (diff < bestDiff) { bestDiff = diff; best = f }
-    }
-    // aceptamos si el mejor está a ≤2% del contenido leído
-    if (best && best.qtyInBase && Math.abs(best.qtyInBase - packSize) / best.qtyInBase <= 0.02) {
-      return { option: best, confident: true }
-    }
-  }
-  // (3) sin certeza → preferente (o el de menor tamaño) y marcar a revisar
-  const pref = (preferredId && formats.find(f => f.id === preferredId)) || formats[0]
-  return { option: pref, confident: false }
 }
 
 // Etiqueta legible de la equivalencia: "80 ud", "5 kg", "10 L" (escala g→kg, ml→L).
@@ -1093,30 +1049,34 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         }
         const existing = catalogByItem.get(itemId)
         const options = existing?.formats ?? []
-        let purchaseFormatId: string | null = null
-        let formatName: string | null = line.formatName ?? null
-        let formatQtyInBase: number | null = null
-        let suggested = false
-        if (options.length > 0) {
-          // varios formatos posibles: elige el que casa con la unidad/cantidad del albarán
-          const { option, confident } = pickFormatForLine(
-            options, line.packUnit ?? null, line.packSize ?? null, existing?.purchaseFormatId ?? null,
-          )
-          if (option) {
-            purchaseFormatId = option.id
-            formatName = option.name ?? formatName
-            formatQtyInBase = option.qtyInBase
-            suggested = !confident   // si no hay certeza, queda como "propuesto" (✨/ámbar)
-          }
-        } else if (existing && existing.purchaseFormatId && existing.formatQtyInBase) {
-          purchaseFormatId = existing.purchaseFormatId
-          formatName = existing.formatName ?? formatName
-          formatQtyInBase = existing.formatQtyInBase
-        } else {
-          formatQtyInBase = formatQtyInBaseFromPack(line.packSize ?? null, line.packUnit ?? null, base)
-          if (!formatName) formatName = defaultFormatName(line.packUnit ?? null, base)
-          suggested = formatQtyInBase !== null
-        }
+        // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo B — Ley 1:
+        // el formato se resuelve en el SERVIDOR contrastando el documento (OCR,
+        // releído de la sesión por raw_text) contra la ficha del proveedor.
+        // Sustituye pickFormatForLine (parecido de nombre + ≤2% de contenido),
+        // que Ley 1 prohíbe explícitamente, y también el camino "sin formatos"
+        // (formatQtyInBaseFromPack), que ahora resuelve Ley 4 (busca antes de
+        // crear) en la misma llamada.
+        const resolved = await resolveGoodsReceiptLineFormat({
+          accountId,
+          aiSessionId: ocrPrefill?.aiSessionId ?? null,
+          recipeItemId: itemId,
+          rawText: line.rawText,
+          supplierId: supplierId || null,
+          createdBy: authUserId ?? null,
+          createdByName: userProfile?.displayName ?? null,
+        })
+        if (cancelled) return
+        let purchaseFormatId: string | null = resolved.purchaseFormatId
+        let formatQtyInBase: number | null = resolved.qtyInBasePerPack
+        // Discrepancia (Ley 1, rama 2): ninguna fuente gana. purchaseFormatId
+        // ya viene null desde el servidor; se deja al humano elegir de
+        // `options`, con formatSuggested=true para que el ámbar lo señale.
+        let formatName: string | null =
+          (purchaseFormatId && options.find(f => f.id === purchaseFormatId)?.name) ||
+          (purchaseFormatId && existing?.purchaseFormatId === purchaseFormatId ? existing?.formatName : null) ||
+          line.formatName ||
+          (formatQtyInBase !== null ? defaultFormatName(line.packUnit ?? null, base) : null)
+        const suggested = resolved.mapNeedsReview
         const label = (formatQtyInBase !== null && base)
           ? `${(formatName ?? '').trim() || 'Formato'} (${formatBaseQty(formatQtyInBase, base.abbr)})`
           : null

@@ -498,57 +498,6 @@ export async function getItemHomeAreas(
   return map
 }
 
-// Factor de una unidad de empaque (lo que escribe el albarán: "kg", "L", "ud"…)
-// a la base CANÓNICA de su dimensión (peso→g, volumen→ml, unidad→ud).
-// null si la unidad no se reconoce (no se adivina).
-function packUnitToCanonical(
-  packUnit: string | null,
-): { dimension: 'weight' | 'volume' | 'unit'; factor: number } | null {
-  if (!packUnit) return null
-  const u = packUnit.trim().toLowerCase().replace(/\.$/, '')
-  switch (u) {
-    case 'ud': case 'u': case 'uds': case 'unid': case 'unidad': case 'unidades':
-    case 'pieza': case 'piezas': case 'pza': case 'pzas':
-      return { dimension: 'unit', factor: 1 }
-    case 'g': case 'gr': case 'grs': case 'gramo': case 'gramos':
-      return { dimension: 'weight', factor: 1 }
-    case 'kg': case 'kgs': case 'kilo': case 'kilos': case 'kilogramo': case 'kilogramos':
-      return { dimension: 'weight', factor: 1000 }
-    case 'mg':
-      return { dimension: 'weight', factor: 0.001 }
-    case 'ml': case 'mililitro': case 'mililitros': case 'cc':
-      return { dimension: 'volume', factor: 1 }
-    case 'cl': case 'centilitro': case 'centilitros':
-      return { dimension: 'volume', factor: 10 }
-    case 'l': case 'lt': case 'lts': case 'litro': case 'litros':
-      return { dimension: 'volume', factor: 1000 }
-    default:
-      return null
-  }
-}
-
-// PURO (testeable): cuánto vale UN formato en la unidad base del artículo, a
-// partir de la pista del OCR (pack_size + pack_unit) y la unidad base del
-// artículo. Devuelve null si no se puede convertir SIN INVENTAR:
-//   · sin contenido (pack_size null/≤0),
-//   · unidad de empaque desconocida,
-//   · dimensión incompatible (caja de 12 ud contra base en gramos: haría falta
-//     el peso por pieza → la línea queda needs_review y el humano lo teclea).
-export function formatQtyInBaseFromPack(
-  packSize: number | null,
-  packUnit: string | null,
-  base: BaseUnitInfo | null,
-): number | null {
-  if (packSize === null || !Number.isFinite(packSize) || packSize <= 0) return null
-  if (!base) return null
-  const canon = packUnitToCanonical(packUnit)
-  if (!canon) return null
-  if (canon.dimension !== base.dimension) return null   // dimensión incompatible → no inventar
-  const inCanonical = packSize * canon.factor            // valor en g/ml/ud
-  const factor = base.factorToBase > 0 ? base.factorToBase : 1
-  return inCanonical / factor                            // valor en la base del artículo
-}
-
 // ── Recibido acumulado por línea de pedido (para la recepción anti-error) ──
 //
 // Suma qty_received de las recepciones CONFIRMADAS de un pedido, agrupada por
@@ -1542,6 +1491,59 @@ export async function matchReceiptLine(
     matchType: (r.match_type as string) ?? 'fuzzy',
     semaphore: (r.semaphore as 'green' | 'yellow') ?? 'yellow',
   }))
+}
+
+// ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo B — Ley 1 + Ley 4
+// en el servidor. Sustituye el matching de formato hecho hasta ahora en el
+// cliente (parecido de nombre en GoodsReceiptForm, autopick-si-hay-1 en
+// ReceiptWizard): relee la sesión de OCR por raw_text y contrasta contra la
+// ficha del proveedor. Prohibido resolver el formato por otra vía que no sea
+// esta llamada — así lo exige la Ley 1 del encargo.
+export interface ResolvedLineFormat {
+  purchaseFormatId: string | null
+  qtyInBasePerPack: number | null
+  supplierCode: string | null
+  docQty: number | null
+  docAmount: number | null
+  mapSource: 'ocr_ficha_coinciden' | 'ocr' | 'ficha' | 'discrepancia' | 'sin_formato'
+  mapNeedsReview: boolean
+  discrepancyReason: string | null
+  ocrQtyInBase: number | null
+  fichaQtyInBase: number | null
+}
+export async function resolveGoodsReceiptLineFormat(params: {
+  accountId: string
+  aiSessionId: string | null
+  recipeItemId: string | null
+  rawText: string | null
+  supplierId: string | null
+  createdBy?: string | null
+  createdByName?: string | null
+}): Promise<ResolvedLineFormat> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('resolve_goods_receipt_line_format', {
+    p_account_id: params.accountId,
+    p_ai_session_id: params.aiSessionId,
+    p_recipe_item_id: params.recipeItemId,
+    p_raw_text: params.rawText,
+    p_supplier_id: params.supplierId,
+    p_created_by: params.createdBy ?? null,
+    p_created_by_name: params.createdByName ?? null,
+  })
+  if (error) throw new Error(`Error resolviendo el formato: ${error.message}`)
+  const row = (Array.isArray(data) ? data[0] : data) as Row | null
+  return {
+    purchaseFormatId: (row?.purchase_format_id as string | null) ?? null,
+    qtyInBasePerPack: row?.qty_in_base_per_pack != null ? Number(row.qty_in_base_per_pack) : null,
+    supplierCode: (row?.supplier_code as string | null) ?? null,
+    docQty: row?.doc_qty != null ? Number(row.doc_qty) : null,
+    docAmount: row?.doc_amount != null ? Number(row.doc_amount) : null,
+    mapSource: (row?.map_source as ResolvedLineFormat['mapSource']) ?? 'sin_formato',
+    mapNeedsReview: !!row?.map_needs_review,
+    discrepancyReason: (row?.discrepancy_reason as string | null) ?? null,
+    ocrQtyInBase: row?.ocr_qty_in_base != null ? Number(row.ocr_qty_in_base) : null,
+    fichaQtyInBase: row?.ficha_qty_in_base != null ? Number(row.ficha_qty_in_base) : null,
+  }
 }
 
 // Etiqueta legible del tipo de casado, para la UI.

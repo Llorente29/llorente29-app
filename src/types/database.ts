@@ -19531,6 +19531,29 @@ export type Database = {
           reason: string
         }[]
       }
+      resolve_goods_receipt_line_format: {
+        Args: {
+          p_account_id: string
+          p_ai_session_id: string | null
+          p_recipe_item_id: string | null
+          p_raw_text: string | null
+          p_supplier_id: string | null
+          p_created_by?: string | null
+          p_created_by_name?: string | null
+        }
+        Returns: {
+          purchase_format_id: string | null
+          qty_in_base_per_pack: number | null
+          supplier_code: string | null
+          doc_qty: number | null
+          doc_amount: number | null
+          map_source: string
+          map_needs_review: boolean
+          discrepancy_reason: string | null
+          ocr_qty_in_base: number | null
+          ficha_qty_in_base: number | null
+        }[]
+      }
       resolve_mapping_proposals: {
         Args: {
           p_fuzzy_min?: number
