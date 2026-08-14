@@ -23,8 +23,10 @@
 // COMPONENTE PURO: no hace queries, no lee Supabase, no maneja estado propio.
 // Solo lee del context y delega cambios al setter.
 
+import { useEffect } from 'react'
 import { useApp } from '../../../context/AppContext'
 import { useLocationScope } from '../hooks/useLocationScope'
+import { useVisibleLocations } from '../hooks/useVisibleLocations'
 
 interface LocationSelectorProps {
   /** Clases extra que se concatenan al className por defecto. */
@@ -35,10 +37,16 @@ interface LocationSelectorProps {
  * Selector visual del local activo. Pensado para el header de la app.
  * No tiene label visible: el contexto (estar en el header) ya lo explica.
  * Para accesibilidad, usa aria-label.
+ *
+ * ENCARGO CODE (14/08) feat/f0-responsable-de-local, B.4 — un Responsable de
+ * local solo ve SUS locales (manager_locations), nunca "Todos los locales"
+ * (eso implicaría todos los de la cuenta). Si solo gestiona uno, ni se le
+ * pregunta: se selecciona solo.
  */
 export default function LocationSelector({ className = '' }: LocationSelectorProps) {
-  const { locations, cloudEnabled, syncing, lastSync, activeAccountId } = useApp()
+  const { cloudEnabled, syncing, lastSync, activeAccountId } = useApp()
   const { activeLocationId, setActiveLocationId } = useLocationScope()
+  const { visibleLocations, isRestricted, loading: loadingScope } = useVisibleLocations()
 
   const baseClass =
     'border border-border-default rounded-md px-2 py-1 text-xs ' +
@@ -47,25 +55,44 @@ export default function LocationSelector({ className = '' }: LocationSelectorPro
     'max-w-[180px] truncate ' +
     className
 
-  // Locaciones activas, ordenadas alfabéticamente.
+  // Locaciones visibles, ordenadas alfabéticamente.
   // - Si una location tiene active=false, no la mostramos (no es selecionable).
   // - El orden alfabético da estabilidad visual aunque cambie el orden en BBDD.
-  const sortedLocations = [...locations]
+  const sortedLocations = [...visibleLocations]
     .filter((l) => l.active !== false)
     .sort((a, b) => a.name.localeCompare(b.name, 'es'))
 
-  // ¿Estamos aún cargando los locales de la cuenta? Hay cuenta activa y nube,
-  // pero no hay locales todavía y la sync no ha terminado su primer ciclo.
+  // Responsable de local con un único local gestionado: se autoselecciona,
+  // nunca se le deja en "Todos los locales" (que aquí ni existe como opción).
+  useEffect(() => {
+    if (isRestricted && sortedLocations.length === 1 && activeLocationId !== sortedLocations[0].id) {
+      setActiveLocationId(sortedLocations[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRestricted, sortedLocations.length, sortedLocations[0]?.id])
+
+  // ¿Estamos aún cargando los locales? Hay cuenta activa y nube, pero no hay
+  // locales todavía — la sync de cuenta no ha terminado su primer ciclo, o
+  // (Responsable de local) manager_locations aún no ha resuelto.
   const stillLoading =
     cloudEnabled &&
     !!activeAccountId &&
     sortedLocations.length === 0 &&
-    (syncing || lastSync === null)
+    (syncing || lastSync === null || loadingScope)
 
   if (stillLoading) {
     return (
       <select aria-label="Cargando locales" title="Cargando locales" disabled className={baseClass}>
         <option>Cargando locales…</option>
+      </select>
+    )
+  }
+
+  // Responsable de local con un único local: ni se pregunta, se muestra fijo.
+  if (isRestricted && sortedLocations.length === 1) {
+    return (
+      <select aria-label="Local activo" title="Local activo" disabled className={baseClass}>
+        <option>{sortedLocations[0].name}</option>
       </select>
     )
   }
@@ -78,7 +105,9 @@ export default function LocationSelector({ className = '' }: LocationSelectorPro
       onChange={(e) => setActiveLocationId(e.target.value)}
       className={baseClass}
     >
-      <option value="all">Todos los locales</option>
+      {/* B.4 — "el selector de local no ofrece los demás": un Responsable de
+          local nunca ve "Todos los locales" (implicaría toda la cuenta). */}
+      {!isRestricted && <option value="all">Todos los locales</option>}
       {sortedLocations.map((loc) => (
         <option key={loc.id} value={loc.id}>
           {loc.name}

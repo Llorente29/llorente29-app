@@ -33,7 +33,6 @@ interface FolvyClaims {
     role: string;
     profile_id: string;
   }>;
-  permission_set_id: string | null;
   impersonating: boolean;
   real_user_id: string | null;
   session_max_age: number;

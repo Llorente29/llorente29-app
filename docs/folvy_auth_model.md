@@ -8,6 +8,22 @@
 - `folvy_v1_spec.md` (Sesión 1).
 - `CONTEXTO_CLAUDE.md` versión P7-S0+.
 
+> **⚠️ SUPERSEDIDO (14/08/2026):** el diseño de `permission_sets` /
+> `permission_set_assignments` descrito en este documento (plantillas de
+> permisos como tabla) NO se implementó así. `permission_sets` y
+> `permission_set_assignments` eran código muerto (ninguna tabla `manager_*`
+> real coincidía con sus ~40 claves) y se eliminaron el 14/08/2026 en
+> `feat/f0-responsable-de-local`, A.1. Las plantillas de permisos existen
+> como objetos TypeScript (`PERMISSION_TEMPLATES` en
+> `src/modules/multitenancy/services/managerPermissionsService.ts`) que
+> escriben directamente las columnas reales de `manager_permissions` — no
+> una tabla aparte. El asistente "crear gestor" de §6.7 tampoco existe como
+> tal: el alta de un Responsable de local vive en `StaffPage.tsx`
+> (`NewEmployeeModal` y el sub-flujo "Dar acceso a la app"). Detalle completo
+> en `claude/folvy_pendientes_diseno_20260814.md §7.3`. El resto del modelo
+> (roles, RLS, claims JWT base) sigue vigente salvo donde se indique lo
+> contrario.
+
 ---
 
 ## 0. Sobre este documento

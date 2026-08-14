@@ -15,11 +15,21 @@ import {
 } from '../services/userManagementService'
 import { type UserProfileRole as UserRole } from '@/types/multitenancy'
 import ManagerPermissionsModal from '../components/ManagerPermissionsModal'
+import { PERMISSION_TEMPLATES, getPermissions, savePermissions } from '@/modules/multitenancy/services/managerPermissionsService'
 
+// ENCARGO CODE (14/08) feat/f0-responsable-de-local, B.1 — 'manager' se llama
+// "Responsable de local" en toda la interfaz (un hostelero no sabe qué es
+// "manager"). Por debajo sigue siendo user_profiles.role='manager', el CHECK
+// no cambia.
 const ROLE_LABELS: Record<UserRole, string> = {
-  admin: 'Admin',
-  manager: 'Encargado',
+  admin: 'Administrador',
+  manager: 'Responsable de local',
   worker: 'Trabajador',
+}
+const ROLE_HELP: Record<UserRole, string> = {
+  admin: 'Ve y gestiona todos los locales del negocio.',
+  manager: 'Puede gestionar los locales que le asignes. No ve el resto.',
+  worker: 'Solo ve su información personal (horario, vacaciones, fichajes).',
 }
 
 const ROLE_COLORS: Record<UserRole, 'red' | 'amber' | 'gray'> = {
@@ -142,7 +152,7 @@ export default function UsuariosAccesosPage() {
           <p className="text-2xl font-bold text-text-primary">{stats.admins}</p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs text-text-secondary inline-flex items-center gap-1"><Briefcase size={12} /> Encargados</p>
+          <p className="text-xs text-text-secondary inline-flex items-center gap-1"><Briefcase size={12} /> Responsables</p>
           <p className="text-2xl font-bold text-text-primary">{stats.managers}</p>
         </Card>
         <Card className="p-3">
@@ -169,7 +179,7 @@ export default function UsuariosAccesosPage() {
           >
             {f === 'all' ? 'Activos' :
              f === 'admin' ? <><ShieldCheck size={12} /> Admins</> :
-             f === 'manager' ? <><Briefcase size={12} /> Encargados</> :
+             f === 'manager' ? <><Briefcase size={12} /> Responsables</> :
              f === 'worker' ? <><User size={12} /> Trabajadores</> :
              <><Ban size={12} /> Inactivos</>}
           </button>
@@ -271,14 +281,46 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
   const [error, setError] = useState<string | null>(null)
   const [showPermissions, setShowPermissions] = useState(false)
 
+  // ENCARGO CODE (14/08) feat/f0-responsable-de-local, §4.bis — "la creación
+  // del usuario y la aplicación de su plantilla de permisos son un solo
+  // paso, no dos". hasExistingPerms=null mientras se comprueba; una vez
+  // resuelto, si es false (responsable nuevo, o uno viejo que quedó sin
+  // fila por el mismo bug), elegir plantilla es OBLIGATORIO antes de poder
+  // guardar — no queda diferido a "vuelve a abrir este usuario".
+  const [hasExistingPerms, setHasExistingPerms] = useState<boolean | null>(null)
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    if (user.role !== 'manager') { setHasExistingPerms(null); return }
+    getPermissions(user.id)
+      .then(p => { if (!cancelled) setHasExistingPerms(!!p) })
+      .catch(() => { if (!cancelled) setHasExistingPerms(false) })
+    return () => { cancelled = true }
+  }, [user.id, user.role])
+
   function toggleLoc(locId: string) {
     setManagedLocs(prev =>
       prev.includes(locId) ? prev.filter(x => x !== locId) : [...prev, locId]
     )
   }
 
+  // ¿Necesita elegir plantilla ahora? Sí si va a ser (o ya es) responsable de
+  // local y todavía no tiene fila real en manager_permissions.
+  const needsTemplate = role === 'manager' && hasExistingPerms === false
+
   async function handleSave() {
     setError(null)
+
+    if (role === 'manager' && managedLocs.length === 0) {
+      setError('Elige al menos un local, o este usuario no verá nada.')
+      return
+    }
+    if (needsTemplate && !selectedTemplateKey) {
+      setError('Elige una plantilla de permisos, o este responsable no verá nada al entrar.')
+      return
+    }
+
     setSaving(true)
 
     // 1) Cambiar rol si cambió
@@ -301,7 +343,21 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
       }
     }
 
-    // 3) Activar/desactivar si cambió
+    // 3) Aplicar plantilla de permisos — MISMO guardado, no un paso aparte.
+    if (role === 'manager' && selectedTemplateKey) {
+      const template = PERMISSION_TEMPLATES.find(t => t.key === selectedTemplateKey)
+      if (template) {
+        try {
+          await savePermissions({ userProfileId: user.id, ...template.values })
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Error al aplicar la plantilla de permisos')
+          setSaving(false)
+          return
+        }
+      }
+    }
+
+    // 4) Activar/desactivar si cambió
     if (active !== user.active) {
       const r = await setUserActive(user.id, active, user.role, isCurrentUser)
       if (!r.ok) {
@@ -357,18 +413,14 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
             disabled={isAdminUser}
           >
             <option value="worker">Trabajador</option>
-            <option value="manager">Encargado</option>
-            {role === 'admin' && <option value="admin">Admin</option>}
+            <option value="manager">Responsable de local</option>
+            {role === 'admin' && <option value="admin">Administrador</option>}
           </Select>
           {role === 'manager' && (
-            <p className="text-[11px] text-text-secondary mt-1">
-              El encargado gestionará los locales que selecciones abajo.
-            </p>
+            <p className="text-[11px] text-text-secondary mt-1">{ROLE_HELP.manager}</p>
           )}
           {role === 'worker' && (
-            <p className="text-[11px] text-text-secondary mt-1">
-              El trabajador solo verá su información personal (horario, vacaciones, fichajes).
-            </p>
+            <p className="text-[11px] text-text-secondary mt-1">{ROLE_HELP.worker}</p>
           )}
         </div>
 
@@ -393,15 +445,52 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
               ))}
             </div>
             {managedLocs.length === 0 && (
-              <p className="text-[11px] text-warning mt-1 inline-flex items-center gap-1">
-                <AlertTriangle size={11} /> Un encargado sin locales asignados no podrá ver datos.
+              <p className="text-[11px] text-danger mt-1 inline-flex items-center gap-1">
+                <AlertTriangle size={11} /> Elige al menos un local, o este usuario no verá nada.
               </p>
             )}
           </div>
         )}
 
-        {/* Permisos del manager (botón que abre modal aparte) */}
-        {role === 'manager' && user.role === 'manager' && (
+        {/* Plantilla de permisos — ENCARGO CODE (14/08) §4.bis: obligatoria si
+            todavía no tiene fila real en manager_permissions (responsable
+            nuevo, o uno viejo roto por el mismo motivo). Mismo guardado que
+            el rol y los locales, no un "vuelve a abrir esto luego". */}
+        {role === 'manager' && needsTemplate && (
+          <div>
+            <Label>Plantilla de permisos</Label>
+            <div className="space-y-1.5 mt-1">
+              {PERMISSION_TEMPLATES.map(t => (
+                <label
+                  key={t.key}
+                  className={`flex items-start gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm transition-base ${
+                    selectedTemplateKey === t.key ? 'border-accent bg-accent-bg' : 'border-border-default hover:border-accent'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="permissionTemplate"
+                    checked={selectedTemplateKey === t.key}
+                    onChange={() => setSelectedTemplateKey(t.key)}
+                    className="mt-1 accent-accent"
+                  />
+                  <span>
+                    <span className="block font-medium text-text-primary">{t.label}</span>
+                    <span className="block text-[11px] text-text-secondary">{t.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-text-secondary mt-1">
+              Es un punto de partida: tras guardar puedes ajustar casilla a casilla en "Configurar permisos individuales".
+            </p>
+          </div>
+        )}
+
+        {/* Permisos del manager (botón que abre modal aparte, siempre disponible
+            para afinar — ya sea recién aplicada la plantilla o un responsable
+            existente que ya tenía sus permisos configurados). */}
+        {role === 'manager' && hasExistingPerms === true && (
           <div>
             <Label>Pantallas que puede ver</Label>
             <button
@@ -412,14 +501,9 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
               <ChevronRight size={16} className="text-text-secondary" />
             </button>
             <p className="text-[11px] text-text-secondary mt-1">
-              Define qué módulos podrá ver este encargado al entrar.
+              Define qué módulos podrá ver este responsable al entrar.
             </p>
           </div>
-        )}
-        {role === 'manager' && user.role !== 'manager' && (
-          <Alert type="info">
-            Tras guardar el cambio de rol, vuelve a abrir este usuario para configurar sus permisos.
-          </Alert>
         )}
 
         {/* Activo / Inactivo */}
@@ -460,7 +544,10 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving || isAdminUser}>
+          <Button
+            onClick={handleSave}
+            disabled={saving || isAdminUser || (role === 'manager' && (managedLocs.length === 0 || (needsTemplate && !selectedTemplateKey)))}
+          >
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </Button>
         </div>
@@ -470,7 +557,7 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
       {showPermissions && (
         <ManagerPermissionsModal
           userProfileId={user.id}
-          userName={user.displayName || user.employeeName || 'Encargado'}
+          userName={user.displayName || user.employeeName || 'Responsable de local'}
           onClose={() => setShowPermissions(false)}
         />
       )}

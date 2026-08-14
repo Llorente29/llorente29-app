@@ -136,7 +136,7 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
   }
 
   async function handleReset() {
-    if (!confirm('¿Restaurar permisos por defecto para este encargado?')) return
+    if (!confirm('¿Restaurar permisos por defecto para este responsable de local?')) return
     setSaving(true)
     setError(null)
     try {
@@ -157,7 +157,7 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
     <Modal open onClose={onClose} title={`Permisos de ${userName}`} size="lg">
       <div className="space-y-4">
         <p className="text-sm text-text-secondary inline-flex items-center gap-1.5">
-          Marca las pantallas que el encargado podrá ver. Las sensibles están marcadas con
+          Marca las pantallas que el responsable de local podrá ver. Las sensibles están marcadas con
           <AlertTriangle size={12} className="text-warning" />.
         </p>
 

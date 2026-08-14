@@ -102,6 +102,118 @@ export function defaultPermissions(): typeof DEFAULT_PERMISSIONS {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Plantillas de permisos (ENCARGO CODE 14/08, feat/f0-responsable-de-local,
+// B.3) — sustituyen a la tabla `permission_sets` (eliminada, A.1: código
+// muerto que declaraba ~40 claves que no eran columna real). Un objeto
+// TypeScript, no una tabla: si una plantilla se equivoca de clave, el
+// `Omit<..., 'userProfileId'|'createdAt'|'updatedAt'>` de abajo NO COMPILA
+// — no puede inventarse un permiso que no existe. Aplicar una plantilla
+// escribe las 31 columnas reales de manager_permissions vía savePermissions;
+// las casillas siguen siendo editables una a una después (no es una jaula).
+//
+// Valores aprobados por Julio (14/08). show_salaries y show_informes_personal
+// (gatea Nóminas, tan sensible como salarios) en false en las dos. Plantilla
+// "Solo lectura" retirada por decisión de Julio: el modelo solo gatea
+// visibilidad de pantalla, no acciones dentro de ella, y el nombre prometía
+// algo que el sistema de permisos no puede garantizar todavía.
+// No hay claves de Supply/Almacén/Recepción en manager_permissions: ese
+// módulo no está gateado por esta tabla hoy (cualquier manager/admin ya lo ve
+// por rol, sin mirar ninguna columna — ver ENCARGO CODE 14/08 "claves de
+// Supply", rama aparte). "Oficina" solo puede tocar los toggles que sí
+// existen (inventario, ventas, zonas de pedido, fichas técnicas).
+type PermissionTemplateValues = Omit<ManagerPermissions, 'userProfileId' | 'createdAt' | 'updatedAt'>
+
+export interface PermissionTemplate {
+  key: 'responsable_de_local' | 'oficina'
+  label: string
+  description: string
+  values: PermissionTemplateValues
+}
+
+export const PERMISSION_TEMPLATES: readonly PermissionTemplate[] = [
+  {
+    key: 'responsable_de_local',
+    label: 'Responsable de local',
+    description: 'Operativa diaria de su local: fichajes, cuadrante, tareas, incidencias, inventario. Sin salarios, sin configuración de cuenta.',
+    values: {
+      showDashboard: true, showStaff: true, showAhoraMismo: true,
+      showFichajesGlobal: true, showKioskoFichaje: true, showSolicitudesPendientes: true,
+      showTurnosAbiertos: true, showCambiosPendientes: true, showCalendario: true,
+      showPlantillaTurnos: true, showInformesPersonal: false, showBolsaHoras: true,
+      showTasks: true, showScheduled: true, showTemplates: false,
+      showIncidents: true, showAudits: true, showHistory: true,
+      showTspoon: false, showVentasAnalisis: false, showPrediccionPersonal: false,
+      showZonasPedido: false, showInventory: true, showLocations: false,
+      showTspoonSettings: false, showSalaries: false,
+      canManageEmployees: false, canEditSchedule: true, canApproveVacations: true,
+      showAppccToday: true, showAppccIncidents: true,
+    },
+  },
+  {
+    key: 'oficina',
+    label: 'Oficina',
+    description: 'Recepción, almacén, informes, análisis de ventas. Sin gestión de personal.',
+    values: {
+      showDashboard: true, showStaff: false, showAhoraMismo: false,
+      showFichajesGlobal: false, showKioskoFichaje: false, showSolicitudesPendientes: false,
+      showTurnosAbiertos: false, showCambiosPendientes: false, showCalendario: false,
+      showPlantillaTurnos: false, showInformesPersonal: false, showBolsaHoras: false,
+      showTasks: false, showScheduled: false, showTemplates: false,
+      showIncidents: false, showAudits: false, showHistory: false,
+      showTspoon: true, showVentasAnalisis: true, showPrediccionPersonal: false,
+      showZonasPedido: true, showInventory: true, showLocations: false,
+      showTspoonSettings: false, showSalaries: false,
+      canManageEmployees: false, canEditSchedule: false, canApproveVacations: false,
+      showAppccToday: false, showAppccIncidents: false,
+    },
+  },
+] as const
+
+/**
+ * Convierte los valores de una plantilla (camelCase, tipo cliente) a las
+ * columnas reales de manager_permissions (snake_case) — lo que espera la
+ * Edge Function `manage-employee` para escribirlas en el alta atómica de un
+ * responsable de local (§4.bis: mismo paso que crear el usuario, no uno
+ * aparte). Mismo mapeo campo a campo que managerPermissionsToInsertRow, sin
+ * el envoltorio de user_profile_id (el server lo añade él mismo al insertar).
+ */
+export function permissionTemplateValuesToRow(values: PermissionTemplateValues): Record<string, boolean> {
+  return {
+    show_dashboard: values.showDashboard,
+    show_staff: values.showStaff,
+    show_ahora_mismo: values.showAhoraMismo,
+    show_fichajes_global: values.showFichajesGlobal,
+    show_kiosko_fichaje: values.showKioskoFichaje,
+    show_solicitudes_pendientes: values.showSolicitudesPendientes,
+    show_turnos_abiertos: values.showTurnosAbiertos,
+    show_cambios_pendientes: values.showCambiosPendientes,
+    show_calendario: values.showCalendario,
+    show_plantilla_turnos: values.showPlantillaTurnos,
+    show_informes_personal: values.showInformesPersonal,
+    show_bolsa_horas: values.showBolsaHoras,
+    show_tasks: values.showTasks,
+    show_scheduled: values.showScheduled,
+    show_templates: values.showTemplates,
+    show_incidents: values.showIncidents,
+    show_audits: values.showAudits,
+    show_history: values.showHistory,
+    show_tspoon: values.showTspoon,
+    show_ventas_analisis: values.showVentasAnalisis,
+    show_prediccion_personal: values.showPrediccionPersonal,
+    show_zonas_pedido: values.showZonasPedido,
+    show_inventory: values.showInventory,
+    show_locations: values.showLocations,
+    show_tspoon_settings: values.showTspoonSettings,
+    show_salaries: values.showSalaries,
+    can_manage_employees: values.canManageEmployees,
+    can_edit_schedule: values.canEditSchedule,
+    can_approve_vacations: values.canApproveVacations,
+    show_appcc_today: values.showAppccToday,
+    show_appcc_incidents: values.showAppccIncidents,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Mappers (BBDD snake_case ↔ dominio camelCase)
 // ─────────────────────────────────────────────────────────────────────
 

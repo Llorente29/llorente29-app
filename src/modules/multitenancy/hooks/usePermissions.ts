@@ -8,15 +8,19 @@
 //
 // FUENTE DE LOS PERMISOS:
 //   AppContext carga `permissions` desde el RPC `get_effective_permissions`
-//   (server-side, cascada admin → permission_set asignado → DENY). El RPC
-//   devuelve un diccionario plano `{ <snake_case_key>: boolean }`. Para
-//   admins incluye el marcador especial `{ __full_access: true }`; para
-//   usuarios sin set asignado devuelve `{}` (fail-closed).
+//   (server-side). El RPC devuelve la fila de `manager_permissions` del
+//   user_profile tal cual, como jsonb `{ <snake_case_column>: boolean }`
+//   (ENCARGO CODE 14/08, f0-responsable-de-local: get_effective_permissions
+//   ya NO pasa por permission_sets/permission_set_assignments — esas tablas
+//   se eliminaron por ser código muerto que nadie leía. Antes de esta nota
+//   el comentario describía ese diseño viejo; el RPC en sí llevaba tiempo
+//   sin usarlo). Para admins incluye el marcador especial
+//   `{ __full_access: true }`; para un manager sin fila en
+//   manager_permissions devuelve `{}` (fail-closed).
 //
-//   Las claves son las definidas en `permission_sets` (snake_case en BBDD),
-//   NO los campos camelCase de la antigua tabla `manager_permissions`. Los
-//   callers que migren desde la API legacy deben adaptar el nombre de la
-//   clave (e.g. 'showSalaries' → 'show_salaries').
+//   Las claves son las columnas reales de `manager_permissions` en
+//   snake_case (e.g. 'showSalaries' en camelCase del cliente → 'show_salaries'
+//   como clave de este diccionario).
 //
 // REGLA DE PERMISOS (alineada con AppContext y BBDD):
 //   - admin de cuenta (roleInActiveAccount === 'admin') → ve todo dentro
