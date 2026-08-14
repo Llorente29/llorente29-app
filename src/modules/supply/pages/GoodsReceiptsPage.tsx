@@ -19,7 +19,7 @@
 // El aviso (flash) se auto-cierra a los segundos (no obliga a teclear).
 
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, PackageCheck, PackagePlus, AlertTriangle, Search, Loader2, Eye, RotateCcw, PencilLine, ScanLine, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
@@ -81,6 +81,14 @@ export default function GoodsReceiptsPage() {
   const isMobile = useIsMobile()
   const location = useLocation()
   const navigate = useNavigate()
+  // ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §0.2 — filtro real
+  // desde /pendientes (antes el botón navegaba aquí y dejaba la lista
+  // completa sin filtrar, prometiendo algo que no cumplía). ?estado=
+  //   recibido            → recepcion_esperando_oficina
+  //   confirmado_revision → albaran_genero_sin_casar (confirmado + needsReview)
+  //   borrador            → albaran_borrador_atascado
+  const [searchParams] = useSearchParams()
+  const estadoFiltro = searchParams.get('estado')
 
   const [receipts, setReceipts] = useState<GoodsReceipt[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -246,7 +254,7 @@ export default function GoodsReceiptsPage() {
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const base = q === ''
+    let base = q === ''
       ? receipts
       : receipts.filter(r => {
           const code = (r.code ?? '').toLowerCase()
@@ -254,6 +262,13 @@ export default function GoodsReceiptsPage() {
           const doc = (r.supplierDocNumber ?? '').toLowerCase()
           return code.includes(q) || sup.includes(q) || doc.includes(q)
         })
+    if (estadoFiltro === 'recibido') {
+      base = base.filter(r => r.status === 'recibido')
+    } else if (estadoFiltro === 'confirmado_revision') {
+      base = base.filter(r => r.status === 'confirmado' && r.needsReview)
+    } else if (estadoFiltro === 'borrador') {
+      base = base.filter(r => r.status === 'borrador')
+    }
     // Lo accionable primero: BORRADORES y RECIBIDO arriba (esperan acción —
     // confirmar o revisar), luego CONFIRMADO/ANULADO (histórico); dentro de
     // cada grupo, por fecha de recepción descendente (lo reciente antes). Así
@@ -269,7 +284,7 @@ export default function GoodsReceiptsPage() {
       if (dr !== 0) return dr
       return (b.receiptDate ?? '').localeCompare(a.receiptDate ?? '')
     })
-  }, [receipts, search, supplierNameById])
+  }, [receipts, search, supplierNameById, estadoFiltro])
 
   // ENCARGO CODE (14/08) fix/recepcion-lista-recibido, §2.2 — contador visible:
   // es lo único que espera acción de la oficina (lo confirmado es histórico).
@@ -623,6 +638,15 @@ export default function GoodsReceiptsPage() {
       )}
       {error && (
         <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>
+      )}
+
+      {estadoFiltro && (
+        <div className="flex items-center gap-2 text-sm text-text-secondary">
+          <span>Filtrado desde Pendientes.</span>
+          <button type="button" onClick={() => navigate('/supply/recepciones')} className="text-accent hover:underline">
+            Quitar filtro
+          </button>
+        </div>
       )}
 
       {!loading && !error && receipts.length > 0 && (

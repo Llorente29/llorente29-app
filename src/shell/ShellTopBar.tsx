@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, MapPin, Settings, Shield, LogOut, User, Building2, ChevronDown } from 'lucide-react'
+import { Home, Inbox, MapPin, Settings, Shield, LogOut, User, Building2, ChevronDown } from 'lucide-react'
 import { getOrderedModules } from './moduleRegistry'
 import { useIsMobile } from './useIsMobile'
 import { isMobileOverflowModule } from './shellMobileNav'
@@ -28,6 +28,9 @@ import type { UserProfileRole, Account } from '@/types/multitenancy'
 
 // Clave especial del Home general (no es un módulo, es del Shell).
 export const HOME_KEY = '__home__'
+// ENCARGO CODE (14/08) Pendientes Fase 1, B.1 — pestaña permanente del Shell,
+// no un módulo del registry (misma clase que HOME_KEY).
+export const PENDIENTES_KEY = 'pendientes'
 
 // Marca nueva: barra clara, acento de acción en tinta, punto de margen verde.
 const INK = '#15171A'        // texto/estructura, pestaña activa, avatar
@@ -57,6 +60,8 @@ interface ShellTopBarProps {
   accounts?: Account[]
   /** Cambia la cuenta activa y va al inicio. Solo se cablea para platform admin. */
   onSwitchAccount?: (accountId: string) => void
+  /** Suma ahora+semana de pending_board (ENCARGO CODE 14/08). 0 = sin badge. */
+  pendingCount?: number
 }
 
 /**
@@ -88,6 +93,7 @@ export default function ShellTopBar({
   activeAccount = null,
   accounts = [],
   onSwitchAccount,
+  pendingCount = 0,
 }: ShellTopBarProps) {
   const modules = getOrderedModules()
   const navigate = useNavigate()
@@ -172,6 +178,13 @@ export default function ShellTopBar({
             icon={<Home size={18} />}
             active={activeKey === HOME_KEY}
             onClick={() => onSelect(HOME_KEY)}
+          />
+          <TabButton
+            label="Pendientes"
+            icon={<Inbox size={18} />}
+            active={activeKey === PENDIENTES_KEY}
+            onClick={() => onSelect(PENDIENTES_KEY)}
+            badge={pendingCount}
           />
           {visibleModules.map(m => {
             const Icon = m.icon
@@ -342,12 +355,13 @@ export default function ShellTopBar({
 
 // ─── Botón de pestaña del TopBar ───────────────────────────────────────────
 function TabButton({
-  label, icon, active, onClick,
+  label, icon, active, onClick, badge,
 }: {
   label: string
   icon: React.ReactNode
   active: boolean
   onClick: () => void
+  badge?: number
 }) {
   return (
     <button
@@ -366,6 +380,19 @@ function TabButton({
     >
       {icon}
       {label}
+      {!!badge && badge > 0 && (
+        <span
+          aria-label={`${badge} pendientes`}
+          className="inline-flex items-center justify-center rounded-full"
+          style={{
+            minWidth: 18, height: 18, padding: '0 4px',
+            background: '#E0492E', color: '#fff',
+            fontSize: 11, fontWeight: 700, lineHeight: '18px',
+          }}
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </button>
   )
 }

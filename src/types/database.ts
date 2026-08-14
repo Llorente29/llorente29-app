@@ -17953,6 +17953,17 @@ export type Database = {
         Returns: Json
       }
       disablelongtransactions: { Args: never; Returns: string }
+      dismiss_pending: {
+        Args: {
+          p_account_id: string
+          p_pending_kind: string
+          p_location_id: string
+          p_action: string
+          p_preset?: string
+          p_reason?: string
+        }
+        Returns: undefined
+      }
       dispatch_watchdog_scan: {
         Args: { p_grace_minutes?: number }
         Returns: number
@@ -18928,6 +18939,19 @@ export type Database = {
       }
       orders_feed: { Args: { p_location_id: string }; Returns: Json }
       orders_feed_by_token: { Args: { p_device_token: string }; Returns: Json }
+      pending_board: {
+        Args: { p_account_id: string }
+        Returns: {
+          pending_kind: string
+          layer: string
+          area: string
+          location_id: string
+          location_name: string
+          items: number
+          detail: Json
+          sort_weight: number
+        }[]
+      }
       pick_social_copy: {
         Args: { p_account_id?: string; p_pillar: string }
         Returns: string
