@@ -443,6 +443,13 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
         const unitCost = resolved && totalN != null && l.qty > 0 ? totalN / l.qty : null
         const format = l.formats.find(f => f.id === l.purchaseFormatId)
         const qtyInBase = resolved ? qtyInBaseFromFormat(l.qty, format?.qtyInBase ?? null) : null
+        // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, A.4 — un casado
+        // por parecido (fuzzy/amarillo) o sin resolver mete género al almacén
+        // sin levantar la mano: flaggedForOffice tiene que ser true siempre
+        // que mapNeedsReview lo sea, no solo cuando el operador marcó "no lo
+        // tengo claro" (l.flagged) a mano. Caso real: ALB-00113, Fanta Naranja
+        // casó por fuzzy y quedó flagged_for_office=false.
+        const mapNeedsReview = !resolved || l.matchSemaphore === 'yellow'
         await createGoodsReceiptLine({
           accountId,
           goodsReceiptId: receipt.id,
@@ -459,8 +466,8 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
           docQty: l.albaranQty,
           docAmount: l.albaranLineAmount,
           mapSource: l.recipeItemId ? (l.matchType ?? 'manual') : 'unmapped',
-          mapNeedsReview: !resolved || l.matchSemaphore === 'yellow',
-          flaggedForOffice: l.flagged,
+          mapNeedsReview,
+          flaggedForOffice: l.flagged || mapNeedsReview,
           position: position++,
         })
       }
