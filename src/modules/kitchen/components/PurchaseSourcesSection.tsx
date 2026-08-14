@@ -42,6 +42,8 @@ import {
   updateArticleSupplier,
   createPurchaseFormat,
   updatePurchaseFormat,
+  purchaseFormatHasStockMovements,
+  archiveAndReplacePurchaseFormat,
   setPreferredSupplier,
   unlinkSupplierFormat,
   reactivateSupplierLink,
@@ -914,8 +916,23 @@ function SourceRow({
         if (fmtQtyInBase === null || !(fmtQtyInBase > 0)) { setFmtError('Indica cuánto trae ese formato.'); return }
         setSavingFmt(true)
         if (format) {
-          await updatePurchaseFormat(format.id, { name, qtyInBase: fmtQtyInBase })
-          await updateArticleSupplier(link.id, { purchaseFormatId: format.id })
+          // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo C —
+          // Ley 3: un formato con movimientos de stock no se edita, se
+          // archiva y se sustituye. El trigger de la base
+          // (trg_recipe_item_purchase_format_immutable) es la defensa real;
+          // esta comprobación evita el viaje de ida y vuelta con el error de
+          // la base cuando el contenido realmente cambió.
+          const contentChanged = fmtQtyInBase !== format.qtyInBase
+          const locked = contentChanged && await purchaseFormatHasStockMovements(format.id)
+          if (locked) {
+            await archiveAndReplacePurchaseFormat({
+              accountId, itemId, oldFormatId: format.id, name, qtyInBase: fmtQtyInBase,
+              articleSupplierId: link.id, createdBy: actorId, createdByName: actorName,
+            })
+          } else {
+            await updatePurchaseFormat(format.id, { name, qtyInBase: fmtQtyInBase })
+            await updateArticleSupplier(link.id, { purchaseFormatId: format.id })
+          }
         } else {
           const created = await createPurchaseFormat({
             accountId, itemId, name, qtyInBase: fmtQtyInBase,

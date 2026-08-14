@@ -22,11 +22,16 @@ import {
   updateGoodsReceiptLine,
   confirmReceipt,
   matchReceiptLine,
+  getGoodsReceiptCostWarnings,
+  ackGoodsReceiptCostWarning,
+  getGoodsReceiptFractionalWarnings,
   OFFICE_QTY_REASON_PREFIX,
   OFFICE_QTY_REASONS,
   type GoodsReceipt,
   type GoodsReceiptLine,
   type LineMatchCandidate,
+  type CostWarning,
+  type FractionalWarning,
 } from '@/modules/supply/services/goodsReceiptService'
 import { getSupplierCatalog, listSupplyLocations, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
 import { listSuppliers, createPurchaseFormat } from '@/modules/kitchen/services/purchaseFormatService'
@@ -123,6 +128,14 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   const [saving, setSaving] = useState(false)
   const [closedPeriodNote, setClosedPeriodNote] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 — aviso
+  // bloqueante-suave de coste fuera de rango. null = aún no comprobado;
+  // [] = comprobado y sin avisos; costWarningsAcked = el trabajador ya
+  // pulsó "es correcto, continuar" en ESTA sesión de pantalla.
+  const [costWarnings, setCostWarnings] = useState<CostWarning[] | null>(null)
+  const [costWarningsAcked, setCostWarningsAcked] = useState(false)
+  // Tramo D.3 — cantidades fraccionadas en artículos por unidades.
+  const [fractionalWarnings, setFractionalWarnings] = useState<FractionalWarning[] | null>(null)
 
   // ── Carga ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -249,7 +262,10 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
 
   async function persistLineResolution(
     line: GoodsReceiptLine,
-    args: { recipeItemId: string | null; purchaseFormatId: string | null; qtyReceived: number; unitCost: number | null; mapSource: string | null },
+    args: {
+      recipeItemId: string | null; purchaseFormatId: string | null; qtyReceived: number; unitCost: number | null
+      mapSource: string | null; needsReview?: boolean; discrepancyReason?: string | null
+    },
   ) {
     setSaving(true); setError(null)
     try {
@@ -258,14 +274,14 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         purchaseFormatId: args.purchaseFormatId,
         qtyReceived: args.qtyReceived,
         unitCost: args.unitCost,
-        discrepancyReason: line.discrepancyReason,
+        discrepancyReason: args.discrepancyReason ?? line.discrepancyReason,
         notGoods: false,
         notGoodsKind: null,
       })
       await updateGoodsReceiptLine(line.id, {
         mapSource: args.mapSource,
-        mapNeedsReview: false,
-        flaggedForOffice: false,
+        mapNeedsReview: args.needsReview ?? false,
+        flaggedForOffice: args.needsReview ?? false,
       })
       if (res.closedPeriodNote) setClosedPeriodNote(res.closedPeriodNote)
       setReloadTick(t => t + 1)
@@ -281,11 +297,56 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     setPickerLineId(null)
     if (!line) return
     const { formatId, qtyInBaseFactor } = await resolveFormatForItem(recipeItemId)
-    const qty = line.qtyReceived > 0 ? line.qtyReceived : (line.docQty ?? 1)
-    const unitCost = qtyInBaseFactor && line.docAmount != null ? line.docAmount / qty : (line.unitCost ?? null)
+    // ENCARGO CODE (15/08) — Ley 1 y Ley 2 se mueven juntas: si el formato
+    // cambia (típico al corregir una línea cuya ficha estaba mal — Carne de
+    // Birria/Pollo Mechado del ALB-00115, Bolsa 2 kg → Caja 6 kg), la
+    // cantidad recibida NO puede heredarse del formato VIEJO. Orden de
+    // prioridad (Julio, 15/08):
+    //   1) doc_qty si existe — lo dice el papel.
+    //   2) si no, CONSERVAR EL TOTAL: la mercancía que entró no cambia
+    //      porque cambiemos cómo la describimos — qty_nueva =
+    //      qty_in_base_vieja / factor_nuevo, y el coste se reescala igual
+    //      (unit_cost_nuevo = unit_cost_viejo × qty_vieja / qty_nueva) para
+    //      que el importe total tampoco se mueva.
+    //   3) si esa división no da un número limpio, NO SE ADIVINA (mismo
+    //      criterio que NO_RESUELTO en el intérprete): se guarda el total
+    //      preservado tal cual (sin redondear — el total sigue intacto) y
+    //      la línea queda marcada para que la mire un humano, con el
+    //      motivo explícito.
+    const formatChanged = formatId !== line.purchaseFormatId
+    let qty: number
+    let unitCost: number | null
+    let needsReview = false
+    let discrepancyReason: string | null = line.discrepancyReason
+
+    if (!formatChanged) {
+      qty = line.qtyReceived > 0 ? line.qtyReceived : (line.docQty ?? 1)
+      unitCost = qtyInBaseFactor && line.docAmount != null ? line.docAmount / qty : (line.unitCost ?? null)
+    } else if (line.docQty != null && line.docQty > 0) {
+      qty = line.docQty
+      unitCost = qtyInBaseFactor && line.docAmount != null
+        ? line.docAmount / qty
+        : (line.unitCost != null && line.qtyReceived > 0 ? line.unitCost * line.qtyReceived / qty : (line.unitCost ?? null))
+    } else if (qtyInBaseFactor && line.qtyInBase != null && line.qtyInBase > 0) {
+      const rawQty = line.qtyInBase / qtyInBaseFactor
+      const rounded = Math.round(rawQty)
+      const clean = rounded > 0 && Math.abs(rawQty - rounded) < 0.02
+      qty = clean ? rounded : rawQty
+      unitCost = line.unitCost != null && line.qtyReceived > 0 ? line.unitCost * line.qtyReceived / qty : (line.unitCost ?? null)
+      if (!clean) {
+        needsReview = true
+        discrepancyReason = `Formato cambiado sin dato del papel: ${line.qtyInBase} en base ÷ ${qtyInBaseFactor} = ${rawQty.toFixed(3)}, no es un número limpio. Revisa a mano.`
+      }
+    } else {
+      qty = line.qtyReceived > 0 ? line.qtyReceived : 1
+      unitCost = line.unitCost ?? null
+      needsReview = true
+      discrepancyReason = 'Formato cambiado sin poder recalcular la cantidad (sin doc_qty ni total anterior). Revisa a mano.'
+    }
+
     await persistLineResolution(line, {
       recipeItemId, purchaseFormatId: formatId, qtyReceived: qty, unitCost,
-      mapSource: matchType ?? 'manual',
+      mapSource: matchType ?? 'manual', needsReview, discrepancyReason,
     })
   }
 
@@ -370,10 +431,47 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   }
 
   // ── Cierre ───────────────────────────────────────────────────────────
+  // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1/D.3 —
+  // antes de confirmar, comprueba coste fuera de rango (mediana del
+  // artículo) y cantidades fraccionadas en artículos por unidades. Con
+  // avisos y sin confirmar aún ⇒ los enseña y para (bloqueante-suave); "es
+  // correcto, continuar" registra quién y cuándo aceptó el de coste
+  // (ackGoodsReceiptCostWarning — D.3 no lo pide) y entonces sí cierra.
   async function handleClose() {
     if (!receipt || !allDecided) return
     setSaving(true); setError(null)
     try {
+      if (!costWarningsAcked) {
+        const [cost, fractional] = await Promise.all([
+          getGoodsReceiptCostWarnings(accountId, receipt.id),
+          getGoodsReceiptFractionalWarnings(accountId, receipt.id),
+        ])
+        if (cost.length > 0 || fractional.length > 0) {
+          setCostWarnings(cost)
+          setFractionalWarnings(fractional)
+          setSaving(false)
+          return
+        }
+      }
+      await confirmReceipt(receipt.id)
+      onSaved(`Recepción ${receipt.code ?? ''} verificada y cerrada.`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo cerrar el albarán.')
+      setSaving(false)
+    }
+  }
+  // "Es correcto, continuar" de los avisos: registra el de coste (quién y
+  // cuándo) y cierra directamente (no delega a handleClose —
+  // costWarningsAcked no estaría actualizado todavía dentro de este mismo
+  // evento).
+  async function acceptWarningsAndClose() {
+    if (!receipt) return
+    setCostWarnings(null)
+    setFractionalWarnings(null)
+    setCostWarningsAcked(true)
+    setSaving(true); setError(null)
+    try {
+      await ackGoodsReceiptCostWarning(accountId, receipt.id)
       await confirmReceipt(receipt.id)
       onSaved(`Recepción ${receipt.code ?? ''} verificada y cerrada.`)
     } catch (err: unknown) {
@@ -486,6 +584,51 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
           )
         })}
       </div>
+
+      {/* ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1/D.3 —
+          aviso bloqueante-suave: coste fuera de rango y/o cantidad
+          fraccionada en un artículo por unidades. No impide cerrar, pero
+          exige un clic explícito (el de coste, además, queda registrado). */}
+      {((costWarnings && costWarnings.length > 0) || (fractionalWarnings && fractionalWarnings.length > 0)) && (
+        <div className="rounded-lg border border-warning bg-page p-4 space-y-3">
+          {costWarnings && costWarnings.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                {costWarnings.length === 1 ? 'Una línea' : `${costWarnings.length} líneas`} con un coste que no cuadra con lo habitual:
+              </p>
+              <ul className="space-y-1 mt-1">
+                {costWarnings.map(w => (
+                  <li key={w.lineId} className="text-sm text-text-secondary">
+                    <span className="text-text-primary font-medium">{w.productName}</span>: suele entrar a {fmtMoney(w.medianCostPerBase)}/base
+                    y esta línea sale a {fmtMoney(w.unitCostPerBase)}/base ({w.ratio}×). Revisa cantidad y formato.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {fractionalWarnings && fractionalWarnings.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                {fractionalWarnings.length === 1 ? 'Una línea' : `${fractionalWarnings.length} líneas`} con cantidad fraccionada:
+              </p>
+              <ul className="space-y-1 mt-1">
+                {fractionalWarnings.map(w => (
+                  <li key={w.lineId} className="text-sm text-text-secondary">
+                    <span className="text-text-primary font-medium">{w.productName}</span>: {w.qtyReceived.toLocaleString('es-ES', { maximumFractionDigits: 2 })} {w.formatName ?? 'formato'}.
+                    Si el paquete real es más pequeño, el formato está mal — no lo compenses con la cantidad.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <button type="button" onClick={acceptWarningsAndClose} disabled={saving}
+              className="px-4 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
+              Es correcto, continuar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ══ PIE ══ */}
       <div className="bg-card border border-border-default rounded-lg px-5 py-4 flex items-center justify-between gap-4 flex-wrap">

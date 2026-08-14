@@ -61,6 +61,7 @@ import {
   getSupplierFormatPrices,
   priceAlertFor,
   qtyInBaseFromFormat,
+  resolveGoodsReceiptLineFormat,
   type LineMatchCandidate,
   type BaseUnitInfo,
 } from '@/modules/supply/services/goodsReceiptService'
@@ -81,6 +82,14 @@ interface WizardLine {
   manual: boolean               // añadida a mano ("Añadir artículo"), no viene del OCR
   rawText: string
   supplierCode: string | null
+  // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo B — pista de
+  // formato que la sesión de OCR ya trae y que antes se descartaba aquí sin
+  // leerla (Fallo A del encargo). No se usan directamente: se le pasan al
+  // servidor (resolveGoodsReceiptLineFormat), que las relee de la sesión por
+  // raw_text de todos modos — se guardan solo para saber si hay algo que
+  // resolver antes de llamar.
+  packSize: number | null
+  packUnit: string | null
   albaranQty: number | null
   albaranPackages: number | null // columna de bultos/cajas del albarán, si la trae — manda sobre la división
   albaranUnit: string | null
@@ -100,6 +109,14 @@ interface WizardLine {
   formats: PurchaseFormat[]
   formatsLoading: boolean
   purchaseFormatId: string | null
+
+  // Ley 1 (servidor): resultado de resolveGoodsReceiptLineFormat. mapSource
+  // null mientras no se ha resuelto (o el artículo aún no casó). Si discrepan
+  // OCR y ficha, purchaseFormatId se queda sin poner y discrepancyReason trae
+  // el texto con las dos cifras — decide el humano, nunca gana ninguna sola.
+  mapSource: 'ocr_ficha_coinciden' | 'ocr' | 'ficha' | 'discrepancia' | 'sin_formato' | null
+  mapNeedsReview: boolean
+  discrepancyReason: string | null
 
   qty: number
   qtySource: QtySource
@@ -172,6 +189,8 @@ function lineFromOcr(l: OcrPrefill['lines'][number], i: number): WizardLine {
     manual: false,
     rawText: l.productName,
     supplierCode: l.supplierCode,
+    packSize: l.packSize ?? null,
+    packUnit: l.packUnit ?? null,
     albaranQty: l.qty,
     albaranPackages: l.packages ?? null,
     albaranUnit: l.albaranUnit ?? null,
@@ -189,6 +208,9 @@ function lineFromOcr(l: OcrPrefill['lines'][number], i: number): WizardLine {
     formats: [],
     formatsLoading: false,
     purchaseFormatId: null,
+    mapSource: null,
+    mapNeedsReview: false,
+    discrepancyReason: null,
     // Sin formato conocido todavía: se cuenta en la unidad del ALBARÁN
     // (§3 — "sin formato conocido, se cuenta en la unidad del albarán, y se
     // dice cuál"). En cuanto case el artículo y resuelva un formato, se
@@ -208,6 +230,8 @@ function blankLine(): WizardLine {
     manual: true,
     rawText: '',
     supplierCode: null,
+    packSize: null,
+    packUnit: null,
     albaranQty: null,
     albaranPackages: null,
     albaranUnit: null,
@@ -225,6 +249,9 @@ function blankLine(): WizardLine {
     formats: [],
     formatsLoading: false,
     purchaseFormatId: null,
+    mapSource: null,
+    mapNeedsReview: false,
+    discrepancyReason: null,
     qty: 1,
     qtySource: 'manual',
     total: '',
@@ -274,9 +301,15 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId])
 
-  // Formatos del artículo en cuanto una línea casa. Un solo formato → se
-  // preselecciona sola (nada que preguntar) y el contador se recalcula a
-  // packs/cajas/sacos; con varios, el trabajador elige (setFormat hace lo mismo).
+  // Formato del artículo en cuanto una línea casa. ENCARGO CODE (14/08)
+  // feat/formatos-documento-decide, Tramo B — antes se preseleccionaba sola
+  // si había exactamente 1 formato activo, sin mirar lo que el OCR dice
+  // (Fallo A). Ahora resuelve en el SERVIDOR (Ley 1: documento vs ficha del
+  // proveedor) vía resolveGoodsReceiptLineFormat, que también crea el
+  // formato si hace falta y no existe uno igual (Ley 4). Si documento y
+  // ficha discrepan, ninguno gana: purchaseFormatId se queda sin poner y
+  // discrepancyReason trae las dos cifras — decide el trabajador entre los
+  // formatos de la lista, como ya hacía cuando había más de uno.
   //
   // El efecto NO puede depender de `lines` completo: marcar formatsLoading es
   // en sí un setLines, así que `lines` cambiaría en cada tick y el cleanup
@@ -299,6 +332,18 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
       for (const l of pending) {
         if (cancelled || !l.recipeItemId) continue
         try {
+          // Secuencial, no Promise.all: si resolve() crea un formato nuevo
+          // (Ley 4), listFormatsByItem tiene que verlo ya creado o el
+          // purchaseFormatId resuelto no aparecería en `formats`.
+          const resolved = await resolveGoodsReceiptLineFormat({
+            accountId,
+            aiSessionId: l.manual ? null : (ocrPrefill.aiSessionId ?? null),
+            recipeItemId: l.recipeItemId,
+            rawText: l.manual ? null : l.rawText,
+            supplierId: ocrPrefill.supplierId || null,
+            createdBy: authUserId ?? null,
+            createdByName: userProfile?.displayName ?? null,
+          })
           const [fmts, base] = await Promise.all([
             listFormatsByItem(l.recipeItemId),
             getItemBaseUnit(l.recipeItemId),
@@ -307,10 +352,17 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
           if (cancelled) return
           setLines(prev => prev.map(x => {
             if (x.key !== l.key) return x
-            if (active.length !== 1) return { ...x, formats: active, formatsLoading: false, baseUnit: base }
-            const derived = deriveFormatQty(x.albaranQty, x.albaranPackages, active[0].qtyInBase)
+            const withResolution = {
+              ...x, formats: active, formatsLoading: false, baseUnit: base,
+              mapSource: resolved.mapSource, mapNeedsReview: resolved.mapNeedsReview,
+              discrepancyReason: resolved.discrepancyReason,
+            }
+            if (!resolved.purchaseFormatId || resolved.qtyInBasePerPack == null) {
+              return { ...withResolution, purchaseFormatId: null }
+            }
+            const derived = deriveFormatQty(x.albaranQty, x.albaranPackages, resolved.qtyInBasePerPack)
             return {
-              ...x, formats: active, formatsLoading: false, baseUnit: base, purchaseFormatId: active[0].id,
+              ...withResolution, purchaseFormatId: resolved.purchaseFormatId,
               ...(derived ? { qty: derived.qty, qtySource: derived.source } : {}),
             }
           }))
@@ -341,6 +393,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
       ? {
           ...x, recipeItemId, matchedName: name, matchSemaphore: semaphore, matchType, pickerOpen: false,
           formats: [], purchaseFormatId: null, baseUnit: null,
+          mapSource: null, mapNeedsReview: false, discrepancyReason: null,
           // Nuevo artículo casado → el formato anterior ya no vale; vuelve a
           // contarse en la unidad del albarán hasta que resuelva el nuevo.
           qty: x.albaranQty != null && x.albaranQty > 0 ? Math.round(x.albaranQty) : 1, qtySource: 'albaran',
@@ -352,6 +405,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
       ? {
           ...x, recipeItemId: null, matchedName: null, matchSemaphore: null, matchType: null,
           formats: [], purchaseFormatId: null, baseUnit: null,
+          mapSource: null, mapNeedsReview: false, discrepancyReason: null,
           qty: x.albaranQty != null && x.albaranQty > 0 ? Math.round(x.albaranQty) : 1, qtySource: 'albaran',
         }
       : x))
@@ -400,8 +454,11 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
     if (l.matchLoading) return 'Un momento, buscando el artículo…'
     if (!l.recipeItemId) return 'Elige el artículo para continuar'
     if (l.formatsLoading) return 'Un momento, mirando el formato…'
+    if (l.mapSource === 'discrepancia' && !l.purchaseFormatId) {
+      return l.discrepancyReason ? `${l.discrepancyReason} Elige en qué viene.` : 'El documento y la ficha no coinciden — elige en qué viene.'
+    }
     if (l.formats.length > 1 && !l.purchaseFormatId) return 'Elige en qué viene para continuar'
-    if (l.formats.length === 0) return 'Sin formato — marca "que lo mire la oficina" para continuar'
+    if (l.formats.length === 0 && !l.purchaseFormatId) return 'Sin formato — marca "que lo mire la oficina" para continuar'
     return 'Pon la cantidad para continuar'
   }
 
@@ -449,7 +506,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
         // que mapNeedsReview lo sea, no solo cuando el operador marcó "no lo
         // tengo claro" (l.flagged) a mano. Caso real: ALB-00113, Fanta Naranja
         // casó por fuzzy y quedó flagged_for_office=false.
-        const mapNeedsReview = !resolved || l.matchSemaphore === 'yellow'
+        const mapNeedsReview = !resolved || l.matchSemaphore === 'yellow' || l.mapNeedsReview
         await createGoodsReceiptLine({
           accountId,
           goodsReceiptId: receipt.id,
@@ -465,6 +522,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
           expiryDate: l.expiryDate,
           docQty: l.albaranQty,
           docAmount: l.albaranLineAmount,
+          discrepancyReason: l.discrepancyReason,
           mapSource: l.recipeItemId ? (l.matchType ?? 'manual') : 'unmapped',
           mapNeedsReview,
           flaggedForOffice: l.flagged || mapNeedsReview,
@@ -698,7 +756,12 @@ function LineScreen({
   const totalN = parseNum(l.total)
 
   const waitingForFormat = !!l.recipeItemId && l.formatsLoading
-  const needsFormatChoice = l.formats.length > 1 && !l.purchaseFormatId
+  // ENCARGO CODE (14/08) feat/formatos-documento-decide — discrepancia entre
+  // el documento y la ficha del proveedor (Ley 1, rama 2): ninguno gana, se
+  // enseñan los dos valores y decide el trabajador, aunque solo haya un
+  // formato en la lista (antes esta pantalla solo aparecía con 2+).
+  const isDiscrepancy = l.mapSource === 'discrepancia' && !l.purchaseFormatId
+  const needsFormatChoice = (l.formats.length > 1 || isDiscrepancy) && !l.purchaseFormatId
 
   const countingUnitLabel = format
     ? pluralFormatName(format.name, l.qty)
@@ -779,9 +842,20 @@ function LineScreen({
         )}
       </div>
 
-      {/* Elegir formato cuando hay varios */}
+      {/* Elegir formato cuando hay varios, o cuando documento y ficha discrepan */}
       {needsFormatChoice && (
         <div className="mt-4">
+          {isDiscrepancy && (
+            <div className="mb-3 rounded-lg border border-warning bg-page p-3">
+              <p className="text-sm text-text-primary">
+                <AlertTriangle className="inline w-4 h-4 mr-1 text-warning" aria-hidden="true" />
+                El albarán y la ficha del proveedor no coinciden.
+              </p>
+              {l.discrepancyReason && (
+                <p className="mt-1 text-sm text-text-secondary">{l.discrepancyReason}</p>
+              )}
+            </div>
+          )}
           <p className="text-lg font-medium text-text-primary text-center">¿En qué formato viene?</p>
           <div className="mt-3 grid gap-2">
             {l.formats.map(f => (
