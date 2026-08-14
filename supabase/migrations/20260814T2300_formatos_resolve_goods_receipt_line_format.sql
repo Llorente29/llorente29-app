@@ -8,16 +8,19 @@
 -- RPC SECURITY DEFINER que reemplaza el matching de formato hoy hecho en el
 -- cliente (heuristica de nombre/parecido en GoodsReceiptForm.tsx, autopick-si-
 -- hay-1-formato en ReceiptWizard.tsx -- ninguno de los dos consulta lo que el
--- OCR ya extrajo). Dado (recepcion, articulo casado, raw_text, proveedor):
+-- OCR ya extrajo). Dado (sesion de OCR, articulo casado, raw_text, proveedor):
 --
---   1) RELEE la sesion de OCR de esa recepcion por raw_text (no confia en lo
---      que el cliente tenga en su estado -- el servidor es la fuente).
+--   1) RELEE la sesion de OCR por raw_text (no confia en lo que el cliente
+--      tenga en su estado -- el servidor es la fuente). Identifica por
+--      ai_session_id, no por goods_receipt_id: en el asistente (ReceiptWizard)
+--      el formato se resuelve MIENTRAS el operario recorre las pantallas,
+--      antes de que exista la fila goods_receipt.
 --   2) Rama OCR: pasa pack_size/pack_unit por _interpret_pack_size (Tramo A).
 --   3) Rama FICHA: article_supplier por supplier_id+supplier_code exacto; sin
 --      codigo, por supplier_id+recipe_item_id solo si hay exactamente una.
---   4) Ley 1, la regla de las tres ramas: coinciden -> automatico: no habla
---      ninguna con la otra -> se usa la que hable; discrepan -> NINGUNA gana,
---      map_needs_review=true con los dos valores para que decida un humano.
+--   4) Ley 1, la regla de las tres ramas: coinciden -> automatico; solo habla
+--      una -> se usa esa; discrepan -> NINGUNA gana, map_needs_review=true con
+--      los dos valores para que decida un humano.
 --   5) Ley 4 (solo cuando resuelve por OCR): busca un formato activo del mismo
 --      articulo con el mismo qty_in_base antes de crear uno nuevo
 --      (source='albaran', needs_review=true), y enlaza/crea la ficha del
@@ -57,9 +60,11 @@
 -- llame en produccion.
 -- ----------------------------------------------------------------------------
 
+drop function if exists public.resolve_goods_receipt_line_format(uuid,uuid,uuid,text,uuid,uuid,text);
+
 create or replace function public.resolve_goods_receipt_line_format(
   p_account_id uuid,
-  p_goods_receipt_id uuid,
+  p_ai_session_id uuid,
   p_recipe_item_id uuid,
   p_raw_text text,
   p_supplier_id uuid,
@@ -107,16 +112,15 @@ begin
 
   -- Camino manual (sin sesion o sin coincidencia por raw_text): pack_size
   -- queda null y solo opera la rama FICHA, tal como exige la Ley 1.
-  if p_raw_text is not null and p_raw_text <> '' then
+  if p_ai_session_id is not null and p_raw_text is not null and p_raw_text <> '' then
     select (ln->>'pack_size')::numeric, ln->>'pack_unit', ln->>'format_name',
            nullif(ln->>'supplier_code',''),
            coalesce((ln->>'packages')::numeric, (ln->>'quantity')::numeric),
            (ln->>'line_amount')::numeric
       into v_pack_size, v_pack_unit, v_format_name, v_supplier_code, v_doc_qty, v_doc_amount
-    from goods_receipt gr
-    join goods_receipt_ai_session s on s.id = gr.ai_session_id
+    from goods_receipt_ai_session s
     cross join lateral jsonb_array_elements(s.parsed_result->'lines') as ln
-    where gr.id = p_goods_receipt_id and ln->>'raw_text' = p_raw_text
+    where s.id = p_ai_session_id and ln->>'raw_text' = p_raw_text
     limit 1;
   end if;
 
@@ -132,6 +136,9 @@ begin
     if v_ocr_rule = 'NO_RESUELTO' then v_ocr_qty := null; end if;
   end if;
 
+  -- Ficha: se busca por recipe_item_id+supplier_id, NO por
+  -- article_supplier.account_id -- ver nota de cabecera sobre las 261 filas
+  -- con account_id placeholder.
   if p_supplier_id is not null and p_recipe_item_id is not null then
     if v_supplier_code is not null then
       select a.purchase_format_id into v_ficha_format_id
@@ -177,6 +184,9 @@ begin
       v_needs_review := true;
     end if;
     v_result_qty := v_ocr_qty; v_map_source := 'ocr';
+    -- Upsert por (recipe_item_id, supplier_id) -- esa es la clave unica real
+    -- de article_supplier (article_supplier_recipe_item_id_supplier_id_key).
+    -- De paso autocura el account_id si la fila lo tenia mal.
     if p_supplier_id is not null then
       update article_supplier a set
           account_id = p_account_id,
