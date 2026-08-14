@@ -1583,6 +1583,34 @@ export async function ackGoodsReceiptCostWarning(accountId: string, receiptId: s
   if (error) throw new Error(`Error registrando la confirmación del aviso de coste: ${error.message}`)
 }
 
+// ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.3 — cantidad
+// recibida no entera en un artículo medido en unidades ("¿0,5 cajas?").
+// Confirmado por Julio: dimension='unit' es el criterio correcto, sin
+// necesidad de Ley 5 (is_weighted) — un artículo de peso con cantidad
+// fraccionada es normal (3,3 kg de tomate), uno en unidades nunca lo es.
+export interface FractionalWarning {
+  lineId: string
+  recipeItemId: string
+  productName: string
+  qtyReceived: number
+  formatName: string | null
+}
+export async function getGoodsReceiptFractionalWarnings(accountId: string, receiptId: string): Promise<FractionalWarning[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('goods_receipt_fractional_warnings', {
+    p_account_id: accountId,
+    p_receipt_id: receiptId,
+  })
+  if (error) throw new Error(`Error comprobando cantidades fraccionadas: ${error.message}`)
+  return ((data as Row[]) ?? []).map(r => ({
+    lineId: r.line_id as string,
+    recipeItemId: r.recipe_item_id as string,
+    productName: r.product_name as string,
+    qtyReceived: Number(r.qty_received),
+    formatName: (r.format_name as string | null) ?? null,
+  }))
+}
+
 // Etiqueta legible del tipo de casado, para la UI.
 export function matchTypeLabel(mt: string): string {
   switch (mt) {

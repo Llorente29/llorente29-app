@@ -18279,6 +18279,16 @@ export type Database = {
       }
       get_sale_ticket: { Args: { p_sale_id: string }; Returns: Json }
       gettransactionid: { Args: never; Returns: unknown }
+      goods_receipt_fractional_warnings: {
+        Args: { p_account_id: string; p_receipt_id: string }
+        Returns: {
+          line_id: string
+          recipe_item_id: string
+          product_name: string
+          qty_received: number
+          format_name: string | null
+        }[]
+      }
       goods_receipt_cost_warnings: {
         Args: { p_account_id: string; p_receipt_id: string }
         Returns: {

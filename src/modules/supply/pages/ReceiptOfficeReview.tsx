@@ -24,12 +24,14 @@ import {
   matchReceiptLine,
   getGoodsReceiptCostWarnings,
   ackGoodsReceiptCostWarning,
+  getGoodsReceiptFractionalWarnings,
   OFFICE_QTY_REASON_PREFIX,
   OFFICE_QTY_REASONS,
   type GoodsReceipt,
   type GoodsReceiptLine,
   type LineMatchCandidate,
   type CostWarning,
+  type FractionalWarning,
 } from '@/modules/supply/services/goodsReceiptService'
 import { getSupplierCatalog, listSupplyLocations, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
 import { listSuppliers, createPurchaseFormat } from '@/modules/kitchen/services/purchaseFormatService'
@@ -132,6 +134,8 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   // pulsó "es correcto, continuar" en ESTA sesión de pantalla.
   const [costWarnings, setCostWarnings] = useState<CostWarning[] | null>(null)
   const [costWarningsAcked, setCostWarningsAcked] = useState(false)
+  // Tramo D.3 — cantidades fraccionadas en artículos por unidades.
+  const [fractionalWarnings, setFractionalWarnings] = useState<FractionalWarning[] | null>(null)
 
   // ── Carga ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -379,19 +383,24 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   }
 
   // ── Cierre ───────────────────────────────────────────────────────────
-  // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 — antes
-  // de confirmar, comprueba el coste por línea contra la mediana del
-  // artículo. Con avisos y sin confirmar aún ⇒ los enseña y para (aviso
-  // bloqueante-suave); "es correcto, continuar" registra quién y cuándo
-  // (ackGoodsReceiptCostWarning) y entonces sí cierra.
+  // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1/D.3 —
+  // antes de confirmar, comprueba coste fuera de rango (mediana del
+  // artículo) y cantidades fraccionadas en artículos por unidades. Con
+  // avisos y sin confirmar aún ⇒ los enseña y para (bloqueante-suave); "es
+  // correcto, continuar" registra quién y cuándo aceptó el de coste
+  // (ackGoodsReceiptCostWarning — D.3 no lo pide) y entonces sí cierra.
   async function handleClose() {
     if (!receipt || !allDecided) return
     setSaving(true); setError(null)
     try {
       if (!costWarningsAcked) {
-        const warnings = await getGoodsReceiptCostWarnings(accountId, receipt.id)
-        if (warnings.length > 0) {
-          setCostWarnings(warnings)
+        const [cost, fractional] = await Promise.all([
+          getGoodsReceiptCostWarnings(accountId, receipt.id),
+          getGoodsReceiptFractionalWarnings(accountId, receipt.id),
+        ])
+        if (cost.length > 0 || fractional.length > 0) {
+          setCostWarnings(cost)
+          setFractionalWarnings(fractional)
           setSaving(false)
           return
         }
@@ -403,12 +412,14 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
       setSaving(false)
     }
   }
-  // "Es correcto, continuar" del aviso de coste: registra quién y cuándo, y
-  // cierra directamente (no delega a handleClose — costWarningsAcked no
-  // estaría actualizado todavía dentro de este mismo evento).
-  async function acceptCostWarningsAndClose() {
+  // "Es correcto, continuar" de los avisos: registra el de coste (quién y
+  // cuándo) y cierra directamente (no delega a handleClose —
+  // costWarningsAcked no estaría actualizado todavía dentro de este mismo
+  // evento).
+  async function acceptWarningsAndClose() {
     if (!receipt) return
     setCostWarnings(null)
+    setFractionalWarnings(null)
     setCostWarningsAcked(true)
     setSaving(true); setError(null)
     try {
@@ -526,25 +537,44 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         })}
       </div>
 
-      {/* ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 —
-          aviso bloqueante-suave: el coste de una o más líneas se desvía
-          mucho de lo habitual para ese artículo. No impide cerrar, pero
-          exige un clic explícito que queda registrado (quién y cuándo). */}
-      {costWarnings && costWarnings.length > 0 && (
+      {/* ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1/D.3 —
+          aviso bloqueante-suave: coste fuera de rango y/o cantidad
+          fraccionada en un artículo por unidades. No impide cerrar, pero
+          exige un clic explícito (el de coste, además, queda registrado). */}
+      {((costWarnings && costWarnings.length > 0) || (fractionalWarnings && fractionalWarnings.length > 0)) && (
         <div className="rounded-lg border border-warning bg-page p-4 space-y-3">
-          <p className="text-sm font-medium text-text-primary">
-            {costWarnings.length === 1 ? 'Una línea' : `${costWarnings.length} líneas`} con un coste que no cuadra con lo habitual:
-          </p>
-          <ul className="space-y-1">
-            {costWarnings.map(w => (
-              <li key={w.lineId} className="text-sm text-text-secondary">
-                <span className="text-text-primary font-medium">{w.productName}</span>: suele entrar a {fmtMoney(w.medianCostPerBase)}/base
-                y esta línea sale a {fmtMoney(w.unitCostPerBase)}/base ({w.ratio}×). Revisa cantidad y formato.
-              </li>
-            ))}
-          </ul>
+          {costWarnings && costWarnings.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                {costWarnings.length === 1 ? 'Una línea' : `${costWarnings.length} líneas`} con un coste que no cuadra con lo habitual:
+              </p>
+              <ul className="space-y-1 mt-1">
+                {costWarnings.map(w => (
+                  <li key={w.lineId} className="text-sm text-text-secondary">
+                    <span className="text-text-primary font-medium">{w.productName}</span>: suele entrar a {fmtMoney(w.medianCostPerBase)}/base
+                    y esta línea sale a {fmtMoney(w.unitCostPerBase)}/base ({w.ratio}×). Revisa cantidad y formato.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {fractionalWarnings && fractionalWarnings.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                {fractionalWarnings.length === 1 ? 'Una línea' : `${fractionalWarnings.length} líneas`} con cantidad fraccionada:
+              </p>
+              <ul className="space-y-1 mt-1">
+                {fractionalWarnings.map(w => (
+                  <li key={w.lineId} className="text-sm text-text-secondary">
+                    <span className="text-text-primary font-medium">{w.productName}</span>: {w.qtyReceived.toLocaleString('es-ES', { maximumFractionDigits: 2 })} {w.formatName ?? 'formato'}.
+                    Si el paquete real es más pequeño, el formato está mal — no lo compenses con la cantidad.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="flex justify-end">
-            <button type="button" onClick={acceptCostWarningsAndClose} disabled={saving}
+            <button type="button" onClick={acceptWarningsAndClose} disabled={saving}
               className="px-4 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
               Es correcto, continuar
             </button>
