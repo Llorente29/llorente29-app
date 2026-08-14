@@ -53,9 +53,7 @@ import {
   updateGoodsReceipt,
   deleteGoodsReceiptLinesByReceipt,
   createGoodsReceiptLine,
-  updateGoodsReceiptLine,
   confirmReceipt,
-  adjustGoodsReceiptLine,
   voidReceipt,
   listOrderLineReceived,
   qtyInBaseFromFormat,
@@ -98,23 +96,12 @@ export interface ReceiptPrefill {
   // REVISAR BORRADOR EN SITIO: si la fuente es un borrador, la oficina lo revisa
   // y confirma la MISMA recepción (no crea otra ni anula). Trae la foto del albarán.
   isDraft?: boolean
-  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — la fuente es
-  // una recepción 'recibido' (el asistente ya metió el stock): oficina VERIFICA,
-  // no re-cuenta. A diferencia de isDraft, persist() NO borra y recrea las
-  // líneas — las ajusta en sitio (adjustGoodsReceiptLine) para no romper la
-  // referencia (source_id) de lo que ya está posteado en el ledger.
-  isReceived?: boolean
   code?: string | null
   rawDocumentUrl?: string | null
   // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — total del albarán leído
   // por la IA (goods_receipt_ai_session.parsed_result.document.grand_total, YA
   // EXISTE — se lee vía getReceiptDocTotal). null si no hubo OCR o no lo leyó.
   docTotal?: number | null
-  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — quién recibió y
-  // cuándo (goods_receipt.created_by_name / received_at), para la cabecera
-  // "Recibido por X · HH:MM · ya en stock". Solo se usa con isReceived.
-  receivedByName?: string | null
-  receivedAt?: string | null
 }
 export interface ReceiptPrefillLine {
   // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — id real de
@@ -146,10 +133,6 @@ export interface ReceiptPrefillLine {
   docQty: number | null
   docAmount: number | null
   discrepancyReason: string | null
-  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — la ⚑ que puso
-  // el asistente ("que lo mire la oficina"). Ordena la revisión (⚑ primero) y
-  // no cuenta como fallo de cocina en la racha.
-  flaggedForOffice?: boolean
 }
 
 // Propuesta OCR (C2.2.a-2): cabecera resuelta + líneas leídas del albarán.
@@ -224,7 +207,6 @@ interface DraftLine {
   // (prefill). Ancla adjustGoodsReceiptLine/updateGoodsReceiptLine a LA MISMA
   // fila en vez de borrar y recrear.
   id?: string
-  flaggedForOffice?: boolean
   recipeItemId: string | null
   productName: string
   purchaseFormatId: string | null
@@ -679,12 +661,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const fromOcr = !!ocrPrefill
   // ¿Revisión de un BORRADOR en sitio? La oficina confirma la MISMA recepción.
   const reviewingDraft = correcting && !!prefill?.isDraft
-  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — ¿revisión de un
-  // 'recibido' del asistente? El stock YA entró; oficina verifica, no re-cuenta.
-  const reviewingReceived = correcting && !!prefill?.isReceived
-  console.log('[DEBUG-wizard-routing] GoodsReceiptForm montado', {
-    againstOrder, correcting, fromOcr, reviewingDraft, reviewingReceived,
-  })
   const fixedHeader = againstOrder || correcting   // en OCR la cabecera es editable (propuesta)
   // ENCARGO CODE (12/08) fix/recepcion-fromocr-borrador. `fromOcr` significa
   // "esta sesión trae ocrPrefill" (escaneo en vivo) — NO "esta línea necesita
@@ -1580,14 +1556,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         lines = prefill.lines.map((l, i) => {
           const cat = resolveFmt(l.purchaseFormatId, l.recipeItemId)
           const ref = refFor(l.purchaseOrderLineId)
-          // Revisión de BORRADOR o de un 'recibido' (Tramo C) → precarga lo que
-          // se contó (para verlo y ajustar). Corrección de una CONFIRMADA →
-          // vacío (se re-cuenta).
-          const startQty = (prefill.isDraft || prefill.isReceived) && l.qtyReceived != null ? numToInputStr(l.qtyReceived) : ''
+          // Revisión de BORRADOR → precarga lo que se contó (para verlo y
+          // ajustar). Corrección de una CONFIRMADA → vacío (se re-cuenta).
+          const startQty = prefill.isDraft && l.qtyReceived != null ? numToInputStr(l.qtyReceived) : ''
           return {
             key: `pf-${i}`,
             id: l.id,
-            flaggedForOffice: l.flaggedForOffice ?? false,
             recipeItemId: l.recipeItemId,
             productName: l.productName,
             purchaseFormatId: l.purchaseFormatId ?? cat?.purchaseFormatId ?? null,
@@ -1614,7 +1588,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             // el picker de motivo al editar en oficina, solo en BORRADOR).
             lineAmount: l.docAmount,
             albaranQty: l.docQty,
-            originalQty: (prefill.isDraft || prefill.isReceived) ? startQty : null,
+            originalQty: prefill.isDraft ? startQty : null,
             discrepancyReason: l.discrepancyReason,
           }
         })
@@ -1693,30 +1667,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const base = q === '' ? draft : draft.filter(l => l.productName.toLowerCase().includes(q))
-    // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C, §4 — "las
-    // líneas marcadas ⚑ primero, con el editor completo": la oficina entra
-    // directa a lo que cocina pidió revisar.
-    if (!reviewingReceived) return base
-    return [...base].sort((a, b) => Number(!!b.flaggedForOffice) - Number(!!a.flaggedForOffice))
-  }, [draft, search, reviewingReceived])
-
-  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C, §4 — "todo lo
-  // demás colapsado a una frase por línea": al revisar un 'recibido', las
-  // líneas SIN ⚑ arrancan colapsadas (un vistazo, no un formulario); las ⚑
-  // arrancan abiertas con el editor completo (PR #63). Un toque expande
-  // cualquiera si la oficina quiere tocarla igualmente — nada queda bloqueado.
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
-  function toggleExpanded(key: string) {
-    setExpandedKeys(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key); else next.add(key)
-      return next
-    })
-  }
-  function isCompactLine(l: DraftLine): boolean {
-    return reviewingReceived && !l.flaggedForOffice && !expandedKeys.has(l.key)
-  }
+    return q === '' ? draft : draft.filter(l => l.productName.toLowerCase().includes(q))
+  }, [draft, search])
 
   const filled = useMemo(
     () => draft.filter(l => { const n = parseNum(l.qty); return n !== null && n > 0 }),
@@ -1976,8 +1928,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // Tramo A/C — crea el NODO de formato si la línea trae equivalencia pero aún
   // no tiene id (propuesto por la IA o montado por el wizard T1). Si ya tiene
   // purchaseFormatId (heredado del proveedor o del catálogo), se reutiliza.
-  // Extraído para no duplicar esta lógica entre persist() (recepción nueva) y
-  // persistReviewedReceived() (Tramo C, ajuste de una línea ya recibida).
   async function resolvePurchaseFormatId(l: DraftLine): Promise<string | null> {
     if (l.purchaseFormatId) return l.purchaseFormatId
     if (!l.recipeItemId || l.formatQtyInBase == null || l.formatQtyInBase <= 0) return null
@@ -2014,73 +1964,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     }
   }
 
-  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — persistencia de
-  // la revisión de oficina de un 'recibido'. NUNCA borra y recrea las líneas
-  // (a diferencia de reviewingDraft): su id es la referencia (source_id) del
-  // movimiento YA posteado en el ledger por el asistente. Solo las líneas con
-  // algo que afecta a stock/valoración cambiado de verdad llaman a
-  // adjustGoodsReceiptLine (reversa + repostea, ledger append-only); un cambio
-  // de solo el motivo usa updateGoodsReceiptLine (no toca stock); sin cambios,
-  // no se escribe nada. Cierra con confirmReceipt, que sobre un 'recibido' NO
-  // vuelve a postear — solo pasa a 'confirmado'.
-  async function persistReviewedReceived() {
-    if (!prefill) return
-    await updateGoodsReceipt(prefill.sourceReceiptId, {
-      supplierId: supplierId || null,
-      purchaseOrderId: linkedOrderId,
-      supplierDocNumber: supplierDoc.trim() || null,
-      receiptDate,
-    })
-
-    for (const l of draft) {
-      if (!l.id) continue
-      const orig = prefill.lines.find(pl => pl.id === l.id)
-      if (!orig) continue
-      const newQty = parseNum(l.qty) ?? 0
-      const newCost = parseNum(l.unitCost)
-      const reason = discrepancyReasons[l.key] ?? null
-      const purchaseFormatId = await resolvePurchaseFormatId(l)
-      const stockChanged =
-        orig.recipeItemId !== l.recipeItemId ||
-        (orig.purchaseFormatId ?? null) !== purchaseFormatId ||
-        orig.qtyReceived !== newQty ||
-        (orig.unitCost ?? null) !== newCost
-      if (stockChanged) {
-        await adjustGoodsReceiptLine(l.id, {
-          recipeItemId: l.recipeItemId,
-          purchaseFormatId,
-          qtyReceived: newQty,
-          unitCost: newCost,
-          discrepancyReason: reason,
-        })
-      } else if (reason !== (orig.discrepancyReason ?? null)) {
-        await updateGoodsReceiptLine(l.id, { discrepancyReason: reason })
-      }
-    }
-
-    const res = await confirmReceipt(prefill.sourceReceiptId)
-
-    let learnNote = ''
-    try {
-      const learned = await learnFromReceipt(prefill.sourceReceiptId)
-      if (learned > 0) learnNote = ` · memoria del proveedor actualizada (${learned})`
-    } catch (e) {
-      console.error('persistReviewedReceived: confirmada OK pero el aprendizaje falló', e)
-    }
-
-    const parts = [`verificada`]
-    if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear (revisar)`)
-    onSaved(`Recepción ${prefill.code ?? ''} confirmada: ${parts.join(' · ')}${learnNote}.`)
-  }
-
   async function persist(confirm: boolean) {
     if (!locationId) { setError('No hay un local operativo definido. Revisa el aviso de local arriba.'); return }
     setSaving(true); setError(null)
     try {
-      if (reviewingReceived && prefill) {
-        await persistReviewedReceived()
-        return
-      }
       let receipt: { id: string; code: string | null }
       if (reviewingDraft && prefill) {
         // En sitio: actualiza cabecera + limpia líneas para reescribirlas. NO crea
@@ -2202,20 +2089,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     }
   }
 
-  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C, §4 — "cabecera
-  // honesta": el stock YA está dentro, esto no es una revisión a ciegas.
-  const receivedTimeLabel = prefill?.receivedAt
-    ? new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' }).format(new Date(prefill.receivedAt))
-    : null
-
-  const title = reviewingReceived
-    ? `Recibido por ${prefill?.receivedByName ?? '—'}${receivedTimeLabel ? ` · ${receivedTimeLabel}` : ''} · ya en stock`
-    : againstOrder
+  const title = againstOrder
     ? `Recibir pedido ${order?.code ?? ''}${fromOcr ? ' · albarán escaneado' : ''}`
     : reviewingDraft ? `Revisar recepción ${prefill?.code ?? ''}` : correcting ? 'Corregir recepción' : fromOcr ? 'Revisar recepción escaneada' : 'Nueva recepción'
-  const subtitle = reviewingReceived
-    ? 'El almacén ya tiene esta mercancía. Verifica: las líneas marcadas ⚑ primero. Cambiar la cantidad pide motivo y genera un ajuste de stock.'
-    : againstOrder
+  const subtitle = againstOrder
     ? 'Cuenta lo que ha llegado y escríbelo. Lo pedido y lo pendiente están a la derecha como referencia.'
     : reviewingDraft
       ? 'Esto contó quien recibió. Revisa la foto del albarán y las líneas; ajusta lo que falte y confirma — entra al almacén con su coste.'
@@ -2242,8 +2119,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
       {!fixedHeader && <OperativeLocationBanner op={op} locations={locations} />}
 
-      {/* Foto del albarán al revisar un borrador o un recibido (la oficina ve lo que firmó el muelle). */}
-      {(reviewingDraft || reviewingReceived) && prefill?.rawDocumentUrl && (
+      {/* Foto del albarán al revisar un borrador (la oficina ve lo que firmó el muelle). */}
+      {reviewingDraft && prefill?.rawDocumentUrl && (
         <div className="rounded-lg border border-border-default bg-card p-3">
           <p className="text-xs text-text-secondary mb-2">Albarán recibido</p>
           <ReceiptPhotoViewer path={prefill.rawDocumentUrl} />
@@ -2562,30 +2439,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                     const albaranPack = needsResolution ? parsePack(l.rawText, l.baseUnit?.abbr) : null
                     const albaranPackTotalBase = albaranPack ? albaranPack.n * albaranPack.m * fu.factor : null
                     const formatMismatchAlbaran = albaranPackTotalBase != null && albaranPackTotalBase > 0 && l.formatQtyInBase != null && Math.abs(l.formatQtyInBase - albaranPackTotalBase) / albaranPackTotalBase > 0.02
-
-                    // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C, §4 —
-                    // línea SIN ⚑ al revisar un 'recibido': una frase, no un formulario.
-                    // Un toque ("Revisar") la abre al editor completo de abajo — nada
-                    // queda inaccesible, solo declutter por defecto.
-                    if (isCompactLine(l)) {
-                      const perBaseCompact = costN != null && l.formatQtyInBase ? costN / l.formatQtyInBase : null
-                      return (
-                        <div key={l.key} className="rounded-lg border border-border-default bg-card px-3 py-2 flex items-center justify-between gap-3">
-                          <div className="min-w-0 flex items-center gap-2">
-                            <Check size={14} className="text-success shrink-0" />
-                            <span className="text-sm text-text-primary truncate">
-                              {l.matchedName ?? l.productName}
-                              {hasQty && <span className="text-text-secondary"> · {l.qty}{l.formatLabel ? ` ${l.formatLabel}` : ''}</span>}
-                              {perBaseCompact != null && <span className="text-text-secondary"> · {fmtHumanPrice(perBaseCompact)} €/{l.baseUnit?.abbr ?? 'ud'}</span>}
-                            </span>
-                          </div>
-                          <button type="button" onClick={() => toggleExpanded(l.key)}
-                            className="shrink-0 text-xs font-medium text-accent hover:underline">
-                            Revisar
-                          </button>
-                        </div>
-                      )
-                    }
 
                     return (
                       <div key={l.key}

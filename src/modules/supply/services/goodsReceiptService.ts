@@ -106,6 +106,12 @@ export interface GoodsReceiptLine {
   // pantalla de oficina (⚑ primero) y NO cuenta como fallo de cocina en la
   // racha de correcciones (§6 del diseño): solo una corrección SIN marcar la rompe.
   flaggedForOffice: boolean
+  // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, A.1 — la oficina marca
+  // una línea que nunca fue mercancía de almacén (portes, envases, descuento,
+  // impuesto...). No entra al stock y no cuenta como "sin decidir" en la
+  // guarda de confirm_goods_receipt.
+  notGoods: boolean
+  notGoodsKind: string | null
   position: number
   notes: string | null
   createdAt: string
@@ -169,6 +175,8 @@ export interface GoodsReceiptLineInsert {
   mapConfidence?: number | null
   mapNeedsReview?: boolean
   flaggedForOffice?: boolean
+  notGoods?: boolean
+  notGoodsKind?: string | null
   docQty?: number | null
   docAmount?: number | null
   discrepancyReason?: string | null
@@ -190,6 +198,8 @@ export interface GoodsReceiptLineUpdate {
   mapConfidence?: number | null
   mapNeedsReview?: boolean
   flaggedForOffice?: boolean
+  notGoods?: boolean
+  notGoodsKind?: string | null
   docQty?: number | null
   docAmount?: number | null
   discrepancyReason?: string | null
@@ -294,6 +304,8 @@ function rowToReceiptLine(row: Row): GoodsReceiptLine {
     mapConfidence: (row.map_confidence as number | null) ?? null,
     mapNeedsReview: Boolean(row.map_needs_review),
     flaggedForOffice: Boolean(row.flagged_for_office),
+    notGoods: Boolean(row.not_goods),
+    notGoodsKind: (row.not_goods_kind as string | null) ?? null,
     position: (row.position as number) ?? 0,
     notes: (row.notes as string | null) ?? null,
     createdAt: row.created_at as string,
@@ -361,6 +373,8 @@ function lineInsertToRow(input: GoodsReceiptLineInsert): Row {
     map_confidence: input.mapConfidence ?? null,
     map_needs_review: input.mapNeedsReview ?? false,
     flagged_for_office: input.flaggedForOffice ?? false,
+    not_goods: input.notGoods ?? false,
+    not_goods_kind: input.notGoodsKind ?? null,
     position: input.position ?? 0,
     notes: input.notes ?? null,
   }
@@ -384,6 +398,8 @@ function lineUpdateToRow(patch: GoodsReceiptLineUpdate): Row {
   if (patch.mapConfidence !== undefined) row.map_confidence = patch.mapConfidence
   if (patch.mapNeedsReview !== undefined) row.map_needs_review = patch.mapNeedsReview
   if (patch.flaggedForOffice !== undefined) row.flagged_for_office = patch.flaggedForOffice
+  if (patch.notGoods !== undefined) row.not_goods = patch.notGoods
+  if (patch.notGoodsKind !== undefined) row.not_goods_kind = patch.notGoodsKind
   if (patch.position !== undefined) row.position = patch.position
   if (patch.notes !== undefined) row.notes = patch.notes
   return row
@@ -754,6 +770,46 @@ export async function updateGoodsReceipt(
   return rowToReceipt(data as Row)
 }
 
+// ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, B.2 — la pantalla de
+// oficina muestra el NOMBRE DE CATÁLOGO de una línea ya casada (no el texto
+// crudo del albarán): sale de recipe_item, no del catálogo del proveedor
+// (article_supplier), para no fallar si la línea casó con un artículo que
+// esta cuenta compra a más de un proveedor.
+export interface RecipeItemDisplayInfo {
+  name: string
+  baseUnitAbbr: string | null
+}
+export async function getRecipeItemDisplayInfo(ids: string[]): Promise<Record<string, RecipeItemDisplayInfo>> {
+  requireSupabase()
+  const uniq = Array.from(new Set(ids.filter(Boolean)))
+  if (uniq.length === 0) return {}
+  const { data, error } = await from('recipe_item')
+    .select('id, name, kitchen_unit:base_unit_id ( abbreviation )')
+    .in('id', uniq)
+  if (error) { console.error('[goodsReceiptService] getRecipeItemDisplayInfo', error); return {} }
+  const out: Record<string, RecipeItemDisplayInfo> = {}
+  for (const row of (data as Row[] | null) ?? []) {
+    const ku = row.kitchen_unit as { abbreviation?: string } | { abbreviation?: string }[] | null
+    const abbr = Array.isArray(ku) ? (ku[0]?.abbreviation ?? null) : (ku?.abbreviation ?? null)
+    out[row.id as string] = { name: row.name as string, baseUnitAbbr: abbr }
+  }
+  return out
+}
+
+// La pantalla de oficina explica el coste ("2 packs × 24 latas = 48 latas")
+// con el NOMBRE DEL FORMATO tal cual está en recipe_item_purchase_format —
+// no se re-deriva del catálogo del proveedor (mismo motivo que arriba).
+export async function getPurchaseFormatNames(ids: string[]): Promise<Record<string, string>> {
+  requireSupabase()
+  const uniq = Array.from(new Set(ids.filter(Boolean)))
+  if (uniq.length === 0) return {}
+  const { data, error } = await from('recipe_item_purchase_format').select('id, name').in('id', uniq)
+  if (error) { console.error('[goodsReceiptService] getPurchaseFormatNames', error); return {} }
+  const out: Record<string, string> = {}
+  for (const row of (data as Row[] | null) ?? []) out[row.id as string] = row.name as string
+  return out
+}
+
 export async function archiveGoodsReceipt(id: string): Promise<GoodsReceipt> {
   requireSupabase()
   const { data, error } = await from('goods_receipt')
@@ -936,6 +992,10 @@ export interface AdjustReceiptLineInput {
   qtyReceived: number
   unitCost: number | null
   discrepancyReason: string | null
+  // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, A.3 — "no es
+  // mercancía" (portes, envases, descuento, impuesto, otro).
+  notGoods?: boolean
+  notGoodsKind?: string | null
 }
 
 /**
@@ -951,22 +1011,27 @@ export interface AdjustReceiptLineInput {
 export async function adjustGoodsReceiptLine(
   lineId: string,
   input: AdjustReceiptLineInput,
-): Promise<void> {
+): Promise<{ closedPeriodNote: string | null }> {
   requireSupabase()
-  const { error } = await rpcUntyped('adjust_goods_receipt_line', {
+  const { data, error } = await rpcUntyped('adjust_goods_receipt_line', {
     p_line_id: lineId,
     p_recipe_item_id: input.recipeItemId,
     p_purchase_format_id: input.purchaseFormatId,
     p_qty_received: input.qtyReceived,
     p_unit_cost: input.unitCost,
     p_discrepancy_reason: input.discrepancyReason,
+    p_not_goods: input.notGoods ?? false,
+    p_not_goods_kind: input.notGoodsKind ?? null,
   })
   if (error) throw new Error(`Error ajustando la línea: ${error.message}`)
 
-  if (input.recipeItemId && input.unitCost !== null && input.purchaseFormatId) {
+  if (!input.notGoods && input.recipeItemId && input.unitCost !== null && input.purchaseFormatId) {
     try { await cascadeFromItem(input.recipeItemId) }
     catch (e) { console.error(`adjustGoodsReceiptLine: cascada de coste falló para ${input.recipeItemId}`, e) }
   }
+
+  const row = (Array.isArray(data) ? data[0] : data) as { closed_period_note?: string | null } | null
+  return { closedPeriodNote: row?.closed_period_note ?? null }
 }
 
 /**

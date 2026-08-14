@@ -50,6 +50,7 @@ import GoodsReceiptForm, { type ReceiptPrefill, type OcrPrefill } from '@/module
 import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
 import ReceiptWizard from '@/modules/supply/pages/ReceiptWizard'
 import OrderReceiveFlow from '@/modules/supply/components/OrderReceiveFlow'
+import ReceiptOfficeReview from '@/modules/supply/pages/ReceiptOfficeReview'
 
 const STATUS_LABEL: Record<GoodsReceiptStatus, string> = {
   borrador: 'Borrador',
@@ -71,7 +72,7 @@ function formatDate(value: string | null): string {
     .format(new Date(value))
 }
 
-type View = 'list' | 'form' | 'scan' | 'receive-order' | 'wizard'
+type View = 'list' | 'form' | 'scan' | 'receive-order' | 'wizard' | 'office-review'
 
 export default function GoodsReceiptsPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -91,6 +92,9 @@ export default function GoodsReceiptsPage() {
   const [view, setView] = useState<View>('list')
   const [prefill, setPrefill] = useState<ReceiptPrefill | null>(null)
   const [ocrPrefill, setOcrPrefill] = useState<OcrPrefill | null>(null)
+  // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, B.1 — la recepción
+  // 'recibido' abre ReceiptOfficeReview (pantalla propia), no GoodsReceiptForm.
+  const [officeReviewReceiptId, setOfficeReviewReceiptId] = useState<string | null>(null)
 
   // Arranque rápido desde el vigía de stock negativo (Almacén → Teórico vs
   // Real → Stock negativo): llega por navigate(state), no por props (esta
@@ -332,60 +336,13 @@ export default function GoodsReceiptsPage() {
     }
   }
 
-  // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — abre una
-  // recepción 'recibido' (el asistente ya metió el stock) para que oficina
-  // verifique. Mismo patrón que handleReviewDraft, pero marca isReceived (no
-  // isDraft): persist() en GoodsReceiptForm toma la rama que NO borra y
-  // recrea líneas — las ajusta en sitio.
-  async function handleReviewReceived(id: string) {
-    setBusyId(id); setFlash(null); setError(null)
-    try {
-      const [r, lines] = await Promise.all([
-        getGoodsReceiptById(id),
-        listGoodsReceiptLines(id),
-      ])
-      if (!r) throw new Error('No se pudo recuperar la recepción.')
-      let docTotal: number | null = null
-      if (r.aiSessionId) {
-        try { docTotal = await getReceiptDocTotal(r.aiSessionId) }
-        catch (e) { console.error('handleReviewReceived: no se pudo leer el total del albarán', e) }
-      }
-      const pf: ReceiptPrefill = {
-        sourceReceiptId: r.id,
-        supplierId: r.supplierId ?? '',
-        locationId: r.locationId,
-        purchaseOrderId: r.purchaseOrderId,
-        supplierDocNumber: r.supplierDocNumber,
-        isReceived: true,
-        code: r.code,
-        rawDocumentUrl: r.rawDocumentUrl,
-        docTotal,
-        receivedByName: r.createdByName,
-        receivedAt: r.receivedAt,
-        lines: lines.map(l => ({
-          id: l.id,
-          recipeItemId: l.recipeItemId,
-          productName: l.productName,
-          purchaseFormatId: l.purchaseFormatId,
-          qtyReceived: l.qtyReceived,
-          unitCost: l.unitCost,
-          purchaseOrderLineId: l.purchaseOrderLineId,
-          rawText: l.rawText,
-          supplierCode: l.supplierCode,
-          docQty: l.docQty,
-          docAmount: l.docAmount,
-          discrepancyReason: l.discrepancyReason,
-          flaggedForOffice: l.flaggedForOffice,
-        })),
-      }
-      setPrefill(pf)
-      setQuickReceipt(null)
-      setView('form')
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'No se pudo abrir la recepción.')
-    } finally {
-      setBusyId(null)
-    }
+  // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, B.1 — abre una
+  // recepción 'recibido' (el asistente ya metió el stock) en la pantalla
+  // propia de oficina (ReceiptOfficeReview), que carga sus propios datos.
+  function handleReviewReceived(id: string) {
+    setFlash(null); setError(null)
+    setOfficeReviewReceiptId(id)
+    setView('office-review')
   }
 
   // ENCARGO CODE (13/08) feat/recepcion-v2-asistente — "descartar" un
@@ -498,8 +455,6 @@ export default function GoodsReceiptsPage() {
     }
   }
 
-  console.log('[DEBUG-wizard-routing] render', { view, hasActiveAccountId: !!activeAccountId, hasOcrPrefill: !!ocrPrefill })
-
   // ── Vista SCAN: escanear albarán (OCR) ──
   if (view === 'scan' && activeAccountId) {
     return (
@@ -512,9 +467,7 @@ export default function GoodsReceiptsPage() {
         // PEDIDO (OrderReceiveFlow) es un camino aparte, no tocado — sigue en
         // el form grande (el formato ya viene dado por el pedido).
         onCreateReceipt={(ocr) => {
-          console.log('[DEBUG-wizard-routing] GoodsReceiptsPage.onCreateReceipt recibido', { hasOcr: !!ocr, lines: ocr?.lines?.length })
           setOcrPrefill(ocr); setQuickReceipt(null); setView('wizard')
-          console.log('[DEBUG-wizard-routing] setView(\'wizard\') llamado')
         }}
       />
     )
@@ -541,6 +494,18 @@ export default function GoodsReceiptsPage() {
         locationId={resolvedLocationId}
         onBack={() => { setView('list'); setReloadTick(t => t + 1) }}
         onSaved={(msg) => { setView('list'); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
+      />
+    )
+  }
+
+  // ── Vista OFFICE-REVIEW: oficina verifica una recepción 'recibido' ──
+  if (view === 'office-review' && activeAccountId && officeReviewReceiptId) {
+    return (
+      <ReceiptOfficeReview
+        accountId={activeAccountId}
+        receiptId={officeReviewReceiptId}
+        onBack={() => { setView('list'); setOfficeReviewReceiptId(null); setReloadTick(t => t + 1) }}
+        onSaved={(msg) => { setView('list'); setOfficeReviewReceiptId(null); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
       />
     )
   }

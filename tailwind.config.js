@@ -127,6 +127,10 @@ export default {
         // categorías ≥82px (4.1 preámbulo), tile de producto ≥118px (4.1).
         'tpv-cat': '82px',
         'tpv-product': '118px',
+        // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, B.9 — pantallas
+        // de OFICINA/escritorio (ratón, no tablet): control ≥44px (ya cubierto
+        // por 'touch'), acción de cierre ≥56px. Sin token previo para 56px.
+        'close-desktop': '56px',
       },
       spacing: {
         // Mismos valores que minHeight.tap-*/tpv-* — para que h-/w-/p-

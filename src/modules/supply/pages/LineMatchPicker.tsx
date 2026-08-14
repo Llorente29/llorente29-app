@@ -29,12 +29,18 @@ interface LineMatchPickerProps {
   onChoose: (recipeItemId: string, name: string, semaphore: 'green' | 'yellow' | null, matchType: string | null) => void
   onClear: () => void
   onClose: () => void
+  // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre — el botón "Crear
+  // artículo nuevo" de la pantalla de oficina abre este picker directo en el
+  // panel de alta (en vez de obligar a un segundo toque). Default false: no
+  // cambia el comportamiento de ningún llamador existente.
+  initialCreateOpen?: boolean
 }
 
 interface SearchHit { id: string; name: string }
 
 export default function LineMatchPicker({
   accountId, rawText, supplierCode, candidates, currentRecipeItemId, createdBy, createdByName, onChoose, onClear, onClose,
+  initialCreateOpen = false,
 }: LineMatchPickerProps) {
   const [search, setSearch] = useState('')
   const [hits, setHits] = useState<SearchHit[]>([])
@@ -42,7 +48,7 @@ export default function LineMatchPicker({
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // C2.2.b.2 — alta de artículo nuevo (nombre prerelleno con el raw_text).
-  const [createOpen, setCreateOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(initialCreateOpen)
   const [newName, setNewName] = useState(rawText)
   const [newUnit, setNewUnit] = useState(BASE_UNITS[0].id)
   const [newFamily, setNewFamily] = useState('')
