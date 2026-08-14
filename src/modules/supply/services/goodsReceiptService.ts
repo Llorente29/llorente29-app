@@ -635,13 +635,30 @@ export async function getGoodsReceiptById(id: string): Promise<GoodsReceipt | nu
 }
 
 /**
- * Total del albarán leído por la IA (ENCARGO CODE 13/08 fix/recepcion-p2-oficina,
- * §3). YA vive en goods_receipt_ai_session.parsed_result.document.grand_total
- * (se escribe al escanear, se lee de vuelta al revisar un borrador guardado) —
- * no es una columna nueva, es cablear un dato que ya está. null si el albarán
- * no vino de OCR o la IA no leyó un total.
+ * Los tres totales que la IA lee del albarán (goods_receipt_ai_session.
+ * parsed_result.document): base imponible, IVA y total con IVA.
+ *
+ * ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §A.1 — Folvy cuenta
+ * base imponible (suma de qty_received × unit_cost, verificado contra
+ * ALB-00115: 550,48 € = tax_base_total exacto). El cuadre tiene que comparar
+ * base contra base, nunca contra grand_total (con IVA) — antes de este fix
+ * SIEMPRE cantaba una diferencia falsa del importe del IVA en cualquier
+ * albarán que lo llevara.
  */
-export async function getReceiptDocTotal(aiSessionId: string): Promise<number | null> {
+export interface OcrDocTotals {
+  base: number | null       // tax_base_total
+  tax: number | null        // tax_total
+  grandTotal: number | null // grand_total (con IVA)
+}
+
+/**
+ * Los totales del albarán leídos por la IA (ENCARGO CODE 13/08
+ * fix/recepcion-p2-oficina, §3; ampliado 14/08 §A — antes solo devolvía
+ * grand_total). YA viven en goods_receipt_ai_session.parsed_result.document
+ * (se escriben al escanear, se leen de vuelta al revisar un borrador
+ * guardado) — no son columnas nuevas. null si el albarán no vino de OCR.
+ */
+export async function getReceiptDocTotal(aiSessionId: string): Promise<OcrDocTotals | null> {
   requireSupabase()
   const { data, error } = await from('goods_receipt_ai_session')
     .select('parsed_result')
@@ -649,9 +666,18 @@ export async function getReceiptDocTotal(aiSessionId: string): Promise<number | 
     .maybeSingle()
   if (error) throw new Error(`Error obteniendo el total leído del albarán: ${error.message}`)
   const row = data as Row | null
-  const parsed = row?.parsed_result as { document?: { grand_total?: number | string | null } } | null
-  const total = parsed?.document?.grand_total
-  return total === null || total === undefined ? null : Number(total)
+  const parsed = row?.parsed_result as {
+    document?: {
+      tax_base_total?: number | string | null
+      tax_total?: number | string | null
+      grand_total?: number | string | null
+    }
+  } | null
+  const doc = parsed?.document
+  if (!doc) return null
+  const num = (v: number | string | null | undefined): number | null =>
+    v === null || v === undefined ? null : Number(v)
+  return { base: num(doc.tax_base_total), tax: num(doc.tax_total), grandTotal: num(doc.grand_total) }
 }
 
 // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §5 — umbral de racha (diseño

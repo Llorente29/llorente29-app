@@ -94,6 +94,77 @@ export async function dismissPending(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §B.2.3 — la
+// vigía albaran_sin_pedido tiene su propia interacción (Sí/No por
+// albarán, no el menú genérico posponer/descartar por tipo).
+// ─────────────────────────────────────────────────────────────────────
+export interface AlbaranSinPedidoDetail {
+  receiptId: string
+  receiptCode: string
+  supplierName: string
+  receivedAt: string
+  candidateOrderId: string
+  candidateOrderCode: string
+  candidateExpectedDate: string
+  candidateScore: number
+}
+
+export async function getAlbaranSinPedidoDetail(
+  accountId: string,
+  locationId: string
+): Promise<AlbaranSinPedidoDetail[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('pending_albaran_sin_pedido_detail', {
+    p_account_id: accountId,
+    p_location_id: locationId,
+  })
+  if (error) throw new Error(`No se pudo cargar la propuesta: ${error.message}`)
+  return (data ?? []).map(r => ({
+    receiptId: r.receipt_id,
+    receiptCode: r.receipt_code,
+    supplierName: r.supplier_name,
+    receivedAt: r.received_at,
+    candidateOrderId: r.candidate_order_id,
+    candidateOrderCode: r.candidate_order_code,
+    candidateExpectedDate: r.candidate_expected_date,
+    candidateScore: Number(r.candidate_score),
+  }))
+}
+
+/** "Sí, es este" — enlaza el albarán al pedido propuesto. */
+export async function confirmAlbaranIsOrder(
+  accountId: string,
+  receiptId: string,
+  orderId: string
+): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('confirm_goods_receipt_order_link', {
+    p_account_id: accountId,
+    p_receipt_id: receiptId,
+    p_order_id: orderId,
+  })
+  if (error) throw new Error(`No se pudo enlazar el albarán al pedido: ${error.message}`)
+}
+
+/** "No, es una compra suelta" — descarta ESTE albarán (no el tipo entero). */
+export async function dismissAlbaranAsStandalone(
+  accountId: string,
+  receiptId: string,
+  locationId: string
+): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('dismiss_pending', {
+    p_account_id: accountId,
+    p_pending_kind: 'albaran_sin_pedido',
+    p_location_id: locationId,
+    p_action: 'descartar',
+    p_reason: 'Compra suelta: no es de ningún pedido.',
+    p_entity_id: receiptId,
+  })
+  if (error) throw new Error(`No se pudo descartar el albarán: ${error.message}`)
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Textos y destino de botón — A.2, literales del encargo. Un solo sitio:
 // si se añade un pending_kind, se añade una línea aquí, no se busca por
 // el código de la pantalla.
@@ -160,6 +231,13 @@ const PENDING_KIND_META: Record<string, PendingKindMeta> = {
     text: n => `${n} entrada${n === 1 ? '' : 's'} de género sin precio: no cuentan en tu coste`,
     buttonText: () => 'Ir a Recepciones',
     destination: () => '/supply/recepciones',
+  },
+  albaran_sin_pedido: {
+    // ENCARGO CODE (14/08) §B.2.3 — esta línea NO navega: se abre en sitio
+    // con la propuesta Sí/es este · No/compra suelta (ver PendientesPage).
+    text: n => `${n} albarán${n === 1 ? '' : 'es'} que pueden ser de un pedido`,
+    buttonText: () => 'Revisar',
+    destination: () => '',
   },
   stock_negativo: {
     text: n => `${n} artículo${n === 1 ? '' : 's'} en negativo`,

@@ -83,6 +83,7 @@ import {
   type SupplierPriceRef,
   type PriceDrift,
   type BaseUnitInfo,
+  type OcrDocTotals,
 } from '@/modules/supply/services/goodsReceiptService'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
 
@@ -98,10 +99,10 @@ export interface ReceiptPrefill {
   isDraft?: boolean
   code?: string | null
   rawDocumentUrl?: string | null
-  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — total del albarán leído
-  // por la IA (goods_receipt_ai_session.parsed_result.document.grand_total, YA
-  // EXISTE — se lee vía getReceiptDocTotal). null si no hubo OCR o no lo leyó.
-  docTotal?: number | null
+  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — totales del albarán
+  // leídos por la IA (se leen vía getReceiptDocTotal). null si no hubo OCR.
+  // 14/08 §A — antes solo grand_total (con IVA); el cuadre compara con base.
+  docTotal?: OcrDocTotals | null
 }
 export interface ReceiptPrefillLine {
   // ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — id real de
@@ -140,13 +141,11 @@ export interface ReceiptPrefillLine {
 // llegan SIN artículo (recipeItemId null): el casado a artículos es C2.2.b.
 export interface OcrPrefill {
   aiSessionId: string | null
-  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — la IA YA lee el total
-  // del albarán (result.document.grand_total) y YA se muestra en ReceiptScanPanel
-  // ("Total") — pero se descartaba aquí, así que nunca llegaba a la oficina para
-  // el cuadre. Cablearlo, no inventar una columna nueva (persistido en
-  // goods_receipt_ai_session.parsed_result, se lee de vuelta al revisar un
-  // borrador vía getReceiptDocTotal).
-  docTotal: number | null
+  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — la IA YA lee los
+  // totales del albarán y YA se muestran en ReceiptScanPanel — pero se
+  // descartaban aquí, así que nunca llegaban a la oficina para el cuadre.
+  // 14/08 §A — antes solo grand_total (con IVA); ver OcrDocTotals.
+  docTotal: OcrDocTotals | null
   supplierId: string            // '' si no casó
   proposedSupplierName: string | null   // emisor leído (para prerellenar el alta si no casa)
   proposedSupplierNif: string | null
@@ -1685,6 +1684,13 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // vez. contado = Σ qty × precio de las líneas CON cantidad (mismo criterio
   // que "filled"); null si ninguna línea tiene los dos datos.
   const docTotal = ocrPrefill?.docTotal ?? prefill?.docTotal ?? null
+  // ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §A.2 — el cuadre
+  // compara contra la BASE imponible (lo que Folvy cuenta: qty × coste, sin
+  // IVA), nunca contra el total con IVA. Si el albarán solo trae grand_total
+  // (sin desglose de IVA), no se inventa un descuadre — se avisa de qué se
+  // compara, sin marcar diferencia.
+  const docBaseTotal = docTotal?.base ?? null
+  const docOnlyGrandTotal = docTotal != null && docBaseTotal == null && docTotal.grandTotal != null
   const contado = useMemo(() => {
     let sum = 0
     let any = false
@@ -2831,19 +2837,26 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                   no se inventa nada, solo se enseña lo contado. No bloquea. */}
               {contado !== null && (
                 <div className="px-1 text-sm">
-                  {docTotal !== null ? (() => {
-                    const diff = Math.round((docTotal - contado) * 100) / 100
+                  {docBaseTotal !== null ? (() => {
+                    const diff = Math.round((docBaseTotal - contado) * 100) / 100
                     const cuadra = Math.abs(diff) <= 0.01
                     return (
                       <span className={cuadra ? 'text-success' : 'text-danger'}>
-                        Albarán {docTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        Albarán (base) {docBaseTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        {docTotal?.tax != null && docTotal.grandTotal != null && (
+                          <> (IVA {docTotal.tax.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € · total {docTotal.grandTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)</>
+                        )}
                         {' · '}contado {contado.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                         {cuadra
                           ? '  ✓'
                           : `  · ${diff > 0 ? 'faltan' : 'sobran'} ${Math.abs(diff).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
                       </span>
                     )
-                  })() : (
+                  })() : docOnlyGrandTotal ? (
+                    <span className="text-text-secondary">
+                      El albarán solo da el total con IVA ({docTotal!.grandTotal!.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €). Comparo con lo que cuentas sin IVA: contado {contado.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €.
+                    </span>
+                  ) : (
                     <span className="text-text-secondary">
                       contado {contado.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                     </span>

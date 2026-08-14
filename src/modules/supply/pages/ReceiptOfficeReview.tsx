@@ -27,6 +27,7 @@ import {
   type GoodsReceipt,
   type GoodsReceiptLine,
   type LineMatchCandidate,
+  type OcrDocTotals,
 } from '@/modules/supply/services/goodsReceiptService'
 import { getSupplierCatalog, listSupplyLocations, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
 import { listSuppliers, createPurchaseFormat } from '@/modules/kitchen/services/purchaseFormatService'
@@ -112,7 +113,7 @@ interface ReceiptOfficeReviewProps {
 export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSaved }: ReceiptOfficeReviewProps) {
   const [receipt, setReceipt] = useState<GoodsReceipt | null>(null)
   const [lines, setLines] = useState<GoodsReceiptLine[]>([])
-  const [docTotal, setDocTotal] = useState<number | null>(null)
+  const [docTotal, setDocTotal] = useState<OcrDocTotals | null>(null)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locationName, setLocationName] = useState<string>('')
   const [itemInfo, setItemInfo] = useState<Record<string, { name: string; baseUnitAbbr: string | null }>>({})
@@ -200,11 +201,20 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     }, 0),
     [lines],
   )
+  // ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §A.2 — el cuadre
+  // compara contra la BASE imponible (lo que Folvy cuenta: qty × coste, sin
+  // IVA), nunca contra el total con IVA. Verificado contra ALB-00115:
+  // sum(doc_amount) = sum(qty_received × unit_cost) = tax_base_total exacto
+  // (550,48 €) — doc_amount por línea YA es sin IVA. Si el albarán solo trae
+  // grand_total (sin base), no se inventa un descuadre: docOnlyGrandTotal
+  // avisa de qué se compara, sin marcar diferencia.
+  const docBaseTotal = docTotal?.base ?? null
+  const docOnlyGrandTotal = docTotal != null && docBaseTotal == null && docTotal.grandTotal != null
   const totalSum = useMemo(() => {
-    if (docTotal != null) return docTotal
+    if (docBaseTotal != null) return docBaseTotal
     return lines.reduce((sum, l) => sum + (l.docAmount ?? 0), 0)
-  }, [docTotal, lines])
-  const missingSum = Math.max(0, totalSum - verifiedSum)
+  }, [docBaseTotal, lines])
+  const missingSum = docOnlyGrandTotal ? 0 : Math.max(0, totalSum - verifiedSum)
   const allDecided = pendingLines.length === 0
 
   // ── Picker de artículo (se reutiliza en las 3 clases: cambiar/dudosa/sin decidir) ──
@@ -442,8 +452,15 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
             <div className="text-sm text-text-primary font-medium">{receipt.supplierDocNumber ?? DASH}</div>
           </div>
           <div>
-            <div className="text-xs text-text-secondary">Total del papel</div>
-            <div className="text-sm text-text-primary font-medium">{isNum(docTotal) ? fmtMoney(docTotal) : DASH}</div>
+            <div className="text-xs text-text-secondary">Total del papel (base)</div>
+            <div className="text-sm text-text-primary font-medium">
+              {isNum(docBaseTotal) ? fmtMoney(docBaseTotal) : isNum(docTotal?.grandTotal) ? `${fmtMoney(docTotal!.grandTotal!)} (con IVA)` : DASH}
+            </div>
+            {isNum(docBaseTotal) && isNum(docTotal?.tax) && isNum(docTotal?.grandTotal) && (
+              <div className="text-xs text-text-secondary mt-0.5">
+                IVA {fmtMoney(docTotal!.tax!)} · total {fmtMoney(docTotal!.grandTotal!)}
+              </div>
+            )}
           </div>
           <div>
             <div className="text-xs text-text-secondary">Tu trabajo aquí</div>
@@ -492,7 +509,12 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         <div className="text-sm text-text-secondary tabular-nums">
           Lo que has verificado suma
           <span className="block text-lg font-display font-semibold text-text-primary">{fmtMoney(verifiedSum)} de {fmtMoney(totalSum)}</span>
-          {!allDecided && <>faltan {fmtMoney(missingSum)} en las {pendingLines.length} línea{pendingLines.length === 1 ? '' : 's'} sin decidir</>}
+          {docOnlyGrandTotal && (
+            <div className="text-xs mt-0.5">
+              El albarán solo da el total con IVA ({fmtMoney(docTotal!.grandTotal!)}) — comparo con lo que cuentas sin IVA.
+            </div>
+          )}
+          {!allDecided && !docOnlyGrandTotal && <>faltan {fmtMoney(missingSum)} en las {pendingLines.length} línea{pendingLines.length === 1 ? '' : 's'} sin decidir</>}
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={handleLeaveHalfway} disabled={saving}

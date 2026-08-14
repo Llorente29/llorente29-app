@@ -10,17 +10,21 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MoreHorizontal, MapPin, AlertTriangle, Inbox } from 'lucide-react'
+import { MoreHorizontal, MapPin, AlertTriangle, Inbox, ChevronDown, ChevronUp, Check, X } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { usePendingBoard } from './hooks/usePendingBoard'
 import {
   pendingKindMeta,
   postponePending,
   dismissPending,
+  getAlbaranSinPedidoDetail,
+  confirmAlbaranIsOrder,
+  dismissAlbaranAsStandalone,
   DISMISS_REASONS,
   type PendingItem,
   type PendingPreset,
   type DismissReason,
+  type AlbaranSinPedidoDetail,
 } from './pendientesService'
 
 const LAST_NONEMPTY_KEY = 'folvy_pendientes_last_nonempty'
@@ -131,16 +135,20 @@ export default function PendientesPage() {
       {semana.length > 0 && (
         <Section title="ESTA SEMANA" tone="semana">
           {semana.map(item => (
-            <PendingLine
-              key={lineKey(item)}
-              item={item}
-              busy={busyKey === lineKey(item)}
-              menuOpen={openMenuKey === lineKey(item)}
-              onToggleMenu={() => setOpenMenuKey(openMenuKey === lineKey(item) ? null : lineKey(item))}
-              onGo={() => navigate(pendingKindMeta(item.pendingKind).destination(item.locationId))}
-              onPostpone={preset => handlePostpone(item, preset)}
-              onAskDismiss={() => { setOpenMenuKey(null); setReasonModalKey(lineKey(item)) }}
-            />
+            item.pendingKind === 'albaran_sin_pedido' ? (
+              <AlbaranSinPedidoLine key={lineKey(item)} item={item} onChanged={refetch} />
+            ) : (
+              <PendingLine
+                key={lineKey(item)}
+                item={item}
+                busy={busyKey === lineKey(item)}
+                menuOpen={openMenuKey === lineKey(item)}
+                onToggleMenu={() => setOpenMenuKey(openMenuKey === lineKey(item) ? null : lineKey(item))}
+                onGo={() => navigate(pendingKindMeta(item.pendingKind).destination(item.locationId))}
+                onPostpone={preset => handlePostpone(item, preset)}
+                onAskDismiss={() => { setOpenMenuKey(null); setReasonModalKey(lineKey(item)) }}
+              />
+            )
           ))}
         </Section>
       )}
@@ -296,6 +304,114 @@ function DismissReasonModal({ onCancel, onPick }: { onCancel: () => void; onPick
           Cancelar
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ENCARGO CODE (14/08) fix/recepcion-iva-y-enlace-pedido, §B.2.3 — la
+// vigía albaran_sin_pedido no navega: al abrirla, la lista de albaranes
+// con su candidato, cada uno con "Sí, es este" / "No, es una compra
+// suelta". La respuesta se guarda (confirm_goods_receipt_order_link o
+// dismiss_pending con entity_id) — no vuelve a preguntar por ese albarán.
+// ─────────────────────────────────────────────────────────────────────
+function AlbaranSinPedidoLine({ item, onChanged }: { item: PendingItem; onChanged: () => void }) {
+  const { activeAccountId } = useApp()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [rows, setRows] = useState<AlbaranSinPedidoDetail[]>([])
+  const [busyReceiptId, setBusyReceiptId] = useState<string | null>(null)
+  const meta = pendingKindMeta(item.pendingKind)
+
+  useEffect(() => {
+    if (!open || !activeAccountId) return
+    let cancelled = false
+    setLoading(true)
+    getAlbaranSinPedidoDetail(activeAccountId, item.locationId)
+      .then(r => { if (!cancelled) setRows(r) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [open, activeAccountId, item.locationId])
+
+  async function handleYes(row: AlbaranSinPedidoDetail) {
+    if (!activeAccountId) return
+    setBusyReceiptId(row.receiptId)
+    try {
+      await confirmAlbaranIsOrder(activeAccountId, row.receiptId, row.candidateOrderId)
+      setRows(prev => prev.filter(r => r.receiptId !== row.receiptId))
+      onChanged()
+    } finally {
+      setBusyReceiptId(null)
+    }
+  }
+
+  async function handleNo(row: AlbaranSinPedidoDetail) {
+    if (!activeAccountId) return
+    setBusyReceiptId(row.receiptId)
+    try {
+      await dismissAlbaranAsStandalone(activeAccountId, row.receiptId, item.locationId)
+      setRows(prev => prev.filter(r => r.receiptId !== row.receiptId))
+      onChanged()
+    } finally {
+      setBusyReceiptId(null)
+    }
+  }
+
+  return (
+    <div className="px-4 py-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-text-primary">{meta.text(item.items)}</div>
+          <span className="inline-flex items-center gap-1 text-xs text-text-secondary mt-0.5">
+            <MapPin size={12} />{item.locationName}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-white hover:opacity-90 transition-base"
+          style={{ minHeight: 44 }}
+        >
+          Revisar {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-2">
+          {loading && <div className="text-sm text-text-secondary">Cargando…</div>}
+          {!loading && rows.length === 0 && (
+            <div className="text-sm text-text-secondary">Ya no queda ninguno por decidir.</div>
+          )}
+          {rows.map(row => (
+            <div key={row.receiptId} className="rounded-md border border-border-default bg-page px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+              <div className="min-w-0">
+                <div className="text-sm text-text-primary font-medium">{row.receiptCode} · {row.supplierName}</div>
+                <div className="text-xs text-text-secondary mt-0.5">
+                  ¿Es del pedido {row.candidateOrderCode} (entrega prevista {new Date(row.candidateExpectedDate).toLocaleDateString('es-ES')})?
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={busyReceiptId === row.receiptId}
+                  onClick={() => handleYes(row)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-sm font-medium bg-success text-white hover:opacity-90 disabled:opacity-50 transition-base"
+                >
+                  <Check size={14} /> Sí, es este
+                </button>
+                <button
+                  type="button"
+                  disabled={busyReceiptId === row.receiptId}
+                  onClick={() => handleNo(row)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-sm font-medium border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50 transition-base"
+                >
+                  <X size={14} /> No, es compra suelta
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

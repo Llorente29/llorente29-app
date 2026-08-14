@@ -41,6 +41,7 @@ import {
   getSupplySettings,
   saveSupplySettings,
   type SupplySettings,
+  type OcrDocTotals,
 } from '@/modules/supply/services/goodsReceiptService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
@@ -305,7 +306,7 @@ export default function GoodsReceiptsPage() {
       // IA ya vive en goods_receipt_ai_session (se escribió al escanear); se lee
       // de vuelta para el cuadre. Best-effort: sin OCR (r.aiSessionId null) o si
       // falla, el cuadre simplemente no se muestra — no rompe abrir la recepción.
-      let docTotal: number | null = null
+      let docTotal: OcrDocTotals | null = null
       if (r.aiSessionId) {
         try { docTotal = await getReceiptDocTotal(r.aiSessionId) }
         catch (e) { console.error('handleReviewDraft: no se pudo leer el total del albarán', e) }
@@ -432,7 +433,7 @@ export default function GoodsReceiptsPage() {
       if (!r) throw new Error('No se pudo recuperar la recepción.')
       // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §3 — mismo cuadre que en
       // handleReviewDraft (ver comentario allí). No bloquea si falla.
-      let docTotal: number | null = null
+      let docTotal: OcrDocTotals | null = null
       if (r.aiSessionId) {
         try { docTotal = await getReceiptDocTotal(r.aiSessionId) }
         catch (e) { console.error('handleCorrect: no se pudo leer el total del albarán', e) }
