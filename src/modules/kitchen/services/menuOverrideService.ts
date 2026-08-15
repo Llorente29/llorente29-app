@@ -26,6 +26,7 @@ export interface ChannelEconomics {
   serviceType: string | null
   price: number               // precio efectivo SIN IVA
   priceSource: PriceSource
+  isLocationOverride: boolean // true si el precio efectivo viene de un override PROPIO del local pedido (no heredado de marca/base)
   isAvailable: boolean        // 86 manual (override); true si no hay override
   vatRate: number
   priceWithVat: number        // PVP cliente
@@ -88,6 +89,7 @@ function rowToChannelEconomics(r: Record<string, unknown>): ChannelEconomics {
     serviceType: (r.service_type as string) ?? null,
     price: Number(r.price ?? 0),
     priceSource: (r.price_source as PriceSource) ?? 'base',
+    isLocationOverride: r.is_location_override === true,
     isAvailable: r.is_available !== false,
     vatRate: Number(r.vat_rate ?? 0),
     priceWithVat: Number(r.price_with_vat ?? 0),
@@ -113,28 +115,42 @@ function rowToChannelEconomics(r: Record<string, unknown>): ChannelEconomics {
 /**
  * Economía por canal de un producto. `preview` ({channelId: precioSinIva}) hace que
  * el servidor recalcule el margen con los precios tecleados, sin guardarlos.
+ * `locationId` activa la cascada de effective_price() para ESE local
+ * (local+canal → local → canal de marca → base); omitido/null = comportamiento
+ * de siempre (canal de marca → base, byte a byte).
  */
 export async function getMenuItemChannelEconomics(
   menuItemId: string,
-  preview?: Record<string, number> | null
+  preview?: Record<string, number> | null,
+  locationId?: string | null,
 ): Promise<ChannelEconomics[]> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('menu_item_channel_economics', {
     p_menu_item_id: menuItemId,
     p_overrides: preview && Object.keys(preview).length > 0 ? preview : null,
+    p_location_id: locationId ?? undefined,
   })
   if (error) throw new Error(`Error calculando economía por canal: ${error.message}`)
   return ((data ?? []) as Record<string, unknown>[]).map(rowToChannelEconomics)
 }
 
-/** Overrides guardados del producto a nivel marca/canal (location_id null). */
-export async function listMenuItemOverrides(menuItemId: string): Promise<MenuItemOverride[]> {
+/**
+ * Overrides guardados del producto. Sin locationId (o null): nivel marca/canal
+ * (location_id IS NULL, comportamiento de siempre). Con locationId: la capa
+ * propia de ESE local (location_id = locationId) — no incluye la de marca,
+ * son capas distintas de la cascada de effective_price().
+ */
+export async function listMenuItemOverrides(
+  menuItemId: string,
+  locationId?: string | null,
+): Promise<MenuItemOverride[]> {
   requireSupabase()
-  const { data, error } = await supabase!
+  let query = supabase!
     .from('menu_item_override')
     .select('channel_id, price, is_available')
     .eq('menu_item_id', menuItemId)
-    .is('location_id', null)
+  query = locationId ? query.eq('location_id', locationId) : query.is('location_id', null)
+  const { data, error } = await query
   if (error) throw new Error(`Error listando overrides: ${error.message}`)
   return (data ?? []).map((o) => ({
     channelId: (o.channel_id as string) ?? null,

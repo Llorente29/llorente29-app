@@ -18798,7 +18798,7 @@ export type Database = {
         }[]
       }
       menu_item_channel_economics: {
-        Args: { p_menu_item_id: string; p_overrides?: Json }
+        Args: { p_menu_item_id: string; p_overrides?: Json; p_location_id?: string }
         Returns: {
           channel_id: string
           channel_name: string
@@ -18815,6 +18815,7 @@ export type Database = {
           food_cost_pct: number
           food_cost_status: string
           is_available: boolean
+          is_location_override: boolean
           net_margin: number
           net_margin_pct: number
           order_costs_per_item: number

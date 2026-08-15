@@ -391,6 +391,20 @@ vigilancia. Corregido: ahora muestra la conexión estándar "Folvy" (incluida in
 estándar: <nombre>". Verificado en vivo por impersonación tras el fix: "Folvy Test" aparece
 correctamente, las dos filas reales no cambiaron. `/_admin/hubrise`, `tsc -b`/`vite build` limpios.
 
+**B.2 backend de lectura (15/08, no es HubRise pero mismo encargo Fase 3)**: `menu_item_channel_economics`
+gana `p_location_id uuid DEFAULT NULL`, aditivo, reutilizando `effective_price()` para el número
+(una cascada, una implementación) — solo añade un `EXISTS` para etiquetar `price_source`/
+`is_location_override`, no recalcula el precio dos veces. Trampa de sobrecarga de
+`CREATE OR REPLACE FUNCTION` (ver `feedback_create_or_replace_function_overload`) apareció otra
+vez y se corrigió con `DROP FUNCTION` explícito de la firma vieja antes de crear la nueva —
+verificado conteo=1. Regresión probada con datos reales: instantánea de 7 `menu_item` con
+overrides ANTES del cambio, diff byte a byte DESPUÉS con `p_location_id` omitido → las 7
+idénticas. Cascada nueva probada con una fila de override real creada y borrada de inmediato
+(price/price_source/is_location_override correctos). Hallazgo no mío: `channel_rate` tiene 3 filas
+activas duplicadas para al menos un canal — preexistente, no introducido por este cambio, no
+tocado (fuera de alcance). `listMenuItemOverrides` gana `locationId` opcional (sin llamadores hoy,
+cero riesgo). Selector en el modal (B.2 paso 4) sigue sin empezar.
+
 **⚠️ Incidente cerrado (15/08): la primera URL de prueba entregada a Julio apuntaba a PRODUCCIÓN,
 no al laboratorio.** Ver Trampa 14 más abajo. Julio NO pulsó la URL incorrecta.
 
