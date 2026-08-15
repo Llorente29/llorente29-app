@@ -138,7 +138,7 @@
 - **Money**: el webhook es ciego a la moneda → la cuenta en EUR.
 - **Edge Functions HubRise** (ACTIVE): `hubrise-webhook`, `hubrise-order-status`, `hubrise-catalog-publish`, `hubrise-callback-ensure`, `hubrise-oauth-start/-callback`, `hubrise-location-dispatch`, `availability-dispatch`, `availability-watchdog`.
 
-## HubRise — F0.2 resuelta: pedidos y callbacks son POR LOCATION (15/08/2026)
+## HubRise — F0.2: NO RESUELTA (test 15/08 mal diseñado — re-test en curso)
 
 **Método**: sin OrderLine (es app receptora, no genera pedidos — corregido en el encargo el 15/08).
 Llamadas HTTP directas a HubRise desde SQL vía `pg_net` (`net.http_post`/`net.http_get` +
@@ -173,39 +173,74 @@ como exige la Trampa 1 (PK sobre `account_id`, no hay forma de que se crucen).
    registrado. La conexión `Folvy Test` (`zy9j2-0`, ya apuntaba a `hubrise-webhook` de producción) **no
    se tocó**.
 
-**La medición decisiva — pedido nuevo en `zy9j2-1` y otro en `zy9j2-0`, tras el callback ya activo:**
+**La medición del 15/08 — pedido nuevo en `zy9j2-1` y otro en `zy9j2-0`, tras el callback ya activo:**
 
 - `zy9j2-1` (pedido `6bgypv4`, creado y sin más actividad): **0 eventos** en el receptor de prueba,
   ni siquiera esperando 30+ segundos.
-- `zy9j2-0` (pedido `vxy89p8`): **2 eventos** `order.update` sí llegaron — pero (matiz importante) NO
-  son de la creación del pedido: son las transiciones `new→received→accepted` que generó **el propio
-  `hubrise-webhook` de producción** al procesar el pedido por la vía YA existente de `Folvy Test`
-  (auto-ack + auto-aceptación, `maybeAckReceived`/`maybeAutoAccept`). Es decir: el callback de cuenta
-  vio tráfico en `zy9j2-0` porque ahí YA hay una conexión por local activa generando eventos; en
-  `zy9j2-1`, sin ninguna conexión por local, el callback de cuenta no vio nada — ni el `create`.
+- `zy9j2-0` (pedido `vxy89p8`): **2 eventos** `order.update` sí llegaron — no son de la creación del
+  pedido: son las transiciones `new→received→accepted` que generó **el propio `hubrise-webhook` de
+  producción** al procesar el pedido por la vía YA existente de `Folvy Test` (auto-ack +
+  auto-aceptación, `maybeAckReceived`/`maybeAutoAccept`).
 
-**RESULTADO: llega solo uno → es POR LOCATION.** Según lo acordado: **se para aquí.** No se toca
-2.1/2.2 (OAuth con `location_id`). La capa escritora de cuenta (`hubrise_writer_connection`, PK
-`account_id`) NO basta para pedidos/callbacks — hace falta una conexión por local con scope de
-pedidos, y eso es cambio de modelo de datos que decide Julio, no un ajuste de código.
+> ⚠️ **CORREGIDO 15/08: conclusión retirada.** El párrafo original decía aquí "RESULTADO: llega solo
+> uno → es POR LOCATION" y daba F0.2 por cerrada. **Era un test mal diseñado, no un resultado.** La
+> doc de HubRise (`/developers/api/callbacks`) es explícita:
+>
+> > "A client does not receive notifications for the events it generated. If you are testing
+> > callbacks, you need to use a separate client to trigger events."
+>
+> Ambos pedidos de prueba los creó **la misma conexión** que tenía el callback registrado (la de
+> cuenta). HubRise nunca iba a notificarle sus propios eventos, en NINGUNA location. El silencio de
+> `zy9j2-1` no medía "por location" — medía "no había un segundo cliente ahí". Y la observación de
+> `zy9j2-0` apunta al REVÉS de lo que se concluyó: esos 2 eventos los generó `Folvy Test` (un cliente
+> distinto), y el callback de la conexión de CUENTA sí los recibió — es evidencia POSITIVA de que un
+> callback de cuenta puede recibir eventos de una location ajena a quien los originó.
+>
+> | Observación | Lectura errónea (retirada) | Lectura correcta (regla del auto-evento) |
+> |---|---|---|
+> | `zy9j2-1`: 0 eventos | "el callback de cuenta no cubre esa location" | el único actor en `zy9j2-1` era la propia conexión de cuenta → autoevento, silencio esperado, no dice nada de cobertura |
+> | `zy9j2-0`: 2 eventos (`update`) | "casualidad, por el auto-accept" | `Folvy Test` es un cliente DISTINTO de la conexión de cuenta → sí hay notificación → primera evidencia (parcial, un solo caso) de que el callback de cuenta SÍ ve eventos ajenos en una location |
+>
+> **F0.2 sigue abierta.** Re-test en curso con un segundo cliente real (OrderLine) en `zy9j2-1` — ver
+> más abajo. El método (pg_net, HTTP 200/403/422 de arriba, la reautorización con scope de pedidos)
+> sigue siendo válido y se reutiliza; solo se retira la conclusión de "por location".
 
-**Efecto colateral documentado (esperado, no un fallo):** el pedido de prueba `vxy89p8` (zy9j2-0)
-entró en producción real por la vía de `Folvy Test` → `hubrise-webhook`: `sale.id=c0c6848a-d69b-4262-9dc7-9d146ba11b64`,
-`account_id`=Folvy Interno, `external_ref='vxy89p8'`, `order_status='accepted'`, `brand_id=null`
-(sin `connection_name` que case con ninguna marca), `total=0`. `external_webhook_log` registra
-`note='frontera-order-create'`, `processed=true`. Fila de test, contenida en la cuenta de laboratorio;
-pendiente de que Julio decida si la borra.
+**Trampa añadida al encargo (15/08)**: un callback nunca recibe los eventos que genera su propia
+conexión. Cualquier prueba de callbacks necesita un segundo cliente distinto — si no, mide silencio
+y lo confunde con ausencia.
 
-**Consecuencia para la arquitectura decidida** (tabla de capas, arriba en este documento): la fila
-`hubrise_writer_connection` sigue sirviendo para catálogo+inventario (eso SÍ es de cuenta, confirmado
-en el RECON de julio). Para pedidos/callbacks, el patrón ya construido y correcto es el que usa
-`external_integration`/`Folvy Test`: **una conexión POR LOCATION**. El módulo de conexión (Fase 2 en
-adelante) necesita crear una conexión OAuth de este tipo por cada local que se conecte — no una sola
-de cuenta — cuando llegue a pedidos/callbacks. El OAuth de catálogo (Fase 1, ya hecho) no cambia.
+**Efecto colateral (ya limpiado)**: el pedido de prueba `vxy89p8` (zy9j2-0) entró en producción real
+por la vía de `Folvy Test` → `hubrise-webhook` (`order_status='accepted'`, `brand_id=null`, `total=0`,
+`external_webhook_log.note='frontera-order-create'`, `processed=true`). La fila de `sale`
+(`c0c6848a-d69b-4262-9dc7-9d146ba11b64`) se BORRÓ el 15/08 tras verificar 0 dependientes en
+`sale_line`/`kds_ticket_station_state`/`channel_settlement_order`/`print_job`/`coupon_redemption`/
+`delivery_assignment`/`delivery_quote`/`customer_notification`.
 
-**Limpieza tras escribir esto**: `hubrise_callback_test_log` (tabla) y `hubrise-callback-test-receiver`
-(Edge Function) se borran — eran solo para este test. El parámetro `?scope=writer_orders` de
-`hubrise-oauth-start` se retira de la lista blanca (el resultado no justifica adoptarlo permanente).
+## HubRise — F0.2, re-test con segundo cliente (OrderLine) — EN CURSO (15/08/2026)
+
+**Por qué OrderLine esta vez SÍ sirve**: no genera pedidos (sigue siendo cierto), pero SÍ cambia el
+estado de un pedido ya existente — y ese cambio de estado, hecho por una app externa distinta de
+nuestra conexión de cuenta, es exactamente el "segundo cliente" que exige la doc de callbacks.
+
+**Por qué NO se reautoriza `hubrise-oauth-start` para esto**: el token de cuenta ya conserva el scope
+`orders.write` de la reautorización anterior (solo se retiró la CLAVE `writer_orders` de la lista
+blanca del parámetro, no el permiso ya concedido). Autorizar una conexión de LOCATION por esa misma
+vía sobrescribiría la fila de `hubrise_writer_connection` de Folvy Interno (PK `account_id`) con un
+token de alcance de location y dejaría el laboratorio sin capacidad de catálogo — por eso el segundo
+cliente es OrderLine (ajeno a nuestra infraestructura), no una segunda conexión nuestra.
+
+**Secuencia**: 1) receptor de prueba + tabla montados de nuevo (mismo disparador de borrado: se
+retiran en cuanto este resultado quede escrito). 2) Callback re-registrado en la conexión de cuenta.
+3) Julio conecta OrderLine a `Lab 2 (zy9j2-1)` desde la consola de HubRise. 4) Con el token de cuenta,
+se crea un pedido en `zy9j2-1` — se espera 0 eventos (autoevento, ahora es predicción, no hallazgo).
+5) Julio cambia el estado de ese pedido desde OrderLine. 6) La medición real: ¿llega ese
+`order.update` (generado por OrderLine, un cliente ajeno) al callback de la conexión de cuenta?
+  - Sí → el callback de cuenta cubre todas las locations; combinado con `zy9j2-0`, F0.2 cierra a favor
+    de la capa de cuenta; 2.1/2.2 siguen como estaban.
+  - No → es por location; parar y decidir el cambio de modelo de datos.
+  - Nada → verificar el receptor con una llamada directa antes de concluir; silencio no es resultado.
+
+**Resultado**: pendiente — esperando confirmación de Julio de que OrderLine está conectado a `zy9j2-1`.
 
 ## Cuenta HubRise 1b6p8 — inventario del panel (24/07/2026)
 
