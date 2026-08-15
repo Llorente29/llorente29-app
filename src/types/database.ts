@@ -8000,16 +8000,22 @@ export type Database = {
         Row: {
           account_id: string
           created_at: string
+          kind: string
+          location_id: string | null
           nonce: string
         }
         Insert: {
           account_id: string
           created_at?: string
+          kind?: string
+          location_id?: string | null
           nonce?: string
         }
         Update: {
           account_id?: string
           created_at?: string
+          kind?: string
+          location_id?: string | null
           nonce?: string
         }
         Relationships: []

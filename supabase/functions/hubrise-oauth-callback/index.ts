@@ -1,29 +1,31 @@
 // supabase/functions/hubrise-oauth-callback/index.ts
 //
-// HubRise "Folvy escritor" (Fase 1) — callback del OAuth2 authorize.
-// ============================================================================
+// HubRise — callback del OAuth2 authorize. Bifurca por `kind` (ENCARGO CODE
+// 2.1/2.2, 15/08/2026), leído del nonce (hubrise_oauth_state, emitido por
+// hubrise-oauth-start):
+//   kind='writer'   (Fase 1, de siempre): guarda el token EN VAULT vía
+//     hubrise_writer_token_save (hubrise_writer_connection). Sin cambios de
+//     comportamiento frente a antes de 2.1.
+//   kind='location'  (2.1): escribe SOLO en external_integration (nunca
+//     hubrise_writer_connection, bajo ninguna circunstancia). Reconecta por
+//     (account_id, external_location_id, connection_name='Folvy') -- ver
+//     comentario en LOCATION_CONNECTION_NAME sobre por qué el natural key
+//     necesita connection_name.
 // redirect_uri registrado en la app OAuth de HubRise. HubRise trae aquí el
-// navegador de Julio con ?code=...&state=<nonce> (o ?error=...). Este Edge:
-//   1) Consume el nonce (public.hubrise_oauth_state, un solo uso, <15 min).
+// navegador con ?code=...&state=<nonce> (o ?error=...). Este Edge:
+//   1) Consume el nonce (un solo uso, <15 min).
 //   2) Intercambia code -> access_token en HubRise (Basic client_id:secret).
-//   3) Guarda el token EN VAULT vía hubrise_writer_token_save (nunca en claro,
-//      nunca logueado).
+//   3) 2.2: valida que la cuenta HubRise que llega coincide (literal, sin
+//      normalizar) con hubrise_writer_connection.hubrise_account_id de esta
+//      cuenta Folvy -- aplica a AMBAS ramas. Si no hay fila aún (primera
+//      conexión de la cuenta), la fija; si difiere, no guarda nada.
+//   4) Guarda según kind.
 // Es un redirect de navegador sin sesión Folvy -> no hay JWT que validar; la
 // única puerta es el nonce (emitido por hubrise-oauth-start) + que el `code`
 // solo es válido si viene realmente de HubRise tras un consentimiento real.
 //
 // Deploy: --no-verify-jwt (fijado con Julio; slug hubrise-oauth-callback debe
 // coincidir EXACTO con el redirect_uri registrado en HubRise).
-//
-// MODO INSPECCIÓN TEMPORAL (ENCARGO CODE 2.1, punto B, 15/08/2026): si la
-// respuesta del intercambio trae `location_id` (grant de scope de LOCATION,
-// nunca visto hasta ahora — solo hemos pedido scope de cuenta), NO se guarda
-// nada en ningún sitio: se muestra el JSON completo (token enmascarado) en la
-// propia página, para diseñar 2.1 sobre datos reales de HubRise en vez de
-// sobre la doc. Si NO trae `location_id` (el flujo de escritor de cuenta de
-// siempre), el comportamiento es EXACTAMENTE el de hoy, sin cambios — esta
-// rama nunca se ha activado en producción porque nunca hemos pedido ese scope.
-// Retirar este bloque en cuanto 2.1 tenga su propio manejo real de 'location'.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -35,6 +37,18 @@ const HUBRISE_OAUTH_REDIRECT_URI = Deno.env.get("HUBRISE_OAUTH_REDIRECT_URI") ??
 const HUBRISE_TOKEN_URL = Deno.env.get("HUBRISE_TOKEN_URL") ??
   "https://manager.hubrise.com/oauth2/v1/token";
 const NONCE_MAX_AGE_MS = 15 * 60 * 1000;
+
+// Nombre fijo de la conexión "propia de Folvy" (no una bridge de plataforma)
+// en external_integration. RECON en vivo (15/08/2026) mostró que
+// external_location_id NO es clave natural por sí solo: 1b6p8-0 tiene 4 filas
+// hubrise (Uber Eats Bridge, Glovo Bridge, Just Eat Flyt Bridge -- las 3
+// desactivadas -- y una fila "Folvy", activa+push_status_enabled, que es la
+// que ux_ei_hubrise_usable ve como "usable" hoy). La clave real para
+// reconectar/crear la conexión de 2.1 es (account_id, external_location_id,
+// connection_name='Folvy') -- coincide con el nombre que ya usa a mano la
+// fila viva de Foodint/1b6p8-0, así que reconectar esa cuenta encuentra y
+// reutiliza esa misma fila en vez de duplicarla.
+const LOCATION_CONNECTION_NAME = "Folvy";
 
 // ASCII-ONLY a proposito (Encargo HubRise, punto 3, 15/08/2026): el gateway de
 // Supabase Edge Functions REESCRIBE el Content-Type de la respuesta a
@@ -56,14 +70,6 @@ function html(body: string, status: number): Response {
 }
 const ok = (msg: string) => html(`<h1>HubRise conectado</h1><p>${msg}</p><p>Ya puedes cerrar esta ventana.</p>`, 200);
 const fail = (msg: string) => html(`<h1>No se pudo conectar</h1><p>${msg}</p>`, 400);
-const inspect = (json: Record<string, unknown>) => html(
-  `<h1>Modo inspeccion (temporal) - nada guardado</h1>` +
-  `<p>Respuesta completa del intercambio (token enmascarado):</p>` +
-  `<pre style="background:#f5f4f0;padding:1rem;border-radius:8px;white-space:pre-wrap">${
-    JSON.stringify(json, null, 2).replace(/</g, "&lt;")
-  }</pre>`,
-  200,
-);
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "GET") return fail("Method Not Allowed");
@@ -87,7 +93,7 @@ Deno.serve(async (req: Request) => {
   // 1) Consumir el nonce (un solo uso).
   const { data: pending, error: readErr } = await sb
     .from("hubrise_oauth_state")
-    .select("account_id, created_at")
+    .select("account_id, created_at, kind, location_id")
     .eq("nonce", state)
     .maybeSingle();
   if (readErr) {
@@ -102,6 +108,8 @@ Deno.serve(async (req: Request) => {
   if (age > NONCE_MAX_AGE_MS) return fail("El enlace caduco (mas de 15 minutos). Vuelve a abrir hubrise-oauth-start.");
 
   const accountId = pending.account_id as string;
+  const kind = (pending.kind as string | null) ?? "writer";
+  const nonceLocationId = (pending.location_id as string | null) ?? null;
 
   // 2) Intercambiar code -> access_token.
   const basic = btoa(`${HUBRISE_OAUTH_CLIENT_ID}:${HUBRISE_OAUTH_CLIENT_SECRET}`);
@@ -120,7 +128,7 @@ Deno.serve(async (req: Request) => {
       }),
     });
   } catch (e) {
-    console.error("hubrise-oauth-callback: fetch token endpoint falló", e);
+    console.error("hubrise-oauth-callback: fetch token endpoint fallo", e);
     return fail("No se pudo contactar con HubRise para intercambiar el code.");
   }
 
@@ -137,25 +145,189 @@ Deno.serve(async (req: Request) => {
     return fail("HubRise no devolvio access_token.");
   }
   const hubriseAccountId = (tokenJson?.account_id as string | undefined) ?? null;
+  const accountName = (tokenJson?.account_name as string | undefined) ?? null;
 
-  // MODO INSPECCIÓN (temporal, ver comentario de cabecera): grant de location,
-  // nunca visto -> loguear y mostrar, NO guardar nada en ningún sitio.
-  if (tokenJson && "location_id" in tokenJson) {
-    const masked = { ...tokenJson, access_token: accessToken ? `${accessToken.slice(0, 4)}…(${accessToken.length} chars)` : null };
-    console.log("hubrise-oauth-callback INSPECT (location grant, no guardado):", JSON.stringify(masked));
-    return inspect(masked);
+  // 3) 2.2 -- validacion de cuenta HubRise, ANTES de escribir nada, aplica a
+  // ambas ramas. Comparacion literal (sin normalizar) contra
+  // hubrise_writer_connection.hubrise_account_id de esta cuenta Folvy.
+  const { data: writerRow, error: writerReadErr } = await sb
+    .from("hubrise_writer_connection")
+    .select("hubrise_account_id")
+    .eq("account_id", accountId)
+    .maybeSingle();
+  if (writerReadErr) {
+    console.error("hubrise-oauth-callback: error leyendo hubrise_writer_connection", writerReadErr);
+    return fail("Error interno validando la cuenta HubRise.");
+  }
+  const expectedHubriseAccountId = (writerRow?.hubrise_account_id as string | null | undefined) ?? null;
+
+  if (kind === "location") {
+    // La rama location NUNCA toca hubrise_writer_connection (ni para leer-y-
+    // fijar el primer valor): exige que la cuenta escritora (kind=writer) ya
+    // este conectada. Esto es una resolucion mia a un conflicto real que
+    // encontre en el encargo -- lo declaro en vez de decidirlo en silencio:
+    // el punto 4 dice "la primera conexion fija el valor esperado" para 2.2,
+    // pero tambien dice, con lenguaje mas fuerte y mas especifico, que
+    // kind=location no debe tocar hubrise_writer_connection "bajo ninguna
+    // circunstancia". Ante el conflicto, gana la regla mas fuerte: location
+    // solo VALIDA contra un valor ya establecido por writer, nunca lo fija.
+    if (!expectedHubriseAccountId) {
+      return fail(
+        "Esta cuenta Folvy todavia no tiene una conexion HubRise de cuenta (kind=writer). " +
+          "Conecta primero la cuenta escritora antes de conectar un local.",
+      );
+    }
+    if (expectedHubriseAccountId !== hubriseAccountId) {
+      return fail(
+        `Cuenta HubRise distinta de la esperada: se esperaba "${expectedHubriseAccountId}", ` +
+          `ha llegado "${hubriseAccountId ?? "(vacio)"}". No se ha guardado nada.`,
+      );
+    }
+  } else {
+    // kind=writer: si ya hay una cuenta HubRise fijada para esta cuenta
+    // Folvy y no coincide, no se guarda nada (protege contra reconectar por
+    // error la cuenta HubRise equivocada). Si es la primera conexion (sin
+    // fila, o hubrise_account_id aun null), hubrise_writer_token_save la fija.
+    if (expectedHubriseAccountId && expectedHubriseAccountId !== hubriseAccountId) {
+      return fail(
+        `Cuenta HubRise distinta de la esperada: se esperaba "${expectedHubriseAccountId}", ` +
+          `ha llegado "${hubriseAccountId ?? "(vacio)"}". No se ha guardado nada.`,
+      );
+    }
   }
 
-  // 3) Guardar en Vault (nunca loguear el token). Rama de siempre, sin cambios.
-  const { error: saveErr } = await sb.rpc("hubrise_writer_token_save", {
-    p_account_id: accountId,
-    p_access_token: accessToken,
-    p_hubrise_account_id: hubriseAccountId,
-  });
-  if (saveErr) {
-    console.error("hubrise-oauth-callback: error guardando en Vault", saveErr.message ?? saveErr);
-    return fail(`No se pudo guardar el token: ${saveErr.message ?? "error desconocido"}`);
+  // 4) Guardar segun kind.
+  if (kind === "writer") {
+    // Rama de siempre, sin cambios de comportamiento.
+    const { error: saveErr } = await sb.rpc("hubrise_writer_token_save", {
+      p_account_id: accountId,
+      p_access_token: accessToken,
+      p_hubrise_account_id: hubriseAccountId,
+    });
+    if (saveErr) {
+      console.error("hubrise-oauth-callback: error guardando en Vault", saveErr.message ?? saveErr);
+      return fail(`No se pudo guardar el token: ${saveErr.message ?? "error desconocido"}`);
+    }
+    return ok(`Cuenta Folvy ${accountId}${hubriseAccountId ? ` - cuenta HubRise ${hubriseAccountId}` : ""}.`);
   }
 
-  return ok(`Cuenta Folvy ${accountId}${hubriseAccountId ? ` - cuenta HubRise ${hubriseAccountId}` : ""}.`);
+  // kind === "location"
+  const externalLocationId = tokenJson?.location_id as string | undefined;
+  const locationName = (tokenJson?.location_name as string | undefined) ?? null;
+  if (!externalLocationId) {
+    console.error("hubrise-oauth-callback: grant location sin location_id en la respuesta", Object.keys(tokenJson ?? {}));
+    return fail("HubRise no devolvio location_id para un grant de location. No se ha guardado nada.");
+  }
+  if (!nonceLocationId) {
+    // No deberia pasar: el CHECK de hubrise_oauth_state exige location_id no
+    // nulo para kind=location. Defensivo, no fallo silencioso.
+    console.error("hubrise-oauth-callback: nonce kind=location sin location_id (inconsistencia de datos)");
+    return fail("Enlace inconsistente (sin local asociado). Vuelve a abrir hubrise-oauth-start.");
+  }
+
+  // Caso limite B: este local de Folvy ya tiene OTRA location de HubRise
+  // conectada y activa -> rechazar, no reemplazar en silencio.
+  const { data: otherForLocation, error: otherForLocationErr } = await sb
+    .from("external_integration")
+    .select("external_location_id, external_location_name")
+    .eq("account_id", accountId)
+    .eq("source", "hubrise")
+    .eq("is_active", true)
+    .eq("location_id", nonceLocationId)
+    .neq("external_location_id", externalLocationId)
+    .limit(1)
+    .maybeSingle();
+  if (otherForLocationErr) {
+    console.error("hubrise-oauth-callback: error comprobando local ya conectado", otherForLocationErr);
+    return fail("Error interno comprobando el local.");
+  }
+  if (otherForLocation) {
+    return fail(
+      `Este local de Folvy ya esta conectado a otra location de HubRise ` +
+        `(${otherForLocation.external_location_id}${otherForLocation.external_location_name ? ` - ${otherForLocation.external_location_name}` : ""}). ` +
+        `Desconectala primero si quieres cambiarla. No se ha guardado nada.`,
+    );
+  }
+
+  // Reconexion: SELECT explicito por (account_id, external_location_id,
+  // connection_name), SIN filtrar por is_active/push_status_enabled -- ver
+  // comentario de LOCATION_CONNECTION_NAME. Nunca INSERT a ciegas, nunca
+  // ON CONFLICT contra ux_ei_hubrise_usable (indice parcial: una fila
+  // desactivada no dispara el conflicto, y un INSERT ciego duplicaria).
+  const { data: existingRows, error: existingErr } = await sb
+    .from("external_integration")
+    .select("id, location_id")
+    .eq("account_id", accountId)
+    .eq("source", "hubrise")
+    .eq("external_location_id", externalLocationId)
+    .eq("connection_name", LOCATION_CONNECTION_NAME)
+    .order("id", { ascending: true });
+  if (existingErr) {
+    console.error("hubrise-oauth-callback: error buscando conexion existente", existingErr);
+    return fail("Error interno buscando la conexion existente.");
+  }
+  if ((existingRows?.length ?? 0) > 1) {
+    console.warn(
+      `hubrise-oauth-callback: ${existingRows!.length} filas para account=${accountId} ` +
+        `external_location_id=${externalLocationId} connection_name=${LOCATION_CONNECTION_NAME} ` +
+        `(se esperaba <=1). Usando la de menor id.`,
+    );
+  }
+  const existing = existingRows && existingRows.length > 0 ? existingRows[0] : null;
+
+  // Caso limite A: la location de HubRise elegida ya esta ligada a OTRO
+  // local de Folvy -> rechazar, no reasignar en silencio.
+  if (existing && existing.location_id && existing.location_id !== nonceLocationId) {
+    return fail(
+      `Esta location de HubRise (${externalLocationId}) ya esta conectada a otro local de Folvy. ` +
+        `Desconectala primero si quieres moverla. No se ha guardado nada.`,
+    );
+  }
+
+  const writeFields = {
+    access_token: accessToken,
+    external_account_name: accountName,
+    external_location_name: locationName,
+    is_active: true,
+    push_status_enabled: true,
+    token_status: "ok",
+    token_checked_at: new Date().toISOString(),
+  };
+
+  if (existing) {
+    const { error: updErr } = await sb
+      .from("external_integration")
+      .update(writeFields)
+      .eq("id", existing.id);
+    if (updErr) {
+      console.error("hubrise-oauth-callback: error reactivando conexion", updErr.message ?? updErr);
+      return fail(`No se pudo guardar el token: ${updErr.message ?? "error desconocido"}`);
+    }
+  } else {
+    const { error: insErr } = await sb
+      .from("external_integration")
+      .insert({
+        account_id: accountId,
+        source: "hubrise",
+        connection_name: LOCATION_CONNECTION_NAME,
+        external_location_id: externalLocationId,
+        ...writeFields,
+      });
+    if (insErr) {
+      console.error("hubrise-oauth-callback: error creando conexion", insErr.message ?? insErr);
+      if (insErr.code === "23505") {
+        return fail(
+          "Ya existe otra conexion HubRise activa y utilizable para este local (indice unico). " +
+            "Revisa las conexiones existentes antes de reintentar. No se ha guardado nada.",
+        );
+      }
+      return fail(`No se pudo guardar el token: ${insErr.message ?? "error desconocido"}`);
+    }
+  }
+
+  return ok(
+    `Local Folvy conectado a HubRise. Cuenta ${hubriseAccountId}` +
+      `${accountName ? ` (${accountName})` : ""}, location ${externalLocationId}` +
+      `${locationName ? ` (${locationName})` : ""}.`,
+  );
 });
