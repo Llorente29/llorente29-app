@@ -225,38 +225,101 @@ Deno.serve(async (req: Request) => {
     return fail("Enlace inconsistente (sin local asociado). Vuelve a abrir hubrise-oauth-start.");
   }
 
-  // Caso limite B: este local de Folvy ya tiene OTRA location de HubRise
-  // conectada y activa -> rechazar, no reemplazar en silencio.
-  const { data: otherForLocation, error: otherForLocationErr } = await sb
-    .from("external_integration")
-    .select("external_location_id, external_location_name")
-    .eq("account_id", accountId)
+  // external_location_map es la fuente real de "que local de Folvy es esta
+  // location de HubRise" -- trg_ei_fill_location_id (20260815T1930) resuelve
+  // external_integration.location_id DESDE AQUI en un BEFORE INSERT/UPDATE
+  // con `select ... into new.location_id ... limit 1`: si no hay fila en el
+  // mapa, el SELECT INTO deja new.location_id en NULL SIEMPRE, aunque se
+  // pase location_id explicito en el INSERT -- el trigger lo pisa. Por eso
+  // los casos limite A/B se comprueban aqui (contra el mapa, que si tiene el
+  // dato) y no contra external_integration (que hasta ahora podia salir NULL
+  // sin que nadie lo notara -- hallazgo de Julio via revision del codigo
+  // desplegado, 15/08/2026). El UPSERT del mapa va ANTES del INSERT/UPDATE de
+  // external_integration para que el trigger encuentre la fila.
+  //
+  // Indice real verificado (RECON, no asumido): UNIQUE(source,
+  // external_location_id) -- SIN account_id (external_location_id de HubRise
+  // ya es unico por diseño, no hace falta account_id en la clave). El ON
+  // CONFLICT del upsert va contra esa pareja.
+  //
+  // Unico escritor existente de external_location_map hoy es
+  // lastappIntegrationService.linkLocation() (source='lastapp', INSERT
+  // simple desde el panel admin) -- para source='hubrise' nunca ha escrito
+  // nadie por codigo, siempre a mano. Esto es el primer escritor automatico.
+
+  // Caso limite A: la location de HubRise elegida ya esta ligada a OTRO
+  // local de Folvy en el mapa -> rechazar, no reasignar en silencio.
+  const { data: mapByExternalLoc, error: mapByExternalLocErr } = await sb
+    .from("external_location_map")
+    .select("location_id")
     .eq("source", "hubrise")
-    .eq("is_active", true)
+    .eq("external_location_id", externalLocationId)
+    .maybeSingle();
+  if (mapByExternalLocErr) {
+    console.error("hubrise-oauth-callback: error comprobando mapa por location HubRise", mapByExternalLocErr);
+    return fail("Error interno comprobando el mapa de locations.");
+  }
+  if (mapByExternalLoc?.location_id && mapByExternalLoc.location_id !== nonceLocationId) {
+    return fail(
+      `Esta location de HubRise (${externalLocationId}) ya esta conectada a otro local de Folvy ` +
+        `en el mapa. Desconectala primero si quieres moverla. No se ha guardado nada.`,
+    );
+  }
+
+  // Caso limite B (inverso): este local de Folvy ya esta mapeado a OTRA
+  // location de HubRise activa -> rechazar, no reemplazar en silencio.
+  const { data: mapByFolvyLoc, error: mapByFolvyLocErr } = await sb
+    .from("external_location_map")
+    .select("external_location_id, external_location_name")
+    .eq("source", "hubrise")
+    .eq("account_id", accountId)
     .eq("location_id", nonceLocationId)
+    .eq("is_active", true)
     .neq("external_location_id", externalLocationId)
     .limit(1)
     .maybeSingle();
-  if (otherForLocationErr) {
-    console.error("hubrise-oauth-callback: error comprobando local ya conectado", otherForLocationErr);
-    return fail("Error interno comprobando el local.");
+  if (mapByFolvyLocErr) {
+    console.error("hubrise-oauth-callback: error comprobando mapa por local Folvy", mapByFolvyLocErr);
+    return fail("Error interno comprobando el mapa de locations.");
   }
-  if (otherForLocation) {
+  if (mapByFolvyLoc) {
     return fail(
-      `Este local de Folvy ya esta conectado a otra location de HubRise ` +
-        `(${otherForLocation.external_location_id}${otherForLocation.external_location_name ? ` - ${otherForLocation.external_location_name}` : ""}). ` +
+      `Este local de Folvy ya esta mapeado a otra location de HubRise ` +
+        `(${mapByFolvyLoc.external_location_id}${mapByFolvyLoc.external_location_name ? ` - ${mapByFolvyLoc.external_location_name}` : ""}). ` +
         `Desconectala primero si quieres cambiarla. No se ha guardado nada.`,
     );
   }
 
-  // Reconexion: SELECT explicito por (account_id, external_location_id,
-  // connection_name), SIN filtrar por is_active/push_status_enabled -- ver
-  // comentario de LOCATION_CONNECTION_NAME. Nunca INSERT a ciegas, nunca
-  // ON CONFLICT contra ux_ei_hubrise_usable (indice parcial: una fila
-  // desactivada no dispara el conflicto, y un INSERT ciego duplicaria).
+  // UPSERT del mapa -- ANTES de tocar external_integration (ver comentario
+  // arriba). ON CONFLICT contra el indice real (source, external_location_id).
+  const { error: mapUpsertErr } = await sb
+    .from("external_location_map")
+    .upsert(
+      {
+        account_id: accountId,
+        source: "hubrise",
+        external_location_id: externalLocationId,
+        external_location_name: locationName,
+        location_id: nonceLocationId,
+        is_active: true,
+        needs_review: false,
+      },
+      { onConflict: "source,external_location_id" },
+    );
+  if (mapUpsertErr) {
+    console.error("hubrise-oauth-callback: error en upsert de external_location_map", mapUpsertErr.message ?? mapUpsertErr);
+    return fail(`No se pudo guardar el mapa de locations: ${mapUpsertErr.message ?? "error desconocido"}`);
+  }
+
+  // Reconexion en external_integration: SELECT explicito por (account_id,
+  // external_location_id, connection_name), SIN filtrar por
+  // is_active/push_status_enabled -- ver comentario de
+  // LOCATION_CONNECTION_NAME. Nunca INSERT a ciegas, nunca ON CONFLICT contra
+  // ux_ei_hubrise_usable (indice parcial: una fila desactivada no dispara el
+  // conflicto, y un INSERT ciego duplicaria).
   const { data: existingRows, error: existingErr } = await sb
     .from("external_integration")
-    .select("id, location_id")
+    .select("id")
     .eq("account_id", accountId)
     .eq("source", "hubrise")
     .eq("external_location_id", externalLocationId)
@@ -274,15 +337,6 @@ Deno.serve(async (req: Request) => {
     );
   }
   const existing = existingRows && existingRows.length > 0 ? existingRows[0] : null;
-
-  // Caso limite A: la location de HubRise elegida ya esta ligada a OTRO
-  // local de Folvy -> rechazar, no reasignar en silencio.
-  if (existing && existing.location_id && existing.location_id !== nonceLocationId) {
-    return fail(
-      `Esta location de HubRise (${externalLocationId}) ya esta conectada a otro local de Folvy. ` +
-        `Desconectala primero si quieres moverla. No se ha guardado nada.`,
-    );
-  }
 
   const writeFields = {
     access_token: accessToken,
