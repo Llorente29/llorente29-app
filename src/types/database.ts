@@ -7332,6 +7332,8 @@ export type Database = {
         Row: {
           access_token: string | null
           account_id: string
+          callback_checked_at: string | null
+          callback_status: string
           connection_name: string | null
           created_at: string
           external_account_name: string | null
@@ -7341,16 +7343,22 @@ export type Database = {
           external_org_id: string | null
           id: string
           is_active: boolean
+          location_id: string | null
           organization_name: string | null
           ownership_type: string
           push_status_enabled: boolean
+          revoke_pending: boolean
           source: string
+          token_checked_at: string | null
           token_secret_name: string | null
+          token_status: string
           updated_at: string
         }
         Insert: {
           access_token?: string | null
           account_id: string
+          callback_checked_at?: string | null
+          callback_status?: string
           connection_name?: string | null
           created_at?: string
           external_account_name?: string | null
@@ -7360,16 +7368,22 @@ export type Database = {
           external_org_id?: string | null
           id?: string
           is_active?: boolean
+          location_id?: string | null
           organization_name?: string | null
           ownership_type?: string
           push_status_enabled?: boolean
+          revoke_pending?: boolean
           source?: string
+          token_checked_at?: string | null
           token_secret_name?: string | null
+          token_status?: string
           updated_at?: string
         }
         Update: {
           access_token?: string | null
           account_id?: string
+          callback_checked_at?: string | null
+          callback_status?: string
           connection_name?: string | null
           created_at?: string
           external_account_name?: string | null
@@ -7379,11 +7393,15 @@ export type Database = {
           external_org_id?: string | null
           id?: string
           is_active?: boolean
+          location_id?: string | null
           organization_name?: string | null
           ownership_type?: string
           push_status_enabled?: boolean
+          revoke_pending?: boolean
           source?: string
+          token_checked_at?: string | null
           token_secret_name?: string | null
+          token_status?: string
           updated_at?: string
         }
         Relationships: [
@@ -7392,6 +7410,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_integration_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
         ]
@@ -8027,6 +8052,8 @@ export type Database = {
           created_at: string
           credentials_ref: string | null
           hubrise_account_id: string | null
+          token_checked_at: string | null
+          token_status: string
           updated_at: string
         }
         Insert: {
@@ -8035,6 +8062,8 @@ export type Database = {
           created_at?: string
           credentials_ref?: string | null
           hubrise_account_id?: string | null
+          token_checked_at?: string | null
+          token_status?: string
           updated_at?: string
         }
         Update: {
@@ -8043,6 +8072,8 @@ export type Database = {
           created_at?: string
           credentials_ref?: string | null
           hubrise_account_id?: string | null
+          token_checked_at?: string | null
+          token_status?: string
           updated_at?: string
         }
         Relationships: []
@@ -18344,6 +18375,7 @@ export type Database = {
           token_status: string
         }[]
       }
+      hubrise_ops_dashboard: { Args: never; Returns: Json }
       hubrise_writer_token_read: {
         Args: { p_account_id: string }
         Returns: string

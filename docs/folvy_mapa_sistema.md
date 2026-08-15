@@ -432,7 +432,28 @@ si esa acción abre un flujo de autorización real contra un sistema externo.
 - **`Foodint 1b6p8` (EUR)**. Client ID `598759333895.clients.hubrise.com`. Integración = POS.
 - **3 locations**: **Alcalá `1b6p8-0`** (`38158159-cd71-4056-950b-53425afac1ce`) · **Carabanchel `1b6p8-2`** (`92d7656e-…`) · **Plaza Castilla `1b6p8-1`** (`629f9154-…`). **Solo Alcalá tiene conexiones** (los otros dos degradan en la UI de cerrar local).
 - ⚠️ **Plan/pago NO activado**: tramo gratuito **máx. 5 pedidos**. Setup 300€ pagados.
+- ⚠️ **Tope de Antoine: máx. 5 live locations con el cliente "Folvy" (598759333895)** — condición
+  escrita del pre-audit cerrado el 05/08/2026 (ver más abajo). Contador actual: **3**
+  (`1b6p8-0` Alcalá producción, `zy9j2-0` Folvy Test lab, `zy9j2-1` lab). "Live" no está definido
+  por Antoine (¿cuenta el lab, que no factura?) — no asumir margen exacto. Revisar este contador
+  cada vez que se conecte una location nueva.
 - Técnico: **Antoine Monnier** (`amonnier@hubrise.com`). Hilo en **`partners@folvy.app`**. Glovo: **Linda Liang** (`linda.liang@glovoapp.com`), Janaina contacta.
+
+### Pre-audit CERRADO por Antoine (05/08/2026) — no se le debe respuesta
+
+Última respuesta de Antoine (05/08/2026 16:09, `partners@folvy.app`, recuperada por Julio el
+15/08), cita literal: **"Pre-audit is complete. You can connect the approved
+598759333895.clients.hubrise.com / Folvy API client with up to 5 live locations. A more
+comprehensive audit will be required when you need to connect more locations."**
+
+Esto CORRIGE cualquier mención anterior en este documento o en memoria de "pendiente responder a
+Antoine" o "punto 4 del pre-audit abierto" — ambas quedaron superadas ese día, antes de que esta
+sesión (15/08) las diera por vigentes. La app **"Folvy" (598759333895) como cliente de pedidos ya
+no es una inferencia de 2.7/Trampa 15 — es la condición ESCRITA de Antoine.** Carabanchel está
+autorizado desde el 05/08 sin pedir permiso adicional (dentro del tope de 5). El disparador del
+"comprehensive audit" es el cliente 2 (o cualquier expansión >5 locations) — **la Fase 3 (UI) se
+construye para aprobar ESE audit futuro, no para cerrar el pre-audit, que ya está cerrado.**
+Próximo contacto con Antoine, con causa: antes de necesitar la location nº 6.
 
 ## Identidades clave (Foodint / Llorente29)
 
