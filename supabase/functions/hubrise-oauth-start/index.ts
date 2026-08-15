@@ -38,6 +38,7 @@ const HUBRISE_AUTHORIZE_URL = Deno.env.get("HUBRISE_AUTHORIZE_URL") ??
   "https://manager.hubrise.com/oauth2/v1/authorize";
 const WRITER_SCOPE = "account[all_catalogs.write,inventory.write]";
 const LOCATION_SCOPE = "location[orders.write]";
+const NONCE_MAX_AGE_MS = 15 * 60 * 1000;
 
 // Lista blanca CERRADA de scopes admitidos vía ?scope=<clave>. "writer" es el
 // default de siempre. "location" es el flujo real de 2.1 (reemplaza al
@@ -98,6 +99,19 @@ Deno.serve(async (req: Request) => {
       return text("Error interno verificando el local.", 500);
     }
     if (!loc) return text("location_id no encontrado, inactivo, o no pertenece a esa cuenta.", 400);
+  }
+
+  // Limpieza al vuelo de nonces caducados: la tabla no tiene cron propio (es
+  // de bajo volumen, unas pocas filas por conexion humana) y cada apertura de
+  // este flujo es la ocasion natural para barrerla -- no justifica meter un
+  // cron nuevo para esto. No falla el flujo si la limpieza falla (best-effort,
+  // logueado, nunca bloquea abrir la conexion real).
+  const { error: cleanupErr } = await sb
+    .from("hubrise_oauth_state")
+    .delete()
+    .lt("created_at", new Date(Date.now() - NONCE_MAX_AGE_MS).toISOString());
+  if (cleanupErr) {
+    console.error("hubrise-oauth-start: no se pudo limpiar nonces caducados (no bloqueante)", cleanupErr);
   }
 
   const { data, error } = await sb
