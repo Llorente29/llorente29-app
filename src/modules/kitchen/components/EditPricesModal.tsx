@@ -13,7 +13,11 @@
 //   devuelve la RPC (is_location_override / price_source) -- regla del número
 //   derivado, la cifra siempre con su origen.
 // · MARGEN NETO EN VIVO desde el motor menu_item_channel_economics (preview con los
-//   precios tecleados): la fórmula vive en el servidor, aquí solo se muestra.
+//   precios tecleados): la fórmula vive en el servidor, aquí solo se muestra. Un
+//   canal con varias tarifas (own_delivery/platform_delivery/pickup) trae varias
+//   filas a propósito -- se agrupan (groupChannelEconomicsByChannel), el precio/86
+//   son del canal (una sola fila de controles), el margen se pinta con el modo
+//   dominante (más pedidos en 30d) y sub-líneas atenuadas para el resto.
 //
 // Selector de local: PROPIO de este modal, alimentado por useVisibleLocations —
 // aislado del selector global de cabecera (activeLocationId de AppContext). Abrir
@@ -28,6 +32,8 @@ import {
   getMenuItemChannelEconomics,
   setMenuItemOverride,
   clearMenuItemOverride,
+  groupChannelEconomicsByChannel,
+  SERVICE_TYPE_LABEL,
   type ChannelEconomics,
 } from '@/modules/kitchen/services/menuOverrideService'
 import { updateMenuItem } from '@/modules/kitchen/services/menuItemService'
@@ -136,9 +142,14 @@ export default function EditPricesModal({
     return () => clearTimeout(handle)
   }, [menuItemId, previewKey, channels.length, selectedLocationId])
 
-  const liveByCh = useMemo(() => {
-    const m: Record<string, ChannelEconomics> = {}
-    for (const r of live) m[r.channelId] = r
+  // Agrupado por canal -- un canal con varias tarifas (own_delivery/platform_delivery/
+  // pickup) trae varias filas a propósito, no son duplicados (ver menuOverrideService).
+  // Los controles de precio/86 son del canal (una fila); el margen se agrupa aparte.
+  const channelGroups = useMemo(() => groupChannelEconomicsByChannel(channels), [channels])
+
+  const liveGroupsByCh = useMemo(() => {
+    const m: Record<string, ChannelEconomics[]> = {}
+    for (const g of groupChannelEconomicsByChannel(live)) m[g.channelId] = g.rows
     return m
   }, [live])
 
@@ -159,8 +170,11 @@ export default function EditPricesModal({
       if (!selectedLocationId && defNum !== null && defNum !== basePrice) {
         await updateMenuItem(menuItemId, { price: defNum })
       }
-      // 2) Override por canal, en el ámbito que la pantalla está mostrando.
-      for (const ch of channels) {
+      // 2) Override por canal, en el ámbito que la pantalla está mostrando. Un canal
+      //    con varias filas (varios service_type) escribe UNA vez -- el override es
+      //    del canal, no del modo de servicio.
+      for (const g of channelGroups) {
+        const ch = g.rows[0]
         const p = parseNum(prices[ch.channelId] ?? '')   // null = hereda
         const a = avail[ch.channelId] !== false
         if (p === null && a) {
@@ -287,8 +301,11 @@ export default function EditPricesModal({
                     <span className="text-right w-24">Margen neto</span>
                     <span className="text-right w-16">Disp.</span>
                   </div>
-                  {channels.map((ch) => {
-                    const lv = liveByCh[ch.channelId]
+                  {channelGroups.map((g) => {
+                    const ch = g.rows[0]
+                    const liveRows = liveGroupsByCh[ch.channelId] ?? []
+                    const lv = liveRows[0]
+                    const otherLive = liveRows.slice(1)
                     const a = avail[ch.channelId] !== false
                     const own = prices[ch.channelId] ?? ''
                     const inherits = own.trim() === ''
@@ -297,6 +314,7 @@ export default function EditPricesModal({
                     const brandCh = brandByCh[ch.channelId]
                     const fallbackLabel = brandCh?.priceSource === 'override' ? 'precio de marca' : 'precio base'
                     const hasLocalOverride = !!selectedLocationId && ch.isLocationOverride
+                    const modeLabel = liveRows.length > 1 && lv?.serviceType ? (SERVICE_TYPE_LABEL[lv.serviceType] ?? lv.serviceType) : null
                     let originHint: string
                     if (!inherits) {
                       originHint = selectedLocationId ? `PVP ${fmtEur(lv?.priceWithVat)} · precio de este local` : `PVP ${fmtEur(lv?.priceWithVat)}`
@@ -309,7 +327,7 @@ export default function EditPricesModal({
                         {/* Canal */}
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-[13px] font-medium text-gray-800 truncate">{ch.channelName}</span>
-                          {ch.serviceType === 'own_delivery' && (lv?.orderCostsPerItem ?? 0) > 0 && (
+                          {lv?.serviceType === 'own_delivery' && (lv?.orderCostsPerItem ?? 0) > 0 && (
                             <span className="text-[10px] text-gray-400">+canal est. {fmtEur(lv?.orderCostsPerItem)}</span>
                           )}
                         </div>
@@ -341,14 +359,29 @@ export default function EditPricesModal({
                             </button>
                           )}
                         </div>
-                        {/* Margen neto */}
+                        {/* Margen neto -- dominante (más pedidos en 30d) + sub-líneas
+                            si el canal tiene más de un modo de servicio configurado */}
                         <div className="w-24 text-right">
+                          {modeLabel && <span className="text-[9px] text-gray-400 block truncate">{modeLabel}</span>}
                           <div className={`font-mono text-sm font-medium ${margin == null ? 'text-gray-300' : margin >= 0 ? 'text-success' : 'text-danger'}`}>
                             {fmtEur(margin)}
                           </div>
                           <span className="text-[10px] text-gray-400 block">
                             {marginPct != null ? `${marginPct}%` : ''}{lv && !lv.costAvailable ? ' · sin coste' : ''}
                           </span>
+                          {otherLive.length > 0 && (
+                            <div className="mt-1 pt-1 border-t border-gray-100 space-y-0.5">
+                              {otherLive.map((o) => (
+                                <div key={`${o.channelId}-${o.serviceType ?? 'none'}`}
+                                  className={o.ordersLast30d === 0 ? 'opacity-40' : ''}>
+                                  <span className="text-[9px] text-gray-400 block truncate">
+                                    {o.serviceType ? (SERVICE_TYPE_LABEL[o.serviceType] ?? o.serviceType) : '—'}
+                                  </span>
+                                  <span className="font-mono text-[11px] text-gray-600 block">{fmtEur(o.netMargin)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         {/* Disponibilidad (86) */}
                         <div className="w-16 flex flex-col items-end gap-0.5">

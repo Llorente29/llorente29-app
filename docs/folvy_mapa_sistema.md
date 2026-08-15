@@ -406,30 +406,64 @@ opcional (sin llamadores hoy, cero riesgo). Selector en el modal (B.2 paso 4) he
 **⚠️ Incidente cerrado (15/08): la primera URL de prueba entregada a Julio apuntaba a PRODUCCIÓN,
 no al laboratorio.** Ver Trampa 14 más abajo. Julio NO pulsó la URL incorrecta.
 
-## Frente propio: `channel_rate` duplicado — VISIBLE en producción (15/08/2026)
+## Frente propio: canal triplicado en Economía/modal — DIAGNÓSTICO CORREGIDO (16/08/2026)
 
-Encontrado durante B.2 (no relacionado con el cambio en sí, no introducido por él): la cuenta real
-de Foodint (`account_id=51ad1792-6629-4ef7-833a-b57b09a86710`) tiene **3 filas activas** en
-`channel_rate` para el mismo canal de venta "Glovo" (`is_active=true`, `archived_at IS NULL`), dos
-de ellas con el mismo `created_at` exacto (`2026-07-12 18:55:40.678907+00`) — huele a inserción
-duplicada, no a 3 tarifas distintas con sentido.
+**Primer diagnóstico (15/08, INCORRECTO — retractado)**: se interpretó que las 3 filas activas de
+`channel_rate` para "Glovo" en Foodint (`account_id=51ad1792-6629-4ef7-833a-b57b09a86710`) eran un
+duplicado de inserción (dos con el mismo `created_at`), y se propuso archivarlas. **Error mío,
+aprobado por Julio sin mirar todas las columnas**: las 3 filas tienen `service_type` DISTINTO
+(`own_delivery` 15%, `platform_delivery` 30%, `pickup` 15%) — son 3 tarifas reales y legítimas, no
+un duplicado. Prueba de que nunca fue un duplicado real: el índice único
+`uq_channel_rate_scope UNIQUE(account_id, sales_channel_id, service_type) WHERE archived_at IS NULL`
+**ya existía en vivo** antes de este hallazgo — un doble-insert del mismo scope habría fallado con
+`23505`. Archivar 2 de las 3 filas, como se propuso, habría borrado configuración de comisión real
+(el 30% de Glovo-repartidor-de-la-plataforma y el 15% de recogida). Lección: un `created_at`
+compartido es un indicio de "se crearon en el mismo lote", no de "son la misma fila repetida" — hay
+que mirar TODAS las columnas de diferenciación (aquí, `service_type`) antes de calificar algo de
+duplicado, y comprobar si ya existe una restricción que lo habría impedido.
 
-**Julio pidió una comprobación de impacto barata antes de tocar nada: ¿se ve en pantalla o algo lo
-de-duplica por el camino?** Respuesta, mirando el código real (no asumida):
+**Causa raíz real (verificada 16/08)**: `menu_item_channel_economics` une `channel_rate` (y
+`brand_channel_rate`) por `channel_id`/`brand_channel_id` **sin fijar `service_type`** — cuando un
+canal tiene tarifa para más de un modo de servicio (que es el diseño normal, no una anomalía), la
+unión no elige una fila, las trae todas. Verificado a escala real en Foodint: **Glovo, Uber y
+JustEat triplican** (los 3 modos, `own_delivery`/`platform_delivery`/`pickup`); solo "Shop" (1 sola
+tarifa) y "Mostrador" (0 tarifas) no triplican. `brand_channel`/`brand_channel_rate` están vacías
+para toda la cuenta Foodint (0 filas) — ninguna marca tiene override propio hoy, así que el fallo
+afecta a las 18 marcas de la cuenta por igual en esos 3 canales. No existe en el esquema ningún
+campo "qué `service_type` usa esta marca para este canal" (ni en `brand_channel` ni en
+`sales_channel`) — y no debe existir: **decisión de Julio (16/08): no se elige un modo canónico, se
+agrupan las filas por canal y se etiquetan por `service_type`**, con orden por uso real
+(`sale.service_type`/`sale.channel_id`, últimos 30 días de la cuenta) y atenuación visual del modo
+sin pedidos en ese periodo. RECON de calidad de `sale.service_type` (16/08, antes de apoyar el
+orden en él): 0 nulos y 0 valores fuera de dominio en los últimos 30 días, tanto en Foodint (2.561
+filas) como en toda la BBDD (2.744 filas) — dato limpio, sin necesidad de caer al orden fijo de
+respaldo (`platform_delivery` > `pickup` > `own_delivery`, que se deja igualmente como
+desempate/red de seguridad).
 
-- `menu_item_channel_economics` hace `LEFT JOIN channel_rate` por `channel_id` SIN deduplicar — la
-  RPC devuelve 3 filas de "Glovo" por cada `menu_item`, no 1.
-- `EconomiaTab.tsx` pinta `econ.map((e) => ...)` directo sobre lo que devuelve la RPC, `key={e.channelId}`
-  (con `channelId` repetido en las 3 filas — React además advertiría por key duplicada).
-- `EditPricesModal.tsx` pinta `channels.map((ch) => ...)` igual, misma key repetida.
-- Ninguna de las dos pantallas de-duplica en el camino.
+Frente independiente de B.2 (no se mezcla en la misma verificación de Julio) — construido en rama
+`feat/economia-canal-agrupada-service-type` (nace de `feat/hubrise-fase3-ui`, no se pushea a esa
+rama mientras Julio certifica B.2 en su preview).
 
-**Conclusión: SÍ es visible — bug de producción, no deuda tranquila.** Cualquier `menu_item` de
-Foodint con el canal Glovo activo muestra la fila "Glovo" tres veces (precio, margen, disponibilidad
-repetidos) tanto en la pestaña Economía como en el modal "Editar precios". Queda **fuera del
-alcance de B.2** (Julio: "no lo toques") — declarado aquí para que alguien lo priorice como bug de
-UI de producción, no como limpieza de datos de bajo impacto. La causa raíz probable es un doble
-insert al crear/editar la tarifa del canal Glovo; no investigada más allá de confirmar el conteo.
+**Construcción (16/08)**: `menu_item_channel_economics` gana `orders_30d integer` (aditivo en el
+NÚMERO de columnas de salida, así que `CREATE OR REPLACE` no vale — Postgres no permite cambiar el
+tipo de retorno de una función existente, error `42P13` — hace falta `DROP FUNCTION` + `CREATE`
+explícito, igual que la trampa de sobrecarga pero por un motivo distinto: aquí no cambia la lista de
+parámetros, cambia la forma de la tabla de retorno). Probado antes contra datos reales con una
+función `_tmp_` (creada y borrada en la misma sesión): 0 filas de diferencia frente a la función
+vieja en 10 productos reales de Foodint + con `p_location_id` + con `p_overrides`, excluyendo la
+columna nueva — estrictamente aditivo. `groupChannelEconomicsByChannel()` (nuevo, en
+`menuOverrideService.ts`) agrupa por canal y ordena las filas por `orders_30d` desc (empate por el
+orden de respaldo `platform_delivery > pickup > own_delivery`) — una sola implementación,
+reutilizada por `EconomiaTab.tsx` y `EditPricesModal.tsx`. Precio/86 siguen siendo del canal (una
+fila de controles); el margen se agrupa: dominante grande + sub-líneas por modo, atenuadas si
+`orders_30d = 0`. Canales con una sola tarifa (Shop) o ninguna (Mostrador) quedan idénticos a antes
+— `others.length === 0` no pinta sub-líneas. `handleSave` del modal deduplicado a una escritura por
+canal (antes iteraba las filas crudas, escribiría 3 veces el mismo override para Glovo/Uber/JustEat
+— redundante, no incorrecto, pero corregido). `database.ts` parcheado con `orders_30d`. `tsc -b`
+limpio. **Dato de Julio (16/08) importante para la prueba de aceptación**: Folvy Interno (el
+laboratorio) solo tiene 1 tarifa activa por canal — la triplicación NO se reproduce ahí. La
+verificación en pantalla de este frente tiene que hacerse contra Foodint en solo lectura (o crear
+tarifas por modo en el lab a propósito), no sirve el guion de prueba habitual del laboratorio.
 
 ### Trampa 15: NINGÚN cron sondea GET /callback — es condición del pre-audit de Antoine
 

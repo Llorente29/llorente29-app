@@ -18819,6 +18819,7 @@ export type Database = {
           net_margin: number
           net_margin_pct: number
           order_costs_per_item: number
+          orders_30d: number
           own_courier_cost: number
           own_customer_fee: number
           packaging_cost: number
