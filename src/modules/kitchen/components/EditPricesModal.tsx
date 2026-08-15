@@ -2,15 +2,28 @@
 //
 // FRENTE OVERRIDES — modal "Editar precios" de un producto.
 // · Precio por defecto (base de la marca, menu_item.price, SIN IVA) → updateMenuItem.
-// · Una fila por canal: precio propio (override, SIN IVA; vacío = hereda base) + 86.
+//   Solo editable en "Todos los locales" -- editarlo con un local elegido tocaría
+//   TODA la marca desde una pantalla que dice estar mostrando un solo local
+//   (regla de Julio: nunca escribir a un ámbito distinto del que la pantalla muestra).
+// · Una fila por canal: precio propio (override, SIN IVA; vacío = hereda) + 86.
+//   Con "Todos los locales": el override es de marca/canal (comportamiento de
+//   siempre). Con un local elegido: el override es PROPIO de ese local — la
+//   cascada completa (local+canal → local → canal de marca → base) la resuelve
+//   el servidor via effective_price(), aquí solo se pinta el origen que YA
+//   devuelve la RPC (is_location_override / price_source) -- regla del número
+//   derivado, la cifra siempre con su origen.
 // · MARGEN NETO EN VIVO desde el motor menu_item_channel_economics (preview con los
 //   precios tecleados): la fórmula vive en el servidor, aquí solo se muestra.
+//
+// Selector de local: PROPIO de este modal, alimentado por useVisibleLocations —
+// aislado del selector global de cabecera (activeLocationId de AppContext). Abrir
+// este modal y elegir un local aquí NO cambia el scope del resto de la app.
 //
 // Convención de IVA idéntica a la ficha: se teclea PRECIO sin IVA, se muestra el PVP
 // con IVA derivado. Sin doble criterio, sin deriva de céntimos.
 
 import { useState, useEffect, useMemo } from 'react'
-import { X, Loader2 } from 'lucide-react'
+import { X, Loader2, RotateCcw } from 'lucide-react'
 import {
   getMenuItemChannelEconomics,
   setMenuItemOverride,
@@ -18,6 +31,7 @@ import {
   type ChannelEconomics,
 } from '@/modules/kitchen/services/menuOverrideService'
 import { updateMenuItem } from '@/modules/kitchen/services/menuItemService'
+import { useVisibleLocations } from '@/modules/multitenancy/hooks/useVisibleLocations'
 
 interface EditPricesModalProps {
   menuItemId: string
@@ -44,28 +58,45 @@ function parseNum(s: string): number | null {
 export default function EditPricesModal({
   menuItemId, productName, basePrice, vatRate, onClose, onSaved,
 }: EditPricesModalProps) {
+  const { visibleLocations } = useVisibleLocations()
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+
   const [loading, setLoading] = useState(true)
   const [channels, setChannels] = useState<ChannelEconomics[]>([])
+  // Baseline SIN local (marca/base) -- solo se carga con un local elegido, para
+  // saber a qué cae la cascada si se borra el override del local (regla de
+  // Julio: el botón "Volver a..." tiene que nombrar el destino real).
+  const [brandChannels, setBrandChannels] = useState<ChannelEconomics[]>([])
   const [defaultPrice, setDefaultPrice] = useState<string>(String(basePrice ?? 0))
   const [prices, setPrices] = useState<Record<string, string>>({})
   const [avail, setAvail] = useState<Record<string, boolean>>({})
   const [live, setLive] = useState<ChannelEconomics[]>([])
   const [saving, setSaving] = useState(false)
+  const [clearingChannelId, setClearingChannelId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Carga inicial: economía por canal en su estado guardado.
+  // Carga inicial (y recarga al cambiar de local): economía por canal en su
+  // estado guardado PARA ESE ÁMBITO. Con local elegido, el input de precio se
+  // siembra SOLO si hay override propio de ese local (is_location_override) —
+  // no con el heredado, sería confundir "propio" con "heredado".
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    getMenuItemChannelEconomics(menuItemId)
-      .then((rows) => {
+    const loads: Array<Promise<ChannelEconomics[]>> = [
+      getMenuItemChannelEconomics(menuItemId, null, selectedLocationId ?? undefined),
+    ]
+    if (selectedLocationId) loads.push(getMenuItemChannelEconomics(menuItemId, null, undefined))
+    Promise.all(loads)
+      .then(([rows, brandRows]) => {
         if (cancelled) return
         setChannels(rows)
         setLive(rows)
+        setBrandChannels(brandRows ?? [])
         const p: Record<string, string> = {}
         const a: Record<string, boolean> = {}
         for (const r of rows) {
-          p[r.channelId] = r.priceSource === 'override' ? String(r.price) : ''
+          const seedFromThisScope = selectedLocationId ? r.isLocationOverride : r.priceSource === 'override'
+          p[r.channelId] = seedFromThisScope ? String(r.price) : ''
           a[r.channelId] = r.isAvailable
         }
         setPrices(p)
@@ -74,36 +105,48 @@ export default function EditPricesModal({
       .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando precios') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [menuItemId])
+  }, [menuItemId, selectedLocationId])
 
-  // Precio efectivo tecleado por canal (propio si lo hay, si no el por defecto).
+  // Precio efectivo tecleado por canal (propio si lo hay, si no el por defecto
+  // -- SOLO en "Todos los locales": ahí el input de base es el motor en vivo
+  // de los canales sin tocar. Con un local elegido no hay input de base que
+  // previsualizar contra -- el servidor ya resuelve la cascada completa con
+  // p_location_id, así que un canal sin teclear simplemente no entra en el
+  // mapa de preview y el servidor calcula su cascada real.
   const previewKey = useMemo(() => {
     const map: Record<string, number> = {}
-    const def = parseNum(defaultPrice)
+    const def = selectedLocationId ? null : parseNum(defaultPrice)
     for (const ch of channels) {
       const own = parseNum(prices[ch.channelId] ?? '')
       const eff = own ?? def
       if (eff !== null) map[ch.channelId] = eff
     }
     return map
-  }, [channels, prices, defaultPrice])
+  }, [channels, prices, defaultPrice, selectedLocationId])
 
-  // Margen en vivo: re-pregunta al motor con los precios tecleados (debounce).
+  // Margen en vivo: re-pregunta al motor con los precios tecleados (debounce),
+  // en el MISMO ámbito (local) que se está mostrando.
   useEffect(() => {
     if (channels.length === 0) return
     const handle = setTimeout(() => {
-      getMenuItemChannelEconomics(menuItemId, previewKey)
+      getMenuItemChannelEconomics(menuItemId, previewKey, selectedLocationId ?? undefined)
         .then(setLive)
         .catch(() => { /* mantener lo último bueno */ })
     }, 300)
     return () => clearTimeout(handle)
-  }, [menuItemId, previewKey, channels.length])
+  }, [menuItemId, previewKey, channels.length, selectedLocationId])
 
   const liveByCh = useMemo(() => {
     const m: Record<string, ChannelEconomics> = {}
     for (const r of live) m[r.channelId] = r
     return m
   }, [live])
+
+  const brandByCh = useMemo(() => {
+    const m: Record<string, ChannelEconomics> = {}
+    for (const r of brandChannels) m[r.channelId] = r
+    return m
+  }, [brandChannels])
 
   const defNum = parseNum(defaultPrice)
   const defPvp = defNum !== null ? Math.round(defNum * (1 + (vatRate ?? 0) / 100) * 100) / 100 : null
@@ -112,24 +155,45 @@ export default function EditPricesModal({
     setSaving(true)
     setError(null)
     try {
-      // 1) Precio por defecto (solo si cambió y es válido)
-      if (defNum !== null && defNum !== basePrice) {
+      // 1) Precio por defecto -- SOLO en "Todos los locales" (ver cabecera).
+      if (!selectedLocationId && defNum !== null && defNum !== basePrice) {
         await updateMenuItem(menuItemId, { price: defNum })
       }
-      // 2) Override por canal
+      // 2) Override por canal, en el ámbito que la pantalla está mostrando.
       for (const ch of channels) {
-        const p = parseNum(prices[ch.channelId] ?? '')   // null = hereda base
+        const p = parseNum(prices[ch.channelId] ?? '')   // null = hereda
         const a = avail[ch.channelId] !== false
         if (p === null && a) {
-          await clearMenuItemOverride({ menuItemId, channelId: ch.channelId })
+          await clearMenuItemOverride({ menuItemId, channelId: ch.channelId, locationId: selectedLocationId })
         } else {
-          await setMenuItemOverride({ menuItemId, channelId: ch.channelId, price: p, isAvailable: a })
+          await setMenuItemOverride({ menuItemId, channelId: ch.channelId, price: p, isAvailable: a, locationId: selectedLocationId })
         }
       }
       onSaved()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error guardando precios')
       setSaving(false)
+    }
+  }
+
+  // "Volver al precio de marca/base" -- acción INMEDIATA (no espera al botón
+  // Guardar general): borra solo la capa del local, nunca la de marca.
+  async function handleClearLocal(channelId: string) {
+    if (!selectedLocationId) return
+    setClearingChannelId(channelId)
+    setError(null)
+    try {
+      await clearMenuItemOverride({ menuItemId, channelId, locationId: selectedLocationId })
+      const rows = await getMenuItemChannelEconomics(menuItemId, null, selectedLocationId)
+      setChannels(rows)
+      setLive(rows)
+      setPrices((p) => ({ ...p, [channelId]: '' }))
+      const row = rows.find((r) => r.channelId === channelId)
+      if (row) setAvail((a) => ({ ...a, [channelId]: row.isAvailable }))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error volviendo al precio heredado')
+    } finally {
+      setClearingChannelId(null)
     }
   }
 
@@ -158,6 +222,24 @@ export default function EditPricesModal({
 
         {/* Body */}
         <div className="px-5 py-4 overflow-y-auto">
+          {/* Selector de local -- propio de este modal, aislado del scope global */}
+          {visibleLocations.length > 0 && (
+            <div className="mb-4">
+              <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Local</label>
+              <select
+                value={selectedLocationId ?? ''}
+                onChange={(e) => setSelectedLocationId(e.target.value || null)}
+                disabled={saving}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+              >
+                <option value="">Todos los locales</option>
+                {visibleLocations.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-10 text-gray-400">
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -169,7 +251,11 @@ export default function EditPricesModal({
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="text-[13px] font-medium text-gray-800">Precio por defecto</div>
-                    <div className="text-[11px] text-gray-500">Base de la marca · se aplica a los canales sin precio propio</div>
+                    <div className="text-[11px] text-gray-500">
+                      {selectedLocationId
+                        ? 'Precio base de toda la marca — cámbialo desde "Todos los locales".'
+                        : 'Base de la marca · se aplica a los canales sin precio propio'}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
@@ -181,7 +267,8 @@ export default function EditPricesModal({
                         value={defaultPrice}
                         onChange={(e) => setDefaultPrice(e.target.value)}
                         inputMode="decimal"
-                        className="w-28 px-3 py-1.5 text-right font-mono text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                        disabled={!!selectedLocationId}
+                        className="w-28 px-3 py-1.5 text-right font-mono text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:bg-gray-50 disabled:text-gray-400"
                       />
                       <span className="text-[10px] text-gray-400 block text-right mt-0.5">sin IVA</span>
                     </div>
@@ -207,6 +294,15 @@ export default function EditPricesModal({
                     const inherits = own.trim() === ''
                     const margin = lv?.netMargin ?? null
                     const marginPct = lv?.netMarginPct ?? null
+                    const brandCh = brandByCh[ch.channelId]
+                    const fallbackLabel = brandCh?.priceSource === 'override' ? 'precio de marca' : 'precio base'
+                    const hasLocalOverride = !!selectedLocationId && ch.isLocationOverride
+                    let originHint: string
+                    if (!inherits) {
+                      originHint = selectedLocationId ? `PVP ${fmtEur(lv?.priceWithVat)} · precio de este local` : `PVP ${fmtEur(lv?.priceWithVat)}`
+                    } else {
+                      originHint = selectedLocationId ? `hereda ${fallbackLabel}` : 'hereda base'
+                    }
                     return (
                       <div key={ch.channelId}
                         className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center px-1 py-2 border-b border-gray-100 last:border-0">
@@ -222,13 +318,28 @@ export default function EditPricesModal({
                           <input
                             value={own}
                             onChange={(e) => setPrices((p) => ({ ...p, [ch.channelId]: e.target.value }))}
-                            placeholder={defNum !== null ? defNum.toFixed(2) : 'base'}
+                            placeholder={defNum !== null && !selectedLocationId ? defNum.toFixed(2) : fallbackLabel}
                             inputMode="decimal"
                             className="w-28 px-2.5 py-1.5 text-right font-mono text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                           />
-                          <span className="text-[10px] text-gray-400 block mt-0.5">
-                            {inherits ? 'hereda base' : `PVP ${fmtEur(lv?.priceWithVat)}`}
-                          </span>
+                          <div className="flex items-center justify-end gap-1 mt-0.5">
+                            <span className={`text-[10px] block ${!inherits && selectedLocationId ? 'text-accent font-medium' : 'text-gray-400'}`}>
+                              {originHint}
+                            </span>
+                          </div>
+                          {hasLocalOverride && (
+                            <button
+                              type="button"
+                              onClick={() => handleClearLocal(ch.channelId)}
+                              disabled={clearingChannelId === ch.channelId || saving}
+                              className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-accent mt-1 disabled:opacity-40"
+                            >
+                              {clearingChannelId === ch.channelId
+                                ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                : <RotateCcw className="w-2.5 h-2.5" />}
+                              Volver a {fallbackLabel}
+                            </button>
+                          )}
                         </div>
                         {/* Margen neto */}
                         <div className="w-24 text-right">
@@ -240,13 +351,16 @@ export default function EditPricesModal({
                           </span>
                         </div>
                         {/* Disponibilidad (86) */}
-                        <div className="w-16 flex justify-end">
+                        <div className="w-16 flex flex-col items-end gap-0.5">
                           <button type="button"
                             onClick={() => setAvail((s) => ({ ...s, [ch.channelId]: !a }))}
                             role="switch" aria-checked={a}
                             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${a ? 'bg-success' : 'bg-stone-300'}`}>
                             <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${a ? 'translate-x-[1.15rem]' : 'translate-x-0.5'}`} />
                           </button>
+                          {selectedLocationId && (
+                            <span className="text-[9px] text-gray-400 text-right leading-tight">solo en<br />este local</span>
+                          )}
                         </div>
                       </div>
                     )

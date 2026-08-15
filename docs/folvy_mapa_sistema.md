@@ -400,13 +400,36 @@ vez y se corrigió con `DROP FUNCTION` explícito de la firma vieja antes de cre
 verificado conteo=1. Regresión probada con datos reales: instantánea de 7 `menu_item` con
 overrides ANTES del cambio, diff byte a byte DESPUÉS con `p_location_id` omitido → las 7
 idénticas. Cascada nueva probada con una fila de override real creada y borrada de inmediato
-(price/price_source/is_location_override correctos). Hallazgo no mío: `channel_rate` tiene 3 filas
-activas duplicadas para al menos un canal — preexistente, no introducido por este cambio, no
-tocado (fuera de alcance). `listMenuItemOverrides` gana `locationId` opcional (sin llamadores hoy,
-cero riesgo). Selector en el modal (B.2 paso 4) sigue sin empezar.
+(price/price_source/is_location_override correctos). `listMenuItemOverrides` gana `locationId`
+opcional (sin llamadores hoy, cero riesgo). Selector en el modal (B.2 paso 4) hecho — ver más abajo.
 
 **⚠️ Incidente cerrado (15/08): la primera URL de prueba entregada a Julio apuntaba a PRODUCCIÓN,
 no al laboratorio.** Ver Trampa 14 más abajo. Julio NO pulsó la URL incorrecta.
+
+## Frente propio: `channel_rate` duplicado — VISIBLE en producción (15/08/2026)
+
+Encontrado durante B.2 (no relacionado con el cambio en sí, no introducido por él): la cuenta real
+de Foodint (`account_id=51ad1792-6629-4ef7-833a-b57b09a86710`) tiene **3 filas activas** en
+`channel_rate` para el mismo canal de venta "Glovo" (`is_active=true`, `archived_at IS NULL`), dos
+de ellas con el mismo `created_at` exacto (`2026-07-12 18:55:40.678907+00`) — huele a inserción
+duplicada, no a 3 tarifas distintas con sentido.
+
+**Julio pidió una comprobación de impacto barata antes de tocar nada: ¿se ve en pantalla o algo lo
+de-duplica por el camino?** Respuesta, mirando el código real (no asumida):
+
+- `menu_item_channel_economics` hace `LEFT JOIN channel_rate` por `channel_id` SIN deduplicar — la
+  RPC devuelve 3 filas de "Glovo" por cada `menu_item`, no 1.
+- `EconomiaTab.tsx` pinta `econ.map((e) => ...)` directo sobre lo que devuelve la RPC, `key={e.channelId}`
+  (con `channelId` repetido en las 3 filas — React además advertiría por key duplicada).
+- `EditPricesModal.tsx` pinta `channels.map((ch) => ...)` igual, misma key repetida.
+- Ninguna de las dos pantallas de-duplica en el camino.
+
+**Conclusión: SÍ es visible — bug de producción, no deuda tranquila.** Cualquier `menu_item` de
+Foodint con el canal Glovo activo muestra la fila "Glovo" tres veces (precio, margen, disponibilidad
+repetidos) tanto en la pestaña Economía como en el modal "Editar precios". Queda **fuera del
+alcance de B.2** (Julio: "no lo toques") — declarado aquí para que alguien lo priorice como bug de
+UI de producción, no como limpieza de datos de bajo impacto. La causa raíz probable es un doble
+insert al crear/editar la tarifa del canal Glovo; no investigada más allá de confirmar el conteo.
 
 ### Trampa 15: NINGÚN cron sondea GET /callback — es condición del pre-audit de Antoine
 
