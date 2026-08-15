@@ -19,9 +19,24 @@
 //   const token = (await resolveHubriseToken(sb, { accountId, externalLocationId, connectionName }))
 //                 ?? (Deno.env.get("HUBRISE_ACCESS_TOKEN") ?? "");
 //
-// `sb` DEBE ser un cliente service_role (external_integration no es legible por anon).
+// `sb` DEBE ser un cliente service_role (external_integration no es legible por anon
+// desde el 15/08/2026 — antes SÍ lo era, ver 20260815T2300_hubrise_revoke_token_columns.sql).
 // Se tipa de forma ESTRUCTURAL a proposito, para no depender del import map de cada
 // funcion (unas importan supabase-js por alias, otras por URL de esm.sh).
+//
+// DEUDA DECLARADA (15/08/2026): access_token vive en TEXTO PLANO en esta
+// columna — el único patrón Vault real de todo HubRise es
+// hubrise_writer_connection.credentials_ref (la conexión escritora). El
+// REVOKE de la migración de arriba cierra el riesgo real (cualquier empleado
+// podía leerlo); Vault sigue siendo mejor pero NO se hace ahora: dos de los
+// lectores de esta tabla (hubrise-catalog-publish y availability-dispatch)
+// tienen su PROPIO SELECT directo de access_token en sus rutas de fallback,
+// duplicado del de este fichero — migrar a Vault exige tocar esos dos
+// también, y availability-dispatch es el camino vivo del 86 en producción.
+// DISPARADOR: consolidar esas lecturas duplicadas para que pasen por
+// resolveHubriseToken/listActiveHubriseConnections, y migrar a Vault, ANTES
+// de conectar el cliente 2 — no antes, para no meter riesgo en mitad de la
+// certificación de Carabanchel (hubrise-catalog-publish v40 recién desplegada).
 
 // deno-lint-ignore no-explicit-any
 type QueryResult = { data: any; error: any };

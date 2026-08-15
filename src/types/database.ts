@@ -7334,8 +7334,10 @@ export type Database = {
           account_id: string
           connection_name: string | null
           created_at: string
+          external_account_name: string | null
           external_catalog_id: string | null
           external_location_id: string | null
+          external_location_name: string | null
           external_org_id: string | null
           id: string
           is_active: boolean
@@ -7351,8 +7353,10 @@ export type Database = {
           account_id: string
           connection_name?: string | null
           created_at?: string
+          external_account_name?: string | null
           external_catalog_id?: string | null
           external_location_id?: string | null
+          external_location_name?: string | null
           external_org_id?: string | null
           id?: string
           is_active?: boolean
@@ -7368,8 +7372,10 @@ export type Database = {
           account_id?: string
           connection_name?: string | null
           created_at?: string
+          external_account_name?: string | null
           external_catalog_id?: string | null
           external_location_id?: string | null
+          external_location_name?: string | null
           external_org_id?: string | null
           id?: string
           is_active?: boolean
