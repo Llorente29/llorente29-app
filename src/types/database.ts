@@ -16741,6 +16741,10 @@ export type Database = {
           per_person_today: number
         }[]
       }
+      _hubrise_location_pending_connect: {
+        Args: { p_account_id: string; p_location_id: string }
+        Returns: boolean
+      }
       _impact_cost: {
         Args: {
           p_quantity: number
@@ -18325,6 +18329,21 @@ export type Database = {
         }[]
       }
       hubrise_money: { Args: { p: string }; Returns: number }
+      hubrise_location_status: {
+        Args: { p_account_id: string }
+        Returns: {
+          brands: Json
+          external_account_name: string
+          external_location_id: string
+          external_location_name: string
+          last_order_at: string
+          location_id: string
+          location_name: string
+          status: string
+          token_checked_at: string
+          token_status: string
+        }[]
+      }
       hubrise_writer_token_read: {
         Args: { p_account_id: string }
         Returns: string
