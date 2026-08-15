@@ -20,6 +20,9 @@
 //   conexión desde external_integration (misma fuente que hubrise-catalog-publish y
 //   hubrise-webhook). El Secret HUBRISE_ACCESS_TOKEN queda solo como fallback de
 //   compatibilidad hasta retirarlo.
+//
+// CAMBIO 29/07/2026 (pre-auditoría HubRise — Antoine Monnier):
+//   PUT → PATCH para actualizaciones de estado de pedidos.
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveHubriseToken } from "../_shared/hubriseToken.ts";
