@@ -14,6 +14,16 @@
 //
 // Deploy: --no-verify-jwt (fijado con Julio; slug hubrise-oauth-callback debe
 // coincidir EXACTO con el redirect_uri registrado en HubRise).
+//
+// MODO INSPECCIÓN TEMPORAL (ENCARGO CODE 2.1, punto B, 15/08/2026): si la
+// respuesta del intercambio trae `location_id` (grant de scope de LOCATION,
+// nunca visto hasta ahora — solo hemos pedido scope de cuenta), NO se guarda
+// nada en ningún sitio: se muestra el JSON completo (token enmascarado) en la
+// propia página, para diseñar 2.1 sobre datos reales de HubRise en vez de
+// sobre la doc. Si NO trae `location_id` (el flujo de escritor de cuenta de
+// siempre), el comportamiento es EXACTAMENTE el de hoy, sin cambios — esta
+// rama nunca se ha activado en producción porque nunca hemos pedido ese scope.
+// Retirar este bloque en cuanto 2.1 tenga su propio manejo real de 'location'.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -26,14 +36,34 @@ const HUBRISE_TOKEN_URL = Deno.env.get("HUBRISE_TOKEN_URL") ??
   "https://manager.hubrise.com/oauth2/v1/token";
 const NONCE_MAX_AGE_MS = 15 * 60 * 1000;
 
+// ASCII-ONLY a proposito (Encargo HubRise, punto 3, 15/08/2026): el gateway de
+// Supabase Edge Functions REESCRIBE el Content-Type de la respuesta a
+// "text/plain" + "X-Content-Type-Options: nosniff" SIN importar lo que
+// devuelva el codigo de esta funcion -- probado con una funcion de control
+// aislada que solo hacia return new Response(html, {headers:{"Content-Type":
+// "text/html"}}) y llegaba igualmente como text/plain. No hay arreglo de
+// codigo posible aqui: el navegador pinta el <h1>/<p> como texto plano, asi
+// que cualquier tilde/enye/emoji sale como mojibake (UTF-8 mal interpretado).
+// El arreglo real es la 3.ter (redirigir a una pagina real del frontend en
+// vez de servir HTML desde el Edge) -- no hecho todavia. Mientras tanto, esto
+// es el interino de coste real cero: texto sin acentos ni emoji, legible
+// aunque se muestre como texto plano.
 function html(body: string, status: number): Response {
   return new Response(
     `<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:2rem">${body}</body>`,
     { status, headers: { "Content-Type": "text/html; charset=utf-8" } },
   );
 }
-const ok = (msg: string) => html(`<h1>✅ HubRise conectado</h1><p>${msg}</p><p>Puedes cerrar esta pestaña.</p>`, 200);
-const fail = (msg: string) => html(`<h1>❌ No se pudo conectar</h1><p>${msg}</p>`, 400);
+const ok = (msg: string) => html(`<h1>HubRise conectado</h1><p>${msg}</p><p>Ya puedes cerrar esta ventana.</p>`, 200);
+const fail = (msg: string) => html(`<h1>No se pudo conectar</h1><p>${msg}</p>`, 400);
+const inspect = (json: Record<string, unknown>) => html(
+  `<h1>Modo inspeccion (temporal) - nada guardado</h1>` +
+  `<p>Respuesta completa del intercambio (token enmascarado):</p>` +
+  `<pre style="background:#f5f4f0;padding:1rem;border-radius:8px;white-space:pre-wrap">${
+    JSON.stringify(json, null, 2).replace(/</g, "&lt;")
+  }</pre>`,
+  200,
+);
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "GET") return fail("Method Not Allowed");
@@ -41,7 +71,7 @@ Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const err = url.searchParams.get("error");
   if (err) {
-    return fail(`HubRise devolvió un error: ${err} — ${url.searchParams.get("error_description") ?? ""}`);
+    return fail(`HubRise devolvio un error: ${err} - ${url.searchParams.get("error_description") ?? ""}`);
   }
 
   const code = url.searchParams.get("code") ?? "";
@@ -64,12 +94,12 @@ Deno.serve(async (req: Request) => {
     console.error("hubrise-oauth-callback: error leyendo nonce", readErr);
     return fail("Error interno validando el enlace.");
   }
-  if (!pending) return fail("Enlace inválido o ya usado. Vuelve a abrir hubrise-oauth-start.");
+  if (!pending) return fail("Enlace invalido o ya usado. Vuelve a abrir hubrise-oauth-start.");
 
   await sb.from("hubrise_oauth_state").delete().eq("nonce", state);
 
   const age = Date.now() - new Date(pending.created_at as string).getTime();
-  if (age > NONCE_MAX_AGE_MS) return fail("El enlace caducó (más de 15 minutos). Vuelve a abrir hubrise-oauth-start.");
+  if (age > NONCE_MAX_AGE_MS) return fail("El enlace caduco (mas de 15 minutos). Vuelve a abrir hubrise-oauth-start.");
 
   const accountId = pending.account_id as string;
 
@@ -97,18 +127,26 @@ Deno.serve(async (req: Request) => {
   if (!tokenResp.ok) {
     const body = await tokenResp.text().catch(() => "");
     console.error(`hubrise-oauth-callback: token endpoint HTTP ${tokenResp.status}: ${body.slice(0, 300)}`);
-    return fail(`HubRise rechazó el intercambio (HTTP ${tokenResp.status}).`);
+    return fail(`HubRise rechazo el intercambio (HTTP ${tokenResp.status}).`);
   }
 
   const tokenJson = await tokenResp.json().catch(() => null) as Record<string, unknown> | null;
   const accessToken = tokenJson?.access_token as string | undefined;
   if (!accessToken) {
     console.error("hubrise-oauth-callback: respuesta de HubRise sin access_token", Object.keys(tokenJson ?? {}));
-    return fail("HubRise no devolvió access_token.");
+    return fail("HubRise no devolvio access_token.");
   }
   const hubriseAccountId = (tokenJson?.account_id as string | undefined) ?? null;
 
-  // 3) Guardar en Vault (nunca loguear el token).
+  // MODO INSPECCIÓN (temporal, ver comentario de cabecera): grant de location,
+  // nunca visto -> loguear y mostrar, NO guardar nada en ningún sitio.
+  if (tokenJson && "location_id" in tokenJson) {
+    const masked = { ...tokenJson, access_token: accessToken ? `${accessToken.slice(0, 4)}…(${accessToken.length} chars)` : null };
+    console.log("hubrise-oauth-callback INSPECT (location grant, no guardado):", JSON.stringify(masked));
+    return inspect(masked);
+  }
+
+  // 3) Guardar en Vault (nunca loguear el token). Rama de siempre, sin cambios.
   const { error: saveErr } = await sb.rpc("hubrise_writer_token_save", {
     p_account_id: accountId,
     p_access_token: accessToken,
@@ -119,5 +157,5 @@ Deno.serve(async (req: Request) => {
     return fail(`No se pudo guardar el token: ${saveErr.message ?? "error desconocido"}`);
   }
 
-  return ok(`Cuenta Folvy ${accountId}${hubriseAccountId ? ` · HubRise account ${hubriseAccountId}` : ""}.`);
+  return ok(`Cuenta Folvy ${accountId}${hubriseAccountId ? ` - cuenta HubRise ${hubriseAccountId}` : ""}.`);
 });

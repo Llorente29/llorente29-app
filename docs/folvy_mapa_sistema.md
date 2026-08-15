@@ -259,12 +259,17 @@ todas las locations de la cuenta**, no hace falta una conexión por local para r
 
 **Consecuencia para la arquitectura**: la capa escritora de cuenta (`hubrise_writer_connection`) SÍ
 basta para pedidos y callbacks, además de catálogo+inventario — con el scope ampliado
-(`account[all_catalogs.write,inventory.write,orders.write]`). **2.1/2.2 siguen como estaban**
-(no hace falta cambiar `hubrise-oauth-start`/`-callback` para aceptar `location_id` de conexión — la
-conexión de cuenta ya es suficiente); lo que sí falta, cuando se retomen, es decidir si el scope de
-producción (`Foodint`/`1b6p8`) se amplía también a `orders.write` o si el patrón `external_integration`
-por-local (bridges) se mantiene para pedidos reales mientras la cuenta solo gobierna catálogo — eso es
-decisión de Julio, no una consecuencia automática de este test.
+(`account[all_catalogs.write,inventory.write,orders.write]`). ~~2.1/2.2 siguen como estaban~~
+**⚠️ ACTUALIZADO 15/08: superado por decisión explícita de Julio.** Pese a que técnicamente
+una sola conexión de cuenta cubriría todo, Julio decidió MANTENER la arquitectura por-location para
+2.1/2.2 (razones: aislamiento de fallos por local, revocación granular, y que el scope
+`location[orders.write]` no necesita ampliar el grant de escritor de cuenta). 2.1/2.2 SÍ bifurcan
+`hubrise-oauth-start`/`-callback` por `kind` (`writer` vs `location`), con `external_integration` como
+destino de la rama `location` — ver más abajo, sección "HubRise — 2.1/2.2: conexión por location
+(implementación)". Lo que sí falta, cuando se retomen, es decidir si el scope de producción
+(`Foodint`/`1b6p8`) se amplía también a `orders.write` o si el patrón `external_integration` por-local
+(bridges) se mantiene para pedidos reales mientras la cuenta solo gobierna catálogo — eso es decisión
+de Julio, no una consecuencia automática de este test.
 
 **Limpieza tras escribir esto**: `hubrise_callback_test_log` (tabla) y `hubrise-callback-test-receiver`
 (Edge Function) se borran — eran solo para este test. El callback de la conexión de cuenta también se
@@ -272,6 +277,28 @@ desregistra (apuntaba SOLO al receptor de prueba; dejarlo registrado tras borrar
 roto, apuntando a un endpoint muerto — no es "conservar el hallazgo", es dejar basura). La llamada
 exacta para volver a registrarlo (con el endpoint real que decida 2.1/2.2) queda documentada arriba en
 este mismo apartado.
+
+## HubRise — 3.ter: mojibake en las páginas HTML de OAuth (causa raíz, 15/08/2026)
+
+**Síntoma**: `hubrise-oauth-start`/`-callback` sirven HTML con `Content-Type: text/html; charset=utf-8`
+explícito en el código, pero el navegador las pintaba como texto plano con tildes/eñes/emoji rotos
+(mojibake).
+
+**Causa raíz verificada (no asumida)**: el GATEWAY de Supabase Edge Functions reescribe el
+`Content-Type` de la respuesta a `text/plain` + añade `X-Content-Type-Options: nosniff`, **sin importar
+lo que devuelva el código de la función**. Probado con una función de control aislada que SOLO hacía
+`return new Response(html, {headers:{"Content-Type":"text/html"}})` — llegó igual como `text/plain`.
+**No hay arreglo de código posible**: no es un bug de charset ni de escritura, es el gateway.
+
+**Interino de coste real cero (aplicado 15/08, `hubrise-oauth-callback` v6)**: las tres páginas
+(`ok()`, `fail()`, `inspect()`) se reescribieron en ASCII puro — sin tildes, eñes, emoji ni comillas
+tipográficas — legibles aunque se sirvan como texto plano. Verificado en vivo: `curl` a la función sin
+`code`/`state` devuelve `Content-Type: text/plain` (confirma que el gateway sigue reescribiendo) con
+cuerpo 100% ASCII, sin mojibake.
+
+**Arreglo real, NO hecho todavía**: redirigir desde el Edge a una página real del frontend (servida por
+Vercel, no por el gateway de Edge Functions) en vez de devolver HTML desde `hubrise-oauth-callback`
+directamente. Queda para cuando se retome ese frente — no bloquea 2.1/2.2.
 
 ## Cuenta HubRise 1b6p8 — inventario del panel (24/07/2026)
 
