@@ -138,6 +138,75 @@
 - **Money**: el webhook es ciego a la moneda → la cuenta en EUR.
 - **Edge Functions HubRise** (ACTIVE): `hubrise-webhook`, `hubrise-order-status`, `hubrise-catalog-publish`, `hubrise-callback-ensure`, `hubrise-oauth-start/-callback`, `hubrise-location-dispatch`, `availability-dispatch`, `availability-watchdog`.
 
+## HubRise — F0.2 resuelta: pedidos y callbacks son POR LOCATION (15/08/2026)
+
+**Método**: sin OrderLine (es app receptora, no genera pedidos — corregido en el encargo el 15/08).
+Llamadas HTTP directas a HubRise desde SQL vía `pg_net` (`net.http_post`/`net.http_get` +
+`net._http_response`, el mismo mecanismo que ya usan los `cron.schedule`), contra el laboratorio
+`zy9j2` ↔ cuenta Folvy **Folvy Interno** (`00000000-0000-0000-0000-000000000001`). Nada de esto tocó
+la cuenta `1b6p8` (Foodint) ni la conexión `Folvy Test` de producción.
+
+**Paso previo — el token de cuenta original NO tenía scope de pedidos.**
+`hubrise_writer_connection` de Folvy Interno se había autorizado (06/08→15/08) con
+`account[all_catalogs.write,inventory.write]` — el mínimo recomendado por la guía de integración.
+Con ese scope: `POST /v1/locations/zy9j2-1/orders` → **403** `"A 'orders' write scope is required"`;
+`POST /v1/callback` con eventos `order.*` → **422** `"orders scope required"`. Bloqueaba la pregunta
+antes de poder hacerla — no demuestra nada sobre "por location vs por cuenta" todavía.
+
+**Julio reautorizó** (15/08, 12:42) la MISMA conexión (`hubrise_writer_connection`, PK `account_id`)
+con `account[all_catalogs.write,inventory.write,orders.write]`, vía
+`hubrise-oauth-start?account_id=<Folvy Interno>&scope=writer_orders` (parámetro `scope` con lista
+blanca cerrada, añadido a `hubrise-oauth-start` solo para este test — retirado tras escribir esto).
+**Verificado**: la fila de Folvy Interno cambió `hubrise_account_id=zy9j2`, `updated_at` 07:26→12:42;
+la fila de Foodint (`hubrise_account_id=1b6p8`) siguió con `updated_at` del 06/08 — **intacta**, tal
+como exige la Trampa 1 (PK sobre `account_id`, no hay forma de que se crucen).
+
+**Con el token nuevo, los 3 pasos del test:**
+
+1. `POST /v1/locations/zy9j2-1/orders` (cuerpo mínimo `{"status":"new"}`) → **200**. Pedido real creado:
+   `id="m6pbvnq"`, `location_id="zy9j2-1"`, `created_by="Folvy Escritor"`.
+2. `PATCH` (vía `X-HTTP-Method-Override`, pg_net no tiene verbo PATCH nativo) sobre ESE pedido real →
+   **200**, `status` pasó a `"accepted"` de verdad. (El 404 de un id inventado en el intento anterior
+   NO contaba como señal — aquí sí, es un resultado válido.)
+3. `POST /v1/callback` en la conexión de cuenta, apuntando a un receptor de prueba propio
+   (`hubrise-callback-test-receiver`, temporal) con eventos `order.create`+`order.update` → **200**,
+   registrado. La conexión `Folvy Test` (`zy9j2-0`, ya apuntaba a `hubrise-webhook` de producción) **no
+   se tocó**.
+
+**La medición decisiva — pedido nuevo en `zy9j2-1` y otro en `zy9j2-0`, tras el callback ya activo:**
+
+- `zy9j2-1` (pedido `6bgypv4`, creado y sin más actividad): **0 eventos** en el receptor de prueba,
+  ni siquiera esperando 30+ segundos.
+- `zy9j2-0` (pedido `vxy89p8`): **2 eventos** `order.update` sí llegaron — pero (matiz importante) NO
+  son de la creación del pedido: son las transiciones `new→received→accepted` que generó **el propio
+  `hubrise-webhook` de producción** al procesar el pedido por la vía YA existente de `Folvy Test`
+  (auto-ack + auto-aceptación, `maybeAckReceived`/`maybeAutoAccept`). Es decir: el callback de cuenta
+  vio tráfico en `zy9j2-0` porque ahí YA hay una conexión por local activa generando eventos; en
+  `zy9j2-1`, sin ninguna conexión por local, el callback de cuenta no vio nada — ni el `create`.
+
+**RESULTADO: llega solo uno → es POR LOCATION.** Según lo acordado: **se para aquí.** No se toca
+2.1/2.2 (OAuth con `location_id`). La capa escritora de cuenta (`hubrise_writer_connection`, PK
+`account_id`) NO basta para pedidos/callbacks — hace falta una conexión por local con scope de
+pedidos, y eso es cambio de modelo de datos que decide Julio, no un ajuste de código.
+
+**Efecto colateral documentado (esperado, no un fallo):** el pedido de prueba `vxy89p8` (zy9j2-0)
+entró en producción real por la vía de `Folvy Test` → `hubrise-webhook`: `sale.id=c0c6848a-d69b-4262-9dc7-9d146ba11b64`,
+`account_id`=Folvy Interno, `external_ref='vxy89p8'`, `order_status='accepted'`, `brand_id=null`
+(sin `connection_name` que case con ninguna marca), `total=0`. `external_webhook_log` registra
+`note='frontera-order-create'`, `processed=true`. Fila de test, contenida en la cuenta de laboratorio;
+pendiente de que Julio decida si la borra.
+
+**Consecuencia para la arquitectura decidida** (tabla de capas, arriba en este documento): la fila
+`hubrise_writer_connection` sigue sirviendo para catálogo+inventario (eso SÍ es de cuenta, confirmado
+en el RECON de julio). Para pedidos/callbacks, el patrón ya construido y correcto es el que usa
+`external_integration`/`Folvy Test`: **una conexión POR LOCATION**. El módulo de conexión (Fase 2 en
+adelante) necesita crear una conexión OAuth de este tipo por cada local que se conecte — no una sola
+de cuenta — cuando llegue a pedidos/callbacks. El OAuth de catálogo (Fase 1, ya hecho) no cambia.
+
+**Limpieza tras escribir esto**: `hubrise_callback_test_log` (tabla) y `hubrise-callback-test-receiver`
+(Edge Function) se borran — eran solo para este test. El parámetro `?scope=writer_orders` de
+`hubrise-oauth-start` se retira de la lista blanca (el resultado no justifica adoptarlo permanente).
+
 ## Cuenta HubRise 1b6p8 — inventario del panel (24/07/2026)
 
 - **`Foodint 1b6p8` (EUR)**. Client ID `598759333895.clients.hubrise.com`. Integración = POS.

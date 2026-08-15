@@ -15,12 +15,13 @@
 // Fase 2 (self-service) sustituirá esto por un botón "Conectar" en Folvy;
 // hoy es un enlace que Julio abre a mano por cuenta.
 //
-// ?scope=<clave> (ENCARGO CODE 2.bis, 15/08/2026, TEMPORAL para el test de
-//   F0.2 en el laboratorio): parámetro opcional, lista blanca cerrada — solo
-//   las claves de SCOPE_WHITELIST, cualquier otra cosa es 400. Omitido (o
-//   "writer") = EXACTAMENTE el comportamiento de hoy, byte a byte (producción
-//   no puede notar este cambio). Nunca se acepta el string de scope crudo por
-//   query: solo una clave corta que mapea a un valor fijo en el código.
+// ?scope=<clave>: parámetro opcional, lista blanca cerrada — solo las claves
+//   de SCOPE_WHITELIST, cualquier otra cosa es 400. Omitido (o "writer") =
+//   EXACTAMENTE el comportamiento de siempre, byte a byte (producción no
+//   puede notar este parámetro). Nunca se acepta el string de scope crudo
+//   por query: solo una clave corta que mapea a un valor fijo en el código.
+//   Añadido para el test 2.bis (F0.2, 15/08/2026) con la clave "writer_orders",
+//   retirada tras el test — ver folvy_mapa_sistema.md sección HubRise.
 //
 // Deploy: --no-verify-jwt (navegación de navegador, sin sesión Folvy).
 
@@ -37,13 +38,14 @@ const WRITER_SCOPE = "account[all_catalogs.write,inventory.write]";
 // Lista blanca CERRADA de scopes admitidos vía ?scope=<clave>. "writer" es el
 // default de siempre; el resto se añade solo cuando hace falta un test o una
 // fase concreta lo pide — nunca un string arbitrario.
+// "writer_orders" (account[...,orders.write]) vivió aquí para el test 2.bis
+// (F0.2, 15/08/2026): resultado "por location", no "por cuenta" — ver
+// folvy_mapa_sistema.md sección HubRise. No se adopta de forma permanente
+// (2.1/2.2 necesitan una conexión POR LOCATION, no ampliar esta de cuenta) →
+// retirada de la lista blanca. El mecanismo ?scope=<clave> se queda, por si
+// hace falta otro test acotado más adelante.
 const SCOPE_WHITELIST: Record<string, string> = {
   writer: WRITER_SCOPE,
-  // TEMPORAL — test 2.bis (F0.2, laboratorio): añade orders.write para medir
-  // si el callback/pedidos de cuenta funcionan. Quitar de la lista cuando el
-  // test quede escrito en folvy_mapa_sistema.md, salvo que 2.1/2.2 decidan
-  // adoptarlo de forma permanente.
-  writer_orders: "account[all_catalogs.write,inventory.write,orders.write]",
 };
 
 function text(body: string, status: number): Response {
