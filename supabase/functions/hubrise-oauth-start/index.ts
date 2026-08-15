@@ -15,6 +15,13 @@
 // Fase 2 (self-service) sustituirá esto por un botón "Conectar" en Folvy;
 // hoy es un enlace que Julio abre a mano por cuenta.
 //
+// ?scope=<clave> (ENCARGO CODE 2.bis, 15/08/2026, TEMPORAL para el test de
+//   F0.2 en el laboratorio): parámetro opcional, lista blanca cerrada — solo
+//   las claves de SCOPE_WHITELIST, cualquier otra cosa es 400. Omitido (o
+//   "writer") = EXACTAMENTE el comportamiento de hoy, byte a byte (producción
+//   no puede notar este cambio). Nunca se acepta el string de scope crudo por
+//   query: solo una clave corta que mapea a un valor fijo en el código.
+//
 // Deploy: --no-verify-jwt (navegación de navegador, sin sesión Folvy).
 
 import { createClient } from "@supabase/supabase-js";
@@ -26,6 +33,18 @@ const HUBRISE_OAUTH_REDIRECT_URI = Deno.env.get("HUBRISE_OAUTH_REDIRECT_URI") ??
 const HUBRISE_AUTHORIZE_URL = Deno.env.get("HUBRISE_AUTHORIZE_URL") ??
   "https://manager.hubrise.com/oauth2/v1/authorize";
 const WRITER_SCOPE = "account[all_catalogs.write,inventory.write]";
+
+// Lista blanca CERRADA de scopes admitidos vía ?scope=<clave>. "writer" es el
+// default de siempre; el resto se añade solo cuando hace falta un test o una
+// fase concreta lo pide — nunca un string arbitrario.
+const SCOPE_WHITELIST: Record<string, string> = {
+  writer: WRITER_SCOPE,
+  // TEMPORAL — test 2.bis (F0.2, laboratorio): añade orders.write para medir
+  // si el callback/pedidos de cuenta funcionan. Quitar de la lista cuando el
+  // test quede escrito en folvy_mapa_sistema.md, salvo que 2.1/2.2 decidan
+  // adoptarlo de forma permanente.
+  writer_orders: "account[all_catalogs.write,inventory.write,orders.write]",
+};
 
 function text(body: string, status: number): Response {
   return new Response(body, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
@@ -45,6 +64,15 @@ Deno.serve(async (req: Request) => {
   const accountId = url.searchParams.get("account_id") ?? "";
   if (!accountId) return text("Falta el parámetro account_id.", 400);
 
+  const scopeKey = url.searchParams.get("scope");
+  const scope = scopeKey === null ? WRITER_SCOPE : SCOPE_WHITELIST[scopeKey];
+  if (!scope) {
+    return text(
+      `scope no reconocido: "${scopeKey}". Valores válidos: ${Object.keys(SCOPE_WHITELIST).join(", ")}.`,
+      400,
+    );
+  }
+
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
   const { data, error } = await sb
@@ -62,7 +90,7 @@ Deno.serve(async (req: Request) => {
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("client_id", HUBRISE_OAUTH_CLIENT_ID);
   authorizeUrl.searchParams.set("redirect_uri", HUBRISE_OAUTH_REDIRECT_URI);
-  authorizeUrl.searchParams.set("scope", WRITER_SCOPE);
+  authorizeUrl.searchParams.set("scope", scope);
   authorizeUrl.searchParams.set("state", data.nonce as string);
 
   return new Response(null, { status: 302, headers: { Location: authorizeUrl.toString() } });
