@@ -300,6 +300,47 @@ cuerpo 100% ASCII, sin mojibake.
 Vercel, no por el gateway de Edge Functions) en vez de devolver HTML desde `hubrise-oauth-callback`
 directamente. Queda para cuando se retome ese frente — no bloquea 2.1/2.2.
 
+## HubRise — 2.5: desconectar, revoke_pending y la trampa del token huérfano (15/08/2026)
+
+**Orden obligatorio (Julio)**: 1) `DELETE /v1/callback` con el token TODAVÍA vivo (verificado en vivo:
+recurso singleton, sin id, `X-Access-Token`, sin cuerpo → 200, GET posterior confirma
+`{url:null,events:{}}`) — un token ya revocado no puede borrar su propio callback; 2)
+`POST manager.hubrise.com/oauth2/v1/revoke` (Basic client_id:client_secret, token en el cuerpo); 3)
+apagar flags LOCALES (`is_active`/`push_status_enabled`=false, `access_token`=NULL,
+`token_status`='invalid' en `external_integration`; `is_active`=false en `external_location_map` —
+**nunca borrar**, el trigger de `location_id` necesita la fila para resolver al reconectar).
+`brand_hubrise_catalog` no se toca nunca — sobrevive intacto para que reconectar no reconfigure catálogos.
+
+**Trampa 13 (Julio, encontrada en su propia especificación de `revoke_pending`)**: si la revocación
+falla, el token se conserva "para poder reintentar" — pero **un token conservado es un token que
+alguien va a sobrescribir** al reconectar. Sin más, la reconexión pisaría `access_token` con el
+nuevo valor y el token viejo sin revocar quedaría huérfano (válido en HubRise) y sin forma de volver a
+intentarlo. Neutralizada: `hubrise-oauth-callback`, al reconectar una fila con `revoke_pending=true`,
+intenta revocar el token viejo (best-effort, no bloquea) antes de sobrescribirlo, y resetea
+`revoke_pending=false` en cualquier reconexión con éxito.
+
+**Verificado en vivo contra el laboratorio (Carabanchel-lab, `zy9j2-1` — nunca `zy9j2-0`, cableada a
+producción)**, con una función de prueba temporal (secretos reales, sin JWT de usuario, borrada/neutralizada
+tras usarla) que reprodujo el mecanismo exacto:
+1. `GET /v1/location` con el token → 200 (confirma que el token vivía ANTES de tocar nada — sin esto,
+   el silencio posterior no demuestra nada, misma lección que el receptor de callbacks de F0.2).
+2. `DELETE /v1/callback` → 200, `{url:null,events:{}}`.
+3. `POST oauth2/v1/revoke` → 200, cuerpo vacío.
+4. `GET /v1/location` inmediatamente después → **401**. Propagación **instantánea** (72 ms después del
+   revoke, sin ventana de "sigue conectado" — no hizo falta el reintento a los 4s previsto para medir
+   propagación asíncrona).
+5. Estado local aplicado (idéntico al que aplicaría la función real) → aceptado por el CHECK relajado
+   sin problema. Verificado en BBDD de forma independiente: `is_active=false`,
+   `push_status_enabled=false`, `token_status=invalid`, `revoke_pending=false`, `access_token` NULL;
+   mapa `is_active=false`.
+
+**Lo que esto NO prueba** (Julio pidió precisión aquí): el mecanismo y las transiciones de estado, sí.
+El camino de autorización (JWT + `current_user_is_admin_of`) y la orquestación de
+`hubrise-location-disconnect` tal como está escrita, NO — la prueba reprodujo la misma lógica en un
+script aparte, no invocó la función real (no hay forma de conseguir un JWT de usuario sin navegador).
+Tampoco se probó el camino de fallo (revoke_pending=true, token conservado, alarma por system-alert):
+en esta ejecución el revoke tuvo éxito a la primera. Eso queda para 4.1 con la UI real.
+
 ## Cuenta HubRise 1b6p8 — inventario del panel (24/07/2026)
 
 - **`Foodint 1b6p8` (EUR)**. Client ID `598759333895.clients.hubrise.com`. Integración = POS.

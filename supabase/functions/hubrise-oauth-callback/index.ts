@@ -36,6 +36,8 @@ const HUBRISE_OAUTH_CLIENT_SECRET = Deno.env.get("HUBRISE_OAUTH_CLIENT_SECRET") 
 const HUBRISE_OAUTH_REDIRECT_URI = Deno.env.get("HUBRISE_OAUTH_REDIRECT_URI") ?? "";
 const HUBRISE_TOKEN_URL = Deno.env.get("HUBRISE_TOKEN_URL") ??
   "https://manager.hubrise.com/oauth2/v1/token";
+const HUBRISE_REVOKE_URL = Deno.env.get("HUBRISE_REVOKE_URL") ??
+  "https://manager.hubrise.com/oauth2/v1/revoke";
 const NONCE_MAX_AGE_MS = 15 * 60 * 1000;
 
 // Nombre fijo de la conexión "propia de Folvy" (no una bridge de plataforma)
@@ -248,12 +250,18 @@ Deno.serve(async (req: Request) => {
   // nadie por codigo, siempre a mano. Esto es el primer escritor automatico.
 
   // Caso limite A: la location de HubRise elegida ya esta ligada a OTRO
-  // local de Folvy en el mapa -> rechazar, no reasignar en silencio.
+  // local de Folvy en el mapa -> rechazar, no reasignar en silencio. Filtro
+  // is_active=true a proposito (fallo de especificacion original, corregido
+  // 15/08 en el diseno de 2.5): sin el, una fila de mapa DESCONECTADA (2.5
+  // la apaga, nunca la borra) bloquearia para siempre reconectar esa misma
+  // location de HubRise a cualquier local -- con el filtro, el UPSERT de
+  // abajo reactiva y sobrescribe la fila apagada sin problema.
   const { data: mapByExternalLoc, error: mapByExternalLocErr } = await sb
     .from("external_location_map")
     .select("location_id")
     .eq("source", "hubrise")
     .eq("external_location_id", externalLocationId)
+    .eq("is_active", true)
     .maybeSingle();
   if (mapByExternalLocErr) {
     console.error("hubrise-oauth-callback: error comprobando mapa por location HubRise", mapByExternalLocErr);
@@ -319,7 +327,7 @@ Deno.serve(async (req: Request) => {
   // conflicto, y un INSERT ciego duplicaria).
   const { data: existingRows, error: existingErr } = await sb
     .from("external_integration")
-    .select("id")
+    .select("id, access_token, revoke_pending")
     .eq("account_id", accountId)
     .eq("source", "hubrise")
     .eq("external_location_id", externalLocationId)
@@ -346,9 +354,34 @@ Deno.serve(async (req: Request) => {
     push_status_enabled: true,
     token_status: "ok",
     token_checked_at: new Date().toISOString(),
+    revoke_pending: false,
   };
 
   if (existing) {
+    if (existing.revoke_pending && existing.access_token) {
+      // Consecuencia de 2.5 (revoke_pending): si una desconexion anterior no
+      // pudo revocar el token viejo, sigue guardado para poder reintentar.
+      // Reconectar va a SOBRESCRIBIR access_token con el nuevo -- sin este
+      // intento, el token viejo quedaria huerfano (valido en HubRise) y sin
+      // forma de volver a intentarlo. Best-effort, no bloquea la reconexion.
+      try {
+        const basicOld = btoa(`${HUBRISE_OAUTH_CLIENT_ID}:${HUBRISE_OAUTH_CLIENT_SECRET}`);
+        const revOldResp = await fetch(HUBRISE_REVOKE_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Basic ${basicOld}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ token: existing.access_token }),
+        });
+        if (!revOldResp.ok) {
+          console.warn(`hubrise-oauth-callback: no se pudo revocar el token viejo huerfano (HTTP ${revOldResp.status}) al reconectar`);
+        }
+      } catch (e) {
+        console.warn("hubrise-oauth-callback: error revocando token viejo huerfano al reconectar", e);
+      }
+    }
+
     const { error: updErr } = await sb
       .from("external_integration")
       .update(writeFields)
