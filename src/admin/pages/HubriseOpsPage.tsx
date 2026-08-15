@@ -128,7 +128,7 @@ function BrandDiffNote({ row }: { row: HubriseOpsLocationRow }) {
   )
 }
 
-function CallbackCell({ row, onVerified }: { row: HubriseOpsLocationRow; onVerified: (locationId: string, ok: boolean, outcome: string | null, error: string | null) => void }) {
+function CallbackCell({ row, onVerified }: { row: HubriseOpsLocationRow; onVerified: (integrationId: string, ok: boolean, outcome: string | null, error: string | null) => void }) {
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; outcome: string | null; error: string | null } | null>(null)
 
@@ -141,7 +141,7 @@ function CallbackCell({ row, onVerified }: { row: HubriseOpsLocationRow; onVerif
     try {
       const r = await verifyHubriseCallbackNow(row.integrationId)
       setResult(r)
-      onVerified(row.locationId, r.ok, r.outcome, r.error)
+      onVerified(row.integrationId, r.ok, r.outcome, r.error)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error verificando el callback.'
       setResult({ ok: false, outcome: null, error: msg })
@@ -191,14 +191,16 @@ export default function HubriseOpsPage() {
   useEffect(() => { load() }, [load])
 
   // Refresco local del punto tocado tras "Verificar callback ahora" — sin
-  // relanzar toda la RPC, solo el dato que de verdad cambió.
-  function handleCallbackVerified(locationId: string, ok: boolean, outcome: string | null) {
+  // relanzar toda la RPC, solo el dato que de verdad cambió. Empareja por
+  // integrationId (no locationId): una location puede tener más de una
+  // conexión hubrise visible ahora (la estándar + una no estándar activa).
+  function handleCallbackVerified(integrationId: string, ok: boolean, outcome: string | null) {
     if (!ok) return
     setDashboard(prev => {
       if (!prev) return prev
       return {
         ...prev,
-        locations: prev.locations.map(l => l.locationId === locationId
+        locations: prev.locations.map(l => l.integrationId === integrationId
           ? { ...l, callbackStatus: outcome === 'noop' || outcome === 'reregistered' ? 'ok' : 'unknown', callbackCheckedAt: new Date().toISOString() }
           : l),
       }
@@ -276,12 +278,22 @@ export default function HubriseOpsPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {dashboard.locations.map(row => (
-              <div key={row.locationId} className="rounded-lg p-3" style={{ border: '1px solid var(--color-border, #eee)' }}>
+              <div
+                key={`${row.locationId}-${row.integrationId ?? row.connectionName ?? 'none'}`}
+                className="rounded-lg p-3"
+                style={row.isStandardConnection ? { border: '1px solid var(--color-border, #eee)' } : { border: `1px solid ${AMBER.border}` }}
+              >
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div>
                     <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary, #1a1a1a)' }}>
                       {row.accountName} · {row.locationName}
                     </p>
+                    {!row.isStandardConnection && (
+                      <p className="text-xs font-medium mt-0.5" style={{ color: AMBER.text }}>
+                        <AlertTriangle size={11} className="inline mr-1 -mt-0.5" />
+                        Conexión no estándar: {row.connectionName ?? '?'}
+                      </p>
+                    )}
                     <p className="text-xs" style={{ color: GRAY.text }}>
                       {row.externalLocationId ?? '—'}
                       {row.externalAccountName ? ` · ${row.externalAccountName}` : ''}

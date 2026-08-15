@@ -378,8 +378,18 @@ borrado antes, en la limpieza de 2.5 — la CLI lo confirmó con "does not exist
 **Backend del módulo HubRise (F1+F2), TERMINADO.** Sigue Fase 3 (UI: A.1 tablero de vigilancia,
 A.2 asistente interno, A.2-bis escritor de `external_brand_map`, A.3 desconectar, B.1 pantalla de
 cliente, B.2 selector de local en `EditPricesModal`, B.3/3.ter página de éxito del OAuth) — diseño
-cerrado por Julio en `folvy_hubrise_fase3_diseno.md` (v2), backend de A.1 en marcha, rama
-`feat/hubrise-fase3-ui`.
+cerrado por Julio en `folvy_hubrise_fase3_diseno.md` (v2), rama `feat/hubrise-fase3-ui`.
+
+**A.1 (tablero de vigilancia superadmin) CERTIFICADO por Julio con captura (15/08)**, tras una
+corrección real encontrada en la propia certificación: `hubrise_ops_dashboard()` filtraba
+`connection_name='Folvy'` y escondía cualquier OTRA conexión hubrise activa de la location (ej.
+"Folvy Test" en `zy9j2-0`, token vivo, callback apuntando a producción — invisible en el tablero
+hasta la corrección). Ese filtro es correcto en `hubrise_location_status` (pantalla del cliente,
+solo le interesa SU conexión estándar) pero era lo contrario del propósito del tablero de
+vigilancia. Corregido: ahora muestra la conexión estándar "Folvy" (incluida inactiva, para
+`revoke_pending`) MÁS cualquier otra conexión que esté activa ahora mismo, etiquetada "conexión no
+estándar: <nombre>". Verificado en vivo por impersonación tras el fix: "Folvy Test" aparece
+correctamente, las dos filas reales no cambiaron. `/_admin/hubrise`, `tsc -b`/`vite build` limpios.
 
 **⚠️ Incidente cerrado (15/08): la primera URL de prueba entregada a Julio apuntaba a PRODUCCIÓN,
 no al laboratorio.** Ver Trampa 14 más abajo. Julio NO pulsó la URL incorrecta.

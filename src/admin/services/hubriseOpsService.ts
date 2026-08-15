@@ -19,6 +19,8 @@ export interface HubriseOpsLocationRow {
   locationId: string
   locationName: string
   integrationId: string | null
+  connectionName: string | null
+  isStandardConnection: boolean
   status: HubriseLocationOpsStatus
   externalLocationId: string | null
   externalAccountName: string | null
@@ -62,6 +64,8 @@ function rowToLocation(r: Record<string, unknown>): HubriseOpsLocationRow {
     locationId: r.location_id as string,
     locationName: r.location_name as string,
     integrationId: (r.integration_id as string | null) ?? null,
+    connectionName: (r.connection_name as string | null) ?? null,
+    isStandardConnection: r.is_standard_connection !== false,
     status: r.status as HubriseLocationOpsStatus,
     externalLocationId: (r.external_location_id as string | null) ?? null,
     externalAccountName: (r.external_account_name as string | null) ?? null,
