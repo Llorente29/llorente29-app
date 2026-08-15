@@ -28,6 +28,7 @@
 // coincidir EXACTO con el redirect_uri registrado en HubRise).
 
 import { createClient } from "@supabase/supabase-js";
+import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -412,9 +413,26 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // 2.6 -- asegurar el callback de pedidos AHORA, sincrono, como parte del
+  // propio flujo de conexion (no por cron: ver cabecera de
+  // _shared/hubriseCallback.ts). Que conectar deje el local operativo, no
+  // "conectado pero mudo" -- hallazgo real (Carabanchel-lab, 15/08/2026)
+  // que motivo este punto: sin esto, una location recien conectada no
+  // recibia ni un pedido hasta que alguien invocara callback-ensure a mano.
+  const callbackResult = await ensureHubriseCallback(accessToken);
+  let callbackWarning = "";
+  if (callbackResult.outcome === "error" || callbackResult.outcome === "token_401") {
+    console.error(
+      `hubrise-oauth-callback: no se pudo asegurar el callback de pedidos ` +
+        `(outcome=${callbackResult.outcome}, status=${callbackResult.status ?? "?"})`,
+    );
+    callbackWarning = " ADVERTENCIA: no se pudo registrar el callback de pedidos -- " +
+      "el local esta conectado pero puede NO recibir pedidos. Vuelve a intentarlo.";
+  }
+
   return ok(
     `Local Folvy conectado a HubRise. Cuenta ${hubriseAccountId}` +
       `${accountName ? ` (${accountName})` : ""}, location ${externalLocationId}` +
-      `${locationName ? ` (${locationName})` : ""}.`,
+      `${locationName ? ` (${locationName})` : ""}.${callbackWarning}`,
   );
 });

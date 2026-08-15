@@ -18,6 +18,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { listActiveHubriseConnections } from "../_shared/hubriseToken.ts";
+import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,12 +28,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const API_BASE = Deno.env.get("HUBRISE_API_BASE") ?? "https://api.hubrise.com/v1";
 const ENV_TOKEN = Deno.env.get("HUBRISE_ACCESS_TOKEN") ?? "";
-const WEBHOOK_URL = Deno.env.get("HUBRISE_WEBHOOK_URL") ??
-  `${SUPABASE_URL}/functions/v1/hubrise-webhook`;
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
-const DESIRED_EVENTS = { order: ["create", "update"] };
 
 function json(o: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(o), {
@@ -41,50 +38,19 @@ function json(o: Record<string, unknown>, status = 200): Response {
   });
 }
 
-function isOurs(cb: unknown): boolean {
-  if (!cb || typeof cb !== "object") return false;
-  const c = cb as Record<string, unknown>;
-  const events = (c["events"] as Record<string, unknown> | undefined) ?? {};
-  return c["url"] === WEBHOOK_URL && Array.isArray(events["order"]);
-}
-
 type EnsureOutcome = "noop" | "reregistered" | "token_401" | "error";
 
 // Asegura el callback para UN token. No lanza: devuelve el resultado.
+// Delega en el helper compartido (_shared/hubriseCallback.ts, 2.6 -- 15/08/2026)
+// para que este barrido manual/opcional y el flujo de conexion sincrono
+// (hubrise-oauth-callback) compartan una sola logica del shape deseado.
 async function ensureForToken(token: string): Promise<{ outcome: EnsureOutcome; status?: number }> {
-  const headers = { "X-Access-Token": token, "Content-Type": "application/json" };
-
-  let getResp: Response;
-  try {
-    getResp = await fetch(`${API_BASE}/callback`, { headers });
-  } catch (e) {
-    console.error("callback-ensure GET error", e);
-    return { outcome: "error" };
+  const r = await ensureHubriseCallback(token);
+  if (r.outcome === "registered") {
+    console.error("callback-ensure: CALLBACK AUSENTE -> re-registrado automáticamente");
+    return { outcome: "reregistered", status: r.status };
   }
-  if (getResp.status === 401) return { outcome: "token_401", status: 401 };
-
-  const current = await getResp.json().catch(() => null);
-  const list = Array.isArray(current) ? current : [current];
-  if (list.some(isOurs)) return { outcome: "noop" };
-
-  let reg: Response;
-  try {
-    reg = await fetch(`${API_BASE}/callback`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ url: WEBHOOK_URL, events: DESIRED_EVENTS }),
-    });
-  } catch (e) {
-    console.error("callback-ensure POST error", e);
-    return { outcome: "error" };
-  }
-  if (!reg.ok) {
-    const body = await reg.text().catch(() => "");
-    console.error(`callback-ensure re-registro falló HTTP ${reg.status}: ${body.slice(0, 200)}`);
-    return { outcome: "error", status: reg.status };
-  }
-  console.error("callback-ensure: CALLBACK AUSENTE -> re-registrado automáticamente");
-  return { outcome: "reregistered" };
+  return { outcome: r.outcome, status: r.status };
 }
 
 // Escala una alarma de sistema (email a operaciones). No bloquea si falta config.
