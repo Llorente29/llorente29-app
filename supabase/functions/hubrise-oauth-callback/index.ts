@@ -32,14 +32,36 @@ import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+// "Folvy Escritor" -- cuenta/catalogo (kind=writer). Sin cambios (2.7).
 const HUBRISE_OAUTH_CLIENT_ID = Deno.env.get("HUBRISE_OAUTH_CLIENT_ID") ?? "";
 const HUBRISE_OAUTH_CLIENT_SECRET = Deno.env.get("HUBRISE_OAUTH_CLIENT_SECRET") ?? "";
+// "Folvy" -- location/pedidos (kind=location). App HubRise DISTINTA de la de
+// arriba, no la misma rotada (folvy_mapa_sistema.md, "HubRise -- 2.7",
+// 15/08/2026). Su client_secret YA vive en HUBRISE_WEBHOOK_SECRET --
+// verificado por HMAC contra un evento real de hubrise-webhook -- no se
+// duplica en una Secret nueva a proposito (dos valores iguales es un valor
+// que puede desincronizarse). El client_id si es nuevo: HUBRISE_OAUTH_LOCATION_CLIENT_ID.
+const HUBRISE_OAUTH_LOCATION_CLIENT_ID = Deno.env.get("HUBRISE_OAUTH_LOCATION_CLIENT_ID") ?? "";
+const HUBRISE_OAUTH_LOCATION_CLIENT_SECRET = Deno.env.get("HUBRISE_WEBHOOK_SECRET") ?? "";
 const HUBRISE_OAUTH_REDIRECT_URI = Deno.env.get("HUBRISE_OAUTH_REDIRECT_URI") ?? "";
 const HUBRISE_TOKEN_URL = Deno.env.get("HUBRISE_TOKEN_URL") ??
   "https://manager.hubrise.com/oauth2/v1/token";
 const HUBRISE_REVOKE_URL = Deno.env.get("HUBRISE_REVOKE_URL") ??
   "https://manager.hubrise.com/oauth2/v1/revoke";
 const NONCE_MAX_AGE_MS = 15 * 60 * 1000;
+
+// Credenciales por kind -- nunca fallback silencioso al cliente equivocado:
+// firmar el intercambio con la app de catalogo para un grant de location
+// produciria un token que hubrise-webhook rechazaria en frontera (401) sin
+// motivo visible (esto es, literal, el bug de 2.7).
+function oauthClientFor(kind: string): { clientId: string; clientSecret: string } | null {
+  if (kind === "location") {
+    if (!HUBRISE_OAUTH_LOCATION_CLIENT_ID || !HUBRISE_OAUTH_LOCATION_CLIENT_SECRET) return null;
+    return { clientId: HUBRISE_OAUTH_LOCATION_CLIENT_ID, clientSecret: HUBRISE_OAUTH_LOCATION_CLIENT_SECRET };
+  }
+  if (!HUBRISE_OAUTH_CLIENT_ID || !HUBRISE_OAUTH_CLIENT_SECRET) return null;
+  return { clientId: HUBRISE_OAUTH_CLIENT_ID, clientSecret: HUBRISE_OAUTH_CLIENT_SECRET };
+}
 
 // Nombre fijo de la conexión "propia de Folvy" (no una bridge de plataforma)
 // en external_integration. RECON en vivo (15/08/2026) mostró que
@@ -87,8 +109,12 @@ Deno.serve(async (req: Request) => {
   const state = url.searchParams.get("state") ?? "";
   if (!code || !state) return fail("Faltan code/state en la respuesta de HubRise.");
 
-  if (!HUBRISE_OAUTH_CLIENT_ID || !HUBRISE_OAUTH_CLIENT_SECRET || !HUBRISE_OAUTH_REDIRECT_URI) {
-    return fail("Faltan Secrets HUBRISE_OAUTH_CLIENT_ID / HUBRISE_OAUTH_CLIENT_SECRET / HUBRISE_OAUTH_REDIRECT_URI.");
+  // redirect_uri es el mismo para ambas apps (parametro de la llamada de
+  // autorizacion, no configuracion de la app -- ver folvy_mapa_sistema.md,
+  // "HubRise -- 2.7"). Las credenciales del cliente SI dependen de kind, y
+  // kind no se conoce hasta leer el nonce -- se comprueban mas abajo.
+  if (!HUBRISE_OAUTH_REDIRECT_URI) {
+    return fail("Falta el Secret HUBRISE_OAUTH_REDIRECT_URI.");
   }
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
@@ -114,8 +140,19 @@ Deno.serve(async (req: Request) => {
   const kind = (pending.kind as string | null) ?? "writer";
   const nonceLocationId = (pending.location_id as string | null) ?? null;
 
+  const oauthClient = oauthClientFor(kind);
+  if (!oauthClient) {
+    const missing = kind === "location"
+      ? "HUBRISE_OAUTH_LOCATION_CLIENT_ID / HUBRISE_WEBHOOK_SECRET"
+      : "HUBRISE_OAUTH_CLIENT_ID / HUBRISE_OAUTH_CLIENT_SECRET";
+    console.error(`hubrise-oauth-callback: faltan credenciales OAuth para kind=${kind} (${missing})`);
+    return fail(
+      `Faltan Secrets del cliente OAuth de ${kind === "location" ? "pedidos (Folvy)" : "catalogo (Folvy Escritor)"}: ${missing}.`,
+    );
+  }
+
   // 2) Intercambiar code -> access_token.
-  const basic = btoa(`${HUBRISE_OAUTH_CLIENT_ID}:${HUBRISE_OAUTH_CLIENT_SECRET}`);
+  const basic = btoa(`${oauthClient.clientId}:${oauthClient.clientSecret}`);
   let tokenResp: Response;
   try {
     tokenResp = await fetch(HUBRISE_TOKEN_URL, {
@@ -366,7 +403,7 @@ Deno.serve(async (req: Request) => {
       // intento, el token viejo quedaria huerfano (valido en HubRise) y sin
       // forma de volver a intentarlo. Best-effort, no bloquea la reconexion.
       try {
-        const basicOld = btoa(`${HUBRISE_OAUTH_CLIENT_ID}:${HUBRISE_OAUTH_CLIENT_SECRET}`);
+        const basicOld = btoa(`${oauthClient.clientId}:${oauthClient.clientSecret}`);
         const revOldResp = await fetch(HUBRISE_REVOKE_URL, {
           method: "POST",
           headers: {

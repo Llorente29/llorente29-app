@@ -50,8 +50,17 @@ const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const HUBRISE_API_BASE = Deno.env.get("HUBRISE_API_BASE") ?? "https://api.hubrise.com/v1";
 const HUBRISE_REVOKE_URL = Deno.env.get("HUBRISE_REVOKE_URL") ??
   "https://manager.hubrise.com/oauth2/v1/revoke";
-const HUBRISE_OAUTH_CLIENT_ID = Deno.env.get("HUBRISE_OAUTH_CLIENT_ID") ?? "";
-const HUBRISE_OAUTH_CLIENT_SECRET = Deno.env.get("HUBRISE_OAUTH_CLIENT_SECRET") ?? "";
+// Esta funcion SOLO maneja conexiones connection_name='Folvy' (location) --
+// nunca escritoras -- asi que el cliente OAuth es siempre el de pedidos
+// ("Folvy"), no el de catalogo ("Folvy Escritor"). Corregido junto con 2.7
+// (folvy_mapa_sistema.md, "HubRise -- 2.7", 15/08/2026): antes revocaba con
+// las credenciales equivocadas para cualquier token emitido por el flujo
+// location ya corregido -- HubRise rechaza un revoke firmado por una app
+// distinta de la que emitio el token. El client_secret ya vive en
+// HUBRISE_WEBHOOK_SECRET (verificado por HMAC), no se duplica en una Secret
+// nueva.
+const HUBRISE_OAUTH_LOCATION_CLIENT_ID = Deno.env.get("HUBRISE_OAUTH_LOCATION_CLIENT_ID") ?? "";
+const HUBRISE_OAUTH_LOCATION_CLIENT_SECRET = Deno.env.get("HUBRISE_WEBHOOK_SECRET") ?? "";
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 const CONNECTION_NAME = "Folvy";
 
@@ -153,11 +162,11 @@ Deno.serve(async (req: Request) => {
   // 2) Revocar el token.
   let revoked = false;
   let revokeErrorMsg: string | null = null;
-  if (!HUBRISE_OAUTH_CLIENT_ID || !HUBRISE_OAUTH_CLIENT_SECRET) {
-    revokeErrorMsg = "faltan Secrets HUBRISE_OAUTH_CLIENT_ID / HUBRISE_OAUTH_CLIENT_SECRET";
+  if (!HUBRISE_OAUTH_LOCATION_CLIENT_ID || !HUBRISE_OAUTH_LOCATION_CLIENT_SECRET) {
+    revokeErrorMsg = "faltan Secrets HUBRISE_OAUTH_LOCATION_CLIENT_ID / HUBRISE_WEBHOOK_SECRET";
   } else {
     try {
-      const basic = btoa(`${HUBRISE_OAUTH_CLIENT_ID}:${HUBRISE_OAUTH_CLIENT_SECRET}`);
+      const basic = btoa(`${HUBRISE_OAUTH_LOCATION_CLIENT_ID}:${HUBRISE_OAUTH_LOCATION_CLIENT_SECRET}`);
       const revResp = await fetch(HUBRISE_REVOKE_URL, {
         method: "POST",
         headers: {

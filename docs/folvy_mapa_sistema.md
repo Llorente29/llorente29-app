@@ -341,6 +341,65 @@ script aparte, no invocó la función real (no hay forma de conseguir un JWT de 
 Tampoco se probó el camino de fallo (revoke_pending=true, token conservado, alarma por system-alert):
 en esta ejecución el revoke tuvo éxito a la primera. Eso queda para 4.1 con la UI real.
 
+## HubRise — 2.6/2.7: CERRADAS (15/08/2026)
+
+El detalle completo del hallazgo — las tres apps OAuth de Folvy en HubRise ("Folvy"=pedidos,
+"Folvy Escritor"=catálogo, "Folvy Injector"=muerta), el HMAC que lo demostró, por qué
+`HUBRISE_WEBHOOK_SECRET` sirve para dos cosas a la vez (rotarlo rompe las dos), y por qué la
+certificación con Antoine va sobre "Folvy" y no sobre "Folvy Escritor" — vive en
+**`folvy_hubrise_tres_apps_oauth.md`** (documento propio de Julio, no duplicar aquí).
+
+**Código desplegado (15/08)** — `hubrise-oauth-start` v11, `hubrise-oauth-callback` v12,
+`hubrise-location-disconnect` v3 (verificados byte a byte contra `list_edge_functions` tras cada
+deploy; `hubrise-webhook` NO se tocó, sigue v49 sin cambios). `writer` byte a byte idéntico
+(mismo `HUBRISE_OAUTH_CLIENT_ID`/`SECRET`, mismo código, solo se movió el orden de comprobación de
+Secrets a después de leer el nonce). `location` usa `HUBRISE_OAUTH_LOCATION_CLIENT_ID` +
+`HUBRISE_WEBHOOK_SECRET` (client_secret de "Folvy", no duplicado en una Secret nueva).
+**Hallazgo propio, no pedido explícitamente, incluido en el mismo commit**: `hubrise-location-disconnect`
+revocaba con las credenciales de "Folvy Escritor" para tokens que, tras este cambio, emite "Folvy"
+— HubRise rechaza un revoke firmado por una app distinta de la que emitió el token. Corregido para
+usar siempre las credenciales de "Folvy" (esta función solo maneja conexiones location).
+
+**Prueba de aceptación real — PASADA (15/08, verificado por Julio en BBDD)**: reconectado
+Carabanchel-lab (Folvy Interno) por el flujo real. Sin error de redirect_uri (HubRise no lo
+pre-registra, confirmado). `ensureHubriseCallback` (2.6) devolvió el callback de `zy9j2-1` a
+`hubrise-webhook` solo, dentro del propio flujo de reconexión, sin paso manual. Cambio de estado
+desde OrderLine → `external_webhook_log` 19:38:58, `frontera-order-update`, `processed=true`,
+cuenta `zy9j2`/location `zy9j2-1`, pedido `6bgypv4` → `sale` creada y cerrada (`close_sale`).
+Camino completo, extremo a extremo. Alcalá siguió recibiendo pedidos reales en la misma ventana
+(`j4xvvyp` 19:22, `yn633nk` 19:20) — producción intacta.
+
+**Limpieza del andamiaje de diagnóstico (15/08, disparador cumplido)**: `hubrise-callback-diag-receiver`
+(Edge) y `_tmp_hubrise_callback_diag` (tabla) borrados; venta de prueba `6bgypv4` de Folvy Interno
+borrada (0 dependientes en las 8 tablas con FK a `sale`, incluida `sale_line` — el pedido de prueba
+no generó líneas ni consumo de stock); `hubrise-lab-disconnect-test` ya no existía (se había
+borrado antes, en la limpieza de 2.5 — la CLI lo confirmó con "does not exist").
+
+**Backend del módulo HubRise, TERMINADO.** Sigue Fase 3 (UI: pantalla de estado, asistente,
+selector de local en `EditPricesModal` — 3.bis, página de éxito del OAuth — 3.ter), a diseñar antes
+de construir.
+
+**⚠️ Incidente cerrado (15/08): la primera URL de prueba entregada a Julio apuntaba a PRODUCCIÓN,
+no al laboratorio.** Ver Trampa 14 más abajo. Julio NO pulsó la URL incorrecta.
+
+### Trampa 14 (misma familia que 1b6p8-1 vs 1b6p8-2): Folvy Interno replica los NOMBRES de los locales de Foodint
+
+Folvy Interno (cuenta de laboratorio) es un espejo de Foodint (cuenta de producción): sus locales
+llevan los MISMOS NOMBRES visibles ("Foodint Carabanchel" existe en las dos cuentas, con
+`account_id`/`location_id` completamente distintos). El 15/08 esta sesión le entregó a Julio una
+URL de prueba de aceptación llamándola "Carabanchel-lab" pero usando en realidad
+`account_id=51ad1792-6629-4ef7-833a-b57b09a86710` (Foodint, producción) +
+`location_id=92d7656e-082e-452a-8ebc-236b2d6ebf5f` (Foodint Carabanchel, producción) — los
+identificadores REALES de producción, recordados de memoria por asociación con el nombre del sitio,
+sin verificar contra `locations` antes de dárselos a Julio. Julio lo detectó él mismo antes de
+pulsar el enlace.
+
+**Regla**: un `location_id` NUNCA se identifica por el nombre del local — se identifica por su
+`account_id`. Cualquier URL, script o instrucción que mencione un local por su nombre debe llevar
+la cuenta al lado explícitamente, y verificarse contra `locations` (`select id, account_id, name
+from locations where id = '<location_id>'`) antes de dársela a un humano para actuar — sobre todo
+si esa acción abre un flujo de autorización real contra un sistema externo.
+
 ## Cuenta HubRise 1b6p8 — inventario del panel (24/07/2026)
 
 - **`Foodint 1b6p8` (EUR)**. Client ID `598759333895.clients.hubrise.com`. Integración = POS.
