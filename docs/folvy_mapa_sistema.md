@@ -375,12 +375,39 @@ borrada (0 dependientes en las 8 tablas con FK a `sale`, incluida `sale_line` �
 no generó líneas ni consumo de stock); `hubrise-lab-disconnect-test` ya no existía (se había
 borrado antes, en la limpieza de 2.5 — la CLI lo confirmó con "does not exist").
 
-**Backend del módulo HubRise, TERMINADO.** Sigue Fase 3 (UI: pantalla de estado, asistente,
-selector de local en `EditPricesModal` — 3.bis, página de éxito del OAuth — 3.ter), a diseñar antes
-de construir.
+**Backend del módulo HubRise (F1+F2), TERMINADO.** Sigue Fase 3 (UI: A.1 tablero de vigilancia,
+A.2 asistente interno, A.2-bis escritor de `external_brand_map`, A.3 desconectar, B.1 pantalla de
+cliente, B.2 selector de local en `EditPricesModal`, B.3/3.ter página de éxito del OAuth) — diseño
+cerrado por Julio en `folvy_hubrise_fase3_diseno.md` (v2), backend de A.1 en marcha, rama
+`feat/hubrise-fase3-ui`.
 
 **⚠️ Incidente cerrado (15/08): la primera URL de prueba entregada a Julio apuntaba a PRODUCCIÓN,
 no al laboratorio.** Ver Trampa 14 más abajo. Julio NO pulsó la URL incorrecta.
+
+### Trampa 15: NINGÚN cron sondea GET /callback — es condición del pre-audit de Antoine
+
+**El vigía de salud de token (`hubrise-connection-health`, F1.3) violó esto desde su propia
+creación, sin que nadie lo notara hasta el diseño de A.1 (15/08/2026).** Pingueaba `GET /callback`
+cada 30 min por conexión — distinta cadencia que el polling original (cada 5 min, cron 21,
+`cron.unschedule` el 29/07), pero el MISMO endpoint sondeado en bucle, la misma objeción que
+Antoine puso como punto 2 del pre-audit. Julio lo aprobó sin verlo (al aprobar 2.6, que sí respeta
+la regla) y yo lo escribí sin comprobarlo contra el propio F1.3 — se coló a los dos.
+
+**Corregido**: la salud del token se comprueba con endpoints "quien soy" escalados por el propio
+token — `GET /v1/location` (conexiones de location) y `GET /v1/account` (escritora) — verificados
+en vivo el 15/08/2026 (200 con token vivo, 401 con token muerto, misma señal que `/callback` sin
+ser ese endpoint). El estado del callback se vigila por EVENTOS, nunca por cron: al conectar/
+reconectar (`hubrise-oauth-callback`, 2.6), al desconectar (`hubrise-location-disconnect`, siempre
+`missing`), cuando un token pasa de `invalid` a `ok` (`hubrise-connection-health`, transición real,
+no bucle), y bajo demanda desde el botón "Verificar callback ahora" del tablero (A.1) —
+`hubrise-callback-ensure` acepta `{integration_id}` para acotar a una sola conexión. Su comentario
+original decía *"Este cron..."* pero NUNCA se programó (confirmado en 2.6 contra los 48 `cron.job`)
+— corregido para que no quede como una invitación a programarlo.
+
+**Regla permanente — no re-litigar**: **ningún cron sondea `GET /callback`.** Es la condición del
+pre-audit de Antoine (punto 2, 29/07). Los callbacks no se borran solos: se verifican al conectar,
+al desconectar y bajo demanda. Cualquier diseño futuro que quiera "vigilar callbacks en bucle" está
+repitiendo el cron 21.
 
 ### Trampa 14 (misma familia que 1b6p8-1 vs 1b6p8-2): Folvy Interno replica los NOMBRES de los locales de Foodint
 

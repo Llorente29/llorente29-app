@@ -115,6 +115,7 @@ export async function resolveHubriseToken(
 
 // Conexion HubRise activa con token — para el auto-sanador MULTI-CONEXION.
 export interface HubriseConnection {
+  id: string;
   accountId: string;
   externalLocationId: string | null;
   connectionName: string | null;
@@ -127,7 +128,7 @@ export async function listActiveHubriseConnections(
 ): Promise<HubriseConnection[]> {
   const { data, error }: QueryResult = await sb
     .from("external_integration")
-    .select("account_id, external_location_id, connection_name, access_token, push_status_enabled, is_active")
+    .select("id, account_id, external_location_id, connection_name, access_token, push_status_enabled, is_active")
     .eq("source", "hubrise")
     .eq("is_active", true);
 
@@ -140,6 +141,7 @@ export async function listActiveHubriseConnections(
       return enabled && typeof tok === "string" && tok.length > 0;
     })
     .map((r) => ({
+      id: r["id"] as string,
       accountId: r["account_id"] as string,
       externalLocationId: (r["external_location_id"] as string | null) ?? null,
       connectionName: (r["connection_name"] as string | null) ?? null,

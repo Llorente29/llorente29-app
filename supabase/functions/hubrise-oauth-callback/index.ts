@@ -395,7 +395,10 @@ Deno.serve(async (req: Request) => {
     revoke_pending: false,
   };
 
+  let integrationId: string;
+
   if (existing) {
+    integrationId = existing.id as string;
     if (existing.revoke_pending && existing.access_token) {
       // Consecuencia de 2.5 (revoke_pending): si una desconexion anterior no
       // pudo revocar el token viejo, sigue guardado para poder reintentar.
@@ -429,7 +432,7 @@ Deno.serve(async (req: Request) => {
       return fail(`No se pudo guardar el token: ${updErr.message ?? "error desconocido"}`);
     }
   } else {
-    const { error: insErr } = await sb
+    const { data: inserted, error: insErr } = await sb
       .from("external_integration")
       .insert({
         account_id: accountId,
@@ -437,7 +440,9 @@ Deno.serve(async (req: Request) => {
         connection_name: LOCATION_CONNECTION_NAME,
         external_location_id: externalLocationId,
         ...writeFields,
-      });
+      })
+      .select("id")
+      .single();
     if (insErr) {
       console.error("hubrise-oauth-callback: error creando conexion", insErr.message ?? insErr);
       if (insErr.code === "23505") {
@@ -448,6 +453,7 @@ Deno.serve(async (req: Request) => {
       }
       return fail(`No se pudo guardar el token: ${insErr.message ?? "error desconocido"}`);
     }
+    integrationId = (inserted as { id: string }).id;
   }
 
   // 2.6 -- asegurar el callback de pedidos AHORA, sincrono, como parte del
@@ -465,6 +471,21 @@ Deno.serve(async (req: Request) => {
     );
     callbackWarning = " ADVERTENCIA: no se pudo registrar el callback de pedidos -- " +
       "el local esta conectado pero puede NO recibir pedidos. Vuelve a intentarlo.";
+  }
+
+  // callback_status dirigido por EVENTOS (Fase 3, A.1) -- este es uno de los
+  // tres: conectar/reconectar. noop/registered = confirmado correcto ahora
+  // mismo; token_401/error = no se pudo confirmar, 'unknown' (no mentir con
+  // 'ok' ni afirmar 'missing' sin haberlo comprobado de verdad).
+  const { error: cbStatusErr } = await sb
+    .from("external_integration")
+    .update({
+      callback_status: callbackResult.outcome === "noop" || callbackResult.outcome === "registered" ? "ok" : "unknown",
+      callback_checked_at: new Date().toISOString(),
+    })
+    .eq("id", integrationId);
+  if (cbStatusErr) {
+    console.error("hubrise-oauth-callback: no se pudo guardar callback_status", cbStatusErr.message ?? cbStatusErr);
   }
 
   return ok(
