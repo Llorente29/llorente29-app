@@ -216,7 +216,7 @@ por la vía de `Folvy Test` → `hubrise-webhook` (`order_status='accepted'`, `b
 `sale_line`/`kds_ticket_station_state`/`channel_settlement_order`/`print_job`/`coupon_redemption`/
 `delivery_assignment`/`delivery_quote`/`customer_notification`.
 
-## HubRise — F0.2, re-test con segundo cliente (OrderLine) — EN CURSO (15/08/2026)
+## HubRise — F0.2 RESUELTA: el callback de CUENTA cubre todas las locations (15/08/2026)
 
 **Por qué OrderLine esta vez SÍ sirve**: no genera pedidos (sigue siendo cierto), pero SÍ cambia el
 estado de un pedido ya existente — y ese cambio de estado, hecho por una app externa distinta de
@@ -240,7 +240,38 @@ se crea un pedido en `zy9j2-1` — se espera 0 eventos (autoevento, ahora es pre
   - No → es por location; parar y decidir el cambio de modelo de datos.
   - Nada → verificar el receptor con una llamada directa antes de concluir; silencio no es resultado.
 
-**Resultado**: pendiente — esperando confirmación de Julio de que OrderLine está conectado a `zy9j2-1`.
+**Resultado — los dos experimentos, con OrderLine ya conectado a `Lab 2 (zy9j2-1)`:**
+
+1. **Segundo cliente (la medición real)**: Julio aceptó el pedido `6bgypv4` desde OrderLine —
+   `order.update`, cliente ajeno a nuestra conexión de cuenta. **Llegó al receptor**: `event_type=update`,
+   `order_id=6bgypv4`, `location_id=zy9j2-1`, `status=accepted`. Un solo evento, sin duplicados ni ruido.
+2. **Auto-evento (verificación de la predicción, no asumida)**: con el token de cuenta se creó un
+   pedido nuevo (`5gy7v6d`) en `zy9j2-1`. Esperados 12+ segundos: **0 eventos**. El receptor ya estaba
+   verificado como funcional por el punto 1 (recibió un evento real minutos antes con la misma
+   infraestructura), así que este silencio SÍ es resultado — no hace falta una llamada directa aparte
+   para descartar que el receptor esté roto.
+
+**F0.2 CERRADA: el callback registrado en la conexión de CUENTA recibe eventos de locations ajenas a
+quien los origina, incluida una location (`zy9j2-1`) donde la propia conexión de cuenta NUNCA tuvo
+actividad previa.** Combinado con `zy9j2-0` (donde también llegaron eventos de un cliente distinto,
+`Folvy Test`): **dos locations de dos, dos clientes distintos de dos — el callback de cuenta cubre
+todas las locations de la cuenta**, no hace falta una conexión por local para recibir notificaciones.
+
+**Consecuencia para la arquitectura**: la capa escritora de cuenta (`hubrise_writer_connection`) SÍ
+basta para pedidos y callbacks, además de catálogo+inventario — con el scope ampliado
+(`account[all_catalogs.write,inventory.write,orders.write]`). **2.1/2.2 siguen como estaban**
+(no hace falta cambiar `hubrise-oauth-start`/`-callback` para aceptar `location_id` de conexión — la
+conexión de cuenta ya es suficiente); lo que sí falta, cuando se retomen, es decidir si el scope de
+producción (`Foodint`/`1b6p8`) se amplía también a `orders.write` o si el patrón `external_integration`
+por-local (bridges) se mantiene para pedidos reales mientras la cuenta solo gobierna catálogo — eso es
+decisión de Julio, no una consecuencia automática de este test.
+
+**Limpieza tras escribir esto**: `hubrise_callback_test_log` (tabla) y `hubrise-callback-test-receiver`
+(Edge Function) se borran — eran solo para este test. El callback de la conexión de cuenta también se
+desregistra (apuntaba SOLO al receptor de prueba; dejarlo registrado tras borrar la función lo deja
+roto, apuntando a un endpoint muerto — no es "conservar el hallazgo", es dejar basura). La llamada
+exacta para volver a registrarlo (con el endpoint real que decida 2.1/2.2) queda documentada arriba en
+este mismo apartado.
 
 ## Cuenta HubRise 1b6p8 — inventario del panel (24/07/2026)
 
