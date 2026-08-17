@@ -562,7 +562,8 @@ export interface KitchenSettingsUpdate {
 
 // ─────────────────────────────────────────────────────────────────────
 // menu_item (Capa 2: ítem de carta por marca — aquí vive el PVP)
-// El precio se guarda SIN IVA (base imponible); con IVA se deriva.
+// El precio se guarda CON IVA INCLUIDO. Corregido 17/08: se creía base
+// imponible y no lo era -- el neto se DERIVA dividiendo, no multiplicando.
 // Margen y food cost % NO viven aquí: los calcula la función SQL.
 // ─────────────────────────────────────────────────────────────────────
 export interface MenuItem {

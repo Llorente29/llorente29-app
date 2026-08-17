@@ -311,7 +311,7 @@ export default function AddExistingProductModal({
                         {/* PVP editable cuando está seleccionado */}
                         {isSel && (
                           <div className="px-3 pb-2.5 pl-10 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <label className="text-[11px] text-gray-500">PVP (sin IVA)</label>
+                            <label className="text-[11px] text-gray-500">PVP (IVA incl.)</label>
                             <div className="relative">
                               <input
                                 type="text" inputMode="decimal" value={sel!.priceText}

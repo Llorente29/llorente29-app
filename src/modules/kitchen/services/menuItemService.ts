@@ -532,7 +532,7 @@ export async function listLinkableMenuItems(
 export interface ReusableProduct {
   recipeItemId: string
   name: string            // nombre de referencia (el más frecuente entre marcas)
-  referencePrice: number  // PVP modal (sin IVA) entre marcas
+  referencePrice: number  // PVP modal (IVA incluido) entre marcas
   vatRate: number         // IVA de referencia (modal)
   brandCount: number      // en cuántas marcas está (activas)
   hasModifiers: boolean   // algún menu_item de esa receta tiene grupos de modificadores

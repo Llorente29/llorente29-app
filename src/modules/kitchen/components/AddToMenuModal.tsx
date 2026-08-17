@@ -255,7 +255,7 @@ export default function AddToMenuModal({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Precio por defecto (sin IVA)</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Precio por defecto (IVA incluido)</label>
                   <div className="relative">
                     <input
                       type="text" inputMode="decimal" value={priceText}
