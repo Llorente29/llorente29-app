@@ -28,7 +28,10 @@ Bajo ningún concepto:
 - `hubrise-webhook` (no se despliega, ni se toca, en ninguna circunstancia).
 - **Foodint Alcalá está en producción.** Nada de este encargo puede rozarla.
 
-Ventana de despliegue: **nunca entre las 11:00 y las 23:45**.
+Ventana de despliegue: ~~nunca entre las 11:00 y las 23:45~~ → **CORREGIDA el 17/08**:
+despliegues **hasta las 12:15**, prohibido **12:15 → 23:45**. Ver
+`claude/folvy_protocolo_15dias_portatil.md`. El 11:00 era una estimación sin
+comprobar; el dato real de ventas lo desmiente.
 
 ---
 
