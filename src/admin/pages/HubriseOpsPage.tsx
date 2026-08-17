@@ -12,6 +12,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { AlertTriangle, CheckCircle2, XCircle, Clock, CircleDashed, RefreshCw, Loader2 } from 'lucide-react'
+import HubriseBrandCatalogPanel from '@/modules/kitchen/components/HubriseBrandCatalogPanel'
 import {
   getHubriseOpsDashboard,
   verifyHubriseCallbackNow,
@@ -334,6 +335,13 @@ export default function HubriseOpsPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Catálogos de marca — herramienta de operación, no vigilancia. Va debajo
+          del tablero porque el tablero es lo que se mira; esto es lo que se usa
+          cuando el tablero dice que falta algo. */}
+      <div className="mt-6">
+        <HubriseBrandCatalogPanel />
       </div>
 
       <p className="text-xs mt-4" style={{ color: '#aaa' }}>
