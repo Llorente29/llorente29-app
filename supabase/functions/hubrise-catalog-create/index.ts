@@ -54,6 +54,22 @@
 // hubrise-webhook). El token no sale de esta función: ni al cliente, ni a la
 // respuesta, ni a un log.
 
+// ESTADO DE DESPLIEGUE (17/08, 09:2x) — v1 ACTIVE, verify_jwt=true.
+// ⚠️ DIVERGENCIA DECLARADA: lo desplegado en v1 es este mismo código con la
+// cabecera de comentarios QUITADA y los acentos retirados de los mensajes de
+// error ("conexion" en vez de "conexión"). La lógica es idéntica sentencia a
+// sentencia — el payload se derivó de este fichero — pero NO es byte a byte, y
+// no se va a decir que lo es. Causa: el despliegue fue por MCP con los ficheros
+// en línea (no hay SUPABASE_ACCESS_TOKEN en el contenedor para usar el CLI, que
+// sube el repo tal cual). SE CORRIGE en el v2 que salga del ensayo de
+// laboratorio, que además es el despliegue donde toca usar el CLI.
+//
+// TRAMPA DE NOMBRES, nivel marca (además de la de locales): "Bendito Burrito"
+// existe en las DOS cuentas —95635ce3… en Foodint (producción) y 73673376… en
+// Folvy Interno (laboratorio)—, igual que "Foodint Carabanchel" existe en las
+// dos. El ensayo y la ejecución real se diferencian SÓLO por los UUID. Nunca
+// resolver ninguno de los dos por nombre.
+
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { resolveWriterToken } from "../_shared/hubriseToken.ts";
