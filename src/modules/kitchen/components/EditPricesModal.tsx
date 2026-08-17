@@ -58,7 +58,7 @@ import {
 import { updateMenuItem } from '@/modules/kitchen/services/menuItemService'
 import { useVisibleLocations } from '@/modules/multitenancy/hooks/useVisibleLocations'
 import { listSalesChannels } from '@/modules/kitchen/services/channelRateService'
-import { fmtNum } from '@/lib/format'
+import { fmtNumEs } from '@/lib/format'
 
 interface EditPricesModalProps {
   menuItemId: string
@@ -150,7 +150,7 @@ export default function EditPricesModal({
   // saber a qué cae la cascada si se borra el override del local (regla de
   // Julio: el botón "Volver a..." tiene que nombrar el destino real).
   const [brandChannels, setBrandChannels] = useState<ChannelEconomics[]>([])
-  const [defaultPrice, setDefaultPrice] = useState<string>(String(basePrice ?? 0))
+  const [defaultPrice, setDefaultPrice] = useState<string>(fmtNumEs(basePrice ?? 0))
   const [prices, setPrices] = useState<Record<string, string>>({})
   const [avail, setAvail] = useState<Record<string, boolean>>({})
   const [live, setLive] = useState<ChannelEconomics[]>([])
@@ -196,7 +196,7 @@ export default function EditPricesModal({
         const a: Record<string, boolean> = {}
         for (const r of rows) {
           const seedFromThisScope = selectedLocationId ? r.isLocationOverride : r.priceSource === 'override'
-          p[r.channelId] = seedFromThisScope ? String(r.price) : ''
+          p[r.channelId] = seedFromThisScope ? fmtNumEs(r.price) : ''
           a[r.channelId] = r.isAvailable
         }
         setPrices(p)
@@ -217,7 +217,7 @@ export default function EditPricesModal({
     const m: Record<string, string> = {}
     for (const r of channels) {
       const own = selectedLocationId ? r.isLocationOverride : r.priceSource === 'override'
-      m[r.channelId] = own ? String(r.price) : ''
+      m[r.channelId] = own ? fmtNumEs(r.price) : ''
     }
     return m
   }, [channels, selectedLocationId])
@@ -532,7 +532,7 @@ export default function EditPricesModal({
                             <input
                               value={own}
                               onChange={(e) => setPrices((p) => ({ ...p, [ch.channelId]: e.target.value }))}
-                              placeholder={inheritedAmount !== null ? fmtNum(inheritedAmount) : ''}
+                              placeholder={inheritedAmount !== null ? fmtNumEs(inheritedAmount) : ''}
                               inputMode="decimal"
                               aria-label={`Precio de ${ch.channelName}`}
                               className={`w-[122px] px-2.5 py-1.5 text-right font-mono tabular-nums text-[13px] rounded-lg
@@ -596,8 +596,12 @@ export default function EditPricesModal({
                               Modo dominante arriba (más pedidos en 30d), el resto
                               en sub-líneas; un modo con 0 pedidos se atenúa y lo dice. */}
                           <div className="text-right">
+                            {/* Sin truncate: "Reparto de plataforma" en mayúsculas no cabe
+                                en 106px y salía "REPARTO DE PLATA…". Un rótulo cortado no
+                                identifica el modo, que es justo para lo que está. Envuelve
+                                en dos líneas; el ancho de la columna manda sobre el alto. */}
                             {modeLabel && (
-                              <div className="text-[9px] uppercase tracking-[.06em] text-tinta-45 truncate">{modeLabel}</div>
+                              <div className="text-[9px] uppercase tracking-[.06em] text-tinta-45 leading-[1.15]">{modeLabel}</div>
                             )}
                             <div className={`font-mono tabular-nums text-[16px] font-semibold leading-tight ${marginTone(lv, margin)}`}>
                               {fmtEur(margin)}
@@ -610,7 +614,10 @@ export default function EditPricesModal({
                                 {otherLive.map((o) => (
                                   <div key={`${o.channelId}-${o.serviceType ?? 'none'}`}
                                     className={`flex items-baseline justify-between gap-2 text-[10.5px] ${o.ordersLast30d === 0 ? 'opacity-[.42]' : ''}`}>
-                                    <span className="text-tinta-45 truncate">
+                                    {/* Igual que el rótulo dominante: envuelve en vez de
+                                        cortar. Se conserva el space-between de la maqueta —
+                                        la cifra sigue a la derecha, en la primera línea. */}
+                                    <span className="text-tinta-45 leading-[1.15] min-w-0">
                                       {o.serviceType ? (SERVICE_TYPE_LABEL[o.serviceType] ?? o.serviceType) : '—'}
                                       {o.ordersLast30d === 0 ? ' · 0 ped.' : ''}
                                     </span>

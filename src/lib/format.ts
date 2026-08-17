@@ -34,6 +34,19 @@ export function fmtMoney(x: unknown): string {
   return isNum(x) ? `${Number(x).toFixed(2).replace('.', ',')} €` : DASH
 }
 
+/** Cifra en formato español SIN unidad: `15,90`. Ausente → '' (cadena vacía,
+ *  no '—'): esto se usa para SEMBRAR CAMPOS EDITABLES, y un guion dentro de un
+ *  input no es un valor, es basura que el usuario tiene que borrar.
+ *
+ *  Existe porque faltaba el hueco evidente entre fmtNum (punto, para cálculo y
+ *  depuración) y fmtMoney/fmtPct (coma, pero con unidad pegada). Un input de
+ *  precio necesita justo lo de en medio: coma, dos decimales, sin símbolo.
+ *  Sembrar con String(n) daba "15.9" al lado de un "15,90 €" — dos formatos en
+ *  la misma pantalla, y el crudo era el del campo que se edita. */
+export function fmtNumEs(x: unknown, dp = 2): string {
+  return isNum(x) ? Number(x).toFixed(dp).replace('.', ',') : ''
+}
+
 /** Cantidad/gramaje del escandallo con `dp` decimales (punto). Ausente → '—'. */
 export function fmtQty(x: unknown, dp = 3): string {
   return isNum(x) ? Number(x).toFixed(dp) : DASH
