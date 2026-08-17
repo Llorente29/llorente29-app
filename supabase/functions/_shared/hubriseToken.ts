@@ -19,9 +19,24 @@
 //   const token = (await resolveHubriseToken(sb, { accountId, externalLocationId, connectionName }))
 //                 ?? (Deno.env.get("HUBRISE_ACCESS_TOKEN") ?? "");
 //
-// `sb` DEBE ser un cliente service_role (external_integration no es legible por anon).
+// `sb` DEBE ser un cliente service_role (external_integration no es legible por anon
+// desde el 15/08/2026 — antes SÍ lo era, ver 20260815T2300_hubrise_revoke_token_columns.sql).
 // Se tipa de forma ESTRUCTURAL a proposito, para no depender del import map de cada
 // funcion (unas importan supabase-js por alias, otras por URL de esm.sh).
+//
+// DEUDA DECLARADA (15/08/2026): access_token vive en TEXTO PLANO en esta
+// columna — el único patrón Vault real de todo HubRise es
+// hubrise_writer_connection.credentials_ref (la conexión escritora). El
+// REVOKE de la migración de arriba cierra el riesgo real (cualquier empleado
+// podía leerlo); Vault sigue siendo mejor pero NO se hace ahora: dos de los
+// lectores de esta tabla (hubrise-catalog-publish y availability-dispatch)
+// tienen su PROPIO SELECT directo de access_token en sus rutas de fallback,
+// duplicado del de este fichero — migrar a Vault exige tocar esos dos
+// también, y availability-dispatch es el camino vivo del 86 en producción.
+// DISPARADOR: consolidar esas lecturas duplicadas para que pasen por
+// resolveHubriseToken/listActiveHubriseConnections, y migrar a Vault, ANTES
+// de conectar el cliente 2 — no antes, para no meter riesgo en mitad de la
+// certificación de Carabanchel (hubrise-catalog-publish v40 recién desplegada).
 
 // deno-lint-ignore no-explicit-any
 type QueryResult = { data: any; error: any };
@@ -41,6 +56,14 @@ export interface HubriseTokenQuery {
 }
 
 // Devuelve el access_token de la conexion, o null si no hay ninguno activo/utilizable.
+//
+// ORDEN DETERMINISTA (Fase 1.1, ENCARGO CODE módulo HubRise): el índice único
+// parcial `ux_ei_hubrise_usable` (account_id, external_location_id) WHERE
+// source='hubrise' AND is_active AND push_status_enabled garantiza en BBDD que
+// a lo sumo UNA fila puede ser "usable" para un (cuenta, location) dado. Si
+// aun así aparece más de una (dato heredado de antes del índice, o el índice
+// se sorteó), el fallback ya NO coge `usable[0]` a ciegas: ordena por
+// connection_name y avisa por consola — nunca falla en silencio.
 export async function resolveHubriseToken(
   sb: SupabaseLike,
   q: HubriseTokenQuery,
@@ -49,7 +72,7 @@ export async function resolveHubriseToken(
 
   const { data, error }: QueryResult = await sb
     .from("external_integration")
-    .select("connection_name, access_token, push_status_enabled, is_active")
+    .select("id, connection_name, access_token, push_status_enabled, is_active")
     .eq("source", "hubrise")
     .eq("account_id", q.accountId)
     .eq("external_location_id", q.externalLocationId)
@@ -65,13 +88,29 @@ export async function resolveHubriseToken(
   });
   if (usable.length === 0) return null;
 
-  // Preferimos la fila de la conexion EXACTA; si no, cualquiera del local
-  // (comparten el token del local en HubRise).
+  // Preferimos la fila de la conexion EXACTA; si no, la más antigua por orden
+  // determinista (connection_name, luego id) — nunca "la primera que llegó".
   if (q.connectionName) {
     const exact = usable.find((r) => r["connection_name"] === q.connectionName);
     if (exact) return exact["access_token"] as string;
   }
-  return usable[0]["access_token"] as string;
+
+  if (usable.length > 1) {
+    console.warn(
+      `resolveHubriseToken: ${usable.length} conexiones usables para account=${q.accountId} ` +
+      `location=${q.externalLocationId} (se esperaba <=1; revisa ux_ei_hubrise_usable). ` +
+      `Usando la de menor connection_name/id por orden determinista.`,
+    );
+  }
+  const sorted = [...usable].sort((a, b) => {
+    const an = (a["connection_name"] as string | null) ?? "";
+    const bn = (b["connection_name"] as string | null) ?? "";
+    if (an !== bn) return an < bn ? -1 : 1;
+    const aid = (a["id"] as string | null) ?? "";
+    const bid = (b["id"] as string | null) ?? "";
+    return aid < bid ? -1 : aid > bid ? 1 : 0;
+  });
+  return sorted[0]["access_token"] as string;
 }
 
 // Conexion HubRise activa con token — para el auto-sanador MULTI-CONEXION.

@@ -40,6 +40,8 @@ function originFor(kind: string): string {
   if (kind === "synthetic_ping") return "vigilante de ingesta — ping sintético (Folvy)";
   if (kind === "catcher-delivery") return "Catcher — entregas de pedidos (Folvy)";
   if (kind === "hubrise-callback") return "HubRise — callback de disponibilidad (Folvy)";
+  if (kind === "hubrise-connection-health") return "HubRise — salud de token por conexión (Folvy)";
+  if (kind === "hubrise-revoke-pending") return "HubRise — revocación de token pendiente (Folvy)";
   if (kind === "availability-dispatch" || kind === "location-status-dispatch" || kind === "brand-closure") {
     return "vigía de disponibilidad HubRise (Folvy)";
   }

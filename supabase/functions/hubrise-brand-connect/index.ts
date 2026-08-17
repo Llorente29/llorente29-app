@@ -3,8 +3,9 @@
 // ASISTENTE "CONECTAR A DELIVERY" · HubRise Fase 2 (self-service).
 // ============================================================================
 // Invocado por el USUARIO desde la página de carta de la marca (botón
-// "Conectar a delivery"). Por cada local activo de la marca con conexión
-// HubRise (brand_location_availability x external_location_map):
+// "Conectar a delivery") o por el asistente de conexión de Fase 3 (2.3,
+// 15/08/2026). Por cada local activo de la marca con conexión HubRise
+// (brand_location_availability x external_location_map):
 //   1. Crea el catálogo en HubRise (POST /locations/{ext_loc}/catalogs) con
 //      el token ESCRITOR de cuenta -- IDEMPOTENTE: si la marca ya tiene fila
 //      en brand_hubrise_catalog para ese local, la reusa; si no, busca por
@@ -28,6 +29,25 @@
 // Requiere token ESCRITOR de cuenta (hubrise_writer_connection, Fase 1). Sin
 // fallo mudo: si no hay, error visible -- crear catálogo exige scope de
 // escritura de cuenta, no hay fallback de bridge posible para esto.
+//
+// location_id (body, OPCIONAL, 2.3 15/08/2026): acota la operación a UN solo
+// local en vez del barrido de todos los locales mapeados de la marca. Omitido
+// = comportamiento de siempre (todos), para no romper el botón "Conectar a
+// delivery" de Kitchen. El asistente de Fase 3 SIEMPRE lo pasa -- acota al
+// local que se acaba de conectar por 2.1, sin retocar los demás.
+//
+// Riesgo de valor por defecto peligroso, neutralizado por diseño (Julio,
+// 15/08): un location_id omitido por error nunca puede quedar invisible.
+//   1) El log dice explícitamente si el alcance vino ACOTADO o fue BARRIDO
+//      COMPLETO, con cuántos locales. La respuesta JSON también lleva
+//      `scope`/`requested_location_id`, no solo la lista `locations` (que ya
+//      de por sí es el resultado por local, nunca un "ok" agregado).
+//   2) Un location_id inválido falla A LA VISTA, con un mensaje que dice
+//      EXACTAMENTE cuál de las tres condiciones no se cumple -- nunca
+//      "0 locales procesados" silencioso:
+//        a) el local pertenece a esta cuenta (locations.account_id)
+//        b) tiene conexión HubRise activa (external_location_map)
+//        c) la marca está activa ahí (brand_location_availability)
 // ============================================================================
 
 import { corsHeaders } from "../_shared/cors.ts";
@@ -75,10 +95,11 @@ Deno.serve(async (req: Request) => {
   const user = userData?.user ?? null;
   if (!user) return json({ ok: false, error: "no autenticado" }, 401);
 
-  let body: { brand_id?: string } = {};
+  let body: { brand_id?: string; location_id?: string } = {};
   try { body = await req.json(); } catch { /* ignore */ }
   const brandId = body.brand_id;
   if (!brandId) return json({ ok: false, error: "brand_id requerido" }, 400);
+  const requestedLocationId = body.location_id ? body.location_id : null;
 
   // ── Autorización por RLS: leer la marca con el cliente del USUARIO ─────────
   const { data: brand, error: brErr } = await sbUser
@@ -109,40 +130,97 @@ Deno.serve(async (req: Request) => {
     }, 200);
   }
 
-  // ── Locales activos de la marca con conexión HubRise ────────────────────
-  // Error de cliente != "cero resultados": si alguna de estas falla, se
-  // corta con 500 en vez de reportar "marca sin locales" (mensaje engañoso).
-  const { data: blaRows, error: blaErr } = await sb.from("brand_location_availability")
-    .select("location_id")
-    .eq("account_id", accountId).eq("brand_id", brandId).eq("is_active", true);
-  if (blaErr) return json({ ok: false, error: `brand_location_availability: ${blaErr.message}` }, 500);
-  const locationIds = (blaRows ?? []).map((r) => r.location_id as string).filter(Boolean);
-  if (locationIds.length === 0) {
-    return json({
-      ok: false,
-      error: "La marca no está activa en ningún local (brand_location_availability).",
-    }, 200);
+  // ── Locales objetivo: ACOTADO a location_id, o BARRIDO de todos los
+  // locales activos de la marca con conexión HubRise ──────────────────────
+  let targets: LocationTarget[];
+  let scopeDesc: string;
+
+  if (requestedLocationId) {
+    // Condición a: el local existe y pertenece a esta cuenta.
+    const { data: loc, error: locErr } = await sb.from("locations")
+      .select("id, name")
+      .eq("id", requestedLocationId).eq("account_id", accountId)
+      .maybeSingle();
+    if (locErr) return json({ ok: false, error: `locations: ${locErr.message}` }, 500);
+    if (!loc) {
+      return json({
+        ok: false,
+        error: `location_id "${requestedLocationId}" no existe o no pertenece a esta cuenta.`,
+      }, 200);
+    }
+
+    // Condición b: tiene conexión HubRise activa en external_location_map.
+    const { data: elm, error: elmErr } = await sb.from("external_location_map")
+      .select("external_location_id")
+      .eq("account_id", accountId).eq("source", "hubrise").eq("is_active", true)
+      .eq("location_id", requestedLocationId)
+      .maybeSingle();
+    if (elmErr) return json({ ok: false, error: `external_location_map: ${elmErr.message}` }, 500);
+    if (!elm?.external_location_id) {
+      return json({
+        ok: false,
+        error: `El local "${loc.name}" no tiene conexión HubRise activa (external_location_map).`,
+      }, 200);
+    }
+
+    // Condición c: la marca está activa en ese local.
+    const { data: bla, error: blaErr } = await sb.from("brand_location_availability")
+      .select("location_id")
+      .eq("account_id", accountId).eq("brand_id", brandId)
+      .eq("location_id", requestedLocationId).eq("is_active", true)
+      .maybeSingle();
+    if (blaErr) return json({ ok: false, error: `brand_location_availability: ${blaErr.message}` }, 500);
+    if (!bla) {
+      return json({
+        ok: false,
+        error: `La marca "${brandName}" no está activa en el local "${loc.name}" (brand_location_availability).`,
+      }, 200);
+    }
+
+    targets = [{
+      locationId: requestedLocationId,
+      externalLocationId: elm.external_location_id as string,
+      locationName: loc.name as string,
+    }];
+    scopeDesc = `ACOTADO a 1 local (location_id=${requestedLocationId}, "${loc.name}")`;
+  } else {
+    // Error de cliente != "cero resultados": si alguna de estas falla, se
+    // corta con 500 en vez de reportar "marca sin locales" (mensaje engañoso).
+    const { data: blaRows, error: blaErr } = await sb.from("brand_location_availability")
+      .select("location_id")
+      .eq("account_id", accountId).eq("brand_id", brandId).eq("is_active", true);
+    if (blaErr) return json({ ok: false, error: `brand_location_availability: ${blaErr.message}` }, 500);
+    const locationIds = (blaRows ?? []).map((r) => r.location_id as string).filter(Boolean);
+    if (locationIds.length === 0) {
+      return json({
+        ok: false,
+        error: "La marca no está activa en ningún local (brand_location_availability).",
+      }, 200);
+    }
+
+    const { data: locRows, error: locErr } = await sb.from("locations")
+      .select("id, name")
+      .in("id", locationIds);
+    if (locErr) return json({ ok: false, error: `locations: ${locErr.message}` }, 500);
+    const nameByLocation = new Map((locRows ?? []).map((l) => [l.id as string, l.name as string]));
+
+    const { data: elmRows, error: elmErr } = await sb.from("external_location_map")
+      .select("location_id, external_location_id")
+      .eq("account_id", accountId).eq("source", "hubrise").eq("is_active", true)
+      .in("location_id", locationIds);
+    if (elmErr) return json({ ok: false, error: `external_location_map: ${elmErr.message}` }, 500);
+
+    targets = (elmRows ?? [])
+      .filter((r) => r.external_location_id)
+      .map((r) => ({
+        locationId: r.location_id as string,
+        externalLocationId: r.external_location_id as string,
+        locationName: nameByLocation.get(r.location_id as string) ?? "?",
+      }));
+    scopeDesc = `BARRIDO COMPLETO de ${targets.length} local(es) mapeados`;
   }
 
-  const { data: locRows, error: locErr } = await sb.from("locations")
-    .select("id, name")
-    .in("id", locationIds);
-  if (locErr) return json({ ok: false, error: `locations: ${locErr.message}` }, 500);
-  const nameByLocation = new Map((locRows ?? []).map((l) => [l.id as string, l.name as string]));
-
-  const { data: elmRows, error: elmErr } = await sb.from("external_location_map")
-    .select("location_id, external_location_id")
-    .eq("account_id", accountId).eq("source", "hubrise").eq("is_active", true)
-    .in("location_id", locationIds);
-  if (elmErr) return json({ ok: false, error: `external_location_map: ${elmErr.message}` }, 500);
-
-  const targets: LocationTarget[] = (elmRows ?? [])
-    .filter((r) => r.external_location_id)
-    .map((r) => ({
-      locationId: r.location_id as string,
-      externalLocationId: r.external_location_id as string,
-      locationName: nameByLocation.get(r.location_id as string) ?? "?",
-    }));
+  console.log(`hubrise-brand-connect: brand=${brandId} account=${accountId} -- ${scopeDesc}`);
 
   if (targets.length === 0) {
     return json({
@@ -262,6 +340,10 @@ Deno.serve(async (req: Request) => {
   return json({
     ok: results.every((r) => r.status !== "error"),
     brand_id: brandId,
+    // El alcance nunca queda implícito en el tamaño de `locations`: se dice
+    // explícitamente si fue acotado (y a qué local) o barrido completo.
+    scope: requestedLocationId ? "single" : "all",
+    requested_location_id: requestedLocationId,
     locations: results,
     publish,
   }, 200);

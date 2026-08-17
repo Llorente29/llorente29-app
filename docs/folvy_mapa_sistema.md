@@ -138,6 +138,268 @@
 - **Money**: el webhook es ciego a la moneda → la cuenta en EUR.
 - **Edge Functions HubRise** (ACTIVE): `hubrise-webhook`, `hubrise-order-status`, `hubrise-catalog-publish`, `hubrise-callback-ensure`, `hubrise-oauth-start/-callback`, `hubrise-location-dispatch`, `availability-dispatch`, `availability-watchdog`.
 
+## HubRise — F0.2: NO RESUELTA (test 15/08 mal diseñado — re-test en curso)
+
+**Método**: sin OrderLine (es app receptora, no genera pedidos — corregido en el encargo el 15/08).
+Llamadas HTTP directas a HubRise desde SQL vía `pg_net` (`net.http_post`/`net.http_get` +
+`net._http_response`, el mismo mecanismo que ya usan los `cron.schedule`), contra el laboratorio
+`zy9j2` ↔ cuenta Folvy **Folvy Interno** (`00000000-0000-0000-0000-000000000001`). Nada de esto tocó
+la cuenta `1b6p8` (Foodint) ni la conexión `Folvy Test` de producción.
+
+**Paso previo — el token de cuenta original NO tenía scope de pedidos.**
+`hubrise_writer_connection` de Folvy Interno se había autorizado (06/08→15/08) con
+`account[all_catalogs.write,inventory.write]` — el mínimo recomendado por la guía de integración.
+Con ese scope: `POST /v1/locations/zy9j2-1/orders` → **403** `"A 'orders' write scope is required"`;
+`POST /v1/callback` con eventos `order.*` → **422** `"orders scope required"`. Bloqueaba la pregunta
+antes de poder hacerla — no demuestra nada sobre "por location vs por cuenta" todavía.
+
+**Julio reautorizó** (15/08, 12:42) la MISMA conexión (`hubrise_writer_connection`, PK `account_id`)
+con `account[all_catalogs.write,inventory.write,orders.write]`, vía
+`hubrise-oauth-start?account_id=<Folvy Interno>&scope=writer_orders` (parámetro `scope` con lista
+blanca cerrada, añadido a `hubrise-oauth-start` solo para este test — retirado tras escribir esto).
+**Verificado**: la fila de Folvy Interno cambió `hubrise_account_id=zy9j2`, `updated_at` 07:26→12:42;
+la fila de Foodint (`hubrise_account_id=1b6p8`) siguió con `updated_at` del 06/08 — **intacta**, tal
+como exige la Trampa 1 (PK sobre `account_id`, no hay forma de que se crucen).
+
+**Con el token nuevo, los 3 pasos del test:**
+
+1. `POST /v1/locations/zy9j2-1/orders` (cuerpo mínimo `{"status":"new"}`) → **200**. Pedido real creado:
+   `id="m6pbvnq"`, `location_id="zy9j2-1"`, `created_by="Folvy Escritor"`.
+2. `PATCH` (vía `X-HTTP-Method-Override`, pg_net no tiene verbo PATCH nativo) sobre ESE pedido real →
+   **200**, `status` pasó a `"accepted"` de verdad. (El 404 de un id inventado en el intento anterior
+   NO contaba como señal — aquí sí, es un resultado válido.)
+3. `POST /v1/callback` en la conexión de cuenta, apuntando a un receptor de prueba propio
+   (`hubrise-callback-test-receiver`, temporal) con eventos `order.create`+`order.update` → **200**,
+   registrado. La conexión `Folvy Test` (`zy9j2-0`, ya apuntaba a `hubrise-webhook` de producción) **no
+   se tocó**.
+
+**La medición del 15/08 — pedido nuevo en `zy9j2-1` y otro en `zy9j2-0`, tras el callback ya activo:**
+
+- `zy9j2-1` (pedido `6bgypv4`, creado y sin más actividad): **0 eventos** en el receptor de prueba,
+  ni siquiera esperando 30+ segundos.
+- `zy9j2-0` (pedido `vxy89p8`): **2 eventos** `order.update` sí llegaron — no son de la creación del
+  pedido: son las transiciones `new→received→accepted` que generó **el propio `hubrise-webhook` de
+  producción** al procesar el pedido por la vía YA existente de `Folvy Test` (auto-ack +
+  auto-aceptación, `maybeAckReceived`/`maybeAutoAccept`).
+
+> ⚠️ **CORREGIDO 15/08: conclusión retirada.** El párrafo original decía aquí "RESULTADO: llega solo
+> uno → es POR LOCATION" y daba F0.2 por cerrada. **Era un test mal diseñado, no un resultado.** La
+> doc de HubRise (`/developers/api/callbacks`) es explícita:
+>
+> > "A client does not receive notifications for the events it generated. If you are testing
+> > callbacks, you need to use a separate client to trigger events."
+>
+> Ambos pedidos de prueba los creó **la misma conexión** que tenía el callback registrado (la de
+> cuenta). HubRise nunca iba a notificarle sus propios eventos, en NINGUNA location. El silencio de
+> `zy9j2-1` no medía "por location" — medía "no había un segundo cliente ahí". Y la observación de
+> `zy9j2-0` apunta al REVÉS de lo que se concluyó: esos 2 eventos los generó `Folvy Test` (un cliente
+> distinto), y el callback de la conexión de CUENTA sí los recibió — es evidencia POSITIVA de que un
+> callback de cuenta puede recibir eventos de una location ajena a quien los originó.
+>
+> | Observación | Lectura errónea (retirada) | Lectura correcta (regla del auto-evento) |
+> |---|---|---|
+> | `zy9j2-1`: 0 eventos | "el callback de cuenta no cubre esa location" | el único actor en `zy9j2-1` era la propia conexión de cuenta → autoevento, silencio esperado, no dice nada de cobertura |
+> | `zy9j2-0`: 2 eventos (`update`) | "casualidad, por el auto-accept" | `Folvy Test` es un cliente DISTINTO de la conexión de cuenta → sí hay notificación → primera evidencia (parcial, un solo caso) de que el callback de cuenta SÍ ve eventos ajenos en una location |
+>
+> **F0.2 sigue abierta.** Re-test en curso con un segundo cliente real (OrderLine) en `zy9j2-1` — ver
+> más abajo. El método (pg_net, HTTP 200/403/422 de arriba, la reautorización con scope de pedidos)
+> sigue siendo válido y se reutiliza; solo se retira la conclusión de "por location".
+
+**Trampa añadida al encargo (15/08)**: un callback nunca recibe los eventos que genera su propia
+conexión. Cualquier prueba de callbacks necesita un segundo cliente distinto — si no, mide silencio
+y lo confunde con ausencia.
+
+**Efecto colateral (ya limpiado)**: el pedido de prueba `vxy89p8` (zy9j2-0) entró en producción real
+por la vía de `Folvy Test` → `hubrise-webhook` (`order_status='accepted'`, `brand_id=null`, `total=0`,
+`external_webhook_log.note='frontera-order-create'`, `processed=true`). La fila de `sale`
+(`c0c6848a-d69b-4262-9dc7-9d146ba11b64`) se BORRÓ el 15/08 tras verificar 0 dependientes en
+`sale_line`/`kds_ticket_station_state`/`channel_settlement_order`/`print_job`/`coupon_redemption`/
+`delivery_assignment`/`delivery_quote`/`customer_notification`.
+
+## HubRise — F0.2 RESUELTA: el callback de CUENTA cubre todas las locations (15/08/2026)
+
+**Por qué OrderLine esta vez SÍ sirve**: no genera pedidos (sigue siendo cierto), pero SÍ cambia el
+estado de un pedido ya existente — y ese cambio de estado, hecho por una app externa distinta de
+nuestra conexión de cuenta, es exactamente el "segundo cliente" que exige la doc de callbacks.
+
+**Por qué NO se reautoriza `hubrise-oauth-start` para esto**: el token de cuenta ya conserva el scope
+`orders.write` de la reautorización anterior (solo se retiró la CLAVE `writer_orders` de la lista
+blanca del parámetro, no el permiso ya concedido). Autorizar una conexión de LOCATION por esa misma
+vía sobrescribiría la fila de `hubrise_writer_connection` de Folvy Interno (PK `account_id`) con un
+token de alcance de location y dejaría el laboratorio sin capacidad de catálogo — por eso el segundo
+cliente es OrderLine (ajeno a nuestra infraestructura), no una segunda conexión nuestra.
+
+**Secuencia**: 1) receptor de prueba + tabla montados de nuevo (mismo disparador de borrado: se
+retiran en cuanto este resultado quede escrito). 2) Callback re-registrado en la conexión de cuenta.
+3) Julio conecta OrderLine a `Lab 2 (zy9j2-1)` desde la consola de HubRise. 4) Con el token de cuenta,
+se crea un pedido en `zy9j2-1` — se espera 0 eventos (autoevento, ahora es predicción, no hallazgo).
+5) Julio cambia el estado de ese pedido desde OrderLine. 6) La medición real: ¿llega ese
+`order.update` (generado por OrderLine, un cliente ajeno) al callback de la conexión de cuenta?
+  - Sí → el callback de cuenta cubre todas las locations; combinado con `zy9j2-0`, F0.2 cierra a favor
+    de la capa de cuenta; 2.1/2.2 siguen como estaban.
+  - No → es por location; parar y decidir el cambio de modelo de datos.
+  - Nada → verificar el receptor con una llamada directa antes de concluir; silencio no es resultado.
+
+**Resultado — los dos experimentos, con OrderLine ya conectado a `Lab 2 (zy9j2-1)`:**
+
+1. **Segundo cliente (la medición real)**: Julio aceptó el pedido `6bgypv4` desde OrderLine —
+   `order.update`, cliente ajeno a nuestra conexión de cuenta. **Llegó al receptor**: `event_type=update`,
+   `order_id=6bgypv4`, `location_id=zy9j2-1`, `status=accepted`. Un solo evento, sin duplicados ni ruido.
+2. **Auto-evento (verificación de la predicción, no asumida)**: con el token de cuenta se creó un
+   pedido nuevo (`5gy7v6d`) en `zy9j2-1`. Esperados 12+ segundos: **0 eventos**. El receptor ya estaba
+   verificado como funcional por el punto 1 (recibió un evento real minutos antes con la misma
+   infraestructura), así que este silencio SÍ es resultado — no hace falta una llamada directa aparte
+   para descartar que el receptor esté roto.
+
+**F0.2 CERRADA: el callback registrado en la conexión de CUENTA recibe eventos de locations ajenas a
+quien los origina, incluida una location (`zy9j2-1`) donde la propia conexión de cuenta NUNCA tuvo
+actividad previa.** Combinado con `zy9j2-0` (donde también llegaron eventos de un cliente distinto,
+`Folvy Test`): **dos locations de dos, dos clientes distintos de dos — el callback de cuenta cubre
+todas las locations de la cuenta**, no hace falta una conexión por local para recibir notificaciones.
+
+**Consecuencia para la arquitectura**: la capa escritora de cuenta (`hubrise_writer_connection`) SÍ
+basta para pedidos y callbacks, además de catálogo+inventario — con el scope ampliado
+(`account[all_catalogs.write,inventory.write,orders.write]`). ~~2.1/2.2 siguen como estaban~~
+**⚠️ ACTUALIZADO 15/08: superado por decisión explícita de Julio.** Pese a que técnicamente
+una sola conexión de cuenta cubriría todo, Julio decidió MANTENER la arquitectura por-location para
+2.1/2.2 (razones: aislamiento de fallos por local, revocación granular, y que el scope
+`location[orders.write]` no necesita ampliar el grant de escritor de cuenta). 2.1/2.2 SÍ bifurcan
+`hubrise-oauth-start`/`-callback` por `kind` (`writer` vs `location`), con `external_integration` como
+destino de la rama `location` — ver más abajo, sección "HubRise — 2.1/2.2: conexión por location
+(implementación)". Lo que sí falta, cuando se retomen, es decidir si el scope de producción
+(`Foodint`/`1b6p8`) se amplía también a `orders.write` o si el patrón `external_integration` por-local
+(bridges) se mantiene para pedidos reales mientras la cuenta solo gobierna catálogo — eso es decisión
+de Julio, no una consecuencia automática de este test.
+
+**Limpieza tras escribir esto**: `hubrise_callback_test_log` (tabla) y `hubrise-callback-test-receiver`
+(Edge Function) se borran — eran solo para este test. El callback de la conexión de cuenta también se
+desregistra (apuntaba SOLO al receptor de prueba; dejarlo registrado tras borrar la función lo deja
+roto, apuntando a un endpoint muerto — no es "conservar el hallazgo", es dejar basura). La llamada
+exacta para volver a registrarlo (con el endpoint real que decida 2.1/2.2) queda documentada arriba en
+este mismo apartado.
+
+## HubRise — 3.ter: mojibake en las páginas HTML de OAuth (causa raíz, 15/08/2026)
+
+**Síntoma**: `hubrise-oauth-start`/`-callback` sirven HTML con `Content-Type: text/html; charset=utf-8`
+explícito en el código, pero el navegador las pintaba como texto plano con tildes/eñes/emoji rotos
+(mojibake).
+
+**Causa raíz verificada (no asumida)**: el GATEWAY de Supabase Edge Functions reescribe el
+`Content-Type` de la respuesta a `text/plain` + añade `X-Content-Type-Options: nosniff`, **sin importar
+lo que devuelva el código de la función**. Probado con una función de control aislada que SOLO hacía
+`return new Response(html, {headers:{"Content-Type":"text/html"}})` — llegó igual como `text/plain`.
+**No hay arreglo de código posible**: no es un bug de charset ni de escritura, es el gateway.
+
+**Interino de coste real cero (aplicado 15/08, `hubrise-oauth-callback` v6)**: las tres páginas
+(`ok()`, `fail()`, `inspect()`) se reescribieron en ASCII puro — sin tildes, eñes, emoji ni comillas
+tipográficas — legibles aunque se sirvan como texto plano. Verificado en vivo: `curl` a la función sin
+`code`/`state` devuelve `Content-Type: text/plain` (confirma que el gateway sigue reescribiendo) con
+cuerpo 100% ASCII, sin mojibake.
+
+**Arreglo real, NO hecho todavía**: redirigir desde el Edge a una página real del frontend (servida por
+Vercel, no por el gateway de Edge Functions) en vez de devolver HTML desde `hubrise-oauth-callback`
+directamente. Queda para cuando se retome ese frente — no bloquea 2.1/2.2.
+
+## HubRise — 2.5: desconectar, revoke_pending y la trampa del token huérfano (15/08/2026)
+
+**Orden obligatorio (Julio)**: 1) `DELETE /v1/callback` con el token TODAVÍA vivo (verificado en vivo:
+recurso singleton, sin id, `X-Access-Token`, sin cuerpo → 200, GET posterior confirma
+`{url:null,events:{}}`) — un token ya revocado no puede borrar su propio callback; 2)
+`POST manager.hubrise.com/oauth2/v1/revoke` (Basic client_id:client_secret, token en el cuerpo); 3)
+apagar flags LOCALES (`is_active`/`push_status_enabled`=false, `access_token`=NULL,
+`token_status`='invalid' en `external_integration`; `is_active`=false en `external_location_map` —
+**nunca borrar**, el trigger de `location_id` necesita la fila para resolver al reconectar).
+`brand_hubrise_catalog` no se toca nunca — sobrevive intacto para que reconectar no reconfigure catálogos.
+
+**Trampa 13 (Julio, encontrada en su propia especificación de `revoke_pending`)**: si la revocación
+falla, el token se conserva "para poder reintentar" — pero **un token conservado es un token que
+alguien va a sobrescribir** al reconectar. Sin más, la reconexión pisaría `access_token` con el
+nuevo valor y el token viejo sin revocar quedaría huérfano (válido en HubRise) y sin forma de volver a
+intentarlo. Neutralizada: `hubrise-oauth-callback`, al reconectar una fila con `revoke_pending=true`,
+intenta revocar el token viejo (best-effort, no bloquea) antes de sobrescribirlo, y resetea
+`revoke_pending=false` en cualquier reconexión con éxito.
+
+**Verificado en vivo contra el laboratorio (Carabanchel-lab, `zy9j2-1` — nunca `zy9j2-0`, cableada a
+producción)**, con una función de prueba temporal (secretos reales, sin JWT de usuario, borrada/neutralizada
+tras usarla) que reprodujo el mecanismo exacto:
+1. `GET /v1/location` con el token → 200 (confirma que el token vivía ANTES de tocar nada — sin esto,
+   el silencio posterior no demuestra nada, misma lección que el receptor de callbacks de F0.2).
+2. `DELETE /v1/callback` → 200, `{url:null,events:{}}`.
+3. `POST oauth2/v1/revoke` → 200, cuerpo vacío.
+4. `GET /v1/location` inmediatamente después → **401**. Propagación **instantánea** (72 ms después del
+   revoke, sin ventana de "sigue conectado" — no hizo falta el reintento a los 4s previsto para medir
+   propagación asíncrona).
+5. Estado local aplicado (idéntico al que aplicaría la función real) → aceptado por el CHECK relajado
+   sin problema. Verificado en BBDD de forma independiente: `is_active=false`,
+   `push_status_enabled=false`, `token_status=invalid`, `revoke_pending=false`, `access_token` NULL;
+   mapa `is_active=false`.
+
+**Lo que esto NO prueba** (Julio pidió precisión aquí): el mecanismo y las transiciones de estado, sí.
+El camino de autorización (JWT + `current_user_is_admin_of`) y la orquestación de
+`hubrise-location-disconnect` tal como está escrita, NO — la prueba reprodujo la misma lógica en un
+script aparte, no invocó la función real (no hay forma de conseguir un JWT de usuario sin navegador).
+Tampoco se probó el camino de fallo (revoke_pending=true, token conservado, alarma por system-alert):
+en esta ejecución el revoke tuvo éxito a la primera. Eso queda para 4.1 con la UI real.
+
+## HubRise — 2.6/2.7: CERRADAS (15/08/2026)
+
+El detalle completo del hallazgo — las tres apps OAuth de Folvy en HubRise ("Folvy"=pedidos,
+"Folvy Escritor"=catálogo, "Folvy Injector"=muerta), el HMAC que lo demostró, por qué
+`HUBRISE_WEBHOOK_SECRET` sirve para dos cosas a la vez (rotarlo rompe las dos), y por qué la
+certificación con Antoine va sobre "Folvy" y no sobre "Folvy Escritor" — vive en
+**`folvy_hubrise_tres_apps_oauth.md`** (documento propio de Julio, no duplicar aquí).
+
+**Código desplegado (15/08)** — `hubrise-oauth-start` v11, `hubrise-oauth-callback` v12,
+`hubrise-location-disconnect` v3 (verificados byte a byte contra `list_edge_functions` tras cada
+deploy; `hubrise-webhook` NO se tocó, sigue v49 sin cambios). `writer` byte a byte idéntico
+(mismo `HUBRISE_OAUTH_CLIENT_ID`/`SECRET`, mismo código, solo se movió el orden de comprobación de
+Secrets a después de leer el nonce). `location` usa `HUBRISE_OAUTH_LOCATION_CLIENT_ID` +
+`HUBRISE_WEBHOOK_SECRET` (client_secret de "Folvy", no duplicado en una Secret nueva).
+**Hallazgo propio, no pedido explícitamente, incluido en el mismo commit**: `hubrise-location-disconnect`
+revocaba con las credenciales de "Folvy Escritor" para tokens que, tras este cambio, emite "Folvy"
+— HubRise rechaza un revoke firmado por una app distinta de la que emitió el token. Corregido para
+usar siempre las credenciales de "Folvy" (esta función solo maneja conexiones location).
+
+**Prueba de aceptación real — PASADA (15/08, verificado por Julio en BBDD)**: reconectado
+Carabanchel-lab (Folvy Interno) por el flujo real. Sin error de redirect_uri (HubRise no lo
+pre-registra, confirmado). `ensureHubriseCallback` (2.6) devolvió el callback de `zy9j2-1` a
+`hubrise-webhook` solo, dentro del propio flujo de reconexión, sin paso manual. Cambio de estado
+desde OrderLine → `external_webhook_log` 19:38:58, `frontera-order-update`, `processed=true`,
+cuenta `zy9j2`/location `zy9j2-1`, pedido `6bgypv4` → `sale` creada y cerrada (`close_sale`).
+Camino completo, extremo a extremo. Alcalá siguió recibiendo pedidos reales en la misma ventana
+(`j4xvvyp` 19:22, `yn633nk` 19:20) — producción intacta.
+
+**Limpieza del andamiaje de diagnóstico (15/08, disparador cumplido)**: `hubrise-callback-diag-receiver`
+(Edge) y `_tmp_hubrise_callback_diag` (tabla) borrados; venta de prueba `6bgypv4` de Folvy Interno
+borrada (0 dependientes en las 8 tablas con FK a `sale`, incluida `sale_line` — el pedido de prueba
+no generó líneas ni consumo de stock); `hubrise-lab-disconnect-test` ya no existía (se había
+borrado antes, en la limpieza de 2.5 — la CLI lo confirmó con "does not exist").
+
+**Backend del módulo HubRise, TERMINADO.** Sigue Fase 3 (UI: pantalla de estado, asistente,
+selector de local en `EditPricesModal` — 3.bis, página de éxito del OAuth — 3.ter), a diseñar antes
+de construir.
+
+**⚠️ Incidente cerrado (15/08): la primera URL de prueba entregada a Julio apuntaba a PRODUCCIÓN,
+no al laboratorio.** Ver Trampa 14 más abajo. Julio NO pulsó la URL incorrecta.
+
+### Trampa 14 (misma familia que 1b6p8-1 vs 1b6p8-2): Folvy Interno replica los NOMBRES de los locales de Foodint
+
+Folvy Interno (cuenta de laboratorio) es un espejo de Foodint (cuenta de producción): sus locales
+llevan los MISMOS NOMBRES visibles ("Foodint Carabanchel" existe en las dos cuentas, con
+`account_id`/`location_id` completamente distintos). El 15/08 esta sesión le entregó a Julio una
+URL de prueba de aceptación llamándola "Carabanchel-lab" pero usando en realidad
+`account_id=51ad1792-6629-4ef7-833a-b57b09a86710` (Foodint, producción) +
+`location_id=92d7656e-082e-452a-8ebc-236b2d6ebf5f` (Foodint Carabanchel, producción) — los
+identificadores REALES de producción, recordados de memoria por asociación con el nombre del sitio,
+sin verificar contra `locations` antes de dárselos a Julio. Julio lo detectó él mismo antes de
+pulsar el enlace.
+
+**Regla**: un `location_id` NUNCA se identifica por el nombre del local — se identifica por su
+`account_id`. Cualquier URL, script o instrucción que mencione un local por su nombre debe llevar
+la cuenta al lado explícitamente, y verificarse contra `locations` (`select id, account_id, name
+from locations where id = '<location_id>'`) antes de dársela a un humano para actuar — sobre todo
+si esa acción abre un flujo de autorización real contra un sistema externo.
+
 ## Cuenta HubRise 1b6p8 — inventario del panel (24/07/2026)
 
 - **`Foodint 1b6p8` (EUR)**. Client ID `598759333895.clients.hubrise.com`. Integración = POS.

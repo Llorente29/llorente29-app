@@ -25,17 +25,24 @@ export interface ConnectLocationResult {
 export interface ConnectResult {
   ok: boolean
   error?: string
+  scope?: 'single' | 'all'
+  requestedLocationId?: string | null
   locations: ConnectLocationResult[]
   publish: Partial<PublishResult> | null
 }
 
-export async function connectBrandToDelivery(brandId: string): Promise<ConnectResult> {
+// locationId opcional (2.3, 15/08/2026): acota la operación a un solo local
+// en vez del barrido de todos los locales mapeados de la marca. Omitido =
+// comportamiento de siempre (el botón "Conectar a delivery" de Kitchen no
+// cambia). El asistente de conexión de Fase 3 lo pasará siempre, acotando al
+// local que se acaba de conectar por 2.1.
+export async function connectBrandToDelivery(brandId: string, locationId?: string): Promise<ConnectResult> {
   if (!isSupabaseEnabled || !supabase) {
     throw new Error('Supabase no está configurado.')
   }
 
   const { data, error } = await supabase.functions.invoke('hubrise-brand-connect', {
-    body: { brand_id: brandId },
+    body: locationId ? { brand_id: brandId, location_id: locationId } : { brand_id: brandId },
   })
 
   // Error de transporte / no-2xx (auth, crash). Intentamos leer el cuerpo si lo hay.
@@ -51,10 +58,15 @@ export async function connectBrandToDelivery(brandId: string): Promise<ConnectRe
     return { ok: false, error: msg, locations: [], publish: null }
   }
 
-  const d = (data ?? {}) as Partial<ConnectResult>
+  const d = (data ?? {}) as {
+    ok?: boolean; error?: string; scope?: 'single' | 'all'; requested_location_id?: string | null
+    locations?: ConnectLocationResult[]; publish?: Partial<PublishResult> | null
+  }
   return {
     ok: d.ok === true,
     error: d.error,
+    scope: d.scope,
+    requestedLocationId: d.requested_location_id ?? null,
     locations: d.locations ?? [],
     publish: d.publish ?? null,
   }

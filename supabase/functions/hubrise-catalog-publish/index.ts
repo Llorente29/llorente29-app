@@ -58,6 +58,24 @@ function genRef(id: string): string {
   return "fv_" + id.replace(/-/g, "");
 }
 
+// F1.6 (ENCARGO CODE módulo HubRise, dimensión local de menu_item_override):
+// cascada de precio por canal×local — MISMA prioridad que effective_price()
+// (F1.5): (local+canal) -> (local) -> (canal global) -> null (el llamador cae
+// al precio base). Hoy (cero overrides de local) siempre resuelve por la
+// última rama, byte-idéntico al comportamiento anterior.
+function resolveOverridePrice(
+  priceIndex: Map<string, number>, menuItemId: string, channelId: string, locationId: string | null,
+): number | null {
+  if (locationId) {
+    const localChannel = priceIndex.get(`${menuItemId}::${channelId}::${locationId}`);
+    if (localChannel !== undefined) return localChannel;
+    const localOnly = priceIndex.get(`${menuItemId}::__null__::${locationId}`);
+    if (localOnly !== undefined) return localOnly;
+  }
+  const channelGlobal = priceIndex.get(`${menuItemId}::${channelId}::__null__`);
+  return channelGlobal !== undefined ? channelGlobal : null;
+}
+
 // ── T2c: imágenes ───────────────────────────────────────────────────────────
 // Cloudinary: insertar una transformación tras /upload/ para cumplir el límite de
 // 1 MB de HubRise (y servir webp ligero). Si no es Cloudinary, se sube tal cual.
@@ -189,12 +207,12 @@ Deno.serve(async (req: Request) => {
   // tiene sentido con token escritor (es el único que puede escribir ahí).
   // FALLBACK (compat): external_brand_map->external_integration -- el path
   // de siempre para marcas montadas a mano con bridge (Bendito Burrito).
-  const conns: Array<{ catalogId: string; token: string; connName: string; extLoc: string }> = [];
+  const conns: Array<{ catalogId: string; token: string; connName: string; extLoc: string; locationId: string | null }> = [];
   const primaryCatalogIds = new Set<string>();
 
   if (writerToken) {
     const { data: primaryRows } = await sb.from("brand_hubrise_catalog")
-      .select("external_catalog_id, external_location_id, hubrise_catalog_name")
+      .select("external_catalog_id, external_location_id, hubrise_catalog_name, location_id")
       .eq("account_id", accountId).eq("brand_id", brandId);
     for (const r of primaryRows ?? []) {
       if (!r.external_catalog_id || !r.external_location_id) continue;
@@ -203,6 +221,7 @@ Deno.serve(async (req: Request) => {
         token: writerToken,
         connName: (r.hubrise_catalog_name as string) ?? "Folvy (autoservicio)",
         extLoc: r.external_location_id as string,
+        locationId: (r.location_id as string | null) ?? null,
       });
       primaryCatalogIds.add(r.external_catalog_id as string);
     }
@@ -214,7 +233,7 @@ Deno.serve(async (req: Request) => {
   for (const m of maps ?? []) {
     if (m.is_ignored === true) continue;
     const { data: integ } = await sb.from("external_integration")
-      .select("access_token, external_catalog_id, connection_name, is_active, push_status_enabled")
+      .select("access_token, external_catalog_id, connection_name, is_active, push_status_enabled, location_id")
       .eq("account_id", accountId).eq("source", "hubrise")
       .eq("external_location_id", m.external_location_id)
       .eq("connection_name", m.external_brand_id)
@@ -228,6 +247,7 @@ Deno.serve(async (req: Request) => {
       token: integ.access_token as string,
       connName: (integ.connection_name as string) ?? "",
       extLoc: m.external_location_id as string,
+      locationId: (integ.location_id as string | null) ?? null,
     });
   }
   if (conns.length === 0) {
@@ -340,24 +360,34 @@ Deno.serve(async (req: Request) => {
       nutByProductId.set(productId, buildNutrition(rows));
     }
 
-    // Overrides por canal (T2b): precio/disponibilidad propios por canal delivery.
-    // Nivel marca/canal (location_id null), que es lo que escribe el editor de precios.
+    // Overrides por canal (T2b) + F1.6 (dimensión local, ENCARGO CODE módulo
+    // HubRise): se traen TODAS las filas del producto (cualquier location_id),
+    // no solo las channel-global. El PRECIO sigue la cascada de effective_price()
+    // (F1.5): (local+canal) -> (local) -> (canal global) -> base. La
+    // DISPONIBILIDAD (86/surtido, restrictions) sigue siendo channel-global
+    // únicamente — el 86 por local es un frente aparte (Fase 3), no se toca aquí.
     const { data: overrides } = productIds.length && deliveryChannels.length
       ? await sb.from("menu_item_override")
-          .select("menu_item_id, channel_id, price, is_available")
-          .eq("account_id", accountId).in("menu_item_id", productIds).is("location_id", null)
+          .select("menu_item_id, channel_id, location_id, price, is_available")
+          .eq("account_id", accountId).in("menu_item_id", productIds)
       : { data: [] as Array<Record<string, unknown>> };
     const deliverySlugSet = new Set(deliverySlugs);
-    const ovByItem = new Map<string, Array<{ slug: string; price: number | null; avail: boolean }>>();
+    const ovByItem = new Map<string, Array<{ slug: string; avail: boolean }>>();
+    const priceIndex = new Map<string, number>();
     for (const o of overrides ?? []) {
-      const slug = slugByChannelId.get(o.channel_id as string);
-      if (!slug || !deliverySlugSet.has(slug)) continue; // solo canales delivery (variants)
-      const k = o.menu_item_id as string;
-      (ovByItem.get(k) ?? ovByItem.set(k, []).get(k)!).push({
-        slug,
-        price: o.price === null || o.price === undefined ? null : Number(o.price),
-        avail: o.is_available !== false,
-      });
+      const menuItemId = o.menu_item_id as string;
+      const channelId = (o.channel_id as string | null) ?? null;
+      const locationId = (o.location_id as string | null) ?? null;
+      if (o.price !== null && o.price !== undefined) {
+        priceIndex.set(`${menuItemId}::${channelId ?? "__null__"}::${locationId ?? "__null__"}`, Number(o.price));
+      }
+      if (locationId === null) {
+        const slug = slugByChannelId.get(channelId as string);
+        if (slug && deliverySlugSet.has(slug)) {
+          (ovByItem.get(menuItemId) ?? ovByItem.set(menuItemId, []).get(menuItemId)!)
+            .push({ slug, avail: o.is_available !== false });
+        }
+      }
     }
 
     // Modificadores: asignaciones -> grupos -> opciones
@@ -477,29 +507,48 @@ Deno.serve(async (req: Request) => {
     // ── Construir products (skus) ───────────────────────────────────────────
     const sortedProducts = products
       .sort((a, b) => Number((a as Record<string, unknown>).position ?? 0) - Number((b as Record<string, unknown>).position ?? 0));
-    const productsPayload: Array<Record<string, unknown>> = sortedProducts
-      .map((p) => {
+
+    // F1.6 (dimensión local): función de la LOCATION de destino, no un array
+    // fijo. Memoizada más abajo por locationId — una marca de un solo local
+    // (hoy todas) la calcula UNA sola vez, igual que antes.
+    function buildProductsPayload(locationId: string | null): Array<Record<string, unknown>> {
+      return sortedProducts.map((p) => {
         const ref = refById.get(p.id as string)!;
         const olRefs = groupsByItem.get(p.id as string) ?? [];
         const sku: Record<string, unknown> = { ref, price: eur(p.price) };
         if (olRefs.length > 0) sku.option_list_refs = olRefs;
-        // T2b: precio por canal (price_overrides) y 86 por canal (restrictions).
-        const ovs = ovByItem.get(p.id as string) ?? [];
+        // T2b + F1.6: precio por canal (price_overrides) con cascada por local
+        // (resolveOverridePrice, misma prioridad que effective_price); 86 por
+        // canal (restrictions) sigue channel-global (ovByItem, sin local).
         const basePrice = Number(p.price ?? 0);
         const priceOverrides: Array<Record<string, unknown>> = [];
-        const disabledSlugs: string[] = [];
-        for (const ov of ovs) {
-          if (ov.price !== null && Math.abs(ov.price - basePrice) > 0.0001) {
-            priceOverrides.push({ variant_refs: [ov.slug], price: eur(ov.price) });
+        for (const c of deliveryChannels) {
+          const resolved = resolveOverridePrice(priceIndex, p.id as string, c.id as string, locationId);
+          if (resolved !== null && Math.abs(resolved - basePrice) > 0.0001) {
+            priceOverrides.push({ variant_refs: [c.slug as string], price: eur(resolved) });
           }
-          if (!ov.avail) disabledSlugs.push(ov.slug);
         }
+        // Orden DETERMINISTA del payload (no cosmética): sin esto, el orden de
+        // price_overrides depende del orden en que llega `sales_channel` (sin
+        // ORDER BY) -> el PUT a HubRise podía variar de una publicación a otra
+        // sin que cambiara ningún precio real. Clave: variant_refs[0] asc,
+        // price como desempate.
+        priceOverrides.sort((a, b) => {
+          const aRef = (a.variant_refs as string[])[0] ?? "";
+          const bRef = (b.variant_refs as string[])[0] ?? "";
+          if (aRef !== bRef) return aRef < bRef ? -1 : 1;
+          const aPrice = a.price as string, bPrice = b.price as string;
+          return aPrice < bPrice ? -1 : aPrice > bPrice ? 1 : 0;
+        });
+        const disabledSlugs = (ovByItem.get(p.id as string) ?? [])
+          .filter((ov) => !ov.avail).map((ov) => ov.slug);
         if (priceOverrides.length > 0) sku.price_overrides = priceOverrides;
         if (disabledSlugs.length > 0) {
           // restrictions.variant_refs es LISTA BLANCA (item disponible solo en esos
           // variants). Para 86 de un canal: dejamos los canales delivery NO apagados.
           // Si todos están apagados -> excluido del catálogo (enabled:false).
-          const enabled = deliverySlugs.filter((s) => !disabledSlugs.includes(s));
+          // .sort() = mismo motivo que arriba: orden determinista del payload.
+          const enabled = deliverySlugs.filter((s) => !disabledSlugs.includes(s)).sort();
           sku.restrictions = enabled.length === 0 ? { enabled: false } : { variant_refs: enabled };
         }
         const prodRef = "p_" + (p.id as string);
@@ -519,6 +568,20 @@ Deno.serve(async (req: Request) => {
         if (p.description) prod.description = p.description;
         return prod;
       });
+    }
+
+    // Memoización por LOCATION (no por conexión/catálogo): evita recalcular el
+    // payload de precios más de una vez para marcas de un solo local.
+    const productsPayloadByLocation = new Map<string, Array<Record<string, unknown>>>();
+    function productsPayloadFor(locationId: string | null): Array<Record<string, unknown>> {
+      const key = locationId ?? "__no_location__";
+      let cached = productsPayloadByLocation.get(key);
+      if (!cached) {
+        cached = buildProductsPayload(locationId);
+        productsPayloadByLocation.set(key, cached);
+      }
+      return cached;
+    }
 
     // Productos Y combos con foto (ENCARGO fotos-combos 06/08 — antes solo
     // productos, ningún combo publicaba foto en ninguna de las 9 marcas).
@@ -577,19 +640,21 @@ Deno.serve(async (req: Request) => {
 
     if (usesUncat) categories.push({ ref: UNCAT_REF, name: "Sin categoría" });
 
-    if (productsPayload.length === 0 && dealsPayload.length === 0) {
+    if (sortedProducts.length === 0 && dealsPayload.length === 0) {
       await sb.from("catalog_publish").update({ status: "failed", note: "carta vacía (sin productos ni combos publicables)" }).eq("id", publishId);
       return json({ ok: false, error: "La carta no tiene productos ni combos publicables.", warnings }, 200);
     }
 
     const variants = deliveryChannels.map((c) => ({ ref: c.slug as string, name: c.name as string }));
 
-    const catalogData = {
+    // products se inyecta por-location más abajo (productsPayloadFor); aquí solo
+    // lo que NO depende del local (categorías/option_lists/deals no llevan
+    // cascada local hoy).
+    const catalogDataBase = {
       name: brand.name as string,
       data: {
         ...(variants.length > 0 ? { variants } : {}),
         categories,
-        products: productsPayload,
         option_lists: optionLists,
         deals: dealsPayload,
       },
@@ -601,20 +666,26 @@ Deno.serve(async (req: Request) => {
     // HubRise, así que hoy se hacían N PUT idénticos, con N-1 de más en 403).
     // Sin escritor (fallback transicional): 1 target por conexión, cada uno
     // con su propio token de bridge — comportamiento IDÉNTICO al de siempre.
-    interface PublishTargetJob { catalogId: string; token: string; connName: string }
+    interface PublishTargetJob { catalogId: string; token: string; connName: string; locationId: string | null }
     let publishTargets: PublishTargetJob[];
     if (writerToken) {
-      const namesByCatalog = new Map<string, string[]>();
+      const byCatalog = new Map<string, { names: string[]; locationId: string | null }>();
       for (const c of conns) {
-        (namesByCatalog.get(c.catalogId) ?? namesByCatalog.set(c.catalogId, []).get(c.catalogId)!).push(c.connName);
+        const entry = byCatalog.get(c.catalogId) ?? { names: [] as string[], locationId: c.locationId };
+        entry.names.push(c.connName);
+        if (!entry.locationId && c.locationId) entry.locationId = c.locationId;
+        byCatalog.set(c.catalogId, entry);
       }
-      publishTargets = Array.from(namesByCatalog.entries()).map(([catalogId, names]) => ({
+      publishTargets = Array.from(byCatalog.entries()).map(([catalogId, e]) => ({
         catalogId,
         token: writerToken,
-        connName: names.filter(Boolean).join(" + "),
+        connName: e.names.filter(Boolean).join(" + "),
+        locationId: e.locationId,
       }));
     } else {
-      publishTargets = conns.map((c) => ({ catalogId: c.catalogId, token: c.token, connName: c.connName }));
+      publishTargets = conns.map((c) => (
+        { catalogId: c.catalogId, token: c.token, connName: c.connName, locationId: c.locationId }
+      ));
     }
 
     // ── Publicar (PUT reemplaza el catálogo) ──────────────────────────────────
@@ -632,11 +703,11 @@ Deno.serve(async (req: Request) => {
           const imageId = itemId ? imgMap.get(itemId) : undefined;
           return imageId ? { ...o, image_ids: [imageId] } : o;
         };
-        const productsForConn = productsPayload.map(injectImage);
+        const productsForConn = productsPayloadFor(t.locationId).map(injectImage);
         const dealsForConn = dealsPayload.map(injectImage);
         const catalogDataForConn = {
-          ...catalogData,
-          data: { ...catalogData.data, products: productsForConn, deals: dealsForConn },
+          ...catalogDataBase,
+          data: { ...catalogDataBase.data, products: productsForConn, deals: dealsForConn },
         };
         const res = await fetch(`${HUBRISE_BASE}/catalogs/${t.catalogId}`, {
           method: "PUT",
@@ -667,19 +738,22 @@ Deno.serve(async (req: Request) => {
       .select("connection_name, external_catalog_id, status, error_text")
       .eq("publish_id", publishId);
 
-    const priceOverridesApplied = productsPayload.reduce((acc, p) => {
+    // Representativo (nutrition/tags no dependen del local; price_overrides sí,
+    // pero hoy toda marca tiene un único local -> un único payload en la caché).
+    const representativeProducts = productsPayloadByLocation.values().next().value ?? [];
+    const priceOverridesApplied = representativeProducts.reduce((acc, p) => {
       const skus = (p.skus as Array<Record<string, unknown>>) ?? [];
       return acc + skus.reduce((a, s) => a + (((s.price_overrides as unknown[] | undefined)?.length) ?? 0), 0);
     }, 0);
 
     // T2d: cuántos productos salieron con declaración de alérgenos (nutrition o tag).
-    const nutritionApplied = productsPayload.filter((p) => p.nutrition || p.tags).length;
+    const nutritionApplied = representativeProducts.filter((p) => p.nutrition || p.tags).length;
 
     return json({
       ok: errCount === 0,
       publish_id: publishId,
       status: finalStatus,
-      products: productsPayload.length,
+      products: sortedProducts.length,
       deals: dealsPayload.length,
       option_lists: optionLists.length,
       variants: variants.length,
