@@ -20,6 +20,8 @@ import { useEffect, useState } from 'react'
 import { Bike, ShoppingBag, Store } from 'lucide-react'
 import {
   getMenuItemChannelEconomics,
+  groupChannelEconomicsByChannel,
+  SERVICE_TYPE_LABEL,
   type ChannelEconomics,
 } from '@/modules/kitchen/services/menuOverrideService'
 import {
@@ -80,15 +82,21 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
   const hasCost = recipeCost != null && recipeCost > 0
   const foodCostPct = hasCost && pvpSinIva > 0 ? Math.round((recipeCost! / pvpSinIva) * 10000) / 100 : null
 
+  // Agrupado por canal — un canal con varias tarifas (own_delivery/platform_delivery/
+  // pickup) no es un duplicado, son modos de servicio reales; se agrupan y se pintan
+  // con el dominante (más pedidos en 30d) primero. Ver groupChannelEconomicsByChannel.
+  const econGroups = groupChannelEconomicsByChannel(econ)
+
   let bestMargin: number | null = null
   let bestChannel = ''
   let bestMarginPct: number | null = null
-  for (const e of econ) {
-    if (e.netMargin == null) continue
-    if (bestMargin === null || e.netMargin > bestMargin) {
-      bestMargin = e.netMargin
-      bestChannel = e.channelName
-      bestMarginPct = e.netMarginPct
+  for (const g of econGroups) {
+    const dominant = g.rows[0]
+    if (dominant.netMargin == null) continue
+    if (bestMargin === null || dominant.netMargin > bestMargin) {
+      bestMargin = dominant.netMargin
+      bestChannel = dominant.channelName
+      bestMarginPct = dominant.netMarginPct
     }
   }
 
@@ -149,10 +157,16 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
         </div>
       </div>
 
-      {/* Barras de margen por canal — del motor menu_item_channel_economics */}
-      {econ.length > 0 ? (
+      {/* Barras de margen por canal — del motor menu_item_channel_economics.
+          Un canal puede traer varias filas (varios service_type reales, no
+          duplicados) — se agrupan, el dominante (más pedidos en 30d) manda la
+          barra grande, el resto son sub-líneas etiquetadas y atenuadas si no
+          tuvieron pedidos en 30d. Con 1 sola fila se ve idéntico a antes. */}
+      {econGroups.length > 0 ? (
         <div className="space-y-6">
-          {econ.map((e) => {
+          {econGroups.map((g) => {
+            const e = g.rows[0]   // dominante
+            const others = g.rows.slice(1)
             const ch = salesChannels.find((s) => s.id === e.channelId)
             const badge = ch
               ? channelBadge(ch)
@@ -160,7 +174,7 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
             const noRate = e.serviceType == null && e.commissionPct == null
             if (noRate) {
               return (
-                <div key={e.channelId} className="flex items-center gap-2.5 border border-dashed border-stone-200 rounded-[10px] px-5 py-4 text-sm text-stone-400">
+                <div key={g.channelId} className="flex items-center gap-2.5 border border-dashed border-stone-200 rounded-[10px] px-5 py-4 text-sm text-stone-400">
                   {badge} · sin configurar
                 </div>
               )
@@ -176,14 +190,18 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
             const commPctBar = price > 0 ? Math.round((commAmt / price) * 100) : 0
             const transPctBar = price > 0 ? Math.round((orderCost / price) * 100) : 0
             const marginPctBar = Math.max(0, 100 - costPct - commPctBar - transPctBar)
+            const modeLabel = g.rows.length > 1 && e.serviceType ? (SERVICE_TYPE_LABEL[e.serviceType] ?? e.serviceType) : null
 
             return (
-              <div key={e.channelId}>
+              <div key={g.channelId}>
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2.5">{badge}</div>
                   <div className="text-right">
                     <span className={`font-mono text-xl font-medium ${margin >= 0 ? 'text-success' : 'text-danger'}`}>{fmtEur(margin)}</span>
-                    <div className="text-[12px] text-stone-400">{fmtPct(marginPct, 2)} del PVP{!e.costAvailable ? ' · sin food cost' : ''}</div>
+                    <div className="text-[12px] text-stone-400">
+                      {modeLabel && <span className="text-stone-500 font-medium">{modeLabel} · </span>}
+                      {fmtPct(marginPct, 2)} del PVP{!e.costAvailable ? ' · sin food cost' : ''}
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-[12px] text-stone-500">
@@ -203,6 +221,22 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
                   {transPctBar > 0 && <div className="h-full bg-[#8BADC4] transition-all duration-500" style={{ width: `${transPctBar}%` }} />}
                   <div className="h-full bg-[#7CB663] transition-all duration-500" style={{ width: `${marginPctBar}%` }} />
                 </div>
+                {others.length > 0 && (
+                  <div className="mt-2.5 pl-3 border-l-2 border-stone-200 space-y-1">
+                    {others.map((o) => (
+                      <div key={`${o.channelId}-${o.serviceType ?? 'none'}`}
+                        className={`flex items-center justify-between text-[12px] ${o.ordersLast30d === 0 ? 'opacity-40' : 'text-stone-600'}`}>
+                        <span>
+                          {o.serviceType ? (SERVICE_TYPE_LABEL[o.serviceType] ?? o.serviceType) : '—'}
+                          {o.ordersLast30d === 0 ? ' · sin pedidos en 30d' : ` · ${o.ordersLast30d} pedidos/30d`}
+                        </span>
+                        <span className={`font-mono ${(o.netMargin ?? 0) >= 0 ? '' : 'text-danger'}`}>
+                          {fmtEur(o.netMargin)} · {fmtPct(o.netMarginPct, 2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

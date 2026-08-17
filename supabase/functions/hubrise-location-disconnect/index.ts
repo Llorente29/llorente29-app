@@ -189,6 +189,13 @@ Deno.serve(async (req: Request) => {
   // 3) Apagar flags LOCALES. Si se revoco: borrar tambien el token (secreto
   // muerto, no dejarlo en texto plano sin motivo). Si no: conservarlo para
   // poder reintentar, y marcar revoke_pending.
+  //
+  // callback_status='missing' SIEMPRE aqui, dirigido por el evento de
+  // desconexion (Fase 3, A.1) -- el paso 1 ya intento borrar el callback en
+  // HubRise (best-effort); se declara la intencion, no se re-verifica con
+  // otro GET (eso seria volver a sondear -- ver regla permanente en
+  // folvy_mapa_sistema.md).
+  const nowIso = new Date().toISOString();
   const updateFields = revoked
     ? {
       is_active: false,
@@ -196,11 +203,15 @@ Deno.serve(async (req: Request) => {
       access_token: null,
       token_status: "invalid",
       revoke_pending: false,
+      callback_status: "missing",
+      callback_checked_at: nowIso,
     }
     : {
       is_active: false,
       push_status_enabled: false,
       revoke_pending: true,
+      callback_status: "missing",
+      callback_checked_at: nowIso,
     };
 
   const { error: updErr } = await sb

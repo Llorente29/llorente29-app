@@ -37,6 +37,22 @@ export default {
           bg: '#F1F2F4',
         },
 
+        // ── Sistema visual v1 (17/08) — escala de tinta y superficies que
+        // gobiernan la Fase 3. Ver claude/folvy_sistema_visual_v1.md.
+        // PURAMENTE ADITIVO: nombres nuevos, ningún token existente se
+        // redefine y la migración terracota→accent no se toca. Existe porque
+        // los tres estados de un valor editable se distinguen SIN color —
+        // con trazo, relleno y peso — y para eso hace falta escala de gris
+        // con los hexes exactos de la ficha de marca, no aproximaciones.
+        'tinta': {
+          DEFAULT: '#15171A',
+          70: '#4A4E54',
+          45: '#868B92',
+          25: '#B9BDC2',
+        },
+        'linea-fuerte': '#D6D9DC',
+        'lavado': '#F0F1F2',
+
         // ── Semánticos = el trío del MARGEN (la tesis: el color es dinero) ──
         'success': {           // verde: gana dinero / hecho
           DEFAULT: '#1F9D6B',

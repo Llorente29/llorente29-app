@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -33,6 +33,7 @@ import {
 } from '@/modules/kitchen/services/menuLinkService'
 import CatalogFichaPage from '@/modules/kitchen/pages/CatalogFichaPage'
 import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
+import BrandReconciliationPage from '@/modules/kitchen/pages/BrandReconciliationPage'
 import WarehouseReliabilityPage from '@/modules/kitchen/pages/WarehouseReliabilityPage'
 import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
 import AddExistingProductModal from '@/modules/kitchen/components/AddExistingProductModal'
@@ -76,6 +77,8 @@ export default function KitchenMenuPage() {
   const [search, setSearch] = useState('')
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [showExceptions, setShowExceptions] = useState(false)
+  // Reconciliación de marcas externas (§6 encargo Carabanchel 17/08).
+  const [showBrandRecon, setShowBrandRecon] = useState(false)
   // Cola guiada de fiabilidad del almacen (arreglar paso a paso).
   const [showReliabilityQueue, setShowReliabilityQueue] = useState(false)
   const [showNewProduct, setShowNewProduct] = useState(false)
@@ -490,6 +493,10 @@ export default function KitchenMenuPage() {
     return <SalesExceptionsPage accountId={activeAccountId} onBack={handleExceptionsBack} />
   }
 
+  if (showBrandRecon && activeAccountId) {
+    return <BrandReconciliationPage accountId={activeAccountId} onBack={() => setShowBrandRecon(false)} />
+  }
+
 
   if (accountsLoading || loadingBrands) {
     return <div className="p-6 text-sm text-gray-500">Cargando carta…</div>
@@ -570,6 +577,15 @@ export default function KitchenMenuPage() {
             {selectedBrand.catalogSource === 'folvy' && activeAccountId && (
               <PublishStatusChip accountId={activeAccountId} brandId={selectedBrand.id} refreshKey={publishStatusKey} />
             )}
+            {/* Reconciliación de marcas externas. Es de CUENTA, no de la marca
+                elegida — por eso no lleva el nombre de la marca en el rótulo. */}
+            <button
+              onClick={() => setShowBrandRecon(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              title="Marcas que llegan de los integradores y no están atribuidas a ninguna marca de Folvy"
+            >
+              <ScanSearch className="w-4 h-4" /> Marcas de fuera
+            </button>
             {selectedBrand.catalogSource === 'folvy' && (
               <button
                 onClick={handleConnect}

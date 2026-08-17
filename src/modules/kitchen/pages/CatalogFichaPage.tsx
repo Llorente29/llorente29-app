@@ -1181,6 +1181,7 @@ export default function CatalogFichaPage({
                 <EnCartaTab
                   item={item}
                   accountId={item.accountId}
+                  brandName={brandName || undefined}
                   onItemChanged={refreshItem}
                 />
               ) : activeMenuItemId && itemLoading ? (

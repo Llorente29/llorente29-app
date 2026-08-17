@@ -46,10 +46,13 @@ import type { MenuItem } from '@/types/kitchen'
 interface EnCartaTabProps {
   item: MenuItem
   accountId: string
+  /** Solo para la cabecera del modal de precios ("{producto} · {marca}").
+   *  Lo resuelve ya CatalogFichaPage; no se vuelve a consultar. */
+  brandName?: string
   onItemChanged: () => void
 }
 
-export default function EnCartaTab({ item, accountId, onItemChanged }: EnCartaTabProps) {
+export default function EnCartaTab({ item, accountId, brandName, onItemChanged }: EnCartaTabProps) {
   // ── Combo (S0) — el producto no expone product_type en el tipo cliente;
   // se resuelve con la misma llamada que ya usaba el código viejo. ──
   const [isCombo, setIsCombo] = useState(false)
@@ -310,9 +313,11 @@ export default function EnCartaTab({ item, accountId, onItemChanged }: EnCartaTa
       {showPrices && (
         <EditPricesModal
           menuItemId={item.id}
+          accountId={accountId}
           productName={item.name}
           basePrice={item.price ?? 0}
           vatRate={item.vatRate ?? 0}
+          brandName={brandName}
           onClose={() => setShowPrices(false)}
           onSaved={() => { setShowPrices(false); onItemChanged() }}
         />

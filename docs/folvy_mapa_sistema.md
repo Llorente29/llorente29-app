@@ -375,12 +375,120 @@ borrada (0 dependientes en las 8 tablas con FK a `sale`, incluida `sale_line` �
 no generó líneas ni consumo de stock); `hubrise-lab-disconnect-test` ya no existía (se había
 borrado antes, en la limpieza de 2.5 — la CLI lo confirmó con "does not exist").
 
-**Backend del módulo HubRise, TERMINADO.** Sigue Fase 3 (UI: pantalla de estado, asistente,
-selector de local en `EditPricesModal` — 3.bis, página de éxito del OAuth — 3.ter), a diseñar antes
-de construir.
+**Backend del módulo HubRise (F1+F2), TERMINADO.** Sigue Fase 3 (UI: A.1 tablero de vigilancia,
+A.2 asistente interno, A.2-bis escritor de `external_brand_map`, A.3 desconectar, B.1 pantalla de
+cliente, B.2 selector de local en `EditPricesModal`, B.3/3.ter página de éxito del OAuth) — diseño
+cerrado por Julio en `folvy_hubrise_fase3_diseno.md` (v2), rama `feat/hubrise-fase3-ui`.
+
+**A.1 (tablero de vigilancia superadmin) CERTIFICADO por Julio con captura (15/08)**, tras una
+corrección real encontrada en la propia certificación: `hubrise_ops_dashboard()` filtraba
+`connection_name='Folvy'` y escondía cualquier OTRA conexión hubrise activa de la location (ej.
+"Folvy Test" en `zy9j2-0`, token vivo, callback apuntando a producción — invisible en el tablero
+hasta la corrección). Ese filtro es correcto en `hubrise_location_status` (pantalla del cliente,
+solo le interesa SU conexión estándar) pero era lo contrario del propósito del tablero de
+vigilancia. Corregido: ahora muestra la conexión estándar "Folvy" (incluida inactiva, para
+`revoke_pending`) MÁS cualquier otra conexión que esté activa ahora mismo, etiquetada "conexión no
+estándar: <nombre>". Verificado en vivo por impersonación tras el fix: "Folvy Test" aparece
+correctamente, las dos filas reales no cambiaron. `/_admin/hubrise`, `tsc -b`/`vite build` limpios.
+
+**B.2 backend de lectura (15/08, no es HubRise pero mismo encargo Fase 3)**: `menu_item_channel_economics`
+gana `p_location_id uuid DEFAULT NULL`, aditivo, reutilizando `effective_price()` para el número
+(una cascada, una implementación) — solo añade un `EXISTS` para etiquetar `price_source`/
+`is_location_override`, no recalcula el precio dos veces. Trampa de sobrecarga de
+`CREATE OR REPLACE FUNCTION` (ver `feedback_create_or_replace_function_overload`) apareció otra
+vez y se corrigió con `DROP FUNCTION` explícito de la firma vieja antes de crear la nueva —
+verificado conteo=1. Regresión probada con datos reales: instantánea de 7 `menu_item` con
+overrides ANTES del cambio, diff byte a byte DESPUÉS con `p_location_id` omitido → las 7
+idénticas. Cascada nueva probada con una fila de override real creada y borrada de inmediato
+(price/price_source/is_location_override correctos). `listMenuItemOverrides` gana `locationId`
+opcional (sin llamadores hoy, cero riesgo). Selector en el modal (B.2 paso 4) hecho — ver más abajo.
 
 **⚠️ Incidente cerrado (15/08): la primera URL de prueba entregada a Julio apuntaba a PRODUCCIÓN,
 no al laboratorio.** Ver Trampa 14 más abajo. Julio NO pulsó la URL incorrecta.
+
+## Frente propio: canal triplicado en Economía/modal — DIAGNÓSTICO CORREGIDO (16/08/2026)
+
+**Primer diagnóstico (15/08, INCORRECTO — retractado)**: se interpretó que las 3 filas activas de
+`channel_rate` para "Glovo" en Foodint (`account_id=51ad1792-6629-4ef7-833a-b57b09a86710`) eran un
+duplicado de inserción (dos con el mismo `created_at`), y se propuso archivarlas. **Error mío,
+aprobado por Julio sin mirar todas las columnas**: las 3 filas tienen `service_type` DISTINTO
+(`own_delivery` 15%, `platform_delivery` 30%, `pickup` 15%) — son 3 tarifas reales y legítimas, no
+un duplicado. Prueba de que nunca fue un duplicado real: el índice único
+`uq_channel_rate_scope UNIQUE(account_id, sales_channel_id, service_type) WHERE archived_at IS NULL`
+**ya existía en vivo** antes de este hallazgo — un doble-insert del mismo scope habría fallado con
+`23505`. Archivar 2 de las 3 filas, como se propuso, habría borrado configuración de comisión real
+(el 30% de Glovo-repartidor-de-la-plataforma y el 15% de recogida). Lección: un `created_at`
+compartido es un indicio de "se crearon en el mismo lote", no de "son la misma fila repetida" — hay
+que mirar TODAS las columnas de diferenciación (aquí, `service_type`) antes de calificar algo de
+duplicado, y comprobar si ya existe una restricción que lo habría impedido.
+
+**Causa raíz real (verificada 16/08)**: `menu_item_channel_economics` une `channel_rate` (y
+`brand_channel_rate`) por `channel_id`/`brand_channel_id` **sin fijar `service_type`** — cuando un
+canal tiene tarifa para más de un modo de servicio (que es el diseño normal, no una anomalía), la
+unión no elige una fila, las trae todas. Verificado a escala real en Foodint: **Glovo, Uber y
+JustEat triplican** (los 3 modos, `own_delivery`/`platform_delivery`/`pickup`); solo "Shop" (1 sola
+tarifa) y "Mostrador" (0 tarifas) no triplican. `brand_channel`/`brand_channel_rate` están vacías
+para toda la cuenta Foodint (0 filas) — ninguna marca tiene override propio hoy, así que el fallo
+afecta a las 18 marcas de la cuenta por igual en esos 3 canales. No existe en el esquema ningún
+campo "qué `service_type` usa esta marca para este canal" (ni en `brand_channel` ni en
+`sales_channel`) — y no debe existir: **decisión de Julio (16/08): no se elige un modo canónico, se
+agrupan las filas por canal y se etiquetan por `service_type`**, con orden por uso real
+(`sale.service_type`/`sale.channel_id`, últimos 30 días de la cuenta) y atenuación visual del modo
+sin pedidos en ese periodo. RECON de calidad de `sale.service_type` (16/08, antes de apoyar el
+orden en él): 0 nulos y 0 valores fuera de dominio en los últimos 30 días, tanto en Foodint (2.561
+filas) como en toda la BBDD (2.744 filas) — dato limpio, sin necesidad de caer al orden fijo de
+respaldo (`platform_delivery` > `pickup` > `own_delivery`, que se deja igualmente como
+desempate/red de seguridad).
+
+Frente independiente de B.2 (no se mezcla en la misma verificación de Julio) — construido en rama
+`feat/economia-canal-agrupada-service-type` (nace de `feat/hubrise-fase3-ui`, no se pushea a esa
+rama mientras Julio certifica B.2 en su preview).
+
+**Construcción (16/08)**: `menu_item_channel_economics` gana `orders_30d integer` (aditivo en el
+NÚMERO de columnas de salida, así que `CREATE OR REPLACE` no vale — Postgres no permite cambiar el
+tipo de retorno de una función existente, error `42P13` — hace falta `DROP FUNCTION` + `CREATE`
+explícito, igual que la trampa de sobrecarga pero por un motivo distinto: aquí no cambia la lista de
+parámetros, cambia la forma de la tabla de retorno). Probado antes contra datos reales con una
+función `_tmp_` (creada y borrada en la misma sesión): 0 filas de diferencia frente a la función
+vieja en 10 productos reales de Foodint + con `p_location_id` + con `p_overrides`, excluyendo la
+columna nueva — estrictamente aditivo. `groupChannelEconomicsByChannel()` (nuevo, en
+`menuOverrideService.ts`) agrupa por canal y ordena las filas por `orders_30d` desc (empate por el
+orden de respaldo `platform_delivery > pickup > own_delivery`) — una sola implementación,
+reutilizada por `EconomiaTab.tsx` y `EditPricesModal.tsx`. Precio/86 siguen siendo del canal (una
+fila de controles); el margen se agrupa: dominante grande + sub-líneas por modo, atenuadas si
+`orders_30d = 0`. Canales con una sola tarifa (Shop) o ninguna (Mostrador) quedan idénticos a antes
+— `others.length === 0` no pinta sub-líneas. `handleSave` del modal deduplicado a una escritura por
+canal (antes iteraba las filas crudas, escribiría 3 veces el mismo override para Glovo/Uber/JustEat
+— redundante, no incorrecto, pero corregido). `database.ts` parcheado con `orders_30d`. `tsc -b`
+limpio. **Dato de Julio (16/08) importante para la prueba de aceptación**: Folvy Interno (el
+laboratorio) solo tiene 1 tarifa activa por canal — la triplicación NO se reproduce ahí. La
+verificación en pantalla de este frente tiene que hacerse contra Foodint en solo lectura (o crear
+tarifas por modo en el lab a propósito), no sirve el guion de prueba habitual del laboratorio.
+
+### Trampa 15: NINGÚN cron sondea GET /callback — es condición del pre-audit de Antoine
+
+**El vigía de salud de token (`hubrise-connection-health`, F1.3) violó esto desde su propia
+creación, sin que nadie lo notara hasta el diseño de A.1 (15/08/2026).** Pingueaba `GET /callback`
+cada 30 min por conexión — distinta cadencia que el polling original (cada 5 min, cron 21,
+`cron.unschedule` el 29/07), pero el MISMO endpoint sondeado en bucle, la misma objeción que
+Antoine puso como punto 2 del pre-audit. Julio lo aprobó sin verlo (al aprobar 2.6, que sí respeta
+la regla) y yo lo escribí sin comprobarlo contra el propio F1.3 — se coló a los dos.
+
+**Corregido**: la salud del token se comprueba con endpoints "quien soy" escalados por el propio
+token — `GET /v1/location` (conexiones de location) y `GET /v1/account` (escritora) — verificados
+en vivo el 15/08/2026 (200 con token vivo, 401 con token muerto, misma señal que `/callback` sin
+ser ese endpoint). El estado del callback se vigila por EVENTOS, nunca por cron: al conectar/
+reconectar (`hubrise-oauth-callback`, 2.6), al desconectar (`hubrise-location-disconnect`, siempre
+`missing`), cuando un token pasa de `invalid` a `ok` (`hubrise-connection-health`, transición real,
+no bucle), y bajo demanda desde el botón "Verificar callback ahora" del tablero (A.1) —
+`hubrise-callback-ensure` acepta `{integration_id}` para acotar a una sola conexión. Su comentario
+original decía *"Este cron..."* pero NUNCA se programó (confirmado en 2.6 contra los 48 `cron.job`)
+— corregido para que no quede como una invitación a programarlo.
+
+**Regla permanente — no re-litigar**: **ningún cron sondea `GET /callback`.** Es la condición del
+pre-audit de Antoine (punto 2, 29/07). Los callbacks no se borran solos: se verifican al conectar,
+al desconectar y bajo demanda. Cualquier diseño futuro que quiera "vigilar callbacks en bucle" está
+repitiendo el cron 21.
 
 ### Trampa 14 (misma familia que 1b6p8-1 vs 1b6p8-2): Folvy Interno replica los NOMBRES de los locales de Foodint
 
@@ -405,7 +513,28 @@ si esa acción abre un flujo de autorización real contra un sistema externo.
 - **`Foodint 1b6p8` (EUR)**. Client ID `598759333895.clients.hubrise.com`. Integración = POS.
 - **3 locations**: **Alcalá `1b6p8-0`** (`38158159-cd71-4056-950b-53425afac1ce`) · **Carabanchel `1b6p8-2`** (`92d7656e-…`) · **Plaza Castilla `1b6p8-1`** (`629f9154-…`). **Solo Alcalá tiene conexiones** (los otros dos degradan en la UI de cerrar local).
 - ⚠️ **Plan/pago NO activado**: tramo gratuito **máx. 5 pedidos**. Setup 300€ pagados.
+- ⚠️ **Tope de Antoine: máx. 5 live locations con el cliente "Folvy" (598759333895)** — condición
+  escrita del pre-audit cerrado el 05/08/2026 (ver más abajo). Contador actual: **3**
+  (`1b6p8-0` Alcalá producción, `zy9j2-0` Folvy Test lab, `zy9j2-1` lab). "Live" no está definido
+  por Antoine (¿cuenta el lab, que no factura?) — no asumir margen exacto. Revisar este contador
+  cada vez que se conecte una location nueva.
 - Técnico: **Antoine Monnier** (`amonnier@hubrise.com`). Hilo en **`partners@folvy.app`**. Glovo: **Linda Liang** (`linda.liang@glovoapp.com`), Janaina contacta.
+
+### Pre-audit CERRADO por Antoine (05/08/2026) — no se le debe respuesta
+
+Última respuesta de Antoine (05/08/2026 16:09, `partners@folvy.app`, recuperada por Julio el
+15/08), cita literal: **"Pre-audit is complete. You can connect the approved
+598759333895.clients.hubrise.com / Folvy API client with up to 5 live locations. A more
+comprehensive audit will be required when you need to connect more locations."**
+
+Esto CORRIGE cualquier mención anterior en este documento o en memoria de "pendiente responder a
+Antoine" o "punto 4 del pre-audit abierto" — ambas quedaron superadas ese día, antes de que esta
+sesión (15/08) las diera por vigentes. La app **"Folvy" (598759333895) como cliente de pedidos ya
+no es una inferencia de 2.7/Trampa 15 — es la condición ESCRITA de Antoine.** Carabanchel está
+autorizado desde el 05/08 sin pedir permiso adicional (dentro del tope de 5). El disparador del
+"comprehensive audit" es el cliente 2 (o cualquier expansión >5 locations) — **la Fase 3 (UI) se
+construye para aprobar ESE audit futuro, no para cerrar el pre-audit, que ya está cerrado.**
+Próximo contacto con Antoine, con causa: antes de necesitar la location nº 6.
 
 ## Identidades clave (Foodint / Llorente29)
 

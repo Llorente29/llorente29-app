@@ -3,9 +3,14 @@
 // FRENTE OVERRIDES — servicio. Habla con el motor SQL menu_item_channel_economics
 // (fuente única de verdad del margen por canal) y con set/clear_menu_item_override.
 //
-// · getMenuItemChannelEconomics(itemId, preview?) — una fila por canal con precio
-//   efectivo (preview > override > base) y márgenes. Con `preview` ({canal: precio})
-//   el servidor recalcula el margen AL TECLEAR sin reimplementar la fórmula en cliente.
+// · getMenuItemChannelEconomics(itemId, preview?) — una fila por (canal, service_type)
+//   con precio efectivo (preview > override > base) y márgenes. Con `preview`
+//   ({canal: precio}) el servidor recalcula el margen AL TECLEAR sin reimplementar la
+//   fórmula en cliente. Un canal con varias tarifas configuradas (own_delivery/
+//   platform_delivery/pickup) devuelve varias filas A PROPÓSITO — no es un duplicado,
+//   ninguna se descarta ni se elige como "la" canónica (decisión de Julio, 16/08, ver
+//   docs/folvy_mapa_sistema.md). groupChannelEconomicsByChannel() las agrupa por canal
+//   para pintar: una UI que no agrupa muestra el canal repetido sin explicación.
 // · listMenuItemOverrides(itemId) — overrides guardados (nivel marca/canal, sin local).
 // · setMenuItemOverride / clearMenuItemOverride — escritura (RPC SECURITY DEFINER).
 //
@@ -26,6 +31,7 @@ export interface ChannelEconomics {
   serviceType: string | null
   price: number               // precio efectivo SIN IVA
   priceSource: PriceSource
+  isLocationOverride: boolean // true si el precio efectivo viene de un override PROPIO del local pedido (no heredado de marca/base)
   isAvailable: boolean        // 86 manual (override); true si no hay override
   vatRate: number
   priceWithVat: number        // PVP cliente
@@ -45,6 +51,57 @@ export interface ChannelEconomics {
   foodCostPct: number | null
   targetFoodCostPct: number | null
   foodCostStatus: FoodCostStatus
+  ordersLast30d: number   // pedidos reales de este (canal, service_type) en 30d de la cuenta
+}
+
+/** Nombre visible de cada modo de servicio (mismo vocabulario que KitchenSettingsPage). */
+export const SERVICE_TYPE_LABEL: Record<string, string> = {
+  platform_delivery: 'Reparto de plataforma',
+  pickup: 'Recogida',
+  own_delivery: 'Reparto propio',
+}
+
+// Orden de respaldo cuando no hay pedidos reales que desempaten (o service_type
+// desconocido). Coincide con el orden que ya usa channelRatesService.SERVICE_TYPES.
+const SERVICE_TYPE_FALLBACK_RANK: Record<string, number> = {
+  platform_delivery: 0,
+  pickup: 1,
+  own_delivery: 2,
+}
+
+/** Un canal con sus filas de tarifa (1 si el canal solo tiene un service_type
+ * configurado, o ninguno; 2-3 si tiene varias) ordenadas por uso real de los
+ * últimos 30 días — la dominante primero, empate por el orden de respaldo. */
+export interface ChannelEconomicsGroup {
+  channelId: string
+  channelName: string
+  channelType: string | null
+  rows: ChannelEconomics[]
+}
+
+export function groupChannelEconomicsByChannel(rows: ChannelEconomics[]): ChannelEconomicsGroup[] {
+  const byChannel = new Map<string, ChannelEconomics[]>()
+  for (const r of rows) {
+    const arr = byChannel.get(r.channelId)
+    if (arr) arr.push(r)
+    else byChannel.set(r.channelId, [r])
+  }
+  const groups: ChannelEconomicsGroup[] = []
+  for (const group of byChannel.values()) {
+    const sorted = [...group].sort((a, b) => {
+      if (b.ordersLast30d !== a.ordersLast30d) return b.ordersLast30d - a.ordersLast30d
+      const ra = a.serviceType ? (SERVICE_TYPE_FALLBACK_RANK[a.serviceType] ?? 99) : 99
+      const rb = b.serviceType ? (SERVICE_TYPE_FALLBACK_RANK[b.serviceType] ?? 99) : 99
+      return ra - rb
+    })
+    groups.push({
+      channelId: sorted[0].channelId,
+      channelName: sorted[0].channelName,
+      channelType: sorted[0].channelType,
+      rows: sorted,
+    })
+  }
+  return groups
 }
 
 /** Override guardado de un producto (nivel marca/canal, sin local en esta capa). */
@@ -88,6 +145,7 @@ function rowToChannelEconomics(r: Record<string, unknown>): ChannelEconomics {
     serviceType: (r.service_type as string) ?? null,
     price: Number(r.price ?? 0),
     priceSource: (r.price_source as PriceSource) ?? 'base',
+    isLocationOverride: r.is_location_override === true,
     isAvailable: r.is_available !== false,
     vatRate: Number(r.vat_rate ?? 0),
     priceWithVat: Number(r.price_with_vat ?? 0),
@@ -107,34 +165,49 @@ function rowToChannelEconomics(r: Record<string, unknown>): ChannelEconomics {
     foodCostPct: num(r.food_cost_pct),
     targetFoodCostPct: num(r.target_food_cost_pct),
     foodCostStatus: (r.food_cost_status as FoodCostStatus) ?? 'no_cost',
+    ordersLast30d: Number(r.orders_30d ?? 0),
   }
 }
 
 /**
  * Economía por canal de un producto. `preview` ({channelId: precioSinIva}) hace que
  * el servidor recalcule el margen con los precios tecleados, sin guardarlos.
+ * `locationId` activa la cascada de effective_price() para ESE local
+ * (local+canal → local → canal de marca → base); omitido/null = comportamiento
+ * de siempre (canal de marca → base, byte a byte).
  */
 export async function getMenuItemChannelEconomics(
   menuItemId: string,
-  preview?: Record<string, number> | null
+  preview?: Record<string, number> | null,
+  locationId?: string | null,
 ): Promise<ChannelEconomics[]> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('menu_item_channel_economics', {
     p_menu_item_id: menuItemId,
     p_overrides: preview && Object.keys(preview).length > 0 ? preview : null,
+    p_location_id: locationId ?? undefined,
   })
   if (error) throw new Error(`Error calculando economía por canal: ${error.message}`)
   return ((data ?? []) as Record<string, unknown>[]).map(rowToChannelEconomics)
 }
 
-/** Overrides guardados del producto a nivel marca/canal (location_id null). */
-export async function listMenuItemOverrides(menuItemId: string): Promise<MenuItemOverride[]> {
+/**
+ * Overrides guardados del producto. Sin locationId (o null): nivel marca/canal
+ * (location_id IS NULL, comportamiento de siempre). Con locationId: la capa
+ * propia de ESE local (location_id = locationId) — no incluye la de marca,
+ * son capas distintas de la cascada de effective_price().
+ */
+export async function listMenuItemOverrides(
+  menuItemId: string,
+  locationId?: string | null,
+): Promise<MenuItemOverride[]> {
   requireSupabase()
-  const { data, error } = await supabase!
+  let query = supabase!
     .from('menu_item_override')
     .select('channel_id, price, is_available')
     .eq('menu_item_id', menuItemId)
-    .is('location_id', null)
+  query = locationId ? query.eq('location_id', locationId) : query.is('location_id', null)
+  const { data, error } = await query
   if (error) throw new Error(`Error listando overrides: ${error.message}`)
   return (data ?? []).map((o) => ({
     channelId: (o.channel_id as string) ?? null,

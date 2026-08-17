@@ -1,14 +1,30 @@
-// hubrise-connection-health — VIGÍA de salud de token, POR CONEXIÓN.
+// hubrise-connection-health — VIGÍA de salud de token, POR CONEXIÓN Y DE LA ESCRITORA.
 // ============================================================================
-// ENCARGO CODE — módulo de conexión HubRise, FASE 1.3.
+// ENCARGO CODE — módulo de conexión HubRise, FASE 1.3 + Fase 3 punto 3 (15/08).
 //
 // Trampa que neutraliza: un token revocado hoy solo se manifiesta como 401
 // silenciosos en hubrise-catalog-publish/availability-dispatch/etc. — nadie
 // se entera hasta que un pedido o un 86 se pierde. El escritor estuvo caído
 // del 29/07 al 06/08 sin que nadie lo supiera (ver ENCARGO). Este cron hace
-// un ping barato y de solo-lectura (GET /callback, el mismo que ya usa
-// hubrise-callback-ensure) a CADA conexión activa de external_integration
-// (source='hubrise') y escribe el resultado en token_status/token_checked_at.
+// un ping barato y de solo-lectura a CADA conexión activa de
+// external_integration (source='hubrise') Y a cada fila de
+// hubrise_writer_connection (la escritora, antes sin salud verificada — solo
+// "conectada desde X"), y escribe el resultado en token_status/token_checked_at
+// de la tabla correspondiente.
+//
+// REGLA PERMANENTE (15/08/2026, Fase 3 — no re-litigar, ver folvy_mapa_sistema.md):
+// NINGÚN cron sondea GET /callback. Es la condición del pre-audit de Antoine
+// (punto 2, 29/07: "eliminar el polling GET /callback cada 5 min",
+// cron.unschedule(21)). Esta misma función lo violó sin querer desde su
+// creación (F1.3): pingueaba GET /callback cada 30 min -- distinta cadencia,
+// mismo endpoint sondeado en bucle, misma objeción de Antoine. Corregido: el
+// ping de salud usa GET /location (conexiones de location) / GET /account
+// (escritora) -- endpoints "quien soy" escalados por el propio token, sin
+// relación con el callback. El estado del callback (¿está registrado el
+// correcto?) se vigila por EVENTOS (conectar/reconectar/desconectar,
+// recuperación de token invalid->ok -- ver más abajo, y bajo demanda desde
+// el tablero) -- nunca en bucle. Ver _shared/hubriseCallback.ts y el tablero
+// de operación (Fase 3, A.1).
 //
 // Semántica de escritura (nunca miente por un fallo transitorio):
 //   - 2xx  -> token_status='ok'
@@ -28,6 +44,7 @@
 // 20260815T1910_hubrise_connection_health_cron.sql.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,17 +67,23 @@ function json(o: Record<string, unknown>, status = 200): Response {
 type PingOutcome = "ok" | "invalid" | "unknown";
 
 // Ping barato y de solo-lectura: NO registra ni modifica nada en HubRise.
-async function pingToken(token: string): Promise<PingOutcome> {
+// endpoint es SIEMPRE uno de los "quien soy" escalados por el propio token
+// (/location para conexiones de location, /account para la escritora) --
+// nunca /callback (ver regla permanente arriba). Verificado en vivo
+// (15/08/2026): ambos devuelven 200 con token vivo y 401 con token
+// revocado/caducado, igual que /callback, sin ser el endpoint que Antoine
+// pidió dejar de sondear.
+async function pingToken(endpoint: string, token: string): Promise<PingOutcome> {
   try {
-    const resp = await fetch(`${API_BASE}/callback`, {
+    const resp = await fetch(`${API_BASE}${endpoint}`, {
       headers: { "X-Access-Token": token },
     });
     if (resp.status === 401) return "invalid";
     if (resp.ok) return "ok";
-    console.error(`hubrise-connection-health: HTTP ${resp.status} (no 401, no 2xx) — estado conservado`);
+    console.error(`hubrise-connection-health: HTTP ${resp.status} en ${endpoint} (no 401, no 2xx) — estado conservado`);
     return "unknown";
   } catch (e) {
-    console.error("hubrise-connection-health: ping error", e);
+    console.error(`hubrise-connection-health: ping error en ${endpoint}`, e);
     return "unknown";
   }
 }
@@ -89,6 +112,12 @@ interface ConnRow {
   token_status: string;
 }
 
+interface WriterRow {
+  account_id: string;
+  hubrise_account_id: string | null;
+  token_status: string;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -103,15 +132,13 @@ Deno.serve(async (req: Request) => {
   if (error) return json({ ok: false, error: `lectura external_integration: ${error.message}` }, 500);
 
   const conns = (data ?? []) as ConnRow[];
-  if (conns.length === 0) return json({ ok: true, checked: 0, note: "sin conexiones HubRise activas con token" });
-
   const nowIso = new Date().toISOString();
   const results: Array<{ label: string; outcome: PingOutcome }> = [];
   const newlyInvalid: string[] = [];
 
   for (const c of conns) {
     const label = `${c.external_location_id ?? "?"} / ${c.connection_name ?? "?"}`;
-    const outcome = await pingToken(c.access_token as string);
+    const outcome = await pingToken("/location", c.access_token as string);
     results.push({ label, outcome });
 
     if (outcome === "unknown") continue; // señal ambigua: no se toca el estado previo
@@ -122,7 +149,66 @@ Deno.serve(async (req: Request) => {
       .eq("id", c.id);
     if (updErr) console.error(`hubrise-connection-health: update ${c.id} falló: ${updErr.message}`);
 
-    if (outcome === "invalid" && c.token_status !== "invalid") newlyInvalid.push(label);
+    if (outcome === "invalid" && c.token_status !== "invalid") newlyInvalid.push(`location ${label}`);
+
+    // Momento con causa natural (Fase 3, A.1 -- no es bucle): un token que
+    // ESTABA invalido y AHORA responde ok merece reconfirmar su callback una
+    // vez -- pudo perderse o cambiar mientras el token estaba muerto, y hasta
+    // el proximo evento (reconectar/desconectar/boton manual) nadie mas lo
+    // comprobaria. Una transicion de valor real, no vigilancia periodica.
+    if (outcome === "ok" && c.token_status === "invalid") {
+      const cb = await ensureHubriseCallback(c.access_token as string);
+      const { error: cbErr } = await sb
+        .from("external_integration")
+        .update({
+          callback_status: cb.outcome === "noop" || cb.outcome === "registered" ? "ok" : "unknown",
+          callback_checked_at: nowIso,
+        })
+        .eq("id", c.id);
+      if (cbErr) console.error(`hubrise-connection-health: callback_status tras recuperar ${c.id}: ${cbErr.message}`);
+    }
+  }
+
+  // Escritora (cuenta) -- misma vigía, mismo endpoint "quien soy" (GET
+  // /account en vez de /location), token en Vault vía RPC
+  // hubrise_writer_token_read (mismo patrón que resolveWriterToken en
+  // _shared/hubriseToken.ts). Fase 3, punto 3: la escritora gana salud real,
+  // hasta hoy solo se sabía "conectada desde X" sin verificación viva.
+  const { data: writersData, error: writersErr } = await sb
+    .from("hubrise_writer_connection")
+    .select("account_id, hubrise_account_id, token_status");
+  if (writersErr) {
+    console.error(`hubrise-connection-health: lectura hubrise_writer_connection: ${writersErr.message}`);
+  }
+  const writers = (writersData ?? []) as WriterRow[];
+
+  for (const w of writers) {
+    const label = `${w.hubrise_account_id ?? "?"} / cuenta ${w.account_id}`;
+    const { data: token, error: tokenErr } = await sb.rpc("hubrise_writer_token_read", {
+      p_account_id: w.account_id,
+    });
+    if (tokenErr || typeof token !== "string" || token.length === 0) {
+      if (tokenErr) console.error(`hubrise-connection-health: token escritor ${w.account_id}: ${tokenErr.message}`);
+      results.push({ label: `escritora ${label}`, outcome: "unknown" });
+      continue;
+    }
+
+    const outcome = await pingToken("/account", token);
+    results.push({ label: `escritora ${label}`, outcome });
+
+    if (outcome === "unknown") continue;
+
+    const { error: updErr } = await sb
+      .from("hubrise_writer_connection")
+      .update({ token_status: outcome, token_checked_at: nowIso })
+      .eq("account_id", w.account_id);
+    if (updErr) console.error(`hubrise-connection-health: update escritora ${w.account_id} falló: ${updErr.message}`);
+
+    if (outcome === "invalid" && w.token_status !== "invalid") newlyInvalid.push(`escritora ${label}`);
+  }
+
+  if (conns.length === 0 && writers.length === 0) {
+    return json({ ok: true, checked: 0, note: "sin conexiones HubRise activas con token" });
   }
 
   if (newlyInvalid.length > 0) {
@@ -136,7 +222,7 @@ Deno.serve(async (req: Request) => {
 
   return json({
     ok: true,
-    checked: conns.length,
+    checked: conns.length + writers.length,
     ok_count: results.filter((r) => r.outcome === "ok").length,
     invalid_count: results.filter((r) => r.outcome === "invalid").length,
     unknown_count: results.filter((r) => r.outcome === "unknown").length,
