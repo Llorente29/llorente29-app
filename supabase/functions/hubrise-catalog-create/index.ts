@@ -34,10 +34,22 @@
 // laboratorio y en producción ("Foodint Carabanchel" existe en las dos cuentas),
 // así que todo va por location_id y jamás por nombre.
 //
+// QUÉ ESCRIBE (A.2-bis, 17/08). Tres cosas, en este orden:
+//   1. el catálogo en HubRise
+//   2. brand_hubrise_catalog  (marca → catálogo)
+//   3. external_brand_map     (clave que llega en el pedido → marca)
+// El (3) se escribe aquí y no desde un escritor aparte: esta función ya tiene
+// marca, local y external_location_id, y ya es idempotente. Una superficie
+// menos que mantener. Ver ensureBrandMap para la clave y para por qué escribe
+// solo si falta.
+//
 // IDEMPOTENTE en tres capas:
 //   1. fila en brand_hubrise_catalog → "ya_conectada", no toca HubRise
 //   2. catálogo con ese nombre ya en el local → "reusada_por_nombre"
 //   3. si no → POST y crea
+// Las TRES ramas aseguran el mapeo, no solo la de "creada". Si no, las 6
+// marcas de Carabanchel —que ya tienen catálogo desde el 17/08 y ningún
+// mapeo— no lo recibirían nunca, y volver a pulsar no las arreglaría.
 //
 // dry_run: hace SOLO la lectura (GET /locations/:ext/catalogs) y devuelve el
 // scope de lo que hay. No crea ni escribe nada. Es como se responde la pregunta
@@ -54,15 +66,13 @@
 // hubrise-webhook). El token no sale de esta función: ni al cliente, ni a la
 // respuesta, ni a un log.
 
-// ESTADO DE DESPLIEGUE (17/08, 09:2x) — v1 ACTIVE, verify_jwt=true.
-// ⚠️ DIVERGENCIA DECLARADA: lo desplegado en v1 es este mismo código con la
-// cabecera de comentarios QUITADA y los acentos retirados de los mensajes de
-// error ("conexion" en vez de "conexión"). La lógica es idéntica sentencia a
-// sentencia — el payload se derivó de este fichero — pero NO es byte a byte, y
-// no se va a decir que lo es. Causa: el despliegue fue por MCP con los ficheros
-// en línea (no hay SUPABASE_ACCESS_TOKEN en el contenedor para usar el CLI, que
-// sube el repo tal cual). SE CORRIGE en el v2 que salga del ensayo de
-// laboratorio, que además es el despliegue donde toca usar el CLI.
+// ESTADO DE DESPLIEGUE — v2 (17/08, tras las 23:45), verify_jwt=true.
+// El v1 (09:2x) se desplegó con la cabecera de comentarios quitada y los
+// acentos fuera de los mensajes de error: la lógica era idéntica sentencia a
+// sentencia pero NO byte a byte, y así se declaró en su momento en vez de
+// llamarlo "compila". El v2 sube ESTE fichero tal cual, con sus comentarios y
+// sus acentos, y se verifica con un diff contra get_edge_function. Con eso el
+// repo vuelve a ser la verdad de lo que corre y la divergencia queda cerrada.
 //
 // TRAMPA DE NOMBRES, nivel marca (además de la de locales): "Bendito Burrito"
 // existe en las DOS cuentas —95635ce3… en Foodint (producción) y 73673376… en
@@ -92,6 +102,100 @@ interface CatalogScope {
   location_id: unknown;
   scope: "location" | "account" | "desconocido";
   keys: string[];
+}
+
+// ── A.2-bis: la fila de external_brand_map ───────────────────────────────────
+//
+// Se escribe DESDE AQUÍ y no desde un escritor aparte: esta función ya tiene
+// marca, local y external_location_id, y ya es idempotente. Una superficie
+// menos que mantener.
+//
+// LA CLAVE ES EL NOMBRE PELADO DE LA MARCA (brand.name), nunca el compuesto del
+// bridge. No es preferencia: verificado el 17/08 contra las ventas reales de
+// Alcalá — las 8 claves que llegaron por HubRise entre el 06 y el 16/08 son
+// nombres pelados, cero compuestas. Las 3 filas "{App} Bridge - {Marca}" que
+// hay desde el 29/07 no han casado nunca con nada.
+//
+// ESCRIBE SOLO SI FALTA. No es un upsert, y la diferencia importa:
+//   · una fila con is_ignored=true es una decisión humana ("esta marca no es
+//     mía") — pisarla la desharía en silencio;
+//   · una fila apuntando a OTRA marca es una atribución que alguien hizo —
+//     pisarla re-atribuiría ventas sin avisar.
+// Ambas se reportan como conflicto y se dejan quietas. De paso, esto cumple
+// literalmente "no toques las 12 filas de Alcalá": sus 9 mapeos pelados ya
+// existen y son correctos, así que quedan intactos por construcción.
+type BrandMapStatus = 'creado' | 'ya_existia' | 'conflicto' | 'no_escrito_dry_run' | 'error';
+
+interface BrandMapResult {
+  status: BrandMapStatus;
+  external_brand_id: string;
+  detalle?: string;
+}
+
+interface EnsureBrandMapArgs {
+  accountId: string;
+  externalLocationId: string;
+  brandId: string;
+  brandName: string;
+  dryRun: boolean;
+}
+
+// deno-lint-ignore no-explicit-any
+async function ensureBrandMap(sb: any, a: EnsureBrandMapArgs): Promise<BrandMapResult> {
+  const key = a.brandName;
+
+  const { data: existing, error: selErr } = await sb
+    .from('external_brand_map')
+    .select('brand_id, is_ignored')
+    .eq('account_id', a.accountId)
+    .eq('source', 'hubrise')
+    .eq('external_location_id', a.externalLocationId)
+    .eq('external_brand_id', key)
+    .maybeSingle();
+
+  if (selErr) {
+    return { status: 'error', external_brand_id: key, detalle: selErr.message };
+  }
+
+  if (existing) {
+    if (existing.is_ignored === true) {
+      return {
+        status: 'conflicto', external_brand_id: key,
+        detalle: 'Ya existe y está DESCARTADA (is_ignored). Es una decisión humana: no se toca. Revísala en "Marcas de fuera".',
+      };
+    }
+    if (existing.brand_id && existing.brand_id !== a.brandId) {
+      return {
+        status: 'conflicto', external_brand_id: key,
+        detalle: `Ya existe y apunta a OTRA marca (${existing.brand_id}). No se toca: re-atribuiría ventas en silencio.`,
+      };
+    }
+    return { status: 'ya_existia', external_brand_id: key };
+  }
+
+  if (a.dryRun) {
+    return { status: 'no_escrito_dry_run', external_brand_id: key, detalle: 'Falta y se crearía.' };
+  }
+
+  // El CHECK external_brand_map_decision_chk obliga: mapeada ⇒ brand_id NOT
+  // NULL e is_ignored=false. Lo garantiza la BBDD, no esta función.
+  const { error: insErr } = await sb.from('external_brand_map').insert({
+    account_id: a.accountId,
+    source: 'hubrise',
+    external_location_id: a.externalLocationId,
+    external_brand_id: key,
+    brand_id: a.brandId,
+    is_ignored: false,
+  });
+  if (insErr) {
+    // Carrera con otra ejecución: la única (account, source, ext_loc,
+    // ext_brand) la resuelve la BBDD. Eso no es un fallo, es idempotencia.
+    if ((insErr.code as string) === '23505') {
+      return { status: 'ya_existia', external_brand_id: key, detalle: 'Creada por otra ejecución simultánea.' };
+    }
+    return { status: 'error', external_brand_id: key, detalle: insErr.message };
+  }
+  return { status: 'creado', external_brand_id: key };
 }
 
 function inspectCatalog(c: Record<string, unknown>): CatalogScope {
@@ -267,6 +371,10 @@ Deno.serve(async (req: Request) => {
     desconocido: scopeCheck.filter((c) => c.scope === "desconocido").length,
   };
 
+  const mapArgs = {
+    accountId, externalLocationId, brandId, brandName, dryRun,
+  };
+
   if (dryRun) {
     return json({
       ok: listOk,
@@ -276,16 +384,25 @@ Deno.serve(async (req: Request) => {
       list_ok: listOk,
       list_error: listError,
       scope_summary: scopeSummary,
+      brand_map: await ensureBrandMap(sb, mapArgs),   // solo mira, no escribe
       catalogs: scopeCheck,
     }, 200);
   }
 
+  // ── ya_conectada TAMBIÉN asegura el mapeo ────────────────────────────────
+  // Es el caso que de verdad importa hoy: las 6 marcas de Carabanchel ya
+  // tienen catálogo (creado el 17/08) y ninguna tiene mapeo. Si el mapeo solo
+  // se escribiera en la rama "creada", esas seis no lo recibirían NUNCA —
+  // volver a pulsar no las arreglaría, que es justo lo contrario de lo que se
+  // espera de un botón idempotente. Con esto, pulsar otra vez las repara.
   if (existing?.external_catalog_id) {
+    const brandMap = await ensureBrandMap(sb, mapArgs);
     return json({
-      ok: true, ...base,
+      ok: brandMap.status !== 'error', ...base,
       status: "ya_conectada",
       external_catalog_id: existing.external_catalog_id,
       hubrise_catalog_name: existing.hubrise_catalog_name,
+      brand_map: brandMap,
       scope_summary: scopeSummary,
     }, 200);
   }
@@ -342,14 +459,17 @@ Deno.serve(async (req: Request) => {
     }, 200);
   }
 
+  const brandMap = await ensureBrandMap(sb, mapArgs);
+
   return json({
-    ok: true, ...base,
+    ok: brandMap.status !== 'error', ...base,
     status: reused ? "reusada_por_nombre" : "creada",
     external_catalog_id: catalogId,
     hubrise_catalog_name: brandName,
+    brand_map: brandMap,
     scope_summary: scopeSummary,
     // Esta función NO publica. Dicho explícitamente para que no se dé por hecho.
     published: false,
-    nota: "Catálogo creado y mapeado. NO se ha publicado carta: eso es un paso aparte, cuando los bridges apunten aquí.",
+    nota: "Catálogo creado y mapeado (catálogo + brand_hubrise_catalog + external_brand_map). NO se ha publicado carta: eso es un paso aparte, cuando los bridges apunten aquí.",
   }, 200);
 });

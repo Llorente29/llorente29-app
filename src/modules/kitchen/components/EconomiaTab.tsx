@@ -75,12 +75,19 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
     return () => { cancelled = true }
   }, [item.id, item.accountId])
 
-  const pvpSinIva = item.price ?? 0
+  // menu_item.price es el precio CON IVA INCLUIDO, no la base imponible
+  // (verificado 17/08 contra ventas reales: sale_line.unit_price = price exacto
+  // en 2.925 líneas, cero a price*1,10). Antes esto se llamaba pvpSinIva y se
+  // multiplicaba por (1+IVA) para pintar un "PVP cliente" que no existía.
   const vatPct = item.vatRate ?? 0
-  const pvpConIva = Math.round(pvpSinIva * (1 + vatPct / 100) * 100) / 100
+  const pvpCliente = item.price ?? 0
+  // Lo que entra en caja de verdad. El IVA es dinero de Hacienda, no ingreso.
+  const ingresoNeto = pvpCliente / (1 + vatPct / 100)
   const recipeCost = econ.find((e) => e.costAvailable)?.cost ?? null
   const hasCost = recipeCost != null && recipeCost > 0
-  const foodCostPct = hasCost && pvpSinIva > 0 ? Math.round((recipeCost! / pvpSinIva) * 10000) / 100 : null
+  // Food cost % contra el INGRESO NETO, igual que antes se medía contra lo que
+  // se creía neto. El denominador baja, así que el porcentaje sube.
+  const foodCostPct = hasCost && ingresoNeto > 0 ? Math.round((recipeCost! / ingresoNeto) * 10000) / 100 : null
 
   // Agrupado por canal — un canal con varias tarifas (own_delivery/platform_delivery/
   // pickup) no es un duplicado, son modos de servicio reales; se agrupan y se pintan
@@ -136,8 +143,10 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-4">
         <div className="bg-stone-50 rounded-lg px-4 py-3">
           <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">PVP cliente</div>
-          <div className="font-mono text-lg font-medium">{fmtEur(pvpConIva)}</div>
-          <div className="text-[11px] text-stone-400">IVA {fmtPct(vatPct)} incluido</div>
+          <div className="font-mono text-lg font-medium">{fmtEur(pvpCliente)}</div>
+          {/* El ingreso neto es el dato nuevo y el que de verdad manda: es lo
+              que queda para la casa una vez fuera el IVA. */}
+          <div className="text-[11px] text-stone-400">IVA {fmtPct(vatPct)} incl. · neto {fmtEur(ingresoNeto)}</div>
         </div>
         <div className="bg-stone-50 rounded-lg px-4 py-3">
           {/* "Food cost" se queda EN INGLÉS a propósito (decisión de Julio,
@@ -148,7 +157,7 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
               spanglish descuidado y se tradujeron. No lo "arregles" de vuelta. */}
           <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">Food cost</div>
           <div className={`font-mono text-lg font-medium ${hasCost ? 'text-[#BA7517]' : 'text-stone-300'}`}>{hasCost ? fmtEur(recipeCost) : '—'}</div>
-          <div className="text-[11px] text-stone-400">{hasCost ? `${fmtPct(foodCostPct, 2)} del PVP` : 'Pendiente de escandallo'}</div>
+          <div className="text-[11px] text-stone-400">{hasCost ? `${fmtPct(foodCostPct, 2)} del neto` : 'Pendiente de escandallo'}</div>
         </div>
         <div className="bg-stone-50 rounded-lg px-4 py-3">
           <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">Mejor margen</div>

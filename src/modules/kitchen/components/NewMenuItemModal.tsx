@@ -5,7 +5,8 @@
 // defecto (+ categoría opcional + descripción). El escandallo se vincula después
 // en la ficha del producto; el precio por canal se ajusta con overrides (CP1-b).
 //
-// El precio se guarda SIN IVA (base imponible), como el resto de menu_item.
+// El precio se guarda CON IVA INCLUIDO, como el resto de menu_item (corregido
+// 17/08: antes se creía base imponible y no lo era).
 // El IVA por defecto es 10% (tipo reducido de hostelería); se afina en la ficha.
 
 import { useEffect, useState } from 'react'
@@ -101,7 +102,7 @@ export default function NewMenuItemModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Precio por defecto (sin IVA)</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Precio por defecto (IVA incluido)</label>
               <div className="relative">
                 <input
                   type="text" inputMode="decimal" value={priceText}

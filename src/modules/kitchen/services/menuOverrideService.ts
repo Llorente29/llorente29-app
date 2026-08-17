@@ -29,7 +29,7 @@ export interface ChannelEconomics {
   channelName: string
   channelType: string | null
   serviceType: string | null
-  price: number               // precio efectivo SIN IVA
+  price: number               // precio efectivo, IVA INCLUIDO (17/08)
   priceSource: PriceSource
   isLocationOverride: boolean // true si el precio efectivo viene de un override PROPIO del local pedido (no heredado de marca/base)
   isAvailable: boolean        // 86 manual (override); true si no hay override

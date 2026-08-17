@@ -1,11 +1,11 @@
 // src/modules/kitchen/components/EditPricesModal.tsx
 //
 // FRENTE OVERRIDES — modal "Editar precios" de un producto.
-// · Precio por defecto (base de la marca, menu_item.price, SIN IVA) → updateMenuItem.
+// · Precio por defecto (base de la marca, menu_item.price, IVA INCLUIDO) → updateMenuItem.
 //   Solo editable en "Todos los locales" -- editarlo con un local elegido tocaría
 //   TODA la marca desde una pantalla que dice estar mostrando un solo local
 //   (regla de Julio: nunca escribir a un ámbito distinto del que la pantalla muestra).
-// · Una fila por canal: precio propio (override, SIN IVA; vacío = hereda) + 86.
+// · Una fila por canal: precio propio (override, IVA INCLUIDO; vacío = hereda) + 86.
 //   Con "Todos los locales": el override es de marca/canal (comportamiento de
 //   siempre). Con un local elegido: el override es PROPIO de ese local — la
 //   cascada completa (local+canal → local → canal de marca → base) la resuelve
@@ -23,8 +23,12 @@
 // aislado del selector global de cabecera (activeLocationId de AppContext). Abrir
 // este modal y elegir un local aquí NO cambia el scope del resto de la app.
 //
-// Convención de IVA idéntica a la ficha: se teclea PRECIO sin IVA, se muestra el PVP
-// con IVA derivado. Sin doble criterio, sin deriva de céntimos.
+// CONVENCIÓN DE IVA (corregida 17/08): menu_item.price es el precio CON IVA
+// INCLUIDO, no la base imponible. Verificado contra ventas reales -- 2.925
+// líneas con sale_line.unit_price = price EXACTO, cero a price*1,10. Antes se
+// tecleaba creyendo que era base y se pintaba un PVP inflado que no existía.
+// El ingreso neto (price/(1+IVA)) es lo que entra en caja y lo que mide el
+// margen; el IVA es dinero de Hacienda.
 //
 // ─── REDISEÑO 17/08 (claude/folvy_sistema_visual_v1.md) ──────────────────────
 // Solo presentación. Misma cascada, misma escritura por ámbito, mismo backend,
@@ -64,7 +68,7 @@ interface EditPricesModalProps {
   menuItemId: string
   accountId: string          // solo para leer sales_channel.color (ver channelDotColor)
   productName: string
-  basePrice: number          // menu_item.price (SIN IVA)
+  basePrice: number          // menu_item.price (IVA INCLUIDO)
   vatRate: number
   brandName?: string         // solo cabecera ("{producto} · {marca}")
   onClose: () => void
@@ -275,7 +279,11 @@ export default function EditPricesModal({
   }, [brandChannels])
 
   const defNum = parseNum(defaultPrice)
-  const defPvp = defNum !== null ? Math.round(defNum * (1 + (vatRate ?? 0) / 100) * 100) / 100 : null
+  // menu_item.price YA es el precio que paga el cliente: el PVP es el precio,
+  // no el precio por (1+IVA). Antes esto inventaba una cifra que no existia.
+  const defPvp = defNum
+  // Lo que entra en caja: el IVA es dinero de Hacienda, no ingreso de la casa.
+  const defNeto = defNum !== null ? defNum / (1 + (vatRate ?? 0) / 100) : null
 
   // Cambios pendientes. Una fila cuenta UNA vez aunque le hayas tocado precio y
   // 86; el precio base cuenta como su propia fila. Con 0 pendientes, Guardar se
@@ -442,8 +450,15 @@ export default function EditPricesModal({
                 </div>
                 <div className="flex items-start gap-3 shrink-0">
                   <div className="text-right pt-0.5">
+                    {/* El PVP cliente ES el precio: ya no se deriva nada. Lo que
+                        de verdad aporta información aquí es el INGRESO NETO —
+                        lo que queda para la casa una vez fuera el IVA, y contra
+                        lo que se mide el margen. */}
                     <div className="text-[9.5px] uppercase tracking-[.1em] text-tinta-45">PVP cliente</div>
                     <div className="font-mono tabular-nums text-[13px] text-tinta-70">{fmtEur(defPvp)}</div>
+                    <div className="text-[9.5px] text-tinta-45 mt-0.5">
+                      neto <span className="font-mono tabular-nums">{fmtEur(defNeto)}</span>
+                    </div>
                   </div>
                   <div>
                     <input
@@ -457,7 +472,7 @@ export default function EditPricesModal({
                           ? 'bg-lavado border border-transparent text-tinta-25'
                           : `bg-card text-tinta ${dirtyBase ? 'border-[1.5px] border-dashed border-tinta font-semibold' : 'border border-linea-fuerte'}`}`}
                     />
-                    <div className="text-[9.5px] text-tinta-45 text-right mt-0.5">SIN IVA</div>
+                    <div className="text-[9.5px] text-tinta-45 text-right mt-0.5">IVA INCLUIDO</div>
                   </div>
                 </div>
               </div>

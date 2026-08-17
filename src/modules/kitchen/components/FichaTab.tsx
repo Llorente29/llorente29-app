@@ -345,7 +345,7 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1.5">Precio base (€ sin IVA)</label>
+            <label className="block text-xs font-medium text-stone-500 mb-1.5">Precio base (€ IVA incluido)</label>
             <input
               type="text" inputMode="decimal" value={priceVal} onChange={(e) => setPriceVal(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"

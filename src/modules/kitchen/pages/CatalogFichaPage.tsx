@@ -967,7 +967,7 @@ export default function CatalogFichaPage({
               <div className="font-mono text-[26px] font-medium tracking-tight">
                 {noProductAnchor ? 'Sin producto' : itemLoading && !item ? '…' : !pvp ? 'Sin precio' : fmtEur(pvp)}
               </div>
-              <div className="text-xs text-stone-500">PVP sin IVA</div>
+              <div className="text-xs text-stone-500">PVP (IVA incl.)</div>
             </div>
           </div>
 

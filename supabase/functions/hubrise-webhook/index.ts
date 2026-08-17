@@ -277,6 +277,77 @@ async function resolveAutoAccept(
 // ── upsertSale: crea o REFRESCA la venta desde el pedido HubRise. NO la cierra. ──
 // Idempotente por external_ref = order.id. GUARD: una venta ya closed/cancelled
 // NO se re-adapta (un update tardío no corrompe una venta consolidada).
+// ── Cliente y dirección de entrega (17/08) ──────────────────────────────────
+// HubRise SÍ manda la dirección, y la manda bien: va en `customer`, no en
+// `delivery` (ese bloque llega como JSON null). Verificado en raw_tab de los 4
+// pedidos reales de Just Eat de Alcalá — address_1, address_2, city,
+// postal_code, latitude, longitude, phone y delivery_notes vienen rellenos.
+// Y solo donde toca: en Uber Eats, address_1 llega NULL en 4 de 4, que es
+// correcto porque reparte Uber.
+//
+// Folvy no lo leía. Por eso todos los pedidos de reparto propio entrados por
+// HubRise se guardaban con delivery_address NULL y el sistema de reparto se
+// quedaba sin destino.
+//
+// FORMATO: EXACTAMENTE el de lastapp-webhook (buildCanonicalFields), porque es
+// lo que el sistema de reparto consume — catcher-dispatch lee sale.delivery_address
+// como texto de destino. Last.app compone [address, details, postalCode] unidos
+// por ", ": "Calle de Manipa, 7, 7, 28027". SIN ciudad.
+//
+// ⚠️ OJO CON address_2 — no es lo que su nombre sugiere. Verificado en los 4
+// pedidos reales de Just Eat: address_1 YA trae calle, número y piso/puerta
+// ("Calle de Vinaroz, 38, 2A") y address_2 es LA CIUDAD ("Madrid"), idéntica a
+// `city`, en 4 de 4. Componer [address_1, address_2, postal_code] a ciegas
+// metería la ciudad y rompería el formato que el reparto sabe leer.
+//
+// Por eso address_2 solo entra si DIFIERE de city: hoy nunca entra (es la
+// ciudad), pero si otro canal o país lo usa de verdad como detalle, no se
+// pierde. Comparación laxa (minúsculas, sin espacios sobrantes) porque es un
+// campo tecleado.
+//
+// (Si una dirección llega duplicada por dentro — "Bloque C, 3A, Bloque C, 3A" —
+// viene así del cliente en la plataforma, dentro de address_1. No se toca: es
+// la dirección que el cliente dio, y limpiarla a ojo es inventar.)
+//
+// Tolerante a nulos por diseño: sin dirección devuelve null y no compone nada.
+// Uber Eats llega sin address_1 en 4 de 4 y es correcto — reparte Uber.
+function buildCustomerFields(order: Record<string, unknown>): {
+  delivery_address: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_note: string | null;
+} {
+  const c = (order["customer"] ?? null) as Record<string, unknown> | null;
+  const s = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+  const norm = (v: string): string => v.toLowerCase().replace(/\s+/g, " ").trim();
+  const city = c ? s(c["city"]) : "";
+  const addr2 = c ? s(c["address_2"]) : "";
+  const addrParts = c
+    ? [
+        s(c["address_1"]),
+        // solo si NO es la ciudad repetida (ver cabecera)
+        addr2 && norm(addr2) !== norm(city) ? addr2 : "",
+        s(c["postal_code"]),
+      ].filter(Boolean)
+    : [];
+  const name = c ? [s(c["first_name"]), s(c["last_name"])].filter(Boolean).join(" ").trim() : "";
+
+  // delivery_notes es la nota PARA EL RIDER (portal, piso, código). Va a
+  // customer_note porque es el campo que catcher-dispatch envía como `details`
+  // del reparto. Si no hay, cae a la nota de pedido (customer_notes, nivel
+  // raíz) para no perderla — nunca se mezclan las dos: son cosas distintas.
+  const deliveryNote = c ? s(c["delivery_notes"]) : "";
+  const orderNote = s(order["customer_notes"]);
+
+  return {
+    delivery_address: addrParts.length ? addrParts.join(", ") : null,
+    customer_name: name || null,
+    customer_phone: (c ? s(c["phone"]) : "") || null,
+    customer_note: deliveryNote || orderNote || null,
+  };
+}
+
 async function upsertSale(
   sb: SupabaseClient, accountId: string, locationId: string | null,
   order: Record<string, unknown>,
@@ -304,6 +375,9 @@ async function upsertSale(
     tax: null,          // HubRise da tax_rate por línea; total de impuesto no directo (futuro)
     taxable_base: null,
     service_type: mapServiceType(order["service_type"] as string | null, caches.deliveryServiceType),
+    // Cliente y destino de entrega. Sin esto el reparto propio se quedaba sin
+    // dirección (ver buildCustomerFields).
+    ...buildCustomerFields(order),
     raw_products: JSON.stringify(order["items"] ?? []),
     raw_tab: JSON.stringify(order),
   };

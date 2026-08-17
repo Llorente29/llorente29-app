@@ -20,7 +20,27 @@
 //   da (external_location_id, external_brand_id=connection_name) cruzado con
 //   external_integration (source=hubrise) -> access_token + catálogo (el path
 //   de siempre para marcas montadas a mano con bridge, p.ej. Bendito Burrito).
-//   Una marca puede tener N catálogos (multi-local); se publica a cada uno.
+//   Una marca puede tener N catálogos (multi-local); se publica a cada uno,
+//   SALVO que se acote con location_id (ver abajo).
+//
+// ÁMBITO (17/08). Body: { brand_id, location_id?, dry_run? }
+//   · location_id OMITIDO = comportamiento de siempre, byte a byte: todos los
+//     catálogos de la marca. hubrise-brand-connect la llama así.
+//   · location_id PRESENTE = solo el catálogo de ese local. Si ese local no
+//     tiene catálogo, NO se publica nada y se dice — nunca se cae hacia atrás
+//     a "publicar todos", que es justo el daño que esto viene a evitar:
+//     publicar Bendito Burrito para Carabanchel republicaba también el j99jm
+//     de Alcalá, en producción desde el 06/08.
+//   · dry_run = dice qué catálogo se publicaría y con qué precios, sin enviar
+//     un solo byte a HubRise (sale antes del PUT y antes de subir imágenes).
+//
+// PRECIO POR LOCAL (17/08). El precio base del sku se resuelve por local, no
+//   solo los price_overrides por canal. Antes el sku llevaba siempre el precio
+//   de MARCA y el local únicamente entraba por los overrides de canal: un
+//   override de local con channel_id NULL (precio propio del local, sin canal)
+//   no cambiaba nada del payload. Hoy no se nota — Carabanchel no tiene ningún
+//   menu_item_override con location_id — pero habría aparecido solo con el
+//   primero, publicando precios de marca en el escaparate de otro local.
 //
 // sku_ref = menu_item.external_id (la MISMA matrícula que usa el 86). Donde falte
 //   (marcas nacidas en Folvy), se genera y PERSISTE 'fv_<id>' para que publicar y
@@ -76,7 +96,7 @@ function resolveOverridePrice(
   return channelGlobal !== undefined ? channelGlobal : null;
 }
 
-// ── T2c: imágenes ───────────────────────────────────────────────────────────
+// ── T2c: imágenes ────────────────────────────────────────────────────────
 // Cloudinary: insertar una transformación tras /upload/ para cumplir el límite de
 // 1 MB de HubRise (y servir webp ligero). Si no es Cloudinary, se sube tal cual.
 function cloudinaryResized(url: string): string {
@@ -169,9 +189,22 @@ Deno.serve(async (req: Request) => {
   const user = userData?.user ?? null;
   if (!user) return json({ ok: false, error: "no autenticado" }, 401);
 
-  let body: { brand_id?: string } = {};
+  // location_id (OPCIONAL, 17/08) — acota la publicación al catálogo de UN
+  // local. Omitido = comportamiento de siempre (todos los catálogos de la
+  // marca), byte a byte: hubrise-brand-connect la llama así y no se rompe.
+  //
+  // POR QUÉ HACÍA FALTA: sin esto, publicar Bendito Burrito para Carabanchel
+  // republicaba también el catálogo j99jm de Alcalá, que lleva desde el 06/08
+  // recibiendo pedidos reales. Es el mismo motivo por el que
+  // hubrise-catalog-create se escribió aparte en vez de reusar brand-connect.
+  //
+  // dry_run (OPCIONAL) — dice QUÉ catálogo se publicaría y CON QUÉ precios, sin
+  // hacer el PUT. Ni un byte sale hacia HubRise.
+  let body: { brand_id?: string; location_id?: string; dry_run?: boolean } = {};
   try { body = await req.json(); } catch { /* ignore */ }
   const brandId = body.brand_id;
+  const requestedLocationId = body.location_id ? body.location_id : null;
+  const dryRun = body.dry_run === true;
   if (!brandId) return json({ ok: false, error: "brand_id requerido" }, 400);
 
   // ── Autorización por RLS: leer la marca con el cliente del USUARIO ─────────
@@ -257,6 +290,33 @@ Deno.serve(async (req: Request) => {
     }, 200);
   }
 
+  // ── Acotado por local ────────────────────────────────────────────────────
+  // Se filtra AQUÍ, después de resolver conexiones por los dos caminos
+  // (brand_hubrise_catalog primario y external_brand_map de compat), para no
+  // duplicar la lógica de resolución ni dejar un camino sin acotar.
+  const connsTotal = conns.length;
+  let descartadasPorAmbito = 0;
+  if (requestedLocationId) {
+    const kept = conns.filter((c) => c.locationId === requestedLocationId);
+    descartadasPorAmbito = conns.length - kept.length;
+    conns.length = 0;
+    conns.push(...kept);
+    if (conns.length === 0) {
+      // Nunca publicar "por si acaso" a todos cuando se pidió uno: si el local
+      // pedido no tiene catálogo, se dice y no se toca nada.
+      return json({
+        ok: false,
+        scope: "single",
+        requested_location_id: requestedLocationId,
+        error: `La marca no tiene catálogo HubRise en el local pedido (se descartaron ${descartadasPorAmbito} catálogo(s) de otros locales). No se ha publicado nada.`,
+      }, 200);
+    }
+  }
+  console.log(
+    `hubrise-catalog-publish: brand=${brandId} scope=${requestedLocationId ? `single(${requestedLocationId})` : "all"} ` +
+    `catalogos=${conns.length}/${connsTotal} dry_run=${dryRun}`,
+  );
+
   // ── Crear el trabajo de publicación ───────────────────────────────────────
   const { data: pub, error: pubErr } = await sb.from("catalog_publish")
     .insert({ account_id: accountId, brand_id: brandId, requested_by: user.id, status: "pending" })
@@ -265,7 +325,7 @@ Deno.serve(async (req: Request) => {
   const publishId = pub.id as string;
 
   try {
-    // ── Cargar la carta (service_role) ──────────────────────────────────────
+    // ── Cargar la carta (service_role) ────────────────────────────────────
     const [{ data: cats }, { data: items }] = await Promise.all([
       sb.from("menu_category")
         .select("id, name, emoji, position, parent_id, is_active")
@@ -480,7 +540,7 @@ Deno.serve(async (req: Request) => {
       (slotsByCombo.get(k) ?? slotsByCombo.set(k, []).get(k)!).push(s);
     }
 
-    // ── Construir categorías ────────────────────────────────────────────────
+    // ── Construir categorías ─────────────────────────────────────────────────
     const catSet = new Set((cats ?? []).filter((c) => c.is_active !== false).map((c) => c.id as string));
     let usesUncat = false;
     const categories: Array<Record<string, unknown>> = (cats ?? [])
@@ -515,12 +575,30 @@ Deno.serve(async (req: Request) => {
       return sortedProducts.map((p) => {
         const ref = refById.get(p.id as string)!;
         const olRefs = groupsByItem.get(p.id as string) ?? [];
-        const sku: Record<string, unknown> = { ref, price: eur(p.price) };
+        // ── PRECIO BASE DEL SKU, POR LOCAL (17/08) ──────────────────────────
+        // ANTES: price: eur(p.price) -- el precio de MARCA, siempre.
+        //
+        // El local solo entraba por los price_overrides POR CANAL, así que un
+        // override de local con channel_id NULL (un precio propio del local, no
+        // de un canal) no cambiaba el precio base publicado: se habría mandado
+        // el precio de la marca al escaparate de ese local. Hoy no se nota
+        // porque Carabanchel no tiene ningún menu_item_override con location_id,
+        // pero aparecería solo en cuanto se ponga el primero.
+        //
+        // Misma prioridad que effective_price(): (local, sin canal) -> base de
+        // marca. La rama (local+canal) sigue viviendo en price_overrides, que es
+        // donde HubRise la espera.
+        const locBase = locationId
+          ? priceIndex.get(`${p.id as string}::__null__::${locationId}`)
+          : undefined;
+        const basePrice = locBase ?? Number(p.price ?? 0);
+        const sku: Record<string, unknown> = { ref, price: eur(basePrice) };
         if (olRefs.length > 0) sku.option_list_refs = olRefs;
         // T2b + F1.6: precio por canal (price_overrides) con cascada por local
         // (resolveOverridePrice, misma prioridad que effective_price); 86 por
         // canal (restrictions) sigue channel-global (ovByItem, sin local).
-        const basePrice = Number(p.price ?? 0);
+        // Se compara contra el basePrice YA resuelto por local: un override que
+        // coincida con el precio del local no se emite (sería ruido idéntico).
         const priceOverrides: Array<Record<string, unknown>> = [];
         for (const c of deliveryChannels) {
           const resolved = resolveOverridePrice(priceIndex, p.id as string, c.id as string, locationId);
@@ -660,7 +738,7 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    // ── Targets a publicar ─────────────────────────────────────────────────
+    // ── Targets a publicar ──────────────────────────────────────────────
     // Con token escritor: 1 target POR CATÁLOGO DISTINTO (dedup — las N
     // conexiones/plataformas de una marca comparten el mismo catálogo en
     // HubRise, así que hoy se hacían N PUT idénticos, con N-1 de más en 403).
@@ -686,6 +764,44 @@ Deno.serve(async (req: Request) => {
       publishTargets = conns.map((c) => (
         { catalogId: c.catalogId, token: c.token, connName: c.connName, locationId: c.locationId }
       ));
+    }
+
+    // ── DRY RUN: qué se publicaría y con qué precios, sin publicar ───────────
+    // Sale ANTES del bucle de PUT: ni una petición hacia HubRise. Devuelve el
+    // catálogo de destino y los precios ya resueltos por local, que es lo que
+    // hay que mirar antes de tocar un escaparate vivo.
+    if (dryRun) {
+      const preview = publishTargets.map((t) => {
+        const prods = productsPayloadFor(t.locationId);
+        return {
+          external_catalog_id: t.catalogId,
+          connection_name: t.connName,
+          location_id: t.locationId,
+          productos: prods.length,
+          // Muestra acotada: publicar entero son cientos de líneas y aquí lo
+          // que importa es si el PRECIO es el del local o el de la marca.
+          precios: prods.slice(0, 25).map((p) => ({
+            ref: p.ref,
+            price: p.price,
+            price_overrides: p.price_overrides ?? null,
+          })),
+          precios_truncados: prods.length > 25 ? prods.length - 25 : 0,
+        };
+      });
+      await sb.from("catalog_publish").update({ status: "done", finished_at: new Date().toISOString() })
+        .eq("id", publishId).then(() => {}, () => {});
+      return json({
+        ok: true,
+        dry_run: true,
+        publicado: false,
+        brand_id: brandId,
+        scope: requestedLocationId ? "single" : "all",
+        requested_location_id: requestedLocationId,
+        catalogos_en_alcance: conns.length,
+        catalogos_descartados_por_ambito: descartadasPorAmbito,
+        targets: preview,
+        nota: "DRY RUN: no se ha enviado nada a HubRise. Ningún catálogo se ha modificado.",
+      }, 200);
     }
 
     // ── Publicar (PUT reemplaza el catálogo) ──────────────────────────────────
