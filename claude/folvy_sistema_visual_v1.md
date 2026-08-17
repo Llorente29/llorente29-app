@@ -133,7 +133,47 @@ Un campo que pertenece al ámbito superior se muestra **bloqueado con su salida*
 fondo `--lavado`, y un enlace que **conmuta el selector** al ámbito donde sí se puede editar.
 Bloquear sin dar salida es un callejón.
 
-## 6. Norma de proceso
+## 6. Decisiones pendientes y deuda declarada
+
+Deuda 0: ninguna deuda en silencio. Lo de abajo está también en el código, en el
+punto exacto donde se decide, no solo aquí.
+
+### 6.1 · Bandas de salud del margen — DECISIÓN INTERINA (17/08)
+
+> `foodCostStatus === 'over'` es un sustituto interino del ámbar. No es lo mismo
+> que «margen apretado»: es coste de comida por encima del objetivo. Las bandas
+> de salud del margen (dónde acaba sano y empieza aprieta) son una decisión de
+> diseño pendiente, no un detalle de implementación. Consecuencia asumida: hasta
+> que haya escandallos, el ámbar no aparece.
+
+Dónde vive: `marginTone()` en `EditPricesModal.tsx`. Se eligió así para **no
+inventar un umbral de negocio en cliente**: los dos campos que usa (`netMargin`,
+`foodCostStatus`) los calcula el servidor.
+
+### 6.2 · Color de identidad del canal — deuda declarada (17/08)
+
+La fuente de verdad es `sales_channel.color`. El componente ya lo lee y solo cae
+a un mapa por nombre cuando viene NULL — el mapa es **fallback explícito, no
+fuente de verdad**.
+
+Estado real en BBDD a 17/08, verificado por consulta: **tres cuentas, 15 canales
+vivos, 0 con color**.
+
+| Cuenta | Canales vivos |
+|---|---|
+| Foodint | Glovo · JustEat · Mostrador · Shop · Uber |
+| Folvy Interno | Glovo · JustEat · Mostrador · Shop · Uber |
+| Kitchen Grill LstQ | Glovo · JustEat · **Salón** · Shop · Uber |
+
+**El fallback ya falla hoy:** «Salón» (Kitchen Grill LstQ) no lo caza ninguna
+regex y sale gris. Acoplar presentación al nombre que un tenant le puso a su
+canal es deuda silenciosa en su forma más pura, y aparece justo en el frente de
+Fase 0, **antes de admitir cliente 2**.
+
+Disparador: poblar `sales_channel.color`. Es escritura → laboratorio primero y
+con consulta de contraste delante. Hecho eso, el mapa por nombre se borra.
+
+## 7. Norma de proceso
 
 Recogida como **principio rector 6** en `CONTEXTO_CLAUDE.md` (commit `325e973`):
 toda pantalla nueva de cara al cliente **se maqueta y se aprueba antes de construirse**.

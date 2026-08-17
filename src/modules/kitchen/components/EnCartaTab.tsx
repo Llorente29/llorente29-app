@@ -313,6 +313,7 @@ export default function EnCartaTab({ item, accountId, brandName, onItemChanged }
       {showPrices && (
         <EditPricesModal
           menuItemId={item.id}
+          accountId={accountId}
           productName={item.name}
           basePrice={item.price ?? 0}
           vatRate={item.vatRate ?? 0}

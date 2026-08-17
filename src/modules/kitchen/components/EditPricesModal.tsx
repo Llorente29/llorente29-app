@@ -57,10 +57,12 @@ import {
 } from '@/modules/kitchen/services/menuOverrideService'
 import { updateMenuItem } from '@/modules/kitchen/services/menuItemService'
 import { useVisibleLocations } from '@/modules/multitenancy/hooks/useVisibleLocations'
+import { listSalesChannels } from '@/modules/kitchen/services/channelRateService'
 import { fmtNum } from '@/lib/format'
 
 interface EditPricesModalProps {
   menuItemId: string
+  accountId: string          // solo para leer sales_channel.color (ver channelDotColor)
   productName: string
   basePrice: number          // menu_item.price (SIN IVA)
   vatRate: number
@@ -96,19 +98,39 @@ function sameValue(a: string, b: string): boolean {
 
 // Identidad de terceros, NO paleta Folvy — por eso se permite el color aquí y en
 // ningún otro sitio de la fila (ver sistema visual v1 §2).
-const CHANNEL_DOT: Array<[RegExp, string]> = [
+//
+// 🔴 DEUDA DECLARADA (17/08) — este mapa es FALLBACK, no fuente de verdad.
+// La fuente de verdad es sales_channel.color. Hoy está a NULL en las 15 filas
+// de las TRES cuentas de la BBDD (Foodint, Folvy Interno, Kitchen Grill LstQ),
+// verificado por consulta, así que el fallback es lo único que pinta. Y ya
+// falla: «Salón» (canal de Kitchen Grill LstQ) no lo caza ninguna regex y sale
+// gris. Acoplar presentación al nombre que un tenant le puso a su canal es
+// deuda silenciosa, y aparece justo en el frente de Fase 0, antes de admitir
+// cliente 2. Disparador: poblar sales_channel.color (escritura, en laboratorio
+// primero y con consulta de contraste delante) — hecho eso, este mapa se borra.
+const CHANNEL_DOT_FALLBACK: Array<[RegExp, string]> = [
   [/glovo/i, '#F5C000'],
   [/just\s*eat/i, '#FF8000'],
   [/uber/i, '#111111'],
 ]
-function channelDotColor(name: string): string {
-  for (const [re, hex] of CHANNEL_DOT) if (re.test(name)) return hex
-  return '#B9BDC2'   // tinta-25: canal sin identidad propia (Mostrador, Shop…)
+function channelDotColor(name: string, colorFromDb: string | null | undefined): string {
+  if (colorFromDb) return colorFromDb          // sales_channel.color manda
+  for (const [re, hex] of CHANNEL_DOT_FALLBACK) if (re.test(name)) return hex
+  return '#B9BDC2'   // tinta-25: canal sin identidad conocida (Mostrador, Shop, Salón…)
 }
 
 // Salud del margen — el ÚNICO color fuerte de la pantalla. Se deriva solo de
 // campos que ya calcula el servidor (netMargin, foodCostStatus): aquí no se
 // inventa ningún umbral de negocio.
+//
+// ⚠️ DECISIÓN INTERINA (17/08, aprobada por Julio como tal):
+//
+//   foodCostStatus === 'over' es un sustituto interino del ámbar. No es lo
+//   mismo que «margen apretado»: es coste de comida por encima del objetivo.
+//   Las bandas de salud del margen (dónde acaba sano y empieza aprieta) son
+//   una decisión de diseño pendiente, no un detalle de implementación.
+//   Consecuencia asumida: hasta que haya escandallos, el ámbar no aparece.
+//
 function marginTone(row: ChannelEconomics | undefined, margin: number | null): string {
   if (margin === null) return 'text-tinta-25'
   if (margin < 0) return 'text-danger'
@@ -117,7 +139,7 @@ function marginTone(row: ChannelEconomics | undefined, margin: number | null): s
 }
 
 export default function EditPricesModal({
-  menuItemId, productName, basePrice, vatRate, brandName, onClose, onSaved,
+  menuItemId, accountId, productName, basePrice, vatRate, brandName, onClose, onSaved,
 }: EditPricesModalProps) {
   const { visibleLocations } = useVisibleLocations()
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
@@ -135,6 +157,23 @@ export default function EditPricesModal({
   const [saving, setSaving] = useState(false)
   const [clearingChannelId, setClearingChannelId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Color de identidad del canal, de la BBDD. Reutiliza listSalesChannels (que ya
+  // lee sales_channel.color) en vez de duplicar la consulta. Si falla, el
+  // fallback por nombre cubre y el modal no se rompe por un adorno.
+  const [channelColors, setChannelColors] = useState<Record<string, string | null>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    listSalesChannels(accountId)
+      .then((cs) => {
+        if (cancelled) return
+        const m: Record<string, string | null> = {}
+        for (const c of cs) m[c.id] = c.color
+        setChannelColors(m)
+      })
+      .catch(() => { /* fallback por nombre */ })
+    return () => { cancelled = true }
+  }, [accountId])
 
   // Carga inicial (y recarga al cambiar de local): economía por canal en su
   // estado guardado PARA ESE ÁMBITO. Con local elegido, el input de precio se
@@ -478,7 +517,7 @@ export default function EditPricesModal({
                           <div className="min-w-0 pt-1.5">
                             <div className="flex items-center gap-2 min-w-0">
                               <span aria-hidden className="w-2 h-2 rounded-[2px] shrink-0"
-                                style={{ backgroundColor: channelDotColor(ch.channelName) }} />
+                                style={{ backgroundColor: channelDotColor(ch.channelName, channelColors[ch.channelId]) }} />
                               <span className="text-[13px] font-medium text-tinta truncate">{ch.channelName}</span>
                             </div>
                             {lv?.serviceType === 'own_delivery' && (lv?.orderCostsPerItem ?? 0) > 0 && (
