@@ -66,15 +66,13 @@
 // hubrise-webhook). El token no sale de esta función: ni al cliente, ni a la
 // respuesta, ni a un log.
 
-// ESTADO DE DESPLIEGUE (17/08, 09:2x) — v1 ACTIVE, verify_jwt=true.
-// ⚠️ DIVERGENCIA DECLARADA: lo desplegado en v1 es este mismo código con la
-// cabecera de comentarios QUITADA y los acentos retirados de los mensajes de
-// error ("conexion" en vez de "conexión"). La lógica es idéntica sentencia a
-// sentencia — el payload se derivó de este fichero — pero NO es byte a byte, y
-// no se va a decir que lo es. Causa: el despliegue fue por MCP con los ficheros
-// en línea (no hay SUPABASE_ACCESS_TOKEN en el contenedor para usar el CLI, que
-// sube el repo tal cual). SE CORRIGE en el v2 que salga del ensayo de
-// laboratorio, que además es el despliegue donde toca usar el CLI.
+// ESTADO DE DESPLIEGUE — v2 (17/08, tras las 23:45), verify_jwt=true.
+// El v1 (09:2x) se desplegó con la cabecera de comentarios quitada y los
+// acentos fuera de los mensajes de error: la lógica era idéntica sentencia a
+// sentencia pero NO byte a byte, y así se declaró en su momento en vez de
+// llamarlo "compila". El v2 sube ESTE fichero tal cual, con sus comentarios y
+// sus acentos, y se verifica con un diff contra get_edge_function. Con eso el
+// repo vuelve a ser la verdad de lo que corre y la divergencia queda cerrada.
 //
 // TRAMPA DE NOMBRES, nivel marca (además de la de locales): "Bendito Burrito"
 // existe en las DOS cuentas —95635ce3… en Foodint (producción) y 73673376… en
