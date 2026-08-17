@@ -96,7 +96,7 @@ function resolveOverridePrice(
   return channelGlobal !== undefined ? channelGlobal : null;
 }
 
-// ── T2c: imágenes ────────────────────────────────────────────────────────
+// ── T2c: imágenes ─────────────────────────────────────────────────────
 // Cloudinary: insertar una transformación tras /upload/ para cumplir el límite de
 // 1 MB de HubRise (y servir webp ligero). Si no es Cloudinary, se sube tal cual.
 function cloudinaryResized(url: string): string {
@@ -179,7 +179,7 @@ Deno.serve(async (req: Request) => {
   const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-  // ── Auth: validar usuario por su JWT ──────────────────────────────────────
+  // ── Auth: validar usuario por su JWT ────────────────────────────────────
   const authHeader = req.headers.get("Authorization") ?? "";
   const sbUser = createClient(SUPABASE_URL, ANON, {
     global: { headers: { Authorization: authHeader } },
@@ -290,7 +290,7 @@ Deno.serve(async (req: Request) => {
     }, 200);
   }
 
-  // ── Acotado por local ────────────────────────────────────────────────────
+  // ── Acotado por local ─────────────────────────────────────────────────
   // Se filtra AQUÍ, después de resolver conexiones por los dos caminos
   // (brand_hubrise_catalog primario y external_brand_map de compat), para no
   // duplicar la lógica de resolución ni dejar un camino sin acotar.
@@ -317,7 +317,7 @@ Deno.serve(async (req: Request) => {
     `catalogos=${conns.length}/${connsTotal} dry_run=${dryRun}`,
   );
 
-  // ── Crear el trabajo de publicación ───────────────────────────────────────
+  // ── Crear el trabajo de publicación ───────────────────────────────────
   const { data: pub, error: pubErr } = await sb.from("catalog_publish")
     .insert({ account_id: accountId, brand_id: brandId, requested_by: user.id, status: "pending" })
     .select("id").single();
@@ -325,7 +325,7 @@ Deno.serve(async (req: Request) => {
   const publishId = pub.id as string;
 
   try {
-    // ── Cargar la carta (service_role) ────────────────────────────────────
+    // ── Cargar la carta (service_role) ──────────────────────────────────
     const [{ data: cats }, { data: items }] = await Promise.all([
       sb.from("menu_category")
         .select("id, name, emoji, position, parent_id, is_active")
@@ -540,7 +540,7 @@ Deno.serve(async (req: Request) => {
       (slotsByCombo.get(k) ?? slotsByCombo.set(k, []).get(k)!).push(s);
     }
 
-    // ── Construir categorías ─────────────────────────────────────────────────
+    // ── Construir categorías ─────────────────────────────────────────────
     const catSet = new Set((cats ?? []).filter((c) => c.is_active !== false).map((c) => c.id as string));
     let usesUncat = false;
     const categories: Array<Record<string, unknown>> = (cats ?? [])
@@ -564,7 +564,7 @@ Deno.serve(async (req: Request) => {
     // idx compartido entre ambos colisionaría — ver ENCARGO fotos-combos 06/08).
     const refToItemId = new Map<string, string>();
 
-    // ── Construir products (skus) ───────────────────────────────────────────
+    // ── Construir products (skus) ────────────────────────────────────────
     const sortedProducts = products
       .sort((a, b) => Number((a as Record<string, unknown>).position ?? 0) - Number((b as Record<string, unknown>).position ?? 0));
 
@@ -575,7 +575,7 @@ Deno.serve(async (req: Request) => {
       return sortedProducts.map((p) => {
         const ref = refById.get(p.id as string)!;
         const olRefs = groupsByItem.get(p.id as string) ?? [];
-        // ── PRECIO BASE DEL SKU, POR LOCAL (17/08) ──────────────────────────
+        // ── PRECIO BASE DEL SKU, POR LOCAL (17/08) ────────────────────────
         // ANTES: price: eur(p.price) -- el precio de MARCA, siempre.
         //
         // El local solo entraba por los price_overrides POR CANAL, así que un
@@ -673,7 +673,7 @@ Deno.serve(async (req: Request) => {
       if (url) imgTargets.push({ itemId: c.id as string, photoUrl: url });
     }
 
-    // ── Construir deals (combos) ────────────────────────────────────────────
+    // ── Construir deals (combos) ─────────────────────────────────────────
     const dealsPayload: Array<Record<string, unknown>> = [];
     for (const c of combos) {
       const cSlots = (slotsByCombo.get(c.id as string) ?? [])
@@ -738,7 +738,7 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    // ── Targets a publicar ──────────────────────────────────────────────
+    // ── Targets a publicar ────────────────────────────────────────────
     // Con token escritor: 1 target POR CATÁLOGO DISTINTO (dedup — las N
     // conexiones/plataformas de una marca comparten el mismo catálogo en
     // HubRise, así que hoy se hacían N PUT idénticos, con N-1 de más en 403).
@@ -788,7 +788,11 @@ Deno.serve(async (req: Request) => {
           precios_truncados: prods.length > 25 ? prods.length - 25 : 0,
         };
       });
-      await sb.from("catalog_publish").update({ status: "done", finished_at: new Date().toISOString() })
+      // catalog_publish NO tiene finished_at (sus columnas son id, account_id,
+      // brand_id, requested_by, requested_at, status, note). Pedirla devolvía 400
+      // y el .then(ok, err) se lo tragaba: la fila se quedaba en 'pending' para
+      // siempre. Verificado en information_schema el 18/08.
+      await sb.from("catalog_publish").update({ status: "done" })
         .eq("id", publishId).then(() => {}, () => {});
       return json({
         ok: true,
