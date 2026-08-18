@@ -11,7 +11,7 @@
 // normal de editar el plato, sin separación posible hoy — "sin rediseñar
 // la pantalla, simplemente el rol no entra ahí". Quien no tenga show_costes
 // tampoco puede editar platos/menús desde aquí.
-import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2 } from 'lucide-react'
+import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2, Table2 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
@@ -30,6 +30,10 @@ import PlatformOffersPage from '@/modules/kitchen/pages/PlatformOffersPage'
 import KitchenAvailabilityPage from '@/modules/kitchen/pages/KitchenAvailabilityPage'
 import AvailabilityReportsPage from '@/modules/kitchen/pages/AvailabilityReportsPage'
 import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
+// REJILLA DE PRECIOS (18/08): todos los precios de una marca por canal, para
+// auditarlos y corregirlos en lote. No publica en plataformas.
+import PriceGridPage from '@/modules/kitchen/pages/PriceGridPage'
+import PriceGridErrorBoundary from '@/modules/kitchen/components/PriceGridErrorBoundary'
 
 export const kitchenModule: ModuleDefinition = {
   // Identidad
@@ -51,6 +55,10 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'disponibilidad-informes', element: <AvailabilityReportsPage /> },
     { path: 'proveedores',       element: <SuppliersPage /> },
     { path: 'recetas',           element: <KitchenRecipesPage /> },
+    // Cortafuegos de vista: la rejilla no se ha podido abrir en un navegador
+    // desde este contenedor (sin sesión). Si revienta al dibujarse, se queda
+    // dentro y no tumba el resto de la app.
+    { path: 'precios',           element: <PriceGridErrorBoundary><PriceGridPage /></PriceGridErrorBoundary> },
     { path: 'rentabilidad',      element: <KitchenProfitabilityPage /> },
     { path: 'ingenieria-menus',  element: <KitchenMenuEngineeringPage /> },
     { path: 'ofertas',           element: <AgentOffersPage /> },
@@ -69,6 +77,7 @@ export const kitchenModule: ModuleDefinition = {
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },
       { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,             path: 'proveedores',      requiredRole: 'manager', requiredPermission: 'show_proveedores' },
       { id: 'kitchen_recipes',       label: 'Platos',              icon: BookOpen,          path: 'recetas',          requiredRole: 'manager', requiredPermission: 'show_costes' },
+      { id: 'kitchen_prices',        label: 'Precios',             icon: Table2,            path: 'precios',          requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,        path: 'rentabilidad',     requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,            path: 'ingenieria-menus', requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_offers',        label: 'Ofertas del agente',  icon: Megaphone,         path: 'ofertas',          requiredRole: 'manager' },
