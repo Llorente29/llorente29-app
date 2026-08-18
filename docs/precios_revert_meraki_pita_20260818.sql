@@ -1,0 +1,31 @@
+-- PREPARADO, NO EJECUTADO. Espera a que Julio lo diga (encargo del 18/08, §6).
+--
+-- Las dos ediciones de Meraki Pita del 18/08 12:50 se escribieron en ambito
+-- CUENTA, no en Alcala. Eso significa que 15,90 EUR vale tambien para
+-- Carabanchel, porque un precio de cuenta es el precio de los dos locales.
+--
+--   34abc60d-493e-46a1-9bd5-c40da313bd69  Glovo  13,90 -> 15,90
+--   5cc67946-9377-4de6-9dac-11c0a4c9f2c6  Uber   13,90 -> 15,90
+--   producto: The Mixed Master: Pita Mixta Gyros
+--
+-- NO se revierten por iniciativa propia: puede que 15,90 le valga para los dos
+-- locales, y en ese caso deshacerlo seria cambiarle el precio sin permiso.
+--
+-- Si decide deshacerlas, esto las devuelve a 13,90 en los dos canales. Cada
+-- revert escribe una operacion NUEVA (kind='revert'); no borra historial.
+-- Ejecutar con la sesion de un admin de Foodint, no con service_role: la RPC
+-- comprueba permisos con auth.uid().
+--
+-- Si decide QUEDARSE con 15,90 pero solo en Alcala, el camino es otro: revertir
+-- estas dos y volver a escribirlas con el ambito puesto en Alcala desde la
+-- rejilla, ahora que la barra de guardado dice donde escribe.
+
+-- select public.revert_price_operation('34abc60d-493e-46a1-9bd5-c40da313bd69'::uuid);
+-- select public.revert_price_operation('5cc67946-9377-4de6-9dac-11c0a4c9f2c6'::uuid);
+
+-- Comprobacion posterior:
+-- select o.location_id, o.price, sc.name as canal
+--   from menu_item_override o
+--   join sales_channel sc on sc.id = o.channel_id
+--  where o.menu_item_id = (select menu_item_id from menu_item_override_history
+--                           where operation_id = '34abc60d-493e-46a1-9bd5-c40da313bd69' limit 1);

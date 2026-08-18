@@ -1,44 +1,59 @@
 // src/modules/kitchen/pages/PriceGridPage.tsx
 //
 // REJILLA DE PRECIOS — una marca por pantalla, todos sus precios por canal.
-// Se audita y se corrige aquí, sin abrir un modal por producto.
 //
-// ── TRES COSAS QUE GOBIERNAN ESTA PANTALLA ─────────────────────────────────
+// ── LA REGLA QUE GOBIERNA LA EDICIÓN (18/08, tarde) ────────────────────────
+// NADA SE GUARDA SOLO. Editar celdas acumula CAMBIOS PENDIENTES; escribir en la
+// base ocurre en un único sitio: el botón Guardar de la barra de abajo, que
+// siempre está ahí.
 //
-// 1. EL PRECIO ES CON IVA, SIEMPRE. Es lo que paga el cliente. `price` de la
-//    RPC ya lo es desde el arreglo del 17/08; no se convierte nada.
+// Por qué se rehizo: la versión anterior intentaba guardar cada celda por su
+// cuenta y no tenía regla para el gesto más frecuente de todos —salir de la
+// celda pulsando en otro sitio—, así que cada camino hacía una cosa distinta.
+// Julio, en producción: «antes salió un guardar, ahora no, y si te sales de la
+// celda no lo guarda». Con este modelo el gesto ambiguo desaparece porque no
+// hay nada que decidir al salir de una celda: se queda pendiente, como todo.
 //
-// 2. EL PRECIO ES POR CANAL; EL MARGEN, POR CANAL × MODALIDAD. menu_item_override
-//    tiene channel_id y NO service_type: hay UN precio por canal. Pero el mismo
-//    1,90 € en Glovo deja −7,1 % con reparto propio y +63,0 % en recogida. Por
-//    eso la vista de PRECIO tiene una columna por canal (pintar el mismo número
-//    dos veces sugeriría dos precios que no existen) y la de MARGEN una por
-//    canal × modalidad, que es donde está la diferencia que decide una oferta.
-//    Al editar UNA celda se enseñan TODAS las modalidades de ese canal por lo
-//    mismo: tocar el precio de Glovo mueve a la vez su reparto y su recogida,
-//    y pueden ir en direcciones opuestas.
+// Salvo Esc, TODO lo que se teclea se queda como pendiente. Nunca se pierde lo
+// escrito, y nunca se escribe sin pasar por Guardar.
+//
+// La operación en lote alimenta LA MISMA lista de pendientes. Un solo camino de
+// guardado, un solo botón, una sola operación reversible. Tener dos caminos era
+// justamente lo que producía «a veces sale un guardar y a veces no».
+//
+// ── TRES COSAS QUE NO CAMBIAN ──────────────────────────────────────────────
+//
+// 1. EL PRECIO ES CON IVA, SIEMPRE. Es lo que paga el cliente.
+//
+// 2. EL PRECIO ES POR CANAL; EL MARGEN, POR CANAL × MODALIDAD. Hay UN precio por
+//    canal, pero el mismo 1,90 € en Glovo deja −7,1 % con reparto propio y
+//    +63,0 % en recogida. Por eso la vista de precio tiene una columna por canal
+//    y la de margen una por canal × modalidad.
 //
 // 3. LAS COMBINACIONES IMPOSIBLES NO SE PINTAN. El servidor las marca; aquí se
-//    listan aparte con su motivo. La que importa: uber/reparto propio da el
-//    mejor margen de la pantalla y no puede ocurrir — Uber siempre reparte Uber.
+//    listan aparte con su motivo.
 //
 // Sin escandallo ⇒ celda de margen VACÍA. Nunca 0 %: sería mentira.
-// El color sólo es dinero (el trío del margen). Heredado/propio se distinguen
-// por peso, gris y filete — sistema visual v1, igual que el modal.
 //
-// ── BLOQUEAR EN LOTE, AVISAR EN UNA CELDA (encargo del 18/08, punto 1) ──────
-// En una operación de decenas de celdas, una que caiga por debajo de 0 % se
-// BLOQUEA: nadie las mira de una en una y un error se cuela entero. En una
-// edición de UNA celda se avisa fuerte y se pide confirmación explícita, pero
-// NO se bloquea: un producto gancho a pérdida es una decisión legítima cuando
-// se toma mirando ese producto. Bloquearla obligaría a rodear la pantalla, y
-// rodear la herramienta es peor que la herramienta.
+// ── EL ÁMBITO SE DICE, NO SE ADIVINA ───────────────────────────────────────
+// El 18/08 dos precios de Meraki Pita se escribieron en ámbito CUENTA cuando la
+// intención era sólo Alcalá. La marca opera en dos locales, así que un precio de
+// cuenta es el precio de los dos. Investigado: el guardado lee UN solo
+// `locationId`, y el `location_id` escrito y el `ambito` del scope salen de esa
+// misma variable, así que no pueden discrepar entre sí — el cliente tenía
+// ámbito cuenta de verdad. Lo que faltaba era que la pantalla lo DIJERA donde se
+// mira antes de escribir. Ahora el ámbito aparece en la barra de guardado y en
+// la previsualización, con su nombre.
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { Table2, AlertTriangle, Undo2, EyeOff, Loader2, Check, X, FlaskConical, Gauge } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  Table2, AlertTriangle, Undo2, EyeOff, Loader2, Check, X, FlaskConical, Gauge, Pencil,
+} from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import { supabase } from '@/lib/supabase'
+import { fmtMoney, fmtNumEs, fmtPct } from '@/lib/format'
 import type { Brand } from '@/types/multitenancy'
 import {
   getBrandPriceGrid, applyPriceOperation, revertPriceOperation, getAccountIsInternal,
@@ -49,12 +64,14 @@ import {
   type OperationEntry, type Banda,
 } from '@/modules/kitchen/services/priceGridService'
 
-const eur = (v: number | null | undefined): string =>
-  v === null || v === undefined ? '' :
-  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(v)
-const pct = (v: number | null | undefined, dp = 1): string =>
-  // eslint-disable-next-line no-restricted-syntax -- el null ya está descartado en la rama de arriba
-  v === null || v === undefined ? '' : `${v >= 0 ? '' : '−'}${Math.abs(v).toFixed(dp)} %`
+// Formato: SIEMPRE dos decimales y símbolo al mostrar (fmtMoney), y coma sin
+// símbolo al sembrar un campo editable (fmtNumEs). Los dos salen de
+// src/lib/format.ts, que es el único sitio donde vive el formateo numérico.
+// Antes se sembraba con String(precio) y salía «15,9» al lado de «15,90 €»:
+// dos formatos en la misma pantalla, y el crudo era justo el del campo que se
+// edita. El propio comentario de fmtNumEs describe ese fallo.
+const eur = (v: number | null | undefined): string => (v === null || v === undefined ? '' : fmtMoney(v))
+const pct = (v: number | null | undefined): string => (v === null || v === undefined ? '' : fmtPct(v))
 const ms = (v: number | null | undefined): string =>
   v === null || v === undefined ? '—' : `${new Intl.NumberFormat('es-ES').format(v)} ms`
 
@@ -65,29 +82,34 @@ const BANDA_CLASE: Record<Banda, string> = {
   sin_dato: 'text-tinta-25',
 }
 
+/**
+ * Un cambio tecleado y aceptado, TODAVÍA SIN ESCRIBIR. Lleva dentro todo lo que
+ * hará falta para construir la entrada de la operación, incluido
+ * `expectedBefore`: si la carta cambia por debajo entre teclear y guardar, el
+ * servidor aborta la operación entera y enseña el conflicto.
+ */
+interface Pendiente {
+  itemId: string
+  channelId: string
+  accion: 'set' | 'clear'
+  precio: number | null        // set → número; clear → null (vuelve a heredado)
+  precioAntes: number
+  expectedBefore: number | null
+}
+
+const pKey = (itemId: string, channelId: string): string => `${itemId}::${channelId}`
+
+/** Fila de la previsualización: lo que se enseña antes de escribir. */
 interface PreviewRow {
   menuItemId: string; producto: string
   channelId: string; canal: string
-  precioAntes: number; precioDespues: number; pctRealAplicado: number | null
-  margenAntes: number | null; margenDespues: number | null
-  costAvailable: boolean
-  bloqueado: boolean          // caería por debajo de 0 %
-  avisado: boolean            // entra en "aprieta"
-}
-
-/** Lo que se enseña ANTES de guardar una edición de una sola celda. */
-interface CellPreview {
-  itemId: string; producto: string
-  channelId: string; canal: string
   accion: 'set' | 'clear'
-  precioAntes: number
-  precioDespues: number | null      // null = vuelve a heredado y no se sabe aún
-  expectedBefore: number | null
+  precioAntes: number; precioDespues: number | null; pctRealAplicado: number | null
   /** Una entrada por modalidad del canal: es donde el margen diverge. */
   modalidades: Array<{ key: string; label: string; antes: number | null; despues: number | null }>
   costAvailable: boolean
-  quedaEnPerdida: boolean
-  nota: string | null
+  enPerdida: boolean
+  avisado: boolean
 }
 
 export default function PriceGridPage() {
@@ -101,11 +123,6 @@ export default function PriceGridPage() {
 
   const [grid, setGrid] = useState<PriceGrid | null>(null)
   const [orden, setOrden] = useState<MenuOrder | null>(null)
-  // `loading` es DERIVADO, no un estado aparte: llamar a setState en el cuerpo
-  // de un efecto encadena renders (react-hooks/set-state-in-effect). Comparar
-  // "lo que se pidió" con "lo que hay cargado" dice lo mismo y además es más
-  // honesto: la rejilla se ve gris en cuanto cambias de marca, no cuando
-  // responde la red.
   const [cargadoPara, setCargadoPara] = useState<string | null>(null)
   const [timings, setTimings] = useState<GridTimings | null>(null)
   const [pintarMs, setPintarMs] = useState<number | null>(null)
@@ -115,13 +132,20 @@ export default function PriceGridPage() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const [vista, setVista] = useState<'precio' | 'margen'>('precio')
+  const [filtroCat, setFiltroCat] = useState<string>('todas')
 
-  // selección
+  // ── LO ÚNICO QUE ESCRIBE: la lista de pendientes ───
+  const [pendientes, setPendientes] = useState<Map<string, Pendiente>>(new Map())
+  // `semilla` = lo que el campo tenía al abrirse. Esc lo devuelve al input ANTES
+  // de cerrar, así que si el navegador dispara onBlur al desmontar, lo que se
+  // acepta es el valor original: un no-op. Así no hace falta un indicador de
+  // "estoy escapando" que el onBlur tenga que consultar — y aceptar al salir
+  // pasa a leer SIEMPRE el DOM, que es la única fuente que no va con retraso.
+  const [edit, setEdit] = useState<{ itemId: string; channelId: string; valor: string; semilla: string } | null>(null)
+
+  // selección para la operación en lote
   const [selProductos, setSelProductos] = useState<Set<string>>(new Set())
   const [selCanales, setSelCanales] = useState<Set<string>>(new Set())
-  const [filtroCat, setFiltroCat] = useState<string>('todas')   // 'todas' | 'sin' | categoryId
-
-  // operación en lote
   const [opKind, setOpKind] = useState<BulkOp['kind']>('pct')
   const [opValor, setOpValor] = useState<string>('10')
   const [escalera, setEscalera] = useState<Escalera>('decena')
@@ -132,18 +156,55 @@ export default function PriceGridPage() {
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [previewing, setPreviewing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [asumoPerdida, setAsumoPerdida] = useState(false)
   const [ultimaOperacion, setUltimaOperacion] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
-  // edición directa de una celda (encargo del 18/08, punto 1)
-  const [edit, setEdit] = useState<{ itemId: string; channelId: string; valor: string } | null>(null)
-  const [cellPrev, setCellPrev] = useState<CellPreview | null>(null)
-  const [cellBusy, setCellBusy] = useState(false)
-  const [asumoPerdida, setAsumoPerdida] = useState(false)
-  // Tab guarda y sigue: aquí queda apuntada la celda a la que saltar después.
-  // Estado y no ref: un ref leído desde algo alcanzable en render es
-  // exactamente lo que prohíbe react-hooks/refs, y aquí no hace falta.
-  const [saltoTrasGuardar, setSaltoTrasGuardar] = useState<{ itemId: string; channelId: string } | null>(null)
+  const hayPendientes = pendientes.size > 0
+
+  const ambitoNombre = locationId
+    ? (locations.find((l) => l.id === locationId)?.name ?? locationId)
+    : 'toda la cuenta'
+
+  // ── Salir con pendientes AVISA ───
+  // Dos puertas, porque son dos salidas distintas.
+  //
+  // NO se usa useBlocker de react-router: esta app monta <BrowserRouter> y no un
+  // data router, y ahí useBlocker LANZA. Habría matado la pantalla entera en el
+  // primer render con un cambio pendiente. En su lugar, un escuchador en fase de
+  // captura sobre los enlaces, que no obliga a tocar el armazón de la app.
+  const navigate = useNavigate()
+  const [salidaPendiente, setSalidaPendiente] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!hayPendientes) return
+    // 1) Recargado, cierre de pestaña y —esto importa aquí— el set()+reload con
+    //    el que la OTA aplica un bundle nuevo sin preguntar. Sin esta puerta, un
+    //    despliegue en una ventana tranquila se llevaría por delante los cambios
+    //    sin escribir.
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    // 2) Navegación dentro de la app: se intercepta el clic en cualquier enlace
+    //    que lleve a otra ruta, antes de que react-router lo procese.
+    const onClick = (ev: MouseEvent) => {
+      if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey) return
+      const destino = (ev.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null
+      if (!destino || destino.target === '_blank') return
+      const href = destino.getAttribute('href')
+      if (!href || href.startsWith('#')) return
+      let url: URL
+      try { url = new URL(destino.href, window.location.href) } catch { return }
+      if (url.origin !== window.location.origin) return
+      if (url.pathname === window.location.pathname) return
+      ev.preventDefault(); ev.stopPropagation()
+      setSalidaPendiente(url.pathname + url.search)
+    }
+    document.addEventListener('click', onClick, true)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('click', onClick, true)
+    }
+  }, [hayPendientes])
 
   // ── carga de marcas, locales y bandera de cuenta interna ───
   useEffect(() => {
@@ -151,14 +212,18 @@ export default function PriceGridPage() {
     listBrands({ accountId: activeAccountId })
       .then((bs) => { setBrands(bs); setBrandId((prev) => prev ?? bs[0]?.id ?? null) })
       .catch((e) => setError(String(e)))
+    // El error NO se traga: si esta consulta falla, el desplegable de ámbito se
+    // queda con «toda la cuenta» como única opción y sería imposible escribir en
+    // un local sin que nadie entendiera por qué.
     supabase?.from('locations').select('id, name').eq('account_id', activeAccountId).order('name')
-      .then(({ data }) => setLocations((data ?? []) as Array<{ id: string; name: string }>))
+      .then(({ data, error: e }) => {
+        if (e) setError(`No se han podido cargar los locales: ${e.message}. Sólo se puede editar en ámbito cuenta.`)
+        setLocations((data ?? []) as Array<{ id: string; name: string }>)
+      })
     getAccountIsInternal(activeAccountId).then(setCuentaInterna).catch(() => setCuentaInterna(false))
   }, [activeAccountId])
 
   // ── carga de la rejilla ───
-  // La rejilla entera en UNA llamada; el orden de carta va EN PARALELO, así que
-  // no suma a la espera (dos consultas de ids + position, ~240 filas en total).
   const claveCarga = `${brandId ?? ''}::${locationId ?? ''}::${reloadKey}`
   const loading = brandId !== null && cargadoPara !== claveCarga
 
@@ -168,8 +233,6 @@ export default function PriceGridPage() {
     const t0 = performance.now()
     const clave = `${brandId}::${locationId ?? ''}::${reloadKey}`
 
-    // El orden es COSMÉTICO: si falla, la rejilla se pinta igual (alfabética).
-    // Nunca puede tumbar la pantalla.
     getBrandMenuOrder(brandId)
       .then((o) => { if (vivo) setOrden(o) })
       .catch(() => { if (vivo) setOrden(null) })
@@ -177,17 +240,12 @@ export default function PriceGridPage() {
     getBrandPriceGrid(brandId, locationId)
       .then(({ grid: g, timings: t }) => {
         if (!vivo) return
-        setError(null); setPreview(null); setEdit(null); setCellPrev(null)
+        setError(null); setPreview(null); setEdit(null)
         const tEstado = performance.now()
         setGrid(g); setTimings(t)
         setTotalMs(Math.round(tEstado - t0))
         setCargadoPara(clave)
-        // Lo que tarda React en pintar 27 × N celdas se mide DESPUÉS del pintado,
-        // no antes: es la única parte del desglose que no se puede cronometrar
-        // desde dentro del `then`.
-        requestAnimationFrame(() => {
-          if (vivo) setPintarMs(Math.round(performance.now() - tEstado))
-        })
+        requestAnimationFrame(() => { if (vivo) setPintarMs(Math.round(performance.now() - tEstado)) })
       })
       .catch((e) => {
         if (!vivo) return
@@ -197,9 +255,7 @@ export default function PriceGridPage() {
     return () => { vivo = false }
   }, [brandId, locationId, reloadKey])
 
-  // ── columnas ───
-  // Precio: una por CANAL (hay un precio por canal, no por modalidad).
-  // Margen: una por canal × modalidad (es donde divergen).
+  // ── columnas y bloques de carta ───
   const canales = useMemo(() => {
     if (!grid) return [] as Array<{ channelId: string; channelName: string; cols: GridColumn[] }>
     const m = new Map<string, { channelId: string; channelName: string; cols: GridColumn[] }>()
@@ -211,13 +267,8 @@ export default function PriceGridPage() {
     return Array.from(m.values())
   }, [grid])
 
-  // ── bloques de carta (punto 1-bis) ───
-  // La marca se lee en el orden en que la ve el cliente, agrupada por
-  // categoría. El desplegable «Categoría» sale de los MISMOS bloques: elegir
-  // "Entrantes" deja de ser a ciegas porque ese bloque se ve en la tabla.
   const todasLasSecciones = useMemo(
-    () => (grid ? agruparPorCarta(grid.products, orden) : []),
-    [grid, orden])
+    () => (grid ? agruparPorCarta(grid.products, orden) : []), [grid, orden])
 
   const categorias = useMemo(
     () => todasLasSecciones.map((sec) => ({ id: sec.categoryId ?? 'sin', name: sec.categoryName })),
@@ -229,11 +280,9 @@ export default function PriceGridPage() {
     return todasLasSecciones.filter((sec) => sec.categoryId === filtroCat)
   }, [todasLasSecciones, filtroCat])
 
-  // Plana, para la selección en lote y los contadores: es la misma lista.
   const productosVisibles = useMemo(
     () => secciones.flatMap((sec) => sec.products), [secciones])
 
-  // ── titulares ───
   const stats = useMemo(() => {
     if (!grid) return null
     let propios = 0, enPerdida = 0, sinEscandallo = 0
@@ -251,180 +300,112 @@ export default function PriceGridPage() {
     return { propios, enPerdida, sinEscandallo, total: grid.products.length }
   }, [grid])
 
-  // ══ EDICIÓN DIRECTA DE UNA CELDA ═══════════════════════════════════════════
+  // ══ EDICIÓN: acumular pendientes, nunca escribir ═══════════════════════════
 
-  const cancelarEdicion = useCallback(() => {
-    // Esc no escribe NADA: ni override, ni operación, ni historial.
-    setEdit(null); setCellPrev(null); setAsumoPerdida(false); setAviso(null)
-    setSaltoTrasGuardar(null)
-  }, [])
+  /** Precio efectivo de una celda AHORA: el pendiente si lo hay, si no el de la base. */
+  const precioMostrado = useCallback((itemId: string, channelId: string, basePrecio: number, precioBase: number | null): number | null => {
+    const p = pendientes.get(pKey(itemId, channelId))
+    if (!p) return basePrecio
+    if (p.accion === 'clear') return precioBase
+    return p.precio
+  }, [pendientes])
 
   function abrirCelda(itemId: string, channelId: string, precioActual: number) {
-    setCellPrev(null); setAsumoPerdida(false); setAviso(null)
-    // El campo nace con el precio EFECTIVO que la celda enseñaba, con IVA.
-    setEdit({ itemId, channelId, valor: precioActual.toString().replace('.', ',') })
+    setAviso(null)
+    const p = pendientes.get(pKey(itemId, channelId))
+    const semilla = p ? (p.accion === 'clear' ? '' : fmtNumEs(p.precio)) : fmtNumEs(precioActual)
+    setEdit({ itemId, channelId, valor: semilla, semilla })
   }
 
   /**
-   * Enter (o Tab con el valor cambiado): pide al SERVIDOR los márgenes de todas
-   * las modalidades del canal con el precio nuevo. No se calcula nada aquí.
+   * Acepta lo tecleado COMO PENDIENTE. Es lo que hacen Enter, Tab y salir de la
+   * celda: un solo camino, para que el mismo gesto haga siempre lo mismo.
+   * Devuelve false sólo si lo tecleado no es un precio, y entonces deja la celda
+   * abierta para corregirlo en vez de tragarse el error.
    */
-  async function previsualizarCelda() {
-    if (!edit || !grid || !brandId) return
-    const prod = grid.products.find((p) => p.menuItemId === edit.itemId)
-    const ch = canales.find((c) => c.channelId === edit.channelId)
-    if (!prod || !ch) return
-    const ref = grid.cells.get(cellKey(edit.itemId, ch.cols[0].key))
-    if (!ref) return
+  const aceptarEdicion = useCallback((valor: string, itemId: string, channelId: string): boolean => {
+    if (!grid) return true
+    const ch = canales.find((c) => c.channelId === channelId)
+    if (!ch) { setEdit(null); return true }
+    const ref = grid.cells.get(cellKey(itemId, ch.cols[0].key))
+    if (!ref) { setEdit(null); return true }
 
-    const leido = leerPrecio(edit.valor)
-    if (Number.isNaN(leido)) { setAviso('Eso no es un precio. Escribe un número, por ejemplo 9,90.'); return }
+    const leido = leerPrecio(valor)
+    if (Number.isNaN(leido)) {
+      setAviso('Eso no es un precio. Escribe un número, por ejemplo 15,90. Se acepta coma o punto.')
+      return false
+    }
 
+    const k = pKey(itemId, channelId)
     const esOverrideAqui = ref.priceSource === 'override' && (locationId ? ref.isLocationOverride : true)
 
-    // ── vaciar = volver a heredado ───
-    if (leido === null) {
-      if (!esOverrideAqui) {
-        setAviso(locationId
-          ? 'Esta celda ya hereda: no hay precio propio DE ESTE LOCAL que borrar.'
-          : 'Esta celda ya hereda del precio base: no hay nada que borrar.')
-        return
+    setPendientes((prev) => {
+      const n = new Map(prev)
+      if (leido === null) {
+        // Campo vacío = volver a heredado. Si no hay override EN ESTE ÁMBITO no
+        // hay nada que borrar: se quita el pendiente y no se inventa una entrada
+        // que el servidor resolvería como 0 escrituras.
+        if (esOverrideAqui) {
+          n.set(k, {
+            itemId, channelId, accion: 'clear',
+            precio: null, precioAntes: ref.price, expectedBefore: expectedPriceBefore(ref),
+          })
+        } else n.delete(k)
+        return n
       }
-      setCellPrev({
-        itemId: edit.itemId, producto: prod.name,
-        channelId: edit.channelId, canal: ch.channelName,
-        accion: 'clear',
-        precioAntes: ref.price,
-        // En ámbito CUENTA el precio al que vuelve es el base, y se conoce.
-        // En ámbito LOCAL vuelve al precio de marca, que esta rejilla no trae:
-        // no se inventa un número ni un margen.
-        precioDespues: locationId ? null : (prod.basePrice ?? null),
-        expectedBefore: expectedPriceBefore(ref),
-        modalidades: [],
-        costAvailable: ref.costAvailable,
-        quedaEnPerdida: false,
-        nota: locationId
-          ? 'Vuelve al precio de marca. El margen se recalcula al guardar.'
-          : 'Vuelve al precio base de la carta.',
+      // Volver al precio que ya tenía = no hay cambio que guardar.
+      if (Math.abs(leido - ref.price) < 0.005) n.delete(k)
+      else n.set(k, {
+        itemId, channelId, accion: 'set',
+        precio: leido, precioAntes: ref.price, expectedBefore: expectedPriceBefore(ref),
       })
-      return
-    }
+      return n
+    })
+    setEdit(null)
+    return true
+  }, [grid, canales, locationId])
 
-    if (Math.abs(leido - ref.price) < 0.005) { setAviso('Ese ya es el precio de la celda.'); return }
-
-    setCellBusy(true); setAviso(null)
-    try {
-      // El margen NUNCA se recalcula aquí: se le pide al servidor con p_overrides.
-      const { grid: conPreview } = await getBrandPriceGrid(
-        brandId, locationId, { [edit.itemId]: { [edit.channelId]: leido } })
-
-      const modalidades = ch.cols.map((c) => {
-        const antes = grid.cells.get(cellKey(edit.itemId, c.key))
-        const desp = conPreview.cells.get(cellKey(edit.itemId, c.key))
-        return {
-          key: c.key,
-          label: c.serviceType ? SERVICE_TYPE_LABEL[c.serviceType] ?? c.serviceType : 'Mostrador',
-          antes: antes?.netMarginPct ?? null,
-          despues: desp?.netMarginPct ?? null,
-        }
-      })
-      setCellPrev({
-        itemId: edit.itemId, producto: prod.name,
-        channelId: edit.channelId, canal: ch.channelName,
-        accion: 'set',
-        precioAntes: ref.price, precioDespues: leido,
-        expectedBefore: expectedPriceBefore(ref),
-        modalidades,
-        costAvailable: ref.costAvailable,
-        // Sin escandallo NO hay pérdida que avisar: no se sabe.
-        quedaEnPerdida: ref.costAvailable && modalidades.some((m) => m.despues !== null && m.despues < 0),
-        nota: null,
-      })
-    } catch (e) {
-      setAviso(e instanceof Error ? e.message : String(e))
-    } finally { setCellBusy(false) }
-  }
-
-  /** Guarda la celda por apply_price_operation, con UNA entrada. Reversible. */
-  async function guardarCelda() {
-    if (!cellPrev || !activeAccountId) return
-    if (cellPrev.quedaEnPerdida && !asumoPerdida) return
-    setCellBusy(true); setAviso(null)
-    try {
-      const entry: OperationEntry = {
-        menu_item_id: cellPrev.itemId,
-        channel_id: cellPrev.channelId,
-        location_id: locationId,
-        action: cellPrev.accion,
-        ...(cellPrev.accion === 'clear' ? {} : { price: cellPrev.precioDespues as number }),
-        // Si la carta cambió por debajo entre abrir la celda y guardar, el RPC
-        // aborta y el conflicto se ENSEÑA. No se pisa el trabajo de nadie.
-        expected_price_before: cellPrev.expectedBefore,
-      }
-      const opId = await applyPriceOperation({
-        accountId: activeAccountId,
-        scope: {
-          marca: brands.find((b) => b.id === brandId)?.name ?? brandId,
-          ambito: locationId ? (locations.find((l) => l.id === locationId)?.name ?? locationId) : 'cuenta',
-          canales: [cellPrev.canal],
-          producto: cellPrev.producto,
-          operacion: cellPrev.accion === 'clear'
-            ? 'volver a heredado'
-            : `fijar a ${cellPrev.precioDespues} €`,
-          origen: 'edición directa',
-        },
-        entries: [entry],
-        note: `Edición directa · ${cellPrev.producto} · ${cellPrev.canal}`,
-      })
-      setUltimaOperacion(opId)
-      const salto = saltoTrasGuardar
-      setEdit(null); setCellPrev(null); setAsumoPerdida(false)
-      setSaltoTrasGuardar(null)
-      setReloadKey((k) => k + 1)
-      setAviso(`Guardado. Operación ${opId.slice(0, 8)} — se puede deshacer.`)
-      if (salto) setEdit({ itemId: salto.itemId, channelId: salto.channelId, valor: '' })
-    } catch (e) {
-      setAviso(e instanceof Error ? e.message : String(e))
-    } finally { setCellBusy(false) }
-  }
-
-  /**
-   * Tab: nunca se sale de una celda con un cambio sin confirmar.
-   *  - valor intacto  -> salta a la siguiente celda editable de la fila.
-   *  - valor cambiado -> se comporta como Enter y, tras guardar, salta.
-   */
-  function tabular(e: React.KeyboardEvent) {
+  /** Enter baja; Tab va a la derecha. Los dos aceptan antes de moverse. */
+  function mover(dir: 'abajo' | 'derecha') {
     if (!edit || !grid) return
-    const ref = grid.cells.get(cellKey(edit.itemId, canales.find((c) => c.channelId === edit.channelId)?.cols[0].key ?? ''))
-    const i = canales.findIndex((c) => c.channelId === edit.channelId)
-    const sig = canales[i + 1] ?? null
-    const leido = leerPrecio(edit.valor)
-    const intacto = ref !== undefined && leido !== null && !Number.isNaN(leido) && Math.abs(leido - ref.price) < 0.005
-
-    e.preventDefault()
-    if (intacto) {
-      if (!sig) { cancelarEdicion(); return }
-      const celdaSig = grid.cells.get(cellKey(edit.itemId, sig.cols[0].key))
-      setCellPrev(null); setAsumoPerdida(false)
-      setEdit({ itemId: edit.itemId, channelId: sig.channelId, valor: (celdaSig?.price ?? 0).toString().replace('.', ',') })
+    const itemId = edit.itemId, channelId = edit.channelId
+    if (!aceptarEdicion(edit.valor, itemId, channelId)) return
+    if (dir === 'derecha') {
+      const i = canales.findIndex((c) => c.channelId === channelId)
+      const sig = canales[i + 1]
+      if (!sig) return
+      const celda = grid.cells.get(cellKey(itemId, sig.cols[0].key))
+      const pend = pendientes.get(pKey(itemId, sig.channelId))
+      const v = pend ? (pend.accion === 'clear' ? '' : fmtNumEs(pend.precio)) : fmtNumEs(celda?.price ?? 0)
+      setEdit({ itemId, channelId: sig.channelId, valor: v, semilla: v })
       return
     }
-    setSaltoTrasGuardar(sig ? { itemId: edit.itemId, channelId: sig.channelId } : null)
-    void previsualizarCelda()
+    const j = productosVisibles.findIndex((p) => p.menuItemId === itemId)
+    const sigProd = productosVisibles[j + 1]
+    if (!sigProd) return
+    const ch = canales.find((c) => c.channelId === channelId)
+    const celda = ch ? grid.cells.get(cellKey(sigProd.menuItemId, ch.cols[0].key)) : undefined
+    const pend = pendientes.get(pKey(sigProd.menuItemId, channelId))
+    const v = pend ? (pend.accion === 'clear' ? '' : fmtNumEs(pend.precio)) : fmtNumEs(celda?.price ?? 0)
+    setEdit({ itemId: sigProd.menuItemId, channelId, valor: v, semilla: v })
   }
 
-  // ══ OPERACIÓN EN LOTE ══════════════════════════════════════════════════════
+  function descartarTodo() {
+    setPendientes(new Map()); setEdit(null); setPreview(null); setAviso(null)
+  }
 
-  async function construirPreview() {
-    if (!grid || !brandId) return
+  // ══ OPERACIÓN EN LOTE → LA MISMA LISTA DE PENDIENTES ═══════════════════════
+  // No guarda: deja los cambios pendientes igual que teclear una celda. Un solo
+  // camino de guardado para las dos formas de editar.
+  function aplicarLote() {
+    if (!grid) return
     setAviso(null)
     const op: BulkOp =
       opKind === 'base' ? { kind: 'base' } : { kind: opKind, value: Number(opValor.replace(',', '.')) }
     if (op.kind !== 'base' && !Number.isFinite(op.value)) { setAviso('El valor de la operación no es un número.'); return }
 
-    const objetivo = new Map<string, number | null>()   // `${itemId}::${channelId}` -> precio o null(=volver a base)
-    const overrides: Record<string, Record<string, number>> = {}
-
+    const nuevos = new Map(pendientes)
+    let n = 0
     for (const p of productosVisibles) {
       if (!selProductos.has(p.menuItemId)) continue
       if (excluirCombos && p.productType === 'combo') continue
@@ -433,98 +414,125 @@ export default function PriceGridPage() {
         const ref = grid.cells.get(cellKey(p.menuItemId, ch.cols[0].key))
         if (!ref) continue
         if (excluirSinEscandallo && !ref.costAvailable) continue
+        const k = pKey(p.menuItemId, ch.channelId)
+        if (op.kind === 'base') {
+          const esOverrideAqui = ref.priceSource === 'override' && (locationId ? ref.isLocationOverride : true)
+          if (!esOverrideAqui) continue
+          nuevos.set(k, { itemId: p.menuItemId, channelId: ch.channelId, accion: 'clear',
+            precio: null, precioAntes: ref.price, expectedBefore: expectedPriceBefore(ref) })
+          n++
+          continue
+        }
         const bruto = precioObjetivo(ref.price, op)
-        if (bruto === null) { objetivo.set(`${p.menuItemId}::${ch.channelId}`, null); continue }
+        if (bruto === null) continue
         const fin = redondear(bruto, ref.price, escalera)
-        objetivo.set(`${p.menuItemId}::${ch.channelId}`, fin)
-        overrides[p.menuItemId] = { ...(overrides[p.menuItemId] ?? {}), [ch.channelId]: fin }
+        if (Math.abs(fin - ref.price) < 0.005) { nuevos.delete(k); continue }
+        nuevos.set(k, { itemId: p.menuItemId, channelId: ch.channelId, accion: 'set',
+          precio: fin, precioAntes: ref.price, expectedBefore: expectedPriceBefore(ref) })
+        n++
       }
     }
-    if (objetivo.size === 0) { setAviso('No hay ninguna celda seleccionada.'); return }
+    if (n === 0) { setAviso('La operación no cambia ninguna celda de las seleccionadas.'); return }
+    setPendientes(nuevos)
+    setSelProductos(new Set())
+    setAviso(`${n} celda(s) añadidas a los cambios pendientes. Nada se ha guardado todavía.`)
+  }
+
+  // ══ PREVISUALIZAR Y GUARDAR — el único camino que escribe ═══════════════════
+
+  async function construirPreview() {
+    if (!grid || !brandId || pendientes.size === 0) return
+    setAviso(null); setAsumoPerdida(false)
+
+    // El margen NUNCA se recalcula aquí: se le pide al servidor con p_overrides.
+    const overrides: Record<string, Record<string, number>> = {}
+    for (const p of pendientes.values()) {
+      let precio: number | null = null
+      if (p.accion === 'set') precio = p.precio
+      else if (!locationId) {
+        // Volver a heredado en ámbito CUENTA acaba en el precio base, que se
+        // conoce. En ámbito local acaba en el precio de marca, que esta rejilla
+        // no trae: no se inventa ni el precio ni el margen.
+        precio = grid.products.find((x) => x.menuItemId === p.itemId)?.basePrice ?? null
+      }
+      if (precio === null) continue
+      overrides[p.itemId] = { ...(overrides[p.itemId] ?? {}), [p.channelId]: precio }
+    }
 
     setPreviewing(true)
     try {
-      // El margen NUNCA se recalcula aquí: se le pide al servidor con p_overrides.
       const { grid: conPreview } = await getBrandPriceGrid(brandId, locationId, overrides)
       const filas: PreviewRow[] = []
-      for (const [k, precioFin] of objetivo.entries()) {
-        const [itemId, chId] = k.split('::')
-        const prod = grid.products.find((p) => p.menuItemId === itemId)
-        const ch = canales.find((c) => c.channelId === chId)
+      for (const p of pendientes.values()) {
+        const prod = grid.products.find((x) => x.menuItemId === p.itemId)
+        const ch = canales.find((c) => c.channelId === p.channelId)
         if (!prod || !ch) continue
-        // Se evalúa en la modalidad de REPARTO permitida (la que decide la oferta);
-        // si el canal no tiene reparto, en la que haya.
-        const colRef = ch.cols.find((c) => c.serviceType === 'own_delivery' || c.serviceType === 'platform_delivery') ?? ch.cols[0]
-        const antes = grid.cells.get(cellKey(itemId, colRef.key))
-        const despues = conPreview.cells.get(cellKey(itemId, colRef.key))
-        if (!antes) continue
-        const precioDespues = precioFin === null ? (prod.basePrice ?? antes.price) : precioFin
-        const mDespues = despues?.netMarginPct ?? null
+        const precioDespues = p.accion === 'clear'
+          ? (locationId ? null : (prod.basePrice ?? null))
+          : p.precio
+        const modalidades = ch.cols.map((c) => ({
+          key: c.key,
+          label: c.serviceType ? SERVICE_TYPE_LABEL[c.serviceType] ?? c.serviceType : 'Mostrador',
+          antes: grid.cells.get(cellKey(p.itemId, c.key))?.netMarginPct ?? null,
+          despues: precioDespues === null ? null : (conPreview.cells.get(cellKey(p.itemId, c.key))?.netMarginPct ?? null),
+        }))
+        const ref = grid.cells.get(cellKey(p.itemId, ch.cols[0].key))
+        const costAvailable = ref?.costAvailable === true
         filas.push({
-          menuItemId: itemId, producto: prod.name,
-          channelId: chId, canal: ch.channelName,
-          precioAntes: antes.price, precioDespues,
-          pctRealAplicado: pctReal(antes.price, precioDespues),
-          margenAntes: antes.netMarginPct, margenDespues: mDespues,
-          costAvailable: antes.costAvailable,
-          bloqueado: antes.costAvailable && mDespues !== null && mDespues < 0,
-          avisado: antes.costAvailable && mDespues !== null && mDespues >= 0 && mDespues < BANDA_APRIETA_HASTA,
+          menuItemId: p.itemId, producto: prod.name,
+          channelId: p.channelId, canal: ch.channelName,
+          accion: p.accion,
+          precioAntes: p.precioAntes, precioDespues,
+          pctRealAplicado: precioDespues === null ? null : pctReal(p.precioAntes, precioDespues),
+          modalidades, costAvailable,
+          // Sin escandallo NO hay pérdida que avisar: no se sabe.
+          enPerdida: costAvailable && modalidades.some((m) => m.despues !== null && m.despues < 0),
+          avisado: costAvailable && modalidades.some((m) => m.despues !== null && m.despues >= 0 && m.despues < BANDA_APRIETA_HASTA),
         })
       }
-      // lo que más empeora, arriba
-      filas.sort((a, b) => {
-        const da = (a.margenDespues ?? 999) - (a.margenAntes ?? 999)
-        const db = (b.margenDespues ?? 999) - (b.margenAntes ?? 999)
-        return da - db
-      })
+      filas.sort((a, b) => (a.enPerdida === b.enPerdida ? a.producto.localeCompare(b.producto, 'es') : a.enPerdida ? -1 : 1))
       setPreview(filas)
     } catch (e) {
       setAviso(e instanceof Error ? e.message : String(e))
     } finally { setPreviewing(false) }
   }
 
-  const bloqueados = preview?.filter((r) => r.bloqueado).length ?? 0
+  const enPerdida = preview?.filter((r) => r.enPerdida).length ?? 0
+  const puedeGuardar = preview !== null && (enPerdida === 0 || asumoPerdida)
 
   async function guardar() {
-    if (!preview || !grid || !activeAccountId) return
-    if (bloqueados > 0) return
+    if (!preview || !activeAccountId || !puedeGuardar) return
     setSaving(true); setAviso(null)
     try {
-      const entries: OperationEntry[] = preview.map((r) => {
-        const ch = canales.find((c) => c.channelId === r.channelId)!
-        const ref = grid.cells.get(cellKey(r.menuItemId, ch.cols[0].key))!
-        const volverABase = opKind === 'base'
-        return {
-          menu_item_id: r.menuItemId,
-          channel_id: r.channelId,
-          location_id: locationId,
-          action: volverABase ? 'clear' : 'set',
-          ...(volverABase ? {} : { price: r.precioDespues }),
-          // Lo que la previsualización tenía delante. Si al guardar la realidad
-          // no coincide, el RPC aborta entero y dice cuáles.
-          expected_price_before: expectedPriceBefore(ref),
-        }
-      })
+      const entries: OperationEntry[] = Array.from(pendientes.values()).map((p) => ({
+        menu_item_id: p.itemId,
+        channel_id: p.channelId,
+        // EL ÁMBITO. Sale del mismo estado que se enseña en la barra y en la
+        // previsualización, así que lo que se ve y lo que se escribe no pueden
+        // discrepar.
+        location_id: locationId,
+        action: p.accion,
+        ...(p.accion === 'clear' ? {} : { price: p.precio as number }),
+        expected_price_before: p.expectedBefore,
+      }))
       const opId = await applyPriceOperation({
         accountId: activeAccountId,
         scope: {
           marca: brands.find((b) => b.id === brandId)?.name ?? brandId,
-          ambito: locationId ? (locations.find((l) => l.id === locationId)?.name ?? locationId) : 'cuenta',
-          canales: Array.from(selCanales).map((id) => canales.find((c) => c.channelId === id)?.channelName ?? id),
-          categoria: filtroCat,
-          operacion: opKind === 'base' ? 'volver a precio base'
-            : `${opKind === 'pct' ? `${opValor} %` : opKind === 'eur' ? `${opValor} €` : `fijar a ${opValor} €`}`,
-          redondeo: ESCALERA_LABEL[escalera],
-          productos: preview.length,
-          origen: 'operación en lote',
+          ambito: ambitoNombre,
+          ambito_location_id: locationId,
+          canales: Array.from(new Set(preview.map((r) => r.canal))),
+          productos: Array.from(new Set(preview.map((r) => r.producto))).length,
+          celdas: entries.length,
+          origen: 'rejilla de precios',
         },
         entries,
-        note: `Rejilla de precios · ${preview.length} celdas`,
+        note: `Rejilla · ${entries.length} celda(s) · ${ambitoNombre}`,
       })
       setUltimaOperacion(opId)
-      setPreview(null); setSelProductos(new Set())
+      setPendientes(new Map()); setPreview(null); setAsumoPerdida(false)
       setReloadKey((k) => k + 1)
-      setAviso(`Guardado. Operación ${opId.slice(0, 8)} — se puede deshacer entera.`)
+      setAviso(`Guardado en ${ambitoNombre}. Operación ${opId.slice(0, 8)} — se puede deshacer entera.`)
     } catch (e) {
       // Conflictos: se ENSEÑAN, no se esconden.
       setAviso(e instanceof Error ? e.message : String(e))
@@ -543,27 +551,31 @@ export default function PriceGridPage() {
     } finally { setSaving(false) }
   }
 
+  /** Cambiar de marca o de ámbito invalida los pendientes: son de ESE ámbito. */
+  function cambiarContexto(fn: () => void) {
+    if (hayPendientes && !window.confirm(
+      `Tienes ${pendientes.size} cambio(s) sin guardar en ${ambitoNombre}. Si cambias de marca o de ámbito se descartan. ¿Seguir?`)) return
+    setPendientes(new Map()); setEdit(null); setPreview(null)
+    fn()
+  }
+
   // ══ RENDER ═════════════════════════════════════════════════════════════════
+  const nCols = vista === 'precio' ? canales.length : (grid?.columns.length ?? 0)
+
   return (
-    <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
+    <div className="p-4 md:p-6 max-w-[1400px] mx-auto pb-28">
       <div className="flex items-start gap-3 mb-1">
         <Table2 className="w-5 h-5 mt-1 text-tinta-70" />
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Precios de la carta</h1>
           <p className="text-sm text-text-secondary mt-1 max-w-3xl">
-            Todos los precios de una marca por canal, para auditarlos de un vistazo y corregirlos sin abrir
-            un producto detrás de otro. <b>Los precios son los que paga el cliente, con IVA.</b> Guardar cambia
-            el precio en Folvy; <b>no publica nada en Glovo, Uber ni Just Eat</b>.
+            Todos los precios de una marca por canal. <b>Los precios son los que paga el cliente, con IVA.</b>{' '}
+            Editar acumula cambios; <b>nada se guarda hasta que pulsas Guardar</b> abajo. Guardar cambia el precio
+            en Folvy; <b>no publica nada en Glovo, Uber ni Just Eat</b>.
           </p>
         </div>
       </div>
 
-      {/* ── Aviso de cuenta interna ──────────────────────────────────────────
-          Permanente y con forma propia (icono + filete grueso + rótulo), no
-          sólo color: el sistema visual v1 reserva el color para el dinero.
-          El 18/08 esta pantalla, abierta en Folvy Interno, no pintó ningún
-          canal —correctamente, porque allí no hay política de reparto— y se
-          leyó como un fallo. Este aviso existe para que eso no vuelva a pasar. */}
       {cuentaInterna && (
         <div className="mt-4 border-l-4 border-tinta bg-lavado border border-linea-fuerte rounded-lg p-3 flex items-start gap-2.5">
           <FlaskConical className="w-4 h-4 mt-0.5 shrink-0 text-tinta-70" />
@@ -581,20 +593,22 @@ export default function PriceGridPage() {
       <div className="mt-5 flex flex-wrap items-center gap-3 bg-card border border-border-default rounded-xl p-3">
         <label className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45">Marca</label>
         <select className="border border-linea-fuerte rounded-lg px-3 py-1.5 text-sm font-semibold bg-white"
-          value={brandId ?? ''} onChange={(e) => { setBrandId(e.target.value); setSelProductos(new Set()); cancelarEdicion() }}>
+          value={brandId ?? ''}
+          onChange={(e) => { const v = e.target.value; cambiarContexto(() => { setBrandId(v); setSelProductos(new Set()) }) }}>
           {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
 
         <label className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45 ml-2">Ámbito</label>
         <select className="border border-linea-fuerte rounded-lg px-3 py-1.5 text-sm font-semibold bg-white"
-          value={locationId ?? ''} onChange={(e) => { setLocationId(e.target.value || null); cancelarEdicion() }}>
+          value={locationId ?? ''}
+          onChange={(e) => { const v = e.target.value || null; cambiarContexto(() => setLocationId(v)) }}>
           <option value="">Toda la cuenta (precio de marca)</option>
           {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
 
         <div className="flex rounded-lg overflow-hidden border border-linea-fuerte ml-auto">
           {(['precio', 'margen'] as const).map((v) => (
-            <button key={v} onClick={() => { setVista(v); cancelarEdicion() }}
+            <button key={v} onClick={() => { setVista(v); setEdit(null) }}
               className={`px-3 py-1.5 text-xs font-semibold ${vista === v ? 'bg-tinta text-white' : 'bg-white text-tinta-45'}`}>
               {v === 'precio' ? 'Precio' : 'Margen neto'}
             </button>
@@ -613,7 +627,6 @@ export default function PriceGridPage() {
 
       {grid && stats && (
         <>
-          {/* titulares */}
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-px bg-border-default border border-border-default rounded-xl overflow-hidden">
             <Stat k="Productos" v={String(stats.total)} n={`${grid.columns.length} columnas reales`} />
             <Stat k="Con precio propio" v={String(stats.propios)} n="celdas con precio fijado para ese canal" />
@@ -621,10 +634,6 @@ export default function PriceGridPage() {
             <Stat k="Sin escandallo" v={String(stats.sinEscandallo)} n="su margen no se puede calcular: celdas vacías" />
           </div>
 
-          {/* ── Desglose de tiempos (encargo del 18/08, punto 2) ──────────────
-              Primero medir, luego optimizar. Aquí NO se ha optimizado nada
-              todavía: sólo se enseña dónde se va el tiempo, con los huecos
-              declarados como huecos. */}
           <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-tinta-45">
             <Gauge className="w-3.5 h-3.5" />
             <span>Carga <b className="tabular-nums text-tinta">{ms(totalMs)}</b></span>
@@ -656,16 +665,9 @@ export default function PriceGridPage() {
                 manda <code>Timing-Allow-Origin</code>. Supabase, siendo otro origen, hoy no lo manda: por eso
                 aparecen vacíos. <b>Un hueco es un dato; un cero sería mentira.</b>
               </p>
-              <p className="mt-1.5">
-                Medido aparte en el servidor: la misma llamada tarda <b>487 ms</b> como superusuario y{' '}
-                <b>3.774 ms</b> como <code>authenticated</code>. <code>brand_price_grid</code> es{' '}
-                <code>security invoker</code>, así que el usuario real paga las políticas de RLS y el{' '}
-                <code>explain analyze</code> hecho como superusuario no las veía.
-              </p>
             </div>
           )}
 
-          {/* combinaciones que NO se pintan */}
           {grid.excluded.length > 0 && (
             <div className="mt-3 border border-border-default rounded-lg bg-card p-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-tinta-70">
@@ -684,7 +686,7 @@ export default function PriceGridPage() {
             </div>
           )}
 
-          {/* panel de operación en lote */}
+          {/* panel de operación en lote — AÑADE pendientes, no guarda */}
           <div className="mt-4 bg-card border border-border-default rounded-xl p-3 flex flex-wrap items-end gap-3">
             <Campo label="Categoría">
               <select className="border border-linea-fuerte rounded-lg px-2 py-1.5 text-sm bg-white"
@@ -743,16 +745,10 @@ export default function PriceGridPage() {
             </Campo>
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs text-tinta-45">{selProductos.size} producto(s) · {selCanales.size} canal(es)</span>
-              <button onClick={construirPreview} disabled={previewing || selProductos.size === 0 || selCanales.size === 0}
-                className="px-3 py-2 rounded-lg bg-tinta text-white text-sm font-semibold disabled:opacity-40">
-                {previewing ? 'Calculando…' : 'Previsualizar'}
+              <button onClick={aplicarLote} disabled={selProductos.size === 0 || selCanales.size === 0}
+                className="px-3 py-2 rounded-lg border-2 border-tinta text-tinta text-sm font-semibold disabled:opacity-40">
+                Añadir a pendientes
               </button>
-              {ultimaOperacion && (
-                <button onClick={deshacer} disabled={saving}
-                  className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold flex items-center gap-1.5">
-                  <Undo2 className="w-3.5 h-3.5" /> Deshacer
-                </button>
-              )}
             </div>
           </div>
 
@@ -762,8 +758,9 @@ export default function PriceGridPage() {
 
           {vista === 'precio' && (
             <div className="mt-3 text-[11px] text-tinta-45">
-              Pulsa cualquier precio para cambiarlo. <b>Enter</b> confirma · <b>Esc</b> cancela ·{' '}
-              <b>Tab</b> pasa a la siguiente celda. Para <b>volver a heredado</b>, deja el campo vacío y pulsa Enter.
+              Pulsa cualquier precio para cambiarlo. <b>Enter</b> acepta y baja · <b>Tab</b> acepta y va a la derecha ·{' '}
+              <b>salir de la celda</b> acepta también · <b>Esc</b> descarta esa edición. Para{' '}
+              <b>volver a heredado</b>, deja el campo vacío. Nada se escribe hasta pulsar <b>Guardar</b>.
             </div>
           )}
 
@@ -797,14 +794,10 @@ export default function PriceGridPage() {
               <tbody>
                 {secciones.map((sec) => (
                   <Fragment key={sec.categoryId ?? 'sin-categoria'}>
-                    {/* Cabecera de bloque de carta. Los precios se leen y se
-                        corrigen por bloques, no por alfabeto. */}
                     <tr className="bg-lavado border-y border-linea-fuerte">
-                      <td colSpan={3 + (vista === 'precio' ? canales.length : grid.columns.length)} className="px-3 py-1.5">
+                      <td colSpan={3 + nCols} className="px-3 py-1.5">
                         <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className="text-[11px] uppercase tracking-wider font-semibold text-tinta-70">
-                            {sec.categoryName}
-                          </span>
+                          <span className="text-[11px] uppercase tracking-wider font-semibold text-tinta-70">{sec.categoryName}</span>
                           <span className="text-[10px] text-tinta-45">{sec.products.length} producto(s)</span>
                           {sec.categoryId === null && (
                             <span className="text-[10px] text-tinta-45">
@@ -815,175 +808,107 @@ export default function PriceGridPage() {
                       </td>
                     </tr>
                     {sec.products.map((p) => (
-                      <Fragment key={p.menuItemId}>
-                    <tr className="border-b border-border-default/60 hover:bg-lavado/40">
-                      <td className="px-3 py-2 align-top">
-                        <input type="checkbox" checked={selProductos.has(p.menuItemId)}
-                          onChange={() => setSelProductos((s) => {
-                            const n = new Set(s)
-                            if (n.has(p.menuItemId)) n.delete(p.menuItemId); else n.add(p.menuItemId)
-                            return n
-                          })} />
-                      </td>
-                      <td className="px-2 py-2 align-top">
-                        <div className="text-sm font-semibold leading-tight">{p.name}</div>
-                        <div className="text-[11px] text-tinta-45 mt-0.5">
-                          {p.categoryName ?? 'Sin categoría'}
-                          {p.productType === 'combo' && ' · combo'}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right align-top tabular-nums text-sm font-semibold">{eur(p.basePrice)}</td>
-
-                      {vista === 'precio'
-                        ? canales.map((c) => {
-                            const cell = grid.cells.get(cellKey(p.menuItemId, c.cols[0].key))
-                            if (!cell) return <td key={c.channelId} className="px-3 py-2" />
-                            const editando = edit?.itemId === p.menuItemId && edit?.channelId === c.channelId
-                            if (editando) {
-                              return (
-                                <td key={c.channelId} className="px-2 py-2 text-right align-top">
-                                  <input
-                                    autoFocus
-                                    value={edit.valor}
-                                    inputMode="decimal"
-                                    aria-label={`Precio de ${p.name} en ${c.channelName}`}
-                                    onChange={(e) => setEdit({ ...edit, valor: e.target.value })}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') { e.preventDefault(); void previsualizarCelda() }
-                                      else if (e.key === 'Escape') { e.preventDefault(); cancelarEdicion() }
-                                      else if (e.key === 'Tab') { tabular(e) }
-                                    }}
-                                    className="w-24 border-2 border-tinta rounded-md px-2 py-1 text-sm text-right tabular-nums font-semibold"
-                                  />
-                                  <div className="text-[10px] text-tinta-45 mt-0.5">con IVA · vacío = heredar</div>
-                                </td>
-                              )
-                            }
-                            const propio = cell.priceSource === 'override'
-                            const desvio = p.basePrice ? ((cell.price - p.basePrice) / p.basePrice) * 100 : null
-                            return (
-                              <td key={c.channelId} className="px-3 py-2 text-right align-top relative">
-                                {propio && <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-tinta rounded" />}
-                                <button
-                                  type="button"
-                                  onClick={() => abrirCelda(p.menuItemId, c.channelId, cell.price)}
-                                  title="Pulsa para cambiar el precio"
-                                  className="w-full text-right rounded px-1 -mx-1 hover:bg-tinta/5 focus:outline-none focus:ring-2 focus:ring-tinta/40">
-                                  <div className={`tabular-nums text-sm ${propio ? 'font-semibold text-tinta' : 'font-normal text-tinta-25'}`}>
-                                    {eur(cell.price)}
-                                  </div>
-                                  <div className={`text-[10px] mt-0.5 ${propio ? 'text-tinta font-semibold uppercase tracking-wide' : 'text-tinta-25'}`}>
-                                    {propio ? (cell.isLocationOverride ? 'propio del local' : 'propio') : 'hereda'}
-                                  </div>
-                                  {propio && desvio !== null && Math.abs(desvio) >= 0.5 && (
-                                    <div className={`text-[10px] tabular-nums mt-0.5 font-semibold ${desvio < -10 ? 'text-danger' : desvio < 0 ? 'text-warning' : 'text-success'}`}>
-                                      {/* eslint-disable-next-line no-restricted-syntax -- desvio es local y ya está comprobado no-null */}
-                                      {desvio > 0 ? '+' : '−'}{Math.abs(desvio).toFixed(0)} %
-                                    </div>
-                                  )}
-                                </button>
-                              </td>)
-                          })
-                        : grid.columns.map((c) => {
-                            const cell = grid.cells.get(cellKey(p.menuItemId, c.key))
-                            if (!cell) return <td key={c.key} className="px-3 py-2" />
-                            const b = bandaDe(cell.netMarginPct)
-                            return (
-                              <td key={c.key} className="px-3 py-2 text-right align-top">
-                                {/* Sin escandallo: HUECO. Nunca 0 %. */}
-                                <div className={`tabular-nums text-sm ${BANDA_CLASE[b]}`}>
-                                  {b === 'sin_dato' ? '' : pct(cell.netMarginPct)}
-                                </div>
-                                <div className="text-[10px] text-tinta-25 mt-0.5">
-                                  {b === 'sin_dato' ? 'sin escandallo' : eur(cell.price)}
-                                </div>
-                              </td>)
-                          })}
-                    </tr>
-
-                    {/* ── Confirmación de la celda, EN LA PROPIA FILA ─────────
-                        El margen se abre por modalidad porque ahí está lo que
-                        decide: el mismo precio de Glovo puede mejorar la
-                        recogida y hundir el reparto propio. */}
-                    {cellPrev && cellPrev.itemId === p.menuItemId && (
-                      <tr className="border-b-2 border-tinta bg-lavado">
-                        <td />
-                        <td colSpan={2 + (vista === 'precio' ? canales.length : grid.columns.length)} className="px-2 py-3">
-                          <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
-                            <div>
-                              <div className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45">
-                                {cellPrev.canal} · precio
-                              </div>
-                              <div className="text-sm tabular-nums mt-1">
-                                <span className="text-tinta-45">{eur(cellPrev.precioAntes)}</span>
-                                {' → '}
-                                <b>{cellPrev.accion === 'clear'
-                                  ? (cellPrev.precioDespues === null ? 'hereda' : `${eur(cellPrev.precioDespues)} (hereda)`)
-                                  : eur(cellPrev.precioDespues)}</b>
-                              </div>
-                              {cellPrev.nota && <div className="text-[11px] text-tinta-45 mt-1 max-w-xs">{cellPrev.nota}</div>}
-                            </div>
-
-                            {cellPrev.modalidades.length > 0 && (
-                              <div>
-                                <div className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45">
-                                  Margen neto por modalidad
-                                </div>
-                                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-1">
-                                  {cellPrev.modalidades.map((m) => (
-                                    <div key={m.key} className="text-sm">
-                                      <span className="text-[11px] text-tinta-45">{m.label}: </span>
-                                      {!cellPrev.costAvailable ? (
-                                        // Sin escandallo: HUECO, y se deja guardar igual.
-                                        <span className="text-tinta-25 text-[11px]">sin escandallo</span>
-                                      ) : (
-                                        <span className="tabular-nums">
-                                          <span className="text-tinta-45">{pct(m.antes)}</span>
-                                          {' → '}
-                                          <b className={BANDA_CLASE[bandaDe(m.despues)]}>{pct(m.despues)}</b>
-                                        </span>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Avisa fuerte, NO bloquea: la decisión es de quien mira el producto. */}
-                          {cellPrev.quedaEnPerdida && (
-                            <label className="mt-3 flex items-start gap-2 border border-danger/50 bg-danger-bg/50 rounded-lg p-2.5 text-sm cursor-pointer">
-                              <input type="checkbox" className="mt-0.5" checked={asumoPerdida}
-                                onChange={(e) => setAsumoPerdida(e.target.checked)} />
-                              <span className="flex items-start gap-1.5">
-                                <AlertTriangle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
-                                <span>
-                                  <b>Este precio deja el producto en pérdida</b> en al menos una modalidad de{' '}
-                                  {cellPrev.canal}. Puede ser lo que quieres —un gancho— pero tienes que decirlo:
-                                  marca la casilla para poder guardar.
-                                </span>
-                              </span>
-                            </label>
-                          )}
-
-                          <div className="mt-3 flex items-center gap-2">
-                            <button onClick={() => void guardarCelda()}
-                              disabled={cellBusy || (cellPrev.quedaEnPerdida && !asumoPerdida)}
-                              className="px-3 py-1.5 rounded-lg bg-tinta text-white text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5">
-                              <Check className="w-3.5 h-3.5" /> {cellBusy ? 'Guardando…' : 'Guardar'}
-                            </button>
-                            <button onClick={cancelarEdicion}
-                              className="px-3 py-1.5 rounded-lg border border-linea-fuerte text-sm font-semibold">
-                              Cancelar
-                            </button>
-                            <span className="text-[11px] text-tinta-45">
-                              Se guarda como una operación: se puede deshacer entera.
-                            </span>
+                      <tr key={p.menuItemId} className="border-b border-border-default/60 hover:bg-lavado/40">
+                        <td className="px-3 py-2 align-top">
+                          <input type="checkbox" checked={selProductos.has(p.menuItemId)}
+                            onChange={() => setSelProductos((s) => {
+                              const n = new Set(s)
+                              if (n.has(p.menuItemId)) n.delete(p.menuItemId); else n.add(p.menuItemId)
+                              return n
+                            })} />
+                        </td>
+                        <td className="px-2 py-2 align-top">
+                          <div className="text-sm font-semibold leading-tight">{p.name}</div>
+                          <div className="text-[11px] text-tinta-45 mt-0.5">
+                            {p.categoryName ?? 'Sin categoría'}
+                            {p.productType === 'combo' && ' · combo'}
                           </div>
                         </td>
+                        <td className="px-3 py-2 text-right align-top tabular-nums text-sm font-semibold">{eur(p.basePrice)}</td>
+
+                        {vista === 'precio'
+                          ? canales.map((c) => {
+                              const cell = grid.cells.get(cellKey(p.menuItemId, c.cols[0].key))
+                              if (!cell) return <td key={c.channelId} className="px-3 py-2" />
+                              const editando = edit?.itemId === p.menuItemId && edit?.channelId === c.channelId
+                              if (editando) {
+                                return (
+                                  <td key={c.channelId} className="px-2 py-2 text-right align-top">
+                                    <input
+                                      autoFocus
+                                      value={edit.valor}
+                                      inputMode="decimal"
+                                      aria-label={`Precio de ${p.name} en ${c.channelName}`}
+                                      onChange={(e) => setEdit({ ...edit, valor: e.target.value })}
+                                      // Salir de la celda ACEPTA, igual que Enter. Es el gesto más
+                                      // frecuente de todos y antes no tenía regla, que es de donde
+                                      // salía «si te sales de la celda no lo guarda». Lee el DOM y
+                                      // no el estado: el estado puede ir un render por detrás.
+                                      onBlur={(e) => { aceptarEdicion(e.target.value, p.menuItemId, c.channelId) }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') { e.preventDefault(); mover('abajo') }
+                                        else if (e.key === 'Tab') { e.preventDefault(); mover('derecha') }
+                                        else if (e.key === 'Escape') {
+                                          // Devolver la semilla al campo deja esa celda como estaba
+                                          // y hace inocuo el onBlur del desmontaje. Los demás
+                                          // pendientes no se tocan.
+                                          e.preventDefault()
+                                          e.currentTarget.value = edit.semilla
+                                          setEdit(null); setAviso(null)
+                                        }
+                                      }}
+                                      className="w-24 border-2 border-tinta rounded-md px-2 py-1 text-sm text-right tabular-nums font-semibold"
+                                    />
+                                    <div className="text-[10px] text-tinta-45 mt-0.5">con IVA · vacío = heredar</div>
+                                  </td>
+                                )
+                              }
+                              const pend = pendientes.get(pKey(p.menuItemId, c.channelId))
+                              const propio = cell.priceSource === 'override'
+                              const mostrado = precioMostrado(p.menuItemId, c.channelId, cell.price, p.basePrice)
+                              return (
+                                <td key={c.channelId} className="px-3 py-2 text-right align-top relative">
+                                  {propio && !pend && <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-tinta rounded" />}
+                                  <button
+                                    type="button"
+                                    onClick={() => abrirCelda(p.menuItemId, c.channelId, cell.price)}
+                                    title="Pulsa para cambiar el precio"
+                                    className={`w-full text-right rounded px-1 -mx-1 focus:outline-none focus:ring-2 focus:ring-tinta/40 ${
+                                      pend ? 'border-2 border-dashed border-tinta bg-tinta/5 py-0.5' : 'hover:bg-tinta/5'}`}>
+                                    <div className={`tabular-nums text-sm ${
+                                      pend ? 'font-bold text-tinta' : propio ? 'font-semibold text-tinta' : 'font-normal text-tinta-25'}`}>
+                                      {pend?.accion === 'clear' ? 'hereda' : eur(mostrado)}
+                                    </div>
+                                    {pend ? (
+                                      <>
+                                        <div className="text-[10px] mt-0.5 font-bold uppercase tracking-wide text-tinta flex items-center justify-end gap-1">
+                                          <Pencil className="w-2.5 h-2.5" /> pendiente
+                                        </div>
+                                        <div className="text-[10px] text-tinta-45 line-through tabular-nums">{eur(pend.precioAntes)}</div>
+                                      </>
+                                    ) : (
+                                      <div className={`text-[10px] mt-0.5 ${propio ? 'text-tinta font-semibold uppercase tracking-wide' : 'text-tinta-25'}`}>
+                                        {propio ? (cell.isLocationOverride ? 'propio del local' : 'propio') : 'hereda'}
+                                      </div>
+                                    )}
+                                  </button>
+                                </td>)
+                            })
+                          : grid.columns.map((c) => {
+                              const cell = grid.cells.get(cellKey(p.menuItemId, c.key))
+                              if (!cell) return <td key={c.key} className="px-3 py-2" />
+                              const b = bandaDe(cell.netMarginPct)
+                              return (
+                                <td key={c.key} className="px-3 py-2 text-right align-top">
+                                  <div className={`tabular-nums text-sm ${BANDA_CLASE[b]}`}>
+                                    {b === 'sin_dato' ? '' : pct(cell.netMarginPct)}
+                                  </div>
+                                  <div className="text-[10px] text-tinta-25 mt-0.5">
+                                    {b === 'sin_dato' ? 'sin escandallo' : eur(cell.price)}
+                                  </div>
+                                </td>)
+                            })}
                       </tr>
-                    )}
-                      </Fragment>
                     ))}
                   </Fragment>
                 ))}
@@ -1000,27 +925,92 @@ export default function PriceGridPage() {
         </>
       )}
 
-      {/* previsualización del LOTE */}
+      {/* ── BARRA DE GUARDADO — SIEMPRE presente mientras hay rejilla ──────────
+          Nunca aparece y desaparece según la celda: con 0 cambios sigue ahí,
+          con los botones apagados. Que un botón de guardar vaya y venga fue
+          justo lo que hizo el sistema impredecible. */}
+      {grid && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-linea-fuerte bg-card/95 backdrop-blur px-4 py-2.5">
+          <div className="max-w-[1400px] mx-auto flex flex-wrap items-center gap-3">
+            <div className="text-sm">
+              <b className={hayPendientes ? 'text-tinta' : 'text-tinta-45'}>
+                {hayPendientes ? `${pendientes.size} cambio(s) pendiente(s)` : 'Sin cambios pendientes'}
+              </b>
+              {/* EL ÁMBITO, donde se mira antes de escribir. */}
+              <span className="text-text-secondary"> · se guardarán en <b className="text-tinta">{ambitoNombre}</b></span>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              {ultimaOperacion && (
+                <button onClick={deshacer} disabled={saving}
+                  className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold flex items-center gap-1.5">
+                  <Undo2 className="w-3.5 h-3.5" /> Deshacer lo guardado
+                </button>
+              )}
+              <button onClick={descartarTodo} disabled={!hayPendientes}
+                className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold disabled:opacity-40">
+                Descartar
+              </button>
+              <button onClick={construirPreview} disabled={!hayPendientes || previewing}
+                className="px-4 py-2 rounded-lg bg-tinta text-white text-sm font-semibold disabled:opacity-40">
+                {previewing ? 'Calculando…' : `Guardar${hayPendientes ? ` ${pendientes.size}` : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* aviso de salida con pendientes */}
+      {salidaPendiente !== null && (
+        <div className="fixed inset-0 bg-tinta/40 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-card rounded-xl max-w-md w-full p-4">
+            <div className="font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-warning" /> Tienes {pendientes.size} cambio(s) sin guardar
+            </div>
+            <p className="text-sm text-text-secondary mt-2">
+              Son cambios de precio en <b>{ambitoNombre}</b> que todavía no se han escrito. Si sales ahora se pierden.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => { const d = salidaPendiente; setPendientes(new Map()); setSalidaPendiente(null); navigate(d) }}
+                className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold">
+                Salir y perderlos
+              </button>
+              <button onClick={() => setSalidaPendiente(null)} className="px-3 py-2 rounded-lg bg-tinta text-white text-sm font-semibold">
+                Quedarme
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* previsualización */}
       {preview && (
         <div className="fixed inset-0 bg-tinta/40 flex items-center justify-center p-4 z-50" onClick={() => setPreview(null)}>
           <div className="bg-card rounded-xl max-w-5xl w-full max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-border-default flex items-start justify-between gap-4">
               <div>
-                <div className="font-semibold">Antes de guardar · {preview.length} celda(s)</div>
+                <div className="font-semibold">
+                  Vas a guardar {preview.length} cambio(s) en <span className="underline decoration-2">{ambitoNombre}</span>
+                </div>
                 <div className="text-xs text-text-secondary mt-1">
-                  Ordenado por lo que más empeora. El porcentaje es el <b>real tras redondear</b>, no el que se pidió.
+                  El margen se abre por modalidad: el mismo precio puede mejorar la recogida y hundir el reparto.
+                  El porcentaje es el <b>real tras redondear</b>.
                 </div>
               </div>
               <button onClick={() => setPreview(null)} className="p-1"><X className="w-4 h-4" /></button>
             </div>
 
-            {bloqueados > 0 && (
-              <div className="mx-4 mt-3 border border-danger/50 bg-danger-bg/50 rounded-lg p-3 text-sm flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
-                <div><b>{bloqueados} celda(s) caerían por debajo de 0 % de margen.</b> No se puede guardar
-                  hasta quitarlas de la selección o cambiar la operación. En una operación de muchas celdas
-                  nadie las mira de una en una; si quieres un producto a pérdida a propósito, edítalo solo.</div>
-              </div>
+            {enPerdida > 0 && (
+              <label className="mx-4 mt-3 border border-danger/50 bg-danger-bg/50 rounded-lg p-3 text-sm flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={asumoPerdida} onChange={(e) => setAsumoPerdida(e.target.checked)} />
+                <span className="flex items-start gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
+                  <span>
+                    <b>{enPerdida} celda(s) quedarían por debajo de 0 % de margen.</b> Puede ser lo que quieres —un
+                    producto gancho— pero no puede pasar por descuido: marca la casilla para poder guardar.
+                  </span>
+                </span>
+              </label>
             )}
 
             <div className="overflow-auto flex-1 p-4">
@@ -1029,30 +1019,36 @@ export default function PriceGridPage() {
                   <tr className="text-[10px] uppercase tracking-wider text-tinta-45">
                     <th className="text-left py-2">Producto</th><th className="text-left">Canal</th>
                     <th className="text-right">Precio</th><th className="text-right">% real</th>
-                    <th className="text-right">Margen</th><th className="text-right"> </th>
+                    <th className="text-left pl-4">Margen por modalidad</th>
                   </tr>
                 </thead>
                 <tbody>
                   {preview.map((r, i) => (
-                    <tr key={i} className="border-t border-border-default/60">
+                    <tr key={i} className="border-t border-border-default/60 align-top">
                       <td className="py-2 pr-2">{r.producto}</td>
                       <td className="pr-2 text-tinta-70">{r.canal}</td>
                       <td className="text-right tabular-nums whitespace-nowrap">
-                        <span className="text-tinta-45">{eur(r.precioAntes)}</span> → <b>{eur(r.precioDespues)}</b>
+                        <span className="text-tinta-45">{eur(r.precioAntes)}</span> →{' '}
+                        <b>{r.accion === 'clear'
+                          ? (r.precioDespues === null ? 'hereda' : `${eur(r.precioDespues)} (hereda)`)
+                          : eur(r.precioDespues)}</b>
                       </td>
-                      <td className="text-right tabular-nums">{r.pctRealAplicado === null ? '' : pct(r.pctRealAplicado, 2)}</td>
-                      <td className="text-right tabular-nums whitespace-nowrap">
-                        {!r.costAvailable ? <span className="text-tinta-25">no se puede saber</span> : (
-                          <>
-                            <span className="text-tinta-45">{pct(r.margenAntes)}</span> →{' '}
-                            <b className={BANDA_CLASE[bandaDe(r.margenDespues)]}>{pct(r.margenDespues)}</b>
-                          </>
+                      <td className="text-right tabular-nums">{r.pctRealAplicado === null ? '' : pct(r.pctRealAplicado)}</td>
+                      <td className="pl-4">
+                        {!r.costAvailable ? <span className="text-tinta-25 text-xs">sin escandallo</span> : (
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                            {r.modalidades.map((m) => (
+                              <span key={m.key} className="text-xs whitespace-nowrap">
+                                <span className="text-tinta-45">{m.label}: </span>
+                                <span className="tabular-nums text-tinta-45">{pct(m.antes)}</span>
+                                {' → '}
+                                <b className={`tabular-nums ${BANDA_CLASE[bandaDe(m.despues)]}`}>
+                                  {m.despues === null ? '—' : pct(m.despues)}
+                                </b>
+                              </span>
+                            ))}
+                          </div>
                         )}
-                      </td>
-                      <td className="text-right pl-2">
-                        {r.bloqueado ? <span className="text-[10px] font-semibold uppercase text-danger">bloqueado</span>
-                          : r.avisado ? <span className="text-[10px] font-semibold uppercase text-warning">aprieta</span>
-                          : !r.costAvailable ? <span className="text-[10px] text-tinta-25">sin dato</span> : null}
                       </td>
                     </tr>
                   ))}
@@ -1060,12 +1056,17 @@ export default function PriceGridPage() {
               </table>
             </div>
 
-            <div className="p-4 border-t border-border-default flex items-center justify-end gap-2">
-              <button onClick={() => setPreview(null)} className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold">Cancelar</button>
-              <button onClick={guardar} disabled={saving || bloqueados > 0}
-                className="px-4 py-2 rounded-lg bg-tinta text-white text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5">
-                <Check className="w-4 h-4" /> {saving ? 'Guardando…' : 'Guardar en Folvy'}
-              </button>
+            <div className="p-4 border-t border-border-default flex items-center justify-between gap-2">
+              <div className="text-xs text-text-secondary">
+                Se escribe <b>una sola operación</b> con {preview.length} entrada(s): se puede deshacer entera.
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setPreview(null)} className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold">Cancelar</button>
+                <button onClick={guardar} disabled={saving || !puedeGuardar}
+                  className="px-4 py-2 rounded-lg bg-tinta text-white text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5">
+                  <Check className="w-4 h-4" /> {saving ? 'Guardando…' : `Guardar en ${ambitoNombre}`}
+                </button>
+              </div>
             </div>
           </div>
         </div>
