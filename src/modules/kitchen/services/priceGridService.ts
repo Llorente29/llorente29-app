@@ -24,7 +24,20 @@
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
 function requireSupabase(): void {
-  if (!isSupabaseEnabled() || !supabase) throw new Error('Supabase no está configurado')
+  if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado')
+}
+
+// DEUDA DECLARADA: src/types/database.ts se regenera con el CLI de Supabase
+// (npm run gen:types, que necesita el CLI global y el proyecto linkeado) y
+// todavia no conoce brand_price_grid, apply_price_operation,
+// revert_price_operation ni la tabla price_operation: las cuatro migraron esta
+// madrugada. Hasta la proxima regeneracion se pasa por el cliente sin tipar,
+// que es el patron ya usado en availabilityReportService y comboEditService.
+// Lo unico que se afloja es el NOMBRE de la RPC/tabla; los tipos de retorno
+// (RawRow, PriceOperationRow) se siguen declarando a mano mas abajo.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function db(): any {
+  return supabase
 }
 
 // ─── Tipos ───
@@ -126,7 +139,7 @@ export async function getBrandPriceGrid(
   overrides?: Record<string, Record<string, number>> | null,
 ): Promise<PriceGrid> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('brand_price_grid', {
+  const { data, error } = await db().rpc('brand_price_grid', {
     p_brand_id: brandId,
     p_location_id: locationId ?? undefined,
     p_overrides: overrides && Object.keys(overrides).length > 0 ? overrides : undefined,
@@ -339,7 +352,7 @@ export async function applyPriceOperation(args: {
   note?: string | null
 }): Promise<string> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('apply_price_operation', {
+  const { data, error } = await db().rpc('apply_price_operation', {
     p_account_id: args.accountId,
     p_scope: args.scope,
     p_entries: args.entries,
@@ -351,7 +364,7 @@ export async function applyPriceOperation(args: {
 
 export async function revertPriceOperation(operationId: string): Promise<string> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('revert_price_operation', {
+  const { data, error } = await db().rpc('revert_price_operation', {
     p_operation_id: operationId,
   })
   if (error) throw new Error(error.message)
@@ -371,14 +384,14 @@ export interface PriceOperationRow {
 
 export async function listPriceOperations(accountId: string, limit = 10): Promise<PriceOperationRow[]> {
   requireSupabase()
-  const { data, error } = await supabase!
+  const { data, error } = await db()
     .from('price_operation')
     .select('id, kind, created_at, entries_count, writes_count, reverted_operation_id, note, scope')
     .eq('account_id', accountId)
     .order('created_at', { ascending: false })
     .limit(limit)
   if (error) throw new Error(error.message)
-  return (data ?? []).map((o) => ({
+  return ((data ?? []) as Record<string, unknown>[]).map((o) => ({
     id: o.id as string,
     kind: o.kind as PriceOperationRow['kind'],
     createdAt: o.created_at as string,
