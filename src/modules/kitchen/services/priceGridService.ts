@@ -57,7 +57,16 @@ export interface GridCell {
   netMargin: number | null
   netMarginPct: number | null
   contributionMarginPct: number | null
-  orders30d: number
+  /**
+   * Pedidos del CANAL en 30 dias. NO son los de este producto: el recuento
+   * filtra por cuenta y ventana, por nada mas, asi que sale el mismo numero
+   * para los 27 productos de la marca (297 filas, 10 valores distintos en
+   * Scandal Burgers / Alcala). El servidor lo renombro el 18/08 para que el
+   * nombre dejara de enganar. Pendiente de decision: cambiarlo para que cuente
+   * ESE producto seria mas util para decidir precios, pero es un cambio de
+   * significado.
+   */
+  channelOrders30d: number
   policyAllowed: boolean
   policyReason: string | null
 }
@@ -122,7 +131,7 @@ export interface RawRow {
   vat_rate: string | number; cost_available: boolean
   net_margin: string | number | null; net_margin_pct: string | number | null
   contribution_margin_pct: string | number | null
-  orders_30d: number
+  channel_orders_30d: number
   policy_allowed: boolean; policy_reason: string | null
 }
 
@@ -292,7 +301,7 @@ export function shapeGrid(rows: RawRow[]): PriceGrid {
       netMargin: r.cost_available ? numOrNull(r.net_margin) : null,
       netMarginPct: r.cost_available ? numOrNull(r.net_margin_pct) : null,
       contributionMarginPct: r.cost_available ? numOrNull(r.contribution_margin_pct) : null,
-      orders30d: r.orders_30d ?? 0,
+      channelOrders30d: r.channel_orders_30d ?? 0,
       policyAllowed: true,
       policyReason: null,
     })
