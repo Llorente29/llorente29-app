@@ -71,12 +71,44 @@ catálogos:
 
 | Ruta / verbo | Resultado |
 |---|---|
+| `GET /catalogs/{c}` · `GET /catalogs?locationId=` | ✅ lee |
 | `PUT /catalogs/{c}/products/{p}` con precio | 200, no cambia nada (6 formas de campo) |
+| `PUT /catalogs/{c}/products/{p}` con `enable` | ✅ **escribe, y es POR LOCAL** — es el 86 en producción |
 | **`PUT /catalogs/{c}`** | **405 — method not allowed** |
+| **`PATCH /catalogs/{c}`** | **405 — method not allowed** |
+| **`PATCH /catalogs/{c}/products/{p}`** | **405 — method not allowed** |
 | `POST /catalogs` · `POST /catalogs/{id}` | 405 |
 | crear/borrar productos y categorías | 404/405 en nueve rutas |
 | precio de producto de **organización** | ✅ escribe, pero es **global** (todos los locales y canales) |
-| `enabled` (el 86) | ✅ escribe, y **sí es por local** |
+
+`DELETE` no se ha probado y no se va a probar: sólo destruye, y no resuelve
+nada de lo que buscamos.
+
+## El límite exacto — y por qué NO es «nunca»
+
+Lo probado es: **con la API v2 pública y el token de bridge que tenemos, hoy**,
+Folvy no puede fijar precio por canal ni crear, sustituir o borrar nada del
+catálogo.
+
+Lo que **sí** puede, y hace en producción todos los días:
+
+- **encender y apagar productos, por local** (`enable`) — eso *es* modificar el catálogo;
+- **cambiar el precio de organización** — global, pero es una escritura real.
+
+Tres cosas quedan sin probar, y cada una bastaría para tumbar un «nunca»:
+
+1. **La ruta que usa el propio panel de Last.** Su back-office guarda precios
+   por catálogo, así que esa ruta existe. No sabemos si es la v2, una interna o
+   una v3. Se ve en dos minutos con la pestaña Red del navegador.
+2. **Otro token con otros permisos.** El nuestro sale de `external_integration`
+   (bridge). Nunca hemos comprobado si Last ofrece un OAuth con scope de
+   escritura de catálogo — que es exactamente el patrón «writer token» que ya
+   montamos para HubRise.
+3. **Que Last lo añada.** Es una decisión de producto suya, no una ley física.
+
+La deuda A31 nació de escribir «definitivo, no se puede» sobre una puerta sin
+abrir. Este documento existe porque esa frase costó dos meses. Que la
+sustituya un límite con fecha, versión y credencial — no un adverbio.
 
 **Folvy no puede gobernar el precio por canal en Last por API.** Para Glovo y
 los canales de Carabanchel, la vía sigue siendo HubRise.

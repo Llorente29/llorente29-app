@@ -288,6 +288,51 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, accion, escritura, huella_despues: await huella(despues) });
     }
 
+    // ── sonda_verbo: CUALQUIER verbo contra CUALQUIER ruta ──
+    // Existe porque cerrar un tema "para siempre" con un verbo sin probar es
+    // como se genero la deuda A31. Si se declara catalog_id_vigilado, se mide
+    // la huella de ese catalogo antes y despues: cualquier dano se ve.
+    if (accion === "sonda_verbo") {
+      const verbo: string = body.verbo ?? "";
+      const ruta: string = body.ruta ?? "";
+      const vigilado: string = body.catalog_id_vigilado ?? "";
+      const prohibido: string = body.catalog_id_prohibido ?? "";
+      if (!verbo || !ruta) return json({ ok: false, error: "verbo y ruta requeridos" }, 400);
+      if (prohibido && ruta.includes(prohibido)) {
+        return json({ ok: false, error: `NEGADO: la ruta toca el catalogo prohibido ${prohibido}.` }, 400);
+      }
+
+      const huellaAntes = vigilado ? await huella(await lastGet(token, `/catalogs/${vigilado}`, locId)) : null;
+
+      const init: RequestInit = {
+        method: verbo,
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "locationID": locId,
+          "Content-Type": "application/json",
+        },
+      };
+      if (body.cuerpo !== undefined && body.cuerpo !== null) init.body = JSON.stringify(body.cuerpo);
+      const res = await fetch(`${LASTAPP_BASE}${ruta}`, init);
+      const texto = await res.text();
+      const cabeceras: Record<string, string> = {};
+      res.headers.forEach((v, k) => { cabeceras[k] = v; });
+
+      const huellaDespues = vigilado ? await huella(await lastGet(token, `/catalogs/${vigilado}`, locId)) : null;
+
+      return json({
+        ok: true, accion, verbo, ruta,
+        status: res.status,
+        allow: res.headers.get("allow"),
+        respuesta: texto.slice(0, 600),
+        cabeceras,
+        catalogo_intacto: huellaAntes && huellaDespues
+          ? huellaAntes.sha256_12 === huellaDespues.sha256_12 : null,
+        huella_antes: huellaAntes,
+        huella_despues: huellaDespues,
+      });
+    }
+
     return json({ ok: false, error: `accion desconocida: ${accion}` }, 400);
   } catch (e) {
     return json({ ok: false, accion, error: e instanceof Error ? e.message : String(e) }, 500);
