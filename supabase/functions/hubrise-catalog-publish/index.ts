@@ -795,15 +795,55 @@ Deno.serve(async (req: Request) => {
     // catálogo de destino y los precios ya resueltos por local, que es lo que
     // hay que mirar antes de tocar un escaparate vivo.
     if (dryRun) {
+      // Un precio propio por canal, con su base y su delta, listo para ensenar.
+      const eurNum = (v: unknown): number => parseFloat(String(v ?? "0").split(" ")[0]) || 0;
+      const cambiosDe = (prods: Array<Record<string, unknown>>): Array<Record<string, unknown>> => {
+        const out: Array<Record<string, unknown>> = [];
+        for (const p of prods) {
+          const sku = ((p.skus as Array<Record<string, unknown>>) ?? [])[0] ?? {};
+          const base = sku.price as string | undefined;
+          for (const o of ((sku.price_overrides as Array<Record<string, unknown>>) ?? [])) {
+            const b = eurNum(base);
+            const n = eurNum(o.price);
+            out.push({
+              ref: p.ref,
+              nombre: p.name,
+              canales: (o.variant_refs as string[]) ?? [],
+              base,
+              se_publica: o.price,
+              delta_pct: b === 0 ? null : Math.round(((n - b) / b) * 100),
+            });
+          }
+        }
+        // Mayor diferencia primero, calculada sobre el TOTAL y no sobre lo que
+        // se acabe ensenando.
+        out.sort((a, b) => Math.abs(Number(b.delta_pct ?? 0)) - Math.abs(Number(a.delta_pct ?? 0)));
+        return out;
+      };
       const preview = publishTargets.map((t) => {
         const prods = productsPayloadFor(t.locationId);
+        const cambios = cambiosDe(prods);
         return {
           external_catalog_id: t.catalogId,
           connection_name: t.connName,
           location_id: t.locationId,
           productos: prods.length,
-          // Muestra acotada: publicar entero son cientos de líneas y aquí lo
-          // que importa es si el PRECIO es el del local o el de la marca.
+          // ── LOS PRECIOS QUE CAMBIAN, TODOS Y CONTADOS (19/08) ───
+          // Antes esto leia p.price y p.price_overrides. El precio NO vive en
+          // el producto: vive en su SKU (p.skus[0], ver donde se monta arriba).
+          // Los dos salian undefined SIEMPRE, para todas las marcas, asi que el
+          // ensayo decia "sin precios propios" aunque hubiera trece. No era la
+          // muestra: era el nivel equivocado, y ampliar la muestra no habria
+          // arreglado nada.
+          //
+          // Ahora se devuelve el TOTAL y la lista COMPLETA, ordenada por la
+          // diferencia mas grande primero. La pantalla decide cuantos ensena,
+          // pero el numero y el orden salen del total: una pantalla de
+          // confirmacion nunca describe una muestra.
+          precios_propios_total: cambios.length,
+          precios_propios: cambios,
+          // Se conservan por compatibilidad con paneles que aun no hayan
+          // recibido la OTA: leen `precios` y reventarian si desapareciera.
           precios: prods.slice(0, 25).map((p) => ({
             ref: p.ref,
             price: p.price,

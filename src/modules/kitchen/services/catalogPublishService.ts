@@ -44,11 +44,17 @@ export interface PublishResult {
   targets: PublishTarget[]
 }
 
-/** Un precio del ensayo: el del sku y, si los hay, los propios por canal. */
-export interface DryRunPrice {
+/**
+ * Un precio propio por canal que CAMBIA respecto al base, tal y como se
+ * publicaría. Precios en el formato de HubRise ("13.50 EUR").
+ */
+export interface DryRunPriceChange {
   ref: string
-  price: string
-  price_overrides: Array<{ variant_refs: string[]; price: string }> | null
+  nombre: string
+  canales: string[]      // slugs de canal: glovo | justeat | uber…
+  base: string
+  se_publica: string
+  delta_pct: number | null
 }
 
 /** Un catálogo de destino, tal y como lo devuelve el ensayo. */
@@ -57,8 +63,15 @@ export interface DryRunTarget {
   connection_name: string
   location_id: string | null
   productos: number
-  precios: DryRunPrice[]
-  precios_truncados: number
+  /**
+   * TOTAL, no lo que se enseñe. Una confirmación nunca describe una muestra.
+   * Opcionales a propósito: la OTA llega por estación, así que un panel puede
+   * hablar un rato con un Edge que todavía no los manda. La UI lo tolera en
+   * vez de reventar.
+   */
+  precios_propios_total?: number
+  /** Completa y ya ordenada por diferencia descendente (la ordena el Edge). */
+  precios_propios?: DryRunPriceChange[]
 }
 
 export interface DryRunResult {

@@ -20,24 +20,36 @@
 // stock 0/null). Si cualquiera de los dos calcula el ref de otra forma, el
 // namespacing deja de servir — por eso vive en un solo fichero compartido.
 
+// Rango U+0300..U+036F = marcas diacriticas combinantes: lo que deja NFD tras
+// separar el acento de su letra.
+//
+// Se expresa con CODIGOS NUMERICOS, no con los caracteres en crudo ni con un
+// escape dentro de una expresion regular literal. Los caracteres en crudo son
+// INVISIBLES en el editor y en cualquier copia; y el escape no sobrevive al
+// desplegador, que viaja por JSON y decodifica los escapes antes de escribir
+// el fichero — paso en la v45, y volvio a pasar en la v46 y la v47 aun
+// mandandolo doblado. Con codigos el fichero es ASCII puro en esta parte: no
+// hay nada que un transporte pueda reinterpretar, y desplegado y repo salen
+// identicos byte a byte siempre. Mismo rango, misma semantica.
+const CM_MIN = 0x300;
+const CM_MAX = 0x36f;
+
+// Quita los acentos: descompone (NFD) y descarta las marcas combinantes.
+// Equivalente exacto a .normalize("NFD").replace(/[U+0300-U+036F]/g, "").
+function sinAcentos(s: string): string {
+  let out = "";
+  for (const ch of s.normalize("NFD")) {
+    const cp = ch.codePointAt(0) ?? 0;
+    if (cp >= CM_MIN && cp <= CM_MAX) continue;
+    out += ch;
+  }
+  return out;
+}
+
 // Sanea un fragmento para ref de SKU de HubRise: alfanumérico + _ - : (evita
 // espacios/acentos/símbolos que puedan romper el ref o el parseo de HubRise).
 function sanitizeRefPart(s: string): string {
-  // \u0300-\u036f = marcas diacriticas combinantes. Escritas con escapes y no
-  // con los caracteres literales a proposito: son INVISIBLES en el editor y en
-  // cualquier copia, y un despliegue que las pierda romperia el saneo de refs
-  // sin que nadie lo viera. Mismo rango, misma semantica.
-  //
-  // OJO al comparar bytes con lo desplegado (19/08, v45): la copia que corre en
-  // Supabase lleva los caracteres LITERALES, no estos escapes, porque el
-  // desplegador va por JSON y decodifico los \uXXXX al mandarlos. Es la MISMA
-  // expresion y es la forma que llevaba en produccion desde la v1; la unica
-  // diferencia es de escritura. Se alineara en el proximo despliegue de esta
-  // funcion. Si alguien diffea v45 contra el repo, este es el unico fichero
-  // que sale distinto, y estas cuatro lineas mas.
-  const COMBINING_MARKS = /[\u0300-\u036f]/g;
-  return s
-    .normalize("NFD").replace(COMBINING_MARKS, "") // quita acentos
+  return sinAcentos(s)
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/-+/g, "-")
