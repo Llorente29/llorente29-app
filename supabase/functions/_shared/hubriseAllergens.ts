@@ -1,7 +1,7 @@
 // supabase/functions/_shared/hubriseAllergens.ts
 //
 // MAPEO DE ALÉRGENOS Folvy -> objeto `nutrition` de HubRise (T2d).
-// ============================================================================
+// ===
 // Folvy guarda los 14 alérgenos EU (Rgto 1169/2011) con estado por plato en
 // recipe_item_allergen: contains | may_contain | free | unknown, y con fuente
 // manual | inherited | ai_enrich. HubRise expone un objeto `nutrition` en cada
@@ -23,7 +23,7 @@
 //      gluten pero no qué cereal"). Los otros 12 códigos mapean 1:1.
 //
 // Usado por hubrise-catalog-publish (inyecta el resultado en cada product).
-// ============================================================================
+// ===
 
 export interface AllergenRow {
   allergen_code: string; // código EU de Folvy

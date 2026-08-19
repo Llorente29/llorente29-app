@@ -1,7 +1,7 @@
 // supabase/functions/_shared/hubriseToken.ts
 //
 // RESOLUCION DE TOKEN HubRise POR CONEXION — helper compartido.
-// ============================================================================
+// ===
 // Unifica de donde sale el X-Access-Token de HubRise. FUENTE DE VERDAD:
 //   tabla `external_integration` (source='hubrise') -> token + catalogo POR conexion
 //   (account_id x external_location_id x connection_name). Es la MISMA tabla que ya
@@ -149,7 +149,7 @@ export async function listActiveHubriseConnections(
     }));
 }
 
-// ── Token ESCRITOR (Fase 1) ─────────────────────────────────────────────────
+// ── Token ESCRITOR (Fase 1) ───
 //
 // Conexión OAuth propia de Folvy por CUENTA (scope account[all_catalogs.write,
 // inventory.write]), guardada en Vault (public.hubrise_writer_connection +

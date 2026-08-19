@@ -1,7 +1,7 @@
 // supabase/functions/_shared/hubriseSku.ts
 //
 // REF DE HUBRISE — única fuente de verdad (Fase B, namespacing de SKU).
-// ============================================================================
+// ===
 // menu_item.external_id es INTOCABLE: lo usa adapt_lastapp_order para casar
 // ventas entrantes de Last (external_source='lastapp' AND external_id =
 // organizationProductId). El ref que se publica/empuja a HubRise es OTRA
@@ -23,7 +23,19 @@
 // Sanea un fragmento para ref de SKU de HubRise: alfanumérico + _ - : (evita
 // espacios/acentos/símbolos que puedan romper el ref o el parseo de HubRise).
 function sanitizeRefPart(s: string): string {
-  const COMBINING_MARKS = /[̀-ͯ]/g;
+  // \u0300-\u036f = marcas diacriticas combinantes. Escritas con escapes y no
+  // con los caracteres literales a proposito: son INVISIBLES en el editor y en
+  // cualquier copia, y un despliegue que las pierda romperia el saneo de refs
+  // sin que nadie lo viera. Mismo rango, misma semantica.
+  //
+  // OJO al comparar bytes con lo desplegado (19/08, v45): la copia que corre en
+  // Supabase lleva los caracteres LITERALES, no estos escapes, porque el
+  // desplegador va por JSON y decodifico los \uXXXX al mandarlos. Es la MISMA
+  // expresion y es la forma que llevaba en produccion desde la v1; la unica
+  // diferencia es de escritura. Se alineara en el proximo despliegue de esta
+  // funcion. Si alguien diffea v45 contra el repo, este es el unico fichero
+  // que sale distinto, y estas cuatro lineas mas.
+  const COMBINING_MARKS = /[\u0300-\u036f]/g;
   return s
     .normalize("NFD").replace(COMBINING_MARKS, "") // quita acentos
     .toLowerCase()

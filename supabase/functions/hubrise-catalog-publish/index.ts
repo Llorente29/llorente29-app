@@ -1,7 +1,7 @@
 // supabase/functions/hubrise-catalog-publish/index.ts
 //
 // PUBLICADOR DE CATÁLOGO · Folvy -> HubRise (T2a, motor núcleo).
-// ============================================================================
+// ===
 // Invocado por el USUARIO desde la carta (botón "Publicar"). Publica la carta de
 // UNA marca (catalog_source='folvy') a su catálogo HubRise. Construye el payload
 // completo a PRECIO BASE: categorías -> products/skus -> option_lists (modificadores)
@@ -53,7 +53,7 @@
 // Resultado: catalog_publish (pending->done/partial/failed) + catalog_publish_target
 //   por conexión (ok/error). Devuelve 200 con {ok,...} también en fallos de negocio
 //   (sin conexión, validación) para que el front los muestre; 401/500 solo auth/crash.
-// ============================================================================
+// ===
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -96,7 +96,7 @@ function resolveOverridePrice(
   return channelGlobal !== undefined ? channelGlobal : null;
 }
 
-// ── T2c: imágenes ─────────────────────────────────────────────────────
+// ── T2c: imágenes ───
 // Cloudinary: insertar una transformación tras /upload/ para cumplir el límite de
 // 1 MB de HubRise (y servir webp ligero). Si no es Cloudinary, se sube tal cual.
 function cloudinaryResized(url: string): string {
@@ -179,7 +179,7 @@ Deno.serve(async (req: Request) => {
   const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-  // ── Auth: validar usuario por su JWT ────────────────────────────────────
+  // ── Auth: validar usuario por su JWT ───
   const authHeader = req.headers.get("Authorization") ?? "";
   const sbUser = createClient(SUPABASE_URL, ANON, {
     global: { headers: { Authorization: authHeader } },
@@ -207,7 +207,7 @@ Deno.serve(async (req: Request) => {
   const dryRun = body.dry_run === true;
   if (!brandId) return json({ ok: false, error: "brand_id requerido" }, 400);
 
-  // ── Autorización por RLS: leer la marca con el cliente del USUARIO ─────────
+  // ── Autorización por RLS: leer la marca con el cliente del USUARIO ───
   const { data: brand, error: brErr } = await sbUser
     .from("brand")
     .select("id, account_id, name, catalog_source, slug")
@@ -223,7 +223,7 @@ Deno.serve(async (req: Request) => {
   }
   const accountId = brand.account_id as string;
 
-  // ── service_role para el trabajo ──────────────────────────────────────────
+  // ── service_role para el trabajo ───
   const sb: SupabaseClient = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
   // ── Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. PRIMARIO para resolver
@@ -234,7 +234,7 @@ Deno.serve(async (req: Request) => {
     console.warn(`hubrise-catalog-publish: sin token escritor para cuenta ${accountId}, fallback a token de bridge (transicional)`);
   }
 
-  // ── Resolver conexiones HubRise de la marca ───────────────────────────────
+  // ── Resolver conexiones HubRise de la marca ───
   // PRIMARIO (Fase 2): brand_hubrise_catalog -- catálogo creado por el
   // asistente "Conectar a delivery" con el token escritor, sin bridge. Solo
   // tiene sentido con token escritor (es el único que puede escribir ahí).
@@ -290,7 +290,7 @@ Deno.serve(async (req: Request) => {
     }, 200);
   }
 
-  // ── Acotado por local ─────────────────────────────────────────────────
+  // ── Acotado por local ───
   // Se filtra AQUÍ, después de resolver conexiones por los dos caminos
   // (brand_hubrise_catalog primario y external_brand_map de compat), para no
   // duplicar la lógica de resolución ni dejar un camino sin acotar.
@@ -317,7 +317,7 @@ Deno.serve(async (req: Request) => {
     `catalogos=${conns.length}/${connsTotal} dry_run=${dryRun}`,
   );
 
-  // ── Crear el trabajo de publicación ───────────────────────────────────
+  // ── Crear el trabajo de publicación ───
   const { data: pub, error: pubErr } = await sb.from("catalog_publish")
     .insert({ account_id: accountId, brand_id: brandId, requested_by: user.id, status: "pending" })
     .select("id").single();
@@ -325,7 +325,7 @@ Deno.serve(async (req: Request) => {
   const publishId = pub.id as string;
 
   try {
-    // ── Cargar la carta (service_role) ──────────────────────────────────
+    // ── Cargar la carta (service_role) ───
     const [{ data: cats }, { data: items }] = await Promise.all([
       sb.from("menu_category")
         .select("id, name, emoji, position, parent_id, is_active")
@@ -386,7 +386,7 @@ Deno.serve(async (req: Request) => {
     const comboIds = combos.map((c) => c.id as string);
     const warnings: string[] = [];
 
-    // ── T2d: nutrition (alérgenos + "puede contener") por producto ──────────
+    // ── T2d: nutrition (alérgenos + "puede contener") por producto ───
     // El alérgeno del plato vive en recipe_item_allergen, colgado del
     // menu_item.recipe_item_id (motor de herencia ya aplicado). Publicamos la
     // UNIÓN de fuentes (manual + inherited + ai_enrich): decisión de seguridad
@@ -540,7 +540,7 @@ Deno.serve(async (req: Request) => {
       (slotsByCombo.get(k) ?? slotsByCombo.set(k, []).get(k)!).push(s);
     }
 
-    // ── Construir categorías ─────────────────────────────────────────────
+    // ── Construir categorías ───
     const catSet = new Set((cats ?? []).filter((c) => c.is_active !== false).map((c) => c.id as string));
     let usesUncat = false;
     const categories: Array<Record<string, unknown>> = (cats ?? [])
@@ -564,11 +564,11 @@ Deno.serve(async (req: Request) => {
     // idx compartido entre ambos colisionaría — ver ENCARGO fotos-combos 06/08).
     const refToItemId = new Map<string, string>();
 
-    // ── Construir products (skus) ────────────────────────────────────────
+    // ── Construir products (skus) ───
     const sortedProducts = products
       .sort((a, b) => Number((a as Record<string, unknown>).position ?? 0) - Number((b as Record<string, unknown>).position ?? 0));
 
-    // ── REGRESION F1.6 (15/08), encontrada el 19/08 ──────────────────────
+    // ── REGRESION F1.6 (15/08), encontrada el 19/08 ───
     // `usesUncat` se ponia a true como EFECTO SECUNDARIO de catRefFor. Para
     // los COMBOS eso sigue funcionando (su catRefFor corre en el bucle de
     // deals, antes del `if (usesUncat)` que anade la categoria). Para los
@@ -599,7 +599,7 @@ Deno.serve(async (req: Request) => {
       return sortedProducts.map((p) => {
         const ref = refById.get(p.id as string)!;
         const olRefs = groupsByItem.get(p.id as string) ?? [];
-        // ── PRECIO BASE DEL SKU, POR LOCAL (17/08) ────────────────────────
+        // ── PRECIO BASE DEL SKU, POR LOCAL (17/08) ───
         // ANTES: price: eur(p.price) -- el precio de MARCA, siempre.
         //
         // El local solo entraba por los price_overrides POR CANAL, así que un
@@ -697,7 +697,7 @@ Deno.serve(async (req: Request) => {
       if (url) imgTargets.push({ itemId: c.id as string, photoUrl: url });
     }
 
-    // ── Construir deals (combos) ─────────────────────────────────────────
+    // ── Construir deals (combos) ───
     const dealsPayload: Array<Record<string, unknown>> = [];
     for (const c of combos) {
       const cSlots = (slotsByCombo.get(c.id as string) ?? [])
@@ -762,7 +762,7 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    // ── Targets a publicar ────────────────────────────────────────────
+    // ── Targets a publicar ───
     // Con token escritor: 1 target POR CATÁLOGO DISTINTO (dedup — las N
     // conexiones/plataformas de una marca comparten el mismo catálogo en
     // HubRise, así que hoy se hacían N PUT idénticos, con N-1 de más en 403).
@@ -790,7 +790,7 @@ Deno.serve(async (req: Request) => {
       ));
     }
 
-    // ── DRY RUN: qué se publicaría y con qué precios, sin publicar ───────────
+    // ── DRY RUN: qué se publicaría y con qué precios, sin publicar ───
     // Sale ANTES del bucle de PUT: ni una petición hacia HubRise. Devuelve el
     // catálogo de destino y los precios ya resueltos por local, que es lo que
     // hay que mirar antes de tocar un escaparate vivo.
@@ -832,7 +832,7 @@ Deno.serve(async (req: Request) => {
       }, 200);
     }
 
-    // ── Publicar (PUT reemplaza el catálogo) ──────────────────────────────────
+    // ── Publicar (PUT reemplaza el catálogo) ───
     // Las imágenes son POR CATÁLOGO: se resuelven (reuso/subida) una vez por
     // target y se inyectan en productos Y deals antes del PUT, por REF (via
     // refToItemId) — no por posición, productos y deals son arrays distintos.
