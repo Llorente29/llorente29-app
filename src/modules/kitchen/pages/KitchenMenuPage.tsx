@@ -39,7 +39,10 @@ import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
 import AddExistingProductModal from '@/modules/kitchen/components/AddExistingProductModal'
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
 import type { MenuItemEconomics } from '@/types/kitchen'
-import { publishBrandCatalog, type PublishResult } from '@/modules/kitchen/services/catalogPublishService'
+import {
+  publishBrandCatalog, dryRunBrandCatalog, listPublishLocations,
+  type PublishResult, type DryRunResult,
+} from '@/modules/kitchen/services/catalogPublishService'
 import PublishStatusChip from '@/modules/kitchen/components/PublishStatusChip'
 import { connectBrandToDelivery, type ConnectResult } from '@/modules/kitchen/services/hubriseBrandConnectService'
 
@@ -92,12 +95,28 @@ export default function KitchenMenuPage() {
   const [undo, setUndo] = useState<{ label: string; revert: () => Promise<void> } | null>(null)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; count: number } | null>(null)
-  // Publicador (T2a): publicar la carta de la marca a HubRise
+  // Publicador (T2a): publicar la carta de la marca a HubRise.
+  // ÁMBITO (19/08): publicar iba SIEMPRE a todos los catálogos de la marca
+  // porque el panel no pasaba location_id, aunque el Edge lo acepta desde el
+  // 17/08. Meraki Pita se publicó a Alcalá y Carabanchel a la vez. Ahora el
+  // ámbito se elige, viaja explícito, y antes de escribir hay un ENSAYO.
   const [publishing, setPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
+  const [publishLocations, setPublishLocations] = useState<Array<{ id: string; name: string }>>([])
+  const [publishLocationId, setPublishLocationId] = useState<string | null>(null)
+  const [dryRun, setDryRun] = useState<DryRunResult | null>(null)
+  const [dryRunning, setDryRunning] = useState(false)
   const [publishStatusKey, setPublishStatusKey] = useState(0)
   const [connecting, setConnecting] = useState(false)
   const [connectResult, setConnectResult] = useState<ConnectResult | null>(null)
+
+  // Locales de la cuenta, para elegir el ámbito de publicación.
+  useEffect(() => {
+    if (accountsLoading || !activeAccountId) return
+    listPublishLocations(activeAccountId)
+      .then(setPublishLocations)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+  }, [accountsLoading, activeAccountId])
 
   // Cargar marcas con catálogo
   useEffect(() => {
@@ -268,13 +287,35 @@ export default function KitchenMenuPage() {
   }
 
   // ── Publicar la carta de la marca a HubRise (T2a) ─────────────────────────
+  // DOS PUERTAS. El botón hace el ENSAYO, que no manda un byte a HubRise; la
+  // publicación de verdad es un segundo clic, ya sabiendo a qué catálogo va.
+  const ambitoNombre = publishLocationId
+    ? (publishLocations.find((l) => l.id === publishLocationId)?.name ?? publishLocationId)
+    : 'toda la cuenta'
+
   async function handlePublish() {
-    if (!selectedBrand || publishing) return
-    setPublishing(true)
+    if (!selectedBrand || publishing || dryRunning) return
+    setDryRunning(true)
     setPublishResult(null)
+    setDryRun(null)
     setError(null)
     try {
-      const res = await publishBrandCatalog(selectedBrand.id)
+      setDryRun(await dryRunBrandCatalog(selectedBrand.id, publishLocationId))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDryRunning(false)
+    }
+  }
+
+  /** Segundo clic: ahora sí se escribe, con el MISMO ámbito que se ensayó. */
+  async function confirmarPublicacion() {
+    if (!selectedBrand || publishing) return
+    setPublishing(true)
+    setError(null)
+    try {
+      const res = await publishBrandCatalog(selectedBrand.id, publishLocationId)
+      setDryRun(null)
       setPublishResult(res)
       setPublishStatusKey((k) => k + 1)
     } catch (e: unknown) {
@@ -598,15 +639,27 @@ export default function KitchenMenuPage() {
               </button>
             )}
             {selectedBrand.catalogSource === 'folvy' && (
-              <button
-                onClick={handlePublish}
-                disabled={publishing}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-green-600 text-white hover:opacity-90 disabled:opacity-50"
-                title="Publicar esta carta a las plataformas de pedido"
-              >
-                {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                {publishing ? 'Publicando…' : 'Publicar'}
-              </button>
+              <>
+                {/* ÁMBITO: se elige ANTES y se enseña otra vez en el ensayo. */}
+                <select
+                  value={publishLocationId ?? ''}
+                  onChange={(e) => setPublishLocationId(e.target.value || null)}
+                  title="A qué local se publica"
+                  className="px-2 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700"
+                >
+                  <option value="">Toda la cuenta (todos los catálogos)</option>
+                  {publishLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                <button
+                  onClick={handlePublish}
+                  disabled={publishing || dryRunning}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-green-600 text-white hover:opacity-90 disabled:opacity-50"
+                  title="Ver a qué catálogo se publicaría y con qué precios, sin publicar todavía"
+                >
+                  {dryRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                  {dryRunning ? 'Comprobando…' : 'Publicar…'}
+                </button>
+              </>
             )}
           </div>
         )}
@@ -910,6 +963,100 @@ export default function KitchenMenuPage() {
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-red-600 text-white hover:opacity-90 disabled:opacity-50">
                 <Trash2 className="w-4 h-4" /> {moving ? 'Borrando…' : 'Borrar categoría'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ENSAYO antes de publicar (19/08) ────────────────────────────────
+          Ni un byte ha salido hacia HubRise todavía. Esta pantalla dice DÓNDE
+          se va a escribir, con el nombre del local y el id del catálogo, y
+          enseña los precios por canal con su variante — que es lo que nunca
+          habíamos llegado a ver, porque la validación de HubRise fallaba antes. */}
+      {dryRun && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDryRun(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl border border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-200">
+              <h3 className="text-base font-medium text-gray-900">
+                {dryRun.ok
+                  ? <>Vas a publicar <span className="font-semibold">{selectedBrand?.name}</span> en <span className="underline decoration-2">{ambitoNombre}</span></>
+                  : 'No se puede publicar'}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Todavía no se ha enviado nada a HubRise. Publicar de verdad es el botón de abajo.
+              </p>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-700 space-y-3 max-h-[60vh] overflow-auto">
+              {dryRun.error && <p className="text-red-700">{dryRun.error}</p>}
+
+              {dryRun.ok && dryRun.scope === 'all' && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    Ámbito <span className="font-semibold">toda la cuenta</span>: se van a reemplazar los{' '}
+                    <span className="font-semibold">{dryRun.targets.length} catálogos</span> de la marca, en{' '}
+                    <span className="font-semibold">todos</span> sus locales. Si sólo quieres uno, ciérralo y elige el local arriba.
+                  </p>
+                </div>
+              )}
+
+              {dryRun.catalogos_descartados_por_ambito > 0 && (
+                <p className="text-xs text-gray-500">
+                  {dryRun.catalogos_descartados_por_ambito} catálogo(s) de otros locales quedan fuera por el ámbito elegido.
+                </p>
+              )}
+
+              {dryRun.targets.map((t) => (
+                <div key={t.external_catalog_id} className="border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                    <span className="font-medium text-gray-900">{t.connection_name || '(sin nombre de conexión)'}</span>
+                    <span className="text-xs font-mono text-gray-500">catálogo {t.external_catalog_id}</span>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {t.productos} producto(s){t.location_id ? '' : ' · sin local asociado en la conexión'}
+                  </div>
+                  {(() => {
+                    const conOverride = t.precios.filter((p) => (p.price_overrides?.length ?? 0) > 0)
+                    if (conOverride.length === 0) {
+                      return <div className="text-xs text-gray-400 mt-2">Sin precios propios por canal en la muestra.</div>
+                    }
+                    return (
+                      <div className="mt-2">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Precios propios por canal</div>
+                        <ul className="text-xs space-y-0.5">
+                          {conOverride.map((p) => (
+                            <li key={p.ref} className="flex flex-wrap gap-x-2">
+                              <span className="font-mono text-gray-600">{p.ref}</span>
+                              <span className="text-gray-400">base {p.price}</span>
+                              {(p.price_overrides ?? []).map((o, i) => (
+                                <span key={i} className="text-gray-800">
+                                  · <span className="font-medium">{o.variant_refs.join(', ')}</span> {o.price}
+                                </span>
+                              ))}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  })()}
+                  {t.precios_truncados > 0 && (
+                    <div className="text-xs text-gray-400 mt-1">…y {t.precios_truncados} producto(s) más, no mostrados.</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <button onClick={() => setDryRun(null)}
+                className="px-3.5 py-1.5 text-sm rounded-lg font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+              {dryRun.ok && (
+                <button onClick={confirmarPublicacion} disabled={publishing}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-green-600 text-white hover:opacity-90 disabled:opacity-50">
+                  {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                  {publishing ? 'Publicando…' : `Publicar en ${ambitoNombre}`}
+                </button>
+              )}
             </div>
           </div>
         </div>
