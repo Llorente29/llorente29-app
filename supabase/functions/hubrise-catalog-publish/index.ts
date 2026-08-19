@@ -568,6 +568,30 @@ Deno.serve(async (req: Request) => {
     const sortedProducts = products
       .sort((a, b) => Number((a as Record<string, unknown>).position ?? 0) - Number((b as Record<string, unknown>).position ?? 0));
 
+    // ── REGRESION F1.6 (15/08), encontrada el 19/08 ──────────────────────
+    // `usesUncat` se ponia a true como EFECTO SECUNDARIO de catRefFor. Para
+    // los COMBOS eso sigue funcionando (su catRefFor corre en el bucle de
+    // deals, antes del `if (usesUncat)` que anade la categoria). Para los
+    // PRODUCTOS dejo de funcionar: desde F1.6 su catRefFor vive dentro de
+    // buildProductsPayload, que es una funcion PEREZOSA evaluada mucho
+    // despues de ese if. Antes de F1.6 el payload de productos era un const
+    // evaluado en el acto y el orden salia bien por accidente.
+    //
+    // Consecuencia: un producto sin categoria salia con category_ref
+    // "__uncat__" y esa categoria NO viajaba en el catalogo. HubRise rechaza
+    // un category_ref que no existe, asi que la marca entera dejaba de
+    // publicar. Lovers Burgers publico bien el 06/08 con Agua Mineral 50 CL
+    // sin categoria; desde F1.6 no puede, y nadie se entero porque nadie lo
+    // intento. Meraki Pita, igual.
+    //
+    // Se calcula del DATO y no del orden de evaluacion, para que no vuelva a
+    // depender de donde se llame a quien. Es exactamente equivalente a lo que
+    // hace catRefFor sobre los productos: buildProductsPayload es un .map sin
+    // filtro, asi que TODO sortedProducts pasa por ahi.
+    if (sortedProducts.some((p) => !catSet.has(((p as Record<string, unknown>).menu_category_id as string | null) ?? ""))) {
+      usesUncat = true;
+    }
+
     // F1.6 (dimensión local): función de la LOCATION de destino, no un array
     // fijo. Memoizada más abajo por locationId — una marca de un solo local
     // (hoy todas) la calcula UNA sola vez, igual que antes.
