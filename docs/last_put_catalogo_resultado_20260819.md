@@ -116,3 +116,61 @@ los canales de Carabanchel, la vía sigue siendo HubRise.
 Lo único que queda es preguntárselo a Last: la pregunta ya no es «¿se puede?»
 sino «¿qué ruta usa vuestro panel para guardar el precio de un producto dentro
 de un catálogo, y está expuesta en la API v2?».
+
+
+---
+
+# ADENDA (19/08, 18:25) — la ruta existe, y es OTRA API
+
+Julio capturó en el navegador lo que hace el panel de Last al guardar un precio
+dentro de un catálogo:
+
+```
+PUT https://api.last.app/dashboard/catalogs/locations/{locationId}
+                                   /catalogs/{catalogId}
+                                   /products/{catalogProductId}
+-> 200 OK
+```
+
+**No es `/v2/`. Es `/dashboard/`** — la API interna de su propio back-office.
+
+## Lo que esto cambia
+
+1. **La capacidad existe y es exactamente la que buscábamos.** La ruta lleva
+   `locationId` **y** `catalogId` **y** `productId`: precio por producto, por
+   catálogo y por local. Justo lo que la v2 no ofrece.
+
+2. **El espacio de ids es el MISMO.** El `463b2be5-…` de la URL está en nuestro
+   espejo: es el `catalog_product_id` de *Alitas Crispy Spicy* en el catálogo
+   `1dae965c` (el de Uber). O sea, **ya tenemos todos los ids que harían falta**.
+
+3. **`/dashboard/` es alcanzable desde fuera.** Un `GET` a esa misma ruta con
+   nuestro token de bridge devuelve `404 Route GET:... not found` — el mensaje
+   de router de Fastify. **No devuelve 401 ni 403.** La petición llega a la capa
+   de enrutado; simplemente no hay `GET` registrado ahí, sólo `PUT`.
+
+## Lo que NO cambia — y por qué esto no se toca sin decisión
+
+`/dashboard/` es la API privada del panel. Construir Folvy encima significa:
+
+- depender de una superficie **no documentada y no soportada**, que Last puede
+  cambiar sin avisar y sin número de versión;
+- autenticarse con un **token de sesión de un humano**, no con una credencial de
+  integración — habría que guardar la sesión de alguien;
+- muy probablemente, **fuera de lo que Last permite** a un integrador.
+
+Y hay un matiz que apunta hacia ellos, no hacia nosotros: si el token de bridge
+llegara a autenticar contra `/dashboard/`, eso sería **un fallo de seguridad de
+Last** — un token de integración alcanzando su back-office. Eso se les reporta,
+no se explota.
+
+## El estado real de A31
+
+Ya no es «no se puede». Es:
+
+> **La API pública v2 de Last no expone escritura de precio por catálogo. Su
+> panel sí lo hace, por `PUT /dashboard/catalogs/locations/{loc}/catalogs/{cat}/products/{prod}`,
+> con los mismos ids que ya manejamos. Falta una vía soportada.**
+
+Eso convierte la pregunta a Last de «¿se puede?» en «**aquí está vuestra propia
+ruta; dadnos una equivalente soportada, o una credencial que la alcance**».
