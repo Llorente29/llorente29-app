@@ -21,20 +21,15 @@
 --                           BURGER 20"), que hoy no se guardaba en ningun sitio.
 --   · external_channels  -> TODOS los destinos del catalogo, ordenados.
 --
--- ⚠️ NO APLICADA TODAVIA (19/08 12:40). Queda aqui como propuesta, pendiente de
--- que Julio decida donde va el arreglo de codigo. IMPORTA MUCHO DONDE:
+-- ⚠️ NO APLICADA TODAVIA. El codigo que escribe estas columnas ya esta escrito,
+-- en `last-catalog-sync` (collectBrandChannelByCatalog acumula todos los
+-- destinos en vez de quedarse con el primero, y resolveLocationCatalogs guarda
+-- el nombre del catalogo). Ese despliegue ESPERA A ESTA MIGRACION.
 --
---   · `last-catalog-sync`  -> es la que corre el cron horario (0 12-23 * * *) y
---     la que mantiene el espejo de verdad. Tiene el defecto del canal aplastado
---     (collectBrandChannelByCatalog: `if (!out.has(v))`, gana el primero).
---     AQUI es donde tiene que ir el arreglo. Hoy NO TIENE CODIGO EN EL REPO:
---     esta desplegada (v8) y no existe carpeta para ella. Traerla al repo es el
---     paso previo a tocar nada.
---
---   · `lastapp-sync-catalog` -> la vieja, si esta en el repo, y NO la usa nadie
---     en automatico. Ademas tiene un defecto peor (cachea el catalogo por id y
---     calca el precio y el is_enabled de un local sobre los demas). Propuesta:
---     retirarla, no arreglarla.
+-- `last-catalog-sync` es la que corre el cron horario (0 12-23 * * *) y la que
+-- mantiene el espejo. Se recupero al repo el 19/08 (antes estaba desplegada sin
+-- codigo en ningun sitio). La vieja, `lastapp-sync-catalog`, quedo retirada el
+-- mismo dia: responde 410 y dice cual usar.
 --
 -- Ejecutar esta migracion ANTES de desplegar el codigo que escribe las columnas;
 -- al reves, cada upsert falla entero y el cron de las 12:00 UTC se cae.

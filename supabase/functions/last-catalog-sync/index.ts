@@ -145,14 +145,23 @@ async function resolveToken(sb: SupabaseClient, accountId: string, orgId: string
 //    catalogId -> {brand, channel} de MEJOR ESFUERZO (no autoritativo: ver
 //    nota en resolveLocationCatalogs). "todos los catálogos, no solo
 //    default" — una marca puede tener varios (carta base + canal). ──
-function collectBrandChannelByCatalog(brands: any[]): Map<string, { brand: string; channel: string }> {
-  const out = new Map<string, { brand: string; channel: string }>();
+function collectBrandChannelByCatalog(brands: any[]): Map<string, { brand: string; channels: Set<string> }> {
+  const out = new Map<string, { brand: string; channels: Set<string> }>();
   for (const b of brands ?? []) {
     const brandName: string = b?.name ?? "";
     const cats = b?.catalogs ?? {};
     const walk = (v: any, channel: string) => {
       if (typeof v === "string" && v) {
-        if (!out.has(v)) out.set(v, { brand: brandName, channel });
+        // ACUMULA (19/08). Antes: `if (!out.has(v))`, o sea ganaba el primer
+        // destino que Last mencionara. Pero un mismo catálogo se asigna a
+        // VARIOS a la vez -- el panel de Alcalá muestra "SMASH BROTHERS
+        // BURGER -> A domicilio, Glovo, Para llevar, Local". Con el primero
+        // ganando, el rótulo no decía de qué canal era el catálogo sino cuál
+        // salió antes, y BAILABA entre pasadas sin que nadie tocara nada.
+        const entry = out.get(v) ?? { brand: brandName, channels: new Set<string>() };
+        if (!entry.brand && brandName) entry.brand = brandName;
+        entry.channels.add(channel);
+        out.set(v, entry);
       } else if (v && typeof v === "object") {
         for (const vv of Object.values(v)) walk(vv, channel);
       }
@@ -173,6 +182,14 @@ function channelFromName(name: string | null | undefined): string {
   return "unknown";
 }
 
+interface CatalogInfo {
+  brand: string;
+  /** TODOS los destinos del catálogo, ordenados. */
+  channels: string[];
+  /** Nombre del catálogo en Last. */
+  name: string | null;
+}
+
 // ── Lista AUTORITATIVA de catálogos de un local: GET /catalogs?locationId=.
 //    El walk de brands[].catalogs (vía /locations/{id}) NO es exhaustivo por
 //    sí solo — verificado en vivo el 12/08 contra Foodint Carabanchel: el
@@ -183,7 +200,7 @@ function channelFromName(name: string | null | undefined): string {
 async function resolveLocationCatalogs(
   token: string,
   locationExtId: string,
-): Promise<{ catalogMap: Map<string, { brand: string; channel: string }>; debug: any }> {
+): Promise<{ catalogMap: Map<string, CatalogInfo>; debug: any }> {
   const [catsResp, detail] = await Promise.all([
     lastGet(`/catalogs?locationId=${locationExtId}`, token, { "LocationID": locationExtId }),
     lastGet(`/locations/${locationExtId}`, token, { "LocationID": locationExtId }),
@@ -191,12 +208,22 @@ async function resolveLocationCatalogs(
   const brandChannelByCatalog = collectBrandChannelByCatalog(Array.isArray(detail?.brands) ? detail.brands : []);
 
   const rawList = extractList(catsResp);
-  const catalogMap = new Map<string, { brand: string; channel: string }>();
+  const catalogMap = new Map<string, CatalogInfo>();
   const deletedCount = rawList.filter((c) => c?.deleted === true).length;
   for (const c of rawList) {
     if (!c?.id || c?.deleted === true) continue;
     const mapped = brandChannelByCatalog.get(c.id);
-    catalogMap.set(String(c.id), mapped ?? { brand: c.name ?? "", channel: channelFromName(c.name) });
+    // Orden alfabético = rótulo estable entre pasadas.
+    const channels = mapped && mapped.channels.size > 0
+      ? Array.from(mapped.channels).sort()
+      : [channelFromName(c.name)];
+    catalogMap.set(String(c.id), {
+      brand: mapped?.brand || (c.name ?? ""),
+      channels,
+      // El NOMBRE del catálogo ("SMASH BROTHERS BURGER 20"). Sin esto no hay
+      // forma de casar una fila del espejo con lo que se ve en el panel.
+      name: typeof c.name === "string" ? c.name : null,
+    });
   }
   // Diagnóstico temporal (12/08): comprobar si /catalogs?locationId= viene
   // paginado (metadatos de totalCount/total/count por encima del array
@@ -389,7 +416,11 @@ async function syncLocation(
             external_location_id: locationExtId,
             external_catalog_id: catId,
             external_brand_name: info.brand || null,
-            external_channel: info.channel || null,
+            // El primero POR ORDEN, no "el que llegara antes". Se conserva
+            // porque availabilityService cuenta canales distintos con él.
+            external_channel: info.channels[0] ?? null,
+            external_channels: info.channels,
+            catalog_name: info.name,
             catalog_product_id: catProdId,
             organization_product_id: p.organizationProductId ? String(p.organizationProductId) : null,
             product_name: typeof p.name === "string" ? p.name : null,
