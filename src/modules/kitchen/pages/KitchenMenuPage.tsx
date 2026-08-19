@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { fmtMoney } from '@/lib/format'
 import {
   listBrandsWithCatalog,
   listCategoriesWithProducts,
@@ -57,6 +58,24 @@ function formatEur(value: number | null): string {
 function formatPct(value: number | null): string {
   if (value === null || value === undefined) return '—'
   return `${Math.round(value)}%`
+}
+
+// Cuántos precios se enseñan en el ensayo. El TOTAL siempre se dice aparte;
+// esto solo acota la tabla para que el modal siga siendo legible.
+const PRECIOS_VISIBLES = 8
+
+// Slug de canal -> nombre de cara a quien mira.
+const CANAL_NOMBRE: Record<string, string> = {
+  glovo: 'Glovo', justeat: 'Just Eat', uber: 'Uber Eats', deliveroo: 'Deliveroo',
+}
+function canalBonito(slug: string): string {
+  return CANAL_NOMBRE[slug] ?? slug
+}
+
+// HubRise manda "13.50 EUR"; aquí se lee "13,50 €".
+function precioBonito(v: string | undefined): string {
+  const n = parseFloat(String(v ?? '').split(' ')[0])
+  return Number.isFinite(n) ? fmtMoney(n) : (v ?? '—')
 }
 
 export default function KitchenMenuPage() {
@@ -1015,32 +1034,52 @@ export default function KitchenMenuPage() {
                   <div className="text-xs text-gray-500 mt-0.5">
                     {t.productos} producto(s){t.location_id ? '' : ' · sin local asociado en la conexión'}
                   </div>
-                  {(() => {
-                    const conOverride = t.precios.filter((p) => (p.price_overrides?.length ?? 0) > 0)
-                    if (conOverride.length === 0) {
-                      return <div className="text-xs text-gray-400 mt-2">Sin precios propios por canal en la muestra.</div>
-                    }
-                    return (
-                      <div className="mt-2">
-                        <div className="text-xs font-medium text-gray-500 mb-1">Precios propios por canal</div>
-                        <ul className="text-xs space-y-0.5">
-                          {conOverride.map((p) => (
-                            <li key={p.ref} className="flex flex-wrap gap-x-2">
-                              <span className="font-mono text-gray-600">{p.ref}</span>
-                              <span className="text-gray-400">base {p.price}</span>
-                              {(p.price_overrides ?? []).map((o, i) => (
-                                <span key={i} className="text-gray-800">
-                                  · <span className="font-medium">{o.variant_refs.join(', ')}</span> {o.price}
-                                </span>
-                              ))}
-                            </li>
-                          ))}
-                        </ul>
+                  {/* LOS PRECIOS QUE CAMBIAN. El total va primero y sale del
+                      total, no de lo que se enseñe: una pantalla de
+                      confirmación nunca describe una muestra. */}
+                  {(t.precios_propios_total ?? 0) === 0 ? (
+                    <div className="text-xs text-gray-600 mt-2">
+                      Este catálogo se publica con los <span className="font-medium">precios base</span>:
+                      ningún precio propio por canal.
+                    </div>
+                  ) : (
+                    <div className="mt-2">
+                      <div className="text-xs font-medium text-gray-900 mb-1">
+                        {t.precios_propios_total} precio{t.precios_propios_total === 1 ? '' : 's'} propio{t.precios_propios_total === 1 ? '' : 's'} por canal
+                        <span className="font-normal text-gray-500"> · se publican distintos del base</span>
                       </div>
-                    )
-                  })()}
-                  {t.precios_truncados > 0 && (
-                    <div className="text-xs text-gray-400 mt-1">…y {t.precios_truncados} producto(s) más, no mostrados.</div>
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-gray-500">
+                            <th className="text-left font-medium py-0.5">Producto</th>
+                            <th className="text-left font-medium">Canal</th>
+                            <th className="text-right font-medium">Base</th>
+                            <th className="text-right font-medium">Se publica</th>
+                            <th className="text-right font-medium">Δ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(t.precios_propios ?? []).slice(0, PRECIOS_VISIBLES).map((c, i) => (
+                            <tr key={`${c.ref}-${i}`} className="border-t border-gray-100">
+                              <td className="py-0.5 pr-2 text-gray-800">{c.nombre}</td>
+                              <td className="pr-2 text-gray-600">{c.canales.map(canalBonito).join(', ')}</td>
+                              <td className="text-right tabular-nums text-gray-500">{precioBonito(c.base)}</td>
+                              <td className="text-right tabular-nums font-medium text-gray-900">{precioBonito(c.se_publica)}</td>
+                              <td className={`text-right tabular-nums font-medium ${
+                                c.delta_pct === null ? 'text-gray-400'
+                                  : c.delta_pct < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                                {c.delta_pct === null ? '—' : `${c.delta_pct > 0 ? '+' : ''}${c.delta_pct} %`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {(t.precios_propios_total ?? 0) > PRECIOS_VISIBLES && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          y {(t.precios_propios_total ?? 0) - PRECIOS_VISIBLES} más.
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               ))}
