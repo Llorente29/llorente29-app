@@ -174,3 +174,51 @@ Ya no es «no se puede». Es:
 
 Eso convierte la pregunta a Last de «¿se puede?» en «**aquí está vuestra propia
 ruta; dadnos una equivalente soportada, o una credencial que la alcance**».
+
+
+---
+
+# RESULTADO DE LA PRUEBA B (19/08, 18:45)
+
+Pregunta: ¿autentica **nuestro token de integración** contra la API del panel?
+
+```
+PUT https://api.last.app/dashboard/catalogs/locations/81519f20…/catalogs/1dae965c…/products/463b2be5…
+Authorization: Bearer <token de external_integration>
+body: {"price": 980}          <- el valor que YA tenía: si abría, no cambiaba nada
+
+-> 401  {"code":"INVALID_TOKEN"}
+```
+
+Catálogo intacto: sha256 `fd4312e4b4eab75bc08774147cba1f2e` antes y después.
+
+## La respuesta es NO, y es limpia
+
+Nuestra credencial **no abre** `/dashboard/`. Y el par de respuestas encaja
+perfectamente:
+
+- `GET` a esa ruta -> `404 Route GET:… not found`. El enrutador no tiene GET ahí,
+  y en Fastify el enrutado va **antes** que la autenticación: por eso no llegó a
+  mirar el token.
+- `PUT` a esa ruta -> la ruta **sí** existe, así que esta vez la autenticación
+  **sí** corrió, y rechazó. `401 INVALID_TOKEN`.
+
+## Lo que esto dice de Last, a su favor
+
+**No hay agujero que reportar.** La separación es correcta: un token de
+integración no alcanza el back-office. Es exactamente como debe estar.
+
+## El mapa, ya completo
+
+| Superficie | Credencial | Precio por catálogo y local |
+|---|---|---|
+| `/v2/` (pública) | token de integración | ❌ no existe la ruta |
+| `/dashboard/` (panel) | sesión de usuario | ✅ **funciona** |
+| `/dashboard/` (panel) | token de integración | ❌ `401 INVALID_TOKEN` |
+
+**Folvy no puede fijar el precio por canal en Last con ninguna credencial que
+tengamos hoy.** No por falta de capacidad en Last — la tiene y funciona — sino
+porque no existe una llave que una las dos cosas.
+
+Sólo Last puede darla. Queda el camino A, y ahora se pide con su propia ruta
+delante.
