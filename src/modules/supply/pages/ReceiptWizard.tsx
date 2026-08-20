@@ -48,6 +48,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
+import { deriveFormatQty, type QtySource } from '@/modules/supply/lib/receiptQty'
 import type { PurchaseFormat } from '@/types/kitchen'
 import ReceiptPhotoViewer from '@/modules/supply/components/ReceiptPhotoViewer'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
@@ -74,8 +75,6 @@ interface ReceiptWizardProps {
   onDone: (message?: string) => void
 }
 
-// De dónde sale el número que ve el trabajador — decide el aviso de "no cuadra".
-type QtySource = 'albaran' | 'packages' | 'division' | 'inexact' | 'manual'
 
 interface WizardLine {
   key: string
@@ -188,21 +187,6 @@ function baseUnitWord(abbr: string | null | undefined): string {
 // la cantidad del albarán entre el contenido del formato. Si no divide
 // exacto, se marca 'inexact' — el número se sugiere (redondeado) pero se
 // avisa, nunca se redondea en silencio.
-function deriveFormatQty(
-  albaranQty: number | null, albaranPackages: number | null, formatQtyInBase: number | null,
-): { qty: number; source: QtySource } | null {
-  if (formatQtyInBase == null || formatQtyInBase <= 0) return null
-  if (albaranPackages != null && albaranPackages > 0) {
-    return { qty: Math.round(albaranPackages), source: 'packages' }
-  }
-  if (albaranQty != null && albaranQty > 0) {
-    const divided = albaranQty / formatQtyInBase
-    const rounded = Math.max(1, Math.round(divided))
-    const exact = Math.abs(divided - rounded) < 0.02
-    return { qty: rounded, source: exact ? 'division' : 'inexact' }
-  }
-  return null
-}
 
 function lineFromOcr(l: OcrPrefill['lines'][number], i: number): WizardLine {
   return {
@@ -427,7 +411,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
             if (!resolved.purchaseFormatId || resolved.qtyInBasePerPack == null) {
               return { ...withResolution, purchaseFormatId: null }
             }
-            const derived = deriveFormatQty(x.albaranQty, x.albaranPackages, resolved.qtyInBasePerPack)
+            const derived = deriveFormatQty(x.albaranQty, x.albaranPackages, resolved.qtyInBasePerPack, x.albaranUnit, base?.abbr ?? null)
             return {
               ...withResolution, purchaseFormatId: resolved.purchaseFormatId,
               ...(derived ? { qty: derived.qty, qtySource: derived.source } : {}),
@@ -499,7 +483,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
       if (x.key !== key) return x
       if (!purchaseFormatId) return { ...x, purchaseFormatId: '' }
       const fmt = x.formats.find(f => f.id === purchaseFormatId)
-      const derived = fmt ? deriveFormatQty(x.albaranQty, x.albaranPackages, fmt.qtyInBase) : null
+      const derived = fmt ? deriveFormatQty(x.albaranQty, x.albaranPackages, fmt.qtyInBase, x.albaranUnit, x.baseUnit?.abbr ?? null) : null
       return { ...x, purchaseFormatId, ...(derived ? { qty: derived.qty, qtySource: derived.source } : {}) }
     }))
   }
@@ -1007,6 +991,26 @@ function LineScreen({
               +
             </button>
           </div>
+
+          {/* El número NO sale del albarán tal cual: se ha convertido a packs y
+              la cuenta no da exacta. Se avisa SIEMPRE — la cabecera de este
+              fichero lo exige ("nunca se redondea en silencio") y hasta el
+              20/08 no se avisaba en ningún sitio, aunque el código ya marcaba
+              la línea como 'inexact'. */}
+          {l.qtySource === 'inexact' && (
+            <div className="mt-3 rounded-lg bg-warning-bg px-3.5 py-2.5 flex items-start gap-2.5">
+              <AlertTriangle size={18} className="text-warning shrink-0 mt-0.5" />
+              <p className="text-sm text-text-primary leading-snug">
+                <span className="font-medium">La cuenta no da exacta.</span>{' '}
+                {l.albaranQty != null && (
+                  <>El albarán dice {nf1.format(l.albaranQty)} {l.albaranUnit || 'ud'}
+                    {format?.qtyInBase ? <> y cada {pluralFormatName(format.name, 1).toLowerCase()} trae {nf1.format(format.qtyInBase)} {baseUnitWord(l.baseUnit?.abbr)}</> : null}.{' '}
+                  </>
+                )}
+                Comprueba el número antes de seguir.
+              </p>
+            </div>
+          )}
 
           {/* Franja de resultado */}
           {baseTotal != null && l.qty > 0 && (
