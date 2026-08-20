@@ -11,9 +11,11 @@
 // catálogo solo se consulta para RESOLVER una línea que la oficina cambia.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, FileText, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import {
   getGoodsReceiptById,
+  updateGoodsReceipt,
+  unverifiedReason,
   listGoodsReceiptLines,
   getReceiptDocTotal,
   getRecipeItemDisplayInfo,
@@ -33,11 +35,22 @@ import {
   type CostWarning,
   type FractionalWarning,
 } from '@/modules/supply/services/goodsReceiptService'
-import { getSupplierCatalog, listSupplyLocations, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
-import { listSuppliers, createPurchaseFormat } from '@/modules/kitchen/services/purchaseFormatService'
+import { getSupplierCatalog, listSupplyLocations, buildFormatLabel, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
+import { listSuppliers, createPurchaseFormat, listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import { fmtMoney, isNum, DASH } from '@/lib/format'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
+import ReceiptPhotoViewer from '@/modules/supply/components/ReceiptPhotoViewer'
+
+// ENCARGO CODE (20/08) «Verificar un albarán a ciegas» §2.2 — los formatos
+// VIVOS de un artículo, con la medida en la etiqueta ("Caja (5 kg)"), para que
+// la oficina pueda cambiar el envase y no solo la cantidad. Sin la medida el
+// desplegable es una lista de palabras ("Caja", "Paquete") que no dice nada.
+export interface FormatOption {
+  id: string
+  label: string
+  qtyInBase: number
+}
 
 const NOT_GOODS_KINDS: { value: string; label: string }[] = [
   { value: 'portes', label: 'Portes' },
@@ -137,6 +150,20 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   // Tramo D.3 — cantidades fraccionadas en artículos por unidades.
   const [fractionalWarnings, setFractionalWarnings] = useState<FractionalWarning[] | null>(null)
 
+  // ENCARGO CODE (20/08) «Verificar un albarán a ciegas».
+  // §2.1 — el papel. En pantalla ancha va AL LADO de las líneas; en móvil,
+  // detrás de un botón grande (no cabe al lado y esconderlo en un icono de 9px
+  // es lo mismo que no tenerlo).
+  const [showDoc, setShowDoc] = useState(false)
+  // §2.2 — formatos vivos por artículo, para poder cambiar el envase.
+  const [formatsByItem, setFormatsByItem] = useState<Record<string, FormatOption[]>>({})
+  // §2.3 — proveedor y nº de albarán, editables. ALB-00119 llegó con los dos
+  // a null y la cabecera enseñaba "Nº de albarán —" sin forma de arreglarlo.
+  const [hdrOpen, setHdrOpen] = useState(false)
+  const [hdrSupplierId, setHdrSupplierId] = useState('')
+  const [hdrDocNumber, setHdrDocNumber] = useState('')
+  const [hdrError, setHdrError] = useState<string | null>(null)
+
   // ── Carga ────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
@@ -153,6 +180,11 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         setReceipt(r)
         setLines(ls)
         setSuppliers(sups)
+        setHdrSupplierId(r.supplierId ?? '')
+        setHdrDocNumber(r.supplierDocNumber ?? '')
+        // Si falta cualquiera de los dos, la cabecera se abre sola: es un
+        // hueco que hay que rellenar, no una preferencia de vista.
+        setHdrOpen(!r.supplierId || !r.supplierDocNumber)
 
         const [locs, cat] = await Promise.all([
           listSupplyLocations(accountId),
@@ -178,6 +210,33 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         if (cancelled) return
         setItemInfo(info)
         setFormatNames(fmts)
+
+        // ENCARGO CODE (20/08) §2.2 — formatos vivos de cada artículo, con la
+        // medida en la etiqueta. Se piden después de pintar (no bloquean la
+        // pantalla): si tardan, la fila enseña el formato actual como texto y
+        // el desplegable aparece cuando llegan.
+        const uniqueItemIds = Array.from(new Set(itemIds))
+        const fetched = await Promise.all(
+          uniqueItemIds.map(async id => {
+            try {
+              const fs = await listFormatsByItem(id)
+              const abbr = info[id]?.baseUnitAbbr ?? null
+              const opts: FormatOption[] = fs
+                .filter(f => f.isActive && f.qtyInBase > 0)
+                .map(f => ({
+                  id: f.id,
+                  label: buildFormatLabel(f.name, f.qtyInBase, abbr) ?? f.name,
+                  qtyInBase: f.qtyInBase,
+                }))
+              return [id, opts] as const
+            } catch (e) {
+              console.error('ReceiptOfficeReview: no se pudieron leer los formatos de', id, e)
+              return [id, [] as FormatOption[]] as const
+            }
+          }),
+        )
+        if (cancelled) return
+        setFormatsByItem(Object.fromEntries(fetched))
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'No se pudo abrir la recepción.')
       } finally {
@@ -219,6 +278,11 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   }, [docTotal, lines])
   const missingSum = Math.max(0, totalSum - verifiedSum)
   const allDecided = pendingLines.length === 0
+  // ENCARGO CODE (20/08) §2.3 — sin proveedor ni nº de albarán no se cierra.
+  // El servidor lo exige también (confirm_goods_receipt), para que no dependa
+  // de que la pantalla se acuerde.
+  const headerComplete = !!receipt?.supplierId && !!(receipt?.supplierDocNumber ?? '').trim()
+  const canClose = allDecided && headerComplete
 
   // ── Picker de artículo (se reutiliza en las 3 clases: cambiar/dudosa/sin decidir) ──
   const [pickerLineId, setPickerLineId] = useState<string | null>(null)
@@ -386,10 +450,43 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     }
   }
 
-  // ── "Cambiar" (resuelta): mini editor de cantidad/coste con motivo tipificado ──
+  // ── ENCARGO CODE (20/08) §2.3 — proveedor y nº de albarán ──────────────
+  // No existía forma de ponerlos desde la pantalla. ALB-00119 llegó con los
+  // dos a null (albarán manuscrito, la IA no leyó emisor) y sin ellos no se
+  // puede casar con su factura ni reclamar nada.
+  async function saveHeader() {
+    if (!receipt) return
+    const sup = hdrSupplierId.trim()
+    const doc = hdrDocNumber.trim()
+    if (!sup) { setHdrError('Elige el proveedor. Sin emisor este albarán no se puede reclamar.'); return }
+    if (!doc) { setHdrError('Pon el nº de albarán. Es lo que lo casa con su factura.'); return }
+    setSaving(true); setHdrError(null); setError(null)
+    try {
+      await updateGoodsReceipt(receipt.id, { supplierId: sup, supplierDocNumber: doc })
+      setHdrOpen(false)
+      setReloadTick(t => t + 1)
+    } catch (err: unknown) {
+      setHdrError(err instanceof Error ? err.message : 'No se pudo guardar la cabecera.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── "Corregir": cantidad, FORMATO y coste, con motivo ──────────────────
+  // ENCARGO CODE (20/08) §2.2 — adjust_goods_receipt_line lleva desplegada
+  // desde el 13/08 y hace exactamente esto, pero en 24 h se llamó 2 veces
+  // frente a 357 peticiones de la pantalla: el camino existía y no se llegaba
+  // a él. Dos cosas cambian aquí:
+  //   · el editor deja cambiar el FORMATO (antes solo cantidad y coste, así
+  //     que un albarán en kilos casado a un formato de 6 unidades no tenía
+  //     arreglo desde la pantalla — el caso ALB-00119);
+  //   · el editor se abre también desde una línea DUDOSA, que antes solo
+  //     ofrecía "Sí, es esta" / "No, es otro artículo". Las 408 líneas
+  //     marcadas de Foodint son dudosas: ninguna tenía botón de corregir.
   const [editLineId, setEditLineId] = useState<string | null>(null)
   const [editQty, setEditQty] = useState('')
   const [editCost, setEditCost] = useState('')
+  const [editFormatId, setEditFormatId] = useState('')
   const [editReason, setEditReason] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -397,6 +494,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     setEditLineId(line.id)
     setEditQty(numToInputStr(line.qtyReceived))
     setEditCost(line.unitCost != null ? numToInputStr(line.unitCost) : '')
+    setEditFormatId(line.purchaseFormatId ?? '')
     setEditReason(null)
     setEditError(null)
   }
@@ -407,19 +505,31 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     const newQty = parseNum(editQty)
     if (newQty === null) { setEditError('Pon una cantidad. Una casilla vacía no es cero.'); return }
     const newCost = parseNum(editCost)
+    const newFormatId = editFormatId || null
     const qtyChanged = newQty !== line.qtyReceived
-    if (qtyChanged && !editReason) { setEditError('Elige un motivo para el cambio de cantidad.'); return }
+    const formatChanged = newFormatId !== line.purchaseFormatId
+    // El motivo se exige cuando cambia lo que ENTRÓ al almacén — cantidad o
+    // formato. Corregir solo el coste no mueve stock.
+    if ((qtyChanged || formatChanged) && !editReason) {
+      setEditError('Elige un motivo para el cambio. Sin motivo no queda rastro de por qué.')
+      return
+    }
     setSaving(true); setError(null)
     try {
       const res = await adjustGoodsReceiptLine(line.id, {
         recipeItemId: line.recipeItemId,
-        purchaseFormatId: line.purchaseFormatId,
+        purchaseFormatId: newFormatId,
         qtyReceived: newQty,
         unitCost: newCost,
-        discrepancyReason: qtyChanged && editReason ? OFFICE_QTY_REASON_PREFIX + editReason : line.discrepancyReason,
+        discrepancyReason: (qtyChanged || formatChanged) && editReason
+          ? OFFICE_QTY_REASON_PREFIX + editReason
+          : line.discrepancyReason,
         notGoods: false,
         notGoodsKind: null,
       })
+      // Corregir a mano ES confirmar: la duda se levanta con el cambio, no
+      // hace falta un segundo clic en "Sí, es esta".
+      await updateGoodsReceiptLine(line.id, { mapNeedsReview: false, flaggedForOffice: false })
       if (res.closedPeriodNote) setClosedPeriodNote(res.closedPeriodNote)
       setEditLineId(null)
       setReloadTick(t => t + 1)
@@ -439,6 +549,11 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   // (ackGoodsReceiptCostWarning — D.3 no lo pide) y entonces sí cierra.
   async function handleClose() {
     if (!receipt || !allDecided) return
+    if (!headerComplete) {
+      setHdrOpen(true)
+      setHdrError('Antes de cerrar, pon el proveedor y el nº de albarán.')
+      return
+    }
     setSaving(true); setError(null)
     try {
       if (!costWarningsAcked) {
@@ -504,11 +619,27 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   const pickerLine = pickerLineId ? lines.find(l => l.id === pickerLineId) ?? null : null
 
   return (
-    <div className="max-w-3xl mx-auto space-y-3.5">
+    // ENCARGO CODE (20/08) §2.1 — el papel AL LADO de las líneas. El documento
+    // lleva guardado desde siempre en goods_receipt.raw_document_url (125 de
+    // 132 recepciones lo tienen); esta pantalla simplemente no lo enseñaba.
+    // Verificar sin el papel delante no es verificar.
+    <div className="max-w-7xl mx-auto lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-4 lg:items-start">
+    <div className="max-w-3xl mx-auto lg:mx-0 lg:max-w-none space-y-3.5">
       <button type="button" onClick={onBack} disabled={saving}
         className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary disabled:opacity-50">
         <ArrowLeft size={16} /> Volver
       </button>
+
+      {/* En móvil el papel no cabe al lado: botón grande, no un icono de 9px. */}
+      <div className="lg:hidden">
+        <button type="button" onClick={() => setShowDoc(v => !v)}
+          className="w-full min-h-touch px-4 rounded-lg text-base font-semibold border border-border-default bg-card text-text-primary hover:bg-page transition-base inline-flex items-center justify-center gap-2">
+          <FileText size={18} />
+          {showDoc ? 'Ocultar el albarán' : 'Ver el albarán'}
+          {showDoc ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+        {showDoc && <div className="mt-2"><ReceiptPhotoViewer path={receipt.rawDocumentUrl} /></div>}
+      </div>
 
       {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
       {closedPeriodNote && (
@@ -520,7 +651,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-lg font-display font-semibold tracking-tight text-text-primary">
-              Albarán {receipt.code ?? ''} · {supplierName}
+              Albarán {receipt.code ?? ''} · {supplierName || 'proveedor sin poner'}
             </h1>
             <p className="text-sm text-text-secondary mt-1">
               {receipt.createdByName ?? 'Alguien'} lo recibió {relativeDay(receipt.receivedAt)} a las {fmtTime(receipt.receivedAt)} en {locationName}
@@ -547,7 +678,58 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
             <div className="text-xs text-text-secondary">Tu trabajo aquí</div>
             <div className="text-sm text-text-primary font-medium">Verificar, no recontar</div>
           </div>
+          {headerComplete && !hdrOpen && (
+            <button type="button" onClick={() => { setHdrOpen(true); setHdrError(null) }} disabled={saving}
+              className="self-end inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline disabled:opacity-50">
+              <Pencil size={13} /> Cambiar proveedor o nº
+            </button>
+          )}
         </div>
+
+        {/* ENCARGO CODE (20/08) §2.3 — proveedor y nº de albarán editables, y
+            obligatorios para cerrar. Se propone lo que se sabe: si la IA leyó
+            un emisor, ya viene elegido; si no (albarán manuscrito), la lista
+            es la de proveedores de la cuenta. Proponer, no preguntar en blanco. */}
+        {hdrOpen && (
+          <div className={`mt-3.5 pt-3.5 border-t border-border-default space-y-2.5 ${headerComplete ? '' : 'rounded-md'}`}>
+            {!headerComplete && (
+              <p className="text-sm font-semibold text-text-primary">
+                Este albarán no tiene {!receipt.supplierId ? 'proveedor' : ''}
+                {!receipt.supplierId && !(receipt.supplierDocNumber ?? '').trim() ? ' ni ' : ''}
+                {!(receipt.supplierDocNumber ?? '').trim() ? 'nº de albarán' : ''}. Sin eso no se puede cerrar.
+              </p>
+            )}
+            <div className="flex gap-3 flex-wrap">
+              <label className="text-xs text-text-secondary">
+                Proveedor
+                <select value={hdrSupplierId} onChange={e => setHdrSupplierId(e.target.value)} disabled={saving}
+                  className="mt-0.5 block w-64 max-w-full px-2.5 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent">
+                  <option value="">— elige el proveedor —</option>
+                  {suppliers.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                </select>
+              </label>
+              <label className="text-xs text-text-secondary">
+                Nº de albarán
+                <input type="text" value={hdrDocNumber} onChange={e => setHdrDocNumber(e.target.value)} disabled={saving}
+                  placeholder="el que viene en el papel"
+                  className="mt-0.5 block w-52 max-w-full px-2.5 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+              </label>
+            </div>
+            {hdrError && <p className="text-xs text-danger">{hdrError}</p>}
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={saveHeader} disabled={saving}
+                className="px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
+                Guardar cabecera
+              </button>
+              {headerComplete && (
+                <button type="button" onClick={() => { setHdrOpen(false); setHdrError(null) }} disabled={saving}
+                  className="px-3 py-2 rounded-md text-sm border border-border-default bg-card hover:bg-page disabled:opacity-50">
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ══ PROGRESO ══ */}
@@ -570,8 +752,21 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
       <div className="flex flex-col gap-2">
         {ordered.map(l => {
           const cls = classify(l)
-          if (cls === 'resuelta') return <ResueltaRow key={l.id} line={l} itemInfo={itemInfo} formatNames={formatNames} saving={saving} isEditing={editLineId === l.id} editQty={editQty} editCost={editCost} editReason={editReason} editError={editError} onOpenEditor={() => openEditor(l)} onCloseEditor={closeEditor} onSetQty={setEditQty} onSetCost={setEditCost} onSetReason={setEditReason} onSave={() => saveEditor(l)} onChangeArticle={() => openPicker(l.id)} />
-          if (cls === 'dudosa') return <DudosaRow key={l.id} line={l} itemInfo={itemInfo} formatNames={formatNames} saving={saving} onConfirm={() => handleConfirmDudosa(l)} onChangeArticle={() => openPicker(l.id)} />
+          // ENCARGO CODE (20/08) §2.2 — el editor es el mismo para una línea
+          // resuelta y para una dudosa: corregir es corregir.
+          if ((cls === 'resuelta' || cls === 'dudosa') && editLineId === l.id) {
+            return (
+              <LineEditor key={l.id} line={l} itemInfo={itemInfo}
+                formats={formatsByItem[l.recipeItemId ?? ''] ?? []}
+                saving={saving} qty={editQty} cost={editCost} formatId={editFormatId}
+                reason={editReason} editError={editError}
+                onSetQty={setEditQty} onSetCost={setEditCost} onSetFormatId={setEditFormatId}
+                onSetReason={setEditReason} onSave={() => saveEditor(l)} onCancel={closeEditor}
+                onChangeArticle={() => openPicker(l.id)} />
+            )
+          }
+          if (cls === 'resuelta') return <ResueltaRow key={l.id} line={l} itemInfo={itemInfo} formatNames={formatNames} saving={saving} onOpenEditor={() => openEditor(l)} />
+          if (cls === 'dudosa') return <DudosaRow key={l.id} line={l} itemInfo={itemInfo} formatNames={formatNames} saving={saving} onConfirm={() => handleConfirmDudosa(l)} onCorregir={() => openEditor(l)} onChangeArticle={() => openPicker(l.id)} />
           if (cls === 'not_goods') return <NotGoodsRow key={l.id} line={l} />
           return (
             <SinDecidirRow key={l.id} line={l} saving={saving}
@@ -642,15 +837,21 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
             className="px-3 py-2 rounded-md text-sm text-text-secondary border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
             Dejar a medias
           </button>
-          <button type="button" onClick={handleClose} disabled={!allDecided || saving}
-            title={!allDecided ? `Faltan por decidir: ${pendingLines.map(l => itemInfo[l.recipeItemId ?? '']?.name ?? sentenceCase(l.productName)).join(', ')}` : undefined}
+          <button type="button" onClick={handleClose} disabled={!canClose || saving}
+            title={
+              !allDecided
+                ? `Faltan por decidir: ${pendingLines.map(l => itemInfo[l.recipeItemId ?? '']?.name ?? sentenceCase(l.productName)).join(', ')}`
+                : !headerComplete
+                  ? 'Falta el proveedor o el nº de albarán'
+                  : undefined
+            }
             className="min-h-close-desktop px-6 rounded-lg text-base font-bold bg-success text-text-on-accent disabled:bg-border-default disabled:text-text-secondary disabled:cursor-not-allowed transition-base">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verificado — cerrar albarán'}
           </button>
         </div>
         <p className="text-sm text-text-secondary w-full">
-          El botón se enciende cuando las {lines.length} líneas tengan decisión. Ninguna se pierde en silencio:
-          o entra al almacén, o dices tú que no es mercancía.
+          El botón se enciende cuando las {lines.length} líneas tengan decisión y la cabecera tenga proveedor
+          y nº de albarán. Ninguna línea se pierde en silencio: o entra al almacén, o dices tú que no es mercancía.
         </p>
       </div>
 
@@ -670,30 +871,139 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         />
       )}
     </div>
+
+    {/* Columna del papel: pegada arriba para que siga visible al bajar por
+        las líneas. Solo en pantalla ancha; en móvil va tras el botón grande. */}
+    <div className="hidden lg:block lg:sticky lg:top-4">
+      <ReceiptPhotoViewer path={receipt.rawDocumentUrl} />
+    </div>
+    </div>
+  )
+}
+
+// ── Editor de línea · ENCARGO CODE (20/08) §2.2 ────────────────────────
+// Cantidad, FORMATO y coste, con motivo obligatorio si se mueve el stock.
+// Escribe SIEMPRE por adjust_goods_receipt_line: reverso del movimiento viejo
+// + reposteo del nuevo, con quién y por qué. Nunca por un UPDATE a pelo (§9.8).
+function LineEditor({
+  line, itemInfo, formats, saving, qty, cost, formatId, reason, editError,
+  onSetQty, onSetCost, onSetFormatId, onSetReason, onSave, onCancel, onChangeArticle,
+}: {
+  line: GoodsReceiptLine
+  itemInfo: Record<string, { name: string; baseUnitAbbr: string | null }>
+  formats: FormatOption[]
+  saving: boolean
+  qty: string
+  cost: string
+  formatId: string
+  reason: string | null
+  editError: string | null
+  onSetQty: (v: string) => void
+  onSetCost: (v: string) => void
+  onSetFormatId: (v: string) => void
+  onSetReason: (v: string) => void
+  onSave: () => void
+  onCancel: () => void
+  onChangeArticle: () => void
+}) {
+  const info = line.recipeItemId ? itemInfo[line.recipeItemId] : undefined
+  const name = info?.name ?? sentenceCase(line.productName)
+  const chosen = formats.find(f => f.id === formatId) ?? null
+  const qtyN = parseNum(qty)
+  const costN = parseNum(cost)
+  const qtyChanged = qtyN !== null && qtyN !== line.qtyReceived
+  const formatChanged = (formatId || null) !== line.purchaseFormatId
+  const uNoun = unitNoun(info?.baseUnitAbbr ?? null, 2)
+  // Lo que va a entrar al almacén con lo que hay escrito ahora mismo. Sin esto
+  // el editor pide números a ciegas, que es justo lo que estamos arreglando.
+  const previewBase = qtyN !== null && chosen ? qtyN * chosen.qtyInBase : null
+  const previewTotal = qtyN !== null && costN !== null ? qtyN * costN : null
+
+  return (
+    <div className="rounded-lg border border-accent bg-card px-4 py-3.5 space-y-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-text-primary">{name}</span>
+        <button type="button" onClick={onChangeArticle} disabled={saving}
+          className="text-xs font-medium text-accent hover:underline disabled:opacity-50">Cambiar artículo</button>
+      </div>
+
+      {(line.rawText || line.docQty != null || line.docAmount != null) && (
+        <div className="text-sm text-text-secondary tabular-nums">
+          El albarán dice:{' '}
+          <b className="text-text-primary">
+            {line.rawText}
+            {line.docQty != null ? ` · ${fmtQtyDisplay(line.docQty)}` : ''}
+            {line.docAmount != null ? ` · ${fmtMoney(line.docAmount)}` : ''}
+          </b>
+        </div>
+      )}
+
+      <div className="flex gap-3 flex-wrap items-end">
+        <label className="text-xs text-text-secondary">
+          En qué viene
+          {formats.length > 0 ? (
+            <select value={formatId} onChange={e => onSetFormatId(e.target.value)} disabled={saving}
+              className="mt-0.5 block w-56 max-w-full px-2.5 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent">
+              <option value="">— sin formato —</option>
+              {formats.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          ) : (
+            <span className="mt-0.5 block w-56 px-2.5 py-2 text-sm text-text-secondary">
+              Este artículo no tiene formatos vivos
+            </span>
+          )}
+        </label>
+        <label className="text-xs text-text-secondary">
+          Cuántos
+          <input type="text" value={qty} onChange={e => onSetQty(e.target.value)} disabled={saving}
+            className="mt-0.5 block w-28 px-2.5 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+        </label>
+        <label className="text-xs text-text-secondary">
+          Coste de cada uno
+          <input type="text" value={cost} onChange={e => onSetCost(e.target.value)} disabled={saving}
+            className="mt-0.5 block w-28 px-2.5 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+        </label>
+      </div>
+
+      {(previewBase != null || previewTotal != null) && (
+        <div className="px-3 py-2 rounded-md border border-dashed border-border-default bg-page text-sm text-text-secondary tabular-nums">
+          Entrará al almacén:{' '}
+          <b className="text-text-primary">
+            {previewBase != null ? `${fmtQtyDisplay(previewBase)} ${uNoun}` : 'nada (sin formato)'}
+          </b>
+          {previewTotal != null && <> · total <b className="text-text-primary">{fmtMoney(previewTotal)}</b></>}
+        </div>
+      )}
+
+      {(qtyChanged || formatChanged) && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-text-secondary">Motivo:</span>
+          {OFFICE_QTY_REASONS.map(r => (
+            <button key={r} type="button" disabled={saving} onClick={() => onSetReason(r)}
+              className={`px-2 py-1 rounded-md text-xs font-medium border transition-base disabled:opacity-50 ${reason === r ? 'border-accent bg-accent-bg text-accent' : 'border-border-default bg-page text-text-primary hover:bg-card'}`}>
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+      {editError && <p className="text-xs text-danger">{editError}</p>}
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onSave} disabled={saving}
+          className="px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">Guardar</button>
+        <button type="button" onClick={onCancel} disabled={saving}
+          className="px-3 py-2 rounded-md text-sm border border-border-default bg-card hover:bg-page disabled:opacity-50">Cancelar</button>
+      </div>
+    </div>
   )
 }
 
 // ── Fila CLASE 1 · resuelta ────────────────────────────────────────────
-function ResueltaRow({
-  line, itemInfo, formatNames, saving, isEditing, editQty, editCost, editReason, editError,
-  onOpenEditor, onCloseEditor, onSetQty, onSetCost, onSetReason, onSave, onChangeArticle,
-}: {
+function ResueltaRow({ line, itemInfo, formatNames, saving, onOpenEditor }: {
   line: GoodsReceiptLine
   itemInfo: Record<string, { name: string; baseUnitAbbr: string | null }>
   formatNames: Record<string, string>
   saving: boolean
-  isEditing: boolean
-  editQty: string
-  editCost: string
-  editReason: string | null
-  editError: string | null
   onOpenEditor: () => void
-  onCloseEditor: () => void
-  onSetQty: (v: string) => void
-  onSetCost: (v: string) => void
-  onSetReason: (v: string) => void
-  onSave: () => void
-  onChangeArticle: () => void
 }) {
   const info = line.recipeItemId ? itemInfo[line.recipeItemId] : undefined
   const name = info?.name ?? sentenceCase(line.productName)
@@ -701,48 +1011,6 @@ function ResueltaRow({
   const qtyInBase = line.qtyInBase ?? 0
   const perUnit = qtyInBase > 0 ? (line.docAmount ?? (line.unitCost ?? 0) * line.qtyReceived) / qtyInBase : null
   const uNoun = unitNoun(info?.baseUnitAbbr ?? null, qtyInBase)
-
-  if (isEditing) {
-    const qtyChanged = parseNum(editQty) !== null && parseNum(editQty) !== line.qtyReceived
-    return (
-      <div className="rounded-lg border border-border-default bg-card px-4 py-3.5 space-y-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium text-text-primary">{name}</span>
-          <button type="button" onClick={onChangeArticle} disabled={saving} className="text-xs font-medium text-accent hover:underline disabled:opacity-50">Cambiar artículo</button>
-        </div>
-        <div className="flex gap-3 flex-wrap">
-          <label className="text-xs text-text-secondary">
-            Cantidad ({formatName ?? 'formato'})
-            <input type="text" value={editQty} onChange={e => onSetQty(e.target.value)} disabled={saving}
-              className="mt-0.5 block w-28 px-2.5 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
-          </label>
-          <label className="text-xs text-text-secondary">
-            Coste del {formatName ?? 'formato'}
-            <input type="text" value={editCost} onChange={e => onSetCost(e.target.value)} disabled={saving}
-              className="mt-0.5 block w-28 px-2.5 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
-          </label>
-        </div>
-        {qtyChanged && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-text-secondary">Motivo:</span>
-            {OFFICE_QTY_REASONS.map(r => (
-              <button key={r} type="button" disabled={saving} onClick={() => onSetReason(r)}
-                className={`px-2 py-1 rounded-md text-xs font-medium border transition-base disabled:opacity-50 ${editReason === r ? 'border-accent bg-accent-bg text-accent' : 'border-border-default bg-page text-text-primary hover:bg-card'}`}>
-                {r}
-              </button>
-            ))}
-          </div>
-        )}
-        {editError && <p className="text-xs text-danger">{editError}</p>}
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onSave} disabled={saving}
-            className="px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">Guardar</button>
-          <button type="button" onClick={onCloseEditor} disabled={saving}
-            className="px-3 py-2 rounded-md text-sm border border-border-default bg-card hover:bg-page disabled:opacity-50">Cancelar</button>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="rounded-lg border border-border-default border-l-4 border-l-success bg-card px-4 py-3 flex items-center gap-3">
@@ -753,22 +1021,26 @@ function ResueltaRow({
         <b className="text-text-primary">{fmtQtyDisplay(qtyInBase)} {uNoun} al almacén</b>
         {line.docAmount != null && <> · {fmtMoney(line.docAmount)}</>}
         {perUnit != null && <> · {fmtMoney(perUnit)} la {unitNoun(info?.baseUnitAbbr ?? null, 1)}</>}
+        {line.unitCost == null && (
+          <b className="text-warning"> · sin coste</b>
+        )}
       </span>
       <button type="button" onClick={onOpenEditor} disabled={saving}
         className="shrink-0 min-h-touch px-3.5 rounded-md text-sm font-semibold border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50 transition-base">
-        Cambiar
+        Corregir
       </button>
     </div>
   )
 }
 
 // ── Fila CLASE 2 · dudosa ───────────────────────────────────────────────
-function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onChangeArticle }: {
+function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onCorregir, onChangeArticle }: {
   line: GoodsReceiptLine
   itemInfo: Record<string, { name: string; baseUnitAbbr: string | null }>
   formatNames: Record<string, string>
   saving: boolean
   onConfirm: () => void
+  onCorregir: () => void
   onChangeArticle: () => void
 }) {
   const info = line.recipeItemId ? itemInfo[line.recipeItemId] : undefined
@@ -795,10 +1067,21 @@ function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onChangeArt
           </div>
         )}
       </div>
+      {/* ENCARGO CODE (20/08) — el aviso decía SIEMPRE "lo emparejó el sistema
+          por parecido de nombre". En Foodint eso es falso para 400 de las 408
+          líneas marcadas: son map_source='unmapped' (el sistema no las casó en
+          absoluto) y solo 11 líneas en toda la base son fuzzy. Un aviso que
+          describe mal el problema manda a mirar donde no es. Ahora dice lo que
+          le pasa a ESTA línea. */}
       <div className="mx-4 mt-3 px-3.5 py-3 rounded-md bg-warning-bg text-base font-semibold text-text-primary">
         ¿Es esta {shortName} la que tienes tú en el catálogo?
         <span className="block font-normal text-sm text-text-primary mt-1">
-          Lo emparejó el sistema por parecido de nombre, no por código. Nadie lo ha confirmado todavía, y ya entró al almacén.
+          {unverifiedReason({
+            recipeItemId: line.recipeItemId,
+            mapSource: line.mapSource,
+            qtyInBase: line.qtyInBase,
+            unitCost: line.unitCost,
+          })}. Nadie lo ha confirmado todavía, y ya entró al almacén.
         </span>
       </div>
       {qtyInBase > 0 && line.docAmount != null && (
@@ -806,6 +1089,10 @@ function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onChangeArt
           {fmtQtyDisplay(line.qtyReceived)} {formatName ? pluralizeEs(formatName, line.qtyReceived) : ''} × {fmtQtyDisplay(qtyInBase / Math.max(line.qtyReceived, 1))} {uNoun} = <b className="text-text-primary">{fmtQtyDisplay(qtyInBase)} {uNoun}</b> · {fmtMoney(line.docAmount)} ÷ {fmtQtyDisplay(qtyInBase)} = <b className="text-text-primary">{perUnit != null ? fmtMoney(perUnit) : DASH} la {uNounSingular}</b>
         </div>
       )}
+      {/* ENCARGO CODE (20/08) §2.2 — tercer camino. Antes solo se podía decir
+          "sí" o "es otro artículo": si el artículo era el correcto pero la
+          cantidad, el formato o el precio estaban mal (ALB-00119), no había
+          por dónde arreglarlo desde aquí. */}
       <div className="flex gap-2.5 flex-wrap px-4 py-3.5">
         <button type="button" onClick={onConfirm} disabled={saving}
           className="min-h-touch px-4.5 rounded-md text-sm font-semibold bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
@@ -814,6 +1101,10 @@ function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onChangeArt
         <button type="button" onClick={onChangeArticle} disabled={saving}
           className="min-h-touch px-4.5 rounded-md text-sm font-semibold border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50 transition-base">
           No, es otro artículo
+        </button>
+        <button type="button" onClick={onCorregir} disabled={saving}
+          className="min-h-touch px-4.5 rounded-md text-sm font-semibold border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50 transition-base">
+          Corregir cantidad, formato o precio
         </button>
       </div>
     </div>

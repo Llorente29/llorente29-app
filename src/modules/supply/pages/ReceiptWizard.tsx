@@ -223,9 +223,26 @@ function lineFromOcr(l: OcrPrefill['lines'][number], i: number): WizardLine {
     // recalcula a packs/cajas/sacos (ver deriveFormatQty).
     qty: l.qty != null && l.qty > 0 ? Math.round(l.qty) : 1,
     qtySource: 'albaran',
-    total: l.lineAmount != null ? l.lineAmount.toLocaleString('es-ES', { useGrouping: false, maximumFractionDigits: 2 }) : '',
+    // ENCARGO CODE (20/08) «Verificar un albarán a ciegas» §0 — el importe de
+    // línea se prerrellenaba SOLO desde line_amount. En un albarán manuscrito
+    // la IA lee la cantidad y el precio pero no siempre el importe (ALB-00119:
+    // quantity 56,57 kg · unit_price_net 7,50 · line_amount null), así que la
+    // casilla salía vacía, nadie la escribía y la línea entraba al almacén con
+    // unit_cost NULL: 424 € de pollo a coste cero.
+    // El producto de dos números que SÍ dice el papel no es una invención;
+    // sigue siendo editable, y el papel está ahora al lado para comprobarlo.
+    total: totalFromOcrLine(l),
     flagged: false,
   }
+}
+
+/** Importe de la línea según el papel: el que trae, o cantidad × precio. */
+function totalFromOcrLine(l: OcrPrefill['lines'][number]): string {
+  const amount = l.lineAmount ?? (
+    l.unitCost != null && l.qty != null && l.qty > 0 ? l.unitCost * l.qty : null
+  )
+  if (amount == null) return ''
+  return amount.toLocaleString('es-ES', { useGrouping: false, maximumFractionDigits: 2 })
 }
 
 let manualCounter = 0
@@ -557,6 +574,9 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
         deliveredBy: ocrPrefill.deliveredBy,
         aiSessionId: ocrPrefill.aiSessionId,
         rawDocumentUrl: ocrPrefill.rawDocumentUrl,
+        // ENCARGO CODE (20/08) «Verificar a ciegas» §3 — la bandera de la IA
+        // llega ahora al albarán en vez de morir en el panel de escaneo.
+        needsReview: ocrPrefill.aiNeedsReview,
         createdBy: authUserId ?? null,
         createdByName: userProfile?.displayName ?? null,
       })
@@ -598,11 +618,23 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
         })
       }
 
-      const res = await receiveGoodsReceipt(receipt.id)
-      const parts = [`${res.postedLines} línea(s) al almacén`]
-      if (flagCount > 0) parts.push(`${flagCount} para que lo mire oficina`)
-      if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear`)
-      onDone(`Recepción ${receipt.code ?? ''} recibida: ${parts.join(' · ')}.`)
+      // ENCARGO CODE (20/08) «Verificar a ciegas» §3 — si la IA pidió revisión,
+      // la mercancía NO entra al almacén hasta que un humano cierre el albarán
+      // en la pantalla de oficina. Hoy pasaba lo contrario: entraba primero y
+      // se preguntaba después, y la pregunta se quedaba sin contestar.
+      const hold = ocrPrefill.aiNeedsReview
+      const res = await receiveGoodsReceipt(receipt.id, hold)
+      if (hold) {
+        onDone(
+          `Recepción ${receipt.code ?? ''} guardada y EN REVISIÓN: ${res.skippedLines} línea(s) esperando. ` +
+          `La mercancía no ha entrado al almacén todavía — entra cuando oficina cierre el albarán.`,
+        )
+      } else {
+        const parts = [`${res.postedLines} línea(s) al almacén`]
+        if (flagCount > 0) parts.push(`${flagCount} para que lo mire oficina`)
+        if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear`)
+        onDone(`Recepción ${receipt.code ?? ''} recibida: ${parts.join(' · ')}.`)
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo recibir la mercancía.')
       setSaving(false)
@@ -674,6 +706,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
           <SummaryScreen
             docTotal={docTotal} totalCounted={totalCounted} anyTotal={anyTotal} shortfall={shortfall}
             flagCount={flagCount} lineCount={lines.length}
+            aiReviewReasons={ocrPrefill.aiNeedsReview ? ocrPrefill.aiReviewReasons : []}
             onAddLine={addLine}
           />
         )}
@@ -698,7 +731,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
             <button type="button" onClick={handleReceive} disabled={!canSubmit}
               className="flex-1 inline-flex items-center justify-center gap-2 h-tap-small rounded-lg text-base font-medium bg-success text-text-on-accent hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-base">
               {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check size={20} />}
-              Recibir y meter al stock
+              {ocrPrefill.aiNeedsReview ? 'Guardar y mandar a oficina' : 'Recibir y meter al stock'}
             </button>
           )}
         </div>
@@ -724,7 +757,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
 
 // ── Pantalla final: cuadre + marcadas ⚑ + añadir artículo + terminar ────────
 function SummaryScreen({
-  docTotal, totalCounted, anyTotal, shortfall, flagCount, lineCount, onAddLine,
+  docTotal, totalCounted, anyTotal, shortfall, flagCount, lineCount, aiReviewReasons, onAddLine,
 }: {
   docTotal: number | null
   totalCounted: number
@@ -732,10 +765,26 @@ function SummaryScreen({
   shortfall: number | null
   flagCount: number
   lineCount: number
+  /** ENCARGO CODE (20/08) §3 — motivos por los que la IA pidió revisión. Vacío = ninguno. */
+  aiReviewReasons: string[]
   onAddLine: () => void
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-6">
+      {aiReviewReasons.length > 0 && (
+        <div className="w-full text-left rounded-lg border border-warning bg-warning-bg px-4 py-3">
+          <p className="text-base font-semibold text-text-primary">Este albarán va a oficina antes de entrar al almacén</p>
+          <ul className="mt-1.5 space-y-0.5">
+            {aiReviewReasons.map((r, i) => (
+              <li key={i} className="text-sm text-text-primary">· {r}</li>
+            ))}
+          </ul>
+          <p className="text-sm text-text-primary mt-2">
+            Tu trabajo aquí ya está hecho y no se pierde. La mercancía entrará al almacén cuando
+            oficina lo cierre con el papel delante.
+          </p>
+        </div>
+      )}
       <div className="w-16 h-16 rounded-full bg-success-bg flex items-center justify-center">
         <Check size={30} className="text-success" />
       </div>

@@ -107,6 +107,16 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
       rawDocumentUrl: result!.filePaths[0] ?? null,
       unmatchedSupplier: header.unmatchedSupplier,
       unmatchedLocation: header.unmatchedLocation,
+      // ENCARGO CODE (20/08) §3 — el aviso de la IA deja de morir en esta
+      // pantalla. handwritten es motivo por sí solo: un albarán a mano no se
+      // postea a ciegas aunque la validación numérica salga limpia.
+      aiNeedsReview: result!.validation.needs_review || result!.document.handwritten === true,
+      aiReviewReasons: [
+        ...(result!.validation.reasons ?? []),
+        ...(result!.document.handwritten === true && !(result!.validation.reasons ?? []).some(r => /manuscrit/i.test(r))
+          ? ['Documento manuscrito']
+          : []),
+      ],
       lines: result!.lines.map(l => ({
         recipeItemId: null,                 // casado en C2.2.b
         productName: l.raw_text,

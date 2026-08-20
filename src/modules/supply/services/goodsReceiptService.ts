@@ -893,18 +893,49 @@ export async function confirmReceipt(receiptId: string): Promise<ConfirmReceiptR
  * asistente ESTE es el momento real de "recibir mercancía" — no falta esperar
  * a que oficina confirme para que la memoria aprenda o el coste se propague.
  */
-export async function receiveGoodsReceipt(receiptId: string): Promise<ConfirmReceiptResult> {
+export async function receiveGoodsReceipt(
+  receiptId: string,
+  // ENCARGO CODE (20/08) «Verificar a ciegas» §3 — hold = la IA pidió revisión.
+  // El albarán queda en 'recibido' (para que la oficina lo pueda abrir) pero
+  // NO entra nada al almacén: el stock entra cuando un humano cierre.
+  // Requiere 20260820T1700_recepcion_verificacion_a_ciegas.sql.
+  hold = false,
+): Promise<ConfirmReceiptResult> {
   requireSupabase()
 
-  const { data, error } = await rpcUntyped('receive_goods_receipt', {
-    p_receipt_id: receiptId,
-  })
-  if (error) throw new Error(`Error recibiendo la recepción: ${error.message}`)
+  // ORDEN DE DESPLIEGUE. La firma de 2 argumentos la trae la migración
+  // 20260820T1700; hasta que se aplique, en producción solo existe la de 1.
+  // Recepcionar es lo que estuvo 6 días roto: no se vuelve a romper por un
+  // orden de despliegue.
+  //   · hold=false (el 100% del tráfico de hoy) llama con UN argumento, así
+  //     que funciona igual antes y después de la migración.
+  //   · hold=true solo puede ocurrir con la migración puesta; si no lo está,
+  //     el error se explica y la recepción se queda en BORRADOR — con todo lo
+  //     que escribió el trabajador guardado y sin nada posteado al almacén,
+  //     que es el lado seguro del fallo.
+  const { data, error } = hold
+    ? await rpcUntyped('receive_goods_receipt', { p_receipt_id: receiptId, p_hold: true })
+    : await rpcUntyped('receive_goods_receipt', { p_receipt_id: receiptId })
+  if (error) {
+    if (hold && /Could not find the function|PGRST202|does not exist/i.test(error.message)) {
+      throw new Error(
+        'Este albarán necesita revisión de oficina y esa parte todavía no está puesta en el servidor ' +
+        '(falta la migración 20260820T1700). La recepción se queda como borrador: no se ha perdido nada ' +
+        'y no ha entrado nada al almacén.',
+      )
+    }
+    throw new Error(`Error recibiendo la recepción: ${error.message}`)
+  }
 
   const row = (Array.isArray(data) ? data[0] : data) as
     { posted_lines?: number; skipped_lines?: number } | null
   const postedLines = Number(row?.posted_lines ?? 0)
   const skippedLines = Number(row?.skipped_lines ?? 0)
+
+  // Retenido: no ha entrado nada al almacén, así que no hay coste que propagar
+  // ni memoria que aprender. Aprender de un albarán que la IA marcó dudoso es
+  // exactamente cómo se contamina el catálogo.
+  if (hold) return { postedLines, skippedLines, recalculatedItems: 0 }
 
   const lines = await listGoodsReceiptLines(receiptId)
   const itemIds = Array.from(
@@ -1609,6 +1640,130 @@ export async function getGoodsReceiptFractionalWarnings(accountId: string, recei
     qtyReceived: Number(r.qty_received),
     formatName: (r.format_name as string | null) ?? null,
   }))
+}
+
+// ENCARGO CODE (20/08) «Verificar un albarán a ciegas» §6 — el aviso amarillo
+// de la pantalla de oficina avisa de algo que YA pasó y no da con qué
+// atacarlo. Esto es la puerta: todas las líneas que entraron al almacén sin
+// que nadie las confirmara, ordenadas por lo que valen.
+//
+// OJO con el vocabulario: `map_needs_review` NO significa "casado por parecido
+// de nombre". En Foodint, 400 de las 408 marcadas son `map_source='unmapped'`
+// — el sistema no las casó en absoluto — y solo 11 líneas en toda la base son
+// `fuzzy`. Por eso la fila dice POR QUÉ está marcada en vez de suponerlo.
+export interface UnverifiedLine {
+  lineId: string
+  receiptId: string
+  receiptCode: string | null
+  receiptStatus: GoodsReceiptStatus
+  receiptDate: string
+  locationId: string
+  supplierId: string | null
+  productName: string
+  recipeItemId: string | null
+  qtyReceived: number
+  qtyInBase: number | null
+  unitCost: number | null
+  docQty: number | null
+  docAmount: number | null
+  mapSource: string | null
+  discrepancyReason: string | null
+  rawDocumentUrl: string | null
+  /** Lo que vale la línea: lo que dice el papel, o lo calculado si no lo dice. */
+  amount: number | null
+  /** Por qué está sin confirmar, en una frase. */
+  why: string
+}
+
+/** Por qué una línea quedó marcada. Explícito, no deducido del color. */
+export function unverifiedReason(l: {
+  recipeItemId: string | null; mapSource: string | null; qtyInBase: number | null; unitCost: number | null
+}): string {
+  if (!l.recipeItemId) return 'No se casó con ningún artículo — no ha entrado al almacén'
+  if (l.qtyInBase == null || l.qtyInBase <= 0) return 'Sin cantidad en unidad base — no ha entrado al almacén'
+  if (l.mapSource === 'unmapped') return 'Entró al almacén sin que el sistema la casara'
+  if (l.mapSource === 'fuzzy' || l.mapSource === 'learned_fuzzy') return 'La casó el sistema por parecido de nombre, no por código'
+  if (l.unitCost == null) return 'Entró al almacén sin coste'
+  return 'Marcada para revisar y nadie la ha confirmado'
+}
+
+/**
+ * Solo el número, para el aviso de la lista de recepciones. Mismo criterio que
+ * listUnverifiedLines (albarán vivo y no anulado), resuelto server-side con un
+ * inner join para no traerse 400 filas cada vez que se abre la pantalla.
+ */
+export async function countUnverifiedLines(accountId: string): Promise<number> {
+  requireSupabase()
+  // from() (no supabase!.from) porque src/types/database.ts está sin
+  // regenerar y no conoce not_goods ni map_needs_review — deuda ya anotada.
+  const { count, error } = await from('goods_receipt_line')
+    .select('id, goods_receipt!inner(status, is_active)', { count: 'exact', head: true })
+    .eq('account_id', accountId)
+    .eq('map_needs_review', true)
+    .eq('not_goods', false)
+    .eq('goods_receipt.is_active', true)
+    .neq('goods_receipt.status', 'anulado')
+  if (error) throw new Error(`Error contando las líneas sin verificar: ${error.message}`)
+  return count ?? 0
+}
+
+export async function listUnverifiedLines(
+  accountId: string,
+  opts: { locationId?: string | null } = {},
+): Promise<UnverifiedLine[]> {
+  requireSupabase()
+  const q = from('goods_receipt_line')
+    .select(`
+      id, goods_receipt_id, product_name, recipe_item_id, qty_received, qty_in_base,
+      unit_cost, doc_qty, doc_amount, map_source, discrepancy_reason,
+      goods_receipt:goods_receipt_id (
+        code, receipt_date, status, location_id, supplier_id, raw_document_url, is_active
+      )
+    `)
+    .eq('account_id', accountId)
+    .eq('map_needs_review', true)
+    .eq('not_goods', false)
+  const { data, error } = await q
+  if (error) throw new Error(`Error leyendo las líneas sin verificar: ${error.message}`)
+
+  const rows = ((data as Row[]) ?? [])
+    .map(r => {
+      const gr = (r.goods_receipt ?? {}) as Row
+      const qtyReceived = Number(r.qty_received ?? 0)
+      const unitCost = r.unit_cost != null ? Number(r.unit_cost) : null
+      const docAmount = r.doc_amount != null ? Number(r.doc_amount) : null
+      const out: UnverifiedLine = {
+        lineId: r.id as string,
+        receiptId: r.goods_receipt_id as string,
+        receiptCode: (gr.code as string | null) ?? null,
+        receiptStatus: (gr.status as GoodsReceiptStatus) ?? 'recibido',
+        receiptDate: (gr.receipt_date as string) ?? '',
+        locationId: (gr.location_id as string) ?? '',
+        supplierId: (gr.supplier_id as string | null) ?? null,
+        productName: (r.product_name as string) ?? '',
+        recipeItemId: (r.recipe_item_id as string | null) ?? null,
+        qtyReceived,
+        qtyInBase: r.qty_in_base != null ? Number(r.qty_in_base) : null,
+        unitCost,
+        docQty: r.doc_qty != null ? Number(r.doc_qty) : null,
+        docAmount,
+        mapSource: (r.map_source as string | null) ?? null,
+        discrepancyReason: (r.discrepancy_reason as string | null) ?? null,
+        rawDocumentUrl: (gr.raw_document_url as string | null) ?? null,
+        amount: docAmount ?? (unitCost != null ? unitCost * qtyReceived : null),
+        why: '',
+      }
+      out.why = unverifiedReason(out)
+      return { row: out, active: gr.is_active !== false, status: out.receiptStatus }
+    })
+    // Un albarán anulado ya no le debe nada a nadie; uno archivado tampoco.
+    .filter(x => x.active && x.status !== 'anulado')
+    .map(x => x.row)
+
+  const filtered = opts.locationId ? rows.filter(r => r.locationId === opts.locationId) : rows
+  // Por importe, de mayor a menor. Sin importe al final: no se puede priorizar
+  // lo que no se sabe cuánto vale, pero tampoco se esconde.
+  return filtered.sort((a, b) => (b.amount ?? -1) - (a.amount ?? -1))
 }
 
 // Etiqueta legible del tipo de casado, para la UI.

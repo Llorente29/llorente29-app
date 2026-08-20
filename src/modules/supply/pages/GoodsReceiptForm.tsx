@@ -161,6 +161,14 @@ export interface OcrPrefill {
   rawDocumentUrl: string | null
   unmatchedSupplier: boolean
   unmatchedLocation: boolean
+  // ENCARGO CODE (20/08) «Verificar un albarán a ciegas» §3 — la IA YA sabe
+  // decir "esto hay que mirarlo" (documento manuscrito, no cuadra la base
+  // imponible, confianza de lectura baja) y ese aviso se quedaba en el panel
+  // de escaneo: nunca llegaba a la recepción. Caso real ALB-00119 (20/08):
+  // tres motivos puestos y la mercancía posteada igual, con coste nulo.
+  // Ahora viaja, y ReceiptWizard retiene el posteo.
+  aiNeedsReview: boolean
+  aiReviewReasons: string[]
   lines: OcrPrefillLine[]
 }
 export interface OcrPrefillLine {

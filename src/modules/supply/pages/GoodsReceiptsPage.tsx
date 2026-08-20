@@ -35,6 +35,7 @@ import {
   getReceiptDocTotal,
   getReceiptCorrectionStreak,
   getLineCounts,
+  countUnverifiedLines,
   type GoodsReceipt,
   type GoodsReceiptStatus,
   type CorrectionStreak,
@@ -51,6 +52,8 @@ import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
 import ReceiptWizard from '@/modules/supply/pages/ReceiptWizard'
 import OrderReceiveFlow from '@/modules/supply/components/OrderReceiveFlow'
 import ReceiptOfficeReview from '@/modules/supply/pages/ReceiptOfficeReview'
+// ENCARGO CODE (20/08) «Verificar un albarán a ciegas» §6.
+import UnverifiedLinesPage from '@/modules/supply/pages/UnverifiedLinesPage'
 
 const STATUS_LABEL: Record<GoodsReceiptStatus, string> = {
   borrador: 'Borrador',
@@ -72,7 +75,7 @@ function formatDate(value: string | null): string {
     .format(new Date(value))
 }
 
-type View = 'list' | 'form' | 'scan' | 'receive-order' | 'wizard' | 'office-review'
+type View = 'list' | 'form' | 'scan' | 'receive-order' | 'wizard' | 'office-review' | 'unverified'
 
 export default function GoodsReceiptsPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -103,6 +106,9 @@ export default function GoodsReceiptsPage() {
   // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, B.1 — la recepción
   // 'recibido' abre ReceiptOfficeReview (pantalla propia), no GoodsReceiptForm.
   const [officeReviewReceiptId, setOfficeReviewReceiptId] = useState<string | null>(null)
+  // ENCARGO CODE (20/08) «Verificar un albarán a ciegas» §6 — cuántas líneas
+  // entraron al almacén sin que nadie las confirmara.
+  const [unverifiedCount, setUnverifiedCount] = useState(0)
 
   // Arranque rápido desde el vigía de stock negativo (Almacén → Teórico vs
   // Real → Stock negativo): llega por navigate(state), no por props (esta
@@ -177,10 +183,13 @@ export default function GoodsReceiptsPage() {
       listGoodsReceipts({ accountId: activeAccountId, locationId: resolvedLocationId ?? undefined }),
       listSuppliers(activeAccountId),
       listSupplyLocations(activeAccountId),
+      // ENCARGO CODE (20/08) §6 — solo el número; la lista se carga al entrar.
+      // Si falla no rompe la pantalla: el aviso simplemente no sale.
+      countUnverifiedLines(activeAccountId).catch(() => 0),
     ])
-      .then(([rows, sups, locs]) => {
+      .then(([rows, sups, locs, unver]) => {
         if (cancelled) return
-        setReceipts(rows); setSuppliers(sups); setLocations(locs)
+        setReceipts(rows); setSuppliers(sups); setLocations(locs); setUnverifiedCount(unver)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -513,6 +522,18 @@ export default function GoodsReceiptsPage() {
     )
   }
 
+  // ── Vista SIN-VERIFICAR: las líneas que entraron sin confirmar (§6) ──
+  if (view === 'unverified' && activeAccountId) {
+    return (
+      <UnverifiedLinesPage
+        accountId={activeAccountId}
+        locationId={resolvedLocationId}
+        onBack={() => { setView('list'); setReloadTick(t => t + 1) }}
+        onOpenReceipt={(id) => { setOfficeReviewReceiptId(id); setView('office-review') }}
+      />
+    )
+  }
+
   // ── Vista OFFICE-REVIEW: oficina verifica una recepción 'recibido' ──
   if (view === 'office-review' && activeAccountId && officeReviewReceiptId) {
     return (
@@ -601,6 +622,21 @@ export default function GoodsReceiptsPage() {
             {recibidoCount} recepción{recibidoCount === 1 ? '' : 'es'} {recibidoCount === 1 ? 'espera' : 'esperan'} tu revisión
           </p>
         </div>
+      )}
+
+      {/* ENCARGO CODE (20/08) «Verificar un albarán a ciegas» §6 — el aviso de
+          la pantalla de oficina avisaba de algo que ya había pasado y no daba
+          con qué arreglarlo: una alarma sin puerta. Ésta es la puerta. */}
+      {!loading && !error && unverifiedCount > 0 && (
+        <button type="button" onClick={() => setView('unverified')}
+          className="w-full text-left p-3 rounded-md border border-warning/30 bg-warning-bg flex items-center gap-2 hover:opacity-90 transition-base">
+          <AlertTriangle size={16} className="text-warning shrink-0" />
+          <p className="text-sm font-medium text-text-primary flex-1">
+            {unverifiedCount} línea{unverifiedCount === 1 ? '' : 's'} entr{unverifiedCount === 1 ? 'ó' : 'aron'} al
+            almacén sin que nadie {unverifiedCount === 1 ? 'la' : 'las'} confirmara
+          </p>
+          <span className="shrink-0 text-sm font-semibold text-text-primary">Verlas por importe →</span>
+        </button>
       )}
 
       {/* ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §5 — solo lectura + una
