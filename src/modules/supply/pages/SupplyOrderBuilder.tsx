@@ -52,6 +52,10 @@ interface DraftLine {
   qty: string
   note: string
   showNote?: boolean
+  // Formato elegido en la fila. Vacío = el de la ficha del proveedor
+  // (e.purchaseFormatId). Se guarda aquí y no en el catálogo porque es una
+  // decisión del pedido que se está montando, no un dato del proveedor.
+  formatId?: string
 }
 
 // Etiqueta legible de la fuente de la sugerencia.
@@ -73,9 +77,23 @@ function formatShortOrderDate(iso: string | null): string {
 }
 
 // Unidad legible de la fila (formato "caja" o unidad base "kg").
-function unitLabel(e: SupplierCatalogEntry): string {
+// Etiqueta de la unidad de pedido. SIEMPRE con la medida cuando se conoce:
+// "bidón" no distingue dos bidones distintos, y ése es justo el error que la
+// pantalla tiene que impedir (§4.3 del encargo del 20/08).
+function unitLabel(e: SupplierCatalogEntry, formatId?: string): string {
+  const elegido = formatId
+    ? e.formats.find((f) => f.id === formatId)
+    : null
+  if (elegido) return (elegido.label ?? elegido.name ?? '').toLowerCase()
+  if (e.formatLabel) return e.formatLabel.toLowerCase()
   if (e.formatName) return e.formatName.toLowerCase()
   return e.baseUnitAbbr ?? ''
+}
+
+// Qué formato se pide en esta fila: el elegido a mano, o el de la ficha del
+// proveedor. Nunca se inventa uno cuando no hay ficha (§4.5).
+function formatoDeLaFila(e: SupplierCatalogEntry, d?: DraftLine): string {
+  return d?.formatId ?? e.purchaseFormatId ?? ''
 }
 
 export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuilderProps) {
@@ -192,6 +210,9 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
   function setNote(id: string, note: string) {
     setDraft(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', note: '' }), note } }))
   }
+  function setFormato(id: string, formatId: string) {
+    setDraft(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', note: '' }), formatId } }))
+  }
   function toggleNote(id: string) {
     setDraft(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', note: '' }), showNote: !d[id]?.showNote } }))
   }
@@ -277,7 +298,13 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
         const n = parseQty(draft[e.articleSupplierId]?.qty)
         if (n <= 0) continue
         const note = draft[e.articleSupplierId]?.note?.trim() || null
-        const eurPorCaja = e.lastPrice !== null ? e.lastPrice * (e.formatQtyInBase ?? 1) : null
+        // El formato que se pide puede haberse cambiado en la fila; el precio
+        // (€/unidad base) se escala por la equivalencia del formato ELEGIDO.
+        const formatIdElegido = formatoDeLaFila(e, draft[e.articleSupplierId])
+        const qtyInBaseElegido = formatIdElegido
+          ? (e.formats.find((f) => f.id === formatIdElegido)?.qtyInBase ?? e.formatQtyInBase)
+          : e.formatQtyInBase
+        const eurPorCaja = e.lastPrice !== null ? e.lastPrice * (qtyInBaseElegido ?? 1) : null
         const lineTotal = eurPorCaja !== null ? Math.round(n * eurPorCaja * 100) / 100 : null
         await createPurchaseOrderLine({
           accountId: activeAccountId,
@@ -285,7 +312,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
           recipeItemId: e.recipeItemId,
           productName: e.itemName,
           qtyOrdered: n,
-          purchaseFormatId: e.purchaseFormatId,
+          purchaseFormatId: formatIdElegido || null,
           estUnitPrice: eurPorCaja,
           estLineTotal: lineTotal,
           position: position++,
@@ -438,8 +465,24 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                             {e.supplierCode && (
                               <span className="text-[11px] text-text-tertiary">{e.supplierCode}</span>
                             )}
+                            {/* La fila se agrupa por ARTÍCULO, pero si el proveedor
+                                tiene más de un código para él, no se esconde: es lo
+                                que el operario compara con el albarán. */}
+                            {e.otherSupplierCodes.length > 0 && (
+                              <span
+                                className="text-[11px] text-text-secondary"
+                                title={`Este proveedor tiene más de un código para este artículo: ${[e.supplierCode, ...e.otherSupplierCodes].filter(Boolean).join(', ')}`}
+                              >
+                                · también {e.otherSupplierCodes.join(', ')}
+                              </span>
+                            )}
                             {e.isPreferred && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-accent">preferente</span>
+                            )}
+                            {!e.purchaseFormatId && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-warning-bg text-text-primary">
+                                sin formato de este proveedor
+                              </span>
                             )}
                           </div>
                           {pending && (
@@ -496,9 +539,39 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                               placeholder="0"
                               className="w-14 px-2 text-right text-[17px] font-medium bg-transparent text-text-primary focus:outline-none disabled:opacity-50"
                             />
-                            <div className="flex items-center px-2 bg-page border-l border-border-default text-[12px] text-text-secondary whitespace-nowrap">
-                              {unitLabel(e)}
-                            </div>
+                            {/* La unidad de pedido. Con más de un formato es un
+                                desplegable DENTRO de la fila: el formato se elige
+                                aquí, no compitiendo con el artículo en la lista
+                                (§4.2). La etiqueta lleva la medida, porque dos
+                                "cajas" del mismo artículo pueden no medir igual. */}
+                            {e.formats.length === 0 ? (
+                              // Ni ficha ni formatos: NO se inventa una unidad de
+                              // compra. Antes caía a la unidad base y escribía "ml",
+                              // que no es el formato de compra de nada (§4.5).
+                              <div
+                                title="Este proveedor no tiene formato de compra para este artículo"
+                                className="flex items-center px-2 bg-warning-bg border-l border-border-default text-[12px] text-text-primary whitespace-nowrap"
+                              >
+                                sin formato
+                              </div>
+                            ) : (e.formats.length > 1 || !e.purchaseFormatId) ? (
+                              <select
+                                value={formatoDeLaFila(e, d)}
+                                onChange={ev => setFormato(e.articleSupplierId, ev.target.value)}
+                                disabled={saving}
+                                aria-label={`En qué formato se pide ${e.itemName}`}
+                                className="px-2 bg-page border-l border-border-default text-[12px] text-text-secondary max-w-[150px] focus:outline-none disabled:opacity-50"
+                              >
+                                {!formatoDeLaFila(e, d) && <option value="">— elige formato —</option>}
+                                {e.formats.map(f => (
+                                  <option key={f.id} value={f.id}>{f.label ?? f.name ?? '(sin nombre)'}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <div className="flex items-center px-2 bg-page border-l border-border-default text-[12px] text-text-secondary whitespace-nowrap">
+                                {unitLabel(e, formatoDeLaFila(e, d))}
+                              </div>
+                            )}
                           </div>
                         </div>
 

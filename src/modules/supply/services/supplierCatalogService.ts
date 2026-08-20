@@ -34,6 +34,10 @@ export interface SupplierCatalogEntry {
   // elegir el formato que coincide con la unidad del albarán (bote vs caja). El
   // preferente sigue expuesto arriba (purchaseFormatId/formatName/formatQtyInBase).
   formats: SupplierFormatOption[]
+  // Otros códigos de ESTE proveedor para el MISMO artículo, cuando hay más de
+  // una ficha. La fila se agrupa por artículo (una fila = un artículo), pero un
+  // código que existe no se esconde: se enseña al lado del principal.
+  otherSupplierCodes: string[]
   // Stock de referencia: vacío hoy (no hay inventario); gancho para cuando exista.
   stockOnHand: number | null
   // ── Sugerencia de repedido (motor suggest_purchase_qty) ──
@@ -136,6 +140,64 @@ export function formatStockForOrder(
   return formatBaseQty(stockOnHand, baseAbbr)
 }
 
+// Prioridad para elegir qué ficha representa al artículo. Nunca al azar: la
+// preferente manda, luego la que trae código (es lo que el operario compara con
+// el albarán), luego la que trae formato, luego la que trae precio.
+export function fichaScore(e: SupplierCatalogEntry): number {
+  return (e.isPreferred ? 8 : 0)
+    + (e.supplierCode ? 4 : 0)
+    + (e.purchaseFormatId ? 2 : 0)
+    + (e.lastPrice != null ? 1 : 0)
+}
+
+export function mergeEntriesByItem(list: SupplierCatalogEntry[]): SupplierCatalogEntry[] {
+  const byItem = new Map<string, SupplierCatalogEntry[]>()
+  for (const e of list) {
+    const arr = byItem.get(e.recipeItemId) ?? []
+    arr.push(e)
+    byItem.set(e.recipeItemId, arr)
+  }
+
+  const out: SupplierCatalogEntry[] = []
+  for (const grupo of byItem.values()) {
+    if (grupo.length === 1) { out.push(grupo[0]); continue }
+
+    const ordenadas = [...grupo].sort((a, b) => fichaScore(b) - fichaScore(a))
+    const jefe = ordenadas[0]
+
+    // El bloque de formato se toma ENTERO de la misma ficha: mezclar el nombre
+    // de una con la equivalencia de otra daría un formato que no existe.
+    const conFormato = ordenadas.find((e) => e.purchaseFormatId)
+    const conCodigo = ordenadas.find((e) => e.supplierCode)
+    const conPrecio = ordenadas.find((e) => e.lastPrice != null)
+    const conNombre = ordenadas.find((e) => e.supplierItemName)
+
+    const codigoElegido = jefe.supplierCode ?? conCodigo?.supplierCode ?? null
+    const otros = Array.from(new Set(
+      ordenadas
+        .map((e) => e.supplierCode)
+        .filter((c): c is string => !!c && c !== codigoElegido),
+    ))
+
+    out.push({
+      ...jefe,
+      supplierCode: codigoElegido,
+      supplierItemName: jefe.supplierItemName ?? conNombre?.supplierItemName ?? null,
+      lastPrice: jefe.lastPrice ?? conPrecio?.lastPrice ?? null,
+      isPreferred: grupo.some((e) => e.isPreferred),
+      purchaseFormatId: jefe.purchaseFormatId ?? conFormato?.purchaseFormatId ?? null,
+      formatName: jefe.purchaseFormatId ? jefe.formatName : (conFormato?.formatName ?? null),
+      formatQtyInBase: jefe.purchaseFormatId ? jefe.formatQtyInBase : (conFormato?.formatQtyInBase ?? null),
+      formatLabel: jefe.purchaseFormatId ? jefe.formatLabel : (conFormato?.formatLabel ?? null),
+      otherSupplierCodes: otros,
+    })
+  }
+
+  // Mismo orden que antes: por nombre de artículo.
+  out.sort((a, b) => a.itemName.localeCompare(b.itemName, 'es'))
+  return out
+}
+
 /**
  * Catálogo de un proveedor: todos sus article_supplier activos, con artículo,
  * código, formato (nombre+equivalencia) y precio. Ordenado por nombre de artículo.
@@ -223,12 +285,36 @@ export async function getSupplierCatalog(
       baseUnitAbbr: baseAbbr,
       formatLabel: buildFormatLabel(fmt?.name ?? null, fmt?.qty_in_base ?? null, baseAbbr),
       formats: formatsByItem.get(r.recipe_item_id as string) ?? [],
+      otherSupplierCodes: [],
       stockOnHand: null, // gancho inventario
       suggestedQty: null,
       suggestionSource: null,
       suggestionConfidence: null,
     }
   })
+
+  // ── UNA FILA POR ARTÍCULO (ENCARGO 20/08) ───────────────────────────────
+  // article_supplier puede tener VARIAS fichas del mismo artículo para el mismo
+  // proveedor: la misma referencia dada de alta dos veces, una con código y otra
+  // sin él, una con formato y otra sin asignar. La pantalla pintaba UNA FILA POR
+  // FICHA, así que el mismo artículo salía dos veces, con el mismo stock y el
+  // mismo "en camino", y el operario tenía que elegir entre filas que se llaman
+  // igual. Medido en Foodint: Cloudtown daba 98 filas para 89 artículos.
+  //
+  // Y el caso feo: "Aceite de Oliva Suave 0,4º" tenía una ficha con código y
+  // Garrafa, y otra sin código y SIN FORMATO — esa segunda caía a la unidad base
+  // y la pantalla escribía "ml", que no es un formato de compra de nada.
+  //
+  // Regla del encargo, y vale para toda la aplicación: una lista operativa se
+  // agrupa por la cosa que el usuario nombra. El cocinero pide "aceite", no
+  // "aceite-en-bidón-formato-3".
+  //
+  // NO se descarta información. Se elige una ficha representante y sus huecos se
+  // rellenan con lo que tengan las hermanas; los códigos que quedan fuera van a
+  // otherSupplierCodes para que la pantalla los diga en vez de esconderlos.
+  const mergedByItem = mergeEntriesByItem(entries)
+  entries.length = 0
+  entries.push(...mergedByItem)
 
   // Stock real del local activo (T1 inventario, vivo desde 14/06): si nos pasan
   // un locationId, leemos recipe_item_location_stock para los artículos del
