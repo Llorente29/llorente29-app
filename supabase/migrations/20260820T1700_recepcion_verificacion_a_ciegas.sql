@@ -1,7 +1,9 @@
 -- 20260820T1700_recepcion_verificacion_a_ciegas.sql
 -- ENCARGO CODE (20/08) «Verificar un albarán a ciegas» — §3.
 --
--- PROPUESTA. NO APLICADA. Claude Code propone, Julio ejecuta y verifica.
+-- APLICADA: 20/08/2026 vía MCP, a petición explícita de Julio, y verificada
+-- con consulta independiente contra pg_proc.
+-- Reverso: supabase/migrations/REVERT_20260820T1700_*.sql
 --
 -- ── El problema ──────────────────────────────────────────────────────────
 -- La IA marca needs_review con motivos (documento manuscrito, no cuadra la
@@ -379,19 +381,27 @@ begin
       where n.nspname = 'public' and p.proname = 'receive_goods_receipt') <> 1 then
     raise exception 'B: debería quedar EXACTAMENTE una receive_goods_receipt';
   end if;
+  -- Por número de argumentos y defaults, NO por el texto de
+  -- pg_get_function_identity_arguments: en este Postgres devuelve los NOMBRES
+  -- ("p_receipt_id uuid"), no solo los tipos, y comparar contra 'uuid, boolean'
+  -- hizo fallar la verificación en el primer intento (20/08). La transacción
+  -- revirtió sola y producción quedó intacta — el cinturón funcionó, pero la
+  -- comprobación tiene que mirar la estructura, no una cadena de texto.
   if not exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = '_post_goods_receipt_lines'
-      and pg_get_function_identity_arguments(p.oid) = 'uuid, boolean'
+      and p.pronargs = 2 and p.pronargdefaults = 1
+      and p.proargtypes::oid[] = array['uuid'::regtype, 'boolean'::regtype]::oid[]
   ) then
-    raise exception 'A: _post_goods_receipt_lines no quedó con (uuid, boolean)';
+    raise exception 'A: _post_goods_receipt_lines no quedó con (uuid, boolean default)';
   end if;
   if not exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'receive_goods_receipt'
-      and pg_get_function_identity_arguments(p.oid) = 'uuid, boolean'
+      and p.pronargs = 2 and p.pronargdefaults = 1
+      and p.proargtypes::oid[] = array['uuid'::regtype, 'boolean'::regtype]::oid[]
   ) then
-    raise exception 'B: receive_goods_receipt no quedó con (uuid, boolean)';
+    raise exception 'B: receive_goods_receipt no quedó con (uuid, boolean default)';
   end if;
   if not exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace

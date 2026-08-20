@@ -2,8 +2,9 @@
 
 Fecha: 2026-08-20 · Rama: `main` y `claude/redesign-pricing-modal-amxuzy`
 
-> **Hay una migración SIN APLICAR**: `supabase/migrations/20260820T1700_recepcion_verificacion_a_ciegas.sql`.
-> El frontend está blindado para funcionar antes y después de aplicarla (ver §Orden de despliegue).
+> **Migración APLICADA** el 20/08/2026 vía MCP, a petición explícita de Julio, y verificada
+> con consulta independiente contra `pg_proc`. Reverso en
+> `supabase/migrations/REVERT_20260820T1700_recepcion_verificacion_a_ciegas.sql`.
 
 ---
 
@@ -136,18 +137,41 @@ recepciones, que ahora es un botón, no un cartel.
 
 ---
 
-## Orden de despliegue
+## Aplicación de la migración · 20/08/2026
 
-El frontend **no depende** de que la migración esté puesta:
+**Primer intento: falló y revirtió solo.** La comprobación comparaba
+`pg_get_function_identity_arguments(oid) = 'uuid, boolean'`, pero en este Postgres esa
+función devuelve **los nombres** (`p_receipt_id uuid`), no solo los tipos. La transacción
+revirtió entera y producción quedó intacta — verificado: las tres funciones seguían con
+1 argumento. El cinturón hizo su trabajo; el fallo era de mi comprobación, no del SQL.
+Ahora comprueba estructura (`pronargs` / `pronargdefaults` / `proargtypes`), no texto.
 
-- `hold=false` (todo el tráfico de hoy) llama a `receive_goods_receipt` con **un**
-  argumento → funciona antes y después.
-- `hold=true` solo puede ocurrir con la migración puesta; si no lo está, el error se
-  explica en castellano y **la recepción se queda en borrador**: con todo lo que escribió
-  el trabajador guardado y sin nada posteado. Recepcionar es lo que estuvo 6 días roto;
-  no se vuelve a romper por un orden de despliegue.
+**Segundo intento: timeout de red**, sin respuesta. No se reintentó a ciegas: se comprobó
+primero el estado (nada aplicado) y se troceó en tres pasos. Los estados intermedios son
+seguros — con A puesta y B sin poner, la llamada de 1 argumento resuelve por el `default`.
 
-Después de aplicar la migración, `needs_review` de la IA empieza a retener de verdad.
+**Estado final, verificado con consulta independiente:**
+
+| Función | Argumentos | Comprobación |
+|---|---|---|
+| `_post_goods_receipt_lines` | `p_receipt_id uuid, p_only_unposted boolean DEFAULT false` | tiene el modo «solo lo no posteado» |
+| `receive_goods_receipt` | `p_receipt_id uuid, p_hold boolean DEFAULT false` | tiene la rama de retención |
+| `confirm_goods_receipt` | `p_receipt_id uuid` | postea lo no posteado · exige nº de albarán |
+
+Exactamente una de cada. **Cero datos tocados**: 0 recepciones y 0 líneas modificadas;
+los 67 movimientos de stock de esa hora son `consumo` por ventas, ninguno de esto.
+
+### El cliente prueba las dos formas
+
+Desde este entorno **no se puede probar la resolución de PostgREST** (la política de red
+bloquea HTTPS directo a Supabase; solo pasa el MCP). En vez de asumir que PostgREST
+resuelve el argumento por defecto, `receiveGoodsReceipt` intenta la llamada de **2**
+argumentos y, si el servidor responde que esa función no existe, reintenta con la de **1**.
+
+Eso cubre las tres formas de romperlo: la caché de esquema de PostgREST todavía con la
+firma vieja, un despliegue en orden inverso, y que alguien ejecute el REVERT. Con
+`hold=true` no hay reintento — retener no se puede emular con la firma vieja sin postear
+el stock, que es justo lo que se evita: se explica y la recepción se queda en borrador.
 
 ---
 

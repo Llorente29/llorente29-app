@@ -904,28 +904,36 @@ export async function receiveGoodsReceipt(
   requireSupabase()
 
   // ORDEN DE DESPLIEGUE. La firma de 2 argumentos la trae la migración
-  // 20260820T1700; hasta que se aplique, en producción solo existe la de 1.
+  // 20260820T1700 (aplicada el 20/08); la de 1 es la que había antes.
   // Recepcionar es lo que estuvo 6 días roto: no se vuelve a romper por un
-  // orden de despliegue.
-  //   · hold=false (el 100% del tráfico de hoy) llama con UN argumento, así
-  //     que funciona igual antes y después de la migración.
-  //   · hold=true solo puede ocurrir con la migración puesta; si no lo está,
-  //     el error se explica y la recepción se queda en BORRADOR — con todo lo
-  //     que escribió el trabajador guardado y sin nada posteado al almacén,
-  //     que es el lado seguro del fallo.
-  const { data, error } = hold
-    ? await rpcUntyped('receive_goods_receipt', { p_receipt_id: receiptId, p_hold: true })
-    : await rpcUntyped('receive_goods_receipt', { p_receipt_id: receiptId })
-  if (error) {
-    if (hold && /Could not find the function|PGRST202|does not exist/i.test(error.message)) {
+  // orden de despliegue, ni por la ventana en que PostgREST todavía tiene la
+  // firma vieja en su caché de esquema, ni si alguien ejecuta el REVERT.
+  //
+  // Por eso se prueban LAS DOS formas en vez de confiar en que PostgREST
+  // resuelva el argumento por defecto: se intenta la de 2 y, si el servidor
+  // dice que esa función no existe, se reintenta con la de 1.
+  //   · hold=false → si solo hay firma vieja, el reintento hace exactamente
+  //     lo de siempre. Cero cambio de comportamiento.
+  //   · hold=true  → retener NO se puede emular con la firma vieja (postearía
+  //     el stock, justo lo que estamos evitando). Se explica y se corta: la
+  //     recepción se queda en BORRADOR, con todo lo que escribió el
+  //     trabajador guardado y sin nada en el almacén. Ése es el lado seguro.
+  const noExiste = (msg: string) => /Could not find the function|PGRST202|does not exist/i.test(msg)
+
+  let { data, error } = await rpcUntyped('receive_goods_receipt', {
+    p_receipt_id: receiptId, p_hold: hold,
+  })
+  if (error && noExiste(error.message)) {
+    if (hold) {
       throw new Error(
         'Este albarán necesita revisión de oficina y esa parte todavía no está puesta en el servidor ' +
         '(falta la migración 20260820T1700). La recepción se queda como borrador: no se ha perdido nada ' +
         'y no ha entrado nada al almacén.',
       )
     }
-    throw new Error(`Error recibiendo la recepción: ${error.message}`)
+    ;({ data, error } = await rpcUntyped('receive_goods_receipt', { p_receipt_id: receiptId }))
   }
+  if (error) throw new Error(`Error recibiendo la recepción: ${error.message}`)
 
   const row = (Array.isArray(data) ? data[0] : data) as
     { posted_lines?: number; skipped_lines?: number } | null
