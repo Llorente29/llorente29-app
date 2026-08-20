@@ -117,12 +117,33 @@ interface WizardLine {
   mapSource: 'ocr_ficha_coinciden' | 'ocr' | 'ficha' | 'discrepancia' | 'sin_formato' | null
   mapNeedsReview: boolean
   discrepancyReason: string | null
+  // Por qué NO se pudo mirar el formato (error o tope de tiempo). Null = sin
+  // incidencia. Existe para que un fallo aquí deje de ser mudo: antes la línea
+  // se quedaba con el esqueleto puesto para siempre y el operario no podía ni
+  // seguir ni saber por qué (§3 del encargo del 20/08).
+  formatError: string | null
 
   qty: number
   qtySource: QtySource
   total: string   // IMPORTE TOTAL de la línea (texto editable, es-ES)
 
   flagged: boolean
+}
+
+// Tope de tiempo para cualquier espera de red. Una pantalla de carga sin tope
+// es un cuelgue esperando a ocurrir: si la respuesta no llega, el operario se
+// queda mirando un esqueleto sin saber que ya no va a pasar nada.
+function conTope<T>(promesa: Promise<T>, ms: number, haciendo: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`Tardó más de ${Math.round(ms / 1000)} s ${haciendo}`)),
+      ms,
+    )
+    promesa.then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) },
+    )
+  })
 }
 
 function parseNum(v: string): number | null {
@@ -211,6 +232,7 @@ function lineFromOcr(l: OcrPrefill['lines'][number], i: number): WizardLine {
     mapSource: null,
     mapNeedsReview: false,
     discrepancyReason: null,
+    formatError: null,
     // Sin formato conocido todavía: se cuenta en la unidad del ALBARÁN
     // (§3 — "sin formato conocido, se cuenta en la unidad del albarán, y se
     // dice cuál"). En cuanto case el artículo y resuelva un formato, se
@@ -252,6 +274,7 @@ function blankLine(): WizardLine {
     mapSource: null,
     mapNeedsReview: false,
     discrepancyReason: null,
+    formatError: null,
     qty: 1,
     qtySource: 'manual',
     total: '',
@@ -318,42 +341,86 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
   // un string estable con el par línea:artículo casado — solo cambia cuando
   // cambia el ARTÍCULO, no cuando cambian formats/formatsLoading — y un ref
   // (no estado) para no repetir la petición de un artículo ya pedido.
+  //
+  // ── EL CUELGUE DEL 14–20/08, Y POR QUÉ ─────────────────────────────────
+  // Seis días sin poder guardar una recepción. La pantalla se quedaba en
+  // "Un momento, mirando el formato…" para siempre, con el servidor ya
+  // respondido y sin una sola petición más.
+  //
+  // Causa: el casado de artículos (efecto de arriba) va línea a línea y
+  // asigna recipeItemId según van llegando. CADA asignación cambia
+  // matchedItemsKey -> este efecto se vuelve a montar -> el cleanup ponía
+  // `cancelled = true` en la ejecución anterior. Las líneas que estaban EN
+  // VUELO salían por `if (cancelled) return` SIN quitarse formatsLoading, y
+  // como requestedFormatsRef ya las tenía marcadas como pedidas, ninguna
+  // ejecución posterior volvía a pedirlas. Quedaban cargando eternamente.
+  // Medido: siempre 1-2 líneas menos de llamadas que de líneas (17 de 19,
+  // 14 de 15, 5 de 6) — justo las que estaban en vuelo al llegar el
+  // siguiente casado. Con canSubmit exigiendo pendingCount === 0, el botón
+  // no se encendía jamás.
+  //
+  // Tres cambios, y los tres importan:
+  //
+  //   1. Cancelar SOLO al desmontar. Un cambio de dependencias ya no aborta
+  //      el bucle en curso: cada ejecución trabaja sobre su propio `pending`
+  //      (disjunto, lo garantiza el ref) y escribe por x.key, así que dos
+  //      bucles a la vez no se pisan. Antes se abortaba por algo que no era
+  //      un problema, y ese aborto era el fallo.
+  //
+  //   2. `finally`: pase lo que pase — éxito, error, tope de tiempo — la
+  //      línea DEJA de estar cargando. El estado de carga no puede depender
+  //      de que se recorra un camino concreto.
+  //
+  //   3. Tope de tiempo con mensaje. Si el servidor no contesta, se dice y
+  //      se deja seguir a mano. Un esqueleto eterno delante de un operario
+  //      de cocina es el peor resultado posible: ni puede seguir ni sabe
+  //      por qué.
   const requestedFormatsRef = useRef<Set<string>>(new Set())
+  const montadoRef = useRef(true)
+  useEffect(() => () => { montadoRef.current = false }, [])
   const matchedItemsKey = lines.map(l => `${l.key}:${l.recipeItemId ?? ''}`).join('|')
   useEffect(() => {
-    let cancelled = false
     const pending = lines.filter(l => l.recipeItemId && !requestedFormatsRef.current.has(`${l.key}:${l.recipeItemId}`))
     if (pending.length === 0) return
     pending.forEach(l => requestedFormatsRef.current.add(`${l.key}:${l.recipeItemId}`))
     ;(async () => {
       // Marca "cargando" dentro del async: nunca setState síncrono en el
       // cuerpo del efecto (mismo criterio que el resto del fetching de Supply).
-      setLines(prev => prev.map(x => pending.some(p => p.key === x.key) ? { ...x, formatsLoading: true } : x))
+      setLines(prev => prev.map(x => pending.some(p => p.key === x.key) ? { ...x, formatsLoading: true, formatError: null } : x))
       for (const l of pending) {
-        if (cancelled || !l.recipeItemId) continue
+        if (!montadoRef.current) return
+        const recipeItemId = l.recipeItemId
+        if (!recipeItemId) continue
+        let fallo: string | null = null
         try {
           // Secuencial, no Promise.all: si resolve() crea un formato nuevo
           // (Ley 4), listFormatsByItem tiene que verlo ya creado o el
           // purchaseFormatId resuelto no aparecería en `formats`.
-          const resolved = await resolveGoodsReceiptLineFormat({
+          const resolved = await conTope(resolveGoodsReceiptLineFormat({
             accountId,
             aiSessionId: l.manual ? null : (ocrPrefill.aiSessionId ?? null),
-            recipeItemId: l.recipeItemId,
+            recipeItemId,
             rawText: l.manual ? null : l.rawText,
             supplierId: ocrPrefill.supplierId || null,
             createdBy: authUserId ?? null,
             createdByName: userProfile?.displayName ?? null,
-          })
-          const [fmts, base] = await Promise.all([
-            listFormatsByItem(l.recipeItemId),
-            getItemBaseUnit(l.recipeItemId),
-          ])
+          }), 20000, 'mirando el formato')
+          const [fmts, base] = await conTope(Promise.all([
+            listFormatsByItem(recipeItemId),
+            getItemBaseUnit(recipeItemId),
+          ]), 20000, 'leyendo los formatos del artículo')
           const active = fmts.filter(f => f.isActive && f.qtyInBase != null && f.qtyInBase > 0)
-          if (cancelled) return
+          if (!montadoRef.current) return
           setLines(prev => prev.map(x => {
             if (x.key !== l.key) return x
+            // El artículo cambió mientras resolvíamos: esta respuesta es de
+            // otro artículo y no debe pisar a la buena. (Antes esto lo cubría
+            // `cancelled`; al quitarlo para no dejar líneas colgadas, el
+            // guardado pasa a ser por artículo, que es lo correcto de todos
+            // modos: sólo descarta lo obsoleto, no aborta lo que va bien.)
+            if (x.recipeItemId !== recipeItemId) return x
             const withResolution = {
-              ...x, formats: active, formatsLoading: false, baseUnit: base,
+              ...x, formats: active, baseUnit: base,
               mapSource: resolved.mapSource, mapNeedsReview: resolved.mapNeedsReview,
               discrepancyReason: resolved.discrepancyReason,
             }
@@ -366,12 +433,23 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
               ...(derived ? { qty: derived.qty, qtySource: derived.source } : {}),
             }
           }))
-        } catch {
-          if (!cancelled) setLines(prev => prev.map(x => x.key === l.key ? { ...x, formatsLoading: false } : x))
+        } catch (e) {
+          fallo = e instanceof Error ? e.message : 'No se pudo mirar el formato'
+        } finally {
+          // RED DE SEGURIDAD. Esta línea deja de estar cargando SIEMPRE, por
+          // cualquier camino. Es lo que impide que vuelva el cuelgue.
+          if (montadoRef.current) {
+            setLines(prev => prev.map(x =>
+              x.key === l.key && x.recipeItemId === recipeItemId
+                ? { ...x, formatsLoading: false, formatError: fallo }
+                : x))
+          }
+          // Si falló, se desmarca para que un reintento (p.ej. si el operario
+          // cambia el artículo y vuelve) pueda volver a pedirlo.
+          if (fallo) requestedFormatsRef.current.delete(`${l.key}:${recipeItemId}`)
         }
       }
     })()
-    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchedItemsKey])
 
@@ -454,6 +532,12 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
     if (l.matchLoading) return 'Un momento, buscando el artículo…'
     if (!l.recipeItemId) return 'Elige el artículo para continuar'
     if (l.formatsLoading) return 'Un momento, mirando el formato…'
+    // El fallo se dice, y con salida: nunca un esqueleto mudo (encargo 20/08 §5.3).
+    if (l.formatError) {
+      return l.formats.length > 0
+        ? `${l.formatError}. Elige en qué viene para continuar.`
+        : `${l.formatError}. Marca "que lo mire la oficina" para continuar.`
+    }
     if (l.mapSource === 'discrepancia' && !l.purchaseFormatId) {
       return l.discrepancyReason ? `${l.discrepancyReason} Elige en qué viene.` : 'El documento y la ficha no coinciden — elige en qué viene.'
     }
@@ -799,6 +883,23 @@ function LineScreen({
 
   return (
     <div className="pt-3 pb-2">
+
+      {/* No se pudo mirar el formato — se DICE, y con salida. Antes esto era un
+          esqueleto eterno: el operario no podía seguir y no sabía por qué. */}
+      {l.formatError && (
+        <div className="mb-3 rounded-xl border border-warning bg-warning-bg p-3 flex items-start gap-2.5">
+          <AlertTriangle size={20} className="text-warning shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-base font-medium text-text-primary leading-snug">
+              No se pudo mirar el formato
+            </p>
+            <p className="text-sm text-text-secondary mt-0.5">
+              {l.formatError}. Puedes elegir en qué viene aquí abajo, o marcar
+              «que lo mire la oficina» y seguir.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* El albarán dice — 14px secundario + 16px primario */}
       <p className="text-sm text-text-secondary">El albarán dice</p>
