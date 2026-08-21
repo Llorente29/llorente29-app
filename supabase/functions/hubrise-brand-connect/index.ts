@@ -323,13 +323,30 @@ Deno.serve(async (req: Request) => {
   const anyCatalogReady = results.some((r) => r.status !== "error");
 
   // ── Publicar la carta -- REUSA hubrise-catalog-publish (mismo JWT de usuario) ──
+  //
+  // ENCARGO CODE (21/08) -- EL AMBITO VIAJA. Aqui se perdia: esta funcion acota
+  // su propio trabajo a requestedLocationId (lineas 133-185) y luego publicaba
+  // con `{ brand_id }` a secas, o sea scope=all. Probado en los logs del 21/08:
+  //
+  //   07:44:55  hubrise-catalog-publish  scope=single(Alcala) catalogos=1/2 dry_run=true
+  //   07:45:18  hubrise-brand-connect    (boton "Conectar a delivery")
+  //   07:45:21  hubrise-catalog-publish  scope=all             catalogos=2/2 dry_run=false
+  //
+  // El segundo publish NO salio del boton de publicar: salio de aqui, y se
+  // llevo por delante el catalogo de Carabanchel, que es un escaparate vivo.
+  // La regla es la misma del 18/08: la ultima pantalla antes de escribir dice
+  // donde escribe, y lo que escribe va exactamente ahi.
   let publish: unknown = null;
   if (anyCatalogReady) {
     try {
       const pubRes = await fetch(`${SUPABASE_URL}/functions/v1/hubrise-catalog-publish`, {
         method: "POST",
         headers: { "Authorization": authHeader, "Content-Type": "application/json" },
-        body: JSON.stringify({ brand_id: brandId }),
+        body: JSON.stringify(
+          requestedLocationId
+            ? { brand_id: brandId, location_id: requestedLocationId }
+            : { brand_id: brandId },
+        ),
       });
       publish = await pubRes.json();
     } catch (e) {

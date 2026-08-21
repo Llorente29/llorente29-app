@@ -352,7 +352,11 @@ export default function KitchenMenuPage() {
     setConnectResult(null)
     setError(null)
     try {
-      const res = await connectBrandToDelivery(selectedBrand.id)
+      // ENCARGO CODE (21/08) — el ámbito elegido arriba viaja también aquí.
+      // Antes no: este botón conectaba y publicaba SIEMPRE todos los locales
+      // de la marca, aunque el desplegable dijera «Foodint Alcalá». Es lo que
+      // republicó Carabanchel el 21/08 a las 07:45.
+      const res = await connectBrandToDelivery(selectedBrand.id, publishLocationId ?? undefined)
       setConnectResult(res)
       setPublishStatusKey((k) => k + 1)
     } catch (e: unknown) {

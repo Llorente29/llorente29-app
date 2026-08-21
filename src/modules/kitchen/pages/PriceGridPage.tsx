@@ -35,20 +35,39 @@
 //
 // Sin escandallo ⇒ celda de margen VACÍA. Nunca 0 %: sería mentira.
 //
-// ── EL ÁMBITO SE DICE, NO SE ADIVINA ───────────────────────────────────────
-// El 18/08 dos precios de Meraki Pita se escribieron en ámbito CUENTA cuando la
-// intención era sólo Alcalá. La marca opera en dos locales, así que un precio de
-// cuenta es el precio de los dos. Investigado: el guardado lee UN solo
-// `locationId`, y el `location_id` escrito y el `ambito` del scope salen de esa
-// misma variable, así que no pueden discrepar entre sí — el cliente tenía
-// ámbito cuenta de verdad. Lo que faltaba era que la pantalla lo DIJERA donde se
-// mira antes de escribir. Ahora el ámbito aparece en la barra de guardado y en
-// la previsualización, con su nombre.
+// ── UNA SOLA PREGUNTA: ¿DÓNDE? (21/08) ─────────────────────────────────────
+// Julio subió tres precios de Meraki Pita y no pudo decir qué había hecho. No
+// era suyo el fallo: la pantalla le hacía tomar CINCO decisiones que nunca
+// enunciaba —precio base o de canal, cuenta o local, si el canal llega a algún
+// sitio, que cambiar no es publicar, y con qué alcance se publica—. Para una
+// tarea que él describe en una frase.
+//
+// Ahora se pregunta UNA cosa, en su idioma: «¿de qué carta?» y «¿dónde?». De
+// ahí sale todo lo demás y no se vuelve a preguntar:
+//
+//   · DÓNDE se escribe.  Elegir «Foodint Alcalá» escribe en Alcalá; elegir
+//     «los 2 locales» escribe el precio de la marca. Una sola variable manda
+//     sobre la escritura, el texto de la barra y el alcance de publicar, así
+//     que no pueden discrepar.
+//
+//   · SI ESE CANAL LLEGA.  La ruta es POR LOCAL (Uber sale por HubRise en
+//     Alcalá y por Last en Carabanchel) y hasta hoy la pantalla no la miraba:
+//     dejaba teclear el precio de Glovo en Alcalá, que se gestiona en Last, sin
+//     decir que ese número no se publica en ningún sitio. Ahora cada columna lo
+//     dice y la celda que no llega no se edita (channelRouteService).
+//
+//   · PUBLICAR.  Guardar y publicar dejan de ser dos actos que hay que conocer:
+//     al guardar, la pantalla dice qué canales llegan, cuáles no y por qué, y
+//     ofrece el botón. Publica EXACTAMENTE el mismo sitio que enseña arriba.
+//
+// Las palabras «ámbito» y «override» no aparecen en pantalla. Son nuestras, no
+// del que pone precios.
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Table2, AlertTriangle, Undo2, EyeOff, Loader2, Check, X, FlaskConical, Gauge, Pencil,
+  UploadCloud, Lock,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
@@ -63,6 +82,11 @@ import {
   type PriceGrid, type GridColumn, type GridTimings, type MenuOrder, type Escalera, type BulkOp,
   type OperationEntry, type Banda,
 } from '@/modules/kitchen/services/priceGridService'
+import {
+  listChannelRoutes, veredicto, esEditable, llegaAPlataforma, ROUTE_LABEL, ROUTE_NOTA,
+  type RouteRow, type RouteVerdict,
+} from '@/modules/kitchen/services/channelRouteService'
+import { publishBrandCatalog, type PublishResult } from '@/modules/kitchen/services/catalogPublishService'
 
 // Formato: SIEMPRE dos decimales y símbolo al mostrar (fmtMoney), y coma sin
 // símbolo al sembrar un campo editable (fmtNumEs). Los dos salen de
@@ -118,8 +142,17 @@ export default function PriceGridPage() {
   const [brands, setBrands] = useState<Brand[]>([])
   const [brandId, setBrandId] = useState<string | null>(null)
   const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([])
-  const [locationId, setLocationId] = useState<string | null>(null)   // null = ámbito cuenta
+  // null = el precio de la marca, el mismo en todos sus locales.
+  // Un id = ese local. Es LA variable: manda sobre lo que se escribe, sobre lo
+  // que dice la barra de guardado y sobre a dónde publica el botón.
+  const [locationId, setLocationId] = useState<string | null>(null)
   const [cuentaInterna, setCuentaInterna] = useState(false)
+  const [rutas, setRutas] = useState<RouteRow[]>([])
+  // Publicar, desde aquí mismo (§4.3): cambiar y publicar dejan de ser dos
+  // actos que el usuario tiene que conocer por su cuenta.
+  const [trasGuardar, setTrasGuardar] = useState<{ celdas: number; canales: string[] } | null>(null)
+  const [publicando, setPublicando] = useState(false)
+  const [resultadoPublicar, setResultadoPublicar] = useState<PublishResult | null>(null)
 
   const [grid, setGrid] = useState<PriceGrid | null>(null)
   const [orden, setOrden] = useState<MenuOrder | null>(null)
@@ -162,9 +195,10 @@ export default function PriceGridPage() {
 
   const hayPendientes = pendientes.size > 0
 
-  const ambitoNombre = locationId
+  // El nombre del SITIO, como lo diría el usuario. Nunca «ámbito».
+  const dondeNombre = locationId
     ? (locations.find((l) => l.id === locationId)?.name ?? locationId)
-    : 'toda la cuenta'
+    : (locations.length === 1 ? (locations[0]?.name ?? 'el local') : `los ${locations.length} locales`)
 
   // ── Salir con pendientes AVISA ───
   // Dos puertas, porque son dos salidas distintas.
@@ -215,12 +249,22 @@ export default function PriceGridPage() {
     // El error NO se traga: si esta consulta falla, el desplegable de ámbito se
     // queda con «toda la cuenta» como única opción y sería imposible escribir en
     // un local sin que nadie entendiera por qué.
-    supabase?.from('locations').select('id, name').eq('account_id', activeAccountId).order('name')
+    // SÓLO LOCALES ABIERTOS. Foodint tiene tres y «Plaza Castilla» está
+    // inactivo (active=false) aunque Meraki Pita siga marcada como disponible
+    // ahí. Sin este filtro el desplegable ofrecería un local cerrado y el texto
+    // diría «los 3 locales» cuando son 2 — y ese número es el que el usuario
+    // lee antes de escribir. Un local cerrado no tiene precios que poner.
+    supabase?.from('locations').select('id, name').eq('account_id', activeAccountId)
+      .eq('active', true).order('name')
       .then(({ data, error: e }) => {
-        if (e) setError(`No se han podido cargar los locales: ${e.message}. Sólo se puede editar en ámbito cuenta.`)
+        if (e) setError(`No se han podido cargar los locales: ${e.message}. Sólo se puede poner el mismo precio para todos.`)
         setLocations((data ?? []) as Array<{ id: string; name: string }>)
       })
     getAccountIsInternal(activeAccountId).then(setCuentaInterna).catch(() => setCuentaInterna(false))
+    // Las rutas de publicación. Si fallan se degrada a «sin declarar», que deja
+    // escribir y avisa: perder la pantalla de precios por no poder leer una
+    // tabla declarativa sería peor que el problema que resuelve.
+    listChannelRoutes(activeAccountId).then(setRutas).catch(() => setRutas([]))
   }, [activeAccountId])
 
   // ── carga de la rejilla ───
@@ -256,16 +300,30 @@ export default function PriceGridPage() {
   }, [brandId, locationId, reloadKey])
 
   // ── columnas y bloques de carta ───
+  // Cada canal lleva pegado SI LLEGA A ALGÚN SITIO desde este local. Va aquí y
+  // no en la celda para que el encabezado, la celda, la operación en lote y la
+  // frase de guardado lean todos el mismo veredicto: si se calculara en cada
+  // sitio, podrían discrepar, que es de donde salen estos problemas.
   const canales = useMemo(() => {
-    if (!grid) return [] as Array<{ channelId: string; channelName: string; cols: GridColumn[] }>
-    const m = new Map<string, { channelId: string; channelName: string; cols: GridColumn[] }>()
+    if (!grid) return [] as Array<{ channelId: string; channelName: string; channelType: string | null; cols: GridColumn[]; ruta: RouteVerdict; editable: boolean }>
+    const m = new Map<string, { channelId: string; channelName: string; channelType: string | null; cols: GridColumn[] }>()
     for (const c of grid.columns) {
       const e = m.get(c.channelId)
       if (e) e.cols.push(c)
-      else m.set(c.channelId, { channelId: c.channelId, channelName: c.channelName, cols: [c] })
+      else m.set(c.channelId, { channelId: c.channelId, channelName: c.channelName, channelType: c.channelType, cols: [c] })
     }
-    return Array.from(m.values())
-  }, [grid])
+    return Array.from(m.values()).map((c) => {
+      const ruta = veredicto(rutas, locationId, c.channelId, c.channelType)
+      return { ...c, ruta, editable: esEditable(ruta) }
+    })
+  }, [grid, rutas, locationId])
+
+  /** Los canales de esta pantalla que SÍ llegarían a una plataforma al publicar. */
+  const canalesQuePublican = useMemo(
+    () => canales.filter((c) => llegaAPlataforma(c.ruta)), [canales])
+  /** Los que NO, con su motivo — para poder decirlo, no para esconderlo. */
+  const canalesQueNo = useMemo(
+    () => canales.filter((c) => c.ruta.kind === 'last' || c.ruta.kind === 'ninguna'), [canales])
 
   const todasLasSecciones = useMemo(
     () => (grid ? agruparPorCarta(grid.products, orden) : []), [grid, orden])
@@ -312,6 +370,11 @@ export default function PriceGridPage() {
 
   function abrirCelda(itemId: string, channelId: string, precioActual: number) {
     setAviso(null)
+    // Puerta cerrada de verdad, no sólo en el pintado: si el canal no lleva el
+    // precio a ninguna parte, no se abre el campo. Ofrecer el teclado para un
+    // número que no se publica es el botón que no cumple.
+    const ch = canales.find((c) => c.channelId === channelId)
+    if (ch && !ch.editable) return
     const p = pendientes.get(pKey(itemId, channelId))
     const semilla = p ? (p.accion === 'clear' ? '' : fmtNumEs(p.precio)) : fmtNumEs(precioActual)
     setEdit({ itemId, channelId, valor: semilla, semilla })
@@ -411,6 +474,9 @@ export default function PriceGridPage() {
       if (excluirCombos && p.productType === 'combo') continue
       for (const ch of canales) {
         if (!selCanales.has(ch.channelId)) continue
+        // Mismo veredicto que la celda suelta: la operación en lote no es una
+        // puerta de atrás para escribir donde no llega.
+        if (!ch.editable) continue
         const ref = grid.cells.get(cellKey(p.menuItemId, ch.cols[0].key))
         if (!ref) continue
         if (excluirSinEscandallo && !ref.costAvailable) continue
@@ -519,7 +585,7 @@ export default function PriceGridPage() {
         accountId: activeAccountId,
         scope: {
           marca: brands.find((b) => b.id === brandId)?.name ?? brandId,
-          ambito: ambitoNombre,
+          ambito: dondeNombre,
           ambito_location_id: locationId,
           canales: Array.from(new Set(preview.map((r) => r.canal))),
           productos: Array.from(new Set(preview.map((r) => r.producto))).length,
@@ -527,16 +593,38 @@ export default function PriceGridPage() {
           origen: 'rejilla de precios',
         },
         entries,
-        note: `Rejilla · ${entries.length} celda(s) · ${ambitoNombre}`,
+        note: `Rejilla · ${entries.length} celda(s) · ${dondeNombre}`,
       })
       setUltimaOperacion(opId)
+      const canalesTocados = Array.from(new Set(preview.map((r) => r.canal)))
       setPendientes(new Map()); setPreview(null); setAsumoPerdida(false)
       setReloadKey((k) => k + 1)
-      setAviso(`Guardado en ${ambitoNombre}. Operación ${opId.slice(0, 8)} — se puede deshacer entera.`)
+      // §4.3 — cambiar y publicar dejan de ser dos actos que hay que conocer.
+      // La pantalla dice qué falta y lo ofrece, con las dos salidas explícitas.
+      setTrasGuardar({ celdas: entries.length, canales: canalesTocados })
+      setResultadoPublicar(null)
     } catch (e) {
       // Conflictos: se ENSEÑAN, no se esconden.
       setAviso(e instanceof Error ? e.message : String(e))
     } finally { setSaving(false) }
+  }
+
+  /**
+   * §4.4 — publica EXACTAMENTE el sitio que enseña la pantalla. Sale de la misma
+   * `locationId` que gobierna la escritura, así que lo que se mira y lo que se
+   * escribe no pueden discrepar. El 21/08 discreparon: el ensayo corrió con
+   * scope=single(Alcalá) y la publicación con scope=all — y no salió del botón
+   * de publicar, sino de «Conectar a delivery», que se comía el local. Está
+   * arreglado en hubrise-brand-connect; esta pantalla no lo repite.
+   */
+  async function publicarAhora() {
+    if (!brandId || publicando) return
+    setPublicando(true); setAviso(null)
+    try {
+      setResultadoPublicar(await publishBrandCatalog(brandId, locationId))
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : String(e))
+    } finally { setPublicando(false) }
   }
 
   async function deshacer() {
@@ -551,11 +639,11 @@ export default function PriceGridPage() {
     } finally { setSaving(false) }
   }
 
-  /** Cambiar de marca o de ámbito invalida los pendientes: son de ESE ámbito. */
+  /** Los cambios pendientes son DE ESE SITIO: cambiar de carta o de local los invalida. */
   function cambiarContexto(fn: () => void) {
     if (hayPendientes && !window.confirm(
-      `Tienes ${pendientes.size} cambio(s) sin guardar en ${ambitoNombre}. Si cambias de marca o de ámbito se descartan. ¿Seguir?`)) return
-    setPendientes(new Map()); setEdit(null); setPreview(null)
+      `Tienes ${pendientes.size} cambio(s) sin guardar en ${dondeNombre}. Si cambias de carta o de local se descartan. ¿Seguir?`)) return
+    setPendientes(new Map()); setEdit(null); setPreview(null); setTrasGuardar(null)
     fn()
   }
 
@@ -569,9 +657,9 @@ export default function PriceGridPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Precios de la carta</h1>
           <p className="text-sm text-text-secondary mt-1 max-w-3xl">
-            Todos los precios de una marca por canal. <b>Los precios son los que paga el cliente, con IVA.</b>{' '}
-            Editar acumula cambios; <b>nada se guarda hasta que pulsas Guardar</b> abajo. Guardar cambia el precio
-            en Folvy; <b>no publica nada en Glovo, Uber ni Just Eat</b>.
+            Elige <b>la carta</b> y <b>dónde</b>, y cambia los precios. Son los que paga el cliente,{' '}
+            <b>con IVA</b>. Nada se guarda hasta que pulsas Guardar; al guardar te digo{' '}
+            <b>a qué plataformas llega</b> y te ofrezco publicarlo.
           </p>
         </div>
       </div>
@@ -591,19 +679,21 @@ export default function PriceGridPage() {
 
       {/* selectores */}
       <div className="mt-5 flex flex-wrap items-center gap-3 bg-card border border-border-default rounded-xl p-3">
-        <label className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45">Marca</label>
+        <label className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45">Carta</label>
         <select className="border border-linea-fuerte rounded-lg px-3 py-1.5 text-sm font-semibold bg-white"
           value={brandId ?? ''}
           onChange={(e) => { const v = e.target.value; cambiarContexto(() => { setBrandId(v); setSelProductos(new Set()) }) }}>
           {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
 
-        <label className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45 ml-2">Ámbito</label>
+        {/* LA ÚNICA PREGUNTA. De aquí sale dónde se escribe, qué dice cada
+            columna y a dónde publica el botón. No se vuelve a preguntar. */}
+        <label className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45 ml-2">Dónde</label>
         <select className="border border-linea-fuerte rounded-lg px-3 py-1.5 text-sm font-semibold bg-white"
           value={locationId ?? ''}
           onChange={(e) => { const v = e.target.value || null; cambiarContexto(() => setLocationId(v)) }}>
-          <option value="">Toda la cuenta (precio de marca)</option>
           {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          {locations.length > 1 && <option value="">Los {locations.length} locales, el mismo precio</option>}
         </select>
 
         <div className="flex rounded-lg overflow-hidden border border-linea-fuerte ml-auto">
@@ -718,7 +808,7 @@ export default function PriceGridPage() {
                   <option value="pct">% sobre el precio</option>
                   <option value="eur">€ por plato</option>
                   <option value="set">Fijar a</option>
-                  <option value="base">Volver a precio base</option>
+                  <option value="base">Poner el precio base</option>
                 </select>
                 {opKind !== 'base' && (
                   <input className="border border-linea-fuerte rounded-lg px-2 py-1.5 text-sm w-24 tabular-nums"
@@ -760,7 +850,8 @@ export default function PriceGridPage() {
             <div className="mt-3 text-[11px] text-tinta-45">
               Pulsa cualquier precio para cambiarlo. <b>Enter</b> acepta y baja · <b>Tab</b> acepta y va a la derecha ·{' '}
               <b>salir de la celda</b> acepta también · <b>Esc</b> descarta esa edición. Para{' '}
-              <b>volver a heredado</b>, deja el campo vacío. Nada se escribe hasta pulsar <b>Guardar</b>.
+              <b>volver al precio base</b>, deja el campo vacío. Las columnas con candado no se tocan desde{' '}
+              aquí: ese precio no saldría de Folvy. Nada se escribe hasta pulsar <b>Guardar</b>.
             </div>
           )}
 
@@ -779,8 +870,21 @@ export default function PriceGridPage() {
                   <th className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-tinta-45">Base</th>
                   {vista === 'precio'
                     ? canales.map((c) => (
-                        <th key={c.channelId} className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-tinta-45 whitespace-nowrap">
+                        // §4.1 — DEBAJO DEL NOMBRE, SI LLEGA. Es el dato que
+                        // faltaba: la ruta es por local y hasta hoy no se miraba.
+                        <th key={c.channelId} className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-tinta-45 whitespace-nowrap align-top">
                           {c.channelName}
+                          <span className={`block normal-case tracking-normal font-medium mt-0.5 ${
+                            c.ruta.kind === 'folvy' ? 'text-success'
+                              : c.ruta.kind === 'interno' ? 'text-tinta-25'
+                              : 'text-warning'}`}>
+                            {ROUTE_LABEL[c.ruta.kind]}
+                          </span>
+                          {ROUTE_NOTA[c.ruta.kind] && (
+                            <span className="block normal-case tracking-normal font-normal text-tinta-25">
+                              {ROUTE_NOTA[c.ruta.kind]}
+                            </span>
+                          )}
                         </th>))
                     : grid.columns.map((c) => (
                         <th key={c.key} className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-tinta-45 whitespace-nowrap">
@@ -830,6 +934,20 @@ export default function PriceGridPage() {
                           ? canales.map((c) => {
                               const cell = grid.cells.get(cellKey(p.menuItemId, c.cols[0].key))
                               if (!cell) return <td key={c.channelId} className="px-3 py-2" />
+                              // §4.1 — si Folvy no lo controla, la UI degrada en
+                              // vez de ofrecer un botón que no cumple. Se enseña
+                              // el precio que hay (es un dato) pero no se teclea.
+                              if (!c.editable) {
+                                return (
+                                  <td key={c.channelId} className="px-3 py-2 text-right align-top bg-lavado/60">
+                                    <div className="tabular-nums text-sm text-tinta-25">{eur(cell.price)}</div>
+                                    <div className="text-[10px] text-tinta-45 mt-0.5 flex items-center justify-end gap-1">
+                                      <Lock className="w-2.5 h-2.5" />
+                                      {c.ruta.kind === 'last' ? 'en Last' : 'no se publica'}
+                                    </div>
+                                  </td>
+                                )
+                              }
                               const editando = edit?.itemId === p.menuItemId && edit?.channelId === c.channelId
                               if (editando) {
                                 return (
@@ -859,7 +977,7 @@ export default function PriceGridPage() {
                                       }}
                                       className="w-24 border-2 border-tinta rounded-md px-2 py-1 text-sm text-right tabular-nums font-semibold"
                                     />
-                                    <div className="text-[10px] text-tinta-45 mt-0.5">con IVA · vacío = heredar</div>
+                                    <div className="text-[10px] text-tinta-45 mt-0.5">con IVA · vacío = el precio base</div>
                                   </td>
                                 )
                               }
@@ -877,7 +995,7 @@ export default function PriceGridPage() {
                                       pend ? 'border-2 border-dashed border-tinta bg-tinta/5 py-0.5' : 'hover:bg-tinta/5'}`}>
                                     <div className={`tabular-nums text-sm ${
                                       pend ? 'font-bold text-tinta' : propio ? 'font-semibold text-tinta' : 'font-normal text-tinta-25'}`}>
-                                      {pend?.accion === 'clear' ? 'hereda' : eur(mostrado)}
+                                      {pend?.accion === 'clear' ? 'el base' : eur(mostrado)}
                                     </div>
                                     {pend ? (
                                       <>
@@ -888,7 +1006,9 @@ export default function PriceGridPage() {
                                       </>
                                     ) : (
                                       <div className={`text-[10px] mt-0.5 ${propio ? 'text-tinta font-semibold uppercase tracking-wide' : 'text-tinta-25'}`}>
-                                        {propio ? (cell.isLocationOverride ? 'propio del local' : 'propio') : 'hereda'}
+                                        {propio
+                                          ? (cell.isLocationOverride ? `sólo en ${dondeNombre}` : 'precio de la carta')
+                                          : 'igual que el base'}
                                       </div>
                                     )}
                                   </button>
@@ -936,8 +1056,8 @@ export default function PriceGridPage() {
               <b className={hayPendientes ? 'text-tinta' : 'text-tinta-45'}>
                 {hayPendientes ? `${pendientes.size} cambio(s) pendiente(s)` : 'Sin cambios pendientes'}
               </b>
-              {/* EL ÁMBITO, donde se mira antes de escribir. */}
-              <span className="text-text-secondary"> · se guardarán en <b className="text-tinta">{ambitoNombre}</b></span>
+              {/* DÓNDE, donde se mira antes de escribir. */}
+              <span className="text-text-secondary"> · se guardarán en <b className="text-tinta">{dondeNombre}</b></span>
             </div>
             <div className="ml-auto flex items-center gap-2">
               {ultimaOperacion && (
@@ -959,6 +1079,83 @@ export default function PriceGridPage() {
         </div>
       )}
 
+      {/* ── §4.3 · CAMBIAR Y PUBLICAR SON UN SOLO BOTÓN ───────────────────────
+          Nadie tiene que saber que existen dos actos. Al guardar, la pantalla
+          dice qué falta, a qué canales llega y a cuáles no —con el motivo— y
+          ofrece las dos salidas. El botón publica EL MISMO sitio que la
+          pantalla enseña arriba: sale de la misma `locationId`. */}
+      {trasGuardar && (
+        <div className="fixed inset-0 bg-tinta/40 flex items-center justify-center p-4 z-[55]" onClick={() => setTrasGuardar(null)}>
+          <div className="bg-card rounded-xl max-w-lg w-full p-4" onClick={(e) => e.stopPropagation()}>
+            {!resultadoPublicar ? (
+              <>
+                <div className="font-semibold flex items-center gap-2">
+                  <Check className="w-4 h-4 text-success" />
+                  {trasGuardar.celdas} precio{trasGuardar.celdas === 1 ? '' : 's'} cambiado{trasGuardar.celdas === 1 ? '' : 's'} en{' '}
+                  {brands.find((b) => b.id === brandId)?.name ?? ''} · {dondeNombre}
+                </div>
+                <div className="text-sm text-text-secondary mt-2 space-y-1">
+                  {canalesQuePublican.length > 0 ? (
+                    <p>
+                      Se publicarán en{' '}
+                      <b className="text-tinta">{canalesQuePublican.map((c) => c.channelName).join(' y ')}</b>.
+                    </p>
+                  ) : (
+                    <p>De aquí <b className="text-tinta">no sale nada a ninguna plataforma</b>.</p>
+                  )}
+                  {canalesQueNo.map((c) => (
+                    <p key={c.channelId}>
+                      <b className="text-tinta">{c.channelName} no</b>:{' '}
+                      {c.ruta.kind === 'last' ? 'se gestiona en Last.' : 'no se publica desde Folvy.'}
+                    </p>
+                  ))}
+                  {ultimaOperacion && (
+                    <p className="text-xs text-tinta-45 pt-1">
+                      Guardado como una sola operación ({ultimaOperacion.slice(0, 8)}): se puede deshacer entera.
+                    </p>
+                  )}
+                </div>
+                <div className="mt-4 flex justify-end gap-2 flex-wrap">
+                  <button onClick={() => setTrasGuardar(null)}
+                    className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold">
+                    Dejarlo guardado sin publicar
+                  </button>
+                  <button onClick={publicarAhora} disabled={publicando || canalesQuePublican.length === 0}
+                    title={canalesQuePublican.length === 0 ? 'Ningún canal de este local publica desde Folvy' : `Publica en ${dondeNombre}`}
+                    className="px-4 py-2 rounded-lg bg-tinta text-white text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5">
+                    {publicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                    {publicando ? 'Publicando…' : 'Publicar ahora'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="font-semibold flex items-center gap-2">
+                  {resultadoPublicar.ok
+                    ? <><Check className="w-4 h-4 text-success" /> Publicado en {dondeNombre}</>
+                    : <><AlertTriangle className="w-4 h-4 text-danger" /> No se pudo publicar</>}
+                </div>
+                {resultadoPublicar.error && (
+                  <p className="text-sm text-danger mt-2">{resultadoPublicar.error}</p>
+                )}
+                <ul className="text-sm text-text-secondary mt-2 space-y-1">
+                  {resultadoPublicar.targets.map((t, i) => (
+                    <li key={i}>
+                      {t.connection_name || '(sin nombre)'} — <b className={t.status === 'ok' ? 'text-success' : 'text-danger'}>{t.status}</b>
+                      {t.error_text ? `: ${t.error_text}` : ''}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 flex justify-end">
+                  <button onClick={() => { setTrasGuardar(null); setResultadoPublicar(null) }}
+                    className="px-3 py-2 rounded-lg bg-tinta text-white text-sm font-semibold">Cerrar</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* aviso de salida con pendientes */}
       {salidaPendiente !== null && (
         <div className="fixed inset-0 bg-tinta/40 flex items-center justify-center p-4 z-[60]">
@@ -967,7 +1164,7 @@ export default function PriceGridPage() {
               <AlertTriangle className="w-4 h-4 text-warning" /> Tienes {pendientes.size} cambio(s) sin guardar
             </div>
             <p className="text-sm text-text-secondary mt-2">
-              Son cambios de precio en <b>{ambitoNombre}</b> que todavía no se han escrito. Si sales ahora se pierden.
+              Son cambios de precio en <b>{dondeNombre}</b> que todavía no se han escrito. Si sales ahora se pierden.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -990,7 +1187,7 @@ export default function PriceGridPage() {
             <div className="p-4 border-b border-border-default flex items-start justify-between gap-4">
               <div>
                 <div className="font-semibold">
-                  Vas a guardar {preview.length} cambio(s) en <span className="underline decoration-2">{ambitoNombre}</span>
+                  Vas a guardar {preview.length} cambio(s) en <span className="underline decoration-2">{dondeNombre}</span>
                 </div>
                 <div className="text-xs text-text-secondary mt-1">
                   El margen se abre por modalidad: el mismo precio puede mejorar la recogida y hundir el reparto.
@@ -1030,7 +1227,7 @@ export default function PriceGridPage() {
                       <td className="text-right tabular-nums whitespace-nowrap">
                         <span className="text-tinta-45">{eur(r.precioAntes)}</span> →{' '}
                         <b>{r.accion === 'clear'
-                          ? (r.precioDespues === null ? 'hereda' : `${eur(r.precioDespues)} (hereda)`)
+                          ? (r.precioDespues === null ? 'el precio base' : `${eur(r.precioDespues)} (el base)`)
                           : eur(r.precioDespues)}</b>
                       </td>
                       <td className="text-right tabular-nums">{r.pctRealAplicado === null ? '' : pct(r.pctRealAplicado)}</td>
@@ -1064,7 +1261,7 @@ export default function PriceGridPage() {
                 <button onClick={() => setPreview(null)} className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold">Cancelar</button>
                 <button onClick={guardar} disabled={saving || !puedeGuardar}
                   className="px-4 py-2 rounded-lg bg-tinta text-white text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5">
-                  <Check className="w-4 h-4" /> {saving ? 'Guardando…' : `Guardar en ${ambitoNombre}`}
+                  <Check className="w-4 h-4" /> {saving ? 'Guardando…' : `Guardar en ${dondeNombre}`}
                 </button>
               </div>
             </div>
