@@ -417,11 +417,22 @@ export async function getPendingReceptionsReport(
 // vía el mismo update de tabla que ya usan los botones Cancelar/Cerrar
 // existentes (RLS ya lo permite; no hace falta RPC nueva).
 //
-// Destino según el estado de partida — el modelo YA distingue "no llegó nada"
-// (cancelado) de "llegó algo, el resto no se completará" (cerrado); el cierre
-// corto solo reutiliza esa distinción, no inventa un tercer estado:
-//   'enviado'          → 'cancelado' (nada confirmado; "no va a llegar").
-//   'recibido_parcial' → 'cerrado'   (algo sí llegó; se cierra con lo que hay).
+// Destino según SI LLEGÓ ALGO — no según el rótulo del estado:
+//   llegó algo  → 'cerrado'    (se cierra con lo que hay; el resto no vendrá)
+//   no llegó nada → 'cancelado' (el pedido, de hecho, no ocurrió)
+//
+// ENCARGO CODE (21/08) — POR QUÉ DEJÓ DE MIRAR SÓLO EL ESTADO. Hasta hoy era
+// 'enviado' → 'cancelado' a secas. Con el casado de líneas roto (arreglado el
+// 21/08), un pedido cuya mercancía SÍ había llegado se quedaba en 'enviado', y
+// al cerrarlo por aquí acababa en 'cancelado'. De los 41 cancelados de Foodint,
+// 10 salieron de este botón y OCHO con el motivo «Otro» — entre ellos pedidos
+// semanales enteros: PED-00014 (35 líneas), PED-00020 (33), PED-00021 (29).
+// «Otro» era donde iba a morir «llegó, pero el sistema no lo cierra».
+//
+// Cancelado es un pedido que NO se envió; cerrado es uno que llegó incompleto y
+// se da por bueno. Confundirlos es lo que ha destrozado la estadística de
+// compras de este año, así que la decisión pasa a mirar el HECHO (¿hay algo
+// recibido?) y no la etiqueta.
 export type ShortCloseReasonCode = 'no_supplied' | 'ordered_elsewhere' | 'mistake' | 'other'
 
 export const SHORT_CLOSE_REASONS: { code: ShortCloseReasonCode; label: string }[] = [
@@ -435,10 +446,19 @@ export function shortCloseReasonLabel(code: string): string {
   return SHORT_CLOSE_REASONS.find(r => r.code === code)?.label ?? code
 }
 
-/** Destino de un cierre corto según el estado de partida. null = no aplica (estado terminal o no reconocido). */
-export function shortCloseTargetStatus(current: PurchaseOrderStatus): PurchaseOrderStatus | null {
-  if (current === 'enviado') return 'cancelado'
+/**
+ * Destino de un cierre corto. null = no aplica (estado terminal o no reconocido).
+ *
+ * `algoRecibido` decide entre cerrado y cancelado. Se omite (false) sólo cuando
+ * el llamador todavía no lo sabe; entonces se comporta como antes. Un
+ * 'recibido_parcial' YA implica que llegó algo, así que no necesita el dato.
+ */
+export function shortCloseTargetStatus(
+  current: PurchaseOrderStatus,
+  algoRecibido = false,
+): PurchaseOrderStatus | null {
   if (current === 'recibido_parcial') return 'cerrado'
+  if (current === 'enviado') return algoRecibido ? 'cerrado' : 'cancelado'
   return null
 }
 
@@ -447,8 +467,10 @@ export async function closeShortPurchaseOrder(input: {
   reasonCode: ShortCloseReasonCode
   notes: string | null
   actorName: string | null
+  /** ¿Ha llegado algo contra este pedido? Decide cerrado vs cancelado. */
+  algoRecibido?: boolean
 }): Promise<PurchaseOrder> {
-  const target = shortCloseTargetStatus(input.order.status)
+  const target = shortCloseTargetStatus(input.order.status, input.algoRecibido ?? false)
   if (!target) {
     throw new Error(`Cierre corto: el pedido ${input.order.code ?? input.order.id} está en estado "${input.order.status}", no se puede cerrar así.`)
   }
@@ -458,4 +480,137 @@ export async function closeShortPurchaseOrder(input: {
     (input.notes?.trim() ? `: ${input.notes.trim()}` : '.')
   const combinedNotes = input.order.notes ? `${input.order.notes}\n${note}` : note
   return updatePurchaseOrder(input.order.id, { status: target, notes: combinedNotes })
+}
+
+// ═══ QUÉ FALTA DE UN PEDIDO (ENCARGO CODE 21/08) ═══════════════════════════
+//
+// DEUDA DECLARADA, la misma que en priceGridService y channelRouteService:
+// src/types/database.ts se regenera con el CLI de Supabase (npm run gen:types,
+// que necesita el CLI global y el proyecto enlazado) y todavía no conoce
+// purchase_order_shortfall, purchase_order_progress ni queue_ctb_order_claim:
+// las tres migraron hoy. Hasta la próxima regeneración se pasa por el cliente
+// sin tipar. Lo único que se afloja es el NOMBRE de la RPC; la forma de las
+// filas se sigue declarando a mano (OrderShortfallLine, OrderProgress) y se
+// mapea campo a campo.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rpc(): any {
+  return supabase
+}
+//
+// «Recibido parcial» a secas obliga a abrir para saber si falta un salsero o
+// falta media entrega. El sistema SABE qué falta; sólo no lo contaba.
+//
+// El cálculo vive en la BBDD (purchase_order_shortfall / purchase_order_progress)
+// y no aquí: lo consumen la fila de la lista, la ficha y el texto de la
+// reclamación, y si cada una lo calculara por su cuenta acabarían discrepando.
+// Mismo criterio que recompute_purchase_order_status, a propósito.
+
+/** Una línea del pedido con lo pedido, lo recibido y lo que falta. */
+export interface OrderShortfallLine {
+  lineId: string
+  productName: string
+  recipeItemId: string | null
+  formatName: string | null
+  qtyOrdered: number
+  qtyReceived: number
+  qtyMissing: number
+  position: number
+}
+
+/** Resumen para pintar la fila de la lista sin abrir el pedido. */
+export interface OrderProgress {
+  orderId: string
+  lineas: number
+  completas: number
+  faltan: number
+  diasDeRetraso: number | null
+}
+
+/**
+ * Las líneas del pedido, CON LAS QUE FALTAN PRIMERO — ese orden lo impone el
+ * servidor, no la pantalla, para que la ficha y la reclamación enseñen lo mismo.
+ */
+export async function getOrderShortfall(orderId: string): Promise<OrderShortfallLine[]> {
+  requireSupabase()
+  const { data, error } = await rpc().rpc('purchase_order_shortfall', { p_order_id: orderId })
+  if (error) throw new Error(`Error leyendo lo que falta del pedido: ${error.message}`)
+  return ((data ?? []) as Record<string, unknown>[]).map(r => ({
+    lineId: r.line_id as string,
+    productName: (r.product_name as string) ?? '',
+    recipeItemId: (r.recipe_item_id as string | null) ?? null,
+    formatName: (r.format_name as string | null) ?? null,
+    qtyOrdered: Number(r.qty_ordered ?? 0),
+    qtyReceived: Number(r.qty_received ?? 0),
+    qtyMissing: Number(r.qty_missing ?? 0),
+    position: Number(r.line_position ?? 0),
+  }))
+}
+
+/**
+ * El resumen de varios pedidos de una tacada: la lista pinta 20 filas con UNA
+ * consulta, no con 20. Un fallo aquí NO tumba la lista — se degrada a sin
+ * resumen (la etiqueta de estado sigue), que es peor pero no roto.
+ */
+export async function getOrdersProgress(orderIds: string[]): Promise<Map<string, OrderProgress>> {
+  const out = new Map<string, OrderProgress>()
+  if (orderIds.length === 0) return out
+  requireSupabase()
+  const { data, error } = await rpc().rpc('purchase_order_progress', { p_order_ids: orderIds })
+  if (error) {
+    console.warn('[purchaseOrderService] no se pudo leer el avance de los pedidos', error)
+    return out
+  }
+  for (const r of ((data ?? []) as Record<string, unknown>[])) {
+    out.set(r.order_id as string, {
+      orderId: r.order_id as string,
+      lineas: Number(r.lineas ?? 0),
+      completas: Number(r.completas ?? 0),
+      faltan: Number(r.faltan ?? 0),
+      diasDeRetraso: r.dias_de_retraso == null ? null : Number(r.dias_de_retraso),
+    })
+  }
+  return out
+}
+
+/**
+ * El texto de la reclamación. Lo compone el sistema, no el usuario: el operario
+ * revisa y envía, no redacta. Se enseña TAL CUAL antes de mandarlo — la última
+ * pantalla antes de escribir dice qué escribe.
+ */
+export function buildOrderClaimMessage(args: {
+  orderCode: string | null
+  supplierName: string | null
+  locationName: string | null
+  expectedDate: string | null
+  faltan: OrderShortfallLine[]
+}): string {
+  const fecha = args.expectedDate
+    ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        .format(new Date(args.expectedDate + 'T00:00:00'))
+    : '—'
+  const num = (n: number): string =>
+    Number.isInteger(n) ? String(n) : n.toLocaleString('es-ES', { maximumFractionDigits: 3 })
+  const lineas = args.faltan.map(l => {
+    const fmt = l.formatName ? ` ${l.formatName}` : ''
+    return `• ${l.productName}: pedidas ${num(l.qtyOrdered)}${fmt}, recibidas ${num(l.qtyReceived)} → faltan ${num(l.qtyMissing)}`
+  })
+  return [
+    'Falta material de un pedido',
+    args.supplierName ? `Proveedor: ${args.supplierName}` : null,
+    args.locationName ? `Local: ${args.locationName}` : null,
+    `Pedido: ${args.orderCode ?? '—'} · entrega prevista ${fecha}`,
+    '',
+    `Falta${args.faltan.length === 1 ? '' : 'n'} ${args.faltan.length} ${args.faltan.length === 1 ? 'artículo' : 'artículos'}:`,
+    ...lineas,
+    '',
+    'Enviado con Folvy · folvy.app',
+  ].filter(Boolean).join('\n')
+}
+
+/** Encola la reclamación en la cola de CTB (la misma que ya se usa a diario). */
+export async function queueOrderClaim(orderId: string): Promise<string> {
+  requireSupabase()
+  const { data, error } = await rpc().rpc('queue_ctb_order_claim', { p_order_id: orderId })
+  if (error) throw new Error(error.message)
+  return data as string
 }

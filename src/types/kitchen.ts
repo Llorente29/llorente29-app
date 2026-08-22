@@ -411,6 +411,12 @@ export interface Supplier {
   address: string | null
   healthRegistryNo: string | null
   notes: string | null
+  /**
+   * Grupo por el que se le comunica. 'ctb' = grupo de WhatsApp del cedente
+   * (Cloudtown). Lo consume la cola ctb_notification_queue y, desde el 21/08,
+   * el botón de reclamar lo que falta de un pedido.
+   */
+  notifyGroup: string | null
   isActive: boolean
   archivedAt: string | null
   createdAt: string

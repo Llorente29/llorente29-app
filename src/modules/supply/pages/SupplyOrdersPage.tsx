@@ -17,6 +17,7 @@ import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { useIsMobile } from '@/shell/useIsMobile'
 import {
   listPurchaseOrders,
+  getOrdersProgress, type OrderProgress,
   type PurchaseOrder,
   type PurchaseOrderStatus,
 } from '@/modules/supply/services/purchaseOrderService'
@@ -65,6 +66,10 @@ export default function SupplyOrdersPage() {
   const isMobile = useIsMobile()
 
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
+  // ENCARGO CODE (21/08) — «Recibido parcial» a secas obliga a abrir para saber
+  // si falta un salsero o falta media entrega. La etiqueta se queda, pero
+  // ACOMPAÑADA DEL NÚMERO. Una consulta para toda la lista, no una por fila.
+  const [progress, setProgress] = useState<Map<string, OrderProgress>>(new Map())
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -96,11 +101,20 @@ export default function SupplyOrdersPage() {
       .then(([rows, sups]) => {
         if (cancelled) return
         setOrders(rows); setSuppliers(sups)
+        // El avance va DESPUÉS y aparte: la lista se pinta con lo que hay y el
+        // «27 de 31» aparece en cuanto llega. Si esta consulta falla, la lista
+        // sigue entera y sólo se queda sin el número — degradar, no romper.
+        const conLineas = rows.filter(o => o.status !== 'borrador').map(o => o.id)
+        if (conLineas.length > 0) {
+          getOrdersProgress(conLineas)
+            .then(m => { if (!cancelled) setProgress(m) })
+            .catch(() => { /* la lista no depende de esto */ })
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return
         setError(err instanceof Error ? err.message : 'Error desconocido')
-        setOrders([]); setSuppliers([])
+        setOrders([]); setSuppliers([]); setProgress(new Map())
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -263,6 +277,16 @@ export default function SupplyOrdersPage() {
                     {STATUS_LABEL[o.status]}
                   </span>
                 </div>
+                {(progresoTexto(progress.get(o.id)) || retrasoTexto(progress.get(o.id))) && (
+                  <div className="flex items-center gap-2 flex-wrap mt-1 text-[12px]">
+                    {progresoTexto(progress.get(o.id)) && (
+                      <span className="font-semibold text-text-primary tabular-nums">{progresoTexto(progress.get(o.id))}</span>
+                    )}
+                    {retrasoTexto(progress.get(o.id)) && (
+                      <span className="text-warning font-medium">{retrasoTexto(progress.get(o.id))}</span>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 mt-2">
                   <Field label="Proveedor" value={o.supplierId ? supplierNameById.get(o.supplierId) ?? '—' : '—'} />
                   <Field label="Fecha" value={formatDate(o.orderDate)} />
@@ -295,9 +319,21 @@ export default function SupplyOrdersPage() {
                     <td className="px-4 py-3 text-text-secondary">{formatDate(o.expectedDate)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-text-primary">{formatEur(o.estTotal)}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded border ${STATUS_CLASS[o.status]}`}>
-                        {STATUS_LABEL[o.status]}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`self-start text-xs px-2 py-0.5 rounded border ${STATUS_CLASS[o.status]}`}>
+                          {STATUS_LABEL[o.status]}
+                        </span>
+                        {progresoTexto(progress.get(o.id)) && (
+                          <span className="text-[12px] font-semibold text-text-primary tabular-nums whitespace-nowrap">
+                            {progresoTexto(progress.get(o.id))}
+                          </span>
+                        )}
+                        {retrasoTexto(progress.get(o.id)) && (
+                          <span className="text-[12px] text-warning font-medium whitespace-nowrap">
+                            {retrasoTexto(progress.get(o.id))}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-text-secondary"><ChevronRight size={16} /></td>
                   </tr>
@@ -311,6 +347,23 @@ export default function SupplyOrdersPage() {
       )}
     </div>
   )
+}
+
+/**
+ * «27 de 31 · faltan 4». Devuelve null cuando no hay nada que contar: en un
+ * pedido completo o sin líneas el número sobra, y un contador que siempre está
+ * deja de leerse.
+ */
+function progresoTexto(p: OrderProgress | undefined): string | null {
+  if (!p || p.lineas === 0) return null
+  if (p.faltan === 0) return null
+  return `${p.completas} de ${p.lineas} · faltan ${p.faltan}`
+}
+
+/** «4 días de retraso». null si no hay fecha o no se ha pasado. */
+function retrasoTexto(p: OrderProgress | undefined): string | null {
+  if (!p || p.diasDeRetraso == null || p.diasDeRetraso <= 0) return null
+  return `${p.diasDeRetraso} ${p.diasDeRetraso === 1 ? 'día' : 'días'} de retraso`
 }
 
 function Field({ label, value }: { label: string; value: string }) {

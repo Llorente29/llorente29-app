@@ -60,6 +60,11 @@ export function rowToSupplier(row: RowSupplier): Supplier {
     address: row.address,
     healthRegistryNo: row.health_registry_no,
     notes: row.notes,
+    // El select es '*', así que el dato SIEMPRE venía; lo que faltaba era
+    // exponerlo. Sin esta línea, quien lo leyera obtendría undefined y su
+    // función se apagaría en silencio — que es justo lo que iba a pasarle al
+    // botón de reclamar del 21/08.
+    notifyGroup: (row as unknown as { notify_group?: string | null }).notify_group ?? null,
     isActive: row.is_active,
     archivedAt: row.archived_at,
     createdAt: row.created_at,

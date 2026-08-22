@@ -11,10 +11,10 @@
 // oficial robusto a grupos de WhatsApp); la cola garantiza que no se olvide.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Send, ExternalLink, Check, AlertTriangle, PackageCheck } from 'lucide-react'
+import { Loader2, Send, ExternalLink, Check, AlertTriangle, PackageCheck, PackageX } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
-  listCtbQueue, markCtbSent, getCtbReceiptFileUrl, buildCtbMessage,
+  listCtbQueue, markCtbSent, getCtbReceiptFileUrl, buildCtbMessage, esReclamacionDePedido,
   type CtbNotifyItem, type CtbNotifyStatus,
 } from '@/modules/supply/services/ctbNotifyService'
 
@@ -64,6 +64,7 @@ export default function CtbNotifyPage() {
     setBusyId(item.id); setError(null)
     try {
       const msg = buildCtbMessage(item)
+      // Una reclamación de pedido no tiene albarán que adjuntar: va sólo texto.
       const url = item.rawDocumentUrl ? await getCtbReceiptFileUrl(item.rawDocumentUrl) : null
 
       const nav = navigator as Navigator & {
@@ -102,7 +103,9 @@ export default function CtbNotifyPage() {
       try { await navigator.clipboard.writeText(msg) } catch { /* sin portapapeles */ }
       if (url) window.open(url, '_blank')
       setConfirmSentId(item.id)
-      setFlash('Mensaje copiado. Pégalo en el grupo de CTB y adjunta el albarán; confirma abajo cuando lo hayas enviado.')
+      setFlash(item.rawDocumentUrl
+        ? 'Mensaje copiado. Pégalo en el grupo de CTB y adjunta el albarán; confirma abajo cuando lo hayas enviado.'
+        : 'Mensaje copiado. Pégalo en el grupo de CTB; confirma abajo cuando lo hayas enviado.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo preparar el envío.')
     } finally {
@@ -135,7 +138,8 @@ export default function CtbNotifyPage() {
       <div>
         <h2 className="text-xl font-display font-medium text-text-primary">Comunicar a CTB</h2>
         <p className="text-sm text-text-secondary mt-0.5">
-          Recepciones de Cloudtown por comunicar al grupo. Las que tienen diferencias van primero.
+          Recepciones de Cloudtown por comunicar al grupo, y reclamaciones de lo que falta de un pedido.
+          Las que tienen diferencias van primero.
         </p>
       </div>
 
@@ -168,11 +172,11 @@ export default function CtbNotifyPage() {
         <div className="p-8 rounded-lg border border-dashed border-border-default text-center">
           <PackageCheck size={30} className="mx-auto text-text-secondary mb-2" />
           <p className="text-sm font-medium text-text-primary">
-            {tab === 'pendiente' ? 'Nada pendiente de comunicar a CTB' : 'Sin recepciones enviadas'}
+            {tab === 'pendiente' ? 'Nada pendiente de comunicar a CTB' : 'Nada enviado todavía'}
           </p>
           <p className="text-xs text-text-secondary mt-1">
             {tab === 'pendiente'
-              ? 'Al confirmar una recepción de Cloudtown aparecerá aquí.'
+              ? 'Aparecerá aquí al confirmar una recepción de Cloudtown, o al reclamar lo que falta de un pedido.'
               : 'Las que vayas enviando se listarán en esta pestaña.'}
           </p>
         </div>
@@ -187,18 +191,36 @@ export default function CtbNotifyPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-text-primary">{item.supplierName ?? 'Cloudtown'}</span>
-                      {diff && (
+                      {/* ENCARGO CODE (21/08) — una entrada de la cola puede ser
+                          una RECEPCIÓN que comunicar o una RECLAMACIÓN de lo que
+                          falta de un pedido. Se dice cuál es: si no, quien la
+                          abre no sabe qué está mandando. */}
+                      {esReclamacionDePedido(item) ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border border-warning/40 bg-card text-warning">
+                          <PackageX size={12} /> Reclamación
+                        </span>
+                      ) : diff ? (
                         <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border border-danger/30 bg-card text-danger">
                           <AlertTriangle size={12} /> Con diferencias
                         </span>
-                      )}
+                      ) : null}
                     </div>
-                    <p className="text-xs text-text-secondary mt-0.5">
-                      {item.locationName ? `${item.locationName} · ` : ''}
-                      {item.supplierDocNumber ? `Albarán ${item.supplierDocNumber} · ` : ''}
-                      {formatDate(item.receiptDate)}
-                      {item.receiptCode ? ` · ${item.receiptCode}` : ''}
-                    </p>
+                    {esReclamacionDePedido(item) ? (
+                      <p className="text-xs text-text-secondary mt-0.5">
+                        {item.locationName ? `${item.locationName} · ` : ''}
+                        Pedido {item.orderCode ?? '—'}
+                        {item.faltan === null
+                          ? ' · no se ha podido leer qué falta'
+                          : ` · falta${item.faltan.length === 1 ? '' : 'n'} ${item.faltan.length} artículo${item.faltan.length === 1 ? '' : 's'}`}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-text-secondary mt-0.5">
+                        {item.locationName ? `${item.locationName} · ` : ''}
+                        {item.supplierDocNumber ? `Albarán ${item.supplierDocNumber} · ` : ''}
+                        {formatDate(item.receiptDate)}
+                        {item.receiptCode ? ` · ${item.receiptCode}` : ''}
+                      </p>
+                    )}
                     {item.status === 'enviado' && (
                       <p className="text-[11px] text-success mt-1">
                         Enviado{item.sentByName ? ` por ${item.sentByName}` : ''}{item.sentAt ? ` · ${formatDate(item.sentAt)}` : ''}

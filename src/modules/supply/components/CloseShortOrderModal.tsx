@@ -6,10 +6,11 @@
 // (SupplyOrderDetailPage) y el vigía de gestión (HungOrdersReviewPanel) —
 // mismo mecanismo, misma confirmación.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Lock, Loader2, AlertTriangle } from 'lucide-react'
 import {
   closeShortPurchaseOrder, shortCloseTargetStatus, SHORT_CLOSE_REASONS,
+  getOrdersProgress,
   type PurchaseOrder, type ShortCloseReasonCode,
 } from '@/modules/supply/services/purchaseOrderService'
 
@@ -25,9 +26,22 @@ export default function CloseShortOrderModal({
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // ENCARGO CODE (21/08) — ¿ha llegado ALGO contra este pedido? Es lo que
+  // decide cerrado vs cancelado, y no el rótulo del estado. null = todavía no
+  // se sabe: hasta saberlo no se deja cerrar, porque elegir mal es
+  // exactamente lo que fabricó los 41 «cancelado».
+  const [algoRecibido, setAlgoRecibido] = useState<boolean | null>(null)
 
-  const target = shortCloseTargetStatus(order.status)
-  const canSave = reason !== '' && !saving && target !== null
+  useEffect(() => {
+    let vivo = true
+    getOrdersProgress([order.id])
+      .then(m => { if (vivo) setAlgoRecibido((m.get(order.id)?.completas ?? 0) > 0 || order.status === 'recibido_parcial') })
+      .catch(() => { if (vivo) setAlgoRecibido(order.status === 'recibido_parcial') })
+    return () => { vivo = false }
+  }, [order.id, order.status])
+
+  const target = shortCloseTargetStatus(order.status, algoRecibido === true)
+  const canSave = reason !== '' && !saving && target !== null && algoRecibido !== null
 
   async function submit() {
     if (!canSave) return
@@ -36,6 +50,7 @@ export default function CloseShortOrderModal({
     try {
       const updated = await closeShortPurchaseOrder({
         order, reasonCode: reason, notes: notes.trim() || null, actorName,
+        algoRecibido: algoRecibido === true,
       })
       onDone(updated)
     } catch (err: unknown) {
@@ -58,9 +73,15 @@ export default function CloseShortOrderModal({
         <div className="px-4 py-4 space-y-4 overflow-y-auto">
           <p className="text-sm text-text-secondary">
             <strong className="text-text-primary">{order.code ?? 'Este pedido'}</strong> deja de esperarse.
-            {target === 'cancelado' && ' No se podrá recibir nada contra él.'}
-            {target === 'cerrado' && ' Se cierra con lo ya recibido — el resto no llegará.'}
+            {target === 'cancelado' && ' No ha llegado nada contra él, así que queda como cancelado: no se podrá recibir nada.'}
+            {target === 'cerrado' && ' Ya ha llegado parte, así que se cierra con lo recibido — el resto no llegará.'}
           </p>
+
+          {algoRecibido === null && (
+            <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <Loader2 className="w-3 h-3 animate-spin" /> Comprobando si ha llegado algo…
+            </div>
+          )}
 
           {target === null ? (
             <div className="p-2.5 rounded-md bg-warning-bg text-warning border border-warning/20 text-xs">

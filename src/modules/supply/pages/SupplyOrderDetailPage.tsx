@@ -36,6 +36,7 @@ import { listSupplyLocations, buildFormatLabel, type SupplyLocation } from '@/mo
 import { buildPurchaseOrderPdfData, generatePurchaseOrderPdf } from '@/modules/supply/services/purchaseOrderPdf'
 import GoodsReceiptForm from '@/modules/supply/pages/GoodsReceiptForm'
 import CloseShortOrderModal from '@/modules/supply/components/CloseShortOrderModal'
+import OrderShortfallPanel from '@/modules/supply/components/OrderShortfallPanel'
 import type { Supplier, KitchenUnit, PurchaseFormat } from '@/types/kitchen'
 import type { RecipeItem } from '@/types/kitchen'
 
@@ -132,6 +133,14 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
     if (!order?.locationId) return null
     return locations.find(l => l.id === order.locationId) ?? null
   }, [order, locations])
+
+  // ENCARGO CODE (21/08) — sólo se puede reclamar por el grupo de CTB si el
+  // proveedor comunica por ahí. Con los demás no hay a dónde mandarlo desde
+  // aquí, y decirlo es mejor que ofrecer un botón que no cumple.
+  const proveedorEsCtb = useMemo(() => {
+    if (!order?.supplierId) return false
+    return (suppliers.find(x => x.id === order.supplierId)?.notifyGroup ?? null) === 'ctb'
+  }, [order, suppliers])
 
   const ingredientNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -310,6 +319,16 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
               <Field label="Total estimado" value={formatEur(order.estTotal)} mono />
             </div>
           </div>
+
+          {/* ── QUÉ FALTA (21/08) — sólo aparece si falta algo ── */}
+          {(order.status === 'recibido_parcial' || order.status === 'enviado' || order.status === 'recibido') && (
+            <OrderShortfallPanel
+              order={order}
+              supplierName={supplierName === '—' ? null : supplierName}
+              locationName={deliveryLocation?.name ?? null}
+              puedeReclamar={proveedorEsCtb}
+            />
+          )}
 
           {/* Líneas */}
           <div className="rounded-lg border border-border-default bg-card">

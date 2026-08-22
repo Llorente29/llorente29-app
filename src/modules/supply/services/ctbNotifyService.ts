@@ -11,12 +11,16 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { getReceiptFileUrl } from '@/modules/supply/services/goodsReceiptService'
+import {
+  getOrderShortfall, buildOrderClaimMessage, type OrderShortfallLine,
+} from '@/modules/supply/services/purchaseOrderService'
 
 export type CtbNotifyStatus = 'pendiente' | 'enviado'
 
 export interface CtbNotifyItem {
   id: string
-  goodsReceiptId: string
+  /** null en una RECLAMACIÓN de pedido (ver purchaseOrderId). */
+  goodsReceiptId: string | null
   status: CtbNotifyStatus
   hasDifferences: boolean
   sentByName: string | null
@@ -29,6 +33,19 @@ export interface CtbNotifyItem {
   rawDocumentUrl: string | null
   supplierName: string | null
   locationName: string | null
+  // ENCARGO CODE (21/08) — una entrada de la cola es de una RECEPCIÓN o de un
+  // PEDIDO (reclamar lo que falta), nunca de las dos: lo garantiza el CHECK
+  // ctb_queue_recepcion_o_pedido, no la buena voluntad de este fichero.
+  purchaseOrderId: string | null
+  orderCode: string | null
+  orderExpectedDate: string | null
+  /** Lo que falta del pedido, para redactar. Se rellena aparte (una consulta por fila). */
+  faltan: OrderShortfallLine[] | null
+}
+
+/** ¿Esta entrada es una reclamación de pedido? */
+export function esReclamacionDePedido(i: CtbNotifyItem): boolean {
+  return i.purchaseOrderId !== null
 }
 
 function requireSupabase(): void {
@@ -48,9 +65,10 @@ function rowToItem(r: Row): CtbNotifyItem {
   const gr = (r.goods_receipt ?? null) as Row | null
   const sup = (r.supplier ?? null) as Row | null
   const loc = (r.location ?? null) as Row | null
+  const po = (r.purchase_order ?? null) as Row | null
   return {
     id: r.id as string,
-    goodsReceiptId: r.goods_receipt_id as string,
+    goodsReceiptId: (r.goods_receipt_id as string | null) ?? null,
     status: r.status as CtbNotifyStatus,
     hasDifferences: Boolean(r.has_differences),
     sentByName: (r.sent_by_name as string | null) ?? null,
@@ -62,6 +80,10 @@ function rowToItem(r: Row): CtbNotifyItem {
     rawDocumentUrl: (gr?.raw_document_url as string | null) ?? null,
     supplierName: (sup?.name as string | null) ?? null,
     locationName: (loc?.name as string | null) ?? null,
+    purchaseOrderId: (r.purchase_order_id as string | null) ?? null,
+    orderCode: (po?.code as string | null) ?? null,
+    orderExpectedDate: (po?.expected_date as string | null) ?? null,
+    faltan: null,
   }
 }
 
@@ -74,8 +96,9 @@ export async function listCtbQueue(
   requireSupabase()
   let q = from('ctb_notification_queue')
     .select(`
-      id, goods_receipt_id, status, has_differences, sent_by_name, sent_at, created_at,
+      id, goods_receipt_id, purchase_order_id, status, has_differences, sent_by_name, sent_at, created_at,
       goods_receipt:goods_receipt_id ( code, receipt_date, supplier_doc_number, raw_document_url ),
+      purchase_order:purchase_order_id ( code, expected_date ),
       supplier:supplier_id ( name ),
       location:location_id ( name )
     `)
@@ -85,7 +108,16 @@ export async function listCtbQueue(
   if (status !== 'all') q = q.eq('status', status)
   const { data, error } = await q
   if (error) throw new Error(`Error cargando la cola de CTB: ${error.message}`)
-  return ((data as Row[]) ?? []).map(rowToItem)
+  const items = ((data as Row[]) ?? []).map(rowToItem)
+
+  // Las reclamaciones necesitan saber QUÉ falta para poder redactarse. Se pide
+  // sólo para ellas —hoy son pocas— y un fallo aquí NO tumba la cola: la fila
+  // se queda sin el detalle y se dice al redactar, en vez de desaparecer.
+  await Promise.all(items.filter(i => i.purchaseOrderId).map(async i => {
+    try { i.faltan = (await getOrderShortfall(i.purchaseOrderId!)).filter(l => l.qtyMissing > 0) }
+    catch (e) { console.warn('[ctbNotifyService] no se pudo leer lo que falta del pedido', i.purchaseOrderId, e) }
+  }))
+  return items
 }
 
 // Conteo de pendientes (para el badge del menú/contador).
@@ -115,6 +147,21 @@ export async function getCtbReceiptFileUrl(path: string | null | undefined): Pro
 // (publicidad pasiva ante el cedente; WhatsApp la auto-enlaza). Si hay diferencias,
 // lo dice explícito (CTB: "si hay diferencias las comunicas").
 export function buildCtbMessage(item: CtbNotifyItem): string {
+  // RECLAMACIÓN DE PEDIDO: el texto lo compone purchaseOrderService, que es
+  // donde vive el dato. Aquí no se redacta una segunda versión del mismo
+  // mensaje — si hubiera dos, acabarían diciendo cosas distintas.
+  if (item.purchaseOrderId) {
+    if (!item.faltan || item.faltan.length === 0) {
+      return `Reclamación del pedido ${item.orderCode ?? ''}: no se ha podido leer qué falta. Ábrelo en Pedidos antes de mandarlo.`
+    }
+    return buildOrderClaimMessage({
+      orderCode: item.orderCode,
+      supplierName: item.supplierName,
+      locationName: item.locationName,
+      expectedDate: item.orderExpectedDate,
+      faltan: item.faltan,
+    })
+  }
   const fecha = item.receiptDate
     ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(item.receiptDate))
     : '—'
