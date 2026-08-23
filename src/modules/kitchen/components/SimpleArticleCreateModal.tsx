@@ -1,13 +1,21 @@
 // src/modules/kitchen/components/SimpleArticleCreateModal.tsx
 //
-// Alta mínima de un ENVASE (packaging) o una HERRAMIENTA (tool). A diferencia
-// del ingrediente, NO hay master/catálogo del que adoptar: se teclea nombre +
-// unidad base y se crea. Anti-duplicado de UX: mientras escribes, si ya existe
-// un artículo parecido del mismo tipo, se ofrece abrirlo en vez de duplicar.
+// Alta mínima de un ENVASE (packaging), una HERRAMIENTA (tool) o una
+// PREPARACIÓN (recipe = sub-receta). A diferencia del ingrediente, NO hay
+// master/catálogo del que adoptar: se teclea nombre + unidad base y se crea.
+// Anti-duplicado de UX: mientras escribes, si ya existe un artículo parecido
+// del mismo tipo, se ofrece abrirlo en vez de duplicar.
 //
 // El envase nace con IVA 'no_alimentario' (21%) por defecto (lo asigna el
 // servicio createPackagingItem); la herramienta no lleva IVA. Coste/proveedor se
 // completan luego en la ficha. Imita el estilo de IngredientCreateModal.
+//
+// PREPARACIÓN (23/08): una sub-receta NO tiene coste propio ni proveedor — su
+// coste sale de SUS líneas (kitchen_recompute_item suma el escandallo igual que
+// para un plato). Nace con is_stockable=false (default de la columna: no se
+// inventaría, se explota hasta los crudos al vender) y needs_review=true (aún
+// no tiene líneas). Unidad base 'ud' por defecto: ver la nota de convención en
+// el propio formulario — el escandallo de la preparación describe 1 unidad base.
 
 import { useMemo, useState } from 'react'
 import { X, Plus } from 'lucide-react'
@@ -22,7 +30,7 @@ const INPUT_CLS =
 
 interface Props {
   accountId: string
-  articleType: 'packaging' | 'tool'
+  articleType: 'packaging' | 'tool' | 'recipe'
   units: KitchenUnit[]
   existingItems: RecipeItem[] // artículos del tipo activo, para anti-duplicado
   actorId: string | null
@@ -43,8 +51,14 @@ export default function SimpleArticleCreateModal({
   onCreated,
   onOpenExisting,
 }: Props) {
-  const noun = articleType === 'tool' ? 'herramienta' : 'envase'
-  const title = articleType === 'tool' ? 'Nueva herramienta' : 'Nuevo envase'
+  const noun =
+    articleType === 'tool' ? 'herramienta' : articleType === 'recipe' ? 'preparación' : 'envase'
+  const title =
+    articleType === 'tool'
+      ? 'Nueva herramienta'
+      : articleType === 'recipe'
+        ? 'Nueva preparación'
+        : 'Nuevo envase'
 
   const [name, setName] = useState('')
   // Unidad base por defecto: la de abreviatura 'ud' (un envase/herramienta se
@@ -55,6 +69,10 @@ export default function SimpleArticleCreateModal({
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Abreviatura de la unidad elegida, para explicar la convención de la
+  // preparación ("la receta describe 1 kg / 1 ud / 1 L de esta preparación").
+  const unitAbbr = units.find((u) => u.id === baseUnitId)?.abbreviation ?? 'ud'
 
   // Coincidencias por nombre (ilike) dentro del tipo activo → ofrecer abrir.
   const matches = useMemo(() => {
@@ -95,9 +113,13 @@ export default function SimpleArticleCreateModal({
             })
           : await createRecipeItem({
               accountId,
-              type: 'tool',
+              type: articleType === 'recipe' ? 'recipe' : 'tool',
               name: trimmed,
               baseUnitId,
+              // La preparación nace SIN terminar: todavía no tiene líneas, así
+              // que su coste es 0 y no debe pasar por buena en el escandallo.
+              // La herramienta conserva el false de siempre (default del servicio).
+              needsReview: articleType === 'recipe',
               createdBy: actorId,
               createdByName: actorName,
             })
@@ -149,7 +171,13 @@ export default function SimpleArticleCreateModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={saving}
-              placeholder={articleType === 'tool' ? 'Ej: Pinza de servicio' : 'Ej: Caja kraft 780 ml'}
+              placeholder={
+                articleType === 'tool'
+                  ? 'Ej: Pinza de servicio'
+                  : articleType === 'recipe'
+                    ? 'Ej: Base Napolitana'
+                    : 'Ej: Caja kraft 780 ml'
+              }
               className={INPUT_CLS}
             />
 
@@ -190,8 +218,18 @@ export default function SimpleArticleCreateModal({
               ))}
             </select>
             <p className="text-[11px] text-text-secondary mt-1">
-              El coste y el proveedor se completan luego en la ficha.
-              {articleType === 'packaging' && ' El envase nace con IVA 21% (no alimentario).'}
+              {articleType === 'recipe' ? (
+                <>
+                  El coste sale de sus ingredientes: al crearla, añádeselos en su
+                  escandallo. Escribe la receta <strong>para 1 {unitAbbr}</strong> —
+                  esa es la cantidad que descontará cada plato que la use.
+                </>
+              ) : (
+                <>
+                  El coste y el proveedor se completan luego en la ficha.
+                  {articleType === 'packaging' && ' El envase nace con IVA 21% (no alimentario).'}
+                </>
+              )}
             </p>
           </div>
 

@@ -1,6 +1,8 @@
 // src/modules/kitchen/pages/KitchenItemsPage.tsx
 //
-// Catálogo de ingredientes (recipe_item con type='raw') del módulo Kitchen.
+// Catálogo de artículos de cocina (recipe_item) del módulo Kitchen: ingredientes
+// (type='raw'), envases (packaging), herramientas (tool) y PREPARACIONES
+// (type='recipe' — sub-recetas compartidas por varios platos).
 // Patrón LISTA + DETALLE por estado, igual que KitchenRecipesPage:
 //   selectedItemId === null → vista LISTA (tabla de ingredientes).
 //   selectedItemId !== null → vista DETALLE: <KitchenItemDetailPage itemId onBack/>.
@@ -18,9 +20,15 @@
 // computado", cada fila se muestra como TARJETA apilada (nombre prominente +
 // chip "sin terminar" + unidad/coste fijo/coste computado etiquetados), sin
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
+//
+// PREPARACIONES (23/08): pestaña propia. Una preparación NO se compra ni se
+// inventaría — no tiene proveedor, familia ni coste fijo, y su coste sale de sus
+// propias líneas. Por eso su fila lleva "usado en N platos" en vez de los costes
+// de compra, y al pulsarla NO se abre la ficha de ingrediente (proveedores,
+// formatos, IVA…) sino su ESCANDALLO, que es donde se la edita de verdad.
 
 import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2, RefreshCw, Coins } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -29,6 +37,7 @@ import {
   listRecipeItems,
   createRecipeItem,
   countRecipeItemsByType,
+  getRawUsageCounts,
 } from '@/modules/kitchen/services/recipeItemService'
 import SimpleArticleCreateModal from '@/modules/kitchen/components/SimpleArticleCreateModal'
 import { searchTemplates, type IngredientTemplate } from '@/modules/kitchen/services/ingredientTemplateService'
@@ -79,6 +88,18 @@ function hasRealCost(item: RecipeItem): boolean {
       || (item.computedCost != null && item.computedCost > 0)
 }
 
+// Distintivo de PREPARACIÓN (sub-receta). Va en la lista junto al nombre, con la
+// misma ↗ que marca estas líneas dentro de un escandallo: es la señal de "esto
+// no es un ingrediente suelto, tiene receta propia detrás".
+function PreparationChip({ item, className = '' }: { item: RecipeItem; className?: string }) {
+  if (item.type !== 'recipe') return null
+  return (
+    <span className={`${className} text-[11px] px-2 py-0.5 rounded-full bg-success-bg text-success inline-flex items-center gap-1 align-middle`}>
+      Preparación ↗
+    </span>
+  )
+}
+
 // Chip de estado del ingrediente, con DOS señales honestas y excluyentes:
 //   • "sin terminar" (ámbar, alarma) → needsReview: falta clasificar (familia/IVA).
 //     Lo cierra el completado con IA.
@@ -112,15 +133,20 @@ export default function KitchenItemsPage() {
   const { userProfile, authUserId } = useApp()
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
 
   const [items, setItems] = useState<RecipeItem[]>([])
   const [units, setUnits] = useState<KitchenUnit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // Pestaña por naturaleza del artículo (raw / packaging / tool).
+  // Pestaña por naturaleza del artículo (raw / packaging / recipe / tool).
   const [activeTab, setActiveTab] = useState<RecipeItemType>('raw')
   // Conteo de herramientas: la pestaña Herramientas solo se muestra si hay alguna.
   const [toolCount, setToolCount] = useState(0)
+  // Uso de cada preparación: en cuántos PLATOS aparece como línea
+  // (kitchen_raw_usage_counts, ya cuenta padres type='dish' de cualquier hijo).
+  // Solo se pide en la pestaña Preparaciones; si falla, la columna queda a "—".
+  const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
   // Modal: solo alta (crear). La edición va al detalle.
   const [createOpen, setCreateOpen] = useState(false)
   // Alta simple de envase/herramienta (modal aparte del de ingrediente).
@@ -187,6 +213,19 @@ export default function KitchenItemsPage() {
       .then((n) => { if (!cancelled) setToolCount(n) })
       .catch(() => { if (!cancelled) setToolCount(0) })
 
+    // Uso en platos (solo hace falta en Preparaciones). No bloquea la lista.
+    if (activeTab === 'recipe') {
+      getRawUsageCounts(activeAccountId)
+        .then((usage) => { if (!cancelled) setUsageCounts(usage) })
+        .catch((err: unknown) => {
+          if (cancelled) return
+          console.error('getRawUsageCounts falló:', err)
+          setUsageCounts({})
+        })
+    } else {
+      setUsageCounts({})
+    }
+
     Promise.all([
       listRecipeItems({ accountId: activeAccountId, type: activeTab }),
       listUnits(),
@@ -215,6 +254,17 @@ export default function KitchenItemsPage() {
 
     return () => { cancelled = true }
   }, [activeAccountId, accountsLoading, reloadTick, activeTab])
+
+  // Nombre de lo que lista la pestaña activa (pies de tabla/lista). En pareja
+  // singular/plural: 'preparación' no pluraliza añadiendo una 's'.
+  const [tabNoun, tabNounPlural] =
+    activeTab === 'packaging'
+      ? ['envase', 'envases']
+      : activeTab === 'recipe'
+        ? ['preparación', 'preparaciones']
+        : activeTab === 'tool'
+          ? ['herramienta', 'herramientas']
+          : ['ingrediente', 'ingredientes']
 
   // Mapa unitId → unidad, para mostrar la abreviatura junto al nombre.
   const unitsById = useMemo(() => {
@@ -251,13 +301,25 @@ export default function KitchenItemsPage() {
     [items],
   )
 
+  // Abre un artículo donde de verdad se edita: la PREPARACIÓN en su escandallo
+  // (no se compra, no tiene proveedor: lo suyo son sus líneas); el resto, en la
+  // ficha de ingrediente de siempre.
+  function openItem(item: RecipeItem) {
+    if (item.type === 'recipe') {
+      navigate('/kitchen/recetas?recipe=' + item.id)
+      return
+    }
+    setSelectedItemId(item.id)
+  }
+
   function handleCreated(created: RecipeItem) {
     setCreateOpen(false)
     setSimpleCreateOpen(false)
     setReloadTick(t => t + 1)
-    // Salto al detalle del artículo recién creado: la siguiente acción natural
-    // es decirle a Folvy de quién se compra (y ver el coste fluir).
-    setSelectedItemId(created.id)
+    // Salto al sitio donde se continúa: una preparación nace VACÍA y lo
+    // siguiente es ponerle sus ingredientes (su escandallo); para el resto, es
+    // decirle a Folvy de quién se compra (y ver el coste fluir) en su ficha.
+    openItem(created)
   }
 
   // El buscador del modal puede resolver a un ingrediente que YA EXISTE en la
@@ -266,6 +328,10 @@ export default function KitchenItemsPage() {
   function handleOpenExisting(itemId: string) {
     setCreateOpen(false)
     setSimpleCreateOpen(false)
+    if (activeTab === 'recipe') {
+      navigate('/kitchen/recetas?recipe=' + itemId)
+      return
+    }
     setSelectedItemId(itemId)
   }
 
@@ -450,7 +516,7 @@ export default function KitchenItemsPage() {
             Artículos
           </h2>
           <p className="text-sm text-text-secondary mt-0.5">
-            Ingredientes, envases y herramientas de la cocina
+            Ingredientes, envases, preparaciones y herramientas de la cocina
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -487,7 +553,13 @@ export default function KitchenItemsPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
           >
             <Plus size={16} />
-            {activeTab === 'raw' ? 'Nuevo ingrediente' : activeTab === 'packaging' ? 'Nuevo envase' : 'Nueva herramienta'}
+            {activeTab === 'raw'
+              ? 'Nuevo ingrediente'
+              : activeTab === 'packaging'
+                ? 'Nuevo envase'
+                : activeTab === 'recipe'
+                  ? 'Nueva preparación'
+                  : 'Nueva herramienta'}
           </button>
         </div>
       </div>
@@ -497,6 +569,7 @@ export default function KitchenItemsPage() {
         {([
           { id: 'raw', label: 'Ingredientes' },
           { id: 'packaging', label: 'Packaging' },
+          { id: 'recipe', label: 'Preparaciones' },
           ...(toolCount > 0 || activeTab === 'tool' ? [{ id: 'tool', label: 'Herramientas' }] : []),
         ] as { id: RecipeItemType; label: string }[]).map(t => (
           <button
@@ -601,7 +674,9 @@ export default function KitchenItemsPage() {
               ? 'Aún no hay ingredientes. Pulsa "Nuevo ingrediente" para empezar.'
               : activeTab === 'packaging'
                 ? 'Aún no hay envases. Pulsa "Nuevo envase" para añadir cajas, bolsas, etc.'
-                : 'Aún no hay herramientas. Pulsa "Nueva herramienta" para empezar.'}
+                : activeTab === 'recipe'
+                  ? 'Aún no hay preparaciones. Una preparación es una base que comparten varios platos (una salsa, un sofrito, una base de milanesa): la defines UNA vez y todos los platos que la usan cambian con ella.'
+                  : 'Aún no hay herramientas. Pulsa "Nueva herramienta" para empezar.'}
           </p>
         </div>
       )}
@@ -615,11 +690,12 @@ export default function KitchenItemsPage() {
               item={item}
               unit={unitsById.get(item.baseUnitId)}
               familyName={item.familyId ? familyNameById.get(item.familyId) ?? null : null}
-              onSelect={() => setSelectedItemId(item.id)}
+              usedInDishes={item.type === 'recipe' ? usageCounts[item.id] ?? 0 : null}
+              onSelect={() => openItem(item)}
             />
           ))}
           <p className="px-1 pt-1 text-xs text-text-secondary">
-            {visibleItems.length} de {items.length} ingrediente{items.length === 1 ? '' : 's'}
+            {visibleItems.length} de {items.length} {items.length === 1 ? tabNoun : tabNounPlural}
           </p>
         </div>
       )}
@@ -632,19 +708,23 @@ export default function KitchenItemsPage() {
               <thead>
                 <tr className="border-b border-border-default bg-page text-left">
                   <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">
-                    Ingrediente
+                    {activeTab === 'recipe' ? 'Preparación' : 'Ingrediente'}
                   </th>
                   <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">
-                    Familia
+                    {activeTab === 'recipe' ? 'Usado en' : 'Familia'}
                   </th>
                   <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">
                     Unidad base
                   </th>
+                  {/* "Coste fijo" es coste de COMPRA: una preparación no se
+                      compra, así que su columna no existe en esa pestaña. */}
+                  {activeTab !== 'recipe' && (
+                    <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide text-right">
+                      Coste fijo
+                    </th>
+                  )}
                   <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide text-right">
-                    Coste fijo
-                  </th>
-                  <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide text-right">
-                    Coste computado
+                    {activeTab === 'recipe' ? 'Coste de la receta' : 'Coste computado'}
                   </th>
                   <th className="p-3 w-8"></th>
                 </tr>
@@ -656,7 +736,7 @@ export default function KitchenItemsPage() {
                   return (
                     <tr
                       key={item.id}
-                      onClick={() => setSelectedItemId(item.id)}
+                      onClick={() => openItem(item)}
                       className="border-b border-border-default last:border-0 hover:bg-accent-bg cursor-pointer transition-base"
                     >
                       <td className="p-3">
@@ -668,10 +748,15 @@ export default function KitchenItemsPage() {
                             ({item.altName})
                           </span>
                         )}
+                        <PreparationChip item={item} className="ml-2" />
                         <IngredientStatusChip item={item} className="ml-2" />
                       </td>
                       <td className="p-3">
-                        {famName ? (
+                        {item.type === 'recipe' ? (
+                          <span className="text-sm text-text-secondary tabular-nums">
+                            {(usageCounts[item.id] ?? 0)} plato{(usageCounts[item.id] ?? 0) === 1 ? '' : 's'}
+                          </span>
+                        ) : famName ? (
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-page border border-border-default text-text-secondary inline-flex items-center gap-1">
                             <Tag className="w-3 h-3" />
                             {famName}
@@ -683,9 +768,11 @@ export default function KitchenItemsPage() {
                       <td className="p-3 text-text-secondary">
                         {unitLabel(unit)}
                       </td>
-                      <td className="p-3 text-right tabular-nums text-text-primary">
-                        {formatEur(item.fixedCost)}
-                      </td>
+                      {activeTab !== 'recipe' && (
+                        <td className="p-3 text-right tabular-nums text-text-primary">
+                          {formatEur(item.fixedCost)}
+                        </td>
+                      )}
                       <td className="p-3 text-right tabular-nums text-text-secondary">
                         {formatEur(item.computedCost)}
                       </td>
@@ -699,7 +786,7 @@ export default function KitchenItemsPage() {
             </table>
           </div>
           <div className="px-3 py-2 text-xs text-text-secondary border-t border-border-default bg-page">
-            {visibleItems.length} de {items.length} ingrediente{items.length === 1 ? '' : 's'}
+            {visibleItems.length} de {items.length} {items.length === 1 ? tabNoun : tabNounPlural}
           </div>
         </div>
       )}
@@ -746,7 +833,7 @@ export default function KitchenItemsPage() {
       {simpleCreateOpen && (
         <SimpleArticleCreateModal
           accountId={activeAccountId!}
-          articleType={activeTab === 'tool' ? 'tool' : 'packaging'}
+          articleType={activeTab === 'tool' ? 'tool' : activeTab === 'recipe' ? 'recipe' : 'packaging'}
           units={units}
           existingItems={items}
           actorId={authUserId ?? null}
@@ -825,11 +912,14 @@ function IngredientCard({
   item,
   unit,
   familyName,
+  usedInDishes,
   onSelect,
 }: {
   item: RecipeItem
   unit: KitchenUnit | undefined
   familyName: string | null
+  // Solo preparaciones: en cuántos platos se usa. null = no aplica.
+  usedInDishes: number | null
   onSelect: () => void
 }) {
   return (
@@ -850,6 +940,7 @@ function IngredientCard({
                 ({item.altName})
               </span>
             )}
+            <PreparationChip item={item} />
             <IngredientStatusChip item={item} />
             {familyName && (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-page border border-border-default text-text-secondary inline-flex items-center gap-1">
@@ -862,11 +953,22 @@ function IngredientCard({
         <ChevronRight className="w-4 h-4 shrink-0 text-text-secondary mt-0.5" />
       </div>
 
-      {/* Campos etiquetados */}
+      {/* Campos etiquetados. Una preparación no se compra: en vez de los costes
+          de compra (fijo) enseña dónde se usa y lo que suman sus ingredientes. */}
       <div className="grid grid-cols-3 gap-2 mt-3">
         <ItemField label="Unidad base" value={unitLabel(unit)} />
-        <ItemField label="Coste fijo" value={formatEur(item.fixedCost)} />
-        <ItemField label="Coste computado" value={formatEur(item.computedCost)} />
+        {usedInDishes === null ? (
+          <ItemField label="Coste fijo" value={formatEur(item.fixedCost)} />
+        ) : (
+          <ItemField
+            label="Usado en"
+            value={`${usedInDishes} plato${usedInDishes === 1 ? '' : 's'}`}
+          />
+        )}
+        <ItemField
+          label={usedInDishes === null ? 'Coste computado' : 'Coste de la receta'}
+          value={formatEur(item.computedCost)}
+        />
       </div>
     </button>
   )

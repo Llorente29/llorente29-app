@@ -156,6 +156,50 @@ export async function getRecipeBreakdown(parentItemId: string): Promise<RecipeLi
   })
 }
 
+/**
+ * Padres que USAN un artículo como línea de su escandallo: platos (type='dish')
+ * y otras preparaciones (type='recipe'). Es la respuesta a "¿en cuántos platos
+ * se usa esta preparación?" — la pregunta que justifica extraer una sub-receta:
+ * si cambia un ingrediente dentro, cambia en todos ellos a la vez.
+ *
+ * Dos consultas sencillas (líneas → padres) en vez de un embed por FK: el join
+ * anidado de PostgREST depende del nombre exacto de la constraint y aquí no
+ * aporta nada. Ordenado por nombre. Sin duplicados (un padre que use la
+ * preparación en dos líneas cuenta una vez).
+ */
+export async function listParentsUsingItem(
+  childItemId: string
+): Promise<{ id: string; name: string; type: string }[]> {
+  requireSupabase()
+  const { data: lineRows, error: lineErr } = await supabase!
+    .from('recipe_line')
+    .select('parent_item_id')
+    .eq('child_item_id', childItemId)
+
+  if (lineErr) {
+    throw new Error(`Error localizando dónde se usa ${childItemId}: ${lineErr.message}`)
+  }
+  const parentIds = Array.from(
+    new Set((lineRows ?? []).map((r) => r.parent_item_id as string).filter(Boolean))
+  )
+  if (parentIds.length === 0) return []
+
+  const { data: parents, error: parentErr } = await supabase!
+    .from('recipe_item')
+    .select('id, name, type')
+    .in('id', parentIds)
+    .order('name', { ascending: true })
+
+  if (parentErr) {
+    throw new Error(`Error leyendo los platos que usan ${childItemId}: ${parentErr.message}`)
+  }
+  return (parents ?? []).map((p) => ({
+    id: p.id as string,
+    name: p.name as string,
+    type: p.type as string,
+  }))
+}
+
 export async function addLine(input: RecipeLineInsert): Promise<RecipeLine> {
   requireSupabase()
   const { data, error } = await supabase!
