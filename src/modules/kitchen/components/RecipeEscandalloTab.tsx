@@ -61,6 +61,7 @@ import {
   deleteLine,
   addLine,
   listLinesByParent,
+  listParentsUsingItem,
 } from '@/modules/kitchen/services/recipeLineService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import {
@@ -310,6 +311,16 @@ export default function RecipeEscandalloTab({
   const [econReloadTick, setEconReloadTick] = useState(0)
   // "Añadir a carta": modal que crea/enlaza el menu_item de este escandallo.
   const [showAddToMenu, setShowAddToMenu] = useState(false)
+  // ── Preparaciones (type='recipe'): en qué escandallos se usa ──
+  // Es la cifra que da sentido a extraer una sub-receta: cambiar un ingrediente
+  // aquí lo cambia en los N platos de golpe. Se guarda ANCLADO al id que se
+  // consultó: así, al saltar de una preparación a otra, el contador no enseña
+  // por un instante los platos de la anterior (y el efecto no necesita
+  // resetearlo a mano). null = aún sin cargar / no aplica.
+  const [usedIn, setUsedIn] = useState<
+    { itemId: string; parents: { id: string; name: string; type: string }[] } | null
+  >(null)
+  const [usedInOpen, setUsedInOpen] = useState(false)
 
   // ── Carga del escandallo (recipe + lines) ──
   useEffect(() => {
@@ -336,6 +347,31 @@ export default function RecipeEscandalloTab({
       cancelled = true
     }
   }, [recipeId, tick])
+
+  // Solo para PREPARACIONES: los escandallos que la usan como línea. No bloquea
+  // la pestaña (si falla, el contador simplemente no aparece).
+  useEffect(() => {
+    if (!recipe || recipe.type !== 'recipe') return
+    const itemId = recipe.id
+    let cancelled = false
+    listParentsUsingItem(itemId)
+      .then((rows) => {
+        if (!cancelled) setUsedIn({ itemId, parents: rows })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error('listParentsUsingItem falló:', err)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [recipe, tick])
+
+  // Los padres cargados solo valen si son los de ESTA preparación.
+  const usedInParents =
+    recipe && recipe.type === 'recipe' && usedIn && usedIn.itemId === recipe.id
+      ? usedIn.parents
+      : null
 
   // Doble dirección: "usado por N ítems" — hoy invisible, y esa invisibilidad
   // es parte de la causa raíz del enlace equivocado que nadie ve.
@@ -1001,6 +1037,13 @@ export default function RecipeEscandalloTab({
   // del modal). Solo texto: no cambia ninguna lógica.
   const addKindLabel =
     addKind === 'packaging' ? 'packaging' : addKind === 'recipe' ? 'sub-receta' : 'ingrediente'
+  // Concordancia de género en los textos de alta: 'sub-receta' es femenino y el
+  // resto masculinos ("nueva sub-receta" / "nuevo ingrediente", "de la" / "del").
+  // Solo texto: no cambia ninguna lógica.
+  const addKindIsFem = addKind === 'recipe'
+  const addKindNewWord = addKindIsFem ? 'nueva' : 'nuevo'
+  const addKindNewWordCap = addKindIsFem ? 'Nueva' : 'Nuevo'
+  const addKindOf = addKindIsFem ? 'de la' : 'del'
 
   function openAdd(kind: 'raw' | 'recipe' | 'packaging' = 'raw') {
     setAddKind(kind)
@@ -1058,9 +1101,13 @@ export default function RecipeEscandalloTab({
   }
 
   // Abre el mini-formulario de "crear ingrediente nuevo" con el texto buscado.
+  // Unidad por defecto según lo que se está creando: una PREPARACIÓN se cuenta
+  // por unidades ('ud' — su escandallo describe 1 ud y el plato la usa 1 ud);
+  // un ingrediente/envase sigue naciendo en gramos como hasta ahora.
   function openCreate() {
-    const gram = units.find((u) => u.abbreviation.toLowerCase() === 'g')
-    setCreateUnitId(gram ? gram.id : (units[0]?.id ?? ''))
+    const wanted = addKind === 'recipe' ? 'ud' : 'g'
+    const unit = units.find((u) => u.abbreviation.trim().toLowerCase() === wanted)
+    setCreateUnitId(unit ? unit.id : (units[0]?.id ?? ''))
     setCreateName(addSearch.trim())
     setCreateCost('')
     setAddError(null)
@@ -1074,13 +1121,21 @@ export default function RecipeEscandalloTab({
     setAddError(null)
   }
 
-  // Crea el raw nuevo (source='manual', needs_review=true) y lo deja seleccionado
-  // para que el usuario indique la cantidad (reutiliza el paso de cantidad de E2a).
+  // Crea el artículo nuevo (source='manual', needs_review=true) y lo deja
+  // seleccionado para que el usuario indique la cantidad (reutiliza el paso de
+  // cantidad de E2a).
+  //
+  // PREPARACIÓN (type='recipe'): no se pide unidad ni coste. Su coste NO se
+  // teclea — lo calcula kitchen_recompute_item sumando sus propias líneas, igual
+  // que hace con un plato. Nace no-stockable (default de la columna), así que al
+  // vender el plato que la contiene, explode_recipe_to_raws la atraviesa y
+  // descuenta los CRUDOS de dentro, no la preparación.
   function confirmCreate() {
     if (!accountId) return
+    const isPrep = addKind === 'recipe'
     const name = createName.trim()
     if (name === '') {
-      setAddError(`El nombre del ${addKindLabel} es obligatorio.`)
+      setAddError(`El nombre ${addKindOf} ${addKindLabel} es obligatorio.`)
       return
     }
     if (!createUnitId) {
@@ -1088,21 +1143,23 @@ export default function RecipeEscandalloTab({
       return
     }
     let cost: number | null = null
-    const rawCost = createCost.trim().replace(',', '.')
-    if (rawCost !== '') {
-      const n = Number(rawCost)
-      if (!Number.isFinite(n) || n < 0) {
-        setAddError('El coste debe ser un número ≥ 0 (déjalo vacío si no lo sabes).')
-        return
+    if (!isPrep) {
+      const rawCost = createCost.trim().replace(',', '.')
+      if (rawCost !== '') {
+        const n = Number(rawCost)
+        if (!Number.isFinite(n) || n < 0) {
+          setAddError('El coste debe ser un número ≥ 0 (déjalo vacío si no lo sabes).')
+          return
+        }
+        cost = n
       }
-      cost = n
     }
 
     setCreateSaving(true)
     setAddError(null)
     createRecipeItem({
       accountId,
-      type: addKind === 'packaging' ? 'packaging' : 'raw',
+      type: isPrep ? 'recipe' : addKind === 'packaging' ? 'packaging' : 'raw',
       name,
       baseUnitId: createUnitId,
       costStrategy: 'fixed',
@@ -1120,7 +1177,7 @@ export default function RecipeEscandalloTab({
         setAddSearch('')
       })
       .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : `No se pudo crear el ${addKindLabel}`
+        const msg = err instanceof Error ? err.message : `No se pudo crear ${addKindIsFem ? 'la' : 'el'} ${addKindLabel}`
         setAddError(msg)
       })
       .finally(() => setCreateSaving(false))
@@ -1307,6 +1364,19 @@ export default function RecipeEscandalloTab({
 
           <span className={'flex-1 min-w-0 text-sm text-text-primary ' + (isMobile ? 'break-words' : 'truncate')}>
             {line.childName}
+            {/* La línea es una SUB-RECETA (preparación): ↗ para abrir su propio
+                escandallo. Lo que se descuenta al vender no es esta línea, sino
+                los crudos de dentro (explode_recipe_to_raws la atraviesa). */}
+            {line.childType === 'recipe' && (
+              <button
+                type="button"
+                onClick={() => navigate('/kitchen/recetas?recipe=' + line.childItemId)}
+                title="Es una preparación: abrir su escandallo"
+                className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full bg-success-bg text-success inline-flex items-center gap-0.5 align-middle hover:opacity-80 transition-opacity cursor-pointer"
+              >
+                preparación ↗
+              </button>
+            )}
             {line.childNeedsReview && (
               <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
                 <AlertTriangle className="w-3 h-3" />
@@ -1531,10 +1601,14 @@ export default function RecipeEscandalloTab({
           {/* Línea tipo/código — recuperada en el checklist de la Fase 7 (gap
               fila 138): vivía en la cabecera del editor viejo, se perdió al no
               pertenecer a ninguna sección con id propio. */}
-          <div className="text-[13px] text-text-secondary mt-1 flex items-center gap-2">
+          <div className="text-[13px] text-text-secondary mt-1 flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5">
               <ChefHat className="w-[15px] h-[15px]" />
-              {recipe.type === 'dish' ? 'Plato' : recipe.type}
+              {recipe.type === 'dish'
+                ? 'Plato'
+                : recipe.type === 'recipe'
+                  ? 'Preparación'
+                  : recipe.type}
             </span>
             {recipe.code && (
               <>
@@ -1542,7 +1616,52 @@ export default function RecipeEscandalloTab({
                 <span className="font-mono opacity-85">{recipe.code}</span>
               </>
             )}
+            {/* Preparación: "usado en N platos" — la cifra que justifica tenerla
+                extraída (un cambio aquí baja a los N a la vez). Clic → la lista. */}
+            {recipe.type === 'recipe' && usedInParents !== null && (
+              <>
+                <span className="opacity-50">·</span>
+                <button
+                  type="button"
+                  onClick={() => setUsedInOpen((v) => !v)}
+                  disabled={usedInParents.length === 0}
+                  title={
+                    usedInParents.length === 0
+                      ? 'Todavía no la usa ningún plato'
+                      : 'Ver los escandallos que la usan'
+                  }
+                  className="inline-flex items-center gap-1 text-[13px] text-success hover:opacity-80 transition-opacity disabled:text-text-secondary disabled:hover:opacity-100 disabled:cursor-default"
+                >
+                  Usado en {usedInParents.length} plato{usedInParents.length === 1 ? '' : 's'}
+                  {usedInParents.length > 0 && (
+                    <ChevronDown
+                      className={
+                        'w-3.5 h-3.5 transition-transform ' + (usedInOpen ? 'rotate-180' : '')
+                      }
+                    />
+                  )}
+                </button>
+              </>
+            )}
           </div>
+          {/* Lista desplegable de los escandallos que usan esta preparación. */}
+          {recipe.type === 'recipe' && usedInOpen && usedInParents && usedInParents.length > 0 && (
+            <div className="mt-1.5 rounded-md border border-border-default bg-card overflow-hidden">
+              {usedInParents.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => navigate('/kitchen/recetas?recipe=' + p.id)}
+                  className="w-full text-left px-2.5 py-1.5 text-sm text-text-primary hover:bg-accent-bg transition-colors border-b border-border-default last:border-0 flex items-center justify-between gap-2"
+                >
+                  <span className="truncate">{p.name}</span>
+                  <span className="text-[11px] text-text-secondary shrink-0">
+                    {p.type === 'recipe' ? 'preparación' : 'plato'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Foto de cocina (gestión completa: subir/cambiar/eliminar/lightbox).
@@ -1950,14 +2069,14 @@ export default function RecipeEscandalloTab({
                 </div>
               </div>
             ) : addCreating ? (
-              // Crear ingrediente/packaging nuevo al vuelo (E2b)
+              // Crear ingrediente / packaging / PREPARACIÓN al vuelo (E2b)
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-[30px] h-[30px] rounded-md bg-card border border-terracota/30 inline-flex items-center justify-center flex-shrink-0">
                     <Plus className="w-3.5 h-3.5 text-terracota" />
                   </span>
                   <span className="text-sm font-medium text-text-primary">
-                    Nuevo {addKindLabel}
+                    {addKindNewWordCap} {addKindLabel}
                   </span>
                   <button
                     type="button"
@@ -1974,37 +2093,43 @@ export default function RecipeEscandalloTab({
                     autoFocus
                     value={createName}
                     onChange={(e) => setCreateName(e.target.value)}
-                    placeholder={`Nombre del ${addKindLabel}`}
+                    placeholder={`Nombre ${addKindOf} ${addKindLabel}`}
                     className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
                   />
-                  <div className="flex gap-2">
-                    <select
-                      value={createUnitId}
-                      onChange={(e) => setCreateUnitId(e.target.value)}
-                      className="flex-1 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
-                    >
-                      {unitsGrouped.map(([dim, list]) => (
-                        <optgroup key={dim} label={DIM_LABEL[dim] ?? dim}>
-                          {list.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name} ({u.abbreviation})
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={createCost}
-                      onChange={(e) => setCreateCost(e.target.value)}
-                      placeholder={`Coste €/${unitsById.get(createUnitId)?.abbreviation ?? ''}`}
-                      className="w-[130px] px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                    />
-                  </div>
+                  {/* Una PREPARACIÓN no pide unidad ni coste: se cuenta por
+                      unidades y su coste sale de sus propias líneas. Solo nombre. */}
+                  {addKind !== 'recipe' && (
+                    <div className="flex gap-2">
+                      <select
+                        value={createUnitId}
+                        onChange={(e) => setCreateUnitId(e.target.value)}
+                        className="flex-1 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        {unitsGrouped.map(([dim, list]) => (
+                          <optgroup key={dim} label={DIM_LABEL[dim] ?? dim}>
+                            {list.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name} ({u.abbreviation})
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={createCost}
+                        onChange={(e) => setCreateCost(e.target.value)}
+                        placeholder={`Coste €/${unitsById.get(createUnitId)?.abbreviation ?? ''}`}
+                        className="w-[130px] px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                      />
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] text-text-secondary leading-snug">
-                      Se marcará para revisar; completa coste y formato cuando puedas.
+                      {addKind === 'recipe'
+                        ? `Se crea vacía y en ${unitsById.get(createUnitId)?.abbreviation ?? 'ud'}: ábrela después para ponerle sus ingredientes (su escandallo describe 1 ${unitsById.get(createUnitId)?.abbreviation ?? 'ud'}). Hasta entonces suma 0 €.`
+                        : 'Se marcará para revisar; completa coste y formato cuando puedas.'}
                     </span>
                     <button
                       type="button"
@@ -2058,14 +2183,14 @@ export default function RecipeEscandalloTab({
                         Sin coincidencias
                         {addSearch.trim() !== '' ? ` para «${addSearch.trim()}»` : ''}.
                       </div>
-                      {addSearch.trim() !== '' && addKind !== 'recipe' && (
+                      {addSearch.trim() !== '' && (
                         <button
                           type="button"
                           onClick={openCreate}
                           className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md bg-terracota text-white hover:bg-terracota-hover transition-colors"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          Crear «{addSearch.trim()}» como {addKindLabel} nuevo
+                          Crear «{addSearch.trim()}» como {addKindLabel} {addKindNewWord}
                         </button>
                       )}
                     </div>
@@ -2092,7 +2217,9 @@ export default function RecipeEscandalloTab({
                               <span className="block text-sm text-text-primary truncate">
                                 {item.name}
                                 {item.type === 'recipe' && (
-                                  <span className="text-text-secondary"> (preparación)</span>
+                                  <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full bg-success-bg text-success align-middle">
+                                    preparación ↗
+                                  </span>
                                 )}
                               </span>
                               <span className="block text-[11px] text-text-secondary truncate font-mono">
@@ -2109,14 +2236,14 @@ export default function RecipeEscandalloTab({
                           </button>
                         )
                       })}
-                      {addSearch.trim() !== '' && addKind !== 'recipe' && (
+                      {addSearch.trim() !== '' && (
                         <button
                           type="button"
                           onClick={openCreate}
                           className="mt-1 flex items-center gap-1.5 px-1.5 py-1.5 rounded-md hover:bg-card text-left transition-colors text-xs font-medium text-terracota"
                         >
                           <Plus className="w-3.5 h-3.5 flex-shrink-0" />
-                          ¿No está? Crear «{addSearch.trim()}» como nuevo
+                          ¿No está? Crear «{addSearch.trim()}» como {addKindNewWord}
                         </button>
                       )}
                     </div>
