@@ -202,6 +202,11 @@ export interface RecipeItem {
   platingNotes: string | null
   kitchenPhotoUrl: string | null
   yieldPortions: number | null
+  // Rendimiento del BATCH: cuánto produce esta receta (batchYield) y en qué
+  // unidad (batchYieldUnitId). El motor divide por él para repartir el batch
+  // entre los platos que la usan. NULL = automático (suma de sus líneas).
+  batchYield: number | null
+  batchYieldUnitId: string | null
   conservationType: ConservationType | null
   serviceTempC: number | null
   notes: string | null
@@ -243,6 +248,8 @@ export interface RecipeItemInsert {
   platingNotes?: string | null
   kitchenPhotoUrl?: string | null
   yieldPortions?: number | null
+  batchYield?: number | null
+  batchYieldUnitId?: string | null
   conservationType?: ConservationType | null
   serviceTempC?: number | null
   notes?: string | null
@@ -269,6 +276,8 @@ export interface RecipeItemUpdate {
   platingNotes?: string | null
   kitchenPhotoUrl?: string | null
   yieldPortions?: number | null
+  batchYield?: number | null
+  batchYieldUnitId?: string | null
   conservationType?: ConservationType | null
   serviceTempC?: number | null
   notes?: string | null

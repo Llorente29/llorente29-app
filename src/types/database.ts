@@ -12324,6 +12324,8 @@ export type Database = {
           alt_names: string[]
           archived_at: string | null
           base_unit_id: string
+          batch_yield: number | null
+          batch_yield_unit_id: string | null
           category: string | null
           chef_notes: string | null
           code: string | null
@@ -12401,6 +12403,8 @@ export type Database = {
           alt_names?: string[]
           archived_at?: string | null
           base_unit_id: string
+          batch_yield?: number | null
+          batch_yield_unit_id?: string | null
           category?: string | null
           chef_notes?: string | null
           code?: string | null
@@ -12478,6 +12482,8 @@ export type Database = {
           alt_names?: string[]
           archived_at?: string | null
           base_unit_id?: string
+          batch_yield?: number | null
+          batch_yield_unit_id?: string | null
           category?: string | null
           chef_notes?: string | null
           code?: string | null
@@ -18517,6 +18523,15 @@ export type Database = {
         Returns: {
           child_item_id: string
           usage_count: number
+        }[]
+      }
+      kitchen_batch_yield: {
+        Args: { p_item_id: string }
+        Returns: {
+          base_unit_id: string
+          is_declared: boolean
+          unmeasured_lines: number
+          yield_in_base: number
         }[]
       }
       kitchen_recipe_breakdown: {

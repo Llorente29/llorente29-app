@@ -54,6 +54,9 @@ import {
   getRawUsageCounts,
   createRecipeItem,
   updateRecipeItem,
+  recomputeRecipeItem,
+  getBatchYield,
+  type BatchYieldInfo,
 } from '@/modules/kitchen/services/recipeItemService'
 import {
   getRecipeBreakdown,
@@ -321,6 +324,19 @@ export default function RecipeEscandalloTab({
     { itemId: string; parents: { id: string; name: string; type: string }[] } | null
   >(null)
   const [usedInOpen, setUsedInOpen] = useState(false)
+  // ── Rendimiento del batch (solo preparaciones) ──
+  // Lo que la preparación PRODUCE. El motor divide por él para repartir el batch
+  // entre los platos: sin esto, un plato que pide 150 g se lleva el batch entero.
+  // Se pide al servidor (misma función por la que divide el motor), nunca se
+  // recalcula aquí. Anclado al id consultado, como usedIn.
+  const [yieldInfo, setYieldInfo] = useState<
+    { itemId: string; info: BatchYieldInfo | null } | null
+  >(null)
+  const [yieldDraft, setYieldDraft] = useState('')
+  const [yieldUnitDraft, setYieldUnitDraft] = useState('')
+  const [editingYield, setEditingYield] = useState(false)
+  const [savingYield, setSavingYield] = useState(false)
+  const [yieldError, setYieldError] = useState<string | null>(null)
 
   // ── Carga del escandallo (recipe + lines) ──
   useEffect(() => {
@@ -348,8 +364,9 @@ export default function RecipeEscandalloTab({
     }
   }, [recipeId, tick])
 
-  // Solo para PREPARACIONES: los escandallos que la usan como línea. No bloquea
-  // la pestaña (si falla, el contador simplemente no aparece).
+  // Solo para PREPARACIONES: los escandallos que la usan como línea y el
+  // rendimiento de su batch. Ninguna de las dos bloquea la pestaña (si fallan,
+  // simplemente no se pintan).
   useEffect(() => {
     if (!recipe || recipe.type !== 'recipe') return
     const itemId = recipe.id
@@ -362,16 +379,111 @@ export default function RecipeEscandalloTab({
         if (cancelled) return
         console.error('listParentsUsingItem falló:', err)
       })
+    getBatchYield(itemId)
+      .then((info) => {
+        if (!cancelled) setYieldInfo({ itemId, info })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error('getBatchYield falló:', err)
+      })
     return () => {
       cancelled = true
     }
   }, [recipe, tick])
+
+  // Unidades para el selector del rendimiento. El alta de línea (E2a) también
+  // las carga, pero en su propio momento: una preparación puede abrirse sin
+  // pasar nunca por ahí.
+  const recipeIsPreparation = recipe?.type === 'recipe'
+  useEffect(() => {
+    if (!recipeIsPreparation) return
+    let cancelled = false
+    listUnits({})
+      .then((rows) => {
+        if (cancelled) return
+        setUnits(rows)
+        const m = new Map<string, KitchenUnit>()
+        rows.forEach((u) => m.set(u.id, u))
+        setUnitsById(m)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error('listUnits (rendimiento) falló:', err)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [recipeIsPreparation])
 
   // Los padres cargados solo valen si son los de ESTA preparación.
   const usedInParents =
     recipe && recipe.type === 'recipe' && usedIn && usedIn.itemId === recipe.id
       ? usedIn.parents
       : null
+
+  // Ídem para el rendimiento.
+  const batchYield =
+    recipe && recipe.type === 'recipe' && yieldInfo && yieldInfo.itemId === recipe.id
+      ? yieldInfo.info
+      : null
+  const yieldBaseUnit = recipe ? unitsById.get(recipe.baseUnitId) : undefined
+  // Solo unidades de la MISMA dimensión que la base del ítem: un rendimiento en
+  // litros para una receta que se mide en kg no es convertible y el motor lo
+  // descartaría. Mejor no dejar teclearlo.
+  const yieldUnitOptions = useMemo(
+    () => (yieldBaseUnit ? units.filter((u) => u.dimension === yieldBaseUnit.dimension) : units),
+    [units, yieldBaseUnit]
+  )
+  function startEditYield() {
+    if (!recipe) return
+    setYieldDraft(recipe.batchYield !== null ? String(recipe.batchYield) : '')
+    setYieldUnitDraft(recipe.batchYieldUnitId ?? recipe.baseUnitId)
+    setYieldError(null)
+    setEditingYield(true)
+  }
+
+  // Guarda el rendimiento y deja los costes cuadrados: el de la propia
+  // preparación lo recalcula updateRecipeItem, y los de los platos que la usan
+  // se recalculan aquí — si no, el plato seguiría cobrando el batch entero.
+  function saveYield() {
+    if (!recipe) return
+    const raw = yieldDraft.trim().replace(',', '.')
+    let value: number | null = null
+    if (raw !== '') {
+      const n = Number(raw)
+      if (!Number.isFinite(n) || n <= 0) {
+        setYieldError('El rendimiento tiene que ser un número mayor que 0 (vacío = automático).')
+        return
+      }
+      value = n
+    }
+    setSavingYield(true)
+    setYieldError(null)
+    updateRecipeItem(recipe.id, {
+      batchYield: value,
+      batchYieldUnitId: value === null ? null : (yieldUnitDraft || recipe.baseUnitId),
+    })
+      .then(async () => {
+        // Los platos que usan la preparación cambian de coste con ella.
+        const parents = usedInParents ?? (await listParentsUsingItem(recipe.id))
+        for (const p of parents) {
+          try {
+            await recomputeRecipeItem(p.id)
+          } catch (e) {
+            console.error(`No se pudo recostear el plato ${p.id} tras cambiar el rendimiento`, e)
+          }
+        }
+        setEditingYield(false)
+        onRecipeChanged()
+        setTick((t) => t + 1)
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'No se pudo guardar el rendimiento'
+        setYieldError(msg)
+      })
+      .finally(() => setSavingYield(false))
+  }
 
   // Doble dirección: "usado por N ítems" — hoy invisible, y esa invisibilidad
   // es parte de la causa raíz del enlace equivocado que nadie ve.
@@ -478,6 +590,13 @@ export default function RecipeEscandalloTab({
     () => lines.reduce((acc, l) => acc + (l.lineCost ?? 0), 0),
     [lines]
   )
+
+  // Coste por unidad de rendimiento: lo que de verdad se le cobra al plato.
+  // totalCost es el coste del BATCH (la suma de las líneas de esta receta).
+  const costPerYieldUnit =
+    batchYield && batchYield.yieldInBase && batchYield.yieldInBase > 0
+      ? totalCost / batchYield.yieldInBase
+      : null
 
   // ── "Producción": escalar el escandallo a un volumen objetivo (NO destructivo) ──
   const baseYield = recipe?.yieldPortions && recipe.yieldPortions > 0 ? recipe.yieldPortions : null
@@ -1644,6 +1763,108 @@ export default function RecipeEscandalloTab({
               </>
             )}
           </div>
+          {/* ── Rendimiento del batch (solo preparaciones) ──
+              La receta de una preparación describe un BATCH entero. Sin decir
+              cuánto produce, un plato que pide 150 g se llevaría el batch
+              completo: por eso esto vive junto al nombre y no escondido. */}
+          {recipe.type === 'recipe' && (
+            <div className="mt-2 rounded-md border border-success/30 bg-success-bg/40 px-2.5 py-2">
+              {editingYield ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-medium tracking-wide text-text-secondary uppercase">
+                    Este batch produce
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      autoFocus
+                      value={yieldDraft}
+                      disabled={savingYield}
+                      onChange={(e) => setYieldDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); saveYield() }
+                        if (e.key === 'Escape') { e.preventDefault(); setEditingYield(false) }
+                      }}
+                      placeholder="automático"
+                      className="w-[92px] px-2 py-1 font-mono text-sm text-text-primary bg-card border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                    <select
+                      value={yieldUnitDraft}
+                      disabled={savingYield}
+                      onChange={(e) => setYieldUnitDraft(e.target.value)}
+                      className="px-2 py-1 text-sm border border-border-default rounded bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+                    >
+                      {yieldUnitOptions.map((u) => (
+                        <option key={u.id} value={u.id}>{u.abbreviation}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={saveYield}
+                      disabled={savingYield}
+                      className="px-2.5 py-1 text-sm font-medium rounded-md bg-terracota text-white hover:bg-terracota-hover disabled:opacity-50 transition-colors"
+                    >
+                      {savingYield ? 'Guardando…' : 'Guardar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingYield(false)}
+                      disabled={savingYield}
+                      className="w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-card transition-colors"
+                      title="Cancelar"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-text-secondary leading-snug">
+                    Déjalo vacío para calcularlo solo, sumando lo que pesan sus
+                    ingredientes. Ponlo a mano cuando el resultado no pese lo que
+                    entra (evaporación, reducción, mermas).
+                  </span>
+                  {yieldError && (
+                    <span className="text-[11px] text-danger">{yieldError}</span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-[13px] text-text-secondary">Este batch produce</span>
+                  <button
+                    type="button"
+                    onClick={startEditYield}
+                    title="Cambiar el rendimiento del batch"
+                    className="inline-flex items-baseline gap-1 text-[13px] font-medium text-success hover:opacity-80 transition-opacity"
+                  >
+                    {batchYield?.yieldInBase
+                      ? `${formatQty(batchYield.yieldInBase)} ${yieldBaseUnit?.abbreviation ?? ''}`
+                      : 'sin definir'}
+                    <Pencil className="w-3 h-3 shrink-0" />
+                  </button>
+                  <span className="text-[11px] text-text-secondary">
+                    {batchYield?.isDeclared
+                      ? '· a mano'
+                      : batchYield?.yieldInBase
+                        ? '· calculado sumando sus ingredientes'
+                        : '· no se puede sumar: la receta se toma como 1 ' +
+                          (yieldBaseUnit?.abbreviation ?? 'unidad')}
+                  </span>
+                  {costPerYieldUnit !== null && (
+                    <span className="text-[13px] text-text-primary font-mono">
+                      {formatEurPrecise(costPerYieldUnit)}/{yieldBaseUnit?.abbreviation ?? ''}
+                    </span>
+                  )}
+                  {batchYield && !batchYield.isDeclared && batchYield.unmeasuredLines > 0 && (
+                    <span className="text-[11px] text-warning inline-flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      {batchYield.unmeasuredLines} línea
+                      {batchYield.unmeasuredLines === 1 ? '' : 's'} sin contar en el cálculo
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Lista desplegable de los escandallos que usan esta preparación. */}
           {recipe.type === 'recipe' && usedInOpen && usedInParents && usedInParents.length > 0 && (
             <div className="mt-1.5 rounded-md border border-border-default bg-card overflow-hidden">
