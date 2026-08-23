@@ -39,6 +39,8 @@ export function rowToRecipeItem(row: RowRecipeItem): RecipeItem {
     platingNotes: row.plating_notes,
     kitchenPhotoUrl: row.kitchen_photo_url,
     yieldPortions: row.yield_portions,
+    batchYield: row.batch_yield,
+    batchYieldUnitId: row.batch_yield_unit_id,
     conservationType: row.conservation_type as RecipeItem['conservationType'],
     serviceTempC: row.service_temp_c,
     notes: row.notes,
@@ -89,6 +91,8 @@ function recipeItemInsertToRow(input: RecipeItemInsert): RowRecipeItemInsert {
     plating_notes: input.platingNotes ?? null,
     kitchen_photo_url: input.kitchenPhotoUrl ?? null,
     yield_portions: input.yieldPortions ?? null,
+    batch_yield: input.batchYield ?? null,
+    batch_yield_unit_id: input.batchYieldUnitId ?? null,
     conservation_type: input.conservationType ?? null,
     service_temp_c: input.serviceTempC ?? null,
     notes: input.notes ?? null,
@@ -118,6 +122,8 @@ function recipeItemUpdateToRow(patch: RecipeItemUpdate): RowRecipeItemUpdate {
   if (patch.platingNotes !== undefined) row.plating_notes = patch.platingNotes
   if (patch.kitchenPhotoUrl !== undefined) row.kitchen_photo_url = patch.kitchenPhotoUrl
   if (patch.yieldPortions !== undefined) row.yield_portions = patch.yieldPortions
+  if (patch.batchYield !== undefined) row.batch_yield = patch.batchYield
+  if (patch.batchYieldUnitId !== undefined) row.batch_yield_unit_id = patch.batchYieldUnitId
   if (patch.conservationType !== undefined) row.conservation_type = patch.conservationType
   if (patch.serviceTempC !== undefined) row.service_temp_c = patch.serviceTempC
   if (patch.notes !== undefined) row.notes = patch.notes
@@ -259,6 +265,42 @@ export async function getDishesIncomplete(accountId: string): Promise<Set<string
   }
   const rows = (data as { dish_id: string }[] | null) ?? []
   return new Set(rows.map((r) => r.dish_id))
+}
+
+/**
+ * Rendimiento del batch de una preparación, TAL COMO LO USA EL MOTOR
+ * (RPC kitchen_batch_yield → _batch_yield_in_base, la misma función por la que
+ * divide explode_recipe_to_raws y kitchen_recompute_item). La pantalla no
+ * recalcula la fórmula por su cuenta: la pregunta, para que no puedan discrepar.
+ *
+ * - yieldInBase: el rendimiento en la UNIDAD BASE del ítem (null = no aplica →
+ *   el motor no divide, la receta se entiende escrita para 1 unidad base).
+ * - isDeclared: true si lo tecleó el usuario; false si es automático (la suma
+ *   de lo que pesan/miden sus líneas).
+ * - unmeasuredLines: líneas que el automático NO puede contar por no ser
+ *   medibles en esa unidad base (p. ej. una línea en 'ud' en una receta en kg).
+ */
+export interface BatchYieldInfo {
+  yieldInBase: number | null
+  baseUnitId: string | null
+  isDeclared: boolean
+  unmeasuredLines: number
+}
+
+export async function getBatchYield(itemId: string): Promise<BatchYieldInfo | null> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('kitchen_batch_yield', { p_item_id: itemId })
+  if (error) {
+    throw new Error(`Error obteniendo el rendimiento de ${itemId}: ${error.message}`)
+  }
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return null
+  return {
+    yieldInBase: row.yield_in_base ?? null,
+    baseUnitId: row.base_unit_id ?? null,
+    isDeclared: row.is_declared ?? false,
+    unmeasuredLines: Number(row.unmeasured_lines ?? 0),
+  }
 }
 
 export async function recomputeRecipeItem(id: string): Promise<number> {
