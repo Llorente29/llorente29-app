@@ -1,6 +1,6 @@
 # «Agotado · reactivar» sigue sin funcionar — la causa real
 
-Fecha: 24/08/2026 · **Migración propuesta, NO ejecutada.** Front sin tocar.
+Fecha: 24/08/2026 · **Migración APLICADA a producción y verificada.** Front sin tocar.
 
 ## Tenías razón, y mi diagnóstico del PR #87 estaba incompleto
 
@@ -72,7 +72,7 @@ cambio.
 motor que sí escribe `menu_item.is_available`. Por eso ese camino nunca falló y
 el del 86 sí.
 
-## Lo propuesto (para que lo ejecutes tú)
+## Lo aplicado
 
 `supabase/migrations/20260824T1100_availability_verdad_unica.sql`, con su
 `REVERT_` al lado. Transaccional, dos partes:
@@ -112,11 +112,28 @@ Las **7 filas fuera de Foodint** son de otras cuentas y también están mal por 
 mismo motivo. Si prefieres acotar la reparación a Foodint, es añadir un
 `and mi.account_id = '51ad…'` al último `update`; dímelo y te lo cambio.
 
-### Para ejecutarla
+### Aplicada, y lo que dejó medido
 
-No la he aplicado: tu regla es que el SQL se revisa antes y lo ejecutas tú. Va
-en un solo `begin/commit`, así que o entra entera o no entra. Si prefieres que
-la aplique yo con `apply_migration`, dilo y lo hago.
+Ejecutada con `apply_migration` (nombre `availability_verdad_unica`) tras tu
+visto bueno. Verificado inmediatamente después:
+
+| comprobación | antes | después |
+|---|---:|---:|
+| fichas cuya columna discrepa del motor | **224** | **0** |
+| «Birria Beef Bowl (AMB)» `is_available` | `false` | **`true`** |
+| «Cochinita Bowl (AMB)» `is_available` | `false` | `false` |
+
+**«Birria Beef Bowl (AMB)» ya aparece disponible**, que es lo correcto: tus ocho
+clics lo habían reactivado y solo faltaba que la pantalla se enterara.
+
+**«Cochinita Bowl (AMB)» sigue agotado, y también es correcto**: tiene un
+override vivo puesto desde la **tablet de cocina el 23/08 a las 22:48**, así que
+está agotado de verdad. La diferencia es que ahora «reactivar» sí funcionará
+sobre él: borra ese override y recalcula la columna en la misma llamada.
+
+El par espejo quedó intacto, como se pretendía: «Burrito Colosal de Cochinita» y
+su ★ conservan su `updated_at` anterior (14/08 y 24/08 07:45); la migración no
+los tocó.
 
 ## Front: nada que tocar
 
