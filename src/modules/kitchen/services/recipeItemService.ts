@@ -303,6 +303,85 @@ export async function getBatchYield(itemId: string): Promise<BatchYieldInfo | nu
   }
 }
 
+/** Resultado de UNA tanda de `kitchen_recompute_all`. `total` es siempre el
+ *  total de la cuenta, no el de la tanda: es lo que permite pintar "45/112". */
+export interface RecomputeAllBatch {
+  total: number
+  processed: number
+  failed: number
+  errors: { itemId: string; name: string; type: string; error: string }[]
+}
+
+export interface RecomputeAllProgress {
+  done: number
+  total: number
+  failed: number
+}
+
+const RECOMPUTE_BATCH_SIZE = 20
+
+/**
+ * Recostea TODOS los platos y preparaciones de la cuenta.
+ *
+ * El recálculo lo hace `kitchen_recompute_all` en el servidor —la misma
+ * función que corre el cron de las 04:00, no una segunda versión en el
+ * cliente—, pero por TANDAS, para poder informar del avance: una sola llamada
+ * de 112 items no puede decir por dónde va.
+ *
+ * El orden (primero las preparaciones, luego los platos) lo impone el servidor
+ * y es estable, así que paginar por offset no reordena nada a mitad.
+ *
+ * Un item que falla no aborta la pasada: el servidor lo anota y sigue. Aquí se
+ * acumulan los errores de todas las tandas para poder enseñarlos al final.
+ */
+export async function recomputeAllCosts(
+  accountId: string,
+  onProgress?: (p: RecomputeAllProgress) => void,
+): Promise<RecomputeAllBatch> {
+  requireSupabase()
+  let offset = 0
+  // Sin valor inicial a propósito: la primera tanda es quien lo descubre, y un
+  // 0 de arranque sería un valor que nadie llega a leer.
+  let total: number
+  let processed = 0
+  let failed = 0
+  const errors: RecomputeAllBatch['errors'] = []
+
+  // do/while: la primera tanda es la que descubre el total.
+  do {
+    const { data, error } = await supabase!.rpc('kitchen_recompute_all', {
+      p_account_id: accountId,
+      p_limit: RECOMPUTE_BATCH_SIZE,
+      p_offset: offset,
+    })
+    if (error) throw new Error(`Error recosteando: ${error.message}`)
+
+    const r = (data ?? {}) as Record<string, unknown>
+    total = Number(r.total ?? 0)
+    const batchDone = Number(r.processed ?? 0)
+    const batchFailed = Number(r.failed ?? 0)
+    processed += batchDone
+    failed += batchFailed
+    for (const e of (r.errors as Record<string, unknown>[] | undefined) ?? []) {
+      errors.push({
+        itemId: String(e.item_id ?? ''),
+        name: String(e.name ?? '(sin nombre)'),
+        type: String(e.type ?? ''),
+        error: String(e.error ?? 'error desconocido'),
+      })
+    }
+
+    offset += RECOMPUTE_BATCH_SIZE
+    onProgress?.({ done: processed + failed, total, failed })
+
+    // Si una tanda no devuelve nada, se acabaron los items: cortar aquí evita
+    // dar vueltas para siempre si `total` viniera desalineado con las filas.
+    if (batchDone + batchFailed === 0) break
+  } while (offset < total)
+
+  return { total, processed, failed, errors }
+}
+
 export async function recomputeRecipeItem(id: string): Promise<number> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('kitchen_recompute_item', {
