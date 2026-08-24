@@ -697,6 +697,60 @@ export async function updateMenuItem(
   return rowToMenuItem(data)
 }
 
+/**
+ * Duplica un producto DENTRO de la misma carta. La copia nace **sin escandallo**
+ * a propósito, y no es un atajo: `menu_item` tiene un índice único
+ * (brand_id, channel_id, recipe_item_id), así que dos filas con la misma receta
+ * en la misma marca y canal son imposibles — y son, exactamente, los duplicados
+ * que hubo que limpiar a mano. Copiar la receta aquí sería fabricar uno.
+ *
+ * En Postgres dos NULL no colisionan en un índice único, así que la copia sin
+ * receta entra siempre. Nace con el nombre marcado y `needs_review`: es un
+ * borrador que alguien tiene que terminar (enlazar escandallo, ajustar precio).
+ *
+ * Para vender el MISMO plato en otra marca no se usa esto, sino
+ * `addRecipeToBrand`: ahí la receta se comparte a propósito (coste único).
+ */
+export async function duplicateMenuItem(id: string): Promise<MenuItem> {
+  requireSupabase()
+  const original = await getMenuItemById(id)
+  if (!original) throw new Error(`El producto ${id} ya no existe.`)
+
+  const { data, error } = await supabase!
+    .from('menu_item')
+    .insert({
+      account_id: original.accountId,
+      brand_id: original.brandId,
+      channel_id: original.channelId,
+      recipe_item_id: null,
+      name: `${original.name} (copia)`,
+      description: original.description,
+      price: original.price,
+      vat_rate: original.vatRate,
+      menu_category_id: null,
+      position: (original.position ?? 0) + 1,
+      product_type: 'simple',
+      source: 'manual',
+      needs_review: true,
+    })
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new Error(`Error duplicando el producto: ${error.message}`)
+  }
+  // La categoría se copia aparte: menu_category_id no viaja en el insert de
+  // arriba si el original no tenía, y así el fallo al copiarla no tumba el alta.
+  const created = rowToMenuItem(data)
+  const catId = await getMenuItemCategoryId(id).catch(() => null)
+  if (catId) {
+    await setMenuItemCategory(created.id, catId).catch((e) =>
+      console.error('duplicateMenuItem: no se pudo copiar la categoría', e)
+    )
+  }
+  return created
+}
+
 export async function archiveMenuItem(id: string): Promise<MenuItem> {
   requireSupabase()
   const { data, error } = await supabase!
