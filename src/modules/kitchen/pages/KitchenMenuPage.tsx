@@ -77,6 +77,15 @@ import {
 import PublishStatusChip from '@/modules/kitchen/components/PublishStatusChip'
 import { connectBrandToDelivery, type ConnectResult } from '@/modules/kitchen/services/hubriseBrandConnectService'
 
+// "Agotado · 2 días" / "· 5h". Por debajo de una hora no se dice nada: un
+// "· 0h" sería ruido, y el 86 acaba de ponerse.
+function formatSince(hours: number): string | null {
+  if (hours < 1) return null
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? '1 día' : `${days} días`
+}
+
 function formatEur(value: number | null): string {
   if (value === null || value === undefined) return '—'
   return new Intl.NumberFormat('es-ES', {
@@ -1580,6 +1589,15 @@ export default function KitchenMenuPage() {
                   const ins = insights.byItem.get(p.id)
                   const units7d = ins?.units7d ?? 0
                   const topRank = insights.topRank.get(p.id)
+                  // El 86 se identifica por receta o por matrícula, según cómo
+                  // lo guardara product_availability. Se prueban las dos.
+                  const unavail = !p.isAvailable
+                    ? (p.recipeItemId ? insights.unavailableSince.get(`r:${p.recipeItemId}`) : undefined)
+                      ?? (p.externalId ? insights.unavailableSince.get(`e:${p.externalId}`) : undefined)
+                    : undefined
+                  const agotadoDesde = unavail && !(unavail.until && new Date(unavail.until).getTime() > Date.now())
+                    ? formatSince(unavail.hours)
+                    : null
                   // Margen de PLATO sobre PVP, desde el coste del escandallo.
                   // Tres estados distintos, que antes se confundían en uno:
                   //   sin receta   -> "sin escandallo" (falta enlazarlo)
@@ -1714,8 +1732,22 @@ export default function KitchenMenuPage() {
                               <Sparkles className="w-3 h-3" /> en promo
                             </span>
                           ) : !p.isAvailable ? (
-                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 align-middle inline-flex items-center gap-1">
+                            <span
+                              className="ml-2 text-xs px-1.5 py-0.5 rounded bg-page text-text-secondary
+                                border border-border-default align-middle inline-flex items-center gap-1"
+                              title={unavail?.until
+                                ? `Agotado con vuelta programada para el ${new Date(unavail.until).toLocaleString('es-ES')}`
+                                : unavail
+                                  ? `Agotado desde el ${new Date(unavail.since).toLocaleString('es-ES')}`
+                                  : undefined}
+                            >
                               <CircleSlash className="w-3 h-3" /> Agotado
+                              {/* Con vuelta programada NO se pinta duración: está
+                                  previsto, no olvidado, y decir "· 3 días" sonaría
+                                  a descuido cuando es justo lo contrario. */}
+                              {agotadoDesde && (
+                                <span className="tabular-nums">· {agotadoDesde}</span>
+                              )}
                             </span>
                           ) : null}
                         </div>
