@@ -47,6 +47,9 @@ export interface CatalogProduct {
   /** Fecha de archivado. null = está en la carta. Solo llega con opciones
    *  { includeArchived: true }; sin ellas la consulta ni los devuelve. */
   archivedAt: string | null
+  /** Etiquetas comerciales (vegano, picante…). La columna YA existía en BBDD;
+   *  lo que faltaba era traerla hasta aquí. */
+  tags: string[]
 }
 
 export interface CatalogCategory {
@@ -188,7 +191,7 @@ export async function listCategoriesWithProducts(
   // Cast puntual (ver arriba): mirror_of_item_id no está aún en los tipos.
   let itemsQuery = (supabase! as any)
     .from('menu_item')
-    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, external_id, is_active, is_available, needs_review, position, mirror_of_item_id, archived_at')
+    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, external_id, is_active, is_available, needs_review, position, mirror_of_item_id, archived_at, tags')
     .eq('account_id', accountId)
     .eq('brand_id', brandId)
 
@@ -297,6 +300,7 @@ export async function listCategoriesWithProducts(
     hasMirror: mirrorByOriginal.has(i.id as string),
     promoActive: mirrorByOriginal.get(i.id as string) === true,
     archivedAt: (i.archived_at as string) ?? null,
+    tags: (i.tags as string[]) ?? [],
   })
 
   const categories: CatalogCategory[] = (cats ?? []).map((c) => ({
