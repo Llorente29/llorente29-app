@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, CircleSlash } from 'lucide-react'
+import { Search, ChevronDown, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, CircleSlash, GripVertical, Smile, Archive, MoveVertical } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { fmtMoney } from '@/lib/format'
 import {
@@ -28,6 +28,26 @@ import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems, archiv
 import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, updateMenuCategory, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
 import { setProductAvailability } from '@/modules/kitchen/services/menuOverrideService'
 import ProductContextMenu, { type ContextMenuTarget } from '@/modules/kitchen/components/ProductContextMenu'
+import MenuFilterChips from '@/modules/kitchen/components/MenuFilterChips'
+import {
+  EMPTY_FILTERS, anyFilterActive, type MenuFilters,
+} from '@/modules/kitchen/components/menuFilters'
+import ChannelBadges from '@/modules/kitchen/components/ChannelBadges'
+import InlineEdit from '@/modules/kitchen/components/InlineEdit'
+import CategoryEmojiPicker from '@/modules/kitchen/components/CategoryEmojiPicker'
+import Sortable from '@/modules/kitchen/components/Sortable'
+import DropZone from '@/modules/kitchen/components/DropZone'
+import {
+  listBrandChannelPublication, type BrandChannelPublication,
+} from '@/modules/kitchen/services/channelPublicationService'
+import {
+  DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  DragOverlay, type DragEndEvent, type DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, sortableKeyboardCoordinates,
+  verticalListSortingStrategy, arrayMove,
+} from '@dnd-kit/sortable'
 import { getReliability, type SalesReliability } from '@/modules/kitchen/services/salesReliabilityService'
 import {
   getMenuItemLinkHealth,
@@ -130,6 +150,33 @@ export default function KitchenMenuPage() {
   >(null)
   const [undo, setUndo] = useState<{ label: string; revert: () => Promise<void> } | null>(null)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
+  // ── F2: chips de filtro. Todo se filtra en memoria salvo "Archivados", que
+  // pide datos que la carta no trae por definición (están fuera de ella). ──
+  const [filters, setFilters] = useState<MenuFilters>({ ...EMPTY_FILTERS })
+  const [loadingArchived, setLoadingArchived] = useState(false)
+  // ── F6: publicación por canal, una consulta para toda la lista ──
+  const [channelPub, setChannelPub] = useState<BrandChannelPublication | null>(null)
+  // ── F3: emoji de categoría y aviso de guardado ──
+  const [emojiPickerCat, setEmojiPickerCat] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  // ── F5: en móvil el long-press ya es el menú contextual, así que arrastrar
+  // exige entrar en un modo explícito (lo mismo que hace Square). ──
+  const [reorderMode, setReorderMode] = useState(false)
+  const [dragging, setDragging] = useState<{ kind: 'product' | 'category'; id: string; label: string } | null>(null)
+  // ¿Se puede arrastrar ahora? En escritorio (>= sm) siempre; en móvil solo
+  // dentro del "modo reordenar", porque el long-press ya es el menú contextual.
+  // Se mira el ancho una vez y se escucha el resize: sin esto, un teléfono en
+  // horizontal se quedaría con las reglas del vertical.
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 640px)').matches : true)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 640px)')
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  const dndDisabled = !isDesktop && !reorderMode
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; count: number } | null>(null)
   // Publicador (T2a): publicar la carta de la marca a HubRise.
   // ÁMBITO (19/08): publicar iba SIEMPRE a todos los catálogos de la marca
@@ -206,8 +253,13 @@ export default function KitchenMenuPage() {
     let cancelled = false
     setLoadingCatalog(true)
     setError(null)
+    // "Archivados" es el ÚNICO filtro que cambia la consulta: los archivados no
+    // están en la carta por definición, así que no se pueden filtrar en memoria
+    // sobre algo que nunca llegó. El resto de chips no recargan nada.
+    const includeArchived = filters.archivados
+    if (includeArchived) setLoadingArchived(true)
     Promise.all([
-      listCategoriesWithProducts(activeAccountId, selectedBrandId),
+      listCategoriesWithProducts(activeAccountId, selectedBrandId, null, { includeArchived }),
       getMenuItemEconomics(selectedBrandId).catch(() => [] as MenuItemEconomics[]),
       listMenuCategories(activeAccountId, selectedBrandId).catch(() => [] as MenuCategory[]),
       getMenuItemLinkHealth(activeAccountId, selectedBrandId).catch((e: unknown) => {
@@ -227,9 +279,43 @@ export default function KitchenMenuPage() {
         setLinkHealth(lh)
       })
       .catch((e) => { if (!cancelled) setError(String(e.message ?? e)) })
-      .finally(() => { if (!cancelled) setLoadingCatalog(false) })
+      .finally(() => {
+        if (cancelled) return
+        setLoadingCatalog(false)
+        setLoadingArchived(false)
+      })
     return () => { cancelled = true }
-  }, [activeAccountId, selectedBrandId])
+  }, [activeAccountId, selectedBrandId, filters.archivados])
+
+  // F6 · Publicación por canal. Va DESPUÉS del catálogo y en su propio efecto:
+  // es información de apoyo, así que si falla la carta se sigue viendo entera y
+  // solo desaparecen los chips. Una consulta para toda la lista, no una por fila.
+  useEffect(() => {
+    if (!activeAccountId) return
+    const ids = categories.flatMap((c) => c.products.map((p) => p.id))
+    let cancelled = false
+    // Sin productos no se consulta, pero tampoco se hace setState en seco
+    // dentro del efecto: eso encadena renders y el linter lo canta con razón.
+    const load = ids.length === 0
+      ? Promise.resolve(null)
+      : listBrandChannelPublication(activeAccountId, ids)
+    load
+      .then((r) => { if (!cancelled) setChannelPub(r) })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        console.warn('KitchenMenuPage: fallo cargando la publicación por canal', e)
+        setChannelPub(null)
+      })
+    return () => { cancelled = true }
+  }, [activeAccountId, categories])
+
+  // El aviso "Guardado" del inline edit se va solo: es una confirmación, no un
+  // error, y no debe pedir un clic para desaparecer.
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 1800)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const selectedBrand = useMemo(
     () => brands.find((b) => b.id === selectedBrandId) ?? null,
@@ -261,14 +347,48 @@ export default function KitchenMenuPage() {
     return out
   }, [allCats, categories])
 
-  // Filtro de búsqueda
+  // Búsqueda + chips (F2). Los chips SUMAN entre sí: marcar "Sin foto" y
+  // "Agotados" pide los que cumplen las dos cosas, no los que cumplen alguna.
+  // Es lo que espera quien busca "los que hay que arreglar".
+  //
+  // "Archivados" es distinto de los otros tres: no acota, SUSTITUYE. Marcado
+  // solo, enseña los que se quitaron de la carta; sin marcar, no aparece
+  // ninguno. Mezclarlos con los vivos sin decirlo sería pintar como carta algo
+  // que no lo es.
   const filteredCategories = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return displayCategories
+    const active = anyFilterActive(filters)
+    if (!q && !active) {
+      return displayCategories.map((c) => ({
+        ...c, products: c.products.filter((p) => !p.archivedAt),
+      }))
+    }
     return displayCategories
-      .map((c) => ({ ...c, products: c.products.filter((p) => p.name.toLowerCase().includes(q)) }))
+      .map((c) => ({
+        ...c,
+        products: c.products.filter((p) => {
+          if (q && !p.name.toLowerCase().includes(q)) return false
+          if (filters.archivados) { if (!p.archivedAt) return false }
+          else if (p.archivedAt) return false
+          if (filters.sinEscandallo && p.recipeItemId !== null) return false
+          if (filters.sinFoto && p.photoUrl) return false
+          if (filters.agotados && p.isAvailable) return false
+          return true
+        }),
+      }))
       .filter((c) => c.products.length > 0)
-  }, [displayCategories, search])
+  }, [displayCategories, search, filters])
+
+  // Cuántos pasan el filtro, para el contador de los chips. Se cuenta sobre los
+  // VIVOS: comparar contra un total que incluya archivados daría un "12 de 520"
+  // que no significa nada.
+  const filterCounts = useMemo(() => {
+    if (!anyFilterActive(filters)) return null
+    const total = displayCategories.reduce(
+      (n, c) => n + c.products.filter((p) => (filters.archivados ? p.archivedAt : !p.archivedAt)).length, 0)
+    const shown = filteredCategories.reduce((n, c) => n + c.products.length, 0)
+    return { shown, total }
+  }, [displayCategories, filteredCategories, filters])
 
   // DETALLE de producto (patrón lista+detalle por estado). Al volver, recargamos
   // el catálogo de la marca para reflejar cambios (precio, nombre editados).
@@ -651,6 +771,163 @@ export default function KitchenMenuPage() {
     }
   }
 
+  // ── F3 · Edición en la fila (sin modal) ───────────────────────────────────
+  // Optimista: se pinta ya y, si el servidor dice que no, InlineEdit revierte y
+  // enseña el fallo. `patchProduct` toca SOLO el estado local; la recarga
+  // completa costaría una consulta por cada nombre corregido.
+  function patchProduct(id: string, patch: Partial<CatalogCategory['products'][number]>) {
+    setCategories((prev) => prev.map((c) => ({
+      ...c, products: c.products.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    })))
+  }
+
+  async function saveProductName(id: string, next: string) {
+    await updateMenuItem(id, { name: next })
+    patchProduct(id, { name: next })
+    setToast('Guardado')
+  }
+
+  async function saveProductPrice(id: string, raw: string) {
+    // "12,50" y "12.50" son la misma cifra para quien la teclea. Que el punto
+    // decimal sea coma en español no puede ser motivo de un error.
+    const n = Number(raw.replace(/\s/g, '').replace(',', '.'))
+    if (!Number.isFinite(n) || n < 0) throw new Error('Precio no válido')
+    await updateMenuItem(id, { price: n })
+    patchProduct(id, { price: n })
+    setToast('Guardado')
+  }
+
+  async function saveCategoryName(catId: string, next: string) {
+    await updateMenuCategory(catId, { name: next })
+    setAllCats((prev) => prev.map((c) => (c.id === catId ? { ...c, name: next } : c)))
+    setToast('Guardado')
+  }
+
+  async function saveCategoryEmoji(catId: string, emoji: string | null) {
+    try {
+      await updateMenuCategory(catId, { emoji })
+      setAllCats((prev) => prev.map((c) => (c.id === catId ? { ...c, emoji } : c)))
+      setToast('Guardado')
+    } catch (e) {
+      setError(String((e as Error).message ?? e))
+    }
+  }
+
+  // ── F5 · Arrastrar y soltar ───────────────────────────────────────────────
+  // El sensor de puntero exige 6 px de recorrido antes de considerar que esto
+  // es un arrastre: sin esa distancia, un clic normal en la fila se comería el
+  // "abrir ficha". En táctil hace falta ADEMÁS una pausa de 250 ms, porque el
+  // dedo se mueve al hacer scroll — y aun así el arrastre en móvil solo existe
+  // dentro del "modo reordenar", que el usuario enciende a propósito: el
+  // long-press ya está ocupado por el menú contextual (F4) y dos gestos no
+  // pueden pelearse por el mismo dedo.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6, delay: 250, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  function onDragStart(e: DragStartEvent) {
+    const id = String(e.active.id)
+    if (id.startsWith('cat:')) {
+      const c = allCats.find((x) => `cat:${x.id}` === id)
+      setDragging(c ? { kind: 'category', id: c.id, label: c.name } : null)
+      return
+    }
+    const prod = filteredCategories.flatMap((c) => c.products).find((x) => x.id === id)
+    setDragging(prod ? { kind: 'product', id: prod.id, label: prod.name } : null)
+  }
+
+  // Reordenar categorías. Se persiste el orden COMPLETO (reorderMenuCategories
+  // ya espera la lista entera), no solo las dos que se cruzan.
+  async function handleCategoryDragEnd(activeId: string, overId: string) {
+    const from = allCats.findIndex((c) => `cat:${c.id}` === activeId)
+    const to = allCats.findIndex((c) => `cat:${c.id}` === overId)
+    if (from < 0 || to < 0 || from === to) return
+    const next = arrayMove(allCats, from, to)
+    const before = allCats
+    setAllCats(next)                               // optimista
+    setMoving(true)
+    try {
+      await reorderMenuCategories(next.map((c, i) => ({ id: c.id, position: i })))
+    } catch (err) {
+      setAllCats(before)                           // vuelta atrás
+      setError(String((err as Error).message ?? err))
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  // Reordenar productos DENTRO de una categoría, o moverlos ENTRE categorías.
+  // El destino se resuelve por el contenedor del elemento sobre el que se
+  // suelta; soltar sobre la cabecera de una categoría vacía también vale, y por
+  // eso existen los ids "drop:<catId>".
+  async function handleProductDragEnd(activeId: string, overId: string) {
+    const findCat = (productId: string) =>
+      filteredCategories.find((c) => c.products.some((p) => p.id === productId)) ?? null
+    const srcCat = findCat(activeId)
+    if (!srcCat) return
+
+    const dstCat = overId.startsWith('drop:')
+      ? filteredCategories.find((c) => `drop:${c.id}` === overId) ?? null
+      : findCat(overId)
+    if (!dstCat) return
+
+    const realCatId = (id: string) => (id === '__sin_categoria__' ? null : id)
+
+    if (dstCat.id === srcCat.id) {
+      const from = srcCat.products.findIndex((p) => p.id === activeId)
+      const to = overId.startsWith('drop:') ? srcCat.products.length - 1 : srcCat.products.findIndex((p) => p.id === overId)
+      if (from < 0 || to < 0 || from === to) return
+      const nextProducts = arrayMove(srcCat.products, from, to)
+      const before = categories
+      setCategories((prev) => prev.map((c) => (c.id === srcCat.id ? { ...c, products: nextProducts } : c)))
+      setMoving(true)
+      try {
+        await reorderMenuItems(nextProducts.map((p, i) => ({ id: p.id, position: i })))
+      } catch (err) {
+        setCategories(before)
+        setError(String((err as Error).message ?? err))
+      } finally { setMoving(false) }
+      return
+    }
+
+    // Entre categorías: cambia la categoría y, ya puesto, se renumera el destino
+    // para que el producto caiga donde se ha soltado y no al final.
+    const moved = srcCat.products.find((p) => p.id === activeId)
+    if (!moved) return
+    const insertAt = overId.startsWith('drop:')
+      ? dstCat.products.length
+      : Math.max(0, dstCat.products.findIndex((p) => p.id === overId))
+    const nextDst = [...dstCat.products]
+    nextDst.splice(insertAt, 0, moved)
+    const before = categories
+    setCategories((prev) => prev.map((c) => {
+      if (c.id === srcCat.id) return { ...c, products: c.products.filter((p) => p.id !== activeId) }
+      if (c.id === dstCat.id) return { ...c, products: nextDst }
+      return c
+    }))
+    setMoving(true)
+    try {
+      await setMenuItemCategory(activeId, realCatId(dstCat.id))
+      await reorderMenuItems(nextDst.map((p, i) => ({ id: p.id, position: i })))
+      setToast(`Movido a ${dstCat.name}`)
+    } catch (err) {
+      setCategories(before)
+      setError(String((err as Error).message ?? err))
+    } finally { setMoving(false) }
+  }
+
+  function onDragEnd(e: DragEndEvent) {
+    setDragging(null)
+    const { active, over } = e
+    if (!over) return
+    const activeId = String(active.id)
+    const overId = String(over.id)
+    if (activeId === overId) return
+    if (activeId.startsWith('cat:')) { void handleCategoryDragEnd(activeId, overId); return }
+    void handleProductDragEnd(activeId, overId)
+  }
+
   // ── Reordenar categorías (↑/↓) ────────────────────────────────────────────
   // Recalcula posiciones 0..n-1 de TODAS las categorías tras el intercambio, así
   // funciona aunque hoy estén sin orden real. Optimista: actualiza UI y persiste.
@@ -752,14 +1029,14 @@ export default function KitchenMenuPage() {
 
 
   if (accountsLoading || loadingBrands) {
-    return <div className="p-6 text-sm text-gray-500">Cargando carta…</div>
+    return <div className="p-6 text-sm text-text-secondary">Cargando carta…</div>
   }
 
   if (brands.length === 0) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-2">Cartas</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-2xl font-semibold text-text-primary mb-2">Cartas</h1>
+        <p className="text-sm text-text-secondary">
           Aún no hay catálogo. Importa el catálogo desde tu TPV o crea productos para empezar.
         </p>
       </div>
@@ -785,18 +1062,18 @@ export default function KitchenMenuPage() {
 
       {/* Cabecera: selector de marca */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <h1 className="text-2xl font-semibold text-gray-900">Cartas</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">Cartas</h1>
         <select
           value={selectedBrandId ?? ''}
           onChange={(e) => setSelectedBrandId(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-medium bg-white"
+          className="border border-border-default rounded-lg px-3 py-1.5 text-sm font-medium bg-white"
         >
           {brands.map((b) => (
             <option key={b.id} value={b.id}>{b.name}</option>
           ))}
         </select>
         {selectedBrand?.ownershipType && (
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-text-secondary">
             marca · {selectedBrand.ownershipType === 'own' ? 'propia' : 'cedida'}
           </span>
         )}
@@ -804,13 +1081,13 @@ export default function KitchenMenuPage() {
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => setShowNewCategory(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border-default bg-white text-text-primary hover:bg-page"
             >
               <FolderPlus className="w-4 h-4" /> Categoría
             </button>
             <button
               onClick={() => setShowAddExisting(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border-default bg-white text-text-primary hover:bg-page"
               title="Reutilizar un producto que ya tienes en otra marca"
             >
               <PackagePlus className="w-4 h-4" /> Añadir existente
@@ -823,7 +1100,7 @@ export default function KitchenMenuPage() {
             </button>
             <button
               onClick={() => setShowNewCombo(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border-default bg-white text-text-primary hover:bg-page"
             >
               <Package className="w-4 h-4" /> Nuevo combo
             </button>
@@ -834,7 +1111,7 @@ export default function KitchenMenuPage() {
                 elegida — por eso no lleva el nombre de la marca en el rótulo. */}
             <button
               onClick={() => setShowBrandRecon(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border-default bg-white text-text-primary hover:bg-page"
               title="Marcas que llegan de los integradores y no están atribuidas a ninguna marca de Folvy"
             >
               <ScanSearch className="w-4 h-4" /> Marcas de fuera
@@ -843,7 +1120,7 @@ export default function KitchenMenuPage() {
               <button
                 onClick={handleConnect}
                 disabled={connecting}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium border border-border-default bg-white text-text-primary hover:bg-page disabled:opacity-50"
                 title="Crear/reusar el catálogo de esta marca en HubRise y publicar la carta (sin bridge)"
               >
                 {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
@@ -857,7 +1134,7 @@ export default function KitchenMenuPage() {
                   value={publishLocationId ?? ''}
                   onChange={(e) => setPublishLocationId(e.target.value || null)}
                   title="A qué local se publica"
-                  className="px-2 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700"
+                  className="px-2 py-1.5 text-sm rounded-lg border border-border-default bg-white text-text-primary"
                 >
                   <option value="">Toda la cuenta (todos los catálogos)</option>
                   {publishLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -904,7 +1181,7 @@ export default function KitchenMenuPage() {
       {/* Barra de cobertura */}
       {selectedBrand && (
         <div className="mb-1.5">
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-page rounded-full overflow-hidden">
             <div
               className={coverage.pct === 100 ? 'h-full bg-green-500' : 'h-full bg-amber-500'}
               style={{ width: `${coverage.pct}%` }}
@@ -913,22 +1190,68 @@ export default function KitchenMenuPage() {
         </div>
       )}
       {selectedBrand && (
-        <p className="text-xs text-gray-500 mb-5">
+        <p className="text-xs text-text-secondary mb-5">
           {coverage.withRecipe} de {coverage.total} productos costeados
           {coverage.pct < 100 && ' · completa los escandallos para ver márgenes'}
         </p>
       )}
 
-      {/* Búsqueda */}
-      <div className="relative mb-5">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar producto…"
-          className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white"
-        />
+      {/* Búsqueda + filtros (F2) */}
+      <div className="mb-5 space-y-2.5">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar producto…"
+            className="w-full border border-border-default rounded-lg pl-9 pr-3 py-2 text-sm bg-card
+              text-text-primary placeholder:text-text-secondary
+              focus:outline-none focus:ring-2 focus:ring-accent/15 focus:border-accent transition-colors duration-150"
+          />
+        </div>
+
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <MenuFilterChips
+            value={filters}
+            onChange={setFilters}
+            counts={filterCounts}
+            loadingArchived={loadingArchived}
+            disabled={loadingCatalog}
+          />
+
+          {/* F5 · En móvil no hay arrastre suelto: el long-press ya es el menú
+              contextual. Se entra a un modo explícito, como el "Rearrange" de
+              Square. En escritorio el asa está siempre y este botón no sale. */}
+          <button
+            type="button"
+            onClick={() => setReorderMode((v) => !v)}
+            aria-pressed={reorderMode}
+            className={`sm:hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[12px] font-medium
+              transition-colors duration-150
+              ${reorderMode
+                ? 'bg-accent text-text-on-accent border-accent'
+                : 'bg-card text-text-secondary border-border-default'}`}
+          >
+            <MoveVertical className="w-3.5 h-3.5" />
+            {reorderMode ? 'Salir de reordenar' : 'Modo reordenar'}
+          </button>
+        </div>
+
+        {reorderMode && (
+          <p className="sm:hidden text-[12px] text-text-secondary">
+            Arrastra por el asa <GripVertical className="w-3 h-3 inline align-[-2px]" /> para
+            reordenar o cambiar de categoría. Tocar un producto no abre su ficha mientras estés aquí.
+          </p>
+        )}
+
+        {filters.archivados && (
+          <p className="text-[12px] text-text-secondary inline-flex items-center gap-1.5">
+            <Archive className="w-3.5 h-3.5 shrink-0" />
+            Estás viendo lo que se <strong>quitó</strong> de la carta. Verlo no lo devuelve:
+            para eso, vuelve a añadirlo desde la ficha del producto.
+          </p>
+        )}
       </div>
 
       {error && (
@@ -947,7 +1270,7 @@ export default function KitchenMenuPage() {
             value={moveTarget}
             onChange={(e) => setMoveTarget(e.target.value)}
             disabled={moving}
-            className="text-sm rounded-lg px-2.5 py-1.5 bg-white text-gray-900 border-0"
+            className="text-sm rounded-lg px-2.5 py-1.5 bg-white text-text-primary border-0"
           >
             <option value="">elige categoría…</option>
             {moveOptions.map((c) => (
@@ -986,10 +1309,20 @@ export default function KitchenMenuPage() {
       )}
 
       {loadingCatalog ? (
-        <div className="text-sm text-gray-500">Cargando catálogo…</div>
+        <div className="text-sm text-text-secondary">Cargando catálogo…</div>
       ) : (
-        <>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragCancel={() => setDragging(null)}
+        >
           {/* Categorías + productos */}
+          <SortableContext
+            items={filteredCategories.map((c) => `cat:${c.id}`)}
+            strategy={verticalListSortingStrategy}
+          >
           {filteredCategories.map((cat) => (
             <div key={cat.id} className="mb-6">
               {(() => {
@@ -997,50 +1330,110 @@ export default function KitchenMenuPage() {
                 const catIdx = allCats.findIndex((c) => c.id === cat.id)
                 const collapsed = collapsedCats.has(cat.id)
                 return (
-                  <>
+                  <Sortable id={`cat:${cat.id}`} disabled={!isReal || moving || dndDisabled}>
+                    {(d) => (
+                  <div ref={d.setNodeRef} style={d.style}>
                     <div className="flex items-center gap-2 mb-2">
+                      {isReal && (
+                        <button
+                          {...d.handleProps}
+                          className={`${dndDisabled ? 'hidden' : 'inline-flex'} items-center text-text-secondary/60
+                            hover:text-text-primary cursor-grab active:cursor-grabbing touch-none
+                            transition-colors duration-150`}
+                          title="Arrastrar para reordenar la categoría"
+                          aria-label={`Reordenar categoría ${cat.name}`}
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => toggleCollapse(cat.id)}
-                        className="text-gray-400 hover:text-gray-700"
+                        className="text-text-secondary hover:text-text-primary transition-colors duration-150"
                         title={collapsed ? 'Desplegar' : 'Plegar'}
                         aria-label={collapsed ? 'Desplegar categoría' : 'Plegar categoría'}
                       >
-                        {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`} />
                       </button>
                       <input
                         type="checkbox"
                         checked={cat.products.length > 0 && cat.products.every((p) => selectedIds.has(p.id))}
                         onChange={(e) => setCategorySelection(cat, e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                        className="w-4 h-4 rounded border-border-default cursor-pointer"
                         title="Seleccionar todos"
                       />
-                      <h2 className="text-base font-medium text-gray-900">
-                        {cat.emoji ? `${cat.emoji} ` : ''}{cat.name}
-                        <span className="ml-2 text-xs font-normal text-gray-400">{cat.products.length}</span>
+                      {/* F3 · emoji de la categoría. El campo existía en BBDD
+                          desde el principio y no había forma de tocarlo. */}
+                      {isReal ? (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setEmojiPickerCat(emojiPickerCat === cat.id ? null : cat.id)}
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-[15px] leading-none
+                              hover:bg-accent-bg transition-colors duration-150"
+                            title="Cambiar el emoji de la categoría"
+                            aria-label={`Emoji de ${cat.name}`}
+                          >
+                            {cat.emoji ?? <Smile className="w-4 h-4 text-text-secondary/50" />}
+                          </button>
+                          {emojiPickerCat === cat.id && (
+                            <CategoryEmojiPicker
+                              current={cat.emoji}
+                              onPick={(e) => void saveCategoryEmoji(cat.id, e)}
+                              onClose={() => setEmojiPickerCat(null)}
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        cat.emoji ? <span className="text-[15px]">{cat.emoji}</span> : null
+                      )}
+                      <h2 className="text-base font-medium text-text-primary">
+                        {isReal ? (
+                          <InlineEdit
+                            value={cat.name}
+                            ariaLabel={`Nombre de la categoría ${cat.name}`}
+                            onSave={(next) => saveCategoryName(cat.id, next)}
+                            disabled={moving}
+                            inputClassName="text-base font-medium w-48"
+                            render={(v) => <>{v}</>}
+                          />
+                        ) : cat.name}
+                        <span className="ml-2 text-xs font-normal text-text-secondary">{cat.products.length}</span>
                       </h2>
                       {isReal && (
                         <div className="ml-auto flex items-center gap-1">
                           <button onClick={() => moveCategory(cat.id, -1)} disabled={moving || catIdx <= 0}
-                            className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                            className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-accent-bg disabled:opacity-30 disabled:hover:bg-transparent"
                             title="Subir" aria-label="Subir categoría"><ArrowUp className="w-4 h-4" /></button>
                           <button onClick={() => moveCategory(cat.id, 1)} disabled={moving || catIdx >= allCats.length - 1}
-                            className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                            className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-accent-bg disabled:opacity-30 disabled:hover:bg-transparent"
                             title="Bajar" aria-label="Bajar categoría"><ArrowDown className="w-4 h-4" /></button>
                           <button onClick={() => setConfirmDelete({ id: cat.id, name: cat.name, count: cat.products.length })} disabled={moving}
-                            className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30"
+                            className="p-1 rounded text-text-secondary hover:text-red-600 hover:bg-red-50 disabled:opacity-30"
                             title="Borrar categoría" aria-label="Borrar categoría"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       )}
                     </div>
-                    {!collapsed && (
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div
+                      className="grid transition-[grid-template-rows] duration-200 ease-out"
+                      style={{ gridTemplateRows: collapsed ? '0fr' : '1fr' }}
+                    >
+                    <div className="overflow-hidden">
+                    <div className="bg-card border border-border-default rounded-xl overflow-hidden">
+                <SortableContext
+                  items={cat.products.map((p) => p.id)}
+                  strategy={verticalListSortingStrategy}
+                >
                 {cat.products.map((p, idx) => {
                   const econ = economics.get(p.id)
                   const health = linkHealth.get(p.id)
+                  const badges = channelPub?.byItem.get(p.id)
                   return (
+                    <Sortable key={p.id} id={p.id} disabled={moving || dndDisabled || !!p.archivedAt}>
+                    {(d) => (
                     <div
-                      key={p.id}
-                      onClick={() => setSelectedProductId(p.id)}
+                      ref={d.setNodeRef}
+                      style={d.style}
+                      onClick={() => { if (!reorderMode) setSelectedProductId(p.id) }}
                       onContextMenu={(e) => {
                         e.preventDefault()
                         openContextMenu(
@@ -1059,17 +1452,33 @@ export default function KitchenMenuPage() {
                       onTouchMove={cancelLongPress}
                       onTouchEnd={cancelLongPress}
                       onTouchCancel={cancelLongPress}
-                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer ${selectedIds.has(p.id) ? 'bg-accent/5' : 'hover:bg-gray-50'} ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''} ${!p.isAvailable ? 'opacity-60' : ''}`}
+                      className={`flex items-center gap-3 px-3 sm:px-4 py-3 transition-colors duration-150
+                        ${reorderMode ? 'cursor-default' : 'cursor-pointer'}
+                        ${selectedIds.has(p.id) ? 'bg-accent-bg' : 'hover:bg-page'}
+                        ${idx < cat.products.length - 1 ? 'border-b border-border-default' : ''}
+                        ${!p.isAvailable ? 'opacity-60' : ''}
+                        ${p.archivedAt ? 'opacity-70 bg-page/60' : ''}`}
                     >
+                      <button
+                        {...d.handleProps}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`${dndDisabled || p.archivedAt ? 'hidden' : 'inline-flex'} shrink-0 items-center
+                          text-text-secondary/40 hover:text-text-primary cursor-grab active:cursor-grabbing
+                          touch-none transition-colors duration-150`}
+                        title="Arrastrar para reordenar o cambiar de categoría"
+                        aria-label={`Reordenar ${p.name}`}
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </button>
                       <input
                         type="checkbox"
                         checked={selectedIds.has(p.id)}
                         onClick={(e) => e.stopPropagation()}
                         onChange={() => toggleSelect(p.id)}
-                        className="w-4 h-4 rounded border-gray-300 cursor-pointer shrink-0"
+                        className="w-4 h-4 rounded border-border-default cursor-pointer shrink-0"
                         title="Seleccionar"
                       />
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
+                      <div className="w-10 h-10 rounded-lg bg-page flex items-center justify-center text-text-secondary shrink-0">
                         {p.photoUrl
                           ? <img src={p.photoUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
                           : p.productType === 'combo'
@@ -1077,8 +1486,22 @@ export default function KitchenMenuPage() {
                             : <UtensilsCrossed className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 text-sm truncate">
-                          {p.name}
+                        <div className="font-medium text-text-primary text-sm truncate">
+                          {p.archivedAt ? p.name : (
+                            <InlineEdit
+                              value={p.name}
+                              ariaLabel={`Nombre de ${p.name}`}
+                              onSave={(next) => saveProductName(p.id, next)}
+                              disabled={moving || reorderMode}
+                              inputClassName="text-sm font-medium w-52"
+                              render={(v) => <>{v}</>}
+                            />
+                          )}
+                          {p.archivedAt && (
+                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-page text-text-secondary border border-border-default align-middle inline-flex items-center gap-1">
+                              <Archive className="w-3 h-3" /> archivado
+                            </span>
+                          )}
                           {p.productType === 'combo' && (
                             <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 align-middle inline-flex items-center gap-1">
                               <Package className="w-3 h-3" /> combo
@@ -1098,26 +1521,41 @@ export default function KitchenMenuPage() {
                             </span>
                           ) : null}
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
-                          {p.shortName ? `${p.shortName} · ` : ''}
-                          {p.productType === 'combo'
-                            ? `${p.comboSlotCount} slot${p.comboSlotCount !== 1 ? 's' : ''}`
-                            : p.modifierGroupCount > 0
-                              ? `${p.modifierGroupCount} grupo${p.modifierGroupCount > 1 ? 's' : ''} modif.`
-                              : 'sin modificadores'}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {/* F6 · en qué canales está, sin abrir la ficha */}
+                          <ChannelBadges badges={badges} className="shrink-0" />
+                          <span className="text-xs text-text-secondary truncate">
+                            {p.shortName ? `${p.shortName} · ` : ''}
+                            {p.productType === 'combo'
+                              ? `${p.comboSlotCount} slot${p.comboSlotCount !== 1 ? 's' : ''}`
+                              : p.modifierGroupCount > 0
+                                ? `${p.modifierGroupCount} grupo${p.modifierGroupCount > 1 ? 's' : ''} modif.`
+                                : 'sin modificadores'}
+                          </span>
                         </div>
                       </div>
-                      <div className="text-sm font-medium text-gray-900 shrink-0 w-16 text-right">
-                        {formatEur(p.price)}
+                      <div className="text-sm font-medium text-text-primary shrink-0 w-20 text-right tabular-nums"
+                        onClick={(e) => e.stopPropagation()}>
+                        {p.archivedAt ? formatEur(p.price) : (
+                          <InlineEdit
+                            value={String(p.price ?? 0)}
+                            mode="decimal"
+                            ariaLabel={`Precio de ${p.name}`}
+                            onSave={(next) => saveProductPrice(p.id, next)}
+                            disabled={moving || reorderMode}
+                            inputClassName="text-sm font-medium w-20 text-right"
+                            render={() => <>{formatEur(p.price)}</>}
+                          />
+                        )}
                       </div>
-                      <div className="shrink-0 w-40 text-right">
+                      <div className="hidden sm:block shrink-0 w-40 text-right">
                         {p.productType === 'combo' ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                          <span className="inline-flex items-center gap-1 text-xs text-text-secondary">
                             <Package className="w-3.5 h-3.5" /> coste por componentes
                           </span>
                         ) : !health ? (
                           // Marca recién cambiada / linkHealth aún no cargó — no mentir a verde ni a roto.
-                          <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                          <span className="inline-flex items-center gap-1 text-xs text-text-secondary">
                             <CircleDashed className="w-3.5 h-3.5" /> …
                           </span>
                         ) : (() => {
@@ -1130,23 +1568,23 @@ export default function KitchenMenuPage() {
                                 <Icon className="w-3.5 h-3.5" /> {meta.label}
                               </span>
                               {econ && (
-                                <div className="text-xs text-gray-500 mt-0.5">
+                                <div className="text-xs text-text-secondary mt-0.5">
                                   coste {formatEur(econ.cost)}{meta.tone === 'green' ? ` · margen ${formatEur(econ.contributionMargin)}` : ''} · FC {formatPct(econ.foodCostPct)}
                                 </div>
                               )}
                               {health.sharedWith > 1 && (
-                                <div className="text-[11px] text-gray-400 mt-0.5">compartido con {health.sharedWith - 1}</div>
+                                <div className="text-[11px] text-text-secondary mt-0.5">compartido con {health.sharedWith - 1}</div>
                               )}
                             </div>
                           )
                         })()}
                       </div>
-                      <div className="shrink-0 flex flex-col -my-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="hidden sm:flex shrink-0 flex-col -my-1" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => moveProduct(cat, p.id, -1)} disabled={moving || idx <= 0}
-                          className="p-0.5 text-gray-300 hover:text-gray-700 disabled:opacity-20"
+                          className="p-0.5 text-text-secondary/40 hover:text-text-primary disabled:opacity-20"
                           title="Subir" aria-label="Subir producto"><ArrowUp className="w-3.5 h-3.5" /></button>
                         <button onClick={() => moveProduct(cat, p.id, 1)} disabled={moving || idx >= cat.products.length - 1}
-                          className="p-0.5 text-gray-300 hover:text-gray-700 disabled:opacity-20"
+                          className="p-0.5 text-text-secondary/40 hover:text-text-primary disabled:opacity-20"
                           title="Bajar" aria-label="Bajar producto"><ArrowDown className="w-3.5 h-3.5" /></button>
                       </div>
                       <div className="shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
@@ -1155,7 +1593,7 @@ export default function KitchenMenuPage() {
                           disabled={moving}
                           className={`p-1.5 rounded-md disabled:opacity-20 transition-colors ${
                             p.isAvailable
-                              ? 'text-gray-300 hover:text-amber-600 hover:bg-amber-50'
+                              ? 'text-text-secondary/40 hover:text-amber-600 hover:bg-amber-50'
                               : 'text-amber-600 hover:bg-amber-50'
                           }`}
                           title={p.isAvailable ? 'Marcar agotado (se me ha acabado)' : 'Reactivar: volver a la venta'}
@@ -1166,7 +1604,7 @@ export default function KitchenMenuPage() {
                         <button
                           onClick={() => askRemoveProducts([{ id: p.id, name: p.name }])}
                           disabled={moving}
-                          className="p-1.5 rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-20 transition-colors"
+                          className="p-1.5 rounded-md text-text-secondary/40 hover:text-red-600 hover:bg-red-50 disabled:opacity-20 transition-colors"
                           title="Quitar de la carta"
                           aria-label={`Quitar ${p.name} de la carta`}
                         >
@@ -1174,29 +1612,69 @@ export default function KitchenMenuPage() {
                         </button>
                       </div>
                     </div>
+                  )}
+                  </Sortable>
                   )
                 })}
+                </SortableContext>
                 {cat.products.length === 0 && (
-                  <div className="px-4 py-3 text-xs text-gray-400">
-                    Aún sin productos · selecciónalos arriba y usa «Mover a {cat.name}»
-                  </div>
+                  <DropZone id={`drop:${cat.id}`} className="px-4 py-5 text-xs text-text-secondary rounded-lg">
+                    Aún sin productos · arrástralos aquí, o selecciónalos arriba y usa «Mover a {cat.name}»
+                  </DropZone>
                 )}
               </div>
+                    </div>
+                    </div>
+                  </div>
                     )}
-                  </>
+                  </Sortable>
                 )
               })()}
             </div>
           ))}
 
+          </SortableContext>
+
           {filteredCategories.length === 0 && (
-            <p className="text-sm text-gray-500">Sin resultados para “{search}”.</p>
+            <p className="text-sm text-text-secondary">
+              {anyFilterActive(filters)
+                ? 'Ningún producto pasa los filtros activos.'
+                : `Sin resultados para “${search}”.`}
+            </p>
           )}
-        </>
+
+          {/* Lo que sigue al dedo mientras se arrastra. Sin esto el usuario
+              arrastra "nada": la fila original se queda en su hueco. */}
+          <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}>
+            {dragging && (
+              <div className="px-3 py-2 rounded-lg bg-card border border-accent text-sm font-medium
+                text-text-primary max-w-xs truncate" style={{ boxShadow: 'var(--shadow-lg)' }}>
+                {dragging.kind === 'category' ? '📁 ' : ''}{dragging.label}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      )}
+
+      {/* F3 · confirmación de guardado. Se va sola: es un "hecho", no un aviso
+          que haya que atender, y pedir un clic para cerrarlo sería castigar al
+          que edita rápido. */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3.5 py-2 rounded-full
+            bg-text-primary text-text-on-accent text-[13px] font-medium
+            inline-flex items-center gap-1.5 animate-[fadeIn_150ms_ease-out]"
+          style={{ boxShadow: 'var(--shadow-lg)' }}
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" /> {toast}
+        </div>
       )}
 
       {undo && (
-        <div className="sticky bottom-3 z-20 mt-4 p-3 rounded-xl bg-gray-900 text-white flex items-center gap-3 shadow-lg max-w-md mx-auto">
+        <div className="sticky bottom-3 z-20 mt-4 p-3 rounded-xl bg-text-primary text-text-on-accent flex items-center gap-3 max-w-md mx-auto"
+          style={{ boxShadow: 'var(--shadow-lg)' }}>
           <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
           <span className="text-sm flex-1">{undo.label}</span>
           <button
@@ -1279,12 +1757,12 @@ export default function KitchenMenuPage() {
       {/* Editar nombre / precio desde el menú contextual */}
       {fieldEdit && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={() => !moving && setFieldEdit(null)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm border border-gray-200" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-3.5 border-b border-gray-200">
-              <h3 className="text-base font-medium text-gray-900">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm border border-border-default" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-border-default">
+              <h3 className="text-base font-medium text-text-primary">
                 {fieldEdit.field === 'name' ? 'Editar nombre' : 'Editar precio'}
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5 truncate">{fieldEdit.name}</p>
+              <p className="text-xs text-text-secondary mt-0.5 truncate">{fieldEdit.name}</p>
             </div>
             <div className="px-5 py-4">
               <input
@@ -1298,18 +1776,18 @@ export default function KitchenMenuPage() {
                   if (e.key === 'Enter') { e.preventDefault(); void saveFieldEdit() }
                   if (e.key === 'Escape') { e.preventDefault(); setFieldEdit(null) }
                 }}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                className="w-full px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
               />
               {fieldEdit.field === 'price' && (
-                <p className="text-[11px] text-gray-400 mt-1.5">Precio base de esta carta, con IVA incluido.</p>
+                <p className="text-[11px] text-text-secondary mt-1.5">Precio base de esta carta, con IVA incluido.</p>
               )}
               {removeError && (
                 <div className="mt-3 p-2.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs">{removeError}</div>
               )}
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-border-default bg-gray-50 rounded-b-xl">
               <button onClick={() => setFieldEdit(null)} disabled={moving}
-                className="px-3 py-1.5 text-sm rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">Cancelar</button>
+                className="px-3 py-1.5 text-sm rounded-lg text-text-secondary hover:bg-accent-bg disabled:opacity-50">Cancelar</button>
               <button onClick={() => void saveFieldEdit()} disabled={moving}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
                 {moving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -1323,14 +1801,14 @@ export default function KitchenMenuPage() {
       {/* Quitar producto(s) de la carta — mismo patrón que borrar categoría. */}
       {confirmRemoveProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !moving && setConfirmRemoveProduct(null)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md border border-gray-200" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md border border-border-default" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-border-default flex items-center gap-2">
               <X className="w-4 h-4 text-red-600" />
-              <h3 className="text-base font-medium text-gray-900">
+              <h3 className="text-base font-medium text-text-primary">
                 {confirmRemoveProduct.length === 1 ? 'Quitar de la carta' : `Quitar ${confirmRemoveProduct.length} productos`}
               </h3>
             </div>
-            <div className="px-5 py-4 text-sm text-gray-700">
+            <div className="px-5 py-4 text-sm text-text-primary">
               {confirmRemoveProduct.length === 1 ? (
                 <>Vas a quitar <span className="font-medium">«{confirmRemoveProduct[0].name}»</span> de esta carta:
                 dejará de venderse y de publicarse en los canales.</>
@@ -1351,7 +1829,7 @@ export default function KitchenMenuPage() {
                 </div>
               )}
 
-              <div className="mt-2 text-gray-500">
+              <div className="mt-2 text-text-secondary">
                 {confirmRemoveProduct.length === 1 ? 'Su escandallo y las ventas' : 'Sus escandallos y las ventas'}{' '}
                 ya registradas no se tocan, y puedes volver a {confirmRemoveProduct.length === 1 ? 'añadirlo' : 'añadirlos'} cuando quieras.
               </div>
@@ -1359,9 +1837,9 @@ export default function KitchenMenuPage() {
                 <div className="mt-3 p-2.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs">{removeError}</div>
               )}
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-border-default bg-gray-50 rounded-b-xl">
               <button onClick={() => setConfirmRemoveProduct(null)} disabled={moving}
-                className="px-3 py-1.5 text-sm rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">Cancelar</button>
+                className="px-3 py-1.5 text-sm rounded-lg text-text-secondary hover:bg-accent-bg disabled:opacity-50">Cancelar</button>
               <button onClick={() => void removeProductsFromMenu(confirmRemoveProduct)} disabled={moving}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-red-600 text-white hover:opacity-90 disabled:opacity-50">
                 {moving ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
@@ -1374,20 +1852,20 @@ export default function KitchenMenuPage() {
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !moving && setConfirmDelete(null)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md border border-gray-200" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md border border-border-default" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-border-default flex items-center gap-2">
               <Trash2 className="w-4 h-4 text-red-600" />
-              <h3 className="text-base font-medium text-gray-900">Borrar categoría</h3>
+              <h3 className="text-base font-medium text-text-primary">Borrar categoría</h3>
             </div>
-            <div className="px-5 py-4 text-sm text-gray-700">
+            <div className="px-5 py-4 text-sm text-text-primary">
               Vas a quitar la categoría <span className="font-medium">«{confirmDelete.name}»</span>.
               {confirmDelete.count > 0 ? (
                 <> Sus <span className="font-medium">{confirmDelete.count} producto{confirmDelete.count > 1 ? 's' : ''}</span> no se borran: pasan a «Sin categoría».</>
               ) : ' Está vacía.'}
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-border-default bg-gray-50 rounded-b-xl">
               <button onClick={() => setConfirmDelete(null)} disabled={moving}
-                className="px-3 py-1.5 text-sm rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">Cancelar</button>
+                className="px-3 py-1.5 text-sm rounded-lg text-text-secondary hover:bg-accent-bg disabled:opacity-50">Cancelar</button>
               <button onClick={confirmDeleteCategory} disabled={moving}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-red-600 text-white hover:opacity-90 disabled:opacity-50">
                 <Trash2 className="w-4 h-4" /> {moving ? 'Borrando…' : 'Borrar categoría'}
@@ -1404,18 +1882,18 @@ export default function KitchenMenuPage() {
           habíamos llegado a ver, porque la validación de HubRise fallaba antes. */}
       {dryRun && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDryRun(null)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl border border-gray-200" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-3.5 border-b border-gray-200">
-              <h3 className="text-base font-medium text-gray-900">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl border border-border-default" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-border-default">
+              <h3 className="text-base font-medium text-text-primary">
                 {dryRun.ok
                   ? <>Vas a publicar <span className="font-semibold">{selectedBrand?.name}</span> en <span className="underline decoration-2">{ambitoNombre}</span></>
                   : 'No se puede publicar'}
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-text-secondary mt-0.5">
                 Todavía no se ha enviado nada a HubRise. Publicar de verdad es el botón de abajo.
               </p>
             </div>
-            <div className="px-5 py-4 text-sm text-gray-700 space-y-3 max-h-[60vh] overflow-auto">
+            <div className="px-5 py-4 text-sm text-text-primary space-y-3 max-h-[60vh] overflow-auto">
               {dryRun.error && <p className="text-red-700">{dryRun.error}</p>}
 
               {dryRun.ok && dryRun.scope === 'all' && (
@@ -1430,18 +1908,18 @@ export default function KitchenMenuPage() {
               )}
 
               {dryRun.catalogos_descartados_por_ambito > 0 && (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-text-secondary">
                   {dryRun.catalogos_descartados_por_ambito} catálogo(s) de otros locales quedan fuera por el ámbito elegido.
                 </p>
               )}
 
               {dryRun.targets.map((t) => (
-                <div key={t.external_catalog_id} className="border border-gray-200 rounded-lg p-3">
+                <div key={t.external_catalog_id} className="border border-border-default rounded-lg p-3">
                   <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                    <span className="font-medium text-gray-900">{t.connection_name || '(sin nombre de conexión)'}</span>
-                    <span className="text-xs font-mono text-gray-500">catálogo {t.external_catalog_id}</span>
+                    <span className="font-medium text-text-primary">{t.connection_name || '(sin nombre de conexión)'}</span>
+                    <span className="text-xs font-mono text-text-secondary">catálogo {t.external_catalog_id}</span>
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
+                  <div className="text-xs text-text-secondary mt-0.5">
                     {t.productos} producto(s){t.location_id ? '' : ' · sin local asociado en la conexión'}
                   </div>
                   {/* LOS PRECIOS QUE CAMBIAN. El total va primero y sale del
@@ -1454,13 +1932,13 @@ export default function KitchenMenuPage() {
                     </div>
                   ) : (
                     <div className="mt-2">
-                      <div className="text-xs font-medium text-gray-900 mb-1">
+                      <div className="text-xs font-medium text-text-primary mb-1">
                         {t.precios_propios_total} precio{t.precios_propios_total === 1 ? '' : 's'} propio{t.precios_propios_total === 1 ? '' : 's'} por canal
-                        <span className="font-normal text-gray-500"> · se publican distintos del base</span>
+                        <span className="font-normal text-text-secondary"> · se publican distintos del base</span>
                       </div>
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="text-gray-500">
+                          <tr className="text-text-secondary">
                             <th className="text-left font-medium py-0.5">Producto</th>
                             <th className="text-left font-medium">Canal</th>
                             <th className="text-right font-medium">Base</th>
@@ -1470,13 +1948,13 @@ export default function KitchenMenuPage() {
                         </thead>
                         <tbody>
                           {(t.precios_propios ?? []).slice(0, PRECIOS_VISIBLES).map((c, i) => (
-                            <tr key={`${c.ref}-${i}`} className="border-t border-gray-100">
+                            <tr key={`${c.ref}-${i}`} className="border-t border-border-default">
                               <td className="py-0.5 pr-2 text-gray-800">{c.nombre}</td>
                               <td className="pr-2 text-gray-600">{c.canales.map(canalBonito).join(', ')}</td>
-                              <td className="text-right tabular-nums text-gray-500">{precioBonito(c.base)}</td>
-                              <td className="text-right tabular-nums font-medium text-gray-900">{precioBonito(c.se_publica)}</td>
+                              <td className="text-right tabular-nums text-text-secondary">{precioBonito(c.base)}</td>
+                              <td className="text-right tabular-nums font-medium text-text-primary">{precioBonito(c.se_publica)}</td>
                               <td className={`text-right tabular-nums font-medium ${
-                                c.delta_pct === null ? 'text-gray-400'
+                                c.delta_pct === null ? 'text-text-secondary'
                                   : c.delta_pct < 0 ? 'text-red-600' : 'text-green-700'}`}>
                                 {c.delta_pct === null ? '—' : `${c.delta_pct > 0 ? '+' : ''}${c.delta_pct} %`}
                               </td>
@@ -1485,7 +1963,7 @@ export default function KitchenMenuPage() {
                         </tbody>
                       </table>
                       {(t.precios_propios_total ?? 0) > PRECIOS_VISIBLES && (
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-text-secondary mt-1">
                           y {(t.precios_propios_total ?? 0) - PRECIOS_VISIBLES} más.
                         </div>
                       )}
@@ -1494,9 +1972,9 @@ export default function KitchenMenuPage() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-border-default bg-gray-50 rounded-b-xl">
               <button onClick={() => setDryRun(null)}
-                className="px-3.5 py-1.5 text-sm rounded-lg font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                className="px-3.5 py-1.5 text-sm rounded-lg font-medium border border-border-default bg-white text-text-primary hover:bg-page">
                 Cancelar
               </button>
               {dryRun.ok && (
@@ -1513,16 +1991,16 @@ export default function KitchenMenuPage() {
 
       {publishResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPublishResult(null)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg border border-gray-200" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg border border-border-default" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-border-default flex items-center gap-2">
               {publishResult.ok
                 ? <CheckCircle2 className="w-5 h-5 text-green-600" />
                 : <AlertTriangle className={`w-5 h-5 ${publishResult.status === 'partial' ? 'text-amber-600' : 'text-red-600'}`} />}
-              <h3 className="text-base font-medium text-gray-900">
+              <h3 className="text-base font-medium text-text-primary">
                 {publishResult.ok ? 'Carta publicada' : publishResult.status === 'partial' ? 'Publicada con avisos' : 'No se pudo publicar'}
               </h3>
             </div>
-            <div className="px-5 py-4 text-sm text-gray-700 space-y-3 max-h-[60vh] overflow-auto">
+            <div className="px-5 py-4 text-sm text-text-primary space-y-3 max-h-[60vh] overflow-auto">
               {publishResult.error && <p className="text-red-700">{publishResult.error}</p>}
               {publishResult.products !== undefined && (
                 <p className="text-gray-600">
@@ -1536,7 +2014,7 @@ export default function KitchenMenuPage() {
               )}
               {publishResult.targets.length > 0 && (
                 <div>
-                  <div className="text-xs font-medium text-gray-500 mb-1">Por conexión</div>
+                  <div className="text-xs font-medium text-text-secondary mb-1">Por conexión</div>
                   <ul className="space-y-1">
                     {publishResult.targets.map((t, i) => (
                       <li key={i} className="flex items-start gap-2">
@@ -1563,7 +2041,7 @@ export default function KitchenMenuPage() {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-border-default bg-gray-50 rounded-b-xl">
               <button onClick={() => setPublishResult(null)}
                 className="px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90">Entendido</button>
             </div>
@@ -1573,20 +2051,20 @@ export default function KitchenMenuPage() {
 
       {connectResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setConnectResult(null)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg border border-gray-200" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg border border-border-default" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-border-default flex items-center gap-2">
               {connectResult.ok
                 ? <CheckCircle2 className="w-5 h-5 text-green-600" />
                 : <AlertTriangle className="w-5 h-5 text-red-600" />}
-              <h3 className="text-base font-medium text-gray-900">
+              <h3 className="text-base font-medium text-text-primary">
                 {connectResult.ok ? 'Marca conectada a delivery' : 'No se pudo conectar'}
               </h3>
             </div>
-            <div className="px-5 py-4 text-sm text-gray-700 space-y-3 max-h-[60vh] overflow-auto">
+            <div className="px-5 py-4 text-sm text-text-primary space-y-3 max-h-[60vh] overflow-auto">
               {connectResult.error && <p className="text-red-700">{connectResult.error}</p>}
               {connectResult.locations.length > 0 && (
                 <div>
-                  <div className="text-xs font-medium text-gray-500 mb-1">Por local</div>
+                  <div className="text-xs font-medium text-text-secondary mb-1">Por local</div>
                   <ul className="space-y-1">
                     {connectResult.locations.map((l, i) => (
                       <li key={i} className="flex items-start gap-2">
@@ -1601,7 +2079,7 @@ export default function KitchenMenuPage() {
                           {l.status === 'reusada_por_nombre' && 'catálogo reusado'}
                           {l.status === 'error' && 'error'}
                           {l.external_catalog_id && (
-                            <span className="text-gray-400"> ({l.external_catalog_id})</span>
+                            <span className="text-text-secondary"> ({l.external_catalog_id})</span>
                           )}
                           {l.status === 'error' && l.error && (
                             <span className="block text-xs text-red-600">{l.error}</span>
@@ -1614,7 +2092,7 @@ export default function KitchenMenuPage() {
               )}
               {connectResult.publish && (
                 <div>
-                  <div className="text-xs font-medium text-gray-500 mb-1">Publicación de la carta</div>
+                  <div className="text-xs font-medium text-text-secondary mb-1">Publicación de la carta</div>
                   {connectResult.publish.ok ? (
                     <p className="text-gray-600">
                       {connectResult.publish.products ?? 0} producto{(connectResult.publish.products ?? 0) === 1 ? '' : 's'} · {connectResult.publish.deals ?? 0} combo{(connectResult.publish.deals ?? 0) === 1 ? '' : 's'}
@@ -1625,7 +2103,7 @@ export default function KitchenMenuPage() {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-border-default bg-gray-50 rounded-b-xl">
               <button onClick={() => setConnectResult(null)}
                 className="px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90">Entendido</button>
             </div>
@@ -1675,10 +2153,10 @@ export default function KitchenMenuPage() {
 }
 
 function KpiCard({ label, value, tone }: { label: string; value: string; tone?: 'warning' | 'success' }) {
-  const valueColor = tone === 'warning' ? 'text-amber-600' : tone === 'success' ? 'text-green-600' : 'text-gray-900'
+  const valueColor = tone === 'warning' ? 'text-amber-600' : tone === 'success' ? 'text-green-600' : 'text-text-primary'
   return (
     <div className="bg-gray-50 rounded-lg p-3">
-      <div className="text-xs text-gray-500">{label}</div>
+      <div className="text-xs text-text-secondary">{label}</div>
       <div className={`text-2xl font-semibold ${valueColor}`}>{value}</div>
     </div>
   )
@@ -1707,12 +2185,12 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
       <span className={`w-2.5 h-2.5 rounded-full ${dot} shrink-0`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <Link2Off className="w-4 h-4 text-gray-500" />
+          <Link2Off className="w-4 h-4 text-text-secondary" />
           <span className={`text-sm font-medium ${valueColor}`}>
             Casado de ventas · todas las marcas {signal.reliabilityPct === null ? '' : `${signal.reliabilityPct.toFixed(1)} %`} fiable
           </span>
           {ciegoLineas > 0 && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-text-secondary">
               · {formatEur(signal.revenueSinCasar)} en {ciegoLineas} líneas sin casar
             </span>
           )}
@@ -1722,7 +2200,7 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
             <span className="text-xs font-medium text-orange-700">
               ⚠ Coste conocido {signal.costCoveragePct === null ? '—' : `${signal.costCoveragePct.toFixed(0)} %`}
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-text-secondary">
               · {formatEur(signal.casadoSinCosteEur)} vendido sin coste ({signal.casadoSinCosteLineas} líneas)
             </span>
           </div>
@@ -1738,7 +2216,7 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
         </button>
         <button
           onClick={onOpen}
-          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
+          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-border-default bg-white hover:bg-page"
         >
           Ver excepciones
         </button>
@@ -1771,7 +2249,7 @@ function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onO
         <span className={`text-sm font-medium ${valueColor}`}>
           Casado: {sinCasar} sin casar · {faltaAlgo} sin precio/escandallo · {paraRevisar} para revisar
         </span>
-        <span className="text-xs text-gray-500"> · {bien} bien</span>
+        <span className="text-xs text-text-secondary"> · {bien} bien</span>
       </div>
       <button
         onClick={onOpen}
