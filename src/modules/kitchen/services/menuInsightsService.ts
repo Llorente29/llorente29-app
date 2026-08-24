@@ -49,6 +49,9 @@ export interface StaleUnavailable {
   recipeItemId: string | null
   since: string
   hours: number
+  /** Vuelta programada. Si la hay, el 86 está PREVISTO, no olvidado: ni entra
+   *  en las alertas ni se le pinta duración en la fila. */
+  until: string | null
 }
 
 export interface MenuInsights {
@@ -60,6 +63,10 @@ export interface MenuInsights {
   topRank: Map<string, number>
   /** 86 puestos hace más de 48 h: ventas que quizá se estén perdiendo. */
   stale86: StaleUnavailable[]
+  /** TODOS los 86 vivos, para poder decir en la fila "Agotado · 2 días".
+   *  Indexado por receta y por matrícula, que es como los guarda
+   *  product_availability: un producto casa por una o por otra. */
+  unavailableSince: Map<string, StaleUnavailable>
 }
 
 export const EMPTY_INSIGHTS: MenuInsights = {
@@ -67,6 +74,7 @@ export const EMPTY_INSIGHTS: MenuInsights = {
   brand: { revenue7d: 0, revenuePrev7d: 0, trendPct: null, units7d: 0 },
   topRank: new Map(),
   stale86: [],
+  unavailableSince: new Map(),
 }
 
 const STALE_86_HOURS = 48
@@ -95,7 +103,7 @@ export async function getMenuInsights(
     getMenuItemUnitsSold(brandId, iso(d7), iso(now)).catch(() => []),
     getMenuItemUnitsSold(brandId, iso(d14), iso(d7)).catch(() => []),
     getMenuItemUnitsSold(brandId, iso(d30), iso(now)).catch(() => []),
-    listStaleUnavailable(accountId).catch(() => [] as StaleUnavailable[]),
+    listUnavailableSince(accountId).catch(() => [] as StaleUnavailable[]),
   ])
 
   const byItem = new Map<string, ItemInsight>()
@@ -135,31 +143,59 @@ export async function getMenuInsights(
     .slice(0, 3)
     .forEach((r, i) => topRank.set(r.menuItemId, i + 1))
 
-  return { byItem, brand: { revenue7d, revenuePrev7d, trendPct, units7d }, topRank, stale86: stale }
+  // Un índice por las dos claves con las que product_availability identifica un
+  // producto: la fila casará por la que tenga.
+  const unavailableSince = new Map<string, StaleUnavailable>()
+  for (const u of stale) {
+    if (u.recipeItemId) unavailableSince.set(`r:${u.recipeItemId}`, u)
+    if (u.externalId) unavailableSince.set(`e:${u.externalId}`, u)
+  }
+  const nowMs = now.getTime()
+
+  return {
+    byItem,
+    brand: { revenue7d, revenuePrev7d, trendPct, units7d },
+    topRank,
+    stale86: stale.filter((u) => isForgotten(u, nowMs)),
+    unavailableSince,
+  }
 }
 
-/** 86 vivos con más de 48 h encima. Ver la nota de cabecera sobre `set_at`. */
-export async function listStaleUnavailable(accountId: string): Promise<StaleUnavailable[]> {
+/**
+ * TODOS los 86 vivos de la cuenta, con desde cuándo.
+ *
+ * Antes solo traía los de más de 48 h, porque solo servían para la alerta. La
+ * fila necesita la duración de CUALQUIERA ("Agotado · 5h"), así que la consulta
+ * deja de recortar y el corte de 48 h se aplica después, en memoria. Sigue
+ * siendo UNA consulta: `product_availability` tiene tantas filas como cosas
+ * agotadas hay, no como productos hay.
+ *
+ * Ver la nota de cabecera sobre por qué `set_at` y no `menu_item.updated_at`.
+ */
+export async function listUnavailableSince(accountId: string): Promise<StaleUnavailable[]> {
   requireSupabase()
-  const cutoff = new Date(Date.now() - STALE_86_HOURS * 3600 * 1000).toISOString()
   const { data, error } = await supabase!
     .from('product_availability')
     .select('external_id, recipe_item_id, set_at, available_until')
     .eq('account_id', accountId)
     .eq('is_available', false)
-    .lt('set_at', cutoff)
-  if (error) throw new Error(`Error leyendo agotados antiguos: ${error.message}`)
+  if (error) throw new Error(`Error leyendo agotados: ${error.message}`)
 
   const now = Date.now()
-  return (data ?? [])
-    // Un 86 con fecha de vuelta programada no está olvidado: está previsto.
-    .filter((r) => !r.available_until || new Date(r.available_until as string).getTime() < now)
-    .map((r) => ({
-      externalId: (r.external_id as string) ?? null,
-      recipeItemId: (r.recipe_item_id as string) ?? null,
-      since: r.set_at as string,
-      hours: Math.floor((now - new Date(r.set_at as string).getTime()) / 3600_000),
-    }))
+  return (data ?? []).map((r) => ({
+    externalId: (r.external_id as string) ?? null,
+    recipeItemId: (r.recipe_item_id as string) ?? null,
+    since: r.set_at as string,
+    hours: Math.floor((now - new Date(r.set_at as string).getTime()) / 3600_000),
+    until: (r.available_until as string) ?? null,
+  }))
+}
+
+/** ¿Este 86 está OLVIDADO? Uno con vuelta programada que aún no ha llegado
+ *  está previsto, y avisar de él sería ruido. */
+function isForgotten(u: StaleUnavailable, now: number): boolean {
+  if (u.until && new Date(u.until).getTime() > now) return false
+  return u.hours >= STALE_86_HOURS
 }
 
 /**

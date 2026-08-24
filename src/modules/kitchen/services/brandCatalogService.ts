@@ -50,6 +50,10 @@ export interface CatalogProduct {
   /** Etiquetas comerciales (vegano, picante…). La columna YA existía en BBDD;
    *  lo que faltaba era traerla hasta aquí. */
   tags: string[]
+  /** Matrícula del producto físico. Ya se leía en la consulta pero no salía
+   *  del servicio; hace falta para casar contra product_availability, que
+   *  identifica los 86 por matrícula o por receta. */
+  externalId: string | null
 }
 
 export interface CatalogCategory {
@@ -301,6 +305,7 @@ export async function listCategoriesWithProducts(
     promoActive: mirrorByOriginal.get(i.id as string) === true,
     archivedAt: (i.archived_at as string) ?? null,
     tags: (i.tags as string[]) ?? [],
+    externalId: (i.external_id as string) ?? null,
   })
 
   const categories: CatalogCategory[] = (cats ?? []).map((c) => ({
