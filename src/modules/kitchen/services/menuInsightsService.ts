@@ -54,8 +54,10 @@ export interface StaleUnavailable {
 export interface MenuInsights {
   byItem: Map<string, ItemInsight>
   brand: BrandInsight
-  /** Los 3 más vendidos en 30 días (con al menos una venta). */
-  topIds: Set<string>
+  /** Los 3 más vendidos en 7 DÍAS, con su puesto: menuItemId -> 1 | 2 | 3.
+   *  Es un Map y no un Set porque la fila enseña el puesto ("TOP 2"), no un
+   *  "estás en el podio" genérico. */
+  topRank: Map<string, number>
   /** 86 puestos hace más de 48 h: ventas que quizá se estén perdiendo. */
   stale86: StaleUnavailable[]
 }
@@ -63,7 +65,7 @@ export interface MenuInsights {
 export const EMPTY_INSIGHTS: MenuInsights = {
   byItem: new Map(),
   brand: { revenue7d: 0, revenuePrev7d: 0, trendPct: null, units7d: 0 },
-  topIds: new Set(),
+  topRank: new Map(),
   stale86: [],
 }
 
@@ -119,15 +121,21 @@ export async function getMenuInsights(
     ? ((revenue7d - revenuePrev7d) / revenuePrev7d) * 100
     : null
 
-  const topIds = new Set(
-    [...m30]
-      .filter((r) => r.unitsSold > 0)
-      .sort((a, b) => b.unitsSold - a.unitsSold)
-      .slice(0, 3)
-      .map((r) => r.menuItemId),
-  )
+  // El podio va por ventas de 7 DÍAS, la misma ventana que enseña la fila y el
+  // header: un "TOP 1" calculado a 30 días junto a un "12 vtas/7d" invitaría a
+  // comparar dos cosas que no se pueden comparar.
+  //
+  // El desempate por id no es capricho: sin él, dos productos con las mismas
+  // unidades podrían intercambiar el puesto entre recargas, y un podio que
+  // baila sin que cambien las ventas no se lo cree nadie.
+  const topRank = new Map<string, number>()
+  ;[...cur]
+    .filter((r) => r.unitsSold > 0)
+    .sort((a, b) => b.unitsSold - a.unitsSold || a.menuItemId.localeCompare(b.menuItemId))
+    .slice(0, 3)
+    .forEach((r, i) => topRank.set(r.menuItemId, i + 1))
 
-  return { byItem, brand: { revenue7d, revenuePrev7d, trendPct, units7d }, topIds, stale86: stale }
+  return { byItem, brand: { revenue7d, revenuePrev7d, trendPct, units7d }, topRank, stale86: stale }
 }
 
 /** 86 vivos con más de 48 h encima. Ver la nota de cabecera sobre `set_at`. */
