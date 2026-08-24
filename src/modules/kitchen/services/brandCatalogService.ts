@@ -179,6 +179,11 @@ export async function listCategoriesWithProducts(
     .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, external_id, is_active, is_available, needs_review, position, mirror_of_item_id')
     .eq('account_id', accountId)
     .eq('brand_id', brandId)
+    // Los ARCHIVADOS no están en la carta: es lo que significa "quitar de la
+    // carta" (archiveMenuItem pone is_active=false + archived_at). Sin este
+    // filtro seguían pintándose aquí, así que quitar un producto parecía no
+    // hacer nada — el archivado ocurría y la lista lo volvía a mostrar igual.
+    .is('archived_at', null)
     .order('position', { ascending: true })
     .order('name', { ascending: true }) as { data: Record<string, unknown>[] | null; error: { message: string } | null }
   if (miErr) throw new Error(`Error listando productos: ${miErr.message}`)

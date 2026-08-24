@@ -82,15 +82,28 @@ export default function EnCartaTab({ item, accountId, brandName, onItemChanged, 
   }
 
   // ── Artículo espejo (S3) ──
-  const [mirror, setMirror] = useState<MirrorState | null>(null)
+  // Estado del espejo ANCLADO al producto consultado. Antes era un `mirror` a
+  // secas que empezaba en null y también quedaba en null si la consulta
+  // fallaba: no se distinguía "aún no sé si es un espejo" de "no lo es". Y esa
+  // diferencia importa, porque el control de disponibilidad de abajo cae en la
+  // rama "Agotado · reactivar" cuando `mirror` es null — así que un espejo EN
+  // ESPERA (que está oculto a propósito, no agotado) ofrecía durante ese
+  // instante el botón equivocado: pulsarlo intenta reactivar algo que el
+  // sistema de espejos vuelve a ocultar, y parece que el botón no responde.
+  const [mirrorState, setMirrorState] = useState<
+    { itemId: string; value: MirrorState | null } | null
+  >(null)
+  const mirrorLoaded = mirrorState !== null && mirrorState.itemId === item.id
+  const mirror = mirrorLoaded ? mirrorState.value : null
   const [mirrorBusy, setMirrorBusy] = useState(false)
   const [mirrorError, setMirrorError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    getMirrorState(item.accountId, item.id)
-      .then((m) => { if (!cancelled) setMirror(m) })
-      .catch(() => { if (!cancelled) setMirror(null) })
+    const itemId = item.id
+    getMirrorState(item.accountId, itemId)
+      .then((m) => { if (!cancelled) setMirrorState({ itemId, value: m }) })
+      .catch(() => { if (!cancelled) setMirrorState({ itemId, value: null }) })
     return () => { cancelled = true }
   }, [item.id, item.accountId])
 
@@ -107,7 +120,7 @@ export default function EnCartaTab({ item, accountId, brandName, onItemChanged, 
       if (!res.ok) { setMirrorError('No se pudo cambiar la versión.'); return }
       onItemChanged()
       const m = await getMirrorState(item.accountId, item.id)
-      setMirror(m)
+      setMirrorState({ itemId: item.id, value: m })
     } catch (err: unknown) {
       setMirrorError(err instanceof Error ? err.message : 'No se pudo cambiar la versión.')
     } finally {
@@ -193,6 +206,14 @@ export default function EnCartaTab({ item, accountId, brandName, onItemChanged, 
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
               Disponible
             </button>
+          ) : !mirrorLoaded ? (
+            // Todavía no sabemos si este producto es un espejo de promo. Ofrecer
+            // "reactivar" aquí sería ofrecer la acción equivocada para un espejo
+            // en espera, así que se espera: es un parpadeo, no un bloqueo.
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-stone-400">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-stone-200" />
+              Comprobando…
+            </span>
           ) : (mirror?.role === 'original' && mirror.usingMirror) ? (
             // Original oculto A PROPÓSITO porque su versión promo está activa: NO es agotado.
             <button
