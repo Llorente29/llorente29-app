@@ -13,9 +13,9 @@
 //
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, CircleSlash } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { fmtMoney } from '@/lib/format'
 import {
@@ -24,8 +24,10 @@ import {
   type CatalogBrand,
   type CatalogCategory,
 } from '@/modules/kitchen/services/brandCatalogService'
-import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems, archiveMenuItem, restoreMenuItem, countRecentSales } from '@/modules/kitchen/services/menuItemService'
+import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems, archiveMenuItem, restoreMenuItem, countRecentSales, duplicateMenuItem, updateMenuItem, setMenuItemCategory, addRecipeToBrand, listAccountBrands, listBrandsForRecipe, type AccountBrandLite } from '@/modules/kitchen/services/menuItemService'
 import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, updateMenuCategory, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
+import { setProductAvailability } from '@/modules/kitchen/services/menuOverrideService'
+import ProductContextMenu, { type ContextMenuTarget } from '@/modules/kitchen/components/ProductContextMenu'
 import { getReliability, type SalesReliability } from '@/modules/kitchen/services/salesReliabilityService'
 import {
   getMenuItemLinkHealth,
@@ -118,6 +120,14 @@ export default function KitchenMenuPage() {
   const [confirmRemoveProduct, setConfirmRemoveProduct] = useState<{ id: string; name: string }[] | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [recentSales, setRecentSales] = useState<number | null>(null)
+  // ── F4: menú contextual (clic derecho / long-press) ──
+  const [ctxMenu, setCtxMenu] = useState<{ target: ContextMenuTarget; x: number; y: number } | null>(null)
+  const [ctxBrands, setCtxBrands] = useState<AccountBrandLite[]>([])
+  const longPressRef = useRef<number | null>(null)
+  // Editor de un campo (nombre o precio) lanzado desde el menú contextual.
+  const [fieldEdit, setFieldEdit] = useState<
+    { id: string; name: string; field: 'name' | 'price'; value: string } | null
+  >(null)
   const [undo, setUndo] = useState<{ label: string; revert: () => Promise<void> } | null>(null)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; count: number } | null>(null)
@@ -417,6 +427,123 @@ export default function KitchenMenuPage() {
   // escandallo y sus ventas siguen intactos. Es la única vía para limpiar los
   // duplicados que deja la ingesta (dos filas del mismo plato, una sin receta),
   // porque esos ni siquiera aparecen en la ficha del plato.
+  // ── F4: abrir / operar el menú contextual ────────────────────────────────
+  // Abrirlo carga, sin bloquear, las marcas a las que el producto AÚN no
+  // pertenece: es lo único que el menú no puede saber por sí mismo.
+  function openContextMenu(target: ContextMenuTarget, x: number, y: number) {
+    setRemoveError(null)
+    setCtxMenu({ target, x, y })
+    setCtxBrands([])
+    if (!activeAccountId) return
+    const recipeId = target.recipeItemId
+    if (!recipeId) return
+    Promise.all([listAccountBrands(activeAccountId), listBrandsForRecipe(activeAccountId, recipeId)])
+      .then(([all, present]) => {
+        const taken = new Set(present.map((p) => p.brandId))
+        setCtxBrands(all.filter((b) => !taken.has(b.id)))
+      })
+      .catch((e: unknown) => console.error('No se pudieron cargar las marcas destino:', e))
+  }
+
+  // Long-press en móvil: 500 ms sin mover el dedo. Si el dedo se va (scroll) o
+  // se levanta antes, no hay menú — el scroll de la lista manda.
+  function startLongPress(target: ContextMenuTarget, x: number, y: number) {
+    cancelLongPress()
+    longPressRef.current = window.setTimeout(() => openContextMenu(target, x, y), 500)
+  }
+  function cancelLongPress() {
+    if (longPressRef.current !== null) {
+      window.clearTimeout(longPressRef.current)
+      longPressRef.current = null
+    }
+  }
+
+  // Ejecuta una acción del menú y deja el estado coherente: cierra, recarga y
+  // enseña el fallo si lo hay (nunca un catch mudo).
+  async function runCtxAction(fn: () => Promise<void>, undoEntry?: { label: string; revert: () => Promise<void> }) {
+    if (moving) return
+    setMoving(true)
+    setCtxMenu(null)
+    try {
+      await fn()
+      reloadCatalogProducts()
+      if (undoEntry) setUndo(undoEntry)
+    } catch (e: unknown) {
+      setRemoveError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  // Guarda el nombre o el precio editado desde el menú contextual.
+  async function saveFieldEdit() {
+    if (!fieldEdit || moving) return
+    const { id, field, value } = fieldEdit
+    const trimmed = value.trim()
+    if (field === 'name' && trimmed === '') {
+      setRemoveError('El nombre no puede quedar vacío.')
+      return
+    }
+    let patch: { name?: string; price?: number }
+    if (field === 'name') {
+      patch = { name: trimmed }
+    } else {
+      const n = Number(trimmed.replace(',', '.'))
+      if (!Number.isFinite(n) || n < 0) {
+        setRemoveError('El precio tiene que ser un número mayor o igual que 0.')
+        return
+      }
+      patch = { price: n }
+    }
+    setMoving(true)
+    setRemoveError(null)
+    try {
+      await updateMenuItem(id, patch)
+      setFieldEdit(null)
+      reloadCatalogProducts()
+    } catch (e: unknown) {
+      setRemoveError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  // ── Agotar / reactivar (86) desde la lista ───────────────────────────────
+  // Misma vía que la ficha: setProductAvailability -> RPC set_product_availability,
+  // que cascadea CROSS-BRAND (el producto físico es el mismo en todas las marcas
+  // que comparten escandallo o matrícula) y empuja a availability-dispatch, que
+  // hace PATCH de inventario en HubRise. Por eso no se pide confirmación previa
+  // pero SÍ se dice el alcance real después, con Deshacer: agotar tiene que ser
+  // de un toque, y el alcance no se puede saber hasta que responde el servidor.
+  //
+  // Mismo vocabulario que la ficha y que Disponibilidad ("Agotado · reactivar"):
+  // es un único campo (is_available) y llamarlo de dos maneras confunde.
+  async function toggleAvailability(p: { id: string; name: string; isAvailable: boolean }) {
+    if (moving) return
+    const next = !p.isAvailable
+    setMoving(true)
+    setRemoveError(null)
+    try {
+      const res = await setProductAvailability(p.id, next, 'manual')
+      reloadCatalogProducts()
+      const alcance = res.brands > 1 ? ` · ${res.brands} marcas` : ''
+      const canales = res.channels > 0 ? ` · ${res.channels} canal${res.channels === 1 ? '' : 'es'}` : ''
+      setUndo({
+        label: next
+          ? `«${p.name}» reactivado${alcance}`
+          : `«${p.name}» agotado${alcance}${canales}`,
+        revert: async () => {
+          await setProductAvailability(p.id, p.isAvailable, 'manual')
+          reloadCatalogProducts()
+        },
+      })
+    } catch (e: unknown) {
+      setRemoveError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setMoving(false)
+    }
+  }
+
   // Abre la confirmación para uno o varios productos y, en paralelo, pregunta
   // cuántas veces se han vendido esta semana (aviso, no bloqueo).
   function askRemoveProducts(targets: { id: string; name: string }[]) {
@@ -914,7 +1041,25 @@ export default function KitchenMenuPage() {
                     <div
                       key={p.id}
                       onClick={() => setSelectedProductId(p.id)}
-                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer ${selectedIds.has(p.id) ? 'bg-accent/5' : 'hover:bg-gray-50'} ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''}`}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        openContextMenu(
+                          { id: p.id, name: p.name, isAvailable: p.isAvailable, recipeItemId: p.recipeItemId },
+                          e.clientX, e.clientY,
+                        )
+                      }}
+                      onTouchStart={(e) => {
+                        const t = e.touches[0]
+                        if (!t) return
+                        startLongPress(
+                          { id: p.id, name: p.name, isAvailable: p.isAvailable, recipeItemId: p.recipeItemId },
+                          t.clientX, t.clientY,
+                        )
+                      }}
+                      onTouchMove={cancelLongPress}
+                      onTouchEnd={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
+                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer ${selectedIds.has(p.id) ? 'bg-accent/5' : 'hover:bg-gray-50'} ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''} ${!p.isAvailable ? 'opacity-60' : ''}`}
                     >
                       <input
                         type="checkbox"
@@ -948,7 +1093,9 @@ export default function KitchenMenuPage() {
                               <Sparkles className="w-3 h-3" /> en promo
                             </span>
                           ) : !p.isAvailable ? (
-                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 align-middle">agotado</span>
+                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 align-middle inline-flex items-center gap-1">
+                              <CircleSlash className="w-3 h-3" /> Agotado
+                            </span>
                           ) : null}
                         </div>
                         <div className="text-xs text-gray-500 truncate">
@@ -1002,7 +1149,20 @@ export default function KitchenMenuPage() {
                           className="p-0.5 text-gray-300 hover:text-gray-700 disabled:opacity-20"
                           title="Bajar" aria-label="Bajar producto"><ArrowDown className="w-3.5 h-3.5" /></button>
                       </div>
-                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <div className="shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => void toggleAvailability({ id: p.id, name: p.name, isAvailable: p.isAvailable })}
+                          disabled={moving}
+                          className={`p-1.5 rounded-md disabled:opacity-20 transition-colors ${
+                            p.isAvailable
+                              ? 'text-gray-300 hover:text-amber-600 hover:bg-amber-50'
+                              : 'text-amber-600 hover:bg-amber-50'
+                          }`}
+                          title={p.isAvailable ? 'Marcar agotado (se me ha acabado)' : 'Reactivar: volver a la venta'}
+                          aria-label={p.isAvailable ? `Marcar agotado ${p.name}` : `Reactivar ${p.name}`}
+                        >
+                          {p.isAvailable ? <CircleSlash className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                        </button>
                         <button
                           onClick={() => askRemoveProducts([{ id: p.id, name: p.name }])}
                           disabled={moving}
@@ -1049,6 +1209,114 @@ export default function KitchenMenuPage() {
           <button onClick={() => setUndo(null)} className="text-white/60 hover:text-white" aria-label="Cerrar">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* F4 — menú contextual del producto (clic derecho / long-press) */}
+      {ctxMenu && (
+        <ProductContextMenu
+          target={ctxMenu.target}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          categories={allCats.map((c) => ({ id: c.id, name: c.name, emoji: c.emoji }))}
+          brands={ctxBrands.map((b) => ({ id: b.id, name: b.name }))}
+          busy={moving}
+          onClose={() => setCtxMenu(null)}
+          onEditName={() => {
+            setFieldEdit({ id: ctxMenu.target.id, name: ctxMenu.target.name, field: 'name', value: ctxMenu.target.name })
+            setCtxMenu(null)
+          }}
+          onEditPrice={() => {
+            const prod = filteredCategories.flatMap((c) => c.products).find((x) => x.id === ctxMenu.target.id)
+            setFieldEdit({
+              id: ctxMenu.target.id,
+              name: ctxMenu.target.name,
+              field: 'price',
+              value: prod ? String(prod.price ?? '') : '',
+            })
+            setCtxMenu(null)
+          }}
+          onMoveToCategory={(categoryId) => {
+            const id = ctxMenu.target.id
+            void runCtxAction(async () => { await setMenuItemCategory(id, categoryId) })
+          }}
+          onDuplicate={() => {
+            const id = ctxMenu.target.id
+            void runCtxAction(async () => { await duplicateMenuItem(id) })
+          }}
+          onAddToBrand={(brandId) => {
+            const t = ctxMenu.target
+            const prod = filteredCategories.flatMap((c) => c.products).find((x) => x.id === t.id)
+            void runCtxAction(async () => {
+              if (!activeAccountId || !t.recipeItemId) return
+              await addRecipeToBrand({
+                accountId: activeAccountId,
+                recipeItemId: t.recipeItemId,
+                brandId,
+                price: prod?.price ?? 0,
+                name: t.name,
+              })
+            })
+          }}
+          onToggleAvailability={() => {
+            const t = ctxMenu.target
+            setCtxMenu(null)
+            void toggleAvailability({ id: t.id, name: t.name, isAvailable: t.isAvailable })
+          }}
+          onRemove={() => {
+            const t = ctxMenu.target
+            setCtxMenu(null)
+            askRemoveProducts([{ id: t.id, name: t.name }])
+          }}
+          onOpenFicha={() => {
+            const id = ctxMenu.target.id
+            setCtxMenu(null)
+            setSelectedProductId(id)
+          }}
+        />
+      )}
+
+      {/* Editar nombre / precio desde el menú contextual */}
+      {fieldEdit && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={() => !moving && setFieldEdit(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm border border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-200">
+              <h3 className="text-base font-medium text-gray-900">
+                {fieldEdit.field === 'name' ? 'Editar nombre' : 'Editar precio'}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5 truncate">{fieldEdit.name}</p>
+            </div>
+            <div className="px-5 py-4">
+              <input
+                autoFocus
+                type="text"
+                inputMode={fieldEdit.field === 'price' ? 'decimal' : 'text'}
+                value={fieldEdit.value}
+                disabled={moving}
+                onChange={(e) => setFieldEdit({ ...fieldEdit, value: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); void saveFieldEdit() }
+                  if (e.key === 'Escape') { e.preventDefault(); setFieldEdit(null) }
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+              />
+              {fieldEdit.field === 'price' && (
+                <p className="text-[11px] text-gray-400 mt-1.5">Precio base de esta carta, con IVA incluido.</p>
+              )}
+              {removeError && (
+                <div className="mt-3 p-2.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs">{removeError}</div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <button onClick={() => setFieldEdit(null)} disabled={moving}
+                className="px-3 py-1.5 text-sm rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">Cancelar</button>
+              <button onClick={() => void saveFieldEdit()} disabled={moving}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
+                {moving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {moving ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
