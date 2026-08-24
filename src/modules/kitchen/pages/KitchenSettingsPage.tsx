@@ -8,10 +8,20 @@
 // channel_rate vía channelRateService. Los overrides por marca×canal llegan en un
 // sub-paso siguiente. Al guardar un canal, el margen de la ficha del producto lo
 // recoge por el fallback de menu_item_economics.
+//
+// Sección 2: RECOSTEAR TODO. Recalcula el coste de todas las preparaciones y
+// platos de la cuenta. El cálculo NO vive aquí: llama a kitchen_recompute_all,
+// la misma función que corre sola cada noche a las 04:00. La pantalla solo la
+// invoca por tandas para poder decir por dónde va.
 
 import { useEffect, useState } from 'react'
-import { Check, Loader2, Pencil, X, Percent } from 'lucide-react'
+import { Check, Loader2, Pencil, X, Percent, Calculator, AlertTriangle } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import {
+  recomputeAllCosts,
+  type RecomputeAllBatch,
+} from '@/modules/kitchen/services/recipeItemService'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import {
   listSalesChannels,
   listChannelRates,
@@ -166,6 +176,33 @@ export default function KitchenSettingsPage() {
       setSaveError(String((e as Error).message ?? e))
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ── Recostear todo ──
+  const [askRecompute, setAskRecompute] = useState(false)
+  const [recomputing, setRecomputing] = useState(false)
+  const [recomputeProgress, setRecomputeProgress] = useState<{ done: number; total: number } | null>(null)
+  const [recomputeResult, setRecomputeResult] = useState<RecomputeAllBatch | null>(null)
+  const [recomputeError, setRecomputeError] = useState<string | null>(null)
+
+  async function runRecomputeAll() {
+    if (!activeAccountId || recomputing) return
+    setAskRecompute(false)
+    setRecomputing(true)
+    setRecomputeError(null)
+    setRecomputeResult(null)
+    setRecomputeProgress({ done: 0, total: 0 })
+    try {
+      const res = await recomputeAllCosts(activeAccountId, (p) =>
+        setRecomputeProgress({ done: p.done, total: p.total }),
+      )
+      setRecomputeResult(res)
+    } catch (e) {
+      setRecomputeError(String((e as Error).message ?? e))
+    } finally {
+      setRecomputing(false)
+      setRecomputeProgress(null)
     }
   }
 
@@ -342,6 +379,105 @@ export default function KitchenSettingsPage() {
           )}
         </div>
       </div>
+
+      {/* SECCIÓN: RECOSTEAR TODO */}
+      <div className="rounded-lg border border-border-default bg-card">
+        <div className="px-4 py-3 border-b border-border-default flex items-center gap-2">
+          <Calculator size={16} className="text-text-secondary" />
+          <h2 className="text-sm font-medium text-text-primary">Costes de escandallo</h2>
+        </div>
+
+        <div className="px-4 py-3">
+          <p className="text-[12px] text-text-secondary mb-3">
+            Recalcula el coste de <strong>todas las preparaciones y platos</strong> a partir
+            del precio actual de sus ingredientes y envases. Primero las preparaciones y
+            después los platos, para que una sub-receta esté al día antes que el plato que
+            la usa. Los ingredientes y envases no se tocan aquí: su coste viene de las
+            compras.
+          </p>
+          <p className="text-[12px] text-text-secondary mb-3">
+            Esto ya se hace <strong>solo cada noche a las 04:00</strong>. El botón sirve
+            para no esperar a mañana cuando acabas de cambiar precios o escandallos.
+          </p>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setAskRecompute(true)}
+              disabled={recomputing || !activeAccountId}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base"
+            >
+              {recomputing
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Calculator size={14} />}
+              {recomputing ? 'Recosteando…' : 'Recostear todo'}
+            </button>
+
+            {recomputing && recomputeProgress && (
+              <span className="text-sm text-text-secondary tabular-nums" aria-live="polite">
+                {recomputeProgress.total > 0
+                  ? `Recosteando… ${recomputeProgress.done}/${recomputeProgress.total}`
+                  : 'Recosteando…'}
+              </span>
+            )}
+          </div>
+
+          {/* Barra de avance: solo cuando ya se sabe el total. */}
+          {recomputing && recomputeProgress && recomputeProgress.total > 0 && (
+            <div className="mt-3 h-1.5 w-full rounded-full bg-page overflow-hidden">
+              <div
+                className="h-full bg-accent transition-all duration-300"
+                style={{ width: `${Math.round((recomputeProgress.done / recomputeProgress.total) * 100)}%` }}
+              />
+            </div>
+          )}
+
+          {recomputeResult && !recomputing && (
+            <div className="mt-3 rounded-md border border-border-default bg-page p-3 text-[13px]">
+              <p className="text-text-primary">
+                <strong>{recomputeResult.processed}</strong>{' '}
+                {recomputeResult.processed === 1 ? 'plato recosteado' : 'platos recosteados'}
+                {recomputeResult.failed > 0 && (
+                  <span className="text-danger">
+                    {' · '}{recomputeResult.failed}{' '}
+                    {recomputeResult.failed === 1 ? 'falló' : 'fallaron'}
+                  </span>
+                )}
+                .
+              </p>
+              {/* Los fallos se enseñan, no se esconden: un plato que no recostea
+                  sigue vendiéndose con el coste viejo y eso hay que saberlo. */}
+              {recomputeResult.errors.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {recomputeResult.errors.map((e) => (
+                    <li key={e.itemId} className="flex items-start gap-1.5 text-[12px] text-danger">
+                      <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                      <span><strong>{e.name}</strong>: {e.error}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {recomputeError && (
+            <div className="mt-3 p-2.5 rounded-md bg-danger-bg text-danger border border-danger/20 text-[13px]">
+              {recomputeError}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={askRecompute}
+        title="¿Recostear todos los platos?"
+        message="Esto puede tardar unos segundos. Se recalcula el coste de todas las preparaciones y platos con el precio actual de sus ingredientes y envases. No se cambia ningún precio de venta ni se toca la carta."
+        confirmLabel="Recostear todo"
+        cancelLabel="Cancelar"
+        busy={recomputing}
+        onConfirm={() => void runRecomputeAll()}
+        onCancel={() => setAskRecompute(false)}
+      />
     </div>
   )
 }

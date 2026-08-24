@@ -18562,6 +18562,10 @@ export type Database = {
           unit_abbr: string
         }[]
       }
+      kitchen_recompute_all: {
+        Args: { p_account_id: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
       kitchen_recompute_item: { Args: { p_item_id: string }; Returns: number }
       kitchen_recompute_raw_cost: {
         Args: { p_item_id: string }
