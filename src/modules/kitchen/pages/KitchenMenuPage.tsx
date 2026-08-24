@@ -24,7 +24,7 @@ import {
   type CatalogBrand,
   type CatalogCategory,
 } from '@/modules/kitchen/services/brandCatalogService'
-import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems, archiveMenuItem } from '@/modules/kitchen/services/menuItemService'
+import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems, archiveMenuItem, restoreMenuItem, countRecentSales } from '@/modules/kitchen/services/menuItemService'
 import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, updateMenuCategory, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
 import { getReliability, type SalesReliability } from '@/modules/kitchen/services/salesReliabilityService'
 import {
@@ -111,9 +111,13 @@ export default function KitchenMenuPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [moveTarget, setMoveTarget] = useState<string>('') // '' = sin elegir; '__none__' = Sin categoría; else categoryId
   const [moving, setMoving] = useState(false)
-  // Quitar de la carta: producto pendiente de confirmar y error del intento.
-  const [confirmRemoveProduct, setConfirmRemoveProduct] = useState<{ id: string; name: string } | null>(null)
+  // Quitar de la carta. `targets` son uno o varios productos (la barra de lote
+  // usa el mismo diálogo). `recentSales` se consulta al abrirlo: quitar algo que
+  // se vendió ayer suele ser un error de dedo, y el número lo frena mejor que un
+  // "¿estás seguro?". null = aún contando; -1 = no se pudo contar (no bloquea).
+  const [confirmRemoveProduct, setConfirmRemoveProduct] = useState<{ id: string; name: string }[] | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [recentSales, setRecentSales] = useState<number | null>(null)
   const [undo, setUndo] = useState<{ label: string; revert: () => Promise<void> } | null>(null)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; count: number } | null>(null)
@@ -413,16 +417,51 @@ export default function KitchenMenuPage() {
   // escandallo y sus ventas siguen intactos. Es la única vía para limpiar los
   // duplicados que deja la ingesta (dos filas del mismo plato, una sin receta),
   // porque esos ni siquiera aparecen en la ficha del plato.
-  async function removeProductFromMenu(id: string) {
-    if (moving) return
+  // Abre la confirmación para uno o varios productos y, en paralelo, pregunta
+  // cuántas veces se han vendido esta semana (aviso, no bloqueo).
+  function askRemoveProducts(targets: { id: string; name: string }[]) {
+    if (targets.length === 0) return
+    setRemoveError(null)
+    setRecentSales(null)
+    setConfirmRemoveProduct(targets)
+    Promise.all(targets.map((t) => countRecentSales(t.id, 7)))
+      .then((counts) => setRecentSales(counts.reduce((a, b) => a + b, 0)))
+      .catch((e: unknown) => {
+        console.error('countRecentSales falló:', e)
+        setRecentSales(-1)   // no se pudo contar: se sigue pudiendo quitar
+      })
+  }
+
+  async function removeProductsFromMenu(targets: { id: string; name: string }[]) {
+    if (moving || targets.length === 0) return
     setMoving(true)
+    const done: string[] = []
     try {
-      await archiveMenuItem(id)
-      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next })
+      for (const t of targets) {
+        await archiveMenuItem(t.id)
+        done.push(t.id)
+      }
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of done) next.delete(id)
+        return next
+      })
       setConfirmRemoveProduct(null)
       reloadCatalogProducts()
+      // Deshacer: reactiva exactamente los que se quitaron, mismo mecanismo que
+      // mover en bloque o borrar categoría.
+      setUndo({
+        label: targets.length === 1
+          ? `«${targets[0].name}» fuera de la carta`
+          : `${done.length} productos fuera de la carta`,
+        revert: async () => {
+          for (const id of done) await restoreMenuItem(id)
+          reloadCatalogProducts()
+        },
+      })
     } catch (e: unknown) {
       setRemoveError(e instanceof Error ? e.message : String(e))
+      if (done.length > 0) reloadCatalogProducts()   // parcial: refleja lo ya hecho
     } finally {
       setMoving(false)
     }
@@ -797,6 +836,19 @@ export default function KitchenMenuPage() {
             <ArrowRightLeft className="w-4 h-4" /> {moving ? 'Moviendo…' : 'Mover'}
           </button>
           <button
+            onClick={() => {
+              const targets = filteredCategories
+                .flatMap((c) => c.products)
+                .filter((p) => selectedIds.has(p.id))
+                .map((p) => ({ id: p.id, name: p.name }))
+              askRemoveProducts(targets)
+            }}
+            disabled={moving || selectedIds.size === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-white/10 text-white hover:bg-white/20 disabled:opacity-40"
+          >
+            <X className="w-4 h-4" /> Quitar de la carta
+          </button>
+          <button
             onClick={clearSelection}
             disabled={moving}
             className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg text-white/80 hover:bg-white/10"
@@ -952,7 +1004,7 @@ export default function KitchenMenuPage() {
                       </div>
                       <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => { setRemoveError(null); setConfirmRemoveProduct({ id: p.id, name: p.name }) }}
+                          onClick={() => askRemoveProducts([{ id: p.id, name: p.name }])}
                           disabled={moving}
                           className="p-1.5 rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-20 transition-colors"
                           title="Quitar de la carta"
@@ -1000,19 +1052,40 @@ export default function KitchenMenuPage() {
         </div>
       )}
 
-      {/* Quitar producto de la carta — mismo patrón que borrar categoría. */}
+      {/* Quitar producto(s) de la carta — mismo patrón que borrar categoría. */}
       {confirmRemoveProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !moving && setConfirmRemoveProduct(null)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md border border-gray-200" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
               <X className="w-4 h-4 text-red-600" />
-              <h3 className="text-base font-medium text-gray-900">Quitar de la carta</h3>
+              <h3 className="text-base font-medium text-gray-900">
+                {confirmRemoveProduct.length === 1 ? 'Quitar de la carta' : `Quitar ${confirmRemoveProduct.length} productos`}
+              </h3>
             </div>
             <div className="px-5 py-4 text-sm text-gray-700">
-              Vas a quitar <span className="font-medium">«{confirmRemoveProduct.name}»</span> de esta carta:
-              dejará de venderse y de publicarse en los canales.
+              {confirmRemoveProduct.length === 1 ? (
+                <>Vas a quitar <span className="font-medium">«{confirmRemoveProduct[0].name}»</span> de esta carta:
+                dejará de venderse y de publicarse en los canales.</>
+              ) : (
+                <>Vas a quitar <span className="font-medium">{confirmRemoveProduct.length} productos</span> de esta
+                carta: dejarán de venderse y de publicarse en los canales.</>
+              )}
+
+              {/* Aviso: se ha vendido hace nada. No bloquea, avisa. */}
+              {recentSales !== null && recentSales > 0 && (
+                <div className="mt-3 p-2.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs flex items-start gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    {confirmRemoveProduct.length === 1 ? 'Se ha vendido' : 'Se han vendido'}{' '}
+                    <span className="font-medium">{recentSales} {recentSales === 1 ? 'vez' : 'veces'}</span> esta semana.
+                    Si solo se ha agotado hoy, quizá busques pausarlo en vez de quitarlo de la carta.
+                  </span>
+                </div>
+              )}
+
               <div className="mt-2 text-gray-500">
-                Su escandallo y las ventas ya registradas no se tocan, y puedes volver a añadirlo cuando quieras.
+                {confirmRemoveProduct.length === 1 ? 'Su escandallo y las ventas' : 'Sus escandallos y las ventas'}{' '}
+                ya registradas no se tocan, y puedes volver a {confirmRemoveProduct.length === 1 ? 'añadirlo' : 'añadirlos'} cuando quieras.
               </div>
               {removeError && (
                 <div className="mt-3 p-2.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs">{removeError}</div>
@@ -1021,10 +1094,10 @@ export default function KitchenMenuPage() {
             <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <button onClick={() => setConfirmRemoveProduct(null)} disabled={moving}
                 className="px-3 py-1.5 text-sm rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">Cancelar</button>
-              <button onClick={() => void removeProductFromMenu(confirmRemoveProduct.id)} disabled={moving}
+              <button onClick={() => void removeProductsFromMenu(confirmRemoveProduct)} disabled={moving}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-red-600 text-white hover:opacity-90 disabled:opacity-50">
                 {moving ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                {moving ? 'Quitando…' : 'Quitar de la carta'}
+                {moving ? 'Quitando…' : confirmRemoveProduct.length === 1 ? 'Quitar de la carta' : `Quitar ${confirmRemoveProduct.length}`}
               </button>
             </div>
           </div>
