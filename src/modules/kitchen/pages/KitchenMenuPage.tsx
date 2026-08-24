@@ -1579,7 +1579,7 @@ export default function KitchenMenuPage() {
                   const itemAllergens = p.recipeItemId ? allergens.get(p.recipeItemId) : undefined
                   const ins = insights.byItem.get(p.id)
                   const units7d = ins?.units7d ?? 0
-                  const isTop = insights.topIds.has(p.id)
+                  const topRank = insights.topRank.get(p.id)
                   // Margen de PLATO sobre PVP, desde el coste del escandallo.
                   // Tres estados distintos, que antes se confundían en uno:
                   //   sin receta   -> "sin escandallo" (falta enlazarlo)
@@ -1686,13 +1686,13 @@ export default function KitchenMenuPage() {
                               render={(v) => <>{v}</>}
                             />
                           )}
-                          {isTop && (
+                          {topRank !== undefined && (
                             <span
                               className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-text-primary text-text-on-accent
                                 align-middle inline-flex items-center gap-1 font-semibold tracking-wide"
-                              title="De los 3 más vendidos de esta marca en 30 días"
+                              title={`El ${topRank}.º más vendido de esta marca en los últimos 7 días`}
                             >
-                              <Star className="w-3 h-3" /> Top 3
+                              <Star className="w-3 h-3" /> TOP {topRank}
                             </span>
                           )}
                           {p.archivedAt && (
