@@ -22,6 +22,7 @@ import {
   type AccountBrandLite,
 } from '@/modules/kitchen/services/menuItemService'
 import { listMenuCategories, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 interface Props {
   accountId: string
@@ -31,6 +32,11 @@ interface Props {
   productName: string
   basePrice: number
   onChanged: () => void
+  /** Se ha quitado de la carta el menu_item que se estaba viendo: la ficha que
+   *  lo mostraba ya no tiene sujeto, así que el padre decide a dónde ir (a otro
+   *  producto de la misma receta, o fuera). Sin esto, quitar el actual dejaría
+   *  la pantalla mirando algo que ya no está en ninguna carta. */
+  onRemovedCurrent?: () => void
 }
 
 function fmtEur(v: number): string {
@@ -39,6 +45,7 @@ function fmtEur(v: number): string {
 
 export default function ProductPlacementSection({
   accountId, menuItemId, recipeItemId, currentBrandId, productName, basePrice, onChanged,
+  onRemovedCurrent,
 }: Props) {
   const [presence, setPresence] = useState<RecipeBrandPresence[]>([])
   const [allBrands, setAllBrands] = useState<AccountBrandLite[]>([])
@@ -48,6 +55,9 @@ export default function ProductPlacementSection({
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  // Quitar de carta pide confirmación: archiva el menu_item (deja de venderse)
+  // y, si es el que estás viendo, además te saca de la ficha.
+  const [confirmRemove, setConfirmRemove] = useState<RecipeBrandPresence | null>(null)
 
   async function reload() {
     setErr(null)
@@ -95,11 +105,24 @@ export default function ProductPlacementSection({
     }
   }
 
+  // Quita el producto de una carta archivando su menu_item. Antes esto se
+  // negaba para la marca que estabas viendo ("no quitar la marca actual"), y
+  // como la ficha SIEMPRE se abre dentro de una marca, el resultado era que
+  // quitar un plato de su carta no se podía hacer desde ningún sitio.
+  // Ahora sí se puede: se archiva igual y se avisa al padre para que reubique
+  // la ficha, que era el problema real que aquel guard esquivaba.
   async function handleRemove(p: RecipeBrandPresence) {
-    if (busy || p.brandId === currentBrandId) return // no quitar la marca que estás viendo
+    if (busy) return
+    const wasCurrent = p.menuItemId === menuItemId
     setBusy(true); setErr(null)
     try {
       await archiveMenuItem(p.menuItemId)
+      setConfirmRemove(null)
+      if (wasCurrent && onRemovedCurrent) {
+        onChanged()
+        onRemovedCurrent()
+        return   // la ficha se va a reubicar: no recargamos sobre un id muerto
+      }
       await reload()
       onChanged()
     } catch (e: unknown) {
@@ -142,7 +165,11 @@ export default function ProductPlacementSection({
           <>
             <div className="flex flex-wrap gap-1.5 mb-2.5">
               {presence.map((p) => {
-                const isCurrent = p.brandId === currentBrandId
+                // "el que estás viendo" es ESTE menu_item, no "esta marca": la
+                // misma receta puede estar dos veces en la misma marca (los
+                // duplicados que deja la ingesta), y ahí hay que poder señalar
+                // cuál se quita.
+                const isCurrent = p.menuItemId === menuItemId
                 return (
                   <span key={p.menuItemId}
                     className={`inline-flex items-center gap-2 text-sm pl-2.5 pr-1.5 py-1.5 rounded-lg ${isCurrent ? 'bg-accent/10 text-accent' : 'bg-stone-100 text-stone-700'}`}>
@@ -151,14 +178,13 @@ export default function ProductPlacementSection({
                     </span>
                     {p.brandName}
                     <span className="text-stone-400 text-xs">{fmtEur(p.price)}</span>
-                    {isCurrent
-                      ? <span className="text-[10px] text-stone-400 px-1">actual</span>
-                      : (
-                        <button onClick={() => handleRemove(p)} disabled={busy}
-                          className="text-stone-400 hover:text-red-600 disabled:opacity-40" title={`Quitar de ${p.brandName}`} aria-label="Quitar de marca">
-                          <X size={14} />
-                        </button>
-                      )}
+                    {isCurrent && <span className="text-[10px] text-stone-400 px-1">actual</span>}
+                    <button onClick={() => setConfirmRemove(p)} disabled={busy}
+                      className="text-stone-400 hover:text-red-600 disabled:opacity-40"
+                      title={isCurrent ? 'Quitar de esta carta' : `Quitar de ${p.brandName}`}
+                      aria-label={isCurrent ? 'Quitar de esta carta' : `Quitar de ${p.brandName}`}>
+                      <X size={14} />
+                    </button>
                   </span>
                 )
               })}
@@ -216,6 +242,29 @@ export default function ProductPlacementSection({
         </div>
         <p className="text-xs text-stone-400">Próximamente: agotar/activar y precio por local y por canal (Glovo · Uber · JustEat · Shop).</p>
       </div>
+
+      {/* Confirmación de "quitar de carta". Se archiva el menu_item: el plato
+          deja de venderse en esa carta, pero su escandallo y su histórico de
+          ventas siguen intactos, y se puede volver a añadir. */}
+      <ConfirmDialog
+        open={confirmRemove !== null}
+        title="Quitar de la carta"
+        message={
+          confirmRemove
+            ? `¿Quitar «${productName}» de ${confirmRemove.brandName}? Dejará de venderse ahí.` +
+              (confirmRemove.menuItemId === menuItemId
+                ? ' Es el que estás viendo, así que saldrás de esta ficha.'
+                : '') +
+              ' El escandallo y las ventas ya registradas no se tocan, y puedes volver a añadirlo cuando quieras.'
+            : ''
+        }
+        confirmLabel={busy ? 'Quitando…' : 'Quitar de la carta'}
+        cancelLabel="Cancelar"
+        tone="danger"
+        busy={busy}
+        onConfirm={() => { if (confirmRemove) void handleRemove(confirmRemove) }}
+        onCancel={() => setConfirmRemove(null)}
+      />
     </div>
   )
 }

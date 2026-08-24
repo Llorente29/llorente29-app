@@ -589,6 +589,29 @@ export default function CatalogFichaPage({
   // Resolución del ancla ya terminada Y realmente no hay ningún producto
   // (solo posible entrando por receta con 0 productos vinculados) — distinto
   // de "todavía cargando", que no debe leerse como "sin producto".
+  // El producto que se estaba viendo se ha quitado de su carta: esta ficha se
+  // queda sin sujeto. Si la receta se vende en más productos (el caso de los
+  // duplicados), saltamos al siguiente y seguimos aquí; si era el único, no hay
+  // nada que enseñar y volvemos a la lista.
+  function handleRemovedFromMenu() {
+    const removedId = activeMenuItemId
+    const rest = (usingRecipeItems ?? []).filter((r) => r.id !== removedId)
+    setUsingRecipeItems(rest)
+    if (rest.length > 0) {
+      setActiveMenuItemId(rest[0].id)
+      setAnchorReloadTick((t) => t + 1)
+      return
+    }
+    if (recipeIdProp) {
+      // Entramos por el escandallo: sigue existiendo, solo que ya no está en
+      // ninguna carta. Nos quedamos, y la ficha lo dirá.
+      setActiveMenuItemId(null)
+      setAnchorReloadTick((t) => t + 1)
+      return
+    }
+    onBack()
+  }
+
   const noProductAnchor = !anchorLoading && !activeMenuItemId
 
   // ─── Loading / error ────────────────────────────────────────────────────
@@ -1183,6 +1206,7 @@ export default function CatalogFichaPage({
                   accountId={item.accountId}
                   brandName={brandName || undefined}
                   onItemChanged={refreshItem}
+                  onRemovedFromMenu={handleRemovedFromMenu}
                 />
               ) : activeMenuItemId && itemLoading ? (
                 <div className="text-sm text-stone-400 py-10 text-center">Cargando producto…</div>

@@ -50,9 +50,12 @@ interface EnCartaTabProps {
    *  Lo resuelve ya CatalogFichaPage; no se vuelve a consultar. */
   brandName?: string
   onItemChanged: () => void
+  /** El producto se ha quitado de la carta: esta ficha ya no tiene sujeto.
+   *  Lo resuelve el padre (saltar a otro producto de la receta, o salir). */
+  onRemovedFromMenu?: () => void
 }
 
-export default function EnCartaTab({ item, accountId, brandName, onItemChanged }: EnCartaTabProps) {
+export default function EnCartaTab({ item, accountId, brandName, onItemChanged, onRemovedFromMenu }: EnCartaTabProps) {
   // ── Combo (S0) — el producto no expone product_type en el tipo cliente;
   // se resuelve con la misma llamada que ya usaba el código viejo. ──
   const [isCombo, setIsCombo] = useState(false)
@@ -336,6 +339,7 @@ export default function EnCartaTab({ item, accountId, brandName, onItemChanged }
           productName={item.name}
           basePrice={item.price}
           onChanged={onItemChanged}
+          onRemovedCurrent={onRemovedFromMenu}
         />
       </div>
     </div>
