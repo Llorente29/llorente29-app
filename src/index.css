@@ -59,6 +59,29 @@
   --shadow-lg: 0 8px 24px rgba(21, 23, 26, 0.08);
 }
 
+/* Micro-animaciones del gestor de menús (aparición de avisos y del panel de
+   alertas). Van aquí y no en el componente porque Tailwind necesita las
+   keyframes declaradas para que `animate-[fadeIn_...]` signifique algo; sin
+   ellas la clase se genera y no anima nada, en silencio. */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Quien pide menos movimiento no lo pide de adorno: hay gente a la que estas
+   transiciones le producen mareo. Se respeta en toda la app, no solo aquí. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

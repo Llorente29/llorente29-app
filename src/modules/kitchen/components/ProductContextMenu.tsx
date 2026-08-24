@@ -17,7 +17,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Pencil, Euro, FolderInput, Copy, Store, CircleSlash, CheckCircle2, X, FileText, ChevronRight,
+  Tags, Check,
 } from 'lucide-react'
+import { PRODUCT_TAGS } from '@/modules/kitchen/components/productTags'
 
 export interface ContextMenuTarget {
   id: string
@@ -25,6 +27,8 @@ export interface ContextMenuTarget {
   isAvailable: boolean
   /** Sin escandallo no se puede llevar a otra marca (no hay coste que compartir). */
   recipeItemId: string | null
+  /** Etiquetas comerciales actuales, para marcar las activas en el submenú. */
+  tags?: string[]
 }
 
 export interface ContextMenuCategoryOption {
@@ -52,6 +56,8 @@ interface Props {
   onMoveToCategory: (categoryId: string | null) => void
   onDuplicate: () => void
   onAddToBrand: (brandId: string) => void
+  /** Enciende o apaga una etiqueta comercial. */
+  onToggleTag: (tagKey: string) => void
   onToggleAvailability: () => void
   onRemove: () => void
   onOpenFicha: () => void
@@ -112,7 +118,7 @@ function Row({
 export default function ProductContextMenu({
   target, x, y, categories, brands, busy = false,
   onEditName, onEditPrice, onMoveToCategory, onDuplicate, onAddToBrand,
-  onToggleAvailability, onRemove, onOpenFicha, onClose,
+  onToggleTag, onToggleAvailability, onRemove, onOpenFicha, onClose,
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: x, top: y })
@@ -206,6 +212,26 @@ export default function ProductContextMenu({
             {b.name}
           </button>
         ))}
+      </Row>
+
+      {/* Etiquetas comerciales. La columna menu_item.tags YA existía en la
+          BBDD; lo único que faltaba era poder tocarla. NO son alérgenos: esos
+          salen del escandallo y no se marcan a mano. */}
+      <Row icon={<Tags className="w-4 h-4" />} label="Etiquetas" submenu disabled={busy}>
+        {PRODUCT_TAGS.map((t) => {
+          const on = (target.tags ?? []).includes(t.key)
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onToggleTag(t.key)}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <span className="w-4 shrink-0">{on ? <Check className="w-3.5 h-3.5" /> : null}</span>
+              <span aria-hidden>{t.emoji}</span>{t.label}
+            </button>
+          )
+        })}
       </Row>
 
       <div className="my-1 border-t border-gray-100" />

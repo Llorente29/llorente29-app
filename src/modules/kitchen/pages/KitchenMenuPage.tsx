@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronDown, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, CircleSlash, GripVertical, Smile, Archive, MoveVertical } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, CircleSlash, GripVertical, Smile, Archive, MoveVertical, ImagePlus, Star, TrendingUp, TrendingDown } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { fmtMoney } from '@/lib/format'
 import {
@@ -40,6 +40,15 @@ import DropZone from '@/modules/kitchen/components/DropZone'
 import {
   listBrandChannelPublication, type BrandChannelPublication,
 } from '@/modules/kitchen/services/channelPublicationService'
+import {
+  getMenuInsights, EMPTY_INSIGHTS, type MenuInsights,
+} from '@/modules/kitchen/services/menuInsightsService'
+import {
+  listAllergensForRecipes, type AllergensByRecipe,
+} from '@/modules/kitchen/services/menuAllergenBulkService'
+import MarginBar from '@/modules/kitchen/components/MarginBar'
+import ProductTagChips from '@/modules/kitchen/components/ProductTagChips'
+import AllergenChips from '@/modules/kitchen/components/AllergenChips'
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
   DragOverlay, type DragEndEvent, type DragStartEvent,
@@ -156,6 +165,11 @@ export default function KitchenMenuPage() {
   const [loadingArchived, setLoadingArchived] = useState(false)
   // ── F6: publicación por canal, una consulta para toda la lista ──
   const [channelPub, setChannelPub] = useState<BrandChannelPublication | null>(null)
+  // ── Datos de negocio: ventas por producto, tendencia de marca, top y 86
+  // olvidados. Sin esto la carta es un listado; con esto es un panel. ──
+  const [insights, setInsights] = useState<MenuInsights>(EMPTY_INSIGHTS)
+  const [allergens, setAllergens] = useState<AllergensByRecipe>(new Map())
+  const [showAlerts, setShowAlerts] = useState(false)
   // ── F3: emoji de categoría y aviso de guardado ──
   const [emojiPickerCat, setEmojiPickerCat] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -309,6 +323,40 @@ export default function KitchenMenuPage() {
     return () => { cancelled = true }
   }, [activeAccountId, categories])
 
+  // Ventas y tendencia de la marca. Igual que los canales: efecto propio y
+  // degradación en silencio — un panel que se cae porque falta un número es
+  // peor que un panel sin ese número.
+  useEffect(() => {
+    if (!activeAccountId || !selectedBrandId) return
+    let cancelled = false
+    getMenuInsights(activeAccountId, selectedBrandId)
+      .then((r) => { if (!cancelled) setInsights(r) })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        console.warn('KitchenMenuPage: fallo cargando ventas de la marca', e)
+        setInsights(EMPTY_INSIGHTS)
+      })
+    return () => { cancelled = true }
+  }, [activeAccountId, selectedBrandId])
+
+  // Alérgenos de toda la carta en dos consultas (no una por plato).
+  useEffect(() => {
+    const ids = Array.from(new Set(
+      categories.flatMap((c) => c.products.map((p) => p.recipeItemId).filter((x): x is string => !!x))))
+    let cancelled = false
+    const load = ids.length === 0
+      ? Promise.resolve(new Map() as AllergensByRecipe)
+      : listAllergensForRecipes(ids)
+    load
+      .then((m) => { if (!cancelled) setAllergens(m) })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        console.warn('KitchenMenuPage: fallo cargando alérgenos', e)
+        setAllergens(new Map())
+      })
+    return () => { cancelled = true }
+  }, [categories])
+
   // El aviso "Guardado" del inline edit se va solo: es una confirmación, no un
   // error, y no debe pedir un clic para desaparecer.
   useEffect(() => {
@@ -322,13 +370,6 @@ export default function KitchenMenuPage() {
     [brands, selectedBrandId],
   )
 
-  // KPI cobertura
-  const coverage = useMemo(() => {
-    if (!selectedBrand) return { total: 0, withRecipe: 0, pct: 0 }
-    const total = selectedBrand.productCount
-    const withRecipe = selectedBrand.withRecipeCount
-    return { total, withRecipe, pct: total > 0 ? Math.round((withRecipe / total) * 100) : 0 }
-  }, [selectedBrand])
 
   // Todas las categorías de la marca como secciones (incluidas las VACÍAS, para
   // que el usuario vea su estructura y no piense que "desaparecieron") + el grupo
@@ -378,6 +419,46 @@ export default function KitchenMenuPage() {
       }))
       .filter((c) => c.products.length > 0)
   }, [displayCategories, search, filters])
+
+  // Margen medio PONDERADO POR VENTAS de la marca. Solo entran los platos con
+  // escandallo Y con ventas: un plato sin coste no tiene margen que promediar, y
+  // uno sin ventas no ha aportado nada a la caja de esta semana.
+  const avgMargin = useMemo(() => {
+    let revenue = 0
+    let margin = 0
+    for (const c of displayCategories) {
+      for (const p of c.products) {
+        if (p.archivedAt) continue
+        const econ = economics.get(p.id)
+        const units = insights.byItem.get(p.id)?.units7d ?? 0
+        if (!econ || econ.cost === null || units <= 0 || p.price <= 0) continue
+        revenue += p.price * units
+        margin += (p.price - econ.cost) * units
+      }
+    }
+    return revenue > 0 ? (margin / revenue) * 100 : null
+  }, [displayCategories, economics, insights])
+
+  // Las alertas del header. Cada una sabe qué filtro la enseña, para que
+  // pulsarla lleve a los productos concretos y no a una lista genérica.
+  const alerts = useMemo(() => {
+    const live = displayCategories.flatMap((c) => c.products).filter((p) => !p.archivedAt)
+    const sinFoto = live.filter((p) => !p.photoUrl).length
+    const sinEscandallo = live.filter((p) => !p.recipeItemId && p.productType !== 'combo').length
+    // Los 86 olvidados se casan por receta o por matrícula, que es como los
+    // guarda product_availability.
+    const staleIds = new Set<string>()
+    for (const s of insights.stale86) {
+      for (const p of live) {
+        if (!p.isAvailable && s.recipeItemId && p.recipeItemId === s.recipeItemId) staleIds.add(p.id)
+      }
+    }
+    const agotadoViejo = staleIds.size
+    return {
+      sinFoto, sinEscandallo, agotadoViejo,
+      total: sinFoto + sinEscandallo + agotadoViejo,
+    }
+  }, [displayCategories, insights])
 
   // Cuántos pasan el filtro, para el contador de los chips. Se cuenta sobre los
   // VIVOS: comparar contra un total que incluya archivados daría un "12 de 520"
@@ -1164,36 +1245,74 @@ export default function KitchenMenuPage() {
         </div>
       )}
 
-      {/* KPIs */}
+      {/* HEADER EJECUTIVO. Los KPIs de antes —productos, combos, agotados— son
+          datos de inventario: contestan "qué tengo", no "¿va bien esta marca?".
+          Estos tres contestan lo segundo, que es la pregunta que se hace quien
+          abre la pantalla. La cobertura de escandallo no desaparece: baja a ser
+          una alerta, que es lo que de verdad es cuando no está al 100%. */}
       {selectedBrand && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-          <KpiCard label="Productos" value={String(selectedBrand.productCount)} />
-          <KpiCard label="Combos" value={String(selectedBrand.comboCount)} />
-          <KpiCard
-            label="Con escandallo"
-            value={`${coverage.pct}%`}
-            tone={coverage.pct === 0 ? 'warning' : coverage.pct < 100 ? 'warning' : 'success'}
-          />
-          <KpiCard label="Agotados" value={String(selectedBrand.unavailableCount)} />
-        </div>
-      )}
+        <div className="mb-5 rounded-xl border border-border-default bg-card px-4 py-4 sm:px-5"
+          style={{ boxShadow: 'var(--shadow-sm)' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+            {/* Ventas 7 días + tendencia */}
+            <div>
+              <div className="text-2xl sm:text-3xl font-display font-medium text-text-primary tabular-nums leading-none">
+                {formatEur(insights.brand.revenue7d)}
+              </div>
+              <div className="text-[12px] text-text-secondary mt-1.5">ventas 7 días</div>
+              {insights.brand.trendPct !== null && (
+                <div className={`text-[12px] mt-0.5 inline-flex items-center gap-1 tabular-nums font-medium
+                  ${insights.brand.trendPct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {insights.brand.trendPct >= 0
+                    ? <TrendingUp className="w-3.5 h-3.5" />
+                    : <TrendingDown className="w-3.5 h-3.5" />}
+                  {insights.brand.trendPct >= 0 ? '+' : ''}{Math.round(insights.brand.trendPct)}% vs sem. ant.
+                </div>
+              )}
+            </div>
 
-      {/* Barra de cobertura */}
-      {selectedBrand && (
-        <div className="mb-1.5">
-          <div className="h-1.5 bg-page rounded-full overflow-hidden">
-            <div
-              className={coverage.pct === 100 ? 'h-full bg-green-500' : 'h-full bg-amber-500'}
-              style={{ width: `${coverage.pct}%` }}
-            />
+            {/* Margen medio PONDERADO POR VENTAS. Un margen simple daría el mismo
+                peso al plato estrella y al que se vende una vez al mes, y eso no
+                es el margen del negocio: es una media de números sueltos. */}
+            <div>
+              <div className="text-2xl sm:text-3xl font-display font-medium text-text-primary tabular-nums leading-none">
+                {avgMargin === null ? '—' : `${Math.round(avgMargin)}%`}
+              </div>
+              <div className="text-[12px] text-text-secondary mt-1.5">
+                margen medio
+                {avgMargin !== null && <span className="hidden sm:inline"> · ponderado por ventas</span>}
+              </div>
+              {avgMargin === null && (
+                <div className="text-[12px] text-text-secondary mt-0.5">
+                  sin ventas con escandallo aún
+                </div>
+              )}
+            </div>
+
+            {/* Alertas: agrupadas y ACCIONABLES. Un contador que no lleva a
+                ningún sitio es decoración. */}
+            <div>
+              <div className={`text-2xl sm:text-3xl font-display font-medium tabular-nums leading-none
+                ${alerts.total > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
+                {alerts.total}
+              </div>
+              <div className="text-[12px] text-text-secondary mt-1.5">
+                {alerts.total === 1 ? 'alerta' : 'alertas'}
+              </div>
+              {alerts.total > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAlerts(true)}
+                  className="text-[12px] mt-0.5 font-medium text-text-info hover:underline underline-offset-2"
+                >
+                  → ver y arreglar
+                </button>
+              ) : (
+                <div className="text-[12px] text-emerald-700 mt-0.5">todo en orden</div>
+              )}
+            </div>
           </div>
         </div>
-      )}
-      {selectedBrand && (
-        <p className="text-xs text-text-secondary mb-5">
-          {coverage.withRecipe} de {coverage.total} productos costeados
-          {coverage.pct < 100 && ' · completa los escandallos para ver márgenes'}
-        </p>
       )}
 
       {/* Búsqueda + filtros (F2) */}
@@ -1329,6 +1448,24 @@ export default function KitchenMenuPage() {
                 const isReal = cat.id !== '__sin_categoria__'
                 const catIdx = allCats.findIndex((c) => c.id === cat.id)
                 const collapsed = collapsedCats.has(cat.id)
+                // Ventas de la categoría y si lleva 30 días sin vender NADA.
+                // "Dormida" se anota, NO se colapsa sola: el encargo lo pedía,
+                // pero plegar por sorpresa lo que alguien acaba de crear —una
+                // categoría nueva vende 0 por definición— es esconderle su
+                // trabajo. Se avisa y decide él.
+                const catStats = (() => {
+                  let revenue7d = 0
+                  let units30d = 0
+                  for (const p of cat.products) {
+                    const i = insights.byItem.get(p.id)
+                    revenue7d += i?.revenue7d ?? 0
+                    units30d += i?.units30d ?? 0
+                  }
+                  return {
+                    revenue7d,
+                    dormida: cat.products.length > 0 && units30d === 0 && insights.byItem.size > 0,
+                  }
+                })()
                 return (
                   <Sortable id={`cat:${cat.id}`} disabled={!isReal || moving || dndDisabled}>
                     {(d) => (
@@ -1386,7 +1523,7 @@ export default function KitchenMenuPage() {
                       ) : (
                         cat.emoji ? <span className="text-[15px]">{cat.emoji}</span> : null
                       )}
-                      <h2 className="text-base font-medium text-text-primary">
+                      <h2 className="text-base font-medium text-text-primary min-w-0">
                         {isReal ? (
                           <InlineEdit
                             value={cat.name}
@@ -1397,7 +1534,23 @@ export default function KitchenMenuPage() {
                             render={(v) => <>{v}</>}
                           />
                         ) : cat.name}
-                        <span className="ml-2 text-xs font-normal text-text-secondary">{cat.products.length}</span>
+                        <span className="ml-2 text-xs font-normal text-text-secondary tabular-nums">
+                          {cat.products.length}
+                        </span>
+                        {catStats.revenue7d > 0 && (
+                          <span className="ml-2 text-xs font-normal text-text-secondary tabular-nums">
+                            · {formatEur(catStats.revenue7d)} /7d
+                          </span>
+                        )}
+                        {catStats.dormida && (
+                          <span
+                            className="ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded-full
+                              bg-page text-text-secondary border border-border-default align-middle"
+                            title="Ningún producto de esta categoría se ha vendido en 30 días"
+                          >
+                            categoría dormida
+                          </span>
+                        )}
                       </h2>
                       {isReal && (
                         <div className="ml-auto flex items-center gap-1">
@@ -1427,6 +1580,15 @@ export default function KitchenMenuPage() {
                   const econ = economics.get(p.id)
                   const health = linkHealth.get(p.id)
                   const badges = channelPub?.byItem.get(p.id)
+                  const itemAllergens = p.recipeItemId ? allergens.get(p.recipeItemId) : undefined
+                  const ins = insights.byItem.get(p.id)
+                  const units7d = ins?.units7d ?? 0
+                  const isTop = insights.topIds.has(p.id)
+                  // Margen sobre PVP. Solo si hay coste REAL y precio: inventar
+                  // un margen sin escandallo sería el peor dato de la pantalla.
+                  const marginPct = econ && econ.cost !== null && p.price > 0
+                    ? ((p.price - econ.cost) / p.price) * 100
+                    : null
                   return (
                     <Sortable key={p.id} id={p.id} disabled={moving || dndDisabled || !!p.archivedAt}>
                     {(d) => (
@@ -1437,7 +1599,7 @@ export default function KitchenMenuPage() {
                       onContextMenu={(e) => {
                         e.preventDefault()
                         openContextMenu(
-                          { id: p.id, name: p.name, isAvailable: p.isAvailable, recipeItemId: p.recipeItemId },
+                          { id: p.id, name: p.name, isAvailable: p.isAvailable, recipeItemId: p.recipeItemId, tags: p.tags },
                           e.clientX, e.clientY,
                         )
                       }}
@@ -1445,7 +1607,7 @@ export default function KitchenMenuPage() {
                         const t = e.touches[0]
                         if (!t) return
                         startLongPress(
-                          { id: p.id, name: p.name, isAvailable: p.isAvailable, recipeItemId: p.recipeItemId },
+                          { id: p.id, name: p.name, isAvailable: p.isAvailable, recipeItemId: p.recipeItemId, tags: p.tags },
                           t.clientX, t.clientY,
                         )
                       }}
@@ -1478,12 +1640,34 @@ export default function KitchenMenuPage() {
                         className="w-4 h-4 rounded border-border-default cursor-pointer shrink-0"
                         title="Seleccionar"
                       />
-                      <div className="w-10 h-10 rounded-lg bg-page flex items-center justify-center text-text-secondary shrink-0">
-                        {p.photoUrl
-                          ? <img src={p.photoUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                          : p.productType === 'combo'
-                            ? <Package className="w-4 h-4" />
-                            : <UtensilsCrossed className="w-4 h-4" />}
+                      {/* La foto es protagonista, no decoración: 64×64. Y cuando
+                          FALTA tiene que doler y ser accionable — un icono de
+                          cubiertos muerto es la razón por la que nadie las sube. */}
+                      <div className="shrink-0">
+                        {p.photoUrl ? (
+                          <img
+                            src={p.photoUrl}
+                            alt=""
+                            loading="lazy"
+                            className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover bg-page"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedProductId(p.id) }}
+                            className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border border-dashed border-border-default
+                              bg-page flex flex-col items-center justify-center gap-0.5
+                              text-text-secondary hover:border-accent hover:text-text-primary
+                              transition-colors duration-150"
+                            title="Este producto no tiene foto. En las plataformas se vende bastante peor."
+                            aria-label={`Añadir foto a ${p.name}`}
+                          >
+                            {p.productType === 'combo'
+                              ? <Package className="w-4 h-4" />
+                              : <ImagePlus className="w-4 h-4" />}
+                            <span className="text-[9px] font-medium leading-none">+ foto</span>
+                          </button>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-text-primary text-sm truncate">
@@ -1496,6 +1680,15 @@ export default function KitchenMenuPage() {
                               inputClassName="text-sm font-medium w-52"
                               render={(v) => <>{v}</>}
                             />
+                          )}
+                          {isTop && (
+                            <span
+                              className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700
+                                border border-emerald-200 align-middle inline-flex items-center gap-1 font-medium"
+                              title="De los 3 más vendidos de esta marca en 30 días"
+                            >
+                              <Star className="w-3 h-3" /> Top 3
+                            </span>
                           )}
                           {p.archivedAt && (
                             <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-page text-text-secondary border border-border-default align-middle inline-flex items-center gap-1">
@@ -1521,17 +1714,43 @@ export default function KitchenMenuPage() {
                             </span>
                           ) : null}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {/* F6 · en qué canales está, sin abrir la ficha */}
+                        {/* Segunda línea: LO QUE DEJA DE DINERO. Margen y ventas
+                            primero, metadatos después. Es la diferencia entre un
+                            listado y un panel de rentabilidad. */}
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {marginPct !== null ? (
+                            <MarginBar marginPct={marginPct} />
+                          ) : p.productType !== 'combo' ? (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setSelectedProductId(p.id) }}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
+                                bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-medium
+                                hover:bg-amber-100 transition-colors duration-150"
+                              title="Sin escandallo no hay coste ni margen: se vende a ciegas"
+                            >
+                              <AlertTriangle className="w-3 h-3" /> sin escandallo
+                            </button>
+                          ) : null}
+
+                          {units7d > 0 && (
+                            <span className="text-[11px] text-text-secondary tabular-nums">
+                              {units7d} vta{units7d === 1 ? '' : 's'}/7d
+                            </span>
+                          )}
+
                           <ChannelBadges badges={badges} className="shrink-0" />
-                          <span className="text-xs text-text-secondary truncate">
-                            {p.shortName ? `${p.shortName} · ` : ''}
-                            {p.productType === 'combo'
-                              ? `${p.comboSlotCount} slot${p.comboSlotCount !== 1 ? 's' : ''}`
-                              : p.modifierGroupCount > 0
-                                ? `${p.modifierGroupCount} grupo${p.modifierGroupCount > 1 ? 's' : ''} modif.`
-                                : 'sin modificadores'}
-                          </span>
+                          <AllergenChips allergens={itemAllergens} />
+                          <ProductTagChips tags={p.tags} />
+                        </div>
+
+                        <div className="text-[11px] text-text-secondary truncate mt-0.5">
+                          {p.shortName ? `${p.shortName} · ` : ''}
+                          {p.productType === 'combo'
+                            ? `${p.comboSlotCount} slot${p.comboSlotCount !== 1 ? 's' : ''}`
+                            : p.modifierGroupCount > 0
+                              ? `${p.modifierGroupCount} grupo${p.modifierGroupCount > 1 ? 's' : ''} modif.`
+                              : 'sin modificadores'}
                         </div>
                       </div>
                       <div className="text-sm font-medium text-text-primary shrink-0 w-20 text-right tabular-nums"
@@ -1656,6 +1875,109 @@ export default function KitchenMenuPage() {
         </DndContext>
       )}
 
+      {/* P3 · PANEL DE ALERTAS. Cada línea LLEVA a los productos concretos
+          (enciende su filtro y cierra el panel): un contador que no lleva a
+          ningún sitio es decoración.
+
+          El "agotado hace >48 h" es el que nadie más tiene, y por eso merece
+          una nota: NO se mide con menu_item.updated_at —que un simple cambio de
+          nombre reinicia—, sino con product_availability.set_at, que solo
+          escribe el 86. Ver menuInsightsService. */}
+      {showAlerts && (
+        <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-label="Alertas de la carta">
+          <div
+            className="absolute inset-0 bg-text-primary/20"
+            onClick={() => setShowAlerts(false)}
+            aria-hidden
+          />
+          <div className="relative w-full max-w-sm h-full bg-card border-l border-border-default
+            overflow-y-auto animate-[slideIn_180ms_ease-out]" style={{ boxShadow: 'var(--shadow-lg)' }}>
+            <div className="sticky top-0 bg-card border-b border-border-default px-4 py-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <h3 className="text-sm font-medium text-text-primary flex-1">
+                Para que esta carta venda más
+              </h3>
+              <button
+                onClick={() => setShowAlerts(false)}
+                className="p-1 rounded-md text-text-secondary hover:bg-page transition-colors duration-150"
+                aria-label="Cerrar alertas"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2">
+              {alerts.total === 0 && (
+                <p className="text-sm text-text-secondary">
+                  Nada que arreglar: todos los productos tienen foto y escandallo, y no hay
+                  agotados olvidados.
+                </p>
+              )}
+
+              {alerts.sinFoto > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setFilters({ ...EMPTY_FILTERS, sinFoto: true }); setShowAlerts(false) }}
+                  className="w-full text-left px-3 py-2.5 rounded-lg border border-border-default
+                    hover:bg-page transition-colors duration-150 flex items-start gap-2.5"
+                >
+                  <ImagePlus className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span className="flex-1">
+                    <span className="block text-sm text-text-primary font-medium">
+                      {alerts.sinFoto} sin foto
+                    </span>
+                    <span className="block text-[12px] text-text-secondary">
+                      En las plataformas, un producto sin foto se vende bastante peor.
+                    </span>
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-text-secondary shrink-0 mt-0.5" />
+                </button>
+              )}
+
+              {alerts.sinEscandallo > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setFilters({ ...EMPTY_FILTERS, sinEscandallo: true }); setShowAlerts(false) }}
+                  className="w-full text-left px-3 py-2.5 rounded-lg border border-border-default
+                    hover:bg-page transition-colors duration-150 flex items-start gap-2.5"
+                >
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span className="flex-1">
+                    <span className="block text-sm text-text-primary font-medium">
+                      {alerts.sinEscandallo} sin escandallo
+                    </span>
+                    <span className="block text-[12px] text-text-secondary">
+                      Sin coste no hay margen: estos se venden a ciegas.
+                    </span>
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-text-secondary shrink-0 mt-0.5" />
+                </button>
+              )}
+
+              {alerts.agotadoViejo > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setFilters({ ...EMPTY_FILTERS, agotados: true }); setShowAlerts(false) }}
+                  className="w-full text-left px-3 py-2.5 rounded-lg border border-amber-200 bg-amber-50/50
+                    hover:bg-amber-50 transition-colors duration-150 flex items-start gap-2.5"
+                >
+                  <CircleSlash className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span className="flex-1">
+                    <span className="block text-sm text-text-primary font-medium">
+                      {alerts.agotadoViejo} agotado{alerts.agotadoViejo === 1 ? '' : 's'} hace más de 48 h
+                    </span>
+                    <span className="block text-[12px] text-text-secondary">
+                      ¿Se te olvidó reactivarlo? Cada hora agotado es venta que no entra.
+                    </span>
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-text-secondary shrink-0 mt-0.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* F3 · confirmación de guardado. Se va sola: es un "hecho", no un aviso
           que haya que atender, y pedir un clic para cerrarlo sería castigar al
           que edita rápido. */}
@@ -1734,6 +2056,18 @@ export default function KitchenMenuPage() {
                 price: prod?.price ?? 0,
                 name: t.name,
               })
+            })
+          }}
+          onToggleTag={(tagKey) => {
+            const prod = filteredCategories.flatMap((c) => c.products).find((x) => x.id === ctxMenu.target.id)
+            const current = prod?.tags ?? []
+            const next = current.includes(tagKey)
+              ? current.filter((t) => t !== tagKey)
+              : [...current, tagKey]
+            void runCtxAction(async () => {
+              await updateMenuItem(ctxMenu.target.id, { tags: next })
+              patchProduct(ctxMenu.target.id, { tags: next })
+              setToast('Guardado')
             })
           }}
           onToggleAvailability={() => {
@@ -2152,15 +2486,6 @@ export default function KitchenMenuPage() {
   )
 }
 
-function KpiCard({ label, value, tone }: { label: string; value: string; tone?: 'warning' | 'success' }) {
-  const valueColor = tone === 'warning' ? 'text-amber-600' : tone === 'success' ? 'text-green-600' : 'text-text-primary'
-  return (
-    <div className="bg-gray-50 rounded-lg p-3">
-      <div className="text-xs text-text-secondary">{label}</div>
-      <div className={`text-2xl font-semibold ${valueColor}`}>{value}</div>
-    </div>
-  )
-}
 
 function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability; onOpen: () => void; onFix: () => void }) {
   const dot =
