@@ -44,6 +44,9 @@ export interface CatalogProduct {
   mirrorOfItemId: string | null   // si != null, esta fila ES el espejo de ese original
   hasMirror: boolean              // este original tiene un espejo
   promoActive: boolean            // el espejo de este original está visible ahora (original oculto a propósito, NO agotado)
+  /** Fecha de archivado. null = está en la carta. Solo llega con opciones
+   *  { includeArchived: true }; sin ellas la consulta ni los devuelve. */
+  archivedAt: string | null
 }
 
 export interface CatalogCategory {
@@ -154,10 +157,18 @@ export async function listBrandsWithCatalog(accountId: string): Promise<CatalogB
 // de Shop (StorefrontPreview, que no conocen "el local" en ese contexto) no
 // cambian. Quien sí necesita disponibilidad real por local (el TPV) pasa su
 // operativeLocationId.
+export interface ListCatalogOptions {
+  /** Trae también los ARCHIVADOS, marcados con su `archivedAt`. Lo pide el
+   *  chip "Archivados" del gestor de menús: sin esto no hay forma de ver qué
+   *  se quitó de la carta sin salir de la pantalla. Por defecto NO vienen. */
+  includeArchived?: boolean
+}
+
 export async function listCategoriesWithProducts(
   accountId: string,
   brandId: string,
   locationId?: string | null,
+  options?: ListCatalogOptions,
 ): Promise<CatalogCategory[]> {
   requireSupabase()
 
@@ -174,16 +185,22 @@ export async function listCategoriesWithProducts(
   // Productos Y combos de la marca (los combos también viven en su categoría).
   // Cast puntual: mirror_of_item_id existe en BBDD (migración 2500) pero aún no en
   // los tipos generados; se lee sin regenerar todo el fichero de tipos.
-  const { data: items, error: miErr } = await (supabase! as any)
+  // Cast puntual (ver arriba): mirror_of_item_id no está aún en los tipos.
+  let itemsQuery = (supabase! as any)
     .from('menu_item')
-    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, external_id, is_active, is_available, needs_review, position, mirror_of_item_id')
+    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, external_id, is_active, is_available, needs_review, position, mirror_of_item_id, archived_at')
     .eq('account_id', accountId)
     .eq('brand_id', brandId)
-    // Los ARCHIVADOS no están en la carta: es lo que significa "quitar de la
-    // carta" (archiveMenuItem pone is_active=false + archived_at). Sin este
-    // filtro seguían pintándose aquí, así que quitar un producto parecía no
-    // hacer nada — el archivado ocurría y la lista lo volvía a mostrar igual.
-    .is('archived_at', null)
+
+  // Los ARCHIVADOS no están en la carta: es lo que significa "quitar de la
+  // carta" (archiveMenuItem pone is_active=false + archived_at). Sin este
+  // filtro seguían pintándose aquí, así que quitar un producto parecía no
+  // hacer nada — el archivado ocurría y la lista lo volvía a mostrar igual.
+  // Solo el chip "Archivados" los pide, y llegan marcados para poder pintarlos
+  // distintos: verlos NO es tenerlos en la carta.
+  if (!options?.includeArchived) itemsQuery = itemsQuery.is('archived_at', null)
+
+  const { data: items, error: miErr } = await itemsQuery
     .order('position', { ascending: true })
     .order('name', { ascending: true }) as { data: Record<string, unknown>[] | null; error: { message: string } | null }
   if (miErr) throw new Error(`Error listando productos: ${miErr.message}`)
@@ -279,6 +296,7 @@ export async function listCategoriesWithProducts(
     mirrorOfItemId: (i.mirror_of_item_id as string) ?? null,
     hasMirror: mirrorByOriginal.has(i.id as string),
     promoActive: mirrorByOriginal.get(i.id as string) === true,
+    archivedAt: (i.archived_at as string) ?? null,
   })
 
   const categories: CatalogCategory[] = (cats ?? []).map((c) => ({
