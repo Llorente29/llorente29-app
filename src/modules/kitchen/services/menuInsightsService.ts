@@ -153,3 +153,36 @@ export async function listStaleUnavailable(accountId: string): Promise<StaleUnav
       hours: Math.floor((now - new Date(r.set_at as string).getTime()) / 3600_000),
     }))
 }
+
+/**
+ * Coste de plato por RECETA, en una sola consulta.
+ *
+ * POR QUÉ NO SE USA `menu_item_economics` PARA ESTO
+ * Esa RPC hace `JOIN sales_channel sc ON sc.id = mi.channel_id` —un INNER
+ * JOIN— y en esta cuenta `menu_item.channel_id` es NULL en las 513 filas
+ * vivas. Resultado: la RPC devuelve CERO filas para cualquier marca, el mapa
+ * de economía llega vacío, y todo lo que dependa de él se comporta como si
+ * ningún plato tuviera escandallo. Ese fue el bug del badge.
+ *
+ * Y aunque devolviera filas, tampoco sería lo que la fila necesita: esa RPC
+ * calcula margen NETO por canal (comisiones, reparto, licencias). El margen de
+ * la fila es el de PLATO —precio contra coste de escandallo—, que es un número
+ * por producto y no por canal.
+ */
+export async function listRecipeCosts(
+  recipeItemIds: string[],
+): Promise<Map<string, number>> {
+  requireSupabase()
+  const out = new Map<string, number>()
+  if (recipeItemIds.length === 0) return out
+  const { data, error } = await supabase!
+    .from('recipe_item')
+    .select('id, computed_cost')
+    .in('id', recipeItemIds)
+  if (error) throw new Error(`Error leyendo costes de escandallo: ${error.message}`)
+  for (const r of data ?? []) {
+    if (r.computed_cost === null) continue
+    out.set(r.id as string, Number(r.computed_cost))
+  }
+  return out
+}

@@ -24,7 +24,7 @@ import {
   type CatalogBrand,
   type CatalogCategory,
 } from '@/modules/kitchen/services/brandCatalogService'
-import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems, archiveMenuItem, restoreMenuItem, countRecentSales, duplicateMenuItem, updateMenuItem, setMenuItemCategory, addRecipeToBrand, listAccountBrands, listBrandsForRecipe, type AccountBrandLite } from '@/modules/kitchen/services/menuItemService'
+import { setMenuItemCategoryBulk, reorderMenuItems, archiveMenuItem, restoreMenuItem, countRecentSales, duplicateMenuItem, updateMenuItem, setMenuItemCategory, addRecipeToBrand, listAccountBrands, listBrandsForRecipe, type AccountBrandLite } from '@/modules/kitchen/services/menuItemService'
 import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, updateMenuCategory, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
 import { setProductAvailability } from '@/modules/kitchen/services/menuOverrideService'
 import ProductContextMenu, { type ContextMenuTarget } from '@/modules/kitchen/components/ProductContextMenu'
@@ -41,7 +41,7 @@ import {
   listBrandChannelPublication, type BrandChannelPublication,
 } from '@/modules/kitchen/services/channelPublicationService'
 import {
-  getMenuInsights, EMPTY_INSIGHTS, type MenuInsights,
+  getMenuInsights, listRecipeCosts, EMPTY_INSIGHTS, type MenuInsights,
 } from '@/modules/kitchen/services/menuInsightsService'
 import {
   listAllergensForRecipes, type AllergensByRecipe,
@@ -70,7 +70,6 @@ import WarehouseReliabilityPage from '@/modules/kitchen/pages/WarehouseReliabili
 import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
 import AddExistingProductModal from '@/modules/kitchen/components/AddExistingProductModal'
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
-import type { MenuItemEconomics } from '@/types/kitchen'
 import {
   publishBrandCatalog, dryRunBrandCatalog, listPublishLocations,
   type PublishResult, type DryRunResult,
@@ -117,7 +116,6 @@ export default function KitchenMenuPage() {
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null)
   const [categories, setCategories] = useState<CatalogCategory[]>([])
   const [allCats, setAllCats] = useState<MenuCategory[]>([])
-  const [economics, setEconomics] = useState<Map<string, MenuItemEconomics>>(new Map())
   const [reliability, setReliability] = useState<SalesReliability | null>(null)
   // Sello de 3 estados del enlace ítem↔escandallo — de la marca visible (fila del
   // Menú) y de toda la cuenta (contadores del banner-resumen). Única fuente de
@@ -169,6 +167,10 @@ export default function KitchenMenuPage() {
   // olvidados. Sin esto la carta es un listado; con esto es un panel. ──
   const [insights, setInsights] = useState<MenuInsights>(EMPTY_INSIGHTS)
   const [allergens, setAllergens] = useState<AllergensByRecipe>(new Map())
+  // Coste de plato por receta. NO sale de menu_item_economics: esa RPC hace
+  // INNER JOIN con sales_channel y menu_item.channel_id es NULL en las 513
+  // filas de la cuenta, así que devuelve cero filas SIEMPRE. Ver el servicio.
+  const [recipeCosts, setRecipeCosts] = useState<Map<string, number>>(new Map())
   const [showAlerts, setShowAlerts] = useState(false)
   // ── F3: emoji de categoría y aviso de guardado ──
   const [emojiPickerCat, setEmojiPickerCat] = useState<string | null>(null)
@@ -274,20 +276,16 @@ export default function KitchenMenuPage() {
     if (includeArchived) setLoadingArchived(true)
     Promise.all([
       listCategoriesWithProducts(activeAccountId, selectedBrandId, null, { includeArchived }),
-      getMenuItemEconomics(selectedBrandId).catch(() => [] as MenuItemEconomics[]),
       listMenuCategories(activeAccountId, selectedBrandId).catch(() => [] as MenuCategory[]),
       getMenuItemLinkHealth(activeAccountId, selectedBrandId).catch((e: unknown) => {
         console.warn('KitchenMenuPage: fallo cargando salud de escandallos de la marca', e)
         return [] as MenuItemLinkHealthRow[]
       }),
     ])
-      .then(([cats, econ, all, health]) => {
+      .then(([cats, all, health]) => {
         if (cancelled) return
         setCategories(cats)
         setAllCats(all)
-        const m = new Map<string, MenuItemEconomics>()
-        for (const e of econ) m.set(e.menuItemId, e)
-        setEconomics(m)
         const lh = new Map<string, MenuItemLinkHealthRow>()
         for (const r of health) lh.set(r.menuItemId, r)
         setLinkHealth(lh)
@@ -345,14 +343,19 @@ export default function KitchenMenuPage() {
       categories.flatMap((c) => c.products.map((p) => p.recipeItemId).filter((x): x is string => !!x))))
     let cancelled = false
     const load = ids.length === 0
-      ? Promise.resolve(new Map() as AllergensByRecipe)
-      : listAllergensForRecipes(ids)
+      ? Promise.resolve([new Map() as AllergensByRecipe, new Map<string, number>()] as const)
+      : Promise.all([listAllergensForRecipes(ids), listRecipeCosts(ids)] as const)
     load
-      .then((m) => { if (!cancelled) setAllergens(m) })
+      .then(([a, c]) => {
+        if (cancelled) return
+        setAllergens(a)
+        setRecipeCosts(c)
+      })
       .catch((e: unknown) => {
         if (cancelled) return
-        console.warn('KitchenMenuPage: fallo cargando alérgenos', e)
+        console.warn('KitchenMenuPage: fallo cargando alérgenos o costes', e)
         setAllergens(new Map())
+        setRecipeCosts(new Map())
       })
     return () => { cancelled = true }
   }, [categories])
@@ -429,15 +432,15 @@ export default function KitchenMenuPage() {
     for (const c of displayCategories) {
       for (const p of c.products) {
         if (p.archivedAt) continue
-        const econ = economics.get(p.id)
+        const cost = p.recipeItemId ? recipeCosts.get(p.recipeItemId) : undefined
         const units = insights.byItem.get(p.id)?.units7d ?? 0
-        if (!econ || econ.cost === null || units <= 0 || p.price <= 0) continue
+        if (cost === undefined || units <= 0 || p.price <= 0) continue
         revenue += p.price * units
-        margin += (p.price - econ.cost) * units
+        margin += (p.price - cost) * units
       }
     }
     return revenue > 0 ? (margin / revenue) * 100 : null
-  }, [displayCategories, economics, insights])
+  }, [displayCategories, recipeCosts, insights])
 
   // Las alertas del header. Cada una sabe qué filtro la enseña, para que
   // pulsarla lleve a los productos concretos y no a una lista genérica.
@@ -508,13 +511,6 @@ export default function KitchenMenuPage() {
     listCategoriesWithProducts(activeAccountId, selectedBrandId).then(setCategories).catch(() => {})
     listMenuCategories(activeAccountId, selectedBrandId).then(setAllCats).catch(() => {})
     listBrandsWithCatalog(activeAccountId).then(setBrands).catch(() => {})
-    getMenuItemEconomics(selectedBrandId)
-      .then((econ) => {
-        const m = new Map<string, MenuItemEconomics>()
-        for (const e of econ) m.set(e.menuItemId, e)
-        setEconomics(m)
-      })
-      .catch(() => {})
   }
 
   // Tras crear un COMBO: recargar y abrir su ficha para montarle los grupos ya.
@@ -1443,7 +1439,7 @@ export default function KitchenMenuPage() {
             strategy={verticalListSortingStrategy}
           >
           {filteredCategories.map((cat) => (
-            <div key={cat.id} className="mb-6">
+            <div key={cat.id} className="mb-8">
               {(() => {
                 const isReal = cat.id !== '__sin_categoria__'
                 const catIdx = allCats.findIndex((c) => c.id === cat.id)
@@ -1571,23 +1567,29 @@ export default function KitchenMenuPage() {
                       style={{ gridTemplateRows: collapsed ? '0fr' : '1fr' }}
                     >
                     <div className="overflow-hidden">
-                    <div className="bg-card border border-border-default rounded-xl overflow-hidden">
+                    <div className="bg-card border border-border-default rounded-xl overflow-hidden"
+                      style={{ boxShadow: 'var(--shadow-sm)' }}>
                 <SortableContext
                   items={cat.products.map((p) => p.id)}
                   strategy={verticalListSortingStrategy}
                 >
                 {cat.products.map((p, idx) => {
-                  const econ = economics.get(p.id)
                   const health = linkHealth.get(p.id)
                   const badges = channelPub?.byItem.get(p.id)
                   const itemAllergens = p.recipeItemId ? allergens.get(p.recipeItemId) : undefined
                   const ins = insights.byItem.get(p.id)
                   const units7d = ins?.units7d ?? 0
                   const isTop = insights.topIds.has(p.id)
-                  // Margen sobre PVP. Solo si hay coste REAL y precio: inventar
-                  // un margen sin escandallo sería el peor dato de la pantalla.
-                  const marginPct = econ && econ.cost !== null && p.price > 0
-                    ? ((p.price - econ.cost) / p.price) * 100
+                  // Margen de PLATO sobre PVP, desde el coste del escandallo.
+                  // Tres estados distintos, que antes se confundían en uno:
+                  //   sin receta   -> "sin escandallo" (falta enlazarlo)
+                  //   receta sin coste -> "sin costear"  (falta recostear)
+                  //   receta con coste -> la barra de margen
+                  // El badge decía "sin escandallo" en los tres, y como la
+                  // fuente de coste estaba vacía, salía en TODOS.
+                  const plateCost = p.recipeItemId ? recipeCosts.get(p.recipeItemId) : undefined
+                  const marginPct = plateCost !== undefined && p.price > 0
+                    ? ((p.price - plateCost) / p.price) * 100
                     : null
                   return (
                     <Sortable key={p.id} id={p.id} disabled={moving || dndDisabled || !!p.archivedAt}>
@@ -1614,9 +1616,12 @@ export default function KitchenMenuPage() {
                       onTouchMove={cancelLongPress}
                       onTouchEnd={cancelLongPress}
                       onTouchCancel={cancelLongPress}
-                      className={`flex items-center gap-3 px-3 sm:px-4 py-3 transition-colors duration-150
+                      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = 'var(--shadow-md)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '' }}
+                      className={`relative flex items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3.5 sm:py-4
+                        transition-[background-color,box-shadow] duration-150 hover:z-10
                         ${reorderMode ? 'cursor-default' : 'cursor-pointer'}
-                        ${selectedIds.has(p.id) ? 'bg-accent-bg' : 'hover:bg-page'}
+                        ${selectedIds.has(p.id) ? 'bg-accent-bg' : 'bg-card hover:bg-card'}
                         ${idx < cat.products.length - 1 ? 'border-b border-border-default' : ''}
                         ${!p.isAvailable ? 'opacity-60' : ''}
                         ${p.archivedAt ? 'opacity-70 bg-page/60' : ''}`}
@@ -1670,7 +1675,7 @@ export default function KitchenMenuPage() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-text-primary text-sm truncate">
+                        <div className="font-semibold text-text-primary text-[15px] leading-snug truncate">
                           {p.archivedAt ? p.name : (
                             <InlineEdit
                               value={p.name}
@@ -1683,8 +1688,8 @@ export default function KitchenMenuPage() {
                           )}
                           {isTop && (
                             <span
-                              className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700
-                                border border-emerald-200 align-middle inline-flex items-center gap-1 font-medium"
+                              className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-text-primary text-text-on-accent
+                                align-middle inline-flex items-center gap-1 font-semibold tracking-wide"
                               title="De los 3 más vendidos de esta marca en 30 días"
                             >
                               <Star className="w-3 h-3" /> Top 3
@@ -1727,9 +1732,12 @@ export default function KitchenMenuPage() {
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
                                 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-medium
                                 hover:bg-amber-100 transition-colors duration-150"
-                              title="Sin escandallo no hay coste ni margen: se vende a ciegas"
+                              title={p.recipeItemId
+                                ? 'Tiene escandallo pero aún no está costeado: dale a «Recostear todo» en Ajustes'
+                                : 'Sin escandallo no hay coste ni margen: se vende a ciegas'}
                             >
-                              <AlertTriangle className="w-3 h-3" /> sin escandallo
+                              <AlertTriangle className="w-3 h-3" />
+                              {p.recipeItemId ? 'sin costear' : 'sin escandallo'}
                             </button>
                           ) : null}
 
@@ -1753,7 +1761,7 @@ export default function KitchenMenuPage() {
                               : 'sin modificadores'}
                         </div>
                       </div>
-                      <div className="text-sm font-medium text-text-primary shrink-0 w-20 text-right tabular-nums"
+                      <div className="text-[15px] font-semibold text-text-primary shrink-0 w-20 sm:w-24 text-right tabular-nums"
                         onClick={(e) => e.stopPropagation()}>
                         {p.archivedAt ? formatEur(p.price) : (
                           <InlineEdit
@@ -1786,9 +1794,10 @@ export default function KitchenMenuPage() {
                               <span className={`inline-flex items-center gap-1 text-xs ${toneColor}`} title={meta.text}>
                                 <Icon className="w-3.5 h-3.5" /> {meta.label}
                               </span>
-                              {econ && (
-                                <div className="text-xs text-text-secondary mt-0.5">
-                                  coste {formatEur(econ.cost)}{meta.tone === 'green' ? ` · margen ${formatEur(econ.contributionMargin)}` : ''} · FC {formatPct(econ.foodCostPct)}
+                              {plateCost !== undefined && (
+                                <div className="text-xs text-text-secondary mt-0.5 tabular-nums">
+                                  coste {formatEur(plateCost)}
+                                  {p.price > 0 && ` · FC ${formatPct((plateCost / p.price) * 100)}`}
                                 </div>
                               )}
                               {health.sharedWith > 1 && (
