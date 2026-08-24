@@ -1,15 +1,15 @@
-# Tareas A y B — Pausar (86) desde la lista y menú contextual (F4)
+# Tareas A y B — Agotar (86) desde la lista y menú contextual (F4)
 
 Fecha: 24/08/2026 · Solo front. Cero migraciones. `App.tsx` sin tocar.
 
-## Tarea A — Pausar (86) desde la lista
+## Tarea A — Agotar (86) desde la lista
 
 ### La verificación que pedías: sí, llega a las plataformas
 
 Seguida hasta el final, no supuesta:
 
 ```
-botón Pausar (lista)
+botón agotar (lista)
   └─ setProductAvailability()            menuOverrideService
       └─ RPC set_product_availability    cascada CROSS-BRAND + guard de acceso
           └─ net.http_post → availability-dispatch
@@ -18,28 +18,33 @@ botón Pausar (lista)
               └─ Otter   : hueco declarado (se loguea, no se silencia)
 ```
 
-Como HubRise es quien alimenta Glovo/Uber/JustEat, **pausar en la lista pausa en
+Como HubRise es quien alimenta Glovo/Uber/JustEat, **agotar en la lista agota en
 las plataformas**. Lo que llega es el `is_available` del producto; los overrides
 por canal (`menu_item_override.is_available`) siguen siendo otro frente.
 
 ### Dos cosas que conviene que sepas
 
-**La pausa es cross-brand, no «de esta carta».** La RPC cascadea a todas las
+**El 86 es cross-brand, no «de esta carta».** La RPC cascadea a todas las
 marcas que comparten el producto físico (mismo escandallo o misma matrícula).
-Pausar la Coca-Cola en Milanesa Haus la pausa también en Dos Coyotes. Es el
+Agotar la Coca-Cola en Milanesa Haus la agota también en Dos Coyotes. Es el
 comportamiento que ya tenía la ficha, y es el correcto —el producto físico se ha
 acabado de verdad—, pero desde una lista por marca no es obvio.
 
 Por eso **no** pongo confirmación previa (pediste un toque, y el alcance no se
 conoce hasta que responde el servidor) sino que el resultado lo dice después:
-*«Coca-Cola pausado · 3 marcas · 4 canales»*, con **Deshacer** al lado. Un toque
-para pausar, y la verdad completa a la vista con vuelta atrás.
+*«Coca-Cola agotado · 3 marcas · 4 canales»*, con **Deshacer** al lado. Un toque
+para agotar, y la verdad completa a la vista con vuelta atrás.
 
-**Terminología.** Has pedido el badge «Pausado» y así está. El resto de la app
-llama a ese mismo estado **«agotado»** (`EnCartaTab`: «Agotado · reactivar»; la
-pantalla de Disponibilidad igual). Ahora mismo la lista dice «Pausado» y la ficha
-del mismo producto dirá «Agotado». Es un campo único (`is_available`), así que es
-solo el nombre: dime cuál quieres y lo unifico en las tres pantallas.
+**Terminología: unificada en «Agotado».** La primera versión decía «Pausado»,
+pero el resto de la app llama a ese mismo estado **«agotado»** (`EnCartaTab`:
+«Agotado · reactivar»; la pantalla de Disponibilidad igual) y es un campo único
+(`is_available`) — dos nombres para lo mismo era una trampa. Ahora la lista dice
+**«Agotado»**, el botón «Marcar agotado» / «Reactivar», y el aviso «… agotado ·
+3 marcas · 4 canales». Los iconos también se alinean: `CircleSlash`, que es el
+que el propio módulo asocia a Disponibilidad, y `CheckCircle2` para reactivar.
+
+(«Pausar/Reanudar» sigue existiendo en Ofertas de plataformas, y ahí se queda:
+eso es pausar una promoción, no marcar un producto sin stock.)
 
 ## Tarea B — Menú contextual (F4)
 
@@ -85,7 +90,7 @@ comparte la receta a propósito — coste único.
 | Mover a categoría ▸ | `setMenuItemCategory`, submenú con las categorías + «Sin categoría» |
 | Duplicar | `duplicateMenuItem` (nuevo, ver arriba) |
 | Añadir a otra marca ▸ | `addRecipeToBrand`; deshabilitado con motivo si no hay escandallo o ya está en todas |
-| Pausar / Reanudar | la misma vía de la Tarea A |
+| Marcar agotado / Reactivar | la misma vía de la Tarea A |
 | Quitar de esta carta | `archiveMenuItem`, con el diálogo y el aviso de ventas de ayer |
 | Ir a ficha completa | la ficha de siempre |
 

@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, Pause, Play } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, CircleSlash } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { fmtMoney } from '@/lib/format'
 import {
@@ -508,14 +508,17 @@ export default function KitchenMenuPage() {
     }
   }
 
-  // ── Pausar / reanudar (86) desde la lista ────────────────────────────────
+  // ── Agotar / reactivar (86) desde la lista ───────────────────────────────
   // Misma vía que la ficha: setProductAvailability -> RPC set_product_availability,
   // que cascadea CROSS-BRAND (el producto físico es el mismo en todas las marcas
   // que comparten escandallo o matrícula) y empuja a availability-dispatch, que
   // hace PATCH de inventario en HubRise. Por eso no se pide confirmación previa
-  // pero SÍ se dice el alcance real después, con Deshacer: pausar tiene que ser
+  // pero SÍ se dice el alcance real después, con Deshacer: agotar tiene que ser
   // de un toque, y el alcance no se puede saber hasta que responde el servidor.
-  async function togglePause(p: { id: string; name: string; isAvailable: boolean }) {
+  //
+  // Mismo vocabulario que la ficha y que Disponibilidad ("Agotado · reactivar"):
+  // es un único campo (is_available) y llamarlo de dos maneras confunde.
+  async function toggleAvailability(p: { id: string; name: string; isAvailable: boolean }) {
     if (moving) return
     const next = !p.isAvailable
     setMoving(true)
@@ -527,8 +530,8 @@ export default function KitchenMenuPage() {
       const canales = res.channels > 0 ? ` · ${res.channels} canal${res.channels === 1 ? '' : 'es'}` : ''
       setUndo({
         label: next
-          ? `«${p.name}» de nuevo a la venta${alcance}`
-          : `«${p.name}» pausado${alcance}${canales}`,
+          ? `«${p.name}» reactivado${alcance}`
+          : `«${p.name}» agotado${alcance}${canales}`,
         revert: async () => {
           await setProductAvailability(p.id, p.isAvailable, 'manual')
           reloadCatalogProducts()
@@ -1091,7 +1094,7 @@ export default function KitchenMenuPage() {
                             </span>
                           ) : !p.isAvailable ? (
                             <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 align-middle inline-flex items-center gap-1">
-                              <Pause className="w-3 h-3" /> Pausado
+                              <CircleSlash className="w-3 h-3" /> Agotado
                             </span>
                           ) : null}
                         </div>
@@ -1148,17 +1151,17 @@ export default function KitchenMenuPage() {
                       </div>
                       <div className="shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => void togglePause({ id: p.id, name: p.name, isAvailable: p.isAvailable })}
+                          onClick={() => void toggleAvailability({ id: p.id, name: p.name, isAvailable: p.isAvailable })}
                           disabled={moving}
                           className={`p-1.5 rounded-md disabled:opacity-20 transition-colors ${
                             p.isAvailable
                               ? 'text-gray-300 hover:text-amber-600 hover:bg-amber-50'
                               : 'text-amber-600 hover:bg-amber-50'
                           }`}
-                          title={p.isAvailable ? 'Pausar (se me ha acabado)' : 'Reanudar: volver a la venta'}
-                          aria-label={p.isAvailable ? `Pausar ${p.name}` : `Reanudar ${p.name}`}
+                          title={p.isAvailable ? 'Marcar agotado (se me ha acabado)' : 'Reactivar: volver a la venta'}
+                          aria-label={p.isAvailable ? `Marcar agotado ${p.name}` : `Reactivar ${p.name}`}
                         >
-                          {p.isAvailable ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                          {p.isAvailable ? <CircleSlash className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                         </button>
                         <button
                           onClick={() => askRemoveProducts([{ id: p.id, name: p.name }])}
@@ -1255,10 +1258,10 @@ export default function KitchenMenuPage() {
               })
             })
           }}
-          onTogglePause={() => {
+          onToggleAvailability={() => {
             const t = ctxMenu.target
             setCtxMenu(null)
-            void togglePause({ id: t.id, name: t.name, isAvailable: t.isAvailable })
+            void toggleAvailability({ id: t.id, name: t.name, isAvailable: t.isAvailable })
           }}
           onRemove={() => {
             const t = ctxMenu.target

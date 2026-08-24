@@ -16,7 +16,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  Pencil, Euro, FolderInput, Copy, Store, Pause, Play, X, FileText, ChevronRight,
+  Pencil, Euro, FolderInput, Copy, Store, CircleSlash, CheckCircle2, X, FileText, ChevronRight,
 } from 'lucide-react'
 
 export interface ContextMenuTarget {
@@ -52,7 +52,7 @@ interface Props {
   onMoveToCategory: (categoryId: string | null) => void
   onDuplicate: () => void
   onAddToBrand: (brandId: string) => void
-  onTogglePause: () => void
+  onToggleAvailability: () => void
   onRemove: () => void
   onOpenFicha: () => void
   onClose: () => void
@@ -112,7 +112,7 @@ function Row({
 export default function ProductContextMenu({
   target, x, y, categories, brands, busy = false,
   onEditName, onEditPrice, onMoveToCategory, onDuplicate, onAddToBrand,
-  onTogglePause, onRemove, onOpenFicha, onClose,
+  onToggleAvailability, onRemove, onOpenFicha, onClose,
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: x, top: y })
@@ -212,9 +212,9 @@ export default function ProductContextMenu({
 
       {/* Disponibilidad y salida de la carta */}
       <Row
-        icon={target.isAvailable ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-        label={target.isAvailable ? 'Pausar (se me ha acabado)' : 'Reanudar: volver a la venta'}
-        onClick={onTogglePause}
+        icon={target.isAvailable ? <CircleSlash className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+        label={target.isAvailable ? 'Marcar agotado (86)' : 'Reactivar: volver a la venta'}
+        onClick={onToggleAvailability}
         disabled={busy}
       />
       <Row
