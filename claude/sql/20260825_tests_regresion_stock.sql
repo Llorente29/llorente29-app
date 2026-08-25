@@ -122,3 +122,16 @@ select 'T10 latencia consumo (min)' as test,
        round(max(extract(epoch from (created_at - occurred_at))/60)::numeric, 1) as max
 from stock_movement
 where source_type='sale' and movement_type='consumo' and occurred_at >= now() - interval '14 days';
+
+-- ══ T11 · (tope de cordura) Cantidades imposibles en conteos ══════════════
+-- Desde el 25-08 hay un trigger (trg_inventory_count_line_sanity) que rechaza
+-- >1.000× el teórico, o el tope absoluto si no hay teórico, salvo confirmación
+-- explícita del contador para ESE valor exacto. Baseline tras la limpieza: 0.
+-- Si esto crece sin una confirmación detrás, el tope se ha caído.
+select 'T11 cantidades imposibles' as test,
+       count(*) filter (where l.counted_qty > 1000000
+                          and l.counted_qty_confirmed is distinct from l.counted_qty) as fallos,
+       count(*) filter (where l.counted_qty_confirmed = l.counted_qty) as confirmadas_a_mano,
+       count(*) filter (where l.counted_qty < 0) as negativas
+from public.inventory_count_line l
+where l.counted_qty is not null;

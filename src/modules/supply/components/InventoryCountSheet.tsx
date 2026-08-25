@@ -19,6 +19,7 @@ import {
   getInventoryCount,
   listCountLines,
   saveCountedQty,
+  AbsurdQuantityError,
   saveReasonCode,
   closeInventoryCount,
   approveInventoryCount,
@@ -146,10 +147,30 @@ export default function InventoryCountSheet({
     setLines(prev => prev.map(l => l.id === line.id ? { ...l, countedQty: parsed } : l))
   }
 
+  /** Guarda la cantidad y, si el servidor la rechaza por estar fuera de escala,
+   *  pide confirmación expresa antes de insistir. Si no se confirma, la línea
+   *  vuelve a quedar sin contar: no se guarda un dedo gordo por inercia. */
+  async function saveQty(line: InventoryCountLine, qty: number | null) {
+    try {
+      await saveCountedQty(line.id, qty, authUserId ?? null, userProfile?.displayName ?? null)
+    } catch (e) {
+      if (e instanceof AbsurdQuantityError) {
+        if (window.confirm(`${e.message}\n\n¿Confirmas que has contado esa cantidad?`)) {
+          await saveCountedQty(line.id, qty, authUserId ?? null, userProfile?.displayName ?? null, e.quantity)
+          return
+        }
+        setLines(prev => prev.map(l => l.id === line.id ? { ...l, countedQty: null } : l))
+        await saveCountedQty(line.id, null, authUserId ?? null, userProfile?.displayName ?? null)
+        return
+      }
+      throw e
+    }
+  }
+
   async function onCountedBlur(line: InventoryCountLine) {
     setSavingId(line.id)
     try {
-      await saveCountedQty(line.id, line.countedQty, authUserId ?? null, userProfile?.displayName ?? null)
+      await saveQty(line, line.countedQty)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar.')
     } finally {
@@ -162,7 +183,7 @@ export default function InventoryCountSheet({
     setCalcLineId(null)
     setSavingId(line.id)
     try {
-      await saveCountedQty(line.id, qtyInBase, authUserId ?? null, userProfile?.displayName ?? null)
+      await saveQty(line, qtyInBase)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar.')
     } finally {
