@@ -343,6 +343,12 @@ export interface ResolveResult {
   recipeItemId: string | null
   brandId: string | null
   lineasAfectadas: number
+  /** Ventas cuyo consumo se ha vuelto a calcular (posteriores al último conteo). */
+  ventasReprocesadas: number
+  /** Ventas que NO se han tocado porque un conteo aprobado ya dijo la verdad. */
+  ventasProtegidas: number
+  /** Importe de esas ventas protegidas. */
+  eurosProtegidos: number
 }
 
 interface RowResolve {
@@ -350,14 +356,24 @@ interface RowResolve {
   menu_item_id: string | null
   recipe_item_id: string | null
   brand_id: string | null
-  lineas_afectadas: number
+  ventas_reprocesadas: number | null
+  ventas_protegidas: number | null
+  euros_protegidos: number | null
 }
 
 /**
  * Resuelve un producto ciego. 'link' (solo no_menu_item: crea el plato en carta
- * y recasa) | 'ignore' | 'delist'. La lógica de resolución vive en la RPC
- * resolve_unmapped_sales (reusa la cadena del recast, no la duplica). La RPC lanza
- * EXCEPTION si el producto es combo o no tiene receta (link): se propaga como Error.
+ * y recalcula el consumo) | 'ignore' | 'delist'. La RPC lanza EXCEPTION si el
+ * producto es combo o no tiene receta (link): se propaga como Error.
+ *
+ * Llama a resolve_unmapped_sales_scoped, no a resolve_unmapped_sales. La
+ * diferencia es EL CORTE, y no es cosmética: la versión sin corte termina en
+ * recast_lastapp_sales(cuenta), que reprocesa TODAS las ventas lastapp de la
+ * cuenta. Medido el 25/08 en Foodint: 7.042 de 7.197 ventas (195.185,32 €)
+ * caen por debajo del último conteo aprobado de su local. Reprocesarlas
+ * regenera consumo que un conteo físico ya corrigió — el doble descuento de
+ * A3, a escala 11x. La versión con corte solo toca las ventas posteriores al
+ * conteo y devuelve cuántas ha protegido.
  */
 export async function resolveUnmapped(
   accountId: string,
@@ -365,7 +381,7 @@ export async function resolveUnmapped(
   action: ResolveAction,
 ): Promise<ResolveResult> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('resolve_unmapped_sales', {
+  const { data, error } = await supabase!.rpc('resolve_unmapped_sales_scoped', {
     p_account_id: accountId,
     p_product_name: productName,
     p_action: action,
@@ -373,12 +389,18 @@ export async function resolveUnmapped(
   if (error) throw new Error(error.message)
   const row = (Array.isArray(data) ? data[0] : data) as RowResolve | undefined
   if (!row) throw new Error('La acción no devolvió resultado.')
+  const reprocesadas = Number(row.ventas_reprocesadas ?? 0)
   return {
     resultado: row.resultado as ResolveResult['resultado'],
     menuItemId: row.menu_item_id ?? null,
     recipeItemId: row.recipe_item_id ?? null,
     brandId: row.brand_id ?? null,
-    lineasAfectadas: Number(row.lineas_afectadas ?? 0),
+    // La RPC con corte cuenta ventas, no líneas. Es el número que le importa a
+    // quien pulsa: cuántos tickets se han vuelto a calcular.
+    lineasAfectadas: reprocesadas,
+    ventasReprocesadas: reprocesadas,
+    ventasProtegidas: Number(row.ventas_protegidas ?? 0),
+    eurosProtegidos: Number(row.euros_protegidos ?? 0),
   }
 }
 
@@ -490,9 +512,12 @@ export async function createDishFromUnmapped(
   lineasCasadas: number
   creado: boolean
   candidato: DuplicateCandidate | null
+  ventasReprocesadas: number
+  ventasProtegidas: number
+  eurosProtegidos: number
 }> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('create_dish_from_unmapped', {
+  const { data, error } = await supabase!.rpc('create_dish_from_unmapped_scoped', {
     p_account_id: accountId,
     p_product_name: productName,
     p_confirm_create: confirmCreate,
@@ -502,6 +527,8 @@ export async function createDishFromUnmapped(
     out_recipe_item_id: string | null; out_marcas_creadas: number; out_lineas_casadas: number
     out_creado: boolean; out_candidato_id: string | null; out_candidato_nombre: string | null
     out_similitud: number | null
+    out_ventas_reprocesadas: number | null; out_ventas_protegidas: number | null
+    out_euros_protegidos: number | null
   } | undefined
   if (!row) throw new Error('No se pudo crear el plato.')
   return {
@@ -512,6 +539,9 @@ export async function createDishFromUnmapped(
     candidato: row.out_candidato_id
       ? { recipeItemId: row.out_candidato_id, nombre: row.out_candidato_nombre ?? '', similitud: Number(row.out_similitud ?? 0) }
       : null,
+    ventasReprocesadas: Number(row.out_ventas_reprocesadas ?? 0),
+    ventasProtegidas: Number(row.out_ventas_protegidas ?? 0),
+    eurosProtegidos: Number(row.out_euros_protegidos ?? 0),
   }
 }
 

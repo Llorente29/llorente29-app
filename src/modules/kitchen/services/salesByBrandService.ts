@@ -392,8 +392,14 @@ export async function ignoreBrandProduct(
 }
 
 /**
- * Deshace el ignore de un producto de una marca: lo devuelve a pendiente y recasa
- * (recomputa la razón real). Acotado a la marca. Devuelve nº de líneas reabiertas.
+ * Deshace el ignore de un producto de una marca: lo devuelve a pendiente y
+ * recomputa su razón real. Acotado a la marca. Devuelve nº de líneas reabiertas.
+ *
+ * Usa unignore_unmapped_sales_scoped: la versión sin corte remataba con
+ * recast_lastapp_sales(cuenta), que reprocesa TODAS las ventas lastapp — y
+ * reprocesar una venta anterior a un conteo aprobado regenera consumo que ese
+ * conteo ya corrigió. Reabrir una línea ignorada no debe mover el stock de
+ * hace dos meses.
  */
 export async function unignoreBrandProduct(
   accountId: string,
@@ -401,7 +407,7 @@ export async function unignoreBrandProduct(
   productName: string,
 ): Promise<number> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('unignore_unmapped_sales', {
+  const { data, error } = await supabase!.rpc('unignore_unmapped_sales_scoped', {
     p_account_id: accountId,
     p_product_name: productName,
     p_brand_id: brandId,
