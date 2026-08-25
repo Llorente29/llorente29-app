@@ -17881,6 +17881,26 @@ export type Database = {
           out_similitud: number
         }[]
       }
+      create_dish_from_unmapped_scoped: {
+        Args: {
+          p_account_id: string
+          p_confirm_create?: boolean
+          p_include_before_last_count?: boolean
+          p_product_name: string
+        }
+        Returns: {
+          out_candidato_id: string
+          out_candidato_nombre: string
+          out_creado: boolean
+          out_euros_protegidos: number
+          out_lineas_casadas: number
+          out_marcas_creadas: number
+          out_recipe_item_id: string
+          out_similitud: number
+          out_ventas_protegidas: number
+          out_ventas_reprocesadas: number
+        }[]
+      }
       create_mirror_item: {
         Args: { p_account: string; p_item: string }
         Returns: Json
@@ -19704,6 +19724,25 @@ export type Database = {
           resultado: string
         }[]
       }
+      resolve_unmapped_sales_scoped: {
+        Args: {
+          p_account_id: string
+          p_action: string
+          p_brand_id?: string
+          p_include_before_last_count?: boolean
+          p_product_name: string
+          p_reason?: string
+        }
+        Returns: {
+          brand_id: string
+          euros_protegidos: number
+          menu_item_id: string
+          recipe_item_id: string
+          resultado: string
+          ventas_protegidas: number
+          ventas_reprocesadas: number
+        }[]
+      }
       restore_recipe_version: {
         Args: { p_created_by_name?: string; p_version_id: string }
         Returns: string
@@ -20986,6 +21025,21 @@ export type Database = {
         Returns: {
           lineas_afectadas: number
           resultado: string
+        }[]
+      }
+      unignore_unmapped_sales_scoped: {
+        Args: {
+          p_account_id: string
+          p_brand_id?: string
+          p_include_before_last_count?: boolean
+          p_product_name: string
+        }
+        Returns: {
+          euros_protegidos: number
+          lineas_afectadas: number
+          resultado: string
+          ventas_protegidas: number
+          ventas_reprocesadas: number
         }[]
       }
       unlockrows: { Args: { "": string }; Returns: number }
