@@ -1,0 +1,48 @@
+-- 20260825_datafix_inv00129_y_mozzarella.sql
+-- REGISTRO de lo EJECUTADO el 25-08-2026. Bitácora en
+-- public.inventory_count_datafix_log, batch '20260825_topes_cordura'.
+
+-- ════════════════════════════════════════════════════════════════════════
+-- INV-00129 · Salsa Mayo Chipotle: 7.200.000 g (7,2 toneladas)
+-- ════════════════════════════════════════════════════════════════════════
+-- QUÉ ASENTÓ, mirando el ledger del artículo:
+--   02-08  ajuste  +7.193.900   source_type='inventory_count'  (el conteo)
+--   02-08  ajuste  -7.192.800   source_type='adjustment'       (a mano, el mismo día)
+--   neto: +1.100  →  el stock quedó en 7.200 g
+--
+-- O sea: alguien vio el disparate el mismo día y lo compensó a mano hasta
+-- exactamente 7.200 g. Ahí está la intención real — 7.200, no 7.200.000 — y no
+-- hay que inventar nada. El ledger llevaba 23 días compensado; lo que seguía
+-- mintiendo era el INFORME (+7,2 t de sobrante) y la línea, que era una mina
+-- para cualquier reanclaje futuro (de hecho el de esta mañana la volvió a
+-- asentar).
+--
+-- QUÉ SE HIZO (mismo criterio que con la mozzarella: que el tecleo no mande):
+--   1. counted_qty  7.200.000 → 7.200
+--   2. asiento del conteo recalculado contra el ledger real del instante: +1.100
+--   3. retirado el ajuste compensatorio de -7.192.800, que solo existía para
+--      deshacer el tecleo
+--   4. informe de la línea rehecho y caché recomputada
+--
+-- SALDO NETO DEL LEDGER: IDÉNTICO. 14.450 g totales antes y después,
+-- 3.000 g en el local. No se ha movido un gramo de stock: solo el relato,
+-- que pasa de «+7.193.900 y luego -7.192.800» a un limpio «+1.100».
+
+-- ════════════════════════════════════════════════════════════════════════
+-- INV-00002 · Mozzarella rallada: 5×10¹⁵
+-- ════════════════════════════════════════════════════════════════════════
+-- Apertura del 15-06, semana de pruebas (tres conteos en minutos). No hay
+-- ninguna evidencia de cuál era la cantidad real, así que NO se inventa un
+-- número: se anula la medición (counted_qty = NULL).
+--   · El asiento de +6.000 que lleva dos meses en el ledger se deja intacto:
+--     no se toca el stock.
+--   · Al quedar sin cantidad contada, ningún reanclaje futuro puede volver a
+--     asentar el tecleo — que es exactamente lo que pasó esta mañana.
+--
+-- Comprobación final: 0 líneas en toda la base con counted_qty > 1.000.000.
+
+-- ── MARCHA ATRÁS ─────────────────────────────────────────────────────────
+-- La bitácora guarda cantidades viejas y nuevas y las filas completas de los
+-- movimientos borrados y creados (jsonb):
+--   select * from public.inventory_count_datafix_log
+--    where batch = '20260825_topes_cordura';

@@ -261,3 +261,49 @@ No es el único dato imposible del histórico: **INV-00129** tiene `counted_qty 
 | T3 · caché desalineada | 144 de 716 | **0** |
 | T8 · informe ≠ asiento | 2 en el conteo más reciente | **0** |
 | Líneas con el teórico fuera del ledger | — | **0** |
+
+---
+
+## 12. Tope de cordura y limpieza de los dos datos imposibles
+
+### El tope (migración `20260825T1900`, aplicada)
+
+Trigger `trg_inventory_count_line_sanity` sobre `inventory_count_line`, en el servidor — no en el cliente, porque el cliente guarda con un UPDATE directo y cualquier otra vía (app nativa, script, PostgREST) tiene que toparse con lo mismo.
+
+| Regla | Umbral | Ajustable en |
+|---|---|---|
+| Más de N× el teórico | **1.000×** | `supply_settings.count_absurd_factor` |
+| Sin teórico (o teórico ≤ 0): tope absoluto | **1.000.000** en unidad base | `supply_settings.count_absurd_abs_cap` |
+| Cantidad negativa | siempre rechazada | — |
+
+**Calibración:** sobre las 1.546 líneas contadas del histórico, p99 = 66.375 y la mayor cantidad creíble = 104.000. Solo 2 pasaban de 1.000.000 y las dos eran tecleos. Con estos umbrales no se habría bloqueado **ni una sola línea legítima**.
+
+**La confirmación vale solo para el valor confirmado.** Se guarda en `counted_qty_confirmed`; el servidor exige que coincida exactamente con `counted_qty`. Si el contador vuelve a teclear otra cantidad absurda, se le vuelve a parar. Y si guarda sin confirmar, el campo se limpia: nunca se hereda una confirmación anterior.
+
+Probado en vivo sobre una línea de un conteo anulado y restaurada después: 30.000.000 con teórico 24.816 → rechazado («son 1209 veces más»); con confirmación → pasa; 40.000.000 con esa confirmación puesta → rechazado otra vez.
+
+En la app (`InventoryCountSheet`), el rechazo abre un `window.confirm` con el mensaje del servidor. Si el contador no confirma, **la línea vuelve a quedar sin contar**: no se guarda un dedo gordo por inercia.
+
+### INV-00129 — 7,2 toneladas de salsa mayo chipotle
+
+Mirando el ledger apareció la clave: **alguien lo detectó el mismo día**.
+
+| Fecha | Movimiento | Cantidad | Origen |
+|---|---|---|---|
+| 02-08 | ajuste | +7.193.900 | el conteo |
+| 02-08 | ajuste | **−7.192.800** | a mano, el mismo día |
+| | **neto** | **+1.100** | deja el stock en 7.200 g |
+
+La intención real era **7.200 g**, y no hay que inventarla: está escrita en el ajuste compensatorio. El ledger llevaba 23 días cuadrado; lo que seguía mintiendo era el informe (+7,2 t de sobrante) y la línea, que era una mina para cualquier reanclaje — de hecho el de esta mañana la volvió a asentar.
+
+Corregido con el mismo criterio que la mozzarella: `counted_qty` a 7.200, asiento recalculado a **+1.100**, y retirado el ajuste compensatorio que solo existía para deshacer el tecleo. **El saldo del ledger no se mueve**: 14.450 g totales y 3.000 g en el local, antes y después. Solo cambia el relato.
+
+### INV-00002 — la mozzarella de 5×10¹⁵
+
+No hay evidencia de cuál era la cantidad real, así que no se inventa: se anula la medición (`counted_qty = NULL`) y se deja intacto el asiento de +6.000 que lleva dos meses en el ledger. Al quedarse sin cantidad contada, ningún reanclaje futuro puede volver a asentar el tecleo.
+
+**Comprobación final: 0 líneas en toda la base con `counted_qty > 1.000.000`.**
+
+### Tablas de trabajo
+
+`_a1_anuladas`, `_a2_cache_antes`, `_a3_cola` y `_a3_antes` se conservan hasta el **1 de septiembre de 2026** y luego se borran.
