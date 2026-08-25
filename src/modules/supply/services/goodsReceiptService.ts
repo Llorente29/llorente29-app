@@ -603,89 +603,47 @@ export async function getReceiptDocTotal(aiSessionId: string): Promise<number | 
   return total === null || total === undefined ? null : Number(total)
 }
 
-// ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §5 — umbral de racha (diseño
-// claude_folvy_recepcion_pantalla_diseno_20260813.md §6): 30 recepciones
-// CONSECUTIVAS sin corrección de cantidad, no un porcentaje (un porcentaje se
-// cumple con fallos recientes; una racha demuestra que el proceso está estable
-// AHORA). Al alcanzarlo, Folvy PROPONE pasar el local a confirmación directa —
-// no lo cambia solo (ese modo, P4, es un encargo aparte: hoy no hay pantalla
-// que lo consuma).
+// ENCARGO Julio (25/08) — la racha DEJA de calcularse al vuelo en el cliente y
+// pasa a vivir en public.location_receipt_trust, que el servidor mantiene en
+// cada recepción y en cada corrección de oficina (migración
+// 20260825T2000_recepcion_stock_siempre_y_confianza.sql).
+//
+// Qué cambia respecto al cálculo anterior, y por qué:
+//   · Es por LOCAL y cuenta TODAS las recepciones del asistente, venga el
+//     género de quien venga: mide si cocina cuenta bien, no si el proveedor
+//     sirve bien.
+//   · La marca de "recepción del asistente" ya no se deduce de status='recibido'
+//     (que se perdía al confirmar y hacía contar de menos): vive en
+//     goods_receipt.via_assistant.
+//   · Al llegar al objetivo, el local pasa SOLO a confirmación directa. Una
+//     única corrección de oficina rompe la racha y vuelve a exigir revisión.
 export const CORRECTION_STREAK_GOAL = 30
 
 export interface CorrectionStreak {
-  correctedCount: number   // de las últimas `totalCount` recepciones DEL ASISTENTE
-  totalCount: number
-  streak: number           // seguidas sin corrección, contando desde la más reciente (nunca > streakGoal)
+  correctedCount: number   // recepciones del asistente que oficina tuvo que corregir
+  totalCount: number       // recepciones del asistente contadas
+  streak: number           // seguidas sin corrección, desde la más reciente
   streakGoal: number
-  metGoal: boolean          // streak >= streakGoal
+  metGoal: boolean          // confirmación directa ACTIVA (no "podrías activarla")
 }
 
-/**
- * Racha de recepciones DEL ASISTENTE (no el histórico entero) SIN que la
- * oficina tuviera que corregir una cantidad (ENCARGO CODE 13/08
- * fix/recepcion-p2-oficina, §5; recorte de alcance ENCARGO CODE 14/08
- * fix/recepcion-lista-recibido, §3). Recibe los candidatos ya cargados por el
- * llamador (recepciones 'recibido' o 'confirmado', ya filtradas por local),
- * del más reciente al más antiguo.
- *
- * "Del asistente" = status='recibido' (el flujo clásico nunca pasa por ahí),
- * o alguna línea con la ⚑ (flagged_for_office) — columna que solo escribe el
- * asistente, ninguna recepción del flujo clásico puede tenerla en true. No
- * hay columna que sobreviva la transición recibido→confirmado (añadirla es
- * migración, fuera de este encargo si hace falta) así que una recepción del
- * asistente con TODAS sus líneas sin marcar deja de detectarse en cuanto se
- * confirma — error hacia el lado seguro: cuenta de menos, nunca de más, así
- * que nunca dispara antes de tiempo la propuesta de confirmación directa.
- *
- * "Corregida" = alguna línea SIN ⚑ (flagged_for_office=false) con
- * discrepancy_reason puesto por el picker de oficina (isOfficeQtyReason) — NO
- * cualquier discrepancy_reason (el dropdown del panel de repaso usa el mismo
- * campo para otra cosa: por qué difiere de lo pedido/del albarán).
- *
- * ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo C — matiz del
- * asistente: una línea que cocina marcó ⚑ ("que lo mire la oficina") y que
- * oficina corrige NO cuenta como fallo de cocina — cocina ya avisó que no
- * estaba segura. Solo rompe la racha una corrección SOBRE UNA LÍNEA SIN
- * MARCAR (cocina dio por buena una cantidad que resultó ser otra).
- */
-export async function getReceiptCorrectionStreak(
-  candidatesRecentFirst: { id: string; status: GoodsReceiptStatus }[],
-): Promise<CorrectionStreak> {
+/** Lee la confianza persistida del local. null si el local aún no tiene fila
+ *  (ninguna recepción del asistente todavía). */
+export async function getLocationReceiptTrust(locationId: string): Promise<CorrectionStreak | null> {
   requireSupabase()
-  if (candidatesRecentFirst.length === 0) {
-    return { correctedCount: 0, totalCount: 0, streak: 0, streakGoal: CORRECTION_STREAK_GOAL, metGoal: false }
-  }
-  const { data, error } = await from('goods_receipt_line')
-    .select('goods_receipt_id, discrepancy_reason, flagged_for_office')
-    .in('goods_receipt_id', candidatesRecentFirst.map(r => r.id))
-  if (error) throw new Error(`Error calculando la racha de correcciones: ${error.message}`)
-  const lines = (data as Row[]) ?? []
-
-  const flaggedIds = new Set(lines.filter(l => l.flagged_for_office).map(l => l.goods_receipt_id as string))
-  const assistantRecentFirst = candidatesRecentFirst
-    .filter(r => r.status === 'recibido' || flaggedIds.has(r.id))
-    .slice(0, 60)
-
-  const correctedIds = new Set<string>()
-  for (const row of lines) {
-    if (isOfficeQtyReason(row.discrepancy_reason as string | null) && !row.flagged_for_office) {
-      correctedIds.add(row.goods_receipt_id as string)
-    }
-  }
-
-  let streak = 0
-  for (const r of assistantRecentFirst) {
-    if (correctedIds.has(r.id)) break
-    streak++
-    if (streak >= CORRECTION_STREAK_GOAL) break
-  }
-
+  const { data, error } = await from('location_receipt_trust')
+    .select('streak, goal, assistant_receipts, corrected_receipts, direct_confirm_enabled')
+    .eq('location_id', locationId)
+    .maybeSingle()
+  if (error) throw new Error(`Error leyendo la confianza del local: ${error.message}`)
+  const r = data as Row | null
+  if (!r) return null
   return {
-    correctedCount: assistantRecentFirst.filter(r => correctedIds.has(r.id)).length,
-    totalCount: assistantRecentFirst.length,
-    streak,
-    streakGoal: CORRECTION_STREAK_GOAL,
-    metGoal: streak >= CORRECTION_STREAK_GOAL,
+    correctedCount: Number(r.corrected_receipts ?? 0),
+    totalCount: Number(r.assistant_receipts ?? 0),
+    streak: Number(r.streak ?? 0),
+    streakGoal: Number(r.goal ?? CORRECTION_STREAK_GOAL),
+    metGoal: Boolean(r.direct_confirm_enabled),
   }
 }
 
@@ -882,11 +840,16 @@ export async function confirmReceipt(receiptId: string): Promise<ConfirmReceiptR
 
 /**
  * ENCARGO CODE (13/08) feat/recepcion-v2-asistente, Tramo B — el botón del
- * asistente ("Recibir y meter al stock"): postea al ledger vía
- * receive_goods_receipt (misma lógica de movimientos que confirm_goods_receipt,
- * server-side no duplicada — ver la migración) y deja status='recibido'. El
- * stock entra AQUÍ, no al confirmar de oficina; confirm_goods_receipt sobre un
- * 'recibido' ya no vuelve a postear, solo cierra.
+ * asistente: postea al ledger vía receive_goods_receipt (misma lógica de
+ * movimientos que confirm_goods_receipt, server-side no duplicada — ver la
+ * migración) y deja status='recibido'. El stock entra AQUÍ, no al confirmar de
+ * oficina; confirm_goods_receipt sobre un 'recibido' ya no vuelve a postear,
+ * solo cierra.
+ *
+ * ENCARGO Julio (25/08) — EL STOCK ENTRA SIEMPRE. `hold` ya no retiene la
+ * mercancía: pasa a ser solo una marca de "que lo mire oficina". Un ajuste
+ * posterior es barato; una cocina sin producto en el sistema, no. Medido: 5
+ * albaranes retenidos acabaron anulados sin entrar nunca, 2.875,42 €.
  *
  * Hace el mismo trabajo que confirmReceipt() tras postear (flip de estrategia
  * de coste, ripple RAW→platos, aprendizaje de memoria/alias) porque para el
@@ -895,10 +858,10 @@ export async function confirmReceipt(receiptId: string): Promise<ConfirmReceiptR
  */
 export async function receiveGoodsReceipt(
   receiptId: string,
-  // ENCARGO CODE (20/08) «Verificar a ciegas» §3 — hold = la IA pidió revisión.
-  // El albarán queda en 'recibido' (para que la oficina lo pueda abrir) pero
-  // NO entra nada al almacén: el stock entra cuando un humano cierre.
-  // Requiere 20260820T1700_recepcion_verificacion_a_ciegas.sql.
+  // hold = la IA pidió revisión. Desde el 25/08 NO retiene mercancía: el
+  // albarán entra al ledger igual y queda marcado (needs_review) para que
+  // oficina lo repase. Lo único que no entra es lo que no se PUEDE postear
+  // (línea sin artículo o sin cantidad base), que sale como skippedLines.
   hold = false,
 ): Promise<ConfirmReceiptResult> {
   requireSupabase()
@@ -912,25 +875,18 @@ export async function receiveGoodsReceipt(
   // Por eso se prueban LAS DOS formas en vez de confiar en que PostgREST
   // resuelva el argumento por defecto: se intenta la de 2 y, si el servidor
   // dice que esa función no existe, se reintenta con la de 1.
-  //   · hold=false → si solo hay firma vieja, el reintento hace exactamente
-  //     lo de siempre. Cero cambio de comportamiento.
-  //   · hold=true  → retener NO se puede emular con la firma vieja (postearía
-  //     el stock, justo lo que estamos evitando). Se explica y se corta: la
-  //     recepción se queda en BORRADOR, con todo lo que escribió el
-  //     trabajador guardado y sin nada en el almacén. Ése es el lado seguro.
+  //
+  // ENCARGO Julio (25/08): ahora el reintento con la firma de 1 argumento es
+  // seguro en LOS DOS casos. Antes hold=true no se podía emular porque la firma
+  // vieja posteaba el stock — que es justo lo que ahora queremos. Lo único que
+  // se pierde en ese reintento es la marca needs_review, y eso lo arregla
+  // oficina en un clic; quedarse sin mercancía en el sistema, no.
   const noExiste = (msg: string) => /Could not find the function|PGRST202|does not exist/i.test(msg)
 
   let { data, error } = await rpcUntyped('receive_goods_receipt', {
     p_receipt_id: receiptId, p_hold: hold,
   })
   if (error && noExiste(error.message)) {
-    if (hold) {
-      throw new Error(
-        'Este albarán necesita revisión de oficina y esa parte todavía no está puesta en el servidor ' +
-        '(falta la migración 20260820T1700). La recepción se queda como borrador: no se ha perdido nada ' +
-        'y no ha entrado nada al almacén.',
-      )
-    }
     ;({ data, error } = await rpcUntyped('receive_goods_receipt', { p_receipt_id: receiptId }))
   }
   if (error) throw new Error(`Error recibiendo la recepción: ${error.message}`)
@@ -940,9 +896,10 @@ export async function receiveGoodsReceipt(
   const postedLines = Number(row?.posted_lines ?? 0)
   const skippedLines = Number(row?.skipped_lines ?? 0)
 
-  // Retenido: no ha entrado nada al almacén, así que no hay coste que propagar
-  // ni memoria que aprender. Aprender de un albarán que la IA marcó dudoso es
-  // exactamente cómo se contamina el catálogo.
+  // Marcado para oficina: la mercancía SÍ ha entrado (25/08), pero no se
+  // propaga coste ni se aprende memoria/alias hasta que un humano lo repase.
+  // Aprender de un albarán que la IA marcó dudoso es exactamente cómo se
+  // contamina el catálogo: el stock se corrige en un clic, el catálogo no.
   if (hold) return { postedLines, skippedLines, recalculatedItems: 0 }
 
   const lines = await listGoodsReceiptLines(receiptId)
