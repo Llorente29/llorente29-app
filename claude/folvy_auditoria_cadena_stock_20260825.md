@@ -129,19 +129,21 @@ El punto ciego: la rama de sobre-porción exige `usedInRecipes` y ausencia de me
 
 ---
 
-## 7. Correcciones que necesitan tu autorización
+## 7. Correcciones que necesitaban autorización — EJECUTADAS el 25-08
 
-Ninguna se ha ejecutado. Todas tocan datos históricos.
+Julio autorizó A2 → A1 → A3 → A5 en ese orden exacto. A4 queda para revisar una a una.
 
-| # | Qué | Alcance | Riesgo |
+| # | Qué | Resultado medido | Estado |
 |---|---|---|---|
-| A1 | Devolver el stock de las **9 ventas anuladas** con consumo vivo | 95 movimientos, ~74,50 € | Bajo. Es lo que D2 hará de ahora en adelante |
-| A2 | **Resincronizar la caché** contra el ledger | 144 de 716 filas | Bajo. `recompute_location_stock_core` es la definición de esa tabla |
-| A3 | **Reprocesar el consumo** de las ventas afectadas por D1 | 641 ventas / 16.428,90 € histórico | Medio. Cambia el stock teórico hacia atrás: hará aparecer consumo que faltaba y bajará el stock |
-| A4 | Revisar las **19 líneas de recepción duplicadas** | 19 líneas | Medio. Hay que mirarlas una a una antes de borrar nada |
-| A5 | El **backfill de `variance` histórico** de esta mañana | 1.452 líneas / 95 conteos | Ya propuesto, sigue pendiente |
+| A2 | Resync de la caché contra el ledger | **144 → 0** filas desalineadas · valor 40.684,21 € → 41.212,40 € · costes medios negativos 58 → 52 | ✅ hecho |
+| A1 | Devolver el stock de las 9 ventas anuladas | 9 ventas, **95 → 0** movimientos de consumo | ✅ hecho |
+| A3 | Reprocesar el consumo de los combos | 641 ventas · **392 → 6.340** movimientos (+5.948) · 397 ventas pasan de cero a descontar · −1.798,25 € de coste · 4 ventas bajaron (2 a cero) | ⚠️ hecho, **con efecto lateral** (§9) |
+| A5 | Backfill del informe de variance | 1.604 líneas / 97 conteos (1.591 / 96 sin INV-00004) · merma informada −10.116,87 € → **−10.564,09 €** · 128 dejan de ser anomalía, 210 pasan a serlo · **0 líneas con el teórico fuera del ledger** | ✅ hecho, reversible |
+| A4 | Revisar las 19 recepciones duplicadas | — | ⏸ pendiente, una a una |
 
-**Orden que recomiendo:** A2 primero (es inocuo y arregla lo que la gente ve). Luego A1. Luego A3 — pero A3 y A5 **en este orden y seguidos**, porque A3 cambia el ledger y A5 lee el ledger para recalcular la merma histórica: hacerlos al revés obligaría a repetir A5.
+Registro exacto de lo ejecutado, con las consultas y las marchas atrás: `claude/sql/20260825_A1_A2_A3_A5_ejecutado.sql`.
+
+El orden importó: hacer A3 antes que A5 redujo la corrección de A5 de los −7.330 € previstos a **−447,22 €**, porque el consumo que faltaba ya estaba en el ledger cuando se recalculó la merma.
 
 ---
 
@@ -163,3 +165,56 @@ Ninguna se ha ejecutado. Todas tocan datos históricos.
 | T10 | Latencia del asiento — baseline p50 123 min |
 
 T1, T2 y T8 filtran por fecha del fix: solo miran lo ocurrido después, porque el histórico no se reprocesa solo.
+
+---
+
+## 9. Efecto lateral de A3 que hay que decidir
+
+**A3 mete consumo real en tramos que un conteo aprobado ya había cuadrado, y ahí se cuenta dos veces.**
+
+Un ajuste de inventario aprobado hace una cosa muy fuerte: **fuerza el ledger a igualar el físico contado en ese instante.** Si el consumo de los combos faltaba, ese ajuste ya lo absorbió — apareció como "merma" y se corrigió el stock. Al añadir ahora ese consumo con fecha anterior al ajuste, el mismo producto sale dos veces del ledger.
+
+Medido justo después de A3:
+
+| | |
+|---|---|
+| Movimientos escritos por A3 | 6.340 |
+| De ellos, **fechados antes del último conteo aprobado de su local** | **6.108** |
+| Coste en zona ya conciliada | **1.882,72 €** |
+| Líneas de conteo donde el ajuste asentado ya no coincide con la variación recalculada | 1.055 |
+
+Se ve en Pan Hamburguesa de INV-00181, que es el caso que abrió todo esto:
+
+| Momento | Teórico | Contado | Variación |
+|---|---|---|---|
+| Con el bug del teórico congelado | 140 | 120 | −20 (merma falsa) |
+| Con el teórico reconstruido del ledger | 137 | 120 | **−17** |
+| Después de A3 | 87 | 120 | **+33** |
+
+El teórico se ha ido 50 unidades por debajo del físico. No es que sobre pan: es que ese consumo ya estaba descontado por el ajuste del conteo del 23-08.
+
+### Qué se puede hacer
+
+1. **Re-anclar el ledger con los conteos aprobados** (lo correcto). Volver a aplicar cada conteo aprobado en orden cronológico para que su ajuste se recalcule contra el ledger nuevo: cada conteo vuelve a decir "aquí había esto de verdad" y el doble descuento se cancela solo. Requiere tocar `apply_inventory_count`, que hoy sale de vacío si el conteo ya está `aprobado`. **Es la opción que recomiendo.**
+2. **Limitar A3 al tramo posterior al último conteo aprobado** de cada local: borrar los 6.108 movimientos fechados antes. Más simple, pero deja el consumo de los combos sin registrar en el histórico anterior — o sea, renuncia a esa parte de la verdad.
+3. **Dejarlo así.** No lo recomiendo: el stock teórico queda por debajo del real y los próximos conteos enseñarán sobrantes falsos, que es el mismo tipo de mentira que veníamos a quitar.
+
+**A3 no es reversible fila a fila**: `generate_sale_consumption` borra y reescribe todo el consumo de la venta, así que las 392 filas previas ya no existen. `_a3_antes` guarda recuento y suma por venta (suficiente para auditar la magnitud, no para restaurar). El camino de vuelta es re-anclar, no resucitar filas.
+
+**Lo que debí avisar antes de ejecutar A3:** dije que bajaría el stock teórico, pero no que chocaría con los conteos ya aprobados. La interacción es mía, no tuya.
+
+---
+
+## 10. Crons cambiados el 25-08
+
+| Job | Antes | Ahora | Por qué |
+|---|---|---|---|
+| `autoinventory-autoclose` | `10 14-23,0-3 * * *` | `10 3 * * *` | El asiento llega con p50 123 min y peor caso 912. Cerrar durante el servicio inventa merma |
+| `sales-consumption-reprocess` | *(no existía)* | `30 1 * * *` | Reprocesa las ventas que reciben escandallo o mapeo tarde. Va después del asiento (~23:30) y antes del cierre (03:10) |
+
+Ambos en UTC: 03:10 UTC = 05:10 Madrid en verano.
+
+Dos cosas a tener en cuenta:
+
+- **Contrapartida del autocierre:** un conteo terminado por la mañana ya no se cierra esa tarde, espera al 03:10 siguiente. Si eso molesta, la alternativa es exigir ≥3 h desde la última venta del local dentro de `cron_autoclose_daily_counts` — queda propuesto, no hecho.
+- **El reproceso hereda el caveat del §9:** con `p_days = 7` puede meter consumo anterior a un conteo aprobado. Esta noche tocaría 5 ventas, 3 de ellas en esa situación. Bajar a `p_days = 2` lo reduce casi a cero; es un `cron.alter_job` de un minuto.
