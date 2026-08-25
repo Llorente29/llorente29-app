@@ -67,6 +67,29 @@ function formatEur(value: number | null): string {
   }).format(value)
 }
 
+/**
+ * El parte honesto de lo que ha movido el casado.
+ *
+ * Las ventas anteriores al último conteo aprobado de su local NO se reprocesan:
+ * ese stock ya lo corrigió un conteo físico, y volver a descontarlo sería merma
+ * inventada — el doble descuento de A3, que aquí sería a escala de cuenta
+ * entera (7.042 de 7.197 ventas caen por debajo del corte). Lo hace la RPC
+ * (resolve_unmapped_sales_scoped / create_dish_from_unmapped_scoped); esto solo
+ * lo cuenta. Si no hay nada protegido, no hay nada que decir.
+ */
+function corteMsg(res: {
+  ventasReprocesadas: number
+  ventasProtegidas: number
+  eurosProtegidos: number
+}): string | null {
+  if (res.ventasProtegidas <= 0) return null
+  const v = res.ventasReprocesadas
+  const p = res.ventasProtegidas
+  return `${v} venta${v === 1 ? '' : 's'} recalculada${v === 1 ? '' : 's'}. `
+    + `${p} anterior${p === 1 ? '' : 'es'} al último conteo no se ${p === 1 ? 'ha' : 'han'} tocado `
+    + `(${formatEur(res.eurosProtegidos)}): ese stock ya lo corrigió un conteo físico.`
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
@@ -515,8 +538,15 @@ function BrandPendingRow({
     setRowError(null)
     createDishFromUnmapped(accountId, product.productName)
       .then((res) => {
-        if (res.recipeItemId) navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
-        else { setClassifyMsg('Plato creado. Crea su escandallo en Recetas.'); setBusy(null) }
+        // Al escandallo, que es el cuello real: el plato recién creado no tiene
+        // receta, así que su consumo sigue siendo cero hasta que alguien la ponga.
+        const irAlEscandallo = () => {
+          if (res.recipeItemId) navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
+          else { setClassifyMsg('Plato creado. Crea su escandallo en Recetas.'); setBusy(null) }
+        }
+        const msg = corteMsg(res)
+        if (msg) { setClassifyMsg(msg + ' Ahora, el escandallo.'); setTimeout(irAlEscandallo, 2600) }
+        else irAlEscandallo()
       })
       .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
   }
@@ -1015,7 +1045,11 @@ function BlindRow({
     setBusy(action)
     setRowError(null)
     resolveUnmapped(accountId, product.productName, action)
-      .then(() => { onResolved() })
+      .then((res) => {
+        const msg = corteMsg(res)
+        if (msg) { setClassifyMsg(msg); setTimeout(onResolved, 2600) }
+        else onResolved()
+      })
       .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
   }
 
@@ -1082,12 +1116,17 @@ function BlindRow({
     setRowError(null)
     createDishFromUnmapped(accountId, product.productName)
       .then((res) => {
-        if (res.recipeItemId) {
-          navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
-        } else {
-          setClassifyMsg('Plato creado. Crea su escandallo en Recetas.')
-          setBusy(null)
+        const irAlEscandallo = () => {
+          if (res.recipeItemId) {
+            navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
+          } else {
+            setClassifyMsg('Plato creado. Crea su escandallo en Recetas.')
+            setBusy(null)
+          }
         }
+        const msg = corteMsg(res)
+        if (msg) { setClassifyMsg(msg + ' Ahora, el escandallo.'); setTimeout(irAlEscandallo, 2600) }
+        else irAlEscandallo()
       })
       .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
   }
