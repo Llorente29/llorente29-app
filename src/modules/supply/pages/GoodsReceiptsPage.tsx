@@ -33,7 +33,7 @@ import {
   archiveGoodsReceipt,
   postPendingReceipt,
   getReceiptDocTotal,
-  getReceiptCorrectionStreak,
+  getLocationReceiptTrust,
   getLineCounts,
   countUnverifiedLines,
   type GoodsReceipt,
@@ -200,32 +200,18 @@ export default function GoodsReceiptsPage() {
     return () => { cancelled = true }
   }, [activeAccountId, accountsLoading, resolvedLocationId, reloadTick])
 
-  // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §5 — "¿sigue haciendo falta
-  // revisar?" Solo lectura, por local (un local a la vez elegido — con "todos
-  // los locales" no se muestra, mezclar locales no dice nada útil de UNO). Usa
-  // los ids ya cargados arriba (receipts, ya viene ordenado por receipt_date
-  // desc) — no repite la consulta de recepciones, solo lee sus líneas.
+  // "¿Sigue haciendo falta revisar?" Solo lectura, por local (un local a la vez
+  // elegido — con "todos los locales" no se muestra: mezclar locales no dice
+  // nada útil de UNO).
   //
-  // ENCARGO CODE (14/08) fix/recepcion-lista-recibido, §3 — candidatos =
-  // 'recibido' o 'confirmado' (antes solo 'confirmado': mezclaba el histórico
-  // entero del flujo clásico con las recepciones del asistente).
-  // getReceiptCorrectionStreak filtra a las del asistente y aplica el tope.
-  // 200 en bruto es margen de sobra para llegar a 60 del asistente sin barrer
-  // toda la tabla.
+  // ENCARGO Julio (25/08) — la racha ya no se calcula en el cliente: vive en
+  // location_receipt_trust y la mantiene el servidor en cada recepción y en
+  // cada corrección de oficina. Aquí solo se lee.
   const [streak, setStreak] = useState<CorrectionStreak | null>(null)
   useEffect(() => {
     let cancelled = false
-    const candidates = resolvedLocationId
-      ? receipts
-          .filter(r => r.status === 'confirmado' || r.status === 'recibido')
-          .slice(0, 200)
-          .map(r => ({ id: r.id, status: r.status }))
-      : []
-    // Sin local elegido o sin candidatos: resuelve a null igual, pero SIEMPRE
-    // por la vía async (nunca setState síncrono en el cuerpo del efecto —
-    // mismo criterio que el resto del fetching de esta página).
-    const fetchPromise = candidates.length > 0
-      ? getReceiptCorrectionStreak(candidates)
+    const fetchPromise = resolvedLocationId
+      ? getLocationReceiptTrust(resolvedLocationId)
       : Promise.resolve(null)
     fetchPromise
       .then(s => { if (!cancelled) setStreak(s) })
@@ -645,9 +631,13 @@ export default function GoodsReceiptsPage() {
           directo es P4, encargo aparte) — sería un estado huérfano. */}
       {streak && streak.totalCount > 0 && (
         <div className="p-3 rounded-md border border-border-default bg-page space-y-1.5">
-          <p className="text-sm font-medium text-text-primary">¿Sigue haciendo falta revisar?</p>
+          <p className="text-sm font-medium text-text-primary">
+            {streak.metGoal ? 'Confirmación directa activa' : '¿Sigue haciendo falta revisar?'}
+          </p>
           <p className="text-xs text-text-secondary">
-            La revisión se apaga sola cuando cocina acierte {streak.streakGoal} recepciones seguidas.
+            {streak.metGoal
+              ? 'Los albaranes de este local se cierran solos, sin pasar por oficina. Una sola corrección de oficina vuelve a activar la revisión.'
+              : `Hoy oficina repasa cada albarán después de que la mercancía entre al stock. Con ${streak.streakGoal} recepciones seguidas sin correcciones, este local pasa solo a confirmación directa.`}
           </p>
           <div className="flex items-center gap-6 pt-0.5">
             <div>
@@ -663,7 +653,7 @@ export default function GoodsReceiptsPage() {
           </div>
           {streak.metGoal && (
             <p className="text-xs text-success pt-0.5">
-              Racha cumplida — ya podrías pasar este local a confirmación directa (sin revisión de oficina).
+              Racha cumplida: la revisión de oficina ya está desactivada en este local.
             </p>
           )}
         </div>

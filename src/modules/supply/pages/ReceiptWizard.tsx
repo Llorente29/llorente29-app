@@ -618,16 +618,18 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
         })
       }
 
-      // ENCARGO CODE (20/08) «Verificar a ciegas» §3 — si la IA pidió revisión,
-      // la mercancía NO entra al almacén hasta que un humano cierre el albarán
-      // en la pantalla de oficina. Hoy pasaba lo contrario: entraba primero y
-      // se preguntaba después, y la pregunta se quedaba sin contestar.
+      // ENCARGO Julio (25/08) — la mercancía ENTRA SIEMPRE, dude o no la IA.
+      // `hold` ya no retiene: solo marca el albarán para que oficina lo repase.
+      // El modelo anterior (retener hasta que oficina cerrase) costó 5 albaranes
+      // anulados sin entrar nunca al stock, 2.875,42 €.
       const hold = ocrPrefill.aiNeedsReview
       const res = await receiveGoodsReceipt(receipt.id, hold)
       if (hold) {
+        const partes = [`${res.postedLines} línea(s) al almacén`]
+        if (res.skippedLines > 0) partes.push(`${res.skippedLines} sin artículo asignado`)
         onDone(
-          `Recepción ${receipt.code ?? ''} guardada y EN REVISIÓN: ${res.skippedLines} línea(s) esperando. ` +
-          `La mercancía no ha entrado al almacén todavía — entra cuando oficina cierre el albarán.`,
+          `Recepción ${receipt.code ?? ''} recibida: ${partes.join(' · ')}. ` +
+          `Queda marcada para que oficina la repase.`,
         )
       } else {
         const parts = [`${res.postedLines} línea(s) al almacén`]
@@ -731,7 +733,7 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
             <button type="button" onClick={handleReceive} disabled={!canSubmit}
               className="flex-1 inline-flex items-center justify-center gap-2 h-tap-small rounded-lg text-base font-medium bg-success text-text-on-accent hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-base">
               {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check size={20} />}
-              {ocrPrefill.aiNeedsReview ? 'Guardar y mandar a oficina' : 'Recibir y meter al stock'}
+              {ocrPrefill.aiNeedsReview ? 'Meter al stock y avisar a oficina' : 'Recibir y meter al stock'}
             </button>
           )}
         </div>
