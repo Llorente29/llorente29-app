@@ -225,6 +225,18 @@ export default function KitchenAvailabilityPage() {
                 <p className="text-[11px] text-stone-500 mt-1">
                   {row.brands} marca{row.brands === 1 ? '' : 's'}
                 </p>
+                {/* Una tarjeta agrupa por escandallo: agotar uno agota a sus
+                    hermanos. El nombre de arriba es el que tiene el override
+                    aquí; estos se van con él. Decirlo evita el susto de ver un
+                    producto que no reconoces en la lista de tu local. */}
+                {row.otrosNombres.length > 0 && (
+                  <p
+                    className="text-[11px] text-stone-400 truncate"
+                    title={`Mismo escandallo, se reactivan juntos: ${row.otrosNombres.join(', ')}`}
+                  >
+                    y {row.otrosNombres.length} más: {row.otrosNombres.join(', ')}
+                  </p>
+                )}
                 {!locationId && row.locationName && (
                   <p className="text-[11px] text-stone-400 truncate" title={row.locationName}>{row.locationName}</p>
                 )}

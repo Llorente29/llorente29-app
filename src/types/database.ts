@@ -17389,6 +17389,7 @@ export type Database = {
           location_id: string
           location_name: string
           name: string
+          otros_nombres: string[]
           photo_url: string
           product_key: string
           reason: string

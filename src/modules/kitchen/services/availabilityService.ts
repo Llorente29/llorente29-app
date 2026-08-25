@@ -50,6 +50,13 @@ export interface SoldOutRow {
   sourceLast: boolean           // agotado en Last
   photoUrl: string | null
   brandNames: string[]
+  /**
+   * Los demás productos que caen en esta misma tarjeta. Una tarjeta agrupa por
+   * ESCANDALLO, no por producto, porque el motor cascadea así: agotar uno agota
+   * a sus hermanos. `name` es el que de verdad tiene el override aquí; estos
+   * son los que se van con él.
+   */
+  otrosNombres: string[]
 }
 
 /** Alcance honesto: Last (real, de siempre) + HubRise (real, ENCARGO 86 — antes
@@ -170,6 +177,7 @@ export async function listSoldOut(
     sourceLast: r.source_last === true,
     photoUrl: (r.photo_url as string) ?? null,
     brandNames: (r.brand_names as string[]) ?? [],
+    otrosNombres: (r.otros_nombres as string[]) ?? [],
   }))
 }
 

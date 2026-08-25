@@ -55,6 +55,9 @@ export interface SoldOutRow {
   sourceLast: boolean
   photoUrl: string | null
   brandNames: string[]
+  /** Los demás productos de la misma tarjeta: comparten escandallo y se
+   *  reactivan juntos. `name` es el que tiene el override aquí. */
+  otrosNombres: string[]
 }
 
 export interface ProductPick {
@@ -117,6 +120,7 @@ export async function listSoldOut(token: string): Promise<SoldOutRow[]> {
     sourceLast: r.source_last === true,
     photoUrl: (r.photo_url as string) ?? null,
     brandNames: (r.brand_names as string[]) ?? [],
+    otrosNombres: (r.otros_nombres as string[]) ?? [],
   }))
 }
 

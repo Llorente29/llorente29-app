@@ -143,6 +143,16 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-zinc-100 truncate">{row.name}</p>
+                      {/* Comparten escandallo: se reactivan juntos. Decirlo evita
+                          el susto de no reconocer el nombre de la tarjeta. */}
+                      {row.otrosNombres.length > 0 && (
+                        <p
+                          className="text-xs text-zinc-500 truncate"
+                          title={`Mismo escandallo, se reactivan juntos: ${row.otrosNombres.join(', ')}`}
+                        >
+                          y {row.otrosNombres.length} más: {row.otrosNombres.join(', ')}
+                        </p>
+                      )}
                       <p className="text-xs text-zinc-500">
                         {row.brands} {row.brands === 1 ? 'marca' : 'marcas'}
                         <span className={`ml-2 px-1.5 py-px rounded text-[10px] font-bold ${row.sourceFolvy ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-500'}`}>
