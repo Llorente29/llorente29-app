@@ -218,3 +218,46 @@ Dos cosas a tener en cuenta:
 
 - **Contrapartida del autocierre:** un conteo terminado por la mañana ya no se cierra esa tarde, espera al 03:10 siguiente. Si eso molesta, la alternativa es exigir ≥3 h desde la última venta del local dentro de `cron_autoclose_daily_counts` — queda propuesto, no hecho.
 - **El reproceso hereda el caveat del §9:** con `p_days = 7` puede meter consumo anterior a un conteo aprobado. Esta noche tocaría 5 ventas, 3 de ellas en esa situación. Bajar a `p_days = 2` lo reduce casi a cero; es un `cron.alter_job` de un minuto.
+
+---
+
+## 11. Reanclaje ejecutado — el §9 queda cerrado
+
+Julio autorizó la opción 1. Ejecutado el 25-08 con `reanchor_counted_adjustments('20260825_reanclaje')`.
+
+| | |
+|---|---|
+| Conteos reanclados | **83** (82 aprobados + INV-00181 en revisión) |
+| Líneas procesadas | **1.515** |
+| Asientos reescritos | 1.479 |
+| Asientos que desaparecen (ya cuadran) | 36 |
+| Líneas donde el ledger tras el corte **no** iguala lo contado | **0** |
+
+Criterio de alcance acordado: solo las líneas **con** asiento. Las 406 contadas que el conteo nunca ajustó se quedan como estaban — si un conteo no las ancló, no hay nada ya absorbido que se esté contando dos veces, y reanclarlas sería revocar una decisión de negocio.
+
+Después se rehizo el informe de variance sobre el ledger reanclado (1.130 líneas / 84 conteos, `batch = '20260825_post_reanclaje'`): merma informada **−7.930,04 € → −6.591,26 €**.
+
+### Pan Hamburguesa (Alcalá, INV-00181), el caso que abrió todo
+
+| Momento | Teórico | Contado | Variación |
+|---|---|---|---|
+| Con el bug del teórico congelado | 140 | 120 | −20 |
+| Con el teórico reconstruido del ledger | 137 | 120 | −17 |
+| Tras A3 (doble descuento) | 87 | 120 | +33 |
+| **Tras el reanclaje** | **137** | 120 | **−17** ✅ |
+
+Vuelve a −17, que es lo que decía el ledger antes de que A3 lo distorsionara. El doble descuento se canceló solo, sin tocar ninguna cantidad contada.
+
+### Un dato corrupto que el reanclaje destapó
+
+**INV-00002** (apertura del 15-06, semana de pruebas) tiene `counted_qty = 5.000.000.000.000.000` en Mozzarella rallada. Es un tecleo, no un físico. El reanclaje lo ancló fielmente y metió 5×10¹⁵ en el ledger; se revirtió **solo esa línea** a su asiento previo (+6.000) desde la bitácora, conservando su `created_at` original. La suma de ajustes volvió a 5.618.002,99.
+
+No es el único dato imposible del histórico: **INV-00129** tiene `counted_qty = 7.200.000` en Salsa Mayo Chipotle (7,2 toneladas de mayonesa). Ese es anterior a esta operación y no se ha tocado, pero conviene limpiarlo — y conviene un tope de cordura en el guardado del conteo, porque hoy nada impide teclear 5×10¹⁵.
+
+### Estado final de los tests
+
+| Test | Antes de la sesión | Ahora |
+|---|---|---|
+| T3 · caché desalineada | 144 de 716 | **0** |
+| T8 · informe ≠ asiento | 2 en el conteo más reciente | **0** |
+| Líneas con el teórico fuera del ledger | — | **0** |
