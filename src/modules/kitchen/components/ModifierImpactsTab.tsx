@@ -22,10 +22,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   SlidersHorizontal, Loader2, CircleCheck, Sparkles, Plus, Minus,
-  RefreshCw, X, Pencil, AlertTriangle, Search, Wand2,
+  RefreshCw, X, Pencil, AlertTriangle, Search, Wand2, Package,
 } from 'lucide-react'
 import {
   listOptionsByRecipe,
+  listProductBundleSuggestions,
+  type ProductBundleSuggestion,
   upsertImpact,
   confirmImpact,
   rejectImpact,
@@ -62,6 +64,10 @@ export default function ModifierImpactsTab({
   // Sugerencia IA (Nivel 2): en curso + mensaje de resultado de la última pasada.
   const [aiRunning, setAiRunning] = useState(false)
   const [aiResult, setAiResult] = useState<string | null>(null)
+  // Opciones que en realidad son un PRODUCTO ENTERO (no un ajuste): el nombre
+  // casa con un único producto vivo de su marca. Se calcula en vivo, así que una
+  // opción nueva que se llame igual que un producto aparece sugerida sola.
+  const [bundleHints, setBundleHints] = useState<Map<string, ProductBundleSuggestion>>(new Map())
 
   // Ingredientes y unidades para el editor "Ajustar". Si el contenedor no los
   // pasa, la pestaña los carga sola (autónoma, no depende del estado del editor).
@@ -108,8 +114,12 @@ export default function ModifierImpactsTab({
     setLoading(true)
     setError(null)
     try {
-      const rows = await listOptionsByRecipe(recipeItemId, accountId)
+      const [rows, hints] = await Promise.all([
+        listOptionsByRecipe(recipeItemId, accountId),
+        listProductBundleSuggestions(accountId).catch(() => new Map<string, ProductBundleSuggestion>()),
+      ])
       setOptions(rows)
+      setBundleHints(hints)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error cargando los modificadores')
       setOptions([])
@@ -121,6 +131,9 @@ export default function ModifierImpactsTab({
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    listProductBundleSuggestions(accountId)
+      .then((hints) => { if (!cancelled) setBundleHints(hints) })
+      .catch(() => { /* la sugerencia es una ayuda, no bloquea la pestaña */ })
     listOptionsByRecipe(recipeItemId, accountId)
       .then((rows) => { if (!cancelled) setOptions(rows) })
       .catch((err: unknown) => {
@@ -174,6 +187,33 @@ export default function ModifierImpactsTab({
       await reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo rechazar')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // "Es un producto entero": un clic. Impacto `bundle` apuntando al escandallo
+  // del producto, cantidad 1 en su unidad base — el motor lo explota como si el
+  // producto se hubiera vendido suelto. No hay cantidad que teclear ni promedio
+  // que inventar: es una unidad de ese plato.
+  async function handleAcceptBundle(o: OptionWithImpact, hint: ProductBundleSuggestion) {
+    setBusyId(o.optionId)
+    try {
+      await upsertImpact({
+        accountId,
+        modifierOptionId: o.optionId,
+        impactType: 'bundle',
+        targetRecipeItemId: hint.targetRecipeItemId,
+        quantity: 1,
+        unitId: null,
+        status: 'confirmed',
+        source: 'human',
+        actorName,
+      })
+      await recomputeAffectedSales(accountId, o.optionId)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar')
     } finally {
       setBusyId(null)
     }
@@ -345,6 +385,8 @@ export default function ModifierImpactsTab({
                   onCancelEdit={() => setEditingId(null)}
                   onSaveManual={(draft) => handleSaveManual(o, draft)}
                   onCreateIngredient={handleCreateIngredient}
+                  bundleHint={bundleHints.get(o.optionId) ?? null}
+                  onAcceptBundle={(hint) => handleAcceptBundle(o, hint)}
                 />
               ))}
             </div>
@@ -369,12 +411,16 @@ interface OptionCardProps {
   onEdit: () => void
   onCancelEdit: () => void
   onSaveManual: (draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }) => void
+  /** Esta opción parece un producto entero de la carta. null = no lo parece. */
+  bundleHint: ProductBundleSuggestion | null
+  onAcceptBundle: (hint: ProductBundleSuggestion) => void
   onCreateIngredient: (name: string) => Promise<{ id: string; name: string } | null>
 }
 
 function OptionCard({
   option: o, recipeItemId, busy, editing, ingredients, units,
   onConfirm, onReject, onEdit, onCancelEdit, onSaveManual, onCreateIngredient,
+  bundleHint, onAcceptBundle,
 }: OptionCardProps) {
   const status = o.impact?.status ?? 'none'
   const isProposed = status === 'proposed'
@@ -422,6 +468,34 @@ function OptionCard({
         <div className="flex gap-2 items-start mb-2 px-2.5 py-1.5 rounded-md bg-accent-bg">
           <Sparkles className="w-3.5 h-3.5 text-terracota mt-0.5 shrink-0" />
           <p className="text-xs text-text-secondary leading-relaxed">{o.impact.rationale}</p>
+        </div>
+      )}
+
+      {/* Esta opción es un PRODUCTO ENTERO, no un ajuste. Un modificador normal
+          cambia la preparación; éste mete un plato completo. Sin esto no
+          descuenta nada: los componentes de los combos llegan de Last como
+          `modifier`, no como `combo_item`. Un clic, sin cantidad que teclear:
+          es una unidad de ese plato. */}
+      {bundleHint && !o.impact && !editing && (
+        <div className="flex gap-2 items-start mb-2 px-2.5 py-2 rounded-md border border-accent/30 bg-accent-bg">
+          <Package className="w-3.5 h-3.5 text-accent mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-text-primary leading-relaxed">
+              Esto no parece un ajuste, parece un plato entero:{' '}
+              <span className="font-medium">{bundleHint.targetName}</span>
+              {bundleHint.brandName && <span className="text-text-secondary"> · {bundleHint.brandName}</span>}.
+              {' '}Si lo es, descuenta una unidad de su escandallo.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onAcceptBundle(bundleHint)}
+              className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-40"
+            >
+              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Package className="w-3.5 h-3.5" />}
+              Sí, es un plato entero
+            </button>
+          </div>
         </div>
       )}
 
