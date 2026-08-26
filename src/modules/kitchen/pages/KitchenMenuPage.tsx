@@ -2611,16 +2611,37 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
 // vende es un resto fuera de carta: se cuenta aparte y en gris. Antes los 85
 // iban todos al mismo rojo y 28 de ellos eran basura — un aviso rojo
 // permanente que nadie sabía qué medía.
+//
+// Y DOS COSAS QUE ESTÁN BIEN POR DISEÑO NO SON FALLO:
+//
+//   · Los COMBOS (`sellsAsCombo`). Sus componentes ya descuentan por separado;
+//     ponerles escandallo propio duplicaría el consumo. 4 productos y
+//     4.255,10 € del rojo eran esto.
+//
+//   · Los RAW (Coca-Cola, Tarta 3 Leches, Cheesecake, salsas sueltas). Un raw
+//     no tiene ni debe tener `recipe_line`: se descuenta a sí mismo por la
+//     condición de parada de explode_recipe_to_raws. classifyMenuItemLink ya
+//     lo sabía y nunca los mandó al rojo — solo caen ahí si les falta el
+//     PRECIO DE COMPRA, que es otro problema y ahora se nombra aparte en vez
+//     de meterse bajo el rótulo "sin escandallo".
 function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onOpen: () => void }) {
   const vivo = (r: MenuItemLinkHealthRow) => r.liveInCatalog || r.soldLines90d > 0
-  const esFallo = (r: MenuItemLinkHealthRow) => {
-    const h = classifyMenuItemLink(r).human
-    return h === 'sin_casar' || h === 'falta_escandallo' || h === 'falta_precio'
-  }
+  const cuenta = (r: MenuItemLinkHealthRow) => vivo(r) && !r.sellsAsCombo
 
-  const fallos = rows.filter(esFallo)
-  const urgentes = fallos.filter(vivo)
-  const restos = fallos.length - urgentes.length
+  const sinEscandallo = rows.filter((r) => {
+    const h = classifyMenuItemLink(r).human
+    return (h === 'sin_casar' || h === 'falta_escandallo') && cuenta(r)
+  })
+  const sinPrecio = rows.filter((r) => classifyMenuItemLink(r).human === 'falta_precio' && cuenta(r))
+  const urgentes = [...sinEscandallo, ...sinPrecio]
+
+  const restos = rows.filter((r) => {
+    const h = classifyMenuItemLink(r).human
+    return (h === 'sin_casar' || h === 'falta_escandallo' || h === 'falta_precio')
+      && !r.sellsAsCombo && !vivo(r)
+  }).length
+
+  const conVenta = urgentes.filter((r) => r.soldEur90d > 0).length
   const eurEnJuego = urgentes.reduce((acc, r) => acc + r.soldEur90d, 0)
   const paraRevisar = rows.filter((r) => classifyMenuItemLink(r).human === 'para_revisar').length
   const bien = rows.filter((r) => classifyMenuItemLink(r).human === 'bien').length
@@ -2640,11 +2661,18 @@ function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onO
         <span className={`text-sm font-medium ${valueColor}`}>
           Escandallos de la carta:{' '}
           {hayUrgente
-            ? <>{urgentes.length} producto{urgentes.length === 1 ? '' : 's'} sin escandallo — no sabemos lo que cuestan ni descuentan de almacén</>
+            ? <>
+                {sinEscandallo.length > 0 && <>{sinEscandallo.length} sin escandallo</>}
+                {sinEscandallo.length > 0 && sinPrecio.length > 0 && <> · </>}
+                {sinPrecio.length > 0 && <>{sinPrecio.length} sin precio de compra</>}
+                {' '}— no descuentan de almacén
+              </>
             : <>{paraRevisar} casado{paraRevisar === 1 ? '' : 's'} sin confirmar</>}
         </span>
         {hayUrgente && eurEnJuego > 0 && (
-          <span className={`text-sm font-medium ${valueColor}`}> · {fmtMoney(eurEnJuego)} vendidos en 90 días</span>
+          <span className={`text-sm font-medium ${valueColor}`}>
+            {' '}· {conVenta} han vendido {fmtMoney(eurEnJuego)} en 90 días
+          </span>
         )}
         <span className="text-xs text-text-secondary">
           {hayUrgente && paraRevisar > 0 && <> · {paraRevisar} casados sin confirmar</>}
@@ -2652,7 +2680,8 @@ function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onO
           {restos > 0 && <> · {restos} fuera de carta y sin ventas</>}
         </span>
         <span className="block text-xs text-text-secondary mt-0.5">
-          Esto es el enlace producto↔escandallo, no el casado de ventas.
+          Enlace producto↔escandallo, no casado de ventas. Combos y artículos de
+          reventa quedan fuera: no llevan escandallo propio a propósito.
         </span>
       </div>
       <button

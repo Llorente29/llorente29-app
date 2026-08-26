@@ -18924,6 +18924,7 @@ export type Database = {
           recipe_line_count: number
           recipe_name: string
           recipe_type: string
+          sells_as_combo: boolean
           shared_with: number
           sold_eur_90d: number
           sold_lines_90d: number
