@@ -73,6 +73,15 @@ export interface MenuItemLinkHealthRow {
   /** Sigue pedible en el catálogo externo. Un ítem que ni está vivo ni ha
    *  vendido es un resto fuera de carta: cuenta, pero no es una urgencia. */
   liveInCatalog: boolean
+  /**
+   * Se vende como combo: sus líneas de venta llevan hijas `combo_item`. NO
+   * lleva escandallo propio a propósito — sus componentes ya descuentan por
+   * separado, y ponerle uno duplicaría el consumo. Nunca es un fallo.
+   *
+   * Solo cuenta `combo_item`. Las hijas `modifier` no valen: no llevan
+   * producto (0 de 3.567 en Foodint), así que no descuentan nada.
+   */
+  sellsAsCombo: boolean
   status: MenuItemLinkStatus
   sharedWith: number
 }
@@ -298,6 +307,7 @@ export async function getMenuItemLinkHealth(
     soldLines90d: Number(row.sold_lines_90d ?? 0),
     soldEur90d: Number(row.sold_eur_90d ?? 0),
     liveInCatalog: row.live_in_catalog === true,
+    sellsAsCombo: row.sells_as_combo === true,
     status: row.status as MenuItemLinkStatus,
     sharedWith: row.shared_with,
   }))
