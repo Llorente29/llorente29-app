@@ -66,6 +66,13 @@ export interface MenuItemLinkHealthRow {
   price: number | null
   needsReview: boolean
   linkApprovedAt: string | null
+  /** Líneas de venta de este ítem en los últimos 90 días. */
+  soldLines90d: number
+  /** Importe vendido en esos 90 días. */
+  soldEur90d: number
+  /** Sigue pedible en el catálogo externo. Un ítem que ni está vivo ni ha
+   *  vendido es un resto fuera de carta: cuenta, pero no es una urgencia. */
+  liveInCatalog: boolean
   status: MenuItemLinkStatus
   sharedWith: number
 }
@@ -288,6 +295,9 @@ export async function getMenuItemLinkHealth(
     price: row.price ?? null,
     needsReview: row.needs_review,
     linkApprovedAt: row.link_approved_at ?? null,
+    soldLines90d: Number(row.sold_lines_90d ?? 0),
+    soldEur90d: Number(row.sold_eur_90d ?? 0),
+    liveInCatalog: row.live_in_catalog === true,
     status: row.status as MenuItemLinkStatus,
     sharedWith: row.shared_with,
   }))
