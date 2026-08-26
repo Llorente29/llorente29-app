@@ -18920,10 +18920,13 @@ export type Database = {
           needs_review: boolean
           price: number
           recipe_item_id: string
+          live_in_catalog: boolean
           recipe_line_count: number
           recipe_name: string
           recipe_type: string
           shared_with: number
+          sold_eur_90d: number
+          sold_lines_90d: number
           status: string
         }[]
       }

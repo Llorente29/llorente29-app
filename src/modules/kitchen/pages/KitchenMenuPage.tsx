@@ -2591,31 +2591,69 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
   )
 }
 
-// Banner-resumen del sello de enlace ítem↔escandallo — TODA la cuenta (no solo
-// la marca visible). rows viene de menu_item_link_health sin filtrar por
+// Banner-resumen del enlace ítem de carta ↔ ESCANDALLO — TODA la cuenta (no
+// solo la marca visible). rows viene de menu_item_link_health sin filtrar por
 // marca; los contadores son la única fuente de verdad, igual que el sello.
+//
+// Este eje NO es el casado de ventas. Son eslabones consecutivos de la misma
+// cadena y se confundían porque los dos se llamaban "Casado":
+//
+//   venta → producto de carta      (casado de ventas: 100 % en Foodint)
+//   producto de carta → escandallo (esto)
+//   línea de albarán → artículo    (casado de recepciones)
+//
+// Una venta puede casar perfectamente con un producto que no sabe lo que
+// cuesta ni descuenta de almacén. Por eso el de ventas puede estar a 0 y este
+// no, sin que ninguno mienta.
+//
+// El rojo se reserva para lo que duele: productos VIVOS (pedibles en el
+// catálogo externo) o que han vendido en 90 días. Un ítem que ni está vivo ni
+// vende es un resto fuera de carta: se cuenta aparte y en gris. Antes los 85
+// iban todos al mismo rojo y 28 de ellos eran basura — un aviso rojo
+// permanente que nadie sabía qué medía.
 function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onOpen: () => void }) {
-  const sinCasar = rows.filter((r) => classifyMenuItemLink(r).human === 'sin_casar').length
-  const faltaAlgo = rows.filter((r) => {
+  const vivo = (r: MenuItemLinkHealthRow) => r.liveInCatalog || r.soldLines90d > 0
+  const esFallo = (r: MenuItemLinkHealthRow) => {
     const h = classifyMenuItemLink(r).human
-    return h === 'falta_escandallo' || h === 'falta_precio'
-  }).length
+    return h === 'sin_casar' || h === 'falta_escandallo' || h === 'falta_precio'
+  }
+
+  const fallos = rows.filter(esFallo)
+  const urgentes = fallos.filter(vivo)
+  const restos = fallos.length - urgentes.length
+  const eurEnJuego = urgentes.reduce((acc, r) => acc + r.soldEur90d, 0)
   const paraRevisar = rows.filter((r) => classifyMenuItemLink(r).human === 'para_revisar').length
   const bien = rows.filter((r) => classifyMenuItemLink(r).human === 'bien').length
-  if (sinCasar === 0 && faltaAlgo === 0 && paraRevisar === 0) return null // nada que auditar — no molestar
 
-  const cardBg = sinCasar > 0 ? 'bg-red-50 border-red-200' : faltaAlgo > 0 ? 'bg-orange-50 border-orange-200' : 'bg-amber-50 border-amber-200'
-  const dot = sinCasar > 0 ? 'bg-red-500' : faltaAlgo > 0 ? 'bg-orange-500' : 'bg-amber-500'
-  const valueColor = sinCasar > 0 ? 'text-red-700' : faltaAlgo > 0 ? 'text-orange-700' : 'text-amber-700'
+  // Nada vivo roto y nada pendiente de confirmar: no molestar.
+  if (urgentes.length === 0 && paraRevisar === 0) return null
+
+  const hayUrgente = urgentes.length > 0
+  const cardBg = hayUrgente ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+  const dot = hayUrgente ? 'bg-red-500' : 'bg-amber-500'
+  const valueColor = hayUrgente ? 'text-red-700' : 'text-amber-700'
 
   return (
     <div className={`rounded-xl border p-3 mb-5 flex items-center gap-3 flex-wrap ${cardBg}`}>
       <span className={`w-2.5 h-2.5 rounded-full ${dot} shrink-0`} />
       <div className="flex-1 min-w-0">
         <span className={`text-sm font-medium ${valueColor}`}>
-          Casado: {sinCasar} sin casar · {faltaAlgo} sin precio/escandallo · {paraRevisar} para revisar
+          Escandallos de la carta:{' '}
+          {hayUrgente
+            ? <>{urgentes.length} producto{urgentes.length === 1 ? '' : 's'} sin escandallo — no sabemos lo que cuestan ni descuentan de almacén</>
+            : <>{paraRevisar} casado{paraRevisar === 1 ? '' : 's'} sin confirmar</>}
         </span>
-        <span className="text-xs text-text-secondary"> · {bien} bien</span>
+        {hayUrgente && eurEnJuego > 0 && (
+          <span className={`text-sm font-medium ${valueColor}`}> · {fmtMoney(eurEnJuego)} vendidos en 90 días</span>
+        )}
+        <span className="text-xs text-text-secondary">
+          {hayUrgente && paraRevisar > 0 && <> · {paraRevisar} casados sin confirmar</>}
+          {bien > 0 && <> · {bien} confirmados</>}
+          {restos > 0 && <> · {restos} fuera de carta y sin ventas</>}
+        </span>
+        <span className="block text-xs text-text-secondary mt-0.5">
+          Esto es el enlace producto↔escandallo, no el casado de ventas.
+        </span>
       </div>
       <button
         onClick={onOpen}
