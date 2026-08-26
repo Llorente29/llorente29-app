@@ -135,3 +135,13 @@ select 'T11 cantidades imposibles' as test,
        count(*) filter (where l.counted_qty < 0) as negativas
 from public.inventory_count_line l
 where l.counted_qty is not null;
+
+-- ══ T12 · computed_cost = 0 tapando un fixed_cost válido ═════════════════
+-- El motor usa COALESCE(computed_cost, fixed_cost, 0) y 0 no es NULL, así que
+-- un cero guardado esconde el precio real de compra.
+-- Baseline 26-08: 0
+select count(*) as t12_cero_tapando_fijo
+from recipe_item
+where archived_at is null
+  and computed_cost = 0
+  and coalesce(fixed_cost,0) > 0;
