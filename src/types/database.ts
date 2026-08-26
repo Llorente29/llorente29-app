@@ -18913,6 +18913,7 @@ export type Database = {
         Returns: {
           brand_id: string
           brand_name: string
+          consumes_via_modifiers: boolean
           cost: number
           item_name: string
           link_approved_at: string
@@ -20806,6 +20807,17 @@ export type Database = {
           p_search?: string
         }
         Returns: Json
+      }
+      suggest_modifier_product_bundles: {
+        Args: { p_account_id: string }
+        Returns: {
+          brand_name: string
+          modifier_option_id: string
+          option_name: string
+          target_menu_item_id: string
+          target_name: string
+          target_recipe_item_id: string
+        }[]
       }
       submit_course_attempt: {
         Args: {

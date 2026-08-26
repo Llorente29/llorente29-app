@@ -82,6 +82,14 @@ export interface MenuItemLinkHealthRow {
    * producto (0 de 3.567 en Foodint), así que no descuentan nada.
    */
   sellsAsCombo: boolean
+  /**
+   * No tiene escandallo propio pero SÍ descuenta: sus modificadores son
+   * productos enteros con impacto `bundle` confirmado. Es el caso de los combos
+   * Smash, cuyos componentes llegan de Last como `modifier` en vez de
+   * `combo_item`. Ponerle escandallo propio duplicaría el consumo — igual que
+   * en un combo, no es un fallo.
+   */
+  consumesViaModifiers: boolean
   status: MenuItemLinkStatus
   sharedWith: number
 }
@@ -308,6 +316,7 @@ export async function getMenuItemLinkHealth(
     soldEur90d: Number(row.sold_eur_90d ?? 0),
     liveInCatalog: row.live_in_catalog === true,
     sellsAsCombo: row.sells_as_combo === true,
+    consumesViaModifiers: row.consumes_via_modifiers === true,
     status: row.status as MenuItemLinkStatus,
     sharedWith: row.shared_with,
   }))

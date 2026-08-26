@@ -2626,7 +2626,12 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
 //     de meterse bajo el rótulo "sin escandallo".
 function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onOpen: () => void }) {
   const vivo = (r: MenuItemLinkHealthRow) => r.liveInCatalog || r.soldLines90d > 0
-  const cuenta = (r: MenuItemLinkHealthRow) => vivo(r) && !r.sellsAsCombo
+  // Un producto sin escandallo propio que SÍ descuenta no es un fallo. Dos
+  // formas de descontar sin receta propia, las dos legítimas: sus componentes
+  // llegan como `combo_item` (sellsAsCombo), o llegan como `modifier` con
+  // impacto `bundle` confirmado (consumesViaModifiers — los combos Smash).
+  const cuenta = (r: MenuItemLinkHealthRow) =>
+    vivo(r) && !r.sellsAsCombo && !r.consumesViaModifiers
 
   const sinEscandallo = rows.filter((r) => {
     const h = classifyMenuItemLink(r).human
@@ -2638,7 +2643,7 @@ function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onO
   const restos = rows.filter((r) => {
     const h = classifyMenuItemLink(r).human
     return (h === 'sin_casar' || h === 'falta_escandallo' || h === 'falta_precio')
-      && !r.sellsAsCombo && !vivo(r)
+      && !r.sellsAsCombo && !r.consumesViaModifiers && !vivo(r)
   }).length
 
   const conVenta = urgentes.filter((r) => r.soldEur90d > 0).length
@@ -2680,8 +2685,9 @@ function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onO
           {restos > 0 && <> · {restos} fuera de carta y sin ventas</>}
         </span>
         <span className="block text-xs text-text-secondary mt-0.5">
-          Enlace producto↔escandallo, no casado de ventas. Combos y artículos de
-          reventa quedan fuera: no llevan escandallo propio a propósito.
+          Enlace producto↔escandallo, no casado de ventas. Fuera los que ya
+          descuentan sin receta propia: combos, artículos de reventa y productos
+          cuyos modificadores son productos enteros.
         </span>
       </div>
       <button

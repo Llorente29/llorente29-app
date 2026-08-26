@@ -70,6 +70,54 @@ export interface OptionWithImpact {
   impact: ModifierImpact | null   // null = sin definir; proposed/confirmed según status
 }
 
+/**
+ * Sugerencia de "esta opción es un PRODUCTO ENTERO, no un ajuste".
+ *
+ * Un modificador normal cambia la preparación (quita pepinillos, añade salsa) y
+ * se resuelve con add_item/remove_item sobre un ingrediente. Pero hay opciones
+ * que son un plato completo: los componentes de los combos Smash llegan de Last
+ * como `modifier` en vez de `combo_item`, y sin esto no descuentan NADA —
+ * medido, 2.133 €/90d saliendo de cocina sin tocar el almacén.
+ *
+ * La RPC solo propone cuando el nombre normalizado casa con UN único producto
+ * vivo de la misma marca y ese producto tiene escandallo. Si hay ambigüedad, no
+ * sugiere. Se calcula en vivo, así que una opción nueva que se llame igual que
+ * un producto aparece sugerida sola.
+ */
+export interface ProductBundleSuggestion {
+  modifierOptionId: string
+  optionName: string
+  brandName: string | null
+  targetRecipeItemId: string
+  targetMenuItemId: string
+  targetName: string
+}
+
+/** Sugerencias de la cuenta, indexadas por optionId. Solo trae opciones SIN impacto. */
+export async function listProductBundleSuggestions(
+  accountId: string,
+): Promise<Map<string, ProductBundleSuggestion>> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('suggest_modifier_product_bundles', {
+    p_account_id: accountId,
+  })
+  if (error) throw new Error(`Error leyendo sugerencias de modificadores: ${error.message}`)
+  const out = new Map<string, ProductBundleSuggestion>()
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const id = r.modifier_option_id as string
+    if (!id) continue
+    out.set(id, {
+      modifierOptionId: id,
+      optionName: (r.option_name as string) ?? '',
+      brandName: (r.brand_name as string) ?? null,
+      targetRecipeItemId: r.target_recipe_item_id as string,
+      targetMenuItemId: r.target_menu_item_id as string,
+      targetName: (r.target_name as string) ?? '',
+    })
+  }
+  return out
+}
+
 // Resumen de cobertura de un plato (conocidos vs por revisar).
 export interface ImpactCoverage {
   total: number
