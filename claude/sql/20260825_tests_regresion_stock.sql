@@ -145,3 +145,25 @@ from recipe_item
 where archived_at is null
   and computed_cost = 0
   and coalesce(fixed_cost,0) > 0;
+
+-- ══ T13 · Ventas de HubRise sin código de plataforma ═════════════════════
+-- El 13/08 por la noche un despliegue de hubrise-webhook borró la captura de
+-- `collection_code` -> `platform_order_code`. 14 días y 148 pedidos sin el
+-- código que ve el cliente, sin que saltara nada. Restaurado el 27/08 en
+-- buildPlatformCodes() (supabase/functions/hubrise-webhook/index.ts) + relleno
+-- histórico (20260827T1400) + vigía horario (20260827T1410).
+-- Baseline tras el arreglo: 0. Si esto crece, la frontera ha vuelto a perderla.
+select count(*) as t13_hubrise_sin_codigo
+from sale
+where source='hubrise' and platform_order_code is null
+  and sold_at >= now() - interval '7 days';
+
+-- Desglose: si T13 > 0, esto dice QUÉ frontera lo perdió (no solo HubRise).
+select source,
+       count(*) as ventas_7d,
+       count(*) filter (where platform_order_code is null) as sin_codigo,
+       count(*) filter (where pos_short_code is null)      as sin_corto
+from sale
+where sold_at >= now() - interval '7 days'
+  and source in ('hubrise','lastapp')
+group by 1 order by 1;
