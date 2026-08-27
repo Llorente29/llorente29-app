@@ -312,6 +312,36 @@ async function resolveAutoAccept(
 //
 // Tolerante a nulos por diseño: sin dirección devuelve null y no compone nada.
 // Uber Eats llega sin address_1 en 4 de 4 y es correcto — reparte Uber.
+// ── El portal de Glovo viaja en `customer.city` (27/08) ─────────────────────
+// HubRise no normaliza la dirección: cada plataforma la reparte a su manera.
+//
+//   Glovo      address_1 "Calle de Ricardo Ortiz"    city "37"      postal_code null
+//   Just Eat   address_1 "Calle de Vinaroz, 38, 2A"  city "Madrid"  postal_code "28002"
+//
+// Descartar `city` siempre —correcto para Just Eat, donde es la ciudad y no
+// puede acabar pegada a la calle en lo que ve el repartidor— tiraba el portal
+// de Glovo. El primer pedido real de Glovo con reparto propio (G659, venta
+// xnp3b9x) salió a la calle como "Calle de Ricardo Ortiz", sin número.
+//
+// GEMELA EXACTA de public.hubrise_street_line (migración 20260827163054) y de
+// streetLine() en catcher-dispatch. Manda el SQL —adapt_hubrise_order escribe
+// el último sobre `sale` y pisa este campo (ver 20260819T0800)—, pero las tres
+// tienen que decir lo mismo o la dirección cambia según quién la componga.
+const HOUSE_NUMBER_RE = /^[0-9]{1,4} *[A-Za-zºª]?$/;
+
+function streetLine(address1: unknown, city: unknown): string {
+  const a = typeof address1 === "string" ? address1.trim() : "";
+  const ci = typeof city === "string" ? city.trim() : "";
+  // `city` no parece un portal ("Madrid") -> address_1 intacto.
+  if (!HOUSE_NUMBER_RE.test(ci)) return a;
+  // Sin calle no hay nada que componer: nunca devolver ", 37".
+  if (!a) return "";
+  // La calle ya lleva ese número al final -> no duplicar.
+  if (new RegExp(`(^|[ ,])${ci}$`).test(a)) return a;
+  // Glovo: pegar el portal a la calle.
+  return `${a}, ${ci}`;
+}
+
 function buildCustomerFields(order: Record<string, unknown>): {
   delivery_address: string | null;
   customer_name: string | null;
@@ -326,7 +356,8 @@ function buildCustomerFields(order: Record<string, unknown>): {
   const addr2 = c ? s(c["address_2"]) : "";
   const addrParts = c
     ? [
-        s(c["address_1"]),
+        // `city` puede ser el portal (Glovo) o la ciudad (Just Eat): decide streetLine()
+        streetLine(c["address_1"], c["city"]),
         // solo si NO es la ciudad repetida (ver cabecera)
         addr2 && norm(addr2) !== norm(city) ? addr2 : "",
         s(c["postal_code"]),

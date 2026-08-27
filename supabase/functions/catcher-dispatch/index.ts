@@ -141,6 +141,34 @@ async function deliveryFromShop(
 // coordenadas de HubRise tal cual. Es el comportamiento correcto: no se puede
 // detectar una discrepancia contra un dato que no existe, y inventarse una
 // re-geocodificación sería cambiar un pin bueno por uno adivinado.
+// ── El portal de Glovo viaja en `customer.city` (27/08) ─────────────────────
+// Tercera copia de la MISMA regla: public.hubrise_street_line (migración
+// 20260827163054) y streetLine() en hubrise-webhook son las otras dos. Manda el
+// SQL —adapt_hubrise_order escribe el último sobre `sale`—, y aquí sólo se usa
+// en el recompuesto de emergencia de abajo, cuando sale.delivery_address está
+// vacío. Aun así tiene que decir lo mismo: si las tres no coinciden, la
+// dirección que ve el rider depende de quién la haya compuesto.
+//
+//   Glovo      address_1 "Calle de Ricardo Ortiz"    city "37"      postal_code null
+//   Just Eat   address_1 "Calle de Vinaroz, 38, 2A"  city "Madrid"  postal_code "28002"
+//
+// Descartar `city` siempre tiraba el portal de Glovo: el pedido G659 (venta
+// xnp3b9x) salió a la calle como "Calle de Ricardo Ortiz", sin número.
+const HOUSE_NUMBER_RE = /^[0-9]{1,4} *[A-Za-zºª]?$/;
+
+function streetLine(address1: unknown, city: unknown): string {
+  const a = typeof address1 === "string" ? address1.trim() : "";
+  const ci = typeof city === "string" ? city.trim() : "";
+  // `city` no parece un portal ("Madrid") -> address_1 intacto.
+  if (!HOUSE_NUMBER_RE.test(ci)) return a;
+  // Sin calle no hay nada que componer: nunca devolver ", 37".
+  if (!a) return "";
+  // La calle ya lleva ese número al final -> no duplicar.
+  if (new RegExp(`(^|[ ,])${ci}$`).test(a)) return a;
+  // Glovo: pegar el portal a la calle.
+  return `${a}, ${ci}`;
+}
+
 function deliveryFromHubrise(
   rawTab: string | null,
   sale: { delivery_address?: string | null },
@@ -173,7 +201,8 @@ function deliveryFromHubrise(
   // lee. Sólo si faltara se recompone aquí desde las piezas.
   const ciudad = txt(c.city);
   const a2 = txt(c.address_2);
-  const compuesta = [txt(c.address_1), a2 && a2 !== ciudad ? a2 : "", txt(c.postal_code)]
+  // `city` puede ser el portal (Glovo) o la ciudad (Just Eat): decide streetLine()
+  const compuesta = [streetLine(c.address_1, c.city), a2 && a2 !== ciudad ? a2 : "", txt(c.postal_code)]
     .filter(Boolean).join(", ");
   const address = txt(sale.delivery_address) || compuesta;
   if (!address) return null;
