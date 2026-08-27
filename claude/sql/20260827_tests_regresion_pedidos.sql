@@ -40,60 +40,77 @@ group by 1 order by 1;
 --   Just Eat   address_1 "Calle de Vinaroz, 38, 2A"  city "Madrid"  postal_code "28002"
 --
 -- La composición descartaba `city` siempre — correcto para Just Eat, donde no
--- puede acabar pegada a la calle, y desastroso para Glovo. El primer pedido
--- real de Glovo con reparto propio (G659, venta xnp3b9x, 27/08) salió a la
--- calle como "Calle de Ricardo Ortiz", sin portal.
+-- puede acabar pegada a la calle, y desastroso para Glovo. G659 (venta
+-- xnp3b9x, 27/08 18:21) salió a reparto propio como "Calle de Ricardo Ortiz",
+-- sin portal, y acabó NO ENTREGADO.
+--
+-- Y tres horas después del arreglo, G092 con city "40-46": un RANGO de
+-- portales. El patrón solo aceptaba dígitos seguidos, no casó, y el número se
+-- perdió otra vez — el mismo fallo por un caso no contemplado. De ahí que la
+-- mitad de los casos de abajo sean rangos: es el borde que ya falló una vez.
+--
+-- Patrón vigente:  ^[0-9]{1,4}( *- *[0-9]{1,4})? *[A-Za-zºª]?$
 --
 -- La regla vive en TRES sitios con el mismo texto copiado a mano:
---   public.hubrise_street_line          (20260827163054)  <- manda, escribe última
+--   public.hubrise_street_line          (20260827163054 + 20260827175746)  <- manda
 --   streetLine() en hubrise-webhook     (index.ts)
 --   streetLine() en catcher-dispatch    (index.ts, sólo el recompuesto fallback)
--- Este test cubre la de SQL; las dos de TypeScript se comprobaron con los
--- mismos 15 casos el 27/08 y dan idéntica respuesta.
+-- Este test cubre la de SQL. Las dos de TypeScript se ejecutaron con estos
+-- mismos 20 casos el 27/08 y dan idéntica respuesta; si tocas una, repite las
+-- tres o volverán a divergir, que es exactamente como nació esto.
 --
 -- Baseline: 0 filas. Cada fila que salga es un caso que la regla ya no cumple.
 with casos(caso, address_1, city, esperado) as (values
-  ('glovo: portal en city',            'Calle de Ricardo Ortiz',      '37',      'Calle de Ricardo Ortiz, 37'),
-  ('glovo: portal con letra',          'Calle de Ricardo Ortiz',      '12B',     'Calle de Ricardo Ortiz, 12B'),
-  ('glovo: portal con ordinal',        'Calle Mayor',                 '2ª',      'Calle Mayor, 2ª'),
-  ('glovo: portal letra separada',     'Calle Mayor',                 '3 A',     'Calle Mayor, 3 A'),
-  ('glovo: portal de 4 digitos',       'Paseo de la Castellana',      '1234',    'Paseo de la Castellana, 1234'),
-  ('glovo: espacios sobrantes',        '  Calle de Ricardo Ortiz  ',  ' 37 ',    'Calle de Ricardo Ortiz, 37'),
-  ('justeat: city es la ciudad',       'Calle de Vinaroz, 38, 2A',    'Madrid',  'Calle de Vinaroz, 38, 2A'),
-  ('city vacia',                       'Calle Mayor',                 '',        'Calle Mayor'),
-  ('city nula',                        'Calle Mayor',                 null,      'Calle Mayor'),
-  ('city de 5 digitos no es portal',   'Calle Mayor',                 '12345',   'Calle Mayor'),
-  ('ya termina en el portal (coma)',   'Calle de Ricardo Ortiz, 37',  '37',      'Calle de Ricardo Ortiz, 37'),
-  ('ya termina en el portal (espacio)','Calle de Ricardo Ortiz 37',   '37',      'Calle de Ricardo Ortiz 37'),
-  ('el numero es de la calle',         'Calle 37',                    '37',      'Calle 37'),
-  ('sin calle: nunca ", 37"',          '',                            '37',      null),
-  ('sin calle (null)',                 null,                          '37',      null)
+  ('glovo: portal en city',              'Calle de Ricardo Ortiz',                    '37',      'Calle de Ricardo Ortiz, 37'),
+  ('glovo: portal con letra',            'Calle de Ricardo Ortiz',                    '12B',     'Calle de Ricardo Ortiz, 12B'),
+  ('glovo: portal con ordinal',          'Calle Mayor',                               '5ª',      'Calle Mayor, 5ª'),
+  ('glovo: portal letra separada',       'Calle Mayor',                               '3 A',     'Calle Mayor, 3 A'),
+  ('glovo: RANGO (G092)',                'Calle de Emilio Gastesi Fernández',         '40-46',   'Calle de Emilio Gastesi Fernández, 40-46'),
+  ('glovo: RANGO con espacios',          'Calle de Emilio Gastesi Fernández',         '40 - 46', 'Calle de Emilio Gastesi Fernández, 40 - 46'),
+  ('glovo: portal de 3 digitos',         'Paseo de la Castellana',                    '128',     'Paseo de la Castellana, 128'),
+  ('glovo: espacios sobrantes',          '  Calle de Ricardo Ortiz  ',                ' 37 ',    'Calle de Ricardo Ortiz, 37'),
+  ('justeat: city es la ciudad',         'Calle de Vinaroz, 38, 2A',                  'Madrid',  'Calle de Vinaroz, 38, 2A'),
+  ('justeat: ciudad en mayusculas',      'Calle de Vinaroz, 38, 2A',                  'MADRID',  'Calle de Vinaroz, 38, 2A'),
+  ('city vacia',                         'Calle Mayor',                               '',        'Calle Mayor'),
+  ('city nula',                          'Calle Mayor',                               null,      'Calle Mayor'),
+  ('CP de 5 digitos no es portal',       'Calle Mayor',                               '28017',   'Calle Mayor'),
+  ('ya termina en el portal (coma)',     'Calle de Ricardo Ortiz, 37',                '37',      'Calle de Ricardo Ortiz, 37'),
+  ('ya termina en el portal (espacio)',  'Calle de Ricardo Ortiz 37',                 '37',      'Calle de Ricardo Ortiz 37'),
+  -- Los dos siguientes prueban el ESCAPADO DEL GUION: sin él, `city` se
+  -- interpola cruda en un patrón y el guion deja de ser un guion.
+  ('ya termina en el RANGO (escapado)',  'Calle de Emilio Gastesi Fernández, 40-46',  '40-46',   'Calle de Emilio Gastesi Fernández, 40-46'),
+  ('ya termina en el RANGO con espacios','Calle Mayor, 40 - 46',                      '40 - 46', 'Calle Mayor, 40 - 46'),
+  ('el numero es de la calle',           'Calle 37',                                  '37',      'Calle 37'),
+  ('sin calle: nunca ", 37"',            '',                                          '37',      null),
+  ('sin calle (null)',                   null,                                        '40-46',   null)
 )
 select caso, address_1, city, esperado,
        public.hubrise_street_line(address_1, city) as obtenido
 from casos
 where public.hubrise_street_line(address_1, city) is distinct from esperado;
 
--- T14b · Sobre datos reales: la dirección guardada tiene que CONTENER la calle
--- que compone la regla. Si no la contiene, algún camino la compuso distinto —
--- que es exactamente el fallo que se está vigilando. Baseline: 0 filas.
-select s.id, s.pos_short_code, s.sold_at at time zone 'Europe/Madrid' as sold_at_madrid,
-       s.raw_tab::jsonb->'customer'->>'address_1' as address_1,
-       s.raw_tab::jsonb->'customer'->>'city'      as city,
-       public.hubrise_street_line(
-         s.raw_tab::jsonb->'customer'->>'address_1',
-         s.raw_tab::jsonb->'customer'->>'city')   as calle_esperada,
-       s.delivery_address
-from sale s
-where s.source = 'hubrise'
-  and s.sold_at >= now() - interval '7 days'
-  and s.raw_tab is not null
-  and public.hubrise_street_line(
-        s.raw_tab::jsonb->'customer'->>'address_1',
-        s.raw_tab::jsonb->'customer'->>'city') is not null
-  and position(
-        public.hubrise_street_line(
-          s.raw_tab::jsonb->'customer'->>'address_1',
-          s.raw_tab::jsonb->'customer'->>'city')
-        in coalesce(s.delivery_address,'')) = 0
-order by s.sold_at desc;
+-- T14b · Los tres caminos de acuerdo, sobre datos reales. Baseline: 0 filas.
+--
+-- Compara la dirección GUARDADA con la que compone la regla desde las piezas
+-- del pedido. Si difieren, alguien la compuso distinto — que es exactamente el
+-- fallo que se vigila.
+--
+-- ⚠️ LA VENTANA DE 3 DÍAS NO ES DECORATIVA. Ampliada a 30 días saca 4 pedidos
+-- de Just Eat del 13, 13, 15 y 16 de agosto (J189793329, J189807345,
+-- J189909640, J189963703) con delivery_address a NULL. NO son de este fallo:
+-- son víctimas del anterior, el UPDATE de adapt_hubrise_order que borraba los
+-- cuatro campos de cliente, arreglado el 19/08 (20260819T0800). El histórico
+-- no se recompone solo. Si amplías la ventana, espera verlos y no los cuentes
+-- como regresión.
+SELECT pos_short_code, delivery_address,
+       raw_tab::jsonb->'customer'->>'address_1' AS a1,
+       raw_tab::jsonb->'customer'->>'city'      AS city
+FROM sale
+WHERE source = 'hubrise'
+  AND created_at > now() - interval '3 days'
+  AND raw_tab::jsonb->'customer'->>'address_1' IS NOT NULL
+  AND delivery_address IS DISTINCT FROM nullif(btrim(concat_ws(', ',
+        public.hubrise_street_line(raw_tab::jsonb->'customer'->>'address_1',
+                                   raw_tab::jsonb->'customer'->>'city'),
+        nullif(btrim(coalesce(raw_tab::jsonb->'customer'->>'postal_code','')),'')
+      )),'');

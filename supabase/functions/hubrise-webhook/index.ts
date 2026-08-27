@@ -312,34 +312,48 @@ async function resolveAutoAccept(
 //
 // Tolerante a nulos por diseño: sin dirección devuelve null y no compone nada.
 // Uber Eats llega sin address_1 en 4 de 4 y es correcto — reparte Uber.
-// ── El portal de Glovo viaja en `customer.city` (27/08) ─────────────────────
-// HubRise no normaliza la dirección: cada plataforma la reparte a su manera.
+// ── Glovo mete el NÚMERO DE PORTAL en `city` (27/08/2026) ───────────────────
+// Verificado en los primeros pedidos reales de Glovo por HubRise:
+//   G659  address_1 "Calle de Ricardo Ortiz"            city "37"
+//   G092  address_1 "Calle de Emilio Gastesi Fernández" city "40-46"  <- rango
+// Just Eat, en cambio, pone la ciudad donde toca:
+//   address_1 "Calle de Vinaroz, 38, 2A"                city "Madrid"
 //
-//   Glovo      address_1 "Calle de Ricardo Ortiz"    city "37"      postal_code null
-//   Just Eat   address_1 "Calle de Vinaroz, 38, 2A"  city "Madrid"  postal_code "28002"
+// Se distingue POR LA FORMA DEL DATO, no por el canal: una ciudad nunca es solo
+// dígitos. Hacerlo por canal exigiría fiarse de `channel`, texto libre de la
+// plataforma.
 //
-// Descartar `city` siempre —correcto para Just Eat, donde es la ciudad y no
-// puede acabar pegada a la calle en lo que ve el repartidor— tiraba el portal
-// de Glovo. El primer pedido real de Glovo con reparto propio (G659, venta
-// xnp3b9x) salió a la calle como "Calle de Ricardo Ortiz", sin número.
+// Descartar `city` siempre era correcto para Just Eat —ahí es la ciudad y no
+// puede acabar pegada a la calle en lo que ve el repartidor— y desastroso para
+// Glovo: G659 salió a reparto propio sin portal y acabó NO ENTREGADO. G092, tres
+// horas después del primer arreglo, volvió a perderlo porque el rango "40-46" no
+// era un caso contemplado.
 //
-// GEMELA EXACTA de public.hubrise_street_line (migración 20260827163054) y de
-// streetLine() en catcher-dispatch. Manda el SQL —adapt_hubrise_order escribe
-// el último sobre `sale` y pisa este campo (ver 20260819T0800)—, pero las tres
-// tienen que decir lo mismo o la dirección cambia según quién la componga.
-const HOUSE_NUMBER_RE = /^[0-9]{1,4} *[A-Za-zºª]?$/;
+// GEMELO EXACTO de public.hubrise_street_line(text,text) en BBDD (migraciones
+// 20260827163054 + 20260827175746) y de streetLine() en catcher-dispatch. Si
+// cambia uno, cambian los tres: adapt_hubrise_order escribe delivery_address
+// DESPUÉS de esto y es la que manda — si divergen, gana el SQL y este código
+// miente.
+const HOUSE_NUMBER_RE = /^\d{1,4}( *- *\d{1,4})? *[A-Za-zºª]?$/;
 
-function streetLine(address1: unknown, city: unknown): string {
-  const a = typeof address1 === "string" ? address1.trim() : "";
-  const ci = typeof city === "string" ? city.trim() : "";
-  // `city` no parece un portal ("Madrid") -> address_1 intacto.
-  if (!HOUSE_NUMBER_RE.test(ci)) return a;
+// El guion es metacaracter dentro de una clase. Al admitir rangos ("40-46"),
+// `n` se interpola en un patron y hay que escaparlo antes: sin esto, un city
+// con guion construye un patron que no dice lo que parece.
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+}
+
+function streetLine(address1: string, city: string): string {
+  const a1 = address1.trim();
+  const n = city.trim();
+  // Just Eat: "Madrid" no es un portal -> address_1 intacto.
+  if (!HOUSE_NUMBER_RE.test(n)) return a1;
   // Sin calle no hay nada que componer: nunca devolver ", 37".
-  if (!a) return "";
-  // La calle ya lleva ese número al final -> no duplicar.
-  if (new RegExp(`(^|[ ,])${ci}$`).test(a)) return a;
+  if (!a1) return "";
+  // Ya lo lleva al final -> no duplicar (idempotente).
+  if (new RegExp(`(^|[ ,])${escapeRe(n)}$`).test(a1)) return a1;
   // Glovo: pegar el portal a la calle.
-  return `${a}, ${ci}`;
+  return `${a1}, ${n}`;
 }
 
 function buildCustomerFields(order: Record<string, unknown>): {
@@ -357,7 +371,7 @@ function buildCustomerFields(order: Record<string, unknown>): {
   const addrParts = c
     ? [
         // `city` puede ser el portal (Glovo) o la ciudad (Just Eat): decide streetLine()
-        streetLine(c["address_1"], c["city"]),
+        streetLine(s(c["address_1"]), city),
         // solo si NO es la ciudad repetida (ver cabecera)
         addr2 && norm(addr2) !== norm(city) ? addr2 : "",
         s(c["postal_code"]),
