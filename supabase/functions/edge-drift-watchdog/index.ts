@@ -126,36 +126,50 @@ async function listarDesplegadas(ref: string, pat: string): Promise<Array<Record
 // Devuelve el mapa "ruta dentro del bundle" -> bytes.
 async function leerFuenteDesplegado(
   ref: string, pat: string, slug: string,
-): Promise<Map<string, Uint8Array> | null> {
+): Promise<{ mapa: Map<string, Uint8Array> | null; diag: string }> {
   let r: Response;
   try {
     r = await fetch(`${MGMT_API}/projects/${ref}/functions/${encodeURIComponent(slug)}/body`, {
       headers: { Authorization: `Bearer ${pat}`, Accept: "application/json" },
     });
-  } catch {
-    return null;
+  } catch (e) {
+    return { mapa: null, diag: `red: ${e instanceof Error ? e.message : String(e)}` };
   }
-  if (!r.ok) { await r.body?.cancel(); return null; }
 
   const tipo = (r.headers.get("content-type") ?? "").toLowerCase();
-  if (!tipo.includes("json")) { await r.body?.cancel(); return null; }
+
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    return { mapa: null, diag: `HTTP ${r.status} (${tipo || "sin content-type"}) ${t.slice(0, 140)}` };
+  }
+  if (!tipo.includes("json")) {
+    await r.body?.cancel();
+    return { mapa: null, diag: `HTTP ${r.status} content-type=${tipo || "vacio"} (no es JSON)` };
+  }
 
   let j: unknown;
-  try { j = await r.json(); } catch { return null; }
+  try { j = await r.json(); } catch { return { mapa: null, diag: `HTTP ${r.status} JSON ilegible` }; }
 
   // Forma esperada: { files: [{ name, content }] }. Cualquier otra -> no leible.
   const files = (j as { files?: unknown })?.files;
-  if (!Array.isArray(files) || files.length === 0) return null;
+  if (!Array.isArray(files) || files.length === 0) {
+    const claves = (j && typeof j === "object") ? Object.keys(j as object).slice(0, 8).join(",") : typeof j;
+    return { mapa: null, diag: `HTTP ${r.status} JSON sin files[]; claves=${claves}` };
+  }
 
   const mapa = new Map<string, Uint8Array>();
   const enc = new TextEncoder();
+  let sinContenido = 0;
   for (const f of files) {
     const nombre = (f as { name?: unknown })?.name;
     const contenido = (f as { content?: unknown })?.content;
-    if (typeof nombre !== "string" || typeof contenido !== "string") continue;
+    if (typeof nombre !== "string" || typeof contenido !== "string") { sinContenido++; continue; }
     mapa.set(nombre, enc.encode(contenido));
   }
-  return mapa.size ? mapa : null;
+  if (!mapa.size) {
+    return { mapa: null, diag: `HTTP ${r.status} files[${files.length}] pero ninguno con name+content` };
+  }
+  return { mapa, diag: `ok: ${mapa.size} ficheros${sinContenido ? `, ${sinContenido} sin contenido` : ""}` };
 }
 
 // Traduce el nombre de un fichero DENTRO del bundle a su ruta en el repositorio.
@@ -281,7 +295,10 @@ Deno.serve(async (req: Request) => {
       let detalle: string | null = null;
 
       if (dep) {
-        const bundle = await leerFuenteDesplegado(ref, pat, slug);
+        const { mapa: bundle, diag } = await leerFuenteDesplegado(ref, pat, slug);
+        // Por que no se pudo comparar: se guarda tal cual. Un vigia que no
+        // puede leer tiene que decir POR QUE, no encogerse de hombros.
+        if (!bundle) detalle = diag;
         if (bundle) {
           const distintos: string[] = [];
           let comparados = 0;
