@@ -21,7 +21,11 @@
 --                           BURGER 20"), que hoy no se guardaba en ningun sitio.
 --   · external_channels  -> TODOS los destinos del catalogo, ordenados.
 --
--- ⚠️ NO APLICADA TODAVIA. El codigo que escribe estas columnas ya esta escrito,
+-- ✅ APLICADA el 27/08/2026 (escrita el 19/08). Y `last-catalog-sync` v11
+-- desplegada justo despues, en el orden obligado: migracion -> verificacion
+-- estructural -> deploy.
+--
+-- (Historico) NO APLICADA TODAVIA. El codigo que escribe estas columnas ya esta escrito,
 -- en `last-catalog-sync` (collectBrandChannelByCatalog acumula todos los
 -- destinos en vez de quedarse con el primero, y resolveLocationCatalogs guarda
 -- el nombre del catalogo). Ese despliegue ESPERA A ESTA MIGRACION.
