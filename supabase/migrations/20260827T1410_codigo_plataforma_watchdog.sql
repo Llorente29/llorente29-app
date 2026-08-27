@@ -1,5 +1,7 @@
 -- 20260827T1410_codigo_plataforma_watchdog.sql
--- PROPUESTA. Revisar antes de ejecutar.
+-- APLICADA en produccion el 27-08-2026 (cron jobid 54, '25 * * * *').
+-- Comprobado en vivo tras el relleno: devuelve 0 avisos. Antes del relleno,
+-- la misma consulta devolvia la fila de hubrise (0 de 20). Los dos sentidos.
 --
 -- VIGIA: UNA FRONTERA QUE DEJA DE GUARDAR EL CODIGO DE PEDIDO.
 -- ============================================================================

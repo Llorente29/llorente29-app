@@ -1,5 +1,6 @@
 -- 20260827T1400_hubrise_codigos_plataforma_backfill.sql
--- PROPUESTA. Cambio de datos historicos: NO se ejecuta sin el visto bueno de Julio.
+-- APLICADA en produccion el 27-08-2026, autorizada por Julio en el encargo.
+-- Cambio de datos historicos. Va en transaccion (apply_migration la abre).
 --
 -- RELLENO DE `platform_order_code` / `pos_short_code` EN LAS VENTAS DE HUBRISE.
 -- ============================================================================
@@ -32,8 +33,6 @@
 -- Idempotente (is distinct from) y transaccional. Solo toca source='hubrise'.
 -- ============================================================================
 
-begin;
-
 with calc as (
   select s.id,
          nullif(btrim(s.raw_tab::jsonb ->> 'collection_code'), '') as code,
@@ -57,13 +56,9 @@ update public.sale s
    and (s.platform_order_code is distinct from c.code
      or s.pos_short_code      is distinct from c.inicial || c.code);
 
--- Verificacion en la misma transaccion: si no cuadra, ROLLBACK a mano.
-select 'tras el relleno' as momento,
-       count(*)                                                as ventas_hubrise,
-       count(platform_order_code)                              as con_codigo,
-       count(*) filter (where platform_order_code is null)     as sin_codigo,
-       count(pos_short_code)                                   as con_corto
-  from public.sale
- where source = 'hubrise';
-
-commit;
+-- Verificacion (a correr aparte, tras aplicar):
+--   select count(*) as ventas, count(platform_order_code) as con_codigo,
+--          count(*) filter (where platform_order_code is null) as sin_codigo,
+--          count(pos_short_code) as con_corto
+--     from public.sale where source = 'hubrise';
+--   Esperado: 209 / 207 / 2 / 207
