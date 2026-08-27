@@ -76,13 +76,62 @@ select 'T6 ledger corrupto' as test,
        count(*) as movs_totales
 from stock_movement;
 
--- ══ T7 · (E7) Recepciones duplicadas ═════════════════════════════════════
--- Misma línea de recepción con más de un movimiento del mismo artículo.
--- Baseline 25-08: 19 (histórico, pendiente de decisión).
-select 'T7 recepciones duplicadas' as test, count(*) as fallos
-from (select sm.source_id, sm.recipe_item_id
-      from stock_movement sm where sm.source_type='goods_receipt_line'
-      group by 1,2 having count(*) > 1) x;
+-- ══ T7 · (E7) Recepciones que descuadran ═════════════════════════════════
+-- ⚠️ RECALIBRADO EL 27-08. EL BASELINE CAMBIA DE 19 A 0 A PROPÓSITO.
+--
+-- La versión original contaba «misma línea de recepción con más de un
+-- movimiento del mismo artículo» y daba 19 de forma permanente. Al revisar
+-- esas 19 una a una (A4 del encargo del 25/08) resultó que NINGUNA era doble
+-- contabilización:
+--
+--    13 líneas · 26 movimientos · neto CERO ....... albarán anulado con su
+--                                                   reversa correcta
+--     6 líneas · 18 movimientos · neto = la línea . albarán editado: entrada
+--                                                   + reversa + re-entrada
+--     0 líneas descuadradas
+--
+-- Es decir: el test contaba MULTIPLICIDAD DE MOVIMIENTOS, que es normal y
+-- esperable en cuanto alguien anula o corrige un albarán, no doble descuento.
+-- Un test que siempre da 19 no vigila nada: se lee una vez, se aprende que
+-- «19 es lo normal», y el día que sean 20 nadie lo nota. Es exactamente cómo
+-- se enterró la alarma buena de hubrise-order-stuck.
+--
+-- Ahora mide lo que importa: que el NETO asentado en el ledger coincida con la
+-- cantidad de la línea del albarán. Da igual por cuántos movimientos se llegue.
+--
+-- BASELINE 27-08: **1**, no 0 — y el que sale es un fallo de verdad que la
+-- versión vieja no veía, porque solo miraba líneas con movimientos repetidos.
+--
+--   ALB-00005 · 16/06 · Foodint Plaza Castilla
+--   "JA'E alubia cocida roja lata 1600gne" · 8 latas · 46,96 € · 20.000 g
+--
+--   La corrección del 15/08 (las alubias rojas sustituyeron a los frijoles
+--   negros) dejó TRES movimientos sobre esa línea:
+--       +20.000  recepción 16/06        entrada original sobre Frijoles Negros
+--       -20.000  ajuste    14/08        "reverso sobre Frijoles Negros"    ✓
+--       -20.000  ajuste    14/08        "alta sobre Alubias rojas"         ✗
+--   El tercero dice ALTA y lleva signo NEGATIVO. Frijoles Negros quedó a cero,
+--   que es correcto; pero Alubias rojas recibió -20.000 en vez de +20.000.
+--   Desvío de 40.000 g sobre lo que dice el albarán.
+--
+-- Pendiente de decisión (misma lógica que CLOUDTOWN): desde el 16/06 ha habido
+-- conteos aprobados en Plaza Castilla que ya han fijado el stock real, así que
+-- corregir el signo hoy arriesga doble descuento. La caché y el ledger están de
+-- acuerdo (26.300 g), o sea que no hay desincronización: es el histórico el que
+-- no cuadra con su documento.
+--
+-- Cuando se decida: si se corrige, este baseline pasa a 0. Si se deja, se queda
+-- en 1 y hay que saber POR QUÉ, que es para lo que está escrito esto.
+select 'T7 recepciones que descuadran' as test, count(*) as fallos
+from (
+  select sm.source_id, sm.recipe_item_id, sum(sm.qty_base) as qty_neta
+    from stock_movement sm
+   where sm.source_type = 'goods_receipt_line'
+   group by 1,2
+) d
+join goods_receipt_line grl on grl.id = d.source_id
+where abs(d.qty_neta) > 0.0001                                   -- no es una anulación neteada
+  and abs(d.qty_neta - coalesce(grl.qty_in_base, 0)) > 0.0001;   -- y no cuadra con la línea
 
 -- ══ T8 · (E8/E9) Informe de conteo vs asiento de conteo ══════════════════
 -- El informe (variance_qty) y el ajuste realmente asentado tienen que dar el

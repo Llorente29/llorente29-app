@@ -139,7 +139,7 @@ Julio autorizó A2 → A1 → A3 → A5 en ese orden exacto. A4 queda para revis
 | A1 | Devolver el stock de las 9 ventas anuladas | 9 ventas, **95 → 0** movimientos de consumo | ✅ hecho |
 | A3 | Reprocesar el consumo de los combos | 641 ventas · **392 → 6.340** movimientos (+5.948) · 397 ventas pasan de cero a descontar · −1.798,25 € de coste · 4 ventas bajaron (2 a cero) | ⚠️ hecho, **con efecto lateral** (§9) |
 | A5 | Backfill del informe de variance | 1.604 líneas / 97 conteos (1.591 / 96 sin INV-00004) · merma informada −10.116,87 € → **−10.564,09 €** · 128 dejan de ser anomalía, 210 pasan a serlo · **0 líneas con el teórico fuera del ledger** | ✅ hecho, reversible |
-| A4 | Revisar las 19 recepciones duplicadas | — | ⏸ pendiente, una a una |
+| A4 | Revisar las 19 recepciones duplicadas | **0 duplicados reales**: 13 con neto cero (anulado + reversa), 6 con neto = la línea (albarán editado). El test T7 contaba multiplicidad, no doble descuento | ✅ cerrado 27/08 — ver `claude/decisiones_cierre_deudas_20260827.md` |
 
 Registro exacto de lo ejecutado, con las consultas y las marchas atrás: `claude/sql/20260825_A1_A2_A3_A5_ejecutado.sql`.
 
