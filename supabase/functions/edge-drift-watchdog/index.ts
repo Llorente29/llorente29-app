@@ -46,8 +46,13 @@
 //
 // Variables de entorno (secrets):
 //   CRON_SECRET             -- compartido cron <-> functions internas (ya existe)
-//   SUPABASE_ACCESS_TOKEN   -- PAT de Supabase, solo lectura de funciones   [NUEVO]
+//   MGMT_API_TOKEN          -- PAT de Supabase (Management API)             [NUEVO]
 //   GITHUB_TOKEN            -- PAT de GitHub, permiso Contents: read-only   [NUEVO]
+//
+// OJO CON EL NOMBRE: NO se llama SUPABASE_ACCESS_TOKEN. El prefijo `SUPABASE_`
+// esta reservado por la plataforma (ahi viven SUPABASE_URL,
+// SUPABASE_SERVICE_ROLE_KEY, etc., inyectadas automaticamente) y un secret
+// propio con ese prefijo puede rechazarse al guardarlo. De ahi MGMT_API_TOKEN.
 //   GITHUB_REPO             -- "Llorente29/llorente29-app" (por defecto)
 //   GITHUB_BRANCH           -- "main" (por defecto)
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY -- inyectadas por la plataforma
@@ -203,7 +208,7 @@ Deno.serve(async (req: Request) => {
 
   const dry = new URL(req.url).searchParams.get("dry") === "1";
 
-  const pat = Deno.env.get("SUPABASE_ACCESS_TOKEN") ?? "";
+  const pat = Deno.env.get("MGMT_API_TOKEN") ?? "";
   const ghToken = Deno.env.get("GITHUB_TOKEN") ?? "";
   const repo = Deno.env.get("GITHUB_REPO") ?? "Llorente29/llorente29-app";
   const rama = Deno.env.get("GITHUB_BRANCH") ?? "main";
@@ -211,7 +216,7 @@ Deno.serve(async (req: Request) => {
   const ref = supaUrl.replace(/^https?:\/\//, "").split(".")[0];
 
   const faltan: string[] = [];
-  if (!pat) faltan.push("SUPABASE_ACCESS_TOKEN");
+  if (!pat) faltan.push("MGMT_API_TOKEN");
   if (!ghToken) faltan.push("GITHUB_TOKEN");
   if (!ref) faltan.push("SUPABASE_URL");
   if (faltan.length) {
