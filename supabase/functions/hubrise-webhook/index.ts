@@ -349,6 +349,45 @@ function buildCustomerFields(order: Record<string, unknown>): {
   };
 }
 
+// ── Códigos de pedido que ve el cliente (17/08 -> perdido -> restaurado 27/08) ──
+// REGRESIÓN CON FECHA. Del 06/08 (go-live de HubRise) al 13/08 por la noche,
+// `platform_order_code` se rellenaba desde `collection_code`. Dejó de hacerlo
+// entre las 20:05 y las 20:52 UTC del 13/08 y estuvo 14 días sin rellenarse
+// (148 pedidos). Causa: la captura NUNCA estuvo en git — vivía solo en la
+// versión desplegada (v45, documentada en docs/folvy_estado.md), y el despliegue
+// de esa noche (`fix/hubrise-service-type-reparto`) la pisó con el árbol limpio.
+// Por eso se restaura AQUÍ, en el repo, y con test de regresión (T13).
+//
+// QUÉ ES `collection_code`: el código que el cliente y la plataforma ven.
+// Verificado contra los 57 pedidos que sí lo tuvieron — `platform_order_code`
+// era EXACTAMENTE `collection_code` en 57 de 57, sin transformación:
+//   Uber Eats  "DC034" / "52766" / "759E0"  (5 caracteres, = últimos 5 del uuid `ref`)
+//   Just Eat   "189793329"                  (el nº de pedido de Just Eat, = `ref`)
+// Contrastado con el panel de Uber: 52766, 759E0 y 108BD cuadran uno a uno.
+//
+// `pos_short_code`: el corto que imprime cocina. En Last viene YA hecho de la
+// plataforma (`tab.code` = "U789" / "G878" / "J076": inicial de canal + número)
+// y solo se copia. HubRise no manda ningún campo equivalente, así que aquí se
+// COMPONE con la misma forma: inicial del canal + `collection_code` ->
+// "U52766", "J189793329". Sin recortar: el valor debe poder cruzarse tal cual
+// con lo que el cliente enseña en la plataforma; un corte lo volvería inútil.
+function buildPlatformCodes(
+  order: Record<string, unknown>, channelText: string | null,
+): { platform_order_code: string | null; pos_short_code: string | null } {
+  const raw = order["collection_code"];
+  const code = typeof raw === "string" ? raw.trim() : "";
+  if (!code) return { platform_order_code: null, pos_short_code: null };
+
+  const slug = channelSlug(channelText);
+  const initial = slug === "uber" ? "U"
+    : slug === "justeat" ? "J"
+    : slug === "glovo" ? "G"
+    : slug === "deliveroo" ? "D"
+    : (channelText ?? "").trim().slice(0, 1).toUpperCase();
+
+  return { platform_order_code: code, pos_short_code: `${initial}${code}` };
+}
+
 async function upsertSale(
   sb: SupabaseClient, accountId: string, locationId: string | null,
   order: Record<string, unknown>,
@@ -376,6 +415,9 @@ async function upsertSale(
     tax: null,          // HubRise da tax_rate por línea; total de impuesto no directo (futuro)
     taxable_base: null,
     service_type: mapServiceType(order["service_type"] as string | null, caches.deliveryServiceType),
+    // Códigos que ve el cliente (platform_order_code / pos_short_code). Van en
+    // `common` a propósito: así un order.update posterior también los rellena.
+    ...buildPlatformCodes(order, channelText),
     // Cliente y destino de entrega. Sin esto el reparto propio se quedaba sin
     // dirección (ver buildCustomerFields).
     ...buildCustomerFields(order),
