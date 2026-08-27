@@ -76,7 +76,12 @@ export async function resolveHubriseToken(
     .eq("source", "hubrise")
     .eq("account_id", q.accountId)
     .eq("external_location_id", q.externalLocationId)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    // Los bridges viejos (Uber Eats Bridge / Glovo Bridge / Just Eat Flyt
+    // Bridge) llevan external_catalog_id. Hoy estan is_active=false, pero si
+    // alguien reactiva uno volveria a colarse un token que no es el de la
+    // conexion de pedidos. La conexion buena no tiene catalogo asociado.
+    .is("external_catalog_id", null);
 
   if (error || !data || data.length === 0) return null;
 

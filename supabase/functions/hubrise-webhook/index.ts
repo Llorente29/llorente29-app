@@ -55,6 +55,7 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { pushOrderStatus } from "../_shared/hubrisePush.ts";
+import { resolveHubriseToken } from "../_shared/hubriseToken.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const HUBRISE_WEBHOOK_SECRET = Deno.env.get("HUBRISE_WEBHOOK_SECRET") ?? "";
@@ -428,14 +429,24 @@ async function upsertSale(
 // Espejo local SOLO tras 2xx (nunca mentimos el estado).
 async function maybeAckReceived(
   sb: SupabaseClient,
-  args: { saleId: string; externalRef: string; incomingStatus: string | null; isNew: boolean },
+  args: {
+    saleId: string; externalRef: string; incomingStatus: string | null; isNew: boolean;
+    accountId: string; externalLocationId: string; connectionName: string | null;
+  },
 ): Promise<void> {
   const incoming = (args.incomingStatus ?? "").toLowerCase();
   if (incoming !== "new") return;     // ya viene received/accepted/etc. -> no re-empujar
   if (!args.isNew) return;            // solo en la primera ingesta del pedido
   if (!args.externalRef) return;
 
-  const res = await pushOrderStatus(args.externalRef, "received", { confirmedTime: null });
+  const token = await resolveHubriseToken(sb, {
+    accountId: args.accountId,
+    externalLocationId: args.externalLocationId,
+    connectionName: args.connectionName,
+  });
+  const res = await pushOrderStatus(args.externalRef, "received", {
+    confirmedTime: null, accessToken: token,
+  });
   if (!res.ok) {
     // No mentimos el estado: si HubRise rechaza, el pedido se queda como entró.
     console.error(`ack received ${args.externalRef}: ${res.error} (HTTP ${res.status})`);
@@ -461,6 +472,7 @@ async function maybeAutoAccept(
   args: {
     accountId: string; saleId: string; externalRef: string;
     incomingStatus: string | null; channelId: string | null; brandId: string | null;
+    externalLocationId: string; connectionName: string | null;
   },
 ): Promise<boolean> {
   const incoming = (args.incomingStatus ?? "").toLowerCase();
@@ -473,7 +485,14 @@ async function maybeAutoAccept(
   if (!cfg.autoAccept) return false;
   // cfg.respectHours queda INERTE hasta Horarios (no se evalúa todavía).
 
-  const res = await pushOrderStatus(args.externalRef, "accepted", { confirmedTime: null });
+  const token = await resolveHubriseToken(sb, {
+    accountId: args.accountId,
+    externalLocationId: args.externalLocationId,
+    connectionName: args.connectionName,
+  });
+  const res = await pushOrderStatus(args.externalRef, "accepted", {
+    confirmedTime: null, accessToken: token,
+  });
   if (!res.ok) {
     // No mentimos el estado: si HubRise rechaza, el pedido se queda como entró.
     console.error(`auto-accept push ${args.externalRef}: ${res.error} (HTTP ${res.status})`);
@@ -602,6 +621,9 @@ Deno.serve(async (req: Request) => {
             externalRef: String(orderId ?? ""),
             incomingStatus: (order["status"] as string | null) ?? null,
             isNew: r.isNew,
+            accountId: loc.accountId,
+            externalLocationId: hubriseLocationId,
+            connectionName: (order["connection_name"] as string | null) ?? null,
           });
           // AUTO-ACEPTACIÓN (solo pedidos vivos sin aceptar; la función guarda el resto).
           await maybeAutoAccept(sb, {
@@ -611,6 +633,8 @@ Deno.serve(async (req: Request) => {
             incomingStatus: (order["status"] as string | null) ?? null,
             channelId,
             brandId,
+            externalLocationId: hubriseLocationId,
+            connectionName: (order["connection_name"] as string | null) ?? null,
           });
         }
         processedOk = true;
