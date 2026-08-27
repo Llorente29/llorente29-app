@@ -418,10 +418,23 @@ function buildCustomerFields(order: Record<string, unknown>): {
 // con lo que el cliente enseña en la plataforma; un corte lo volvería inútil.
 function buildPlatformCodes(
   order: Record<string, unknown>, channelText: string | null,
-): { platform_order_code: string | null; pos_short_code: string | null } {
+): { platform_order_code: string | null; pos_short_code: string | null; platform_order_ref: string | null } {
+  // `ref` es la referencia LARGA de la plataforma. En Glovo es el nº de 12
+  // dígitos que hace falta para reclamar y que por Last.app iba impreso en el
+  // ticket; al pasar a HubRise dejó de guardarse porque platform_order_code
+  // pasó a ser el collection_code corto. Se captura SIEMPRE (es dato de la
+  // plataforma); quién lo imprime lo decide el ticket, no la ingesta.
+  //
+  // En Just Eat `ref` es IGUAL al collection_code y en Uber es un uuid: por eso
+  // se guarda crudo y la regla de impresión (passCode.ts) decide por la forma
+  // del dato, no por el canal.
+  const refLargo = typeof order["ref"] === "string" ? order["ref"].trim() : "";
+
   const raw = order["collection_code"];
   const code = typeof raw === "string" ? raw.trim() : "";
-  if (!code) return { platform_order_code: null, pos_short_code: null };
+  if (!code) {
+    return { platform_order_code: null, pos_short_code: null, platform_order_ref: refLargo || null };
+  }
 
   const slug = channelSlug(channelText);
   const initial = slug === "uber" ? "U"
@@ -430,7 +443,7 @@ function buildPlatformCodes(
     : slug === "deliveroo" ? "D"
     : (channelText ?? "").trim().slice(0, 1).toUpperCase();
 
-  return { platform_order_code: code, pos_short_code: `${initial}${code}` };
+  return { platform_order_code: code, pos_short_code: `${initial}${code}`, platform_order_ref: refLargo || null };
 }
 
 async function upsertSale(

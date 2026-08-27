@@ -65,14 +65,14 @@ function pickupCode(order: OrderFeedItem): string {
 }
 
 /** Línea fina de referencia = el OTRO código (para soporte/incidencias/factura). Cuando
- *  el otro es el nº de plataforma se etiqueta con el canal ("Glovo · 101688354460");
- *  si es el corto (caso Uber), va a secas. null si no hay segundo código. */
+ *  el otro es de la plataforma —el nº largo de Glovo o su código corto— se etiqueta con
+ *  el canal ("Glovo · 101755551192"); si es el corto de Folvy (caso Uber), va a secas.
+ *  QUÉ código es lo decide passCode.ts, aquí sólo se etiqueta. null si no hay segundo. */
 function platformRef(order: OrderFeedItem): string | null {
   const pc = passCode(order)
   if (!pc.secondary) return null
   const ch = (order.channel ?? '').trim()
-  const plat = (order.platform_order_code ?? '').trim().toUpperCase()
-  return (pc.secondary === plat && ch) ? `${ch} · ${pc.secondary}` : pc.secondary
+  return (pc.secondarySource !== 'short' && ch) ? `${ch} · ${pc.secondary}` : pc.secondary
 }
 
 function money(n: number | null | undefined): string {

@@ -12,13 +12,13 @@ function ticketNumber(order: any) { return order.external_tab_ref ?? order.exter
 function pickupCode(order: any) {
   return passCode(order).full;
 }
-// Referencia fina = el OTRO código (para incidencias). Con canal si es el nº de plataforma.
+// Referencia fina = el OTRO código (para incidencias). Con canal si es de la plataforma
+// (el largo de Glovo o el corto del canal). Qué código es lo decide passCode.ts.
 function platformRef(order: any) {
   const pc = passCode(order);
   if (!pc.secondary) return null;
   const ch = (order.channel ?? '').trim();
-  const plat = (order.platform_order_code ?? '').trim().toUpperCase();
-  return (pc.secondary === plat && ch) ? `${ch} · ${pc.secondary}` : pc.secondary;
+  return (pc.secondarySource !== 'short' && ch) ? `${ch} · ${pc.secondary}` : pc.secondary;
 }
 function money(n: any) {
   if (n === null || n === undefined) return '';

@@ -114,3 +114,42 @@ WHERE source = 'hubrise'
                                    raw_tab::jsonb->'customer'->>'city'),
         nullif(btrim(coalesce(raw_tab::jsonb->'customer'->>'postal_code','')),'')
       )),'');
+
+-- ══ T15 · El número largo de la plataforma ═══════════════════════════════
+-- Por Last.app el ticket llevaba impreso el nº largo de Glovo (101753216562)
+-- porque `platform_order_code` ERA ese número. Por HubRise ese campo pasó a ser
+-- el `collection_code` (3 dígitos en Glovo) y el largo se quedó sin columna: el
+-- ticket dejó de poder imprimir el número con el que se RECLAMA a Glovo.
+-- Arreglado el 27/08: se captura en `platform_order_ref` (20260827214035), la
+-- expone order_for_print (20260827214146) y la imprime passCode.ts.
+--
+-- Los tres códigos, que no son lo mismo:
+--   pos_short_code       G954  · J189793329 · U52766   el grande de cocina
+--   platform_order_code  954   · 189793329  · 52766    el corto que canta el rider
+--   platform_order_ref   1017… · 189793329  · (uuid)   el largo, reclamaciones
+--
+-- T15a · Todo pedido de HubRise tiene capturado su `ref`. Baseline: 0.
+-- Si esto crece, la ingesta ha vuelto a perder el dato (buildPlatformCodes).
+select count(*) as t15a_sin_capturar
+from sale
+where source = 'hubrise'
+  and created_at > now() - interval '2 days'
+  and platform_order_ref is distinct from nullif(btrim(public.safe_jsonb(raw_tab)->>'ref'), '');
+
+-- T15b · La regla de impresión hace lo que debe, POR CANAL.
+-- Esperado: Glovo -> se_imprimiria = pedidos ; Just Eat y Uber -> 0.
+-- Just Eat queda fuera porque su `ref` ES el collection_code (repetiría el mismo
+-- número dos veces) y Uber porque el suyo es un uuid (ruido en un ticket). La
+-- condición mira la FORMA del dato, no el canal — mismo criterio que
+-- hubrise_street_line, y por lo mismo: `channel` es texto libre de la plataforma.
+--
+-- Medido el 27/08 sobre 7 días: Glovo 12/12, Just Eat 0/4, Uber Eats 0/86.
+select external_channel_text as canal,
+       count(*) as pedidos,
+       count(*) filter (where platform_order_ref is not null) as con_ref,
+       count(*) filter (where platform_order_ref is not null
+                          and platform_order_ref <> platform_order_code
+                          and platform_order_ref ~ '^[0-9]{6,20}$') as se_imprimiria
+from sale
+where source = 'hubrise' and created_at > now() - interval '7 days'
+group by 1 order by 1;
