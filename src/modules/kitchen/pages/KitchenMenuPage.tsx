@@ -27,6 +27,7 @@ import {
 import { setMenuItemCategoryBulk, reorderMenuItems, archiveMenuItem, restoreMenuItem, countRecentSales, duplicateMenuItem, updateMenuItem, setMenuItemCategory, addRecipeToBrand, listAccountBrands, listBrandsForRecipe, type AccountBrandLite } from '@/modules/kitchen/services/menuItemService'
 import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, updateMenuCategory, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
 import { setProductAvailability } from '@/modules/kitchen/services/menuOverrideService'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import ProductContextMenu, { type ContextMenuTarget } from '@/modules/kitchen/components/ProductContextMenu'
 import MenuFilterChips from '@/modules/kitchen/components/MenuFilterChips'
 import {
@@ -210,6 +211,10 @@ export default function KitchenMenuPage() {
   // ámbito se elige, viaja explícito, y antes de escribir hay un ENSAYO.
   const [publishing, setPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
+  // OJO: `publishLocationId` (abajo) es el AMBITO DE PUBLICACION, no el local
+  // en el que se agota. Son dos cosas distintas y mezclarlas fue el fallo: el
+  // 86 usa el local del selector de cabecera.
+  const { resolvedLocationId } = useLocationScope()
   const [publishLocations, setPublishLocations] = useState<Array<{ id: string; name: string }>>([])
   const [publishLocationId, setPublishLocationId] = useState<string | null>(null)
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null)
@@ -726,11 +731,17 @@ export default function KitchenMenuPage() {
   // es un único campo (is_available) y llamarlo de dos maneras confunde.
   async function toggleAvailability(p: { id: string; name: string; isAvailable: boolean }) {
     if (moving) return
+    // Sin local elegido no se agota. Hasta el 28/08 esto agotaba en TODOS los
+    // locales sin decirlo, porque la funcion ni aceptaba local.
+    if (resolvedLocationId === null) {
+      setRemoveError('Elige un local en la cabecera para agotar o reactivar. Desde «todos los locales» no se puede: el 86 es de un local concreto.')
+      return
+    }
     const next = !p.isAvailable
     setMoving(true)
     setRemoveError(null)
     try {
-      const res = await setProductAvailability(p.id, next, 'manual')
+      const res = await setProductAvailability(p.id, next, resolvedLocationId, 'manual')
       reloadCatalogProducts()
       const alcance = res.brands > 1 ? ` · ${res.brands} marcas` : ''
       const canales = res.channels > 0 ? ` · ${res.channels} canal${res.channels === 1 ? '' : 'es'}` : ''
@@ -739,7 +750,7 @@ export default function KitchenMenuPage() {
           ? `«${p.name}» reactivado${alcance}`
           : `«${p.name}» agotado${alcance}${canales}`,
         revert: async () => {
-          await setProductAvailability(p.id, p.isAvailable, 'manual')
+          await setProductAvailability(p.id, p.isAvailable, resolvedLocationId, 'manual')
           reloadCatalogProducts()
         },
       })
