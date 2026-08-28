@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+# Definicion completa de adapt_hubrise_order transcrita byte a byte desde
+# pg_get_functiondef: finales de linea MIXTOS a proposito (CRLF en el cuerpo
+# antiguo, LF en lo que toco el replace). Normalizarlos rompe el md5 con el
+# que se verifica contra produccion. Se trata como binario.
+supabase/migrations/20260827163135_adapt_hubrise_order_usa_hubrise_street_line.sql -text
