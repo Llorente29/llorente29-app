@@ -195,24 +195,13 @@ where archived_at is null
   and computed_cost = 0
   and coalesce(fixed_cost,0) > 0;
 
--- ══ T13 · Ventas de HubRise sin código de plataforma ═════════════════════
--- El 13/08 por la noche un despliegue de hubrise-webhook borró la captura de
--- `collection_code` -> `platform_order_code`. 14 días y 148 pedidos sin el
--- código que ve el cliente, sin que saltara nada. Restaurado el 27/08 en
--- buildPlatformCodes() (supabase/functions/hubrise-webhook/index.ts) + relleno
--- histórico (20260827T1400) + vigía horario (20260827T1410).
--- Baseline tras el arreglo: 0. Si esto crece, la frontera ha vuelto a perderla.
-select count(*) as t13_hubrise_sin_codigo
-from sale
-where source='hubrise' and platform_order_code is null
-  and sold_at >= now() - interval '7 days';
-
--- Desglose: si T13 > 0, esto dice QUÉ frontera lo perdió (no solo HubRise).
-select source,
-       count(*) as ventas_7d,
-       count(*) filter (where platform_order_code is null) as sin_codigo,
-       count(*) filter (where pos_short_code is null)      as sin_corto
-from sale
-where sold_at >= now() - interval '7 days'
-  and source in ('hubrise','lastapp')
-group by 1 order by 1;
+-- ── T13 y T14 se han MUDADO ─────────────────────────────────────────────────
+-- Vivían aquí por inercia: se escribieron el 27/08 y este era el fichero de
+-- tests abierto. Pero no miden la cadena de stock — miden la INGESTA DE
+-- PEDIDOS (el código de plataforma de HubRise y la composición de la dirección
+-- de Glovo), que no tiene nada que ver con consumo ni con conteos y no hay que
+-- ejecutarla al tocar el motor.
+--
+-- Están en:  claude/sql/20260827_tests_regresion_pedidos.sql
+-- Conservan su numeración (T13, T14, T14b) para que las referencias del
+-- historial y de los mensajes de commit sigan valiendo.

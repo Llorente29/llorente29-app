@@ -65,8 +65,9 @@ function pass(order: PassCodeInput): PassCode {
 function secondaryField(order: PassCodeInput, pc: PassCode): { label: string; value: string } | null {
   if (!pc.secondary) return null
   const ch = (order.channel ?? '').trim()
-  const plat = (order.platform_order_code ?? '').trim().toUpperCase()
-  const isPlatform = pc.secondary === plat
+  // De la plataforma = su nº largo (Glovo, para reclamar) o su código corto.
+  // Cuál de los dos es lo decide passCode.ts; aquí sólo se etiqueta.
+  const isPlatform = pc.secondarySource !== 'short'
   return {
     label: (isPlatform && ch) ? `Código ${ch}:` : 'Código interno:',
     value: pc.secondary,

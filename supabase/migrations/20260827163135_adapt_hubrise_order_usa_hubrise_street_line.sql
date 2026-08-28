@@ -1,0 +1,411 @@
+-- ============================================================================
+-- 27/08/2026 — adapt_hubrise_order compone la calle con hubrise_street_line
+-- ============================================================================
+-- Companera de 20260827163054. adapt_hubrise_order es quien ESCRIBE EL ULTIMO
+-- sobre `sale`: hubrise-webhook inserta la venta y dos lineas mas abajo esta
+-- RPC hace un UPDATE que pisa customer_name, customer_phone, delivery_address
+-- y customer_note (ver 20260819T0800). Asi que la regla de la direccion manda
+-- aqui aunque este copiada tambien en las dos edge functions.
+--
+-- Unico cambio funcional respecto a la version anterior, dentro del concat_ws
+-- de `delivery_address`:
+--
+--   -  nullif(btrim(coalesce(v_order->'customer'->>'address_1','')),''),
+--   +  public.hubrise_street_line(v_order->'customer'->>'address_1',
+--                                 v_order->'customer'->>'city'),
+--
+-- Por que va la definicion ENTERA y no un DO $do$ con replace():
+-- en produccion se aplico con un replace() sobre pg_get_functiondef() porque
+-- transcribir 17.776 caracteres a mitad de servicio era el riesgo mayor. Pero
+-- ese bloque NO es replayable: sobre una base limpia la funcion todavia no
+-- existe y no hay nada que sustituir, y la migracion pasaria en silencio sin
+-- crear nada. Lo que sigue es la salida literal de
+--
+--   SELECT pg_get_functiondef('public.adapt_hubrise_order(uuid)'::regprocedure);
+--
+-- verificada byte a byte contra produccion: md5 17d8ca699c6a70ecf1603348b676e0b4
+-- (17.776 caracteres / 18.678 bytes UTF-8). Los finales de linea son mixtos
+-- (CRLF en el cuerpo antiguo, LF en los bloques que toco el replace) porque asi
+-- estan en el catalogo; no los normalices o el md5 deja de casar.
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.adapt_hubrise_order(p_sale_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_sale        sale%ROWTYPE;
+  v_acc         uuid;
+  v_brand_ext   text;
+  v_order       jsonb;
+  v_items       jsonb;
+  v_deals       jsonb;
+  v_item        jsonb;
+  v_mod         jsonb;
+  v_deal        jsonb;
+  v_deal_key    text;
+  v_deal_keys   text[];
+  v_parent_id   uuid;       -- línea padre (product standalone o combo)
+  v_child_id    uuid;       -- línea combo_item
+  v_menu        uuid;
+  v_n_match     integer;
+  v_matricula   text;       -- sku_ref del item / ref del deal
+  v_mod_opt     uuid;
+  v_norm        text;
+  v_count       integer := 0;
+  v_qty         numeric;
+  v_price       numeric;
+  v_reason      text;
+  v_combo_matched boolean;
+  v_deduced_brand uuid;
+  v_deduced_menu  uuid;
+  v_expected    timestamptz;   -- hora prometida canónica (parseo protegido)
+BEGIN
+  SELECT * INTO v_sale FROM sale WHERE id = p_sale_id;
+  IF NOT FOUND THEN RETURN 0; END IF;
+  v_acc := v_sale.account_id;
+  v_brand_ext := nullif(v_sale.external_brand_text, '');
+
+  -- Guard de fuente: este motor solo procesa HubRise (raw en raw_tab).
+  IF v_sale.source <> 'hubrise' OR v_sale.raw_tab IS NULL THEN RETURN 0; END IF;
+
+  v_order := v_sale.raw_tab::jsonb;
+  v_items := COALESCE(v_order->'items', '[]'::jsonb);
+  v_deals := COALESCE(v_order->'deals', '{}'::jsonb);
+
+  -- ──────────────────────────────────────────────────────────────────────────
+  -- CAMPOS CANÓNICOS DE PEDIDO (agnósticos de canal)
+  -- Extraer cliente / teléfono / dirección / hora prometida / nota del cliente
+  -- del JSON HubRise a las columnas canónicas de sale. La pantalla las lee sin
+  -- saber del formato HubRise. raw_tab se conserva intacto.
+  -- Hora: parseo PROTEGIDO (si el formato fuese raro, NULL en vez de abortar).
+  -- ──────────────────────────────────────────────────────────────────────────
+  BEGIN
+    v_expected := CASE
+        WHEN v_order->>'service_type' = 'collection'
+          THEN nullif(coalesce(v_order->>'expected_time_pickup', v_order->>'expected_time'), '')::timestamptz
+        ELSE nullif(coalesce(v_order->>'expected_time', v_order->>'expected_time_pickup'), '')::timestamptz
+      END;
+  EXCEPTION WHEN others THEN
+    v_expected := NULL;
+  END;
+
+  UPDATE sale SET
+    customer_name = nullif(btrim(
+        coalesce(v_order->'customer'->>'first_name','') || ' ' ||
+        coalesce(v_order->'customer'->>'last_name','')), ''),
+    customer_phone = nullif(v_order->'customer'->>'phone',''),
+    delivery_address = nullif(btrim(coalesce(
+        -- HubRise manda la direccion en customer.*, NO en delivery.* (null).
+        -- Misma regla que buildCustomerFields: address_2 solo si difiere de
+        -- city (en Just Eat address_2 ES la ciudad), y sin ciudad al final.
+        nullif(concat_ws(', ',
+          public.hubrise_street_line(v_order->'customer'->>'address_1', v_order->'customer'->>'city'),
+          case when lower(regexp_replace(coalesce(v_order->'customer'->>'address_2',''), '\s+', ' ', 'g'))
+                    is distinct from
+                    lower(regexp_replace(coalesce(v_order->'customer'->>'city',''), '\s+', ' ', 'g'))
+               then nullif(btrim(coalesce(v_order->'customer'->>'address_2','')),'') end,
+          nullif(btrim(coalesce(v_order->'customer'->>'postal_code','')),'')), ''),
+        -- delivery.address como objeto estructurado (forma habitual HubRise)
+        nullif(concat_ws(', ',
+          nullif(v_order->'delivery'->'address'->>'line_1',''),
+          nullif(v_order->'delivery'->'address'->>'line_2',''),
+          nullif(v_order->'delivery'->'address'->>'post_code',''),
+          nullif(v_order->'delivery'->'address'->>'city','')), ''),
+        -- fallback: delivery.address como texto plano
+        nullif(v_order->'delivery'->>'address',''))), ''),
+    expected_time = v_expected,
+    customer_note = coalesce(
+      -- nota PARA EL RIDER (portal, piso, codigo): es la que consume el reparto
+      nullif(btrim(coalesce(v_order->'customer'->>'delivery_notes','')),''),
+      -- respaldo: nota de pedido, que es lo que habia antes
+      nullif(btrim(coalesce(v_order->>'customer_notes','')),''))
+  WHERE id = p_sale_id;
+
+  -- Borrar y reescribir SOLO nuestras líneas (preservar manuales / ignored / delisted).
+  DELETE FROM sale_line
+  WHERE sale_id = p_sale_id
+    AND coalesce(map_source,'') <> 'manual'
+    AND coalesce(unmapped_reason,'') NOT IN ('ignored','delisted');
+
+  -- ──────────────────────────────────────────────────────────────────────────
+  -- A) ITEMS STANDALONE (sin deal_line) -> product
+  -- ──────────────────────────────────────────────────────────────────────────
+  FOR v_item IN SELECT * FROM jsonb_array_elements(v_items)
+  LOOP
+    IF COALESCE(v_item->>'deleted','false') = 'true' THEN CONTINUE; END IF;
+    -- Si pertenece a un deal, se procesa en el bloque de combos.
+    IF jsonb_typeof(v_item->'deal_line') = 'object' THEN CONTINUE; END IF;
+
+    v_qty       := COALESCE((v_item->>'quantity')::numeric, 1);
+    v_price     := public.hubrise_money(v_item->>'price');
+    v_matricula := nullif(v_item->>'sku_ref','');
+    v_menu      := NULL;
+
+    IF v_matricula IS NOT NULL THEN
+      SELECT count(*) INTO v_n_match
+      FROM menu_item mi
+      WHERE mi.account_id = v_acc AND true
+        AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL;
+
+      IF v_n_match = 1 THEN
+        SELECT mi.id INTO v_menu FROM menu_item mi
+        WHERE mi.account_id = v_acc AND true
+          AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL
+        LIMIT 1;
+      ELSIF v_n_match > 1 AND v_sale.brand_id IS NOT NULL THEN
+        SELECT mi.id INTO v_menu FROM menu_item mi
+        WHERE mi.account_id = v_acc AND true
+          AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL
+          AND mi.brand_id = v_sale.brand_id
+        LIMIT 1;
+      END IF;
+    END IF;
+
+    IF v_menu IS NOT NULL THEN
+      v_reason := NULL;
+    ELSIF v_matricula IS NULL THEN
+      v_reason := 'no_recipe';
+    ELSE
+      v_reason := 'no_menu_item';
+    END IF;
+
+    INSERT INTO sale_line (account_id, sale_id, product_name, raw_text, line_type,
+                           quantity, unit_price, line_total, menu_item_id,
+                           map_source, map_needs_review, unmapped_reason, parent_sale_line_id,
+                           external_source, external_product_id, external_brand_id)
+    VALUES (v_acc, p_sale_id, v_item->>'product_name', v_item->>'product_name', 'product',
+            v_qty, v_price, v_price * v_qty, v_menu,
+            CASE WHEN v_menu IS NOT NULL THEN 'pos' ELSE 'unmapped' END,
+            (v_menu IS NULL), v_reason, NULL,
+            'hubrise', v_matricula, v_brand_ext)
+    RETURNING id INTO v_parent_id;
+    v_count := v_count + 1;
+
+    -- options[] -> modifiers del item standalone
+    IF jsonb_typeof(v_item->'options') = 'array' THEN
+      FOR v_mod IN SELECT * FROM jsonb_array_elements(v_item->'options')
+      LOOP
+        v_mod_opt := NULL;
+        IF v_menu IS NOT NULL AND nullif(v_mod->>'ref','') IS NOT NULL THEN
+          SELECT mo.id INTO v_mod_opt
+          FROM modifier_group_assignment mga
+          JOIN modifier_option mo ON mo.modifier_group_id = mga.modifier_group_id
+          WHERE mga.menu_item_id = v_menu
+            AND mo.external_id = (v_mod->>'ref')
+          LIMIT 1;
+        END IF;
+        IF v_mod_opt IS NULL THEN
+          v_norm := regexp_replace(regexp_replace(btrim(lower(public.unaccent(coalesce(v_mod->>'name','')))),'\.$',''),'\s+',' ','g');
+          SELECT mo.id INTO v_mod_opt FROM modifier_option mo
+          WHERE mo.account_id = v_acc
+            AND regexp_replace(regexp_replace(btrim(lower(public.unaccent(mo.name))),'\.$',''),'\s+',' ','g') = v_norm
+          LIMIT 1;
+        END IF;
+
+        INSERT INTO sale_line (account_id, sale_id, product_name, raw_text, line_type,
+                               quantity, unit_price, line_total, modifier_option_id,
+                               map_source, map_needs_review, parent_sale_line_id,
+                               external_source, external_product_id, external_brand_id)
+        VALUES (v_acc, p_sale_id, v_mod->>'name', coalesce(v_mod->>'name','modifier'), 'modifier',
+                COALESCE((v_mod->>'quantity')::numeric,1),
+                public.hubrise_money(v_mod->>'price'),
+                public.hubrise_money(v_mod->>'price'),
+                v_mod_opt,
+                CASE WHEN v_mod_opt IS NOT NULL THEN 'pos' ELSE 'unmapped' END,
+                (v_mod_opt IS NULL), v_parent_id,
+                'hubrise', nullif(v_mod->>'ref',''), v_brand_ext);
+        v_count := v_count + 1;
+      END LOOP;
+    END IF;
+  END LOOP;
+
+  -- ──────────────────────────────────────────────────────────────────────────
+  -- B) COMBOS: agrupar items por deal_line.deal_key (combos planos de HubRise)
+  -- ──────────────────────────────────────────────────────────────────────────
+  SELECT ARRAY(
+    SELECT DISTINCT (it->'deal_line'->>'deal_key')
+    FROM jsonb_array_elements(v_items) it
+    WHERE jsonb_typeof(it->'deal_line') = 'object'
+      AND COALESCE(it->>'deleted','false') <> 'true'
+      AND nullif(it->'deal_line'->>'deal_key','') IS NOT NULL
+  ) INTO v_deal_keys;
+
+  FOREACH v_deal_key IN ARRAY COALESCE(v_deal_keys, '{}'::text[])
+  LOOP
+    v_deal      := v_deals->v_deal_key;            -- {name, ref}
+    v_matricula := nullif(v_deal->>'ref','');
+    v_menu      := NULL;
+    v_combo_matched := false;
+
+    -- 1) intentar casar el combo por ref (matrícula externa)
+    IF v_matricula IS NOT NULL THEN
+      SELECT count(*) INTO v_n_match FROM menu_item mi
+      WHERE mi.account_id = v_acc AND true
+        AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL;
+      IF v_n_match = 1 THEN
+        SELECT mi.id INTO v_menu FROM menu_item mi
+        WHERE mi.account_id = v_acc AND true
+          AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL LIMIT 1;
+      ELSIF v_n_match > 1 AND v_sale.brand_id IS NOT NULL THEN
+        SELECT mi.id INTO v_menu FROM menu_item mi
+        WHERE mi.account_id = v_acc AND true
+          AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL
+          AND mi.brand_id = v_sale.brand_id LIMIT 1;
+      END IF;
+    END IF;
+
+    -- 2) si no casó por ref, intentar por nombre dentro de la marca del ticket
+    IF v_menu IS NULL AND v_sale.brand_id IS NOT NULL THEN
+      SELECT mi.id INTO v_menu FROM menu_item mi
+      WHERE mi.account_id = v_acc AND mi.brand_id = v_sale.brand_id AND mi.archived_at IS NULL
+        AND lower(public.unaccent(mi.name)) = lower(public.unaccent(coalesce(v_deal->>'name','')))
+      LIMIT 1;
+    END IF;
+
+    v_combo_matched := (v_menu IS NOT NULL);
+
+    IF v_menu IS NOT NULL THEN
+      v_reason := NULL;
+    ELSIF v_sale.brand_id IS NULL THEN
+      v_reason := 'no_brand';
+    ELSE
+      v_reason := 'no_menu_item';
+    END IF;
+
+    -- línea PADRE del combo (anclaje del escandallo; coste por componentes)
+    INSERT INTO sale_line (account_id, sale_id, product_name, raw_text, line_type,
+                           quantity, unit_price, line_total, menu_item_id,
+                           map_source, map_needs_review, unmapped_reason, parent_sale_line_id,
+                           external_source, external_product_id, external_brand_id)
+    VALUES (v_acc, p_sale_id, coalesce(v_deal->>'name','Combo'), coalesce(v_deal->>'name','Combo'), 'product',
+            1, 0, 0, v_menu,
+            CASE WHEN v_menu IS NOT NULL THEN 'pos' ELSE 'unmapped' END,
+            (v_menu IS NULL), v_reason, NULL,
+            'hubrise', v_matricula, v_brand_ext)
+    RETURNING id INTO v_parent_id;
+    v_count := v_count + 1;
+
+    -- hijos: items con este deal_key -> combo_item (conservan su precio HubRise)
+    FOR v_item IN
+      SELECT it FROM jsonb_array_elements(v_items) it
+      WHERE (it->'deal_line'->>'deal_key') = v_deal_key
+        AND COALESCE(it->>'deleted','false') <> 'true'
+    LOOP
+      v_qty       := COALESCE((v_item->>'quantity')::numeric, 1);
+      v_price     := public.hubrise_money(v_item->>'price');
+      v_matricula := nullif(v_item->>'sku_ref','');
+      v_menu      := NULL;
+
+      IF v_matricula IS NOT NULL THEN
+        SELECT count(*) INTO v_n_match FROM menu_item mi
+        WHERE mi.account_id = v_acc AND true
+          AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL;
+        IF v_n_match = 1 THEN
+          SELECT mi.id INTO v_menu FROM menu_item mi
+          WHERE mi.account_id = v_acc AND true
+            AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL LIMIT 1;
+        ELSIF v_n_match > 1 AND v_sale.brand_id IS NOT NULL THEN
+          SELECT mi.id INTO v_menu FROM menu_item mi
+          WHERE mi.account_id = v_acc AND true
+            AND mi.external_id in (v_matricula, public.hubrise_strip_ns(v_matricula)) AND mi.archived_at IS NULL
+            AND mi.brand_id = v_sale.brand_id LIMIT 1;
+        END IF;
+      END IF;
+
+      IF v_menu IS NOT NULL THEN
+        v_reason := NULL;
+      ELSIF v_matricula IS NULL THEN
+        v_reason := 'no_recipe';
+      ELSE
+        v_reason := 'no_menu_item';
+      END IF;
+
+      INSERT INTO sale_line (account_id, sale_id, product_name, raw_text, line_type,
+                             quantity, unit_price, line_total, menu_item_id,
+                             map_source, map_needs_review, unmapped_reason, parent_sale_line_id,
+                             external_source, external_product_id, external_brand_id)
+      VALUES (v_acc, p_sale_id, v_item->>'product_name', coalesce(v_item->>'product_name','combo_item'), 'combo_item',
+              v_qty, v_price, v_price * v_qty, v_menu,
+              CASE WHEN v_menu IS NOT NULL THEN 'pos' ELSE 'unmapped' END,
+              (v_menu IS NULL), v_reason, v_parent_id,
+              'hubrise', v_matricula, v_brand_ext)
+      RETURNING id INTO v_child_id;
+      v_count := v_count + 1;
+
+      -- options[] del hijo -> modifiers
+      IF jsonb_typeof(v_item->'options') = 'array' THEN
+        FOR v_mod IN SELECT * FROM jsonb_array_elements(v_item->'options')
+        LOOP
+          v_mod_opt := NULL;
+          IF v_menu IS NOT NULL AND nullif(v_mod->>'ref','') IS NOT NULL THEN
+            SELECT mo.id INTO v_mod_opt
+            FROM modifier_group_assignment mga
+            JOIN modifier_option mo ON mo.modifier_group_id = mga.modifier_group_id
+            WHERE mga.menu_item_id = v_menu
+              AND mo.external_id = (v_mod->>'ref')
+            LIMIT 1;
+          END IF;
+          IF v_mod_opt IS NULL THEN
+            v_norm := regexp_replace(regexp_replace(btrim(lower(public.unaccent(coalesce(v_mod->>'name','')))),'\.$',''),'\s+',' ','g');
+            SELECT mo.id INTO v_mod_opt FROM modifier_option mo
+            WHERE mo.account_id = v_acc
+              AND regexp_replace(regexp_replace(btrim(lower(public.unaccent(mo.name))),'\.$',''),'\s+',' ','g') = v_norm
+            LIMIT 1;
+          END IF;
+
+          INSERT INTO sale_line (account_id, sale_id, product_name, raw_text, line_type,
+                                 quantity, unit_price, line_total, modifier_option_id,
+                                 map_source, map_needs_review, parent_sale_line_id,
+                                 external_source, external_product_id, external_brand_id)
+          VALUES (v_acc, p_sale_id, v_mod->>'name', coalesce(v_mod->>'name','modifier'), 'modifier',
+                  COALESCE((v_mod->>'quantity')::numeric,1),
+                  public.hubrise_money(v_mod->>'price'),
+                  public.hubrise_money(v_mod->>'price'),
+                  v_mod_opt,
+                  CASE WHEN v_mod_opt IS NOT NULL THEN 'pos' ELSE 'unmapped' END,
+                  (v_mod_opt IS NULL), v_child_id,
+                  'hubrise', nullif(v_mod->>'ref',''), v_brand_ext);
+          v_count := v_count + 1;
+        END LOOP;
+      END IF;
+    END LOOP;
+
+    -- Si el combo padre NO casó, deducir la marca de un hijo casado y reintentar
+    -- por nombre (mismo patrón que adapt_lastapp_order: el combo se identifica
+    -- por sus componentes).
+    IF NOT v_combo_matched THEN
+      SELECT mi.brand_id INTO v_deduced_brand
+      FROM sale_line child
+      JOIN menu_item mi ON mi.id = child.menu_item_id
+      WHERE child.parent_sale_line_id = v_parent_id
+        AND child.menu_item_id IS NOT NULL
+      LIMIT 1;
+
+      IF v_deduced_brand IS NOT NULL THEN
+        SELECT mi.id INTO v_deduced_menu
+        FROM menu_item mi
+        WHERE mi.account_id = v_acc
+          AND mi.brand_id = v_deduced_brand
+          AND mi.archived_at IS NULL
+          AND lower(public.unaccent(mi.name)) = lower(public.unaccent(coalesce(v_deal->>'name','')))
+        LIMIT 1;
+
+        IF v_deduced_menu IS NOT NULL THEN
+          UPDATE sale_line
+          SET menu_item_id = v_deduced_menu,
+              map_source = 'pos',
+              map_needs_review = false,
+              unmapped_reason = NULL
+          WHERE id = v_parent_id;
+        END IF;
+      END IF;
+    END IF;
+  END LOOP;
+
+  RETURN v_count;
+END;
+$function$
+;

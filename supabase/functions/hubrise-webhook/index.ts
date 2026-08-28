@@ -312,6 +312,50 @@ async function resolveAutoAccept(
 //
 // Tolerante a nulos por diseño: sin dirección devuelve null y no compone nada.
 // Uber Eats llega sin address_1 en 4 de 4 y es correcto — reparte Uber.
+// ── Glovo mete el NÚMERO DE PORTAL en `city` (27/08/2026) ───────────────────
+// Verificado en los primeros pedidos reales de Glovo por HubRise:
+//   G659  address_1 "Calle de Ricardo Ortiz"            city "37"
+//   G092  address_1 "Calle de Emilio Gastesi Fernández" city "40-46"  <- rango
+// Just Eat, en cambio, pone la ciudad donde toca:
+//   address_1 "Calle de Vinaroz, 38, 2A"                city "Madrid"
+//
+// Se distingue POR LA FORMA DEL DATO, no por el canal: una ciudad nunca es solo
+// dígitos. Hacerlo por canal exigiría fiarse de `channel`, texto libre de la
+// plataforma.
+//
+// Descartar `city` siempre era correcto para Just Eat —ahí es la ciudad y no
+// puede acabar pegada a la calle en lo que ve el repartidor— y desastroso para
+// Glovo: G659 salió a reparto propio sin portal y acabó NO ENTREGADO. G092, tres
+// horas después del primer arreglo, volvió a perderlo porque el rango "40-46" no
+// era un caso contemplado.
+//
+// GEMELO EXACTO de public.hubrise_street_line(text,text) en BBDD (migraciones
+// 20260827163054 + 20260827175746) y de streetLine() en catcher-dispatch. Si
+// cambia uno, cambian los tres: adapt_hubrise_order escribe delivery_address
+// DESPUÉS de esto y es la que manda — si divergen, gana el SQL y este código
+// miente.
+const HOUSE_NUMBER_RE = /^\d{1,4}( *- *\d{1,4})? *[A-Za-zºª]?$/;
+
+// El guion es metacaracter dentro de una clase. Al admitir rangos ("40-46"),
+// `n` se interpola en un patron y hay que escaparlo antes: sin esto, un city
+// con guion construye un patron que no dice lo que parece.
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+}
+
+function streetLine(address1: string, city: string): string {
+  const a1 = address1.trim();
+  const n = city.trim();
+  // Just Eat: "Madrid" no es un portal -> address_1 intacto.
+  if (!HOUSE_NUMBER_RE.test(n)) return a1;
+  // Sin calle no hay nada que componer: nunca devolver ", 37".
+  if (!a1) return "";
+  // Ya lo lleva al final -> no duplicar (idempotente).
+  if (new RegExp(`(^|[ ,])${escapeRe(n)}$`).test(a1)) return a1;
+  // Glovo: pegar el portal a la calle.
+  return `${a1}, ${n}`;
+}
+
 function buildCustomerFields(order: Record<string, unknown>): {
   delivery_address: string | null;
   customer_name: string | null;
@@ -326,7 +370,8 @@ function buildCustomerFields(order: Record<string, unknown>): {
   const addr2 = c ? s(c["address_2"]) : "";
   const addrParts = c
     ? [
-        s(c["address_1"]),
+        // `city` puede ser el portal (Glovo) o la ciudad (Just Eat): decide streetLine()
+        streetLine(s(c["address_1"]), city),
         // solo si NO es la ciudad repetida (ver cabecera)
         addr2 && norm(addr2) !== norm(city) ? addr2 : "",
         s(c["postal_code"]),
@@ -373,10 +418,23 @@ function buildCustomerFields(order: Record<string, unknown>): {
 // con lo que el cliente enseña en la plataforma; un corte lo volvería inútil.
 function buildPlatformCodes(
   order: Record<string, unknown>, channelText: string | null,
-): { platform_order_code: string | null; pos_short_code: string | null } {
+): { platform_order_code: string | null; pos_short_code: string | null; platform_order_ref: string | null } {
+  // `ref` es la referencia LARGA de la plataforma. En Glovo es el nº de 12
+  // dígitos que hace falta para reclamar y que por Last.app iba impreso en el
+  // ticket; al pasar a HubRise dejó de guardarse porque platform_order_code
+  // pasó a ser el collection_code corto. Se captura SIEMPRE (es dato de la
+  // plataforma); quién lo imprime lo decide el ticket, no la ingesta.
+  //
+  // En Just Eat `ref` es IGUAL al collection_code y en Uber es un uuid: por eso
+  // se guarda crudo y la regla de impresión (passCode.ts) decide por la forma
+  // del dato, no por el canal.
+  const refLargo = typeof order["ref"] === "string" ? order["ref"].trim() : "";
+
   const raw = order["collection_code"];
   const code = typeof raw === "string" ? raw.trim() : "";
-  if (!code) return { platform_order_code: null, pos_short_code: null };
+  if (!code) {
+    return { platform_order_code: null, pos_short_code: null, platform_order_ref: refLargo || null };
+  }
 
   const slug = channelSlug(channelText);
   const initial = slug === "uber" ? "U"
@@ -385,7 +443,7 @@ function buildPlatformCodes(
     : slug === "deliveroo" ? "D"
     : (channelText ?? "").trim().slice(0, 1).toUpperCase();
 
-  return { platform_order_code: code, pos_short_code: `${initial}${code}` };
+  return { platform_order_code: code, pos_short_code: `${initial}${code}`, platform_order_ref: refLargo || null };
 }
 
 async function upsertSale(

@@ -129,6 +129,49 @@ async function deliveryFromShop(
   };
 }
 
+// ── El portal de Glovo viaja en `customer.city` (27/08) ─────────────────────
+// Tercera copia de la MISMA regla. Las otras dos:
+//   public.hubrise_street_line   (migraciones 20260827163054 + 20260827175746)
+//   streetLine() en hubrise-webhook/index.ts
+// Manda el SQL —adapt_hubrise_order escribe el último sobre `sale`— y aquí sólo
+// se usa en el recompuesto de emergencia de deliveryFromHubrise, cuando
+// sale.delivery_address viniera vacío. Aun así tiene que decir lo mismo: si las
+// tres no coinciden, la dirección que ve el rider depende de quién la componga.
+//
+//   Glovo      address_1 "Calle de Ricardo Ortiz"            city "37"
+//   Glovo      address_1 "Calle de Emilio Gastesi Fernández" city "40-46"  <- rango
+//   Just Eat   address_1 "Calle de Vinaroz, 38, 2A"          city "Madrid"
+//
+// Se distingue POR LA FORMA DEL DATO, no por el canal: una ciudad nunca es solo
+// dígitos. Hacerlo por canal exigiría fiarse de `channel`, texto libre de la
+// plataforma.
+//
+// Costó dos pedidos en reparto: G659 salió como "Calle de Ricardo Ortiz" sin
+// portal y acabó no entregado; G092, tres horas después del primer arreglo,
+// volvió a perderlo porque "40-46" no era un caso contemplado.
+const HOUSE_NUMBER_RE = /^\d{1,4}( *- *\d{1,4})? *[A-Za-zºª]?$/;
+
+// El guion es metacaracter dentro de una clase. Al admitir rangos ("40-46"),
+// `n` se interpola en un patron y hay que escaparlo antes: sin esto, un city
+// con guion construye un patron que no dice lo que parece.
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+}
+
+function streetLine(address1: string, city: string): string {
+  const a1 = address1.trim();
+  const n = city.trim();
+  // Just Eat: "Madrid" no es un portal -> address_1 intacto.
+  if (!HOUSE_NUMBER_RE.test(n)) return a1;
+  // Sin calle no hay nada que componer: nunca devolver ", 37".
+  if (!a1) return "";
+  // Ya lo lleva al final -> no duplicar (idempotente).
+  if (new RegExp(`(^|[ ,])${escapeRe(n)}$`).test(a1)) return a1;
+  // Glovo: pegar el portal a la calle.
+  return `${a1}, ${n}`;
+}
+
+
 // ── Dirección de un pedido de HUBRISE (source='hubrise') ────────────────────
 // HubRise la manda en raw_tab.customer, con las coordenadas ya puestas: no hay
 // que geocodificar nada ni pedirle nada a HubRise. Verificado en el pedido de
@@ -173,7 +216,8 @@ function deliveryFromHubrise(
   // lee. Sólo si faltara se recompone aquí desde las piezas.
   const ciudad = txt(c.city);
   const a2 = txt(c.address_2);
-  const compuesta = [txt(c.address_1), a2 && a2 !== ciudad ? a2 : "", txt(c.postal_code)]
+  // `city` puede ser el portal (Glovo) o la ciudad (Just Eat): decide streetLine()
+  const compuesta = [streetLine(txt(c.address_1), ciudad), a2 && a2 !== ciudad ? a2 : "", txt(c.postal_code)]
     .filter(Boolean).join(", ");
   const address = txt(sale.delivery_address) || compuesta;
   if (!address) return null;
@@ -452,7 +496,21 @@ Deno.serve(async (req: Request) => {
     orderPickupLong: String(loc.lng),
     userPhone: sale.customer_phone ?? "",
     userName: sale.customer_name ?? "Cliente",
-    orderSource: sale.source ?? "folvy",
+    // Catcher pinta el logo del pedido segun este campo. Le mandamos SIEMPRE
+    // "folvy": para el repartidor el pedido viene del TPV, no del integrador
+    // por el que entro. El origen tecnico sigue en sale.source, que es donde
+    // se consulta.
+    //
+    // ⚠️ SIN DESPLEGAR HASTA DOS COMPROBACIONES (27/08). Este cambio es
+    // identidad de marca, no arregla ningun fallo, y puede EMPEORAR lo que hay:
+    //   1. Preguntar a Catcher si `orderSource` alimenta algo mas que el icono
+    //      (informes, tarifas, filtros) y si reconocen el valor "folvy". Si no
+    //      lo reconocen, el icono puede quedar EN BLANCO — peor que ahora.
+    //   2. Probarlo con { sale_id, dry_run: true }, que devuelve el payload sin
+    //      enviarlo a Catcher ni escribir en el pedido, y mirar que sale aqui.
+    // Si la respuesta de Catcher es que no, se revierte esta linea sola: el
+    // resto del fichero no depende de ella.
+    orderSource: "folvy",
     orderTotalAmount: sale.total != null ? String(Math.round(Number(sale.total) * 100)) : "0",
     orderInstructions: sale.customer_note ?? "",
     // CÓDIGO DE PASE: al repartidor propio le mandamos el CORTO (pos_short_code), no

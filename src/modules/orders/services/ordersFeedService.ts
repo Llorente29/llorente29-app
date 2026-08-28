@@ -63,6 +63,12 @@ export interface OrderFeedItem {
   external_tab_ref: string | null
   platform_order_code: string | null   // nº REAL de la plataforma (Glovo/Uber/JE); protagonista del ticket
   pos_short_code: string | null         // corto interno de Last (G931/U382/J076); referencia, null si no entró por Last
+  // Referencia LARGA de la plataforma (HubRise: order.ref). En Glovo es el nº de
+  // 12 dígitos con el que se RECLAMA; en Just Eat coincide con
+  // platform_order_code y en Uber es un uuid, así que no siempre se imprime:
+  // decide passCode.ts por la forma del dato. null en lo entrado por Last.app,
+  // donde platform_order_code YA era ese número largo.
+  platform_order_ref: string | null
   order_status: OrderStatus
   status: string
   service_type: string | null
