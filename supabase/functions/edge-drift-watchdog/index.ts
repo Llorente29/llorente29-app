@@ -31,11 +31,23 @@
 // SE COMPARAN TODOS LOS FICHEROS DEL BUNDLE, no solo index.ts: un cambio en
 // `_shared/hubrisePush.ts` es exactamente lo que se perdio el 13/08.
 //
-// SI NO SE PUEDE LEER EL FUENTE DESPLEGADO. El endpoint de la Management API
-// que devuelve el cuerpo de una funcion no tiene contrato publicado. Si no
-// responde algo legible, esta funcion NO inventa: marca `contenido:
-// 'no_comprobable'` y deja que el SQL caiga al criterio por fechas (mas flojo,
-// documentado en la migracion). Nunca da por bueno lo que no ha podido leer.
+// COMO SE LEE EL FUENTE DESPLEGADO (corregido 28/08). El endpoint
+// /functions/{slug}/body NEGOCIA EL FORMATO POR `Accept`: con
+// application/json devuelve el bundle eszip en octet-stream, ilegible sin
+// parser; con multipart/form-data devuelve los ficheros, uno por parte. Se pide
+// multipart y se parsea con Response.formData(), que Deno trae de serie. Es la
+// misma via que usa el servidor MCP de Supabase.
+//
+// Del 27 al 28/08 se pedia JSON, asi que `contenido` valia 'no_comprobable' en
+// las 60 funciones y el SQL caia a heuristicas por fechas. Una de ellas es un
+// pestillo del que solo se sale viendo un bundle_sha nuevo, y dejo a
+// hubrise-webhook y catcher-dispatch marcadas como `commit_sin_desplegar`
+// siendo byte a byte identicas a main. El pestillo no estaba mal: estaba
+// decidiendo a ciegas porque aqui no se le daban los hechos.
+//
+// SI AUN ASI NO SE PUEDE LEER, esta funcion NO inventa: marca `contenido:
+// 'no_comprobable'` con el motivo y deja que el SQL caiga al criterio por
+// fechas. Nunca da por bueno lo que no ha podido leer.
 //
 // MODO SECO: `?dry=1` devuelve la tabla comparada y NO avisa ni escribe estado.
 // Es el modo con el que se estrena, para ver que la comparacion de contenido
@@ -121,16 +133,55 @@ async function listarDesplegadas(ref: string, pat: string): Promise<Array<Record
 }
 
 // ── Lado desplegado: el fuente ──────────────────────────────────────────────
-// El contrato de este endpoint no esta publicado. Se acepta lo que se pueda
-// leer y se devuelve null cuando no; nunca se da por bueno lo no leido.
-// Devuelve el mapa "ruta dentro del bundle" -> bytes.
+// EL ENDPOINT NEGOCIA EL FORMATO POR `Accept`, y ahi estaba la ceguera (28/08).
+//
+// Con `Accept: application/json` la Management API devuelve
+// `application/octet-stream`: el bundle eszip de Deno, que no se puede leer sin
+// un parser. La funcion lo detectaba y se declaraba ciega — correcto, pero con
+// contenido='no_comprobable' en las 60 funciones el SQL caia a heuristicas por
+// fechas, y una de ellas es un pestillo del que solo se sale con un bundle_sha
+// nuevo. Desplegar-y-luego-fusionar dejaba dos funciones trabadas en
+// `commit_sin_desplegar` siendo identicas a main.
+//
+// Con `Accept: multipart/form-data` el MISMO endpoint devuelve los ficheros,
+// uno por parte. Es lo que hace el servidor MCP de Supabase
+// (@supabase/mcp-server-supabase, functions.getEdgeFunction): pide multipart,
+// lee el boundary de la cabecera y recorre las partes quedandose con las que
+// son fichero. Aqui no hace falta libreria: Response.formData() de Deno parsea
+// multipart de serie.
+//
+// NOMBRES DE FICHERO. Las partes vienen con la ruta del contenedor de
+// despliegue, no la del repositorio:
+//
+//   user_fn_<ref>_<id>_<version>/source/index.ts                        <- catcher-dispatch
+//   user_fn_<ref>_<id>_<version>/_shared/cors.ts                        <- ojo: FUERA de source/
+//   user_fn_<ref>_<id>_<version>/source/supabase/functions/<slug>/index.ts
+//
+// Se normaliza igual que el MCP: fuera el prefijo del contenedor y fuera un
+// `source/` inicial. Lo que queda lo traduce rutaEnRepo().
+//
+// SIGUE SIN INVENTAR NADA: si el content-type no es multipart, o formData()
+// falla, o no viene ningun fichero, devuelve null con el motivo. Un vigia que
+// no puede leer tiene que decir por que, no dar por bueno lo que no ha visto.
+
+// `user_fn_.../source/x.ts` -> `x.ts`. Tolera la forma absoluta (`/tmp/...`)
+// y la relativa, que es la que se ha visto en produccion.
+function nombreEnBundle(filename: string): string {
+  let n = filename.replace(/^file:\/\//, "");
+  n = n.replace(/^\/+/, "");
+  n = n.replace(/^tmp\//, "");
+  n = n.replace(/^user_fn_[^/]+\//, "");
+  n = n.replace(/^source\//, "");
+  return n;
+}
+
 async function leerFuenteDesplegado(
   ref: string, pat: string, slug: string,
 ): Promise<{ mapa: Map<string, Uint8Array> | null; diag: string }> {
   let r: Response;
   try {
     r = await fetch(`${MGMT_API}/projects/${ref}/functions/${encodeURIComponent(slug)}/body`, {
-      headers: { Authorization: `Bearer ${pat}`, Accept: "application/json" },
+      headers: { Authorization: `Bearer ${pat}`, Accept: "multipart/form-data" },
     });
   } catch (e) {
     return { mapa: null, diag: `red: ${e instanceof Error ? e.message : String(e)}` };
@@ -142,43 +193,43 @@ async function leerFuenteDesplegado(
     const t = await r.text().catch(() => "");
     return { mapa: null, diag: `HTTP ${r.status} (${tipo || "sin content-type"}) ${t.slice(0, 140)}` };
   }
-  if (!tipo.includes("json")) {
+  if (!tipo.includes("multipart/form-data")) {
     await r.body?.cancel();
-    return { mapa: null, diag: `HTTP ${r.status} content-type=${tipo || "vacio"} (no es JSON)` };
+    return { mapa: null, diag: `HTTP ${r.status} content-type=${tipo || "vacio"} (no es multipart)` };
   }
 
-  let j: unknown;
-  try { j = await r.json(); } catch { return { mapa: null, diag: `HTTP ${r.status} JSON ilegible` }; }
-
-  // Forma esperada: { files: [{ name, content }] }. Cualquier otra -> no leible.
-  const files = (j as { files?: unknown })?.files;
-  if (!Array.isArray(files) || files.length === 0) {
-    const claves = (j && typeof j === "object") ? Object.keys(j as object).slice(0, 8).join(",") : typeof j;
-    return { mapa: null, diag: `HTTP ${r.status} JSON sin files[]; claves=${claves}` };
+  let fd: FormData;
+  try {
+    fd = await r.formData();
+  } catch (e) {
+    return { mapa: null, diag: `HTTP ${r.status} multipart ilegible: ${e instanceof Error ? e.message : String(e)}` };
   }
 
   const mapa = new Map<string, Uint8Array>();
-  const enc = new TextEncoder();
-  let sinContenido = 0;
-  for (const f of files) {
-    const nombre = (f as { name?: unknown })?.name;
-    const contenido = (f as { content?: unknown })?.content;
-    if (typeof nombre !== "string" || typeof contenido !== "string") { sinContenido++; continue; }
-    mapa.set(nombre, enc.encode(contenido));
+  let sinNombre = 0;
+  for (const [, valor] of fd.entries()) {
+    if (!(valor instanceof File)) continue;
+    const nombre = nombreEnBundle(valor.name ?? "");
+    if (!nombre) { sinNombre++; continue; }
+    mapa.set(nombre, new Uint8Array(await valor.arrayBuffer()));
   }
   if (!mapa.size) {
-    return { mapa: null, diag: `HTTP ${r.status} files[${files.length}] pero ninguno con name+content` };
+    return { mapa: null, diag: `HTTP ${r.status} multipart sin ficheros` };
   }
-  return { mapa, diag: `ok: ${mapa.size} ficheros${sinContenido ? `, ${sinContenido} sin contenido` : ""}` };
+  return { mapa, diag: `ok: ${mapa.size} ficheros${sinNombre ? `, ${sinNombre} sin nombre` : ""}` };
 }
 
-// Traduce el nombre de un fichero DENTRO del bundle a su ruta en el repositorio.
-// Observado: "functions/hubrise-webhook/index.ts", "functions/_shared/cors.ts".
-// Algunas funciones se desplegaron desde otra raiz y llegan como "index.ts".
+// Traduce la ruta dentro del bundle a la ruta dentro del repositorio.
 function rutaEnRepo(nombreBundle: string, slug: string): string {
   const n = nombreBundle.replace(/^\.?\//, "");
   if (n.startsWith("supabase/functions/")) return n;
   if (n.startsWith("functions/")) return `supabase/${n}`;
+  // `_shared/` es hermano de la carpeta de la funcion, no hijo: en el bundle
+  // llega como `_shared/cors.ts` y en el repo vive en supabase/functions/_shared/.
+  // Colgarlo del slug daria una ruta que no existe en main y el fichero se
+  // contaria como "no esta en main" — justo el que mas importa comparar, que es
+  // lo que se perdio el 13/08.
+  if (n.startsWith("_shared/")) return `${FUNC_DIR}/${n}`;
   return `${FUNC_DIR}/${slug}/${n}`;
 }
 
