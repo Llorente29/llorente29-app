@@ -46,6 +46,11 @@ import type { MenuItem } from '@/types/kitchen'
 interface EnCartaTabProps {
   item: MenuItem
   accountId: string
+  /** Local en el que se agota (86). Sale del selector de la cabecera, vía
+   *  useLocationScope() en CatalogFichaPage. `null` = vista consolidada: NO se
+   *  agota, se pide elegir local. Hasta el 28/08 esta ficha agotaba en todos
+   *  los locales a la vez porque el 86 ni siquiera aceptaba local. */
+  locationId: string | null
   /** Solo para la cabecera del modal de precios ("{producto} · {marca}").
    *  Lo resuelve ya CatalogFichaPage; no se vuelve a consultar. */
   brandName?: string
@@ -55,7 +60,7 @@ interface EnCartaTabProps {
   onRemovedFromMenu?: () => void
 }
 
-export default function EnCartaTab({ item, accountId, brandName, onItemChanged, onRemovedFromMenu }: EnCartaTabProps) {
+export default function EnCartaTab({ item, accountId, locationId, brandName, onItemChanged, onRemovedFromMenu }: EnCartaTabProps) {
   // ── Combo (S0) — el producto no expone product_type en el tipo cliente;
   // se resuelve con la misma llamada que ya usaba el código viejo. ──
   const [isCombo, setIsCombo] = useState(false)
@@ -142,7 +147,10 @@ export default function EnCartaTab({ item, accountId, brandName, onItemChanged, 
     setAvailError(null)
     setAvailScope(null)
     setAvailConfirm(true)
-    previewScope(item.accountId, item.id, null)
+    // El ensayo mira EL MISMO local que se va a tocar. Antes pasaba null fijo,
+    // asi que enseñaba el alcance global y luego agotaba global: coherente, y
+    // las dos cosas mal.
+    previewScope(item.accountId, item.id, locationId)
       .then(setAvailScope)
       .catch(() => setAvailScope(null))
   }
@@ -150,9 +158,15 @@ export default function EnCartaTab({ item, accountId, brandName, onItemChanged, 
   // Marcar disponible/agotado (cascada cross-brand + empuje a canales en el servidor).
   async function handleToggleAvailability(next: boolean) {
     setAvailError(null)
+    // Desde la vista consolidada no se agota: no hay local al que referirse y
+    // el resultado seria un 86 en todos. Se pide elegir, no se adivina.
+    if (locationId === null) {
+      setAvailError('Elige un local en la cabecera para agotar o reactivar. Desde «todos los locales» no se puede: el 86 es de un local concreto.')
+      return
+    }
     setAvailSaving(true)
     try {
-      const res = await setProductAvailability(item.id, next, 'manual')
+      const res = await setProductAvailability(item.id, next, locationId, 'manual')
       setAvailResult(next ? null : res) // mostramos el alcance solo al agotar
       setAvailConfirm(false)
       setAvailScope(null)

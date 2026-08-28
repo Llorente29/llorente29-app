@@ -258,10 +258,29 @@ export interface ProductAvailabilityResult {
  * misma matrícula) y dispara el empuje a los canales (Last hoy; HubRise/Otter
  * mañana). `reason` deja entrar auto-86 sin cambiar la firma; `availableUntil`
  * es el timer (Fase 2). Devuelve el alcance real.
+ *
+ * `locationId` ES OBLIGATORIO EN LA FIRMA (28/08/2026). Hasta hoy esta función
+ * NI SIQUIERA LO ACEPTABA: no es que los llamadores se olvidaran de pasarlo, es
+ * que no existía. Con un solo local no dolía; con Alcalá y Camichi abiertos,
+ * agotar desde la Carta agotaba en LOS DOS a la vez, mientras la pantalla de
+ * Disponibilidad y la tablet sí acotaban. Dos caminos para lo mismo y uno roto
+ * es peor que los dos rotos: funciona casi siempre y nadie recuerda por qué
+ * pantalla entró.
+ *
+ * `null` significa EXPLÍCITAMENTE "en todos los locales" y hay que quererlo: los
+ * dos llamadores de la Carta lo BLOQUEAN y piden elegir local, así que por esta
+ * vía ya no puede llegar null.
+ *
+ * Se sigue usando `?? undefined` como el resto del módulo, no `null` a pelo:
+ * `src/types/database.ts` declara `p_location_id?: string` (sin null) y mandar
+ * null no compila. Cambiar a null explícito es el paso previo a quitar el
+ * DEFAULT de la RPC, y va DESPUÉS de regenerar los tipos — el orden completo
+ * está en supabase/migrations/20260828T1200_set_product_availability_local_obligatorio.sql.
  */
 export async function setProductAvailability(
   menuItemId: string,
   isAvailable: boolean,
+  locationId: string | null,
   reason: AvailabilityReason = 'manual',
   availableUntil?: string | null,
 ): Promise<ProductAvailabilityResult> {
@@ -269,6 +288,7 @@ export async function setProductAvailability(
   const { data, error } = await supabase!.rpc('set_product_availability', {
     p_menu_item_id: menuItemId,
     p_is_available: isAvailable,
+    p_location_id: locationId ?? undefined,
     p_reason: reason,
     p_available_until: availableUntil ?? undefined,
   })

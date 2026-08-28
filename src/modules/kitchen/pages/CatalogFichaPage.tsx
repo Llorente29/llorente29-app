@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { getMenuItemById } from '@/modules/kitchen/services/menuItemService'
 import {
   getRecipeItemById,
@@ -174,6 +175,10 @@ export default function CatalogFichaPage({
   const navigate = useNavigate()
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const { authUserId, userProfile } = useApp()
+  // Local del selector de cabecera. Gobierna el 86 de la pestaña "En carta":
+  // null = vista consolidada, y entonces la pestaña pide elegir local en vez
+  // de agotar en todos (28/08).
+  const { resolvedLocationId } = useLocationScope()
 
   const [activeTab, setActiveTab] = useState<FichaTab>(initialTab ?? 'escandallo')
 
@@ -1204,6 +1209,7 @@ export default function CatalogFichaPage({
                 <EnCartaTab
                   item={item}
                   accountId={item.accountId}
+                  locationId={resolvedLocationId}
                   brandName={brandName || undefined}
                   onItemChanged={refreshItem}
                   onRemovedFromMenu={handleRemovedFromMenu}
