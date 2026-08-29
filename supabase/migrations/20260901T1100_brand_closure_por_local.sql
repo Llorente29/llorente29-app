@@ -107,21 +107,66 @@ create policy brand_closure_read on public.brand_closure
 
 grant select on public.brand_closure to authenticated, anon, service_role;
 
--- ── 2. Migrar el estado que hay AHORA ───────────────────────────────────────
--- Una marca hoy 'paused' esta cerrada en todos los locales activos donde opera.
--- Se traduce literalmente: una fila por cada uno. No se inventa nada.
-insert into public.brand_closure
-  (account_id, brand_id, location_id, resume_at, reason, set_at, set_by, surface)
-select b.account_id, b.id, bla.location_id,
-       b.closure_resume_at, b.closure_reason,
-       coalesce(b.closure_set_at, now()), b.closure_set_by, 'migracion'
-from public.brand b
-join public.brand_location_availability bla
-  on bla.brand_id = b.id and bla.is_active = true
-join public.locations l
-  on l.id = bla.location_id and coalesce(l.active, true) = true
-where b.closure_mode = 'paused'
-on conflict (brand_id, location_id) do nothing;
+-- ── 2. Migrar el estado que hay AHORA — A MANO, NO POR TRADUCCION ──────────
+-- Traducir `closure_mode='paused'` a "cerrada en todos los locales activos"
+-- seria repetir el fallo al migrarlo. Meraki Pita figura cerrada en global,
+-- pero ALCALA NO DEBE QUEDAR CERRADA: su escaparate se restauro hoy 29/08 a las
+-- 14:27 acotando el enable=true a 1b6p8-0, y esta vendiendo. Solo Carabanchel
+-- sigue cerrada, que es lo que cocina queria.
+--
+-- Por eso va una sola fila, escrita con nombre y apellidos, y una GUARDA que
+-- para si el mundo no es el que se verifico el 29/08 a las 18:00.
+--
+-- Ids verificados uno a uno contra brand_location_availability,
+-- brand_hubrise_catalog, external_location_map y kds_device, porque `locations`
+-- tiene FILAS DUPLICADAS POR NOMBRE: hay otra "Foodint Carabanchel"
+-- (a4f9c286-...) y otra "Foodint Alcala" (8a78366c-...) que solo llevan mapeos
+-- zy9j2-* y ningun catalogo de esta marca. Anclar por nombre habria cerrado el
+-- local equivocado.
+--   Carabanchel 92d7656e-082e-452a-8ebc-236b2d6ebf5f -> 1b6p8-2 / cat x77xp
+--   Alcala      38158159-cd71-4056-950b-53425afac1ce -> 1b6p8-0 / cat dmmj9  (NO se cierra)
+do $mig$
+declare
+  v_brand uuid := 'cc89c6eb-afb8-4308-884e-9aac83986b22';  -- Meraki Pita (la real: 184 ventas/30d)
+  v_loc   uuid := '92d7656e-082e-452a-8ebc-236b2d6ebf5f';  -- Foodint Carabanchel
+  v_acc   uuid;
+  v_n     int;
+  v_marcas text;
+begin
+  select count(*), string_agg(name, ', ' order by name)
+    into v_n, v_marcas
+  from brand where closure_mode is distinct from 'normal';
+
+  if v_n <> 1 then
+    raise exception 'ABORTA: hay % marca(s) con closure_mode <> normal (%). El 29/08 a las 18:00 habia exactamente 1. '
+                    'Parar y decidir A MANO en que locales va cada una: traducirlo automaticamente repetiria el fallo.',
+                    v_n, coalesce(v_marcas, '-');
+  end if;
+
+  if not exists (select 1 from brand where id = v_brand and closure_mode is distinct from 'normal') then
+    raise exception 'ABORTA: la unica marca cerrada no es Meraki Pita (%). Es: %. Parar y preguntar.', v_brand, v_marcas;
+  end if;
+
+  select account_id into v_acc from brand where id = v_brand;
+
+  if not exists (select 1 from locations where id = v_loc and account_id = v_acc) then
+    raise exception 'ABORTA: el local % no existe o no es de la cuenta de la marca', v_loc;
+  end if;
+  if not exists (select 1 from brand_location_availability
+                  where brand_id = v_brand and location_id = v_loc and is_active = true) then
+    raise exception 'ABORTA: la marca no opera en el local % segun brand_location_availability', v_loc;
+  end if;
+
+  insert into public.brand_closure
+    (account_id, brand_id, location_id, resume_at, reason, set_at, set_by, surface)
+  select v_acc, v_brand, v_loc, b.closure_resume_at, b.closure_reason,
+         coalesce(b.closure_set_at, now()), b.closure_set_by, 'migracion'
+  from brand b where b.id = v_brand
+  on conflict (brand_id, location_id) do nothing;
+
+  raise notice 'migrada 1 fila: Meraki Pita cerrada SOLO en Foodint Carabanchel. Alcala queda ABIERTA.';
+end
+$mig$;
 
 -- ── 3. El nucleo, sin guardas (patron de la casa: los cores no llaman a
 --       auth.uid(), para que sirvan tambien sin sesion) ─────────────────────
@@ -284,9 +329,6 @@ begin
 end;
 $function$;
 
-commit;
-
-begin;
 
 -- ── 4. Tablet: MISMA FIRMA, ahora saca el local del dispositivo ─────────────
 -- Es la puerta que se usa en servicio. Queda arreglada sin desplegar la app.
@@ -383,9 +425,9 @@ $function$;
 create or replace function public.set_brand_status(
   p_brand_id    uuid,
   p_mode        text,
-  p_resume_at   timestamptz,
-  p_reason      text,
-  p_reason_code text)
+  p_resume_at   timestamptz default null,
+  p_reason      text        default null,
+  p_reason_code text        default null)
  returns jsonb
  language plpgsql
  security definer
@@ -404,9 +446,6 @@ comment on function public.set_brand_status(uuid, text, timestamptz, text, text)
   'select count(*) from availability_event where scope=''brand'' and location_id is null '
   'and occurred_at > now() - interval ''30 days'';';
 
-commit;
-
-begin;
 
 -- ── 6. Lectores ─────────────────────────────────────────────────────────────
 -- brand_status: DROP + CREATE para admitir el local. Aqui p_location_id SI

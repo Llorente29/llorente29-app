@@ -59,7 +59,29 @@ Otras dos ramas empujadas y sin mergear, del mismo periodo:
 el repo sigue sin conocer lo que hay en producción, que es la deuda que el vigía
 de deriva existe para cazar.
 
-## 3. Regla que esto confirma
+## 3. `_set_brand_closure_core` y `brand_status` — mismo patrón, recién creado
+
+Al aplicar `20260901T1100` el 29/08 a las 18:2x, la migración se envió por MCP
+sin los `begin;`/`commit;` del fichero (la herramienta ya envuelve en
+transacción) y **acortando algunos comentarios** para que el cuerpo cupiera de
+una pieza. Resultado, verificado línea a línea contra el fichero:
+
+| función | fichero | vivo | diferencia |
+|---|---|---|---|
+| `_set_brand_closure_core` | 143 líneas | 133 | 10 líneas, **todas comentario** |
+| `brand_status` | 80 líneas | 76 | 4 líneas, **todas comentario** |
+
+**Cero líneas de código difieren, y cero líneas viven en producción sin estar en
+el fichero.** Las otras cinco funciones de esa migración coinciden byte a byte
+(md5 idéntico).
+
+Es exactamente el mismo patrón que el §1: producción pierde comentarios por el
+camino de aplicación. No se corrige el mismo sábado en servicio — volver a
+lanzar DDL sobre seis funciones para reponer catorce líneas de comentario es más
+riesgo que beneficio. Se repone en la primera ventana tranquila, reaplicando
+esas dos funciones desde el fichero.
+
+## 4. Regla que esto confirma
 
 La regla 1 de CLAUDE.md («ninguna corrección vive sólo en el desplegado») tiene
 una hermana que hoy se paga: **ninguna corrección vive sólo en una rama.** Un
