@@ -33,6 +33,22 @@
 --   ejecutan con los privilegios del propietario: el permiso de anon no
 --   interviene. Verificado que ningun front llama a un `_core` directamente.
 --
+-- SEGUNDA PASADA, en la misma noche: al verificar la primera aparecio que los
+-- TRES nucleos escritos hoy seguian siendo ejecutables por `authenticated`,
+-- mientras los CINCO anteriores no. Misma omision, tres funciones:
+--   _autoinventory_queue_core      (29/08 manana)
+--   _generate_daily_count_core     (29/08 manana)
+--   _set_brand_closure_core        (29/08 tarde)
+-- Con una sesion de CUALQUIER cuenta se podia llamar a _set_brand_closure_core
+-- con un p_account_id arbitrario y cerrar cualquier marca en cualquier local.
+-- Quitar anon no bastaba: la fuga F0 de multi-inquilino es exactamente esta.
+--
+-- (Nota de metodo: la primera verificacion que escribi daba `publico = true`
+-- en los ocho, y era un test MIO mal escrito -- `proacl::text like '%=X/%'`
+-- casa tambien con `anon=X/`. Con la comprobacion por elemento del array,
+-- PUBLIC estaba fuera de los ocho. El dato bueno lo daba
+-- has_function_privilege, que si tiene en cuenta lo concedido a PUBLIC.)
+--
 -- Aplicable por separado del encargo de la ficha, a proposito: esto es deuda
 -- mia de hoy y no debe esperar a que se despliegue un front.
 -- ============================================================================
@@ -53,7 +69,16 @@ revoke all on function public._autoinventory_queue_core(
 grant execute on function public._autoinventory_queue_core(
   uuid, uuid, integer, numeric, numeric, numeric, numeric) to service_role;
 
--- ── GUARDA: los ocho nucleos, cerrados a anon ───────────────────────────────
+-- Segunda pasada: `authenticated` fuera de los tres de hoy. Los cinco
+-- anteriores ya lo tenian fuera.
+revoke all on function public._set_brand_closure_core(
+  uuid, uuid[], text, timestamptz, text, text, uuid, uuid, text, text) from authenticated;
+revoke all on function public._autoinventory_queue_core(
+  uuid, uuid, integer, numeric, numeric, numeric, numeric) from authenticated;
+revoke all on function public._generate_daily_count_core(
+  uuid, uuid, uuid[], integer, numeric, boolean) from authenticated;
+
+-- ── GUARDA: los ocho nucleos, fuera del alcance de anon Y authenticated ─────
 do $ver$
 declare v_abiertos text;
 begin
@@ -61,10 +86,18 @@ begin
   from pg_proc p
   where p.pronamespace='public'::regnamespace and p.prokind='f'
     and p.proname like '\_%\_core'
-    and has_function_privilege('anon', p.oid, 'EXECUTE');
+    and (has_function_privilege('anon', p.oid, 'EXECUTE')
+      or has_function_privilege('authenticated', p.oid, 'EXECUTE'));
 
   if v_abiertos is not null then
-    raise exception 'Siguen abiertos a anon: %', v_abiertos;
+    raise exception 'Nucleos sin guarda todavia alcanzables: %', v_abiertos;
+  end if;
+
+  -- Y que service_role SIGUE pudiendo: comprobar solo el cierre deja la puerta
+  -- rota sin que nadie se entere hasta que falla el cron.
+  if not has_function_privilege('service_role',
+        'public._set_brand_closure_core(uuid, uuid[], text, timestamptz, text, text, uuid, uuid, text, text)', 'EXECUTE') then
+    raise exception 'service_role ha perdido _set_brand_closure_core';
   end if;
 
   -- Y que los legitimos siguen pudiendo: las dos RPC de marca son SECURITY
@@ -73,15 +106,18 @@ begin
     raise exception 'set_brand_status ha desaparecido';
   end if;
 
-  raise notice 'VERIFICACION OK: los 8 nucleos sin guarda estan cerrados a anon';
+  raise notice 'VERIFICACION OK: los 8 nucleos sin guarda solo alcanzables por su propietario y service_role';
 end
 $ver$;
 
 commit;
 
 -- ── Comprobacion DESPUES de aplicar ─────────────────────────────────────────
--- select p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') as anon_puede
+-- select p.proname,
+--        has_function_privilege('anon', p.oid, 'EXECUTE')          as anon,
+--        has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated,
+--        has_function_privilege('service_role', p.oid, 'EXECUTE')  as service_role
 --   from pg_proc p
 --  where p.pronamespace='public'::regnamespace and p.proname like '\_%\_core'
 --  order by 1;
---    -- esperado: los 8 con anon_puede = false.
+--    -- esperado: los 8 con anon=false, authenticated=false, service_role=true.
