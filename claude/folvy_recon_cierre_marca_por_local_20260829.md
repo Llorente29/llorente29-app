@@ -284,3 +284,55 @@ cuelga de qué venta es exactamente el tipo de cosa que no se hace un sábado.
    esperar — pero es un frente distinto del que pediste.
 5. **§5.2:** cuáles de los 6 importan de verdad y cuáles se documentan como
    «global a propósito».
+
+---
+
+## 9. Construido (29/08, tarde) — migración `20260901T1100`, SIN aplicar
+
+Decisiones de Julio: modelo **(b)**; `brand.closure_*` **no se borran todavía**
+(migrar → dejar de escribir → COMMENT con fecha → DROP en segunda pasada).
+
+**Tabla `brand_closure`** — `(brand_id, location_id)` única, **fila presente =
+cerrada ahí**. Sin columna `mode`: si existiera cabría una fila `'normal'` y
+volveríamos a tener dos verdades. RLS calcada de `product_availability`.
+
+**Migración del estado actual:** una marca hoy `paused` pasa a tener una fila por
+cada local activo donde opera. Traducción literal, no se inventa nada.
+
+**`_set_brand_closure_core`** — núcleo sin guardas (patrón de la casa: los cores
+no llaman a `auth.uid()`). Recorre los locales y, por cada uno, escribe el
+estado, el `location_status_log`, el `availability_event` **con `location_id`
+real** (ya no informativo), y hace su propio `net.http_post` **pasando el
+`location_id`** que `availability-dispatch` siempre supo leer.
+
+**La trampa de la reapertura, desarmada.** Al reabrir, las matrículas excluyen
+los productos que tengan su propio 86 vivo en ese local. La reapertura devuelve
+la marca; no pisa el 86 del cocinero. Sin esto, reabrir Meraki Pita encendía en
+HubRise los 9 platos con agotado real en Alcalá mientras Folvy seguía diciendo
+agotado — dos verdades separándose en silencio.
+
+**Firmas:**
+
+| función | qué pasa | ¿hay que desplegar front? |
+|---|---|---|
+| `set_brand_status_by_token` | **misma firma**, saca el local del dispositivo | **no** — la tablet queda arreglada sola |
+| `set_brand_status` | DROP de la de 5 args; nueva de 6 con `p_location_id` **obligatorio, sin DEFAULT** | sí (web) |
+| `set_brand_status` (5 args) | se recrea sólo para lanzar una excepción que se entiende, en vez de un 404 de PostgREST | — |
+| `brand_status` | DROP + CREATE con `p_location_id` **DEFAULT NULL** (aquí null = «resumen», respuesta legítima) | compatible |
+| `closed_brands`, `anomalous_brand_closures` | misma firma, una entrada por (marca, local) | compatible |
+
+El `p_location_id` de `set_brand_status` **no lleva default a propósito**: un
+default null volvería a significar «todos los locales», que es el fallo. Es la
+lección del `set_product_availability` cuyos pasos 2-4 siguen pendientes.
+
+**Front:** `BrandCloseControl` toma el local de `useLocationScope()`; en «todos
+los locales» no deja cerrar y **lo dice en pantalla** (regla 7: se marca, no se
+esconde el botón). El estado ahora nombra el local y, si la marca está cerrada
+en otros, lo enseña — una pantalla no puede poner «Abierta» y callarse el resto.
+`ClosedBrandsCard` y `ClosureAnomalyAlarm` pasan a clave `(marca, local)`, porque
+una marca puede salir dos veces.
+
+**Verificado:** `tsc -b` limpio. Tests: los mismos 6 rojos que ya había en `main`
+(`routes.test.ts` y los mappers de `brandsService`/`salesChannelsService`),
+ninguno nuevo. Lint: los mismos 3 errores que ya había en esos ficheros en
+`main`, desplazados de línea por las añadidas, ninguno nuevo.

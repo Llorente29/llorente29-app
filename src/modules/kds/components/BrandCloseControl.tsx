@@ -6,6 +6,12 @@
 // modo batch). Nunca toca los productos compartidos (stock_group) de la
 // marca: solo los ref por-marca.
 //
+// POR LOCAL desde el 01/09/2026. Antes, cerrar una marca la cerraba en TODOS
+// los locales: el 29/08 Carabanchel cerró Meraki Pita y se apagó también en
+// Alcalá, en pleno sábado. Desde la tablet el local sale del dispositivo; desde
+// oficina hay que elegirlo en la cabecera, y en «todos los locales» no se deja
+// cerrar — igual que el 86, y por la misma razón.
+//
 // El selector SOLO lista marcas con presencia real en HubRise (catálogo Fase
 // 2 o mapeo bridge utilizable) — las cedidas (solo Last, sin catálogo
 // HubRise) quedan fuera: cerrarlas sería una promesa falsa (Folvy no escribe
@@ -18,6 +24,7 @@ import {
   getBrandStatus, setBrandStatus, setBrandStatusByToken, listBrandsForClosure,
   type BrandOption, type BrandStatus,
 } from '../services/kdsService'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { themeCls } from '../lib/theme'
 import ReasonSelect from './ReasonSelect'
 import { reasonCodeParam, type ReasonCode } from '../lib/reasonCode'
@@ -63,6 +70,9 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
   const [showDurations, setShowDurations] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reasonCode, setReasonCode] = useState<ReasonCode | ''>('')
+  // Sólo cuenta en oficina: con token, el local lo pone el dispositivo.
+  const { resolvedLocationId } = useLocationScope()
+  const sinLocal = !token && resolvedLocationId === null
 
   useEffect(() => {
     let alive = true
@@ -77,13 +87,13 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
   const refreshStatus = useCallback(async (brandId: string) => {
     setStatusLoading(true)
     try {
-      setStatus(await getBrandStatus(brandId, token))
+      setStatus(await getBrandStatus(brandId, token, resolvedLocationId))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error cargando estado')
     } finally {
       setStatusLoading(false)
     }
-  }, [token])
+  }, [token, resolvedLocationId])
 
   function pick(b: BrandOption) {
     setPicked(b)
@@ -97,8 +107,15 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
     try {
       const resumeAt = minutes !== null ? new Date(Date.now() + minutes * 60_000).toISOString() : null
       const code = reasonCodeParam(reasonCode)
-      if (token) await setBrandStatusByToken(token, picked.id, 'paused', resumeAt, 'manual', code)
-      else await setBrandStatus(picked.id, 'paused', resumeAt, 'manual', code)
+      if (token) {
+        await setBrandStatusByToken(token, picked.id, 'paused', resumeAt, 'manual', code)
+      } else {
+        if (resolvedLocationId === null) {
+          setError('Elige un local en la cabecera para cerrar la marca. Desde «todos los locales» no se puede: el cierre es de un local concreto.')
+          return
+        }
+        await setBrandStatus(picked.id, 'paused', resolvedLocationId, resumeAt, 'manual', code)
+      }
       setShowDurations(false)
       setReasonCode('')
       await refreshStatus(picked.id)
@@ -113,8 +130,15 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
     if (!picked) return
     setBusy(true); setError(null)
     try {
-      if (token) await setBrandStatusByToken(token, picked.id, 'normal')
-      else await setBrandStatus(picked.id, 'normal')
+      if (token) {
+        await setBrandStatusByToken(token, picked.id, 'normal')
+      } else {
+        if (resolvedLocationId === null) {
+          setError('Elige un local en la cabecera para reabrir la marca.')
+          return
+        }
+        await setBrandStatus(picked.id, 'normal', resolvedLocationId)
+      }
       await refreshStatus(picked.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo reabrir la marca')
@@ -137,6 +161,12 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
         </div>
 
         <div className="p-4">
+          {sinLocal && (
+            <p className={`text-xs mb-3 px-3 py-2 rounded-lg ${t.textSecondary} border ${t.border}`}>
+              Estás en «todos los locales». Cerrar una marca es de un local concreto:
+              elige uno en la cabecera para poder cerrarla o reabrirla.
+            </p>
+          )}
           {!picked ? (
             <>
               <div className="relative mb-3">
@@ -186,7 +216,18 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
                       : status.resume_at
                         ? `Cerrada hasta las ${new Date(status.resume_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
                         : 'Cerrada indefinidamente'}
+                    {status.location_id
+                      ? ` · ${status.locations.find((l) => l.location_id === status.location_id)?.location_name ?? 'este local'}`
+                      : ''}
                   </p>
+                  {/* Regla 7: si está cerrada en otros locales, se dice. Una
+                      pantalla no puede poner «Abierta» y callarse el resto. */}
+                  {status.closed_count > 0 && status.closed_count < status.total_count && (
+                    <p className={`text-xs ${t.textSecondary}`}>
+                      Cerrada en {status.locations.filter((l) => l.closed).map((l) => l.location_name).join(', ')}
+                      {' '}({status.closed_count} de {status.total_count} locales).
+                    </p>
+                  )}
                 </div>
               </div>
 

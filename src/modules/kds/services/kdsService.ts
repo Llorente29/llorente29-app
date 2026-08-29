@@ -373,7 +373,23 @@ export type BrandStatusMode = 'normal' | 'paused'
 export interface BrandStatus {
   brand_id: string
   brand_name: string
+  /** Local consultado. null = resumen de la marca (ver locations). */
+  location_id: string | null
   mode: BrandStatusMode
+  resume_at: string | null
+  reason: string | null
+  set_at: string | null
+  /** Desglose SIEMPRE presente: regla 7, ninguna pantalla dice "abierta"
+   *  escondiendo que esta cerrada en otro local. */
+  closed_count: number
+  total_count: number
+  locations: BrandClosureByLocation[]
+}
+
+export interface BrandClosureByLocation {
+  location_id: string
+  location_name: string
+  closed: boolean
   resume_at: string | null
   reason: string | null
   set_at: string | null
@@ -382,28 +398,49 @@ export interface BrandStatus {
 export interface BrandOption { id: string; name: string }
 
 /** Estado actual de cierre de una marca. */
-export function getBrandStatus(brandId: string, token?: string | null): Promise<BrandStatus> {
-  return rpc<BrandStatus>('brand_status', { p_brand_id: brandId, p_token: token ?? null })
+export function getBrandStatus(
+  brandId: string,
+  token?: string | null,
+  locationId?: string | null,
+): Promise<BrandStatus> {
+  return rpc<BrandStatus>('brand_status', {
+    p_brand_id: brandId,
+    p_token: token ?? null,
+    p_location_id: locationId ?? null,
+  })
 }
 
-/** Cierra/reabre una marca (sesión, oficina). */
+/**
+ * Cierra/reabre una marca EN UN LOCAL (sesión, oficina).
+ *
+ * `locationId` es OBLIGATORIO y no tiene default a propósito: hasta el
+ * 01/09/2026 esta llamada cerraba la marca en TODOS los locales sin decirlo, y
+ * el 29/08 apagó Meraki Pita en Alcalá cuando Carabanchel la cerró. Un
+ * parámetro opcional habría dejado el mismo fallo esperando a que alguien
+ * olvidara pasarlo.
+ */
 export function setBrandStatus(
   brandId: string,
   mode: BrandStatusMode,
+  locationId: string,
   resumeAt?: string | null,
   reason?: string | null,
   reasonCode?: string | null,
-): Promise<{ brand_id: string; mode: BrandStatusMode; items: number }> {
+): Promise<{ brand_id: string; mode: BrandStatusMode; locations: number; items: number }> {
   return rpc('set_brand_status', {
     p_brand_id: brandId,
     p_mode: mode,
+    p_location_id: locationId,
     p_resume_at: resumeAt ?? null,
     p_reason: reason ?? null,
     p_reason_code: reasonCode ?? null,
   })
 }
 
-/** Cierra/reabre una marca desde la tablet (token del local; la marca se elige a mano). */
+/**
+ * Cierra/reabre una marca desde la tablet. MISMA FIRMA que siempre: el local
+ * sale del dispositivo, así que la cocina quedó arreglada sin desplegar app.
+ */
 export function setBrandStatusByToken(
   token: string,
   brandId: string,
@@ -411,7 +448,7 @@ export function setBrandStatusByToken(
   resumeAt?: string | null,
   reason?: string | null,
   reasonCode?: string | null,
-): Promise<{ brand_id: string; mode: BrandStatusMode; items: number }> {
+): Promise<{ brand_id: string; mode: BrandStatusMode; locations: number; items: number }> {
   return rpc('set_brand_status_by_token', {
     p_device_token: token,
     p_brand_id: brandId,
@@ -438,6 +475,8 @@ export function listBrandsForClosure(accountId: string | null, token?: string | 
 export interface ClosedBrand {
   brand_id: string
   brand_name: string
+  location_id: string
+  location_name: string
   mode: BrandStatusMode
   resume_at: string | null
   reason: string | null
@@ -459,6 +498,8 @@ export function getClosedBrands(accountId: string | null, token?: string | null)
 export interface AnomalousBrandClosure {
   brand_id: string
   brand_name: string
+  location_id: string
+  location_name: string
   resume_at: string | null
   set_at: string | null
   reason: string | null

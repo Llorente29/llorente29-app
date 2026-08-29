@@ -39,8 +39,14 @@ interface Props {
   dark?: boolean
 }
 
+// Desde el 01/09/2026 una marca puede salir DOS veces, una por local cerrado.
+// La huella y el id de "ocupado" llevan el local o se pisarian entre si.
+function filaId(b: { brand_id: string; location_id: string }): string {
+  return `${b.brand_id}:${b.location_id}`
+}
+
 function brandsFingerprint(brands: ClosedBrand[]): string {
-  return brands.map(b => `${b.brand_id}:${b.resume_at ?? ''}`).sort().join(',')
+  return brands.map(b => `${filaId(b)}:${b.resume_at ?? ''}`).sort().join(',')
 }
 
 export default function ClosedBrandsCard({ accountId, token, dark = false }: Props) {
@@ -81,11 +87,13 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
     return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
-  async function reopen(brandId: string) {
-    setBusyId(brandId); setError(null)
+  async function reopen(brandId: string, locationId: string) {
+    setBusyId(`${brandId}:${locationId}`); setError(null)
     try {
+      // Con token el local lo pone el dispositivo; desde oficina se reabre el
+      // local de ESTA fila, no la marca entera.
       if (token) await setBrandStatusByToken(token, brandId, 'normal')
-      else await setBrandStatus(brandId, 'normal')
+      else await setBrandStatus(brandId, 'normal', locationId)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo reabrir')
       setBusyId(null)
@@ -110,10 +118,11 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
       </div>
       <div className="flex flex-col gap-1.5">
         {brands.map((b) => (
-          <div key={b.brand_id} className="flex items-center justify-between gap-2">
+          <div key={filaId(b)} className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2 h-2 rounded-full bg-danger shrink-0" />
               <span className={`text-sm truncate ${t.textPrimary}`}>{b.brand_name}</span>
+              <span className={`text-xs shrink-0 ${t.textMuted}`}>{b.location_name}</span>
               <span className={`text-xs shrink-0 ${t.textMuted}`}>
                 {b.resume_at
                   ? `hasta las ${new Date(b.resume_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
@@ -121,11 +130,11 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
               </span>
             </div>
             <button
-              onClick={() => void reopen(b.brand_id)}
-              disabled={busyId === b.brand_id}
+              onClick={() => void reopen(b.brand_id, b.location_id)}
+              disabled={busyId === filaId(b)}
               className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-success text-white hover:opacity-90 disabled:opacity-50"
             >
-              {busyId === b.brand_id ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />} Reabrir
+              {busyId === filaId(b) ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />} Reabrir
             </button>
           </div>
         ))}
