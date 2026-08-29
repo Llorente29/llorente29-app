@@ -137,3 +137,28 @@ se arregla en el paso 2 pase lo que pase.
   contra el reloj de forma continua; un 86 vencido sigue apagado hasta el
   siguiente recálculo. Es el comportamiento de hoy, no lo empeora ninguno de los
   dos pasos, y se anota aquí para que no se descubra como sorpresa.
+
+---
+
+## 6. Decisiones de Julio (29/08, tarde)
+
+**Volumen, que corrige la prioridad.** La tienda propia lleva 22 ventas desde el
+27/06, 600,39 € históricos, **última venta el 12/08 — hace 17 días**, y **cero
+líneas con `unit_price = 0`**. El plato regalado nunca ha ocurrido. El fallo es
+real y el mecanismo está armado, pero no está costando dinero.
+
+Por eso: **paso 1 escrito y commiteado, NO aplicado el sábado.** Se aplica el
+lunes 01/09 con calma. Migración preparada en
+`supabase/migrations/20260901T1000_tienda_deja_de_leer_el_espejo_global.sql`.
+
+**Paso 2, decisión de producto tomada.** Cuando el cliente elige local en el
+checkout y le faltan platos del carrito, **se los enseñamos marcados como no
+disponibles en ese local, con el motivo, y decide él** — quitarlos o cambiar de
+local.
+
+No se le quitan en silencio: lo descubriría en el ticket. No se le bloquea el
+pedido entero por un refresco.
+
+Es la **regla 7** aplicada de cara al cliente: un umbral —o una falta de
+existencias— ordena y etiqueta, no esconde la fila. Vale igual para el operario
+que para quien está pagando.
