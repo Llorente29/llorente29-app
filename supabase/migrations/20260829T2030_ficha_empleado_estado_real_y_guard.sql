@@ -109,7 +109,9 @@ begin
   -- ayer en UTC, y contarlo como de hoy falsea el dia.
   v_hoy_ini := (date_trunc('day', now() at time zone 'Europe/Madrid')) at time zone 'Europe/Madrid';
 
-  -- Minutos de HOY: pares cerrados + el tramo abierto hasta ahora.
+  -- Minutos de HOY: pares cerrados + el tramo abierto hasta ahora. Se calcula
+  -- con real_datetime, igual que team_worked_shifts, para no dar dos cifras
+  -- distintas de las mismas horas.
   for r in
     select ce.type, coalesce(ce.real_datetime, ce.datetime) as rt
     from clock_entries ce
@@ -131,7 +133,10 @@ begin
   elsif v_last.type in ('entrada','pausa_inicio','pausa_fin') then
     v_estado := 'trabajando';
     -- Desde cuando: la ULTIMA entrada no anulada (una pausa no reabre jornada).
-    select coalesce(ce.real_datetime, ce.datetime) into v_since
+    -- Se devuelve `datetime`, la hora OFICIAL: es la que ve el trabajador y la
+    -- que cita el parte. Ensenar la real descuadraria la ficha con el reloj de
+    -- todos los demas en los 68 fichajes que llevan redondeo.
+    select ce.datetime into v_since
     from clock_entries ce
     where ce.employee_id = p_employee_id and coalesce(ce.voided,false) = false
       and ce.type = 'entrada'
@@ -143,7 +148,7 @@ begin
     end if;
   else
     v_estado := 'fuera';
-    v_since  := coalesce(v_last.real_datetime, v_last.datetime);
+    v_since  := v_last.datetime;
   end if;
 
   -- "Sin fichajes hoy" tambien cuando el ultimo evento es de otro dia y fue
@@ -160,7 +165,7 @@ begin
     'abierta_desde',  v_abierta,
     'minutos_hoy',    round(v_min_hoy, 1),
     'ultimo_tipo',    v_last.type,
-    'ultimo_at',      coalesce(v_last.real_datetime, v_last.datetime)
+    'ultimo_at',      v_last.datetime
   );
 end;
 $function$;
