@@ -32,3 +32,8 @@ Cada una costó un incidente real. La fecha es el día que se pagó.
 
 6. **Reprocesar consumo siempre con corte en el último conteo aprobado**, salvo autorización explícita y reanclaje posterior.
    *(25/08. Tres botones vivos reprocesaban a escala 11x por debajo de conteos ya cerrados.)*
+
+7. **Un umbral ordena, no esconde.** Una pantalla que el usuario abre a propósito NUNCA oculta filas; un aviso que le interrumpe SÍ filtra. El umbral decide el **orden** y la **etiqueta**, nunca la **existencia**.
+   *Detector automático:* si para ser honesta una pantalla necesita una nota al pie del tipo «y además hay N que no te enseño», el filtro está en el sitio equivocado. Esa nota no es transparencia: es la confesión de que el diseño sabe que está escondiendo algo.
+   *Dónde SÍ va un umbral:* en lo que interrumpe a alguien — push, `system_alert`, correo, el badge rojo del menú. Ahí filtrar es respeto por la atención del otro. Un contador puede contar solo lo prioritario, pero no puede decir «0, sin alertas» en verde habiendo filas.
+   *(29/08. Stock negativo de Alcalá decía «sin alertas» y resumía «+9 por debajo del umbral (ruido, no listados aquí)» mientras Pedidos enseñaba Coca-Cola Original Lata a −10 ud. El umbral no fallaba —Coca-Cola quedaba fuera por 2,7 latas— fallaba usarlo para decidir la existencia de la fila. Lo caro no es el dato oculto: es que el operario aprende que "sin alertas" no significa "no hay nada", y deja de creerse también las pantallas que dicen la verdad.)*

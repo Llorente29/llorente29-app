@@ -1,8 +1,29 @@
 // src/modules/supply/components/NegativeStockSection.tsx
 //
 // Vigía de stock negativo (Fase B, 10/08). Lee negative_stock_report y enseña
-// los artículos×local con qty_on_hand < 0 que CRUZAN el umbral anti-ruido
-// (is_alert), con su causa probable y los remedios disponibles.
+// TODOS los artículos×local con qty_on_hand < 0, con su causa probable y los
+// remedios disponibles.
+//
+// UN UMBRAL ORDENA, NO ESCONDE (29/08/2026 — regla de CLAUDE.md).
+// Hasta hoy esta sección listaba SOLO los que cruzan el umbral (is_alert) y
+// resumía el resto en una nota: «+9 artículos en negativo por debajo del umbral
+// (ruido, no listados aquí)». A la vez, la pantalla de Pedidos enseñaba
+// Coca-Cola Original Lata con −10 ud. Julio: «no tiene sentido ver en el stock
+// negativos que cuando vas a la pantalla de negativos específica no aparecen».
+//
+// El umbral no era el problema: Coca-Cola se quedaba fuera por 2,7 latas, y el
+// umbral hace bien su trabajo priorizando. El problema era usarlo para decidir
+// la EXISTENCIA de la fila en vez de su ORDEN.
+//
+// Ahora: todos los negativos en una sola lista, los que cruzan el umbral
+// arriba y marcados «revisar», el resto debajo en gris y marcados «menor»,
+// cada uno con su cifra y su % sobre consumo. El umbral sigue igual y se sigue
+// ajustando en Recepciones → Ajustes de avisos: ahora ordena.
+//
+// La nota de «+N no listados» se ha ido, y no debe volver: si una pantalla
+// necesita esa nota para ser honesta, el filtro está en el sitio equivocado.
+// Esa nota no es transparencia, es la confesión de que el diseño sabe que está
+// escondiendo algo.
 //
 // Decisión de Julio: permitir + avisar, NUNCA bloquear ni poner a cero.
 // **Ningún botón pone el stock a cero ni "resuelve" nada por sí solo** —
@@ -32,7 +53,7 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, AlertTriangle, ShieldCheck, Settings2, RefreshCw, SlidersHorizontal, PackagePlus } from 'lucide-react'
+import { Loader2, ShieldCheck, Settings2, RefreshCw, SlidersHorizontal, PackagePlus } from 'lucide-react'
 import {
   getNegativeStockReport, negativeStockCauseLabel, negativeStockCauseHint,
   type NegativeStockItem,
@@ -99,15 +120,20 @@ export default function NegativeStockSection({
     return () => { cancelled = true }
   }, [accountId, locationId, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ORDEN, NO FILTRO: los que cruzan el umbral primero; dentro de cada grupo,
+  // el más negativo respecto a su consumo arriba. Nadie desaparece.
   const alerts = items.filter(i => i.isAlert)
-  const noise = items.filter(i => !i.isAlert)
+  const menores = items.filter(i => !i.isAlert)
+  const ordenados = [...alerts, ...menores]
 
   // Resuelve el proveedor (preferente/activo) de cada artículo en alerta, en
   // bloque, para decidir qué filas ofrecen "Cargar recepción". Independiente
   // de la causa: el atajo se ofrece por disponibilidad real de proveedor, no
   // por lo que el sistema sospeche.
   useEffect(() => {
-    const ids = items.filter(i => i.isAlert).map(i => i.recipeItemId)
+    // Para TODOS, no solo los de alerta: ahora todas las filas se pintan y
+    // todas ofrecen sus remedios. La lista de negativos es corta por naturaleza.
+    const ids = items.map(i => i.recipeItemId)
     if (ids.length === 0) { setSupplierByItem(new Map()); return }
     let cancelled = false
     Promise.all(ids.map(id =>
@@ -165,26 +191,46 @@ export default function NegativeStockSection({
 
   return (
     <div className="space-y-3">
-      {alerts.length === 0 ? (
+      {/* El encabezado dice la VERDAD: "sin alertas" solo cuando no hay NINGÚN
+          negativo. Si los hay pero ninguno cruza el umbral, se dice tal cual —
+          que además informa más que un verde vacío. */}
+      {items.length === 0 ? (
         <div className="flex items-center gap-2 p-4 rounded-lg border border-border-default bg-card text-sm text-text-secondary">
           <ShieldCheck size={18} className="text-success shrink-0" />
-          Sin alertas de stock negativo en este local (umbral: {relPct} % del consumo reciente, o {absQty} unidad(es) base como mínimo).
+          Sin stock negativo en este local.
         </div>
       ) : (
+        <>
+        {alerts.length === 0 && (
+          <div className="flex items-center gap-2 p-3 rounded-lg border border-border-default bg-card text-sm text-text-secondary">
+            <ShieldCheck size={16} className="text-success shrink-0" />
+            {items.length} artículo{items.length === 1 ? '' : 's'} en negativo · ninguno supera el umbral de revisión
+            ({relPct} % del consumo reciente, o {absQty} unidad(es) base como mínimo).
+          </div>
+        )}
         <div className="border border-border-default rounded-lg overflow-hidden">
           <div className="flex items-center gap-3 px-3 py-2 bg-page text-[11px] uppercase tracking-wide text-text-tertiary border-b border-border-default">
+            <span className="w-20">Prioridad</span>
             <span className="flex-1">Artículo</span>
             <span className="w-28 text-right">Stock</span>
             <span className="w-24 text-right">% consumo</span>
             <span className="w-52">Causa probable</span>
             <span className="w-64">Acciones</span>
           </div>
-          {alerts.map(i => {
+          {ordenados.map(i => {
             const supplierId = supplierByItem.get(i.recipeItemId) ?? null
             return (
-              <div key={i.recipeItemId} className="flex items-center gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0">
-                <span className="flex-1 min-w-0 text-sm text-text-primary truncate">{i.name}</span>
-                <span className="w-28 text-right text-sm font-medium text-danger tabular-nums">
+              <div key={i.recipeItemId} className={`flex items-center gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0 ${i.isAlert ? '' : 'bg-page/40'}`}>
+                <span className="w-20">
+                  <span className={`inline-block text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${
+                    i.isAlert
+                      ? 'border-danger/30 bg-danger-bg text-danger font-medium'
+                      : 'border-border-default text-text-tertiary'}`}>
+                    {i.isAlert ? 'revisar' : 'menor'}
+                  </span>
+                </span>
+                <span className={`flex-1 min-w-0 text-sm truncate ${i.isAlert ? 'text-text-primary' : 'text-text-secondary'}`}>{i.name}</span>
+                <span className={`w-28 text-right text-sm tabular-nums ${i.isAlert ? 'font-medium text-danger' : 'text-text-secondary'}`}>
                   {formatBaseQty(i.qtyOnHand, i.unitAbbr)}
                 </span>
                 <span className="w-24 text-right text-xs text-text-tertiary tabular-nums">
@@ -212,19 +258,14 @@ export default function NegativeStockSection({
             )
           })}
         </div>
-      )}
-
-      {noise.length > 0 && (
-        <p className="text-xs text-text-tertiary flex items-center gap-1.5">
-          <AlertTriangle size={13} className="shrink-0" />
-          +{noise.length} artículo{noise.length === 1 ? '' : 's'} en negativo por debajo del umbral (ruido, no listados aquí) —
-          se ven con su cifra real en Existencias.
-        </p>
+        </>
       )}
 
       <p className="text-xs text-text-tertiary leading-relaxed flex items-start gap-1.5">
         <Settings2 size={13} className="shrink-0 mt-0.5" />
-        No se bloquea ninguna venta ni consumo, ni se pone nada a cero: el stock que ves es el real. "% consumo" compara
+        Se listan TODOS los negativos: los marcados «revisar» cruzan el umbral y van primero; los «menor» están por
+        debajo y se enseñan igual, con su cifra. No se bloquea ninguna venta ni consumo, ni se pone nada a cero: el
+        stock que ves es el real. "% consumo" compara
         contra el consumo de los últimos {windowDays} días (o el histórico si no hay consumo reciente). Umbrales
         ajustables en Recepciones → Ajustes de avisos.
       </p>

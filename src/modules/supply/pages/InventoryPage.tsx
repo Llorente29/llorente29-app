@@ -480,6 +480,11 @@ function SummarySection({
   const [cov, setCov] = useState<StorageCoverage | null>(null)
   const [belowMin, setBelowMin] = useState<number | null>(null)
   const [negAlerts, setNegAlerts] = useState<number | null>(null)
+  // Total de negativos, no solo los que cruzan el umbral. La tarjeta puede
+  // PRIORIZAR con el umbral —es un contador, y ahí filtrar es legítimo— pero no
+  // puede decir "sin alertas" en verde habiendo 9 artículos en negativo. Ese
+  // verde era el mismo engaño que la seccion, un nivel mas arriba (29/08).
+  const [negTotal, setNegTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const eur = (v: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
 
@@ -498,10 +503,14 @@ function SummarySection({
     // se queda en "—" (nunca en "0 sin alertas" — folvy_reglas.md §2, un error
     // no es "cero resultados").
     getNegativeStockReport(accountId, locationId)
-      .then(r => { if (!cancelled) setNegAlerts(r.items.filter(i => i.isAlert).length) })
+      .then(r => {
+        if (cancelled) return
+        setNegAlerts(r.items.filter(i => i.isAlert).length)
+        setNegTotal(r.items.length)
+      })
       .catch(e => {
         console.warn('[InventoryPage] negative_stock_report falló en el resumen:', e)
-        if (!cancelled) setNegAlerts(null)
+        if (!cancelled) { setNegAlerts(null); setNegTotal(null) }
       })
     return () => { cancelled = true }
   }, [accountId, locationId, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -570,12 +579,22 @@ function SummarySection({
           ) : negAlerts > 0 ? (
             <>
               <div className="text-2xl font-medium text-danger tabular-nums">{negAlerts}</div>
-              <div className="text-xs text-danger mt-1">artículo{negAlerts === 1 ? '' : 's'} en alerta</div>
+              <div className="text-xs text-danger mt-1">
+                artículo{negAlerts === 1 ? '' : 's'} a revisar
+                {(negTotal ?? 0) > negAlerts && ` · ${negTotal} en negativo`}
+              </div>
+            </>
+          ) : (negTotal ?? 0) > 0 ? (
+            /* Hay negativos, pero ninguno cruza el umbral. Ni verde ni "sin
+               alertas": el número que se enseña es el que hay. */
+            <>
+              <div className="text-2xl font-medium text-text-primary tabular-nums">{negTotal}</div>
+              <div className="text-xs text-text-secondary mt-1">en negativo · ninguno a revisar</div>
             </>
           ) : (
             <>
               <div className="text-2xl font-medium text-success tabular-nums">0</div>
-              <div className="text-xs text-text-tertiary mt-1">sin alertas</div>
+              <div className="text-xs text-text-tertiary mt-1">sin stock negativo</div>
             </>
           )}
         </button>
