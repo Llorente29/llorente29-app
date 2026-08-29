@@ -29,6 +29,31 @@
 -- Es la hermana de la regla 7: aqui no es un umbral el que esconde filas, es
 -- un filtro de validez -- pero el operario paga lo mismo.
 --
+-- PERMISOS: EL DROP NO LOS PIERDE, LOS ENSANCHA
+-- Julio avisa de que el DROP se lleva los grants por delante y la funcion
+-- moriria con permission denied. Comprobado en produccion, y el efecto es el
+-- CONTRARIO: `pg_default_acl` del esquema public concede EXECUTE a anon,
+-- authenticated y service_role a TODA funcion nueva, y ademas PostgreSQL
+-- concede EXECUTE a PUBLIC por defecto. Evidencia: set_brand_status y
+-- brand_status se recrearon con DROP + CREATE esta misma tarde y hoy tienen
+-- =X/postgres | postgres | anon | authenticated | service_role -- el juego
+-- completo, sin perder nada, y funcionando.
+--
+-- Pero el aviso apunta a algo real, solo que al reves: el DROP BORRA CUALQUIER
+-- REVOKE ANTERIOR y devuelve la funcion a PUBLIC + anon. Un endurecimiento
+-- hecho hace meses se deshace solo, en silencio, la proxima vez que alguien
+-- toque la firma. Por eso aqui los permisos se declaran EXPLICITAMENTE despues
+-- de cada CREATE, en vez de confiar en el default.
+--
+-- Y de paso lo que pide Julio: add_manual_clock_entry es SECURITY DEFINER que
+-- ESCRIBE en el registro legal de jornada. Hoy anon puede llamarla (falla
+-- dentro, por current_user_is_admin_of, pero llega). Se le quita a anon y a
+-- PUBLIC. Es la deuda F0 de multi-inquilino que bloquea el cliente 2, y sale
+-- gratis mientras la funcion se recrea de todas formas.
+-- Verificado que ninguna superficie anonima la llama: el unico llamador es
+-- clockEditService.addManualClockEntry -> StaffPage (oficina, authenticated).
+-- El kiosko NO usa esta RPC: ficha insertando en la tabla.
+--
 -- NO SE INVENTAN HORAS. Las filas con incidencia devuelven worked_minutes,
 -- presence_minutes, break_minutes y night_minutes en NULL. Se muestran sin
 -- total y se pide correccion. El arreglo del 07/08 dejo de inventar horas; esto
@@ -140,6 +165,11 @@ begin
 end;
 $function$;
 
+-- Permisos EXPLICITOS, no heredados del default (ver cabecera).
+revoke all on function public.employee_clock_status(uuid) from public;
+revoke all on function public.employee_clock_status(uuid) from anon;
+grant execute on function public.employee_clock_status(uuid) to authenticated, service_role;
+
 comment on function public.employee_clock_status(uuid) is
   'Estado REAL de fichaje de un empleado, del ultimo fichaje no anulado (misma '
   'logica que training_is_clocked_in). Tres estados: trabajando | fuera | '
@@ -230,6 +260,13 @@ begin
           null, public._clock_snapshot(v_row));
   return v_row;
 end $function$;
+
+-- Permisos EXPLICITOS. anon y PUBLIC FUERA: es SECURITY DEFINER y escribe en
+-- el registro legal de jornada. Que falle dentro no es una razon para dejar
+-- que llegue.
+revoke all on function public.add_manual_clock_entry(uuid, text, timestamptz, text, text, boolean) from public;
+revoke all on function public.add_manual_clock_entry(uuid, text, timestamptz, text, text, boolean) from anon;
+grant execute on function public.add_manual_clock_entry(uuid, text, timestamptz, text, text, boolean) to authenticated, service_role;
 
 comment on function public.add_manual_clock_entry(uuid, text, timestamptz, text, text, boolean) is
   'Fichaje manual CON guard de coherencia (29/08/2026). Rechaza una entrada sobre alguien '
@@ -341,6 +378,11 @@ as $function$
   order by 2;
 $function$;
 
+-- Permisos EXPLICITOS. Solo la ficha de oficina la consume.
+revoke all on function public.employee_daily_detail(uuid, date, date) from public;
+revoke all on function public.employee_daily_detail(uuid, date, date) from anon;
+grant execute on function public.employee_daily_detail(uuid, date, date) to authenticated, service_role;
+
 comment on function public.employee_daily_detail(uuid, date, date) is
   'Dia a dia de la ficha del empleado. Las jornadas CERRADAS salen de '
   'team_worked_shifts sin tocar (mismos minutos de siempre). Desde el 29/08/2026 '
@@ -373,7 +415,27 @@ begin
     raise exception 'team_worked_shifts ha cambiado y NO debia: las 375 jornadas validas estan en riesgo';
   end if;
 
-  raise notice 'VERIFICACION OK: estado real, guard de escritura y jornadas marcadas';
+  -- Permisos: que el DROP no haya devuelto nada a anon ni a PUBLIC.
+  if has_function_privilege('anon', 'public.add_manual_clock_entry(uuid, text, timestamptz, text, text, boolean)', 'EXECUTE') then
+    raise exception 'add_manual_clock_entry sigue siendo ejecutable por anon';
+  end if;
+  if has_function_privilege('anon', 'public.employee_clock_status(uuid)', 'EXECUTE') then
+    raise exception 'employee_clock_status sigue siendo ejecutable por anon';
+  end if;
+  if has_function_privilege('anon', 'public.employee_daily_detail(uuid, date, date)', 'EXECUTE') then
+    raise exception 'employee_daily_detail sigue siendo ejecutable por anon';
+  end if;
+  if not has_function_privilege('authenticated', 'public.add_manual_clock_entry(uuid, text, timestamptz, text, text, boolean)', 'EXECUTE') then
+    raise exception 'authenticated NO puede ejecutar add_manual_clock_entry: el boton moriria con permission denied';
+  end if;
+  if not has_function_privilege('authenticated', 'public.employee_daily_detail(uuid, date, date)', 'EXECUTE') then
+    raise exception 'authenticated NO puede ejecutar employee_daily_detail';
+  end if;
+  if not has_function_privilege('authenticated', 'public.employee_clock_status(uuid)', 'EXECUTE') then
+    raise exception 'authenticated NO puede ejecutar employee_clock_status';
+  end if;
+
+  raise notice 'VERIFICACION OK: estado real, guard de escritura, jornadas marcadas y permisos cerrados';
 end
 $ver$;
 
