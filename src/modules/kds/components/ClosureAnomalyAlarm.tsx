@@ -65,11 +65,13 @@ export default function ClosureAnomalyAlarm({ accountId, token, variant = 'fixed
     return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
-  async function reopen(brandId: string) {
-    setBusyId(brandId)
+  async function reopen(brandId: string, locationId: string) {
+    setBusyId(`${brandId}:${locationId}`)
     try {
+      // Una marca puede aparecer una vez por local olvidado: se reabre el de
+      // ESTA fila, no la marca entera.
       if (token) await setBrandStatusByToken(token, brandId, 'normal')
-      else await setBrandStatus(brandId, 'normal')
+      else await setBrandStatus(brandId, 'normal', locationId)
       await refresh()
       pollHandleRef.current?.wake()
     } catch {
@@ -97,13 +99,14 @@ export default function ClosureAnomalyAlarm({ accountId, token, variant = 'fixed
 
         <ul className="max-h-[50vh] overflow-y-auto divide-y divide-white/15">
           {closures.map((c) => (
-            <li key={c.brand_id} className="flex items-center gap-3 px-4 py-2.5">
+            <li key={`${c.brand_id}:${c.location_id}`} className="flex items-center gap-3 px-4 py-2.5">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[12px] font-extrabold uppercase tracking-wide bg-white/20 px-2 py-0.5 rounded">
                     {c.kind === 'indefinite' ? 'CERRADA HACE +24H' : 'DEBÍA REABRIR YA'}
                   </span>
                   <span className="font-bold text-[14px]">{c.brand_name}</span>
+                  <span className="text-[12px] text-white/80">· {c.location_name}</span>
                 </div>
                 <div className="text-[12.5px] text-white/85 mt-0.5 truncate">
                   {c.kind === 'indefinite'
@@ -113,11 +116,11 @@ export default function ClosureAnomalyAlarm({ accountId, token, variant = 'fixed
               </div>
 
               <button
-                onClick={() => void reopen(c.brand_id)}
-                disabled={busyId === c.brand_id}
+                onClick={() => void reopen(c.brand_id, c.location_id)}
+                disabled={busyId === `${c.brand_id}:${c.location_id}`}
                 className="shrink-0 inline-flex items-center gap-1.5 bg-white text-[#E0492E] font-bold rounded-lg px-3 py-2 text-[13px] disabled:opacity-60"
               >
-                {busyId === c.brand_id ? <Loader2 size={14} className="animate-spin" /> : <Unlock size={14} />} Reabrir
+                {busyId === `${c.brand_id}:${c.location_id}` ? <Loader2 size={14} className="animate-spin" /> : <Unlock size={14} />} Reabrir
               </button>
             </li>
           ))}
