@@ -1,6 +1,8 @@
 -- 20260830T0815_tienda_deja_de_leer_el_espejo_global.sql
 -- ============================================================================
--- PASO 1 de dos. Escrita el 29/08, RENUMERADA al 30/08 antes de aplicarla:
+-- PASO 1 de dos. APLICADA el 30/08/2026 a las 08:21 de Madrid, registrada como
+-- version 20260830062119, nombre `tienda_deja_de_leer_el_espejo_global`.
+-- Escrita el 29/08 y RENUMERADA al 30/08 antes de aplicarla:
 -- estaba fechada el 01/09 y un nombre con fecha futura confunde a quien lee el
 -- repo para saber que queda pendiente. (El registro real, sin embargo, nunca
 -- corrio peligro: schema_migrations sella la hora UTC de aplicacion, no la del
