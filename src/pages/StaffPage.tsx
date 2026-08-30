@@ -11,6 +11,7 @@ import SendMessageModal from '../components/personal/SendMessageModal'
 import AccesoTrabajadorPanel from '../components/personal/AccesoTrabajadorPanel'
 import InsightsPage from './InsightsPage'
 import { fetchStaffRoles, type StaffRole } from '../services/staffRoleService'
+import { mensajeDeFalloDeFichaje } from '../services/supabaseSync'
 import {
   getEmployeeTrainingStatus, type EmployeeTrainingStatus,
   listEmployeePhaseProgress, releaseNextPhase, type EmployeePhaseProgress, type TrainingPhaseName,
@@ -662,7 +663,11 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
         setClockWarn({ type: 'real', msg: `${type === 'entrada' ? 'Entrada' : 'Salida'} registrada a mano: ${now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}.` })
       }
     } catch (e) {
-      setClockWarn({ type: 'blocked', msg: `No se pudo registrar el fichaje: ${e instanceof Error ? e.message : 'error'}` })
+      // Este catch existia desde siempre pero nunca saltaba: insertClockEntry
+      // devolvia false en silencio. Desde el 30/08 lanza, y aqui se lee el
+      // motivo real (el hint del trigger de orden, si es el que rechaza).
+      console.error('[staff] escritura de fichaje rechazada:', e)
+      setClockWarn({ type: 'blocked', msg: mensajeDeFalloDeFichaje(e) })
     } finally {
       setClocking(false)
     }

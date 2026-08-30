@@ -5,12 +5,17 @@ import {
   Clock, Timer, LogIn, LogOut,
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
+import { fetchEmployeeClockStatus } from '../../services/teamHoursService'
+import type { EmployeeClockStatus } from '../../services/teamHoursService'
+import { mensajeDeFalloDeFichaje } from '../../services/supabaseSync'
 import { Card } from '../../components/ui'
 import type { Employee, Location } from '../../types'
 import {
   getCurrentPosition, distanceMeters, coordsForLocation,
   hasOpenShift, nextClockType, buildClockEntry, defaultKioskoConfig,
+  avisoDeContexto, horaCorta,
 } from '../../services/fichajeKiosko'
+import type { AvisoContexto } from '../../services/fichajeKiosko'
 import type { CalendarContext, ScheduledShift, ShiftTypeInfo } from '../../services/horasComputo'
 import { listShiftTemplates, getSchedule } from '../../services/schedulerService'
 import { getMondayOfWeek, toISODate, shiftDurationHours } from '../../types/scheduler'
@@ -19,6 +24,11 @@ import { fetchAppSettings } from '../../services/appSettingsService'
 const DEFAULT_RADIUS_M = 200  // fallback si el local no tiene radio configurado
 const radiusForLoc = (loc: Location | null | undefined) => (loc?.clockRadiusM ?? DEFAULT_RADIUS_M)
 
+// Donde se ficha: 'in' (en zona) · 'outside' (fuera, marca la distancia) ·
+// 'nogps' (sin ubicacion). La salida anticipada NO es un modo: es una marca
+// aparte, porque se puede salir antes de hora Y estar fuera de zona a la vez.
+type ClockMode = 'in' | 'outside' | 'nogps'
+
 interface Props {
   employee: Employee
   onBack: () => void
@@ -26,7 +36,7 @@ interface Props {
 
 export default function FichajeEmpleado({ employee, onBack }: Props) {
   const { locations, addClockEntry, staff } = useApp()
-  const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'warn-confirm' | 'early-confirm' | 'success' | 'error'>('idle')
+  const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'warn-confirm' | 'early-confirm' | 'contexto-confirm' | 'success' | 'error'>('idle')
   const [position, setPosition] = useState<GeolocationPosition | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [pendingDist, setPendingDist] = useState(0)
@@ -39,7 +49,19 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   // Turno teórico de HOY en minutos desde 00:00 (para avisos de fichaje anticipado).
   const [todayShift, setTodayShift] = useState<{ startMin: number; endMin: number; start: string; end: string } | null>(null)
   // Aviso de fichaje anticipado pendiente de confirmación.
-  const [earlyWarn, setEarlyWarn] = useState<null | { kind: 'entrada' | 'salida'; theoreticalTime: string; minutesEarly: number }>(null)
+  const [earlyWarn, setEarlyWarn] = useState<null | {
+    kind: 'entrada' | 'salida'; theoreticalTime: string; minutesEarly: number
+    mode: ClockMode; distM: number
+  }>(null)
+  // AVISO DE CONTEXTO (30/08). La app decide sola el tipo del fichaje -- hay un
+  // solo boton -- asi que cuando el contexto es raro tiene que enseñar QUE va a
+  // escribir antes de escribirlo. Informa y deja pasar: quien confirma, ficha.
+  const [ctxWarn, setCtxWarn] = useState<
+    null | (AvisoContexto & { mode: ClockMode; distM: number; earlyExitMin?: number })
+  >(null)
+  // Lo ULTIMO escrito de verdad, para que la pantalla de exito no diga
+  // "entrada" cuando se corrigio a salida.
+  const [written, setWritten] = useState<null | { type: 'entrada' | 'salida'; datetime: string }>(null)
 
   // Locales donde puede fichar
   const allowedLocations = useMemo(() => {
@@ -224,7 +246,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   // ¿Hay que avisar de fichaje anticipado? Devuelve el aviso o null.
   // - Entrada antes de su hora (más de la tolerancia): avisa que se redondeará.
   // - Salida antes de su hora (más de 3 min): avisa siempre, sin importar cuánto.
-  function earlyClockWarning(type: 'entrada' | 'salida'): typeof earlyWarn {
+  function earlyClockWarning(type: 'entrada' | 'salida'): null | { kind: 'entrada' | 'salida'; theoreticalTime: string; minutesEarly: number } {
     if (!todayShift) return null
     const now = new Date()
     const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -253,7 +275,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     // Sin GPS (permiso denegado / timeout): en warn se ficha igual, marcando "sin
     // ubicación". Nunca bloquea.
     if (!position) {
-      void writeEntry('nogps', 0)
+      void tramitar('nogps', 0)
       return
     }
 
@@ -275,35 +297,98 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
       return
     }
 
-    // Aviso de fichaje anticipado (entrada antes de hora → se redondea; salida
-    // antes de hora → confirmar). Independiente del geofence.
+    // Dentro de zona: sigue por el embudo normal (anticipado → contexto → escribir).
+    void tramitar('in', 0)
+  }
+
+  /**
+   * Embudo único: aviso de fichaje anticipado primero, aviso de contexto después
+   * (es el último antes de escribir, y por eso lo comprueban TODOS los caminos,
+   * incluido el de confirmar una salida anticipada).
+   */
+  async function tramitar(mode: ClockMode, distM: number) {
     const warn = earlyClockWarning(nextType)
     if (warn) {
-      setEarlyWarn(warn)
+      setEarlyWarn({ ...warn, mode, distM })
       setStep('early-confirm')
       return
     }
-
-    // Dentro de zona y en hora: fichaje normal, directo.
-    void writeEntry('in', 0)
+    await comprobarContextoYEscribir(mode, distM)
   }
 
-  // Escribe el fichaje. mode: 'in' (en zona) · 'outside' (fuera, marca distancia) ·
-  // 'nogps' (sin ubicación, marca para revisión) · 'early-exit' (salida anticipada
-  // confirmada: hora real, sin redondeo hacia arriba, marcada para el manager).
-  async function writeEntry(mode: 'in' | 'outside' | 'nogps' | 'early-exit', distM: number) {
+  /**
+   * AVISO DE CONTEXTO. La app decide sola el tipo del fichaje — hay UN solo botón —
+   * así que antes de escribir enseña QUÉ va a escribir cuando el contexto es raro.
+   * El contexto se lee EN VIVO de employee_clock_status al pulsar, NUNCA del array
+   * hidratado: esa fue la lección de la ficha del empleado del 29/08, donde cuatro
+   * personas que estaban trabajando leían "Sin entrada" porque se dedujo del array.
+   * Informa y deja pasar: quien confirma, ficha.
+   */
+  async function comprobarContextoYEscribir(mode: ClockMode, distM: number, earlyExitMin?: number) {
+    setStep('confirming')
+    let status: EmployeeClockStatus | null
+    try {
+      status = await fetchEmployeeClockStatus(currentEmp.id)
+    } catch {
+      status = null
+    }
+    // Si la BBDD no contesta no inventamos contexto ni bloqueamos: se ficha como
+    // siempre. El trigger de orden sigue siendo la última defensa.
+    const warn = status ? avisoDeContexto(nextType, status) : null
+    if (warn) {
+      setCtxWarn({ ...warn, mode, distM, earlyExitMin })
+      setStep('contexto-confirm')
+      return
+    }
+    await writeEntry(mode, distM, { earlyExitMin })
+  }
+
+  // Escribe el fichaje. mode: dónde ficha. earlyExitMin: salida anticipada
+  // confirmada (hora real, sin redondear hacia arriba, marcada para el manager).
+  // forzarTipo: la persona ha corregido el tipo contra el estado real de la BBDD.
+  async function writeEntry(
+    mode: ClockMode, distM: number,
+    opts: { forzarTipo?: 'entrada' | 'salida'; earlyExitMin?: number } = {},
+  ) {
     if (!selectedLoc) return
+    const { forzarTipo, earlyExitMin } = opts
     setStep('confirming')
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
     // En salida anticipada NO pasamos calendarCtx: así buildClockEntry no redondea
     // hacia la hora teórica (regalaría minutos no trabajados). Se guarda la hora real.
-    const ctxForBuild = mode === 'early-exit' ? undefined : calendarCtx
+    // Al forzar el tipo tampoco: el redondeo se calculó para el tipo contrario.
+    const ctxForBuild = (earlyExitMin != null || forzarTipo) ? undefined : calendarCtx
     const result = buildClockEntry(currentEmp, selectedLoc, config, position, undefined, roundingToleranceMin, ctxForBuild)
     let entry = result.entry
-    if (mode === 'outside') entry = { ...entry, address: `Fuera de zona · ${distM}m` }
-    else if (mode === 'nogps') entry = { ...entry, address: 'Sin ubicación (GPS no disponible)' }
-    else if (mode === 'early-exit') entry = { ...entry, address: `Salida anticipada · ${distM} min antes` }
-    await addClockEntry(currentEmp.id, entry)
+    const marcas: string[] = []
+    if (mode === 'outside') marcas.push(`Fuera de zona · ${distM}m`)
+    else if (mode === 'nogps') marcas.push('Sin ubicación (GPS no disponible)')
+    if (earlyExitMin != null) marcas.push(`Salida anticipada · ${earlyExitMin} min antes`)
+    if (forzarTipo && forzarTipo !== entry.type) {
+      marcas.push(`Corregido por el trabajador · la app ofrecía ${entry.type}`)
+      entry = {
+        ...entry,
+        type: forzarTipo,
+        datetime: entry.realDatetime || entry.datetime,
+        scheduled: undefined,
+        roundingApplied: false,
+        diffMinutes: 0,
+      }
+    }
+    if (marcas.length > 0) entry = { ...entry, address: marcas.join(' · ') }
+
+    // Hasta el 30/08 esto era `await addClockEntry(...)` seguido de `setStep('success')`
+    // pasara lo que pasara: si la BBDD rechazaba la fila, la pantalla decía
+    // "¡Entrada registrada!" igual y el fichaje no existía. Regla 8.
+    try {
+      await addClockEntry(currentEmp.id, entry)
+    } catch (e) {
+      console.error('[fichaje] escritura rechazada:', e)
+      setErrorMsg(mensajeDeFalloDeFichaje(e))
+      setStep('error')
+      return
+    }
+    setWritten({ type: entry.type, datetime: entry.datetime })
     setStep('success')
   }
 
@@ -368,7 +453,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                 Cancelar
               </button>
               <button
-                onClick={() => writeEntry('outside', pendingDist)}
+                onClick={() => { void tramitar('outside', pendingDist) }}
                 className="flex-1 py-3 rounded-xl bg-danger text-text-on-accent font-bold hover:opacity-90 transition-base">
                 Fichar igualmente
               </button>
@@ -405,7 +490,10 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                     Cancelar
                   </button>
                   <button
-                    onClick={() => { setEarlyWarn(null); void writeEntry('in', 0) }}
+                    onClick={() => {
+                      const w = earlyWarn; setEarlyWarn(null)
+                      void comprobarContextoYEscribir(w.mode, w.distM)
+                    }}
                     className="flex-1 py-3 rounded-xl bg-accent text-text-on-accent font-bold hover:bg-accent-hover transition-base">
                     Entendido, fichar
                   </button>
@@ -426,13 +514,58 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                     No, cancelar
                   </button>
                   <button
-                    onClick={() => { const m = earlyWarn.minutesEarly; setEarlyWarn(null); void writeEntry('early-exit', m) }}
+                    onClick={() => {
+                      const w = earlyWarn; setEarlyWarn(null)
+                      void comprobarContextoYEscribir(w.mode, w.distM, w.minutesEarly)
+                    }}
                     className="flex-1 py-3 rounded-xl bg-danger text-text-on-accent font-bold hover:opacity-90 transition-base">
                     Sí, me voy
                   </button>
                 </div>
               </>
             )}
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'contexto-confirm' && ctxWarn) {
+    const cerrar = () => { setCtxWarn(null); setStep('idle') }
+    return (
+      <div className="min-h-screen bg-page p-4">
+        <div className="max-w-md mx-auto pt-12">
+          <Card className="p-6 text-center border-2 border-warning">
+            <div className="flex justify-center mb-3">
+              <AlertTriangle size={56} className="text-warning" />
+            </div>
+            <p className="font-bold text-warning text-xl">{ctxWarn.titulo}</p>
+            <p className="text-sm text-text-secondary mt-3">{ctxWarn.texto}</p>
+            <div className="mt-6 space-y-2">
+              <button
+                onClick={() => {
+                  const w = ctxWarn; setCtxWarn(null)
+                  void writeEntry(w.mode, w.distM, { earlyExitMin: w.earlyExitMin })
+                }}
+                className="w-full py-3 rounded-xl bg-accent text-text-on-accent font-bold hover:bg-accent-hover transition-base">
+                Sí, fichar {ctxWarn.accion === 'entrada' ? 'ENTRADA' : 'SALIDA'}
+              </button>
+              {ctxWarn.alternativa && (
+                <button
+                  onClick={() => {
+                    const w = ctxWarn; setCtxWarn(null)
+                    void writeEntry(w.mode, w.distM, { forzarTipo: w.alternativa!, earlyExitMin: w.earlyExitMin })
+                  }}
+                  className="w-full py-3 rounded-xl bg-danger text-text-on-accent font-bold hover:opacity-90 transition-base">
+                  No, fichar {ctxWarn.alternativa === 'entrada' ? 'ENTRADA' : 'SALIDA'}
+                </button>
+              )}
+              <button
+                onClick={cerrar}
+                className="w-full py-3 rounded-xl bg-accent-bg text-text-primary font-medium hover:bg-page transition-base">
+                Cancelar
+              </button>
+            </div>
           </Card>
         </div>
       </div>
@@ -448,10 +581,10 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
               <CheckCircle2 size={72} className="text-success" />
             </div>
             <p className="font-bold text-2xl text-success">
-              {nextType === 'entrada' ? '¡Entrada registrada!' : '¡Salida registrada!'}
+              {(written?.type ?? nextType) === 'entrada' ? '¡Entrada registrada!' : '¡Salida registrada!'}
             </p>
             <p className="text-sm text-text-secondary mt-2">
-              {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} · {selectedLoc?.name}
+              {horaCorta(written ? new Date(written.datetime) : new Date())} · {selectedLoc?.name}
             </p>
             <button onClick={onBack}
               className="mt-6 w-full py-3 rounded-xl bg-success text-text-on-accent font-medium hover:opacity-90 transition-base">

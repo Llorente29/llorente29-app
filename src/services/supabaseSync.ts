@@ -428,8 +428,48 @@ export async function fetchClockEntries(accountId: string | null): Promise<{ emp
 }
 
 /**
+ * Error de escritura de un fichaje, con el hint del servidor intacto.
+ *
+ * Los triggers de clock_entries levantan excepciones con `hint` legible
+ * (YA_ESTA_DENTRO, NO_ESTA_FICHADO, PAUSA_FUERA_DE_ORDEN,
+ * DOBLE_FICHAJE_MUY_RAPIDO). Ese hint esta escrito para que lo lea una persona
+ * en una cocina: se conserva hasta la pantalla en vez de traducirse a un
+ * booleano por el camino.
+ */
+export class ClockWriteError extends Error {
+  readonly hint: string | null
+  readonly code: string | null
+  constructor(message: string, hint: string | null, code: string | null) {
+    super(message)
+    this.name = 'ClockWriteError'
+    this.hint = hint
+    this.code = code
+  }
+}
+
+/**
+ * Traduce un fallo de escritura de fichaje a algo que una persona pueda leer.
+ * El trigger de orden manda un `hint` ya escrito en castellano para quien ficha;
+ * lo demas cae en un texto generico que NO promete que el fichaje se guardo.
+ * Compartido por las TRES pantallas que escriben fichajes, para que las tres
+ * digan lo mismo cuando la BBDD rechaza la fila.
+ */
+export function mensajeDeFalloDeFichaje(e: unknown): string {
+  if (e instanceof ClockWriteError) {
+    if (e.hint) return e.hint
+    if (e.message) return `No se ha podido registrar: ${e.message}`
+  }
+  if (e instanceof Error && e.message) return `No se ha podido registrar: ${e.message}`
+  return 'No se ha podido registrar el fichaje. Comprueba la conexión e inténtalo otra vez. '
+       + 'Si sigue fallando avisa a tu encargado: NO ha quedado guardado.'
+}
+
+/**
  * Inserta un clock entry. No requiere accountId: employee_id identifica
  * el employee y por tanto su location/account. RLS valida.
+ *
+ * LANZA si la escritura falla. Quien llame decide que enseñar, pero no puede
+ * ya no enterarse.
  */
 export async function insertClockEntry(employeeId: string, entry: ClockEntry): Promise<boolean> {
   if (!supabase) return false
@@ -449,7 +489,14 @@ export async function insertClockEntry(employeeId: string, entry: ClockEntry): P
     photo_data_url: entry.photoDataUrl || null,
   }
   const { error } = await supabase.from('clock_entries').insert(row)
-  if (error) { console.error('Supabase insertClockEntry:', error); return false }
+  if (error) {
+    // NO se degrada a `false`. Hasta el 30/08 este error se quedaba en la
+    // consola, addClockEntry ignoraba el booleano y la pantalla decia
+    // "registrada" igual. Un rechazo del trigger o un fallo de red se leian
+    // como exito, y la persona se iba a casa creyendo que habia fichado.
+    console.error('Supabase insertClockEntry:', error)
+    throw new ClockWriteError(error.message, error.hint ?? null, error.code ?? null)
+  }
   return true
 }
 

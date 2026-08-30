@@ -466,13 +466,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (isSupabaseEnabled) await deleteLocation(id)
   }
 
+  // El estado local se toca DESPUES de que la escritura confirme, no antes.
+  // Hasta el 30/08 se añadia optimista y se ignoraba el resultado: un rechazo
+  // del trigger dejaba el fichaje pintado en la app y ninguna fila en la tabla.
+  // Si insertClockEntry lanza, la excepcion sube a la pantalla, que es quien
+  // sabe como contarlo.
   const addClockEntry = async (employeeId: string, entry: ClockEntry) => {
+    if (isSupabaseEnabled) await insertClockEntry(employeeId, entry)
     setStaff(prev => prev.map(e =>
       e.id === employeeId
         ? { ...e, clockEntries: [...(e.clockEntries || []), entry] }
         : e
     ))
-    if (isSupabaseEnabled) await insertClockEntry(employeeId, entry)
   }
 
   const createEmployee = (locationId: string): Employee => ({
