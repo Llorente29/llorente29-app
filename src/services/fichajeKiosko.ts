@@ -187,10 +187,20 @@ export const AVISO_REENTRADA_MIN = 120
  * Jornada que ya no parece una jornada. 12 h y NO 10,5 h: sobre las 395
  * jornadas cerradas de los últimos 90 días, cortar a 10,5 h avisaría 47 veces
  * (12 % de las salidas, ~4 por semana) y 26 de ellas caen en la franja 11-12 h,
- * que es un turno largo REAL y recurrente de las ocho personas, todas las
- * semanas. A 12 h son 20 avisos en 90 días (~1,7 por semana) y sigue cazando el
- * caso que motivó el encargo (15 h 54 min). Es además la misma línea que traza
- * la BBDD en c_jornada_rancia: app y trigger avisan de lo mismo.
+ * que se repite en las ocho personas todas las semanas. A 12 h son 20 avisos en
+ * 90 días (~1,7 por semana) y sigue cazando el caso que motivó el encargo
+ * (15 h 54 min). Es además la misma línea que traza la BBDD en
+ * c_jornada_rancia: app y trigger avisan de lo mismo.
+ *
+ * ⚠️ LA FRANJA 11-12 h ESTÁ BAJO VIGILANCIA, NO ABSUELTA. Puede ser un turno
+ * largo legal o puede ser el "partido sin cortar" de la hoja de agosto: alguien
+ * que no ficha la salida del mediodía y deja corriendo una jornada que en
+ * realidad son dos. La distribución mide FRECUENCIA, NO VERDAD — ocho personas
+ * repitiendo el mismo olvido cada semana pintan exactamente igual que ocho
+ * turnos largos legales. Quien lo decide son las confirmaciones persona a
+ * persona del cierre de mes, no esta medida. Si el cierre dice que son partidos
+ * sin cortar, este umbral está tapando el sintoma y hay que bajarlo (o atacar
+ * el corte del partido, que es el problema de verdad).
  */
 export const AVISO_JORNADA_LARGA_MIN = 720
 

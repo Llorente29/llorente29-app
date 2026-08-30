@@ -35,9 +35,11 @@ describe('avisoDeContexto · el día normal no molesta a nadie', () => {
     expect(avisoDeContexto('salida', dentro('2026-08-20T09:00:00'), ahora)).toBeNull()
   })
 
-  it('salida de un turno largo REAL de 11 h 30: sin aviso', () => {
-    // La franja 11-12 h son 26 jornadas de las ocho personas en 90 días: es un
-    // turno de verdad, no una anomalía. A 10,5 h esto habría avisado.
+  it('salida a las 11 h 30: sin aviso mientras la franja siga bajo vigilancia', () => {
+    // La franja 11-12 h son 26 jornadas de las ocho personas en 90 días. NO está
+    // absuelta: puede ser turno largo legal o partido sin cortar, y eso lo decide
+    // el cierre de mes, no la distribución. Si el cierre dice partido, este test
+    // cambia de bando y el umbral baja. Ver AVISO_JORNADA_LARGA_MIN.
     const ahora = new Date('2026-08-20T20:30:00')
     expect(avisoDeContexto('salida', dentro('2026-08-20T09:00:00'), ahora)).toBeNull()
   })
