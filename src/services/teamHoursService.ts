@@ -75,6 +75,50 @@ export interface EmployeeDailyDetailRow {
   // Presencia >11h o salida de madrugada: probable olvido de fichar la salida.
   // Mostrar en ámbar, no contar como jornada real en totales sin avisar.
   looksLikeForgottenClockout: boolean
+  // Desde el 29/08/2026 la RPC devuelve TAMBIÉN las jornadas que el motor
+  // descarta, marcadas. 'cerrada' es la de siempre y la única con total.
+  shiftState: ShiftState
+}
+
+/**
+ * Estado de una fila del día a día.
+ *  cerrada          jornada normal, entrada + salida. La única con total.
+ *  en_curso         entrada abierta que es el último evento: está dentro AHORA.
+ *  sin_salida       entrada sin salida, pero ya hay eventos posteriores.
+ *  huerfana         hay otra entrada antes de la salida (se olvidó fichar).
+ *  demasiado_larga  la salida existe pero a 16 h o más.
+ * Las cuatro últimas vienen SIN total a propósito: no se inventan horas.
+ */
+export type ShiftState = 'cerrada' | 'en_curso' | 'sin_salida' | 'huerfana' | 'demasiado_larga'
+
+/** Estado real de fichaje, del último fichaje no anulado. */
+export interface EmployeeClockStatus {
+  estado: 'trabajando' | 'fuera' | 'sin_fichajes'
+  since: string | null
+  abiertaDesde: string | null
+  minutosHoy: number
+}
+
+/**
+ * Lee el estado de la BBDD, NO de emp.clockEntries. Hasta el 29/08/2026 la
+ * ficha deducía "Sin entrada" de no tener jornadas CERRADAS, y decía eso a
+ * cuatro personas que estaban trabajando.
+ */
+export async function fetchEmployeeClockStatus(employeeId: string): Promise<EmployeeClockStatus | null> {
+  const { data, error } = await db().rpc('employee_clock_status', { p_employee_id: employeeId })
+  if (error) {
+    console.error('[teamHours] employee_clock_status:', error)
+    return null
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = data as any
+  if (!r) return null
+  return {
+    estado: r.estado,
+    since: r.since ?? null,
+    abiertaDesde: r.abierta_desde ?? null,
+    minutosHoy: Number(r.minutos_hoy) || 0,
+  }
 }
 
 export async function fetchEmployeeDailyDetail(
@@ -101,6 +145,7 @@ export async function fetchEmployeeDailyDetail(
     breakMinutes: Number(r.break_minutes) || 0,
     nightMinutes: Number(r.night_minutes) || 0,
     looksLikeForgottenClockout: !!r.looks_like_forgotten_clockout,
+    shiftState: (r.shift_state ?? 'cerrada') as ShiftState,
   }))
 }
 

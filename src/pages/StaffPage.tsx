@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
@@ -28,6 +28,7 @@ import { PERMISSION_TEMPLATES, permissionTemplateValuesToRow } from '@/modules/m
 import {
   fetchEmployeeDailyDetail, fetchEmployeeBalance, fetchTeamHoursSummary,
   type EmployeeDailyDetailRow, type EmployeeBalanceRow,
+  fetchEmployeeClockStatus, type EmployeeClockStatus,
 } from '../services/teamHoursService'
 import { editClockEntry, addManualClockEntry } from '../services/clockEditService'
 import PeriodFilter, { makePeriodValue, type PeriodValue } from '../components/team/PeriodFilter'
@@ -573,14 +574,27 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
 
   const update = (field: keyof Employee, value: unknown) => setEmp(prev => ({ ...prev, [field]: value }))
 
-  const isWorking = emp.clockEntries[0]?.type === 'entrada'
-  const todayEntries = emp.clockEntries.filter(e => e.datetime.startsWith(new Date().toISOString().slice(0, 10)))
-  let hoursToday = 0
-  for (let i = todayEntries.length - 1; i >= 0; i--) {
-    if (todayEntries[i].type === 'entrada' && todayEntries[i - 1]?.type === 'salida') {
-      hoursToday += (new Date(todayEntries[i - 1].datetime).getTime() - new Date(todayEntries[i].datetime).getTime()) / 3600000
-    }
-  }
+  // ESTADO REAL — de la BBDD, no de emp.clockEntries.
+  //
+  // Hasta el 29/08/2026 esto salía de `emp.clockEntries[0]?.type`, un array de
+  // estado local congelado en el montaje (useState arriba, sin ningún useEffect
+  // que lo resincronice), y las horas sumaban SOLO parejas cerradas: una
+  // jornada abierta contaba 0. El resultado era "Sin entrada · Hoy 0.0h" a
+  // cuatro personas que estaban trabajando. Ahora lo pregunta a
+  // employee_clock_status, que mira el último fichaje no anulado — la misma
+  // lógica que training_is_clocked_in, que siempre dijo la verdad.
+  const [clockStatus, setClockStatus] = useState<EmployeeClockStatus | null>(null)
+  // Sin flag de carga: `clockStatus === null` ya significa "aún no lo sé", y un
+  // setState síncrono dentro del efecto es justo lo que el lint del repo veta.
+  const reloadClockStatus = useCallback(async () => {
+    if (!employee.id) return
+    const st = await fetchEmployeeClockStatus(employee.id)
+    setClockStatus(st)
+  }, [employee.id])
+  useEffect(() => { void reloadClockStatus() }, [reloadClockStatus, tab])
+
+  const isWorking = clockStatus?.estado === 'trabajando'
+  const hoursToday = (clockStatus?.minutosHoy ?? 0) / 60
 
   const todaySchedule = (() => {
     const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
@@ -642,6 +656,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
     try {
       await addClockEntry(emp.id, entry)
       setEmp(prev => ({ ...prev, clockEntries: [entry, ...prev.clockEntries] }))
+      void reloadClockStatus()
       setManualReason('')
       if (!roundingApplied) {
         setClockWarn({ type: 'real', msg: `${type === 'entrada' ? 'Entrada' : 'Salida'} registrada a mano: ${now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}.` })
@@ -851,10 +866,17 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <p className="text-xs text-text-secondary">Estado actual</p>
+                    {/* Tres estados, nunca dos. "Sin fichajes hoy" es lo único
+                        que puede parecerse al antiguo "Sin entrada": no tener
+                        jornadas CERRADAS no es no haber fichado. */}
                     <p className="text-sm font-semibold text-accent inline-flex items-center gap-1.5">
-                      {isWorking
-                        ? <><span className="w-2 h-2 rounded-full bg-success" /> Trabajando</>
-                        : <><span className="w-2 h-2 rounded-full bg-text-secondary" /> Sin entrada</>
+                      {!clockStatus
+                        ? <><RefreshCw size={11} className="animate-spin" /> Comprobando…</>
+                        : clockStatus?.estado === 'trabajando'
+                          ? <><span className="w-2 h-2 rounded-full bg-success" /> Trabajando{clockStatus.abiertaDesde ? ` desde las ${new Date(clockStatus.abiertaDesde).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}` : ''}</>
+                          : clockStatus?.estado === 'fuera'
+                            ? <><span className="w-2 h-2 rounded-full bg-text-secondary" /> Fuera{clockStatus.since ? ` desde las ${new Date(clockStatus.since).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}` : ''}</>
+                            : <><span className="w-2 h-2 rounded-full bg-text-secondary" /> Sin fichajes hoy</>
                       }
                     </p>
                   </div>
@@ -876,13 +898,31 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                     Queda registrado como fichaje <strong>manual</strong>{senderName ? <> hecho por {senderName}</> : null} con este motivo (rastro legal).
                   </p>
                 </div>
+                {/* El principal es el que toca. Hasta el 29/08 "Fichar entrada"
+                    salía en negro a alguien que ya estaba dentro, y crear esa
+                    segunda entrada sin salida en medio corrompe la jornada.
+                    El guard de add_manual_clock_entry lo rechaza igualmente:
+                    un guard que solo vive en el front no es un guard. */}
                 <div className="flex gap-2 mt-3">
-                  <Button size="sm" onClick={() => handleClock('entrada')} disabled={clocking || isWorking}>
-                    <LogIn size={14} /> Fichar entrada (manual)
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleClock('salida')} disabled={clocking || !isWorking}>
-                    <Square size={14} /> Fichar salida (manual)
-                  </Button>
+                  {isWorking ? (
+                    <>
+                      <Button size="sm" onClick={() => handleClock('salida')} disabled={clocking}>
+                        <Square size={14} /> Fichar salida (manual)
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleClock('entrada')} disabled>
+                        <LogIn size={14} /> Fichar entrada (manual)
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="sm" onClick={() => handleClock('entrada')} disabled={clocking || !clockStatus}>
+                        <LogIn size={14} /> Fichar entrada (manual)
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleClock('salida')} disabled>
+                        <Square size={14} /> Fichar salida (manual)
+                      </Button>
+                    </>
+                  )}
                 </div>
                 {clockWarn && (
                   <Alert type={clockWarn.type === 'blocked' ? 'error' : clockWarn.type === 'rounded' ? 'warning' : 'info'}>
@@ -924,10 +964,10 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                   {dailyLoading ? (
                     <tr><td colSpan={6} className="p-4 text-center text-text-secondary italic">Cargando…</td></tr>
                   ) : dailyDetail.length === 0 ? (
-                    <tr><td colSpan={6} className="p-4 text-center text-text-secondary italic">Sin jornadas en este periodo</td></tr>
+                    <tr><td colSpan={6} className="p-4 text-center text-text-secondary italic">Sin jornadas cerradas en este periodo</td></tr>
                   ) : (
                     dailyDetail.map((d, i) => (
-                      <tr key={i} className={`border-b border-border-default last:border-0 ${d.looksLikeForgottenClockout ? 'bg-warning-bg/40' : ''}`}>
+                      <tr key={i} className={`border-b border-border-default last:border-0 ${d.shiftState === 'en_curso' ? 'bg-success-bg/40' : (d.looksLikeForgottenClockout || d.shiftState !== 'cerrada') ? 'bg-warning-bg/40' : ''}`}>
                         <td className="p-2 text-xs text-text-primary capitalize">
                           {new Date(d.workDate + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short' })}
                         </td>
@@ -935,16 +975,33 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                           {d.startedAt ? new Date(d.startedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '—'}
                         </td>
                         <td className="p-2 text-xs tabular-nums">
-                          {d.looksLikeForgottenClockout ? (
+                          {d.shiftState === 'en_curso' ? (
+                            <span className="inline-flex items-center gap-1 text-success font-medium">en curso</span>
+                          ) : d.shiftState === 'sin_salida' ? (
+                            <span className="inline-flex items-center gap-1 text-warning font-medium"><AlertTriangle size={11} /> sin salida</span>
+                          ) : d.shiftState === 'huerfana' ? (
+                            <span className="inline-flex items-center gap-1 text-warning font-medium"><AlertTriangle size={11} /> sin cerrar</span>
+                          ) : d.shiftState === 'demasiado_larga' ? (
+                            <span className="inline-flex items-center gap-1 text-warning font-medium">
+                              <AlertTriangle size={11} />
+                              {d.endedAt ? new Date(d.endedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '?'} · +16 h
+                            </span>
+                          ) : d.looksLikeForgottenClockout ? (
                             <span className="inline-flex items-center gap-1 text-warning font-medium"><AlertTriangle size={11} /> ¿sin fichar?</span>
                           ) : d.endedAt ? (
                             new Date(d.endedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
                           ) : '—'}
                         </td>
-                        <td className="p-2 text-xs text-right tabular-nums text-text-primary">{fmtHrs(d.workedMinutes / 60)}</td>
-                        <td className="p-2 text-xs text-right tabular-nums text-text-secondary">{d.nightMinutes > 0 ? fmtHrs(d.nightMinutes / 60) : '—'}</td>
+                        {/* Sin total a propósito en las que el motor no sabe
+                            interpretar: no se inventan horas, se pide corregir. */}
+                        <td className="p-2 text-xs text-right tabular-nums text-text-primary">
+                          {d.shiftState === 'cerrada'
+                            ? fmtHrs(d.workedMinutes / 60)
+                            : <span className="text-warning">revisar</span>}
+                        </td>
+                        <td className="p-2 text-xs text-right tabular-nums text-text-secondary">{d.shiftState === 'cerrada' && d.nightMinutes > 0 ? fmtHrs(d.nightMinutes / 60) : '—'}</td>
                         <td className="p-2 text-right">
-                          {d.looksLikeForgottenClockout && (
+                          {(d.looksLikeForgottenClockout || d.shiftState === 'sin_salida' || d.shiftState === 'huerfana' || d.shiftState === 'demasiado_larga') && (
                             <button
                               onClick={() => setCorrectDay(d)}
                               className="text-[10px] px-2 py-1 rounded border border-warning/40 text-warning hover:bg-warning-bg transition-base inline-flex items-center gap-1"
