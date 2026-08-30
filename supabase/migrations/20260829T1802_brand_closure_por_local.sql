@@ -1,6 +1,9 @@
--- 20260901T1100_brand_closure_por_local.sql
+-- 20260829T1802_brand_closure_por_local.sql
 -- ============================================================================
--- PREPARADA EL 29/08. NO APLICADA. Se aplica el lunes 01/09 con calma.
+-- APLICADA el 29/08/2026 a las 18:02 de Madrid (16:02 UTC). Registrada en
+-- supabase_migrations.schema_migrations como version 20260829160208, nombre
+-- `brand_closure_por_local`. El fichero se llamaba 20260901T1100 y se
+-- renumero a la hora real: el nombre tiene que decir cuando paso.
 --
 -- PROBLEMA (pasó hoy, 29/08, en servicio)
 -- Cerrar una marca la cierra en TODOS los locales. Camichi cerró Meraki Pita en

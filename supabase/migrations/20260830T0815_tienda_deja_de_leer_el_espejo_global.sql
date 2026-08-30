@@ -1,6 +1,10 @@
--- 20260901T1000_tienda_deja_de_leer_el_espejo_global.sql
+-- 20260830T0815_tienda_deja_de_leer_el_espejo_global.sql
 -- ============================================================================
--- PASO 1 de dos. PREPARADA EL 29/08, PARA APLICAR EL LUNES 01/09.
+-- PASO 1 de dos. Escrita el 29/08, RENUMERADA al 30/08 antes de aplicarla:
+-- estaba fechada el 01/09 y un nombre con fecha futura confunde a quien lee el
+-- repo para saber que queda pendiente. (El registro real, sin embargo, nunca
+-- corrio peligro: schema_migrations sella la hora UTC de aplicacion, no la del
+-- nombre del fichero.)
 -- No aplicada el 29 a propósito: sábado en servicio, y la tienda propia llevaba
 -- 17 días sin una sola venta (22 ventas históricas, 600,39 €, cero líneas a 0 €).
 -- El fallo es real pero no estaba costando dinero: no había razón para tocar
