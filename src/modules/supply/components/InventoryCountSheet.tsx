@@ -12,7 +12,7 @@
 // como alerta con la causa propuesta, nunca bloquean la aprobación.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag, Search, X, Calculator, Sparkles, Ban } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag, Search, X, Calculator, Sparkles, Ban, Gauge } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import FormatCalculator from '@/modules/kitchen/components/FormatCalculator'
 import {
@@ -25,12 +25,17 @@ import {
   approveInventoryCount,
   voidInventoryCount,
   classifyCountCauses,
+  getConsumptionCoverage,
   REASON_CODES,
   type AvtCauseV2,
   type InventoryCount,
   type InventoryCountLine,
   type InventoryCountSummary,
 } from '@/modules/supply/services/inventoryCountService'
+import {
+  textoCobertura, pctCobertura, hayHuecoNoAtribuible,
+  type Cobertura,
+} from '@/modules/supply/lib/coberturaConsumo'
 
 function eur(v: number | null): string {
   if (v === null || v === undefined) return '—'
@@ -61,6 +66,12 @@ export default function InventoryCountSheet({
   const [approved, setApproved] = useState<{ adjustments: number; itemsRecomputed: number } | null>(null)
   // Clasificador local (V2): sugerencia de causa por línea, instantánea.
   const [causeV2, setCauseV2] = useState<Map<string, AvtCauseV2>>(new Map())
+  // Cobertura del consumo del periodo (ENCARGO 31/08 punto 5). `null` mientras
+  // carga o si no se pudo medir; el clasificador ya trata null como "no lo sé"
+  // y deja de proponer hipótesis, así que un fallo aquí NUNCA se convierte en
+  // una acusación con aspecto de dato.
+  const [cobertura, setCobertura] = useState<Cobertura | null>(null)
+  const [coberturaError, setCoberturaError] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
   const [quick, setQuick] = useState<'all' | 'uncounted' | 'out' | 'review'>('all')
@@ -81,7 +92,20 @@ export default function InventoryCountSheet({
         // Clasificador local: al entrar en revisión, propone la causa de cada
         // línea al instante. Silencioso si falla (el dropdown queda de respaldo).
         if (c && (c.status === 'en_revision' || c.status === 'aprobado')) {
-          classifyCountCauses(countId, ls, c.isOpening)
+          // La cobertura se mide ANTES de clasificar: sin ella el clasificador
+          // no puede saber si tiene derecho a proponer causa.
+          let cob: Cobertura | null = null
+          try {
+            cob = await getConsumptionCoverage(countId)
+            if (!cancelled) { setCobertura(cob); setCoberturaError(null) }
+          } catch (e) {
+            if (!cancelled) {
+              setCobertura(null)
+              setCoberturaError(e instanceof Error ? e.message : 'No se pudo medir la cobertura del consumo.')
+            }
+          }
+          if (cancelled) return
+          classifyCountCauses(countId, ls, c.isOpening, cob)
             .then(m => { if (!cancelled) setCauseV2(m) })
             .catch(() => {})
         }
@@ -323,6 +347,28 @@ export default function InventoryCountSheet({
       )}
 
       {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
+
+      {/* Cobertura del consumo — SIEMPRE, cubra lo que cubra. Un conteo al 67 %
+          no es un conteo malo: es un conteo que todavía no puede hablar de la
+          cocina, y tiene que decirlo antes de que alguien apruebe ocho alertas. */}
+      {isReview && !isOpening && (
+        <div className={`p-3 rounded-md border text-sm flex items-start gap-2 ${
+          coberturaError ? 'bg-danger-bg border-danger/30 text-danger'
+          : cobertura && !hayHuecoNoAtribuible(cobertura.periodo) ? 'bg-success-bg border-success/20 text-text-secondary'
+          : 'bg-warning-bg border-warning/30 text-text-secondary'}`}>
+          <Gauge size={15} className="shrink-0 mt-0.5" />
+          <span>
+            {coberturaError
+              ? `No se pudo medir la cobertura del consumo: ${coberturaError} Sin ella, el sistema no propone causas: prefiere callar a acusar.`
+              : cobertura === null
+                ? 'Midiendo la cobertura del consumo…'
+                : textoCobertura(cobertura.periodo)}
+            {cobertura && pctCobertura(cobertura.periodo) !== null && hayHuecoNoAtribuible(cobertura.periodo) && (
+              <> Las desviaciones se siguen mostrando; lo que no se propone es la causa.</>
+            )}
+          </span>
+        </div>
+      )}
 
       {summary && (
         <div className="p-3 rounded-md bg-accent-bg border border-accent/20 text-sm grid grid-cols-2 sm:grid-cols-5 gap-2">
