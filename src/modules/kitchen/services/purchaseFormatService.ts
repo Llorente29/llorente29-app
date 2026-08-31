@@ -65,6 +65,18 @@ export function rowToSupplier(row: RowSupplier): Supplier {
     // función se apagaría en silencio — que es justo lo que iba a pasarle al
     // botón de reclamar del 21/08.
     notifyGroup: (row as unknown as { notify_group?: string | null }).notify_group ?? null,
+    // ENCARGO CODE (31/08) «El albarán con IVA incluido» §4 — mismo patrón que
+    // notify_group: el select es '*', así que la columna llega en cuanto exista
+    // y no hace falta regenerar types para leerla. Y como PostgREST no falla
+    // por una columna que no pidió, esto funciona IGUAL antes y después de
+    // aplicar la migración: el front se despliega hoy, el SQL lo ejecuta Julio
+    // cuando quiera, y nada se rompe en el hueco entre las dos cosas.
+    //
+    // `vatSettingsAvailable` distingue «la columna no existe todavía» de «la
+    // columna existe y vale false». Sin esa distinción la ficha ofrecería un
+    // interruptor cuyo guardado devuelve un 400 de PostgREST.
+    ivaIncluidoEnLinea: (row as unknown as { iva_incluido_en_linea?: boolean | null }).iva_incluido_en_linea ?? null,
+    vatSettingsAvailable: 'iva_incluido_en_linea' in (row as unknown as Record<string, unknown>),
     isActive: row.is_active,
     archivedAt: row.archived_at,
     createdAt: row.created_at,
@@ -98,6 +110,12 @@ function supplierUpdateToRow(patch: SupplierUpdate): RowSupplierUpdate {
   if (patch.address !== undefined) row.address = patch.address
   if (patch.healthRegistryNo !== undefined) row.health_registry_no = patch.healthRegistryNo
   if (patch.notes !== undefined) row.notes = patch.notes
+  // §4 — solo viaja si quien llama lo pone. La ficha únicamente lo pone cuando
+  // `vatSettingsAvailable` dice que la columna existe, así que un cliente
+  // desplegado antes de la migración nunca la manda.
+  if (patch.ivaIncluidoEnLinea !== undefined) {
+    (row as unknown as Record<string, unknown>).iva_incluido_en_linea = patch.ivaIncluidoEnLinea
+  }
   if (patch.isActive !== undefined) row.is_active = patch.isActive
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt
   return row

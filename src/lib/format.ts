@@ -34,6 +34,30 @@ export function fmtMoney(x: unknown): string {
   return isNum(x) ? `${Number(x).toFixed(2).replace('.', ',')} €` : DASH
 }
 
+/** Dinero con los decimales que hagan falta para que se VEA la diferencia.
+ *
+ *  ENCARGO CODE (31/08) «El albarán con IVA incluido» §2 — `fmtMoney` fija dos
+ *  decimales, y eso escondió una corrección real: el coste por gramo del
+ *  ALB-00134 pasó de 0,0092 (92/10000, el papel) a 0,0084 (83,64/10000, el
+ *  neto que Pamela guardó), y la pantalla pintó «0,01 €» en los dos casos. La
+ *  corrección existía en la base de datos y era invisible por redondeo.
+ *
+ *  Regla: si editar un dato no cambia ningún número visible en pantalla, la
+ *  pantalla está mal. Esto da SIEMPRE al menos dos cifras significativas —
+ *  suelo de `min` decimales, techo de `max`.
+ *
+ *  Es para costes por unidad base (€/g, €/ml), no para importes de línea: un
+ *  total de 92 € se sigue pintando con fmtMoney, que es lo que espera quien
+ *  cuadra un albarán contra un papel.
+ */
+export function fmtMoneyPrecise(x: unknown, min = 2, max = 6): string {
+  if (!isNum(x)) return DASH
+  const n = Number(x)
+  const exp = n === 0 ? 0 : Math.floor(Math.log10(Math.abs(n)))
+  const dp = n === 0 ? min : Math.min(max, Math.max(min, 1 - exp))
+  return `${n.toFixed(dp).replace('.', ',')} €`
+}
+
 /** Cifra en formato español SIN unidad: `15,90`. Ausente → '' (cadena vacía,
  *  no '—'): esto se usa para SEMBRAR CAMPOS EDITABLES, y un guion dentro de un
  *  input no es un valor, es basura que el usuario tiene que borrar.
