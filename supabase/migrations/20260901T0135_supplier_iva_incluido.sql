@@ -1,9 +1,29 @@
--- PROPUESTA_20260831T1900_supplier_iva_incluido.sql
+-- 20260901T0135_supplier_iva_incluido.sql
 -- ============================================================================
--- NO APLICADA. Claude Code propone, Julio ejecuta y verifica.
--- Cuando se aplique: renombrar el fichero a la HORA REAL de aplicación
--- (patrón de la casa: el nombre tiene que decir cuándo pasó) y quitar el
--- prefijo PROPUESTA_.
+-- APLICADA el 01/09/2026 a las 01:35 (Madrid) = 31/08 23:35 UTC, en la ventana
+-- nocturna posterior al cierre de Alcalá, por reparto de Julio.
+-- Registrada en supabase_migrations.schema_migrations con version 20260831233552.
+--
+-- Se ejecutó el cuerpo EXACTO del fichero: extraído entre `begin;` y `commit;`,
+-- transcrito, y contrastado con diff + md5 antes de tocar producción
+-- (`f4bd7976958c1ed7e0d334748f9bd7d4` en las dos copias). No se transcribió a ojo.
+--
+-- VERIFICACIÓN POR CONSULTA, ejecutada después de aplicar:
+--   supplier.iva_incluido_en_linea .................. 1 columna creada
+--   columna de TIPO colada en supplier .............. 0   (el tipo es del artículo)
+--   recipe_item, columnas de procedencia ............ 3
+--   proveedores marcados ............................ 1
+--     id .......... 3048d4f8-b1eb-4352-ad2d-64583b0f4f93   (AMIRSA)
+--     account_id .. 51ad1792-6629-4ef7-833a-b57b09a86710   (Foodint)
+--   fichas con procedencia escrita .................. 0   (las tres nacen NULL)
+--   goods_receipt_line .............................. 921 líneas
+--   huella .......................................... 0f41e326de3f2b17c6ef8fc6bf45a16f
+--     IDÉNTICA a la de las 18:00: ni una línea del histórico se movió.
+--
+-- Precondiciones revalidadas justo antes de aplicar (01:34 Madrid): ninguna
+-- columna existía ya, la migración no estaba registrada, y AMIRSA seguía siendo
+-- la única ficha activa con ese nombre DENTRO de la cuenta de Foodint, con su
+-- ALB-00134. Las tres guardas del cuerpo habrían abortado si no.
 --
 -- ENCARGO CODE (31/08) «El albarán con IVA incluido: el coste se guarda, pero
 -- la pantalla no lo enseña» — punto 4, segunda mitad, MAS el anadido de Julio
