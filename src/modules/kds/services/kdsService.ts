@@ -15,6 +15,7 @@
 // kitchen_family_route, kds_device — DEUDA: regenerar types cuando convenga).
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import { partirPorLocal, type CierresPorAlcance } from '../lib/closureScope'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -483,18 +484,6 @@ export interface ClosedBrand {
   set_at: string | null
 }
 
-/**
- * Marcas EFECTIVAMENTE cerradas ahora mismo (indicador ambiental, §9-C) — la
- * RPC ya oculta las que tenían resume_at y ya pasó (HubRise las reabrió sola
- * vía expires_at, aunque brand.closure_mode en Folvy no se reescriba solo).
- */
-export function getClosedBrands(accountId: string | null, token?: string | null): Promise<ClosedBrand[]> {
-  return rpc<ClosedBrand[]>('closed_brands', {
-    p_account_id: accountId,
-    p_token: token ?? null,
-  })
-}
-
 export interface AnomalousBrandClosure {
   brand_id: string
   brand_name: string
@@ -506,17 +495,59 @@ export interface AnomalousBrandClosure {
   kind: 'indefinite' | 'expired'
 }
 
+// ── LECTORES DE CIERRE: SIEMPRE CON ALCANCE ────────────────────────────────
+// Las dos RPC (closed_brands, anomalous_brand_closures) devuelven la cuenta
+// ENTERA cuando se llaman con sesión: una entrada por (marca, local) de todos
+// los locales. Eso es correcto en la RPC — el que tiene que decidir qué es
+// «suyo» es quien pinta.
+//
+// El 31/08 nadie decidió: el banner de Pedidos de Alcalá listó como propios
+// los dos cierres de Carabanchel, con su botón Reabrir. Por eso aquí NO se
+// exporta ninguna función que devuelva una lista plana: solo estas dos, que
+// obligan a pasar el local y devuelven las dos mitades separadas
+// (`aqui` / `otrosLocales`). Un lector nuevo no puede "olvidarse" de filtrar,
+// porque no existe la forma sin filtrar.
+//
+// `locationId` es OBLIGATORIO y sin default, por la misma razón que en
+// set_brand_status: un opcional con default null volvería a significar
+// «todos los locales», que es justo el fallo. null se escribe a mano y
+// significa "no hay local con el que contrastar" (consolidado, o token — ahí
+// la RPC ya filtró por el dispositivo).
+
+/**
+ * Marcas EFECTIVAMENTE cerradas ahora mismo (indicador ambiental, §9-C),
+ * partidas por local. La RPC ya oculta las que tenían resume_at y ya pasó
+ * (HubRise las reabrió sola vía expires_at, aunque brand.closure_mode en
+ * Folvy no se reescriba solo).
+ */
+export async function getClosedBrandsByScope(
+  accountId: string | null,
+  token: string | null | undefined,
+  locationId: string | null,
+): Promise<CierresPorAlcance<ClosedBrand>> {
+  const filas = await rpc<ClosedBrand[]>('closed_brands', {
+    p_account_id: accountId,
+    p_token: token ?? null,
+  })
+  return partirPorLocal(filas, token ? null : locationId)
+}
+
 /**
  * Cierres de marca ANÓMALOS (Cap. B · Pata 3): indefinidos hace >24h, o con
  * resume_at ya vencido. Mismo criterio que availability-watchdog usa para la
  * alarma por email — aquí consultable para pintar el aviso en pantalla.
  * Cierre correcto con hora futura NO aparece aquí (eso es closed_brands).
  */
-export function getAnomalousBrandClosures(accountId: string | null, token?: string | null): Promise<AnomalousBrandClosure[]> {
-  return rpc<AnomalousBrandClosure[]>('anomalous_brand_closures', {
+export async function getAnomalousBrandClosuresByScope(
+  accountId: string | null,
+  token: string | null | undefined,
+  locationId: string | null,
+): Promise<CierresPorAlcance<AnomalousBrandClosure>> {
+  const filas = await rpc<AnomalousBrandClosure[]>('anomalous_brand_closures', {
     p_account_id: accountId,
     p_token: token ?? null,
   })
+  return partirPorLocal(filas, token ? null : locationId)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
