@@ -121,37 +121,66 @@ comment on column public.recipe_item.vat_category_set_at is
 comment on column public.recipe_item.vat_category_set_by is
   'auth.uid() de quien la confirmo. NULL = nadie, o viene de antes.';
 
--- ── 2. AMIRSA nace con la casilla puesta al 10 % ───────────────────────────
+-- ── 2. AMIRSA queda marcada. POR ID, no por nombre ─────────────────────────
 -- Lo pide el encargo, y es el unico proveedor del que hay PRUEBA en los datos:
 -- el ALB-00134 se corrigio a mano dividiendo entre 1,10 (92 -> 83,636363 y
--- 99 -> 90), y el ALB-00080 del 30/07 quedo con el IVA dentro. Ningun otro
--- proveedor se marca aqui: sin mirar un papel, marcarlo seria adivinar.
+-- 99 -> 90), y el ALB-00080 del 30/07 quedo con el IVA dentro.
 --
--- Anclado por nombre CON GUARDA, porque `supplier` puede tener homonimos: si
--- aparece mas de una fila, para y que lo decida un humano (misma leccion que
--- las locations duplicadas del 29/08, donde anclar por nombre habria cerrado
--- el local equivocado).
+-- SE ANCLA POR ID, Y NO POR NOMBRE, PORQUE HAY DOS AMIRSA.
+-- Comprobado el 31/08 a las 20:00, antes de aplicar nada:
+--   3048d4f8-b1eb-4352-ad2d-64583b0f4f93  CIF B87123790  4 albaranes
+--       (ALB-00134, ALB-00094, ALB-00080, ALB-00074; el ultimo, hoy)  <- ESTA
+--   a47f80b7-9e41-4b20-a387-93e06d9b0bff  sin CIF        0 albaranes
+--       (ficha duplicada, creada el 07/06, nunca usada para recibir)
+--
+-- Las dos estan activas y se llaman EXACTAMENTE igual. La version anterior de
+-- esta migracion anclaba por nombre con una guarda que abortaba al encontrar
+-- mas de una: habria abortado la migracion ENTERA. Es la leccion del 29/08 con
+-- los locales duplicados —anclar por nombre habria cerrado el local
+-- equivocado— repetida aqui con proveedores.
+--
+-- La guarda de abajo no comprueba el nombre: comprueba que el MUNDO sigue
+-- siendo el que se verifico. Si la ficha buena dejo de tener el ALB-00134, o
+-- si la duplicada ha empezado a recibir mercancia, para y que lo mire un
+-- humano: querria decir que alguien ha estado usando la otra ficha y entonces
+-- marcar solo una seria dejar el aviso ciego para la mitad de los albaranes.
+--
+-- La ficha duplicada NO se toca aqui: fusionar o archivar proveedores es otra
+-- decision y es de Julio. Queda anotada en el aviso de abajo.
 do $amirsa$
 declare
-  v_n  int;
-  v_id uuid;
+  v_buena     uuid := '3048d4f8-b1eb-4352-ad2d-64583b0f4f93';
+  v_duplicada uuid := 'a47f80b7-9e41-4b20-a387-93e06d9b0bff';
+  v_n         int;
 begin
-  select count(*), min(id) into v_n, v_id
-  from public.supplier
-  where name ilike 'AMIRSA%' and coalesce(is_active, true) = true;
-
-  if v_n = 0 then
-    raise notice 'AMIRSA no encontrada: no se marca nada. Marcalo a mano en su ficha.';
-  elsif v_n > 1 then
-    raise exception 'ABORTA: hay % proveedores que empiezan por AMIRSA. Anclar por nombre '
-                    'marcaria al equivocado. Marcalo a mano en la ficha del bueno.', v_n;
-  else
-    update public.supplier
-       set iva_incluido_en_linea = true,
-           updated_at            = now()
-     where id = v_id;
-    raise notice 'AMIRSA (%) marcada: factura con IVA incluido. El tipo lo pone cada articulo.', v_id;
+  if not exists (select 1 from public.supplier
+                  where id = v_buena and coalesce(is_active, true) = true) then
+    raise exception 'ABORTA: la ficha de AMIRSA verificada (%) no existe o esta archivada. '
+                    'Mirar cual es la buena AHORA y marcarla a mano.', v_buena;
   end if;
+
+  if not exists (select 1 from public.goods_receipt
+                  where supplier_id = v_buena and code = 'ALB-00134') then
+    raise exception 'ABORTA: la ficha % ya no tiene el ALB-00134, que es el albaran del '
+                    'encargo. El mundo no es el que se verifico: parar y comprobar.', v_buena;
+  end if;
+
+  select count(*) into v_n from public.goods_receipt where supplier_id = v_duplicada;
+  if v_n > 0 then
+    raise exception 'ABORTA: la ficha duplicada de AMIRSA (%) ha recibido % albaran(es) desde '
+                    'que se verifico. Marcar solo una dejaria el aviso ciego para la otra: '
+                    'decidir a mano cual se usa, o marcar las dos.', v_duplicada, v_n;
+  end if;
+
+  update public.supplier
+     set iva_incluido_en_linea = true,
+         updated_at            = now()
+   where id = v_buena;
+
+  raise notice 'AMIRSA (%) marcada: factura con IVA incluido. El tipo lo pone cada articulo.', v_buena;
+  raise warning 'AVISO, fuera del alcance de esta migracion: hay una SEGUNDA ficha de AMIRSA '
+                '(%) activa, sin CIF y sin albaranes, con 2 articulos vinculados. No se toca. '
+                'Fusionarla o archivarla es decision de Julio.', v_duplicada;
 end
 $amirsa$;
 
@@ -212,11 +241,17 @@ commit;
 --    misma de arriba. Si cambia, algo mas escribio mientras tanto: mirarlo.
 -- 2) En la ficha de proveedor aparece el bloque «Cómo factura». AMIRSA sale ya
 --    marcada al 10 %.
--- 3) La pregunta abierta sigue abierta: mirar un papel de Cloudtown, Makro,
+-- 3-bis) HAY DOS FICHAS DE AMIRSA, las dos activas y con el mismo nombre. Solo
+--    una recibe (4 albaranes, CIF B87123790); la otra tiene 0 albaranes, sin
+--    CIF, y 2 articulos vinculados. Esta migracion marca SOLO la buena y no
+--    toca la otra. Fusionarlas o archivar la vacia es una decision aparte —
+--    pero conviene tomarla: mientras existan las dos, cualquier cosa que se
+--    ancle por nombre de proveedor puede coger la equivocada.
+-- 4) La pregunta abierta sigue abierta: mirar un papel de Cloudtown, Makro,
 --    Europastry, Coheldi, Olimpo y Bodega de Vallecas y marcar los que
 --    facturen con el IVA dentro. Hasta que se marquen, el aviso del punto 5 no
 --    salta para ellos — a proposito.
--- 4) Lo que de verdad hace util esto a medio plazo NO es esta columna, son las
+-- 5) Lo que de verdad hace util esto a medio plazo NO es esta columna, son las
 --    164 fichas activas sin categoria fiscal (352 - 188) y las 145 que estan
 --    solo propuestas. Cada una que se clasifique o se confirme es una linea que
 --    deja de preguntar. Desde el 31/08 la pantalla no solo las senala: OFRECE
