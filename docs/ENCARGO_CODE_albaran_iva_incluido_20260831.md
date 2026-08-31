@@ -109,23 +109,67 @@ La cascada vive en `src/modules/kitchen/services/vatRateService.ts` y tiene **tr
   mejor respuesta que hay) pero viaja marcada, y la pantalla lo dice: «…propuesta y aún sin
   confirmar».
 
-**Estado real del catálogo fiscal (contado en producción el 31/08):**
+**Estado real del catálogo fiscal (31/08, Foodint, artículos activos):**
 
 | | |
 |---|---|
 | categorías / tipos / vigentes hoy | 5 / 6 / 5 |
 | familias mapeadas | 16, **6 de ellas mixtas** |
-| artículos | 1.072 |
-| **con categoría propia** | **273 (25 %)** |
+| artículos activos | 352 |
+| **con categoría propia** | **188 (53 %)** |
+| de esas 188: confirmadas / propuestas | **43 / 145** |
 
-O sea: **hoy el camino mayoritario es el que pregunta.** No es un fallo del módulo, es el estado
-del catálogo — y es la razón por la que preguntar tiene que quedar bien resuelto en pantalla y no
-ser un caso raro de esquina. Cada ficha que se clasifique es una línea que deja de preguntar.
+> **Corrección (Julio, 31/08).** Un recuento anterior decía «273 de 1.072 (25 %)». Era
+> `recipe_item` **entera**, que es multi-cuenta e incluye el catálogo plantilla de «Folvy Interno»
+> (625 artículos) y «Kitchen Grill LstQ» (56). Leer una tabla multi-cuenta sin su `account_id` da
+> un número que no es de nadie — y aquí, además, **invertía la conclusión**: no es que la mayoría
+> pregunte, es que la mayoría resuelve.
+
+Lo que sí dicen los números buenos: **la mayoría resuelve, pero casi todo lo que resuelve lo hace
+con una categoría que nadie ha confirmado** (145 de 188). Son dos trabajos distintos, y los dos se
+hacen desde esta misma pantalla: **164** fichas activas sin categoría que rellenar, y **145**
+propuestas que confirmar.
 
 **El caso real resuelve solo:** los dos artículos del ALB-00134 (Kebab Pollo Loncheado y Kebab
 Ternera Loncheado, familia «Carnes y aves») están en `alimento_general` = **10 %** por su propia
 categoría — exactamente el tipo que Pamela aplicó a mano. Su `source` es `proposed`, así que la
 pantalla lo dirá.
+
+---
+
+## 2-ter · Que el catálogo fiscal se complete con el trabajo diario (Julio, 31/08)
+
+> «Cuando el usuario responde el tipo porque no se sabía, la pantalla le ofrece guardarlo en la
+> ficha del artículo como categoría confirmada, con su origen anotado. Nunca en silencio: se
+> ofrece, no se escribe solo.»
+
+Cuando el tipo **no se resolvía** y la persona lo responde, aparece la oferta bajo la casilla del
+IVA. Hasta que no se pulsa, la ficha no cambia.
+
+**Un tipo NO identifica una categoría** — verificado el 31/08:
+
+| tipo | categorías vigentes con ese tipo |
+|---|---|
+| 4 % | Alimento básico · Aceite de oliva |
+| **10 %** | **Alimento general** (la única sin ambigüedad) |
+| 21 % | Bebida o azúcar · No alimentario |
+
+Por eso guardar «el 10 %» es un toque, pero al 21 % la oferta **hace elegir cuál**. Escoger por él
+dejaría el artículo **confirmado y mal**, que es peor que dejarlo vacío: la próxima recepción ya no
+preguntaría, y el error quedaría fijado en la tabla que esto viene a mejorar.
+
+**El origen queda anotado.** Tres columnas nuevas en `recipe_item` (`vat_category_origin`,
+`vat_category_set_at`, `vat_category_set_by`), todas nullable. Se escribe
+«recepción ALB-00134 (AMIRSA)». Sin eso, dentro de seis meses habría categorías confirmadas y
+ninguna forma de saber si las confirmó alguien mirando un albarán o un clic con prisa.
+
+**Y se dice lo que ha pasado** (regla 8): «Kebab Pollo queda clasificado como *Alimento general*
+(10 %), confirmado. Las próximas recepciones ya no preguntarán su tipo.» El estado se relee del
+servidor, no se da por hecho.
+
+**El botón no aparece antes de la migración.** `puedeGuardarse` sale de si la fila de
+`recipe_item` trae ya la clave `vat_category_origin` — el mismo truco que `notify_group`. Ofrecer
+un guardado que va a dar 400 es peor que no ofrecerlo.
 
 **5 · Aviso «este importe parece llevar el IVA dentro».** Bloqueante-suave antes de cerrar, junto
 a los avisos de coste que ya existían. Es el caso ALB-00080. **Solo salta si el proveedor está
@@ -151,10 +195,14 @@ no saber el tipo sería esconder el problema.
 `supabase/migrations/PROPUESTA_20260831T1900_supplier_iva_incluido.sql`
 **Está SIN APLICAR.** Claude Code propone, Julio ejecuta y verifica.
 
-Añade **una** columna a `supplier` — `iva_incluido_en_linea boolean not null default false` — y
-marca **AMIRSA** con guarda anti-homónimos. Sin tipo: la guarda final **falla a propósito** si
-alguien añade un `default_vat_rate` o `vat_rate` a `supplier`, y comprueba que existen las tres
-tablas de las que sí sale el tipo. **No toca `goods_receipt_line`.**
+Añade **una** columna a `supplier` — `iva_incluido_en_linea boolean not null default false` —,
+**tres a `recipe_item`** para la procedencia de la categoría fiscal (todas nullable), y marca
+**AMIRSA** con guarda anti-homónimos.
+
+La guarda final **falla a propósito** si alguien añade un `default_vat_rate` o `vat_rate` a
+`supplier`; comprueba que existen las tres tablas de las que sí sale el tipo; y comprueba que
+**ninguna ficha existente trae procedencia** — esta migración solo CREA las columnas, no clasifica
+nada. **No toca `goods_receipt_line`.**
 
 Julio (31/08): entra mañana en la ventana; es aditiva y de riesgo bajo.
 

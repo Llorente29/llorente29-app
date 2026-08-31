@@ -38,7 +38,8 @@ import {
 import { getSupplierCatalog, listSupplyLocations, buildFormatLabel, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
 import { listSuppliers, createPurchaseFormat, listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import {
-  resolveVatRates, explicaOrigen, explicaFalta, type TipoIvaResuelto,
+  resolveVatRates, explicaOrigen, explicaFalta, categoriasParaTipo,
+  confirmaCategoriaFiscal, type TipoIvaResuelto, type CategoriaFiscal,
 } from '@/modules/kitchen/services/vatRateService'
 import type { Supplier } from '@/types/kitchen'
 import { fmtMoney, fmtMoneyPrecise, fmtNumEs, isNum, DASH } from '@/lib/format'
@@ -161,6 +162,9 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   // cascada. Mapa recipeItemId -> tipo resuelto (o sin resolver, que tambien es
   // una respuesta y la pantalla la dice).
   const [vatRates, setVatRates] = useState<Record<string, TipoIvaResuelto>>({})
+  // Confirmación de «se ha guardado en la ficha». Se ofrece, no se escribe
+  // sola; y cuando se escribe, se dice.
+  const [categoriaGuardada, setCategoriaGuardada] = useState<string | null>(null)
   // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 — aviso
   // bloqueante-suave de coste fuera de rango. null = aún no comprobado;
   // [] = comprobado y sin avisos; costWarningsAcked = el trabajador ya
@@ -645,6 +649,41 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
       + (papel != null ? `. El papel sigue diciendo ${fmtMoney(papel)}.` : '.')
   }, [pendingConfirm, loadedTick, lines, itemInfo])
 
+  /**
+   * AÑADIDO POR JULIO (31/08): guardar en la ficha del artículo el tipo que la
+   * persona acaba de responder, como categoría CONFIRMADA y con su origen.
+   * Que el catálogo fiscal se complete con el trabajo diario.
+   *
+   * NUNCA EN SILENCIO, en los dos sentidos: solo se ejecuta desde el botón que
+   * lo ofrece, y cuando termina lo dice — con el nombre de la categoría, no con
+   * un visto (regla 8).
+   */
+  async function confirmarCategoria(line: GoodsReceiptLine, categoria: CategoriaFiscal) {
+    if (!line.recipeItemId) return
+    const nombre = itemInfo[line.recipeItemId]?.name ?? sentenceCase(line.productName)
+    const origen = `recepción ${receipt?.code ?? ''}${supplierName ? ` (${supplierName})` : ''}`.trim()
+    setSaving(true); setError(null)
+    try {
+      await confirmaCategoriaFiscal({
+        itemId: line.recipeItemId,
+        categoryId: categoria.id,
+        origen,
+        actorId: null,
+      })
+      // Releer del servidor, no dar por hecho lo que acabamos de mandar.
+      const nuevos = await resolveVatRates([line.recipeItemId])
+      setVatRates(prev => ({ ...prev, ...nuevos }))
+      setCategoriaGuardada(
+        `${nombre} queda clasificado como «${categoria.name}» (${categoria.rate} %), confirmado. `
+        + `Las próximas recepciones ya no preguntarán su tipo.`,
+      )
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar la categoría fiscal.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // ── Cierre ───────────────────────────────────────────────────────────
   // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1/D.3 —
   // antes de confirmar, comprueba coste fuera de rango (mediana del
@@ -879,7 +918,8 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
                 ivaOn={editIvaOn} ivaRate={editIvaRate}
                 ivaSugeridoPorProveedor={!!supplier?.ivaIncluidoEnLinea}
                 tipoIva={l.recipeItemId ? vatRates[l.recipeItemId] : undefined}
-                onSetIvaOn={setEditIvaOn} onSetIvaRate={setEditIvaRate} />
+                onSetIvaOn={setEditIvaOn} onSetIvaRate={setEditIvaRate}
+                onCategoriaConfirmada={confirmarCategoria} />
             )
           }
           if (cls === 'resuelta') return <ResueltaRow key={l.id} line={l} itemInfo={itemInfo} formatNames={formatNames} saving={saving} onOpenEditor={() => openEditor(l)} />
@@ -909,6 +949,17 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
           <Check size={17} className="text-success shrink-0 mt-0.5" />
           <p className="text-sm text-text-primary flex-1 tabular-nums">{savedConfirm}</p>
           <button type="button" onClick={() => setPendingConfirm(null)}
+            className="text-xs font-medium text-text-secondary hover:text-text-primary shrink-0">
+            Vale
+          </button>
+        </div>
+      )}
+
+      {categoriaGuardada && (
+        <div className="rounded-md border border-success/30 bg-success-bg px-4 py-3 flex items-start gap-2.5">
+          <Check size={17} className="text-success shrink-0 mt-0.5" />
+          <p className="text-sm text-text-primary flex-1">{categoriaGuardada}</p>
+          <button type="button" onClick={() => setCategoriaGuardada(null)}
             className="text-xs font-medium text-text-secondary hover:text-text-primary shrink-0">
             Vale
           </button>
@@ -1059,6 +1110,7 @@ function LineEditor({
   line, itemInfo, formats, saving, qty, cost, formatId, reason, editError,
   onSetQty, onSetCost, onSetFormatId, onSetReason, onSave, onCancel, onChangeArticle,
   ivaOn, ivaRate, ivaSugeridoPorProveedor, tipoIva, onSetIvaOn, onSetIvaRate,
+  onCategoriaConfirmada,
 }: {
   line: GoodsReceiptLine
   itemInfo: Record<string, { name: string; baseUnitAbbr: string | null }>
@@ -1089,6 +1141,8 @@ function LineEditor({
   tipoIva: TipoIvaResuelto | undefined
   onSetIvaOn: (v: boolean) => void
   onSetIvaRate: (v: string) => void
+  /** Guarda en la ficha del artículo el tipo respondido. Solo desde el botón. */
+  onCategoriaConfirmada: (line: GoodsReceiptLine, categoria: CategoriaFiscal) => void
 }) {
   const info = line.recipeItemId ? itemInfo[line.recipeItemId] : undefined
   const name = info?.name ?? sentenceCase(line.productName)
@@ -1112,6 +1166,29 @@ function LineEditor({
   // el articulo: en cuanto alguien lo cambia a mano, la frase dejaria de ser
   // verdad y desaparece.
   const origenTipo = tipoIva?.rate != null && rateN === tipoIva.rate ? explicaOrigen(tipoIva) : null
+
+  // ── LA OFERTA: guardar en la ficha lo que se acaba de responder ────────
+  // Solo cuando el tipo NO se sabía y la persona ha puesto uno: si ya se
+  // resolvía, esta línea no enseña nada nuevo al catálogo.
+  const respondioElTipo = ivaOn && rateN !== null && (tipoIva == null || tipoIva.rate == null)
+  const puedeOfrecer = respondioElTipo && tipoIva?.puedeGuardarse === true && !!line.recipeItemId
+  // Las candidatas viajan CON EL TIPO al que pertenecen. Sin eso, al pasar de
+  // 21 % a 10 % se verían un instante las categorías del 21 % junto al 10 %
+  // reción escrito — y ese instante es justo cuando alguien pulsa.
+  const [candidatas, setCandidatas] = useState<{ rate: number; cats: CategoriaFiscal[] } | null>(null)
+
+  useEffect(() => {
+    if (!puedeOfrecer || rateN === null) return
+    let vivo = true
+    const paraEste = rateN
+    categoriasParaTipo(paraEste)
+      .then(cs => { if (vivo) setCandidatas({ rate: paraEste, cats: cs }) })
+      .catch(() => { if (vivo) setCandidatas({ rate: paraEste, cats: [] }) })
+    return () => { vivo = false }
+  }, [puedeOfrecer, rateN])
+
+  // Solo valen si son del tipo que hay escrito AHORA.
+  const cats = candidatas !== null && candidatas.rate === rateN ? candidatas.cats : null
   const brutoPorUnidad = qtyN !== null && qtyN !== 0 && line.docAmount != null
     ? line.docAmount / qtyN
     : null
@@ -1246,6 +1323,33 @@ function LineEditor({
                 </>
               )}
             </p>
+
+            {/* Que el catálogo fiscal se complete con el trabajo diario. SE
+                OFRECE: hasta que no se pulsa, la ficha del artículo no cambia. */}
+            {puedeOfrecer && cats !== null && cats.length > 0 && (
+              <div className="px-3 py-2.5 rounded-md border border-dashed border-accent/40 bg-accent-bg/40">
+                <p className="text-xs text-text-primary">
+                  {cats.length === 1
+                    ? <>¿Guardarlo en la ficha de <b>{name}</b>? Quedará como <b>{cats[0].name}</b>, confirmado, y las próximas recepciones dejarán de preguntarlo.</>
+                    : <>¿Guardarlo en la ficha de <b>{name}</b>? Al {fmtNumEs(rateN, 0)} % hay {cats.length} categorías y del tipo solo no se puede deducir cuál: elígela.</>}
+                </p>
+                <div className="flex gap-1.5 flex-wrap mt-2">
+                  {cats.map(c => (
+                    <button key={c.id} type="button" disabled={saving}
+                      onClick={() => onCategoriaConfirmada(line, c)}
+                      className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
+                      Guardar como {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {puedeOfrecer && cats !== null && cats.length === 0 && rateN !== null && (
+              <p className="text-xs text-text-secondary">
+                Ninguna categoría fiscal lleva hoy el {fmtNumEs(rateN, 0)} %, así que esto no se puede guardar
+                en la ficha. El tipo se aplica igual a esta línea.
+              </p>
+            )}
           </>
         )}
       </div>

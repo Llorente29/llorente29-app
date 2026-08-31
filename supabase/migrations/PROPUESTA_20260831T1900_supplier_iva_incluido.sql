@@ -6,7 +6,8 @@
 -- prefijo PROPUESTA_.
 --
 -- ENCARGO CODE (31/08) «El albarán con IVA incluido: el coste se guarda, pero
--- la pantalla no lo enseña» — punto 4, segunda mitad.
+-- la pantalla no lo enseña» — punto 4, segunda mitad, MAS el anadido de Julio
+-- del 31/08 por la tarde (guardar en la ficha el tipo que se responde).
 --
 -- QUÉ FALTA Y POR QUÉ
 -- El arreglo de pantalla (las dos cifras con su nombre, la precisión del €/g,
@@ -46,10 +47,14 @@
 --   familia, que es la cascada que el propio modelo trae.
 --   Si no hay ni una cosa ni la otra, LA PANTALLA LO DICE Y PIDE EL TIPO.
 --
--- Estado del catalogo fiscal el 31/08, que es lo que hace que preguntar tenga
--- que estar bien resuelto y no ser un caso raro de esquina:
+-- Estado del catalogo fiscal el 31/08 (Foodint, articulos activos):
 --   5 categorias · 6 tipos (5 vigentes hoy) · 16 familias mapeadas, 6 MIXTAS
---   1.072 articulos, de los cuales 273 (25 %) tienen categoria propia.
+--   352 articulos activos, 188 con categoria propia (53 %):
+--     43 CONFIRMADAS y 145 solo PROPUESTAS.
+-- (Un recuento anterior decia 273 de 1.072: era `recipe_item` ENTERA, que es
+--  multi-cuenta e incluye el catalogo plantilla del sistema. Corregido por
+--  Julio. Leer una tabla multi-cuenta sin su account_id da un numero que no es
+--  de nadie -- y aqui habria hecho parecer raro lo que es mayoritario.)
 -- Una familia MIXTA no resuelve: `is_mixed` significa "esta familia tiene
 -- varios tipos", asi que su defecto es una lista de candidatos, no una
 -- respuesta. Y una categoria con vat_category_source = 'proposed' resuelve
@@ -89,6 +94,32 @@ comment on column public.supplier.iva_incluido_en_linea is
   'AQUI NO VA EL TIPO: el tipo es del articulo (vat_category/vat_rate, con '
   'family_vat_default de cascada) y esta columna solo dice COMO escribe sus '
   'importes el proveedor.';
+
+-- ── 1-bis. De donde salio la categoria fiscal de un articulo ───────────────
+-- ANADIDO AL ALCANCE POR JULIO (31/08): cuando la recepcion pregunta el tipo
+-- porque no se sabia, la pantalla OFRECE guardarlo en la ficha del articulo
+-- como categoria CONFIRMADA, "con su origen anotado". Que el catalogo fiscal se
+-- complete con el trabajo diario en vez de con una tarde de despacho.
+--
+-- `vat_category_source` ya distingue 'proposed' de 'confirmed', pero no dice
+-- QUIEN lo confirmo ni DESDE DONDE. Sin eso, dentro de seis meses hay 145
+-- categorias confirmadas y ninguna forma de saber si las confirmo alguien
+-- mirando un albaran o un clic con prisa. Tres columnas, todas nullable:
+-- aditivo puro, no rompen ninguna fila existente.
+alter table public.recipe_item
+  add column if not exists vat_category_origin text,
+  add column if not exists vat_category_set_at  timestamptz,
+  add column if not exists vat_category_set_by  uuid;
+
+comment on column public.recipe_item.vat_category_origin is
+  'De donde salio esta categoria fiscal, en texto legible. Hoy lo escribe la '
+  'verificacion de recepcion: "recepcion ALB-00134 (AMIRSA)". NULL = viene de '
+  'antes de 31/08/2026, o la puso el motor. Se escribe SOLO junto con '
+  'vat_category_source = confirmed.';
+comment on column public.recipe_item.vat_category_set_at is
+  'Cuando se confirmo la categoria fiscal. NULL = nunca se confirmo a mano.';
+comment on column public.recipe_item.vat_category_set_by is
+  'auth.uid() de quien la confirmo. NULL = nadie, o viene de antes.';
 
 -- ── 2. AMIRSA nace con la casilla puesta al 10 % ───────────────────────────
 -- Lo pide el encargo, y es el unico proveedor del que hay PRUEBA en los datos:
@@ -150,6 +181,24 @@ begin
     end if;
   end loop;
 
+  -- Y las tres de procedencia, que son las que permiten que el catalogo fiscal
+  -- se complete desde la recepcion sin perder de vista quien lo completo.
+  foreach v_t in array array['vat_category_origin','vat_category_set_at','vat_category_set_by'] loop
+    if not exists (select 1 from information_schema.columns
+                    where table_schema = 'public' and table_name = 'recipe_item'
+                      and column_name = v_t) then
+      raise exception 'recipe_item.% no quedo creada', v_t;
+    end if;
+  end loop;
+
+  -- NINGUNA ficha existente puede haberse tocado: las tres nacen NULL.
+  select count(*) into v_n from public.recipe_item
+   where vat_category_origin is not null or vat_category_set_at is not null
+      or vat_category_set_by is not null;
+  if v_n <> 0 then
+    raise exception 'ABORTA: % fichas ya traen procedencia. Esta migracion solo CREA las columnas.', v_n;
+  end if;
+
   -- Y lo que de verdad importa: que el historico siga intacto.
   select count(*) into v_n from public.goods_receipt_line;
   raise notice 'goods_receipt_line: % lineas (esta migracion no toca ninguna).', v_n;
@@ -168,6 +217,8 @@ commit;
 --    facturen con el IVA dentro. Hasta que se marquen, el aviso del punto 5 no
 --    salta para ellos — a proposito.
 -- 4) Lo que de verdad hace util esto a medio plazo NO es esta columna, son las
---    799 fichas de articulo sin categoria fiscal (1.072 - 273). Cada una que se
---    clasifique es una linea que deja de preguntar el tipo. La pantalla ya dice
---    cuales son: aparecen pidiendolo al corregir.
+--    164 fichas activas sin categoria fiscal (352 - 188) y las 145 que estan
+--    solo propuestas. Cada una que se clasifique o se confirme es una linea que
+--    deja de preguntar. Desde el 31/08 la pantalla no solo las senala: OFRECE
+--    guardar la respuesta en la ficha, para que el catalogo fiscal se complete
+--    con el trabajo diario en vez de con una tarde de despacho.

@@ -34,12 +34,20 @@
 //     y Kebab Ternera Loncheado, familia «Carnes y aves») están en
 //     'alimento_general' = 10 %, y su source es 'proposed'.
 //
-// ESTADO REAL DEL CATÁLOGO (31/08, contado en producción)
-//   1.072 artículos · 273 con categoría propia (25 %) · 16 familias mapeadas,
-//   6 de ellas mixtas. O sea: hoy el camino MAYORITARIO es el que pregunta.
-//   Eso no es un fallo de este módulo, es el estado del catálogo fiscal — y es
-//   la razón por la que preguntar tiene que quedar bien resuelto en pantalla,
-//   no ser un caso raro de esquina.
+// ESTADO REAL DEL CATÁLOGO (31/08, contado en produccion, SOLO Foodint y solo
+// articulos activos — corregido por Julio: la primera cuenta miraba
+// `recipe_item` entera, que es multi-cuenta e incluye el catalogo plantilla de
+// «Folvy Interno» (625 articulos) y «Kitchen Grill LstQ» (56). Leer una tabla
+// multi-cuenta sin su account_id da un numero que no es de nadie.)
+//
+//   352 articulos activos · 188 con categoria propia (53 %)
+//   de esas 188: 43 CONFIRMADAS y 145 solo PROPUESTAS
+//   16 familias mapeadas, 6 de ellas mixtas
+//
+// O sea: la mayoria SI resuelve, pero casi todo lo que resuelve lo hace con una
+// categoria que nadie ha confirmado. Son dos trabajos distintos y los dos se
+// hacen desde la misma pantalla: 164 fichas sin categoria que hay que rellenar,
+// y 145 propuestas que hay que confirmar.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
@@ -57,13 +65,22 @@ export interface TipoIvaResuelto {
   soloPropuesta: boolean
   /** Su familia está marcada como mixta: tiene varios tipos y no decide. */
   familiaMixta: boolean
+  /**
+   * ¿Se puede OFRECER guardar la respuesta en la ficha? Solo si la migración
+   * que crea las columnas de procedencia ya está aplicada. Antes de eso el
+   * botón no aparece: ofrecer un guardado que va a dar 400 es peor que no
+   * ofrecerlo.
+   */
+  puedeGuardarse: boolean
 }
 
 /** No se sabe nada de este artículo. Se pregunta. */
-function sinResolver(itemId: string, familiaNombre: string | null, familiaMixta: boolean): TipoIvaResuelto {
+function sinResolver(
+  itemId: string, familiaNombre: string | null, familiaMixta: boolean, puedeGuardarse = false,
+): TipoIvaResuelto {
   return {
     itemId, rate: null, origen: 'ninguno',
-    categoriaNombre: null, familiaNombre, soloPropuesta: false, familiaMixta,
+    categoriaNombre: null, familiaNombre, soloPropuesta: false, familiaMixta, puedeGuardarse,
   }
 }
 
@@ -86,7 +103,11 @@ export async function resolveVatRates(itemIds: string[]): Promise<Record<string,
     // familias el 31/08): se traen enteros en vez de filtrar por ids, que sería
     // más código para menos datos.
     const [itemsRes, catsRes, ratesRes, famDefRes] = await Promise.all([
-      sb.from('recipe_item').select('id, family_id, vat_category_id, vat_category_source').in('id', ids),
+      // select('*') a proposito: pedir por nombre una columna que aun no existe
+      // da un 400 de PostgREST. Asi esto funciona igual antes y despues de
+      // aplicar la migracion, y ademas permite DETECTAR si ya esta aplicada
+      // mirando si la fila trae la clave (mismo truco que notify_group).
+      sb.from('recipe_item').select('*').in('id', ids),
       sb.from('vat_category').select('id, code, name'),
       sb.from('vat_rate').select('category_id, rate, valid_from, valid_to'),
       sb.from('family_vat_default').select('family_name, vat_category_id, is_mixed'),
@@ -141,6 +162,8 @@ export async function resolveVatRates(itemIds: string[]): Promise<Record<string,
       const familiaNombre = typeof it.family_id === 'string' ? familyNames[it.family_id] ?? null : null
       const def = familiaNombre ? famDef[familiaNombre] : undefined
       const familiaMixta = def?.mixed === true
+      // La migracion de procedencia, ¿esta aplicada? La fila lo dice.
+      const puedeGuardarse = 'vat_category_origin' in it
 
       // 1) La categoría del propio artículo manda.
       const catId = (it.vat_category_id as string | null) ?? null
@@ -153,6 +176,7 @@ export async function resolveVatRates(itemIds: string[]): Promise<Record<string,
           familiaNombre,
           soloPropuesta: (it.vat_category_source as string | null) !== 'confirmed',
           familiaMixta,
+          puedeGuardarse,
         }
         continue
       }
@@ -168,12 +192,13 @@ export async function resolveVatRates(itemIds: string[]): Promise<Record<string,
           familiaNombre,
           soloPropuesta: false,
           familiaMixta: false,
+          puedeGuardarse,
         }
         continue
       }
 
       // 3) No se sabe. Se pregunta.
-      out[itemId] = sinResolver(itemId, familiaNombre, familiaMixta)
+      out[itemId] = sinResolver(itemId, familiaNombre, familiaMixta, puedeGuardarse)
     }
 
     // Un artículo que ni siquiera existe en recipe_item también se pregunta.
@@ -208,4 +233,106 @@ export function explicaFalta(t: TipoIvaResuelto | undefined): string {
     return `Este artículo no tiene categoría fiscal y su familia «${t.familiaNombre}» tampoco está mapeada. Elige el tipo que ponga el albarán.`
   }
   return 'Este artículo no tiene categoría fiscal, así que no se puede deducir el tipo. Elige el que ponga el albarán.'
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUE EL CATÁLOGO FISCAL SE COMPLETE CON EL TRABAJO DIARIO
+// Añadido al alcance por Julio (31/08): cuando la recepción pregunta el tipo
+// porque no se sabía, la pantalla OFRECE guardarlo en la ficha del artículo
+// como categoría confirmada, con su origen anotado.
+//
+// NUNCA EN SILENCIO. Se ofrece, no se escribe solo. De ahí que esto sea una
+// función suelta que solo se llama desde un botón, y no algo que ocurra dentro
+// de `resolveVatRates` ni al guardar la línea.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface CategoriaFiscal {
+  id: string
+  code: string
+  name: string
+  /** Tipo vigente HOY de esta categoría, en porcentaje. */
+  rate: number
+}
+
+/**
+ * Las categorías vigentes que llevan ESE tipo.
+ *
+ * Devuelve una LISTA, no una categoría, porque un tipo NO identifica una
+ * categoría — verificado el 31/08 en producción:
+ *     4 %  -> Alimento básico  |  Aceite de oliva
+ *    10 %  -> Alimento general                      (la única sin ambigüedad)
+ *    21 %  -> Bebida o azúcar  |  No alimentario
+ *
+ * Por eso guardar «el 10 %» en la ficha se puede hacer de un toque, pero
+ * guardar «el 21 %» obliga a elegir cuál de las dos. Escoger por él sería
+ * meter una categoría inventada en la tabla que esto viene a mejorar: el
+ * artículo quedaría CONFIRMADO y mal, que es peor que quedarse vacío.
+ */
+export async function categoriasParaTipo(rate: number): Promise<CategoriaFiscal[]> {
+  if (!isSupabaseEnabled || !supabase || !Number.isFinite(rate)) return []
+  const sb = supabase
+  try {
+    const [catsRes, ratesRes] = await Promise.all([
+      sb.from('vat_category').select('id, code, name, is_active'),
+      sb.from('vat_rate').select('category_id, rate, valid_from, valid_to'),
+    ])
+    if (catsRes.error) throw catsRes.error
+    if (ratesRes.error) throw ratesRes.error
+
+    const hoy = new Date().toISOString().slice(0, 10)
+    const vigente: Record<string, number> = {}
+    for (const r of ((ratesRes.data as Row[]) ?? [])) {
+      const from = (r.valid_from as string | null) ?? '0000-01-01'
+      const to = r.valid_to as string | null
+      if (from <= hoy && (to == null || to >= hoy)) vigente[r.category_id as string] = Number(r.rate)
+    }
+
+    return ((catsRes.data as Row[]) ?? [])
+      .filter(c => (c.is_active ?? true) === true)
+      .map(c => ({ id: c.id as string, code: c.code as string, name: c.name as string, rate: vigente[c.id as string] }))
+      .filter(c => c.rate != null && Math.abs(c.rate - rate) < 0.001)
+  } catch (e) {
+    console.error('[vatRateService] categoriasParaTipo', e)
+    return []
+  }
+}
+
+/**
+ * Guarda la categoría fiscal en la ficha del artículo, CONFIRMADA y con su
+ * origen anotado. Solo se llama desde el botón que lo ofrece.
+ *
+ * LANZA si falla, a propósito: quien lo llama tiene que poder decirlo en
+ * pantalla (regla 8). Un guardado de catálogo que falla en silencio deja al
+ * usuario creyendo que ha clasificado un artículo que sigue sin clasificar, y
+ * la próxima recepción se lo vuelve a preguntar sin explicar por qué.
+ *
+ * RLS: `recipe_item_update` exige admin o encargado de la cuenta. Si quien
+ * verifica no lo es, esto falla con el mensaje de PostgREST y la pantalla lo
+ * enseña — no se esconde el botón, porque en oficina lo normal es tener
+ * permiso y esconderlo confundiría más que el error.
+ */
+export async function confirmaCategoriaFiscal(args: {
+  itemId: string
+  categoryId: string
+  /** Texto legible de dónde sale. Ej.: «recepción ALB-00134 (AMIRSA)». */
+  origen: string
+  actorId?: string | null
+}): Promise<void> {
+  if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
+  // Casteado porque las tres columnas de procedencia aun no estan en los tipos
+  // autogenerados (la migracion entra manana). Mismo patron que notify_group.
+  const parche: Record<string, unknown> = {
+    vat_category_id: args.categoryId,
+    vat_category_source: 'confirmed',
+    vat_category_origin: args.origen,
+    vat_category_set_at: new Date().toISOString(),
+    vat_category_set_by: args.actorId ?? null,
+  }
+  const { error } = await supabase
+    .from('recipe_item')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update(parche as any)
+    .eq('id', args.itemId)
+  if (error) throw new Error(`No se pudo guardar la categoría fiscal: ${error.message}`)
 }
