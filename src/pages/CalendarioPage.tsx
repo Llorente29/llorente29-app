@@ -13,6 +13,7 @@ import {
   AlertTriangle, Copy, Euro, TrendingUp, TrendingDown, CalendarDays, Leaf, Users, SlidersHorizontal,
   Settings, ChevronDown, MoreHorizontal, Trash2, Sparkles, RefreshCw,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import {
   listShiftTemplates,
@@ -218,7 +219,17 @@ export default function CalendarioPage() {
   const canEditSchedule = hasPermission('can_edit_schedule')
   const canSeeLaborCosts = hasPermission('show_salaries')
   const [locationId, setLocationId] = useState<string>('')
-  const [weekStart, setWeekStart] = useState<string>(() => toISODate(getMondayOfWeek(new Date())))
+  // ENCARGO CODE (31/08) Inicio P1 — la franja de atención enlaza AQUÍ ya
+  // filtrado: `?semana=AAAA-MM-DD`. Sin ese parámetro, la semana en curso, como
+  // siempre. Un enlace que promete filtrar y aterriza en otra semana obliga a
+  // buscar a mano lo que el aviso ya sabía.
+  const [searchParams] = useSearchParams()
+  const [weekStart, setWeekStart] = useState<string>(() => {
+    const pedida = searchParams.get('semana')
+    return pedida && /^\d{4}-\d{2}-\d{2}$/.test(pedida)
+      ? toISODate(getMondayOfWeek(new Date(pedida + 'T00:00:00')))
+      : toISODate(getMondayOfWeek(new Date()))
+  })
   const [templates, setTemplates] = useState<ShiftTemplate[]>([])
   const [cells, setCells] = useState<ScheduleCells>({})
   const [overrides, setOverrides] = useState<CoverageOverrides>({})

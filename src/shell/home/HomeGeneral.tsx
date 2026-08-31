@@ -22,14 +22,22 @@
 // user_profiles.role — hay `admin` (3) y `worker` (9) — y no se inventan roles
 // para personas que no existen. `worker` sigue en su portal.
 //
-// LA FRANJA DE ESTADO dice el ALCANCE y la FRESCURA de lo que hay debajo:
+// HAY DOS FRANJAS, y son cosas distintas a propósito:
+//   · ATENCIÓN (atencionService) — lo que hay que hacer: conteos sin cerrar,
+//     tablets mudas, cuadrantes sin publicar. SOLO aparece cuando hay algo; si
+//     no hay nada no ocupa sitio y NO dice «todo bien». El silencio es el
+//     estado normal, y un «todo correcto» diario enseña a no mirarla.
+//   · PROCEDENCIA — la de abajo. Siempre visible.
+//
+// LA FRANJA DE PROCEDENCIA dice el ALCANCE y la FRESCURA de lo que hay debajo:
 // de qué local son los números, de cuándo son, y si el mosaico es el tuyo o el
 // defecto. Sin eso, un mosaico configurable es un montón de cifras sin decir
 // de qué son. NO inventa estado de negocio: lo que no tiene fuente sigue
 // diciendo «—» dentro de su tarjeta, como desde junio.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { LayoutGrid, RotateCcw, ChevronUp, ChevronDown, X, Check, AlertTriangle, MapPin } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { LayoutGrid, RotateCcw, ChevronUp, ChevronDown, X, Check, AlertTriangle, MapPin, ClipboardList, TabletSmartphone, CalendarClock } from 'lucide-react'
 
 import { useIsMobile } from '../useIsMobile'
 import { useApp } from '../../context/AppContext'
@@ -43,6 +51,7 @@ import { HomeMetricsProvider } from './cards/HomeMetricsProvider'
 import {
   getGating, getUserLayout, getRoleDefault, saveUserLayout, restoreUserLayout,
 } from './homeLayoutService'
+import { getAvisosAtencion, type AvisoAtencion, type TipoAviso } from './atencionService'
 
 const INK = 'var(--color-accent)'
 const MUTED = 'var(--color-text-secondary)'
@@ -64,6 +73,12 @@ function todayLabel(): string {
 }
 function hora(d: Date): string {
   return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+}
+
+const ICONO_AVISO: Record<TipoAviso, typeof ClipboardList> = {
+  conteo: ClipboardList,
+  tablet: TabletSmartphone,
+  cuadrante: CalendarClock,
 }
 
 /** De dónde viene el mosaico que se está viendo. Se dice, no se adivina. */
@@ -92,10 +107,12 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
   const [cargadoPara, setCargadoPara] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
+  const [avisos, setAvisos] = useState<AvisoAtencion[]>([])
   const [cajonAbierto, setCajonAbierto] = useState(false)
   const [guardando, setGuardando] = useState(false)
 
-  const alcance = `${activeAccountId ?? '-'}|${authUserId ?? '-'}|${roleInActiveAccount ?? '-'}`
+  const navigate = useNavigate()
+  const alcance = `${activeAccountId ?? '-'}|${authUserId ?? '-'}|${roleInActiveAccount ?? '-'}|${resolvedLocationId ?? 'todos'}`
   // Sin cuenta no hay nada que cargar, así que tampoco se está cargando: se
   // deriva en vez de marcarlo, y el efecto se puede ir sin tocar estado.
   const cargando = activeAccountId != null && cargadoPara !== alcance
@@ -119,6 +136,7 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
         if (delRol && delRol.length > 0) { setClaves(delRol); setOrigen('rol') }
         else { setClaves(LAYOUT_POR_DEFECTO); setOrigen('fabrica') }
       }
+      setAvisos(await getAvisosAtencion(activeAccountId, resolvedLocationId))
       setCargadoA(new Date())
       setError(null)   // solo cuando se sabe que la recarga ha funcionado
     } catch (e) {
@@ -126,7 +144,7 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
     } finally {
       setCargadoPara(alcance)
     }
-  }, [activeAccountId, authUserId, roleInActiveAccount, catalogo, alcance])
+  }, [activeAccountId, authUserId, roleInActiveAccount, catalogo, alcance, resolvedLocationId])
 
   useEffect(() => { void cargar() }, [cargar])
 
@@ -174,7 +192,38 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
 
   return (
     <HomeMetricsProvider accountId={activeAccountId} locationId={resolvedLocationId}>
-      {/* ══ FRANJA DE ESTADO ══
+      {/* ══ FRANJA DE ATENCIÓN ══
+          Una franja, no cinco banners. Solo si hay algo: sin avisos no se
+          pinta nada, y no existe el caso «todo bien».
+          Regla 7: se listan TODOS. Si hay cinco, dice cinco — nunca «y 3 más»,
+          porque la franja ordena y etiqueta, no decide qué existe. */}
+      {avisos.length > 0 && (
+        <div className="mb-4 rounded-xl border border-warning/40 bg-warning-bg overflow-hidden">
+          <div className="px-4 py-2 border-b border-warning/25 flex items-center gap-2">
+            <AlertTriangle size={15} className="text-warning shrink-0" />
+            <span className="text-[12px] font-bold uppercase tracking-wide text-text-primary">
+              {avisos.length === 1 ? 'Una cosa pide atención' : `${avisos.length} cosas piden atención`}
+            </span>
+          </div>
+          <ul className="divide-y divide-warning/20">
+            {avisos.map(a => {
+              const Icono = ICONO_AVISO[a.tipo]
+              return (
+                <li key={a.id}>
+                  <button type="button" onClick={() => navigate(a.ruta)}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-warning/10 transition-colors">
+                    <Icono size={15} className="text-text-secondary shrink-0" />
+                    <span className="text-[13.5px] text-text-primary flex-1 min-w-0">{a.texto}</span>
+                    <span className="text-[12px] font-semibold text-accent shrink-0">Resolver →</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* ══ FRANJA DE PROCEDENCIA ══
           Alcance y frescura de todo lo de abajo. Un mosaico configurable sin
           esto es un montón de cifras sin decir de qué son ni de cuándo. */}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
