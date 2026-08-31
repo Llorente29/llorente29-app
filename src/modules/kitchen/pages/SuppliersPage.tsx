@@ -281,6 +281,11 @@ function SupplierDetail({ supplierId, onBack, allSuppliers }: SupplierDetailProp
   const [email, setEmail] = useState('')
   const [healthRegistryNo, setHealthRegistryNo] = useState('')
   const [notes, setNotes] = useState('')
+  // ENCARGO CODE (31/08) «El albarán con IVA incluido» §4 — cómo escribe sus
+  // importes este proveedor. AMIRSA los pone con el IVA dentro; la mayoría
+  // lista base imponible por línea y suma el IVA al pie.
+  const [pricesIncludeVat, setPricesIncludeVat] = useState(false)
+  const [defaultVatRate, setDefaultVatRate] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -326,6 +331,8 @@ function SupplierDetail({ supplierId, onBack, allSuppliers }: SupplierDetailProp
     setEmail(supplier.email ?? '')
     setHealthRegistryNo(supplier.healthRegistryNo ?? '')
     setNotes(supplier.notes ?? '')
+    setPricesIncludeVat(supplier.pricesIncludeVat === true)
+    setDefaultVatRate(supplier.defaultVatRate != null ? String(supplier.defaultVatRate) : '')
     setFormError(null)
     setEditing(true)
   }
@@ -348,6 +355,18 @@ function SupplierDetail({ supplierId, onBack, allSuppliers }: SupplierDetailProp
         email: email.trim() === '' ? null : email.trim(),
         healthRegistryNo: healthRegistryNo.trim() === '' ? null : healthRegistryNo.trim(),
         notes: notes.trim() === '' ? null : notes.trim(),
+        // §4 — solo se envían si las columnas EXISTEN. El front va desplegado
+        // antes que la migración (Claude Code propone el SQL, Julio lo
+        // ejecuta): mandarlas antes daría un 400 de PostgREST, así que hasta
+        // entonces el bloque ni se enseña ni se guarda.
+        ...(supplier.vatSettingsAvailable
+          ? {
+              pricesIncludeVat,
+              defaultVatRate: !pricesIncludeVat || defaultVatRate.trim() === ''
+                ? null
+                : Number(defaultVatRate.replace(',', '.')),
+            }
+          : {}),
       })
       setEditing(false)
       await refresh()
@@ -413,6 +432,14 @@ function SupplierDetail({ supplierId, onBack, allSuppliers }: SupplierDetailProp
                 <Field label="Email" value={supplier.email} />
                 <Field label="Dirección" value={supplier.address} />
                 <Field label="Registro sanitario" value={supplier.healthRegistryNo} mono />
+                {supplier.vatSettingsAvailable && (
+                  <Field
+                    label="Cómo factura"
+                    value={supplier.pricesIncludeVat
+                      ? `Con el IVA dentro del importe de línea${supplier.defaultVatRate != null ? ` (${supplier.defaultVatRate} %)` : ''}`
+                      : 'Base imponible por línea, IVA al pie'}
+                  />
+                )}
                 <Field label="Notas" value={supplier.notes} />
               </div>
             ) : (
@@ -435,6 +462,46 @@ function SupplierDetail({ supplierId, onBack, allSuppliers }: SupplierDetailProp
                     <span>Lo encuentras en sus facturas o albaranes. Sirve para el control de proveedores del APPCC.</span>
                   </p>
                 </div>
+                {/* §4 — el defecto del proveedor. Se ESCONDE mientras las
+                    columnas no existan: enseñar un interruptor cuyo guardado
+                    va a fallar es peor que no enseñarlo. */}
+                {supplier.vatSettingsAvailable && (
+                  <div className="pt-1">
+                    <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pricesIncludeVat}
+                        disabled={saving}
+                        onChange={(e) => setPricesIncludeVat(e.target.checked)}
+                        className="w-4 h-4 accent-accent"
+                      />
+                      Este proveedor factura con el IVA incluido en el importe de línea
+                    </label>
+                    {pricesIncludeVat && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-sm text-text-secondary">Tipo habitual:</span>
+                        <input
+                          type="text"
+                          value={defaultVatRate}
+                          disabled={saving}
+                          onChange={(e) => setDefaultVatRate(e.target.value)}
+                          placeholder="10"
+                          aria-label="Tipo de IVA habitual en porcentaje"
+                          className="w-20 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                        <span className="text-sm text-text-secondary">%</span>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-text-secondary mt-1 flex items-start gap-1">
+                      <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                      <span>
+                        Al recibir un albarán suyo, la pantalla PROPONE quitarle el IVA y enseña el neto antes
+                        de guardar. Nunca lo aplica sola, y se puede cambiar línea a línea.
+                      </span>
+                    </p>
+                  </div>
+                )}
+
                 <EditRow label="Notas" value={notes} onChange={setNotes} disabled={saving} />
 
                 {formError && (

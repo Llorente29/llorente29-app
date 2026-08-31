@@ -426,6 +426,30 @@ export interface Supplier {
    * el botón de reclamar lo que falta de un pedido.
    */
   notifyGroup: string | null
+  /**
+   * ENCARGO CODE (31/08) «El albarán con IVA incluido» §4 — este proveedor
+   * factura con el IVA DENTRO del importe de línea. AMIRSA lo hace; la mayoría
+   * (Cloudtown, Makro, Europastry…) lista base imponible por línea y suma el
+   * IVA al pie, que es lo habitual.
+   *
+   * Es una SUGERENCIA para la recepción, nunca un cálculo automático: propone
+   * el neto y lo enseña antes de guardar, siempre editable por línea. Aplicarlo
+   * en silencio sería cambiar el coste del almacén sin que nadie lo vea, que es
+   * el fallo de enfrente del que se está arreglando.
+   *
+   * null = no se sabe (o la migración de columnas aún no está aplicada: ver
+   * `vatSettingsAvailable`).
+   */
+  pricesIncludeVat: boolean | null
+  /** Tipo de IVA habitual de este proveedor, en porcentaje (10, no 0,10). */
+  defaultVatRate: number | null
+  /**
+   * ¿Existen de verdad las columnas de IVA en la tabla? El front se desplegó
+   * antes que la migración a propósito (Claude Code propone el SQL, Julio lo
+   * ejecuta), así que la ficha esconde el control hasta que las columnas
+   * existan en vez de ofrecer un guardado que va a fallar.
+   */
+  vatSettingsAvailable: boolean
   isActive: boolean
   archivedAt: string | null
   createdAt: string
@@ -453,6 +477,9 @@ export interface SupplierUpdate {
   address?: string | null
   healthRegistryNo?: string | null
   notes?: string | null
+  /** §4 — ver Supplier.pricesIncludeVat. Solo se envía si el control está vivo. */
+  pricesIncludeVat?: boolean | null
+  defaultVatRate?: number | null
   isActive?: boolean
   archivedAt?: string | null
 }

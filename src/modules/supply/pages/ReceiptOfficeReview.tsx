@@ -11,7 +11,7 @@
 // catálogo solo se consulta para RESOLVER una línea que la oficina cambia.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2, FileText, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
+import { ArrowLeft, Loader2, FileText, ChevronDown, ChevronUp, Pencil, Check, AlertTriangle } from 'lucide-react'
 import {
   getGoodsReceiptById,
   updateGoodsReceipt,
@@ -38,7 +38,11 @@ import {
 import { getSupplierCatalog, listSupplyLocations, buildFormatLabel, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
 import { listSuppliers, createPurchaseFormat, listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
-import { fmtMoney, isNum, DASH } from '@/lib/format'
+import { fmtMoney, fmtMoneyPrecise, fmtNumEs, isNum, DASH } from '@/lib/format'
+import {
+  TIPOS_IVA, netoDesdeBruto, importePapel, importeAlAlmacen, costePorUnidadBase,
+  avisoIvaProbable,
+} from '@/modules/supply/lib/lineCost'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
 import ReceiptPhotoViewer from '@/modules/supply/components/ReceiptPhotoViewer'
 
@@ -141,6 +145,14 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   const [saving, setSaving] = useState(false)
   const [closedPeriodNote, setClosedPeriodNote] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // ENCARGO CODE (31/08) §3 — guardar confirma en pantalla.
+  // `pendingConfirm` se guarda CON LA RECARGA EN LA QUE SE PIDIÓ, y
+  // `loadedTick` dice cuál ha vuelto ya. La confirmación no se pinta hasta que
+  // haya llegado una recarga POSTERIOR: mientras tanto `lines` sigue teniendo
+  // el valor viejo, y confirmar con él diría «guardado: 92,00 €» justo después
+  // de haber guardado 83,64 — el mismo fallo del encargo, pero en verde.
+  const [pendingConfirm, setPendingConfirm] = useState<{ lineId: string; tick: number } | null>(null)
+  const [loadedTick, setLoadedTick] = useState(0)
   // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 — aviso
   // bloqueante-suave de coste fuera de rango. null = aún no comprobado;
   // [] = comprobado y sin avisos; costWarningsAcked = el trabajador ya
@@ -149,6 +161,16 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   const [costWarningsAcked, setCostWarningsAcked] = useState(false)
   // Tramo D.3 — cantidades fraccionadas en artículos por unidades.
   const [fractionalWarnings, setFractionalWarnings] = useState<FractionalWarning[] | null>(null)
+  // §5 — «este importe parece llevar el IVA dentro». Es exactamente el caso
+  // ALB-00080 (30/07): AMIRSA facturó con el IVA dentro, nadie lo corrigió, y
+  // ese stock quedó valorado un 10 % por encima de su coste real durante un mes.
+  //
+  // Solo salta si el proveedor está MARCADO como «factura con IVA incluido».
+  // Sin esa marca no se avisa, a propósito: en Cloudtown (597 líneas), Makro
+  // (79) o Europastry (22) unit_cost = doc_amount y eso es lo NORMAL cuando el
+  // albarán lista base imponible y suma el IVA al pie. Un aviso que no se puede
+  // afirmar enseña a ignorar los avisos que sí.
+  const [ivaWarningsAcked, setIvaWarningsAcked] = useState(false)
 
   // ENCARGO CODE (20/08) «Verificar un albarán a ciegas».
   // §2.1 — el papel. En pantalla ancha va AL LADO de las líneas; en móvil,
@@ -179,6 +201,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         if (!r) throw new Error('No se pudo recuperar la recepción.')
         setReceipt(r)
         setLines(ls)
+        setLoadedTick(reloadTick)
         setSuppliers(sups)
         setHdrSupplierId(r.supplierId ?? '')
         setHdrDocNumber(r.supplierDocNumber ?? '')
@@ -247,10 +270,22 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     return () => { cancelled = true }
   }, [accountId, receiptId, reloadTick])
 
-  const supplierName = useMemo(
-    () => suppliers.find(s => s.id === receipt?.supplierId)?.name ?? '',
+  const supplier = useMemo(
+    () => suppliers.find(s => s.id === receipt?.supplierId) ?? null,
     [suppliers, receipt],
   )
+  const supplierName = supplier?.name ?? ''
+
+  const ivaWarnings = useMemo(() => {
+    if (!supplier?.pricesIncludeVat) return []
+    return lines.flatMap(l => {
+      if (l.notGoods) return []
+      const aviso = avisoIvaProbable(l, true, supplier.defaultVatRate)
+      if (!aviso) return []
+      const nombre = (l.recipeItemId ? itemInfo[l.recipeItemId]?.name : null) ?? sentenceCase(l.productName)
+      return [{ lineId: l.id, nombre, ...aviso }]
+    })
+  }, [lines, supplier, itemInfo])
 
   // ── Reordenar: lo decidido primero (resuelta · dudosa), luego lo pendiente ──
   const ordered = useMemo(
@@ -489,6 +524,17 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   const [editFormatId, setEditFormatId] = useState('')
   const [editReason, setEditReason] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
+  // ENCARGO CODE (31/08) §4 — quitar el IVA deja de ser aritmética mental.
+  // `editIvaOn` = «el precio del papel lleva IVA». El neto se propone y se
+  // ENSEÑA antes de guardar; el campo de coste sigue siendo editable a mano.
+  const [editIvaOn, setEditIvaOn] = useState(false)
+  const [editIvaRate, setEditIvaRate] = useState('10')
+
+  // §3 — guardar confirma en pantalla. `pendingConfirmLineId` se pone al
+  // guardar; la confirmación se compone DESPUÉS de recargar, con los valores
+  // que devuelve el servidor — nunca con lo que se tecleó. Un estado optimista
+  // aquí sería exactamente el fallo que se está arreglando: dar por bueno un
+  // cambio que quizá no entró.
 
   function openEditor(line: GoodsReceiptLine) {
     setEditLineId(line.id)
@@ -497,9 +543,15 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     setEditFormatId(line.purchaseFormatId ?? '')
     setEditReason(null)
     setEditError(null)
+    // §4 — el defecto del proveedor entra como SUGERENCIA VISIBLE: la casilla
+    // aparece marcada y con su tipo, y quien mira ve el cálculo antes de
+    // guardar. Nunca se aplica en silencio: si no se toca Guardar, no cambia
+    // nada, y el coste sigue siendo editable a mano.
+    setEditIvaOn(false)
+    setEditIvaRate(supplier?.defaultVatRate != null ? String(supplier.defaultVatRate) : '10')
   }
   function closeEditor() {
-    setEditLineId(null); setEditError(null)
+    setEditLineId(null); setEditError(null); setEditIvaOn(false)
   }
   async function saveEditor(line: GoodsReceiptLine) {
     const newQty = parseNum(editQty)
@@ -532,13 +584,46 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
       await updateGoodsReceiptLine(line.id, { mapNeedsReview: false, flaggedForOffice: false })
       if (res.closedPeriodNote) setClosedPeriodNote(res.closedPeriodNote)
       setEditLineId(null)
+      setEditIvaOn(false)
+      // §3 — la confirmación NO se compone aquí. Se pide, y se escribe cuando
+      // vuelva el dato del servidor (efecto de abajo). Si la recarga trae otra
+      // cosa, es esa otra cosa la que se enseña.
+      setPendingConfirm({ lineId: line.id, tick: reloadTick })
       setReloadTick(t => t + 1)
     } catch (err: unknown) {
+      // El editor se queda ABIERTO con lo tecleado y el error a la vista. No se
+      // recarga, no se cierra y no se confirma nada: si la escritura falló, la
+      // pantalla no puede dar el cambio por bueno.
+      setPendingConfirm(null)
       setEditError(err instanceof Error ? err.message : 'No se pudo guardar el cambio.')
     } finally {
       setSaving(false)
     }
   }
+
+  // §3 — la confirmación, compuesta con lo que devolvió el servidor tras
+  // recargar. Cuarta aparición esta semana del mismo patrón (kds_heartbeat→200,
+  // autocierre→warning, Publicar mudo, fichaje «registrada»): un botón que hace
+  // algo importante confirma o falla en pantalla; callar no es una opción.
+  // Derivado en render, no en un efecto: así el texto SIEMPRE describe la línea
+  // que hay ahora mismo en `lines` — es decir, lo que devolvió el servidor. Si
+  // una recarga posterior trae otra cosa, la confirmación cambia con ella en vez
+  // de quedarse congelada afirmando algo que ya no es verdad.
+  const savedConfirm = useMemo(() => {
+    if (!pendingConfirm) return null
+    if (loadedTick <= pendingConfirm.tick) return null   // la recarga aún no ha vuelto
+    const l = lines.find(x => x.id === pendingConfirm.lineId)
+    if (!l) return null
+    const nombre = (l.recipeItemId ? itemInfo[l.recipeItemId]?.name : null) ?? sentenceCase(l.productName)
+    const almacen = importeAlAlmacen(l)
+    const porBase = costePorUnidadBase(l)
+    const uSingular = unitNoun(l.recipeItemId ? itemInfo[l.recipeItemId]?.baseUnitAbbr ?? null : null, 1)
+    const papel = importePapel(l)
+    if (almacen == null) return `Guardado: ${nombre} queda sin coste, así que no valora el almacén.`
+    return `Guardado: ${nombre} entra al almacén por ${fmtMoney(almacen)}`
+      + (porBase != null ? ` (${fmtMoneyPrecise(porBase)} la ${uSingular})` : '')
+      + (papel != null ? `. El papel sigue diciendo ${fmtMoney(papel)}.` : '.')
+  }, [pendingConfirm, loadedTick, lines, itemInfo])
 
   // ── Cierre ───────────────────────────────────────────────────────────
   // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1/D.3 —
@@ -556,6 +641,13 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     }
     setSaving(true); setError(null)
     try {
+      // §5 — el aviso de IVA se comprueba ANTES que los del servidor: es el
+      // único que se puede afirmar sin consultar nada (ya está todo en
+      // pantalla) y es el que evita cerrar un albarán valorado un 10 % de más.
+      if (!ivaWarningsAcked && ivaWarnings.length > 0) {
+        setSaving(false)
+        return
+      }
       if (!costWarningsAcked) {
         const [cost, fractional] = await Promise.all([
           getGoodsReceiptCostWarnings(accountId, receipt.id),
@@ -584,6 +676,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     setCostWarnings(null)
     setFractionalWarnings(null)
     setCostWarningsAcked(true)
+    setIvaWarningsAcked(true)
     setSaving(true); setError(null)
     try {
       await ackGoodsReceiptCostWarning(accountId, receipt.id)
@@ -762,7 +855,10 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
                 reason={editReason} editError={editError}
                 onSetQty={setEditQty} onSetCost={setEditCost} onSetFormatId={setEditFormatId}
                 onSetReason={setEditReason} onSave={() => saveEditor(l)} onCancel={closeEditor}
-                onChangeArticle={() => openPicker(l.id)} />
+                onChangeArticle={() => openPicker(l.id)}
+                ivaOn={editIvaOn} ivaRate={editIvaRate}
+                ivaSugeridoPorProveedor={!!supplier?.pricesIncludeVat}
+                onSetIvaOn={setEditIvaOn} onSetIvaRate={setEditIvaRate} />
             )
           }
           if (cls === 'resuelta') return <ResueltaRow key={l.id} line={l} itemInfo={itemInfo} formatNames={formatNames} saving={saving} onOpenEditor={() => openEditor(l)} />
@@ -784,6 +880,56 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
           aviso bloqueante-suave: coste fuera de rango y/o cantidad
           fraccionada en un artículo por unidades. No impide cerrar, pero
           exige un clic explícito (el de coste, además, queda registrado). */}
+      {/* §3 — GUARDAR CONFIRMA EN PANTALLA. El texto se compone con lo que
+          devolvió el servidor tras recargar, no con lo que se tecleó: si la
+          escritura no entró, aquí no aparece nada. */}
+      {savedConfirm && (
+        <div className="rounded-md border border-success/30 bg-success-bg px-4 py-3 flex items-start gap-2.5">
+          <Check size={17} className="text-success shrink-0 mt-0.5" />
+          <p className="text-sm text-text-primary flex-1 tabular-nums">{savedConfirm}</p>
+          <button type="button" onClick={() => setPendingConfirm(null)}
+            className="text-xs font-medium text-text-secondary hover:text-text-primary shrink-0">
+            Vale
+          </button>
+        </div>
+      )}
+
+      {/* §5 — «este importe parece llevar el IVA dentro». Bloqueante-suave,
+          igual que los avisos de coste: enseña y para, no impide cerrar. */}
+      {ivaWarnings.length > 0 && !ivaWarningsAcked && (
+        <div className="rounded-lg border border-warning bg-page p-4 space-y-3">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle size={17} className="text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-text-primary">
+                {supplierName || 'Este proveedor'} factura con el IVA dentro
+                {supplier?.defaultVatRate != null ? ` (${supplier.defaultVatRate} %)` : ''}, y en{' '}
+                {ivaWarnings.length === 1 ? 'una línea' : `${ivaWarnings.length} líneas`} el coste del almacén
+                es idéntico al importe del papel. {ivaWarnings.length === 1 ? 'Ese importe parece' : 'Esos importes parecen'} llevar el IVA dentro.
+              </p>
+              <ul className="space-y-1 mt-1.5">
+                {ivaWarnings.map(w => (
+                  <li key={w.lineId} className="text-sm text-text-secondary tabular-nums">
+                    <span className="text-text-primary font-medium">{w.nombre}</span>: papel {fmtMoney(w.papel)} = almacén {fmtMoney(w.almacen)}
+                    {w.netoPropuesto != null && <> · sin IVA serían <b className="text-text-primary">{fmtMoney(w.netoPropuesto)}</b></>}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-text-secondary mt-1.5">
+                Corrígelo con «Corregir» en la línea (la casilla del IVA lo calcula), o sigue si el albarán
+                venía en base imponible esta vez.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button type="button" onClick={() => setIvaWarningsAcked(true)} disabled={saving}
+              className="px-4 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
+              Es correcto, continuar
+            </button>
+          </div>
+        </div>
+      )}
+
       {((costWarnings && costWarnings.length > 0) || (fractionalWarnings && fractionalWarnings.length > 0)) && (
         <div className="rounded-lg border border-warning bg-page p-4 space-y-3">
           {costWarnings && costWarnings.length > 0 && (
@@ -888,6 +1034,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
 function LineEditor({
   line, itemInfo, formats, saving, qty, cost, formatId, reason, editError,
   onSetQty, onSetCost, onSetFormatId, onSetReason, onSave, onCancel, onChangeArticle,
+  ivaOn, ivaRate, ivaSugeridoPorProveedor, onSetIvaOn, onSetIvaRate,
 }: {
   line: GoodsReceiptLine
   itemInfo: Record<string, { name: string; baseUnitAbbr: string | null }>
@@ -905,6 +1052,13 @@ function LineEditor({
   onSave: () => void
   onCancel: () => void
   onChangeArticle: () => void
+  /** §4 — «el precio del papel lleva IVA». */
+  ivaOn: boolean
+  ivaRate: string
+  /** El proveedor está marcado como «factura con IVA incluido» en su ficha. */
+  ivaSugeridoPorProveedor: boolean
+  onSetIvaOn: (v: boolean) => void
+  onSetIvaRate: (v: string) => void
 }) {
   const info = line.recipeItemId ? itemInfo[line.recipeItemId] : undefined
   const name = info?.name ?? sentenceCase(line.productName)
@@ -918,6 +1072,33 @@ function LineEditor({
   // el editor pide números a ciegas, que es justo lo que estamos arreglando.
   const previewBase = qtyN !== null && chosen ? qtyN * chosen.qtyInBase : null
   const previewTotal = qtyN !== null && costN !== null ? qtyN * costN : null
+
+  // ── §4 · quitar el IVA deja de ser aritmética mental ──────────────────
+  // El BRUTO por unidad sale del papel (doc_amount ÷ unidades). Si el papel no
+  // dice importe, se toma lo que hay escrito en el campo como bruto: es lo
+  // único que se puede afirmar, y se dice en el texto de qué sale.
+  const rateN = parseNum(ivaRate)
+  const brutoPorUnidad = qtyN !== null && qtyN !== 0 && line.docAmount != null
+    ? line.docAmount / qtyN
+    : null
+  const brutoBase = brutoPorUnidad ?? costN
+  const netoPropuesto = netoDesdeBruto(brutoBase, rateN)
+  // «→ 83,64 €» tiene que ser exactamente lo que se va a guardar, no una
+  // aproximación distinta: se compara contra lo que hay escrito con la misma
+  // tolerancia de céntimo con la que se enseña.
+  const netoYaAplicado = netoPropuesto != null && costN !== null
+    && Math.abs(costN - netoPropuesto) < 0.005
+
+  // Marcar la casilla ESCRIBE el neto en el campo. No lo guarda: el campo
+  // sigue siendo editable a mano y no pasa nada hasta pulsar Guardar.
+  function aplicarIva(on: boolean, tipo: string) {
+    onSetIvaOn(on)
+    onSetIvaRate(tipo)
+    if (!on) return
+    const r = parseNum(tipo)
+    const neto = netoDesdeBruto(brutoBase, r)
+    if (neto != null) onSetCost(numToInputStr(neto))
+  }
 
   return (
     <div className="rounded-lg border border-accent bg-card px-4 py-3.5 space-y-2.5">
@@ -965,6 +1146,56 @@ function LineEditor({
         </label>
       </div>
 
+      {/* §4 — la casilla del IVA. Vive pegada al campo de coste porque es lo que
+          modifica. Si el proveedor está marcado en su ficha, se dice aquí: es
+          una sugerencia VISIBLE, no un cálculo que pasa solo. */}
+      <div className="px-3 py-2.5 rounded-md border border-border-default bg-page space-y-2">
+        <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+          <input type="checkbox" checked={ivaOn} disabled={saving}
+            onChange={e => aplicarIva(e.target.checked, ivaRate)}
+            className="w-4 h-4 accent-accent" />
+          El precio del papel lleva IVA
+        </label>
+        {ivaSugeridoPorProveedor && !ivaOn && (
+          <p className="text-xs text-text-secondary">
+            Este proveedor está marcado en su ficha como «factura con IVA incluido». Marca la casilla si
+            este albarán también lo lleva.
+          </p>
+        )}
+        {ivaOn && (
+          <>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-text-secondary">Tipo:</span>
+              {TIPOS_IVA.map(t => (
+                <button key={t} type="button" disabled={saving}
+                  onClick={() => aplicarIva(true, String(t))}
+                  className={`px-2 py-1 rounded-md text-xs font-medium border transition-base disabled:opacity-50 ${rateN === t ? 'border-accent bg-accent-bg text-accent' : 'border-border-default bg-card text-text-primary hover:bg-page'}`}>
+                  {t} %
+                </button>
+              ))}
+              <input type="text" value={ivaRate} disabled={saving}
+                onChange={e => aplicarIva(true, e.target.value)}
+                aria-label="Otro tipo de IVA en porcentaje"
+                className="w-16 px-2 py-1 text-xs border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+              <span className="text-xs text-text-secondary">%</span>
+            </div>
+            <p className="text-sm text-text-primary tabular-nums">
+              {brutoBase == null || netoPropuesto == null ? (
+                <span className="text-text-secondary">
+                  Falta el importe del papel o la cantidad para poder quitarle el IVA.
+                </span>
+              ) : (
+                <>
+                  {brutoPorUnidad != null ? 'Papel' : 'Lo escrito'} {fmtMoney(brutoBase)} con IVA {fmtNumEs(rateN, 0)} %
+                  {' → '}al almacén <b>{fmtMoney(netoPropuesto)}</b> cada uno
+                  {!netoYaAplicado && <span className="text-warning"> · lo escrito ahora es {costN !== null ? fmtMoney(costN) : 'nada'}</span>}
+                </>
+              )}
+            </p>
+          </>
+        )}
+      </div>
+
       {(previewBase != null || previewTotal != null) && (
         <div className="px-3 py-2 rounded-md border border-dashed border-border-default bg-page text-sm text-text-secondary tabular-nums">
           Entrará al almacén:{' '}
@@ -997,6 +1228,40 @@ function LineEditor({
   )
 }
 
+// ── LAS DOS CIFRAS DE LA LÍNEA ─────────────────────────────────────────
+// ENCARGO CODE (31/08) «El albarán con IVA incluido» §1 — hasta hoy la tarjeta
+// plegada pintaba UNA cifra sin decir cuál era, y era `doc_amount` (el papel).
+// Por eso Pamela guardó 83,64 en el ALB-00134 y la pantalla siguió diciendo
+// «92,00 €»: no era el mismo campo.
+//
+// Se enseñan las dos, con su nombre, SIEMPRE — también cuando coinciden. Que
+// coincidan es información (el albarán trae base imponible), no ausencia de
+// información: esconderlas al coincidir devolvería la ambigüedad de no saber
+// cuál se está mirando.
+//
+// El €/unidad base sale de `unit_cost` (lo que valora el almacén) y con
+// decimales suficientes: es EL número que tiene que moverse cuando alguien
+// corrige el coste. Con fmtMoney, 0,0092 y 0,0084 se pintaban los dos «0,01 €».
+function ImportesLinea({ line, baseUnitAbbr }: {
+  line: GoodsReceiptLine
+  baseUnitAbbr: string | null
+}) {
+  const papel = importePapel(line)
+  const almacen = importeAlAlmacen(line)
+  const porBase = costePorUnidadBase(line)
+  const uSingular = unitNoun(baseUnitAbbr, 1)
+
+  return (
+    <>
+      {papel != null && <> · <span className="text-text-secondary">Papel:</span> {fmtMoney(papel)}</>}
+      {almacen != null
+        ? <> · <span className="text-text-secondary">Al almacén:</span> <b className="text-text-primary">{fmtMoney(almacen)}</b></>
+        : <b className="text-warning"> · sin coste (no valora el almacén)</b>}
+      {porBase != null && <> · <b className="text-text-primary">{fmtMoneyPrecise(porBase)}</b> la {uSingular}</>}
+    </>
+  )
+}
+
 // ── Fila CLASE 1 · resuelta ────────────────────────────────────────────
 function ResueltaRow({ line, itemInfo, formatNames, saving, onOpenEditor }: {
   line: GoodsReceiptLine
@@ -1009,7 +1274,6 @@ function ResueltaRow({ line, itemInfo, formatNames, saving, onOpenEditor }: {
   const name = info?.name ?? sentenceCase(line.productName)
   const formatName = line.purchaseFormatId ? formatNames[line.purchaseFormatId] : null
   const qtyInBase = line.qtyInBase ?? 0
-  const perUnit = qtyInBase > 0 ? (line.docAmount ?? (line.unitCost ?? 0) * line.qtyReceived) / qtyInBase : null
   const uNoun = unitNoun(info?.baseUnitAbbr ?? null, qtyInBase)
 
   return (
@@ -1019,11 +1283,7 @@ function ResueltaRow({ line, itemInfo, formatNames, saving, onOpenEditor }: {
       <span className="text-sm text-text-secondary min-w-0 flex-1">
         {fmtQtyDisplay(line.qtyReceived)} {formatName ? pluralizeEs(formatName, line.qtyReceived) : ''} ·{' '}
         <b className="text-text-primary">{fmtQtyDisplay(qtyInBase)} {uNoun} al almacén</b>
-        {line.docAmount != null && <> · {fmtMoney(line.docAmount)}</>}
-        {perUnit != null && <> · {fmtMoney(perUnit)} la {unitNoun(info?.baseUnitAbbr ?? null, 1)}</>}
-        {line.unitCost == null && (
-          <b className="text-warning"> · sin coste</b>
-        )}
+        <ImportesLinea line={line} baseUnitAbbr={info?.baseUnitAbbr ?? null} />
       </span>
       <button type="button" onClick={onOpenEditor} disabled={saving}
         className="shrink-0 min-h-touch px-3.5 rounded-md text-sm font-semibold border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50 transition-base">
@@ -1048,7 +1308,12 @@ function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onCorregir,
   const shortName = name.split(' ')[0]
   const formatName = line.purchaseFormatId ? formatNames[line.purchaseFormatId] : null
   const qtyInBase = line.qtyInBase ?? 0
-  const perUnit = qtyInBase > 0 ? (line.docAmount ?? 0) / qtyInBase : null
+  // §1/§2 — antes: (line.docAmount ?? 0) / qtyInBase. Salía del PAPEL, así que
+  // corregir el coste no movía este número; y con fmtMoney se aplastaba a
+  // «0,01 €». Ahora sale de unit_cost y con decimales suficientes.
+  const perUnit = costePorUnidadBase(line)
+  const perUnitPapel = qtyInBase > 0 && line.docAmount != null ? line.docAmount / qtyInBase : null
+  const almacen = importeAlAlmacen(line)
   const uNoun = unitNoun(info?.baseUnitAbbr ?? null, qtyInBase)
   const uNounSingular = unitNoun(info?.baseUnitAbbr ?? null, 1)
   const docQty = line.docQty
@@ -1084,9 +1349,24 @@ function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onCorregir,
           })}. Nadie lo ha confirmado todavía, y ya entró al almacén.
         </span>
       </div>
-      {qtyInBase > 0 && line.docAmount != null && (
-        <div className="mx-4 mt-2.5 px-3 py-2.5 rounded-md border border-dashed border-border-default bg-page text-sm text-text-secondary tabular-nums">
-          {fmtQtyDisplay(line.qtyReceived)} {formatName ? pluralizeEs(formatName, line.qtyReceived) : ''} × {fmtQtyDisplay(qtyInBase / Math.max(line.qtyReceived, 1))} {uNoun} = <b className="text-text-primary">{fmtQtyDisplay(qtyInBase)} {uNoun}</b> · {fmtMoney(line.docAmount)} ÷ {fmtQtyDisplay(qtyInBase)} = <b className="text-text-primary">{perUnit != null ? fmtMoney(perUnit) : DASH} la {uNounSingular}</b>
+      {qtyInBase > 0 && (line.docAmount != null || almacen != null) && (
+        <div className="mx-4 mt-2.5 px-3 py-2.5 rounded-md border border-dashed border-border-default bg-page text-sm text-text-secondary tabular-nums space-y-1">
+          <div>
+            {fmtQtyDisplay(line.qtyReceived)} {formatName ? pluralizeEs(formatName, line.qtyReceived) : ''} × {fmtQtyDisplay(qtyInBase / Math.max(line.qtyReceived, 1))} {uNoun} = <b className="text-text-primary">{fmtQtyDisplay(qtyInBase)} {uNoun}</b>
+          </div>
+          {/* El desglose enseña la cuenta DE VERDAD, la que valora el almacén.
+              La del papel se deja al lado cuando difiere: ver la diferencia es
+              justamente lo que permite cazar un IVA colado. */}
+          <div>
+            Al almacén: <b className="text-text-primary">{almacen != null ? fmtMoney(almacen) : DASH}</b>
+            {' '}÷ {fmtQtyDisplay(qtyInBase)} = <b className="text-text-primary">{perUnit != null ? fmtMoneyPrecise(perUnit) : DASH} la {uNounSingular}</b>
+          </div>
+          {line.docAmount != null && (
+            <div>
+              Papel: {fmtMoney(line.docAmount)}
+              {perUnitPapel != null && <> ÷ {fmtQtyDisplay(qtyInBase)} = {fmtMoneyPrecise(perUnitPapel)} la {uNounSingular}</>}
+            </div>
+          )}
         </div>
       )}
       {/* ENCARGO CODE (20/08) §2.2 — tercer camino. Antes solo se podía decir
