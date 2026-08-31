@@ -1,9 +1,37 @@
--- 20260830T1810_inicio_p1_datos_y_rls.sql
+-- 20260831T1835_inicio_p1_datos_y_rls.sql
 -- ============================================================================
--- INICIO P1 · SUB-LOTE 1: datos + RLS. ESCRITA, NO APLICADA.
+-- INICIO P1 · SUB-LOTE 1: datos + RLS.
+--
+-- APLICADA el 31/08/2026 a las 18:35 de Madrid (16:35 UTC), por orden expresa
+-- de Julio. Registrada en supabase_migrations.schema_migrations como version
+-- 20260831163522, nombre `inicio_p1_datos_y_rls`. El fichero se llamaba
+-- 20260830T1810 y se renumero a la hora real: el nombre tiene que decir cuando
+-- paso, no cuando se escribio (misma leccion que brand_closure_por_local).
+--
+-- VERIFICADO EN PRODUCCION JUSTO DESPUES DE APLICARLA, por consulta y no por
+-- afirmacion (regla 5):
+--   · las CUATRO tablas existen: home_card_catalog, home_card_account,
+--     home_layout, home_role_default.
+--   · relrowsecurity = true en las cuatro.
+--   · anon: SELECT e INSERT en false en las cuatro.
+--   · authenticated: INSERT = true en home_layout (la mitad que se olvida
+--     comprobar, y sin la cual el Inicio naceria roto).
+--   · 6 politicas, todas `to authenticated`; home_layout_own compara
+--     auth.uid() = user_id directamente, sin joins.
+--
+-- HALLAZGO ANOTADO, NO CORREGIDO AQUI: `authenticated` conserva INSERT/UPDATE/
+-- DELETE de tabla sobre home_card_catalog, aunque abajo solo se le concede
+-- SELECT. Viene de pg_default_acl, que reparte arwdDxtm a anon, authenticated y
+-- service_role en cada tabla nueva de `public`; el revoke de abajo quita a
+-- `public` y a `anon`, no a `authenticated`. NO es un agujero abierto: RLS esta
+-- activa y home_card_catalog no tiene ninguna politica de escritura, asi que la
+-- escritura queda denegada igual. Es la misma postura que ya tiene
+-- brand_closure. Queda escrito para que se decida a proposito, no por olvido.
+--
 -- La ventana de despliegue del 30/08 (antes de las 12:15) ya estaba cerrada
--- cuando llego el encargo, y el propio encargo dice que el Inicio no toca
--- produccion hasta que este sub-lote este construido y REVISADO.
+-- cuando llego el encargo, y el propio encargo decia que el Inicio no toca
+-- produccion hasta que este sub-lote estuviera construido y REVISADO. Lo
+-- estuvo, y Julio la mando aplicar el 31/08 por la tarde.
 --
 -- DECISIONES DE JULIO (30/08) QUE ESTA MIGRACION MATERIALIZA
 --
