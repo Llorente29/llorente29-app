@@ -33,6 +33,28 @@ export async function listShiftTemplates(locationId: string): Promise<ShiftTempl
   return (data ?? []) as ShiftTemplate[];
 }
 
+/**
+ * Plantillas por id, SIN filtrar por `active`.
+ *
+ * Existe porque un cuadrante ya guardado referencia plantillas que pueden
+ * haberse desactivado despues: el 29/08 se podaron 7 de Alcala entre las 18:54
+ * y las 19:02 y la semana publicada del 24/08 dejo de pintar 7 de sus 10 filas.
+ * Desactivar una plantilla no borra los turnos que ya se trabajaron; la vista
+ * tiene que seguir enseñandolos.
+ */
+export async function listShiftTemplatesByIds(ids: string[]): Promise<ShiftTemplate[]> {
+  if (!supabase || ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('shift_templates')
+    .select('*')
+    .in('id', ids);
+  if (error) {
+    console.error('[scheduler] listShiftTemplatesByIds', error);
+    return [];
+  }
+  return (data ?? []) as ShiftTemplate[];
+}
+
 export async function createShiftTemplate(
   t: Omit<ShiftTemplate, 'id' | 'created_at' | 'updated_at'>
 ): Promise<ShiftTemplate | null> {
@@ -272,16 +294,35 @@ export async function upsertSchedule(s: {
   return { schedule: data as Schedule, errorMessage: null };
 }
 
-export async function publishSchedule(id: string): Promise<boolean> {
-  if (!supabase) return false;
+/**
+ * Resultado de publicar, con CONTENIDO. Antes devolvia un boolean que la
+ * pantalla ni miraba: Julio publico el 30/08 a las 15:04, salio todo bien
+ * -- status, celdas y los 4 avisos -- y la pantalla no dijo nada. El silencio
+ * se lee como fallo y siembra dobles clics.
+ *
+ * `notified` es cuanta gente recibio el aviso. `notifyError` distingue "no
+ * habia a quien avisar" (0 sin error) de "fallo el aviso" (0 con error): la
+ * publicacion es valida en los dos casos, pero no significan lo mismo.
+ */
+export interface PublishResult {
+  ok: boolean;
+  notified: number;
+  error?: string;
+  notifyError?: string;
+}
+
+export async function publishSchedule(id: string): Promise<PublishResult> {
+  if (!supabase) return { ok: false, notified: 0, error: 'Sin conexion con Supabase' };
   const sb = supabase;
+  let notified = 0;
+  let notifyError: string | undefined;
   const { error } = await sb
     .from('schedules')
     .update({ status: 'published', published_at: new Date().toISOString() })
     .eq('id', id);
   if (error) {
     console.error('[scheduler] publishSchedule', error);
-    return false;
+    return { ok: false, notified: 0, error: error.message };
   }
 
   // Notificar a todos los empleados con turnos en este schedule (sin bloquear si falla)
@@ -322,13 +363,17 @@ export async function publishSchedule(id: string): Promise<boolean> {
           `Tu horario para la semana del ${fechaLegible} ya está publicado. Consulta tus turnos en la app.`,
           { scheduleId: id, weekStart: week_start }
         );
+        notified = employeeIds.size;
       }
     }
   } catch (e) {
+    // El cuadrante YA esta publicado: un fallo avisando no lo deshace. Pero
+    // deja de tragarse en la consola y sube para que la pantalla lo diga.
+    notifyError = e instanceof Error ? e.message : 'error creando los avisos';
     console.warn('[scheduler] publishSchedule: error creando notificaciones:', e);
   }
 
-  return true;
+  return { ok: true, notified, notifyError };
 }
 
 export async function listRecentSchedules(

@@ -36,6 +36,10 @@ export default function PlantillaTurnosPage() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Un boton que hace algo importante confirma o falla en pantalla. Hasta el
+  // 30/08 crear, editar y BORRAR una plantilla se tragaban el resultado: la
+  // poda del 29/08 -- la que escondio la semana del 24 -- no dijo ni pio.
+  const [aviso, setAviso] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Default: primer local
   useEffect(() => {
@@ -72,8 +76,20 @@ export default function PlantillaTurnosPage() {
   }
 
   async function handleDelete(id: string) {
+    const t = templates.find((x) => x.id === id);
     if (!confirm('¿Eliminar este turno del catálogo?')) return;
-    await deleteShiftTemplate(id);
+    setAviso(null);
+    const ok = await deleteShiftTemplate(id);
+    if (ok) {
+      // Retirar una plantilla NO borra los turnos ya cuadrados con ella: las
+      // semanas que la usen la seguiran pintando, marcada como inactiva.
+      setAviso({
+        ok: true,
+        msg: `Turno «${t?.label ?? id.slice(0, 8)}» retirado del catálogo. Los cuadrantes que ya lo usaban lo siguen mostrando, marcado como inactivo.`,
+      });
+    } else {
+      setAviso({ ok: false, msg: 'No se pudo retirar el turno. Sigue en el catálogo.' });
+    }
     refresh();
   }
 
@@ -89,6 +105,17 @@ export default function PlantillaTurnosPage() {
           esto como base.
         </p>
       </div>
+
+      {aviso && (
+        <div className={`mb-4 rounded-lg p-3 flex items-start justify-between gap-3 border ${
+          aviso.ok ? 'bg-success-bg border-success/30' : 'bg-danger-bg border-danger/30'
+        }`}>
+          <p className={`text-sm ${aviso.ok ? 'text-success' : 'text-danger'}`}>{aviso.msg}</p>
+          <button onClick={() => setAviso(null)} className="text-xs opacity-70 hover:opacity-100 shrink-0">
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {/* Selector de local */}
       <div className="mb-4 flex items-center gap-3">
