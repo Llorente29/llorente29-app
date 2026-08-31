@@ -16,6 +16,7 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { Bike, CheckCircle2, AlertTriangle, Phone, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { traduceDireccionEntrega } from '@/lib/direccionEntrega'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined
 // Base de la tienda propia (canal directo). Multi-tenant por slug. Path-mode = siempre funciona.
@@ -323,7 +324,7 @@ export default function SeguimientoRoute() {
       <div className="flex-1 min-h-0 mx-4 rounded-2xl overflow-hidden ring-1 ring-zinc-200 relative">
         {MAPBOX_TOKEN
           ? <div ref={containerRef} className="absolute inset-0" />
-          : <div className="absolute inset-0 grid place-items-center text-sm text-zinc-500 p-6 text-center">{data.delivery_address ?? 'Tu direccion'}</div>}
+          : <div className="absolute inset-0 grid place-items-center text-sm text-zinc-500 p-6 text-center">{traduceDireccionEntrega(data.delivery_address) ?? 'Tu direccion'}</div>}
       </div>
 
       <div className="shrink-0 p-4 space-y-3">
@@ -351,7 +352,7 @@ export default function SeguimientoRoute() {
             <span>Al recibirlo, tienes <b>-{pct}%</b> para tu próxima con el código <b>{offer.code}</b> en la tienda.</span>
           </div>
         )}
-        {data.delivery_address && <p className="text-xs text-zinc-400 text-center">Entrega en {data.delivery_address}</p>}
+        {data.delivery_address && <p className="text-xs text-zinc-400 text-center">Entrega en {traduceDireccionEntrega(data.delivery_address)}</p>}
       </div>
     </div>
   )

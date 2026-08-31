@@ -5,6 +5,7 @@
 
 import type { TicketDoc } from './escpos';
 import { passCode } from '@/modules/orders/lib/passCode';
+import { traduceDireccionEntrega } from '@/lib/direccionEntrega';
 
 function ticketNumber(order: any) { return order.external_tab_ref ?? order.external_ref ?? '—'; }
 // CÓDIGO DE PASE (lo que canta el repartidor): Glovo → pos_short_code; Uber →
@@ -111,7 +112,8 @@ export function renderBagTicket(order: any, fiscal?: any): TicketDoc {
   if (order.expected_time) b.push({ kind: 'text', text: 'Hora programada: ' + fmtDate(order.expected_time) });
   if (order.customer_name) b.push({ kind: 'text', text: 'Nombre del cliente: ' + order.customer_name });
   if (isOwnDelivery(order.service_type)) {
-    if (order.delivery_address) b.push({ kind: 'text', text: 'Dirección: ' + order.delivery_address });
+    // Traducción de presentación: el dato guardado no cambia.
+    if (order.delivery_address) b.push({ kind: 'text', text: 'Dirección: ' + traduceDireccionEntrega(order.delivery_address) });
     if (order.customer_phone)   b.push({ kind: 'text', text: 'Número de teléfono: ' + order.customer_phone });
   }
   b.push({ kind: 'space' });

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { MapPin, RefreshCw, Bike, Phone, AlertTriangle, PiggyBank, UserRound } from 'lucide-react'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import { traduceDireccionEntrega } from '@/lib/direccionEntrega'
 import {
   getOrdersFeed, deliveryView, isOwnDeliveryUndispatched, dispatchOrder, isTerminalStatus,
   type OrderFeedItem,
@@ -220,7 +221,7 @@ function DispatchRow({ order, onDone }: { order: OrderFeedItem; onDone: () => vo
           <span className="ml-auto text-[13px] font-bold tabular-nums text-text-primary">{eur(order.total)}</span>
         </div>
         <div className="text-[12px] text-text-secondary mt-0.5">
-          {undispatched ? 'Reparto propio sin despachar' : 'Fallo de despacho'}{order.delivery_address ? ` · ${order.delivery_address}` : ''}
+          {undispatched ? 'Reparto propio sin despachar' : 'Fallo de despacho'}{order.delivery_address ? ` · ${traduceDireccionEntrega(order.delivery_address)}` : ''}
         </div>
         {(err || order.dispatch_error) && (
           <div className="flex items-start gap-1.5 text-[12px] text-danger mt-1.5"><AlertTriangle size={13} className="shrink-0 mt-0.5" />{err ?? order.dispatch_error}</div>
@@ -253,7 +254,7 @@ function ProgressRow({ order }: { order: OrderFeedItem }) {
       <div className="flex items-center gap-2 mt-1.5 text-[12.5px] text-text-secondary">
         <span>{vehEmoji(d.transport)} {d.rider ?? 'Sin rider aún'}</span>
         {d.etaText && <span>· llega en {d.etaText}</span>}
-        {order.delivery_address && <span className="truncate">· {order.delivery_address}</span>}
+        {order.delivery_address && <span className="truncate">· {traduceDireccionEntrega(order.delivery_address)}</span>}
       </div>
       <div className="flex items-center justify-between gap-2 mt-1">
         <EconNudge order={order} />

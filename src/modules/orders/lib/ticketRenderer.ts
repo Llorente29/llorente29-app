@@ -24,6 +24,7 @@
 import type { OrderFeedItem, OrderFeedLine, OrderFeedChild } from '../services/ordersFeedService'
 import { childVisual } from '../services/ordersFeedService'
 import { passCode } from './passCode'
+import { traduceDireccionEntrega } from '@/lib/direccionEntrega'
 
 // ── Modelo intermedio ───────────────────────────────────────────────────────
 
@@ -186,7 +187,10 @@ export function renderBagTicket(order: OrderFeedItem, fiscal?: { legalName?: str
   // Datos de entrega
   b.push({ kind: 'text', text: 'Método: ' + deliveryLabel(order.service_type) })
   if (order.customer_name)   b.push({ kind: 'text', text: 'Cliente: ' + order.customer_name })
-  if (order.delivery_address) b.push({ kind: 'text', text: 'Dir: ' + order.delivery_address })
+  // Etiquetas en castellano SOLO al imprimir: delivery_address se queda como
+  // lo mandó el proveedor. Misma función que la pantalla, para que el papel
+  // y el móvil del repartidor no digan cosas distintas.
+  if (order.delivery_address) b.push({ kind: 'text', text: 'Dir: ' + traduceDireccionEntrega(order.delivery_address) })
   if (order.customer_phone)  b.push({ kind: 'text', text: 'Tel: ' + order.customer_phone })
   if (order.expected_time)   b.push({ kind: 'text', text: 'Hora: ' + fmtDate(order.expected_time) })
 
