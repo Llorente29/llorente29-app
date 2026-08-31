@@ -12,11 +12,11 @@
 // Reutiliza: getOrdersFeed, deliveryView, isOwnDeliveryUndispatched, dispatchOrder,
 // y reparto_settings() para los repartidores en turno.
 
-import { useCallback, useEffect, useState } from 'react'
-import { MapPin, RefreshCw, Bike, Phone, AlertTriangle, PiggyBank, UserRound } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { MapPin, RefreshCw, Bike, Phone, AlertTriangle, PiggyBank, UserRound, Languages } from 'lucide-react'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
-import { traduceDireccionEntrega } from '@/lib/direccionEntrega'
+import { direccionParaMostrar, etiquetasDesconocidas } from '@/lib/direccionEntrega'
 import {
   getOrdersFeed, deliveryView, isOwnDeliveryUndispatched, dispatchOrder, isTerminalStatus,
   type OrderFeedItem,
@@ -119,6 +119,25 @@ function DispatchBoard({ locationId }: { locationId: string }) {
   const onShift = couriers.filter(c => c.on_shift)
   const ahorroActivo = orders.reduce((s, o) => s + saving(o), 0)
 
+  // EL AUDITOR DE ETIQUETAS, ENCHUFADO (Julio, 31/08: «un auditor que nadie
+  // mira es un auditor que no existe»).
+  //
+  // Las etiquetas que no están en el mapa se enseñan tal cual — esa es la
+  // regla 2 y no cambia. Pero eso solo lo ve quien lea ESA dirección; nadie
+  // sabría que hay que ampliar el mapa. Aquí se juntan las de todos los
+  // pedidos en pantalla, en la pantalla de OFICINA, que es donde alguien puede
+  // hacer algo con ellas. Si no hay ninguna, no se pinta nada: no ocupa sitio
+  // cuando no aporta.
+  const etiquetasSinTraducir = useMemo(() => {
+    const vistas = new Map<string, number>()
+    for (const o of orders) {
+      for (const e of etiquetasDesconocidas(o.delivery_address)) {
+        vistas.set(e, (vistas.get(e) ?? 0) + 1)
+      }
+    }
+    return [...vistas.entries()].sort((a, b) => b[1] - a[1])
+  }, [orders])
+
   return (
     <div className="rounded-2xl overflow-hidden border border-default bg-card text-text-primary flex flex-col h-[calc(100vh-9rem)] min-h-[520px]">
       {/* Cabecera + KPIs */}
@@ -148,6 +167,27 @@ function DispatchBoard({ locationId }: { locationId: string }) {
         ))}
         {platformCount > 0 && <span className="ml-auto text-[12px] text-text-secondary">· {platformCount} pedidos los reparte la plataforma</span>}
       </div>
+
+      {/* Etiquetas de dirección que llegan sin traducción. Informativo y
+          discreto: no bloquea nada, solo dice qué hay que añadir al mapa de
+          src/lib/direccionEntrega.ts. */}
+      {etiquetasSinTraducir.length > 0 && (
+        <div className="px-5 py-2 border-b border-default flex items-center gap-2 flex-wrap bg-page">
+          <Languages size={13} className="text-text-secondary shrink-0" />
+          <span className="text-[11.5px] text-text-secondary">
+            {etiquetasSinTraducir.length === 1 ? 'Etiqueta de dirección sin traducir' : 'Etiquetas de dirección sin traducir'}:
+          </span>
+          {etiquetasSinTraducir.map(([etiqueta, n]) => (
+            <span key={etiqueta}
+              className="inline-flex items-center gap-1 text-[11.5px] font-semibold bg-card text-text-secondary border border-default rounded-full px-2 py-0.5">
+              {etiqueta}{n > 1 && <span className="opacity-60">×{n}</span>}
+            </span>
+          ))}
+          <span className="text-[11px] text-text-secondary opacity-80">
+            · se enseñan tal cual; añádelas al mapa para que salgan en castellano
+          </span>
+        </div>
+      )}
 
       {/* Cuerpo */}
       <div className="flex-1 overflow-y-auto p-5 bg-page">
@@ -221,7 +261,7 @@ function DispatchRow({ order, onDone }: { order: OrderFeedItem; onDone: () => vo
           <span className="ml-auto text-[13px] font-bold tabular-nums text-text-primary">{eur(order.total)}</span>
         </div>
         <div className="text-[12px] text-text-secondary mt-0.5">
-          {undispatched ? 'Reparto propio sin despachar' : 'Fallo de despacho'}{order.delivery_address ? ` · ${traduceDireccionEntrega(order.delivery_address)}` : ''}
+          {undispatched ? 'Reparto propio sin despachar' : 'Fallo de despacho'}{order.delivery_address ? ` · ${direccionParaMostrar(order.delivery_address)}` : ''}
         </div>
         {(err || order.dispatch_error) && (
           <div className="flex items-start gap-1.5 text-[12px] text-danger mt-1.5"><AlertTriangle size={13} className="shrink-0 mt-0.5" />{err ?? order.dispatch_error}</div>
@@ -254,7 +294,7 @@ function ProgressRow({ order }: { order: OrderFeedItem }) {
       <div className="flex items-center gap-2 mt-1.5 text-[12.5px] text-text-secondary">
         <span>{vehEmoji(d.transport)} {d.rider ?? 'Sin rider aún'}</span>
         {d.etaText && <span>· llega en {d.etaText}</span>}
-        {order.delivery_address && <span className="truncate">· {traduceDireccionEntrega(order.delivery_address)}</span>}
+        {order.delivery_address && <span className="truncate">· {direccionParaMostrar(order.delivery_address)}</span>}
       </div>
       <div className="flex items-center justify-between gap-2 mt-1">
         <EconNudge order={order} />

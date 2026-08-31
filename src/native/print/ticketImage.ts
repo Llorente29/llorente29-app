@@ -31,7 +31,7 @@
 
 import QRCode from 'qrcode'
 import { passCode, type PassCode, type PassCodeInput } from '@/modules/orders/lib/passCode'
-import { traduceDireccionEntrega } from '@/lib/direccionEntrega'
+import { direccionParaMostrar } from '@/lib/direccionEntrega'
 import dejaVuRegularUrl from './assets/DejaVuSans.ttf?url'
 import dejaVuBoldUrl from './assets/DejaVuSans-Bold.ttf?url'
 import folvyPieUrl from './assets/folvy_pie.png'
@@ -199,8 +199,8 @@ export async function renderBagImage(order: any, fiscal?: any, opts?: BagRenderO
   // `delivery_address` se leen tal cual y se traducen SOLO para pintarlas: la
   // fila de la venta no se toca.
   const addr = {
-    address: traduceDireccionEntrega(dd.address || order.delivery_address || null),
-    details: traduceDireccionEntrega(dd.details || null),
+    address: direccionParaMostrar(dd.address || order.delivery_address || null),
+    details: direccionParaMostrar(dd.details || null),
     postalCode: dd.postalCode || dd.post_code || null,
   }
 

@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   traduceDireccionEntrega, etiquetasDesconocidas, ETIQUETAS_DIRECCION,
+  quitaDireccionDuplicada, direccionParaMostrar,
 } from '@/lib/direccionEntrega'
 
 // Las cuatro direcciones con palabra inglesa que hay hoy en producción.
@@ -83,8 +84,8 @@ describe('la trampa: «door» dentro de una nota del cliente', () => {
   })
 })
 
-describe('lo que NO se traduce, declarado', () => {
-  it('«Spain» se queda: es un valor, no una etiqueta (481 de 1.043 direcciones)', () => {
+describe('lo que NO se traduce, decidido', () => {
+  it('«Spain» se queda: es un valor, y ya no llega (0 veces en los últimos 30 días)', () => {
     expect(traduceDireccionEntrega(CON_SPAIN)).toBe(CON_SPAIN)
   })
 
@@ -124,5 +125,96 @@ describe('idempotencia — traducir dos veces da lo mismo', () => {
   it('pasar la salida por la función otra vez no la cambia', () => {
     const una = traduceDireccionEntrega(CON_ETIQUETAS)
     expect(traduceDireccionEntrega(una)).toBe(una)
+  })
+})
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LA DIRECCIÓN REPETIDA
+// Direcciones reales de producción. Las de Just Eat por Last.app repiten
+// calle y CP: 32 de 32 en los últimos 30 días. Por HubRise, 0 de 73.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// La última del 31/08, a las 14:58 hora de Madrid.
+const JE_MALICIOSA = 'Plaza Maliciosa, 1 3 Izda, 28027, Plaza Maliciosa, 1 3 Izda, España, 28027'
+const JE_ORTIZ = 'Calle de Ricardo Ortiz, 38, 6 A, 28017, Calle de Ricardo Ortiz, 38, 6 A, Madrid, 28017'
+const JE_SIRO = 'Siro Muela 71, 28027, Siro Muela 71, Madrid, 28027'
+const JE_HUMBOLT = 'Calle Alejandro Humbolt, 15, 4E, Entrada Por María Teresa De león, 21, 28051, Calle Alejandro Humbolt, 15, 4E, Entrada Por María Teresa De león, 21, Madrid, 28051'
+
+describe('quitar la dirección repetida', () => {
+  it('la última real: se queda la copia con ciudad', () => {
+    expect(quitaDireccionDuplicada(JE_MALICIOSA)).toBe('Plaza Maliciosa, 1 3 Izda, España, 28027')
+  })
+
+  it('con piso y letra', () => {
+    expect(quitaDireccionDuplicada(JE_ORTIZ)).toBe('Calle de Ricardo Ortiz, 38, 6 A, Madrid, 28017')
+  })
+
+  it('sin coma entre calle y número', () => {
+    expect(quitaDireccionDuplicada(JE_SIRO)).toBe('Siro Muela 71, Madrid, 28027')
+  })
+
+  it('con una indicación larga dentro, y acentos', () => {
+    expect(quitaDireccionDuplicada(JE_HUMBOLT))
+      .toBe('Calle Alejandro Humbolt, 15, 4E, Entrada Por María Teresa De león, 21, Madrid, 28051')
+  })
+
+  it('no se pierde NADA de lo que había en la copia que se queda', () => {
+    const salida = quitaDireccionDuplicada(JE_HUMBOLT)!
+    for (const trozo of ['Humbolt', '15', '4E', 'María Teresa De león', '21', 'Madrid', '28051']) {
+      expect(salida).toContain(trozo)
+    }
+  })
+})
+
+describe('mejor repetida que recortada de más', () => {
+  it('si la primera copia tiene algo que la segunda no, NO se toca', () => {
+    // Aquí «Piso 3» solo está en la primera copia: recortar lo perdería, y una
+    // dirección sin piso es un pedido que no llega.
+    const asimetrica = 'Calle X, Piso 3, 28001, Calle X, Madrid, 28001'
+    expect(quitaDireccionDuplicada(asimetrica)).toBe(asimetrica)
+  })
+
+  it('una dirección normal (Glovo, HubRise) no se toca: 0 de 73 repiten', () => {
+    const glovo = 'Calle de la Encomienda de Palacios, 152, Floor: 1, Door: B, 28030'
+    expect(quitaDireccionDuplicada(glovo)).toBe(glovo)
+    const gmaps = 'C. de Álvarez Abellán, 4, Carabanchel, 28025 Madrid, Spain'
+    expect(quitaDireccionDuplicada(gmaps)).toBe(gmaps)
+  })
+
+  it('si al cortar se perdiera el código postal, no se corta', () => {
+    // «A, 28001, A»: el resto no es más largo que la cabeza. Se deja repetida.
+    expect(quitaDireccionDuplicada('Calle X, 28001, Calle X')).toBe('Calle X, 28001, Calle X')
+  })
+
+  it('sin código postal no hay nada que reconocer', () => {
+    expect(quitaDireccionDuplicada('Calle X, Calle X')).toBe('Calle X, Calle X')
+  })
+
+  it('null, undefined y vacío entran y salen igual', () => {
+    expect(quitaDireccionDuplicada(null)).toBeNull()
+    expect(quitaDireccionDuplicada(undefined)).toBeUndefined()
+    expect(quitaDireccionDuplicada('')).toBe('')
+  })
+
+  it('idempotente: pasarla dos veces da lo mismo', () => {
+    const una = quitaDireccionDuplicada(JE_ORTIZ)
+    expect(quitaDireccionDuplicada(una)).toBe(una)
+  })
+})
+
+describe('direccionParaMostrar — lo que ven la pantalla y el ticket', () => {
+  it('hace las dos cosas: quita la copia y traduce las etiquetas', () => {
+    const ambas = 'Calle X, Floor: 2, 28001, Calle X, Floor: 2, Madrid, 28001'
+    expect(direccionParaMostrar(ambas)).toBe('Calle X, Piso: 2, Madrid, 28001')
+  })
+
+  it('una dirección de Just Eat real queda legible', () => {
+    expect(direccionParaMostrar(JE_SIRO)).toBe('Siro Muela 71, Madrid, 28027')
+  })
+
+  it('y si no encaja ninguna de las dos reglas, sale tal cual', () => {
+    const raro = 'Algo raro: 3º izq., 4-B, #5'
+    expect(direccionParaMostrar(raro)).toBe(raro)
   })
 })

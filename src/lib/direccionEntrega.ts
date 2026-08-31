@@ -40,12 +40,14 @@
 //                       (aparece así en producción).
 // Cualquier otra cosa se devuelve sin tocar.
 //
-// ── LO QUE NO SE TRADUCE, DECLARADO ───────────────────────────────────────
-// «Spain» sale en 481 de las 1.043 direcciones — es, con diferencia, la
-// palabra inglesa más frecuente del ticket. NO se traduce aquí: es un VALOR
-// (el país que pone Google en la dirección formateada), no una etiqueta, y el
-// encargo habla de etiquetas. Queda anotado para que lo decida Julio, no
-// resuelto a escondidas.
+// ── LO QUE NO SE TRADUCE: «Spain». DECIDIDO, NO PENDIENTE ─────────────────
+// Se planteó porque sale en 481 de las 1.043 direcciones históricas. Julio lo
+// cerró el 31/08 con el dato que faltaba: en los ÚLTIMOS 30 DÍAS aparece CERO
+// veces. Esas 481 son histórico de Last.app; por la vía HubRise no llega
+// ninguna. Traducir un valor que ya no llega es añadir una regla que nadie
+// puede comprobar y que habría que mantener para siempre.
+// No se toca el mapa. Y de paso: es un VALOR (el país que pone Google en la
+// dirección formateada), no una etiqueta — el encargo habla de etiquetas.
 
 /**
  * Etiqueta inglesa (en minúsculas) → castellano.
@@ -165,4 +167,87 @@ export function etiquetasDesconocidas(texto: string | null | undefined): string[
     if (!traduceEtiqueta(etiqueta)) fuera.push(etiqueta)
   }
   return fuera
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LA DIRECCIÓN REPETIDA — 31/08/2026
+//
+// Just Eat, entrando por Last.app, manda la dirección DOS VECES en el mismo
+// campo. Verificado en producción sobre los últimos 30 días:
+//
+//   lastapp · justeat   32 de 32  repiten            ← todas
+//   lastapp · cash       1 de  1  repite
+//   lastapp · glovo      0 de 282
+//   hubrise · Glovo      0 de  66
+//   hubrise · Just Eat   0 de   7
+//
+// O sea: es una costumbre de LAST.APP, no del canal. Por HubRise no pasa —
+// ni siquiera con el mismo Just Eat. Por eso esto no se ata a un canal ni a
+// un `source`: se reconoce por la FORMA del texto, y si la forma no está, no
+// se toca nada. El día que Last.app deje de hacerlo, esto deja de actuar solo.
+//
+// LA FORMA, con un ejemplo real (31/08 a las 14:58, hora de Madrid):
+//
+//   «Plaza Maliciosa, 1 3 Izda, 28027, Plaza Maliciosa, 1 3 Izda, España, 28027»
+//     └──────── cabeza ────────┘  └CP┘ └──────── cabeza otra vez ───────┘
+//
+//   queda: «Plaza Maliciosa, 1 3 Izda, España, 28027»
+//
+// Se conserva la SEGUNDA copia, no la primera, porque es la que trae la
+// ciudad. Y se conserva LETRA POR LETRA: no se recompone la dirección, se
+// tira el prefijo sobrante.
+//
+// LA GUARDA QUE IMPIDE RECORTAR DE MÁS
+// Solo se quita el prefijo si la cabeza ENTERA reaparece, segmento a segmento,
+// justo al empezar el resto. Si la primera copia tuviera algo que la segunda
+// no tiene — «Calle X, Piso 3, 28001, Calle X, Madrid, 28001» — la
+// comparación falla y se enseña tal cual, con su repetición. Es la regla de
+// Julio: mejor repetida que recortada de más. Perder un piso de una dirección
+// es un pedido que no llega; leer la calle dos veces es una molestia.
+
+const CODIGO_POSTAL = /^\d{5}$/
+
+/** Para comparar dos copias: sin mayúsculas, sin acentos, sin espacios de más. */
+function normaliza(s: string): string {
+  return s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
+}
+
+/**
+ * Quita la primera copia cuando la dirección viene repetida. Si el patrón no
+ * encaja limpiamente, devuelve el texto SIN TOCAR.
+ *
+ * Como todo en este módulo: es de presentación. No escribe en ningún sitio y
+ * `delivery_address` sigue teniendo las dos copias, que son la prueba de lo
+ * que mandó el proveedor.
+ */
+export function quitaDireccionDuplicada<T extends string | null | undefined>(texto: T): T {
+  if (typeof texto !== 'string' || texto === '') return texto
+  const segs = texto.split(',')
+
+  // El corte va justo después del PRIMER código postal. Se prueban todos por
+  // si hubiera más de uno, y se acepta el primero que cuadre entero.
+  for (let k = 0; k < segs.length - 1; k++) {
+    if (!CODIGO_POSTAL.test(segs[k].trim())) continue
+    const cabeza = segs.slice(0, k)
+    const resto = segs.slice(k + 1)
+    if (cabeza.length === 0) continue
+    // El resto tiene que ser MÁS que la cabeza: si fuera igual de largo, al
+    // cortar perderíamos el código postal y no ganaríamos nada.
+    if (resto.length <= cabeza.length) continue
+    const repite = cabeza.every((c, i) => normaliza(c) === normaliza(resto[i]))
+    if (!repite) continue
+    return resto.join(',').replace(/^\s+/, '') as T
+  }
+  return texto
+}
+
+/**
+ * LO QUE SE PINTA Y LO QUE SE IMPRIME. Única función que deben usar la
+ * pantalla y el ticket: primero se quita la copia repetida, luego se traducen
+ * las etiquetas. Si las dos cosas viven separadas acaban aplicándose en
+ * sitios distintos, y el papel de la bolsa deja de coincidir con el móvil.
+ */
+export function direccionParaMostrar<T extends string | null | undefined>(texto: T): T {
+  return traduceDireccionEntrega(quitaDireccionDuplicada(texto))
 }
