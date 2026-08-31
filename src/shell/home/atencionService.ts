@@ -50,12 +50,49 @@ const ESTADOS_CONTEO_VIVO = ['contando', 'en_revision']
 
 // Una tablet lleva «muda» si no late desde hace más de un DÍA.
 //
-// El umbral no es fino a propósito. Con dos horas, la franja gritaría cada
-// mañana: los locales cierran a la 01:00 y ninguna tablet late hasta que
-// vuelven a abrir, así que todas serían «mudas» todos los días. Eso enseña a
-// ignorar la franja, que es peor que no tenerla. Un día entero no lo cruza
-// ningún cierre normal, y sí caza el caso que esto viene a evitar: la tablet
-// que estuvo TRES DÍAS invisible en agosto con el heartbeat devolviendo 200.
+// ── ESTE UMBRAL ES PROVISIONAL, Y SE SABE POR QUÉ ES MALO ──────────────────
+//
+// El razonamiento con el que se eligió: con dos horas la franja gritaría cada
+// mañana, porque los locales cierran a la 01:00 y ninguna tablet late hasta
+// que vuelven a abrir; todas serían «mudas» todos los días, y eso enseña a
+// ignorar la franja. Ese argumento era correcto.
+//
+// LA CONCLUSIÓN NO LO ERA (corregido por Julio, 31/08). Lo que había que
+// hacer no era subir el umbral, sino DEJAR DE CONTAR las horas en las que
+// nadie espera un latido.
+//
+// EL CONTRAEJEMPLO, con los datos reales:
+//   La tablet «Cocina» de Foodint Alcalá enmudeció el JUEVES 27/08 a las
+//   20:26:50 de Madrid — EN PLENO SERVICIO. Con este umbral de 24 h de reloj,
+//   la franja no habría dicho nada hasta el viernes 28 a las 20:26: un
+//   servicio entero de viernes noche a ciegas, más el resto del jueves.
+//   Justo lo que la franja existe para evitar.
+//
+// Con las mismas 24 h contadas SOLO en minutos de apertura, ese caso habría
+// avisado la misma noche del jueves.
+//
+// ── EL PASO SIGUIENTE, QUE VA JUSTO DETRÁS DEL SUB-LOTE 2 ─────────────────
+// Medir el silencio en MINUTOS DE APERTURA, no en horas de reloj. Y no hay
+// que construir la pieza: ya existe en producción.
+//
+//   availability_location_open_minutes(p_location_id, p_from, p_to)
+//
+// devuelve los minutos que el local estuvo abierto entre dos instantes,
+// leyendo `business_hours` (+ `business_hours_exception`). El cambio es
+// sustituir esta resta por una llamada:
+//
+//   antes:  now() - last_seen_at > 24 h
+//   luego:  availability_location_open_minutes(location_id, last_seen_at, now()) > N
+//
+// Con N alrededor de 30: en servicio una tablet late cada minuto (medido: 0-1
+// min en las dos vivas), así que 30 minutos de apertura está muy por encima de
+// cualquier corte pasajero y caza el caso de «Cocina» dentro del mismo turno.
+// Al contarse solo apertura, la noche entera no suma y desaparece el motivo
+// por el que se subió a 24 h.
+//
+// DISPARADOR: se cambia al cerrar el sub-lote 2. Si esto sigue aquí cuando el
+// sub-lote 3 esté en marcha, es que se olvidó — y el olvido tiene fecha y
+// nombre: el 27/08, la tablet de Cocina, un servicio a ciegas.
 const HORAS_SIN_LATIDO = 24
 
 function haceCuanto(iso: string | null): string {
