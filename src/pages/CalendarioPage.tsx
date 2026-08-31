@@ -16,6 +16,7 @@ import {
 import { useApp } from '../context/AppContext'
 import {
   listShiftTemplates,
+  listShiftTemplatesByIds,
   getSchedule,
   upsertSchedule,
   publishSchedule,
@@ -165,6 +166,31 @@ const BREAKDOWN_LABEL: Record<string, string> = {
   forzada: 'Franja forzada', fijo: 'Bloque fijo', refuerzo: 'Refuerzo excepcional',
 }
 
+// Una fila de la rejilla puede venir de tres sitios, y hay que poder
+// distinguirlos SIN esconder ninguno (regla 7: `active = false` no es "no
+// existe"). El 29/08 se podaron 7 plantillas de Alcala y la semana publicada
+// del 24/08 dejo de pintar 7 de sus 10 filas: los turnos seguian en `cells`,
+// solo que nadie los dibujaba, y la cabecera contaba 3 de 10 y decia "118 h
+// sin asignar".
+type EstadoFila = 'inactiva' | 'desconocida'
+type GridTemplate = ShiftTemplate & { _estado?: EstadoFila }
+
+// Plantilla borrada de shift_templates pero todavia referenciada por un
+// cuadrante guardado. No se sabe su horario: no se inventa.
+function buildUnknownTemplate(id: string, locationId: string): GridTemplate {
+  return {
+    id,
+    location_id: locationId,
+    label: `Turno desconocido · ${id.slice(0, 8)}`,
+    start_time: '00:00:00',
+    end_time: '00:00:00',
+    coverage_mon: 0, coverage_tue: 0, coverage_wed: 0, coverage_thu: 0,
+    coverage_fri: 0, coverage_sat: 0, coverage_sun: 0,
+    active: false,
+    _estado: 'desconocida',
+  }
+}
+
 function buildSyntheticTemplate(id: string, locationId: string, ini: string, fin: string): ShiftTemplate {
   return {
     id,
@@ -220,6 +246,9 @@ export default function CalendarioPage() {
   const [locationId, setLocationId] = useState<string>('')
   const [weekStart, setWeekStart] = useState<string>(() => toISODate(getMondayOfWeek(new Date())))
   const [templates, setTemplates] = useState<ShiftTemplate[]>([])
+  // Plantillas que el cuadrante guardado referencia pero que ya NO estan
+  // activas: inactivas (fila viva, active=false) o borradas (sin fila).
+  const [retiredTemplates, setRetiredTemplates] = useState<GridTemplate[]>([])
   const [cells, setCells] = useState<ScheduleCells>({})
   const [overrides, setOverrides] = useState<CoverageOverrides>({})
   const [scheduleRow, setScheduleRow] = useState<Schedule | null>(null)
@@ -312,8 +341,15 @@ export default function CalendarioPage() {
       if (parsed) synths.push(buildSyntheticTemplate(id, locationId, parsed.ini, parsed.fin))
     }
     synths.sort((a, b) => a.start_time.localeCompare(b.start_time))
-    return [...templates, ...synths]
-  }, [cells, proposalGaps, templates, locationId])
+    // Las retiradas se mezclan con las vivas por hora de inicio, para que la
+    // rejilla siga leyendose en orden. Las desconocidas (00:00, horario que no
+    // se sabe) caen al final, que es donde deben estar: son un aviso, no un
+    // turno.
+    const reales: GridTemplate[] = [...templates, ...retiredTemplates.filter(t => t._estado === 'inactiva')]
+    reales.sort((a, b) => a.start_time.localeCompare(b.start_time))
+    const desconocidas = retiredTemplates.filter(t => t._estado === 'desconocida')
+    return [...reales, ...synths, ...desconocidas] as GridTemplate[]
+  }, [cells, proposalGaps, templates, retiredTemplates, locationId])
 
   useEffect(() => {
     if (!locationId && locations.length > 0) setLocationId(locations[0].id)
@@ -376,6 +412,23 @@ export default function CalendarioPage() {
     setTemplates(tpls)
     setScheduleRow(sched)
     setCells(sched?.cells || {})
+
+    // Rescatar las plantillas que el cuadrante GUARDADO referencia y que
+    // listShiftTemplates no devuelve porque filtra active=true. Sin esto, una
+    // poda de plantillas borra semanas enteras de la vista sin decir nada.
+    const savedCells = sched?.cells || {}
+    const vivas = new Set(tpls.map(t => t.id))
+    const huerfanos = Object.keys(savedCells).filter(id => !vivas.has(id) && !GEN_ID_RE.test(id))
+    if (huerfanos.length === 0) {
+      setRetiredTemplates([])
+    } else {
+      const encontradas = await listShiftTemplatesByIds(huerfanos)
+      const porId = new Map(encontradas.map(t => [t.id, t]))
+      setRetiredTemplates(huerfanos.map(id => {
+        const t = porId.get(id)
+        return t ? { ...t, _estado: 'inactiva' as const } : buildUnknownTemplate(id, locationId)
+      }))
+    }
     setOverrides(sched?.coverage_overrides || {})
     setDirty(false)
     setLoading(false)
@@ -1004,6 +1057,8 @@ export default function CalendarioPage() {
     if (saved) {
       setScheduleRow(saved)
       setDirty(false)
+      // Que el botón se apague no es una confirmación: hay que decirlo.
+      setPublishResult({ ok: true, msg: 'Cuadrante guardado. Sigue sin publicar: los empleados aún no lo ven.' })
       // Recalcular aviso de personal con lo recién guardado
       getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
     } else if (errorMessage) {
@@ -1016,11 +1071,24 @@ export default function CalendarioPage() {
     const conflicts = findVacationConflicts(cells, weekStart, employees, vacations)
     if (conflicts.length > 0) { setVacationConflicts(conflicts); return }
     setSaveError(null)
+    setPublishResult(null)
     if (!scheduleRow) {
       await doSave()
     }
     if (scheduleRow?.id) {
-      await publishSchedule(scheduleRow.id)
+      const res = await publishSchedule(scheduleRow.id)
+      if (!res.ok) {
+        setPublishResult({ ok: false, msg: `No se pudo publicar: ${res.error ?? 'error desconocido'}. El cuadrante sigue sin publicar.` })
+        return
+      }
+      // Publicado. Se dice CUÁNTA gente se ha avisado, y se distingue "no
+      // había a quién avisar" de "falló el aviso": las dos dan 0.
+      const aviso = res.notifyError
+        ? `Publicado, pero los avisos fallaron (${res.notifyError}). Nadie ha recibido notificación.`
+        : res.notified === 0
+          ? 'Publicado. No había nadie asignado, así que no se ha avisado a nadie.'
+          : `Publicado. ${res.notified === 1 ? 'Avisada 1 persona' : `Avisadas ${res.notified} personas`}.`
+      setPublishResult({ ok: !res.notifyError, msg: aviso })
       await refresh()
     } else {
       const { schedule: saved, errorMessage } = await upsertSchedule({
@@ -1032,8 +1100,14 @@ export default function CalendarioPage() {
         generated_at: new Date().toISOString(),
         published_at: new Date().toISOString(),
       })
-      if (saved) { setScheduleRow(saved) }
-      else if (errorMessage) setSaveError(parseScheduleSaveError(errorMessage))
+      if (saved) {
+        setScheduleRow(saved)
+        setPublishResult({ ok: true, msg: 'Publicado. Los avisos se envían al volver a publicar sobre el cuadrante ya guardado.' })
+      } else if (errorMessage) {
+        const m = parseScheduleSaveError(errorMessage)
+        setSaveError(m)
+        setPublishResult({ ok: false, msg: `No se pudo publicar: ${m}` })
+      }
     }
   }
 
@@ -1041,6 +1115,9 @@ export default function CalendarioPage() {
   // publicar igualmente" es la regla firme de Julio. Solo mira a quién hay
   // REALMENTE asignado esta semana en cells, cruzado con redEmployeeIds.
   const [publishWarning, setPublishWarning] = useState<{ name: string; missing: string[] }[] | null>(null)
+  // Confirmacion VISIBLE de publicar. Un boton que hace algo importante
+  // confirma o falla en pantalla; callar no es una opcion.
+  const [publishResult, setPublishResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   function assignedThisWeekIds(): Set<string> {
     const ids = new Set<string>()
@@ -1373,6 +1450,27 @@ export default function CalendarioPage() {
         )}
       </div>
 
+      {/* Publicar dice en pantalla qué ha pasado, con contenido: cuánta gente
+          se ha avisado, o por qué no. Hasta el 30/08 publicaba bien y no decía
+          nada, y el silencio se lee como fallo. */}
+      {publishResult && (
+        <div className={`rounded-lg p-3 flex items-start justify-between gap-3 border ${
+          publishResult.ok ? 'bg-success-bg border-success/30' : 'bg-danger-bg border-danger/30'
+        }`}>
+          <p className={`text-sm inline-flex items-start gap-1.5 ${publishResult.ok ? 'text-success' : 'text-danger'}`}>
+            {publishResult.ok
+              ? <Megaphone size={14} className="shrink-0 mt-0.5" />
+              : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+            {publishResult.msg}
+          </p>
+          <button
+            onClick={() => setPublishResult(null)}
+            className="text-xs opacity-70 hover:opacity-100 shrink-0"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
       {saveError && (
         <div className="bg-danger-bg border border-danger/30 rounded-lg p-3 flex items-start justify-between gap-3">
           <p className="text-sm text-danger inline-flex items-start gap-1.5">
@@ -1654,10 +1752,24 @@ export default function CalendarioPage() {
                   <tr key={t.id} className="border-b">
                     <td className="px-3 py-2 align-top sticky left-0 z-10 bg-card border-r border-border-default">
                       <div className="font-medium">{t.label}</div>
-                      <div className="text-xs text-text-secondary font-mono">
-                        {t.start_time.slice(0, 5)} – {t.end_time.slice(0, 5)}
+                      {/* Una plantilla retirada NO se esconde: se enseña con lo
+                          que se sabe de ella y con su motivo. Esconderla borra
+                          de la vista turnos que sí se trabajaron. */}
+                      {t._estado === 'desconocida' ? (
+                        <div className="text-xs text-warning font-mono">horario desconocido</div>
+                      ) : (
+                        <div className="text-xs text-text-secondary font-mono">
+                          {t.start_time.slice(0, 5)} – {t.end_time.slice(0, 5)}
+                        </div>
+                      )}
+                      <div className="text-xs text-text-secondary">
+                        {t._estado === 'desconocida' ? '—' : `${tHours}h`}
                       </div>
-                      <div className="text-xs text-text-secondary">{tHours}h</div>
+                      {t._estado && (
+                        <div className="mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-warning/40 text-warning bg-warning-bg">
+                          {t._estado === 'inactiva' ? 'inactiva · solo lectura' : 'plantilla borrada · solo lectura'}
+                        </div>
+                      )}
                     </td>
                     {DAYS.map(d => {
                       const baseCov = coverageForDay(t, d)
@@ -1679,7 +1791,7 @@ export default function CalendarioPage() {
                           workloads={workloads}
                           redEmployeeIds={redEmployeeIds}
                           trainingGapsByEmployee={trainingGapsByEmployee}
-                          canEdit={canEditSchedule}
+                          canEdit={canEditSchedule && !t._estado}
                           onChangeAssigned={(ids) => setCellAssign(t.id, d, ids)}
                           onChangeNeeded={(v) => setOverride(t.id, d, v === baseCov ? null : v)}
                           proposalAvisos={proposalAvisos ?? undefined}
@@ -1688,7 +1800,7 @@ export default function CalendarioPage() {
                       )
                     })}
                     <td className="px-2 py-2 text-center text-xs text-text-secondary font-mono">
-                      {tHours}
+                      {t._estado === 'desconocida' ? '—' : tHours}
                     </td>
                   </tr>
                 )
