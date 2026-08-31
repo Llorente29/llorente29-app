@@ -75,12 +75,8 @@ export function rowToSupplier(row: RowSupplier): Supplier {
     // `vatSettingsAvailable` distingue «la columna no existe todavía» de «la
     // columna existe y vale false». Sin esa distinción la ficha ofrecería un
     // interruptor cuyo guardado devuelve un 400 de PostgREST.
-    pricesIncludeVat: (row as unknown as { prices_include_vat?: boolean | null }).prices_include_vat ?? null,
-    defaultVatRate: (() => {
-      const v = (row as unknown as { default_vat_rate?: number | string | null }).default_vat_rate
-      return v == null ? null : Number(v)
-    })(),
-    vatSettingsAvailable: 'prices_include_vat' in (row as unknown as Record<string, unknown>),
+    ivaIncluidoEnLinea: (row as unknown as { iva_incluido_en_linea?: boolean | null }).iva_incluido_en_linea ?? null,
+    vatSettingsAvailable: 'iva_incluido_en_linea' in (row as unknown as Record<string, unknown>),
     isActive: row.is_active,
     archivedAt: row.archived_at,
     createdAt: row.created_at,
@@ -114,12 +110,12 @@ function supplierUpdateToRow(patch: SupplierUpdate): RowSupplierUpdate {
   if (patch.address !== undefined) row.address = patch.address
   if (patch.healthRegistryNo !== undefined) row.health_registry_no = patch.healthRegistryNo
   if (patch.notes !== undefined) row.notes = patch.notes
-  // §4 — solo viajan si quien llama los pone. La ficha únicamente los pone
-  // cuando `vatSettingsAvailable` dice que las columnas existen, así que un
-  // cliente desplegado antes de la migración nunca los manda.
-  const extra = row as unknown as Record<string, unknown>
-  if (patch.pricesIncludeVat !== undefined) extra.prices_include_vat = patch.pricesIncludeVat
-  if (patch.defaultVatRate !== undefined) extra.default_vat_rate = patch.defaultVatRate
+  // §4 — solo viaja si quien llama lo pone. La ficha únicamente lo pone cuando
+  // `vatSettingsAvailable` dice que la columna existe, así que un cliente
+  // desplegado antes de la migración nunca la manda.
+  if (patch.ivaIncluidoEnLinea !== undefined) {
+    (row as unknown as Record<string, unknown>).iva_incluido_en_linea = patch.ivaIncluidoEnLinea
+  }
   if (patch.isActive !== undefined) row.is_active = patch.isActive
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt
   return row

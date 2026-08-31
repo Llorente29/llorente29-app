@@ -118,10 +118,23 @@ describe('quitar el IVA deja de ser aritmética mental (§4)', () => {
 
 describe('aviso «este importe parece llevar el IVA dentro» (§5)', () => {
   it('salta en el caso ALB-00080: proveedor con IVA dentro y papel = almacén', () => {
+    // El 10 % NO sale del proveedor: sale de la categoría fiscal del artículo
+    // (Kebab Pollo Loncheado → «alimento_general» → 10 %, verificado el 31/08).
     const aviso = avisoIvaProbable(POLLO_CON_IVA_DENTRO, true, 10)
     expect(aviso).not.toBeNull()
     expect(aviso!.papel).toBe(92)
     expect(aviso!.netoPropuesto).toBeCloseTo(83.6364, 4)
+  })
+
+  it('sin tipo resuelto el aviso SALTA IGUAL, pero sin proponer cifra', () => {
+    // Decisión de Julio (31/08): si el artículo no tiene categoría fiscal, la
+    // línea lo dice y pide el tipo en vez de suponerlo. Pero papel = almacén en
+    // un proveedor que factura con IVA dentro sigue siendo sospechoso, así que
+    // callarse el aviso por no saber el tipo sería esconder el problema.
+    const aviso = avisoIvaProbable(POLLO_CON_IVA_DENTRO, true, null)
+    expect(aviso).not.toBeNull()
+    expect(aviso!.papel).toBe(92)
+    expect(aviso!.netoPropuesto).toBeNull()
   })
 
   it('NO salta en el ALB-00134 ya corregido: papel y almacén ya difieren', () => {

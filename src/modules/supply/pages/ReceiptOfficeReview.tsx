@@ -37,6 +37,9 @@ import {
 } from '@/modules/supply/services/goodsReceiptService'
 import { getSupplierCatalog, listSupplyLocations, buildFormatLabel, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
 import { listSuppliers, createPurchaseFormat, listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
+import {
+  resolveVatRates, explicaOrigen, explicaFalta, type TipoIvaResuelto,
+} from '@/modules/kitchen/services/vatRateService'
 import type { Supplier } from '@/types/kitchen'
 import { fmtMoney, fmtMoneyPrecise, fmtNumEs, isNum, DASH } from '@/lib/format'
 import {
@@ -153,6 +156,11 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   // de haber guardado 83,64 — el mismo fallo del encargo, pero en verde.
   const [pendingConfirm, setPendingConfirm] = useState<{ lineId: string; tick: number } | null>(null)
   const [loadedTick, setLoadedTick] = useState(0)
+  // ENCARGO CODE (31/08, revision de Julio) — el tipo de IVA es del ARTICULO,
+  // no del proveedor: sale de vat_category/vat_rate, con family_vat_default de
+  // cascada. Mapa recipeItemId -> tipo resuelto (o sin resolver, que tambien es
+  // una respuesta y la pantalla la dice).
+  const [vatRates, setVatRates] = useState<Record<string, TipoIvaResuelto>>({})
   // ENCARGO CODE (14/08) feat/formatos-documento-decide, Tramo D.1 — aviso
   // bloqueante-suave de coste fuera de rango. null = aún no comprobado;
   // [] = comprobado y sin avisos; costWarningsAcked = el trabajador ya
@@ -234,6 +242,12 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         setItemInfo(info)
         setFormatNames(fmts)
 
+        // El tipo de IVA de cada articulo. No bloquea la pantalla: si tarda o
+        // falla, el editor pregunta el tipo en vez de suponerlo.
+        resolveVatRates(itemIds)
+          .then(r => { if (!cancelled) setVatRates(r) })
+          .catch(e => console.error('ReceiptOfficeReview: no se pudieron resolver los tipos de IVA', e))
+
         // ENCARGO CODE (20/08) §2.2 — formatos vivos de cada artículo, con la
         // medida en la etiqueta. Se piden después de pintar (no bloquean la
         // pantalla): si tardan, la fila enseña el formato actual como texto y
@@ -277,15 +291,20 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   const supplierName = supplier?.name ?? ''
 
   const ivaWarnings = useMemo(() => {
-    if (!supplier?.pricesIncludeVat) return []
+    if (!supplier?.ivaIncluidoEnLinea) return []
     return lines.flatMap(l => {
       if (l.notGoods) return []
-      const aviso = avisoIvaProbable(l, true, supplier.defaultVatRate)
+      // El tipo con el que se propone el neto sale del ARTÍCULO. Si no se
+      // resuelve, el aviso salta IGUAL (papel = almacén sigue siendo
+      // sospechoso en un proveedor que factura con IVA dentro) pero sin
+      // proponer cifra: se dice que hay que elegir el tipo.
+      const t = l.recipeItemId ? vatRates[l.recipeItemId] : undefined
+      const aviso = avisoIvaProbable(l, true, t?.rate ?? null)
       if (!aviso) return []
       const nombre = (l.recipeItemId ? itemInfo[l.recipeItemId]?.name : null) ?? sentenceCase(l.productName)
-      return [{ lineId: l.id, nombre, ...aviso }]
+      return [{ lineId: l.id, nombre, tipo: t, ...aviso }]
     })
-  }, [lines, supplier, itemInfo])
+  }, [lines, supplier, itemInfo, vatRates])
 
   // ── Reordenar: lo decidido primero (resuelta · dudosa), luego lo pendiente ──
   const ordered = useMemo(
@@ -543,12 +562,13 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     setEditFormatId(line.purchaseFormatId ?? '')
     setEditReason(null)
     setEditError(null)
-    // §4 — el defecto del proveedor entra como SUGERENCIA VISIBLE: la casilla
-    // aparece marcada y con su tipo, y quien mira ve el cálculo antes de
-    // guardar. Nunca se aplica en silencio: si no se toca Guardar, no cambia
-    // nada, y el coste sigue siendo editable a mano.
+    // §4 — el tipo se siembra desde la CATEGORÍA FISCAL DEL ARTÍCULO, con la
+    // familia de cascada. Si no se resuelve, el campo se queda VACÍO y el
+    // editor lo dice y lo pide: rellenarlo con un 10 por defecto sería suponer
+    // el tipo, que es justo lo que Julio descartó el 31/08.
     setEditIvaOn(false)
-    setEditIvaRate(supplier?.defaultVatRate != null ? String(supplier.defaultVatRate) : '10')
+    const t = line.recipeItemId ? vatRates[line.recipeItemId] : undefined
+    setEditIvaRate(t?.rate != null ? String(t.rate) : '')
   }
   function closeEditor() {
     setEditLineId(null); setEditError(null); setEditIvaOn(false)
@@ -857,7 +877,8 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
                 onSetReason={setEditReason} onSave={() => saveEditor(l)} onCancel={closeEditor}
                 onChangeArticle={() => openPicker(l.id)}
                 ivaOn={editIvaOn} ivaRate={editIvaRate}
-                ivaSugeridoPorProveedor={!!supplier?.pricesIncludeVat}
+                ivaSugeridoPorProveedor={!!supplier?.ivaIncluidoEnLinea}
+                tipoIva={l.recipeItemId ? vatRates[l.recipeItemId] : undefined}
                 onSetIvaOn={setEditIvaOn} onSetIvaRate={setEditIvaRate} />
             )
           }
@@ -902,8 +923,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
             <AlertTriangle size={17} className="text-warning shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-medium text-text-primary">
-                {supplierName || 'Este proveedor'} factura con el IVA dentro
-                {supplier?.defaultVatRate != null ? ` (${supplier.defaultVatRate} %)` : ''}, y en{' '}
+                {supplierName || 'Este proveedor'} factura con el IVA dentro, y en{' '}
                 {ivaWarnings.length === 1 ? 'una línea' : `${ivaWarnings.length} líneas`} el coste del almacén
                 es idéntico al importe del papel. {ivaWarnings.length === 1 ? 'Ese importe parece' : 'Esos importes parecen'} llevar el IVA dentro.
               </p>
@@ -911,7 +931,11 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
                 {ivaWarnings.map(w => (
                   <li key={w.lineId} className="text-sm text-text-secondary tabular-nums">
                     <span className="text-text-primary font-medium">{w.nombre}</span>: papel {fmtMoney(w.papel)} = almacén {fmtMoney(w.almacen)}
-                    {w.netoPropuesto != null && <> · sin IVA serían <b className="text-text-primary">{fmtMoney(w.netoPropuesto)}</b></>}
+                    {w.netoPropuesto != null && w.tipo?.rate != null ? (
+                      <> · sin el {fmtNumEs(w.tipo.rate, 0)} % serían <b className="text-text-primary">{fmtMoney(w.netoPropuesto)}</b></>
+                    ) : (
+                      <> · <span className="text-warning">sin tipo de IVA que aplicar: elígelo al corregir</span></>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -1034,7 +1058,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
 function LineEditor({
   line, itemInfo, formats, saving, qty, cost, formatId, reason, editError,
   onSetQty, onSetCost, onSetFormatId, onSetReason, onSave, onCancel, onChangeArticle,
-  ivaOn, ivaRate, ivaSugeridoPorProveedor, onSetIvaOn, onSetIvaRate,
+  ivaOn, ivaRate, ivaSugeridoPorProveedor, tipoIva, onSetIvaOn, onSetIvaRate,
 }: {
   line: GoodsReceiptLine
   itemInfo: Record<string, { name: string; baseUnitAbbr: string | null }>
@@ -1057,6 +1081,12 @@ function LineEditor({
   ivaRate: string
   /** El proveedor está marcado como «factura con IVA incluido» en su ficha. */
   ivaSugeridoPorProveedor: boolean
+  /**
+   * Tipo del ARTÍCULO, resuelto por su categoría fiscal (o por su familia).
+   * `undefined` o `rate: null` = no se sabe, y entonces se PIDE: no se rellena
+   * con un 10 por defecto.
+   */
+  tipoIva: TipoIvaResuelto | undefined
   onSetIvaOn: (v: boolean) => void
   onSetIvaRate: (v: string) => void
 }) {
@@ -1078,6 +1108,10 @@ function LineEditor({
   // dice importe, se toma lo que hay escrito en el campo como bruto: es lo
   // único que se puede afirmar, y se dice en el texto de qué sale.
   const rateN = parseNum(ivaRate)
+  // Solo se explica la procedencia mientras el tipo siga siendo el que resolvio
+  // el articulo: en cuanto alguien lo cambia a mano, la frase dejaria de ser
+  // verdad y desaparece.
+  const origenTipo = tipoIva?.rate != null && rateN === tipoIva.rate ? explicaOrigen(tipoIva) : null
   const brutoPorUnidad = qtyN !== null && qtyN !== 0 && line.docAmount != null
     ? line.docAmount / qtyN
     : null
@@ -1091,11 +1125,14 @@ function LineEditor({
 
   // Marcar la casilla ESCRIBE el neto en el campo. No lo guarda: el campo
   // sigue siendo editable a mano y no pasa nada hasta pulsar Guardar.
+  // Si no hay tipo (ni resuelto ni escrito), no se escribe nada: el editor
+  // pide el tipo y espera. Rellenar con un 10 por defecto seria suponerlo.
   function aplicarIva(on: boolean, tipo: string) {
     onSetIvaOn(on)
     onSetIvaRate(tipo)
     if (!on) return
     const r = parseNum(tipo)
+    if (r === null) return
     const neto = netoDesdeBruto(brutoBase, r)
     if (neto != null) onSetCost(numToInputStr(neto))
   }
@@ -1176,11 +1213,28 @@ function LineEditor({
               <input type="text" value={ivaRate} disabled={saving}
                 onChange={e => aplicarIva(true, e.target.value)}
                 aria-label="Otro tipo de IVA en porcentaje"
+                placeholder="—"
                 className="w-16 px-2 py-1 text-xs border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
               <span className="text-xs text-text-secondary">%</span>
             </div>
+
+            {/* De dónde sale el tipo, o por qué no sale. Un número sin
+                procedencia es indistinguible de uno inventado. */}
+            {origenTipo && (
+              <p className="text-xs text-text-secondary">
+                {fmtNumEs(tipoIva?.rate ?? null, 0)} % {origenTipo}. Cámbialo si el albarán dice otra cosa.
+              </p>
+            )}
+            {rateN === null && (
+              <p className="text-xs text-warning">{explicaFalta(tipoIva)}</p>
+            )}
+
             <p className="text-sm text-text-primary tabular-nums">
-              {brutoBase == null || netoPropuesto == null ? (
+              {rateN === null ? (
+                <span className="text-text-secondary">
+                  Elige el tipo y aquí sale el neto. No se propone ninguno por defecto: sería suponerlo.
+                </span>
+              ) : brutoBase == null || netoPropuesto == null ? (
                 <span className="text-text-secondary">
                   Falta el importe del papel o la cantidad para poder quitarle el IVA.
                 </span>

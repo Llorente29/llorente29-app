@@ -30,21 +30,36 @@
 -- por esa coincidencia sería inventarse la respuesta. Julio mira un papel de
 -- cada uno y marca; hasta entonces, sin marca no hay aviso.
 --
--- NO ES EL MODELO DE IVA QUE YA EXISTE, Y NO LO SUSTITUYE
--- En producción ya viven `vat_category`, `vat_rate` y `family_vat_default`
--- (verificado el 31/08 en information_schema). Ese modelo responde a OTRA
--- pregunta: QUÉ TIPO DE IVA LLEVA UN ARTÍCULO — categoría fiscal versionada por
--- fecha, para repercutir y para validar facturas antiguas por OCR.
--- Lo de aquí es una pregunta distinta: CÓMO ESCRIBE SUS IMPORTES ESTE
--- PROVEEDOR — si el número que pone en la línea del albarán ya lleva el IVA
--- dentro o es base imponible. Un mismo artículo al 10 % lo puede facturar
--- AMIRSA con el IVA dentro y Makro con base imponible: el tipo es del artículo,
--- la costumbre de escribirlo es del proveedor. Por eso son dos columnas en
--- `supplier` y no una fila más en `vat_rate`.
--- `default_vat_rate` es solo el tipo HABITUAL de ese proveedor, para no tener
--- que elegirlo en cada línea. Si algún día la categoría fiscal del artículo se
--- consulta desde la recepción, ese es el sitio del que debe salir el tipo, y
--- esta columna pasa a ser el respaldo — no al revés.
+-- EL TIPO NO VIVE AQUI. DECISION DE JULIO (31/08)
+-- Esta migracion anade UNA columna: un booleano. NO hay `default_vat_rate`.
+--
+-- El tipo es del ARTICULO; la costumbre de meterlo o no en el importe de linea
+-- es del PROVEEDOR. Son dos ejes distintos y mezclarlos crea una segunda
+-- verdad sobre el tipo que ademas gana por estar mas a mano: un mismo pollo al
+-- 10 % lo factura AMIRSA con el IVA dentro y Makro con base imponible, y el
+-- 10 % es del pollo en los dos casos.
+--
+-- El tipo sale del modelo fiscal que YA existe en produccion (verificado el
+-- 31/08 en information_schema y contado fila a fila):
+--   recipe_item.vat_category_id -> vat_rate vigente por fecha
+--   y si el articulo no tiene categoria, family_vat_default por nombre de
+--   familia, que es la cascada que el propio modelo trae.
+--   Si no hay ni una cosa ni la otra, LA PANTALLA LO DICE Y PIDE EL TIPO.
+--
+-- Estado del catalogo fiscal el 31/08, que es lo que hace que preguntar tenga
+-- que estar bien resuelto y no ser un caso raro de esquina:
+--   5 categorias · 6 tipos (5 vigentes hoy) · 16 familias mapeadas, 6 MIXTAS
+--   1.072 articulos, de los cuales 273 (25 %) tienen categoria propia.
+-- Una familia MIXTA no resuelve: `is_mixed` significa "esta familia tiene
+-- varios tipos", asi que su defecto es una lista de candidatos, no una
+-- respuesta. Y una categoria con vat_category_source = 'proposed' resuelve
+-- pero viaja marcada, para que la pantalla diga que aun no la ha confirmado
+-- nadie -- que es para lo que el modelo distingue 'proposed' de 'confirmed'.
+--
+-- Comprobado sobre el caso real: los dos articulos del ALB-00134 (Kebab Pollo
+-- Loncheado y Kebab Ternera Loncheado, familia «Carnes y aves») estan en
+-- 'alimento_general' = 10 %, que es exactamente el tipo que Pamela aplico a
+-- mano. La cascada devuelve la respuesta correcta sin que nadie la teclee.
 --
 -- Comprobación de que no se ha movido nada del histórico (antes y después):
 --   select count(*) as lineas,
@@ -57,32 +72,23 @@
 
 begin;
 
--- ── 1. Las dos columnas ─────────────────────────────────────────────────────
--- `prices_include_vat` NOT NULL DEFAULT false: el caso por defecto es el
--- habitual (albarán con base imponible por línea). Un default NULL obligaría a
--- cada lector a decidir qué significa "no se sabe", y ya hay un sitio donde eso
--- se decide (el front distingue "columna ausente" de "false" por la propia
--- ausencia de la clave, no por su valor).
+-- ── 1. La columna. UNA, y booleana ─────────────────────────────────────────
+-- NOT NULL DEFAULT false: el caso por defecto es el habitual (albaran con base
+-- imponible por linea). Un default NULL obligaria a cada lector a decidir que
+-- significa "no se sabe", y ya hay un sitio donde eso se decide: el front
+-- distingue "columna ausente" de "false" por la ausencia de la clave en la
+-- fila, no por su valor.
 alter table public.supplier
-  add column if not exists prices_include_vat boolean not null default false,
-  add column if not exists default_vat_rate   numeric;
+  add column if not exists iva_incluido_en_linea boolean not null default false;
 
-comment on column public.supplier.prices_include_vat is
+comment on column public.supplier.iva_incluido_en_linea is
   'ENCARGO 31/08: este proveedor factura con el IVA DENTRO del importe de linea '
   '(AMIRSA lo hace). Es una SUGERENCIA para la recepcion: propone el neto y lo '
   'ensena antes de guardar, nunca lo aplica en silencio. false = el albaran '
-  'lista base imponible por linea y suma el IVA al pie (lo habitual).';
-comment on column public.supplier.default_vat_rate is
-  'Tipo de IVA habitual del proveedor, EN PORCENTAJE (10, no 0.10). Solo tiene '
-  'sentido con prices_include_vat = true. Editable por linea siempre.';
-
--- Un tipo de IVA negativo o por encima de 100 no es un tipo de IVA. Se admite
--- 0 (hay lineas exentas) y se admite NULL (no se sabe todavia).
-alter table public.supplier
-  drop constraint if exists supplier_default_vat_rate_valido;
-alter table public.supplier
-  add constraint supplier_default_vat_rate_valido
-  check (default_vat_rate is null or (default_vat_rate >= 0 and default_vat_rate <= 100));
+  'lista base imponible por linea y suma el IVA al pie (lo habitual). '
+  'AQUI NO VA EL TIPO: el tipo es del articulo (vat_category/vat_rate, con '
+  'family_vat_default de cascada) y esta columna solo dice COMO escribe sus '
+  'importes el proveedor.';
 
 -- ── 2. AMIRSA nace con la casilla puesta al 10 % ───────────────────────────
 -- Lo pide el encargo, y es el unico proveedor del que hay PRUEBA en los datos:
@@ -110,29 +116,39 @@ begin
                     'marcaria al equivocado. Marcalo a mano en la ficha del bueno.', v_n;
   else
     update public.supplier
-       set prices_include_vat = true,
-           default_vat_rate   = 10,
-           updated_at         = now()
+       set iva_incluido_en_linea = true,
+           updated_at            = now()
      where id = v_id;
-    raise notice 'AMIRSA (%) marcada: factura con IVA incluido al 10 %%.', v_id;
+    raise notice 'AMIRSA (%) marcada: factura con IVA incluido. El tipo lo pone cada articulo.', v_id;
   end if;
 end
 $amirsa$;
 
 -- ── 3. GUARDA FINAL ────────────────────────────────────────────────────────
 do $ver$
-declare v_n int;
+declare v_n int; v_t text;
 begin
   if not exists (select 1 from information_schema.columns
                   where table_schema = 'public' and table_name = 'supplier'
-                    and column_name = 'prices_include_vat') then
-    raise exception 'prices_include_vat no quedo creada';
+                    and column_name = 'iva_incluido_en_linea') then
+    raise exception 'iva_incluido_en_linea no quedo creada';
   end if;
-  if not exists (select 1 from information_schema.columns
-                  where table_schema = 'public' and table_name = 'supplier'
-                    and column_name = 'default_vat_rate') then
-    raise exception 'default_vat_rate no quedo creada';
+
+  -- Y que NO se haya colado un tipo en el proveedor: el tipo es del articulo.
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'supplier'
+                and column_name in ('default_vat_rate', 'vat_rate')) then
+    raise exception 'supplier tiene una columna de TIPO de IVA. El tipo es del articulo '
+                    '(vat_category/vat_rate); en el proveedor solo va la costumbre.';
   end if;
+
+  -- La cascada del articulo tiene que existir, o el front se queda preguntando
+  -- el tipo SIEMPRE y esto no sirve de nada.
+  foreach v_t in array array['vat_category','vat_rate','family_vat_default'] loop
+    if to_regclass('public.'||v_t) is null then
+      raise exception 'falta %, que es de donde sale el tipo', v_t;
+    end if;
+  end loop;
 
   -- Y lo que de verdad importa: que el historico siga intacto.
   select count(*) into v_n from public.goods_receipt_line;
@@ -151,3 +167,7 @@ commit;
 --    Europastry, Coheldi, Olimpo y Bodega de Vallecas y marcar los que
 --    facturen con el IVA dentro. Hasta que se marquen, el aviso del punto 5 no
 --    salta para ellos — a proposito.
+-- 4) Lo que de verdad hace util esto a medio plazo NO es esta columna, son las
+--    799 fichas de articulo sin categoria fiscal (1.072 - 273). Cada una que se
+--    clasifique es una linea que deja de preguntar el tipo. La pantalla ya dice
+--    cuales son: aparecen pidiendolo al corregir.

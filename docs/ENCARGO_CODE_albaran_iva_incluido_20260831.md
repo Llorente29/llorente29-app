@@ -75,15 +75,65 @@ cierra y **no se confirma nada**.
   enseña la frase: *«Papel 92,00 € con IVA 10 % → al almacén 83,64 € cada uno»*.
 - El bruto sale del papel (`doc_amount ÷ unidades`); si el papel no dice importe, se toma lo
   escrito y el texto lo dice («Lo escrito 92,00 €…»), en vez de callarse de dónde sale.
-- Defecto del proveedor en su ficha (**§4** más abajo), como **sugerencia visible**: si está
-  marcado, el editor lo dice y propone el tipo, pero la casilla hay que marcarla. Nunca en
-  silencio.
+- **El TIPO es del ARTÍCULO** (decisión de Julio, 31/08). Ver §2-bis.
+- En el proveedor solo se guarda **la costumbre**: un booleano. Si está marcado, el editor lo dice
+  y ofrece la casilla, pero hay que marcarla. Nunca en silencio.
+
+---
+
+## 2-bis · De dónde sale el tipo (revisión de Julio, 31/08)
+
+> «El tipo sale de vat_category/vat_rate del artículo (con family_vat_default como cascada). Si un
+> artículo no tiene categoría, la línea lo dice y pide el tipo en vez de suponerlo.»
+
+Un `default_vat_rate` en `supplier` habría sido una **tercera verdad sobre el tipo**, compitiendo
+con la del artículo y ganándole por estar más a mano. El tipo es del artículo; la costumbre de
+meterlo o no en el importe de línea es del proveedor. Dos ejes, dos sitios.
+
+La cascada vive en `src/modules/kitchen/services/vatRateService.ts` y tiene **tres salidas**:
+
+| Salida | Cuándo | Qué hace la pantalla |
+|---|---|---|
+| `articulo` | `recipe_item.vat_category_id` con tipo vigente | siembra el tipo y dice de dónde sale: «10 % por su categoría fiscal (Alimento general)» |
+| `familia` | sin categoría propia, familia mapeada y **no mixta** | siembra y lo dice: «10 % por su familia «Carnes y aves»» |
+| `ninguno` | ni una cosa ni la otra | **campo vacío**, y lo dice: «Este artículo no tiene categoría fiscal… Elige el tipo que ponga el albarán» |
+
+**Dos frenos que salen de los propios datos, para no suponer:**
+
+- **`family_vat_default.is_mixed`** — 6 de las 16 familias mapeadas están marcadas como mixtas
+  (Bebidas sin alcohol, Congelados, Charcutería y quesos, Cereales, Aceites, Panadería). Mixta
+  significa «esta familia tiene varios tipos»: su defecto es una lista de candidatos, no una
+  respuesta. **Una familia mixta no resuelve: pregunta.**
+- **`recipe_item.vat_category_source`** — el modelo distingue `proposed` de `confirmed`
+  precisamente para no mentir en silencio. Una categoría solo propuesta **sí** resuelve (es la
+  mejor respuesta que hay) pero viaja marcada, y la pantalla lo dice: «…propuesta y aún sin
+  confirmar».
+
+**Estado real del catálogo fiscal (contado en producción el 31/08):**
+
+| | |
+|---|---|
+| categorías / tipos / vigentes hoy | 5 / 6 / 5 |
+| familias mapeadas | 16, **6 de ellas mixtas** |
+| artículos | 1.072 |
+| **con categoría propia** | **273 (25 %)** |
+
+O sea: **hoy el camino mayoritario es el que pregunta.** No es un fallo del módulo, es el estado
+del catálogo — y es la razón por la que preguntar tiene que quedar bien resuelto en pantalla y no
+ser un caso raro de esquina. Cada ficha que se clasifique es una línea que deja de preguntar.
+
+**El caso real resuelve solo:** los dos artículos del ALB-00134 (Kebab Pollo Loncheado y Kebab
+Ternera Loncheado, familia «Carnes y aves») están en `alimento_general` = **10 %** por su propia
+categoría — exactamente el tipo que Pamela aplicó a mano. Su `source` es `proposed`, así que la
+pantalla lo dirá.
 
 **5 · Aviso «este importe parece llevar el IVA dentro».** Bloqueante-suave antes de cerrar, junto
 a los avisos de coste que ya existían. Es el caso ALB-00080. **Solo salta si el proveedor está
 marcado**: en Cloudtown (597 líneas), Makro (79) o Europastry (22) `unit_cost = doc_amount` y eso
 es lo *normal* si el albarán lista base imponible. Un aviso que no se puede afirmar enseña a
-ignorar los que sí.
+ignorar los que sí. Si el artículo no tiene tipo resuelto, el aviso **salta igual** pero sin
+proponer cifra: papel = almacén sigue siendo sospechoso en ese proveedor, y callarse el aviso por
+no saber el tipo sería esconder el problema.
 
 ---
 
@@ -101,8 +151,12 @@ ignorar los que sí.
 `supabase/migrations/PROPUESTA_20260831T1900_supplier_iva_incluido.sql`
 **Está SIN APLICAR.** Claude Code propone, Julio ejecuta y verifica.
 
-Añade dos columnas a `supplier` (`prices_include_vat`, `default_vat_rate`), su `check`, y marca
-**AMIRSA al 10 %** con guarda anti-homónimos. **No toca `goods_receipt_line`.**
+Añade **una** columna a `supplier` — `iva_incluido_en_linea boolean not null default false` — y
+marca **AMIRSA** con guarda anti-homónimos. Sin tipo: la guarda final **falla a propósito** si
+alguien añade un `default_vat_rate` o `vat_rate` a `supplier`, y comprueba que existen las tres
+tablas de las que sí sale el tipo. **No toca `goods_receipt_line`.**
+
+Julio (31/08): entra mañana en la ventana; es aditiva y de riesgo bajo.
 
 **El front va desplegado ya y funciona sin ella**, porque los puntos 1, 2, 3 y la casilla por
 línea del 4 no necesitan base de datos. La lectura de las columnas usa el patrón de
