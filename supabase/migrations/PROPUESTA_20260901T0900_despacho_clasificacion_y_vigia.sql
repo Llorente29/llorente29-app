@@ -28,18 +28,45 @@
 begin;
 
 -- ── 1. La clasificacion respeta el interruptor ─────────────────────────────
--- SOLO cuando el interruptor esta EXPLICITAMENTE apagado (`false`).
+-- DOS CONDICIONES JUNTAS, no una: interruptor apagado Y SIN DIRECCION.
+--
+-- La primera version pedia solo el interruptor, y era INSEGURA. Lo caza Julio
+-- y lo confirman los datos de Smash Brothers Burgers (todos sus own_delivery):
+--
+--   lastapp · glovo     24 pedidos — 17 CON direccion  (ultimo 22/08)
+--   hubrise · Glovo     21 pedidos —  1 CON direccion  (30/08 11:31)
+--   lastapp · justeat    3 pedidos —  2 CON direccion  (ultimo 09/08)
+--
+-- Con el interruptor apagado y sin mas condicion, el proximo Just Eat suyo con
+-- direccion se marcaria platform_delivery y NADIE lo repartiria. Y no bastaba
+-- con acotar a source='hubrise' como hacia la primera version: ahi dentro hay
+-- ya un pedido CON direccion (30/08, Calle de La Solana de Opañel) que se
+-- habria reescrito. Ese pedido no tuvo ni intento de despacho ni alarma: es
+-- reparto propio legitimo que se entrego.
+--
+-- LO QUE SE PIERDE Y LO QUE SE GANA, contado:
+--   de los 23 pedidos del encargo, siguen entrando 22 (20 de Smash + 2 de
+--   Lovers, todos SIN direccion). El unico que queda fuera es ese de La Solana
+--   — que es exactamente el que no habia que tocar. «23 de 23» era «22 de 23 y
+--   uno que estaba bien».
+--
+-- LA CONTRADICCION NO SE REESCRIBE.
+-- Interruptor apagado + direccion presente es una contradiccion: alguien dice
+-- que la marca no reparte y el pedido trae a donde llevarlo. No se resuelve
+-- adivinando. Se deja como esta y es «reparto desconocido» del punto 4:
+-- visible y sin despacho automatico. Y eso YA se cumple con las otras piezas
+-- de este mismo lote, sin construir nada: resolve_dispatch corta por el
+-- interruptor (no hay despacho automatico) y el vigia corregido lo dice con su
+-- motivo real en vez de inventarse un envio. El punto 4 le pondra el nombre.
+--
+-- Solo BAJA (own_delivery -> platform_delivery). Nunca al reves: este trigger
+-- no puede encender reparto propio que nadie pidio.
 --
 -- NO se usa coalesce(own_delivery_enabled, ownership_type='own') como hace
 -- resolve_dispatch, y es deliberado: ese coalesce convertiria en
 -- platform_delivery a toda marca CEDIDA con el interruptor a null, y hay 15
--- pedidos de reparto propio de una marca cedida por Just Eat. Apagar eso de
--- rebote seria romper reparto que hoy funciona para arreglar el que no.
--- Aqui solo actua lo que alguien ha apagado a mano. Lo que esta a null es
--- «no se sabe», y eso lo resuelve el punto 4 del encargo, no esto.
---
--- Solo BAJA (own_delivery -> platform_delivery). Nunca al reves: este trigger
--- no puede encender reparto propio que nadie pidio.
+-- pedidos de reparto propio de una cedida por Just Eat. Apagar eso de rebote
+-- seria romper reparto que hoy funciona para arreglar el que no.
 create or replace function public.tg_sale_service_type_por_interruptor()
  returns trigger
  language plpgsql
@@ -52,6 +79,9 @@ begin
   if new.brand_id is null then return new; end if;
   if coalesce(new.source, '') <> 'hubrise' then return new; end if;
   if new.service_type is distinct from 'own_delivery' then return new; end if;
+
+  -- CONDICION 2: sin direccion. Con direccion no se toca — ver arriba.
+  if coalesce(btrim(new.delivery_address), '') <> '' then return new; end if;
 
   select b.own_delivery_enabled is false
     into v_apagado
@@ -67,9 +97,12 @@ $function$;
 
 comment on function public.tg_sale_service_type_por_interruptor() is
   'ENCARGO 31/08: un pedido de HubRise de una marca con own_delivery_enabled = '
-  'false entra como platform_delivery, no como own_delivery. Se corrige AQUI y '
-  'no en hubrise-webhook porque ese webhook no se despliega (camino vivo de '
-  'Alcala). BEFORE, para que trg_auto_dispatch (AFTER) ya lea el valor bueno.';
+  'false Y SIN direccion de entrega entra como platform_delivery. Las DOS '
+  'condiciones: con direccion no se toca, porque interruptor apagado + '
+  'direccion presente es una contradiccion y se resuelve como «reparto '
+  'desconocido» (punto 4), no adivinando. Se corrige AQUI y no en '
+  'hubrise-webhook porque ese webhook no se despliega (camino vivo de Alcala). '
+  'BEFORE, para que trg_auto_dispatch (AFTER) ya lea el valor bueno.';
 
 drop trigger if exists trg_sale_service_type_por_interruptor on public.sale;
 create trigger trg_sale_service_type_por_interruptor
@@ -336,6 +369,37 @@ commit;
 --        from brand b where b.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
 --         and b.name in ('Smash Brothers Burgers','Lovers Burgers');
 --      -- esperado: las dos true.
+--
+-- 1-bis) REPLAY EN SECO de los 23, y del contraejemplo de Julio. Dice, sin
+--    escribir nada, que haria el trigger con cada pedido si entrara hoy:
+--      select b.name, s.source, s.external_channel_text as canal, s.sold_at,
+--             (coalesce(btrim(s.delivery_address),'') <> '') as tiene_direccion,
+--             case
+--               when s.source <> 'hubrise'                              then 'intacto (no es hubrise)'
+--               when coalesce(btrim(s.delivery_address),'') <> ''       then 'INTACTO: con direccion -> reparto desconocido (punto 4)'
+--               when b.own_delivery_enabled is false                    then 'a platform_delivery'
+--               else 'intacto (interruptor no apagado)'
+--             end as que_haria_el_trigger
+--        from sale s join brand b on b.id = s.brand_id
+--       where b.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
+--         and s.service_type = 'own_delivery'
+--         and b.name in ('Smash Brothers Burgers','Lovers Burgers')
+--       order by tiene_direccion desc, s.sold_at desc;
+--    YA EJECUTADO EN SECO el 31/08 a las 22:35 de Madrid, con este resultado:
+--      a platform_delivery ............................. 22 pedidos, 22 con error
+--      INTACTO (no es hubrise) ........................ 27 pedidos, 12 con error
+--      INTACTO: con direccion -> punto 4 ...............  1 pedido,   0 con error
+--    Los 22 que el trigger corrige son EXACTAMENTE los 22 que dieron error:
+--    no toca ni uno que funcionara, y coge todos los que fallaron.
+--    Los 12 errores que quedan fuera son de lastapp y TODOS CON DIRECCION —
+--    reparto propio legitimo que fallo por otra cosa (sin rider), no
+--    clasificacion mal. Este trigger no los toca a proposito.
+--    ESPERADO:
+--      · 22 filas «a platform_delivery» (20 Smash + 2 Lovers, todas sin direccion)
+--      · el de Smash del 30/08 11:31 (hubrise, CON direccion): INTACTO
+--      · los 2 de Smash por Just Eat con direccion (lastapp, ultimo 09/08):
+--        INTACTOS — es el contraejemplo de Julio, y conserva su own_delivery
+--      · los 17 de Glovo/lastapp con direccion: INTACTOS
 --
 -- 2) Verificacion 3 — quien SI reparte sigue igual. Milanesa House y Mila's
 --    tienen el interruptor a null, asi que el trigger no las toca:

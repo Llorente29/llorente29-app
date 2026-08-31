@@ -123,3 +123,33 @@ grano actual, Glovo + marca propia = reparto propio, y por eso Lovers con `null`
 
 Milanesa House y Mila's tienen 1 pedido cada una sin dirección. **No se han revisado uno a uno
 todavía** — queda pendiente, y no se concluye nada sobre ellos.
+
+
+---
+
+## 5. El punto 5 (cerrar las alarmas falsas) NO necesita ninguna escritura
+
+Autorizado por Julio, comprobado antes de ejecutar — y no hay nada que ejecutar.
+
+**Las 21 alarmas ya están cerradas**, y no por esta sesión:
+
+| marca · origen | con alarma | activas | ya cerradas | último cierre |
+|---|---|---|---|---|
+| Smash Brothers · hubrise, sin dirección | 19 | **0** | 19 | 31/08 16:45 UTC |
+| Lovers Burgers · hubrise, sin dirección | 2 | **0** | 2 | 31/08 17:52 UTC |
+| Smash Brothers · lastapp, **con dirección** | 12 | **0** | 12 | 22/08 20:57 UTC |
+
+La verificación 5 del encargo —«el contador de alarmas activas baja en 21»— **no puede cumplirse**:
+ya está en cero para estas dos marcas. Ejecutar el cierre habría reescrito `dispatch_error` en 21
+filas sin ganar nada, y eso es justo lo que la verificación 7 quiere evitar.
+
+**Las 6 alarmas activas que quedan en toda la base son de otra cuenta** (Kitchen Grill LstQ), todas
+`own_delivery` **con dirección**, y sus errores son legítimos («el local no tiene…», «sin rider»).
+Son exactamente las «alarmas legítimas» que la verificación 5 pide no tocar.
+
+Huella de `sale` al comprobar todo esto: **8.941 ventas, `44614acd69a3b1e4654c102681c377dc`**. No se
+ha escrito nada, así que sigue siendo esa.
+
+**Nota aparte, no del encargo:** los 12 de lastapp con dirección son otro problema — reparto propio
+real que se intentó y falló por falta de rider, no por clasificación. El trigger no los toca a
+propósito. Si se quiere mirar, es otro hilo.
