@@ -52,6 +52,52 @@ export interface ModuleSidebarDefinition {
   items: ModuleSidebarItem[]
 }
 
+// ─── Tarjetas del Inicio ───────────────────────────────────────────────────
+// INICIO P1 · SUB-LOTE 2 (31/08/2026). Decision de Julio, del RECON del 30/08:
+// CATALOGO HIBRIDO CON EL CODIGO COMO VERDAD.
+//
+// Una tarjeta no es una fila: es un COMPONENTE mas una CONSULTA. La «grafica de
+// 14 dias» no se pinta desde un nombre de RPC guardado en una columna. Por eso
+// la definicion vive aqui, en el codigo, junto al componente que la sabe
+// renderizar, y no puede desincronizarse de si misma.
+//
+// `home_card_catalog` existe en BBDD, pero es ESPEJO e INTERRUPTOR:
+//   · espejo   → se regenera desde este catalogo; sirve para saber que habia.
+//   · interruptor → `active`, y `home_card_account` por cuenta.
+// Una fila huerfana —existe en BBDD, ya no en codigo— NO SE PINTA. Nunca al
+// reves: la BBDD no puede inventar una tarjeta que nadie sabe renderizar.
+// Y no se descarta en silencio: `resolverMosaico` la devuelve aparte para que
+// la pantalla pueda decirlo (regla 7).
+
+/** Lo que recibe toda tarjeta del Inicio. Nada mas: se busca sus datos sola. */
+export interface HomeCardProps {
+  accountId: string | null
+  /** Local activo, o null en consolidado («todos los locales»). */
+  locationId: string | null
+  /**
+   * Ir a donde lleva esta tarjeta (`drillRoute`). El Inicio lo ata a cada
+   * tarjeta; la tarjeta decide si lo usa y donde lo pone. Ausente = esta
+   * tarjeta no lleva a ningun sitio, y entonces no se pinta como pulsable.
+   */
+  onDrill?: () => void
+}
+
+export interface HomeCardDefinition {
+  /** Clave global y estable. Es la que se guarda en home_layout.cards. */
+  key: string
+  title: string
+  description?: string
+  /** Ancho en el mosaico. Coincide con home_card_catalog.size. */
+  size: 'sm' | 'md' | 'lg'
+  /** A donde lleva al pulsarla. Ruta absoluta dentro de la cuenta. */
+  drillRoute?: string
+  /** De donde sale el dato. INFORMATIVO: quien consulta es el componente. */
+  source?: string
+  /** Rol minimo. P1: solo `admin` tiene Inicio; `worker` sigue en su portal. */
+  requiredRole?: ShellRole
+  component: ComponentType<HomeCardProps>
+}
+
 // ─── Module Contract ───────────────────────────────────────────────────────
 // Interfaz que define un módulo enchufable. Ver doc reconciliado §5.1.
 export interface ModuleDefinition {
@@ -75,6 +121,11 @@ export interface ModuleDefinition {
   // Eventos (opcional)
   publishes?: EventDescriptor[]
   subscribes?: EventDescriptor[]
+
+  // Tarjetas que este módulo aporta al Inicio (opcional). Añadir una aquí la
+  // hace aparecer en el cajón «Personalizar» sin tocar el Inicio: es la
+  // verificación 5 del encargo.
+  homeCards?: HomeCardDefinition[]
 
   // Settings propios del módulo (opcional, panel en config de cuenta)
   settingsPanel?: ComponentType
