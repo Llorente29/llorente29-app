@@ -34,6 +34,10 @@ select count(*) as lineas,
 ```
 → **921 líneas · `0f41e326de3f2b17c6ef8fc6bf45a16f`**, antes y después. Idéntica.
 
+> **Regla 9.** Esas 921 son la **tabla entera**: 834 de Foodint y 87 del catálogo plantilla. Aquí
+> la huella se quiere de tabla entera **a propósito** — es más fuerte, porque también cazaría un
+> cambio accidental en la plantilla. Lo que no vale es llamarlas «las líneas de Foodint».
+
 ---
 
 ## 1. Las tres capas del fallo, y dónde estaba cada una
