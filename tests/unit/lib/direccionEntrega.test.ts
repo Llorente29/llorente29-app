@@ -86,6 +86,7 @@ describe('la trampa: «door» dentro de una nota del cliente', () => {
 
 describe('lo que NO se traduce, decidido', () => {
   it('«Spain» se queda: es un valor, y ya no llega (0 veces en los últimos 30 días)', () => {
+    // 475 de las 1.033 históricas de Foodint, ninguna en los últimos 30 días.
     expect(traduceDireccionEntrega(CON_SPAIN)).toBe(CON_SPAIN)
   })
 
@@ -131,8 +132,11 @@ describe('idempotencia — traducir dos veces da lo mismo', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LA DIRECCIÓN REPETIDA
-// Direcciones reales de producción. Las de Just Eat por Last.app repiten
-// calle y CP: 32 de 32 en los últimos 30 días. Por HubRise, 0 de 73.
+// Direcciones reales de producción. Las de Just Eat por Last.app repiten calle
+// y CP en los últimos 30 días: 25 de 25 en Foodint y 7 de 7 en Kitchen Grill
+// LstQ — el 100 % en DOS cuentas independientes. Por HubRise, 0 de 76.
+// (Contado por cuenta: regla 9. La primera versión decía «32 de 32» sumando
+// las dos cuentas en una cifra que no era de nadie.)
 // ═══════════════════════════════════════════════════════════════════════════
 
 // La última del 31/08, a las 14:58 hora de Madrid.
@@ -175,7 +179,7 @@ describe('mejor repetida que recortada de más', () => {
     expect(quitaDireccionDuplicada(asimetrica)).toBe(asimetrica)
   })
 
-  it('una dirección normal (Glovo, HubRise) no se toca: 0 de 73 repiten', () => {
+  it('una dirección normal (Glovo, HubRise) no se toca: 0 de 76 repiten', () => {
     const glovo = 'Calle de la Encomienda de Palacios, 152, Floor: 1, Door: B, 28030'
     expect(quitaDireccionDuplicada(glovo)).toBe(glovo)
     const gmaps = 'C. de Álvarez Abellán, 4, Carabanchel, 28025 Madrid, Spain'

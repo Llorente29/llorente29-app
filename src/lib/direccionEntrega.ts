@@ -41,9 +41,11 @@
 // Cualquier otra cosa se devuelve sin tocar.
 //
 // ── LO QUE NO SE TRADUCE: «Spain». DECIDIDO, NO PENDIENTE ─────────────────
-// Se planteó porque sale en 481 de las 1.043 direcciones históricas. Julio lo
-// cerró el 31/08 con el dato que faltaba: en los ÚLTIMOS 30 DÍAS aparece CERO
-// veces. Esas 481 son histórico de Last.app; por la vía HubRise no llega
+// Se planteó porque sale en 475 de las 1.033 direcciones históricas de Foodint
+// (el primer recuento decía 481 de 1.043: era la tabla entera, sin
+// `account_id` — regla 9). Julio lo cerró el 31/08 con el dato que de verdad
+// faltaba, que no era de cuenta sino de ventana: en los ÚLTIMOS 30 DÍAS
+// aparece CERO veces. Esas 481 son histórico de Last.app; por la vía HubRise no llega
 // ninguna. Traducir un valor que ya no llega es añadir una regla que nadie
 // puede comprobar y que habría que mantener para siempre.
 // No se toca el mapa. Y de paso: es un VALOR (el país que pone Google en la
@@ -174,18 +176,26 @@ export function etiquetasDesconocidas(texto: string | null | undefined): string[
 // LA DIRECCIÓN REPETIDA — 31/08/2026
 //
 // Just Eat, entrando por Last.app, manda la dirección DOS VECES en el mismo
-// campo. Verificado en producción sobre los últimos 30 días:
+// campo. Verificado en producción sobre los últimos 30 días, POR CUENTA
+// (regla 9: un recuento sin `account_id` da un número que no es de nadie —
+// la primera versión de este comentario decía «32 de 32» sumando dos cuentas
+// distintas):
 //
-//   lastapp · justeat   32 de 32  repiten            ← todas
-//   lastapp · cash       1 de  1  repite
-//   lastapp · glovo      0 de 282
-//   hubrise · Glovo      0 de  66
-//   hubrise · Just Eat   0 de   7
+//   Foodint            · lastapp · justeat   25 de 25  repiten   ← todas
+//   Kitchen Grill LstQ · lastapp · justeat    7 de  7  repiten   ← todas
+//   Foodint            · lastapp · cash       1 de  1  repite
+//   Foodint            · lastapp · glovo      0 de 282
+//   Foodint            · hubrise · Glovo      0 de  69
+//   Foodint            · hubrise · Just Eat   0 de   7
 //
-// O sea: es una costumbre de LAST.APP, no del canal. Por HubRise no pasa —
-// ni siquiera con el mismo Just Eat. Por eso esto no se ata a un canal ni a
-// un `source`: se reconoce por la FORMA del texto, y si la forma no está, no
-// se toca nada. El día que Last.app deje de hacerlo, esto deja de actuar solo.
+// Partirlo por cuenta no debilita la conclusión: la REFUERZA. La duplicación
+// sale al 100 % en DOS cuentas independientes, las dos por lastapp/justeat, y
+// en ninguna de las que entran por HubRise — ni siquiera con el mismo Just
+// Eat. Es una costumbre de LAST.APP, no del canal ni de un cliente.
+//
+// Por eso esto no se ata a un canal, ni a un `source`, ni a una cuenta: se
+// reconoce por la FORMA del texto, y si la forma no está, no se toca nada. El
+// día que Last.app deje de hacerlo, esto deja de actuar solo.
 //
 // LA FORMA, con un ejemplo real (31/08 a las 14:58, hora de Madrid):
 //
