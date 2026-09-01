@@ -391,8 +391,39 @@ export function isOwnDeliveryUndispatched(order: OrderFeedItem): boolean {
 // Despacha un pedido a Catcher (invocación manual desde la tarjeta). Reusa la Edge
 // catcher-dispatch: acepta { sale_id } con JWT de usuario (sin secret interno) y es
 // idempotente. Lanza Error con el motivo si falla.
+/**
+ * Lo que dice el resolutor sobre un pedido. `carrier` null = NO se despacha, y
+ * `reason` explica por qué en castellano.
+ */
+export async function resolveDispatch(saleId: string): Promise<{ carrier: string | null; reason: string }> {
+  requireSupabase()
+  const { data, error } = await (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+    => Promise<{ data: unknown; error: { message: string } | null }>)('resolve_dispatch', { p_sale_id: saleId })
+  if (error) throw new Error(error.message)
+  const row = (Array.isArray(data) ? data[0] : data) as { carrier?: string | null; reason?: string } | null
+  return { carrier: row?.carrier ?? null, reason: row?.reason ?? 'sin motivo del resolutor' }
+}
+
+/**
+ * Despacha un pedido, PASANDO POR EL MISMO GUARD que el despacho automático.
+ *
+ * ENCARGO CODE (31/08 noche), punto 3 del reparto de Julio. Antes esto llamaba
+ * a `catcher-dispatch` DIRECTO, esquivando `resolve_dispatch` entero: ni
+ * interruptor de marca, ni dirección. Era el único de los cuatro caminos que
+ * podía despachar un pedido que el resolutor había rechazado — y el botón está
+ * justo en la pantalla donde aparecen los pedidos mal clasificados, que es
+ * donde más fácil es pulsarlo por error.
+ *
+ * Ahora se pregunta primero. Si el resolutor dice que no, NO se invoca a
+ * Catcher y se devuelve su motivo tal cual: «sin dirección: este pedido no lo
+ * repartimos nosotros», «marca sin reparto propio (interruptor apagado)». El
+ * motivo lo escribe el resolutor, no esta función: si algún día cambia la
+ * regla, el mensaje cambia con ella y no hay dos textos que mantener.
+ */
 export async function dispatchOrder(saleId: string): Promise<void> {
   requireSupabase()
+  const { carrier, reason } = await resolveDispatch(saleId)
+  if (!carrier) throw new Error(reason)
   const { data, error } = await supabase!.functions.invoke('catcher-dispatch', { body: { sale_id: saleId } })
   if (error) throw new Error(error.message)
   if (data && data.ok === false) throw new Error(data.error ?? 'No se pudo despachar.')
