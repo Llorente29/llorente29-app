@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Phone, Check, Bell, BellOff } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
+import { direccionParaMostrar } from '@/lib/direccionEntrega'
 import { getAlarms, ackAlarm, type KdsAlarm } from '../services/kdsService'
 import { playAlarmSound } from '../kdsUtils'
 
@@ -149,7 +150,7 @@ export default function KdsAlarmOverlay({ locationId, token, variant = 'fixed' }
                 </div>
                 <div className="text-[12.5px] text-white/85 mt-0.5 truncate">
                   {a.customer_name ?? 'Cliente'}
-                  {a.delivery_address && <span className="text-white/70"> · {a.delivery_address}</span>}
+                  {a.delivery_address && <span className="text-white/70"> · {direccionParaMostrar(a.delivery_address)}</span>}
                 </div>
               </div>
 

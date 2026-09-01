@@ -14,6 +14,7 @@ import {
   courierPing, courierProofUpload, type CourierSession, type CourierJob,
 } from './repartidorService'
 import { supabase } from '../../lib/supabase'
+import { direccionParaMostrar } from '@/lib/direccionEntrega'
 
 // Reto (quest) con progreso calculado en vivo por courier_quests_by_token.
 interface Quest {
@@ -395,8 +396,10 @@ function OfferCard({ j, c, claiming, declining, onClaim, onDecline }: {
         <span className={`text-xs ${c.sub}`}>#{j.order_code}</span>
         <span className={`ml-auto text-sm ${c.body}`}>{eur(j.total)}</span>
       </div>
-      <p className={`text-sm ${c.body} mt-2`}>{j.delivery_address ?? 'Sin direccion'}</p>
-      {j.delivery_details && <p className={`text-xs ${c.sub}`}>{j.delivery_details}</p>}
+      {/* Etiquetas en castellano: quien lee esto va en moto. El dato guardado
+          no cambia — es traducción de presentación. */}
+      <p className={`text-sm ${c.body} mt-2`}>{direccionParaMostrar(j.delivery_address) ?? 'Sin direccion'}</p>
+      {j.delivery_details && <p className={`text-xs ${c.sub}`}>{direccionParaMostrar(j.delivery_details)}</p>}
       <div className="flex items-center gap-3 mt-2">
         {j.distance_km != null && <span className={`text-xs ${c.sub} inline-flex items-center gap-1`}><Navigation size={12} /> {km(j.distance_km)}</span>}
         <span className={`text-xs ${c.sub}`}>{j.items_count} art. {DOT} {j.pickup_name ?? 'el local'}</span>
@@ -424,6 +427,10 @@ function ActiveCard({ j, c, busy, onPicked, onDelivered, onFailed }: {
   const label = enroute ? 'En ruta al cliente' : 'Recoger en el local'
   const destLat = enroute ? j.delivery_lat : j.pickup_lat
   const destLng = enroute ? j.delivery_lng : j.pickup_lng
+  // OJO: destAddr va SIN TRADUCIR, y tiene que seguir así. Alimenta a Waze y a
+  // Google Maps (openNav), que geocodifican la cadena: traducirle las etiquetas
+  // no le ayuda y puede empeorar la búsqueda. La traducción es para los OJOS
+  // del repartidor (el párrafo de abajo y el ticket), no para el navegador.
   const destAddr = enroute ? j.delivery_address : j.pickup_address
   const canNav = destLat != null || !!destAddr
 
@@ -449,7 +456,7 @@ function ActiveCard({ j, c, busy, onPicked, onDelivered, onFailed }: {
 
       <p className={`text-sm ${c.body} mt-2`}>
         {enroute
-          ? `${j.delivery_address ?? 'Sin direccion'}${j.delivery_details ? ` ${DOT} ${j.delivery_details}` : ''}`
+          ? `${direccionParaMostrar(j.delivery_address) ?? 'Sin direccion'}${j.delivery_details ? ` ${DOT} ${direccionParaMostrar(j.delivery_details)}` : ''}`
           : `Recoger en ${j.pickup_name ?? 'el local'}${j.pickup_address ? ` ${DOT} ${j.pickup_address}` : ''}`}
       </p>
       <div className="flex items-center gap-3 mt-2">
