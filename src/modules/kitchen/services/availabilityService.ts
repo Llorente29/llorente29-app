@@ -420,3 +420,169 @@ export async function setProductsAvailabilityBulk(
 }
 
 export { ACCOUNT_DOES_NOT_MATTER }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 86 DE OPCIONES DE MODIFICADOR (01/09)
+//
+// El 01/09 Alcalá se quedó sin milanesa de ternera. Los nueve productos se
+// marcaron, y las dos opciones de modificador siguieron vendiéndose — que es la
+// RUTA NORMAL del cliente. Entró comida que no existía mientras la pantalla
+// decía que estaba resuelto.
+//
+// Un 86 que solo se puede hacer con SQL no es un 86: a las nueve de la noche,
+// en pleno servicio, no hay nadie escribiendo consultas.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ModifierOptionRow {
+  /** Un id cualquiera de las que comparten external_id: la RPC ancla por el ref. */
+  optionId: string
+  name: string
+  groupName: string
+  externalId: string
+  /**
+   * Cuántas filas comparten este external_id. Las opciones vienen DUPLICADAS
+   * del catálogo — «Milanesa de ternera» son cuatro filas, dos por grupo — y
+   * agotar por ref las cubre todas de una vez. Se enseña para que nadie crea
+   * que se ha dejado la mitad sin agotar.
+   */
+  filas: number
+}
+
+export interface SoldOutOptionRow extends ModifierOptionRow {
+  locationId: string | null
+  locationName: string | null
+  availableUntil: string | null
+  setAt: string | null
+}
+
+/** Opciones que se pueden agotar: las que tienen ref publicado en el canal. */
+export async function searchModifierOptions(
+  accountId: string, term: string, limit = 30,
+): Promise<ModifierOptionRow[]> {
+  requireSupabase()
+  let q = supabase!.from('modifier_option')
+    .select('id, name, external_id, modifier_group:modifier_group_id(name)')
+    .eq('account_id', accountId)
+    .eq('is_active', true)
+    .not('external_id', 'is', null)
+    .order('name')
+    .limit(200)
+  if (term.trim()) q = q.ilike('name', `%${term.trim()}%`)
+  const { data, error } = await q
+  if (error) throw new Error(`No se han podido leer las opciones: ${error.message}`)
+
+  // Se agrupa por external_id, que es como se agota. Sin esto la lista
+  // enseñaría «Milanesa de ternera» cuatro veces y nadie sabría cuál pulsar.
+  const porRef = new Map<string, ModifierOptionRow>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data as any[]) ?? []) {
+    const ref = r.external_id as string
+    const prev = porRef.get(ref)
+    if (prev) { prev.filas += 1; continue }
+    porRef.set(ref, {
+      optionId: r.id as string,
+      name: (r.name as string) ?? '',
+      groupName: (r.modifier_group?.name as string) ?? '',
+      externalId: ref,
+      filas: 1,
+    })
+  }
+  return Array.from(porRef.values()).slice(0, limit)
+}
+
+/** Lo que está agotado ahora mismo, por local. NO filtra nada (regla 7). */
+export async function listSoldOutOptions(locationId: string | null): Promise<SoldOutOptionRow[]> {
+  requireSupabase()
+  // El cast se cae solo cuando se regenere database.ts: los tipos generados
+  // todavía no conocen `target_kind`, que se añadió esta tarde.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = (supabase!.from('product_availability') as any)
+    .select('external_id, location_id, available_until, set_at, locations:location_id(name)')
+    .eq('target_kind', 'modifier_option')
+    .eq('is_available', false)
+  if (locationId) q = q.eq('location_id', locationId)
+  const { data, error } = await q
+  if (error) throw new Error(`No se han podido leer las opciones agotadas: ${error.message}`)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const filas = (data as any[]) ?? []
+  if (filas.length === 0) return []
+
+  const refs = Array.from(new Set(filas.map(f => f.external_id as string)))
+  const { data: opts } = await supabase!.from('modifier_option')
+    .select('id, name, external_id, modifier_group:modifier_group_id(name)')
+    .in('external_id', refs)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const infoPorRef = new Map<string, { id: string; name: string; grupo: string; filas: number }>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const o of (opts as any[]) ?? []) {
+    const ref = o.external_id as string
+    const prev = infoPorRef.get(ref)
+    if (prev) { prev.filas += 1; continue }
+    infoPorRef.set(ref, {
+      id: o.id as string, name: (o.name as string) ?? '',
+      grupo: (o.modifier_group?.name as string) ?? '', filas: 1,
+    })
+  }
+
+  return filas.map(f => {
+    const ref = f.external_id as string
+    const info = infoPorRef.get(ref)
+    return {
+      optionId: info?.id ?? ref,
+      name: info?.name ?? '(opción desconocida)',
+      groupName: info?.grupo ?? '',
+      externalId: ref,
+      filas: info?.filas ?? 1,
+      locationId: (f.location_id as string) ?? null,
+      locationName: (f.locations?.name as string) ?? null,
+      availableUntil: (f.available_until as string) ?? null,
+      setAt: (f.set_at as string) ?? null,
+    }
+  }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export interface OptionAvailabilityResult {
+  optionRefs: string[]
+  label: string
+  /** false = la fila se escribió pero NO llegó al canal. Hay que decirlo. */
+  dispatched: boolean
+  warning?: string
+}
+
+/**
+ * Agota o reactiva una opción en un local. Ancla por el ref, así que cubre
+ * todas las filas duplicadas que lo comparten.
+ *
+ * `dispatched` NO se ignora: si la RPC escribió la fila pero no pudo empujar al
+ * canal, la pantalla tiene que decirlo. Un 86 que solo existe en nuestra base
+ * de datos es el fallo silencioso de siempre, un piso más abajo.
+ */
+export async function setModifierOptionAvailability(
+  optionId: string,
+  isAvailable: boolean,
+  locationId: string | null,
+  availableUntil?: string | null,
+  reasonCode?: string | null,
+): Promise<OptionAvailabilityResult> {
+  requireSupabase()
+  const { data, error } = await (supabase!.rpc as unknown as (
+    fn: string, args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    'set_modifier_option_availability', {
+      p_option_id: optionId,
+      p_is_available: isAvailable,
+      p_location_id: locationId ?? undefined,
+      p_reason: 'stock_out',
+      p_available_until: availableUntil ?? undefined,
+      p_reason_code: reasonCode ?? undefined,
+    })
+  if (error) throw new Error(error.message)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = (data as any) ?? {}
+  return {
+    optionRefs: Array.isArray(r.option_refs) ? r.option_refs : [],
+    label: r.label ?? '',
+    dispatched: r.dispatched === true,
+    warning: r.warning ?? undefined,
+  }
+}

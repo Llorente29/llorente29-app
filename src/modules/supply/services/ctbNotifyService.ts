@@ -143,10 +143,122 @@ export async function getCtbReceiptFileUrl(path: string | null | undefined): Pro
   return getReceiptFileUrl(path)
 }
 
+/**
+ * LAS DIFERENCIAS DE UN ALBARÁN, CALCULADAS EN LA BBDD.
+ *
+ * El cálculo vive en `ctb_receipt_differences` y NO se repite aquí: de esa
+ * función salen las dos cosas, el `has_differences` que decide si hay aviso y
+ * el texto que se redacta abajo. Si el cálculo viviera en dos sitios acabarían
+ * diciendo cosas distintas, que es lo que ya advierte buildOrderClaimMessage.
+ */
+export interface CtbDifference {
+  linea: number
+  productName: string
+  docQty: number | null
+  qtyReceived: number | null
+  diferencia: number | null
+  dimension: string
+  valorEur: number | null
+  motivo: string | null
+  clase: 'diferencia' | 'ruido' | 'no_comparable' | 'solo_nota'
+}
+
+export async function listCtbDifferences(receiptId: string): Promise<CtbDifference[]> {
+  requireSupabase()
+  const { data, error } = await (supabase!.rpc as unknown as (
+    fn: string, args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    'ctb_receipt_differences', { p_receipt_id: receiptId },
+  )
+  if (error) throw new Error(`No se han podido leer las diferencias: ${error.message}`)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data as any[]) ?? []).map(r => ({
+    linea: Number(r.linea),
+    productName: String(r.product_name ?? ''),
+    docQty: r.doc_qty != null ? Number(r.doc_qty) : null,
+    qtyReceived: r.qty_received != null ? Number(r.qty_received) : null,
+    diferencia: r.diferencia != null ? Number(r.diferencia) : null,
+    dimension: String(r.dimension ?? 'unit'),
+    valorEur: r.valor_eur != null ? Number(r.valor_eur) : null,
+    motivo: r.motivo ?? null,
+    clase: r.clase as CtbDifference['clase'],
+  }))
+}
+
+const fmtEur = (n: number) =>
+  n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })
+
+/** 3 → "3", 3.2 → "3,2". Sin ceros de relleno que nadie dice en voz alta. */
+const fmtQty = (n: number) =>
+  n.toLocaleString('es-ES', { maximumFractionDigits: 3 })
+
+/**
+ * "SOBRE AMERICANO KDB CAJA 250 UD" → "Sobre americano KDB caja 250 ud".
+ *
+ * El albarán viene TODO EN MAYÚSCULAS y así grita. Pero minusculizar a lo
+ * bruto se come las siglas — KDB pasa a "kdb" y el proveedor ya no reconoce su
+ * producto.
+ *
+ * La regla para distinguirlas: UNA SIGLA NO SE PUEDE PRONUNCIAR, no tiene
+ * vocales. KDB se queda; BIG (que por longitud también parecía sigla) baja a
+ * minúsculas como la palabra que es. Las unidades sin vocales — KG, LT, ML, CL
+ * — caerían del lado equivocado, así que van en una lista corta y explícita.
+ */
+const PALABRAS_DE_ALMACEN = new Set([
+  'CAJA', 'CAJAS', 'BOLSA', 'SACO', 'UD', 'UDS', 'KG', 'GR', 'GRS', 'LT', 'ML',
+  'CL', 'PACK', 'LATA', 'BOTE', 'DE', 'Y', 'EL', 'LA', 'CON', 'SIN',
+])
+function nombreLegible(s: string): string {
+  const palabras = s.trim().split(/\s+/).map(w => {
+    const soloLetras = w.replace(/[^A-ZÁÉÍÓÚÑ]/gi, '')
+    const sinVocales = soloLetras.length > 0 && !/[AEIOUÁÉÍÓÚ]/i.test(soloLetras)
+    const esSigla = sinVocales && soloLetras.length <= 4
+      && w === w.toUpperCase()
+      && !PALABRAS_DE_ALMACEN.has(soloLetras.toUpperCase())
+    return esSigla ? w : w.toLowerCase()
+  })
+  const t = palabras.join(' ')
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+/**
+ * Una línea de reclamación, con las palabras del almacén y no del programador.
+ * Se usa el nombre DEL ALBARÁN, no el del catálogo: el proveedor conoce "SOBRE
+ * AMERICANO KDB CAJA 250 UD", no "Bolsas Personalizadas Korean".
+ *
+ * El motivo escrito a mano NO sustituye al número: va detrás, como contexto.
+ * Los números son la verdad; la nota es lo que alguien vio.
+ */
+export function lineaDeDiferencia(d: CtbDifference): string {
+  const nombre = nombreLegible(d.productName)
+  const nota = d.motivo ? ` Nota: ${d.motivo}` : ''
+
+  if (d.clase === 'solo_nota') {
+    return `${nombre} — cantidad correcta.${nota}`
+  }
+  if (d.docQty == null || d.qtyReceived == null || d.diferencia == null) {
+    return `${nombre} — el albarán no dice cantidad, no se ha podido comparar.${nota}`
+  }
+
+  const papel = fmtQty(d.docQty)
+  const dif = Math.abs(d.diferencia)
+  const importe = d.valorEur != null ? ` · ${fmtEur(d.valorEur)}` : ''
+
+  if (d.diferencia > 0) {
+    return `${nombre} — el albarán factura ${papel} y han llegado ${fmtQty(d.qtyReceived)}`
+         + ` (${fmtQty(dif)} de más).${nota}`
+  }
+  const llegado = d.qtyReceived === 0
+    ? 'no ha llegado ninguna'
+    : `han llegado ${fmtQty(d.qtyReceived)}`
+  return `${nombre} — el albarán factura ${papel} y ${llegado}`
+       + ` (falta ${fmtQty(dif)}${importe}).${nota}`
+}
+
 // Texto del mensaje para el grupo de CTB. Incluye la cuña sutil "folvy.app"
 // (publicidad pasiva ante el cedente; WhatsApp la auto-enlaza). Si hay diferencias,
 // lo dice explícito (CTB: "si hay diferencias las comunicas").
-export function buildCtbMessage(item: CtbNotifyItem): string {
+export function buildCtbMessage(item: CtbNotifyItem, difs: CtbDifference[] = []): string {
   // RECLAMACIÓN DE PEDIDO: el texto lo compone purchaseOrderService, que es
   // donde vive el dato. Aquí no se redacta una segunda versión del mismo
   // mensaje — si hubiera dos, acabarían diciendo cosas distintas.
@@ -172,9 +284,32 @@ export function buildCtbMessage(item: CtbNotifyItem): string {
     `Fecha: ${fecha}`,
     item.supplierDocNumber ? `Albarán nº: ${item.supplierDocNumber}` : null,
     item.receiptCode ? `Ref. Folvy: ${item.receiptCode}` : null,
-    item.hasDifferences ? '⚠️ Recepción CON diferencias respecto al pedido.' : 'Sin diferencias.',
-    '',
-    'Enviado con Folvy · folvy.app',
   ]
-  return lines.filter(Boolean).join('\n')
+
+  // LAS DIFERENCIAS, UNA POR LÍNEA Y CON SUS NÚMEROS. Hasta el 01/09 aquí solo
+  // iba «⚠️ Recepción CON diferencias respecto al pedido.»: el proveedor recibía
+  // que había diferencias y ni qué artículo, ni cuánto, ni cuánto dinero.
+  //
+  // Solo viajan las de clase 'diferencia'. Las de 'ruido' (décimas de báscula)
+  // se ven en el panel de revisión y se pueden añadir a mano desde ahí, pero no
+  // entran solas: meterlas resta seriedad a lo que sí importa. Las
+  // 'no_comparable' tampoco viajan — se cuentan en el panel, no se inventan.
+  const reclamables = difs.filter(d => d.clase === 'diferencia')
+  if (reclamables.length > 0) {
+    lines.push('', `⚠️ Diferencias (${reclamables.length}):`)
+    for (const d of reclamables) lines.push(`· ${lineaDeDiferencia(d)}`)
+  } else {
+    lines.push('Sin diferencias.')
+  }
+
+  // El motivo escrito a mano en una línea SIN diferencia de cantidad no es una
+  // reclamación, pero es lo que vio quien recibió: viaja como contexto.
+  const notas = difs.filter(d => d.clase === 'solo_nota')
+  if (notas.length > 0) {
+    lines.push('', 'Notas de la recepción:')
+    for (const d of notas) lines.push(`· ${lineaDeDiferencia(d)}`)
+  }
+
+  lines.push('', 'Enviado con Folvy · folvy.app')
+  return lines.filter(l => l !== null && l !== undefined).join('\n')
 }
