@@ -495,9 +495,15 @@ export async function listSoldOutOptions(locationId: string | null): Promise<Sol
   requireSupabase()
   // El cast se cae solo cuando se regenere database.ts: los tipos generados
   // todavía no conocen `target_kind`, que se añadió esta tarde.
+  //
+  // NO se embebe el local con `locations:location_id(name)`: `product_availability`
+  // NO TIENE NINGUNA CLAVE AJENA — ni a locations ni a nada — así que PostgREST
+  // no sabe resolver el embed y la consulta entera falla. La lista de agotados
+  // habría salido vacía y la pantalla habría parecido rota sin decir por qué.
+  // Los nombres de local se resuelven en una segunda consulta.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = (supabase!.from('product_availability') as any)
-    .select('external_id, location_id, available_until, set_at, locations:location_id(name)')
+    .select('external_id, location_id, available_until, set_at')
     .eq('target_kind', 'modifier_option')
     .eq('is_available', false)
   if (locationId) q = q.eq('location_id', locationId)
@@ -506,6 +512,17 @@ export async function listSoldOutOptions(locationId: string | null): Promise<Sol
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filas = (data as any[]) ?? []
   if (filas.length === 0) return []
+
+  // Nombres de local, por separado (ver arriba: no hay FK que embeber).
+  const locIds = Array.from(new Set(
+    filas.map(f => f.location_id as string | null).filter((x): x is string => !!x),
+  ))
+  const nombrePorLocal = new Map<string, string>()
+  if (locIds.length > 0) {
+    const { data: locs } = await supabase!.from('locations').select('id, name').in('id', locIds)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const l of (locs as any[]) ?? []) nombrePorLocal.set(l.id as string, (l.name as string) ?? '')
+  }
 
   const refs = Array.from(new Set(filas.map(f => f.external_id as string)))
   const { data: opts } = await supabase!.from('modifier_option')
@@ -534,7 +551,7 @@ export async function listSoldOutOptions(locationId: string | null): Promise<Sol
       externalId: ref,
       filas: info?.filas ?? 1,
       locationId: (f.location_id as string) ?? null,
-      locationName: (f.locations?.name as string) ?? null,
+      locationName: f.location_id ? (nombrePorLocal.get(f.location_id as string) ?? null) : null,
       availableUntil: (f.available_until as string) ?? null,
       setAt: (f.set_at as string) ?? null,
     }
