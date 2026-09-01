@@ -86,6 +86,9 @@ Deno.serve(async (req: Request) => {
   let body: {
     account_id?: string;
     matriculas?: string[];
+    /** v8 (01/09): refs de OPCIONES de modificador. Van al mismo inventario de
+     *  HubRise pero en el campo `option_ref`, no `sku_ref`. */
+    option_refs?: string[];
     affected_menu_item_ids?: string[];
     external_location_ids?: string[];
     location_id?: string | null;
@@ -98,6 +101,7 @@ Deno.serve(async (req: Request) => {
 
   const accountId = body.account_id;
   const matriculas = Array.isArray(body.matriculas) ? body.matriculas.filter(Boolean) : [];
+  const optionRefs = Array.isArray(body.option_refs) ? body.option_refs.filter(Boolean) : [];
   const affectedMenuItemIds = Array.isArray(body.affected_menu_item_ids)
     ? body.affected_menu_item_ids.filter(Boolean)
     : [];
@@ -108,8 +112,8 @@ Deno.serve(async (req: Request) => {
   const availableUntil = body.available_until ?? null;
   const enable = body.enable === true;
   const locationStatusLogId = body.location_status_log_id ?? null;
-  if (!accountId || matriculas.length === 0) {
-    return json({ ok: false, error: "account_id y matriculas requeridos" }, 400);
+  if (!accountId || (matriculas.length === 0 && optionRefs.length === 0)) {
+    return json({ ok: false, error: "account_id y matriculas u option_refs requeridos" }, 400);
   }
 
   const sb = createClient(
@@ -124,7 +128,11 @@ Deno.serve(async (req: Request) => {
   // No se llama a la API de Last ni se toca is_enabled: Last es dueño de su
   // catálogo. Un solo log informativo por llamada (no es fallo), para no
   // inundar availability_push_log con una fila por producto×local.
-  {
+  //
+  // v8: solo si hay matrículas de PRODUCTO. Un 86 de opción no pasa por aquí:
+  // las opciones de las marcas propias no existen en Last, y un `.in(col, [])`
+  // no consultaría nada útil.
+  if (matriculas.length > 0) {
     let query = sb
       .from("external_catalog_product")
       .select("organization_product_id")
@@ -315,7 +323,13 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    type HubriseEntry = { sku_ref: string; stock: string | null; expires_at?: string };
+    // v8: el inventario de HubRise acepta `sku_ref` O `option_ref` por entrada.
+    // El ref de una opción es el que ya publica el catálogo, optRef(o) =
+    // external_id — SIN el namespacing por marca que sí llevan los skus de
+    // producto. Si se le aplicara ese namespace, el PATCH no encontraría nada.
+    type HubriseEntry =
+      | { sku_ref: string; stock: string | null; expires_at?: string }
+      | { option_ref: string; stock: string | null; expires_at?: string };
     function entriesFor(conn: ConnEntry): HubriseEntry[] {
       const refs = brandIdsInvolved.length > 0
         ? hubriseRefs.filter((ref) => {
@@ -332,11 +346,22 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    for (const conn of connsByKey.values()) {
-      const entries = entriesFor(conn);
-      if (entries.length === 0) continue; // nada de este catálogo para este 86 -> ni log ni PATCH
+    // Las option_lists NO se publican por marca (van en catalogDataBase, iguales
+    // para todos los catálogos), así que un option_ref no se filtra por marca
+    // como los skus: va a todos los catálogos del local. El inventario sí es
+    // por local, que es lo que hace que Alcalá se agote y Carabanchel no.
+    const optionEntries: HubriseEntry[] = optionRefs.map((ref) =>
+      enable
+        ? { option_ref: ref, stock: null }
+        : { option_ref: ref, stock: "0", ...(availableUntil ? { expires_at: availableUntil } : {}) }
+    );
 
-      const refsPushed = entries.map((e) => e.sku_ref);
+    for (const conn of connsByKey.values()) {
+      const entries = matriculas.length > 0 || affectedMenuItemIds.length > 0 ? entriesFor(conn) : [];
+      // Sin nada que empujar a este catálogo -> ni log ni PATCH.
+      if (entries.length === 0 && optionEntries.length === 0) continue;
+
+      const refsPushed = entries.map((e) => ("sku_ref" in e ? e.sku_ref : e.option_ref));
       const label = {
         connection_name: Array.from(conn.connNames).filter(Boolean).join(" + "),
         external_catalog_id: conn.catalogId, external_location_id: conn.extLocId,
@@ -352,21 +377,41 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      results.hubrise.pushed++;
-      const r = await patchHubriseInventory(conn.token, conn.catalogId, conn.extLocId, entries);
-      if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
-      await logPush(sb, accountId, {
-        source: "hubrise", enable, ok: r.ok, http_status: r.status ?? null,
-        external_catalog_id: conn.catalogId, organization_product_id: refsPushed,
-        error: hubriseDetail(label, r.ok ? `ok · ${refsPushed.length} sku` : (r.reason ?? null)),
-      });
+      if (entries.length > 0) {
+        results.hubrise.pushed++;
+        const r = await patchHubriseInventory(conn.token, conn.catalogId, conn.extLocId, entries);
+        if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
+        await logPush(sb, accountId, {
+          source: "hubrise", enable, ok: r.ok, http_status: r.status ?? null,
+          external_catalog_id: conn.catalogId, organization_product_id: refsPushed,
+          error: hubriseDetail(label, r.ok ? `ok · ${refsPushed.length} sku` : (r.reason ?? null)),
+        });
+      }
+
+      // ── OPCIONES: PATCH APARTE, Y A PROPÓSITO ──────────────────────────
+      // Podrían ir en la misma llamada, pero esta función empuja TODOS los 86,
+      // no solo los nuevos. Si un option_ref desconocido hiciera fallar el
+      // PATCH, se caería con él el 86 de PRODUCTOS, en pleno servicio. En dos
+      // llamadas, lo de productos ya está aplicado cuando se intenta lo otro.
+      if (optionEntries.length > 0) {
+        results.hubrise.pushed++;
+        const ro = await patchHubriseInventory(conn.token, conn.catalogId, conn.extLocId, optionEntries);
+        if (ro.ok) results.hubrise.ok++; else results.hubrise.failed++;
+        await logPush(sb, accountId, {
+          source: "hubrise", enable, ok: ro.ok, http_status: ro.status ?? null,
+          external_catalog_id: conn.catalogId, organization_product_id: optionRefs,
+          error: hubriseDetail(label, ro.ok ? `ok · ${optionRefs.length} opcion(es)` : (ro.reason ?? null)),
+        });
+      }
     }
   }
 
   // ===================== huecos declarados (otter/otros) ===================
   // No empujamos, pero LO REGISTRAMOS (antes era skip silencioso).
   // (Se detecta si hubo filas espejo de otros integradores para estas matrículas.)
-  {
+  // v8: solo con matrículas de producto — el espejo de otros integradores se
+  // indexa por producto, y un 86 de opción no tiene nada que buscar aquí.
+  if (matriculas.length > 0) {
     const { data: others } = await sb.from("external_catalog_product")
       .select("source, external_org_id, external_catalog_id, organization_product_id")
       .eq("account_id", accountId)
