@@ -18,6 +18,7 @@ import KdsAlarmOverlay from '../kds/components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from '../kds/components/AvailabilityNoticeOverlay'
 import TabletAvailabilityTab from './TabletAvailabilityTab'
 import OrdersFeed from '../orders/components/OrdersFeed'
+import { useNuevaVersion } from '@/shell/version/useNuevaVersion'
 import PrintersSettingsPage from '../printing/components/PrintersSettingsPage'
 import QrScanButton from '../printing/components/QrScanButton'
 import { extractToken } from '../printing/pairingUtils'
@@ -39,6 +40,15 @@ function clearToken(): void {
 type Tab = 'pedidos' | 'cocina' | 'disponibilidad' | 'impresoras'
 
 export default function TabletStationRoute() {
+  // 01/09 — LA TABLET SE RECARGA SOLA. No tiene a nadie delante que pulse un
+  // botón, así que un aviso aquí no sirve de nada: la de Cocina se quedó cinco
+  // días en el mismo bundle porque nadie cerró la pestaña.
+  //
+  // Pero NUNCA en mitad de un pedido: `useNuevaVersion` pregunta cada 10 s si
+  // hay trabajo en curso —lo declara OrdersFeed— y espera. No se rinde: cuando
+  // la última comanda se cierra, recarga.
+  useNuevaVersion({ autoRecarga: true })
+
   const [token, setToken] = useState<string | null>(null)
   const [pasteValue, setPasteValue] = useState('')
   const [tab, setTab] = useState<Tab>('pedidos')
