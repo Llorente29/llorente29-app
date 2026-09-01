@@ -1641,6 +1641,41 @@ export interface UnverifiedLine {
 }
 
 /** Por qué una línea quedó marcada. Explícito, no deducido del color. */
+/**
+ * ¿ESTA LÍNEA ESTÁ SIN DECIDIR? — LA ÚNICA COPIA EN EL FRONT DEL CRITERIO.
+ *
+ * ⚠️ ESTE CRITERIO VIVE TAMBIÉN EN LA BASE DE DATOS, en el guard de
+ * `confirm_goods_receipt` y en su `needs_review`. El 01/09 se arregló allí y
+ * NO aquí, y la pantalla siguió contando como «sin decidir» una línea que el
+ * servidor ya exoneraba: el botón «Verificado — cerrar albarán» se quedó
+ * apagado y ALB-00136 no se pudo cerrar con la reclamación esperando.
+ *
+ * Es la Regla 10 mordiendo el mismo día que se escribió: una regla en dos
+ * sitios acaba discrepando. Mientras siga aquí, ESTA función es el único punto
+ * del front que puede decidirlo — nadie vuelve a escribir la condición suelta
+ * en un componente. Y la deuda de verdad, anotada: que el criterio salga del
+ * servidor (una RPC que devuelva las líneas sin decidir) y esto desaparezca.
+ *
+ * El criterio, palabra por palabra igual que el SQL:
+ *   · «no es mercancía» nunca cuenta;
+ *   · sin artículo SIEMPRE está sin decidir;
+ *   · cantidad cero (0 o NULL) SIN motivo escrito, sin decidir;
+ *   · cantidad cero CON motivo escrito es una DECISIÓN — «no ha llegado» —
+ *     y por eso deja de contar.
+ */
+export function lineaSinDecidir(l: {
+  notGoods?: boolean | null
+  recipeItemId: string | null
+  qtyInBase: number | null
+  discrepancyReason?: string | null
+}): boolean {
+  if (l.notGoods) return false
+  if (!l.recipeItemId) return true
+  const cantidadCero = l.qtyInBase == null || l.qtyInBase <= 0
+  if (!cantidadCero) return false
+  return (l.discrepancyReason ?? '').trim() === ''
+}
+
 export function unverifiedReason(l: {
   recipeItemId: string | null; mapSource: string | null; qtyInBase: number | null; unitCost: number | null
 }): string {

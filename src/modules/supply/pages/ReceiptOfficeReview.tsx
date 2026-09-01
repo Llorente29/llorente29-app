@@ -16,6 +16,7 @@ import {
   getGoodsReceiptById,
   updateGoodsReceipt,
   unverifiedReason,
+  lineaSinDecidir,
   listGoodsReceiptLines,
   getReceiptDocTotal,
   getRecipeItemDisplayInfo,
@@ -72,8 +73,12 @@ type LineClass = 'resuelta' | 'dudosa' | 'sin_decidir' | 'not_goods'
 
 function classify(l: GoodsReceiptLine): LineClass {
   if (l.notGoods) return 'not_goods'
-  const undecided = !l.recipeItemId || l.qtyInBase == null || l.qtyInBase <= 0
-  if (undecided) return 'sin_decidir'
+  // El criterio NO se reescribe aquí: sale de `lineaSinDecidir`, que es la
+  // única copia en el front y está escrita palabra por palabra igual que el
+  // guard de confirm_goods_receipt. El 01/09 la condición vivía suelta en esta
+  // línea, se arregló en la BBDD y no aquí, y la pantalla dejó a Julio sin
+  // poder cerrar ALB-00136 con la reclamación esperando.
+  if (lineaSinDecidir(l)) return 'sin_decidir'
   if (l.flaggedForOffice || l.mapNeedsReview) return 'dudosa'
   return 'resuelta'
 }
@@ -334,7 +339,23 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     if (docTotal != null) return docTotal
     return lines.reduce((sum, l) => sum + (l.docAmount ?? 0), 0)
   }, [docTotal, lines])
-  const missingSum = Math.max(0, totalSum - verifiedSum)
+  /**
+   * EL IMPORTE DE LAS LÍNEAS SIN DECIDIR, que es lo que dice la frase del pie.
+   *
+   * Antes era `totalSum - verifiedSum`: el hueco entre el total del documento y
+   * lo verificado, que NO es lo mismo — se traga también las líneas marcadas
+   * «no es mercancía», que están en el total del papel y nunca se verifican.
+   * En ALB-00136 decía «faltan 100,79 € en 1 línea sin decidir» cuando esa
+   * línea son 46,60 €. Un número que no cuadra con la frase que lo acompaña
+   * enseña a no fiarse de los dos.
+   */
+  const missingSum = useMemo(
+    () => pendingLines.reduce((sum, l) => {
+      const amt = l.docAmount ?? (l.unitCost != null ? l.unitCost * l.qtyReceived : 0)
+      return sum + amt
+    }, 0),
+    [pendingLines],
+  )
   const allDecided = pendingLines.length === 0
   // ENCARGO CODE (20/08) §2.3 — sin proveedor ni nº de albarán no se cierra.
   // El servidor lo exige también (confirm_goods_receipt), para que no dependa
