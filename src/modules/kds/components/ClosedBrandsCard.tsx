@@ -14,6 +14,21 @@
 // No se muestra nada si no hay ninguna marca cerrada (ambiental de verdad:
 // no ocupa sitio cuando no aporta).
 //
+// POR LOCAL desde el 31/08/2026 — `locationId` es obligatorio.
+// La tarjeta se pinta también dentro del chip de Pedidos, y ahí listaba los
+// cierres de TODA la cuenta con su botón Reabrir: con Alcalá seleccionado
+// enseñaba los dos cierres de Carabanchel como si fueran suyos. Ahora hay dos
+// bloques y no se pueden confundir:
+//   · «cerradas aquí»  → con botón, y el botón dice el local en la confirmación.
+//   · «en otros locales» → SOLO LECTURA, etiquetado con el nombre del local.
+//     No se ocultan (regla 7: una pantalla que se abre a propósito no esconde
+//     filas) pero no se tocan desde aquí: ver no es tocar.
+//
+// La reapertura es en DOS PASOS: el primer toque pide confirmación con la
+// frase entera —«Reabrir Meraki Pita en Foodint Carabanchel»— y solo el
+// segundo llama a la RPC. Reabrir empuja a las plataformas del local: no
+// puede salir de un roce en una tablet.
+//
 // fix/sondeo-adaptativo-resto (13/08, Encargo B-bis): closed_brands es una de
 // las tres RPC que se escaparon del encargo B. Este es su SEGUNDO sitio de
 // sondeo (el primero es ClosuresChip) — se llega aquí también desde
@@ -24,9 +39,12 @@
 // suelo general de 5 min (B2).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Store, Unlock, Loader2, AlertTriangle } from 'lucide-react'
+import { Store, Unlock, Loader2, AlertTriangle, Eye } from 'lucide-react'
 import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
-import { getClosedBrands, setBrandStatus, setBrandStatusByToken, type ClosedBrand } from '../services/kdsService'
+import { getClosedBrandsByScope, setBrandStatus, setBrandStatusByToken, type ClosedBrand } from '../services/kdsService'
+import {
+  filaId, textoReapertura, textoReabrir, textoMarcasCerradas, textoOtrosLocales,
+} from '../lib/closureScope'
 import { themeCls } from '../lib/theme'
 
 const POLL_MS = 30_000
@@ -36,33 +54,38 @@ const IDLE_AFTER = 4
 interface Props {
   accountId?: string | null
   token?: string | null
+  /**
+   * Local seleccionado. OBLIGATORIO y sin default a propósito: hasta el
+   * 31/08/2026 esta tarjeta pintaba la cuenta entera sin decirlo. null se
+   * escribe a mano y significa que no hay local con el que contrastar
+   * (consolidado en Disponibilidad web, o tablet: ahí el token ya acota).
+   */
+  locationId: string | null
   dark?: boolean
-}
-
-// Desde el 01/09/2026 una marca puede salir DOS veces, una por local cerrado.
-// La huella y el id de "ocupado" llevan el local o se pisarian entre si.
-function filaId(b: { brand_id: string; location_id: string }): string {
-  return `${b.brand_id}:${b.location_id}`
 }
 
 function brandsFingerprint(brands: ClosedBrand[]): string {
   return brands.map(b => `${filaId(b)}:${b.resume_at ?? ''}`).sort().join(',')
 }
 
-export default function ClosedBrandsCard({ accountId, token, dark = false }: Props) {
-  const [brands, setBrands] = useState<ClosedBrand[]>([])
+export default function ClosedBrandsCard({ accountId, token, locationId, dark = false }: Props) {
+  const [aqui, setAqui] = useState<ClosedBrand[]>([])
+  const [otros, setOtros] = useState<ClosedBrand[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // Fila pendiente de confirmar la reapertura (null = ninguna).
+  const [confirmId, setConfirmId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const lastFingerprintRef = useRef<string | null>(null)
   const pollHandleRef = useRef<RetryLoopHandle | null>(null)
 
   const refresh = useCallback(async (): Promise<boolean> => {
     try {
-      const list = await getClosedBrands(accountId ?? null, token)
-      setBrands(list)
+      const scope = await getClosedBrandsByScope(accountId ?? null, token, locationId)
+      setAqui(scope.aqui)
+      setOtros(scope.otrosLocales)
       setError(null)
-      const fp = brandsFingerprint(list)
+      const fp = brandsFingerprint([...scope.aqui, ...scope.otrosLocales])
       const hadWork = lastFingerprintRef.current === null || fp !== lastFingerprintRef.current
       lastFingerprintRef.current = fp
       return hadWork
@@ -72,7 +95,7 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
     } finally {
       setLoading(false)
     }
-  }, [accountId, token])
+  }, [accountId, token, locationId])
 
   useEffect(() => {
     setLoading(true)
@@ -87,13 +110,20 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
     return () => { pollHandleRef.current = null; handle.cancel() }
   }, [refresh])
 
-  async function reopen(brandId: string, locationId: string) {
-    setBusyId(`${brandId}:${locationId}`); setError(null)
+  /**
+   * Reabre la fila `b`. Solo se llama desde el bloque «cerradas aquí»: las de
+   * otros locales no tienen botón. El local viaja EXPLÍCITO en la llamada —
+   * `b.location_id`, el de la fila, nunca "el de la marca".
+   *
+   * Con token no hay parámetro de local: lo pone el dispositivo. Y no puede
+   * descuadrar, porque con token la RPC ya devolvió solo su local (por eso
+   * `otrosLocales` viene siempre vacío ahí).
+   */
+  async function reopen(b: ClosedBrand) {
+    setBusyId(filaId(b)); setConfirmId(null); setError(null)
     try {
-      // Con token el local lo pone el dispositivo; desde oficina se reabre el
-      // local de ESTA fila, no la marca entera.
-      if (token) await setBrandStatusByToken(token, brandId, 'normal')
-      else await setBrandStatus(brandId, 'normal', locationId)
+      if (token) await setBrandStatusByToken(token, b.brand_id, 'normal')
+      else await setBrandStatus(b.brand_id, 'normal', b.location_id)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo reabrir')
       setBusyId(null)
@@ -104,41 +134,90 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
     setBusyId(null)
   }
 
-  if (loading || brands.length === 0) return null
+  if (loading || (aqui.length === 0 && otros.length === 0)) return null
 
   const t = themeCls(dark ? 'dark' : 'light')
 
   return (
     <div className={`rounded-xl px-4 py-3 mb-3 ${t.card}`}>
-      <div className="flex items-center gap-2 mb-2">
-        <Store size={15} className={t.textMuted} />
-        <span className={`text-xs font-semibold uppercase tracking-wide ${t.textSecondary}`}>
-          {brands.length === 1 ? 'Marca cerrada' : `${brands.length} marcas cerradas`}
-        </span>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {brands.map((b) => (
-          <div key={filaId(b)} className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-danger shrink-0" />
-              <span className={`text-sm truncate ${t.textPrimary}`}>{b.brand_name}</span>
-              <span className={`text-xs shrink-0 ${t.textMuted}`}>{b.location_name}</span>
-              <span className={`text-xs shrink-0 ${t.textMuted}`}>
-                {b.resume_at
-                  ? `hasta las ${new Date(b.resume_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
-                  : 'indefinido'}
-              </span>
-            </div>
-            <button
-              onClick={() => void reopen(b.brand_id, b.location_id)}
-              disabled={busyId === filaId(b)}
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-success text-white hover:opacity-90 disabled:opacity-50"
-            >
-              {busyId === filaId(b) ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />} Reabrir
-            </button>
+      {aqui.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <Store size={15} className={t.textMuted} />
+            <span className={`text-xs font-semibold uppercase tracking-wide ${t.textSecondary}`}>
+              {aqui.length === 1 ? 'Marca cerrada' : textoMarcasCerradas(aqui.length)}
+            </span>
           </div>
-        ))}
-      </div>
+          <div className="flex flex-col gap-1.5">
+            {aqui.map((b) => (
+              <div key={filaId(b)} className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-danger shrink-0" />
+                  <span className={`text-sm truncate ${t.textPrimary}`}>{b.brand_name}</span>
+                  <span className={`text-xs shrink-0 ${t.textMuted}`}>{b.location_name}</span>
+                  <span className={`text-xs shrink-0 ${t.textMuted}`}>{textoReapertura(b.resume_at)}</span>
+                </div>
+                {confirmId === filaId(b) ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`text-xs ${t.textSecondary}`}>
+                      ¿{textoReabrir(b.brand_name, b.location_name)}?
+                    </span>
+                    <button
+                      onClick={() => void reopen(b)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-success text-white hover:opacity-90"
+                    >
+                      <Unlock size={12} /> Sí, reabrir
+                    </button>
+                    <button
+                      onClick={() => setConfirmId(null)}
+                      className={`px-2 py-1 rounded-md text-xs font-medium ${t.chipNeutral}`}
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmId(filaId(b))}
+                    disabled={busyId === filaId(b)}
+                    title={textoReabrir(b.brand_name, b.location_name)}
+                    className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-success text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    {busyId === filaId(b) ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />}
+                    {' '}Reabrir en {b.location_name}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Otros locales: se ven, no se tocan. Sin botón a propósito — quien
+          decide reabrir Carabanchel es Carabanchel. */}
+      {otros.length > 0 && (
+        <div className={aqui.length > 0 ? `mt-3 pt-3 border-t ${t.dividerLight}` : ''}>
+          <div className="flex items-center gap-2 mb-2">
+            <Eye size={15} className={t.textMuted} />
+            <span className={`text-xs font-semibold uppercase tracking-wide ${t.textSecondary}`}>
+              {textoOtrosLocales(otros.length)}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {otros.map((b) => (
+              <div key={filaId(b)} className="flex items-center gap-2 min-w-0">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${dark ? 'bg-zinc-600' : 'bg-stone-300'}`} />
+                <span className={`text-sm truncate ${t.textSecondary}`}>{b.brand_name}</span>
+                <span className={`text-xs shrink-0 font-medium ${t.textSecondary}`}>{b.location_name}</span>
+                <span className={`text-xs shrink-0 ${t.textMuted}`}>{textoReapertura(b.resume_at)}</span>
+              </div>
+            ))}
+          </div>
+          <p className={`text-[11px] mt-1.5 ${t.textMuted}`}>
+            Se gestionan desde su propio local.
+          </p>
+        </div>
+      )}
+
       {error && (
         <div className="mt-2 flex items-center gap-1.5 text-xs text-danger">
           <AlertTriangle size={13} /> {error}

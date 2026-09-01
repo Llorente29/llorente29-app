@@ -285,7 +285,7 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
         {/* Escalada: cierre de marca OLVIDADO (indefinido >24h o vencido) —
             banner rojo, mismo patrón que KdsAlarmOverlay. Cierre correcto
             con hora NUNCA dispara esto (eso es el chip discreto de abajo). */}
-        <ClosureAnomalyAlarm accountId={accountId} token={token} variant="inline" />
+        <ClosureAnomalyAlarm accountId={accountId} token={token} locationId={locationId} variant="inline" />
 
         {/* Banner del día (KPI cocina) — colectivo, siempre visible arriba. */}
         {banner && (

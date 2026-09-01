@@ -72,7 +72,7 @@ export default function AvailabilityBoard({
         {(locationId || token) && (
           <LocationStatusCard key={statusVersion} locationId={locationId} token={token} dark={dark} />
         )}
-        <ClosedBrandsCard accountId={accountId} token={token} dark={dark} />
+        <ClosedBrandsCard accountId={accountId} token={token} locationId={locationId} dark={dark} />
       </div>
 
       <SectionHeader
