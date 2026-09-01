@@ -3,7 +3,7 @@ import { hayVersionNueva, leeVersionPublicada } from '@/services/versionApp'
 import {
   declaraTrabajoEnCurso, hayTrabajoEnCurso, detalleTrabajoEnCurso, _vaciaRegistro,
 } from '@/services/trabajoEnCurso'
-import { calculaBuildId } from '../../../build/folvyVersionPlugin'
+import { calculaBuildId, calculaEntorno } from '../../../build/folvyVersionPlugin'
 
 describe('hayVersionNueva', () => {
   it('detecta que lo publicado no es lo que se ejecuta', () => {
@@ -92,5 +92,30 @@ describe('calculaBuildId', () => {
     const a = calculaBuildId(new Date('2026-09-01T07:15:00Z'))
     const b = calculaBuildId(new Date('2026-09-01T07:16:00Z'))
     expect(a).not.toBe(b)
+  })
+})
+
+describe('calculaEntorno — «esto no es producción»', () => {
+  it('reconoce una preview de Vercel con su rama', () => {
+    expect(calculaEntorno({ VERCEL_ENV: 'preview', VERCEL_GIT_COMMIT_REF: 'feat-hubrise-fase3-ui' }))
+      .toEqual({ entorno: 'preview', rama: 'feat-hubrise-fase3-ui' })
+  })
+  it('reconoce producción', () => {
+    expect(calculaEntorno({ VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_REF: 'main' }))
+      .toEqual({ entorno: 'production', rama: 'main' })
+  })
+
+  // FALLA HACIA AVISAR, al revés que el aviso de versión nueva. Aquí el error
+  // caro es callarse: una preview sin etiqueta es alguien operando el negocio
+  // sin saberlo. Una etiqueta de más es una franja fea cinco minutos.
+  it('sin VERCEL_ENV no se da por producción: es «local»', () => {
+    expect(calculaEntorno({}).entorno).toBe('local')
+  })
+  it('un valor raro tampoco cuela como producción', () => {
+    expect(calculaEntorno({ VERCEL_ENV: 'PRODUCTION' }).entorno).toBe('local')
+    expect(calculaEntorno({ VERCEL_ENV: 'staging' }).entorno).toBe('local')
+  })
+  it('una preview sin rama sigue siendo preview', () => {
+    expect(calculaEntorno({ VERCEL_ENV: 'preview' })).toEqual({ entorno: 'preview', rama: null })
   })
 })

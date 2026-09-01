@@ -20,10 +20,44 @@
 
 /** Id de la build que se está EJECUTANDO. Lo inyecta el plugin en `vite build`. */
 declare const __BUILD_ID__: string | undefined
+/** De dónde sale esta build: production | preview | local. Lo inyecta el plugin. */
+declare const __ENTORNO__: string | undefined
+/** La rama, cuando la hay (previews de Vercel). */
+declare const __RAMA__: string | null | undefined
 
 export interface VersionPublicada {
   buildId: string
   builtAt?: string
+}
+
+/** production | preview | local. `local` fuera de Vercel, y tampoco es producción. */
+export function entornoDeBuild(): 'production' | 'preview' | 'local' {
+  try {
+    if (typeof __ENTORNO__ === 'string') {
+      if (__ENTORNO__ === 'production' || __ENTORNO__ === 'preview') return __ENTORNO__
+    }
+  } catch { /* dev: la constante no existe */ }
+  return 'local'
+}
+
+export function ramaDeBuild(): string | null {
+  try {
+    return typeof __RAMA__ === 'string' && __RAMA__ ? __RAMA__ : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * ¿Esto es producción?
+ *
+ * Falla hacia AVISAR, al revés que el aviso de versión nueva, y a propósito:
+ * aquí el error caro es callarse. Si no consta que sea producción, se etiqueta.
+ * Una preview sin etiqueta es alguien operando el negocio sin saberlo; una
+ * producción con etiqueta de más es una franja fea durante cinco minutos.
+ */
+export function esProduccion(): boolean {
+  return entornoDeBuild() === 'production'
 }
 
 /** Lo que esta build sabe de sí misma. `null` en dev (no hay plugin). */

@@ -29,6 +29,24 @@ import { join } from 'node:path'
 
 const MARCADOR = '__FOLVY_BUILD_ID__'
 
+/**
+ * De dónde sale esta build. Vercel lo pone en el entorno del build:
+ *   VERCEL_ENV            production | preview | development
+ *   VERCEL_GIT_COMMIT_REF la rama
+ * Fuera de Vercel (build local) no hay nada de eso y se marca como 'local',
+ * que TAMPOCO es producción y también tiene que decirlo.
+ */
+export function calculaEntorno(env: NodeJS.ProcessEnv = process.env): {
+  entorno: 'production' | 'preview' | 'local'
+  rama: string | null
+} {
+  const v = env.VERCEL_ENV
+  const rama = env.VERCEL_GIT_COMMIT_REF || null
+  if (v === 'production') return { entorno: 'production', rama }
+  if (v === 'preview') return { entorno: 'preview', rama }
+  return { entorno: 'local', rama }
+}
+
 /** Id de esta build: sha corto de git + minuto. Legible y ordenable. */
 export function calculaBuildId(ahora = new Date()): string {
   let sha = 'singit'
@@ -45,6 +63,7 @@ export function calculaBuildId(ahora = new Date()): string {
 
 export function folvyVersion(): Plugin {
   const buildId = calculaBuildId()
+  const { entorno, rama } = calculaEntorno()
   return {
     name: 'folvy-version',
     apply: 'build',
@@ -52,7 +71,18 @@ export function folvyVersion(): Plugin {
     config() {
       // Constante de compilación: lo que ESTA build sabe de sí misma. La app la
       // compara con lo publicado en version.json.
-      return { define: { __BUILD_ID__: JSON.stringify(buildId) } }
+      return {
+        define: {
+          __BUILD_ID__: JSON.stringify(buildId),
+          // 01/09: Julio estuvo operando el negocio desde una PREVIEW de rama
+          // (feat-hubrise-fase3-ui, SW del 16/08) contra la base de datos
+          // REAL, y no había forma de notarlo: una preview y producción se ven
+          // exactamente igual. Dos semanas de arreglos que él no veía.
+          // Ahora cada build lleva escrito de dónde sale.
+          __ENTORNO__: JSON.stringify(entorno),
+          __RAMA__: JSON.stringify(rama),
+        },
+      }
     },
 
     writeBundle(options) {
@@ -60,7 +90,7 @@ export function folvyVersion(): Plugin {
 
       writeFileSync(
         join(dir, 'version.json'),
-        JSON.stringify({ buildId, builtAt: new Date().toISOString() }, null, 2) + '\n',
+        JSON.stringify({ buildId, builtAt: new Date().toISOString(), entorno, rama }, null, 2) + '\n',
         'utf8',
       )
 
