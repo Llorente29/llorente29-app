@@ -46,7 +46,47 @@ function json(o: Record<string, unknown>, status = 200): Response {
   });
 }
 
-async function raiseAlert(subject: string, message: string, kind: string): Promise<void> {
+/**
+ * Escala una alarma.
+ *
+ * CON `debounceKind` va por la COLA (`_queue_system_alert`), que es lo que
+ * hacen los demás vigías y lo que da el dedupe. SIN él sigue el camino directo
+ * de antes, para no cambiar de golpe el comportamiento de los otros dos avisos
+ * de este fichero, que no son estados permanentes.
+ *
+ * El 01/09 este vigía era el ÚNICO que se saltaba la cola, y por eso mandaba
+ * 96 correos al día por una marca cerrada a propósito.
+ *
+ * La cola la vacía el cron `system-alert-queue-drain`, cada minuto — verificado
+ * antes de mover nada aquí: pasar a una cola que nadie drena no habría sido
+ * arreglar el ruido, habría sido apagar el aviso.
+ */
+async function raiseAlert(
+  subject: string,
+  message: string,
+  kind: string,
+  debounceKind?: string,
+  debounceWindow = "24 hours",
+): Promise<void> {
+  if (debounceKind) {
+    try {
+      const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+      const { error } = await sb.rpc("_queue_system_alert", {
+        p_kind: kind,
+        p_subject: subject,
+        p_message: message,
+        p_debounce_kind: debounceKind,
+        p_debounce_window: debounceWindow,
+      });
+      if (error) {
+        console.error("availability-watchdog: fallo al encolar alarma", error);
+      }
+    } catch (e) {
+      console.error("availability-watchdog: fallo al encolar alarma", e);
+    }
+    return;
+  }
+
   if (!CRON_SECRET) {
     console.error("availability-watchdog: CRON_SECRET ausente -> no se pudo escalar alarma:", subject);
     return;
@@ -60,6 +100,13 @@ async function raiseAlert(subject: string, message: string, kind: string): Promi
   } catch (e) {
     console.error("availability-watchdog: fallo al escalar alarma", e);
   }
+}
+
+/** Clave de dedupe con la fecha dentro, como el resto de la casa
+ *  (`venta_sin_casar_..._20260901`): una por cierre y por día natural. */
+function claveDelDia(prefijo: string, id: string): string {
+  const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `${prefijo}_${id}_${hoy}`;
 }
 
 // (A) 86 por producto — tramo HubRise de availability_push_log.
@@ -108,66 +155,106 @@ async function checkAvailabilityPushLog(
   return { failures: rows.length, stuck: stuck.length, soldOutFailed: soldOutFailed.length };
 }
 
-// (C) Cap. B — cierres de marca OLVIDADOS. Dos casos, distintos de gravedad:
-//   · INDEFINIDO (resume_at null) más de INDEFINITE_CLOSURE_ALERT_HOURS: sin
-//     expires_at en el push a HubRise, esa marca NO se reabre sola — riesgo
-//     real de quedar cerrada para siempre si nadie se acuerda.
-//   · VENCIDO (resume_at ya pasado, brand.closure_mode aún 'paused'): HubRise
-//     ya reabrió esos SKUs solo (expires_at) — closed_brands ya lo oculta en
-//     el indicador ambiental — pero el semáforo de Folvy sigue "mintiendo"
-//     hasta que alguien reabra a mano; aviso de limpieza, no de fallo real.
-// SIN dedupe entre corridas (mismo criterio que hubrise-callback-ensure: más
-// ruidoso que olvidarlo en silencio) — se resuelve solo en cuanto se reabre.
+// (C) Cap. B — cierres de marca OLVIDADOS.
+//
+// ── TRES ARREGLOS DEL 01/09, y los tres salen del mismo sitio: Julio recibía
+//    96 correos al día por UNA marca cerrada a propósito. Uno por corrida, 96
+//    corridas al día. Un aviso que llega 96 veces ya no lo lee nadie, que es
+//    exactamente el fallo que el vigía venía a evitar.
+//
+// 1. LEÍA LA TABLA VIEJA. Consultaba `brand.closure_mode/closure_set_at`,
+//    pero el estado real vive en `brand_closure` (por LOCAL, desde el 29/08).
+//    Medido: Meraki Pita decía 29/08 10:13 en la columna vieja y 01/09 06:33
+//    en la fila real — 34 h de desfase. Ahora lee brand_closure, que es la
+//    única verdad del cierre (decisión de Julio, 01/09).
+//
+// 2. NO DECÍA EL LOCAL. Daba marca y cuenta. Con dos locales eso obliga a ir
+//    a mirar cuál es. Ahora va el local en cada línea.
+//
+// 3. SE SALTABA LA COLA. Llamaba a `system-alert` directo, sin pasar por
+//    `_queue_system_alert`, así que era el ÚNICO vigía sin dedupe. El
+//    «SIN dedupe a propósito» del comentario viejo es defendible para un fallo
+//    de EMPUJE, que se resuelve solo; para un ESTADO PERMANENTE es spam.
+//    Ahora: un cierre DECLARADO a propósito (deliberate_at) no avisa NUNCA, y
+//    uno sin declarar avisa UNA VEZ AL DÍA, con debounce_kind por cierre —
+//    para que un cierre nuevo en otro local avise ya, sin quedar tapado por el
+//    debounce de otro.
 const INDEFINITE_CLOSURE_ALERT_HOURS = 24;
+const CLOSURE_DEBOUNCE_HOURS = 24;
+
+interface CierreVivo {
+  id: string;
+  resume_at: string | null;
+  set_at: string | null;
+  reason: string | null;
+  deliberate_at: string | null;
+  brand: { name: string } | null;
+  locations: { name: string } | null;
+}
 
 async function checkStaleBrandClosures(
   sb: ReturnType<typeof createClient>,
-): Promise<{ indefinite: number; expired: number }> {
+): Promise<{ indefinite: number; expired: number; deliberate: number }> {
+  // brand_closure es la única verdad del cierre, y trae el LOCAL.
   const { data: closed, error } = await sb
-    .from("brand")
-    .select("id, name, account_id, closure_resume_at, closure_set_at, closure_reason")
-    .eq("closure_mode", "paused")
+    .from("brand_closure")
+    .select("id, resume_at, set_at, reason, deliberate_at, brand(name), locations(name)")
     .limit(200);
 
   if (error) {
-    console.error("availability-watchdog: error consultando brand (cierres de marca)", error);
-    return { indefinite: 0, expired: 0 };
+    console.error("availability-watchdog: error consultando brand_closure", error);
+    return { indefinite: 0, expired: 0, deliberate: 0 };
   }
 
-  const rows = closed ?? [];
-  if (rows.length === 0) return { indefinite: 0, expired: 0 };
+  const rows = (closed ?? []) as unknown as CierreVivo[];
+  if (rows.length === 0) return { indefinite: 0, expired: 0, deliberate: 0 };
 
   const now = Date.now();
   const indefiniteCutoff = now - INDEFINITE_CLOSURE_ALERT_HOURS * 60 * 60 * 1000;
 
-  const indefinite = rows.filter((b) =>
-    !b.closure_resume_at && b.closure_set_at && new Date(b.closure_set_at as string).getTime() < indefiniteCutoff);
-  const expired = rows.filter((b) =>
-    !!b.closure_resume_at && new Date(b.closure_resume_at as string).getTime() < now);
+  // DECLARADO A PROPÓSITO -> no avisa NUNCA. No se cuenta como olvido porque no
+  // lo es: alguien dijo con su nombre que esa marca está cerrada a propósito.
+  const deliberados = rows.filter((c) => c.deliberate_at !== null);
 
-  if (indefinite.length === 0 && expired.length === 0) return { indefinite: 0, expired: 0 };
+  const indefinite = rows.filter((c) =>
+    c.deliberate_at === null && !c.resume_at && c.set_at &&
+    new Date(c.set_at).getTime() < indefiniteCutoff);
 
-  const lines: string[] = [];
-  if (indefinite.length > 0) {
-    lines.push(`⚠️ ${indefinite.length} marca(s) cerrada(s) INDEFINIDAMENTE hace más de ${INDEFINITE_CLOSURE_ALERT_HOURS}h — sin expires_at, NO se reabren solas en HubRise:`);
-    for (const b of indefinite.slice(0, 15)) {
-      lines.push(`  - ${b.name} · cuenta ${b.account_id} · cerrada desde ${b.closure_set_at} · motivo: ${b.closure_reason ?? "(sin motivo)"}`);
-    }
-    lines.push("");
+  // Los VENCIDOS no miran deliberate_at: una fecha que ya pasó es un descuido
+  // la declare quien la declare.
+  const expired = rows.filter((c) =>
+    !!c.resume_at && new Date(c.resume_at).getTime() < now);
+
+  const nombre = (c: CierreVivo) =>
+    `${c.brand?.name ?? "(marca sin nombre)"} · ${c.locations?.name ?? "(local desconocido)"}`;
+
+  // UN AVISO POR CIERRE, con su propia clave de dedupe. Así un cierre nuevo en
+  // otro local avisa en cuanto aparece, en vez de quedar tapado por la ventana
+  // de otro que no tiene nada que ver con él.
+  for (const c of indefinite) {
+    await raiseAlert(
+      `Marca cerrada sin fecha: ${nombre(c)}`,
+      `${nombre(c)} lleva cerrada desde ${c.set_at} sin fecha de reapertura ` +
+      `(más de ${INDEFINITE_CLOSURE_ALERT_HOURS}h). Sin expires_at NO se reabre sola en HubRise.\n` +
+      `Motivo: ${c.reason ?? "(sin motivo)"}\n\n` +
+      `Si es a propósito, márcalo con «Es a propósito» en la tarjeta del cierre ` +
+      `y este aviso deja de llegar.`,
+      "brand-closure",
+      claveDelDia("brand_closure_indefinido", c.id),
+    );
   }
-  if (expired.length > 0) {
-    lines.push(`${expired.length} marca(s) con cierre YA VENCIDO pero brand.closure_mode sigue 'paused' — HubRise ya las reabrió sola(s), es limpieza de Folvy, no fallo de plataforma:`);
-    for (const b of expired.slice(0, 15)) {
-      lines.push(`  - ${b.name} · cuenta ${b.account_id} · debía reabrir en ${b.closure_resume_at}`);
-    }
+
+  for (const c of expired) {
+    await raiseAlert(
+      `Cierre vencido sin reabrir: ${nombre(c)}`,
+      `${nombre(c)} debía reabrir el ${c.resume_at} y sigue cerrada en Folvy. ` +
+      `HubRise ya la reabrió sola (expires_at): es limpieza de Folvy, no fallo de plataforma.`,
+      "brand-closure",
+      claveDelDia("brand_closure_vencido", c.id),
+    );
   }
 
-  await raiseAlert(
-    `Cierres de marca sin resolver (${indefinite.length + expired.length})`,
-    lines.join("\n"),
-    "brand-closure",
-  );
-  return { indefinite: indefinite.length, expired: expired.length };
+  return { indefinite: indefinite.length, expired: expired.length, deliberate: deliberados.length };
 }
 
 // (B) Cap. C/D — location_status_log (cerrar/reabrir local, horario semanal).

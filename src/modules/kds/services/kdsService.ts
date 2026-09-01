@@ -485,6 +485,10 @@ export interface ClosedBrand {
 }
 
 export interface AnomalousBrandClosure {
+  /** Id de la fila de brand_closure. Lo que se declara deliberado es ESTA fila,
+   *  no la marca: la misma marca puede estar cerrada a propósito en un local y
+   *  por descuido en otro. */
+  closure_id: string
   brand_id: string
   brand_name: string
   location_id: string
@@ -538,6 +542,29 @@ export async function getClosedBrandsByScope(
  * alarma por email — aquí consultable para pintar el aviso en pantalla.
  * Cierre correcto con hora futura NO aparece aquí (eso es closed_brands).
  */
+/**
+ * Declara que un cierre SIN FECHA es a propósito. Deja de alarmar, con autor y
+ * momento. Idempotente: declarar dos veces conserva la primera declaración.
+ *
+ * Devuelve lo que ha quedado escrito EN EL SERVIDOR, no lo que se pidió: la
+ * pantalla confirma con eso (regla 8). Si la escritura falla, esto lanza y la
+ * tarjeta lo dice — nunca un «hecho» sin fila detrás.
+ */
+export async function declararCierreDeliberado(
+  closureId: string,
+  nota: string | null,
+): Promise<{ closure_id: string; deliberate_at: string | null }> {
+  const filas = await rpc<{ closure_id: string; deliberate_at: string | null }[]>(
+    'declare_closure_deliberate',
+    { p_closure_id: closureId, p_note: nota ?? null },
+  )
+  const fila = Array.isArray(filas) ? filas[0] : (filas as unknown as { closure_id: string; deliberate_at: string | null })
+  if (!fila || !fila.deliberate_at) {
+    throw new Error('El servidor no devolvió la declaración: no se puede dar por guardada.')
+  }
+  return fila
+}
+
 export async function getAnomalousBrandClosuresByScope(
   accountId: string | null,
   token: string | null | undefined,
