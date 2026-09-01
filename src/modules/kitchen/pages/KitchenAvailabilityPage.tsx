@@ -21,6 +21,27 @@ import {
 import AvailabilityBoard from '@/modules/kds/components/AvailabilityBoard'
 import AgotarProductoModal, { type AgotarProductoAdapter } from '@/modules/kds/components/AgotarProductoModal'
 import BusinessHoursEditor from '@/modules/multitenancy/components/hours/BusinessHoursEditor'
+import OpcionesAgotadasPanel from '@/modules/kitchen/components/OpcionesAgotadasPanel'
+
+/**
+ * DOS LOCALES ACTIVOS PUEDEN LLAMARSE IGUAL (01/09: hay dos «Foodint Alcalá»,
+ * uno vivo con 380 ventas y otro a cero en todo). Si el selector enseña dos
+ * entradas idénticas, cualquiera puede elegir el fantasma, agotar, ver la
+ * confirmación en verde — y la comida sigue vendiéndose en el local de verdad.
+ *
+ * Aquí no se arregla el dato, solo se deja de esconder: cuando dos locales
+ * comparten nombre, se les añade el principio de su id para poder distinguirlos.
+ * Si la pantalla no puede distinguirlos, el operario tampoco.
+ */
+function etiquetasDeLocal(locs: LocationOption[]): Map<string, string> {
+  const veces = new Map<string, number>()
+  for (const l of locs) veces.set(l.name, (veces.get(l.name) ?? 0) + 1)
+  const out = new Map<string, string>()
+  for (const l of locs) {
+    out.set(l.id, (veces.get(l.name) ?? 0) > 1 ? `${l.name} (${l.id.slice(0, 8)})` : l.name)
+  }
+  return out
+}
 
 export default function KitchenAvailabilityPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -37,6 +58,7 @@ export default function KitchenAvailabilityPage() {
 
   const [showAgotar, setShowAgotar] = useState(false)
   const [showHours, setShowHours] = useState(false)
+  const etiquetaLocal = useMemo(() => etiquetasDeLocal(locations), [locations])
 
   const locName = useMemo(
     () => (locationId ? (locations.find((l) => l.id === locationId)?.name ?? 'local') : 'todos los locales'),
@@ -132,7 +154,7 @@ export default function KitchenAvailabilityPage() {
           className="min-w-[200px] border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white"
         >
           {locations.map((l) => (
-            <option key={l.id} value={l.id}>Local: {l.name}</option>
+            <option key={l.id} value={l.id}>Local: {etiquetaLocal.get(l.id) ?? l.name}</option>
           ))}
           <option value="">Todos los locales</option>
         </select>
@@ -270,6 +292,17 @@ export default function KitchenAvailabilityPage() {
           </div>
         )}
       </AvailabilityBoard>
+
+      {activeAccountId && (
+        <OpcionesAgotadasPanel
+          // Remontar al cambiar de local: estado limpio sin setState en efecto,
+          // y sin enseñar un instante las opciones del local anterior.
+          key={locationId ?? 'todos'}
+          accountId={activeAccountId}
+          locationId={locationId}
+          locationName={locationId ? (etiquetaLocal.get(locationId) ?? locName) : locName}
+        />
+      )}
 
       {showAgotar && activeAccountId && (
         <AgotarProductoModal
