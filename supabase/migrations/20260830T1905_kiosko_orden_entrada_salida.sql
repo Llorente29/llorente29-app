@@ -1,6 +1,103 @@
 -- 20260830T1905_kiosko_orden_entrada_salida.sql
 -- ============================================================================
--- EL KIOSKO DEJA DE ACEPTAR FICHAJES IMPOSIBLES. ESCRITA, NO APLICADA.
+-- EL KIOSKO DEJA DE ACEPTAR FICHAJES IMPOSIBLES.
+--
+-- APLICADA el 01/09/2026 a las 07:15 (Madrid) = 05:14 UTC, con los dos locales
+-- cerrados. Registrada como 20260901051458. Ensayada antes contra produccion
+-- dentro de una transaccion revertida: los 8 casos salieron bien y no se
+-- escribio ni una fila.
+--
+-- ###########################################################################
+-- #                                                                         #
+-- #   SI ESTA NOCHE ALGUIEN NO PUEDE FICHAR LA SALIDA, PEGA ESTA LINEA:     #
+-- #                                                                         #
+-- #     alter table public.clock_entries disable trigger trg_clock_entry_orden;
+-- #                                                                         #
+-- #   Desarma el guard entero al instante. No hay que pensar, no hay que    #
+-- #   buscar y no hay que entender nada de lo que viene debajo. Los         #
+-- #   fichajes vuelven a entrar como entraban ayer. Se arregla por la       #
+-- #   manana.                                                               #
+-- #                                                                         #
+-- #   Para volver a armarlo:                                                #
+-- #     alter table public.clock_entries enable trigger trg_clock_entry_orden;
+-- #                                                                         #
+-- ###########################################################################
+--
+-- Un guard nuevo que bloquea a la 01:30 es peor que el problema que arregla
+-- (Julio, 01/09). Esa linea existe para que esa frase no sea solo una opinion.
+--
+-- ── REVERSION COMPLETA, si hay que deshacerlo del todo ─────────────────────
+-- La linea de arriba basta para desatascar. Esto es para dejar la base como
+-- estaba, y OJO: no vale solo con borrar lo nuevo, porque esta migracion
+-- RETIRA el guard de pausas y hay que devolverlo o las pausas se quedan sin
+-- ninguno.
+--
+--   begin;
+--     drop trigger if exists trg_clock_entry_orden on public.clock_entries;
+--     drop function if exists public.tg_clock_entry_orden();
+--
+--     -- Devolver el guard de pausas TAL CUAL estaba (20260807T2425):
+--     create or replace function public.tg_clock_entry_pause_order()
+--     returns trigger language plpgsql security definer set search_path to 'public','pg_temp'
+--     as $$
+--     declare v_last text;
+--     begin
+--       if new.type not in ('pausa_inicio','pausa_fin') then return new; end if;
+--       if coalesce(new.source,'') = 'manual' then return new; end if;
+--       select ce.type into v_last
+--       from clock_entries ce
+--       where ce.employee_id = new.employee_id
+--         and coalesce(ce.voided,false) = false
+--         and ce.real_datetime <= coalesce(new.real_datetime, new.datetime, now())
+--       order by ce.real_datetime desc limit 1;
+--       if new.type = 'pausa_inicio' then
+--         if v_last is null or v_last in ('salida','pausa_inicio') then
+--           raise exception 'PAUSA_FUERA_DE_ORDEN: no se puede iniciar una pausa sin estar fichado dentro'
+--             using hint = 'Ficha la entrada antes de iniciar la pausa.';
+--         end if;
+--       else
+--         if v_last is distinct from 'pausa_inicio' then
+--           raise exception 'PAUSA_FUERA_DE_ORDEN: no hay ninguna pausa iniciada que cerrar'
+--             using hint = 'Solo se puede volver de pausa si antes se inicio una.';
+--         end if;
+--       end if;
+--       return new;
+--     end $$;
+--     drop trigger if exists trg_clock_entry_pause_order on public.clock_entries;
+--     create trigger trg_clock_entry_pause_order
+--       before insert on public.clock_entries
+--       for each row execute function public.tg_clock_entry_pause_order();
+--
+--     delete from supabase_migrations.schema_migrations
+--      where name = 'kiosko_orden_entrada_salida';
+--   commit;
+--
+--   La columna stale_prev_open_at se puede DEJAR: es nullable, no la lee nadie
+--   mas y borrarla perderia las marcas ya escritas. Si aun asi se quiere:
+--     alter table public.clock_entries drop column if exists stale_prev_open_at;
+--
+-- ── ENSAYO CONTRA PRODUCCION, revertido (01/09 07:12) ──────────────────────
+--   1 ENTRADA estando fuera .................................... ACEPTA
+--   2 ENTRADA de madrugada estando YA DENTRO .................... RECHAZA
+--       «YA_ESTA_DENTRO: hay una jornada abierta desde 01/09 04:12»
+--       pista: «Ya estas dentro desde las 04:12. ¿Querias fichar la SALIDA?»
+--   3 SALIDA estando dentro ..................................... ACEPTA
+--   4 SALIDA en frio, sin entrada abierta ....................... RECHAZA
+--       pista: «No hay ninguna entrada abierta. ¿Querias fichar la ENTRADA?»
+--   5 ENTRADA con jornada rancia de 20 h ........................ ACEPTA
+--       y stale_prev_open_at queda relleno (31/08 11:12)
+--   6 PAUSA sin estar dentro .................................... RECHAZA
+--   7 El gestor (source='manual') pasa por encima ............... ACEPTA
+--   8 Debounce <60 s sigue vivo ................................. SALTA
+--
+-- ── VERIFICACION DESPUES DE APLICAR ────────────────────────────────────────
+--   trg_clock_entry_orden enganchado ......... 1
+--   trg_clock_debounce intacto ............... 1
+--   trg_clock_entry_pause_order (vieja) ...... 0, y su funcion retirada
+--   anon / authenticated pueden ejecutarla ... false / false
+--   service_role ............................. true
+--   clock_entries ............................ 855 filas, ninguna tocada
+--   filas con stale_prev_open_at ............. 0
 --
 -- EL FALLO, CON NOMBRES
 -- Al cierre, la persona quiere fichar SALIDA y pulsa ENTRADA. Nadie la para, y
