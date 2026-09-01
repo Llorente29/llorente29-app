@@ -1,5 +1,43 @@
 -- ============================================================================
--- PROPUESTA — NO APLICADA. Julio ejecuta y verifica.
+-- APLICADA el 01/09/2026 a las 08:37 (Madrid) = 06:37 UTC. Registrada como
+-- 20260901063742. Cuerpo exacto del fichero, contrastado con diff + md5
+-- (d3b8e4a848ab9df882e14a0b5f233400) antes de ejecutar.
+--
+-- CORRECCION APLICADA JUSTO DESPUES, y queda escrita porque el fichero estaba
+-- MAL: el `revoke all ... from public` de abajo NO basta. El ACL por defecto de
+-- este proyecto concede EXECUTE a `anon` DIRECTAMENTE, y revocar de PUBLIC no
+-- toca una concesion nominal. Verificado al aplicar: anon podia ejecutarla.
+-- Se cerro con `revoke all on function ... from anon`, que es lo que ya hacen
+-- por nombre las funciones de trigger del lote de fichajes. Mismo hallazgo que
+-- salio con inicio-p1 y pg_default_acl.
+-- No hubo fuga: la funcion comprueba belongs_to_account antes de leer nada, y
+-- para anon eso es falso. Pero un permiso que sobra hoy es el permiso que
+-- manana alcanza a una funcion sin guarda.
+--
+-- VERIFICACION POR CONSULTA, despues de aplicar:
+--   firmas de la funcion ......................... 1
+--   authenticated puede ejecutarla ............... si
+--   anon puede ejecutarla ........................ NO (tras la correccion)
+--   stock_movement ............................... 57.425 filas
+--     huella ..................................... ef6a0121729824d20cae97e9f02724fe
+--   recipe_line .................................. 2.158 filas
+--     huella ..................................... baf32a317764f59c6709ccb262145d0c
+--   Las DOS huellas identicas a las de antes de aplicar: esto es solo lectura y
+--   se demuestra, no se promete.
+--
+-- La RPC no se puede invocar desde la conexion de servicio (belongs_to_account
+-- es falso ahi, que es lo correcto), asi que su logica se verifico con la
+-- consulta equivalente sobre INV-00194.
+--
+-- Y un cambio respecto al ensayo de ayer, que NO es un error: ayer el unico
+-- hueco era Milanesa Ternera 5/11; hoy salen DOS, Ternera 5/11 y Milanesa de
+-- Pollo 12/14. La ventana es la misma (30/08 19:42 -> 31/08 19:37) y las
+-- lineas vendidas tambien (115). Lo que cambio fue el CATALOGO: anoche se
+-- tocaron 3 impactos de modificador (ultimo a las 23:04) y ahora hay 23
+-- confirmados en vez de 22. Al vincular un modificador mas, la cobertura
+-- alcanza a mirar mas cosas -- y descubre que ese tambien esta mudo. La medida
+-- no ha cambiado: se ha afinado porque el catalogo crecio. Es exactamente lo
+-- que tiene que pasar.
 --
 -- ENCARGO CODE 31/08 punto 5: "El motor deja de proponer causas que no puede
 -- saber". Hoy el AvT afirma «sobre-porción en elaboración — el escandallo es
@@ -201,6 +239,9 @@ comment on function public.avt_consumption_coverage(uuid) is
   'Solo lectura: no escribe movimientos ni toca recetas. ENCARGO 31/08 punto 5.';
 
 revoke all on function public.avt_consumption_coverage(uuid) from public;
+-- OJO: `from public` NO basta en este proyecto (ver cabecera). Hace falta
+-- tambien por nombre, o anon se queda con el EXECUTE del ACL por defecto.
+revoke all on function public.avt_consumption_coverage(uuid) from anon;
 grant execute on function public.avt_consumption_coverage(uuid) to authenticated;
 
 commit;
