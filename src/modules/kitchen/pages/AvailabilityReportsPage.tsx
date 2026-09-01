@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  BarChart3, Store, TrendingUp, TrendingDown, Minus, Download, Loader2, Info,
+  BarChart3, Store, Download, Loader2, Info,
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Legend,
@@ -30,6 +30,7 @@ import {
 } from '@/modules/kitchen/services/availabilityReportService'
 import { REASON_OPTIONS } from '@/modules/kds/lib/reasonCode'
 import AvailabilityHeatmap from '@/modules/kitchen/components/AvailabilityHeatmap'
+import KpiCard from '@/components/KpiCard'
 
 // ─── paleta de origen (validada con dataviz/scripts/validate_palette.js —
 // adjacent + wraparound, ALL CHECKS PASS en modo claro) ─────────────────────
@@ -91,39 +92,6 @@ function computeRange(key: RangeKey, customFrom: string, customTo: string): { fr
   const days = key === '7d' ? 7 : 30
   const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
   return { from: from.toISOString(), to: now.toISOString() }
-}
-
-// ─── KPI card ────────────────────────────────────────────────────────────
-function KpiCard({
-  label, value, prevValue, betterWhen, format, note,
-}: {
-  label: string
-  value: number | null
-  prevValue: number | null
-  betterWhen: 'up' | 'down'
-  format: (v: number | null) => string
-  note?: string
-}) {
-  const hasDelta = value !== null && prevValue !== null && Number.isFinite(value) && Number.isFinite(prevValue)
-  const delta = hasDelta ? value! - prevValue! : null
-  const improved = delta !== null && (betterWhen === 'up' ? delta > 0 : delta < 0)
-  const worsened = delta !== null && (betterWhen === 'up' ? delta < 0 : delta > 0)
-  const DeltaIcon = delta === null || delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown
-
-  return (
-    <div className="bg-card border border-border-default rounded-xl p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-1.5">{label}</p>
-      <p className="text-2xl font-semibold text-text-primary font-display">{format(value)}</p>
-      {hasDelta && delta !== null && (
-        <p className={`mt-1.5 text-xs inline-flex items-center gap-1 font-medium ${
-          improved ? 'text-success' : worsened ? 'text-danger' : 'text-text-secondary'
-        }`}>
-          <DeltaIcon size={13} /> {format(Math.abs(delta))} vs periodo anterior
-        </p>
-      )}
-      {note && <p className="mt-1 text-[11px] text-text-tertiary">{note}</p>}
-    </div>
-  )
 }
 
 export default function AvailabilityReportsPage() {
