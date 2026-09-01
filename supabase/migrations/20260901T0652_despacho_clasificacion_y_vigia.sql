@@ -1,7 +1,46 @@
--- PROPUESTA_20260901T0900_despacho_clasificacion_y_vigia.sql
+-- 20260901T0652_despacho_clasificacion_y_vigia.sql
 -- ============================================================================
--- NO APLICADA. Claude Code propone, Julio ejecuta y verifica.
--- Al aplicarla: renombrar a la hora real y quitar el prefijo PROPUESTA_.
+-- APLICADA el 01/09/2026 a las 06:52 (Madrid) = 04:52 UTC, en la ventana de
+-- mañana con los dos locales cerrados. Registrada como 20260901045210.
+--
+-- COSTO TRES INTENTOS, y los tres fallos fueron de este fichero, no del mundo.
+-- La transaccion los absorbio enteros: la huella de `sale` fue IDENTICA antes
+-- del primero y despues del ultimo. Quedan escritos porque el segundo escondia
+-- un fallo grave:
+--   1º  ERROR 42P13: cannot remove parameter defaults from existing function.
+--       `create or replace` sobre dispatch_watchdog_scan, que vive declarada
+--       `(p_grace_minutes integer DEFAULT 8)`. Al mirarlo aparecio lo caro:
+--       el cron `dispatch-watchdog` (jobid 25, cada 3 min) la llama SIN
+--       ARGUMENTOS. Un DROP+CREATE ingenuo, sin conservar el default, habria
+--       dejado al vigia lanzando «function ... does not exist» cada 3 minutos,
+--       en silencio: exactamente la clase de fallo que este encargo arregla.
+--   2º  La guarda nueva se aborto a si misma: `not like '%default%'` contra un
+--       pg_get_function_arguments que escribe «DEFAULT» en MAYUSCULAS.
+--   3º  `to_regprocedure('...()') is null` tampoco valia: regprocedure resuelve
+--       por TIPOS DECLARADOS, no por invocabilidad — para (integer default 8)
+--       devuelve null aunque `select f()` funcione.
+--   La guarda definitiva pregunta el hecho directo, pg_proc.pronargdefaults, y
+--   se comprobo EN VIVO antes de escribirla en vez de suponerla.
+--
+-- VERIFICACION POR CONSULTA, despues de aplicar:
+--   trigger BEFORE en sale .......................... 1  (tgtype & 2 = 2)
+--   resolve_dispatch con la guarda de direccion ..... si
+--   vigia con 'no_despachado' (ya no inventa) ....... si
+--   firmas: las tres funciones, una cada una ........ 3
+--   firma del vigia ................................. p_grace_minutes integer DEFAULT 8
+--   llamada EXACTA del cron, `select dispatch_watchdog_scan();` ... devuelve 0
+--   sale ............................................ 8.948 filas
+--   huella .......................................... 6727e635fc67f4f461fd0e3d47c917a6
+--     IDENTICA a la de antes de empezar: no se reescribio historico.
+--
+-- REPLAY EN SECO sobre los datos de hoy (01/09 06:52):
+--   a platform_delivery ............................. 23 pedidos, 23 con error
+--   intacto (no es hubrise) ......................... 27 pedidos, 12 con error
+--   INTACTO: con direccion -> punto 4 ...............  1 pedido,   0 con error
+--   Anoche eran 22/22: entro un pedido mas de esa categoria durante la noche.
+--   La correlacion se mantiene exacta — corrige TODOS los que fallaron y solo
+--   esos. Milanesa House y Mila's siguen con el interruptor a null: el trigger
+--   no las toca (verificacion 3 del encargo).
 --
 -- ENCARGO CODE (31/08 noche) «Folvy despacha a Catcher pedidos que reparte la
 -- plataforma», puntos 1 y 2 del reparto de Julio.
@@ -263,7 +302,21 @@ $function$;
 --   · carrier null  → no se envio. No es un «sin rider»: se dice el motivo real
 --                     y NO se usa la palabra «enviado».
 --   · carrier no null → se envio de verdad y no vino rider: la alarma de antes.
-create or replace function public.dispatch_watchdog_scan(p_grace_minutes integer)
+--
+-- DROP + CREATE, NO «create or replace» (regla 2 de la casa, por el otro lado).
+-- La funcion viva se declaro como `p_grace_minutes integer DEFAULT 8` y Postgres
+-- se niega a quitar un default con replace:
+--     ERROR 42P13: cannot remove parameter defaults from existing function
+-- Lo caza la transaccion al aplicar, el 01/09 a las 06:44.
+--
+-- Y ESE DEFAULT NO ES DECORATIVO. El cron `dispatch-watchdog` (jobid 25, cada
+-- 3 minutos) llama `select public.dispatch_watchdog_scan();` SIN ARGUMENTOS.
+-- Recrearla sin el default dejaria al vigia lanzando
+--     function dispatch_watchdog_scan() does not exist
+-- cada 3 minutos, en silencio y para siempre: justo la clase de fallo que este
+-- encargo venia a arreglar. El DEFAULT 8 se conserva a proposito.
+drop function if exists public.dispatch_watchdog_scan(integer);
+create function public.dispatch_watchdog_scan(p_grace_minutes integer default 8)
  returns integer
  language plpgsql
  security definer
@@ -352,6 +405,24 @@ begin
    where pronamespace='public'::regnamespace and proname='dispatch_watchdog_scan';
   if v_n <> 1 then
     raise exception 'dispatch_watchdog_scan tiene % firmas, deberia tener 1', v_n;
+  end if;
+
+  -- Y que conserve su DEFAULT: el cron dispatch-watchdog (cada 3 min) la llama
+  -- sin argumentos. Sin default, el vigia muere en silencio.
+  -- Se comprueba con pg_proc.pronargdefaults, que es el hecho directo: cuantos
+  -- parametros tienen valor por defecto. Dos intentos anteriores fallaron por
+  -- preguntarlo de formas que parecian equivalentes y no lo son:
+  --   · `not like '%default%'` — pg_get_function_arguments escribe «DEFAULT»
+  --     en MAYUSCULAS, asi que la guarda se abortaba a si misma.
+  --   · `to_regprocedure('...()') is null` — regprocedure resuelve por los
+  --     TIPOS DECLARADOS, no por como se puede llamar: para una funcion
+  --     (integer default 8) devuelve NULL aunque `select f()` funcione.
+  -- Comprobado en vivo antes de escribir esto: args = «p_grace_minutes integer
+  -- DEFAULT 8», pronargdefaults = 1, to_regprocedure('...()') = null.
+  select pronargdefaults into v_n from pg_proc
+   where pronamespace='public'::regnamespace and proname='dispatch_watchdog_scan';
+  if coalesce(v_n, 0) < 1 then
+    raise exception 'dispatch_watchdog_scan perdio su DEFAULT: el cron la llama sin argumentos y se quedaria muda';
   end if;
 
   raise notice 'VERIFICACION OK: trigger BEFORE en sale, resolve_dispatch y vigia con una firma cada uno';
