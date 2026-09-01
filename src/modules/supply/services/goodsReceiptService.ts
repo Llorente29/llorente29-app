@@ -739,6 +739,99 @@ export async function listGoodsReceiptLines(receiptId: string): Promise<GoodsRec
   return ((data as Row[]) ?? []).map(rowToReceiptLine)
 }
 
+/**
+ * LÍNEAS PENDIENTES DE RESOLVER, DE TODAS LAS RECEPCIONES.
+ *
+ * El 01/09 había 66 en Foodint: líneas sin artículo y sin marcar como "no es
+ * mercancía", con 4.022,43 € de género fuera del inventario y del coste, y
+ * ningún sitio donde verlas. Solo se veían abriendo el albarán que las contenía,
+ * uno a uno. Un pendiente que nadie lista es un olvido, no un pendiente.
+ *
+ * DEVUELVE LAS 66, NO SOLO LAS MARCADAS (regla 7). Es la tentación obvia —
+ * filtrar por flagged_for_office y llamarlo "la bandeja de pendientes" — y sería
+ * una pantalla que enseña 1 línea y esconde 65. La marca ORDENA y ETIQUETA;
+ * no decide qué existe. Esta pantalla la abre alguien a propósito: salen todas.
+ */
+export interface PendingLine {
+  lineId: string
+  receiptId: string
+  productName: string
+  rawText: string | null
+  docQty: number | null
+  /** Lo que costó. Del documento si lo hay; si no, lo tecleado. */
+  amount: number | null
+  /** true = alguien la dejó pendiente a propósito. false = nadie la ha tocado. */
+  flaggedForOffice: boolean
+  supplierId: string | null
+  supplierName: string
+  receiptCode: string | null
+  supplierDocNumber: string | null
+  receiptDate: string
+  locationId: string
+}
+
+export async function listPendingLines(accountId: string): Promise<PendingLine[]> {
+  requireSupabase()
+  // Dos consultas en vez de embed: el embed falla con FKs que no se llaman
+  // exactamente como espera PostgREST, y aquí no compensa el riesgo.
+  const { data: lineRows, error: lineErr } = await from('goods_receipt_line')
+    .select('id, goods_receipt_id, product_name, raw_text, doc_qty, doc_amount, qty_received, unit_cost, flagged_for_office')
+    .eq('account_id', accountId)          // regla 9: nunca sin cuenta
+    .is('recipe_item_id', null)
+    .eq('not_goods', false)
+  if (lineErr) throw new Error(`Error listando líneas pendientes: ${lineErr.message}`)
+
+  const lines = (lineRows as Row[]) ?? []
+  if (lines.length === 0) return []
+
+  const receiptIds = [...new Set(lines.map(r => r.goods_receipt_id as string))]
+  const { data: recRows, error: recErr } = await from('goods_receipt')
+    .select('id, supplier_id, code, supplier_doc_number, receipt_date, location_id')
+    .eq('account_id', accountId)
+    .in('id', receiptIds)
+  if (recErr) throw new Error(`Error listando recepciones: ${recErr.message}`)
+  const receipts = new Map((((recRows as Row[]) ?? [])).map(r => [r.id as string, r]))
+
+  const supplierIds = [...new Set(
+    [...receipts.values()].map(r => r.supplier_id as string | null).filter((x): x is string => !!x),
+  )]
+  const names = new Map<string, string>()
+  if (supplierIds.length > 0) {
+    const { data: supRows } = await from('supplier')
+      .select('id, name')
+      .eq('account_id', accountId)
+      .in('id', supplierIds)
+    for (const r of ((supRows as Row[]) ?? [])) names.set(r.id as string, r.name as string)
+  }
+
+  const out: PendingLine[] = []
+  for (const l of lines) {
+    const rec = receipts.get(l.goods_receipt_id as string)
+    // Sin cabecera no se puede situar la línea. No se inventa un proveedor:
+    // se deja fuera y se cuenta aparte arriba (ver la pantalla).
+    if (!rec) continue
+    const docAmount = l.doc_amount as number | null
+    const qty = l.qty_received as number | null
+    const cost = l.unit_cost as number | null
+    out.push({
+      lineId: l.id as string,
+      receiptId: l.goods_receipt_id as string,
+      productName: l.product_name as string,
+      rawText: (l.raw_text as string | null) ?? null,
+      docQty: (l.doc_qty as number | null) ?? null,
+      amount: docAmount ?? (qty != null && cost != null ? qty * cost : null),
+      flaggedForOffice: Boolean(l.flagged_for_office),
+      supplierId: (rec.supplier_id as string | null) ?? null,
+      supplierName: names.get(rec.supplier_id as string) ?? 'Sin proveedor',
+      receiptCode: (rec.code as string | null) ?? null,
+      supplierDocNumber: (rec.supplier_doc_number as string | null) ?? null,
+      receiptDate: rec.receipt_date as string,
+      locationId: rec.location_id as string,
+    })
+  }
+  return out
+}
+
 export async function createGoodsReceiptLine(
   input: GoodsReceiptLineInsert,
 ): Promise<GoodsReceiptLine> {

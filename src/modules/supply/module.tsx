@@ -21,10 +21,11 @@
 // Comunicar a CTB sube a requiredRole: 'admin' (decisión de Julio, no
 // manager) — comunica datos a la gestoría, no es operativa de local.
 
-import { Truck, ClipboardList, PackageCheck, FileText, Boxes, Send } from 'lucide-react'
+import { Truck, ClipboardList, PackageCheck, FileText, Boxes, Send, AlertTriangle } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import SupplyOrdersPage from '@/modules/supply/pages/SupplyOrdersPage'
 import GoodsReceiptsPage from '@/modules/supply/pages/GoodsReceiptsPage'
+import PendientesRecepcionPage from '@/modules/supply/pages/PendientesRecepcionPage'
 import SupplierInvoicesPage from '@/modules/supply/pages/SupplierInvoicesPage'
 import InventoryPage from '@/modules/supply/pages/InventoryPage'
 import CtbNotifyPage from '@/modules/supply/pages/CtbNotifyPage'
@@ -42,6 +43,7 @@ export const supplyModule: ModuleDefinition = {
   routes: [
     { path: '', element: <SupplyOrdersPage /> },
     { path: 'recepciones', element: <GoodsReceiptsPage /> },
+    { path: 'pendientes', element: <PendientesRecepcionPage /> },
     { path: 'facturas', element: <SupplierInvoicesPage /> },
     { path: 'inventario', element: <InventoryPage /> },
     { path: 'comunicar-ctb', element: <CtbNotifyPage /> },
@@ -52,6 +54,7 @@ export const supplyModule: ModuleDefinition = {
     items: [
       { id: 'supply_orders', label: 'Pedidos', icon: ClipboardList, path: '', requiredPermission: 'show_pedidos' },
       { id: 'supply_receipts', label: 'Recepciones', icon: PackageCheck, path: 'recepciones', requiredPermission: 'show_recepcion' },
+      { id: 'supply_pending', label: 'Pendientes', icon: AlertTriangle, path: 'pendientes', requiredPermission: 'show_recepcion' },
       { id: 'supply_invoices', label: 'Facturas', icon: FileText, path: 'facturas', requiredPermission: 'show_facturas' },
       { id: 'supply_inventory', label: 'Almacén', icon: Boxes, path: 'inventario', requiredPermission: 'show_inventory' },
       { id: 'supply_ctb', label: 'Comunicar a CTB', icon: Send, path: 'comunicar-ctb', requiredRole: 'admin' },
