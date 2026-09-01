@@ -119,3 +119,51 @@ describe('calculaEntorno — «esto no es producción»', () => {
     expect(calculaEntorno({ VERCEL_ENV: 'preview' })).toEqual({ entorno: 'preview', rama: null })
   })
 })
+
+// 01/09, la tarde del mismo día. El bundle OTA de las tablets lo construye
+// GitHub Actions, donde no hay VERCEL_ENV: caía en 'local' y Pase (12:16) y
+// camichi4 (09:16) pintaron «BUILD LOCAL» siendo producción pura. El arreglo
+// no ablanda el fallback: hace que quien construye lo DECLARE.
+describe('calculaEntorno — quien construye fuera de Vercel lo declara', () => {
+  it('GitHub Actions en main declara producción y no pinta franja', () => {
+    expect(calculaEntorno({ FOLVY_ENTORNO: 'production', FOLVY_RAMA: 'main' }))
+      .toEqual({ entorno: 'production', rama: 'main' })
+  })
+
+  it('un dispatch desde una rama deja la variable vacía y SIGUE etiquetando', () => {
+    // Es la red de seguridad de publicar una rama al bucket de las tres
+    // tablets: sale etiquetado y se ve en las tres a la vez.
+    expect(calculaEntorno({ FOLVY_ENTORNO: '', FOLVY_RAMA: 'claude/lo-que-sea' }))
+      .toEqual({ entorno: 'local', rama: 'claude/lo-que-sea' })
+  })
+
+  it('un valor raro declarado tampoco cuela como producción', () => {
+    expect(calculaEntorno({ FOLVY_ENTORNO: 'PRODUCTION' }).entorno).toBe('local')
+    expect(calculaEntorno({ FOLVY_ENTORNO: 'prod' }).entorno).toBe('local')
+    expect(calculaEntorno({ FOLVY_ENTORNO: 'staging' }).entorno).toBe('local')
+  })
+
+  // EL INCIDENTE ORIGINAL, AL REVÉS. Julio operó el negocio desde una preview
+  // sin saberlo. Ninguna variable puede devolvernos ahí: dentro de Vercel,
+  // Vercel tiene la última palabra sobre sus propias builds.
+  it('una PREVIEW de Vercel no se puede reetiquetar como producción', () => {
+    expect(calculaEntorno({
+      VERCEL_ENV: 'preview',
+      VERCEL_GIT_COMMIT_REF: 'feat-hubrise-fase3-ui',
+      FOLVY_ENTORNO: 'production',
+    })).toEqual({ entorno: 'preview', rama: 'feat-hubrise-fase3-ui' })
+  })
+
+  it('un development de Vercel tampoco, ni con la declaración puesta', () => {
+    expect(calculaEntorno({ VERCEL_ENV: 'development', FOLVY_ENTORNO: 'production' }).entorno)
+      .toBe('local')
+  })
+
+  it('la rama de Vercel manda sobre la declarada', () => {
+    expect(calculaEntorno({
+      VERCEL_ENV: 'production',
+      VERCEL_GIT_COMMIT_REF: 'main',
+      FOLVY_RAMA: 'otra',
+    }).rama).toBe('main')
+  })
+})

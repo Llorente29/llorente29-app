@@ -33,17 +33,45 @@ const MARCADOR = '__FOLVY_BUILD_ID__'
  * De dónde sale esta build. Vercel lo pone en el entorno del build:
  *   VERCEL_ENV            production | preview | development
  *   VERCEL_GIT_COMMIT_REF la rama
- * Fuera de Vercel (build local) no hay nada de eso y se marca como 'local',
- * que TAMPOCO es producción y también tiene que decirlo.
+ *
+ * PERO VERCEL NO ES EL ÚNICO QUE CONSTRUYE (01/09, la tarde del mismo día).
+ * El bundle OTA de las tablets lo construye GitHub Actions (build-apk.yml), y
+ * allí no hay VERCEL_ENV: la build caía en 'local' y las tablets pintaron
+ * «BUILD LOCAL — NO ES PRODUCCIÓN» siendo producción pura. Pase (Alcalá) y
+ * camichi4 (Carabanchel) cogieron el bundle 203 el 01/09 a las 12:16 y 09:16
+ * de Madrid y las dos lo pintaron.
+ *
+ * La franja no falló: hizo lo que se le pidió — si no consta que sea
+ * producción, etiqueta. Lo que faltaba es que el bundle SUPIERA de dónde sale.
+ * Por eso el arreglo no es quitar la franja ni ablandar el fallback, sino que
+ * quien construye lo DECLARE: FOLVY_ENTORNO (+ FOLVY_RAMA), igual que el
+ * buildId va sellado dentro del bundle. Un bundle de producción dice
+ * producción; uno que no lo sabe, sigue etiquetando.
+ *
+ * ORDEN DE PRECEDENCIA, y el porqué:
+ *   1. VERCEL_ENV manda SIEMPRE dentro de Vercel, incluso cuando dice algo que
+ *      no es production ni preview. Si Vercel dice que esto no es producción,
+ *      no hay variable que lo reetiquete: así una preview NUNCA puede pasar
+ *      por producción por una env var suelta, que es el incidente original.
+ *   2. Fuera de Vercel, FOLVY_ENTORNO es la declaración de quien construye.
+ *   3. Sin nada, 'local'. Sigue fallando hacia AVISAR.
  */
 export function calculaEntorno(env: NodeJS.ProcessEnv = process.env): {
   entorno: 'production' | 'preview' | 'local'
   rama: string | null
 } {
+  const rama = env.VERCEL_GIT_COMMIT_REF || env.FOLVY_RAMA || null
+
   const v = env.VERCEL_ENV
-  const rama = env.VERCEL_GIT_COMMIT_REF || null
   if (v === 'production') return { entorno: 'production', rama }
   if (v === 'preview') return { entorno: 'preview', rama }
+  // Dentro de Vercel y NO es production/preview: Vercel tiene la última
+  // palabra sobre sus propias builds. No se consulta la declaración.
+  if (v) return { entorno: 'local', rama }
+
+  const declarado = env.FOLVY_ENTORNO
+  if (declarado === 'production') return { entorno: 'production', rama }
+  if (declarado === 'preview') return { entorno: 'preview', rama }
   return { entorno: 'local', rama }
 }
 
