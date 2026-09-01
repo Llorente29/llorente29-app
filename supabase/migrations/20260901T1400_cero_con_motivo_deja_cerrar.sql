@@ -200,13 +200,22 @@ do $verif$
 declare
   v_bloquean int;
   v_src      text;
+  -- Dollar-quoting anidado: la cadena lleva comillas y escaparlas a mano es
+  -- justo como se cuela un error en una guarda que nadie vuelve a mirar.
+  v_exencion constant text := $q$coalesce(btrim(discrepancy_reason), '') = ''$q$;
 begin
   v_src := pg_get_functiondef('public.confirm_goods_receipt(uuid)'::regprocedure);
 
   -- La exención tiene que estar en LOS DOS sitios (guard y needs_review). Si
   -- solo estuviera en uno, el albarán cerraría manchado o no cerraría.
-  if (length(v_src) - length(replace(v_src, 'btrim(discrepancy_reason)', ''))) / length('btrim(discrepancy_reason)') <> 2 then
-    raise exception 'la exencion no aparece exactamente 2 veces: guard y needs_review tienen que ir a la par';
+  --
+  -- Se cuenta la forma EXACTA de la exención, no `btrim(discrepancy_reason)` a
+  -- secas: eso aparece TRES veces en el cuerpo, porque v_has_diff ya lo usaba
+  -- desde antes para decidir has_differences. Contar la subcadena suelta habría
+  -- hecho abortar esta migración por un motivo falso.
+  if (length(v_src) - length(replace(v_src, v_exencion, ''))) / length(v_exencion) <> 2 then
+    raise exception 'la exencion aparece % vez/veces y tienen que ser 2 (guard y needs_review)',
+      (length(v_src) - length(replace(v_src, v_exencion, ''))) / length(v_exencion);
   end if;
 
   if has_function_privilege('anon', 'public.confirm_goods_receipt(uuid)', 'execute') then
