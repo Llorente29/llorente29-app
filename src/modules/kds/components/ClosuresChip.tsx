@@ -19,15 +19,20 @@
 // Leía closed_brands sin filtrar por el local seleccionado — la escritura ya
 // era por local desde el 29/08, este lector se quedó siendo global.
 //
-// Ahora el titular cuenta SOLO lo de este local, y hay tres estados:
-//   · cerrado aquí          -> píldora roja, «N marcas cerradas» = verdad aquí.
-//   · nada aquí, algo fuera -> píldora NEUTRA (gris), «Aquí todo abierto ·
-//                              N marcas cerradas en otros locales». No alarma
-//                              con lo que no es suyo, pero no lo esconde
-//                              (regla 7: el umbral ordena, no esconde).
-//   · nada en ningún sitio  -> no se pinta nada.
-// El detalle desplegado (ClosedBrandsCard) separa igual: las de aquí con
-// botón, las de fuera solo lectura y con el nombre de su local.
+// Ahora el titular cuenta SOLO lo de este local, y hay dos estados:
+//   · cerrado aquí         -> píldora roja, «N marcas cerradas» = verdad aquí.
+//   · nada cerrado aquí    -> no se pinta nada.
+//
+// 01/09 — CORRECCIÓN DE JULIO. Hubo un tercer estado, «Aquí todo abierto · N
+// marcas cerradas en otros locales», y estaba mal. Se justificaba con la regla
+// 7 (el umbral ordena, no esconde), pero la regla 7 habla de NO esconder filas
+// de la pantalla que el usuario abre para verlas. Pedidos no es esa pantalla:
+// la mira quien está cocinando, y lo del otro local no es información, es ruido
+// que compite con lo suyo. La regla buena: una pantalla de servicio enseña lo
+// del local que la mira, y nada más.
+//
+// Nada queda escondido de verdad: en CONSOLIDADO todo cae en `aqui` y se ve
+// entero, y Cocina → Disponibilidad sigue enseñando los dos locales.
 //
 // fix/sondeo-adaptativo-resto (13/08, Encargo B-bis): location_status y
 // closed_brands eran dos de las tres RPC que se escaparon del encargo B —
@@ -42,7 +47,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Store, ChevronDown, ChevronUp } from 'lucide-react'
 import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import { getClosedBrandsByScope, getLocationStatus, type ClosedBrand, type LocationStatus } from '../services/kdsService'
-import { filaId, textoReaperturaChip, textoMarcasCerradas, textoOtrosLocales } from '../lib/closureScope'
+import { filaId, textoReaperturaChip, textoMarcasCerradas } from '../lib/closureScope'
 import LocationStatusCard from './LocationStatusCard'
 import ClosedBrandsCard from './ClosedBrandsCard'
 
@@ -60,15 +65,14 @@ interface Props {
 // hasta cuándo). Un cambio aquí es justo lo que el chip existe para avisar.
 // Entran las dos mitades: que se cierre algo en otro local también cambia lo
 // que se ve (la línea gris), y el poll tiene que enterarse.
-function closuresFingerprint(location: LocationStatus | null, aqui: ClosedBrand[], otros: ClosedBrand[]): string {
+function closuresFingerprint(location: LocationStatus | null, aqui: ClosedBrand[]): string {
   const loc = location ? `${location.mode}:${location.resume_at ?? ''}:${location.connected ? 1 : 0}` : ''
   const huella = (xs: ClosedBrand[]) => xs.map(x => `${filaId(x)}:${x.resume_at ?? ''}`).sort().join(',')
-  return `${loc}|${huella(aqui)}|${huella(otros)}`
+  return `${loc}|${huella(aqui)}`
 }
 
 export default function ClosuresChip({ accountId, locationId, token }: Props) {
   const [aqui, setAqui] = useState<ClosedBrand[]>([])
-  const [otros, setOtros] = useState<ClosedBrand[]>([])
   const [location, setLocation] = useState<LocationStatus | null>(null)
   const [open, setOpen] = useState(false)
   const lastFingerprintRef = useRef<string | null>(null)
@@ -84,9 +88,11 @@ export default function ClosuresChip({ accountId, locationId, token }: Props) {
       getLocationStatus(locationId, token),
     ])
     setAqui(b.aqui)
-    setOtros(b.otrosLocales)
     setLocation(l)
-    const fp = closuresFingerprint(l, b.aqui, b.otrosLocales)
+    // La huella NO mira otros locales: en Pedidos un cambio de Carabanchel no
+    // es actividad de Alcalá, y contarlo mantendría el sondeo despierto por
+    // algo que esta pantalla ya no enseña.
+    const fp = closuresFingerprint(l, b.aqui)
     const hadWork = lastFingerprintRef.current === null || fp !== lastFingerprintRef.current
     lastFingerprintRef.current = fp
     return hadWork
@@ -110,7 +116,7 @@ export default function ClosuresChip({ accountId, locationId, token }: Props) {
   // Lo que hay cerrado AQUÍ. Es lo único que enciende la píldora roja.
   const cerradoAqui = locationClosed || aqui.length > 0
 
-  if (!cerradoAqui && otros.length === 0) return null
+  if (!cerradoAqui) return null
 
   // Próxima reapertura conocida (el chip solo la muestra si TODO lo cerrado
   // AQUÍ tiene hora — si algo no la tiene, no promete una hora que no hay).
@@ -152,9 +158,6 @@ export default function ClosuresChip({ accountId, locationId, token }: Props) {
           {cerradoAqui && anySinFecha && (
             <span className="font-semibold opacity-90">· sin fecha de reapertura</span>
           )}
-          {otros.length > 0 && (
-            <span className="font-semibold opacity-80">· {textoOtrosLocales(otros.length)}</span>
-          )}
         </span>
         {open ? <ChevronUp size={15} className="ml-auto" /> : <ChevronDown size={15} className="ml-auto" />}
       </button>
@@ -162,7 +165,11 @@ export default function ClosuresChip({ accountId, locationId, token }: Props) {
       {open && (
         <div className="mt-2">
           {locationId && <LocationStatusCard locationId={locationId} token={token} />}
-          <ClosedBrandsCard accountId={accountId} token={token} locationId={locationId} />
+          {/* false EXPLÍCITO: Pedidos es pantalla de servicio y enseña solo el
+              local que la mira (01/09). En consolidado no se pierde nada,
+              porque ahí todo cae en `aqui`. */}
+          <ClosedBrandsCard accountId={accountId} token={token} locationId={locationId}
+                            mostrarOtrosLocales={false} />
         </div>
       )}
     </div>

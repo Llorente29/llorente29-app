@@ -14,11 +14,18 @@
 // (se reabre, o se le pone una hora) — no se puede posponer un olvido.
 //
 // POR LOCAL desde el 31/08/2026 — `locationId` es obligatorio.
-// Esta alarma INTERRUMPE, y la regla 7 dice que lo que interrumpe SÍ filtra:
-// el banner rojo salta solo por los olvidos de ESTE local. Los de otros no
-// se esconden —van debajo, en un bloque gris, con el nombre de su local y
-// SIN botón—, pero no gritan aquí: la cocina de Alcalá no puede quedarse
-// mirando una alarma que no puede resolver, ni resolverla por Carabanchel.
+// Esta alarma INTERRUMPE, y la regla 7 dice que lo que interrumpe SÍ filtra.
+//
+// 01/09: y filtra DEL TODO. La primera versión dejaba los olvidos de otros
+// locales debajo, en un bloque gris y sin botón, como «información». Julio lo
+// corrigió: esta pantalla la usa quien está cocinando, y lo del otro local no
+// es información, es ruido que compite con lo suyo. Con un local seleccionado,
+// Pedidos enseña SOLO ese local.
+//
+// En CONSOLIDADO no se pierde nada: `partirPorLocal(filas, null)` mete todo en
+// `aqui`, así que la vista que se abre a propósito para verlo todo lo sigue
+// viendo todo. La regla es: una pantalla de servicio enseña lo del local que
+// la mira, y nada más.
 //
 // Reabrir va en DOS PASOS y con el local en la frase («Reabrir Meraki Pita en
 // Foodint Carabanchel»): el 31/08 este botón, mudo respecto al local, era el
@@ -34,7 +41,7 @@
 // local sin actividad real 60 min, baja al suelo general de 5 min (B2).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Unlock, Loader2, Eye } from 'lucide-react'
+import { AlertTriangle, Unlock, Loader2 } from 'lucide-react'
 import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import {
   getAnomalousBrandClosuresByScope, setBrandStatus, setBrandStatusByToken,
@@ -69,7 +76,6 @@ function horaCorta(iso: string | null): string {
 
 export default function ClosureAnomalyAlarm({ accountId, token, locationId, variant = 'fixed' }: Props) {
   const [aqui, setAqui] = useState<AnomalousBrandClosure[]>([])
-  const [otros, setOtros] = useState<AnomalousBrandClosure[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   // Fila pendiente de confirmar la reapertura (null = ninguna).
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -80,8 +86,8 @@ export default function ClosureAnomalyAlarm({ accountId, token, locationId, vari
   // de fallo, que antes faltaba en este poll.
   const refresh = useCallback(async (): Promise<boolean> => {
     const scope = await getAnomalousBrandClosuresByScope(accountId ?? null, token, locationId)
+    // scope.otrosLocales se descarta A PROPÓSITO: ver cabecera.
     setAqui(scope.aqui)
-    setOtros(scope.otrosLocales)
     return scope.aqui.length > 0
   }, [accountId, token, locationId])
 
@@ -115,7 +121,7 @@ export default function ClosureAnomalyAlarm({ accountId, token, locationId, vari
     }
   }
 
-  if (aqui.length === 0 && otros.length === 0) return null
+  if (aqui.length === 0) return null
 
   const wrapperCls = variant === 'inline'
     ? 'relative z-25 px-2 sm:px-3 pt-2 sm:pt-3'
@@ -187,32 +193,6 @@ export default function ClosureAnomalyAlarm({ accountId, token, locationId, vari
 
       {/* Otros locales: se ven (no se esconde nada), pero ni gritan ni se
           tocan. Quien reabre Carabanchel es Carabanchel. */}
-      {otros.length > 0 && (
-        <div className={`mx-auto max-w-4xl rounded-xl bg-card border border-border-default text-text-secondary ${aqui.length > 0 ? 'mt-2' : ''}`}>
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-border-default">
-            <Eye size={15} className="shrink-0" />
-            <span className="text-[12px] font-semibold uppercase tracking-wide">
-              {otros.length === 1 ? '1 cierre olvidado en otro local' : `${otros.length} cierres olvidados en otros locales`}
-            </span>
-          </div>
-          <ul className="divide-y divide-border-default">
-            {otros.map((c) => (
-              <li key={filaId(c)} className="flex items-center gap-2 px-4 py-2 text-[13px] flex-wrap">
-                <span className="font-semibold text-text-primary">{c.brand_name}</span>
-                <span className="font-medium">· {c.location_name}</span>
-                <span className="text-[12px] text-text-secondary">
-                  {c.kind === 'indefinite'
-                    ? `cerrada desde ${fechaCorta(c.set_at)}, sin fecha de reapertura`
-                    : `debía reabrir a las ${horaCorta(c.resume_at)}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="px-4 pb-2 text-[11px] text-text-secondary">
-            Se gestionan desde su propio local.
-          </p>
-        </div>
-      )}
     </div>
   )
 }

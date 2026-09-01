@@ -72,7 +72,10 @@ export default function AvailabilityBoard({
         {(locationId || token) && (
           <LocationStatusCard key={statusVersion} locationId={locationId} token={token} dark={dark} />
         )}
-        <ClosedBrandsCard accountId={accountId} token={token} locationId={locationId} dark={dark} />
+        {/* true: Disponibilidad se abre A PROPÓSITO para gestionar cierres, y en
+            tablet el token ya acota (el bloque sale vacío). No es Pedidos. */}
+        <ClosedBrandsCard accountId={accountId} token={token} locationId={locationId}
+                          mostrarOtrosLocales dark={dark} />
       </div>
 
       <SectionHeader
