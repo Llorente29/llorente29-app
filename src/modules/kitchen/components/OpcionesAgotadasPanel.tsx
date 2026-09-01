@@ -34,6 +34,14 @@ export default function OpcionesAgotadasPanel({ accountId, locationId, locationN
   const [rows, setRows] = useState<SoldOutOptionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * FALLO SILENCIOSO CON EL ERROR IMPRESO JUSTO ENCIMA (01/09, cazado por Julio).
+   * Cuando la lectura fallaba, la lista se quedaba vacía y la pantalla decía
+   * «No hay opciones agotadas» — una frase tranquilizadora al lado de un error
+   * rojo. Si no se puede leer, NO se afirma que no hay nada: se dice que no se
+   * ha podido comprobar. `rows.length === 0` no distingue las dos cosas; esto sí.
+   */
+  const [falloAlLeer, setFalloAlLeer] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   // Confirmación CON CONTENIDO, no un visto (regla 8): dice qué se agotó, dónde
   // y si de verdad salió al canal.
@@ -48,9 +56,11 @@ export default function OpcionesAgotadasPanel({ accountId, locationId, locationN
     try {
       setRows(await listSoldOutOptions(locationId))
       setError(null)
+      setFalloAlLeer(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error cargando las opciones agotadas')
       setRows([])
+      setFalloAlLeer(true)
     } finally {
       setLoading(false)
     }
@@ -131,6 +141,14 @@ export default function OpcionesAgotadasPanel({ accountId, locationId, locationN
 
       {loading ? (
         <div className="py-8 text-center text-stone-400"><Loader2 size={20} className="animate-spin inline" /></div>
+      ) : falloAlLeer ? (
+        <div className="py-8 text-center text-danger text-sm font-medium">
+          <AlertTriangle size={18} className="inline mr-1.5 -mt-0.5" />
+          No se ha podido comprobar qué opciones están agotadas en {locationName}.
+          <span className="block font-normal text-stone-500 mt-1">
+            Puede haber opciones agotadas que no se estén viendo. No des la lista por vacía.
+          </span>
+        </div>
       ) : rows.length === 0 ? (
         <div className="py-8 text-center text-stone-400 text-sm">
           No hay opciones agotadas en {locationName}.
@@ -173,6 +191,9 @@ export default function OpcionesAgotadasPanel({ accountId, locationId, locationN
           accountId={accountId}
           locationName={locationName}
           busyId={busy}
+          // Las ya agotadas NO se esconden del buscador: se marcan. Esconderlas
+          // haría dudar de si se agotó o de si la lista está mal (regla 7).
+          yaAgotadas={new Set(rows.map(r => r.externalId))}
           onAgotar={async (o) => { await cambiar(o.optionId, false, o.name); setShowAgotar(false) }}
           onClose={() => setShowAgotar(false)}
         />
@@ -181,10 +202,12 @@ export default function OpcionesAgotadasPanel({ accountId, locationId, locationN
   )
 }
 
-function AgotarOpcionModal({ accountId, locationName, busyId, onAgotar, onClose }: {
+function AgotarOpcionModal({ accountId, locationName, busyId, yaAgotadas, onAgotar, onClose }: {
   accountId: string
   locationName: string
   busyId: string | null
+  /** refs ya agotadas en este local: se marcan, no se ocultan. */
+  yaAgotadas: Set<string>
   onAgotar: (o: ModifierOptionRow) => Promise<void>
   onClose: () => void
 }) {
@@ -253,13 +276,19 @@ function AgotarOpcionModal({ accountId, locationName, busyId, onAgotar, onClose 
                       {o.groupName}{sufijoFilas(o.filas)}
                     </p>
                   </div>
-                  <button
-                    onClick={() => void onAgotar(o)}
-                    disabled={busyId === o.optionId}
-                    className="shrink-0 px-3 py-1.5 rounded-md bg-danger text-white text-[12px] font-medium hover:opacity-90 disabled:opacity-40"
-                  >
-                    {busyId === o.optionId ? <Loader2 size={13} className="animate-spin" /> : 'Agotar'}
-                  </button>
+                  {yaAgotadas.has(o.externalId) ? (
+                    <span className="shrink-0 px-3 py-1.5 rounded-md bg-stone-100 text-stone-500 text-[12px] font-medium">
+                      Ya agotada
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => void onAgotar(o)}
+                      disabled={busyId === o.optionId}
+                      className="shrink-0 px-3 py-1.5 rounded-md bg-danger text-white text-[12px] font-medium hover:opacity-90 disabled:opacity-40"
+                    >
+                      {busyId === o.optionId ? <Loader2 size={13} className="animate-spin" /> : 'Agotar'}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
