@@ -1,0 +1,251 @@
+name: Desplegar edge functions
+
+# QUÉ HACE
+# Despliega a Supabase las edge functions que hayan cambiado en un push a main.
+# Con esto, availability-watchdog y edge-drift-watchdog dejan de depender de que
+# alguien tenga un token a mano, y ningún token vuelve a pasar por un chat.
+#
+# LO QUE JULIO HACE UNA VEZ, Y NUNCA MÁS
+#   Settings → Secrets and variables → Actions → New repository secret
+#     Nombre:  SUPABASE_ACCESS_TOKEN
+#     Valor:   el token de https://supabase.com/dashboard/account/tokens
+#   No hace falta un segundo secreto: el project ref sale de supabase/config.toml,
+#   y no es secreto (viaja en la URL de cada petición).
+#
+# ── LA PROHIBIDA ───────────────────────────────────────────────────────────
+# hubrise-webhook NO se despliega desde aquí. Nunca. Es el camino vivo de los
+# pedidos de Alcalá y un despliegue suyo ya se llevó por delante dos
+# correcciones (13/08: collection_code y resolveHubriseToken). Está excluida
+# por nombre, y además hay una guarda que aborta el paso de despliegue si se
+# colara en la lista por cualquier vía. Si cambia, el workflow lo DICE en el
+# resumen y sigue sin desplegarla: callarlo sería peor que no excluirla.
+#
+# ── POR QUÉ NO ES UN `deploy` A SECAS (01/09) ──────────────────────────────
+# Medido en producción ese día: de 63 funciones desplegadas, 43 corren con
+# verify_jwt = false — todos los webhooks (Stripe, HubRise, Last.app, Otter,
+# Catcher), catcher-dispatch, system-alert, edge-drift-watchdog y la propia
+# availability-watchdog. Y supabase/config.toml declara SOLO 2, las dos con
+# true. El CLI, para una función que no está declarada, aplica su defecto:
+# verify_jwt = true.
+#
+# O sea: un `supabase functions deploy <nombre>` a secas le habría activado la
+# verificación de JWT a 43 funciones y habría dejado fuera a todas las
+# plataformas y a todos los pg_cron. En silencio, y con cara de despliegue
+# correcto.
+#
+# Por eso este workflow NO adivina: antes de desplegar cada función PREGUNTA a
+# la Management API cómo está viviendo ahora mismo, y la vuelve a desplegar
+# igual. Y si una función es NUEVA (no existe todavía allí), no se inventa el
+# valor: exige que esté declarada en config.toml y aborta si no lo está.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/deploy-edge-functions.yml'
+  workflow_dispatch:
+    inputs:
+      funciones:
+        description: 'Funciones a desplegar, separadas por espacios. Vacío = las que cambiaron en el último commit.'
+        required: false
+        default: ''
+
+# Dos despliegues a la vez sobre el mismo proyecto es cómo se pisan dos
+# versiones. Se encolan, y no se cancela el que ya está a medias.
+concurrency:
+  group: edge-functions-deploy
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Comprobar que el secreto está puesto
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Falta el secreto SUPABASE_ACCESS_TOKEN."
+            echo "::error::Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+          echo "Secreto presente."
+
+      - name: Leer el project ref de supabase/config.toml
+        id: ref
+        run: |
+          REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
+          if [ -z "$REF" ]; then
+            echo "::error::No se pudo leer project_id de supabase/config.toml."
+            exit 1
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Proyecto: $REF"
+
+      - name: Decidir qué funciones se despliegan
+        id: lista
+        env:
+          MANUAL: ${{ github.event.inputs.funciones }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${MANUAL:-}" ]; then
+            CANDIDATAS="$MANUAL"
+            echo "Lista manual: $CANDIDATAS"
+          else
+            ANTES="${{ github.event.before }}"
+            # Un push nuevo o forzado deja `before` en ceros o inalcanzable:
+            # se cae al commit anterior en vez de intentar desplegarlo todo.
+            if [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+              ANTES="${{ github.sha }}^"
+            fi
+            CANDIDATAS=$(git diff --name-only "$ANTES" "${{ github.sha }}" -- 'supabase/functions/**' \
+              | awk -F/ 'NF>=3 {print $3}' | sort -u | tr '\n' ' ')
+            echo "Cambiaron: ${CANDIDATAS:-(ninguna)}"
+          fi
+
+          # ── LA EXCLUSIÓN, y se dice en voz alta ──────────────────────────
+          FINAL=""
+          for f in $CANDIDATAS; do
+            # _shared no es una función: es código compartido.
+            if [ "$f" = "_shared" ]; then continue; fi
+            if [ ! -d "supabase/functions/$f" ]; then
+              echo "::notice::$f ya no existe en el repo (borrada). No se toca en Supabase."
+              continue
+            fi
+            if [ "$f" = "hubrise-webhook" ]; then
+              echo "::warning::hubrise-webhook HA CAMBIADO y NO se despliega: está prohibida (camino vivo de los pedidos de Alcalá). Si el cambio tiene que salir, lo despliega una persona a mano y a conciencia."
+              echo "- :no_entry: **hubrise-webhook cambió y NO se ha desplegado** (prohibida)." >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            FINAL="$FINAL $f"
+          done
+
+          FINAL=$(echo "$FINAL" | xargs || true)
+          echo "funciones=$FINAL" >> "$GITHUB_OUTPUT"
+          if [ -z "$FINAL" ]; then
+            echo "Nada que desplegar."
+          else
+            echo "Se desplegarán: $FINAL"
+          fi
+
+      - uses: supabase/setup-cli@v1
+        if: steps.lista.outputs.funciones != ''
+        with:
+          version: latest
+
+      - name: Desplegar, conservando el verify_jwt que cada una tiene HOY
+        if: steps.lista.outputs.funciones != ''
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ steps.ref.outputs.ref }}
+          FUNCIONES: ${{ steps.lista.outputs.funciones }}
+        run: |
+          set -euo pipefail
+
+          # GUARDA DE ÚLTIMA LÍNEA. La exclusión de arriba ya la deja fuera;
+          # esto aborta si por cualquier camino se hubiera colado.
+          for f in $FUNCIONES; do
+            if [ "$f" = "hubrise-webhook" ]; then
+              echo "::error::hubrise-webhook ha llegado a la lista de despliegue. Se aborta."
+              exit 1
+            fi
+          done
+
+          # Estado VIVO de las funciones. No se adivina el verify_jwt: se lee.
+          curl -sS --fail-with-body \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$REF/functions" > /tmp/vivas.json
+
+          echo "## Edge functions desplegadas" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| función | verify_jwt | resultado |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          FALLOS=0
+          for f in $FUNCIONES; do
+            VIVE=$(jq -r --arg s "$f" '[.[] | select(.slug==$s)] | length' /tmp/vivas.json)
+
+            if [ "$VIVE" = "0" ]; then
+              # Función NUEVA. Aquí no se puede leer el estado porque no hay
+              # estado. Se exige que esté declarada en config.toml: preferimos
+              # parar a estrenar una función con la puerta al revés.
+              if grep -qE "^\[functions\.$f\]" supabase/config.toml; then
+                echo "$f es nueva y está declarada en config.toml. El CLI aplica lo declarado."
+                DECL=$(awk -v f="[functions.$f]" '$0==f{found=1;next} /^\[/{found=0} found && /verify_jwt/{print $3}' supabase/config.toml)
+                supabase functions deploy "$f" --project-ref "$REF" \
+                  && echo "| \`$f\` | ${DECL:-declarado} (nueva) | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY" \
+                  || { echo "| \`$f\` | ${DECL:-declarado} (nueva) | :x: |" >> "$GITHUB_STEP_SUMMARY"; FALLOS=1; }
+              else
+                echo "::error::$f es NUEVA y no está declarada en supabase/config.toml."
+                echo "::error::Añade [functions.$f] con su verify_jwt antes de desplegarla. No se adivina."
+                echo "| \`$f\` | — | :x: sin declarar |" >> "$GITHUB_STEP_SUMMARY"
+                FALLOS=1
+              fi
+              continue
+            fi
+
+            JWT=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .verify_jwt' /tmp/vivas.json)
+            if [ "$JWT" = "false" ]; then
+              FLAG="--no-verify-jwt"
+            elif [ "$JWT" = "true" ]; then
+              FLAG=""
+            else
+              echo "::error::No se pudo leer verify_jwt de $f (valor: '$JWT'). Se aborta antes que adivinar."
+              echo "| \`$f\` | ? | :x: |" >> "$GITHUB_STEP_SUMMARY"
+              FALLOS=1
+              continue
+            fi
+
+            echo "→ $f (verify_jwt=$JWT)"
+            if supabase functions deploy "$f" --project-ref "$REF" $FLAG; then
+              echo "| \`$f\` | $JWT | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$f\` | $JWT | :x: |" >> "$GITHUB_STEP_SUMMARY"
+              FALLOS=1
+            fi
+          done
+
+          if [ "$FALLOS" != "0" ]; then
+            echo "::error::Alguna función no se desplegó. Mirar el resumen."
+            exit 1
+          fi
+
+      - name: Comprobar que lo desplegado es lo que se quería
+        if: steps.lista.outputs.funciones != ''
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ steps.ref.outputs.ref }}
+          FUNCIONES: ${{ steps.lista.outputs.funciones }}
+        run: |
+          set -euo pipefail
+          curl -sS --fail-with-body \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$REF/functions" > /tmp/despues.json
+
+          # Verificación por consulta, no por afirmación: cada función tocada
+          # sigue ACTIVE y conserva el verify_jwt que tenía antes.
+          MAL=0
+          for f in $FUNCIONES; do
+            ANTES=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .verify_jwt' /tmp/vivas.json)
+            AHORA=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .verify_jwt' /tmp/despues.json)
+            ESTADO=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .status' /tmp/despues.json)
+            if [ -n "$ANTES" ] && [ "$ANTES" != "$AHORA" ]; then
+              echo "::error::$f ha cambiado su verify_jwt: $ANTES → $AHORA. Eso rompe a quien la llama."
+              MAL=1
+            fi
+            if [ "$ESTADO" != "ACTIVE" ]; then
+              echo "::error::$f no quedó ACTIVE (está en '$ESTADO')."
+              MAL=1
+            fi
+          done
+          if [ "$MAL" = "0" ]; then
+            echo "Verificado: ninguna cambió de verify_jwt y todas quedaron ACTIVE."
+          fi
+          exit "$MAL"

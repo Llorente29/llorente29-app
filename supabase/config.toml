@@ -1,6 +1,42 @@
 # Folvy V1 - Supabase local config
 project_id = "xzmpnchlguibclvxyynt"
 
+# ############################################################################
+# #  AVISO — NO DESPLIEGUES A MANO SIN LEER ESTO                             #
+# ############################################################################
+#
+# Este fichero declara DOS funciones. En produccion hay 63, y 43 de ellas
+# corren con verify_jwt = FALSE (medido el 01/09/2026): todos los webhooks
+# (Stripe, HubRise, Last.app, Otter, Catcher), catcher-dispatch, system-alert,
+# availability-watchdog, edge-drift-watchdog, order-advance...
+#
+# El CLI, para una funcion que NO esta declarada aqui, aplica su defecto:
+# verify_jwt = true. Asi que:
+#
+#     supabase functions deploy availability-watchdog
+#
+# le ACTIVARIA la verificacion de JWT y dejaria fuera a pg_cron. En silencio,
+# y con cara de despliegue correcto. Lo mismo con cualquiera de las otras 42.
+#
+# COMO SE DESPLIEGA BIEN
+#   · Lo normal: no se despliega a mano. Un push a main que toque
+#     supabase/functions/** dispara .github/workflows/deploy-edge-functions.yml,
+#     que PREGUNTA a la Management API el verify_jwt vivo de cada funcion y la
+#     vuelve a desplegar igual. No adivina.
+#   · Si aun asi hay que hacerlo a mano, mira primero como esta viviendo:
+#       curl -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" #         https://api.supabase.com/v1/projects/xzmpnchlguibclvxyynt/functions #         | jq -r '.[] | "\(.slug)\t\(.verify_jwt)"'
+#     y anade --no-verify-jwt si esa funcion lo tiene en false.
+#
+# Y hubrise-webhook NO se despliega, ni a mano ni automaticamente, salvo
+# decision explicita: es el camino vivo de los pedidos de Alcala.
+#
+# DEUDA: completar este fichero con las 63 y su verify_jwt real, y entonces el
+# workflow podra dejar de preguntar. No se ha hecho hoy a proposito: transcribir
+# 63 valores a mano puede meter uno mal, y un valor DECLARADO mal es peor que
+# ausente — el CLI lo aplicaria con toda confianza. Cuando se haga, que se
+# genere desde la Management API, no a mano.
+# ############################################################################
+
 [functions.check-account-status]
 verify_jwt = true
 
