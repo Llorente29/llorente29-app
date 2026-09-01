@@ -168,3 +168,77 @@ porque se opera con confianza.
 4. **Orden de ataque.** Propuesta: primero las de ESCRITURA que nombra el
    encargo (8), con pruebas por usuario, y solo después la lectura. Es la mitad
    que puede hacer daño real desde el local equivocado.
+
+---
+
+# DECISIONES DE JULIO (01/09, noche) — cerradas, no se rediscuten
+
+## La línea que lo une todo: qué es «de un local»
+
+**Vive en un local y SE ACOTA** — pedidos · disponibilidad y 86 · cierres de
+marca · albaranes y almacén · inventario · fichajes · cuadrantes · impresoras y
+tablets · horarios del local · informes.
+
+**NO vive en un local y NO se acota** — escandallos · recetas · artículos ·
+proveedores · marcas · cartas. *Un escandallo no es de Carabanchel. Si acotas
+eso, José no puede trabajar.*
+
+**Consecuencia, y es la que reduce el trabajo:** no son las 529 políticas. Son
+las de las **tablas con `location_id` (89)**. Y el criterio se explica en una
+frase, que es lo que hace que se pueda sostener.
+
+Con esa línea, la **lectura también se acota** donde el dato es de un local —
+entera, no solo la escritura — y se deja abierta donde el dato es de la cuenta.
+Eso resuelve el punto 1: el inventario que importa es el de las tablas con
+local, no el de todas.
+
+## `'all'` = «todos los MÍOS»
+
+No desaparece: para Julio son los tres, para José solo Carabanchel. Una opción
+que se esfuma según quién entra confunde, y la vista consolidada es útil aunque
+sea de un solo local.
+
+**La condición, que es la parte difícil:** `'all'` NO se traduce NUNCA a «sin
+filtro» en el servidor. Se expande a la lista de locales del usuario, siempre,
+aunque esa lista sea de uno.
+
+⚠️ **Ojo, porque hoy es justo lo contrario.** `useLocationScope` hace
+`resolvedLocationId = isConsolidated ? null : activeLocationId`, y ese `null`
+llega a las RPC como «sin filtro» — que es exactamente el patrón que la
+condición prohíbe, y ya está escrito por todas partes. El cambio no es solo
+server-side: hay que convertir ese `null` en la lista explícita, o el servidor
+seguirá recibiendo «dame todo» y no tendrá cómo distinguir «todo» de «todo lo
+mío».
+
+## Orden: escritura primero, y dentro de ella lo que hace daño
+
+Las ocho funciones con pruebas por usuario, y **primero las tres que pueden
+hacer daño de verdad desde el local equivocado**:
+`set_brand_status` · `set_product_availability` ·
+`set_modifier_option_availability`.
+
+*Que un admin acotado cierre Alcalá es el escenario que hay que hacer imposible
+el primer día.*
+
+## `current_user_location_ids()` — única fuente del criterio
+
+Hermana de `current_user_account_ids()`. Sin filas en `user_location` = todos
+los locales de la cuenta (así Julio no se toca). El criterio NO se reescribe en
+cada política: Regla 10.
+
+---
+
+# PENDIENTE DE DECIDIR (Julio, mañana)
+
+**¿Puede José publicar una carta?** No es de un local, pero afecta a los dos.
+
+Un dato que ayuda a decidir y que salió del RECON de hoy: **publicar una carta
+se materializa en catálogos que SÍ son por local**. `brand_hubrise_catalog`
+tiene `location_id`, y una marca tiene un catálogo por local — Mila's
+Sandwiches tiene `62253` en Alcalá y `5qqrj` en Carabanchel.
+
+Así que hay una tercera opción entre «sí» y «no»: **José edita y publica la
+carta, pero la publicación solo alcanza los catálogos de SUS locales.** La carta
+es de la cuenta; su materialización es por local. Técnicamente se sostiene con
+la misma línea de arriba. Si eso es lo que se quiere, es decisión de Julio, no
+mía.
