@@ -9,9 +9,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, TrendingDown, AlertTriangle, ShieldCheck, ShieldAlert, ShieldQuestion, RefreshCw } from 'lucide-react'
 import {
   getLatestApprovedCount, listCountLines, classifyAvtCause,
-  getApprovedCountBefore, getIncompleteConsumptionItems,
+  getApprovedCountBefore, getIncompleteConsumptionItems, getConsumptionCoverage,
   type InventoryCountLine, type ApprovedCountRef, type AvtCause,
 } from '@/modules/supply/services/inventoryCountService'
+import { textoCobertura, type Cobertura } from '@/modules/supply/lib/coberturaConsumo'
 
 const fmtEur = (v: number | null) => v == null ? '—' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(v)
 const fmtQty = (v: number | null) => v == null ? '—' : new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v)
@@ -48,6 +49,11 @@ export default function AvtSection({
   // "0 con consumo no medible" / salud "Buena" sin saberlo de verdad
   // (folvy_reglas.md §2 — un error no es "cero resultados").
   const [incompleteError, setIncompleteError] = useState<string | null>(null)
+  // Cobertura del consumo del periodo (ENCARGO 31/08 punto 5): la cabecera del
+  // AvT dice qué parte de lo vendido descontó de verdad, antes de que nadie lea
+  // una desviación como si fuera merma.
+  const [cobertura, setCobertura] = useState<Cobertura | null>(null)
+  const [coberturaError, setCoberturaError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loaded, setLoaded] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
@@ -56,6 +62,7 @@ export default function AvtSection({
     if (!accountId || !locationId) { setLines([]); setCount(null); setIncompleteSet(new Set()); setIncompleteError(null); setLoaded(true); setLoading(false); return }
     let cancelled = false
     setLoading(true); setLoaded(false); setIncompleteError(null)
+    setCobertura(null); setCoberturaError(null)
     ;(async () => {
       try {
         const c = await getLatestApprovedCount(accountId, locationId)
@@ -64,6 +71,17 @@ export default function AvtSection({
         if (c) {
           const l = await listCountLines(c.id)
           if (!cancelled) setLines(l)
+          if (!c.isOpening) {
+            try {
+              const cob = await getConsumptionCoverage(c.id)
+              if (!cancelled) { setCobertura(cob); setCoberturaError(null) }
+            } catch (e) {
+              // Aislado, como avt_incomplete_raws: un fallo aquí no puede pasar
+              // por "cobertura completa". Se dice que no se sabe.
+              console.warn('[AvtSection] avt_consumption_coverage falló:', e)
+              if (!cancelled) setCoberturaError(e instanceof Error ? e.message : 'No se pudo medir la cobertura del consumo.')
+            }
+          }
           // Consumo no medible en la ventana de este conteo: del conteo aprobado
           // ANTERIOR (inicio) a este (fin). En apertura no hay desviación → vacío.
           if (!c.isOpening) {
@@ -178,6 +196,16 @@ export default function AvtSection({
           {health.noRecipe > 0 && <> {(health.negative > 0 || health.consumoIncompleto > 0) ? '' : ' '}{health.noRecipe} sin escandallo fiable.</>}
           {health.negative === 0 && health.consumoIncompleto === 0 && health.noRecipe === 0 && <> Sin avisos de dato.</>}
         </div>
+        {/* Cobertura del consumo: SIEMPRE, calculada, nunca fija. */}
+        {!isOpening && (
+          <div className="text-xs mt-2 pt-2 border-t border-border-default leading-relaxed">
+            {coberturaError
+              ? <span className="text-danger">No se pudo medir la cobertura del consumo: {coberturaError} Sin ella, ninguna desviación de aquí se puede leer como merma.</span>
+              : cobertura === null
+                ? <span className="text-text-tertiary">Midiendo la cobertura del consumo…</span>
+                : <span className="text-text-secondary">{textoCobertura(cobertura.periodo)}</span>}
+          </div>
+        )}
       </div>
 
       {isOpening ? (

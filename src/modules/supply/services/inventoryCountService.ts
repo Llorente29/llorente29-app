@@ -615,6 +615,11 @@ export async function getIncompleteConsumptionItems(
   return out
 }
 
+import {
+  PERIODO_VACIO, motivoSinCausa,
+  type Cobertura, type CoberturaArticulo, type CoberturaPeriodo,
+} from '@/modules/supply/lib/coberturaConsumo'
+
 export interface AvtCause {
   key: 'opening' | 'negative_theoretical' | 'consumo_incompleto' | 'no_recipe' | 'waste' | 'unexplained'
   label: string
@@ -804,6 +809,50 @@ export function classifyCauseV2(
   }
 }
 
+/**
+ * ENCARGO 31/08 punto 5 — el motor deja de proponer causas que no puede saber.
+ *
+ * Regla, en una frase: una causa que se apoya en EVIDENCIA POSITIVA (hay merma
+ * registrada, el teórico es negativo, el escandallo está sin revisar) se sostiene
+ * sola y pasa. Una causa que se apoya en la AUSENCIA de evidencia —«no hay merma
+ * registrada, luego se sirvió de más»— solo vale si de verdad lo hemos medido
+ * todo. Esas son exactamente las que el clasificador marca `confidence: 'low'`,
+ * así que el filtro no necesita una lista de casos: usa la confianza que el
+ * propio clasificador ya declara, y no se queda desactualizado cuando alguien
+ * añada una hipótesis nueva.
+ *
+ * Sin cobertura no se calla la fila (regla 7: el umbral ordena, no esconde): la
+ * fila sigue, con su desviación y sus euros. Lo que se sustituye es la CAUSA
+ * inventada por el hueco declarado.
+ */
+export function classifyCauseConCobertura(
+  line: InventoryCountLine,
+  isOpening: boolean,
+  ctx: CauseContext,
+  /** `null` = no se pudo medir. NO es sinónimo de "cobertura completa". */
+  cobertura: Cobertura | null,
+): AvtCauseV2 {
+  const base = classifyCauseV2(line, isOpening, ctx)
+  if (isOpening) return base
+  if (base.confidence !== 'low') return base
+
+  // FALLA CERRADO. Si la cobertura no se pudo medir, `cobertura` es null y NO
+  // se propone la hipótesis: no saber si medimos el consumo no es lo mismo que
+  // haber medido y salir limpio. El precedente es la propia AvtSection, que se
+  // niega a pintar salud "Buena" cuando su RPC de consumo no medible falla.
+  const motivo = cobertura === null
+    ? 'No puedo atribuirlo: no he podido medir cuánto de lo vendido en este periodo descontó stock.'
+    : motivoSinCausa(cobertura.porArticulo.get(line.recipeItemId), cobertura.periodo)
+  if (!motivo) return base
+
+  return {
+    reasonCode: 'otro',
+    label: 'No atribuible',
+    evidence: motivo,
+    confidence: 'high',   // alta confianza en que NO lo sabemos
+  }
+}
+
 // helper local (ya existe nf1 arriba; por si no, versión mínima)
 function fmtQtyHelper(v: number, unit: string | null): string {
   return `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(v)}${unit ? ` ${unit}` : ''}`
@@ -819,11 +868,63 @@ interface CauseContextRow {
   consumo_incompleto: boolean
 }
 
+interface CoverageRow {
+  recipe_item_id: string | null
+  lineas_tocan: number | null
+  lineas_descuentan: number | null
+  lineas_vendidas: number | null
+  lineas_con_consumo: number | null
+  lineas_sin_mapear: number | null
+  modif_vendidos: number | null
+  modif_sin_vinculo: number | null
+  modif_mudos: number | null
+}
+
+/**
+ * Cobertura real del consumo en la ventana del conteo (ENCARGO 31/08 punto 5).
+ * Una fila por artículo contado + UNA fila resumen con recipe_item_id nulo.
+ */
+export async function getConsumptionCoverage(countId: string): Promise<Cobertura> {
+  requireSupabase()
+  // Mismo cast puntual inline que el resto de RPCs nuevas: la función no está
+  // en database.ts hasta que se regeneren los tipos. Nunca `const rpc =
+  // supabase.rpc` suelto — pierde el `this` de supabase-js.
+  const { data, error } = await (supabase!.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    'avt_consumption_coverage', { p_count_id: countId },
+  )
+  if (error) throw new Error(`No se pudo medir la cobertura del consumo: ${error.message}`)
+
+  const porArticulo = new Map<string, CoberturaArticulo>()
+  let periodo: CoberturaPeriodo = PERIODO_VACIO
+  for (const r of (data ?? []) as CoverageRow[]) {
+    if (r.recipe_item_id) {
+      porArticulo.set(r.recipe_item_id, {
+        tocan: Number(r.lineas_tocan ?? 0),
+        descuentan: Number(r.lineas_descuentan ?? 0),
+      })
+    } else {
+      periodo = {
+        lineasVendidas: Number(r.lineas_vendidas ?? 0),
+        lineasConConsumo: Number(r.lineas_con_consumo ?? 0),
+        lineasSinMapear: Number(r.lineas_sin_mapear ?? 0),
+        modificadores: Number(r.modif_vendidos ?? 0),
+        modificadoresSinVinculo: Number(r.modif_sin_vinculo ?? 0),
+        modificadoresMudos: Number(r.modif_mudos ?? 0),
+      }
+    }
+  }
+  return { periodo, porArticulo }
+}
+
 /** Trae el contexto del periodo y clasifica cada línea del conteo (causa V2). */
 export async function classifyCountCauses(
   countId: string,
   lines: InventoryCountLine[],
   isOpening: boolean,
+  cobertura: Cobertura | null = null,
 ): Promise<Map<string, AvtCauseV2>> {
   requireSupabase()
   // La RPC es nueva y aún no está en los tipos generados de Supabase: se
@@ -860,7 +961,7 @@ export async function classifyCountCauses(
           usedInRecipes: false,
           consumoIncompleto: false,
         }
-    result.set(line.id, classifyCauseV2(line, isOpening, context))
+    result.set(line.id, classifyCauseConCobertura(line, isOpening, context, cobertura))
   }
   return result
 }
