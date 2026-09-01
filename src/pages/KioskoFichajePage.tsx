@@ -22,6 +22,7 @@ import {
   loadKioskoConfig, saveKioskoConfig, defaultKioskoConfig,
   coordsForLocation, distanceMeters,
 } from '../services/fichajeKiosko'
+import { mensajeDeFalloDeFichaje } from '../services/supabaseSync'
 
 type Step = 'select-employee' | 'enter-pin' | 'confirming' | 'warn-confirm' | 'success' | 'error'
 
@@ -167,7 +168,17 @@ export default function KioskoFichajePage() {
       entry = r.entry
     }
     if (mark) entry = { ...entry, address: mark }
-    await addClockEntry(selectedEmp.id, entry)
+    // Desde el 30/08 la escritura LANZA si la BBDD rechaza la fila. Sin este
+    // catch la pantalla se quedaria clavada en "Registrando..." — o, como hasta
+    // hoy, diria "registrada" sin que existiera el fichaje. Regla 8.
+    try {
+      await addClockEntry(selectedEmp.id, entry)
+    } catch (e) {
+      console.error('[kiosko] escritura rechazada:', e)
+      setResultMsg(mensajeDeFalloDeFichaje(e))
+      setStep('error')
+      return
+    }
     const verb = entry.type === 'entrada' ? 'Entrada' : 'Salida'
     setResultMsg(`${verb} registrada — ${selectedEmp.name}`)
     setStep('success')
