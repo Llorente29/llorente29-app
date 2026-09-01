@@ -179,6 +179,29 @@ async function checkAvailabilityPushLog(
 //    uno sin declarar avisa UNA VEZ AL DÍA, con debounce_kind por cierre —
 //    para que un cierre nuevo en otro local avise ya, sin quedar tapado por el
 //    debounce de otro.
+// ── DEUDA DECLARADA, NO ARREGLADA (Julio, 01/09) ──────────────────────────
+// `brand_closure.set_at` SE REINICIA EN CADA RECIERRE. Así que un cierre que se
+// abre y se recierra a diario NUNCA cumple las 24 h, y este vigía NO avisa de
+// él jamás.
+//
+// La prueba es del mismo cierre, hoy, en la misma fila:
+//     columna vieja `brand.closure_set_at` .... 29/08 12:13  ->  68,7 h
+//     fila real     `brand_closure.set_at` .... 01/09 08:33  ->   0,4 h
+//
+// O sea que el arreglo de hoy cambia un punto ciego por otro, y hay que decirlo:
+//   · ANTES: la columna vieja se quedaba congelada y avisaba para siempre de
+//     algo que ya no era verdad. Ese era el ruido, 96 correos al día.
+//   · AHORA: el reloj se pone a cero cada vez que alguien recierra, así que una
+//     marca que abre y cierra todos los días es invisible para este umbral.
+//
+// El de ahora es el error menos malo —callar de un caso concreto es mejor que
+// gritar 96 veces al día de uno falso— pero sigue siendo un error, y no está
+// arreglado. Arreglarlo pide medir OTRA COSA: no «cuánto lleva cerrada desde el
+// último recierre», sino cuánto tiempo ha estado cerrada en los últimos N días,
+// o desde cuándo no se sirve. Eso es un encargo aparte, no un umbral distinto.
+//
+// NO subir las 24 h creyendo que esto se arregla así: el problema no es el
+// número, es que la magnitud medida se reinicia sola.
 const INDEFINITE_CLOSURE_ALERT_HOURS = 24;
 const CLOSURE_DEBOUNCE_HOURS = 24;
 
