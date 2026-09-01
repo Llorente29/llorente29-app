@@ -116,23 +116,34 @@ Ver no es tocar.
 4. **«indefinido» → «sin fecha de reapertura».** `resume_at` null no es un dato que falta: es una
    de las duraciones que ofrece el propio selector («Hasta que reabra a mano»). El texto vive en
    `textoReapertura` y está probado.
-5. **Otros locales, en sección aparte y sin acción.** Bloque separado, etiquetado con el nombre
-   del local, sin botón, con el pie «Se gestionan desde su propio local».
+5. ~~**Otros locales, en sección aparte y sin acción.**~~ **RETIRADO por Julio el 01/09.**
+   Se construyó y se ha quitado. Ver abajo.
 
-### Regla 7, aplicada a los dos niveles
+### Lo que se creyó que decía la regla 7, y lo que dice de verdad (01/09)
 
-Esta pantalla tiene un aviso que **interrumpe** y un detalle que **se abre a propósito**, y la
-regla 7 los trata distinto:
+La primera versión de este encargo repartía la pantalla en dos niveles: el aviso que
+**interrumpe** filtraba por local, y el detalle que **se abre a propósito** enseñaba también los
+cierres de otros locales, etiquetados y sin botón, para «no esconder filas».
 
-- **`ClosureAnomalyAlarm` (interrumpe)** → el banner rojo que grita **filtra**: solo salta por los
-  olvidos de este local. Ahí filtrar es respeto por la atención de quien está en el pase; la
-  cocina de Alcalá no puede resolver —ni debe resolver— un olvido de Carabanchel.
-- **`ClosuresChip` + `ClosedBrandsCard` (se abren a propósito)** → **no ocultan ninguna fila.**
-  Lo de otros locales se ve, etiquetado, sin botón.
-- **El contador nunca miente en verde.** Si no hay nada cerrado aquí pero sí fuera, la píldora
-  **no desaparece**: se pinta en gris —«Aquí todo abierto · 2 marcas cerradas en otros locales»—
-  y se despliega a la lista. Sin nota al pie del tipo «y además hay N que no te enseño»: si hace
-  falta esa nota, el filtro está en el sitio equivocado.
+**Julio lo corrigió el 01/09 y tiene razón.** La regla 7 dice que una pantalla que el usuario abre
+A PROPÓSITO para ver algo no le esconde filas de eso que ha ido a ver. Pedidos no es esa pantalla:
+la mira quien está cocinando, y no la ha abierto para auditar la cuenta. Lo del otro local ahí no
+es información, es **ruido que compite con lo suyo**.
+
+**La regla buena, y la que manda a partir de ahora:**
+
+> Una pantalla de servicio enseña lo del local que la mira, y nada más.
+
+Con un local seleccionado, Pedidos no pinta ni el bloque gris ni el aviso «N cierres olvidados en
+otro local». Ni como información.
+
+Y no esconde nada, porque el sitio donde se ve todo sigue existiendo:
+
+- **Consolidado** (sin local concreto): `partirPorLocal(filas, null)` mete TODO en `aqui`, así que
+  la vista que se abre justamente para verlo todo lo sigue viendo todo, con sus botones.
+- **Cocina → Disponibilidad** y la **tablet**: `ClosedBrandsCard` conserva el bloque, ahora tras
+  una prop OBLIGATORIA `mostrarOtrosLocales`. Sin default: quién lo enseña y quién no es una
+  decisión de para qué sirve cada pantalla, y un default la tomaría en silencio.
 
 ---
 
@@ -142,15 +153,16 @@ regla 7 los trata distinto:
 |---|---|---|
 | 1 | Alcalá NO lista los 2 cierres de Carabanchel como propios; Carabanchel sí | `partirPorLocal` con los ids reales de producción: 6 casos en `tests/unit/modules/kds/closureScope.test.ts`, incluido el caso mixto y el «ninguna fila se pierde ni se duplica» |
 | 2 | Reabrir desde Carabanchel reabre SOLO Carabanchel, y el empuje lleva ese `location_id` | El front pasa `b.location_id` de la fila a `set_brand_status(p_location_id)`. De ahí en adelante es el núcleo del 29/08, ya en producción: `_set_brand_closure_core` borra `where brand_id = … and location_id = v_loc` y manda `'location_id', v_loc` a `availability-dispatch`. **Comprobación en vivo pendiente de Julio** (pulsar Reabrir con Carabanchel seleccionado y verificar que la fila desaparece de `brand_closure`) |
-| 3 | No existe camino que reabra otro local | Tabla 1.d: los cinco caminos, con el local que viaja en cada uno. Los bloques de otros locales no tienen `onClick` |
+| 3 | No existe camino que reabra otro local | Tabla 1.d: los cinco caminos, con el local que viaja en cada uno. Desde el 01/09 en Pedidos ni siquiera se pintan las filas de otros locales, así que no hay nada que pulsar |
 | 4 | Barrido documentado | Este fichero |
 | 5 | build + tsc + lint limpios | `tsc -b` sin salida · `vite build` ✓ en 9,80 s · `eslint` sobre los ficheros tocados: **los mismos 3 hallazgos que ya había en main** (dos en `OrdersFeed`, uno en `ClosedBrandsCard`, todos preexistentes y solo desplazados de línea), **cero nuevos**. Suite: 13 tests nuevos, todos verdes; los 6 fallos restantes son los mismos que fallan en main |
 
 ### La comprobación que Julio tiene que hacer en pantalla
 
-1. Selector en **Foodint Alcalá** → Pedidos. La píldora **no** dice «2 marcas cerradas». Dice
-   «Aquí todo abierto · 2 marcas cerradas en otros locales», en gris. Al desplegar: las dos, con
-   «Foodint Carabanchel» al lado y **sin botón Reabrir**.
+1. Selector en **Foodint Alcalá** → Pedidos. **No se pinta nada de cierres** si Alcalá no tiene
+   ninguno: ni píldora gris, ni bloque de otros locales, ni aviso de olvidos de fuera.
+   *(Actualizado el 01/09: antes esto decía «Aquí todo abierto · 2 marcas cerradas en otros
+   locales». Ese estado ya no existe.)*
 2. Selector en **Foodint Carabanchel** → Pedidos. Píldora roja: «2 marcas cerradas · sin fecha de
    reapertura». Al desplegar: las dos con «Reabrir en Foodint Carabanchel».
 3. Pulsar Reabrir en Milanesa House → sale «¿Reabrir Milanesa House en Foodint Carabanchel?».

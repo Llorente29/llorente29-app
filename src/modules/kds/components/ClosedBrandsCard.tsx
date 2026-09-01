@@ -21,6 +21,8 @@
 // bloques y no se pueden confundir:
 //   · «cerradas aquí»  → con botón, y el botón dice el local en la confirmación.
 //   · «en otros locales» → SOLO LECTURA, etiquetado con el nombre del local.
+//     Solo si `mostrarOtrosLocales`. Pedidos lo apaga: es pantalla de servicio
+//     y enseña lo del local que la mira, nada más (Julio, 01/09).
 //     No se ocultan (regla 7: una pantalla que se abre a propósito no esconde
 //     filas) pero no se tocan desde aquí: ver no es tocar.
 //
@@ -61,6 +63,18 @@ interface Props {
    * (consolidado en Disponibilidad web, o tablet: ahí el token ya acota).
    */
   locationId: string | null
+  /**
+   * ¿Se pinta el bloque de solo lectura con los cierres de OTROS locales?
+   *
+   * OBLIGATORIA y sin default, como `locationId` y por lo mismo: la respuesta
+   * depende de para qué es la pantalla, y un default la decidiría en silencio.
+   *   · Pedidos (vía ClosuresChip) -> false. Pantalla de servicio: enseña lo
+   *     del local que la mira y nada más (corrección de Julio, 01/09).
+   *   · Cocina → Disponibilidad y tablet -> true. Ahí sí se abre a propósito
+   *     para gestionar cierres, y en la tablet el token ya acota, así que el
+   *     bloque sale vacío de todas formas.
+   */
+  mostrarOtrosLocales: boolean
   dark?: boolean
 }
 
@@ -68,7 +82,7 @@ function brandsFingerprint(brands: ClosedBrand[]): string {
   return brands.map(b => `${filaId(b)}:${b.resume_at ?? ''}`).sort().join(',')
 }
 
-export default function ClosedBrandsCard({ accountId, token, locationId, dark = false }: Props) {
+export default function ClosedBrandsCard({ accountId, token, locationId, mostrarOtrosLocales, dark = false }: Props) {
   const [aqui, setAqui] = useState<ClosedBrand[]>([])
   const [otros, setOtros] = useState<ClosedBrand[]>([])
   const [loading, setLoading] = useState(true)
@@ -134,7 +148,8 @@ export default function ClosedBrandsCard({ accountId, token, locationId, dark = 
     setBusyId(null)
   }
 
-  if (loading || (aqui.length === 0 && otros.length === 0)) return null
+  const otrosVisibles = mostrarOtrosLocales ? otros : []
+  if (loading || (aqui.length === 0 && otrosVisibles.length === 0)) return null
 
   const t = themeCls(dark ? 'dark' : 'light')
 
@@ -194,16 +209,16 @@ export default function ClosedBrandsCard({ accountId, token, locationId, dark = 
 
       {/* Otros locales: se ven, no se tocan. Sin botón a propósito — quien
           decide reabrir Carabanchel es Carabanchel. */}
-      {otros.length > 0 && (
+      {otrosVisibles.length > 0 && (
         <div className={aqui.length > 0 ? `mt-3 pt-3 border-t ${t.dividerLight}` : ''}>
           <div className="flex items-center gap-2 mb-2">
             <Eye size={15} className={t.textMuted} />
             <span className={`text-xs font-semibold uppercase tracking-wide ${t.textSecondary}`}>
-              {textoOtrosLocales(otros.length)}
+              {textoOtrosLocales(otrosVisibles.length)}
             </span>
           </div>
           <div className="flex flex-col gap-1.5">
-            {otros.map((b) => (
+            {otrosVisibles.map((b) => (
               <div key={filaId(b)} className="flex items-center gap-2 min-w-0">
                 <span className={`w-2 h-2 rounded-full shrink-0 ${dark ? 'bg-zinc-600' : 'bg-stone-300'}`} />
                 <span className={`text-sm truncate ${t.textSecondary}`}>{b.brand_name}</span>
