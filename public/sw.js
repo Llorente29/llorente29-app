@@ -1,8 +1,16 @@
 // public/sw.js
 // Service worker de Folvy — instalable + anti-bundle-viejo.
 //
-// Bump de versión para forzar byte-diff y que el navegador instale este SW.
-const SW_VERSION = 'folvy-2026-07-03-free-item-gift';
+// LA VERSIÓN LA PONE EL BUILD. El marcador de abajo lo sustituye
+// build/folvyVersionPlugin.ts en cada `vite build`, así que este fichero cambia
+// de bytes en cada despliegue y el navegador instala el SW nuevo.
+//
+// Antes esto era una constante a mano con un comentario que pedía «bump de
+// versión». Se quedó en el 3 de julio mientras pasaban 124 commits por main:
+// 124 despliegues con un sw.js idéntico y el mecanismo de renovación apagado.
+// NO lo devuelvas a una cadena escrita a mano: el build falla si falta el
+// marcador, y falla a propósito.
+const SW_VERSION = '__FOLVY_BUILD_ID__';
 
 // Objetivo: cumplir el requisito de Chrome/Android para que la app sea
 // INSTALABLE (handler 'fetch' que llama de verdad a event.respondWith), y a la

@@ -26,6 +26,7 @@ import {
 import OrderCard from './OrderCard'
 import KitchenDayBannerBar from './KitchenDayBanner'
 import ClosuresChip from '@/modules/kds/components/ClosuresChip'
+import { declaraTrabajoEnCurso } from '@/services/trabajoEnCurso'
 import ClosureAnomalyAlarm from '@/modules/kds/components/ClosureAnomalyAlarm'
 
 const POLL_MS = 10_000
@@ -218,6 +219,20 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
     curso: orders.filter(o => FILTERS.curso(o.order_status)).length,
     incidencias: orders.filter(o => FILTERS.incidencias(o.order_status)).length,
   }), [orders])
+
+  // 01/09 — «NUNCA EN MITAD DE UN PEDIDO». La tablet se recarga sola cuando hay
+  // versión nueva, y esta es la pantalla que sabe si es buen momento. Declara
+  // lo que tiene abierto; el vigía de versión solo pregunta, no sabe qué es un
+  // pedido.
+  //
+  // Se cuentan los NUEVOS y los EN CURSO. Las incidencias NO: una puede
+  // quedarse abierta horas esperando a una plataforma, y contarla bloquearía la
+  // recarga para siempre — que es como no tener recarga.
+  useEffect(() => {
+    const clave = `orders:${locationId ?? 'consolidado'}`
+    declaraTrabajoEnCurso(clave, counts.nuevos + counts.curso)
+    return () => declaraTrabajoEnCurso(clave, 0)
+  }, [locationId, counts.nuevos, counts.curso])
 
   const filtered = useMemo(
     () => orders.filter(o => FILTERS[filter](o.order_status)).sort(sortOrders),

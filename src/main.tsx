@@ -7,6 +7,7 @@ import { CapacitorUpdater } from '@capgo/capacitor-updater'
 import { AppProvider } from './context/AppContext'
 import App from './App'
 import UpdateGate from './components/UpdateGate'
+import FranjaEntorno from './shell/version/FranjaEntorno'
 import RootErrorBoundary from './components/RootErrorBoundary'
 import './index.css'
 // Worker de impresión nativo (app Capacitor): reclama la cola print_job por
@@ -84,6 +85,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     {/* Cortafuegos global: un crash de render en cualquier punto muestra un
         fallback con "Recargar" en vez de dejar la pantalla en blanco. */}
     <RootErrorBoundary>
+      {/* 01/09 — La etiqueta de «esto NO es producción». Va aquí arriba del
+          todo, FUERA de <App/> y fuera del Shell, a propósito: tiene que salir
+          en TODAS las rutas —tablet, kiosco, login, tienda— porque cualquiera
+          de ellas puede estar servida desde una preview contra la base de
+          datos real, que es exactamente lo que pasó. En producción no pinta
+          nada. */}
+      <FranjaEntorno />
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AppProvider>

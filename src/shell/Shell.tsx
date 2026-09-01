@@ -38,6 +38,7 @@ import { listAccounts } from '@/modules/multitenancy/services/accountsService'
 import type { Account } from '@/types/multitenancy'
 import { FolvyAIBubble } from '../modules/folvy-ai/components/FolvyAIBubble'
 import PendientesPage from '../modules/pendientes/PendientesPage'
+import AvisoNuevaVersion from './version/AvisoNuevaVersion'
 import { usePendingBoard } from '../modules/pendientes/hooks/usePendingBoard'
 
 const SETTINGS_BASE = 'configuracion'
@@ -286,6 +287,14 @@ export default function Shell() {
           flotante (lo abre el héroe de la barra); en escritorio, su botón
           flotante de siempre, ahora gobernado por el mismo estado. */}
       <FolvyAIBubble open={aiOpen} onOpenChange={setAiOpen} hideLauncher={isMobile} module={activeModule?.id} />
+
+      {/* 01/09: el aviso de versión nueva. Vive en el Shell porque el problema
+          no era de ninguna pantalla en concreto: la SPA pide index.html UNA vez
+          y nada la obliga a volver a pedirlo, así que sin esto nadie se entera
+          de un despliegue hasta que cierra la pestaña. En oficina AVISA y deja
+          decidir; la recarga sola es cosa de la tablet, que no tiene a nadie
+          delante (ver TabletStationRoute). */}
+      <AvisoNuevaVersion />
 
       {/* R1.2/R1.3b: barra inferior solo en móvil, con la IA como héroe central. */}
       {isMobile && (
