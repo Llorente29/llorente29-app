@@ -58,6 +58,7 @@ export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
  * hasta que el defecto sea exactamente esas seis.
  */
 export const LAYOUT_POR_DEFECTO: string[] = [
+  'ventas.ayer',                   // §1.1 de la maqueta
   'kitchen.productos_86',          // §1.4 de la maqueta
   ...SHELL_HOME_CARDS.map(c => c.key),
 ]

@@ -7,14 +7,13 @@
 // ordenar, y decir «6 días» cuando son 6— y así se prueba sin montar React.
 
 import type { SoldOutRow } from '../services/availabilityService'
+import { diasNaturalesEntre } from '@/lib/fechas'
 
 export interface ResumenAgotados {
   total: number
   filas: { etiqueta: string; valor: string }[]
   nota?: string
 }
-
-const DIA_MS = 86_400_000
 
 // ── DÍAS NATURALES, NO HORAS TRANSCURRIDAS (02/09) ─────────────────────────
 // La primera versión hacía `floor((ahora - set_at) / 24h)`. Medido con la fila
@@ -23,45 +22,18 @@ const DIA_MS = 86_400_000
 // día habría pasado a 5 sola.
 //
 // El problema no es el número, es QUE BAILA: la misma pantalla, el mismo
-// agotado, dos cifras distintas según la hora a la que se mire, y el salto
-// ocurre a las 12:17 porque a esa hora se agotó — un instante que no significa
-// nada para quien lo lee. Alguien iba a discutirla, y con razón.
+// agotado, dos cifras según la hora, y el salto ocurre a las 12:17 porque a esa
+// hora se agotó — un instante que no significa nada para quien lo lee.
 //
-// El criterio es DÍAS NATURALES COMPLETOS: la diferencia entre el día del
-// calendario en que se agotó y el de hoy. Cambia a medianoche, que es cuando
-// una persona espera que cambie, y coincide con lo que dice la base de datos
-// —`(now() at time zone 'Europe/Madrid')::date - (set_at at time zone ...)::date`—
-// así que la pantalla y una consulta a mano dan lo mismo.
-//
-// EN HORA DE MADRID, no en la del navegador. `set_at` está en UTC (regla 4) y
-// un portátil en otro huso contaría un día distinto que la base. Está fijado a
-// Europe/Madrid; la fuente correcta el día que haya un cliente fuera de España
-// es `accounts.timezone`, que ya existe y ya usa `sales_dashboard`.
-const ZONA = 'Europe/Madrid'
+// El criterio es DÍAS NATURALES COMPLETOS y vive en src/lib/fechas.ts, que es
+// donde está el huso del negocio. Aquí solo se envuelve para tolerar el null.
 
-/** El día del calendario en Madrid, como 'YYYY-MM-DD'. */
-function diaNatural(d: Date): string {
-  // 'sv-SE' da exactamente 'YYYY-MM-DD', que es lo que hace falta para restar.
-  return d.toLocaleDateString('sv-SE', { timeZone: ZONA })
-}
-
-/**
- * Días naturales completos entre `iso` y `ahora`, en hora de Madrid.
- * null si la fecha falta o no es una fecha.
- */
+/** Días naturales completos desde `iso`. null si falta o no es una fecha. */
 export function diasDesde(iso: string | null, ahora: number = Date.now()): number | null {
   if (!iso) return null
   const t = new Date(iso)
   if (Number.isNaN(t.getTime())) return null
-  // Se restan los DÍAS, no los instantes: se reinterpretan como mediodías UTC
-  // para que un cambio de hora (marzo y octubre) no meta ni quite un día.
-  const aMedioDiaUtc = (ymd: string) => {
-    const [y, m, d] = ymd.split('-').map(Number)
-    return Date.UTC(y, m - 1, d, 12)
-  }
-  return Math.round(
-    (aMedioDiaUtc(diaNatural(new Date(ahora))) - aMedioDiaUtc(diaNatural(t))) / DIA_MS,
-  )
+  return diasNaturalesEntre(t, new Date(ahora))
 }
 
 export function resumeAgotados(filas: SoldOutRow[], ahora: number = Date.now()): ResumenAgotados {

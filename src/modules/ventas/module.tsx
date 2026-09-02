@@ -27,6 +27,7 @@ import RecomendacionesPage from '@/pages/RecomendacionesPage'
 import CedidasPage from '@/pages/CedidasPage'
 import PrediccionPersonalPage from '@/pages/PrediccionPersonalPage'
 import ZonasPedidoPage from '@/pages/ZonasPedidoPage'
+import VentasDeAyer from '@/modules/ventas/home/VentasDeAyer'
 
 export const ventasModule: ModuleDefinition = {
   id: 'ventas',
@@ -69,5 +70,19 @@ export const ventasModule: ModuleDefinition = {
 
   publishes: [
     { key: 'ventas.sale.imported', description: 'Se han importado ventas de un TPV' },
+  ],
+
+  // ── TARJETAS QUE ESTE MÓDULO APORTA AL INICIO ────────────────────────────
+  // §1.1 de la maqueta aprobada. Vive aquí y no en el shell porque su dato son
+  // ventas: el shell no tiene por qué saber cortar un día de servicio.
+  homeCards: [
+    {
+      key: 'ventas.ayer',
+      title: 'Ventas de ayer',
+      size: 'sm',
+      source: 'sale',
+      drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' },
+      component: VentasDeAyer,
+    },
   ],
 }

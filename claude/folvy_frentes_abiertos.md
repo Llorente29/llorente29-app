@@ -81,3 +81,28 @@ que la tarjeta del 86 saldría bajo «Folvy Kitchen» en vez de «Canales».
 
 **Decidido:** el grupo pasa a ser un atributo declarado de cada tarjeta, no el
 módulo que la aporta. Pendiente de ejecutar.
+
+---
+
+## 5 · El huso está fijado a Madrid en vez de salir de `accounts.timezone`
+**Abierto:** 02/09/2026 · **No molesta hoy; con cliente fuera de España, sí**
+
+`set_at`, `sold_at` y todo lo demás están en UTC (regla 4). Para contar días
+naturales o cortar un día de ventas hay que convertir a la hora del negocio, y
+ahora mismo eso está escrito como la constante `'Europe/Madrid'` en
+`src/lib/fechas.ts`.
+
+**Por qué no es un detalle:** `accounts.timezone` YA EXISTE y ya lo usa
+`sales_dashboard` —`coalesce(timezone, 'Europe/Madrid')`—, así que hoy conviven
+dos criterios: el servidor pregunta a la cuenta y el front supone Madrid. Con
+todos los locales en Madrid dan lo mismo y nadie lo nota; con un cliente en
+Canarias son una hora, y el 31 de diciembre eso es un día entero y un cierre
+contable.
+
+**Lo que hace falta:** que la cuenta activa exponga su huso al front —hoy no
+viaja en el contexto— y que `src/lib/fechas.ts` lo reciba en vez de suponerlo.
+La constante está en UN solo fichero a propósito, para que ese día sea un
+cambio y no una búsqueda.
+
+**De dónde sale:** de arreglar el conteo de días del 86 el 02/09, donde el
+cálculo por horas transcurridas daba 4 y la base decía 5.
