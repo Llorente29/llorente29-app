@@ -230,3 +230,51 @@ por el correo.
 **Y una pieza de la (2) que cuesta minutos y se puede hacer aparte:** que el
 botón «Escanear» no esté cuando la cámara no puede funcionar. Un botón que no
 puede cumplir es peor que ningún botón.
+
+---
+
+## 8 · `availability_event` no guarda el local en el 84 % de los cierres de marca
+**Abierto:** 02/09/2026 · **El historial de disponibilidad no responde por local**
+
+Foodint se opera POR LOCAL. Un historial de disponibilidad que no sabe en qué
+local pasó cada cosa no responde a la única pregunta que se le hace.
+
+### Medido sobre todo el histórico de Foodint
+
+| scope | eventos | sin local | último nulo | último evento |
+|---|---|---|---|---|
+| **brand** | 62 | **52 (84 %)** | 29/08 | 02/09 |
+| product | 810 | 20 | 31/08 | 02/09 |
+| modifier_option | 10 | 0 | — | 01/09 |
+| location | 10 | 0 | — | 02/09 |
+
+**Lo que costó hoy:** la línea del porqué de la tarjeta «Ventas · esta semana»
+tuvo que descartar 19 de los 28 eventos de las dos últimas semanas. Sin local
+no se puede decir «en los dos locales» sin suponer a cuáles afectó, y suponer
+es inventar. La frase literal de la maqueta —«El martes Meraki Pita estuvo
+cerrada en los dos locales»— no es reproducible con este historial.
+
+### Dos matices que cambian el trabajo, y hay que decirlos
+
+1. **En `product`, un `location_id` nulo puede ser LEGÍTIMO.** En
+   `product_availability`, null significa «todos los locales» —la tienda lo lee
+   así: `(pa.location_id = p_location_id or pa.location_id is null)`—. Así que
+   los 20 nulos de product no son necesariamente un fallo. Los de **brand** sí:
+   `_set_brand_closure_core` recorre `p_location_ids` y escribe SIEMPRE un
+   local, así que un nulo ahí viene de otro camino de escritura.
+
+2. **Parece tapado desde el 30/08**, pero NO está confirmado. Los 10 eventos de
+   marca posteriores al 29/08 llevan local. Eso es compatible con que se
+   arreglara el camino… y también con que nadie lo haya usado desde entonces.
+   Diez eventos en cuatro días no distinguen una cosa de la otra.
+
+### Lo que hay que hacer, en este orden
+
+1. **Averiguar qué camino escribe `scope='brand'` sin local**, y si sigue vivo.
+   `_set_brand_closure_core` no es: hay otro, probablemente el anterior al
+   30/08. Mientras no se sepa cuál, no se puede decir que esté tapado.
+2. **Taparlo**, o —si el nulo tiene que significar «todas» también en brand—
+   escribirlo explícito y documentarlo, para que el historial sea legible sin
+   adivinar.
+3. **Los 52 eventos ya escritos no se recuperan.** Esa parte del historial está
+   perdida y conviene saberlo antes de construir un informe encima.
