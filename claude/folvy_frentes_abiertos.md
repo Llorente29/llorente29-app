@@ -312,8 +312,29 @@ cerrada en los dos locales»— no es reproducible con este historial.
 
 ---
 
-## 9 · «% personal sobre ventas» — DECIDIDO: coste de empresa
-**Abierto:** 02/09/2026 · **Decidido por Julio el 02/09** · Pendiente de construir
+## 9 · «% personal sobre ventas» — CONSTRUIDA, pero SIN EL DATO PARA CALCULAR
+**Decidido y construido el 02/09** · **Bloqueado por un campo vacío en la plantilla**
+
+> **Los SEIS empleados activos de Foodint tienen `employer_ss_annual` a NULL.**
+> Ninguno. Y uno —Keilymar— tiene además `salary` a 0.
+
+La tarjeta está hecha y enchufada, y **no da número**: dice qué falta y a quién.
+En cuanto alguien rellene la seguridad social de la plantilla, empieza a
+funcionar sola, sin tocar código.
+
+**Por qué no se rellenó con el bruto y ya:** habría salido un porcentaje del
+orden de un 30 % más bajo del real, o sea diciendo que el negocio va mejor de lo
+que va — y con ese número se decide si se contrata. Es literalmente lo que Julio
+prohibió. Estimar la seguridad social con un porcentaje típico era la otra
+salida y es peor: inventar un dato y darle cara de medido.
+
+**Y basta UNO sin dato para invalidar el porcentaje:** sumar el coste de cinco
+personas y dividirlo entre las ventas de seis da un número más bajo que el real,
+y más bajo es justo la dirección que engaña.
+
+**Lo que hay que hacer para desbloquearla:** rellenar `employer_ss_annual` (y el
+`salary` de Keilymar) en la ficha de cada empleado. Es dato de gestoría, no de
+desarrollo.
 
 **La decisión:** el coste es **coste de empresa** — `salary` + `employer_ss_annual`
 — no el salario bruto.
@@ -328,13 +349,29 @@ avisa de que lo está diciendo.
 de empresa». Una cifra de la que hay que preguntar cómo está hecha ya ha fallado
 — si hay que preguntar, la respuesta llega tarde o no llega.
 
-**Lo que queda por construir (4 h):** horas de `clock_entries` × coste/hora
-desde `employees`, contra ventas de `sale`, en el día del negocio.
+**Cómo está hecha:** horas de `team_worked_shifts` —la fuente canónica, para no
+dar dos cifras distintas de las mismas horas— × coste/hora desde `employees`,
+contra ventas de `sale`, en la semana del negocio. `salary` y
+`employer_ss_annual` son ANUALES: 22.589,76 € con 40 h/semana es un salario de
+convenio al año.
 
 ---
 
-## 10 · «Puntos de pedido» — DECIDIDO: lo calcula el sistema, del consumo
-**Abierto:** 02/09/2026 · **Decidido por Julio el 02/09** · Pendiente de construir
+## 10 · «Puntos de pedido» — DECIDIDO, y DELIBERADAMENTE APLAZADO
+**Decidido el 02/09** · **NO SE CONSTRUYE TODAVÍA, y esto no es un olvido**
+
+> **NO LA COJAS CREYENDO QUE ESTÁ LISTA.** Está decidida y sus guardas están
+> escritas, pero construirla hoy es construir algo que empieza a servir dentro
+> de un mes.
+>
+> **La razón, medida:** el historial de agotados arranca el 30/07 (ver más
+> abajo). Con cinco semanas, la guarda 1 —excluir los días agotados del consumo
+> medio— apenas tiene de dónde excluir, y la tarjeta llevaría puesta casi todo
+> el rato la coletilla «calculado sobre 28 días, que es todo el historial
+> disponible». Un punto de pedido así sale flojo y con cara de provisional.
+>
+> **Cuándo cogerla:** cuando el historial dé para dos o tres meses. Entonces la
+> misma tarjeta, con el mismo código, sale sólida. El techo se despega solo.
 
 **La decisión:** el punto de pedido lo **calcula el sistema** a partir del
 consumo, y **se recalcula solo**. No un campo que alguien rellena artículo a

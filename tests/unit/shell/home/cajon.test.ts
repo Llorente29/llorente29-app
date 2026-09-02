@@ -120,21 +120,22 @@ describe('el catálogo aprobado', () => {
   // grupo Ventas queda entero (5 de 5) y Team a falta de dos.
   // Quinto lote: «Sin fichar teniendo turno» cierra Team 5 de 5, y con ella el
   // grupo de las que se miran a las ocho de la mañana.
-  it('quince cableadas y seis P2', () => {
-    expect(catalogo.filter(c => c.component != null)).toHaveLength(15)
-    expect(catalogo.filter(c => c.component == null)).toHaveLength(6)
+  it('dieciséis cableadas y cinco P2', () => {
+    expect(catalogo.filter(c => c.component != null)).toHaveLength(16)
+    expect(catalogo.filter(c => c.component == null)).toHaveLength(5)
   })
 
   // Ventas queda entero. Team NO: le falta «% personal sobre ventas», que está
   // DECIDIDA (frente 9: coste de empresa) pero sin construir. La prueba lo fija
   // para que nadie diga «Team completo» sin mirar — que es lo que hice yo al
   // proponerla.
-  it('Ventas está completo; en Team solo falta la que espera al frente 9', () => {
+  // Ahora SÍ: Ventas y Team completos, 5 de 5 cada uno.
+  it('Ventas y Team están completos', () => {
     const g = agrupadoPorGrupo(catalogo)
     const sinCablear = (n: string) =>
       g.find(x => x.grupo === n)!.tarjetas.filter(c => c.component == null).map(c => c.key)
     expect(sinCablear('Ventas')).toEqual([])
-    expect(sinCablear('Team')).toEqual(['personal.pct_sobre_ventas'])
+    expect(sinCablear('Team')).toEqual([])
   })
 
   // Si alguien añade una tarjeta y olvida el grupo, cae en «Otras» y esto la

@@ -43,6 +43,7 @@ import Cuadrantes from '@/modules/personal/home/Cuadrantes'
 import EnCocinaAhora from '@/modules/personal/home/EnCocinaAhora'
 import BolsaHoras from '@/modules/personal/home/BolsaHoras'
 import SinFichar from '@/modules/personal/home/SinFichar'
+import PersonalSobreVentas from '@/modules/personal/home/PersonalSobreVentas'
 
 export const personalModule: ModuleDefinition = {
   id: 'personal',
@@ -101,6 +102,13 @@ export const personalModule: ModuleDefinition = {
   // ── TARJETAS QUE ESTE MÓDULO APORTA AL INICIO ────────────────────────────
   // §1.6 de la maqueta. Sin cifra grande: una fila por local con su estado.
   homeCards: [
+    {
+      key: 'personal.pct_sobre_ventas', title: '% personal sobre ventas',
+      grupo: 'Team', size: 'sm', source: 'clock_entries', requiredRole: 'manager',
+      drill: { ruta: '/personal/informes-analitica', etiqueta: 'Abrir Team · Informes →' },
+      component: PersonalSobreVentas,
+    },
+
     {
       key: 'personal.sin_fichar_con_turno', title: 'Sin fichar teniendo turno',
       grupo: 'Team', size: 'sm', source: 'clock_entries', requiredRole: 'manager',
