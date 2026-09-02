@@ -1,5 +1,38 @@
 # Frentes abiertos
 
+## ⛔ DOS HERRAMIENTAS QUE NO SIRVEN COMO PRUEBA — leer antes de medir nada
+
+Las dos se usaron el 02/09 para sostener una conclusión, y las dos la sostenían
+mal. Están arriba para que nadie las vuelva a usar como evidencia sin leer esto.
+
+### 1 · `pg_stat_statements` NO VE DENTRO DE LAS FUNCIONES
+
+`pg_stat_statements.track = 'top'` *(comprobado)*: las sentencias del cuerpo de
+una función **no se registran**. Que una tabla no aparezca ahí NO significa que
+nadie la haya tocado.
+
+**La demostración:** `social_n2_usage` tiene **173 incrementos** hechos por
+`claim_n2_budget`, y en `pg_stat_statements` **no aparece ni uno**.
+
+*Cuándo sí vale:* solo si se ha probado aparte que **ninguna función, vista,
+trigger o cron nombra la tabla** — entonces no hay cuerpo donde esconder la
+llamada. Esa comprobación es la que hay que hacer; `pg_stat_statements` sola, no.
+
+### 2 · LOS CONTADORES DE `pg_stat_user_tables` NO CUBREN LA VIDA DE LA BASE
+
+`n_tup_ins`, `n_tup_upd`, `n_tup_del`, `seq_scan` se pierden y **no avisan de que
+se perdieron**. `pg_stat_database.stats_reset` a NULL **no** garantiza que los
+contadores por tabla estén completos.
+
+**La demostración, aritmética:** `social_n2_usage` tiene **40 filas** y
+**`n_tup_ins = 6`**. Seis inserciones no crean cuarenta filas.
+
+*Consecuencia:* «`n_tup_upd = 0`, luego nadie ha escrito nunca» **no es una
+medida**, es la lectura de un contador que no cubre lo que se afirma. Y
+«`seq_scan = 0`, luego nunca se ha leído» vale lo mismo.
+
+---
+
 Lo que se ha encontrado, se ha medido y NO se ha arreglado, con la razón por la
 que no. No es una lista de deseos: cada entrada tiene su medida y su fecha, y
 sale de aquí cuando se cierra o cuando Julio decide que no se cierra —y
@@ -1323,3 +1356,108 @@ al mes siguiente.
 rama alta, máximo 33,1 %. Que hoy no salte por arriba es lo correcto. Lo que ya
 no es cierto es que no **pueda**.
 
+
+
+## 22 · El food cost del pasado SE REESCRIBE SOLO — B44, medido y confirmado
+**Abierto:** 02/09/2026 · **La medida es de agosto CERRADO**
+
+`food_cost_dashboard` lee `recipe_item.computed_cost`, **la columna viva**. Eso
+no es una inferencia, está en la definición de la función. Lo que había que
+medir es cuánto ha derivado — y la respuesta es que no es teórico.
+
+**Agosto cerrado, 3.592 líneas comparables** (producto, con los dos costes,
+excluyendo las que llevan modificadores o son combos, para que lo que quede sea
+deriva y no diferencia estructural):
+
+| | |
+|---|---:|
+| Líneas que **difieren** entre coste congelado y coste vivo | **2.575 (71,7 %)** |
+| Suma **congelada** (lo que costó cuando se vendió) | 12.601,91 € |
+| Suma **viva** (lo que la tarjeta cuenta hoy) | 11.914,20 € |
+| **Deriva** | **−687,71 € · −5,46 %** |
+| Recetas tocadas después de costear la línea | 3.532 de 3.592 |
+
+**El food cost de agosto que enseña la tarjeta hoy no es el food cost de agosto.**
+Es el de agosto recalculado a precios de hoy, y volverá a moverse cada vez que
+suba un proveedor, sin que nadie toque nada y sin nada con qué compararlo.
+
+### Y hay una trampa en el agregado, que es lo que más conviene saber
+
+A nivel de mes, las dos cifras casi coinciden: la RPC da **17.056 €** y la suma
+congelada de todas las líneas de producto da **16.957 €** — **99 € de diferencia,
+un 0,6 %**.
+
+**Eso NO es tranquilidad, es compensación.** Los dos agregados no cuentan la
+misma población: el congelado incluye combos (el padre lleva la suma de sus
+hijos) e impactos de modificadores; el vivo incluye las líneas `combo_item`
+directamente y deja fuera los modificadores, que no tienen receta. Que se
+crucen en 99 € es casualidad. **Las líneas se mueven un 5,46 %; el total parece
+quieto.** Quien mire solo el total concluirá que no pasa nada.
+
+### Por qué esto asciende `recipe_item_version`
+
+Existe la tabla para hacerlo bien —`valid_from`, `valid_to`, `computed_cost`— y
+tiene **0 filas**. Sin ella **no se puede reconstruir qué era el food cost de
+agosto**: el dato de entonces no está guardado en ninguna parte. Deja de ser un
+detalle de las 473 líneas que no se rellenaron y pasa a ser lo que impide
+arreglar esto.
+
+**Lo que NO se hace:** cambiar la RPC para que lea el coste congelado. Sería
+peor: `sale_line.computed_cost` cubre 4.211 de 4.786 líneas de producto y ninguna
+línea `combo_item`, así que el numerador se quedaría cojo. El arreglo es llenar
+el histórico, no cambiar de columna coja.
+
+---
+
+## 23 · Un contador mutable no se puede auditar — B43
+**Abierto:** 02/09/2026 · **No urgente, y es la diferencia entre poder responder y no poder**
+
+La forense de `social_n2_usage` terminó en «no hay evidencia de manipulación, y
+no se puede demostrar que no la hubo». Se cerró la puerta (F0.5), pero **el
+arreglo no era de permisos, era de forma**.
+
+`social_n2_usage` guarda un `count` que se sobrescribe. Un `UPDATE` malicioso y
+un incremento legítimo del agente son **la misma operación sobre la misma
+columna**: no dejan rastro distinto. Si mañana alguien con sesión válida lo
+toca, la forense volverá a terminar en la misma frase.
+
+**Un registro append-only de incrementos sí deja hueco cuando falta algo.** Con
+una fila por reclamación —cuenta, día, sello de tiempo, quién— el contador pasa
+a ser una suma, y una suma que no cuadra con sus sumandos se ve. Hoy no hay
+sumandos.
+
+No urgente: la puerta está cerrada y el único escritor es una `SECURITY DEFINER`
+que ni `anon` ni `authenticated` pueden ejecutar. Pero mientras la forma sea un
+contador, la respuesta a «¿entró alguien?» seguirá siendo «no se puede saber».
+
+---
+
+## 24 · UNA ORDEN QUE SALE VERDE SIN CUMPLIRSE — B45, y van tres esta noche
+**Abierto:** 02/09/2026 · **Regla general, no una curiosidad de una tabla**
+
+`REVOKE ... FROM anon` sobre `spatial_ref_sys` **se ejecutó sin error y sin
+efecto**. Verificado después con `has_table_privilege`: los cuatro privilegios
+seguían ahí. El motivo, medido: **los catorce grants los concedió
+`supabase_admin`**, y en Postgres un `REVOKE` solo retira lo que concedió quien
+lo ejecuta. `postgres` no es dueño ni concedente → **no-op silencioso**.
+
+**Eso no es una rareza de PostGIS. Es la tercera de la misma familia esta noche:**
+
+| Qué | Sale verde | Y no hace |
+|---|---|---|
+| Despliegue de edge function (frente 11) | El workflow termina en 8 s | No desplegar ninguna función |
+| `tsc --noEmit` (frente 20) | exit 0 | Mirar una sola línea |
+| `REVOKE` sin ser concedente (éste) | Sin error | Retirar el privilegio |
+
+Y hay una cuarta ya escrita en las reglas del proyecto desde julio: **el editor
+SQL de Supabase se traga sentencias en silencio y devuelve «Success»**.
+
+**LA REGLA: se verifica EL EFECTO, nunca que el comando pasó.** Un `has_table_privilege`
+después del revoke. Un `pg_get_functiondef` después del deploy. Un `count(*)`
+después del insert. La ausencia de error no es evidencia de nada: es la
+ausencia de error.
+
+**`spatial_ref_sys` se queda como está**, según lo acordado: las cuatro funciones
+que la usan son `SECURITY DEFINER` y el grant es inerte. Lo que queda anotado no
+es que falte hacerlo — es que **desde este rol no se puede**, y que si alguna vez
+importa hay que pedirlo por el panel de Supabase.
