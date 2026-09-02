@@ -18,7 +18,7 @@
 //     como si fuera el dato de ahora. Un 0 inventado en un panel de mando es
 //     de las pocas cosas peores que no tener panel.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { selloDe, UMBRAL_POR_DEFECTO_MIN, type Sello } from '../sello'
 
 const TICK_MS = 30_000
@@ -32,42 +32,59 @@ export interface DatoDeTarjeta<T> {
   recargar: () => void
 }
 
+interface Estado<T> {
+  /** Identidad de la petición: cambia cuando cambian las dependencias. */
+  clave: string
+  datos: T | null
+  cargando: boolean
+  error: string | null
+  leidoA: Date | null
+}
+
+/**
+ * `cargar` DEBE venir memorizada (`useCallback`). No se guarda en una ref para
+ * esquivarlo: una ref escrita durante el render es de las cosas que funcionan
+ * hasta que React decide renderizar dos veces, y entonces el fallo aparece en
+ * producción y no en las pruebas. Si el linter se queja de las dependencias,
+ * la respuesta es memorizar la función, no callar al linter.
+ */
 export function useDatoDeTarjeta<T>(
   cargar: () => Promise<T>,
   deps: unknown[],
   umbralMin: number = UMBRAL_POR_DEFECTO_MIN,
 ): DatoDeTarjeta<T> {
-  const [datos, setDatos] = useState<T | null>(null)
-  const [cargando, setCargando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [leidoA, setLeidoA] = useState<Date | null>(null)
+  const clave = JSON.stringify(deps)
+  const [recarga, setRecarga] = useState(0)
+  const [estado, setEstado] = useState<Estado<T>>(
+    () => ({ clave, datos: null, cargando: true, error: null, leidoA: null }),
+  )
   const [ahora, setAhora] = useState<Date>(() => new Date())
-  const [tick, setTick] = useState(0)
 
-  // `cargar` suele llegar como función nueva en cada render; se guarda en una
-  // ref para que el efecto dependa de `deps` y no de la identidad de la función.
-  const cargarRef = useRef(cargar)
-  cargarRef.current = cargar
+  // CAMBIO DE DEPENDENCIAS: se ajusta EN RENDER, que es el patrón que React
+  // recomienda para resetear estado cuando cambia la entrada. Ponerlo en el
+  // efecto pintaría un frame con el dato de la petición anterior — el dato de
+  // OTRO local, en esta pantalla — y acto seguido lo borraría.
+  if (estado.clave !== clave) {
+    setEstado({ clave, datos: null, cargando: true, error: null, leidoA: null })
+  }
 
   useEffect(() => {
     let cancelado = false
-    setCargando(true)
-    cargarRef.current()
+    cargar()
       .then(d => {
         if (cancelado) return
-        setDatos(d)
-        setError(null)
-        setLeidoA(new Date())
+        setEstado(e => (e.clave !== clave ? e
+          : { ...e, datos: d, error: null, cargando: false, leidoA: new Date() }))
       })
-      .catch(e => {
-        // No se toca `datos`: lo último bueno sigue en pantalla, y el sello
-        // sigue diciendo de cuándo es. Mentir sería sustituirlo por un cero.
-        if (!cancelado) setError(e instanceof Error ? e.message : String(e))
+      .catch(err => {
+        // No se toca `datos`: lo último bueno sigue en pantalla y el sello sigue
+        // diciendo de cuándo es. Mentir sería sustituirlo por un cero.
+        if (cancelado) return
+        setEstado(e => (e.clave !== clave ? e
+          : { ...e, cargando: false, error: err instanceof Error ? err.message : String(err) }))
       })
-      .finally(() => { if (!cancelado) setCargando(false) })
     return () => { cancelado = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, tick])
+  }, [cargar, clave, recarga])
 
   // El reloj que hace que un dato pueda caducar sin que nadie toque nada.
   useEffect(() => {
@@ -76,7 +93,13 @@ export function useDatoDeTarjeta<T>(
     return () => clearInterval(id)
   }, [umbralMin])
 
-  const recargar = useCallback(() => setTick(t => t + 1), [])
+  const recargar = useCallback(() => setRecarga(n => n + 1), [])
 
-  return { datos, cargando, error, sello: selloDe(leidoA, ahora, umbralMin), recargar }
+  return {
+    datos: estado.datos,
+    cargando: estado.cargando,
+    error: estado.error,
+    sello: selloDe(estado.leidoA, ahora, umbralMin),
+    recargar,
+  }
 }
