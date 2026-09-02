@@ -1642,7 +1642,15 @@ function SinDecidirRow({ line, saving, onSearch, onCreate, notGoodsOpen, onToggl
         </div>
       ) : (
         <div className="mx-4 mt-3 px-3.5 py-3 rounded-md bg-accent-bg text-base font-semibold text-text-primary">
-          Esto no lo tienes en el catálogo. ¿Qué hacemos?
+          {/* EL MOTIVO, NO UNA SUPOSICIÓN (02/09). Esta tarjeta decía SIEMPRE
+              «Esto no lo tienes en el catálogo», y tras crear el artículo seguía
+              diciéndolo debajo del verde que confirmaba que se había guardado.
+              Era falso: el artículo ya estaba; lo que faltaba era la cantidad.
+              Una tarjeta que da un motivo equivocado manda a arreglar lo que no
+              está roto, y eso costó una búsqueda entera. */}
+          {line.recipeItemId
+            ? 'Ya está en el catálogo, pero falta decir cuánto ha entrado. ¿Qué hacemos?'
+            : 'Esto no lo tienes en el catálogo. ¿Qué hacemos?'}
           <span className="block font-normal text-sm text-text-primary mt-1">
             No ha entrado al almacén. Si lo dejas así, estos {line.docAmount != null ? fmtMoney(line.docAmount) : DASH} de género no aparecerán en tu inventario ni en tu coste.
           </span>

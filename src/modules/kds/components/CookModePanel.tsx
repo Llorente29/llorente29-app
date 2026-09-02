@@ -8,6 +8,7 @@
 // Reutilizable con sesión (sin token) y con kiosco (token + locationId).
 
 import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
+import { getDishPhotoUrl } from '@/modules/kitchen/services/recipePhotoService'
 import { X, AlertTriangle, ImageOff, Loader2 } from 'lucide-react'
 import { getRecipe, type KdsRecipe, type AllergenState } from '../services/kdsService'
 import { roundQty } from '../kdsUtils'
@@ -82,6 +83,22 @@ export default function CookModePanel({ target, onClose, token, locationId }: Co
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
+  /**
+   * URLS RESUELTAS. `kds_recipe.photo_url` NO es una URL: es
+   *   coalesce(recipe_item.kitchen_photo_url, menu_item.photo_url)
+   * es decir, a veces un PATH del bucket privado y a veces una URL absoluta,
+   * con prioridad al path. Meterlo en un `src` en crudo — que es lo que hacía
+   * esta pantalla — pide al navegador algo que no existe: las 57 fichas con
+   * foto de cocina salían rotas, todas.
+   *
+   * No se parchea aquí con un `startsWith('http')`: la ruta se resuelve en UN
+   * solo sitio, `getDishPhotoUrl`, que ya sabe distinguir las dos formas y
+   * firmar el path contra el bucket. Si esta pantalla reimplementara el
+   * criterio, la tercera que lea el campo volvería a nacer rota (Regla 10).
+   *
+   * Clave = el valor crudo; valor = URL utilizable, o null si no se pudo.
+   */
+  const [urls, setUrls] = useState<Record<string, string | null>>({})
 
   useEffect(() => {
     if (!target) { setRecipe(null); setError(null); return }
@@ -95,6 +112,18 @@ export default function CookModePanel({ target, onClose, token, locationId }: Co
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [target, token, locationId])
+
+  // Resolver las fotos (plato + pasos) en cuanto llega la receta.
+  useEffect(() => {
+    if (!recipe || !recipe.found) return
+    const crudas = [recipe.photo_url, ...recipe.steps.map(s => s.photo_url)]
+      .filter((x): x is string => !!x)
+    if (crudas.length === 0) return
+    let cancelled = false
+    void Promise.all(crudas.map(async (raw) => [raw, await getDishPhotoUrl(raw).catch(() => null)] as const))
+      .then(pares => { if (!cancelled) setUrls(Object.fromEntries(pares)) })
+    return () => { cancelled = true }
+  }, [recipe])
 
   // Cierre con Escape.
   useEffect(() => {
@@ -160,19 +189,31 @@ export default function CookModePanel({ target, onClose, token, locationId }: Co
 
           {!loading && !error && hasRecipe && (
             <RecipeErrorBoundary key={target.menuItemId}>
-              {/* Foto */}
-              {recipe.photo_url && (
-                <button
-                  onClick={() => setLightbox(recipe.photo_url)}
-                  className="block w-full overflow-hidden rounded-xl ring-1 ring-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                >
-                  <img
-                    src={recipe.photo_url}
-                    alt={target.name}
-                    className="w-full h-56 object-cover hover:scale-[1.02] transition-transform"
-                  />
-                </button>
-              )}
+              {/* FOTO: o foto, o NADA.
+                  Antes se pintaba el marco en cuanto había un valor en
+                  photo_url, aunque no fuera una URL utilizable: quedaba un
+                  recuadro vacío con el nombre del plato encima, que parece un
+                  fallo de la foto y manda a buscar donde no es. Se pinta solo
+                  cuando hay una URL RESUELTA. Sin foto no hay hueco. */}
+              {(() => {
+                const url = recipe.photo_url ? urls[recipe.photo_url] : null
+                if (!url) return null
+                return (
+                  <button
+                    onClick={() => setLightbox(url)}
+                    className="block w-full overflow-hidden rounded-xl ring-1 ring-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  >
+                    <img
+                      src={url}
+                      alt={target.name}
+                      className="w-full h-56 object-cover hover:scale-[1.02] transition-transform"
+                      // Si la imagen falla ya cargada (URL firmada caducada, red),
+                      // se quita el bloque entero en vez de dejar el marco roto.
+                      onError={(e) => { (e.currentTarget.closest('button') as HTMLElement | null)?.remove() }}
+                    />
+                  </button>
+                )
+              })()}
 
               {/* Alérgenos */}
               {recipe.allergens.length > 0 && (
@@ -246,9 +287,10 @@ export default function CookModePanel({ target, onClose, token, locationId }: Co
                               ))}
                             </div>
                           )}
-                          {step.photo_url && (
-                            <button onClick={() => setLightbox(step.photo_url)} className="mt-2 block">
-                              <img src={step.photo_url} alt={`Paso ${step.position}`} className="h-24 rounded-lg ring-1 ring-zinc-700 object-cover" />
+                          {step.photo_url && urls[step.photo_url] && (
+                            <button onClick={() => setLightbox(urls[step.photo_url!]!)} className="mt-2 block">
+                              <img src={urls[step.photo_url]!} alt={`Paso ${step.position}`} className="h-24 rounded-lg ring-1 ring-zinc-700 object-cover"
+                                   onError={(e) => { (e.currentTarget.closest('button') as HTMLElement | null)?.remove() }} />
                             </button>
                           )}
                         </div>
