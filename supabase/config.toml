@@ -42,3 +42,14 @@ verify_jwt = true
 
 [functions.create-account]
 verify_jwt = true
+
+# (02/09) menu-photos-repatriate. Su frontera es el JWT de un admin de la
+# cuenta, no un secreto compartido: verify_jwt = true, que es lo contrario que
+# los webhooks y los pg_cron de este mismo fichero.
+#
+# Se declara porque la guarda del workflow abortó el despliegue del 07:54: una
+# función NUEVA sin [functions.X] no se despliega, y hace bien — adivinar el
+# verify_jwt de una función nueva es como se abre un webhook al mundo o se
+# cierra uno que tenía que estar abierto. La guarda no falló: avisó.
+[functions.menu-photos-repatriate]
+verify_jwt = true
