@@ -244,13 +244,29 @@ export default function VentasDashboardPage() {
   const own = data?.by_ownership.find((o) => o.ownership === 'own')
   const lic = data?.by_ownership.find((o) => o.ownership === 'licensed')
 
-  // Variación vs periodo anterior (maneja prev=0 → sin base de comparación).
+  // ── VARIACIÓN vs PERIODO ANTERIOR ──────────────────────────────────────
+  // (02/09) «HOY» YA NO SE COMPARA. Decía «vs ayer» y comparaba un día A
+  // MEDIAS con uno entero: a las once de la mañana eso da −80 % y no significa
+  // nada. Es la regla 2 de src/shell/home/espejo.ts, que se escribió hoy para
+  // el Inicio y vale igual aquí — un periodo en curso no se compara con uno
+  // cerrado. Se enseña el número del periodo y ya.
+  //
+  // LO QUE SIGUE SIN SER EL ESPEJO, y se dice en vez de renombrarlo: el
+  // servidor (`sales_dashboard`) calcula «periodo anterior de igual duración»,
+  // así que para «ayer» compara con anteayer, no con el mismo día de la semana
+  // pasada. La etiqueta dice la verdad de lo que compara —«vs anteayer»— y por
+  // eso se queda: cambiarla a «vs sábado anterior» sin tocar el servidor sería
+  // poner un nombre correcto encima de un cálculo que no lo es. El espejo de
+  // verdad aquí es trabajo de servidor y va aparte.
   const prevNet = data?.prev?.net ?? 0
   const curNet = data?.kpis.net ?? 0
+  const periodoEnCurso = period === 'today'
   const deltaPct =
-    prevNet > 0 ? Math.round(((curNet - prevNet) / prevNet) * 100) : null
+    periodoEnCurso || prevNet <= 0
+      ? null
+      : Math.round(((curNet - prevNet) / prevNet) * 100)
   const periodPrevLabel: Record<PeriodKey, string> = {
-    today: 'vs ayer',
+    today: 'Sin comparación',
     yesterday: 'vs anteayer',
     last7: 'vs 7 días previos',
     month: 'vs mes anterior',
@@ -337,7 +353,11 @@ export default function VentasDashboardPage() {
             <KpiCard
               label={periodPrevLabel[period]}
               value={deltaPct === null ? '—' : `${deltaPct >= 0 ? '▲' : '▼'} ${Math.abs(deltaPct)}%`}
-              sub={prevNet > 0 ? `${eur(prevNet)} · ${data.prev.orders} ped.` : 'sin datos previos'}
+              sub={
+                periodoEnCurso
+                  ? 'El día no ha terminado: comparar con uno cerrado engaña'
+                  : prevNet > 0 ? `${eur(prevNet)} · ${data.prev.orders} ped.` : 'sin datos previos'
+              }
             />
           </div>
 

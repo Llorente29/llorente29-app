@@ -186,3 +186,34 @@ solo un comentario dentro del fichero que no se hizo.
 la cadena corre `npm run build`. Cuatro despliegues a producción en ERROR y una
 mañana sin Inicio. También ahí el fallo fue afirmar sobre una comprobación que
 no era la que importaba.)*
+
+---
+
+## 7 · 02/09 · Un arreglo que no recorrió todos los caminos
+
+Hermana pequeña de la 6, y por eso va justo detrás.
+
+Al cablear la garantía (c) apareció que el enlace «ver» del cajón de
+Personalizar tenía **arreglado el `onClick` y no el `onKeyDown`**. El de ratón
+navegaba; el de teclado seguía llamando a `onOpenModule(c.moduleId)` — el mismo
+no-op de la entrada 6, vivo en el camino que nadie prueba.
+
+**Lo que enseña.** No es un descuido aislado: es que un arreglo se dio por
+completo sin recorrer todos los caminos que llegan al mismo sitio. Un elemento
+interactivo suele tener dos —ratón y teclado—, y a veces tres si además es un
+enlace real. Arreglar uno y mirar la pantalla da la sensación de haber
+terminado, porque la pantalla se prueba con el ratón.
+
+**La regla que deja.** Cuando se cambia a dónde lleva algo, la pregunta no es
+«¿funciona el click?» sino **«¿cuántas formas hay de activar esto, y las he
+recorrido todas?»**. Y si un manejador queda obsoleto, se BORRA en vez de
+dejarlo apuntando a lo viejo: en este mismo lote se quitó la prop
+`onOpenModule` del Inicio entera por lo mismo — una puerta tapiada que conserva
+el pomo se vuelve a abrir.
+
+*(Contraejemplo del mismo día, para que se vea que el método funciona cuando se
+aplica: al cerrar `_queue_system_alert` a `anon`, la orden literal era
+`revoke … from anon`. Recorrer el ACL entero enseñó que el permiso también
+estaba concedido a PUBLIC, y que revocar solo `anon` habría dejado la función
+abierta con una migración aplicada y cara de arreglada. El mismo hábito, esta
+vez a tiempo.)*
