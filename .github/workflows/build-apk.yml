@@ -86,6 +86,18 @@ jobs:
       - name: Build web bundle
         run: npm run build
         env:
+          # ENTORNO SELLADO DENTRO DEL BUNDLE (01/09). Aqui no hay VERCEL_ENV,
+          # asi que sin esto la build cae en 'local' y las tablets pintan
+          # «BUILD LOCAL — NO ES PRODUCCION» siendo produccion pura: paso el
+          # 01/09 con el bundle 203 en Pase y camichi4. Ver calculaEntorno().
+          #
+          # Solo se declara produccion cuando el ref es main. Un dispatch desde
+          # una rama deja la variable VACIA -> 'local' -> el bundle sale
+          # etiquetado, y esa etiqueta se ve en las tres tablets a la vez. Es la
+          # red de seguridad de publicar una rama al bucket de todos, no un
+          # descuido: la franja falla hacia AVISAR y aqui tambien.
+          FOLVY_ENTORNO: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
+          FOLVY_RAMA: ${{ github.ref_name }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_APP_URL: ${{ secrets.VITE_APP_URL }}
