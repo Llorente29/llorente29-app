@@ -864,7 +864,7 @@ function GeneralExceptionsView({ accountId }: { accountId: string }) {
 
       {/* «Casado pero sin coste» se RETIRÓ el 02/09. No se movió de sitio ni se
           escondió: la pregunta que hacía —qué se vende sin poder costearlo— la
-          contesta ahora la tarjeta «Platos sin escandallo» del Inicio, y la
+          contesta ahora la tarjeta «Vendido sin coste» del Inicio, y la
           contesta entera.
 
           Su fuente, `list_costless_sold_products`, exigía que el `recipe_item`

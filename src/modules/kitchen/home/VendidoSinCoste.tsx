@@ -1,13 +1,25 @@
-// Tarjeta «Platos sin escandallo» (§Cocina del cajón).
+// Tarjeta «Vendido sin coste» (§Cocina del cajón).
 //
-// ── LO QUE LA TARJETA CUENTA DE VERDAD, Y NO ES LO QUE DICE EL TÍTULO ──────
-// Cuenta PRODUCTOS DE CARTA VENDIDOS SIN COSTE, que es un conjunto un poco más
-// ancho que «platos sin escandallo»: incluye productos con escandallo enlazado
-// pero sin coste, y packs y menús a los que nadie declaró el combo. El título
-// viene de la lista de veintiuna aprobada, así que no se cambia aquí por mi
-// cuenta — queda propuesto como frente («Vendido sin coste») para que lo decida
-// Julio. Mientras tanto la tarjeta dice en su propia letra qué está contando,
-// que es lo que evita que alguien lea mal la cifra.
+// ── SE LLAMABA «Platos sin escandallo», Y PROMETÍA UNA CAUSA QUE NO ENTREGA ─
+// Nació con ese nombre porque venía de la lista de veintiuna aprobada, y con un
+// frente abierto (el 17) diciendo que el nombre engañaba. Julio lo cerró el
+// 02/09: se llama «Vendido sin coste», que es lo que mide.
+//
+// La diferencia importa. «Platos sin escandallo» nombra UNA CAUSA —falta la
+// receta— y manda a quien lo lee a escribir escandallos. Lo que la tarjeta
+// cuenta son PRODUCTOS DE CARTA VENDIDOS SIN COSTE, y ahí dentro hay al menos
+// tres causas distintas: productos sin receta enlazada, productos con receta
+// enlazada y sin coste, y packs y menús a los que nadie declaró el combo — que
+// además NO se arreglan con un escandallo. Un título que nombra el síntoma deja
+// que la fila diga cuál es la causa; uno que nombra una causa manda a la mitad
+// de la gente a hacer el trabajo equivocado.
+//
+// LA CLAVE NO CAMBIA. Sigue siendo `kitchen.platos_sin_escandallo`. Una clave
+// es identidad —es lo que hay guardado en `home_layout` y lo que compara el
+// aviso de «tarjetas nuevas»— y un título es etiqueta. Cambiar la clave para
+// que «haga juego» con el nombre haría desaparecer la tarjeta del Inicio de
+// quien ya la tuviera puesta, sin decir nada. Es exactamente el fallo que
+// costó el sub-lote del cajón.
 //
 // ── POR QUÉ LOS COMBOS VAN CONTADOS Y NO LISTADOS ─────────────────────────
 // Un combo declarado no lleva escandallo propio: su coste sale de sus
@@ -22,7 +34,7 @@ import { eurEntero } from '@/lib/dinero'
 import type { HomeCardProps } from '@/shell/types'
 import { leeVendidoSinCoste, type VendidoSinCoste as Dato } from './vendidoSinCoste'
 
-export default function PlatosSinEscandallo({ accountId, locationId, drillTo }: HomeCardProps) {
+export default function VendidoSinCoste({ accountId, locationId, drillTo }: HomeCardProps) {
   const cargar = useCallback((): Promise<Dato> => {
     if (!accountId) throw new Error('sin cuenta activa')
     return leeVendidoSinCoste(accountId, locationId)
@@ -43,11 +55,13 @@ export default function PlatosSinEscandallo({ accountId, locationId, drillTo }: 
 
   return (
     <TarjetaInicio
-      titulo="Platos sin escandallo"
+      titulo="Vendido sin coste"
       icono={ReceiptText}
       cifra={!datos ? undefined : datos.platos.productos.toLocaleString('es-ES')}
+      // El sufijo ya no repite el título: con «Vendido sin coste» arriba,
+      // «productos» basta y la cifra se lee de un golpe.
       cifraSufijo={datos
-        ? (datos.platos.productos === 1 ? 'producto vendido sin coste' : 'productos vendidos sin coste')
+        ? (datos.platos.productos === 1 ? 'producto' : 'productos')
         : undefined}
       cargando={cargando && datos == null}
       error={error}

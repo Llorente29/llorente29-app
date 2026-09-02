@@ -167,6 +167,22 @@ describe('el catálogo aprobado', () => {
     ])
   })
 
+  // «Vendido sin coste» se llamaba «Platos sin escandallo» y el nombre prometía
+  // una causa —falta la receta— que la tarjeta no entrega: dentro hay packs sin
+  // combo declarado, que no se arreglan con un escandallo. Se fija por nombre
+  // para que no vuelva solo, y se fija la CLAVE al lado para que a nadie le
+  // parezca buena idea cambiarla «para que haga juego»: la clave es lo que hay
+  // guardado en el `home_layout` de la gente.
+  it('Cocina lleva el título nuevo, y la clave NO cambió con él', () => {
+    const cocina = agrupadoPorGrupo(catalogo).find(g => g.grupo === 'Cocina')!
+    expect(cocina.tarjetas.map(c => c.title)).toEqual([
+      'Food cost medio', 'Margen del mes', 'Vendido sin coste',
+    ])
+    expect(cocina.tarjetas.map(c => c.key)).toEqual([
+      'kitchen.food_cost_medio', 'kitchen.margen_del_mes', 'kitchen.platos_sin_escandallo',
+    ])
+  })
+
   it('dentro de Ventas, el orden es el de la tabla aprobada', () => {
     const ventas = agrupadoPorGrupo(catalogo).find(g => g.grupo === 'Ventas')!
     expect(ventas.tarjetas.map(c => c.title)).toEqual([

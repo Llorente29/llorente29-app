@@ -35,7 +35,7 @@ import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
 import PriceGridPage from '@/modules/kitchen/pages/PriceGridPage'
 import PriceGridErrorBoundary from '@/modules/kitchen/components/PriceGridErrorBoundary'
 import ProductosEn86 from '@/modules/kitchen/home/ProductosEn86'
-import PlatosSinEscandallo from '@/modules/kitchen/home/PlatosSinEscandallo'
+import VendidoSinCoste from '@/modules/kitchen/home/VendidoSinCoste'
 
 export const kitchenModule: ModuleDefinition = {
   // Identidad
@@ -112,14 +112,17 @@ export const kitchenModule: ModuleDefinition = {
       component: ProductosEn86,
     },
     {
+      // La CLAVE se queda como nació: es identidad (lo que hay guardado en
+      // `home_layout`), no etiqueta. Solo cambia el título — frente 17, cerrado
+      // por Julio el 02/09.
       key: 'kitchen.platos_sin_escandallo',
       grupo: 'Cocina',
-      title: 'Platos sin escandallo',
+      title: 'Vendido sin coste',
       size: 'sm',
       source: 'sale_line',
       drill: { ruta: '/kitchen/recetas', etiqueta: 'Abrir Cocina · Platos →' },
       requiredRole: 'manager',
-      component: PlatosSinEscandallo,
+      component: VendidoSinCoste,
     },
   ],
 }

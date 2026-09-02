@@ -810,22 +810,42 @@ cierra las dos a la vez y deja una sola definición**, que es lo que pide la
 regla 10. Mientras tanto, cada tarjeta dice en su letra qué está contando.
 
 
-## 17 · «Platos sin escandallo» cuenta más cosas de las que dice su nombre
-**Abierto:** 02/09/2026 · **Propuesta de renombrado, pendiente**
+## 17 · «Platos sin escandallo» se llama ahora «Vendido sin coste» — CERRADO el 02/09
+**Abierto y cerrado el 02/09** · **Decidido por Julio**
 
-La tarjeta cuenta **productos de carta vendidos sin coste**, que es un conjunto
-más ancho que «platos sin escandallo»: incluye productos con escandallo
-enlazado pero sin coste, y packs y menús sin combo declarado.
+La tarjeta contaba **productos de carta vendidos sin coste**, y el nombre
+prometía otra cosa. Palabras de Julio al cerrarlo: *«Platos sin escandallo»
+promete una causa y entrega otra*.
 
-El título viene de la lista de veintiuna aprobada, así que **no se ha cambiado
-por mi cuenta**. La tarjeta dice en su propia letra qué está contando («87
-productos vendidos sin coste»), que es lo que evita que alguien lea mal la
-cifra, pero el nombre del cajón sigue prometiendo otra cosa.
+**Por qué no era una manía de redacción.** «Platos sin escandallo» nombra UNA
+CAUSA —falta la receta— y manda a quien lo lee a escribir escandallos. Dentro de
+esa cifra hay al menos tres causas:
 
-**Propuesta:** «Vendido sin coste». Cambiarlo toca `ORDEN_DEL_CAJON`, la
-definición en `kitchen/module.tsx`, el espejo `home_card_catalog` y la prueba
-del reparto por grupo. Cinco minutos, y hace falta que lo diga Julio.
+1. productos sin `recipe_item` enlazado,
+2. productos con receta enlazada y sin coste,
+3. packs y menús a los que **nadie declaró el combo** — y esos NO se arreglan
+   con un escandallo, se arreglan declarando el combo o arreglando el motor
+   (frente 16).
 
+Un título que nombra el síntoma deja que la fila diga la causa. Uno que nombra
+una causa manda a la mitad de la gente a hacer el trabajo equivocado.
+
+### La clave NO cambió, y eso es la mitad de la decisión
+
+Sigue siendo `kitchen.platos_sin_escandallo`. **Una clave es identidad** —es lo
+que está guardado en `home_layout` y lo que compara el aviso de «tarjetas
+nuevas»— **y un título es etiqueta**. Cambiar la clave para que hiciera juego con
+el nombre habría hecho desaparecer la tarjeta del Inicio de quien ya la tuviera
+puesta, en silencio: exactamente el fallo que costó el sub-lote del cajón.
+
+Hay una prueba que fija las dos cosas a la vez —el título nuevo y la clave
+vieja— para que a nadie le parezca buena idea «cuadrarlas» más adelante.
+
+### Lo que NO hizo falta tocar, comprobado
+
+El espejo `home_card_catalog` tiene una columna `title`, pero el cliente solo lee
+de él `card_key` y `active` (`homeLayoutService.ts:69`). El título de la BBDD es
+decorativo: **el código es la verdad**, así que el renombrado no llevó migración.
 
 ## 18 · Las tres pantallas de Ventas no leen la URL
 **Abierto:** 02/09/2026 · **Consecuencia visible hoy**
