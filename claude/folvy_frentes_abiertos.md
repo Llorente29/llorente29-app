@@ -55,6 +55,7 @@ otras 21 pasan sin que nadie se entere.
 | 02/09 tarde | `schedules`, `employees` y `vacations` sin `account_id`: **el filtro de cuenta no compila**. Parcheadas a mano las tres (Row/Insert/Update) |
 | 02/09 tarde | `employee_clock_status` no está entre las RPC tipadas. Se resuelve con `src/lib/rpcSinTipar.ts`, un puente ÚNICO y borrable, para no seguir divergiendo el fichero generado |
 | 02/09 tarde | `shift_templates` y `clock_entries` tampoco tienen `account_id` en el fichero. Aquí NO se parcheó: se acotaron las consultas por los ids de local y de empleado que ya se tenían, que además es **más estrecho** que filtrar por cuenta. Cuando se pueda acotar así, es mejor que un parche |
+| 02/09 tarde | `home_layout` no está **entera** en el fichero (se creó el 30/08, después de generarlo). No hizo falta parchear: `homeLayoutService.ts` ya tenía su propio puente local `tabla()` para las cuatro tablas `home_*`, y la columna nueva entra por ahí. Tercer caso en que la primera opción del criterio evita el parche |
 
 ### El criterio mientras tanto (aprobado el 02/09), en este orden
 

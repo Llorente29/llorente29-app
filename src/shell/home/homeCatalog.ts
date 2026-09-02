@@ -28,7 +28,7 @@
 // poder probar sin levantar la pantalla.
 
 import { moduleRegistry } from '../moduleRegistry'
-import type { HomeCardDefinition, ShellRole } from '../types'
+import { GRUPOS_DE_INICIO, type HomeCardDefinition, type ShellRole } from '../types'
 import { SHELL_HOME_CARDS } from './cards/shellCards'
 
 /** Una tarjeta del catálogo, con el módulo del que viene. */
@@ -136,20 +136,65 @@ export function resolverMosaico(
   return { tarjetas, huerfanas }
 }
 
-/** El catálogo agrupado por módulo, para el cajón «Personalizar». */
-export function agrupadoPorModulo(
-  disponibles: CatalogEntry[],
-): { moduleId: string; moduleName: string; tarjetas: CatalogEntry[] }[] {
-  const grupos = new Map<string, { moduleId: string; moduleName: string; tarjetas: CatalogEntry[] }>()
+/**
+ * El catálogo agrupado por GRUPO DE NEGOCIO, para el cajón «Personalizar».
+ *
+ * (02/09) Sustituye a la agrupación por módulo. Los seis grupos aprobados
+ * —Ventas, Team, Cocina, Almacén, Canales, Agentes— son el idioma con el que
+ * se habla del negocio; «Folvy Kitchen» es el nombre con el que hablamos
+ * nosotros del código. El cajón lo abre alguien que quiere ver sus ventas, no
+ * alguien que quiere ver el módulo de ventas.
+ *
+ * Los grupos salen SIEMPRE en el orden aprobado, y los vacíos no se pintan. Al
+ * final, «Otras»: si ahí aparece algo es que a alguien se le olvidó declarar el
+ * grupo, y se ve a la primera en vez de quedar escondido bajo un módulo.
+ */
+export interface GrupoDelCajon {
+  grupo: string
+  tarjetas: CatalogEntry[]
+}
+
+export function agrupadoPorGrupo(disponibles: CatalogEntry[]): GrupoDelCajon[] {
+  const porGrupo = new Map<string, CatalogEntry[]>()
   for (const c of disponibles) {
-    let g = grupos.get(c.moduleId)
-    if (!g) { g = { moduleId: c.moduleId, moduleName: c.moduleName, tarjetas: [] }; grupos.set(c.moduleId, g) }
-    g.tarjetas.push(c)
+    const g = c.grupo ?? 'Otras'
+    porGrupo.set(g, [...(porGrupo.get(g) ?? []), c])
   }
-  // «Inicio» primero (son las transversales); el resto por nombre.
-  return [...grupos.values()].sort((a, b) =>
-    a.moduleId === 'shell' ? -1 : b.moduleId === 'shell' ? 1 : a.moduleName.localeCompare(b.moduleName),
-  )
+  const salida: GrupoDelCajon[] = []
+  for (const g of GRUPOS_DE_INICIO) {
+    const t = porGrupo.get(g)
+    if (t && t.length > 0) salida.push({ grupo: g, tarjetas: t })
+  }
+  const otras = porGrupo.get('Otras')
+  if (otras && otras.length > 0) salida.push({ grupo: 'Otras', tarjetas: otras })
+  return salida
+}
+
+/**
+ * Las tarjetas que EXISTEN y que este usuario NO tiene en su Inicio.
+ *
+ * ── POR QUÉ ESTO TIENE QUE EXISTIR ─────────────────────────────────────────
+ * Un layout personalizado es del usuario y no se toca. Pero eso tiene una
+ * consecuencia que nadie ve venir: una tarjeta nueva NO entra en un layout
+ * existente, así que quien más ha usado el producto es exactamente quien deja
+ * de ver lo que se añade. Al revés de como debería ser.
+ *
+ * El aviso de huérfanas ya sabía hablar de lo que SE FUE; esta es su simétrica,
+ * la que habla de lo que HA LLEGADO. Sale de la misma comparación, en el mismo
+ * momento y sin ninguna tabla nueva.
+ *
+ * `descartadas` son las que el usuario ya dijo que no quiere. Sin recordarlo, el
+ * aviso reaparecería en cada carga y a la tercera se ignoraría — y con él se
+ * ignoraría el de huérfanas, que sí importa.
+ */
+export function novedades(
+  claves: string[],
+  disponibles: CatalogEntry[],
+  descartadas: string[] = [],
+): CatalogEntry[] {
+  const tengo = new Set(claves)
+  const noQuiero = new Set(descartadas)
+  return disponibles.filter(c => !tengo.has(c.key) && !noQuiero.has(c.key))
 }
 
 /** Sube o baja una clave una posición. Devuelve una lista NUEVA. */

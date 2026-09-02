@@ -89,6 +89,15 @@ export interface HomeCardProps {
   drillTo?: (destino: DrillDestino) => void
 }
 
+/**
+ * Los seis grupos aprobados del cajon, EN SU ORDEN de pantalla. El orden vive
+ * aqui y no en el componente: es una decision de producto, no de maquetacion.
+ */
+export const GRUPOS_DE_INICIO = [
+  'Ventas', 'Team', 'Cocina', 'Almacen', 'Canales', 'Agentes',
+] as const
+export type GrupoDeInicio = (typeof GRUPOS_DE_INICIO)[number]
+
 export interface HomeCardDefinition {
   /** Clave global y estable. Es la que se guarda en home_layout.cards. */
   key: string
@@ -105,6 +114,20 @@ export interface HomeCardDefinition {
   drill?: DrillDestino
   /** De donde sale el dato. INFORMATIVO: quien consulta es el componente. */
   source?: string
+  /**
+   * El GRUPO DE NEGOCIO del cajon: Ventas, Team, Cocina, Almacen, Canales,
+   * Agentes.
+   *
+   * (02/09) Es un atributo declarado de la tarjeta, NO el modulo donde vive su
+   * codigo. Agrupar por modulo ponia «Productos en 86» bajo «Folvy Kitchen»
+   * cuando la maqueta la pone en «Canales»: los seis grupos son el idioma del
+   * negocio y el nombre del modulo es el nuestro. Una tarjeta puede vivir en el
+   * codigo de un modulo y pertenecer al grupo de otro, y eso es normal.
+   *
+   * Ausente = «Otras», que es donde se ve enseguida que a alguien se le olvido
+   * ponerlo.
+   */
+  grupo?: GrupoDeInicio
   /** Rol minimo. P1: solo `admin` tiene Inicio; `worker` sigue en su portal. */
   requiredRole?: ShellRole
   component: ComponentType<HomeCardProps>

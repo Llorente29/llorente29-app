@@ -39,13 +39,13 @@ import {
  * hasta que decida personalizarlo.
  */
 export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
-  { key: 'shell.ventas_hoy',       title: 'Ventas hoy',        size: 'sm', source: 'sale',
+  { key: 'shell.ventas_hoy', grupo: 'Ventas',       title: 'Ventas hoy',        size: 'sm', source: 'sale',
     drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' }, component: VentasHoy },
-  { key: 'shell.trabajando_ahora', title: 'Trabajando ahora',  size: 'sm', source: 'employee_clock_status',
+  { key: 'shell.trabajando_ahora', grupo: 'Team', title: 'Trabajando ahora',  size: 'sm', source: 'employee_clock_status',
     drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' }, component: TrabajandoAhora },
-  { key: 'shell.resumen_team',     title: 'Resumen de Team',   size: 'md', source: 'employee_clock_status',
+  { key: 'shell.resumen_team', grupo: 'Team',     title: 'Resumen de Team',   size: 'md', source: 'employee_clock_status',
     drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' }, component: ResumenTeam },
-  { key: 'shell.resumen_sales',    title: 'Resumen de Sales',  size: 'md', source: 'sale',
+  { key: 'shell.resumen_sales', grupo: 'Ventas',    title: 'Resumen de Sales',  size: 'md', source: 'sale',
     drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' }, component: ResumenSales },
 ]
 

@@ -80,6 +80,7 @@ export const ventasModule: ModuleDefinition = {
   homeCards: [
     {
       key: 'ventas.ayer',
+      grupo: 'Ventas',
       title: 'Ventas de ayer',
       size: 'sm',
       source: 'sale',
@@ -88,6 +89,7 @@ export const ventasModule: ModuleDefinition = {
     },
     {
       key: 'ventas.grafica_14_dias',
+      grupo: 'Ventas',
       title: 'Ventas por día · últimas dos semanas',
       size: 'lg',
       source: 'sale',
@@ -96,6 +98,7 @@ export const ventasModule: ModuleDefinition = {
     },
     {
       key: 'ventas.semana',
+      grupo: 'Ventas',
       title: 'Ventas · esta semana',
       size: 'sm',
       source: 'sale',

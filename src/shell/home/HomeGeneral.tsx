@@ -37,13 +37,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutGrid, RotateCcw, ChevronUp, ChevronDown, X, Check, AlertTriangle, MapPin, ClipboardList, TabletSmartphone, CalendarClock } from 'lucide-react'
+import { LayoutGrid, RotateCcw, ChevronUp, ChevronDown, X, Check, AlertTriangle, MapPin, ClipboardList, TabletSmartphone, CalendarClock, Sparkles, Plus } from 'lucide-react'
 
 import { useIsMobile } from '../useIsMobile'
 import { useApp } from '../../context/AppContext'
 import { useLocationScope } from '../../modules/multitenancy/hooks/useLocationScope'
 import {
-  getHomeCatalog, catalogoDisponible, resolverMosaico, agrupadoPorModulo,
+  getHomeCatalog, catalogoDisponible, resolverMosaico, agrupadoPorGrupo, novedades,
   mover, alternar, type CatalogEntry,
 } from './homeCatalog'
 import { LAYOUT_POR_DEFECTO, TARJETAS_RETIRADAS, nombreDeTarjetaRetirada } from './cards/shellCards'
@@ -52,6 +52,8 @@ import { construyeUrl } from './drill'
 import { HomeMetricsProvider } from './cards/HomeMetricsProvider'
 import {
   getGating, getUserLayout, getRoleDefault, saveUserLayout, restoreUserLayout,
+  getDescartadas,
+  descartarNovedad,
 } from './homeLayoutService'
 import { getAvisosAtencion, type AvisoAtencion, type TipoAviso } from './atencionService'
 
@@ -104,6 +106,10 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
 
   const [disponibles, setDisponibles] = useState<CatalogEntry[]>([])
   const [claves, setClaves] = useState<string[]>(LAYOUT_POR_DEFECTO)
+  /** Las novedades que este usuario ya rechazó. Se declara aquí, con los demás
+   *  estados, porque `cargar()` la rellena y usarla antes de declararla deja de
+   *  actualizarse cuando cambia. */
+  const [descartadas, setDescartadas] = useState<string[]>([])
   const [origen, setOrigen] = useState<Origen>('fabrica')
   const [cargadoA, setCargadoA] = useState<Date | null>(null)
   // `cargando` se DERIVA de si lo cargado corresponde al alcance actual, en vez
@@ -142,6 +148,8 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
         if (delRol && delRol.length > 0) { setClaves(delRol); setOrigen('rol') }
         else { setClaves(LAYOUT_POR_DEFECTO); setOrigen('fabrica') }
       }
+      // Lo que este usuario ya dijo que NO quiere que se le vuelva a ofrecer.
+      if (authUserId) setDescartadas(await getDescartadas(activeAccountId, authUserId))
       setAvisos(await getAvisosAtencion(activeAccountId, resolvedLocationId))
       setCargadoA(new Date())
       setError(null)   // solo cuando se sabe que la recarga ha funcionado
@@ -157,7 +165,15 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
   const { tarjetas, huerfanas } = useMemo(
     () => resolverMosaico(claves, disponibles), [claves, disponibles],
   )
-  const grupos = useMemo(() => agrupadoPorModulo(disponibles), [disponibles])
+  const grupos = useMemo(() => agrupadoPorGrupo(disponibles), [disponibles])
+
+  // ── NOVEDADES: LO QUE HA LLEGADO Y NO TIENES ─────────────────────────────
+  // El aviso de huérfanas sabía hablar de lo que SE FUE. Ésta es su simétrica.
+  // Sin ella, un layout personalizado deja fuera para siempre cada tarjeta que
+  // se añada: quien más ha usado el producto es quien deja de ver lo nuevo.
+  const nuevas = useMemo(
+    () => novedades(claves, disponibles, descartadas), [claves, disponibles, descartadas],
+  )
 
   // El PORQUÉ de las retiradas, en una frase. Si todas comparten motivo —el
   // caso normal, porque se retiran por lotes— se dice una vez en vez de repetir
@@ -172,18 +188,48 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
   }, [huerfanas])
 
   /** Guarda y lo DICE. Si falla, no se da por bueno (regla 8). */
-  async function guardar(nuevas: string[], queSeHizo: string) {
+  async function guardar(siguientes: string[], queSeHizo: string) {
     const antes = claves
-    setClaves(nuevas)                       // respuesta inmediata al toque
+    setClaves(siguientes)                   // respuesta inmediata al toque
     if (!activeAccountId || !authUserId) return
     setGuardando(true); setError(null); setAviso(null)
     try {
-      await saveUserLayout(activeAccountId, authUserId, nuevas)
+      await saveUserLayout(activeAccountId, authUserId, siguientes)
+      // Añadir una tarjeta la saca de las descartadas: si la pides, deja de
+      // ser algo que dijiste que no querías.
+      setDescartadas(d => d.filter(k => !siguientes.includes(k)))
       setOrigen('usuario')
       setAviso(queSeHizo)
     } catch (e) {
       setClaves(antes)                      // no entró: se vuelve a lo que había
       setError(e instanceof Error ? e.message : 'No se pudo guardar tu Inicio.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  /**
+   * «No, gracias» a las novedades.
+   *
+   * SE RECUERDA, y esa es la decisión importante: si no, el aviso reaparece en
+   * cada carga y a la tercera se ignora — y con él se ignora el de huérfanas,
+   * que sí importa. Un aviso que no se puede apagar enseña a no leer los avisos.
+   */
+  async function rechazarNovedades() {
+    if (!activeAccountId || !authUserId) return
+    const claveS = nuevas.map(c => c.key)
+    setDescartadas(d => [...d, ...claveS])   // respuesta inmediata al toque
+    setGuardando(true); setError(null); setAviso(null)
+    try {
+      for (const k of claveS) {
+        await descartarNovedad(activeAccountId, authUserId, k, claves)
+      }
+      setAviso(claveS.length === 1
+        ? 'No se volverá a ofrecer. Sigue en «Personalizar» si cambias de idea.'
+        : 'No se volverán a ofrecer. Siguen en «Personalizar» si cambias de idea.')
+    } catch (e) {
+      setDescartadas(d => d.filter(k => !claveS.includes(k)))   // no entró
+      setError(e instanceof Error ? e.message : 'No se pudo guardar.')
     } finally {
       setGuardando(false)
     }
@@ -267,6 +313,13 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
           <button type="button" onClick={() => setCajonAbierto(true)} disabled={cargando}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50">
             <LayoutGrid size={16} /> Personalizar
+            {nuevas.length > 0 && (
+              // El contador cuenta lo NO descartado: si dijiste que no a una,
+              // no vuelve a contar. Un contador que no baja deja de mirarse.
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-accent text-text-on-accent">
+                {nuevas.length} {nuevas.length === 1 ? 'nueva' : 'nuevas'}
+              </span>
+            )}
           </button>
           {origen === 'usuario' && (
             <button type="button" onClick={() => void restaurar()} disabled={guardando}
@@ -309,6 +362,34 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
         </div>
       )}
 
+      {/* La simétrica del aviso de huérfanas: lo que HA LLEGADO. Se ofrece, no
+          se impone — un layout personalizado es del usuario— pero no se calla,
+          porque callarlo es como una tarjeta nueva se vuelve invisible justo
+          para quien más usa el producto. */}
+      {nuevas.length > 0 && (
+        <div className="mb-3 p-3 rounded-md bg-card border border-accent/40 text-sm text-text-primary flex items-start gap-2 flex-wrap">
+          <Sparkles size={16} className="shrink-0 mt-0.5 text-accent" />
+          <span className="flex-1">
+            {enumeraNombres(nuevas.map(c => c.title))}{' '}
+            {nuevas.length === 1 ? 'es nueva y no la tienes' : 'son nuevas y no las tienes'}{' '}
+            en tu Inicio.
+          </span>
+          <button type="button" disabled={guardando}
+            onClick={() => void guardar(
+              [...claves, ...nuevas.map(c => c.key)],
+              nuevas.length === 1 ? 'Añadida al final de tu Inicio.' : `${nuevas.length} añadidas al final de tu Inicio.`,
+            )}
+            className="shrink-0 px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-text-on-accent disabled:opacity-50">
+            {nuevas.length === 1 ? 'Añadirla' : 'Añadirlas'}
+          </button>
+          <button type="button" disabled={guardando}
+            onClick={() => void rechazarNovedades()}
+            className="shrink-0 px-2.5 py-1 rounded-md text-xs font-semibold border border-border-default bg-card hover:bg-page disabled:opacity-50">
+            No, gracias
+          </button>
+        </div>
+      )}
+
       {/* ══ MOSAICO ══ */}
       {tarjetas.length === 0 && !cargando ? (
         <div className="rounded-xl border border-dashed border-border-default p-8 text-center text-text-secondary">
@@ -320,6 +401,11 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12, alignItems: 'start' }}>
+          {/* LA FANTASMA. Ocupa una celda al final del mosaico y no finge ser
+              una tarjeta: es un hueco punteado que dice a dónde lleva. Sin
+              ella, la única puerta al cajón es un botón en la esquina de
+              arriba, que es donde no está mirando quien acaba de recorrer sus
+              tarjetas y piensa «me falta una». */}
           {tarjetas.map(c => {
             const Card = c.component
             return (
@@ -332,11 +418,27 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
               </div>
             )
           })}
+
+          <button
+            type="button"
+            onClick={() => setCajonAbierto(true)}
+            style={{ gridColumn: 'span 1', minHeight: 120 }}
+            className="rounded-xl border border-dashed border-border-default text-text-secondary hover:text-text-primary hover:border-accent/60 flex flex-col items-center justify-center gap-1.5 text-sm"
+          >
+            <Plus size={18} />
+            Añadir tarjeta
+            {nuevas.length > 0 && (
+              <span className="text-[11px] font-semibold text-accent">
+                {nuevas.length} {nuevas.length === 1 ? 'nueva disponible' : 'nuevas disponibles'}
+              </span>
+            )}
+          </button>
         </div>
       )}
 
-      {/* ══ CAJÓN «PERSONALIZAR» ══ agrupado por módulo, que es como el usuario
-          entiende de dónde sale cada cosa. */}
+      {/* ══ CAJÓN «PERSONALIZAR» ══ agrupado por GRUPO DE NEGOCIO —Ventas,
+          Team, Cocina, Almacén, Canales, Agentes— que es el idioma con el que
+          se habla del negocio, no el nombre de nuestros módulos. */}
       {cajonAbierto && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={() => setCajonAbierto(false)}>
           <div className="w-full max-w-md h-full bg-card overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
@@ -382,15 +484,16 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
               )}
             </div>
 
-            {/* El catálogo entero, agrupado por módulo. Añadir una homeCard a un
-                módulo la hace aparecer AQUÍ sin tocar el Inicio. */}
+            {/* El catálogo entero, agrupado por GRUPO DE NEGOCIO: Ventas,
+                Team, Cocina, Almacén, Canales, Agentes. Añadir una homeCard a
+                un módulo la hace aparecer AQUÍ sin tocar el Inicio. */}
             <div className="px-4 pb-6">
               <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">
                 Todas las tarjetas
               </p>
               {grupos.map(g => (
-                <div key={g.moduleId} className="mb-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary mb-1">{g.moduleName}</p>
+                <div key={g.grupo} className="mb-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary mb-1">{g.grupo}</p>
                   <div className="flex flex-col gap-1">
                     {g.tarjetas.map(c => {
                       const puesta = claves.includes(c.key)

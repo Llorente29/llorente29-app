@@ -101,6 +101,7 @@ export const personalModule: ModuleDefinition = {
   homeCards: [
     {
       key: 'personal.cuadrantes',
+      grupo: 'Team',
       title: 'Cuadrantes',
       size: 'sm',
       source: 'schedules',
@@ -110,6 +111,7 @@ export const personalModule: ModuleDefinition = {
     },
     {
       key: 'personal.en_cocina_ahora',
+      grupo: 'Team',
       title: 'En cocina ahora',
       size: 'sm',
       source: 'clock_entries',

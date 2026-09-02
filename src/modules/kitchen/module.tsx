@@ -102,6 +102,7 @@ export const kitchenModule: ModuleDefinition = {
   homeCards: [
     {
       key: 'kitchen.productos_86',
+      grupo: 'Canales',
       title: 'Productos en 86',
       size: 'sm',
       source: 'product_availability',

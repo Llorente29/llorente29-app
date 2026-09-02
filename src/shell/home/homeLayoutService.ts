@@ -109,6 +109,42 @@ export async function getRoleDefault(accountId: string, role: string): Promise<s
  * decirlo en pantalla (regla 8). Un guardado de preferencias que falla en
  * silencio deja al usuario reordenando lo mismo cada vez que entra.
  */
+/**
+ * Las tarjetas que este usuario ya rechazo del aviso de novedades.
+ *
+ * Se lee aparte del layout porque son dos cosas distintas: `cards` es lo que
+ * quiere ver, `descartadas` es lo que ha dicho que NO quiere que le vuelvan a
+ * ofrecer. Mezclarlas obligaria a distinguir «no la tengo porque la quite» de
+ * «no la tengo porque nunca la vi», que es justo la diferencia que hace util al
+ * aviso.
+ */
+export async function getDescartadas(accountId: string, userId: string): Promise<string[]> {
+  if (!isSupabaseEnabled || !supabase) return []
+  const { data, error } = await tabla('home_layout').select('descartadas')
+    .eq('account_id', accountId).eq('user_id', userId).maybeSingle()
+  if (error) { console.error('[homeLayout] getDescartadas', error); return [] }
+  return listaDeClaves((data as Row | null)?.descartadas)
+}
+
+/** Anade una clave a las descartadas, sin tocar el orden de las tarjetas. */
+export async function descartarNovedad(
+  accountId: string, userId: string, key: string, cardsActuales: string[],
+): Promise<void> {
+  if (!isSupabaseEnabled || !supabase) return
+  const previas = await getDescartadas(accountId, userId)
+  if (previas.includes(key)) return
+  const { error } = await tabla('home_layout').upsert({
+    account_id: accountId, user_id: userId,
+    // Si el usuario no tenia fila propia, se crea con SU mosaico actual: sin
+    // esto, decir «no, gracias» a una tarjeta le congelaria el Inicio de
+    // fabrica y dejaria de recibir las siguientes.
+    cards: cardsActuales,
+    descartadas: [...previas, key],
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'account_id,user_id' })
+  if (error) throw new Error(`No se ha podido guardar el descarte: ${error.message}`)
+}
+
 export async function saveUserLayout(accountId: string, userId: string, cards: string[]): Promise<void> {
   if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
   const { error } = await tabla('home_layout')
