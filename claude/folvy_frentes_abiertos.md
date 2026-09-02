@@ -282,47 +282,88 @@ cerrada en los dos locales»— no es reproducible con este historial.
 
 ---
 
-## 9 · «% personal sobre ventas»: falta decidir qué es «personal»
-**Abierto:** 02/09/2026 · **Decisión pendiente de Julio, no tarjeta pendiente**
+## 9 · «% personal sobre ventas» — DECIDIDO: coste de empresa
+**Abierto:** 02/09/2026 · **Decidido por Julio el 02/09** · Pendiente de construir
 
-La tarjeta está declarada como P2 y **no se toca hasta que haya decisión**. El
-trabajo no es la tarjeta —son 4 h— es el criterio, y elegir mal da un número que
-parece bueno y no lo es.
+**La decisión:** el coste es **coste de empresa** — `salary` + `employer_ss_annual`
+— no el salario bruto.
 
-**La pregunta:** ¿el coste de personal es el **salario bruto** o el **coste
-empresa**? `employees` tiene los dos campos: `salary` y `employer_ss_annual`.
+**Sus palabras, que son la regla:** *«el bruto es engañar en silencio»*. No es
+una preferencia contable: entre uno y otro hay del orden de un 30 %, y con ese
+número se decide si se contrata. Un panel que enseña el bruto no da un número
+menos preciso: da un número que dice que el negocio va mejor de lo que va, y no
+avisa de que lo está diciendo.
 
-**Por qué importa y no es un detalle contable:** entre uno y otro hay del orden
-de un 30 %. Un panel que diga «28 % de personal sobre ventas» usando el bruto
-está diciendo que el negocio va mejor de lo que va, y ese número se mira para
-decidir si se contrata. La cifra que se enseña en un panel de mando tiene que
-ser la que se usa para decidir, no la más bonita.
+**Y la tarjeta DICE CUÁL USA.** No solo el porcentaje: el subtítulo lleva «coste
+de empresa». Una cifra de la que hay que preguntar cómo está hecha ya ha fallado
+— si hay que preguntar, la respuesta llega tarde o no llega.
 
-**Lo que hay que decidir, en una frase:** cuál de los dos, y si la tarjeta lo
-dice en su subtítulo («coste empresa») para que nadie tenga que preguntarlo.
+**Lo que queda por construir (4 h):** horas de `clock_entries` × coste/hora
+desde `employees`, contra ventas de `sale`, en el día del negocio.
 
 ---
 
-## 10 · «Puntos de pedido»: el concepto no existe en la base
-**Abierto:** 02/09/2026 · **Decisión pendiente de Julio, no tarjeta pendiente**
+## 10 · «Puntos de pedido» — DECIDIDO: lo calcula el sistema, del consumo
+**Abierto:** 02/09/2026 · **Decidido por Julio el 02/09** · Pendiente de construir
 
-Declarada como P2 y **sin tocar**. `stockLevelService` da el stock actual, pero
-NO hay punto de pedido por artículo en ninguna parte.
+**La decisión:** el punto de pedido lo **calcula el sistema** a partir del
+consumo, y **se recalcula solo**. No un campo que alguien rellena artículo a
+artículo.
 
-**Las dos salidas, y no son equivalentes:**
+### EL PRINCIPIO QUE MANDA SOBRE TODO LO DEMÁS
 
-1. **Un campo por artículo**, puesto a mano. Fiable y explicable —el punto es el
-   que alguien decidió— pero hay que rellenarlo artículo a artículo, y un campo
-   vacío es una alerta que nunca salta.
-2. **Deducirlo del consumo medio** × días de cobertura. No hay nada que
-   rellenar y funciona desde el primer día, pero el punto cambia solo: un
-   artículo que se dejó de vender baja su punto y deja de avisar justo cuando
-   vuelve la temporada.
+**El sistema PROPONE, no pide solo.** El día que esto dispare un pedido
+automático, la decisión de Julio del 02/09 fue **«que lo calcule»**, no **«que
+compre»**. Quien lea esta ficha dentro de seis meses y esté a punto de cablear
+un pedido automático: eso es una decisión nueva, y no está tomada.
 
-**Lo segundo es más listo y menos fiable.** Con 56.311 movimientos de stock hay
-datos de sobra para la media; lo que no hay es forma de que el operario entienda
-por qué hoy le avisa de la harina y ayer no.
+### Las cinco guardas
 
-**Mi recomendación:** empezar por (1) en los veinte artículos que de verdad se
-rompen, y no por los 1.072. Una alerta en la que se cree vale más que mil
-calculadas.
+**1 · Los días agotados NO cuentan en el consumo medio.** Sin esto el cálculo se
+muerde la cola: cada rotura baja el consumo medio, el punto de pedido baja con
+él, y el punto bajo provoca la siguiente rotura. Un sistema que aprende de sus
+propios fallos a equivocarse más.
+
+> **CORRECCIÓN DE LA FUENTE, medida el 02/09 antes de escribir esto.** El
+> encargo decía «tienes `product_availability` con sus fechas». **No sirve para
+> esto:** esa tabla tiene 106 filas y **las 106 con `is_available = false`**. Es
+> una tabla de ESTADO ACTUAL — la fila existe mientras el producto está agotado
+> y se borra al reactivarlo, igual que `brand_closure`. Solo sabe decir qué está
+> agotado AHORA y desde cuándo; no puede decir que la Coca-Cola estuvo agotada
+> el 14, 15 y 16 de agosto si hoy está disponible.
+>
+> **La fuente buena es `availability_event`**, que sí guarda cierres Y
+> aperturas: 810 eventos de producto, el más antiguo del **05/08**.
+>
+> **Y eso pone un techo que hay que saber:** el historial de agotados llega a
+> unas cuatro semanas. Más atrás no se puede excluir nada, y hay que decirlo en
+> vez de calcular como si esos días hubieran sido normales.
+
+**2 · Esos días se IMPUTAN, no se ponen a cero.** Con la media del mismo día de
+la semana en fechas con existencia. Es demanda censurada: que no se vendiera un
+sábado agotado no significa que nadie lo quisiera, significa que no había.
+
+**3 · Las roturas cuentan como señal propia.** N roturas en 30 días suben el
+punto de pedido **aunque la media no lo pida**. La media dice cuánto se gasta;
+las roturas dicen que el colchón era corto, y eso es información distinta.
+
+**4 · El plazo de entrega se MIDE por proveedor**, de la fecha del pedido a la
+del albarán. No un número fijo igual para todos: un proveedor que tarda cuatro
+días necesita más colchón que uno que trae al día siguiente, y eso está en los
+datos.
+
+**5 · Mínimo manual por artículo que el cálculo NUNCA puede bajar.** Es la
+válvula: donde alguien sabe algo que los datos no saben, gana la persona.
+
+### Lo que la tarjeta tiene que decir de sí misma
+
+**Con cuántos días de historia ha calculado, y si hubo roturas en el periodo.**
+Un punto de pedido salido de tres días no vale lo mismo que uno de treinta, y
+uno salido de una racha de agotados no vale lo mismo que uno de un mes limpio.
+Quien lo lee tiene que poder distinguirlos sin preguntar.
+
+**Y lo estacional y lo de poca rotación se MARCAN, no se calculan a la brava.**
+Si el consumo es irregular, la tarjeta lo dice en vez de dar un número con cara
+de certeza. Un número con cara de certeza sobre un dato que no la tiene es peor
+que no dar número.
+
