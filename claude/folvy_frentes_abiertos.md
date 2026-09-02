@@ -477,8 +477,22 @@ auditar después quién desplegó qué sin depender de los logs del run.
 
 ---
 
-## 12 · La bolsa de horas ignora el día de cierre configurado — y son nóminas
-**Abierto:** 02/09/2026 · **Hoy cosmético. El día que alguien cambie el día, no.**
+## 12 · La bolsa de horas ignoraba el día de cierre — ARREGLADO el 02/09
+**Abierto y cerrado el 02/09/2026** · Se deja la ficha porque explica un patrón
+
+> **La pantalla parecía configurable y no lo era.**
+>
+> Ese `?? 25` no era un valor por defecto: era **una decisión tomada en silencio
+> sobre las horas de la gente** — y una de las dos pantallas es la que el
+> trabajador abre para ver las suyas.
+
+**El arreglo (02/09):** `gestoriaDay: undefined` en `BolsaHorasPage.tsx:111` y
+en `MiBolsaHoras.tsx:69`. Dos líneas, y `getEffectiveCloseDay` vuelve a hacer lo
+que dice su nombre: coger el `closeDay` del local. Con eso desaparece también la
+divergencia con la tarjeta del Inicio.
+
+**Lo que sigue abierto de esto:** nada en el código. Pero la ficha se queda,
+porque el mecanismo de abajo es el que hay que reconocer la próxima vez.
 
 ### El mecanismo, exacto
 

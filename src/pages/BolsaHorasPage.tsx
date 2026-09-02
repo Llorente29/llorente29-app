@@ -108,7 +108,15 @@ export default function BolsaHorasPage() {
     const config: LocationBalanceConfig = {
       closeDay: (currentLocation as any).hoursBalanceCloseDay ?? 25,
       syncWithGestoria: (currentLocation as any).hoursBalanceSyncWithGestoria ?? true,
-      gestoriaDay: (currentLocation as any).gestoriaSendDay ?? 25,
+      // `gestoriaSendDay` NO EXISTE: ni en `locations`, ni en el tipo, ni en el
+      // mapper. Con `?? 25` valia 25 SIEMPRE —un numero, o sea verdadero— y
+      // `getEffectiveCloseDay` cogia esa rama y tiraba el `closeDay` bien leido.
+      // La pantalla parecia configurable y no lo era.
+      //
+      // `undefined` deja que la funcion haga lo que dice su nombre. Ese `?? 25`
+      // no era un valor por defecto: era una decision tomada en silencio sobre
+      // las horas de la gente.
+      gestoriaDay: undefined,
     }
     return getEffectiveCloseDay(config)
   }, [currentLocation])
