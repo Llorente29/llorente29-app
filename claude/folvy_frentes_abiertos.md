@@ -157,11 +157,32 @@ puede pedir cámara en la APK y la alternativa es teclear cincuenta caracteres;
 (3) registrar el token desconocido con su hora; (4) averiguar por qué se
 desvinculó sola.
 
-**Dato para (4), y no cuadra con lo que se recordaba:** la desvinculación se dio
-por ocurrida a las 20:26 del 27/08, pero los avisos sitúan a «Pase» callada
-**desde las 13:12** y a «Cocina» **desde las 18:27** de ese mismo día. Son dos
-aparatos, en dos momentos, y ninguno a las 20:26. La ventana a investigar es
-esa, no la otra.
+**Dato para (4), CORREGIDO el 02/09 — el error era mío y era la regla 4.** Dije
+que la desvinculación no cuadraba con las 20:26 que daba `last_seen_at`. Cuadra:
+el aviso saltó a las 18:40 UTC diciendo «13 minutos», o sea callada desde las
+18:27 **UTC**, que son las **20:27 de Madrid**. `last_seen_at` = 18:26:50+00 =
+20:26 de Madrid. **El mismo instante.** Resté minutos a un `created_at` en UTC y
+lo escribí como si fuera hora de reloj — en la misma ficha en la que estaba
+siendo cuidadoso con todo lo demás, y el día de escribir `src/lib/fechas.ts`
+para que esto no pasara en las tarjetas.
+
+Lo que sí se sostiene: fueron DOS aparatos. «Pase» calló a las **15:12 de
+Madrid** y «Cocina» a las **20:26**. La ventana a investigar para los cinco días
+es la de Cocina: 27/08, 20:26 de Madrid.
+
+**Y un fallo real en la vecindad, que apareció al comprobarlo:** el aviso no
+escribe NINGUNA hora, solo una duración —«lleva 13 minutos»—. Leído en el
+momento, perfecto; leído tres horas después en una pila de correos, es inútil:
+no se puede saber cuándo empezó sin mirar la cabecera del correo. Añadirle la
+hora local del negocio («sin señal desde las 20:26») es una línea, y va con el
+mismo criterio de `fechas.ts`. Entra en la pieza (1).
+
+**EL DESTINO DEL AVISO, decidido por Julio el 02/09 y mejor que la propuesta
+anterior:** el arreglo NO es mandarlo a otro correo. Es que el aviso viva en la
+**franja del Inicio**, que es la pantalla que ya se mira. El correo es para
+cuando no hay nadie delante; la franja, para cuando sí. La prueba de que
+funciona: «la tablet Cocina lleva 5 días sin dar señal» llegó por la franja, no
+por el correo.
 
 **Y una pieza de la (2) que cuesta minutos y se puede hacer aparte:** que el
 botón «Escanear» no esté cuando la cámara no puede funcionar. Un botón que no
