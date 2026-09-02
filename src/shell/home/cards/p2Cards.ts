@@ -27,8 +27,6 @@ export const P2_HOME_CARDS: HomeCardDefinition[] = [
   // ── Team ─────────────────────────────────────────────────────────────────
   { key: 'personal.pct_sobre_ventas', grupo: 'Team', title: '% personal sobre ventas', size: 'sm',
     source: 'clock_entries', drill: { ruta: '/personal/informes-analitica', etiqueta: 'Abrir Team · Informes →' } },
-  { key: 'personal.sin_fichar_con_turno', grupo: 'Team', title: 'Sin fichar teniendo turno', size: 'sm',
-    source: 'clock_entries', drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' } },
 
   // ── Cocina ───────────────────────────────────────────────────────────────
   { key: 'kitchen.food_cost_medio', grupo: 'Cocina', title: 'Food cost medio', size: 'sm',

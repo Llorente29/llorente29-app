@@ -118,9 +118,23 @@ describe('el catálogo aprobado', () => {
   // conexiones dejan de ser P2. Once cableadas, diez prometidas.
   // Cuarto lote: Ticket medio, Ventas por canal y Bolsa de horas. Con esto el
   // grupo Ventas queda entero (5 de 5) y Team a falta de dos.
-  it('catorce cableadas y siete P2', () => {
-    expect(catalogo.filter(c => c.component != null)).toHaveLength(14)
-    expect(catalogo.filter(c => c.component == null)).toHaveLength(7)
+  // Quinto lote: «Sin fichar teniendo turno» cierra Team 5 de 5, y con ella el
+  // grupo de las que se miran a las ocho de la mañana.
+  it('quince cableadas y seis P2', () => {
+    expect(catalogo.filter(c => c.component != null)).toHaveLength(15)
+    expect(catalogo.filter(c => c.component == null)).toHaveLength(6)
+  })
+
+  // Ventas queda entero. Team NO: le falta «% personal sobre ventas», que está
+  // DECIDIDA (frente 9: coste de empresa) pero sin construir. La prueba lo fija
+  // para que nadie diga «Team completo» sin mirar — que es lo que hice yo al
+  // proponerla.
+  it('Ventas está completo; en Team solo falta la que espera al frente 9', () => {
+    const g = agrupadoPorGrupo(catalogo)
+    const sinCablear = (n: string) =>
+      g.find(x => x.grupo === n)!.tarjetas.filter(c => c.component == null).map(c => c.key)
+    expect(sinCablear('Ventas')).toEqual([])
+    expect(sinCablear('Team')).toEqual(['personal.pct_sobre_ventas'])
   })
 
   // Si alguien añade una tarjeta y olvida el grupo, cae en «Otras» y esto la

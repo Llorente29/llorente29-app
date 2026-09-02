@@ -42,6 +42,7 @@ import BolsaHorasPage from '@/pages/BolsaHorasPage'
 import Cuadrantes from '@/modules/personal/home/Cuadrantes'
 import EnCocinaAhora from '@/modules/personal/home/EnCocinaAhora'
 import BolsaHoras from '@/modules/personal/home/BolsaHoras'
+import SinFichar from '@/modules/personal/home/SinFichar'
 
 export const personalModule: ModuleDefinition = {
   id: 'personal',
@@ -100,6 +101,13 @@ export const personalModule: ModuleDefinition = {
   // ── TARJETAS QUE ESTE MÓDULO APORTA AL INICIO ────────────────────────────
   // §1.6 de la maqueta. Sin cifra grande: una fila por local con su estado.
   homeCards: [
+    {
+      key: 'personal.sin_fichar_con_turno', title: 'Sin fichar teniendo turno',
+      grupo: 'Team', size: 'sm', source: 'clock_entries', requiredRole: 'manager',
+      drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' },
+      component: SinFichar,
+    },
+
     {
       key: 'personal.bolsa_horas', title: 'Bolsa de horas', grupo: 'Team', size: 'sm',
       source: 'clock_entries', requiredRole: 'manager',
