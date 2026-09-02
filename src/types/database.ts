@@ -18518,6 +18518,7 @@ export type Database = {
           depth: number
         }[]
       }
+      kitchen_archive_item: { Args: { p_item_id: string }; Returns: Json }
       kitchen_day_banner: { Args: { p_location_id: string }; Returns: Json }
       kitchen_day_banner_by_token: {
         Args: { p_device_token: string }
@@ -18604,6 +18605,7 @@ export type Database = {
         Args: { p_from: string; p_location_id: string; p_to: string }
         Returns: Json
       }
+      kitchen_unarchive_item: { Args: { p_item_id: string }; Returns: Json }
       learn_from_receipt: { Args: { p_receipt_id: string }; Returns: number }
       learn_supplier_alias: { Args: { p_receipt_id: string }; Returns: boolean }
       licensed_economics_dashboard: {
