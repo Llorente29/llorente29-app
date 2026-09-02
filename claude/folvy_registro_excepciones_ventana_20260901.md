@@ -132,3 +132,57 @@ merge, y los dos commits entraron juntos.
 **El vigía, verificado en vivo tras aplicarlo:** Cocina (Alcalá) sale con 25
 bundles de atraso y 119 h → avisa. Pase y camichi4, 1 de atraso y 0 h → rojos
 en pantalla y sin aviso. El desfase se mide en tiempo, no en número de bundles.
+
+---
+
+## 6 · 02/09 · El acta que afirmó más de lo que había
+
+No es una excepción de ventana. Está aquí porque es la lección del día y porque
+el sitio donde falló no fue el código: fue el informe.
+
+**Lo que dijo el acta.** El commit `23c64b77` («Inicio P1 · sub-lote 2»), en su
+lista de cosas resueltas:
+
+> «Al cablear las tarjetas de resumen se perdía su onOpen y dejaban de abrir su
+> módulo. Arreglado en el contrato: HomeCardProps lleva onDrill, que el Inicio
+> ata por tarjeta desde su drillRoute.»
+
+**Lo que hay.** `HomeGeneral.tsx:311` ata desde otro campo:
+
+```
+onDrill={c.drillRoute ? () => onOpenModule?.(c.moduleId) : undefined}
+homeCatalog.ts:60      ...c, moduleId: 'shell', moduleName: 'Inicio',
+```
+
+El `moduleId` de las siete tarjetas es `'shell'`, y no existe ningún módulo con
+ese id en el registry. `goToKey('shell')` recorre sus tres ramas y **no hace
+nada**. El click es un no-op silencioso en las cuatro tarjetas que tienen drill.
+La garantía (c) del encargo —drill-through al módulo con el filtro puesto—
+quedó declarada hecha y no funciona ni sin filtro.
+
+**Por qué importa más que el fallo.** Un `moduleId` donde iba un `drillRoute` es
+un descuido de dos palabras; se arregla en un minuto y se caza probando la
+pantalla. Lo que no se caza probando es un acta que dice que ya se probó. El
+commit convirtió un cambio no verificado en un hecho registrado, y a partir de
+ahí nadie tenía motivo para volver a mirarlo: Julio abrió el Inicio dos días
+después y descubrió que el click no llevaba a ninguna parte.
+
+Y no fue el único de la misma familia ese día. Las tres garantías del encargo
+—(a) sello de frescura por tarjeta, (b) todo delta contra su espejo, (c)
+drill-through— no aparecen en el acta ni como hechas ni como pendientes, salvo
+la (c), que aparece como hecha. **Desaparecer del acta y aparecer cumplida son
+el mismo fallo con distinto signo.**
+
+**La regla que deja.** Una línea de «arreglado» en un mensaje de commit es una
+afirmación sobre el mundo, y vale exactamente lo que valga la comprobación que
+la respalda. Si no se ha visto funcionar, se escribe lo que se hizo —«se añade
+onDrill al contrato»— y no lo que se supone que ahora ocurre. Y lo que el
+encargo pedía y no entró se escribe entero, aunque la decisión de no hacerlo
+fuera razonable: el sitio donde se escribe que algo no se hizo no puede ser
+solo un comentario dentro del fichero que no se hizo.
+
+*(Hermana de la del mismo día, más abajo en el mismo escalón: verificar con
+`npx tsc --noEmit` y `npx vite build` por separado y decir «build verde», cuando
+la cadena corre `npm run build`. Cuatro despliegues a producción en ERROR y una
+mañana sin Inicio. También ahí el fallo fue afirmar sobre una comprobación que
+no era la que importaba.)*
