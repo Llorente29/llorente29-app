@@ -1,0 +1,44 @@
+-- 20260902T2330_bandera_sospechosa_umbral_40.sql
+-- APLICADA y verificada el 02/09. Frente 21, decidido por Julio.
+-- Una sola firma. El cuerpo es el de 20260902T2310 con el umbral cambiado.
+--
+-- ── LA RAMA ALTA DE LA BANDERA NO PODIA ENCENDERSE ─────────────────────────
+-- Al corregir el denominador (20260902T2200) desaparecieron las dos marcas
+-- «sospechosas». Julio pidio lo contrario de celebrarlo: probar la bandera
+-- contra un caso que si deba dispararse, porque sus umbrales se fijaron mirando
+-- numeros que estaban mal.
+--
+-- 68 observaciones (17 marcas x 4 ventanas: 30 dias, agosto, julio, junio):
+--
+--   minimo   5,4 %      por encima de 60:  0
+--   mediana 21,6 %      por encima de 40:  0
+--   p95     31,1 %      por debajo de  8:  1   (julio, una marca al 5,4 %)
+--   MAXIMO  33,1 %
+--
+-- La rama `< 8` esta VIVA y hace su trabajo. La rama `> 60` estaba MUERTA: el
+-- maximo real esta a 27 puntos del liston. El 60 se puso cuando los combos
+-- inflaban el numero al doble — Deep Pizza marcaba 78,6 % y es 32,9 %.
+--
+-- Una alarma que no puede sonar es `list_costless_sold_products` con otra ropa.
+--
+-- ── POR QUE 40, Y POR QUE ES INTERINO ──────────────────────────────────────
+-- 40 son SIETE PUNTOS por encima de la peor marca real: no salta por variacion
+-- normal y sigue por debajo de donde un food cost deja de ser un margen. Es un
+-- numero con padre, no uno redondo.
+--
+-- Y ESTA DECLARADO PROVISIONAL EN EL PROPIO CODIGO, con su fecha de caducidad
+-- nombrada: el umbral bueno no es absoluto, es «X puntos sobre el objetivo de
+-- la cuenta». Hoy no se puede — `kitchen_settings.target_food_cost_pct` existe
+-- como columna pero Foodint NO TIENE FILA en `kitchen_settings`. Ese es el
+-- frente A7, que Julio deja abierto a proposito y que a partir de ahora tiene
+-- un consumidor: el dia que el objetivo exista, este 40 se sustituye por el
+-- relativo y la bandera deja de envejecer sola.
+--
+-- VERIFICADO DESPUES: 1 firma, 68 observaciones, 1 marcada (la de julio, por la
+-- rama baja), 0 por la rama alta, maximo 33,1 %. Que hoy no salte por arriba es
+-- lo correcto: 40 esta por encima del maximo real. Lo que ya no es cierto es
+-- que no PUEDA saltar.
+--
+-- El cuerpo completo va en 20260902T2310; aqui solo cambia, dentro de by_brand:
+--     round(...) > 60   ->   round(...) > 40
+-- y el bloque de comentario que explica el porque y la interinidad.

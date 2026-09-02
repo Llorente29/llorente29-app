@@ -832,6 +832,64 @@ Porque su consulta hace `join recipe_item ri on ri.id = mi.recipe_item_id`, y
 **un combo no tiene receta propia** — es lo que lo hace un combo. El INNER JOIN
 lo tira. El reparador tiene un punto ciego con la forma exacta de un combo.
 
+### LAS DOS MEDIDAS QUE PIDIÓ JULIO ANTES DE TOCAR, Y LO QUE DICEN
+
+**Medida 1 — qué más ciega ese `INNER JOIN`, aparte de los combos.** Universo:
+líneas sin `sale_line.computed_cost`, **las tres cuentas, sin ventana**:
+
+| Lo que el `join` deja fuera | líneas | cuentas | ¿es punto ciego? |
+|---|---:|---:|---|
+| No es línea de producto (`modifier` / `combo_item`) | 9.539 | 3 | **No.** Su coste va en el padre, por diseño |
+| **PADRE DE COMBO (sin receta propia)** | **1.389** | **3** | **SÍ. El único** |
+| Sin `menu_item` | 939 | 3 | No: no hay de dónde costear |
+| `menu_item` sin receta enlazada | 236 | 2 | No: no hay de dónde costear |
+| Receta **solo** con `fixed_cost` | **0** | — | **No existe hoy** |
+| Receta sin ningún coste | **0** | — | **No existe hoy** |
+| Lo que el barrido sí recoge hoy | 58 | 1 | — |
+
+Las dos hipótesis que Julio nombró —`fixed_cost` sin receta, y productos
+costeados por otra vía— **miden cero**. El punto ciego es uno solo, y tiene forma
+de combo.
+
+**Medida 2 — cuántas hay fuera de la ventana de 30 días.** Y aquí está el aviso:
+
+| Cuenta | Padres sin coste | **Reparables** | Últimos 30 d | **Más antiguas** | € reparable |
+|---|---:|---:|---:|---:|---:|
+| Foodint | 1.157 | **605** | 133 | **472** | 14.375 € |
+| Kitchen Grill LstQ | 180 | **0** | 0 | 0 | — |
+| Folvy Interno | 52 | 1 | 0 | 1 | 27 € |
+
+**No son 131: son 606, y llegan hasta el 12/06.** Julio dijo «si son cuatro, se
+olvidan; si son mil, es otra decisión». Son 472 fuera de la ventana, en **tres
+cuentas** — el número que di antes era de Foodint y de 30 días.
+
+*(Kitchen Grill LstQ tiene 180 padres sin coste y **cero reparables**: sus combos
+tienen todos algún componente sin casar. Ahí el `where` no arregla nada; es
+catálogo del cliente 2.)*
+
+### Y UNA TERCERA MEDIDA QUE NADIE PIDIÓ Y CAMBIA LA PREGUNTA
+
+Julio puso como condición: *«nunca recalcular una línea que ya tiene coste:
+recostear una venta de hace tres semanas con la receta de hoy reescribe
+historia»*. La guarda `computed_cost is null` cumple eso al pie de la letra —
+pero **no protege de lo mismo por el otro lado**: estas 606 líneas **nunca han
+tenido coste**, así que no se recalculan, se calculan por primera vez… **con la
+receta de hoy**.
+
+> **598 de las 606 (98,7 %, 14.361 €) se costearían con una receta que se tocó
+> DESPUÉS de la venta.** La más vieja es del 07/06; la última receta tocada, de
+> hoy.
+
+Y no hay forma de hacerlo bien: existe `recipe_item_version` —con `valid_from`,
+`valid_to` y `computed_cost`, que es exactamente la tabla para costear una venta
+a su precio de entonces— y **tiene 0 filas**. El mecanismo está diseñado y nunca
+se llenó.
+
+*Matiz honesto:* `recipe_item.updated_at` se mueve por muchas razones (un
+nombre, una foto, una cascada de recálculo), no solo porque cambie el coste. Así
+que «tocada después» no es «el coste cambió». Pero sin histórico **no se puede
+distinguir**, y por eso el 98,7 % no se puede descartar.
+
 ### La propuesta, y por qué no la he aplicado
 
 El arreglo es al `where` del barrido: además de las líneas de producto con
@@ -845,9 +903,18 @@ un food cost del **26,3 %** para ese grupo. Está en familia con el resto de la
 casa (mediana 21,6 %, máximo 33,1 %), que es la señal de que el número
 reparado no es absurdo.
 
-**No se ha aplicado, y la razón no es la banda:** es que **escribe datos de
-producción** —rellena 131 filas de `sale_line`— y eso es más que redefinir una
-función. Va con la decisión de Julio delante, no detrás.
+**PARADO ANTES DE ESCRIBIR, por la condición que puso el propio Julio:** *«si
+aparece un tercer grupo, se vuelve a preguntar antes de escribir»*. No apareció
+un tercer grupo de líneas —el punto ciego es solo el combo— pero **sí cambió la
+escala y apareció un problema que no estaba sobre la mesa**: 606 líneas y no
+131, tres cuentas y no una, 14.375 € y no 3.338, hasta el 07/06 — y el 98,7 % se
+costearía con una receta posterior a la venta, sin histórico con el que hacerlo
+bien.
+
+Las tres condiciones restantes están listas y escritas (guarda
+`computed_cost is null`, lista de ids en la migración, y el barrido publicando
+reparadas/rechazadas). Lo único que falta es **el alcance**, y ése no lo decido
+yo.
 
 **Qué se movería y qué no**, para que nadie se lleve una sorpresa:
 
@@ -1011,6 +1078,76 @@ escritura y se le deja el SELECT, igual que la F0.4 hizo con `anon`.
 con el guard verde y la cabecera diciendo la verdad. Cuando el alcance se pone
 en el título, lo que queda fuera del título no se ve que falta.
 
+### ¿ENTRÓ ALGUIEN? — la pregunta que faltaba, y que aquí sí importaba
+
+Julio: *cerrar la puerta sin mirar si entró alguien es media medida, y aquí, a
+diferencia de las trece, la puerta daba a algo con presupuesto.*
+
+**No hay evidencia de manipulación. Y no se puede demostrar que no la hubo.** Las
+dos frases van juntas.
+
+*Lo que se comprobó:*
+
+| Prueba | Resultado |
+|---|---|
+| `n_tup_del` de por vida | **0** — no consta ni un DELETE |
+| Filas por cuenta | **40, todas de Foodint.** Ninguna cuenta ajena escribió ahí |
+| Contadores vs tope | Todos entre 3 y 16, con el tope en 30. **Ninguno a 0**, ninguno por encima del tope |
+| Cruce con `social_post` | Día a día, **los posts NUNCA superan al contador**. Un reset para ganar presupuesto dejaría el rastro contrario |
+| Trigger de auditoría / tabla de histórico | **No existe ninguno** |
+| Otras funciones que la tocan | **Ninguna**, solo `claim_n2_budget` |
+
+*Lo que NO se puede saber, y por qué:* no hay trigger de auditoría ni histórico
+de fila, así que **no existe registro de quién escribió qué**. Un `UPDATE`
+malicioso y un incremento legítimo del agente son la misma operación sobre la
+misma columna.
+
+### DOS CORRECCIONES A ESTE MISMO RECON, que salieron al hacer la forense
+
+**1. `pg_stat_statements` NO prueba lo que dije que probaba.** Escribí «TODAS las
+consultas que han tocado estas trece tablas las hizo `postgres`». La medida real
+es `pg_stat_statements.track = 'top'` *(comprobado)*: **las sentencias de dentro
+del cuerpo de una función NO se registran**. La prueba está a la vista — el
+contador tiene 173 incrementos hechos por `claim_n2_budget` y en
+`pg_stat_statements` **no aparece ni uno**.
+
+*La conclusión de las trece sigue en pie, pero por otro motivo:* se probó aparte
+que **ninguna función, vista, trigger ni cron las nombra**, así que no hay
+cuerpo de función donde una llamada pudiera esconderse. El resultado era
+correcto; el razonamiento que publiqué, no.
+
+**2. Los contadores de `pg_stat_user_tables` no cubren toda la vida de la base.**
+Dije que sí, apoyándome en que `pg_stat_database.stats_reset` está a NULL. La
+refutación es aritmética y está en esta misma tabla: **40 filas existentes con
+`n_tup_ins = 6`**. Seis inserciones registradas no crean cuarenta filas. Los
+contadores por tabla se perdieron en algún momento.
+
+*Qué debilita:* la línea «nunca leída» de las seis tablas con `seq_scan = 0` es
+más floja de lo que la escribí. *Qué no toca:* las otras tres pruebas —objetos
+de la base, código, y que nada las nombre— que son las que sostienen la
+conclusión.
+
+### `spatial_ref_sys` (bloque 2): intentado, y NO se puede — ni falla
+
+Julio avisó de que el dueño es `supabase_admin` y el `revoke` podía dar
+«must be owner». Lo que pasa es **peor que un error**:
+
+> El `REVOKE` se ejecutó **sin error y sin efecto.** Verificado después con
+> `has_table_privilege`: `anon` sigue con SELECT, INSERT, UPDATE y DELETE.
+
+El motivo, medido en `information_schema.role_table_grants`: **los catorce grants
+los concedió `supabase_admin`**, y en Postgres un `REVOKE` solo retira las
+concesiones que hizo quien lo ejecuta. `postgres` no es dueño ni concedente, así
+que su revoke es un **no-op silencioso**. Exactamente la familia del frente 11:
+una operación que sale bien y no hace nada.
+
+**Se deja como está, según lo acordado:** las cuatro funciones que usan la tabla
+(`resolve_delivery_zone`, `shop_check_delivery`, `upsert_delivery_zone_polygon`,
+`upsert_delivery_zone_radius`) son `SECURITY DEFINER`, así que el grant es
+inerte. Queda anotado que **no es que no se haya hecho: es que desde este rol no
+se puede hacer**, y que si algún día importa, hay que pedirlo por el panel de
+Supabase o asumir que es inalcanzable.
+
 **Propuesta, en dos pasos separados:**
 1. `revoke all on <las 13> from anon, authenticated;` — reversible, inmediato,
    y no puede romper nada porque ninguna pantalla las lee. `spatial_ref_sys` se
@@ -1089,50 +1226,48 @@ de CI sí comprueba.** El agujero era solo de comprobación manual y de lo que s
 escribía en los registros.
 
 
-## 21 · La bandera «sospechoso» tiene una rama que no puede encenderse
-**Abierto:** 02/09/2026 · **Probada, no celebrada** · **C1 de Julio**
+## 21 · La bandera «sospechoso» tenía una rama muerta — CERRADO el 02/09, como PROVISIONAL
+**Abierto y cerrado el 02/09** · **Probado, no celebrado** · **Migración `20260902T2330`**
 
-Al cerrar el frente 14 desaparecieron las dos marcas marcadas como sospechosas.
-La tentación era contarlo como éxito. Julio pidió lo contrario: **probar la
-bandera contra un caso que sí deba dispararse**, porque sus umbrales se fijaron
-mirando números que estaban mal —con Deep Pizza al 78,6 %— y un listón puesto
-para aquello puede haber quedado inalcanzable. Una bandera que no puede
-encenderse es `list_costless_sold_products` con otra ropa.
+Al cerrar el frente 14 desaparecieron las dos marcas sospechosas. La tentación
+era contarlo como éxito. Julio pidió lo contrario: **probar la bandera contra un
+caso que sí deba dispararse**, porque sus umbrales se fijaron mirando números que
+estaban mal. Una bandera que no puede encenderse es
+`list_costless_sold_products` con otra ropa.
 
-**La medida.** 68 observaciones = 17 marcas × 4 ventanas (30 días, agosto,
-julio, junio), con la métrica nueva:
+**La medida.** 68 observaciones = 17 marcas × 4 ventanas, métrica nueva:
 
-| | valor |
-|---|---:|
-| mínimo | 5,4 % |
-| mediana | 21,6 % |
-| p95 | 31,1 % |
-| máximo | **33,1 %** |
-| por encima de 60 % (`> 60`) | **0** |
-| por encima de 40 % | **0** |
-| por debajo de 8 % (`< 8`) | **1** |
+| | valor | | |
+|---|---:|---|---:|
+| mínimo | 5,4 % | por encima de 60 | **0** |
+| mediana | 21,6 % | por encima de 40 | **0** |
+| p95 | 31,1 % | por debajo de 8 | **1** |
+| **máximo** | **33,1 %** | | |
 
-**Veredicto, rama por rama:**
+- **`< 8` VIVA**: se disparó en julio, una marca al 5,4 %. Caza «falta coste».
+- **`> 60` MUERTA**: el máximo real está a 27 puntos del listón.
 
-- **`< 8` está VIVA y sirve.** Se disparó una vez: julio, una marca al 5,4 %.
-  Es la rama que caza «falta coste», y hace su trabajo.
-- **`> 60` está MUERTA.** El máximo real en cuatro ventanas y diecisiete marcas
-  es 33,1 %, a 27 puntos del listón. Con la métrica corregida ninguna marca de
-  este negocio puede acercarse: el 60 % se puso cuando los combos inflaban el
-  número al doble. Es una alarma que no puede sonar.
+**Decisión de Julio: bajar la rama alta a 40 %, declarada provisional.**
 
-**Lo que NO se ha hecho:** cambiar el umbral. El número es una decisión de
-negocio y aquí solo se aporta la distribución con la que decidirlo.
+40 son **siete puntos** por encima de la peor marca real: no salta por variación
+normal y sigue por debajo de donde un food cost deja de ser un margen. Un número
+con padre, no uno redondo.
 
-**Propuesta, anclada en el dato y no en el gusto:** bajar la rama alta a **40 %**
-—siete puntos por encima de la peor marca real, así que no dispara por variación
-normal, y bien por debajo de donde un food cost deja de ser un margen— y dejar
-`< 8` como está. Con esos umbrales, las 68 observaciones dan 1 bandera, la de
-julio, que es la que hay que ver.
+### Y lleva escrita su fecha de caducidad, con la dependencia nombrada
 
-**Y un hallazgo de paso:** `kitchen_settings.target_food_cost_pct` existe como
-columna, pero **Foodint no tiene fila en `kitchen_settings`**. Así que hoy no
-hay objetivo configurado con el que anclar el umbral, y por eso la propuesta es
-un número absoluto y no «X puntos sobre el objetivo», que sería lo bueno. Si
-Julio pone el objetivo, la bandera puede pasar a ser relativa y dejar de
-envejecer sola.
+El umbral bueno **no es absoluto**: es «X puntos sobre el objetivo de la cuenta».
+Hoy no se puede — `kitchen_settings.target_food_cost_pct` existe como columna
+pero **Foodint no tiene fila en `kitchen_settings`**. Ése es el frente **A7**,
+que Julio deja abierto a propósito y que **desde hoy tiene un consumidor**: el
+día que el objetivo por marca exista, este 40 se sustituye por el relativo y la
+bandera deja de envejecer sola.
+
+Está escrito así **dentro del propio SQL**, no solo aquí: quien abra
+`food_cost_dashboard` lee por qué es 40, que es interino, y que mire A7 antes de
+tocarlo. Un umbral cuya justificación vive en otro fichero es un número huérfano
+al mes siguiente.
+
+**Verificado después:** 1 firma, 1 bandera (la de julio, rama baja), 0 por la
+rama alta, máximo 33,1 %. Que hoy no salte por arriba es lo correcto. Lo que ya
+no es cierto es que no **pueda**.
+
