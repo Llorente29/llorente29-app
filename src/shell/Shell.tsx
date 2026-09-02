@@ -55,7 +55,11 @@ export default function Shell() {
   // ENCARGO CODE (14/08) Pendientes Fase 1, B.1 — un solo fetch aquí; el
   // contador se pasa al TopBar y decide el aterrizaje en Home. NUNCA cuenta
   // 'salud' (solo ahora+semana, ver usePendingBoard).
-  const { actionableCount: pendingActionableCount, loading: pendingLoading } = usePendingBoard()
+  const {
+    actionableCount: pendingActionableCount,
+    actionableFreshCount: pendingFreshCount,
+    loading: pendingLoading,
+  } = usePendingBoard()
 
   // Lista de cuentas para el selector. Usuario normal: solo SUS cuentas (accounts
   // del contexto). Platform admin: TODAS (puede gestionar cualquier cliente).
@@ -155,11 +159,18 @@ export default function Shell() {
     if (moduleBasePath !== '') return          // no se entra por la raíz: nada que decidir
     if (pendingLoading) return                 // todavía no se sabe si hay algo
     aterrizajeConsumido.current = true         // decidido: no se vuelve a decidir
-    if (pendingActionableCount > 0) {
+    // LO RECIENTE, no el historico. Con el contador total, ocho filas viejas
+    // —dos borradores de albaran de julio y seis lineas sin coste desde el
+    // 16/06— mandaban a Pendientes todos los dias, para siempre. Un aviso
+    // permanente deja de ser un aviso: se ve una vez y se deja de mirar, y
+    // entonces el dia que aparece algo de verdad tampoco se mira.
+    // La pestaña sigue contando las 18 y la pantalla sigue enseñandolas: el
+    // umbral vive solo en lo que INTERRUMPE (Regla 7).
+    if (pendingFreshCount > 0) {
       navigate('/pendientes', { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moduleBasePath, pendingLoading, pendingActionableCount])
+  }, [moduleBasePath, pendingLoading, pendingFreshCount])
 
   const activeItem = activeModule
     ? (activeModule.sidebar.items.find(i => i.path === itemPathFromUrl)

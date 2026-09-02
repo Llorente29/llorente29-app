@@ -14,6 +14,16 @@ export interface UsePendingBoardResult {
   error: string | null
   /** Suma de items en capas 'ahora' + 'semana'. NUNCA 'salud' (B.1). */
   actionableCount: number
+  /**
+   * Lo accionable que ADEMÁS es reciente (7 días), para decidir el aterrizaje.
+   *
+   * No sustituye a `actionableCount`: el contador de la pestaña y la pantalla
+   * de Pendientes siguen contando y enseñando TODO. Este número solo gobierna
+   * lo que interrumpe — secuestrar la pantalla de entrada—, que es el único
+   * sitio donde un umbral es respeto por la atención de quien entra y no una
+   * forma de esconder filas (Regla 7).
+   */
+  actionableFreshCount: number
   refetch: () => void
 }
 
@@ -38,9 +48,17 @@ export function usePendingBoard(): UsePendingBoardResult {
 
   const refetch = useCallback(() => setTick(t => t + 1), [])
 
-  const actionableCount = items
-    .filter(i => i.layer === 'ahora' || i.layer === 'semana')
-    .reduce((sum, i) => sum + i.items, 0)
+  const accionables = items.filter(i => i.layer === 'ahora' || i.layer === 'semana')
+  const actionableCount = accionables.reduce((sum, i) => sum + i.items, 0)
 
-  return { items, loading, error, actionableCount, refetch }
+  // `items_recientes` lo pone pending_board (20260902T0620). Si un servidor
+  // viejo no lo manda, se cae a `items`: el comportamiento de antes. Degradar
+  // hacia «aterriza» es lo correcto — un aterrizaje de más molesta; uno de
+  // menos esconde trabajo que había que ver al entrar.
+  const actionableFreshCount = accionables.reduce((sum, i) => {
+    const recientes = i.detail?.items_recientes
+    return sum + (typeof recientes === 'number' ? recientes : i.items)
+  }, 0)
+
+  return { items, loading, error, actionableCount, actionableFreshCount, refetch }
 }
