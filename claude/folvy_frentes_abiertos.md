@@ -8,6 +8,36 @@ entonces se mueve al registro de decisiones, no se borra.
 Distinto de `folvy_registro_excepciones_ventana_20260901.md`, que guarda lo que
 SÍ se hizo fuera de norma y qué enseñó.
 
+
+## POR AQUÍ SE EMPIEZA LA PRÓXIMA (cerrado el 02/09)
+
+Escrito en el repositorio a propósito: hoy dos cosas se salieron del contexto de
+la conversación y hubo que pararse a recuperarlas. Esto no depende de ninguna
+sesión.
+
+**1 · Desplegar `offers-agent`.** El código YA está commiteado y lee
+`agent_pause` (dos líneas, junto al bucle de `offers_agent_config`). Falta solo
+el despliegue de la edge function. En cuanto esté, su fila del panel «Mis
+agentes» cambia sola de «todavía no se puede pausar desde aquí» a interruptor
+operativo — el panel ya está preparado y no hay que tocarlo.
+
+**2 · Las tres tarjetas que faltan de las cinco**, por este orden:
+
+| Tarjeta | De dónde sale | Estado del RECON |
+|---|---|---|
+| **Conteos pendientes** | `listInventoryCounts(accountId, locationId)` de `inventoryCountService` | Mirado. El criterio «sin cerrar» ya está escrito en `atencionService`: vivos son `contando` y `en_revision`; `aprobado` y `anulado` son finales |
+| **Pedidos atascados** | el criterio lo define el vigía `hubrise-order-stuck-watchdog` | Sin mirar. Leer el vigía ANTES de escribir la consulta: el criterio de «atascado» ya existe y no se inventa otro |
+| **Salud de conexiones** | `connectorService` (`listAccountConnectors`) + `hubrise-connection-health` | Sin mirar. Falta ver la forma de `AccountConnector` |
+
+Las tres son de grupo Almacén / Canales y ya están declaradas como P2 en
+`src/shell/home/cards/p2Cards.ts`: cablearlas es ponerles `component` y sacarlas
+de esa lista. La prueba del catálogo pasará de «8 y 13» a «11 y 10» — y hay que
+actualizarla, que es justo el despiste que costó una prueba roja empujada hoy.
+
+**Lo que NO toca todavía:** «% personal sobre ventas» y «Puntos de pedido»
+(frentes 9 y 10). Están DECIDIDOS pero no construidos, y el 10 tiene cinco
+guardas que hay que leer enteras antes de escribir la primera línea.
+
 ---
 
 ## 1 · «Salsa Tzatziki» sale siete veces en el panel de opciones agotadas
