@@ -24,6 +24,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { BarChart3 } from 'lucide-react'
+import { eurEntero } from '@/lib/dinero'
 import TarjetaInicio from '@/shell/home/widgets/TarjetaInicio'
 import { useDatoDeTarjeta } from '@/shell/home/cards/useDatoDeTarjeta'
 import type { HomeCardProps } from '@/shell/types'
@@ -36,8 +37,6 @@ import {
 const UMBRAL_MIN = 30
 const ALTO = 96
 
-const eur0 = (n: number) =>
-  n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
 
 export default function GraficaCatorceDias({ accountId, locationId, drillTo }: HomeCardProps) {
   const [encima, setEncima] = useState<number | null>(null)
@@ -58,8 +57,10 @@ export default function GraficaCatorceDias({ accountId, locationId, drillTo }: H
   const maximo = useMemo(() => Math.max(1, ...dias.map(d => d.total)), [dias])
 
   const detalle = encima != null && dias[encima]
-    ? `${etiquetaCorta(dias[encima].ymd)} · ${eur0(dias[encima].total)}`
-      + (dias[encima].enCurso ? ' · en curso' : '')
+    ? dias[encima].futuro
+      ? `${etiquetaCorta(dias[encima].ymd)} · todavía no ha llegado`
+      : `${etiquetaCorta(dias[encima].ymd)} · ${eurEntero(dias[encima].total)}`
+        + (dias[encima].enCurso ? ' · en curso' : '')
     : null
 
   return (
@@ -88,7 +89,10 @@ export default function GraficaCatorceDias({ accountId, locationId, drillTo }: H
         <div style={{ marginTop: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: ALTO }}>
             {dias.map((d, i) => {
-              const alto = Math.max(2, Math.round((d.total / maximo) * ALTO))
+              // Un día que aún no ha llegado NO tiene barra. Pintarlo a cero
+              // sería enseñar una caída que no ha ocurrido; dejar su hueco dice
+              // la verdad y mantiene el eje cuadrado.
+              const alto = d.futuro ? 0 : Math.max(2, Math.round((d.total / maximo) * ALTO))
               const esPico = picos.has(i)
               return (
                 <button
@@ -100,27 +104,34 @@ export default function GraficaCatorceDias({ accountId, locationId, drillTo }: H
                   onBlur={() => setEncima(e => (e === i ? null : e))}
                   // El lector de pantalla no ve ni la opacidad ni el gris: se le
                   // dice con palabras lo mismo que dice el dibujo.
-                  aria-label={`${etiquetaCorta(d.ymd)}: ${eur0(d.total)}, ${d.pedidos} pedidos${
-                    d.enCurso ? ', día en curso' : ''}`}
+                  aria-label={d.futuro
+                    ? `${etiquetaCorta(d.ymd)}: todavía no ha llegado`
+                    : `${etiquetaCorta(d.ymd)}: ${eurEntero(d.total)}, ${d.pedidos} pedidos${
+                        d.enCurso ? ', día en curso' : ''}`}
                   style={{
                     flex: 1, height: '100%', padding: 0, border: 0, background: 'none',
                     display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
                     cursor: 'pointer', position: 'relative',
                   }}
                 >
-                  {esPico || encima === i ? (
+                  {!d.futuro && (esPico || encima === i) ? (
                     <span style={{
                       fontSize: '0.625rem', color: 'var(--color-text-secondary)',
                       marginBottom: 2, whiteSpace: 'nowrap',
                     }}>
-                      {eur0(d.total)}
+                      {eurEntero(d.total)}
                     </span>
                   ) : null}
                   <span style={{
                     display: 'block', height: alto,
                     borderRadius: '4px 4px 0 0',
+                    // UN SOLO TONO, la tinta de la casa, y la diferencia en la
+                    // OPACIDAD. `--color-accent` es #15171A: a opacidad plena
+                    // las barras del finde salían negras, que es un color que
+                    // en un panel se lee como «error» o como «otra serie».
+                    // 0,62 y 0,30 mantienen la misma familia y se distinguen.
                     background: d.enCurso ? 'var(--color-text-secondary)' : 'var(--color-accent)',
-                    opacity: d.enCurso ? 0.45 : (d.esFinde ? 1 : 0.45),
+                    opacity: d.enCurso ? 0.35 : (d.esFinde ? 0.62 : 0.3),
                     outline: encima === i ? '2px solid var(--color-bg-card)' : undefined,
                   }} />
                 </button>

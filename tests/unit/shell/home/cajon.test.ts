@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { agrupadoPorGrupo, novedades } from '@/shell/home/homeCatalog'
+import { agrupadoPorGrupo, novedades, enumeraHastaTres } from '@/shell/home/homeCatalog'
 import type { CatalogEntry } from '@/shell/home/homeCatalog'
+
+/** Una P2: declarada y sin componente. */
+function cardP2(key: string, grupo?: string, title = key): CatalogEntry {
+  return { key, title, size: 'sm', grupo, moduleId: 'x', moduleName: 'Módulo X' } as CatalogEntry
+}
 
 function card(key: string, grupo?: string, title = key): CatalogEntry {
   return {
@@ -39,32 +44,57 @@ describe('agrupadoPorGrupo · el idioma del negocio, no el de los módulos', () 
 })
 
 describe('novedades · lo que ha llegado y no tienes', () => {
-  const CATALOGO = [card('a', 'Ventas'), card('b', 'Team'), card('c', 'Cocina')]
+  // Con componente = ya da dato. Sin componente = P2, prometida y sin cablear.
+  const CATALOGO = [card('a', 'Ventas'), card('b', 'Team'), cardP2('p1', 'Cocina'), cardP2('p2', 'Canales')]
 
-  it('son las disponibles que no están en tu mosaico', () => {
-    expect(novedades(['a'], CATALOGO).map(c => c.key)).toEqual(['b', 'c'])
+  it('separa lo que YA da dato de lo prometido', () => {
+    const n = novedades(['a'], CATALOGO)
+    expect(n.cableadas.map(c => c.key)).toEqual(['b'])
+    expect(n.p2.map(c => c.key)).toEqual(['p1', 'p2'])
   })
 
-  it('con todas puestas, ninguna novedad', () => {
-    expect(novedades(['a', 'b', 'c'], CATALOGO)).toEqual([])
+  // Lo que Julio prohíbe expresamente: un «Añadirlas» que llene el Inicio de
+  // huecos punteados. Las P2 se mencionan, nunca se ofrecen con botón.
+  it('las P2 NUNCA salen entre las ofrecibles', () => {
+    const n = novedades([], CATALOGO)
+    expect(n.cableadas.every(c => c.component != null)).toBe(true)
+    expect(n.cableadas.map(c => c.key)).toEqual(['a', 'b'])
+  })
+
+  it('con todas puestas, ninguna novedad de ninguna clase', () => {
+    const n = novedades(['a', 'b', 'p1', 'p2'], CATALOGO)
+    expect(n.cableadas).toEqual([])
+    expect(n.p2).toEqual([])
   })
 
   // Sin recordar el «no, gracias», el aviso reaparece en cada carga y a la
   // tercera se ignora — y con él se ignora el de huérfanas, que sí importa.
-  it('una descartada NO se vuelve a ofrecer', () => {
-    expect(novedades(['a'], CATALOGO, ['b']).map(c => c.key)).toEqual(['c'])
+  it('una descartada NO se vuelve a ofrecer, sea cableada o P2', () => {
+    const n = novedades(['a'], CATALOGO, ['b', 'p1'])
+    expect(n.cableadas).toEqual([])
+    expect(n.p2.map(c => c.key)).toEqual(['p2'])
   })
 
-  it('descartar todas deja el aviso callado del todo', () => {
-    expect(novedades(['a'], CATALOGO, ['b', 'c'])).toEqual([])
-  })
-
-  // Una clave huérfana en el layout no convierte su tarjeta en novedad: no
-  // está en el catálogo, así que no puede ofrecerse.
   it('una clave guardada que ya no existe no genera novedad', () => {
-    expect(novedades(['a', 'borrada'], CATALOGO).map(c => c.key)).toEqual(['b', 'c'])
+    expect(novedades(['a', 'borrada'], CATALOGO).cableadas.map(c => c.key)).toEqual(['b'])
   })
 })
+
+describe('enumeraHastaTres · tres nombres y un recuento', () => {
+  // Quince nombres seguidos no son una lista: son un párrafo que nadie lee, y
+  // el aviso deja de avisar.
+  it('hasta tres, los nombra; a partir de ahí, cuenta', () => {
+    expect(enumeraHastaTres(['A'])).toBe('A')
+    expect(enumeraHastaTres(['A', 'B'])).toBe('A y B')
+    expect(enumeraHastaTres(['A', 'B', 'C'])).toBe('A, B y C')
+    expect(enumeraHastaTres(['A', 'B', 'C', 'D'])).toBe('A, B, C y 1 más')
+    expect(enumeraHastaTres(['A', 'B', 'C', 'D', 'E', 'F'])).toBe('A, B, C y 3 más')
+  })
+  it('sin nombres, cadena vacía y no «y 0 más»', () => {
+    expect(enumeraHastaTres([])).toBe('')
+  })
+})
+
 
 // ── LAS 21 DEL CATÁLOGO APROBADO ───────────────────────────────────────────
 // Estas pruebas leen el catálogo DE VERDAD, no un fixture: son las que se

@@ -44,6 +44,7 @@ import { useApp } from '../../context/AppContext'
 import { useLocationScope } from '../../modules/multitenancy/hooks/useLocationScope'
 import {
   getHomeCatalog, catalogoDisponible, resolverMosaico, agrupadoPorGrupo, novedades,
+  enumeraHastaTres,
   mover, alternar, type CatalogEntry,
 } from './homeCatalog'
 import { LAYOUT_POR_DEFECTO, TARJETAS_RETIRADAS, nombreDeTarjetaRetirada } from './cards/shellCards'
@@ -234,7 +235,9 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
       setError('No se ha guardado: no hay sesión o cuenta activa. Vuelve a entrar e inténtalo.')
       return
     }
-    const claveS = nuevas.map(c => c.key)
+    // Se descartan las dos clases: si dices que no, no vuelve a aparecer ni la
+    // mención de las P2.
+    const claveS = [...nuevas.cableadas, ...nuevas.p2].map(c => c.key)
     setDescartadas(d => [...d, ...claveS])   // respuesta inmediata al toque
     setGuardando(true); setError(null); setAviso(null)
     try {
@@ -300,7 +303,7 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-warning/10 transition-colors">
                     <Icono size={15} className="text-text-secondary shrink-0" />
                     <span className="text-[13.5px] text-text-primary flex-1 min-w-0">{a.texto}</span>
-                    <span className="text-[12px] font-semibold text-accent shrink-0">Resolver →</span>
+                    <span className="text-[12px] font-semibold text-accent shrink-0">→ {a.destino}</span>
                   </button>
                 </li>
               )
@@ -335,11 +338,11 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
           <button type="button" onClick={() => setCajonAbierto(true)} disabled={cargando}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50">
             <LayoutGrid size={16} /> Personalizar
-            {nuevas.length > 0 && (
-              // El contador cuenta lo NO descartado: si dijiste que no a una,
-              // no vuelve a contar. Un contador que no baja deja de mirarse.
+            {nuevas.cableadas.length > 0 && (
+              // Cuenta solo las que YA dan dato: un contador que incluyera las
+              // P2 prometería quince tarjetas y entregaría quince huecos.
               <span className="ml-1 px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-accent text-text-on-accent">
-                {nuevas.length} {nuevas.length === 1 ? 'nueva' : 'nuevas'}
+                {nuevas.cableadas.length} {nuevas.cableadas.length === 1 ? 'nueva' : 'nuevas'}
               </span>
             )}
           </button>
@@ -388,22 +391,40 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
           se impone — un layout personalizado es del usuario— pero no se calla,
           porque callarlo es como una tarjeta nueva se vuelve invisible justo
           para quien más usa el producto. */}
-      {nuevas.length > 0 && (
+      {(nuevas.cableadas.length > 0 || nuevas.p2.length > 0) && (
         <div className="mb-3 p-3 rounded-md bg-card border border-accent/40 text-sm text-text-primary flex items-start gap-2 flex-wrap">
           <Sparkles size={16} className="shrink-0 mt-0.5 text-accent" />
           <span className="flex-1">
-            {enumeraNombres(nuevas.map(c => c.title))}{' '}
-            {nuevas.length === 1 ? 'es nueva y no la tienes' : 'son nuevas y no las tienes'}{' '}
-            en tu Inicio.
-          </span>
-          <button type="button" disabled={guardando}
-            onClick={() => void guardar(
-              [...claves, ...nuevas.map(c => c.key)],
-              nuevas.length === 1 ? 'Añadida al final de tu Inicio.' : `${nuevas.length} añadidas al final de tu Inicio.`,
+            {nuevas.cableadas.length > 0 && (
+              <>
+                {enumeraHastaTres(nuevas.cableadas.map(c => c.title))}{' '}
+                {nuevas.cableadas.length === 1 ? 'es nueva y no la tienes' : 'son nuevas y no las tienes'}{' '}
+                en tu Inicio.
+              </>
             )}
-            className="shrink-0 px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-text-on-accent disabled:opacity-50">
-            {nuevas.length === 1 ? 'Añadirla' : 'Añadirlas'}
-          </button>
+            {/* Las P2 se MENCIONAN y no se ofrecen. Un «Añadirlas» aquí
+                llenaría el Inicio de huecos punteados, que es lo contrario de
+                lo que un aviso de novedades tiene que conseguir. */}
+            {nuevas.p2.length > 0 && (
+              <span className="block text-[12.5px] text-text-secondary mt-0.5">
+                Hay {nuevas.p2.length} {nuevas.p2.length === 1 ? 'más prometida' : 'más prometidas'}{' '}
+                que todavía no dan dato ({enumeraHastaTres(nuevas.p2.map(c => c.title))});{' '}
+                {nuevas.p2.length === 1 ? 'está' : 'están'} en «Personalizar» con su etiqueta P2.
+              </span>
+            )}
+          </span>
+          {nuevas.cableadas.length > 0 && (
+            <button type="button" disabled={guardando}
+              onClick={() => void guardar(
+                [...claves, ...nuevas.cableadas.map(c => c.key)],
+                nuevas.cableadas.length === 1
+                  ? `«${nuevas.cableadas[0].title}» añadida al final de tu Inicio.`
+                  : `${nuevas.cableadas.length} añadidas al final de tu Inicio.`,
+              )}
+              className="shrink-0 px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-text-on-accent disabled:opacity-50">
+              {nuevas.cableadas.length === 1 ? 'Añadirla' : 'Añadirlas'}
+            </button>
+          )}
           <button type="button" disabled={guardando}
             onClick={() => void rechazarNovedades()}
             className="shrink-0 px-2.5 py-1 rounded-md text-xs font-semibold border border-border-default bg-card hover:bg-page disabled:opacity-50">
@@ -456,9 +477,9 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
           >
             <Plus size={18} />
             Añadir tarjeta
-            {nuevas.length > 0 && (
+            {nuevas.cableadas.length > 0 && (
               <span className="text-[11px] font-semibold text-accent">
-                {nuevas.length} {nuevas.length === 1 ? 'nueva disponible' : 'nuevas disponibles'}
+                {nuevas.cableadas.length} {nuevas.cableadas.length === 1 ? 'nueva disponible' : 'nuevas disponibles'}
               </span>
             )}
           </button>

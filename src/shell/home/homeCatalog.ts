@@ -198,14 +198,44 @@ export function agrupadoPorGrupo(disponibles: CatalogEntry[]): GrupoDelCajon[] {
  * aviso reaparecería en cada carga y a la tercera se ignoraría — y con él se
  * ignoraría el de huérfanas, que sí importa.
  */
+export interface Novedades {
+  /** Las que YA dan dato. Son las únicas que se ofrecen con botón. */
+  cableadas: CatalogEntry[]
+  /**
+   * Las prometidas y aún sin cablear. Se MENCIONAN y no se ofrecen: un
+   * «Añadirlas» aquí llenaría el Inicio de huecos punteados, que es lo contrario
+   * de lo que un aviso de novedades debe conseguir.
+   */
+  p2: CatalogEntry[]
+}
+
 export function novedades(
   claves: string[],
   disponibles: CatalogEntry[],
   descartadas: string[] = [],
-): CatalogEntry[] {
+): Novedades {
   const tengo = new Set(claves)
   const noQuiero = new Set(descartadas)
-  return disponibles.filter(c => !tengo.has(c.key) && !noQuiero.has(c.key))
+  const fuera = disponibles.filter(c => !tengo.has(c.key) && !noQuiero.has(c.key))
+  return {
+    cableadas: fuera.filter(c => c.component != null),
+    p2: fuera.filter(c => c.component == null),
+  }
+}
+
+/**
+ * «Ventas de ayer, Cuadrantes y Productos en 86» · «…, y 12 más».
+ *
+ * Tres nombres y un recuento. Quince nombres seguidos no son una lista: son un
+ * párrafo que nadie lee, y el aviso deja de avisar.
+ */
+export function enumeraHastaTres(nombres: string[]): string {
+  if (nombres.length === 0) return ''
+  if (nombres.length === 1) return nombres[0]
+  if (nombres.length === 2) return `${nombres[0]} y ${nombres[1]}`
+  if (nombres.length === 3) return `${nombres[0]}, ${nombres[1]} y ${nombres[2]}`
+  const resto = nombres.length - 3
+  return `${nombres[0]}, ${nombres[1]}, ${nombres[2]} y ${resto} más`
 }
 
 /** Sube o baja una clave una posición. Devuelve una lista NUEVA. */

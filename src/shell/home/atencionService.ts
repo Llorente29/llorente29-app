@@ -38,6 +38,15 @@ export interface AvisoAtencion {
   texto: string
   /** Dónde se resuelve. Ruta absoluta del Shell. */
   ruta: string
+  /**
+   * CÓMO SE LLAMA ESE SITIO, con el idioma del menú: «Almacén · Inventarios».
+   *
+   * La franja decía «Resolver →» en todas las filas. «Resolver» no es un
+   * destino: es un verbo que obliga a pulsar para saber a dónde lleva, y lo que
+   * no dice a dónde lleva se pulsa con menos ganas o no se pulsa. Nombrar el
+   * destino convierte el aviso en una instrucción.
+   */
+  destino: string
 }
 
 type Row = Record<string, unknown>
@@ -169,6 +178,7 @@ export async function getAvisosAtencion(
       tipo: 'conteo',
       texto: `Conteo ${(c.code as string) ?? ''} sin cerrar${deQuien(c.location_id)}`,
       ruta: '/supply/inventario',
+      destino: 'Almacén · Inventarios',
     })
   }
 
@@ -182,6 +192,7 @@ export async function getAvisosAtencion(
       tipo: 'tablet',
       texto: `La tablet «${(d.label as string) ?? 'sin nombre'}» lleva ${haceCuanto(visto)} sin dar señal${deQuien(d.location_id)}`,
       ruta: '/orders/ajustes',
+      destino: 'Pedidos · Ajustes',
     })
   }
 
@@ -195,6 +206,7 @@ export async function getAvisosAtencion(
       texto: `Cuadrante de ${esta ? 'esta semana' : 'la semana que viene'} sin publicar${deQuien(s.location_id)}`,
       // El enlace va YA FILTRADO a la semana del aviso.
       ruta: `/personal/calendario?semana=${s.week_start as string}`,
+      destino: 'Team · Calendario',
     })
   }
 

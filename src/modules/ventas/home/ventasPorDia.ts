@@ -9,7 +9,7 @@
 // noche del cambio de hora, que es justo cuando nadie lo está mirando.
 
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
-import { diaNatural, diaDelNegocio } from '@/lib/fechas'
+import { diaNatural, diaDelNegocio, lunesDeLaSemana } from '@/lib/fechas'
 
 export interface DiaDeVentas {
   ymd: string
@@ -20,6 +20,15 @@ export interface DiaDeVentas {
   esFinde: boolean
   /** El día en curso: su cifra está a medias y no se compara con las demás. */
   enCurso: boolean
+  /**
+   * Día que TODAVÍA NO HA LLEGADO.
+   *
+   * La gráfica empieza en lunes para que las dos semanas queden alineadas con
+   * el eje `L M X J V S D` ×2, y eso mete los días que faltan de esta semana.
+   * No se pintan como cero: cero es una venta que no hubo, y esto es un día que
+   * no ha pasado. Confundirlos sería enseñar una caída que no existe.
+   */
+  futuro: boolean
 }
 
 const LETRA_DIA = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -70,7 +79,9 @@ export function agrupaPorDia(
     const v = acc.get(ymd) ?? { total: 0, pedidos: 0 }
     salida.push({
       ymd, total: v.total, pedidos: v.pedidos,
-      diaSemana, esFinde: diaSemana >= 5, enCurso: ymd === hoyYmd,
+      diaSemana, esFinde: diaSemana >= 5,
+      enCurso: ymd === hoyYmd,
+      futuro: ymd > hoyYmd,
     })
   }
   return salida
@@ -85,8 +96,8 @@ export function agrupaPorDia(
  */
 export function indicesDeLosPicos(dias: DiaDeVentas[], cuantos = 2): number[] {
   return dias
-    .map((d, i) => ({ i, total: d.total, enCurso: d.enCurso }))
-    .filter(d => !d.enCurso && d.total > 0)
+    .map((d, i) => ({ i, total: d.total, fuera: d.enCurso || d.futuro }))
+    .filter(d => !d.fuera && d.total > 0)
     .sort((a, b) => b.total - a.total)
     .slice(0, cuantos)
     .map(d => d.i)
@@ -97,14 +108,30 @@ function sb() {
   return supabase
 }
 
+/**
+ * La ventana: DOS SEMANAS DE CALENDARIO que empiezan en lunes.
+ *
+ * No son «los últimos 14 días»: si empezara en un día cualquiera, el eje
+ * `L M X J V S D` ×2 no cuadraría con las barras y se leería el lunes en la
+ * columna del martes. Empieza en el lunes de la semana ANTERIOR, así que
+ * siempre se ven una semana entera y la que va en curso.
+ */
+export function ventanaDeDosSemanas(ahora: Date = new Date()): { desdeYmd: string; dias: number } {
+  const lunesDeEsta = lunesDeLaSemana(ahora)
+  const [y, m, d] = lunesDeEsta.split('-').map(Number)
+  const lunesAnterior = new Date(Date.UTC(y, m - 1, d - 7)).toISOString().slice(0, 10)
+  return { desdeYmd: lunesAnterior, dias: 14 }
+}
+
 export async function leeVentasPorDia(
   accountId: string,
   locationId: string | null,
-  dias = 14,
 ): Promise<DiaDeVentas[]> {
-  const hoy = diaDelNegocio(new Date())
-  const inicio = new Date(hoy.desde.getTime() - (dias - 1) * 86_400_000)
-  const desde = diaDelNegocio(inicio)
+  const ahora = new Date()
+  const hoy = diaDelNegocio(ahora)
+  const { desdeYmd, dias } = ventanaDeDosSemanas(ahora)
+  const [dy, dm, dd] = desdeYmd.split('-').map(Number)
+  const desde = diaDelNegocio(new Date(Date.UTC(dy, dm - 1, dd, 12)))
 
   let q = sb().from('sale').select('total, sold_at')
     .eq('account_id', accountId)

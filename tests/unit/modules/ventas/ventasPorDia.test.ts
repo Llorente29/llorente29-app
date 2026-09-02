@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  agrupaPorDia, indicesDeLosPicos, letraDe, etiquetaCorta,
+  agrupaPorDia, indicesDeLosPicos, letraDe, etiquetaCorta, ventanaDeDosSemanas,
 } from '@/modules/ventas/home/ventasPorDia'
 
 // La serie REAL del 20/08 al 02/09, medida en la base el 02/09.
@@ -82,5 +82,34 @@ describe('rótulos', () => {
   // El ejemplo literal de la maqueta.
   it('«Sáb 22», como el hover de la maqueta', () => {
     expect(etiquetaCorta('2026-08-22')).toBe('Sáb 22')
+  })
+})
+
+describe('ventanaDeDosSemanas · empieza en LUNES', () => {
+  // Si empezara en un día cualquiera, el eje `L M X J V S D` ×2 no cuadraría
+  // con las barras y se leería el lunes en la columna del martes.
+  it('el miércoles 2/09 arranca el lunes 24/08, no «hace 14 días»', () => {
+    expect(ventanaDeDosSemanas(new Date('2026-09-02T08:00:00Z')))
+      .toEqual({ desdeYmd: '2026-08-24', dias: 14 })
+  })
+  it('un lunes arranca el lunes anterior', () => {
+    expect(ventanaDeDosSemanas(new Date('2026-08-31T10:00:00Z')).desdeYmd).toBe('2026-08-24')
+  })
+  it('un domingo sigue en su semana, no salta a la siguiente', () => {
+    expect(ventanaDeDosSemanas(new Date('2026-09-06T20:00:00Z')).desdeYmd).toBe('2026-08-24')
+  })
+})
+
+describe('los días que aún no han llegado', () => {
+  // Cero es una venta que no hubo; futuro es un día que no ha pasado.
+  // Confundirlos enseña una caída que no existe.
+  it('se marcan como futuro y no como cero', () => {
+    const d = agrupaPorDia([], '2026-08-31', 7, '2026-09-02')
+    expect(d.map(x => x.futuro)).toEqual([false, false, false, true, true, true, true])
+  })
+  it('un día futuro nunca es un pico', () => {
+    const d = agrupaPorDia(
+      [{ total: 100, sold_at: '2026-08-31T10:00:00Z' }], '2026-08-31', 4, '2026-09-01')
+    expect(indicesDeLosPicos(d)).toEqual([0])
   })
 })

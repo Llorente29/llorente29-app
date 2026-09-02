@@ -14,6 +14,7 @@
 
 import { useCallback, useMemo } from 'react'
 import { TrendingDown } from 'lucide-react'
+import { eurEntero } from '@/lib/dinero'
 import TarjetaInicio from '@/shell/home/widgets/TarjetaInicio'
 import { useDatoDeTarjeta } from '@/shell/home/cards/useDatoDeTarjeta'
 import { fechaISO } from '@/shell/home/drill'
@@ -24,8 +25,6 @@ import { frasePorque, type EventoDeMarca } from './porqueSemana'
 
 const UMBRAL_MIN = 15
 
-const eur0 = (n: number) =>
-  n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
 
 interface Datos { semana: SemanaConEspejo; eventos: EventoDeMarca[] }
 
@@ -49,7 +48,7 @@ export default function VentasSemana({ accountId, locationId, drillTo }: HomeCar
     const signo = pct >= 0 ? '+' : '−'
     return {
       texto: `${signo}${Math.abs(pct).toLocaleString('es-ES', { maximumFractionDigits: 1 })} %`
-        + ` vs los mismos días de la semana anterior (${eur0(s.espejo)})`,
+        + ` vs los mismos días de la semana anterior (${eurEntero(s.espejo)})`,
       tono: (pct >= 0 ? 'positive' : 'attention') as 'positive' | 'attention',
     }
   }, [datos])
@@ -65,7 +64,7 @@ export default function VentasSemana({ accountId, locationId, drillTo }: HomeCar
     <TarjetaInicio
       titulo="Ventas · esta semana"
       icono={TrendingDown}
-      cifra={datos ? eur0(datos.semana.total) : undefined}
+      cifra={datos ? eurEntero(datos.semana.total) : undefined}
       cargando={cargando && datos == null}
       error={error}
       hayDato={datos != null}

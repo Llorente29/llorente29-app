@@ -22,6 +22,7 @@
 
 import { useCallback, useMemo } from 'react'
 import { Banknote } from 'lucide-react'
+import { eurEntero } from '@/lib/dinero'
 import TarjetaInicio from '@/shell/home/widgets/TarjetaInicio'
 import { useDatoDeTarjeta } from '@/shell/home/cards/useDatoDeTarjeta'
 import { calculaDelta, espejoDeDia } from '@/shell/home/espejo'
@@ -33,11 +34,6 @@ import { ventasEntre, nombresDeLocales, type VentasDeUnDia } from './ventasDelDi
 /** Una hora. Ayer está cerrado, pero el ingestor todavía puede traer pedidos. */
 const UMBRAL_MIN = 60
 
-const eur = (n: number) =>
-  n.toLocaleString('es-ES', {
-    style: 'currency', currency: 'EUR',
-    maximumFractionDigits: Math.abs(n) >= 1000 ? 0 : 2,
-  })
 
 interface Datos { ayer: VentasDeUnDia; espejo: VentasDeUnDia }
 
@@ -82,7 +78,7 @@ export default function VentasDeAyer({ accountId, locationId, drillTo }: HomeCar
     if (porLocal.length <= 1) return []
     return porLocal.map(l => ({
       etiqueta: l.nombre,
-      valor: `${eur(l.total)} · ${l.pedidos} ${l.pedidos === 1 ? 'pedido' : 'pedidos'}`,
+      valor: `${eurEntero(l.total)} · ${l.pedidos} ${l.pedidos === 1 ? 'pedido' : 'pedidos'}`,
     }))
   }, [datos])
 
@@ -90,7 +86,7 @@ export default function VentasDeAyer({ accountId, locationId, drillTo }: HomeCar
     <TarjetaInicio
       titulo={`Ventas · ayer ${nombreDeAyer}`}
       icono={Banknote}
-      cifra={datos ? eur(datos.ayer.total) : undefined}
+      cifra={datos ? eurEntero(datos.ayer.total) : undefined}
       cargando={cargando && datos == null}
       error={error}
       hayDato={datos != null}
