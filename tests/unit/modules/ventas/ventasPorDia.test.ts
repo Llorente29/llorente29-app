@@ -113,3 +113,43 @@ describe('los días que aún no han llegado', () => {
     expect(indicesDeLosPicos(d)).toEqual([0])
   })
 })
+
+// ── LA COMPROBACIÓN QUE PIDIÓ JULIO ────────────────────────────────────────
+// «El domingo por la tarde la gráfica no puede tener ningún hueco, y el lunes
+// por la mañana tiene seis.» Es la prueba de que alinear a semanas de
+// calendario no mete días inventados.
+describe('los huecos de la ventana, según el día que sea', () => {
+  const huecos = (ahora: string) => {
+    const { desdeYmd, dias } = ventanaDeDosSemanas(new Date(ahora))
+    const hoy = new Date(ahora).toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
+    return agrupaPorDia([], desdeYmd, dias, hoy).filter(d => d.futuro).length
+  }
+
+  it('el domingo por la tarde no hay ningún hueco: la ventana está completa', () => {
+    // Domingo 6/09/2026, 18:00 de Madrid.
+    expect(huecos('2026-09-06T16:00:00Z')).toBe(0)
+  })
+
+  it('el lunes por la mañana hay seis: de mañana al domingo', () => {
+    // Lunes 7/09/2026, 09:00 de Madrid — arranca semana nueva.
+    expect(huecos('2026-09-07T07:00:00Z')).toBe(6)
+  })
+
+  it('el miércoles hay cuatro, que es el caso que se vio en pantalla', () => {
+    expect(huecos('2026-09-02T08:00:00Z')).toBe(4)
+  })
+
+  it('el sábado por la noche queda uno: el domingo', () => {
+    expect(huecos('2026-09-05T20:00:00Z')).toBe(1)
+  })
+
+  // Y lo que de verdad importa: un día futuro NO es un cero. Son estados
+  // distintos y la gráfica no puede pintarlos igual.
+  it('futuro y venta-a-cero son estados distintos', () => {
+    const d = agrupaPorDia([], '2026-08-31', 7, '2026-09-02')
+    const miercoles = d.find(x => x.ymd === '2026-09-02')!
+    const jueves = d.find(x => x.ymd === '2026-09-03')!
+    expect([miercoles.total, miercoles.futuro]).toEqual([0, false])  // hoy, sin ventas aún
+    expect([jueves.total, jueves.futuro]).toEqual([0, true])         // no ha llegado
+  })
+})

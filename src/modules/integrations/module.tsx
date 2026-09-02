@@ -14,6 +14,7 @@ import { Cable, Plug, Store } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import IntegrationsPage from '@/modules/integrations/pages/IntegrationsPage'
 import IntegrationsMarketplacePage from '@/modules/integrations/pages/IntegrationsMarketplacePage'
+import SaludConexionesCard from '@/modules/integrations/home/SaludConexionesCard'
 
 export const integrationsModule: ModuleDefinition = {
   // Identidad
@@ -36,4 +37,16 @@ export const integrationsModule: ModuleDefinition = {
       { id: 'integrations_marketplace', label: 'Marketplace',        icon: Store, path: 'marketplace' },
     ],
   },
+  homeCards: [
+    {
+      key: 'integrations.salud_conexiones',
+      title: 'Salud de conexiones',
+      grupo: 'Canales',
+      size: 'sm',
+      source: 'account_connector',
+      drill: { ruta: '/integraciones', etiqueta: 'Abrir Integraciones →' },
+      requiredRole: 'manager',
+      component: SaludConexionesCard,
+    },
+  ],
 }

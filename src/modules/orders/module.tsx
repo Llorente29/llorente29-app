@@ -23,6 +23,7 @@ import DispatchBoardPage from '@/modules/orders/pages/DispatchBoardPage'
 import KdsBoardPage from '@/modules/kds/pages/KdsBoardPage'
 import OrdersSettingsPage from '@/modules/orders/pages/OrdersSettingsPage'
 import KitchenTimesPanelPage from '@/modules/orders/pages/KitchenTimesPanelPage'
+import PedidosAtascadosCard from '@/modules/orders/home/PedidosAtascadosCard'
 
 export const ordersModule: ModuleDefinition = {
   // Identidad
@@ -51,4 +52,16 @@ export const ordersModule: ModuleDefinition = {
       { id: 'orders_settings', label: 'Ajustes',  icon: SlidersHorizontal, path: 'ajustes', requiredRole: 'manager' },
     ],
   },
+  homeCards: [
+    {
+      key: 'orders.pedidos_atascados',
+      title: 'Pedidos atascados',
+      grupo: 'Canales',
+      size: 'sm',
+      source: 'sale',
+      drill: { ruta: '/pedidos', etiqueta: 'Abrir Pedidos →' },
+      requiredRole: 'manager',
+      component: PedidosAtascadosCard,
+    },
+  ],
 }

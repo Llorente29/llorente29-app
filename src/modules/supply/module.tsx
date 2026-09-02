@@ -30,6 +30,7 @@ import SupplierInvoicesPage from '@/modules/supply/pages/SupplierInvoicesPage'
 import InventoryPage from '@/modules/supply/pages/InventoryPage'
 import CtbNotifyPage from '@/modules/supply/pages/CtbNotifyPage'
 import StockNegativoCard from '@/modules/supply/home/StockNegativoCard'
+import ConteosPendientesCard from '@/modules/supply/home/ConteosPendientesCard'
 
 export const supplyModule: ModuleDefinition = {
   // Identidad
@@ -63,6 +64,17 @@ export const supplyModule: ModuleDefinition = {
   },
   // §Almacén de la maqueta. Cuelga del mismo servicio que la pantalla de Stock.
   homeCards: [
+    {
+      key: 'supply.conteos_pendientes',
+      title: 'Conteos pendientes',
+      grupo: 'Almacen',
+      size: 'sm',
+      source: 'inventory_count',
+      drill: { ruta: '/supply/inventario', etiqueta: 'Abrir Almacén · Inventarios →' },
+      requiredRole: 'manager',
+      component: ConteosPendientesCard,
+    },
+
     {
       key: 'supply.stock_negativo',
       title: 'Stock negativo',

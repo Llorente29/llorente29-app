@@ -114,9 +114,11 @@ describe('el catálogo aprobado', () => {
   // 02/09, segundo lote: «Stock negativo» y «Resumen de agentes» dejan de ser
   // P2 y pasan a cableadas. El total no se mueve: una tarjeta que se cablea no
   // aparece ni desaparece, cambia de lado.
-  it('ocho cableadas y trece P2', () => {
-    expect(catalogo.filter(c => c.component != null)).toHaveLength(8)
-    expect(catalogo.filter(c => c.component == null)).toHaveLength(13)
+  // 02/09, tercer lote: Conteos pendientes, Pedidos atascados y Salud de
+  // conexiones dejan de ser P2. Once cableadas, diez prometidas.
+  it('once cableadas y diez P2', () => {
+    expect(catalogo.filter(c => c.component != null)).toHaveLength(11)
+    expect(catalogo.filter(c => c.component == null)).toHaveLength(10)
   })
 
   // Si alguien añade una tarjeta y olvida el grupo, cae en «Otras» y esto la

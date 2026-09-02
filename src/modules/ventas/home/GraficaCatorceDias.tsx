@@ -89,10 +89,12 @@ export default function GraficaCatorceDias({ accountId, locationId, drillTo }: H
         <div style={{ marginTop: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: ALTO }}>
             {dias.map((d, i) => {
-              // Un día que aún no ha llegado NO tiene barra. Pintarlo a cero
-              // sería enseñar una caída que no ha ocurrido; dejar su hueco dice
-              // la verdad y mantiene el eje cuadrado.
-              const alto = d.futuro ? 0 : Math.max(2, Math.round((d.total / maximo) * ALTO))
+              // Un día que aún no ha llegado NO TIENE BARRA — ni siquiera de
+              // altura cero. Un hueco a ras de suelo en una gráfica de ventas se
+              // lee como «ese día no se vendió», que es afirmar la ausencia de
+              // algo que todavía no ha pasado: la regla 7 en versión gráfica.
+              // El eje SÍ se conserva, para que las dos semanas sigan alineadas.
+              const alto = Math.max(2, Math.round((d.total / maximo) * ALTO))
               const esPico = picos.has(i)
               return (
                 <button
@@ -122,7 +124,7 @@ export default function GraficaCatorceDias({ accountId, locationId, drillTo }: H
                       {eurEntero(d.total)}
                     </span>
                   ) : null}
-                  <span style={{
+                  {d.futuro ? null : <span style={{
                     display: 'block', height: alto,
                     borderRadius: '4px 4px 0 0',
                     // UN SOLO TONO, la tinta de la casa, y la diferencia en la
@@ -133,7 +135,7 @@ export default function GraficaCatorceDias({ accountId, locationId, drillTo }: H
                     background: d.enCurso ? 'var(--color-text-secondary)' : 'var(--color-accent)',
                     opacity: d.enCurso ? 0.35 : (d.esFinde ? 0.62 : 0.3),
                     outline: encima === i ? '2px solid var(--color-bg-card)' : undefined,
-                  }} />
+                  }} />}
                 </button>
               )
             })}
@@ -143,7 +145,11 @@ export default function GraficaCatorceDias({ accountId, locationId, drillTo }: H
             {dias.map(d => (
               <span key={`e-${d.ymd}`} style={{
                 flex: 1, textAlign: 'center', fontSize: '0.625rem',
-                color: 'var(--color-text-secondary)', opacity: d.esFinde ? 1 : 0.6,
+                color: 'var(--color-text-secondary)',
+                // El día que no ha llegado conserva su letra —el eje tiene que
+                // seguir cuadrando— pero apagada: la columna está vacía porque
+                // aún no toca, no porque no se vendiera.
+                opacity: d.futuro ? 0.25 : (d.esFinde ? 1 : 0.6),
               }}>
                 {letraDe(d.diaSemana)}
               </span>

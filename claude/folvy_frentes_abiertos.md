@@ -446,3 +446,31 @@ Si el consumo es irregular, la tarjeta lo dice en vez de dar un número con cara
 de certeza. Un número con cara de certeza sobre un dato que no la tiene es peor
 que no dar número.
 
+
+---
+
+## 11 · Un despliegue que no despliega nada sale verde y no lo dice
+**Abierto:** 02/09/2026 · **Del mismo patrón que todo lo de hoy**
+
+El 02/09 a las 19:xx se lanzó el workflow de despliegue sobre `fa24539f`.
+**Verde en 8 segundos, sin desplegar ninguna función** — y el resumen del run no
+lo dijo. Ocho segundos y un tick verde se leen como «desplegado».
+
+**Esta vez el final fue bueno:** `offers-agent` ya estaba en v54, desplegada a
+las **18:51:05** por el workflow del commit anterior (`e147d57c`, 27 segundos
+antes). El paso que decide qué funciones se despliegan hizo lo correcto — no
+había nada nuevo — pero lo comunicó como un éxito indistinguible de un
+despliegue real.
+
+**Es la regla 8 en el CI:** un paso que hace algo importante confirma o falla
+**con contenido**. «Verde» no dice si desplegó cinco funciones, una o ninguna, y
+esta misma mañana ya costó una confusión con `hubrise-webhook`.
+
+**Lo que hay que hacer:** que el resumen del run diga **qué funciones desplegó,
+por nombre — o «ninguna»**. Es una línea en el step summary, y convierte un tick
+mudo en un parte.
+
+**Detalle para quien lo arregle:** el origen del despliegue se puede leer en el
+`entrypoint_path` de la función. Las desplegadas por CI llevan
+`/home/runner/work/...`; las desplegadas a mano, `/tmp/user_fn_...`. Sirve para
+auditar después quién desplegó qué sin depender de los logs del run.

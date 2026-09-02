@@ -45,18 +45,12 @@ export const P2_HOME_CARDS: HomeCardDefinition[] = [
     source: 'recipe_item', drill: { ruta: '/kitchen/recetas', etiqueta: 'Abrir Cocina · Platos →' } },
 
   // ── Almacén ──────────────────────────────────────────────────────────────
-  { key: 'supply.conteos_pendientes', grupo: 'Almacen', title: 'Conteos pendientes', size: 'sm',
-    source: 'stock_count', drill: { ruta: '/supply/conteos', etiqueta: 'Abrir Almacén · Conteos →' } },
   { key: 'supply.puntos_de_pedido', grupo: 'Almacen', title: 'Puntos de pedido', size: 'sm',
     source: 'recipe_item', drill: { ruta: '/supply/pedidos', etiqueta: 'Abrir Almacén · Pedidos →' } },
 
   // ── Canales ──────────────────────────────────────────────────────────────
-  { key: 'orders.pedidos_atascados', grupo: 'Canales', title: 'Pedidos atascados', size: 'sm',
-    source: 'sale', drill: { ruta: '/pedidos', etiqueta: 'Abrir Pedidos →' } },
   { key: 'orders.liquidaciones_ctb', grupo: 'Canales', title: 'Liquidaciones CTB', size: 'sm',
     source: 'sale', drill: { ruta: '/pedidos', etiqueta: 'Abrir Pedidos →' } },
-  { key: 'integrations.salud_conexiones', grupo: 'Canales', title: 'Salud de conexiones', size: 'sm',
-    source: 'connector', drill: { ruta: '/integraciones', etiqueta: 'Abrir Integraciones →' } },
 
   // ── Agentes ──────────────────────────────────────────────────────────────
   // OJO: es la TARJETA del mosaico. El panel «Mis agentes» de la maqueta va
