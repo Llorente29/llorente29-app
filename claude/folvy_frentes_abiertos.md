@@ -20,18 +20,25 @@ histórico, un punto de pedido calculado sería una media de agosto disfrazada d
 criterio. Se cablea cuando haya dos o tres meses. Quien la coja antes creyendo
 que «solo falta enchufarla» está cogiendo el frente 10, no una tarjeta.
 
-**Cerrados el 02/09 por la noche:** el 14 (el food cost estaba inflado: 27,4 %
-era 22,3 %, y el diagnóstico que traía el frente era el equivocado) y el RECON
-del 19 (no es incidente; falta que Julio ejecute el `revoke`).
+**Cerrados el 02/09 por la noche:** el **14** (el food cost estaba inflado:
+27,4 % era 22,3 %, y el diagnóstico que traía el frente era el equivocado), el
+**15** (`list_costless_sold_products` retirada), el **17** (renombrada a
+«Vendido sin coste», con la clave intacta) y el **19** (F0.5 aplicada, con las
+dos que la auditoría de agosto había dejado fuera de su alcance).
+
+**Dos frentes cambiaron de diagnóstico al medirlos, y los dos los había escrito
+yo:** el 14 proponía un `where` que habría BAJADO el food cost 4,6 puntos
+borrando coste real, y el 16 pedía construir un motor que ya estaba escrito. En
+los dos casos la medida previa era correcta y la conclusión estaba invertida.
 
 **Lo que sí está esperando decisión de Julio**, y en este orden de coste:
 
 | # | Qué | Coste |
 |---|---|---|
-| 17 | Renombrar «Platos sin escandallo» → «Vendido sin coste» | Cinco minutos |
-| 16 | Los combos no se costean ni por arriba ni por abajo: 5.181 € en 30 días. Motor o catálogo | Decisión primero |
+| 16 | **El motor ya existe.** Lo roto es el barrido nocturno, que no puede ver un combo: 131 combos y 3.338 € reparables con un `where`. Escribe datos, así que decides tú | Un `where` + backfill |
 | 18 | Las tres pantallas de Ventas no leen la URL, así que el drill del bloque del dinero va sin filtro de local | Tres pantallas |
-| 15 | `list_costless_sold_products` dice cero y se sigue usando en el panel de excepciones | Corregir o retirar |
+| 21 | La rama `> 60` de la bandera «sospechoso» no puede encenderse. Propuesta: bajarla a 40 % | Un número, tuyo |
+| 16b | 265 componentes de combo sin casar dejan 263 combos (5.074 €) sin costear, y ahí el motor hace bien en negarse | Trabajo de catálogo |
 
 ## 1 · «Salsa Tzatziki» sale siete veces en el panel de opciones agotadas
 **Abierto:** 02/09/2026 · **Medido en Foodint Alcalá**
@@ -761,54 +768,102 @@ pregunta, no un hueco.
 entraban nunca. Con un solo agujero ya no valía; con dos, menos.
 
 
-## 16 · Un combo vendido no tiene coste, y no es un escandallo que falte
-**Abierto:** 02/09/2026 · **Hallazgo de producto, decisión de Julio**
+## 16 · El motor de combos YA EXISTE. Lo que está roto es el reparador
+**Abierto el 02/09 · MEDIDO el 02/09, y el diagnóstico que traía era el equivocado**
 
-De los 118 productos vendidos sin coste en 30 días, **31 son combos declarados**
-(tienen filas activas en `combo_slot`) y valen **5.181 €**. Un combo no lleva
-escandallo propio: su coste es la suma de sus componentes.
+Julio decidió «el motor» y puso una puerta antes de construir: **medir por qué
+`combo_item.computed_cost` sale NULL — si la línea no lleva la referencia al
+producto componente, el arreglo es otro y más hondo.**
 
-Y los componentes llegan: hay **1.676 líneas `combo_item`** en el periodo. Pero
-`sale_line.computed_cost` está a NULL en **las 1.676**. Así que el coste del
-combo no sale ni por arriba (no tiene escandallo) ni por abajo (sus componentes
-no se costean).
+Se midió. Y las dos respuestas dan la vuelta al frente.
 
-**El caso que lo enseña:** «Korean Crispy Menu (Para 1) (KDB)» — 57 líneas, 938
-€ en 30 días, cero coste. Mandar a alguien a «hacerle el escandallo» sería
-mandarle a hacer un trabajo equivocado: lo que falta es que el motor sume sus
-componentes.
+### Respuesta 1: la referencia SÍ está
 
-**Y hay un segundo grupo, más barato de arreglar:** entre los 87 sin combo
-declarado, los que más dinero mueven son también packs y menús —«PACK PA 2
-(DC)» 1.437 €, «Combo Individual Smash» 658 €, «Combo Duo Smash» 643 €— a los
-que **nadie declaró el combo**. Esos no necesitan motor: necesitan que alguien
-los declare, y entonces caen en el grupo de arriba.
+De las 1.678 líneas `combo_item` de 30 días, **1.413 tienen `menu_item_id`, y
+las 1.413 tienen receta enlazada Y con coste.** No es 1.413 → 1.200 → 900: es el
+mismo número las tres veces. La referencia existe y la receta tiene precio. Las
+otras 265 son componentes que nadie casó, y ése es un problema de catálogo, no
+de estructura.
 
-**La tarjeta los cuenta aparte y lo dice.** No los mete en la lista de
-«arréglame» porque el arreglo no es el mismo.
+**Así que no es «más hondo».** El arreglo no exige tocar cómo se guarda una
+venta.
 
-**Decidido por Julio el 02/09: el MOTOR.** El coste de un combo es la suma de
-sus componentes; un escandallo propio por combo duplica la receta y se separa de
-ella con la primera subida del proveedor — regla 10. Antes de construir hay que
-medir **por qué `combo_item.computed_cost` sale NULL**: si la línea no lleva la
-referencia al producto componente, el arreglo es otro y más hondo.
+### Respuesta 2: `combo_item.computed_cost` está a NULL A PROPÓSITO
 
-**Y hay una razón más para hacerlo, que apareció al cerrar el frente 14:** hoy
-conviven DOS definiciones de «costeada» en el Inicio, y dan números que parecen
-contradecirse.
+`compute_sale_line_cost` **ya hace exactamente lo que Julio decidió**: si la
+línea tiene hijos `combo_item`, recorre los hijos, suma
+`COALESCE(ri.computed_cost, ri.fixed_cost)` de cada uno, le aplica los impactos
+de sus modificadores, multiplica por la cantidad **y escribe el total en la
+línea PADRE**. El coste del combo es la suma de sus componentes, y lo es desde
+antes de que abriéramos este frente.
 
-| Tarjeta | Define «costeada» como | Y dice |
-|---|---|---|
-| Food cost medio | `recipe_item.computed_cost`, por unidad de venta | cobertura 95,2 %, 96,6 % del dinero |
-| Platos sin escandallo | `sale_line.computed_cost`, por línea de producto | 87 productos y 6.357 € sin coste |
+Los hijos se quedan a NULL porque **no es ahí donde va el coste**. La pregunta
+de la puerta tiene respuesta y no es un fallo: es el diseño, y es el correcto.
 
-**Las dos son ciertas y miden cosas distintas**, pero un lector que las ve juntas
-tiene derecho a pensar que una miente. La discrepancia es exactamente el hueco
-del combo: la receta del componente SÍ tiene coste (por eso la primera lo ve) y
-el motor NO lo escribió en la línea (por eso la segunda no). **Arreglar el motor
-cierra las dos a la vez y deja una sola definición**, que es lo que pide la
-regla 10. Mientras tanto, cada tarjeta dice en su letra qué está contando.
+**El motor no hay que construirlo.** Estaba escrito. Lo que yo fiché como «los
+combos no se costean ni por arriba ni por abajo» era mirar el piso equivocado.
 
+### Lo que sí está roto, y es pequeño
+
+De los **606 combos** vendidos en 30 días (8.412 € sin costear):
+
+| | combos | € |
+|---|---:|---:|
+| Con algún hijo sin casar — el motor se niega, y hace bien | 263 | 5.074 |
+| **Con todos los hijos costeables y aun así sin coste** | **131** | **3.338** |
+
+Esos 131 son la anomalía. Desglosados:
+
+- **96** se costearon ANTES de que la receta de su hijo tuviera coste
+  (`cost_computed_at` < `updated_at` de la receta hija). El motor pasó, no pudo,
+  escribió NULL, y nadie volvió.
+- **35** no los visitó nunca nadie.
+- **0** se visitaron con la receta ya lista y aun así salieron NULL. **No hay
+  fallo de lógica en el motor**: cuando corre a tiempo, calcula bien.
+
+Y aquí está el remate. Existe un reparador nocturno para exactamente este caso
+—`sale_line_cost_sweep`, cron `sale-line-cost-sweep` a las 04:50, y su propio
+comentario dice «venta de hoy costeada mañana al escandallar»—. Se comprobó
+cuántos de los 131 recogería:
+
+> **`los_ve_el_barrido = 0`. Ninguno.**
+
+Porque su consulta hace `join recipe_item ri on ri.id = mi.recipe_item_id`, y
+**un combo no tiene receta propia** — es lo que lo hace un combo. El INNER JOIN
+lo tira. El reparador tiene un punto ciego con la forma exacta de un combo.
+
+### La propuesta, y por qué no la he aplicado
+
+El arreglo es al `where` del barrido: además de las líneas de producto con
+receta propia, recoger **las líneas padre de combo cuyos hijos ya son todos
+costeables y que siguen sin coste**. `compute_sale_line_cost` ya sabe qué hacer
+con ellas; solo hay que dárselas.
+
+**Ensayo en seco de lo que repararía** (replicando la suma del motor sin
+escribir nada): 131 combos, 3.338 € de venta, **878 € de coste que aparecen**,
+un food cost del **26,3 %** para ese grupo. Está en familia con el resto de la
+casa (mediana 21,6 %, máximo 33,1 %), que es la señal de que el número
+reparado no es absurdo.
+
+**No se ha aplicado, y la razón no es la banda:** es que **escribe datos de
+producción** —rellena 131 filas de `sale_line`— y eso es más que redefinir una
+función. Va con la decisión de Julio delante, no detrás.
+
+**Qué se movería y qué no**, para que nadie se lleve una sorpresa:
+
+- **«Vendido sin coste» SÍ**: lee `sale_line.computed_cost`. Los 11.522 € sin
+  costear bajarían a unos 8.184 €.
+- **«Food cost medio» y «Margen del mes» NO**: leen `food_cost_dashboard`, que
+  va por `recipe_item.computed_cost` rodado a la unidad de venta. Ni se enteran.
+
+Y de paso cierra parte de la discrepancia entre las dos definiciones de
+«costeada» que se anotó al cerrar el frente 14.
+
+### Lo que queda como trabajo de verdad
+
+Los **265 componentes de combo sin casar**, que dejan 263 combos (5.074 €) sin
+costear con toda la razón. Eso no lo arregla ningún `where`: hay que casarlos.
+Es trabajo de catálogo y tiene su sitio natural en la pantalla de Casado.
 
 ## 17 · «Platos sin escandallo» se llama ahora «Vendido sin coste» — CERRADO el 02/09
 **Abierto y cerrado el 02/09** · **Decidido por Julio**
