@@ -14,8 +14,6 @@ import { supabase } from '@/lib/supabase'
 export interface HomeMetrics {
   // Ventas de hoy en € (suma de sale.total con sold_at = hoy). null si no se pudo.
   ventasHoy: number | null
-  // Variación % vs ayer (mismo cálculo ayer). null si ayer no tiene datos.
-  ventasVsAyerPct: number | null
   // Empleados trabajando ahora (último evento de fichaje = entrada). 0 real válido.
   trabajandoAhora: number | null
   // Nº de locales del cliente (para subtítulos).
@@ -59,22 +57,21 @@ export async function getHomeMetrics(accountId: string, locationId?: string | nu
   const now = new Date()
   const startToday = new Date(now); startToday.setHours(0, 0, 0, 0)
   const startTomorrow = new Date(startToday); startTomorrow.setDate(startTomorrow.getDate() + 1)
-  const startYesterday = new Date(startToday); startYesterday.setDate(startYesterday.getDate() - 1)
   const start7d = new Date(startToday); start7d.setDate(start7d.getDate() - 7)
 
   const result: HomeMetrics = {
-    ventasHoy: null, ventasVsAyerPct: null, trabajandoAhora: null,
+    ventasHoy: null, trabajandoAhora: null,
     numLocales: null, ventas7d: null, numPedidos7d: null, ticketMedio7d: null,
   }
 
-  // Ventas hoy + ayer (para la variación).
+  // Ventas de hoy. SIN comparación: la de ayer se ha ido con la garantía (b).
+  // Comparar el día en curso con el anterior juntaba los dos errores que el
+  // encargo prohíbe — un día parcial contra uno completo, y «ayer» en vez del
+  // mismo día de la semana pasada. El espejo vive en `espejo.ts` y lo usan las
+  // tarjetas que comparan periodos CERRADOS.
   try {
     const hoy = await sumVentas(accountId, startToday.toISOString(), startTomorrow.toISOString(), locationId)
     result.ventasHoy = hoy.total
-    const ayer = await sumVentas(accountId, startYesterday.toISOString(), startToday.toISOString(), locationId)
-    if (ayer.total > 0) {
-      result.ventasVsAyerPct = Math.round(((hoy.total - ayer.total) / ayer.total) * 100)
-    }
   } catch { /* ventasHoy queda null */ }
 
   // Ventas 7 días + pedidos + ticket medio (resumen Sales).
