@@ -790,6 +790,26 @@ cualquiera puede leer— llega a copias de la tabla de PERMISOS y a copias de
 proveedores y pedidos, y puede borrarlas. El prefijo `_` no las esconde:
 PostgREST expone el esquema `public` entero.
 
+**RECON HECHO el 02/09 (noche), y NO es incidente.** Ficha completa en
+`claude/folvy_recon_tablas_sin_rls_anon_20260902.md`. Lo esencial:
+
+`pg_stat_database.stats_reset` está a NULL, así que los contadores cubren toda
+la vida de la base. Sobre eso: **todas** las consultas que han tocado las trece
+tablas las hizo el rol `postgres`, y todas son el `create table … as` o el
+`count(*)` de verificación del guion que las creó. Ni una de `anon`,
+`authenticated` ni `service_role`. Cero funciones, vistas, triggers, crons o
+dependencias las nombran. Cero lecturas desde la aplicación.
+
+Las copias de permisos guardan UUID internos y el modelo de permisos — sin
+credenciales— y **no las lee ningún camino de autorización**, así que escribir
+en ellas no eleva privilegios. Es divulgación de una copia muerta y una puerta
+abierta que no hace falta: deuda real, no incidente.
+
+**Y revocar no puede romper nada:** `postgres` es dueño y `BYPASSRLS`, y
+`service_role` también. Para las trece, el `revoke` basta y la RLS ni siquiera
+hace falta. El único caso con riesgo es `spatial_ref_sys` —PostGIS, y sí se
+usa—, y se resuelve quitándole solo INSERT/UPDATE/DELETE y dejándole el SELECT.
+
 **Lo que NO se ha hecho, y por qué:** revocar y/o tirar tablas en producción no
 se hace de paso mientras se cablea una tarjeta. Va en su propio bloque SQL,
 revisable, y lo ejecuta Julio.
