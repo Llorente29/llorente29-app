@@ -19,6 +19,7 @@ import {
   getShopHomeOverview, getShopAdminLocations, getCampaignMenuTree,
   type ShopHomeOverview, type CampaignKind, type ShopAdminLocation,
 } from '@/modules/shop/admin/campaignService'
+import { descargaCsv } from '@/lib/descargaCsv'
 
 const C = {
   surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -43,14 +44,11 @@ const KIND_COLOR: Record<string, string> = {
 }
 function kindLabel(k: string): string { return KIND_OPTS.find((o) => o.k === k)?.l ?? k }
 
-function downloadCSV(rows: Record<string, unknown>[], filename: string) {
-  if (!rows.length) return
-  const cols = Object.keys(rows[0])
-  const esc = (v: unknown) => { const s = String(v ?? ''); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
-  const csv = [cols.join(';'), ...rows.map((r) => cols.map((c) => esc(r[c])).join(';'))].join('\n')
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url)
+// (02/09) La implementación se mudó a `src/lib/descargaCsv.ts` para que el
+// panel «Mis informes» del Inicio use EXACTAMENTE la misma —mismo separador,
+// mismo escapado, mismo BOM— y no aparezca un segundo formato de CSV.
+const downloadCSV = (rows: Record<string, unknown>[], filename: string) => {
+  descargaCsv(rows, filename)
 }
 function downloadXLSX(rows: Record<string, unknown>[], filename: string, sheet = 'Datos') {
   const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ '': '' }])
