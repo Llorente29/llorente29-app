@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { supabase } from '@/lib/supabase'
 import {
@@ -25,6 +26,41 @@ const eur = (n: number) =>
   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n ?? 0)
 
 type PeriodKey = 'today' | 'yesterday' | 'last7' | 'month'
+
+// ── RANGO QUE LLEGA POR LA URL (02/09) ─────────────────────────────────────
+// GARANTÍA (c) del encargo del Inicio: el drill-through aterriza FILTRADO, y se
+// demuestra con la URL. `/ventas?desde=2026-09-01&hasta=2026-09-02` abre esta
+// pantalla mostrando ese rango, no «Hoy».
+//
+// No hizo falta obra: la pantalla ya mandaba un `from`/`to` arbitrario a la RPC
+// —`periodRange` los calculaba— así que lo único que faltaba era dejar que los
+// calculara otro. El contrato de parámetros está en src/shell/home/drill.ts.
+//
+// [desde, hasta) — `hasta` EXCLUSIVO, igual que los rangos de `periodRange`.
+// Mezclar un extremo inclusivo con uno exclusivo es como se cuela un día entero
+// de más en un total que alguien va a leer como bueno.
+function rangoDeLaUrl(desde: string | null, hasta: string | null): { from: Date; to: Date } | null {
+  if (!desde || !hasta) return null
+  // `new Date('2026-09-01')` se interpreta como UTC y en Madrid retrocede al día
+  // anterior. Se construye la fecha LOCAL a mano — regla 4 del proyecto.
+  const trozos = (t: string) => t.split('-').map(Number)
+  const [ya, ma, da] = trozos(desde)
+  const [yb, mb, db] = trozos(hasta)
+  if ([ya, ma, da, yb, mb, db].some(n => !Number.isFinite(n))) return null
+  const from = new Date(ya, ma - 1, da)
+  const to = new Date(yb, mb - 1, db)
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to <= from) return null
+  return { from, to }
+}
+
+/** «sábado 29 de agosto», para decir en pantalla qué se está mirando. */
+function nombraRango(from: Date, to: Date): string {
+  const unDia = to.getTime() - from.getTime() <= 86_400_000
+  const f = (d: Date) => d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+  if (unDia) return f(from)
+  const fin = new Date(to.getTime() - 86_400_000)   // `to` es exclusivo
+  return `${f(from)} — ${f(fin)}`
+}
 
 function periodRange(key: PeriodKey): { from: Date; to: Date } {
   const now = new Date()
@@ -126,7 +162,21 @@ function Select({
 export default function VentasDashboardPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rangoUrl = rangoDeLaUrl(searchParams.get('desde'), searchParams.get('hasta'))
   const [period, setPeriod] = useState<PeriodKey>('today')
+
+  /** Volver a un periodo predefinido abandona el rango de la URL y LO BORRA de
+   *  la barra: si la URL sigue diciendo un rango que ya no se ve, la próxima
+   *  recarga vuelve a él y nadie entiende por qué. */
+  function eligePeriodo(k: PeriodKey) {
+    setPeriod(k)
+    if (rangoUrl) {
+      const p = new URLSearchParams(searchParams)
+      p.delete('desde'); p.delete('hasta')
+      setSearchParams(p, { replace: true })
+    }
+  }
   const [locationId, setLocationId] = useState<string>('')
   const [ownership, setOwnership] = useState<string>('')
   const [channel, setChannel] = useState<string>('')
@@ -186,7 +236,9 @@ export default function VentasDashboardPage() {
     setLoading(true)
     setError(null)
 
-    const { from, to } = periodRange(period)
+    // El rango de la URL MANDA sobre el botón: se ha llegado aquí pidiendo un
+    // rango concreto.
+    const { from, to } = rangoUrl ?? periodRange(period)
     getSalesDashboard({
       accountId: activeAccountId,
       from,
@@ -211,7 +263,9 @@ export default function VentasDashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [activeAccountId, accountsLoading, period, locationId, ownership, channel, brandId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccountId, accountsLoading, period, locationId, ownership, channel, brandId,
+      searchParams.get('desde'), searchParams.get('hasta')])
 
   // Auditoría externa (2.6): un canal "Desconocido" con net negativo (ajustes/
   // devoluciones sin canal atribuido) pintaba una barra negativa sin sentido.
@@ -284,17 +338,31 @@ export default function VentasDashboardPage() {
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div>
           <h1 className="text-2xl font-display text-stone-800">Ventas</h1>
-          <p className="text-sm text-stone-500">Resumen del negocio en tiempo real</p>
+          {/* SI SE HA LLEGADO CON UN RANGO, LA PANTALLA LO DICE. Sin esto,
+              ningún botón de periodo sale marcado y el usuario ve unas cifras
+              sin saber de qué días son: un filtro invisible es peor que
+              ninguno. */}
+          {rangoUrl ? (
+            <p className="text-sm text-stone-600">
+              Mostrando <b>{nombraRango(rangoUrl.from, rangoUrl.to)}</b>{' '}
+              <button type="button" onClick={() => eligePeriodo('today')}
+                className="underline text-stone-500 hover:text-stone-800">
+                quitar el filtro
+              </button>
+            </p>
+          ) : (
+            <p className="text-sm text-stone-500">Resumen del negocio en tiempo real</p>
+          )}
         </div>
         <div className="flex gap-1.5">
           {(Object.keys(PERIOD_LABELS) as PeriodKey[]).map((k) => (
             <button
               key={k}
-              onClick={() => setPeriod(k)}
+              onClick={() => eligePeriodo(k)}
               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                period === k ? 'border-transparent text-white' : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                period === k && !rangoUrl ? 'border-transparent text-white' : 'border-stone-200 text-stone-600 hover:bg-stone-50'
               }`}
-              style={period === k ? { background: TERRA } : undefined}
+              style={period === k && !rangoUrl ? { background: TERRA } : undefined}
             >
               {PERIOD_LABELS[k]}
             </button>
