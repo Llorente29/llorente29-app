@@ -759,3 +759,45 @@ mano de paso es cómo se rompe algo que funcionaba.
 
 **Mientras tanto:** los enlaces van limpios. Un filtro que no viaja es mejor que
 un filtro que viaja y se pierde.
+
+
+## 19 · Trece tablas de trabajo sin RLS y con escritura de `anon`
+**Abierto:** 02/09/2026 · **Encontrado de paso, medido, NO tocado** · **Es de seguridad**
+
+Comprobando los permisos de `licensed_settlement` para la tarjeta nueva salió
+esto, y no es de la tarjeta:
+
+De las **311 tablas** de `public`, **286 conceden INSERT/UPDATE/DELETE a
+`anon`** (el default de Supabase, que el proyecto ya ha tenido que revocar a
+mano dos veces: `_queue_system_alert` y `agent_pause`). En 272 de ellas la RLS
+está activa y las políticas piden sesión, así que `anon` no pasa.
+
+**En CATORCE no hay RLS.** Ahí el grant es lo único que decide, y el grant dice
+que sí:
+
+| Tabla | anon |
+|---|---|
+| `_backup_permission_sets_20260814` | SELECT, INSERT, UPDATE, DELETE |
+| `_backup_permission_set_assignments_20260814` | SELECT, INSERT, UPDATE, DELETE |
+| `_backup_article_supplier_20260810` / `_20260815` / `_ctb_20260811` | ídem |
+| `_backup_purchase_order_20260810`, `_backup_purchase_format_20260810` | ídem |
+| `_backup_kds_fn_20260811`, `_backup_kds_fn_20260811_pre0901` | ídem |
+| `_a1_anuladas`, `_a2_cache_antes`, `_a3_antes`, `_a3_cola` | ídem |
+| `spatial_ref_sys` (PostGIS, del sistema) | ídem |
+
+**Lo que significa:** la clave anónima —la que va en el bundle del navegador y
+cualquiera puede leer— llega a copias de la tabla de PERMISOS y a copias de
+proveedores y pedidos, y puede borrarlas. El prefijo `_` no las esconde:
+PostgREST expone el esquema `public` entero.
+
+**Lo que NO se ha hecho, y por qué:** revocar y/o tirar tablas en producción no
+se hace de paso mientras se cablea una tarjeta. Va en su propio bloque SQL,
+revisable, y lo ejecuta Julio.
+
+**Propuesta, en dos pasos separados:**
+1. `revoke all on <las 13> from anon, authenticated;` — reversible, inmediato,
+   y no puede romper nada porque ninguna pantalla las lee. `spatial_ref_sys` se
+   deja: es de PostGIS.
+2. Decidir cuáles de los ocho `_backup_*` (de agosto) y los cuatro `_a*` siguen
+   haciendo falta, y tirar el resto. Un backup que ya no se va a restaurar es
+   solo superficie.
