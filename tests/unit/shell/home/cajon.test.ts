@@ -120,9 +120,14 @@ describe('el catálogo aprobado', () => {
   // grupo Ventas queda entero (5 de 5) y Team a falta de dos.
   // Quinto lote: «Sin fichar teniendo turno» cierra Team 5 de 5, y con ella el
   // grupo de las que se miran a las ocho de la mañana.
-  it('dieciséis cableadas y cinco P2', () => {
-    expect(catalogo.filter(c => c.component != null)).toHaveLength(16)
-    expect(catalogo.filter(c => c.component == null)).toHaveLength(5)
+  // Sexto lote (el bloque del dinero): Food cost medio, Margen del mes, Platos
+  // sin escandallo y Liquidaciones CTB. Queda UNA sin cablear, y no por falta
+  // de tiempo: «Puntos de pedido» está aparcada hasta que el histórico de
+  // consumo dé para calcular un punto que signifique algo (frente 10).
+  it('veinte cableadas y una P2', () => {
+    expect(catalogo.filter(c => c.component != null)).toHaveLength(20)
+    expect(catalogo.filter(c => c.component == null).map(c => c.key))
+      .toEqual(['supply.puntos_de_pedido'])
   })
 
   // Ventas queda entero. Team NO: le falta «% personal sobre ventas», que está
@@ -130,12 +135,17 @@ describe('el catálogo aprobado', () => {
   // para que nadie diga «Team completo» sin mirar — que es lo que hice yo al
   // proponerla.
   // Ahora SÍ: Ventas y Team completos, 5 de 5 cada uno.
-  it('Ventas y Team están completos', () => {
+  it('solo queda «Puntos de pedido» sin cablear', () => {
     const g = agrupadoPorGrupo(catalogo)
     const sinCablear = (n: string) =>
       g.find(x => x.grupo === n)!.tarjetas.filter(c => c.component == null).map(c => c.key)
     expect(sinCablear('Ventas')).toEqual([])
     expect(sinCablear('Team')).toEqual([])
+    // Y con el sexto lote, también Cocina y Canales.
+    expect(sinCablear('Cocina')).toEqual([])
+    expect(sinCablear('Canales')).toEqual([])
+    // La única que queda es la de Almacén, y está aparcada a propósito.
+    expect(sinCablear('Almacen')).toEqual(['supply.puntos_de_pedido'])
   })
 
   // Si alguien añade una tarjeta y olvida el grupo, cae en «Otras» y esto la

@@ -35,6 +35,7 @@ import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
 import PriceGridPage from '@/modules/kitchen/pages/PriceGridPage'
 import PriceGridErrorBoundary from '@/modules/kitchen/components/PriceGridErrorBoundary'
 import ProductosEn86 from '@/modules/kitchen/home/ProductosEn86'
+import PlatosSinEscandallo from '@/modules/kitchen/home/PlatosSinEscandallo'
 
 export const kitchenModule: ModuleDefinition = {
   // Identidad
@@ -109,6 +110,16 @@ export const kitchenModule: ModuleDefinition = {
       drill: { ruta: '/kitchen/disponibilidad', etiqueta: 'Abrir Disponibilidad →' },
       requiredRole: 'manager',
       component: ProductosEn86,
+    },
+    {
+      key: 'kitchen.platos_sin_escandallo',
+      grupo: 'Cocina',
+      title: 'Platos sin escandallo',
+      size: 'sm',
+      source: 'sale_line',
+      drill: { ruta: '/kitchen/recetas', etiqueta: 'Abrir Cocina · Platos →' },
+      requiredRole: 'manager',
+      component: PlatosSinEscandallo,
     },
   ],
 }

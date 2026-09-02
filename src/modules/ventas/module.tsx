@@ -32,6 +32,9 @@ import GraficaCatorceDias from '@/modules/ventas/home/GraficaCatorceDias'
 import VentasSemana from '@/modules/ventas/home/VentasSemana'
 import TicketMedio from '@/modules/ventas/home/TicketMedio'
 import VentasPorCanal from '@/modules/ventas/home/VentasPorCanal'
+import FoodCostMedio from '@/modules/ventas/home/FoodCostMedio'
+import MargenDelMes from '@/modules/ventas/home/MargenDelMes'
+import LiquidacionesCtb from '@/modules/ventas/home/LiquidacionesCtb'
 
 export const ventasModule: ModuleDefinition = {
   id: 'ventas',
@@ -80,6 +83,29 @@ export const ventasModule: ModuleDefinition = {
   // §1.1 de la maqueta aprobada. Vive aquí y no en el shell porque su dato son
   // ventas: el shell no tiene por qué saber cortar un día de servicio.
   homeCards: [
+    // ── Las tres del bloque de dinero (02/09) ──────────────────────────────
+    // Viven en el código de Ventas porque leen los services de Ventas y abren
+    // pantallas de Ventas; su GRUPO en el cajón es el del negocio, no el del
+    // módulo. Food cost y Margen son de Cocina; la liquidación, de Canales.
+    {
+      key: 'kitchen.food_cost_medio', title: 'Food cost medio', grupo: 'Cocina', size: 'sm',
+      source: 'sale_line', requiredRole: 'manager',
+      drill: { ruta: '/ventas/margen', etiqueta: 'Abrir Ventas · Margen por plato →' },
+      component: FoodCostMedio,
+    },
+    {
+      key: 'kitchen.margen_del_mes', title: 'Margen del mes', grupo: 'Cocina', size: 'sm',
+      source: 'sale_line', requiredRole: 'manager',
+      drill: { ruta: '/ventas/margen-final', etiqueta: 'Abrir Ventas · Margen final →' },
+      component: MargenDelMes,
+    },
+    {
+      key: 'orders.liquidaciones_ctb', title: 'Liquidaciones CTB', grupo: 'Canales', size: 'sm',
+      source: 'licensed_settlement', requiredRole: 'manager',
+      drill: { ruta: '/ventas/cedidas', etiqueta: 'Abrir Ventas · Cedidas →' },
+      component: LiquidacionesCtb,
+    },
+
     {
       key: 'ventas.ticket_medio', title: 'Ticket medio', grupo: 'Ventas', size: 'sm',
       source: 'sale', drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' },

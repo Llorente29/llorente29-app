@@ -9,36 +9,26 @@ Distinto de `folvy_registro_excepciones_ventana_20260901.md`, que guarda lo que
 SÍ se hizo fuera de norma y qué enseñó.
 
 
-## POR AQUÍ SE EMPIEZA LA PRÓXIMA (cerrado el 02/09)
+## POR AQUÍ SE EMPIEZA LA PRÓXIMA (cerrado el 02/09, noche)
 
-Escrito en el repositorio a propósito: hoy dos cosas se salieron del contexto de
-la conversación y hubo que pararse a recuperarlas. Esto no depende de ninguna
-sesión.
+El mosaico está **completo salvo una**: veinte tarjetas cableadas de veintiuna.
 
-**1 · Desplegar `offers-agent`.** El código YA está commiteado y lee
-`agent_pause` (dos líneas, junto al bucle de `offers_agent_config`). Falta solo
-el despliegue de la edge function. En cuanto esté, su fila del panel «Mis
-agentes» cambia sola de «todavía no se puede pausar desde aquí» a interruptor
-operativo — el panel ya está preparado y no hay que tocarlo.
+**La que falta es «Puntos de pedido», y falta a propósito** — frente 10. No es
+que no haya dado tiempo: Julio decidió que el punto lo CALCULA el sistema desde
+el consumo, y el consumo fiable empieza el 30/07. Con cinco semanas de
+histórico, un punto de pedido calculado sería una media de agosto disfrazada de
+criterio. Se cablea cuando haya dos o tres meses. Quien la coja antes creyendo
+que «solo falta enchufarla» está cogiendo el frente 10, no una tarjeta.
 
-**2 · Las tres tarjetas que faltan de las cinco**, por este orden:
+**Lo que sí está esperando decisión de Julio**, y en este orden de coste:
 
-| Tarjeta | De dónde sale | Estado del RECON |
+| # | Qué | Coste |
 |---|---|---|
-| **Conteos pendientes** | `listInventoryCounts(accountId, locationId)` de `inventoryCountService` | Mirado. El criterio «sin cerrar» ya está escrito en `atencionService`: vivos son `contando` y `en_revision`; `aprobado` y `anulado` son finales |
-| **Pedidos atascados** | el criterio lo define el vigía `hubrise-order-stuck-watchdog` | Sin mirar. Leer el vigía ANTES de escribir la consulta: el criterio de «atascado» ya existe y no se inventa otro |
-| **Salud de conexiones** | `connectorService` (`listAccountConnectors`) + `hubrise-connection-health` | Sin mirar. Falta ver la forma de `AccountConnector` |
-
-Las tres son de grupo Almacén / Canales y ya están declaradas como P2 en
-`src/shell/home/cards/p2Cards.ts`: cablearlas es ponerles `component` y sacarlas
-de esa lista. La prueba del catálogo pasará de «8 y 13» a «11 y 10» — y hay que
-actualizarla, que es justo el despiste que costó una prueba roja empujada hoy.
-
-**Lo que NO toca todavía:** «% personal sobre ventas» y «Puntos de pedido»
-(frentes 9 y 10). Están DECIDIDOS pero no construidos, y el 10 tiene cinco
-guardas que hay que leer enteras antes de escribir la primera línea.
-
----
+| 14 | La cobertura del food cost sube de 71,4 % a 88,0 % al arreglar un `where`. Cambia un número que Julio ya mira | Una línea + comprobar |
+| 17 | Renombrar «Platos sin escandallo» → «Vendido sin coste» | Cinco minutos |
+| 16 | Los combos no se costean ni por arriba ni por abajo: 5.181 € en 30 días. Motor o catálogo | Decisión primero |
+| 18 | Las tres pantallas de Ventas no leen la URL, así que el drill del bloque del dinero va sin filtro de local | Tres pantallas |
+| 15 | `list_costless_sold_products` dice cero y se sigue usando en el panel de excepciones | Corregir o retirar |
 
 ## 1 · «Salsa Tzatziki» sale siete veces en el panel de opciones agotadas
 **Abierto:** 02/09/2026 · **Medido en Foodint Alcalá**
@@ -620,3 +610,152 @@ sitio de lectura.
 en `src/modules/ventas/services` (channelRates, foodCost, licensed, trend). No
 son del Inicio y no se han tocado, pero son del mismo patrón y conviene mirarlos
 antes de que uno de ellos esconda otro campo fantasma.
+
+
+## 14 · La cobertura del food cost está infravalorada en la pantalla de Margen por plato
+**Abierto:** 02/09/2026 · **Medido, no arreglado** · **Cambia una conclusión, no solo un número**
+
+`food_cost_dashboard` dice que la cobertura de Foodint es del **71,4 %** (5.461
+líneas costeadas de 7.652, últimos 30 días). Es la cifra que pinta
+`/ventas/margen` y la que enseña la tarjeta nueva del Inicio, porque la tarjeta
+y la pantalla tienen que decir lo mismo.
+
+**Está mal contada.** La RPC mete en el denominador TODAS las líneas de venta, y
+ahí dentro hay tres tipos:
+
+| line_type | líneas | venta | ¿tiene coste de línea? |
+|---|---:|---:|---|
+| `product` | 4.786 | 74.945 € | 4.211 sí (88,0 %) |
+| `combo_item` | 1.676 | 421 € | ninguna |
+| `modifier` | 1.192 | 728 € | ninguna |
+
+Las 2.868 líneas de modificador y de componente de combo **no son platos**: no
+llevan escandallo propio y no pueden tenerlo. Llevan 1.149 € de 76.094 €, el
+1,5 % del dinero. Contarlas como «líneas sin coste» hunde la cobertura de
+**88,0 % a 71,4 %**.
+
+**Por qué importa y no es cosmético:** con 71,4 % la conclusión es «el food cost
+del negocio está a medio medir». Con 88,0 % —y 84,7 % medido por dinero— la
+conclusión es «está bastante medido y falta un trozo concreto e identificable».
+Son dos decisiones distintas sobre dónde meter una tarde de trabajo.
+
+**Dónde se arregla:** en `food_cost_dashboard`, añadiendo
+`and coalesce(sl.line_type,'product') = 'product'` a la CTE `l`. Un sitio. La
+tarjeta del Inicio la sigue sin tocar nada, porque lee esa misma función.
+
+**Por qué no se ha hecho hoy:** cambia el número de una pantalla de producción
+que Julio ya mira, y el número sube de golpe 16 puntos. Eso se anuncia antes de
+hacerlo, no después. Además hay que comprobar de paso si `total.food_cost_pct`
+cambia (no debería: el numerador y el denominador del importe ya filtran por
+`costed`, y las líneas de modificador aportan 0 al coste — pero se comprueba con
+la query, no con el razonamiento).
+
+**Fuente de la medida:** ver el bloque `l` de
+`20260902T2100_home_vendido_sin_coste.sql`, que ya filtra bien y sirve de
+contraste.
+
+
+## 15 · `list_costless_sold_products` devuelve cero y el agujero existe
+**Abierto:** 02/09/2026 · **Esquivado, no arreglado**
+
+La RPC existe desde antes, se llama exactamente como el problema y **devuelve
+CERO filas para Foodint**. La tarjeta «Platos sin escandallo» iba a anclarse ahí.
+
+Devuelve cero porque exige `recipe_item.computed_cost IS NULL AND fixed_cost IS
+NULL`, y hoy todos los `recipe_item` enlazados que se venden tienen coste. El
+agujero real está **un paso antes**: productos de carta sin `recipe_item`
+enlazado. Y la RPC los excluye por construcción, porque hace
+`JOIN recipe_item ON ri.id = mi.recipe_item_id`.
+
+**Lo que habría dicho la tarjeta:** «0 platos sin escandallo». Detrás:
+
+| | productos | líneas | venta 30 d |
+|---|---:|---:|---:|
+| Sin coste, sin combo declarado | 87 | 313 | 6.357 € |
+| Sin coste, combo declarado | 31 | 268 | 5.181 € |
+| **Total sin costear** | **118** | **581** | **11.522 €** |
+
+Es el cero de la regla 7 servido por una fuente de aspecto impecable, y solo se
+cazó porque se midió la RPC antes de cablearla en vez de después.
+
+**Lo que se hizo:** función nueva, `home_vendido_sin_coste`, con el criterio
+correcto (`sale_line.computed_cost`, que es lo que el motor deja escrito en la
+línea y ya resuelve combos y modificadores).
+
+**Lo que queda:** decidir qué se hace con `list_costless_sold_products`. Sigue
+viva y sigue usándose en el panel de excepciones de `KitchenMenuPage`, donde
+también estará diciendo cero. O se corrige su criterio o se retira; lo que no
+puede quedarse es una función cuyo nombre promete el agujero entero y enseña una
+esquina vacía.
+
+
+## 16 · Un combo vendido no tiene coste, y no es un escandallo que falte
+**Abierto:** 02/09/2026 · **Hallazgo de producto, decisión de Julio**
+
+De los 118 productos vendidos sin coste en 30 días, **31 son combos declarados**
+(tienen filas activas en `combo_slot`) y valen **5.181 €**. Un combo no lleva
+escandallo propio: su coste es la suma de sus componentes.
+
+Y los componentes llegan: hay **1.676 líneas `combo_item`** en el periodo. Pero
+`sale_line.computed_cost` está a NULL en **las 1.676**. Así que el coste del
+combo no sale ni por arriba (no tiene escandallo) ni por abajo (sus componentes
+no se costean).
+
+**El caso que lo enseña:** «Korean Crispy Menu (Para 1) (KDB)» — 57 líneas, 938
+€ en 30 días, cero coste. Mandar a alguien a «hacerle el escandallo» sería
+mandarle a hacer un trabajo equivocado: lo que falta es que el motor sume sus
+componentes.
+
+**Y hay un segundo grupo, más barato de arreglar:** entre los 87 sin combo
+declarado, los que más dinero mueven son también packs y menús —«PACK PA 2
+(DC)» 1.437 €, «Combo Individual Smash» 658 €, «Combo Duo Smash» 643 €— a los
+que **nadie declaró el combo**. Esos no necesitan motor: necesitan que alguien
+los declare, y entonces caen en el grupo de arriba.
+
+**La tarjeta los cuenta aparte y lo dice.** No los mete en la lista de
+«arréglame» porque el arreglo no es el mismo.
+
+**Pendiente de Julio:** si el motor de coste debe bajar a las líneas
+`combo_item` (obra en el motor) o si los combos se declaran con escandallo
+propio (trabajo de catálogo, y duplica la verdad). No se decide desde aquí.
+
+
+## 17 · «Platos sin escandallo» cuenta más cosas de las que dice su nombre
+**Abierto:** 02/09/2026 · **Propuesta de renombrado, pendiente**
+
+La tarjeta cuenta **productos de carta vendidos sin coste**, que es un conjunto
+más ancho que «platos sin escandallo»: incluye productos con escandallo
+enlazado pero sin coste, y packs y menús sin combo declarado.
+
+El título viene de la lista de veintiuna aprobada, así que **no se ha cambiado
+por mi cuenta**. La tarjeta dice en su propia letra qué está contando («87
+productos vendidos sin coste»), que es lo que evita que alguien lea mal la
+cifra, pero el nombre del cajón sigue prometiendo otra cosa.
+
+**Propuesta:** «Vendido sin coste». Cambiarlo toca `ORDEN_DEL_CAJON`, la
+definición en `kitchen/module.tsx`, el espejo `home_card_catalog` y la prueba
+del reparto por grupo. Cinco minutos, y hace falta que lo diga Julio.
+
+
+## 18 · Las tres pantallas de Ventas no leen la URL
+**Abierto:** 02/09/2026 · **Consecuencia visible hoy**
+
+`/ventas/margen`, `/ventas/margen-final` y `/ventas/cedidas` **no usan
+`useSearchParams`**. Comprobado, no supuesto.
+
+Por eso las tres tarjetas nuevas del bloque del dinero mandan su enlace **sin
+filtros**, en vez de mandar un `local` que se perdería en silencio — que es
+exactamente lo que prohíbe la tabla de contratos de `drill.ts`, y por lo que
+esa tabla existe.
+
+**La consecuencia que se ve:** si en el Inicio hay un local seleccionado, la
+tarjeta enseña las cifras de ese local y el enlace abre la pantalla con TODOS.
+Los números no cuadran, y no hay nada en pantalla que explique por qué.
+
+**Lo que costaría:** las tres pantallas ya tienen su propio selector de local
+con estado; es leer un parámetro al montar y sembrarlo. No se ha hecho en este
+lote porque son tres pantallas de producción que no son del Inicio, y meterles
+mano de paso es cómo se rompe algo que funcionaba.
+
+**Mientras tanto:** los enlaces van limpios. Un filtro que no viaja es mejor que
+un filtro que viaja y se pierde.

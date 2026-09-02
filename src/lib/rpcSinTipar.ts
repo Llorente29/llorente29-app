@@ -15,6 +15,7 @@
 //
 // USADO HOY POR:
 //   · employee_clock_status(p_employee_id)  — tarjeta «En cocina ahora»
+//   · home_vendido_sin_coste(p_account, …)  — tarjeta «Platos sin escandallo»
 //
 // Cuando se regenere el fichero de tipos: quitar la llamada de arriba, borrar
 // este fichero, y el compilador señalará solo lo que falte.

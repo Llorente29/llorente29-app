@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   inicioDeSemana, espejoDeDia, espejoDeSemana, calculaDelta, nombreDeDia,
+  deltaEnPuntos,
 } from '@/shell/home/espejo'
 
 // `toLocaleString` en es-ES separa la cifra del € con un espacio DURO (U+00A0 o
@@ -106,5 +107,44 @@ describe('calculaDelta · cuándo NO, que es lo que importa', () => {
 
   it('un espejo negativo tampoco vale como base', () => {
     expect(calculaDelta(100, -50, e)).toBeNull()
+  })
+})
+
+// ── deltaEnPuntos ──────────────────────────────────────────────────────────
+// Existe porque un porcentaje no se mueve como un euro. Lo que se prueba es la
+// unidad (puntos, no porcentaje del porcentaje) y el SENTIDO (que subir pueda
+// ser malo), que son las dos cosas por las que no vale `calculaDelta`.
+describe('deltaEnPuntos', () => {
+  const e = { desde: new Date(2026, 6, 4), hasta: new Date(2026, 7, 3), etiqueta: 'los 30 días anteriores' }
+
+  it('27,4 vs 28,2 son 0,8 PUNTOS, no un 2,8 %', () => {
+    const d = deltaEnPuntos(27.4, 28.2, e, { subirEsMalo: true })!
+    expect(d.pct).toBe(-0.8)
+    expect(sinEspacioDuro(d.texto)).toBe('−0,8 pp vs los 30 días anteriores')
+  })
+
+  it('cuando subir es malo, subir pinta de atención y bajar de bien', () => {
+    expect(deltaEnPuntos(30, 27, e, { subirEsMalo: true })!.tono).toBe('attention')
+    expect(deltaEnPuntos(27, 30, e, { subirEsMalo: true })!.tono).toBe('positive')
+  })
+
+  it('sin declarar el sentido, subir es bueno — como en ventas', () => {
+    expect(deltaEnPuntos(30, 27, e)!.tono).toBe('positive')
+  })
+
+  it('un espejo de 0 % SÍ es un espejo: nadie tenía coste, y eso es un dato', () => {
+    const d = deltaEnPuntos(12, 0, e, { subirEsMalo: true })!
+    expect(d.pct).toBe(12)
+  })
+
+  it('sin espejo no hay delta, y un periodo en curso tampoco lo tiene', () => {
+    expect(deltaEnPuntos(27.4, null, e)).toBeNull()
+    expect(deltaEnPuntos(null, 28.2, e)).toBeNull()
+    expect(deltaEnPuntos(27.4, 28.2, e, { periodoEnCurso: true })).toBeNull()
+  })
+
+  it('el espejo se nombra, y con su cifra si se pide', () => {
+    const d = deltaEnPuntos(27.4, 28.2, e, { conCifraDelEspejo: true })!
+    expect(sinEspacioDuro(d.texto)).toBe('−0,8 pp vs los 30 días anteriores (28,2 %)')
   })
 })

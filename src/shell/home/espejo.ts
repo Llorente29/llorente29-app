@@ -146,3 +146,51 @@ export function calculaDelta(
     texto: `${signo}${magnitud} % vs ${espejo.etiqueta}${cifra}`,
   }
 }
+
+/**
+ * EL DELTA DE UN PORCENTAJE, que no es el mismo animal que el de un euro.
+ *
+ * Dos diferencias, y las dos han dado disgustos en paneles de otra gente:
+ *
+ *   1. UN PORCENTAJE SE MUEVE EN PUNTOS, no en porcentaje del porcentaje. Un
+ *      food cost que pasa de 27,4 % a 28,9 % ha subido **1,5 puntos**. Decir
+ *      «+5,5 %» es verdad aritmética y mentira operativa: nadie compra comida
+ *      en porcentajes de porcentajes, y la cifra suena cinco veces más pequeña
+ *      de lo que se siente en la cuenta.
+ *
+ *   2. SUBIR NO SIEMPRE ES BUENO. En ventas, más es mejor y `calculaDelta` lo
+ *      da por hecho. En food cost o en % de personal, más es peor. Por eso el
+ *      sentido se DECLARA en la llamada en vez de heredarse.
+ *
+ * Las tres reglas de la cabecera siguen mandando: sin espejo no hay tendencia,
+ * un periodo en curso no se compara con uno cerrado, y el espejo se nombra.
+ */
+export function deltaEnPuntos(
+  actual: number | null | undefined,
+  valorEspejo: number | null | undefined,
+  espejo: Espejo,
+  opciones: OpcionesDelta & { subirEsMalo?: boolean } = {},
+): Delta | null {
+  if (opciones.periodoEnCurso) return null
+  if (actual == null || Number.isNaN(actual)) return null
+  // A diferencia del delta en euros, aquí un espejo de 0 SÍ vale: un food cost
+  // del 0 % es un dato (nadie tenía coste), no una división imposible.
+  if (valorEspejo == null || Number.isNaN(valorEspejo)) return null
+
+  const puntos = Math.round((actual - valorEspejo) * 10) / 10
+  const signo = puntos > 0 ? '+' : puntos < 0 ? '−' : ''
+  const magnitud = Math.abs(puntos).toLocaleString('es-ES', {
+    minimumFractionDigits: 1, maximumFractionDigits: 1,
+  })
+  const malo = opciones.subirEsMalo ?? false
+  const cifra = opciones.conCifraDelEspejo
+    ? ` (${valorEspejo.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %)`
+    : ''
+
+  return {
+    pct: puntos,
+    tono: puntos === 0 ? 'neutral'
+      : (puntos > 0) === malo ? 'attention' : 'positive',
+    texto: `${signo}${magnitud} pp vs ${espejo.etiqueta}${cifra}`,
+  }
+}
