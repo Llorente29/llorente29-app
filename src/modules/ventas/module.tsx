@@ -28,6 +28,7 @@ import CedidasPage from '@/pages/CedidasPage'
 import PrediccionPersonalPage from '@/pages/PrediccionPersonalPage'
 import ZonasPedidoPage from '@/pages/ZonasPedidoPage'
 import VentasDeAyer from '@/modules/ventas/home/VentasDeAyer'
+import GraficaCatorceDias from '@/modules/ventas/home/GraficaCatorceDias'
 
 export const ventasModule: ModuleDefinition = {
   id: 'ventas',
@@ -83,6 +84,14 @@ export const ventasModule: ModuleDefinition = {
       source: 'sale',
       drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' },
       component: VentasDeAyer,
+    },
+    {
+      key: 'ventas.grafica_14_dias',
+      title: 'Ventas por día · últimas dos semanas',
+      size: 'lg',
+      source: 'sale',
+      drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas · comparar periodos →' },
+      component: GraficaCatorceDias,
     },
   ],
 }

@@ -102,9 +102,18 @@ begin
     raise exception 'authenticated NO puede ejecutar home_en_cocina_ahora';
   end if;
 
+  -- ── PRESTAMO DE IDENTIDAD: HERRAMIENTA DE COMPROBACION, NO DE EJECUCION ──
   -- Para verificar el CONTENIDO hace falta una identidad: la funcion exige la
-  -- cuenta del llamante y `postgres` no la tiene. Se presta la de Julio con
-  -- `set local`, que muere al cerrar la transaccion.
+  -- cuenta del llamante y `postgres` no la tiene, asi que sin esto la
+  -- comprobacion habria sido mas floja (solo permisos) o directamente falsa.
+  --
+  -- CONDICIONES, y no son negociables:
+  --   · `set local`, nunca `set`: muere al cerrar ESTA transaccion.
+  --   · Solo dentro de un bloque de VERIFICACION como este.
+  --   · NUNCA en una migracion que corra sola, ni en un camino de ejecucion,
+  --     ni en un job programado. Prestarse una identidad para comprobar algo
+  --     es legitimo; prestarsela para HACER algo es saltarse la puerta que uno
+  --     mismo acaba de poner.
   set local request.jwt.claims = '{"sub":"673fca49-f6b5-40ed-a8f7-558390acce10","role":"authenticated"}';
 
   select count(*) filter (where estado = 'trabajando'), count(*)

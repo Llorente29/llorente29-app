@@ -56,6 +56,17 @@ otras 21 pasan sin que nadie se entere.
 | 02/09 tarde | `employee_clock_status` no está entre las RPC tipadas. Se resuelve con `src/lib/rpcSinTipar.ts`, un puente ÚNICO y borrable, para no seguir divergiendo el fichero generado |
 | 02/09 tarde | `shift_templates` y `clock_entries` tampoco tienen `account_id` en el fichero. Aquí NO se parcheó: se acotaron las consultas por los ids de local y de empleado que ya se tenían, que además es **más estrecho** que filtrar por cuenta. Cuando se pueda acotar así, es mejor que un parche |
 
+### El criterio mientras tanto (aprobado el 02/09), en este orden
+
+1. **Acotar por los ids que ya se tienen** es la PRIMERA opción. Pedir «los
+   fichajes de estos seis empleados» es más estrecho que «los de esta cuenta»,
+   no toca el fichero generado y no deja deuda.
+2. **`src/lib/rpcSinTipar.ts`**, solo donde no hay alternativa: una RPC que no
+   está tipada y que no se puede sustituir por una consulta acotada.
+3. **Parchear el fichero de tipos a mano es el ÚLTIMO recurso**, y cada vez que
+   se haga se anota en la tabla de arriba, porque una regeneración se lo lleva
+   sin avisar.
+
 **Las dos salidas, y hay que elegir una:** o el fichero se regenera de verdad
 con el CLI (`npm run gen:types`, necesita token de Supabase), o el chequeo
 estricto se extiende a los demás servicios.
