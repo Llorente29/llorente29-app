@@ -506,6 +506,25 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     }
   }
 
+  // CUARTA SALIDA (01/09): «Déjalo pendiente». No toca el stock ni el coste —
+  // no hay nada que revertir, la línea nunca entró — solo la hace VISIBLE en la
+  // lista de pendientes. Regla 8: confirma en pantalla con lo que devolvió el
+  // servidor, y si la escritura falla se dice; no se pinta un pendiente que no
+  // se guardó.
+  async function handleTogglePendiente(line: GoodsReceiptLine) {
+    const marcar = !line.flaggedForOffice
+    setSaving(true); setError(null)
+    try {
+      await updateGoodsReceiptLine(line.id, { flaggedForOffice: marcar })
+      setPendingConfirm({ lineId: line.id, tick: reloadTick })
+      setReloadTick(t => t + 1)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo marcar la línea como pendiente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // "No es mercancía" (sin decidir): reversa si había algo posteado, no repostea.
   const [notGoodsLineId, setNotGoodsLineId] = useState<string | null>(null)
   async function handleNotGoods(line: GoodsReceiptLine, kind: string) {
@@ -660,6 +679,18 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     const l = lines.find(x => x.id === pendingConfirm.lineId)
     if (!l) return null
     const nombre = (l.recipeItemId ? itemInfo[l.recipeItemId]?.name : null) ?? sentenceCase(l.productName)
+
+    // «Déjalo pendiente» (01/09). El texto sale de la línea RECARGADA, así que
+    // dice lo que de verdad quedó guardado. Y no finge que se arregló nada: el
+    // importe sigue fuera del inventario y eso se repite aquí.
+    if (!l.recipeItemId && !l.notGoods) {
+      const imp = importePapel(l)
+      return l.flaggedForOffice
+        ? `${nombre} queda PENDIENTE. Sale en Recepciones · Pendientes hasta que se resuelva`
+          + (imp != null ? `; sus ${fmtMoney(imp)} siguen fuera del inventario.` : '; sigue fuera del inventario.')
+        : `${nombre} ya no está marcada como pendiente. Sigue sin artículo y sin entrar al almacén.`
+    }
+
     const almacen = importeAlAlmacen(l)
     const porBase = costePorUnidadBase(l)
     const uSingular = unitNoun(l.recipeItemId ? itemInfo[l.recipeItemId]?.baseUnitAbbr ?? null : null, 1)
@@ -953,6 +984,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
               notGoodsOpen={notGoodsLineId === l.id}
               onToggleNotGoods={() => setNotGoodsLineId(n => n === l.id ? null : l.id)}
               onPickNotGoods={kind => handleNotGoods(l, kind)}
+              onTogglePendiente={() => void handleTogglePendiente(l)}
             />
           )
         })}
@@ -1571,7 +1603,7 @@ function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onCorregir,
 }
 
 // ── Fila CLASE 3 · sin decidir ───────────────────────────────────────────
-function SinDecidirRow({ line, saving, onSearch, onCreate, notGoodsOpen, onToggleNotGoods, onPickNotGoods }: {
+function SinDecidirRow({ line, saving, onSearch, onCreate, notGoodsOpen, onToggleNotGoods, onPickNotGoods, onTogglePendiente }: {
   line: GoodsReceiptLine
   saving: boolean
   onSearch: () => void
@@ -1579,6 +1611,7 @@ function SinDecidirRow({ line, saving, onSearch, onCreate, notGoodsOpen, onToggl
   notGoodsOpen: boolean
   onToggleNotGoods: () => void
   onPickNotGoods: (kind: string) => void
+  onTogglePendiente: () => void
 }) {
   const name = sentenceCase(line.productName)
   const docQty = line.docQty
@@ -1596,12 +1629,25 @@ function SinDecidirRow({ line, saving, onSearch, onCreate, notGoodsOpen, onToggl
           </div>
         )}
       </div>
-      <div className="mx-4 mt-3 px-3.5 py-3 rounded-md bg-accent-bg text-base font-semibold text-text-primary">
-        Esto no lo tienes en el catálogo. ¿Qué hacemos?
-        <span className="block font-normal text-sm text-text-primary mt-1">
-          No ha entrado al almacén. Si lo dejas así, estos {line.docAmount != null ? fmtMoney(line.docAmount) : DASH} de género no aparecerán en tu inventario ni en tu coste.
-        </span>
-      </div>
+      {/* MARCADA COMO PENDIENTE: cambia la etiqueta, NO el hecho. El dinero
+          sigue fuera del inventario y aquí se dice igual de claro. Un pendiente
+          que se pinta como resuelto es peor que no tener el botón. */}
+      {line.flaggedForOffice ? (
+        <div className="mx-4 mt-3 px-3.5 py-3 rounded-md bg-warning-bg text-base font-semibold text-text-primary">
+          Pendiente de resolver en oficina.
+          <span className="block font-normal text-sm text-text-primary mt-1">
+            Sigue sin entrar al almacén: estos {line.docAmount != null ? fmtMoney(line.docAmount) : DASH} de género
+            NO aparecen en tu inventario ni en tu coste. Está en la lista de pendientes para que no se olvide.
+          </span>
+        </div>
+      ) : (
+        <div className="mx-4 mt-3 px-3.5 py-3 rounded-md bg-accent-bg text-base font-semibold text-text-primary">
+          Esto no lo tienes en el catálogo. ¿Qué hacemos?
+          <span className="block font-normal text-sm text-text-primary mt-1">
+            No ha entrado al almacén. Si lo dejas así, estos {line.docAmount != null ? fmtMoney(line.docAmount) : DASH} de género no aparecerán en tu inventario ni en tu coste.
+          </span>
+        </div>
+      )}
       {!notGoodsOpen ? (
         <div className="flex gap-2.5 flex-wrap px-4 py-3.5">
           <button type="button" onClick={onSearch} disabled={saving}
@@ -1615,6 +1661,19 @@ function SinDecidirRow({ line, saving, onSearch, onCreate, notGoodsOpen, onToggl
           <button type="button" onClick={onToggleNotGoods} disabled={saving}
             className="min-h-touch px-3.5 rounded-md text-sm text-text-secondary border border-transparent hover:border-border-default hover:bg-page disabled:opacity-50 transition-base">
             No es mercancía (portes, envases…)
+          </button>
+          {/* CUARTA SALIDA (01/09). Las tres de arriba obligan a decidir AHORA,
+              y la única cómoda —"no es mercancía"— saca el género del inventario
+              y del coste PARA SIEMPRE. Faltaba «no lo sé ahora», que es la
+              verdad la mitad de las veces. Escribe flagged_for_office y la línea
+              sale en la lista de pendientes. */}
+          <button type="button" onClick={onTogglePendiente} disabled={saving}
+            className={`min-h-touch px-3.5 rounded-md text-sm border disabled:opacity-50 transition-base ${
+              line.flaggedForOffice
+                ? 'border-warning text-warning font-semibold hover:bg-warning-bg'
+                : 'border-transparent text-text-secondary hover:border-border-default hover:bg-page'
+            }`}>
+            {line.flaggedForOffice ? 'Quitar el pendiente' : 'Déjalo pendiente'}
           </button>
         </div>
       ) : (

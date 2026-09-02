@@ -6,11 +6,12 @@
 // Muestra last_seen_at.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Loader2, Copy, Check, Tablet, Ban, QrCode, X, MapPin } from 'lucide-react'
+import { Plus, Loader2, Copy, Check, Tablet, Ban, QrCode, X, MapPin, AlertTriangle } from 'lucide-react'
 import { Button, Input, Badge } from '../../../components/ui'
 import {
   listDevices, createDevice, revokeDevice, generateDeviceToken, listStations,
-  type KdsDevice, type KitchenStation,
+  listDeviceBundleStatus,
+  type KdsDevice, type KitchenStation, type DeviceBundleStatus,
 } from '../services/kdsService'
 import QRCode from 'qrcode'
 import { supabase } from '../../../lib/supabase'
@@ -27,6 +28,36 @@ function estacionUrl(token: string): string {
   return `${origin}/estacion?token=${token}`
 }
 
+/**
+ * EL 01/09 HABÍA DOS TABLETS EN LA MISMA COCINA CON 18 BUNDLES DE DIFERENCIA y
+ * ningún sitio donde verlo. Una tablet desfasada late, pinta pedidos y contesta
+ * con normalidad — por eso es más peligrosa que una apagada: nadie sospecha.
+ * Aquí se ve el bundle de cada una, siempre, sin filtrar.
+ */
+function bundleTexto(b: DeviceBundleStatus | undefined): { texto: string; rojo: boolean } | null {
+  if (!b) return null
+  switch (b.estado) {
+    case 'al_dia':
+      return { texto: `bundle ${b.bundleActual} · al día`, rojo: false }
+    case 'builtin':
+      return { texto: 'sin actualizar nunca · código empotrado en el APK', rojo: true }
+    case 'desconocido':
+      return { texto: 'versión ilegible · SIN VIGILAR', rojo: true }
+    case 'muy_atrasado':
+      return {
+        texto: `bundle ${b.bundleActual} · el último es el ${b.ultimoBundle}`
+             + ` · lleva ${b.horasDesfase} h sin coger lo nuevo`,
+        rojo: true,
+      }
+    default:
+      return {
+        texto: `bundle ${b.bundleActual} · el último es el ${b.ultimoBundle}`
+             + (b.atrasoBundles ? ` (${b.atrasoBundles} por detrás)` : ''),
+        rojo: true,
+      }
+  }
+}
+
 function formatLastSeen(iso: string | null): string {
   if (!iso) return 'Nunca conectado'
   const d = new Date(iso)
@@ -41,6 +72,7 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
   const [saving, setSaving] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [locationName, setLocationName] = useState<string>('')
+  const [bundles, setBundles] = useState<Record<string, DeviceBundleStatus>>({})
   const [qrFor, setQrFor] = useState<KdsDevice | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
@@ -51,12 +83,16 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
   async function load() {
     setLoading(true)
     try {
-      const [devs, sts] = await Promise.all([
+      // El estado de bundle NO tumba la pantalla si falla: listDeviceBundleStatus
+      // devuelve [] y la lista se pinta igual, solo que sin esa línea.
+      const [devs, sts, bs] = await Promise.all([
         listDevices(accountId, locationId),
         listStations(accountId, locationId),
+        listDeviceBundleStatus(locationId),
       ])
       setDevices(devs)
       setStations(sts.filter(s => s.isActive))
+      setBundles(Object.fromEntries(bs.map(b => [b.deviceId, b])))
       setError(null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando dispositivos')
@@ -200,6 +236,16 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
                     : 'Todas las estaciones'}
                   {' · '}{formatLastSeen(d.lastSeenAt)}
                 </div>
+                {(() => {
+                  const b = bundleTexto(bundles[d.id])
+                  if (!b) return null
+                  return (
+                    <div className={`text-xs mt-0.5 ${b.rojo ? 'text-danger font-semibold' : 'text-text-secondary'}`}>
+                      {b.rojo && <AlertTriangle size={11} className="inline-block mr-1 -mt-0.5" />}
+                      {b.texto}
+                    </div>
+                  )
+                })()}
               </div>
               {d.isActive && (
                 <>

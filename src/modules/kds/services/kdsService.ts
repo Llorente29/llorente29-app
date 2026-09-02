@@ -757,6 +757,50 @@ export interface KdsDevice {
   lastSeenAt: string | null
 }
 
+/**
+ * Qué bundle corre cada aparato y cuánto va por detrás del último publicado.
+ * Lo calcula la BBDD (kds_device_bundle_status): el último bundle es el que
+ * hay en el bucket `apps`, que es lo que las tablets se descargan de verdad.
+ *
+ * NO FILTRA NADA: la pantalla de Dispositivos la abre alguien a propósito, así
+ * que salen todos con su estado. El umbral de 24 h vive solo en el vigía que
+ * interrumpe (regla 7).
+ */
+export interface DeviceBundleStatus {
+  deviceId: string
+  bundleActual: number | null
+  ultimoBundle: number | null
+  atrasoBundles: number | null
+  horasDesfase: number | null
+  /** al_dia · atrasado · muy_atrasado · builtin · desconocido */
+  estado: 'al_dia' | 'atrasado' | 'muy_atrasado' | 'builtin' | 'desconocido'
+}
+
+/**
+ * Devuelve [] si la RPC todavía no existe (migración sin aplicar) o falla: la
+ * pantalla de dispositivos tiene que seguir funcionando sin esta columna.
+ */
+export async function listDeviceBundleStatus(locationId: string): Promise<DeviceBundleStatus[]> {
+  if (!supabase) return []
+  // El cast se cae solo cuando se regenere database.ts con la migración ya
+  // aplicada: hoy los tipos generados todavía no conocen esta RPC.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('kds_device_bundle_status', { p_location_id: locationId }) as { data: unknown; error: { message: string } | null }
+  if (error) {
+    console.warn('[kds] kds_device_bundle_status no disponible:', error.message)
+    return []
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map(r => ({
+    deviceId: r.device_id as string,
+    bundleActual: r.bundle_actual ?? null,
+    ultimoBundle: r.ultimo_bundle ?? null,
+    atrasoBundles: r.atraso_bundles ?? null,
+    horasDesfase: r.horas_desfase ?? null,
+    estado: (r.estado ?? 'desconocido') as DeviceBundleStatus['estado'],
+  }))
+}
+
 function rowToDevice(r: Row): KdsDevice {
   return {
     id: r.id as string,
