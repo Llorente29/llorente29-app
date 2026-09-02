@@ -279,3 +279,50 @@ cerrada en los dos locales»— no es reproducible con este historial.
    adivinar.
 3. **Los 52 eventos ya escritos no se recuperan.** Esa parte del historial está
    perdida y conviene saberlo antes de construir un informe encima.
+
+---
+
+## 9 · «% personal sobre ventas»: falta decidir qué es «personal»
+**Abierto:** 02/09/2026 · **Decisión pendiente de Julio, no tarjeta pendiente**
+
+La tarjeta está declarada como P2 y **no se toca hasta que haya decisión**. El
+trabajo no es la tarjeta —son 4 h— es el criterio, y elegir mal da un número que
+parece bueno y no lo es.
+
+**La pregunta:** ¿el coste de personal es el **salario bruto** o el **coste
+empresa**? `employees` tiene los dos campos: `salary` y `employer_ss_annual`.
+
+**Por qué importa y no es un detalle contable:** entre uno y otro hay del orden
+de un 30 %. Un panel que diga «28 % de personal sobre ventas» usando el bruto
+está diciendo que el negocio va mejor de lo que va, y ese número se mira para
+decidir si se contrata. La cifra que se enseña en un panel de mando tiene que
+ser la que se usa para decidir, no la más bonita.
+
+**Lo que hay que decidir, en una frase:** cuál de los dos, y si la tarjeta lo
+dice en su subtítulo («coste empresa») para que nadie tenga que preguntarlo.
+
+---
+
+## 10 · «Puntos de pedido»: el concepto no existe en la base
+**Abierto:** 02/09/2026 · **Decisión pendiente de Julio, no tarjeta pendiente**
+
+Declarada como P2 y **sin tocar**. `stockLevelService` da el stock actual, pero
+NO hay punto de pedido por artículo en ninguna parte.
+
+**Las dos salidas, y no son equivalentes:**
+
+1. **Un campo por artículo**, puesto a mano. Fiable y explicable —el punto es el
+   que alguien decidió— pero hay que rellenarlo artículo a artículo, y un campo
+   vacío es una alerta que nunca salta.
+2. **Deducirlo del consumo medio** × días de cobertura. No hay nada que
+   rellenar y funciona desde el primer día, pero el punto cambia solo: un
+   artículo que se dejó de vender baja su punto y deja de avisar justo cuando
+   vuelve la temporada.
+
+**Lo segundo es más listo y menos fiable.** Con 56.311 movimientos de stock hay
+datos de sobra para la media; lo que no hay es forma de que el operario entienda
+por qué hoy le avisa de la harina y ayer no.
+
+**Mi recomendación:** empezar por (1) en los veinte artículos que de verdad se
+rompen, y no por los 1.072. Una alerta en la que se cree vale más que mil
+calculadas.
