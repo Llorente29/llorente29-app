@@ -3,6 +3,13 @@
 // Food cost real (escandallo) por marca y por plato. Lee la RPC server-side
 // `food_cost_dashboard` (sale_line -> menu_item -> recipe_item.computed_cost).
 // Devuelve cobertura (salud del dato) y marca recetas sospechosas.
+//
+// 02/09 — LA RPC CUENTA POR UNIDAD DE VENTA, NO POR LÍNEA. Un combo reparte su
+// coste entre las líneas hijas y su PRECIO en la línea padre (581 de 605 combos
+// de 30 días lo hacen así, 13.229 €). Contando por línea, el coste de los hijos
+// entraba en el numerador y el ingreso del padre se caía del denominador por no
+// tener receta: el food cost salía 27,4 % siendo 22,3 %, y marcas enteras
+// aparecían al doble de lo que son (Ay Mamita Bowls 46,3 % -> 18,9 %).
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
@@ -12,10 +19,24 @@ function requireSupabase(): void {
   }
 }
 
+/**
+ * SALUD DEL DATO, contada por UNIDAD DE VENTA — no por línea.
+ *
+ * Una unidad es una línea de producto MÁS sus hijos (`combo_item` y
+ * `modifier`): lo que el cliente compró y pagó junto. Hasta el 02/09 esto se
+ * contaba por línea suelta y decía 71,4 % donde la verdad es 95,2 %, porque
+ * metía en el denominador 2.862 líneas de modificador y de componente de combo
+ * que no son platos y no pueden llevar escandallo propio.
+ *
+ * `cobertura_dinero_pct` es la misma pregunta pesada por euros, que es la que
+ * de verdad importa: da igual que falte por costear una unidad de 2 € o una de
+ * 40 si se cuentan igual.
+ */
 export interface FoodCostSalud {
-  lineas: number
-  lineas_costeadas: number
+  unidades: number
+  unidades_costeadas: number
   cobertura_pct: number | null
+  cobertura_dinero_pct: number | null
 }
 export interface FoodCostTotal {
   ingreso: number
@@ -55,7 +76,7 @@ export interface FoodCostFilters {
 }
 
 const EMPTY: FoodCostDashboard = {
-  salud: { lineas: 0, lineas_costeadas: 0, cobertura_pct: null },
+  salud: { unidades: 0, unidades_costeadas: 0, cobertura_pct: null, cobertura_dinero_pct: null },
   total: { ingreso: 0, food_cost: 0, food_cost_pct: null },
   by_brand: [], by_dish: [],
 }

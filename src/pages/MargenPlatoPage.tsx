@@ -86,7 +86,16 @@ export default function MargenPlatoPage() {
               Salud del dato — cuánto food cost conocemos
             </div>
             <div style={{ fontSize: 12.5, color: '#445' }}>
-              Cobertura <b>{pct(data.salud.cobertura_pct)}</b> · {fmtInt(data.salud.lineas_costeadas)} de {fmtInt(data.salud.lineas)} líneas con receta costeada.
+              {/* UNIDADES, no líneas. Una unidad es un producto con sus
+                  extras y sus componentes de combo: lo que el cliente pagó
+                  junto. Contando líneas sueltas esto decía 71,4 % donde la
+                  verdad es 95,2 %. Y la cobertura por DINERO va al lado porque
+                  es la que decide: falta por costear un 3,4 % de la caja, no un
+                  3,4 % de «cosas». */}
+              Cobertura <b>{pct(data.salud.cobertura_pct)}</b> · {fmtInt(data.salud.unidades_costeadas)} de {fmtInt(data.salud.unidades)} unidades de venta con receta costeada
+              {data.salud.cobertura_dinero_pct != null
+                ? <> · <b>{pct(data.salud.cobertura_dinero_pct)}</b> del dinero</>
+                : null}.
               El resto son platos sin escandallo enlazado — no penalizan el %, pero conviene completarlos.
             </div>
           </div>

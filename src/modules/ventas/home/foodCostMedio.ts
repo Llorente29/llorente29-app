@@ -23,6 +23,13 @@
 // CERRADO se puede comparar con su espejo sin romper la regla 2 (un periodo en
 // curso no se compara con uno cerrado). Con hoy dentro no habría delta.
 //
+// ── LO QUE CUENTA EL DENOMINADOR (corregido el 02/09) ─────────────────────
+// La RPC cuenta UNIDADES DE VENTA, no líneas: un producto con sus extras y sus
+// componentes de combo es UNA cosa, la que el cliente pagó. Contando líneas
+// sueltas decía 71,4 % de cobertura y 27,4 % de food cost; la verdad es 95,2 %
+// y 22,3 %. La diferencia no era ruido: metía el coste de los hijos del combo
+// en el numerador y tiraba el ingreso del padre del denominador.
+//
 // El espejo son los 30 días completos anteriores. No es «el mismo día de la
 // semana» porque un mes móvil ya lleva dentro todos los días de la semana: el
 // sesgo que el espejo diario corrige aquí no existe.
@@ -47,9 +54,12 @@ export interface FoodCostMedio {
   pct: number | null
   /** El mismo cálculo sobre los 30 días anteriores. null = sin espejo. */
   pctEspejo: number | null
-  lineas: number
-  lineasCosteadas: number
+  /** Unidades de venta del periodo (producto + sus extras y componentes). */
+  unidades: number
+  unidadesCosteadas: number
   coberturaPct: number | null
+  /** La misma cobertura pesada por euros, que es la que decide. */
+  coberturaDineroPct: number | null
   marcas: MarcaFoodCost[]
   /** Nombres de las marcas fuera de rango, para poder nombrarlas. */
   sospechosas: string[]
@@ -88,10 +98,11 @@ export async function leeFoodCostMedio(
   return {
     pct: d.total.food_cost_pct,
     // Un espejo sin líneas costeadas no es un 0 %: es que no hay espejo.
-    pctEspejo: e.salud.lineas_costeadas > 0 ? e.total.food_cost_pct : null,
-    lineas: d.salud.lineas,
-    lineasCosteadas: d.salud.lineas_costeadas,
+    pctEspejo: e.salud.unidades_costeadas > 0 ? e.total.food_cost_pct : null,
+    unidades: d.salud.unidades,
+    unidadesCosteadas: d.salud.unidades_costeadas,
     coberturaPct: d.salud.cobertura_pct,
+    coberturaDineroPct: d.salud.cobertura_dinero_pct,
     marcas,
     sospechosas: marcas.filter(m => m.sospechoso).map(m => m.marca),
     desde: actual.desde,

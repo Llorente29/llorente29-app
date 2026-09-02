@@ -41,12 +41,17 @@ export default function FoodCostMedio({ accountId, locationId, drillTo }: HomeCa
     : datos.pct == null
       // No hay ni una línea costeada. Decir «0 %» sería decir que se cocina
       // gratis; lo que pasa es que no se sabe.
-      ? `Ninguna de las ${datos.lineas.toLocaleString('es-ES')} líneas del periodo tiene coste: no hay food cost que calcular.`
+      ? `Ninguna de las ${datos.unidades.toLocaleString('es-ES')} ventas del periodo tiene coste: no hay food cost que calcular.`
       : [
           sospechosas.length > 0
             ? `${sospechosas.slice(0, 2).join(' y ')} sale${sospechosas.length > 1 ? 'n' : ''} fuera de rango: revisa su escandallo antes de creerte su margen.`
             : null,
-          `Sale de ${datos.lineasCosteadas.toLocaleString('es-ES')} líneas de ${datos.lineas.toLocaleString('es-ES')}; las otras ${(datos.lineas - datos.lineasCosteadas).toLocaleString('es-ES')} no tienen coste y no cuentan.`,
+          // La cobertura se dice por DINERO, que es la que decide si el
+          // porcentaje de arriba se puede creer. Los euros que faltan por
+          // costear los lista «Platos sin escandallo»: no se repiten aquí.
+          datos.coberturaDineroPct != null
+            ? `Cubre el ${datos.coberturaDineroPct.toLocaleString('es-ES', { maximumFractionDigits: 1 })} % del dinero vendido (${datos.unidadesCosteadas.toLocaleString('es-ES')} ventas de ${datos.unidades.toLocaleString('es-ES')}).`
+            : `Sale de ${datos.unidadesCosteadas.toLocaleString('es-ES')} ventas de ${datos.unidades.toLocaleString('es-ES')}.`,
         ].filter(Boolean).join(' ')
 
   return (

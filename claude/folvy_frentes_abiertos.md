@@ -20,11 +20,14 @@ histórico, un punto de pedido calculado sería una media de agosto disfrazada d
 criterio. Se cablea cuando haya dos o tres meses. Quien la coja antes creyendo
 que «solo falta enchufarla» está cogiendo el frente 10, no una tarjeta.
 
+**Cerrados el 02/09 por la noche:** el 14 (el food cost estaba inflado: 27,4 %
+era 22,3 %, y el diagnóstico que traía el frente era el equivocado) y el RECON
+del 19 (no es incidente; falta que Julio ejecute el `revoke`).
+
 **Lo que sí está esperando decisión de Julio**, y en este orden de coste:
 
 | # | Qué | Coste |
 |---|---|---|
-| 14 | La cobertura del food cost sube de 71,4 % a 88,0 % al arreglar un `where`. Cambia un número que Julio ya mira | Una línea + comprobar |
 | 17 | Renombrar «Platos sin escandallo» → «Vendido sin coste» | Cinco minutos |
 | 16 | Los combos no se costean ni por arriba ni por abajo: 5.181 € en 30 días. Motor o catálogo | Decisión primero |
 | 18 | Las tres pantallas de Ventas no leen la URL, así que el drill del bloque del dinero va sin filtro de local | Tres pantallas |
@@ -612,48 +615,93 @@ son del Inicio y no se han tocado, pero son del mismo patrón y conviene mirarlo
 antes de que uno de ellos esconda otro campo fantasma.
 
 
-## 14 · La cobertura del food cost está infravalorada en la pantalla de Margen por plato
-**Abierto:** 02/09/2026 · **Medido, no arreglado** · **Cambia una conclusión, no solo un número**
+## 14 · El food cost estaba inflado — RESUELTO el 02/09, y el diagnóstico era otro
+**Abierto y cerrado el 02/09** · **Migración `20260902T2200_food_cost_denominador_por_unidad.sql`**
 
-`food_cost_dashboard` dice que la cobertura de Foodint es del **71,4 %** (5.461
-líneas costeadas de 7.652, últimos 30 días). Es la cifra que pinta
-`/ventas/margen` y la que enseña la tarjeta nueva del Inicio, porque la tarjeta
-y la pantalla tienen que decir lo mismo.
+### Lo que este frente decía, y por qué estaba mal
 
-**Está mal contada.** La RPC mete en el denominador TODAS las líneas de venta, y
-ahí dentro hay tres tipos:
+Decía: «mete líneas de `modifier` y de `combo_item` en el denominador; se
+arregla con `and coalesce(sl.line_type,'product')='product'` y la cobertura sube
+de 71,4 % a 88 %». Se midió antes de aplicarlo, como manda la regla 5, y salió
+lo contrario de lo previsto:
 
-| line_type | líneas | venta | ¿tiene coste de línea? |
-|---|---:|---:|---|
-| `product` | 4.786 | 74.945 € | 4.211 sí (88,0 %) |
-| `combo_item` | 1.676 | 421 € | ninguna |
-| `modifier` | 1.192 | 728 € | ninguna |
+```
+food cost   27,4 %  ->  22,8 %     BAJA 4,6 puntos
+```
 
-Las 2.868 líneas de modificador y de componente de combo **no son platos**: no
-llevan escandallo propio y no pueden tenerlo. Llevan 1.149 € de 76.094 €, el
-1,5 % del dinero. Contarlas como «líneas sin coste» hunde la cobertura de
-**88,0 % a 71,4 %**.
+Porque las líneas que iba a quitar **no son gratis**: 1.411 de las 2.862 tienen
+receta costeada y aportan **2.880 € de coste real** contra solo 400 € de
+ingreso. Ese `where` habría borrado 2.880 € de comida de verdad del numerador.
 
-**Por qué importa y no es cosmético:** con 71,4 % la conclusión es «el food cost
-del negocio está a medio medir». Con 88,0 % —y 84,7 % medido por dinero— la
-conclusión es «está bastante medido y falta un trozo concreto e identificable».
-Son dos decisiones distintas sobre dónde meter una tarde de trabajo.
+**Un cambio que hace BAJAR el food cost es un cambio que dice que el negocio va
+mejor de lo que va.** Es el error que aprueba, el mismo patrón del frente 15. Y
+lo escribí yo en este fichero por la mañana, con una tabla y todo. La tabla era
+correcta; la conclusión que saqué de ella, no.
 
-**Dónde se arregla:** en `food_cost_dashboard`, añadiendo
-`and coalesce(sl.line_type,'product') = 'product'` a la CTE `l`. Un sitio. La
-tarjeta del Inicio la sigue sin tocar nada, porque lee esa misma función.
+*(El «88,0 %» que puse aquí tampoco valía: lo medí sobre `sale_line.computed_cost`
+y esta RPC define «costeada» por `recipe_item.computed_cost`. Dos definiciones
+distintas comparadas como si fueran la misma.)*
 
-**Por qué no se ha hecho hoy:** cambia el número de una pantalla de producción
-que Julio ya mira, y el número sube de golpe 16 puntos. Eso se anuncia antes de
-hacerlo, no después. Además hay que comprobar de paso si `total.food_cost_pct`
-cambia (no debería: el numerador y el denominador del importe ya filtran por
-`costed`, y las líneas de modificador aportan 0 al coste — pero se comprueba con
-la query, no con el razonamiento).
+### El fallo de verdad
 
-**Fuente de la medida:** ver el bloque `l` de
-`20260902T2100_home_vendido_sin_coste.sql`, que ya filtra bien y sirve de
-contraste.
+Un combo se parte en varias `sale_line`: una PADRE de tipo `product` y varias
+HIJAS de tipo `combo_item`. **El dinero y el coste no viven en la misma:**
 
+- El **precio** va en la padre. Medido: **581 de los 605 combos** vendidos en 30
+  días (**13.229 €**) lo ponen ahí; solo 22 (421 €) lo ponen en las hijas. Y la
+  padre no tiene `recipe_item`, porque un combo no lleva escandallo propio.
+- El **coste** va en las hijas, que sí tienen receta.
+
+La función agrupaba por LÍNEA y filtraba los dos sumatorios por `costed`:
+**metía el coste de las hijas en el numerador y tiraba el ingreso de la padre
+del denominador.** El food cost de todos los combos se dividía entre un
+denominador que no incluía lo que los combos facturan.
+
+### La corrección y lo que movió
+
+`unidad = coalesce(parent_sale_line_id, id)`. El numerador no se toca —16.439 €,
+el mismo euro por euro—; el denominador recupera los 13.229 € que se tiraban.
+
+| | antes | después |
+|---|---:|---:|
+| cobertura | 71,4 % | **95,2 %** (96,6 % por dinero) |
+| food cost | 27,4 % | **22,3 %** |
+| ingreso base | 59.894 € | 73.591 € |
+| food cost € | 16.432 € | 16.439 € |
+
+Y por marca, que es donde de verdad dolía — estas cifras deciden qué marca se
+mira y cuál se cierra:
+
+| Marca | antes | después |
+|---|---:|---:|
+| Ay Mamita Bowls | 46,3 % | **18,9 %** |
+| Deep Pizza | 78,6 % | **32,9 %** ← estaba marcada «sospechosa» |
+| Chivuos | 60,4 % | **22,6 %** ← estaba marcada «sospechosa» |
+| Koreans do it better | 39,4 % | **23,5 %** |
+| Big Mike's Burger Joint | 37,2 % | **24,1 %** |
+| Dos Coyotes | 32,7 % | **26,8 %** |
+| Milanesa Haus | 24,6 % | 23,8 % ← casi no vende combos |
+
+**Las marcas que salían fatal eran justo las que venden combos.** Después del
+cambio no queda **ninguna** marcada como sospechosa: las dos banderas rojas eran
+artefactos del mismo fallo, y la tarjeta que estrené esta mañana mandaba a Julio
+a revisar dos escandallos que están bien.
+
+### Lo que sigue siendo optimista, y se dice
+
+Las 1.187 líneas de `modifier` llevan 726 € de venta y **cero** coste: ninguna
+opción tiene receta costeada. Su ingreso entra en el denominador y su coste no
+entra en el numerador, así que el 22,3 % se queda algo por debajo del real. Son
+el 0,95 % de la venta; costeadas, el número subiría unas tres décimas. Escrito
+para que el día que alguien coste los modificadores, la subida no se lea como
+una regresión.
+
+### La lección, que es la cara
+
+**Un frente con su medida al lado no es un diagnóstico.** Aquí la medición era
+buena (2.868 líneas, 1.149 €, todo correcto) y la conclusión estaba invertida,
+porque supuse que esas líneas no aportaban coste en vez de comprobarlo. La
+comprobación costó una consulta.
 
 ## 15 · `list_costless_sold_products` devuelve cero y el agujero existe
 **Abierto:** 02/09/2026 · **Esquivado, no arreglado**
@@ -715,9 +763,27 @@ los declare, y entonces caen en el grupo de arriba.
 **La tarjeta los cuenta aparte y lo dice.** No los mete en la lista de
 «arréglame» porque el arreglo no es el mismo.
 
-**Pendiente de Julio:** si el motor de coste debe bajar a las líneas
-`combo_item` (obra en el motor) o si los combos se declaran con escandallo
-propio (trabajo de catálogo, y duplica la verdad). No se decide desde aquí.
+**Decidido por Julio el 02/09: el MOTOR.** El coste de un combo es la suma de
+sus componentes; un escandallo propio por combo duplica la receta y se separa de
+ella con la primera subida del proveedor — regla 10. Antes de construir hay que
+medir **por qué `combo_item.computed_cost` sale NULL**: si la línea no lleva la
+referencia al producto componente, el arreglo es otro y más hondo.
+
+**Y hay una razón más para hacerlo, que apareció al cerrar el frente 14:** hoy
+conviven DOS definiciones de «costeada» en el Inicio, y dan números que parecen
+contradecirse.
+
+| Tarjeta | Define «costeada» como | Y dice |
+|---|---|---|
+| Food cost medio | `recipe_item.computed_cost`, por unidad de venta | cobertura 95,2 %, 96,6 % del dinero |
+| Platos sin escandallo | `sale_line.computed_cost`, por línea de producto | 87 productos y 6.357 € sin coste |
+
+**Las dos son ciertas y miden cosas distintas**, pero un lector que las ve juntas
+tiene derecho a pensar que una miente. La discrepancia es exactamente el hueco
+del combo: la receta del componente SÍ tiene coste (por eso la primera lo ve) y
+el motor NO lo escribió en la línea (por eso la segunda no). **Arreglar el motor
+cierra las dos a la vez y deja una sola definición**, que es lo que pide la
+regla 10. Mientras tanto, cada tarjeta dice en su letra qué está contando.
 
 
 ## 17 · «Platos sin escandallo» cuenta más cosas de las que dice su nombre
@@ -821,3 +887,39 @@ revisable, y lo ejecuta Julio.
 2. Decidir cuáles de los ocho `_backup_*` (de agosto) y los cuatro `_a*` siguen
    haciendo falta, y tirar el resto. Un backup que ya no se va a restaurar es
    solo superficie.
+
+
+## 20 · `tsc --noEmit` en este repositorio NO COMPRUEBA NADA
+**Abierto:** 02/09/2026 · **Sale con exit 0 siempre** · **Misma familia que el frente 11**
+
+`tsconfig.json` es un fichero de SOLUCIÓN: `"files": []` más dos `references`
+(`tsconfig.app.json` y `tsconfig.node.json`). Con project references, el
+comprobador es **`tsc -b`**; `tsc --noEmit` sobre el fichero raíz no encuentra
+ningún fichero de entrada y **sale con 0 sin mirar una sola línea**.
+
+**Cómo se cazó:** cambié tres nombres de campo en `FoodCostSalud` y dejé a
+propósito tres consumidores leyendo los nombres viejos. `npx tsc --noEmit` no
+dijo nada. `npx tsc -b` dijo:
+
+```
+foodCostMedio.ts(91,24): error TS2339: Property 'lineas_costeadas' does not exist
+foodCostMedio.ts(92,21): error TS2339: Property 'lineas' does not exist
+foodCostMedio.ts(93,30): error TS2339: Property 'lineas_costeadas' does not exist
+foodCostService.ts(79,12): error TS2353: 'lineas' does not exist in type
+```
+
+**Lo que esto significa hacia atrás:** en el lote de las cuatro tarjetas del
+02/09 usé `tsc --noEmit` como comprobación intermedia varias veces y anuncié
+«limpio». No comprobaba nada. **El lote está bien igualmente** —`npm run build`
+ejecuta `tsc -b` y pasó en verde— pero la comprobación que yo creía estar
+haciendo no se hacía. Un `exit 0` de una herramienta que no ha mirado nada es
+indistinguible de un `exit 0` de una que ha mirado todo, y es la misma familia
+que el frente 11: el despliegue que no despliega y sale verde.
+
+**La regla que sale:** en este repositorio, el comprobador de tipos es
+**`npx tsc -b`**. `--noEmit` sobre la raíz está prohibido como prueba.
+
+**Arreglado en el mismo lote:** `package.json` ya tiene
+`"typecheck": "tsc -b"`. Existe un nombre correcto que teclear y nadie tiene que
+acordarse de esto. Lo que queda abierto es la costumbre: si alguien escribe
+`tsc --noEmit` por inercia, sigue saliendo verde sin mirar.
