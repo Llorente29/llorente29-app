@@ -49,10 +49,60 @@ function sb() {
   return supabase
 }
 
-export async function leeEnCocinaAhora(
-  accountId: string,
-  locationId: string | null,
-): Promise<EstadoEmpleado[]> {
+// ── LO QUE LA MAQUETA PIDE ADEMÁS DE «QUIÉN ESTÁ DENTRO» ───────────────────
+// El estado vacío da la PRIMERA ENTRADA PREVISTA, que sale del cuadrante, y la
+// fila de contexto dice QUIÉN CERRÓ AYER y a qué hora.
+//
+// La forma de `schedules.cells` es `{ turnoId: { díaIndex: [empleadoId…] } }`
+// — el turno fuera y los empleados dentro, no al revés. Comprobado el 02/09
+// después de leerlo del revés y estar a punto de dar una alarma falsa por 226
+// referencias «rotas» que no lo estaban: eran empleados donde yo buscaba
+// turnos. El día va 0=lunes … 6=domingo, como `DayOfWeek`.
+
+export interface ContextoDelDia {
+  /** «12:30», del turno más temprano con alguien asignado hoy. null si no hay. */
+  primeraEntradaPrevista: string | null
+  /** Quién cerró el último día con salidas, y a qué hora. */
+  ayerCerro: { nombre: string; hora: string } | null
+}
+
+interface CeldasCuadrante { [turnoId: string]: { [dia: string]: string[] } }
+
+/** El turno más temprano CON ALGUIEN ASIGNADO ese día. */
+export function primeraEntradaPrevista(
+  cells: unknown,
+  turnos: { id: string; start_time: string }[],
+  diaIndex: number,
+): string | null {
+  if (!cells || typeof cells !== 'object') return null
+  const c = cells as CeldasCuadrante
+  const horas: string[] = []
+  for (const [turnoId, porDia] of Object.entries(c)) {
+    const asignados = porDia?.[String(diaIndex)]
+    // Un turno SIN nadie asignado no es una entrada prevista: es una casilla
+    // vacía. Contarlo diría que alguien entra a las 12:30 cuando no entra nadie.
+    if (!Array.isArray(asignados) || asignados.length === 0) continue
+    const t = turnos.find(x => x.id === turnoId)
+    if (t?.start_time) horas.push(t.start_time.slice(0, 5))
+  }
+  return horas.length === 0 ? null : horas.sort()[0]
+}
+
+export interface Ambito {
+  locales: Map<string, string>
+  plantilla: { id: string; name: string; location_id: string | null }[]
+}
+
+/**
+ * Los locales ABIERTOS del ámbito y su plantilla activa.
+ *
+ * Se extrae porque lo necesitan las dos lecturas de la tarjeta, y porque sus
+ * ids acotan las consultas siguientes MEJOR que un filtro por cuenta: pedir
+ * los fichajes «de estos seis empleados» es más estrecho que «de esta cuenta»,
+ * y de paso esquiva que `clock_entries` y `shift_templates` no tengan
+ * `account_id` en el fichero de tipos (frente 2) sin parchearlo más.
+ */
+export async function leeAmbito(accountId: string, locationId: string | null): Promise<Ambito> {
   // Solo locales ACTIVOS, por lo mismo que en cuadrantes: un local cerrado no
   // puede aparecer con «0 dentro» para siempre.
   let qLoc = sb().from('locations').select('id, name').eq('account_id', accountId).eq('active', true)
@@ -60,7 +110,7 @@ export async function leeEnCocinaAhora(
   const { data: locs, error: eLoc } = await qLoc
   if (eLoc) throw new Error(`No se han podido leer los locales: ${eLoc.message}`)
   const locales = new Map(((locs ?? []) as { id: string; name: string }[]).map(l => [l.id, l.name]))
-  if (locales.size === 0) return []
+  if (locales.size === 0) return { locales, plantilla: [] }
 
   const { data: emps, error: eEmp } = await sb()
     .from('employees').select('id, name, location_id')
@@ -68,7 +118,12 @@ export async function leeEnCocinaAhora(
     .in('location_id', [...locales.keys()])
     .order('name')
   if (eEmp) throw new Error(`No se ha podido leer la plantilla: ${eEmp.message}`)
-  const plantilla = (emps ?? []) as { id: string; name: string; location_id: string | null }[]
+  return { locales, plantilla: (emps ?? []) as Ambito['plantilla'] }
+}
+
+export async function leeEnCocinaAhora(ambito: Ambito): Promise<EstadoEmpleado[]> {
+  const { locales, plantilla } = ambito
+  if (plantilla.length === 0) return []
 
   const estados = await Promise.all(
     plantilla.map(e =>
@@ -88,4 +143,67 @@ export async function leeEnCocinaAhora(
     abiertaDesde: estados[i]?.abierta_desde ?? null,
     minutosHoy: Number(estados[i]?.minutos_hoy ?? 0) || 0,
   }))
+}
+
+/**
+ * El contexto que pide la maqueta: primera entrada prevista de hoy y quién
+ * cerró ayer.
+ *
+ * «Ayer» es el último día con salidas, no literalmente el día anterior: si el
+ * local libró el lunes, lo útil es quién cerró el domingo, no un hueco.
+ */
+export async function leeContextoDelDia(
+  ambito: Ambito,
+  lunes: string,
+  diaIndex: number,
+  inicioDeHoy: Date,
+): Promise<ContextoDelDia> {
+  const locIds = [...ambito.locales.keys()]
+  const empIds = ambito.plantilla.map(e => e.id)
+  if (locIds.length === 0) return { primeraEntradaPrevista: null, ayerCerro: null }
+
+  const qSch = sb().from('schedules').select('location_id, cells')
+    .eq('week_start', lunes).in('location_id', locIds)
+
+  const qTur = sb().from('shift_templates').select('id, start_time, location_id')
+    .in('location_id', locIds)
+
+  // La última salida ANTERIOR a hoy, y SOLO de esta plantilla. Se mira un mes
+  // atrás: de sobra, y acotado para no traerse el histórico en cada carga.
+  const haceUnMes = new Date(inicioDeHoy.getTime() - 31 * 86_400_000).toISOString()
+  const qSal = empIds.length === 0
+    ? Promise.resolve({ data: [], error: null })
+    : sb().from('clock_entries')
+        .select('employee_id, datetime')
+        .in('employee_id', empIds)
+        .eq('type', 'salida').eq('voided', false)
+        .gte('datetime', haceUnMes).lt('datetime', inicioDeHoy.toISOString())
+        .order('datetime', { ascending: false }).limit(1)
+
+  const [sch, tur, sal] = await Promise.all([qSch, qTur, qSal])
+  if (sch.error) throw new Error(`No se ha podido leer el cuadrante: ${sch.error.message}`)
+  if (tur.error) throw new Error(`No se han podido leer los turnos: ${tur.error.message}`)
+  if (sal.error) throw new Error(`No se han podido leer los fichajes: ${sal.error.message}`)
+
+  const turnos = (tur.data ?? []) as { id: string; start_time: string }[]
+  const horas = ((sch.data ?? []) as { cells: unknown }[])
+    .map(s => primeraEntradaPrevista(s.cells, turnos, diaIndex))
+    .filter((h): h is string => h != null)
+    .sort()
+
+  let ayerCerro: ContextoDelDia['ayerCerro'] = null
+  const ultima = ((sal.data ?? []) as { employee_id: string; datetime: string }[])[0]
+  if (ultima) {
+    const completo = ambito.plantilla.find(e => e.id === ultima.employee_id)?.name ?? ''
+    const nombre = completo.trim().split(/\s+/)[0]
+    ayerCerro = {
+      nombre: nombre ? nombre.charAt(0).toLocaleUpperCase('es') + nombre.slice(1).toLocaleLowerCase('es') : 'Alguien',
+      // La hora, en la del NEGOCIO: una salida a las 00:15 de Madrid está
+      // guardada como 22:15 UTC del día anterior.
+      hora: new Date(ultima.datetime).toLocaleTimeString('es-ES',
+        { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' }),
+    }
+  }
+
+  return { primeraEntradaPrevista: horas[0] ?? null, ayerCerro }
 }

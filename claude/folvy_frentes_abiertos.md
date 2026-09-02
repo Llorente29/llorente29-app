@@ -54,6 +54,7 @@ otras 21 pasan sin que nadie se entere.
 | 02/09 mañana | `kitchen_archive_item` y `kitchen_unarchive_item` rompen el build |
 | 02/09 tarde | `schedules`, `employees` y `vacations` sin `account_id`: **el filtro de cuenta no compila**. Parcheadas a mano las tres (Row/Insert/Update) |
 | 02/09 tarde | `employee_clock_status` no está entre las RPC tipadas. Se resuelve con `src/lib/rpcSinTipar.ts`, un puente ÚNICO y borrable, para no seguir divergiendo el fichero generado |
+| 02/09 tarde | `shift_templates` y `clock_entries` tampoco tienen `account_id` en el fichero. Aquí NO se parcheó: se acotaron las consultas por los ids de local y de empleado que ya se tenían, que además es **más estrecho** que filtrar por cuenta. Cuando se pueda acotar así, es mejor que un parche |
 
 **Las dos salidas, y hay que elegir una:** o el fichero se regenera de verdad
 con el CLI (`npm run gen:types`, necesita token de Supabase), o el chequeo
@@ -106,6 +107,19 @@ que la tarjeta del 86 saldría bajo «Folvy Kitchen» en vez de «Canales».
 
 **Decidido:** el grupo pasa a ser un atributo declarado de cada tarjeta, no el
 módulo que la aporta. Pendiente de ejecutar.
+
+---
+
+## 7 · `assigned_locations` no cuenta para «en cocina ahora» ni para cuadrantes
+**Abierto:** 02/09/2026 · **Deuda declarada, hoy no cambia nada**
+
+Las dos tarjetas de Team agrupan por `employees.location_id`, la ficha del
+empleado. Existe además `assigned_locations`, para quien trabaja en más de un
+sitio.
+
+**Con la plantilla de hoy —seis personas, cada una en un local— no cambia nada.
+El día que alguien trabaje en dos locales, sí:** aparecerá contado solo en el
+suyo de ficha, y el otro local dirá que tiene menos gente de la que tiene.
 
 ---
 
