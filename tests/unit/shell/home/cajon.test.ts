@@ -65,3 +65,60 @@ describe('novedades · lo que ha llegado y no tienes', () => {
     expect(novedades(['a', 'borrada'], CATALOGO).map(c => c.key)).toEqual(['b', 'c'])
   })
 })
+
+// ── LAS 21 DEL CATÁLOGO APROBADO ───────────────────────────────────────────
+// Estas pruebas leen el catálogo DE VERDAD, no un fixture: son las que se
+// enteran de que alguien ha añadido una tarjeta y ha olvidado su grupo, su
+// orden, o las dos cosas.
+import { getHomeCatalog } from '@/shell/home/homeCatalog'
+import { ORDEN_DEL_CAJON } from '@/shell/home/cards/p2Cards'
+import { LAYOUT_POR_DEFECTO } from '@/shell/home/cards/shellCards'
+
+describe('el catálogo aprobado', () => {
+  const catalogo = getHomeCatalog()
+
+  it('tiene las 21 tarjetas, ni una más ni una menos', () => {
+    expect(catalogo).toHaveLength(21)
+  })
+
+  it('seis cableadas y quince P2', () => {
+    const cableadas = catalogo.filter(c => c.component != null)
+    expect(cableadas).toHaveLength(6)
+    expect(catalogo.filter(c => c.component == null)).toHaveLength(15)
+  })
+
+  // Si alguien añade una tarjeta y olvida el grupo, cae en «Otras» y esto la
+  // caza antes de que llegue a la pantalla de nadie.
+  it('todas declaran su grupo de negocio', () => {
+    expect(catalogo.filter(c => !c.grupo).map(c => c.key)).toEqual([])
+  })
+
+  it('todas están en el orden aprobado, y el orden no nombra fantasmas', () => {
+    const enCatalogo = new Set(catalogo.map(c => c.key))
+    expect(catalogo.filter(c => !ORDEN_DEL_CAJON.includes(c.key)).map(c => c.key)).toEqual([])
+    expect(ORDEN_DEL_CAJON.filter(k => !enCatalogo.has(k))).toEqual([])
+  })
+
+  it('el reparto por grupo es el aprobado', () => {
+    const porGrupo = agrupadoPorGrupo(catalogo)
+    expect(porGrupo.map(g => [g.grupo, g.tarjetas.length])).toEqual([
+      ['Ventas', 5], ['Team', 5], ['Cocina', 3], ['Almacen', 3], ['Canales', 4], ['Agentes', 1],
+    ])
+  })
+
+  it('dentro de Ventas, el orden es el de la tabla aprobada', () => {
+    const ventas = agrupadoPorGrupo(catalogo).find(g => g.grupo === 'Ventas')!
+    expect(ventas.tarjetas.map(c => c.title)).toEqual([
+      'Ventas de ayer', 'Ventas · esta semana', 'Ventas por día · últimas dos semanas',
+      'Ticket medio', 'Ventas por canal',
+    ])
+  })
+
+  // El defecto de fábrica son las seis que YA dan dato. Colar una P2 aquí
+  // pondría un hueco punteado en el Inicio de quien no ha tocado nada.
+  it('el defecto de fábrica son las seis cableadas, y ninguna P2', () => {
+    const porKey = new Map(catalogo.map(c => [c.key, c]))
+    expect(LAYOUT_POR_DEFECTO).toHaveLength(6)
+    expect(LAYOUT_POR_DEFECTO.filter(k => porKey.get(k)?.component == null)).toEqual([])
+  })
+})

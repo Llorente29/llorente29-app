@@ -30,6 +30,7 @@
 import { moduleRegistry } from '../moduleRegistry'
 import { GRUPOS_DE_INICIO, type HomeCardDefinition, type ShellRole } from '../types'
 import { SHELL_HOME_CARDS } from './cards/shellCards'
+import { P2_HOME_CARDS, ORDEN_DEL_CAJON } from './cards/p2Cards'
 
 /** Una tarjeta del catálogo, con el módulo del que viene. */
 export interface CatalogEntry extends HomeCardDefinition {
@@ -56,7 +57,7 @@ export interface AccountSwitchRow {
  * módulo. Este es el catálogo de verdad; lo de la tabla es su reflejo.
  */
 export function getHomeCatalog(): CatalogEntry[] {
-  const shell: CatalogEntry[] = SHELL_HOME_CARDS.map(c => ({
+  const shell: CatalogEntry[] = [...SHELL_HOME_CARDS, ...P2_HOME_CARDS].map(c => ({
     ...c, moduleId: 'shell', moduleName: 'Inicio',
   }))
   const deModulos: CatalogEntry[] = moduleRegistry.flatMap(m =>
@@ -160,10 +161,20 @@ export function agrupadoPorGrupo(disponibles: CatalogEntry[]): GrupoDelCajon[] {
     const g = c.grupo ?? 'Otras'
     porGrupo.set(g, [...(porGrupo.get(g) ?? []), c])
   }
+  // El ORDEN dentro del grupo es el aprobado, no el de carga del catálogo: si
+  // dependiera de en qué módulo vive cada una, añadir un módulo reordenaría el
+  // cajón sin que nadie lo hubiera pedido. Una clave sin orden declarado va al
+  // final de su grupo: no se pierde, se nota.
+  const rango = (k: string) => {
+    const i = ORDEN_DEL_CAJON.indexOf(k)
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i
+  }
   const salida: GrupoDelCajon[] = []
   for (const g of GRUPOS_DE_INICIO) {
     const t = porGrupo.get(g)
-    if (t && t.length > 0) salida.push({ grupo: g, tarjetas: t })
+    if (t && t.length > 0) {
+      salida.push({ grupo: g, tarjetas: [...t].sort((x, y) => rango(x.key) - rango(y.key)) })
+    }
   }
   const otras = porGrupo.get('Otras')
   if (otras && otras.length > 0) salida.push({ grupo: 'Otras', tarjetas: otras })

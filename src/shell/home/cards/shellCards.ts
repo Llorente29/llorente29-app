@@ -29,9 +29,6 @@
 // `ModuleDefinition.homeCards` y entran en el mismo catálogo sin tocar esto.
 
 import type { HomeCardDefinition } from '../../types'
-import {
-  VentasHoy, TrabajandoAhora, ResumenTeam, ResumenSales,
-} from './shellCardComponents'
 
 /**
  * El catálogo del shell. El ORDEN de este array es el defecto de fábrica del
@@ -39,34 +36,36 @@ import {
  * hasta que decida personalizarlo.
  */
 export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
-  { key: 'shell.ventas_hoy', grupo: 'Ventas',       title: 'Ventas hoy',        size: 'sm', source: 'sale',
-    drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' }, component: VentasHoy },
-  { key: 'shell.trabajando_ahora', grupo: 'Team', title: 'Trabajando ahora',  size: 'sm', source: 'employee_clock_status',
-    drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' }, component: TrabajandoAhora },
-  { key: 'shell.resumen_team', grupo: 'Team',     title: 'Resumen de Team',   size: 'md', source: 'employee_clock_status',
-    drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' }, component: ResumenTeam },
-  { key: 'shell.resumen_sales', grupo: 'Ventas',    title: 'Resumen de Sales',  size: 'md', source: 'sale',
-    drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' }, component: ResumenSales },
+  // (02/09) VACÍO. Las cuatro que quedaban de junio —Ventas hoy, Trabajando
+  // ahora, Resumen de Team y Resumen de Sales— se retiran ahora que existen sus
+  // sustitutas de la maqueta. No se borran del producto: se les pone lápida
+  // abajo, así que quien las tuviera ve el aviso con su nombre y su porqué en
+  // vez de encontrarse un hueco.
+  //
+  // Sus componentes siguen en shellCardComponents.tsx. Volver a enchufar
+  // cualquiera es añadir aquí su línea; borrarlos ahora sería tirar trabajo por
+  // una decisión de catálogo, que es reversible.
 ]
 
 /**
  * El defecto de fábrica: lo que ve quien nunca ha personalizado nada.
  *
- * (02/09) Deja de ser «las del shell» y pasa a ser una LISTA EXPLÍCITA, porque
- * las tarjetas de la maqueta las aportan los módulos y no aparecerían solas.
- * Según entren las seis aprobadas, las cuatro heredadas de junio salen de aquí
- * hasta que el defecto sea exactamente esas seis.
+ * (02/09) Ya son EXACTAMENTE las seis de la maqueta, en su orden. Las cuatro
+ * heredadas de junio han salido: existen sus sustitutas, y mantenerlas habría
+ * dejado un Inicio con dos tarjetas de ventas de hoy y dos de quién trabaja.
+ *
+ * La lista es explícita porque las aportan los módulos y no aparecerían solas:
+ * el orden del mosaico es una decisión de producto, no el resultado de en qué
+ * orden se cargue el registro de módulos.
  */
 export const LAYOUT_POR_DEFECTO: string[] = [
-  'ventas.ayer',                   // §1.1 de la maqueta
-  'ventas.semana',                 // §1.2 de la maqueta
-  'ventas.grafica_14_dias',        // §1.3 de la maqueta (ancha)
-  'kitchen.productos_86',          // §1.4 de la maqueta
-  'personal.en_cocina_ahora',      // §1.x de la maqueta
-  'personal.cuadrantes',           // §1.6 de la maqueta
-  ...SHELL_HOME_CARDS.map(c => c.key),
+  'ventas.ayer',                   // §1.1
+  'ventas.semana',                 // §1.2
+  'ventas.grafica_14_dias',        // §1.3 (ancha)
+  'personal.en_cocina_ahora',      // §1.4
+  'personal.cuadrantes',           // §1.6
+  'kitchen.productos_86',          // §1.5
 ]
-
 // ── LÁPIDAS: las tarjetas que se retiraron, con su nombre y su motivo ───────
 //
 // Cuando una tarjeta sale del catálogo, la clave sigue guardada en el
@@ -87,6 +86,13 @@ export const TARJETAS_RETIRADAS: Record<string, TarjetaRetirada> = {
   'shell.solicitudes':    { titulo: 'Solicitudes',       motivo: 'no tenía fuente de datos' },
   'shell.appcc_hoy':      { titulo: 'APPCC de hoy',      motivo: 'no tenía fuente de datos' },
   'shell.resumen_safety': { titulo: 'Resumen de Safety', motivo: 'no tenía fuente de datos' },
+  // Las cuatro de junio, sustituidas por las seis de la maqueta el 02/09. El
+  // motivo dice por CUÁL se sustituye: «se retiró» a secas dejaría al usuario
+  // buscando algo que ahora se llama de otra forma.
+  'shell.ventas_hoy':       { titulo: 'Ventas hoy',        motivo: 'la sustituyen «Ventas de ayer» y «Ventas · esta semana»' },
+  'shell.trabajando_ahora': { titulo: 'Trabajando ahora',  motivo: 'la sustituye «En cocina ahora»' },
+  'shell.resumen_team':     { titulo: 'Resumen de Team',   motivo: 'lo sustituyen «En cocina ahora» y «Cuadrantes»' },
+  'shell.resumen_sales':    { titulo: 'Resumen de Sales',  motivo: 'lo sustituye «Ventas por día · últimas dos semanas»' },
 }
 
 /**

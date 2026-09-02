@@ -56,6 +56,7 @@ import {
   descartarNovedad,
 } from './homeLayoutService'
 import { getAvisosAtencion, type AvisoAtencion, type TipoAviso } from './atencionService'
+import TarjetaP2 from './widgets/TarjetaP2'
 
 const INK = 'var(--color-accent)'
 const MUTED = 'var(--color-text-secondary)'
@@ -410,11 +411,18 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
             const Card = c.component
             return (
               <div key={c.key} style={{ gridColumn: `span ${span(c.size)}` }}>
-                <Card
-                  accountId={activeAccountId}
-                  locationId={resolvedLocationId}
-                  drillTo={c.drill ? (d) => navigate(construyeUrl(d)) : undefined}
-                />
+                {/* Sin componente = P2: prometida y aún sin cablear. Se pinta
+                    el hueco punteado, que dice que el dato no existe TODAVÍA —
+                    no un «—», que se leería como «hoy no hay nada». */}
+                {Card ? (
+                  <Card
+                    accountId={activeAccountId}
+                    locationId={resolvedLocationId}
+                    drillTo={c.drill ? (d) => navigate(construyeUrl(d)) : undefined}
+                  />
+                ) : (
+                  <TarjetaP2 titulo={c.title} />
+                )}
               </div>
             )
           })}
@@ -462,7 +470,11 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
                   {tarjetas.map((c, i) => (
                     <div key={c.key} className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-border-default">
                       <span className="text-sm text-text-primary flex-1 truncate">{c.title}</span>
-                      <span className="text-[11px] text-text-secondary shrink-0">{c.moduleName}</span>
+                      {c.component == null ? (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-page text-text-secondary shrink-0">P2</span>
+                      ) : (
+                        <span className="text-[11px] text-text-secondary shrink-0">{c.grupo ?? c.moduleName}</span>
+                      )}
                       <button type="button" disabled={i === 0 || guardando} title="Subir"
                         onClick={() => void guardar(mover(claves, c.key, 'arriba'), `«${c.title}» sube una posición.`)}
                         className="p-1 rounded text-text-secondary hover:text-text-primary disabled:opacity-30">
@@ -497,6 +509,7 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
                   <div className="flex flex-col gap-1">
                     {g.tarjetas.map(c => {
                       const puesta = claves.includes(c.key)
+                      const esPromesa = c.component == null
                       return (
                         <button key={c.key} type="button" disabled={guardando}
                           onClick={() => void guardar(
@@ -508,7 +521,18 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
                             {puesta && <Check size={11} className="text-text-on-accent" />}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm text-text-primary truncate">{c.title}</span>
+                            <span className="block text-sm text-text-primary truncate">
+                              {c.title}
+                              {/* La etiqueta gris de la maqueta. Va junto al
+                                  nombre y no en un rincón: quien lee el título
+                                  tiene que enterarse ahí mismo de que todavía
+                                  no da dato, no después de marcarla. */}
+                              {esPromesa && (
+                                <span className="ml-1.5 align-middle text-[10px] font-bold px-1.5 py-0.5 rounded bg-page text-text-secondary">
+                                  P2
+                                </span>
+                              )}
+                            </span>
                             {c.description && <span className="block text-[11px] text-text-secondary truncate">{c.description}</span>}
                           </span>
                           {c.drill && (

@@ -130,7 +130,16 @@ export interface HomeCardDefinition {
   grupo?: GrupoDeInicio
   /** Rol minimo. P1: solo `admin` tiene Inicio; `worker` sigue en su portal. */
   requiredRole?: ShellRole
-  component: ComponentType<HomeCardProps>
+  /**
+   * El componente que la dibuja. AUSENTE = tarjeta P2: prometida y todavia sin
+   * cablear.
+   *
+   * No es lo mismo que una tarjeta retirada. Una retirada se fue y deja lapida;
+   * una P2 no ha llegado y se ve que existe. Se declara en el codigo porque el
+   * codigo sigue siendo la verdad: el cajon no puede ofrecer nada que no este
+   * declarado, y una P2 declarada es una promesa escrita, no un hueco.
+   */
+  component?: ComponentType<HomeCardProps>
 }
 
 // ─── Module Contract ───────────────────────────────────────────────────────
