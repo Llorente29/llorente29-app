@@ -126,8 +126,19 @@ Deno.serve(async (req) => {
   };
 
   const { data: configs } = await supa.from("offers_agent_config").select("*").eq("enabled", true);
+
+  // ── PAUSA POR CUENTA (02/09) ────────────────────────────────────────────
+  // `cron.job` no tiene cuenta: hay tres cuentas compartiendo un planificador.
+  // Apagar el cron apagaria el agente para todas, asi que la pausa vive en
+  // `agent_pause` y se consulta AQUI, que es donde se sabe de que cuenta se
+  // esta hablando. El cron sigue corriendo; lo que se salta es la cuenta.
+  const { data: pausas } = await supa.from("agent_pause")
+    .select("account_id").eq("agent_key", "ofertas");
+  const enPausa = new Set((pausas ?? []).map((r: { account_id: string }) => r.account_id));
+
   for (const cfg of configs ?? []) {
     const accountId = cfg.account_id as string;
+    if (enPausa.has(accountId)) continue;
 
     // ── REGLAS del Shop (v3 · paso 4): "automático pero con reglas". El agente lee
     //    offers_agent_config.shop_rules (jsonb). Estructura: { default:{bands,happy_hour,gift},

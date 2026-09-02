@@ -91,8 +91,18 @@ Deno.serve(async (req) => {
     byAccount.get(a.account_id)!.push(a);
   }
 
+  // ── PAUSA POR CUENTA (02/09) ────────────────────────────────────────────
+  // `cron.job` no tiene cuenta: hay tres cuentas compartiendo un planificador.
+  // Apagar el cron apagaria Social para todas, asi que la pausa vive en
+  // `agent_pause` y se consulta aqui. El cron sigue corriendo; lo que se salta
+  // es la cuenta pausada.
+  const { data: pausas } = await supa.from("agent_pause")
+    .select("account_id").eq("agent_key", "social");
+  const enPausa = new Set((pausas ?? []).map((r: { account_id: string }) => r.account_id));
+
   for (const [accountId, nets] of byAccount) {
     if (onlyAccount && accountId !== onlyAccount) continue;
+    if (enPausa.has(accountId)) continue;
 
     const { data: cfg } = await supa.from("social_config")
       .select("launch_phase").eq("account_id", accountId).maybeSingle();
