@@ -34,6 +34,7 @@ import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
 // auditarlos y corregirlos en lote. No publica en plataformas.
 import PriceGridPage from '@/modules/kitchen/pages/PriceGridPage'
 import PriceGridErrorBoundary from '@/modules/kitchen/components/PriceGridErrorBoundary'
+import ProductosEn86 from '@/modules/kitchen/home/ProductosEn86'
 
 export const kitchenModule: ModuleDefinition = {
   // Identidad
@@ -88,5 +89,25 @@ export const kitchenModule: ModuleDefinition = {
   // Eventos que el módulo publica (declarativo, sin emisores cableados aún).
   publishes: [
     { key: 'kitchen.item.recomputed', description: 'Se ha recalculado el coste de un item de cocina' },
+  ],
+
+  // ── TARJETAS QUE ESTE MÓDULO APORTA AL INICIO ────────────────────────────
+  // `homeCards` estaba declarado en el contrato desde el 31/08 y no lo usaba
+  // NINGÚN módulo: el punto de extensión existía y nadie había entrado por él.
+  // Ésta es la primera, y con eso queda probado que funciona de verdad —era la
+  // verificación 5 del encargo original del Inicio.
+  //
+  // La tarjeta vive AQUÍ y no en el shell porque su dato es de cocina: el shell
+  // no tiene por qué saber qué es un 86.
+  homeCards: [
+    {
+      key: 'kitchen.productos_86',
+      title: 'Productos en 86',
+      size: 'sm',
+      source: 'product_availability',
+      drill: { ruta: '/kitchen/disponibilidad', etiqueta: 'Abrir Disponibilidad →' },
+      requiredRole: 'manager',
+      component: ProductosEn86,
+    },
   ],
 }

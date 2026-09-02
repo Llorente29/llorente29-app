@@ -49,8 +49,18 @@ export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
     drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' }, component: ResumenSales },
 ]
 
-/** El defecto de fábrica: lo que ve quien nunca ha personalizado nada. */
-export const LAYOUT_POR_DEFECTO: string[] = SHELL_HOME_CARDS.map(c => c.key)
+/**
+ * El defecto de fábrica: lo que ve quien nunca ha personalizado nada.
+ *
+ * (02/09) Deja de ser «las del shell» y pasa a ser una LISTA EXPLÍCITA, porque
+ * las tarjetas de la maqueta las aportan los módulos y no aparecerían solas.
+ * Según entren las seis aprobadas, las cuatro heredadas de junio salen de aquí
+ * hasta que el defecto sea exactamente esas seis.
+ */
+export const LAYOUT_POR_DEFECTO: string[] = [
+  'kitchen.productos_86',          // §1.4 de la maqueta
+  ...SHELL_HOME_CARDS.map(c => c.key),
+]
 
 // ── LÁPIDAS: las tarjetas que se retiraron, con su nombre y su motivo ───────
 //
