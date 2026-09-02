@@ -1,0 +1,170 @@
+-- 20260902T2345_backfill_133_combos_lista_de_ids.sql
+-- APLICADA el 02/09 EJECUTANDO EL PROPIO BARRIDO (`select * from
+-- sale_line_cost_sweep(2000)`), no una copia paralela: así lo que se probó es
+-- exactamente el código que corre cada noche.
+--
+--   examinadas 181 · reparadas 181 · rechazadas 299
+--
+-- Las 181 son 48 líneas de producto (trabajo normal del barrido, que se habría
+-- hecho a las 04:50 igual) MÁS los 133 combos de esta lista.
+--
+-- ── ESTE FICHERO ES LA REVERSIÓN ───────────────────────────────────────────
+-- Julio: «el valor previo de las 131 es NULL, así que deshacerlo es una línea —
+-- pero sólo si tienes la lista de ids». Aquí está, y no hay tabla de respaldo a
+-- propósito: de tablas de respaldo huérfanas salieron las trece del frente 19.
+--
+-- PARA DESHACER, una línea:
+--
+--   update public.sale_line set computed_cost = null where id in (<la lista>);
+--
+-- Matiz honesto: eso restaura `computed_cost`, que es el dato. NO restaura
+-- `cost_computed_at` — antes del backfill 96 de las 133 lo tenían puesto (se
+-- habían costeado demasiado pronto) y 35 lo tenían a null. Es inocuo: ese campo
+-- solo decide si el barrido reintenta, y con `computed_cost` de vuelta a null
+-- volvería a recogerlas igual.
+--
+-- Las 133 son todas de Foodint, del 04/08 al 02/09. Las 473 líneas padre de
+-- combo anteriores a la ventana NO se tocaron — verificado después.
+--
+-- LA LISTA (133 ids de `sale_line`). VA COMENTADA: un fichero de migración que
+-- contiene un UPDATE capaz de deshacer el trabajo es una trampa esperando a que
+-- alguien ejecute la carpeta entera. Para revertir, se descomenta el bloque.
+
+-- update public.sale_line set computed_cost = null where id in (
+--   '002b1e2b-2a80-422d-9f63-f47c6b1eff55',
+--   '0345f850-45bc-4efc-9dbd-18c0d015be97',
+--   '03713087-48e4-482b-8aec-7757c41b66b1',
+--   '03c8ea8a-b4e4-4f14-b28c-3b7d9327956b',
+--   '05e9499f-f35c-4af6-b1a9-4d8b5ec7e6bc',
+--   '06d064b9-a22f-418f-b8b5-13015a769788',
+--   '06ef4b6d-3708-4726-90fc-c0ca348418b6',
+--   '07450da6-36ab-4eb5-8ab0-9c84232b7c1c',
+--   '07df97f2-4490-43f5-a2ed-89af823544f1',
+--   '084cb03d-4d79-48f4-9228-d6fb87dbfaf9',
+--   '0f9cfe08-e3e1-491d-897f-6de83cfa66b4',
+--   '119a3762-7352-4c4a-bdf4-95518a5d601d',
+--   '11e1edb8-e131-4a63-8580-18e186e11b85',
+--   '12ba7b47-9b53-4604-ac5d-b1177b71f24e',
+--   '14e215dc-6467-4999-ab95-7dad5547c1d4',
+--   '182b0eeb-8f8b-418c-857b-3ee4236ff79c',
+--   '186fec22-af6d-475c-982e-c10f27c7b5b0',
+--   '18fbbcc6-08e0-43b8-b4cc-c95973470e9b',
+--   '1d32693f-5344-4c05-baef-77f952ce133a',
+--   '22af0082-992a-4846-96c1-9a6067ec8562',
+--   '231aef8e-6d98-42ff-9f7a-9aa9f404e93a',
+--   '234d79df-2ffd-405e-a20b-ee5ef7c9d17b',
+--   '248b487e-4496-4344-9146-8c6a6aed8c79',
+--   '25ca0eaf-6b82-43e4-9d64-2a71afc7b869',
+--   '292671a5-6a21-48c3-a592-2cbec4e2f2f2',
+--   '2a2474d2-8c2e-487e-8c56-c9aead5516c3',
+--   '2c3382eb-19c1-4868-a612-53a232510af0',
+--   '31fda0c8-ed69-4a3e-aa34-45ff0da20929',
+--   '324ad05c-a223-45cf-9167-bdd752434aae',
+--   '34fa44d5-56d4-40af-b539-fc44b8452ede',
+--   '38736ac9-4fe5-4596-8119-18d259ad179c',
+--   '38ed3100-c2f6-4051-94f0-f6a934496104',
+--   '3f218cd3-795f-406c-8278-5a43e4614951',
+--   '41bdf747-e1d7-4af7-87d1-2804ed3c1953',
+--   '423381d4-20f4-4bc2-a19b-edd5599d3550',
+--   '47bda07e-0f9f-47f7-b3cd-55950df73c9a',
+--   '4a3aacc5-5591-4005-89f6-963e1f2c325e',
+--   '4a98a8ad-867e-4077-a15d-965d5df877b1',
+--   '4cd48caa-a2b1-490e-8121-f61de9e9159a',
+--   '4ec52924-f9f6-4312-aec6-5d070fae28e9',
+--   '4f26bd6e-3a8d-4245-a42a-ff64b7da918c',
+--   '4f2d0967-4323-476b-bb42-c7069ebf7be7',
+--   '4f3ff787-b69e-492d-b102-8ce7179d45e3',
+--   '502fd119-f80e-4d99-8bb1-91a5c15dab04',
+--   '5940bcf4-2209-4745-ad02-ef78cb238a27',
+--   '5b36c2d8-737a-4ee5-aaf2-815c8eb60ff1',
+--   '5c5a1d74-37cd-49f1-bd7f-2b6e1ee09a72',
+--   '5f33b3c1-7ea2-4fe7-a1d7-cd075d6aba65',
+--   '620c788f-2960-4a13-be2e-e269d23688b3',
+--   '6382cc03-fd7f-4aab-b382-3c490d01027c',
+--   '66da38a2-f607-416f-8679-a2ba48c92602',
+--   '69a5308a-7437-44ce-ba0d-e2bf2b7be90e',
+--   '6a925922-f144-4dcd-b197-9768c51bddc0',
+--   '6d859d3b-e562-49c9-ba5c-a6cc8e4ca931',
+--   '6e79f7c0-43ad-49db-846f-1fb8bd4ddfce',
+--   '6f2aa33e-189a-4fe7-b68c-65e8e8aea8d7',
+--   '703320b8-ccae-45bd-99df-ae33e0d4046d',
+--   '751bb942-337d-442c-9d68-2fbc8910d07d',
+--   '78949b05-e2c3-4646-80d1-4c3784134fab',
+--   '7c8ed059-4836-4fe8-a0a3-f80330f4a579',
+--   '7cbffbad-4f0a-486a-b012-9d92751777ba',
+--   '7e05cdd7-755d-4877-97e5-2aa215158986',
+--   '7e1273bb-3bd0-4eea-a00b-8592155fe3f3',
+--   '8459f3ae-1af0-4e8f-a81b-dcacd3af0098',
+--   '866a2743-535d-4e4d-86c4-d406196f467c',
+--   '874fbb9c-b041-4863-ab42-3e973d521089',
+--   '88289da8-381a-4c87-aff3-c63e5f4f1dce',
+--   '8877c1ec-366a-4170-8bb5-b3647fbe4e99',
+--   '8901d119-3f01-440c-8064-5b2f643297ad',
+--   '8c268ca5-1071-4203-aaff-9e793c82e965',
+--   '8f544a59-b688-4e3f-9a9a-44fd31b97e71',
+--   '8faa355b-327c-4ecb-9236-0f3b32ef8d88',
+--   '95c85ed9-e150-40c3-a273-7229c73fc6fb',
+--   '961698dd-72c9-4a00-a9d1-dc815f5269e0',
+--   '9bb9c7c2-29b0-496f-b7c3-358802841949',
+--   '9c9a0357-7977-4448-befd-36e41dae0c94',
+--   '9ca088c0-3a39-46bd-9462-65913fe708a4',
+--   'a1dc68bf-a2a5-4d65-892c-ff2069facc6e',
+--   'a23b65e7-0ff7-4188-8320-378f3f72498f',
+--   'a293d7eb-debc-48d3-bdee-0a9763ee074e',
+--   'a4564cad-75af-4436-b57c-fb977ed583d1',
+--   'a742bad4-550c-44ce-838f-496a0e4f0097',
+--   'a9cf3f55-4460-4cfc-b943-7a2a4fd4850f',
+--   'aa7061c4-656d-49e0-ac95-5070f15e396c',
+--   'abfe30c1-c5a9-4bf4-adbc-95177430aaa1',
+--   'b054c484-4156-493e-8be3-a2ad9bd2fa6f',
+--   'b0843619-e2c0-48cc-bb4f-2f55b4f0b934',
+--   'b26495e1-8401-4073-b717-1d76b387a414',
+--   'b28ccb87-d215-464b-9478-70d5e8d77c2e',
+--   'b291b255-0b1a-4853-96c4-4228995106c5',
+--   'b6fe3db8-9876-4df3-8375-64f19658b51f',
+--   'b83e0448-883f-4d66-bb92-fce72a476162',
+--   'b882fada-f167-48da-974f-84a74577bad4',
+--   'b9e8b38a-cd11-4c1c-8ea3-bc70096a6399',
+--   'bacb5297-e11d-4a80-9b78-31977570277c',
+--   'be759a64-f6f7-4b07-96f0-f878b1ac03ad',
+--   'c095bf12-f58a-49c6-9f1b-50e08c6264c5',
+--   'c1974f38-0fd6-4af4-8c62-5ae81af6c01e',
+--   'c289e9fa-5c09-4118-8fa8-0400a7aa51f0',
+--   'c30f1c23-6f94-4fe0-a333-14e28bd6bbc5',
+--   'c31c3be4-5092-430c-8169-f75ac3b6b7ce',
+--   'c6c231d2-335e-4920-8625-523ea8411bd0',
+--   'cb055741-ecda-407d-b172-1ca3552e47b7',
+--   'cd1c2168-8bf1-4a9f-b5cd-61550603b9e9',
+--   'cda5c4d5-a749-435f-8a96-60d9c44baa38',
+--   'cdcdf23d-3bb7-4290-9c3a-03be0a511dad',
+--   'cf646151-3d74-4c65-bf04-88d64a1dea33',
+--   'd344dc08-74a5-4318-9ed5-948beface3de',
+--   'd34a4701-597e-4832-8054-a7a640a1b697',
+--   'd7ff08d0-5b2e-4f8c-9574-206605146c63',
+--   'd98105c2-49be-4251-b35a-91365e4b518d',
+--   'dbc0d62d-b80b-46f1-addc-d7fcc8f842a6',
+--   'dc6a2899-9311-45c2-9764-ac9fe033e593',
+--   'dd3354d1-078f-4f44-81ad-4db4953aa0cf',
+--   'de9094cd-e885-4168-89eb-555b2ca5a3d5',
+--   'e0203d95-610c-411f-b248-5212f609aa09',
+--   'e043634f-ee7e-45a1-b3f9-1c18db920c56',
+--   'e8183b70-529f-4306-9279-5fb5af98b6a9',
+--   'e8fc2abb-a531-4a4a-ba3b-2efc1bd68f04',
+--   'ec1e9d4a-a245-49ed-8d09-6be676fcb146',
+--   'efae06e8-9c0b-40e9-91c3-1716efbc0d02',
+--   'f0d92b60-710c-4ae8-9f40-40359270909d',
+--   'f2f62dae-b17f-4730-a579-ef3bf8154d8d',
+--   'f3ea70e5-1b35-4283-bfd5-d9a659ebeac8',
+--   'f489b0dc-92c6-4135-a949-3b216c421c56',
+--   'f4cf1ca3-dd32-4ad1-baea-c9f3fad44daf',
+--   'f551ada8-5ece-47b6-aa2b-8c7cc91f877a',
+--   'f8dd83a6-f7e9-4e73-8371-152716130f5a',
+--   'fa1ea44f-d989-4ad5-8a76-d2127dad6f7f',
+--   'fcfb57f9-bf4d-44e7-a423-138194950a77',
+--   'fe3eef2a-3d3b-4603-aade-0abaff6410c4',
+--   'ff135d49-9b60-47a7-97fe-d224a1383b7e',
+--   'ffe5fcc1-5a5b-4994-832c-b92fc6a95e1d'
+-- );
+-- ^ Para revertir: quitar los `--` del bloque de arriba y ejecutarlo. Devuelve
+--   las 133 líneas a «sin coste», que es exactamente como estaban a las 22:50
+--   del 02/09. Ninguna otra fila se toca.

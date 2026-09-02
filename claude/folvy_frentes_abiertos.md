@@ -20,7 +20,9 @@ histórico, un punto de pedido calculado sería una media de agosto disfrazada d
 criterio. Se cablea cuando haya dos o tres meses. Quien la coja antes creyendo
 que «solo falta enchufarla» está cogiendo el frente 10, no una tarjeta.
 
-**Cerrados el 02/09 por la noche:** el **14** (el food cost estaba inflado:
+**Cerrados el 02/09 por la noche:** el **16** (el motor ya existía; lo roto era
+el barrido, que no podía ver un combo — arreglado, 133 reparadas y 299
+publicadas por primera vez), el **21** (umbral a 40 %, provisional), el **14** (el food cost estaba inflado:
 27,4 % era 22,3 %, y el diagnóstico que traía el frente era el equivocado), el
 **15** (`list_costless_sold_products` retirada), el **17** (renombrada a
 «Vendido sin coste», con la clave intacta) y el **19** (F0.5 aplicada, con las
@@ -35,10 +37,10 @@ los dos casos la medida previa era correcta y la conclusión estaba invertida.
 
 | # | Qué | Coste |
 |---|---|---|
-| 16 | **El motor ya existe.** Lo roto es el barrido nocturno, que no puede ver un combo: 131 combos y 3.338 € reparables con un `where`. Escribe datos, así que decides tú | Un `where` + backfill |
+| 16b | Las **299 rechazadas** del barrido son la cola de Casado y solo salen por `cron.job_run_details`. Falta que la pantalla las enseñe | Pantalla |
 | 18 | Las tres pantallas de Ventas no leen la URL, así que el drill del bloque del dinero va sin filtro de local | Tres pantallas |
 | 21 | La rama `> 60` de la bandera «sospechoso» no puede encenderse. Propuesta: bajarla a 40 % | Un número, tuyo |
-| 16b | 265 componentes de combo sin casar dejan 263 combos (5.074 €) sin costear, y ahí el motor hace bien en negarse | Trabajo de catálogo |
+| 16c | Los componentes de combo sin casar: 299 combos de 30 días, y 473 líneas padre antiguas que no se rellenan sin `recipe_item_version` | Catálogo |
 
 ## 1 · «Salsa Tzatziki» sale siete veces en el panel de opciones agotadas
 **Abierto:** 02/09/2026 · **Medido en Foodint Alcalá**
@@ -903,18 +905,68 @@ un food cost del **26,3 %** para ese grupo. Está en familia con el resto de la
 casa (mediana 21,6 %, máximo 33,1 %), que es la señal de que el número
 reparado no es absurdo.
 
-**PARADO ANTES DE ESCRIBIR, por la condición que puso el propio Julio:** *«si
-aparece un tercer grupo, se vuelve a preguntar antes de escribir»*. No apareció
-un tercer grupo de líneas —el punto ciego es solo el combo— pero **sí cambió la
-escala y apareció un problema que no estaba sobre la mesa**: 606 líneas y no
-131, tres cuentas y no una, 14.375 € y no 3.338, hasta el 07/06 — y el 98,7 % se
-costearía con una receta posterior a la venta, sin histórico con el que hacerlo
-bien.
+**Se paró antes de escribir**, por la condición del propio Julio. No apareció un
+tercer grupo de líneas —el punto ciego es solo el combo— pero **sí cambió la
+escala**: 606 y no 131, tres cuentas y no una, 14.375 € y no 3.338, hasta el
+07/06 — y el 98,7 % se costearía con una receta posterior a la venta.
 
-Las tres condiciones restantes están listas y escritas (guarda
-`computed_cost is null`, lista de ids en la migración, y el barrido publicando
-reparadas/rechazadas). Lo único que falta es **el alcance**, y ése no lo decido
-yo.
+### APLICADO el 02/09, con el alcance que decidió Julio
+
+**Solo lo reciente, y arreglo hacia delante.** Migraciones
+`20260902T2340_barrido_ve_los_combos.sql` (la rama 2 del barrido) y
+`20260902T2345_backfill_133_combos_lista_de_ids.sql` (el registro de reversión).
+
+Las cuatro condiciones, cumplidas:
+
+1. **`computed_cost is null` explícito** en la rama 2. Nunca se recalcula una
+   línea que ya tiene coste.
+2. **Los 133 ids dentro de la migración**, comentados — un fichero con un
+   `UPDATE` capaz de deshacer el trabajo es una trampa esperando a que alguien
+   ejecute la carpeta. Para revertir se descomenta el bloque.
+3. **Las dos medidas hechas antes**, arriba. Y una tercera que nadie pidió, la
+   del 98,7 %, que es la que cambió el alcance.
+4. **El barrido publica lo que hizo.** Devuelve `examinadas / reparadas /
+   rechazadas` y lo registra con `raise warning`, que aterriza en
+   `cron.job_run_details.return_message` — lo que ya lee el panel «Mis
+   agentes». Sin tabla nueva y en una pantalla que alguien mira.
+
+**Se aplicó ejecutando el propio barrido**, no una copia paralela: así lo
+probado es exactamente el código que corre cada noche.
+
+```
+antes:      133 combos reparables + 48 productos pendientes
+ejecución:  examinadas 181 · reparadas 181 · RECHAZADAS 299
+después:    0 combos reparables en ventana
+            473 líneas más antiguas INTACTAS  ← la decisión, cumplida
+```
+
+Las 181 son los 133 combos más 48 líneas de producto: trabajo normal del
+barrido, que se habría hecho a las 04:50 igual.
+
+**Efecto en «Vendido sin coste»** (Foodint, 30 días):
+
+| | antes | después |
+|---|---:|---:|
+| cobertura | 87,9 % | **91,7 %** |
+| sin costear | 11.522 € | **7.490 €** |
+| platos | 87 | 46 |
+| combos | 31 | 18 |
+
+*(Predije ~8.184 € y salieron 7.490 €: la diferencia son las 48 líneas de
+producto que el barrido arregló de paso y que yo no había contado.)*
+
+### LO QUE QUEDA, Y AHORA TIENE NÚMERO
+
+- **299 rechazadas.** Combos de los últimos 30 días sin coste porque les falta
+  casar algún componente. Es **la cola de trabajo de Casado**, y hasta esta
+  noche no existía en ninguna parte. Hoy sale por `cron.job_run_details`; lo que
+  falta es que la pantalla de Casado la enseñe como lo que es. **Ése es el
+  frente que hereda B36.**
+- **473 líneas padre anteriores a la ventana**, intactas a propósito. Se
+  costearían con receta de hoy y no hay `recipe_item_version` con el que
+  hacerlo bien. Se quedan hasta que esa tabla se llene — o hasta que alguien
+  decida que un coste aproximado es mejor que ninguno, que es una decisión de
+  negocio y no de código.
 
 **Qué se movería y qué no**, para que nadie se lleve una sorpresa:
 
