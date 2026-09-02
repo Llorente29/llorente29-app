@@ -58,6 +58,7 @@ import {
 } from './homeLayoutService'
 import { getAvisosAtencion, type AvisoAtencion, type TipoAviso } from './atencionService'
 import TarjetaP2 from './widgets/TarjetaP2'
+import PanelAgentes from '@/modules/agentes/home/PanelAgentes'
 
 const INK = 'var(--color-accent)'
 const MUTED = 'var(--color-text-secondary)'
@@ -485,6 +486,11 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
           </button>
         </div>
       )}
+
+      {/* ══ PANEL «MIS AGENTES» ══ debajo del mosaico. Es otra cosa que la
+          tarjeta «Resumen de agentes» del catálogo: aquella es una casilla del
+          mosaico, ésta es la tabla con interruptor. */}
+      <PanelAgentes accountId={activeAccountId} />
 
       {/* ══ CAJÓN «PERSONALIZAR» ══ agrupado por GRUPO DE NEGOCIO —Ventas,
           Team, Cocina, Almacén, Canales, Agentes— que es el idioma con el que

@@ -1,0 +1,15 @@
+-- 20260902T1900_agentes_pausa_y_panel.sql
+-- APLICADA el 02/09. Dos migraciones en una: la pausa por cuenta y el estado
+-- que lee el panel. Verificaciones pasadas (ver los bloques do $verif$).
+--
+-- ── EL HALLAZGO QUE LO ORDENA TODO ─────────────────────────────────────────
+-- `cron.job` NO tiene `account_id`. Hoy hay TRES cuentas --Foodint, Kitchen
+-- Grill LstQ y la plantilla-- compartiendo un planificador sin dueño. Apagar un
+-- cron desde el Inicio de una cuenta lo apagaria para todas: un interruptor que
+-- dice «mis agentes» y hace «los de todos».
+--
+-- Por eso el cron NO se toca. La pausa vive en `agent_pause`, por cuenta, y
+-- cada agente la consulta antes de trabajar. El planificador sigue corriendo.
+--
+-- El fichero es el registro; el SQL aplicado es el de las dos migraciones
+-- `agent_pause_por_cuenta` y `home_agentes_estado`, en ese orden.
