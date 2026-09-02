@@ -47,8 +47,6 @@ export const P2_HOME_CARDS: HomeCardDefinition[] = [
   // ── Almacén ──────────────────────────────────────────────────────────────
   { key: 'supply.conteos_pendientes', grupo: 'Almacen', title: 'Conteos pendientes', size: 'sm',
     source: 'stock_count', drill: { ruta: '/supply/conteos', etiqueta: 'Abrir Almacén · Conteos →' } },
-  { key: 'supply.stock_negativo', grupo: 'Almacen', title: 'Stock negativo', size: 'sm',
-    source: 'stock_movement', drill: { ruta: '/supply/stock', etiqueta: 'Abrir Almacén · Stock →' } },
   { key: 'supply.puntos_de_pedido', grupo: 'Almacen', title: 'Puntos de pedido', size: 'sm',
     source: 'recipe_item', drill: { ruta: '/supply/pedidos', etiqueta: 'Abrir Almacén · Pedidos →' } },
 
@@ -63,8 +61,6 @@ export const P2_HOME_CARDS: HomeCardDefinition[] = [
   // ── Agentes ──────────────────────────────────────────────────────────────
   // OJO: es la TARJETA del mosaico. El panel «Mis agentes» de la maqueta va
   // debajo del mosaico y es otra cosa; no se confunden ni comparten clave.
-  { key: 'agentes.resumen', grupo: 'Agentes', title: 'Resumen de agentes', size: 'md',
-    source: 'agent_run', drill: { ruta: '/agentes', etiqueta: 'Abrir Agentes →' } },
 ]
 
 /**

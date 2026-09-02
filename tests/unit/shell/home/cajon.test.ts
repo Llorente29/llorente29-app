@@ -111,10 +111,12 @@ describe('el catálogo aprobado', () => {
     expect(catalogo).toHaveLength(21)
   })
 
-  it('seis cableadas y quince P2', () => {
-    const cableadas = catalogo.filter(c => c.component != null)
-    expect(cableadas).toHaveLength(6)
-    expect(catalogo.filter(c => c.component == null)).toHaveLength(15)
+  // 02/09, segundo lote: «Stock negativo» y «Resumen de agentes» dejan de ser
+  // P2 y pasan a cableadas. El total no se mueve: una tarjeta que se cablea no
+  // aparece ni desaparece, cambia de lado.
+  it('ocho cableadas y trece P2', () => {
+    expect(catalogo.filter(c => c.component != null)).toHaveLength(8)
+    expect(catalogo.filter(c => c.component == null)).toHaveLength(13)
   })
 
   // Si alguien añade una tarjeta y olvida el grupo, cae en «Otras» y esto la

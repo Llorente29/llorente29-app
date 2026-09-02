@@ -29,6 +29,7 @@ import PendientesRecepcionPage from '@/modules/supply/pages/PendientesRecepcionP
 import SupplierInvoicesPage from '@/modules/supply/pages/SupplierInvoicesPage'
 import InventoryPage from '@/modules/supply/pages/InventoryPage'
 import CtbNotifyPage from '@/modules/supply/pages/CtbNotifyPage'
+import StockNegativoCard from '@/modules/supply/home/StockNegativoCard'
 
 export const supplyModule: ModuleDefinition = {
   // Identidad
@@ -60,4 +61,17 @@ export const supplyModule: ModuleDefinition = {
       { id: 'supply_ctb', label: 'Comunicar a CTB', icon: Send, path: 'comunicar-ctb', requiredRole: 'admin' },
     ],
   },
+  // §Almacén de la maqueta. Cuelga del mismo servicio que la pantalla de Stock.
+  homeCards: [
+    {
+      key: 'supply.stock_negativo',
+      title: 'Stock negativo',
+      grupo: 'Almacen',
+      size: 'sm',
+      source: 'stock_movement',
+      drill: { ruta: '/supply/stock', etiqueta: 'Abrir Almacén · Stock →' },
+      requiredRole: 'manager',
+      component: StockNegativoCard,
+    },
+  ],
 }

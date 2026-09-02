@@ -29,6 +29,7 @@
 // `ModuleDefinition.homeCards` y entran en el mismo catálogo sin tocar esto.
 
 import type { HomeCardDefinition } from '../../types'
+import ResumenAgentes from '@/modules/agentes/home/ResumenAgentes'
 
 /**
  * El catálogo del shell. El ORDEN de este array es el defecto de fábrica del
@@ -36,7 +37,21 @@ import type { HomeCardDefinition } from '../../types'
  * hasta que decida personalizarlo.
  */
 export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
-  // (02/09) VACÍO. Las cuatro que quedaban de junio —Ventas hoy, Trabajando
+  // «Resumen de agentes» la aporta el SHELL porque no hay módulo `agentes`: los
+  // agentes son cinco `cron.job` y una RPC, no una pantalla con su registro.
+  // Comparte `home_agentes_estado` con el panel «Mis agentes» de abajo, así que
+  // los dos no pueden discrepar — que es lo que pasaría con dos consultas.
+  {
+    key: 'agentes.resumen',
+    title: 'Resumen de agentes',
+    grupo: 'Agentes',
+    size: 'md',
+    source: 'cron.job_run_details',
+    drill: { ruta: '/agentes', etiqueta: 'Abrir Agentes →' },
+    requiredRole: 'manager',
+    component: ResumenAgentes,
+  },
+  // (02/09) Las CUATRO de junio. Las cuatro que quedaban de junio —Ventas hoy, Trabajando
   // ahora, Resumen de Team y Resumen de Sales— se retiran ahora que existen sus
   // sustitutas de la maqueta. No se borran del producto: se les pone lápida
   // abajo, así que quien las tuviera ve el aviso con su nombre y su porqué en
