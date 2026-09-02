@@ -107,3 +107,28 @@ viejo sigue vivo, y solo entonces lo nuevo.
   otra está a cero en todo. Cualquier cosa anclada por nombre coge la que no es.
 - Una migración de junio (`20260621T2330`) lleva el secreto del despachador
   **en claro** en el fichero. Hoy se lee del Vault; el fichero sigue en el repo.
+
+---
+
+## 5 · 04:45–04:55 (02/09) · Ventana de las 23:45, con Alcalá cerrado
+
+No es excepción: es la ventana buena, con el servicio cerrado. Se mergeó y
+aplicó lo que quedaba del día, uno cada vez y verificado en main antes de abrir
+el siguiente.
+
+| Paso | Qué | Sha / migración |
+|---|---|---|
+| 1 | Franja sellada en el bundle OTA | `4e99e953` |
+| 2+3 | «Déjalo pendiente» + vigía del bundle desfasado | `4d3dc444` + `vigia_de_bundle_desfasado` |
+| 4 | Los dos RECON a main | en `f6064681` |
+| — | Deriva de numeración cerrada | `20260901T1745` + `conciliacion_fichero_despachador_opciones` |
+
+**Un cambio de orden que hubo que hacer y por qué.** Los pasos 2 y 3 iban
+encadenados en la rama (`2c97bf19` tiene a `e0304389` de ancestro), así que no
+se podía traer uno sin el otro. Para respetar la condición —el front del vigía
+no llega sin su migración— la migración `20260902T0800` se aplicó **antes** del
+merge, y los dos commits entraron juntos.
+
+**El vigía, verificado en vivo tras aplicarlo:** Cocina (Alcalá) sale con 25
+bundles de atraso y 119 h → avisa. Pase y camichi4, 1 de atraso y 0 h → rojos
+en pantalla y sin aviso. El desfase se mide en tiempo, no en número de bundles.
