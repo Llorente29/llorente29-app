@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  catalogoDisponible, resolverMosaico, agrupadoPorModulo, mover, alternar,
+  catalogoDisponible, resolverMosaico, mover, alternar,
   rolPuedeVer, type CatalogEntry,
 } from '@/shell/home/homeCatalog'
 
@@ -109,13 +109,14 @@ describe('poner y quitar', () => {
   })
 })
 
-describe('agrupado por módulo, para el cajón', () => {
-  it('«Inicio» primero y el resto por nombre', () => {
-    const grupos = agrupadoPorModulo([C, A, B])
-    expect(grupos.map(g => g.moduleId)).toEqual(['shell', 'ventas'])
-    expect(grupos[0].tarjetas.map(t => t.key)).toEqual(['shell.a', 'shell.b'])
-  })
-})
+// La agrupación por MÓDULO se retiró el 02/09: el cajón agrupa por GRUPO DE
+// NEGOCIO —Ventas, Team, Cocina, Almacén, Canales, Agentes—, que es el idioma
+// con el que se habla del negocio, no el nombre de nuestros módulos. Sus
+// pruebas viven ahora en tests/unit/shell/home/cajon.test.ts.
+//
+// El módulo NO desaparece del catálogo: `moduleId`/`moduleName` siguen ahí y
+// siguen siendo de quien aporta el código. Lo que ya no hace es decidir bajo
+// qué epígrafe se ve la tarjeta.
 
 describe('rol — P1 solo admin', () => {
   it('una tarjeta sin rol exigido la ve cualquiera', () => {
