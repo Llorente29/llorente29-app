@@ -60,6 +60,9 @@ export interface FoodCostMedio {
   coberturaPct: number | null
   /** La misma cobertura pesada por euros, que es la que decide. */
   coberturaDineroPct: number | null
+  /** Los euros que prueban esa cobertura: costeado y total. */
+  ingresoCosteadoEur: number
+  ingresoTotalEur: number
   marcas: MarcaFoodCost[]
   /** Nombres de las marcas fuera de rango, para poder nombrarlas. */
   sospechosas: string[]
@@ -103,6 +106,8 @@ export async function leeFoodCostMedio(
     unidadesCosteadas: d.salud.unidades_costeadas,
     coberturaPct: d.salud.cobertura_pct,
     coberturaDineroPct: d.salud.cobertura_dinero_pct,
+    ingresoCosteadoEur: d.total.ingreso,
+    ingresoTotalEur: d.salud.ingreso_total,
     marcas,
     sospechosas: marcas.filter(m => m.sospechoso).map(m => m.marca),
     desde: actual.desde,

@@ -730,11 +730,35 @@ cazó porque se midió la RPC antes de cablearla en vez de después.
 correcto (`sale_line.computed_cost`, que es lo que el motor deja escrito en la
 línea y ya resuelve combos y modificadores).
 
-**Lo que queda:** decidir qué se hace con `list_costless_sold_products`. Sigue
-viva y sigue usándose en el panel de excepciones de `KitchenMenuPage`, donde
-también estará diciendo cero. O se corrige su criterio o se retira; lo que no
-puede quedarse es una función cuyo nombre promete el agujero entero y enseña una
-esquina vacía.
+**CERRADO el 02/09. Julio decidió retirar**, y el argumento es el bueno: dos
+fuentes para la misma pregunta es como nace la siguiente discrepancia (regla 10).
+
+Migración `20260902T2320_retirar_list_costless_sold_products.sql`, que guarda la
+definición original entera —borrar algo sin dejar cómo era es borrar dos veces—
+y lleva guarda `do $$` antes del `drop`. Verificado después: cero firmas.
+
+**Lo que se midió antes de borrar:**
+
+| | |
+|---|---|
+| Objetos de la base que la nombran | **ninguno** (0 funciones, vistas, crons) |
+| Consumidores en el código | **uno**: la sección «Casado pero sin coste» de `SalesExceptionsPage` |
+| Llamadas en `pg_stat_statements` | **1 en toda la vida de la base** |
+| Grants | `anon` podía ejecutarla; se va con ella |
+
+Esa única llamada dice bastante: la sección se abrió una vez, y lo que enseñó
+fue una lista vacía.
+
+**Lo que se pierde y lo que no.** Con la sección se va su fila `CostlessRow`,
+que tenía un flujo de resolución de tres acciones (reventa / plato / combo). **La
+maquinaria NO se pierde:** `classifyUnmappedProduct` la siguen usando las otras
+dos secciones de la misma pantalla. Lo que desaparece es una fila que no tenía a
+nadie a quien enseñar. En su sitio queda un comentario que dice adónde se fue la
+pregunta, no un hueco.
+
+**Y un segundo defecto suyo, registrado por si vuelve:** filtraba
+`s.source = 'lastapp'`, así que las ventas importadas por CSV de plataforma no
+entraban nunca. Con un solo agujero ya no valía; con dos, menos.
 
 
 ## 16 · Un combo vendido no tiene coste, y no es un escandallo que falte
@@ -876,9 +900,41 @@ abierta que no hace falta: deuda real, no incidente.
 hace falta. El único caso con riesgo es `spatial_ref_sys` —PostGIS, y sí se
 usa—, y se resuelve quitándole solo INSERT/UPDATE/DELETE y dejándole el SELECT.
 
-**Lo que NO se ha hecho, y por qué:** revocar y/o tirar tablas en producción no
-se hace de paso mientras se cablea una tarjeta. Va en su propio bloque SQL,
-revisable, y lo ejecuta Julio.
+**CERRADO el 02/09 (noche).** Migración `20260902T2300_f0_5_cerrar_grants_tablas_sin_rls.sql`,
+aplicada bajo el criterio F2 y verificada con `has_table_privilege` antes y
+después: las trece más `social_n2_usage` en false para `anon` y `authenticated`
+en los cuatro verbos; `football_team_city` con SELECT y sin escritura;
+`service_role` intacto en las quince. `spatial_ref_sys` sigue pendiente, en su
+propio bloque.
+
+### Y las dos que faltaban: la F0.4 de agosto se quedó a mitad de alcance
+
+`20260807T1600_f0_4_close_no_rls_table_holes.sql` **hizo bien su trabajo** —se
+comprobó, `anon` está cerrado en las dos, tal como dice su cabecera—. Lo que
+pasa es que **su alcance era `anon`**, lo dice el título, y `authenticated` se
+quedó fuera. En una tabla con `account_id` y sin RLS, `authenticated` es el rol
+peligroso: es cualquier usuario logueado de cualquiera de las tres cuentas.
+
+**`social_n2_usage` no estaba muerta: la escribieron hoy.** 40 filas, último
+acceso 02/09 a las 12:08 UTC. Es el contador diario del agente Social
+(`account_id, day, count`). Sin RLS y con INSERT/UPDATE/DELETE para
+`authenticated`, cualquier usuario logueado podía leer el consumo de las otras
+cuentas y **poner su propio contador a cero** — darse presupuesto ilimitado. Es
+el caso exacto que Julio quería descartar antes de tocar: una tabla viva.
+
+Revocar no la rompe, y se comprobó ANTES: `claim_n2_budget` es `SECURITY
+DEFINER`, su dueño es `postgres` —que conserva INSERT y UPDATE— y **ni `anon` ni
+`authenticated` pueden ejecutarla**. La escritura no pasa nunca por el grant del
+usuario.
+
+`football_team_city` es catálogo de referencia: 0 filas, nunca leída, sin
+`account_id`, la llena `sports-events` como `service_role`. Se le quita la
+escritura y se le deja el SELECT, igual que la F0.4 hizo con `anon`.
+
+**La lección, y es de alcance, no de ejecución:** una auditoría que se titula
+«grants a anon» cierra `anon` y deja `authenticated` abierto durante 26 días,
+con el guard verde y la cabecera diciendo la verdad. Cuando el alcance se pone
+en el título, lo que queda fuera del título no se ve que falta.
 
 **Propuesta, en dos pasos separados:**
 1. `revoke all on <las 13> from anon, authenticated;` — reversible, inmediato,
@@ -923,3 +979,85 @@ que el frente 11: el despliegue que no despliega y sale verde.
 `"typecheck": "tsc -b"`. Existe un nombre correcto que teclear y nadie tiene que
 acordarse de esto. Lo que queda abierto es la costumbre: si alguien escribe
 `tsc --noEmit` por inercia, sigue saliendo verde sin mirar.
+
+### CORRECCIÓN (02/09, misma noche): esto no era un hallazgo. Era una regla escrita que me salté
+
+Al barrer el repositorio entero buscando `--noEmit` apareció esto:
+
+> `docs/claude_folvy_reglas.md:38` — **«El build se verifica con `tsc -b`** (lo
+> que corre Vercel), no `tsc --noEmit`.»
+
+Y su origen, en `docs/claude_folvy_archivo_2026-08.md:109`: se aprendió
+arreglando **un build de Vercel roto en el PR #47**. O sea que el proyecto ya
+había pagado exactamente este fallo, lo había escrito en su fichero de reglas, y
+yo lo repetí. Presentarlo como descubrimiento propio era la mitad de la verdad.
+
+**Y el barrido dejó una segunda cosa, más incómoda:** hay **ocho documentos de
+agosto** que declaran «`tsc --noEmit` limpio» como verificación de un lote
+(`gestor_menus_premium_20260824`, `gestor_menus_auditoria_f1_20260824`,
+`gestor_menus_fix_margen_20260824`, `subrecetas_preparaciones_ui_20260823`,
+`botones_carta_no_responden_20260824`, `gestor_menus_f2_f7_20260824`,
+`carta_pausar_y_menu_contextual_20260824`, `quitar_plato_de_carta_20260823`,
+`recostear_todo_20260824`, `batch_yield_subrecetas_20260823`,
+`pedido_articulo_repetido_20260820`). **Esas afirmaciones estaban vacías cuando
+se escribieron.** Los lotes pueden estar bien —casi todos declaran también
+`npm run build` ✓, que sí comprueba— pero la línea del `--noEmit` no probaba
+nada en ninguno.
+
+### Lo que el barrido descartó, y es la buena noticia
+
+**No hay ningún hook ni workflow afectado.** No existe `.husky/`, no hay
+`lint-staged`, no hay `pre-commit`. Los tres workflows de Actions
+(`deploy.yml`, `build-apk.yml`, `deploy-edge-functions.yml`) no usan `--noEmit`:
+`deploy.yml` corre `npm run build`, que es `tsc -b && vite build`. **La puerta
+de CI sí comprueba.** El agujero era solo de comprobación manual y de lo que se
+escribía en los registros.
+
+
+## 21 · La bandera «sospechoso» tiene una rama que no puede encenderse
+**Abierto:** 02/09/2026 · **Probada, no celebrada** · **C1 de Julio**
+
+Al cerrar el frente 14 desaparecieron las dos marcas marcadas como sospechosas.
+La tentación era contarlo como éxito. Julio pidió lo contrario: **probar la
+bandera contra un caso que sí deba dispararse**, porque sus umbrales se fijaron
+mirando números que estaban mal —con Deep Pizza al 78,6 %— y un listón puesto
+para aquello puede haber quedado inalcanzable. Una bandera que no puede
+encenderse es `list_costless_sold_products` con otra ropa.
+
+**La medida.** 68 observaciones = 17 marcas × 4 ventanas (30 días, agosto,
+julio, junio), con la métrica nueva:
+
+| | valor |
+|---|---:|
+| mínimo | 5,4 % |
+| mediana | 21,6 % |
+| p95 | 31,1 % |
+| máximo | **33,1 %** |
+| por encima de 60 % (`> 60`) | **0** |
+| por encima de 40 % | **0** |
+| por debajo de 8 % (`< 8`) | **1** |
+
+**Veredicto, rama por rama:**
+
+- **`< 8` está VIVA y sirve.** Se disparó una vez: julio, una marca al 5,4 %.
+  Es la rama que caza «falta coste», y hace su trabajo.
+- **`> 60` está MUERTA.** El máximo real en cuatro ventanas y diecisiete marcas
+  es 33,1 %, a 27 puntos del listón. Con la métrica corregida ninguna marca de
+  este negocio puede acercarse: el 60 % se puso cuando los combos inflaban el
+  número al doble. Es una alarma que no puede sonar.
+
+**Lo que NO se ha hecho:** cambiar el umbral. El número es una decisión de
+negocio y aquí solo se aporta la distribución con la que decidirlo.
+
+**Propuesta, anclada en el dato y no en el gusto:** bajar la rama alta a **40 %**
+—siete puntos por encima de la peor marca real, así que no dispara por variación
+normal, y bien por debajo de donde un food cost deja de ser un margen— y dejar
+`< 8` como está. Con esos umbrales, las 68 observaciones dan 1 bandera, la de
+julio, que es la que hay que ver.
+
+**Y un hallazgo de paso:** `kitchen_settings.target_food_cost_pct` existe como
+columna, pero **Foodint no tiene fila en `kitchen_settings`**. Así que hoy no
+hay objetivo configurado con el que anclar el umbral, y por eso la propuesta es
+un número absoluto y no «X puntos sobre el objetivo», que sería lo bueno. Si
+Julio pone el objetivo, la bandera puede pasar a ser relativa y dejar de
+envejecer sola.

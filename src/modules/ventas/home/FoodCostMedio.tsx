@@ -19,6 +19,7 @@ import { Percent } from 'lucide-react'
 import TarjetaInicio from '@/shell/home/widgets/TarjetaInicio'
 import { useDatoDeTarjeta } from '@/shell/home/cards/useDatoDeTarjeta'
 import { deltaEnPuntos } from '@/shell/home/espejo'
+import { eurEntero } from '@/lib/dinero'
 import type { HomeCardProps } from '@/shell/types'
 import { leeFoodCostMedio, VENTANA_DIAS, type FoodCostMedio as Dato } from './foodCostMedio'
 
@@ -46,12 +47,18 @@ export default function FoodCostMedio({ accountId, locationId, drillTo }: HomeCa
           sospechosas.length > 0
             ? `${sospechosas.slice(0, 2).join(' y ')} sale${sospechosas.length > 1 ? 'n' : ''} fuera de rango: revisa su escandallo antes de creerte su margen.`
             : null,
-          // La cobertura se dice por DINERO, que es la que decide si el
-          // porcentaje de arriba se puede creer. Los euros que faltan por
-          // costear los lista «Platos sin escandallo»: no se repiten aquí.
+          // LA PRUEBA VA EN LA MISMA MONEDA QUE LA CIFRA. El paréntesis lleva
+          // euros, no un conteo: 4.656 de 4.892 unidades da 95,2 %, o sea un
+          // número DISTINTO del 96,6 % que va delante, y quien divida creerá
+          // que la tarjeta está mal. Un número y su prueba son el mismo número.
+          //
+          // Y no dice «ventas»: 4.892 a 15 € cada una no son pedidos, son
+          // unidades de venta. Ese conteo vive en Margen por plato, con su
+          // nombre; aquí manda el dinero, que es lo que decide si el
+          // porcentaje de arriba se puede creer.
           datos.coberturaDineroPct != null
-            ? `Cubre el ${datos.coberturaDineroPct.toLocaleString('es-ES', { maximumFractionDigits: 1 })} % del dinero vendido (${datos.unidadesCosteadas.toLocaleString('es-ES')} ventas de ${datos.unidades.toLocaleString('es-ES')}).`
-            : `Sale de ${datos.unidadesCosteadas.toLocaleString('es-ES')} ventas de ${datos.unidades.toLocaleString('es-ES')}.`,
+            ? `Cubre el ${datos.coberturaDineroPct.toLocaleString('es-ES', { maximumFractionDigits: 1 })} % del dinero vendido (${eurEntero(datos.ingresoCosteadoEur)} de ${eurEntero(datos.ingresoTotalEur)}).`
+            : null,
         ].filter(Boolean).join(' ')
 
   return (

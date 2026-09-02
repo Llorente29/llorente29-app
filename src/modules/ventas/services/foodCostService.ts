@@ -37,6 +37,10 @@ export interface FoodCostSalud {
   unidades_costeadas: number
   cobertura_pct: number | null
   cobertura_dinero_pct: number | null
+  /** Ingreso del periodo ENTERO, costeado o no. Es la prueba en euros de
+   *  `cobertura_dinero_pct`: sin él, la cifra iría acompañada de un conteo de
+   *  unidades que da OTRO porcentaje. */
+  ingreso_total: number
 }
 export interface FoodCostTotal {
   ingreso: number
@@ -76,7 +80,10 @@ export interface FoodCostFilters {
 }
 
 const EMPTY: FoodCostDashboard = {
-  salud: { unidades: 0, unidades_costeadas: 0, cobertura_pct: null, cobertura_dinero_pct: null },
+  salud: {
+    unidades: 0, unidades_costeadas: 0,
+    cobertura_pct: null, cobertura_dinero_pct: null, ingreso_total: 0,
+  },
   total: { ingreso: 0, food_cost: 0, food_cost_pct: null },
   by_brand: [], by_dish: [],
 }

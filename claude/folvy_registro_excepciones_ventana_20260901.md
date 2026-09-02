@@ -217,3 +217,49 @@ aplica: al cerrar `_queue_system_alert` a `anon`, la orden literal era
 estaba concedido a PUBLIC, y que revocar solo `anon` habría dejado la función
 abierta con una migración aplicada y cara de arreglada. El mismo hábito, esta
 vez a tiempo.)*
+
+---
+
+## F2 · 02/09 · EL CRITERIO DE LA BANDA, escrito antes de volver a usarlo
+
+Hasta aquí, las siete entradas de este fichero son excepciones autorizadas **una
+a una**. Julio paró y puso el motivo por escrito, y la razón que dio es la que
+importa:
+
+> A las 22:04 te dije que un `revoke` sobre trece tablas muertas esperara a las
+> 23:45. A las 22:15 aplicaste una migración que redefine `food_cost_dashboard`
+> y no dije nada. Las dos son igual de inocuas. El problema no es cuál de las
+> dos, es que estoy aplicando la ventana por corazonada, y **una regla que se
+> improvisa por caso siempre acaba encontrando la excepción**.
+
+### El criterio
+
+**La banda protege LA OPERACIÓN.** Operación es: edge functions, front que llega
+a tablets y TPV, publicación de cartas, y cualquier cosa que toque **cocina,
+pedidos o escaparate**.
+
+**Los informes no son la operación.** Quedan FUERA de la banda:
+
+- una migración que solo redefine una función **sin consumidor operativo**;
+- un `revoke` sobre objetos **que nadie lee**.
+
+Con tres condiciones que no son negociables:
+
+1. **Verificadas antes y después**, en la propia migración.
+2. **Decididas ANTES del cambio**, no mientras se aplica.
+3. **Anotadas en el registro.** Aquí.
+
+**Y la que da sentido a las otras tres: nunca argumentadas a posteriori.** Si la
+justificación de por qué algo estaba fuera de la banda se escribe después de
+aplicarlo, no es un criterio, es una coartada.
+
+### Aplicado por primera vez el mismo 02/09
+
+| Cambio | Por qué queda fuera de la banda | Verificación |
+|---|---|---|
+| `20260902T2200` · `food_cost_dashboard` por unidad de venta | Redefine una función de informe. Sus consumidores son dos pantallas de análisis y dos tarjetas del Inicio. No toca cocina, pedidos ni escaparate | Antes/después de las 4 claves y de `by_brand`; una sola firma |
+| `20260902T2300` · F0.5, `revoke` sobre 13 tablas muertas + 2 | Objetos que nadie lee. La única viva, `social_n2_usage`, la escribe una `SECURITY DEFINER` que el rol revocado **ni puede ejecutar** — comprobado antes | `has_table_privilege` antes y después, y guarda `do $$` que aborta si algo queda abierto |
+| `20260902T2310` · `salud.ingreso_total` | Añade una clave a la misma función de informe | Una sola firma; 73.573/76.181 = 96,6 %, que es la cifra que acompaña |
+
+Las tres decididas antes, verificadas dentro, y anotadas aquí. Ninguna se aplicó
+apoyándose en que la anterior hubiera salido bien.
