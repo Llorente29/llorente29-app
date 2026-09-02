@@ -51,3 +51,34 @@ export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
 
 /** El defecto de fábrica: lo que ve quien nunca ha personalizado nada. */
 export const LAYOUT_POR_DEFECTO: string[] = SHELL_HOME_CARDS.map(c => c.key)
+
+// ── LÁPIDAS: las tarjetas que se retiraron, con su nombre y su motivo ───────
+//
+// Cuando una tarjeta sale del catálogo, la clave sigue guardada en el
+// `home_layout` de quien la tuviera puesta. El Inicio lo dice —regla 7, no se
+// descarta en silencio— pero decía «shell.appcc_hoy» y «nadie sabe ya
+// dibujarlas»: una clave interna y una frase que suena a avería, en la pantalla
+// del dueño. La pantalla habla el idioma del negocio.
+//
+// Así que cada retirada deja su lápida: cómo se llamaba y por qué se fue. Es la
+// misma idea que la firma vieja de `set_brand_status`, que en vez de
+// desaparecer contesta explicando que está retirada y qué hacer.
+export interface TarjetaRetirada {
+  titulo: string
+  motivo: string
+}
+
+export const TARJETAS_RETIRADAS: Record<string, TarjetaRetirada> = {
+  'shell.solicitudes':    { titulo: 'Solicitudes',       motivo: 'no tenía fuente de datos' },
+  'shell.appcc_hoy':      { titulo: 'APPCC de hoy',      motivo: 'no tenía fuente de datos' },
+  'shell.resumen_safety': { titulo: 'Resumen de Safety', motivo: 'no tenía fuente de datos' },
+}
+
+/**
+ * El nombre para enseñar. Si la clave no tiene lápida —una tarjeta retirada sin
+ * anotarla, o un dato corrupto— se devuelve la clave: enseñar algo raro es
+ * mejor que inventar un nombre bonito para algo que no sabemos qué era.
+ */
+export function nombreDeTarjetaRetirada(key: string): string {
+  return TARJETAS_RETIRADAS[key]?.titulo ?? key
+}

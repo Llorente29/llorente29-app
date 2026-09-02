@@ -76,7 +76,8 @@ export function ResumenTeam({ drillTo }: HomeCardProps) {
   const { metrics } = useHomeMetrics()
   return (
     <ModuleSummaryCard
-      title="Team" icon={Users} onOpen={drillTo ? () => drillTo(A_AHORA) : undefined}
+      title="Team" icon={Users}
+      pie={drillTo ? { etiqueta: A_AHORA.etiqueta, onClick: () => drillTo(A_AHORA) } : undefined}
       lines={[
         { text: `${metrics?.trabajandoAhora != null ? metrics.trabajandoAhora : '—'} trabajando ahora` },
       ]}
@@ -87,7 +88,8 @@ export function ResumenSales({ drillTo }: HomeCardProps) {
   const { metrics, loading } = useHomeMetrics()
   return (
     <ModuleSummaryCard
-      title="Sales" icon={BarChart3} onOpen={drillTo ? () => drillTo(A_VENTAS) : undefined}
+      title="Sales" icon={BarChart3}
+      pie={drillTo ? { etiqueta: A_VENTAS.etiqueta, onClick: () => drillTo(A_VENTAS) } : undefined}
       lines={[
         { text: `Ticket medio: ${loading ? '…' : eur(metrics?.ticketMedio7d ?? null)}` },
         { text: `${loading ? '…' : num(metrics?.numPedidos7d ?? null)} pedidos (7 días)` },

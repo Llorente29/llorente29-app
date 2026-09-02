@@ -17,23 +17,29 @@ export interface ModuleSummaryCardProps {
   title: string
   icon: LucideIcon
   lines: ModuleSummaryLine[]
-  onOpen?: () => void
+  /**
+   * EL PIE, igual que en MetricCard: «Abrir Team · Ahora mismo →». Va abajo y
+   * es lo ÚNICO pulsable de la tarjeta.
+   *
+   * (02/09) Antes la tarjeta ENTERA era un <button> con `onOpen`. Se cambia por
+   * dos motivos: una caja pulsable no dice a dónde lleva —y lo que no dice a
+   * dónde lleva no se pulsa—, y además un <button> dentro de otro <button> es
+   * HTML inválido, así que el pie no cabía sin este cambio.
+   */
+  pie?: { etiqueta: string; onClick: () => void }
 }
 
 export default function ModuleSummaryCard({
-  title, icon: Icon, lines, onOpen,
+  title, icon: Icon, lines, pie,
 }: ModuleSummaryCardProps) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="text-left w-full transition-colors"
+    <div
+      className="text-left w-full"
       style={{
         background: 'var(--color-bg-card)',
         border: '0.5px solid var(--color-border-default)',
         borderRadius: 'var(--radius-xl)',
         padding: '1rem 1.125rem',
-        cursor: onOpen ? 'pointer' : 'default',
       }}
     >
       <p
@@ -54,6 +60,19 @@ export default function ModuleSummaryCard({
           {line.text}
         </div>
       ))}
-    </button>
+      {pie ? (
+        <button
+          type="button"
+          onClick={pie.onClick}
+          style={{
+            marginTop: '0.75rem', padding: 0, border: 0, background: 'none',
+            font: 'inherit', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+            color: 'var(--color-accent)', textAlign: 'left',
+          }}
+        >
+          {pie.etiqueta}
+        </button>
+      ) : null}
+    </div>
   )
 }

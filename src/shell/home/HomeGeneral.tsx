@@ -46,7 +46,8 @@ import {
   getHomeCatalog, catalogoDisponible, resolverMosaico, agrupadoPorModulo,
   mover, alternar, type CatalogEntry,
 } from './homeCatalog'
-import { LAYOUT_POR_DEFECTO } from './cards/shellCards'
+import { LAYOUT_POR_DEFECTO, TARJETAS_RETIRADAS, nombreDeTarjetaRetirada } from './cards/shellCards'
+import { enumeraNombres } from '../../lib/texto'
 import { construyeUrl } from './drill'
 import { HomeMetricsProvider } from './cards/HomeMetricsProvider'
 import {
@@ -157,6 +158,18 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
     () => resolverMosaico(claves, disponibles), [claves, disponibles],
   )
   const grupos = useMemo(() => agrupadoPorModulo(disponibles), [disponibles])
+
+  // El PORQUÉ de las retiradas, en una frase. Si todas comparten motivo —el
+  // caso normal, porque se retiran por lotes— se dice una vez en vez de repetir
+  // «no tenía fuente de datos» tres veces. Y no se dice «nadie sabe dibujarlas»,
+  // que suena a avería del programa cuando fue una decisión de producto.
+  const motivoDeRetirada = useMemo(() => {
+    const motivos = [...new Set(huerfanas.map(k => TARJETAS_RETIRADAS[k]?.motivo).filter(Boolean))]
+    if (motivos.length === 1) return `${motivos[0]} y se retiraron hasta cablearlas`
+    if (motivos.length > 1) return `${enumeraNombres(motivos as string[])}, y se retiraron hasta cablearlas`
+    // Sin lápida no se inventa una explicación: se dice lo único que se sabe.
+    return 'se retiraron del catálogo'
+  }, [huerfanas])
 
   /** Guarda y lo DICE. Si falla, no se da por bueno (regla 8). */
   async function guardar(nuevas: string[], queSeHizo: string) {
@@ -283,12 +296,13 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
         <div className="mb-3 p-3 rounded-md bg-warning-bg border border-warning/30 text-sm text-text-primary flex items-start gap-2 flex-wrap">
           <AlertTriangle size={16} className="shrink-0 mt-0.5 text-warning" />
           <span className="flex-1">
-            {huerfanas.length === 1 ? 'Una tarjeta que tenías' : `${huerfanas.length} tarjetas que tenías`} ya no
-            {huerfanas.length === 1 ? ' existe' : ' existen'} ({huerfanas.join(', ')}). No se pintan porque nadie
-            sabe ya dibujarlas.
+            {enumeraNombres(huerfanas.map(nombreDeTarjetaRetirada))}{' '}
+            {huerfanas.length === 1 ? 'ya no está' : 'ya no están'} en tu Inicio:{' '}
+            {motivoDeRetirada}. {huerfanas.length === 1 ? 'Volverá' : 'Volverán'} al cajón cuando{' '}
+            {huerfanas.length === 1 ? 'se cablee' : 'se cableen'}.
           </span>
           <button type="button" disabled={guardando}
-            onClick={() => void guardar(claves.filter(k => !huerfanas.includes(k)), 'Quitadas las tarjetas que ya no existen.')}
+            onClick={() => void guardar(claves.filter(k => !huerfanas.includes(k)), 'Quitadas de tu Inicio.')}
             className="shrink-0 px-2.5 py-1 rounded-md text-xs font-semibold border border-border-default bg-card hover:bg-page disabled:opacity-50">
             Quitarlas de mi Inicio
           </button>

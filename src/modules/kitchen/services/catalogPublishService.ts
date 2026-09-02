@@ -22,6 +22,7 @@
 // pantalla antes de escribir dice DÓNDE escribe.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import { enumeraNombres } from '../../../lib/texto'
 
 export interface PublishTarget {
   connection_name: string | null
@@ -135,12 +136,11 @@ export interface AlcancePublicacion {
   desconocido: boolean
 }
 
-/** «A», «A y B», «A, B y C». Todos, siempre: un umbral ordena, no esconde. */
-export function enumeraNombres(nombres: string[]): string {
-  if (nombres.length === 0) return ''
-  if (nombres.length === 1) return nombres[0]
-  return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
-}
+// (02/09) La enumeración se fue a src/lib/texto.ts: la necesita también el
+// aviso de tarjetas retiradas del Inicio, y dos copias de la misma frase es
+// como empieza a discrepar una regla. Se sigue exportando desde aquí para no
+// tocar a quien ya la importaba.
+export { enumeraNombres } from '../../../lib/texto'
 
 /**
  * De la elección del usuario a los locales de verdad, con nombre y todo.
