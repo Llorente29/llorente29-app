@@ -73,7 +73,8 @@ import AddExistingProductModal from '@/modules/kitchen/components/AddExistingPro
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
 import {
   publishBrandCatalog, dryRunBrandCatalog, listPublishLocations,
-  type PublishResult, type DryRunResult,
+  alcanceDePublicacion, enumeraNombres,
+  type PublishResult, type DryRunResult, type LocalPublicable,
 } from '@/modules/kitchen/services/catalogPublishService'
 import PublishStatusChip from '@/modules/kitchen/components/PublishStatusChip'
 import { connectBrandToDelivery, type ConnectResult } from '@/modules/kitchen/services/hubriseBrandConnectService'
@@ -215,8 +216,11 @@ export default function KitchenMenuPage() {
   // en el que se agota. Son dos cosas distintas y mezclarlas fue el fallo: el
   // 86 usa el local del selector de cabecera.
   const { resolvedLocationId } = useLocationScope()
-  const [publishLocations, setPublishLocations] = useState<Array<{ id: string; name: string }>>([])
+  const [publishLocations, setPublishLocations] = useState<LocalPublicable[]>([])
   const [publishLocationId, setPublishLocationId] = useState<string | null>(null)
+  // Consentimiento aparte cuando la publicación toca MÁS DE UN local. Se
+  // reinicia en cada ensayo: nunca se hereda de la vez anterior.
+  const [asumoVariosLocales, setAsumoVariosLocales] = useState(false)
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null)
   const [dryRunning, setDryRunning] = useState(false)
   const [publishStatusKey, setPublishStatusKey] = useState(0)
@@ -536,15 +540,34 @@ export default function KitchenMenuPage() {
   // ── Publicar la carta de la marca a HubRise (T2a) ─────────────────────────
   // DOS PUERTAS. El botón hace el ENSAYO, que no manda un byte a HubRise; la
   // publicación de verdad es un segundo clic, ya sabiendo a qué catálogo va.
-  const ambitoNombre = publishLocationId
-    ? (publishLocations.find((l) => l.id === publishLocationId)?.name ?? publishLocationId)
-    : 'toda la cuenta'
+  // A QUIÉN LE CAMBIA EL ESCAPARATE. Sale del servicio, que es donde vive la
+  // regla; esta pantalla ya no tiene su propia idea de lo que es «el ámbito».
+  const alcance = alcanceDePublicacion(publishLocationId, publishLocations)
+  const ambitoNombre = alcance.frase
+
+  // Los locales que el ENSAYO dice que van a quedar afectados, por nombre. El
+  // desplegable dice lo que se PIDIÓ; los destinos dicen lo que hay conectado,
+  // y es lo segundo lo que se reemplaza. Se ordenan para que la frase no baile.
+  const localesDelEnsayo: string[] = useMemo(() => {
+    const ids = new Set((dryRun?.targets ?? []).map((t) => t.location_id).filter((x): x is string => !!x))
+    const nombres = [...ids].map((id) => publishLocations.find((l) => l.id === id)?.name ?? `local ${id.slice(0, 8)}`)
+    return nombres.sort((x, y) => x.localeCompare(y, 'es'))
+  }, [dryRun, publishLocations])
+
+  const catalogosSinLocal = (dryRun?.targets ?? []).filter((t) => !t.location_id).length
+
+  // CONSENTIMIENTO APARTE. No es un permiso que se niegue: es una consecuencia
+  // que no se puede descubrir después. Se pide cuando la publicación toca más
+  // de un local, y también cuando no se sabe a cuáles toca — que es peor.
+  const necesitaConsentimiento = !!dryRun?.ok
+    && (localesDelEnsayo.length > 1 || (localesDelEnsayo.length === 0 && (dryRun?.targets.length ?? 0) > 0))
 
   async function handlePublish() {
     if (!selectedBrand || publishing || dryRunning) return
     setDryRunning(true)
     setPublishResult(null)
     setDryRun(null)
+    setAsumoVariosLocales(false)
     setError(null)
     try {
       setDryRun(await dryRunBrandCatalog(selectedBrand.id, publishLocationId))
@@ -576,6 +599,12 @@ export default function KitchenMenuPage() {
   // Crea/reusa el catálogo HubRise por local (sin bridge) y publica la carta.
   async function handleConnect() {
     if (!selectedBrand || connecting) return
+    // «Conectar a delivery» TAMBIÉN publica, y sin pasar por el ensayo. Si el
+    // ámbito es más de un local hay que decir cuáles antes de tocar el
+    // escaparate vivo — la misma regla que el botón de publicar.
+    if (alcance.esMultiple && !window.confirm(
+      `Conectar publica la carta de ${selectedBrand.name} y reemplaza el escaparate vivo en ${alcance.frase}.\n\n` +
+      'Si sólo quieres uno, cancela y elígelo en el desplegable de al lado. ¿Seguir?')) return
     setConnecting(true)
     setConnectResult(null)
     setError(null)
@@ -1233,7 +1262,11 @@ export default function KitchenMenuPage() {
                   title="A qué local se publica"
                   className="px-2 py-1.5 text-sm rounded-lg border border-border-default bg-white text-text-primary"
                 >
-                  <option value="">Toda la cuenta (todos los catálogos)</option>
+                  <option value="">
+                    {publishLocations.length > 1
+                      ? `Todos los locales: ${enumeraNombres(publishLocations.map((l) => l.name))}`
+                      : 'Toda la cuenta (todos los catálogos)'}
+                  </option>
                   {publishLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
                 <button
@@ -2282,13 +2315,36 @@ export default function KitchenMenuPage() {
             <div className="px-5 py-4 text-sm text-text-primary space-y-3 max-h-[60vh] overflow-auto">
               {dryRun.error && <p className="text-red-700">{dryRun.error}</p>}
 
-              {dryRun.ok && dryRun.scope === 'all' && (
+              {/* QUÉ LOCALES QUEDAN AFECTADOS, CON SUS NOMBRES. Los nombres
+                  salen de los DESTINOS del ensayo, que es la verdad de a dónde
+                  va: el desplegable dice lo que se pidió, los targets dicen lo
+                  que hay conectado. Si un catálogo no trae local, se dice —no
+                  se cuenta como si supiéramos de quién es. */}
+              {dryRun.ok && localesDelEnsayo.length > 0 && (
+                <div className={`p-3 rounded-lg border flex items-start gap-2 ${
+                  localesDelEnsayo.length > 1 ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-border-default'}`}>
+                  <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${
+                    localesDelEnsayo.length > 1 ? 'text-amber-600' : 'text-text-secondary'}`} />
+                  <p className={`text-xs ${localesDelEnsayo.length > 1 ? 'text-amber-800' : 'text-text-secondary'}`}>
+                    Se reemplaza la carta viva en{' '}
+                    <span className="font-semibold">{enumeraNombres(localesDelEnsayo)}</span>
+                    {catalogosSinLocal > 0 && (
+                      <> y en {catalogosSinLocal} catálogo{catalogosSinLocal === 1 ? '' : 's'} cuya conexión no dice a qué local pertenece</>
+                    )}
+                    .{' '}
+                    {localesDelEnsayo.length > 1 && <>Si sólo quieres uno, ciérralo y elígelo arriba.</>}
+                  </p>
+                </div>
+              )}
+
+              {/* Ningún destino trae local: no se calla, se dice. */}
+              {dryRun.ok && localesDelEnsayo.length === 0 && dryRun.targets.length > 0 && (
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-800">
-                    Ámbito <span className="font-semibold">toda la cuenta</span>: se van a reemplazar los{' '}
-                    <span className="font-semibold">{dryRun.targets.length} catálogos</span> de la marca, en{' '}
-                    <span className="font-semibold">todos</span> sus locales. Si sólo quieres uno, ciérralo y elige el local arriba.
+                    No se puede decir a qué locales afecta: ninguno de los{' '}
+                    {dryRun.targets.length} catálogo(s) de destino tiene local asociado en su conexión.
+                    Publicar reemplaza igualmente el escaparate de esos catálogos.
                   </p>
                 </div>
               )}
@@ -2358,18 +2414,38 @@ export default function KitchenMenuPage() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-border-default bg-gray-50 rounded-b-xl">
-              <button onClick={() => setDryRun(null)}
-                className="px-3.5 py-1.5 text-sm rounded-lg font-medium border border-border-default bg-white text-text-primary hover:bg-page">
-                Cancelar
-              </button>
-              {dryRun.ok && (
-                <button onClick={confirmarPublicacion} disabled={publishing}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-green-600 text-white hover:opacity-90 disabled:opacity-50">
-                  {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                  {publishing ? 'Publicando…' : `Publicar en ${ambitoNombre}`}
-                </button>
+            <div className="px-5 py-3.5 border-t border-border-default bg-gray-50 rounded-b-xl space-y-3">
+              {necesitaConsentimiento && (
+                <label className="flex items-start gap-2 text-xs text-amber-900 cursor-pointer">
+                  <input type="checkbox" className="mt-0.5 shrink-0"
+                    checked={asumoVariosLocales}
+                    onChange={(e) => setAsumoVariosLocales(e.target.checked)} />
+                  <span>
+                    Entiendo que esto reemplaza la carta viva en{' '}
+                    <span className="font-semibold">
+                      {localesDelEnsayo.length > 0 ? enumeraNombres(localesDelEnsayo) : 'los catálogos de destino'}
+                    </span>, ahora mismo y en horario de servicio.
+                  </span>
+                </label>
               )}
+              <div className="flex items-center justify-end gap-2">
+                <button onClick={() => setDryRun(null)}
+                  className="px-3.5 py-1.5 text-sm rounded-lg font-medium border border-border-default bg-white text-text-primary hover:bg-page">
+                  Cancelar
+                </button>
+                {dryRun.ok && (
+                  <button onClick={confirmarPublicacion}
+                    disabled={publishing || (necesitaConsentimiento && !asumoVariosLocales)}
+                    title={necesitaConsentimiento && !asumoVariosLocales
+                      ? 'Marca la casilla: esta publicación afecta a más de un local'
+                      : undefined}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-green-600 text-white hover:opacity-90 disabled:opacity-50">
+                    {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                    {publishing ? 'Publicando…'
+                      : `Publicar en ${localesDelEnsayo.length > 0 ? enumeraNombres(localesDelEnsayo) : ambitoNombre}`}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

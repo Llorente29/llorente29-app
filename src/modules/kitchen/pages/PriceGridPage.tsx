@@ -71,7 +71,6 @@ import {
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
-import { supabase } from '@/lib/supabase'
 import { fmtMoney, fmtNumEs, fmtPct } from '@/lib/format'
 import type { Brand } from '@/types/multitenancy'
 import {
@@ -86,7 +85,10 @@ import {
   listChannelRoutes, veredicto, esEditable, llegaAPlataforma, ROUTE_LABEL, ROUTE_NOTA,
   type RouteRow, type RouteVerdict,
 } from '@/modules/kitchen/services/channelRouteService'
-import { publishBrandCatalog, type PublishResult } from '@/modules/kitchen/services/catalogPublishService'
+import {
+  publishBrandCatalog, listPublishLocations, alcanceDePublicacion, enumeraNombres,
+  type PublishResult, type LocalPublicable,
+} from '@/modules/kitchen/services/catalogPublishService'
 
 // Formato: SIEMPRE dos decimales y símbolo al mostrar (fmtMoney), y coma sin
 // símbolo al sembrar un campo editable (fmtNumEs). Los dos salen de
@@ -141,7 +143,7 @@ export default function PriceGridPage() {
 
   const [brands, setBrands] = useState<Brand[]>([])
   const [brandId, setBrandId] = useState<string | null>(null)
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([])
+  const [locations, setLocations] = useState<LocalPublicable[]>([])
   // null = el precio de la marca, el mismo en todos sus locales.
   // Un id = ese local. Es LA variable: manda sobre lo que se escribe, sobre lo
   // que dice la barra de guardado y sobre a dónde publica el botón.
@@ -196,9 +198,13 @@ export default function PriceGridPage() {
   const hayPendientes = pendientes.size > 0
 
   // El nombre del SITIO, como lo diría el usuario. Nunca «ámbito».
-  const dondeNombre = locationId
-    ? (locations.find((l) => l.id === locationId)?.name ?? locationId)
-    : (locations.length === 1 ? (locations[0]?.name ?? 'el local') : `los ${locations.length} locales`)
+  //
+  // (02/09) Sale del servicio, no de aquí. Esta pantalla decía «los 3 locales»
+  // y la carta de marcas decía «toda la cuenta» para exactamente lo mismo: dos
+  // copias de la misma idea, ya discrepando. Y ninguna de las dos decía los
+  // NOMBRES, que es lo único que deja saber a quién le cambia el escaparate.
+  const alcance = alcanceDePublicacion(locationId, locations)
+  const dondeNombre = alcance.frase
 
   // ── Salir con pendientes AVISA ───
   // Dos puertas, porque son dos salidas distintas.
@@ -254,12 +260,12 @@ export default function PriceGridPage() {
     // ahí. Sin este filtro el desplegable ofrecería un local cerrado y el texto
     // diría «los 3 locales» cuando son 2 — y ese número es el que el usuario
     // lee antes de escribir. Un local cerrado no tiene precios que poner.
-    supabase?.from('locations').select('id, name').eq('account_id', activeAccountId)
-      .eq('active', true).order('name')
-      .then(({ data, error: e }) => {
-        if (e) setError(`No se han podido cargar los locales: ${e.message}. Sólo se puede poner el mismo precio para todos.`)
-        setLocations((data ?? []) as Array<{ id: string; name: string }>)
-      })
+    // (02/09) UNA sola consulta de locales, la del servicio. Esta pantalla
+    // tenía la suya con `active = true` y la del publicador no filtraba: dos
+    // consultas para la misma pregunta, y la otra ofrecía un local cerrado.
+    listPublishLocations(activeAccountId)
+      .then(setLocations)
+      .catch((e) => setError(`No se han podido cargar los locales: ${e instanceof Error ? e.message : String(e)}. Sólo se puede poner el mismo precio para todos.`))
     getAccountIsInternal(activeAccountId).then(setCuentaInterna).catch(() => setCuentaInterna(false))
     // Las rutas de publicación. Si fallan se degrada a «sin declarar», que deja
     // escribir y avisa: perder la pantalla de precios por no poder leer una
@@ -619,6 +625,13 @@ export default function PriceGridPage() {
    */
   async function publicarAhora() {
     if (!brandId || publicando) return
+    // Publicar reemplaza el escaparate VIVO. Si son varios locales, se dice
+    // cuáles por su nombre y se pide un sí aparte: no es un permiso que se
+    // niegue, es una consecuencia que no se puede descubrir después. Aquí no
+    // hay ensayo previo, así que este es el último sitio donde avisar.
+    if (alcance.esMultiple && !window.confirm(
+      `Vas a reemplazar la carta viva en ${alcance.frase}, ahora mismo y en horario de servicio.\n\n` +
+      'Si sólo quieres uno, cancela y elígelo en «Dónde». ¿Publicar?')) return
     setPublicando(true); setAviso(null)
     try {
       setResultadoPublicar(await publishBrandCatalog(brandId, locationId))
@@ -693,7 +706,9 @@ export default function PriceGridPage() {
           value={locationId ?? ''}
           onChange={(e) => { const v = e.target.value || null; cambiarContexto(() => setLocationId(v)) }}>
           {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          {locations.length > 1 && <option value="">Los {locations.length} locales, el mismo precio</option>}
+          {locations.length > 1 && (
+            <option value="">{enumeraNombres(locations.map((l) => l.name))} — el mismo precio</option>
+          )}
         </select>
 
         <div className="flex rounded-lg overflow-hidden border border-linea-fuerte ml-auto">

@@ -85,15 +85,100 @@ export interface DryRunResult {
   nota?: string
 }
 
-/** Locales de la cuenta, para elegir ámbito antes de publicar. */
-export async function listPublishLocations(accountId: string): Promise<Array<{ id: string; name: string }>> {
+/** Un local, tal y como lo necesita cualquier pantalla que publique. */
+export interface LocalPublicable { id: string; name: string }
+
+/**
+ * Locales de la cuenta, para elegir ámbito antes de publicar.
+ *
+ * SÓLO LOS ABIERTOS (02/09). Hasta hoy esta consulta no filtraba `active` y la
+ * rejilla de precios sí: dos pantallas que publican la misma carta contaban
+ * locales distintos, y la carta de marcas ofrecía «Plaza Castilla», que está
+ * cerrado. Es la Regla 10 en su forma más barata de arreglar: una consulta.
+ */
+export async function listPublishLocations(accountId: string): Promise<LocalPublicable[]> {
   if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
   const { data, error } = await supabase
-    .from('locations').select('id, name').eq('account_id', accountId).order('name')
+    .from('locations').select('id, name')
+    .eq('account_id', accountId).eq('active', true).order('name')
   // El error NO se traga: sin locales el selector se queda en "toda la cuenta"
   // como única opción y publicar tocaría los dos escaparates sin que se sepa.
   if (error) throw new Error(`No se han podido cargar los locales: ${error.message}`)
-  return (data ?? []) as Array<{ id: string; name: string }>
+  return (data ?? []) as LocalPublicable[]
+}
+
+// ── A QUIÉN LE CAMBIA EL ESCAPARATE (02/09) ────────────────────────────────
+// Publicar una carta REEMPLAZA el catálogo vivo en cada local del ámbito. Hasta
+// hoy las dos pantallas que publican decían el ámbito con un NÚMERO —«toda la
+// cuenta», «los 3 locales»— y nunca con los nombres. Un número no es un aviso:
+// quien pulsa no puede saber que acaba de republicar el escaparate de Alcalá en
+// horario de servicio hasta que se lo cuentan.
+//
+// La regla, y vale para Julio igual que para José: la pantalla dice QUÉ LOCALES
+// quedan afectados, con sus nombres, y si son más de uno pide un consentimiento
+// aparte. No es un permiso que se le niegue a nadie: es una consecuencia que no
+// se puede descubrir después.
+//
+// Vive AQUÍ y en ningún otro sitio. Las dos pantallas tenían cada una su copia
+// —`ambitoNombre` y `dondeNombre`— y ya discrepaban: una decía «toda la cuenta»
+// y la otra «los 3 locales» para exactamente lo mismo. Regla 10.
+
+export interface AlcancePublicacion {
+  /** Los locales que quedan afectados. Vacío sólo si no se han podido leer. */
+  ids: string[]
+  nombres: string[]
+  /** Como lo diría una persona: «Foodint Alcalá y Foodint Carabanchel». */
+  frase: string
+  /** Más de un local: la consecuencia no es obvia y hay que consentirla. */
+  esMultiple: boolean
+  /** No se sabe a qué locales va. Se dice; no se adivina ni se calla. */
+  desconocido: boolean
+}
+
+/** «A», «A y B», «A, B y C». Todos, siempre: un umbral ordena, no esconde. */
+export function enumeraNombres(nombres: string[]): string {
+  if (nombres.length === 0) return ''
+  if (nombres.length === 1) return nombres[0]
+  return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
+}
+
+/**
+ * De la elección del usuario a los locales de verdad, con nombre y todo.
+ * `locationId === null` significa «toda la cuenta», que es justo el caso en el
+ * que hay que decir nombres, no contar.
+ */
+export function alcanceDePublicacion(
+  locationId: string | null, locales: LocalPublicable[],
+): AlcancePublicacion {
+  if (locationId) {
+    const l = locales.find((x) => x.id === locationId)
+    if (!l) {
+      // El id no está en la lista: pudo fallar la carga. No se inventa un nombre.
+      return {
+        ids: [locationId], nombres: [], esMultiple: false, desconocido: true,
+        frase: 'un local que no se ha podido identificar',
+      }
+    }
+    return { ids: [l.id], nombres: [l.name], frase: l.name, esMultiple: false, desconocido: false }
+  }
+
+  if (locales.length === 0) {
+    // Toda la cuenta y no sabemos cuántos son. Es el peor caso posible para
+    // pulsar a ciegas, así que se trata como múltiple: pide consentimiento.
+    return {
+      ids: [], nombres: [], esMultiple: true, desconocido: true,
+      frase: 'todos los locales de la cuenta (no se han podido leer sus nombres)',
+    }
+  }
+
+  const nombres = locales.map((l) => l.name)
+  return {
+    ids: locales.map((l) => l.id),
+    nombres,
+    frase: enumeraNombres(nombres),
+    esMultiple: locales.length > 1,
+    desconocido: false,
+  }
 }
 
 /**
