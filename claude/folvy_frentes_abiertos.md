@@ -41,6 +41,13 @@ otras 21 pasan sin que nadie se entere.
 con el CLI (`npm run gen:types`, necesita token de Supabase), o el chequeo
 estricto se extiende a los demás servicios.
 
+**Mordió el 02/09:** `schedules`, `employees` y `vacations` tienen `account_id`
+en la base —verificado en `information_schema`— y NO lo tenían en el fichero de
+tipos, así que filtrar por cuenta no compilaba. Se parchearon esas tres tablas a
+mano (Row/Insert/Update) en vez de quitar el filtro: la BBDD es la verdad y la
+regla 9 no se negocia por un fichero desactualizado. Quedan 20 RPC y las demás
+tablas por revisar.
+
 **Aviso para quien lo haga:** regenerar con el generador del MCP NO es
 equivalente. Produce 202 errores en 26 ficheros (`RejectExcessProperties`,
 `account_id` obligatorio en los Insert) porque es una versión más nueva que la

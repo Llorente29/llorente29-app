@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   diaNatural, diasNaturalesEntre, diaDelNegocio, diaEspejo, diaAnterior,
+  lunesDeLaSemana, semanasEntre,
 } from '@/lib/fechas'
 
 describe('diaNatural', () => {
@@ -81,5 +82,31 @@ describe('diaEspejo y diaAnterior', () => {
   })
   it('«ayer» el día siguiente al cambio de hora sigue siendo el día anterior', () => {
     expect(diaAnterior(new Date('2026-10-26T10:00:00Z')).ymd).toBe('2026-10-25')
+  })
+})
+
+describe('lunesDeLaSemana', () => {
+  it('el miércoles 2/09/2026 pertenece a la semana del lunes 31/08', () => {
+    expect(lunesDeLaSemana(new Date('2026-09-02T08:00:00Z'))).toBe('2026-08-31')
+  })
+  it('un lunes es su propio lunes', () => {
+    expect(lunesDeLaSemana(new Date('2026-08-31T10:00:00Z'))).toBe('2026-08-31')
+  })
+  // El domingo cierra la semana, no abre la siguiente: si no, el cuadrante del
+  // domingo por la noche sería el de la semana que aún no ha empezado.
+  it('el domingo pertenece a la semana que termina', () => {
+    expect(lunesDeLaSemana(new Date('2026-09-06T20:00:00Z'))).toBe('2026-08-31')
+  })
+  it('a las 23:30 UTC del domingo ya es lunes en Madrid: semana nueva', () => {
+    expect(lunesDeLaSemana(new Date('2026-09-06T23:30:00Z'))).toBe('2026-09-07')
+  })
+})
+
+describe('semanasEntre', () => {
+  it('el caso real: Carabanchel publicó por última vez la semana del 3/08', () => {
+    expect(semanasEntre('2026-08-03', '2026-08-31')).toBe(4)
+  })
+  it('cruzando el cambio de hora sigue contando semanas enteras', () => {
+    expect(semanasEntre('2026-10-19', '2026-11-02')).toBe(2)
   })
 })

@@ -39,6 +39,7 @@ import InformesPage from '@/pages/InformesPage'
 import InformesTeamPage from '@/pages/InformesTeamPage'
 import NominasPage from '@/pages/NominasPage'
 import BolsaHorasPage from '@/pages/BolsaHorasPage'
+import Cuadrantes from '@/modules/personal/home/Cuadrantes'
 
 export const personalModule: ModuleDefinition = {
   id: 'personal',
@@ -93,5 +94,18 @@ export const personalModule: ModuleDefinition = {
   publishes: [
     { key: 'personal.employee.created', description: 'Se ha creado un empleado' },
     { key: 'personal.clock.in',         description: 'Un empleado ha fichado' },
+  ],
+  // ── TARJETAS QUE ESTE MÓDULO APORTA AL INICIO ────────────────────────────
+  // §1.6 de la maqueta. Sin cifra grande: una fila por local con su estado.
+  homeCards: [
+    {
+      key: 'personal.cuadrantes',
+      title: 'Cuadrantes',
+      size: 'sm',
+      source: 'schedules',
+      drill: { ruta: '/personal/calendario', etiqueta: 'Abrir Team · Calendario →' },
+      requiredRole: 'manager',
+      component: Cuadrantes,
+    },
   ],
 }

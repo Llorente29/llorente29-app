@@ -7077,6 +7077,7 @@ export type Database = {
       }
       employees: {
         Row: {
+          account_id: string
           active: boolean
           assigned_locations: string[] | null
           availability: Json | null
@@ -7116,6 +7117,7 @@ export type Database = {
           weekly_schedule: Json | null
         }
         Insert: {
+          account_id?: string
           active?: boolean
           assigned_locations?: string[] | null
           availability?: Json | null
@@ -7155,6 +7157,7 @@ export type Database = {
           weekly_schedule?: Json | null
         }
         Update: {
+          account_id?: string
           active?: boolean
           assigned_locations?: string[] | null
           availability?: Json | null
@@ -13971,6 +13974,7 @@ export type Database = {
       }
       schedules: {
         Row: {
+          account_id: string
           cells: Json
           coverage_overrides: Json
           created_at: string
@@ -13983,6 +13987,7 @@ export type Database = {
           week_start: string
         }
         Insert: {
+          account_id?: string
           cells?: Json
           coverage_overrides?: Json
           created_at?: string
@@ -13995,6 +14000,7 @@ export type Database = {
           week_start: string
         }
         Update: {
+          account_id?: string
           cells?: Json
           coverage_overrides?: Json
           created_at?: string
@@ -16530,6 +16536,7 @@ export type Database = {
       }
       vacations: {
         Row: {
+          account_id: string
           alert_lead_time: boolean | null
           alert_min_staff: boolean | null
           created_at: string
@@ -16548,6 +16555,7 @@ export type Database = {
           type: string
         }
         Insert: {
+          account_id?: string
           alert_lead_time?: boolean | null
           alert_min_staff?: boolean | null
           created_at?: string
@@ -16566,6 +16574,7 @@ export type Database = {
           type: string
         }
         Update: {
+          account_id?: string
           alert_lead_time?: boolean | null
           alert_min_staff?: boolean | null
           created_at?: string

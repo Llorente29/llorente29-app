@@ -93,3 +93,22 @@ export function diaEspejo(d: Date): { desde: Date; hasta: Date; ymd: string } {
 export function diaAnterior(d: Date): { desde: Date; hasta: Date; ymd: string } {
   return diaDelNegocio(new Date(diaDelNegocio(d).desde.getTime() - 12 * 3600_000))
 }
+
+/** El lunes de la semana del negocio que contiene `d`, como 'YYYY-MM-DD'. */
+export function lunesDeLaSemana(d: Date): string {
+  const ymd = diaNatural(d)
+  const [y, m, dd] = ymd.split('-').map(Number)
+  // Se opera sobre un UTC "plano" construido con las partes del día del
+  // negocio: así el día de la semana es el de Madrid, no el del navegador.
+  const plano = new Date(Date.UTC(y, m - 1, dd))
+  const dow = plano.getUTCDay()            // 0 domingo … 6 sábado
+  const alLunes = dow === 0 ? 6 : dow - 1  // el domingo pertenece a la semana que acaba
+  plano.setUTCDate(plano.getUTCDate() - alLunes)
+  return plano.toISOString().slice(0, 10)
+}
+
+/** Semanas enteras entre dos lunes 'YYYY-MM-DD'. */
+export function semanasEntre(lunesA: string, lunesB: string): number {
+  const t = (s: string) => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) }
+  return Math.round((t(lunesB) - t(lunesA)) / (7 * 86_400_000))
+}
