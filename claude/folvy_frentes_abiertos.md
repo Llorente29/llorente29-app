@@ -106,3 +106,56 @@ cambio y no una búsqueda.
 
 **De dónde sale:** de arreglar el conteo de días del 86 el 02/09, donde el
 cálculo por horas transcurridas daba 4 y la base decía 5.
+
+---
+
+## 6 · Tablets de cocina: el aviso funcionaba y nadie lo leyó
+**Abierto:** 02/09/2026 · **Cerrado el incidente, abierto el frente**
+
+Del 27/08 al 01/09 la tablet «Cocina» de Alcalá estuvo cinco días fuera. Causa
+real: **perdió su token**. Ninguna de las tres hipótesis que se barajaron —red,
+runtime congelado, token compartido— era la buena. En cuanto se revinculó cogió
+los 45 bundles pendientes de una vez, así que el bucle de versión nunca estuvo
+roto. Hoy las tres tablets están en el bundle 230 y latiendo.
+
+### Lo que se midió antes de decidir el orden
+
+| | |
+|---|---|
+| Avisos `kds_device_silencio` del 27/08 al 02/09 | **28** |
+| De ellos, **entregados** | **28** (`sent_at` en todos) |
+| Primer aviso | 27/08 **13:25** (la tablet llevaba 13 min callada) |
+| Qué decía | nombre de la tablet, local, minutos, versión **y el remedio** |
+| Avisos sin enviar | 0 |
+
+El aviso decía literalmente: *«La tablet "Pase" del local Foodint Alcalá lleva 13
+minutos sin dar señal de vida, en horario de servicio. […] Si la pantalla pide
+vincular, apagar y encender la tablet suele bastar.»*
+
+**El sensor funcionó, el mensaje era bueno y la entrega también.** Lo que falló
+es que el aviso llegó a un sitio donde nadie lo mira. Veintiocho veces.
+
+### Por qué esto reordena las tres piezas
+
+La pieza que parecía primera —que `kds_heartbeat` registre los tokens
+desconocidos en vez de devolver `false` y tirar la evidencia— **no habría
+acortado los cinco días**: habría añadido detalle a un aviso que ya se estaba
+mandando y ya se estaba ignorando. Sigue mereciendo la pena, pero es la tercera.
+
+**Orden propuesto:** (1) que el aviso llegue a alguien que actúe — es el mismo
+problema que el frente 3, y un solo arreglo sirve para los dos; (2) el código
+corto de seis dígitos, que es lo que convierte la próxima caída de días en
+minutos, porque hoy revincular en pleno servicio es imposible: «Escanear» no
+puede pedir cámara en la APK y la alternativa es teclear cincuenta caracteres;
+(3) registrar el token desconocido con su hora; (4) averiguar por qué se
+desvinculó sola.
+
+**Dato para (4), y no cuadra con lo que se recordaba:** la desvinculación se dio
+por ocurrida a las 20:26 del 27/08, pero los avisos sitúan a «Pase» callada
+**desde las 13:12** y a «Cocina» **desde las 18:27** de ese mismo día. Son dos
+aparatos, en dos momentos, y ninguno a las 20:26. La ventana a investigar es
+esa, no la otra.
+
+**Y una pieza de la (2) que cuesta minutos y se puede hacer aparte:** que el
+botón «Escanear» no esté cuando la cámara no puede funcionar. Un botón que no
+puede cumplir es peor que ningún botón.
