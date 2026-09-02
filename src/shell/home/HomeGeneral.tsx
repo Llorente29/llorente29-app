@@ -47,6 +47,7 @@ import {
   mover, alternar, type CatalogEntry,
 } from './homeCatalog'
 import { LAYOUT_POR_DEFECTO } from './cards/shellCards'
+import { construyeUrl } from './drill'
 import { HomeMetricsProvider } from './cards/HomeMetricsProvider'
 import {
   getGating, getUserLayout, getRoleDefault, saveUserLayout, restoreUserLayout,
@@ -58,7 +59,6 @@ const MUTED = 'var(--color-text-secondary)'
 
 interface HomeGeneralProps {
   userName?: string
-  onOpenModule?: (moduleId: string) => void
 }
 
 function greeting(): string {
@@ -89,7 +89,12 @@ const ORIGEN_TEXTO: Record<Origen, string> = {
   fabrica: 'el Inicio por defecto',
 }
 
-export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps) {
+// (02/09) YA NO RECIBE `onOpenModule`. Navegaba por ID DE MÓDULO, y el id de
+// las tarjetas del shell es 'shell', que no existe en el registro: el click no
+// hacía nada. El Inicio navega ahora por RUTA (drill.ts), que es un dato que se
+// puede pegar en la barra del navegador y comprobar. Se quita la prop en vez de
+// dejarla sin usar: una puerta tapiada que sigue teniendo pomo se vuelve a abrir.
+export default function HomeGeneral({ userName }: HomeGeneralProps) {
   const isMobile = useIsMobile()
   const { activeAccountId, authUserId, roleInActiveAccount } = useApp()
   const { resolvedLocationId, isConsolidated } = useLocationScope()
@@ -308,7 +313,7 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
                 <Card
                   accountId={activeAccountId}
                   locationId={resolvedLocationId}
-                  onDrill={c.drillRoute ? () => onOpenModule?.(c.moduleId) : undefined}
+                  drillTo={c.drill ? (d) => navigate(construyeUrl(d)) : undefined}
                 />
               </div>
             )
@@ -389,11 +394,11 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
                             <span className="block text-sm text-text-primary truncate">{c.title}</span>
                             {c.description && <span className="block text-[11px] text-text-secondary truncate">{c.description}</span>}
                           </span>
-                          {c.drillRoute && (
+                          {c.drill && (
                             <span
                               role="link" tabIndex={0}
-                              onClick={e => { e.stopPropagation(); onOpenModule?.(c.moduleId) }}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); onOpenModule?.(c.moduleId) } }}
+                              onClick={e => { e.stopPropagation(); navigate(c.drill!.ruta) }}
+                              onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); navigate(c.drill!.ruta) } }}
                               className="text-[11px] text-text-secondary underline shrink-0 cursor-pointer">
                               ver
                             </span>

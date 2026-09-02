@@ -12,6 +12,9 @@
 import type { ComponentType } from 'react'
 import type { RouteObject } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
+import type { DrillDestino } from './home/drill'
+
+export type { DrillDestino }
 
 // ─── Roles y planes (re-export ligero para no acoplar) ─────────────────────
 // El rol vive en el modelo de multitenancy; aquí solo tipamos el mínimo que
@@ -75,11 +78,15 @@ export interface HomeCardProps {
   /** Local activo, o null en consolidado («todos los locales»). */
   locationId: string | null
   /**
-   * Ir a donde lleva esta tarjeta (`drillRoute`). El Inicio lo ata a cada
-   * tarjeta; la tarjeta decide si lo usa y donde lo pone. Ausente = esta
-   * tarjeta no lleva a ningun sitio, y entonces no se pinta como pulsable.
+   * Ir a donde lleva esta tarjeta. La tarjeta construye su destino —ruta mas
+   * filtros— porque los filtros dependen de SUS datos: el rango de «ventas de
+   * ayer» no se sabe hasta que se sabe que dia era ayer.
+   *
+   * (02/09) Sustituye al `onDrill` sin argumentos, que el Inicio ataba contra
+   * `moduleId: 'shell'` — un id que no existe en el registro — y no hacia nada.
+   * Ver src/shell/home/drill.ts.
    */
-  onDrill?: () => void
+  drillTo?: (destino: DrillDestino) => void
 }
 
 export interface HomeCardDefinition {
@@ -89,8 +96,13 @@ export interface HomeCardDefinition {
   description?: string
   /** Ancho en el mosaico. Coincide con home_card_catalog.size. */
   size: 'sm' | 'md' | 'lg'
-  /** A donde lleva al pulsarla. Ruta absoluta dentro de la cuenta. */
-  drillRoute?: string
+  /**
+   * A donde lleva al pulsarla, SIN filtros: es el destino estatico, el que el
+   * cajon puede enseñar sin renderizar la tarjeta. Los filtros los añade el
+   * componente con `drillTo`, porque salen de sus datos.
+   * Ausente = esta tarjeta no lleva a ningun sitio y no se pinta pulsable.
+   */
+  drill?: DrillDestino
   /** De donde sale el dato. INFORMATIVO: quien consulta es el componente. */
   source?: string
   /** Rol minimo. P1: solo `admin` tiene Inicio; `worker` sigue en su portal. */

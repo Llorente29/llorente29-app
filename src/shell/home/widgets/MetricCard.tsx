@@ -20,10 +20,16 @@ export interface MetricCardProps {
   subtitle?: string
   subtitleTone?: MetricTone
   accent?: boolean
+  /**
+   * EL PIE DE LA MAQUETA: «Abrir Ventas →». Va DENTRO de la tarjeta y como
+   * enlace visible, no como un click en toda la caja: una tarjeta entera
+   * pulsable no dice a dónde lleva, y lo que no dice a dónde lleva no se pulsa.
+   */
+  pie?: { etiqueta: string; onClick: () => void }
 }
 
 export default function MetricCard({
-  label, value, icon: Icon, subtitle, subtitleTone = 'neutral', accent = false,
+  label, value, icon: Icon, subtitle, subtitleTone = 'neutral', accent = false, pie,
 }: MetricCardProps) {
   const subtitleColor =
     subtitleTone === 'positive' ? 'var(--color-success)'
@@ -61,6 +67,19 @@ export default function MetricCard({
         <p style={{ fontSize: '0.75rem', color: subtitleColor, margin: '0.25rem 0 0' }}>
           {subtitle}
         </p>
+      ) : null}
+      {pie ? (
+        <button
+          type="button"
+          onClick={pie.onClick}
+          style={{
+            marginTop: '0.625rem', padding: 0, border: 0, background: 'none',
+            font: 'inherit', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+            color: 'var(--color-accent)', textAlign: 'left',
+          }}
+        >
+          {pie.etiqueta}
+        </button>
       ) : null}
     </div>
   )

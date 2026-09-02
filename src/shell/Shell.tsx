@@ -309,7 +309,7 @@ export default function Shell() {
       ) : (
         <main className="flex-1 w-full min-w-0">
           <div style={contentStyle}>
-            <HomeGeneral userName={userName} onOpenModule={goToKey} />
+            <HomeGeneral userName={userName} />
           </div>
         </main>
       )}

@@ -24,6 +24,7 @@ import { Banknote, Users, BarChart3 } from 'lucide-react'
 import MetricCard from '../widgets/MetricCard'
 import ModuleSummaryCard from '../widgets/ModuleSummaryCard'
 import type { HomeCardProps } from '../../types'
+import type { DrillDestino } from '../drill'
 import { useHomeMetrics } from './homeMetricsContext'
 
 // Formateo seguro heredado del Inicio: null → «—», nunca un 0 inventado.
@@ -42,18 +43,22 @@ function num(n: number | null | undefined): string {
 // comparación, es una resta que da miedo a las once de la mañana. Mientras el
 // espejo no esté (siguiente sub-lote), se enseña el número y nada más: un
 // delta mal calculado es peor que ningún delta.
-export function VentasHoy() {
+const A_VENTAS: DrillDestino = { ruta: '/ventas', etiqueta: 'Abrir Ventas →' }
+const A_AHORA: DrillDestino = { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' }
+
+export function VentasHoy({ drillTo }: HomeCardProps) {
   const { metrics, loading } = useHomeMetrics()
   return (
     <MetricCard
       label="Ventas hoy"
       value={loading ? '…' : eur(metrics?.ventasHoy ?? null)}
       icon={Banknote}
+      pie={drillTo ? { etiqueta: A_VENTAS.etiqueta, onClick: () => drillTo(A_VENTAS) } : undefined}
     />
   )
 }
 
-export function TrabajandoAhora() {
+export function TrabajandoAhora({ drillTo }: HomeCardProps) {
   const { metrics, loading } = useHomeMetrics()
   const n = metrics?.numLocales
   return (
@@ -62,26 +67,27 @@ export function TrabajandoAhora() {
       value={loading ? '…' : num(metrics?.trabajandoAhora ?? null)}
       icon={Users}
       subtitle={loading ? undefined : n != null ? `en ${n} ${n === 1 ? 'local' : 'locales'}` : undefined}
+      pie={drillTo ? { etiqueta: A_AHORA.etiqueta, onClick: () => drillTo(A_AHORA) } : undefined}
     />
   )
 }
 
-export function ResumenTeam({ onDrill }: HomeCardProps) {
+export function ResumenTeam({ drillTo }: HomeCardProps) {
   const { metrics } = useHomeMetrics()
   return (
     <ModuleSummaryCard
-      title="Team" icon={Users} onOpen={onDrill}
+      title="Team" icon={Users} onOpen={drillTo ? () => drillTo(A_AHORA) : undefined}
       lines={[
         { text: `${metrics?.trabajandoAhora != null ? metrics.trabajandoAhora : '—'} trabajando ahora` },
       ]}
     />
   )
 }
-export function ResumenSales({ onDrill }: HomeCardProps) {
+export function ResumenSales({ drillTo }: HomeCardProps) {
   const { metrics, loading } = useHomeMetrics()
   return (
     <ModuleSummaryCard
-      title="Sales" icon={BarChart3} onOpen={onDrill}
+      title="Sales" icon={BarChart3} onOpen={drillTo ? () => drillTo(A_VENTAS) : undefined}
       lines={[
         { text: `Ticket medio: ${loading ? '…' : eur(metrics?.ticketMedio7d ?? null)}` },
         { text: `${loading ? '…' : num(metrics?.numPedidos7d ?? null)} pedidos (7 días)` },

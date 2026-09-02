@@ -39,10 +39,14 @@ import {
  * hasta que decida personalizarlo.
  */
 export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
-  { key: 'shell.ventas_hoy',       title: 'Ventas hoy',        size: 'sm', source: 'sale',                  drillRoute: 'ventas',   component: VentasHoy },
-  { key: 'shell.trabajando_ahora', title: 'Trabajando ahora',  size: 'sm', source: 'employee_clock_status', drillRoute: 'personal', component: TrabajandoAhora },
-  { key: 'shell.resumen_team',     title: 'Resumen de Team',   size: 'md', source: 'employee_clock_status', drillRoute: 'personal', component: ResumenTeam },
-  { key: 'shell.resumen_sales',    title: 'Resumen de Sales',  size: 'md', source: 'sale',                  drillRoute: 'ventas',   component: ResumenSales },
+  { key: 'shell.ventas_hoy',       title: 'Ventas hoy',        size: 'sm', source: 'sale',
+    drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' }, component: VentasHoy },
+  { key: 'shell.trabajando_ahora', title: 'Trabajando ahora',  size: 'sm', source: 'employee_clock_status',
+    drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' }, component: TrabajandoAhora },
+  { key: 'shell.resumen_team',     title: 'Resumen de Team',   size: 'md', source: 'employee_clock_status',
+    drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' }, component: ResumenTeam },
+  { key: 'shell.resumen_sales',    title: 'Resumen de Sales',  size: 'md', source: 'sale',
+    drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' }, component: ResumenSales },
 ]
 
 /** El defecto de fábrica: lo que ve quien nunca ha personalizado nada. */
