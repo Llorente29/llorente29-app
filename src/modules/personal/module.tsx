@@ -40,6 +40,7 @@ import InformesTeamPage from '@/pages/InformesTeamPage'
 import NominasPage from '@/pages/NominasPage'
 import BolsaHorasPage from '@/pages/BolsaHorasPage'
 import Cuadrantes from '@/modules/personal/home/Cuadrantes'
+import EnCocinaAhora from '@/modules/personal/home/EnCocinaAhora'
 
 export const personalModule: ModuleDefinition = {
   id: 'personal',
@@ -106,6 +107,15 @@ export const personalModule: ModuleDefinition = {
       drill: { ruta: '/personal/calendario', etiqueta: 'Abrir Team · Calendario →' },
       requiredRole: 'manager',
       component: Cuadrantes,
+    },
+    {
+      key: 'personal.en_cocina_ahora',
+      title: 'En cocina ahora',
+      size: 'sm',
+      source: 'clock_entries',
+      drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' },
+      requiredRole: 'manager',
+      component: EnCocinaAhora,
     },
   ],
 }

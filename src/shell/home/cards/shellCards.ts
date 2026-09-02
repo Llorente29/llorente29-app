@@ -60,6 +60,7 @@ export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
 export const LAYOUT_POR_DEFECTO: string[] = [
   'ventas.ayer',                   // §1.1 de la maqueta
   'kitchen.productos_86',          // §1.4 de la maqueta
+  'personal.en_cocina_ahora',      // §1.x de la maqueta
   'personal.cuadrantes',           // §1.6 de la maqueta
   ...SHELL_HOME_CARDS.map(c => c.key),
 ]

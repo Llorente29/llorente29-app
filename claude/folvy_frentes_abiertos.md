@@ -29,13 +29,31 @@ que hoy funciona. Necesita su propio RECON.
 
 ---
 
-## 2 · 23 de las 232 RPC que llama el front no están en el fichero de tipos
-**Abierto:** 02/09/2026 · **Medido sobre `src/` y `src/types/database.ts`**
+## 2 · El fichero de tipos ha divergido de la base — PRIORIDAD ALTA
+**Abierto:** 02/09/2026 · **Subido de prioridad el mismo día, tras morder dos veces**
+
+Ya no es una deuda teórica. El 02/09 **impidió escribir un filtro por cuenta**,
+que es la regla 9, y obligó a parchear tres tablas a mano.
+
+**Y el parche manual es el problema, no la solución.** Cada uno es una
+divergencia más entre el fichero y la base, y el día que alguien regenere se
+los lleva por delante sin enterarse: el build volverá a fallar donde hoy
+compila, y quien lo regenere no tendrá forma de saber qué se acaba de perder.
+Los parches de hoy están anotados aquí precisamente para que ese día se sepa
+qué había.
 
 Se puede llamar a una función que no existe y descubrirlo en producción. Hoy
 solo dos rompieron el build —`kitchen_archive_item` y `kitchen_unarchive_item`—
 y fue por casualidad: solo `recipeItemService` está tipado en estricto. Las
 otras 21 pasan sin que nadie se entere.
+
+### La cuenta de mordeduras de hoy
+
+| Cuándo | Qué pasó |
+|---|---|
+| 02/09 mañana | `kitchen_archive_item` y `kitchen_unarchive_item` rompen el build |
+| 02/09 tarde | `schedules`, `employees` y `vacations` sin `account_id`: **el filtro de cuenta no compila**. Parcheadas a mano las tres (Row/Insert/Update) |
+| 02/09 tarde | `employee_clock_status` no está entre las RPC tipadas. Se resuelve con `src/lib/rpcSinTipar.ts`, un puente ÚNICO y borrable, para no seguir divergiendo el fichero generado |
 
 **Las dos salidas, y hay que elegir una:** o el fichero se regenera de verdad
 con el CLI (`npm run gen:types`, necesita token de Supabase), o el chequeo
