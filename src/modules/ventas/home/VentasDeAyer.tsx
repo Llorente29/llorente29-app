@@ -90,9 +90,10 @@ export default function VentasDeAyer({ accountId, locationId, drillTo }: HomeCar
     <TarjetaInicio
       titulo={`Ventas · ayer ${nombreDeAyer}`}
       icono={Banknote}
-      cifra={datos ? eur(datos.ayer.total) : '—'}
+      cifra={datos ? eur(datos.ayer.total) : undefined}
       cargando={cargando && datos == null}
       error={error}
+      hayDato={datos != null}
       delta={delta}
       filas={filas}
       // Sin espejo no se pinta tendencia (regla 1 de la garantía b), pero se

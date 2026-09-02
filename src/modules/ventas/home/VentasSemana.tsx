@@ -65,9 +65,10 @@ export default function VentasSemana({ accountId, locationId, drillTo }: HomeCar
     <TarjetaInicio
       titulo="Ventas · esta semana"
       icono={TrendingDown}
-      cifra={datos ? eur0(datos.semana.total) : '—'}
+      cifra={datos ? eur0(datos.semana.total) : undefined}
       cargando={cargando && datos == null}
       error={error}
+      hayDato={datos != null}
       delta={delta}
       // Sin espejo utilizable se DICE por qué falta, en vez de dejar el hueco.
       nota={porque

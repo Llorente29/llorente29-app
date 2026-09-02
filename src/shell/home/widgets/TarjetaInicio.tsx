@@ -32,6 +32,7 @@ import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import type { TonoDelta } from '../espejo'
 import type { Sello } from '../sello'
+import { decideContenido, fraseDeLasQueSobran } from './contenidoDeTarjeta'
 
 export interface FilaDeTarjeta {
   /** «Foodint Alcalá». */
@@ -61,6 +62,24 @@ export interface TarjetaInicioProps {
    * error no convierte el número en un cero ni hace desaparecer la tarjeta.
    */
   error?: string | null
+  /**
+   * GARANTÍA (d): ¿se ha llegado a LEER algo alguna vez?
+   *
+   * `false` + `error` = la tarjeta NO tiene dato y no ha podido comprobarlo. En
+   * ese caso NO se pinta ni cifra ni filas: se dice que no se ha podido
+   * comprobar. Un «0» ahí es la peor mentira posible, porque «cero agotados» y
+   * «no he podido mirar si hay agotados» se leen igual y significan lo
+   * contrario.
+   *
+   * Con `true` la tarjeta enseña lo último bueno con su sello, aunque el último
+   * refresco fallara: ahí sí hay dato, solo que viejo, y el sello lo dice.
+   */
+  hayDato?: boolean
+  /**
+   * Tope de filas. Lo que sobra NO se esconde: se cuenta al pie («y 3 más»).
+   * Un umbral ordena, no decide la existencia — regla 7.
+   */
+  maxFilas?: number
   children?: ReactNode
 }
 
@@ -76,10 +95,16 @@ const COLOR_DELTA: Record<TonoDelta, string> = {
   neutral: 'var(--color-text-secondary)',
 }
 
+const TOPE_DE_FILAS = 5
+
 export default function TarjetaInicio({
   titulo, icono: Icono, cifra, cifraSufijo, delta, filas, nota,
-  sello, pie, cargando = false, error = null, children,
+  sello, pie, cargando = false, error = null, hayDato = true,
+  maxFilas = TOPE_DE_FILAS, children,
 }: TarjetaInicioProps) {
+  // La decisión vive en `contenidoDeTarjeta.ts`, que es puro y está probado:
+  // aquí solo se pinta lo que allí se decide.
+  const { sinComprobar, visibles, ocultas } = decideContenido(error, hayDato, filas, maxFilas)
   return (
     <div
       style={{
@@ -99,11 +124,22 @@ export default function TarjetaInicio({
 
       {error ? (
         <p style={{ fontSize: '0.75rem', color: 'var(--color-danger)', margin: '0 0 0.375rem' }}>
-          No se ha podido actualizar: {error}
+          {sinComprobar
+            ? `No se ha podido comprobar: ${error}`
+            : `No se ha podido actualizar: ${error}`}
         </p>
       ) : null}
 
-      {cifra !== undefined ? (
+      {sinComprobar ? (
+        // El texto que sustituye a la cifra. Dice lo que pasa —no se sabe— y no
+        // deja al lector deduciendo de un hueco.
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: 0 }}>
+          Sin dato: no se ha podido leer esta tarjeta. Vuelve a cargar la
+          pantalla; si sigue igual, el dato no está disponible ahora mismo.
+        </p>
+      ) : null}
+
+      {!sinComprobar && cifra !== undefined ? (
         <p style={{
           fontSize: '1.75rem', fontWeight: 500, color: 'var(--color-accent)',
           margin: 0, fontFamily: 'var(--font-display)', lineHeight: 1.1,
@@ -117,29 +153,37 @@ export default function TarjetaInicio({
         </p>
       ) : null}
 
-      {delta ? (
+      {!sinComprobar && delta ? (
         <p style={{ fontSize: '0.75rem', color: COLOR_DELTA[delta.tono], margin: '0.25rem 0 0' }}>
           {delta.texto}
         </p>
       ) : null}
 
-      {filas && filas.length > 0 ? (
+      {!sinComprobar && visibles.length > 0 ? (
         <div style={{ marginTop: '0.625rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-          {filas.map((f, i) => (
+          {visibles.map((f, i) => (
             <div key={`${f.etiqueta}-${i}`}
               style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.8125rem' }}>
               <span style={{ color: 'var(--color-text-secondary)' }}>{f.etiqueta}</span>
               <span style={{ fontWeight: 600, color: COLOR_TONO[f.tono ?? 'neutral'] }}>{f.valor}</span>
             </div>
           ))}
+          {/* LO QUE NO CABE SE CUENTA. Nunca se corta en silencio: una lista
+              recortada sin decirlo es la nota al pie que confiesa el escondite
+              — regla 7. */}
+          {fraseDeLasQueSobran(ocultas) ? (
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', margin: '0.125rem 0 0' }}>
+              {fraseDeLasQueSobran(ocultas)}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
-      {children}
+      {!sinComprobar && children}
 
       {/* LA CONSECUENCIA. No es un subtítulo decorativo: es la frase por la que
           alguien hace algo («el más antiguo lleva 6 días agotado»). */}
-      {nota ? (
+      {!sinComprobar && nota ? (
         <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', margin: '0.625rem 0 0' }}>
           {nota}
         </p>

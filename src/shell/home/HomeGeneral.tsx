@@ -192,7 +192,15 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
   async function guardar(siguientes: string[], queSeHizo: string) {
     const antes = claves
     setClaves(siguientes)                   // respuesta inmediata al toque
-    if (!activeAccountId || !authUserId) return
+    // GARANTÍA (e): sin cuenta o sin usuario NO se puede escribir, así que la
+    // pantalla vuelve a lo que había y lo dice. Antes se quedaba movida y
+    // volvía en silencio: el usuario veía su cambio hecho y no se había
+    // guardado nada. Un éxito silencioso que además era falso.
+    if (!activeAccountId || !authUserId) {
+      setClaves(antes)
+      setError('No se ha guardado: no hay sesión o cuenta activa. Vuelve a entrar e inténtalo.')
+      return
+    }
     setGuardando(true); setError(null); setAviso(null)
     try {
       await saveUserLayout(activeAccountId, authUserId, siguientes)
@@ -202,8 +210,13 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
       setOrigen('usuario')
       setAviso(queSeHizo)
     } catch (e) {
-      setClaves(antes)                      // no entró: se vuelve a lo que había
-      setError(e instanceof Error ? e.message : 'No se pudo guardar tu Inicio.')
+      // No entró: la pantalla vuelve a lo que hay en la BASE, no se queda
+      // optimista. Enseñar el cambio después de que la escritura falle es
+      // exactamente cómo alguien cierra el navegador creyendo que guardó.
+      setClaves(antes)
+      setError(e instanceof Error
+        ? `No se ha guardado tu Inicio: ${e.message}`
+        : 'No se ha guardado tu Inicio.')
     } finally {
       setGuardando(false)
     }
@@ -217,7 +230,10 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
    * que sí importa. Un aviso que no se puede apagar enseña a no leer los avisos.
    */
   async function rechazarNovedades() {
-    if (!activeAccountId || !authUserId) return
+    if (!activeAccountId || !authUserId) {
+      setError('No se ha guardado: no hay sesión o cuenta activa. Vuelve a entrar e inténtalo.')
+      return
+    }
     const claveS = nuevas.map(c => c.key)
     setDescartadas(d => [...d, ...claveS])   // respuesta inmediata al toque
     setGuardando(true); setError(null); setAviso(null)
@@ -237,13 +253,18 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
   }
 
   async function restaurar() {
-    if (!activeAccountId || !authUserId) return
+    if (!activeAccountId || !authUserId) {
+      setError('No se ha restaurado: no hay sesión o cuenta activa. Vuelve a entrar e inténtalo.')
+      return
+    }
     setGuardando(true); setError(null); setAviso(null)
     try {
       await restoreUserLayout(activeAccountId, authUserId)
       setCargadoPara(null)
       await cargar()
-      setAviso('Inicio restaurado. Vuelves al que trae tu rol por defecto.')
+      // Con CONTENIDO: cuántas tarjetas tienes ahora. «Restaurado» a secas
+      // obliga a mirar la pantalla para saber si pasó algo.
+      setAviso(`Inicio restaurado: vuelves al que trae tu rol por defecto.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo restaurar tu Inicio.')
     } finally {

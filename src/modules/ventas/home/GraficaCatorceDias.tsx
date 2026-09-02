@@ -68,6 +68,7 @@ export default function GraficaCatorceDias({ accountId, locationId, drillTo }: H
       icono={BarChart3}
       cargando={cargando && datos == null}
       error={error}
+      hayDato={datos != null}
       sello={sello}
       nota={detalle ?? undefined}
       pie={drillTo

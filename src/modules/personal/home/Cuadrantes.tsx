@@ -59,6 +59,10 @@ export default function Cuadrantes({ accountId, locationId, drillTo }: HomeCardP
       icono={CalendarDays}
       cargando={cargando && datos == null}
       error={error}
+      // Sin esto, un fallo dejaba la tarjeta con CERO filas, que en una tarjeta
+      // de cuadrantes se lee como «todos publicados». Es la mentira mas cara de
+      // las seis.
+      hayDato={datos != null}
       filas={filas.map(f => ({ etiqueta: f.etiqueta, valor: f.valor, tono: f.tono }))}
       nota={nota}
       sello={sello}

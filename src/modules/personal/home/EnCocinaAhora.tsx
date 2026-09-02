@@ -77,10 +77,11 @@ export default function EnCocinaAhora({ accountId, locationId, drillTo }: HomeCa
       titulo="En cocina ahora"
       icono={Users}
       // «0 de 6», con el denominador pequeño al lado, como la maqueta.
-      cifra={datos ? String(resumen.dentro) : '—'}
+      cifra={datos ? String(resumen.dentro) : undefined}
       cifraSufijo={datos ? `de ${resumen.total}` : undefined}
       cargando={cargando && datos == null}
       error={error}
+      hayDato={datos != null}
       filas={resumen.filas}
       nota={resumen.nota}
       sello={sello}

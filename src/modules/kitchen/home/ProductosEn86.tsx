@@ -59,9 +59,13 @@ export default function ProductosEn86({ accountId, locationId, drillTo }: HomeCa
     <TarjetaInicio
       titulo="Productos en 86"
       icono={CircleSlash}
-      cifra={String(total)}
+      // Antes esto era `String(total)` y con `datos` nulo pintaba un 0: «cero
+      // agotados» y «no he podido mirar» se leen igual y significan lo
+      // contrario. Ahora la cifra solo sale si hay dato.
+      cifra={datos ? String(total) : undefined}
       cargando={cargando && datos == null}
       error={error}
+      hayDato={datos != null}
       filas={filas}
       // Se dice que las opciones no cuentan aquí, en vez de dejar que se
       // deduzca de un número que no las incluye.
