@@ -29,6 +29,7 @@ import PrediccionPersonalPage from '@/pages/PrediccionPersonalPage'
 import ZonasPedidoPage from '@/pages/ZonasPedidoPage'
 import VentasDeAyer from '@/modules/ventas/home/VentasDeAyer'
 import GraficaCatorceDias from '@/modules/ventas/home/GraficaCatorceDias'
+import VentasSemana from '@/modules/ventas/home/VentasSemana'
 
 export const ventasModule: ModuleDefinition = {
   id: 'ventas',
@@ -92,6 +93,14 @@ export const ventasModule: ModuleDefinition = {
       source: 'sale',
       drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas · comparar periodos →' },
       component: GraficaCatorceDias,
+    },
+    {
+      key: 'ventas.semana',
+      title: 'Ventas · esta semana',
+      size: 'sm',
+      source: 'sale',
+      drill: { ruta: '/ventas', etiqueta: 'Ver el porqué, día a día →' },
+      component: VentasSemana,
     },
   ],
 }
