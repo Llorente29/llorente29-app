@@ -474,3 +474,98 @@ mudo en un parte.
 `entrypoint_path` de la función. Las desplegadas por CI llevan
 `/home/runner/work/...`; las desplegadas a mano, `/tmp/user_fn_...`. Sirve para
 auditar después quién desplegó qué sin depender de los logs del run.
+
+---
+
+## 12 · La bolsa de horas ignora el día de cierre configurado — y son nóminas
+**Abierto:** 02/09/2026 · **Hoy cosmético. El día que alguien cambie el día, no.**
+
+### El mecanismo, exacto
+
+`getEffectiveCloseDay` decide así:
+
+```
+if (config.syncWithGestoria && config.gestoriaDay) return config.gestoriaDay
+return config.closeDay
+```
+
+Y las dos pantallas que lo llaman construyen el config así:
+
+```
+closeDay:    (location as any).hoursBalanceCloseDay ?? 25   ← se lee BIEN
+gestoriaDay: (location as any).gestoriaSendDay      ?? 25   ← NO EXISTE, siempre 25
+syncWithGestoria: … ?? true                                 ← true en los 7 locales
+```
+
+**`gestoria_send_day` no existe en `locations`, ni en el tipo, ni en el mapper.**
+Comprobado el 02/09. Así que `gestoriaDay` es SIEMPRE `25` —un número, o sea
+verdadero— y con `syncWithGestoria` en true la primera rama gana siempre:
+
+> **`getEffectiveCloseDay` devuelve 25 SIEMPRE, y el `closeDay` bien leído se
+> tira a la basura.**
+
+Lo irónico: `hoursBalanceCloseDay` **sí** está bien mapeado
+(`supabaseSync.ts:61`). El campo se lee correctamente de la base y luego se
+descarta. La pantalla parece configurable y no lo es.
+
+### La cifra, que es la que decide
+
+| Cuenta | Local | `hours_balance_close_day` | Sincroniza |
+|---|---|---|---|
+| Foodint | Alcalá | 25 | sí |
+| Foodint | Carabanchel | 25 | sí |
+| Foodint | Plaza Castilla | 25 | sí |
+| Kitchen Grill LstQ | Kitchen Grill | 25 | sí |
+| Folvy Interno | los tres | 25 | sí |
+
+**Los siete locales están en 25.** Así que HOY no hay ni un saldo mal calculado:
+el defecto coincide con el valor real en todas partes. **Es cosmético.**
+
+**Y es un arma cargada.** El día que alguien ponga 31 en un local, la pantalla
+seguirá calculando con 25 y nadie se enterará, porque el `as any` se tragó el
+error que lo habría avisado. Los saldos de horas acaban en nóminas.
+
+### Dónde está, y una divergencia que ya existe
+
+- `src/pages/BolsaHorasPage.tsx:111`
+- `src/components/MiBolsaHoras.tsx:69` — **la del empleado**, que es peor: es la
+  que ve el trabajador de sus propias horas.
+
+Y la tarjeta nueva del Inicio (`src/modules/personal/home/bolsaHoras.ts`) NO
+tiene el fallo: usa `gestoriaDay = closeDay`, así que respeta el día
+configurado. **El día que alguien cambie el día de cierre, la tarjeta y la
+pantalla darán saldos distintos de las mismas horas.** Arreglar las dos
+pantallas cierra también esa divergencia.
+
+### El arreglo
+
+Quitar `gestoriaDay` de los dos sitios —o dejarlo en `undefined`, no en 25— para
+que `getEffectiveCloseDay` caiga a `closeDay`. Es una línea en cada uno. Lo que
+NO se puede hacer es dejar el `?? 25`: ese valor por defecto es justo lo que
+convierte un campo que no existe en una decisión silenciosa.
+
+---
+
+## 13 · El `as any` que hizo posible el frente 12
+**Abierto:** 02/09/2026 · **Misma familia que el frente 2, y peor**
+
+`(location as any).gestoriaSendDay` compila, se ejecuta y devuelve `undefined`
+para siempre. Sin el `as any`, TypeScript habría dicho que ese campo no existe
+en `Location` — que es exactamente lo que pasaba y lo que nadie supo durante
+meses.
+
+**Es la misma familia que los tipos desactualizados del frente 2, pero peor:**
+allí el fichero se quedó viejo solo, por no regenerarlo; **aquí el desvío está
+escrito a mano**, deliberadamente, y silencia el aviso en el punto exacto donde
+hacía falta.
+
+**La regla que sale de esto:** un `as any` sobre una fila de la base no es un
+atajo de tipos, es apagar la única comprobación que hay de que ese campo existe.
+Si hace falta leer un campo que el tipo no tiene, el camino es el criterio del
+frente 2 —acotar, puente único, o parche anotado— y NUNCA un `as any` en el
+sitio de lectura.
+
+**Deuda medible:** hay 16 errores de `@typescript-eslint/no-explicit-any` vivos
+en `src/modules/ventas/services` (channelRates, foodCost, licensed, trend). No
+son del Inicio y no se han tocado, pero son del mismo patrón y conviene mirarlos
+antes de que uno de ellos esconda otro campo fantasma.
