@@ -21,7 +21,7 @@
 //        gris (la sensación de "pantalla vacía"). En móvil no tiene efecto
 //        (el viewport es menor que el tope). Patrón de Toast/R365/Apicbase/Linear.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY, PENDIENTES_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
@@ -134,12 +134,28 @@ export default function Shell() {
     ? PENDIENTES_KEY
     : (activeModule && !settingsActive) ? activeModule.id : HOME_KEY
 
-  // B.1 — aterrizaje: al entrar a Home (raíz), si hay algo en ahora+semana,
-  // /pendientes es la pantalla de aterrizaje. Si no hay nada, NO se muestra
-  // — se entra donde se entraba antes. Espera a que cargue (pendingLoading)
-  // para no redirigir en falso con el contador todavía a 0.
+  // B.1 — aterrizaje: al ENTRAR a la aplicación, si hay algo en ahora+semana,
+  // /pendientes es la pantalla de aterrizaje. Si no hay nada, se entra donde se
+  // entraba antes. Espera a que cargue (pendingLoading) para no redirigir en
+  // falso con el contador todavía a 0.
+  //
+  // ── AL ENTRAR, UNA VEZ, Y NO CADA VEZ QUE SE PISA LA RAÍZ (02/09) ─────────
+  // Esto redirigía en CADA llegada a '/', y pulsar «Inicio» navega justo a '/'.
+  // Con 66 líneas pendientes el contador nunca baja de 0, así que la pestaña
+  // Inicio rebotaba a Pendientes SIEMPRE: el dashboard llevaba todo el día sin
+  // poder abrirse, y no por un permiso ni por una ruta mal puesta, sino porque
+  // una regla de aterrizaje se estaba aplicando a un gesto deliberado.
+  //
+  // Un aterrizaje es una decisión sobre POR DÓNDE ENTRAS. En cuanto el usuario
+  // pide una pantalla a propósito, la regla ha terminado su trabajo: pulsar
+  // Inicio y no ir a Inicio no es una sugerencia, es la pantalla desobedeciendo.
+  const aterrizajeConsumido = useRef(false)
   useEffect(() => {
-    if (moduleBasePath === '' && !pendingLoading && pendingActionableCount > 0) {
+    if (aterrizajeConsumido.current) return
+    if (moduleBasePath !== '') return          // no se entra por la raíz: nada que decidir
+    if (pendingLoading) return                 // todavía no se sabe si hay algo
+    aterrizajeConsumido.current = true         // decidido: no se vuelve a decidir
+    if (pendingActionableCount > 0) {
       navigate('/pendientes', { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,6 +174,10 @@ export default function Shell() {
   // Navega a una sección desde el TopBar/barra inferior.
   function goToKey(key: string) {
     if (key === HOME_KEY) {
+      // Pulsar Inicio es un gesto deliberado: desactiva el aterrizaje aunque
+      // todavía no se hubiera llegado a decidir (por ejemplo si el contador
+      // seguía cargando cuando se abrió la aplicación).
+      aterrizajeConsumido.current = true
       navigate('/')
       return
     }
