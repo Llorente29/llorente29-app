@@ -20,7 +20,7 @@
 // converger MetricCard con KpiCard cambia el aspecto del Inicio y es una
 // decisión de diseño, no un merge. Se toma la salida que Julio dejó escrita.
 
-import { Banknote, Users, Inbox, Leaf, BarChart3 } from 'lucide-react'
+import { Banknote, Users, BarChart3 } from 'lucide-react'
 import MetricCard from '../widgets/MetricCard'
 import ModuleSummaryCard from '../widgets/ModuleSummaryCard'
 import type { HomeCardProps } from '../../types'
@@ -36,16 +36,19 @@ function num(n: number | null | undefined): string {
   return n.toLocaleString('es-ES')
 }
 
+// (02/09 · §0) SIN DELTA HASTA QUE HAYA ESPEJO.
+// Esta tarjeta decía «−100 % vs ayer». La garantía (b) del encargo prohíbe «vs
+// ayer» con esas palabras: un día parcial contra uno completo no es una
+// comparación, es una resta que da miedo a las once de la mañana. Mientras el
+// espejo no esté (siguiente sub-lote), se enseña el número y nada más: un
+// delta mal calculado es peor que ningún delta.
 export function VentasHoy() {
   const { metrics, loading } = useHomeMetrics()
-  const pct = metrics?.ventasVsAyerPct
   return (
     <MetricCard
       label="Ventas hoy"
       value={loading ? '…' : eur(metrics?.ventasHoy ?? null)}
       icon={Banknote}
-      subtitle={loading ? undefined : pct != null ? `${pct >= 0 ? '+' : ''}${pct}% vs ayer` : 'vs ayer sin datos'}
-      subtitleTone={pct != null && pct >= 0 ? 'positive' : 'neutral'}
     />
   )
 }
@@ -63,15 +66,6 @@ export function TrabajandoAhora() {
   )
 }
 
-// Sin fuente fiable todavía. Se enseña «—» y se dice: no se inventa un número
-// ni se esconde la tarjeta, que serían las dos formas de mentir aquí.
-export function Solicitudes() {
-  return <MetricCard label="Solicitudes" value="—" icon={Inbox} subtitle="próximamente" />
-}
-export function AppccHoy() {
-  return <MetricCard label="APPCC hoy" value="—" icon={Leaf} subtitle="próximamente" />
-}
-
 export function ResumenTeam({ onDrill }: HomeCardProps) {
   const { metrics } = useHomeMetrics()
   return (
@@ -79,18 +73,6 @@ export function ResumenTeam({ onDrill }: HomeCardProps) {
       title="Team" icon={Users} onOpen={onDrill}
       lines={[
         { text: `${metrics?.trabajandoAhora != null ? metrics.trabajandoAhora : '—'} trabajando ahora` },
-        { text: 'Detalle de turnos próximamente', muted: true },
-      ]}
-    />
-  )
-}
-export function ResumenSafety({ onDrill }: HomeCardProps) {
-  return (
-    <ModuleSummaryCard
-      title="Safety" icon={Leaf} onOpen={onDrill}
-      lines={[
-        { text: 'Resumen APPCC próximamente' },
-        { text: 'Se conectará con el módulo Safety', muted: true },
       ]}
     />
   )

@@ -2,7 +2,21 @@
 //
 // LAS TARJETAS TRANSVERSALES DEL INICIO, ya en el catálogo.
 //
-// Son EXACTAMENTE las siete que el Inicio enseña desde junio, sin reescribir
+// (02/09 · §0) LAS SIN FUENTE, FUERA. Eran tres —Solicitudes, APPCC hoy y
+// Resumen de Safety— y no enseñaban un dato: enseñaban «—» y la palabra
+// «próximamente». En junio eso era honesto porque el Inicio era interno. Hoy
+// esta pantalla es la cara de la demo del cliente 2, y una casilla que dice
+// «próximamente» no comunica transparencia: comunica producto a medias.
+//
+// No es la regla 7 al revés. La regla 7 prohíbe esconder FILAS QUE EXISTEN; una
+// tarjeta sin fuente no tiene filas que esconder, tiene un hueco. Y siguen en el
+// catálogo del cajón cuando se cableen: quitarlas del mosaico por defecto no es
+// borrarlas del producto.
+//
+// Se quedan CUATRO, que son las que tienen dato de verdad, hasta que las
+// sustituyan las seis de la maqueta.
+//
+// Eran las siete que el Inicio enseñaba desde junio, sin reescribir
 // ni un widget: los componentes de shellCardComponents.tsx envuelven
 // `MetricCard` y `ModuleSummaryCard` tal cual. Lo dice el RECON del 30/08 y es
 // la razón de que existan como estaban — «preparado para configurabilidad por
@@ -16,8 +30,7 @@
 
 import type { HomeCardDefinition } from '../../types'
 import {
-  VentasHoy, TrabajandoAhora, Solicitudes, AppccHoy,
-  ResumenTeam, ResumenSafety, ResumenSales,
+  VentasHoy, TrabajandoAhora, ResumenTeam, ResumenSales,
 } from './shellCardComponents'
 
 /**
@@ -28,10 +41,7 @@ import {
 export const SHELL_HOME_CARDS: HomeCardDefinition[] = [
   { key: 'shell.ventas_hoy',       title: 'Ventas hoy',        size: 'sm', source: 'sale',                  drillRoute: 'ventas',   component: VentasHoy },
   { key: 'shell.trabajando_ahora', title: 'Trabajando ahora',  size: 'sm', source: 'employee_clock_status', drillRoute: 'personal', component: TrabajandoAhora },
-  { key: 'shell.solicitudes',      title: 'Solicitudes',       size: 'sm', description: 'Sin fuente todavía',                       component: Solicitudes },
-  { key: 'shell.appcc_hoy',        title: 'APPCC hoy',         size: 'sm', description: 'Sin fuente todavía',                       component: AppccHoy },
   { key: 'shell.resumen_team',     title: 'Resumen de Team',   size: 'md', source: 'employee_clock_status', drillRoute: 'personal', component: ResumenTeam },
-  { key: 'shell.resumen_safety',   title: 'Resumen de Safety', size: 'md', description: 'Sin fuente todavía',                       component: ResumenSafety },
   { key: 'shell.resumen_sales',    title: 'Resumen de Sales',  size: 'md', source: 'sale',                  drillRoute: 'ventas',   component: ResumenSales },
 ]
 
