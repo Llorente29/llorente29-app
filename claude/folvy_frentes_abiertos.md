@@ -339,6 +339,46 @@ propios fallos a equivocarse más.
 > unas cuatro semanas. Más atrás no se puede excluir nada, y hay que decirlo en
 > vez de calcular como si esos días hubieran sido normales.
 
+### El techo, explicado (medido el 02/09)
+
+**Es el caso bueno: el techo se despega solo.** La tabla no existía, no es que
+se dejara de registrar.
+
+| | |
+|---|---|
+| `availability_event`, creada por | `20260731T1000_availability_event.sql` |
+| `location_status_log`, creada por | `20260730T1610_location_status_log.sql` |
+| Primer evento en la base | **30/07/2026** |
+| Eventos hoy | 892 |
+
+Las dos tablas empiezan el mismo fin de semana porque **se crearon entonces**.
+Antes del 30/07 no hay historial de disponibilidad de ninguna clase, y no
+porque un camino de escritura se lo saltara: porque no había dónde escribirlo.
+
+**Consecuencia práctica:** el horizonte crece un día por día. Hoy son ~5
+semanas; en un mes serán ~9 y deja de molestar para un cálculo de consumo. No
+hay nada que arreglar aquí — solo que decirlo mientras sea corto.
+
+**Y NO ES EL CASO MALO**, que sí habría sido un frente: no hay un camino de
+escritura que siga sin registrar. Eso es otra cosa y ya tiene ficha: el
+**frente 8** —`location_id` nulo en el 84 % de los eventos de marca— sí afecta a
+la CALIDAD de este historial, aunque no a su longitud.
+
+### ¿Alguien poda `availability_event`? NO (medido el 02/09)
+
+Un dato que se borra solo no puede ser la base de una decisión de compra, así
+que se comprobó antes de apoyar nada encima:
+
+- **Ninguna función** de `public` contiene `delete from availability_event` ni
+  `delete from location_status_log` ni un `truncate` sobre ellas.
+- **Ningún `cron.job`** las toca. El único trabajo de limpieza programado es
+  `cleanup_auth_rate_limits_daily`, que es de los límites de intentos de login.
+
+**El historial se acumula.** Si algún día se añade una poda —por tamaño, que es
+la razón habitual— hay que saber que este cálculo depende de ella: podar a 90
+días deja el punto de pedido sin la temporada anterior. Queda dicho aquí para
+que quien la escriba lo lea antes.
+
 **2 · Esos días se IMPUTAN, no se ponen a cero.** Con la media del mismo día de
 la semana en fechas con existencia. Es demanda censurada: que no se vendiera un
 sábado agotado no significa que nadie lo quisiera, significa que no había.
@@ -361,6 +401,15 @@ válvula: donde alguien sabe algo que los datos no saben, gana la persona.
 Un punto de pedido salido de tres días no vale lo mismo que uno de treinta, y
 uno salido de una racha de agotados no vale lo mismo que uno de un mes limpio.
 Quien lo lee tiene que poder distinguirlos sin preguntar.
+
+**Y MIENTRAS EL TECHO SEA CORTO, LA TARJETA DICE EL TECHO, no solo los días.**
+
+> «Calculado sobre 28 días, **que es todo el historial disponible**»
+
+dice algo muy distinto de «calculado sobre 28 días». Lo primero avisa de que no
+hay más y de que el número mejorará solo; lo segundo deja creer que 28 fue una
+elección, y que alguien podría haber pedido 90. Cuando el historial pase de
+largo de la ventana que se use, la coletilla sobra y se quita.
 
 **Y lo estacional y lo de poca rotación se MARCAN, no se calculan a la brava.**
 Si el consumo es irregular, la tarjeta lo dice en vez de dar un número con cara
