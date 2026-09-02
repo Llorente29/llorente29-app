@@ -23,16 +23,10 @@ import type { HomeCardDefinition } from '../../types'
 
 export const P2_HOME_CARDS: HomeCardDefinition[] = [
   // ── Ventas ───────────────────────────────────────────────────────────────
-  { key: 'ventas.ticket_medio', grupo: 'Ventas', title: 'Ticket medio', size: 'sm', source: 'sale',
-    drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' } },
-  { key: 'ventas.por_canal', grupo: 'Ventas', title: 'Ventas por canal', size: 'md', source: 'sale',
-    drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' } },
 
   // ── Team ─────────────────────────────────────────────────────────────────
   { key: 'personal.pct_sobre_ventas', grupo: 'Team', title: '% personal sobre ventas', size: 'sm',
     source: 'clock_entries', drill: { ruta: '/personal/informes-analitica', etiqueta: 'Abrir Team · Informes →' } },
-  { key: 'personal.bolsa_horas', grupo: 'Team', title: 'Bolsa de horas', size: 'sm',
-    source: 'clock_entries', drill: { ruta: '/personal/bolsa-horas', etiqueta: 'Abrir Team · Bolsa de horas →' } },
   { key: 'personal.sin_fichar_con_turno', grupo: 'Team', title: 'Sin fichar teniendo turno', size: 'sm',
     source: 'clock_entries', drill: { ruta: '/personal/ahora-mismo', etiqueta: 'Abrir Team · Ahora mismo →' } },
 

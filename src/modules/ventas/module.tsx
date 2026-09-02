@@ -30,6 +30,8 @@ import ZonasPedidoPage from '@/pages/ZonasPedidoPage'
 import VentasDeAyer from '@/modules/ventas/home/VentasDeAyer'
 import GraficaCatorceDias from '@/modules/ventas/home/GraficaCatorceDias'
 import VentasSemana from '@/modules/ventas/home/VentasSemana'
+import TicketMedio from '@/modules/ventas/home/TicketMedio'
+import VentasPorCanal from '@/modules/ventas/home/VentasPorCanal'
 
 export const ventasModule: ModuleDefinition = {
   id: 'ventas',
@@ -78,6 +80,17 @@ export const ventasModule: ModuleDefinition = {
   // §1.1 de la maqueta aprobada. Vive aquí y no en el shell porque su dato son
   // ventas: el shell no tiene por qué saber cortar un día de servicio.
   homeCards: [
+    {
+      key: 'ventas.ticket_medio', title: 'Ticket medio', grupo: 'Ventas', size: 'sm',
+      source: 'sale', drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' },
+      component: TicketMedio,
+    },
+    {
+      key: 'ventas.por_canal', title: 'Ventas por canal', grupo: 'Ventas', size: 'md',
+      source: 'sale', drill: { ruta: '/ventas', etiqueta: 'Abrir Ventas →' },
+      component: VentasPorCanal,
+    },
+
     {
       key: 'ventas.ayer',
       grupo: 'Ventas',

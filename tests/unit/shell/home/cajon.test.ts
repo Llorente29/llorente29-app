@@ -116,9 +116,11 @@ describe('el catálogo aprobado', () => {
   // aparece ni desaparece, cambia de lado.
   // 02/09, tercer lote: Conteos pendientes, Pedidos atascados y Salud de
   // conexiones dejan de ser P2. Once cableadas, diez prometidas.
-  it('once cableadas y diez P2', () => {
-    expect(catalogo.filter(c => c.component != null)).toHaveLength(11)
-    expect(catalogo.filter(c => c.component == null)).toHaveLength(10)
+  // Cuarto lote: Ticket medio, Ventas por canal y Bolsa de horas. Con esto el
+  // grupo Ventas queda entero (5 de 5) y Team a falta de dos.
+  it('catorce cableadas y siete P2', () => {
+    expect(catalogo.filter(c => c.component != null)).toHaveLength(14)
+    expect(catalogo.filter(c => c.component == null)).toHaveLength(7)
   })
 
   // Si alguien añade una tarjeta y olvida el grupo, cae en «Otras» y esto la
