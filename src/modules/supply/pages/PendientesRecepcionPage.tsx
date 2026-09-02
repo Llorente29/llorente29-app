@@ -42,10 +42,23 @@ export default function PendientesRecepcionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // CAMBIAR DE CUENTA INVALIDA LO QUE HAY EN PANTALLA, y el reseteo se hace EN
+  // RENDER, no en el cuerpo del efecto. Poner `setLoading(true)` dentro del
+  // efecto provoca un render en cascada —pinta las líneas de la cuenta
+  // anterior y acto seguido las borra—, y es lo que marcaba el lint. Ajustar
+  // estado en render cuando cambia la entrada es el patrón que recomienda
+  // React justo para esto.
+  const [cuentaCargada, setCuentaCargada] = useState<string | null>(null)
+  if (activeAccountId && cuentaCargada !== activeAccountId) {
+    setCuentaCargada(activeAccountId)
+    setLineas([])
+    setError(null)
+    setLoading(true)
+  }
+
   useEffect(() => {
     let cancel = false
     if (!activeAccountId) return
-    setLoading(true)
     listPendingLines(activeAccountId)
       .then(l => { if (!cancel) { setLineas(l); setError(null) } })
       .catch(e => { if (!cancel) setError(e instanceof Error ? e.message : 'Error cargando pendientes') })
