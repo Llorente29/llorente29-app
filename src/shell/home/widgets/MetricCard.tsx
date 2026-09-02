@@ -26,10 +26,16 @@ export interface MetricCardProps {
    * pulsable no dice a dónde lleva, y lo que no dice a dónde lleva no se pulsa.
    */
   pie?: { etiqueta: string; onClick: () => void }
+  /**
+   * GARANTÍA (a): el sello de ESTA tarjeta, no el del panel. «datos de las
+   * 08:18», y cuando el dato pasa su umbral, «· pueden haber cambiado».
+   * Se pinta atenuado: informa, no interrumpe.
+   */
+  sello?: { texto: string; caducado: boolean }
 }
 
 export default function MetricCard({
-  label, value, icon: Icon, subtitle, subtitleTone = 'neutral', accent = false, pie,
+  label, value, icon: Icon, subtitle, subtitleTone = 'neutral', accent = false, pie, sello,
 }: MetricCardProps) {
   const subtitleColor =
     subtitleTone === 'positive' ? 'var(--color-success)'
@@ -66,6 +72,14 @@ export default function MetricCard({
       {subtitle ? (
         <p style={{ fontSize: '0.75rem', color: subtitleColor, margin: '0.25rem 0 0' }}>
           {subtitle}
+        </p>
+      ) : null}
+      {sello ? (
+        <p style={{
+          fontSize: '0.6875rem', margin: '0.5rem 0 0',
+          color: sello.caducado ? 'var(--color-terracota)' : 'var(--color-text-secondary)',
+        }}>
+          {sello.texto}
         </p>
       ) : null}
       {pie ? (
