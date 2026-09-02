@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useState, type ReactNode, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Archive, Check, Loader2, Pencil, X, ChevronDown, ImagePlus, Trash2,
+  ArrowLeft, Archive, ArchiveRestore, Check, Loader2, Pencil, X, ChevronDown, ImagePlus, Trash2,
   ChefHat, AlertTriangle, Activity, Scissors, Boxes, Clock, Snowflake, Settings2,
   TrendingUp, Tag, Scale,
   FileText,
@@ -33,6 +33,8 @@ import {
   countUsersOf,
   checkItemDeletable,
   deleteOrArchiveItem,
+  archiveRecipeItem,
+  restoreRecipeItem,
 } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import { listConversions, upsertConversion, removeConversion, type UnitConversion } from '@/modules/kitchen/services/unitConversionService'
@@ -262,6 +264,13 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteCheck, setDeleteCheck] = useState<Awaited<ReturnType<typeof checkItemDeletable>> | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  // (02/09) Lo que PASÓ, en pantalla. Antes la ficha se cerraba sola y no decía
+  // si había borrado o archivado, ni por qué. Un botón que hace algo importante
+  // confirma en pantalla, y con contenido (Regla 8).
+  const [deleteResult, setDeleteResult] = useState<{ action: 'deleted' | 'archived'; name: string; reasons?: string[] } | null>(null)
+  // Archivar y desarchivar a propósito, sin pasar por «Eliminar».
+  const [archiveBusy, setArchiveBusy] = useState(false)
+  const [archiveMsg, setArchiveMsg] = useState<string | null>(null)
   // Disparador de recarga del item (tras aplicar el copiloto IA, etc.)
   const [reloadTick, setReloadTick] = useState(0)
   // Conversiones de unidad amigables ("1 ud = 85 g") del ingrediente.
@@ -616,6 +625,7 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
   async function openDeleteDialog() {
     if (!item) return
     setDeleteCheck(null)
+    setDeleteResult(null)
     setDeleteOpen(true)
     try {
       setDeleteCheck(await checkItemDeletable(item.id))
@@ -629,14 +639,46 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
     if (!item) return
     setDeleteBusy(true)
     try {
-      await deleteOrArchiveItem(item.id)   // borra o archiva; en ambos casos sale del catálogo
-      setDeleteOpen(false)
-      onBack()
+      // Borra o archiva; el servidor vuelve a decidir, no se fía del check de
+      // la UI. Y ahora se DICE cuál de las dos cosas hizo: hasta hoy la ficha
+      // se cerraba sola y quedaba la duda de si el artículo seguía existiendo.
+      const r = await deleteOrArchiveItem(item.id)
+      setDeleteResult(r)
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'No se pudo completar la acción.')
+      setDeleteOpen(false)
     } finally {
       setDeleteBusy(false)
     }
+  }
+
+  /** Archivar a propósito: retira del catálogo sin borrar y se puede deshacer. */
+  async function handleArchive() {
+    if (!item || archiveBusy) return
+    if (!window.confirm(
+      `«${item.name}» dejará de aparecer en el catálogo y en los buscadores.\n\n` +
+      'No se borra nada y se puede devolver al catálogo desde esta misma ficha. ¿Archivar?')) return
+    setArchiveBusy(true); setArchiveMsg(null); setFormError(null)
+    try {
+      await archiveRecipeItem(item.id)
+      await refreshItem()
+      setArchiveMsg(`Archivado. «${item.name}» ya no aparece en el catálogo; su historial se conserva.`)
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'No se pudo archivar.')
+    } finally { setArchiveBusy(false) }
+  }
+
+  /** El camino de vuelta, que hasta hoy no existía. */
+  async function handleUnarchive() {
+    if (!item || archiveBusy) return
+    setArchiveBusy(true); setArchiveMsg(null); setFormError(null)
+    try {
+      await restoreRecipeItem(item.id)
+      await refreshItem()
+      setArchiveMsg(`«${item.name}» vuelve a estar en el catálogo.`)
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'No se pudo devolver al catálogo.')
+    } finally { setArchiveBusy(false) }
   }
 
   // ── Foto ──
@@ -699,6 +741,11 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
   // tienen sentido en un ingrediente. Un envase o herramienta las oculta.
   const isRaw = item.type === 'raw'
 
+  // ARCHIVADO. La ficha no lo decía en ningún sitio: un artículo archivado se
+  // veía exactamente igual que uno vivo, y el único camino conocido para
+  // archivar era pulsar «Eliminar» y que el servidor decidiera por ti.
+  const estaArchivado = item.isActive === false || !!item.archivedAt
+
   // ── Semáforo "Utilizable" (honesto) ──
   const cost = effectiveCost(item)
   const okPrecio = cost !== null
@@ -735,6 +782,38 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
           )}
         </div>
       </div>
+
+      {/* ARCHIVADO, DICHO EN LA FICHA. Con la fecha y con la salida, arriba del
+          todo: un artículo retirado del catálogo no puede parecer uno vivo. */}
+      {estaArchivado && (
+        <div className="mb-3 p-3 rounded-md bg-warning-bg border border-warning/30 flex items-start gap-2.5">
+          <Archive className="w-4 h-4 mt-0.5 shrink-0 text-warning" />
+          <div className="text-sm flex-1">
+            <b>Archivado{item.archivedAt ? ` el ${new Date(item.archivedAt).toLocaleDateString('es-ES')}` : ''}.</b>{' '}
+            <span className="text-text-secondary">
+              No aparece en el catálogo ni en los buscadores. Su historial —compras, inventarios,
+              movimientos— se conserva entero.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleUnarchive}
+            disabled={archiveBusy}
+            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-card border border-border-default hover:bg-page transition-base disabled:opacity-50"
+          >
+            {archiveBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArchiveRestore className="w-3.5 h-3.5" />}
+            Devolver al catálogo
+          </button>
+        </div>
+      )}
+
+      {/* Confirmación con contenido de archivar/desarchivar (Regla 8). */}
+      {archiveMsg && (
+        <div className="mb-3 p-2.5 rounded-md bg-success-bg text-success border border-success/20 text-xs flex items-center justify-between gap-3">
+          <span>{archiveMsg}</span>
+          <button type="button" onClick={() => setArchiveMsg(null)} className="text-success hover:opacity-70 flex-shrink-0" aria-label="Cerrar aviso"><X size={14} /></button>
+        </div>
+      )}
 
       {photoError && (
         <div className="mb-3 p-2.5 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs flex items-center justify-between gap-3">
@@ -1278,8 +1357,34 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
             <ItemVatSelector item={item} onChanged={refreshItem} />
           </div>
 
-          {/* Eliminar (Folvy decide: borra si no se usa, archiva si sí) */}
+          {/* Retirar del catálogo. DOS acciones distintas, no una que decide
+              sola: ARCHIVAR (reversible, se elige) y ELIMINAR (definitivo, solo
+              si el artículo está huérfano de verdad). Ninguna se ofrece en gris:
+              si eliminar no se puede, el diálogo dice por qué y ofrece archivar. */}
           <div className="pt-4 flex items-center gap-2 flex-wrap">
+            {estaArchivado ? (
+              <button
+                type="button"
+                onClick={handleUnarchive}
+                disabled={archiveBusy}
+                title="Vuelve a aparecer en el catálogo y en los buscadores"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md text-text-primary border border-border-default hover:bg-page transition-base disabled:opacity-50"
+              >
+                {archiveBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArchiveRestore className="w-4 h-4" />}
+                Devolver al catálogo
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleArchive}
+                disabled={archiveBusy}
+                title="Lo retira del catálogo sin borrar nada. Se puede deshacer desde esta misma ficha"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50"
+              >
+                {archiveBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                Archivar
+              </button>
+            )}
             <button
               type="button"
               onClick={openDeleteDialog}
@@ -1309,7 +1414,41 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
       {deleteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !deleteBusy && setDeleteOpen(false)}>
           <div className="bg-card rounded-xl w-full max-w-md p-6 border border-border-default" onClick={(e) => e.stopPropagation()}>
-            {deleteCheck === null ? (
+            {/* LO QUE PASÓ. Antes se cerraba la ficha sin decir nada y quedaba
+                la duda de si el artículo se había borrado o solo archivado —y,
+                si se archivó, por qué. El silencio se lee como fallo. */}
+            {deleteResult ? (
+              <>
+                <div className="flex items-center gap-2 text-text-primary mb-2">
+                  {deleteResult.action === 'deleted'
+                    ? <Trash2 className="w-5 h-5 text-danger" />
+                    : <Archive className="w-5 h-5 text-warning" />}
+                  <span className="text-base font-medium">
+                    {deleteResult.action === 'deleted'
+                      ? `Eliminado «${deleteResult.name}»`
+                      : `Archivado «${deleteResult.name}»`}
+                  </span>
+                </div>
+                <p className="text-sm text-text-secondary mb-4">
+                  {deleteResult.action === 'deleted'
+                    ? 'No quedaba ningún rastro suyo en compras, inventarios, cartas ni movimientos, así que se ha borrado de verdad.'
+                    : <>
+                        No se ha borrado: sigue existiendo y su historial está intacto.
+                        {deleteResult.reasons && deleteResult.reasons.length > 0
+                          && <> Se ha archivado porque {deleteResult.reasons.join(' · ')}.</>}
+                      </>}
+                </p>
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => { setDeleteOpen(false); onBack() }}
+                    className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-white hover:opacity-90 transition-base"
+                  >
+                    Volver a ingredientes
+                  </button>
+                </div>
+              </>
+            ) : deleteCheck === null ? (
               <div className="flex items-center gap-2 text-text-secondary py-2">
                 <Loader2 className="w-4 h-4 animate-spin" /> Comprobando…
               </div>
@@ -1335,7 +1474,7 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
                 </p>
               </>
             )}
-            {deleteCheck !== null && (
+            {deleteCheck !== null && !deleteResult && (
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"

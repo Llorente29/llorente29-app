@@ -524,34 +524,34 @@ export async function dismissReview(
   return rowToRecipeItem(data!)
 }
 
+// ── ARCHIVAR Y DESARCHIVAR (02/09) ────────────────────────────────────────
+// Estas dos existían desde hace meses y NO las llamaba nadie: la capacidad
+// estaba escrita en el servicio y no había ningún botón enchufado a ella. Por
+// eso la ficha «no ofrecía archivar»: no es que faltara la función, es que
+// nadie la había conectado a la pantalla.
+//
+// Y hacían UPDATE directo sobre `recipe_item`, apoyándose solo en RLS. Ahora
+// pasan por `kitchen_archive_item` / `kitchen_unarchive_item`, que comprueban
+// el permiso de forma explícita igual que `kitchen_delete_or_archive_item`. Una
+// sola puerta para retirar un artículo del catálogo, no dos con criterios
+// distintos (Regla 10).
+
 export async function archiveRecipeItem(id: string): Promise<RecipeItem> {
   requireSupabase()
-  const { data, error } = await supabase!
-    .from('recipe_item')
-    .update({ is_active: false, archived_at: new Date().toISOString() })
-    .eq('id', id)
-    .select('*')
-    .single()
-
-  if (error) {
-    throw new Error(`Error archivando item ${id}: ${error.message}`)
-  }
-  return rowToRecipeItem(data)
+  const { error } = await supabase!.rpc('kitchen_archive_item', { p_item_id: id })
+  if (error) throw new Error(`Error archivando item ${id}: ${error.message}`)
+  const item = await getRecipeItemById(id)
+  if (!item) throw new Error(`Archivado, pero no se ha podido releer el item ${id}.`)
+  return item
 }
 
 export async function restoreRecipeItem(id: string): Promise<RecipeItem> {
   requireSupabase()
-  const { data, error } = await supabase!
-    .from('recipe_item')
-    .update({ is_active: true, archived_at: null })
-    .eq('id', id)
-    .select('*')
-    .single()
-
-  if (error) {
-    throw new Error(`Error restaurando item ${id}: ${error.message}`)
-  }
-  return rowToRecipeItem(data)
+  const { error } = await supabase!.rpc('kitchen_unarchive_item', { p_item_id: id })
+  if (error) throw new Error(`Error restaurando item ${id}: ${error.message}`)
+  const item = await getRecipeItemById(id)
+  if (!item) throw new Error(`Devuelto al catálogo, pero no se ha podido releer el item ${id}.`)
+  return item
 }
 
 // ─────────────────────────────────────────────────────────────────────
