@@ -90,10 +90,29 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, push: { attempted: false, reason: "plataforma cierra en su sistema" } }, 200);
   }
 
-  const { data: integ } = await sb.from("external_integration")
-    .select("token_secret_name, push_status_enabled, is_active")
+  // ORDEN DETERMINISTA (B54, 03/09/2026). Antes era `.limit(1).maybeSingle()`
+  // sin `order`: Postgres no garantiza cual devuelve, asi que la eleccion era
+  // ARBITRARIA. Foodint tiene DOS filas activas de lastapp, creadas el 12/06 con
+  // 3 h de diferencia y distinto external_org_id. Hoy es inocuo —las dos apuntan
+  // al mismo token_secret_name— pero es el mismo defecto que ya se endurecio en
+  // resolveHubriseToken, y ahi dejo de ser inocuo el dia que los tokens
+  // divergieron. Se elige SIEMPRE la mas antigua por (created_at, id), y si hay
+  // mas de una se dice. (Duplicar o no la fila sobrante es decision de datos, no
+  // de codigo: aqui no se borra nada.)
+  const { data: integRows } = await sb.from("external_integration")
+    .select("id, token_secret_name, push_status_enabled, is_active, created_at")
     .eq("account_id", sale.account_id).eq("source", "lastapp").eq("is_active", true)
-    .limit(1).maybeSingle();
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (integRows && integRows.length > 1) {
+    console.warn(
+      `order-advance: ${integRows.length} integraciones lastapp activas para ` +
+      `account=${sale.account_id} (se esperaba 1). Usando la mas antigua por ` +
+      `(created_at, id): ${integRows[0].id}.`,
+    );
+  }
+  const integ = integRows?.[0] ?? null;
 
   if (!integ) {
     return json({ ok: true, push: { attempted: false, reason: "sin integración Last activa" } }, 200);
