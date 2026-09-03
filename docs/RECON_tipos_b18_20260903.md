@@ -71,44 +71,80 @@ ficheros de servicio y cada uno pide su propia decisión.
 Los dos son reales, están en producción hoy, y **no dependen de que se aplique
 o no** el fichero regenerado.
 
-### 4.1 `list_costless_sold_products` — RPC muerta, y se sigue llamando
+### 4.1 `list_costless_sold_products` — retirada de la base, y la pantalla se cayó con ella
 
-`src/modules/kitchen/services/salesReliabilityService.ts:615` hace:
+`src/modules/kitchen/services/salesReliabilityService.ts:615` llama a una RPC
+que **ya no existe**: la retiró a propósito la migración
+**`20260902204305_retirar_list_costless_sold_products`**, el 02/09 a las 20:43
+UTC. La retirada llevaba guardas — comprobaba que ninguna otra función de
+Postgres y ningún cron la nombraran — pero **ninguna guarda podía ver el código
+del cliente**, y el cliente sí la usaba.
 
-```ts
-const { data, error } = await supabase!.rpc('list_costless_sold_products', { … })
+El daño no era el que yo dije al principio. **No es que «el tipo tape un
+PGRST202»: es que la vista General de `SalesExceptionsPage` se quedaba entera
+en un recuadro rojo.** Las tres lecturas iban en un mismo `Promise.all`, así
+que el rechazo de ésta se llevaba por delante la señal de fiabilidad y los
+grupos de ventas sin casar. Rota desde el 02/09 a las 20:43 — el último commit
+del repo es de esa misma tarde a las 16:50, o sea que la retirada ocurrió
+**después** y la UI nunca se enteró.
+
+**Arreglado el 03/09:** la lectura de «casado sin coste» se separa del
+`Promise.all` y tiene su propio error. La pantalla vuelve a funcionar y, si esa
+lectura falla, **lo dice en un aviso ámbar en vez de callarse** (reglas 7 y 8).
+La migración de la retirada está ya en `supabase/migrations/`.
+
+**Queda por decidir** (no es de código): si se recrea la RPC —su definición
+sigue en `supabase/migrations/20260608T2000_list_costless_sold_products.sql`— o
+si se jubila la sección «Casado pero sin coste» con su `CostlessRow`, que son
+~200 líneas de UI que funcionan. Ver §5.
+
+### 4.2 `set_brand_status` — dos firmas, y NO es el fallo de la regla 2
+
+**Corrección de lo que dije en la primera versión de esta ficha.** Escribí que
+esto era «la regla ganada nº2 exactamente» y que había que hacer DROP + CREATE.
+**Es al revés: tocarlo empeoraría las cosas.**
+
+Las dos firmas existen **a propósito**. La de 5 argumentos no es un residuo: su
+cuerpo entero es una lápida deliberada.
+
+```
+raise exception 'set_brand_status: esta version cierra la marca en TODOS los
+                 locales y esta retirada desde el 01/09/2026. Actualiza la
+                 aplicacion: ahora hay que indicar el local. Desde la tablet de
+                 cocina no hace falta hacer nada.';
 ```
 
-**Esa función no existe en la base.** Buscada en `pg_proc` por todos los
-esquemas: cero filas. `database.ts` la sigue declarando (línea 18.630) y por eso
-el build no se queja — el tipo miente y tapa una llamada que en ejecución
-devuelve `PGRST202`. Es la deuda B1 **al revés**: el repo tiene código de algo
-que la base ya no tiene.
+Es la red que atrapa a una app vieja que aún llame sin local — el fallo que el
+29/08 apagó Meraki Pita en Alcalá cuando se cerró Carabanchel. **Borrarla
+convertiría ese mensaje en castellano en un `PGRST202` genérico.**
 
-### 4.2 `set_brand_status` — dos firmas vivas (regla ganada nº 2)
-
-En la base hay **dos** `set_brand_status`:
+Y **no hay ambigüedad**, que es lo que la regla 2 castiga. Comprobado contra
+producción, no razonado:
 
 ```
-set_brand_status(p_brand_id, p_mode, p_resume_at, p_reason, p_reason_code)                 -- 5 args
-set_brand_status(p_brand_id, p_mode, p_location_id, p_resume_at, p_reason, p_reason_code)  -- 6 args
+select public.set_brand_status('000…000'::uuid, 'closed');
+ERROR:  P0001: set_brand_status: esta version cierra la marca en TODOS los locales…
+        CONTEXT: PL/pgSQL function set_brand_status(uuid,text,timestamptz,text,text) line 3
 ```
 
-Es la forma exacta que describe la regla nº 2: *«añadir un parámetro es DROP +
-CREATE, nunca CREATE OR REPLACE; replace crea una SOBRECARGA»*. El
-`database.ts` actual sólo conoce la de 5 argumentos; el regenerado la declara
-como unión de las dos. Se llama desde
-`src/modules/kds/services/kdsService.ts:431`. Hoy PostgREST desempata por los
-nombres de los argumentos que se envían, así que funciona — pero es la misma
-configuración que dejó a los siete vigías sin poder encolar el 27/08.
+`P0001` —el mensaje de la propia lápida—, **no `42725`**. Postgres resuelve
+limpio porque `p_location_id` **no tiene DEFAULT** en la firma de 6: una
+llamada que no lo pase sólo puede casar con la de 5. El cliente
+(`kdsService.ts:431`) ya pasa `p_location_id` y es obligatorio sin default, con
+el porqué escrito encima.
+
+**No se toca.** Lo que sí es cierto es que el `database.ts` actual sólo conoce
+la firma de 5 y el regenerado las declara como unión — un detalle a tener
+presente cuando se aplique, no un fallo que arreglar.
 
 ## 5. Lo que se propone
 
 Tres piezas separadas, cada una con su encargo, en este orden:
 
-1. **Las dos de arriba** — pequeñas, acotadas, independientes: decidir si
-   `list_costless_sold_products` se recupera o se jubila la llamada, y hacer
-   DROP + CREATE de la firma buena de `set_brand_status`.
+1. **Decidir qué pasa con «Casado pero sin coste»** (§4.1): recrear la RPC
+   —la definición está en la migración del 08/06— o jubilar la sección y su
+   `CostlessRow`. La pantalla ya no se cae mientras tanto.
+   **`set_brand_status` (§4.2) NO entra: no hay nada que arreglar ahí.**
 2. **El barrido de `account_id`** — 27 ficheros de servicio, uno a uno, con la
    regla 9 delante. Es el grueso de B18 y merece su propio frente.
 3. **Aplicar `database.ts` regenerado** — al final, cuando 1 y 2 lo dejen verde.

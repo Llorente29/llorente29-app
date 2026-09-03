@@ -824,24 +824,38 @@ function GeneralExceptionsView({ accountId }: { accountId: string }) {
   const [costless, setCostless] = useState<CostlessProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // «Casado sin coste» va APARTE, con su propio error. El 02/09 se retiro de la
+  // base la RPC list_costless_sold_products (migracion 20260902204305) creyendo
+  // que no la usaba nadie; su guarda solo miraba funciones de Postgres y crons,
+  // no el front. Como las tres lecturas iban en un mismo Promise.all, el rechazo
+  // de esta tumbaba TAMBIEN la señal y los grupos: la pantalla entera se quedaba
+  // en un recuadro rojo. Una fuente que falla no puede llevarse por delante las
+  // que si responden — y lo que falla se dice, no se esconde (reglas 7 y 8).
+  const [costlessError, setCostlessError] = useState<string | null>(null)
 
   function reload() {
     setLoading(true)
     setError(null)
-    Promise.all([getReliability(accountId), listBlindLines(accountId), listCostlessSoldProducts(accountId)])
-      .then(([sig, grp, cl]) => { setSignal(sig); setGroups(grp); setCostless(cl) })
+    Promise.all([getReliability(accountId), listBlindLines(accountId)])
+      .then(([sig, grp]) => { setSignal(sig); setGroups(grp) })
       .catch((e) => setError(String(e.message ?? e)))
       .finally(() => setLoading(false))
+    listCostlessSoldProducts(accountId)
+      .then((cl) => { setCostless(cl); setCostlessError(null) })
+      .catch((e) => { setCostless([]); setCostlessError(String(e.message ?? e)) })
   }
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    Promise.all([getReliability(accountId), listBlindLines(accountId), listCostlessSoldProducts(accountId)])
-      .then(([sig, grp, cl]) => { if (!cancelled) { setSignal(sig); setGroups(grp); setCostless(cl) } })
+    Promise.all([getReliability(accountId), listBlindLines(accountId)])
+      .then(([sig, grp]) => { if (!cancelled) { setSignal(sig); setGroups(grp) } })
       .catch((e) => { if (!cancelled) setError(String(e.message ?? e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
+    listCostlessSoldProducts(accountId)
+      .then((cl) => { if (!cancelled) { setCostless(cl); setCostlessError(null) } })
+      .catch((e) => { if (!cancelled) { setCostless([]); setCostlessError(String(e.message ?? e)) } })
     return () => { cancelled = true }
   }, [accountId])
 
@@ -862,6 +876,15 @@ function GeneralExceptionsView({ accountId }: { accountId: string }) {
           {groups.map((g) => (
             <ReasonGroup key={g.reason} group={g} accountId={accountId} onResolved={reload} />
           ))}
+        </div>
+      )}
+
+      {costlessError && (
+        <div className="mt-8 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+          <div className="font-medium">«Casado pero sin coste» no se puede mostrar.</div>
+          <div className="mt-1 text-xs text-amber-800">
+            El resto de esta pantalla es correcto. {costlessError}
+          </div>
         </div>
       )}
 
