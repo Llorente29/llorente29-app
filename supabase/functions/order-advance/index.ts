@@ -36,10 +36,33 @@ const CANCEL_STATES = ["cancelled", "rejected", "delivery_failed"];
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // ROTACION SIN CORTE (B55, 03/09/2026). El secreto vivia en texto plano dentro
+  // del cuerpo de trg_sale_push_status, y anon/authenticated tienen SELECT sobre
+  // pg_proc: era legible. Ademas viajaba en el repositorio. Hay que rotarlo, no
+  // solo esconderlo.
+  //
+  // El problema es que rotar tiene un precipicio: si se cambia este env antes que
+  // la funcion, la BBDD sigue mandando el secreto viejo; si se cambia la funcion
+  // antes, aqui se espera el viejo. En los dos casos son 401 y TODOS los empujes
+  // caidos hasta que cuadren. Por eso durante la ventana se aceptan los dos.
+  //
+  // El aviso de abajo es el que dice cuando se puede retirar ORDER_ADVANCE_SECRET_PREV:
+  // mientras siga apareciendo en los logs, la rotacion no ha terminado. Cuando deje
+  // de salir, se borra la variable y el secreto viejo queda muerto.
   const secret = req.headers.get("x-order-advance-secret") ?? "";
   const expected = Deno.env.get("ORDER_ADVANCE_SECRET") ?? "";
-  if (!expected || secret !== expected) {
+  const previous = Deno.env.get("ORDER_ADVANCE_SECRET_PREV") ?? "";
+  const conElNuevo = expected !== "" && secret === expected;
+  const conElViejo = previous !== "" && secret === previous;
+  if (!conElNuevo && !conElViejo) {
     return json({ ok: false, error: "unauthorized" }, 401);
+  }
+  if (conElViejo) {
+    console.warn(
+      "order-advance: peticion aceptada con el secreto ANTERIOR. La rotacion B55 " +
+      "no ha terminado: falta que trg_sale_push_status lea el nuevo de Vault. " +
+      "No retirar ORDER_ADVANCE_SECRET_PREV mientras salga este aviso.",
+    );
   }
 
   let body: { sale_id?: string; new_status?: string } = {};

@@ -30,6 +30,20 @@
 
 begin;
 
+-- ── GUARDA PREVIA (B55): sin el secreto en Vault, esta funcion no puede empujar.
+-- Aplicarla igualmente dejaria TODOS los empujes a Last en 401 hasta que alguien
+-- se diera cuenta. Mejor que la migracion se niegue a entrar.
+do $guarda$
+begin
+  if not exists (select 1 from vault.decrypted_secrets where name = 'order_advance_secret') then
+    raise exception
+      'B53/B55: falta el secreto `order_advance_secret` en Vault. Crealo con el valor '
+      'ROTADO y ponlo tambien en ORDER_ADVANCE_SECRET de la Edge order-advance ANTES '
+      'de aplicar esta migracion. Ver docs/RUNBOOK_b53_b55_b54_20260903.md.';
+  end if;
+end
+$guarda$;
+
 create or replace function public.trg_sale_push_status()
 returns trigger
 language plpgsql

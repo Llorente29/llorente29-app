@@ -1,4 +1,13 @@
 -- supabase/migrations/20260619T1020_sale_push_trigger.sql
+-- ⚠️ SECRETO RETIRADO DE ESTE FICHERO EL 03/09/2026 (B55).
+-- El literal que habia aqui estaba en texto plano en el repositorio Y en el cuerpo
+-- de la funcion, y anon/authenticated tienen SELECT sobre pg_catalog.pg_proc: era
+-- legible desde fuera. Se ha ROTADO (esconderlo no basta: ha estado expuesto) y el
+-- valor nuevo vive en Vault como `order_advance_secret`.
+-- Esta migracion queda como historia: la funcion que define fue sustituida por
+-- 20260903171600_b53_trigger_guarda_el_acuse.sql, que lee el secreto de Vault.
+-- NO se re-aplica este fichero: dejaria la funcion sin secreto valido.
+-- ============================================================================
 -- ============================================================================
 -- PUENTE KDS -> FEED (2/2): el empuje al canal es CONSECUENCIA del cambio de estado.
 -- ============================================================================
@@ -39,7 +48,7 @@ begin
       url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/order-advance',
       headers := jsonb_build_object(
         'Content-Type',            'application/json',
-        'x-order-advance-secret',  'fv_oadv_CV8IjsPzPIwDIXBPg42FkQMUMJp5Vyde'
+        'x-order-advance-secret',  '<<RETIRADO 03/09/2026 - B55>>'
       ),
       body    := jsonb_build_object(
         'sale_id',    new.id,
