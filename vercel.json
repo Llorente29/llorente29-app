@@ -3,6 +3,16 @@
   "rewrites": [
     {
       "source": "/E/:token",
+      "has": [{ "type": "host", "value": "(?<marca>.*)" }],
+      "destination": "https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/label-scan?t=:token&h=:marca"
+    },
+    {
+      "source": "/e/:token",
+      "has": [{ "type": "host", "value": "(?<marca>.*)" }],
+      "destination": "https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/label-scan?t=:token&h=:marca"
+    },
+    {
+      "source": "/E/:token",
       "destination": "https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/label-scan?t=:token"
     },
     {

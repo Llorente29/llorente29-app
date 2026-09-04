@@ -25,17 +25,51 @@
 // (/E/ y /e/), y del token, el upper() de aqui y el de label_scan_register.
 //
 // UN TOKEN DESCONOCIDO NO ROMPE NADA (requisito 6): se redirige igual, a la
-// tienda del dominio por el que entro (`x-forwarded-host`), y no se escribe.
+// tienda del dominio por el que entro, y no se escribe.
+//
+// COMO SE AVERIGUA ESE DOMINIO, Y POR QUE NO POR CABECERA (medido 04/09).
+// La primera version leia `x-forwarded-host` y, si no, `host`. MEDIDO EN
+// PRODUCCION: dentro del runtime el `host` es SIEMPRE `edge-runtime.supabase.com`
+// y el `x-forwarded-host` de Vercel no llega. Resultado real de la prueba: un
+// token desconocido devolvia un 302 a `https://edge-runtime.supabase.com/`, o
+// sea el cliente acababa en un JSON de error de Supabase. Justo lo que el
+// requisito 6 prohibe, y ademas en silencio.
+// Ahora el dominio de la marca lo manda Vercel EXPLICITO en `?h=`, capturado
+// del Host con `has` en vercel.json — no depende de que nadie reenvie nada. Y
+// aqui se valida: si `h` no viene o no parece un dominio de marca, se cae a
+// folvy.app en vez de mandar a nadie a la infraestructura.
 //
 // Deploy: POR CI, nunca por MCP (regla 22). Y con --no-verify-jwt: lo abre el
 // movil de un cliente, que no tiene sesion.
 
 import { createClient } from "@supabase/supabase-js";
 
-function destinoPorDefecto(req: Request): string {
-  // El dominio por el que llego la peticion es la tienda de esa marca.
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
-  return host ? `https://${host}/` : "https://folvy.app/";
+// Un host de marca y nada mas: letras, digitos, puntos y guiones. Se rechaza
+// de forma explicita la infraestructura, que es donde acabo la version anterior.
+function hostDeMarca(candidato: string | null): string | null {
+  const h = (candidato ?? "").trim().toLowerCase();
+  if (!h || h.length > 253) return null;
+  if (!/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(h)) return null;
+  if (!h.includes(".")) return null;
+  if (h.endsWith("supabase.co") || h.endsWith("supabase.com")) return null;
+  if (h.includes("edge-runtime")) return null;
+  return h;
+}
+
+function destinoPorDefecto(req: Request, url: URL | null): string {
+  // 1) Lo que Vercel captura del Host y manda explicito. Es la via buena.
+  // 2) x-forwarded-host, por si algun dia si llega o se entra por otro camino.
+  // El `host` a secas NO se usa: dentro del runtime siempre es infraestructura.
+  const h =
+    hostDeMarca(url?.searchParams.get("h") ?? null) ??
+    hostDeMarca(req.headers.get("x-forwarded-host"));
+
+  if (h) return `https://${h}/`;
+
+  // Ultimo recurso. Que se vea en los logs: llegar aqui significa que el
+  // cliente NO va a su tienda, y eso hay que poder enterarse.
+  console.warn("label-scan: sin dominio de marca; se cae a folvy.app");
+  return "https://folvy.app/";
 }
 
 function redirigir(url: string): Response {
@@ -50,18 +84,21 @@ function redirigir(url: string): Response {
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
-  const respaldo = destinoPorDefecto(req);
-
-  let token: string;
+  let u: URL | null = null;
   try {
-    const u = new URL(req.url);
-    // Vercel manda el token como ?t=…; se acepta tambien /label-scan/<token>.
-    token = (u.searchParams.get("t") ?? u.pathname.split("/").filter(Boolean).pop() ?? "")
-      .trim()
-      .toUpperCase();
+    u = new URL(req.url);
   } catch {
-    return redirigir(respaldo);
+    u = null;
   }
+
+  const respaldo = destinoPorDefecto(req, u);
+
+  if (!u) return redirigir(respaldo);
+
+  // Vercel manda el token como ?t=…; se acepta tambien /label-scan/<token>.
+  const token = (u.searchParams.get("t") ?? u.pathname.split("/").filter(Boolean).pop() ?? "")
+    .trim()
+    .toUpperCase();
 
   if (!token || token === "LABEL-SCAN") return redirigir(respaldo);
 
