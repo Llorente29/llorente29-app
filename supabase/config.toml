@@ -53,3 +53,12 @@ verify_jwt = true
 # cierra uno que tenía que estar abierto. La guarda no falló: avisó.
 [functions.menu-photos-repatriate]
 verify_jwt = true
+
+# (04/09) label-scan · C9 Lote 1. El destino del QR de las etiquetas.
+# verify_jwt = FALSE, y es deliberado: quien abre esta URL es el movil de un
+# cliente en su casa, escaneando la pegatina de su bolsa. No tiene sesion ni
+# puede tenerla. Su frontera no es un JWT ni un secreto: es que NO HACE NADA
+# sensible — registra un escaneo y devuelve un 302 a la tienda de la marca. Un
+# token desconocido redirige igual y no escribe.
+[functions.label-scan]
+verify_jwt = false
