@@ -45,6 +45,19 @@ function originFor(kind: string): string {
   if (kind === "availability-dispatch" || kind === "location-status-dispatch" || kind === "brand-closure") {
     return "vigía de disponibilidad HubRise (Folvy)";
   }
+  // B61 (04/09). El pie decía «kind sin mapear» en 6 de los 8 tipos que de
+  // verdad se usan — 80 de los 89 avisos encolados, incluidos los 34 de
+  // ingesta_silencio. Un aviso que se ve a medio hacer se acaba ignorando, y
+  // entonces el vigía deja de servir aunque funcione.
+  if (kind === "edge_drift") return "vigía de deriva de Edge Functions (Folvy)";
+  if (kind === "ingesta_silencio") return "vigía de silencio de ingesta (Folvy)";
+  if (kind === "venta_producto_sin_casar") return "vigía de ventas sin casar (Folvy)";
+  if (kind === "kds_device_silencio") return "vigía de tablets mudas (Folvy)";
+  if (kind === "kds_device_desfasado") return "vigía de bundle desfasado en tablet (Folvy)";
+  if (kind === "autoinventario") return "autoinventario — cola de conteos (Folvy)";
+  if (kind === "cost_sweep") return "barrido nocturno de costes de línea (Folvy)";
+  // El fallback se queda: nunca afirma un origen que no se puede verificar.
+  // Que salga es la señal de que hay un vigía nuevo sin dar de alta aquí.
   return `Folvy — kind sin mapear: "${kind}"`;
 }
 
