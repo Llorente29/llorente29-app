@@ -178,7 +178,7 @@ jobs:
               # parar a estrenar una función con la puerta al revés.
               if grep -qE "^\[functions\.$f\]" supabase/config.toml; then
                 echo "$f es nueva y está declarada en config.toml. El CLI aplica lo declarado."
-                DECL=$(awk -v f="[functions.$f]" '$0==f{found=1;next} /^\[/{found=0} found && /verify_jwt/{print $3}' supabase/config.toml)
+                DECL=$(awk -v f="[functions.$f]" '$0==f{found=1;next} /^\[/{found=0} found && /^[[:space:]]*verify_jwt[[:space:]]*=/{sub(/^[^=]*=[[:space:]]*/,""); gsub(/[[:space:]]/,""); print; exit}' supabase/config.toml)
                 supabase functions deploy "$f" --project-ref "$REF" \
                   && echo "| \`$f\` | ${DECL:-declarado} (nueva) | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY" \
                   || { echo "| \`$f\` | ${DECL:-declarado} (nueva) | :x: |" >> "$GITHUB_STEP_SUMMARY"; FALLOS=1; }
@@ -191,23 +191,62 @@ jobs:
               continue
             fi
 
-            JWT=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .verify_jwt' /tmp/vivas.json)
-            if [ "$JWT" = "false" ]; then
-              FLAG="--no-verify-jwt"
-            elif [ "$JWT" = "true" ]; then
-              FLAG=""
-            else
-              echo "::error::No se pudo leer verify_jwt de $f (valor: '$JWT'). Se aborta antes que adivinar."
+            VIVO=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .verify_jwt' /tmp/vivas.json)
+            if [ "$VIVO" != "true" ] && [ "$VIVO" != "false" ]; then
+              echo "::error::No se pudo leer verify_jwt de $f (valor: '$VIVO'). Se aborta antes que adivinar."
               echo "| \`$f\` | ? | :x: |" >> "$GITHUB_STEP_SUMMARY"
               FALLOS=1
               continue
             fi
 
-            echo "→ $f (verify_jwt=$JWT)"
-            if supabase functions deploy "$f" --project-ref "$REF" $FLAG; then
-              echo "| \`$f\` | $JWT | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY"
+            # ── LA DECLARACION MANDA SOBRE LO VIVO (04/09) ──────────────────
+            # Hasta hoy esto leia SIEMPRE el valor vivo y lo volvia a poner. Eso
+            # protege a las 43 funciones sin declarar --que es para lo que se
+            # hizo-- pero tiene una consecuencia que costo dos dias: el CI NO
+            # PODIA CORREGIR UN FLAG MAL PUESTO. `social-agent` llevaba desde el
+            # 02/09 con verify_jwt=true por un despliegue por MCP, todas sus
+            # llamadas morian en 401, y un despliegue por CI le habria vuelto a
+            # poner el true con toda fidelidad.
+            #
+            # Ahora: si la funcion ESTA declarada en config.toml, manda la
+            # declaracion. Si no lo esta, no se toca nada y se conserva lo vivo,
+            # exactamente igual que antes. Declarar una funcion pasa a SIGNIFICAR
+            # algo en vez de ser decorativo.
+            if grep -qE "^\[functions\.$f\]" supabase/config.toml; then
+              DECL=$(awk -v f="[functions.$f]" '$0==f{found=1;next} /^\[/{found=0} found && /^[[:space:]]*verify_jwt[[:space:]]*=/{sub(/^[^=]*=[[:space:]]*/,""); gsub(/[[:space:]]/,""); print; exit}' supabase/config.toml)
+              if [ "$DECL" != "true" ] && [ "$DECL" != "false" ]; then
+                echo "::error::$f esta declarada en config.toml pero su verify_jwt no se pudo leer (valor: '$DECL')."
+                echo "| \`$f\` | ? | :x: declaracion ilegible |" >> "$GITHUB_STEP_SUMMARY"
+                FALLOS=1
+                continue
+              fi
+              JWT="$DECL"
+              ORIGEN="config.toml"
+              if [ "$DECL" != "$VIVO" ]; then
+                # No se hace en silencio: corregir un flag cambia quien puede
+                # llamar a la funcion, y eso se dice en el resumen del run.
+                echo "::warning::$f: DERIVA CORREGIDA. Vivo=$VIVO, declarado=$DECL. Manda config.toml."
+                NOTA=" (corrige deriva: $VIVO → $DECL)"
+              else
+                NOTA=""
+              fi
             else
-              echo "| \`$f\` | $JWT | :x: |" >> "$GITHUB_STEP_SUMMARY"
+              JWT="$VIVO"
+              ORIGEN="lo vivo (sin declarar)"
+              NOTA=""
+            fi
+
+            if [ "$JWT" = "false" ]; then
+              FLAG="--no-verify-jwt"
+            else
+              FLAG=""
+            fi
+
+            echo "→ $f (verify_jwt=$JWT, segun $ORIGEN)$NOTA"
+            if supabase functions deploy "$f" --project-ref "$REF" $FLAG; then
+              echo "| \`$f\` | $JWT [$ORIGEN]$NOTA | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$f\` | $JWT [$ORIGEN]$NOTA | :x: |" >> "$GITHUB_STEP_SUMMARY"
               FALLOS=1
             fi
           done
@@ -230,15 +269,34 @@ jobs:
             "https://api.supabase.com/v1/projects/$REF/functions" > /tmp/despues.json
 
           # Verificación por consulta, no por afirmación: cada función tocada
-          # sigue ACTIVE y conserva el verify_jwt que tenía antes.
+          # sigue ACTIVE y quedó con el verify_jwt QUE SE QUERIA.
+          #
+          # Qué se quería (04/09): si la función está declarada en config.toml,
+          # lo declarado. Si no, lo que tenía antes. Antes esto comparaba SIEMPRE
+          # contra lo anterior, y por eso habría dado por rota la corrección de
+          # `social-agent` -- el único cambio de flag que había que hacer.
           MAL=0
           for f in $FUNCIONES; do
             ANTES=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .verify_jwt' /tmp/vivas.json)
             AHORA=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .verify_jwt' /tmp/despues.json)
             ESTADO=$(jq -r --arg s "$f" '.[] | select(.slug==$s) | .status' /tmp/despues.json)
-            if [ -n "$ANTES" ] && [ "$ANTES" != "$AHORA" ]; then
-              echo "::error::$f ha cambiado su verify_jwt: $ANTES → $AHORA. Eso rompe a quien la llama."
+
+            if grep -qE "^\[functions\.$f\]" supabase/config.toml; then
+              QUERIA=$(awk -v f="[functions.$f]" '$0==f{found=1;next} /^\[/{found=0} found && /^[[:space:]]*verify_jwt[[:space:]]*=/{sub(/^[^=]*=[[:space:]]*/,""); gsub(/[[:space:]]/,""); print; exit}' supabase/config.toml)
+              FUENTE="config.toml"
+            else
+              QUERIA="$ANTES"
+              FUENTE="lo que tenía antes"
+            fi
+
+            if [ -n "$QUERIA" ] && [ "$QUERIA" != "$AHORA" ]; then
+              echo "::error::$f quedó con verify_jwt=$AHORA y se quería $QUERIA (según $FUENTE)."
               MAL=1
+            fi
+            if [ "$ANTES" != "$AHORA" ]; then
+              # No es un error si era lo declarado: es la corrección. Pero se
+              # DICE, porque cambiar este flag cambia quién puede llamar.
+              echo "::warning::$f cambió su verify_jwt: $ANTES → $AHORA (según $FUENTE)."
             fi
             if [ "$ESTADO" != "ACTIVE" ]; then
               echo "::error::$f no quedó ACTIVE (está en '$ESTADO')."
@@ -246,6 +304,6 @@ jobs:
             fi
           done
           if [ "$MAL" = "0" ]; then
-            echo "Verificado: ninguna cambió de verify_jwt y todas quedaron ACTIVE."
+            echo "Verificado: todas quedaron ACTIVE y con el verify_jwt que se quería."
           fi
           exit "$MAL"

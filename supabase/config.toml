@@ -62,3 +62,39 @@ verify_jwt = true
 # token desconocido redirige igual y no escribe.
 [functions.label-scan]
 verify_jwt = false
+
+# (04/09) order-evidence-capture · C9 Lote 2. Recibe la foto del pase.
+# verify_jwt = FALSE, y es deliberado igual que en label-scan y order-advance:
+# quien llama es la TABLET del pase, que se identifica con su `device_token`
+# contra `kds_resolve_device` -- no tiene sesion de usuario ni puede tenerla.
+# La frontera no es un JWT: es que el token resuelva a un dispositivo vivo Y que
+# el pedido sea de ESA cuenta y ESE local (regla 9). Sin las dos cosas, 401/403.
+[functions.order-evidence-capture]
+verify_jwt = false
+
+# (04/09) order-evidence-purge · C9 Lote 2 §5. Borra las fotos que cumplen plazo.
+# verify_jwt = FALSE porque quien llama es pg_cron, que no tiene JWT. Su frontera
+# es el `x-cron-secret` de Vault, el mismo patron que edge-drift-watchdog.
+[functions.order-evidence-purge]
+verify_jwt = false
+
+# (04/09) social-agent · LA QUE ESTUVO DOS DIAS CAIDA SIN QUE NADIE SE ENTERARA.
+#
+# verify_jwt = FALSE. Quien la llama es el cron `social-agent-daily` (0 10 * * *),
+# que manda `Content-Type` y `x-agent-secret` y NO manda `Authorization`. Con la
+# puerta del gateway encendida, todas sus llamadas morian en 401 ANTES de entrar
+# en el codigo de la funcion. Su autenticacion real es el `x-agent-secret`, que
+# devuelve 403 -- por eso un 401 delataba que ni siquiera llegaba a ejecutarse.
+#
+# COMO SE ROMPIO: el 02/09 a las 16:59 UTC alguien la desplego POR MCP (su
+# entrypoint_path era `/tmp/user_fn_...`, no `/home/runner/...`). Un despliegue
+# por MCP NO arrastra este fichero, asi que el flag volvio a su defecto, que es
+# `true`. Es el mismo despliegue que disparo la deriva de bytes del vigia.
+# Ultima fila de `social_post`: 02/09 12:00. Encaja al minuto.
+#
+# Y POR ESO SE DECLARA AQUI aunque «ya funcionaba»: lo que no esta declarado
+# queda a merced del defecto la proxima vez que alguien despliegue por fuera del
+# CI. Declararla es lo que convierte este fichero en la intencion, y no en una
+# copia de lo que hubiera un martes.
+[functions.social-agent]
+verify_jwt = false
