@@ -204,6 +204,26 @@ export function renderKitchenTicket(order: any): TicketDoc {
   return { title: 'Cocina', widthMm: 80, blocks: b };
 }
 
+// C9 · Lote 1 §2 (04/09/2026). El QR deja de ser un cartel y pasa a ser un
+// identificador. ANTES las 18 marcas de la cuenta emitian LA MISMA URL
+// (`brand_shop_url`): verificado sobre una foto real, los seis QR decodificaban
+// a `https://foodint.folvy.app/`. Como identificador no servia para nada.
+//
+// Ahora: `https://<tienda-de-la-marca>/e/<token>`, que redirige (302) a la
+// tienda. Para el cliente es exactamente lo mismo que hoy; para nosotros, la
+// etiqueta pasa a ser identificable.
+//
+// SIN TOKEN SE IMPRIME IGUAL, con la URL de siempre. Una venta antigua, un
+// acuñado que fallo, o una tablet contra un order_for_print sin parchear, no
+// pueden dejar a la cocina sin pegatinas: se imprime peor, no se deja de
+// imprimir (misma regla que B53).
+function qrEtiqueta(order: { brand_shop_url?: string | null }, token: string | null | undefined): string | null {
+  const tienda = String(order.brand_shop_url ?? '').trim();
+  if (!tienda) return null;
+  if (!token) return tienda;
+  return tienda.replace(/\/+$/, '') + '/e/' + token;
+}
+
 export function renderLabels(order: any): TicketDoc[] {
   const items = flattenItems(order);
   const food = items.filter(it => !it.isDrink);
@@ -222,7 +242,8 @@ export function renderLabels(order: any): TicketDoc[] {
     for (const m of modifierLines(it.modifiers)) b.push({ kind: 'text', text: '  ' + m.text, muted: true });
     if (it.allergens.length) b.push({ kind: 'text', text: '! ' + it.allergens.join(' · '), bold: true });
     b.push({ kind: 'row', left: `${idx} de ${totalPieces} · ${who}`, right: '', muted: true });
-    if (order.brand_shop_url) b.push({ kind: 'qr', data: order.brand_shop_url, size: 'sm' });
+    const qrUnidad = qrEtiqueta(order, it.unitTokens?.[(it.unitNo ?? 1) - 1]);
+    if (qrUnidad) b.push({ kind: 'qr', data: qrUnidad, size: 'sm' });
     b.push({ kind: 'cut' });
     labels.push({ title: `Pegatina ${idx}/${totalPieces}`, widthMm: 80, blocks: b });
   }
@@ -234,7 +255,8 @@ export function renderLabels(order: any): TicketDoc[] {
     b.push({ kind: 'text', text: 'Bebidas y postres', bold: true, size: 2 });
     for (const it of drinks) b.push({ kind: 'text', text: `  ${it.qty}x ${it.name}` });
     b.push({ kind: 'row', left: `${idx} de ${totalPieces} · bolsa aparte · ${who}`, right: '', muted: true });
-    if (order.brand_shop_url) b.push({ kind: 'qr', data: order.brand_shop_url, size: 'sm' });
+    const qrBolsa = qrEtiqueta(order, order.bag_token);
+    if (qrBolsa) b.push({ kind: 'qr', data: qrBolsa, size: 'sm' });
     b.push({ kind: 'cut' });
     labels.push({ title: 'Pegatina bebidas', widthMm: 80, blocks: b });
   }
