@@ -17,6 +17,13 @@
 // dependencia de Vercel, y montarla obligaria a poner una clave de Supabase en
 // Vercel. Un rewrite a esta edge function no necesita ningun secreto nuevo.
 //
+// INSENSIBLE A MAYUSCULAS, y esto no es un detalle: el QR emite la URL ENTERA
+// en mayusculas para que el simbolo entre en modo alfanumerico y baje de version
+// 4 a 3 (medido: 24,8 mm -> 21,8 mm de lado manteniendo ECC Q). Asi que lo que
+// llega aqui es `/E/AZ3KP9QR7MXT`. El esquema y el dominio ya son insensibles
+// por norma y por DNS; de la ruta se encargan los dos rewrites de vercel.json
+// (/E/ y /e/), y del token, el upper() de aqui y el de label_scan_register.
+//
 // UN TOKEN DESCONOCIDO NO ROMPE NADA (requisito 6): se redirige igual, a la
 // tienda del dominio por el que entro (`x-forwarded-host`), y no se escribe.
 //
@@ -49,12 +56,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     const u = new URL(req.url);
     // Vercel manda el token como ?t=…; se acepta tambien /label-scan/<token>.
-    token = (u.searchParams.get("t") ?? u.pathname.split("/").filter(Boolean).pop() ?? "").trim();
+    token = (u.searchParams.get("t") ?? u.pathname.split("/").filter(Boolean).pop() ?? "")
+      .trim()
+      .toUpperCase();
   } catch {
     return redirigir(respaldo);
   }
 
-  if (!token || token === "label-scan") return redirigir(respaldo);
+  if (!token || token === "LABEL-SCAN") return redirigir(respaldo);
 
   try {
     const sb = createClient(

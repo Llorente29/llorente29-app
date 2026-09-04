@@ -60,7 +60,9 @@ function qr(b: Bytes, data: string, moduleSize = 6) {
   // 6 de 6 reescalando x3. El enemigo de una pegatina que va en una bolsa de
   // comida no es la resolucion: es la grasa, el vaho y el pliegue — y contra eso
   // lo que sirve es la correccion, no el tamaño del modulo.
-  // Si no cabe en la pegatina, se baja a 50 (M, 15 %) ANTES que volver a modulo 4.
+  // El repliegue a M (50) YA NO HACE FALTA: con la URL entera en mayusculas el QR
+  // entra en modo alfanumerico y en ECC Q sale la MISMA version 3 que saldria en
+  // M. Se conserva el 25 % de correccion al precio del 15 % (Julio, 04/09).
   b.push(GS, 0x28, 0x6b, 3, 0, 49, 69, 51);
   b.push(GS, 0x28, 0x6b, pL, pH, 49, 80, 48);
   for (let i = 0; i < store.length; i++) b.push(store[i]);
@@ -179,12 +181,12 @@ export function renderDoc(doc: TicketDoc): Uint8Array {
       case 'space': lf(b, blk.lines ?? 1); break;
       case 'qr': {
         alignCtr(b);
-        // C9 §3: modulo 'sm' de 4 -> 6 puntos. A 203 dpi (8 puntos/mm) el QR de una
-        // etiqueta pasa de ~12,5 mm a ~24,7 mm de lado. Es el doble, y esta medido
-        // a proposito para que la prueba fisica tenga contra que compararse:
-        //   antes  26 car. + ECC L -> version 2 (25 modulos) x4 = 100 pt = 12,5 mm
-        //   ahora  40 car. + ECC Q -> version 4 (33 modulos) x6 = 198 pt = 24,7 mm
-        //   si hay que bajar a M   -> version 3 (29 modulos) x6 = 174 pt = 21,8 mm
+        // C9 §3: modulo 'sm' de 4 -> 6 puntos. MEDIDO con un codificador real, no
+        // supuesto, para que la prueba fisica tenga contra que compararse
+        // (203 dpi = 8 puntos/mm):
+        //   antes   26 car. minusc. + ECC L -> v2, 25 modulos, byte   x4 = 12,5 mm
+        //   ahora   40 car. MAYUSC. + ECC Q -> v3, 29 modulos, alfan. x6 = 21,8 mm
+        //   (base62 minusculas habria dado  -> v4, 33 modulos, byte   x6 = 24,8 mm)
         // NO se toca el texto para hacerle sitio: el codigo de pedido y el «N de M»
         // son el segundo lector del verificador (OCR cuando el QR no se lee). Si el
         // QR crece a costa de que el texto se vuelva ilegible, se pierde una via

@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/E/:token",
+      "destination": "https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/label-scan?t=:token"
+    },
+    {
       "source": "/e/:token",
       "destination": "https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/label-scan?t=:token"
     },

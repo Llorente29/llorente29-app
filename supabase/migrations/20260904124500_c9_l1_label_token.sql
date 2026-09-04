@@ -6,7 +6,21 @@
 --
 -- EL TOKEN ES OPACO, y esa es la condicion que manda: la etiqueta se va a casa
 --   del cliente. Nada de sale_id en claro y nada enumerable desde fuera. 12
---   caracteres base62 (~71 bits) de extensions.gen_random_bytes.
+--   caracteres BASE36 EN MAYUSCULAS (A-Z0-9) de extensions.gen_random_bytes:
+--   36^12 = 4,7e18, sobra de largo para que no se adivine.
+--
+-- ⚠️ POR QUE MAYUSCULAS Y NO base62 (Julio, 04/09) — y esta MEDIDO, no supuesto:
+--   el modo ALFANUMERICO del QR admite 0-9 A-Z y unos pocos simbolos, pero NO
+--   minusculas. Con la URL entera en mayusculas el simbolo entra en ese modo y
+--   baja de version:
+--     base62 minusculas, ECC Q ....... 40 car -> version 4, 33 modulos, byte
+--     TODO mayusculas base36, ECC Q .. 40 car -> version 3, 29 modulos, alfanum.
+--   A modulo 6 y 203 dpi son 24,8 mm frente a 21,8 mm de lado. Y en ECC Q sale
+--   la MISMA version que saldria en M, asi que el repliegue a M deja de hacer
+--   falta: se conserva el 25 % de correccion al precio del 15 %.
+--   OJO: subir a mayusculas SOLO EL TOKEN no sirve de nada — medido, sigue
+--   saliendo byte y version 4. Tiene que ir la URL ENTERA, dominio incluido, y
+--   por eso /e/ se resuelve insensible a mayusculas (DNS ya lo es).
 --
 -- IDEMPOTENTE, Y AHI ESTA LA GRACIA: la reimpresion vuelve a pasar por
 --   order_for_print (reprint_order encola el trabajo y la tablet re-consulta),
@@ -61,7 +75,7 @@ create policy lt_read on public.label_token
   for select to authenticated
   using (public.belongs_to_account(account_id));
 
--- ── El token: 12 caracteres base62 ──────────────────────────────────────────
+-- ── El token: 12 caracteres base36 EN MAYUSCULAS (ver cabecera) ────────────
 create or replace function public._label_token_nuevo()
 returns text
 language sql
@@ -69,8 +83,8 @@ volatile
 set search_path to 'public'
 as $function$
   select string_agg(
-           substr('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-                  1 + (get_byte(b.bytes, g.i) % 62), 1), '')
+           substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                  1 + (get_byte(b.bytes, g.i) % 36), 1), '')
     from (select extensions.gen_random_bytes(12) as bytes) b,
          generate_series(0, 11) as g(i);
 $function$;
@@ -173,10 +187,13 @@ begin
     return null;
   end if;
 
+  -- Insensible a mayusculas: el QR va todo en mayusculas (modo alfanumerico),
+  -- pero alguien puede teclear la URL a mano en minusculas. Los tokens se
+  -- guardan siempre en mayusculas, asi que basta con normalizar la entrada.
   update public.label_token t
      set scanned_at = coalesce(t.scanned_at, now()),
          scan_count = t.scan_count + 1
-   where t.token = p_token
+   where t.token = upper(p_token)
   returning (select b.shop_url from sale s join brand b on b.id = s.brand_id where s.id = t.sale_id)
     into v_url;
 
@@ -210,6 +227,11 @@ begin
   end if;
   if length(public._label_token_nuevo()) <> 12 then
     raise exception 'C9 L1: el generador de token no da 12 caracteres.';
+  end if;
+  -- Si algun dia alguien mete una minuscula aqui, el QR se cae a modo byte y
+  -- sube de version sin que nadie lo note hasta imprimir. Se comprueba.
+  if public._label_token_nuevo() !~ '^[A-Z0-9]{12}$' then
+    raise exception 'C9 L1: el token no es base36 en mayusculas; el QR perderia el modo alfanumerico.';
   end if;
 end
 $verif$;

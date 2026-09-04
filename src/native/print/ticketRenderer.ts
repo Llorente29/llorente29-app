@@ -217,11 +217,19 @@ export function renderKitchenTicket(order: any): TicketDoc {
 // acuñado que fallo, o una tablet contra un order_for_print sin parchear, no
 // pueden dejar a la cocina sin pegatinas: se imprime peor, no se deja de
 // imprimir (misma regla que B53).
+// LA URL VA ENTERA EN MAYUSCULAS, y no es un capricho: el modo alfanumerico del
+// QR admite 0-9 A-Z y poco mas, pero NO minusculas. Medido con un codificador
+// real, 40 caracteres y ECC Q:
+//   `https://…/e/aZ3kP9qR7mXt`  -> version 4, 33 modulos, modo byte  (24,8 mm)
+//   `HTTPS://…/E/AZ3KP9QR7MXT`  -> version 3, 29 modulos, alfanum.   (21,8 mm)
+// Subir a mayusculas SOLO el token no sirve: sigue saliendo byte. Tiene que ir
+// todo. El esquema y el dominio son insensibles a mayusculas por norma y por
+// DNS; de la ruta /E/ se encarga label-scan.
 function qrEtiqueta(order: { brand_shop_url?: string | null }, token: string | null | undefined): string | null {
   const tienda = String(order.brand_shop_url ?? '').trim();
   if (!tienda) return null;
-  if (!token) return tienda;
-  return tienda.replace(/\/+$/, '') + '/e/' + token;
+  if (!token) return tienda.toUpperCase();
+  return (tienda.replace(/\/+$/, '') + '/e/' + token).toUpperCase();
 }
 
 export function renderLabels(order: any): TicketDoc[] {
