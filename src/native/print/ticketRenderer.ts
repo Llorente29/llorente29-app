@@ -67,21 +67,37 @@ function allergenList(line: any) {
   const a = line.allergens || [];
   return a.length ? a.join(' · ') : '';
 }
+// C9 · Lote 1 (04/09/2026). ANTES esta funcion construia objetos nuevos y TIRABA
+// el `line_id` que order_for_print si devuelve, asi que dos unidades de la misma
+// linea eran indistinguibles — y una etiqueta impresa no se podia identificar.
+//
+// Ahora conserva `lineId` y numera la unidad DENTRO de su linea (`unitNo`, 1..qty).
+// La pareja (lineId, unitNo) ES la identidad de una etiqueta. Ojo: en un combo el
+// lineId es el del COMPONENTE, no el del padre, porque es el componente lo que se
+// embolsa y lo que lleva pegatina.
+//
+// NO se toca el «N de M»: cuenta piezas fisicas y ya lo hacia bien (ver :198).
+// Son dos numeraciones distintas a proposito — «2 de 3» es la pieza en la bolsa,
+// `unitNo` es la unidad dentro de su linea.
+//
+// Las BEBIDAS siguen colapsando en una sola etiqueta de bolsa: no se expanden y
+// por eso llevan `unitNo: null`. Limitacion aceptada y anotada en el diseño (la
+// cantidad de bebidas no sera verificable), no un defecto a arreglar aqui.
 function flattenItems(order: any) {
   const out: any[] = [];
   const pushExpanded = (it: any) => {
-    if (it.isDrink) { out.push(it); return; }
+    if (it.isDrink) { out.push({ ...it, unitNo: null }); return; }
     const n = Math.max(1, Math.round(it.qty));
-    for (let i = 0; i < n; i++) out.push({ ...it, qty: 1 });
+    for (let i = 0; i < n; i++) out.push({ ...it, qty: 1, unitNo: i + 1 });
   };
   for (const line of order.lineas || []) {
     const comboComponents = (line.children || []).filter((c: any) => c.line_type === 'combo_item');
     if (comboComponents.length > 0) {
       for (const comp of comboComponents) {
-        pushExpanded({ name: comp.name, qty: comp.qty, family: comp.family, allergens: line.allergens || [], modifiers: [], isDrink: isDrinkOrDessert(comp.family, comp.name) });
+        pushExpanded({ lineId: comp.line_id ?? null, unitTokens: comp.unit_tokens ?? null, name: comp.name, qty: comp.qty, family: comp.family, allergens: line.allergens || [], modifiers: [], isDrink: isDrinkOrDessert(comp.family, comp.name) });
       }
     } else {
-      pushExpanded({ name: line.name, qty: line.qty, family: line.family, allergens: line.allergens || [], modifiers: (line.children || []).filter((c: any) => c.line_type !== 'combo_item'), isDrink: isDrinkOrDessert(line.family, line.name) });
+      pushExpanded({ lineId: line.line_id ?? null, unitTokens: line.unit_tokens ?? null, name: line.name, qty: line.qty, family: line.family, allergens: line.allergens || [], modifiers: (line.children || []).filter((c: any) => c.line_type !== 'combo_item'), isDrink: isDrinkOrDessert(line.family, line.name) });
     }
   }
   return out;
