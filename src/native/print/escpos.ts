@@ -54,7 +54,14 @@ function qr(b: Bytes, data: string, moduleSize = 6) {
   const pL = len & 0xff, pH = (len >> 8) & 0xff;
   b.push(GS, 0x28, 0x6b, 4, 0, 49, 65, 50, 0);
   b.push(GS, 0x28, 0x6b, 3, 0, 49, 67, moduleSize);
-  b.push(GS, 0x28, 0x6b, 3, 0, 49, 69, 49);
+  // C9 · Lote 1 §3 (04/09/2026). CORRECCION DE ERRORES: 49 = L (7 %) -> 51 = Q (25 %).
+  // Estaba en L, el mas bajo de los cuatro, y se noto: de una foto real de seis
+  // etiquetas del pase de Alcala, 3 de 6 decodificaron a resolucion original y
+  // 6 de 6 reescalando x3. El enemigo de una pegatina que va en una bolsa de
+  // comida no es la resolucion: es la grasa, el vaho y el pliegue — y contra eso
+  // lo que sirve es la correccion, no el tamaño del modulo.
+  // Si no cabe en la pegatina, se baja a 50 (M, 15 %) ANTES que volver a modulo 4.
+  b.push(GS, 0x28, 0x6b, 3, 0, 49, 69, 51);
   b.push(GS, 0x28, 0x6b, pL, pH, 49, 80, 48);
   for (let i = 0; i < store.length; i++) b.push(store[i]);
   b.push(GS, 0x28, 0x6b, 3, 0, 49, 81, 48);
@@ -172,7 +179,17 @@ export function renderDoc(doc: TicketDoc): Uint8Array {
       case 'space': lf(b, blk.lines ?? 1); break;
       case 'qr': {
         alignCtr(b);
-        qr(b, blk.data ?? '', blk.size === 'sm' ? 4 : 7);
+        // C9 §3: modulo 'sm' de 4 -> 6 puntos. A 203 dpi (8 puntos/mm) el QR de una
+        // etiqueta pasa de ~12,5 mm a ~24,7 mm de lado. Es el doble, y esta medido
+        // a proposito para que la prueba fisica tenga contra que compararse:
+        //   antes  26 car. + ECC L -> version 2 (25 modulos) x4 = 100 pt = 12,5 mm
+        //   ahora  40 car. + ECC Q -> version 4 (33 modulos) x6 = 198 pt = 24,7 mm
+        //   si hay que bajar a M   -> version 3 (29 modulos) x6 = 174 pt = 21,8 mm
+        // NO se toca el texto para hacerle sitio: el codigo de pedido y el «N de M»
+        // son el segundo lector del verificador (OCR cuando el QR no se lee). Si el
+        // QR crece a costa de que el texto se vuelva ilegible, se pierde una via
+        // para ganar la otra, y las dos tienen que leerse en la MISMA foto.
+        qr(b, blk.data ?? '', blk.size === 'sm' ? 6 : 7);
         lf(b);
         if (blk.caption) { boldOn(b); b.text(blk.caption); lf(b); boldOff(b); }
         alignLeft(b);
