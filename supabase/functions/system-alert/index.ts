@@ -56,6 +56,7 @@ function originFor(kind: string): string {
   if (kind === "kds_device_desfasado") return "vigía de bundle desfasado en tablet (Folvy)";
   if (kind === "autoinventario") return "autoinventario — cola de conteos (Folvy)";
   if (kind === "cost_sweep") return "barrido nocturno de costes de línea (Folvy)";
+  if (kind === "impresora_muda") return "vigía de impresoras (Folvy)";
   // El fallback se queda: nunca afirma un origen que no se puede verificar.
   // Que salga es la señal de que hay un vigía nuevo sin dar de alta aquí.
   return `Folvy — kind sin mapear: "${kind}"`;
