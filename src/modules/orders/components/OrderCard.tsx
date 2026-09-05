@@ -23,16 +23,18 @@
 // para que el pase entregue la bolsa sin tener que mirar la pantalla. La prominencia
 // la decide `deliveryView().phase` en el servicio; aquí solo se pinta.
 
-import { useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag, MapPin, ExternalLink } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
+import { fmtNum } from '@/lib/format'
 import { passCode } from '../lib/passCode'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
 import {
   primaryAction, secondaryAction, childVisual, deliveryView,
   isOwnDeliveryUndispatched, dispatchOrder,
+  portalDeLaPlataforma, coordenadasDeEntrega, type CoordenadasEntrega,
   cookingChip, DEFAULT_KITCHEN_THRESHOLDS,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
   type DeliveryView, type DeliveryTone,
@@ -281,6 +283,81 @@ function GreenCallPill({ phone, label = true, big = false }: { phone: string; la
   )
 }
 
+// ── B68 §1/§2 (05/09/2026). Sin dirección: qué falta, y adónde ir. ──
+//
+// EL CARTEL YA NO AFIRMA QUIÉN REPARTE. La frase vieja decía «este pedido no lo
+// repartimos nosotros» y era FALSA: G569 es `own_delivery` —lo reparte el
+// local— y Glovo simplemente no mandó la dirección. La frase contradecía a la
+// propia fila. El texto lo escribe `resolve_dispatch`; aquí sólo se añade el
+// nombre del canal, que la base no tiene a mano y la web sí.
+//
+// Y SI HAY COORDENADAS, SE ENSEÑAN. Estaban llegando y se tiraban. Se etiquetan
+// como lo que son —un punto, no un portal— porque quien reparte tiene que saber
+// que va a una zona. No se despacha automáticamente con ellas: eso sigue
+// bloqueado y es otra decisión.
+function SinDireccionAviso(
+  { order, portal }: { order: OrderFeedItem; portal: { url: string; nombre: string } | null },
+) {
+  const [coords, setCoords] = useState<CoordenadasEntrega | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    coordenadasDeEntrega(order.sale_id)
+      .then(c => { if (vivo) setCoords(c) })
+      .catch(() => { if (vivo) setCoords({ hay: false, motivo: 'no se pudieron leer' }) })
+    return () => { vivo = false }
+  }, [order.sale_id])
+
+  const canal = order.channel?.trim() || 'La plataforma'
+  return (
+    <div className="px-3 py-2.5 border-b border-[#CFE4FA] bg-white/60">
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={15} className="text-[#B4690E] shrink-0 mt-0.5" />
+        <div className="text-[12.5px] leading-snug text-gray-700">
+          <b className="block text-[11px] uppercase tracking-wide text-[#B4690E]">Falta la dirección</b>
+          {canal} no ha enviado la dirección de entrega.
+        </div>
+      </div>
+
+      {coords?.hay === true && Number.isFinite(Number(coords.lat)) && Number.isFinite(Number(coords.lng)) && (
+        <div className="mt-2 flex items-start gap-2">
+          <MapPin size={15} className="text-[#2563A8] shrink-0 mt-0.5" />
+          <div className="text-[12.5px] leading-snug">
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`}
+              target="_blank" rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="font-bold text-[#2563A8] underline"
+            >
+              {fmtNum(coords.lat, 6)}, {fmtNum(coords.lng, 6)}
+            </a>
+            <span className="block text-[11.5px] text-gray-500">
+              Ubicación aproximada (sin dirección postal). Es un punto, no un portal.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {coords?.hay === false && (
+        <div className="mt-2 text-[11.5px] text-gray-500 pl-[23px]">
+          Tampoco hay coordenadas: {coords.motivo}.
+        </div>
+      )}
+
+      {portal && (
+        <a
+          href={portal.url}
+          target="_blank" rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#2563A8] no-underline"
+        >
+          <ExternalLink size={13} /> Abrir el portal de {portal.nombre}
+        </a>
+      )}
+    </div>
+  )
+}
+
 // ── Fila de reparto. Caras según el estado del despacho propio. ──
 function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatched?: () => void }) {
   const [dispatching, setDispatching] = useState(false)
@@ -305,8 +382,11 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
   if (isOwnDeliveryUndispatched(order) && order.dispatch_mode !== 'off') {
     const failed = !!order.dispatch_error
     const errMsg = dispatchErr ?? order.dispatch_error
+    const sinDireccion = !(order.delivery_address ?? '').trim()
+    const portal = portalDeLaPlataforma(order.channel)
     return (
       <div className={`mx-4 mb-2.5 ml-5 rounded-xl border overflow-hidden ${failed ? 'border-danger/40 bg-danger-bg' : 'border-[#CFE4FA] bg-[#F0F7FF]'}`}>
+        {sinDireccion && <SinDireccionAviso order={order} portal={portal} />}
         {failed && errMsg && (
           <div className="flex items-start gap-2 px-3 py-2.5 border-b border-danger/20">
             <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" />

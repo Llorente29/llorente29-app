@@ -388,6 +388,71 @@ export function isOwnDeliveryUndispatched(order: OrderFeedItem): boolean {
   return (order.service_type === 'own_delivery') && !order.carrier_code
 }
 
+// ── B68 §1/§2 (05/09/2026) ──────────────────────────────────────────────────
+// Cuando la plataforma NO manda la direccion, dos cosas que antes no habia.
+
+/**
+ * El portal de la plataforma, para que quien lee el cartel sepa adonde ir.
+ *
+ * NO se enlaza al pedido concreto: no tengo un patron de enlace profundo
+ * verificado para ninguna de las tres, y mandar a alguien a una URL inventada a
+ * las dos de la manana es peor que no poner boton. Se enlaza a la pantalla de
+ * pedidos y ya.
+ *
+ * ⚠️ ESTAS TRES URLS ESTAN SIN CONFIRMAR. Las usa Julio a diario; si alguna no
+ * es, se corrige aqui y es una linea. Un canal sin URL NO ensena boton, a
+ * proposito: mejor sin boton que con uno que lleva donde no es.
+ */
+/**
+ * Portales de plataforma con URL CONFIRMADA.
+ *
+ * Solo entra aqui lo que alguien ha abierto y ha visto funcionar. En la primera
+ * version puse las tres de memoria y una de ellas, `managerportal.glovoapp.com`,
+ * NO EXISTE: habria mandado al repartidor a una pared justo cuando le corre
+ * prisa. La de Glovo la verifico Julio el 05/09.
+ *
+ * Uber Eats y Just Eat estan fuera A PROPOSITO mientras nadie confirme su URL.
+ * Para esos canales no sale boton -- mejor nada que un enlace roto, que ademas
+ * ensena al operario a no fiarse del boton (misma familia que la regla 7: si no
+ * puedes decir la verdad, no digas nada, pero no digas una mentira comoda).
+ *
+ * Anadir un canal = anadir su fila, con la URL comprobada, no recordada.
+ */
+const PORTAL_PLATAFORMA: { match: RegExp; url: string; nombre: string }[] = [
+  { match: /glovo/i, url: 'https://portal.glovoapp.com/dashboard', nombre: 'Glovo' },
+]
+
+/**
+ * Devuelve el portal del canal, o `null` si para ese canal no tenemos URL.
+ * Quien llama solo distingue «hay portal / no lo hay»: no conoce la lista.
+ */
+export function portalDeLaPlataforma(channel: string | null): { url: string; nombre: string } | null {
+  if (!channel) return null
+  const p = PORTAL_PLATAFORMA.find(x => x.match.test(channel))
+  return p ? { url: p.url, nombre: p.nombre } : null
+}
+
+/** Lo que devuelve `sale_coordenadas_de_entrega`. `hay:false` trae el motivo. */
+export type CoordenadasEntrega =
+  | { hay: true; lat: number; lng: number; origen: 'delivery' | 'customer'; aproximada: true; tiene_direccion_postal: boolean }
+  | { hay: false; motivo: string }
+
+/**
+ * Coordenadas de entrega de un pedido cuya plataforma no mando direccion.
+ *
+ * Funcion APARTE y no un campo mas del feed: `orders_feed` alimenta tambien las
+ * tablets del pase, y esto se pregunta solo para los pedidos que lo necesitan
+ * -- 26 en 30 dias, no uno por pantalla.
+ */
+export async function coordenadasDeEntrega(saleId: string): Promise<CoordenadasEntrega> {
+  requireSupabase()
+  const { data, error } = await (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+    => Promise<{ data: unknown; error: { message: string } | null }>)(
+      'sale_coordenadas_de_entrega', { p_sale_id: saleId })
+  if (error) throw new Error(error.message)
+  return data as CoordenadasEntrega
+}
+
 // Despacha un pedido a Catcher (invocación manual desde la tarjeta). Reusa la Edge
 // catcher-dispatch: acepta { sale_id } con JWT de usuario (sin secret interno) y es
 // idempotente. Lanza Error con el motivo si falla.
