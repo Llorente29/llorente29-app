@@ -107,6 +107,47 @@ export function lunesDeLaSemana(d: Date): string {
   return plano.toISOString().slice(0, 10)
 }
 
+/**
+ * La SEMANA del negocio que contiene `d`, como rango [desde, hasta).
+ * Lunes 00:00 → lunes siguiente 00:00, hora de Madrid.
+ *
+ * Se construye a partir de `diaDelNegocio` del lunes, no sumando 7×24 h: la
+ * semana del cambio de hora dura 167 h o 169 h, y sumar horas la desplaza.
+ */
+export function semanaDelNegocio(d: Date): { desde: Date; hasta: Date; lunes: string } {
+  const lunes = lunesDeLaSemana(d)
+  const desde = diaDelNegocio(new Date(aMedioDiaUtc(lunes))).desde
+  // El lunes SIGUIENTE, buscado por calendario y no por aritmética de horas.
+  const [y, m, dd] = lunes.split('-').map(Number)
+  const plano = new Date(Date.UTC(y, m - 1, dd))
+  plano.setUTCDate(plano.getUTCDate() + 7)
+  const hasta = diaDelNegocio(new Date(aMedioDiaUtc(plano.toISOString().slice(0, 10)))).desde
+  return { desde, hasta, lunes }
+}
+
+/** La semana ANTERIOR a la de `d`, entera. */
+export function semanaAnteriorDelNegocio(d: Date): { desde: Date; hasta: Date; lunes: string } {
+  return semanaDelNegocio(new Date(semanaDelNegocio(d).desde.getTime() - 36 * 3600_000))
+}
+
+/** El MES del negocio que contiene `d`, como rango [desde, hasta). */
+export function mesDelNegocio(d: Date): { desde: Date; hasta: Date; ym: string } {
+  const ymd = diaNatural(d)
+  const [y, m] = ymd.split('-').map(Number)
+  const primero = `${y}-${String(m).padStart(2, '0')}-01`
+  const sig = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+  return {
+    desde: diaDelNegocio(new Date(aMedioDiaUtc(primero))).desde,
+    hasta: diaDelNegocio(new Date(aMedioDiaUtc(sig))).desde,
+    ym: `${y}-${String(m).padStart(2, '0')}`,
+  }
+}
+
+/** El mes ANTERIOR al de `d`, entero. */
+export function mesAnteriorDelNegocio(d: Date): { desde: Date; hasta: Date; ym: string } {
+  return mesDelNegocio(new Date(mesDelNegocio(d).desde.getTime() - 36 * 3600_000))
+}
+
 /** Semanas enteras entre dos lunes 'YYYY-MM-DD'. */
 export function semanasEntre(lunesA: string, lunesB: string): number {
   const t = (s: string) => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) }
