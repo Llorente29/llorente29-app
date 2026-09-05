@@ -1,0 +1,1 @@
+drop function if exists public.menu_item_channel_economics(uuid, jsonb);
