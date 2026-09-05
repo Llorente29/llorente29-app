@@ -18,6 +18,24 @@
 // V1 de la pestaña: definir/confirmar/ajustar/rechazar el impacto. El "latido" de
 // coste en vivo (preview sin guardar) se refuerza después con una función de preview
 // server-side; aquí el coste real se actualiza tras confirmar (recomputeAffectedSales).
+//
+// B72 (05/09/2026) — UN MODIFICADOR PUEDE SER UN PLATO.
+// Este selector filtraba el catálogo a `raw`/`recipe` y dejaba fuera `dish`. Con eso:
+//  - «¿Quieres acompañar con unas patatas?» no encontraba `Patatas Clásicas Meraki`
+//    (existe, activa, 0,876 € de escandallo) y la única salida en pantalla era
+//    «¿No está? Crear … como nuevo»: un clic a crear un duplicado vacío y sin coste.
+//  - Y los 15 impactos `bundle` ya confirmados, que apuntan a platos, se pintaban
+//    como «+ ingrediente · 1» — el nombre no se resolvía porque el plato no estaba
+//    en la lista. Un dato correcto en la base, invisible en la pantalla.
+// El arreglo es de FRONT y no toca el esquema: `bundle` existe desde el 05/06 y ya
+// apunta al `recipe_item` del propio plato. Lo que faltaba era dejar llegar.
+//
+// Dos cosas van juntas y ninguna es cosmética:
+//  1. Los platos aparecen.
+//  2. Se distinguen a simple vista. Buscando «patatas» salen `Patatas Bastón`
+//     (`raw`, 0,0022 €/g, la patata cruda a granel) y `Patatas Clásicas Meraki`
+//     (`dish`, la ración). Elegir la primera con cantidad 1 da un coste absurdo y
+//     nadie lo notaría. Sin etiqueta, cambiamos una confusión por otra.
 
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -39,16 +57,23 @@ import {
   type ImpactCostPreview,
 } from '@/modules/kitchen/services/modifierImpactService'
 import { listRecipeItems, createRecipeItem } from '@/modules/kitchen/services/recipeItemService'
+import type { RecipeItemType } from '@/types/kitchen'
+import {
+  TIPOS_ELEGIBLES, kindOf, normName, grupoPidePlato, ordenaCandidatas, razonNoElegible,
+  type CatalogPick,
+} from '@/modules/kitchen/lib/catalogPick'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 
 interface ModifierImpactsTabProps {
   recipeItemId: string
   accountId: string
   actorName: string
-  // Catálogo para los selectores del modo "Ajustar": ingredientes (recipe_item raw/recipe)
-  // y unidades. Los aporta el editor (ya los tiene cargados). Si no se pasan, el modo
-  // ajustar muestra solo cantidad sobre el ingrediente ya propuesto.
-  ingredients?: { id: string; name: string; needsReview?: boolean }[]
+  // Catálogo para los selectores del modo "Ajustar": fichas de cocina y unidades.
+  // Los aporta el editor si ya los tiene cargados. Si no se pasan —hoy nadie los
+  // pasa: CatalogFichaPage monta la pestaña sin ellos— la pestaña carga el catálogo
+  // ella sola. `type` es opcional por compatibilidad; sin él la ficha se etiqueta
+  // como ingrediente, que es lo que era esta lista antes de B72.
+  ingredients?: { id: string; name: string; needsReview?: boolean; type?: RecipeItemType }[]
   units?: { id: string; label: string }[]
 }
 
@@ -69,27 +94,52 @@ export default function ModifierImpactsTab({
   // opción nueva que se llame igual que un producto aparece sugerida sola.
   const [bundleHints, setBundleHints] = useState<Map<string, ProductBundleSuggestion>>(new Map())
 
-  // Ingredientes y unidades para el editor "Ajustar". Si el contenedor no los
-  // pasa, la pestaña los carga sola (autónoma, no depende del estado del editor).
-  const [ingredients, setIngredients] = useState<{ id: string; name: string; needsReview?: boolean }[]>(ingredientsProp ?? [])
+  // Catálogo de cocina y unidades para el editor "Ajustar". Si el contenedor no lo
+  // pasa, la pestaña lo carga sola (autónoma, no depende del estado del editor).
+  //
+  // Se carga ENTERO a propósito, incluidas las fichas archivadas, desactivadas, de
+  // envase y de utensilio. No es para ofrecerlas —`selectable` las deja fuera del
+  // desplegable— es para poder decir «eso ya existe» antes de crear un duplicado.
+  // Una sola llamada sirve a los dos usos.
+  const [catalog, setCatalog] = useState<CatalogPick[]>(
+    (ingredientsProp ?? []).map((i) => ({
+      id: i.id, name: i.name, needsReview: i.needsReview,
+      type: i.type ?? 'raw', kind: kindOf(i.type ?? 'raw'), selectable: true,
+    })),
+  )
   const [units, setUnits] = useState<{ id: string; label: string }[]>(unitsProp ?? [])
   const [unitGramId, setUnitGramId] = useState<string | null>(null)
 
-  async function loadIngredients() {
+  // Lo que el desplegable puede ofrecer: platos e ingredientes vivos.
+  const pickable = useMemo(() => catalog.filter((c) => c.selectable), [catalog])
+
+  async function loadCatalog() {
     try {
-      const rows = await listRecipeItems({ accountId, includeInactive: false })
-      setIngredients(
-        rows
-          .filter((r) => r.type === 'raw' || r.type === 'recipe')
-          .map((r) => ({ id: r.id, name: r.name, needsReview: r.needsReview })),
+      const rows = await listRecipeItems({ accountId, includeArchived: true })
+      setCatalog(
+        rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          needsReview: r.needsReview,
+          type: r.type,
+          kind: kindOf(r.type),
+          selectable:
+            TIPOS_ELEGIBLES.includes(r.type) && r.isActive === true && r.archivedAt == null,
+        })),
       )
     } catch { /* el selector quedará vacío; no bloquea la pestaña */ }
   }
 
   useEffect(() => {
-    if (ingredientsProp && ingredientsProp.length > 0) { setIngredients(ingredientsProp); return }
+    if (ingredientsProp && ingredientsProp.length > 0) {
+      setCatalog(ingredientsProp.map((i) => ({
+        id: i.id, name: i.name, needsReview: i.needsReview,
+        type: i.type ?? 'raw', kind: kindOf(i.type ?? 'raw'), selectable: true,
+      })))
+      return
+    }
     let cancelled = false
-    loadIngredients().finally(() => { if (cancelled) return })
+    loadCatalog().finally(() => { if (cancelled) return })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, ingredientsProp])
@@ -266,7 +316,7 @@ export default function ModifierImpactsTab({
         needsReview: true,
         createdByName: actorName,
       })
-      await loadIngredients()
+      await loadCatalog()
       return { id: created.id, name: created.name }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo crear el ingrediente')
@@ -377,7 +427,8 @@ export default function ModifierImpactsTab({
                   recipeItemId={recipeItemId}
                   busy={busyId === o.optionId}
                   editing={editingId === o.optionId}
-                  ingredients={ingredients}
+                  catalog={catalog}
+                  pickable={pickable}
                   units={units}
                   onConfirm={() => handleConfirm(o)}
                   onReject={() => handleReject(o)}
@@ -404,7 +455,10 @@ interface OptionCardProps {
   recipeItemId: string
   busy: boolean
   editing: boolean
-  ingredients: { id: string; name: string; needsReview?: boolean }[]
+  /** Catálogo COMPLETO: sirve para resolver nombres y para no crear duplicados. */
+  catalog: CatalogPick[]
+  /** Lo que el desplegable puede ofrecer: platos e ingredientes vivos. */
+  pickable: CatalogPick[]
   units: { id: string; label: string }[]
   onConfirm: () => void
   onReject: () => void
@@ -418,7 +472,7 @@ interface OptionCardProps {
 }
 
 function OptionCard({
-  option: o, recipeItemId, busy, editing, ingredients, units,
+  option: o, recipeItemId, busy, editing, catalog, pickable, units,
   onConfirm, onReject, onEdit, onCancelEdit, onSaveManual, onCreateIngredient,
   bundleHint, onAcceptBundle,
 }: OptionCardProps) {
@@ -502,7 +556,7 @@ function OptionCard({
       {!editing ? (
         <>
           {/* Diff: qué le hace al plato (sin jerga) */}
-          <ImpactSummary impact={o.impact} ingredients={ingredients} />
+          <ImpactSummary impact={o.impact} catalog={catalog} />
 
           {/* Acciones */}
           <div className="flex items-center justify-end gap-2 mt-2">
@@ -543,7 +597,9 @@ function OptionCard({
           draft={draft}
           setDraft={setDraft}
           recipeItemId={recipeItemId}
-          ingredients={ingredients}
+          catalog={catalog}
+          pickable={pickable}
+          groupName={o.groupName}
           units={units}
           busy={busy}
           onCancel={onCancelEdit}
@@ -555,16 +611,48 @@ function OptionCard({
   )
 }
 
+/**
+ * Etiqueta de tipo de ficha. La mitad del arreglo de B72 vive aquí.
+ *
+ * Buscando «patatas» salen `Patatas Bastón` (la patata cruda a granel, 0,0022 €
+ * el gramo) y `Patatas Clásicas Meraki` (la ración terminada). Sin etiqueta las
+ * dos son «patatas»: elegir la primera con cantidad 1 da un coste de 0,002 € y
+ * nadie lo notaría. Con etiqueta, la pregunta se responde sola.
+ *
+ * En lenguaje de cocina y sin jerga: «plato» y «ingrediente», nunca `dish`/`raw`.
+ */
+function KindChip({ kind }: { kind: 'plato' | 'ingrediente' }) {
+  const esPlato = kind === 'plato'
+  return (
+    <span
+      className={`inline-flex items-center shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide ${
+        esPlato ? 'bg-terracota-bg text-terracota' : 'bg-stone-100 text-stone-500'
+      }`}
+    >
+      {esPlato ? 'plato' : 'ingrediente'}
+    </span>
+  )
+}
+
 // Resumen legible del impacto (sin jerga técnica).
 function ImpactSummary({
-  impact, ingredients,
-}: { impact: OptionWithImpact['impact']; ingredients: { id: string; name: string; needsReview?: boolean }[] }) {
+  impact, catalog,
+}: { impact: OptionWithImpact['impact']; catalog: CatalogPick[] }) {
   if (!impact) {
     return <p className="text-xs text-text-secondary italic">Sin definir — el coste de esta opción aún no se calcula.</p>
   }
-  const ing = (id: string | null) => (id ? ingredients.find((i) => i.id === id) : undefined)
-  const ingName = (id: string | null) => ing(id)?.name ?? 'ingrediente'
+  // Se busca en el catálogo COMPLETO: los 15 impactos `bundle` confirmados apuntan
+  // a un plato, y hasta B72 esta lista no los tenía — se pintaban «+ ingrediente».
+  const ing = (id: string | null) => (id ? catalog.find((i) => i.id === id) : undefined)
+  const ingName = (id: string | null) => ing(id)?.name ?? 'ficha no encontrada'
   const incomplete = (id: string | null) => !!ing(id)?.needsReview
+
+  // Etiqueta plato/ingrediente junto al nombre: lo mismo que se ve al elegirlo.
+  const kindChip = (id: string | null) => {
+    const k = ing(id)?.kind
+    if (!k) return null
+    return <KindChip kind={k} />
+  }
 
   // Aviso si el ingrediente del impacto está sin terminar (creado al vuelo sin coste).
   const warn = (id: string | null) =>
@@ -581,6 +669,7 @@ function ImpactSummary({
           <Plus className="w-3 h-3" />{ingName(impact.targetRecipeItemId)}
           {impact.quantity != null && ` · ${impact.quantity}`}
         </span>
+        {kindChip(impact.targetRecipeItemId)}
         {warn(impact.targetRecipeItemId)}
       </div>
     )
@@ -592,6 +681,7 @@ function ImpactSummary({
           <Minus className="w-3 h-3" />{ingName(impact.targetRecipeItemId)}
           {impact.quantity != null && ` · ${impact.quantity}`}
         </span>
+        {kindChip(impact.targetRecipeItemId)}
         {warn(impact.targetRecipeItemId)}
       </div>
     )
@@ -603,6 +693,7 @@ function ImpactSummary({
           <Plus className="w-3 h-3" />{ingName(impact.targetRecipeItemId)}
           {impact.quantity != null && ` · ${impact.quantity}`}
         </span>
+        {kindChip(impact.targetRecipeItemId)}
         <span className="text-xs text-text-secondary">(sustituye al ingrediente base)</span>
         {warn(impact.targetRecipeItemId)}
       </div>
@@ -620,12 +711,17 @@ function ImpactSummary({
 
 // Editor del impacto (modo Ajustar).
 function ImpactEditor({
-  draft, setDraft, recipeItemId, ingredients, units, busy, onCancel, onSave, onCreateIngredient,
+  draft, setDraft, recipeItemId, catalog, pickable, groupName, units, busy, onCancel, onSave, onCreateIngredient,
 }: {
   draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }
   setDraft: (d: typeof draft) => void
   recipeItemId: string
-  ingredients: { id: string; name: string; needsReview?: boolean }[]
+  /** Catálogo COMPLETO, para la guarda anti-duplicado del «Crear como nuevo». */
+  catalog: CatalogPick[]
+  /** Lo que se puede elegir: platos e ingredientes vivos. */
+  pickable: CatalogPick[]
+  /** Nombre del grupo de modificadores: decide si los platos van primero. */
+  groupName: string
   units: { id: string; label: string }[]
   busy: boolean
   onCancel: () => void
@@ -637,7 +733,7 @@ function ImpactEditor({
 
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
-  const picked = ingredients.find((i) => i.id === draft.targetRecipeItemId)
+  const picked = catalog.find((i) => i.id === draft.targetRecipeItemId)
 
   // ── Latido de coste en vivo ──
   // Al cambiar el draft, pide el preview server-side (misma lógica que el guardado).
@@ -673,6 +769,9 @@ function ImpactEditor({
 
   async function handleCreate() {
     if (search.trim() === '') return
+    // Doble llave: la pantalla ya no ofrece el botón cuando el nombre existe, pero
+    // la comprobación va también aquí. Lo que no puede pasar es crear el duplicado.
+    if (yaExiste) return
     setCreating(true)
     const created = await onCreateIngredient(search.trim())
     setCreating(false)
@@ -682,11 +781,35 @@ function ImpactEditor({
     }
   }
 
-  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  const matches = search.trim() === ''
-    ? ingredients.slice(0, 8)
-    : ingredients.filter((i) => norm(i.name).includes(norm(search))).slice(0, 8)
-  const exactExists = ingredients.some((i) => norm(i.name) === norm(search.trim()))
+  // ── Qué se ofrece, y en qué orden ──
+  //
+  // El orden depende de qué está preguntando el grupo: si pregunta por un plato
+  // («¿Quieres acompañar con unas patatas?»), los platos van primero; si pregunta
+  // por un ajuste («Extra Salsa»), los ingredientes. Es SOLO orden: las dos clases
+  // salen siempre (regla 7 — un umbral ordena y etiqueta, nunca decide qué existe).
+  const platosPrimero = grupoPidePlato(groupName)
+
+  const todosLosQueCasan = useMemo(
+    () => ordenaCandidatas(pickable, search, platosPrimero),
+    [pickable, search, platosPrimero],
+  )
+
+  const TOPE = 8
+  const matches = todosLosQueCasan.slice(0, TOPE)
+  // Cuántos quedan fuera del tope. Se DICE (regla 7): una lista que recorta en
+  // silencio enseña que «no está» significa «no lo he mirado bien».
+  const ocultos = todosLosQueCasan.length - matches.length
+
+  // ── La guarda del «Crear como nuevo» ──
+  //
+  // Se compara contra el catálogo ENTERO, no contra lo que el desplegable enseña.
+  // Ésa es justo la trampa que se está cerrando: cuando el filtro escondía la
+  // ficha, esta comprobación decía «no existe» y ofrecía crear un duplicado vacío
+  // y sin coste de algo que ya estaba. Con la lista completa no puede mentir, ni
+  // siquiera con un envase, un utensilio o una ficha archivada.
+  const yaExiste = search.trim() === ''
+    ? undefined
+    : catalog.find((i) => normName(i.name) === normName(search))
 
   return (
     <div className="space-y-2.5 pt-1">
@@ -712,6 +835,7 @@ function ImpactEditor({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent-bg text-sm text-text-primary">
                 {picked.name}
+                <KindChip kind={picked.kind} />
                 {picked.needsReview && (
                   <span className="inline-flex items-center gap-0.5 text-xs text-warning">
                     <AlertTriangle className="w-3 h-3" />sin terminar
@@ -735,7 +859,7 @@ function ImpactEditor({
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="busca el ingrediente…"
+                  placeholder={platosPrimero ? 'busca el plato o el ingrediente…' : 'busca el ingrediente o el plato…'}
                   className="flex-1 min-w-0 text-sm bg-transparent text-text-primary focus:outline-none"
                 />
               </div>
@@ -749,10 +873,46 @@ function ImpactEditor({
                       className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-accent-bg transition-colors"
                     >
                       <span className="truncate">{i.name}</span>
-                      {i.needsReview && <AlertTriangle className="w-3 h-3 text-warning shrink-0" />}
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {i.needsReview && <AlertTriangle className="w-3 h-3 text-warning" />}
+                        <KindChip kind={i.kind} />
+                      </span>
                     </button>
                   ))}
-                  {search.trim() !== '' && !exactExists && (
+                  {ocultos > 0 && (
+                    <p className="px-2.5 py-1.5 text-[11px] text-text-secondary">
+                      Y {ocultos} {ocultos === 1 ? 'ficha más' : 'fichas más'} que también
+                      {' '}casan. Escribe un poco más para verlas.
+                    </p>
+                  )}
+                  {/* Ya existe y se puede elegir: se ofrece la que hay, no se crea otra. */}
+                  {yaExiste && yaExiste.selectable && (
+                    <button
+                      type="button"
+                      onClick={() => { setDraft({ ...draft, targetRecipeItemId: yaExiste.id }); setSearch('') }}
+                      className="w-full flex items-start gap-1.5 px-2.5 py-1.5 text-left text-xs font-medium text-success hover:bg-success/10 transition-colors"
+                    >
+                      <CircleCheck className="w-3.5 h-3.5 shrink-0 mt-px" />
+                      <span>
+                        «{yaExiste.name}» ya existe como {yaExiste.kind}. Usa ésta.
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Ya existe pero no es elegible (envase, utensilio, ficha retirada):
+                      tampoco se crea a ciegas — se dice por qué y quién es. */}
+                  {yaExiste && !yaExiste.selectable && (
+                    <p className="flex items-start gap-1.5 px-2.5 py-1.5 text-xs text-warning">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                      <span>
+                        «{yaExiste.name}» ya existe en cocina{razonNoElegible(yaExiste)}, así que
+                        {' '}no se crea otra igual. Si de verdad hace falta aquí, arregla esa ficha.
+                      </span>
+                    </p>
+                  )}
+
+                  {/* No existe con ese nombre en ningún sitio: crear es legítimo. */}
+                  {search.trim() !== '' && !yaExiste && (
                     <button
                       type="button"
                       onClick={handleCreate}
@@ -760,7 +920,7 @@ function ImpactEditor({
                       className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-xs font-medium text-terracota hover:bg-terracota-bg disabled:opacity-60 transition-colors"
                     >
                       {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                      ¿No está? Crear «{search.trim()}» como nuevo
+                      ¿No está? Crear «{search.trim()}» como ingrediente nuevo
                     </button>
                   )}
                 </div>
