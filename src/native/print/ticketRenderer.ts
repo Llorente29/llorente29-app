@@ -80,13 +80,20 @@ function allergenList(line: any) {
 // Son dos numeraciones distintas a proposito — «2 de 3» es la pieza en la bolsa,
 // `unitNo` es la unidad dentro de su linea.
 //
-// Las BEBIDAS siguen colapsando en una sola etiqueta de bolsa: no se expanden y
-// por eso llevan `unitNo: null`. Limitacion aceptada y anotada en el diseño (la
-// cantidad de bebidas no sera verificable), no un defecto a arreglar aqui.
+// LAS BEBIDAS SE EXPANDEN COMO EL RESTO (§5.2, 04/09). La version anterior de
+// esta funcion las colapsaba en una sola etiqueta de bolsa («Bebidas y postres:
+// 1x Coca-Cola, 1x Coca-Cola») y yo lo habia dejado escrito aqui como
+// «limitacion aceptada». No lo era: una bolsa cerrada con UNA etiqueta no
+// prueba que lleva dentro, y la cantidad de bebidas es justo de lo que mas se
+// reclama. Ahora cada lata lleva la suya, igual que la comida.
+//
+// No hace falta nada en la BBDD: comprobado sobre datos reales de Foodint,
+// `ensure_label_tokens` ya acuñaba un token por unidad tambien para las lineas
+// de bebida (`Coca-Cola Zero Lata` qty 3 -> 3 tokens). Solo lo tiraba el
+// renderizador.
 function flattenItems(order: any) {
   const out: any[] = [];
   const pushExpanded = (it: any) => {
-    if (it.isDrink) { out.push({ ...it, unitNo: null }); return; }
     const n = Math.max(1, Math.round(it.qty));
     for (let i = 0; i < n; i++) out.push({ ...it, qty: 1, unitNo: i + 1 });
   };
@@ -239,9 +246,16 @@ export function renderLabels(order: any): TicketDoc[] {
   const labels: TicketDoc[] = [];
   const code = pickupCode(order);
   const who = (order.customer_name || '').split(' ')[0] ?? '';
-  const totalPieces = food.length + (drinks.length > 0 ? 1 : 0);
+
+  // Cada UNIDAD es una pieza, bebidas incluidas (§5.2), mas la bolsa de bebidas
+  // si la hay. El «N de M» se recalcula solo porque cuenta piezas fisicas: no se
+  // ha tocado su criterio, solo hay mas piezas que contar.
+  const totalPieces = items.length + (drinks.length > 0 ? 1 : 0);
   let idx = 0;
-  for (const it of food) {
+
+  // La comida primero y las bebidas despues: el pase se monta asi, y deja la
+  // pegatina de la bolsa al final, junto a lo que va dentro.
+  for (const it of [...food, ...drinks]) {
     idx++;
     const b: any[] = [];
     b.push({ kind: 'row', left: code, right: (order.brand ?? '').slice(0, 16), bold: true });
@@ -255,13 +269,25 @@ export function renderLabels(order: any): TicketDoc[] {
     b.push({ kind: 'cut' });
     labels.push({ title: `Pegatina ${idx}/${totalPieces}`, widthMm: 80, blocks: b });
   }
+
+  // LA PEGATINA DE LA BOLSA SE QUEDA, y es decision mia: el §5.2 pide que cada
+  // bebida lleve la suya y eso ya esta hecho arriba. Esta de aqui ya no PRUEBA
+  // el contenido —para eso estan las de cada lata— sino que identifica la bolsa
+  // cerrada: sin ella, el repartidor tiene un paquete de latas sin codigo de
+  // pedido a la vista cuando hay varios pedidos en el pase. Ademas mantiene vivo
+  // el `bag_token` que la migracion ya acuña. Si sobra, se quita borrando este
+  // bloque y el `+ 1` de totalPieces.
   if (drinks.length > 0) {
     idx++;
     const b: any[] = [];
     b.push({ kind: 'row', left: code, right: 'BOLSA BEBIDAS', bold: true });
     b.push({ kind: 'rule', dashed: true });
     b.push({ kind: 'text', text: 'Bebidas y postres', bold: true, size: 2 });
-    for (const it of drinks) b.push({ kind: 'text', text: `  ${it.qty}x ${it.name}` });
+    // Agrupado por nombre: tras expandir, cada unidad viene con qty 1 y una
+    // lista cruda diria «1x Coca-Cola» tres veces.
+    const porNombre = new Map<string, number>();
+    for (const it of drinks) porNombre.set(it.name, (porNombre.get(it.name) ?? 0) + 1);
+    for (const [nombre, n] of porNombre) b.push({ kind: 'text', text: `  ${n}x ${nombre}` });
     b.push({ kind: 'row', left: `${idx} de ${totalPieces} · bolsa aparte · ${who}`, right: '', muted: true });
     const qrBolsa = qrEtiqueta(order, order.bag_token);
     if (qrBolsa) b.push({ kind: 'qr', data: qrBolsa, size: 'sm' });
