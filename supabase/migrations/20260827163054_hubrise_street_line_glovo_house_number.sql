@@ -1,34 +1,35 @@
--- ============================================================================
--- 27/08/2026 — Glovo manda el numero de portal en `customer.city`
--- ============================================================================
--- HubRise no normaliza la direccion: cada plataforma la reparte como quiere.
---
---   Glovo      address_1 "Calle de Ricardo Ortiz"    city "37"      postal_code null
---   Just Eat   address_1 "Calle de Vinaroz, 38, 2A"  city "Madrid"  postal_code "28002"
---
--- La composicion de `delivery_address` descartaba `city` a proposito: en Just
--- Eat es la ciudad y no puede acabar pegada a la calle en la direccion que ve
--- el repartidor. Con Glovo ese descarte tiraba el numero de portal.
---
--- El primer pedido real de Glovo con reparto propio (G659, venta xnp3b9x) salio
--- a la calle como "Calle de Ricardo Ortiz", sin portal.
---
--- Esta funcion decide caso por caso en vez de descartar siempre:
---   - `city` no parece un portal ("Madrid")   -> address_1 intacto.
---   - `city` parece un portal ("37", "12B")   -> se pega a address_1.
---   - address_1 ya termina en ese numero      -> no se duplica.
---   - address_1 vacio                         -> NULL, nunca ", 37".
---
--- IMMUTABLE y sin acceso a tablas: es pura decision de texto. Se usa desde
--- adapt_hubrise_order (migracion 20260827163135) y tiene gemelas en TypeScript
--- en hubrise-webhook y catcher-dispatch — las tres reglas deben ir a la vez.
--- ============================================================================
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GLOVO METE EL NÚMERO DE PORTAL EN `city` (27/08/2026)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Verificado en el primer pedido real de Glovo por HubRise (G659, Meraki Pita,
+-- external_ref xnp3b9x):
+--
+--   address_1   "Calle de Ricardo Ortiz"   <- SIN número
+--   city        "37"                       <- el NÚMERO DE PORTAL
+--   postal_code null
+--   address_2   null
+--
+-- Just Eat, en cambio, pone la ciudad donde toca:
+--   address_1 "Calle de Vinaroz, 38, 2A"   city "Madrid"   address_2 "Madrid"
+--
+-- La composición existente descarta `city` a propósito (en Just Eat es la
+-- ciudad y no debe ir al final de la dirección del rider). Con Glovo ese
+-- descarte TIRA EL NÚMERO y el repartidor recibe una calle sin portal.
+--
+-- SE DISTINGUE POR LA FORMA DEL DATO, NO POR EL CANAL. Una ciudad nunca es
+-- solo dígitos; un número de portal siempre lo es (con letra opcional: "12B").
+-- Hacerlo por canal exigiría fiarse de `channel`, que es texto libre de la
+-- plataforma; hacerlo por la forma funciona aunque mañana otro bridge repita
+-- el mismo mapeo.
+--
+-- IDEMPOTENTE: si address_1 YA termina en ese número (porque Glovo lo arregle,
+-- o porque la función se aplique dos veces), no se duplica.
 CREATE OR REPLACE FUNCTION public.hubrise_street_line(p_address_1 text, p_city text)
- RETURNS text
- LANGUAGE sql
- IMMUTABLE
-AS $function$
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
   SELECT CASE
     -- `city` NO es un número de portal (Just Eat: "Madrid") -> address_1 intacto.
     WHEN btrim(coalesce(p_city, '')) !~ '^[0-9]{1,4} *[A-Za-zºª]?$'
@@ -42,5 +43,9 @@ AS $function$
     -- Glovo: pegar el portal a la calle.
     ELSE btrim(p_address_1) || ', ' || btrim(p_city)
   END;
-$function$
-;
+$$;
+
+COMMENT ON FUNCTION public.hubrise_street_line(text, text) IS
+  'Compone "calle, número" desde customer.address_1 + customer.city de HubRise. '
+  'Glovo manda el número de portal en `city`; Just Eat manda ahí la ciudad. '
+  'Se decide por la forma del dato (solo dígitos = portal). Idempotente.';
