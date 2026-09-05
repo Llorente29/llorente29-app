@@ -184,6 +184,7 @@ const PAGE_TO_PATH: Partial<Record<Page, string>> = {
   informes_personal:      'informes-personal',
   bolsa_horas:            'bolsa-horas',
   // Ventas
+  ventas_informes:        'ventas/informes',
   ventas_analisis:        'ventas/analisis',
   prediccion_personal:    'ventas/prediccion',
   zonas_pedido:           'ventas/zonas',

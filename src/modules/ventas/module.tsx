@@ -12,11 +12,12 @@
 // las 2 plantillas actuales tiene en false — dejaba el food cost visible
 // por esta vía aunque show_costes fuera false.
 
-import { BarChart3, LineChart, Bike, Wallet, Percent, UtensilsCrossed, Target, Star, TrendingUp, Lightbulb, Store } from 'lucide-react'
+import { BarChart3, LineChart, Bike, Wallet, Percent, UtensilsCrossed, Target, Star, TrendingUp, Lightbulb, Store, FileBarChart } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import VentasDashboardPage from '@/pages/VentasDashboardPage'
 import VentasAnalisisPage from '@/pages/VentasAnalisisPage'
+import InformesPage from '@/pages/InformesPage'
 import EconomiaPlataformasPage from '@/pages/EconomiaPlataformasPage'
 import MargenFinalPage from '@/pages/MargenFinalPage'
 import TarifasCanalPage from '@/pages/TarifasCanalPage'
@@ -43,6 +44,7 @@ export const ventasModule: ModuleDefinition = {
   basePath: 'ventas',
   routes: [
     { path: '',           element: <VentasDashboardPage /> },
+    { path: 'informes',    element: <InformesPage /> },
     { path: 'recomendaciones', element: <RecomendacionesPage /> },
     { path: 'economia',    element: <EconomiaPlataformasPage /> },
     { path: 'margen-final', element: <MargenFinalPage /> },
@@ -59,6 +61,11 @@ export const ventasModule: ModuleDefinition = {
   sidebar: {
     items: [
       { id: 'ventas_dashboard',  label: 'Resumen de ventas',   icon: BarChart3, path: '',         requiredPermission: 'show_ventas_analisis' },
+      // El generador pide SOLO show_ventas_analisis: su cuerpo son ventas.
+      // El bloque de coste y margen de dentro se pinta unicamente con
+      // show_costes, que es la puerta sensible — mismo criterio que el
+      // encargo del 14/08, que subio ese AND a las tres pantallas de coste.
+      { id: 'ventas_informes',   label: 'Informes',            icon: FileBarChart,     path: 'informes',     requiredPermission: 'show_ventas_analisis' },
       { id: 'ventas_recos',      label: 'Recomendaciones',     icon: Lightbulb,        path: 'recomendaciones', requiredPermission: 'show_ventas_analisis' },
       { id: 'ventas_economia',   label: 'Economia / Margenes', icon: Wallet,           path: 'economia',     requiredPermission: ['show_ventas_analisis', 'show_costes'] },
       { id: 'ventas_margenfin',  label: 'Margen final',        icon: Target,           path: 'margen-final', requiredPermission: ['show_ventas_analisis', 'show_costes'] },

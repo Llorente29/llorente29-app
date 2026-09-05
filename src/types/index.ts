@@ -68,6 +68,7 @@ export type Page =
   | 'tasks' | 'scheduled' | 'templates' | 'incidents'
   | 'locations' | 'audits' | 'history' | 'tspoon'
   | 'inventory' | 'tspoon_settings' | 'avisos_settings' | 'ventas_analisis' | 'prediccion_personal'
+  | 'ventas_informes'
   | 'zonas_pedido' | 'kiosko_fichaje' | 'solicitudes_pendientes'
   | 'ahora_mismo' | 'turnos_abiertos'
   | 'bolsa_horas'
