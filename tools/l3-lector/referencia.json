@@ -1,0 +1,329 @@
+{
+  "_nota": "VERDAD DE REFERENCIA escrita a mano mirando las fotos, y comprometida en git ANTES de ejecutar el lector ni una sola vez. Si luego un resultado no cuadra con esto, se corrige el lector, no la referencia.",
+  "_discrepancia_con_el_encargo": "El encargo dice «8 fotos, 20 unidades», pero su propia tabla suma 22 (6+4+1+2+1+3+3+2). Contadas a ojo en las fotos son 22. Se usa 22 y se avisa.",
+  "_envases": [
+    "suelta",
+    "cono",
+    "caja_kraft",
+    "caja_blanca",
+    "caja_impresa",
+    "aluminio",
+    "bolsa"
+  ],
+  "fotos": [
+    {
+      "fichero": "00_sueltas_6etiquetas_3pedidos.png",
+      "pedidos": [
+        "G774",
+        "4454B",
+        "G600"
+      ],
+      "unidades": [
+        {
+          "pedido": "G774",
+          "n": 1,
+          "m": 1,
+          "envase": "suelta",
+          "producto": "The Mixed Master: Pita Mixta Gyros",
+          "cliente": "Almudena",
+          "cx": 0.291,
+          "cy": 0.462
+        },
+        {
+          "pedido": "4454B",
+          "n": 1,
+          "m": 3,
+          "envase": "suelta",
+          "producto": "PATATAS FRITAS (DC)",
+          "cliente": "Lee",
+          "cx": 0.474,
+          "cy": 0.454
+        },
+        {
+          "pedido": "4454B",
+          "n": 2,
+          "m": 3,
+          "envase": "suelta",
+          "producto": "QUESATACO XL DE TERNERA",
+          "cliente": "Lee",
+          "cx": 0.474,
+          "cy": 0.646
+        },
+        {
+          "pedido": "4454B",
+          "n": 3,
+          "m": 3,
+          "envase": "suelta",
+          "producto": "QUESATACOS DE TERNERA (DC)",
+          "cliente": "Lee",
+          "cx": 0.472,
+          "cy": 0.876
+        },
+        {
+          "pedido": "G600",
+          "n": 1,
+          "m": 2,
+          "envase": "suelta",
+          "producto": "QUESATACOS DE TERNERA (DC)",
+          "cliente": "Martina",
+          "cx": 0.654,
+          "cy": 0.228
+        },
+        {
+          "pedido": "G600",
+          "n": 2,
+          "m": 2,
+          "envase": "suelta",
+          "producto": "QUESATACOS DE TERNERA (DC)",
+          "cliente": "Martina",
+          "cx": 0.66,
+          "cy": 0.443
+        }
+      ]
+    },
+    {
+      "fichero": "01_G442_pase_2conos_2cajas.png",
+      "pedidos": [
+        "G442"
+      ],
+      "unidades": [
+        {
+          "pedido": "G442",
+          "n": 1,
+          "m": 5,
+          "envase": "caja_kraft",
+          "producto": "Patatas Clasicas Meraki",
+          "cliente": "Jerome",
+          "cx": 0.509,
+          "cy": 0.831
+        },
+        {
+          "pedido": "G442",
+          "n": 2,
+          "m": 5,
+          "envase": "cono",
+          "girada": true,
+          "producto": "The Golden Chicken: Pita de Pollo Gyros",
+          "cliente": "Jerome",
+          "cx": 0.463,
+          "cy": 0.216
+        },
+        {
+          "pedido": "G442",
+          "n": 3,
+          "m": 5,
+          "envase": "caja_kraft",
+          "producto": "Crispy Falafel & Greek Dip (3 uds)",
+          "cliente": "Jerome",
+          "cx": 0.511,
+          "cy": 0.574
+        },
+        {
+          "pedido": "G442",
+          "n": 4,
+          "m": 5,
+          "envase": "cono",
+          "girada": true,
+          "producto": "The Beef Legend: Pita de Ternera Gyros",
+          "cliente": "Jerome",
+          "cx": 0.495,
+          "cy": 0.372
+        }
+      ]
+    },
+    {
+      "fichero": "02_G442_bolsa_bebidas.png",
+      "pedidos": [
+        "G442"
+      ],
+      "unidades": [
+        {
+          "pedido": "G442",
+          "n": 5,
+          "m": 5,
+          "envase": "bolsa",
+          "producto": "Bebidas y postres (2x Coca-Cola Zero Lata)",
+          "cliente": "Jerome",
+          "cx": 0.522,
+          "cy": 0.408
+        }
+      ]
+    },
+    {
+      "fichero": "03_G296_2uds_cajas.jpg",
+      "pedidos": [
+        "G296"
+      ],
+      "unidades": [
+        {
+          "pedido": "G296",
+          "n": 1,
+          "m": 2,
+          "envase": "caja_kraft",
+          "producto": "PATATAS FRITAS (DC)",
+          "cliente": "Alvaro",
+          "cx": 0.531,
+          "cy": 0.322
+        },
+        {
+          "pedido": "G296",
+          "n": 2,
+          "m": 2,
+          "envase": "caja_blanca",
+          "producto": "QUESATACOS DE TERNERA (DC)",
+          "cliente": "Alvaro",
+          "cx": 0.531,
+          "cy": 0.724
+        }
+      ],
+      "qr_ajenos_visibles": [
+        "ticket de plataforma, esquina superior izquierda"
+      ]
+    },
+    {
+      "fichero": "04_G194_1ud_caja_girada.jpg",
+      "pedidos": [
+        "G194"
+      ],
+      "unidades": [
+        {
+          "pedido": "G194",
+          "n": 1,
+          "m": 1,
+          "envase": "caja_impresa",
+          "girada": true,
+          "producto": "Milanesa de Pollo Setas y Trufas",
+          "cliente": "Virginia",
+          "cx": 0.401,
+          "cy": 0.372
+        }
+      ],
+      "qr_ajenos_visibles": [
+        "etiqueta de otro pedido asomando por el borde derecho"
+      ]
+    },
+    {
+      "fichero": "05_G654_3uds_girada.jpg",
+      "pedidos": [
+        "G654"
+      ],
+      "unidades": [
+        {
+          "pedido": "G654",
+          "n": 1,
+          "m": 3,
+          "envase": "caja_impresa",
+          "girada": true,
+          "producto": "Milanesa de Ternera Pepperoni",
+          "cliente": "Angela",
+          "cx": 0.257,
+          "cy": 0.343
+        },
+        {
+          "pedido": "G654",
+          "n": 2,
+          "m": 3,
+          "envase": "caja_kraft",
+          "girada": true,
+          "producto": "Tequenos Milanesa Haus (MH)",
+          "cliente": "Angela",
+          "cx": 0.53,
+          "cy": 0.559
+        },
+        {
+          "pedido": "G654",
+          "n": 3,
+          "m": 3,
+          "envase": "caja_kraft",
+          "girada": true,
+          "producto": "Tequenos Milanesa Haus (MH)",
+          "cliente": "Angela",
+          "cx": 0.572,
+          "cy": 0.793
+        }
+      ],
+      "qr_ajenos_visibles": [
+        "etiqueta de otro pedido asomando por el borde inferior izquierdo"
+      ]
+    },
+    {
+      "fichero": "06_G652_3uds_aluminio_horizontal.jpg",
+      "pedidos": [
+        "G652"
+      ],
+      "unidades": [
+        {
+          "pedido": "G652",
+          "n": 1,
+          "m": 3,
+          "envase": "caja_kraft",
+          "girada": true,
+          "producto": "Home style frech fries (KDB)",
+          "cliente": "Nohely",
+          "cx": 0.564,
+          "cy": 0.483
+        },
+        {
+          "pedido": "G652",
+          "n": 2,
+          "m": 3,
+          "envase": "aluminio",
+          "girada": true,
+          "producto": "Korean crispy Chicken Burger (KdB)",
+          "cliente": "Nohely",
+          "cx": 0.464,
+          "cy": 0.82
+        },
+        {
+          "pedido": "G652",
+          "n": 3,
+          "m": 3,
+          "envase": "bolsa",
+          "girada": true,
+          "producto": "Bebidas y postres",
+          "cliente": "Nohely",
+          "texto_recuperable": false,
+          "_por_que": "El codigo de pedido y el «N de M» quedan FUERA DEL ENCUADRE (comprobado ampliando). El QR se ve entero. El lector de texto no puede acertar esta por definicion; el de QR si.",
+          "cx": 0.564,
+          "cy": 0.115
+        }
+      ],
+      "qr_ajenos_visibles": [
+        "factura simplificada de Llorente29 Food, S.L."
+      ]
+    },
+    {
+      "fichero": "07_G759_2uds_aluminio.jpg",
+      "pedidos": [
+        "G759"
+      ],
+      "unidades": [
+        {
+          "pedido": "G759",
+          "n": 1,
+          "m": 2,
+          "envase": "aluminio",
+          "girada": true,
+          "producto": "Double Korean Cheeseburger (KDB)",
+          "cliente": "Samy",
+          "cx": 0.579,
+          "cy": 0.611
+        },
+        {
+          "pedido": "G759",
+          "n": 2,
+          "m": 2,
+          "envase": "caja_blanca",
+          "producto": "Seoul Chicken Tacos",
+          "cliente": "Samy",
+          "cx": 0.66,
+          "cy": 0.414
+        }
+      ],
+      "qr_ajenos_visibles": [
+        "factura simplificada con QR de folvy"
+      ]
+    }
+  ],
+  "_anexo_posiciones": "Centros normalizados (x/W, y/H) de cada etiqueta, añadidos DESPUES de la primera ejecucion. Es un ANEXO, no una correccion: no cambia ninguna terna (pedido, N, M) ya comprometida. Hacen falta para atribuir cada QR a SU unidad y poder dar el desglose por envase de verdad, en vez de repartir por orden de lista -- que es lo que hacia la primera version del banco y era un numero inventado."
+}

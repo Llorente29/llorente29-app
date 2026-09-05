@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+salida/
+# Las fotos llevan nombres de pila de clientes: no entran en el repositorio.
+# Ver muestras/LEEME.md -- viven en el bucket privado `l3-muestras`.
+muestras/*.png
+muestras/*.jpg
+muestras/*.jpeg
