@@ -19,15 +19,23 @@ pedidos cancelados.
 
 ## 2 · Cuánto se mueve, medido antes de tocar
 
-| ventana | enseña hoy | va a enseñar | diferencia |
+| ventana (fechas fijas, Europe/Madrid) | enseñaba | enseña ahora | diferencia |
 |---|---|---|---|
-| semana 24→30/08 | 10.846,36 € | **13.234,93 €** | **+2.388,57 €** |
-| semana en curso | 10.997,80 € | **14.381,66 €** | **+3.383,86 €** |
-| **últimos 30 días** | **55.941,15 €** | **66.350,76 €** | **+10.409,61 € · +18,6 %** |
+| 24/08 00:00 → 31/08 00:00 | 10.846,36 € | **13.234,93 €** | **+2.388,57 €** |
+| **06/08 00:00 → 05/09 00:00** (30 días cerrados) | **54.633,84 €** | **64.251,07 €** | **+9.617,23 € · +17,6 %** |
 
-De esa corrección, **216,33 € en 30 días (11 pedidos)** son las cancelaciones que
-hoy se cuentan como venta: van en dirección contraria, y por eso hay que
-arreglar las dos cosas a la vez.
+De esa corrección, **233,23 € (12 pedidos)** en la ventana de 30 días son
+cancelaciones que se contaban como venta: van en dirección contraria, y por eso
+hay que arreglar las dos cosas a la vez.
+
+> **Corrección de método, 06/09.** La primera versión de esta tabla medía
+> «últimos 30 días» y «semana en curso» — **ventanas relativas, que se mueven
+> solas**. Julio verificó por su lado y le salió `+10.418,74 €` donde a mí
+> `+10.409,61 €`: **25,57 € de diferencia que eran pedidos entrados entre las dos
+> medidas**, no un desacuerdo. Una verificación con ventana relativa **no se
+> reproduce**, así que las cifras que deciden algo se reescriben con fechas fijas.
+> Los 11 cancelados sí cuadraron exactos en las dos medidas, porque esa parte no
+> dependía del borde móvil.
 
 **El número sube. Nadie ha vendido más:** se estaba enseñando de menos.
 
