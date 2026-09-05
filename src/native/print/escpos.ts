@@ -14,8 +14,22 @@ class Bytes {
   raw(buf: ArrayLike<number>) { for (let i = 0; i < buf.length; i++) this.arr.push(buf[i] & 0xff); return this; }
   text(s: string) {
     // La NT311 corrompe bytes altos -> plegamos acentos a ASCII. El € va en 0xD5.
-    const fold: Record<string, string> = { 'á':'a','à':'a','ä':'a','é':'e','è':'e','ë':'e','í':'i','ì':'i','ï':'i','ó':'o','ò':'o','ö':'o','ú':'u','ù':'u','ü':'u','ñ':'n','ç':'c','Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ñ':'N','Ü':'U','¿':'?','¡':'!','·':'-','»':'>','«':'<','ª':'a','º':'o','–':'-','—':'-','“':'"','”':'"','‘':"'",'’':"'",'⚠':'!','✂':'' };
-    const str = s || '';
+    //
+    // C9 · Lote 1 §5.3 (04/09/2026). ANTES esto era una LISTA A MANO, y fallaba
+    // por lo que no estaba en ella: «Jérôme» salia impreso «Jer?me» — la `é`
+    // estaba en la lista, la `ô` no, y lo que no esta cae en el 0x3f de abajo,
+    // que es literalmente un signo de interrogacion. Con nombres reales de
+    // clientes eso pasa constantemente, y no solo en frances: cualquier letra
+    // que no se le ocurriera a quien escribio la lista.
+    //
+    // Ahora se PLIEGA POR NORMA, no por memoria: NFD separa cada letra de su
+    // tilde y se tiran las marcas combinantes (U+0300–U+036F). Eso cubre de una
+    // vez todas las vocales acentuadas, la ñ, la ç, la diéresis y la
+    // circunfleja, salgan de donde salgan. La tabla de abajo se queda SOLO para
+    // lo que NFD no descompone (ß, æ, ø, œ, ł, đ) y para la puntuacion.
+    const fold: Record<string, string> = { 'ß':'ss','æ':'ae','Æ':'AE','œ':'oe','Œ':'OE','ø':'o','Ø':'O','ł':'l','Ł':'L','đ':'d','Đ':'D','ð':'d','þ':'th','¿':'?','¡':'!','·':'-','»':'>','«':'<','ª':'a','º':'o','–':'-','—':'-','―':'-','“':'"','”':'"','„':'"','‘':"'",'’':"'",'‚':"'",'…':'...','⚠':'!','✂':'','→':'->','×':'x' };
+    // Quitar las tildes de todo lo que se pueda antes de mirar la tabla.
+    const str = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     for (let i = 0; i < str.length; i++) {
       const ch = str[i];
       if (ch === '€') { this.arr.push(0xD5); continue; }
