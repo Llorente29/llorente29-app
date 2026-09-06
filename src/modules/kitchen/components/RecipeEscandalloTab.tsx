@@ -37,14 +37,13 @@ import {
   Plus,
   Search,
   X,
-  Store,
-  Bike,
   ShoppingBag,
   Trash2,
   Loader2,
   Scale,
   Pencil,
 } from 'lucide-react'
+import { iconoDeCanal } from '@/modules/kitchen/lib/iconoDeCanal'
 import { useApp } from '@/context/AppContext'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useVoice } from '@/modules/folvy-ai/hooks/useVoice'
@@ -172,15 +171,6 @@ function matchesTokens(query: string, ...fields: (string | null | undefined)[]):
     .map((f) => normalize(f))
     .join(' ')
   return tokens.every((tok) => haystack.includes(tok))
-}
-
-// Icono según el nombre del canal (heurística por palabras clave). Local/tienda
-// usa tienda; los de delivery, una bici.
-function channelIcon(name: string) {
-  const n = name.toLowerCase()
-  if (n.includes('local') || n.includes('shop') || n.includes('tienda') || n.includes('sala')) return Store
-  if (n.includes('glovo') || n.includes('uber') || n.includes('just') || n.includes('deliver')) return Bike
-  return ShoppingBag
 }
 
 // Color del semáforo según food_cost_status (valores reales de menu_item_economics).
@@ -2610,7 +2600,7 @@ export default function RecipeEscandalloTab({
                   {!collapsed && (
                     <div className="flex flex-col gap-2.5 pl-1">
                       {group.rows.map((e) => {
-                        const Icon = channelIcon(e.channelName)
+                        const Icon = iconoDeCanal(e.channelName)
                         const mainValue = isLicensed ? e.revenueSharePct : e.foodCostPct
                         const mainColor = isLicensed
                           ? 'text-text-primary'
@@ -2621,7 +2611,8 @@ export default function RecipeEscandalloTab({
                               <Icon className="w-3.5 h-3.5 text-text-secondary" />
                             </span>
                             <span className="flex-1 min-w-0 text-[13px] text-text-primary truncate">
-                              {e.channelName}
+                              {/* B80: sin canal asignado, se dice — no se deja el hueco. */}
+                              {e.channelName ?? <span className="italic text-text-secondary">sin canal</span>}
                             </span>
                             <span className="text-right leading-tight flex-shrink-0">
                               {mainValue !== null && mainValue !== undefined ? (

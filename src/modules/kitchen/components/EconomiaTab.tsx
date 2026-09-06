@@ -179,7 +179,7 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
             const ch = salesChannels.find((s) => s.id === e.channelId)
             const badge = ch
               ? channelBadge(ch)
-              : <span className="h-11 px-4 rounded-xl flex items-center text-stone-800 text-base font-medium bg-stone-100 flex-shrink-0">{e.channelName}</span>
+              : <span className="h-11 px-4 rounded-xl flex items-center text-stone-800 text-base font-medium bg-stone-100 flex-shrink-0">{e.channelName ?? 'sin canal'}</span>
             const noRate = e.serviceType == null && e.commissionPct == null
             if (noRate) {
               return (
