@@ -9,19 +9,33 @@
 // sub-paso siguiente. Al guardar un canal, el margen de la ficha del producto lo
 // recoge por el fallback de menu_item_economics.
 //
-// Sección 2: RECOSTEAR TODO. Recalcula el coste de todas las preparaciones y
+// Sección 2: OBJETIVO DE COMIDA SOBRE VENTAS (B79 §3.11, 06/09/2026). El único
+// ajuste de `kitchen_settings` que se puede tocar desde una pantalla. Antes de
+// esto la tabla existía y NADIE la escribía: la fila la creaba NuevaCuentaPage y
+// el objetivo se quedaba a NULL en las tres cuentas, así que `food_cost_status`
+// salía 'no_target' en todo Kitchen. La regla que se pinta aquí y que cumple el
+// motor: el objetivo del PLATO manda, el de la CUENTA vale para los demás.
+//
+// Sección 3: RECOSTEAR TODO. Recalcula el coste de todas las preparaciones y
 // platos de la cuenta. El cálculo NO vive aquí: llama a kitchen_recompute_all,
 // la misma función que corre sola cada noche a las 04:00. La pantalla solo la
 // invoca por tandas para poder decir por dónde va.
 
 import { useEffect, useState } from 'react'
-import { Check, Loader2, Pencil, X, Percent, Calculator, AlertTriangle } from 'lucide-react'
+import { Check, Loader2, Pencil, X, Percent, Calculator, AlertTriangle, Target } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   recomputeAllCosts,
   type RecomputeAllBatch,
 } from '@/modules/kitchen/services/recipeItemService'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import {
+  getKitchenSettings,
+  setTargetFoodCostPct,
+  contarPlatosConObjetivoPropio,
+  objetivoValido,
+  OBJETIVO_INVALIDO,
+} from '@/modules/kitchen/services/kitchenSettingsService'
 import {
   listSalesChannels,
   listChannelRates,
@@ -91,6 +105,18 @@ export default function KitchenSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // ── Objetivo de comida de la cuenta (§3.11) ──────────────────────────────
+  // `objetivoGuardado` es lo que hay en la base; `objetivoVal` es lo que está
+  // escrito en el campo. Se guardan por separado para poder decir «sin cambios»
+  // sin tener que preguntarle otra vez a la base.
+  const [objetivoGuardado, setObjetivoGuardado] = useState<number | null>(null)
+  const [objetivoVal, setObjetivoVal] = useState('')
+  const [objetivoCargado, setObjetivoCargado] = useState(false)
+  const [platosPropios, setPlatosPropios] = useState<{ conObjetivoPropio: number; enCarta: number } | null>(null)
+  const [guardandoObjetivo, setGuardandoObjetivo] = useState(false)
+  const [objetivoOk, setObjetivoOk] = useState<string | null>(null)
+  const [objetivoError, setObjetivoError] = useState<string | null>(null)
+
   function load() {
     if (!activeAccountId) return
     setLoading(true)
@@ -99,6 +125,59 @@ export default function KitchenSettingsPage() {
       .then(([chs, rts]) => { setChannels(chs); setRates(rts) })
       .catch((e) => setError(String(e.message ?? e)))
       .finally(() => setLoading(false))
+    cargaObjetivo(activeAccountId)
+  }
+
+  // El objetivo se carga aparte de los canales: si una de las dos cosas falla, la
+  // otra se sigue viendo, y cada una dice su propio fallo en su sitio.
+  function cargaObjetivo(accountId: string) {
+    setObjetivoCargado(false)
+    setObjetivoError(null)
+    setObjetivoOk(null)
+    Promise.all([getKitchenSettings(accountId), contarPlatosConObjetivoPropio(accountId)])
+      .then(([ajustes, conteo]) => {
+        const v = ajustes?.targetFoodCostPct ?? null
+        setObjetivoGuardado(v)
+        setObjetivoVal(v != null ? String(v) : '')
+        setPlatosPropios(conteo)
+      })
+      .catch((e) => setObjetivoError(String(e.message ?? e)))
+      .finally(() => setObjetivoCargado(true))
+  }
+
+  async function guardaObjetivo() {
+    if (!activeAccountId) return
+    const t = objetivoVal.trim().replace(',', '.')
+    const pct = t === '' ? null : Number(t)
+    // La MISMA regla que usa el servicio, no una copia parecida.
+    if (!objetivoValido(pct)) {
+      setObjetivoError(OBJETIVO_INVALIDO)
+      setObjetivoOk(null)
+      return
+    }
+    setGuardandoObjetivo(true)
+    setObjetivoError(null)
+    setObjetivoOk(null)
+    try {
+      const guardado = await setTargetFoodCostPct(activeAccountId, pct)
+      const v = guardado.targetFoodCostPct
+      setObjetivoGuardado(v)
+      setObjetivoVal(v != null ? String(v) : '')
+      // La confirmación lleva CONTENIDO, no un visto (regla 8): dice el número
+      // que ha quedado guardado y a cuántos platos se les aplica.
+      const otros = platosPropios ? platosPropios.enCarta - platosPropios.conObjetivoPropio : null
+      setObjetivoOk(
+        v == null
+          ? 'Objetivo borrado. Ningún plato tiene ya con qué compararse, salvo los que tengan el suyo.'
+          : `Guardado: ${v} %. Se le aplica a ${otros != null ? otros : '—'} platos de la carta` +
+            `${platosPropios && platosPropios.conObjetivoPropio > 0
+                ? `; los otros ${platosPropios.conObjetivoPropio} siguen con el suyo propio` : ''}.`,
+      )
+    } catch (e) {
+      setObjetivoError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setGuardandoObjetivo(false)
+    }
   }
 
   useEffect(() => {
@@ -376,6 +455,87 @@ export default function KitchenSettingsPage() {
                 )
               })}
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* SECCIÓN: OBJETIVO DE COMIDA SOBRE VENTAS (B79 §3.11) */}
+      <div className="rounded-lg border border-border-default bg-card" id="objetivo-de-comida">
+        <div className="px-4 py-3 border-b border-border-default flex items-center gap-2">
+          <Target size={16} className="text-text-secondary" />
+          <h2 className="text-sm font-medium text-text-primary">Objetivo de comida sobre ventas</h2>
+        </div>
+
+        <div className="px-4 py-3">
+          <p className="text-[12px] text-text-secondary mb-3">
+            A qué porcentaje quieres que salga la comida (ingredientes y envase) sobre lo
+            que vendes, sin IVA. <strong>Vale para todos los platos que no tengan el
+            suyo</strong>: el objetivo que pongas en la ficha de un plato manda sobre éste.
+            Sin objetivo, Folvy puede decirte cuánto cuesta cada plato, pero no si eso está
+            bien o mal.
+          </p>
+
+          {!objetivoCargado ? (
+            <p className="text-sm text-text-secondary">Cargando el objetivo…</p>
+          ) : (
+            <>
+              <div className="flex items-end gap-2 flex-wrap">
+                <label className="block">
+                  <span className="block text-[11px] text-text-secondary mb-1">Objetivo</span>
+                  <span className="inline-flex items-center gap-1">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={objetivoVal}
+                      onChange={(e) => { setObjetivoVal(e.target.value); setObjetivoOk(null) }}
+                      placeholder="p. ej. 28"
+                      className="w-24 px-2 py-1.5 text-sm rounded-md border border-border-default bg-card text-text-primary tabular-nums"
+                    />
+                    <span className="text-sm text-text-secondary">%</span>
+                  </span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => void guardaObjetivo()}
+                  disabled={guardandoObjetivo || !activeAccountId
+                    || objetivoVal.trim().replace(',', '.') === (objetivoGuardado != null ? String(objetivoGuardado) : '')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base"
+                >
+                  {guardandoObjetivo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check size={14} />}
+                  {guardandoObjetivo ? 'Guardando…' : 'Guardar objetivo'}
+                </button>
+              </div>
+
+              {/* Ni el número de la cuenta ni los platos que tienen el suyo se
+                  esconden: son dos verdades y se dicen las dos, con cuál manda. */}
+              <p className="text-[12px] text-text-secondary mt-2.5">
+                {objetivoGuardado == null
+                  ? 'Ahora mismo la cuenta no tiene objetivo puesto.'
+                  : `Ahora mismo la cuenta apunta al ${objetivoGuardado} %.`}
+                {platosPropios && platosPropios.conObjetivoPropio > 0 && (
+                  <>
+                    {' '}
+                    {platosPropios.conObjetivoPropio}{' '}
+                    {platosPropios.conObjetivoPropio === 1
+                      ? 'plato de la carta tiene el suyo propio y no usa éste'
+                      : 'platos de la carta tienen el suyo propio y no usan éste'}
+                    {' '}(de {platosPropios.enCarta} en carta).
+                  </>
+                )}
+              </p>
+
+              {objetivoOk && (
+                <div className="mt-3 p-2.5 rounded-md bg-success-bg text-success border border-success/20 text-[13px]">
+                  {objetivoOk}
+                </div>
+              )}
+              {objetivoError && (
+                <div className="mt-3 p-2.5 rounded-md bg-danger-bg text-danger border border-danger/20 text-[13px]">
+                  {objetivoError}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
