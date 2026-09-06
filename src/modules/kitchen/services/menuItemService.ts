@@ -897,3 +897,70 @@ export async function getMenuItemEconomics(brandId: string): Promise<MenuItemEco
   }
   return ((data ?? []) as RowMenuItemEconomics[]).map(rowToMenuItemEconomics)
 }
+
+// ── B79 · lote 2 ────────────────────────────────────────────────────────────
+
+/**
+ * Lo que Rentabilidad e Ingeniería necesitan saber de un producto y que
+ * `menu_item_economics` NO devuelve: de qué TIPO es y en qué categoría de la
+ * CARTA está.
+ *
+ * POR QUÉ NO VA EN LA RPC. Añadir dos columnas a `menu_item_economics` cambiaría
+ * su tipo de retorno, y eso es DROP + CREATE, no REPLACE (regla 2) — sobre una
+ * función que la fase C va a reescribir entera para colgarla del eje de canal
+ * bueno. Tocarla dos veces en dos semanas no compensa: se lee aparte.
+ *
+ * PARA QUÉ SIRVE CADA UNO:
+ *  · `productType` separa los dos motivos de «sin coste», que no son el mismo
+ *    problema ni tienen la misma salida: `combo` es un menú que se compone de
+ *    otros platos («Componer»), `item` es un plato al que le falta la receta
+ *    («Poner coste»). En Meraki son 4 y 2.
+ *  · `categoriaCarta` es el criterio de «las bebidas van aparte» en Ingeniería.
+ *    Se usa la categoría de la CARTA y no `recipe_item.category` porque esta
+ *    última está vacía en las 33 fichas de la marca: por ahí no se puede
+ *    implementar, y comprobarlo evitó una heurística por nombre.
+ *
+ * Dos consultas y el cruce en cliente, a propósito: el nombre de la relación en
+ * PostgREST depende de cómo se llame la clave ajena, y adivinarlo es la clase de
+ * suposición que luego falla en producción y no en el build.
+ */
+export interface MetaDeCarta {
+  id: string
+  productType: string | null
+  categoriaCarta: string | null
+}
+
+export async function listMetaDeCarta(
+  accountId: string,
+  brandId: string,
+): Promise<MetaDeCarta[]> {
+  requireSupabase()
+  const { data: items, error } = await supabase!
+    .from('menu_item')
+    .select('id, product_type, menu_category_id')
+    .eq('account_id', accountId)
+    .eq('brand_id', brandId)
+    .is('archived_at', null)
+  if (error) throw new Error(`Error leyendo la carta de la marca: ${error.message}`)
+
+  const catIds = Array.from(
+    new Set((items ?? []).map((r) => r.menu_category_id as string | null).filter((v): v is string => !!v)),
+  )
+  const nombrePorCategoria = new Map<string, string>()
+  if (catIds.length > 0) {
+    const { data: cats, error: e2 } = await supabase!
+      .from('menu_category')
+      .select('id, name')
+      .in('id', catIds)
+    if (e2) throw new Error(`Error leyendo las categorías de la carta: ${e2.message}`)
+    for (const c of cats ?? []) nombrePorCategoria.set(c.id as string, c.name as string)
+  }
+
+  return (items ?? []).map((r) => ({
+    id: r.id as string,
+    productType: (r.product_type as string | null) ?? null,
+    categoriaCarta: r.menu_category_id
+      ? nombrePorCategoria.get(r.menu_category_id as string) ?? null
+      : null,
+  }))
+}

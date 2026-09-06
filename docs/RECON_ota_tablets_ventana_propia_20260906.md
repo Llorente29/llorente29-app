@@ -1,0 +1,156 @@
+# RECON · Las tablets sólo se actualizan cuando les toca
+
+**06/09/2026 · Code · sólo lectura, nada tocado.** Responde al §2 y al §2.bis del
+encargo `ENCARGO_CODE_ota_tablets_ventana_propia_20260906.md`.
+
+---
+
+## 0 · La respuesta corta
+
+**La pieza 1 existe y, por el camino normal, FUNCIONA.** Hay tres puertas
+declaradas por las que se salta, y ninguna de las tres explica lo de «Pase».
+
+**Y lo de «Pase» a las 14:18 es, casi con seguridad, una falsa alarma** — pero el
+dato con el que se detectó **no puede probarlo ni en un sentido ni en el otro**, y
+ése es el hallazgo que importa: `app_version_at` **no marca cuándo se aplicó un
+bundle**. Marca cuándo arrancó la app. Son cosas distintas y hoy se confunden.
+
+---
+
+## 1 · Quién llama a `station_update_window`, con fichero y línea
+
+| paso | dónde |
+|---|---|
+| Sondeo cada 60 s, **sólo si hay algo pendiente** | `src/components/UpdateGate.tsx:183-200` (la guarda de entrada, línea 184) |
+| La llamada | `UpdateGate.tsx:187` → `fetchUpdateWindow(QUIET_MINUTES)` con `QUIET_MINUTES = 20` (línea 68) |
+| La RPC | `src/native/appUpdate.ts:147` → `rpc('station_update_window', { p_device_token: getDeviceToken(), p_quiet_minutes })` |
+| **La decisión** | `UpdateGate.tsx:209-211` |
+| El acto | `UpdateGate.tsx:217-227` → `applyOtaBundle()` → `CapacitorUpdater.set()` + recarga |
+
+La decisión, literal:
+
+```ts
+const ciego    = win?.unsupported === true || blind
+const serverOk = !isStation || ciego ? true : win?.safe === true
+const windowOpen = serverOk && idleOk
+```
+
+**Con `safe = false` → `serverOk = false` → `windowOpen = false` → no se aplica.**
+El efecto de aplicar (línea 218) sale por `!windowOpen`. La guarda hace su trabajo.
+
+## 1.bis · Las TRES puertas por las que se salta, todas a propósito
+
+1. **`!isStation`** (`UpdateGate.tsx:203`, `getDeviceToken().length > 0`). Un
+   dispositivo **sin token** → `serverOk = true` **incondicional**: sólo cuenta la
+   inactividad táctil. Es deliberado —«un dispositivo sin token de estación no
+   tiene cocina que interrumpir»— y **hoy no aplica**: las cuatro tablets de
+   Foodint tienen token, incluida la inactiva de Plaza Castilla.
+2. **`blind`** (`BLIND_LIMIT = 30`, línea 69). **30 sondeos seguidos sin
+   respuesta = 30 minutos** de RPC muda → `ciego = true` → `serverOk = true`, y se
+   aplica sin permiso del servidor. El motivo está escrito y es bueno («una
+   migración olvidada dejaría a la flota sin poder actualizarse jamás, y en
+   silencio»), pero **es una puerta real**: 30 minutos de red mala en pleno
+   servicio abren la ventana.
+3. **`unsupported`** — sólo si la RPC no existe en el proyecto. **Existe**, así que
+   hoy no es ésta.
+
+Y una cuarta condición que no es puerta pero sí es más débil de lo que parece:
+**`idleOk` son 5 minutos sin tocar la pantalla** (`IDLE_MS`, línea 67). Una tablet
+de **Pase** puede pasar cinco minutos sin que nadie la toque en pleno servicio: es
+una pantalla que se mira, no que se usa.
+
+## 2 · 🔴 `app_version_at` NO marca la recarga. Marca el arranque
+
+Es la tercera hipótesis del §2.bis, y es la correcta.
+
+- `report_device_app_version` hace `app_version_at = now()` **incondicionalmente**,
+  cambie o no la versión. No compara nada.
+- `reportAppVersion()` se llama **exactamente una vez**, desde
+  `UpdateGate.tsx:122` — `useEffect(() => { void reportAppVersion() }, [])`. O sea:
+  **en cada arranque de la app**.
+
+Por tanto `app_version_at` = «la última vez que esta app arrancó y consiguió
+reportar». **Una recarga por OTA y un reinicio cualquiera dejan exactamente la
+misma fila.** No hay forma de distinguirlos con lo que hay guardado.
+
+## 3 · Qué dicen los datos sobre «Pase», bundle 259, 14:18
+
+| tablet | local | bundle | reportó (Madrid) |
+|---|---|---|---|
+| Cocina | Foodint Alcalá | 259 | **12:04:50** |
+| Tablet camichi4 | Foodint Carabanchel | 259 | **12:04:44** |
+| **Pase** | Foodint Alcalá | 259 | **14:18:08** |
+| Tablet J | Plaza Castilla | — | (inactiva desde el 20/07) |
+
+**Tres cosas apuntan a que a las 14:18 no se aplicó ningún bundle:**
+
+1. **Cocina y camichi4 reportaron el 259 con SEIS SEGUNDOS de diferencia, en dos
+   locales distintos.** Eso es el momento en que se publicó el bundle y las tablets
+   lo cogieron, no dos ventanas de calma independientes que casualmente coinciden.
+2. Las tres están en el **mismo bundle 259**. Pase no va por detrás ni por delante.
+3. **La guarda, si se le hubiera preguntado a las 14:18, habría dicho que NO.**
+   Medido: hay una venta en Alcalá a las **14:12:15**, seis minutos antes, y con
+   `p_quiet_minutes = 20` eso da `venta_reciente` → `safe = false`.
+
+Lo más probable es que **Pase aplicara el 259 hacia las 12:04 como las otras dos**,
+y que a las 14:18 simplemente **arrancara** — Android la mató y la relanzó, alguien
+la reabrió, volvió la red.
+
+**Pero no se puede probar, y por eso esto no se cierra como «falsa alarma» a secas:
+se cierra como “no hay registro de cuándo se aplica un bundle”.** Es lo primero que
+la pieza 1 tiene que traer, y es barato: hoy el aplicar y el arrancar comparten un
+único `now()`.
+
+## 4 · Pieza 2 · cómo se calcula la versión, y por qué llega a la tablet todo
+
+- **UNA sola entrada de Vite.** `index.html`, sin `rollupOptions.input` en
+  `vite.config.ts`. **La tablet y la oficina son literalmente el mismo paquete.**
+- **El OTA NO compara ningún hash de contenido.**
+  `bundleId = ${{ github.run_number }}` (`.github/workflows/build-apk.yml:113`), un
+  contador que sube en cada ejecución de CI. Y
+  `checkForBundleUpdate` (`appUpdate.ts:245`) decide con
+  `remote.bundleId > currentId`. **Un contador, no una huella.**
+- El `sha256` de `bundle.json` (línea 120) **sí** existe, pero es el checksum de
+  descarga que verifica Capgo — no decide si hay versión nueva.
+- Lo único que filtra hoy es `paths-ignore: ['docs/**','**/*.md','supabase/**']`.
+  Por rutas, y sólo esas tres. **Cualquier push a `main` que toque `src/` publica un
+  bundle nuevo y las tres tablets lo ven**, aunque el cambio sea la Rentabilidad de
+  Kitchen. La premisa del §1 del encargo queda confirmada tal cual.
+
+## 5 · Un hallazgo que ahorra trabajo en la pieza 1: la banda ya está en la base
+
+`business_hours` **existe y está cargada en los tres locales**:
+
+| local | tramos | abre | cierra |
+|---|---|---|---|
+| Foodint Alcalá | 7 | 13:00 | **23:45** |
+| Foodint Carabanchel | 11 | 13:00 | **23:45** |
+| Foodint Plaza Castilla | 12 | 13:00 | **23:45** |
+
+Con el margen que propone el §2 (cierre + 45 min → apertura − 45 min), la ventana de
+mantenimiento sale **00:30 → 12:15**. **Que es exactamente la banda 12:15 → 23:45,
+del revés.** La banda que Julio aplica a mano no es una convención: es el horario de
+los locales, y ya está en la base. La pieza 1 no tiene que inventar política —
+tiene que leer `business_hours`.
+
+*(Y el `04:00 → 10:00` de reserva para un local sin horario sigue haciendo falta:
+no por Foodint, sino por el cliente 2.)*
+
+## 6 · Lo que esta RECON NO ha mirado
+
+- **Qué pantallas usa de verdad la tablet.** Sé que `isPairedEstacion()` la abre en
+  `/estacion` (`printWorker.ts:88`, `App.tsx:109`), pero **no he medido el grafo de
+  importaciones** de esa entrada, que es lo que decide entre (a) huella por área y
+  (b) dos paquetes. Es la siguiente medición y la pide el propio encargo.
+- **Los modos B30/B31** (ciego / sin token) los he leído en el código, no
+  reproducido en una tablet.
+
+## 7 · Lo que yo propondría, con la decisión en manos de Julio
+
+1. **Registrar cuándo se aplica un bundle, aparte de cuándo arranca la app.** Es la
+   condición para poder verificar cualquiera de las dos piezas — y hoy no se puede
+   verificar ninguna.
+2. **Bajar la puerta `blind`**: 30 minutos de silencio abren la ventana en plena
+   cena. Con `business_hours` en la mano, un ciego dentro del horario de apertura
+   puede esperar; sólo fuera de él debería abrir.
+3. **La pieza 1 sobre `business_hours`**, no sobre una constante nueva.

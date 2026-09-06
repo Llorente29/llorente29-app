@@ -14,7 +14,7 @@
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, CircleSlash, GripVertical, Smile, Archive, MoveVertical, ImagePlus, Star, TrendingUp, TrendingDown } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { fmtMoney } from '@/lib/format'
@@ -138,6 +138,30 @@ export default function KitchenMenuPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // B79 · lote 2. Si la URL trae ?producto=ID, se abre esa ficha directamente.
+  //
+  // Existe porque Rentabilidad e Ingeniería mandan aquí los productos que NO
+  // tienen ficha de receta —los menús y los platos sin escandallo—, y a esos el
+  // enlace de Platos (`?recipe=`) no les sirve: no hay `recipe_item` al que
+  // apuntar. Sin esto, «Componer» dejaría al usuario en una lista de 33
+  // productos a buscar el suyo, que no es lo que dice el botón.
+  //
+  // Mismo patrón que Platos: query param (sobrevive al remontaje al cambiar de
+  // ruta, cosa que `location.state` no hace) y se limpia después, para que
+  // «volver» a la lista no lo reabra.
+  useEffect(() => {
+    const entrante = searchParams.get('producto')
+    if (entrante) {
+      setSelectedProductId(entrante)
+      const next = new URLSearchParams(searchParams)
+      next.delete('producto')
+      setSearchParams(next, { replace: true })
+    }
+    // Solo al montar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [showExceptions, setShowExceptions] = useState(false)
   // Reconciliación de marcas externas (§6 encargo Carabanchel 17/08).
   const [showBrandRecon, setShowBrandRecon] = useState(false)
