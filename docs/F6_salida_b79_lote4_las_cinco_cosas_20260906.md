@@ -432,3 +432,93 @@ dos lados se habrían ido con un «no he roto nada» encima.
 - Y una corrección pendiente de front que sale de la pieza C: el comentario de
   `priceGridService.ts` dice que no usa `food_cost_status` «porque sale
   `'no_target'` en toda la cuenta». Deja de ser cierto hoy.
+
+
+---
+
+# 8 · La pantalla del Resumen, reescrita
+
+`KitchenDashboardPage.tsx` entera, sobre la maqueta aprobada y las dos RPC nuevas.
+Lo que había decía «Food cost medio —», «Margen 0 €», «0 de 0 platos con coste» y
+«Sin datos todavía» ×18 sobre una cuenta que en 30 días vendió 73.000 € con el
+89 % de cobertura — y encima remataba con «las cifras son de ejemplo».
+
+## 8.1 · De dónde sale cada número, y por qué de ahí
+
+- **La comida sobre ventas**, de `food_cost_dashboard`: **la misma función que usa
+  Ventas**, así que las dos pantallas no pueden decir cifras distintas de lo mismo.
+- **El corte «tuyas / de terceros»**, de `by_ownership` — sumado en SQL sobre las
+  mismas filas que la cifra grande. Sumar aquí las de `by_brand`, que van
+  redondeadas a euros enteros, sería otra vara.
+- **Las cinco cosas**, de `kitchen_catalog_gaps`, y **cada contador se pinta con la
+  definición que da la base**, en cursiva bajo su fila. La pantalla no re-define
+  ninguno: el número no se separa de su regla.
+- **Las ventas sin marca no se tiran en silencio** (regla 7): si las hay, el pie de
+  la cifra grande dice cuántas son y que van dentro.
+
+## 8.2 · Tres cosas que no estaban en el encargo y que he hecho igualmente
+
+1. **El patrón, en un solo sitio.** Había **tres copias** del mismo marcado de
+   «cifra con nombre humano» (Rentabilidad, Ingeniería y la nueva). Extraídas a
+   `components/PatronDeKitchen.tsx` **con su contrato de píxel escrito** —
+   `patronDeKitchen.test.tsx` fija las clases exactas, igual que hiciste con
+   `KpiCard`. Rentabilidad ya usa el compartido; **Ingeniería la he dejado como
+   está** porque su marcado no es idéntico y cambiarlo sería un cambio de aspecto
+   que no puedo justificar sin una captura de antes y después.
+2. **Borrado `kitchenDashboardService.ts`** — 359 líneas, el agregador del Resumen
+   viejo, **sin un solo importador** en `src/` ni en `tests/` después de la
+   reescritura. Es un cadáver recién hecho y lo he recogido yo.
+3. **La ventana se guarda con los datos.** Las fechas de la línea de regla son
+   EXACTAMENTE las que se consultaron, aunque la pestaña lleve horas abierta.
+
+## 8.3 · Un hallazgo del entorno de pruebas, que conviene saber
+
+`(2707).toLocaleString('es-ES')` devuelve **«2707»** en este Node: **no trae ICU
+completo** y `Intl` resuelve a `en-US`. En el navegador formatea bien, así que **no
+es un fallo de producto** — pero significa que **ninguna prueba de este repo puede
+verificar el formato de números en castellano**. Lo he descubierto porque una
+prueba mía afirmaba «2.707 €» y salía roja con «2707 €».
+
+Qué he hecho: usar el helper del proyecto (`fmtInt`) en vez de un `toLocaleString`
+suelto, y que la prueba afirme lo que es cierto en los dos sitios (`/2\.?707 €/`),
+con el motivo escrito al lado. Lo que **no** he hecho es cambiar la prueba para que
+pase sin decir por qué.
+
+## 8.4 · Números, con la misma vara a los dos lados
+
+| | antes | después |
+|---|---|---|
+| `npm run build` | verde | **verde** |
+| lint | 1359 (1058 · 301) | **1357 (1057 · 300)** — dos menos |
+| pruebas | 784, 6 rojas | **805, las mismas 6 rojas** (+21) |
+
+Las 6 rojas son las de `main`. Los dos problemas de lint que bajan son del
+agregador borrado; la pantalla nueva, su servicio y su `lib` no aportan ninguno.
+
+**Y otro fallo mío cazado por medir los dos lados:** el primer servicio del Resumen
+metía tres `Record<string, any>` y subía el lint a 1361. Cambiados a
+`Record<string, unknown>`, que es lo que ya sabían leer los ayudantes de conversión.
+
+## 8.5 · Las pruebas nuevas (21)
+
+- **`lasCosasQueArreglar.test.ts` (16)**, escritas contra la población REAL de
+  Foodint del 06/09 —100/120 extras, 129/558 sin ficha, 314 sin envase, 23/133
+  ingredientes— no contra ejemplos inventados. Comprueban que **los cinco destinos
+  son rutas que existen** (contra la lista real del módulo), que **Casado** es el
+  destino de los sin ficha y **`ajustes#objetivo-de-comida`** el del objetivo, y
+  que **ninguna frase afirma lo que el contador no ha medido**: si los ingredientes
+  no están en ninguna receta, se dice «hoy no bloquean nada» y no aparece por
+  ninguna parte «N recetas no cierran su coste»; si no hay dato de envase, no se
+  inventa un euro. También el singular y el plural, que es lo que separa una
+  pantalla de un volcado.
+- **`patronDeKitchen.test.tsx` (5)**: el contrato de píxel del patrón.
+
+## 8.6 · Lo que falta para publicar
+
+1. Aplicar A, B y C al abrir la ventana, y renombrar los ficheros a la versión que
+   registre la base.
+2. **Verificar la sintaxis de `menu_item_channel_economics` inmediatamente después
+   de aplicarla** (regla 2), con `pg_get_functiondef` y una llamada sobre Budapest.
+3. Publicar la OTA con los cuatro lotes en una sola vez.
+4. Y una corrección pendiente: el comentario de `priceGridService.ts` que dice que
+   `food_cost_status` sale `'no_target'` en toda la cuenta deja de ser cierto.

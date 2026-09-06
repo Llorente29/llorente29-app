@@ -34,6 +34,9 @@ import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import { getMenuItemEconomics, listMetaDeCarta } from '@/modules/kitchen/services/menuItemService'
 import { getMenuItemUnitsSold } from '@/modules/kitchen/services/menuEngineeringService'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
+// B79 lote 4: la cifra y el campo salen de aquí, iguales letra a letra que
+// cuando vivían en este fichero. Lo fija `patronDeKitchen.test.tsx`.
+import { Campo, Cifra } from '@/modules/kitchen/components/PatronDeKitchen'
 import {
   calculaFila, cifrasDeRentabilidad, elMargenEsDeLaCasa, etiquetasDeFila,
   MARGEN_DE_MARCA_CEDIDA, motivoSinCoste,
@@ -306,25 +309,6 @@ export default function KitchenProfitabilityPage() {
           </p>
         </>
       )}
-    </div>
-  )
-}
-
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[11px] uppercase tracking-wide text-text-secondary">{label}</span>
-      {children}
-    </label>
-  )
-}
-
-function Cifra({ titulo, valor, pie, alerta }: { titulo: string; valor: string; pie: string; alerta?: boolean }) {
-  return (
-    <div className="bg-card border border-border-default rounded-lg p-3">
-      <div className="text-[11px] text-text-secondary">{titulo}</div>
-      <div className={`text-2xl font-semibold mt-0.5 ${alerta ? 'text-danger' : 'text-text-primary'}`}>{valor}</div>
-      <div className="text-[11px] text-text-secondary mt-1 leading-snug">{pie}</div>
     </div>
   )
 }
