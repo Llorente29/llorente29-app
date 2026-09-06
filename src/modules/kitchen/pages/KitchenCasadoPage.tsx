@@ -18,6 +18,11 @@ import { AlertTriangle, Check, ChefHat, Clock, Euro, Link2, Loader2, Plus, Refre
 import { fmtMoney, fmtInt } from '@/lib/format'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listBrandsWithCatalog, type CatalogBrand } from '@/modules/kitchen/services/brandCatalogService'
+// B83: la marca se recuerda para TODO Kitchen (§3.7). Esta pantalla abria
+// siempre en la primera por alfabeto — «Ay Mamita Bowls», y encima cedida —
+// asi que el boton «Casar o crear la ficha» del Resumen llevaba a la pantalla
+// correcta y a la marca equivocada.
+import { guardaMarcaRecordada, marcaConLaQueAbrir } from '@/modules/kitchen/lib/recuerdoDeKitchen'
 import { getMenuItemUnitsSold, type MenuItemUnitsSold } from '@/modules/kitchen/services/menuEngineeringService'
 import {
   getMenuItemLinkHealth,
@@ -88,7 +93,13 @@ export default function KitchenCasadoPage() {
       .then((bs) => {
         if (cancelled) return
         setBrands(bs)
-        if (bs.length > 0 && !selectedBrandId) setSelectedBrandId(bs[0].id)
+        if (bs.length === 0 || selectedBrandId) return
+        // Orden de preferencia: la que pide la URL (el boton del Resumen manda la
+        // marca con mas platos sin ficha) > la recordada de todo Kitchen > una
+        // propia > la primera. Nunca la primera por alfabeto a secas.
+        const pedida = searchParams.get('marca')
+        const existe = pedida && bs.some((b) => b.id === pedida) ? pedida : null
+        setSelectedBrandId(existe ?? marcaConLaQueAbrir(bs)?.id ?? bs[0].id)
       })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setLoadingBrands(false) })
@@ -263,7 +274,7 @@ export default function KitchenCasadoPage() {
         {brands.length > 0 && (
           <select
             value={selectedBrandId ?? ''}
-            onChange={(e) => setSelectedBrandId(e.target.value)}
+            onChange={(e) => { setSelectedBrandId(e.target.value); guardaMarcaRecordada(e.target.value) }}
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-medium bg-white"
           >
             {brands.map((b) => (

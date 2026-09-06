@@ -37,7 +37,14 @@ export interface CosaMedida {
   orden: number
   n: number
   de: number | null
+  /** Castellano de persona. Es la ÚNICA que se pinta. */
   definicion: string
+  /**
+   * La regla técnica, con sus columnas. Viaja para soporte y para poder auditar
+   * el número — y NO SE PINTA NUNCA en pantalla de cliente (B83). Si algún día
+   * alguien la quiere ver, va detrás de un pliegue, no suelta bajo la fila.
+   */
+  reglaTecnica?: string
   porQueAqui: string
   accion: string
   peores: Array<{ brandId: string | null; marca: string; n: number; de: number }>
@@ -91,6 +98,11 @@ export function pintaCosa(c: CosaMedida, envaseEur: number | null): CosaPintada 
     case 'platos_en_carta_sin_coste': {
       const sinFicha = c.sinFicha ?? 0
       const conFicha = c.conFichaSinCoste ?? 0
+      // B83: el botón abre Casado EN LA MARCA que la propia fila nombra la
+      // primera — la que más platos sin ficha tiene. Antes abría en la primera
+      // por alfabeto, que en Foodint es «Ay Mamita Bowls» y encima cedida: la
+      // pantalla correcta y la marca equivocada.
+      const peor = c.peores[0]?.brandId ?? null
       const trozos: string[] = []
       if (sinFicha > 0) trozos.push(`${sinFicha} sin ficha enlazada`)
       if (conFicha > 0) trozos.push(`${conFicha} con ficha sin cerrar`)
@@ -101,7 +113,7 @@ export function pintaCosa(c: CosaMedida, envaseEur: number | null): CosaPintada 
           `${trozos.join(' y ')}. Se venden sin que Folvy sepa lo que cuestan, así que se quedan ` +
           'FUERA de la cifra de arriba: no la empeoran, la dejan incompleta.',
         boton: c.accion,
-        destino: 'casado',
+        destino: peor ? `casado?marca=${peor}` : 'casado',
       }
     }
 

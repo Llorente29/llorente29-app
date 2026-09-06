@@ -149,7 +149,7 @@ export default function KitchenDashboardPage() {
         <h1 className="text-2xl font-semibold text-text-primary">¿Cómo va tu cocina este mes?</h1>
         <p className="mt-1.5 text-sm text-text-secondary max-w-4xl">
           Comida = ingredientes y envase de lo que has vendido · ventas = precio de carta
-          sin IVA{ventana ? ` · ${intervaloDeFechas(ventana.desde, ventana.hasta) ?? 'periodo sin fechas'}` : ''}.{' '}
+          sin IVA{ventana ? ` · ${intervaloDeFechas(ventana.desde, ventana.hasta, { minuscula: true }) ?? 'periodo sin fechas'}` : ''}.{' '}
           <span className="text-text-tertiary">
             El margen después de Glovo, Uber y Just Eat llega cuando el catálogo tenga canal.
           </span>

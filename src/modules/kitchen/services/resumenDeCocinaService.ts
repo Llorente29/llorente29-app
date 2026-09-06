@@ -166,6 +166,8 @@ export async function getLoQueFalta(accountId: string): Promise<LoQueFalta> {
       // La definición y el porqué NO se reescriben aquí: llegan de la base y se
       // enseñan tal cual. Es lo que impide que el número y su regla se separen.
       definicion: String(c.definicion ?? ''),
+      // Viaja, no se pinta. Ver `CosaMedida.reglaTecnica`.
+      reglaTecnica: c.regla_tecnica ? String(c.regla_tecnica) : undefined,
       porQueAqui: String(c.por_que_aqui ?? ''),
       accion: String(c.accion ?? ''),
       peores: ((c.peores ?? []) as Record<string, unknown>[]).map((p) => ({

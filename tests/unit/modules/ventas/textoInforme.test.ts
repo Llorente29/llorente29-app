@@ -94,3 +94,37 @@ describe('intervaloDeFechas · el camino que usan ahora las tres pantallas', () 
     expect(intervaloDeFechas(new Date(hasta.getTime() - NaN), hasta)).toBeNull()
   })
 })
+
+
+// B83: «vendido Del 8 de junio» — mayúscula a mitad de frase, en tres cabeceras.
+describe('minúscula cuando la frase no empieza ahí', () => {
+  const desde = new Date(2026, 5, 8, 0, 0)
+  const hasta = new Date(2026, 8, 6, 20, 1)
+
+  it('sin opción, como siempre: empieza en mayúscula', () => {
+    expect(intervaloDeFechas(desde, hasta)?.startsWith('Del')).toBe(true)
+  })
+
+  it('con minúscula, encaja detrás de «vendido»', () => {
+    const t = intervaloDeFechas(desde, hasta, { minuscula: true })
+    expect(t?.startsWith('del')).toBe(true)
+    expect(`vendido ${t}`).toContain('vendido del')
+  })
+
+  // Sólo baja la PRIMERA letra: el resto del texto no se toca.
+  it('no destroza el resto de la frase', () => {
+    const a = intervaloDeFechas(desde, hasta)!
+    const b = intervaloDeFechas(desde, hasta, { minuscula: true })!
+    expect(b.slice(1)).toBe(a.slice(1))
+  })
+
+  it('«El 6 de septiembre» también baja bien', () => {
+    const d = new Date(2026, 8, 6, 0, 0)
+    const h = new Date(2026, 8, 6, 14, 30)
+    expect(intervaloDeFechas(d, h, { minuscula: true })?.startsWith('el ')).toBe(true)
+  })
+
+  it('una fecha inválida sigue dando null, con opción o sin ella', () => {
+    expect(intervaloDeFechas(new Date(NaN), hasta, { minuscula: true })).toBeNull()
+  })
+})

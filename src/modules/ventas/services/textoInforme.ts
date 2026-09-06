@@ -77,12 +77,23 @@ export function fechaParaIntervalo(d: Date): string | null {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-/** El intervalo a partir de dos `Date`, sin que quien llame tenga que saber el formato. */
-export function intervaloDeFechas(desde: Date, hasta: Date): string | null {
+/**
+ * El intervalo a partir de dos `Date`, sin que quien llame tenga que saber el
+ * formato.
+ *
+ * `minuscula` es para cuando la frase NO empieza aquí: «vendido del 8 de junio»,
+ * no «vendido Del 8 de junio» (B83). Sólo baja la primera letra; los meses ya van
+ * en minúscula y los nombres propios no aparecen en este texto.
+ */
+export function intervaloDeFechas(
+  desde: Date, hasta: Date, opciones?: { minuscula?: boolean },
+): string | null {
   const a = fechaParaIntervalo(desde)
   const b = fechaParaIntervalo(hasta)
   if (a === null || b === null) return null
-  return intervaloEnCastellano(a, b)
+  const texto = intervaloEnCastellano(a, b)
+  if (texto === null) return null
+  return opciones?.minuscula ? texto.charAt(0).toLowerCase() + texto.slice(1) : texto
 }
 
 function diaAnteriorDe(p: { anio: number; mes: number; dia: number }) {

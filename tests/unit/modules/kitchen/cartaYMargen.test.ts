@@ -254,3 +254,37 @@ describe('precioSinIva', () => {
     expect(precioSinIva(10, null)).toBe(10)
   })
 })
+
+
+// ── B83 ─────────────────────────────────────────────────────────────────────
+// «Mejor plato» salía en Bendito Burrito como «Burrito Colosal · sin ventas en el
+// periodo». Como respuesta a «¿qué platos te dejan más margen?» no vale: un plato
+// que no se ha vendido no te ha dejado nada.
+describe('el mejor plato se elige entre los VENDIDOS', () => {
+  const P2 = (o: Partial<ProductoDeCarta>): ProductoDeCarta => ({
+    id: 'x', nombre: 'x', tipo: 'item', categoria: 'PITAS', precio: 10, ivaPct: 10,
+    coste: 2, uds: 10, ...o,
+  })
+
+  it('un plato de margen enorme y CERO ventas no puede ser el mejor', () => {
+    const filas = [
+      P2({ id: 'caro',    nombre: 'Burrito Colosal', precio: 40, coste: 2, uds: 0 }),
+      P2({ id: 'vendido', nombre: 'Pita Mixta',      precio: 14, coste: 2, uds: 300 }),
+    ].map((p) => calculaFila(p))
+    const c = cifrasDeRentabilidad(filas, 90)
+    expect(c.mejorPlato?.nombre).toBe('Pita Mixta')
+  })
+
+  it('si NADA se ha vendido, no hay mejor plato: null, no un invento', () => {
+    const filas = [P2({ nombre: 'Burrito Colosal', precio: 40, coste: 2, uds: 0 })].map((p) => calculaFila(p))
+    expect(cifrasDeRentabilidad(filas, 90).mejorPlato).toBeNull()
+  })
+
+  it('entre dos vendidos gana el de más margen por unidad, no el que más vende', () => {
+    const filas = [
+      P2({ id: 'a', nombre: 'Mucho volumen', precio: 6,  coste: 1, uds: 900 }),
+      P2({ id: 'b', nombre: 'Mucho margen',  precio: 20, coste: 2, uds: 5 }),
+    ].map((p) => calculaFila(p))
+    expect(cifrasDeRentabilidad(filas, 90).mejorPlato?.nombre).toBe('Mucho margen')
+  })
+})

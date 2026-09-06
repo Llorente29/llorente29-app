@@ -149,8 +149,14 @@ export function cifrasDeRentabilidad(
     udsConCoste += f.uds
   }
 
+  // B83: el mejor plato se elige SOLO entre los que se han vendido en el periodo.
+  // Antes salía el de mayor margen aunque tuviera 0 ventas — en Bendito Burrito
+  // salía «Burrito Colosal · sin ventas en el periodo», que como respuesta a «¿qué
+  // plato te deja más margen?» no vale: un plato que no se vende no te ha dejado
+  // nada. Si no se ha vendido ninguno con coste, no hay mejor plato y se dice «—».
   let mejor: CifrasDeRentabilidad['mejorPlato'] = null
   for (const f of conCoste) {
+    if (f.uds <= 0) continue
     if (mejor == null || (f.margen as number) > mejor.margen) {
       mejor = { nombre: f.nombre, margen: f.margen as number, costeSobrePrecio: f.costeSobrePrecio }
     }
