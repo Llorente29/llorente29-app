@@ -241,6 +241,10 @@ export const EXPLICACION_CUADRANTE: Record<Cuadrante, string> = {
   lastre: 'ni se venden ni dejan · revísalos o quítalos',
 }
 
+// Sólo para componer las frases de abajo, y sobre un margen que en ese punto ya
+// está comprobado no-null (`f.margen as number` tras filtrar). No usa
+// `fmtMoney` porque esta capa no debe depender de la de presentación.
+// eslint-disable-next-line no-restricted-syntax
 const eur = (v: number) => v.toFixed(2).replace('.', ',') + ' €'
 
 /**
