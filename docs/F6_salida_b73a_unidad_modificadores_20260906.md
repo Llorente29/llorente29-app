@@ -274,3 +274,38 @@ va dicha.** Los +15 que pasan son las pruebas nuevas.
 
 *(Y una corrección de vara: el «7 problemas, 3 errores» que reporté en B72 salía
 de un alcance más estrecho de eslint. No se puede leer contra este 1363.)*
+
+---
+
+## 9 · §1.ter · LA RUTA REAL, leída del código y no deducida del nombre del fichero
+
+Te di dos veces una navegación inventada, la última «Cocina → Recetas». **Ninguna
+de las dos existe**, y salieron de leer el *path* del fichero en vez del rótulo de
+la pantalla. Esto es lo que dice `module.tsx` y `routes.ts`:
+
+**Para llegar a los impactos de un modificador:**
+
+> **Folvy Kitchen** (barra superior) → **Cartas** (barra lateral) → **pulsar el
+> producto** → pestaña **«Modificadores»** → bloque **«Impacto en coste»**
+
+También se llega por **Folvy Kitchen → Platos** (la ficha del plato) o por
+**Folvy Kitchen → Casado**: las tres abren la misma ficha con las mismas pestañas.
+
+**Dónde estaba la trampa, para que no vuelva a picar nadie:**
+
+| en el código | en la pantalla |
+|---|---|
+| módulo `kitchen`, URL `/kitchen/...` | se llama **«Folvy Kitchen»**, no «Cocina» |
+| `path: 'menu'` | se rotula **«Cartas»**, no «Menú» |
+| `path: 'recetas'` | se rotula **«Platos»**, no «Recetas» ← *la que inventé* |
+| `CatalogFichaPage` | **no tiene URL propia**: se abre pulsando un producto dentro de Cartas / Platos / Casado |
+
+`recetas` es el *path* de la entrada rotulada **«Platos»**. Leer el path y decir
+«Recetas» es exactamente el mismo error que la regla 30 describe un piso más
+arriba: **el nombre con el que el código la guarda no es el nombre con el que el
+usuario la lee.**
+
+**«Platos» y «Precios» piden `show_costes`; «Cartas» y «Casado» solo rol
+`manager`.** Así que quien no tenga el permiso de costes llega igual por Cartas.
+
+*(El aviso del vigía lleva esta ruta escrita dentro, con estos rótulos.)*
