@@ -31,9 +31,16 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
  * El límite superior es EXCLUSIVO —la ventana acaba el lunes 00:00— así que
  * para nombrar el último día se resta un minuto: «al 30», no «al 31».
  */
-export function intervaloEnCastellano(desde: string, hasta: string): string {
+export function intervaloEnCastellano(desde: string, hasta: string): string | null {
   const d = parte(desde)
   const h = parte(hasta)
+  // B82 (06/09/2026): un formato que esta funcion no sabe leer NO puede tumbar
+  // la pantalla. Antes seguia adelante con `dia = NaN`, llegaba a `Date.UTC(...,
+  // NaN)` y `toISOString()` lanzaba `RangeError: Invalid time value` en pleno
+  // render — tres pantallas de Kitchen en blanco. Ahora devuelve null y quien
+  // llama decide qué decir. El contrato es `YYYY-MM-DD HH:MM`, con ESPACIO: un
+  // ISO con «T» no vale (ver `fechaParaIntervalo` abajo).
+  if (!d || !h) return null
   const finExclusivo = h.hora === '00:00'
   const hDia = finExclusivo ? diaAnteriorDe(h) : h
   if (d.ymd === hDia.ymd) {
@@ -46,9 +53,36 @@ export function intervaloEnCastellano(desde: string, hasta: string): string {
 }
 
 function parte(v: string) {
-  const [ymd, hora] = v.split(' ')
-  const [anio, mes, dia] = ymd.split('-').map(Number)
+  const [ymd, hora] = (v ?? '').split(' ')
+  const [anio, mes, dia] = (ymd ?? '').split('-').map(Number)
+  // Se comprueba lo que se va a usar, no «que parezca una fecha»: si alguno de
+  // los tres no es un numero, no hay dia que nombrar.
+  if (!Number.isFinite(anio) || !Number.isFinite(mes) || !Number.isFinite(dia)) return null
+  if (mes < 1 || mes > 12) return null
   return { ymd, anio, mes, dia, hora: hora ?? '00:00' }
+}
+
+/**
+ * Un `Date` en el formato que ESTA funcion sabe leer: `YYYY-MM-DD HH:MM`, en
+ * hora LOCAL — que es la que hay que enseñarle a una persona, y la misma que
+ * manda la RPC de Informes.
+ *
+ * Existe porque tres pantallas le pasaron `toISOString()` y la reventaron: el
+ * ISO lleva «T» donde esta espera un espacio, asi que el dia salia `NaN`. Si
+ * hace falta una fecha para esta funcion, se construye aqui y no a mano.
+ */
+export function fechaParaIntervalo(d: Date): string | null {
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** El intervalo a partir de dos `Date`, sin que quien llame tenga que saber el formato. */
+export function intervaloDeFechas(desde: Date, hasta: Date): string | null {
+  const a = fechaParaIntervalo(desde)
+  const b = fechaParaIntervalo(hasta)
+  if (a === null || b === null) return null
+  return intervaloEnCastellano(a, b)
 }
 
 function diaAnteriorDe(p: { anio: number; mes: number; dia: number }) {

@@ -44,7 +44,7 @@ import {
   cuantasResueltas, estaPendiente, pintaCosa,
 } from '@/modules/kitchen/lib/lasCosasQueArreglar'
 import { guardaPeriodoRecordado, leePeriodoRecordado } from '@/modules/kitchen/lib/recuerdoDeKitchen'
-import { intervaloEnCastellano } from '@/modules/ventas/services/textoInforme'
+import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import { fmtInt, fmtPct } from '@/lib/format'
 
 type Dias = 30 | 90 | 365
@@ -149,7 +149,7 @@ export default function KitchenDashboardPage() {
         <h1 className="text-2xl font-semibold text-text-primary">¿Cómo va tu cocina este mes?</h1>
         <p className="mt-1.5 text-sm text-text-secondary max-w-4xl">
           Comida = ingredientes y envase de lo que has vendido · ventas = precio de carta
-          sin IVA{ventana ? ` · ${intervaloEnCastellano(ventana.desde.toISOString(), ventana.hasta.toISOString())}` : ''}.{' '}
+          sin IVA{ventana ? ` · ${intervaloDeFechas(ventana.desde, ventana.hasta) ?? 'periodo sin fechas'}` : ''}.{' '}
           <span className="text-text-tertiary">
             El margen después de Glovo, Uber y Just Eat llega cuando el catálogo tenga canal.
           </span>

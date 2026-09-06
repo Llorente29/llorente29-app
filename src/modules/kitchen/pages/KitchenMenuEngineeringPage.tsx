@@ -41,7 +41,7 @@ import {
 import {
   guardaMarcaRecordada, guardaPeriodoRecordado, leePeriodoRecordado, marcaConLaQueAbrir,
 } from '@/modules/kitchen/lib/recuerdoDeKitchen'
-import { intervaloEnCastellano } from '@/modules/ventas/services/textoInforme'
+import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import { fmtMoney } from '@/lib/format'
 import type { Brand } from '@/types/multitenancy'
 
@@ -164,7 +164,7 @@ export default function KitchenMenuEngineeringPage() {
         <p className="mt-1.5 text-sm text-text-secondary max-w-4xl">
           Cada plato se compara con la media de la marca en dos cosas: <strong>cuánto se vende</strong> y{' '}
           <strong>cuánto deja</strong> (precio sin IVA − coste) ·{' '}
-          {intervaloEnCastellano(desde.toISOString(), hasta.toISOString())}, todos los canales.{' '}
+          {intervaloDeFechas(desde, hasta) ?? 'En el periodo elegido'}, todos los canales.{' '}
           <span className="text-text-tertiary">
             {!margenPropio
               ? MARGEN_DE_MARCA_CEDIDA

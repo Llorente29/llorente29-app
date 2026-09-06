@@ -42,7 +42,7 @@ import {
   MARGEN_DE_MARCA_CEDIDA, motivoSinCoste,
   type FilaDeCarta,
 } from '@/modules/kitchen/lib/cartaYMargen'
-import { intervaloEnCastellano } from '@/modules/ventas/services/textoInforme'
+import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import {
   guardaMarcaRecordada, guardaPeriodoRecordado, leePeriodoRecordado, marcaConLaQueAbrir,
 } from '@/modules/kitchen/lib/recuerdoDeKitchen'
@@ -183,7 +183,7 @@ export default function KitchenProfitabilityPage() {
         <h1 className="text-2xl font-semibold text-text-primary">¿Qué platos te dejan más margen?</h1>
         <p className="mt-1.5 text-sm text-text-secondary max-w-4xl">
           Margen = precio de carta sin IVA − coste del plato (ingredientes y envase) ·
-          vendido {intervaloEnCastellano(desde.toISOString(), hasta.toISOString())}.{' '}
+          vendido {intervaloDeFechas(desde, hasta) ?? 'en el periodo elegido'}.{' '}
           {/* Lo provisional va AQUÍ, en la misma línea, no en una caja amarilla. */}
           <span className="text-text-tertiary">
             {margenPropio
