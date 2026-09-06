@@ -39,6 +39,9 @@ import {
   type FilaDeCarta,
 } from '@/modules/kitchen/lib/cartaYMargen'
 import { intervaloEnCastellano } from '@/modules/ventas/services/textoInforme'
+import {
+  guardaMarcaRecordada, guardaPeriodoRecordado, leePeriodoRecordado, marcaConLaQueAbrir,
+} from '@/modules/kitchen/lib/recuerdoDeKitchen'
 import { fmtMoney, fmtPct } from '@/lib/format'
 import type { Brand } from '@/types/multitenancy'
 
@@ -53,23 +56,13 @@ const eurRedondo = (v: number | null | undefined) =>
   v == null ? '—' : `${Math.round(v).toLocaleString('es-ES')} €`
 const pct = (v: number | null | undefined) => fmtPct(v, 1)
 
-/** La marca que se recuerda entre visitas (principio 7). */
-const RECUERDO = 'folvy.kitchen.rentabilidad'
-
-function leeRecuerdo(): { marca?: string; dias?: Dias } {
-  try { return JSON.parse(localStorage.getItem(RECUERDO) ?? '{}') } catch { return {} }
-}
-function guardaRecuerdo(v: { marca?: string; dias?: Dias }) {
-  try { localStorage.setItem(RECUERDO, JSON.stringify(v)) } catch { /* sin recuerdo, no pasa nada */ }
-}
-
 export default function KitchenProfitabilityPage() {
   const { activeAccountId } = useActiveAccount()
   const navigate = useNavigate()
 
   const [brands, setBrands] = useState<Brand[]>([])
   const [brandId, setBrandId] = useState<string | null>(null)
-  const [dias, setDias] = useState<Dias>(leeRecuerdo().dias ?? 90)
+  const [dias, setDias] = useState<Dias>(leePeriodoRecordado('rentabilidad', 90) as Dias)
   const [orden, setOrden] = useState<Orden>('margen')
   const [soloSinCoste, setSoloSinCoste] = useState(false)
 
@@ -91,12 +84,7 @@ export default function KitchenProfitabilityPage() {
         if (muerto) return
         const vivas = bs.filter((b) => b.isActive)
         setBrands(vivas)
-        const recordada = leeRecuerdo().marca
-        const elegida =
-          vivas.find((b) => b.id === recordada) ??
-          vivas.find((b) => b.ownershipType === 'own') ??
-          vivas[0]
-        setBrandId(elegida?.id ?? null)
+        setBrandId(marcaConLaQueAbrir(vivas)?.id ?? null)
       })
       .catch((e: unknown) => { if (!muerto) setError(e instanceof Error ? e.message : 'Error cargando las marcas') })
     return () => { muerto = true }
@@ -191,7 +179,7 @@ export default function KitchenProfitabilityPage() {
         <Campo label="Marca">
           <select
             value={brandId ?? ''}
-            onChange={(e) => { setBrandId(e.target.value); guardaRecuerdo({ marca: e.target.value, dias }) }}
+            onChange={(e) => { setBrandId(e.target.value); guardaMarcaRecordada(e.target.value) }}
             className="px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary"
           >
             {brands.map((b) => (
@@ -204,7 +192,7 @@ export default function KitchenProfitabilityPage() {
         <Campo label="Periodo">
           <select
             value={String(dias)}
-            onChange={(e) => { const d = Number(e.target.value) as Dias; setDias(d); guardaRecuerdo({ marca: brandId ?? undefined, dias: d }) }}
+            onChange={(e) => { const d = Number(e.target.value) as Dias; setDias(d); guardaPeriodoRecordado('rentabilidad', d) }}
             className="px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary"
           >
             <option value="30">Últimos 30 días</option>
