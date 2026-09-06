@@ -293,3 +293,31 @@ export function frasePorCuadrante(
     botones: [{ texto: 'Abrir', destino: 'escandallo' }],
   }
 }
+
+// ── Marcas de terceros: el margen NO es de la casa ──────────────────────────
+
+/**
+ * ¿El margen de esta marca es de Foodint?
+ *
+ * En una marca PROPIA sí: Foodint pone la comida y cobra el precio de carta, así
+ * que «precio sin IVA − coste» es lo que se queda.
+ *
+ * En una marca CEDIDA (`licensed`) **no**, y calcularlo igual sería inventar una
+ * cifra con cara de medida. Foodint no cobra el PVP: cobra un porcentaje de la
+ * venta (`brand_licensing_agreement.revenue_share_pct`) y, según el acuerdo, se le
+ * reembolsa el consumo. La propia `menu_item_economics` lo sabe y deja
+ * `food_cost_pct` y `contribution_margin` en NULL para `licensed` — este código no
+ * puede ser más optimista que el motor.
+ *
+ * Cuál de las dos varas es la buena para una cedida —el PVP de carta o lo que
+ * Foodint cobra por ella— es CONCEPTO y lo decide Julio con la cifra delante. Es
+ * de la fase C. Hasta entonces la pantalla lo dice con todas las letras en su
+ * línea de regla, que es distinto de decir «no hay platos».
+ */
+export function elMargenEsDeLaCasa(ownershipType: string | null | undefined): boolean {
+  return ownershipType !== 'licensed'
+}
+
+export const MARGEN_DE_MARCA_CEDIDA =
+  'Ésta es una marca de terceros: Foodint no cobra el precio de carta, sino un porcentaje de la venta. ' +
+  'Su margen real llega cuando se calcule con esa regla; el coste y lo vendido sí son de verdad.'

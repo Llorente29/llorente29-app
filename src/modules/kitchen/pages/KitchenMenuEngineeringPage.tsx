@@ -34,8 +34,8 @@ import { getMenuItemEconomics, listMetaDeCarta } from '@/modules/kitchen/service
 import { getMenuItemUnitsSold } from '@/modules/kitchen/services/menuEngineeringService'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
-  calculaFila, construyeMatriz, esBebida, frasePorCuadrante,
-  EXPLICACION_CUADRANTE, ROTULO_CUADRANTE,
+  calculaFila, construyeMatriz, elMargenEsDeLaCasa, esBebida, frasePorCuadrante,
+  EXPLICACION_CUADRANTE, MARGEN_DE_MARCA_CEDIDA, ROTULO_CUADRANTE,
   type Cuadrante, type FilaDeCarta,
 } from '@/modules/kitchen/lib/cartaYMargen'
 import {
@@ -120,6 +120,12 @@ export default function KitchenMenuEngineeringPage() {
       })
   }, [activeAccountId, brandId, dias])
 
+  // En una marca de TERCEROS no hay matriz posible: el eje «cuánto deja» sería el
+  // PVP de carta menos el coste, y eso no es lo que cobra Foodint. Una matriz
+  // sobre un margen que no es tuyo colocaría platos en cuadrantes equivocados y
+  // te haría subir el precio de algo que no cobras. Se dice y no se pinta.
+  const margenPropio = elMargenEsDeLaCasa(marca?.ownershipType)
+
   // La matriz de PLATOS es la que manda: las bebidas se comparan entre ellas, en
   // su pestaña, con su propia media. Nunca las dos juntas (ver cabecera).
   const matrizPlatos = useMemo(() => construyeMatriz(filas), [filas])
@@ -160,9 +166,11 @@ export default function KitchenMenuEngineeringPage() {
           <strong>cuánto deja</strong> (precio sin IVA − coste) ·{' '}
           {intervaloEnCastellano(desde.toISOString(), hasta.toISOString())}, todos los canales.{' '}
           <span className="text-text-tertiary">
-            {verBebidas
-              ? 'Las bebidas se comparan entre ellas, no con los platos.'
-              : `Entran los ${matrizPlatos.platos.length} platos con coste y ventas; las bebidas van aparte.`}
+            {!margenPropio
+              ? MARGEN_DE_MARCA_CEDIDA
+              : verBebidas
+                ? 'Las bebidas se comparan entre ellas, no con los platos.'
+                : `Entran los ${matrizPlatos.platos.length} platos con coste y ventas; las bebidas van aparte.`}
           </span>
         </p>
       </header>
@@ -233,7 +241,24 @@ export default function KitchenMenuEngineeringPage() {
         )}
       </div>
 
-      {cargando || error || matriz.platos.length === 0 ? (
+      {!cargando && !error && marca && !margenPropio ? (
+        // NO es «no hay platos»: es que la pregunta de esta pantalla no se puede
+        // responder para una marca de terceros con la vara de hoy.
+        <div className="bg-card border border-border-default rounded-xl p-6">
+          <p className="text-sm text-text-primary font-medium">
+            {marca.name} es una marca de terceros: aquí no se puede ordenar por margen.
+          </p>
+          <p className="text-xs text-text-secondary mt-2 max-w-3xl leading-relaxed">
+            {MARGEN_DE_MARCA_CEDIDA} Comparar sus platos con un margen que no es el tuyo te haría
+            subir el precio de algo que no cobras, así que no se dibuja la matriz.
+          </p>
+          <p className="text-xs text-text-secondary mt-2">
+            Lo que sí puedes ver de esta marca: el coste de cada plato y lo que se ha vendido, en{' '}
+            <button type="button" onClick={() => navigate('/kitchen/rentabilidad')}
+              className="text-terracota underline underline-offset-2">Rentabilidad</button>.
+          </p>
+        </div>
+      ) : cargando || error || matriz.platos.length === 0 ? (
         <EstadoDeLaConsulta
           cargando={cargando}
           textoCargando="Cruzando coste real con ventas reales…"

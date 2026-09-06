@@ -35,7 +35,8 @@ import { getMenuItemEconomics, listMetaDeCarta } from '@/modules/kitchen/service
 import { getMenuItemUnitsSold } from '@/modules/kitchen/services/menuEngineeringService'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
-  calculaFila, cifrasDeRentabilidad, etiquetasDeFila, motivoSinCoste,
+  calculaFila, cifrasDeRentabilidad, elMargenEsDeLaCasa, etiquetasDeFila,
+  MARGEN_DE_MARCA_CEDIDA, motivoSinCoste,
   type FilaDeCarta,
 } from '@/modules/kitchen/lib/cartaYMargen'
 import { intervaloEnCastellano } from '@/modules/ventas/services/textoInforme'
@@ -135,20 +136,32 @@ export default function KitchenProfitabilityPage() {
       })
   }, [activeAccountId, brandId, dias])
 
-  const cifras = useMemo(() => cifrasDeRentabilidad(filas, dias), [filas, dias])
+  // En una marca de terceros el margen no es de Foodint: se enseña el coste y lo
+  // vendido, y donde iría el margen va «—» con el motivo en la línea de regla.
+  // Calcularlo igual sería inventar una cifra (ver `elMargenEsDeLaCasa`).
+  const margenPropio = elMargenEsDeLaCasa(marca?.ownershipType)
+  const filasParaContar = useMemo(
+    () => (margenPropio ? filas : filas.map((f) => ({ ...f, margen: null, margenDelPeriodo: null }))),
+    [filas, margenPropio],
+  )
+  const cifras = useMemo(() => cifrasDeRentabilidad(filasParaContar, dias), [filasParaContar, dias])
 
   const conCoste = useMemo(() => {
-    const c = filas.filter((f) => f.margen != null)
+    // Con una cedida no hay margen que ordenar, pero los platos existen: se
+    // listan por lo vendido para que la pantalla no se quede vacía.
+    const c = margenPropio
+      ? filas.filter((f) => f.margen != null)
+      : filas.filter((f) => f.coste != null)
     const orden3 = {
       margen: (a: FilaDeCarta, b: FilaDeCarta) => (b.margen as number) - (a.margen as number),
       vendido: (a: FilaDeCarta, b: FilaDeCarta) => b.uds - a.uds,
       coste: (a: FilaDeCarta, b: FilaDeCarta) => (b.costeSobrePrecio ?? 0) - (a.costeSobrePrecio ?? 0),
     }[orden]
-    return [...c].sort(orden3)
-  }, [filas, orden])
+    return [...c].sort(margenPropio ? orden3 : (a, b) => b.uds - a.uds)
+  }, [filas, orden, margenPropio])
 
   const sinCoste = useMemo(
-    () => [...filas.filter((f) => f.margen == null)].sort((a, b) => b.uds - a.uds),
+    () => [...filas.filter((f) => f.coste == null)].sort((a, b) => b.uds - a.uds),
     [filas],
   )
 
@@ -170,7 +183,9 @@ export default function KitchenProfitabilityPage() {
           vendido {intervaloEnCastellano(desde.toISOString(), hasta.toISOString())}.{' '}
           {/* Lo provisional va AQUÍ, en la misma línea, no en una caja amarilla. */}
           <span className="text-text-tertiary">
-            El margen después de la comisión de Glovo, Uber o Just Eat llega cuando el catálogo tenga canal.
+            {margenPropio
+              ? 'El margen después de la comisión de Glovo, Uber o Just Eat llega cuando el catálogo tenga canal.'
+              : MARGEN_DE_MARCA_CEDIDA}
           </span>
         </p>
       </header>
@@ -247,7 +262,7 @@ export default function KitchenProfitabilityPage() {
         <>
           {/* 4 · LAS FILAS. */}
           {!soloSinCoste && conCoste.length > 0 && (
-            <Tabla filas={conCoste} recetaPorItem={recetaPorItem} abrir={abrirFicha} />
+            <Tabla filas={conCoste} recetaPorItem={recetaPorItem} abrir={abrirFicha} margenPropio={margenPropio} />
           )}
 
           {sinCoste.length > 0 && (
@@ -315,11 +330,13 @@ function Cifra({ titulo, valor, pie, alerta }: { titulo: string; valor: string; 
 }
 
 function Tabla({
-  filas, recetaPorItem, abrir,
+  filas, recetaPorItem, abrir, margenPropio,
 }: {
   filas: FilaDeCarta[]
   recetaPorItem: Map<string, string | null>
   abrir: (recipeItemId: string | null, menuItemId: string, tab: string) => void
+  /** false = marca de terceros: el margen no es de Foodint y no se pinta. */
+  margenPropio: boolean
 }) {
   return (
     <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
@@ -351,8 +368,12 @@ function Tabla({
                   <span className="block text-[11px] text-text-secondary">{eur(f.precioNeto)} sin IVA</span>
                 </td>
                 <td className="px-3 py-2 text-right font-mono text-text-secondary">{eur(f.coste)}</td>
-                <td className="px-3 py-2 text-right font-mono text-text-primary">{eur(f.margen)}</td>
-                <td className="px-3 py-2 text-right font-mono text-text-secondary">{pct(f.costeSobrePrecio)}</td>
+                <td className="px-3 py-2 text-right font-mono text-text-primary">
+                  {margenPropio ? eur(f.margen) : '—'}
+                </td>
+                <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                  {margenPropio ? pct(f.costeSobrePrecio) : '—'}
+                </td>
                 <td className="px-3 py-2 text-right font-mono text-text-secondary">{f.uds}</td>
                 <td className="px-3 py-2 text-right">
                   <button type="button"

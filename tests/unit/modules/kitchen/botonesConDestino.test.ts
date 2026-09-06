@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  calculaFila, construyeMatriz, frasePorCuadrante, motivoSinCoste,
+  calculaFila, construyeMatriz, elMargenEsDeLaCasa, frasePorCuadrante,
+  MARGEN_DE_MARCA_CEDIDA, motivoSinCoste,
   type Cuadrante, type ProductoDeCarta,
 } from '@/modules/kitchen/lib/cartaYMargen'
 
@@ -125,5 +126,35 @@ describe('filas CON coste · un botón por cuadrante, todos con destino', () => 
         expect(frasePorCuadrante(f, c, media).frase.trim().length).toBeGreaterThan(20)
       }
     }
+  })
+})
+
+// ── Marcas de terceros ──────────────────────────────────────────────────────
+//
+// Julio, 06/09: las cedidas ENTRAN en las tres pantallas; lo que no puede pasar
+// es que digan «no hay platos». Pero tampoco pueden enseñar un margen que no es
+// de Foodint: en una cedida, Foodint cobra un porcentaje de la venta, no el
+// precio de carta. `menu_item_economics` ya lo sabe — deja `food_cost_pct` y
+// `contribution_margin` en NULL para `licensed` — y esta capa no puede ser más
+// optimista que el motor.
+//
+// Esta prueba existe porque mi primera version SÍ lo calculaba: como el margen
+// sale de `precio − coste` y no de la RPC, una marca cedida habria enseñado un
+// margen inventado, con su ranking y sus cuadrantes. Un numero con cara de
+// medida.
+
+describe('el margen de una marca de terceros no es de la casa', () => {
+  it('propia sí, cedida no, y sin dato tampoco se asume que sea cedida', () => {
+    expect(elMargenEsDeLaCasa('own')).toBe(true)
+    expect(elMargenEsDeLaCasa(null)).toBe(true)
+    expect(elMargenEsDeLaCasa(undefined)).toBe(true)
+    expect(elMargenEsDeLaCasa('licensed')).toBe(false)
+  })
+
+  it('el motivo se dice entero: qué cobra Foodint y qué sí es de verdad', () => {
+    expect(MARGEN_DE_MARCA_CEDIDA).toContain('porcentaje de la venta')
+    expect(MARGEN_DE_MARCA_CEDIDA).toContain('el coste y lo vendido sí son de verdad')
+    // Y nunca la frase que Julio prohibió.
+    expect(MARGEN_DE_MARCA_CEDIDA).not.toContain('no hay platos')
   })
 })
