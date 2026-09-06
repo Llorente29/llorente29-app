@@ -1,0 +1,235 @@
+# F6 · B79 lote 4 — las dos piezas de base del Resumen
+
+**06/09/2026 · rama `claude/b79-lote1-la-regla` · ESCRITO Y VERIFICADO, SIN APLICAR**
+
+Las dos piezas que pide el lote 4: el §3.4 (`food_cost_dashboard.by_brand` con
+`brand_id` y `ownership_type`) y la RPC de «las 5 cosas que arreglar», con la
+definición de cada contador **en el cuerpo**.
+
+Se aplican **cuando abra la ventana (23:45)**, no antes. Aquí está todo lo que
+haría falta para decidir si se aplican, medido antes de tocar nada.
+
+---
+
+## 0 · Marcado de acciones operativas
+
+| Acción | Estado |
+|---|---|
+| Ficheros de migración escritos en el repo | **hecho** (2) |
+| Cuerpo de cada uno probado contra producción **sin crearlo** | **hecho** |
+| Aplicado a la BBDD | **NO — la banda 12:15→23:45 está abierta** |
+| Commit + push a `claude/b79-lote1-la-regla` | **hecho** |
+| OTA | **no** — sale con los cuatro lotes juntos, después de las 23:45 |
+
+Los dos ficheros llevan un nombre con la hora prevista de aplicación
+(`20260906214600`, `20260906214700` = 23:46 y 23:47 de Madrid). Si al aplicar la
+BBDD registra otra versión, **el fichero se renombra a la que registre la BBDD**
+y se vuelve a comparar el md5 (regla 17). Se dice ahora para que no parezca
+después que el nombre estaba elegido de antemano.
+
+---
+
+## 1 · Cómo se ha probado sin tocar la BBDD
+
+Las dos son funciones. Una función se puede probar entera sin crearla: se coge
+el CUERPO, se sustituyen los parámetros por literales y se ejecuta como consulta
+de lectura. Eso es lo que se ha hecho con las dos, contra Foodint y contra los
+datos de hoy.
+
+### Pieza A — el «no he roto nada», con las dos cifras y la misma vara (regla 31)
+
+No es una opinión: es el JSON viejo contra el JSON nuevo, en la misma sentencia,
+con la misma ventana y el mismo `now()`.
+
+| Comprobación | Resultado |
+|---|---|
+| `salud` idéntica | **true** |
+| `by_dish` idéntico | **true** |
+| `total` idéntico quitando las dos claves nuevas | **true** |
+| `by_brand`: nº de filas | **17 antes · 17 después** |
+| `by_brand` idéntico quitando `brand_id` y `ownership_type` | **true** |
+
+La última fila es la que importa: `by_brand` pasa de agrupar por NOMBRE a agrupar
+por `brand_id`, y el resultado sale **byte a byte igual**. Se puede afirmar por
+qué: medido, en toda la tabla `brand` no hay ni un solo nombre repetido dentro de
+la misma cuenta (cero grupos con `count(*) > 1`). Hoy el cambio no mueve nada; el
+día que haya dos marcas con el mismo nombre, evita que se fundan en una fila sin
+avisar — que es la regla 9 mordiendo por donde ya mordió con AMIRSA.
+
+### Pieza B — los cinco contadores, contra la población real
+
+| Contador | Hoy | De |
+|---|---|---|
+| Extras que cobran y valen 0,00 € | **100** (35 venden) | 120 que cobran |
+| Platos en carta sin coste | **129** | 558 en carta |
+| Platos en carta sin envase | **314** | 558 en carta |
+| Ingredientes sin precio | **23** | 133 activos |
+| Sin objetivo de comida | **sí** | — |
+
+Y la comprobación de la condición de Julio: `todas_llevan_su_definicion` = **true**.
+Cada uno de los cinco sale con su `definicion` y su `por_que_aqui` no vacíos, en
+la salida, no en un comentario.
+
+Las listas `peores` suman exactamente el total de su contador (100, 129 y 314,
+comprobado sumando a mano las filas devueltas). No es un top tres: es la lista
+entera. El corte a tres es de la pantalla, y la pantalla tiene que decir cuántas
+deja fuera (regla 7).
+
+---
+
+## 2 · TRES COSAS DE LA MAQUETA APROBADA QUE LOS DATOS NO SOSTIENEN
+
+Van aquí arriba y no en un anexo, porque dos de ellas cambian lo que la pantalla
+tiene que decir, y una cambia el ORDEN de las filas.
+
+### 2.1 · «23 ingredientes sin precio · por ellos, 16 recetas no cierran su coste»
+
+Los 23 son exactos. **Las 16 no existen.**
+
+Medido:
+- esos 23 ingredientes aparecen en **0 líneas de receta** (`recipe_line`);
+- en Foodint no hay **ni una** ficha activa de tipo `recipe` o `dish` con
+  `computed_cost` a NULL.
+
+Hoy no bloquean nada. La frase «por ellos, 16 recetas no cierran su coste» es
+una relación de causa que no se puede probar y que además apunta a un efecto que
+no está ahí.
+
+**Qué he hecho:** el contador devuelve `usados_en_lineas_de_receta` (0) y
+`recetas_que_bloquean` (0), y la fila baja del tercer al **cuarto** puesto. No es
+una decisión de diseño mía: la propia maqueta dice que el orden es «ordenadas por
+lo que más pesa en el 24,0 %», y con el dato corregido esta pesa poco. He aplicado
+la regla aprobada a un dato corregido. Si prefieres el orden de la maqueta tal
+cual, se cambia el campo `orden` y ya está — pero entonces la fila no puede
+llevar la frase de las 16.
+
+### 2.2 · «130 platos sin coste» son 129, y 128 de ellos **no tienen ficha**
+
+`menu_item.recipe_item_id IS NULL` en 128 de los 129. El único que sí tiene ficha
+es **«Tarrina Salsa Smokey (BM)»**, que apunta a un `raw` llamado «Salsa Smokey
+Baconesa» con el `computed_cost` a NULL.
+
+No es que su coste esté sin calcular: es que no hay a qué calculárselo. La acción
+no es «poner coste», es «enlazar o crear la ficha». El contador devuelve
+`sin_ficha` (128) y `con_ficha_sin_coste` (1) para que la pantalla pueda decirlo
+bien y el botón lleve a donde tiene que llevar.
+
+### 2.3 · «El envase que sí está puesto pesa 3,5 puntos del 24,0 %»
+
+El número de hoy es **3,7**, y la forma de decirlo está mal.
+
+Ese 3,7 sale del `packaging_cost` de las fichas de **hoy** aplicado a lo que se
+vendió. El 24,0 % sale del coste **congelado en la venta** (`sale_line.computed_cost`,
+B44). Son dos varas distintas: el 3,7 **no se puede restar del 24,0 como si fuera
+un trozo suyo**. Es una estimación del orden de magnitud, y sirve para sostener la
+única afirmación que de verdad importa en esa fila — que el food cost real es
+MAYOR, porque 314 de 558 platos tienen el envase a cero. Esa parte se sostiene
+entera.
+
+Para que se vea de dónde sale: con todas las líneas, 2.707 € y 3,7 puntos; contando
+sólo las líneas `product`, 2.378 € y 3,3. La diferencia son 329 € de líneas hijas
+de combo y modificadores. Se devuelve la primera, porque el coste congelado del
+padre sí incluye lo de sus hijos.
+
+**Propuesta de texto para la pantalla:** «314 de 558 platos tienen el envase a
+cero. El envase que sí está puesto vale unos 2.707 € de lo vendido en 30 días: el
+food cost real es mayor que el 24,0 %.» Sin «puntos del 24,0».
+
+---
+
+## 3 · Qué hace cada pieza
+
+### Pieza A · `food_cost_dashboard` — `CREATE OR REPLACE`, no `DROP` + `CREATE`
+
+La regla 2 manda DROP+CREATE cuando cambia la **firma**. Aquí no cambia: mismos
+cinco parámetros, mismos tipos, mismo `returns jsonb`. No puede nacer una
+sobrecarga. Sólo cambia el contenido del jsonb, y de forma aditiva.
+
+1. **`by_brand` gana `brand_id` y `ownership_type`.** El `ownership_type` porque
+   la separación «tuyas / de terceros» **invierte la lectura**: 24,0 % en total,
+   **18,5 %** en las propias, **26,8 %** en las cedidas, y las cedidas son el 67 %
+   de lo vendido. El 24,0 % no es «cómo cocina Foodint»: es sobre todo la carta
+   que manda el TPV de otro. Sin esa columna, la pantalla enseña un número que el
+   usuario atribuye a lo que él controla, y no lo es.
+
+2. **`by_ownership`**, el mismo corte ya sumado en SQL. No se deriva en el cliente
+   sumando las filas de `by_brand` porque esas van redondeadas a euros enteros:
+   sumar 17 redondeos es otra vara (regla 31). Y devuelve **tres** cubos, no dos:
+   hay **3 unidades de venta, 31 €, sin marca ninguna**. Un corte de dos las
+   tiraría en silencio. Salen como `sin_marca`; que la pantalla decida cómo
+   decirlo, pero que no pueda no saberlo.
+
+3. **`total` gana `envase_eur` y `envase_pts`**, con el aviso del §2.3 escrito en
+   el cuerpo, no sólo aquí.
+
+4. **Se corrige un comentario que ya no es verdad.** El bloque del umbral de 40
+   decía «Foodint NO TIENE FILA en `kitchen_settings`». Medido hoy: **la fila
+   existe** y es `target_food_cost_pct` quien está a NULL. La conclusión no cambia
+   —el 40 sigue interino porque no hay objetivo con el que hacerlo relativo— pero
+   la causa se cuenta como es. Un comentario que miente cuesta lo mismo que una
+   pantalla que miente.
+
+**Consumidores mirados antes (regla 32):** `foodCostService.ts` (`getFoodCost`) y,
+a través de él, `MargenPlatoPage.tsx` y `RecomendacionesPage.tsx`. Los tres leen
+claves por nombre; ninguno desestructura de forma exhaustiva ni cuenta claves.
+Añadir campos no les toca. El tipo TS `FoodCostBrand` se amplía en el lote de front.
+
+### Pieza B · `kitchen_catalog_gaps(p_account, p_ventana)`
+
+**La condición de Julio, y cómo se cumple.** «La definición de cada contador
+escrita EN EL CUERPO, no sólo en el comentario.» Viene de un caso real: la palabra
+«interino» de `menu_item_economics` vivía en un `COMMENT ON FUNCTION`, Julio la
+buscó en el cuerpo y no estaba — y tenía razón.
+
+Aquí la definición **no es un comentario: es un dato que sale por la salida**.
+Seis constantes de texto en el `DECLARE`, y cada contador devuelve la suya al lado
+de su número, con las columnas exactas que ha mirado. La pantalla la puede
+enseñar, un grep del cuerpo la encuentra, y el número no se puede separar de su
+regla.
+
+Las definiciones, tal y como las fijaste:
+
+- **en carta** = `is_active IS NOT FALSE` **y** `archived_at IS NULL`.
+  *(Medido: `menu_item.is_active` es NOT NULL, así que hoy `IS NOT FALSE` equivale
+  a `is_active` a secas. Se escribe como lo pediste porque el día que la columna
+  admita NULL la regla no cambia de significado sola.)*
+- **con coste** = `recipe_item.computed_cost IS NOT NULL`.
+- **extras que cobran sin coste** = la consulta del vigía de B73a, tal cual.
+- **ingredientes sin precio** = el aviso que ya da el Resumen hoy.
+- **sin envase** = `packaging_cost` a NULL o a cero.
+
+**`SECURITY DEFINER`, y levanta en vez de devolver vacío.** Definer como su
+hermana `kitchen_dishes_incomplete`, y por tanto sin RLS: cada consulta lleva su
+`account_id` escrito, sin excepción (regla 9). Pero al revés que ella, si no hay
+permiso **no devuelve cero filas: levanta**. Una pantalla que recibe cero de una
+consulta denegada no distingue «no tienes permiso» de «no hay nada que arreglar»,
+y eso es exactamente lo que B79 vino a matar (reglas 7 y 8).
+
+`VOLATILE`, no `STABLE`, porque llama a `_impact_cost`, que es `VOLATILE`.
+Nace declarada: `revoke execute … from public, anon` (regla 16).
+
+---
+
+## 4 · Lo que NO he hecho, y por qué
+
+- **No la he aplicado.** La banda está abierta.
+- **No he tocado el objetivo de comida.** `target_food_cost_pct` sigue a NULL:
+  ponerle un número es una decisión de negocio, no de código. La RPC lo cuenta
+  como lo que es, la quinta cosa que arreglar.
+- **No he tocado la pantalla del Resumen.** Va después, con las dos piezas ya en
+  la BBDD.
+- **No he cambiado la maqueta.** Las tres correcciones del §2 están dichas aquí
+  para que decidas tú; el código está escrito con la lectura corregida y se
+  revierte con un campo.
+
+---
+
+## 5 · Las dos preguntas que necesitan respuesta antes de la pantalla
+
+1. **El orden de la fila «ingredientes sin precio»**: ¿cuarta (como está, porque
+   hoy bloquea 0 recetas) o tercera (como la maqueta, quitándole la frase de las
+   16)?
+2. **El texto de la fila «sin envase»**: ¿vale la redacción propuesta en el §2.3,
+   sin «puntos del 24,0 %»?
+
+Ninguna de las dos bloquea aplicar las dos piezas: son texto y un entero.
