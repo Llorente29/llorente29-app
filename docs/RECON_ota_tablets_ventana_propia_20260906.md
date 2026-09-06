@@ -226,3 +226,55 @@ el contador de ventas.
 Pase y camichi4 siguen en 259 **y pueden hacer lo mismo esta noche**. La decisión de
 si se para algo es de Julio; yo no toco nada — publicar otro bundle para revertir
 provocaría más recargas, que es justo lo que hay que evitar.
+
+
+---
+
+# 9 · SEGUNDO CASO: Pase, 22:08:14. Misma firma exacta
+
+| tablet | recarga | hueco de ventas antes | pedidos abiertos entonces | impresiones | lo que habría dicho la guarda |
+|---|---|---|---|---|---|
+| **Cocina** | 20:38:23 | 26,3 min (última 20:12:07) | **1** | 0 | **`safe = false`** |
+| **Pase** | 22:08:14 | 28,8 min (última 21:39:25) | **2** | 0 | **`safe = false`** |
+
+**Dos casos, misma firma, con 90 minutos de diferencia.** En los dos: el hueco de
+ventas superaba los 20 minutos, así que `venta_reciente` NO frenaba; lo único que
+cerraba la puerta eran los pedidos en curso; y la tablet se recargó igual.
+
+Los pedidos de Pase eran de las **20:00:04** y **20:03:02**, cerrados a las
+**22:10:07** y **22:10:11** — cuatro segundos entre ellos, dos minutos después de la
+recarga. Dos horas abiertos y cerrados en bloque (encaja con el autocierre). El de
+Cocina, igual: abierto a las 18:38:54, cerrado a las 20:40:04.
+
+## 9.1 · Lo que queda descartado, y lo que no
+
+| hipótesis | estado |
+|---|---|
+| `unsupported` — la RPC no existe | **descartada**: existe y responde bien |
+| Permisos — la tablet no puede ejecutarla | **descartada**: `anon` y `authenticated` tienen EXECUTE en `station_update_window`, `kds_resolve_device` y `report_device_app_version` |
+| `!isStation` — `getDeviceToken()` vacío en ese render | **no descartable desde aquí** |
+| `blind` — 30 sondeos nulos seguidos | **no descartable desde aquí** |
+
+**La hipótesis que mejor explica los dos casos es que `blind` esté permanentemente
+activo** — si la llamada de la tablet falla siempre por lo que sea, tras 30 minutos
+`ciego = true` para el resto de la sesión y **el único freno que queda es `idleOk`:
+5 minutos sin tocar la pantalla**. Y eso encaja con los dos sucesos, porque los dos
+ocurrieron en huecos largos, que es justo cuando nadie toca la tablet.
+
+**No la doy por probada.** Hace falta el estado local del dispositivo (o un log del
+lado tablet), y desde la base no se ve.
+
+## 9.2 · Lo que esto implica para el arreglo
+
+**El §5 de esta RECON proponía leer `business_hours` en la guarda. Con estos dos
+casos delante, eso NO basta**: si la tablet no está honrando la respuesta del
+servidor, da igual lo lista que sea la respuesta. Endurecer `station_update_window`
+no arregla nada.
+
+El arreglo tiene que estar **en el lado de la tablet**, y va en este orden:
+1. **Que `blind` y `!isStation` no puedan abrir la ventana dentro del horario de
+   apertura del local.** Hoy las dos rutas devuelven `serverOk = true` sin
+   preguntar. Dejar la salida de emergencia sólo fuera de horario.
+2. **Registrar por qué se aplicó** (`safe`, `blind`, `isStation`, `idleOk` en el
+   momento del `set()`). Sin eso, esta misma investigación habrá que repetirla.
+3. Y sólo después, la ventana de `business_hours` del §5.
