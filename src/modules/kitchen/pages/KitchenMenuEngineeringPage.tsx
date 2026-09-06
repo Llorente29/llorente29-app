@@ -22,6 +22,7 @@ import {
   getMenuItemUnitsSold,
 } from '@/modules/kitchen/services/menuEngineeringService'
 import { getMenuItemEconomics } from '@/modules/kitchen/services/menuItemService'
+import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import type {
   MenuEngineeringResult,
   MenuEngineeringItem,
@@ -117,7 +118,13 @@ export default function KitchenMenuEngineeringPage() {
   // Canales presentes en los datos (para el selector)
   const channels = useMemo(() => {
     const map = new Map<string, string>()
-    economics.forEach(e => { if (!map.has(e.channelId)) map.set(e.channelId, e.channelName) })
+    // B79: un producto sin canal (hoy, todos) no puede convertirse en una opción
+    // del selector — daría una opción sin valor que al elegirla vacía la tabla.
+    // Se quedan fuera del SELECTOR, no de los datos: la matriz los sigue contando
+    // bajo «Todos los canales» (regla 7).
+    economics.forEach(e => {
+      if (e.channelId && e.channelName && !map.has(e.channelId)) map.set(e.channelId, e.channelName)
+    })
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
   }, [economics])
 
@@ -148,6 +155,16 @@ export default function KitchenMenuEngineeringPage() {
       <div className="flex items-center gap-2">
         <TrendingUp size={20} className="text-accent shrink-0" />
         <h1 className="text-xl font-semibold text-text-primary">Ingeniería de menús</h1>
+        {/* B79 · INTERINO DECLARADO (regla 16). El margen por canal necesita que el
+            catalogo tenga canal, y hoy `menu_item.channel_id` esta vacio en las 584
+            filas de la cuenta: el eje de canal vive en la capa de precios. Hasta que
+            esta RPC se reescriba sobre ese eje, las comisiones no se pueden aplicar y
+            el margen neto sale vacio en las marcas propias. Se dice, no se disimula. */}
+        <p className="mt-1 text-xs text-text-secondary">
+          El margen por canal llegará cuando el catálogo tenga canal. Hasta entonces verás
+          «sin canal» y el margen neto vacío en las marcas propias: el coste y el food cost
+          sí son reales.
+        </p>
       </div>
 
       {/* Controles */}
@@ -203,9 +220,17 @@ export default function KitchenMenuEngineeringPage() {
           Cruzando coste real con ventas reales…
         </div>
       ) : result.items.length === 0 ? (
-        <div className="bg-card border border-border-default rounded-xl p-8 text-center text-sm text-text-secondary">
-          {selectedBrand ? 'No hay platos con coste y ventas en este periodo y canal.' : 'Selecciona una marca.'}
-        </div>
+        // B79: este cartel salia tambien cuando la carga fallaba, y afirmaba sobre
+        // el negocio («no hay platos») lo que solo se sabia de la consulta.
+        <EstadoDeLaConsulta
+          error={error}
+          queSePregunto={selectedBrand
+            ? `los platos de ${selectedBrand.name} con coste y ventas en el periodo elegido`
+            : 'la ingeniería de menús'}
+          matiz={selectedBrand
+            ? 'Un plato entra aquí sólo si tiene escandallo Y ventas en el periodo. Si falta una de las dos, no aparece.'
+            : 'Elige una marca arriba.'}
+        />
       ) : view === 'matrix' ? (
         <MatrixView result={result} />
       ) : (
@@ -293,7 +318,9 @@ function ActionCard({ item, quadrant }: { item: MenuEngineeringItem; quadrant: M
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-sm font-medium text-text-primary truncate">{item.menuItemName}</span>
-            <span className="text-xs text-text-secondary shrink-0">{item.channelName}</span>
+            <span className="text-xs text-text-secondary shrink-0">
+              {item.channelName ?? <span className="italic opacity-60">sin canal</span>}
+            </span>
           </div>
           <p className="mt-1 text-sm text-text-secondary">{headline}</p>
           <p className={`mt-1.5 text-sm ${meta.color}`}>{action}</p>

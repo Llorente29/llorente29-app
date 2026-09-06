@@ -325,7 +325,12 @@ function MarginListCard({ title, rows }: { title: string; rows: MarginRow[] }) {
     <div className="bg-card border border-border-default rounded-xl p-3">
       <h3 className="text-sm font-medium text-text-primary mb-2.5">{title}</h3>
       {rows.length === 0 ? (
-        <p className="text-xs text-text-secondary">Sin datos todavía.</p>
+        // B79: «Sin datos todavia» afirmaba sobre el negocio lo que solo se sabia
+        // de la consulta. Ahora dice de que consulta habla.
+        <p className="text-xs text-text-secondary">
+          Esta lista no ha devuelto ninguna fila. No significa que no haya ventas:
+          significa que ninguna llegó con lo que hace falta para calcularla.
+        </p>
       ) : (
         <div className="text-sm">
           {rows.map(r => (

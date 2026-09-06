@@ -22,6 +22,7 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import { getMenuItemEconomics } from '@/modules/kitchen/services/menuItemService'
+import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import type { Brand } from '@/types/multitenancy'
 import type { MenuItemEconomics, FoodCostStatus } from '@/types/kitchen'
 
@@ -177,6 +178,16 @@ export default function KitchenProfitabilityPage() {
       <div className="flex items-center gap-2">
         <TrendingUp size={20} className="text-accent shrink-0" />
         <h1 className="text-xl font-semibold text-text-primary">Rentabilidad de carta</h1>
+        {/* B79 · INTERINO DECLARADO (regla 16). El margen por canal necesita que el
+            catalogo tenga canal, y hoy `menu_item.channel_id` esta vacio en las 584
+            filas de la cuenta: el eje de canal vive en la capa de precios. Hasta que
+            esta RPC se reescriba sobre ese eje, las comisiones no se pueden aplicar y
+            el margen neto sale vacio en las marcas propias. Se dice, no se disimula. */}
+        <p className="mt-1 text-xs text-text-secondary">
+          El margen por canal llegará cuando el catálogo tenga canal. Hasta entonces verás
+          «sin canal» y el margen neto vacío en las marcas propias: el coste y el food cost
+          sí son reales.
+        </p>
       </div>
 
       {/* Selector de marca */}
@@ -242,11 +253,17 @@ export default function KitchenProfitabilityPage() {
           Cargando rentabilidad…
         </div>
       ) : rows.length === 0 ? (
-        <div className="bg-card border border-border-default rounded-xl p-8 text-center text-sm text-text-secondary">
-          {selectedBrand
-            ? 'Esta marca no tiene platos en carta todavía.'
-            : 'Selecciona una marca para ver su rentabilidad.'}
-        </div>
+        // B79: antes decia «Esta marca no tiene platos en carta todavia» sobre una
+        // marca con 23 productos activos, y lo decia TAMBIEN cuando la carga habia
+        // fallado. Ahora el error se ensena y el vacio habla de la consulta, no
+        // del negocio del cliente.
+        <EstadoDeLaConsulta
+          error={error}
+          queSePregunto={selectedBrand ? `la economía de ${selectedBrand.name}` : 'la rentabilidad'}
+          matiz={selectedBrand
+            ? 'Si la marca tiene productos en su carta, es que ninguno ha llegado hasta aquí: revisa que tengan escandallo.'
+            : 'Elige una marca arriba para ver su rentabilidad.'}
+        />
       ) : isMobile ? (
         // ── Móvil: tarjetas apiladas (sin scroll horizontal) ──
         <div className="space-y-2">
@@ -282,7 +299,9 @@ export default function KitchenProfitabilityPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-text-secondary">{r.channelName}</td>
+                    <td className="px-4 py-3 text-text-secondary">
+                      {r.channelName ?? <span className="italic opacity-60">sin canal</span>}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums text-text-primary">
                       {r.costAvailable ? formatEur(r.cost) : '—'}
                     </td>
@@ -346,7 +365,9 @@ function EconomicsCard({ r }: { r: MenuItemEconomics }) {
               </span>
             )}
           </div>
-          <div className="text-xs text-text-secondary mt-0.5">{r.channelName}</div>
+          <div className="text-xs text-text-secondary mt-0.5">
+        {r.channelName ?? <span className="italic opacity-60">sin canal</span>}
+      </div>
         </div>
         <span
           className={`shrink-0 inline-block px-2 py-0.5 rounded-full text-xs tabular-nums ${foodCostChipClasses(r.foodCostStatus)}`}
