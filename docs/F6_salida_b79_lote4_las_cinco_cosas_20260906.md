@@ -224,12 +224,67 @@ Nace declarada: `revoke execute … from public, anon` (regla 16).
 
 ---
 
-## 5 · Las dos preguntas que necesitan respuesta antes de la pantalla
+## 5 · Respondido por el §3.10 del encargo, y aplicado a la pieza B
 
-1. **El orden de la fila «ingredientes sin precio»**: ¿cuarta (como está, porque
-   hoy bloquea 0 recetas) o tercera (como la maqueta, quitándole la frase de las
-   16)?
-2. **El texto de la fila «sin envase»**: ¿vale la redacción propuesta en el §2.3,
-   sin «puntos del 24,0 %»?
+Julio cerró las dos preguntas y cambió un destino. Ya está en el código (la pieza
+no se había aplicado todavía, así que es una edición limpia, no un parche):
 
-Ninguna de las dos bloquea aplicar las dos piezas: son texto y un entero.
+| §3.10 dice | En la pieza B |
+|---|---|
+| Orden final: extras · sin ficha · sin envase · **sin objetivo** · **ingredientes** | `orden` 1..5 en ese orden, y el array sale en ese orden |
+| «129 platos **sin ficha** de coste», botón **«Casar o crear la ficha» → Casado** | `accion` = `'Casar o crear la ficha'`; el desglose `sin_ficha` (128) / `con_ficha_sin_coste` (1) ya estaba |
+| Frase nueva del envase, con los 244 que sí lo tienen | 558 − 314 = **244**, y `envase_eur` = 2.707 € sale de la pieza A |
+| Ingredientes al último con su frase honesta | `por_que_aqui` reescrito; `usados_en_lineas_de_receta` = 0 lo sostiene |
+
+Al reordenar los bloques rompí dos costuras del array (un cierre duplicado en el
+cuarto y uno que faltaba en el quinto). **Lo cazó volver a ejecutar el cuerpo, no
+mirarlo.** Corregido y re-ejecutado: los cinco contadores salen en el orden nuevo,
+con `todas_llevan_su_definicion` = true.
+
+---
+
+## 6 · 🔴 UN CUARTO HALLAZGO, DEL MISMO DÍA: el botón «Poner objetivo» no tiene dónde ir, y hay ocho objetivos que no lee nadie
+
+Salió de comprobar el destino del cuarto botón, como manda la regla «ningún botón
+sin destino que exista hoy». Las dos mitades son la misma medición.
+
+**`target_food_cost_pct` existe en DOS tablas.** En `kitchen_settings`, uno por
+cuenta. Y en `menu_item`, uno por plato de carta. Medido hoy:
+
+- **`kitchen_settings`: 3 filas, una por cuenta, y las TRES con el objetivo a NULL.**
+  La fila la crea `NuevaCuentaPage` al dar de alta la cuenta y **no vuelve a
+  tocarla nadie**: en todo `src/` no hay una sola pantalla que lea ni escriba
+  `kitchen_settings.target_food_cost_pct`. «Ajustes» (`KitchenSettingsPage`) no lo
+  menciona. *(Corrige de paso lo que yo mismo escribí ayer en el comentario del
+  umbral de 40: no es que Foodint no tenga fila — la tiene, y el valor está vacío.)*
+
+- **`menu_item`: 8 platos de Foodint SÍ tienen objetivo propio**, puesto a mano
+  desde la pestaña Ficha, que es la única que lo edita. El más reciente es
+  **«Budapest» (Lovers Burgers, 25 %), guardado HOY a las 12:09 de Madrid** — el
+  mismo plato de B80. Los otros siete son de entre el 1 y el 2 de septiembre.
+
+- **Y ni `menu_item_economics` ni `menu_item_channel_economics` los miran.** Las dos
+  toman el objetivo de `ks.target_food_cost_pct`, el de la CUENTA; ninguna lee
+  `mi.target_food_cost_pct`. Comprobado sobre el texto de las dos funciones, no
+  sobre la suposición.
+
+**Ocho objetivos rellenados a mano, uno de ellos hoy mismo, que no entran en ningún
+cálculo.** Es la regla 30 en su forma exacta: trabajo YA HECHO que la pantalla no
+ve, y que quien lo mire concluirá que no está hecho.
+
+**Qué he hecho y qué no.** La RPC devuelve `platos_con_objetivo_propio` (hoy **8**)
+para que la pantalla **no pueda decir «no hay objetivos» habiéndolos**. No he
+tocado las dos funciones del motor ni la pantalla de Ajustes: son otro encargo, y
+`menu_item_economics` la reescribe entera la fase C.
+
+**Y el botón: por tu propia regla, no lo pinto.** «Poner objetivo» apuntaría hoy a
+una pantalla que no tiene el campo. La fila sale con su cifra y su frase, sin
+botón, hasta que decidas:
+
+- **(a)** meter el campo en Ajustes (es un input y un `update`, media hora), o
+- **(b)** que el motor lea el objetivo del plato cuando exista y el de la cuenta
+  cuando no — que además rescata los 8 que ya están puestos.
+
+**(b) me parece la buena**, y no por elegancia: hay ocho decisiones tomadas que
+hoy se pierden. Pero toca `menu_item_economics`, que es de la fase C, así que la
+decisión es tuya. Con (a) sola, los 8 siguen sin contar.

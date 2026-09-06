@@ -13,6 +13,10 @@
 -- las columnas exactas que ha mirado. La pantalla la puede enseñar, quien haga un
 -- grep la encuentra en el cuerpo, y el numero no puede separarse de su regla.
 --
+-- El ORDEN de los cinco lo cerro Julio en el §3.10, «por lo que pesa»: extras que
+-- cobran sin coste · platos sin ficha · sin envase · sin objetivo · ingredientes
+-- sin precio. Cada uno lleva escrito en `por_que_aqui` por que esta donde esta.
+--
 -- ── LAS DEFINICIONES, TAL Y COMO LAS FIJO JULIO ─────────────────────────────
 --   · «en carta»  = `is_active IS NOT FALSE` Y `archived_at IS NULL`.
 --     (Medido hoy: `menu_item.is_active` es NOT NULL, asi que `IS NOT FALSE`
@@ -23,13 +27,14 @@
 --   · «ingredientes sin precio» = el aviso que ya tiene el Resumen hoy.
 --   · «sin envase» = `packaging_cost` a NULL o a cero.
 --
--- ── TRES COSAS QUE MEDI Y QUE NO SON LO QUE LA MAQUETA SUPONIA ──────────────
+-- ── CUATRO COSAS QUE MEDI Y QUE NO SON LO QUE LA MAQUETA SUPONIA ────────────
 -- (regla 31: la prueba se escribe contra la poblacion real, no contra la idea)
 --
 -- 1. «130 platos sin coste» son 129, y 128 de esos 129 NO TIENEN FICHA NINGUNA
 --    (`menu_item.recipe_item_id IS NULL`). No es que su coste este sin calcular:
 --    es que no hay a que calcularselo. La accion no es «poner coste», es «enlazar
---    o crear la ficha», y por eso el contador devuelve el desglose y no un total.
+--    o crear la ficha» — y el destino es CASADO, que es la pantalla que hace
+--    exactamente eso (Julio, §3.10). Por eso el contador devuelve el desglose.
 --    El unico caso restante es «Tarrina Salsa Smokey (BM)», que apunta a una ficha
 --    `raw` con `computed_cost` a NULL.
 --
@@ -37,9 +42,37 @@
 --    los 23 son exactos, pero las 16 NO EXISTEN. Medido: esos 23 aparecen en CERO
 --    lineas de receta, y en Foodint no hay ni una ficha activa de tipo `recipe` o
 --    `dish` con `computed_cost` a NULL. Hoy no bloquean nada. Se cuenta lo que se
---    puede probar — `usados_en_lineas_de_receta` — y por eso este contador baja al
---    cuarto puesto: la propia maqueta dice que el orden es «por lo que mas pesa»,
---    y con el dato corregido pesa poco.
+--    puede probar — `usados_en_lineas_de_receta` — y este contador baja al ULTIMO
+--    puesto (Julio, §3.10): la propia maqueta dice que el orden es «por lo que mas
+--    pesa», y con el dato corregido pesa menos que poner el objetivo, que es un
+--    minuto y le da sentido al 24,0 %.
+--
+-- 4. EL BOTON «PONER OBJETIVO» NO TIENE DONDE IR, Y HAY OCHO OBJETIVOS QUE NADIE
+--    LEE. Las dos cosas salen de la misma medicion, y son la regla 30 otra vez.
+--
+--    `target_food_cost_pct` existe en DOS tablas: en `kitchen_settings` (uno por
+--    cuenta) y en `menu_item` (uno por plato de carta). Medido hoy:
+--      · `kitchen_settings`: 3 filas, una por cuenta, y las TRES con el objetivo a
+--        NULL. La fila la crea `NuevaCuentaPage` al dar de alta la cuenta y no
+--        vuelve a tocarla nadie: en todo `src/` no hay una sola pantalla que lea
+--        ni escriba `kitchen_settings.target_food_cost_pct` — «Ajustes»
+--        (`KitchenSettingsPage`) no lo menciona.
+--      · `menu_item`: 8 platos de Foodint SI tienen objetivo propio, puesto a mano
+--        desde la pestaña Ficha, que es la unica que lo edita. El mas reciente es
+--        «Budapest» (Lovers Burgers, 25 %), guardado HOY a las 12:09 de Madrid.
+--      · Y `menu_item_economics` y `menu_item_channel_economics` toman el objetivo
+--        de `ks.target_food_cost_pct` — el de la CUENTA. Ninguna de las dos mira
+--        `mi.target_food_cost_pct`. Comprobado sobre el texto de las dos funciones.
+--
+--    O sea: ocho objetivos rellenados a mano, uno de ellos hoy mismo, que no entran
+--    en ningun calculo. Y el boton «Poner objetivo» de la maqueta apuntaria a una
+--    pantalla que no tiene ese campo — «ningun boton sin destino que exista hoy».
+--
+--    Esto NO se arregla aqui: son otras dos funciones y una pantalla de ajustes.
+--    Lo que hace este contador es no dejar que se cuente mal — devuelve
+--    `platos_con_objetivo_propio` para que la pantalla no pueda decir «no hay
+--    objetivos» habiendo ocho. La decision (poner el campo en Ajustes, o que el
+--    motor lea el del plato cuando exista) es de Julio.
 --
 -- 3. «El envase pesa 3,5 puntos» son 3,7, y son una ESTIMACION: salen del
 --    `packaging_cost` de las fichas de hoy aplicado a lo vendido, no de un trozo
@@ -195,7 +228,7 @@ begin
         -- coste calculado, es que no tienen ficha a la que calculárselo.
         'sin_ficha',           (select count(*) from carta where recipe_item_id is null),
         'con_ficha_sin_coste', (select count(*) from carta where recipe_item_id is not null and computed_cost is null),
-        'accion',     'Completar',
+        'accion',     'Casar o crear la ficha',
         'peores', (
           select coalesce(jsonb_agg(p order by p.n desc, p.marca), '[]'::jsonb) from (
             select k.brand_id, coalesce(b.name, '(sin marca)') as marca,
@@ -231,9 +264,32 @@ begin
       ),
 
       jsonb_build_object(
-        'clave',      'ingredientes_sin_precio',
+        'clave',      'sin_objetivo_de_comida',
         'orden',      4,
-        'por_que_aqui','Va el cuarto y no el tercero porque HOY no bloquea nada: `usados_en_lineas_de_receta` dice en cuántas líneas de receta aparecen de verdad. Si ese número sube, este contador sube de puesto solo.',
+        'por_que_aqui','Va el cuarto porque no ensucia ningún número: los deja sin juez. Es un minuto de trabajo y le da sentido a los tres de arriba — mientras no exista, ni esta pantalla ni el umbral de «marca sospechosa» de `food_cost_dashboard` pueden decir si una cifra es buena.',
+        'definicion', d_objetivo,
+        'n',          (select case when (select target_food_cost_pct from objetivo) is null then 1 else 0 end),
+        'de',         1,
+        'hay_fila_de_ajustes', (select exists (select 1 from objetivo)),
+        'target_food_cost_pct', (select target_food_cost_pct from objetivo),
+        -- Los objetivos que alguien SI ha puesto, en otra tabla y por plato. Ver
+        -- el punto 4 de la cabecera: hoy no los lee el motor. Sale como dato para
+        -- que la pantalla no pueda decir «no hay objetivos» habiendolos.
+        'platos_con_objetivo_propio', (
+          select count(*)::int from menu_item mi2
+           where mi2.account_id = p_account                    -- regla 9
+             and mi2.is_active is not false
+             and mi2.archived_at is null
+             and mi2.target_food_cost_pct is not null
+        ),
+        'accion',     'Poner objetivo',
+        'peores',     '[]'::jsonb
+      ),
+
+      jsonb_build_object(
+        'clave',      'ingredientes_sin_precio',
+        'orden',      5,
+        'por_que_aqui','El último porque HOY no bloquea nada: `usados_en_lineas_de_receta` dice en cuántas líneas de receta aparecen de verdad, y hoy son cero. Si ese número sube, este contador sube de puesto solo.',
         'definicion', d_ingred,
         'n',          (select count(*) from ingredientes where mudo),
         'de',         (select count(*) from ingredientes),
@@ -254,19 +310,6 @@ begin
            where rl.account_id = p_account
         ),
         'accion',     'Poner precios',
-        'peores',     '[]'::jsonb
-      ),
-
-      jsonb_build_object(
-        'clave',      'sin_objetivo_de_comida',
-        'orden',      5,
-        'por_que_aqui','El último porque no ensucia ningún número: los deja sin juez. Mientras no exista, ni esta pantalla ni el umbral de «marca sospechosa» de `food_cost_dashboard` pueden decir si una cifra es buena.',
-        'definicion', d_objetivo,
-        'n',          (select case when (select target_food_cost_pct from objetivo) is null then 1 else 0 end),
-        'de',         1,
-        'hay_fila_de_ajustes', (select exists (select 1 from objetivo)),
-        'target_food_cost_pct', (select target_food_cost_pct from objetivo),
-        'accion',     'Poner objetivo',
         'peores',     '[]'::jsonb
       )
     )
