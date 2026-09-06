@@ -63,6 +63,10 @@ import {
   type CatalogPick,
 } from '@/modules/kitchen/lib/catalogPick'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import {
+  resuelveImpacto, cuentaCobertura, pintaComoConfirmado, avisoDeConfirmadoSinCoste,
+  unidadRacion, type UnidadPick, type ImpactoResuelto,
+} from '@/modules/kitchen/lib/impactoResuelto'
 
 interface ModifierImpactsTabProps {
   recipeItemId: string
@@ -109,6 +113,11 @@ export default function ModifierImpactsTab({
   )
   const [units, setUnits] = useState<{ id: string; label: string }[]>(unitsProp ?? [])
   const [unitGramId, setUnitGramId] = useState<string | null>(null)
+  // B73a: las unidades COMPLETAS (dimensión y factor), no solo su etiqueta. Sin
+  // dimensión no se puede saber si un impacto resuelve o cae en el cuarto camino
+  // silencioso de `_impact_cost` («unidad no convertible»), que es justo el caso
+  // de «Sweet Chili T»: 50 g contra una salsa medida en ml.
+  const [unidades, setUnidades] = useState<UnidadPick[]>([])
 
   // Lo que el desplegable puede ofrecer: platos e ingredientes vivos.
   const pickable = useMemo(() => catalog.filter((c) => c.selectable), [catalog])
@@ -125,6 +134,11 @@ export default function ModifierImpactsTab({
           kind: kindOf(r.type),
           selectable:
             TIPOS_ELEGIBLES.includes(r.type) && r.isActive === true && r.archivedAt == null,
+          // Mismo COALESCE que el motor: `computed_cost ?? fixed_cost`. El
+          // `packaging_cost` NO entra — ni `_impact_cost` ni
+          // `compute_sale_line_cost` lo leen. Eso es B73b.
+          costeUnitario: r.computedCost ?? r.fixedCost ?? null,
+          baseUnitId: r.baseUnitId ?? null,
         })),
       )
     } catch { /* el selector quedará vacío; no bloquea la pestaña */ }
@@ -152,6 +166,10 @@ export default function ModifierImpactsTab({
         if (!unitsProp || unitsProp.length === 0) {
           setUnits(rows.map((u) => ({ id: u.id, label: u.abbreviation })))
         }
+        setUnidades(rows.map((u) => ({
+          id: u.id, abreviatura: u.abbreviation,
+          dimension: u.dimension, factorABase: u.factorToBase,
+        })))
         // Unidad gramo, para crear ingredientes al vuelo (base por defecto).
         const g = rows.find((u) => u.abbreviation?.toLowerCase() === 'g')
         if (g) setUnitGramId(g.id)
@@ -196,13 +214,44 @@ export default function ModifierImpactsTab({
     return () => { cancelled = true }
   }, [recipeItemId, accountId])
 
-  // Cobertura: conocidos (confirmed) vs por revisar (resto).
-  const coverage = useMemo(() => {
-    const total = options.length
-    const confirmed = options.filter((o) => o.impact?.status === 'confirmed').length
-    return { total, confirmed, pending: total - confirmed,
-      pct: total > 0 ? Math.round((confirmed / total) * 100) : 0 }
-  }, [options])
+  // B73a · CUÁNTO APORTA CADA IMPACTO, DE VERDAD.
+  //
+  // Antes esta pestaña no lo preguntaba: daba por bueno lo confirmado. Con eso,
+  // diez impactos que resolvían a 0,00 € se pintaban «✓ Confirmado» en verde y
+  // engordaban el porcentaje de cobertura. Confirmar no es costar.
+  const porFicha = useMemo(() => new Map(catalog.map((c) => [c.id, c])), [catalog])
+  const porUnidad = useMemo(() => new Map(unidades.map((u) => [u.id, u])), [unidades])
+
+  const resueltos = useMemo(() => {
+    const m = new Map<string, ImpactoResuelto>()
+    for (const o of options) {
+      if (!o.impact) continue
+      const ficha = o.impact.targetRecipeItemId ? porFicha.get(o.impact.targetRecipeItemId) : undefined
+      m.set(o.optionId, resuelveImpacto({
+        impactType: o.impact.impactType,
+        targetRecipeItemId: o.impact.targetRecipeItemId,
+        quantity: o.impact.quantity,
+        unitId: o.impact.unitId,
+        ficha: ficha ? { costeUnitario: ficha.costeUnitario ?? null, baseUnitId: ficha.baseUnitId ?? null } : null,
+        unidadDeLaLinea: (o.impact.unitId ? porUnidad.get(o.impact.unitId) : undefined) ?? null,
+        unidadBaseDeLaFicha: (ficha?.baseUnitId ? porUnidad.get(ficha.baseUnitId) : undefined) ?? null,
+      }))
+    }
+    return m
+  }, [options, porFicha, porUnidad])
+
+  // Cobertura: lo que APORTA, lo que no aporta, y lo que está por revisar. Los
+  // tres se enseñan; ninguno se esconde (regla 7).
+  const coverage = useMemo(() => cuentaCobertura(
+    options.map((o) => ({
+      status: o.impact?.status ?? null,
+      resuelto: resueltos.get(o.optionId) ?? { estado: 'sin_coste' as const, motivo: 'sin definir' },
+    })),
+  ), [options, resueltos])
+
+  // La unidad con la que se miden las raciones. Cuando el destino es un plato no
+  // hay nada que preguntar: una ración es una unidad.
+  const unitRacion = useMemo(() => unidadRacion(unidades), [unidades])
 
   // Agrupar por grupo de modificador.
   const groups = useMemo(() => {
@@ -375,17 +424,28 @@ export default function ModifierImpactsTab({
         </div>
         <div className="flex items-center gap-3 text-xs">
           <span className="inline-flex items-center gap-1 text-success">
-            <CircleCheck className="w-3.5 h-3.5" />{coverage.confirmed} conocidos
+            <CircleCheck className="w-3.5 h-3.5" />{coverage.conCoste} con coste
           </span>
-          {coverage.pending > 0 && (
-            <span className="text-warning">{coverage.pending} por revisar</span>
+          {/* Los confirmados que NO aportan no desaparecen: cambian de casilla y
+              la casilla se enseña. Un contador puede ordenar; no puede decir que
+              no hay nada habiendo filas (regla 7). */}
+          {coverage.sinCoste > 0 && (
+            <span className="inline-flex items-center gap-1 text-warning">
+              <AlertTriangle className="w-3.5 h-3.5" />{coverage.sinCoste} confirmados sin coste
+            </span>
+          )}
+          {coverage.dudoso > 0 && (
+            <span className="text-warning">{coverage.dudoso} sin poder calcular</span>
+          )}
+          {coverage.porRevisar > 0 && (
+            <span className="text-warning">{coverage.porRevisar} por revisar</span>
           )}
           <span className="text-text-secondary">· {coverage.pct}% cobertura</span>
         </div>
       </div>
 
       {/* Sugerir con IA: solo si hay algo por revisar (si todo confirmado, no aporta). */}
-      {coverage.pending > 0 && (
+      {coverage.porRevisar > 0 && (
         <button
           type="button"
           onClick={handleSuggestAI}
@@ -430,6 +490,8 @@ export default function ModifierImpactsTab({
                   catalog={catalog}
                   pickable={pickable}
                   units={units}
+                  resuelto={resueltos.get(o.optionId) ?? null}
+                  unitRacionId={unitRacion?.id ?? null}
                   onConfirm={() => handleConfirm(o)}
                   onReject={() => handleReject(o)}
                   onEdit={() => setEditingId(o.optionId)}
@@ -460,6 +522,10 @@ interface OptionCardProps {
   /** Lo que el desplegable puede ofrecer: platos e ingredientes vivos. */
   pickable: CatalogPick[]
   units: { id: string; label: string }[]
+  /** Cuánto aporta el impacto de esta opción, o por qué no aporta. null = sin impacto. */
+  resuelto: ImpactoResuelto | null
+  /** La unidad «ud», con la que se miden las raciones de un plato. */
+  unitRacionId: string | null
   onConfirm: () => void
   onReject: () => void
   onEdit: () => void
@@ -473,6 +539,7 @@ interface OptionCardProps {
 
 function OptionCard({
   option: o, recipeItemId, busy, editing, catalog, pickable, units,
+  resuelto, unitRacionId,
   onConfirm, onReject, onEdit, onCancelEdit, onSaveManual, onCreateIngredient,
   bundleHint, onAcceptBundle,
 }: OptionCardProps) {
@@ -480,9 +547,20 @@ function OptionCard({
   const isProposed = status === 'proposed'
   const isConfirmed = status === 'confirmed'
 
-  // Borde según estado: confirmado=verde sutil, propuesto=normal, sin impacto=punteado.
-  const borderClass = isConfirmed
+  // B73a · «Confirmado» sólo se pinta en verde si el impacto APORTA algo.
+  //
+  // Ésta era la trampa que lo hizo invisible durante meses: «Si, con patatas»
+  // salía «✓ Confirmado» en verde, la vista previa decía «2,37 € → 2,37 €» —sin
+  // efecto— y el resumen lo contaba como conocido. Una pantalla llamando
+  // «confirmado» a un cálculo que el motor no ha podido hacer.
+  const aviso = avisoDeConfirmadoSinCoste(o.impact?.status, resuelto ?? { estado: 'no_aplica' })
+  const verde = isConfirmed && pintaComoConfirmado(o.impact?.status, resuelto ?? { estado: 'no_aplica' })
+
+  // Borde según estado: aporta=verde sutil, confirmado sin coste=aviso,
+  // propuesto=normal, sin impacto=punteado.
+  const borderClass = verde
     ? 'border-success/40'
+    : aviso ? 'border-warning/50'
     : o.impact ? 'border-border-default' : 'border-dashed border-border-default'
 
   // Estado local del formulario de ajuste.
@@ -505,9 +583,14 @@ function OptionCard({
             </span>
           )}
         </div>
-        {isConfirmed && (
+        {verde && (
           <span className="inline-flex items-center gap-1 text-xs text-success shrink-0">
             <CircleCheck className="w-3.5 h-3.5" />Confirmado
+          </span>
+        )}
+        {aviso && (
+          <span className="inline-flex items-center gap-1 text-xs text-warning shrink-0">
+            <AlertTriangle className="w-3.5 h-3.5" />{aviso}
           </span>
         )}
         {isProposed && (
@@ -601,6 +684,7 @@ function OptionCard({
           pickable={pickable}
           groupName={o.groupName}
           units={units}
+          unitRacionId={unitRacionId}
           busy={busy}
           onCancel={onCancelEdit}
           onSave={() => onSaveManual(draft)}
@@ -711,7 +795,8 @@ function ImpactSummary({
 
 // Editor del impacto (modo Ajustar).
 function ImpactEditor({
-  draft, setDraft, recipeItemId, catalog, pickable, groupName, units, busy, onCancel, onSave, onCreateIngredient,
+  draft, setDraft, recipeItemId, catalog, pickable, groupName, units, unitRacionId,
+  busy, onCancel, onSave, onCreateIngredient,
 }: {
   draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }
   setDraft: (d: typeof draft) => void
@@ -723,6 +808,8 @@ function ImpactEditor({
   /** Nombre del grupo de modificadores: decide si los platos van primero. */
   groupName: string
   units: { id: string; label: string }[]
+  /** La unidad «ud»: la cantidad de un plato son raciones, y no se pregunta. */
+  unitRacionId: string | null
   busy: boolean
   onCancel: () => void
   onSave: () => void
@@ -730,6 +817,34 @@ function ImpactEditor({
 }) {
   const needsIngredient = draft.impactType !== 'multiply' && draft.impactType !== 'none'
   const needsQty = draft.impactType !== 'none'
+
+  // ── B73a · SI EL DESTINO ES UN PLATO, ES UNA RACIÓN ───────────────────────
+  //
+  // Julio, textual: «"Si, con patatas" es que el cliente quiere una ración, es
+  // decir una ración de Patatas Clásicas Meraki, con su escandallo ya hecho».
+  // Tiene razón y los datos se la dan: de los impactos que SÍ tienen unidad, 15
+  // apuntan a un `dish` con `ud` y cantidad 1. Poner `ud` no es un apaño — es lo
+  // que ya hacen los que funcionan, y significa literalmente «una ración».
+  //
+  // Así que cuando el destino es un plato: la unidad no se pregunta (se pone
+  // sola), y la cantidad se rotula «raciones».
+  const destino = draft.targetRecipeItemId
+    ? pickable.find((c) => c.id === draft.targetRecipeItemId)
+        ?? catalog.find((c) => c.id === draft.targetRecipeItemId)
+    : undefined
+  const destinoEsPlato = destino?.kind === 'plato'
+
+  // La unidad se fija sola, y el tipo se propone solo. `bundle` es lo que usan
+  // los 16 que funcionan; hasta hoy la pantalla no sabía decirlo, así que Julio
+  // no podía reproducir desde la interfaz lo que hace un impacto correcto.
+  useEffect(() => {
+    if (!destinoEsPlato) return
+    const cambios: Partial<typeof draft> = {}
+    if (unitRacionId && draft.unitId !== unitRacionId) cambios.unitId = unitRacionId
+    if (draft.impactType === 'add_item') cambios.impactType = 'bundle'
+    if (Object.keys(cambios).length > 0) setDraft({ ...draft, ...cambios })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destinoEsPlato, unitRacionId, draft.targetRecipeItemId])
 
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
@@ -822,11 +937,20 @@ function ImpactEditor({
           className="px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
         >
           <option value="add_item">añade</option>
+          {/* B73a: `bundle` existe en la base desde el 05/06 y lo usan los 16
+              impactos que funcionan — pero el desplegable no lo ofrecía. La lista
+              con la que se ELIGE no era la lista con la que se LEE (regla 30). */}
+          <option value="bundle">trae un plato entero</option>
           <option value="remove_item">quita</option>
           <option value="replace_item">cambia (sustituye)</option>
           <option value="multiply">multiplica el plato</option>
           <option value="none">no cambia nada</option>
         </select>
+        {destinoEsPlato && (
+          <span className="text-[11px] text-text-secondary">
+            El destino es un plato: se mide en raciones.
+          </span>
+        )}
       </div>
 
       {needsIngredient && (
@@ -941,10 +1065,18 @@ function ImpactEditor({
             step="any"
             value={draft.quantity ?? ''}
             onChange={(e) => setDraft({ ...draft, quantity: e.target.value === '' ? null : Number(e.target.value) })}
-            placeholder={draft.impactType === 'multiply' ? 'factor (ej. 2)' : 'cantidad'}
+            placeholder={
+              draft.impactType === 'multiply' ? 'factor (ej. 2)'
+                : destinoEsPlato ? 'raciones (ej. 1)'
+                : 'cantidad'
+            }
             className="w-28 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
           />
-          {draft.impactType !== 'multiply' && (
+          {/* Un plato se pide por raciones: el desplegable de unidad no aparece,
+              porque no hay nada que elegir. Petición literal de Julio. */}
+          {destinoEsPlato ? (
+            <span className="text-sm text-text-secondary">raciones</span>
+          ) : draft.impactType !== 'multiply' && (
             <select
               value={draft.unitId ?? ''}
               onChange={(e) => setDraft({ ...draft, unitId: e.target.value || null })}

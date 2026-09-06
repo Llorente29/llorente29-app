@@ -30,6 +30,11 @@ export interface CatalogPick {
   type: RecipeItemType
   kind: 'plato' | 'ingrediente'
   selectable: boolean
+  // B73a: el coste y la unidad base de la ficha, para poder decir en pantalla si
+  // un impacto que apunta aquí resuelve a 0,00 €. Opcionales porque el contenedor
+  // puede pasar el catálogo por props sin ellos; sin coste no se afirma nada.
+  costeUnitario?: number | null
+  baseUnitId?: string | null
 }
 
 // Tipos que este selector deja elegir como objetivo de un impacto.
