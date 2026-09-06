@@ -154,3 +154,75 @@ no por Foodint, sino por el cliente 2.)*
    cena. Con `business_hours` en la mano, un ciego dentro del horario de apertura
    puede esperar; sólo fuera de él debería abrir.
 3. **La pieza 1 sobre `business_hours`**, no sobre una constante nueva.
+
+
+---
+
+# 8 · LA PREDICCIÓN DEL §3.16 SALIÓ MAL. Medido, 06/09 20:46
+
+Publiqué el bundle 260 a las **20:01:02** con esta predicción escrita: *ninguna
+tablet se recarga en servicio; las tres aplican después del cierre.*
+
+**Falsa.** A los 37 minutos:
+
+| tablet | bundle | arrancó |
+|---|---|---|
+| **Cocina · Alcalá** | **260** | **20:38:23** ← se recargó EN SERVICIO |
+| Pase · Alcalá | 259 | 14:18:08 |
+| camichi4 · Carabanchel | 259 | 12:04:44 |
+
+Es exactamente el criterio de desmentida que dejé escrito: `app_version` pasó de
+259 a 260 antes de las 23:45. **Y Alcalá volvió a vender 17 segundos después de la
+recarga** (20:38:40).
+
+## 8.1 · Qué habría dicho la guarda en ese instante
+
+Lo reconstruí antes de sacar conclusiones, porque había dos lecturas posibles y
+llevan a sitios opuestos.
+
+- **`venta_reciente`: NO era motivo.** La última venta de Alcalá antes de la
+  recarga fue a las **20:12:07 — 26,3 minutos antes**, fuera de los 20 de
+  `p_quiet_minutes`. Un bache de domingo por la noche, no un cierre.
+- **`trabajos_de_impresion_vivos`: 0.**
+- **`pedidos_en_curso`: SÍ era motivo.** Un pedido creado a las **18:38:54** seguía
+  abierto: se marcó `completed` a las **20:40:04**, un minuto y 41 segundos DESPUÉS
+  de la recarga.
+
+**Conclusión: `station_update_window` habría devuelto `safe = false`, y la tablet
+se recargó igual.** No es que la guarda se equivocara: **es que no la obedeció.**
+
+*(Salvedad honesta: la reconstrucción de «pedidos en curso» se apoya en que
+`updated_at` marque el cambio de estado. Es la mejor evidencia disponible y encaja
+—un pedido abierto dos horas, cerrado a las 20:40— pero no es una prueba directa.)*
+
+## 8.2 · Por cuál de las tres puertas entró: NO LO SÉ, y no lo puedo saber desde aquí
+
+Las tres candidatas del §1.bis:
+1. **`!isStation`** — Cocina tiene token en la base, pero `getDeviceToken()` lee del
+   dispositivo. Si devolvió vacío en ese render, `serverOk = true`.
+2. **`blind`** — 30 sondeos nulos seguidos = 30 min. El bundle salió a las 20:01 y
+   la recarga fue a las 20:38: **37 minutos. Encaja con incomodidad.**
+3. **`unsupported`** — la RPC existe. Pero **apliqué tres migraciones a las
+   19:25-19:31**, y aplicar una migración recarga la caché de esquema de PostgREST:
+   una llamada que caiga en esa ventana puede recibir `PGRST202`, que es justo lo
+   que `appUpdate.ts:155-158` traduce a `unsupported` → ciego.
+
+**La tercera me señala a mí** y por eso la escribo la primera de las tres. No la doy
+por buena: las tres son hipótesis y ninguna se puede confirmar sin el estado local
+de esa tablet.
+
+## 8.3 · Lo que esto cambia, tenga la culpa quien la tenga
+
+**Aunque la puerta hubiera estado cerrada, la guarda es demasiado floja.** Si el
+pedido de las 18:38 se hubiera cerrado diez minutos antes, `safe` habría sido
+**true** con toda legitimidad — y la recarga habría sido igual de inoportuna. **20
+minutos sin ventas no es «cerrado»: es un bache.** El §5 de esta RECON ya tenía la
+respuesta y no la usé para esto: **`business_hours` dice que Alcalá cierra a las
+23:45.** Ninguna recarga debería poder ocurrir antes de esa hora, diga lo que diga
+el contador de ventas.
+
+## 8.4 · Pendiente
+
+Pase y camichi4 siguen en 259 **y pueden hacer lo mismo esta noche**. La decisión de
+si se para algo es de Julio; yo no toco nada — publicar otro bundle para revertir
+provocaría más recargas, que es justo lo que hay que evitar.
