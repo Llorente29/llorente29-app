@@ -200,3 +200,29 @@ as $function$
     )
   );
 $function$;
+
+
+-- ── GUARDA: que el objeto quede, y que quede con lo nuevo dentro ────────────
+-- No basta el «Success» del runner. Si la funcion no esta, o esta sin las claves
+-- que esta migracion viene a poner, ABORTA y no se da por aplicada.
+do $guarda$
+declare v_def text;
+begin
+  select pg_get_functiondef(p.oid) into v_def
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'food_cost_dashboard';
+
+  if v_def is null then
+    raise exception 'GUARDA: food_cost_dashboard no existe despues de aplicar.';
+  end if;
+  if v_def not like '%by_ownership%' then
+    raise exception 'GUARDA: food_cost_dashboard no tiene by_ownership.';
+  end if;
+  if v_def not like '%envase_pts%' then
+    raise exception 'GUARDA: food_cost_dashboard no tiene envase_pts.';
+  end if;
+  if v_def not like '%group by brand_id%' then
+    raise exception 'GUARDA: by_brand no agrupa por brand_id.';
+  end if;
+end
+$guarda$;

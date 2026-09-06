@@ -68,9 +68,8 @@
 --
 -- ── CONSUMIDORES MIRADOS ANTES (regla 32) ───────────────────────────────────
 -- `food_cost_status` lo pintan `RecipeEscandalloTab.tsx` (semaforo de la ficha) y
--- `EditPricesModal.tsx` (ambar cuando es 'over'); `kitchenDashboardService.ts` lo
--- usa para la barra de salud. Los tres cambian de comportamiento SOLO en esos seis
--- platos, y solo de «sin objetivo» a «dentro». `priceGridService.ts` lleva un
+-- `EditPricesModal.tsx` (ambar cuando es 'over'). Los dos cambian de comportamiento
+-- SOLO en esos seis platos, y solo de «sin objetivo» a «dentro». `priceGridService.ts` lleva un
 -- comentario que dice que no usa `food_cost_status` «porque sale 'no_target' en
 -- toda la cuenta»: ese motivo deja de ser cierto hoy y se corrige en el lote de
 -- front, no aqui.
@@ -456,3 +455,28 @@ BEGIN
   ORDER BY f.channel_name;
 END;
 $function$;
+
+-- ── GUARDA: las DOS funciones, o ninguna ────────────────────────────────────
+-- Si solo una llevara el COALESCE, Precios y Rentabilidad dirian cosas distintas
+-- del mismo plato — que es peor que el defecto que esto viene a arreglar.
+do $guarda$
+declare v_eco text; v_ch text;
+begin
+  select pg_get_functiondef(p.oid) into v_eco
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'menu_item_economics';
+  select pg_get_functiondef(p.oid) into v_ch
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'menu_item_channel_economics';
+
+  if v_eco is null or v_ch is null then
+    raise exception 'GUARDA: falta alguna de las dos funciones de economia.';
+  end if;
+  if v_eco not like '%COALESCE(mi.target_food_cost_pct, ks.target_food_cost_pct)%' then
+    raise exception 'GUARDA: menu_item_economics no lee el objetivo del plato.';
+  end if;
+  if v_ch not like '%COALESCE(v_target_own, v_target)%' then
+    raise exception 'GUARDA: menu_item_channel_economics no lee el objetivo del plato.';
+  end if;
+end
+$guarda$;

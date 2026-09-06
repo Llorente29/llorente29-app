@@ -47,37 +47,36 @@
 --    pesa», y con el dato corregido pesa menos que poner el objetivo, que es un
 --    minuto y le da sentido al 24,0 %.
 --
--- 4. EL BOTON «PONER OBJETIVO» NO TIENE DONDE IR, Y HAY OCHO OBJETIVOS QUE NADIE
---    LEE. Las dos cosas salen de la misma medicion, y son la regla 30 otra vez.
+-- 3. «El envase pesa 3,5 puntos» son 3,7, y son una ESTIMACION: salen del
+--    `packaging_cost` de las fichas de hoy aplicado a lo vendido, no de un trozo
+--    del coste congelado en la venta. Viven en `food_cost_dashboard.total`
+--    (pieza A), no aqui, para no medir lo mismo con dos varas distintas.
+--
+-- 4. EL BOTON «PONER OBJETIVO» NO TENIA DONDE IR, Y HAY DIEZ OBJETIVOS QUE NO
+--    LEIA NADIE. Las dos cosas salen de la misma medicion, y son la regla 30.
 --
 --    `target_food_cost_pct` existe en DOS tablas: en `kitchen_settings` (uno por
 --    cuenta) y en `menu_item` (uno por plato de carta). Medido hoy:
 --      · `kitchen_settings`: 3 filas, una por cuenta, y las TRES con el objetivo a
 --        NULL. La fila la crea `NuevaCuentaPage` al dar de alta la cuenta y no
---        vuelve a tocarla nadie: en todo `src/` no hay una sola pantalla que lea
---        ni escriba `kitchen_settings.target_food_cost_pct` — «Ajustes»
---        (`KitchenSettingsPage`) no lo menciona.
---      · `menu_item`: 8 platos de Foodint SI tienen objetivo propio, puesto a mano
---        desde la pestaña Ficha, que es la unica que lo edita. El mas reciente es
---        «Budapest» (Lovers Burgers, 25 %), guardado HOY a las 12:09 de Madrid.
---      · Y `menu_item_economics` y `menu_item_channel_economics` toman el objetivo
---        de `ks.target_food_cost_pct` — el de la CUENTA. Ninguna de las dos mira
---        `mi.target_food_cost_pct`. Comprobado sobre el texto de las dos funciones.
+--        volvia a tocarla nadie: no habia una sola pantalla en `src/` que leyera
+--        ni escribiera esa columna — «Ajustes» no la mencionaba.
+--      · `menu_item`: **10 platos sin archivar** tienen objetivo propio, puesto a
+--        mano desde la pestaña Ficha, que es la unica que lo edita. De esos 10,
+--        **8 estan en carta**; los otros dos, desactivados sin archivar. Las dos
+--        cifras son ciertas y miden cosas distintas: este contador dice «en
+--        carta» y cuenta 8; el motor filtra solo `archived_at IS NULL` y ve 10.
+--        El mas reciente es «Budapest» (Lovers Burgers, 25 %), guardado el mismo
+--        06/09 a las 12:09 de Madrid.
+--      · Y ninguna de las dos funciones de economia lo miraba: las dos leian solo
+--        el de la cuenta, que estaba vacio. Diez decisiones sin efecto ninguno.
 --
---    O sea: ocho objetivos rellenados a mano, uno de ellos hoy mismo, que no entran
---    en ningun calculo. Y el boton «Poner objetivo» de la maqueta apuntaria a una
---    pantalla que no tiene ese campo — «ningun boton sin destino que exista hoy».
---
---    Esto NO se arregla aqui: son otras dos funciones y una pantalla de ajustes.
---    Lo que hace este contador es no dejar que se cuente mal — devuelve
---    `platos_con_objetivo_propio` para que la pantalla no pueda decir «no hay
---    objetivos» habiendo ocho. La decision (poner el campo en Ajustes, o que el
---    motor lea el del plato cuando exista) es de Julio.
---
--- 3. «El envase pesa 3,5 puntos» son 3,7, y son una ESTIMACION: salen del
---    `packaging_cost` de las fichas de hoy aplicado a lo vendido, no de un trozo
---    del coste congelado en la venta. Viven en `food_cost_dashboard.total`
---    (pieza A), no aqui, para no medir lo mismo con dos varas distintas.
+--    RESUELTO EL MISMO DIA, y no aqui: Julio decidio (a)+(b) juntas (§3.11). El
+--    campo entra en «Ajustes» —que es lo que le da destino al boton— y las dos
+--    funciones pasan a leer `COALESCE(mi.target_food_cost_pct,
+--    ks.target_food_cost_pct)` en la pieza C. Lo que hace ESTE contador es no
+--    dejar que se cuente mal: devuelve `platos_con_objetivo_propio` para que la
+--    pantalla no pueda decir «no hay objetivos» habiendo ocho en carta.
 --
 -- ── POR QUE `SECURITY DEFINER` Y POR QUE LEVANTA EN VEZ DE DEVOLVER VACIO ────
 -- Definer como su hermana `kitchen_dishes_incomplete`, y por tanto SIN RLS: cada
@@ -323,3 +322,29 @@ comment on function public.kitchen_catalog_gaps(uuid, interval) is
   'B79 lote 4. Las cinco cosas que arreglar del Resumen de Kitchen. Cada contador devuelve su definicion EN LA SALIDA, no solo en un comentario: el numero no se separa de la regla con la que se conto.';
 
 revoke execute on function public.kitchen_catalog_gaps(uuid, interval) from public, anon;
+
+-- ── GUARDA: que la funcion quede, con su firma exacta y sin PUBLIC ──────────
+do $guarda$
+declare v_oid oid;
+begin
+  select p.oid into v_oid
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'kitchen_catalog_gaps'
+     and pg_get_function_identity_arguments(p.oid) = 'p_account uuid, p_ventana interval';
+
+  if v_oid is null then
+    raise exception 'GUARDA: kitchen_catalog_gaps(uuid, interval) no existe despues de aplicar.';
+  end if;
+  if has_function_privilege('public', v_oid, 'EXECUTE')
+     or has_function_privilege('anon', v_oid, 'EXECUTE') then
+    raise exception 'GUARDA: kitchen_catalog_gaps sigue siendo ejecutable por public/anon (regla 16).';
+  end if;
+  -- La condicion de Julio: la definicion de cada contador vive EN EL CUERPO. Se
+  -- comprueba con un trozo ASCII de la definicion de «en carta», que no depende
+  -- de como viajen los acentos.
+  if (select p.prosrc from pg_proc p where p.oid = v_oid)
+     not like '%is_active IS NOT FALSE%' then
+    raise exception 'GUARDA: las definiciones no estan en el cuerpo de la funcion.';
+  end if;
+end
+$guarda$;

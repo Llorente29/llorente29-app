@@ -522,3 +522,116 @@ metía tres `Record<string, any>` y subía el lint a 1361. Cambiados a
 3. Publicar la OTA con los cuatro lotes en una sola vez.
 4. Y una corrección pendiente: el comentario de `priceGridService.ts` que dice que
    `food_cost_status` sale `'no_target'` en toda la cuenta deja de ser cierto.
+
+
+---
+
+# 9 · APLICADO (§3.14) — A, B y C en produccion, 06/09 ~17:25-17:31 UTC
+
+Julio dio el adelante para aplicar las tres sin esperar a las 23:45: no tocan
+ninguna tablet ni nada en servicio. **La OTA sigue esperando.**
+
+## 9.1 · Antes de tocar: quién aplica, y por qué por MCP
+
+El §3.4 decía «nada por MCP (regla 22)». Fui a leer la regla 22 en vez de
+interpretarla a mi favor, y **no es lo que parecía**: está en
+`RUNBOOK_b53_b55_b54_20260903.md` y es de **`order-advance`, una edge function** —
+«sale por CI, nunca por MCP» porque el MCP normaliza los escapes Unicode al subir
+y el vigía de deriva la marcaría como divergente para siempre. **No habla de
+migraciones.** Y `claude_folvy_reglas.md` dice lo contrario para éstas: *«`begin;`/
+`commit;` en el fichero: el editor los DESCARTA… (`apply_migration` por MCP sí
+aplica de verdad)»*, y *«Julio ejecuta, Claude diseña/revisa. (Claude puede
+ejecutar cambios de BBDD él mismo **si Julio lo autoriza**, siempre marcando la
+operación y enseñando el SQL antes.)»* Las tres condiciones se cumplían.
+
+## 9.2 · Lo que exigen las reglas y que no había hecho
+
+- **«Comparar la versión VIVA con lo que trae el fichero ANTES de aplicar.»**
+  Hecho justo antes: `food_cost_dashboard` `6b53af7f…`, `menu_item_economics`
+  `ca61a775…`, `menu_item_channel_economics` (prosrc) `2beefa9c…` — **las tres
+  idénticas** a lo que suponían mis ficheros, y `kitchen_catalog_gaps` sin existir.
+- **«Cada migración que cree un objeto lleva guard `DO` que consulta `pg_catalog` y
+  ABORTA si no quedó.»** No los tenía. **Añadidos a las tres** antes de aplicar: A
+  comprueba `by_ownership`, `envase_pts` y el `group by brand_id`; B la firma
+  exacta, que `anon` no pueda ejecutarla y que las definiciones estén en el cuerpo;
+  C que **las dos** funciones lleven su `COALESCE` — o ninguna.
+- **«Verificar CADA objeto con una query independiente tras la migración. No basta
+  el "Success".»** Hecho, abajo.
+
+## 9.3 · Dos cosas que corregí en las migraciones justo antes de aplicarlas
+
+Las dos son la misma familia: **un comentario que miente cuesta lo mismo que una
+pantalla que miente**, y estas iban a quedar grabadas en la base.
+
+1. La cabecera de B estaba numerada **1, 2, 4, 3** (mi inserción se coló en medio),
+   y su punto 4 seguía diciendo «la decisión es de Julio» cuando Julio ya la había
+   tomado y la pieza C la implementa. Reordenada y reescrita: ahora dice qué se
+   decidió y dónde está hecho, y **10 sin archivar / 8 en carta** con su vara cada
+   una.
+2. La cabecera de C citaba `kitchenDashboardService.ts` entre los consumidores de
+   `food_cost_status` — un fichero que yo mismo borré hace dos horas.
+
+## 9.4 · Verificación de cada pieza, con consulta independiente
+
+**A — `food_cost_dashboard`**, ventana fija 07/08 → 06/09:
+
+| comprobación | resultado |
+|---|---|
+| filas de `by_brand` | **17** |
+| `own` / `licensed` | **9 / 8** ✓ |
+| filas sin `brand_id` | **0** ✓ |
+| filas con `brand_id` de OTRA cuenta | **0** ✓ |
+| totales | 72.922 € · 17.518 € · **24,0 %** |
+| `by_ownership` | licensed **26,8 %** · own **18,5 %** · sin_marca 19,6 % (3 uds, 31 €) |
+
+Los totales son 72.922 / 17.518, no los 72.890 / 17.512 que cita el §3.4. **No es
+una discrepancia del cambio**: 72.922 / 17.518 es lo que el propio §3.3.bis midió
+con esa misma llamada, y sigue siendo idéntico antes y después (lo probé byte a
+byte). El 72.890 del §3.4 es el total de la tabla del corte por propiedad, que se
+calculó por otro camino. Dos varas, una de ellas heredada; la del `by_ownership`
+nuevo da 48.692 + 24.199 + 31, con ±1 € de redondeo frente a la tabla del encargo.
+
+**B — `kitchen_catalog_gaps`**: `SECURITY DEFINER` ✓ · `VOLATILE` ✓ · firma
+`p_account uuid, p_ventana interval` ✓ · **una sola firma, sin sobrecarga** (regla
+2) ✓ · `anon` **no** puede ejecutarla ✓ · las definiciones **están en el cuerpo** ✓.
+
+**C — las dos funciones de economía**: **una firma cada una** ✓ ·
+`menu_item_economics` sigue `SECURITY DEFINER` y la de canal sigue sin serlo, como
+estaban ✓. Y la verificación que **no se podía hacer sin crearla**, hecha en el
+mismo minuto (regla 2): **Budapest por `menu_item_channel_economics` → objetivo
+25 %, food cost 15,79 %, `under` en los cinco canales**, y `plate_cost_status`
+sigue `no_target`, que es lo correcto porque el objetivo de coste de plato no se
+tocó.
+
+**Un falso hallazgo mío, y lo digo porque casi lo reporto como bug:** esa llamada
+devuelve 11 filas para 5 canales y pensé que duplicaba. No duplica: Glovo, JustEat
+y Uber tienen **tres tarifas activas cada uno** (reparto propio · recogida ·
+reparto de plataforma) y la función devuelve una fila por canal×tipo de servicio.
+Mi consulta no seleccionaba `service_type`. **La función estaba bien; la consulta
+era mía.**
+
+## 9.5 · Regla 17 · el repo y la base dicen lo mismo
+
+| versión que registró la base | fichero |
+|---|---|
+| `20260906172548` | `…_b79_l4_food_cost_dashboard_por_tipo_de_marca.sql` |
+| `20260906172842` | `…_b79_l4_kitchen_catalog_gaps_las_cinco_cosas.sql` |
+| `20260906173128` | `…_b79_l4_el_objetivo_del_plato_manda_sobre_el_de_la_cuenta.sql` |
+
+**Las tres huellas coinciden con el `statements` de la base.** Renombré C sobre una
+versión *adivinada* (`173235`) antes de leer la real (`173128`) — corregido, y va
+dicho porque es exactamente contra lo que existe la regla 17.
+
+**Y la regla de comparación, escrita de una vez para que nadie la vuelva a
+descubrir:** el fichero del repo es idéntico a lo aplicado **salvo el salto de
+línea final**, que el runner no guarda. Se compara con `rstrip('\n')`. El fichero
+conserva su salto final, que es lo correcto. *(Es lo que expliqué mal la otra vez:
+dije que la base había partido la migración en dos sentencias y era falso — era
+este salto de línea.)*
+
+## 9.6 · Lo que queda
+
+Sólo la OTA, y **sigue esperando a las 23:45**: los cuatro lotes de front en una
+sola publicación. Antes de publicar, el `grep` de la regla 32 sobre
+`food_cost_status` con datos reales, ahora que seis platos han dejado de decir
+«sin objetivo».
