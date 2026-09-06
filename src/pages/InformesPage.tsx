@@ -19,7 +19,7 @@
 // Todas las cifras salen de `report_sales`. Aquí sólo se eligen ejes, se pintan
 // filas y se llaman los helpers de descarga que ya existen.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileDown, Loader2, Save, Mail, AlertTriangle } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
@@ -28,12 +28,14 @@ import { descargaCsv } from '@/lib/descargaCsv'
 import { descargaXlsx, nombreXlsxConFecha } from '@/lib/descargaXlsx'
 import { diaNatural } from '@/lib/fechas'
 import { fmtMoney, fmtInt, fmtPct } from '@/lib/format'
+import { intervaloEnCastellano } from '@/modules/ventas/services/textoInforme'
 import {
-  resuelvePeriodo, etiquetaDelEspejo,
+  resuelvePeriodo,
   type ClaveDePeriodo, type PeriodoResuelto,
 } from '@/modules/ventas/services/periodoInforme'
 import {
   ejecutaInforme, cruzaConEspejo, filasParaDescarga, nombreDelInforme,
+  filtraPorEjes, cuadra,
   type EjeInforme, type InformeVentas, type FilaConDelta,
 } from '@/modules/ventas/services/reportSalesService'
 
@@ -101,11 +103,30 @@ export default function InformesPage() {
     return () => { vivo = false }
   }, [activeAccountId])
 
+  // Los filtros en palabras. B78 §3.bis: ni un identificador interno delante de
+  // un cliente. Si un dato no se puede decir con palabras, no se enseña.
+  const queSeMide = useMemo(() => {
+    const local = localSel ? (locales.find(l => l.id === localSel)?.nombre ?? 'un local') : 'todos los locales'
+    const prop = propiedadSel === 'own' ? 'marcas propias'
+      : propiedadSel === 'licensed' ? 'marcas de terceros' : 'todas las marcas'
+    const canal = canalSel ? (canales.find(c => c.id === canalSel)?.nombre ?? 'un canal') : 'todos los canales'
+    return `${local} · ${prop} · ${canal}`
+  }, [localSel, locales, propiedadSel, canalSel, canales])
+
   const ejes = useMemo<EjeInforme[]>(
     () => (ejeColumna ? [ejeFila, ejeColumna] : [ejeFila]), [ejeFila, ejeColumna])
 
+  // GUARDA DE CARRERA (B78). `ejecuta` no cancelaba ni ordenaba: siete
+  // dependencias disparan el efecto y, con dos consultas en vuelo, ganaba la que
+  // RESPONDÍA la última — no la que se PEDÍA la última. Una respuesta vieja
+  // pisaba a la nueva, y eso es lo único del código que puede poner en pantalla
+  // el resultado de otra pregunta. Ahora cada petición lleva número y sólo la
+  // última escribe estado.
+  const peticion = useRef(0)
+
   async function ejecuta() {
     if (!activeAccountId) { setFallo('No hay cuenta activa.'); return }
+    const mia = ++peticion.current
     // Sale del cuerpo SÍNCRONO del efecto antes de tocar estado: pintar y
     // volver a pintar en la misma vuelta es una cascada de renders, y la regla
     // `react-hooks/set-state-in-effect` avisa de eso con razón. Otras pantallas
@@ -124,13 +145,15 @@ export default function InformesPage() {
           channelIds: canalSel ? [canalSel] : null,
         },
       })
+      if (mia !== peticion.current) return   // llegó tarde: no pisa a la buena
       setPeriodo(p); setInforme(r)
     } catch (e) {
+      if (mia !== peticion.current) return
       // El mensaje de la frontera YA dice qué pasa («las ventanas no duran lo
       // mismo (X vs Y)»). Se enseña tal cual en vez de taparlo (regla 8).
       setFallo(e instanceof Error ? e.message : 'No se ha podido ejecutar el informe.')
       setInforme(null)
-    } finally { setCargando(false) }
+    } finally { if (mia === peticion.current) setCargando(false) }
   }
 
   // `set-state-in-effect` marca ESTA LLAMADA, no el `setState`: el análisis
@@ -142,10 +165,14 @@ export default function InformesPage() {
   useEffect(() => { void ejecuta() /* eslint-disable-next-line react-hooks/exhaustive-deps */ },
     [activeAccountId, ejeFila, ejeColumna, periodoClave, localSel, propiedadSel, canalSel])
 
-  const filas = useMemo<FilaConDelta[]>(
-    () => (informe ? cruzaConEspejo(informe.filas, informe.espejo) : []), [informe])
+  // La guarda de ejes va ANTES de pintar y antes de sumar: lo que no es de esta
+  // pregunta no se enseña ni cuenta. `descartadas` no se tira — se dice.
+  const { visibles: filas, descartadas } = useMemo(
+    () => filtraPorEjes(informe ? cruzaConEspejo(informe.filas, informe.espejo) : [], ejes),
+    [informe, ejes])
 
   const total = useMemo(() => sumaFilas(filas), [filas])
+  const elCuadre = useMemo(() => cuadra(filas, total), [filas, total])
   const totalEspejo = useMemo(
     () => (informe ? sumaFilas(informe.espejo.map(e => ({ ...e, espejo: null, deltaNeto: null, deltaNetoPct: null, deltaPedidos: null }))) : null),
     [informe])
@@ -177,28 +204,32 @@ export default function InformesPage() {
           <section className="bg-card border border-border-default rounded-xl p-3">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">Cómo se cruza</h2>
 
-            <p className="text-[11px] font-medium text-text-secondary mb-1.5">Ver por · filas</p>
+            <p className="text-[11px] font-medium text-text-secondary mb-1.5">Ver por</p>
             <div className="flex flex-wrap gap-1.5 mb-3">
               {EJES_FILA.map(e => (
-                <Chip key={e.id} activo={ejeFila === e.id} onClick={() => setEjeFila(e.id)}
+                <Chip key={e.id} activo={ejeFila === e.id}
+                  // Si el eje elegido para filas era el de columnas, se limpia:
+                  // si no, el chip desaparece de la lista pero el estado se
+                  // queda y se acaba pidiendo el mismo eje dos veces.
+                  onClick={() => { if (ejeColumna === e.id) setEjeColumna(null); setEjeFila(e.id) }}
                   // El eje elegido se rotula DENTRO del chip: nunca hay que
                   // adivinar cuál de los dos es cuál.
-                  label={ejeFila === e.id ? `filas · ${e.label}` : e.label} />
+                  label={ejeFila === e.id ? `ver por · ${e.label}` : e.label} />
               ))}
             </div>
 
-            <p className="text-[11px] font-medium text-text-secondary mb-1.5">Agrupar por · columnas</p>
+            <p className="text-[11px] font-medium text-text-secondary mb-1.5">Separado por…</p>
             <div className="flex flex-wrap gap-1.5">
               {EJES_COLUMNA.filter(e => e.id !== ejeFila).map(e => (
                 <Chip key={e.id ?? 'none'} activo={ejeColumna === e.id}
                   onClick={() => setEjeColumna(e.id)}
-                  label={ejeColumna === e.id && e.id ? `columnas · ${e.label}` : e.label} />
+                  label={ejeColumna === e.id && e.id ? `separado por · ${e.label}` : e.label} />
               ))}
             </div>
 
             <p className="mt-2.5 text-[11px] text-text-secondary leading-snug">
-              Los dos ejes se eligen a la vez y se escriben junto a la cifra.
-              Un número sin sus dos ejes es el que se lee mal.
+              Las dos preguntas se eligen a la vez y se escriben junto a la cifra.
+              Un número sin saber de qué es, es el que se lee mal.
             </p>
           </section>
 
@@ -211,7 +242,7 @@ export default function InformesPage() {
               <div className="flex gap-1.5">
                 <Chip activo={propiedadSel === 'own'} label="Propias"
                   onClick={() => setPropiedadSel(propiedadSel === 'own' ? '' : 'own')} />
-                <Chip activo={propiedadSel === 'licensed'} label="Cedidas"
+                <Chip activo={propiedadSel === 'licensed'} label="De terceros"
                   onClick={() => setPropiedadSel(propiedadSel === 'licensed' ? '' : 'licensed')} />
               </div>
             </div>
@@ -223,8 +254,8 @@ export default function InformesPage() {
             {periodo && (
               <p className="text-[11px] text-text-secondary leading-snug">
                 {periodo.parcial
-                  ? 'Periodo en curso: el espejo se recorta al mismo tramo, no a la semana entera.'
-                  : 'Periodo completo: el espejo es el anterior entero. Misma duración a los dos lados.'}
+                  ? 'Periodo en curso: se compara con el mismo tramo del anterior, no con la semana entera.'
+                  : 'Periodo completo: se compara con el anterior entero. Misma duración a los dos lados.'}
               </p>
             )}
           </section>
@@ -245,11 +276,12 @@ export default function InformesPage() {
 
           {informe && periodo && (
             <>
-              <BandaDeMedida informe={informe} periodo={periodo} />
+              <BandaDeMedida informe={informe} periodo={periodo} queSeMide={queSeMide} />
               <FilaDeKpis total={total} espejo={totalEspejo} />
               <Tabla
                 filas={filas} ejeFila={ejeFila} ejeColumna={ejeColumna}
                 total={total} totalEspejo={totalEspejo}
+                cuadre={elCuadre} descartadas={descartadas}
                 abierta={filaAbierta} onAbrir={setFilaAbierta}
               />
               <DiaADia informe={informe} abierta={filaAbierta} ejeFila={ejeFila} />
@@ -297,28 +329,21 @@ function Selector({ label, value, onChange, opciones }: {
  * su denominador y lo que permite cuadrar esta pantalla con el correo. Va en
  * monoespaciada a propósito — se lee para COMPARAR, no para leer de corrido.
  */
-function BandaDeMedida({ informe, periodo }: { informe: InformeVentas; periodo: PeriodoResuelto }) {
+function BandaDeMedida({ informe, periodo, queSeMide }: {
+  informe: InformeVentas; periodo: PeriodoResuelto; queSeMide: string
+}) {
   const m = informe.meta
   return (
-    <section className="bg-card border border-border-default rounded-xl p-3 text-[12px] font-mono leading-relaxed">
-      <Dato k="Periodo" v={`${m.ventana_actual.desde} → ${m.ventana_actual.hasta}`}
-        extra={<span className="font-sans text-text-secondary ml-2">
-          Espejo <span className="font-mono">{m.ventana_espejo.desde} → {m.ventana_espejo.hasta}</span>
-          <span className="ml-2">· {etiquetaDelEspejo(periodo)}</span>
-        </span>} />
-      <Dato k="Filtro" v={Object.keys(m.filtros).length ? JSON.stringify(m.filtros) : 'todos los locales · todas las marcas · todos los canales'} />
-      <Dato k="Regla" v={m.regla} />
+    <section className="bg-card border border-border-default rounded-xl px-3 py-2.5">
+      <p className="text-sm font-medium text-text-primary">
+        {intervaloEnCastellano(m.ventana_actual.desde, m.ventana_actual.hasta)} · {queSeMide}
+      </p>
+      <p className="mt-0.5 text-[12px] text-text-secondary">
+        Ventas cobradas, sin pedidos cancelados. Horario de Madrid.
+        {' · '}Comparado con {intervaloEnCastellano(m.ventana_espejo.desde, m.ventana_espejo.hasta)}
+        {periodo.parcial ? ', el mismo tramo' : ', completo'}.
+      </p>
     </section>
-  )
-}
-
-function Dato({ k, v, extra }: { k: string; v: string; extra?: React.ReactNode }) {
-  return (
-    <p className="flex flex-wrap gap-x-2">
-      <span className="uppercase text-text-tertiary w-[64px] shrink-0">{k}</span>
-      <span className="text-text-primary break-all">{v}</span>
-      {extra}
-    </p>
   )
 }
 
@@ -377,18 +402,20 @@ function Kpi({ label, valor, delta, mejorSi, nota, notaAlarma, destacado }: {
       <p className={`mt-1 text-[11px] ${mejor ? 'text-success' : peor ? 'text-danger' : 'text-text-secondary'}`}>
         {delta == null
           // Sin base no se inventa un porcentaje: se dice con palabras.
-          ? 'sin espejo con qué comparar'
-          : `${delta > 0 ? '+' : ''}${fmtPct(delta)} vs espejo`}
+          ? 'sin periodo anterior con que comparar'
+          : `${delta > 0 ? '+' : ''}${fmtPct(delta)} frente al periodo anterior`}
       </p>
       {nota && <p className={`mt-0.5 text-[11px] ${notaAlarma ? 'text-danger font-medium' : 'text-text-tertiary'}`}>{nota}</p>}
     </div>
   )
 }
 
-function Tabla({ filas, ejeFila, ejeColumna, total, totalEspejo, abierta, onAbrir }: {
+function Tabla({ filas, ejeFila, ejeColumna, total, totalEspejo, abierta, onAbrir, cuadre, descartadas }: {
   filas: FilaConDelta[]; ejeFila: EjeInforme; ejeColumna: EjeInforme | null
   total: Totales; totalEspejo: Totales | null
   abierta: string | null; onAbrir: (k: string | null) => void
+  cuadre: { ok: boolean; sumaNeto: number; sumaPedidos: number }
+  descartadas: FilaConDelta[]
 }) {
   const etiqueta = (f: FilaConDelta) =>
     [f.dims[ejeFila], ejeColumna ? f.dims[ejeColumna] : null].filter(Boolean).join(' · ')
@@ -406,7 +433,7 @@ function Tabla({ filas, ejeFila, ejeColumna, total, totalEspejo, abierta, onAbri
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-text-secondary border-b border-border-default">
               <Th left>{ejeFila}{ejeColumna ? ` · ${ejeColumna}` : ''}</Th>
-              <Th>Bruto</Th><Th>Descuentos</Th><Th>Neto</Th><Th>Pedidos</Th><Th>Neto espejo</Th><Th>Δ</Th>
+              <Th>Bruto</Th><Th>Descuentos</Th><Th>Neto</Th><Th>Pedidos</Th><Th>Neto anterior</Th><Th>Δ</Th>
             </tr>
           </thead>
           <tbody>
@@ -429,7 +456,7 @@ function Tabla({ filas, ejeFila, ejeColumna, total, totalEspejo, abierta, onAbri
                   <Td>{f.espejo ? fmtMoney(f.espejo.neto) : '—'}</Td>
                   <Td>
                     {f.deltaNetoPct == null
-                      ? <span className="text-text-secondary text-[11px]">sin espejo</span>
+                      ? <span className="text-text-secondary text-[11px]">sin comparación</span>
                       : <span className={f.deltaNetoPct < 0 ? 'text-danger' : 'text-success'}>
                           {f.deltaNetoPct > 0 ? '+' : ''}{fmtPct(f.deltaNetoPct)}
                         </span>}
@@ -453,6 +480,30 @@ function Tabla({ filas, ejeFila, ejeColumna, total, totalEspejo, abierta, onAbri
           </tbody>
         </table>
       </div>
+
+      {/* EL CUADRE, VISIBLE. Si las filas no suman el total, la tabla lo dice
+          con las dos cifras. Hasta el 06/09 esto sólo se veía sumando a mano. */}
+      {!cuadre.ok && (
+        <p className="flex items-start gap-1.5 px-3 py-2 border-t border-danger/40 bg-danger/10 text-[12px] text-danger">
+          <AlertTriangle size={13} className="shrink-0 mt-px" />
+          <span>
+            <strong>Las filas no suman el total.</strong> Suman {fmtMoney(cuadre.sumaNeto)} y
+            {' '}{fmtInt(cuadre.sumaPedidos)} pedidos; el total dice {fmtMoney(total.neto)} y
+            {' '}{fmtInt(total.pedidos)}. No te fíes de esta tabla hasta que cuadre.
+          </span>
+        </p>
+      )}
+
+      {/* Lo que la guarda ha dejado fuera. NO se calla: mientras la causa de
+          B78 siga abierta, esta línea es lo que la va a identificar. */}
+      {descartadas.length > 0 && (
+        <p className="px-3 py-2 border-t border-warning/40 bg-warning/10 text-[12px] text-text-primary">
+          <strong>{fmtInt(descartadas.length)}</strong>
+          {descartadas.length === 1 ? ' fila no era de esta consulta y no se enseña' : ' filas no eran de esta consulta y no se enseñan'}
+          {' '}({descartadas.map(d => JSON.stringify(d.dims)).join(' · ')}).
+          {' '}Si ves esto, dilo: es el fallo del 6 de septiembre y sigue sin explicarse del todo.
+        </p>
+      )}
     </section>
   )
 }
@@ -494,9 +545,9 @@ function DiaADia({ informe, abierta, ejeFila }: {
     <section className="bg-card border border-border-default rounded-xl p-3">
       <div className="flex items-baseline justify-between gap-2 mb-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-          Día a día{abierta ? ` · ${abierta}` : ' · todo lo filtrado'}
+          Día a día{abierta ? ` · ${abierta}` : ' · todo lo seleccionado'}
         </h2>
-        <p className="text-[11px] text-text-secondary">periodo vs espejo</p>
+        <p className="text-[11px] text-text-secondary">este periodo y el anterior</p>
       </div>
       <div className="overflow-x-auto">
         <div className="flex gap-3 items-end min-w-max">
@@ -512,7 +563,7 @@ function DiaADia({ informe, abierta, ejeFila }: {
                   <div style={{ height: `${(e / max) * 100}%` }} className="w-6 rounded-t bg-border-default" />
                 </div>
                 <p className="mt-1 text-[11px] font-medium text-text-primary">{fmtMoney(a)}</p>
-                <p className="text-[10px] text-text-secondary">esp. {fmtMoney(e)}</p>
+                <p className="text-[10px] text-text-secondary">antes {fmtMoney(e)}</p>
                 <p className="text-[10px] text-text-tertiary">{d.slice(5)}</p>
               </div>
             )

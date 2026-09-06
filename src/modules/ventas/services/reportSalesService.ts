@@ -188,6 +188,59 @@ function vacia(dims: Record<string, string>): FilaInformeVentas {
   }
 }
 
+/**
+ * LA GUARDA DE B78: una fila cuyas `dims` no lleven las claves de los ejes
+ * pedidos NO SE PINTA.
+ *
+ * El 06/09 la tabla enseñó dos filas que no eran de su consulta. Una se
+ * reprodujo al céntimo: `{canal: "Uber"}` con 96 pedidos y 2.017,41 € era la
+ * respuesta de OTRA pregunta —eje canal, Alcalá, propias, semana en curso—
+ * pintada bajo un informe de `marca × propiedad`.
+ *
+ * Esta guarda no depende de saber cómo llegó ahí: una fila que no trae los ejes
+ * que se preguntaron no es de esta pregunta, y no se enseña. Por construcción,
+ * no por acordarse de vaciar el estado.
+ *
+ * Y NO FILTRA EN SILENCIO: devuelve lo descartado para que la pantalla lo diga.
+ * Un filtro callado nos habría dejado sin saber nunca de dónde salían esas
+ * filas — que es justo lo que hay que evitar mientras la causa siga abierta.
+ */
+export function filtraPorEjes<T extends { dims: Record<string, string> }>(
+  filas: T[], ejes: EjeInforme[],
+): { visibles: T[]; descartadas: T[] } {
+  const visibles: T[] = []
+  const descartadas: T[] = []
+  for (const f of filas) {
+    const d = f.dims ?? {}
+    // Tiene que traer TODAS las claves pedidas y NINGUNA de más: una fila con
+    // un eje extra tampoco es de esta pregunta.
+    const traeTodas = ejes.every((e) => typeof d[e] === 'string')
+    const sinSobrantes = Object.keys(d).every((k) => (ejes as string[]).includes(k))
+    ;(traeTodas && sinSobrantes ? visibles : descartadas).push(f)
+  }
+  return { visibles, descartadas }
+}
+
+/**
+ * EL CUADRE VISIBLE. La suma de las filas contra el total.
+ *
+ * Sin esto, el fallo del 06/09 sólo se veía sumando a mano — y lo hizo Julio.
+ * Una pantalla no esconde que algo no cuadra (regla 7 en su forma más literal):
+ * si no suma, lo dice, con las dos cifras.
+ *
+ * El margen de un céntimo es por el redondeo a dos decimales de cada fila.
+ */
+export function cuadra(
+  filas: { neto: number; pedidos: number }[], total: { neto: number; pedidos: number },
+): { ok: boolean; sumaNeto: number; sumaPedidos: number } {
+  const sumaNeto = Math.round(filas.reduce((a, f) => a + f.neto, 0) * 100) / 100
+  const sumaPedidos = filas.reduce((a, f) => a + f.pedidos, 0)
+  return {
+    ok: Math.abs(sumaNeto - total.neto) <= 0.01 && sumaPedidos === total.pedidos,
+    sumaNeto, sumaPedidos,
+  }
+}
+
 // ── Lo que se descarga ─────────────────────────────────────────────────────
 
 /**
