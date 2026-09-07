@@ -29,7 +29,10 @@ const num = (v: unknown): number => (v == null ? 0 : Number(v))
 const numOrNull = (v: unknown): number | null => (v == null ? null : Number(v))
 
 export interface LosExtras {
-  medidoEn: string | null
+  // Los días que ha contado la consulta, tal cual los devuelve, en el
+  // calendario de Madrid. La cabecera los escribe; no los recalcula nadie.
+  ventanaDesde: string | null
+  ventanaHasta: string | null
   ventanaDias: number | null
   cifras: CifrasDeExtras
   filas: ExtraPorNombre[]
@@ -46,7 +49,8 @@ export async function getExtras(accountId: string): Promise<LosExtras> {
   const c = (d.cifras ?? {}) as Record<string, unknown>
 
   return {
-    medidoEn: (d.medido_en as string) ?? null,
+    ventanaDesde: (d.ventana_desde as string) ?? null,
+    ventanaHasta: (d.ventana_hasta as string) ?? null,
     ventanaDias: numOrNull(d.ventana_dias),
     cifras: {
       cobran: num(c.cobran),

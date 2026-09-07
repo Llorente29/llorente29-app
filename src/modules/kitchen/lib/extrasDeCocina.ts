@@ -245,31 +245,47 @@ export function frasedeLoQueLleva(cosas: CosaQueLleva[]): string {
 }
 
 /**
- * QUÉ DÍAS SE ESTÁ VIENDO, con las fechas puestas: «vendido del 8 de agosto al
+ * QUÉ DÍAS SE ESTÁ VIENDO, con las fechas puestas: «vendido del 9 de agosto al
  * 7 de septiembre». «Los últimos 30 días» obliga a hacer la cuenta de cabeza y
  * no dice desde cuándo, que es lo que hace falta para juzgar un número de
  * ventas.
  *
- * Dos ajustes sobre `intervaloDeFechas`, y los dos cambian lo que dice:
- *  · A DÍAS ENTEROS. Con la hora tal cual sale «al 7 de septiembre, hasta las
- *    15:00». Esa coletilla es el dato en Informes; aquí es ruido.
- *  · EL LÍMITE DE ARRIBA ES EXCLUSIVO, así que para que HOY entre en la frase
- *    hay que pasar la medianoche de mañana. Dejarlo en hoy diría «al 6» y se
- *    comería lo vendido hoy, que sí está contado.
+ * UN SOLO RELOJ. Las dos fechas las manda la consulta (`ventana_desde` y
+ * `ventana_hasta`): son los días que ha contado de verdad, en el calendario de
+ * Madrid. Aquí no se calcula ninguna, sólo se escriben. Sacarlas de «medido a
+ * las 15:00, menos 30 días» prometía días enteros mientras la consulta contaba
+ * desde ayer a las 15:00: dos relojes, y el que se leía no era el que contaba.
  *
- * Devuelve `null` si la fecha no se puede leer: una cabecera sin fechas se
- * pinta, no revienta (B82).
+ * Dos detalles al pasarlas a texto, y los dos cambian lo que dice:
+ *  · SE LEEN COMO FECHA DE CALENDARIO, a mano. `new Date('2026-08-09')` es
+ *    medianoche UTC, que al oeste de Greenwich cae en el día 8.
+ *  · EL LÍMITE DE ARRIBA ES EXCLUSIVO en `intervaloDeFechas`, así que para que
+ *    el último día entre en la frase hay que pasarle la medianoche siguiente.
+ *
+ * Devuelve `null` si falta o no se entiende alguna de las dos: una cabecera sin
+ * fechas se pinta, no revienta (B82).
  */
+function diaDeCalendario(iso: string | null): Date | null {
+  if (!iso) return null
+  const p = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!p) return null
+  const anio = Number(p[1]); const mes = Number(p[2]); const dia = Number(p[3])
+  const d = new Date(anio, mes - 1, dia)
+  // `new Date(2026, 12, 40)` no falla: se desborda a otro mes. Un 13 o un 32 es
+  // una fecha que no existe, no una fecha que rueda.
+  if (d.getFullYear() !== anio || d.getMonth() !== mes - 1 || d.getDate() !== dia) return null
+  return d
+}
+
 export function ventanaEnCastellano(
-  medidoEn: string | null,
-  ventanaDias: number | null,
+  ventanaDesde: string | null,
+  ventanaHasta: string | null,
   intervaloDeFechas: (d: Date, h: Date, o?: { minuscula?: boolean }) => string | null,
 ): string | null {
-  if (!medidoEn || !ventanaDias) return null
-  const m = new Date(medidoEn)
-  if (Number.isNaN(m.getTime())) return null
-  const desde = new Date(m.getFullYear(), m.getMonth(), m.getDate() - ventanaDias)
-  const hasta = new Date(m.getFullYear(), m.getMonth(), m.getDate() + 1)
-  const t = intervaloDeFechas(desde, hasta, { minuscula: true })
+  const desde = diaDeCalendario(ventanaDesde)
+  const hasta = diaDeCalendario(ventanaHasta)
+  if (!desde || !hasta) return null
+  const finExclusivo = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate() + 1)
+  const t = intervaloDeFechas(desde, finExclusivo, { minuscula: true })
   return t ? `vendido ${t}` : null
 }

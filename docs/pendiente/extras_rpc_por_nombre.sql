@@ -32,6 +32,20 @@ set search_path to 'public'
 as $function$
 declare
   v_dias      integer := greatest(1, (extract(epoch from coalesce(p_ventana, interval '30 days')) / 86400)::int);
+  -- ── DÍAS ENTEROS, Y EN HORA DE MADRID ───────────────────────────────────
+  -- La ventana era `now() - 30 days`, que empieza a media tarde del primer
+  -- día. La pantalla dice «del 9 de agosto al 7 de septiembre» y eso promete
+  -- días completos: o la frase miente o la cuenta miente. Aquí se arregla en
+  -- la cuenta, y la frase se pinta con las fechas que devuelve ESTA función:
+  -- un solo reloj, no dos que se parecen.
+  --
+  -- El truncado va en `Europe/Madrid`, no en UTC (regla 4): la medianoche de
+  -- Madrid del 9 son las 22:00 UTC del 8. Truncando en UTC la ventana
+  -- empezaría a las 02:00 de Madrid y se comería el servicio de madrugada,
+  -- que en Alcalá llega pasada la una.
+  v_hasta_dia date      := (now() at time zone 'Europe/Madrid')::date;
+  v_desde_dia date      := v_hasta_dia - (v_dias - 1);
+  v_desde     timestamptz := (v_desde_dia::timestamp) at time zone 'Europe/Madrid';
   v_resultado jsonb;
 begin
   if not (public.current_user_is_admin()
@@ -72,7 +86,7 @@ begin
       from sale_line m
       join sale s on s.id = m.sale_id
                  and s.account_id = p_account                        -- regla 9
-                 and s.sold_at >= now() - coalesce(p_ventana, interval '30 days')
+                 and s.sold_at >= v_desde                            -- días enteros, Madrid
                  and coalesce(s.status, '') <> 'cancelled'
      where m.account_id = p_account
        and m.line_type = 'modifier'
@@ -121,6 +135,11 @@ begin
     'cuenta',        p_account,
     'medido_en',     now(),
     'ventana_dias',  v_dias,
+    -- QUÉ DÍAS SE HAN CONTADO. La pantalla los pinta tal cual; no los vuelve a
+    -- calcular. Dos sitios calculando la misma ventana es cómo nacen los dos
+    -- relojes.
+    'ventana_desde', v_desde_dia,
+    'ventana_hasta', v_hasta_dia,
     'cifras', jsonb_build_object(
       'cobran',             (select count(*) from c),
       'marcas_que_cobran',  (select count(distinct brand_id) from c),
@@ -177,6 +196,18 @@ begin
   -- Nada de castellano de pantalla dentro de la funcion: el texto vive en lib/.
   if v_src ~ 'nada puesto|no lleva nada|entra por caja|Decir que lleva' then
     raise exception 'GUARDA: hay texto de pantalla dentro de la funcion; el castellano va en lib/ (B83).';
+  end if;
+
+  -- La ventana tiene que ser de dias enteros y en hora de Madrid: si vuelve la
+  -- movil, la frase de la pantalla promete dias que no se han contado.
+  if v_src not like '%Europe/Madrid%' then
+    raise exception 'GUARDA: la ventana no trunca en Europe/Madrid (regla 4).';
+  end if;
+  if v_src like '%sold_at >= now() -%' then
+    raise exception 'GUARDA: ha vuelto la ventana movil; la pantalla prometeria dias enteros que no se cuentan.';
+  end if;
+  if v_src not like '%ventana_desde%' or v_src not like '%ventana_hasta%' then
+    raise exception 'GUARDA: la funcion no dice que dias ha contado; la pantalla tendria que calcularlos por su cuenta.';
   end if;
 end
 $guarda$;

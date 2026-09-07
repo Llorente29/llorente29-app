@@ -86,13 +86,13 @@ function Fila({ e }: { e: ExtraPorNombre }) {
 it('genera la captura de Extras a 1280', () => {
   const cuerpo = renderToStaticMarkup(
     <div className="cocina min-h-full">
-      <div className="px-6 py-5 flex flex-col gap-3.5">
+      <div className="cocina-pagina">
         <CabeceraCocina
           migaja="Folvy Kitchen · Cuenta Foodint"
           pregunta="¿Qué extras cobras sin saber lo que te cuestan?"
           regla={<>Un extra es lo que el cliente añade o elige y paga aparte. Aquí se le dice{' '}
             <b className="font-semibold text-cocina-tinta">una vez</b> qué lleva y vale para todos los
-            platos donde aparezca · <em className="not-italic text-cocina-tinta-3">vendido del 8 de agosto al 7 de septiembre.</em></>}
+            platos donde aparezca · <em className="not-italic text-cocina-tinta-3">vendido del 9 de agosto al 7 de septiembre.</em></>}
         >
           <CampoCocina label="Marca"><span>Todas</span></CampoCocina>
           <CampoCocina label="Periodo"><span>Últimos 30 días</span></CampoCocina>

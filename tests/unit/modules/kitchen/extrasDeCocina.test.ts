@@ -253,40 +253,68 @@ describe('la frase de lo que lleva, sin jerga', () => {
 })
 
 // ── Qué días se está viendo ────────────────────────────────────────────────
-// La maqueta pone las fechas («vendido del 8 de agosto al 6 de septiembre») y
-// no «los últimos 30 días», que obliga a echar la cuenta de cabeza. Y es donde
-// mordió B82: una fecha ilegible NO puede tumbar la cabecera.
+// La maqueta pone las fechas («vendido del 9 de agosto al 7 de septiembre») y
+// no «los últimos 30 días», que obliga a echar la cuenta de cabeza.
+//
+// UN RELOJ. Las dos fechas ya no se calculan aquí: llegan de la consulta, que
+// las devuelve porque son exactamente los días que ha contado, en el calendario
+// de Madrid. Antes la frase decía «del 8 de agosto» —hoy menos 30— y la consulta
+// contaba desde ayer a las 15:00: la frase prometía días enteros que la consulta
+// no contaba. Los ejemplos de abajo son los de la ventana real de producción:
+// 30 días enteros cerrados el 07/09/2026 son del 9 de agosto al 7 de septiembre,
+// 2.948 ventas (la ventana móvil daba 3.003 y arrancaba a media tarde).
+//
+// Lo que estas pruebas NO pueden ver: el entorno corre en UTC, así que leer las
+// fechas a mano en vez de con `new Date('2026-08-09')` no cambia el resultado
+// aquí. Lo que sí se prueba es que una fecha imposible no rueda al mes
+// siguiente, que es la otra mitad de la misma lectura manual.
 import { ventanaEnCastellano } from '@/modules/kitchen/lib/extrasDeCocina'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 
 describe('las fechas de la ventana', () => {
-  it('una ventana de 30 días medida el 07/09 se lee con sus dos fechas', () => {
-    expect(ventanaEnCastellano('2026-09-07T15:00:00', 30, intervaloDeFechas))
-      .toBe('vendido del 8 de agosto al 7 de septiembre')
+  it('escribe los dos días que dice la consulta, sin tocarlos', () => {
+    expect(ventanaEnCastellano('2026-08-09', '2026-09-07', intervaloDeFechas))
+      .toBe('vendido del 9 de agosto al 7 de septiembre')
   })
 
-  // El límite de arriba es EXCLUSIVO: sin la medianoche de mañana diría «al 6»
-  // y se comería lo vendido hoy, que sí está contado.
-  it('el día de hoy entra en la frase', () => {
-    expect(ventanaEnCastellano('2026-09-07T15:00:00', 30, intervaloDeFechas))
+  // El límite de arriba es EXCLUSIVO en `intervaloDeFechas`: sin pasarle la
+  // medianoche siguiente diría «al 6» y se comería el último día, que sí está
+  // contado.
+  it('el último día contado entra en la frase', () => {
+    expect(ventanaEnCastellano('2026-08-09', '2026-09-07', intervaloDeFechas))
       .toContain('al 7 de septiembre')
   })
 
-  // La coletilla de la hora es el dato en Informes; aquí es ruido.
+  // La coletilla de la hora es el dato en Informes; aquí es ruido, y además
+  // sería el segundo reloj entrando por la puerta de atrás.
   it('no arrastra la hora', () => {
-    expect(ventanaEnCastellano('2026-09-07T15:00:00', 30, intervaloDeFechas))
+    expect(ventanaEnCastellano('2026-08-09', '2026-09-07', intervaloDeFechas))
       .not.toContain('hasta las')
   })
 
   it('cruza el cambio de año sin romperse', () => {
-    expect(ventanaEnCastellano('2027-01-10T09:00:00', 30, intervaloDeFechas))
-      .toBe('vendido del 11 de diciembre al 10 de enero')
+    expect(ventanaEnCastellano('2026-12-12', '2027-01-10', intervaloDeFechas))
+      .toBe('vendido del 12 de diciembre al 10 de enero')
   })
 
-  // B82: la cabecera se pinta aunque la fecha no se pueda leer.
+  // Un solo día contado se lee como un solo día.
+  it('una ventana de un día se lee entera', () => {
+    expect(ventanaEnCastellano('2026-09-07', '2026-09-07', intervaloDeFechas))
+      .toContain('7 de septiembre')
+  })
+
+  // B82: la cabecera se pinta aunque las fechas no se puedan leer.
   it('una fecha ilegible devuelve null, no un error', () => {
-    expect(ventanaEnCastellano('no es una fecha', 30, intervaloDeFechas)).toBeNull()
-    expect(ventanaEnCastellano(null, 30, intervaloDeFechas)).toBeNull()
-    expect(ventanaEnCastellano('2026-09-07T15:00:00', null, intervaloDeFechas)).toBeNull()
+    expect(ventanaEnCastellano('no es una fecha', '2026-09-07', intervaloDeFechas)).toBeNull()
+    expect(ventanaEnCastellano(null, '2026-09-07', intervaloDeFechas)).toBeNull()
+    expect(ventanaEnCastellano('2026-08-09', null, intervaloDeFechas)).toBeNull()
+  })
+
+  // `new Date(2026, 12, 1)` no falla: rueda a enero de 2027 y la cabecera
+  // pintaría una ventana que nadie ha contado. Mejor sin fechas que con fechas
+  // inventadas.
+  it('una fecha que no existe devuelve null, no rueda al mes siguiente', () => {
+    expect(ventanaEnCastellano('2026-13-01', '2026-09-07', intervaloDeFechas)).toBeNull()
+    expect(ventanaEnCastellano('2026-02-30', '2026-09-07', intervaloDeFechas)).toBeNull()
   })
 })

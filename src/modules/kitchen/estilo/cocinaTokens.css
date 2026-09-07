@@ -89,3 +89,15 @@
   font-family: var(--cocina-mono);
   font-variant-numeric: tabular-nums;
 }
+
+/* El margen de la página, copiado tal cual de la maqueta (`.main`): 22 arriba,
+   26 a los lados, 30 abajo y 14 de separación entre bloques. Los seis lienzos
+   llevan el mismo, así que va aquí y no en cada pantalla: con `px-6 py-5` la
+   caja de texto de la cabecera salía 4 px más ancha y el subtítulo rompía la
+   línea una palabra más tarde que en la maqueta. */
+.cocina-pagina {
+  padding: 22px 26px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}

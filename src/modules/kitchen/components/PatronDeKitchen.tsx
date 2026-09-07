@@ -224,7 +224,10 @@ export function CabeceraCocina({
   migaja, pregunta, regla, children,
 }: { migaja?: string; pregunta: string; regla: ReactNode; children?: ReactNode }) {
   return (
-    <div>
+    // 14 px entre la migaja y el título: en la maqueta son dos hijos de `.main`,
+    // que separa a 14. Aquí van juntos en la cabecera, así que la separación hay
+    // que ponerla, no heredarla — sin ella todo lo de abajo subía 14 px.
+    <div className="flex flex-col gap-3.5">
       {migaja && (
         <div className="text-[11px] text-cocina-tinta-3 tracking-[0.08em] uppercase font-bold">{migaja}</div>
       )}

@@ -161,10 +161,12 @@ export default function KitchenExtrasPage() {
     return ordena(filas, orden)
   }, [datos, soloLosQueArreglar, marca, orden])
 
-  // Las fechas de la ventana, en castellano. La lógica vive en `lib/` para
-  // poder probarla: una frase que sitúa mal al que mira no la caza un build.
+  // Las fechas de la ventana, en castellano. Salen de la consulta —son los días
+  // que ha contado— y aquí sólo se escriben: un reloj, no dos. La lógica vive en
+  // `lib/` para poder probarla: una frase que sitúa mal al que mira no la caza
+  // un build.
   const intervalo = useMemo(
-    () => ventanaEnCastellano(datos?.medidoEn ?? null, datos?.ventanaDias ?? null, intervaloDeFechas),
+    () => ventanaEnCastellano(datos?.ventanaDesde ?? null, datos?.ventanaHasta ?? null, intervaloDeFechas),
     [datos],
   )
 
@@ -182,7 +184,7 @@ export default function KitchenExtrasPage() {
 
   return (
     <div className="cocina min-h-full">
-      <div className="px-6 py-5 flex flex-col gap-3.5">
+      <div className="cocina-pagina">
 
         <CabeceraCocina
           migaja="Folvy Kitchen"
