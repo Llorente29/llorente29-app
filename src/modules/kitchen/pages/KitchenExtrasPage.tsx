@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
+import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
   CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
@@ -34,7 +35,7 @@ import { kindOf, TIPOS_ELEGIBLES, type CatalogPick } from '@/modules/kitchen/lib
 import type { UnidadPick } from '@/modules/kitchen/lib/impactoResuelto'
 import FlujoDeExtra from '@/modules/kitchen/components/FlujoDeExtra'
 import {
-  ORDENES, confirmacion, cuantasCopias, loQueCobra, queLleva, botonDeLaFila,
+  ORDENES, confirmacion, cuantasCopias, ventanaEnCastellano, loQueCobra, queLleva, botonDeLaFila,
   hayQueArreglarlo, ordena, parteEnDos, pieDeLaBarra, tituloDelPliegue,
   type ExtraPorNombre, type OrdenDeExtras, type CosaQueLleva,
 } from '@/modules/kitchen/lib/extrasDeCocina'
@@ -160,6 +161,13 @@ export default function KitchenExtrasPage() {
     return ordena(filas, orden)
   }, [datos, soloLosQueArreglar, marca, orden])
 
+  // Las fechas de la ventana, en castellano. La lógica vive en `lib/` para
+  // poder probarla: una frase que sitúa mal al que mira no la caza un build.
+  const intervalo = useMemo(
+    () => ventanaEnCastellano(datos?.medidoEn ?? null, datos?.ventanaDias ?? null, intervaloDeFechas),
+    [datos],
+  )
+
   const { conVentas, sinVentas } = useMemo(() => parteEnDos(visibles), [visibles])
 
   // El pie de la barra cuenta EL PROBLEMA, no lo que el filtro deja ver: «56
@@ -184,9 +192,7 @@ export default function KitchenExtrasPage() {
               Un extra es lo que el cliente añade o elige y paga aparte. Aquí se le
               dice <b className="font-semibold text-cocina-tinta">una vez</b> qué lleva
               y vale para todos los platos donde aparezca
-              {datos?.ventanaDias ? <> · <em className="not-italic text-cocina-tinta-3">
-                vendido en los últimos {datos.ventanaDias} días.
-              </em></> : null}
+              {intervalo && <> · <em className="not-italic text-cocina-tinta-3">{intervalo}.</em></>}
             </>
           }
         >

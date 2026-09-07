@@ -243,3 +243,33 @@ export function frasedeLoQueLleva(cosas: CosaQueLleva[]): string {
   if (trozos.length <= 1) return trozos[0] ?? ''
   return `${trozos.slice(0, -1).join(', ')} y ${trozos[trozos.length - 1]}`
 }
+
+/**
+ * QUÉ DÍAS SE ESTÁ VIENDO, con las fechas puestas: «vendido del 8 de agosto al
+ * 7 de septiembre». «Los últimos 30 días» obliga a hacer la cuenta de cabeza y
+ * no dice desde cuándo, que es lo que hace falta para juzgar un número de
+ * ventas.
+ *
+ * Dos ajustes sobre `intervaloDeFechas`, y los dos cambian lo que dice:
+ *  · A DÍAS ENTEROS. Con la hora tal cual sale «al 7 de septiembre, hasta las
+ *    15:00». Esa coletilla es el dato en Informes; aquí es ruido.
+ *  · EL LÍMITE DE ARRIBA ES EXCLUSIVO, así que para que HOY entre en la frase
+ *    hay que pasar la medianoche de mañana. Dejarlo en hoy diría «al 6» y se
+ *    comería lo vendido hoy, que sí está contado.
+ *
+ * Devuelve `null` si la fecha no se puede leer: una cabecera sin fechas se
+ * pinta, no revienta (B82).
+ */
+export function ventanaEnCastellano(
+  medidoEn: string | null,
+  ventanaDias: number | null,
+  intervaloDeFechas: (d: Date, h: Date, o?: { minuscula?: boolean }) => string | null,
+): string | null {
+  if (!medidoEn || !ventanaDias) return null
+  const m = new Date(medidoEn)
+  if (Number.isNaN(m.getTime())) return null
+  const desde = new Date(m.getFullYear(), m.getMonth(), m.getDate() - ventanaDias)
+  const hasta = new Date(m.getFullYear(), m.getMonth(), m.getDate() + 1)
+  const t = intervaloDeFechas(desde, hasta, { minuscula: true })
+  return t ? `vendido ${t}` : null
+}

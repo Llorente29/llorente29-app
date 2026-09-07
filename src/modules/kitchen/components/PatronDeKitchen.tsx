@@ -72,12 +72,20 @@ export function Cifra({
 // obliga a envolver la pantalla, que es lo que hace la migración explícita en
 // vez de silenciosa.
 
-/** `.sel` de la maqueta: el campo de la cabecera, con su etiqueta dentro. */
+/**
+ * `.sel` de la maqueta: el campo de la cabecera, con su etiqueta dentro y la
+ * FLECHA al final. La flecha no es adorno: sin ella el campo parece una
+ * etiqueta y nadie descubre que se abre.
+ */
 export function CampoCocina({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="inline-flex items-center gap-2 h-9 px-3 border border-cocina-linea bg-cocina-superficie rounded-cocina text-[13px] font-medium text-cocina-tinta">
+    <label className="inline-flex items-center gap-2 h-9 px-3 border border-cocina-linea bg-cocina-superficie rounded-cocina text-[13px] font-medium text-cocina-tinta cursor-pointer">
       <span className="text-[10.5px] font-bold tracking-[0.06em] uppercase text-cocina-tinta-3">{label}</span>
       {children}
+      {/* La misma que la maqueta: 14×14, trazo 1.8, sin relleno. */}
+      <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 shrink-0 stroke-cocina-tinta-3 fill-none" strokeWidth={1.8}>
+        <path d="M4 6l4 4 4-4" />
+      </svg>
     </label>
   )
 }

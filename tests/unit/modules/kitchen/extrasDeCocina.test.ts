@@ -251,3 +251,42 @@ describe('la frase de lo que lleva, sin jerga', () => {
     expect(t).not.toMatch(/add_item|bundle|impact/)
   })
 })
+
+// ── Qué días se está viendo ────────────────────────────────────────────────
+// La maqueta pone las fechas («vendido del 8 de agosto al 6 de septiembre») y
+// no «los últimos 30 días», que obliga a echar la cuenta de cabeza. Y es donde
+// mordió B82: una fecha ilegible NO puede tumbar la cabecera.
+import { ventanaEnCastellano } from '@/modules/kitchen/lib/extrasDeCocina'
+import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
+
+describe('las fechas de la ventana', () => {
+  it('una ventana de 30 días medida el 07/09 se lee con sus dos fechas', () => {
+    expect(ventanaEnCastellano('2026-09-07T15:00:00', 30, intervaloDeFechas))
+      .toBe('vendido del 8 de agosto al 7 de septiembre')
+  })
+
+  // El límite de arriba es EXCLUSIVO: sin la medianoche de mañana diría «al 6»
+  // y se comería lo vendido hoy, que sí está contado.
+  it('el día de hoy entra en la frase', () => {
+    expect(ventanaEnCastellano('2026-09-07T15:00:00', 30, intervaloDeFechas))
+      .toContain('al 7 de septiembre')
+  })
+
+  // La coletilla de la hora es el dato en Informes; aquí es ruido.
+  it('no arrastra la hora', () => {
+    expect(ventanaEnCastellano('2026-09-07T15:00:00', 30, intervaloDeFechas))
+      .not.toContain('hasta las')
+  })
+
+  it('cruza el cambio de año sin romperse', () => {
+    expect(ventanaEnCastellano('2027-01-10T09:00:00', 30, intervaloDeFechas))
+      .toBe('vendido del 11 de diciembre al 10 de enero')
+  })
+
+  // B82: la cabecera se pinta aunque la fecha no se pueda leer.
+  it('una fecha ilegible devuelve null, no un error', () => {
+    expect(ventanaEnCastellano('no es una fecha', 30, intervaloDeFechas)).toBeNull()
+    expect(ventanaEnCastellano(null, 30, intervaloDeFechas)).toBeNull()
+    expect(ventanaEnCastellano('2026-09-07T15:00:00', null, intervaloDeFechas)).toBeNull()
+  })
+})
