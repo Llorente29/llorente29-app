@@ -64,7 +64,8 @@ import {
 } from '@/modules/kitchen/lib/catalogPick'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import {
-  resuelveImpacto, cuentaCobertura, pintaComoConfirmado, avisoDeConfirmadoSinCoste,
+  resuelveImpacto, resuelveOpcion, estadoDeLaOpcion, cuentaCobertura,
+  pintaComoConfirmado, avisoDeConfirmadoSinCoste,
   unidadRacion, type UnidadPick, type ImpactoResuelto,
 } from '@/modules/kitchen/lib/impactoResuelto'
 
@@ -89,7 +90,9 @@ export default function ModifierImpactsTab({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  // Qué se está editando: `optionId::impactId`, o `optionId::nuevo` para añadir
+  // otra cosa. Era sólo `optionId`, que con varios impactos no señala a ninguno.
+  const [editingKey, setEditingKey] = useState<string | null>(null)
   // Sugerencia IA (Nivel 2): en curso + mensaje de resultado de la última pasada.
   const [aiRunning, setAiRunning] = useState(false)
   const [aiResult, setAiResult] = useState<string | null>(null)
@@ -222,29 +225,45 @@ export default function ModifierImpactsTab({
   const porFicha = useMemo(() => new Map(catalog.map((c) => [c.id, c])), [catalog])
   const porUnidad = useMemo(() => new Map(unidades.map((u) => [u.id, u])), [unidades])
 
-  const resueltos = useMemo(() => {
+  // Dos mapas, porque son dos preguntas distintas: qué aporta CADA cosa que la
+  // opción lleva (por impacto), y qué cuesta la opción entera (por opción). La
+  // segunda no es siempre la suma de la primera: si una parte no se puede
+  // calcular, el total tampoco — `resuelveOpcion` lo hace cumplir.
+  const porImpacto = useMemo(() => {
     const m = new Map<string, ImpactoResuelto>()
     for (const o of options) {
-      if (!o.impact) continue
-      const ficha = o.impact.targetRecipeItemId ? porFicha.get(o.impact.targetRecipeItemId) : undefined
-      m.set(o.optionId, resuelveImpacto({
-        impactType: o.impact.impactType,
-        targetRecipeItemId: o.impact.targetRecipeItemId,
-        quantity: o.impact.quantity,
-        unitId: o.impact.unitId,
-        ficha: ficha ? { costeUnitario: ficha.costeUnitario ?? null, baseUnitId: ficha.baseUnitId ?? null } : null,
-        unidadDeLaLinea: (o.impact.unitId ? porUnidad.get(o.impact.unitId) : undefined) ?? null,
-        unidadBaseDeLaFicha: (ficha?.baseUnitId ? porUnidad.get(ficha.baseUnitId) : undefined) ?? null,
-      }))
+      for (const imp of o.impacts) {
+        const ficha = imp.targetRecipeItemId ? porFicha.get(imp.targetRecipeItemId) : undefined
+        m.set(imp.id, resuelveImpacto({
+          impactType: imp.impactType,
+          targetRecipeItemId: imp.targetRecipeItemId,
+          quantity: imp.quantity,
+          unitId: imp.unitId,
+          ficha: ficha ? { costeUnitario: ficha.costeUnitario ?? null, baseUnitId: ficha.baseUnitId ?? null } : null,
+          unidadDeLaLinea: (imp.unitId ? porUnidad.get(imp.unitId) : undefined) ?? null,
+          unidadBaseDeLaFicha: (ficha?.baseUnitId ? porUnidad.get(ficha.baseUnitId) : undefined) ?? null,
+        }))
+      }
     }
     return m
   }, [options, porFicha, porUnidad])
+
+  const resueltos = useMemo(() => {
+    const m = new Map<string, ImpactoResuelto>()
+    for (const o of options) {
+      if (o.impacts.length === 0) continue
+      m.set(o.optionId, resuelveOpcion(
+        o.impacts.map((i) => porImpacto.get(i.id) ?? { estado: 'no_calculable' as const, motivo: 'no se ha podido leer' }),
+      ))
+    }
+    return m
+  }, [options, porImpacto])
 
   // Cobertura: lo que APORTA, lo que no aporta, y lo que está por revisar. Los
   // tres se enseñan; ninguno se esconde (regla 7).
   const coverage = useMemo(() => cuentaCobertura(
     options.map((o) => ({
-      status: o.impact?.status ?? null,
+      status: estadoDeLaOpcion(o.impacts.map((i) => i.status)),
       resuelto: resueltos.get(o.optionId) ?? { estado: 'sin_coste' as const, motivo: 'sin definir' },
     })),
   ), [options, resueltos])
@@ -264,11 +283,12 @@ export default function ModifierImpactsTab({
     return Array.from(m.values())
   }, [options])
 
-  async function handleConfirm(o: OptionWithImpact) {
-    if (!o.impact) return
+  // Se confirma UNA cosa de las que la opción lleva, no «la opción». Con varias,
+  // «confirmar» sin decir cuál no señalaba a nada.
+  async function handleConfirm(o: OptionWithImpact, impactId: string) {
     setBusyId(o.optionId)
     try {
-      await confirmImpact(o.impact.id, actorName)
+      await confirmImpact(impactId, actorName)
       await recomputeAffectedSales(accountId, o.optionId)
       await reload()
     } catch (err) {
@@ -278,11 +298,10 @@ export default function ModifierImpactsTab({
     }
   }
 
-  async function handleReject(o: OptionWithImpact) {
-    if (!o.impact) return
+  async function handleReject(o: OptionWithImpact, impactId: string) {
     setBusyId(o.optionId)
     try {
-      await rejectImpact(o.impact.id)
+      await rejectImpact(impactId)
       await reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo rechazar')
@@ -321,6 +340,7 @@ export default function ModifierImpactsTab({
   // Guardar un impacto definido a mano (modo Ajustar) y confirmarlo.
   async function handleSaveManual(
     o: OptionWithImpact,
+    impactId: string | null,
     draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null },
   ) {
     setBusyId(o.optionId)
@@ -328,6 +348,9 @@ export default function ModifierImpactsTab({
       await upsertImpact({
         accountId,
         modifierOptionId: o.optionId,
+        // Con `impactId` se corrige ESA cosa; sin él se añade otra a lo que la
+        // opción ya lleva. Antes daba igual: sólo podía haber una.
+        impactId,
         impactType: draft.impactType,
         targetRecipeItemId: draft.targetRecipeItemId,
         quantity: draft.quantity,
@@ -337,7 +360,7 @@ export default function ModifierImpactsTab({
         actorName,
       })
       await recomputeAffectedSales(accountId, o.optionId)
-      setEditingId(null)
+      setEditingKey(null)
       await reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar')
@@ -486,17 +509,18 @@ export default function ModifierImpactsTab({
                   option={o}
                   recipeItemId={recipeItemId}
                   busy={busyId === o.optionId}
-                  editing={editingId === o.optionId}
+                  editingKey={editingKey}
                   catalog={catalog}
                   pickable={pickable}
                   units={units}
                   resuelto={resueltos.get(o.optionId) ?? null}
+                  porImpacto={porImpacto}
                   unitRacionId={unitRacion?.id ?? null}
-                  onConfirm={() => handleConfirm(o)}
-                  onReject={() => handleReject(o)}
-                  onEdit={() => setEditingId(o.optionId)}
-                  onCancelEdit={() => setEditingId(null)}
-                  onSaveManual={(draft) => handleSaveManual(o, draft)}
+                  onConfirm={(impactId) => handleConfirm(o, impactId)}
+                  onReject={(impactId) => handleReject(o, impactId)}
+                  onEdit={(impactId) => setEditingKey(`${o.optionId}::${impactId ?? 'nuevo'}`)}
+                  onCancelEdit={() => setEditingKey(null)}
+                  onSaveManual={(impactId, draft) => handleSaveManual(o, impactId, draft)}
                   onCreateIngredient={handleCreateIngredient}
                   bundleHint={bundleHints.get(o.optionId) ?? null}
                   onAcceptBundle={(hint) => handleAcceptBundle(o, hint)}
@@ -516,21 +540,25 @@ interface OptionCardProps {
   option: OptionWithImpact
   recipeItemId: string
   busy: boolean
-  editing: boolean
+  /** `optionId::impactId` o `optionId::nuevo`. null = nada en edición. */
+  editingKey: string | null
   /** Catálogo COMPLETO: sirve para resolver nombres y para no crear duplicados. */
   catalog: CatalogPick[]
   /** Lo que el desplegable puede ofrecer: platos e ingredientes vivos. */
   pickable: CatalogPick[]
   units: { id: string; label: string }[]
-  /** Cuánto aporta el impacto de esta opción, o por qué no aporta. null = sin impacto. */
+  /** Lo que aporta la opción ENTERA, sumando todo lo que lleva. null = no lleva nada. */
   resuelto: ImpactoResuelto | null
+  /** Lo que aporta cada cosa por separado, por id de impacto. */
+  porImpacto: Map<string, ImpactoResuelto>
   /** La unidad «ud», con la que se miden las raciones de un plato. */
   unitRacionId: string | null
-  onConfirm: () => void
-  onReject: () => void
-  onEdit: () => void
+  onConfirm: (impactId: string) => void
+  onReject: (impactId: string) => void
+  /** `null` = añadir otra cosa; un id = corregir ésa. */
+  onEdit: (impactId: string | null) => void
   onCancelEdit: () => void
-  onSaveManual: (draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }) => void
+  onSaveManual: (impactId: string | null, draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }) => void
   /** Esta opción parece un producto entero de la carta. null = no lo parece. */
   bundleHint: ProductBundleSuggestion | null
   onAcceptBundle: (hint: ProductBundleSuggestion) => void
@@ -538,14 +566,19 @@ interface OptionCardProps {
 }
 
 function OptionCard({
-  option: o, recipeItemId, busy, editing, catalog, pickable, units,
-  resuelto, unitRacionId,
+  option: o, recipeItemId, busy, editingKey, catalog, pickable, units,
+  resuelto, porImpacto, unitRacionId,
   onConfirm, onReject, onEdit, onCancelEdit, onSaveManual, onCreateIngredient,
   bundleHint, onAcceptBundle,
 }: OptionCardProps) {
-  const status = o.impact?.status ?? 'none'
+  // El estado de la OPCIÓN sale del de todo lo que lleva: si una parte está por
+  // revisar, la opción lo está (07/09). Antes había un solo impacto y la
+  // distinción no existía.
+  const status = estadoDeLaOpcion(o.impacts.map((i) => i.status)) ?? 'none'
   const isProposed = status === 'proposed'
   const isConfirmed = status === 'confirmed'
+  const sinNada = o.impacts.length === 0
+  const editandoNuevo = editingKey === `${o.optionId}::nuevo`
 
   // B73a · «Confirmado» sólo se pinta en verde si el impacto APORTA algo.
   //
@@ -553,23 +586,17 @@ function OptionCard({
   // salía «✓ Confirmado» en verde, la vista previa decía «2,37 € → 2,37 €» —sin
   // efecto— y el resumen lo contaba como conocido. Una pantalla llamando
   // «confirmado» a un cálculo que el motor no ha podido hacer.
-  const aviso = avisoDeConfirmadoSinCoste(o.impact?.status, resuelto ?? { estado: 'no_aplica' })
-  const verde = isConfirmed && pintaComoConfirmado(o.impact?.status, resuelto ?? { estado: 'no_aplica' })
+  const aviso = avisoDeConfirmadoSinCoste(status, resuelto ?? { estado: 'no_aplica' })
+  const verde = isConfirmed && pintaComoConfirmado(status, resuelto ?? { estado: 'no_aplica' })
 
   // Borde según estado: aporta=verde sutil, confirmado sin coste=aviso,
   // propuesto=normal, sin impacto=punteado.
   const borderClass = verde
     ? 'border-success/40'
     : aviso ? 'border-warning/50'
-    : o.impact ? 'border-border-default' : 'border-dashed border-border-default'
+    : !sinNada ? 'border-border-default' : 'border-dashed border-border-default'
 
-  // Estado local del formulario de ajuste.
-  const [draft, setDraft] = useState({
-    impactType: (o.impact?.impactType ?? 'add_item') as ImpactType,
-    targetRecipeItemId: o.impact?.targetRecipeItemId ?? null,
-    quantity: o.impact?.quantity ?? null,
-    unitId: o.impact?.unitId ?? null,
-  })
+  const enEdicion = o.impacts.find((i) => editingKey === `${o.optionId}::${i.id}`) ?? null
 
   return (
     <div className={`rounded-lg border bg-card p-3 ${borderClass}`}>
@@ -600,20 +627,13 @@ function OptionCard({
         )}
       </div>
 
-      {/* Propuesta IA: el porqué */}
-      {isProposed && o.impact?.rationale && (
-        <div className="flex gap-2 items-start mb-2 px-2.5 py-1.5 rounded-md bg-accent-bg">
-          <Sparkles className="w-3.5 h-3.5 text-terracota mt-0.5 shrink-0" />
-          <p className="text-xs text-text-secondary leading-relaxed">{o.impact.rationale}</p>
-        </div>
-      )}
 
       {/* Esta opción es un PRODUCTO ENTERO, no un ajuste. Un modificador normal
           cambia la preparación; éste mete un plato completo. Sin esto no
           descuenta nada: los componentes de los combos llegan de Last como
           `modifier`, no como `combo_item`. Un clic, sin cantidad que teclear:
           es una unidad de ese plato. */}
-      {bundleHint && !o.impact && !editing && (
+      {bundleHint && sinNada && !editingKey && (
         <div className="flex gap-2 items-start mb-2 px-2.5 py-2 rounded-md border border-accent/30 bg-accent-bg">
           <Package className="w-3.5 h-3.5 text-accent mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
@@ -636,49 +656,93 @@ function OptionCard({
         </div>
       )}
 
-      {!editing ? (
+      {/* TODO lo que la opción lleva, una línea por cosa (07/09).
+          Antes aquí se pintaba UNA, porque el listado sólo traía una: si una
+          opción llevaba pan, carne y salsa, dos de las tres no existían para
+          quien miraba la pantalla. */}
+      {!editingKey && (
         <>
-          {/* Diff: qué le hace al plato (sin jerga) */}
-          <ImpactSummary impact={o.impact} catalog={catalog} />
+          {sinNada ? (
+            <ImpactSummary impact={null} catalog={catalog} />
+          ) : (
+            <div className="space-y-1.5">
+              {o.impacts.map((imp) => {
+                const r = porImpacto.get(imp.id) ?? null
+                const avisoLinea = avisoDeConfirmadoSinCoste(imp.status, r ?? { estado: 'no_aplica' })
+                return (
+                  <div key={imp.id} className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <ImpactSummary impact={imp} catalog={catalog} />
+                      {imp.status === 'proposed' && imp.rationale && (
+                        <div className="flex gap-2 items-start mt-1 px-2.5 py-1.5 rounded-md bg-accent-bg">
+                          <Sparkles className="w-3.5 h-3.5 text-terracota mt-0.5 shrink-0" />
+                          <p className="text-xs text-text-secondary leading-relaxed">{imp.rationale}</p>
+                        </div>
+                      )}
+                      {avisoLinea && (
+                        <p className="text-[11px] text-warning mt-0.5">{avisoLinea}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(imp.id)}
+                        disabled={busy}
+                        className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md border border-border-default text-text-primary hover:bg-accent-bg disabled:opacity-60 transition-base"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />Ajustar
+                      </button>
+                      {imp.status === 'proposed' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onReject(imp.id)}
+                            disabled={busy}
+                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-border-default text-text-secondary hover:text-danger disabled:opacity-60 transition-base"
+                          >
+                            <X className="w-3.5 h-3.5" />Descartar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onConfirm(imp.id)}
+                            disabled={busy}
+                            className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1 rounded-md bg-terracota text-white hover:bg-terracota-hover disabled:opacity-60 transition-base"
+                          >
+                            <CircleCheck className="w-3.5 h-3.5" />Confirmar
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
-          {/* Acciones */}
           <div className="flex items-center justify-end gap-2 mt-2">
             {busy && <Loader2 className="w-4 h-4 animate-spin text-text-secondary" />}
             <button
               type="button"
-              onClick={onEdit}
+              onClick={() => onEdit(null)}
               disabled={busy}
               className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md border border-border-default text-text-primary hover:bg-accent-bg disabled:opacity-60 transition-base"
             >
-              <Pencil className="w-3.5 h-3.5" />{o.impact ? 'Ajustar' : 'Definir'}
+              <Pencil className="w-3.5 h-3.5" />{sinNada ? 'Definir' : 'Añadir otra cosa'}
             </button>
-            {isProposed && (
-              <>
-                <button
-                  type="button"
-                  onClick={onReject}
-                  disabled={busy}
-                  className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border-default text-text-secondary hover:text-danger disabled:opacity-60 transition-base"
-                >
-                  <X className="w-3.5 h-3.5" />Descartar
-                </button>
-                <button
-                  type="button"
-                  onClick={onConfirm}
-                  disabled={busy}
-                  className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-md bg-terracota text-white hover:bg-terracota-hover disabled:opacity-60 transition-base"
-                >
-                  <CircleCheck className="w-3.5 h-3.5" />Confirmar
-                </button>
-              </>
-            )}
           </div>
         </>
-      ) : (
-        /* Modo Ajustar: definir el impacto a mano */
-        <ImpactEditor
-          draft={draft}
-          setDraft={setDraft}
+      )}
+
+      {(enEdicion || editandoNuevo) && (
+        /* Modo Ajustar: definir a mano UNA de las cosas que lleva.
+           La `key` es lo que hace que el formulario arranque de la cosa buena:
+           al cambiar de una a otra el componente se monta de nuevo con sus
+           valores. Con un `useEffect` que reiniciase el borrador, «Ajustar»
+           sobre la segunda abriría con los datos de la primera hasta el
+           siguiente render. */
+        <EditorDeUnaCosa
+          key={editingKey ?? 'nuevo'}
+          inicial={enEdicion}
           recipeItemId={recipeItemId}
           catalog={catalog}
           pickable={pickable}
@@ -687,7 +751,7 @@ function OptionCard({
           unitRacionId={unitRacionId}
           busy={busy}
           onCancel={onCancelEdit}
-          onSave={() => onSaveManual(draft)}
+          onSave={(draft) => onSaveManual(enEdicion?.id ?? null, draft)}
           onCreateIngredient={onCreateIngredient}
         />
       )}
@@ -718,10 +782,58 @@ function KindChip({ kind }: { kind: 'plato' | 'ingrediente' }) {
   )
 }
 
+/**
+ * El formulario de UNA de las cosas que lleva la opción.
+ *
+ * Existe para que el borrador viva aquí y no en la tarjeta: montado con `key`,
+ * arranca solo de lo que se está corrigiendo. Es la alternativa a reiniciar el
+ * borrador con un efecto, que además de ser un render de más se equivocaba en
+ * el primero.
+ */
+function EditorDeUnaCosa({
+  inicial, recipeItemId, catalog, pickable, groupName, units, unitRacionId,
+  busy, onCancel, onSave, onCreateIngredient,
+}: {
+  inicial: OptionWithImpact['impacts'][number] | null
+  recipeItemId: string
+  catalog: CatalogPick[]
+  pickable: CatalogPick[]
+  groupName: string
+  units: { id: string; label: string }[]
+  unitRacionId: string | null
+  busy: boolean
+  onCancel: () => void
+  onSave: (draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }) => void
+  onCreateIngredient: (name: string) => Promise<{ id: string; name: string } | null>
+}) {
+  const [draft, setDraft] = useState({
+    impactType: (inicial?.impactType ?? 'add_item') as ImpactType,
+    targetRecipeItemId: inicial?.targetRecipeItemId ?? null,
+    quantity: inicial?.quantity ?? null,
+    unitId: inicial?.unitId ?? null,
+  })
+  return (
+    <ImpactEditor
+      draft={draft}
+      setDraft={setDraft}
+      recipeItemId={recipeItemId}
+      catalog={catalog}
+      pickable={pickable}
+      groupName={groupName}
+      units={units}
+      unitRacionId={unitRacionId}
+      busy={busy}
+      onCancel={onCancel}
+      onSave={() => onSave(draft)}
+      onCreateIngredient={onCreateIngredient}
+    />
+  )
+}
+
 // Resumen legible del impacto (sin jerga técnica).
 function ImpactSummary({
   impact, catalog,
-}: { impact: OptionWithImpact['impact']; catalog: CatalogPick[] }) {
+}: { impact: OptionWithImpact['impacts'][number] | null; catalog: CatalogPick[] }) {
   if (!impact) {
     return <p className="text-xs text-text-secondary italic">Sin definir — el coste de esta opción aún no se calcula.</p>
   }

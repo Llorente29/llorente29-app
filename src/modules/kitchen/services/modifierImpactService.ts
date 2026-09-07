@@ -67,7 +67,14 @@ export interface OptionWithImpact {
   groupName: string
   minSelections: number
   maxSelections: number
-  impact: ModifierImpact | null   // null = sin definir; proposed/confirmed según status
+  /**
+   * TODO lo que lleva esta opción, no una de las cosas.
+   *
+   * Era `impact: ModifierImpact | null` y el listado se quedaba con uno por
+   * opción (ranking confirmed > proposed > rejected): los demás no llegaban a la
+   * pantalla y nadie lo decía. Vacío = sin definir.
+   */
+  impacts: ModifierImpact[]
 }
 
 /**
@@ -129,6 +136,13 @@ export interface ImpactCoverage {
 export interface UpsertImpactInput {
   accountId: string
   modifierOptionId: string
+  /**
+   * QUÉ impacto se está tocando. Con varios por opción, «el impacto de esta
+   * opción» dejó de señalar a uno solo (07/09): para CORREGIR uno hay que decir
+   * cuál. Sin `impactId` se CREA uno nuevo, que es lo que quiere «añadir otra
+   * cosa a lo que lleva».
+   */
+  impactId?: string | null
   impactType: ImpactType
   targetRecipeItemId?: string | null
   quantity?: number | null
@@ -158,6 +172,8 @@ interface RowImpact {
   rationale: string | null
   confirmed_by_name: string | null
   confirmed_at: string | null
+  /** Sólo para ordenar la lista de una opción por antigüedad. Llega en el `*`. */
+  created_at: string | null
 }
 
 function rowToImpact(row: RowImpact): ModifierImpact {
@@ -210,7 +226,7 @@ export async function listOptionsWithImpacts(
   }
 
   // Aplanar a opciones.
-  const options: Omit<OptionWithImpact, 'impact'>[] = []
+  const options: Omit<OptionWithImpact, 'impacts'>[] = []
   for (const r of rows ?? []) {
     const g = (r as any).modifier_group
     if (!g) continue
@@ -241,20 +257,34 @@ export async function listOptionsWithImpacts(
     throw new Error(`Error obteniendo impactos: ${impErr.message}`)
   }
 
-  // Por opción nos quedamos con un impacto: confirmed > proposed > rejected.
-  const rank: Record<string, number> = { confirmed: 3, proposed: 2, rejected: 1 }
-  const byOption = new Map<string, RowImpact>()
+  // TODOS los impactos de cada opción. Antes esto se quedaba con uno —el de
+  // mayor rango: confirmed > proposed > rejected— y los demás no llegaban a la
+  // pantalla. Una opción que lleva pan, carne y salsa enseñaba sólo una de las
+  // tres, sin una nota que lo dijera (regla 7).
+  //
+  // El `rejected` sí se filtra aquí, y eso NO es esconder: un impacto rechazado
+  // es una respuesta dada y descartada, no una parte de lo que la opción lleva.
+  const byOption = new Map<string, RowImpact[]>()
   for (const ir of (impactRows ?? []) as RowImpact[]) {
-    const prev = byOption.get(ir.modifier_option_id)
-    if (!prev || (rank[ir.status] ?? 0) > (rank[prev.status] ?? 0)) {
-      byOption.set(ir.modifier_option_id, ir)
-    }
+    if (ir.status === 'rejected') continue
+    const lista = byOption.get(ir.modifier_option_id) ?? []
+    lista.push(ir)
+    byOption.set(ir.modifier_option_id, lista)
   }
 
-  return options.map((o) => {
-    const ir = byOption.get(o.optionId)
-    return { ...o, impact: ir ? rowToImpact(ir) : null }
-  })
+  // Orden estable y con sentido para quien mira: primero lo que ya está dicho,
+  // después lo que está por revisar, y dentro de cada bloque por antigüedad.
+  const rank: Record<string, number> = { confirmed: 0, proposed: 1, rejected: 2 }
+  for (const lista of byOption.values()) {
+    lista.sort((a, b) =>
+      (rank[a.status] ?? 9) - (rank[b.status] ?? 9) ||
+      String(a.created_at).localeCompare(String(b.created_at)))
+  }
+
+  return options.map((o) => ({
+    ...o,
+    impacts: (byOption.get(o.optionId) ?? []).map(rowToImpact),
+  }))
 }
 
 /**
@@ -303,7 +333,13 @@ export async function listOptionsByRecipe(
 export async function getCoverage(menuItemId: string): Promise<ImpactCoverage> {
   const opts = await listOptionsWithImpacts(menuItemId)
   const total = opts.length
-  const confirmed = opts.filter((o) => o.impact?.status === 'confirmed').length
+  // Una opción cuenta como resuelta cuando TODO lo que lleva está dicho: si le
+  // queda una parte por revisar, no lo está. Con un impacto por opción esto era
+  // lo mismo; con varios, dar por buena la que tiene una parte a medias sería
+  // volver a contar como hecho lo que está a medias.
+  const confirmed = opts.filter((o) =>
+    o.impacts.length > 0 &&
+    o.impacts.every((i) => i.status === 'confirmed')).length
   const pending = total - confirmed
   return {
     total,
@@ -318,9 +354,11 @@ export async function getCoverage(menuItemId: string): Promise<ImpactCoverage> {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Crea o actualiza el impacto de una opción (upsert por modifier_option_id).
+ * Crea un impacto nuevo, o corrige uno concreto si se pasa `impactId`.
  * Sirve para "Ajustar" (humano define/corrige) y para que la IA escriba
- * propuestas (status='proposed', source='ai'). Un impacto por opción.
+ * propuestas (status='proposed', source='ai'). Una opción puede llevar VARIOS
+ * (07/09): «pan, carne y salsa» son tres. Un plato entero sigue siendo uno solo,
+ * `bundle`.
  *
  * Si status='confirmed', sella confirmed_at + confirmed_by_name (auditoría).
  * Tras escribir un confirmed, el llamador debe recomputar el coste de las
@@ -335,13 +373,14 @@ export async function upsertImpact(input: UpsertImpactInput): Promise<ModifierIm
       ? { confirmed_by_name: input.actorName ?? null, confirmed_at: nowIso }
       : {}
 
-  // ¿Existe ya un impacto para esta opción? (upsert manual por modifier_option_id)
-  const { data: existing, error: readErr } = await supabase!
-    .from('modifier_recipe_impact')
-    .select('id')
-    .eq('modifier_option_id', input.modifierOptionId)
-    .maybeSingle()
-  if (readErr) throw new Error(`Error buscando impacto: ${readErr.message}`)
+  // ANTES esto hacía `.maybeSingle()` filtrando por `modifier_option_id`, es
+  // decir: daba por hecho que una opción tiene como mucho un impacto. La base
+  // nunca lo garantizó —no hay índice único, sólo la primaria— y con dos filas
+  // `maybeSingle()` no elige: LANZA. Funcionaba porque el segundo no existía.
+  //
+  // Ahora quien corrige un impacto dice CUÁL, y quien no lo dice está añadiendo
+  // otra cosa a lo que la opción lleva.
+  const existing = input.impactId ? { id: input.impactId } : null
 
   if (existing) {
     const patch: RowImpactUpdate = {

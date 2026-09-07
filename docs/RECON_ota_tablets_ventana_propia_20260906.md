@@ -5,6 +5,27 @@ encargo `ENCARGO_CODE_ota_tablets_ventana_propia_20260906.md`.
 
 ---
 
+> ## ⚠ CORRECCIÓN (07/09, Julio) — leer antes que los §§7-9
+>
+> **Los §§7, 8 y 9 concluyen que Cocina se recargó a las 20:38 y Pase a las
+> 22:08, las dos en servicio y con `safe = false`. Esa conclusión NO se
+> sostiene, y este documento la desmonta él mismo unas páginas antes:
+> `app_version_at` marca el ARRANQUE de la aplicación, no el momento en que se
+> aplica un bundle por OTA.** Un arranque en servicio es un reinicio de la
+> tablet, del navegador o de la app — no prueba que la guarda dejara pasar una
+> actualización.
+>
+> Así que **no hubo dos recargas en servicio**, y esto **no se cita como
+> precedente** de que la guarda haya fallado. Yo mismo lo usé así el 07/09 al
+> justificar por qué no publicaba, y estaba mal.
+>
+> Lo que sigue en pie: publicar fuera de servicio es la política **hasta que
+> exista un registro de «aplicado»** distinto del arranque (§7.1 del encargo de
+> tablets). La cautela se sostiene porque hoy no se puede DEMOSTRAR cuándo se
+> aplica un bundle — no porque conste que la guarda falló.
+
+---
+
 ## 0 · La respuesta corta
 
 **La pieza 1 existe y, por el camino normal, FUNCIONA.** Hay tres puertas
