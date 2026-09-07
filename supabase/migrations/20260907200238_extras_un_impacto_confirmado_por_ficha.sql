@@ -1,14 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- PENDIENTE DE APLICAR · sección Extras · decisión de Julio del 07/09 (§6)
---
--- Este fichero NO está en `supabase/migrations/` a propósito. Va ahí, con la
--- versión EXACTA que registre la base, en el momento en que se aplique
--- (regla 17). Ponerle ahora un número inventado es lo que ya se hizo mal una
--- vez en esta sesión con la pieza C de B79.
---
--- SE APLICA FUERA DE LA BANDA 12:15–23:45, con las demás migraciones de la
--- sección.
--- ══════════════════════════════════════════════════════════════════════════
+-- Sección Extras · decisión de Julio del 07/09 (§6)
 --
 -- QUÉ IMPIDE: que una opción de modificador tenga DOS impactos confirmados
 -- sobre la misma ficha. Sumaría el coste dos veces, en silencio, y el sitio
@@ -39,9 +30,9 @@
 --
 -- SIN `begin;`/`commit;` EXPLÍCITOS, a propósito: `apply_migration` ya envuelve
 -- en transacción, y las ocho migraciones aplicadas hasta hoy tampoco los llevan
--- (comprobado en `schema_migrations`). Estrenar ese camino de madrugada y sin
--- nadie delante es la clase de sorpresa que no compensa. El DDL de Postgres es
--- transaccional: si el guarda aborta, no queda índice a medias.
+-- (comprobado en `schema_migrations`). Estrenar ese camino sin nadie delante es
+-- la clase de sorpresa que no compensa. El DDL de Postgres es transaccional: si
+-- el guarda aborta, no queda índice a medias.
 
 -- ── COMPROBACIÓN PREVIA ───────────────────────────────────────────────────
 -- Si algún par duplicado hubiera nacido entre la medición y la aplicación, se
@@ -119,7 +110,7 @@ $guarda$;
 --   filas «misma opción + sin destino + confirmed» ENTRAN. Con él, la segunda
 --   se rechaza.
 --
--- Las tres guardas de abajo se probaron contra la salida real de
+-- Las tres guardas de arriba se probaron contra la salida real de
 -- `pg_get_indexdef`, que imprime `WHERE (status = 'confirmed'::text)`: las tres
 -- casan. Un guarda que rechaza un objeto correcto ya costó una migración
 -- abortada el 06/09.

@@ -1,7 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- PENDIENTE DE APLICAR · sección Extras · maqueta aprobada (§8)
--- Va a `supabase/migrations/` con la versión que registre la base al aplicarla
--- (regla 17). Fuera de la banda 12:15–23:45.
+-- Sección Extras · maqueta aprobada (§8)
 -- ══════════════════════════════════════════════════════════════════════════
 --
 -- UNA FILA POR NOMBRE, no por copia. Es lo que hace que ponerle coste a «Salsa

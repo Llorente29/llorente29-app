@@ -1,6 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- PENDIENTE DE APLICAR · sección Extras · el flujo «Decir qué lleva»
--- Va a `supabase/migrations/` con la versión que registre la base (regla 17).
+-- Sección Extras · el flujo «Decir qué lleva»
 -- ══════════════════════════════════════════════════════════════════════════
 --
 -- ESCRIBIR EN N COPIAS ES UNA SOLA TRANSACCIÓN (regla 13). Y no es formalismo:
