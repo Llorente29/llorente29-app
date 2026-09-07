@@ -4,60 +4,88 @@
  * Condición de Julio al aprobar la maqueta, textual: «mantener ese diseño
  * limpio y pro, no el seco y para informáticos que hay ahora».
  *
- * ESCOPADO A `.cocina-2`, NO A `:root`, y eso NO es prudencia decorativa:
- * los colores del resto de la app son hexes fijos en `tailwind.config.js`, no
- * variables. Redefinir variables globales no cambiaría `bg-card` ni
- * `text-text-primary` —no las leen— y cambiar los hexes cambiaría la app
- * ENTERA: Supply, APPCC, Almacén, el portal del trabajador. El §9.2 dice otra
- * cosa: Extras nace con el estándar nuevo y Resumen, Rentabilidad e Ingeniería
- * pasan **en el lote siguiente, con captura al lado**. Así que el tema nuevo
- * viaja en una clase que se pone donde toca, y migrar una pantalla es
- * envolverla y hacerle su captura.
+ * FUENTE: `build.py::CSS` de la maqueta aprobada, entregado el 07/09
+ * (`maqueta_kitchen_dc.zip`). Los valores están COPIADOS, no adaptados, que es
+ * lo que manda el §9.1. Los nombres se conservan tal cual salen de la maqueta
+ * —ground, ink, muted, up/down/flag— para que comparar los dos ficheros sea
+ * leer la misma palabra en los dos sitios.
  *
- * Mismo método que el TPV (`tpvTokens.css`), que ya lleva meses en producción.
+ * PRIMERO LOS DERIVÉ DE MIRAR LAS CAPTURAS, Y LOS OCHO ESTABAN MAL. Los seis
+ * hexes que el encargo escribía a mano acertaban; los ocho que deduje —líneas,
+ * grises intermedios, fondos de pastilla— fallaban todos, y dos de largo:
+ * `--ink-2` lo puse en #5A6A75 cuando es #3D4C57, y `--muted` en #8B979F
+ * cuando es #65767F. Un texto secundario dos tonos más claro de la cuenta no
+ * da un error: da una pantalla que se lee peor y nadie sabe por qué. Por eso
+ * iban marcados como derivados y por eso se pidió el fichero.
  *
- * FUENTE. Los valores con el hex escrito en el §9.1 se copian tal cual y van
- * marcados «§9.1». Los DERIVADOS —grises intermedios, fondos de pastilla,
- * líneas— no estaban en el encargo y no tengo los `.dc.html` de la maqueta:
- * salen de leer las dos capturas. Van marcados «derivado» para que la
- * comparación a 1280 del §9.3 empiece por ellos, que es donde puede haber
- * diferencia.
+ * ESCOPADO A `.cocina-2`, NO A `:root`: los colores del resto de la app son
+ * hexes LITERALES en `tailwind.config.js`, no variables. Redefinir variables
+ * globales no cambiaría `bg-card` —nadie las lee— y cambiar los hexes
+ * cambiaría Supply, APPCC, Almacén y el portal del trabajador de paso. El
+ * §9.2 dice otra cosa: Extras nace con el estándar y las tres pantallas de B79
+ * pasan EN EL LOTE SIGUIENTE, con captura al lado. Migrar una pantalla es
+ * envolverla en esta clase y hacerle su captura.
+ *
+ * Mismo método que `tpvTokens.css`, en producción desde agosto.
  */
 .cocina-2 {
   /* ── Superficies ────────────────────────────────────────────────── */
-  --cocina-fondo:        #EAEEF1;   /* §9.1 */
-  --cocina-superficie:   #FFFFFF;   /* §9.1 */
-  --cocina-carril:       #101A21;   /* §9.1 · el carril oscuro */
+  --cocina-fondo:        #EAEEF1;   /* --ground     */
+  --cocina-superficie:   #FFFFFF;   /* --surface    */
+  --cocina-superficie-2: #F4F7F9;   /* --surface-2  · cabeceras de tabla */
+  --cocina-linea:        #D3DCE2;   /* --line       */
+  --cocina-linea-suave:  #E4EAEE;   /* --line-soft  · separador entre filas */
 
   /* ── Tinta ──────────────────────────────────────────────────────── */
-  --cocina-tinta:        #101A21;   /* §9.1 */
-  --cocina-tinta-2:      #5A6A75;   /* derivado · texto secundario */
-  --cocina-tinta-3:      #8B979F;   /* derivado · metadatos bajo el nombre */
+  --cocina-tinta:        #101A21;   /* --ink        · y el carril */
+  --cocina-tinta-2:      #3D4C57;   /* --ink-2      · motivo, línea de regla */
+  --cocina-tinta-3:      #65767F;   /* --muted      · metadatos, cabeceras */
 
-  /* ── Acento y semánticos ────────────────────────────────────────── */
-  --cocina-acento:       #0E5A5E;   /* §9.1 */
-  --cocina-acento-hover: #0A4649;   /* derivado */
-  --cocina-verde:        #2C6A4E;   /* §9.1 */
-  --cocina-rojo:         #9C3A2A;   /* §9.1 */
-  --cocina-ambar:        #7E5A0E;   /* §9.1 */
+  /* ── Acento ─────────────────────────────────────────────────────── */
+  --cocina-acento:       #0E5A5E;   /* --accent      */
+  --cocina-acento-bg:    #D8EAEA;   /* --accent-soft */
+  --cocina-acento-ink:   #0A4245;   /* --accent-ink  · texto sobre el suave */
 
-  /* Fondos de pastilla: el mismo tono muy lavado, para que la pastilla se lea
-     sin gritar. Derivados de los tres de arriba. */
-  --cocina-verde-bg:     #E6EFE9;   /* derivado */
-  --cocina-rojo-bg:      #F5E7E4;   /* derivado */
-  --cocina-ambar-bg:     #F5EEDD;   /* derivado */
-  --cocina-acento-bg:    #E4EDED;   /* derivado */
+  /* ── Los tres del margen ────────────────────────────────────────── */
+  --cocina-verde:        #2C6A4E;   /* --up          */
+  --cocina-verde-bg:     #DCEDE2;   /* --up-soft     */
+  --cocina-rojo:         #9C3A2A;   /* --down        */
+  --cocina-rojo-bg:      #F5DFDA;   /* --down-soft   */
+  --cocina-ambar:        #7E5A0E;   /* --flag        */
+  --cocina-ambar-bg:     #F6EBCF;   /* --flag-soft   */
 
-  /* ── Líneas ─────────────────────────────────────────────────────── */
-  --cocina-linea:        #D8DEE3;   /* derivado */
-  --cocina-linea-suave:  #E6EAEE;   /* derivado */
+  /* ── Carril ─────────────────────────────────────────────────────── */
+  --cocina-carril-texto: #B3C3CB;
+  --cocina-carril-activo:#1B262C;
+  --cocina-carril-marca: #59B6BA;
 
-  /* ── Radios ─────────────────────────────────────────────────────── */
-  /* §9.1: «radios (2-3 px)». La app de hoy usa 6/8/10/14: es el cambio que
-     más se nota de un vistazo y el que más «seco» quitaba. */
-  --cocina-radio:        2px;       /* §9.1 */
-  --cocina-radio-md:     3px;       /* §9.1 */
+  /* ── Radios: 2 px lo pequeño, 3 px los paneles ──────────────────── */
+  --cocina-radio:        2px;
+  --cocina-radio-md:     3px;
 
-  /* ── Altura de los botones ──────────────────────────────────────── */
-  --cocina-boton:        34px;      /* §9.1 */
+  /* La sombra de la maqueta, con su segundo halo negativo: es lo que despega
+     el panel del fondo sin que se note el borde. */
+  --cocina-sombra: 0 1px 2px rgba(16,26,33,.06), 0 8px 24px -16px rgba(16,26,33,.28);
+
+  /* Tipografía. La maqueta usa Archivo e IBM Plex Mono; la app va con Space
+     Grotesk / Inter / JetBrains Mono. Se cargan en index.html junto a las
+     otras: dentro de `.cocina-2` manda ésta, fuera no cambia nada. */
+  --cocina-fuente: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --cocina-mono:   'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+
+/* El cuerpo de la sección: 14 px y 1.45 de interlínea, como la maqueta. */
+.cocina-2 {
+  font-family: var(--cocina-fuente);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--cocina-tinta);
+  background: var(--cocina-fondo);
+}
+
+/* Los números, siempre tabulares: los céntimos alineados son seña de la casa y
+   una columna de importes que baila se lee peor. */
+.cocina-2 .num {
+  font-family: var(--cocina-mono);
+  font-variant-numeric: tabular-nums;
 }

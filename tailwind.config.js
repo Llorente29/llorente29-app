@@ -102,12 +102,16 @@ export default {
         // trabajador de paso.
         'cocina-fondo': 'var(--cocina-fondo)',
         'cocina-superficie': 'var(--cocina-superficie)',
+        'cocina-superficie-2': 'var(--cocina-superficie-2)',
+        'cocina-acento-ink': 'var(--cocina-acento-ink)',
+        'cocina-carril-texto': 'var(--cocina-carril-texto)',
+        'cocina-carril-activo': 'var(--cocina-carril-activo)',
+        'cocina-carril-marca': 'var(--cocina-carril-marca)',
         'cocina-carril': 'var(--cocina-carril)',
         'cocina-tinta': 'var(--cocina-tinta)',
         'cocina-tinta-2': 'var(--cocina-tinta-2)',
         'cocina-tinta-3': 'var(--cocina-tinta-3)',
         'cocina-acento': 'var(--cocina-acento)',
-        'cocina-acento-hover': 'var(--cocina-acento-hover)',
         'cocina-acento-bg': 'var(--cocina-acento-bg)',
         'cocina-verde': 'var(--cocina-verde)',
         'cocina-verde-bg': 'var(--cocina-verde-bg)',
@@ -151,6 +155,8 @@ export default {
         'sm': '0 1px 2px rgba(21, 23, 26, 0.04)',
         'md': '0 2px 8px rgba(21, 23, 26, 0.06)',
         'lg': '0 8px 24px rgba(21, 23, 26, 0.08)',
+        // Cocina (§9.1): la de la maqueta, con su halo negativo.
+        'cocina': 'var(--cocina-sombra)',
       },
       transitionDuration: {
         'fast': '120ms',
