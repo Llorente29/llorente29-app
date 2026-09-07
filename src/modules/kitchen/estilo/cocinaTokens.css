@@ -18,7 +18,7 @@
  * da un error: da una pantalla que se lee peor y nadie sabe por qué. Por eso
  * iban marcados como derivados y por eso se pidió el fichero.
  *
- * ESCOPADO A `.cocina-2`, NO A `:root`: los colores del resto de la app son
+ * ESCOPADO A `.cocina`, NO A `:root`: los colores del resto de la app son
  * hexes LITERALES en `tailwind.config.js`, no variables. Redefinir variables
  * globales no cambiaría `bg-card` —nadie las lee— y cambiar los hexes
  * cambiaría Supply, APPCC, Almacén y el portal del trabajador de paso. El
@@ -28,7 +28,7 @@
  *
  * Mismo método que `tpvTokens.css`, en producción desde agosto.
  */
-.cocina-2 {
+.cocina {
   /* ── Superficies ────────────────────────────────────────────────── */
   --cocina-fondo:        #EAEEF1;   /* --ground     */
   --cocina-superficie:   #FFFFFF;   /* --surface    */
@@ -69,13 +69,13 @@
 
   /* Tipografía. La maqueta usa Archivo e IBM Plex Mono; la app va con Space
      Grotesk / Inter / JetBrains Mono. Se cargan en index.html junto a las
-     otras: dentro de `.cocina-2` manda ésta, fuera no cambia nada. */
+     otras: dentro de `.cocina` manda ésta, fuera no cambia nada. */
   --cocina-fuente: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --cocina-mono:   'IBM Plex Mono', ui-monospace, Menlo, monospace;
 }
 
 /* El cuerpo de la sección: 14 px y 1.45 de interlínea, como la maqueta. */
-.cocina-2 {
+.cocina {
   font-family: var(--cocina-fuente);
   font-size: 14px;
   line-height: 1.45;
@@ -85,7 +85,7 @@
 
 /* Los números, siempre tabulares: los céntimos alineados son seña de la casa y
    una columna de importes que baila se lee peor. */
-.cocina-2 .num {
+.cocina .num {
   font-family: var(--cocina-mono);
   font-variant-numeric: tabular-nums;
 }

@@ -19,7 +19,7 @@ import { fmtInt } from '@/lib/format'
 
 /** Las rutas del módulo Kitchen que existen HOY, relativas a `/kitchen/`. */
 export const RUTAS_DE_KITCHEN = [
-  '', 'resumen', 'menu', 'casado', 'disponibilidad', 'disponibilidad-informes',
+  '', 'resumen', 'menu', 'casado', 'extras', 'disponibilidad', 'disponibilidad-informes',
   'proveedores', 'recetas', 'precios', 'rentabilidad', 'ingenieria-menus',
   'ofertas', 'ofertas-reglas', 'ofertas-clasico', 'ajustes',
 ] as const

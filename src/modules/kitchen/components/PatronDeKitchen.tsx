@@ -68,7 +68,7 @@ export function Cifra({
 // `Cifra` de arriba se borran y estas se quedan solas.
 //
 // Todo esto pinta con los tokens de `cocinaTokens.css`, que sólo existen
-// dentro de `.cocina-2`. Fuera de esa clase sale sin color: es a propósito —
+// dentro de `.cocina`. Fuera de esa clase sale sin color: es a propósito —
 // obliga a envolver la pantalla, que es lo que hace la migración explícita en
 // vez de silenciosa.
 
