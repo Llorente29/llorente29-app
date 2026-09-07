@@ -36,7 +36,12 @@ import { getMenuItemUnitsSold } from '@/modules/kitchen/services/menuEngineering
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 // B79 lote 4: la cifra y el campo salen de aquí, iguales letra a letra que
 // cuando vivían en este fichero. Lo fija `patronDeKitchen.test.tsx`.
-import { Campo, Cifra } from '@/modules/kitchen/components/PatronDeKitchen'
+import {
+  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  BotonCocina, ChipCocina, InterruptorCocina, PanelCocina, PastillaCocina,
+} from '@/modules/kitchen/components/PatronDeKitchen'
+import { eurDeCocina } from '@/modules/kitchen/lib/lasCosasQueArreglar'
+import { useApp } from '@/context/AppContext'
 import {
   calculaFila, cifrasDeRentabilidad, elMargenEsDeLaCasa, etiquetasDeFila,
   MARGEN_DE_MARCA_CEDIDA, motivoSinCoste,
@@ -55,13 +60,21 @@ type Orden = 'margen' | 'vendido' | 'coste'
 // Los formateadores del proyecto, que ya son null-safe: un coste ausente sale
 // «—», nunca 0 (regla del módulo, y la lección de meez).
 const eur = (v: number | null | undefined) => fmtMoney(v)
-/** Para «Margen que han dejado» y «al mes»: euros sin céntimos. */
-const eurRedondo = (v: number | null | undefined) =>
-  v == null ? '—' : `${Math.round(v).toLocaleString('es-ES')} €`
 const pct = (v: number | null | undefined) => fmtPct(v, 1)
+
+/** La carta: plato · precio · coste · margen · coste sobre precio · vendidos. */
+const REJILLA_CARTA = 'minmax(0,1fr) 105px 80px 95px 110px 75px auto'
+/** Los que no tienen coste: sin margen ni porcentaje, con su motivo y su botón. */
+const REJILLA_SIN_COSTE = 'minmax(0,1fr) 120px 110px 90px auto'
+
+/** El número sin el símbolo: `CifraCocina` lo pone aparte, en pequeño. */
+const eurSinSimbolo = (v: number | null | undefined) =>
+  v == null ? '—' : v.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function KitchenProfitabilityPage() {
   const { activeAccountId } = useActiveAccount()
+  const { activeAccount } = useApp()
+  const nombreDeLaCuenta = activeAccount?.name ?? null
   const navigate = useNavigate()
 
   const [brands, setBrands] = useState<Brand[]>([])
@@ -177,138 +190,156 @@ export default function KitchenProfitabilityPage() {
   const desde = new Date(hasta.getTime() - dias * 24 * 3600 * 1000)
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      {/* 1 · LA PREGUNTA, y debajo una sola línea con la regla y las fechas. */}
-      <header>
-        <h1 className="text-2xl font-semibold text-text-primary">¿Qué platos te dejan más margen?</h1>
-        <p className="mt-1.5 text-sm text-text-secondary max-w-4xl">
-          Margen = precio de carta sin IVA − coste del plato (ingredientes y envase) ·
-          vendido {intervaloDeFechas(desde, hasta, { minuscula: true }) ?? 'en el periodo elegido'}.{' '}
-          {/* Lo provisional va AQUÍ, en la misma línea, no en una caja amarilla. */}
-          <span className="text-text-tertiary">
-            {margenPropio
-              ? 'El margen después de la comisión de Glovo, Uber o Just Eat llega cuando el catálogo tenga canal.'
-              : MARGEN_DE_MARCA_CEDIDA}
-          </span>
-        </p>
-      </header>
+    // B83 · al estándar de la maqueta (§9.2 de Extras). Tablero:
+    // `Rentabilidad.dc.html`. Cambia cómo se ve, no qué dice.
+    //
+    // SIN SELECTOR DE LOCAL, y no por olvido: `menu_item_economics(p_brand_id,
+    // p_service_type)` y `menu_item_units_sold(p_brand_id, p_from, p_to)` no
+    // aceptan local — medido en la base. Un selector que no filtra es peor que
+    // su ausencia, y filtrarlo en el navegador sería inventar el dato. Queda
+    // como diferencia con el tablero hasta que las dos consultas lo acepten.
+    <div className="cocina min-h-full">
+      <div className="cocina-pagina">
 
-      <div className="flex flex-wrap items-end gap-3">
-        <Campo label="Marca">
-          <select
-            value={brandId ?? ''}
-            onChange={(e) => { setBrandId(e.target.value); guardaMarcaRecordada(e.target.value) }}
-            className="px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary"
-          >
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}{b.ownershipType === 'licensed' ? ' · de terceros' : ''}
-              </option>
+        <CabeceraCocina
+          migaja={`Folvy Kitchen${nombreDeLaCuenta ? ` · ${nombreDeLaCuenta}` : ''}`}
+          pregunta="¿Qué platos te dejan más margen?"
+          regla={
+            <>
+              Margen = precio de carta sin IVA − coste del plato (ingredientes y envase) ·{' '}
+              <em className="not-italic text-cocina-tinta-3">
+                vendido {intervaloDeFechas(desde, hasta, { minuscula: true }) ?? 'en el periodo elegido'}
+              </em>.{' '}
+              {/* Lo provisional va AQUÍ, en la misma línea, no en una caja. */}
+              <span className="text-cocina-tinta-3">
+                {margenPropio
+                  ? 'El margen después de la comisión de Glovo, Uber o Just Eat llega cuando el catálogo tenga canal.'
+                  : MARGEN_DE_MARCA_CEDIDA}
+              </span>
+            </>
+          }
+        >
+          <CampoCocina label="Marca">
+            <select
+              value={brandId ?? ''}
+              onChange={(e) => { setBrandId(e.target.value); guardaMarcaRecordada(e.target.value) }}
+              className="text-[13px] font-medium text-cocina-tinta"
+            >
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}{b.ownershipType === 'licensed' ? ' · de terceros' : ''}
+                </option>
+              ))}
+            </select>
+          </CampoCocina>
+          <CampoCocina label="Periodo">
+            <select
+              value={String(dias)}
+              onChange={(e) => { const d = Number(e.target.value) as Dias; setDias(d); guardaPeriodoRecordado('rentabilidad', d) }}
+              className="text-[13px] font-medium text-cocina-tinta"
+            >
+              <option value="30">Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="365">Último año</option>
+            </select>
+          </CampoCocina>
+        </CabeceraCocina>
+
+        {/* 2 · CINCO CIFRAS con nombre de persona. Ni una más. */}
+        <CifrasCocina>
+          <CifraCocina titulo="Platos en carta" valor={String(cifras.platosEnCarta)}
+            pie={`${cifras.conCoste} con coste · ${cifras.sinCoste} sin coste`} />
+          <CifraCocina titulo="Margen por unidad vendida" valor={eurSinSimbolo(cifras.margenPorUnidadVendida)} sufijo="€"
+            pie="media de todo lo vendido con coste, bebidas incluidas" />
+          <CifraCocina titulo="Margen que han dejado" valor={eurDeCocina(cifras.margenDelPeriodo)} tono="bueno"
+            pie={`en ${dias} días · ${eurDeCocina(cifras.margenPorMes)} al mes · sumado plato a plato con el coste exacto`} />
+          <CifraCocina titulo="Mejor plato" valor={eurSinSimbolo(cifras.mejorPlato?.margen)} sufijo="€"
+            pie={cifras.mejorPlato ? `${cifras.mejorPlato.nombre} · ${pct(cifras.mejorPlato.costeSobrePrecio)} de coste` : '—'} />
+          <CifraCocina titulo="Vendidos sin saber el coste" valor={String(cifras.udsSinCoste)}
+            pie={`de ${cifras.udsTotales} · son los ${cifras.sinCoste} platos sin coste`}
+            tono={cifras.udsSinCoste > 0 ? 'malo' : undefined} />
+        </CifrasCocina>
+
+        {/* 3 · EL FILTRO ES LA ACCIÓN. Aquí la pregunta es el ranking, así que
+               el orden manda y «sólo los que no tienen coste» nace apagado. */}
+        <div className="flex justify-between items-center gap-3 mt-1 flex-wrap">
+          <div className="flex gap-1.5">
+            {([['margen', 'Por margen'], ['vendido', 'Por lo vendido'], ['coste', 'Por coste']] as const).map(([v, t]) => (
+              <ChipCocina key={v} activo={orden === v} onClick={() => setOrden(v)}>{t}</ChipCocina>
             ))}
-          </select>
-        </Campo>
-        <Campo label="Periodo">
-          <select
-            value={String(dias)}
-            onChange={(e) => { const d = Number(e.target.value) as Dias; setDias(d); guardaPeriodoRecordado('rentabilidad', d) }}
-            className="px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary"
-          >
-            <option value="30">Últimos 30 días</option>
-            <option value="90">Últimos 90 días</option>
-            <option value="365">Último año</option>
-          </select>
-        </Campo>
-      </div>
+          </div>
+          <InterruptorCocina activo={soloSinCoste} onChange={setSoloSinCoste}>
+            Sólo los que no tienen coste
+          </InterruptorCocina>
+        </div>
 
-      {/* 2 · CINCO CIFRAS con nombre de persona. Ni una más. */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-        <Cifra titulo="Platos en carta" valor={String(cifras.platosEnCarta)}
-          pie={`${cifras.conCoste} con coste · ${cifras.sinCoste} sin coste`} />
-        <Cifra titulo="Margen por unidad vendida" valor={eur(cifras.margenPorUnidadVendida)}
-          pie="media de todo lo vendido con coste, bebidas incluidas" />
-        <Cifra titulo="Margen que han dejado" valor={eurRedondo(cifras.margenDelPeriodo)}
-          pie={`en ${dias} días · ${eurRedondo(cifras.margenPorMes)} al mes · sumado plato a plato con el coste exacto`} />
-        <Cifra titulo="Mejor plato" valor={eur(cifras.mejorPlato?.margen)}
-          pie={cifras.mejorPlato ? `${cifras.mejorPlato.nombre} · ${pct(cifras.mejorPlato.costeSobrePrecio)} de coste` : '—'} />
-        <Cifra titulo="Vendidos sin saber el coste" valor={String(cifras.udsSinCoste)}
-          pie={`de ${cifras.udsTotales} · son los ${cifras.sinCoste} platos sin coste`}
-          alerta={cifras.udsSinCoste > 0} />
-      </div>
+        {cargando || error || filas.length === 0 ? (
+          <EstadoDeLaConsulta
+            cargando={cargando}
+            textoCargando="Cruzando la carta con lo vendido…"
+            error={error}
+            queSePregunto={marca ? `la rentabilidad de ${marca.name}` : 'la rentabilidad'}
+            matiz={marca
+              ? 'Si la marca tiene productos en su carta, es que ninguno ha llegado hasta aquí: revisa que tengan escandallo.'
+              : 'Elige una marca arriba.'}
+          />
+        ) : (
+          <>
+            {/* 4 · LAS FILAS. */}
+            {!soloSinCoste && conCoste.length > 0 && (
+              <Tabla filas={conCoste} recetaPorItem={recetaPorItem} abrir={abrirFicha} margenPropio={margenPropio} />
+            )}
 
-      {/* 3 · EL FILTRO ES LA ACCIÓN. Aquí la pregunta es el ranking, así que el
-             orden manda y «sólo los que no tienen coste» nace apagado. */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        {([['margen', 'Por margen'], ['vendido', 'Por lo vendido'], ['coste', 'Por coste']] as const).map(([v, t]) => (
-          <button key={v} type="button" onClick={() => setOrden(v)}
-            className={`px-3 py-1.5 rounded-md border transition-base ${
-              orden === v ? 'border-accent bg-accent text-white' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-            {t}
-          </button>
-        ))}
-        <label className="inline-flex items-center gap-1.5 ml-2 text-text-secondary cursor-pointer">
-          <input type="checkbox" checked={soloSinCoste} onChange={(e) => setSoloSinCoste(e.target.checked)} />
-          Sólo los que no tienen coste
-        </label>
-      </div>
-
-      {cargando || error || filas.length === 0 ? (
-        <EstadoDeLaConsulta
-          cargando={cargando}
-          textoCargando="Cruzando la carta con lo vendido…"
-          error={error}
-          queSePregunto={marca ? `la rentabilidad de ${marca.name}` : 'la rentabilidad'}
-          matiz={marca
-            ? 'Si la marca tiene productos en su carta, es que ninguno ha llegado hasta aquí: revisa que tengan escandallo.'
-            : 'Elige una marca arriba.'}
-        />
-      ) : (
-        <>
-          {/* 4 · LAS FILAS. */}
-          {!soloSinCoste && conCoste.length > 0 && (
-            <Tabla filas={conCoste} recetaPorItem={recetaPorItem} abrir={abrirFicha} margenPropio={margenPropio} />
-          )}
-
-          {sinCoste.length > 0 && (
-            <section className="space-y-2">
-              <h2 className="text-sm font-medium text-text-primary">
-                Sin coste · {sinCoste.length}
-                <span className="ml-2 font-normal text-text-secondary">
-                  se han vendido {cifras.udsSinCoste} veces en {dias} días sin saber lo que cuestan
-                </span>
-              </h2>
-              {sinCoste.map((f) => {
-                const m = motivoSinCoste(f.tipo)
-                return (
-                  <div key={f.id} className="bg-card border border-border-default rounded-lg p-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm text-text-primary">{f.nombre}</div>
-                      <div className="text-xs text-text-secondary">{m.motivo}</div>
+            {sinCoste.length > 0 && (
+              <PanelCocina>
+                <div className="flex items-baseline justify-between gap-3 px-4 py-2.5 border-b border-cocina-linea-suave bg-cocina-superficie-2">
+                  <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-3">
+                    Sin coste · {sinCoste.length}
+                  </span>
+                  <span className="text-[11.5px] text-cocina-tinta-3">
+                    se han vendido {cifras.udsSinCoste} veces en {dias} días sin saber lo que cuestan
+                  </span>
+                </div>
+                {sinCoste.map((f) => {
+                  const m = motivoSinCoste(f.tipo)
+                  return (
+                    <div key={f.id}
+                      className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[50px]"
+                      style={{ gridTemplateColumns: REJILLA_SIN_COSTE }}>
+                      <div className="min-w-0">
+                        <div className="text-[13.5px] font-semibold text-cocina-tinta truncate">{f.nombre}</div>
+                        <div className="text-[11.5px] text-cocina-tinta-3 mt-0.5">{m.motivo}</div>
+                      </div>
+                      <span className="num text-[13px] text-right text-cocina-tinta whitespace-nowrap">
+                        {eur(f.precio)}
+                        <span className="block text-[11px] text-cocina-tinta-3">{eurSinSimbolo(f.precioNeto)} sin IVA</span>
+                      </span>
+                      <span className="text-right">
+                        <PastillaCocina tono="ambar">sin coste</PastillaCocina>
+                      </span>
+                      <span className="num text-[13px] text-right text-cocina-tinta">{f.uds}</span>
+                      <span className="text-right">
+                        <BotonCocina peso="borde"
+                          onClick={() => abrirFicha(recetaPorItem.get(f.id) ?? null, f.id, m.destino)}>
+                          {m.boton}
+                        </BotonCocina>
+                      </span>
                     </div>
-                    <div className="text-sm text-text-secondary font-mono">
-                      {eur(f.precio)} <span className="text-xs">· {eur(f.precioNeto)} sin IVA</span>
-                    </div>
-                    <div className="text-sm text-warning">— sin coste</div>
-                    <div className="text-sm text-text-secondary font-mono w-16 text-right">{f.uds}</div>
-                    <button type="button"
-                      onClick={() => abrirFicha(recetaPorItem.get(f.id) ?? null, f.id, m.destino)}
-                      className="text-xs font-medium px-3 py-1.5 rounded-md border border-border-default text-terracota hover:bg-terracota-bg transition-base">
-                      {m.boton}
-                    </button>
-                  </div>
-                )
-              })}
-            </section>
-          )}
+                  )
+                })}
+              </PanelCocina>
+            )}
 
-          {/* 5 · NADA MÁS. Sólo la vara con la que se ha medido. */}
-          <p className="text-xs text-text-secondary">
-            Precios y costes son los de hoy; lo vendido, lo que dice el TPV en el periodo.
-            {marca && (marca.ownershipType === 'licensed'
-              ? ` ${marca.name} es de terceros: su carta la manda el TPV.`
-              : ` ${marca.name} es tuya: el margen es tuyo entero.`)}
-          </p>
-        </>
-      )}
+            {/* 5 · NADA MÁS. Sólo la vara con la que se ha medido. */}
+            <p className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
+              Precios y costes son los de hoy; lo vendido, lo que dice el TPV en el periodo.
+              {marca && (marca.ownershipType === 'licensed'
+                ? ` ${marca.name} es de terceros: su carta la manda el TPV.`
+                : ` ${marca.name} es tuya: el margen es tuyo entero.`)}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -323,54 +354,51 @@ function Tabla({
   margenPropio: boolean
 }) {
   return (
-    <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-[11px] uppercase tracking-wide text-text-secondary border-b border-border-default">
-            <th className="px-3 py-2 font-medium">Plato</th>
-            <th className="px-3 py-2 font-medium text-right">Precio de carta</th>
-            <th className="px-3 py-2 font-medium text-right">Coste</th>
-            <th className="px-3 py-2 font-medium text-right">Margen</th>
-            <th className="px-3 py-2 font-medium text-right">Coste sobre precio sin IVA</th>
-            <th className="px-3 py-2 font-medium text-right">Vendidos</th>
-            <th className="px-3 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {filas.map((f) => {
-            const etiquetas = etiquetasDeFila(f)
-            return (
-              <tr key={f.id} className="border-b border-border-default last:border-0 hover:bg-page">
-                <td className="px-3 py-2 text-text-primary">
-                  {f.nombre}
-                  {etiquetas.map((e) => (
-                    <span key={e} className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-warning-bg text-warning">{e}</span>
-                  ))}
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap">
-                  {eur(f.precio)}
-                  <span className="block text-[11px] text-text-secondary">{eur(f.precioNeto)} sin IVA</span>
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-text-secondary">{eur(f.coste)}</td>
-                <td className="px-3 py-2 text-right font-mono text-text-primary">
-                  {margenPropio ? eur(f.margen) : '—'}
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-text-secondary">
-                  {margenPropio ? pct(f.costeSobrePrecio) : '—'}
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-text-secondary">{f.uds}</td>
-                <td className="px-3 py-2 text-right">
-                  <button type="button"
-                    onClick={() => abrir(recetaPorItem.get(f.id) ?? null, f.id, 'escandallo')}
-                    className="text-xs px-2.5 py-1 rounded-md border border-border-default text-text-secondary hover:bg-page transition-base">
-                    Abrir
-                  </button>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <PanelCocina>
+      <div
+        className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
+        style={{ gridTemplateColumns: REJILLA_CARTA }}
+      >
+        <span>Plato</span>
+        <span className="text-right">Precio de carta</span>
+        <span className="text-right">Coste</span>
+        <span className="text-right">Margen</span>
+        <span className="text-right">Coste sobre precio sin IVA</span>
+        <span className="text-right">Vendidos</span>
+        <span />
+      </div>
+      {filas.map((f) => {
+        const etiquetas = etiquetasDeFila(f)
+        return (
+          <div key={f.id}
+            className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[50px]"
+            style={{ gridTemplateColumns: REJILLA_CARTA }}>
+            <div className="min-w-0 flex items-center gap-1.5">
+              <span className="text-[13.5px] font-semibold text-cocina-tinta truncate">{f.nombre}</span>
+              {etiquetas.map((e) => <PastillaCocina key={e} tono="ambar">{e}</PastillaCocina>)}
+            </div>
+            <span className="num text-[13px] text-right text-cocina-tinta whitespace-nowrap">
+              {eur(f.precio)}
+              <span className="block text-[11px] text-cocina-tinta-3">{eurSinSimbolo(f.precioNeto)} sin IVA</span>
+            </span>
+            <span className="num text-[13px] text-right text-cocina-tinta">{eur(f.coste)}</span>
+            {/* El margen es el número de la pregunta: en tinta y en negrita. */}
+            <span className="num text-[13px] text-right font-semibold text-cocina-tinta">
+              {margenPropio ? eur(f.margen) : '—'}
+            </span>
+            <span className="num text-[13px] text-right text-cocina-tinta">
+              {margenPropio ? pct(f.costeSobrePrecio) : '—'}
+            </span>
+            <span className="num text-[13px] text-right text-cocina-tinta">{f.uds}</span>
+            <span className="text-right">
+              <BotonCocina peso="fantasma"
+                onClick={() => abrir(recetaPorItem.get(f.id) ?? null, f.id, 'escandallo')}>
+                Abrir
+              </BotonCocina>
+            </span>
+          </div>
+        )
+      })}
+    </PanelCocina>
   )
 }
