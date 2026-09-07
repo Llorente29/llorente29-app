@@ -107,6 +107,7 @@ it('genera la captura del Resumen a 1280', () => {
             <span className="text-cocina-tinta-3">El margen después de Glovo, Uber y Just Eat llega cuando el catálogo tenga canal.</span></>}
         >
           <CampoCocina label="Periodo"><span>Últimos 30 días</span></CampoCocina>
+          <CampoCocina label="Local"><span>Todos</span></CampoCocina>
           <CampoCocina label="Marcas"><span>Todas</span></CampoCocina>
         </CabeceraCocina>
 

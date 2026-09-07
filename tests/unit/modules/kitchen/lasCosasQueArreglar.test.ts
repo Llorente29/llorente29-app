@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   pintaCosa, estaPendiente, cuantasResueltas, rutaDe, RUTAS_DE_KITCHEN,
   type CosaMedida, type ClaveDeCosa,
+  loQueNoCambiaConElLocal, eurDeCocina, pctEnteroDeCocina,
 } from '@/modules/kitchen/lib/lasCosasQueArreglar'
 
 // B79 · lote 4. LAS CINCO COSAS DEL RESUMEN: que cada botón tenga destino, y que
@@ -283,5 +284,44 @@ describe('las definiciones que hoy devuelve producción', () => {
   it('cada definición trae su regla técnica: son seis y seis', () => {
     expect(DEFINICIONES_DE_PRODUCCION).toHaveLength(6)
     expect(REGLAS_TECNICAS_DE_PRODUCCION).toHaveLength(6)
+  })
+})
+
+// ── B83 · un filtro que no afecta a una cifra lo dice ──────────────────────
+// Condición de Julio al aprobar el selector de local: lo que no depende del
+// local no cambia al elegirlo Y LO DICE. Sin eso, elegir Alcalá y ver el mismo
+// «422 de 551» parece un filtro roto — y quien lo crea roto dejará de fiarse
+// también de las cifras que sí han cambiado. Medido antes de construirlo:
+// Alcalá 46.192 € y Carabanchel 26.629 € sobre 72.821 € (suman exacto), así que
+// las de VENTAS sí se mueven y sólo las de CATÁLOGO se quedan igual.
+describe('lo que no cambia al elegir un local', () => {
+  it('con un local elegido, lo dice', () => {
+    expect(loQueNoCambiaConElLocal('38158159-cd71-4056-950b-53425afac1ce')).toBe(' · toda la cuenta')
+  })
+  it('sin local no dice nada: en «Todos» la coletilla sería ruido', () => {
+    expect(loQueNoCambiaConElLocal('')).toBe('')
+    expect(loQueNoCambiaConElLocal(null)).toBe('')
+    expect(loQueNoCambiaConElLocal(undefined)).toBe('')
+  })
+})
+
+// ── B83 · los euros de Kitchen agrupan siempre ────────────────────────────
+// `toLocaleString('es-ES')` NO agrupa los números de cuatro cifras, así que en
+// la misma columna salía «7181 €» junto a «14.473 €». Medido, no supuesto.
+describe('los euros del módulo', () => {
+  it('agrupa también las cuatro cifras, que es donde falla el formato común', () => {
+    expect(eurDeCocina(7181)).toBe('7.181 €')
+    expect(eurDeCocina(14473)).toBe('14.473 €')
+    expect(eurDeCocina(699)).toBe('699 €')
+  })
+  it('sin dato, una raya: no un cero que parezca una medida', () => {
+    expect(eurDeCocina(null)).toBe('—')
+    expect(eurDeCocina(undefined)).toBe('—')
+  })
+  // La cobertura va entera: un decimal ahí no dice nada que el entero no diga.
+  it('la cobertura se redondea a entero, como el tablero', () => {
+    expect(pctEnteroDeCocina(96.2)).toBe('96 %')
+    expect(pctEnteroDeCocina(59.4)).toBe('59 %')
+    expect(pctEnteroDeCocina(null)).toBe('—')
   })
 })

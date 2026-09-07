@@ -210,3 +210,20 @@ export function pctEnteroDeCocina(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(Number(v))) return '—'
   return `${Math.round(Number(v))} %`
 }
+
+/**
+ * LA COLETILLA DE LO QUE NO CAMBIA AL ELEGIR UN LOCAL (B83, condición de Julio).
+ *
+ * Las cifras de catálogo salen de `kitchen_catalog_gaps`, que cuenta la CUENTA:
+ * no acepta local y no cambiaría aunque lo aceptase — un plato sin ficha lo está
+ * en los dos sitios. Sin decirlo, elegir Alcalá y ver el mismo «422 de 551» se
+ * lee como un filtro roto; y quien lo lea así dejará de fiarse también de las
+ * cifras que sí han cambiado. Es la regla 7 vista del revés: no se esconde que
+ * algo NO se ha filtrado.
+ *
+ * Devuelve cadena vacía cuando no hay local elegido: sin filtro no hay nada que
+ * matizar, y la coletilla en «Todos» sería ruido.
+ */
+export function loQueNoCambiaConElLocal(localElegido: string | null | undefined): string {
+  return localElegido ? ' · toda la cuenta' : ''
+}

@@ -45,7 +45,9 @@ import {
 } from '@/modules/kitchen/services/resumenDeCocinaService'
 import {
   cuantasResueltas, estaPendiente, pintaCosa, eurDeCocina, pctEnteroDeCocina,
+  loQueNoCambiaConElLocal,
 } from '@/modules/kitchen/lib/lasCosasQueArreglar'
+import { listLocations as listLocales } from '@/modules/kitchen/services/availabilityService'
 import { guardaPeriodoRecordado, leePeriodoRecordado } from '@/modules/kitchen/lib/recuerdoDeKitchen'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import { fmtInt, fmtPct } from '@/lib/format'
@@ -76,6 +78,12 @@ export default function KitchenDashboardPage() {
   // sale del almacén de Foodint y a su coste. «Sólo tuyas» es un filtro, nunca
   // una puerta.
   const [queMarcas, setQueMarcas] = useState<QueMarcas>('todas')
+  // ── B83 · EL LOCAL (decisión de Julio, 07/09) ────────────────────────────
+  // Lo pide el tablero y la consulta de ventas lo acepta, así que se cablea de
+  // verdad. Medido antes de construirlo: Alcalá 46.192 € · Carabanchel 26.629 €
+  // · Todos 72.821 € — suman exacto, así que el filtro filtra y no adorna.
+  const [local, setLocal] = useState<string>('')      // '' = todos
+  const [locales, setLocales] = useState<Array<{ id: string; name: string }>>([])
   const [soloPendiente, setSoloPendiente] = useState(true)
 
   const [comida, setComida] = useState<ComidaSobreVentas | null>(null)
@@ -91,6 +99,17 @@ export default function KitchenDashboardPage() {
   const peticion = useRef(0)
   useEffect(() => {
     if (!activeAccountId) return
+    let vigente = true
+    void listLocales(activeAccountId)
+      .then((ls) => { if (vigente) setLocales(ls) })
+      // Sin locales el selector no se pinta y la pantalla sigue: un filtro que
+      // no se ha podido cargar no puede tumbar el resumen entero.
+      .catch(() => { if (vigente) setLocales([]) })
+    return () => { vigente = false }
+  }, [activeAccountId])
+
+  useEffect(() => {
+    if (!activeAccountId) return
     const mia = ++peticion.current
     const hasta = new Date()
     const desde = new Date(hasta.getTime() - dias * 24 * 3600 * 1000)
@@ -101,7 +120,7 @@ export default function KitchenDashboardPage() {
       setError(null)
     })
     Promise.all([
-      getComidaSobreVentas({ accountId: activeAccountId, desde, hasta }),
+      getComidaSobreVentas({ accountId: activeAccountId, desde, hasta, locationId: local || null }),
       getLoQueFalta(activeAccountId),
     ])
       .then(([c, f]) => {
@@ -117,7 +136,7 @@ export default function KitchenDashboardPage() {
         setError(e instanceof Error ? e.message : 'Error cargando el resumen')
         setCargando(false)
       })
-  }, [activeAccountId, dias])
+  }, [activeAccountId, dias, local])
 
   // ── La cifra grande y su partición ───────────────────────────────────────
   const propias = comida?.porTipo.find((t) => t.tipo === 'own') ?? null
@@ -149,6 +168,14 @@ export default function KitchenDashboardPage() {
 
   // Contadores de catálogo para las cifras de arriba, sacados de las cosas para
   // no volver a preguntar lo mismo por otro camino.
+  // ── LO QUE NO CAMBIA AL ELEGIR LOCAL, Y LO DICE (condición de Julio) ──────
+  //
+  // `kitchen_catalog_gaps` cuenta CATÁLOGO, y el catálogo es de la cuenta: no
+  // acepta local y no cambiaría aunque lo aceptase. Sin decirlo, elegir Alcalá
+  // y ver el mismo «422 de 551» se lee como un filtro roto — y quien lo lea así
+  // dejará de fiarse también de las cifras que sí han cambiado.
+  const deTodaLaCuenta = loQueNoCambiaConElLocal(local)
+
   const cosaExtras = cosas.find((c) => c.clave === 'extras_que_cobran_sin_coste')
   const cosaSinFicha = cosas.find((c) => c.clave === 'platos_en_carta_sin_coste')
   const cosaIngredientes = cosas.find((c) => c.clave === 'ingredientes_sin_precio')
@@ -188,6 +215,20 @@ export default function KitchenDashboardPage() {
               <option value="365">Último año</option>
             </select>
           </CampoCocina>
+          {/* Sólo si hay más de uno: un selector con una sola opción es un
+              control que no hace nada. */}
+          {locales.length > 1 && (
+            <CampoCocina label="Local">
+              <select
+                value={local}
+                onChange={(e) => setLocal(e.target.value)}
+                className="text-[13px] font-medium text-cocina-tinta"
+              >
+                <option value="">Todos</option>
+                {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </CampoCocina>
+          )}
           <CampoCocina label="Marcas">
             <select
               value={queMarcas}
@@ -239,18 +280,18 @@ export default function KitchenDashboardPage() {
                 titulo="Platos con coste"
                 valor={cosaSinFicha ? String((cosaSinFicha.de ?? 0) - cosaSinFicha.n) : '—'}
                 sufijo={cosaSinFicha ? `de ${cosaSinFicha.de ?? 0}` : undefined}
-                pie={cosaSinFicha && cosaSinFicha.n > 0
+                pie={(cosaSinFicha && cosaSinFicha.n > 0
                   ? `${cosaSinFicha.n} se venden sin saber lo que cuestan`
-                  : 'todos los de la carta tienen ficha con coste'}
+                  : 'todos los de la carta tienen ficha con coste') + deTodaLaCuenta}
                 tono={(cosaSinFicha?.n ?? 0) > 0 ? 'malo' : undefined}
               />
               <CifraCocina
                 titulo="Extras que cobran sin coste"
                 valor={cosaExtras ? String(cosaExtras.n) : '—'}
                 sufijo={cosaExtras ? `de ${cosaExtras.de ?? 0}` : undefined}
-                pie={cosaExtras && (cosaExtras.venden ?? 0) > 0
+                pie={(cosaExtras && (cosaExtras.venden ?? 0) > 0
                   ? `${cosaExtras.venden} se han vendido y no descuentan comida`
-                  : 'entran por caja y no descuentan comida'}
+                  : 'entran por caja y no descuentan comida') + deTodaLaCuenta}
                 tono={(cosaExtras?.n ?? 0) > 0 ? 'malo' : undefined}
               />
               <CifraCocina
@@ -258,7 +299,7 @@ export default function KitchenDashboardPage() {
                 valor={cosaIngredientes ? String(cosaIngredientes.n) : '—'}
                 sufijo={cosaIngredientes ? `de ${cosaIngredientes.de ?? 0}` : undefined}
                 pie={cosaIngredientes
-                  ? `en uso${cosaIngredientes.usadosEnLineasDeReceta === 0 ? ' · todavía no están en ninguna receta' : ''}`
+                  ? `en uso${cosaIngredientes.usadosEnLineasDeReceta === 0 ? ' · todavía no están en ninguna receta' : ''}${deTodaLaCuenta}`
                   : '—'}
                 tono={(cosaIngredientes?.n ?? 0) > 0 ? 'malo' : undefined}
               />
@@ -271,6 +312,8 @@ export default function KitchenDashboardPage() {
               </InterruptorCocina>
               <span className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
                 {cosasVisibles.length} {cosasVisibles.length === 1 ? 'cosa' : 'cosas'} · ordenadas por lo que más pesa en el {pct(cifraGrande)}
+                {/* Las cinco son de catálogo: tampoco cambian con el local. */}
+                {local && ' · de toda la cuenta'}
                 {/* El filtro decide el ORDEN y la ETIQUETA, nunca la EXISTENCIA:
                     si deja algo fuera, lo dice (regla 7). */}
                 {soloPendiente && resueltas > 0 && (
