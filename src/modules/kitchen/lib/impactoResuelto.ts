@@ -180,3 +180,78 @@ export function unidadRacion(unidades: UnidadPick[]): UnidadPick | null {
       ?? unidades.find((u) => u.dimension === 'unit')
       ?? null
 }
+
+// ── UNA OPCIÓN PUEDE LLEVAR VARIAS COSAS (07/09, decisión 5 del encargo Extras) ──
+//
+// Hasta hoy todo esto suponía UN impacto por opción. El modelo nunca lo dijo:
+// `modifier_recipe_impact` no tiene índice único por `modifier_option_id` — sólo
+// la clave primaria. Funcionaba porque nadie había creado el segundo: 40
+// impactos en producción, máximo 1 por opción. Suerte, no diseño.
+//
+// Y los dos caminos fallaban de forma distinta, que es lo que lo hacía difícil
+// de ver:
+//   · el de ESCRITURA reventaba — `upsertImpact` hacía `.maybeSingle()`;
+//   · el de LECTURA mentía — `listOptionsWithImpacts` se quedaba con uno por
+//     opción y los demás DESAPARECÍAN de la pantalla, sin decirlo. Eso es la
+//     familia de la regla 7: esconder filas que existen. Peor que reventar,
+//     porque nadie se entera.
+//
+// Un extra de verdad lleva varias cosas: «pan, carne y salsa» son tres impactos.
+// Un plato entero sigue siendo UNO solo, `bundle`.
+
+/**
+ * Lo que cuesta una opción con N impactos, y por qué.
+ *
+ * LA REGLA QUE IMPORTA, y es la de B73a un piso más arriba: **un `no_calculable`
+ * gana a cualquier suma**. Si de tres partes dos suman 0,40 € y de la tercera no
+ * se sabe, el total NO es 0,40 € — es que no se sabe. Devolver la suma parcial
+ * sería afirmar que la tercera vale cero, que es exactamente el error que costó
+ * los diez impactos sin unidad.
+ *
+ * El orden es a propósito: primero lo que impide sumar, después la suma.
+ */
+export function resuelveOpcion(partes: ImpactoResuelto[]): ImpactoResuelto {
+  if (partes.length === 0) {
+    return { estado: 'sin_coste', motivo: 'no lleva nada puesto' }
+  }
+
+  // Una sola parte que no se puede calcular tumba el total. No se suma alrededor.
+  const dudosa = partes.find((p) => p.estado === 'no_calculable')
+  if (dudosa) {
+    return partes.length === 1
+      ? dudosa
+      : { estado: 'no_calculable', motivo: `una de las ${partes.length} cosas que lleva no se ha podido calcular — ${dudosa.motivo}` }
+  }
+
+  const euros = partes.reduce((s, p) => s + (p.estado === 'con_coste' ? p.euros : 0), 0)
+  if (euros > 0) return { estado: 'con_coste', euros }
+
+  // Sin dinero y sin dudas: o no aplica ninguna, o todas resuelven a cero.
+  if (partes.every((p) => p.estado === 'no_aplica')) return { estado: 'no_aplica' }
+
+  const primeraSinCoste = partes.find((p) => p.estado === 'sin_coste')
+  return {
+    estado: 'sin_coste',
+    motivo: primeraSinCoste && primeraSinCoste.estado === 'sin_coste'
+      ? primeraSinCoste.motivo
+      : 'no suma coste',
+  }
+}
+
+/**
+ * El estado de una opción a partir del de sus impactos.
+ *
+ * El motor sólo cuenta los `confirmed`, así que son los únicos que aportan. Pero
+ * una opción con uno confirmado y otro por revisar NO está resuelta: le falta
+ * una parte, y llamarla «confirmada» repetiría el error de dar por hecho lo que
+ * está a medias. Por eso un `proposed` pendiente manda sobre los confirmados.
+ *
+ * Los `rejected` no cuentan para nada: son una respuesta dada y descartada.
+ */
+export function estadoDeLaOpcion(
+  estados: (string | null | undefined)[],
+): 'confirmed' | 'proposed' | null {
+  const vivos = estados.filter((s) => s === 'confirmed' || s === 'proposed')
+  if (vivos.length === 0) return null
+  return vivos.some((s) => s === 'proposed') ? 'proposed' : 'confirmed'
+}

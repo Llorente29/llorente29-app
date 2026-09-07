@@ -286,7 +286,14 @@ export default function ModifierEditorSection({
               {g.options.length === 0 && <p className="text-xs text-stone-400">Sin opciones.</p>}
               {g.options.map((o) => {
                 const oi = impacts.get(o.id)
-                const imp = oi?.impact ?? null
+                // Una opción puede llevar varias cosas (07/09). Aquí sólo se
+                // resume su estado; el detalle y la edición viven en la pestaña
+                // «Modificadores». Se pinta la primera que quede por revisar —
+                // que es sobre la que hay que actuar— y, si hay más de una, se
+                // dice cuántas: callarlo sería enseñar una de tres sin avisar.
+                const todos = oi?.impacts ?? []
+                const imp = todos.find((i) => i.status === 'proposed') ?? todos[0] ?? null
+                const cuantas = todos.length
                 return (
                 <div key={o.id} className="space-y-0.5">
                   <div className="flex items-center gap-2 text-sm">
@@ -320,6 +327,9 @@ export default function ModifierEditorSection({
                   <div className="flex items-center gap-2 pl-1 text-[11px]">
                     {imp === null && (
                       <span className="text-stone-400">Coste sin definir</span>
+                    )}
+                    {cuantas > 1 && (
+                      <span className="text-stone-400">Lleva {cuantas} cosas ·</span>
                     )}
                     {imp && imp.status === 'proposed' && (
                       <>

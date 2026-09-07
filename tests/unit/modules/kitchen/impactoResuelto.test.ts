@@ -23,7 +23,8 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  resuelveImpacto, cuentaCobertura, pintaComoConfirmado, avisoDeConfirmadoSinCoste,
+  resuelveImpacto, resuelveOpcion, estadoDeLaOpcion, cuentaCobertura,
+  pintaComoConfirmado, avisoDeConfirmadoSinCoste,
   unidadRacion, type UnidadPick, type ImpactoResuelto,
 } from '../../../../src/modules/kitchen/lib/impactoResuelto'
 import type { ImpactType } from '../../../../src/modules/kitchen/services/modifierImpactService'
@@ -234,5 +235,128 @@ describe('unidadRacion · cuando el destino es un plato, la cantidad son racione
 
   it('si no hay ninguna de dimensión `unit`, lo dice con null y no inventa una', () => {
     expect(unidadRacion([G, ML, KG])).toBeNull()
+  })
+})
+
+// ── UNA OPCIÓN CON VARIAS COSAS (07/09) ─────────────────────────────────────
+//
+// Hasta hoy el código suponía un impacto por opción, y la base nunca lo dijo:
+// no hay índice único, sólo la primaria. Medido en producción antes de tocar
+// nada: 40 impactos, CERO opciones con más de uno. Funcionaba por suerte.
+//
+// Estas tres piezas son REALES, sacadas de producción el 07/09 con `_impact_cost`
+// delante — no son ejemplos escritos de memoria (regla 31):
+//
+//   · «Tarta 3 Leches 🤤»  add_item, 1 ud, ficha 3,1580 €/ud  → motor 3,1580 €
+//   · «La Triple»          bundle,   1 ud, ficha 4,0018 €/ud  → motor 4,0018 €
+//   · « Sweet Chili T»     add_item, 50 g, ficha 0,0051 €/ml  → motor 0,0000 €
+//                          (g contra ml: no comparten dimensión)
+
+const TARTA = resuelveImpacto({
+  impactType: 'add_item' as ImpactType, targetRecipeItemId: 'ri-tarta',
+  quantity: 1, unitId: UD.id,
+  ficha: { costeUnitario: 3.158, baseUnitId: UD.id },
+  unidadDeLaLinea: UD, unidadBaseDeLaFicha: UD,
+})
+const TRIPLE = resuelveImpacto({
+  impactType: 'bundle' as ImpactType, targetRecipeItemId: 'ri-triple',
+  quantity: 1, unitId: UD.id,
+  // Producción guarda 4,0017680447597865154660209208467177250000 — más decimales
+  // de los que cabe en un número de JavaScript. Se recorta a los que sí caben y
+  // se dice: fingir la precisión sería peor que perderla.
+  ficha: { costeUnitario: 4.001768, baseUnitId: UD.id },
+  unidadDeLaLinea: UD, unidadBaseDeLaFicha: UD,
+})
+const SWEET_CHILI = resuelveImpacto({
+  impactType: 'add_item' as ImpactType, targetRecipeItemId: 'ri-chili',
+  quantity: 50, unitId: G.id,
+  ficha: { costeUnitario: 0.0051, baseUnitId: ML.id },
+  unidadDeLaLinea: G, unidadBaseDeLaFicha: ML,
+})
+
+describe('resuelveOpcion · lo que cuesta una opción que lleva varias cosas', () => {
+  it('las tres piezas de partida son las que dice producción', () => {
+    expect(TARTA).toEqual({ estado: 'con_coste', euros: 3.158 })
+    expect(TRIPLE.estado).toBe('con_coste')
+    expect(SWEET_CHILI.estado).toBe('no_calculable')
+  })
+
+  it('sin nada puesto no afirma que valga cero: dice que no lleva nada', () => {
+    const r = resuelveOpcion([])
+    expect(r.estado).toBe('sin_coste')
+    if (r.estado === 'sin_coste') expect(r.motivo).toBe('no lleva nada puesto')
+  })
+
+  it('una sola cosa se comporta igual que antes (no se rompe lo que había)', () => {
+    expect(resuelveOpcion([TARTA])).toEqual(TARTA)
+    expect(resuelveOpcion([SWEET_CHILI])).toEqual(SWEET_CHILI)
+  })
+
+  it('dos cosas con coste SUMAN', () => {
+    const r = resuelveOpcion([TARTA, TRIPLE])
+    expect(r.estado).toBe('con_coste')
+    if (r.estado === 'con_coste') expect(r.euros).toBeCloseTo(7.159768, 5)
+  })
+
+  // ÉSTE ES EL QUE IMPORTA. Es el error de B73a un piso más arriba: devolver la
+  // suma de lo que sí se sabe es AFIRMAR que lo que no se sabe vale cero.
+  it('una parte que no se puede calcular tumba el total, no se suma alrededor', () => {
+    const r = resuelveOpcion([TARTA, SWEET_CHILI])
+    expect(r.estado).toBe('no_calculable')
+    // Y explícitamente: NO devuelve los 3,158 € de la tarta.
+    expect(r).not.toHaveProperty('euros')
+  })
+
+  it('el motivo dice cuántas cosas lleva, para poder ir a buscar la que falla', () => {
+    const r = resuelveOpcion([TARTA, TRIPLE, SWEET_CHILI])
+    expect(r.estado).toBe('no_calculable')
+    if (r.estado === 'no_calculable') {
+      expect(r.motivo).toContain('una de las 3')
+      expect(r.motivo).toContain('conversión')
+    }
+  })
+
+  it('todo «no aplica» sigue siendo «no aplica», no un cero disfrazado', () => {
+    const nada: ImpactoResuelto = { estado: 'no_aplica' }
+    expect(resuelveOpcion([nada, nada])).toEqual({ estado: 'no_aplica' })
+  })
+
+  it('varias que resuelven a cero devuelven el primer motivo, no un total mudo', () => {
+    const sinUnidad = resuelveImpacto({
+      impactType: 'add_item' as ImpactType, targetRecipeItemId: 'ri-x',
+      quantity: 10, unitId: null,
+      ficha: { costeUnitario: 1, baseUnitId: G.id },
+      unidadDeLaLinea: null, unidadBaseDeLaFicha: G,
+    })
+    const r = resuelveOpcion([sinUnidad, sinUnidad])
+    expect(r.estado).toBe('sin_coste')
+    if (r.estado === 'sin_coste') expect(r.motivo).toBe('le falta la unidad')
+  })
+})
+
+describe('estadoDeLaOpcion · con varias cosas, una a medias deja la opción a medias', () => {
+  it('sin nada vivo no hay estado', () => {
+    expect(estadoDeLaOpcion([])).toBeNull()
+    expect(estadoDeLaOpcion(['rejected', 'rejected'])).toBeNull()
+  })
+
+  it('todas confirmadas: confirmada', () => {
+    expect(estadoDeLaOpcion(['confirmed', 'confirmed', 'confirmed'])).toBe('confirmed')
+  })
+
+  // Lo que estaba mal antes de existir esta función: con una confirmada y otra
+  // por revisar, el ranking se quedaba con la confirmada y la opción se pintaba
+  // verde. Le falta una parte: no está resuelta.
+  it('una por revisar manda sobre las confirmadas', () => {
+    expect(estadoDeLaOpcion(['confirmed', 'proposed'])).toBe('proposed')
+  })
+
+  it('las rechazadas no cuentan ni para bien ni para mal', () => {
+    expect(estadoDeLaOpcion(['confirmed', 'rejected'])).toBe('confirmed')
+  })
+
+  it('una opción a medias NO se pinta de verde', () => {
+    const estado = estadoDeLaOpcion(['confirmed', 'proposed'])
+    expect(pintaComoConfirmado(estado, resuelveOpcion([TARTA, TARTA]))).toBe(false)
   })
 })
