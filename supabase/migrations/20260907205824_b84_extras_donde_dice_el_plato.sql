@@ -1,6 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- PENDIENTE DE APLICAR · B84.5 · «Ver dónde» tiene que decir el PLATO
--- Va a `supabase/migrations/` con la versión que registre la base (regla 17).
+-- B84.5 · «Ver dónde» tiene que decir el PLATO
 -- ══════════════════════════════════════════════════════════════════════════
 --
 -- LO QUE VIO JULIO (07/09, producción): al abrir «Ver dónde» en «Salsa Yogur»
@@ -180,7 +179,7 @@ end;
 $function$;
 
 comment on function public.kitchen_extras_por_nombre(uuid, interval) is
-  'Sección Extras. Una fila por nombre normalizado dentro de la cuenta, no por copia: copias, marcas, lo vendido, lo cobrado, si los precios difieren y si alguna copia ya tiene coste. Devuelve TODOS los grupos; el filtro «sólo los que hay que arreglar» es de la pantalla. Sólo claves, ningún texto de pantalla.';
+  'Sección Extras. Una fila por nombre normalizado dentro de la cuenta, no por copia: copias, marcas, lo vendido, lo cobrado, si los precios difieren y si alguna copia ya tiene coste. Cada copia dice en qué platos aparece (B84.5). Devuelve TODOS los grupos; el filtro «sólo los que hay que arreglar» es de la pantalla. Sólo claves, ningún texto de pantalla.';
 
 revoke execute on function public.kitchen_extras_por_nombre(uuid, interval) from public, anon;
 
@@ -239,37 +238,14 @@ begin
 end
 $guarda$;
 
--- ── COMPROBACION EJECUTADA, no solo declarada ────────────────────────────
--- La guarda de arriba mira el codigo; esta mira el RESULTADO. Con los datos de
--- hoy, «Salsa Yogur» tiene 7 copias y TODAS apuntan al menos a un plato vivo.
--- Si la union quedara mal escrita, `platos` seria `[]` en todas y la pantalla
--- volveria a no decir donde — en silencio, que es como duele (regla 30).
-do $ejecutada$
-declare v_r jsonb; v_fila jsonb; v_sin_platos int;
-begin
-  -- Sin cuenta no hay nada que comprobar: en un entorno vacio esto no aplica.
-  if not exists (select 1 from modifier_option limit 1) then return; end if;
-
-  select jsonb_agg(x) into v_r from (
-    select jsonb_array_elements(
-             (select f from jsonb_array_elements(
-                (select (public.kitchen_extras_por_nombre(a.id))->'filas')) f
-               where f->>'clave' = 'salsa yogur')->'donde') as x
-      from account a
-     where a.id = '51ad1792-6629-4ef7-833a-b57b09a86710'
-  ) t;
-
-  if v_r is null then return; end if;   -- otra base, u otra cuenta: no aplica
-
-  select count(*) into v_sin_platos
-    from jsonb_array_elements(v_r) d
-   where jsonb_array_length(coalesce(d->'platos','[]'::jsonb)) = 0;
-
-  if v_sin_platos = jsonb_array_length(v_r) then
-    raise exception 'GUARDA: ninguna copia trae platos; la union con modifier_group_assignment no esta trayendo nada.';
-  end if;
-
-  raise notice 'B84.5 comprobado: % copias, % sin platos.',
-    jsonb_array_length(v_r), v_sin_platos;
-end
-$ejecutada$;
+-- ── LA COMPROBACION EJECUTADA NO VA AQUI DENTRO, Y ESTUVO A PUNTO ────────
+-- La escribi como un `do` dentro de esta migracion: llamaba a la RPC recien
+-- creada y abortaba si ninguna copia traia platos. Tenia DOS fallos y los dos
+-- habrian tumbado la migracion entera:
+--   · usaba `from account a` y la tabla se llama `accounts` (42P01);
+--   · y dentro de una migracion no hay sesion, asi que la propia RPC habria
+--     lanzado 42501 «Sin permiso» antes de devolver nada.
+-- Es la leccion del 06/09 —una guarda mia aborto una migracion buena— y esta
+-- vez se caza antes. La comprobacion se hace DESPUES, como consulta
+-- independiente con la sesion puesta, igual que las tres del 07/09: no basta el
+-- «Success», pero tampoco vale una guarda que no puede funcionar donde vive.

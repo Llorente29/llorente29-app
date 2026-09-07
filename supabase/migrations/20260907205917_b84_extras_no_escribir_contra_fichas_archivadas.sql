@@ -1,12 +1,11 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- PENDIENTE DE APLICAR · B84.3 · la escritura no acepta fichas archivadas
--- Va a `supabase/migrations/` con la versión que registre la base (regla 17).
+-- B84.3 · la escritura no acepta fichas archivadas
 -- ══════════════════════════════════════════════════════════════════════════
 --
 -- LO QUE DESTAPÓ JULIO (07/09): hay DOS fichas de yogur griego en Foodint. La
 -- buena —«Yogur griego», 0,00659 €/g— está archivada desde el 24/08 y no sale
 -- en el selector; la viva —«Yogurt Griego», RAW-00206— vale 0. Con la pantalla
--- de hoy, elegir la viva daba 0,00 € y «Guardar» activo.
+-- de entonces, elegir la viva daba 0,00 € y «Guardar» activo.
 --
 -- La pantalla ya lo impide desde B84 (la línea de coste lo dice y el botón se
 -- bloquea), pero eso vive en el navegador. Aquí abajo hay un agujero aparte: la
@@ -37,6 +36,7 @@ declare
   v_ficha     uuid;
   v_tipo      text;
   v_rationale text;
+  v_mala      text;
 begin
   if not (public.current_user_is_admin()
           or public.current_user_is_admin_or_manager_of(p_account)) then
@@ -65,28 +65,7 @@ begin
       using errcode = '42501';
   end if;
 
-  -- Las fichas de destino, igual: por cuenta. Y VIVAS (B84.3).
-  --
-  -- Una ficha archivada tiene el precio del día en que se archivó y ya no sale
-  -- en el selector: si llega aquí es por una llamada directa, y costear siete
-  -- copias contra un precio congelado es escribir un número que nadie va a
-  -- volver a mirar. El ensayo del 07/09 usó «Yogur griego», archivada el 24/08,
-  -- y entró sin decir nada. Se dice CUÁL falla, no «alguna»: con siete copias y
-  -- tres cosas, «alguna» no se puede buscar.
-  declare v_mala text;
-  begin
-    select ri.name into v_mala
-      from jsonb_array_elements(p_lleva) c
-      join recipe_item ri on ri.id = (c->>'ficha')::uuid
-     where ri.account_id = p_account
-       and (not ri.is_active or ri.archived_at is not null)
-     limit 1;
-    if v_mala is not null then
-      raise exception 'La ficha «%» está archivada: su precio es el del día que se archivó. No se ha escrito nada.', v_mala
-        using errcode = '42501';
-    end if;
-  end;
-
+  -- Las fichas de destino, igual: por cuenta.
   if exists (
     select 1 from jsonb_array_elements(p_lleva) c
      where not exists (
@@ -94,6 +73,22 @@ begin
         where ri.id = (c->>'ficha')::uuid and ri.account_id = p_account)
   ) then
     raise exception 'Alguna de las fichas no es de esta cuenta. No se ha escrito nada.'
+      using errcode = '42501';
+  end if;
+
+  -- Y VIVAS (B84.3). Una ficha archivada tiene el precio del día en que se
+  -- archivó y ya no sale en el selector: si llega aquí es por una llamada
+  -- directa, y costear siete copias contra un precio congelado es escribir un
+  -- número que nadie va a volver a mirar. Se dice CUÁL falla, no «alguna»: con
+  -- siete copias y tres cosas, «alguna» no se puede ir a buscar.
+  select ri.name into v_mala
+    from jsonb_array_elements(p_lleva) c
+    join recipe_item ri on ri.id = (c->>'ficha')::uuid
+   where ri.account_id = p_account
+     and (not ri.is_active or ri.archived_at is not null)
+   limit 1;
+  if v_mala is not null then
+    raise exception 'La ficha «%» está archivada: su precio es el del día que se archivó. No se ha escrito nada.', v_mala
       using errcode = '42501';
   end if;
 
@@ -143,7 +138,7 @@ end;
 $function$;
 
 comment on function public.kitchen_extras_poner_lo_que_lleva(uuid, uuid[], jsonb, text) is
-  'Sección Extras. Pone lo que lleva un extra en TODAS las copias elegidas, en una sola transacción (regla 13): o entran todas o no entra ninguna. source=human siempre —dice quién lo dijo— y la procedencia va en rationale. Un plato entero es un impacto bundle; un ingrediente, add_item.';
+  'Sección Extras. Pone lo que lleva un extra en TODAS las copias elegidas, en una sola transacción (regla 13): o entran todas o no entra ninguna. Rechaza fichas archivadas, nombrándolas (B84.3). source=human siempre —dice quién lo dijo— y la procedencia va en rationale. Un plato entero es un impacto bundle; un ingrediente, add_item.';
 
 revoke execute on function public.kitchen_extras_poner_lo_que_lleva(uuid, uuid[], jsonb, text) from public, anon;
 
