@@ -12,6 +12,9 @@
 // en 3 marcas» cuando son 2— no la caza un build verde.
 
 /** Lo que la RPC devuelve por cada nombre, ya en camelCase. */
+/** Un plato donde el cliente ve este extra, con su id para poder abrirlo. */
+export interface PlatoDeLaCopia { id: string; nombre: string }
+
 export interface CopiaDelExtra {
   opcion: string
   marca: string
@@ -21,6 +24,11 @@ export interface CopiaDelExtra {
   vendidas: number
   coste: number
   tieneCoste: boolean
+  /**
+   * Los platos donde aparece (B84.5). Vacío mientras la consulta no los mande:
+   * entonces se pinta el grupo, como antes, en vez de mentir con una lista vacía.
+   */
+  platos: PlatoDeLaCopia[]
 }
 
 export type EstadoDelExtra = 'nada_puesto' | 'puesto_pero_cero' | 'mixto' | 'con_coste'
@@ -160,6 +168,71 @@ export function queLleva(e: ExtraPorNombre): { texto: string; tono: 'rojo' | 'am
  */
 export function botonDeLaFila(e: ExtraPorNombre): string {
   return e.preciosDistintos ? 'Elegir copias' : 'Decir qué lleva'
+}
+
+/**
+ * DÓNDE APARECE UNA COPIA, dicho para una persona (B84.5).
+ *
+ * El grupo NO dice dónde: «Algun extra en tu pita?» son cuatro copias de The
+ * Urban Kebab y cuatro platos distintos —Falafel, Pollo, Ternera y Mixto—, y la
+ * pantalla pintaba cuatro líneas idénticas. El botón se llama «Ver dónde».
+ *
+ *  · un plato   → el plato, y el grupo detrás en pequeño
+ *  · varios     → «15 platos» y el grupo; la lista se abre debajo
+ *  · ninguno    → el grupo solo, que es todo lo que se sabe (la consulta vieja
+ *                 no manda platos, y una lista vacía no se inventa)
+ */
+export function dondeApareceLaCopia(c: CopiaDelExtra): { principal: string; secundario: string } {
+  const n = c.platos?.length ?? 0
+  if (n === 0) return { principal: `«${c.grupo}»`, secundario: c.marca }
+  if (n === 1) return { principal: c.platos[0].nombre, secundario: `${c.marca} · «${c.grupo}»` }
+  return { principal: `${n} platos`, secundario: `${c.marca} · «${c.grupo}»` }
+}
+
+/**
+ * LAS MARCAS DE LA FILA, en el mismo orden que la frase del panel: alfabético.
+ *
+ * (B84.6) La fila decía «The Urban Kebab · Meraki Pita» y el panel «Meraki Pita
+ * (3) y The Urban Kebab (4)» para el mismo extra. Dos órdenes distintos para lo
+ * mismo obligan a releer para comprobar que hablan del mismo sitio.
+ */
+export function marcasDeLaFila(e: ExtraPorNombre): string {
+  return [...new Set(e.donde.map((d) => d.marca))].sort((a, b) => a.localeCompare(b, 'es')).join(' · ')
+}
+
+/**
+ * LO QUE HAY QUE DECIR CUANDO UNA FICHA NO TIENE PRECIO (B84.3).
+ *
+ * Sin esto, elegir un ingrediente sin coste daba «0,00 €» y «Guardar» activo: se
+ * escribían siete impactos que dejaban el extra en «puesto, pero vale 0 €» —peor
+ * que no haberlo tocado, porque ahora parece hecho—. Es la regla 3 de arriba
+ * («computed_cost = 0 tapa el fixed_cost real») vista desde la pantalla: un cero
+ * que no es una medida, es una ficha sin rellenar.
+ *
+ * Devuelve `null` cuando no hay nada que avisar. Nombra la ficha —no «un
+ * ingrediente»— porque el que mira tiene que saber cuál ir a arreglar.
+ */
+export function fichasSinPrecio<T extends { id: string; name: string; costeUnitario?: number | null }>(
+  cosas: Array<{ ficha: string }>,
+  catalogo: T[],
+): T[] {
+  const porId = new Map(catalogo.map((c) => [c.id, c]))
+  const fuera: T[] = []
+  for (const c of cosas) {
+    const f = porId.get(c.ficha)
+    if (f && !f.costeUnitario) fuera.push(f)   // null, undefined o 0: no hay precio
+  }
+  return fuera
+}
+
+/** «Yogurt Griego no tiene precio puesto» · «Yogurt Griego y Pan de pita no tienen precio puesto». */
+export function avisoDeSinPrecio(fichas: Array<{ name: string }>): string | null {
+  if (fichas.length === 0) return null
+  const nombres = fichas.map((f) => f.name)
+  const lista = nombres.length === 1
+    ? nombres[0]
+    : `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
+  return `${lista} ${nombres.length === 1 ? 'no tiene' : 'no tienen'} precio puesto`
 }
 
 /** El pie de la barra: «56 nombres · 100 copias · los 34 que se venden, primero». */

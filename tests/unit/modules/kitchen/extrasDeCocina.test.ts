@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   cuantasCopias, cuantasCopiasEnElTitulo, soloCopias, platoDelMismoNombre,
+  marcasDeLaFila, dondeApareceLaCopia, fichasSinPrecio, avisoDeSinPrecio,
   loQueCobra, queLleva, botonDeLaFila, hayQueArreglarlo,
   ordena, parteEnDos, pieDeLaBarra, tituloDelPliegue, confirmacion,
   type ExtraPorNombre, type CopiaDelExtra,
@@ -17,7 +18,7 @@ import {
 
 const copia = (o: Partial<CopiaDelExtra> = {}): CopiaDelExtra => ({
   opcion: 'o', marca: 'Meraki Pita', marcaId: 'm', grupo: 'g',
-  precio: 1.5, vendidas: 0, coste: 0, tieneCoste: false, ...o,
+  precio: 1.5, vendidas: 0, coste: 0, tieneCoste: false, platos: [], ...o,
 })
 const E = (o: Partial<ExtraPorNombre> = {}): ExtraPorNombre => ({
   clave: 'x', nombre: 'X', copias: 1, marcas: 1, vendidas: 0, cobrado: 0,
@@ -305,6 +306,89 @@ describe('cuando el extra ya existe como plato', () => {
   })
   it('sin coincidencia devuelve null, no la primera que pilla', () => {
     expect(platoDelMismoNombre('Mayo trufa', CATALOGO, norm)).toBeNull()
+  })
+})
+
+
+// ── B84 · lo que Julio vio en producción el 07/09 ──────────────────────────
+
+// B84.5. Las CUATRO copias de «Salsa Yogur» en The Urban Kebab comparten el
+// nombre de grupo «Algun extra en tu pita?» y son cuatro PLATOS distintos. La
+// pantalla pintaba cuatro líneas idénticas y escondía justo lo que las separa.
+// Los datos son los de producción, medidos el 07/09 como consulta suelta.
+describe('dónde aparece una copia', () => {
+  it('con un plato, manda el plato y el grupo queda de apellido', () => {
+    const c = copia({ marca: 'The Urban Kebab', grupo: 'Algun extra en tu pita?',
+      platos: [{ id: 'de9c174c', nombre: 'Kebab de Falafel 🌿' }] })
+    expect(dondeApareceLaCopia(c)).toEqual({
+      principal: 'Kebab de Falafel 🌿',
+      secundario: 'The Urban Kebab · «Algun extra en tu pita?»',
+    })
+  })
+
+  // La copia de Meraki con ese mismo nombre de grupo son QUINCE platos.
+  it('con varios, dice cuántos', () => {
+    const c = copia({ marca: 'Meraki Pita', grupo: 'Algun extra en tu pita?',
+      platos: Array.from({ length: 15 }, (_, i) => ({ id: `p${i}`, nombre: `Plato ${i}` })) })
+    expect(dondeApareceLaCopia(c).principal).toBe('15 platos')
+  })
+
+  // Lo importante: dos copias con el MISMO grupo ya no se leen igual.
+  it('dos copias del mismo grupo dejan de ser indistinguibles', () => {
+    const a = copia({ marca: 'The Urban Kebab', grupo: 'Algun extra en tu pita?',
+      platos: [{ id: '1', nombre: 'Kebab de Pollo Gyros 🌯' }] })
+    const b = copia({ marca: 'The Urban Kebab', grupo: 'Algun extra en tu pita?',
+      platos: [{ id: '2', nombre: 'Kebab de Ternera Gyros 🌯' }] })
+    expect(dondeApareceLaCopia(a).principal).not.toBe(dondeApareceLaCopia(b).principal)
+  })
+
+  // Mientras la consulta no mande platos se pinta el grupo, no una lista vacía.
+  it('sin platos, se dice el grupo y no se inventa nada', () => {
+    const c = copia({ marca: 'Meraki Pita', grupo: '¿Le añadimos salsa?', platos: [] })
+    expect(dondeApareceLaCopia(c)).toEqual({
+      principal: '«¿Le añadimos salsa?»', secundario: 'Meraki Pita',
+    })
+  })
+})
+
+// B84.6. El mismo reparto no puede salir en dos órdenes según quién lo pinte.
+describe('el orden de las marcas', () => {
+  it('la fila las ordena como la frase del panel: alfabético', () => {
+    expect(marcasDeLaFila(SALSA_YOGUR)).toBe('Meraki Pita · The Urban Kebab')
+  })
+  it('no repite una marca que está en varias copias', () => {
+    expect(marcasDeLaFila(SALSA_YOGUR).split(' · ')).toHaveLength(2)
+  })
+})
+
+// B84.3. Las DOS fichas de yogur griego que hay de verdad en Foodint: la buena
+// archivada el 24/08 y la viva a 0 €. Elegir la viva daba «0,00 €» y Guardar
+// activo, y las siete copias quedaban «puestas, pero a 0 €» — peor que no
+// tocarlas, porque ya parecen hechas.
+describe('una ficha sin precio se dice, no se traga', () => {
+  const CATALOGO = [
+    { id: 'viva', name: 'Yogurt Griego', costeUnitario: 0 },
+    { id: 'salsa', name: 'SALSA Yogur', costeUnitario: 0.0068 },
+    { id: 'nula', name: 'Pan de pita', costeUnitario: null },
+  ]
+  it('caza el cero', () => {
+    expect(fichasSinPrecio([{ ficha: 'viva' }], CATALOGO).map((f) => f.name)).toEqual(['Yogurt Griego'])
+  })
+  it('caza también el sin poner, que no es lo mismo pero pinta igual', () => {
+    expect(fichasSinPrecio([{ ficha: 'nula' }], CATALOGO).map((f) => f.name)).toEqual(['Pan de pita'])
+  })
+  it('una ficha con precio no salta', () => {
+    expect(fichasSinPrecio([{ ficha: 'salsa' }], CATALOGO)).toEqual([])
+  })
+  it('el aviso nombra la ficha, no «un ingrediente»', () => {
+    expect(avisoDeSinPrecio([{ name: 'Yogurt Griego' }])).toBe('Yogurt Griego no tiene precio puesto')
+  })
+  it('con varias, las nombra todas y concuerda', () => {
+    expect(avisoDeSinPrecio([{ name: 'Yogurt Griego' }, { name: 'Pan de pita' }]))
+      .toBe('Yogurt Griego y Pan de pita no tienen precio puesto')
+  })
+  it('sin ninguna no hay aviso', () => {
+    expect(avisoDeSinPrecio([])).toBeNull()
   })
 })
 
