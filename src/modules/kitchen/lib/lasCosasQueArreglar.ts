@@ -15,7 +15,6 @@
 // 'recetas' (Platos) · 'ajustes' (Ajustes). La prueba lo comprueba contra esa
 // misma lista, así que si alguien renombra una ruta, se pone roja sola.
 
-import { fmtInt } from '@/lib/format'
 
 /** Las rutas del módulo Kitchen que existen HOY, relativas a `/kitchen/`. */
 export const RUTAS_DE_KITCHEN = [
@@ -76,7 +75,39 @@ function pluraliza(n: number, uno: string, varios: string): string {
  * El motivo no repite el título: dice QUÉ PASA si no se arregla, que es lo que
  * decide si merece la pena. Y no afirma nada que el contador no haya medido.
  */
-export function pintaCosa(c: CosaMedida, envaseEur: number | null): CosaPintada {
+/**
+ * LAS MARCAS QUE MÁS PESAN, en una frase: «The Urban Kebab 18 de 27 · Scandal
+ * Burgers 16 de 17 · Big Mike´s 12 de 14 · y 8 marcas más».
+ *
+ * Estaba escrita dos veces —en la pantalla y en la captura— y las dos decían
+ * «y 1 marcas más». Una frase repetida en dos sitios es una frase que se
+ * corrige en uno solo; por eso baja aquí, donde se puede probar.
+ */
+export function lasQueMasPesan(
+  peores: Array<{ marca: string; n: number; de: number }>,
+  cuantas = 3,
+): string | null {
+  if (peores.length === 0) return null
+  const primeras = peores.slice(0, cuantas).map((x) => `${x.marca} ${x.n} de ${x.de}`).join(' · ')
+  const resto = peores.length - cuantas
+  if (resto <= 0) return primeras
+  return `${primeras} · y ${resto} ${pluraliza(resto, 'marca', 'marcas')} más`
+}
+
+export function pintaCosa(
+  c: CosaMedida,
+  envaseEur: number | null,
+  /**
+   * La comida sobre ventas que enseña la cifra grande, para poder decir la
+   * consecuencia con el número delante (B83.3): «el coste real es mayor que el
+   * 24,1 %» dice algo; «mayor que el de arriba» obliga a subir la vista y
+   * acordarse. Opcional: sin ella se dice «el de arriba», que es lo que había.
+   */
+  comidaPct?: number | null,
+): CosaPintada {
+  const elDeArriba = comidaPct != null && Number.isFinite(comidaPct)
+    ? `el ${comidaPct.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
+    : 'el de arriba'
   switch (c.clave) {
     case 'extras_que_cobran_sin_coste': {
       const venden = c.venden ?? 0
@@ -124,9 +155,9 @@ export function pintaCosa(c: CosaMedida, envaseEur: number | null): CosaPintada 
         titulo: `${c.n} ${pluraliza(c.n, 'plato', 'platos')} sin envase`,
         motivo:
           `Su envase cuenta como cero. ${envaseEur !== null
-            ? `El envase de los ${conEnvase} que sí lo tienen vale unos ${fmtInt(envaseEur)} € de lo vendido en 30 días: `
+            ? `El envase de los ${conEnvase} que sí lo tienen vale unos ${eurDeCocina(envaseEur)} de lo vendido en 30 días: `
             : `Con ${conEnvase} de ${c.de ?? '—'} con envase puesto: `}` +
-          'el coste real de la comida es mayor que el de arriba.',
+          `el coste real de la comida es mayor que ${elDeArriba}.`,
         boton: c.accion,
         destino: 'recetas',
       }

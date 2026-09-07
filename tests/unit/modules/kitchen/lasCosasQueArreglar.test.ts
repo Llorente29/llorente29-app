@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   pintaCosa, estaPendiente, cuantasResueltas, rutaDe, RUTAS_DE_KITCHEN,
   type CosaMedida, type ClaveDeCosa,
-  loQueNoCambiaConElLocal, eurDeCocina, pctEnteroDeCocina,
+  loQueNoCambiaConElLocal, eurDeCocina, pctEnteroDeCocina, lasQueMasPesan,
 } from '@/modules/kitchen/lib/lasCosasQueArreglar'
 
 // B79 · lote 4. LAS CINCO COSAS DEL RESUMEN: que cada botón tenga destino, y que
@@ -323,5 +323,32 @@ describe('los euros del módulo', () => {
     expect(pctEnteroDeCocina(96.2)).toBe('96 %')
     expect(pctEnteroDeCocina(59.4)).toBe('59 %')
     expect(pctEnteroDeCocina(null)).toBe('—')
+  })
+})
+
+// ── B83 · «y 1 marcas más» ────────────────────────────────────────────────
+// La frase estaba escrita dos veces —pantalla y captura— y las dos concordaban
+// mal. Es lo que pasa con el texto duplicado: se arregla en un sitio y sigue mal
+// en el otro. Los datos son los de hoy: 11 marcas con extras sin coste.
+describe('las marcas que más pesan', () => {
+  const ONCE = [
+    { marca: 'The Urban Kebab', n: 18, de: 27 },
+    { marca: 'Scandal Burgers', n: 16, de: 17 },
+    { marca: 'Big Mike´s Burger Joint', n: 12, de: 14 },
+    { marca: 'Milanesa Haus', n: 8, de: 8 },
+  ]
+  it('con más de tres, dice cuántas quedan y CONCUERDA', () => {
+    expect(lasQueMasPesan(ONCE)).toBe(
+      'The Urban Kebab 18 de 27 · Scandal Burgers 16 de 17 · Big Mike´s Burger Joint 12 de 14 · y 1 marca más',
+    )
+  })
+  it('con cuatro que sobran, plural', () => {
+    expect(lasQueMasPesan([...ONCE, ...ONCE])).toContain('y 5 marcas más')
+  })
+  it('con tres o menos, no añade coletilla', () => {
+    expect(lasQueMasPesan(ONCE.slice(0, 3))).not.toContain('más')
+  })
+  it('sin ninguna, no hay frase que pintar', () => {
+    expect(lasQueMasPesan([])).toBeNull()
   })
 })

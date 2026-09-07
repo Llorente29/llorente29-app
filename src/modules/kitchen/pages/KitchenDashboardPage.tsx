@@ -45,18 +45,17 @@ import {
 } from '@/modules/kitchen/services/resumenDeCocinaService'
 import {
   cuantasResueltas, estaPendiente, pintaCosa, eurDeCocina, pctEnteroDeCocina,
-  loQueNoCambiaConElLocal,
+  loQueNoCambiaConElLocal, lasQueMasPesan,
 } from '@/modules/kitchen/lib/lasCosasQueArreglar'
 import { listLocations as listLocales } from '@/modules/kitchen/services/availabilityService'
 import { guardaPeriodoRecordado, leePeriodoRecordado } from '@/modules/kitchen/lib/recuerdoDeKitchen'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtPct } from '@/lib/format'
 
 type Dias = 30 | 90 | 365
 type QueMarcas = 'todas' | 'tuyas'
 
 const pct = (v: number | null | undefined) => fmtPct(v, 1)
-const eurRedondo = (v: number | null | undefined) => (v == null ? '—' : `${fmtInt(v)} €`)
 
 /** Debajo de esta cobertura, la marca se marca en rojo: su cifra no es fiable. */
 const COBERTURA_QUE_PREOCUPA = 80
@@ -261,19 +260,26 @@ export default function KitchenDashboardPage() {
                   (queMarcas === 'todas' && propias && cedidas
                     ? `tuyas ${pct(propias.foodCostPct)} · de terceros ${pct(cedidas.foodCostPct)} · `
                     : '') +
-                  `${eurRedondo(comidaEur)} de comida sobre ${eurRedondo(vendidoEur)} vendidos` +
-                  // Las ventas sin marca existen y no se tiran en silencio (regla 7).
+                  // B83.1: los euros de comida son lo que hace tangible el
+                  // porcentaje. Un «24,1 %» solo no dice cuánto dinero es.
+                  `${eurDeCocina(comidaEur)} de comida sobre ${eurDeCocina(vendidoEur)} vendidos` +
+                  // Las ventas sin marca existen y no se tiran en silencio
+                  // (regla 7), pero van detrás: son el matiz, no el dato.
                   (queMarcas === 'todas' && sinMarca && sinMarca.unidades > 0
-                    ? ` · ${sinMarca.unidades} ${sinMarca.unidades === 1 ? 'venta' : 'ventas'} sin marca (${eurRedondo(sinMarca.vendido)}) van dentro`
+                    ? ` · ${sinMarca.unidades} ${sinMarca.unidades === 1 ? 'venta' : 'ventas'} sin marca (${eurDeCocina(sinMarca.vendido)}) van dentro`
                     : '')
                 }
               />
               <CifraCocina
                 titulo="Ventas con coste conocido"
-                valor={pct(comida.coberturaDineroPct).replace(' %', '')}
+                // B83.2 · una sola regla para los dos sitios: la COBERTURA va
+                // entera aquí y en la tabla de abajo; el porcentaje de comida
+                // sobre ventas, con un decimal. Dos varas para el mismo tipo de
+                // número es lo que hace que alguien compare mal.
+                valor={pctEnteroDeCocina(comida.coberturaDineroPct).replace(' %', '')}
                 sufijo="%"
                 pie={comida.coberturaDineroPct != null
-                  ? `el ${pct(100 - comida.coberturaDineroPct)} restante se vende sin saber lo que cuesta`
+                  ? `el ${pctEnteroDeCocina(100 - comida.coberturaDineroPct)} restante se vende sin saber lo que cuesta`
                   : 'no ha llegado ninguna venta que medir'}
               />
               <CifraCocina
@@ -328,7 +334,7 @@ export default function KitchenDashboardPage() {
             ) : (
               <PanelCocina>
                 {cosasVisibles.map((c) => {
-                  const p = pintaCosa(c, comida.envaseEur)
+                  const p = pintaCosa(c, comida.envaseEur, cifraGrande)
                   return (
                     <div key={c.clave}
                       className="grid items-start gap-3.5 px-4 py-3 border-b border-cocina-linea-suave last:border-b-0"
@@ -344,10 +350,7 @@ export default function KitchenDashboardPage() {
                         {c.peores.length > 0 && (
                           <div className="text-[12.5px] text-cocina-tinta-2 leading-[1.45] mt-0.5">
                             Las que más:{' '}
-                            <b className="font-semibold text-cocina-tinta">
-                              {c.peores.slice(0, 3).map((x) => `${x.marca} ${x.n} de ${x.de}`).join(' · ')}
-                            </b>
-                            {c.peores.length > 3 && ` · y ${c.peores.length - 3} marcas más`}
+                            <b className="font-semibold text-cocina-tinta">{lasQueMasPesan(c.peores)}</b>
                           </div>
                         )}
                         {/* La definición con la que se contó, tal y como la da la
@@ -375,7 +378,11 @@ export default function KitchenDashboardPage() {
                 <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-3">
                   Por marca · comida sobre ventas
                 </span>
-                <span className="text-[11.5px] text-cocina-tinta-3">tuyas primero · de terceros después</span>
+                {/* B83.4 · en versalitas y en tinta, como el tablero: es el
+                    criterio de orden de la tabla, no una nota al pie. */}
+                <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-2">
+                  tuyas primero · de terceros después
+                </span>
               </div>
               <div
                 className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
@@ -407,7 +414,9 @@ export default function KitchenDashboardPage() {
                     <span className="text-right whitespace-nowrap">
                       {flojo
                         ? <PastillaCocina tono="rojo">{pctEnteroDeCocina(m.coberturaPct)} · falta coste</PastillaCocina>
-                        : <span className="num text-[13px] text-cocina-tinta-3">{pctEnteroDeCocina(m.coberturaPct)}</span>}
+                        // B83.4 · es el TERCER NÚMERO de la fila, no una nota:
+                        // en gris se leía como comentario de los otros dos.
+                        : <span className="num text-[13px] text-cocina-tinta">{pctEnteroDeCocina(m.coberturaPct)}</span>}
                     </span>
                     <span className="text-right">
                       <BotonCocina peso="fantasma" onClick={() => navigate('/kitchen/rentabilidad')}>Ver platos</BotonCocina>
