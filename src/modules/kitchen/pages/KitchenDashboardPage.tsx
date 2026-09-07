@@ -32,16 +32,19 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useApp } from '@/context/AppContext'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
-import { Campo, Cifra } from '@/modules/kitchen/components/PatronDeKitchen'
+import {
+  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  BotonCocina, InterruptorCocina, PanelCocina, AvisoCocina, PastillaCocina,
+} from '@/modules/kitchen/components/PatronDeKitchen'
 import {
   getComidaSobreVentas, getLoQueFalta,
   type ComidaSobreVentas, type LoQueFalta, type ComidaPorMarca,
 } from '@/modules/kitchen/services/resumenDeCocinaService'
 import {
-  cuantasResueltas, estaPendiente, pintaCosa,
+  cuantasResueltas, estaPendiente, pintaCosa, eurDeCocina, pctEnteroDeCocina,
 } from '@/modules/kitchen/lib/lasCosasQueArreglar'
 import { guardaPeriodoRecordado, leePeriodoRecordado } from '@/modules/kitchen/lib/recuerdoDeKitchen'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
@@ -56,8 +59,16 @@ const eurRedondo = (v: number | null | undefined) => (v == null ? '—' : `${fmt
 /** Debajo de esta cobertura, la marca se marca en rojo: su cifra no es fiable. */
 const COBERTURA_QUE_PREOCUPA = 80
 
+/** La rejilla de la tabla por marca, copiada del ancho del tablero. */
+const REJILLA_MARCAS = 'minmax(0,1fr) 120px 90px 160px auto'
+
+/** Las filas de «lo que hay que arreglar»: título · motivo · botón. */
+const REJILLA_COSAS = '230px minmax(0,1fr) auto'
+
 export default function KitchenDashboardPage() {
   const { activeAccountId } = useActiveAccount()
+  const { activeAccount } = useApp()
+  const nombreDeLaCuenta = activeAccount?.name ?? null
   const navigate = useNavigate()
 
   const [dias, setDias] = useState<Dias>(leePeriodoRecordado('resumen', 30) as Dias)
@@ -143,229 +154,236 @@ export default function KitchenDashboardPage() {
   const cosaIngredientes = cosas.find((c) => c.clave === 'ingredientes_sin_precio')
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      {/* 1 · LA PREGUNTA, y debajo una sola línea con la regla y las fechas. */}
-      <header>
-        <h1 className="text-2xl font-semibold text-text-primary">¿Cómo va tu cocina este mes?</h1>
-        <p className="mt-1.5 text-sm text-text-secondary max-w-4xl">
-          Comida = ingredientes y envase de lo que has vendido · ventas = precio de carta
-          sin IVA{ventana ? ` · ${intervaloDeFechas(ventana.desde, ventana.hasta, { minuscula: true }) ?? 'periodo sin fechas'}` : ''}.{' '}
-          <span className="text-text-tertiary">
-            El margen después de Glovo, Uber y Just Eat llega cuando el catálogo tenga canal.
-          </span>
-        </p>
-      </header>
+    // B83 · AL ESTÁNDAR DE LA MAQUETA (§9.2 del encargo de Extras). Esta pantalla
+    // nació con el patrón de Casado pero con los colores y espaciados de la app
+    // vieja; el tablero es `Main.dc.html`. Lo que cambia es CÓMO se ve, no qué
+    // dice: mismos números, mismos textos, mismos destinos.
+    <div className="cocina min-h-full">
+      <div className="cocina-pagina">
 
-      <div className="flex flex-wrap items-end gap-3">
-        <Campo label="Periodo">
-          <select
-            value={String(dias)}
-            onChange={(e) => { const d = Number(e.target.value) as Dias; setDias(d); guardaPeriodoRecordado('resumen', d) }}
-            className="px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary"
-          >
-            <option value="30">Últimos 30 días</option>
-            <option value="90">Últimos 90 días</option>
-            <option value="365">Último año</option>
-          </select>
-        </Campo>
-        <Campo label="Marcas">
-          <select
-            value={queMarcas}
-            onChange={(e) => setQueMarcas(e.target.value as QueMarcas)}
-            className="px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary"
-          >
-            <option value="todas">Todas</option>
-            <option value="tuyas">Sólo tuyas</option>
-          </select>
-        </Campo>
-      </div>
-
-      {cargando || error || !comida || !falta ? (
-        <EstadoDeLaConsulta
-          cargando={cargando}
-          textoCargando="Sumando lo vendido y repasando el catálogo…"
-          error={error}
-          queSePregunto="el resumen de la cocina"
-          matiz="Si hay ventas en el periodo, es que ninguna ha llegado hasta aquí."
-        />
-      ) : (
-        <>
-          {/* 2 · CINCO CIFRAS con nombre de persona. Ni una más. */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-            <Cifra
-              titulo={queMarcas === 'tuyas' ? 'Comida sobre ventas · sólo tuyas' : 'Comida sobre ventas · todas las marcas'}
-              valor={pct(cifraGrande)}
-              pie={
-                (queMarcas === 'todas' && propias && cedidas
-                  ? `tuyas ${pct(propias.foodCostPct)} · de terceros ${pct(cedidas.foodCostPct)} · `
-                  : '') +
-                `${eurRedondo(comidaEur)} de comida sobre ${eurRedondo(vendidoEur)} vendidos` +
-                // Las ventas sin marca existen y no se tiran en silencio (regla 7).
-                (queMarcas === 'todas' && sinMarca && sinMarca.unidades > 0
-                  ? ` · ${sinMarca.unidades} ${sinMarca.unidades === 1 ? 'venta' : 'ventas'} sin marca (${eurRedondo(sinMarca.vendido)}) van dentro`
-                  : '')
-              }
-            />
-            <Cifra
-              titulo="Ventas con coste conocido"
-              valor={pct(comida.coberturaDineroPct)}
-              pie={comida.coberturaDineroPct != null
-                ? `el ${pct(100 - comida.coberturaDineroPct)} restante se vende sin saber lo que cuesta`
-                : 'no ha llegado ninguna venta que medir'}
-            />
-            <Cifra
-              titulo="Platos con coste"
-              valor={cosaSinFicha ? `${(cosaSinFicha.de ?? 0) - cosaSinFicha.n} de ${cosaSinFicha.de ?? 0}` : '—'}
-              pie={cosaSinFicha && cosaSinFicha.n > 0
-                ? `${cosaSinFicha.n} se venden sin saber lo que cuestan`
-                : 'todos los de la carta tienen ficha con coste'}
-              alerta={(cosaSinFicha?.n ?? 0) > 0}
-            />
-            <Cifra
-              titulo="Extras que cobran sin coste"
-              valor={cosaExtras ? `${cosaExtras.n} de ${cosaExtras.de ?? 0}` : '—'}
-              pie={cosaExtras && (cosaExtras.venden ?? 0) > 0
-                ? `${cosaExtras.venden} se han vendido y no descuentan comida`
-                : 'entran por caja y no descuentan comida'}
-              alerta={(cosaExtras?.n ?? 0) > 0}
-            />
-            <Cifra
-              titulo="Ingredientes sin precio"
-              valor={cosaIngredientes ? String(cosaIngredientes.n) : '—'}
-              pie={cosaIngredientes
-                ? `de ${cosaIngredientes.de ?? 0} en uso${cosaIngredientes.usadosEnLineasDeReceta === 0 ? ' · todavía no están en ninguna receta' : ''}`
-                : '—'}
-              alerta={(cosaIngredientes?.n ?? 0) > 0}
-            />
-          </div>
-
-          {/* 3 · EL FILTRO ES LA ACCIÓN. */}
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <label className="inline-flex items-center gap-1.5 text-text-secondary cursor-pointer">
-              <input type="checkbox" checked={soloPendiente} onChange={(e) => setSoloPendiente(e.target.checked)} />
-              Sólo lo que hay que arreglar
-            </label>
-            {/* El filtro decide el ORDEN y la ETIQUETA, nunca la EXISTENCIA: si
-                deja algo fuera, lo dice (regla 7). */}
-            {soloPendiente && resueltas > 0 && (
-              <span className="text-text-tertiary">
-                · {resueltas} {resueltas === 1 ? 'ya está resuelta' : 'ya están resueltas'} y no se listan aquí
+        <CabeceraCocina
+          migaja={`Folvy Kitchen${nombreDeLaCuenta ? ` · ${nombreDeLaCuenta}` : ''}`}
+          pregunta="¿Cómo va tu cocina este mes?"
+          regla={
+            <>
+              Comida = ingredientes y envase de lo que has vendido · ventas = precio de carta
+              sin IVA
+              {ventana && <> · <em className="not-italic text-cocina-tinta-3">
+                {intervaloDeFechas(ventana.desde, ventana.hasta, { minuscula: true }) ?? 'periodo sin fechas'}
+              </em></>}.{' '}
+              <span className="text-cocina-tinta-3">
+                El margen después de Glovo, Uber y Just Eat llega cuando el catálogo tenga canal.
               </span>
-            )}
-          </div>
+            </>
+          }
+        >
+          <CampoCocina label="Periodo">
+            <select
+              value={String(dias)}
+              onChange={(e) => { const d = Number(e.target.value) as Dias; setDias(d); guardaPeriodoRecordado('resumen', d) }}
+              className="text-[13px] font-medium text-cocina-tinta"
+            >
+              <option value="30">Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="365">Último año</option>
+            </select>
+          </CampoCocina>
+          <CampoCocina label="Marcas">
+            <select
+              value={queMarcas}
+              onChange={(e) => setQueMarcas(e.target.value as QueMarcas)}
+              className="text-[13px] font-medium text-cocina-tinta"
+            >
+              <option value="todas">Todas</option>
+              <option value="tuyas">Sólo tuyas</option>
+            </select>
+          </CampoCocina>
+        </CabeceraCocina>
 
-          {/* 4 · LAS FILAS: lo que hay que arreglar, y luego cada marca. */}
-          <section>
-            <h2 className="text-sm font-medium text-text-primary mb-2">
-              {soloPendiente ? 'Sólo lo que hay que arreglar' : 'Las cinco cosas del catálogo'}
-              <span className="ml-2 text-[11px] font-normal text-text-secondary">
-                ordenadas por lo que más pesa en la cifra de arriba
+        {cargando || error || !comida || !falta ? (
+          <EstadoDeLaConsulta
+            cargando={cargando}
+            textoCargando="Sumando lo vendido y repasando el catálogo…"
+            error={error}
+            queSePregunto="el resumen de la cocina"
+            matiz="Si hay ventas en el periodo, es que ninguna ha llegado hasta aquí."
+          />
+        ) : (
+          <>
+            {/* 2 · CINCO CIFRAS con nombre de persona. Ni una más. */}
+            <CifrasCocina>
+              <CifraCocina
+                titulo={queMarcas === 'tuyas' ? 'Comida sobre ventas · sólo tuyas' : 'Comida sobre ventas · todas las marcas'}
+                valor={pct(cifraGrande).replace(' %', '')}
+                sufijo="%"
+                pie={
+                  (queMarcas === 'todas' && propias && cedidas
+                    ? `tuyas ${pct(propias.foodCostPct)} · de terceros ${pct(cedidas.foodCostPct)} · `
+                    : '') +
+                  `${eurRedondo(comidaEur)} de comida sobre ${eurRedondo(vendidoEur)} vendidos` +
+                  // Las ventas sin marca existen y no se tiran en silencio (regla 7).
+                  (queMarcas === 'todas' && sinMarca && sinMarca.unidades > 0
+                    ? ` · ${sinMarca.unidades} ${sinMarca.unidades === 1 ? 'venta' : 'ventas'} sin marca (${eurRedondo(sinMarca.vendido)}) van dentro`
+                    : '')
+                }
+              />
+              <CifraCocina
+                titulo="Ventas con coste conocido"
+                valor={pct(comida.coberturaDineroPct).replace(' %', '')}
+                sufijo="%"
+                pie={comida.coberturaDineroPct != null
+                  ? `el ${pct(100 - comida.coberturaDineroPct)} restante se vende sin saber lo que cuesta`
+                  : 'no ha llegado ninguna venta que medir'}
+              />
+              <CifraCocina
+                titulo="Platos con coste"
+                valor={cosaSinFicha ? String((cosaSinFicha.de ?? 0) - cosaSinFicha.n) : '—'}
+                sufijo={cosaSinFicha ? `de ${cosaSinFicha.de ?? 0}` : undefined}
+                pie={cosaSinFicha && cosaSinFicha.n > 0
+                  ? `${cosaSinFicha.n} se venden sin saber lo que cuestan`
+                  : 'todos los de la carta tienen ficha con coste'}
+                tono={(cosaSinFicha?.n ?? 0) > 0 ? 'malo' : undefined}
+              />
+              <CifraCocina
+                titulo="Extras que cobran sin coste"
+                valor={cosaExtras ? String(cosaExtras.n) : '—'}
+                sufijo={cosaExtras ? `de ${cosaExtras.de ?? 0}` : undefined}
+                pie={cosaExtras && (cosaExtras.venden ?? 0) > 0
+                  ? `${cosaExtras.venden} se han vendido y no descuentan comida`
+                  : 'entran por caja y no descuentan comida'}
+                tono={(cosaExtras?.n ?? 0) > 0 ? 'malo' : undefined}
+              />
+              <CifraCocina
+                titulo="Ingredientes sin precio"
+                valor={cosaIngredientes ? String(cosaIngredientes.n) : '—'}
+                sufijo={cosaIngredientes ? `de ${cosaIngredientes.de ?? 0}` : undefined}
+                pie={cosaIngredientes
+                  ? `en uso${cosaIngredientes.usadosEnLineasDeReceta === 0 ? ' · todavía no están en ninguna receta' : ''}`
+                  : '—'}
+                tono={(cosaIngredientes?.n ?? 0) > 0 ? 'malo' : undefined}
+              />
+            </CifrasCocina>
+
+            {/* 3 · EL FILTRO ES LA ACCIÓN, y a su derecha lo que se está viendo. */}
+            <div className="flex justify-between items-center gap-3 mt-1 flex-wrap">
+              <InterruptorCocina activo={soloPendiente} onChange={setSoloPendiente}>
+                Sólo lo que hay que arreglar
+              </InterruptorCocina>
+              <span className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
+                {cosasVisibles.length} {cosasVisibles.length === 1 ? 'cosa' : 'cosas'} · ordenadas por lo que más pesa en el {pct(cifraGrande)}
+                {/* El filtro decide el ORDEN y la ETIQUETA, nunca la EXISTENCIA:
+                    si deja algo fuera, lo dice (regla 7). */}
+                {soloPendiente && resueltas > 0 && (
+                  <> · {resueltas} {resueltas === 1 ? 'ya está resuelta' : 'ya están resueltas'} y no se listan aquí</>
+                )}
               </span>
-            </h2>
+            </div>
 
+            {/* 4 · LAS FILAS: lo que hay que arreglar. */}
             {cosasVisibles.length === 0 ? (
-              <div className="p-4 rounded-lg bg-success-bg text-success border border-success/20 text-sm">
-                Nada pendiente en el catálogo: los cinco contadores están a cero.
-              </div>
+              <AvisoCocina>Nada pendiente en el catálogo: los cinco contadores están a cero.</AvisoCocina>
             ) : (
-              <div className="space-y-2">
+              <PanelCocina>
                 {cosasVisibles.map((c) => {
                   const p = pintaCosa(c, comida.envaseEur)
                   return (
                     <div key={c.clave}
-                      className="bg-card border border-border-default rounded-lg p-3 flex items-start gap-3 flex-wrap">
-                      <div className="flex-1 min-w-[16rem]">
-                        <p className="text-sm font-medium text-text-primary">
-                          {estaPendiente(c) ? p.titulo : `${p.titulo} — resuelto`}
-                        </p>
-                        <p className="text-[12px] text-text-secondary mt-0.5 leading-snug">{p.motivo}</p>
+                      className="grid items-start gap-3.5 px-4 py-3 border-b border-cocina-linea-suave last:border-b-0"
+                      style={{ gridTemplateColumns: REJILLA_COSAS }}>
+                      {/* El TÍTULO en su propia columna, como el tablero: así los
+                          cinco se leen en vertical de un vistazo, sin buscar
+                          dónde empieza cada uno dentro de un párrafo. */}
+                      <div className="text-[13.5px] font-semibold text-cocina-tinta">
+                        {estaPendiente(c) ? p.titulo : `${p.titulo} — resuelto`}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] text-cocina-tinta-2 leading-[1.45]">{p.motivo}</div>
                         {c.peores.length > 0 && (
-                          <p className="text-[11px] text-text-tertiary mt-1">
+                          <div className="text-[12.5px] text-cocina-tinta-2 leading-[1.45] mt-0.5">
                             Las que más:{' '}
-                            {c.peores.slice(0, 3).map((x) => `${x.marca} ${x.n} de ${x.de}`).join(' · ')}
+                            <b className="font-semibold text-cocina-tinta">
+                              {c.peores.slice(0, 3).map((x) => `${x.marca} ${x.n} de ${x.de}`).join(' · ')}
+                            </b>
                             {c.peores.length > 3 && ` · y ${c.peores.length - 3} marcas más`}
-                          </p>
+                          </div>
                         )}
                         {/* La definición con la que se contó, tal y como la da la
                             base. No se reescribe aquí: el número no se separa de
-                            su regla. */}
+                            su regla. En cursiva NO (B83): se lee como una nota al
+                            pie, y es la regla del número. */}
                         {c.definicion && (
-                          <p className="text-[11px] text-text-tertiary mt-1 italic">{c.definicion}</p>
+                          <div className="text-[11.5px] text-cocina-tinta-3 mt-1">{c.definicion}</div>
                         )}
                       </div>
                       {estaPendiente(c) && (
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/kitchen/${p.destino}`)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-accent bg-accent text-white hover:opacity-90 transition-base shrink-0"
-                        >
-                          {p.boton}
-                          <ChevronRight size={14} />
-                        </button>
+                        <div className="shrink-0">
+                          <BotonCocina onClick={() => navigate(`/kitchen/${p.destino}`)}>{p.boton}</BotonCocina>
+                        </div>
                       )}
                     </div>
                   )
                 })}
-              </div>
+              </PanelCocina>
             )}
-          </section>
 
-          <section>
-            <h2 className="text-sm font-medium text-text-primary mb-2">
-              Por marca · comida sobre ventas
-              <span className="ml-2 text-[11px] font-normal text-text-secondary">
-                tuyas primero · de terceros después
-              </span>
-            </h2>
-            <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-[11px] uppercase tracking-wide text-text-secondary border-b border-border-default">
-                    <th className="text-left font-medium px-3 py-2">Marca</th>
-                    <th className="text-right font-medium px-3 py-2">Vendido</th>
-                    <th className="text-right font-medium px-3 py-2">Comida</th>
-                    <th className="text-right font-medium px-3 py-2">Coste conocido</th>
-                    <th className="px-3 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {marcasVisibles.map((m) => {
-                    const flojo = m.coberturaPct != null && m.coberturaPct < COBERTURA_QUE_PREOCUPA
-                    return (
-                      <tr key={m.brandId ?? m.marca} className="border-b border-border-default last:border-0">
-                        <td className="px-3 py-2 text-text-primary">
-                          {m.marca}
-                          {m.ownershipType !== 'own' && (
-                            <span className="ml-1.5 text-[10px] text-text-secondary">de terceros</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-text-primary">{eurRedondo(m.ingreso)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-text-primary">{pct(m.foodCostPct)}</td>
-                        <td className={`px-3 py-2 text-right tabular-nums ${flojo ? 'text-danger' : 'text-text-secondary'}`}>
-                          {pct(m.coberturaPct)}{flojo ? ' · falta coste' : ''}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => navigate('/kitchen/rentabilidad')}
-                            className="text-[12px] text-accent hover:underline">
-                            Ver platos
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {/* 5 · POR MARCA. */}
+            <PanelCocina>
+              <div className="flex items-baseline justify-between gap-3 px-4 py-2.5 border-b border-cocina-linea-suave bg-cocina-superficie-2">
+                <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-3">
+                  Por marca · comida sobre ventas
+                </span>
+                <span className="text-[11.5px] text-cocina-tinta-3">tuyas primero · de terceros después</span>
+              </div>
+              <div
+                className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
+                style={{ gridTemplateColumns: REJILLA_MARCAS }}
+              >
+                <span>Marca</span>
+                <span className="text-right">Vendido</span>
+                <span className="text-right">Comida</span>
+                <span className="text-right">Coste conocido</span>
+                <span />
+              </div>
+              {marcasVisibles.map((m) => {
+                const flojo = m.coberturaPct != null && m.coberturaPct < COBERTURA_QUE_PREOCUPA
+                return (
+                  <div key={m.brandId ?? m.marca}
+                    className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[44px]"
+                    style={{ gridTemplateColumns: REJILLA_MARCAS }}>
+                    <div className="min-w-0 text-[13.5px] font-semibold text-cocina-tinta truncate">
+                      {m.marca}
+                      {m.ownershipType !== 'own' && (
+                        <span className="ml-1.5 text-[11px] font-medium text-cocina-tinta-3">de terceros</span>
+                      )}
+                    </div>
+                    <span className="num text-[13px] text-right text-cocina-tinta">{eurDeCocina(m.ingreso)}</span>
+                    <span className="num text-[13px] text-right text-cocina-tinta">{pct(m.foodCostPct)}</span>
+                    {/* Una cobertura floja es una PASTILLA, como en el tablero, y
+                        no texto rojo suelto: partido en dos líneas se leía como
+                        una nota, no como un aviso. */}
+                    <span className="text-right whitespace-nowrap">
+                      {flojo
+                        ? <PastillaCocina tono="rojo">{pctEnteroDeCocina(m.coberturaPct)} · falta coste</PastillaCocina>
+                        : <span className="num text-[13px] text-cocina-tinta-3">{pctEnteroDeCocina(m.coberturaPct)}</span>}
+                    </span>
+                    <span className="text-right">
+                      <BotonCocina peso="fantasma" onClick={() => navigate('/kitchen/rentabilidad')}>Ver platos</BotonCocina>
+                    </span>
+                  </div>
+                )
+              })}
+            </PanelCocina>
+
             {queMarcas === 'todas' && cedidas && propias && comida.ingresoTotal > 0 && (
-              <p className="text-[12px] text-text-secondary mt-2 max-w-4xl">
+              <p className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
                 Las de terceros son el {pct(100 * cedidas.vendido / (comida.ingresoTotal || 1))} de lo vendido
                 y su comida cuesta el {pct(cedidas.foodCostPct)}: la cifra de arriba es sobre todo suya.
                 Con «Marcas: sólo tuyas» pasa a {pct(propias.foodCostPct)}. Su carta la manda el TPV.
               </p>
             )}
-          </section>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

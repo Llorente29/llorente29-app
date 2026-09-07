@@ -187,3 +187,26 @@ export function cuantasResueltas(cosas: CosaMedida[]): number {
 export function rutaDe(destino: string): string {
   return destino.split('#')[0].split('?')[0]
 }
+
+/**
+ * EUROS ENTEROS COMO LOS PINTA LA MAQUETA: «6.693 €», «927 €», «7.181 €».
+ *
+ * `fmtInt` usa `toLocaleString('es-ES')` a secas, y en español eso NO agrupa los
+ * números de cuatro cifras: «7181» sale sin punto y «14.473» con él, en la misma
+ * columna. Medido, no supuesto — `(7181).toLocaleString('es-ES')` da «7181».
+ *
+ * No se arregla en `fmtInt` porque lo usan doce ficheros de toda la app —Supply,
+ * Almacén, Personal, Órdenes— y cambiarlo movería el aspecto de pantallas que no
+ * tienen su captura comparada (§11: eso es justo lo que no se hace). Aquí va
+ * acotado a Kitchen, y queda escrito como deuda del formato común.
+ */
+export function eurDeCocina(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(Number(v))) return '—'
+  return `${Math.round(Number(v)).toLocaleString('es-ES', { useGrouping: true })} €`
+}
+
+/** El porcentaje de cobertura, entero: la maqueta pinta «96 %», no «96,2 %». */
+export function pctEnteroDeCocina(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(Number(v))) return '—'
+  return `${Math.round(Number(v))} %`
+}
