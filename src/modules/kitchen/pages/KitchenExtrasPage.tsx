@@ -19,17 +19,24 @@
 // probado allí.
 
 import { useEffect, useMemo, useState } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useApp } from '@/context/AppContext'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
   CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
   PastillaCocina, BotonCocina, ChipCocina, InterruptorCocina, PanelCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
-import { getExtras, type LosExtras } from '@/modules/kitchen/services/extrasService'
+import { getExtras, ponerLoQueLleva, type LosExtras } from '@/modules/kitchen/services/extrasService'
+import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
+import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import { kindOf, TIPOS_ELEGIBLES, type CatalogPick } from '@/modules/kitchen/lib/catalogPick'
+import type { UnidadPick } from '@/modules/kitchen/lib/impactoResuelto'
+import FlujoDeExtra from '@/modules/kitchen/components/FlujoDeExtra'
 import {
-  ORDENES, cuantasCopias, loQueCobra, queLleva, botonDeLaFila,
+  ORDENES, confirmacion, cuantasCopias, loQueCobra, queLleva, botonDeLaFila,
   hayQueArreglarlo, ordena, parteEnDos, pieDeLaBarra, tituloDelPliegue,
-  type ExtraPorNombre, type OrdenDeExtras,
+  type ExtraPorNombre, type OrdenDeExtras, type CosaQueLleva,
 } from '@/modules/kitchen/lib/extrasDeCocina'
 
 /** La rejilla de la tabla, copiada del `.dc.html`. Cabecera y filas comparten. */
@@ -40,6 +47,8 @@ const eur = (n: number) =>
 
 export default function KitchenExtrasPage() {
   const { activeAccountId } = useActiveAccount()
+  const { userProfile } = useApp()
+  const nombreDelActor = userProfile?.displayName ?? null
   const [datos, setDatos] = useState<LosExtras | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +57,16 @@ export default function KitchenExtrasPage() {
   const [orden, setOrden] = useState<OrdenDeExtras>('vendido')
   const [marca, setMarca] = useState<string>('')          // '' = todas
   const [pliegueAbierto, setPliegueAbierto] = useState(false)
+  const [refresco, setRefresco] = useState(0)
+
+  // El flujo y el «ver dónde». Sólo uno abierto a la vez: dos cajas de aviso
+  // apiladas es justo lo que prohíbe la línea 5 del patrón.
+  const [enFlujo, setEnFlujo] = useState<ExtraPorNombre | null>(null)
+  const [verDonde, setVerDonde] = useState<ExtraPorNombre | null>(null)
+  const [guardando, setGuardando] = useState(false)
+  const [hecho, setHecho] = useState<string | null>(null)
+  const [catalogo, setCatalogo] = useState<CatalogPick[]>([])
+  const [unidades, setUnidades] = useState<UnidadPick[]>([])
 
   // La consulta empieza con el `await`, no con un `setCargando(true)`: tocar el
   // estado en seco dentro del efecto encadena un render de más.
@@ -71,7 +90,59 @@ export default function KitchenExtrasPage() {
       }
     })()
     return () => { vigente = false }
+  }, [activeAccountId, refresco])
+
+  // El catálogo y las unidades: los mismos que usa la pestaña del plato, para
+  // que las dos pantallas ofrezcan lo mismo y calculen igual.
+  useEffect(() => {
+    if (!activeAccountId) return
+    let vigente = true
+    void (async () => {
+      try {
+        const [items, uds] = await Promise.all([
+          listRecipeItems({ accountId: activeAccountId, includeArchived: true }),
+          listUnits({}),
+        ])
+        if (!vigente) return
+        setCatalogo(items.map((r) => ({
+          id: r.id, name: r.name, needsReview: r.needsReview, type: r.type,
+          kind: kindOf(r.type),
+          selectable: TIPOS_ELEGIBLES.includes(r.type) && r.isActive === true && r.archivedAt == null,
+          costeUnitario: r.computedCost ?? r.fixedCost ?? null,
+          baseUnitId: r.baseUnitId ?? null,
+        })))
+        setUnidades(uds.map((u) => ({
+          id: u.id, abreviatura: u.abbreviation, dimension: u.dimension, factorABase: u.factorToBase,
+        })))
+      } catch { /* el flujo lo dirá al abrirse; la lista no depende de esto */ }
+    })()
+    return () => { vigente = false }
   }, [activeAccountId])
+
+  async function guardar(opciones: string[], cosas: CosaQueLleva[], frase: string, coste: number) {
+    if (!activeAccountId || !enFlujo) return
+    setGuardando(true)
+    try {
+      await ponerLoQueLleva({
+        accountId: activeAccountId,
+        opciones,
+        lleva: cosas.map((c) => ({ ficha: c.ficha, tipo: c.tipo, cantidad: c.cantidad, unidad: c.unidad })),
+        actor: nombreDelActor,
+      })
+      // La confirmación lleva CONTENIDO (regla 8): qué, cuánto, dónde y qué queda.
+      setHecho(confirmacion({
+        nombre: enFlujo.nombre, queLleva: frase, coste,
+        copias: enFlujo.donde.filter((d) => opciones.includes(d.opcion)),
+        sinCosteDespues: Math.max(0, (datos?.cifras.sinCoste ?? 0) - opciones.length),
+      }))
+      setEnFlujo(null)
+      setRefresco((n) => n + 1)     // los contadores se recalculan solos
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se ha podido guardar lo que lleva')
+    } finally {
+      setGuardando(false)
+    }
+  }
 
   /** Las marcas que ofrece el selector salen de los datos, no de una lista aparte. */
   const marcas = useMemo(() => {
@@ -90,6 +161,15 @@ export default function KitchenExtrasPage() {
   }, [datos, soloLosQueArreglar, marca, orden])
 
   const { conVentas, sinVentas } = useMemo(() => parteEnDos(visibles), [visibles])
+
+  // El pie de la barra cuenta EL PROBLEMA, no lo que el filtro deja ver: «56
+  // nombres · 100 copias · los 34 que se venden». Contar lo filtrado haría que
+  // el número bajara al marcar una casilla, como si se hubiera arreglado algo.
+  const paraElPie = useMemo(() => {
+    let f = datos?.filas ?? []
+    if (marca) f = f.filter((x) => x.donde.some((c) => c.marcaId === marca))
+    return f.filter(hayQueArreglarlo)
+  }, [datos, marca])
   const c = datos?.cifras
 
   return (
@@ -169,9 +249,17 @@ export default function KitchenExtrasPage() {
                 </div>
               </div>
               <span className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
-                {pieDeLaBarra(visibles)}
+                {pieDeLaBarra(paraElPie)}
               </span>
             </div>
+
+            {/* Lo que ha pasado, con contenido y no con un visto (regla 8). */}
+            {hecho && (
+              <div className="rounded-cocina px-3.5 py-3 text-[13px] bg-cocina-verde-bg text-cocina-verde border border-cocina-verde/35 flex items-start justify-between gap-3">
+                <span>{hecho}</span>
+                <button type="button" onClick={() => setHecho(null)} className="shrink-0 opacity-70 hover:opacity-100">✕</button>
+              </div>
+            )}
 
             <PanelCocina>
               <div
@@ -191,7 +279,12 @@ export default function KitchenExtrasPage() {
                   Ningún extra cumple lo que estás mirando ahora mismo.
                 </p>
               ) : (
-                conVentas.map((f) => <FilaDeExtra key={f.clave} extra={f} />)
+                conVentas.map((f) => (
+                  <FilaDeExtra key={f.clave} extra={f}
+                    onDecir={() => { setHecho(null); setEnFlujo(f) }}
+                    onVerDonde={() => setVerDonde(verDonde?.clave === f.clave ? null : f)}
+                    abierta={verDonde?.clave === f.clave} />
+                ))
               )}
 
               {/* Lo que no se vende NO desaparece: baja, se cuenta y se abre
@@ -201,14 +294,20 @@ export default function KitchenExtrasPage() {
                   <button
                     type="button"
                     onClick={() => setPliegueAbierto((v) => !v)}
-                    className="w-full flex items-baseline gap-2.5 px-4 pt-3 pb-2 border-b border-cocina-linea-suave bg-cocina-superficie-2 text-left"
+                    className="w-full flex items-center gap-2.5 px-4 pt-3 pb-2 border-b border-cocina-linea-suave bg-cocina-superficie-2 text-left"
                   >
+                    <ChevronRight size={14} className={`text-cocina-tinta-3 transition-base ${pliegueAbierto ? 'rotate-90' : ''}`} />
                     <span className="text-[14px] font-bold text-cocina-tinta">{tituloDelPliegue(sinVentas)}</span>
                     <span className="text-[12px] text-cocina-tinta-3">
-                      que no se han vendido en {datos.ventanaDias ?? 30} días · {pliegueAbierto ? 'ocultar' : 'ver'}
+                      que no se han vendido en {datos.ventanaDias ?? 30} días · ordenados por copias
                     </span>
                   </button>
-                  {pliegueAbierto && sinVentas.map((f) => <FilaDeExtra key={f.clave} extra={f} />)}
+                  {pliegueAbierto && sinVentas.map((f) => (
+                    <FilaDeExtra key={f.clave} extra={f}
+                      onDecir={() => { setHecho(null); setEnFlujo(f) }}
+                      onVerDonde={() => setVerDonde(verDonde?.clave === f.clave ? null : f)}
+                      abierta={verDonde?.clave === f.clave} />
+                  ))}
                 </>
               )}
             </PanelCocina>
@@ -221,17 +320,37 @@ export default function KitchenExtrasPage() {
           </>
         )}
       </div>
+
+      {enFlujo && (
+        <FlujoDeExtra
+          extra={enFlujo}
+          catalogo={catalogo}
+          unidades={unidades}
+          sinCosteAhora={datos?.cifras.sinCoste ?? 0}
+          guardando={guardando}
+          onCancelar={() => setEnFlujo(null)}
+          onGuardar={guardar}
+        />
+      )}
     </div>
   )
 }
 
 /** Una fila: un NOMBRE, no una copia. Es la idea entera de la sección. */
-function FilaDeExtra({ extra }: { extra: ExtraPorNombre }) {
+function FilaDeExtra({
+  extra, onDecir, onVerDonde, abierta,
+}: {
+  extra: ExtraPorNombre
+  onDecir: () => void
+  onVerDonde: () => void
+  abierta: boolean
+}) {
   const cobra = loQueCobra(extra)
   const lleva = queLleva(extra)
   const marcas = [...new Set(extra.donde.map((d) => d.marca))].join(' · ')
 
   return (
+    <>
     <div
       className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[50px]"
       style={{ gridTemplateColumns: REJILLA }}
@@ -254,9 +373,39 @@ function FilaDeExtra({ extra }: { extra: ExtraPorNombre }) {
       <div><PastillaCocina tono={lleva.tono}>{lleva.texto}</PastillaCocina></div>
 
       <div className="flex gap-2">
-        <BotonCocina>{botonDeLaFila(extra)}</BotonCocina>
-        <BotonCocina peso="fantasma">Ver dónde</BotonCocina>
+        <BotonCocina onClick={onDecir}>{botonDeLaFila(extra)}</BotonCocina>
+        <BotonCocina peso="fantasma" onClick={onVerDonde}>Ver dónde</BotonCocina>
       </div>
     </div>
+
+    {/* Dónde aparece: la copia, su marca, en qué grupo la ve el cliente, lo que
+        cobra y lo que se vende. Es lo que hace falta para decidir si son la
+        misma cosa. */}
+    {abierta && (
+      <div className="px-4 pb-3 pt-1 bg-cocina-superficie-2 border-b border-cocina-linea-suave">
+        <div className="text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 mb-1.5">
+          Dónde aparece
+        </div>
+        <div className="flex flex-col gap-1">
+          {extra.donde.map((c) => (
+            <div key={c.opcion}
+              className="grid items-center gap-2.5 text-[12.5px] px-2.5 py-1.5 bg-cocina-superficie border border-cocina-linea-suave rounded-cocina"
+              style={{ gridTemplateColumns: 'minmax(0,1fr) 90px 90px 110px' }}>
+              <span className="truncate text-cocina-tinta">{c.marca} · «{c.grupo}»</span>
+              <span className="num text-right text-cocina-tinta">{eur(c.precio)} €</span>
+              <span className="num text-right text-cocina-tinta-3">
+                {c.vendidas > 0 ? `${c.vendidas} vend.` : '0'}
+              </span>
+              <span className="text-right">
+                {c.tieneCoste
+                  ? <PastillaCocina tono="verde">{eur(c.coste)} €</PastillaCocina>
+                  : <PastillaCocina tono="rojo">sin coste</PastillaCocina>}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+    </>
   )
 }

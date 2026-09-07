@@ -177,3 +177,69 @@ export function confirmacion(args: {
        + ` Aplicado a ${n} ${n === 1 ? 'copia' : 'copias'} en ${porMarca.size} ${porMarca.size === 1 ? 'marca' : 'marcas'}: ${marcas}.`
        + ` Sin coste quedan ${args.sinCosteDespues}.`
 }
+
+// ── LA PUERTA DE LAS COPIAS ────────────────────────────────────────────────
+//
+// Cuando las copias no cobran lo mismo puede que no sean la misma cosa, y ahí
+// no se costea a ciegas: se eligen (decisión 2 del §5). El caso que lo obliga
+// es real — «Tiras de Pollo Kentucky» está a 1,90 € en dos marcas y a 6,50 € en
+// una tercera: la de 6,50 € es una ración entera, no un añadido. Ponerles el
+// mismo coste sería escribir un error en tres fichas.
+
+/**
+ * Las que vienen marcadas: las que cobran lo mismo que la copia que MÁS SE
+ * VENDE. No es el precio más bajo ni el más repetido — es el de la copia que
+ * de verdad mueve dinero, que es la que define de qué estamos hablando.
+ */
+export function copiasPreseleccionadas(e: ExtraPorNombre): string[] {
+  if (e.donde.length === 0) return []
+  const patron = [...e.donde].sort(
+    (a, b) => b.vendidas - a.vendidas || a.precio - b.precio,
+  )[0]
+  return e.donde.filter((c) => c.precio === patron.precio).map((c) => c.opcion)
+}
+
+/**
+ * La frase que explica por qué una copia se queda fuera. Se dice: dejarla
+ * desmarcada sin decir por qué es esconder una decisión (regla 8).
+ */
+export function porQueSeQuedaFuera(e: ExtraPorNombre, c: CopiaDelExtra): string | null {
+  const marcadas = copiasPreseleccionadas(e)
+  if (marcadas.includes(c.opcion)) return null
+  const eur2 = (n: number) => n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `La de ${c.marca} a ${eur2(c.precio)} € parece otra cosa. Se queda fuera y aparece como extra aparte.`
+}
+
+/** Cuántas copias van a recibirlo, para el botón: «Guardar en las 7 copias». */
+export function textoDeGuardar(cuantas: number): string {
+  return cuantas === 1 ? 'Guardar en la copia' : `Guardar en las ${cuantas} copias`
+}
+
+/** Lo que lleva un extra, tal y como se teclea antes de guardarlo. */
+export interface CosaQueLleva {
+  ficha: string
+  nombreFicha: string
+  tipo: 'plato' | 'ingrediente'
+  cantidad: number | null
+  unidad: string | null
+  nombreUnidad: string
+}
+
+/**
+ * La frase de lo que lleva, en castellano y sin jerga (línea 5 del patrón):
+ * «40 g de yogur griego», «una ración de Salsa Yogur». Ni `add_item` ni
+ * `bundle` salen nunca de aquí.
+ */
+export function frasedeLoQueLleva(cosas: CosaQueLleva[]): string {
+  const trozos = cosas.map((c) => {
+    if (c.tipo === 'plato') {
+      return c.cantidad && c.cantidad !== 1
+        ? `${c.cantidad} raciones de ${c.nombreFicha}`
+        : `una ración de ${c.nombreFicha}`
+    }
+    const cant = c.cantidad ?? 0
+    return `${cant.toLocaleString('es-ES')} ${c.nombreUnidad} de ${c.nombreFicha}`
+  })
+  if (trozos.length <= 1) return trozos[0] ?? ''
+  return `${trozos.slice(0, -1).join(', ')} y ${trozos[trozos.length - 1]}`
+}

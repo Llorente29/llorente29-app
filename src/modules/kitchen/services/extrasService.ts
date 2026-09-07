@@ -86,3 +86,28 @@ export async function getExtras(accountId: string): Promise<LosExtras> {
     })),
   }
 }
+
+/**
+ * Pone lo que lleva un extra en TODAS las copias elegidas, de una vez.
+ *
+ * La transacción está en la base (regla 13), no aquí: escribiendo de una en una
+ * desde el navegador, si falla la quinta de siete quedan cuatro puestas y tres
+ * no, sin nada que lo deshaga. O entran todas o no entra ninguna.
+ */
+export async function ponerLoQueLleva(args: {
+  accountId: string
+  opciones: string[]
+  lleva: Array<{ ficha: string; tipo: 'plato' | 'ingrediente'; cantidad: number | null; unidad: string | null }>
+  actor: string | null
+}): Promise<{ copias: number; escritos: number; cosas: number }> {
+  requireSupabase()
+  const { data, error } = await (supabase!.rpc as unknown as Rpc)('kitchen_extras_poner_lo_que_lleva', {
+    p_account: args.accountId,
+    p_opciones: args.opciones,
+    p_lleva: args.lleva,
+    p_actor: args.actor,
+  })
+  if (error) throw new Error(`No se ha podido guardar lo que lleva: ${error.message}`)
+  const d = (data ?? {}) as Record<string, unknown>
+  return { copias: num(d.copias), escritos: num(d.escritos), cosas: num(d.cosas) }
+}

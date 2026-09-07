@@ -178,3 +178,76 @@ describe('ni un identificador en lo que se pinta', () => {
     }
   })
 })
+
+// ── La puerta de las copias ────────────────────────────────────────────────
+// El caso REAL que la obliga: «Tiras de Pollo Kentucky (4 uds)», tres copias en
+// tres marcas, a 1,90 € dos y a 6,50 € la tercera. Medido en producción el
+// 07/09. La de 6,50 € es una ración entera, no un añadido.
+import {
+  copiasPreseleccionadas, porQueSeQuedaFuera, textoDeGuardar, frasedeLoQueLleva,
+} from '@/modules/kitchen/lib/extrasDeCocina'
+
+const TIRAS = E({
+  clave: 'tiras de pollo kentucky (4 uds)', nombre: 'Tiras de Pollo Kentucky (4 uds)',
+  copias: 3, marcas: 3, vendidas: 5, cobrado: 9.5,
+  precioMin: 1.9, precioMax: 6.5, preciosDistintos: true, estado: 'nada_puesto',
+  donde: [
+    copia({ opcion: 'a', marca: 'Smash Brothers Burgers', precio: 1.9, vendidas: 5 }),
+    copia({ opcion: 'b', marca: "Mila's Sandwiches",      precio: 1.9, vendidas: 0 }),
+    copia({ opcion: 'c', marca: 'Dirty Burger',           precio: 6.5, vendidas: 0 }),
+  ],
+})
+
+describe('cuando las copias no cobran lo mismo', () => {
+  it('marca las que cobran como la que MÁS SE VENDE, no las más baratas', () => {
+    expect(copiasPreseleccionadas(TIRAS)).toEqual(['a', 'b'])
+  })
+
+  // Si el patrón fuera «el precio más bajo» coincidiría aquí por casualidad.
+  // Con la más vendida cara, el resultado tiene que cambiar: así se comprueba
+  // que la regla es la que digo y no otra que da lo mismo en este ejemplo.
+  it('si la que más vende es la cara, se marcan las caras', () => {
+    const alReves = { ...TIRAS, donde: [
+      copia({ opcion: 'a', marca: 'Smash Brothers Burgers', precio: 1.9, vendidas: 0 }),
+      copia({ opcion: 'b', marca: "Mila's Sandwiches",      precio: 1.9, vendidas: 0 }),
+      copia({ opcion: 'c', marca: 'Dirty Burger',           precio: 6.5, vendidas: 9 }),
+    ] }
+    expect(copiasPreseleccionadas(alReves)).toEqual(['c'])
+  })
+
+  it('la que se queda fuera lleva escrito por qué', () => {
+    const fuera = TIRAS.donde.find((c) => c.opcion === 'c')!
+    expect(porQueSeQuedaFuera(TIRAS, fuera)).toContain('Dirty Burger a 6,50 €')
+    expect(porQueSeQuedaFuera(TIRAS, TIRAS.donde[0])).toBeNull()
+  })
+
+  it('el botón dice a cuántas copias va', () => {
+    expect(textoDeGuardar(7)).toBe('Guardar en las 7 copias')
+    expect(textoDeGuardar(1)).toBe('Guardar en la copia')
+  })
+})
+
+describe('la frase de lo que lleva, sin jerga', () => {
+  const yogur = { ficha: 'f1', nombreFicha: 'yogur griego', tipo: 'ingrediente' as const,
+                  cantidad: 40, unidad: 'u1', nombreUnidad: 'g' }
+  it('un ingrediente con su cantidad y unidad', () => {
+    expect(frasedeLoQueLleva([yogur])).toBe('40 g de yogur griego')
+  })
+  it('un plato entero se dice en raciones, no en gramos', () => {
+    expect(frasedeLoQueLleva([{ ficha: 'f2', nombreFicha: 'Salsa Yogur (ración)',
+      tipo: 'plato', cantidad: 1, unidad: null, nombreUnidad: 'ud' }]))
+      .toBe('una ración de Salsa Yogur (ración)')
+  })
+  it('varias cosas se enumeran en castellano', () => {
+    const t = frasedeLoQueLleva([
+      { ...yogur, nombreFicha: 'pan', cantidad: 1, nombreUnidad: 'ud' },
+      { ...yogur, nombreFicha: 'carne', cantidad: 120 },
+      { ...yogur, nombreFicha: 'salsa', cantidad: 20 },
+    ])
+    expect(t).toBe('1 ud de pan, 120 g de carne y 20 g de salsa')
+  })
+  it('nunca dice add_item ni bundle', () => {
+    const t = frasedeLoQueLleva([yogur])
+    expect(t).not.toMatch(/add_item|bundle|impact/)
+  })
+})

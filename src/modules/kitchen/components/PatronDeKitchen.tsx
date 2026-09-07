@@ -220,12 +220,12 @@ export function CabeceraCocina({
       {migaja && (
         <div className="text-[11px] text-cocina-tinta-3 tracking-[0.08em] uppercase font-bold">{migaja}</div>
       )}
-      <div className="flex justify-between items-end gap-4 flex-wrap">
-        <div className="min-w-0">
+      <div className="flex justify-between items-end gap-4">
+        <div className="min-w-0 flex-1">
           <h1 className="text-[24px] font-bold tracking-[-0.015em] leading-[1.2] mt-1 text-cocina-tinta">{pregunta}</h1>
           <p className="text-[12.5px] text-cocina-tinta-2 mt-1.5 leading-[1.5]">{regla}</p>
         </div>
-        {children && <div className="flex gap-2 items-center shrink-0">{children}</div>}
+        {children && <div className="flex gap-2 items-center shrink-0 flex-none">{children}</div>}
       </div>
     </div>
   )
