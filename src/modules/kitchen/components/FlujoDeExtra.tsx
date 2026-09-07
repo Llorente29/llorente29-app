@@ -15,14 +15,15 @@
 // Y AL GUARDAR SE DICE QUÉ HA PASADO, no un visto (regla 8): qué lleva, cuánto
 // cuesta, a cuántas copias ha ido, en qué marcas y cuántos quedan sin coste.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Plus, Trash2, Loader2 } from 'lucide-react'
 import { BotonCocina, PastillaCocina } from '@/modules/kitchen/components/PatronDeKitchen'
 import { resuelveImpacto, type UnidadPick } from '@/modules/kitchen/lib/impactoResuelto'
 import { kindOf, TIPOS_ELEGIBLES, normName, type CatalogPick } from '@/modules/kitchen/lib/catalogPick'
 import {
   copiasPreseleccionadas, porQueSeQuedaFuera, textoDeGuardar, cuantasCopiasEnElTitulo,
-  soloCopias, frasedeLoQueLleva, platoDelMismoNombre,
+  soloCopias, frasedeLoQueLleva, platoDelMismoNombre, fichasSinPrecio, avisoDeSinPrecio,
   type ExtraPorNombre, type CosaQueLleva,
 } from '@/modules/kitchen/lib/extrasDeCocina'
 
@@ -71,9 +72,29 @@ export default function FlujoDeExtra({
 
   const completo = cosas.length > 0 && cosas.every((c) => c.ficha && (c.tipo === 'plato' || (c.cantidad != null && c.unidad)))
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(16,26,33,.45)] p-8">
-      <div className="cocina w-[560px] bg-cocina-superficie border border-cocina-linea rounded-cocina-md shadow-cocina py-[18px] px-5 flex flex-col gap-3">
+  // Cerrar con Escape: si el panel tapa la pantalla, tiene que haber una salida
+  // que no obligue a buscar la «×» con el ratón.
+  useEffect(() => {
+    const alPulsar = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancelar() }
+    document.addEventListener('keydown', alPulsar)
+    return () => document.removeEventListener('keydown', alPulsar)
+  }, [onCancelar])
+
+  // ── B84.1 · EL PANEL SE ABRE DONDE ESTÁS, NO ARRIBA DE LA PÁGINA ──────────
+  //
+  // Julio, 07/09 en producción: pulsando «Decir qué lleva» en una fila de abajo
+  // el panel salía fuera de la vista y sólo aparecía con la tecla Inicio. Que
+  // Inicio lo traiga es la prueba de que NO estaba fijo al viewport: algún
+  // ascendiente lo estaba conteniendo. Y un administrativo no deduce eso: cree
+  // que el botón no hace nada y lo vuelve a pulsar.
+  //
+  // El arreglo NO es cazar al ascendiente. Es sacar el panel del subárbol de la
+  // página con un portal a `body`: así ningún ancestro —ni el de hoy ni el que
+  // alguien añada mañana— puede volver a moverlo. Y `items-center`, como los
+  // otros 43 paneles del módulo; el `items-start` era mío y era el único.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[rgba(16,26,33,.45)] p-8">
+      <div className="cocina w-[560px] max-h-[calc(100vh-64px)] overflow-y-auto bg-cocina-superficie border border-cocina-linea rounded-cocina-md shadow-cocina py-[18px] px-5 flex flex-col gap-3">
 
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -114,7 +135,8 @@ export default function FlujoDeExtra({
           />
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -146,6 +168,10 @@ export function PasoDeLoQueLleva({
   const elPlato = useMemo(
     () => platoDelMismoNombre(extra.nombre, catalogo, normName),
     [extra.nombre, catalogo],
+  )
+  const sinPrecio = useMemo(
+    () => fichasSinPrecio(cosas.filter((c) => c.ficha), catalogo),
+    [cosas, catalogo],
   )
   return (
     <>
@@ -188,11 +214,30 @@ export function PasoDeLoQueLleva({
       )}
 
       {cosas.length > 0 && (
-        <div className="flex justify-between items-center px-2.5 py-2 border border-cocina-linea-suave rounded-cocina">
-          <span className="text-[10.5px] font-bold tracking-[0.05em] uppercase text-cocina-tinta-3">Coste</span>
-          {coste === null
-            ? <PastillaCocina tono="ambar">no se puede calcular</PastillaCocina>
-            : <span className="num text-[13px] font-bold text-cocina-tinta">{eur(coste)} €</span>}
+        <div className="flex flex-col gap-1.5 px-2.5 py-2 border border-cocina-linea-suave rounded-cocina">
+          <div className="flex justify-between items-center">
+            <span className="text-[10.5px] font-bold tracking-[0.05em] uppercase text-cocina-tinta-3">Coste</span>
+            {coste === null
+              ? <PastillaCocina tono="ambar">no se puede calcular</PastillaCocina>
+              : <span className="num text-[13px] font-bold text-cocina-tinta">{eur(coste)} €</span>}
+          </div>
+
+          {/* B84.3 · UN CERO QUE NO ES UNA MEDIDA SE DICE. Sin esto, elegir un
+              ingrediente sin precio daba «0,00 €» y Guardar activo: se escribían
+              las siete copias y el extra quedaba «puesto, pero vale 0 €», que es
+              PEOR que no tocarlo — ahora parece hecho. Y con el nombre y el
+              enlace, porque el que mira tiene que saber cuál ir a rellenar. */}
+          {sinPrecio.length > 0 && (
+            <div className="text-[11.5px] text-cocina-ambar leading-[1.45]">
+              {avisoDeSinPrecio(sinPrecio)} ·{' '}
+              <a
+                href={`/kitchen?item=${sinPrecio[0].id}`}
+                className="underline underline-offset-2 font-semibold"
+              >
+                ponérselo en Ingredientes
+              </a>
+            </div>
+          )}
         </div>
       )}
 
@@ -213,7 +258,8 @@ export function PasoDeLoQueLleva({
       <div className="flex gap-2 justify-end">
         <BotonCocina peso="fantasma" onClick={onCancelar}>Cancelar</BotonCocina>
         <BotonCocina
-          disabled={!completo || guardando}
+          // No se guarda un coste que se sabe que es mentira (B84.3).
+          disabled={!completo || guardando || sinPrecio.length > 0}
           onClick={onGuardar}
         >
           {guardando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : textoDeGuardar(elegidas.length)}
@@ -371,7 +417,11 @@ function UnaCosaQueLleva({
                 onCambiar({
                   ...cosa, ficha: c.id, nombreFicha: c.name, tipo: esPlato ? 'plato' : 'ingrediente',
                   cantidad: esPlato ? 1 : cosa.cantidad,
-                  unidad: esPlato ? (c.baseUnitId ?? null) : cosa.unidad,
+                  // B84.4: la unidad la trae la ficha. Dejarla en «—» obligaba a
+                  // elegirla a mano sabiendo en qué se mide un yogur, y un
+                  // desplegable en blanco al lado de una cantidad escrita es
+                  // media orden dada: 40 de nada.
+                  unidad: c.baseUnitId ?? cosa.unidad,
                   nombreUnidad: ud?.abreviatura ?? cosa.nombreUnidad,
                 })
                 setBusca('')

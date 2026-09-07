@@ -38,10 +38,13 @@ export interface LosExtras {
   filas: ExtraPorNombre[]
 }
 
-export async function getExtras(accountId: string): Promise<LosExtras> {
+export async function getExtras(accountId: string, dias = 30): Promise<LosExtras> {
   requireSupabase()
   const { data, error } = await (supabase!.rpc as unknown as Rpc)('kitchen_extras_por_nombre', {
     p_account: accountId,
+    // La consulta redondea a días enteros de Madrid y devuelve cuáles ha
+    // contado; aquí sólo se le dice cuántos.
+    p_ventana: `${dias} days`,
   })
   if (error) throw new Error(`No se han podido leer los extras: ${error.message}`)
 
@@ -86,6 +89,11 @@ export async function getExtras(accountId: string): Promise<LosExtras> {
         vendidas: num(w.vendidas),
         coste: num(w.coste),
         tieneCoste: w.tiene_coste === true,
+        // B84.5. Si la consulta todavía no los manda llega vacío y la pantalla
+        // pinta el grupo: nunca una lista inventada.
+        platos: ((w.platos ?? []) as Record<string, unknown>[]).map((p) => ({
+          id: String(p.id ?? ''), nombre: String(p.nombre ?? ''),
+        })),
       })),
     })),
   }

@@ -79,7 +79,11 @@ export function Cifra({
  */
 export function CampoCocina({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="inline-flex items-center gap-2 h-9 px-3 border border-cocina-linea bg-cocina-superficie rounded-cocina text-[13px] font-medium text-cocina-tinta cursor-pointer">
+    // B84.2 · UNA SOLA FLECHA. El `<select>` de dentro trae la suya del sistema
+    // y aquí se dibuja la de la maqueta: salían las dos, una al lado de otra.
+    // `appearance-none` se aplica desde fuera, al select hijo, para que ninguna
+    // pantalla tenga que acordarse de ponerlo.
+    <label className="inline-flex items-center gap-2 h-9 px-3 border border-cocina-linea bg-cocina-superficie rounded-cocina text-[13px] font-medium text-cocina-tinta cursor-pointer [&>select]:appearance-none [&>select]:bg-transparent [&>select]:outline-none [&>select]:cursor-pointer">
       <span className="text-[10.5px] font-bold tracking-[0.06em] uppercase text-cocina-tinta-3">{label}</span>
       {children}
       {/* La misma que la maqueta: 14×14, trazo 1.8, sin relleno. */}

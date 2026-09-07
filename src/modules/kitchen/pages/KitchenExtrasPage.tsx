@@ -36,6 +36,7 @@ import type { UnidadPick } from '@/modules/kitchen/lib/impactoResuelto'
 import FlujoDeExtra from '@/modules/kitchen/components/FlujoDeExtra'
 import {
   ORDENES, confirmacion, cuantasCopias, ventanaEnCastellano, loQueCobra, queLleva, botonDeLaFila,
+  marcasDeLaFila, dondeApareceLaCopia,
   hayQueArreglarlo, ordena, parteEnDos, pieDeLaBarra, tituloDelPliegue,
   type ExtraPorNombre, type OrdenDeExtras, type CosaQueLleva,
 } from '@/modules/kitchen/lib/extrasDeCocina'
@@ -46,9 +47,16 @@ const REJILLA = 'minmax(0,1fr) 120px 90px 110px 150px auto'
 const eur = (n: number) =>
   n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+/**
+ * Los periodos que se pueden mirar. 30 por defecto, como la maqueta; 7 para ver
+ * la semana en curso y 90 para que un extra de temporada no parezca muerto.
+ */
+const VENTANAS = [7, 30, 90] as const
+
 export default function KitchenExtrasPage() {
   const { activeAccountId } = useActiveAccount()
-  const { userProfile } = useApp()
+  const { userProfile, activeAccount } = useApp()
+  const nombreDeLaCuenta = activeAccount?.name ?? null
   const nombreDelActor = userProfile?.displayName ?? null
   const [datos, setDatos] = useState<LosExtras | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -56,7 +64,10 @@ export default function KitchenExtrasPage() {
 
   const [soloLosQueArreglar, setSoloLosQueArreglar] = useState(true)
   const [orden, setOrden] = useState<OrdenDeExtras>('vendido')
-  const [marca, setMarca] = useState<string>('')          // '' = todas
+  const [marca, setMarca] = useState<string>('')      // '' = todas
+  // Los días que se miran. La consulta cuenta ESTOS días enteros y devuelve
+  // cuáles: la frase del subtítulo sale de ahí, no de aquí (§15, un reloj).
+  const [dias, setDias] = useState<number>(30)
   const [pliegueAbierto, setPliegueAbierto] = useState(false)
   const [refresco, setRefresco] = useState(0)
 
@@ -80,7 +91,7 @@ export default function KitchenExtrasPage() {
     let vigente = true
     void (async () => {
       try {
-        const d = await getExtras(activeAccountId)
+        const d = await getExtras(activeAccountId, dias)
         if (!vigente) return
         setDatos(d); setError(null)
       } catch (e) {
@@ -91,7 +102,7 @@ export default function KitchenExtrasPage() {
       }
     })()
     return () => { vigente = false }
-  }, [activeAccountId, refresco])
+  }, [activeAccountId, dias, refresco])
 
   // El catálogo y las unidades: los mismos que usa la pestaña del plato, para
   // que las dos pantallas ofrezcan lo mismo y calculen igual.
@@ -187,7 +198,7 @@ export default function KitchenExtrasPage() {
       <div className="cocina-pagina">
 
         <CabeceraCocina
-          migaja="Folvy Kitchen"
+          migaja={`Folvy Kitchen${nombreDeLaCuenta ? ` · ${nombreDeLaCuenta}` : ''}`}
           pregunta="¿Qué extras cobras sin saber lo que te cuestan?"
           regla={
             <>
@@ -202,10 +213,24 @@ export default function KitchenExtrasPage() {
             <select
               value={marca}
               onChange={(e) => setMarca(e.target.value)}
-              className="bg-transparent outline-none text-[13px] font-medium text-cocina-tinta"
+              className="text-[13px] font-medium text-cocina-tinta"
             >
               <option value="">Todas</option>
               {marcas.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+            </select>
+          </CampoCocina>
+
+          {/* B84.2 · El periodo faltaba: estaba en el tablero y en la captura,
+              pero la captura escribía su propia cabecera en vez de usar ésta, así
+              que pintó un selector que la página no tenía. La captura de ahora
+              monta la cabecera de verdad para que eso no se repita. */}
+          <CampoCocina label="Periodo">
+            <select
+              value={dias}
+              onChange={(e) => setDias(Number(e.target.value))}
+              className="text-[13px] font-medium text-cocina-tinta"
+            >
+              {VENTANAS.map((d) => <option key={d} value={d}>Últimos {d} días</option>)}
             </select>
           </CampoCocina>
         </CabeceraCocina>
@@ -349,7 +374,7 @@ function FilaDeExtra({
 }) {
   const cobra = loQueCobra(extra)
   const lleva = queLleva(extra)
-  const marcas = [...new Set(extra.donde.map((d) => d.marca))].join(' · ')
+  const marcas = marcasDeLaFila(extra)
 
   return (
     <>
@@ -389,11 +414,39 @@ function FilaDeExtra({
           Dónde aparece
         </div>
         <div className="flex flex-col gap-1">
-          {extra.donde.map((c) => (
+          {extra.donde.map((c) => {
+            const donde = dondeApareceLaCopia(c)
+            return (
             <div key={c.opcion}
               className="grid items-center gap-2.5 text-[12.5px] px-2.5 py-1.5 bg-cocina-superficie border border-cocina-linea-suave rounded-cocina"
               style={{ gridTemplateColumns: 'minmax(0,1fr) 90px 90px 110px' }}>
-              <span className="truncate text-cocina-tinta">{c.marca} · «{c.grupo}»</span>
+              <span className="min-w-0">
+                {/* B84.5: el PLATO primero, que es lo que se ha venido a ver.
+                    Con uno, su nombre y un enlace a su ficha; con varios, el
+                    número y la lista debajo. El grupo queda de apellido. */}
+                {c.platos.length === 1 ? (
+                  <a href={`/kitchen/menu?producto=${c.platos[0].id}`}
+                     className="block truncate text-cocina-tinta font-medium underline underline-offset-2 decoration-cocina-linea hover:decoration-cocina-acento">
+                    {donde.principal}
+                  </a>
+                ) : (
+                  <span className="block truncate text-cocina-tinta font-medium">{donde.principal}</span>
+                )}
+                <span className="block truncate text-[11px] text-cocina-tinta-3">{donde.secundario}</span>
+                {c.platos.length > 1 && (
+                  <span className="block text-[11px] text-cocina-tinta-3 leading-[1.5]">
+                    {c.platos.map((p, i) => (
+                      <span key={p.id}>
+                        {i > 0 && ' · '}
+                        <a href={`/kitchen/menu?producto=${p.id}`}
+                           className="underline underline-offset-2 decoration-cocina-linea hover:decoration-cocina-acento">
+                          {p.nombre}
+                        </a>
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </span>
               <span className="num text-right text-cocina-tinta">{eur(c.precio)} €</span>
               <span className="num text-right text-cocina-tinta-3">
                 {c.vendidas > 0 ? `${c.vendidas} vend.` : '0'}
@@ -404,7 +457,8 @@ function FilaDeExtra({
                   : <PastillaCocina tono="rojo">sin coste</PastillaCocina>}
               </span>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     )}

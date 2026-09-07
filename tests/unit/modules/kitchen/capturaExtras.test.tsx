@@ -9,7 +9,7 @@
 // Los datos son los REALES de producción, medidos el 07/09 con el cuerpo de la
 // RPC ejecutado como consulta suelta.
 
-import { it } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -82,6 +82,30 @@ function Fila({ e }: { e: ExtraPorNombre }) {
     </div>
   )
 }
+
+
+// ── LA FOTO NO PUEDE ENSEÑAR LO QUE LA PANTALLA NO TIENE (B84.2) ───────────
+//
+// Costó un fallo en producción: la captura escribía su propia cabecera con
+// «MARCA» y «PERIODO», la miramos los dos y la dimos por buena — y la página
+// real sólo tenía Marca. La comparación del §9.3 valía menos de lo que
+// parecía porque los dos lados no eran la misma cabecera.
+//
+// Esto lo fija leyendo los DOS ficheros: los selectores de la foto y los de la
+// página tienen que ser los mismos. No prueba el diseño; prueba que la prueba
+// del diseño mide lo que dice medir.
+describe('la captura y la pantalla enseñan los mismos selectores', () => {
+  const campos = (ruta: string) =>
+    [...readFileSync(resolve(__dirname, ruta), 'utf8')
+      .matchAll(/<CampoCocina\s+label="([^"]+)"/g)].map((m) => m[1]).sort()
+
+  it('los mismos, y no por casualidad ninguno', () => {
+    const enLaFoto = campos('./capturaExtras.test.tsx')
+    const enLaPagina = campos('../../../../src/modules/kitchen/pages/KitchenExtrasPage.tsx')
+    expect(enLaPagina.length).toBeGreaterThan(0)
+    expect(enLaFoto).toEqual(enLaPagina)
+  })
+})
 
 it('genera la captura de Extras a 1280', () => {
   const cuerpo = renderToStaticMarkup(
