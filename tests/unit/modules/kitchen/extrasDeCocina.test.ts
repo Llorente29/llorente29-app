@@ -9,7 +9,8 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  cuantasCopias, loQueCobra, queLleva, botonDeLaFila, hayQueArreglarlo,
+  cuantasCopias, cuantasCopiasEnElTitulo, soloCopias, platoDelMismoNombre,
+  loQueCobra, queLleva, botonDeLaFila, hayQueArreglarlo,
   ordena, parteEnDos, pieDeLaBarra, tituloDelPliegue, confirmacion,
   type ExtraPorNombre, type CopiaDelExtra,
 } from '@/modules/kitchen/lib/extrasDeCocina'
@@ -249,6 +250,61 @@ describe('la frase de lo que lleva, sin jerga', () => {
   it('nunca dice add_item ni bundle', () => {
     const t = frasedeLoQueLleva([yogur])
     expect(t).not.toMatch(/add_item|bundle|impact/)
+  })
+})
+
+
+// ── Las tres formas de contar las copias ───────────────────────────────────
+// Son tres sitios distintos y cada uno enseña algo distinto al lado, así que la
+// frase cambia. En la TABLA la columna se titula COPIAS: el número basta. En el
+// TÍTULO del paso 1 no hay columna que lo diga y sin la palabra queda «7 en 2
+// marcas», que deja preguntándose 7 qué. En la PUERTA cada fila lleva su marca
+// escrita: repetir «en 3 marcas» arriba es decir dos veces lo que ya se ve.
+describe('cómo se cuentan las copias en cada sitio', () => {
+  it('en la tabla, sin la palabra', () => {
+    expect(cuantasCopias(SALSA_YOGUR)).toBe('7 en 2 marcas')
+  })
+  it('en el título del paso, con la palabra', () => {
+    expect(cuantasCopiasEnElTitulo(SALSA_YOGUR)).toBe('7 copias en 2 marcas')
+  })
+  it('en la puerta, sin las marcas', () => {
+    expect(soloCopias(SALSA_YOGUR)).toBe('7 copias')
+  })
+  it('una sola copia se dice igual en los tres', () => {
+    expect(cuantasCopias(SWEET_CHILI_T)).toBe('1 copia')
+    expect(cuantasCopiasEnElTitulo(SWEET_CHILI_T)).toBe('1 copia')
+    expect(soloCopias(SWEET_CHILI_T)).toBe('1 copia')
+  })
+})
+
+// ── ¿Ya existe como plato? ─────────────────────────────────────────────────
+// Los OCHO casos reales del 07/09 en Foodint: extras que se cobran aparte y que
+// además existen como plato con su escandallo hecho. Decírselo al que va a
+// teclear el coste ahorra el escandallo y evita costear a mano lo que la cocina
+// ya tiene medido.
+describe('cuando el extra ya existe como plato', () => {
+  const norm = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim()
+  const CATALOGO = [
+    { name: 'La Triple', kind: 'plato' as const },
+    { name: 'Bocadillo César', kind: 'plato' as const },
+    { name: 'Yogur griego', kind: 'ingrediente' as const },
+    { name: 'SALSA Yogur', kind: 'ingrediente' as const },
+  ]
+
+  it('lo encuentra por nombre', () => {
+    expect(platoDelMismoNombre('La Triple', CATALOGO, norm)?.name).toBe('La Triple')
+  })
+  it('no le importan los acentos ni las mayúsculas', () => {
+    expect(platoDelMismoNombre('BOCADILLO CESAR', CATALOGO, norm)?.name).toBe('Bocadillo César')
+  })
+  // Lo importante: un INGREDIENTE que se llama igual NO es «usar el plato».
+  // «Salsa Yogur» existe como ficha de ingrediente y no debe ofrecer el atajo.
+  it('un ingrediente del mismo nombre no cuenta', () => {
+    expect(platoDelMismoNombre('Salsa Yogur', CATALOGO, norm)).toBeNull()
+  })
+  it('sin coincidencia devuelve null, no la primera que pilla', () => {
+    expect(platoDelMismoNombre('Mayo trufa', CATALOGO, norm)).toBeNull()
   })
 })
 

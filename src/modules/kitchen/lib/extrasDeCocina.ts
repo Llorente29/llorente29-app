@@ -108,6 +108,28 @@ export function cuantasCopias(e: ExtraPorNombre): string {
 }
 
 /**
+ * La misma cuenta, con la palabra puesta: «7 copias en 2 marcas».
+ *
+ * En la tabla la columna se titula COPIAS y el número no necesita repetirlo; en
+ * el título del flujo no hay columna que lo diga, y «Salsa Yogur · 7 en 2
+ * marcas» deja al que mira preguntándose 7 qué. La maqueta lo escribe así en
+ * los dos sitios y por eso son dos frases, no una con un parámetro.
+ */
+export function cuantasCopiasEnElTitulo(e: ExtraPorNombre): string {
+  if (e.copias === 1) return '1 copia'
+  return `${e.copias} copias en ${e.marcas} ${e.marcas === 1 ? 'marca' : 'marcas'}`
+}
+
+/**
+ * «3 copias», sin marcas: es lo que va en el título de la PUERTA, donde cada
+ * fila lleva su marca escrita al lado. Repetir «en 3 marcas» arriba sería decir
+ * dos veces lo que ya se está viendo.
+ */
+export function soloCopias(e: ExtraPorNombre): string {
+  return e.copias === 1 ? '1 copia' : `${e.copias} copias`
+}
+
+/**
  * Lo que cobra. Si las copias no cobran lo mismo se enseña el rango, y eso
  * ABRE UNA PUERTA en vez de ser una nota al pie: «Tiras de Pollo Kentucky» está
  * a 1,90 € y a 6,50 € en tres marcas, y no son la misma cosa. Costearlas juntas
@@ -168,8 +190,10 @@ export function confirmacion(args: {
 }): string {
   const porMarca = new Map<string, number>()
   for (const c of args.copias) porMarca.set(c.marca, (porMarca.get(c.marca) ?? 0) + 1)
+  // Alfabético, como la maqueta. Ordenar por número haría que la misma frase
+  // cambiara de orden al añadir una copia, y no dice nada que el número no diga.
   const marcas = [...porMarca.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .sort((a, b) => a[0].localeCompare(b[0], 'es'))
     .map(([m, n]) => `${m} (${n})`)
     .join(', ')
   const n = args.copias.length
@@ -208,6 +232,28 @@ export function porQueSeQuedaFuera(e: ExtraPorNombre, c: CopiaDelExtra): string 
   if (marcadas.includes(c.opcion)) return null
   const eur2 = (n: number) => n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return `La de ${c.marca} a ${eur2(c.precio)} € parece otra cosa. Se queda fuera y aparece como extra aparte.`
+}
+
+/**
+ * ¿EXISTE YA UN PLATO QUE SE LLAMA IGUAL QUE ESTE EXTRA?
+ *
+ * Cuando lo hay, decirlo ahorra teclear un escandallo que ya está hecho y evita
+ * el error de costear a mano lo que la cocina ya tiene medido. En Foodint pasa
+ * en OCHO extras el 07/09 — «La Triple» (4,00 €), «Truffled Smash» (3,25 €),
+ * «Bocadillo César» (2,92 €)…—: son platos enteros que se venden también como
+ * añadido, que es justo el `bundle` de la decisión 5 del §5.
+ *
+ * Se compara por nombre normalizado y SÓLO dentro del catálogo que llega, que ya
+ * viene de la cuenta (regla 9). Devuelve `null` cuando no hay ninguno: entonces
+ * no se pinta nada, que es lo que pasa con «Salsa Yogur».
+ */
+export function platoDelMismoNombre<T extends { name: string; kind: 'plato' | 'ingrediente' }>(
+  nombreDelExtra: string,
+  catalogo: T[],
+  normaliza: (s: string) => string,
+): T | null {
+  const q = normaliza(nombreDelExtra)
+  return catalogo.find((c) => c.kind === 'plato' && normaliza(c.name) === q) ?? null
 }
 
 /** Cuántas copias van a recibirlo, para el botón: «Guardar en las 7 copias». */

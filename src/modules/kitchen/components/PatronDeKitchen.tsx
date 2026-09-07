@@ -242,6 +242,25 @@ export function CabeceraCocina({
   )
 }
 
+/**
+ * `.ok` de la maqueta: LO QUE HA PASADO, en verde y con contenido.
+ *
+ * Regla 8: un botón que hace algo importante confirma en pantalla, y la
+ * confirmación lleva contenido —«Salsa Yogur lleva 40 g de yogur griego: 0,18 €.
+ * Aplicado a 7 copias…»—, no un visto. Va aquí y no suelta en una página para
+ * que la siguiente pantalla que confirme algo no invente su propia caja verde.
+ */
+export function AvisoCocina({ children, onCerrar }: { children: ReactNode; onCerrar?: () => void }) {
+  return (
+    <div className="rounded-cocina px-3.5 py-3 text-[13px] bg-cocina-verde-bg text-cocina-verde border border-cocina-verde/35 flex items-start justify-between gap-3">
+      <span>{children}</span>
+      {onCerrar && (
+        <button type="button" onClick={onCerrar} className="shrink-0 opacity-70 hover:opacity-100">✕</button>
+      )}
+    </div>
+  )
+}
+
 /** `.panel` de la maqueta: la caja de la tabla. */
 export function PanelCocina({ children }: { children: ReactNode }) {
   return (

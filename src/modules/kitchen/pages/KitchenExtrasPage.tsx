@@ -26,7 +26,7 @@ import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
   CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
-  PastillaCocina, BotonCocina, ChipCocina, InterruptorCocina, PanelCocina,
+  PastillaCocina, BotonCocina, ChipCocina, InterruptorCocina, PanelCocina, AvisoCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { getExtras, ponerLoQueLleva, type LosExtras } from '@/modules/kitchen/services/extrasService'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
@@ -262,12 +262,7 @@ export default function KitchenExtrasPage() {
             </div>
 
             {/* Lo que ha pasado, con contenido y no con un visto (regla 8). */}
-            {hecho && (
-              <div className="rounded-cocina px-3.5 py-3 text-[13px] bg-cocina-verde-bg text-cocina-verde border border-cocina-verde/35 flex items-start justify-between gap-3">
-                <span>{hecho}</span>
-                <button type="button" onClick={() => setHecho(null)} className="shrink-0 opacity-70 hover:opacity-100">✕</button>
-              </div>
-            )}
+            {hecho && <AvisoCocina onCerrar={() => setHecho(null)}>{hecho}</AvisoCocina>}
 
             <PanelCocina>
               <div
@@ -334,7 +329,6 @@ export default function KitchenExtrasPage() {
           extra={enFlujo}
           catalogo={catalogo}
           unidades={unidades}
-          sinCosteAhora={datos?.cifras.sinCoste ?? 0}
           guardando={guardando}
           onCancelar={() => setEnFlujo(null)}
           onGuardar={guardar}

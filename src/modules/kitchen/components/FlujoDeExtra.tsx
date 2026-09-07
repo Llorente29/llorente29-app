@@ -21,8 +21,8 @@ import { BotonCocina, PastillaCocina } from '@/modules/kitchen/components/Patron
 import { resuelveImpacto, type UnidadPick } from '@/modules/kitchen/lib/impactoResuelto'
 import { kindOf, TIPOS_ELEGIBLES, normName, type CatalogPick } from '@/modules/kitchen/lib/catalogPick'
 import {
-  copiasPreseleccionadas, porQueSeQuedaFuera, textoDeGuardar, cuantasCopias,
-  frasedeLoQueLleva, confirmacion,
+  copiasPreseleccionadas, porQueSeQuedaFuera, textoDeGuardar, cuantasCopiasEnElTitulo,
+  soloCopias, frasedeLoQueLleva, platoDelMismoNombre,
   type ExtraPorNombre, type CosaQueLleva,
 } from '@/modules/kitchen/lib/extrasDeCocina'
 
@@ -33,15 +33,13 @@ interface Props {
   extra: ExtraPorNombre
   catalogo: CatalogPick[]
   unidades: UnidadPick[]
-  /** Cuántos extras quedarían sin coste después, para la confirmación. */
-  sinCosteAhora: number
   guardando: boolean
   onCancelar: () => void
   onGuardar: (opciones: string[], cosas: CosaQueLleva[], frase: string, coste: number) => void
 }
 
 export default function FlujoDeExtra({
-  extra, catalogo, unidades, sinCosteAhora, guardando, onCancelar, onGuardar,
+  extra, catalogo, unidades, guardando, onCancelar, onGuardar,
 }: Props) {
   // La puerta sólo existe si hace falta. Si todas cobran igual, se salta.
   const [enLaPuerta, setEnLaPuerta] = useState(extra.preciosDistintos)
@@ -75,7 +73,7 @@ export default function FlujoDeExtra({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(16,26,33,.45)] p-8">
-      <div className="cocina w-[560px] bg-cocina-superficie border border-cocina-linea rounded-cocina-md shadow-cocina p-5 flex flex-col gap-3">
+      <div className="cocina w-[560px] bg-cocina-superficie border border-cocina-linea rounded-cocina-md shadow-cocina py-[18px] px-5 flex flex-col gap-3">
 
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -83,7 +81,7 @@ export default function FlujoDeExtra({
               {enLaPuerta ? 'Cuando las copias no cobran lo mismo' : 'Paso 1 · Decir qué lleva'}
             </div>
             <h2 className="text-[17px] font-bold mt-1 text-cocina-tinta">
-              {extra.nombre} · {cuantasCopias(extra)}
+              {extra.nombre} · {enLaPuerta ? soloCopias(extra) : cuantasCopiasEnElTitulo(extra)}
               {!enLaPuerta && !extra.preciosDistintos && <> · cobra {eur(extra.precioMin)} €</>}
             </h2>
           </div>
@@ -101,72 +99,128 @@ export default function FlujoDeExtra({
             onSeguir={() => setEnLaPuerta(false)}
           />
         ) : (
-          <>
-            <p className="text-[12.5px] text-cocina-tinta-2 leading-[1.5]">
-              Lo que pongas aquí vale para {elegidas.length === 1 ? 'la copia' : `las ${elegidas.length} copias`}
-              : {repartoPorMarca(extra, elegidas)}.
-            </p>
-
-            {cosas.map((c, i) => (
-              <UnaCosaQueLleva
-                key={i}
-                cosa={c}
-                catalogo={catalogo}
-                unidades={unidades}
-                onCambiar={(nueva) => setCosas(cosas.map((x, j) => (j === i ? nueva : x)))}
-                onQuitar={() => setCosas(cosas.filter((_, j) => j !== i))}
-              />
-            ))}
-
-            <button
-              type="button"
-              onClick={() => setCosas([...cosas, {
-                ficha: '', nombreFicha: '', tipo: 'ingrediente',
-                cantidad: null, unidad: null, nombreUnidad: '',
-              }])}
-              className="flex justify-between items-center px-2.5 py-2 border border-cocina-linea-suave rounded-cocina text-[13px] text-cocina-tinta-2 hover:bg-cocina-acento-bg"
-            >
-              <span className="inline-flex items-center gap-1.5"><Plus size={13} />
-                {cosas.length === 0 ? 'Decir qué lleva' : 'Añadir otra cosa que lleve'}
-              </span>
-              <span className="text-[10.5px] font-bold tracking-[0.05em] uppercase text-cocina-tinta-3">pan, carne, salsa…</span>
-            </button>
-
-            {cosas.length > 0 && (
-              <div className="flex justify-between items-center px-2.5 py-2 border border-cocina-linea-suave rounded-cocina">
-                <span className="text-[10.5px] font-bold tracking-[0.05em] uppercase text-cocina-tinta-3">Coste</span>
-                {coste === null
-                  ? <PastillaCocina tono="ambar">no se puede calcular</PastillaCocina>
-                  : <span className="num text-[13px] font-bold text-cocina-tinta">{eur(coste)} €</span>}
-              </div>
-            )}
-
-            {/* Lo que se va a escribir, dicho antes de escribirlo. */}
-            {completo && coste !== null && (
-              <div className="rounded-cocina px-3 py-2.5 text-[13px] bg-cocina-verde-bg text-cocina-verde border border-cocina-verde/35">
-                {confirmacion({
-                  nombre: extra.nombre,
-                  queLleva: frasedeLoQueLleva(cosas),
-                  coste,
-                  copias: extra.donde.filter((d) => elegidas.includes(d.opcion)),
-                  sinCosteDespues: Math.max(0, sinCosteAhora - elegidas.length),
-                })}
-              </div>
-            )}
-
-            <div className="flex gap-2 justify-end">
-              <BotonCocina peso="fantasma" onClick={onCancelar}>Cancelar</BotonCocina>
-              <BotonCocina
-                disabled={!completo || guardando}
-                onClick={() => onGuardar(elegidas, cosas, frasedeLoQueLleva(cosas), coste ?? 0)}
-              >
-                {guardando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : textoDeGuardar(elegidas.length)}
-              </BotonCocina>
-            </div>
-          </>
+          <PasoDeLoQueLleva
+            extra={extra}
+            elegidas={elegidas}
+            cosas={cosas}
+            catalogo={catalogo}
+            unidades={unidades}
+            coste={coste}
+            completo={completo}
+            guardando={guardando}
+            onCosas={setCosas}
+            onCancelar={onCancelar}
+            onGuardar={() => onGuardar(elegidas, cosas, frasedeLoQueLleva(cosas), coste ?? 0)}
+          />
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * EL PASO 2 — qué lleva el extra. Pura, como `PuertaDeCopias`: recibe lo que hay
+ * que pintar y avisa de lo que se toca, sin guardar estado propio.
+ *
+ * Está separada por la misma razón que el castellano vive en `lib/`: para poder
+ * enseñarla. La captura del §9.3 la pinta con una cosa ya puesta —yogur griego,
+ * 40 g, 0,18 €—, que es el estado del tablero de la maqueta y un estado al que
+ * el componente entero no llega sin que alguien teclee.
+ */
+export function PasoDeLoQueLleva({
+  extra, elegidas, cosas, catalogo, unidades, coste, completo,
+  guardando, onCosas, onCancelar, onGuardar,
+}: {
+  extra: ExtraPorNombre
+  elegidas: string[]
+  cosas: CosaQueLleva[]
+  catalogo: CatalogPick[]
+  unidades: UnidadPick[]
+  coste: number | null
+  completo: boolean
+  guardando: boolean
+  onCosas: (c: CosaQueLleva[]) => void
+  onCancelar: () => void
+  onGuardar: () => void
+}) {
+  const elPlato = useMemo(
+    () => platoDelMismoNombre(extra.nombre, catalogo, normName),
+    [extra.nombre, catalogo],
+  )
+  return (
+    <>
+      <p className="text-[12.5px] text-cocina-tinta-2 leading-[1.5]">
+        Lo que pongas aquí vale para {elegidas.length === 1 ? 'la copia' : `las ${elegidas.length} copias`}
+        : {repartoPorMarca(extra, elegidas)}.
+      </p>
+
+      {cosas.map((c, i) => (
+        <UnaCosaQueLleva
+          key={i}
+          cosa={c}
+          catalogo={catalogo}
+          unidades={unidades}
+          sePuedeQuitar={cosas.length > 1}
+          onCambiar={(nueva) => onCosas(cosas.map((x, j) => (j === i ? nueva : x)))}
+          onQuitar={() => onCosas(cosas.filter((_, j) => j !== i))}
+        />
+      ))}
+
+      {/* Si ya existe un plato que se llama igual, se dice: su escandallo ya
+          está hecho y teclearlo a mano sólo puede salir peor. */}
+      {elPlato && !cosas.some((c) => c.ficha === elPlato.id) && (
+        <div className="flex justify-between items-center gap-3 px-2.5 py-2 border border-cocina-linea-suave rounded-cocina text-[13px]">
+          <span className="text-cocina-tinta-2">
+            ¿Es un plato entero? <b className="font-semibold text-cocina-tinta">{elPlato.name}</b> existe
+            como plato con su escandallo
+            {elPlato.costeUnitario != null && <> · <span className="num">{eur(elPlato.costeUnitario)} €</span></>}
+          </span>
+          <BotonCocina
+            peso="borde"
+            onClick={() => onCosas([...cosas.filter((c) => c.ficha), {
+              ficha: elPlato.id, nombreFicha: elPlato.name, tipo: 'plato',
+              cantidad: 1, unidad: elPlato.baseUnitId ?? null, nombreUnidad: '',
+            }])}
+          >
+            Usar el plato
+          </BotonCocina>
+        </div>
+      )}
+
+      {cosas.length > 0 && (
+        <div className="flex justify-between items-center px-2.5 py-2 border border-cocina-linea-suave rounded-cocina">
+          <span className="text-[10.5px] font-bold tracking-[0.05em] uppercase text-cocina-tinta-3">Coste</span>
+          {coste === null
+            ? <PastillaCocina tono="ambar">no se puede calcular</PastillaCocina>
+            : <span className="num text-[13px] font-bold text-cocina-tinta">{eur(coste)} €</span>}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onCosas([...cosas, {
+          ficha: '', nombreFicha: '', tipo: 'ingrediente',
+          cantidad: null, unidad: null, nombreUnidad: '',
+        }])}
+        className="flex justify-between items-center px-2.5 py-2 border border-cocina-linea-suave rounded-cocina text-[13px] text-cocina-tinta-2 hover:bg-cocina-acento-bg"
+      >
+        <span className="inline-flex items-center gap-1.5"><Plus size={13} />
+          {cosas.length === 0 ? 'Decir qué lleva' : 'Añadir otra cosa que lleve'}
+        </span>
+        <span className="text-[10.5px] font-bold tracking-[0.05em] uppercase text-cocina-tinta-3">pan, carne, salsa…</span>
+      </button>
+
+      <div className="flex gap-2 justify-end">
+        <BotonCocina peso="fantasma" onClick={onCancelar}>Cancelar</BotonCocina>
+        <BotonCocina
+          disabled={!completo || guardando}
+          onClick={onGuardar}
+        >
+          {guardando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : textoDeGuardar(elegidas.length)}
+        </BotonCocina>
+      </div>
+    
+    </>
   )
 }
 
@@ -177,13 +231,15 @@ function repartoPorMarca(extra: ExtraPorNombre, elegidas: string[]): string {
     if (!elegidas.includes(c.opcion)) continue
     m.set(c.marca, (m.get(c.marca) ?? 0) + 1)
   }
-  const trozos = [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  // Alfabético, como la maqueta y como la confirmación: el mismo reparto no
+  // puede salir en dos órdenes distintos según qué caja lo pinte.
+  const trozos = [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'))
     .map(([marca, n]) => `${marca} (${n})`)
   if (trozos.length <= 1) return trozos[0] ?? '—'
   return `${trozos.slice(0, -1).join(', ')} y ${trozos[trozos.length - 1]}`
 }
 
-function PuertaDeCopias({
+export function PuertaDeCopias({
   extra, elegidas, onCambiar, onCancelar, onSeguir,
 }: {
   extra: ExtraPorNombre
@@ -246,11 +302,14 @@ function PuertaDeCopias({
 
 /** Una de las cosas que lleva: el selector de B72, con su etiqueta. */
 function UnaCosaQueLleva({
-  cosa, catalogo, unidades, onCambiar, onQuitar,
+  cosa, catalogo, unidades, sePuedeQuitar, onCambiar, onQuitar,
 }: {
   cosa: CosaQueLleva
   catalogo: CatalogPick[]
   unidades: UnidadPick[]
+  /** La papelera sólo cuando hay algo que quitar: con una sola cosa, quitarla
+      es cancelar, y un botón que hace lo mismo que otro sólo estorba. */
+  sePuedeQuitar: boolean
   onCambiar: (c: CosaQueLleva) => void
   onQuitar: () => void
 }) {
@@ -268,13 +327,23 @@ function UnaCosaQueLleva({
   const ficha = catalogo.find((c) => c.id === cosa.ficha)
 
   return (
-    <div className="border border-cocina-linea-suave rounded-cocina p-2.5 flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10.5px] font-bold tracking-[0.06em] uppercase text-cocina-tinta-3">Lleva</span>
-        <button type="button" onClick={onQuitar} className="text-cocina-tinta-3 hover:text-cocina-rojo">
-          <Trash2 size={13} />
-        </button>
-      </div>
+    // Sin marco propio: la caja de dentro ya lo lleva, y el de fuera era un
+    // segundo borde que la maqueta no tiene. Lo que separa dos cosas es la
+    // línea de arriba, no una caja alrededor de cada una.
+    // Los mismos huecos que la maqueta: 12 px entre bloques (`.gate`) y 5 px
+    // entre una etiqueta y su caja (`.field`). Con un solo hueco de 8 px para
+    // todo, la etiqueta se despegaba de su campo y los campos se pegaban entre
+    // sí — el bloque dejaba de leerse como «esto va con esto».
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10.5px] font-bold tracking-[0.06em] uppercase text-cocina-tinta-3">Lleva</span>
+          {sePuedeQuitar && (
+            <button type="button" onClick={onQuitar} className="text-cocina-tinta-3 hover:text-cocina-rojo">
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
 
       {ficha ? (
         <div className="h-9 border border-cocina-linea rounded-cocina px-2.5 flex items-center gap-2 text-[13px]">
@@ -315,6 +384,7 @@ function UnaCosaQueLleva({
           ))}
         </>
       )}
+      </div>
 
       {/* Un plato entero no pide cantidad: es una ración de ese plato. */}
       {ficha && cosa.tipo === 'ingrediente' && (
