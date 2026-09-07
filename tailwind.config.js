@@ -92,6 +92,31 @@ export default {
         'tpv-warn': 'var(--tpv-warn)',
         'tpv-danger': 'var(--tpv-danger)',
         'tpv-note': 'var(--tpv-note)',
+
+        // ── COCINA (§9 de Extras, 07/09): el estándar de la maqueta ──
+        // Valores en src/modules/kitchen/estilo/cocinaTokens.css, escopados a
+        // .cocina-2. Esto sólo los expone como clases. ADITIVO: no redefine
+        // NINGÚN token existente, igual que el sistema visual v1 y que el TPV.
+        // Los hexes de la app (page, card, accent…) son literales, no
+        // variables: cambiarlos habría cambiado Supply, APPCC y el portal del
+        // trabajador de paso.
+        'cocina-fondo': 'var(--cocina-fondo)',
+        'cocina-superficie': 'var(--cocina-superficie)',
+        'cocina-carril': 'var(--cocina-carril)',
+        'cocina-tinta': 'var(--cocina-tinta)',
+        'cocina-tinta-2': 'var(--cocina-tinta-2)',
+        'cocina-tinta-3': 'var(--cocina-tinta-3)',
+        'cocina-acento': 'var(--cocina-acento)',
+        'cocina-acento-hover': 'var(--cocina-acento-hover)',
+        'cocina-acento-bg': 'var(--cocina-acento-bg)',
+        'cocina-verde': 'var(--cocina-verde)',
+        'cocina-verde-bg': 'var(--cocina-verde-bg)',
+        'cocina-rojo': 'var(--cocina-rojo)',
+        'cocina-rojo-bg': 'var(--cocina-rojo-bg)',
+        'cocina-ambar': 'var(--cocina-ambar)',
+        'cocina-ambar-bg': 'var(--cocina-ambar-bg)',
+        'cocina-linea': 'var(--cocina-linea)',
+        'cocina-linea-suave': 'var(--cocina-linea-suave)',
       },
       fontFamily: {
         // Display → Space Grotesk (grotesca moderna). Fallback a Inter para
@@ -117,6 +142,10 @@ export default {
         'xl': '14px',
         // TPV (T1.f): --tpv-radius en tpvTokens.css.
         'tpv': 'var(--tpv-radius)',
+        // Cocina (§9.1 de Extras): 2-3 px. El radio es lo que más separa la
+        // maqueta de la app de hoy, que va de 6 a 14.
+        'cocina': 'var(--cocina-radio)',
+        'cocina-md': 'var(--cocina-radio-md)',
       },
       boxShadow: {
         'sm': '0 1px 2px rgba(21, 23, 26, 0.04)',

@@ -1,0 +1,63 @@
+/* src/modules/kitchen/estilo/cocinaTokens.css
+ *
+ * EL ESTÁNDAR DE DISEÑO DE COCINA (§9 del encargo de Extras, 07/09/2026).
+ * Condición de Julio al aprobar la maqueta, textual: «mantener ese diseño
+ * limpio y pro, no el seco y para informáticos que hay ahora».
+ *
+ * ESCOPADO A `.cocina-2`, NO A `:root`, y eso NO es prudencia decorativa:
+ * los colores del resto de la app son hexes fijos en `tailwind.config.js`, no
+ * variables. Redefinir variables globales no cambiaría `bg-card` ni
+ * `text-text-primary` —no las leen— y cambiar los hexes cambiaría la app
+ * ENTERA: Supply, APPCC, Almacén, el portal del trabajador. El §9.2 dice otra
+ * cosa: Extras nace con el estándar nuevo y Resumen, Rentabilidad e Ingeniería
+ * pasan **en el lote siguiente, con captura al lado**. Así que el tema nuevo
+ * viaja en una clase que se pone donde toca, y migrar una pantalla es
+ * envolverla y hacerle su captura.
+ *
+ * Mismo método que el TPV (`tpvTokens.css`), que ya lleva meses en producción.
+ *
+ * FUENTE. Los valores con el hex escrito en el §9.1 se copian tal cual y van
+ * marcados «§9.1». Los DERIVADOS —grises intermedios, fondos de pastilla,
+ * líneas— no estaban en el encargo y no tengo los `.dc.html` de la maqueta:
+ * salen de leer las dos capturas. Van marcados «derivado» para que la
+ * comparación a 1280 del §9.3 empiece por ellos, que es donde puede haber
+ * diferencia.
+ */
+.cocina-2 {
+  /* ── Superficies ────────────────────────────────────────────────── */
+  --cocina-fondo:        #EAEEF1;   /* §9.1 */
+  --cocina-superficie:   #FFFFFF;   /* §9.1 */
+  --cocina-carril:       #101A21;   /* §9.1 · el carril oscuro */
+
+  /* ── Tinta ──────────────────────────────────────────────────────── */
+  --cocina-tinta:        #101A21;   /* §9.1 */
+  --cocina-tinta-2:      #5A6A75;   /* derivado · texto secundario */
+  --cocina-tinta-3:      #8B979F;   /* derivado · metadatos bajo el nombre */
+
+  /* ── Acento y semánticos ────────────────────────────────────────── */
+  --cocina-acento:       #0E5A5E;   /* §9.1 */
+  --cocina-acento-hover: #0A4649;   /* derivado */
+  --cocina-verde:        #2C6A4E;   /* §9.1 */
+  --cocina-rojo:         #9C3A2A;   /* §9.1 */
+  --cocina-ambar:        #7E5A0E;   /* §9.1 */
+
+  /* Fondos de pastilla: el mismo tono muy lavado, para que la pastilla se lea
+     sin gritar. Derivados de los tres de arriba. */
+  --cocina-verde-bg:     #E6EFE9;   /* derivado */
+  --cocina-rojo-bg:      #F5E7E4;   /* derivado */
+  --cocina-ambar-bg:     #F5EEDD;   /* derivado */
+  --cocina-acento-bg:    #E4EDED;   /* derivado */
+
+  /* ── Líneas ─────────────────────────────────────────────────────── */
+  --cocina-linea:        #D8DEE3;   /* derivado */
+  --cocina-linea-suave:  #E6EAEE;   /* derivado */
+
+  /* ── Radios ─────────────────────────────────────────────────────── */
+  /* §9.1: «radios (2-3 px)». La app de hoy usa 6/8/10/14: es el cambio que
+     más se nota de un vistazo y el que más «seco» quitaba. */
+  --cocina-radio:        2px;       /* §9.1 */
+  --cocina-radio-md:     3px;       /* §9.1 */
+
+  /* ── Altura de los botones ──────────────────────────────────────── */
+  --cocina-boton:        34px;      /* §9.1 */
+}
