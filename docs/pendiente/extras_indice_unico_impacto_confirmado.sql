@@ -36,8 +36,12 @@
 -- Medido antes de escribirlo (07/09): 40 impactos confirmados, 2 sin destino,
 -- ambos `none`, en opciones distintas. CERO pares duplicados con estas
 -- semánticas. El índice entra sin tocar un solo dato.
-
-begin;
+--
+-- SIN `begin;`/`commit;` EXPLÍCITOS, a propósito: `apply_migration` ya envuelve
+-- en transacción, y las ocho migraciones aplicadas hasta hoy tampoco los llevan
+-- (comprobado en `schema_migrations`). Estrenar ese camino de madrugada y sin
+-- nadie delante es la clase de sorpresa que no compensa. El DDL de Postgres es
+-- transaccional: si el guarda aborta, no queda índice a medias.
 
 -- ── COMPROBACIÓN PREVIA ───────────────────────────────────────────────────
 -- Si algún par duplicado hubiera nacido entre la medición y la aplicación, se
@@ -97,8 +101,6 @@ begin
   end if;
 end
 $guarda$;
-
-commit;
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- PROBADO ANTES DE APLICAR (07/09), en tabla temporal, contra este mismo
