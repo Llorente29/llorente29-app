@@ -115,3 +115,34 @@ Supabase y no está en mi entorno, y (b) el proxy de red de esta sesión corta l
 igual que cortó `functions/` y Storage. Y sobre todo (c): **ya no hace falta.** La
 respuesta estaba en el repo, y viene con fecha de verificación en vivo y con 4.444
 productos de prueba corriendo cada noche.
+
+---
+
+# Respuesta al §10 · ¿el importador debe leer del espejo?
+
+**No, y el motivo es corto: el espejo no tiene lo que el importador necesita.**
+
+`external_catalog_product` guarda **productos y nada más** — `catalog_product_id`,
+`organization_product_id`, `external_catalog_id`, nombre, `price_cents`,
+`product_type`, `is_enabled`, canal, fechas. **No guarda categorías, ni grupos de
+modificadores, ni opciones, ni slots de combo**, que es justamente el trabajo del
+importador de la fase 2 en adelante. Leer del espejo lo dejaría sin la mitad de su
+tarea y habría que volver a llamar a Last igualmente.
+
+**Pero la preocupación de fondo es correcta y tiene mejor arreglo: compartir el
+CÓDIGO, no el dato.**
+
+Hoy cada función tiene su propia copia de `lastGet` y su propio descubrimiento de
+catálogos — uno bueno y uno viejo conviviendo, que es exactamente el bug que nos ha
+costado esto. Y ya existe `supabase/functions/_shared/`, que usan las dos (de ahí
+sacan `cors`), así que el sitio está hecho: falta `_shared/lastapp.ts` con `lastGet` y
+`resolveLocationCatalogs`, importado por `last-catalog-sync` y por
+`lastapp-catalog-import`.
+
+**Por qué es mejor que compartir el dato:** una función es determinista y se prueba;
+el espejo es una tabla con su propia frescura. Si el importador leyera de él, el día
+que el espejo falle una pasada el importador traería una carta vieja **sin
+enterarse** — un tercer camino de fallo silencioso. Compartiendo el código, las dos
+descubren igual y ninguna depende de que la otra haya corrido.
+
+**Una sola fuente de descubrimiento, sí. Que sea una función, no una tabla.**
