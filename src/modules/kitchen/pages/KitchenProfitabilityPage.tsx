@@ -37,7 +37,7 @@ import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 // B79 lote 4: la cifra y el campo salen de aquí, iguales letra a letra que
 // cuando vivían en este fichero. Lo fija `patronDeKitchen.test.tsx`.
 import {
-  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  CabeceraCocina, CabeceraDeBloque, CampoCocina, CifrasCocina, CifraCocina,
   BotonCocina, ChipCocina, InterruptorCocina, PanelCocina, PastillaCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { eurDeCocina } from '@/modules/kitchen/lib/lasCosasQueArreglar'
@@ -292,14 +292,13 @@ export default function KitchenProfitabilityPage() {
 
             {sinCoste.length > 0 && (
               <PanelCocina>
-                <div className="flex items-baseline justify-between gap-3 px-4 py-2.5 border-b border-cocina-linea-suave bg-cocina-superficie-2">
-                  <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-3">
-                    Sin coste · {sinCoste.length}
-                  </span>
-                  <span className="text-[11.5px] text-cocina-tinta-3">
-                    se han vendido {cifras.udsSinCoste} veces en {dias} días sin saber lo que cuestan
-                  </span>
-                </div>
+                {/* B83 · la pieza del patrón, no una copia: en la maqueta esto
+                    es `.qh` —14 px al lado de su explicación— y yo lo tenía
+                    escrito con el marcado de `.panel-h`, que es otra cosa. */}
+                <CabeceraDeBloque
+                  nombre={`Sin coste · ${sinCoste.length}`}
+                  detalle={`se han vendido ${cifras.udsSinCoste} veces en ${dias} días sin saber lo que cuestan`}
+                />
                 {sinCoste.map((f) => {
                   const m = motivoSinCoste(f.tipo)
                   return (

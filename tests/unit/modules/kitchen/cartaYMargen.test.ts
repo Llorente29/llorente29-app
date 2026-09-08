@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   calculaFila, cifrasDeRentabilidad, construyeMatriz, esBebida, etiquetasDeFila,
-  frasePorCuadrante, ganariaSubiendo, motivoSinCoste, precioSinIva,
-  type ProductoDeCarta,
+  frasePorCuadrante, ganariaSubiendo, motivoSinCoste, parteLaFrase, precioSinIva,
 } from '@/modules/kitchen/lib/cartaYMargen'
+import { CARTA_DE_MERAKI } from './fixtures/cartaDeMeraki'
 
 // B79 · lote 1. La regla con la que las tres pantallas cuentan lo mismo.
 //
@@ -16,41 +16,9 @@ import {
 // que a mí me parezca. Si una prueba de aquí se pone roja, o cambió la carta o
 // cambió la regla — y las dos cosas hay que enterarse.
 
-const CARTA: ProductoDeCarta[] = [
-  { id: '1',  nombre: 'Agua Mineral 50 CL', tipo: 'item', categoria: 'Bebidas', precio: 1.9, ivaPct: 10, coste: 0.35, uds: 21 },
-  { id: '2',  nombre: 'Cheesecake de Nutella', tipo: 'item', categoria: 'CAPRICHOS DEL OBRADOR (Postres)', precio: 7.9, ivaPct: 10, coste: 3.158, uds: 21 },
-  { id: '3',  nombre: 'Coca-Cola Original Lata', tipo: 'item', categoria: 'Bebidas', precio: 2.6, ivaPct: 10, coste: 0.5909375, uds: 35 },
-  { id: '4',  nombre: 'Coca-Cola Zero Lata', tipo: 'item', categoria: 'Bebidas', precio: 2.6, ivaPct: 10, coste: 0.7675, uds: 44 },
-  { id: '5',  nombre: 'Combo DÚO Mediterráneo (Para 2)', tipo: 'combo', categoria: 'EXPERIENCIAS MERAKÍ (Combos)', precio: 34.9, ivaPct: 10, coste: null, uds: 23 },
-  { id: '6',  nombre: 'Crispy Falafel & Greek Dip (3 uds)', tipo: 'item', categoria: 'EL ARTE DEL PICOTEO (Entrantes)', precio: 6.5, ivaPct: 10, coste: 1.12224, uds: 142 },
-  { id: '7',  nombre: 'Daily Box Esencial', tipo: 'combo', categoria: 'Menús Merakí: Daily Boxes (L-V)', precio: 12.9, ivaPct: 10, coste: null, uds: 0 },
-  { id: '8',  nombre: 'Daily Box Premium', tipo: 'combo', categoria: 'Menús Merakí: Daily Boxes (L-V)', precio: 16.9, ivaPct: 10, coste: null, uds: 0 },
-  { id: '9',  nombre: 'Fanta Limón Lata', tipo: 'item', categoria: 'Bebidas', precio: 2.6, ivaPct: 10, coste: 0.6216666666666667, uds: 8 },
-  { id: '10', nombre: 'Fanta Naranja Lata', tipo: 'item', categoria: 'Bebidas', precio: 2.6, ivaPct: 10, coste: 0.495, uds: 16 },
-  { id: '11', nombre: 'Kebab de Falafel', tipo: 'item', categoria: 'PITAS & ROLLOS ARTESANOS', precio: 9.9, ivaPct: 10, coste: 1.774405957397009, uds: 23 },
-  { id: '12', nombre: 'Kebab de Pollo Gyros', tipo: 'item', categoria: 'PITAS & ROLLOS ARTESANOS', precio: 10.5, ivaPct: 10, coste: 2.2905423210333726, uds: 18 },
-  { id: '13', nombre: 'Kebab de Ternera Gyros', tipo: 'item', categoria: 'PITAS & ROLLOS ARTESANOS', precio: 11.1, ivaPct: 10, coste: 2.370335518597933, uds: 22 },
-  { id: '14', nombre: 'Kebab Mixto: Pollo y Ternera', tipo: 'item', categoria: 'PITAS & ROLLOS ARTESANOS', precio: 10.9, ivaPct: 10, coste: 2.332153700416115, uds: 62 },
-  { id: '15', nombre: 'MAHOU 5 ESTRELLAS', tipo: 'item', categoria: 'Bebidas', precio: 2.8, ivaPct: 10, coste: 0.5092857142857142, uds: 48 },
-  { id: '16', nombre: 'Marquesa de Choco-Avellanas', tipo: 'item', categoria: 'CAPRICHOS DEL OBRADOR (Postres)', precio: 6.9, ivaPct: 10, coste: 2.59875, uds: 0 },
-  { id: '17', nombre: 'Marquesa de Dulce de Leche', tipo: 'item', categoria: 'CAPRICHOS DEL OBRADOR (Postres)', precio: 6.9, ivaPct: 10, coste: 2.607083333333333, uds: 0 },
-  { id: '18', nombre: 'Menú Individual "Crea tu Experiencia"', tipo: 'combo', categoria: 'EXPERIENCIAS MERAKÍ (Combos)', precio: 19.9, ivaPct: 10, coste: null, uds: 50 },
-  { id: '19', nombre: 'Patatas Clásicas Meraki', tipo: 'item', categoria: 'EL ARTE DEL PICOTEO (Entrantes)', precio: 5.5, ivaPct: 10, coste: 0.876096, uds: 149 },
-  { id: '20', nombre: 'Pita BOWL Falafel: El Delirio Veggie', tipo: 'item', categoria: 'GOURMET PITA BOWLS', precio: 14.7, ivaPct: 10, coste: null, uds: 10 },
-  { id: '21', nombre: 'Pita BOWL Mixto: La Experiencia Completa', tipo: 'item', categoria: 'GOURMET PITA BOWLS', precio: 14.8, ivaPct: 10, coste: 2.036168715359134, uds: 170 },
-  { id: '22', nombre: 'Pita BOWL Pollo: El Clásico Jugoso', tipo: 'item', categoria: 'GOURMET PITA BOWLS', precio: 14.7, ivaPct: 10, coste: 1.6701894224298413, uds: 64 },
-  { id: '23', nombre: 'Pita BOWL Ternera: Sabor Tradicional', tipo: 'item', categoria: 'GOURMET PITA BOWLS', precio: 14.9, ivaPct: 10, coste: 1.7338257860662047, uds: 15 },
-  { id: '24', nombre: 'Plato Mixto Gyros: Carne y Patatas', tipo: 'item', categoria: 'TRIBUTO AL GYROS (Platos)', precio: 12.9, ivaPct: 10, coste: 1.7099373737373738, uds: 31 },
-  { id: '25', nombre: 'Plato Pollo Gyros: Pollo y Patatas', tipo: 'item', categoria: 'TRIBUTO AL GYROS (Platos)', precio: 11.9, ivaPct: 10, coste: 1.678119191919192, uds: 15 },
-  { id: '26', nombre: 'Plato Ternera Gyros: Carne y Patatas', tipo: 'item', categoria: 'TRIBUTO AL GYROS (Platos)', precio: 13.1, ivaPct: 10, coste: null, uds: 6 },
-  { id: '27', nombre: 'Rollitos de Queso Feta (3 unidades)', tipo: 'item', categoria: 'EL ARTE DEL PICOTEO (Entrantes)', precio: 6.3, ivaPct: 10, coste: 1.6940800000000003, uds: 85 },
-  { id: '28', nombre: 'Tarta 3 Leches', tipo: 'item', categoria: 'CAPRICHOS DEL OBRADOR (Postres)', precio: 7.9, ivaPct: 10, coste: 3.158, uds: 27 },
-  { id: '29', nombre: 'The Beef Legend: Pita de Ternera Gyros', tipo: 'item', categoria: 'PITAS & ROLLOS ARTESANOS', precio: 13.9, ivaPct: 10, coste: 2.2920535638439827, uds: 203 },
-  { id: '30', nombre: 'The Golden Chicken: Pita de Pollo Gyros', tipo: 'item', categoria: 'PITAS & ROLLOS ARTESANOS', precio: 12.9, ivaPct: 10, coste: 2.224987639006695, uds: 200 },
-  { id: '31', nombre: 'The Green Falafel: Pita Artesana', tipo: 'item', categoria: 'PITAS & ROLLOS ARTESANOS', precio: 11.9, ivaPct: 10, coste: 1.8795535638439826, uds: 48 },
-  { id: '32', nombre: 'The Mixed Master: Pita Mixta Gyros', tipo: 'item', categoria: 'PITAS & ROLLOS ARTESANOS', precio: 13.9, ivaPct: 10, coste: 2.2602353820258005, uds: 433 },
-  { id: '33', nombre: 'The Spanakopita Twist (Greek Spiral)', tipo: 'item', categoria: 'EL ARTE DEL PICOTEO (Entrantes)', precio: 9.9, ivaPct: 10, coste: 1.42062, uds: 64 },
-]
+// La carta está en `fixtures/cartaDeMeraki.ts`: la comparten esta prueba y la de
+// la captura, para que las dos midan sobre la misma población.
+const CARTA = CARTA_DE_MERAKI
 
 const FILAS = CARTA.map(calculaFila)
 const buscar = (n: string) => FILAS.find((f) => f.nombre.startsWith(n))!
@@ -230,13 +198,47 @@ describe('las frases de cada fila', () => {
 
   it('NINGÚN botón sin destino: «Mantener» no existe y «Quitar» lleva a «En carta»', () => {
     const r = frasePorCuadrante(buscar('Rollitos'), 'lastre', media)
-    expect(r.botones.map((b) => b.texto)).toEqual(['Quitar de la carta'])
+    expect(r.frase).toBe('Deja 4,03 €, por debajo de la media, y se vende 85 veces. Si se queda, que sea por algo que no sea el margen.')
+    expect(r.botones.map((b) => b.texto)).toEqual(['Quitar de la carta', 'Abrir'])
     expect(r.botones[0].destino).toBe('en_carta')
     // La regla de la casa del 06/09: no decidir es el estado por defecto.
     for (const c of ['estrella', 'caballo', 'joya', 'lastre'] as const) {
       const botones = frasePorCuadrante(buscar('Rollitos'), c, media).botones
       expect(botones.map((b) => b.texto)).not.toContain('Mantener')
       expect(botones.every((b) => ['escandallo', 'en_carta', 'economia'].includes(b.destino))).toBe(true)
+    }
+  })
+
+  // La negrita de la maqueta: el número por el que se decide, y NADA más.
+  it('la negrita marca el número que decide, y sólo donde hay uno', () => {
+    const caballo = frasePorCuadrante(buscar('Patatas'), 'caballo', media)
+    expect(caballo.destacado).toBe('68 € más')
+    expect(parteLaFrase(caballo.frase, caballo.destacado)).toEqual([
+      'Se vende mucho (149) pero deja 4,12 €. Con 0,50 € más de precio habrías ganado ',
+      '68 € más', ' en el periodo.',
+    ])
+
+    // Una joya de lo mejor de la carta destaca su margen; una joya normal no
+    // destaca nada, porque si todas llevaran negrita la negrita no diría nada.
+    expect(frasePorCuadrante(buscar('Pita BOWL Pollo'), 'joya', media).destacado).toBe('11,69 €')
+    expect(frasePorCuadrante(buscar('The Green Falafel'), 'joya', media).destacado).toBeUndefined()
+    expect(frasePorCuadrante(buscar('Rollitos'), 'lastre', media).destacado).toBeUndefined()
+    expect(frasePorCuadrante(buscar('The Mixed Master'), 'estrella', media).destacado).toBeUndefined()
+  })
+
+  // Sin destacado —o con uno que no está— se devuelve la frase ENTERA en el
+  // primer trozo: la pantalla la pinta igual y no se pierde ni una palabra.
+  it('sin negrita, la frase sale entera y no se come nada', () => {
+    expect(parteLaFrase('Se vende y deja.')).toEqual(['Se vende y deja.', '', ''])
+    expect(parteLaFrase('Se vende y deja.', 'no está')).toEqual(['Se vende y deja.', '', ''])
+  })
+
+  // Y para todas las filas de verdad: los tres trozos vuelven a ser la frase.
+  it('partir y volver a juntar da exactamente la frase, en las 19', () => {
+    for (const f of m.platos) {
+      const c = m.cuadranteDe.get(f.id)!
+      const r = frasePorCuadrante(f, c, media)
+      expect(parteLaFrase(r.frase, r.destacado).join('')).toBe(r.frase)
     }
   })
 

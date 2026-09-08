@@ -34,23 +34,53 @@ import { getMenuItemEconomics, listMetaDeCarta } from '@/modules/kitchen/service
 import { getMenuItemUnitsSold } from '@/modules/kitchen/services/menuEngineeringService'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
-  calculaFila, construyeMatriz, elMargenEsDeLaCasa, esBebida, frasePorCuadrante,
+  calculaFila, construyeMatriz, elMargenEsDeLaCasa, esBebida, frasePorCuadrante, parteLaFrase,
   EXPLICACION_CUADRANTE, MARGEN_DE_MARCA_CEDIDA, ROTULO_CUADRANTE,
   type Cuadrante, type FilaDeCarta,
 } from '@/modules/kitchen/lib/cartaYMargen'
 import {
   guardaMarcaRecordada, guardaPeriodoRecordado, leePeriodoRecordado, marcaConLaQueAbrir,
 } from '@/modules/kitchen/lib/recuerdoDeKitchen'
+import {
+  CabeceraCocina, CabeceraDeBloque, CampoCocina, CifrasCocina, CifraCocina,
+  BotonCocina, ChipCocina, InterruptorCocina, PanelCocina, RotuloDePanel,
+} from '@/modules/kitchen/components/PatronDeKitchen'
+import { useApp } from '@/context/AppContext'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import { fmtMoney } from '@/lib/format'
 import type { Brand } from '@/types/multitenancy'
 
 type Dias = 30 | 90 | 365
 /** El orden en que se enseñan: primero lo que pide una decisión. */
-const ORDEN_CUADRANTES: Cuadrante[] = ['caballo', 'joya', 'lastre', 'estrella']
+// DOS ÓRDENES, y no es un descuido: son dos preguntas distintas (B83, §3.17.5).
+//
+// LAS CIFRAS se leen como un retrato de la carta y empiezan por lo bueno —«4
+// estrellas»—, que es como lo pinta el tablero. LAS SECCIONES se leen como una
+// lista de trabajo y empiezan por lo que pide una decisión; las estrellas van al
+// final porque no hay nada que hacer con ellas.
+//
+// Compartían una sola constante y por eso las cifras abrían por «Caballos»: la
+// pantalla saludaba con el problema en vez de con la foto.
+// LA REJILLA DE LA MAQUETA, y el cambio importa: yo tenía el nombre elástico y
+// la frase DEBAJO, con el nombre recortado por la mitad. La maqueta da al nombre
+// 250 px fijos —que caben dos líneas sin recortar nada— y pone la frase en su
+// propia columna, a la derecha de los números. Así la columna de margen queda
+// pegada a la de unidades y se leen las dos de un vistazo, que es la pregunta de
+// esta pantalla: cuánto se vende y cuánto deja.
+/** Plato · uds · margen · frase · botones. */
+const REJILLA_INGENIERIA = '250px 90px 90px minmax(0,1fr) auto'
+
+/** El número sin el símbolo: `CifraCocina` lo pone aparte, en pequeño. */
+const eurSinSimbolo = (v: number | null | undefined) =>
+  v == null ? '—' : v.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+const ORDEN_DE_LAS_CIFRAS: Cuadrante[] = ['estrella', 'caballo', 'joya', 'lastre']
+const ORDEN_DE_LAS_SECCIONES: Cuadrante[] = ['caballo', 'joya', 'lastre', 'estrella']
 
 export default function KitchenMenuEngineeringPage() {
   const { activeAccountId } = useActiveAccount()
+  const { activeAccount } = useApp()
+  const nombreDeLaCuenta = activeAccount?.name ?? null
   const navigate = useNavigate()
 
   const [brands, setBrands] = useState<Brand[]>([])
@@ -141,7 +171,7 @@ export default function KitchenMenuEngineeringPage() {
       const c = matriz.cuadranteDe.get(f.id)
       if (c) g[c].push(f)
     }
-    for (const c of ORDEN_CUADRANTES) g[c].sort((a, b) => b.uds - a.uds)
+    for (const c of ORDEN_DE_LAS_SECCIONES) g[c].sort((a, b) => b.uds - a.uds)
     return g
   }, [matriz])
 
@@ -153,170 +183,230 @@ export default function KitchenMenuEngineeringPage() {
 
   const hasta = new Date()
   const desde = new Date(hasta.getTime() - dias * 24 * 3600 * 1000)
-  const cuadrantesVisibles = soloDecision
-    ? (['caballo', 'joya', 'lastre'] as Cuadrante[])
-    : ORDEN_CUADRANTES
+  // Los tres que piden una decisión van en UN panel, con una cabecera de bloque
+  // por cuadrante: son la lista de trabajo y se lee de arriba abajo del tirón.
+  // Las estrellas van en SU panel, y con un rótulo en vez de una cabecera de
+  // bloque: no son trabajo, son la parte de la carta que está bien.
+  const LOS_QUE_PIDEN_DECISION: Cuadrante[] = ['caballo', 'joya', 'lastre']
+  const bloquesConFilas = LOS_QUE_PIDEN_DECISION.filter((c) => porCuadrante[c].length > 0)
+  const estrellas = soloDecision ? [] : porCuadrante.estrella
+
+  const pintaFila = (f: FilaDeCarta, c: Cuadrante, compacta = false) => {
+    const { frase, destacado, botones } = frasePorCuadrante(f, c, matriz.mediaSimpleDeMargen ?? 0)
+    const [antes, fuerte, despues] = parteLaFrase(frase, destacado)
+    return (
+      <div key={f.id}
+        className={`grid items-center gap-3.5 px-4 border-b border-cocina-linea-suave last:border-b-0 ${
+          compacta ? 'py-[5px] min-h-[40px]' : 'py-[7px] min-h-[48px]'}`}
+        style={{ gridTemplateColumns: REJILLA_INGENIERIA }}>
+        {/* 500, no 600: en la maqueta el peso fuerte es del margen, que es la
+            columna por la que se decide. Un nombre en negrita se lo robaba. */}
+        <div className="text-[13.5px] font-medium text-cocina-tinta">{f.nombre}</div>
+        <span className="num text-[13px] text-right text-cocina-tinta whitespace-nowrap">
+          {f.uds} <span className="text-[11px] text-cocina-tinta-3">uds</span>
+        </span>
+        <span className="num text-[13px] text-right font-bold text-cocina-tinta">
+          {fmtMoney(f.margen)}
+        </span>
+        {/* El número por el que se decide, en negrita: los 68 € que ganarías, o
+            el margen del que deja de lo mejor de la carta. */}
+        <div className="text-[12.5px] text-cocina-tinta-2 leading-[1.4]">
+          {antes}<b className="font-semibold text-cocina-tinta">{fuerte}</b>{despues}
+        </div>
+        <span className="flex gap-2 justify-end">
+          {botones.map((b, i) => (
+            // El primero con borde y el resto en fantasma, y sólo cuando hay más
+            // de uno: un botón solo —«Abrir» de una estrella— no es la acción
+            // principal de nada, así que no se pinta como si lo fuera.
+            <BotonCocina key={b.texto} peso={i === 0 && botones.length > 1 ? 'borde' : 'fantasma'}
+              onClick={() => abrir(f.id, b.destino)}>
+              {b.texto}
+            </BotonCocina>
+          ))}
+        </span>
+      </div>
+    )
+  }
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <header>
-        <h1 className="text-2xl font-semibold text-text-primary">¿Qué platos vender más y cuáles quitar?</h1>
-        <p className="mt-1.5 text-sm text-text-secondary max-w-4xl">
-          Cada plato se compara con la media de la marca en dos cosas: <strong>cuánto se vende</strong> y{' '}
-          <strong>cuánto deja</strong> (precio sin IVA − coste) ·{' '}
-          {intervaloDeFechas(desde, hasta) ?? 'En el periodo elegido'}, todos los canales.{' '}
-          <span className="text-text-tertiary">
-            {!margenPropio
-              ? MARGEN_DE_MARCA_CEDIDA
-              : verBebidas
-                ? 'Las bebidas se comparan entre ellas, no con los platos.'
-                : `Entran los ${matrizPlatos.platos.length} platos con coste y ventas; las bebidas van aparte.`}
-          </span>
-        </p>
-      </header>
+    // B83 · al estándar de la maqueta (§9.2 de Extras). Tablero:
+    // `Ingenieria.dc.html`. Esta era la única de las tres que NO usaba ninguna
+    // pieza del patrón —tenía su propio marcado, deuda declarada en el §3.13—,
+    // así que aquí es reescritura, no cambio de piezas.
+    //
+    // SIN SELECTOR DE LOCAL: `menu_item_units_sold(p_brand_id, p_from, p_to)` no
+    // lo acepta (medido en la base). Un control que no filtra es peor que su
+    // ausencia.
+    <div className="cocina min-h-full">
+      <div className="cocina-pagina">
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-text-secondary">Marca</span>
-          <select value={brandId ?? ''}
-            onChange={(e) => { setBrandId(e.target.value); guardaMarcaRecordada(e.target.value) }}
-            className="px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary">
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}{b.ownershipType === 'licensed' ? ' · de terceros' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-text-secondary">Periodo</span>
-          <select value={String(dias)}
-            onChange={(e) => { const d = Number(e.target.value) as Dias; setDias(d); guardaPeriodoRecordado('ingenieria', d) }}
-            className="px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary">
-            <option value="30">Últimos 30 días</option>
-            <option value="90">Últimos 90 días</option>
-            <option value="365">Último año</option>
-          </select>
-        </label>
-      </div>
+        <CabeceraCocina
+          migaja={`Folvy Kitchen${nombreDeLaCuenta ? ` · ${nombreDeLaCuenta}` : ''}`}
+          pregunta="¿Qué platos vender más y cuáles quitar?"
+          regla={
+            <>
+              Cada plato se compara con la media de la marca en dos cosas:{' '}
+              <b className="font-semibold text-cocina-tinta">cuánto se vende</b> y{' '}
+              <b className="font-semibold text-cocina-tinta">cuánto deja</b> (precio sin IVA − coste) ·{' '}
+              <em className="not-italic text-cocina-tinta-3">
+                {intervaloDeFechas(desde, hasta, { minuscula: true }) ?? 'en el periodo elegido'}, todos los canales
+              </em>.{' '}
+              <span className="text-cocina-tinta-3">
+                {!margenPropio
+                  ? MARGEN_DE_MARCA_CEDIDA
+                  : verBebidas
+                    ? 'Las bebidas se comparan entre ellas, no con los platos.'
+                    : `Entran los ${matrizPlatos.platos.length} platos con coste y ventas; las bebidas van aparte.`}
+              </span>
+            </>
+          }
+        >
+          <CampoCocina label="Marca">
+            <select
+              value={brandId ?? ''}
+              onChange={(e) => { setBrandId(e.target.value); guardaMarcaRecordada(e.target.value) }}
+              className="text-[13px] font-medium text-cocina-tinta"
+            >
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}{b.ownershipType === 'licensed' ? ' · de terceros' : ''}
+                </option>
+              ))}
+            </select>
+          </CampoCocina>
+          <CampoCocina label="Periodo">
+            <select
+              value={String(dias)}
+              onChange={(e) => { const d = Number(e.target.value) as Dias; setDias(d); guardaPeriodoRecordado('ingenieria', d) }}
+              className="text-[13px] font-medium text-cocina-tinta"
+            >
+              <option value="30">Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="365">Último año</option>
+            </select>
+          </CampoCocina>
+        </CabeceraCocina>
 
-      {/* 2 · CINCO CIFRAS: los cuatro cuadrantes y la media que los separa. */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-        {ORDEN_CUADRANTES.map((c) => (
-          <div key={c} className="bg-card border border-border-default rounded-lg p-3">
-            <div className="text-[11px] text-text-secondary">{ROTULO_CUADRANTE[c]}</div>
-            <div className="text-2xl font-semibold text-text-primary mt-0.5">{matriz.conteo[c]}</div>
-            <div className="text-[11px] text-text-secondary mt-1 leading-snug">{EXPLICACION_CUADRANTE[c]}</div>
+        {/* 2 · CINCO CIFRAS: los cuatro cuadrantes y la media que los separa. */}
+        <CifrasCocina>
+          {ORDEN_DE_LAS_CIFRAS.map((c) => (
+            <CifraCocina
+              key={c}
+              titulo={ROTULO_CUADRANTE[c]}
+              valor={String(matriz.conteo[c])}
+              pie={EXPLICACION_CUADRANTE[c]}
+              // Sólo los lastres se pintan en rojo: son los únicos que están mal
+              // en las dos cosas. Un caballo o una joya no son un problema, son
+              // una decisión.
+              tono={c === 'lastre' && matriz.conteo[c] > 0 ? 'malo'
+                : c === 'estrella' && matriz.conteo[c] > 0 ? 'bueno' : undefined}
+            />
+          ))}
+          <CifraCocina
+            titulo={`La media de ${verBebidas ? 'las' : 'los'} ${matriz.platos.length} ${verBebidas ? 'bebidas' : 'platos'}`}
+            valor={eurSinSimbolo(matriz.mediaSimpleDeMargen)}
+            sufijo="€"
+            pie={`cada ${verBebidas ? 'bebida' : 'plato'} cuenta uno, se venda lo que se venda · y ${
+              matriz.mediaSimpleDeUnidades == null ? '—' : Math.round(matriz.mediaSimpleDeUnidades)} vendidos`}
+          />
+        </CifrasCocina>
+
+        {/* 3 · EL FILTRO ES LA ACCIÓN: abre en lo que pide una decisión. */}
+        {/* Los dos MANDOS juntos a la izquierda y la nota a la derecha, como la
+            maqueta: un interruptor separado de las pastillas por medio metro de
+            pantalla no se lee como parte del mismo filtro. */}
+        <div className="flex justify-between items-center gap-3 mt-1 flex-wrap">
+          <div className="flex items-center gap-3.5 flex-wrap">
+            <div className="flex gap-1.5">
+              {([[false, 'Platos'], [true, 'Bebidas']] as const).map(([v, t]) => (
+                <ChipCocina key={t} activo={verBebidas === v} onClick={() => setVerBebidas(v)}>{t}</ChipCocina>
+              ))}
+            </div>
+            <InterruptorCocina activo={soloDecision} onChange={setSoloDecision}>
+              Sólo los que piden una decisión
+            </InterruptorCocina>
           </div>
-        ))}
-        <div className="bg-card border border-border-default rounded-lg p-3">
-          <div className="text-[11px] text-text-secondary">
-            La media de {matriz.platos.length} {verBebidas ? 'bebidas' : 'platos'}
-          </div>
-          <div className="text-2xl font-semibold text-text-primary mt-0.5">{fmtMoney(matriz.mediaSimpleDeMargen)}</div>
-          <div className="text-[11px] text-text-secondary mt-1 leading-snug">
-            cada uno cuenta uno, se venda lo que se venda · y{' '}
-            {matriz.mediaSimpleDeUnidades == null ? '—' : Math.round(matriz.mediaSimpleDeUnidades)} vendidos
-          </div>
+          {soloDecision && (
+            <span className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
+              Caballos, joyas y lastres · las estrellas se quedan como están
+            </span>
+          )}
         </div>
-      </div>
 
-      {/* 3 · EL FILTRO ES LA ACCIÓN: abre en lo que pide una decisión. */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        {([[false, 'Platos'], [true, 'Bebidas']] as const).map(([v, t]) => (
-          <button key={t} type="button" onClick={() => setVerBebidas(v)}
-            className={`px-3 py-1.5 rounded-md border transition-base ${
-              verBebidas === v ? 'border-accent bg-accent text-white' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-            {t}
-          </button>
-        ))}
-        <label className="inline-flex items-center gap-1.5 ml-2 text-text-secondary cursor-pointer">
-          <input type="checkbox" checked={soloDecision} onChange={(e) => setSoloDecision(e.target.checked)} />
-          Sólo los que piden una decisión
-        </label>
-        {soloDecision && (
-          <span className="text-xs text-text-secondary">
-            Caballos, joyas y lastres · las estrellas se quedan como están
-          </span>
+        {!cargando && !error && marca && !margenPropio ? (
+          // NO es «no hay platos»: es que la pregunta de esta pantalla no se
+          // puede responder para una marca de terceros con la vara de hoy.
+          <PanelCocina>
+            <div className="px-4 py-4 flex flex-col gap-2">
+              <p className="text-[13.5px] font-semibold text-cocina-tinta">
+                {marca.name} es una marca de terceros: aquí no se puede ordenar por margen.
+              </p>
+              <p className="text-[12.5px] text-cocina-tinta-2 leading-[1.5] max-w-3xl">
+                {MARGEN_DE_MARCA_CEDIDA} Comparar sus platos con un margen que no es el tuyo te haría
+                subir el precio de algo que no cobras, así que no se dibuja la matriz.
+              </p>
+              <p className="text-[12.5px] text-cocina-tinta-2 leading-[1.5]">
+                Lo que sí puedes ver de esta marca: el coste de cada plato y lo que se ha vendido.
+              </p>
+              <div className="mt-1">
+                <BotonCocina peso="borde" onClick={() => navigate('/kitchen/rentabilidad')}>
+                  Verlo en Rentabilidad
+                </BotonCocina>
+              </div>
+            </div>
+          </PanelCocina>
+        ) : cargando || error || matriz.platos.length === 0 ? (
+          <EstadoDeLaConsulta
+            cargando={cargando}
+            textoCargando="Cruzando coste real con ventas reales…"
+            error={error}
+            queSePregunto={marca
+              ? `los ${verBebidas ? 'bebidas' : 'platos'} de ${marca.name} con coste y ventas en el periodo`
+              : 'la ingeniería de menús'}
+            matiz={marca
+              ? 'Un plato entra aquí sólo si tiene escandallo Y ventas en el periodo. Si le falta una de las dos, está en Rentabilidad con su motivo.'
+              : 'Elige una marca arriba.'}
+          />
+        ) : (
+          <>
+            {bloquesConFilas.length > 0 && (
+              <PanelCocina>
+                {bloquesConFilas.map((c) => (
+                  <div key={c}>
+                    <CabeceraDeBloque
+                      nombre={`${ROTULO_CUADRANTE[c]} · ${porCuadrante[c].length}`}
+                      detalle={
+                        c === 'caballo' ? `se venden mucho pero dejan menos que la media (${fmtMoney(matriz.mediaSimpleDeMargen)})`
+                          : c === 'joya' ? `dejan más que la media pero se venden menos de ${Math.round(matriz.mediaSimpleDeUnidades ?? 0)} en ${dias} días`
+                            : 'por debajo de la media en las dos cosas'
+                      }
+                    />
+                    {porCuadrante[c].map((f) => pintaFila(f, c))}
+                  </div>
+                ))}
+              </PanelCocina>
+            )}
+
+            {estrellas.length > 0 && (
+              <PanelCocina>
+                <RotuloDePanel>
+                  {ROTULO_CUADRANTE.estrella} · {estrellas.length} · se quedan como están
+                </RotuloDePanel>
+                {estrellas.map((f) => pintaFila(f, 'estrella', true))}
+              </PanelCocina>
+            )}
+
+            {/* 5 · NADA MÁS: sólo lo que no entra y por qué, que es lo que evita
+                   que alguien piense que faltan platos. */}
+            <p className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
+              {verBebidas
+                ? 'Las bebidas se comparan entre ellas: una lata no compite con una pita por el sitio en la carta.'
+                : `Las ${filas.filter((f) => esBebida(f.categoria)).length} bebidas se comparan entre ellas en su pestaña. ` +
+                  `Los ${filas.filter((f) => f.margen == null).length} platos sin coste y los ${filas.filter((f) => f.margen != null && f.uds === 0 && !esBebida(f.categoria)).length} sin ventas en el periodo no entran: están en Rentabilidad con su motivo.`}
+            </p>
+          </>
         )}
       </div>
-
-      {!cargando && !error && marca && !margenPropio ? (
-        // NO es «no hay platos»: es que la pregunta de esta pantalla no se puede
-        // responder para una marca de terceros con la vara de hoy.
-        <div className="bg-card border border-border-default rounded-xl p-6">
-          <p className="text-sm text-text-primary font-medium">
-            {marca.name} es una marca de terceros: aquí no se puede ordenar por margen.
-          </p>
-          <p className="text-xs text-text-secondary mt-2 max-w-3xl leading-relaxed">
-            {MARGEN_DE_MARCA_CEDIDA} Comparar sus platos con un margen que no es el tuyo te haría
-            subir el precio de algo que no cobras, así que no se dibuja la matriz.
-          </p>
-          <p className="text-xs text-text-secondary mt-2">
-            Lo que sí puedes ver de esta marca: el coste de cada plato y lo que se ha vendido, en{' '}
-            <button type="button" onClick={() => navigate('/kitchen/rentabilidad')}
-              className="text-terracota underline underline-offset-2">Rentabilidad</button>.
-          </p>
-        </div>
-      ) : cargando || error || matriz.platos.length === 0 ? (
-        <EstadoDeLaConsulta
-          cargando={cargando}
-          textoCargando="Cruzando coste real con ventas reales…"
-          error={error}
-          queSePregunto={marca
-            ? `los ${verBebidas ? 'bebidas' : 'platos'} de ${marca.name} con coste y ventas en el periodo`
-            : 'la ingeniería de menús'}
-          matiz={marca
-            ? 'Un plato entra aquí sólo si tiene escandallo Y ventas en el periodo. Si le falta una de las dos, está en Rentabilidad con su motivo.'
-            : 'Elige una marca arriba.'}
-        />
-      ) : (
-        <>
-          {cuadrantesVisibles.map((c) => porCuadrante[c].length > 0 && (
-            <section key={c} className="space-y-2">
-              <h2 className="text-sm font-medium text-text-primary">
-                {ROTULO_CUADRANTE[c]} · {porCuadrante[c].length}
-                <span className="ml-2 font-normal text-text-secondary">
-                  {c === 'caballo' && `se venden mucho pero dejan menos que la media (${fmtMoney(matriz.mediaSimpleDeMargen)})`}
-                  {c === 'joya' && `dejan más que la media pero se venden menos de ${Math.round(matriz.mediaSimpleDeUnidades ?? 0)} en ${dias} días`}
-                  {c === 'lastre' && 'por debajo de la media en las dos cosas'}
-                  {c === 'estrella' && 'se quedan como están'}
-                </span>
-              </h2>
-              {porCuadrante[c].map((f) => {
-                const { frase, botones } = frasePorCuadrante(f, c, matriz.mediaSimpleDeMargen ?? 0)
-                return (
-                  <div key={f.id} className="bg-card border border-border-default rounded-lg p-3">
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="text-sm font-medium text-text-primary">{f.nombre}</span>
-                      <span className="text-sm font-mono text-text-secondary">{f.uds} uds</span>
-                      <span className="text-sm font-mono text-text-primary">{fmtMoney(f.margen)}</span>
-                    </div>
-                    <p className="text-xs text-text-secondary mt-1 leading-relaxed">{frase}</p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {botones.map((b) => (
-                        <button key={b.texto} type="button" onClick={() => abrir(f.id, b.destino)}
-                          className="text-xs font-medium px-3 py-1.5 rounded-md border border-border-default text-terracota hover:bg-terracota-bg transition-base">
-                          {b.texto}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </section>
-          ))}
-
-          {/* 5 · NADA MÁS: sólo lo que no entra y por qué, que es lo que evita
-                 que alguien piense que faltan platos. */}
-          <p className="text-xs text-text-secondary">
-            {verBebidas
-              ? 'Las bebidas se comparan entre ellas: una lata no compite con una pita por el sitio en la carta.'
-              : `Las ${filas.filter((f) => esBebida(f.categoria)).length} bebidas se comparan entre ellas en su pestaña. ` +
-                `Los ${filas.filter((f) => f.margen == null).length} sin coste y los ${filas.filter((f) => f.margen != null && f.uds === 0 && !esBebida(f.categoria)).length} sin ventas en el periodo no entran: están en Rentabilidad con su motivo.`}
-          </p>
-        </>
-      )}
     </div>
   )
 }

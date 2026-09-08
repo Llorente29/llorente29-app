@@ -264,12 +264,18 @@ export function frasePorCuadrante(
   f: FilaDeCarta,
   c: Cuadrante,
   media: number,
-): { frase: string; botones: { texto: string; destino: 'escandallo' | 'en_carta' | 'economia' }[] } {
+) : {
+  frase: string
+  /** El trozo de `frase` que va en negrita. Ver `parteLaFrase`. */
+  destacado?: string
+  botones: { texto: string; destino: 'escandallo' | 'en_carta' | 'economia' }[]
+} {
   const m = f.margen as number
   if (c === 'caballo') {
     const gana = ganariaSubiendo(f.uds, 0.5, f.ivaPct)
     return {
       frase: `Se vende mucho (${f.uds}) pero deja ${eur(m)}. Con 0,50 € más de precio habrías ganado ${Math.round(gana)} € más en el periodo.`,
+      destacado: `${Math.round(gana)} € más`,
       botones: [{ texto: 'Subir precio', destino: 'economia' }, { texto: 'Ver receta', destino: 'escandallo' }],
     }
   }
@@ -279,6 +285,9 @@ export function frasePorCuadrante(
       frase: deLoMejor
         ? `Deja ${eur(m)}, de lo mejor de la carta, y sólo se ha vendido ${f.uds} veces. Súbelo en la carta o mételo en un menú.`
         : `Deja ${eur(m)}, por encima de la media, y se vende ${f.uds} veces. Que se vea más en la carta.`,
+      // Sólo se destaca cuando hay algo que destacar: si todas las frases
+      // llevaran una negrita, la negrita dejaría de decir nada.
+      destacado: deLoMejor ? eur(m) : undefined,
       botones: [{ texto: 'Darle sitio', destino: 'en_carta' }, { texto: 'Abrir', destino: 'escandallo' }],
     }
   }
@@ -289,15 +298,40 @@ export function frasePorCuadrante(
         botones: [{ texto: 'Subir precio', destino: 'economia' }, { texto: 'Quitar de la carta', destino: 'en_carta' }],
       }
     }
+    // «Decide si se queda» daba la orden y se iba. La maqueta aprobada dice lo
+    // que hay que decidir CON qué: «Si se queda, que sea por algo que no sea el
+    // margen» — porque un lastre puede quedarse por ser el plato vegano de la
+    // carta o el que pide la mitad de las mesas, y eso esta pantalla no lo sabe.
+    // Y lleva «Abrir» detrás: para mirar eso hay que entrar en la ficha.
     return {
-      frase: `Deja ${eur(m)}, por debajo de la media, y se vende ${f.uds} veces. Decide si se queda.`,
-      botones: [{ texto: 'Quitar de la carta', destino: 'en_carta' }],
+      frase: `Deja ${eur(m)}, por debajo de la media, y se vende ${f.uds} veces. Si se queda, que sea por algo que no sea el margen.`,
+      botones: [
+        { texto: 'Quitar de la carta', destino: 'en_carta' },
+        { texto: 'Abrir', destino: 'escandallo' },
+      ],
     }
   }
   return {
     frase: 'Se vende y deja. Vigila que el coste no suba.',
     botones: [{ texto: 'Abrir', destino: 'escandallo' }],
   }
+}
+
+/**
+ * Parte la frase en tres para que la pantalla pinte el trozo del medio en
+ * negrita: lo de antes, lo destacado y lo de después.
+ *
+ * POR QUÉ ASÍ Y NO CON HTML EN LA FRASE. Esta capa no sabe pintar y no debe:
+ * si devolviera `<b>…</b>`, la frase dejaría de poderse comparar con una
+ * cadena en una prueba, y el día que alguien la use en un correo o en un push
+ * saldría con las etiquetas dentro. Devolviendo el trozo, cada sitio decide si
+ * lo destaca y cómo — y el que no lo destaque sigue enseñando la frase entera.
+ */
+export function parteLaFrase(frase: string, destacado?: string): [string, string, string] {
+  if (!destacado) return [frase, '', '']
+  const i = frase.indexOf(destacado)
+  if (i < 0) return [frase, '', '']
+  return [frase.slice(0, i), destacado, frase.slice(i + destacado.length)]
 }
 
 // ── Marcas de terceros: el margen NO es de la casa ──────────────────────────

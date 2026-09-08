@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Cifra, Campo } from '@/modules/kitchen/components/PatronDeKitchen'
+import { Cifra, Campo, CabeceraDeBloque, RotuloDePanel } from '@/modules/kitchen/components/PatronDeKitchen'
 
 // EL CONTRATO DE PÍXEL DEL PATRÓN, ESCRITO.
 //
@@ -56,5 +56,57 @@ describe('Campo · el marcado del patrón no cambia', () => {
     expect(html).toContain('class="text-[11px] uppercase tracking-wide text-text-secondary"')
     expect(html).toContain('Marca')
     expect(html).toContain('<select')
+  })
+})
+
+// ── B83 · las dos cabeceras, que son DOS y no una ──────────────────────────
+//
+// Había cuatro copias escritas a mano de «la cabecera de dentro del panel», y
+// sólo la de Extras estaba bien: Rentabilidad e Ingeniería habían escrito la
+// suya con el marcado de `.panel-h` —11 px, versalitas, separadas a los
+// extremos— cuando la maqueta ahí pone `.qh`, que es 14 px y con la explicación
+// AL LADO. Nadie lo habría visto comparando una pantalla consigo misma.
+//
+// Aquí quedan las dos fijadas, y la diferencia escrita: `CabeceraDeBloque`
+// agrupa filas dentro de un panel; `RotuloDePanel` rotula el panel entero.
+
+describe('CabeceraDeBloque · `.qh` de la maqueta', () => {
+  it('el nombre en 14 px y la explicación al lado, no en la otra punta', () => {
+    const html = renderToStaticMarkup(
+      <CabeceraDeBloque nombre="Lastres · 8" detalle="por debajo de la media en las dos cosas" />,
+    )
+    expect(html).toContain('class="flex items-baseline gap-2.5 px-4 pt-3 pb-2 border-b border-cocina-linea-suave bg-cocina-superficie-2"')
+    expect(html).toContain('class="text-[14px] font-bold text-cocina-tinta"')
+    expect(html).toContain('class="text-[12px] text-cocina-tinta-3"')
+    // `justify-between` es de la OTRA pieza: aquí separaría el nombre de lo que
+    // lo explica, que fue exactamente el fallo.
+    expect(html).not.toContain('justify-between')
+  })
+
+  it('sin detalle no se pinta un hueco vacío', () => {
+    const html = renderToStaticMarkup(<CabeceraDeBloque nombre="Lastres · 8" />)
+    expect(html).not.toContain('text-cocina-tinta-3')
+  })
+})
+
+describe('RotuloDePanel · `.panel-h` de la maqueta', () => {
+  it('versalitas de 11 px, a los dos extremos y SIN fondo gris', () => {
+    const html = renderToStaticMarkup(
+      <RotuloDePanel derecha="tuyas primero · de terceros después">
+        Por marca · comida sobre ventas
+      </RotuloDePanel>,
+    )
+    expect(html).toContain('class="flex justify-between items-center gap-3 px-4 py-2.5 border-b border-cocina-linea-suave text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-3"')
+    // El fondo gris es de `.qh` y de las cabeceras de columna. `.panel-h` no lo
+    // lleva: con él el rótulo pesaba lo mismo que una fila de datos.
+    expect(html).not.toContain('bg-cocina-superficie-2')
+  })
+
+  // Las dos mitades en el MISMO tono, como la maqueta. La derecha la tenía yo en
+  // `text-cocina-tinta-2` diciendo en un comentario «como el tablero», y el
+  // tablero no hace eso: era mío.
+  it('las dos mitades en el mismo tono', () => {
+    const html = renderToStaticMarkup(<RotuloDePanel derecha="B">A</RotuloDePanel>)
+    expect(html).not.toContain('text-cocina-tinta-2')
   })
 })

@@ -88,9 +88,18 @@ describe('filas CON coste · un botón por cuadrante, todos con destino', () => 
     expect(r.botones[0]).toEqual({ texto: 'Darle sitio', destino: 'en_carta' })
   })
 
-  it('LASTRE normal: UN solo botón, y es «Quitar de la carta»', () => {
+  // B83 · era «UN solo botón». La maqueta aprobada le pone dos, y el segundo no
+  // rompe la regla que motivó la prueba: la regla prohíbe «Mantener» —no decidir
+  // no es una acción—, no prohíbe MIRAR. Y hay que mirar: un lastre puede
+  // quedarse por ser el único plato vegano de la carta, y eso está en la ficha,
+  // no aquí. Lo que sigue fijo es que el primero es quitar y que los dos van a
+  // una pestaña que existe.
+  it('LASTRE normal: quitar primero, y «Abrir» para mirar antes de decidir', () => {
     const r = frasePorCuadrante(fila('lastre'), 'lastre', media)
-    expect(r.botones).toEqual([{ texto: 'Quitar de la carta', destino: 'en_carta' }])
+    expect(r.botones).toEqual([
+      { texto: 'Quitar de la carta', destino: 'en_carta' },
+      { texto: 'Abrir', destino: 'escandallo' },
+    ])
   })
 
   it('LASTRE caro de hacer: antes de quitarlo se ofrece subir el precio', () => {

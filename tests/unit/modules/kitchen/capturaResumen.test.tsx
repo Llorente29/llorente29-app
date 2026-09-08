@@ -22,7 +22,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  CabeceraCocina, RotuloDePanel, CampoCocina, CifrasCocina, CifraCocina,
   BotonCocina, InterruptorCocina, PanelCocina, PastillaCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import {
@@ -175,12 +175,9 @@ it('genera la captura del Resumen a 1280', () => {
         </PanelCocina>
 
         <PanelCocina>
-          <div className="flex items-baseline justify-between gap-3 px-4 py-2.5 border-b border-cocina-linea-suave bg-cocina-superficie-2">
-            <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-3">
-              Por marca · comida sobre ventas
-            </span>
-            <span className="text-[11.5px] text-cocina-tinta-3">tuyas primero · de terceros después</span>
-          </div>
+          <RotuloDePanel derecha="tuyas primero · de terceros después">
+            Por marca · comida sobre ventas
+          </RotuloDePanel>
           <div className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
                style={{ gridTemplateColumns: REJILLA_MARCAS }}>
             <span>Marca</span><span className="text-right">Vendido</span>

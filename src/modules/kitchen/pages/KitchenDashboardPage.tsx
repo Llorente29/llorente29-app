@@ -36,7 +36,7 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
-  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  CabeceraCocina, RotuloDePanel, CampoCocina, CifrasCocina, CifraCocina,
   BotonCocina, InterruptorCocina, PanelCocina, AvisoCocina, PastillaCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import {
@@ -374,16 +374,15 @@ export default function KitchenDashboardPage() {
 
             {/* 5 · POR MARCA. */}
             <PanelCocina>
-              <div className="flex items-baseline justify-between gap-3 px-4 py-2.5 border-b border-cocina-linea-suave bg-cocina-superficie-2">
-                <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-3">
-                  Por marca · comida sobre ventas
-                </span>
-                {/* B83.4 · en versalitas y en tinta, como el tablero: es el
-                    criterio de orden de la tabla, no una nota al pie. */}
-                <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-2">
-                  tuyas primero · de terceros después
-                </span>
-              </div>
+              {/* B83 · la pieza del patrón. Y sin fondo gris: `.panel-h` de la
+                  maqueta no lo lleva —el gris es de las cabeceras de columna—, y
+                  con él el rótulo pesaba lo mismo que una fila de datos. Las dos
+                  mitades en el mismo tono, también como la maqueta: al pintar la
+                  derecha más oscura decía «como el tablero» y el tablero no hace
+                  eso; era mío. */}
+              <RotuloDePanel derecha="tuyas primero · de terceros después">
+                Por marca · comida sobre ventas
+              </RotuloDePanel>
               <div
                 className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
                 style={{ gridTemplateColumns: REJILLA_MARCAS }}

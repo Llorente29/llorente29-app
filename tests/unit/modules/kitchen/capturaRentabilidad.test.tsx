@@ -17,7 +17,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  CabeceraCocina, CabeceraDeBloque, CampoCocina, CifrasCocina, CifraCocina,
   BotonCocina, ChipCocina, InterruptorCocina, PanelCocina, PastillaCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { eurDeCocina } from '@/modules/kitchen/lib/lasCosasQueArreglar'
@@ -161,10 +161,8 @@ it('genera la captura de Rentabilidad a 1280', () => {
         </PanelCocina>
 
         <PanelCocina>
-          <div className="flex items-baseline justify-between gap-3 px-4 py-2.5 border-b border-cocina-linea-suave bg-cocina-superficie-2">
-            <span className="text-[11px] font-bold tracking-[0.09em] uppercase text-cocina-tinta-3">Sin coste · 6</span>
-            <span className="text-[11.5px] text-cocina-tinta-3">se han vendido 90 veces en 90 días sin saber lo que cuestan</span>
-          </div>
+          <CabeceraDeBloque nombre="Sin coste · 6"
+            detalle="se han vendido 90 veces en 90 días sin saber lo que cuestan" />
           {SIN_COSTE.map((f) => {
             const m = motivoSinCoste(f.tipo)
             return (
