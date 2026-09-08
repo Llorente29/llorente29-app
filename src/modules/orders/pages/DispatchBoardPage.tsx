@@ -18,7 +18,7 @@ import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { direccionParaMostrar, etiquetasDesconocidas } from '@/lib/direccionEntrega'
 import {
-  getOrdersFeed, deliveryView, isOwnDeliveryUndispatched, dispatchOrder, isTerminalStatus,
+  getOrdersFeed, deliveryView, isOwnDeliveryUndispatched, brandDoesOwnDelivery, dispatchOrder, isTerminalStatus,
   type OrderFeedItem,
 } from '../services/ordersFeedService'
 
@@ -43,13 +43,24 @@ function saving(o: OrderFeedItem): number {
 function ownCost(o: OrderFeedItem): number { return o.transport_price ?? OWN_COST_EST }
 
 // Reparto propio activo (lo que se opera aquí).
+//
+// 08/09: una marca que NO hace reparto propio no tiene reparto propio activo,
+// aunque sus pedidos lleguen marcados como `own_delivery` (una cedida de Just
+// Eat llega así: para Last ES un reparto). Antes se colaban en este tablero
+// como si hubiera algo que operar con ellas.
 function isActiveOwn(o: OrderFeedItem): boolean {
+  if (!brandDoesOwnDelivery(o)) return false
   if ((o.service_type ?? '') !== 'own_delivery') return false
   if (isTerminalStatus(o.order_status)) return false
   const ds = (o.delivery_state ?? '').toLowerCase()
   return !['delivered', 'canceled', 'cancelled', 'finish', 'failed'].includes(ds)
 }
+// El `|| !!o.dispatch_error` es el segundo camino por el que un pedido de marca
+// que no reparte entraba aquí: el motivo del RECHAZO («marca sin reparto propio»)
+// se guarda en la misma columna que los fallos de verdad, así que un no-despacho
+// correcto parecía uno pendiente. La marca decide, no el texto del motivo.
 function needsDispatch(o: OrderFeedItem): boolean {
+  if (!brandDoesOwnDelivery(o)) return false
   return isOwnDeliveryUndispatched(o) || !!o.dispatch_error
 }
 
