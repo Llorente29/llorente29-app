@@ -178,6 +178,20 @@ export function channelFromName(name: string | null | undefined): string {
 
 export interface CatalogInfo {
   brand: string;
+  /**
+   * `true` = la marca la dio el recorrido de `brands[].catalogs`.
+   * `false` = NO se pudo atribuir y `brand` es, en realidad, el NOMBRE DEL
+   * CATÁLOGO, puesto como último recurso.
+   *
+   * Hay que distinguirlo, y lo pidió Julio el 08/09 como comprobación de
+   * cinturón: sin esta bandera, un recorrido fallido es INVISIBLE. La marca de
+   * verdad se quedaría sin ningún catálogo atribuido —y saldría como «sin carta
+   * en Last»— mientras el nombre del catálogo aparecería como una marca
+   * fantasma «sin resolver». Dos síntomas en dos sitios y nada que diga que son
+   * el mismo catálogo. Medido el 08/09 sobre el espejo: 54 de 55 catálogos SÍ
+   * se atribuyen, así que hoy no muerde; la bandera está para el día que sí.
+   */
+  brandFromWalk: boolean;
   /** TODOS los destinos del catálogo, ordenados. */
   channels: string[];
   /** Nombre del catálogo en Last. */
@@ -215,6 +229,7 @@ export async function resolveLocationCatalogs(
       : [channelFromName(c.name)];
     catalogMap.set(String(c.id), {
       brand: mapped?.brand || (c.name ?? ""),
+      brandFromWalk: Boolean(mapped?.brand),
       // El NOMBRE del catálogo ("SMASH BROTHERS BURGER 20"). Sin esto no hay
       // forma de casar una fila del espejo con lo que se ve en el panel.
       channels,

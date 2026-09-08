@@ -86,7 +86,12 @@ const BRAND_ALIAS: Record<string, string> = {
 //     tendrá su PROPIA shop de venta directa (canal 'shop', no una marca). Por eso
 //     no se importa como marca: la venta directa es un CANAL transversal a las
 //     marcas, no una marca en sí.
-const DISCARDED_BRANDS: Set<string> = new Set(["foodint"]);
+//   - "van van": marca de Last que Foodint NO trabaja ni va a trabajar (Julio,
+//     08/09). Su carta existe en Last —«Van Van Chicken Bar», catálogos de Glovo
+//     y Uber— y el recorrido la atribuye bien, así que sin esto sale cada pasada
+//     en `brands_unresolved` como si faltara por casar. Descartarla a propósito
+//     la saca del ruido y la deja CONTADA en `brands_discarded`, que es su sitio.
+const DISCARDED_BRANDS: Set<string> = new Set(["foodint", "van van"]);
 
 // Infiere el tipo de grupo de modificadores por su nombre (heurística).
 function inferGroupType(name: string): string {
@@ -212,6 +217,9 @@ Deno.serve(async (req: Request) => {
     discovery: [] as any[],
     catalogs_discovered: 0,
     catalogs_without_brand: [] as string[],
+    // Si esto no está vacío, hay marcas de `brands_skipped_empty` y de
+    // `brands_unresolved` que en realidad son el MISMO catálogo mal atribuido.
+    catalogs_brand_por_nombre: [] as any[],
     categories: 0, products: 0, combos: 0,
     modifier_groups: 0, modifier_options: 0, assignments: 0,
     combo_slots: 0, combo_slot_options: 0,
@@ -250,6 +258,13 @@ Deno.serve(async (req: Request) => {
     // callarlos sería volver al mismo sitio (regla 7: se cuentan, no se
     // esconden).
     const catalogsSinMarca: string[] = [];
+    // Catálogos cuya marca NO la dio el recorrido de `brands[].catalogs`, sino
+    // el nombre del catálogo puesto como último recurso. Comprobación pedida por
+    // Julio (§19) y hace falta: un recorrido fallido es INVISIBLE sin esto — la
+    // marca de verdad se queda sin catálogo y sale como «sin carta en Last»,
+    // mientras el nombre del catálogo aparece como marca fantasma «sin
+    // resolver». Dos síntomas separados y nada que diga que son lo mismo.
+    const catalogsMarcaPorNombre: Array<{ catalogo: string; usada_como_marca: string }> = [];
 
     for (const loc of locations) {
       const { catalogMap, debug } = await resolveLocationCatalogs(token, String(loc.id));
@@ -265,6 +280,9 @@ Deno.serve(async (req: Request) => {
         if (!brandName) {
           if (!catalogsSinMarca.includes(catId)) catalogsSinMarca.push(catId);
           continue;
+        }
+        if (!info.brandFromWalk) {
+          catalogsMarcaPorNombre.push({ catalogo: info.name ?? catId, usada_como_marca: brandName });
         }
         brandHasCatalog.set(brandName, true);
         if (!canonicalCatalogs.has(catId)) {
@@ -290,6 +308,7 @@ Deno.serve(async (req: Request) => {
       .filter(([, has]) => !has)
       .map(([name]) => name);
     report.catalogs_without_brand = catalogsSinMarca;
+    report.catalogs_brand_por_nombre = catalogsMarcaPorNombre;
     report.catalogs_discovered = canonicalCatalogs.size;
 
     // ════════════════ FASE 2: productos/combos EN USO por catálogo ════════════════
