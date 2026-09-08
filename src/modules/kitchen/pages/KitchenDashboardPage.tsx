@@ -36,8 +36,8 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
-  CabeceraCocina, RotuloDePanel, CampoCocina, CifrasCocina, CifraCocina,
-  BotonCocina, InterruptorCocina, PanelCocina, AvisoCocina, PastillaCocina,
+  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  BotonCocina, InterruptorCocina, PanelCocina, AvisoCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import {
   getComidaSobreVentas, getLoQueFalta,
@@ -50,6 +50,8 @@ import {
 import { listLocations as listLocales } from '@/modules/kitchen/services/availabilityService'
 import { guardaPeriodoRecordado, leePeriodoRecordado } from '@/modules/kitchen/lib/recuerdoDeKitchen'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
+import { TablaPorMarca } from '@/modules/kitchen/components/TablaPorMarca'
+import { REJILLA_COSAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 import { fmtPct } from '@/lib/format'
 
 type Dias = 30 | 90 | 365
@@ -58,13 +60,9 @@ type QueMarcas = 'todas' | 'tuyas'
 const pct = (v: number | null | undefined) => fmtPct(v, 1)
 
 /** Debajo de esta cobertura, la marca se marca en rojo: su cifra no es fiable. */
-const COBERTURA_QUE_PREOCUPA = 80
 
-/** La rejilla de la tabla por marca, copiada del ancho del tablero. */
-const REJILLA_MARCAS = 'minmax(0,1fr) 120px 90px 160px auto'
 
 /** Las filas de «lo que hay que arreglar»: título · motivo · botón. */
-const REJILLA_COSAS = '230px minmax(0,1fr) auto'
 
 export default function KitchenDashboardPage() {
   const { activeAccountId } = useActiveAccount()
@@ -373,57 +371,8 @@ export default function KitchenDashboardPage() {
             )}
 
             {/* 5 · POR MARCA. */}
-            <PanelCocina>
-              {/* B83 · la pieza del patrón. Y sin fondo gris: `.panel-h` de la
-                  maqueta no lo lleva —el gris es de las cabeceras de columna—, y
-                  con él el rótulo pesaba lo mismo que una fila de datos. Las dos
-                  mitades en el mismo tono, también como la maqueta: al pintar la
-                  derecha más oscura decía «como el tablero» y el tablero no hace
-                  eso; era mío. */}
-              <RotuloDePanel derecha="tuyas primero · de terceros después">
-                Por marca · comida sobre ventas
-              </RotuloDePanel>
-              <div
-                className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
-                style={{ gridTemplateColumns: REJILLA_MARCAS }}
-              >
-                <span>Marca</span>
-                <span className="text-right">Vendido</span>
-                <span className="text-right">Comida</span>
-                <span className="text-right">Coste conocido</span>
-                <span />
-              </div>
-              {marcasVisibles.map((m) => {
-                const flojo = m.coberturaPct != null && m.coberturaPct < COBERTURA_QUE_PREOCUPA
-                return (
-                  <div key={m.brandId ?? m.marca}
-                    className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[44px]"
-                    style={{ gridTemplateColumns: REJILLA_MARCAS }}>
-                    <div className="min-w-0 text-[13.5px] font-semibold text-cocina-tinta truncate">
-                      {m.marca}
-                      {m.ownershipType !== 'own' && (
-                        <span className="ml-1.5 text-[11px] font-medium text-cocina-tinta-3">de terceros</span>
-                      )}
-                    </div>
-                    <span className="num text-[13px] text-right text-cocina-tinta">{eurDeCocina(m.ingreso)}</span>
-                    <span className="num text-[13px] text-right text-cocina-tinta">{pct(m.foodCostPct)}</span>
-                    {/* Una cobertura floja es una PASTILLA, como en el tablero, y
-                        no texto rojo suelto: partido en dos líneas se leía como
-                        una nota, no como un aviso. */}
-                    <span className="text-right whitespace-nowrap">
-                      {flojo
-                        ? <PastillaCocina tono="rojo">{pctEnteroDeCocina(m.coberturaPct)} · falta coste</PastillaCocina>
-                        // B83.4 · es el TERCER NÚMERO de la fila, no una nota:
-                        // en gris se leía como comentario de los otros dos.
-                        : <span className="num text-[13px] text-cocina-tinta">{pctEnteroDeCocina(m.coberturaPct)}</span>}
-                    </span>
-                    <span className="text-right">
-                      <BotonCocina peso="fantasma" onClick={() => navigate('/kitchen/rentabilidad')}>Ver platos</BotonCocina>
-                    </span>
-                  </div>
-                )
-              })}
-            </PanelCocina>
+            <TablaPorMarca marcas={marcasVisibles}
+              verPlatos={() => navigate('/kitchen/rentabilidad')} />
 
             {queMarcas === 'todas' && cedidas && propias && comida.ingresoTotal > 0 && (
               <p className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">

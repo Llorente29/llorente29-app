@@ -236,6 +236,19 @@ export function eurDeCocina(v: number | null | undefined): string {
   return `${Math.round(Number(v)).toLocaleString('es-ES', { useGrouping: true })} €`
 }
 
+/**
+ * Un entero con su punto de millar. «de 2053» no es castellano, y `String(n)` no
+ * agrupa nada — ni `toLocaleString` sin `useGrouping` explícito, que en cuatro
+ * cifras se lo salta por su `'min2'` de fábrica (deuda declarada el 07/09; ésta
+ * es la misma familia y aquí se cierra para las unidades vendidas).
+ *
+ * Vale para lo que se cuenta, no para lo que se cobra: para euros, `eurDeCocina`.
+ */
+export function enteroDeCocina(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(Number(v))) return '—'
+  return Math.round(Number(v)).toLocaleString('es-ES', { useGrouping: true })
+}
+
 /** El porcentaje de cobertura, entero: la maqueta pinta «96 %», no «96,2 %». */
 export function pctEnteroDeCocina(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(Number(v))) return '—'

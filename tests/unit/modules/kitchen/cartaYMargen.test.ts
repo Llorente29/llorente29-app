@@ -65,16 +65,48 @@ describe('el motivo de «sin coste» distingue los dos casos reales', () => {
 })
 
 describe('etiquetas de fila', () => {
-  it('«caro de hacer» a partir del 40 % — las dos tartas y las dos marquesas', () => {
-    const caros = FILAS.filter((f) => etiquetasDeFila(f).includes('caro de hacer')).map((f) => f.nombre)
-    expect(caros.sort()).toEqual([
+  const caros = (objetivo: number | null) =>
+    FILAS.filter((f) => etiquetasDeFila(f, objetivo).includes('caro de hacer'))
+      .map((f) => f.nombre).sort()
+
+  // §3.21.2 · HOY FOODINT NO TIENE OBJETIVO, así que hoy no hay ni una pastilla.
+  // Es lo correcto y es lo que dice la otra pantalla: el Resumen lleva «Sin
+  // objetivo de comida» con su botón. Las dos cuentan la misma historia.
+  it('sin objetivo puesto no se llama «caro» a nadie: no hay vara con la que medir', () => {
+    expect(caros(null)).toEqual([])
+  })
+
+  // Y el día que Julio lo ponga, aparecen solas. Con el 40 % que estaba escrito
+  // a mano salen exactamente las mismas cuatro que antes: el cambio es de dónde
+  // sale el número, no de la regla.
+  it('con objetivo al 40 % son las dos tartas y las dos marquesas', () => {
+    expect(caros(40)).toEqual([
       'Cheesecake de Nutella', 'Marquesa de Choco-Avellanas',
       'Marquesa de Dulce de Leche', 'Tarta 3 Leches',
     ])
   })
+
+  // Una vara más exigente señala a más platos: es la prueba de que la pastilla
+  // se mueve con el objetivo y no con un número escondido en el código.
+  it('con objetivo al 25 % señala a más, y con el 60 % a ninguno', () => {
+    expect(caros(25).length).toBeGreaterThan(caros(40).length)
+    expect(caros(60)).toEqual([])
+  })
+
+  // El límite es ESTRICTO: un plato que cuesta exactamente el objetivo lo
+  // cumple, no lo incumple. «Caro» es pasarse, no llegar.
+  it('justo en el objetivo no es caro: se pasa o no se pasa', () => {
+    const tarta = FILAS.find((f) => f.nombre === 'Tarta 3 Leches')!
+    const suyo = tarta.costeSobrePrecio as number
+    expect(etiquetasDeFila(tarta, suyo)).not.toContain('caro de hacer')
+    expect(etiquetasDeFila(tarta, suyo - 0.01)).toContain('caro de hacer')
+  })
+
+  // Esta NO depende del objetivo: cero ventas es cero ventas.
   it('«sin ventas en el periodo» son las dos marquesas y las dos Daily Box', () => {
-    const sinVentas = FILAS.filter((f) => etiquetasDeFila(f).includes('sin ventas en el periodo'))
+    const sinVentas = FILAS.filter((f) => etiquetasDeFila(f, null).includes('sin ventas en el periodo'))
     expect(sinVentas).toHaveLength(4)
+    expect(sinVentas.every((f) => f.uds === 0)).toBe(true)
   })
 })
 

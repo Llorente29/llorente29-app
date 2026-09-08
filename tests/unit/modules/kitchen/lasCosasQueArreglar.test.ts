@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   pintaCosa, estaPendiente, cuantasResueltas, rutaDe, RUTAS_DE_KITCHEN,
   type CosaMedida, type ClaveDeCosa,
-  loQueNoCambiaConElLocal, eurDeCocina, pctEnteroDeCocina, lasQueMasPesan,
+  loQueNoCambiaConElLocal, enteroDeCocina, eurDeCocina, pctEnteroDeCocina, lasQueMasPesan,
 } from '@/modules/kitchen/lib/lasCosasQueArreglar'
 
 // B79 · lote 4. LAS CINCO COSAS DEL RESUMEN: que cada botón tenga destino, y que
@@ -319,6 +319,26 @@ describe('los euros del módulo', () => {
     expect(eurDeCocina(undefined)).toBe('—')
   })
   // La cobertura va entera: un decimal ahí no dice nada que el entero no diga.
+  // «de 2053» no es castellano, y es lo que salía: `String(n)` no agrupa nada.
+  // Las cuatro cifras son justo el caso que se escapa —`toLocaleString` sin
+  // `useGrouping` explícito las deja sin punto por su `'min2'` de fábrica—, así
+  // que la prueba entra por ahí y no por un número de siete dígitos que
+  // pasaría de todas formas.
+  it('un entero lleva su punto de millar desde las cuatro cifras', () => {
+    expect(enteroDeCocina(2053)).toBe('2.053')
+    expect(enteroDeCocina(2061)).toBe('2.061')
+    expect(enteroDeCocina(90)).toBe('90')
+    expect(enteroDeCocina(1000000)).toBe('1.000.000')
+    // Y lo que NO pasa por aquí es lo que se cobra: para eso, `eurDeCocina`.
+    expect(enteroDeCocina(2053)).not.toContain('€')
+  })
+
+  it('un entero sin dato también es una raya, no un cero', () => {
+    expect(enteroDeCocina(null)).toBe('—')
+    expect(enteroDeCocina(undefined)).toBe('—')
+    expect(enteroDeCocina(Number.NaN)).toBe('—')
+  })
+
   it('la cobertura se redondea a entero, como el tablero', () => {
     expect(pctEnteroDeCocina(96.2)).toBe('96 %')
     expect(pctEnteroDeCocina(59.4)).toBe('59 %')

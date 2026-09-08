@@ -47,6 +47,7 @@ import {
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { useApp } from '@/context/AppContext'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
+import { REJILLA_INGENIERIA, REJILLA_INGENIERIA_ESTRELLAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 import { fmtMoney } from '@/lib/format'
 import type { Brand } from '@/types/multitenancy'
 
@@ -67,8 +68,6 @@ type Dias = 30 | 90 | 365
 // propia columna, a la derecha de los números. Así la columna de margen queda
 // pegada a la de unidades y se leen las dos de un vistazo, que es la pregunta de
 // esta pantalla: cuánto se vende y cuánto deja.
-/** Plato · uds · margen · frase · botones. */
-const REJILLA_INGENIERIA = '250px 90px 90px minmax(0,1fr) auto'
 
 /** El número sin el símbolo: `CifraCocina` lo pone aparte, en pequeño. */
 const eurSinSimbolo = (v: number | null | undefined) =>
@@ -198,7 +197,7 @@ export default function KitchenMenuEngineeringPage() {
       <div key={f.id}
         className={`grid items-center gap-3.5 px-4 border-b border-cocina-linea-suave last:border-b-0 ${
           compacta ? 'py-[5px] min-h-[40px]' : 'py-[7px] min-h-[48px]'}`}
-        style={{ gridTemplateColumns: REJILLA_INGENIERIA }}>
+        style={{ gridTemplateColumns: compacta ? REJILLA_INGENIERIA_ESTRELLAS : REJILLA_INGENIERIA }}>
         {/* 500, no 600: en la maqueta el peso fuerte es del margen, que es la
             columna por la que se decide. Un nombre en negrita se lo robaba. */}
         <div className="text-[13.5px] font-medium text-cocina-tinta">{f.nombre}</div>

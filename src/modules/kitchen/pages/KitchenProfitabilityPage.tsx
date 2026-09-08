@@ -37,35 +37,32 @@ import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 // B79 lote 4: la cifra y el campo salen de aquí, iguales letra a letra que
 // cuando vivían en este fichero. Lo fija `patronDeKitchen.test.tsx`.
 import {
-  CabeceraCocina, CabeceraDeBloque, CampoCocina, CifrasCocina, CifraCocina,
-  BotonCocina, ChipCocina, InterruptorCocina, PanelCocina, PastillaCocina,
+  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  ChipCocina, InterruptorCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
-import { eurDeCocina } from '@/modules/kitchen/lib/lasCosasQueArreglar'
+import { BloqueSinCoste, TablaDeCarta } from '@/modules/kitchen/components/TablasDeRentabilidad'
+import { getKitchenSettings } from '@/modules/kitchen/services/kitchenSettingsService'
+import { enteroDeCocina, eurDeCocina } from '@/modules/kitchen/lib/lasCosasQueArreglar'
 import { useApp } from '@/context/AppContext'
 import {
-  calculaFila, cifrasDeRentabilidad, elMargenEsDeLaCasa, etiquetasDeFila,
-  MARGEN_DE_MARCA_CEDIDA, motivoSinCoste,
-  type FilaDeCarta,
+  calculaFila, cifrasDeRentabilidad, elMargenEsDeLaCasa, losSinCoste,
+  MARGEN_DE_MARCA_CEDIDA, ordenaLaCarta,
+  type FilaDeCarta, type OrdenDeCarta,
 } from '@/modules/kitchen/lib/cartaYMargen'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import {
   guardaMarcaRecordada, guardaPeriodoRecordado, leePeriodoRecordado, marcaConLaQueAbrir,
 } from '@/modules/kitchen/lib/recuerdoDeKitchen'
-import { fmtMoney, fmtPct } from '@/lib/format'
+import { fmtPct } from '@/lib/format'
 import type { Brand } from '@/types/multitenancy'
 
 type Dias = 30 | 90 | 365
-type Orden = 'margen' | 'vendido' | 'coste'
+type Orden = OrdenDeCarta
 
 // Los formateadores del proyecto, que ya son null-safe: un coste ausente sale
 // «—», nunca 0 (regla del módulo, y la lección de meez).
-const eur = (v: number | null | undefined) => fmtMoney(v)
 const pct = (v: number | null | undefined) => fmtPct(v, 1)
 
-/** La carta: plato · precio · coste · margen · coste sobre precio · vendidos. */
-const REJILLA_CARTA = 'minmax(0,1fr) 105px 80px 95px 110px 75px auto'
-/** Los que no tienen coste: sin margen ni porcentaje, con su motivo y su botón. */
-const REJILLA_SIN_COSTE = 'minmax(0,1fr) 120px 110px 90px auto'
 
 /** El número sin el símbolo: `CifraCocina` lo pone aparte, en pequeño. */
 const eurSinSimbolo = (v: number | null | undefined) =>
@@ -77,6 +74,9 @@ export default function KitchenProfitabilityPage() {
   const nombreDeLaCuenta = activeAccount?.name ?? null
   const navigate = useNavigate()
 
+  // El objetivo de comida de la CUENTA: es la vara con la que se llama «caro de
+  // hacer» a un plato (§3.21.2). Si no está puesto, no se juzga a nadie.
+  const [objetivoPct, setObjetivoPct] = useState<number | null>(null)
   const [brands, setBrands] = useState<Brand[]>([])
   const [brandId, setBrandId] = useState<string | null>(null)
   const [dias, setDias] = useState<Dias>(leePeriodoRecordado('rentabilidad', 90) as Dias)
@@ -96,6 +96,11 @@ export default function KitchenProfitabilityPage() {
   useEffect(() => {
     if (!activeAccountId) return
     let muerto = false
+    getKitchenSettings(activeAccountId)
+      .then((k) => { if (!muerto) setObjetivoPct(k?.targetFoodCostPct ?? null) })
+      // Que falten los ajustes NO es un error de esta pantalla: sin objetivo se
+      // pinta igual, sólo que sin pastillas. Se traga y se sigue.
+      .catch(() => { if (!muerto) setObjetivoPct(null) })
     listBrands({ accountId: activeAccountId })
       .then((bs) => {
         if (muerto) return
@@ -162,24 +167,10 @@ export default function KitchenProfitabilityPage() {
   )
   const cifras = useMemo(() => cifrasDeRentabilidad(filasParaContar, dias), [filasParaContar, dias])
 
-  const conCoste = useMemo(() => {
-    // Con una cedida no hay margen que ordenar, pero los platos existen: se
-    // listan por lo vendido para que la pantalla no se quede vacía.
-    const c = margenPropio
-      ? filas.filter((f) => f.margen != null)
-      : filas.filter((f) => f.coste != null)
-    const orden3 = {
-      margen: (a: FilaDeCarta, b: FilaDeCarta) => (b.margen as number) - (a.margen as number),
-      vendido: (a: FilaDeCarta, b: FilaDeCarta) => b.uds - a.uds,
-      coste: (a: FilaDeCarta, b: FilaDeCarta) => (b.costeSobrePrecio ?? 0) - (a.costeSobrePrecio ?? 0),
-    }[orden]
-    return [...c].sort(margenPropio ? orden3 : (a, b) => b.uds - a.uds)
-  }, [filas, orden, margenPropio])
-
-  const sinCoste = useMemo(
-    () => [...filas.filter((f) => f.coste == null)].sort((a, b) => b.uds - a.uds),
-    [filas],
-  )
+  // Ordenar y separar son REGLA, no pintura: viven en `lib/` para que la captura
+  // pueda usar exactamente lo mismo (§3.21.1 — la foto salía sin ordenar).
+  const conCoste = useMemo(() => ordenaLaCarta(filas, orden, margenPropio), [filas, orden, margenPropio])
+  const sinCoste = useMemo(() => losSinCoste(filas), [filas])
 
   const abrirFicha = (recipeItemId: string | null, menuItemId: string, tab: string) => {
     if (recipeItemId) navigate(`/kitchen/recetas?recipe=${recipeItemId}&tab=${tab}`)
@@ -255,8 +246,8 @@ export default function KitchenProfitabilityPage() {
             pie={`en ${dias} días · ${eurDeCocina(cifras.margenPorMes)} al mes · sumado plato a plato con el coste exacto`} />
           <CifraCocina titulo="Mejor plato" valor={eurSinSimbolo(cifras.mejorPlato?.margen)} sufijo="€"
             pie={cifras.mejorPlato ? `${cifras.mejorPlato.nombre} · ${pct(cifras.mejorPlato.costeSobrePrecio)} de coste` : '—'} />
-          <CifraCocina titulo="Vendidos sin saber el coste" valor={String(cifras.udsSinCoste)}
-            pie={`de ${cifras.udsTotales} · son los ${cifras.sinCoste} platos sin coste`}
+          <CifraCocina titulo="Vendidos sin saber el coste" valor={enteroDeCocina(cifras.udsSinCoste)}
+            pie={`de ${enteroDeCocina(cifras.udsTotales)} · son los ${cifras.sinCoste} platos sin coste`}
             tono={cifras.udsSinCoste > 0 ? 'malo' : undefined} />
         </CifrasCocina>
 
@@ -287,46 +278,13 @@ export default function KitchenProfitabilityPage() {
           <>
             {/* 4 · LAS FILAS. */}
             {!soloSinCoste && conCoste.length > 0 && (
-              <Tabla filas={conCoste} recetaPorItem={recetaPorItem} abrir={abrirFicha} margenPropio={margenPropio} />
+              <TablaDeCarta filas={conCoste} recetaPorItem={recetaPorItem} abrir={abrirFicha}
+                margenPropio={margenPropio} objetivoPct={objetivoPct} />
             )}
 
             {sinCoste.length > 0 && (
-              <PanelCocina>
-                {/* B83 · la pieza del patrón, no una copia: en la maqueta esto
-                    es `.qh` —14 px al lado de su explicación— y yo lo tenía
-                    escrito con el marcado de `.panel-h`, que es otra cosa. */}
-                <CabeceraDeBloque
-                  nombre={`Sin coste · ${sinCoste.length}`}
-                  detalle={`se han vendido ${cifras.udsSinCoste} veces en ${dias} días sin saber lo que cuestan`}
-                />
-                {sinCoste.map((f) => {
-                  const m = motivoSinCoste(f.tipo)
-                  return (
-                    <div key={f.id}
-                      className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[50px]"
-                      style={{ gridTemplateColumns: REJILLA_SIN_COSTE }}>
-                      <div className="min-w-0">
-                        <div className="text-[13.5px] font-semibold text-cocina-tinta truncate">{f.nombre}</div>
-                        <div className="text-[11.5px] text-cocina-tinta-3 mt-0.5">{m.motivo}</div>
-                      </div>
-                      <span className="num text-[13px] text-right text-cocina-tinta whitespace-nowrap">
-                        {eur(f.precio)}
-                        <span className="block text-[11px] text-cocina-tinta-3">{eurSinSimbolo(f.precioNeto)} sin IVA</span>
-                      </span>
-                      <span className="text-right">
-                        <PastillaCocina tono="ambar">sin coste</PastillaCocina>
-                      </span>
-                      <span className="num text-[13px] text-right text-cocina-tinta">{f.uds}</span>
-                      <span className="text-right">
-                        <BotonCocina peso="borde"
-                          onClick={() => abrirFicha(recetaPorItem.get(f.id) ?? null, f.id, m.destino)}>
-                          {m.boton}
-                        </BotonCocina>
-                      </span>
-                    </div>
-                  )
-                })}
-              </PanelCocina>
+              <BloqueSinCoste filas={sinCoste} udsSinCoste={cifras.udsSinCoste} dias={dias}
+                recetaPorItem={recetaPorItem} abrir={abrirFicha} />
             )}
 
             {/* 5 · NADA MÁS. Sólo la vara con la que se ha medido. */}
@@ -343,61 +301,3 @@ export default function KitchenProfitabilityPage() {
   )
 }
 
-function Tabla({
-  filas, recetaPorItem, abrir, margenPropio,
-}: {
-  filas: FilaDeCarta[]
-  recetaPorItem: Map<string, string | null>
-  abrir: (recipeItemId: string | null, menuItemId: string, tab: string) => void
-  /** false = marca de terceros: el margen no es de Foodint y no se pinta. */
-  margenPropio: boolean
-}) {
-  return (
-    <PanelCocina>
-      <div
-        className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
-        style={{ gridTemplateColumns: REJILLA_CARTA }}
-      >
-        <span>Plato</span>
-        <span className="text-right">Precio de carta</span>
-        <span className="text-right">Coste</span>
-        <span className="text-right">Margen</span>
-        <span className="text-right">Coste sobre precio sin IVA</span>
-        <span className="text-right">Vendidos</span>
-        <span />
-      </div>
-      {filas.map((f) => {
-        const etiquetas = etiquetasDeFila(f)
-        return (
-          <div key={f.id}
-            className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[50px]"
-            style={{ gridTemplateColumns: REJILLA_CARTA }}>
-            <div className="min-w-0 flex items-center gap-1.5">
-              <span className="text-[13.5px] font-semibold text-cocina-tinta truncate">{f.nombre}</span>
-              {etiquetas.map((e) => <PastillaCocina key={e} tono="ambar">{e}</PastillaCocina>)}
-            </div>
-            <span className="num text-[13px] text-right text-cocina-tinta whitespace-nowrap">
-              {eur(f.precio)}
-              <span className="block text-[11px] text-cocina-tinta-3">{eurSinSimbolo(f.precioNeto)} sin IVA</span>
-            </span>
-            <span className="num text-[13px] text-right text-cocina-tinta">{eur(f.coste)}</span>
-            {/* El margen es el número de la pregunta: en tinta y en negrita. */}
-            <span className="num text-[13px] text-right font-semibold text-cocina-tinta">
-              {margenPropio ? eur(f.margen) : '—'}
-            </span>
-            <span className="num text-[13px] text-right text-cocina-tinta">
-              {margenPropio ? pct(f.costeSobrePrecio) : '—'}
-            </span>
-            <span className="num text-[13px] text-right text-cocina-tinta">{f.uds}</span>
-            <span className="text-right">
-              <BotonCocina peso="fantasma"
-                onClick={() => abrir(recetaPorItem.get(f.id) ?? null, f.id, 'escandallo')}>
-                Abrir
-              </BotonCocina>
-            </span>
-          </div>
-        )
-      })}
-    </PanelCocina>
-  )
-}

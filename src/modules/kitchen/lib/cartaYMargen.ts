@@ -100,10 +100,37 @@ export function calculaFila(p: ProductoDeCarta): FilaDeCarta {
   }
 }
 
-/** Las etiquetas que van junto al nombre. Sólo cuando hay algo que mirar. */
-export function etiquetasDeFila(f: FilaDeCarta): string[] {
+/**
+ * Las etiquetas que van junto al nombre. Sólo cuando hay algo que mirar.
+ *
+ * ── «caro de hacer» se mide contra el OBJETIVO DE LA CUENTA (§3.21.2, 08/09) ──
+ *
+ * Antes salía con un 40 % fijo escrito aquí, y ese 40 no era de nadie: ni de
+ * Julio, ni de la cuenta, ni de la carta. Una pantalla que llama «caro» a un
+ * plato tiene que poder decir **caro comparado con qué**, y la respuesta es el
+ * objetivo de comida sobre ventas de la cuenta, que es el número que Julio pone
+ * en Ajustes y contra el que se mide el 24,1 % del Resumen.
+ *
+ * CONSECUENCIA, Y ES LA BUENA: hoy Foodint no tiene objetivo puesto
+ * (`kitchen_settings.target_food_cost_pct` a NULL), así que **no sale ni una
+ * pastilla** — y el Resumen dice, en su cuarta fila, «Sin objetivo de comida»
+ * con su botón. Las dos pantallas cuentan la misma historia en vez de que una
+ * juzgue con una vara que la otra dice que falta. El día que Julio lo ponga,
+ * las pastillas aparecen solas.
+ *
+ * `objetivoPct` null = no hay vara, no se juzga. Nunca se cae a un número por
+ * defecto: un umbral inventado es peor que ninguno, porque parece medido.
+ *
+ * NO se toca el 40 % de `frasePorCuadrante` (el «Cuesta el 44 % del precio» de
+ * un lastre de Ingeniería): ahí no juzga, describe una proporción y ofrece dos
+ * salidas. Si Julio quiere también esa frase atada al objetivo, es un cambio de
+ * Ingeniería y va con su captura.
+ */
+export function etiquetasDeFila(f: FilaDeCarta, objetivoPct: number | null): string[] {
   const e: string[] = []
-  if (f.costeSobrePrecio != null && f.costeSobrePrecio >= CARO_DE_HACER_PCT) e.push('caro de hacer')
+  if (objetivoPct != null && f.costeSobrePrecio != null && f.costeSobrePrecio > objetivoPct) {
+    e.push('caro de hacer')
+  }
   if (f.uds === 0) e.push('sin ventas en el periodo')
   return e
 }
@@ -173,6 +200,45 @@ export function cifrasDeRentabilidad(
     udsSinCoste: sinCoste.reduce((s, f) => s + f.uds, 0),
     udsTotales: filas.reduce((s, f) => s + f.uds, 0),
   }
+}
+
+/** Los tres órdenes de Rentabilidad. La pregunta de la pantalla es el ranking. */
+export type OrdenDeCarta = 'margen' | 'vendido' | 'coste'
+
+/**
+ * Las filas CON coste, ordenadas.
+ *
+ * VIVE AQUÍ Y NO EN LA PÁGINA porque la captura tiene que ordenar con la misma
+ * función que la pantalla. Julio, 08/09: con «Por margen» marcado, la foto
+ * enseñaba 4,02 · 4,02 · 3,67 · 4,03 · 4,79 · 4,12 — no estaba ordenada, porque
+ * la foto no pasaba por la ordenación de nadie. Es la regla 37 una fila más
+ * abajo: la foto no puede enseñar un orden que la pantalla no hace.
+ *
+ * `margenPropio = false` (marca de terceros): no hay margen que ordenar, pero
+ * los platos existen. Se listan por lo vendido para que no se quede vacía.
+ */
+export function ordenaLaCarta(
+  filas: FilaDeCarta[],
+  orden: OrdenDeCarta,
+  margenPropio = true,
+): FilaDeCarta[] {
+  const conCoste = margenPropio
+    ? filas.filter((f) => f.margen != null)
+    : filas.filter((f) => f.coste != null)
+  const porLoVendido = (a: FilaDeCarta, b: FilaDeCarta) => b.uds - a.uds
+  const comparador = margenPropio
+    ? {
+        margen: (a: FilaDeCarta, b: FilaDeCarta) => (b.margen as number) - (a.margen as number),
+        vendido: porLoVendido,
+        coste: (a: FilaDeCarta, b: FilaDeCarta) => (b.costeSobrePrecio ?? 0) - (a.costeSobrePrecio ?? 0),
+      }[orden]
+    : porLoVendido
+  return [...conCoste].sort(comparador)
+}
+
+/** Los que no tienen coste, por lo vendido: primero el que más se cobra a ciegas. */
+export function losSinCoste(filas: FilaDeCarta[]): FilaDeCarta[] {
+  return [...filas.filter((f) => f.coste == null)].sort((a, b) => b.uds - a.uds)
 }
 
 // ── Ingeniería de menús: la matriz ──────────────────────────────────────────

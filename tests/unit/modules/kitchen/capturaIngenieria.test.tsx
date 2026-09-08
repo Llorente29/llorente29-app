@@ -24,11 +24,11 @@ import {
   EXPLICACION_CUADRANTE, parteLaFrase, ROTULO_CUADRANTE, type Cuadrante, type FilaDeCarta,
 } from '@/modules/kitchen/lib/cartaYMargen'
 import { CARTA_DE_MERAKI } from './fixtures/cartaDeMeraki'
+import { REJILLA_INGENIERIA, REJILLA_INGENIERIA_ESTRELLAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 import { intervaloDeFechas } from '@/modules/ventas/services/textoInforme'
 import { fmtMoney } from '@/lib/format'
 
 const PAGINA = '../../../../src/modules/kitchen/pages/KitchenMenuEngineeringPage.tsx'
-const REJILLA_INGENIERIA = '250px 90px 90px minmax(0,1fr) auto'
 const DIAS = 90
 
 // La ventana FIJA con la que se midieron las unidades del fixture. La frase se
@@ -60,7 +60,7 @@ function pintaFila(f: FilaDeCarta, c: Cuadrante, compacta = false) {
     <div key={f.id}
       className={`grid items-center gap-3.5 px-4 border-b border-cocina-linea-suave last:border-b-0 ${
         compacta ? 'py-[5px] min-h-[40px]' : 'py-[7px] min-h-[48px]'}`}
-      style={{ gridTemplateColumns: REJILLA_INGENIERIA }}>
+      style={{ gridTemplateColumns: compacta ? REJILLA_INGENIERIA_ESTRELLAS : REJILLA_INGENIERIA }}>
       <div className="text-[13.5px] font-medium text-cocina-tinta">{f.nombre}</div>
       <span className="num text-[13px] text-right text-cocina-tinta whitespace-nowrap">
         {f.uds} <span className="text-[11px] text-cocina-tinta-3">uds</span>
@@ -99,10 +99,15 @@ describe('la captura de Ingeniería y la pantalla enseñan lo mismo', () => {
     expect(campos(PAGINA)).not.toContain('Local')
   })
 
-  // La rejilla de fila es lo que decide dónde cae cada columna: si la pantalla
-  // la cambia y la foto no, la comparación con la maqueta mide otra pantalla.
-  it('la rejilla de fila es la misma en las dos', () => {
-    expect(fuente(PAGINA)).toContain(`const REJILLA_INGENIERIA = '${REJILLA_INGENIERIA}'`)
+  // La rejilla ya no se puede desincronizar: las dos IMPORTAN la misma constante
+  // de `lib/rejillasDeCocina.ts`. Lo que se comprueba aquí es justo eso — que
+  // ninguna de las dos se escriba la suya — y `columnasCuadradas.test.ts` vigila
+  // que la constante no vuelva a terminar en `auto` (regla 38).
+  it('las dos importan la rejilla del mismo sitio, ninguna se escribe la suya', () => {
+    for (const f of [fuente(PAGINA), fuente('./capturaIngenieria.test.tsx')]) {
+      expect(f).toContain("from '@/modules/kitchen/lib/rejillasDeCocina'")
+      expect(f).not.toMatch(/const REJILLA_INGENIERIA\s*=/)
+    }
   })
 })
 

@@ -22,7 +22,7 @@ import {
   type ExtraPorNombre,
 } from '@/modules/kitchen/lib/extrasDeCocina'
 
-const REJILLA = 'minmax(0,1fr) 120px 90px 110px 150px auto'
+import { REJILLA_EXTRAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 
 const F = (
   nombre: string, marcas: string, copias: number, nMarcas: number,
@@ -63,7 +63,7 @@ function Fila({ e }: { e: ExtraPorNombre }) {
   const marcas = [...new Set(e.donde.map((d) => d.marca))].join(' · ')
   return (
     <div className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[50px]"
-         style={{ gridTemplateColumns: REJILLA }}>
+         style={{ gridTemplateColumns: REJILLA_EXTRAS }}>
       <div className="min-w-0">
         <div className="text-[13.5px] font-semibold text-cocina-tinta">{e.nombre}</div>
         <div className="text-[11.5px] font-medium text-cocina-tinta-3 mt-0.5 truncate">{marcas}</div>
@@ -143,7 +143,7 @@ it('genera la captura de Extras a 1280', () => {
 
         <PanelCocina>
           <div className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
-               style={{ gridTemplateColumns: REJILLA }}>
+               style={{ gridTemplateColumns: REJILLA_EXTRAS }}>
             <span>Extra</span><span className="text-right">Copias</span><span className="text-right">Cobra</span>
             <span className="text-right">Vendido 30 d</span><span>Qué lleva</span><span />
           </div>

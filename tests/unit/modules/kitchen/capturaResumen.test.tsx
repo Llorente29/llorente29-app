@@ -22,15 +22,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  CabeceraCocina, RotuloDePanel, CampoCocina, CifrasCocina, CifraCocina,
-  BotonCocina, InterruptorCocina, PanelCocina, PastillaCocina,
+  CabeceraCocina, CampoCocina, CifrasCocina, CifraCocina,
+  BotonCocina, InterruptorCocina, PanelCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import {
-  eurDeCocina, pctEnteroDeCocina, pintaCosa, lasQueMasPesan, type CosaMedida,
+  eurDeCocina, pintaCosa, lasQueMasPesan, type CosaMedida,
 } from '@/modules/kitchen/lib/lasCosasQueArreglar'
 
-const REJILLA_MARCAS = 'minmax(0,1fr) 120px 90px 160px auto'
-const REJILLA_COSAS = '230px minmax(0,1fr) auto'
+import { TablaPorMarca } from '@/modules/kitchen/components/TablaPorMarca'
+import { REJILLA_COSAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 
 // ── Las marcas, tal cual las devuelve `food_cost_dashboard` hoy ─────────────
 type M = { marca: string; ingreso: number; food: number; cobertura: number; propia: boolean }
@@ -174,37 +174,15 @@ it('genera la captura del Resumen a 1280', () => {
           })}
         </PanelCocina>
 
-        <PanelCocina>
-          <RotuloDePanel derecha="tuyas primero · de terceros después">
-            Por marca · comida sobre ventas
-          </RotuloDePanel>
-          <div className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
-               style={{ gridTemplateColumns: REJILLA_MARCAS }}>
-            <span>Marca</span><span className="text-right">Vendido</span>
-            <span className="text-right">Comida</span><span className="text-right">Coste conocido</span><span />
-          </div>
-          {MARCAS.map((m) => {
-            const flojo = m.cobertura < 80
-            return (
-              <div key={m.marca}
-                className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[44px]"
-                style={{ gridTemplateColumns: REJILLA_MARCAS }}>
-                <div className="min-w-0 text-[13.5px] font-semibold text-cocina-tinta truncate">
-                  {m.marca}
-                  {!m.propia && <span className="ml-1.5 text-[11px] font-medium text-cocina-tinta-3">de terceros</span>}
-                </div>
-                <span className="num text-[13px] text-right text-cocina-tinta">{eurDeCocina(m.ingreso)}</span>
-                <span className="num text-[13px] text-right text-cocina-tinta">{m.food.toLocaleString('es-ES', { minimumFractionDigits: 1 })} %</span>
-                <span className="text-right whitespace-nowrap">
-                  {flojo
-                    ? <PastillaCocina tono="rojo">{pctEnteroDeCocina(m.cobertura)} · falta coste</PastillaCocina>
-                    : <span className="num text-[13px] text-cocina-tinta-3">{pctEnteroDeCocina(m.cobertura)}</span>}
-                </span>
-                <span className="text-right"><BotonCocina peso="fantasma">Ver platos</BotonCocina></span>
-              </div>
-            )
-          })}
-        </PanelCocina>
+        {/* El componente de la pantalla, no una copia. Julio, 08/09: vio
+            «coste conocido» en gris y la PANTALLA la tenía en tinta desde
+            B83.4 — la que mentía era esta foto. */}
+        <TablaPorMarca
+          marcas={MARCAS.map((m) => ({
+            marca: m.marca, ownershipType: m.propia ? 'own' : 'licensed',
+            ingreso: m.ingreso, foodCostPct: m.food, coberturaPct: m.cobertura,
+          }))}
+          verPlatos={() => {}} />
 
         <p className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
           Las de terceros son el 67 % de lo vendido y su comida cuesta el 27,0 %: la cifra de arriba

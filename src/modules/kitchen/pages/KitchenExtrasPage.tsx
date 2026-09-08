@@ -34,6 +34,7 @@ import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import { kindOf, TIPOS_ELEGIBLES, type CatalogPick } from '@/modules/kitchen/lib/catalogPick'
 import type { UnidadPick } from '@/modules/kitchen/lib/impactoResuelto'
 import FlujoDeExtra from '@/modules/kitchen/components/FlujoDeExtra'
+import { REJILLA_EXTRAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 import {
   ORDENES, confirmacion, cuantasCopias, ventanaEnCastellano, loQueCobra, queLleva, botonDeLaFila,
   marcasDeLaFila, dondeApareceLaCopia,
@@ -42,7 +43,6 @@ import {
 } from '@/modules/kitchen/lib/extrasDeCocina'
 
 /** La rejilla de la tabla, copiada del `.dc.html`. Cabecera y filas comparten. */
-const REJILLA = 'minmax(0,1fr) 120px 90px 110px 150px auto'
 
 const eur = (n: number) =>
   n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -292,7 +292,7 @@ export default function KitchenExtrasPage() {
             <PanelCocina>
               <div
                 className="grid gap-3.5 px-4 py-2 text-[10.5px] font-bold tracking-[0.07em] uppercase text-cocina-tinta-3 border-b border-cocina-linea-suave bg-cocina-superficie-2"
-                style={{ gridTemplateColumns: REJILLA }}
+                style={{ gridTemplateColumns: REJILLA_EXTRAS }}
               >
                 <span>Extra</span>
                 <span className="text-right">Copias</span>
@@ -380,7 +380,7 @@ function FilaDeExtra({
     <>
     <div
       className="grid gap-3.5 items-center px-4 py-[7px] border-b border-cocina-linea-suave last:border-b-0 min-h-[50px]"
-      style={{ gridTemplateColumns: REJILLA }}
+      style={{ gridTemplateColumns: REJILLA_EXTRAS }}
     >
       <div className="min-w-0">
         <div className="text-[13.5px] font-semibold text-cocina-tinta">{extra.nombre}</div>
