@@ -139,10 +139,16 @@ export function extractList(json: any): any[] {
 //    default" — una marca puede tener varios (carta base + canal). ──
 export function collectBrandChannelByCatalog(
   brands: any[],
-): Map<string, { brand: string; channels: Set<string> }> {
-  const out = new Map<string, { brand: string; channels: Set<string> }>();
+): Map<string, { brand: string; brandId: string; channels: Set<string> }> {
+  const out = new Map<string, { brand: string; brandId: string; channels: Set<string> }>();
   for (const b of brands ?? []) {
     const brandName: string = b?.name ?? "";
+    // 08/09: el recorrido ya tenía delante el ID de la marca en Last y lo tiraba,
+    // quedándose sólo con el nombre. Casar por nombre es lo que hace falta alias
+    // ("Dirty Burgers" -> "Dirty Burger") y lo que pone a un tilde de distancia
+    // «Milanesa Haus» (cedida) de «Milanesa House» (propia). El id no tiene
+    // ortografía: se lleva, y quien resuelva decide si lo usa.
+    const brandExtId: string = b?.id ? String(b.id) : "";
     const cats = b?.catalogs ?? {};
     const walk = (v: any, channel: string) => {
       if (typeof v === "string" && v) {
@@ -152,8 +158,9 @@ export function collectBrandChannelByCatalog(
         // BURGER -> A domicilio, Glovo, Para llevar, Local". Con el primero
         // ganando, el rótulo no decía de qué canal era el catálogo sino cuál
         // salió antes, y BAILABA entre pasadas sin que nadie tocara nada.
-        const entry = out.get(v) ?? { brand: brandName, channels: new Set<string>() };
+        const entry = out.get(v) ?? { brand: brandName, brandId: brandExtId, channels: new Set<string>() };
         if (!entry.brand && brandName) entry.brand = brandName;
+        if (!entry.brandId && brandExtId) entry.brandId = brandExtId;
         entry.channels.add(channel);
         out.set(v, entry);
       } else if (v && typeof v === "object") {
@@ -192,6 +199,13 @@ export interface CatalogInfo {
    * se atribuyen, así que hoy no muerde; la bandera está para el día que sí.
    */
   brandFromWalk: boolean;
+  /**
+   * ID de la marca EN LAST que reclamó este catálogo en el recorrido, o `null`
+   * si el recorrido no lo atribuyó (y entonces `brand` es el nombre del
+   * catálogo). Es la clave con la que `external_brand_map` resuelve la marca de
+   * Folvy sin pasar por el nombre.
+   */
+  brandId: string | null;
   /** TODOS los destinos del catálogo, ordenados. */
   channels: string[];
   /** Nombre del catálogo en Last. */
@@ -230,6 +244,7 @@ export async function resolveLocationCatalogs(
     catalogMap.set(String(c.id), {
       brand: mapped?.brand || (c.name ?? ""),
       brandFromWalk: Boolean(mapped?.brand),
+      brandId: mapped?.brandId ? mapped.brandId : null,
       // El NOMBRE del catálogo ("SMASH BROTHERS BURGER 20"). Sin esto no hay
       // forma de casar una fila del espejo con lo que se ve en el panel.
       channels,
