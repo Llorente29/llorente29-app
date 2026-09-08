@@ -100,7 +100,7 @@ export default function Shell() {
   const mainPadX = isMobile ? 16 : 26
   const mainPadTop = isMobile ? 16 : 24
   const mainPaddingBottom = isMobile
-    ? 'calc(56px + env(safe-area-inset-bottom) + 24px)'
+    ? 'calc(56px + env(safe-area-inset-bottom, 0px) + 24px)'
     : 24
 
   // IMG-1: estilo del contenedor de contenido — centrado a ancho máximo con los
