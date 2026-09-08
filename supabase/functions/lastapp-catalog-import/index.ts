@@ -5,7 +5,11 @@
 // Last.app: marcas sin catálogo, canal "informes", objetos huérfanos).
 //
 // ALCANCE v1 (deuda explícita, no oculta):
-//   - Trae el catálogo CANÓNICO (brand.catalogs.default) de cada marca.
+//   - Trae TODOS los catálogos que el local declara, no solo el "default":
+//     desde el 08/09 el descubrimiento va por `GET /catalogs?locationId=`
+//     (`_shared/lastapp.ts`). El camino viejo —`brands[].catalogs.default`—
+//     devolvía cero para las 20 marcas de Foodint mientras la carta real tenía
+//     41 catálogos: Last dejó de rellenar ese puntero y nadie se enteró.
 //   - NO crea recipe_items: menu_item.recipe_item_id = NULL. El escandallo lo
 //     hace el cocinero después (enlaza/crea el recipe_item en ese momento).
 //   - NO crea recipe_lines, NO costes, NO modifier_recipe_impact.
@@ -19,9 +23,13 @@
 // Patrón calcado de lastapp-sync-catalog.
 
 import { corsHeaders } from "../_shared/cors.ts";
+// El descubrimiento de catálogos y el cliente de Last viven en `_shared` desde
+// el 08/09: esta función tenía SU copia y descubría por `brands[].catalogs
+// .default`, que Last dejó de rellenar — 0 catálogos, 0 productos y las 20
+// marcas en `brands_skipped_empty` mientras `last-catalog-sync`, con el
+// endpoint bueno, traía 41 catálogos y 4.444 filas. Ver `_shared/lastapp.ts`.
+import { lastGet, resolveLocationCatalogs } from "../_shared/lastapp.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-
-const LASTAPP_BASE = "https://api.last.app/v2";
 
 // Canales que NO son de venta real (reporting interno). Reservado para Fase B
 // (variantes por canal); en v1 solo importamos el catálogo "default".
@@ -91,19 +99,6 @@ function inferGroupType(name: string): string {
   return "choice";
 }
 
-async function lastGet(
-  path: string,
-  token: string,
-  entityHeader: Record<string, string>,
-): Promise<any> {
-  const res = await fetch(`${LASTAPP_BASE}${path}`, {
-    headers: { "Authorization": `Bearer ${token}`, ...entityHeader },
-  });
-  if (!res.ok) {
-    throw new Error(`Last.app ${path} -> ${res.status} ${await res.text()}`);
-  }
-  return res.json();
-}
 
 // ── Upsert idempotente por external_id ───────────────────────────────
 // Devuelve un Map external_id -> folvy id (incluye preexistentes y nuevos).
@@ -212,6 +207,11 @@ Deno.serve(async (req: Request) => {
     brands_skipped_empty: [] as string[],
     brands_unresolved: [] as string[],
     brands_discarded: [] as string[],   // marcas descartadas a propósito (DISCARDED_BRANDS)
+    // Qué se ha descubierto, por local, ANTES de contar nada: si esto viene a
+    // cero otra vez, se ve de un vistazo dónde se rompió (08/09).
+    discovery: [] as any[],
+    catalogs_discovered: 0,
+    catalogs_without_brand: [] as string[],
     categories: 0, products: 0, combos: 0,
     modifier_groups: 0, modifier_options: 0, assignments: 0,
     combo_slots: 0, combo_slot_options: 0,
@@ -219,7 +219,21 @@ Deno.serve(async (req: Request) => {
   };
 
   try {
-    // ════════════════ FASE 1: marca → catálogo canónico (default) ════════════════
+    // ════════════════ FASE 1: local → sus catálogos ════════════════
+    //
+    // 08/09: ANTES esto leía `brands[].catalogs.default` del detalle de cada
+    // local y, si venía vacío, daba la marca por «sin catálogo» y seguía. Ese
+    // puntero está vacío HOY para las 20 marcas de Foodint, así que el
+    // importador descubría 0 catálogos y no traía nada — mientras
+    // `last-catalog-sync`, esa misma madrugada, traía 41 catálogos y 4.444
+    // filas de producto de las mismas marcas.
+    //
+    // Ahora el descubrimiento es el de la hermana, compartido en
+    // `_shared/lastapp.ts`: `GET /catalogs?locationId=` es la lista
+    // AUTORITATIVA y `brands[].catalogs` sólo aporta la etiqueta de marca y
+    // canal cuando la tiene. Verificado en vivo el 12/08 (Carabanchel: el walk
+    // veía 8 catálogos y 208 productos donde el endpoint bueno da la carta
+    // entera).
     const locResp = await lastGet(`/locations?organizationId=${orgId}`, token, { "organizationID": orgId });
     const locations: any[] = Array.isArray(locResp) ? locResp : (locResp?.value ?? []);
 
@@ -227,35 +241,56 @@ Deno.serve(async (req: Request) => {
     const brandByCatalog = new Map<string, string>();
     const catalogLocation = new Map<string, string>();
     const canonicalCatalogs = new Set<string>();
-    // Presencia de catálogo por marca (across locations): una marca está "en uso"
-    // si tiene catálogo default no vacío en AL MENOS una location.
+    // Presencia de catálogo por marca (across locations): una marca está "en
+    // uso" si aparece en ALGÚN catálogo de ALGUNA location.
     const brandHasCatalog = new Map<string, boolean>();
+    // Catálogos que el endpoint devuelve sin poder atribuir a una marca. Antes
+    // esto no existía porque el walk siempre traía el nombre de la marca; con
+    // la lista autoritativa puede haber catálogos que `brands[]` no menciona, y
+    // callarlos sería volver al mismo sitio (regla 7: se cuentan, no se
+    // esconden).
+    const catalogsSinMarca: string[] = [];
 
     for (const loc of locations) {
-      const detail = await lastGet(`/locations/${loc.id}`, token, { "LocationID": loc.id });
-      for (const b of (detail?.brands ?? [])) {
-        const brandName: string = b?.name ?? "";
-        if (!brandName) continue;
-        const cats = b?.catalogs ?? {};
-        const def = typeof cats.default === "string" ? cats.default : "";
-        if (!def) {
-          // No marcar vacía aún: puede tener catálogo en otra location.
-          if (!brandHasCatalog.has(brandName)) brandHasCatalog.set(brandName, false);
+      const { catalogMap, debug } = await resolveLocationCatalogs(token, String(loc.id));
+      report.discovery.push({
+        location: loc?.name ?? String(loc.id),
+        catalogs: catalogMap.size,
+        raw_list_length: debug?.raw_list_length ?? null,
+        deleted: debug?.deleted_count ?? null,
+      });
+
+      for (const [catId, info] of catalogMap) {
+        const brandName = (info.brand ?? "").trim();
+        if (!brandName) {
+          if (!catalogsSinMarca.includes(catId)) catalogsSinMarca.push(catId);
           continue;
         }
         brandHasCatalog.set(brandName, true);
-        if (!canonicalCatalogs.has(def)) {
-          canonicalCatalogs.add(def);
-          brandByCatalog.set(def, brandName);
-          catalogLocation.set(def, loc.id);
+        if (!canonicalCatalogs.has(catId)) {
+          canonicalCatalogs.add(catId);
+          brandByCatalog.set(catId, brandName);
+          catalogLocation.set(catId, String(loc.id));
         }
+      }
+
+      // Las marcas que el local declara pero que no aparecen en ningún
+      // catálogo suyo: se anotan como «sin catálogo» sólo si no la tienen en
+      // otro local (igual que antes).
+      const detalle = await lastGet(`/locations/${loc.id}`, token, { "LocationID": loc.id });
+      for (const b of (detalle?.brands ?? [])) {
+        const brandName: string = (b?.name ?? "").trim();
+        if (!brandName) continue;
+        if (!brandHasCatalog.has(brandName)) brandHasCatalog.set(brandName, false);
       }
     }
 
-    // Marcas vacías en TODAS las locations (deduplicado).
+    // Marcas sin catálogo en NINGUNA location (deduplicado).
     report.brands_skipped_empty = [...brandHasCatalog.entries()]
       .filter(([, has]) => !has)
       .map(([name]) => name);
+    report.catalogs_without_brand = catalogsSinMarca;
+    report.catalogs_discovered = canonicalCatalogs.size;
 
     // ════════════════ FASE 2: productos/combos EN USO por catálogo ════════════════
     // inUseProducts: orgProductId -> { brandName, catExtId, catName }
