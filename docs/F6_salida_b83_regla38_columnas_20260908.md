@@ -152,11 +152,49 @@ uso al sacar la tabla del Resumen a su componente). Se quitaron y volvió a 1357
 
 ---
 
-## 7 · Lo que queda antes de publicar
+## 7 · §3.17.4 · `kitchen.marca` en el resto de las pantallas
 
-- Las dos del §3.17 que siguen abiertas: `kitchen.marca` leído por Casado y las otras
-  14 pantallas, y que «Casar o crear la ficha» abra en la marca que la propia fila
-  nombra. («Mejor plato» entre los vendidos ya está, desde B83.)
-- **Una sola publicación** con las tres pantallas cuando Julio dé el visto.
-- Extras entra en la publicación aunque ya esté en producción: su rejilla también
-  llevaba el `auto`, y era la que más desfase tenía (206 px).
+**Medido antes de tocar:** de las doce pantallas de Kitchen que manejan una marca,
+**tres** leían el recuerdo (Casado, Rentabilidad, Ingeniería), **dos** abrían en
+«la primera que devuelva la consulta» y **siete** no eligen marca en absoluto.
+
+Las dos que faltaban, arregladas:
+
+- **Cartas** (`KitchenMenuPage`): abría en `bs[0]` — en Foodint, «Ay Mamita Bowls»,
+  cedida y primera por alfabeto.
+- **Precios** (`PriceGridPage`): `setBrandId((prev) => prev ?? bs[0]?.id ?? null)`,
+  lo mismo.
+
+Las dos pasan a `marcaConLaQueAbrir` y las dos **guardan** al elegir: sin escribir, el
+recuerdo no se llena nunca y las que sí leen abren en lo que dejó otra.
+
+**Tres que NO llevan recuerdo, a propósito, y con el motivo escrito en la prueba:**
+`AvailabilityReportsPage`, `SalesExceptionsPage` y `KitchenAvailabilityPage` abren en
+«todas las marcas» y su desplegable **acota una lista**. Meterles el recuerdo cambiaría
+lo que la pantalla contesta: quien entra a los informes de disponibilidad quiere los de
+la cuenta, no los de la última marca que tocó en Rentabilidad. El recuerdo es para
+«¿sobre qué marca trabajo?», no para «¿qué me enseñas?».
+
+**La otra mitad del §3.17.4 ya estaba hecha** (commit `d02a5325`): «Casar o crear la
+ficha» abre Casado en la marca que la propia fila nombra, y lo hace por `brandId`, no
+por nombre (regla 9).
+
+`laMarcaEsDelModulo.test.ts` fija la regla para la pantalla número quince: ninguna abre
+en «la primera que devuelva la consulta», la que lee el recuerdo lo escribe, y quedan
+enumeradas las cinco que trabajan sobre una marca y las tres que filtran.
+
+**Un fallo de mi propia barrida, cazado por su última prueba:** el detector usaba
+`[^)]*` y no veía el caso de Precios, porque el paréntesis de `(prev)` cortaba la
+búsqueda. Esa prueba existe justo para eso — una barrida que no salta con el código que
+la motivó no prueba nada.
+
+---
+
+## 8 · Lo que queda antes de publicar
+
+- **Una sola publicación** con las cuatro pantallas cuando Julio dé el visto a las
+  capturas. No la lanzo yo: el push a `main` publica el bundle OTA.
+- Extras entra aunque ya esté en producción: su rejilla también llevaba el `auto`, y
+  era la que más desfase tenía (206 px).
+- Cartas y Precios entran en la misma publicación: el recuerdo sólo se nota si lo
+  tienen todas a la vez.

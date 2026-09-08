@@ -71,6 +71,7 @@ import {
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
+import { guardaMarcaRecordada, marcaConLaQueAbrir } from '@/modules/kitchen/lib/recuerdoDeKitchen'
 import { fmtMoney, fmtNumEs, fmtPct } from '@/lib/format'
 import type { Brand } from '@/types/multitenancy'
 import {
@@ -250,7 +251,10 @@ export default function PriceGridPage() {
   useEffect(() => {
     if (!activeAccountId) return
     listBrands({ accountId: activeAccountId })
-      .then((bs) => { setBrands(bs); setBrandId((prev) => prev ?? bs[0]?.id ?? null) })
+      // §3.17.4 · la marca la recuerda todo Kitchen, no cada pantalla: si eliges
+      // Meraki en Rentabilidad, Precios abre en Meraki. `bs[0]` abría en la
+      // primera por alfabeto, que en Foodint es una cedida.
+      .then((bs) => { setBrands(bs); setBrandId((prev) => prev ?? marcaConLaQueAbrir(bs)?.id ?? null) })
       .catch((e) => setError(String(e)))
     // El error NO se traga: si esta consulta falla, el desplegable de ámbito se
     // queda con «toda la cuenta» como única opción y sería imposible escribir en
@@ -695,7 +699,7 @@ export default function PriceGridPage() {
         <label className="text-[10px] uppercase tracking-wider font-semibold text-tinta-45">Carta</label>
         <select className="border border-linea-fuerte rounded-lg px-3 py-1.5 text-sm font-semibold bg-white"
           value={brandId ?? ''}
-          onChange={(e) => { const v = e.target.value; cambiarContexto(() => { setBrandId(v); setSelProductos(new Set()) }) }}>
+          onChange={(e) => { const v = e.target.value; guardaMarcaRecordada(v); cambiarContexto(() => { setBrandId(v); setSelProductos(new Set()) }) }}>
           {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
 

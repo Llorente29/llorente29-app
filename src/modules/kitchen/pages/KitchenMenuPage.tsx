@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus, ScanSearch, CircleSlash, GripVertical, Smile, Archive, MoveVertical, ImagePlus, Star, TrendingUp, TrendingDown } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { guardaMarcaRecordada, marcaConLaQueAbrir } from '@/modules/kitchen/lib/recuerdoDeKitchen'
 import { fmtMoney } from '@/lib/format'
 import {
   listBrandsWithCatalog,
@@ -269,7 +270,14 @@ export default function KitchenMenuPage() {
       .then((bs) => {
         if (cancelled) return
         setBrands(bs)
-        if (bs.length > 0 && !selectedBrandId) setSelectedBrandId(bs[0].id)
+        // §3.17.4 · LA MARCA ES DEL MÓDULO, no de esta pantalla. Antes abría en
+        // `bs[0]`, la primera que devolviera la consulta —en Foodint «Ay Mamita
+        // Bowls», cedida y por alfabeto—, así que quien venía de elegir Meraki en
+        // Rentabilidad no pensaba «se acordó de mi última visita»: pensaba que se
+        // había equivocado de pantalla.
+        if (bs.length > 0 && !selectedBrandId) {
+          setSelectedBrandId(marcaConLaQueAbrir(bs)?.id ?? bs[0].id)
+        }
       })
       .catch((e) => { if (!cancelled) setError(String(e.message ?? e)) })
       .finally(() => { if (!cancelled) setLoadingBrands(false) })
@@ -1215,7 +1223,7 @@ export default function KitchenMenuPage() {
         <h1 className="text-2xl font-semibold text-text-primary">Cartas</h1>
         <select
           value={selectedBrandId ?? ''}
-          onChange={(e) => setSelectedBrandId(e.target.value)}
+          onChange={(e) => { setSelectedBrandId(e.target.value); guardaMarcaRecordada(e.target.value) }}
           className="border border-border-default rounded-lg px-3 py-1.5 text-sm font-medium bg-white"
         >
           {brands.map((b) => (
