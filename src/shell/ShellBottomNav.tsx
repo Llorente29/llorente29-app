@@ -94,7 +94,7 @@ export default function ShellBottomNav({ activeKey, onSelect, onOpenAI, aiActive
         background: 'var(--color-accent)',
         display: 'flex', alignItems: 'stretch',
         height: 56,
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         borderTop: '1px solid rgba(255,255,255,0.08)',
       }}
     >

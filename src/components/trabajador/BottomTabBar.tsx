@@ -40,7 +40,7 @@ export default function BottomTabBar({ active, onSelect, showTareas = true }: Pr
   return (
     <nav
       className="fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border-default"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Navegación principal"
     >
       <div className="max-w-md mx-auto flex items-stretch">
