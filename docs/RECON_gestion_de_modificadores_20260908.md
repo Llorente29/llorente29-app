@@ -168,3 +168,43 @@ la familia de B90 (el casado por id), no de esta RECON, pero queda contado.
 **Lo que NO propongo todavía:** nada de la gestión en sí hasta saber si el catálogo
 que se gestiona está vivo. Construir una pantalla de grupos sobre una foto de junio
 sería trabajo bien hecho sobre datos muertos.
+
+---
+
+# Delta · 08/09 tarde — el `dry_run` no lo puedo lanzar yo
+
+La decisión 2 del §6 dice «lo lanza Code, es lectura pura». **No puedo:** el proxy de
+red de este entorno bloquea el dominio del proyecto. Medido, no supuesto:
+
+```
+$ curl -X POST ".../functions/v1/lastapp-catalog-import" -d '{"dry_run":true}'
+curl: (56) CONNECT tunnel failed, response 403
+```
+
+Es el mismo 403 con el que no pude leer Storage al publicar el bundle 265. Sale del
+proxy (`recentRelayFailures: connect_rejected — gateway answered 403 to CONNECT`), no
+de Supabase: por eso las lecturas SQL sí funcionan y el HTTPS directo no.
+
+**Busqué la respuesta por otra vía y tampoco está:** `external_catalog_product` —el
+espejo del catálogo— tiene 25 columnas y **ninguna de modificadores**. Guarda producto,
+precio, canal y fechas; no guarda `modifierGroups`. Así que no se puede reconstruir lo
+que el importador vería sin invocarlo. El `dry_run` es el único camino.
+
+**La orden, para que la lances tú.** Necesita la clave interna o un JWT de platform
+admin (`lastapp-catalog-import/index.ts:163-175`):
+
+```bash
+curl -sS -X POST \
+  "https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/lastapp-catalog-import" \
+  -H "x-internal-key: $LASTAPP_INTERNAL_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}' | jq .
+```
+
+Lo que hay que mirar del `report`: **`modifier_groups` y `modifier_options`**.
+- Si vienen **> 0** y en la base no entra ninguno → es el mecanismo (b), y la causa
+  está en `upsertByExternalId` o en el `continue` de la marca. Demostrado.
+- Si vienen **0** → el TPV de verdad no ofrece grupos nuevos, no hay nada roto en el
+  importador, y el 3,1 % tiene otra explicación que habrá que buscar.
+
+Hasta entonces, el §3 de esta RECON se queda en «apunta a», no en «es».
