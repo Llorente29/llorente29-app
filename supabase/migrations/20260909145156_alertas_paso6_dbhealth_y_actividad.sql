@@ -3,10 +3,27 @@
 -- de silencio deja de fiarse de una bandera
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. **VA DESPUÉS de `20260909133018_alertas_plantilla_unica.sql`**
--- (el paso 4, ya aplicado): reescribe `ingesta_silencio_watchdog` partiendo del
--- cuerpo que deja aquélla. Aplicarla antes dejaría el prefijo `[Negocio · Local]`
--- otra vez escrito a mano dentro de los asuntos. Nombre provisional (regla 17).
+-- ✅ APLICADA el 09/09 como `20260909145156`. Va después de `20260909133018`
+-- (el paso 4): reescribe `ingesta_silencio_watchdog` partiendo del cuerpo que
+-- deja aquélla.
+--
+-- ── COMPROBADO A LOS DOS LADOS, Y LA PREDICCIÓN ACERTÓ AL BYTE ───────────
+-- La huella se predijo ANTES de aplicar, desde una copia de ensayo con los
+-- bloques byte a byte de este fichero, y se midió después con la misma vara:
+--
+--   db_health_watchdog ........  9.251 chars · c14fdaf3b7025f70e306e68bff35800f
+--   ingesta_silencio_watchdog . 12.734 chars · bd494300bd37b7a8a9a1d880bfb2f441
+--
+-- Las dos, una sola firma. Eso es lo que convierte una transcripción de 800
+-- líneas en algo comprobable: sin la huella predicha, un byte cambiado por el
+-- camino no lo ve nadie.
+--
+-- Julio ejecutó las dos funciones a mano tras aplicar (correr, no leer):
+-- `db-health` sin incidencias; el vigía, 0 avisos de silencio (los dos locales
+-- abiertos y vendiendo) y UN aviso nuevo, el que tocaba —
+-- «Vende con el local apagado en Folvy: 1 local(es)» · Kitchen Grill LstQ.
+-- Primer disparo del criterio de actividad, y correcto: con la vara vieja
+-- («sólo locales con la bandera puesta») ese local no se habría mirado nunca.
 --
 -- ── CAMBIO DE ALCANCE, Y ES UNA CORRECCIÓN MÍA ───────────────────────────
 -- Este fichero salió como «fase 1» y dejaba fuera los avisos 4 y 5 «para no
@@ -31,16 +48,28 @@
 -- El encargo dice «85 avisos en 14 días desde el 26/08, y los 85 son del MISMO
 -- local». Medido sobre la tabla entera:
 --
---   Kitchen Grill LstQ · Kitchen Grill LstQ .... 96 avisos · 12/08 → 09/09
---   Folvy Interno · Foodint Alcalá .............  2 avisos · 11/08 → 15/08
+--   Kitchen Grill LstQ · Kitchen Grill LstQ .... 98 filas · 12/08 → 09/09
+--   Folvy Interno · Foodint Alcalá .............  2 filas · 11/08 → 15/08
 --   ───────────────────────────────────────────────────────────────────────
---   total ...................................... 98
+--   total tabla entera ......................... 100 filas · desde el 11/08
+--   ↑ medido el 09/09 a las 16:45 de Madrid.
 --
--- Son 98 y no 85, empiezan el 12/08 y no el 26/08, y **no son todos del mismo
--- local**: hay dos de la cuenta plantilla. La conclusión del encargo no cambia
--- —el aviso sigue sin decir dónde, que es el problema— pero la cifra sí, y es
--- otra vez el mismo patrón: un `count(*)` sin cuenta mezcla producción con la
--- plantilla.
+-- No son 85 ni empiezan el 26/08, y **no son todos del mismo local**: hay dos
+-- de la cuenta plantilla. La conclusión del encargo no cambia —el aviso sigue
+-- sin decir dónde, que es el problema— pero la cifra sí, y es otra vez el mismo
+-- patrón: un `count(*)` sin cuenta mezcla producción con la plantilla.
+--
+-- Ojo con la fecha de arranque: la TABLA empieza el 11/08, pero Kitchen Grill
+-- empieza el 12/08. La primera fila de todas es de la plantilla. Decir «100
+-- desde el 12/08» vuelve a mezclar la fecha de una cuenta con el total de dos.
+--
+-- ── Y UNA COSA QUE NO ES UN ERROR DE CUENTA, AUNQUE LO PAREZCA ───────────
+-- Esta tabla CRECE. Hoy le entra una fila por hora: 14:30, 15:37 y 16:39 de
+-- Madrid. Cuando escribí 96 eran 96; una hora después eran 98; ahora son 100.
+-- Ninguna de las tres medidas estaba mal — les faltaba la HORA. Una cifra de
+-- una tabla viva sin el momento en que se tomó parece un error una hora más
+-- tarde, y se corrige lo que no estaba roto. Toda cifra que salga de aquí
+-- lleva cuándo se midió.
 --
 -- ── Y UN FALLO DEL VIGÍA QUE NADIE HABÍA VISTO ───────────────────────────
 -- El antirruido de este aviso era GLOBAL:
