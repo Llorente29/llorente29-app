@@ -156,7 +156,32 @@ export default function ShellTopBar({
   return (
     <header
       className="flex items-center shrink-0"
-      style={{ background: BAR_BG, height: 64, borderBottom: `1px solid ${BORDER}`, paddingLeft: isMobile ? 16 : 26, paddingRight: isMobile ? 16 : 26, gap: isMobile ? 0 : 34 }}
+      style={{
+        background: BAR_BG,
+        // ── Zona segura de iOS (08/09/2026) ──────────────────────────────
+        // `index.html` lleva `viewport-fit=cover` y
+        // `apple-mobile-web-app-status-bar-style: black-translucent`, o sea que
+        // la página empieza en y=0: DEBAJO del reloj, la cobertura y la batería.
+        // Sin reservar ese hueco, el wordmark «folvy» se pintaba encima de la
+        // hora del sistema. El hueco de ABAJO ya estaba puesto (ShellBottomNav,
+        // BottomTabBar y el padding del contenido); el de arriba no estaba en
+        // ninguna parte.
+        //
+        // La altura CRECE con el hueco en vez de repartirse: con
+        // `box-sizing: border-box` (index.css), dejar `height: 64` y añadir
+        // padding aplastaría la barra a 20 px en un iPhone con Dynamic Island.
+        // Así el contenido sigue midiendo 64 px y el hueco va por encima.
+        //
+        // En un móvil sin muesca, en Android y en escritorio `env()` vale 0, así
+        // que esto no abre ningún hueco donde no hace falta. Los laterales son
+        // para el APAISADO, que es cuando la muesca se pone al lado.
+        height: 'calc(64px + env(safe-area-inset-top, 0px))',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        borderBottom: `1px solid ${BORDER}`,
+        paddingLeft: `calc(${isMobile ? 16 : 26}px + env(safe-area-inset-left, 0px))`,
+        paddingRight: `calc(${isMobile ? 16 : 26}px + env(safe-area-inset-right, 0px))`,
+        gap: isMobile ? 0 : 34,
+      }}
     >
       {/* Logo "El ciclo" inline (anillo tinta + punto de margen verde) + wordmark */}
       <div className="flex items-center shrink-0" style={{ gap: 11 }}>

@@ -32,10 +32,15 @@ export default function FranjaEntorno() {
   const etiqueta = entorno === 'preview' ? 'PREVIEW' : 'BUILD LOCAL'
 
   return (
+    // Misma zona segura que la cabecera: esta franja va `fixed top-0`, así que
+    // en un iPhone se pintaba debajo del reloj. Es la franja que avisa de que
+    // NO ES PRODUCCIÓN — un aviso ilegible es un aviso que no está. El py-1 de
+    // la clase son 0.25rem: se suman aquí para no perderlo.
     <div
       role="status"
       className="fixed top-0 left-0 right-0 z-[100] bg-warning text-black text-[11px] font-semibold tracking-wide
                  px-3 py-1 flex items-center justify-center gap-2 shadow-md pointer-events-none select-none"
+      style={{ paddingTop: 'calc(0.25rem + env(safe-area-inset-top, 0px))' }}
     >
       <span className="uppercase">{etiqueta}</span>
       {rama && <span className="font-normal opacity-80">· rama {rama}</span>}
