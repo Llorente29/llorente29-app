@@ -2,8 +2,23 @@
 -- Estándar de alertas · paso 4 — UNA plantilla, y los vigías dejan de escribirla
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Nombre provisional: se renombra a la versión que registre la
--- base (regla 17). Transaccional.
+-- APLICADA el 09/09 por Julio (F2) · versión 20260909133018
+--
+-- Comprobado por los dos lados, por separado:
+--   · el ancla aparecía EXACTAMENTE UNA VEZ en el drenaje vivo justo antes de
+--     aplicar. La guarda no era teórica.
+--   · después: `negocio`, `local` y `severity` dentro del `http_post`, y
+--     `net.http_post`, `for update skip locked` y el log CONSERVADOS. El
+--     drenaje pasa de 4.408 a 5.177 caracteres, que es justo lo que produjo el
+--     ensayo con la copia desechable.
+--   · el cuerpo del vigía es `4ce35d3d616623285d5e9b0a18a35732 / 9.871 chars`,
+--     idéntico a este fichero en bruto y con los comentarios, y con el cambio
+--     de cadencia del aviso de cobertura (clave por lista, 7 días) intacto.
+--   · la cola sigue entregando: 78 enviados, 0 atascados.
+--
+-- ⚠️ FALTA DESPLEGAR LA EDGE para que se vea: hasta que se fusione la rama, el
+-- drenaje manda campos que la plantilla vieja ignora. Es inofensivo —el correo
+-- sale como antes— pero el prefijo `[Negocio · Local]` no aparece todavía.
 --
 -- ── ORDEN CON EL DESPLIEGUE, Y POR QUÉ DA IGUAL ──────────────────────────
 -- Esta migración va junto a un cambio en `system-alert` (la plantilla) y otro
