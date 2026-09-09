@@ -1,12 +1,22 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- Estándar de alertas · paso 6, fase 1 — `db-health` dice QUÉ local, y el vigía
+-- Estándar de alertas · paso 6 — `db-health` ENTERO dice QUÉ local, y el vigía
 -- de silencio deja de fiarse de una bandera
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. **VA DESPUÉS de `PENDIENTE_alertas_plantilla_unica.sql`** (el
--- paso 4): reescribe `ingesta_silencio_watchdog` partiendo del cuerpo que deja
--- aquélla. Aplicarla antes dejaría el prefijo `[Negocio · Local]` otra vez
--- escrito a mano dentro de los asuntos. Nombre provisional (regla 17).
+-- ⚠️ SIN APLICAR. **VA DESPUÉS de `20260909133018_alertas_plantilla_unica.sql`**
+-- (el paso 4, ya aplicado): reescribe `ingesta_silencio_watchdog` partiendo del
+-- cuerpo que deja aquélla. Aplicarla antes dejaría el prefijo `[Negocio · Local]`
+-- otra vez escrito a mano dentro de los asuntos. Nombre provisional (regla 17).
+--
+-- ── CAMBIO DE ALCANCE, Y ES UNA CORRECCIÓN MÍA ───────────────────────────
+-- Este fichero salió como «fase 1» y dejaba fuera los avisos 4 y 5 «para no
+-- tocar tres bloques del mismo cuerpo en una pasada». Estaba mal, y la razón
+-- es de fontanería: cada bloque se reemplaza por ANCLA sobre el cuerpo VIVO,
+-- así que una fase 2 escrita hoy tendría que anclar contra un cuerpo que aún
+-- no existe —el que dejaría esta migración sin aplicar— y no habría forma de
+-- probarla hasta después. Encadenar anclas contra un cuerpo no aplicado es
+-- peor que tres anclas en una pasada, y cada una lleva su propia guarda de
+-- «aparece exactamente una vez». Así que `db-health` va entero, de una.
 --
 -- ── POR QUÉ `db-health` VA EL PRIMERO DE LOS DIECISÉIS ───────────────────
 -- Por el ruido medido, no por orden alfabético: es el segundo emisor de la cola
@@ -84,12 +94,96 @@
 -- así que reescribirlo entero exigiría transcribir 5.861 caracteres a mano, que
 -- es la mejor forma de perder por el camino algo que nadie pidió cambiar.
 --
--- ── LO QUE NO SE TOCA, Y POR QUÉ SE DICE ─────────────────────────────────
--- Los avisos 4 y 5 de `db_health_watchdog` («print_job atascados >2h» y
--- «encolados a impresora INACTIVA») TAMBIÉN hablan de un local y TAMPOCO lo
--- dicen. No entran aquí para no tocar tres bloques del mismo cuerpo en una
--- pasada; van en la fase siguiente, con su ensayo. Queda escrito para que no se
--- dé por hecho que `db-health` ya está migrado: está a un tercio.
+-- ── LOS AVISOS 4 Y 5, Y LO QUE DICE MEDIRLOS ─────────────────────────────
+-- Los otros dos avisos que hablan de un local sin decirlo:
+--
+--   Aviso 4 · «trabajo(s) de impresion atascados >2h»
+--   Aviso 5 · «encolados a impresora INACTIVA»
+--
+-- Los dos suman `print_job` de la TABLA ENTERA, sin `account_id` (regla 9). Hoy
+-- eso no ha mordido todavía y hay que decir por qué: los 9.488 `print_job` que
+-- existen son TODOS de Foodint, así que el total sin cuenta y el total de la
+-- cuenta coinciden por casualidad. El día que entre el cliente 2, el número
+-- pasa a no ser de nadie sin que cambie una línea de código.
+--
+-- ── Y LA POBLACIÓN DE HOY ES CERO, QUE TAMBIÉN HAY QUE DECIRLO ───────────
+-- No hay antes/después que enseñar con estos dos, porque ahora mismo no hay
+-- nada que avisar. Medido, no supuesto:
+--
+--   print_job en pending >2h ......................... 0 filas
+--   print_job (pending/sent) en impresora inactiva ... 0 filas
+--   avisos de estos dos tipos en db_health_alert_log .. 0 en 30 días
+--
+-- No es que el aviso esté roto: es que no ha habido caso. Los 76 de Carabanchel
+-- del 08/08 —el incidente que hizo nacer el aviso 4— siguen en la tabla, pero
+-- en `cancelled`, así que ya no cuentan. Con población cero, la prueba de que
+-- esto no rompe nada es que el cuerpo compila y que los otros cuatro avisos
+-- siguen intactos; lo demás sería inventarse un ensayo (regla 31).
+--
+-- ── EL ENSAYO, Y LO QUE COSTÓ ───────────────────────────────────────────
+-- Copia de usar y tirar (`zz_ensayo_dbhealth`, sin SECURITY DEFINER) con las
+-- dos puertas de encolado sustituidas por sellos que escriben en una tabla en
+-- vez de encolar: cero efectos sobre la cola real. Correrla tal cual no probaba
+-- NADA —los tres `if n > 0` daban falso, población cero— así que se corrió una
+-- segunda copia ensanchando SOLO el predicado (`pending`→`done`, la bandera de
+-- impresora invertida) para que los bloques nuevos pasaran por filas de verdad.
+-- Lo que sale:
+--
+--   Aviso 4 (forzado a `done`)
+--     [Foodint · Alcalá] ............ 6.117 tickets, el más viejo del 20/07
+--     [Foodint · Carabanchel] ....... 2.257 tickets, el más viejo del 09/08
+--     [Foodint · Plaza Castilla] .......  29 tickets, el más viejo del 21/06
+--   Aviso 5 (forzado a impresora activa) — y aquí se ve lo que aporta
+--     [Foodint · Alcalá] ......... 1.680 · «Cocina, Pase, Pegatina»
+--     [Foodint · Carabanchel] .... 2.290 · «Impre»
+--     [Foodint · Plaza Castilla] ....  30 · «NT311 Plaza Castilla»
+--   Aviso 6 (forzado a 60 días)
+--     [Kitchen Grill LstQ] .......... 97 pedidos
+--     [Folvy Interno · Alcalá] ....... 2 pedidos
+--
+-- Tres cosas que sólo se ven corriéndolo:
+--   · Cada fila lleva su `account_id` y su `location_id`, y la clave de
+--     antirruido lleva el UUID del local: ya no se tapan entre sí.
+--   · El aviso 5 dice el NOMBRE de la impresora. Sin eso hay que ir a buscarla.
+--   · El aviso 6 separa Kitchen Grill de la plantilla en DOS avisos, que es lo
+--     que la cifra de 98 del encargo tenía mezclado.
+--
+-- El cuerpo que produce esto: **9.251 chars, md5 `c14fdaf3b7025f70e306e68bff35800f`**.
+-- Es la misma vara a los dos lados: el `prosrc` de la copia de ensayo y el que
+-- dejará esta migración son el mismo texto (el nombre y el SECURITY DEFINER no
+-- viven en `prosrc`). Si al aplicar sale otro md5, algo ha cambiado por el
+-- camino y hay que mirarlo antes de dar nada por bueno.
+--
+-- Y el ensayo dejó rastro, que también se dice: la copia ejecuta el cuerpo
+-- entero, así que las 5 pasadas insertaron 5 filas en `db_health_snapshot_log`
+-- y corrieron sus dos purgas. Es exactamente lo que hace el cron cada tick; las
+-- 5 filas se borran solas a las 48 h. Los objetos de ensayo (`zz_ensayo_*`)
+-- quedan borrados — comprobado, 0. Y el `db_health_watchdog` VIVO no se ha
+-- tocado: sigue en 5.861 chars, md5 `6b64ffdda90d55ea2ddf97bf0c878086`.
+--
+-- Las anclas se comprobaron contra la base ANTES de escribir nada, con la
+-- misma vara a los dos lados: el trozo vivo del aviso 4 mide 789 chars con
+-- md5 `12a6bd0bc734b90b7f3cbe5817f6ed6f` y el del 5, 899 con
+-- `a0477db3af638fae481d9e62561cc78e` — idénticos a los de este fichero. Y los
+-- tres bloques NUEVOS que se ensayaron son los de aquí, byte a byte:
+-- `62701c…` (4), `1bf68c…` (5), `6b25a4…` (6).
+--
+-- ── LOS AVISOS 1 Y 2 SE QUEDAN COMO ESTÁN, Y ES A PROPÓSITO ─────────────
+-- «Bloqueos sostenidos» y «cerca del límite de conexiones» hablan de la BASE
+-- DE DATOS entera, no de un local: la medida de este paso —que todo aviso de
+-- local diga el local— no les aplica, y ponerles un `location_id` inventado
+-- sería mentir en un campo. Se quedan en `_queue_system_alert`, que es lo que
+-- deja `db-health` con dos llamadas a la puerta vieja y tres a la nueva. Lo que
+-- SÍ les falta es la severidad declarada (hoy caen al `alto` por defecto, y un
+-- bloqueo sostenido es `critico`); eso va en la pasada que le dé severidad a
+-- todo, no en ésta.
+--
+-- ── UNA COSA QUE NO DECIDO YO ────────────────────────────────────────────
+-- Los tres avisos salen con `severity = 'alto'`. El 4 es el del incidente de
+-- tres días en silencio y se podría argumentar `critico`; lo dejo en `alto`
+-- por coherencia con los otros dos y porque subir un umbral de interrupción es
+-- decisión de Julio, no mía (regla 7). Si lo quieres en `critico`, es cambiar
+-- una palabra en el bloque 2.
 -- ══════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -163,7 +257,148 @@ BEGIN
 END;
 $ancla$;
 
--- ── 2. El vigía de silencio: la actividad manda sobre la bandera ──────────
+-- ── 2. db-health · aviso 4, por LOCAL ─────────────────────────────────────
+DO $ancla4$
+DECLARE
+  v_def   text;
+  v_viejo text := $viejo$    -- Aviso 4 — print_job en pending >2h
+    select count(*) into v_stuck_print
+    from print_job
+    where status = 'pending' and created_at < now() - interval '2 hours';
+    if v_stuck_print > 0
+       and not exists (
+         select 1 from public.db_health_alert_log
+         where kind = 'db-health-print-stuck' and sent_at >= now() - interval '60 minutes'
+       ) then
+      perform public._queue_system_alert(
+        'db-health',
+        v_stuck_print || ' trabajo(s) de impresion atascados >2h',
+        'db_health_watchdog detecto ' || v_stuck_print || ' print_job en pending desde hace mas de 2 horas.' || chr(10)
+          || 'Asi se acumularon los 76 de Carabanchel (08-09/08) durante 3 dias sin que nadie se enterara.',
+        'db-health-print-stuck'
+      );
+    end if;$viejo$;
+  v_nuevo text := $nuevo$    -- Aviso 4 — tickets atascados en cola mas de 2h, POR LOCAL.
+    -- `print_job` trae `account_id` y `location_id`, los dos NOT NULL: como en
+    -- el aviso 6, no habia que buscarlos, habia que dejar de tirarlos. El
+    -- viejo sumaba la tabla ENTERA y decia un numero que no es de nadie
+    -- (regla 9); hoy solo hay una cuenta con trabajos de impresion, asi que
+    -- todavia no ha mordido, pero muerde el dia que entre el cliente 2.
+    -- Y el antirruido era global: un local tapaba al otro durante una hora.
+    select count(*) into v_stuck_print
+    from public.print_job
+    where status = 'pending' and created_at < now() - interval '2 hours';
+    if v_stuck_print > 0 then
+      perform public.encolar_alerta(
+        p_kind    => 'db-health',
+        p_subject => 'Tickets sin imprimir desde hace horas: ' || t.n || ' en cola',
+        p_message =>
+          t.n || ' ticket(s) llevan en cola sin imprimirse mas de 2 horas. El mas viejo espera '
+          || 'desde las ' || to_char(t.mas_viejo at time zone 'Europe/Madrid', 'HH24:MI')
+          || ' del ' || to_char(t.mas_viejo at time zone 'Europe/Madrid', 'DD/MM') || '.'
+          || chr(10) || chr(10)
+          || 'Mira la impresora del local: encendida, con papel y con la tablet conectada.'
+          || chr(10)
+          || 'Asi se acumularon los 76 de Carabanchel del 08/08, tres dias sin que nadie se enterara.',
+        p_debounce_kind   => 'db-health-print-stuck_'
+                             || coalesce(t.location_id::text, 'sin-local'),
+        p_debounce_window => interval '60 minutes',
+        p_account_id      => t.account_id,
+        p_location_id     => t.location_id,
+        p_brand_id        => NULL,
+        p_severity        => 'alto'
+      )
+      from (select j.account_id, j.location_id, count(*) as n, min(j.created_at) as mas_viejo
+              from public.print_job j
+             where j.status = 'pending' and j.created_at < now() - interval '2 hours'
+             group by j.account_id, j.location_id) t;
+    end if;$nuevo$;
+  v_veces integer;
+BEGIN
+  SELECT pg_get_functiondef(p.oid) INTO v_def
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'db_health_watchdog';
+  v_veces := (length(v_def) - length(replace(v_def, v_viejo, ''))) / length(v_viejo);
+  IF v_veces <> 1 THEN
+    RAISE EXCEPTION 'el ancla del aviso 4 aparece % veces, esperaba 1', v_veces;
+  END IF;
+  EXECUTE replace(v_def, v_viejo, v_nuevo);
+END;
+$ancla4$;
+
+-- ── 3. db-health · aviso 5, por LOCAL y diciendo QUÉ impresora ────────────
+DO $ancla5$
+DECLARE
+  v_def   text;
+  v_viejo text := $viejo$    -- Aviso 5 — print_job no terminal en impresora inactiva
+    select count(*) into v_inactive_print
+    from print_job pj
+    join printer p on p.id = pj.printer_id
+    where pj.status in ('pending', 'sent') and p.is_active = false;
+    if v_inactive_print > 0
+       and not exists (
+         select 1 from public.db_health_alert_log
+         where kind = 'db-health-print-inactive-printer' and sent_at >= now() - interval '60 minutes'
+       ) then
+      perform public._queue_system_alert(
+        'db-health',
+        v_inactive_print || ' trabajo(s) de impresion encolados a impresora INACTIVA',
+        'db_health_watchdog detecto ' || v_inactive_print || ' print_job (pending/sent) cuya impresora tiene is_active=false.' || chr(10)
+          || 'Nunca se van a imprimir: claim_print_jobs solo reclama de impresoras activas.',
+        'db-health-print-inactive-printer'
+      );
+    end if;$viejo$;
+  v_nuevo text := $nuevo$    -- Aviso 5 — tickets encolados a una impresora marcada como inactiva, POR LOCAL.
+    -- Mismo arreglo que el 4, y aqui ademas se puede decir QUE impresora: sin
+    -- el nombre, el aviso obliga a ir a buscarla a mano.
+    --
+    -- Se agrupa por el local del TRABAJO, no por el de la impresora. No es lo
+    -- mismo por definicion, asi que se comprobo sobre la tabla entera: de los
+    -- 9.488 print_job, CERO apuntan a una impresora de otro local. Agrupar por
+    -- el del trabajo no parte hoy ningun aviso en dos.
+    select count(*) into v_inactive_print
+    from public.print_job pj
+    join public.printer p on p.id = pj.printer_id
+    where pj.status in ('pending', 'sent') and p.is_active = false;
+    if v_inactive_print > 0 then
+      perform public.encolar_alerta(
+        p_kind    => 'db-health',
+        p_subject => 'Tickets encolados a una impresora apagada en Folvy: ' || t.n,
+        p_message =>
+          t.n || ' ticket(s) estan esperando en una impresora que en Folvy figura como INACTIVA: '
+          || t.impresoras || '.' || chr(10) || chr(10)
+          || 'No se van a imprimir nunca: la tablet solo recoge trabajos de impresoras activas.'
+          || chr(10)
+          || 'O se vuelve a marcar activa esa impresora, o esos tickets hay que mandarlos a otra.',
+        p_debounce_kind   => 'db-health-print-inactive-printer_'
+                             || coalesce(t.location_id::text, 'sin-local'),
+        p_debounce_window => interval '60 minutes',
+        p_account_id      => t.account_id,
+        p_location_id     => t.location_id,
+        p_brand_id        => NULL,
+        p_severity        => 'alto'
+      )
+      from (select j.account_id, j.location_id, count(*) as n,
+                   string_agg(distinct pr.name, ', ') as impresoras
+              from public.print_job j
+              join public.printer pr on pr.id = j.printer_id
+             where j.status in ('pending', 'sent') and pr.is_active = false
+             group by j.account_id, j.location_id) t;
+    end if;$nuevo$;
+  v_veces integer;
+BEGIN
+  SELECT pg_get_functiondef(p.oid) INTO v_def
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'db_health_watchdog';
+  v_veces := (length(v_def) - length(replace(v_def, v_viejo, ''))) / length(v_viejo);
+  IF v_veces <> 1 THEN
+    RAISE EXCEPTION 'el ancla del aviso 5 aparece % veces, esperaba 1', v_veces;
+  END IF;
+  EXECUTE replace(v_def, v_viejo, v_nuevo);
+END;
+$ancla5$;
+
+-- ── 4. El vigía de silencio: la actividad manda sobre la bandera ──────────
 create or replace function public.ingesta_silencio_watchdog(
   p_min_punta       integer  default 30,
   p_min_valle       integer  default 60,
@@ -475,9 +710,52 @@ BEGIN
   IF v_src LIKE '%sin impresora activa en el local%' THEN
     RAISE EXCEPTION 'sigue el asunto viejo, el que decia «el local» sin decir cual';
   END IF;
-  -- Y que no se ha llevado por delante los otros cinco avisos.
-  IF v_src NOT LIKE '%db-health-connections%' OR v_src NOT LIKE '%db-health-print-stuck%'
-     OR v_src NOT LIKE '%db-health-print-inactive-printer%' THEN
+
+  -- Avisos 4 y 5: agrupados, con cuenta y local, y sin el antirruido global.
+  IF v_src NOT LIKE '%group by j.account_id, j.location_id) t;%' THEN
+    RAISE EXCEPTION 'los avisos 4 y 5 no agrupan por cuenta y local';
+  END IF;
+  IF v_src NOT LIKE '%db-health-print-stuck_%'
+     OR v_src NOT LIKE '%db-health-print-inactive-printer_%' THEN
+    RAISE EXCEPTION 'los avisos 4 y 5 siguen con el antirruido global: un local tapa al otro';
+  END IF;
+  IF v_src NOT LIKE '%t.impresoras%' THEN
+    RAISE EXCEPTION 'el aviso 5 no dice que impresora es';
+  END IF;
+  -- Los TRES avisos de impresion pasan ya por la puerta nueva, y quedan
+  -- exactamente TRES llamadas a la vieja: los avisos 1 y 2 —que hablan de la
+  -- BASE DE DATOS entera, no de un local, asi que la medida de este paso no
+  -- les aplica— y el manejador de excepciones del final.
+  --
+  -- TRES, y no dos: escribi la guarda esperando 2 contando los bloques a ojo,
+  -- me olvide del manejador, y la guarda habria abortado la migracion ella
+  -- sola. Lo cazo correrla contra el ensayo; leyendola no se ve. Es la
+  -- segunda vez que pasa en este mismo fichero.
+  --
+  -- Se cuentan en vez de mirar si aparecen, porque si un ancla se llevara un
+  -- bloque por delante el numero bajaria y un LIKE no lo veria.
+  --
+  -- Y se cuenta la LLAMADA (`public.x(`), no el nombre suelto: contando el
+  -- nombre salian 4 encolados donde hay 3, porque uno de los comentarios que
+  -- se meten aqui nombra `encolar_alerta` en prosa. Segunda guarda de este
+  -- fichero que habria abortado la migracion ella sola, y otra vez la cazo
+  -- correrla contra el ensayo, no leerla.
+  IF (length(v_src) - length(replace(v_src, 'public._queue_system_alert(', '')))
+       / length('public._queue_system_alert(') <> 3 THEN
+    RAISE EXCEPTION 'esperaba 3 llamadas a _queue_system_alert (avisos 1 y 2 y el manejador), hay %',
+      (length(v_src) - length(replace(v_src, 'public._queue_system_alert(', '')))
+        / length('public._queue_system_alert(');
+  END IF;
+  IF (length(v_src) - length(replace(v_src, 'public.encolar_alerta(', '')))
+       / length('public.encolar_alerta(') <> 3 THEN
+    RAISE EXCEPTION 'esperaba 3 llamadas a encolar_alerta (avisos 4, 5 y 6), hay %',
+      (length(v_src) - length(replace(v_src, 'public.encolar_alerta(', '')))
+        / length('public.encolar_alerta(');
+  END IF;
+  -- Y que las anclas no se han llevado por delante los avisos 1 y 2, que no
+  -- se tocan. No se comprueban por las claves de los avisos 4/5: esas ahora
+  -- casan igual con el texto nuevo, asi que no probarian nada.
+  IF v_src NOT LIKE '%db-health-lock%' OR v_src NOT LIKE '%db-health-connections%' THEN
     RAISE EXCEPTION 'el reemplazo por ancla se ha llevado otros avisos de db_health_watchdog';
   END IF;
 
@@ -503,7 +781,7 @@ BEGIN
     RAISE EXCEPTION 'al vigia le falta el veto o el aviso de cobertura';
   END IF;
 
-  RAISE NOTICE 'Paso 6 fase 1: db-health dice el local y el vigia mira la actividad, no la bandera.';
+  RAISE NOTICE 'Paso 6: los seis avisos de db-health dicen el local, y el vigia mira la actividad, no la bandera.';
 END;
 $verifica$;
 
@@ -511,6 +789,11 @@ commit;
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- DESPUÉS DE APLICAR
+--
+-- 0) Que el cuerpo es EL MISMO que se ensayó, medido igual a los dos lados:
+--   select length(prosrc) as chars, md5(prosrc) as md5
+--     from pg_proc where oid = 'public.db_health_watchdog()'::regprocedure;
+--   -- esperado: 9251 · c14fdaf3b7025f70e306e68bff35800f
 --
 -- 1) Que el aviso de impresoras ya dice de quién habla. Se dispara solo: hay
 --    fallos casi a diario desde el 12/08.
