@@ -79,6 +79,17 @@ export interface OrderFeedItem {
   brand_shop_url: string | null
   brand_qr_caption: string | null
   brand_ownership_type: 'own' | 'licensed' | null
+  /**
+   * ¿Esta marca hace reparto propio? Lo decide la BASE, no la pantalla:
+   * `public.marca_reparte_propio(brand)`, la MISMA función con la que
+   * `resolve_dispatch` decide si despacha. Si aquí se recalculara, habría dos
+   * implementaciones de una regla y un día dirían cosas distintas.
+   *
+   * `null` = el feed no lo manda todavía (base sin la migración) o el pedido no
+   * tiene marca. En los dos casos se trata como «sí reparte», que es lo de
+   * siempre: la pantalla no cambia hasta que la base sepa contestar.
+   */
+  brand_own_delivery?: boolean | null
   channel: string | null
   channel_id: string | null
   customer_name: string | null
@@ -367,6 +378,23 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
       supportPhone: null,
     }
   }
+  // La marca no reparte → lo reparte la plataforma. Se dice en una línea gris,
+  // que es justo lo que ya sabe pintar la rama `platform` (nombre del canal y
+  // teléfono de soporte). Sin esto, quitar el pedido de la rama de despacho lo
+  // dejaría SIN ninguna línea de entrega, y el cocinero pasaría de un rojo que
+  // asusta a un silencio que tampoco dice quién lo lleva.
+  if (!brandDoesOwnDelivery(order) && order.service_type === 'own_delivery') {
+    return {
+      kind: 'platform',
+      phase: 'unknown',
+      carrierLabel: order.channel ?? 'la plataforma',
+      stateLabel: null, stateTone: 'active',
+      rider: null, phone: null, etaText: null,
+      transport: null, seenText: null, hasCourier: false,
+      deliveryDurationMin: null, deliveryBasis: null,
+      supportPhone: supportPhoneFor(order.channel),
+    }
+  }
   if (isPlatformDelivery(order.service_type)) {
     return {
       kind: 'platform',
@@ -382,9 +410,37 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
   return { kind: 'none', phase: 'unknown', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, transport: null, seenText: null, hasCourier: false, deliveryDurationMin: null, deliveryBasis: null, supportPhone: null }
 }
 
-// ¿Es un pedido de reparto propio pendiente de despachar (modo manual o tras fallo)?
-// Sirve para decidir si la fila muestra el botón "Despachar / Reintentar".
+/**
+ * ¿La marca de este pedido hace reparto propio?
+ *
+ * LEE la respuesta que da la base (`brand_own_delivery`, calculado con
+ * `public.marca_reparte_propio`). NO la recalcula, y eso es el punto: la misma
+ * función decide si `resolve_dispatch` despacha y si esta pantalla enseña algo
+ * de despacho. Cuando la regla vive en dos sitios, funcionan los dos hasta que
+ * alguien arregla uno — y entonces el otro miente sin que se note.
+ *
+ * Ausente o `null` → se da por «sí reparte»: es el comportamiento de siempre,
+ * así que publicar esto antes de aplicar la migración no cambia nada.
+ */
+export function brandDoesOwnDelivery(order: OrderFeedItem): boolean {
+  return order.brand_own_delivery !== false
+}
+
+/**
+ * ¿Es un pedido de reparto propio pendiente de despachar (modo manual o tras
+ * fallo)? Sirve para decidir si la fila muestra el botón "Despachar / Reintentar".
+ *
+ * 08/09: si la marca NO hace reparto propio, esto es FALSO aunque el pedido
+ * venga marcado como `own_delivery`. Una cedida de Just Eat llega así —para
+ * Last ES un reparto— y el KDS la pintaba con «⚠️ NO SE PUDO DESPACHAR» y un
+ * botón «Reintentar» que no podía funcionar nunca, porque el guardarraíl del
+ * despacho está haciendo lo correcto al no mandarla a la flota. Medido: 69
+ * pedidos, 46 con banner rojo y 23 con sólo el botón azul. No es un fallo: es
+ * que ese paso no existe para esa marca (regla 35: si no hay acción, no hay
+ * botón).
+ */
 export function isOwnDeliveryUndispatched(order: OrderFeedItem): boolean {
+  if (!brandDoesOwnDelivery(order)) return false
   return (order.service_type === 'own_delivery') && !order.carrier_code
 }
 
