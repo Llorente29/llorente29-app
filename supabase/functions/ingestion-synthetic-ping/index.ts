@@ -31,8 +31,9 @@
 //   ?simulate=fail  -- fuerza el camino de fallo (para probar la alarma sin
 //                      tocar el webhook real). Requiere el CRON_SECRET igual.
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
+import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
 
 // Cuenta vigilada. Hoy Llorente29 es el único cliente activo; cuando haya más,
 // el cron pasará el account_id o se iterará sobre ingestion_monitor_config.enabled.
@@ -116,7 +117,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           (Date.now() - lastAlert) < cooldownMin * 60_000;
 
         if (!inCooldown) {
-          await sendAlert(supabaseUrl, cronSecret, result);
+          await sendAlert(sb, supabaseUrl, cronSecret, result);
           await sb.from("ingestion_monitor_state").update({
             last_alert_sent_at: nowIso,
             last_alert_kind: "synthetic_ping",
@@ -129,7 +130,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch (e) {
     // Si la persistencia falla, intentamos avisar igualmente (el ping es lo crítico).
     if (!result.ok) {
-      await sendAlert(supabaseUrl, cronSecret, result);
+      await sendAlert(sb, supabaseUrl, cronSecret, result);
       alerted = true;
     }
     return json(200, { ok: result.ok, alerted, persisted: false, detail: String(e) });
@@ -186,8 +187,21 @@ async function pingWebhook(webhookUrl: string, token: string): Promise<PingResul
   }
 }
 
-// Dispara el email vía system-alert (canal de alarma dedicado ya validado).
-async function sendAlert(supabaseUrl: string, cronSecret: string, result: PingResult): Promise<void> {
+// Encola el aviso. Antes hacía `fetch` directo a `system-alert`, saltándose la
+// cola: no aparecía en ninguna tabla y, sobre todo, NO TENÍA ANTIRRUIDO. Este
+// vigía corre cada 10 minutos, así que una ingesta rota eran 6 correos a la
+// hora, indefinidamente — el mismo fallo que le costó 96 correos en un día a
+// `availability-watchdog`. Ahora va por la cola, con clave por día.
+//
+// La ventana es de 1 hora y no de las 20 de por defecto: esto es `critico` y
+// para un aviso de que las ventas pueden no estar entrando, callar 20 horas es
+// demasiado. Una vez por hora mientras dure.
+async function sendAlert(
+  sb: SupabaseClient,
+  supabaseUrl: string,
+  cronSecret: string,
+  result: PingResult,
+): Promise<void> {
   const subject = "Webhook de ingesta CAÍDO";
   const message =
     `El ping sintético al webhook de Last.app ha fallado.\n\n` +
@@ -196,16 +210,15 @@ async function sendAlert(supabaseUrl: string, cronSecret: string, result: PingRe
     `Detalle: ${result.detail}\n\n` +
     `Esto significa que las ventas pueden NO estar entrando. Revisar el webhook ` +
     `(¿deploy sin --no-verify-jwt? ¿token? ¿Last dejó de enviar?).`;
-  try {
-    await fetch(supabaseUrl + "/functions/v1/system-alert", {
-      method: "POST",
-      headers: {
-        "x-cron-secret": cronSecret,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ subject, message, kind: "synthetic_ping" }),
-    });
-  } catch {
-    // best-effort: si el canal de alarma también está caído, no hay más que hacer aquí.
-  }
+  const r = await encolarAlerta(sb, {
+    kind: "synthetic_ping",
+    subject,
+    message,
+    severity: "critico",
+    debounceKind: claveDelDia("synthetic_ping"),
+    debounceWindow: "1 hour",
+    // Sin cuenta ni local a propósito: el webhook de ingesta es de sistema, no
+    // de un local. Un NULL aquí es la verdad, no un campo sin rellenar.
+  }, { supabaseUrl, cronSecret });
+  console.log("SYNTHETIC_PING_ALERTA", r);
 }

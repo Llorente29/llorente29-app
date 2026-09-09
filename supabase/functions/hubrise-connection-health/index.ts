@@ -43,8 +43,9 @@
 // exigir JWT). Cron cada 30 min — ver
 // 20260815T1910_hubrise_connection_health_cron.sql.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
+import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,20 +89,23 @@ async function pingToken(endpoint: string, token: string): Promise<PingOutcome> 
   }
 }
 
-async function raiseAlert(subject: string, message: string): Promise<void> {
-  if (!CRON_SECRET) {
-    console.error("hubrise-connection-health: CRON_SECRET ausente -> no se pudo escalar alarma:", subject);
-    return;
-  }
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/system-alert`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET },
-      body: JSON.stringify({ subject, message, kind: "hubrise-connection-health" }),
-    });
-  } catch (e) {
-    console.error("hubrise-connection-health: fallo al escalar alarma", e);
-  }
+// Antes hacía `fetch` directo a `system-alert`, saltándose la cola. Severidad
+// `critico`: un token inválido corta la entrada de pedidos por HubRise.
+//
+// Sin `accountId` a propósito, y esto NO es un campo sin rellenar: este aviso
+// agrupa VARIAS conexiones, que pueden ser de cuentas distintas. Poner una sola
+// cuenta sería mentir sobre su alcance. El día que se parta en un aviso por
+// conexión, cada uno llevará la suya.
+async function raiseAlert(sb: SupabaseClient, subject: string, message: string): Promise<void> {
+  const r = await encolarAlerta(sb, {
+    kind: "hubrise-connection-health",
+    subject,
+    message,
+    severity: "critico",
+    debounceKind: claveDelDia("hubrise-connection-health"),
+    debounceWindow: "2 hours",
+  }, { supabaseUrl: SUPABASE_URL, cronSecret: CRON_SECRET });
+  console.log("hubrise-connection-health: alerta", r);
 }
 
 interface ConnRow {
@@ -212,7 +216,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (newlyInvalid.length > 0) {
-    await raiseAlert(
+    await raiseAlert(sb,
       "Token HubRise inválido (401)",
       `${newlyInvalid.length} conexión(es) HubRise han pasado a token_status='invalid' en el último ping. ` +
       `Re-autoriza la conexión desde el módulo de integraciones.\n\n` +

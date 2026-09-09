@@ -232,3 +232,93 @@ decisión de si eso sobra está marcada dentro de la migración, en un bloque qu
 Hoy, si no hay NINGUNA venta en 12 h, `v_ultima` es NULL y el vigía calla: una caída larga es invisible.
 Ahora, sin ventas desde que abrió, el ancla es la hora de apertura y **sí avisa**. Era el caso más grave y
 era justo el que no se veía.
+
+---
+
+## §11 · Paso 5 hecho: **cero POST directos**, una sola puerta
+
+`grep -rn "functions/v1/system-alert" supabase/functions/` fuera de la puerta compartida: **0 resultados**.
+Era la medición del §2 y ahora da cero. Los seis productores directos pasan por `system_alert_queue`.
+
+### `_shared/alerta.ts`, la puerta
+
+Cada una tenía su propio `raiseAlert`, así que fueron **seis embudos**, no 31 puntos de llamada. Todos
+llaman ahora a `encolarAlerta(sb, {...})`, que:
+
+- exige `severity` en el tipo — no se puede encolar sin declararla, que es lo contrario de los 24 puntos
+  viejos donde va NULL;
+- **nunca lanza** (`catcher-webhook` no puede devolver 500: Catcher reintentaría y duplicaría estado);
+- devuelve **qué ha pasado** —`encolada` / `callada` / `por-la-reserva` / `perdida`— en vez de `void`.
+  «Callada por antirruido» y «perdida» son cosas opuestas y hasta hoy se veían igual desde fuera.
+
+### La reserva no es una puerta trasera
+
+Si la RPC falla, cae al POST directo de siempre. No es dejar el agujero: el único motivo realista de que la
+RPC falle es que **la base no esté**, y sin base tampoco corre el drenaje — un aviso encolado en ese momento
+no saldría nunca. La reserva es justo para el caso en que más falta hace, y se registra como
+`ALERTA_POR_LA_RESERVA` para poder contarla. Si ese contador sube, es una avería en sí mismo.
+
+### Lo que gana cada una
+
+| función | kind | severidad | antirruido |
+|---|---|---|---|
+| `ingestion-synthetic-ping` | `synthetic_ping` | crítico | 1 h |
+| `hubrise-connection-health` | `hubrise-connection-health` | crítico | 2 h |
+| `catcher-webhook` | `catcher-delivery` | alto | 2 h |
+| `hubrise-callback-ensure` | `hubrise-callback` | alto | 6 h |
+| `availability-watchdog` | `availability-dispatch` · `location-status-dispatch` | alto | 24 h |
+| `availability-watchdog` | `brand-closure` | aviso | 24 h |
+| `hubrise-location-disconnect` | `hubrise-revoke-pending` | aviso | 24 h |
+
+**El antirruido es lo que más cambia, y no es cosmético.** `ingestion-synthetic-ping` corre cada 10 minutos
+y no tenía ninguno: una ingesta rota eran **6 correos a la hora, indefinidamente** — el mismo fallo que le
+costó 96 correos en un día a `availability-watchdog`. Con la clave por día y ventana de 1 h, uno por hora
+mientras dure. Las ventanas son las que menos me convencen de todo esto: son mi criterio sobre cuánto puede
+esperar cada cosa, y se cambian en una línea.
+
+### Campos: dos los llevan, y los que no, dicen por qué
+
+- **`availability-watchdog` / `brand-closure`** ahora lleva `account_id`, `brand_id` y `location_id` como
+  CAMPOS. Era el único aviso que ya decía el local… **dentro del texto**, o sea imposible de filtrar o de
+  contar. Hubo que añadir los tres ids al `select` de `brand_closure`, que sólo traía nombres.
+- **`hubrise-location-disconnect`** lleva cuenta y local: el sitio que llama los tiene en la mano.
+- **`hubrise-connection-health` va sin cuenta a propósito, y no es un campo sin rellenar:** ese aviso
+  agrupa VARIAS conexiones, que pueden ser de cuentas distintas. Poner una sola sería mentir sobre su
+  alcance. El día que se parta en un aviso por conexión, cada uno llevará la suya.
+- **`ingestion-synthetic-ping` y `catcher-webhook` van sin local**, porque el hecho no es de un local: el
+  webhook de ingesta es de sistema. Un NULL ahí es la verdad.
+
+### Un comentario que se quedó mintiendo
+
+`availability-watchdog` llevaba escrito «CON `debounceKind` va por la COLA… SIN él sigue el camino directo».
+Era cierto hasta hoy y ha dejado de serlo. Reescrito: en este proyecto un comentario desactualizado es una
+trampa, no un detalle.
+
+### Comprobación de tipos, a los dos lados (regla 31)
+
+`deno check` de las seis. Tres resuelven aquí; las otras tres importan por `esm.sh`, que el proxy bloquea,
+así que se comprobaron cambiando el especificador **temporalmente** y devolviéndolo (el pin de la versión
+sigue intacto, verificado después):
+
+| función | con el cambio | sin él |
+|---|---:|---:|
+| `ingestion-synthetic-ping` | verde | — |
+| `hubrise-location-disconnect` | verde | — |
+| `catcher-webhook` | verde | — |
+| `hubrise-callback-ensure` | 0 errores | 0 |
+| `hubrise-connection-health` | 0 errores | 0 |
+| `availability-watchdog` | 19 errores | **19** |
+
+Los 19 son artefactos del cambio temporal de especificador, no míos: salen igual antes y después.
+
+**Y un aviso sobre cómo casi lo doy por bueno:** la primera pasada la filtré con
+`grep -E "^(Check|TS[0-9]+|error)"`, que no casa porque `deno` empieza las líneas con códigos de color. Salió
+vacío y parecía verde. Lo era la salida del `grep`, no la comprobación. Con el **código de salida** salieron
+dos errores reales — a dos ficheros no les había entrado el `import`. Misma familia que verificar un permiso
+leyendo el texto del ACL: la vara medía otra cosa.
+
+### Deuda que este paso hereda, y hay que decirla
+
+El despliegue **excluye `_shared` por nombre** y cada función se lleva su copia dentro de su paquete: cambiar
+`_shared/alerta.ts` **no redespliega a quien lo usa**. Hoy no muerde —las seis cambian a la vez—, pero el día
+que se toque sólo la puerta, las seis se quedarán con la versión vieja **sin que nadie avise**.

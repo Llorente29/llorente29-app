@@ -3,8 +3,32 @@
 -- horario y el texto nuevo
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Depende de 20260909120857 (ya aplicada): usa `encolar_alerta`.
--- Nombre provisional: se renombra a la versión que registre la base (regla 17).
+-- APLICADA el 09/09 por Julio (F2) · versión 20260909122522
+--
+-- Lo aplicado ES lo que hay aquí, en bruto y con los comentarios dentro:
+-- md5 d7678ae98b65a5d9eff0977a8c0c41b1 / 10.009 chars, fichero y `prosrc`
+-- idénticos. Una firma, defaults `30, 60, '02:00:00'` intactos, SECURITY
+-- DEFINER, `anon` no puede.
+--
+-- Al correr dentro de la transacción, como la llama el cron: 0 avisos de local
+-- —los dos estaban abiertos y recibiendo— y 1 `info` de cobertura.
+--
+-- ── UMBRALES: 30/60, DECISIÓN DE JULIO (09/09) ────────────────────────────
+-- La tabla de sensibilidad daba 9 avisos con 30/60, 5 con 40/60 y 4 con 45/60.
+-- Se deja el más sensible: ya es pasar de ~11 avisos al día a ~1,3, y subirlos
+-- es un argumento del cron sin tocar la función. **Se revisa con una semana de
+-- datos reales, no con una tabla.**
+--
+-- ── EL AVISO DE COBERTURA CAMBIÓ DE CADENCIA, NO DE EXISTENCIA ────────────
+-- Lo escribí «una vez al día» y estaba mal: esa lista no cambia de un día para
+-- otro, así que habría sido un correo cada mañana sobre lo mismo — el ruido que
+-- veníamos a quitar. Julio lo corrigió sin borrar el bloque: la clave va por la
+-- LISTA de locales (`md5`), así que sólo suena cuando la lista CAMBIA. El detalle
+-- que lo cierra bien es suyo y no lo habría visto: el techo de 7 días no hay que
+-- elegirlo, sale solo de que el drenaje borra las filas enviadas a los 7 días.
+-- La lección: cuando el antirruido protege un ESTADO y no un SUCESO, la clave va
+-- por el estado, no por la fecha. Una clave con la fecha dentro convierte
+-- cualquier estado permanente en un correo diario.
 --
 -- ── ES `CREATE OR REPLACE`, Y ESO ESTÁ COMPROBADO, NO SUPUESTO ────────────
 -- La firma NO cambia: `(p_min_punta integer, p_min_valle integer,
@@ -319,9 +343,17 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- ── AVISO DE COBERTURA — bórrame entero si Julio no lo quiere ───────────
-  -- Un vigía que no dice lo que NO mira da la sensación de que mira todo. Va en
-  -- `info` y una vez al día. Hoy es una línea: Kitchen Grill LstQ.
+  -- ── AVISO DE COBERTURA ─────────────────────────────────────────────────
+  -- Un vigía que no dice lo que NO mira da la sensación de que mira todo.
+  --
+  -- ⚠️ CAMBIO SOBRE EL FICHERO DE CODE, decidido por Julio (09/09): Code lo
+  -- puso una vez AL DÍA. Diario está mal: esto no cambia de un día para otro y
+  -- sería un correo cada mañana sobre lo mismo, que es justo el ruido que se
+  -- viene a quitar. La clave de antirruido pasa a ir por la LISTA de locales
+  -- afectados, no por la fecha: sólo vuelve a avisar cuando la lista CAMBIA.
+  -- Techo real de 7 días, y no es un número elegido: el drenaje borra las filas
+  -- enviadas a los 7 días, así que a partir de ahí la clave deja de existir y
+  -- vuelve a sonar una vez. Ni calla sobre su punto ciego ni da la lata.
   IF array_length(v_sin_hora, 1) > 0 THEN
     PERFORM public.encolar_alerta(
       p_kind    => 'ingesta_silencio',
@@ -331,15 +363,14 @@ BEGIN
         || 'no se puede saber si deberían estar recibiendo pedidos. NO se vigilan:' || chr(10)
         || '· ' || array_to_string(v_sin_hora, chr(10) || '· ') || chr(10) || chr(10)
         || 'Cárgales el horario y empiezan a vigilarse solos.',
-      p_debounce_kind   => 'ingesta_sin_horario_' || to_char(v_hoy, 'YYYYMMDD'),
-      p_debounce_window => interval '24 hours',
+      p_debounce_kind   => 'ingesta_sin_horario_' || md5(array_to_string(v_sin_hora, '|')),
+      p_debounce_window => interval '7 days',
       p_account_id      => NULL,
       p_location_id     => NULL,
       p_brand_id        => NULL,
       p_severity        => 'info'
     );
   END IF;
-  -- ── fin del bloque borrable ────────────────────────────────────────────
 
   RETURN v_n;
 END;
