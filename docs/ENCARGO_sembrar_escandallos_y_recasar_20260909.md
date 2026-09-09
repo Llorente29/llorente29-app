@@ -146,3 +146,101 @@ hasta hoy, ese mismo error no lo habría notado nadie: el contador habría salid
 
 **Siguiente:** el `dry_run` de `seed_catalog_canonical`, y con él la guarda de `ownership_type` y la ventana
 de frescura del §3.
+
+---
+
+## §6 · Hecho el 09/09 — paso 2: el ensayo, con las dos guardas dentro
+
+Propuesto, **no aplicado**: `supabase/migrations/PENDIENTE_seed_catalog_canonical_ensayo_y_guardas.sql`.
+Es `DROP` + `CREATE` porque añade parámetros — con `CREATE OR REPLACE` quedarían dos firmas y las llamadas
+de un argumento serían ambiguas (regla 2). Nadie más la llama: 0 funciones la mencionan en `prosrc`.
+
+### Lo que devuelve el ensayo, corrido de verdad
+
+No está calculado a mano: este cuerpo exacto se creó como copia desechable sin `SECURITY DEFINER`, revocada
+de `public`/`anon`/`authenticated`, se corrió sobre Foodint y se borró (quedan 0 copias). Salió:
+
+| | | |
+|---|---:|---|
+| matrículas miradas | **419** | predicho ✓ |
+| ya existen, no se tocan | **307** | ✓ |
+| se crearían | **17** | ✓ |
+| fuera, sin marca en Folvy | **18** | ✓ · `Van Van` |
+| fuera, marca propia | **65** | ✓ · 5 marcas |
+| fuera, no está en la última foto | **12** | ✓ |
+| | 419 | = la suma de las cinco |
+| precios por canal | 43 | no predicho: para esto es el ensayo |
+| …de ellos, de foto vieja | 2 | se cuenta, no se corta |
+
+**94 → 17.** Y no escribió nada, medido a los dos lados en la misma sentencia (regla 31):
+`recipe_item` 394→394, `menu_item` 633→633, `menu_item_override` 58→58, mientras decía que crearía 17 y 43.
+La prueba que menos se puede falsear: dos pasadas seguidas dieron las **mismas** 307 ya existentes y los
+**mismos** 17 a crear — si la primera hubiera escrito, la segunda habría dicho 324 y 0.
+
+### La guarda de frescura no se mide contra `now()`, y eso cambió el diseño
+
+El §3.2 pedía «vistos en los últimos N días». Medido, esa vara está mal. Las dos orgs de Foodint tienen
+fotos de fechas distintas: **Cloudtown 08/09 23:00 (hace 10,5 h)** y **Foodint 05/09 23:00 (hace 82,5 h)**.
+Un corte de «3 días desde hoy» se llevaría la org de Foodint entera, y no porque Last haya dejado de servir
+nada: porque nadie ha refrescado ese espejo desde el 5. `seen_in_catalog_at` mide **cuándo miramos**, no
+cuándo lo sirvió Last, y la pantalla diría «Last no lo sirve desde el 05/09» de algo que sí sirve — regla 30
+otra vez, y regla 39: la vara tiene que ser la del sistema al que gobierna.
+
+Así que la vara es **la última foto de su propia org**: ¿estaba este producto la última vez que miramos ESE
+catálogo? El corte es nítido —una pasada sella todas sus filas en la misma hora, así que a 1 h y a 1 día
+salen los mismos números— y el margen queda como parámetro. Y la antigüedad de cada foto sale en el
+resultado y en pantalla, porque sembrar de una foto de hace tres días es una decisión.
+
+### Los 12 que la guarda de foto deja fuera son, casi todos, packs
+
+Nueve son del 21/06 y dos del 30/08:
+
+- **Chivuos** — Pack Single Hero · Pack Chicken Single Hero · Pack Deluxe Para Dos · CHIVUO´S® BURGER *(30/08)*
+- **Ay Mamita Bowls** — Birria Lunch · Mamita Duo · Birria Chicken Bowl · Birria + Tequeños · GRINGAS DE QUESO *(30/08)*
+- **Dos Coyotes** — PACK UNO PA UNO · PACK PA 2
+- **Big Mike´s** — Menú Doble Big Mikes
+
+Sembrarlos crearía doce `recipe_item type='dish'` para packs que Last ya no sirve como producto. Es
+exactamente lo que la guarda evita, y son los mismos packs de los que habla `PENDIENTE_casa_por_id_externo`.
+
+### Las 5 marcas propias que se dejan de sembrar
+
+Milanesa House (24) · Meraki Pita (16) · Smash Brothers Burgers (14) · Dirty Burgers (6) · Bendito Burrito (5).
+
+⚠️ **«Milanesa House» es PROPIA y «Milanesa Haus» es CEDIDA.** Dos marcas distintas a una letra. Hoy no se
+confunden porque la resolución es por nombre exacto normalizado — pero conviene saberlo antes de tocar el
+alias de `Dirty Burgers`, que es el único que hay escrito a fuego ahí dentro.
+
+### Y de paso: esa función la puede llamar `anon`
+
+Medido con `has_function_privilege('anon', …, 'EXECUTE')` → **TRUE**. Es `SECURITY DEFINER` y escribe en tres
+tablas; su guarda de tenancy la salva, pero no tiene por qué estar al alcance. No estaba entre las 21 del
+barrido de ayer. Y como esto es un `DROP` + `CREATE`, la nueva **nacería otra vez abierta** —
+`ALTER DEFAULT PRIVILEGES` concede EXECUTE a `anon` y `authenticated` en cada función nueva de `public`—, así
+que el revoke va en la misma migración, revocando de **PUBLIC además de los nombres**, y la verificación va
+dentro de la transacción: si `anon` sigue pudiendo, la migración no entra.
+
+### La pantalla
+
+Botón **«Simular sembrado»** al lado de **«Sembrar escandallos»**, como el importador. La tarjeta enseña las
+cinco cifras que cuadran con las matrículas miradas, y **lista** lo que deja fuera: la marca sin resolver, las
+marcas propias, y los doce productos con su fecha de «visto por última vez» en hora de Madrid. Más la foto de
+cada org con su antigüedad. Nada de «y además hay N que no te enseño» (regla 7).
+
+**Medido a los dos lados (regla 31):** `lint` 1376 problemas (1076 errores, 300 avisos) sin el cambio y con él;
+`vitest` 6 rojas / 1005 verdes antes, 6 rojas / 1024 verdes después — las 6 son las ya declaradas en `main`.
+`npm run build`: verde.
+
+### Orden, y lo que se rompe
+
+1. **Julio aplica la migración.** En ese momento «Sembrar escandallos» de la pantalla **deja de funcionar**:
+   `p_dry_run` no tiene valor por defecto a propósito, así que la llamada de un argumento que hace el panel
+   hoy ya no existe y da error. Es la dirección correcta del fallo — y ese botón no había que pulsarlo igual
+   (§4). «Recasar ventas» no se toca.
+2. **Se renombra el fichero** a la versión que registre la base (regla 17).
+3. **Se fusiona la rama** y la pantalla nueva llama con `p_dry_run`.
+4. **Primero se simula**, se mira la tarjeta, y sólo entonces se decide si se siembra.
+
+**Sigue abierto:** los overrides no llevan guarda de foto — se cuentan (2 de 43) y la decisión es de Julio.
+Y el excluido `'FOODINT'`, el alias `'Dirty Burgers'→'Dirty Burger'` y el uuid de la unidad «Unidad» siguen
+escritos a fuego dentro de la función: deuda vista, no de este encargo.

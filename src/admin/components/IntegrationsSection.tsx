@@ -146,18 +146,22 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
     setBusy(null)
   }
 
-  async function handleSeed() {
-    setBusy('seed'); setFeedback(null); setSeedResult(null)
+  async function handleSeed(dryRun: boolean) {
+    setBusy(dryRun ? 'seed:dry' : 'seed'); setFeedback(null); setSeedResult(null)
     try {
-      const r = await seedCatalogCanonical(accountId)
+      const r = await seedCatalogCanonical(accountId, dryRun)
       setSeedResult(r)
-      const creadas = r.productosBaseCreados + r.overridesCreados
-      const base = creadas === 0
-        ? `Sembrado sin cambios: no había nada nuevo que crear (${r.baseYaExistentes} producto(s) base ya existían).`
-        : `Sembrado: ${r.productosBaseCreados} producto(s) base y ${r.overridesCreados} override(s) de precio creados.`
-      setFeedback(r.saltadosSinMarca > 0
-        ? { kind: 'error', msg: `${base} ${r.saltadosSinMarca} producto(s) del catálogo se quedaron fuera por no resolver marca: su escandallo NO existe y sus ventas no casarán. Vincula esas marcas y vuelve a sembrar.` }
-        : { kind: 'ok', msg: base })
+      const verbo = r.dryRun ? 'Se crearían' : 'Creados'
+      const base = r.productosBaseCreados === 0 && r.overridesCreados === 0
+        ? (r.dryRun
+            ? `Simulación: no hay nada que sembrar. Nada escrito. De ${r.matriculasMiradas} matrículas, ${r.baseYaExistentes} ya existen.`
+            : `Sembrado sin cambios: no había nada nuevo que crear (de ${r.matriculasMiradas} matrículas, ${r.baseYaExistentes} ya existían).`)
+        : `${r.dryRun ? 'Simulación (nada escrito). ' : ''}${verbo} ${r.productosBaseCreados} producto(s) base y ${r.overridesCreados} precio(s) por canal, de ${r.matriculasMiradas} matrículas miradas.`
+      const fuera = r.saltadosSinMarca + r.saltadosPorSerPropia + r.saltadosPorNoEstarEnLaFoto
+      setFeedback({
+        kind: r.saltadosSinMarca > 0 ? 'error' : 'ok',
+        msg: fuera === 0 ? base : `${base} ${fuera} se quedan fuera: el detalle, abajo.`,
+      })
     } catch (e) {
       setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudo sembrar el catálogo.' })
     } finally {
@@ -239,21 +243,86 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
       )}
 
       {seedResult && (
-        <div className="rounded-lg p-3 mb-3 text-sm border border-border-default bg-card space-y-2">
-          <span className="font-medium text-text-primary">Resultado del sembrado</span>
+        <div className="rounded-lg p-3 mb-3 text-sm border border-border-default bg-card space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-text-primary">
+              {seedResult.dryRun ? 'Simulación del sembrado' : 'Resultado del sembrado'}
+            </span>
+            {seedResult.dryRun && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border bg-page text-text-tertiary border-border-default">
+                nada escrito
+              </span>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-secondary text-xs">
-            <span>Productos base creados: <b className="text-text-primary tabular-nums">{seedResult.productosBaseCreados}</b></span>
-            <span>Overrides de precio creados: <b className="text-text-primary tabular-nums">{seedResult.overridesCreados}</b></span>
-            <span>Ya existían (no tocados): <b className="text-text-primary tabular-nums">{seedResult.baseYaExistentes}</b></span>
-            <span className={seedResult.saltadosSinMarca > 0 ? 'text-danger' : undefined}>
-              Saltados por no resolver marca: <b className="tabular-nums">{seedResult.saltadosSinMarca}</b>
+            <span>Matrículas miradas: <b className="text-text-primary tabular-nums">{seedResult.matriculasMiradas}</b></span>
+            <span>Ya existían (no se tocan): <b className="text-text-primary tabular-nums">{seedResult.baseYaExistentes}</b></span>
+            <span>
+              {seedResult.dryRun ? 'Se crearían' : 'Creados'}:{' '}
+              <b className="text-text-primary tabular-nums">{seedResult.productosBaseCreados}</b> producto(s) base
+            </span>
+            <span>
+              Precios por canal: <b className="text-text-primary tabular-nums">{seedResult.overridesCreados}</b>
+              {seedResult.overridesDeFotoVieja > 0 && (
+                <span className="text-text-tertiary"> ({seedResult.overridesDeFotoVieja} de una foto que no es la última)</span>
+              )}
             </span>
           </div>
-          {seedResult.saltadosSinMarca > 0 && (
-            <p className="text-[11px] text-text-tertiary">
-              Esos productos no tienen escandallo: sus ventas seguirán sin casar aunque recases. Vincula sus marcas
-              arriba y vuelve a sembrar.
-            </p>
+
+          {/* Lo que se queda fuera. Se lista SIEMPRE que exista: el umbral ordena, no
+              decide la existencia de la fila (regla 7). */}
+          <div className="text-xs space-y-1">
+            <div className="text-text-tertiary text-[11px] uppercase tracking-wide">Lo que se queda fuera</div>
+
+            <div className={seedResult.saltadosSinMarca > 0 ? 'text-danger' : 'text-text-tertiary'}>
+              Sin marca en Folvy: <b className="tabular-nums">{seedResult.saltadosSinMarca}</b>
+              {seedResult.marcasSinResolver.length > 0 && (
+                <span> — {seedResult.marcasSinResolver.join(', ')}. No tienen escandallo, y sus ventas no van a casar
+                  mientras la marca no exista aquí.</span>
+              )}
+            </div>
+
+            <div className="text-text-secondary">
+              De marca propia: <b className="tabular-nums">{seedResult.saltadosPorSerPropia}</b>
+              {seedResult.marcasPropiasSaltadas.length > 0 && (
+                <span className="text-text-tertiary"> — {seedResult.marcasPropiasSaltadas.join(', ')}. El escandallo de
+                  una marca propia se hace aquí; no se copia de lo que el TPV enseña al cliente.</span>
+              )}
+            </div>
+
+            <div className="text-text-secondary">
+              Fuera de la última foto del catálogo: <b className="tabular-nums">{seedResult.saltadosPorNoEstarEnLaFoto}</b>
+              {seedResult.noEnLaFoto.length > 0 && (
+                <ul className="mt-1 ml-3 list-disc text-[11px] text-text-tertiary space-y-0.5">
+                  {seedResult.noEnLaFoto.map((f, i) => (
+                    <li key={`${f.marca}-${f.producto}-${i}`}>
+                      {f.producto} <span className="text-text-tertiary">· {f.marca} · visto por última vez el{' '}
+                      {fechaHoraDelNegocio(f.vistoPorUltimaVez, 'nunca')}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {seedResult.fotos.length > 0 && (
+            <div className="text-xs">
+              <div className="text-text-tertiary text-[11px] uppercase tracking-wide mb-1">
+                Última foto del catálogo de cada org
+              </div>
+              <ul className="text-[11px] text-text-tertiary space-y-0.5">
+                {seedResult.fotos.map(f => (
+                  <li key={f.org}>
+                    {fechaHoraDelNegocio(f.ultimaFoto, 'sin foto')} — hace {f.horas} h · {f.filas} fila(s)
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-text-tertiary mt-1">
+                Sembrar de una foto vieja siembra lo que había entonces. Si alguna org lleva días sin refrescarse,
+                importa su catálogo antes.
+              </p>
+            </div>
           )}
         </div>
       )}
@@ -372,7 +441,11 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
                 Y son independientes: sembrar no recasa, y recasar no siembra nada.
               </p>
               <div className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={() => handleSeed()} disabled={!!busy}
+                <button type="button" onClick={() => handleSeed(true)} disabled={!!busy}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border border-border-default text-text-secondary hover:bg-page disabled:opacity-50 transition-base">
+                  {busy === 'seed:dry' ? <Loader2 size={14} className="animate-spin" /> : <Sprout size={14} />} Simular sembrado
+                </button>
+                <button type="button" onClick={() => handleSeed(false)} disabled={!!busy}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border border-border-default text-text-secondary hover:bg-page disabled:opacity-50 transition-base">
                   {busy === 'seed' ? <Loader2 size={14} className="animate-spin" /> : <Sprout size={14} />} Sembrar escandallos
                 </button>
@@ -382,8 +455,10 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
                 </button>
               </div>
               <p className="text-[11px] text-text-tertiary">
-                Sembrar crea los productos base que faltan (aditivo: lo que ya existe no se toca). Recasar reprocesa
-                las ventas ya entradas y se para en el último conteo cerrado.
+                «Simular sembrado» hace el mismo recorrido sin escribir una fila y devuelve las mismas cifras:
+                mírala antes de sembrar de verdad. Sembrar sólo crea sobre marcas cedidas y sólo lo que estaba en
+                la última foto del catálogo; lo que deja fuera sale listado. Recasar reprocesa las ventas ya
+                entradas y se para en el último conteo cerrado.
               </p>
             </div>
           )}

@@ -362,16 +362,52 @@ export async function importCatalog(input: {
 // tiraba a la basura (regla 8 — un botón que hace algo importante confirma CON
 // CONTENIDO, no con un visto).
 
-/** Lo que devuelve seed_catalog_canonical. Todo son filas ESCRITAS, salvo las dos últimas. */
+/** Una org del espejo y cuándo se sacó su última foto del catálogo. */
+export interface FotoDeCatalogo {
+  org: string
+  ultimaFoto: string | null
+  /** Horas transcurridas desde esa foto, como las devuelve la RPC. */
+  horas: number
+  filas: number
+}
+
+/** Un producto que se queda fuera por no estar en la última foto de su org. */
+export interface ProductoFueraDeFoto {
+  producto: string
+  marca: string
+  vistoPorUltimaVez: string | null
+}
+
+/**
+ * Lo que devuelve seed_catalog_canonical.
+ *
+ * En ensayo (`dryRun`) las cifras son las MISMAS y no se escribe una fila: es
+ * el mismo recorrido con los INSERT apagados.
+ */
 export interface SeedResult {
+  /** Eco de lo que se pidió. Si viene true, no se ha escrito nada. */
+  dryRun: boolean
+  /** Matrículas de Last miradas. Las cinco cifras de abajo suman esto. */
+  matriculasMiradas: number
+  /** Ya estaban: no se tocan. */
+  baseYaExistentes: number
   /** menu_item BASE creados (uno por marca × matrícula de Last). */
   productosBaseCreados: number
   /** Overrides de precio por canal creados. */
   overridesCreados: number
-  /** Productos del catálogo externo que NO se sembraron por no resolver marca. */
+  /** De esos overrides, cuántos salen de una foto que no es la última. Se cuenta, no se corta. */
+  overridesDeFotoVieja: number
+  /** No se sembraron porque su marca de Last no resuelve en Folvy. */
   saltadosSinMarca: number
-  /** Ya estaban: no se tocan. */
-  baseYaExistentes: number
+  /** No se sembraron por ser de marca PROPIA: su escandallo es de Folvy, no del TPV. */
+  saltadosPorSerPropia: number
+  /** No se sembraron por no estar en la última foto del catálogo de su org. */
+  saltadosPorNoEstarEnLaFoto: number
+  /** Los nombres, no solo el número (regla 7). */
+  marcasSinResolver: string[]
+  marcasPropiasSaltadas: string[]
+  noEnLaFoto: ProductoFueraDeFoto[]
+  fotos: FotoDeCatalogo[]
 }
 
 /**
@@ -402,27 +438,66 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/** Un text[] de Postgres. Si no llega, lista vacía — nunca undefined pintado. */
+function textos(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+}
+
 /**
  * Siembra el catálogo en el modelo CANÓNICO: 1 menu_item BASE por marca×matrícula
- * con external_source='lastapp' + external_id=matrícula, más los overrides de
- * precio por canal. NO recasa ventas — eso es el botón de al lado.
+ * con external_source='lastapp' + external_id=matrícula, más su recipe_item y los
+ * overrides de precio por canal. NO recasa ventas — eso es el botón de al lado.
  *
  * Sustituye al viejo seed_lastapp_catalog (modelo por canal + lastapp_product_map),
  * jubilado en la convergencia de ingesta (20/06).
  *
- * Escribe en menu_item y en los overrides de precio. Es aditivo: lo que ya existe
- * no se toca (sale contado en `baseYaExistentes`).
+ * `dryRun` recorre exactamente lo mismo con los INSERT apagados y devuelve las
+ * mismas cifras. Es obligatorio pasarlo: la RPC no le pone valor por defecto a
+ * propósito, para que una llamada vieja falle en la cara en vez de escribir —o
+ * de no escribir— en silencio.
+ *
+ * Dos guardas, y las dos CUENTAN Y LISTAN lo que dejan fuera (regla 7):
+ *  - propiedad: sólo se siembra sobre marcas CEDIDAS. El escandallo de una marca
+ *    propia es de Folvy, no se copia de lo que el TPV enseña al cliente.
+ *  - foto: sólo lo que estaba en la última foto del catálogo de SU org. Y ojo,
+ *    la vara es la foto de la org, no «los últimos N días»: las dos orgs de
+ *    Foodint se refrescan en fechas distintas, así que un corte contra `now()`
+ *    mediría cuándo miramos nosotros, no cuándo lo sirvió Last.
  */
-export async function seedCatalogCanonical(accountId: string): Promise<SeedResult> {
+export async function seedCatalogCanonical(
+  accountId: string,
+  dryRun: boolean,
+): Promise<SeedResult> {
   const sb = requireSupabase()
-  const { data, error } = await sb.rpc('seed_catalog_canonical', { p_account_id: accountId })
+  const { data, error } = await sb.rpc('seed_catalog_canonical', {
+    p_account_id: accountId,
+    p_dry_run: dryRun,
+  } as never)
   if (error) throw new Error(`Error sembrando el catálogo: ${error.message}`)
   const r = ((data as unknown as Row[] | null) ?? [])[0] ?? {}
   return {
+    dryRun: r.dry_run === true,
+    matriculasMiradas: num(r.matriculas_miradas),
+    baseYaExistentes: num(r.base_ya_existentes),
     productosBaseCreados: num(r.productos_base_creados),
     overridesCreados: num(r.overrides_creados),
+    overridesDeFotoVieja: num(r.overrides_de_foto_vieja),
     saltadosSinMarca: num(r.saltados_sin_marca),
-    baseYaExistentes: num(r.base_ya_existentes),
+    saltadosPorSerPropia: num(r.saltados_por_ser_propia),
+    saltadosPorNoEstarEnLaFoto: num(r.saltados_por_no_estar_en_la_foto),
+    marcasSinResolver: textos(r.marcas_sin_resolver),
+    marcasPropiasSaltadas: textos(r.marcas_propias_saltadas),
+    noEnLaFoto: ((r.no_en_la_foto as Row[] | null) ?? []).map(f => ({
+      producto: (f.producto as string | null) ?? '(sin nombre)',
+      marca: (f.marca as string | null) ?? '(sin marca)',
+      vistoPorUltimaVez: (f.visto_por_ultima_vez as string | null) ?? null,
+    })),
+    fotos: ((r.fotos as Row[] | null) ?? []).map(f => ({
+      org: (f.org as string | null) ?? '',
+      ultimaFoto: (f.ultima_foto as string | null) ?? null,
+      horas: num(f.horas),
+      filas: num(f.filas),
+    })),
   }
 }
 
