@@ -153,3 +153,22 @@ export function semanasEntre(lunesA: string, lunesB: string): number {
   const t = (s: string) => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) }
   return Math.round((t(lunesB) - t(lunesA)) / (7 * 86_400_000))
 }
+
+/**
+ * Un instante de la base (UTC) pintado en hora del negocio: '09/09/2026, 23:39'.
+ *
+ * Para enseñar timestamps a alguien — regla 4. La constante del huso está
+ * arriba, en este mismo fichero, que es donde dice la cabecera que vive.
+ *
+ * No inventa nada: sin valor devuelve `siNoHay`, y si la cadena no es una fecha
+ * la devuelve tal cual. Un texto raro se ve; una fecha falsa no.
+ */
+export function fechaHoraDelNegocio(iso: string | null | undefined, siNoHay = '—'): string {
+  if (!iso) return siNoHay
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('es-ES', {
+    timeZone: ZONA_NEGOCIO,
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}

@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   diaNatural, diasNaturalesEntre, diaDelNegocio, diaEspejo, diaAnterior,
-  lunesDeLaSemana, semanasEntre,
+  lunesDeLaSemana, semanasEntre, fechaHoraDelNegocio,
 } from '@/lib/fechas'
 
 describe('diaNatural', () => {
@@ -108,5 +108,23 @@ describe('semanasEntre', () => {
   })
   it('cruzando el cambio de hora sigue contando semanas enteras', () => {
     expect(semanasEntre('2026-10-19', '2026-11-02')).toBe(2)
+  })
+})
+
+describe('fechaHoraDelNegocio', () => {
+  it('el corte de las 22:43 UTC del 8 es ya la 00:43 del 9 en Madrid', () => {
+    // El caso de la regla 4, con el día cambiado además de la hora: pintarlo en
+    // UTC diría «corte el 8» de algo que pasó el 9.
+    expect(fechaHoraDelNegocio('2026-09-08T22:43:00Z')).toBe('09/09/2026, 00:43')
+  })
+  it('en invierno el desfase es de una hora, no de dos', () => {
+    expect(fechaHoraDelNegocio('2026-01-15T22:43:00Z')).toBe('15/01/2026, 23:43')
+  })
+  it('sin valor devuelve la reserva que se le pase, no una fecha', () => {
+    expect(fechaHoraDelNegocio(null, 'sin conteo cerrado')).toBe('sin conteo cerrado')
+    expect(fechaHoraDelNegocio(undefined)).toBe('—')
+  })
+  it('una cadena que no es fecha se devuelve tal cual: se ve, no se disfraza', () => {
+    expect(fechaHoraDelNegocio('mañana')).toBe('mañana')
   })
 })

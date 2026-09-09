@@ -8,7 +8,9 @@
 //   2. Vincular tiendas Last → local → fila(s) en external_location_map (source='lastapp')
 //   2.bis Vincular marca externa → marca Folvy → fila(s) en external_brand_map (genérico)
 //   3. Importar catálogo             → Edge lastapp-catalog-import (token desde Vault)
-//   4. Sembrar catálogo + recasar    → seed_catalog_canonical + recast_lastapp_sales
+//   4. Sembrar catálogo              → seed_catalog_canonical
+//   5. Recasar ventas ya entradas    → recast_lastapp_sales
+//      (4 y 5 eran un botón; se separan el 09/09 — ver §4 abajo)
 //
 // (20/06) Tablas convergidas al modelo agnóstico external_*; los nombres de campo
 // de dominio en TS conservan "lastapp" por estabilidad de la UI (deuda cosmética).
@@ -350,25 +352,186 @@ export async function importCatalog(input: {
   }
 }
 
-// ─── 4. Sembrar escandallos + recasar ──────────────────────────────────────
+// ─── 4. Sembrar escandallos  ·  5. Recasar ventas ──────────────────────────
+//
+// (09/09) Eran UN botón. Se separan porque el recasado es útil por sí solo —
+// se quiere reprocesar sin sembrar nada— y estaba secuestrado por el sembrado:
+// para recasar había que aceptar de paso 237 filas nuevas de catálogo.
+//
+// Y ahora los dos devuelven sus cifras: ambas RPC ya las calculaban y la UI las
+// tiraba a la basura (regla 8 — un botón que hace algo importante confirma CON
+// CONTENIDO, no con un visto).
+
+/** Una org del espejo y cuándo se sacó su última foto del catálogo. */
+export interface FotoDeCatalogo {
+  org: string
+  ultimaFoto: string | null
+  /** Horas transcurridas desde esa foto, como las devuelve la RPC. */
+  horas: number
+  filas: number
+}
+
+/** Un producto que se queda fuera por no estar en la última foto de su org. */
+export interface ProductoFueraDeFoto {
+  producto: string
+  marca: string
+  vistoPorUltimaVez: string | null
+}
 
 /**
- * Siembra el catálogo en el modelo CANÓNICO (seed_catalog_canonical: 1 menu_item
- * BASE por marca×matrícula con external_source='lastapp'+external_id=matrícula,
- * + overrides de precio por canal) y recasa las ventas ya entradas
- * (recast_lastapp_sales). Tras esto, las ventas que tenían catálogo pero no
- * escandallo quedan casadas por matrícula.
+ * Lo que devuelve seed_catalog_canonical.
+ *
+ * En ensayo (`dryRun`) las cifras son las MISMAS y no se escribe una fila: es
+ * el mismo recorrido con los INSERT apagados.
+ */
+export interface SeedResult {
+  /** Eco de lo que se pidió. Si viene true, no se ha escrito nada. */
+  dryRun: boolean
+  /** Matrículas de Last miradas. Las cinco cifras de abajo suman esto. */
+  matriculasMiradas: number
+  /** Ya estaban: no se tocan. */
+  baseYaExistentes: number
+  /** menu_item BASE creados (uno por marca × matrícula de Last). */
+  productosBaseCreados: number
+  /** Overrides de precio por canal creados. */
+  overridesCreados: number
+  /** De esos overrides, cuántos salen de una foto que no es la última. Se cuenta, no se corta. */
+  overridesDeFotoVieja: number
+  /** No se sembraron porque su marca de Last no resuelve en Folvy. */
+  saltadosSinMarca: number
+  /** No se sembraron por ser de marca PROPIA: su escandallo es de Folvy, no del TPV. */
+  saltadosPorSerPropia: number
+  /** No se sembraron por no estar en la última foto del catálogo de su org. */
+  saltadosPorNoEstarEnLaFoto: number
+  /** Los nombres, no solo el número (regla 7). */
+  marcasSinResolver: string[]
+  marcasPropiasSaltadas: string[]
+  noEnLaFoto: ProductoFueraDeFoto[]
+  fotos: FotoDeCatalogo[]
+}
+
+/**
+ * Lo que devuelve recast_lastapp_sales.
+ *
+ * OJO con el ámbito, que no es el mismo en todos los campos:
+ *  - `ventasProtegidas` y `corteEn` son de ESTA pasada (qué se dejó fuera y por dónde cortó).
+ *  - todo lo demás (`ventasProcesadas`, `lineas*`) es el ESTADO DEL CASADO DE LA CUENTA
+ *    ENTERA, medido después de reescribir. Lo dice la propia función en su comentario.
+ *    No es "lo que ha hecho esta pasada": si se etiqueta como tal, se miente.
+ */
+export interface RecastResult {
+  ventasProcesadas: number
+  ventasProtegidas: number
+  /** timestamptz en UTC. Se pinta en Europe/Madrid (regla 4). */
+  corteEn: string | null
+  lineasTotal: number
+  lineasCasadas: number
+  lineasNoBrand: number
+  lineasNoRecipe: number
+  lineasNoMenuItem: number
+  lineasAmbiguous: number
+  lineasRespetadas: number
+}
+
+function num(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+/** Un text[] de Postgres. Si no llega, lista vacía — nunca undefined pintado. */
+function textos(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+}
+
+/**
+ * Siembra el catálogo en el modelo CANÓNICO: 1 menu_item BASE por marca×matrícula
+ * con external_source='lastapp' + external_id=matrícula, más su recipe_item y los
+ * overrides de precio por canal. NO recasa ventas — eso es el botón de al lado.
  *
  * Sustituye al viejo seed_lastapp_catalog (modelo por canal + lastapp_product_map),
  * jubilado en la convergencia de ingesta (20/06).
  *
- * No se parsean los contadores de retorno a propósito: la UI confirma éxito y
- * remite a Ventas para ver el casado real. Surfacing de cifras = mejora menor.
+ * `dryRun` recorre exactamente lo mismo con los INSERT apagados y devuelve las
+ * mismas cifras. Es obligatorio pasarlo: la RPC no le pone valor por defecto a
+ * propósito, para que una llamada vieja falle en la cara en vez de escribir —o
+ * de no escribir— en silencio.
+ *
+ * Dos guardas, y las dos CUENTAN Y LISTAN lo que dejan fuera (regla 7):
+ *  - propiedad: sólo se siembra sobre marcas CEDIDAS. El escandallo de una marca
+ *    propia es de Folvy, no se copia de lo que el TPV enseña al cliente.
+ *  - foto: sólo lo que estaba en la última foto del catálogo de SU org. Y ojo,
+ *    la vara es la foto de la org, no «los últimos N días»: las dos orgs de
+ *    Foodint se refrescan en fechas distintas, así que un corte contra `now()`
+ *    mediría cuándo miramos nosotros, no cuándo lo sirvió Last.
  */
-export async function seedAndRecast(accountId: string): Promise<void> {
+export async function seedCatalogCanonical(
+  accountId: string,
+  dryRun: boolean,
+): Promise<SeedResult> {
   const sb = requireSupabase()
-  const { error: seedErr } = await sb.rpc('seed_catalog_canonical', { p_account_id: accountId })
-  if (seedErr) throw new Error(`Error sembrando el catálogo: ${seedErr.message}`)
-  const { error: recastErr } = await sb.rpc('recast_lastapp_sales', { p_account_id: accountId })
-  if (recastErr) throw new Error(`Error recasando ventas: ${recastErr.message}`)
+  const { data, error } = await sb.rpc('seed_catalog_canonical', {
+    p_account_id: accountId,
+    p_dry_run: dryRun,
+  } as never)
+  if (error) throw new Error(`Error sembrando el catálogo: ${error.message}`)
+  const r = ((data as unknown as Row[] | null) ?? [])[0] ?? {}
+  return {
+    dryRun: r.dry_run === true,
+    matriculasMiradas: num(r.matriculas_miradas),
+    baseYaExistentes: num(r.base_ya_existentes),
+    productosBaseCreados: num(r.productos_base_creados),
+    overridesCreados: num(r.overrides_creados),
+    overridesDeFotoVieja: num(r.overrides_de_foto_vieja),
+    saltadosSinMarca: num(r.saltados_sin_marca),
+    saltadosPorSerPropia: num(r.saltados_por_ser_propia),
+    saltadosPorNoEstarEnLaFoto: num(r.saltados_por_no_estar_en_la_foto),
+    marcasSinResolver: textos(r.marcas_sin_resolver),
+    marcasPropiasSaltadas: textos(r.marcas_propias_saltadas),
+    noEnLaFoto: ((r.no_en_la_foto as Row[] | null) ?? []).map(f => ({
+      producto: (f.producto as string | null) ?? '(sin nombre)',
+      marca: (f.marca as string | null) ?? '(sin marca)',
+      vistoPorUltimaVez: (f.visto_por_ultima_vez as string | null) ?? null,
+    })),
+    fotos: ((r.fotos as Row[] | null) ?? []).map(f => ({
+      org: (f.org as string | null) ?? '',
+      ultimaFoto: (f.ultima_foto as string | null) ?? null,
+      horas: num(f.horas),
+      filas: num(f.filas),
+    })),
+  }
+}
+
+/**
+ * Recasa las ventas de Last ya entradas: reprocesa cada una y deja el casado
+ * escrito en sale_line (y lo que arrastra: sale.brand_id, stock_movement, stock
+ * por local). NO siembra nada.
+ *
+ * CORTE (regla 6): la función se para en el último conteo de inventario cerrado
+ * — no reprocesa por debajo de una verdad de stock ya fijada. Las que quedan
+ * fuera vuelven en `ventasProtegidas`. Bajar del corte exige los dos parámetros
+ * extra de la RPC (p_incluir_bajo_conteo + p_ventas_esperadas con la cifra
+ * exacta), y eso NO se expone en esta pantalla a propósito: es una decisión con
+ * autorización explícita, no un botón.
+ *
+ * Los tipos generados (src/types/database.ts) van por detrás de la firma real
+ * —no traen ventas_protegidas ni corte_en, ni los dos parámetros nuevos—, así
+ * que la fila se lee por nombre contra el objeto crudo. La BBDD es la verdad.
+ */
+export async function recastLastappSales(accountId: string): Promise<RecastResult> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.rpc('recast_lastapp_sales', { p_account_id: accountId })
+  if (error) throw new Error(`Error recasando ventas: ${error.message}`)
+  const r = ((data as unknown as Row[] | null) ?? [])[0] ?? {}
+  return {
+    ventasProcesadas: num(r.ventas_procesadas),
+    ventasProtegidas: num(r.ventas_protegidas),
+    corteEn: (r.corte_en as string | null) ?? null,
+    lineasTotal: num(r.lineas_total),
+    lineasCasadas: num(r.lineas_casadas),
+    lineasNoBrand: num(r.lineas_no_brand),
+    lineasNoRecipe: num(r.lineas_no_recipe),
+    lineasNoMenuItem: num(r.lineas_no_menu_item),
+    lineasAmbiguous: num(r.lineas_ambiguous),
+    lineasRespetadas: num(r.lineas_respetadas),
+  }
 }
