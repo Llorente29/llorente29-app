@@ -9,11 +9,16 @@
 //   1. Alta de integración (org + nombre del secret del token)
 //   2. Vincular tiendas Last → locales Folvy
 //   3. Importar catálogo (Edge, token desde Vault)
-//   4. Sembrar escandallos + recasar ventas
+//   4. Sembrar escandallos
+//   5. Recasar ventas ya entradas
+//
+// (09/09) 4 y 5 eran UN botón. Se separan: recasar es útil sin sembrar, y no
+// tiene por qué costar 237 filas de catálogo. Y los dos confirman con cifras.
 //
 // El VALOR del token no se toca aquí: se pone por CLI (supabase secrets set).
 
 import { useCallback, useEffect, useState } from 'react'
+import { fechaHoraDelNegocio } from '@/lib/fechas'
 import {
   Plug, Loader2, Plus, Download, Sprout, Link2, ShieldAlert, Store, RefreshCw, Tag, EyeOff, ChevronDown,
 } from 'lucide-react'
@@ -25,7 +30,8 @@ import {
   linkLocation,
   getCatalogCount,
   importCatalog,
-  seedAndRecast,
+  seedCatalogCanonical,
+  recastLastappSales,
   listBrandMaps,
   listFolvyBrands,
   listPendingExternalBrands,
@@ -38,6 +44,8 @@ import {
   type ExternalBrandMap,
   type PendingExternalBrand,
   type ImportReport,
+  type SeedResult,
+  type RecastResult,
 } from '@/admin/services/lastappIntegrationService'
 
 type Feedback = { kind: 'ok' | 'error'; msg: string } | null
@@ -70,6 +78,8 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
   const [loading, setLoading] = useState(true)
   const [feedback, setFeedback] = useState<Feedback>(null)
   const [report, setReport] = useState<ImportReport | null>(null)
+  const [seedResult, setSeedResult] = useState<SeedResult | null>(null)
+  const [recastResult, setRecastResult] = useState<RecastResult | null>(null)
   const [busy, setBusy] = useState<string | null>(null) // clave de la acción en curso
   const [openLocation, setOpenLocation] = useState<string | null>(null) // acordeón: cocina abierta
 
@@ -136,13 +146,39 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
     setBusy(null)
   }
 
-  async function handleSeedRecast(int: LastappIntegration) {
-    setBusy(`seed:${int.id}`); setFeedback(null)
+  async function handleSeed() {
+    setBusy('seed'); setFeedback(null); setSeedResult(null)
     try {
-      await seedAndRecast(accountId)
-      setFeedback({ kind: 'ok', msg: 'Escandallos sembrados y ventas recasadas. Revisa el casado en Folvy Sales.' })
+      const r = await seedCatalogCanonical(accountId)
+      setSeedResult(r)
+      const creadas = r.productosBaseCreados + r.overridesCreados
+      const base = creadas === 0
+        ? `Sembrado sin cambios: no había nada nuevo que crear (${r.baseYaExistentes} producto(s) base ya existían).`
+        : `Sembrado: ${r.productosBaseCreados} producto(s) base y ${r.overridesCreados} override(s) de precio creados.`
+      setFeedback(r.saltadosSinMarca > 0
+        ? { kind: 'error', msg: `${base} ${r.saltadosSinMarca} producto(s) del catálogo se quedaron fuera por no resolver marca: su escandallo NO existe y sus ventas no casarán. Vincula esas marcas y vuelve a sembrar.` }
+        : { kind: 'ok', msg: base })
     } catch (e) {
-      setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudo sembrar/recasar.' })
+      setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudo sembrar el catálogo.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function handleRecast() {
+    setBusy('recast'); setFeedback(null); setRecastResult(null)
+    try {
+      const r = await recastLastappSales(accountId)
+      setRecastResult(r)
+      const casado = `Recasado. En la cuenta hay ${r.lineasCasadas} de ${r.lineasTotal} línea(s) de Last casadas.`
+      setFeedback({
+        kind: 'ok',
+        msg: r.ventasProtegidas > 0
+          ? `${casado} ${r.ventasProtegidas} venta(s) por debajo del último conteo cerrado (${fechaHoraDelNegocio(r.corteEn, 'sin conteo cerrado')}) no se han tocado.`
+          : casado,
+      })
+    } catch (e) {
+      setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudieron recasar las ventas.' })
     } finally {
       setBusy(null)
     }
@@ -202,6 +238,62 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
         </div>
       )}
 
+      {seedResult && (
+        <div className="rounded-lg p-3 mb-3 text-sm border border-border-default bg-card space-y-2">
+          <span className="font-medium text-text-primary">Resultado del sembrado</span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-secondary text-xs">
+            <span>Productos base creados: <b className="text-text-primary tabular-nums">{seedResult.productosBaseCreados}</b></span>
+            <span>Overrides de precio creados: <b className="text-text-primary tabular-nums">{seedResult.overridesCreados}</b></span>
+            <span>Ya existían (no tocados): <b className="text-text-primary tabular-nums">{seedResult.baseYaExistentes}</b></span>
+            <span className={seedResult.saltadosSinMarca > 0 ? 'text-danger' : undefined}>
+              Saltados por no resolver marca: <b className="tabular-nums">{seedResult.saltadosSinMarca}</b>
+            </span>
+          </div>
+          {seedResult.saltadosSinMarca > 0 && (
+            <p className="text-[11px] text-text-tertiary">
+              Esos productos no tienen escandallo: sus ventas seguirán sin casar aunque recases. Vincula sus marcas
+              arriba y vuelve a sembrar.
+            </p>
+          )}
+        </div>
+      )}
+
+      {recastResult && (
+        <div className="rounded-lg p-3 mb-3 text-sm border border-border-default bg-card space-y-2">
+          <span className="font-medium text-text-primary">Resultado del recasado</span>
+
+          <div className="text-xs text-text-secondary">
+            <div className="text-text-tertiary text-[11px] uppercase tracking-wide mb-1">Esta pasada</div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span>Corte en el último conteo cerrado: <b className="text-text-primary">{fechaHoraDelNegocio(recastResult.corteEn, 'sin conteo cerrado')}</b></span>
+              <span>Ventas protegidas por el corte: <b className="text-text-primary tabular-nums">{recastResult.ventasProtegidas}</b></span>
+            </div>
+          </div>
+
+          <div className="text-xs text-text-secondary">
+            <div className="text-text-tertiary text-[11px] uppercase tracking-wide mb-1">
+              Estado del casado en toda la cuenta (no solo lo de esta pasada)
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span>Ventas con líneas: <b className="text-text-primary tabular-nums">{recastResult.ventasProcesadas}</b></span>
+              <span>Líneas casadas: <b className="text-text-primary tabular-nums">{recastResult.lineasCasadas}</b> de <b className="text-text-primary tabular-nums">{recastResult.lineasTotal}</b></span>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-text-tertiary">
+              <span>Sin marca: <b className="tabular-nums">{recastResult.lineasNoBrand}</b></span>
+              <span>Sin escandallo: <b className="tabular-nums">{recastResult.lineasNoRecipe}</b></span>
+              <span>Sin producto: <b className="tabular-nums">{recastResult.lineasNoMenuItem}</b></span>
+              <span>Ambiguas: <b className="tabular-nums">{recastResult.lineasAmbiguous}</b></span>
+              <span>Respetadas (casado manual o descartadas): <b className="tabular-nums">{recastResult.lineasRespetadas}</b></span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-text-tertiary">
+            Recasar no baja del último conteo cerrado. Para reprocesar por debajo hace falta autorización explícita
+            y se hace fuera de esta pantalla.
+          </p>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center gap-2 text-text-secondary text-sm p-4">
           <Loader2 size={15} className="animate-spin" /> Cargando integraciones…
@@ -219,7 +311,6 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
               const count = catalogCounts[int.lastappOrganizationId]
               const importing = busy === `import:${int.id}:false`
               const simulating = busy === `import:${int.id}:true`
-              const seeding = busy === `seed:${int.id}`
               return (
                 <div key={int.id} className="border border-border-default rounded-lg bg-card p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -249,7 +340,7 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
                     </div>
                   </div>
 
-                  {/* Pasos 3 y 4 */}
+                  {/* Paso 3: importar. Sembrar y recasar están abajo: son de cuenta, no de esta org. */}
                   <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border-default">
                     <button type="button" onClick={() => handleImport(int, false)} disabled={!!busy}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
@@ -259,14 +350,42 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border border-border-default text-text-secondary hover:bg-page disabled:opacity-50 transition-base">
                       {simulating ? <Loader2 size={14} className="animate-spin" /> : null} Simular
                     </button>
-                    <button type="button" onClick={() => handleSeedRecast(int)} disabled={!!busy}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border border-border-default text-text-secondary hover:bg-page disabled:opacity-50 transition-base">
-                      {seeding ? <Loader2 size={14} className="animate-spin" /> : <Sprout size={14} />} Sembrar escandallos y recasar
-                    </button>
                   </div>
                 </div>
               )
             })
+          )}
+
+          {/* ── Sembrar y recasar (pasos 4 y 5) ── */}
+          {/* Van FUERA de la ficha de integración a propósito: las dos RPC toman la
+              CUENTA, no la org. Puestas dentro de cada ficha —y Foodint tiene dos—
+              la pantalla enseñaba dos parejas de botones idénticos, cada una
+              aparentando que solo alcanzaba a su marca. Alcanzan a todo. */}
+          {integrations.length > 0 && (
+            <div className="border border-border-default rounded-lg bg-card p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sprout size={15} className="text-accent" />
+                <span className="text-sm font-medium text-text-primary">Sembrar y recasar — toda la cuenta</span>
+              </div>
+              <p className="text-xs text-text-tertiary">
+                Las dos alcanzan a todo el catálogo y a todas las ventas de Last del cliente, no a una sola org.
+                Y son independientes: sembrar no recasa, y recasar no siembra nada.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button type="button" onClick={() => handleSeed()} disabled={!!busy}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border border-border-default text-text-secondary hover:bg-page disabled:opacity-50 transition-base">
+                  {busy === 'seed' ? <Loader2 size={14} className="animate-spin" /> : <Sprout size={14} />} Sembrar escandallos
+                </button>
+                <button type="button" onClick={() => handleRecast()} disabled={!!busy}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border border-border-default text-text-secondary hover:bg-page disabled:opacity-50 transition-base">
+                  {busy === 'recast' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Recasar ventas
+                </button>
+              </div>
+              <p className="text-[11px] text-text-tertiary">
+                Sembrar crea los productos base que faltan (aditivo: lo que ya existe no se toca). Recasar reprocesa
+                las ventas ya entradas y se para en el último conteo cerrado.
+              </p>
+            </div>
           )}
 
           {/* ── Alta de integración ── */}

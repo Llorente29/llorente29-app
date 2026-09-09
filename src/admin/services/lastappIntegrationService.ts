@@ -8,7 +8,9 @@
 //   2. Vincular tiendas Last → local → fila(s) en external_location_map (source='lastapp')
 //   2.bis Vincular marca externa → marca Folvy → fila(s) en external_brand_map (genérico)
 //   3. Importar catálogo             → Edge lastapp-catalog-import (token desde Vault)
-//   4. Sembrar catálogo + recasar    → seed_catalog_canonical + recast_lastapp_sales
+//   4. Sembrar catálogo              → seed_catalog_canonical
+//   5. Recasar ventas ya entradas    → recast_lastapp_sales
+//      (4 y 5 eran un botón; se separan el 09/09 — ver §4 abajo)
 //
 // (20/06) Tablas convergidas al modelo agnóstico external_*; los nombres de campo
 // de dominio en TS conservan "lastapp" por estabilidad de la UI (deuda cosmética).
@@ -350,25 +352,111 @@ export async function importCatalog(input: {
   }
 }
 
-// ─── 4. Sembrar escandallos + recasar ──────────────────────────────────────
+// ─── 4. Sembrar escandallos  ·  5. Recasar ventas ──────────────────────────
+//
+// (09/09) Eran UN botón. Se separan porque el recasado es útil por sí solo —
+// se quiere reprocesar sin sembrar nada— y estaba secuestrado por el sembrado:
+// para recasar había que aceptar de paso 237 filas nuevas de catálogo.
+//
+// Y ahora los dos devuelven sus cifras: ambas RPC ya las calculaban y la UI las
+// tiraba a la basura (regla 8 — un botón que hace algo importante confirma CON
+// CONTENIDO, no con un visto).
+
+/** Lo que devuelve seed_catalog_canonical. Todo son filas ESCRITAS, salvo las dos últimas. */
+export interface SeedResult {
+  /** menu_item BASE creados (uno por marca × matrícula de Last). */
+  productosBaseCreados: number
+  /** Overrides de precio por canal creados. */
+  overridesCreados: number
+  /** Productos del catálogo externo que NO se sembraron por no resolver marca. */
+  saltadosSinMarca: number
+  /** Ya estaban: no se tocan. */
+  baseYaExistentes: number
+}
 
 /**
- * Siembra el catálogo en el modelo CANÓNICO (seed_catalog_canonical: 1 menu_item
- * BASE por marca×matrícula con external_source='lastapp'+external_id=matrícula,
- * + overrides de precio por canal) y recasa las ventas ya entradas
- * (recast_lastapp_sales). Tras esto, las ventas que tenían catálogo pero no
- * escandallo quedan casadas por matrícula.
+ * Lo que devuelve recast_lastapp_sales.
+ *
+ * OJO con el ámbito, que no es el mismo en todos los campos:
+ *  - `ventasProtegidas` y `corteEn` son de ESTA pasada (qué se dejó fuera y por dónde cortó).
+ *  - todo lo demás (`ventasProcesadas`, `lineas*`) es el ESTADO DEL CASADO DE LA CUENTA
+ *    ENTERA, medido después de reescribir. Lo dice la propia función en su comentario.
+ *    No es "lo que ha hecho esta pasada": si se etiqueta como tal, se miente.
+ */
+export interface RecastResult {
+  ventasProcesadas: number
+  ventasProtegidas: number
+  /** timestamptz en UTC. Se pinta en Europe/Madrid (regla 4). */
+  corteEn: string | null
+  lineasTotal: number
+  lineasCasadas: number
+  lineasNoBrand: number
+  lineasNoRecipe: number
+  lineasNoMenuItem: number
+  lineasAmbiguous: number
+  lineasRespetadas: number
+}
+
+function num(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * Siembra el catálogo en el modelo CANÓNICO: 1 menu_item BASE por marca×matrícula
+ * con external_source='lastapp' + external_id=matrícula, más los overrides de
+ * precio por canal. NO recasa ventas — eso es el botón de al lado.
  *
  * Sustituye al viejo seed_lastapp_catalog (modelo por canal + lastapp_product_map),
  * jubilado en la convergencia de ingesta (20/06).
  *
- * No se parsean los contadores de retorno a propósito: la UI confirma éxito y
- * remite a Ventas para ver el casado real. Surfacing de cifras = mejora menor.
+ * Escribe en menu_item y en los overrides de precio. Es aditivo: lo que ya existe
+ * no se toca (sale contado en `baseYaExistentes`).
  */
-export async function seedAndRecast(accountId: string): Promise<void> {
+export async function seedCatalogCanonical(accountId: string): Promise<SeedResult> {
   const sb = requireSupabase()
-  const { error: seedErr } = await sb.rpc('seed_catalog_canonical', { p_account_id: accountId })
-  if (seedErr) throw new Error(`Error sembrando el catálogo: ${seedErr.message}`)
-  const { error: recastErr } = await sb.rpc('recast_lastapp_sales', { p_account_id: accountId })
-  if (recastErr) throw new Error(`Error recasando ventas: ${recastErr.message}`)
+  const { data, error } = await sb.rpc('seed_catalog_canonical', { p_account_id: accountId })
+  if (error) throw new Error(`Error sembrando el catálogo: ${error.message}`)
+  const r = ((data as unknown as Row[] | null) ?? [])[0] ?? {}
+  return {
+    productosBaseCreados: num(r.productos_base_creados),
+    overridesCreados: num(r.overrides_creados),
+    saltadosSinMarca: num(r.saltados_sin_marca),
+    baseYaExistentes: num(r.base_ya_existentes),
+  }
+}
+
+/**
+ * Recasa las ventas de Last ya entradas: reprocesa cada una y deja el casado
+ * escrito en sale_line (y lo que arrastra: sale.brand_id, stock_movement, stock
+ * por local). NO siembra nada.
+ *
+ * CORTE (regla 6): la función se para en el último conteo de inventario cerrado
+ * — no reprocesa por debajo de una verdad de stock ya fijada. Las que quedan
+ * fuera vuelven en `ventasProtegidas`. Bajar del corte exige los dos parámetros
+ * extra de la RPC (p_incluir_bajo_conteo + p_ventas_esperadas con la cifra
+ * exacta), y eso NO se expone en esta pantalla a propósito: es una decisión con
+ * autorización explícita, no un botón.
+ *
+ * Los tipos generados (src/types/database.ts) van por detrás de la firma real
+ * —no traen ventas_protegidas ni corte_en, ni los dos parámetros nuevos—, así
+ * que la fila se lee por nombre contra el objeto crudo. La BBDD es la verdad.
+ */
+export async function recastLastappSales(accountId: string): Promise<RecastResult> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.rpc('recast_lastapp_sales', { p_account_id: accountId })
+  if (error) throw new Error(`Error recasando ventas: ${error.message}`)
+  const r = ((data as unknown as Row[] | null) ?? [])[0] ?? {}
+  return {
+    ventasProcesadas: num(r.ventas_procesadas),
+    ventasProtegidas: num(r.ventas_protegidas),
+    corteEn: (r.corte_en as string | null) ?? null,
+    lineasTotal: num(r.lineas_total),
+    lineasCasadas: num(r.lineas_casadas),
+    lineasNoBrand: num(r.lineas_no_brand),
+    lineasNoRecipe: num(r.lineas_no_recipe),
+    lineasNoMenuItem: num(r.lineas_no_menu_item),
+    lineasAmbiguous: num(r.lineas_ambiguous),
+    lineasRespetadas: num(r.lineas_respetadas),
+  }
 }
