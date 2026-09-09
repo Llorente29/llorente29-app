@@ -37,55 +37,66 @@ De las 560 `SECURITY DEFINER` nuestras:
 Leer sin permiso es un problema; **escribir** saltándose RLS es otro. Las 138 son el orden natural del
 barrido.
 
-## §3 · Y dentro de las 138, por TIPO de cerrojo
+## §3 · Dentro de las 138, por TIPO de cerrojo — CORREGIDO dos veces
 
-Porque una ACL abierta no es una puerta abierta si la función lleva cerrojo dentro:
+> **Este apartado se ha reescrito.** La primera versión decía «64 por sesión, 9 por parámetro». Estaba mal
+> dos veces, y las dos por medir con la vara torcida:
+>
+> 1. El patrón `current_user_is_admin` casaba también con `current_user_is_admin_or_manager_of`, así que
+>    funciones que usan la variante con parámetro se contaban como «por sesión».
+> 2. Y al mirar los ayudantes de verdad, resulta que `belongs_to_account(p_account_id)` y
+>    `current_user_is_admin_or_manager_of(p_account_id)` **miran `auth.uid()` por dentro**: el parámetro dice
+>    QUÉ CUENTA, no QUIÉN SOY. Son cerrojo de sesión, no de parámetro.
+>
+> Resolviendo los ayudantes a **dos niveles** —hizo falta: `_require_manage_admins()` llama a
+> `current_user_has_platform_permission()`, que es quien usa `auth.uid()`— el reparto real es:
 
 | | funciones | qué significa |
 |---|---|---|
-| **A · cerrojo por SESIÓN** | **64** | `auth.uid()`, `current_user_is_admin*`, `_require_*()`. No se puede mentir desde fuera. |
-| **B · cerrojo por PARÁMETRO** | **9** | `belongs_to_account(p_account)`, `_user_can_manage_admins(p_created_by)`. **Confía en que quien llama diga la verdad sobre quién es.** |
-| **C · por TOKEN en la firma** | **26** | tablet, repartidor, cliente. Camino público con llave, por diseño. |
-| **D · sin cerrojo reconocible** | **39** | ← lo que hay que mirar |
+| **cerrojo de SESIÓN** | **86** | acaban en `auth.uid()`. No se puede mentir desde fuera. |
+| **token en la firma** | **26** | tablet, repartidor, cliente. Público con llave, por diseño. |
+| **ni una cosa ni la otra** | **26** | ← las del triaje |
 
-**La categoría B merece nombre propio.** `create_platform_admin_tx` comprueba
-`_user_can_manage_admins(p_created_by)`: el permiso se verifica sobre el usuario que el LLAMADOR dice ser,
-no sobre la sesión. No es lo mismo que un cerrojo por sesión, y hoy están mezcladas.
+**Y la categoría «cerrojo por parámetro» es UNA sola función**, no nueve: `create_platform_admin_tx`, que
+comprueba `_user_can_manage_admins(p_created_by)` — sobre el usuario que el llamador DICE ser.
 
-## §4 · Las 39, y por qué son CANDIDATAS y no un veredicto
+## §4 · Las 26, triadas por QUIÉN LAS LLAMA
 
-> `_match_order_lines_for_order`, `adapt_hubrise_order`, `adapt_lastapp_order`, `add_ingredient_to_recipes`,
-> `apply_invoice_costs`, `auto_link_goods_receipt_to_order`, `build_inventory_count`, `cancel_sale`,
-> `claim_promo_push_jobs`, `close_inventory_count`, `close_sale`, `compliance_doc_mark_expired`,
-> `compute_sale_line_cost`, `customer_request_login`, `customer_verify_login`, `db_health_connection_guard`,
-> `delete_campaign`, `dispatch_watchdog_scan`, `enqueue_clockout_reminders`, `learn_from_receipt`,
-> `migrate_supplier_articles`, `place_shop_order`, `queue_ctb_order_claim`, `receive_goods_receipt`,
-> `register_shop_consent`, `remove_ingredient_from_recipes`, `reparto_award_quests`, `reparto_reoffer`,
-> `reparto_weather_apply`, `reparto_weather_poll`, `report_platform_floor`, `report_promo_push_job`,
-> `reprocess_sale`, `request_clock_correction`, `retire_stale_agent_shop_offers`, `run_invoice_match`,
-> `substitute_ingredient_in_recipes`, `swap_mirror`, `toggle_campaign`
+Medido en `cron.job`, en `src/` y en `supabase/functions/`. **Para Julio quedan 2 preguntas, no 39.**
 
-**Mi detector ya ha demostrado que sobre-avisa, y lo digo antes de que nadie actúe sobre la lista.** La
-primera versión daba 50 e incluía `set_platform_admin_role`, `create_platform_admin_tx` y `set_stock_level`.
-Las tres tienen cerrojo — vía `_require_manage_admins()`, `_user_can_manage_admins(p_created_by)` y
-`belongs_to_account(p_account)`— que mi expresión no conocía. Se validó la cabeza de la lista ANTES de
-entregarla, y por eso la lista de arriba tiene 39 y no 50.
+| montón | n | funciones | qué se hace |
+|---|---|---|---|
+| **cron y nadie más** | 6 | `db_health_connection_guard`, `dispatch_watchdog_scan`, `reparto_award_quests`, `reparto_reoffer`, `reparto_weather_apply`, `reparto_weather_poll` | revocar; el cron corre como `postgres` |
+| **edge function y nadie más** | 11 | `adapt_hubrise_order`, `adapt_lastapp_order`, `cancel_sale`, `close_sale`, `compliance_doc_mark_expired`, `create_platform_admin_tx`, `customer_request_login`, `customer_verify_login`, `enqueue_clockout_reminders`, `reprocess_sale`, `retire_stale_agent_shop_offers` | revocar; las edge usan `service_role` |
+| **sólo otras funciones SQL** | 1 | `auto_link_goods_receipt_to_order` | revocar |
+| **pantalla de gestión** | 3 | `apply_invoice_costs`, `compute_sale_line_cost`, `run_invoice_match` | quitar `anon`, **dejar `authenticated`** |
+| **tienda pública — DECISIÓN** | 2 | `place_shop_order`, `register_shop_consent` | ¿la tienda sigue sin login? |
+| **sin llamador conocido — CONFIRMAR** | 3 | `claim_promo_push_jobs`, `report_platform_floor`, `report_promo_push_job` | ¿los usa algo de fuera del repo? |
 
-Que haya fallado una vez significa que puede fallar otra: **quedan 39 para mirar UNA A UNA**, no 39
-agujeros. Varias tienen pinta de no ser alcanzables por `anon` aunque la ACL lo permita (funciones de cron
-como `dispatch_watchdog_scan` o `reparto_weather_poll`, o internas como `compute_sale_line_cost`), y otras
-son camino público legítimo (`place_shop_order`, `customer_request_login`). El trabajo es decidir cuál es
-cuál, y eso lo decide Julio, no un regex.
+**Hallazgo del triaje:** el login de la tienda (`customer_request_login`, `customer_verify_login`) **no lo
+llama el navegador** — lo llama la edge `shop-customer-auth`. El cliente habla con la edge, no con la RPC.
+Parecían camino público y no lo son.
+
+**`create_platform_admin_tx` merece párrafo.** Es la única con cerrojo por parámetro, y **no se puede pasar
+a cerrojo de sesión**: la llama la edge `create-platform-admin` con `service_role`, donde `auth.uid()` es
+NULL, y el `p_created_by` lo extrae la edge del JWT de quien llama — ahí está la autenticación de verdad. El
+diseño es correcto *a condición de que sólo la edge pueda llamarla*. Hoy puede `anon`, y entonces el cerrojo
+se convierte en «dime el uuid de alguien que pueda gestionar admins». Su arreglo es la revocación, no tocar
+la función.
 
 ## §5 · Qué haría falta de Julio
 
-1. **Qué debe ser público a propósito:** tienda (`place_shop_order`, `customer_*`, `register_shop_consent`),
-   seguimiento por token, tablet y repartidor. Con esa lista, todo lo demás se revoca de `anon` y
-   `authenticated` **por nombre** —que es la lección de hoy— y lo que se rompa aparece enseguida.
-2. **Si la categoría B (9) le parece aceptable** o hay que pasarlas a cerrojo por sesión.
-3. Nada de esto es urgente por sí solo, pero **el valor por defecto de la casa es abrir**, así que cada
-   función nueva nace en el lado malo. Lo barato es cambiar el defecto (`ALTER DEFAULT PRIVILEGES`) y
-   conceder por nombre; lo caro es revisar 1.446 una a una cada seis meses.
+Sólo esto:
 
-**Este documento no propone ninguna migración.** Es el mapa para decidir; el barrido va detrás de la lista
-del §5.1.
+1. **¿La tienda pública sigue funcionando sin login?** Si sí, `place_shop_order` y `register_shop_consent`
+   se quedan con `anon`. Es lo único de negocio.
+2. **¿Se usan `claim_promo_push_jobs`, `report_platform_floor`, `report_promo_push_job`?** No aparecen en
+   cron, ni en `src/`, ni en las edge. No puedo demostrar que nadie las llame desde fuera del repositorio.
+
+Todo lo demás va en `PENDIENTE_cerrar_funciones_de_escritura_a_anon.sql`, que cierra 21 y deja esas 5.
+
+## §6 · Y después: que una función nueva no nazca abierta
+
+`ALTER DEFAULT PRIVILEGES` para que `anon` y `authenticated` dejen de recibir `EXECUTE` por defecto. Cambia
+el nacimiento de TODA función futura, incluidas las que el front sí llama, así que va con su medición de los
+dos lados (regla 31) y detrás de este barrido. Pendiente de escribir.
