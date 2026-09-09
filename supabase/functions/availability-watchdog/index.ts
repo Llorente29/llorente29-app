@@ -27,6 +27,7 @@
 // Deploy: --no-verify-jwt (inocua; sin params externos, solo lee y alerta).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { encolarAlerta } from "../_shared/alerta.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,15 +48,14 @@ function json(o: Record<string, unknown>, status = 200): Response {
 }
 
 /**
- * Escala una alarma.
+ * Escala una alarma. SIEMPRE por la cola desde el 09/09.
  *
- * CON `debounceKind` va por la COLA (`_queue_system_alert`), que es lo que
- * hacen los demás vigías y lo que da el dedupe. SIN él sigue el camino directo
- * de antes, para no cambiar de golpe el comportamiento de los otros dos avisos
- * de este fichero, que no son estados permanentes.
- *
- * El 01/09 este vigía era el ÚNICO que se saltaba la cola, y por eso mandaba
- * 96 correos al día por una marca cerrada a propósito.
+ * El 01/09 este vigía era el ÚNICO que se saltaba la cola, y por eso mandaba 96
+ * correos al día por una marca cerrada a propósito. Aquel arreglo la usó sólo
+ * cuando se le pasaba `debounceKind`; sin clave seguía yendo por el POST
+ * directo, así que dos de sus tres avisos seguían sin antirruido y sin aparecer
+ * en ninguna tabla. Ahora no hay camino de salida: la puerta compartida deja el
+ * POST sólo como reserva para cuando la base no esté.
  *
  * La cola la vacía el cron `system-alert-queue-drain`, cada minuto — verificado
  * antes de mover nada aquí: pasar a una cola que nadie drena no habría sido
@@ -67,39 +67,24 @@ async function raiseAlert(
   kind: string,
   debounceKind?: string,
   debounceWindow = "24 hours",
+  campos?: { accountId?: string | null; locationId?: string | null; brandId?: string | null },
 ): Promise<void> {
-  if (debounceKind) {
-    try {
-      const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-      const { error } = await sb.rpc("_queue_system_alert", {
-        p_kind: kind,
-        p_subject: subject,
-        p_message: message,
-        p_debounce_kind: debounceKind,
-        p_debounce_window: debounceWindow,
-      });
-      if (error) {
-        console.error("availability-watchdog: fallo al encolar alarma", error);
-      }
-    } catch (e) {
-      console.error("availability-watchdog: fallo al encolar alarma", e);
-    }
-    return;
-  }
-
-  if (!CRON_SECRET) {
-    console.error("availability-watchdog: CRON_SECRET ausente -> no se pudo escalar alarma:", subject);
-    return;
-  }
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/system-alert`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET },
-      body: JSON.stringify({ subject, message, kind }),
-    });
-  } catch (e) {
-    console.error("availability-watchdog: fallo al escalar alarma", e);
-  }
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  // Un cierre olvidado es limpieza; que la disponibilidad no se propague corta
+  // ventas. No son lo mismo y no tienen por qué despertar a la misma hora.
+  const severity = kind === "brand-closure" ? "aviso" : "alto";
+  const r = await encolarAlerta(sb, {
+    kind,
+    subject,
+    message,
+    severity,
+    debounceKind: debounceKind ?? null,
+    debounceWindow,
+    accountId: campos?.accountId ?? null,
+    locationId: campos?.locationId ?? null,
+    brandId: campos?.brandId ?? null,
+  }, { supabaseUrl: SUPABASE_URL, cronSecret: CRON_SECRET });
+  console.log("availability-watchdog: alerta", kind, r);
 }
 
 /** Clave de dedupe con la fecha dentro, como el resto de la casa
@@ -207,6 +192,11 @@ const CLOSURE_DEBOUNCE_HOURS = 24;
 
 interface CierreVivo {
   id: string;
+  // Los ids van al aviso como CAMPOS. Este vigía era el único que ya decía el
+  // local, pero lo decía dentro del texto: imposible de filtrar o de contar.
+  account_id: string | null;
+  brand_id: string | null;
+  location_id: string | null;
   resume_at: string | null;
   set_at: string | null;
   reason: string | null;
@@ -221,7 +211,7 @@ async function checkStaleBrandClosures(
   // brand_closure es la única verdad del cierre, y trae el LOCAL.
   const { data: closed, error } = await sb
     .from("brand_closure")
-    .select("id, resume_at, set_at, reason, deliberate_at, brand(name), locations(name)")
+    .select("id, account_id, brand_id, location_id, resume_at, set_at, reason, deliberate_at, brand(name), locations(name)")
     .limit(200);
 
   if (error) {
@@ -264,6 +254,8 @@ async function checkStaleBrandClosures(
       `y este aviso deja de llegar.`,
       "brand-closure",
       claveDelDia("brand_closure_indefinido", c.id),
+      "24 hours",
+      { accountId: c.account_id, locationId: c.location_id, brandId: c.brand_id },
     );
   }
 
@@ -274,6 +266,8 @@ async function checkStaleBrandClosures(
       `HubRise ya la reabrió sola (expires_at): es limpieza de Folvy, no fallo de plataforma.`,
       "brand-closure",
       claveDelDia("brand_closure_vencido", c.id),
+      "24 hours",
+      { accountId: c.account_id, locationId: c.location_id, brandId: c.brand_id },
     );
   }
 

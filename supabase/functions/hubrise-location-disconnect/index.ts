@@ -42,6 +42,7 @@
 // Deploy SIN --no-verify-jwt.
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -71,20 +72,21 @@ function json(obj: unknown, status: number): Response {
   });
 }
 
-async function raiseAlert(subject: string, message: string): Promise<void> {
-  if (!CRON_SECRET) {
-    console.error("hubrise-location-disconnect: CRON_SECRET ausente -> no se pudo escalar alarma:", subject);
-    return;
-  }
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/system-alert`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET },
-      body: JSON.stringify({ subject, message, kind: "hubrise-revoke-pending" }),
-    });
-  } catch (e) {
-    console.error("hubrise-location-disconnect: fallo al escalar alarma", e);
-  }
+// Antes hacía `fetch` directo a `system-alert`, saltándose la cola. Severidad
+// `aviso`: el token no revocado es limpieza pendiente, no un corte de servicio.
+// Y este SÍ lleva cuenta y local, porque el sitio que lo llama los tiene.
+async function raiseAlert(sb: SupabaseClient, subject: string, message: string, accountId: string, locationId: string): Promise<void> {
+  const r = await encolarAlerta(sb, {
+    kind: "hubrise-revoke-pending",
+    subject,
+    message,
+    severity: "aviso",
+    debounceKind: claveDelDia("hubrise-revoke-pending", locationId),
+    debounceWindow: "24 hours",
+    accountId,
+    locationId,
+  }, { supabaseUrl: SUPABASE_URL, cronSecret: CRON_SECRET });
+  console.log("hubrise-location-disconnect: alerta", r);
 }
 
 Deno.serve(async (req: Request) => {
@@ -235,13 +237,15 @@ Deno.serve(async (req: Request) => {
   }
 
   if (!revoked) {
-    await raiseAlert(
+    await raiseAlert(sb,
       "Revocacion de token HubRise pendiente",
       `La conexion HubRise de la cuenta ${accountId} / local ${locationId} ` +
         `(external_location_id=${integ.external_location_id}) se desconecto localmente, ` +
         `pero la revocacion del token en HubRise fallo: ${revokeErrorMsg}.\n\n` +
         `El token SIGUE guardado (revoke_pending=true) para poder reintentar -- ` +
         `vuelve a invocar hubrise-location-disconnect con la misma cuenta/local.`,
+      accountId,
+      locationId,
     );
     return json({
       ok: true,

@@ -18,7 +18,8 @@
 // URL (secreta) y el cruce por externalId/orderId que solo Catcher conoce.
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
 
 function json(status: number, payload: unknown): Response {
   return new Response(JSON.stringify(payload), {
@@ -61,19 +62,30 @@ function parseDelivered(v: unknown): boolean | null {
   return null;
 }
 
-// Aviso al canal de sistema (email vía system-alert). Fire-and-forget defensivo:
-// NUNCA debe tumbar el webhook (si Catcher recibe 500 reintenta y duplica estado).
-async function raiseAlert(baseUrl: string, cronSecret: string, subject: string, message: string): Promise<void> {
-  if (!cronSecret) { console.log("CATCHER_ALERT_SKIP_NO_SECRET"); return; }
-  try {
-    await fetch(`${baseUrl}/functions/v1/system-alert`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-cron-secret": cronSecret },
-      body: JSON.stringify({ subject, message, kind: "catcher-delivery" }),
-    });
-  } catch (e) {
-    console.log("CATCHER_ALERT_FAIL", String(e));
-  }
+// Aviso al canal de sistema. Fire-and-forget defensivo: NUNCA debe tumbar el
+// webhook (si Catcher recibe 500 reintenta y duplica estado) — por eso la puerta
+// compartida no lanza nunca y devuelve qué ha pasado en vez de `void`.
+//
+// Antes hacía `fetch` directo a `system-alert`, saltándose la cola: sin
+// antirruido y sin aparecer en ninguna tabla. Es un webhook, así que un fallo
+// de Catcher podía repetirse a ritmo de pedidos. Severidad `alto`: afecta a
+// entregas, pero no corta la entrada de pedidos.
+async function raiseAlert(
+  sb: SupabaseClient,
+  baseUrl: string,
+  cronSecret: string,
+  subject: string,
+  message: string,
+): Promise<void> {
+  const r = await encolarAlerta(sb, {
+    kind: "catcher-delivery",
+    subject,
+    message,
+    severity: "alto",
+    debounceKind: claveDelDia("catcher-delivery", subject),
+    debounceWindow: "2 hours",
+  }, { supabaseUrl: baseUrl, cronSecret });
+  console.log("CATCHER_ALERT", r);
 }
 
 Deno.serve(async (req: Request) => {
@@ -135,7 +147,7 @@ Deno.serve(async (req: Request) => {
     // Evento de Catcher que no casa con ninguna venta = SEÑAL PERDIDA (posible fallo
     // invisible). Antes solo se logueaba; ahora también avisa por system-alert.
     console.log("CATCHER_WEBHOOK_NOMATCH", { orderId, externalId, rawStatus });
-    await raiseAlert(url, cronSecret,
+    await raiseAlert(sb, url, cronSecret,
       "Catcher: evento sin pedido (NOMATCH)",
       `Un evento de reparto de Catcher no casa con ninguna venta — posible señal perdida.\n` +
       `orderId=${orderId}\nexternalId=${externalId}\nestado=${rawStatus}\n\nRevisar el cruce externalId=sale.id con Catcher/Abdul.`);
@@ -211,7 +223,7 @@ Deno.serve(async (req: Request) => {
   // duplicados si Catcher reenvía). La alarma PRIMARIA en cocina (banner+sonido) la da
   // la Capa 2 leyendo delivery_state; esto es la red de respaldo para el encargado.
   if (state === "failed" && curDeliveryState !== "failed") {
-    await raiseAlert(url, cronSecret,
+    await raiseAlert(sb, url, cronSecret,
       `Reparto NO ENTREGADO · pedido ${saleId.slice(0, 8)}`,
       `Un pedido se ha marcado NO ENTREGADO (Catcher).\n` +
       `sale_id=${saleId}\n` +

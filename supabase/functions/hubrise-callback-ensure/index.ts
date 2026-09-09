@@ -32,9 +32,10 @@
 //
 // Deploy: --no-verify-jwt (inocua; solo repone NUESTRO callback -> NUESTRO webhook).
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { listActiveHubriseConnections } from "../_shared/hubriseToken.ts";
 import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
+import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,20 +71,19 @@ async function ensureForToken(token: string): Promise<{ outcome: EnsureOutcome; 
 }
 
 // Escala una alarma de sistema (email a operaciones). No bloquea si falta config.
-async function raiseAlert(subject: string, message: string): Promise<void> {
-  if (!CRON_SECRET) {
-    console.error("callback-ensure: CRON_SECRET ausente -> no se pudo escalar alarma:", subject);
-    return;
-  }
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/system-alert`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET },
-      body: JSON.stringify({ subject, message, kind: "hubrise-callback" }),
-    });
-  } catch (e) {
-    console.error("callback-ensure: fallo al escalar alarma", e);
-  }
+// Antes hacía `fetch` directo a `system-alert`, saltándose la cola: sin
+// antirruido y sin aparecer en ninguna tabla. Severidad `alto`: sin callback la
+// disponibilidad deja de propagarse, pero no tumba los pedidos.
+async function raiseAlert(sb: SupabaseClient, subject: string, message: string): Promise<void> {
+  const r = await encolarAlerta(sb, {
+    kind: "hubrise-callback",
+    subject,
+    message,
+    severity: "alto",
+    debounceKind: claveDelDia("hubrise-callback"),
+    debounceWindow: "6 hours",
+  }, { supabaseUrl: SUPABASE_URL, cronSecret: CRON_SECRET });
+  console.log("callback-ensure: alerta", r);
 }
 
 interface WorkItem {
@@ -172,7 +172,7 @@ Deno.serve(async (req: Request) => {
 
   // Alarma agregada si algún token está muerto (401): hay que re-autorizar OAuth.
   if (dead.length > 0) {
-    await raiseAlert(
+    await raiseAlert(sb,
       "Token HubRise caducado (401)",
       `El callback NO puede garantizarse en ${dead.length} conexión(es) por token 401. ` +
       `Re-autoriza OAuth (oob) y actualiza external_integration.access_token.\n\n` +
