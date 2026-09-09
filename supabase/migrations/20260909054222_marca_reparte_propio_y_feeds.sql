@@ -2,8 +2,12 @@
 -- KDS · «no aplica» no es «ha fallado» — una sola definición de quién reparte
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Nombre provisional: se renombra a la versión que registre la
--- base (regla 17). Va ANTES del bundle: el front de este arreglo lee un campo
+-- ✅ APLICADA el 09/09/2026 por MCP, con Julio delante (F2). La base la
+-- registró como 20260909054222 y el fichero lleva ya ese nombre (regla 17).
+-- Huellas DESPUÉS de aplicar, medidas:
+--   resolve_dispatch      5ed12f15  4657 chars
+--   orders_feed           6ab77b7c  9052 chars
+--   orders_feed_by_token   095016d0  8427 chars Va ANTES del bundle: el front de este arreglo lee un campo
 -- que sale de aquí. Si se publica el bundle sin aplicar esto, el campo llega
 -- `undefined` y la pantalla se queda como está (no rompe, pero no arregla).
 --

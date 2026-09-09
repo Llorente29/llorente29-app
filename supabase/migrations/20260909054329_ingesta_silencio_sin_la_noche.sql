@@ -2,8 +2,10 @@
 -- Vigía de silencio · que la primera pasada del día no cuente la noche
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Nombre provisional: se renombra a la versión que registre la
--- base al aplicarla (regla 17). Luz verde de Julio (08/09) para sacarlo YA,
+-- ✅ APLICADA el 09/09/2026 por MCP, con Julio delante (F2). La base la
+-- registró como 20260909054329 y el fichero lleva ya ese nombre (regla 17).
+-- Huellas DESPUÉS de aplicar, medidas:
+--   ingesta_silencio_watchdog  739aea30b0e19356c1181fb3d18af0bd  4814 chars Luz verde de Julio (08/09) para sacarlo YA,
 -- aparte del estándar de alertas.
 --
 -- ── EL FALLO, MEDIDO ──────────────────────────────────────────────────────
