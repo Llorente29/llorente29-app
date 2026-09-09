@@ -3,8 +3,24 @@
 -- deja de avisar de cuentas que no operan
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Va DESPUÉS de `20260909145156_alertas_paso6_dbhealth_y_actividad`:
--- ancla contra el cuerpo que dejó aquélla. Nombre provisional (regla 17).
+-- ✅ APLICADA el 09/09 como `20260909162931`. Va después de
+-- `20260909145156_alertas_paso6_dbhealth_y_actividad`: ancla contra el cuerpo
+-- que dejó aquélla.
+--
+-- ── COMPROBADO A LOS DOS LADOS ──────────────────────────────────────────
+-- Las dos huellas se predijeron ANTES de aplicar, desde copias de ensayo con
+-- los seis bloques byte a byte de este fichero, y cuadran al byte:
+--
+--   db_health_watchdog ........ 11.588 chars · 6addfeec6c5014615d88de41c64f151a
+--   ingesta_silencio_watchdog . 12.626 chars · 4dace4648ef7320ffa92061e0adbabfc
+--
+-- Y Julio corrió las dos funciones a mano después: 0 avisos, **con el registro
+-- llenándose igual**. Esa segunda mitad es la que importa — es la comprobación
+-- de regla 7 que va abajo, en «DESPUÉS DE APLICAR» punto 3: esto filtra el
+-- AVISO, no esconde el HECHO. `print_route_failure_log` sigue recibiendo sus
+-- filas de Kitchen Grill; lo que ya no sale es el correo. Si el registro
+-- hubiera dejado de llenarse, habríamos escondido el problema en vez de dejar
+-- de gritarlo, y las dos cosas se ven igual desde la bandeja de entrada.
 --
 -- Cuatro decisiones de Julio (09/09), las cuatro en el mismo cuerpo:
 --
