@@ -207,6 +207,88 @@ const AMBITO: Record<string, string | null> = {
   combo_slot_option: null,
 };
 
+// ── Comprobar la clave contra la base ANTES de tocar nada ────────────────
+//
+// La tabla de arriba dice con qué clave decide ESTE código. `pg_index` dice con
+// cuál decide la BASE. El 09/09 no coincidían y la primera importación de
+// verdad murió a mitad, con 112 categorías y 166 platos ya escritos y los
+// combos sin entrar. Esto se pregunta al arrancar, antes de la primera llamada
+// a Last, para que ese fallo pase de «a mitad y con un duplicate key» a «no ha
+// empezado y te dice exactamente qué no cuadra».
+//
+// VERIFICA, NO DERIVA. La clave sigue declarada arriba, a la vista, y esto sólo
+// comprueba que sigue siendo la de la base. Derivarla del índice haría que el
+// comportamiento cambiara solo el día que alguien toca un índice — que es justo
+// el día en que hace falta que alguien mire.
+//
+// Y el techo, dicho: esto cubre lo que uno sabe preguntar. No habría cazado la
+// columna `updated_at` que faltaba en `combo_slot_option`, porque a nadie se le
+// ocurrió preguntarlo. Por eso la otra mitad del arreglo es que, cuando algo se
+// escape igualmente, el error hable claro: ver el `pista` del insert.
+const TABLAS_CON_CLAVE_EXTERNA = [
+  "menu_category", "menu_item", "modifier_group",
+  "modifier_option", "combo_slot", "combo_slot_option",
+] as const;
+
+interface ClaveDeLaBase {
+  tabla: string;
+  indice: string;
+  columnas: string[];
+  parcial: boolean;
+}
+
+/** Lo que ESTE código usa como clave, en las mismas columnas que un índice. */
+function claveDelCodigo(tabla: string): string[] {
+  const ambito = AMBITO[tabla] ?? null;
+  // `account_id` y `external_source` los fija cada consulta de existencia
+  // (`.eq("account_id", …)`, `.eq("external_source", "lastapp")`), así que
+  // forman parte de la clave aunque no aparezcan en AMBITO.
+  return ["account_id", "external_source", "external_id", ...(ambito ? [ambito] : [])];
+}
+
+async function verificaClavesContraLaBase(sb: SupabaseClient): Promise<ClaveDeLaBase[]> {
+  const { data, error } = await sb.rpc("claves_unicas_externas", {
+    p_tablas: [...TABLAS_CON_CLAVE_EXTERNA],
+  });
+
+  if (error) {
+    const falta = /does not exist|could not find|schema cache/i.test(error.message);
+    throw new Error(
+      falta
+        ? "No se puede comprobar con qué clave decide la base: falta la función " +
+          "public.claves_unicas_externas. Es la migración 20260909081014, y va ANTES " +
+          "de desplegar este importador. No se ha escrito nada."
+        : `No se pudo comprobar la clave contra la base: ${error.message}. No se ha escrito nada.`,
+    );
+  }
+
+  const deLaBase = (data ?? []) as ClaveDeLaBase[];
+  for (const tabla of TABLAS_CON_CLAVE_EXTERNA) {
+    const fila = deLaBase.find((f) => f.tabla === tabla);
+    if (!fila) {
+      throw new Error(
+        `La base no tiene ningún índice único sobre external_id en ${tabla}, ` +
+        `y este importador decide existencia con «${claveDelCodigo(tabla).join(" + ")}». ` +
+        `Sin índice, nada impide dos filas para la misma de Last. No se ha escrito nada.`,
+      );
+    }
+    // Se comparan como CONJUNTO: el orden dentro del índice cambia para qué
+    // consultas sirve, no qué filas considera iguales.
+    const mia = [...claveDelCodigo(tabla)].sort().join(",");
+    const suya = [...fila.columnas].sort().join(",");
+    if (mia !== suya) {
+      throw new Error(
+        `El importador decide existencia en ${tabla} con «${claveDelCodigo(tabla).join(" + ")}» ` +
+        `y la base la decide con «${fila.columnas.join(" + ")}» ` +
+        `(índice ${fila.indice}${fila.parcial ? ", parcial" : ""}). ` +
+        `No se ha escrito nada. Alinea AMBITO en lastapp-catalog-import/index.ts ` +
+        `o cambia el índice, pero no las dos a la vez.`,
+      );
+    }
+  }
+  return deLaBase;
+}
+
 interface ContadorTabla {
   nuevas: number;
   actualizadas: number;
@@ -454,9 +536,26 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // ANTES de la primera llamada a Last: si la clave no es la de la base, aquí
+  // no ha pasado nada todavía y se puede decir por qué sin dejar el catálogo a
+  // medias. Se comprueba también en dry_run: un ensayo que no valida la clave
+  // no está ensayando la pasada de verdad.
+  let clavesDeLaBase: ClaveDeLaBase[];
+  try {
+    clavesDeLaBase = await verificaClavesContraLaBase(sb);
+  } catch (e) {
+    return jsonResponse({ ok: false, error: String(e instanceof Error ? e.message : e) }, 409);
+  }
+
   const report: any = {
     dry_run: dryRun,
     aplicar_activo: aplicarActivo,
+    // Con qué clave se ha comprobado que decide la base en esta pasada. Va en
+    // el informe a propósito: una comprobación que no se ve no tranquiliza a
+    // nadie, y el día que cambie un índice el informe lo enseña.
+    claves_verificadas: clavesDeLaBase.map((c) =>
+      `${c.tabla}: ${c.columnas.join(" + ")} (${c.indice})`
+    ),
     brands_in_use: [] as string[],
     brands_skipped_empty: [] as string[],
     brands_unresolved: [] as string[],
