@@ -16,50 +16,43 @@
 //   SYSTEM_ALERT_TO  -- destino de las alarmas de operaciones (email)
 //   CRON_SECRET      -- secreto compartido cron <-> functions internas
 //
-// Cuerpo esperado (JSON): { "subject": string, "message": string, "kind"?: string }
+// ── LA PLANTILLA ÚNICA (09/09, paso 4 del estándar de alertas) ────────────
+// El asunto y el pie se COMPONEN aquí, desde campos, con una sola plantilla.
+// Ningún vigía vuelve a escribir su propio «[Negocio · Local]»: lo pone esto,
+// igual para todos, o no lo pone nadie. Así el estándar se cumple por
+// construcción y no vigía a vigía.
+//
+// Los campos los resuelve el drenaje (`system_alert_queue_drain`), que es quien
+// tiene las tablas para convertir `account_id`/`location_id`/`brand_id` en
+// nombres. Aquí sólo se pinta.
+//
+// Cuerpo esperado (JSON):
+//   { subject, message, kind?, severity?, negocio?, local?, marca?,
+//     alerta_id?, creado_at? }
+//
+// LOS CAMPOS NUEVOS SON OPCIONALES A PROPÓSITO: la reserva de
+// `_shared/alerta.ts` —el POST directo para cuando la base no está— sólo puede
+// mandar subject/message/kind. Si esto exigiera los campos, el único aviso que
+// importa de verdad (la base caída) sería el único que no saldría.
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { componerCorreo } from "../_shared/plantillaAlerta.ts";
+
+// El remitente y el «responder a» se quedan aquí, en la frontera: son del
+// canal de correo, no de la plantilla.
+const FROM = "Folvy Alertas <no-reply@folvy.app>";
+const REPLY_TO = "jgcolon@idasal.com";
 
 interface AlertBody {
   subject?: string;
   message?: string;
   kind?: string;
-}
-
-const FROM = "Folvy Alertas <no-reply@folvy.app>";
-const REPLY_TO = "jgcolon@idasal.com";
-
-// Origen visible en el pie del correo — derivado de `kind`, nunca fijo.
-// Antes decía "vigilante de ingesta (Folvy)" en TODOS los avisos, incluidos
-// los del vigía de salud de BBDD (kind='db-health*'), que es un sistema
-// distinto — en una alerta real de madrugada ese pie manda a mirar donde no
-// es. Lista cerrada de kinds conocidos (11/08); el fallback nunca afirma un
-// origen que no se puede verificar, muestra el kind crudo en su lugar.
-function originFor(kind: string): string {
-  if (kind.startsWith("db-health")) return "vigía de salud de BBDD (Folvy)";
-  if (kind === "synthetic_ping") return "vigilante de ingesta — ping sintético (Folvy)";
-  if (kind === "catcher-delivery") return "Catcher — entregas de pedidos (Folvy)";
-  if (kind === "hubrise-callback") return "HubRise — callback de disponibilidad (Folvy)";
-  if (kind === "hubrise-connection-health") return "HubRise — salud de token por conexión (Folvy)";
-  if (kind === "hubrise-revoke-pending") return "HubRise — revocación de token pendiente (Folvy)";
-  if (kind === "availability-dispatch" || kind === "location-status-dispatch" || kind === "brand-closure") {
-    return "vigía de disponibilidad HubRise (Folvy)";
-  }
-  // B61 (04/09). El pie decía «kind sin mapear» en 6 de los 8 tipos que de
-  // verdad se usan — 80 de los 89 avisos encolados, incluidos los 34 de
-  // ingesta_silencio. Un aviso que se ve a medio hacer se acaba ignorando, y
-  // entonces el vigía deja de servir aunque funcione.
-  if (kind === "edge_drift") return "vigía de deriva de Edge Functions (Folvy)";
-  if (kind === "ingesta_silencio") return "vigía de silencio de ingesta (Folvy)";
-  if (kind === "venta_producto_sin_casar") return "vigía de ventas sin casar (Folvy)";
-  if (kind === "kds_device_silencio") return "vigía de tablets mudas (Folvy)";
-  if (kind === "kds_device_desfasado") return "vigía de bundle desfasado en tablet (Folvy)";
-  if (kind === "autoinventario") return "autoinventario — cola de conteos (Folvy)";
-  if (kind === "cost_sweep") return "barrido nocturno de costes de línea (Folvy)";
-  if (kind === "impresora_muda") return "vigía de impresoras (Folvy)";
-  // El fallback se queda: nunca afirma un origen que no se puede verificar.
-  // Que salga es la señal de que hay un vigía nuevo sin dar de alta aquí.
-  return `Folvy — kind sin mapear: "${kind}"`;
+  severity?: string | null;
+  negocio?: string | null;
+  local?: string | null;
+  marca?: string | null;
+  alerta_id?: number | null;
+  creado_at?: string | null;
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -103,14 +96,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json(500, { ok: false, error: "missing_config" });
   }
 
-  const kind = (body.kind ?? "system").trim();
-  const prefixedSubject = `[Folvy · alerta] ${subject}`;
-  const text =
-    `${message}\n\n` +
-    `— — —\n` +
-    `Tipo: ${kind}\n` +
-    `Enviado: ${new Date().toISOString()}\n` +
-    `Origen: ${originFor(kind)}`;
+  const { asunto, text, html } = componerCorreo({
+    subject, message,
+    kind: body.kind,
+    severity: body.severity,
+    negocio: body.negocio,
+    local: body.local,
+    marca: body.marca,
+    alerta_id: body.alerta_id,
+    creado_at: body.creado_at,
+  });
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -123,8 +118,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         from: FROM,
         to: [to],
         reply_to: REPLY_TO,
-        subject: prefixedSubject,
+        subject: asunto,
         text,
+        html,
       }),
     });
 

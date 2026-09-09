@@ -246,7 +246,10 @@ async function checkStaleBrandClosures(
   // de otro que no tiene nada que ver con él.
   for (const c of indefinite) {
     await raiseAlert(
-      `Marca cerrada sin fecha: ${nombre(c)}`,
+      // Sin `${nombre(c)}`: la marca y el local van como CAMPOS y la plantilla
+      // los pone delante. Dejarlos aquí daría «[Foodint · Alcalá] Marca cerrada
+      // sin fecha: Meraki Pita · Foodint Alcalá», que es lo mismo dos veces.
+      `Marca cerrada sin fecha`,
       `${nombre(c)} lleva cerrada desde ${c.set_at} sin fecha de reapertura ` +
       `(más de ${INDEFINITE_CLOSURE_ALERT_HOURS}h). Sin expires_at NO se reabre sola en HubRise.\n` +
       `Motivo: ${c.reason ?? "(sin motivo)"}\n\n` +
@@ -261,7 +264,7 @@ async function checkStaleBrandClosures(
 
   for (const c of expired) {
     await raiseAlert(
-      `Cierre vencido sin reabrir: ${nombre(c)}`,
+      `Cierre vencido sin reabrir`,
       `${nombre(c)} debía reabrir el ${c.resume_at} y sigue cerrada en Folvy. ` +
       `HubRise ya la reabrió sola (expires_at): es limpieza de Folvy, no fallo de plataforma.`,
       "brand-closure",
