@@ -2,7 +2,39 @@
 -- Cerrar a `anon` las funciones que escriben y no son camino público
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Se renombra a la versión que registre la base (regla 17).
+-- ⚠️ APLICADA el 09/09/2026 como 20260909085142 — Y NO CERRÓ NADA.
+--
+-- Este fichero se queda TAL CUAL, con su error dentro. Lo arregla el siguiente
+-- (20260909085337), no se reescribe aquí: corregirlo en el sitio dejaría el repo
+-- diciendo que salió bien.
+--
+-- ── LO QUE FALLÓ, Y ES EL ESPEJO DEL FALLO DE ESTA MAÑANA ─────────────────
+--
+-- El ACL de esta base es `{=X/postgres, postgres=X/postgres, service_role=X/postgres}`.
+-- Esa primera entrada, con el concedido VACÍO, es **PUBLIC** — y PUBLIC incluye
+-- a `anon`. En la mayoría de las 21 NO HABÍA ninguna entrada `anon=` que
+-- revocar: el acceso venía entero de PUBLIC. Así que estos `REVOKE … FROM anon`
+-- no quitaron nada, y 18 de las 21 seguían siendo ejecutables por `anon`.
+--
+-- ── Y POR QUÉ MI VERIFICACIÓN DIJO OK ─────────────────────────────────────
+--
+-- Porque miraba `proacl::text like '%anon=%'`. **Un ACL sin `anon=` no dice que
+-- anon no pueda; dice que no tiene entrada propia.** Comprobé la forma del
+-- texto en vez del permiso efectivo, que es lo único que decide.
+--
+-- Esta mañana escribí `REVOKE … FROM public` creyendo que bastaba, y hacía
+-- falta nombrar a anon y authenticated. Aquí nombré a anon y authenticated
+-- creyendo que bastaba, y hacía falta PUBLIC. La misma suposición, del revés,
+-- el mismo día. Lo cazó Julio comprobando el permiso efectivo después de
+-- aplicar.
+--
+-- ── LA RECETA, para que no haya tercera vez ───────────────────────────────
+--
+--   revoke execute on function public.<fn>(<firma>) from public, anon, authenticated;
+--
+--   y verificar SIEMPRE con has_function_privilege('anon', oid, 'EXECUTE'),
+--   NUNCA con el texto del ACL.
+--
 --
 -- ── DE DÓNDE SALE ─────────────────────────────────────────────────────────
 --

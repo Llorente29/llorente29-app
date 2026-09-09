@@ -1,5 +1,35 @@
 # RECON · Permisos de las funciones de `public` — el corte accionable
 
+> ## §0 · LA RECETA, ganada a base de fallar dos veces el mismo día
+>
+> ```sql
+> revoke execute on function public.<fn>(<firma>) from public, anon, authenticated;
+> ```
+> **y verificar SIEMPRE con `has_function_privilege('anon', oid, 'EXECUTE')`, NUNCA con el texto del ACL.**
+>
+> Por qué las dos mitades:
+>
+> - **`from public, anon, authenticated`** — hacen falta los tres. El ACL de esta base es
+>   `{=X/postgres, postgres=X/postgres, …}`; esa primera entrada, con el concedido VACÍO, es **PUBLIC**, y
+>   PUBLIC incluye a `anon`. Por la mañana revoqué de PUBLIC creyendo que bastaba y hacían falta los
+>   nombres; por la tarde revoqué de los nombres creyendo que bastaba y hacía falta PUBLIC. **La misma
+>   suposición, del revés, el mismo día.**
+> - **`has_function_privilege`** — un ACL **sin** `anon=` no dice que anon no pueda: dice que no tiene
+>   entrada propia. Mi verificación miraba `proacl::text like '%anon=%'`, dio OK, y 18 de 21 seguían
+>   abiertas. Comprobé la forma del texto en vez del permiso efectivo, que es lo único que decide.
+>
+> Es la regla 39 otra vez, en su forma más literal: **la vara la elige la base.** El permiso efectivo lo
+> resuelve Postgres, así que se le pregunta a Postgres.
+>
+> ### Y una corrección del triaje, que habría roto algo
+>
+> `claim_promo_push_jobs`, `report_platform_floor` y `report_promo_push_job` **no eran «sin llamador
+> conocido»**: sus firmas empiezan por `p_secret` y autentican contra
+> `offers_agent_config.push_agent_secret`. Son categoría TOKEN, y su llamador está **fuera del repositorio**
+> (el agente de promociones, con su llave). Revocarlas habría roto el agente. **La prueba estaba en la
+> firma** —`claim_promo_push_jobs(text, text, integer)`— y no la miré: busqué el llamador en `src/` y en las
+> edge, no lo encontré, y escribí «no lo llama nadie» en vez de «no lo llama nada de lo que he mirado».
+
 **Fecha:** 09/09/2026 · **Escribe:** nada. Lectura pura sobre `pg_proc`, `pg_depend` y las ACL.
 **Origen:** la migración `20260909081014` declaró un permiso que no consiguió (`REVOKE FROM PUBLIC` no
 quita los GRANT explícitos a `anon`/`authenticated`), Julio lo cazó y midió el patrón. Esto afina el corte.
