@@ -1,15 +1,32 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- «Sembrar escandallos» · CORRECCIÓN — la guarda va en el ORIGEN, no en la marca
+-- APLICADA el 09/09 por Julio (F2) · versión 20260909105036
+-- «Sembrar escandallos» · la guarda va en el ORIGEN, no en la etiqueta de la marca
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Va DETRÁS de 20260909101510, que ya está aplicada y que esta
--- sustituye entera. Nombre provisional: se renombra a la versión que registre
--- la base (regla 17). Transaccional: o entra entera o no entra.
+-- Sustituye entera a 20260909101510. Lo aplicado ES lo que hay aquí, en bruto y
+-- con los comentarios dentro: md5 854392d4f57e123dd0c338143d3da5d9, 11.192
+-- caracteres, el fichero y `pg_proc.prosrc` idénticos. Una firma,
+-- `SECURITY DEFINER`, `search_path=public`, `anon` no puede ejecutarla y
+-- `authenticated` sí (verificado con `has_function_privilege`).
 --
 -- ── QUÉ ARREGLA, EN UNA FRASE ─────────────────────────────────────────────
--- Lo aplicado esta mañana crea 17 platos, y NUEVE son de un catálogo muerto.
--- Con esto son 8 y ninguno. La guarda deja de preguntar «¿de quién dice la
--- marca que es?» y pregunta «¿de dónde salió este dato?».
+-- La versión anterior creaba 17 platos y NUEVE eran de un catálogo muerto. La
+-- guarda deja de preguntar «¿de quién dice la marca que es?» y pregunta «¿de
+-- dónde salió este dato?».
+--
+-- ── EL FALLO DE ESTE FICHERO AL APLICARLO, PARA QUE NO SE REPITA ──────────
+-- La primera vez NO aplicó. El `DROP` nombraba `seed_catalog_canonical(uuid)`,
+-- que era la firma viva cuando escribí el fichero — pero para cuando se aplicó,
+-- 20260909101510 ya había cambiado la firma a `(uuid, boolean, interval)`. El
+-- drop de la firma vieja es un no-op silencioso y el `CREATE` se estrella con
+-- `already exists with same argument types`. Julio añadió el drop que faltaba.
+--
+-- La lección es de la misma familia que la regla 2: **una migración que hace
+-- DROP+CREATE tiene que nombrar la firma que estará viva EN EL MOMENTO DE
+-- APLICARSE, no la que había cuando se escribió.** Con dos migraciones de la
+-- misma función en vuelo el mismo día, eso cambia entre una y otra. Van las dos
+-- firmas abajo: la segunda es la que hace el trabajo, la primera se queda por si
+-- alguna vez se reproduce el historial desde cero.
 --
 -- ── LO QUE HACE HOY, MEDIDO SOBRE FOODINT EL 09/09 (regla 9: sólo Foodint) ─
 --
@@ -126,37 +143,44 @@
 -- Receta del 09/09: revocar de PUBLIC **y** de los nombres, y verificar con
 -- `has_function_privilege`, nunca con `proacl::text`.
 --
--- ── YA ESTÁ PROBADA. NO A MANO: LA FUNCIÓN, CORRIENDO ─────────────────────
--- Este cuerpo exacto se creó como copia desechable —`_prueba_seed_ensayo`, sin
--- SECURITY DEFINER y revocada de public/anon/authenticated—, se corrió en
--- ensayo sobre Foodint y se borró (quedan 0 copias). Devuelve:
+-- ── LO QUE DEVUELVE HOY, MEDIDO (y por qué cambió desde que se escribió) ──
+-- El ensayo se probó antes de aplicar con una copia desechable —sin SECURITY
+-- DEFINER, revocada de public/anon/authenticated, borrada después— y daba
+-- 307 / 8 / 18 / 74 / 0 / 12. Esas cifras YA NO SALEN, y no porque la función
+-- cambiara: entre medias Julio apagó «Lobbers» (`brand.is_active=false` y sus 3
+-- `brand_location_availability`), confirmada muerta. Al no resolver ya la marca,
+-- sus matrículas salen por la primera puerta en vez de por la de origen:
 --
---   matriculas_miradas ................. 419
---   base_ya_existentes ................. 307
---   productos_base_creados .............   8
---   saltados_sin_marca .................  18   marcas_sin_resolver = {Van Van}
---   saltados_por_integracion_no_cedida ..  74   {Smash Brothers Burgers, Lobbers,
---                                              Meraki Pita, Dirty Burgers,
---                                              Milanesa House, Bendito Burrito}
---   saltados_por_ser_propia ............   0   (la de origen ya los cogió)
---   saltados_por_no_estar_en_la_foto ...  12
---   ─────────────────────────────────────────
---   suma ............................... 419  = matriculas_miradas
+--                                        antes de apagarla    ahora
+--   matriculas_miradas .................      419              419
+--   base_ya_existentes .................      307              303
+--   productos_base_creados .............        8                8   ← igual
+--   saltados_sin_marca .................       18               31
+--   saltados_por_integracion_no_cedida .       74               65
+--   saltados_por_ser_propia ............        0                0
+--   saltados_por_no_estar_en_la_foto ...       12               12
+--   ────────────────────────────────────────────────────────────────
+--   suma ...............................      419              419
 --
---   overrides_creados ..................  21
---   overrides_de_foto_vieja ............   0
---   productos_sin_revisar_precios ...... 132
+--   overrides_creados ..................       21               21   ← igual
+--   overrides_de_foto_vieja ............        0                0
+--   productos_sin_revisar_precios ......      132              128
 --
--- Y NO ESCRIBIÓ NADA, medido a los dos lados con la misma vara (regla 31), en
--- la misma sentencia que la llamó:
+--   marcas_sin_resolver ................ {Van Van} → {Lobbers, Van Van}
+--   marcas_de_integracion_no_cedida .... 6 marcas  → 5 (sale Lobbers)
 --
---   recipe_item .......... 394 → 394   (decía que crearía 8)
---   menu_item ............ 633 → 633
---   menu_item_override ...  58 →  58   (decía que crearía 21)
+-- Los 13 que se mueven son de Lobbers: 9 que la guarda de origen bloqueaba y 4
+-- que contaban como «ya existentes». Los 8 a crear NO se mueven, que es la
+-- señal de que la guarda hace su trabajo por el origen y no por la etiqueta.
+-- Las 194 ventas históricas de Lobbers siguen enteras y siguen contando: los
+-- informes filtran por `sale.is_active`, no por la marca.
 --
--- Prueba de más, y la que menos se puede falsear: dos pasadas seguidas del
--- ensayo dieron las MISMAS 307 ya existentes y los MISMOS a crear. Si la
--- primera hubiera escrito, la segunda habría dicho otra cosa.
+-- SI EL ENSAYO DEVUELVE LA COLUMNA DE LA IZQUIERDA, ES QUE LOBBERS VOLVIÓ A
+-- ACTIVARSE. No es un fallo de la función: es una pregunta para quien la mire.
+--
+-- Y en su día se comprobó que el ensayo NO ESCRIBE, a los dos lados y en la
+-- misma sentencia (regla 31): recipe_item 394→394, menu_item 633→633,
+-- menu_item_override 58→58, mientras decía que crearía 8 y 21.
 --
 -- ── LOS 12 QUE SE QUEDAN FUERA POR LA FOTO (todos de Cloudtown, la viva) ──
 --   Chivuos ......... Pack Single Hero · Pack Chicken Single Hero ·
@@ -185,7 +209,10 @@
 
 begin;
 
+-- Las dos firmas. La de tres argumentos es la que existe hoy (la dejó
+-- 20260909101510); la de uno, por si se reproduce el historial desde cero.
 drop function if exists public.seed_catalog_canonical(uuid);
+drop function if exists public.seed_catalog_canonical(uuid, boolean, interval);
 
 create function public.seed_catalog_canonical(
   p_account_id  uuid,

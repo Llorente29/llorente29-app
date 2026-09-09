@@ -24,9 +24,9 @@
 //             corte_en timestamptz, lineas_total int, lineas_casadas int,
 //             lineas_no_brand int, lineas_no_recipe int, lineas_no_menu_item int,
 //             lineas_ambiguous int, lineas_respetadas int)
-// Y FILA_SEED no es un ejemplo: es la fila que devolvió el ensayo corriendo
-// contra Foodint el 09/09, copiada tal cual. Las de recast son las medidas del
-// mismo día (8.245 ventas protegidas por el corte).
+// Y FILA_SEED no es un ejemplo: son las cifras medidas contra Foodint el 09/09
+// DESPUÉS de aplicar 20260909105036 y de apagar «Lobbers», copiadas tal cual.
+// Las de recast son las medidas del mismo día (8.245 ventas protegidas).
 //
 // OJO al ámbito, que es lo que hace falsable esta prueba: de recast, solo
 // `ventas_protegidas` y `corte_en` hablan de la pasada. Las `lineas_*` son el
@@ -48,21 +48,25 @@ const CUENTA = '11111111-1111-1111-1111-111111111111'
 const FILA_SEED = {
   dry_run: true,
   matriculas_miradas: 419,
-  base_ya_existentes: 307,
+  base_ya_existentes: 303,
   productos_base_creados: 8,
   overrides_creados: 21,
   overrides_de_foto_vieja: 0,
-  productos_sin_revisar_precios: 132,
-  saltados_sin_marca: 18,
-  saltados_por_integracion_no_cedida: 74,
+  productos_sin_revisar_precios: 128,
+  // Lobbers está apagada (brand.is_active=false) desde que se confirmó muerta,
+  // así que sus matrículas ya no resuelven marca y salen por la PRIMERA puerta,
+  // no por la de origen. De ahí 31 en vez de 18 y 65 en vez de 74: se mueven 13
+  // (9 que bloqueaba la guarda de origen + 4 que contaban como ya existentes).
+  // Los 8 a crear NO se mueven, que es la señal de que la guarda mira el origen
+  // del dato y no la etiqueta de la marca.
+  saltados_sin_marca: 31,
+  saltados_por_integracion_no_cedida: 65,
   saltados_por_ser_propia: 0,
   saltados_por_no_estar_en_la_foto: 12,
-  marcas_sin_resolver: ['Van Van'],
-  // Lobbers va AQUÍ y no en la lista de propias: su brand.ownership_type dice
-  // 'licensed'. Lo que la bloquea es de dónde viene el dato, no su etiqueta.
+  marcas_sin_resolver: ['Lobbers', 'Van Van'],
   marcas_de_integracion_no_cedida: [
-    'Smash Brothers Burgers', 'Lobbers', 'Meraki Pita', 'Dirty Burgers',
-    'Milanesa House', 'Bendito Burrito',
+    'Bendito Burrito', 'Dirty Burgers', 'Meraki Pita', 'Milanesa House',
+    'Smash Brothers Burgers',
   ],
   marcas_propias_saltadas: [],
   no_en_la_foto: [
@@ -114,13 +118,13 @@ describe('seedCatalogCanonical', () => {
     const r = await seedCatalogCanonical(CUENTA, true)
     expect(r.dryRun).toBe(true)
     expect(r.matriculasMiradas).toBe(419)
-    expect(r.baseYaExistentes).toBe(307)
+    expect(r.baseYaExistentes).toBe(303)
     expect(r.productosBaseCreados).toBe(8)
     expect(r.overridesCreados).toBe(21)
     expect(r.overridesDeFotoVieja).toBe(0)
-    expect(r.productosSinRevisarPrecios).toBe(132)
-    expect(r.saltadosSinMarca).toBe(18)
-    expect(r.saltadosPorIntegracionNoCedida).toBe(74)
+    expect(r.productosSinRevisarPrecios).toBe(128)
+    expect(r.saltadosSinMarca).toBe(31)
+    expect(r.saltadosPorIntegracionNoCedida).toBe(65)
     expect(r.saltadosPorSerPropia).toBe(0)
     expect(r.saltadosPorNoEstarEnLaFoto).toBe(12)
   })
@@ -138,12 +142,9 @@ describe('seedCatalogCanonical', () => {
   it('trae los NOMBRES de lo que deja fuera, no sólo el número (regla 7)', async () => {
     rpc.mockResolvedValue({ data: [FILA_SEED], error: null })
     const r = await seedCatalogCanonical(CUENTA, true)
-    expect(r.marcasSinResolver).toEqual(['Van Van'])
+    expect(r.marcasSinResolver).toEqual(['Lobbers', 'Van Van'])
     expect(r.marcasDeIntegracionNoCedida).toContain('Milanesa House')
-    expect(r.marcasDeIntegracionNoCedida).toHaveLength(6)
-    // La que costó el hallazgo: Lobbers es 'licensed' en `brand`, así que la
-    // guarda de MARCA la dejaba pasar. La bloquea la de ORIGEN.
-    expect(r.marcasDeIntegracionNoCedida).toContain('Lobbers')
+    expect(r.marcasDeIntegracionNoCedida).toHaveLength(5)
     expect(r.marcasPropiasSaltadas).toEqual([])
     expect(r.noEnLaFoto[0]).toEqual({
       producto: 'PACK UNO PA UNO DC',
