@@ -172,3 +172,63 @@ default **y lo comprueba comparando el literal**, con la migración abortando si
 3. **La línea base del éxito es 76 avisos / 6,5 días**, y el después se mide con la misma ventana (§1).
 4. **Local sin horario cargado = no se avisa y se lista**, y el vigía ancla por `account_id` + `location.id`,
    nunca por nombre (§4).
+
+---
+
+## §10 · Ensayo del paso 3 (`ingesta_silencio` por local): **43 → 9**
+
+Simulado tick a tick —cada 10 minutos, como corre de verdad— sobre los 7 días que caben en la cola, y con
+**las mismas funciones que usará el código** (`is_brand_open`, `availability_location_open_minutes`), no con
+una reimplementación de su lógica. Eso es lo que hace que el ensayo pueda llevarme la contraria.
+
+| local | severidad | avisaría | peor silencio | anclaje |
+|---|---|---|---:|---|
+| Carabanchel | crítico | 02/09 22:30 | 41 min | 22:40 |
+| Carabanchel | crítico | 03/09 20:30 | 30 min | 21:30 |
+| Carabanchel | alto | 04/09 16:50 | **146 min** | 15:44 |
+| Alcalá | alto | 04/09 18:40 | 60 min | 17:39 |
+| Carabanchel | crítico | 04/09 23:40 | 32 min | 23:07 |
+| Carabanchel | alto | 05/09 18:40 | 67 min | 17:32 |
+| Alcalá | crítico | 06/09 22:10 | 31 min | 21:39 |
+| Carabanchel | crítico | 07/09 21:10 | **113 min** | 20:37 |
+| Alcalá | crítico | 07/09 23:10 | 38 min | 22:32 |
+
+Nueve, contra 43. Y los dos gordos —146 min en Carabanchel el 04/09 y 113 el 07/09— son cortes reales en
+pleno servicio: eso es lo que un aviso tiene que decir, y hoy queda enterrado entre 43.
+
+El ensayo cubre la rama de «no entra nada», que es la que producía el ruido. La rama de «la vía que más
+pedidos trae, muda» no está simulada y puede añadir alguno.
+
+### Los umbrales, con la tabla delante
+
+Cinco de los nueve rozan el umbral (30, 31, 32, 38, 41 min). Misma simulación, cambiando sólo los umbrales:
+
+| | valle 60 | valle 75 | valle 90 | valle 120 |
+|---|---:|---:|---:|---:|
+| **punta 30** *(hoy)* | **9** | 7 | 7 | 7 |
+| punta 40 | 5 | 3 | 3 | 3 |
+| punta 45 | 4 | 2 | 2 | 2 |
+| punta 60 | 4 | 2 | 2 | 2 |
+
+La migración **no los cambia**: se quedan en 30/60. Subirlos es una decisión sobre cuánto silencio en cena
+es tolerable, y se hace pasando argumentos al cron sin tocar la función.
+
+### Quién se vigila, y por qué Kitchen Grill se queda fuera sin que sea un apaño
+
+Local activo, de cuenta no interna ni suspendida, **con horario cargado** y con ventas en 7 días. Anclado
+por `account_id` y `location.id`. Deja hoy exactamente Alcalá y Carabanchel, y fuera:
+
+- los 3 locales de la plantilla → `is_internal` (y 0 ventas)
+- Plaza Castilla → `active = false`
+- **Kitchen Grill LstQ → sin horario cargado**
+
+Lo de Kitchen Grill no está elegido para que cuadre con «esa cuenta está parada»: **sin horario no se puede
+aplicar el veto, y vigilar sin veto es volver a la franja fija**. El criterio es el mismo para todos y no
+menciona a nadie por su nombre. Y los que quedan fuera por eso salen en un aviso `info` una vez al día — la
+decisión de si eso sobra está marcada dentro de la migración, en un bloque que se borra entero.
+
+### El punto ciego del §6.1, cerrado
+
+Hoy, si no hay NINGUNA venta en 12 h, `v_ultima` es NULL y el vigía calla: una caída larga es invisible.
+Ahora, sin ventas desde que abrió, el ancla es la hora de apertura y **sí avisa**. Era el caso más grave y
+era justo el que no se veía.

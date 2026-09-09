@@ -2,9 +2,18 @@
 -- Estándar de alertas · paso 1 — el local deja de ser texto y pasa a ser CAMPO
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Nombre provisional: se renombra a la versión que registre la
--- base (regla 17). Transaccional: o entra entera o no entra, y su propia
--- verificación la aborta si algo no cuadra.
+-- APLICADA el 09/09 por Julio (F2) · versión 20260909120857
+--
+-- Lo aplicado ES lo que hay aquí, en bruto y con los comentarios dentro:
+--   encolar_alerta ....... 7349bacec3b8cfa6d778281824810fec / 1.137 chars
+--   _queue_system_alert .. 6710d0d901aca84fb99427e9f0ae629c /   522 chars
+-- Fichero y `prosrc` idénticos, comprobado por los dos lados por separado.
+--
+-- Y comprobado en el mundo real 12 minutos después, que es donde se vería si
+-- algún vigía dejó de encolar: los siete crons que llaman al encolador con 0
+-- fallos en 2 h (120 pasadas cada uno los de cada minuto), las 76 filas vivas
+-- intactas y 0 filas de prueba. La verificación de dentro de la transacción
+-- prueba las formas de llamada; ésta prueba que siguen corriendo.
 --
 -- ── LO QUE HACE ───────────────────────────────────────────────────────────
 -- 1. `system_alert_queue` gana `account_id`, `location_id`, `brand_id` y
