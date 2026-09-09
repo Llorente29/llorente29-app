@@ -148,40 +148,63 @@ const CAMPOS_DE_LAST: Record<string, string[]> = {
   menu_category: ["name"],
   menu_item: ["name", "price", "is_available", "menu_category_id", "product_type"],
   modifier_group: ["name", "min_selections", "max_selections"],
-  modifier_option: ["name", "price_impact", "position"],
-  combo_slot: ["name", "min_selections", "max_selections", "position"],
-  combo_slot_option: ["menu_item_id", "price_impact", "position"],
+  modifier_option: ["modifier_group_id", "name", "price_impact", "position"],
+  // `combo_item_id`, `combo_slot_id` y `modifier_group_id` son enlaces al padre,
+  // y el padre lo decide entero el catálogo de Last. Van aquí desde el 09/09:
+  // sin ellos, cuando un combo estrena fila `menu_item` —pasó con 12 en la
+  // primera pasada de verdad— sus slots se quedan colgando de la fila vieja y
+  // el combo se queda sin partes sin que nadie lo note. Un enlace que no sigue
+  // a su padre es la version silenciosa del mismo fallo.
+  combo_slot: ["combo_item_id", "name", "min_selections", "max_selections", "position"],
+  combo_slot_option: ["combo_slot_id", "menu_item_id", "price_impact", "position"],
 };
 
 // ── La CLAVE con la que se casa una fila de Last con la de Folvy ──────────
 //
-// `external_id` SOLO NO VALE para `menu_item`, y esto está medido (08/09,
-// Foodint): 513 filas etiquetadas `lastapp` reparten 361 external_id — 28 ids
-// repetidos, 7 de ellos con una marca PROPIA y una CEDIDA a la vez. La causa no
-// es un error: son las BEBIDAS. Last tiene UN producto "COCA-COLA ORIGINAL"
-// (`ec807d42…`) y Folvy tiene una ficha por marca — nueve, en ese caso.
+// LA DECIDE EL ÍNDICE DE LA BASE. No mi criterio. Esto está escrito así porque
+// el 09/09 la primera importación de verdad murió con
+// `duplicate key value violates unique constraint "uq_combo_slot_external"`,
+// y la causa fue exactamente eso: yo había elegido las claves «con cabeza» —el
+// ámbito natural de cada tabla— y la base tenía las suyas. Dos definiciones de
+// «esta es la misma fila», y el día que discreparon ganó la base, como debía.
 //
-// Con la clave vieja (sólo external_id) el mapa external_id -> id de Folvy se
-// quedaba con UNA de las nueve, la última que pasara, y era arbitraria entre
-// pasadas. Mientras sólo se INSERTABA lo nuevo casi no se notaba; en cuanto se
-// ACTUALIZA, escribe la Coca-Cola de Lobbers encima de la de Meraki Pita.
+// El error de medición que lo dejó pasar: comprobé la unicidad mirando
+// `pg_constraint`, y **un índice único PARCIAL no es una constraint**. Los seis
+// `uq_*_external` son `CREATE UNIQUE INDEX … WHERE external_id IS NOT NULL`, o
+// sea que viven en `pg_index` y mi consulta no los veía. Conclusión con la vara
+// equivocada: «ninguna tabla tiene unicidad sobre (cuenta, origen, id)».
 //
-// Por eso la clave lleva el ÁMBITO: la columna que, con external_id, hace única
-// la fila. Medido: con el ámbito, 0 pares repetidos en las seis tablas.
+// Lo que la base dice DE VERDAD (medido el 09/09 sobre pg_index):
 //
-// `modifier_group` es la excepción a propósito: su ámbito NATURAL sería
-// brand_id, pero la marca de un grupo la decide "la primera marca que lo usa" y
-// ese orden no es estable entre pasadas. Con brand_id en la clave, un baile de
-// orden CREARÍA un grupo duplicado en otra marca en vez de actualizar el que
-// hay. Va por external_id solo (50 filas, 50 ids hoy) y `brand_id` no se
-// actualiza nunca: el grupo se queda en la marca donde ya está.
+//   uq_menu_item_external          (account_id, external_source, external_id, brand_id)
+//   uq_menu_category_external      (account_id, external_source, external_id)
+//   uq_modifier_group_external     (account_id, external_source, external_id)
+//   uq_modifier_option_external    (account_id, external_source, external_id)
+//   uq_combo_slot_external         (account_id, external_source, external_id)
+//   uq_combo_slot_option_external  (account_id, external_source, external_id)
+//
+// `account_id` y `external_source` son fijos en una pasada, así que la clave se
+// reduce a `external_id`, y en `menu_item` a `(brand_id, external_id)`. Que
+// `menu_item` lleve la marca no es un capricho del índice: son las BEBIDAS.
+// Last tiene UN producto «COCA-COLA ORIGINAL» y Folvy una ficha por marca —
+// nueve para ese id. 513 filas etiquetadas reparten 361 external_id.
+//
+// CÓMO MORDIÓ, con los números de la pasada que falló: había 132 slots colgando
+// de las filas de combo de junio. La pasada creó 12 combos NUEVOS, con `id`
+// nuevo, así que `itemMap` devolvía otro `combo_item_id`; con la clave vieja
+// —(combo_item_id, external_id)— esos slots no casaban con nada y salían como
+// «nuevos». 31 INSERT contra un índice que sólo mira external_id.
+//
+// Y no era sólo `combo_slot`: `menu_category`, `modifier_option` y
+// `combo_slot_option` tenían el mismo desajuste. No estallaron porque hoy sus
+// external_id no se repiten dentro de la cuenta — o sea que estaban esperando.
 const AMBITO: Record<string, string | null> = {
-  menu_category: "brand_id",
-  menu_item: "brand_id",
+  menu_category: null,
+  menu_item: "brand_id",   // el índice lleva brand_id; las bebidas lo exigen
   modifier_group: null,
-  modifier_option: "modifier_group_id",
-  combo_slot: "combo_item_id",
-  combo_slot_option: "combo_slot_id",
+  modifier_option: null,
+  combo_slot: null,
+  combo_slot_option: null,
 };
 
 interface ContadorTabla {
@@ -327,7 +350,24 @@ async function casarYActualizar(
       .from(table)
       .insert(nuevas)
       .select(columnas);
-    if (insErr) throw new Error(`insert ${table}: ${insErr.message}`);
+    if (insErr) {
+      // Si vuelve a chocar contra un índice único, que el informe diga CONTRA
+      // QUÉ y CON QUÉ FILAS. El 09/09 esto murió con un «duplicate key value
+      // violates unique constraint uq_combo_slot_external» a secas, y
+      // reconstruir de ahí que la clave del código no era la del índice costó
+      // una pasada entera. Un error que no dice con qué filas chocó obliga a
+      // repetir el trabajo de diagnóstico cada vez.
+      const choque = /duplicate key|unique constraint/i.test(insErr.message);
+      const pista = choque
+        ? ` · La clave con la que este importador decide existencia en ${table} es` +
+          ` «${ambito ? `${ambito} + external_id` : "external_id"}». Si el índice de la base` +
+          ` mira otras columnas, el importador cree que son nuevas y las inserta.` +
+          ` external_id de las ${nuevas.length} que intentaba insertar: ` +
+          nuevas.slice(0, 15).map((r) => String(r.external_id)).join(", ") +
+          (nuevas.length > 15 ? ` … (+${nuevas.length - 15})` : "")
+        : "";
+      throw new Error(`insert ${table}: ${insErr.message}${pista}`);
+    }
     for (const i of ((inserted ?? []) as any[])) map.set(clave(i), i.id as string);
   }
 
@@ -734,7 +774,7 @@ Deno.serve(async (req: Request) => {
       const op = orgProductById.get(prodId);
       const name = op?.name ?? "(producto)";
       const priceCents = typeof op?.price === "number" ? op.price : 0;
-      const catFolvyId = info.catExtId ? (catMap.get(`${info.brandId}|${info.catExtId}`) ?? null) : null;
+      const catFolvyId = info.catExtId ? (catMap.get(info.catExtId) ?? null) : null;
       itemRows.push({
         account_id: accountId, brand_id: info.brandId, channel_id: null, recipe_item_id: null,
         name, price: priceCents / 100, product_type: "item",
@@ -868,7 +908,7 @@ Deno.serve(async (req: Request) => {
       const comboFolvyId = itemMap.get(`${comboInfo.brandId}|${comboId}`);
       if (!oc || !comboFolvyId) continue;
       for (const cat of (oc.categories ?? [])) {
-        const slotFolvyId = slotMap.get(`${comboFolvyId}|${cat.id}`);
+        const slotFolvyId = slotMap.get(cat.id);
         if (!slotFolvyId) continue;
         let opos = 0;
         for (const p of (cat.products ?? [])) {
