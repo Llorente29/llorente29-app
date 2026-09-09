@@ -365,6 +365,10 @@ export async function importCatalog(input: {
 /** Una org del espejo y cuándo se sacó su última foto del catálogo. */
 export interface FotoDeCatalogo {
   org: string
+  /** Nombre de la integración, si la fila sigue existiendo. */
+  nombre: string | null
+  /** `licensed` (cedidas) u `own` (propias). La de las propias no debería tener espejo. */
+  tipo: string | null
   ultimaFoto: string | null
   /** Horas transcurridas desde esa foto, como las devuelve la RPC. */
   horas: number
@@ -395,16 +399,26 @@ export interface SeedResult {
   productosBaseCreados: number
   /** Overrides de precio por canal creados. */
   overridesCreados: number
-  /** De esos overrides, cuántos salen de una foto que no es la última. Se cuenta, no se corta. */
+  /** De esos overrides, cuántos salen de una foto que no es la última. */
   overridesDeFotoVieja: number
+  /** Productos a los que ni se les miró el precio por canal, por no venir de una cedida viva. */
+  productosSinRevisarPrecios: number
   /** No se sembraron porque su marca de Last no resuelve en Folvy. */
   saltadosSinMarca: number
+  /**
+   * No se sembraron porque su catálogo NO viene de una integración cedida y viva.
+   * Es la guarda que importa: pregunta por el origen del dato, no por la etiqueta
+   * de la marca — que puede estar mal, y lo está («Lobbers» figura como cedida y
+   * sólo existe en la org de las propias, que además está muerta).
+   */
+  saltadosPorIntegracionNoCedida: number
   /** No se sembraron por ser de marca PROPIA: su escandallo es de Folvy, no del TPV. */
   saltadosPorSerPropia: number
   /** No se sembraron por no estar en la última foto del catálogo de su org. */
   saltadosPorNoEstarEnLaFoto: number
   /** Los nombres, no solo el número (regla 7). */
   marcasSinResolver: string[]
+  marcasDeIntegracionNoCedida: string[]
   marcasPropiasSaltadas: string[]
   noEnLaFoto: ProductoFueraDeFoto[]
   fotos: FotoDeCatalogo[]
@@ -456,13 +470,24 @@ function textos(v: unknown): string[] {
  * propósito, para que una llamada vieja falle en la cara en vez de escribir —o
  * de no escribir— en silencio.
  *
- * Dos guardas, y las dos CUENTAN Y LISTAN lo que dejan fuera (regla 7):
- *  - propiedad: sólo se siembra sobre marcas CEDIDAS. El escandallo de una marca
- *    propia es de Folvy, no se copia de lo que el TPV enseña al cliente.
- *  - foto: sólo lo que estaba en la última foto del catálogo de SU org. Y ojo,
- *    la vara es la foto de la org, no «los últimos N días»: las dos orgs de
- *    Foodint se refrescan en fechas distintas, así que un corte contra `now()`
- *    mediría cuándo miramos nosotros, no cuándo lo sirvió Last.
+ * Tres guardas, y las tres CUENTAN Y LISTAN lo que dejan fuera (regla 7):
+ *  - origen: sólo se siembra desde una integración CEDIDA y viva. Pregunta por
+ *    dónde nació el dato, no por la etiqueta de la marca — que puede estar mal:
+ *    «Lobbers» figura como cedida y sus matrículas sólo existen en la org de las
+ *    propias, que además está muerta. Preguntando por la marca se colaban 9
+ *    platos de un cadáver; preguntando por la integración, ninguno.
+ *  - propiedad: aunque venga de una cedida, si la MARCA es propia no se siembra.
+ *    El escandallo de una propia es de Folvy, no se copia del TPV. Hoy cuenta 0
+ *    porque la de origen ya los coge; sirve el día que una marca propia aparezca
+ *    dentro de la org de las cedidas.
+ *  - foto: sólo lo que estaba en la última foto del catálogo de esa org cedida.
+ *    La vara es la foto de la org, no «los últimos N días»: las dos orgs se
+ *    refrescan en fechas distintas, así que un corte contra `now()` mediría
+ *    cuándo miramos nosotros, no cuándo lo sirvió Last. Y no vale la foto de una
+ *    org muerta: ahí todo está siempre en la última foto.
+ *
+ * La capa de precios por canal lleva la misma guarda de origen: sin ella, 22 de
+ * 43 precios se calculaban contra el espejo de la org muerta.
  */
 export async function seedCatalogCanonical(
   accountId: string,
@@ -482,10 +507,13 @@ export async function seedCatalogCanonical(
     productosBaseCreados: num(r.productos_base_creados),
     overridesCreados: num(r.overrides_creados),
     overridesDeFotoVieja: num(r.overrides_de_foto_vieja),
+    productosSinRevisarPrecios: num(r.productos_sin_revisar_precios),
     saltadosSinMarca: num(r.saltados_sin_marca),
+    saltadosPorIntegracionNoCedida: num(r.saltados_por_integracion_no_cedida),
     saltadosPorSerPropia: num(r.saltados_por_ser_propia),
     saltadosPorNoEstarEnLaFoto: num(r.saltados_por_no_estar_en_la_foto),
     marcasSinResolver: textos(r.marcas_sin_resolver),
+    marcasDeIntegracionNoCedida: textos(r.marcas_de_integracion_no_cedida),
     marcasPropiasSaltadas: textos(r.marcas_propias_saltadas),
     noEnLaFoto: ((r.no_en_la_foto as Row[] | null) ?? []).map(f => ({
       producto: (f.producto as string | null) ?? '(sin nombre)',
@@ -494,6 +522,8 @@ export async function seedCatalogCanonical(
     })),
     fotos: ((r.fotos as Row[] | null) ?? []).map(f => ({
       org: (f.org as string | null) ?? '',
+      nombre: (f.nombre as string | null) ?? null,
+      tipo: (f.tipo as string | null) ?? null,
       ultimaFoto: (f.ultima_foto as string | null) ?? null,
       horas: num(f.horas),
       filas: num(f.filas),

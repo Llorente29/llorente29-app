@@ -1,9 +1,87 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- «Sembrar escandallos» · paso 2 — ensayo, guarda de propiedad y guarda de foto
+-- «Sembrar escandallos» · CORRECCIÓN — la guarda va en el ORIGEN, no en la marca
 -- ══════════════════════════════════════════════════════════════════════════
 --
--- ⚠️ SIN APLICAR. Nombre provisional: se renombra a la versión que registre la
--- base (regla 17). Transaccional: o entra entera o no entra.
+-- ⚠️ SIN APLICAR. Va DETRÁS de 20260909101510, que ya está aplicada y que esta
+-- sustituye entera. Nombre provisional: se renombra a la versión que registre
+-- la base (regla 17). Transaccional: o entra entera o no entra.
+--
+-- ── QUÉ ARREGLA, EN UNA FRASE ─────────────────────────────────────────────
+-- Lo aplicado esta mañana crea 17 platos, y NUEVE son de un catálogo muerto.
+-- Con esto son 8 y ninguno. La guarda deja de preguntar «¿de quién dice la
+-- marca que es?» y pregunta «¿de dónde salió este dato?».
+--
+-- ── LO QUE HACE HOY, MEDIDO SOBRE FOODINT EL 09/09 (regla 9: sólo Foodint) ─
+--
+--   matrículas miradas ................................. 419
+--   ya existen (no se tocan) ........................... 307
+--   candidatas ......................................... 112
+--     · sin marca en Folvy («Van Van») .................  18
+--     · de una integración que NO es cedida viva .......  74   ← no debería
+--     · fuera de la última foto de la org cedida .......  12   ← no debería
+--     · cedidas, vivas y en la foto ....................   8   ← esto sí
+--
+-- Recorrido del número, para que no se pierda:
+--   antes de todo esto ........................ 94 creados (65 propias, 12 viejos)
+--   con 20260909101510, ya aplicada ........... 17 creados (9 del cadáver)
+--   con esta corrección ........................ 8 creados
+-- No es que el código falle: hace lo que dice su código. Lo que no hacía es lo
+-- que promete su nombre.
+--
+-- ── LA GUARDA VA EN LA INTEGRACIÓN, NO EN LA MARCA. ESTO ES UNA CORRECCIÓN ─
+-- La primera versión de este fichero preguntaba `brand.ownership_type`. Con esa
+-- guarda se creaban 17, y NUEVE de esos 17 eran de «Lobbers»:
+--
+--   brand.ownership_type ......... 'licensed'  ← por eso pasaba la guarda
+--   sus 22 matrículas ............ SÓLO en la org 31f13f35, la de las PROPIAS
+--   última foto de esa org ....... 05/09 — la org devuelve 404, está muerta
+--   última venta de Lobbers ...... 10/07 (194 ventas en toda su historia)
+--
+-- Nueve platos de un cadáver, colados por una etiqueta de marca equivocada. Y
+-- la guarda de foto no los paraba, porque medía «¿está en la última foto de su
+-- org?» y en una org muerta TODO está en la última foto: el cadáver siempre
+-- parece fresco. Es la misma familia que la regla 39 y la que Julio nombró en
+-- el §9 del encargo de alertas: medir la frescura de una fuente sin preguntar
+-- antes si esa fuente tiene derecho a existir.
+--
+-- La guarda buena pregunta por el ORIGEN del dato, que es donde el hecho vive:
+-- `external_integration.ownership_type='licensed' AND is_active`. Con ella:
+--
+--   por marca (v1) ....... 17 creados, 9 de la org muerta, 65 propias bloqueadas
+--   por integración (v2) ..  8 creados, 0 de la org muerta, 74 bloqueadas
+--
+-- Las 74 son las 65 propias MÁS los 9 de Lobbers. Se quedan las dos guardas: la
+-- de marca cuenta 0 hoy, pero responde otra pregunta (de quién es el escandallo)
+-- y sirve el día que una marca propia aparezca dentro de la org de las cedidas.
+--
+-- ── OJO: LAS DOS INTEGRACIONES ESTÁN `is_active=true` ─────────────────────
+--   31f13f35 «Foodint» ..... ownership_type='own'      · is_active=true
+--   b7bc4753 «Cloudtown» ... ownership_type='licensed' · is_active=true
+-- O sea que `is_active` NO distingue la muerta de la viva: quien separa es
+-- `ownership_type`. La fila muerta sigue ahí (acción 2 del §9b del encargo de
+-- alertas, con Julio delante). Esta guarda no depende de que se retire.
+--
+-- ── LA GUARDA DE FOTO SIGUE HACIENDO FALTA (corrección al §9b) ────────────
+-- El §9b dice que retirando las filas muertas «no hay foto vieja contra la que
+-- comparar y el problema desaparece por su cuenta». Medido, no: los 12 que la
+-- guarda de foto deja fuera son TODOS de Cloudtown, la org VIVA de las cedidas
+-- —el contador los cuenta sólo entre los que ya pasaron la guarda de origen—.
+-- Nueve son del 21/06 y dos del 30/08. Retirar el cadáver no los toca.
+--
+-- ── LA GUARDA DE ORIGEN TAMBIÉN VA EN LA CAPA DE PRECIOS ──────────────────
+-- Esto también cambia respecto a la primera versión, y por el mismo hallazgo.
+-- Los 307 que «ya existen» incluyen los productos de las marcas propias, y sus
+-- precios por canal se recalculaban contra el espejo de la org muerta:
+--
+--   sin guarda en precios ... 43 precios, 22 de ellos desde la org muerta
+--   con guarda en precios ... 21 precios, 0 desde la org muerta
+--                             132 productos con la capa de precios sin mirar
+--
+-- Lo había dejado como «se cuenta y decide Julio» cuando el número era 2 y la
+-- lectura era «precio de una foto algo vieja». Con la vara correcta son 22 y la
+-- lectura es «precio de un catálogo que no existe», que es justo lo que el §9b
+-- dice que no hay que curar con una guarda de frescura. Va cerrado. Los 35
+-- overrides que las propias YA tienen no se tocan aquí: eso es la acción 3.
 --
 -- ── POR QUÉ ES DROP + CREATE Y NO REPLACE ─────────────────────────────────
 -- Añade parámetros. `CREATE OR REPLACE` con una firma distinta no reemplaza:
@@ -12,51 +90,28 @@
 -- Nadie más la llama: `pg_proc.prosrc ilike '%seed_catalog_canonical%'` sobre
 -- las demás funciones da 0 filas. El único llamador es el panel de admin.
 --
--- ── LO QUE HACE HOY, MEDIDO SOBRE FOODINT EL 09/09 ────────────────────────
---
---   matrículas miradas ................................. 419
---   ya existen (no se tocan) ........................... 307
---   candidatas ......................................... 112
---     · sin marca en Folvy («Van Van») .................  18
---     · de marca PROPIA ................................  65   ← no debería
---     · fuera de la última foto de su org ..............  12   ← no debería
---     · cedidas y en la foto ...........................  17   ← esto sí
---
--- O sea: el botón que hoy dice «Sembrar escandallos» crearía 94, y 77 de esas
--- 94 están mal. No es que el código falle: hace lo que dice su código. Lo que
--- no hace es lo que promete su nombre.
---
--- ── LA GUARDA DE FRESCURA NO SE MIDE CONTRA `now()` ───────────────────────
--- El encargo pedía «vistos en los últimos N días». Medido, esa vara está mal,
--- y el fallo es silencioso (regla 39: se mide con la vara del sistema que se
--- va a gobernar). Las dos orgs de Foodint tienen fotos de fechas distintas:
+-- ── LA VARA DE LA FRESCURA NO ES `now()` ──────────────────────────────────
+-- El encargo pedía «vistos en los últimos N días». Medido, esa vara está mal:
 --
 --   Cloudtown (cedidas) .... última foto 08/09 23:00 .... 3.360 filas
---   Foodint   (propias) .... última foto 05/09 23:00 .... 1.084 filas
+--   Foodint   (la muerta) .. última foto 05/09 23:00 .... 1.084 filas
 --
--- Un corte de «3 días desde hoy» se llevaría por delante la org de Foodint
--- ENTERA, y no porque Last haya dejado de servir nada: porque nadie ha
--- refrescado ese espejo desde el 05. `seen_in_catalog_at` mide CUÁNDO MIRAMOS,
--- no cuándo lo sirvió Last. Confundirlas es la regla 30: la pantalla diría
--- «Last no lo sirve desde el 05/09» de algo que sí sirve.
+-- Un corte de «3 días desde hoy» se llevaría una org entera sin que Last haya
+-- dejado de servir nada: `seen_in_catalog_at` mide CUÁNDO MIRAMOS. Confundirlas
+-- es la regla 30: la pantalla diría «Last no lo sirve desde el 05/09» de algo
+-- que sí sirve. La vara es la última foto de su propia org —y ahora, además,
+-- sólo cuenta si esa org es una cedida viva—. El corte es nítido: una pasada
+-- sella todas sus filas en la misma hora, así que a 1 h y a 1 día salen los
+-- mismos números. El margen queda como parámetro.
 --
--- Así que la vara es la ÚLTIMA FOTO DE SU PROPIA ORG: ¿estaba este producto la
--- última vez que miramos ESE catálogo? El corte es nítido — una pasada sella
--- todas sus filas en la misma hora, así que a 1 hora y a 1 día salen los mismos
--- números (2.749 dentro / 611 fuera en Cloudtown; 574 / 510 en Foodint) — y el
--- margen queda como parámetro por si algún día una pasada se alarga.
---
--- Y la antigüedad de cada foto SALE EN EL RESULTADO (`fotos`), porque sembrar
--- de una foto de hace cuatro días es una decisión, no un detalle.
+-- Y la antigüedad de cada foto SALE EN EL RESULTADO (`fotos`), con el nombre y
+-- el tipo de cada org, porque sembrar de una foto de hace días es una decisión.
 --
 -- ── LO QUE NO CAMBIA, A PROPÓSITO ─────────────────────────────────────────
--- · La capa de overrides sigue exactamente como está para los 307 que ya
---   existen. Sí se CUENTA aparte cuántos de los overrides saldrían de una foto
---   que no es la última (`overrides_de_foto_vieja`): la cifra se enseña y la
---   decisión de ponerle guarda es de Julio, no mía.
 -- · El excluido `'FOODINT'` y el alias `'Dirty Burgers'→'Dirty Burger'` siguen
---   escritos a fuego dentro de la función. Es deuda vista, no de este encargo.
+--   escritos a fuego dentro de la función. Deuda vista, no de este encargo.
 -- · El uuid de la unidad «Unidad» sigue a fuego. Igual.
+-- · Los 35 overrides que ya tienen las marcas propias no se tocan.
 --
 -- ── PERMISOS: HOY ESTA FUNCIÓN LA PUEDE LLAMAR `anon` ─────────────────────
 -- Medido con la vara buena, no con el texto del ACL:
@@ -71,72 +126,54 @@
 -- Receta del 09/09: revocar de PUBLIC **y** de los nombres, y verificar con
 -- `has_function_privilege`, nunca con `proacl::text`.
 --
--- ── LA PREDICCIÓN, PARA QUE EL ENSAYO PUEDA LLEVARME LA CONTRARIA ─────────
--- Con `p_dry_run => true` sobre Foodint, esta función tiene que devolver
--- EXACTAMENTE:
---
---   matriculas_miradas ................ 419
---   base_ya_existentes ................ 307
---   productos_base_creados ............  17
---   saltados_sin_marca ................  18   (marcas_sin_resolver = {Van Van})
---   saltados_por_ser_propia ...........  65
---   saltados_por_no_estar_en_la_foto ..  12
---
---   y 419 = 307 + 17 + 18 + 65 + 12. Si sale otra cosa, o mi cuenta está mal o
---   la función no hace lo que creo: en cualquiera de los dos casos NO se pulsa
---   nada hasta saber cuál de las dos. `overrides_creados` no lo predigo — es
---   justo para lo que sirve el ensayo.
---
 -- ── YA ESTÁ PROBADA. NO A MANO: LA FUNCIÓN, CORRIENDO ─────────────────────
 -- Este cuerpo exacto se creó como copia desechable —`_prueba_seed_ensayo`, sin
--- SECURITY DEFINER y revocada de public/anon/authenticated— se corrió en
--- ensayo sobre Foodint, y se borró (quedan 0 copias). Compila y devuelve:
+-- SECURITY DEFINER y revocada de public/anon/authenticated—, se corrió en
+-- ensayo sobre Foodint y se borró (quedan 0 copias). Devuelve:
 --
---   matriculas_miradas ................ 419  ✓ predicho
---   base_ya_existentes ................ 307  ✓
---   productos_base_creados ............  17  ✓
---   saltados_sin_marca ................  18  ✓   marcas_sin_resolver = {Van Van}
---   saltados_por_ser_propia ...........  65  ✓
---   saltados_por_no_estar_en_la_foto ..  12  ✓
---   suma de las partes ................ 419  = matriculas_miradas
+--   matriculas_miradas ................. 419
+--   base_ya_existentes ................. 307
+--   productos_base_creados .............   8
+--   saltados_sin_marca .................  18   marcas_sin_resolver = {Van Van}
+--   saltados_por_integracion_no_cedida ..  74   {Smash Brothers Burgers, Lobbers,
+--                                              Meraki Pita, Dirty Burgers,
+--                                              Milanesa House, Bendito Burrito}
+--   saltados_por_ser_propia ............   0   (la de origen ya los cogió)
+--   saltados_por_no_estar_en_la_foto ...  12
+--   ─────────────────────────────────────────
+--   suma ............................... 419  = matriculas_miradas
 --
---   overrides_creados .................  43  (no predicho: para esto es el ensayo)
---   overrides_de_foto_vieja ...........   2  de esos 43
+--   overrides_creados ..................  21
+--   overrides_de_foto_vieja ............   0
+--   productos_sin_revisar_precios ...... 132
 --
 -- Y NO ESCRIBIÓ NADA, medido a los dos lados con la misma vara (regla 31), en
 -- la misma sentencia que la llamó:
 --
---   recipe_item .......... antes 394  después 394   (decía que crearía 17)
---   menu_item ............ antes 633  después 633
---   menu_item_override ... antes  58  después  58   (decía que crearía 43)
+--   recipe_item .......... 394 → 394   (decía que crearía 8)
+--   menu_item ............ 633 → 633
+--   menu_item_override ...  58 →  58   (decía que crearía 21)
 --
--- Prueba de más, y es la que menos se puede falsear: dos pasadas seguidas del
--- ensayo dieron las MISMAS 307 ya existentes y los MISMOS 17 a crear. Si la
--- primera hubiera escrito, la segunda habría dicho 324 y 0.
+-- Prueba de más, y la que menos se puede falsear: dos pasadas seguidas del
+-- ensayo dieron las MISMAS 307 ya existentes y los MISMOS a crear. Si la
+-- primera hubiera escrito, la segunda habría dicho otra cosa.
 --
--- ── LAS 5 MARCAS PROPIAS QUE SE DEJAN DE SEMBRAR (regla 7: se listan) ─────
---   Milanesa House (24) · Meraki Pita (16) · Smash Brothers Burgers (14)
---   Dirty Burgers (6) · Bendito Burrito (5)
---
---   ⚠️ «Milanesa House» es PROPIA y «Milanesa Haus» es CEDIDA. Dos marcas
---   distintas a una letra. La resolución es por nombre exacto normalizado, así
---   que hoy no se confunden — pero conviene saberlo antes de tocar el alias.
---
--- ── LOS 12 QUE SE QUEDAN FUERA POR LA FOTO ────────────────────────────────
--- Nueve son del 21/06 y dos del 30/08. Y casi todos son PACKS:
+-- ── LOS 12 QUE SE QUEDAN FUERA POR LA FOTO (todos de Cloudtown, la viva) ──
 --   Chivuos ......... Pack Single Hero · Pack Chicken Single Hero ·
 --                     Pack Deluxe Para Dos · CHIVUO´S® BURGER (30/08)
 --   Ay Mamita ....... Birria Lunch · Mamita Duo · Birria Chicken Bowl ·
 --                     Birria + Tequeños · GRINGAS DE QUESO (30/08)
 --   Dos Coyotes ..... PACK UNO PA UNO · PACK PA 2
 --   Big Mike´s ...... Menú Doble Big Mikes
--- Sembrarlos crearía doce `recipe_item type='dish'` para packs que Last ya no
--- sirve como producto. Eso es exactamente lo que la guarda evita.
+-- Casi todos son PACKS. Sembrarlos crearía doce `recipe_item type='dish'` para
+-- packs que Last ya no sirve como producto.
 --
--- ── LA FOTO DE CADA ORG, EN EL MOMENTO DEL ENSAYO ─────────────────────────
---   Cloudtown (cedidas) ... 08/09 23:00 ... hace  10,5 h ... 3.360 filas
---   Foodint   (propias) ... 05/09 23:00 ... hace  82,5 h ... 1.084 filas
--- Sale en el resultado (`fotos`) para que se vea antes de decidir.
+-- ── UN NOMBRE QUE ASUSTA Y NO ES UN FALLO ─────────────────────────────────
+-- «Milanesa House» es PROPIA (org muerta, 53 matrículas) y «Milanesa Haus» es
+-- CEDIDA (Cloudtown, 39 matrículas). Dos marcas distintas a una letra, y las
+-- DOS venden hoy (237 y 434 ventas en 30 días). No se confunden porque la
+-- resolución es por nombre exacto normalizado — pero conviene saberlo antes de
+-- tocar el alias.
 --
 -- ── AL APLICAR ESTO, EL BOTÓN «SEMBRAR ESCANDALLOS» SE ROMPE ──────────────
 -- `p_dry_run` no tiene valor por defecto, así que la llamada de un argumento
@@ -165,10 +202,13 @@ returns table (
   productos_base_creados           integer,
   overrides_creados                integer,
   overrides_de_foto_vieja          integer,
+  productos_sin_revisar_precios    integer,
   saltados_sin_marca               integer,
+  saltados_por_integracion_no_cedida integer,
   saltados_por_ser_propia          integer,
   saltados_por_no_estar_en_la_foto integer,
   marcas_sin_resolver              text[],
+  marcas_de_integracion_no_cedida  text[],
   marcas_propias_saltadas          text[],
   no_en_la_foto                    jsonb,
   fotos                            jsonb
@@ -191,10 +231,13 @@ DECLARE
   v_base       integer := 0;
   v_over       integer := 0;
   v_over_vieja integer := 0;
+  v_over_norg  integer := 0;
   v_nomarca    integer := 0;
+  v_norg       integer := 0;
   v_propia     integer := 0;
   v_vieja      integer := 0;
   v_marcas_nom text[] := '{}';
+  v_marcas_org text[] := '{}';
   v_marcas_pro text[] := '{}';
   v_lista      jsonb  := '[]'::jsonb;
   v_fotos      jsonb;
@@ -209,15 +252,23 @@ BEGIN
   -- resultado porque sembrar de una foto vieja es una decisión, no un detalle.
   SELECT coalesce(jsonb_agg(jsonb_build_object(
            'org',          t.external_org_id,
+           'nombre',       t.nombre,
+           'tipo',         t.tipo,
            'ultima_foto',  t.ultima_foto,
            'horas',        round(extract(epoch FROM (now() - t.ultima_foto)) / 3600.0, 1),
            'filas',        t.filas)
            ORDER BY t.ultima_foto DESC), '[]'::jsonb)
     INTO v_fotos
     FROM (SELECT ecp.external_org_id,
+                 max(ei.organization_name)   AS nombre,
+                 max(ei.ownership_type)      AS tipo,
                  max(ecp.seen_in_catalog_at) AS ultima_foto,
                  count(*)                    AS filas
             FROM public.external_catalog_product ecp
+            LEFT JOIN public.external_integration ei
+                   ON ei.account_id = ecp.account_id
+                  AND ei.source = 'lastapp'
+                  AND ei.external_org_id = ecp.external_org_id
            WHERE ecp.account_id = p_account_id
            GROUP BY ecp.external_org_id) t;
 
@@ -244,10 +295,19 @@ BEGIN
             AND ecp2.price_cents IS NOT NULL)
       ) AS base_cents,
       max(ecp.seen_in_catalog_at) AS visto,
-      -- ¿estaba en la última foto de SU org? (no «de los últimos N días»)
-      bool_or(ecp.seen_in_catalog_at >= f.ultima_foto - p_margen_foto) AS en_la_foto
+      -- ¿Viene de una integración CEDIDA y viva? Se pregunta por el ORIGEN del
+      -- dato, no por la etiqueta de la marca: es donde vive el hecho.
+      bool_or(ei.ownership_type = 'licensed' AND ei.is_active) AS de_cedida,
+      -- ¿Y estaba en la última foto de ESA org cedida? (no «de los últimos N días»,
+      -- y no la foto de una org muerta, que siempre parece fresca)
+      bool_or(ei.ownership_type = 'licensed' AND ei.is_active
+              AND ecp.seen_in_catalog_at >= f.ultima_foto - p_margen_foto) AS en_foto_de_cedida
     FROM external_catalog_product ecp
     JOIN foto f ON f.external_org_id = ecp.external_org_id
+    LEFT JOIN external_integration ei
+           ON ei.account_id = ecp.account_id
+          AND ei.source = 'lastapp'
+          AND ei.external_org_id = ecp.external_org_id
     WHERE ecp.account_id = p_account_id
       AND ecp.organization_product_id IS NOT NULL
       AND ecp.external_brand_name IS NOT NULL
@@ -290,7 +350,21 @@ BEGIN
     IF v_menu_id IS NOT NULL THEN
       v_ya := v_ya + 1;
     ELSE
-      -- ── 3. Guarda de propiedad: sembrar es cosa de marcas CEDIDAS ───────
+      -- ── 3. Guarda de ORIGEN: sólo se siembra de una integración CEDIDA y viva ──
+      -- Va DELANTE de la de marca porque pregunta por el sitio donde el hecho
+      -- vive de verdad. La etiqueta de la marca puede estar mal —y lo está:
+      -- «Lobbers» figura como `licensed` y sus 22 matrículas sólo existen en la
+      -- org de las PROPIAS, que además está muerta. Preguntando por la marca se
+      -- colaban sus 9 platos; preguntando por la integración, no.
+      IF NOT COALESCE(v_prod.de_cedida, false) THEN
+        v_norg := v_norg + 1;
+        IF NOT (v_prod.brand_name = ANY (v_marcas_org)) THEN
+          v_marcas_org := v_marcas_org || v_prod.brand_name;
+        END IF;
+        CONTINUE;
+      END IF;
+
+      -- ── 4. Guarda de propiedad: sembrar es cosa de marcas CEDIDAS ───────
       -- Lo de una marca propia es de Folvy: su escandallo se hace aquí, no se
       -- copia de lo que el TPV enseña al cliente. Se cuenta y se LISTA, no se
       -- salta en silencio (regla 7).
@@ -302,10 +376,10 @@ BEGIN
         CONTINUE;
       END IF;
 
-      -- ── 4. Guarda de foto: sólo lo que estaba la última vez que miramos ──
+      -- ── 5. Guarda de foto: sólo lo que estaba la última vez que miramos ──
       -- Sembrar de una foto vieja no es sembrar, es resucitar. Sale con su
       -- fecha, para que se pueda mirar antes de decidir.
-      IF NOT COALESCE(v_prod.en_la_foto, false) THEN
+      IF NOT COALESCE(v_prod.en_foto_de_cedida, false) THEN
         v_vieja := v_vieja + 1;
         v_lista := v_lista || jsonb_build_object(
           'producto',             v_prod.product_name,
@@ -314,7 +388,7 @@ BEGIN
         CONTINUE;
       END IF;
 
-      -- ── 5. Crear: artículo físico + presentación base ───────────────────
+      -- ── 6. Crear: artículo físico + presentación base ───────────────────
       IF NOT p_dry_run THEN
         INSERT INTO recipe_item (account_id, type, name, base_unit_id, is_active, source, needs_review)
         VALUES (p_account_id, 'dish', v_prod.product_name, v_unit_ud, true, 'import', true)
@@ -329,10 +403,22 @@ BEGIN
       v_base := v_base + 1;
     END IF;
 
-    -- ── CAPA OVERRIDES: igual que antes, exista o no el base ──────────────
+    -- ── CAPA OVERRIDES: exista o no el base, pero SOLO desde una cedida viva ──
+    -- La misma guarda de origen que arriba, y por la misma razón. Sin ella el
+    -- tapón tiene un agujero: los 307 productos que YA existen incluyen los de
+    -- las marcas propias, y sus precios por canal se recalculaban contra el
+    -- espejo de la org muerta. Medido: de 43 precios, 22 salían de ahí.
+    -- No es una guarda de frescura sobre una fuente vieja — es la misma
+    -- pregunta de siempre: ¿esta fuente tiene derecho a existir?
+    --
     -- En ensayo, cuando el base todavía no existe, v_menu_id es NULL: el
     -- EXISTS de abajo no encuentra nada y el override cuenta como nuevo, que
     -- es justo lo que pasaría de verdad.
+    IF NOT COALESCE(v_prod.de_cedida, false) THEN
+      v_over_norg := v_over_norg + 1;
+      CONTINUE;
+    END IF;
+
     FOR v_chan IN
       SELECT sc.id AS channel_id, sc.slug,
              (SELECT ecp3.price_cents
@@ -364,7 +450,7 @@ BEGIN
           v_over := v_over + 1;
           -- Se cuenta, no se corta: cuántos de esos precios salen de una foto
           -- que no es la última. La guarda, si la quiere, la decide Julio.
-          IF NOT COALESCE(v_prod.en_la_foto, false) THEN
+          IF NOT COALESCE(v_prod.en_foto_de_cedida, false) THEN
             v_over_vieja := v_over_vieja + 1;
           END IF;
         END IF;
@@ -378,10 +464,13 @@ BEGIN
   productos_base_creados           := v_base;
   overrides_creados                := v_over;
   overrides_de_foto_vieja          := v_over_vieja;
+  productos_sin_revisar_precios    := v_over_norg;
   saltados_sin_marca               := v_nomarca;
+  saltados_por_integracion_no_cedida := v_norg;
   saltados_por_ser_propia          := v_propia;
   saltados_por_no_estar_en_la_foto := v_vieja;
   marcas_sin_resolver              := v_marcas_nom;
+  marcas_de_integracion_no_cedida  := v_marcas_org;
   marcas_propias_saltadas          := v_marcas_pro;
   no_en_la_foto                    := v_lista;
   fotos                            := v_fotos;

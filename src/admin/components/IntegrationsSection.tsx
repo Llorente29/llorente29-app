@@ -267,6 +267,11 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
               {seedResult.overridesDeFotoVieja > 0 && (
                 <span className="text-text-tertiary"> ({seedResult.overridesDeFotoVieja} de una foto que no es la última)</span>
               )}
+              {seedResult.productosSinRevisarPrecios > 0 && (
+                <span className="text-text-tertiary">
+                  {' '}· {seedResult.productosSinRevisarPrecios} producto(s) sin mirarles el precio, por no venir de una cedida viva
+                </span>
+              )}
             </span>
           </div>
 
@@ -280,6 +285,15 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
               {seedResult.marcasSinResolver.length > 0 && (
                 <span> — {seedResult.marcasSinResolver.join(', ')}. No tienen escandallo, y sus ventas no van a casar
                   mientras la marca no exista aquí.</span>
+              )}
+            </div>
+
+            <div className="text-text-secondary">
+              De un catálogo que no es de una cedida viva:{' '}
+              <b className="tabular-nums">{seedResult.saltadosPorIntegracionNoCedida}</b>
+              {seedResult.marcasDeIntegracionNoCedida.length > 0 && (
+                <span className="text-text-tertiary"> — {seedResult.marcasDeIntegracionNoCedida.join(', ')}. Su carta
+                  se hace en Folvy; lo que hay en ese espejo no manda sobre ella.</span>
               )}
             </div>
 
@@ -314,13 +328,16 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
               <ul className="text-[11px] text-text-tertiary space-y-0.5">
                 {seedResult.fotos.map(f => (
                   <li key={f.org}>
-                    {fechaHoraDelNegocio(f.ultimaFoto, 'sin foto')} — hace {f.horas} h · {f.filas} fila(s)
+                    <span className="text-text-secondary">{f.nombre ?? '(integración retirada)'}</span>
+                    {f.tipo && <span> · {f.tipo === 'licensed' ? 'cedidas' : 'propias'}</span>}
+                    {' · '}{fechaHoraDelNegocio(f.ultimaFoto, 'sin foto')} — hace {f.horas} h · {f.filas} fila(s)
                   </li>
                 ))}
               </ul>
               <p className="text-[11px] text-text-tertiary mt-1">
-                Sembrar de una foto vieja siembra lo que había entonces. Si alguna org lleva días sin refrescarse,
-                importa su catálogo antes.
+                Sólo se siembra desde el catálogo de las <b>cedidas</b>. El de las marcas propias no manda: su carta
+                se hace en Folvy. Y si la org de las cedidas lleva días sin refrescarse, importa su catálogo antes de
+                sembrar — lo que se sembraría es lo que había entonces.
               </p>
             </div>
           )}
