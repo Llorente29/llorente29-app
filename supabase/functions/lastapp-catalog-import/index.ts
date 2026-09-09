@@ -4,7 +4,22 @@
 // marca de Folvy (Fase A). Trae solo lo que está EN USO (filtra la basura de
 // Last.app: marcas sin catálogo, canal "informes", objetos huérfanos).
 //
-// ALCANCE v1 (deuda explícita, no oculta):
+// ══ QUIÉN MANDA EN QUÉ (decisión de Julio, 08/09/2026) ════════════════════
+//
+// Sólo para las marcas CEDIDAS (`brand.ownership_type = 'licensed'`), que son
+// las que tienen su carta en Last:
+//
+//   LAST manda en lo que ve el cliente  →  nombre, precio, opciones, en qué
+//                                          platos van, disponible/agotado.
+//   FOLVY manda en lo que cuesta        →  recipe_item_id (el escandallo),
+//                                          modifier_recipe_impact, packaging,
+//                                          IVA, objetivo de food cost, notas.
+//   FOLVY manda en lo que Folvy creó    →  toda fila con external_source NULL.
+//
+// Para las marcas PROPIAS la fuente de verdad es FOLVY y no hay importación:
+// esta función NO DEBE TOCARLAS NUNCA. Ver la guarda de `resuelveMarca`.
+//
+// ══ ALCANCE v2 (deuda explícita, no oculta) ═══════════════════════════════
 //   - Trae TODOS los catálogos que el local declara, no solo el "default":
 //     desde el 08/09 el descubrimiento va por `GET /catalogs?locationId=`
 //     (`_shared/lastapp.ts`). El camino viejo —`brands[].catalogs.default`—
@@ -15,12 +30,14 @@
 //   - NO crea recipe_lines, NO costes, NO modifier_recipe_impact.
 //   - Las VARIANTES POR CANAL (p.ej. el catálogo Glovo distinto de Scandal/
 //     Bendito) son Fase B (menu_item_override) — tramo separado.
-//   - Idempotente por external_id (soporta re-ejecución). En v1 inserta lo nuevo
-//     y conserva lo existente; el diff/actualización es el frente "sync viva".
+//   - NO BORRA NADA. Lo que Last ya no sirve se CUENTA y se lista
+//     (`sobrantes`), no se archiva ni se borra: eso es decisión de Julio, con
+//     la lista delante. Regla 7 — un umbral (o una ausencia) ordena, no
+//     esconde.
 //
-// Entrada (POST JSON): { account_id, lastapp_organization_id, dry_run? }
+// Entrada (POST JSON):
+//   { account_id, lastapp_organization_id, dry_run?, aplicar_activo? }
 // Auth: platform admin (JWT folvy.is_platform_admin) o x-internal-key.
-// Patrón calcado de lastapp-sync-catalog.
 
 import { corsHeaders } from "../_shared/cors.ts";
 // El descubrimiento de catálogos y el cliente de Last viven en `_shared` desde
@@ -72,8 +89,8 @@ function normalize(s: string | null | undefined): string {
 }
 
 // Alias de marca: desajustes conocidos de nombre Last.app -> Folvy.
-// Clave y valor en forma NORMALIZADA. (Deuda futura: brand.lastapp_brand_name
-// para resolución determinista por id, en vez de por nombre.)
+// Clave y valor en forma NORMALIZADA. Sólo se usa cuando `external_brand_map`
+// no tiene la marca por ID (ver `resuelveMarca`).
 const BRAND_ALIAS: Record<string, string> = {
   "dirty burgers": "dirty burger", // Last (plural) -> Folvy (singular)
 };
@@ -86,7 +103,16 @@ const BRAND_ALIAS: Record<string, string> = {
 //     tendrá su PROPIA shop de venta directa (canal 'shop', no una marca). Por eso
 //     no se importa como marca: la venta directa es un CANAL transversal a las
 //     marcas, no una marca en sí.
-const DISCARDED_BRANDS: Set<string> = new Set(["foodint"]);
+//   - "van van": marca de Last que Foodint NO trabaja ni va a trabajar (Julio,
+//     08/09). Su carta existe en Last —«Van Van Chicken Bar», catálogos de Glovo
+//     y Uber— y el recorrido la atribuye bien, así que sin esto sale cada pasada
+//     en `brands_unresolved` como si faltara por casar. Descartarla a propósito
+//     la saca del ruido y la deja CONTADA en `brands_discarded`, que es su sitio.
+//
+// Esta lista es el respaldo por NOMBRE. La forma buena de descartar es la fila
+// de `external_brand_map` con `is_ignored = true`, que va por id y no depende
+// de cómo se escriba la marca.
+const DISCARDED_BRANDS: Set<string> = new Set(["foodint", "van van"]);
 
 // Infiere el tipo de grupo de modificadores por su nombre (heurística).
 function inferGroupType(name: string): string {
@@ -99,55 +125,211 @@ function inferGroupType(name: string): string {
   return "choice";
 }
 
+// ── Qué campos de cada tabla los manda LAST ───────────────────────────────
+//
+// Lo que NO está en esta lista NO se toca al actualizar, aunque el importador
+// lo escriba al INSERTAR. Es la traducción a código de la decisión de arriba, y
+// está en un solo sitio a propósito: si mañana alguien quiere que Last mande en
+// una columna más, se añade aquí y se ve en el diff. Ausencias deliberadas:
+//
+//   menu_item.recipe_item_id  — el escandallo. Es de Folvy. Pisarlo sería
+//                               tirar el trabajo del cocinero.
+//   menu_item.is_active       — está detrás de `aplicar_activo` (ver abajo).
+//   menu_item.archived_at     — archivar es un acto de Folvy; esta función no
+//                               desarchiva ni archiva. Cuenta y lista.
+//   menu_item.vat_rate        — Last no tiene IVA; es de Folvy.
+//   modifier_group.group_type — lo INFIERE `inferGroupType` por el nombre. Es
+//                               una interpretación de Folvy, y un humano puede
+//                               haberla corregido: no se pisa cada pasada con
+//                               el resultado de una heurística.
+//   modifier_group.brand_id   — ver la nota de la clave, más abajo.
+//   modifier_option.recipe_item_id — de Folvy (hoy muerta: deuda declarada).
+const CAMPOS_DE_LAST: Record<string, string[]> = {
+  menu_category: ["name"],
+  menu_item: ["name", "price", "is_available", "menu_category_id", "product_type"],
+  modifier_group: ["name", "min_selections", "max_selections"],
+  modifier_option: ["name", "price_impact", "position"],
+  combo_slot: ["name", "min_selections", "max_selections", "position"],
+  combo_slot_option: ["menu_item_id", "price_impact", "position"],
+};
 
-// ── Upsert idempotente por external_id ───────────────────────────────
-// Devuelve un Map external_id -> folvy id (incluye preexistentes y nuevos).
-// v1: inserta los que faltan, conserva los existentes (no actualiza campos).
-async function upsertByExternalId(
+// ── La CLAVE con la que se casa una fila de Last con la de Folvy ──────────
+//
+// `external_id` SOLO NO VALE para `menu_item`, y esto está medido (08/09,
+// Foodint): 513 filas etiquetadas `lastapp` reparten 361 external_id — 28 ids
+// repetidos, 7 de ellos con una marca PROPIA y una CEDIDA a la vez. La causa no
+// es un error: son las BEBIDAS. Last tiene UN producto "COCA-COLA ORIGINAL"
+// (`ec807d42…`) y Folvy tiene una ficha por marca — nueve, en ese caso.
+//
+// Con la clave vieja (sólo external_id) el mapa external_id -> id de Folvy se
+// quedaba con UNA de las nueve, la última que pasara, y era arbitraria entre
+// pasadas. Mientras sólo se INSERTABA lo nuevo casi no se notaba; en cuanto se
+// ACTUALIZA, escribe la Coca-Cola de Lobbers encima de la de Meraki Pita.
+//
+// Por eso la clave lleva el ÁMBITO: la columna que, con external_id, hace única
+// la fila. Medido: con el ámbito, 0 pares repetidos en las seis tablas.
+//
+// `modifier_group` es la excepción a propósito: su ámbito NATURAL sería
+// brand_id, pero la marca de un grupo la decide "la primera marca que lo usa" y
+// ese orden no es estable entre pasadas. Con brand_id en la clave, un baile de
+// orden CREARÍA un grupo duplicado en otra marca en vez de actualizar el que
+// hay. Va por external_id solo (50 filas, 50 ids hoy) y `brand_id` no se
+// actualiza nunca: el grupo se queda en la marca donde ya está.
+const AMBITO: Record<string, string | null> = {
+  menu_category: "brand_id",
+  menu_item: "brand_id",
+  modifier_group: null,
+  modifier_option: "modifier_group_id",
+  combo_slot: "combo_item_id",
+  combo_slot_option: "combo_slot_id",
+};
+
+interface ContadorTabla {
+  nuevas: number;
+  actualizadas: number;
+  sin_cambios: number;
+  total: number;
+  cambios_ejemplo: any[];
+}
+
+function contadorNuevo(): ContadorTabla {
+  return { nuevas: 0, actualizadas: 0, sin_cambios: 0, total: 0, cambios_ejemplo: [] };
+}
+
+// Compara un valor de Last con el que devuelve PostgREST. `numeric` vuelve como
+// cadena ("2.6"), así que comparar con === marcaría como cambiada cada fila de
+// cada pasada — y el informe diría "actualizadas: 500" para siempre.
+function mismoValor(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || a === undefined) return b === null || b === undefined;
+  if (b === null || b === undefined) return false;
+  if (typeof a === "number" || typeof b === "number") {
+    const na = Number(a), nb = Number(b);
+    if (Number.isFinite(na) && Number.isFinite(nb)) return Math.abs(na - nb) < 1e-9;
+  }
+  return String(a) === String(b);
+}
+
+// ── Casa por (ámbito, external_id): inserta lo nuevo y ACTUALIZA lo de Last ──
+//
+// Devuelve un Map "ámbito|external_id" -> id de Folvy (preexistentes y nuevos).
+//
+// v1 hacía sólo la mitad: insertaba lo que faltaba y saltaba lo que ya estaba,
+// así que un cambio hecho en el TPV no llegaba NUNCA. Esto es la otra mitad, y
+// va con dos frenos: sólo escribe las columnas de `CAMPOS_DE_LAST`, y sólo
+// sobre filas que de verdad han cambiado (si no, `sin_cambios`).
+async function casarYActualizar(
   sb: SupabaseClient,
   table: string,
   accountId: string,
   rows: Array<Record<string, unknown> & { external_id: string }>,
   dryRun: boolean,
+  contador: ContadorTabla,
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
+  contador.total = rows.length;
   if (rows.length === 0) return map;
+
+  const ambito = AMBITO[table] ?? null;
+  const campos = CAMPOS_DE_LAST[table] ?? [];
+  const clave = (r: Record<string, unknown>) =>
+    ambito ? `${String(r[ambito] ?? "")}|${String(r.external_id)}` : String(r.external_id);
 
   const extIds = [...new Set(rows.map((r) => r.external_id))];
 
-  // 1) Preexistentes
-  const { data: existing, error: selErr } = await sb
-    .from(table)
-    .select("id, external_id")
-    .eq("account_id", accountId)
-    .eq("external_source", "lastapp")
-    .in("external_id", extIds);
-  if (selErr) throw new Error(`select ${table}: ${selErr.message}`);
-  for (const e of existing ?? []) map.set(e.external_id as string, e.id as string);
+  // 1) Preexistentes. Se traen también las columnas de Last para poder decir
+  //    "esta ya estaba y está igual" sin escribir.
+  const columnas = ["id", "external_id", ...(ambito ? [ambito] : []), ...campos].join(", ");
+  const existentes: any[] = [];
+  // `in` con muchos ids hace una URL enorme; se trocea.
+  for (let i = 0; i < extIds.length; i += 200) {
+    const { data, error } = await sb
+      .from(table)
+      .select(columnas)
+      .eq("account_id", accountId)
+      .eq("external_source", "lastapp")
+      .in("external_id", extIds.slice(i, i + 200));
+    if (error) throw new Error(`select ${table}: ${error.message}`);
+    existentes.push(...(data ?? []));
+  }
+  const filaPorClave = new Map<string, any>();
+  for (const e of existentes) {
+    const k = clave(e);
+    filaPorClave.set(k, e);
+    map.set(k, e.id as string);
+  }
 
-  // 2) Nuevos (los que no estaban)
-  const seen = new Set<string>();
-  const newRows = rows.filter((r) => {
-    if (map.has(r.external_id) || seen.has(r.external_id)) return false;
-    seen.add(r.external_id);
-    return true;
-  });
-
-  if (newRows.length === 0) return map;
+  // 2) Repartir en "hay que actualizar", "está igual" y "es nueva".
+  const nuevas: Array<Record<string, unknown>> = [];
+  const aActualizar: Array<{ id: string; campos: Record<string, unknown>; antes: Record<string, unknown> }> = [];
+  const vistas = new Set<string>();
+  for (const r of rows) {
+    const k = clave(r);
+    if (vistas.has(k)) continue;
+    vistas.add(k);
+    const existente = filaPorClave.get(k);
+    if (!existente) {
+      nuevas.push(r);
+      continue;
+    }
+    const cambios: Record<string, unknown> = {};
+    const antes: Record<string, unknown> = {};
+    for (const c of campos) {
+      // En dry_run un padre NUEVO no tiene id todavía y lleva uno sintético
+      // ("dry-…"). Compararlo con el uuid que la fila tiene hoy diría "ha
+      // cambiado" sin que nada haya cambiado, y el informe del dry_run —que es
+      // justo lo que se mira ANTES de aplicar— saldría inflado.
+      if (typeof r[c] === "string" && (r[c] as string).startsWith("dry-")) continue;
+      if (!mismoValor(r[c], existente[c])) {
+        cambios[c] = r[c];
+        antes[c] = existente[c];
+      }
+    }
+    if (Object.keys(cambios).length === 0) {
+      contador.sin_cambios++;
+    } else {
+      aActualizar.push({ id: existente.id as string, campos: cambios, antes });
+    }
+  }
+  contador.nuevas = nuevas.length;
+  contador.actualizadas = aActualizar.length;
+  // Muestra de qué cambia, para poder mirarlo ANTES de aplicar. No es un
+  // resumen: son las filas de verdad, con su antes y su después.
+  contador.cambios_ejemplo = aActualizar.slice(0, 10).map((u) => ({
+    id: u.id, antes: u.antes, despues: u.campos,
+  }));
 
   // En dry_run NO escribimos, pero generamos ids sintéticos para que los pasos
   // hijos (opciones, slots, assignments) puedan contar correctamente.
   if (dryRun) {
-    for (const r of newRows) map.set(r.external_id, `dry-${r.external_id}`);
+    for (const r of nuevas) map.set(clave(r), `dry-${clave(r)}`);
     return map;
   }
 
-  const { data: inserted, error: insErr } = await sb
-    .from(table)
-    .insert(newRows)
-    .select("id, external_id");
-  if (insErr) throw new Error(`insert ${table}: ${insErr.message}`);
-  for (const i of inserted ?? []) map.set(i.external_id as string, i.id as string);
+  // 3) Actualizar. PostgREST no sabe hacer un UPDATE masivo con valores
+  //    distintos por fila, así que va una a una, en tandas para no soltar 500
+  //    peticiones a la vez.
+  for (let i = 0; i < aActualizar.length; i += 20) {
+    const tanda = aActualizar.slice(i, i + 20);
+    const resultados = await Promise.all(
+      tanda.map((u) =>
+        sb.from(table).update({ ...u.campos, updated_at: new Date().toISOString() }).eq("id", u.id)
+      ),
+    );
+    for (const r of resultados) {
+      if (r.error) throw new Error(`update ${table}: ${r.error.message}`);
+    }
+  }
+
+  // 4) Insertar lo nuevo.
+  if (nuevas.length > 0) {
+    const { data: inserted, error: insErr } = await sb
+      .from(table)
+      .insert(nuevas)
+      .select(columnas);
+    if (insErr) throw new Error(`insert ${table}: ${insErr.message}`);
+    for (const i of ((inserted ?? []) as any[])) map.set(clave(i), i.id as string);
+  }
 
   return map;
 }
@@ -176,6 +358,13 @@ Deno.serve(async (req: Request) => {
   const accountId = body.account_id;
   const orgId = body.lastapp_organization_id;
   const dryRun = body.dry_run === true;
+  // Last manda también en activo/inactivo (decisión de Julio), pero eso son
+  // cientos de filas que pueden cambiar de estado en la PRIMERA pasada, y una
+  // pantalla que se vacía de golpe no se distingue de una avería. Va detrás de
+  // un interruptor: el informe SIEMPRE dice cuántas cambiarían
+  // (`platos_que_last_no_sirve` / `platos_inactivos_que_last_si_sirve`), y con
+  // `aplicar_activo: true` se escribe. Contar no se puede desactivar.
+  const aplicarActivo = body.aplicar_activo === true;
   if (!accountId || !orgId) {
     return jsonResponse({ error: "account_id and lastapp_organization_id required" }, 400);
   }
@@ -194,27 +383,77 @@ Deno.serve(async (req: Request) => {
   const token = Deno.env.get(integ.token_secret_name) ?? "";
   if (!token) return jsonResponse({ error: `Secret ${integ.token_secret_name} not set` }, 500);
 
-  // ── Marcas de Folvy (resolución por nombre normalizado) ──
+  // ── Marcas de Folvy ──
   const { data: folvyBrands, error: brErr } = await sb
-    .from("brand").select("id, name").eq("account_id", accountId);
+    .from("brand").select("id, name, ownership_type").eq("account_id", accountId);
   if (brErr) return jsonResponse({ error: `brands: ${brErr.message}` }, 500);
   const brandByNorm = new Map<string, string>();
-  for (const b of folvyBrands ?? []) brandByNorm.set(normalize(b.name), b.id as string);
+  const marcaPorId = new Map<string, { name: string; ownership: string }>();
+  for (const b of folvyBrands ?? []) {
+    brandByNorm.set(normalize(b.name), b.id as string);
+    marcaPorId.set(b.id as string, { name: b.name as string, ownership: (b.ownership_type as string) ?? "" });
+  }
+
+  // ── Marca por ID: external_brand_map ──
+  // (cuenta, 'lastapp', local, id de marca en Last) -> marca de Folvy, o
+  // `is_ignored` para las descartadas a propósito. Existe desde el 12/06 y el
+  // importador no la miraba: resolvía por nombre, que es lo que obliga a tener
+  // alias ("Dirty Burgers"/"Dirty Burger") y lo que deja a «Milanesa Haus»
+  // (cedida) a un tilde de «Milanesa House» (propia).
+  const { data: brandMapRows, error: bmErr } = await sb
+    .from("external_brand_map")
+    .select("external_location_id, external_brand_id, brand_id, is_ignored")
+    .eq("account_id", accountId)
+    .eq("source", "lastapp");
+  if (bmErr) return jsonResponse({ error: `external_brand_map: ${bmErr.message}` }, 500);
+  const mapaMarca = new Map<string, { brandId: string | null; ignorada: boolean }>();
+  for (const m of brandMapRows ?? []) {
+    mapaMarca.set(`${m.external_location_id}|${m.external_brand_id}`, {
+      brandId: (m.brand_id as string) ?? null,
+      ignorada: m.is_ignored === true,
+    });
+  }
 
   const report: any = {
     dry_run: dryRun,
+    aplicar_activo: aplicarActivo,
     brands_in_use: [] as string[],
     brands_skipped_empty: [] as string[],
     brands_unresolved: [] as string[],
-    brands_discarded: [] as string[],   // marcas descartadas a propósito (DISCARDED_BRANDS)
+    brands_discarded: [] as string[],   // marcas descartadas a propósito
+    // La guarda de la decisión de Julio: una marca de Last que casa con una
+    // marca PROPIA de Folvy. No se importa nada suyo. Si esto sale con algo
+    // dentro, no es un aviso menor: es que un nombre de Last apunta a una carta
+    // cuya verdad es Folvy, y hay que mirarlo antes de la siguiente pasada.
+    marcas_propias_rechazadas: [] as any[],
+    // Cómo se resolvió cada marca. Que esto se llene por el lado del nombre no
+    // es un fallo, pero sí es lo que hay que ir vaciando: el nombre se escribe
+    // mal, el id no.
+    marcas_por_id: 0,
+    marcas_por_nombre: [] as string[],
     // Qué se ha descubierto, por local, ANTES de contar nada: si esto viene a
     // cero otra vez, se ve de un vistazo dónde se rompió (08/09).
     discovery: [] as any[],
     catalogs_discovered: 0,
     catalogs_without_brand: [] as string[],
+    // Si esto no está vacío, hay marcas de `brands_skipped_empty` y de
+    // `brands_unresolved` que en realidad son el MISMO catálogo mal atribuido.
+    catalogs_brand_por_nombre: [] as any[],
     categories: 0, products: 0, combos: 0,
     modifier_groups: 0, modifier_options: 0, assignments: 0,
     combo_slots: 0, combo_slot_options: 0,
+    // Nuevo/actualizado/igual por tabla. Es lo que hace comparable una pasada
+    // con la siguiente: "products: 186" no distingue 186 altas de 186 filas que
+    // ya estaban y no han cambiado.
+    tablas: {} as Record<string, ContadorTabla>,
+    // Lo que Last ya NO sirve y en Folvy sigue vivo. Se cuenta y se lista; no
+    // se borra ni se archiva.
+    sobrantes: {
+      platos_que_last_no_sirve: 0,
+      platos_que_last_no_sirve_ejemplo: [] as any[],
+      platos_inactivos_que_last_si_sirve: 0,
+      asignaciones_que_last_no_tiene: 0,
+    },
     warnings: [] as string[],
   };
 
@@ -237,9 +476,9 @@ Deno.serve(async (req: Request) => {
     const locResp = await lastGet(`/locations?organizationId=${orgId}`, token, { "organizationID": orgId });
     const locations: any[] = Array.isArray(locResp) ? locResp : (locResp?.value ?? []);
 
-    // brandByCatalog: catalogId -> nombre marca Last;  catalogLocation: catalogId -> locId
-    const brandByCatalog = new Map<string, string>();
-    const catalogLocation = new Map<string, string>();
+    // catalogInfo: catalogId -> qué marca de Last lo reclama, con qué id y en
+    // qué local (los tres hacen falta para resolver por `external_brand_map`).
+    const catalogInfo = new Map<string, { brandName: string; lastBrandId: string | null; locId: string }>();
     const canonicalCatalogs = new Set<string>();
     // Presencia de catálogo por marca (across locations): una marca está "en
     // uso" si aparece en ALGÚN catálogo de ALGUNA location.
@@ -250,6 +489,13 @@ Deno.serve(async (req: Request) => {
     // callarlos sería volver al mismo sitio (regla 7: se cuentan, no se
     // esconden).
     const catalogsSinMarca: string[] = [];
+    // Catálogos cuya marca NO la dio el recorrido de `brands[].catalogs`, sino
+    // el nombre del catálogo puesto como último recurso. Comprobación pedida por
+    // Julio (§19) y hace falta: un recorrido fallido es INVISIBLE sin esto — la
+    // marca de verdad se queda sin catálogo y sale como «sin carta en Last»,
+    // mientras el nombre del catálogo aparece como marca fantasma «sin
+    // resolver». Dos síntomas separados y nada que diga que son lo mismo.
+    const catalogsMarcaPorNombre: Array<{ catalogo: string; usada_como_marca: string }> = [];
 
     for (const loc of locations) {
       const { catalogMap, debug } = await resolveLocationCatalogs(token, String(loc.id));
@@ -266,11 +512,17 @@ Deno.serve(async (req: Request) => {
           if (!catalogsSinMarca.includes(catId)) catalogsSinMarca.push(catId);
           continue;
         }
+        if (!info.brandFromWalk) {
+          catalogsMarcaPorNombre.push({ catalogo: info.name ?? catId, usada_como_marca: brandName });
+        }
         brandHasCatalog.set(brandName, true);
         if (!canonicalCatalogs.has(catId)) {
           canonicalCatalogs.add(catId);
-          brandByCatalog.set(catId, brandName);
-          catalogLocation.set(catId, String(loc.id));
+          catalogInfo.set(catId, {
+            brandName,
+            lastBrandId: info.brandId,
+            locId: String(loc.id),
+          });
         }
       }
 
@@ -290,40 +542,123 @@ Deno.serve(async (req: Request) => {
       .filter(([, has]) => !has)
       .map(([name]) => name);
     report.catalogs_without_brand = catalogsSinMarca;
+    report.catalogs_brand_por_nombre = catalogsMarcaPorNombre;
     report.catalogs_discovered = canonicalCatalogs.size;
 
+    // ════════════════ FASE 1b: resolver la marca de cada catálogo ════════════
+    //
+    // Se resuelve UNA VEZ por catálogo, no una vez por fila: la marca de un
+    // producto es la del catálogo donde aparece, y resolverla mil veces sólo
+    // multiplica las ocasiones de resolverla distinto.
+    const resueltasCache = new Map<string, string | null>();
+    const resuelveMarca = (catId: string): string | null => {
+      if (resueltasCache.has(catId)) return resueltasCache.get(catId) ?? null;
+      const info = catalogInfo.get(catId);
+      const decide = (): string | null => {
+        if (!info) return null;
+        const { brandName, lastBrandId, locId } = info;
+
+        // 1) Por ID (external_brand_map). Es la vía buena.
+        if (lastBrandId) {
+          const fila = mapaMarca.get(`${locId}|${lastBrandId}`);
+          if (fila) {
+            if (fila.ignorada) {
+              if (!report.brands_discarded.includes(brandName)) report.brands_discarded.push(brandName);
+              return null;
+            }
+            if (fila.brandId) {
+              report.marcas_por_id++;
+              return fila.brandId;
+            }
+          }
+        }
+
+        // 2) Descartadas por nombre (respaldo de la lista de arriba).
+        const norm = normalize(brandName);
+        if (DISCARDED_BRANDS.has(norm)) {
+          if (!report.brands_discarded.includes(brandName)) report.brands_discarded.push(brandName);
+          return null;
+        }
+
+        // 3) Por nombre + alias. Sigue existiendo porque el mapa no cubre
+        //    todos los catálogos; cada marca que caiga aquí se LISTA.
+        const aliased = BRAND_ALIAS[norm] ?? norm;
+        const id = brandByNorm.get(aliased) ?? null;
+        if (!id) {
+          if (!report.brands_unresolved.includes(brandName)) report.brands_unresolved.push(brandName);
+          return null;
+        }
+        if (!report.marcas_por_nombre.includes(brandName)) report.marcas_por_nombre.push(brandName);
+        return id;
+      };
+
+      let id = decide();
+
+      // ── LA GUARDA ────────────────────────────────────────────────────────
+      // Resuelva por id o por nombre, si la marca de Folvy NO es cedida, aquí
+      // no se importa nada. La verdad de una marca propia es Folvy y esta
+      // función viene de Last.
+      //
+      // No es hipotético: hoy 206 platos VIVOS de las 9 marcas propias llevan
+      // `external_source = 'lastapp'` —etiqueta vieja de junio— y ninguna
+      // propia tiene un plato sin ella. O sea que "¿lo trajo Last?" NO se puede
+      // preguntar mirando `external_source`: la respuesta es que sí para todos.
+      // Se pregunta por `brand.ownership_type`, que es lo que esto hace.
+      if (id) {
+        const marca = marcaPorId.get(id);
+        if (!marca || marca.ownership !== "licensed") {
+          report.marcas_propias_rechazadas.push({
+            marca_en_last: info?.brandName ?? "(sin nombre)",
+            marca_en_folvy: marca?.name ?? "(desconocida)",
+            ownership_type: marca?.ownership ?? "(sin tipo)",
+            motivo: "la verdad de esta marca es Folvy; el importador de Last no la toca",
+          });
+          id = null;
+        }
+      }
+
+      resueltasCache.set(catId, id);
+      return id;
+    };
+
     // ════════════════ FASE 2: productos/combos EN USO por catálogo ════════════════
-    // inUseProducts: orgProductId -> { brandName, catExtId, catName }
-    // inUseCombos:   orgComboId   -> { brandName }
-    // categoriesByBrand: clave brandNorm -> Map<catExtId, {name}>
-    const inUseProducts = new Map<string, { brandName: string; catExtId: string | null; catName: string | null }>();
-    const inUseCombos = new Map<string, { brandName: string }>();
-    const categoryRows = new Map<string, { name: string; brandName: string }>(); // catExtId -> ...
+    // inUseProducts: orgProductId -> { brandId, brandName, catExtId, catName }
+    // inUseCombos:   orgComboId   -> { brandId, brandName }
+    const inUseProducts = new Map<string, { brandId: string; brandName: string; catExtId: string | null; catName: string | null }>();
+    const inUseCombos = new Map<string, { brandId: string; brandName: string }>();
+    const categoryRows = new Map<string, { name: string; brandId: string }>(); // catExtId -> ...
 
     for (const catId of canonicalCatalogs) {
-      const brandName = brandByCatalog.get(catId) ?? "";
+      const info = catalogInfo.get(catId)!;
+      const brandId = resuelveMarca(catId);
+      if (!brandId) continue;
       let catalog: any;
       try {
-        catalog = await lastGet(`/catalogs/${catId}`, token, { "locationID": catalogLocation.get(catId) ?? "" });
+        catalog = await lastGet(`/catalogs/${catId}`, token, { "locationID": info.locId });
       } catch (e) {
-        report.warnings.push(`catalog ${catId} (${brandName}): ${String(e)}`);
+        report.warnings.push(`catalog ${catId} (${info.brandName}): ${String(e)}`);
         continue;
       }
       for (const cat of (catalog?.categories ?? [])) {
         const catExtId: string = cat?.id ?? "";
         const catName: string = cat?.name ?? "";
         if (catExtId && !categoryRows.has(catExtId)) {
-          categoryRows.set(catExtId, { name: catName, brandName });
+          categoryRows.set(catExtId, { name: catName, brandId });
         }
         for (const p of (cat?.products ?? [])) {
           const type = (p?.type ?? "PRODUCT").toUpperCase();
           if (type === "COMBO") {
             const comboId = p?.organizationComboId ?? p?.organizationProductId ?? null;
-            if (comboId && !inUseCombos.has(comboId)) inUseCombos.set(comboId, { brandName });
+            if (comboId && !inUseCombos.has(comboId)) {
+              inUseCombos.set(comboId, { brandId, brandName: info.brandName });
+            }
           } else {
             const prodId = p?.organizationProductId ?? null;
             if (prodId && !inUseProducts.has(prodId)) {
-              inUseProducts.set(prodId, { brandName, catExtId: catExtId || null, catName: catName || null });
+              inUseProducts.set(prodId, {
+                brandId, brandName: info.brandName,
+                catExtId: catExtId || null, catName: catName || null,
+              });
             }
           }
         }
@@ -358,7 +693,10 @@ Deno.serve(async (req: Request) => {
         for (const p of (cat.products ?? [])) {
           const pid = p?.productId;
           if (pid && !inUseProducts.has(pid) && orgProductById.has(pid)) {
-            inUseProducts.set(pid, { brandName: comboInfo.brandName, catExtId: null, catName: null });
+            inUseProducts.set(pid, {
+              brandId: comboInfo.brandId, brandName: comboInfo.brandName,
+              catExtId: null, catName: null,
+            });
           }
         }
       }
@@ -371,49 +709,34 @@ Deno.serve(async (req: Request) => {
       for (const gid of (op?.modifierGroups ?? [])) inUseGroupIds.add(gid);
     }
 
-    // ════════════════ FASE 5: resolver marca + construir filas + upsert ════════════════
+    // ════════════════ FASE 5: construir filas + casar/actualizar ════════════════
 
-    // Helper: resuelve brand_id Folvy desde nombre Last; registra unresolved.
-    const resolveBrand = (brandName: string): string | null => {
-      const norm = normalize(brandName);
-      // Marca descartada a propósito (p.ej. FOODINT = venta directa): ni se importa
-      // ni se reporta como "sin resolver". Se registra aparte (informativo).
-      if (DISCARDED_BRANDS.has(norm)) {
-        if (!report.brands_discarded.includes(brandName)) report.brands_discarded.push(brandName);
-        return null;
-      }
-      const aliased = BRAND_ALIAS[norm] ?? norm; // aplica alias conocido si existe
-      const id = brandByNorm.get(aliased);
-      if (!id) {
-        if (!report.brands_unresolved.includes(brandName)) report.brands_unresolved.push(brandName);
-      }
-      return id ?? null;
+    const cuenta = (t: string): ContadorTabla => {
+      const c = contadorNuevo();
+      report.tablas[t] = c;
+      return c;
     };
 
     // 5.1 menu_category
     const catRows: Array<any> = [];
     for (const [catExtId, info] of categoryRows) {
-      const brandId = resolveBrand(info.brandName);
-      if (!brandId) continue;
       catRows.push({
-        account_id: accountId, brand_id: brandId, name: info.name || "(sin nombre)",
+        account_id: accountId, brand_id: info.brandId, name: info.name || "(sin nombre)",
         external_source: "lastapp", external_id: catExtId,
       });
     }
-    const catMap = await upsertByExternalId(sb, "menu_category", accountId, catRows, dryRun);
+    const catMap = await casarYActualizar(sb, "menu_category", accountId, catRows, dryRun, cuenta("menu_category"));
     report.categories = catRows.length;
 
     // 5.2 menu_item (productos)
     const itemRows: Array<any> = [];
     for (const [prodId, info] of inUseProducts) {
-      const brandId = resolveBrand(info.brandName);
-      if (!brandId) continue;
       const op = orgProductById.get(prodId);
       const name = op?.name ?? "(producto)";
       const priceCents = typeof op?.price === "number" ? op.price : 0;
-      const catFolvyId = info.catExtId ? (catMap.get(info.catExtId) ?? null) : null;
+      const catFolvyId = info.catExtId ? (catMap.get(`${info.brandId}|${info.catExtId}`) ?? null) : null;
       itemRows.push({
-        account_id: accountId, brand_id: brandId, channel_id: null, recipe_item_id: null,
+        account_id: accountId, brand_id: info.brandId, channel_id: null, recipe_item_id: null,
         name, price: priceCents / 100, product_type: "item",
         menu_category_id: catFolvyId,
         is_active: true,                       // está en la carta (estructural)
@@ -424,13 +747,11 @@ Deno.serve(async (req: Request) => {
     }
     // 5.3 menu_item (combos)
     for (const [comboId, info] of inUseCombos) {
-      const brandId = resolveBrand(info.brandName);
-      if (!brandId) continue;
       const oc = orgComboById.get(comboId);
       const name = oc?.name ?? "(combo)";
       const priceCents = typeof oc?.price === "number" ? oc.price : 0;
       itemRows.push({
-        account_id: accountId, brand_id: brandId, channel_id: null, recipe_item_id: null,
+        account_id: accountId, brand_id: info.brandId, channel_id: null, recipe_item_id: null,
         name, price: priceCents / 100, product_type: "combo",
         menu_category_id: null,
         is_active: true,
@@ -439,24 +760,24 @@ Deno.serve(async (req: Request) => {
         external_source: "lastapp", external_id: comboId,
       });
     }
-    const itemMap = await upsertByExternalId(sb, "menu_item", accountId, itemRows, dryRun);
+    const itemMap = await casarYActualizar(sb, "menu_item", accountId, itemRows, dryRun, cuenta("menu_item"));
     report.products = itemRows.filter((r) => r.product_type === "item").length;
     report.combos = itemRows.filter((r) => r.product_type === "combo").length;
 
     // 5.4 modifier_group
     const groupRows: Array<any> = [];
-    const groupBrand = new Map<string, string>(); // groupExtId -> brandName (1ª marca que lo usa)
+    const groupBrand = new Map<string, string>(); // groupExtId -> brand_id Folvy (1ª marca que lo usa)
     for (const prodId of inUseProducts.keys()) {
       const op = orgProductById.get(prodId);
-      const bn = inUseProducts.get(prodId)!.brandName;
+      const bid = inUseProducts.get(prodId)!.brandId;
       for (const gid of (op?.modifierGroups ?? [])) {
-        if (!groupBrand.has(gid)) groupBrand.set(gid, bn);
+        if (!groupBrand.has(gid)) groupBrand.set(gid, bid);
       }
     }
     for (const gid of inUseGroupIds) {
       const g = orgGroupById.get(gid);
       if (!g) continue;
-      const brandId = resolveBrand(groupBrand.get(gid) ?? "");
+      const brandId = groupBrand.get(gid);
       if (!brandId) continue;
       groupRows.push({
         account_id: accountId, brand_id: brandId,
@@ -467,7 +788,7 @@ Deno.serve(async (req: Request) => {
         external_source: "lastapp", external_id: gid,
       });
     }
-    const groupMap = await upsertByExternalId(sb, "modifier_group", accountId, groupRows, dryRun);
+    const groupMap = await casarYActualizar(sb, "modifier_group", accountId, groupRows, dryRun, cuenta("modifier_group"));
     report.modifier_groups = groupRows.length;
 
     // 5.5 modifier_option (de organizationModifiers: priceOverride manda)
@@ -491,13 +812,14 @@ Deno.serve(async (req: Request) => {
         });
       }
     }
-    const optionMap = await upsertByExternalId(sb, "modifier_option", accountId, optionRows, dryRun);
+    const optionMap = await casarYActualizar(sb, "modifier_option", accountId, optionRows, dryRun, cuenta("modifier_option"));
+    void optionMap;
     report.modifier_options = optionRows.length;
 
     // 5.6 modifier_group_assignment (producto -> grupo)
     const assignRows: Array<any> = [];
-    for (const [prodId] of inUseProducts) {
-      const menuItemId = itemMap.get(prodId);
+    for (const [prodId, info] of inUseProducts) {
+      const menuItemId = itemMap.get(`${info.brandId}|${prodId}`);
       if (!menuItemId) continue;
       const op = orgProductById.get(prodId);
       let pos = 0;
@@ -521,8 +843,8 @@ Deno.serve(async (req: Request) => {
 
     // 5.7 combo_slot + 5.8 combo_slot_option
     const slotRows: Array<any> = [];
-    for (const [comboId] of inUseCombos) {
-      const comboFolvyId = itemMap.get(comboId);
+    for (const [comboId, info] of inUseCombos) {
+      const comboFolvyId = itemMap.get(`${info.brandId}|${comboId}`);
       const oc = orgComboById.get(comboId);
       if (!comboFolvyId || !oc) continue;
       let spos = 0;
@@ -537,19 +859,21 @@ Deno.serve(async (req: Request) => {
         });
       }
     }
-    const slotMap = await upsertByExternalId(sb, "combo_slot", accountId, slotRows, dryRun);
+    const slotMap = await casarYActualizar(sb, "combo_slot", accountId, slotRows, dryRun, cuenta("combo_slot"));
     report.combo_slots = slotRows.length;
 
     const slotOptRows: Array<any> = [];
-    for (const [comboId] of inUseCombos) {
+    for (const [comboId, comboInfo] of inUseCombos) {
       const oc = orgComboById.get(comboId);
-      if (!oc) continue;
+      const comboFolvyId = itemMap.get(`${comboInfo.brandId}|${comboId}`);
+      if (!oc || !comboFolvyId) continue;
       for (const cat of (oc.categories ?? [])) {
-        const slotFolvyId = slotMap.get(cat.id);
+        const slotFolvyId = slotMap.get(`${comboFolvyId}|${cat.id}`);
         if (!slotFolvyId) continue;
         let opos = 0;
         for (const p of (cat.products ?? [])) {
-          const menuItemId = itemMap.get(p.productId);
+          const compInfo = inUseProducts.get(p.productId);
+          const menuItemId = compInfo ? itemMap.get(`${compInfo.brandId}|${p.productId}`) : undefined;
           if (!menuItemId) {
             report.warnings.push(`combo slot "${cat.name}": producto ${p.productId} no está en uso, opción omitida`);
             continue;
@@ -564,8 +888,90 @@ Deno.serve(async (req: Request) => {
         }
       }
     }
-    const slotOptMap = await upsertByExternalId(sb, "combo_slot_option", accountId, slotOptRows, dryRun);
+    await casarYActualizar(sb, "combo_slot_option", accountId, slotOptRows, dryRun, cuenta("combo_slot_option"));
     report.combo_slot_options = slotOptRows.length;
+
+    // ════════════════ FASE 6: lo que SOBRA, contado y listado ════════════════
+    //
+    // No se borra nada aquí. Un plato que desaparece de la carta de Last puede
+    // ser una baja de verdad o una pasada incompleta de Last, y la diferencia
+    // no se ve desde dentro de una pasada. Lo que sí se puede hacer —y hay que
+    // hacer— es DECIRLO: la lista existe, con nombre, para que Julio decida.
+    const marcasCedidasTocadas = [...new Set(
+      [...inUseProducts.values(), ...inUseCombos.values()].map((v) => v.brandId),
+    )];
+    if (marcasCedidasTocadas.length > 0) {
+      const idsDeLast = new Set(itemRows.map((r) => `${r.brand_id}|${r.external_id}`));
+      const { data: vivos, error: vErr } = await sb
+        .from("menu_item")
+        .select("id, name, brand_id, external_id, is_active")
+        .eq("account_id", accountId)
+        .eq("external_source", "lastapp")
+        .is("archived_at", null)
+        .in("brand_id", marcasCedidasTocadas);
+      if (vErr) {
+        report.warnings.push(`sobrantes: ${vErr.message}`);
+      } else {
+        const sobra = (vivos ?? []).filter(
+          (m: any) => !idsDeLast.has(`${m.brand_id}|${m.external_id}`),
+        );
+        report.sobrantes.platos_que_last_no_sirve = sobra.length;
+        report.sobrantes.platos_que_last_no_sirve_ejemplo = sobra.slice(0, 15).map((m: any) => ({
+          plato: m.name,
+          marca: marcaPorId.get(m.brand_id)?.name ?? m.brand_id,
+          activo_en_folvy: m.is_active,
+        }));
+        // Asignaciones grupo->plato que Folvy tiene y Last ya no manda. Mismo
+        // criterio: se cuentan, no se borran. Este número es el que dirá si la
+        // pantalla de Modificadores está enseñando preguntas que el cliente ya
+        // no ve.
+        const idsVivos = new Set((vivos ?? []).map((m: any) => m.id as string));
+        const asignacionesDeLast = new Set(
+          assignRows.map((a) => `${a.modifier_group_id}|${a.menu_item_id}`),
+        );
+        const listaVivos = [...idsVivos];
+        let sobranAsig = 0;
+        let falloAsig = false;
+        for (let i = 0; i < listaVivos.length; i += 200) {
+          const { data: asigActuales, error: asErr } = await sb
+            .from("modifier_group_assignment")
+            .select("modifier_group_id, menu_item_id")
+            .eq("account_id", accountId)
+            .in("menu_item_id", listaVivos.slice(i, i + 200));
+          if (asErr) {
+            report.warnings.push(`asignaciones sobrantes: ${asErr.message}`);
+            falloAsig = true;
+            break;
+          }
+          sobranAsig += (asigActuales ?? []).filter(
+            (a: any) => !asignacionesDeLast.has(`${a.modifier_group_id}|${a.menu_item_id}`),
+          ).length;
+        }
+        // Si la medición falló a medias NO se publica media cifra: un número
+        // incompleto presentado como completo es peor que no tenerlo (regla 31).
+        report.sobrantes.asignaciones_que_last_no_tiene = falloAsig ? null : sobranAsig;
+
+        // Al revés: platos que Folvy tiene apagados y Last SÍ sirve. Es lo que
+        // `aplicar_activo` encendería.
+        const apagados = (vivos ?? []).filter(
+          (m: any) => m.is_active === false && idsDeLast.has(`${m.brand_id}|${m.external_id}`),
+        );
+        report.sobrantes.platos_inactivos_que_last_si_sirve = apagados.length;
+        if (aplicarActivo && !dryRun && apagados.length > 0) {
+          for (let i = 0; i < apagados.length; i += 20) {
+            const tanda = apagados.slice(i, i + 20);
+            const res = await Promise.all(
+              tanda.map((m: any) =>
+                sb.from("menu_item")
+                  .update({ is_active: true, updated_at: new Date().toISOString() })
+                  .eq("id", m.id)
+              ),
+            );
+            for (const r of res) if (r.error) report.warnings.push(`activo: ${r.error.message}`);
+          }
+        }
+      }
+    }
 
     // Resumen de marcas en uso RESUELTAS (excluye las no resueltas, ya listadas aparte).
     report.brands_in_use = [...new Set([...inUseProducts.values()].map((v) => v.brandName))]
