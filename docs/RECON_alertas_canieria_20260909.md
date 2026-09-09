@@ -322,3 +322,84 @@ leyendo el texto del ACL: la vara medía otra cosa.
 El despliegue **excluye `_shared` por nombre** y cada función se lleva su copia dentro de su paquete: cambiar
 `_shared/alerta.ts` **no redespliega a quien lo usa**. Hoy no muerde —las seis cambian a la vez—, pero el día
 que se toque sólo la puerta, las seis se quedarán con la versión vieja **sin que nadie avise**.
+
+---
+
+## §12 · Paso 6, fase 1 — dos correcciones a mis propias medidas
+
+### La cifra de los avisos de impresora no es 85, y no son todos del mismo local
+
+El encargo dice «85 avisos en 14 días desde el 26/08, y los 85 son del MISMO local». Medido sobre
+`print_route_failure_log` entera:
+
+| cuenta · local | avisos | desde | hasta |
+|---|---:|---|---|
+| Kitchen Grill LstQ · Kitchen Grill LstQ | **96** | 12/08 | 09/09 |
+| **Folvy Interno · Foodint Alcalá** | **2** | 11/08 | 15/08 |
+| | **98** | | |
+
+Son 98, empiezan el 12/08, y **dos son de la cuenta plantilla**. La conclusión no cambia —el aviso sigue sin
+decir dónde— pero es otra vez el mismo patrón: un `count(*)` sin cuenta mezcla producción con la plantilla.
+
+### Y un fallo del vigía que no estaba en el encargo
+
+El antirruido de ese aviso era **global**:
+
+```sql
+not exists (select 1 from db_health_alert_log
+             where kind = 'db-health-print-no-active-printer'
+               and sent_at >= now() - interval '60 minutes')
+```
+
+O sea que **un local tapaba al otro**: con Kitchen Grill fallando cada día, un fallo simultáneo en Alcalá no
+habría avisado en una hora. Con la clave por local, cada uno avisa por su cuenta. Sale de leer el bloque, no
+de la lista de tareas.
+
+### El criterio «sólo locales activos» que yo escribí está mal, y el caso lo tumba
+
+| cuenta | local | bandera | ventas 30d | importe | tramos | impresoras |
+|---|---|---|---:|---:|---:|---:|
+| Foodint | Alcalá | true | 1.926 | 42.309 € | 11 | 3 |
+| Foodint | Carabanchel | true | 1.073 | 24.921 € | 11 | 2 |
+| **Kitchen Grill LstQ** | Kitchen Grill LstQ | **false** | **138** | **3.254 €** | 0 | **0** |
+| Folvy Interno | Foodint Alcalá | true | 1 | 28,60 € | 0 | 0 |
+| Foodint | Plaza Castilla | false | 0 | — | 12 | 1 |
+
+Con «sólo `l.active`», un local que factura 3.254 € al mes **no se vigila nunca**. La bandera la mantiene una
+persona; las ventas no mienten.
+
+**Pero la regla literal del encargo se pasa de frenada, y hay que decirlo.** «Si un local tiene ventas, está
+operando» mete dentro a la cuenta plantilla: `Folvy Interno · Foodint Alcalá` tiene **una venta de 28,60 €
+del 11/08**. Una venta hace cinco semanas no es un local operando. El corte es **ventas en los últimos 7
+días**, que separa lo que hay hoy sin inventar un umbral de dinero, y se mantiene `is_internal` como
+cinturón.
+
+**El ensayo, con la consulta exacta del fichero:**
+
+```
+a quién vigila el bucle ......... Foodint · Alcalá, Foodint · Carabanchel
+vende con la bandera apagada .... Kitchen Grill LstQ · Kitchen Grill LstQ — 67 venta(s) en 7 días
+```
+
+Exactamente lo que debe: la plantilla fuera, Kitchen Grill señalado. Y el aviso nuevo se mira **sin** el
+filtro de estado de cuenta a propósito — una cuenta suspendida que sigue vendiendo es justo la noticia; con
+`status='active'` delante, el único caso que existe hoy sería invisible.
+
+### Una guarda mía que habría abortado la migración
+
+La verificación comprobaba `'%p_location_id      => t.location_id%'` con **un espacio de más**. La migración
+habría abortado sola, en producción, por una guarda mal contada. Lo cazó probarla; leyéndola no se ve.
+Ahora compara sin contar espacios a ojo.
+
+### Qué queda de `db-health`, dicho para que no se dé por hecho
+
+Los avisos **4 y 5** («print_job atascados >2h» y «encolados a impresora INACTIVA») también hablan de un
+local y tampoco lo dicen. No entran en esta fase para no tocar tres bloques del mismo cuerpo de una vez.
+`db-health` está **a un tercio**, no migrado.
+
+### Deuda de la regla 1 que aparece de paso
+
+**El cuerpo vivo de `db_health_watchdog` no está en el repo.** Las migraciones que lo mencionan son de
+agosto y ninguna trae la versión de hoy. Por eso se toca por ancla y no reescribiéndolo: transcribir 5.861
+caracteres a mano es la mejor forma de perder algo que nadie pidió cambiar. Queda anotado: hay al menos una
+función de producción cuya única copia está en la base.

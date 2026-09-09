@@ -104,6 +104,23 @@ export async function getBrandMenu(slug: string, brandId: string): Promise<Brand
             }
           : null,
       })),
-    })),
+    }))
+    // ── UNA SECCIÓN VACÍA NO SE PINTA EN LA CARTA DEL CLIENTE (09/09) ──────
+    // El importador crea una categoría por CATÁLOGO de Last (Glovo, Uber, web,
+    // sala…) y los platos cuelgan de una sola, así que las demás quedan vacías:
+    // 102 de 182 en Foodint, con «Bebidas» hasta por triplicado. Al cliente eso
+    // le llega como tres secciones seguidas, dos sin nada dentro.
+    //
+    // Esto NO arregla el fondo —las duplicadas se fusionan aparte— pero quita
+    // lo que se ve. Y va en el servicio y no en el render a propósito: así
+    // desaparecen también de la navegación por secciones y del scroll, que leen
+    // esta misma lista. Filtrar sólo al pintar habría dejado pastillas de
+    // navegación que llevan a una sección que no existe.
+    //
+    // OJO, y es lo contrario en la otra pantalla: la de EDICIÓN
+    // (`KitchenMenuPage`) sigue enseñando las vacías, y debe seguir haciéndolo
+    // — ahí son filas que el usuario abre a propósito para llenarlas o
+    // borrarlas, y esconderlas sería la regla 7 al revés.
+    .filter((c: MenuCategory) => c.products.length > 0),
   }
 }
