@@ -13,19 +13,20 @@
 //                          p_margen_foto interval)
 //     → TABLE(dry_run bool, matriculas_miradas int, base_ya_existentes int,
 //             productos_base_creados int, overrides_creados int,
-//             overrides_de_foto_vieja int, saltados_sin_marca int,
+//             overrides_de_foto_vieja int, productos_sin_revisar_precios int,
+//             saltados_sin_marca int, saltados_por_integracion_no_cedida int,
 //             saltados_por_ser_propia int, saltados_por_no_estar_en_la_foto int,
-//             marcas_sin_resolver text[], marcas_propias_saltadas text[],
-//             no_en_la_foto jsonb, fotos jsonb)
+//             marcas_sin_resolver text[], marcas_de_integracion_no_cedida text[],
+//             marcas_propias_saltadas text[], no_en_la_foto jsonb, fotos jsonb)
 //   recast_lastapp_sales(p_account_id uuid, p_incluir_bajo_conteo bool,
 //                        p_ventas_esperadas int)
 //     → TABLE(ventas_procesadas int, ventas_protegidas int,
 //             corte_en timestamptz, lineas_total int, lineas_casadas int,
 //             lineas_no_brand int, lineas_no_recipe int, lineas_no_menu_item int,
 //             lineas_ambiguous int, lineas_respetadas int)
-// Y FILA_SEED no es un ejemplo: es la fila que devolvió el ensayo corriendo
-// contra Foodint el 09/09, copiada tal cual. Las de recast son las medidas del
-// mismo día (8.245 ventas protegidas por el corte).
+// Y FILA_SEED no es un ejemplo: son las cifras medidas contra Foodint el 09/09
+// DESPUÉS de aplicar 20260909105036 y de apagar «Lobbers», copiadas tal cual.
+// Las de recast son las medidas del mismo día (8.245 ventas protegidas).
 //
 // OJO al ámbito, que es lo que hace falsable esta prueba: de recast, solo
 // `ventas_protegidas` y `corte_en` hablan de la pasada. Las `lineas_*` son el
@@ -47,24 +48,36 @@ const CUENTA = '11111111-1111-1111-1111-111111111111'
 const FILA_SEED = {
   dry_run: true,
   matriculas_miradas: 419,
-  base_ya_existentes: 307,
-  productos_base_creados: 17,
-  overrides_creados: 43,
-  overrides_de_foto_vieja: 2,
-  saltados_sin_marca: 18,
-  saltados_por_ser_propia: 65,
+  base_ya_existentes: 303,
+  productos_base_creados: 8,
+  overrides_creados: 21,
+  overrides_de_foto_vieja: 0,
+  productos_sin_revisar_precios: 128,
+  // Lobbers está apagada (brand.is_active=false) desde que se confirmó muerta,
+  // así que sus matrículas ya no resuelven marca y salen por la PRIMERA puerta,
+  // no por la de origen. De ahí 31 en vez de 18 y 65 en vez de 74: se mueven 13
+  // (9 que bloqueaba la guarda de origen + 4 que contaban como ya existentes).
+  // Los 8 a crear NO se mueven, que es la señal de que la guarda mira el origen
+  // del dato y no la etiqueta de la marca.
+  saltados_sin_marca: 31,
+  saltados_por_integracion_no_cedida: 65,
+  saltados_por_ser_propia: 0,
   saltados_por_no_estar_en_la_foto: 12,
-  marcas_sin_resolver: ['Van Van'],
-  marcas_propias_saltadas: [
-    'Smash Brothers Burgers', 'Meraki Pita', 'Dirty Burgers', 'Milanesa House', 'Bendito Burrito',
+  marcas_sin_resolver: ['Lobbers', 'Van Van'],
+  marcas_de_integracion_no_cedida: [
+    'Bendito Burrito', 'Dirty Burgers', 'Meraki Pita', 'Milanesa House',
+    'Smash Brothers Burgers',
   ],
+  marcas_propias_saltadas: [],
   no_en_la_foto: [
     { marca: 'Dos Coyotes', producto: 'PACK UNO PA UNO DC', visto_por_ultima_vez: '2026-06-21T16:08:19.11+00:00' },
     { marca: 'Chivuos', producto: 'CHIVUO´S®️ BURGER (CH)', visto_por_ultima_vez: '2026-08-30T20:00:09.895+00:00' },
   ],
   fotos: [
-    { org: 'b7bc4753-575c-42e1-bf97-ed61443f639b', ultima_foto: '2026-09-08T23:00:10.179+00:00', horas: 10.5, filas: 3360 },
-    { org: '31f13f35-be2e-4806-8be4-a7589c1cbf71', ultima_foto: '2026-09-05T23:00:08.69+00:00', horas: 82.5, filas: 1084 },
+    { org: 'b7bc4753-575c-42e1-bf97-ed61443f639b', nombre: 'Cloudtown', tipo: 'licensed',
+      ultima_foto: '2026-09-08T23:00:10.179+00:00', horas: 11.2, filas: 3360 },
+    { org: '31f13f35-be2e-4806-8be4-a7589c1cbf71', nombre: 'Foodint', tipo: 'own',
+      ultima_foto: '2026-09-05T23:00:08.69+00:00', horas: 83.2, filas: 1084 },
   ],
 }
 
@@ -105,12 +118,14 @@ describe('seedCatalogCanonical', () => {
     const r = await seedCatalogCanonical(CUENTA, true)
     expect(r.dryRun).toBe(true)
     expect(r.matriculasMiradas).toBe(419)
-    expect(r.baseYaExistentes).toBe(307)
-    expect(r.productosBaseCreados).toBe(17)
-    expect(r.overridesCreados).toBe(43)
-    expect(r.overridesDeFotoVieja).toBe(2)
-    expect(r.saltadosSinMarca).toBe(18)
-    expect(r.saltadosPorSerPropia).toBe(65)
+    expect(r.baseYaExistentes).toBe(303)
+    expect(r.productosBaseCreados).toBe(8)
+    expect(r.overridesCreados).toBe(21)
+    expect(r.overridesDeFotoVieja).toBe(0)
+    expect(r.productosSinRevisarPrecios).toBe(128)
+    expect(r.saltadosSinMarca).toBe(31)
+    expect(r.saltadosPorIntegracionNoCedida).toBe(65)
+    expect(r.saltadosPorSerPropia).toBe(0)
     expect(r.saltadosPorNoEstarEnLaFoto).toBe(12)
   })
 
@@ -119,22 +134,28 @@ describe('seedCatalogCanonical', () => {
     const r = await seedCatalogCanonical(CUENTA, true)
     expect(
       r.baseYaExistentes + r.productosBaseCreados + r.saltadosSinMarca
-      + r.saltadosPorSerPropia + r.saltadosPorNoEstarEnLaFoto,
+      + r.saltadosPorIntegracionNoCedida + r.saltadosPorSerPropia
+      + r.saltadosPorNoEstarEnLaFoto,
     ).toBe(r.matriculasMiradas)
   })
 
   it('trae los NOMBRES de lo que deja fuera, no sólo el número (regla 7)', async () => {
     rpc.mockResolvedValue({ data: [FILA_SEED], error: null })
     const r = await seedCatalogCanonical(CUENTA, true)
-    expect(r.marcasSinResolver).toEqual(['Van Van'])
-    expect(r.marcasPropiasSaltadas).toContain('Milanesa House')
-    expect(r.marcasPropiasSaltadas).toHaveLength(5)
+    expect(r.marcasSinResolver).toEqual(['Lobbers', 'Van Van'])
+    expect(r.marcasDeIntegracionNoCedida).toContain('Milanesa House')
+    expect(r.marcasDeIntegracionNoCedida).toHaveLength(5)
+    expect(r.marcasPropiasSaltadas).toEqual([])
     expect(r.noEnLaFoto[0]).toEqual({
       producto: 'PACK UNO PA UNO DC',
       marca: 'Dos Coyotes',
       vistoPorUltimaVez: '2026-06-21T16:08:19.11+00:00',
     })
-    expect(r.fotos[1].horas).toBe(82.5)
+    expect(r.fotos[1]).toEqual({
+      org: '31f13f35-be2e-4806-8be4-a7589c1cbf71',
+      nombre: 'Foodint', tipo: 'own',
+      ultimaFoto: '2026-09-05T23:00:08.69+00:00', horas: 83.2, filas: 1084,
+    })
   })
 
   it('dry_run false no se confunde con true: el eco se lee del dato, no de lo que se pidió', async () => {
@@ -143,8 +164,8 @@ describe('seedCatalogCanonical', () => {
   })
 
   it('los enteros que PostgREST manda como texto siguen siendo números', async () => {
-    rpc.mockResolvedValue({ data: [{ ...FILA_SEED, productos_base_creados: '17' }], error: null })
-    expect((await seedCatalogCanonical(CUENTA, true)).productosBaseCreados).toBe(17)
+    rpc.mockResolvedValue({ data: [{ ...FILA_SEED, productos_base_creados: '8' }], error: null })
+    expect((await seedCatalogCanonical(CUENTA, true)).productosBaseCreados).toBe(8)
   })
 
   it('sin filas devuelve ceros y listas vacías, no undefined pintado como NaN', async () => {
@@ -153,6 +174,7 @@ describe('seedCatalogCanonical', () => {
     expect(r.matriculasMiradas).toBe(0)
     expect(r.productosBaseCreados).toBe(0)
     expect(r.marcasSinResolver).toEqual([])
+    expect(r.marcasDeIntegracionNoCedida).toEqual([])
     expect(r.noEnLaFoto).toEqual([])
     expect(r.fotos).toEqual([])
   })

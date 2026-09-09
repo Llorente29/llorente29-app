@@ -244,3 +244,90 @@ cada org con su antigüedad. Nada de «y además hay N que no te enseño» (regl
 **Sigue abierto:** los overrides no llevan guarda de foto — se cuentan (2 de 43) y la decisión es de Julio.
 Y el excluido `'FOODINT'`, el alias `'Dirty Burgers'→'Dirty Burger'` y el uuid de la unidad «Unidad» siguen
 escritos a fuego dentro de la función: deuda vista, no de este encargo.
+
+---
+
+## §7 · Corrección aplicada el 09/09 — la guarda va en el ORIGEN (`20260909105036`)
+
+El §6 se equivocaba en el sitio donde preguntaba. Lo encontró el cruce con el §9b del encargo de alertas:
+de los 17 platos que creaba `20260909101510`, **nueve eran de «Lobbers»**.
+
+```
+brand.ownership_type ....... 'licensed'   ← por eso pasaba la guarda de marca
+sus 22 matrículas .......... SÓLO en la org 31f13f35, la de las PROPIAS
+esa org .................... 404, muerta, foto congelada del 05/09
+última venta ............... 10/07  (194 ventas en toda su historia)
+```
+
+Y la guarda de foto tampoco lo paraba: preguntaba «¿está en la última foto de su org?», y **en una org
+muerta todo está en la última foto**. El cadáver siempre parece fresco. Es exactamente lo que Julio nombra
+en el §9 —medir la frescura de una fuente sin preguntar antes si esa fuente tiene derecho a existir— y mi
+guarda heredó el mismo error una capa más abajo.
+
+La guarda buena pregunta por `external_integration.ownership_type='licensed' AND is_active`, que es donde
+vive el hecho. También en la capa de precios, y ahí el número cambió la decisión: la había dejado abierta
+cuando eran 2 de 43 y se leía «precio de una foto algo vieja»; con la vara correcta eran **22 de 43** y se
+leía «precio de un catálogo que no existe».
+
+| | por marca | por origen |
+|---|---:|---:|
+| platos creados | 17 | **8** |
+| …de ellos, del cadáver | 9 | **0** |
+| bloqueados | 65 | 74 (= 65 + 9) |
+| precios por canal | 43 | **21** |
+| …de ellos, del cadáver | 22 | **0** |
+
+### Recorrido del número, para que no se pierda
+
+```
+antes de todo ....................... 94 creados  (65 propias, 12 viejos, 9 del cadáver)
+con 20260909101510 .................. 17 creados  (9 del cadáver)
+con 20260909105036 ..................  8 creados
+```
+
+### Lo que devuelve hoy, y por qué no es lo que predije
+
+Julio apagó «Lobbers» (`is_active=false` y sus 3 `brand_location_availability`) tras confirmarla muerta.
+Al no resolver ya la marca, sus matrículas salen por la **primera** puerta en vez de por la de origen:
+
+| | antes de apagarla | ahora |
+|---|---:|---:|
+| matrículas miradas | 419 | 419 |
+| ya existen | 307 | 303 |
+| **se crean** | **8** | **8** |
+| sin marca | 18 | 31 |
+| de integración no cedida | 74 | 65 |
+| de marca propia | 0 | 0 |
+| fuera de la foto | 12 | 12 |
+| precios por canal | 21 | 21 |
+| productos sin mirarles el precio | 132 | 128 |
+
+Los 13 que se mueven son de Lobbers: 9 que bloqueaba la guarda de origen + 4 que contaban como ya
+existentes. **Los 8 a crear no se mueven**, que es la señal de que la guarda mira el origen del dato y no
+la etiqueta. Las 194 ventas históricas siguen enteras y siguen contando: los informes filtran por
+`sale.is_active`, no por la marca. Y queda escrito en la migración: *si el ensayo devuelve la columna de la
+izquierda, es que Lobbers volvió a activarse.*
+
+### Tres correcciones al §9b del encargo de alertas, medidas y aceptadas por Julio
+
+1. **Sus cifras del espejo eran de tabla entera** (regla 9). Los 10.132 de Cloudtown son 3.729 de
+   `Folvy Interno` + 3.360 de Foodint + 3.043 de `Kitchen Grill LstQ`; los 2.097 de la org muerta son 1.084
+   de Foodint + 1.013 de la plantilla. La acción de borrado no puede decir «las 2.097 filas».
+2. **Retirar el cadáver NO hace innecesaria la guarda de foto.** Los 12 que deja fuera son todos de
+   Cloudtown, la org viva: nueve del 21/06 y dos del 30/08, casi todos packs.
+3. **Las dos integraciones están `is_active=true`**, la muerta incluida. Quien las separa es
+   `ownership_type`, no `is_active`; la guarda no depende de que se retire la fila.
+
+### Dos cosas que costaron un intento, y son la lección
+
+**El fichero no aplicó a la primera.** El `DROP` nombraba `seed_catalog_canonical(uuid)` —la firma viva
+cuando lo escribí—, pero al aplicarse ya era `(uuid, boolean, interval)` por culpa de la migración anterior
+del mismo día. El drop de una firma que no existe es un no-op silencioso y el `CREATE` se estrella con
+`already exists with same argument types`. **Una migración que hace DROP+CREATE tiene que nombrar la firma
+que estará viva EN EL MOMENTO DE APLICARSE, no la que había cuando se escribió.** Con dos migraciones de la
+misma función en vuelo el mismo día, eso cambia entre una y otra. Misma familia que la regla 2.
+
+**Y la conclusión sobre los comentarios estaba mal.** Escribí que «no sobrevivieron al aplicado». No fue la
+herramienta: los perdió Julio al reescribir a mano la primera migración antes de aplicarla. Por eso cuadraba
+normalizada y no en bruto. Esta segunda se aplicó fiel y el cuerpo vivo es idéntico **en bruto** al fichero:
+`md5 854392d4f57e123dd0c338143d3da5d9`, 11.192 caracteres, comentarios incluidos.

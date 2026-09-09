@@ -19,8 +19,10 @@
 -- puede ejecutarla y `authenticated` sí. Todo verificado con
 -- `has_function_privilege`, no con el texto del ACL.
 --
--- ⚠️ LOS COMENTARIOS NO SOBREVIVIERON AL APLICADO. Quien lea esta función con
--- `pg_get_functiondef` no verá por qué existe cada guarda. Están aquí.
+-- POR QUÉ FALTABAN LOS COMENTARIOS: los perdió Julio al reescribir esta
+-- migración a mano antes de aplicarla, no la herramienta al aplicarla. Escribí
+-- lo contrario y estaba mal. La siguiente (20260909105036) se aplicó fiel y su
+-- cuerpo vivo es idéntico EN BRUTO al fichero, comentarios incluidos.
 --
 -- ⚠️ ESTA VERSIÓN TIENE UN AGUJERO, ENCONTRADO DESPUÉS DE APLICARLA. La guarda
 -- de propiedad pregunta `brand.ownership_type`, y esa etiqueta puede estar mal:
