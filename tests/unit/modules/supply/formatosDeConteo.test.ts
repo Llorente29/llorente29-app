@@ -20,6 +20,13 @@
 // `qty_in_base !== 1`, no `> 1`.
 
 import { describe, it, expect } from 'vitest'
+
+// ENTRE LA CIFRA Y LA UNIDAD VA U+00A0, no un espacio normal (corrección de
+// Julio del 10/09: a 390 px «750» se quedaba al final de una línea y la «g»
+// sola al principio de la siguiente). Se escribe con este ayudante y no
+// pegando el carácter invisible en cada cadena: una prueba que depende de un
+// carácter que no se ve es una prueba que nadie sabe arreglar cuando se rompe.
+const nb = (s: string) => s.replace(/ (kg|g|l|ml|ud|u)\b/g, '\u00A0$1')
 import {
   detectarChoques, explicarChoque, formatLabel, formatDetail, fmtQty,
   type CountFormat,
@@ -133,23 +140,26 @@ describe('detectarChoques · contra el catálogo real', () => {
 describe('el nombre que ve quien cuenta, compuesto y no guardado', () => {
   it('Caja · 4 bolsas · 10 kg — igual que la maqueta', () => {
     const caja = PATATAS_FORMATOS[1]
-    expect(formatLabel(caja, 'g')).toBe('Caja · 4 bolsas · 10 kg')
-    expect(formatDetail(caja, 'g')).toBe('4 bolsas · 10 kg')
+    expect(formatLabel(caja, 'g')).toBe(nb('Caja · 4 bolsas · 10 kg'))
+    expect(formatDetail(caja, 'g')).toBe(nb('4 bolsas · 10 kg'))
   })
 
   it('Bolsa · 2,5 kg — sin árbol, sólo el contenido', () => {
-    expect(formatLabel(PATATAS_FORMATOS[0], 'g')).toBe('Bolsa · 2,5 kg')
+    expect(formatLabel(PATATAS_FORMATOS[0], 'g')).toBe(nb('Bolsa · 2,5 kg'))
   })
 
   it('Paquete · 18 ud — las unidades no se convierten a kilos', () => {
-    expect(formatLabel(TORTILLA_FORMATOS[0], 'ud')).toBe('Paquete · 18 ud')
+    expect(formatLabel(TORTILLA_FORMATOS[0], 'ud')).toBe(nb('Paquete · 18 ud'))
   })
 
   it('1.000 g se lee 1 kg, y 1.000 ml se lee 1 l', () => {
-    expect(fmtQty(1000, 'g')).toBe('1 kg')
-    expect(fmtQty(5750, 'g')).toBe('5,75 kg')
-    expect(fmtQty(1500, 'ml')).toBe('1,5 l')
-    expect(fmtQty(750, 'g')).toBe('750 g')
+    expect(fmtQty(1000, 'g')).toBe(nb('1 kg'))
+    expect(fmtQty(5750, 'g')).toBe(nb('5,75 kg'))
+    expect(fmtQty(1500, 'ml')).toBe(nb('1,5 l'))
+    expect(fmtQty(750, 'g')).toBe(nb('750 g'))
+    // Y que de verdad sea el de no separación, no uno normal que se le parece.
+    expect(fmtQty(750, 'g')).toContain('\u00A0')
+    expect(fmtQty(750, 'g')).not.toContain(' ')
   })
 })
 
@@ -160,9 +170,9 @@ describe('la frase que explica el choque, en palabras de cocina', () => {
       detectarChoques(PORK_FORMATOS),
     )
     expect(txt).toContain('3 «Bolsa» con distinto peso')
-    expect(txt).toContain('1 kg')
-    expect(txt).toContain('1,3 kg')
-    expect(txt).toContain('4 kg')
+    expect(txt).toContain(nb('1 kg'))
+    expect(txt).toContain(nb('1,3 kg'))
+    expect(txt).toContain(nb('4 kg'))
     // Y dice qué pasa mientras nadie decida — sin eso, la frase acusa y no ayuda.
     expect(txt).toContain('se cuenta en gramos')
     expect(txt).toContain('se archivan, no se borran')
@@ -174,7 +184,7 @@ describe('la frase que explica el choque, en palabras de cocina', () => {
       detectarChoques(TORTILLA_FORMATOS),
     )
     expect(txt).toContain('«Ud»')
-    expect(txt).toContain('20 ud')
-    expect(txt).toContain('260 ud')   // 13 × 20, el ejemplo de la maqueta
+    expect(txt).toContain(nb('20 ud'))
+    expect(txt).toContain(nb('260 ud'))   // 13 × 20, el ejemplo de la maqueta
   })
 })

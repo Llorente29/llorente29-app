@@ -153,7 +153,15 @@ BEGIN
                 AND sm.location_id    = v_location_id
                 AND sm.occurred_at    < COALESCE(l.counted_at, v_instant)
            ), 0) AS ledger_before,
-           COALESCE(ril.avg_unit_cost, 0) AS unit_cost
+           -- CAMBIO 10/09 (corrección de Julio §1.1): `avg_unit_cost` a
+           -- secas, sin COALESCE a 0. Ese cero era la mitad del bucle:
+           -- apply escribía 0 (o el coste medio negativo) en el ajuste, y el
+           -- ajuste volvía a alimentar el coste medio. Con la p8 los ajustes
+           -- ya no mueven la media, y con esto además dejan de mentir sobre
+           -- lo que valen: si no se sabe, NULL. La columna lo admite, y las
+           -- tres funciones que multiplican qty × unit_cost ya llevan su
+           -- propio COALESCE — comprobado una a una, no supuesto.
+           ril.avg_unit_cost AS unit_cost
       FROM public.inventory_count_line l
       LEFT JOIN public.recipe_item_location_stock ril
         ON ril.recipe_item_id = l.recipe_item_id

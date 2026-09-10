@@ -185,8 +185,11 @@ BEGIN
     END IF;
 
     IF v_method = 'fraccion' THEN
-      IF v_fraction IS NULL OR v_fraction <= 0 OR v_fraction >= 1 THEN
-        RAISE EXCEPTION 'save_count_line: una fracción a ojo va entre 0 y 1 (¼, ½, ¾), no %', v_fraction;
+      -- Puede pasar de 1: «Otra · + bolsa» de la pantalla 2 sirve para decir
+      -- que hay dos bolsas abiertas y media. Sigue siendo A OJO, y eso es lo
+      -- que hace que salga marcada en la aprobación.
+      IF v_fraction IS NULL OR v_fraction <= 0 THEN
+        RAISE EXCEPTION 'save_count_line: una cantidad a ojo tiene que ser mayor que cero, no %', v_fraction;
       END IF;
       v_a_ojo := true;
     END IF;

@@ -20,11 +20,54 @@
 -- a no creérsela.
 --
 -- Lo que hay a partir de ahora: MEDIA PONDERADA PERPETUA, recorriendo el libro
--- en orden. Cada entrada con coste mueve la media; las salidas NO la tocan.
+-- en orden. Sólo las RECEPCIONES mueven la media; todo lo demás, no.
 --
---     avg = (max(qty_antes,0) × avg + qty_entra × coste_entra)
---           ─────────────────────────────────────────────────
---                    max(qty_antes,0) + qty_entra
+-- ─────────────────────────────────────────────────────────────────────────
+-- DOS CORRECCIONES DE JULIO SOBRE EL PRIMER ENSAYO (10/09), Y SON LAS QUE
+-- HACEN QUE ESTO SIRVA PARA ALGO
+--
+-- (1) SÓLO LAS RECEPCIONES. El encargo decía «en cada entrada con coste», y mi
+--     primera versión lo cumplía al pie de la letra: un ajuste POSITIVO de
+--     recuento entra con `unit_cost = COALESCE(avg_unit_cost, 0)` —el coste
+--     medio viejo, el envenenado— y, si el stock previo era ≤ 0, se convertía
+--     en la media nueva. El caso que lo destapa:
+--
+--       Aceite de Oliva Suave 0,4º · Carabanchel · ficha 0,0045 €/ml
+--         16/06  recepción  250 ml  0,0122
+--         24/06  recepción  250 ml  0,0122
+--         05/08  AJUSTE      31 ml  0,1070   ← coste medio viejo, arrastrado
+--       Mi media nueva daba 0,1070 €/ml. Eso son 107 € el litro de aceite.
+--
+--     Mueven la media `goods_receipt_line` y `traspaso_entrada`, que traen el
+--     coste de ORIGEN. Un ajuste de recuento entra al coste medio vigente y no
+--     lo cambia — y `apply_inventory_count` (migración p6) pasa a escribirlo
+--     así, con `avg_unit_cost` a secas y NULL cuando no se sabe, nunca con un
+--     `COALESCE(..., 0)`. Eso cierra el bucle: sin él, un coste negativo
+--     engendraba movimientos negativos que volvían a alimentarlo.
+--
+-- (2) UNA RECEPCIÓN CON EL COSTE MAL PUESTO ENVENENA LA MEDIA NUEVA.
+--
+--       CAJA GENERICA 780 Ml · Alcalá · ficha 0,2241 €/ud
+--         07/07  250 ud a 56,0200   ← el precio de la caja entera, por unidad
+--       Media nueva 6,5461 €/ud: 79,80 € de stock pasaban a 3.273,06 €.
+--
+--     Medido: 53 recepciones de 23 artículos se apartan más de ×5 de su coste
+--     de ficha (de 911 con coste en Foodint). Una recepción fuera de esa banda
+--     NO mueve la media hasta que alguien la corrija. No se rechaza, no se
+--     borra y no se toca: se queda fuera de la media y sale listada con nombre,
+--     fecha, cantidad, coste puesto y coste de ficha en el ensayo. Corregirlas
+--     es un dato de producción y se hace con Julio delante, no en una
+--     migración.
+--
+--     La banda es `supply_settings.cost_band_factor` (5 por defecto), no un
+--     número escrito aquí. Y si el artículo NO tiene coste de ficha, no hay
+--     con qué juzgar: la recepción entra. Rechazarla dejaría sin coste para
+--     siempre a cualquier artículo nuevo, que es peor que el riesgo que cubre.
+-- ─────────────────────────────────────────────────────────────────────────
+--
+--     avg = (max(qty_antes,0) × avg + qty_recibe × coste_recibe)
+--           ───────────────────────────────────────────────────
+--                    max(qty_antes,0) + qty_recibe
 --
 -- El `max(qty_antes, 0)` es lo que impide que un stock negativo envenene el
 -- coste: si el libro está en −3 kg y entran 10 con coste, la media es la del
@@ -56,32 +99,49 @@ DECLARE
   v_avg        numeric := NULL;
   v_base       numeric;
   v_value      numeric;
+  v_ficha      numeric;
+  v_banda      numeric;
   r            RECORD;
 BEGIN
-  SELECT account_id INTO v_account_id FROM recipe_item WHERE id = p_item_id;
+  SELECT account_id,
+         COALESCE(NULLIF(computed_cost, 0), NULLIF(fixed_cost, 0))
+    INTO v_account_id, v_ficha
+    FROM recipe_item WHERE id = p_item_id;
   IF v_account_id IS NULL THEN
     RAISE EXCEPTION 'recompute_location_stock_core: item % no existe', p_item_id;
   END IF;
+
+  SELECT COALESCE(cost_band_factor, 5) INTO v_banda
+    FROM supply_settings WHERE account_id = v_account_id;
+  v_banda := COALESCE(v_banda, 5);
+  IF v_banda <= 1 THEN v_banda := 5; END IF;
 
   -- El libro en orden. `id` desempata para que dos movimientos con el mismo
   -- instante se recorran siempre igual: sin ese desempate, el mismo libro daría
   -- dos costes distintos en dos ejecuciones y nadie sabría cuál creerse.
   FOR r IN
-    SELECT qty_base, unit_cost
+    SELECT qty_base, unit_cost,
+           (source_type = 'goods_receipt_line'
+            OR movement_type IN ('recepcion', 'traspaso_entrada')) AS es_recepcion
       FROM stock_movement
      WHERE recipe_item_id = p_item_id
        AND location_id    = p_location_id
      ORDER BY occurred_at, id
   LOOP
-    -- `unit_cost > 0`, no `IS NOT NULL`: un coste negativo o cero no es un
+    -- SÓLO LAS RECEPCIONES, y sólo si su coste es creíble.
+    --
+    -- `unit_cost > 0` y no `IS NOT NULL`: un coste negativo o cero no es un
     -- coste, es un hueco (regla 3, la misma lección que `computed_cost = 0`).
-    -- Y aquí hay un BUCLE que hay que cortar: `apply_inventory_count` escribe
-    -- en cada ajuste `unit_cost = COALESCE(avg_unit_cost, 0)`, así que un coste
-    -- medio negativo genera movimientos de coste negativo, que vuelven a
-    -- alimentar el coste medio. Medido el 10/09 en Foodint: 87 ENTRADAS con
-    -- coste negativo, y son las únicas que podían dejar el nuevo coste medio en
-    -- negativo — las otras 9.957 son salidas, que ya no tocan la media.
-    IF r.qty_base > 0 AND r.unit_cost > 0 THEN
+    --
+    -- Y la banda: `v_ficha IS NULL` deja pasar a propósito —sin coste de ficha
+    -- no hay con qué juzgar, y rechazar dejaría sin coste para siempre a un
+    -- artículo nuevo.
+    IF r.qty_base > 0
+       AND r.es_recepcion
+       AND r.unit_cost > 0
+       AND (v_ficha IS NULL
+            OR (r.unit_cost <= v_ficha * v_banda AND r.unit_cost >= v_ficha / v_banda))
+    THEN
       v_base := GREATEST(v_qty, 0);
       IF v_avg IS NULL OR v_base = 0 THEN
         v_avg := r.unit_cost;
@@ -89,7 +149,8 @@ BEGIN
         v_avg := (v_base * v_avg + r.qty_base * r.unit_cost) / (v_base + r.qty_base);
       END IF;
     END IF;
-    -- Las salidas mueven la CANTIDAD, nunca el coste medio.
+    -- Todo lo demás mueve la CANTIDAD y no el coste: las salidas, los ajustes
+    -- de recuento, las mermas y las aperturas.
     v_qty := v_qty + r.qty_base;
   END LOOP;
 
@@ -123,10 +184,12 @@ END;
 $function$;
 
 COMMENT ON FUNCTION public.recompute_location_stock_core(uuid, uuid) IS
-  'Media ponderada PERPETUA: recorre el libro en orden, cada entrada con coste '
-  'mueve la media, las salidas no. Un stock negativo no envenena el coste '
-  '(max(qty,0)). Sin entradas con coste, coste de ficha; sin eso, NULL — nunca '
-  '0 callado (§2.5, 10/09/2026).';
+  'Media ponderada PERPETUA: recorre el libro en orden y SÓLO las recepciones '
+  'con coste dentro de banda (cost_band_factor × coste de ficha) mueven la '
+  'media. Los ajustes de recuento, las mermas y las salidas no la tocan. Un '
+  'stock negativo no la envenena (max(qty,0)). Sin recepciones válidas, coste '
+  'de ficha; sin eso, NULL — nunca 0 callado (§2.5 + correcciones de Julio del '
+  '10/09/2026).';
 
 -- ═════════════════════════════════════════════════════════════════════════
 -- close_inventory_count · valora con ese coste, y NULL cuando no lo hay

@@ -3,6 +3,40 @@
 **Encargo del 10/09/2026 · maqueta de 5 pantallas aprobada por Julio ese mismo día**
 Rama `claude/conteo-formatos-validacion-pwbctk`.
 
+> ## Segunda vuelta · respuesta a las correcciones de Julio
+>
+> **§1.1 · Sólo las recepciones mueven la media.** Tenía razón y el caso que lo
+> prueba es suyo: el ajuste de 31 ml de Aceite de Oliva del 05/08 entraba con
+> 0,1070 €/ml —el coste medio viejo, arrastrado— y se convertía en la media
+> nueva. **107 € el litro de aceite.** Ahora mueven la media sólo
+> `goods_receipt_line` y `traspaso_entrada`. Y `apply_inventory_count` escribe
+> sus ajustes con `avg_unit_cost` a secas, NULL incluido: ahí se cierra el
+> bucle.
+>
+> **§1.2 · Una recepción con el coste mal puesto envenena la media nueva.**
+> También cierto. Banda de ×5 contra el coste de ficha, en
+> `supply_settings.cost_band_factor`. CAJA GENERICA 780 Ml pasa de 6,5461 €/ud a
+> **0,2014**, y sus 3.273 € de stock inventado a 100,72 €.
+>
+> **Y una cosa que sale de listar las 53:** en **21 de los 23** artículos la
+> mediana de sus recepciones coincide con la ficha, o sea que la banda está
+> dejando fuera exactamente la línea rara. En **dos no**, y ahí la rara es LA
+> FICHA — están abajo con nombre. Esa columna va en el ensayo, porque es la que
+> dice qué corregir.
+>
+> **§1.3 · Albahaca y Tortilla Trigo.** Comprobado y coincide: ya no las
+> pregunto.
+>
+> **§2 · Las cuatro de pantalla**, hechas. La primera era la peor y tenía razón
+> dos veces: «Bolsa cerrada abierta, a ojo» decía «cerrada» de una bolsa
+> abierta. Ahora el título sale del ENVASE —la primera palabra— y el género de
+> una regla probada contra los 24 nombres de formato que hay en el catálogo.
+>
+> **§3 · Las dos cifras.** Los «27» son 6 por arriba + 21 por abajo; los «35 sin
+> motivo» caben dentro de mis 152. Anotado, nada que cambiar.
+>
+> **Sigue sin aplicarse nada.** El orden de §4 es el que se sigue.
+
 ---
 
 ## Lo primero: qué está hecho y qué espera a Julio
@@ -53,11 +87,13 @@ sale de una consulta sin `account_id`.
 
 ### Donde el número no me sale
 
-**«27 filas a más de ×3 del coste de ficha».** A mí me salen **6** con
-`avg_unit_cost > 3 × COALESCE(computed_cost, fixed_cost)`, y **10** si comparo
-el valor absoluto. No he encontrado la definición que da 27. No cambia ninguna
-decisión —los 120 sin coste y los 50 negativos, que son lo grave, cuadran
-exactos— pero va dicho: si esa cifra iba a algún sitio, no la respaldo.
+**«27 filas a más de ×3 del coste de ficha».** Resuelto por Julio: son **6 por
+encima de ×3 más 21 por debajo de ⅓**. Mi consulta sólo miraba hacia arriba. No
+cambia ninguna decisión.
+
+**«35 líneas sin motivo».** También resuelto: son de Alcalá, sin las líneas de
+Julio, y contando sólo las que tienen diferencia distinta de cero. Caben dentro
+de mis 152, que son de los tres locales.
 
 ### Cuatro cosas que el encargo no dice y sí importan
 
@@ -252,11 +288,14 @@ etiqueta que está en la pantalla y no puede salir nunca.
   (posición negativa): es lo que alguien ha pedido a mano, no lo que el motor
   ha elegido.
 
-### §2.5 · El coste medio · **ENSAYO, PARA MIRAR ANTES DE APLICAR**
+### §2.5 · El coste medio · **ENSAYO REHECHO, PARA MIRAR ANTES DE APLICAR**
 
-Media ponderada perpetua recorriendo el libro en orden. Las salidas no tocan la
-media; `max(qty_antes, 0)` impide que un stock negativo la envenene; sin
-entradas con coste se usa el de ficha; sin eso, **NULL — nunca 0 callado**.
+Media ponderada perpetua recorriendo el libro en orden. **Sólo las recepciones
+mueven la media**, y sólo si su coste está dentro de ×5 del coste de ficha. Los
+ajustes de recuento, las mermas, las aperturas y las salidas mueven la cantidad
+y no tocan el coste. `max(qty_antes, 0)` impide que un stock negativo la
+envenene. Sin recepciones válidas se usa el coste de ficha; sin eso, **NULL —
+nunca 0 callado**.
 
 ```
 Foodint · 453 filas artículo × local activas
@@ -264,45 +303,77 @@ Foodint · 453 filas artículo × local activas
                        ANTES        DESPUÉS
   sin coste              120             49
   coste negativo          50              0     ← §4.6
-  cambian                              334
-  valor total       41.442,43 €   49.181,59 €
+  cambian                              339
+  valor total       41.442,43 €   49.735,98 €
 
-  Foodint Alcalá     196 filas · neg 11 → 0 · 34.566,95 → 38.442,12 €
-  Foodint Carabanchel 139 filas · neg 23 → 0 ·  2.551,01 →  5.777,71 €
-  Foodint Plaza Cast. 118 filas · neg 16 → 0 ·  4.324,47 →  4.961,76 €
+  Foodint Alcalá     196 filas · neg 11 → 0 · 34.566,95 → 38.486,15 €
+  Foodint Carabanchel 139 filas · neg 23 → 0 ·  2.551,01 →  6.233,60 €
+  Foodint Plaza Cast. 118 filas · neg 16 → 0 ·  4.324,47 →  5.016,23 €
 ```
 
-Las que más se mueven, con su nombre:
+**Los dos casos que puso Julio, resueltos:**
+
+| | Primer ensayo | Con las correcciones |
+|---|---:|---:|
+| Aceite de Oliva Suave · Carabanchel | 0,1070 €/ml — **107 € el litro** | **0,0122 €/ml** |
+| CAJA GENERICA 780 Ml · Alcalá | 6,5461 €/ud — **3.273,06 €** | **0,2014 €/ud — 100,72 €** |
+
+**El total sube en vez de bajar, y hay que explicarlo.** Julio esperaba que
+bajara porque la caja genérica sola aportaba 3.193 €. Baja por ahí, sí, pero
+las dos correcciones empujan en los dos sentidos: la banda también deja fuera
+recepciones ANORMALMENTE BARATAS —Pan de Pita a 0,0038 €/ud contra una ficha de
+0,30, Coca-Cola a 0,0246 contra 0,5909, Servilletas a 0,0092 contra 0,2767— y
+esos artículos pasan a valorarse por su ficha, que es mucho más alta. Neto:
+49.181,59 € del primer ensayo → **49.735,98 €**. Son +554 €, no −3.193.
+
+Las que más se mueven ahora, con su nombre:
 
 | Artículo · local | Coste antes | Coste después | Valor antes | Valor después |
 |---|---:|---:|---:|---:|
-| CAJA GENERICA 780 Ml · Alcalá | 0,1596 | 6,5461 | 79,80 | 3.273,06 |
+| Bolsas Personalizadas Birria Burrito · Alcalá | 0,1729 | 0,2151 | 8.644,69 | 10.754,00 |
+| Bolsas Personalizadas Ay Mamita · Alcalá | 0,1622 | 0,1934 | 8.923,66 | 10.637,00 |
+| Servilletas 30 x 40 · Carabanchel | 0,0166 | 0,1027 | 169,25 | 1.047,20 |
+| **Tapa Salsero 120 Cc · Alcalá** | **2,8100** | **0,0045** | **562,00** | **0,89** |
 | Tarta 3 Leches · Carabanchel | 0,5854 | 3,1580 | 120,02 | 647,39 |
-| Aceite Oliva Suave · Carabanchel | 0,0008 | 0,1070 | 3,74 | 526,42 |
+| Bolsas Personalizadas Korean · Alcalá | 0,1742 | 0,1611 | 5.530,78 | 5.115,00 |
 | Pollo Mechado · Carabanchel | **−0,0030** | 0,0109 | −81,38 | 297,53 |
-| **Albahaca · Plaza Castilla** | **7,1536** | **0,0278** | **294,68** | **1,14** |
+| Albahaca · Plaza Castilla | 7,1536 | 0,0278 | 294,68 | 1,14 |
 | Carne de Birria · Carabanchel | **−0,0062** | 0,0192 | −62,08 | 193,03 |
-| Hamburguesa Mixta · Plaza Cast. | **−0,0266** | 0,7482 | −7,04 | 198,26 |
-| Milanesa de Pollo · Carabanchel | 0,6181 | 1,8686 | 101,10 | 305,63 |
-| **Tortilla Trigo 30 cm · Carabanchel** | **5,2209** | **0,2293** | **187,95** | **8,25** |
-| Patatas Bastón · Carabanchel | **−0,0006** | 0,0017 | −48,30 | 129,53 |
-
-**Las dos en negrita que BAJAN son las que hay que mirar despacio.** Albahaca
-pasa de 7,15 €/g a 0,03 €/g y Tortilla Trigo de 5,22 €/ud a 0,23 €/ud. No es
-que la fórmula nueva se equivoque: es que la vieja estaba promediando un libro
-con las salidas dentro. Pero un artículo que pierde el 99 % de su valor merece
-que alguien que conoce el producto diga «sí, la tortilla de trigo cuesta
-23 céntimos», y eso no lo puedo decir yo.
+| Tortilla Trigo 30 cm · Carabanchel | 5,2209 | 0,2293 | 187,95 | 8,25 |
 
 Los tres que nombra el §4.6:
 
 | | Antes | Después |
 |---|---:|---:|
 | Coca-Cola Zero Lata · Carabanchel | **−48,73 €** | 26,86 € |
-| Coca-Cola Original Lata · Carabanchel | **−68,04 €** | 35,50 € |
+| Coca-Cola Original Lata · Carabanchel | **−68,04 €** | 27,63 € |
 | Carne de Birria · Carabanchel | **−62,08 €** | 193,03 € |
-| Carne de Birria · Alcalá | 101,14 € | 101,12 € |
-| Carne de Birria · Plaza Castilla | 370,74 € | 370,74 € |
+
+#### Las 53 recepciones fuera de banda, y cuál es la rara
+
+De las 911 recepciones con coste de Foodint, **53 se apartan más de ×5 de su
+ficha, en 23 artículos**. La pregunta útil no es cuáles son, sino qué corregir
+en cada una, y eso lo contesta comparar la ficha con la **mediana de TODAS las
+recepciones del artículo**:
+
+- **En 21 de los 23**, la mediana coincide con la ficha (ratio 1,00–1,25). Las
+  recepciones concuerdan entre ellas y la ficha con ellas: la rara es esa línea
+  suelta. Aquí la banda acierta y basta con corregir la recepción.
+- **En 2 no**, y ahí la rara es la ficha:
+
+| Artículo | Coste de ficha | Mediana de sus recepciones | |
+|---|---:|---:|---|
+| **Humus** | 0,0000072 €/g | 0,0065 €/g | ×900 |
+| **Tapa Salsero 120 Cc** | 0,0045 €/ud | 0,0356 €/ud | ×8 |
+
+En esos dos, la banda deja fuera las recepciones **buenas** y el artículo cae a
+un coste de ficha que no vale: Tapa Salsero pasa de 562 € a 0,89 €. **No es un
+fallo de la regla: es la regla diciendo dónde mirar.** Hay que arreglar la
+ficha, no la recepción.
+
+La lista completa, con nombre, fecha, cantidad, coste puesto, coste de ficha y
+esa columna de veredicto, es el **PASO 0a** de
+`supabase/verificacion/20260910_recalcular_coste_medio.sql`.
 
 `close_inventory_count` valora con ese coste y, sin coste, deja
 `variance_value` en **NULL**. La pantalla dice «sin coste» y la franja de valor
@@ -310,10 +381,9 @@ dice aparte cuántas líneas no puede sumar. El único 0 que se queda es el del
 saneamiento de negativos, y ahí el 0 es un cero de verdad —«esto no es una
 pérdida»—, no un «no lo sé» disfrazado.
 
-**Esto no se aplica solo.** El guion
-`supabase/verificacion/20260910_recalcular_coste_medio.sql` tiene el PASO 0 sin
-escribir, el PASO 1 comentado, y el PASO 2 —recalcular `variance_value` de los
-aprobados desde el 01/08— también con su ensayo delante.
+**Esto no se aplica solo.** El guion tiene el PASO 0a y el 0b sin escribir, el
+PASO 1 comentado, y el PASO 2 —recalcular `variance_value` de los aprobados
+desde el 01/08— también con su ensayo delante.
 
 ### §2.6 · Formatos en oficina
 
@@ -360,17 +430,56 @@ más se escribe «2 × Bolsa cerrada», que nunca está mal.
 mayúscula lleva barra dentro y se lee como un cero. Las cifras siguen en mono;
 las palabras, no.
 
-### Una desviación de la maqueta, dicha a las claras
+### Las cuatro de la segunda vuelta
 
-La maqueta pone **«Bolsa abierta, a ojo»**. Eso sólo funciona con nombres
-femeninos, y en el catálogo real de Foodint los formatos que se abren son
-**«Paquete», «Estuche», «Bote» y «Manojo»**: la frase de la maqueta escribe
-«Paquete abierta, a ojo». Lo vi mirando los nombres de verdad, no el ejemplo.
+**1 · «Bolsa cerrada abierta, a ojo».** La peor, y Julio tenía razón dos veces:
+decía «cerrada» de una bolsa que está abierta, y mi arreglo anterior —quitar el
+género con «Lo abierto, a ojo»— esquivaba el problema en vez de resolverlo. El
+género SÍ se puede sacar, y de donde ya se saca «Bolsa cerrada» y «Paquete
+cerrado»: del **envase**, que es la primera palabra del nombre.
 
-Está construido como **«Lo abierto, a ojo» / «¿Cuánto queda de Bolsa · 2,5 kg?»**,
-que no tiene género y además dice algo que a la maqueta le faltaba: **de qué**
-es la fracción. Un «½» sin decir de qué es lo mismo que el número pelado que
-venimos a quitar. Si Julio prefiere la frase de la maqueta, es una línea.
+Ahora la frase es la de la maqueta —**«Bolsa abierta, a ojo» · «¿Cuánto queda en
+ella?»**— con la cantidad de referencia debajo en gris: «bolsa de 2,5 kg».
+
+La regla de género está probada contra **los 24 nombres de formato que existen
+en el catálogo de Foodint**, con sus faltas de ortografía («Carton» sin tilde,
+«PPaquete» con dos pes) y con el formato que se llama literalmente «1». Y esa
+lista es la que obligó al segundo tramo de la regla: con «acaba en -a» a secas,
+23 de 24 salían bien y **«Unidad» salía mal** — la pantalla habría escrito
+«Unidad abierto». Uno de veinticuatro, y de los que se cuentan.
+
+**2 · El total se partía.** «2 × Bolsa cerrada (5 kg) + 750 / g». Dos cosas:
+el nombre del envase a secas y pluralizado —«2 bolsas», como la maqueta— y un
+**espacio de no separación (U+00A0)** entre cada cifra y su unidad, en las cinco
+pantallas. Sin él, «750» se queda al final de una línea y la «g» sola al
+principio de la siguiente: una cantidad que hay que leer dos veces.
+
+**3 · Las casillas vacías ponían «0».** Ahora ponen «–» mientras no se haya
+tecleado nada de ese producto, y «0» en cuanto hay algo puesto en otra fila —que
+es cuando el cero significa de verdad «ninguna caja». Es lo que hacen las dos
+pantallas de la maqueta, y es lo mismo que dice `save_count_line` al negarse a
+tratar un array vacío como un recuento a cero.
+
+**4 · «Otra · + g» era «+ bolsa».** Corregido: lo que se teclea ahí son
+unidades del formato, no gramos —el caso de dos bolsas abiertas y media—. Sigue
+guardándose como **estimado** (`method = 'fraccion'`), así que llega a la
+aprobación con su pastilla «A ojo»; lo único que ha cambiado en la BBDD es que
+`fraction` ya no está obligada a ser menor que 1.
+
+### Y una cosa que me encontré arreglando esto
+
+**`tests/` no entra en ningún `tsconfig`** — `tsconfig.app.json` incluye sólo
+`src`. Así que `tsc -b` **no mira los ficheros de prueba**, y eso incluye el que
+genera las capturas. Se me olvidó pasarle la propiedad `tocado` a `FilaFormato`
+en la captura, el compilador no dijo nada, y la foto salió con la caja en «–»
+donde tenía que poner «0».
+
+Lo cazó **mirar la foto**, que es exactamente para lo que están las capturas.
+Pero conviene saberlo: el código que hace las capturas es, en silencio, el menos
+comprobado del cambio. Ahora hay una prueba que fija el caso (`p1` lleva un 0,
+`p3` lleva una raya) y otra que comprueba que el U+00A0 sigue ahí. **No he
+metido `tests/` en el tsconfig**: eso enciende el typechecker sobre 82 ficheros
+de prueba de golpe y no es lo que se me ha pedido hoy. Queda dicho aquí.
 
 ---
 
@@ -441,10 +550,10 @@ y se quita el ayudante `rpc()` de `countEntryService.ts`.
 |---|---|---|
 | `tsc -b` | exit 0 | **exit 0** |
 | `eslint src` | 761 errores · 268 avisos | **761 · 268** |
-| `vitest run` (con `dist`) | 1.042 pasan · 6 fallan | **1.064 pasan · 6 fallan** |
+| `vitest run` (con `dist`) | 1.042 pasan · 6 fallan | **1.101 pasan · 6 fallan** |
 
 Los 6 que fallan son los mismos seis de antes (`routes`, `brandsService`,
-`salesChannelsService`) y no los toca nada de aquí. Los 22 nuevos son míos.
+`salesChannelsService`) y no los toca nada de aquí. Los **59** nuevos son míos.
 
 **Los dos errores de lint que sí añadí** eran `setState` en el cuerpo de un
 efecto, en las dos pantallas nuevas. Movidos dentro de la función asíncrona, el
@@ -462,6 +571,11 @@ saca está escrita en la cabecera del fichero.
 tres recuentos reales del peperoni del 3, 4 y 5 de septiembre, con sus nombres
 y sus horas.
 
+`tests/unit/modules/supply/generoDeEnvase.test.ts` (37) va contra **las 24
+primeras palabras de nombre de formato** que hay en el catálogo, con el número
+de formatos de cada una. Esa prueba ya se ganó el sueldo dos veces: puse 349 de
+cabeza y son 330, y me enseñó que «unidad» rompía la regla de género.
+
 `tests/unit/modules/supply/capturaConteoMovil.test.tsx` (1) escribe las tres
 capturas y comprueba dos cosas: que el marcado no lleve clases del Folvy viejo
 —medido sobre el **marcado**, no sobre el fichero, porque el CSS del build
@@ -473,15 +587,22 @@ aparecieran, el freno habría dejado de ser ciego.
 
 ## §5 · Lo que hace falta de Julio, en orden
 
-1. **Leer el ensayo del coste medio de arriba**, en especial Albahaca y
-   Tortilla Trigo 30 cm.
-2. **Aplicar las diez migraciones** por orden de nombre.
-3. **Ejecutar** `supabase/verificacion/20260910_conteo_por_formatos.sql` y
+El orden que puso Julio, con las tres primeras EN LA MISMA SESIÓN — las
+migraciones sin el front nuevo dejarían al móvil de hoy escribiendo contra el
+disparador simétrico:
+
+1. **PASO 0a** de `20260910_recalcular_coste_medio.sql` (no escribe): las 53
+   recepciones fuera de banda. Corregir por lo menos las dos fichas malas
+   —**Humus** y **Tapa Salsero 120 Cc**—, que son las que hacen caer un
+   artículo a un coste que no vale.
+2. **PASO 0b** (no escribe): el antes/después. Si no da 49.735,98 €, parar.
+3. **Aplicar las diez migraciones** por orden de nombre y **fusionar la rama**,
+   a la vez.
+4. **Ejecutar** `supabase/verificacion/20260910_conteo_por_formatos.sql` y
    pegar el resultado.
-4. **PASO 0** de `20260910_recalcular_coste_medio.sql` (no escribe). Si cuadra
-   con las cifras de arriba, descomentar el PASO 1 y el PASO 2.
-5. `npm run types:gen`.
-6. Abrir **Almacén › Cómo se cuenta** y decidir los formatos de los siete
+5. `npm run types:gen`, y quitar el ayudante `rpc()` de `countEntryService.ts`.
+6. **PASO 1** del coste medio, sólo si el 0b cuadró. Y después el PASO 2.
+7. Abrir **Almacén › Cómo se cuenta** y decidir los formatos de los siete
    artículos de la tabla del §2.1 — sobre todo Pulled Pork, que se cuenta 31
    veces al mes con cinco formatos y ninguno marcado.
 

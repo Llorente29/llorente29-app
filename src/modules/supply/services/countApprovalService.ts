@@ -119,11 +119,12 @@ export interface CountReview {
 
 const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 })
 
+// Espacio de NO SEPARACIÓN entre la cifra y su unidad: «750 g» no se parte.
 function qtyTxt(v: number, unit: string | null): string {
   const u = (unit ?? '').toLowerCase()
-  if (u === 'g' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)} kg`
-  if (u === 'ml' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)} l`
-  return `${nf.format(v)}${unit ? ` ${unit}` : ''}`
+  if (u === 'g' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)}\u00A0kg`
+  if (u === 'ml' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)}\u00A0l`
+  return `${nf.format(v)}${unit ? `\u00A0${unit}` : ''}`
 }
 
 function fechaCorta(iso: string): string {

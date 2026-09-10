@@ -186,11 +186,12 @@ export async function listEntriesByCount(countId: string): Promise<Map<string, C
 
 const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 })
 
+// Espacio de NO SEPARACIÓN entre la cifra y su unidad: «750 g» no se parte.
 function qtyTxt(v: number, unit: string | null): string {
   const u = (unit ?? '').toLowerCase()
-  if (u === 'g' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)} kg`
-  if (u === 'ml' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)} l`
-  return `${nf.format(v)}${unit ? ` ${unit}` : ''}`
+  if (u === 'g' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)}\u00A0kg`
+  if (u === 'ml' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)}\u00A0l`
+  return `${nf.format(v)}${unit ? `\u00A0${unit}` : ''}`
 }
 
 const FRACCIONES: Record<string, string> = { '0.25': '¼', '0.5': '½', '0.75': '¾' }
@@ -210,13 +211,19 @@ export function describirEntradas(entries: CountEntry[], baseUnit: string | null
       case 'peso':
         return `${qtyTxt(e.qtyInBase, baseUnit)} pesados`
       case 'fraccion': {
-        const f = FRACCIONES[String(e.fraction)] ?? `${nf.format((e.fraction ?? 0) * 100)} %`
-        return `${f} ${(e.formatName ?? 'formato').toLowerCase()} a ojo`
+        // ¼ ½ ¾ tienen su símbolo; «Otra» sale como número («2,5 bolsas a ojo»).
+        const nombre = (e.formatName ?? 'formato').trim().split(/\s+/)[0].toLowerCase()
+        const f = FRACCIONES[String(e.fraction)]
+        if (f) return `${f} ${nombre} a ojo`
+        const n = e.fraction ?? 0
+        return `${nf.format(n)} ${n === 1 ? nombre : (/[aeiouáéíóú]$/.test(nombre) ? nombre + 's' : nombre + 'es')} a ojo`
       }
       case 'formato': {
+        // El nombre del ENVASE, la primera palabra: «Bolsa cerrada» → «bolsas».
+        // Concordar el sintagma entero escribiría «2 bolsa cerradas».
         const n = e.qty ?? 0
-        const nombre = (e.formatName ?? 'formato').toLowerCase()
-        const plural = n === 1 ? nombre : `${nombre}s`
+        const nombre = (e.formatName ?? 'formato').trim().split(/\s+/)[0].toLowerCase()
+        const plural = n === 1 ? nombre : (/[aeiouáéíóú]$/.test(nombre) ? `${nombre}s` : `${nombre}es`)
         return `${nf.format(n)} ${plural} de ${qtyTxt(e.formatQtyInBase ?? 0, baseUnit)}`
       }
     }

@@ -25,20 +25,79 @@ export const FRACCIONES: { v: number; label: string; pie: string }[] = [
 const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 })
 
 /**
- * «2 bolsas», «2 × Bolsa cerrada».
+ * EL NOMBRE DEL ENVASE, A SECAS: la PRIMERA palabra del formato.
  *
- * Sólo se pluraliza un nombre de UNA palabra. Con dos, el castellano hace
- * concordar las dos —«bolsa cerrada» → «bolsas cerradas»— y una regla que
- * añade una ese al final escribe «2 bolsa cerradas», que es exactamente lo que
- * salió en la primera captura a 390 px. Con «×» delante el nombre se queda
- * intacto y nunca hay una concordancia mal hecha en la pantalla de alguien.
+ * «Bolsa cerrada» → «bolsa». Es el sustantivo; lo que viene detrás es un
+ * adjetivo o el peso escrito a mano («Caja 12,5 kg», «Pack 3x150 g»). Medido
+ * sobre los 24 nombres distintos que hay en el catálogo de Foodint: en los 24,
+ * la primera palabra es el envase.
+ *
+ * Esto es lo que permite pluralizar y concordar bien sin tener que resolver la
+ * concordancia de un sintagma entero, que es donde se rompió la primera
+ * versión: escribía «2 bolsa cerradas».
+ */
+export function nombreDeEnvase(nombre: string): string {
+  return nombre.trim().split(/\s+/)[0].toLowerCase()
+}
+
+/** Nombres cortos que son femeninos y no acaban en -a. */
+const FEMENINOS_SUELTOS = new Set(['ud', 'uds', 'u', 'uni', 'unidad', 'unidades'])
+
+/**
+ * ¿El envase es femenino? «bolsa» sí, «paquete» no.
+ *
+ * Regla de castellano, no una lista: acaba en -a (quitando un plural), o lleva
+ * uno de los sufijos femeninos de siempre (-dad, -ción, -sión, -tad, -umbre).
+ *
+ * PROBADA CONTRA LOS 24 NOMBRES REALES del catálogo de Foodint, que es donde se
+ * ve que hace falta el segundo tramo: `unidad` no acaba en -a y es femenina, y
+ * sin él la pantalla escribiría «Unidad abierto». Los abreviados «Ud» y «Uni»
+ * van en la lista porque son esa misma palabra recortada y ninguna regla
+ * fonética los alcanza.
+ */
+export function esFemenino(nombre: string): boolean {
+  const b = nombreDeEnvase(nombre)
+  if (FEMENINOS_SUELTOS.has(b)) return true
+  const sin = b.endsWith('s') ? b.slice(0, -1) : b
+  if (/(?:dad|ción|cion|sión|sion|tad|umbre)$/.test(sin)) return true
+  return /[aá]$/.test(sin)
+}
+
+/** «abierta» / «abierto», «cerrada» / «cerrado». */
+export function concuerda(nombre: string, adjetivoMasculino: string): string {
+  if (!esFemenino(nombre)) return adjetivoMasculino
+  return adjetivoMasculino.replace(/o$/, 'a')
+}
+
+/**
+ * «Bolsa abierta», «Paquete abierto» — el título de la fila de lo abierto.
+ *
+ * Usa el NOMBRE DEL ENVASE y no el nombre completo del formato, y eso es lo que
+ * arregla la primera versión: con «Bolsa cerrada» delante salía «Bolsa cerrada
+ * abierta, a ojo», que dice «cerrada» de una bolsa que está abierta. El
+ * adjetivo del nombre describe el formato de compra; aquí estamos hablando del
+ * envase que está empezado, que es otra cosa.
+ */
+export function tituloAbierto(nombre: string): string {
+  const b = nombreDeEnvase(nombre)
+  return `${b.charAt(0).toUpperCase()}${b.slice(1)} ${concuerda(nombre, 'abierto')}`
+}
+
+/**
+ * «2 bolsas», «1 bolsa», «3 paquetes», «2 bidones».
+ *
+ * Lo de la tilde no es cosmético: «bidón» hace «bidones», no «bidónes», porque
+ * al añadir sílaba la palabra deja de ser aguda. Sale de probar la regla contra
+ * los 24 nombres del catálogo — «Bidón» es uno de ellos.
  */
 export function plural(n: number, nombre: string): string {
+  const b = nombreDeEnvase(nombre)
+  if (n === 1) return `1 ${b}`
   const num = nf.format(n)
-  if (n === 1) return `1 ${nombre.toLowerCase()}`
-  if (nombre.trim().includes(' ')) return `${num} × ${nombre}`
-  const b = nombre.toLowerCase()
-  return `${num} ${/[aeiouáéíóú]$/.test(b) ? `${b}s` : `${b}es`}`
+  if (/[aeiouáéíóú]$/.test(b)) return `${num} ${b}s`
+  const sinTilde = b.replace(/á(?=[ns]$)/, 'a').replace(/é(?=[ns]$)/, 'e')
+    .replace(/í(?=[ns]$)/, 'i').replace(/ó(?=[ns]$)/, 'o').replace(/ú(?=[ns]$)/, 'u')
+  return `${num} ${sinTilde}es`
 }
 
 export function unidadLarga(abbr: string | null | undefined): string {
@@ -71,11 +130,12 @@ export function desglose(
   } else {
     const ref = formats.find(f => f.id === abierto.formatId) ?? formatoRef
     if (abierto.fraccion != null && ref) {
-      const etiqueta = FRACCIONES.find(f => f.v === abierto.fraccion)?.label ?? `${abierto.fraccion}`
-      trozos.push(`${etiqueta} ${ref.name.toLowerCase()} a ojo`)
+      const etiqueta = FRACCIONES.find(f => f.v === abierto.fraccion)?.label ?? nf.format(abierto.fraccion)
+      trozos.push(`${etiqueta} ${nombreDeEnvase(ref.name)} a ojo`)
     } else {
-      const g = Number(abierto.otros.replace(',', '.'))
-      if (Number.isFinite(g) && g > 0) trozos.push(`${fmtQty(g, baseUnit)} a ojo`)
+      // «Otra» son unidades del formato, no gramos: es otra bolsa abierta.
+      const n = Number(abierto.otros.replace(',', '.'))
+      if (Number.isFinite(n) && n > 0 && ref) trozos.push(`${plural(n, ref.name)} a ojo`)
     }
   }
   return trozos.join(' + ')

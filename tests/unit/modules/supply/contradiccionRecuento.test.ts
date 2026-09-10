@@ -20,6 +20,10 @@ import { describe, it, expect } from 'vitest'
 import { explicarContradiccion, type PrevContext } from '@/modules/supply/services/countApprovalService'
 import type { InventoryCountLine } from '@/modules/supply/services/inventoryCountService'
 
+// U+00A0 entre cifra y unidad, igual que en el móvil. Ver la nota en
+// `formatosDeConteo.test.ts`.
+const nb = (s: string) => s.replace(/ (kg|g|l|ml|ud|u)\b/g, '\u00A0$1')
+
 function linea(p: Partial<InventoryCountLine>): InventoryCountLine {
   return {
     id: 'l1', recipeItemId: 'peperoni', itemName: 'Peperoni Loncheado', unitAbbr: 'g',
@@ -47,10 +51,10 @@ describe('el peperoni · lo que la pantalla tenía que haber dicho el 04/09', ()
   it('0 kg contra 9 kg del día anterior, sin entradas: contradice', () => {
     const txt = explicarContradiccion(linea({}), PAMELA, 40)
     expect(txt).not.toBe('')
-    expect(txt).toContain('Pamela Guzman Velásquez contó 9 kg')
+    expect(txt).toContain(nb('Pamela Guzman Velásquez contó 9 kg'))
     expect(txt).toContain('el 03/09 a las 21:00')
     expect(txt).toContain('no ha entrado peperoni loncheado')
-    expect(txt).toContain('se han vendido 125 g')
+    expect(txt).toContain(nb('se han vendido 125 g'))
   })
 
   it('CON una recepción de por medio se calla: el stock cambió por algo conocido', () => {
@@ -95,7 +99,7 @@ describe('los tequeños · 170 → 255 → 100 en tres días', () => {
       linea({ itemName: 'Tequeños', unitAbbr: 'ud', countedQty: 255, systemQty: 150 }),
       tequenos, 40,
     )
-    expect(txt).toContain('Johanny contó 170 ud')
-    expect(txt).toContain('se han vendido 20 ud')
+    expect(txt).toContain(nb('Johanny contó 170 ud'))
+    expect(txt).toContain(nb('se han vendido 20 ud'))
   })
 })

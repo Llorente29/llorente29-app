@@ -82,13 +82,23 @@ ALTER TABLE public.supply_settings
   -- Lo que la pantalla de aprobación llama «revisa antes de aprobar»: una
   -- desviación tiene que ser grande EN LOS DOS EJES para pedir atención.
   ADD COLUMN IF NOT EXISTS count_review_pct numeric NOT NULL DEFAULT 25,
-  ADD COLUMN IF NOT EXISTS count_review_eur numeric NOT NULL DEFAULT 5;
+  ADD COLUMN IF NOT EXISTS count_review_eur numeric NOT NULL DEFAULT 5,
+  -- Banda de cordura del COSTE de una recepción contra el coste de ficha. Una
+  -- recepción fuera de banda no mueve el coste medio hasta que alguien la
+  -- corrija: el 07/07 alguien puso 56,02 €/ud en CAJA GENERICA 780 Ml —el
+  -- precio de la caja entera, por unidad— y esa sola línea vale 3.193 € de
+  -- valor de stock inventado.
+  ADD COLUMN IF NOT EXISTS cost_band_factor numeric NOT NULL DEFAULT 5;
 
 COMMENT ON COLUMN public.supply_settings.count_recount_factor IS
   'Factor del freno a ciegas contra el teórico vivo (3 = ≥×3 o ≤⅓ → recount).';
 COMMENT ON COLUMN public.supply_settings.count_contradiction_pct IS
   'Cuánto puede apartarse un recuento del anterior aprobado, ajustado por los '
   'movimientos de por medio, antes de considerarse contradicción (%).';
+COMMENT ON COLUMN public.supply_settings.cost_band_factor IS
+  'Cuántas veces puede apartarse el coste de una recepción del coste de ficha '
+  'antes de que deje de mover el coste medio (5 = ×5 arriba o abajo). No la '
+  'rechaza ni la borra: la deja fuera de la media y la lista para corregir.';
 COMMENT ON COLUMN public.supply_settings.count_review_pct IS
   'Umbral de la pantalla de aprobación: desviación ≥ este % Y ≥ count_review_eur '
   'a coste fiable manda la línea a «Revisa antes de aprobar». ORDENA Y ETIQUETA, '

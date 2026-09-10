@@ -69,12 +69,20 @@ function rowToCountFormat(r: Row, byId: Map<string, Row>): CountFormat {
   }
 }
 
-/** «1000 g» se lee «1 kg»: el contenido tiene que entrar de un vistazo. */
+/**
+ * «1000 g» se lee «1 kg»: el contenido tiene que entrar de un vistazo.
+ *
+ * ENTRE LA CIFRA Y LA UNIDAD VA UN ESPACIO DE NO SEPARACIÓN (U+00A0). A 390 px
+ * un espacio normal deja «750» al final de una línea y la «g» sola al principio
+ * de la siguiente, que es lo que salió en la primera captura. Una cantidad
+ * partida en dos renglones no es un detalle tipográfico: es una cifra que hay
+ * que leer dos veces.
+ */
 export function fmtQty(v: number, unit: string | null | undefined): string {
   const u = (unit ?? '').toLowerCase()
-  if (u === 'g' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)} kg`
-  if (u === 'ml' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)} l`
-  return `${nf.format(v)}${unit ? ` ${unit}` : ''}`
+  if (u === 'g' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)}\u00A0kg`
+  if (u === 'ml' && Math.abs(v) >= 1000) return `${nf.format(v / 1000)}\u00A0l`
+  return `${nf.format(v)}${unit ? `\u00A0${unit}` : ''}`
 }
 
 /**

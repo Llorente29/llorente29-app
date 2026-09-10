@@ -52,12 +52,13 @@ const nfQty = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 })
 const nfPct = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 })
 const nfEur = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 })
 
+// Espacio de NO SEPARACIÓN entre la cifra y su unidad, igual que en el móvil.
 function qtyTxt(v: number | null, unit: string | null): string {
   if (v === null) return '—'
   const u = (unit ?? '').toLowerCase()
-  if (u === 'g' && Math.abs(v) >= 1000) return `${nfQty.format(v / 1000)} kg`
-  if (u === 'ml' && Math.abs(v) >= 1000) return `${nfQty.format(v / 1000)} l`
-  return `${nfQty.format(v)}${unit ? ` ${unit}` : ''}`
+  if (u === 'g' && Math.abs(v) >= 1000) return `${nfQty.format(v / 1000)}\u00A0kg`
+  if (u === 'ml' && Math.abs(v) >= 1000) return `${nfQty.format(v / 1000)}\u00A0l`
+  return `${nfQty.format(v)}${unit ? `\u00A0${unit}` : ''}`
 }
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']

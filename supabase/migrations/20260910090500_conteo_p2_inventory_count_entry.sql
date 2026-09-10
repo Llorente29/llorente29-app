@@ -14,7 +14,8 @@
 -- LOS CUATRO MÉTODOS, y el porqué de que 'cero' sea uno de ellos:
 --   formato  · N unidades de un formato de conteo   → qty × format.qty_in_base
 --   peso     · gramos/ml/unidades en la báscula     → qty (ya en base)
---   fraccion · ¼, ½ o ¾ de un formato, a ojo        → fraction × format.qty_in_base
+--   fraccion · cuánto hay de un formato, a ojo       → fraction × format.qty_in_base
+--              (¼, ½, ¾ · o «Otra», que puede pasar de 1)
 --   cero     · «no queda nada de este producto»     → 0, dicho a propósito
 --
 -- Un campo vacío NO es cero. Es la diferencia entre «he mirado y no hay» y «no
@@ -58,7 +59,11 @@ CREATE TABLE IF NOT EXISTS public.inventory_count_entry (
   CONSTRAINT ice_metodo_coherente CHECK (
     CASE method
       WHEN 'formato'  THEN format_id IS NOT NULL AND qty      IS NOT NULL AND qty      > 0 AND fraction IS NULL
-      WHEN 'fraccion' THEN format_id IS NOT NULL AND fraction IS NOT NULL AND fraction > 0 AND fraction < 1
+      -- `fraction` es CUÁNTOS de ese formato hay, a ojo. Normalmente ¼, ½ o ¾,
+      -- pero puede pasar de 1: «Otra · + bolsa» de la pantalla 2 es el caso de
+      -- que haya dos bolsas abiertas y media. Lo que la marca como estimada es
+      -- el método, no que sea menor que uno.
+      WHEN 'fraccion' THEN format_id IS NOT NULL AND fraction IS NOT NULL AND fraction > 0
       WHEN 'peso'     THEN qty IS NOT NULL AND qty >= 0 AND fraction IS NULL
       WHEN 'cero'     THEN qty_in_base = 0 AND fraction IS NULL
     END

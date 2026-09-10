@@ -13,6 +13,14 @@
 //
 // La pantalla 3 usa el caso del peperoni tal cual pasó: Natacha marcó «no queda
 // nada» el 04/09 a las 20:39 donde Pamela había contado 9 kg la noche anterior.
+//
+// AVISO, Y LO PAGUÉ HOY: `tests/` NO ENTRA EN NINGÚN `tsconfig` —`tsconfig.app`
+// incluye sólo `src`—, así que `tsc -b` no mira este fichero. Se me olvidó
+// pasarle la propiedad `tocado` a `FilaFormato`, el compilador no dijo nada, y
+// la captura salió con la caja en «–» donde tenía que poner «0». Lo cazó
+// MIRAR LA FOTO, que es justamente para lo que está.
+// Aquí abajo hay una prueba que fija ese caso para que no dependa de que
+// alguien se fije.
 
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -71,6 +79,7 @@ function Pantalla({
   for (const f of formats) total += (cuenta[f.id] ?? 0) * f.qtyInBase
   if (abierto.modo === 'peso') total += Number(abierto.gramos || 0)
   else if (abierto.fraccion != null && refAbierto) total += abierto.fraccion * refAbierto.qtyInBase
+  else if (abierto.otros && refAbierto) total += Number(abierto.otros) * refAbierto.qtyInBase
   const aOjo = abierto.modo === 'ojo' && abierto.fraccion != null
   const hayAlgo = total > 0
 
@@ -86,7 +95,8 @@ function Pantalla({
         <Tarjeta>
           {formats.map((f, i) => (
             <FilaFormato key={f.id} formato={f} baseUnit={baseUnit}
-              valor={cuenta[f.id] ?? 0} rayada={i % 2 === 1} onChange={() => {}} />
+              valor={cuenta[f.id] ?? 0} rayada={i % 2 === 1} tocado={hayAlgo}
+              onChange={() => {}} />
           ))}
           <FilaAbierto abierto={abierto} setAbierto={() => {}} formatoRef={refAbierto}
             baseUnit={baseUnit} soloBase={formats.length === 0} />
@@ -202,7 +212,21 @@ describe('capturas del móvil a 390 px', () => {
       // siempre. Es el error de medir sobre el sitio equivocado.
       expect(cuerpo).not.toMatch(/text-text-primary|border-border-default|bg-card|bg-page/)
       expect(cuerpo).toContain('cocina')
+      // Corrección de Julio: entre la cifra y su unidad, U+00A0. Si alguien
+      // vuelve a poner un espacio normal, «750» y «g» se separan a 390 px.
+      expect(cuerpo).toContain('\u00A0')
     }
+
+    // VACÍO NO ES CERO, y al revés tampoco: en la pantalla 1 ya hay 2 bolsas
+    // puestas, así que el 0 de la caja significa «ninguna caja» y se escribe 0;
+    // en la 3 no se ha tocado nada y va una raya. Si esto se invierte, la
+    // pantalla estaría diciendo que ha contado cero cajas sin que nadie lo diga.
+    const p1 = renderToStaticMarkup(PANTALLAS[0].nodo)
+    const p3 = renderToStaticMarkup(PANTALLAS[2].nodo)
+    expect(p1).toMatch(/>0</)
+    expect(p1).not.toMatch(/>–</)
+    expect(p3).toMatch(/>–</)
+    expect(p3).not.toMatch(/>0</)
 
     // Y lo que NO puede salir en ninguna de las tres: la cantidad esperada.
     // 8875 y 9000 son el teórico y el recuento anterior del peperoni. Si

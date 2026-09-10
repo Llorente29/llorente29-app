@@ -13,11 +13,11 @@
 import { ChevronLeft, AlertTriangle, Loader2, Scale } from 'lucide-react'
 import {
   formatDetail,
-  formatLabel,
+  fmtQty,
   type CountFormat,
 } from '@/modules/supply/services/countFormatService'
 import {
-  FRACCIONES, unidadLarga, type Abierto,
+  FRACCIONES, unidadLarga, nombreDeEnvase, esFemenino, tituloAbierto, type Abierto,
 } from '@/modules/supply/lib/conteoMovilTexto'
 import '@/modules/kitchen/estilo/cocinaTokens.css'
 
@@ -119,12 +119,19 @@ export function BotonSecundario({
 
 /** Una fila por formato: nombre, contenido, y − / cifra / + de 48 px. */
 export function FilaFormato({
-  formato, baseUnit, valor, rayada, onChange,
+  formato, baseUnit, valor, rayada, tocado, onChange,
 }: {
   formato: CountFormat
   baseUnit: string | null
   valor: number
   rayada: boolean
+  /** ¿Se ha tecleado YA algo de este producto, en cualquier fila?
+   *  Mientras no, la casilla enseña «–» y no «0»: vacío no es cero, que es lo
+   *  mismo que dice `save_count_line` al negarse a tratar un array vacío como
+   *  un recuento a cero. La maqueta lo hace igual — la pantalla 3, que llega
+   *  con todo sin tocar, pone rayas; la 1, donde ya hay 2 bolsas puestas, pone
+   *  el 0 de la caja, que ahí sí significa «ninguna caja». */
+  tocado: boolean
   onChange: (n: number) => void
 }) {
   return (
@@ -137,7 +144,7 @@ export function FilaFormato({
       <div className="flex items-center gap-2 shrink-0">
         <Paso aria-label={`Quitar una ${formato.name}`} onClick={() => onChange(valor - 1)} disabled={valor <= 0}>−</Paso>
         <span className={`num w-10 text-center text-[22px] font-semibold ${valor > 0 ? 'text-cocina-tinta' : 'text-cocina-tinta-3'}`}>
-          {valor}
+          {valor === 0 && !tocado ? '–' : valor}
         </span>
         <Paso aria-label={`Añadir una ${formato.name}`} onClick={() => onChange(valor + 1)}>+</Paso>
       </div>
@@ -199,7 +206,7 @@ export function FilaAbierto({
               inputMode="decimal"
               value={abierto.gramos}
               onChange={e => setAbierto({ modo: 'peso', gramos: e.target.value })}
-              placeholder="0"
+              placeholder="–"
               aria-label={`Cantidad en ${unidadLarga(baseUnit)}`}
               className="num w-[68px] min-w-0 text-right text-[22px] font-semibold bg-transparent outline-none text-cocina-tinta"
             />
@@ -224,18 +231,26 @@ export function FilaAbierto({
     <div className="flex flex-col gap-2.5 px-3.5 py-3 pb-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5 min-w-0">
-          {/* LA MAQUETA DICE «Bolsa abierta, a ojo», Y ESO SÓLO FUNCIONA CON
-              NOMBRES FEMENINOS. En el catálogo real de Foodint los formatos que
-              se abren son «Paquete», «Estuche», «Bote» y «Manojo»: la frase de
-              la maqueta escribe «Paquete abierta, a ojo». Lo vi mirando los
-              nombres de verdad, no el ejemplo.
-              La frase de aquí no tiene género Y dice algo que a la maqueta le
-              faltaba: DE QUÉ es la fracción. «½» sin decir «de qué» es lo mismo
-              que el número pelado que venimos a quitar. */}
-          <span className="text-[16px] font-bold text-cocina-tinta leading-tight">Lo abierto, a ojo</span>
-          <span className="text-[13px] text-cocina-tinta-3">
-            {formatoRef ? `¿Cuánto queda de ${formatLabel(formatoRef, baseUnit)}?` : '¿Cuánto queda?'}
+          {/* LA FRASE DE LA MAQUETA, con la concordancia resuelta.
+              «Bolsa abierta» y «Paquete abierto» salen de la misma regla que ya
+              escribe bien «Bolsa cerrada» y «Paquete cerrado»: el género del
+              envase, que es la PRIMERA palabra del nombre. Probada contra los
+              24 nombres de formato que hay en el catálogo — y ahí es donde se
+              ve que hace falta el tramo de los sufijos, porque «Unidad» no
+              acaba en -a y es femenina.
+              La cantidad de referencia va debajo, en gris: sin ella un «½» no
+              dice de qué es la mitad. */}
+          <span className="text-[16px] font-bold text-cocina-tinta leading-tight">
+            {formatoRef ? `${tituloAbierto(formatoRef.name)}, a ojo` : 'Lo abierto, a ojo'}
           </span>
+          <span className="text-[13px] text-cocina-tinta-3">
+            {formatoRef ? `¿Cuánto queda en ${esFemenino(formatoRef.name) ? 'ella' : 'él'}?` : '¿Cuánto queda?'}
+          </span>
+          {formatoRef && (
+            <span className="text-[12px] text-cocina-tinta-3">
+              {nombreDeEnvase(formatoRef.name)} de {fmtQty(formatoRef.qtyInBase, baseUnit)}
+            </span>
+          )}
         </div>
         <span className="shrink-0 inline-flex items-center rounded-cocina bg-cocina-ambar-bg text-cocina-ambar
                          px-2 py-[3px] text-[11px] font-semibold">A ojo</span>
@@ -260,21 +275,28 @@ export function FilaAbierto({
             </button>
           )
         })}
+        {/* «Otra · + bolsa», como la maqueta: lo que se teclea aquí son BOLSAS,
+            no gramos. Es el caso de que haya más de una abierta, o de que la
+            que hay no sea ni ¼ ni ½ ni ¾. Poner gramos aquí sería duplicar la
+            báscula dentro de la pantalla que existe porque no hay báscula. */}
         <div className={`h-14 rounded-cocina border flex flex-col items-center justify-center px-1 ${
           abierto.otros.trim() !== '' ? 'border-cocina-acento bg-cocina-acento-bg' : 'border-cocina-linea bg-cocina-superficie'
         }`}>
           <input
             type="number"
             inputMode="decimal"
+            step="0.25"
             value={abierto.otros}
             onChange={e => setAbierto({ ...abierto, otros: e.target.value, fraccion: null })}
             placeholder="Otra"
-            aria-label={`Otra cantidad, en ${unidadLarga(baseUnit)}`}
+            aria-label={`Otra cantidad, en ${formatoRef ? nombreDeEnvase(formatoRef.name) + 's' : 'unidades'}`}
             className="num w-full text-center text-[15px] font-bold bg-transparent outline-none text-cocina-tinta
                        placeholder:font-semibold placeholder:text-cocina-tinta-2
                        placeholder:[font-family:var(--cocina-fuente)]"
           />
-          <span className="text-[11px] text-cocina-tinta-3">+ {unidad}</span>
+          <span className="text-[11px] text-cocina-tinta-3">
+            + {formatoRef ? nombreDeEnvase(formatoRef.name) : unidad}
+          </span>
         </div>
       </div>
 
@@ -353,6 +375,7 @@ export function HojaVuelveAMirarlo({
                 baseUnit={baseUnit}
                 valor={cuenta[f.id] ?? 0}
                 rayada={i % 2 === 1}
+                tocado={hayAlgo}
                 onChange={n => setCuenta(c => ({ ...c, [f.id]: Math.max(0, n) }))}
               />
             ))}

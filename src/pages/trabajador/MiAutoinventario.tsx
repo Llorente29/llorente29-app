@@ -160,8 +160,9 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
       const ref = formats.find(f => f.id === abierto.formatId) ?? formatoAbierto
       if (abierto.fraccion != null && ref) t += abierto.fraccion * ref.qtyInBase
       else {
-        const g = Number(abierto.otros.replace(',', '.'))
-        if (Number.isFinite(g) && g > 0) t += g
+        // «Otra» son unidades del formato («+ bolsa»), no gramos.
+        const n = Number(abierto.otros.replace(',', '.'))
+        if (Number.isFinite(n) && n > 0 && ref) t += n * ref.qtyInBase
       }
     }
     return t
@@ -195,8 +196,13 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
       if (abierto.fraccion != null && ref) {
         out.push({ method: 'fraccion', formatId: ref.id, fraction: abierto.fraccion })
       } else {
-        const g = Number(abierto.otros.replace(',', '.'))
-        if (Number.isFinite(g) && g > 0) out.push({ method: 'peso', qty: g })
+        // «Otra» sigue siendo A OJO: va como fracción, aunque pase de 1 (dos
+        // bolsas abiertas y media son 2,5). Mandarlo como 'formato' lo daría
+        // por medido y perdería la pastilla «A ojo» de la aprobación.
+        const n = Number(abierto.otros.replace(',', '.'))
+        if (Number.isFinite(n) && n > 0 && ref) {
+          out.push({ method: 'fraccion', formatId: ref.id, fraction: n })
+        }
       }
     }
     return out
@@ -369,6 +375,7 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
                 baseUnit={current?.baseUnit ?? null}
                 valor={cuenta[f.id] ?? 0}
                 rayada={i % 2 === 1}
+                tocado={hayAlgoTecleado}
                 onChange={n => setCuenta(c => ({ ...c, [f.id]: Math.max(0, n) }))}
               />
             ))}
