@@ -87,6 +87,34 @@ export async function getReviewContext(countId: string): Promise<Map<string, Pre
   return out
 }
 
+/**
+ * LA REGLA, Y VIVE EN LA BASE (11/09/2026).
+ *
+ * Antes esta decisión estaba escrita DOS veces: aquí con 25 % y 5 €, y en
+ * `apply_inventory_count` con la tolerancia por clase ABC de 2/3/5 %. La
+ * pantalla ofrecía «Aprobar los 28 que cuadran» y la base contestaba «13
+ * línea(s) a revisar sin motivo»: un botón que la base iba a rechazar, y
+ * ninguna forma de arreglarlo desde la pantalla.
+ *
+ * Ahora `count_lines_requiring_reason` lo decide una sola vez y las dos la
+ * leen. El umbral sigue viniendo de `supply_settings`, pero ya no se aplica
+ * aquí: si estuviera en los dos sitios volvería a separarse.
+ */
+export async function getLinesRequiringReason(
+  countId: string,
+): Promise<Map<string, MotivoRevision[]>> {
+  requireSupabase()
+  const { data, error } = await (supabase! as unknown as {
+    rpc: (f: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  }).rpc('count_lines_requiring_reason', { p_count_id: countId })
+  if (error) throw new Error(`No se pudo leer qué hay que revisar: ${error.message}`)
+  const out = new Map<string, MotivoRevision[]>()
+  for (const r of ((data as Row[] | null) ?? [])) {
+    out.set(r.line_id as string, ((r.reasons as string[] | null) ?? []) as MotivoRevision[])
+  }
+  return out
+}
+
 export type MotivoRevision =
   'desviacion' | 'needs_review' | 'contradiccion' | 'a_ojo' | 'sin_referencia'
 
@@ -173,24 +201,32 @@ export function explicarContradiccion(
 /**
  * El reparto en dos grupos.
  *
- * Una línea va a revisar si CUALQUIERA de estas cuatro cosas es cierta:
- *   · se desvía ≥ 25 % Y ≥ 5 € a coste fiable — los dos ejes, no uno;
- *   · viene marcada `needs_review` (se contó dos veces y sigue sin cuadrar);
- *   · contradice al recuento anterior sin recepciones de por medio;
- *   · lleva algo estimado a ojo Y se desvía.
+ * QUIÉN DECIDE: `count_lines_requiring_reason`, en la base. Las cinco razones
+ * que puede devolver son las mismas que pinta esta pantalla:
+ *   · `desviacion` ....... ≥ 25 % Y ≥ 5 € a coste fiable — los dos ejes, no uno;
+ *   · `needs_review` ..... se contó dos veces y sigue sin cuadrar;
+ *   · `sin_referencia` ... Folvy no tenía con qué comparar, y se contó algo;
+ *   · `contradiccion` .... contradice al recuento anterior sin recepciones;
+ *   · `a_ojo` ............ hay algo estimado a ojo Y se desvía.
  *
  * Lo de «Y se desvía» en la última no es un descuido: media bolsa a ojo que
  * cuadra con lo esperado no le hace perder el tiempo a nadie. Sale marcada
  * «A ojo» en su grupo, que es distinto de esconderla.
+ *
+ * Y lo mismo con `sin_referencia` cuando se ha contado CERO: si Folvy no sabía
+ * qué esperar y la persona dice que no queda nada, no hay nada que revisar. La
+ * etiqueta sale igual en los dos grupos — regla 7: el umbral decide el orden,
+ * nunca la existencia de la fila.
  */
 export async function buildCountReview(
   countId: string,
   lines: InventoryCountLine[],
   th: CountReviewThresholds,
 ): Promise<CountReview> {
-  const [entriesByLine, ctx] = await Promise.all([
+  const [entriesByLine, ctx, porRevisar] = await Promise.all([
     listEntriesByCount(countId).catch(() => new Map<string, CountEntry[]>()),
     getReviewContext(countId).catch(() => new Map<string, PrevContext>()),
+    getLinesRequiringReason(countId),
   ])
 
   const todas: ReviewLine[] = lines
@@ -199,26 +235,18 @@ export async function buildCountReview(
       const entries = entriesByLine.get(l.id) ?? []
       const prev = ctx.get(l.id) ?? null
       const estimated = esAOjo(entries)
-      const contradiction = explicarContradiccion(l, prev, th.contradictionPct)
 
-      const pct = Math.abs(l.variancePct ?? 0)
-      const eur = l.varianceValue == null ? null : Math.abs(l.varianceValue)
-      const desviacionGrande = pct >= th.reviewPct && eur != null && eur >= th.reviewEur
+      // LA DECISIÓN VIENE DE LA BASE. Aquí sólo se pone en palabras.
+      const reasons = porRevisar.get(l.id) ?? []
 
-      const reasons: MotivoRevision[] = []
-      if (desviacionGrande) reasons.push('desviacion')
-      if (l.lineNeedsReview) reasons.push('needs_review')
-      // FOLVY NO TENÍA REFERENCIA. La marca la pone el servidor cuando ni el
-      // teórico vivo ni el último recuento aprobado eran positivos, así que
-      // ninguno de los dos frenos pudo mirar la línea (Humus a −355 g).
-      //
-      // Va al grupo de revisar SALVO que se haya contado cero: si Folvy no
-      // sabía qué esperar y la persona dice que no queda nada, no hay nada
-      // que revisar. La ETIQUETA sale igual en los dos grupos —eso es la
-      // regla 7: el umbral decide el orden, nunca la existencia de la fila.
-      if (l.lineNoReference && l.countedQty !== 0) reasons.push('sin_referencia')
-      if (contradiction) reasons.push('contradiccion')
-      if (estimated && pct >= th.reviewPct) reasons.push('a_ojo')
+      // Si la base dice que contradice, la frase la arma esta función —está
+      // probada contra los recuentos reales de septiembre. Y si por lo que sea
+      // no puede armarla, se dice igual: una etiqueta sin explicación es fea,
+      // pero callar la etiqueta sería esconder una fila que existe (regla 7).
+      const contradiction = reasons.includes('contradiccion')
+        ? (explicarContradiccion(l, prev, th.contradictionPct)
+           || 'Contradice al recuento anterior.')
+        : ''
 
       return {
         line: l,
@@ -251,7 +279,7 @@ export async function buildCountReview(
     counts: {
       ok: ok.length,
       toReview: toReview.length,
-      contradictions: todas.filter(r => r.contradiction !== '').length,
+      contradictions: todas.filter(r => r.reasons.includes('contradiccion')).length,
       reviewValue: toReview.reduce((s, r) => s + (r.line.varianceValue ?? 0), 0),
       reviewWithoutCost: toReview.filter(r => r.line.varianceValue == null).length,
     },

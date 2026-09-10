@@ -145,6 +145,18 @@ export default function AprobarRecuento({
     [review],
   )
 
+  /**
+   * REGLA 8: el botón dice lo que pasa ANTES de pulsarlo. Mientras falte un
+   * motivo no se ofrece «Aprobar» —la base lo rechazaría— sino el número que
+   * falta, y lleva a la primera fila que lo espera.
+   */
+  function irAlPrimeroSinMotivo() {
+    const primero = review?.toReview.find(r => !r.line.reasonCode)
+    if (!primero) return
+    document.getElementById(`linea-${primero.line.id}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   async function onMotivo(r: ReviewLine, code: string, note: string | null) {
     setBusyLine(r.line.id)
     setError(null)
@@ -218,12 +230,8 @@ export default function AprobarRecuento({
     setError(null)
     try {
       const res = await approveInventoryCount(count.id, authUserId, userProfile?.displayName ?? null)
-      const pendiente = sinMotivo > 0
-        ? ` Quedan ${sinMotivo} esperando motivo: el recuento sigue abierto hasta que las cierres.`
-        : ' El recuento queda aprobado.'
-      setFlash(`Aplicado: ${res.adjustments} ajuste${res.adjustments === 1 ? '' : 's'} de stock sobre ${res.itemsRecomputed} artículos.${pendiente}`)
-      if (sinMotivo === 0) onApproved()
-      else recargar()
+      setFlash(`Aplicado: ${res.adjustments} ajuste${res.adjustments === 1 ? '' : 's'} de stock sobre ${res.itemsRecomputed} artículos. El recuento queda aprobado.`)
+      onApproved()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo aprobar.')
     } finally {
@@ -406,9 +414,15 @@ export default function AprobarRecuento({
               Pedir recuento de {paraRecontar}
             </BotonCocina>
           )}
-          <BotonCocina peso="relleno" onClick={() => void onAprobar()} disabled={approving || aprobables === 0}>
-            {approving ? 'Aplicando…' : `Aprobar los ${aprobables} que cuadran`}
-          </BotonCocina>
+          {sinMotivo > 0 ? (
+            <BotonCocina peso="borde" onClick={irAlPrimeroSinMotivo}>
+              {`Faltan ${sinMotivo} motivo${sinMotivo === 1 ? '' : 's'}`}
+            </BotonCocina>
+          ) : (
+            <BotonCocina peso="relleno" onClick={() => void onAprobar()} disabled={approving || aprobables === 0}>
+              {approving ? 'Aplicando…' : `Aprobar los ${aprobables} que cuadran`}
+            </BotonCocina>
+          )}
         </div>
       </div>
     </div>
@@ -434,7 +448,7 @@ function FilaRevision({
 
   return (
     <>
-      <tr className={`border-b ${contradice ? 'bg-cocina-ambar-bg/45 border-transparent' : 'border-cocina-linea-suave'}`}>
+      <tr id={`linea-${l.id}`} className={`border-b ${contradice ? 'bg-cocina-ambar-bg/45 border-transparent' : 'border-cocina-linea-suave'}`}>
         <td className="px-4 py-3 align-top">
           <div className="text-[14px] font-bold text-cocina-tinta leading-tight">{l.itemName}</div>
           <div className="text-[12px] text-cocina-tinta-3 mt-0.5">
