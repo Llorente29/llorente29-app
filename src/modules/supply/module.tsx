@@ -21,7 +21,7 @@
 // Comunicar a CTB sube a requiredRole: 'admin' (decisión de Julio, no
 // manager) — comunica datos a la gestoría, no es operativa de local.
 
-import { Truck, ClipboardList, PackageCheck, FileText, Boxes, Send, AlertTriangle } from 'lucide-react'
+import { Truck, ClipboardList, PackageCheck, FileText, Boxes, Send, AlertTriangle, Scale } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import SupplyOrdersPage from '@/modules/supply/pages/SupplyOrdersPage'
 import GoodsReceiptsPage from '@/modules/supply/pages/GoodsReceiptsPage'
@@ -29,6 +29,7 @@ import PendientesRecepcionPage from '@/modules/supply/pages/PendientesRecepcionP
 import SupplierInvoicesPage from '@/modules/supply/pages/SupplierInvoicesPage'
 import InventoryPage from '@/modules/supply/pages/InventoryPage'
 import CtbNotifyPage from '@/modules/supply/pages/CtbNotifyPage'
+import FormatosDeConteoPage from '@/modules/supply/pages/FormatosDeConteoPage'
 import StockNegativoCard from '@/modules/supply/home/StockNegativoCard'
 import ConteosPendientesCard from '@/modules/supply/home/ConteosPendientesCard'
 
@@ -48,6 +49,7 @@ export const supplyModule: ModuleDefinition = {
     { path: 'pendientes', element: <PendientesRecepcionPage /> },
     { path: 'facturas', element: <SupplierInvoicesPage /> },
     { path: 'inventario', element: <InventoryPage /> },
+    { path: 'formatos-conteo', element: <FormatosDeConteoPage /> },
     { path: 'comunicar-ctb', element: <CtbNotifyPage /> },
   ],
   // Navegación interna del módulo (ModuleSidebar).
@@ -59,6 +61,10 @@ export const supplyModule: ModuleDefinition = {
       { id: 'supply_pending', label: 'Pendientes', icon: AlertTriangle, path: 'pendientes', requiredPermission: 'show_recepcion' },
       { id: 'supply_invoices', label: 'Facturas', icon: FileText, path: 'facturas', requiredPermission: 'show_facturas' },
       { id: 'supply_inventory', label: 'Almacén', icon: Boxes, path: 'inventario', requiredPermission: 'show_inventory' },
+      // §2.6: la pantalla donde se decide con qué formatos se cuenta cada
+      // producto. Cuelga de Almacén porque es lo que hay que dejar claro ANTES
+      // de que alguien cuente, no una configuración que se toca una vez.
+      { id: 'supply_count_formats', label: 'Cómo se cuenta', icon: Scale, path: 'formatos-conteo', requiredPermission: 'show_inventory' },
       { id: 'supply_ctb', label: 'Comunicar a CTB', icon: Send, path: 'comunicar-ctb', requiredRole: 'admin' },
     ],
   },

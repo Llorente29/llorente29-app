@@ -53,9 +53,23 @@
 
 BEGIN;
 
+-- REGLA 2 (27/08, siete vigías mudos): añadir un parámetro a una función es
+-- DROP + CREATE, nunca CREATE OR REPLACE — replace no reemplaza, crea una
+-- SOBRECARGA, y a partir de ahí las llamadas son ambiguas (ERROR 42725).
+-- Aquí la función nace en esta migración, así que no hay nada que tirar; el
+-- DROP está igualmente, para que una reaplicación después de haberle tocado
+-- la firma no deje dos vivas.
+DROP FUNCTION IF EXISTS public.save_count_line(uuid, jsonb);
+DROP FUNCTION IF EXISTS public.save_count_line(uuid, jsonb, numeric);
+
 CREATE OR REPLACE FUNCTION public.save_count_line(
   p_line_id uuid,
-  p_entries jsonb
+  p_entries jsonb,
+  -- Confirmación EXPRESA de una cantidad que la red de cordura había
+  -- rechazado. Vale para ESE total y sólo para ése: el servidor exige que
+  -- coincida exactamente con lo que suman las entradas, así que no se puede
+  -- heredar de un intento anterior ni mandarla «por si acaso».
+  p_confirm numeric DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -97,6 +111,7 @@ DECLARE
 
   v_veredicto    text := 'ok';
   v_confirmado   boolean := false;
+  v_forzado      boolean := false;
   v_revisar      boolean := false;
   v_segundo      boolean;
 
@@ -283,6 +298,16 @@ BEGIN
     END IF;
   END IF;
 
+  -- Confirmar a mano una cantidad que la red de cordura había rechazado vale
+  -- para los dos intentos: quien la confirma ya ha dicho que la ha mirado. Va
+  -- FUERA del if de arriba a propósito — dentro de la primera rama no serviría
+  -- de nada en el segundo intento, que es justo donde la red sigue puesta.
+  IF p_confirm IS NOT NULL AND p_confirm = v_total THEN
+    v_forzado   := true;
+    v_veredicto := 'ok';
+    v_revisar   := false;
+  END IF;
+
   -- ── Guardar SIEMPRE lo tecleado ─────────────────────────────────────────
   -- El intento se guarda aunque el veredicto sea `recount`: lo que la persona
   -- tecleó es un hecho y no se tira. Lo que no se sella todavía es la línea.
@@ -311,8 +336,8 @@ BEGIN
            counted_at               = now(),
            counted_by               = COALESCE(v_actor_emp, counted_by),
            counted_by_name          = COALESCE(v_actor_name, counted_by_name),
-           counted_qty_confirmed    = CASE WHEN v_confirmado THEN v_total ELSE NULL END,
-           counted_qty_confirmed_at = CASE WHEN v_confirmado THEN now() ELSE NULL END,
+           counted_qty_confirmed    = CASE WHEN v_confirmado OR v_forzado THEN v_total ELSE NULL END,
+           counted_qty_confirmed_at = CASE WHEN v_confirmado OR v_forzado THEN now() ELSE NULL END,
            needs_review             = v_revisar
      WHERE id = p_line_id;
   END IF;
@@ -333,12 +358,69 @@ END;
 $function$;
 
 -- ── Nace privada (§5) ─────────────────────────────────────────────────────
-REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb) FROM anon;
-REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.save_count_line(uuid, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM anon;
+REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.save_count_line(uuid, jsonb, numeric) TO authenticated;
 
-COMMENT ON FUNCTION public.save_count_line(uuid, jsonb) IS
+-- ═════════════════════════════════════════════════════════════════════════
+-- clear_count_line · borrar lo contado, que NO es contar cero
+-- ═════════════════════════════════════════════════════════════════════════
+--
+-- Es una función aparte y no «mandar un array vacío» a propósito. Un array
+-- vacío es justo lo que llega cuando el front se equivoca —un estado sin
+-- inicializar, un formulario que se limpia solo—, y si eso significara «no hay
+-- nada» estaríamos escribiendo ceros por accidente en el libro de stock. Aquí
+-- hay que decirlo con el nombre: `clear_count_line` deja la línea SIN CONTAR,
+-- que es otra cosa que contar cero.
+CREATE OR REPLACE FUNCTION public.clear_count_line(p_line_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_account_id uuid;
+  v_status text;
+BEGIN
+  SELECT l.account_id, ic.status INTO v_account_id, v_status
+    FROM public.inventory_count_line l
+    JOIN public.inventory_count ic ON ic.id = l.inventory_count_id
+   WHERE l.id = p_line_id;
+
+  IF v_account_id IS NULL THEN
+    RAISE EXCEPTION 'clear_count_line: la línea % no existe', p_line_id;
+  END IF;
+  IF NOT public.belongs_to_account(v_account_id) THEN
+    RAISE EXCEPTION 'clear_count_line: sin acceso a la cuenta';
+  END IF;
+  IF v_status IN ('aprobado', 'anulado') THEN
+    RAISE EXCEPTION 'clear_count_line: el recuento está % y ya no se puede tocar', v_status;
+  END IF;
+
+  DELETE FROM public.inventory_count_entry WHERE line_id = p_line_id;
+
+  UPDATE public.inventory_count_line
+     SET counted_qty              = NULL,
+         counted_at               = NULL,
+         counted_qty_confirmed    = NULL,
+         counted_qty_confirmed_at = NULL,
+         needs_review             = false,
+         recount_asked_at         = NULL
+   WHERE id = p_line_id;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM anon;
+REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.clear_count_line(uuid) TO authenticated;
+
+COMMENT ON FUNCTION public.clear_count_line(uuid) IS
+  'Deja la línea SIN CONTAR (no en cero) y borra sus entradas. Para contar cero '
+  'está save_count_line con method = cero (§2.2, 10/09/2026).';
+
+COMMENT ON FUNCTION public.save_count_line(uuid, jsonb, numeric) IS
   'ÚNICA puerta de escritura de un conteo. Guarda las entradas del intento, '
   'suma en servidor y devuelve un veredicto a ciegas (ok/recount) que NUNCA '
   'contiene la cantidad esperada (§2.2/§2.3, 10/09/2026).';

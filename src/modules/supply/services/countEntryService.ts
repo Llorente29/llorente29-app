@@ -63,6 +63,13 @@ export interface SaveCountLineResult {
 }
 
 /** Lo que el servidor rechaza por estar fuera de escala (red de cordura). */
+/**
+ * El servidor ha rechazado la cantidad por estar fuera de escala (la red de
+ * cordura, ahora por arriba Y por abajo). No trae el total dentro a propósito:
+ * la excepción aborta la transacción antes de que el servidor pueda devolver
+ * nada, así que el único que sabe con seguridad qué se intentó guardar es quien
+ * llamó — y es él quien tiene que pasarlo en `confirmTotal` si lo confirma.
+ */
 export class AbsurdQuantityError extends Error {
   constructor(message: string) {
     super(message)
@@ -89,6 +96,9 @@ function toPayload(e: CountEntryInput): Record<string, unknown> {
 export async function saveCountLine(
   lineId: string,
   entries: CountEntryInput[],
+  /** Confirmación expresa de una cantidad que la red de cordura rechazó. Vale
+   *  para ESE total y sólo para ése: el servidor exige que coincida. */
+  confirmTotal?: number,
 ): Promise<SaveCountLineResult> {
   requireSupabase()
   if (entries.length === 0) {
@@ -97,6 +107,7 @@ export async function saveCountLine(
   const { data, error } = await rpc('save_count_line', {
     p_line_id: lineId,
     p_entries: entries.map(toPayload),
+    p_confirm: confirmTotal ?? null,
   })
   if (error) {
     // FV001 = la red de cordura del conteo, por arriba o por abajo.
@@ -255,4 +266,15 @@ export async function requestRecount(
     assignedTo: (r.assigned_to as string | null) ?? null,
     assignedName: (r.assigned_name as string | null) ?? null,
   }
+}
+
+/**
+ * Deja la línea SIN CONTAR. No es lo mismo que contar cero, y por eso es una
+ * llamada distinta con un nombre distinto: «no lo he mirado» y «he mirado y no
+ * hay» son las dos respuestas que Folvy guardaba igual hasta hoy.
+ */
+export async function clearCountLine(lineId: string): Promise<void> {
+  requireSupabase()
+  const { error } = await rpc('clear_count_line', { p_line_id: lineId })
+  if (error) throw new Error(`No se pudo borrar lo contado: ${error.message}`)
 }

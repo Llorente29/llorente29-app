@@ -73,6 +73,23 @@ export interface InventoryCountLine {
   familyName: string | null
   needsReview: boolean             // recipe_item.needs_review (pendiente de revisar)
   lineValue: number | null         // counted_qty × unitCost (€), null si falta alguno
+
+  // ── §2.4 (10/09/2026) · lo que necesita la pantalla de aprobación ────────
+  /** `inventory_count_line.needs_review`: se contó DOS veces y sigue sin cuadrar.
+   *  OJO: no es `needsReview` de arriba, que es de la ficha del artículo. Son dos
+   *  banderas distintas con el mismo nombre en dos tablas distintas, y por eso
+   *  ésta lleva prefijo: confundirlas sería aplicar sola una línea que espera. */
+  lineNeedsReview: boolean
+  /** La nota de «Otro». Obligatoria cuando el motivo es «otro». */
+  reasonNote: string | null
+  countedByName: string | null
+  countedAt: string | null
+  /** Lo contó, se le pidió mirarlo otra vez, y le salió lo mismo. */
+  confirmedTwice: boolean
+  /** Ya se ha pedido que otra persona lo vuelva a contar. */
+  recountRequestedAt: string | null
+  /** Esta línea ES el recuento de otra. */
+  recountOf: string | null
 }
 
 export interface InventoryCountSummary {
@@ -286,6 +303,8 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
     .select(`
       id, recipe_item_id, storage_area_id, position, system_qty, counted_qty,
       variance_qty, variance_pct, variance_value, abc_class, within_tolerance, reason_code,
+      reason_note, needs_review, counted_by_name, counted_at, counted_qty_confirmed,
+      recount_requested_at, recount_of,
       recipe_item:recipe_item_id (
         name, computed_cost, family_id, needs_review,
         kitchen_unit:base_unit_id ( abbreviation ),
@@ -330,6 +349,13 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
       familyName: item?.recipe_family?.name ?? null,
       needsReview: Boolean(item?.needs_review),
       lineValue,
+      lineNeedsReview: Boolean(r.needs_review),
+      reasonNote: (r.reason_note as string | null) ?? null,
+      countedByName: (r.counted_by_name as string | null) ?? null,
+      countedAt: (r.counted_at as string | null) ?? null,
+      confirmedTwice: r.counted_qty_confirmed != null,
+      recountRequestedAt: (r.recount_requested_at as string | null) ?? null,
+      recountOf: (r.recount_of as string | null) ?? null,
     }
   })
 }
