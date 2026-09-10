@@ -182,3 +182,40 @@ export function dudaDeKilos(
     frase: `${nf.format(n)}\u00A0${grande}`,
   }
 }
+
+/**
+ * CÓMO SE MIDE ESTO, Y CÓMO SE DICE.
+ *
+ * La pantalla decía «Pésalo y escribe los unidades» en cuanto entró el
+ * packaging: dos errores en cuatro palabras. «Unidades» es femenino —de
+ * «unidad», que lleva el sufijo -dad— así que pide «las»; y una bolsa no se
+ * pesa, se cuenta.
+ *
+ * No es cosmético: el móvil lo lee alguien de pie delante de una estantería, y
+ * «pésalo» le está mandando a buscar una báscula que no necesita.
+ *
+ * Se decide por la UNIDAD BASE, que es lo único que la pantalla sabe: gramos,
+ * kilos, mililitros y litros se pesan (o se miden) y son masculinos; todo lo
+ * demás son «unidades», que se cuentan.
+ */
+export function medida(baseUnit: string | null | undefined): {
+  pesable: boolean
+  largo: string
+  articulo: 'los' | 'las'
+  /** El imperativo con su pronombre ya concordado: «Pésalo», «Cuéntalas». */
+  verbo: string
+} {
+  const u = (baseUnit ?? '').trim().toLowerCase()
+  const pesable = u === 'g' || u === 'kg' || u === 'ml' || u === 'l'
+  return pesable
+    ? { pesable: true,  largo: unidadLarga(u), articulo: 'los', verbo: 'Pésalo' }
+    : { pesable: false, largo: 'unidades',     articulo: 'las', verbo: 'Cuéntalas' }
+}
+
+/** La frase de debajo del título de la fila de lo abierto. */
+export function pieDeLaCasilla(baseUnit: string | null | undefined, soloBase: boolean): string {
+  const m = medida(baseUnit)
+  return soloBase
+    ? `Escribe ${m.articulo} ${m.largo}`
+    : `${m.verbo} y escribe ${m.articulo} ${m.largo}`
+}

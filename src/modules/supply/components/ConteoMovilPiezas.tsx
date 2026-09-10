@@ -10,14 +10,15 @@
 // Todo pinta con los tokens de `cocinaTokens.css`, que sólo existen dentro de
 // `.cocina`. Fuera de esa clase sale sin color: es a propósito.
 
-import { ChevronLeft, AlertTriangle, Loader2, Scale } from 'lucide-react'
+import { ChevronLeft, AlertTriangle, Loader2, Scale, Hash } from 'lucide-react'
 import {
   formatDetail,
   fmtQty,
   type CountFormat,
 } from '@/modules/supply/services/countFormatService'
 import {
-  FRACCIONES, unidadLarga, nombreDeEnvase, esFemenino, tituloAbierto, type Abierto,
+  FRACCIONES, unidadLarga, nombreDeEnvase, esFemenino, tituloAbierto,
+  medida, pieDeLaCasilla, type Abierto,
 } from '@/modules/supply/lib/conteoMovilTexto'
 import '@/modules/kitchen/estilo/cocinaTokens.css'
 
@@ -190,7 +191,7 @@ export function FilaAbierto({
               {soloBase ? '¿Cuánto hay?' : 'Abierto o suelto'}
             </span>
             <span className="text-[13px] text-cocina-tinta-3">
-              {soloBase ? `Escribe los ${unidadLarga(baseUnit)}` : `Pésalo y escribe los ${unidadLarga(baseUnit)}`}
+              {pieDeLaCasilla(baseUnit, soloBase)}
             </span>
           </div>
           {/* CAJA Y CAMPO FIJOS. Con el input a `w-full` la caja crecía hasta el
@@ -203,7 +204,10 @@ export function FilaAbierto({
               cinco y seis cifras son el día a día, no un caso raro. */}
           <label className="flex items-center gap-2 h-12 px-3 rounded-cocina border-2 border-cocina-acento
                             bg-cocina-superficie w-[176px] justify-between shrink-0">
-            <Scale size={20} className="text-cocina-acento shrink-0" />
+            {/* Una bolsa no se pesa: el icono también lo dice. */}
+            {medida(baseUnit).pesable
+              ? <Scale size={20} className="text-cocina-acento shrink-0" />
+              : <Hash size={20} className="text-cocina-acento shrink-0" />}
             <input
               /* `text` Y NO `number`. El `number` RECHAZA LA COMA —que es la tecla
                  decimal del teclado español— y deja el campo VACÍO sin decir nada:
@@ -220,7 +224,7 @@ export function FilaAbierto({
                 gramos: e.target.value.replace(/[^\d.,]/g, ''),
               })}
               placeholder="–"
-              aria-label={`Cantidad en ${unidadLarga(baseUnit)}`}
+              aria-label={`Cantidad en ${medida(baseUnit).largo}`}
               className="num w-[96px] min-w-0 text-right text-[22px] font-semibold bg-transparent outline-none text-cocina-tinta"
             />
             <span className="text-[14px] text-cocina-tinta-3 shrink-0">{unidad}</span>
@@ -232,7 +236,9 @@ export function FilaAbierto({
             onClick={() => setAbierto({ modo: 'ojo', formatId: formatoRef.id, fraccion: null, otros: '' })}
             className="self-start min-h-[48px] -my-2 text-[13px] font-semibold text-cocina-acento text-left"
           >
-            No tengo báscula: calcular a ojo
+            {medida(baseUnit).pesable
+              ? 'No tengo báscula: calcular a ojo'
+              : 'Son muchas para contarlas: calcular a ojo'}
           </button>
         )}
       </div>
@@ -322,7 +328,9 @@ export function FilaAbierto({
         onClick={() => setAbierto({ modo: 'peso', gramos: '' })}
         className="self-start min-h-[48px] -my-2 text-[13px] font-semibold text-cocina-acento text-left"
       >
-        Tengo báscula: escribir los {unidadLarga(baseUnit)}
+        {medida(baseUnit).pesable
+          ? `Tengo báscula: escribir los ${medida(baseUnit).largo}`
+          : 'Contarlas: escribir las unidades'}
       </button>
     </div>
   )

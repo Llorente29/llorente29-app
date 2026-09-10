@@ -61,6 +61,7 @@ const PEPERONI: CountFormat[] = [
 /** El cuerpo de la pantalla, tal cual lo compone `MiAutoinventario`. */
 function Pantalla({
   local, producto, instruccion, formats, cuenta, abierto, paso, de, pct, hoja,
+  unidad,
 }: {
   local: string
   producto: string
@@ -72,8 +73,10 @@ function Pantalla({
   de: number
   pct: number
   hoja?: boolean
+  /** El packaging se cuenta en unidades, no en gramos. */
+  unidad?: string
 }) {
-  const baseUnit = 'g'
+  const baseUnit = unidad ?? 'g'
   const refAbierto = formats.length > 0 ? formats[formats.length - 1] : null
   let total = 0
   for (const f of formats) total += (cuenta[f.id] ?? 0) * f.qtyInBase
@@ -133,6 +136,12 @@ function Pantalla({
     </Marco>
   )
 }
+
+/** Packaging real de Alcalá: caja de 250 bolsas, y la bolsa suelta. */
+const BOLSAS: CountFormat[] = [
+  fmt('aaaa1111-0000-4000-8000-000000000001', 'Caja', 250),
+  fmt('aaaa1111-0000-4000-8000-000000000002', 'Paquete', 100),
+]
 
 const PANTALLAS = [
   {
@@ -200,6 +209,25 @@ const PANTALLAS = [
           onPequeno={() => {}}
         />
       </div>
+    ),
+  },
+  {
+    // §4 DEL ENCARGO DEL PACKAGING: nombre largo de verdad y cifras de seis
+    // dígitos. Los dos datos son reales: «Bolsas Personalizadas Birria
+    // Burrito» es el nombre tal cual está en la ficha, y 125.000 es el orden
+    // de magnitud que hay hoy en Alcalá.
+    fichero: '5_packaging_nombre_largo',
+    titulo: 'Pantalla 5 · Packaging: nombre largo y seis cifras',
+    nodo: (
+      <Pantalla
+        local="Foodint Alcalá" producto="Bolsas Personalizadas Birria Burrito"
+        instruccion="Cuenta lo cerrado por formato. Lo abierto o suelto, en unidades."
+        formats={BOLSAS}
+        cuenta={{ 'aaaa1111-0000-4000-8000-000000000001': 199 }}
+        abierto={{ modo: 'peso', gramos: '125000' }}
+        unidad="ud"
+        paso={7} de={59} pct={12}
+      />
     ),
   },
 ]
