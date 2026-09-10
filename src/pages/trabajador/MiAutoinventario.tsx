@@ -1,103 +1,117 @@
 // src/pages/trabajador/MiAutoinventario.tsx
-// Autoinventario en el móvil del TRABAJADOR — wizard guiado paso a paso.
 //
-// Pensado para formación BAJA o NULA: un artículo por pantalla, frases cortas,
-// botón grande, teclado numérico directo, cero jerga. El trabajador SOLO cuenta;
-// no ve el stock del sistema, ni variación, ni %, ni € (eso es del gestor). El
-// conteo lo cierra y aprueba el gestor en su pantalla; aquí no hay "aprobar".
+// CONTAR POR FORMATOS · pantallas 1, 2 y 3 de la maqueta aprobada el 10/09/2026.
 //
-// UNIDAD DE MEDIDA: el trabajador cuenta en SU unidad (caja, bolsa, paquete —
-// la que le resulte cómoda), no en la unidad base del sistema. Cada opción
-// muestra nombre + contenido ("Bolsa · 5 kg") para distinguir formatos con el
-// mismo nombre. El sistema convierte a base internamente, y la preferencia se
-// recuerda por artículo y persona. "Cuentas en tu unidad, el sistema piensa en
-// la suya."
+// Quien cuenta tiene poca soltura con la tecnología y está de pie delante de una
+// cámara. Un producto por pantalla, un renglón por formato, botones de 48 px y
+// cero jerga. Y lo que cambia de verdad respecto a lo de antes:
 //
-// Aviso de variación (paso 3): antes de avanzar, el SERVIDOR compara lo tecleado
-// (ya convertido a base) contra el stock esperado sin enseñarlo (blind) y
-// devuelve solo un veredicto; si se sale de lo normal (un cero de más/menos),
-// se le pregunta con suavidad si quiere volver a contar. Caza el error de dedo
-// sin frustrar.
+//   ANTES  un campo de texto y un selector de unidad. El empleado tenía que
+//          convertir mentalmente («dos bolsas y media son… ¿6.250?») y teclear
+//          un número en unidad base. De ahí salían los 57 % de líneas en g/ml
+//          apuntadas en kilos exactos: 6.000, 12.000. Lo abierto no se pesaba.
+//   AHORA  una fila por formato con − y +, y una última fila para lo abierto,
+//          con báscula. Nadie multiplica: se cuenta lo que se ve.
+//
+// LO QUE ESPERA FOLVY NO SE ENSEÑA NUNCA. Ni la cantidad, ni un porcentaje, ni
+// una flecha, ni en el aviso de «vuelve a mirarlo». En cuanto quien cuenta
+// puede deducir lo que el sistema espera, deja de contar y empieza a confirmar,
+// y el recuento pasa a valer exactamente lo que valía el teórico.
+//
+// PINTA CON LOS TOKENS DE LA MAQUETA (`cocinaTokens.css`, escopado a `.cocina`),
+// que son los mismos que aprobó Julio para Kitchen. No es «el estilo de Folvy
+// adaptado»: es la maqueta, con sus radios de 2-3 px, su Archivo y sus cifras
+// en IBM Plex Mono tabular.
 
-import { useEffect, useState } from 'react'
-import { ArrowLeft, AlertTriangle, Check, Loader2, Boxes } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, Check, Loader2 } from 'lucide-react'
 import type { Employee } from '../../types'
 import {
   getMyDailyQueue,
   getManualCountLines,
-  checkCountVariance,
   countRemainingLines,
   autocloseDailyCount,
   type DailyQueueLine,
 } from '../../modules/supply/services/autoinventoryService'
-import { saveCountedQty, closeInventoryCount } from '../../modules/supply/services/inventoryCountService'
-import { listFormatsByItem } from '../../modules/kitchen/services/purchaseFormatService'
-import type { PurchaseFormat } from '../../types/kitchen'
-import { getUnitPref, setUnitPref } from '../../modules/supply/services/unitPrefService'
-import { useApp } from '../../context/AppContext'
+import { closeInventoryCount } from '../../modules/supply/services/inventoryCountService'
+import {
+  saveCountLine,
+  AbsurdQuantityError,
+  type CountEntryInput,
+} from '../../modules/supply/services/countEntryService'
+import {
+  listCountFormats,
+  fmtQty,
+  type CountFormat,
+} from '../../modules/supply/services/countFormatService'
+// Las piezas viven fuera para que la CAPTURA que va al lado de la maqueta se
+// pinte con ellas y no con un HTML escrito para la foto.
+import {
+  Marco, Cabecera, Tarjeta, Pie, Centrado, BotonPrincipal, BotonSecundario,
+  FilaFormato, FilaAbierto, HojaVuelveAMirarlo,
+} from '../../modules/supply/components/ConteoMovilPiezas'
+import {
+  unidadLarga, desglose, type Abierto,
+} from '../../modules/supply/lib/conteoMovilTexto'
+import { getLocationName } from '../../modules/supply/services/countFormatService'
+import '@/modules/kitchen/estilo/cocinaTokens.css'
 
 interface Props {
   employee: Employee
   onBack: () => void
-  /** C5 — si viene, es un inventario MANUAL concreto: se cuentan TODAS sus
-   *  líneas (asignación por cabecera, no por línea) y al terminar se cierra
-   *  explícitamente (Terminar), no el auto-cierre del cíclico compartido. */
+  /** C5 — inventario MANUAL concreto: se cuentan TODAS sus líneas. */
   manualCountId?: string
-  /** Título de la cabecera. Por defecto "Conteo de hoy" (autoinventario). Para
-   *  un manual el caller pasa el código/zona, para que Pamela distinga cada uno. */
   title?: string
 }
 
-type Phase = 'loading' | 'intro' | 'counting' | 'warn' | 'done' | 'empty' | 'error'
+type Phase = 'loading' | 'intro' | 'counting' | 'recount' | 'done' | 'empty' | 'error'
 
-// Unidad de conteo elegida: la base del sistema o un formato de compra.
-type UnitSel = { kind: 'base' } | { kind: 'format'; format: PurchaseFormat }
-
-const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 })
-
-export default function MiAutoinventario({ employee, onBack, manualCountId, title = 'Conteo de hoy' }: Props) {
-  const { authUserId } = useApp()
+export default function MiAutoinventario({ employee, onBack, manualCountId, title = 'Autoinventario de hoy' }: Props) {
   const [phase, setPhase] = useState<Phase>('loading')
-  const [total, setTotal] = useState(0)        // artículos asignados hoy (8)
-  const [doneBefore, setDoneBefore] = useState(0) // ya contados al entrar (reanudar)
-  const [queue, setQueue] = useState<DailyQueueLine[]>([]) // los que faltan por contar
-  const [idx, setIdx] = useState(0)            // índice dentro de queue
-  const [value, setValue] = useState('')       // lo que teclea (texto), en SU unidad
+  const [total, setTotal] = useState(0)
+  const [doneBefore, setDoneBefore] = useState(0)
+  const [queue, setQueue] = useState<DailyQueueLine[]>([])
+  const [idx, setIdx] = useState(0)
   const [saving, setSaving] = useState(false)
-  const [warnKind, setWarnKind] = useState<'low' | 'high'>('low')
   const [errMsg, setErrMsg] = useState('')
   const [countId, setCountId] = useState<string | null>(null)
+  const [locationName, setLocationName] = useState('')
 
-  // Unidad de medida por artículo: formatos disponibles + la elegida.
-  const [formats, setFormats] = useState<PurchaseFormat[]>([])
-  const [unit, setUnit] = useState<UnitSel>({ kind: 'base' })
+  // Lo que se cuenta del artículo en curso.
+  const [formats, setFormats] = useState<CountFormat[]>([])
+  const [formatsLoading, setFormatsLoading] = useState(false)
+  const [cuenta, setCuenta] = useState<Record<string, number>>({})
+  const [abierto, setAbierto] = useState<Abierto>({ modo: 'peso', gramos: '' })
+
+  const current = queue[idx]
+  const stepNumber = doneBefore + idx + 1
+  const progressPct = total > 0 ? Math.round(((doneBefore + idx) / total) * 100) : 0
 
   useEffect(() => {
     let cancel = false
     async function load() {
       try {
+        let lines: DailyQueueLine[] = []
+        let cid: string | null = null
         if (manualCountId) {
-          const lines = await getManualCountLines(manualCountId)
-          if (cancel) return
-          setCountId(manualCountId)
-          const pending = lines.filter((l) => l.countedQty == null)
-          setTotal(lines.length)
-          setDoneBefore(lines.length - pending.length)
-          setQueue(pending)
-          setIdx(0)
-          if (lines.length === 0) setPhase('empty')
-          else if (pending.length === 0) setPhase('done')
-          else setPhase('intro')
-          return
+          lines = await getManualCountLines(manualCountId)
+          cid = manualCountId
+        } else if (employee.locationId) {
+          // Una sola llamada: la cola y su conteo vienen juntos. Pedirla dos
+          // veces no sólo es lento — puede devolver dos conteos distintos si
+          // el autoinventario se genera entre medias.
+          const q = await getMyDailyQueue(employee.locationId, employee.id)
+          lines = q.lines
+          cid = q.countId
         }
-        if (!employee.locationId) {
-          if (!cancel) setPhase('empty')
-          return
-        }
-        const { countId: cid, lines } = await getMyDailyQueue(employee.locationId, employee.id)
         if (cancel) return
         setCountId(cid)
-        const pending = lines.filter((l) => l.countedQty == null)
+        if (employee.locationId) {
+          void getLocationName(employee.locationId)
+            .then(n => { if (!cancel) setLocationName(n) })
+            .catch(() => {})
+        }
+        const pending = lines.filter(l => l.countedQty == null)
         setTotal(lines.length)
         setDoneBefore(lines.length - pending.length)
         setQueue(pending)
@@ -113,117 +127,125 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
       }
     }
     void load()
-    return () => {
-      cancel = true
-    }
+    return () => { cancel = true }
   }, [employee.id, employee.locationId, manualCountId])
 
-  const current = queue[idx]
-  const stepNumber = doneBefore + idx + 1 // "artículo X de N"
-  const progressPct = total > 0 ? Math.round(((doneBefore + idx) / total) * 100) : 0
-
-  // Carga los formatos del artículo actual y resuelve la unidad inicial:
-  // preferencia guardada > formato de mayor contenido > base.
+  // Los formatos de conteo del artículo en curso. Si no hay ninguno, el móvil
+  // pide sólo la unidad base — que es lo que debe pasar mientras nadie haya
+  // decidido cuál de los formatos que chocan es el bueno (§2.6).
   useEffect(() => {
     let cancel = false
-    async function loadUnit() {
-      if (!current) return
-      const fmts = await listFormatsByItem(current.recipeItemId)
-        .then(fs => fs.filter(f => f.qtyInBase > 1))
-        .catch(() => [] as PurchaseFormat[])
-      if (cancel) return
-      setFormats(fmts)
+    if (!current) return
+    setFormatsLoading(true)
+    listCountFormats(current.recipeItemId)
+      .then(fs => { if (!cancel) { setFormats(fs); setFormatsLoading(false) } })
+      .catch(() => { if (!cancel) { setFormats([]); setFormatsLoading(false) } })
+    return () => { cancel = true }
+  }, [current?.recipeItemId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-      let sel: UnitSel = { kind: 'base' }
-      if (authUserId) {
-        const pref = await getUnitPref(authUserId, current.recipeItemId).catch(() => null)
-        if (cancel) return
-        if (pref === 'base') sel = { kind: 'base' }
-        else if (pref) {
-          const f = fmts.find(x => x.id === pref)
-          if (f) sel = { kind: 'format', format: f }
+  // El formato de referencia para calcular a ojo: el más pequeño, que es el que
+  // se abre. Nadie abre una caja de 10 kg para servir: abre la bolsa.
+  const formatoAbierto = useMemo(
+    () => (formats.length > 0 ? formats[formats.length - 1] : null),
+    [formats],
+  )
+
+  const totalBase = useMemo(() => {
+    let t = 0
+    for (const f of formats) t += (cuenta[f.id] ?? 0) * f.qtyInBase
+    if (abierto.modo === 'peso') {
+      const g = Number(abierto.gramos.replace(',', '.'))
+      if (Number.isFinite(g) && g > 0) t += g
+    } else {
+      const ref = formats.find(f => f.id === abierto.formatId) ?? formatoAbierto
+      if (abierto.fraccion != null && ref) t += abierto.fraccion * ref.qtyInBase
+      else {
+        // «Otra» son unidades del formato («+ bolsa»), no gramos.
+        const n = Number(abierto.otros.replace(',', '.'))
+        if (Number.isFinite(n) && n > 0 && ref) t += n * ref.qtyInBase
+      }
+    }
+    return t
+  }, [formats, cuenta, abierto, formatoAbierto])
+
+  const hayAlgoTecleado = useMemo(() => {
+    if (formats.some(f => (cuenta[f.id] ?? 0) > 0)) return true
+    if (abierto.modo === 'peso') return abierto.gramos.trim() !== ''
+    return abierto.fraccion != null || abierto.otros.trim() !== ''
+  }, [formats, cuenta, abierto])
+
+  const esAOjo = abierto.modo === 'ojo' && abierto.fraccion != null
+
+  function limpiar() {
+    setCuenta({})
+    setAbierto({ modo: 'peso', gramos: '' })
+  }
+
+  /** Lo que se manda al servidor: el CÓMO. La conversión la hace él. */
+  function construirEntradas(): CountEntryInput[] {
+    const out: CountEntryInput[] = []
+    for (const f of formats) {
+      const n = cuenta[f.id] ?? 0
+      if (n > 0) out.push({ method: 'formato', formatId: f.id, qty: n })
+    }
+    if (abierto.modo === 'peso') {
+      const g = Number(abierto.gramos.replace(',', '.'))
+      if (Number.isFinite(g) && g > 0) out.push({ method: 'peso', qty: g })
+    } else {
+      const ref = formats.find(f => f.id === abierto.formatId) ?? formatoAbierto
+      if (abierto.fraccion != null && ref) {
+        out.push({ method: 'fraccion', formatId: ref.id, fraction: abierto.fraccion })
+      } else {
+        // «Otra» sigue siendo A OJO: va como fracción, aunque pase de 1 (dos
+        // bolsas abiertas y media son 2,5). Mandarlo como 'formato' lo daría
+        // por medido y perdería la pastilla «A ojo» de la aprobación.
+        const n = Number(abierto.otros.replace(',', '.'))
+        if (Number.isFinite(n) && n > 0 && ref) {
+          out.push({ method: 'fraccion', formatId: ref.id, fraction: n })
         }
       }
-      // Sin preferencia: arranca en el formato de mayor contenido (como cuenta el cocinero).
-      if (sel.kind === 'base' && fmts.length > 0) {
-        const ref = fmts.reduce((a, b) => (b.qtyInBase > a.qtyInBase ? b : a))
-        sel = { kind: 'format', format: ref }
-      }
-      if (!cancel) setUnit(sel)
     }
-    void loadUnit()
-    return () => { cancel = true }
-  }, [current?.recipeItemId, authUserId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function parseValue(): number | null {
-    const n = Number(value.replace(',', '.'))
-    return Number.isFinite(n) && n >= 0 ? n : null
+    return out
   }
 
-  // Lo tecleado (en SU unidad) → unidad base del sistema.
-  function toBase(n: number, u: UnitSel): number {
-    return u.kind === 'format' ? n * u.format.qtyInBase : n
-  }
-
-  // Cambia la unidad y la recuerda para la próxima vez (por usuario + artículo).
-  function onUnitChange(u: UnitSel) {
-    setUnit(u)
-    if (authUserId && current) {
-      const formatId = u.kind === 'format' ? u.format.id : null
-      void setUnitPref(authUserId, current.recipeItemId, formatId).catch(() => {})
-    }
-  }
-
-  // Guarda lo contado (convertido a base) y comprueba la variación. Si se sale
-  // de lo normal → aviso.
-  async function onNext() {
+  async function guardar(entradas: CountEntryInput[]) {
     if (!current) return
-    const num = parseValue()
-    if (num == null) return
-    const baseQty = toBase(num, unit)
     setSaving(true)
+    setErrMsg('')
     try {
-      await saveCountedQty(current.lineId, baseQty, employee.id, employee.name ?? null)
-      const verdict = await checkCountVariance(current.lineId, baseQty)
+      const res = await saveCountLine(current.lineId, entradas)
       setSaving(false)
-      if (verdict === 'low' || verdict === 'high') {
-        setWarnKind(verdict)
-        setPhase('warn')
+      if (res.verdict === 'recount') {
+        limpiar()
+        setPhase('recount')
         return
       }
-      advance()
+      avanzar()
     } catch (e) {
       setSaving(false)
+      if (e instanceof AbsurdQuantityError) {
+        // La red de cordura. No se cambia de pantalla: se dice qué pasa y se
+        // deja corregir donde está, que es donde tiene las manos.
+        setErrMsg(e.message)
+        return
+      }
       setErrMsg(e instanceof Error ? e.message : 'No se pudo guardar')
       setPhase('error')
     }
   }
 
-  // Avanza al siguiente artículo (o termina). Lo contado ya está guardado.
-  function advance() {
-    setValue('')
+  function avanzar() {
+    limpiar()
     if (idx + 1 >= queue.length) {
       setPhase('done')
-      // El trabajador terminó SU parte. Si era el último del día (no quedan
-      // líneas sin contar en TODO el conteo), dispara el auto-cierre: cierra y
-      // aplica lo limpio solo. Silencioso: el trabajador no se entera, ya vio
-      // '¡Listo!'. Si quedan otras personas por contar, no se cierra aún.
       if (countId) {
         void (async () => {
           try {
-            if (manualCountId) {
-              // Manual: una sola persona asignada por cabecera — al terminar
-              // su última línea, se cierra siempre (pasa a en_revision, listo
-              // para que oficina lo apruebe).
-              await closeInventoryCount(countId)
-            } else {
-              const remaining = await countRemainingLines(countId)
-              if (remaining === 0) await autocloseDailyCount(countId)
-            }
+            if (manualCountId) await closeInventoryCount(countId)
+            else if (await countRemainingLines(countId) === 0) await autocloseDailyCount(countId)
           } catch {
-            // Si falla el cierre, no se le muestra error al trabajador: el
-            // barrido del día siguiente (cíclico) o el gestor a mano
-            // (Almacén › Inventarios, manual) lo cerrarán igualmente.
+            // Si falla el cierre no se le enseña error a quien cuenta: ya ha
+            // terminado su parte. El barrido del día siguiente lo recoge.
           }
         })()
       }
@@ -233,337 +255,197 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
     }
   }
 
-  // ─── Pantallas ───
+  // ─── Pantallas ───────────────────────────────────────────────────────────
 
   if (phase === 'loading') {
-    return (
-      <Centered>
-        <Loader2 size={28} className="text-accent animate-spin" />
-        <p className="text-sm text-text-secondary mt-3">Cargando…</p>
-      </Centered>
-    )
+    return <Marco><Centrado><Loader2 size={28} className="text-cocina-acento animate-spin" />
+      <p className="text-[13px] text-cocina-tinta-3 mt-3">Cargando…</p></Centrado></Marco>
   }
 
   if (phase === 'error') {
     return (
-      <Centered>
-        <AlertTriangle size={36} className="text-danger" />
-        <p className="font-semibold text-text-primary mt-3">No se pudo cargar</p>
-        <p className="text-sm text-text-secondary mt-1 max-w-xs">{errMsg}</p>
-        <button
-          onClick={onBack}
-          className="mt-5 px-5 py-3 rounded-xl bg-accent text-white font-semibold transition-base active:scale-95"
-        >
-          Volver
-        </button>
-      </Centered>
+      <Marco>
+        <Centrado>
+          <AlertTriangle size={36} className="text-cocina-rojo" />
+          <p className="text-[17px] font-bold text-cocina-tinta mt-3">No se pudo cargar</p>
+          <p className="text-[13px] text-cocina-tinta-2 mt-1 max-w-xs">{errMsg}</p>
+          <BotonPrincipal onClick={onBack}>Volver</BotonPrincipal>
+        </Centrado>
+      </Marco>
     )
   }
 
   if (phase === 'empty') {
     return (
-      <div className="min-h-screen bg-page flex flex-col">
-        <Header onBack={onBack} title={title} />
-        <Centered>
-          <div className="w-16 h-16 rounded-full bg-success-bg flex items-center justify-center">
-            <Check size={32} className="text-success" />
-          </div>
-          <p className="font-display text-xl text-text-primary mt-4">Hoy no te toca contar</p>
-          <p className="text-sm text-text-secondary mt-1 max-w-xs">
-            No tienes artículos asignados para hoy. Nada que hacer por aquí.
+      <Marco>
+        <Cabecera title={title} onBack={onBack} />
+        <Centrado>
+          <Check size={40} className="text-cocina-verde" />
+          <p className="text-[22px] font-extrabold text-cocina-tinta mt-4">Hoy no te toca contar</p>
+          <p className="text-[13px] text-cocina-tinta-2 mt-1 max-w-xs">
+            No tienes productos asignados para hoy. Nada que hacer por aquí.
           </p>
-          <button
-            onClick={onBack}
-            className="mt-6 px-6 py-3 rounded-xl bg-accent text-white font-semibold transition-base active:scale-95"
-          >
-            Volver
-          </button>
-        </Centered>
-      </div>
+          <BotonPrincipal onClick={onBack}>Volver</BotonPrincipal>
+        </Centrado>
+      </Marco>
     )
   }
 
   if (phase === 'intro') {
     return (
-      <div className="min-h-screen bg-page flex flex-col">
-        <Header onBack={onBack} title={title} />
-        <div className="flex-1 px-5 pt-2">
-          <p className="font-display text-2xl text-text-primary">Hola, {employee.name.split(' ')[0]}</p>
-          <p className="text-sm text-text-secondary mt-1">Hoy te toca un conteo rápido</p>
-
-          <div className="mt-6 bg-accent-bg rounded-2xl p-6 text-center">
-            <div className="font-display text-5xl text-accent leading-none">{queue.length}</div>
-            <div className="text-sm text-accent mt-2">
-              {queue.length === 1 ? 'artículo por contar' : 'artículos por contar'}
+      <Marco>
+        <Cabecera title={title} onBack={onBack} />
+        <div className="flex-1 px-4 pt-5">
+          <p className="text-[26px] font-extrabold tracking-[-.02em] leading-[1.15] text-cocina-tinta">
+            Hola, {employee.name.split(' ')[0]}
+          </p>
+          <p className="text-[14px] text-cocina-tinta-2 mt-1">Hoy te toca un recuento rápido.</p>
+          <div className="mt-5 rounded-cocina-md bg-cocina-acento-bg px-5 py-6 text-center">
+            <div className="num text-[44px] font-bold leading-none text-cocina-acento-ink">{queue.length}</div>
+            <div className="text-[13px] text-cocina-acento-ink mt-2">
+              {queue.length === 1 ? 'producto por contar' : 'productos por contar'}
             </div>
-            <div className="text-xs text-accent/80 mt-1">≈ {Math.max(1, Math.round(queue.length * 0.4))} minutos</div>
           </div>
-
-          <p className="text-xs text-text-secondary text-center mt-4">
-            Te lo pido de uno en uno. Cuentas en tu unidad (caja, bolsa…), yo me encargo del resto.
+          <p className="text-[13px] text-cocina-tinta-2 mt-4 leading-[1.5]">
+            Te los pido de uno en uno. Cuenta lo cerrado por formato —cajas, bolsas, paquetes— y
+            lo que esté abierto, a la báscula.
           </p>
         </div>
-        <div className="px-5 pb-8">
-          <button
-            onClick={() => setPhase('counting')}
-            className="w-full py-4 rounded-2xl bg-accent text-white font-semibold text-lg transition-base active:scale-[0.98]"
-          >
-            Empezar a contar
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (phase === 'warn') {
-    const less = warnKind === 'low'
-    return (
-      <div className="min-h-screen bg-page flex flex-col">
-        <Header title="Un momento" />
-        <div className="flex-1 px-6 pt-6 flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-full bg-warning-bg flex items-center justify-center">
-            <AlertTriangle size={30} className="text-warning" />
-          </div>
-          <p className="font-display text-xl text-text-primary mt-4 leading-snug">
-            Eso es mucho {less ? 'menos' : 'más'}
-            <br />
-            de lo normal
-          </p>
-          <p className="text-sm text-text-secondary mt-3 max-w-xs leading-relaxed">
-            Has puesto{' '}
-            <b className="text-text-primary font-semibold">
-              {value} {unitLabel(unit, current?.baseUnit)}
-            </b>{' '}
-            de {current?.name}. ¿Lo cuentas otra vez para asegurar?
-          </p>
-        </div>
-        <div className="px-5 pb-8 space-y-3">
-          <button
-            onClick={() => {
-              setValue('')
-              setPhase('counting')
-            }}
-            className="w-full py-4 rounded-2xl bg-accent text-white font-semibold text-lg transition-base active:scale-[0.98]"
-          >
-            Volver a contar
-          </button>
-          <button
-            onClick={advance}
-            className="w-full py-3.5 rounded-2xl border border-border-default text-text-secondary font-medium transition-base active:scale-[0.98]"
-          >
-            Está bien, es correcto
-          </button>
-        </div>
-      </div>
+        <Pie>
+          <BotonPrincipal onClick={() => setPhase('counting')}>Empezar a contar</BotonPrincipal>
+        </Pie>
+      </Marco>
     )
   }
 
   if (phase === 'done') {
     return (
-      <div className="min-h-screen bg-page flex flex-col">
-        <Header title={title} />
-        <div className="flex-1 px-6 pt-10 flex flex-col items-center text-center">
-          <div className="w-20 h-20 rounded-full bg-success-bg flex items-center justify-center">
-            <Check size={40} className="text-success" />
-          </div>
-          <p className="font-display text-2xl text-text-primary mt-5">¡Listo!</p>
-          <p className="text-sm text-text-secondary mt-2 max-w-xs leading-relaxed">
-            Has contado {total === 1 ? 'el artículo' : `los ${total} artículos`} de hoy. Gracias.
+      <Marco>
+        <Cabecera title={title} />
+        <Centrado>
+          <Check size={44} className="text-cocina-verde" />
+          <p className="text-[24px] font-extrabold text-cocina-tinta mt-4">¡Listo!</p>
+          <p className="text-[13px] text-cocina-tinta-2 mt-2 max-w-xs leading-[1.5]">
+            Has contado {total === 1 ? 'el producto' : `los ${total} productos`} de hoy. Gracias.
           </p>
-          <div className="mt-6 bg-card border border-border-default rounded-2xl p-4 text-sm text-text-secondary max-w-xs">
-            El gestor revisa y ajusta el stock. Tú no tienes que hacer nada más.
-          </div>
-        </div>
-        <div className="px-5 pb-8">
-          <button
-            onClick={onBack}
-            className="w-full py-4 rounded-2xl bg-accent text-white font-semibold text-lg transition-base active:scale-[0.98]"
-          >
-            Cerrar
-          </button>
-        </div>
-      </div>
+          <p className="text-[13px] text-cocina-tinta-3 mt-5 max-w-xs leading-[1.5]">
+            El encargado lo revisa y ajusta el stock. Tú no tienes que hacer nada más.
+          </p>
+        </Centrado>
+        <Pie><BotonPrincipal onClick={onBack}>Cerrar</BotonPrincipal></Pie>
+      </Marco>
     )
   }
 
-  // phase === 'counting'
-  const canNext = parseValue() != null
-  const n = parseValue()
-  const baseEq = n != null && unit.kind === 'format' ? toBase(n, unit) : null
+  // ─── phase 'counting' y 'recount' comparten el cuerpo ────────────────────
+  const enRecount = phase === 'recount'
+  const instruccion = enRecount
+    ? 'Cuéntalo otra vez, sin mirar lo de antes.'
+    : abierto.modo === 'ojo'
+      ? 'Sin báscula a mano: di cuánto queda en lo que está abierto.'
+      : formats.length > 0
+        ? 'Cuenta lo cerrado por formato. Lo abierto, a la báscula.'
+        : `Cuenta lo que hay, en ${unidadLarga(current?.baseUnit)}.`
+
   return (
-    <div className="min-h-screen bg-page flex flex-col">
-      <Header onBack={onBack} title={title} />
-      <div className="flex-1 px-5 pt-2">
-        {/* progreso */}
-        <div className="flex items-center justify-between text-xs text-text-secondary">
-          <span>Artículo {stepNumber} de {total}</span>
-        </div>
-        <div className="h-1.5 bg-border-default/50 rounded-full mt-2 overflow-hidden">
-          <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${progressPct}%` }} />
-        </div>
+    <Marco>
+      <Cabecera title={title} onBack={onBack} paso={stepNumber} de={total} pct={progressPct} />
 
-        {/* artículo */}
-        <div className="mt-6 flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-2xl bg-accent-bg flex items-center justify-center">
-            <Boxes size={32} className="text-accent" />
-          </div>
-          <p className="font-display text-2xl text-text-primary mt-3">{current?.name}</p>
-          <p className="text-sm text-text-secondary mt-1">¿Cuánto hay?</p>
-        </div>
-
-        {/* entrada numérica grande + unidad */}
-        <div className="mt-5">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type="number"
-                inputMode="decimal"
-                autoFocus
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="0"
-                className="w-full text-center font-display text-4xl py-5 rounded-2xl border-2 border-accent/40 focus:border-accent outline-none bg-card text-text-primary"
-              />
-            </div>
-          </div>
-
-          {/* selector de unidad: chips con nombre + contenido */}
-          {formats.length > 0 ? (
-            <div className="mt-3">
-              <UnitPicker
-                unit={unit}
-                formats={formats}
-                baseUnit={current?.baseUnit ?? null}
-                onChange={onUnitChange}
-              />
-            </div>
-          ) : (
-            current?.baseUnit && (
-              <p className="text-center text-sm text-text-secondary mt-3">{unitWord(current.baseUnit)}</p>
-            )
+      <div className={`flex-1 overflow-y-auto ${enRecount ? 'opacity-40 pointer-events-none' : ''}`}>
+        <div className="px-4 pt-4 pb-3 flex flex-col gap-1">
+          {locationName && (
+            <span className="text-[11px] font-bold tracking-[.08em] uppercase text-cocina-tinta-3">{locationName}</span>
           )}
-
-          {/* equivalencia viva a base (red de seguridad, solo si hay formato) */}
-          {baseEq != null && (
-            <p className="text-center text-xs text-text-tertiary mt-2">
-              ≈ {fmtQty(baseEq, current?.baseUnit)}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="px-5 pb-8">
-        <button
-          onClick={onNext}
-          disabled={!canNext || saving}
-          className="w-full py-4 rounded-2xl bg-accent text-white font-semibold text-lg transition-base active:scale-[0.98] disabled:opacity-40 inline-flex items-center justify-center gap-2"
-        >
-          {saving ? <Loader2 size={20} className="animate-spin" /> : null}
-          {stepNumber >= total ? 'Terminar' : 'Siguiente'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Selector de unidad ───
-// Chips con los formatos de compra + la unidad base. Cada chip muestra el
-// nombre Y el contenido ("Bolsa · 5 kg") para que el trabajador distinga dos
-// formatos con el mismo nombre. La elección se recuerda (onUnitChange).
-function UnitPicker({
-  unit, formats, baseUnit, onChange,
-}: {
-  unit: UnitSel
-  formats: PurchaseFormat[]
-  baseUnit: string | null
-  onChange: (u: UnitSel) => void
-}) {
-  const isActive = (f: PurchaseFormat) => unit.kind === 'format' && unit.format.id === f.id
-  const baseActive = unit.kind === 'base'
-  return (
-    <div className="flex flex-wrap justify-center gap-2">
-      {formats.map(f => (
-        <button
-          key={f.id}
-          type="button"
-          onClick={() => onChange({ kind: 'format', format: f })}
-          className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-base active:scale-95 ${
-            isActive(f)
-              ? 'bg-accent text-white border-accent'
-              : 'bg-card text-text-secondary border-border-default'
-          }`}
-        >
-          {f.name}
-          <span className={isActive(f) ? 'text-white/75' : 'text-text-tertiary'}>
-            {' '}· {fmtQty(f.qtyInBase, baseUnit)}
+          <span className="text-[26px] font-extrabold tracking-[-.02em] leading-[1.15] text-cocina-tinta">
+            {current?.name}
           </span>
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => onChange({ kind: 'base' })}
-        className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-base active:scale-95 ${
-          baseActive
-            ? 'bg-accent text-white border-accent'
-            : 'bg-card text-text-secondary border-border-default'
-        }`}
-      >
-        {baseUnit ?? 'base'}
-      </button>
-    </div>
-  )
-}
+          <span className="text-[14px] text-cocina-tinta-2 leading-[1.4]">{instruccion}</span>
+        </div>
 
-// ─── Piezas de presentación ───
+        {formatsLoading ? (
+          <div className="mx-4 rounded-cocina-md border border-cocina-linea bg-cocina-superficie p-6 flex justify-center">
+            <Loader2 size={20} className="animate-spin text-cocina-acento" />
+          </div>
+        ) : (
+          <Tarjeta>
+            {formats.map((f, i) => (
+              <FilaFormato
+                key={f.id}
+                formato={f}
+                baseUnit={current?.baseUnit ?? null}
+                valor={cuenta[f.id] ?? 0}
+                rayada={i % 2 === 1}
+                tocado={hayAlgoTecleado}
+                onChange={n => setCuenta(c => ({ ...c, [f.id]: Math.max(0, n) }))}
+              />
+            ))}
+            <FilaAbierto
+              abierto={abierto}
+              setAbierto={setAbierto}
+              formatoRef={formatoAbierto}
+              baseUnit={current?.baseUnit ?? null}
+              soloBase={formats.length === 0}
+            />
+          </Tarjeta>
+        )}
 
-function Header({ title, onBack }: { title: string; onBack?: () => void }) {
-  return (
-    <div className="px-4 pt-5 pb-3 flex items-center gap-3">
-      {onBack && (
-        <button
-          onClick={onBack}
-          className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base"
-          aria-label="Volver"
-        >
-          <ArrowLeft size={20} />
-        </button>
+        {hayAlgoTecleado && (
+          <div className="mx-4 mt-3 rounded-cocina-md bg-cocina-acento-bg px-4 py-3.5 flex justify-between items-baseline gap-3">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[12px] font-bold tracking-[.06em] uppercase text-cocina-acento-ink">Total contado</span>
+              <span className="text-[13px] text-cocina-acento-ink leading-snug">
+                {desglose(formats, cuenta, abierto, formatoAbierto, current?.baseUnit ?? null)}
+              </span>
+            </div>
+            <span className="num text-[26px] font-bold tracking-[-.02em] text-cocina-acento-ink whitespace-nowrap">
+              {esAOjo ? '≈ ' : ''}{fmtQty(totalBase, current?.baseUnit ?? null)}
+            </span>
+          </div>
+        )}
+
+        {errMsg && !enRecount && (
+          <div className="mx-4 mt-3 rounded-cocina px-3.5 py-3 text-[13px] bg-cocina-rojo-bg text-cocina-rojo leading-[1.45]">
+            {errMsg}
+          </div>
+        )}
+      </div>
+
+      {!enRecount && (
+        <Pie>
+          <BotonPrincipal
+            disabled={!hayAlgoTecleado || saving}
+            onClick={() => void guardar(construirEntradas())}
+          >
+            {saving ? <Loader2 size={18} className="animate-spin" /> : null}
+            Guardar y seguir
+          </BotonPrincipal>
+          <BotonSecundario
+            disabled={saving}
+            onClick={() => void guardar([{ method: 'cero' }])}
+          >
+            No queda nada de este producto
+          </BotonSecundario>
+        </Pie>
       )}
-      <p className="text-xs text-text-secondary uppercase tracking-wide">{title}</p>
-    </div>
+
+      {enRecount && (
+        <HojaVuelveAMirarlo
+          producto={current?.name ?? ''}
+          formats={formats}
+          baseUnit={current?.baseUnit ?? null}
+          cuenta={cuenta}
+          setCuenta={setCuenta}
+          abierto={abierto}
+          setAbierto={setAbierto}
+          formatoRef={formatoAbierto}
+          hayAlgo={hayAlgoTecleado}
+          saving={saving}
+          error={errMsg}
+          onGuardar={() => void guardar(construirEntradas())}
+          onLoMismo={() => void guardar([{ method: 'cero' }])}
+        />
+      )}
+    </Marco>
   )
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-page flex flex-col items-center justify-center text-center px-6">
-      {children}
-    </div>
-  )
-}
-
-// Etiqueta de la unidad elegida (para el aviso de variación).
-function unitLabel(unit: UnitSel, baseAbbr: string | null | undefined): string {
-  if (unit.kind === 'format') return unit.format.name
-  return unitWord(baseAbbr)
-}
-
-// "1000 g" se muestra como "1 kg" para que el contenido se lea de un vistazo.
-function fmtQty(v: number, unit: string | null | undefined): string {
-  const u = (unit ?? '').toLowerCase()
-  if (u === 'g' && Math.abs(v) >= 1000) return `${nf1.format(v / 1000)} kg`
-  if (u === 'ml' && Math.abs(v) >= 1000) return `${nf1.format(v / 1000)} l`
-  return `${nf1.format(v)}${unit ? ` ${unit}` : ''}`
-}
-
-// "gramos" / "mililitros" / "unidades" en lenguaje llano (con fallback al abreviado).
-function unitWord(abbr: string | null | undefined): string {
-  switch ((abbr ?? '').toLowerCase()) {
-    case 'g': return 'gramos'
-    case 'kg': return 'kilos'
-    case 'ml': return 'mililitros'
-    case 'l': return 'litros'
-    case 'ud':
-    case 'u': return 'unidades'
-    default: return abbr || 'unidades'
-  }
-}

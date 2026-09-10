@@ -73,6 +73,23 @@ export interface InventoryCountLine {
   familyName: string | null
   needsReview: boolean             // recipe_item.needs_review (pendiente de revisar)
   lineValue: number | null         // counted_qty × unitCost (€), null si falta alguno
+
+  // ── §2.4 (10/09/2026) · lo que necesita la pantalla de aprobación ────────
+  /** `inventory_count_line.needs_review`: se contó DOS veces y sigue sin cuadrar.
+   *  OJO: no es `needsReview` de arriba, que es de la ficha del artículo. Son dos
+   *  banderas distintas con el mismo nombre en dos tablas distintas, y por eso
+   *  ésta lleva prefijo: confundirlas sería aplicar sola una línea que espera. */
+  lineNeedsReview: boolean
+  /** La nota de «Otro». Obligatoria cuando el motivo es «otro». */
+  reasonNote: string | null
+  countedByName: string | null
+  countedAt: string | null
+  /** Lo contó, se le pidió mirarlo otra vez, y le salió lo mismo. */
+  confirmedTwice: boolean
+  /** Ya se ha pedido que otra persona lo vuelva a contar. */
+  recountRequestedAt: string | null
+  /** Esta línea ES el recuento de otra. */
+  recountOf: string | null
 }
 
 export interface InventoryCountSummary {
@@ -286,6 +303,8 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
     .select(`
       id, recipe_item_id, storage_area_id, position, system_qty, counted_qty,
       variance_qty, variance_pct, variance_value, abc_class, within_tolerance, reason_code,
+      reason_note, needs_review, counted_by_name, counted_at, counted_qty_confirmed,
+      recount_requested_at, recount_of,
       recipe_item:recipe_item_id (
         name, computed_cost, family_id, needs_review,
         kitchen_unit:base_unit_id ( abbreviation ),
@@ -330,59 +349,29 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
       familyName: item?.recipe_family?.name ?? null,
       needsReview: Boolean(item?.needs_review),
       lineValue,
+      lineNeedsReview: Boolean(r.needs_review),
+      reasonNote: (r.reason_note as string | null) ?? null,
+      countedByName: (r.counted_by_name as string | null) ?? null,
+      countedAt: (r.counted_at as string | null) ?? null,
+      confirmedTwice: r.counted_qty_confirmed != null,
+      recountRequestedAt: (r.recount_requested_at as string | null) ?? null,
+      recountOf: (r.recount_of as string | null) ?? null,
     }
   })
 }
 
-/** El servidor ha rechazado la cantidad por estar fuera de escala (tope de
- *  cordura: >1.000× el teórico, o por encima del tope absoluto si no hay
- *  teórico). No es un fallo: es un dedo gordo probable. Quien cuenta puede
- *  confirmar el valor y volver a guardar. */
-export class AbsurdQuantityError extends Error {
-  readonly quantity: number
-  constructor(message: string, quantity: number) {
-    super(message)
-    this.name = 'AbsurdQuantityError'
-    this.quantity = quantity
-  }
-}
-
-/** Guarda la cantidad contada de una línea (guardado progresivo).
- *  Sella counted_at (foto por línea: apply ancla el teórico a este instante) y
- *  registra el actor real que tecleó la cantidad.
- *
- *  confirmQty: solo se manda cuando quien cuenta ha confirmado expresamente una
- *  cantidad que el tope de cordura había rechazado. Vale para ESE valor y solo
- *  para ese: el servidor exige que coincida exactamente. */
-export async function saveCountedQty(
-  lineId: string,
-  countedQty: number | null,
-  actorId?: string | null,
-  actorName?: string | null,
-  confirmQty?: number,
-): Promise<void> {
-  requireSupabase()
-  const confirmed = confirmQty !== undefined && confirmQty === countedQty
-  const patch: Record<string, unknown> = {
-    counted_qty: countedQty,
-    counted_at: countedQty === null ? null : new Date().toISOString(),
-    // Sin confirmación explícita se limpia: cada cantidad fuera de escala
-    // necesita su propia confirmación, nunca hereda la anterior.
-    counted_qty_confirmed: confirmed ? countedQty : null,
-  }
-  if (actorId !== undefined)   patch.counted_by = actorId
-  if (actorName !== undefined) patch.counted_by_name = actorName
-  const { error } = await from('inventory_count_line')
-    .update(patch)
-    .eq('id', lineId)
-  if (error) {
-    // FV001 = tope de cordura del conteo (trg_inventory_count_line_sanity).
-    if ((error as { code?: string }).code === 'FV001' && countedQty !== null) {
-      throw new AbsurdQuantityError(error.message, countedQty)
-    }
-    throw new Error(`No se pudo guardar: ${error.message}`)
-  }
-}
+// ─────────────────────────────────────────────────────────────────────
+// AQUÍ VIVÍA `saveCountedQty`, Y SE HA BORRADO A PROPÓSITO (§2.2, 10/09/2026).
+//
+// Escribía `counted_qty` con un UPDATE directo desde el navegador. Ahora hay
+// UNA sola puerta —`save_count_line`, en `countEntryService.ts`—, que convierte
+// y suma en servidor, guarda CÓMO se contó y devuelve el veredicto a ciegas.
+//
+// No se deja «por si acaso» ni marcada como obsoleta: una función que escribe
+// `counted_qty` a mano y sigue exportada es una función que alguien va a usar
+// dentro de seis meses sin saber que se salta el freno. `AbsurdQuantityError`
+// se fue con ella al mismo sitio.
+// ─────────────────────────────────────────────────────────────────────
 
 /** Guarda el motivo (reason_code) de una línea fuera de tolerancia. */
 export async function saveReasonCode(lineId: string, reasonCode: string | null): Promise<void> {

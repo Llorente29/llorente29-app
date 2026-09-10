@@ -18,8 +18,6 @@ import FormatCalculator from '@/modules/kitchen/components/FormatCalculator'
 import {
   getInventoryCount,
   listCountLines,
-  saveCountedQty,
-  AbsurdQuantityError,
   saveReasonCode,
   closeInventoryCount,
   approveInventoryCount,
@@ -36,6 +34,18 @@ import {
   textoCobertura, pctCobertura, hayHuecoNoAtribuible,
   type Cobertura,
 } from '@/modules/supply/lib/coberturaConsumo'
+// §2.2 (10/09/2026): el front NO escribe `counted_qty`. Ni el móvil ni esta
+// hoja: los dos pasan por `save_count_line`, que convierte y suma en servidor.
+// Lo que aquí se teclea ya viene en unidad base, así que es una entrada de tipo
+// 'peso' — el mismo método que usa la báscula del móvil.
+import {
+  saveCountLine,
+  clearCountLine,
+  AbsurdQuantityError,
+} from '@/modules/supply/services/countEntryService'
+import AprobarRecuento from '@/modules/supply/components/AprobarRecuento'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { getLocationName } from '@/modules/supply/services/countFormatService'
 
 function eur(v: number | null): string {
   if (v === null || v === undefined) return '—'
@@ -78,8 +88,10 @@ export default function InventoryCountSheet({
   const [familyFilter, setFamilyFilter] = useState<string>('')
 
   const { userProfile, authUserId } = useApp()
+  const { activeAccountId } = useActiveAccount()
   const role = userProfile?.role ?? 'worker'
   const canApprove = role === 'admin' || role === 'manager'
+  const [locationName, setLocationName] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -89,6 +101,11 @@ export default function InventoryCountSheet({
         const [c, ls] = await Promise.all([getInventoryCount(countId), listCountLines(countId)])
         if (cancelled) return
         setCount(c); setLines(ls)
+        if (c) {
+          void getLocationName(c.locationId)
+            .then(n => { if (!cancelled) setLocationName(n) })
+            .catch(() => {})
+        }
         // Clasificador local: al entrar en revisión, propone la causa de cada
         // línea al instante. Silencioso si falla (el dropdown queda de respaldo).
         if (c && (c.status === 'en_revision' || c.status === 'aprobado')) {
@@ -175,16 +192,24 @@ export default function InventoryCountSheet({
    *  pide confirmación expresa antes de insistir. Si no se confirma, la línea
    *  vuelve a quedar sin contar: no se guarda un dedo gordo por inercia. */
   async function saveQty(line: InventoryCountLine, qty: number | null) {
+    // Vaciar la casilla deja la línea SIN CONTAR, que no es contar cero. Para
+    // contar cero está el botón de «no queda nada» del móvil, que manda un
+    // método 'cero' explícito.
+    if (qty === null) {
+      await clearCountLine(line.id)
+      return
+    }
     try {
-      await saveCountedQty(line.id, qty, authUserId ?? null, userProfile?.displayName ?? null)
+      await saveCountLine(line.id, [{ method: 'peso', qty }])
     } catch (e) {
       if (e instanceof AbsurdQuantityError) {
         if (window.confirm(`${e.message}\n\n¿Confirmas que has contado esa cantidad?`)) {
-          await saveCountedQty(line.id, qty, authUserId ?? null, userProfile?.displayName ?? null, e.quantity)
+          // La confirmación vale para ESTE total y sólo para éste.
+          await saveCountLine(line.id, [{ method: 'peso', qty }], qty)
           return
         }
         setLines(prev => prev.map(l => l.id === line.id ? { ...l, countedQty: null } : l))
-        await saveCountedQty(line.id, null, authUserId ?? null, userProfile?.displayName ?? null)
+        await clearCountLine(line.id)
         return
       }
       throw e
@@ -284,6 +309,27 @@ export default function InventoryCountSheet({
 
   if (loading) {
     return <div className="flex items-center gap-2 text-text-secondary text-sm p-6"><Loader2 size={16} className="animate-spin" /> Cargando conteo…</div>
+  }
+
+  // ── PANTALLA 4 (§2.4, maqueta del 10/09) ────────────────────────────────
+  // Un conteo EN REVISIÓN ya no se aprueba en esta hoja: se aprueba en la
+  // pantalla que enseña cómo se contó cada cosa y qué contradice al recuento
+  // anterior. La hoja se queda con lo que sabe hacer —contar a ciegas— y la
+  // decisión se toma donde están los datos para tomarla.
+  //
+  // Se delega en vez de reescribir esta hoja entera porque el modo 'contando'
+  // no cambia y reescribirlo «de paso» sería cambiarle el aspecto a una
+  // pantalla que nadie ha comparado con una maqueta.
+  if (count && count.status === 'en_revision' && canApprove && activeAccountId) {
+    return (
+      <AprobarRecuento
+        count={count}
+        accountId={activeAccountId}
+        locationName={locationName}
+        onBack={onBack}
+        onApproved={() => setReloadTick(t => t + 1)}
+      />
+    )
   }
 
   return (
