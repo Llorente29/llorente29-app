@@ -44,8 +44,8 @@ Rama `claude/conteo-formatos-validacion-pwbctk`.
 | | |
 |---|---|
 | **Construido y en la rama** | Diez migraciones, cinco pantallas, tres servicios nuevos, 22 pruebas nuevas |
-| **Aplicado en producción** | **NADA.** Ninguna migración se ha ejecutado |
-| **Lo que hay que hacer ahora** | El ensayo del coste medio (§2.5) con Julio delante, y después aplicar |
+| **Aplicado en producción** | **SÍ, el 10/09 con Julio delante.** Las diez migraciones y la fusión a `main`. Ver el registro al final |
+| **Lo que hay que hacer ahora** | Los puntos 5, 6 y 7 del §5: `types:gen`, el recálculo del coste y decidir los formatos |
 
 Las migraciones se proponen, no se aplican: es la regla de la casa. Y dos de
 ellas (`p1`, el valor inicial de `use_in_count`; `p8`, el coste medio) tocan
@@ -610,3 +610,179 @@ disparador simétrico:
 
 Unidad base de ficha con conversión · fiabilidad por empleado dentro de Folvy ·
 FEFO y lotes · traspasos entre locales. Nada de eso se ha tocado.
+
+---
+
+# APLICADO EN PRODUCCIÓN · 10/09/2026, con Julio delante
+
+Se ejecutaron los pasos 1 a 4 del §5. Los pasos 5, 6 y 7 quedan pendientes y
+están al final.
+
+## Antes de empezar: nadie estaba contando
+
+| | Local | Estado | Líneas | Contadas |
+|---|---|---|---:|---:|
+| INV-00217 | Foodint Carabanchel | contando | 14 | **0** |
+| INV-00218 | Foodint Alcalá | contando | 35 | **0** |
+
+Los dos creados por el cron a las 06:00, con `counted_qty`, `counted_at` y
+`counted_by_name` a nulo en las 49 líneas.
+
+## Paso 1 · Las 53 recepciones fuera de banda
+
+53 líneas, 23 artículos. En **21 de 23** la mediana de las recepciones coincide
+con la ficha: la banda deja fuera exactamente la línea rara (Milanesa Ternera a
+**233,96 €/ud** contra 3,66 de ficha, Pasta Trufada a **8,35** contra 0,024,
+CAJA GENERICA a **56,02** contra 0,224).
+
+En **2 la rara es la ficha**, y hay que arreglarla por ahí:
+
+| Artículo | Ficha | Mediana de sus recepciones | |
+|---|---:|---:|---|
+| **Humus** | 0,00001 €/g | 0,00647 €/g | ×900 · 3 de 4 fuera |
+| **Tapa Salsero 120 Cc** | 0,00446 €/ud | 0,03556 €/ud | ×8 · 2 de 3 fuera |
+
+## Paso 2 · El antes/después, clavado con el ensayo
+
+```
+                  filas  sin coste  negativo  cambian  valor antes   valor después
+Alcalá             196    65 → 39    11 → 0     154    34.566,95 €   38.486,15 €
+Carabanchel        139    36 →  8    23 → 0     106     2.551,01 €    6.233,60 €
+Plaza Castilla     118    19 →  2    16 → 0      79     4.324,47 €    5.016,23 €
+TOTAL              453   120 → 49    50 → 0     339    41.442,43 €   49.735,98 €
+```
+
+## Paso 3 · Las diez migraciones, aplicadas
+
+Aplicadas por orden de nombre, de `conteo_p1_use_in_count` a
+`conteo_p10_contexto_de_revision`. Comprobado después:
+
+- `use_in_count`: Foodint **275 activos → 189 true / 86 false**; Folvy Interno
+  **306 → 206 / 100**. Clavado con el ensayo del §2.1.
+- Todas las columnas y la tabla: `inventory_count_entry`, las 6 columnas nuevas
+  de `inventory_count_line`, las 6 de `supply_settings`, las 2 de `recipe_item`,
+  el CHECK `otro_con_nota` y el disparador `trg_ripf_invalida_revision`.
+- Las cuatro funciones nuevas **nacen privadas**: `anon` no puede ejecutar
+  ninguna. Y `save_count_line` tiene **una sola firma** `(uuid, jsonb, numeric)`
+  — sin sobrecarga, que es la regla 2.
+
+**Sin deriva entre el repo y lo desplegado.** Las migraciones se aplicaron por
+el MCP, transcribiendo el SQL a mano, así que se comprobó: md5 del cuerpo
+literal de cada función (`prosrc`, sin comentarios y con los espacios
+colapsados) contra el del fichero del repo. **11 de 11 idénticas.** Regla 1: no
+hay nada que viva sólo en el desplegado.
+
+La rama se fusionó a `main` en el mismo tramo (commit `3bb2722`), como pedía el
+orden: las migraciones sin el front nuevo dejarían al móvil de hoy escribiendo
+`counted_qty` a mano contra el disparador simétrico.
+
+## Paso 4 · La verificación, sobre las líneas reales de hoy
+
+**§4.1 · Patatas Bastón, 2 bolsas + 750 g** (línea de INV-00218, Alcalá). Va en
+DOS pasos porque el teórico vivo son 120.000 g y el freno salta:
+
+```
+1er guardado {"attempt":1,"counted":5750,"entries":2,"verdict":"recount", …}
+             → 2 bolsas × 2.500 + 750 = 5750, 2 entradas, y la línea NO se sella
+2º guardado  {"attempt":2,"counted":5750,"entries":2,"verdict":"ok","confirmed":true, …}
+             → counted_qty = 5750
+entradas     intento 1: 2 filas (5750 g) · intento 2: 2 filas (5750 g)
+```
+
+Demuestra §4.1 y de paso el §2.3 entero: la suma en servidor, el freno que
+frena UNA vez, y «confirmado 2 veces» al repetir el mismo total.
+
+**§4.2 · «0 donde el último aprobado son 9 kg, sin entradas».** Hoy no hay línea
+de Peperoni en Alcalá, así que se probó el MISMO caso con **Kebab Pollo
+Loncheado** (INV-00218): último aprobado 9.000 g por Natacha el 09/09, ninguna
+entrada desde entonces.
+
+```
+{"attempt":1,"counted":0,"entries":1,"verdict":"recount","confirmed":false, …}
+```
+
+`recount`, y **la respuesta no contiene ni 9000 ni 8875**. La línea no se sella
+(`counted_qty` sigue NULL, `recount_asked_at` puesto) **pero el intento sí se
+guarda**: una entrada, que es lo que hace que el segundo guardado pueda saber si
+repite.
+
+**§4.3 · El solomillo, «25» contra 35 kg** (INV-00218, teórico 35.000 g):
+
+```
+{"attempt":1,"counted":25,"entries":1,"verdict":"recount", …}
+```
+
+`recount` **y sin excepción FV001**. Es la contradicción del encargo resuelta
+por el orden, comprobada en producción: el freno se adelanta a la red.
+
+**§4.5 · «Otro» sin nota.** Rechazado por la BBDD:
+`violates check constraint "inventory_count_line_otro_con_nota"`. Con nota, entra.
+Y `uso_sin_apuntar` y `error_conteo` están en el CHECK.
+
+**§4.7 · `git grep` de escrituras directas a `counted_qty` desde el front:**
+sólo lecturas y comentarios. **Ninguna escritura.**
+
+**§4.9 · `tsc -b` exit 0** sobre `main` fusionado.
+
+### El ensayo no dejó nada escrito
+
+Cuatro líneas se tocaron y las cuatro se deshicieron. Estado final:
+
+```
+INV-00217  14 líneas · 0 contadas · 0 entradas · 0 recount pedido · 0 motivos
+INV-00218  35 líneas · 0 contadas · 0 entradas · 0 recount pedido · 0 motivos
+inventory_count_entry en TODA la BBDD: 0 filas
+movimientos de stock creados hoy: 0
+```
+
+**Y hubo un tropiezo que hay que contar.** El primer intento del §4.2 cogió «la
+línea viva más reciente de Peperoni» y le tocó una de **INV-00206** (Carabanchel,
+un conteo rezagado del 06/09). Ahí el teórico vivo es 0 y el último aprobado
+también, así que contar 0 salió `ok` — correcto, pero no era el caso que se
+quería probar. Peor: mi deshacer borró las entradas y `recount_asked_at` **pero
+se dejó `counted_qty = 0`** en una línea que estaba sin contar. Se detectó al
+mirar los datos en vez de creerse el resultado, y se revirtió con
+`clear_count_line`. La línea `4608bf2a` volvió a `counted_qty` NULL, `counted_at`
+NULL, 0 entradas.
+
+La lección, que es la de siempre: **elegir la fila del ensayo con una consulta
+que no mira los datos es escribir a ciegas.** La segunda vuelta miró primero las
+35 líneas de INV-00218 con su teórico y su último aprobado, y eligió sobre
+hechos.
+
+## Lo que NO se ha hecho, y por qué
+
+**§4.4 · `needs_review` no la aplica `autoclose_daily_count`.** No se ha
+probado. Para probarlo de verdad hay que ejecutar `autoclose_daily_count` sobre
+un conteo, y eso **cierra el conteo y mueve stock**. No hay conteo de prueba, y
+usar uno real (INV-00204 o INV-00201, rezagados de Carabanchel) sería una
+operación con efectos que no se ha pedido. Lo que sí está comprobado es que el
+código desplegado es el del repo, y ese código cuenta las `needs_review` en
+`v_missing` y las excluye del bucle en modo parcial. **La prueba de verdad
+queda pendiente y hace falta decidir sobre qué conteo se hace.**
+
+**§4.6 · 0 filas con coste medio negativo.** La función nueva está desplegada,
+pero las 453 filas **siguen con el coste viejo**: recalcularlas es el PASO 1 del
+guion del coste, que es el punto 6 del orden y no estaba en lo de hoy. Hasta que
+se ejecute, el ensayo del PASO 2 sigue midiendo 50 negativos.
+
+**Puntos 5, 6 y 7 del §5**, tal cual quedaron:
+
+5. `npm run types:gen`, y quitar el ayudante `rpc()` de `countEntryService.ts`.
+6. PASO 1 del recálculo del coste (y después el PASO 2, `variance_value`).
+7. Abrir **Almacén › Cómo se cuenta** y decidir los formatos de Pulled Pork y
+   los otros seis de la tabla del §2.1.
+
+## Un hallazgo que no es de hoy y no se ha tocado
+
+`apply_inventory_count`, `autoclose_daily_count`, `close_inventory_count` y
+`tg_inventory_count_line_sanity` son **ejecutables por `anon`**. No lo he abierto
+yo: `CREATE OR REPLACE` conserva los permisos de la función anterior, y se
+comprobó contra siete funciones de escritura que **no** se han tocado hoy
+—`register_adjustment`, `register_waste`, `register_transfer`,
+`build_inventory_count`, `generate_daily_count`, `post_pending_receipt_line`,
+`void_goods_receipt`— y todas están igual.
+
+Es sistémico y anterior. La migración del 09/09
+(`cerrar_a_anon_de_verdad_revocando_public`) no llegó a estas. **No se toca
+porque no es lo de hoy**, pero queda escrito.
