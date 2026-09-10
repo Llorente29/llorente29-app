@@ -77,6 +77,27 @@ export class AbsurdQuantityError extends Error {
   }
 }
 
+/**
+ * ESTA APP ES VIEJA (FV002, incidente del 10/09).
+ *
+ * La BBDD ha rechazado la escritura porque no venía sellada por
+ * `save_count_line`. Sólo puede llegar aquí un cliente con una versión
+ * anterior a la puerta única — o sea, esta misma clase no debería verse nunca
+ * desde la versión que la define. Existe por lo mismo que existe el
+ * disparador: porque quien está contando merece leer «actualízate», no un
+ * error de base de datos.
+ *
+ * Quien la reciba tiene UNA cosa que hacer: recargar. No hay estado que salvar
+ * —el servidor no ha escrito nada— y seguir en la versión vieja sólo repetiría
+ * el fallo en la siguiente línea.
+ */
+export class AppCaducadaError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AppCaducadaError'
+  }
+}
+
 function toPayload(e: CountEntryInput): Record<string, unknown> {
   switch (e.method) {
     case 'formato':  return { method: 'formato',  format_id: e.formatId, qty: e.qty }
@@ -110,10 +131,13 @@ export async function saveCountLine(
     p_confirm: confirmTotal ?? null,
   })
   if (error) {
+    const code = (error as { code?: string }).code
+    // FV002 = la puerta: esta app no pasó por save_count_line, así que es
+    // vieja. Va PRIMERO porque es la que manda recargar, y recargar arregla
+    // todo lo demás.
+    if (code === 'FV002') throw new AppCaducadaError(error.message)
     // FV001 = la red de cordura del conteo, por arriba o por abajo.
-    if ((error as { code?: string }).code === 'FV001') {
-      throw new AbsurdQuantityError(error.message)
-    }
+    if (code === 'FV001') throw new AbsurdQuantityError(error.message)
     throw new Error(`No se pudo guardar: ${error.message}`)
   }
   const r = (data ?? {}) as Record<string, unknown>
@@ -283,5 +307,8 @@ export async function requestRecount(
 export async function clearCountLine(lineId: string): Promise<void> {
   requireSupabase()
   const { error } = await rpc('clear_count_line', { p_line_id: lineId })
-  if (error) throw new Error(`No se pudo borrar lo contado: ${error.message}`)
+  if (error) {
+    if ((error as { code?: string }).code === 'FV002') throw new AppCaducadaError(error.message)
+    throw new Error(`No se pudo borrar lo contado: ${error.message}`)
+  }
 }
