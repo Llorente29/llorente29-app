@@ -360,55 +360,18 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
   })
 }
 
-/** El servidor ha rechazado la cantidad por estar fuera de escala (tope de
- *  cordura: >1.000× el teórico, o por encima del tope absoluto si no hay
- *  teórico). No es un fallo: es un dedo gordo probable. Quien cuenta puede
- *  confirmar el valor y volver a guardar. */
-export class AbsurdQuantityError extends Error {
-  readonly quantity: number
-  constructor(message: string, quantity: number) {
-    super(message)
-    this.name = 'AbsurdQuantityError'
-    this.quantity = quantity
-  }
-}
-
-/** Guarda la cantidad contada de una línea (guardado progresivo).
- *  Sella counted_at (foto por línea: apply ancla el teórico a este instante) y
- *  registra el actor real que tecleó la cantidad.
- *
- *  confirmQty: solo se manda cuando quien cuenta ha confirmado expresamente una
- *  cantidad que el tope de cordura había rechazado. Vale para ESE valor y solo
- *  para ese: el servidor exige que coincida exactamente. */
-export async function saveCountedQty(
-  lineId: string,
-  countedQty: number | null,
-  actorId?: string | null,
-  actorName?: string | null,
-  confirmQty?: number,
-): Promise<void> {
-  requireSupabase()
-  const confirmed = confirmQty !== undefined && confirmQty === countedQty
-  const patch: Record<string, unknown> = {
-    counted_qty: countedQty,
-    counted_at: countedQty === null ? null : new Date().toISOString(),
-    // Sin confirmación explícita se limpia: cada cantidad fuera de escala
-    // necesita su propia confirmación, nunca hereda la anterior.
-    counted_qty_confirmed: confirmed ? countedQty : null,
-  }
-  if (actorId !== undefined)   patch.counted_by = actorId
-  if (actorName !== undefined) patch.counted_by_name = actorName
-  const { error } = await from('inventory_count_line')
-    .update(patch)
-    .eq('id', lineId)
-  if (error) {
-    // FV001 = tope de cordura del conteo (trg_inventory_count_line_sanity).
-    if ((error as { code?: string }).code === 'FV001' && countedQty !== null) {
-      throw new AbsurdQuantityError(error.message, countedQty)
-    }
-    throw new Error(`No se pudo guardar: ${error.message}`)
-  }
-}
+// ─────────────────────────────────────────────────────────────────────
+// AQUÍ VIVÍA `saveCountedQty`, Y SE HA BORRADO A PROPÓSITO (§2.2, 10/09/2026).
+//
+// Escribía `counted_qty` con un UPDATE directo desde el navegador. Ahora hay
+// UNA sola puerta —`save_count_line`, en `countEntryService.ts`—, que convierte
+// y suma en servidor, guarda CÓMO se contó y devuelve el veredicto a ciegas.
+//
+// No se deja «por si acaso» ni marcada como obsoleta: una función que escribe
+// `counted_qty` a mano y sigue exportada es una función que alguien va a usar
+// dentro de seis meses sin saber que se salta el freno. `AbsurdQuantityError`
+// se fue con ella al mismo sitio.
+// ─────────────────────────────────────────────────────────────────────
 
 /** Guarda el motivo (reason_code) de una línea fuera de tolerancia. */
 export async function saveReasonCode(lineId: string, reasonCode: string | null): Promise<void> {
