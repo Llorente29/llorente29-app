@@ -87,7 +87,8 @@ export async function getReviewContext(countId: string): Promise<Map<string, Pre
   return out
 }
 
-export type MotivoRevision = 'desviacion' | 'needs_review' | 'contradiccion' | 'a_ojo'
+export type MotivoRevision =
+  'desviacion' | 'needs_review' | 'contradiccion' | 'a_ojo' | 'sin_referencia'
 
 export interface ReviewLine {
   line: InventoryCountLine
@@ -207,6 +208,15 @@ export async function buildCountReview(
       const reasons: MotivoRevision[] = []
       if (desviacionGrande) reasons.push('desviacion')
       if (l.lineNeedsReview) reasons.push('needs_review')
+      // FOLVY NO TENÍA REFERENCIA. La marca la pone el servidor cuando ni el
+      // teórico vivo ni el último recuento aprobado eran positivos, así que
+      // ninguno de los dos frenos pudo mirar la línea (Humus a −355 g).
+      //
+      // Va al grupo de revisar SALVO que se haya contado cero: si Folvy no
+      // sabía qué esperar y la persona dice que no queda nada, no hay nada
+      // que revisar. La ETIQUETA sale igual en los dos grupos —eso es la
+      // regla 7: el umbral decide el orden, nunca la existencia de la fila.
+      if (l.lineNoReference && l.countedQty !== 0) reasons.push('sin_referencia')
       if (contradiction) reasons.push('contradiccion')
       if (estimated && pct >= th.reviewPct) reasons.push('a_ojo')
 

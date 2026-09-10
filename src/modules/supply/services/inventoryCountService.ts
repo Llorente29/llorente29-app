@@ -80,6 +80,11 @@ export interface InventoryCountLine {
    *  banderas distintas con el mismo nombre en dos tablas distintas, y por eso
    *  ésta lleva prefijo: confundirlas sería aplicar sola una línea que espera. */
   lineNeedsReview: boolean
+  /** `inventory_count_line.no_reference`: al guardar no había NINGUNA
+   *  referencia positiva con la que comparar —ni teórico vivo ni último
+   *  recuento aprobado—, así que ningún freno pudo mirar esta línea.
+   *  No es culpa de quien contó: es una ficha que no cuadra. */
+  lineNoReference: boolean
   /** La nota de «Otro». Obligatoria cuando el motivo es «otro». */
   reasonNote: string | null
   countedByName: string | null
@@ -303,7 +308,7 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
     .select(`
       id, recipe_item_id, storage_area_id, position, system_qty, counted_qty,
       variance_qty, variance_pct, variance_value, abc_class, within_tolerance, reason_code,
-      reason_note, needs_review, counted_by_name, counted_at, counted_qty_confirmed,
+      reason_note, needs_review, no_reference, counted_by_name, counted_at, counted_qty_confirmed,
       recount_requested_at, recount_of,
       recipe_item:recipe_item_id (
         name, computed_cost, family_id, needs_review,
@@ -350,6 +355,7 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
       needsReview: Boolean(item?.needs_review),
       lineValue,
       lineNeedsReview: Boolean(r.needs_review),
+      lineNoReference: Boolean(r.no_reference),
       reasonNote: (r.reason_note as string | null) ?? null,
       countedByName: (r.counted_by_name as string | null) ?? null,
       countedAt: (r.counted_at as string | null) ?? null,

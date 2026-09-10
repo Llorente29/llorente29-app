@@ -140,3 +140,45 @@ export function desglose(
   }
   return trozos.join(' + ')
 }
+
+/**
+ * ¿ESE DECIMAL SON KILOS?
+ *
+ * Natacha pesó una bolsa empezada de Patatas Bastón y escribió «1,01» en la
+ * casilla de GRAMOS. Se guardó 1,011 g de patatas — un grano— cuando quería
+ * decir un kilo justo. La casilla dice «gramos» y ella tenía la báscula
+ * delante marcando kilos, que es lo que marcan las básculas de cocina.
+ *
+ * Nadie pesa un gramo y pico. Un decimal en una casilla de gramos o mililitros
+ * es, casi siempre, la lectura de la báscula sin convertir. Así que se
+ * PREGUNTA — no se convierte a la fuerza, porque 0,5 g de azafrán existe y
+ * quien lo pesa tiene derecho a escribirlo.
+ *
+ * Devuelve `null` cuando no hay nada que preguntar:
+ *   · unidad base que no es g ni ml (en «ud» un decimal significa otra cosa);
+ *   · un entero — 250 g es 250 g y no se molesta a nadie;
+ *   · 1.000 o más, donde el decimal ya es plausible como gramos (1.250,5 g) y
+ *     leerlo como kilos daría una tonelada y cuarto.
+ */
+export function dudaDeKilos(
+  texto: string,
+  baseUnit: string | null,
+): { comoEsta: number; enGrande: number; unidadGrande: string; frase: string } | null {
+  const u = (baseUnit ?? '').trim().toLowerCase()
+  if (u !== 'g' && u !== 'ml') return null
+
+  const n = Number(texto.replace(',', '.'))
+  if (!Number.isFinite(n) || n <= 0) return null
+  if (Number.isInteger(n)) return null
+  if (n >= 1000) return null
+
+  const grande = u === 'g' ? 'kg' : 'l'
+  const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 })
+  return {
+    comoEsta: n,
+    enGrande: n * 1000,
+    unidadGrande: grande,
+    // Espacio de NO SEPARACIÓN: «1,01 kg» no se parte al final de una línea.
+    frase: `${nf.format(n)}\u00A0${grande}`,
+  }
+}

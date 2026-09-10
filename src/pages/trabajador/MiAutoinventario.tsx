@@ -49,10 +49,10 @@ import {
 // pinte con ellas y no con un HTML escrito para la foto.
 import {
   Marco, Cabecera, Tarjeta, Pie, Centrado, BotonPrincipal, BotonSecundario,
-  FilaFormato, FilaAbierto, HojaVuelveAMirarlo,
+  FilaFormato, FilaAbierto, HojaVuelveAMirarlo, HojaDeKilos,
 } from '../../modules/supply/components/ConteoMovilPiezas'
 import {
-  unidadLarga, desglose, type Abierto,
+  unidadLarga, desglose, dudaDeKilos, type Abierto,
 } from '../../modules/supply/lib/conteoMovilTexto'
 import { getLocationName } from '../../modules/supply/services/countFormatService'
 import { declaraTrabajoEnCurso } from '../../services/trabajoEnCurso'
@@ -76,6 +76,10 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
   const [idx, setIdx] = useState(0)
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
+  /** «¿1,01 kg?» — la pregunta de la casilla de gramos, esperando respuesta. */
+  const [duda, setDuda] = useState<
+    { entradas: CountEntryInput[]; kilos: NonNullable<ReturnType<typeof dudaDeKilos>> } | null
+  >(null)
   const [countId, setCountId] = useState<string | null>(null)
   const [locationName, setLocationName] = useState('')
 
@@ -181,6 +185,35 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
   function limpiar() {
     setCuenta({})
     setAbierto({ modo: 'peso', gramos: '' })
+    setDuda(null)
+  }
+
+  /**
+   * LA PUERTA DE ANTES DE LA PUERTA. Si en la casilla de gramos hay un decimal,
+   * no se guarda todavía: se pregunta. Ver `dudaDeKilos`, que es donde está la
+   * regla y donde se prueba.
+   *
+   * No es un freno —no rechaza nada, no exige confirmar una cifra «rara»— es
+   * una pregunta de unidad, y por eso vive en el móvil y no en el servidor: el
+   * servidor recibe gramos y no puede saber qué marcaba la báscula.
+   */
+  function pedirGuardado(entradas: CountEntryInput[]) {
+    if (abierto.modo === 'peso') {
+      const k = dudaDeKilos(abierto.gramos, current?.baseUnit ?? null)
+      if (k) { setDuda({ entradas, kilos: k }); return }
+    }
+    void guardar(entradas)
+  }
+
+  /** «Sí, son kilos»: se rehace la entrada pesada con la cifra convertida. */
+  function resolverDuda(enGrande: boolean) {
+    if (!duda) return
+    const entradas = enGrande
+      ? duda.entradas.map(e =>
+          e.method === 'peso' ? { ...e, qty: duda.kilos.enGrande } : e)
+      : duda.entradas
+    setDuda(null)
+    void guardar(entradas)
   }
 
   /**
@@ -467,7 +500,7 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
         <Pie>
           <BotonPrincipal
             disabled={!hayAlgoTecleado || saving}
-            onClick={() => void guardar(construirEntradas())}
+            onClick={() => pedirGuardado(construirEntradas())}
           >
             {saving ? <Loader2 size={18} className="animate-spin" /> : null}
             Guardar y seguir
@@ -479,6 +512,18 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
             No queda nada de este producto
           </BotonSecundario>
         </Pie>
+      )}
+
+      {duda && (
+        <HojaDeKilos
+          producto={current?.name ?? ''}
+          frase={duda.kilos.frase}
+          comoEsta={duda.kilos.comoEsta}
+          baseUnit={current?.baseUnit ?? null}
+          saving={saving}
+          onGrande={() => resolverDuda(true)}
+          onPequeno={() => resolverDuda(false)}
+        />
       )}
 
       {enRecount && (
@@ -494,7 +539,7 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
           hayAlgo={hayAlgoTecleado}
           saving={saving}
           error={errMsg}
-          onGuardar={() => void guardar(construirEntradas())}
+          onGuardar={() => pedirGuardado(construirEntradas())}
           onLoMismo={() => void guardar([{ method: 'cero' }])}
         />
       )}

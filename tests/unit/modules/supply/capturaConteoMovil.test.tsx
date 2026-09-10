@@ -28,7 +28,7 @@ import { writeFileSync, readFileSync, readdirSync, existsSync, mkdirSync } from 
 import { resolve } from 'node:path'
 import {
   Marco, Cabecera, Tarjeta, Pie, BotonPrincipal, BotonSecundario,
-  FilaFormato, FilaAbierto, HojaVuelveAMirarlo,
+  FilaFormato, FilaAbierto, HojaVuelveAMirarlo, HojaDeKilos,
 } from '@/modules/supply/components/ConteoMovilPiezas'
 import { desglose, type Abierto } from '@/modules/supply/lib/conteoMovilTexto'
 import { fmtQty, type CountFormat } from '@/modules/supply/services/countFormatService'
@@ -175,6 +175,33 @@ const PANTALLAS = [
       />
     ),
   },
+  {
+    // LA DE HOY, con el caso tal cual pasó: Natacha pesó la bolsa empezada de
+    // Patatas Bastón y escribió «1,011» en la casilla de GRAMOS. Se guardó un
+    // gramo. La pregunta va ENCIMA de la pantalla 1, que es donde sale.
+    fichero: '4_es_kilos',
+    titulo: 'Pantalla 4 · ¿1,011 kg?',
+    nodo: (
+      <div className="relative" style={{ width: 390, height: 844 }}>
+        <Pantalla
+          local="Foodint Alcalá" producto="Patatas Bastón"
+          instruccion="Cuenta lo cerrado por formato. Lo abierto, a la báscula."
+          formats={PATATAS}
+          cuenta={{ 'ccc5e019-b47a-4f3e-8f09-229d7bf34e70': 2 }}
+          abierto={{ modo: 'peso', gramos: '1.011' }}
+          paso={4} de={12} pct={33}
+        />
+        <HojaDeKilos
+          producto="Patatas Bastón"
+          frase={'1,011\u00A0kg'}
+          comoEsta={1.011}
+          baseUnit="g"
+          onGrande={() => {}}
+          onPequeno={() => {}}
+        />
+      </div>
+    ),
+  },
 ]
 
 describe('capturas del móvil a 390 px', () => {
@@ -221,12 +248,33 @@ describe('capturas del móvil a 390 px', () => {
     // puestas, así que el 0 de la caja significa «ninguna caja» y se escribe 0;
     // en la 3 no se ha tocado nada y va una raya. Si esto se invierte, la
     // pantalla estaría diciendo que ha contado cero cajas sin que nadie lo diga.
-    const p1 = renderToStaticMarkup(PANTALLAS[0].nodo)
-    const p3 = renderToStaticMarkup(PANTALLAS[2].nodo)
+    // POR NOMBRE, NO POR POSICIÓN. Estaban por índice y al insertar la
+    // pantalla de «¿1,011 kg?» en medio, `PANTALLAS[2]` dejó de ser «no
+    // cuadra» sin que nadie lo dijera: la prueba seguía midiendo, pero otra
+    // cosa. Lo cazó ella misma al fallar, que para eso está.
+    const por = (f: string) =>
+      renderToStaticMarkup(PANTALLAS.find(p => p.fichero === f)!.nodo)
+    const p1 = por('1_contar_por_formatos')
+    const p3 = por('3_no_cuadra')
     expect(p1).toMatch(/>0</)
     expect(p1).not.toMatch(/>–</)
     expect(p3).toMatch(/>–</)
     expect(p3).not.toMatch(/>0</)
+
+    // LA CASILLA DE PESO NO PUEDE SER `type="number"`. Medido en el navegador
+    // el 10/09 por la tarde: con `number`, el value de «12,5» sale VACÍO —el
+    // control rechaza la coma, que es la tecla decimal del teclado español— y
+    // quien escribe ve desaparecer lo tecleado sin que nadie se lo diga. Es la
+    // familia de «vacío no es cero», y además dejaba inerte la pregunta de los
+    // kilos: si la coma no llega, no hay decimal que preguntar.
+    expect(p1).not.toMatch(/<input[^>]*type="number"/)
+    expect(p1).toMatch(/<input[^>]*inputmode="decimal"/i)
+
+    // Y sitio para seis cifras. Con los 68 px de antes, «12500» pedía 81 px y
+    // se recortaba: Aceite Alto Oleico tiene 50.000 g de teórico y Bacon
+    // Ahumado 16.384. El ancho se mide en el navegador, no aquí; esto sólo fija
+    // que nadie lo devuelva a 68 sin enterarse.
+    expect(p1).toMatch(/w-\[96px\]/)
 
     // Y lo que NO puede salir en ninguna de las tres: la cantidad esperada.
     // 8875 y 9000 son el teórico y el recuento anterior del peperoni. Si

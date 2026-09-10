@@ -941,3 +941,161 @@ gente sin manera de actualizarse.
 **Sigue pendiente, igual que esta mañana:** los puntos 5, 6 y 7 del §5, el §4.4
 y las dos fichas malas (Humus, Tapa Salsero 120 Cc) — a las que hoy se les suma
 Lima y el agujero del teórico en negativo.
+
+---
+
+# TRES DE NATACHA · 10/09/2026, tarde
+
+## 2 · El «No queda nada» SÍ dejó su rastro — la premisa no se sostiene
+
+Julio dio por hecho que Colorador amarillo, Albahaca y Salsa César se habían
+guardado con cero entradas, como las doce del mediodía. **No es así.** Las tres
+pasaron por `save_count_line` y las tres tienen su entrada:
+
+| Artículo | method | qty_in_base | attempt | hora (Madrid) | formato |
+|---|---|---:|---:|---|---|
+| Colorador amarillo alimenticio | `cero` | 0 | 1 | 17:01:20.236253 | — |
+| Albahaca | `cero` | 0 | 1 | 17:01:58.054527 | — |
+| Salsa Cesar Hellmann´s | `cero` | 0 | 1 | 17:02:34.282257 | — |
+
+La marca de tiempo de la entrada es **idéntica al milisegundo** a la de
+`counted_at` de su línea: misma transacción, la de la puerta.
+
+Lo que las distingue de las doce del mediodía es justo eso. Las doce tienen
+`counted_at` y **cero** filas en `inventory_count_entry`; éstas tres tienen una
+cada una. En el conteo entero: 23 líneas contadas, 19 entradas — las 12 sin
+entrada son las de las 12:34, las 11 con entrada son las de la tarde.
+
+**Dónde puede haberse visto lo contrario, y merece comprobarse:** una consulta
+que una `inventory_count_entry` con `recipe_item_purchase_format` por dentro
+(`JOIN`, no `LEFT JOIN`) pierde TODAS las entradas `cero` y `peso`, porque en
+ésas `format_id` es NULL. El código de la pantalla usa `LEFT JOIN` y por eso
+enseña «No queda nada» correctamente. Si la comprobación se hizo con la misma
+consulta del incidente de la mañana, ésa filtraba por otra cosa.
+
+No he tocado nada por este punto. Si la pantalla de aprobación las enseña mal,
+hace falta ver la pantalla: el dato está bien.
+
+## 1 · «¿1,011 kg?» — la casilla de gramos pregunta
+
+Natacha pesó la bolsa empezada de Patatas Bastón y escribió el número de la
+báscula en la casilla de GRAMOS. Se guardó **1,011 g** de patatas junto a 50
+bolsas cerradas: total 125.001,011 g.
+
+Ahora, si en esa casilla hay un decimal, el móvil pregunta antes de guardar.
+**No convierte a la fuerza**: 0,5 g de azafrán existe y quien lo pesa tiene
+derecho a escribirlo. La regla vive en `dudaDeKilos` y no pregunta cuando la
+unidad base no es g ni ml, cuando el número es entero, o cuando pasa de 1.000
+—ahí el decimal ya es plausible como gramos y leerlo como kilos daría una
+tonelada—.
+
+**La prueba está escrita contra la población real** (regla 31): las OCHO
+entradas `peso` que hay en la BBDD, con la unidad base de su artículo. Salta en
+**una de ocho**, y es Patatas Bastón. Caldo de Birria (1.900 g), Salsa Mil
+Islas (2.613 g) y Bacon Ahumado (2.400 g) pasan sin que nadie las moleste.
+
+### Y la foto encontró dos cosas más, en esa misma casilla
+
+Ninguna la habría visto una prueba, y las dos son anteriores a hoy:
+
+1. **`type="number"` se come la coma.** Medido en el navegador: con
+   `type="number"`, el `value` de «12,5» sale **vacío**. La coma es la tecla
+   decimal del teclado español, así que quien escribe «12,5» ve desaparecer lo
+   tecleado sin que nadie se lo diga. Es la familia de «vacío no es cero» — y
+   además dejaba **inerte la pregunta de arriba**: si la coma no llega, no hay
+   decimal que preguntar. Ahora es `type="text"` con `inputMode="decimal"`, que
+   sigue sacando el teclado numérico.
+
+2. **Más de cuatro cifras se recortaban.** La caja eran 68 px; «12500» pide 81.
+   Aceite Alto Oleico tiene 50.000 g de teórico y Bacon Ahumado 16.384: cinco y
+   seis cifras son el día a día. Medido a los dos lados:
+
+   | tecleado | antes (68 px) | ahora (96 px) |
+   |---|---|---|
+   | 750 | ✓ | ✓ |
+   | 1250 | ✓ | ✓ |
+   | 12500 | ✗ pedía 81 px | ✓ |
+   | 125000 | ✗ pedía 94 px | ✓ |
+   | 1234567 | ✗ | ✓ |
+   | «12,5» | ✗ salía **vacío** | ✓ se conserva |
+
+   Y la pantalla sigue sin desbordarse a 390 px en las cuatro capturas.
+
+   Es la vuelta de la misma pieza: en la primera versión el campo iba a `w-full`
+   y reventaba la tarjeta; el arreglo fue fijarlo a 68 px, y ese arreglo trajo
+   este recorte. Ahora está medido con los números que se teclean de verdad.
+
+Captura: `docs/capturas/conteo_movil_pregunta_kilos_20260910.png`.
+
+**Y una prueba que se cazó a sí misma:** las aserciones de la captura iban por
+índice (`PANTALLAS[2]`), así que meter la pantalla nueva en medio hizo que
+dejaran de medir «no cuadra» sin que nadie lo dijera. Falló, y ahora buscan por
+nombre.
+
+## 3 · «Folvy no tenía referencia» (migración p12)
+
+Los dos frenos sólo corren si su referencia es un número **positivo**: el del
+teórico exige `v_teorico > 0`, el de la contradicción `v_ref_qty > 0`. Cuando
+las dos fallan, la línea se guarda **sin que nadie la mire**. Humus entró con
+1.000 g contra un teórico de −355 y no saltó nada.
+
+No se frena a quien cuenta: no tiene culpa de la ficha. Se marca
+(`inventory_count_line.no_reference`) y la aprobación lo dice con todas las
+letras. Es la regla 7 por el lado bueno: se añade etiqueta, no se quita fila.
+
+**Dónde va la decisión de pantalla.** La BBDD guarda la verdad entera —también
+cuando el teórico es CERO, que tampoco frena—. Quién de esas líneas merece que
+le miren se decide en la pantalla: contar cero contra un teórico de cero no le
+hace perder el tiempo a nadie, así que sale **etiquetada** pero se queda en el
+grupo de las que cuadran. Contar 1.000 sin referencia, sí sube a revisar.
+
+### El ensayo, sobre las 14 líneas reales de INV-00217
+
+Guardadas las 14 de verdad por `save_count_line`, comprobadas, y revertidas:
+
+| Artículo | teórico | veredicto | `no_reference` |
+|---|---:|---|:--:|
+| Mezcla de Mix de Setas | −60,0 | ok | **sí** |
+| Fanta Limón Lata | −1,0 | ok | **sí** |
+| Rollitos de Queso Feta | −300,0 | ok | **sí** |
+| SALSA Yogur | −20,0 | ok | **sí** |
+| Hamburguesa Mixta 85 Grs | 314,5 | ok | no |
+| Tortilla Trigo 30 cm | 36,0 | ok | no |
+| Bacon Ahumado | 16.384,0 | ok | no |
+| Tarta 3 Leches | 205,0 | ok | no |
+| Milanesa de Pollo Rebozado | 161,6 | ok | no |
+| Aceite Alto Oleico | 50.000,0 | ok | no |
+| Solomillo de Pollo Piri-piri | 12.006,0 | ok | no |
+| Queso Mozarela | 9.150,0 | ok | no |
+| Pan Hamburguesa | 155,0 | ok | no |
+| Carne de Birria | 10.080,0 | ok | no |
+
+**14 de 14 clavadas, y ni una frenada.** Comprobado después mirando los datos:
+INV-00217 vuelve a 14 líneas, 0 contadas, 0 entradas, 0 marcadas.
+
+**El número que no esperaba: 4 de las 14 líneas del conteo de mañana tienen el
+teórico en negativo.** Casi un tercio. La etiqueta va a salir mucho más de lo
+que parecía cuando se pidió, y eso no es ruido de la etiqueta: es el tamaño real
+del problema de fichas que hay debajo.
+
+### Lo que cambia dentro de `save_count_line`, y lo que no
+
+Las dos referencias se calculan **siempre**; antes la (b) sólo se calculaba si
+la (a) no había frenado ya. Se **aplican** en las mismas condiciones exactas que
+antes, así que el veredicto no cambia para ninguna entrada: lo único nuevo es
+que ahora se puede contestar «¿tenía Folvy con qué comparar?».
+
+Generada desde el fichero de la p11 con cinco sustituciones explícitas y el
+diff delante, no vuelta a teclear. md5 repo contra desplegado, **2 de 2
+iguales**: `save_count_line` `62fee5f1f79bc86ffb3e684584707a9c` (12.760 chars),
+`clear_count_line` `31249d6077f698bbd09cdd364c5436c6` (1.232).
+
+## Medido a los dos lados
+
+- Pruebas: **157 → 167**, 13 ficheros, todas en verde.
+- Lint: `origin/main` **761 errores / 268 avisos** → con el cambio **761 / 268**.
+  En medio subió a 762 por un `no-irregular-whitespace`: había puesto el espacio
+  duro literal en vez de la secuencia ` ` que usa el resto del código.
+  Medir los dos lados es lo que lo enseñó.
+- `tsc -b`: limpio.
+- Las cuatro capturas a 390 px: `scrollWidth` 390 en las cuatro.

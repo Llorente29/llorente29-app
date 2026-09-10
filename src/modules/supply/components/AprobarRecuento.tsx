@@ -379,6 +379,9 @@ export default function AprobarRecuento({
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     {r.estimated && <PastillaCocina tono="ambar">A ojo</PastillaCocina>}
+                    {r.line.lineNoReference && (
+                      <PastillaCocina tono="apagado">Folvy no tenía referencia</PastillaCocina>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -444,6 +447,7 @@ function FilaRevision({
             {l.confirmedTwice && <PastillaCocina tono="apagado">Confirmado 2 veces</PastillaCocina>}
             {r.estimated && <PastillaCocina tono="ambar">A ojo</PastillaCocina>}
             {l.lineNeedsReview && <PastillaCocina tono="rojo">No cuadró dos veces</PastillaCocina>}
+            {l.lineNoReference && <PastillaCocina tono="ambar">Folvy no tenía referencia</PastillaCocina>}
             {l.recountRequestedAt && <PastillaCocina tono="apagado">Recuento pedido</PastillaCocina>}
           </div>
         </td>

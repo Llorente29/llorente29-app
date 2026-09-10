@@ -193,22 +193,35 @@ export function FilaAbierto({
               {soloBase ? `Escribe los ${unidadLarga(baseUnit)}` : `Pésalo y escribe los ${unidadLarga(baseUnit)}`}
             </span>
           </div>
-          {/* 132 px de caja y 68 px de campo, FIJOS. Con el input a `w-full` la
-              caja crecía hasta el ancho por defecto de un `input[type=number]`
-              —unos 20 caracteres— y se salía de la tarjeta llevándose por
-              delante la unidad de la derecha. Se vio en la captura a 390 px, no
-              leyendo el código: por eso las capturas van al lado de la maqueta. */}
+          {/* CAJA Y CAMPO FIJOS. Con el input a `w-full` la caja crecía hasta el
+              ancho por defecto del control —unos 20 caracteres— y se salía de la
+              tarjeta llevándose por delante la unidad de la derecha. Se vio en la
+              captura a 390 px, no leyendo el código.
+              MEDIDO EL 10/09 POR LA TARDE, y por eso ya no son 148/68: con 68 px
+              cabían cuatro cifras y se recortaba la quinta —«12500» pedía 81 px—.
+              Aceite Alto Oleico tiene 50.000 g de teórico y Bacon Ahumado 16.384:
+              cinco y seis cifras son el día a día, no un caso raro. */}
           <label className="flex items-center gap-2 h-12 px-3 rounded-cocina border-2 border-cocina-acento
-                            bg-cocina-superficie w-[148px] justify-between shrink-0">
+                            bg-cocina-superficie w-[176px] justify-between shrink-0">
             <Scale size={20} className="text-cocina-acento shrink-0" />
             <input
-              type="number"
+              /* `text` Y NO `number`. El `number` RECHAZA LA COMA —que es la tecla
+                 decimal del teclado español— y deja el campo VACÍO sin decir nada:
+                 quien escribe «12,5» ve desaparecer lo que ha tecleado. Medido en
+                 el navegador el 10/09: value de «12,5» sale «». Con `text` la coma
+                 se conserva y la convierte quien ya lo hacía, al construir la
+                 entrada. `inputMode="decimal"` sigue sacando el teclado numérico. */
+              type="text"
               inputMode="decimal"
               value={abierto.gramos}
-              onChange={e => setAbierto({ modo: 'peso', gramos: e.target.value })}
+              onChange={e => setAbierto({
+                modo: 'peso',
+                // Sólo cifras y separador: con `text` ya no filtra el navegador.
+                gramos: e.target.value.replace(/[^\d.,]/g, ''),
+              })}
               placeholder="–"
               aria-label={`Cantidad en ${unidadLarga(baseUnit)}`}
-              className="num w-[68px] min-w-0 text-right text-[22px] font-semibold bg-transparent outline-none text-cocina-tinta"
+              className="num w-[96px] min-w-0 text-right text-[22px] font-semibold bg-transparent outline-none text-cocina-tinta"
             />
             <span className="text-[14px] text-cocina-tinta-3 shrink-0">{unidad}</span>
           </label>
@@ -414,3 +427,61 @@ export function HojaVuelveAMirarlo({
   )
 }
 
+
+/**
+ * «¿1,01 kg?» — LA PREGUNTA DE LA CASILLA DE GRAMOS.
+ *
+ * Sale cuando en la casilla de peso hay un decimal y la unidad base es g o ml.
+ * Ver `dudaDeKilos`, que es donde vive la regla.
+ *
+ * NO ES UN FRENO, y por eso no se parece a la pantalla de «vuelve a mirarlo»:
+ * no dice que la cantidad sea rara, no compara con nada y no esconde ninguna
+ * salida. Pregunta una unidad y ofrece las DOS lecturas escritas enteras, con
+ * su equivalencia, para que se pueda elegir sin hacer la cuenta de cabeza.
+ *
+ * La lectura en kilos va de principal porque es la que hace la báscula, pero
+ * «son gramos» está al lado, al mismo tamaño de dedo (48 px), no escondida en
+ * una esquina: quien pesa 0,5 g de azafrán tiene que poder decirlo en un toque.
+ */
+export function HojaDeKilos({
+  producto, frase, comoEsta, baseUnit, saving, onGrande, onPequeno,
+}: {
+  producto: string
+  frase: string
+  comoEsta: number
+  baseUnit: string | null
+  saving?: boolean
+  onGrande: () => void
+  onPequeno: () => void
+}) {
+  return (
+    <div className="cocina fixed inset-0 z-50 flex flex-col justify-end bg-black/45">
+      <div className="bg-cocina-fondo rounded-t-cocina-md border-t border-cocina-linea px-4 pt-5 pb-6">
+        <div className="flex items-center gap-2 text-cocina-ambar">
+          <Scale size={16} />
+          <span className="text-[12px] font-bold uppercase tracking-[0.08em]">Comprueba la unidad</span>
+        </div>
+
+        <p className="mt-2.5 text-[22px] font-bold text-cocina-tinta leading-[1.2]">
+          ¿{frase}?
+        </p>
+        <p className="mt-2 text-[14px] text-cocina-tinta-suave leading-[1.5]">
+          Has escrito un número con decimales en la casilla de {unidadLarga(baseUnit)} de{' '}
+          <b className="text-cocina-tinta">{producto.toLowerCase()}</b>. Las básculas de cocina
+          marcan {baseUnit === 'ml' ? 'litros' : 'kilos'}, así que casi siempre es eso.{' '}
+          <b className="text-cocina-tinta">La diferencia son mil veces.</b>
+        </p>
+
+        <div className="mt-5 flex flex-col gap-2.5">
+          <BotonPrincipal disabled={saving} onClick={onGrande}>
+            {saving ? <Loader2 size={18} className="animate-spin" /> : null}
+            Sí, son {frase}
+          </BotonPrincipal>
+          <BotonSecundario disabled={saving} onClick={onPequeno}>
+            No, son {fmtQty(comoEsta, baseUnit)}
+          </BotonSecundario>
+        </div>
+      </div>
+    </div>
+  )
+}
