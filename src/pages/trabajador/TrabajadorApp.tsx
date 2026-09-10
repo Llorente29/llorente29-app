@@ -1,7 +1,7 @@
 // src/pages/trabajador/TrabajadorApp.tsx
 // Orquestador del modo trabajador: gestiona navegación entre módulos y subpáginas.
 // Home: 2 botones grandes (APPCC + Portal). Preparado para añadir más módulos.
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, Ban, AlertTriangle } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import HomeEmpleado from './HomeEmpleado'
@@ -26,6 +26,8 @@ import MisChecklistsPage from './MisChecklistsPage'
 import MiFormacion from './MiFormacion'
 import MisAjustes from './MisAjustes'
 import BottomTabBar from '../../components/trabajador/BottomTabBar'
+import { useNuevaVersion } from '../../shell/version/useNuevaVersion'
+import { hayTrabajoEnCurso } from '../../services/trabajoEnCurso'
 import type { WorkerTab } from '../../components/trabajador/BottomTabBar'
 import ExecutionPage from '../../modules/appcc/pages/ExecutionPage'
 import { fetchWorkerPortalVisibility, type WorkerPortalVisibility } from '../../services/workerVisibilityService'
@@ -64,6 +66,53 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
     refreshStaff,
   } = useApp()
   const [subPage, setSubPage] = useState<SubPage>('home')
+
+  /**
+   * EL VIGÍA DE VERSIÓN, QUE AQUÍ FALTABA (incidente del 10/09, 12:34).
+   *
+   * Estaba montado en `Shell.tsx` (oficina, aviso discreto) y en
+   * `TabletStationRoute.tsx` (tablet, recarga sola). En el portal del
+   * trabajador, NO — y es el único de los tres que nadie cierra nunca: un
+   * móvil de cocina se queda con la pestaña abierta días. La pantalla nueva se
+   * publicó a las 11:39 y a las 12:34 ese móvil seguía ejecutando la vieja.
+   *
+   * Recarga SOLA, como la tablet y por la misma razón: quien cuenta no decide
+   * qué versión usa y no tiene por qué enterarse de que existen versiones.
+   *
+   * PERO NO EN CUALQUIER PANTALLA, y esto es lo que hay que mirar dos veces.
+   * `hayTrabajoEnCurso()` sólo lo alimentan hoy el feed de pedidos y el conteo;
+   * las demás pantallas del portal no declaran nada, así que para el vigía
+   * están «libres» aunque haya alguien a mitad de un formulario. Recargarle
+   * encima a quien está rellenando un control de APPCC o firmando una
+   * recepción le borra el trabajo — que es exactamente lo que el aviso de
+   * oficina evita no recargando nunca solo.
+   *
+   * Así que la autorecarga se limita a donde de verdad no hay nada que perder,
+   * y lo que decide NO es una lista de permitidas sino una de PROHIBIDAS: si
+   * mañana alguien añade una pantalla y se olvida de esto, la nueva hereda el
+   * comportamiento seguro sólo si es de las que no guardan nada a medias. Por
+   * eso se enumeran las que SÍ tienen formulario largo, que son pocas y se
+   * saben.
+   */
+  const enFormularioLargo = (
+    subPage === 'appcc_execution' ||   // control de APPCC a medio rellenar
+    subPage === 'recepcion' ||         // albarán a medio firmar
+    subPage === 'cambios' ||           // solicitud de cambio de turno
+    subPage === 'inventario_manual' || // conteo manual: lo declara MiAutoinventario, pero por si acaso
+    subPage === 'inventario'
+  )
+  const puedeRecargar = useCallback(
+    // En las pantallas de conteo manda `trabajoEnCurso`, que MiAutoinventario
+    // alimenta con precisión: entre dos artículos no hay nada tecleado y la
+    // recarga es gratis. En las otras dos, no se recarga y punto.
+    () => {
+      if (subPage === 'inventario' || subPage === 'inventario_manual') return !hayTrabajoEnCurso()
+      return !enFormularioLargo && !hayTrabajoEnCurso()
+    },
+    [subPage, enFormularioLargo],
+  )
+  useNuevaVersion({ autoRecarga: true, esperaMs: 4000, puedeRecargar })
+
   // F8 — UNA sola llamada al RPC worker_portal_visibility; se respeta en todo
   // el portal (menú + rutas). Invisible por defecto (fail-closed) mientras se resuelve.
   const [visibility, setVisibility] = useState<WorkerPortalVisibility>({

@@ -37,6 +37,7 @@ import { closeInventoryCount } from '../../modules/supply/services/inventoryCoun
 import {
   saveCountLine,
   AbsurdQuantityError,
+  AppCaducadaError,
   type CountEntryInput,
 } from '../../modules/supply/services/countEntryService'
 import {
@@ -54,6 +55,7 @@ import {
   unidadLarga, desglose, type Abierto,
 } from '../../modules/supply/lib/conteoMovilTexto'
 import { getLocationName } from '../../modules/supply/services/countFormatService'
+import { declaraTrabajoEnCurso } from '../../services/trabajoEnCurso'
 import '@/modules/kitchen/estilo/cocinaTokens.css'
 
 interface Props {
@@ -64,7 +66,7 @@ interface Props {
   title?: string
 }
 
-type Phase = 'loading' | 'intro' | 'counting' | 'recount' | 'done' | 'empty' | 'error'
+type Phase = 'loading' | 'intro' | 'counting' | 'recount' | 'done' | 'empty' | 'error' | 'caducada'
 
 export default function MiAutoinventario({ employee, onBack, manualCountId, title = 'Autoinventario de hoy' }: Props) {
   const [phase, setPhase] = useState<Phase>('loading')
@@ -181,6 +183,24 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
     setAbierto({ modo: 'peso', gramos: '' })
   }
 
+  /**
+   * DECLARA EL TRABAJO EN CURSO para que el vigía de versión no recargue
+   * encima de alguien que está contando.
+   *
+   * `trabajoEnCurso.ts` ya dejaba escrito el hueco el 01/09: «si mañana hay
+   * otra cosa que tampoco se puede interrumpir —un conteo a medias— se declara
+   * aquí y el vigía no cambia». Esto es ese mañana.
+   *
+   * Lo que cuenta como trabajo NO es «hay un conteo abierto»: es «hay algo
+   * tecleado que todavía no se ha guardado». Contar 12 artículos son 12
+   * guardados, y entre uno y otro no hay nada que perder: ahí la recarga es
+   * gratis y conviene que ocurra cuanto antes.
+   */
+  useEffect(() => {
+    declaraTrabajoEnCurso('conteo-movil', hayAlgoTecleado ? 1 : 0)
+    return () => declaraTrabajoEnCurso('conteo-movil', 0)
+  }, [hayAlgoTecleado])
+
   /** Lo que se manda al servidor: el CÓMO. La conversión la hace él. */
   function construirEntradas(): CountEntryInput[] {
     const out: CountEntryInput[] = []
@@ -223,6 +243,15 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
       avanzar()
     } catch (e) {
       setSaving(false)
+      if (e instanceof AppCaducadaError) {
+        // La puerta ha rechazado la escritura porque esta app es vieja. No hay
+        // nada que salvar —el servidor no ha escrito— y quedarse aquí sólo
+        // repetiría el fallo en la siguiente línea. Pantalla propia, con un
+        // botón que recarga.
+        setErrMsg(e.message)
+        setPhase('caducada')
+        return
+      }
       if (e instanceof AbsurdQuantityError) {
         // La red de cordura. No se cambia de pantalla: se dice qué pasa y se
         // deja corregir donde está, que es donde tiene las manos.
@@ -260,6 +289,30 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
   if (phase === 'loading') {
     return <Marco><Centrado><Loader2 size={28} className="text-cocina-acento animate-spin" />
       <p className="text-[13px] text-cocina-tinta-3 mt-3">Cargando…</p></Centrado></Marco>
+  }
+
+  // La app es vieja y la BBDD lo ha dicho. Ni «volver» ni «reintentar»: lo
+  // único que arregla esto es recargar, así que es lo único que hay.
+  if (phase === 'caducada') {
+    return (
+      <Marco>
+        <Cabecera title={title} />
+        <Centrado>
+          <div className="w-14 h-14 rounded-cocina bg-cocina-ambar-bg flex items-center justify-center">
+            <AlertTriangle size={28} className="text-cocina-ambar" />
+          </div>
+          <p className="text-[22px] font-extrabold text-cocina-tinta mt-4 leading-tight">
+            Hay una versión nueva
+          </p>
+          <p className="text-[14px] text-cocina-tinta-2 mt-2 max-w-xs leading-[1.5]">{errMsg}</p>
+        </Centrado>
+        <Pie>
+          <BotonPrincipal onClick={() => window.location.reload()}>
+            Actualizar y seguir contando
+          </BotonPrincipal>
+        </Pie>
+      </Marco>
+    )
   }
 
   if (phase === 'error') {
