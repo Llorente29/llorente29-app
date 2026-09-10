@@ -57,6 +57,9 @@ import { getNegativeStockReport } from '@/modules/supply/services/negativeStockS
 export default function InventoryPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const { userProfile, authUserId, staff } = useApp()
+  // Quien puede aprobar es quien puede marcar una apertura: es una decisión con
+  // consecuencias de dinero. Mismo criterio que la hoja de conteo.
+  const puedeAprobar = userProfile?.role === 'admin' || userProfile?.role === 'manager'
 
   const [locations, setLocations] = useState<SupplyLocation[]>([])
   const op = useOperativeLocation()
@@ -151,13 +154,20 @@ export default function InventoryPage() {
   }, [staff])
 
   async function handleCreateCount(opts: {
-    scope: 'areas' | 'full'; areaIds: string[]; employeeId: string; scheduledFor: string; startNow: boolean
+    scope: 'areas' | 'full'; areaIds: string[]; employeeId: string; scheduledFor: string
+    startNow: boolean; apertura: boolean; aperturaDecidida: boolean
   }) {
     if (!activeAccountId || !locationId) return
     setError(null)
     try {
-      // Alcance por zonas → 'audit'; almacén completo → 'full'. La apertura
-      // (is_opening) la decide el MOTOR al generar la hoja, no el cliente.
+      // Alcance por zonas → 'audit'; almacén completo → 'full'.
+      //
+      // LA APERTURA LA DECIDE LA PERSONA (p17, 10/09). Antes la decidía el motor
+      // al generar la hoja —`is_opening = NOT hay_apertura_en_el_ledger`— y
+      // pisaba cualquier cosa que dijera el cliente. En Alcalá y Carabanchel,
+      // que ya tienen movimientos de apertura, la casilla se habría borrado sola
+      // sin decir nada. Ahora `is_opening_manual` marca que hay una decisión y
+      // el motor se calla; para quien no ve la casilla, todo sigue igual.
       const kind: InventoryCountKind = opts.scope === 'areas' ? 'audit' : 'full'
       const countId = await createInventoryCount({
         accountId: activeAccountId,
@@ -170,6 +180,8 @@ export default function InventoryPage() {
         assignedBy: authUserId ?? null,
         scopeAreaIds: opts.scope === 'areas' ? opts.areaIds : null,
         scheduledFor: opts.scheduledFor,
+        isOpening: opts.apertura,
+        isOpeningManual: opts.aperturaDecidida,
       })
       setNewCountOpen(false)
       const emp = staff.find(e => e.id === opts.employeeId)
@@ -447,6 +459,7 @@ export default function InventoryPage() {
       {/* Modal nuevo inventario (crear + asignar) */}
       {newCountOpen && (
         <NewCountModal
+          puedeAprobar={puedeAprobar}
           zones={zones}
           employees={employees}
           onClose={() => setNewCountOpen(false)}
@@ -609,7 +622,7 @@ type TipoFilter = 'manual' | 'inicial' | 'seguridad' | 'auto' | 'all'
 // Etiqueta de TIPO derivada de la verdad del motor (is_opening) + kind.
 function tipoOf(c: InventoryCount): { label: string; cls: string } {
   if (c.kind === 'cycle') return { label: 'Autoinventario', cls: 'bg-accent-bg text-accent border-accent/20' }
-  if (c.isOpening)        return { label: 'Inicial · apertura', cls: 'bg-success-bg text-success border-success/20' }
+  if (c.isOpening)        return { label: 'Apertura', cls: 'bg-success-bg text-success border-success/20' }
   if (c.kind === 'audit') return { label: 'Seguridad · zonas', cls: 'bg-warning-bg text-warning border-warning/20' }
   return { label: 'Seguridad · completo', cls: 'bg-warning-bg text-warning border-warning/20' }
 }
@@ -781,24 +794,32 @@ function todayISODate(): string {
 }
 
 function NewCountModal({
-  zones, employees, onClose, onCreate,
+  zones, employees, onClose, onCreate, puedeAprobar,
 }: {
   zones: ZoneOption[]
   employees: Employee[]
   onClose: () => void
-  onCreate: (opts: { scope: 'areas' | 'full'; areaIds: string[]; employeeId: string; scheduledFor: string; startNow: boolean }) => void
+  puedeAprobar: boolean
+  onCreate: (opts: {
+    scope: 'areas' | 'full'; areaIds: string[]; employeeId: string; scheduledFor: string
+    startNow: boolean; apertura: boolean; aperturaDecidida: boolean
+  }) => void
 }) {
-  // 'inicial' = local nuevo (siempre almacén completo). 'seguridad' = verificar cifras.
-  const [purpose, setPurpose] = useState<'inicial' | 'seguridad'>('seguridad')
+  // LA APERTURA, EN UNA CASILLA (10/09). Antes esto era un botón «Inicial (local
+  // nuevo)» que forzaba el almacén completo y cuyo texto en gris ya confesaba la
+  // limitación: «ancla la apertura solo si el local no tiene stock previo». Con
+  // la p17 la decide la persona, así que el botón sobraba — y dos controles para
+  // una sola idea es peor que uno. Es la misma idea, con su nombre y sin la
+  // atadura al alcance: la apertura del packaging es UNA ZONA, no el almacén.
+  const [apertura, setApertura] = useState(false)
   const [scope, setScope] = useState<'areas' | 'full'>('full')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [employeeId, setEmployeeId] = useState<string>('')
   const [scheduledFor, setScheduledFor] = useState<string>(todayISODate())
 
   const hasZones = zones.length > 0
-  // Inicial → siempre full. Seguridad sin zonas con artículos → full forzado.
-  const effectiveScope: 'areas' | 'full' =
-    purpose === 'inicial' ? 'full' : (hasZones ? scope : 'full')
+  // Sin zonas con artículos → almacén completo, no hay otra cosa que contar.
+  const effectiveScope: 'areas' | 'full' = hasZones ? scope : 'full'
 
   function toggleArea(id: string) {
     setSelected(prev => {
@@ -817,6 +838,10 @@ function NewCountModal({
       employeeId,
       scheduledFor,
       startNow,
+      apertura: puedeAprobar && apertura,
+      // Quien NO ve la casilla no ha decidido nada: para esos el motor sigue
+      // decidiendo por el ledger, igual que hasta hoy.
+      aperturaDecidida: puedeAprobar,
     })
   }
 
@@ -828,32 +853,24 @@ function NewCountModal({
           <button type="button" onClick={onClose} className="text-text-tertiary hover:text-text-primary"><X size={18} /></button>
         </div>
         <div className="px-5 py-4 space-y-4">
-          {/* Tipo */}
-          <div>
-            <span className="block text-xs text-text-secondary mb-1.5">Tipo</span>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setPurpose('inicial')}
-                className={`px-3 py-1.5 text-sm rounded-md border transition-base ${purpose === 'inicial' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-                Inicial (local nuevo)
-              </button>
-              <button type="button" onClick={() => setPurpose('seguridad')}
-                className={`px-3 py-1.5 text-sm rounded-md border transition-base ${purpose === 'seguridad' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-                De seguridad
-              </button>
+          {/* Inventario de apertura · solo lo ve quien puede aprobar */}
+          {puedeAprobar && (
+            <div>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={apertura}
+                  onChange={e => setApertura(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-accent shrink-0" />
+                <span className="text-sm font-medium text-text-primary">Inventario de apertura</span>
+              </label>
+              <p className="text-xs text-text-tertiary mt-1.5 ml-[26px]">
+                Pone el stock a lo que se cuente. No calcula diferencias ni pide motivo.
+                Úsalo solo la primera vez que se cuenta algo.
+              </p>
             </div>
-            {purpose === 'inicial' ? (
-              <p className="text-xs text-text-tertiary mt-1.5">
-                Cuenta el almacén completo. Ancla la apertura solo si el local no tiene stock previo; si ya lo tiene, será un conteo completo normal.
-              </p>
-            ) : (
-              <p className="text-xs text-text-tertiary mt-1.5">
-                Verifica las cifras existentes. Al aprobar, fija el stock a lo contado.
-              </p>
-            )}
-          </div>
+          )}
 
-          {/* Alcance (solo Seguridad) */}
-          {purpose === 'seguridad' && (
+          {/* Alcance */}
+          {(
             <div>
               <span className="block text-xs text-text-secondary mb-1.5">Alcance</span>
               {!hasZones ? (

@@ -10,7 +10,8 @@ import { X, Search, Check, Loader2, Plus } from 'lucide-react'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import {
   matchTypeLabel,
-  quickCreateRawItem,
+  quickCreateItemFromLine,
+  type TipoDeArticuloNuevo,
   listSupplyFamilies,
   suggestItemAttributes,
   BASE_UNITS,
@@ -52,6 +53,10 @@ export default function LineMatchPicker({
   const [newName, setNewName] = useState(rawText)
   const [newUnit, setNewUnit] = useState(BASE_UNITS[0].id)
   const [newFamily, setNewFamily] = useState('')
+  // Qué es lo que llega: comida o envase. Por defecto comida, que es lo más
+  // frecuente, pero se pregunta siempre — antes se decidía solo y siempre mal
+  // para el packaging.
+  const [newTipo, setNewTipo] = useState<TipoDeArticuloNuevo>('raw')
   const [families, setFamilies] = useState<SupplyFamily[]>([])
   const [creating, setCreating] = useState(false)
   const [createErr, setCreateErr] = useState<string | null>(null)
@@ -94,7 +99,7 @@ export default function LineMatchPicker({
     if (!newName.trim()) { setCreateErr('Pon un nombre.'); return }
     setCreating(true); setCreateErr(null)
     try {
-      const item = await quickCreateRawItem(accountId, newName, newUnit, newFamily || null, createdBy, createdByName)
+      const item = await quickCreateItemFromLine(accountId, newTipo, newName, newUnit, newFamily || null, createdBy, createdByName)
       onChoose(item.id, item.name, 'green', 'created')
     } catch (err: unknown) {
       setCreateErr(err instanceof Error ? err.message : 'No se pudo crear el artículo.')
@@ -201,6 +206,23 @@ export default function LineMatchPicker({
                   Nuevo artículo
                   {suggesting && <span className="inline-flex items-center gap-1 text-text-tertiary normal-case tracking-normal"><Loader2 size={11} className="animate-spin" /> sugiriendo…</span>}
                 </p>
+                <fieldset className="flex flex-wrap items-center gap-2">
+                  <legend className="text-[11px] text-text-secondary mb-1">¿Qué es?</legend>
+                  {([
+                    { v: 'raw' as const,       t: 'Comida o bebida' },
+                    { v: 'packaging' as const, t: 'Envase o embalaje' },
+                  ]).map(o => (
+                    <button key={o.v} type="button" disabled={creating}
+                      onClick={() => setNewTipo(o.v)}
+                      aria-pressed={newTipo === o.v}
+                      className={`px-3 py-2 min-h-[40px] text-sm rounded-md border transition-base ${
+                        newTipo === o.v
+                          ? 'bg-accent text-text-on-accent border-accent font-medium'
+                          : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                      {o.t}
+                    </button>
+                  ))}
+                </fieldset>
                 <label className="block">
                   <span className="text-[11px] text-text-secondary">Nombre {suggested.name && <span className="text-accent">✨ sugerido</span>}</span>
                   <input type="text" value={newName} onChange={e => { setNewName(e.target.value); setSuggested(s => ({ ...s, name: false })) }} disabled={creating}

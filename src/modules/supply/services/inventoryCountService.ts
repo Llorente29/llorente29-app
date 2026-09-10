@@ -125,6 +125,11 @@ export async function createInventoryCount(input: {
   // Día para el que se PROGRAMA (etiqueta + aviso; NO congela stock). El snapshot
   // se congela al Empezar, no al crear.
   scheduledFor?: string | null
+  /** Inventario de apertura: fija el stock, sin diferencias ni motivo. */
+  isOpening?: boolean
+  /** true cuando una PERSONA lo ha decidido. Mientras sea false, lo decide el
+   *  motor por el ledger al generar la hoja, como hasta el 10/09. */
+  isOpeningManual?: boolean
 }): Promise<string> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
@@ -143,6 +148,8 @@ export async function createInventoryCount(input: {
       assigned_at: input.assignedEmployeeId ? new Date().toISOString() : null,
       scope_area_ids: input.scopeAreaIds ?? null,
       scheduled_for: input.scheduledFor ?? null,
+      is_opening: input.isOpening ?? false,
+      is_opening_manual: input.isOpeningManual ?? false,
     })
     .select('id')
     .single()

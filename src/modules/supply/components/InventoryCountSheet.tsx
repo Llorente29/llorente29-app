@@ -384,10 +384,14 @@ export default function InventoryCountSheet({
       {isOpening && !isApproved && (
         <div className="p-3 rounded-md bg-accent-bg border border-accent/20 text-sm flex items-start gap-2">
           <Flag size={15} className="text-accent shrink-0 mt-0.5" />
+          {/* EL TEXTO VIEJO DECÍA «es el primer inventario de este local», y desde
+              la p17 eso ya no es cierto: una apertura puede ser de UNA ZONA en un
+              local que lleva meses contándose — que es justo el caso del
+              packaging en Alcalá. Un aviso que afirma algo falso es peor que no
+              tenerlo. */}
           <span className="text-text-secondary">
-            <span className="font-medium text-text-primary">Inventario de apertura.</span> Es el primer
-            inventario de este local: lo que cuentes fija el stock inicial. No es una corrección de merma —
-            es el punto de partida desde el que se medirán las variaciones.
+            <span className="font-medium text-text-primary">Este inventario fija el stock.</span>{' '}
+            No hay diferencias que revisar: lo que se cuente pasa a ser el punto de partida.
           </span>
         </div>
       )}
@@ -493,7 +497,9 @@ export default function InventoryCountSheet({
                     <th className="text-right font-medium px-3 py-1.5">{isReview ? 'Contado' : 'Cantidad'}</th>
                     <th className="text-right font-medium px-3 py-1.5">Valor</th>
                     {isReview && !isOpening && <th className="text-right font-medium px-3 py-1.5">Variación</th>}
-                    {isReview && <th className="text-right font-medium px-3 py-1.5">€</th>}
+                    {/* La columna de € también es una diferencia: en una apertura no
+                        hay ninguna que enseñar, y con la p13 vendría toda en NULL. */}
+                    {isReview && !isOpening && <th className="text-right font-medium px-3 py-1.5">€</th>}
                     {isReview && !isOpening && <th className="text-left font-medium px-3 py-1.5">Causa</th>}
                   </tr>
                 </thead>
@@ -546,8 +552,8 @@ export default function InventoryCountSheet({
                             {l.variancePct !== null && <span className="text-xs text-text-tertiary ml-1">({l.variancePct > 0 ? '+' : ''}{l.variancePct.toFixed(1)}%)</span>}
                           </td>
                         )}
-                        {isReview && (
-                          <td className={`px-3 py-2 text-right tabular-nums ${(!isOpening && (l.varianceValue ?? 0) < 0) ? 'text-danger' : 'text-text-secondary'}`}>
+                        {isReview && !isOpening && (
+                          <td className={`px-3 py-2 text-right tabular-nums ${(l.varianceValue ?? 0) < 0 ? 'text-danger' : 'text-text-secondary'}`}>
                             {eur(l.varianceValue)}
                           </td>
                         )}

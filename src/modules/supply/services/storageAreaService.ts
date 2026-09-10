@@ -195,13 +195,21 @@ export interface InventoryItem {
   name: string
 }
 
-/** Artículos raw (ingredientes, los que se cuentan) de la cuenta, para asignar a áreas. */
+/**
+ * Lo que se guarda en el almacén y por tanto se puede asignar a una zona.
+ *
+ * INGREDIENTES Y PACKAGING. El criterio, escrito el 10/09: el packaging ES
+ * almacén, igual que un ingrediente — entra, se cuenta, se descuenta y se ve.
+ * Con solo `raw`, la zona «6.- Packaging» de Alcalá salía con 0 artículos y
+ * no se le podía asignar ninguno: 56 artículos que existen y no se podían
+ * colocar en el sitio donde están.
+ */
 export async function listInventoryItems(accountId: string): Promise<InventoryItem[]> {
   requireSupabase()
   const { data, error } = await from('recipe_item')
     .select('id, name, type')
     .eq('account_id', accountId)
-    .eq('type', 'raw')
+    .in('type', ['raw', 'packaging'])
     .eq('is_active', true)
     .order('name', { ascending: true })
   if (error) throw new Error(`Error cargando artículos: ${error.message}`)

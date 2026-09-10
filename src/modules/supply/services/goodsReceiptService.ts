@@ -1544,8 +1544,14 @@ export async function resolveReceiptHeader(
 // ── C2.2.b.1: casado de línea de albarán con la memoria (run_mapping) ──
 //
 // Reutiliza la RPC run_mapping (cascada: código de proveedor → nombre exacto →
-// normalizado → difuso), filtrada a artículos (type='raw'). Devuelve candidatos
-// con confianza y semáforo. IA propone; el humano valida al confirmar.
+// normalizado → difuso). Devuelve candidatos con confianza y semáforo. IA
+// propone; el humano valida al confirmar.
+//
+// INGREDIENTES Y PACKAGING (10/09). Estaba filtrada a `raw`, así que una línea
+// de albarán de bolsas o de cajas NO PODÍA RECIBIR A SU ARTÍCULO como
+// candidato, por bien escrita que estuviera: el casador solo sabía ofrecer
+// comida. Quien recibía tenía que buscarlo a mano en el selector —que sí los
+// incluye— o crear uno nuevo, y ahí es donde nacen los gemelos.
 
 export interface LineMatchCandidate {
   recipeItemId: string
@@ -1568,7 +1574,7 @@ export async function matchReceiptLine(
     p_text: rawText,
     p_code: supplierCode && supplierCode.trim() !== '' ? supplierCode.trim() : undefined,
     p_limit: limit,
-    p_target_types: ['raw'],
+    p_target_types: ['raw', 'packaging'],
   })
   if (error) throw new Error(`Error casando "${rawText}": ${error.message}`)
   const rows = (data as Row[] | null) ?? []
@@ -1919,10 +1925,20 @@ export async function listSupplyFamilies(accountId: string): Promise<SupplyFamil
   return ((data as Row[] | null) ?? []).map(r => ({ id: r.id as string, name: r.name as string }))
 }
 
-// Alta MÍNIMA de artículo desde el OCR: nombre + unidad base (+ familia opcional).
-// type='raw', source='ocr', needs_review=true (el resto se completa luego en Kitchen).
-export async function quickCreateRawItem(
+// Alta MÍNIMA de artículo desde el OCR: qué es + nombre + unidad base
+// (+ familia opcional). source='ocr', needs_review=true (el resto se completa
+// luego en Kitchen).
+//
+// QUÉ ES, LO ELIGE QUIEN REVISA (10/09). Antes nacía SIEMPRE `raw`: un artículo
+// creado desde un albarán de bolsas nacía como ingrediente, y luego había que
+// acordarse de cambiarle el tipo a mano. Un envase que se cree como comida no
+// aparece en la zona de packaging, no entra en su cadencia y no se descuenta
+// como envase. Se pregunta, y en palabras de la calle.
+export type TipoDeArticuloNuevo = 'raw' | 'packaging'
+
+export async function quickCreateItemFromLine(
   accountId: string,
+  tipo: TipoDeArticuloNuevo,
   name: string,
   baseUnitId: string,
   familyId: string | null,
@@ -1932,7 +1948,7 @@ export async function quickCreateRawItem(
   requireSupabase()
   const item = await createRecipeItem({
     accountId,
-    type: 'raw',
+    type: tipo,
     name: name.trim(),
     baseUnitId,
     source: 'ocr_invoice',
@@ -1946,7 +1962,7 @@ export async function quickCreateRawItem(
   })
   if (familyId) {
     try { await updateRecipeItem(item.id, { familyId }) }
-    catch (e) { console.error('quickCreateRawItem: no se pudo asignar familia', e) }
+    catch (e) { console.error('quickCreateItemFromLine: no se pudo asignar familia', e) }
   }
   return { id: item.id, name: item.name }
 }
