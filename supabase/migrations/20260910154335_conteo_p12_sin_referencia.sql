@@ -1,66 +1,39 @@
--- 20260910091500_conteo_p4_save_count_line.sql
+-- 20260910154335_conteo_p12_sin_referencia.sql
 --
--- CONTAR POR FORMATOS · PASO 4 (§2.2 + §2.3) — LA ÚNICA PUERTA DE ESCRITURA
+-- «FOLVY NO TENÍA REFERENCIA» (visto en vivo en INV-00218, 10/09 por la tarde)
 --
--- A partir de aquí, un conteo se guarda por aquí o no se guarda. El móvil manda
--- CÓMO se contó (dos bolsas, 750 g, media bolsa a ojo) y el servidor decide
--- CUÁNTO es. Antes lo decidía el móvil: multiplicaba por el formato elegido y
--- escribía `counted_qty` con un UPDATE directo. Con eso, la conversión vivía en
--- el cliente y el rastro de cómo se contó no vivía en ningún sitio.
+-- EL AGUJERO. Los dos frenos de `save_count_line` sólo corren si su referencia
+-- es un número POSITIVO: el del teórico exige `v_teorico > 0`, el de la
+-- contradicción exige `v_ref_qty > 0`. Cuando las dos fallan, la línea se
+-- guarda sin que nadie la mire — y el caso en que fallan es justo el peor: una
+-- ficha rota. Humus entró con 1.000 g contra un teórico de −355 g y no saltó
+-- nada. Lima igual.
 --
--- EL FRENO ES A CIEGAS, Y ESO NO ES UN DETALLE DE ESTILO. La respuesta al móvil
--- NO lleva nunca la cantidad esperada, ni dentro del mensaje, ni de rebote en
--- un porcentaje del que se pueda despejar. Quien cuenta no debe poder deducir
--- lo que Folvy espera: en el momento en que lo deduce, deja de contar y empieza
--- a confirmar. El veredicto es una palabra: 'ok' o 'recount'.
+-- LO QUE SE HACE, Y LO QUE NO. NO se frena a quien cuenta: no tiene culpa de la
+-- ficha, y pararle delante de la cámara para decirle que Folvy no sabe lo que
+-- debería haber es echarle a él un problema que es nuestro. Lo que se hace es
+-- MARCAR la línea, para que la aprobación lo diga con todas las letras.
 --
--- DOS REFERENCIAS, NO UNA:
---   (a) el teórico VIVO del ledger — caza el error de magnitud (un cero de más);
---   (b) el ÚLTIMO RECUENTO APROBADO del mismo artículo y local, más lo que se
---       ha movido desde entonces sin contar los movimientos de inventario.
---       Ésta es la que faltaba, y es la que habría parado el peperoni: Natacha
---       puso 0 kg donde Pamela había contado 9 kg el día antes, sin una sola
---       entrada de por medio. Contra el teórico vivo aquello podía pasar por
---       normal; contra el recuento anterior, no.
+-- Es la regla 7 otra vez, por el lado bueno: el umbral no decide la existencia
+-- de la fila, decide su etiqueta. Aquí se añade etiqueta, no se quita fila.
 --
--- ═════════════════════════════════════════════════════════════════════════
--- CONTRADICCIÓN DEL ENCARGO, Y CÓMO SE RESUELVE (§5: si el RECON contradice,
--- el RECON manda y se cuenta)
---
--- §4.3 pide que «25» en un artículo en gramos con 35 kg esperados devuelva
--- `recount`. Pero §2.3 también manda hacer SIMÉTRICO el disparador de cordura,
--- y con el factor de hoy (1.000) ese mismo 25 cae por debajo de 35.000/1.000 =
--- 35: el disparador lo RECHAZARÍA con excepción antes de que nadie pudiera
--- devolver un veredicto. Los dos puntos del mismo encargo piden cosas
--- incompatibles sobre el mismo número.
---
--- Se resuelve por el orden, no bajando ninguno de los dos:
---   1. El freno se evalúa ANTES de escribir. Si sale `recount`, la línea NO se
---      sella: se guardan las entradas del intento (no se pierde lo que tecleó)
---      y `counted_qty` sigue como estaba. Nada llega al disparador, y el móvil
---      recibe la palabra `recount`, que es lo que pide §4.3.
---   2. El disparador simétrico queda para el SEGUNDO guardado y para cualquier
---      escritura que no pase por esta puerta. Es la red, no el freno — que es
---      literalmente lo que dice §2.3.
--- Y encaja con la maqueta: la pantalla 3 enseña las casillas VACÍAS. No las
--- enseña vacías por estética; las enseña vacías porque ese recuento aún no está.
--- ═════════════════════════════════════════════════════════════════════════
---
--- Y FRENA UNA VEZ, NO DOS. El segundo guardado se acepta siempre: si repite
--- (±5 %) queda sellado como confirmado dos veces; si no, queda `needs_review` y
--- no se aplica solo. Un freno que no se puede pasar no protege el dato: enseña
--- a quien cuenta a teclear lo que el sistema quiera oír.
+-- POR QUÉ `<= 0` Y NO `< 0`. Un teórico en CERO tampoco frena —el `> 0` lo deja
+-- fuera igual que al negativo—, así que la BBDD guarda la verdad entera: «no
+-- había con qué comparar». Quién de esas líneas merece que le miren es una
+-- decisión de pantalla, y se toma en pantalla: contar cero contra un teórico
+-- de cero no le hace perder el tiempo a nadie, así que sale ETIQUETADA pero no
+-- va al grupo de revisar. Contar 1.000 sin referencia, sí.
 
 BEGIN;
 
--- REGLA 2 (27/08, siete vigías mudos): añadir un parámetro a una función es
--- DROP + CREATE, nunca CREATE OR REPLACE — replace no reemplaza, crea una
--- SOBRECARGA, y a partir de ahí las llamadas son ambiguas (ERROR 42725).
--- Aquí la función nace en esta migración, así que no hay nada que tirar; el
--- DROP está igualmente, para que una reaplicación después de haberle tocado
--- la firma no deje dos vivas.
-DROP FUNCTION IF EXISTS public.save_count_line(uuid, jsonb);
-DROP FUNCTION IF EXISTS public.save_count_line(uuid, jsonb, numeric);
+ALTER TABLE public.inventory_count_line
+  ADD COLUMN IF NOT EXISTS no_reference boolean NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN public.inventory_count_line.no_reference IS
+  'true cuando al guardar no había NINGUNA referencia positiva con la que '
+  'comparar: ni teórico vivo (> 0) ni último recuento aprobado (> 0). La línea '
+  'se guardó sin que ningún freno pudiera mirarla. Lo pone save_count_line '
+  '(10/09/2026); no frena a nadie, marca para la aprobación.';
 
 CREATE OR REPLACE FUNCTION public.save_count_line(
   p_line_id uuid,
@@ -108,6 +81,7 @@ DECLARE
   v_teorico      numeric;
   v_ref_qty      numeric;
   v_hubo_entrada boolean := false;
+  v_sin_ref      boolean := false;
 
   v_veredicto    text := 'ok';
   v_confirmado   boolean := false;
@@ -223,59 +197,73 @@ BEGIN
   v_contra_pct := COALESCE(v_contra_pct, 40);
   v_repeat_pct := COALESCE(v_repeat_pct, 5);
 
+  -- (a) teórico vivo del ledger
+  v_teorico := public.theoretical_qty_at(v_item_id, v_location_id, now());
+
+  -- (b) último recuento APROBADO + lo movido desde entonces
+  --
+  -- LAS DOS SE MIRAN SIEMPRE, aunque el freno no llegue a usarlas. Antes la (b)
+  -- sólo se calculaba si la (a) no había frenado ya; ahora se calcula igual y
+  -- se APLICA en las mismas condiciones que antes, para poder responder a una
+  -- pregunta que el freno no contestaba: ¿tenía Folvy con qué comparar?
+  SELECT ref.qty, ref.entradas
+    INTO v_ref_qty, v_hubo_entrada
+    FROM (
+      SELECT prev.counted_qty + COALESCE((
+               SELECT SUM(sm.qty_base) FROM public.stock_movement sm
+                WHERE sm.recipe_item_id = v_item_id
+                  AND sm.location_id    = v_location_id
+                  AND sm.source_type   <> 'inventory_count'
+                  AND sm.occurred_at    > prev.counted_at
+             ), 0) AS qty,
+             COALESCE((
+               -- «Recepciones» en el sentido del encargo: mercancía que
+               -- ENTRA por una razón registrada. Un ajuste manual no cuenta:
+               -- si el stock subió porque alguien lo corrigió a mano, la
+               -- pregunta «¿seguro?» sigue mereciendo hacerse.
+               SELECT bool_or(true) FROM public.stock_movement sm
+                WHERE sm.recipe_item_id = v_item_id
+                  AND sm.location_id    = v_location_id
+                  AND sm.occurred_at    > prev.counted_at
+                  AND (sm.source_type = 'goods_receipt_line'
+                       OR sm.movement_type IN ('recepcion','traspaso_entrada','apertura'))
+             ), false) AS entradas
+        FROM public.inventory_count_line prev
+        JOIN public.inventory_count pic ON pic.id = prev.inventory_count_id
+       WHERE prev.recipe_item_id = v_item_id
+         AND prev.account_id     = v_account_id
+         AND pic.location_id     = v_location_id
+         AND pic.status          = 'aprobado'
+         AND prev.counted_qty IS NOT NULL
+         AND prev.counted_at  IS NOT NULL
+         AND prev.id <> p_line_id
+       ORDER BY prev.counted_at DESC
+       LIMIT 1
+    ) ref;
+
+  -- ¿TENÍA FOLVY CON QUÉ COMPARAR? Ninguno de los dos frenos puede correr si su
+  -- referencia no es un número positivo: el (a) exige `v_teorico > 0` y el (b)
+  -- `v_ref_qty > 0`. Cuando las dos fallan —una ficha con el teórico en
+  -- negativo, como Humus a −355 g— la línea se guarda SIN QUE NADIE LA MIRE.
+  -- No se frena a quien cuenta, que no tiene culpa de la ficha: se marca para
+  -- que la aprobación lo sepa.
+  v_sin_ref := (v_teorico IS NULL OR v_teorico <= 0)
+           AND (v_ref_qty  IS NULL OR v_ref_qty  <= 0);
+
   IF NOT v_segundo THEN
-    -- (a) teórico vivo del ledger
-    v_teorico := public.theoretical_qty_at(v_item_id, v_location_id, now());
     IF v_teorico IS NOT NULL AND v_teorico > 0 THEN
       IF v_total >= v_teorico * v_factor OR v_total <= v_teorico / v_factor THEN
         v_veredicto := 'recount';
       END IF;
     END IF;
 
-    -- (b) último recuento APROBADO + lo movido desde entonces
-    IF v_veredicto = 'ok' THEN
-      SELECT ref.qty, ref.entradas
-        INTO v_ref_qty, v_hubo_entrada
-        FROM (
-          SELECT prev.counted_qty + COALESCE((
-                   SELECT SUM(sm.qty_base) FROM public.stock_movement sm
-                    WHERE sm.recipe_item_id = v_item_id
-                      AND sm.location_id    = v_location_id
-                      AND sm.source_type   <> 'inventory_count'
-                      AND sm.occurred_at    > prev.counted_at
-                 ), 0) AS qty,
-                 COALESCE((
-                   -- «Recepciones» en el sentido del encargo: mercancía que
-                   -- ENTRA por una razón registrada. Un ajuste manual no cuenta:
-                   -- si el stock subió porque alguien lo corrigió a mano, la
-                   -- pregunta «¿seguro?» sigue mereciendo hacerse.
-                   SELECT bool_or(true) FROM public.stock_movement sm
-                    WHERE sm.recipe_item_id = v_item_id
-                      AND sm.location_id    = v_location_id
-                      AND sm.occurred_at    > prev.counted_at
-                      AND (sm.source_type = 'goods_receipt_line'
-                           OR sm.movement_type IN ('recepcion','traspaso_entrada','apertura'))
-                 ), false) AS entradas
-            FROM public.inventory_count_line prev
-            JOIN public.inventory_count pic ON pic.id = prev.inventory_count_id
-           WHERE prev.recipe_item_id = v_item_id
-             AND prev.account_id     = v_account_id
-             AND pic.location_id     = v_location_id
-             AND pic.status          = 'aprobado'
-             AND prev.counted_qty IS NOT NULL
-             AND prev.counted_at  IS NOT NULL
-             AND prev.id <> p_line_id
-           ORDER BY prev.counted_at DESC
-           LIMIT 1
-        ) ref;
-
-      -- Sin entradas de por medio, apartarse del recuento anterior es una
-      -- contradicción, no deriva. Con entradas, este freno se calla: el stock
-      -- ha cambiado por una razón conocida.
-      IF v_ref_qty IS NOT NULL AND NOT v_hubo_entrada AND v_ref_qty > 0 THEN
-        IF abs(v_total - v_ref_qty) / v_ref_qty * 100 >= v_contra_pct THEN
-          v_veredicto := 'recount';
-        END IF;
+    -- Sin entradas de por medio, apartarse del recuento anterior es una
+    -- contradicción, no deriva. Con entradas, este freno se calla: el stock
+    -- ha cambiado por una razón conocida.
+    IF v_veredicto = 'ok'
+       AND v_ref_qty IS NOT NULL AND NOT v_hubo_entrada AND v_ref_qty > 0 THEN
+      IF abs(v_total - v_ref_qty) / v_ref_qty * 100 >= v_contra_pct THEN
+        v_veredicto := 'recount';
       END IF;
     END IF;
 
@@ -334,6 +322,10 @@ BEGIN
        SET recount_asked_at = now()
      WHERE id = p_line_id;
   ELSE
+    -- EL SELLO DE LA PUERTA (p11, incidente del 10/09). Se pone justo antes
+    -- del UPDATE y se quita justo después: la ventana en la que vale es UNA
+    -- sentencia. Y lleva el id de la línea, así que no autoriza otra.
+    PERFORM set_config('folvy.count_gate', p_line_id::text, true);
     UPDATE public.inventory_count_line
        SET counted_qty              = v_total,
            counted_at               = now(),
@@ -341,8 +333,10 @@ BEGIN
            counted_by_name          = COALESCE(v_actor_name, counted_by_name),
            counted_qty_confirmed    = CASE WHEN v_confirmado OR v_forzado THEN v_total ELSE NULL END,
            counted_qty_confirmed_at = CASE WHEN v_confirmado OR v_forzado THEN now() ELSE NULL END,
-           needs_review             = v_revisar
+           needs_review             = v_revisar,
+           no_reference             = v_sin_ref
      WHERE id = p_line_id;
+    PERFORM set_config('folvy.count_gate', '', true);
   END IF;
 
   -- LO QUE VUELVE AL MÓVIL. `counted` es lo que ha tecleado la propia persona,
@@ -355,27 +349,17 @@ BEGIN
     'attempt',      v_intento,
     'estimated',    v_a_ojo,
     'confirmed',    v_confirmado,
-    'needs_review', v_revisar
+    'needs_review', v_revisar,
+    'no_reference', v_sin_ref
   );
 END;
 $function$;
 
--- ── Nace privada (§5) ─────────────────────────────────────────────────────
 REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM anon;
 REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.save_count_line(uuid, jsonb, numeric) TO authenticated;
 
--- ═════════════════════════════════════════════════════════════════════════
--- clear_count_line · borrar lo contado, que NO es contar cero
--- ═════════════════════════════════════════════════════════════════════════
---
--- Es una función aparte y no «mandar un array vacío» a propósito. Un array
--- vacío es justo lo que llega cuando el front se equivoca —un estado sin
--- inicializar, un formulario que se limpia solo—, y si eso significara «no hay
--- nada» estaríamos escribiendo ceros por accidente en el libro de stock. Aquí
--- hay que decirlo con el nombre: `clear_count_line` deja la línea SIN CONTAR,
--- que es otra cosa que contar cero.
 CREATE OR REPLACE FUNCTION public.clear_count_line(p_line_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -403,29 +387,23 @@ BEGIN
 
   DELETE FROM public.inventory_count_entry WHERE line_id = p_line_id;
 
+  -- El sello, sólo alrededor del UPDATE.
+  PERFORM set_config('folvy.count_gate', p_line_id::text, true);
   UPDATE public.inventory_count_line
      SET counted_qty              = NULL,
          counted_at               = NULL,
          counted_qty_confirmed    = NULL,
          counted_qty_confirmed_at = NULL,
          needs_review             = false,
-         recount_asked_at         = NULL
+         recount_asked_at         = NULL,
+         no_reference             = false
    WHERE id = p_line_id;
+  PERFORM set_config('folvy.count_gate', '', true);
 END;
 $function$;
-
 REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM anon;
 REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.clear_count_line(uuid) TO authenticated;
-
-COMMENT ON FUNCTION public.clear_count_line(uuid) IS
-  'Deja la línea SIN CONTAR (no en cero) y borra sus entradas. Para contar cero '
-  'está save_count_line con method = cero (§2.2, 10/09/2026).';
-
-COMMENT ON FUNCTION public.save_count_line(uuid, jsonb, numeric) IS
-  'ÚNICA puerta de escritura de un conteo. Guarda las entradas del intento, '
-  'suma en servidor y devuelve un veredicto a ciegas (ok/recount) que NUNCA '
-  'contiene la cantidad esperada (§2.2/§2.3, 10/09/2026).';
 
 COMMIT;

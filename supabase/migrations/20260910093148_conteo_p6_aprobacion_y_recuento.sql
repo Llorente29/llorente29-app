@@ -1,4 +1,4 @@
--- 20260910092500_conteo_p6_aprobacion_y_recuento.sql
+-- 20260910093148_conteo_p6_aprobacion_y_recuento.sql
 --
 -- CONTAR POR FORMATOS · PASO 6 (§2.4) — LO QUE NO SE APLICA SOLO, Y PEDIR
 -- QUE ALGUIEN LO VUELVA A CONTAR

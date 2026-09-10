@@ -1,21 +1,18 @@
--- 20260910093000_conteo_p7_recuentos_en_el_siguiente.sql
+-- 20260910171825_conteo_p13c_daily_apertura_no_es_prueba.sql
 --
--- CONTAR POR FORMATOS · PASO 7 (§2.4) — el recuento pedido entra en el
--- SIGUIENTE autoinventario.
+-- UNA APERTURA NO ES PRUEBA DE NADA
 --
--- `request_recount` (paso 6) mete la línea en el conteo de hoy si sigue
--- abierto. Cuando ya está cerrado —que es lo normal, porque se aprueba por la
--- mañana el del día anterior— la petición queda en cola. Esto es lo que la
--- vacía: al generar el autoinventario del día, primero se añaden los recuentos
--- pedidos y luego lo que toque por cobertura.
+-- `_generate_daily_count_core` calculaba `last_ok` con un COALESCE que convertía
+-- un NULL en `true`, o sea en «el último recuento cuadró». Con la apertura del
+-- packaging habría dicho eso de 59 artículos que nadie ha comprobado nunca.
 --
--- Van PRIMEROS en el orden (`position` negativa) a propósito: es lo que alguien
--- ha pedido expresamente, no lo que el motor ha elegido. Y con la asignación
--- que se decidió al pedirlo, que nunca es quien contó la original.
+-- Ahora NULL se propaga: `NOT NULL` es NULL, la línea deja de opinar y la
+-- rotación decide por EDAD, que es lo único que una apertura sí demuestra.
 --
--- El resto de la función está copiado LETRA A LETRA de la versión del
--- 29/08/2026 (`20260829T0810_generate_daily_count_core_autocierre_no_tumba_generacion.sql`).
--- Lo único nuevo es el bloque marcado «RECUENTOS PEDIDOS».
+-- APLICADO transformando el código desplegado con una guarda de dos apariciones,
+-- porque son ~300 líneas y el cambio son dos expresiones. Este fichero lleva el
+-- cuerpo literal resultante; el md5 contra `pg_proc` es lo que demuestra que son
+-- el mismo texto (3cd2b92a02ee551cb749c842efc74576, 10.142 caracteres).
 
 BEGIN;
 
@@ -93,9 +90,18 @@ BEGIN
       SELECT DISTINCT ON (icl.recipe_item_id)
              icl.recipe_item_id,
              ic.approved_at AS last_approved,
-             COALESCE(icl.within_tolerance,
-                      (ABS(COALESCE(icl.variance_value,0)) < 5
-                       AND ABS(COALESCE(icl.variance_pct,0)) < 3)) AS last_ok
+             -- UNA APERTURA NO ES PRUEBA DE NADA (10/09, noche). Este
+             -- COALESCE convertía un NULL en `true`, o sea en «el último
+             -- recuento cuadró», y con la apertura del packaging habría
+             -- dicho eso de 59 artículos que nadie ha comprobado nunca.
+             -- NULL se propaga: `NOT NULL` es NULL, así que la línea deja de
+             -- opinar y la rotación decide por EDAD, que es lo único que una
+             -- apertura sí demuestra.
+             CASE WHEN COALESCE(ic.is_opening, false) THEN NULL
+                  ELSE COALESCE(icl.within_tolerance,
+                         (ABS(COALESCE(icl.variance_value,0)) < 5
+                          AND ABS(COALESCE(icl.variance_pct,0)) < 3))
+             END AS last_ok
       FROM public.inventory_count_line icl
       JOIN public.inventory_count ic ON ic.id = icl.inventory_count_id
       WHERE ic.account_id = p_account_id AND ic.location_id = p_location_id AND ic.status = 'aprobado'
@@ -131,9 +137,18 @@ BEGIN
       SELECT DISTINCT ON (icl.recipe_item_id)
              icl.recipe_item_id,
              ic.approved_at AS last_approved,
-             COALESCE(icl.within_tolerance,
-                      (ABS(COALESCE(icl.variance_value,0)) < 5
-                       AND ABS(COALESCE(icl.variance_pct,0)) < 3)) AS last_ok
+             -- UNA APERTURA NO ES PRUEBA DE NADA (10/09, noche). Este
+             -- COALESCE convertía un NULL en `true`, o sea en «el último
+             -- recuento cuadró», y con la apertura del packaging habría
+             -- dicho eso de 59 artículos que nadie ha comprobado nunca.
+             -- NULL se propaga: `NOT NULL` es NULL, así que la línea deja de
+             -- opinar y la rotación decide por EDAD, que es lo único que una
+             -- apertura sí demuestra.
+             CASE WHEN COALESCE(ic.is_opening, false) THEN NULL
+                  ELSE COALESCE(icl.within_tolerance,
+                         (ABS(COALESCE(icl.variance_value,0)) < 5
+                          AND ABS(COALESCE(icl.variance_pct,0)) < 3))
+             END AS last_ok
       FROM public.inventory_count_line icl
       JOIN public.inventory_count ic ON ic.id = icl.inventory_count_id
       WHERE ic.account_id = p_account_id AND ic.location_id = p_location_id AND ic.status = 'aprobado'
@@ -235,5 +250,4 @@ BEGIN
   RETURN QUERY SELECT v_count_id, v_created, false, v_cov_before, v_cov_after, v_per_today;
 END;
 $function$;
-
 COMMIT;

@@ -1,4 +1,4 @@
--- 20260910090500_conteo_p2_inventory_count_entry.sql
+-- 20260910092853_conteo_p2_inventory_count_entry.sql
 --
 -- CONTAR POR FORMATOS · PASO 2a (§2.2) — CÓMO SE CONTÓ
 --

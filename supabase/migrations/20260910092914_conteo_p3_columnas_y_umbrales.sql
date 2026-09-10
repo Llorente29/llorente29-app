@@ -1,4 +1,4 @@
--- 20260910091000_conteo_p3_columnas_y_umbrales.sql
+-- 20260910092914_conteo_p3_columnas_y_umbrales.sql
 --
 -- CONTAR POR FORMATOS · PASO 3 (§2.3 y §2.4) — las columnas del freno y de la
 -- aprobación, y los umbrales fuera del código.

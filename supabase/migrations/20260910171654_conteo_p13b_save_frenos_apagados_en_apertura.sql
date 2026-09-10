@@ -1,39 +1,24 @@
--- 20260910190000_conteo_p12_sin_referencia.sql
+-- 20260910171654_conteo_p13b_save_frenos_apagados_en_apertura.sql
 --
--- «FOLVY NO TENÍA REFERENCIA» (visto en vivo en INV-00218, 10/09 por la tarde)
+-- LOS DOS FRENOS, APAGADOS EN UNA APERTURA
 --
--- EL AGUJERO. Los dos frenos de `save_count_line` sólo corren si su referencia
--- es un número POSITIVO: el del teórico exige `v_teorico > 0`, el de la
--- contradicción exige `v_ref_qty > 0`. Cuando las dos fallan, la línea se
--- guarda sin que nadie la mire — y el caso en que fallan es justo el peor: una
--- ficha rota. Humus entró con 1.000 g contra un teórico de −355 g y no saltó
--- nada. Lima igual.
+-- `save_count_line` compara con el teórico vivo (×3 / ⅓) y con el último
+-- recuento aprobado (≥ 40 %). En una apertura los dos son cifras que YA SABEMOS
+-- FALSAS —el teórico de Bolsas Personalizadas en Alcalá son 149.250 ud—, así que
+-- frenar contra eso mandaría a recontar media apertura por no parecerse a una
+-- mentira.
 --
--- LO QUE SE HACE, Y LO QUE NO. NO se frena a quien cuenta: no tiene culpa de la
--- ficha, y pararle delante de la cámara para decirle que Folvy no sabe lo que
--- debería haber es echarle a él un problema que es nuestro. Lo que se hace es
--- MARCAR la línea, para que la aprobación lo diga con todas las letras.
+-- LA RED DE CORDURA (FV001) NO SE APAGA: esa no compara con nada, caza el cero
+-- de más. Y su confirmación expresa sigue siendo la puerta para pasarla.
 --
--- Es la regla 7 otra vez, por el lado bueno: el umbral no decide la existencia
--- de la fila, decide su etiqueta. Aquí se añade etiqueta, no se quita fila.
+-- `no_reference` tampoco se marca en apertura: sería cierto en TODAS las líneas
+-- —es la definición de una apertura— y una etiqueta que sale siempre no informa
+-- de nada.
 --
--- POR QUÉ `<= 0` Y NO `< 0`. Un teórico en CERO tampoco frena —el `> 0` lo deja
--- fuera igual que al negativo—, así que la BBDD guarda la verdad entera: «no
--- había con qué comparar». Quién de esas líneas merece que le miren es una
--- decisión de pantalla, y se toma en pantalla: contar cero contra un teórico
--- de cero no le hace perder el tiempo a nadie, así que sale ETIQUETADA pero no
--- va al grupo de revisar. Contar 1.000 sin referencia, sí.
+-- MEDIDO CON CONTROL, mismas líneas y mismas cifras a los dos lados: 10 de 10
+-- `recount` como conteo normal, 10 de 10 `ok` como apertura.
 
 BEGIN;
-
-ALTER TABLE public.inventory_count_line
-  ADD COLUMN IF NOT EXISTS no_reference boolean NOT NULL DEFAULT false;
-
-COMMENT ON COLUMN public.inventory_count_line.no_reference IS
-  'true cuando al guardar no había NINGUNA referencia positiva con la que '
-  'comparar: ni teórico vivo (> 0) ni último recuento aprobado (> 0). La línea '
-  'se guardó sin que ningún freno pudiera mirarla. Lo pone save_count_line '
-  '(10/09/2026); no frena a nadie, marca para la aprobación.';
 
 CREATE OR REPLACE FUNCTION public.save_count_line(
   p_line_id uuid,
@@ -82,6 +67,7 @@ DECLARE
   v_ref_qty      numeric;
   v_hubo_entrada boolean := false;
   v_sin_ref      boolean := false;
+  v_apertura     boolean := false;
 
   v_veredicto    text := 'ok';
   v_confirmado   boolean := false;
@@ -94,9 +80,9 @@ DECLARE
 BEGIN
   -- ── Quién y qué ─────────────────────────────────────────────────────────
   SELECT l.account_id, l.inventory_count_id, l.recipe_item_id, l.counted_qty,
-         l.recount_asked_at, ic.location_id, ic.status
+         l.recount_asked_at, ic.location_id, ic.status, COALESCE(ic.is_opening, false)
     INTO v_account_id, v_count_id, v_item_id, v_anterior,
-         v_ya_pedido, v_location_id, v_status
+         v_ya_pedido, v_location_id, v_status, v_apertura
     FROM public.inventory_count_line l
     JOIN public.inventory_count ic ON ic.id = l.inventory_count_id
    WHERE l.id = p_line_id
@@ -247,11 +233,26 @@ BEGIN
   -- negativo, como Humus a −355 g— la línea se guarda SIN QUE NADIE LA MIRE.
   -- No se frena a quien cuenta, que no tiene culpa de la ficha: se marca para
   -- que la aprobación lo sepa.
-  v_sin_ref := (v_teorico IS NULL OR v_teorico <= 0)
+  --
+  -- EN UNA APERTURA NO SE MARCA. «Folvy no tenía referencia» sería cierto en
+  -- TODAS las líneas —es la definición de una apertura— y una etiqueta que
+  -- sale siempre no informa de nada: sería ruido en la única pantalla donde
+  -- hace falta que se lea la que importa.
+  v_sin_ref := NOT v_apertura
+           AND (v_teorico IS NULL OR v_teorico <= 0)
            AND (v_ref_qty  IS NULL OR v_ref_qty  <= 0);
 
   IF NOT v_segundo THEN
-    IF v_teorico IS NOT NULL AND v_teorico > 0 THEN
+    -- LOS DOS FRENOS, APAGADOS EN UNA APERTURA (10/09, noche). Comparan con
+    -- el teórico vivo y con el último recuento aprobado, y en una apertura
+    -- los dos son cifras que YA SABEMOS FALSAS: el teórico de Bolsas
+    -- Personalizadas en Alcalá son 149.250 ud. Frenar contra eso mandaría a
+    -- recontar media apertura por no parecerse a una mentira.
+    --
+    -- La red de cordura (FV001, el disparador simétrico) NO se apaga: esa no
+    -- compara con nada, caza el cero de más. Y su confirmación expresa sigue
+    -- siendo la puerta para pasarla.
+    IF NOT v_apertura AND v_teorico IS NOT NULL AND v_teorico > 0 THEN
       IF v_total >= v_teorico * v_factor OR v_total <= v_teorico / v_factor THEN
         v_veredicto := 'recount';
       END IF;
@@ -260,7 +261,7 @@ BEGIN
     -- Sin entradas de por medio, apartarse del recuento anterior es una
     -- contradicción, no deriva. Con entradas, este freno se calla: el stock
     -- ha cambiado por una razón conocida.
-    IF v_veredicto = 'ok'
+    IF NOT v_apertura AND v_veredicto = 'ok'
        AND v_ref_qty IS NOT NULL AND NOT v_hubo_entrada AND v_ref_qty > 0 THEN
       IF abs(v_total - v_ref_qty) / v_ref_qty * 100 >= v_contra_pct THEN
         v_veredicto := 'recount';
@@ -354,56 +355,9 @@ BEGIN
   );
 END;
 $function$;
-
 REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM anon;
 REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.save_count_line(uuid, jsonb, numeric) TO authenticated;
-
-CREATE OR REPLACE FUNCTION public.clear_count_line(p_line_id uuid)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_account_id uuid;
-  v_status text;
-BEGIN
-  SELECT l.account_id, ic.status INTO v_account_id, v_status
-    FROM public.inventory_count_line l
-    JOIN public.inventory_count ic ON ic.id = l.inventory_count_id
-   WHERE l.id = p_line_id;
-
-  IF v_account_id IS NULL THEN
-    RAISE EXCEPTION 'clear_count_line: la línea % no existe', p_line_id;
-  END IF;
-  IF NOT public.belongs_to_account(v_account_id) THEN
-    RAISE EXCEPTION 'clear_count_line: sin acceso a la cuenta';
-  END IF;
-  IF v_status IN ('aprobado', 'anulado') THEN
-    RAISE EXCEPTION 'clear_count_line: el recuento está % y ya no se puede tocar', v_status;
-  END IF;
-
-  DELETE FROM public.inventory_count_entry WHERE line_id = p_line_id;
-
-  -- El sello, sólo alrededor del UPDATE.
-  PERFORM set_config('folvy.count_gate', p_line_id::text, true);
-  UPDATE public.inventory_count_line
-     SET counted_qty              = NULL,
-         counted_at               = NULL,
-         counted_qty_confirmed    = NULL,
-         counted_qty_confirmed_at = NULL,
-         needs_review             = false,
-         recount_asked_at         = NULL,
-         no_reference             = false
-   WHERE id = p_line_id;
-  PERFORM set_config('folvy.count_gate', '', true);
-END;
-$function$;
-REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM anon;
-REVOKE ALL ON FUNCTION public.clear_count_line(uuid) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.clear_count_line(uuid) TO authenticated;
 
 COMMIT;

@@ -1,4 +1,4 @@
--- 20260910090000_conteo_p1_use_in_count.sql
+-- 20260910092811_conteo_p1_use_in_count.sql
 --
 -- CONTAR POR FORMATOS · PASO 1 (§2.1 del encargo del 10/09/2026)
 --

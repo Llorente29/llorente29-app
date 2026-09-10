@@ -1,4 +1,4 @@
--- 20260910093500_conteo_p8_coste_medio_perpetuo.sql
+-- 20260910093334_conteo_p8_coste_medio_perpetuo.sql
 --
 -- CONTAR POR FORMATOS · PASO 8 (§2.5) — EL € DE VERDAD
 --

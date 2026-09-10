@@ -1,4 +1,4 @@
--- 20260910092000_conteo_p5_cordura_simetrica.sql
+-- 20260910093045_conteo_p5_cordura_simetrica.sql
 --
 -- CONTAR POR FORMATOS · PASO 5 (§2.3, último punto) — LA RED, POR LOS DOS LADOS
 --

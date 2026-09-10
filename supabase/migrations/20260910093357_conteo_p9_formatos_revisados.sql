@@ -1,4 +1,4 @@
--- 20260910094000_conteo_p9_formatos_revisados.sql
+-- 20260910093357_conteo_p9_formatos_revisados.sql
 --
 -- CONTAR POR FORMATOS · PASO 9 (§2.6) — «Confirmar» deja el artículo revisado
 --

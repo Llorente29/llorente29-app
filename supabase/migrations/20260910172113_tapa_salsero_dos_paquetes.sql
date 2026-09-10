@@ -1,4 +1,4 @@
--- 20260910220000_tapa_salsero_dos_paquetes.sql
+-- 20260910172113_tapa_salsero_dos_paquetes.sql
 --
 -- TAPA SALSERO 120 CC · un formato «Pack» para DOS paquetes distintos
 --
