@@ -39,6 +39,8 @@
 -- diciendo «sé que me salto el freno». Lo que no puede pasar es que se lo
 -- salte alguien sin enterarse.
 
+BEGIN;
+
 -- ═════════════════════════════════════════════════════════════════════════
 -- El disparador
 -- ═════════════════════════════════════════════════════════════════════════
@@ -474,3 +476,5 @@ COMMENT ON FUNCTION public.save_count_line(uuid, jsonb, numeric) IS
   'sella la transacción con el id de la línea para pasar el disparador '
   'trg_a_count_line_solo_por_la_puerta. Devuelve un veredicto a ciegas '
   '(ok/recount) que NUNCA contiene la cantidad esperada.';
+
+COMMIT;
