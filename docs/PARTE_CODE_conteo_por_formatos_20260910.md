@@ -786,3 +786,158 @@ comprobó contra siete funciones de escritura que **no** se han tocado hoy
 Es sistémico y anterior. La migración del 09/09
 (`cerrar_a_anon_de_verdad_revocando_public`) no llegó a estas. **No se toca
 porque no es lo de hoy**, pero queda escrito.
+
+---
+
+# INCIDENTE Y CIERRE DE LA PUERTA · 10/09/2026, 12:34–12:43
+
+## Lo que pasó, medido
+
+La pantalla nueva se publicó a las **11:39**. A las **12:34** empezaron a
+entrar líneas de INV-00218 (Alcalá) que **no habían pasado por
+`save_count_line`**: doce líneas contadas, **cero filas** en
+`inventory_count_entry`. Todas de la misma persona, Johanny Garzón Rodríguez,
+entre las 12:34:37 y las 12:43:32 de Madrid. Un móvil con la versión vieja en
+caché, escribiendo `counted_qty` por la puerta de atrás.
+
+| Artículo | apuntado | teórico vivo | ref. anterior | ¿recepción? | qué habría dicho el freno |
+|---|---:|---:|---:|:--:|---|
+| Milanesa de Pollo Rebozado | 4 | 7,0 | 7,0 | no | **FRENO · contradice 43 %** |
+| Solomillo de Pollo Prefrito Piri-piri | 25.000 | 35.000,0 | 35.000,0 | no | pasa (−29 %) |
+| Queso Mozarela | 8.000 | 8.850,0 | 8.850,0 | no | pasa (−10 %) |
+| Sweet Potato Fries | 12.500 | 14.700,0 | 14.700,0 | no | pasa (−15 %) |
+| Focaccia XXL | 63 | 72,0 | 72,0 | no | pasa (−13 %) |
+| Lechuga Romana | 1.950 | 2.534,2 | 2.534,2 | **sí** | pasa (el freno se calla a propósito) |
+| Pepinillos Agridulce en Rodajas | 6.600 | 6.247,3 | 6.247,3 | no | pasa (+6 %) |
+| Milanesa Ternera Rebozado | 33 | 32,0 | 32,0 | no | pasa (+3 %) |
+| Coca-Cola Zero Lata | 0 | 0,0 | 0,0 | no | pasa |
+| SALSA Yogur | 0 | 0,0 | 0,0 | no | pasa |
+| Humus | 1.000 | −355,0 | −355,0 | no | **no lo mira** (ver abajo) |
+| Lima | 0 | −360,7 | −360,7 | no | **no lo mira** (ver abajo) |
+
+Replicado en lectura con los umbrales reales de la cuenta (factor 3,
+contradicción 40 %), anclado por `account_id`.
+
+**Una de las doce** habría parado a pedir un segundo vistazo. Las otras once
+habrían pasado igual — pero no es eso lo que se perdió. Lo que se perdió en las
+doce es **el cómo**: sin entradas no hay formatos, no hay marca de «a ojo», y
+la pantalla de aprobación no puede decir «2 cajas + media bolsa». Se guardó el
+número y se tiró el razonamiento.
+
+### Y de rebote, un agujero que la puerta NO tapa
+
+**Con el teórico en negativo, los dos frenos se apagan.** El primero exige
+`teorico > 0`; el segundo exige `ref_anterior > 0`. Humus llegó apuntado con
+1.000 g contra un teórico de −355 g, y **ningún freno lo mira**: justo el caso
+en el que la ficha ya venía mal y más falta hacía preguntar. Lima igual.
+
+No lo arreglo hoy porque no es lo que se ha pedido y cambia el umbral de
+verdad, no la puerta. Queda escrito y con nombre propio: **Humus y Lima, y los
+453 artículos del recálculo del coste están en la misma familia.**
+
+## 1 · La puerta, cerrada con llave (migración p11)
+
+**La lección es nueva y va al grano:** haber puesto una sola puerta de
+escritura **en el código** no cierra la puerta vieja, la deja abierta y sin
+vigilar. Mientras exista una versión del cliente en el caché de alguien, el
+`UPDATE` directo sigue siendo una escritura válida para la BBDD. Una puerta que
+sólo existe en el front no es una puerta: es una recomendación.
+
+`save_count_line` y `clear_count_line` sellan la transacción con **el id de la
+línea** justo antes de su `UPDATE` y lo quitan justo después. El disparador
+`trg_a_count_line_solo_por_la_puerta` exige ese sello y, si no está, levanta
+**FV002** con un mensaje escrito para quien está de pie delante de una cámara:
+
+> Esta versión de Folvy es antigua y ya no puede guardar recuentos. Cierra la
+> aplicación y vuelve a abrirla para actualizarla; lo que hayas contado no se ha
+> perdido, vuelve a apuntarlo cuando se actualice.
+
+El nombre empieza por `trg_a_` a propósito: Postgres los ejecuta por orden
+alfabético, y así una app vieja oye «actualízate» y no «cantidad fuera de
+escala» de la red de cordura.
+
+**Lo que esta puerta no es.** No es una barrera criptográfica: quien pudiera
+llamar a `set_config` a voluntad se la saltaría. No puede — PostgREST sólo
+expone el esquema `public` y `set_config` vive en `pg_catalog`. Para lo que
+está es para lo que pasó hoy, y de eso protege del todo.
+
+**La válvula, dicha en voz alta.** Una migración que necesite tocar
+`counted_qty` a mano pone el sello `'mantenimiento'`. Es ruidoso a propósito:
+quien lo escriba está diciendo «sé que me salto el freno».
+
+### Antes de aplicar: quién más escribe `counted_qty`
+
+Preguntado a la BBDD, no supuesto. Cinco funciones tocan
+`inventory_count_line`; de ésas, **sólo `save_count_line` y `clear_count_line`
+asignan `counted_qty`**. `close_inventory_count` lo nombra dos veces pero las
+dos son **comparaciones** dentro de `within_tolerance`. Los dos caminos que
+crean conteos —`_generate_daily_count_core` y `build_inventory_count`— insertan
+`counted_qty` **NULL** explícito. En el front no queda ni un escritor: los once
+usos que quedan de `counted_qty` son lecturas.
+
+### El ensayo, revertido a propósito
+
+Ocho comprobaciones sobre una línea real de INV-00217 (*Mezcla de Mix de
+Setas*), todas dentro de un bloque que aborta al final para no dejar nada:
+
+| # | Prueba | Resultado |
+|---|---|---|
+| 1 | `UPDATE` directo, como el móvil de las 12:34 | ✓ RECHAZADO `FV002`, con el mensaje literal |
+| 2 | Sello **de otra línea** | ✓ RECHAZADO `FV002` — el sello es por línea, no un «sí» genérico |
+| 3 | Válvula `'mantenimiento'` | ✓ pasa, a propósito |
+| 4 | `save_count_line` | ✓ veredicto `ok`, `counted_qty` = 4, 1 entrada |
+| 4b | `UPDATE` directo **después** de `save_count_line` | ✓ RECHAZADO `FV002` — el sello no se queda pegado |
+| 5 | `clear_count_line` | ✓ deshace: `counted_qty` NULL, 0 entradas |
+| 6 | `INSERT` con `counted_qty` NULL | ✓ pasa — crear conteos sigue intacto |
+| 7 | `INSERT` ya contado por la puerta de atrás | ✓ RECHAZADO `FV002` |
+| 8 | Orden de disparadores | `trg_a_count_line_solo_por_la_puerta` → `trg_inventory_count_line_sanity` |
+
+Los dos primeros intentos de 4 y 5 fallaron con «sin acceso a la cuenta»:
+`belongs_to_account()` decía la verdad, no había JWT. Se repitieron con las
+claims de un usuario real de la cuenta.
+
+**Y comprobado después, mirando los datos y no fiándome del rollback:**
+INV-00217 sigue con 14 líneas, 0 contadas, 0 entradas, 0 frenos, y su
+`position` máxima vuelve a ser 14 — las dos filas de prueba (9998 y 9999) no
+están.
+
+### Sin drift entre repo y desplegado
+
+md5 de los tres cuerpos, repo contra producción, **3 de 3 iguales**:
+
+| Función | md5 | chars |
+|---|---|---:|
+| `tg_count_line_solo_por_la_puerta` | `cba16212274dcb41c3499c89598aa43b` | 1.441 |
+| `clear_count_line` | `aef3bd7b105c326693bc4732a4bf8e2e` | 1.189 |
+| `save_count_line` | `b6133e37f7fe243c81eac7061046fdfa` | 11.965 |
+
+Importa más de lo que parece: `save_count_line` son doscientas líneas de las
+que **sólo cambian dos** (las dos de `set_config`). El cuerpo se generó desde el
+fichero de la p4, no se volvió a teclear, y el md5 es lo que demuestra que no se
+coló ningún cambio que nadie ha decidido.
+
+## 2 · Que el móvil se entere de que hay versión nueva
+
+`__BUILD_ID__` se inyecta en el build y el móvil compara contra
+`/version.json` pidiéndolo con `cache: 'no-store'`. Si no coinciden, recarga.
+
+**Pero no recarga encima de alguien que está escribiendo.** Un registro de
+trabajo en curso (`trabajoEnCurso.ts`) hace que el vigía espere mientras haya
+algo tecleado sin guardar; en los formularios largos —APPCC, recepción,
+cambios, inventario— no recarga sola: avisa. Y si la BBDD contesta `FV002`
+igualmente, `MiAutoinventario` entra en la pantalla `'caducada'`, con **un solo
+botón**: «Actualizar y seguir contando».
+
+El mensaje de esa pantalla y el que levanta el disparador son **literalmente el
+mismo texto**, y hay una prueba que falla si alguien cambia uno sin el otro.
+
+## Lo aplicado y lo que queda
+
+**Aplicado hoy:** migración p11 (`conteo_p11_puerta_cerrada`), sobre las diez
+de esta mañana. **Front:** ya estaba fusionado antes de la p11 — el orden
+importaba, porque la puerta cerrada sin el vigía de versión habría dado FV002 a
+gente sin manera de actualizarse.
+
+**Sigue pendiente, igual que esta mañana:** los puntos 5, 6 y 7 del §5, el §4.4
+y las dos fichas malas (Humus, Tapa Salsero 120 Cc) — a las que hoy se les suma
+Lima y el agujero del teórico en negativo.
