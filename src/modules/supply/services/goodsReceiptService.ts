@@ -219,7 +219,8 @@ export interface LocationStock {
   locationId: string
   qtyOnHand: number
   avgUnitCost: number | null
-  stockValue: number
+  /** € del stock. NULL cuando no hay coste medio fiable (p8). */
+  stockValue: number | null
   updatedAt: string
 }
 
@@ -1207,7 +1208,8 @@ export async function listLocationStock(
     locationId: r.location_id as string,
     qtyOnHand: Number(r.qty_on_hand),
     avgUnitCost: r.avg_unit_cost === null || r.avg_unit_cost === undefined ? null : Number(r.avg_unit_cost),
-    stockValue: Number(r.stock_value),
+    // OJO: `Number(null)` es 0 y `Number(undefined)` es NaN. Las dos mienten.
+    stockValue: r.stock_value == null ? null : Number(r.stock_value),
     updatedAt: r.updated_at as string,
   }))
 }

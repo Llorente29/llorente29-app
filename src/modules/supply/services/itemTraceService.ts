@@ -56,7 +56,8 @@ export interface ItemTraceHeader {
   unitAbbr: string | null
   qtyOnHand: number
   avgUnitCost: number | null
-  stockValue: number
+  /** € del stock. NULL cuando no hay coste medio fiable (p8). */
+  stockValue: number | null
 }
 
 export interface SeriesPoint {
@@ -110,7 +111,9 @@ export async function listItemMovements(input: {
           unitAbbr: s(rawItem.unit_abbr),
           qtyOnHand: n(rawItem.qty_on_hand),
           avgUnitCost: rawItem.avg_unit_cost == null ? null : n(rawItem.avg_unit_cost),
-          stockValue: n(rawItem.stock_value),
+          // `n()` devuelve 0 para un NULL. Aquí NO: sin coste medio, el valor
+          // del stock es desconocido, y se dice.
+          stockValue: rawItem.stock_value == null ? null : Number(rawItem.stock_value),
         }
       : null,
     total: n(obj.total),

@@ -186,7 +186,13 @@ export default function ItemMovementsPanel({
               </div>
               <div className="border border-border-default rounded-lg px-3 py-2">
                 <p className="text-[11px] uppercase tracking-wide text-text-tertiary">Valor en stock</p>
-                <p className="text-base font-semibold tabular-nums text-text-primary">{fmtEur(item.stockValue)}</p>
+                {/* Aquí hay sitio para decirlo con palabras. Una raya al lado de
+                    unos euros se lee como un cero; «sin coste» no. */}
+                {item.stockValue == null ? (
+                  <p className="text-base font-semibold text-text-tertiary">sin coste</p>
+                ) : (
+                  <p className="text-base font-semibold tabular-nums text-text-primary">{fmtEur(item.stockValue)}</p>
+                )}
               </div>
             </div>
           )}

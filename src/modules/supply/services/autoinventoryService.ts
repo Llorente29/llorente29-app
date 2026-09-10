@@ -34,7 +34,8 @@ export interface AutoInventoryItem {
   code: string | null
   baseUnit: string | null
   qtyOnHand: number
-  stockValue: number
+  /** € del stock. NULL cuando no hay coste medio fiable (p8): desconocido, no cero. */
+  stockValue: number | null
   rotationEur: number
   riskEur: number
   mustCount: boolean
@@ -89,7 +90,9 @@ export async function getAutoInventoryQueue(
     code: (r.code as string | null) ?? null,
     baseUnit: (r.base_unit as string | null) ?? null,
     qtyOnHand: Number(r.qty_on_hand ?? 0),
-    stockValue: Number(r.stock_value ?? 0),
+    // `?? 0` convertía «no lo sé» en «vale cero», que es justo lo que la p8
+    // quitó del motor. Se conserva el NULL: la pantalla ya sabe pintarlo.
+    stockValue: r.stock_value == null ? null : Number(r.stock_value),
     rotationEur: Number(r.rotation_eur ?? 0),
     riskEur: Number(r.risk_eur ?? 0),
     mustCount: Boolean(r.must_count),
