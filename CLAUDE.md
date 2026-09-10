@@ -50,6 +50,7 @@ Cada una costó un incidente real. La fecha es el día que se pagó.
 
 10. **Un cambio de coste o de stock se ensaya por sus CAMINOS, no por su fórmula.** Medir que la media sale bien no prueba nada sobre quien la escribe. Antes de aplicar, dentro de una transacción revertida: **cerrar una venta, recibir un albarán, apuntar una merma y aprobar un recuento**. Los cuatro. Si alguno no se puede ensayar, eso es el hallazgo, y se dice.
    *Detector automático:* si el ensayo de un cambio de coste o de stock solo contiene `SELECT`, no es un ensayo. La pregunta no es «¿da el número correcto?» sino «¿quién escribe esto y qué le pasa a esa escritura».
+   *(= regla 32 de la maestra.)*
    *(10/09, y lo pagó el servicio entero. Mi p8 dejó `avg_unit_cost` en NULL cuando no hay coste fiable —lo correcto, y lo pidió Julio— pero `recipe_item_location_stock.stock_value` era NOT NULL y se calcula `qty × avg`. Desde las 12:13 UTC, cualquier camino que recalculara stock abortaba con 23502 y se llevaba la transacción entera: 79 «Entregado al rider» por token, 33 cambios de estado, 10 mermas y 7 cierres de venta, todos rechazados. A las 22:00 había 12 pedidos «Listo» sin cerrar en Alcalá, el más antiguo de las 14:49. Mi ensayo de la p8 midió la media sobre 453 filas y no ejecutó ni una venta.)*
 
 ### Numeradas por la secuencia maestra
