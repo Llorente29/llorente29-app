@@ -248,6 +248,13 @@ BEGIN
        AND sm.source_type   = 'sale'
        AND sm.source_id IN (SELECT id FROM public.sale_line WHERE sale_id = p_sale_id)
        AND sm.recipe_item_id IS NOT NULL;
+    -- Las dos llaves pueden traer el MISMO ingrediente, y concatenar dos
+    -- arrays no lo quita. Si se cuela repetido, la nota de proteccion intenta
+    -- escribir dos veces la misma fila y Postgres para la venta entera con
+    -- 21000 («ON CONFLICT DO UPDATE command cannot affect row a second time»).
+    -- Lo cazo el ensayo C8; en una venta de hoy no pasa nunca, porque solo se
+    -- mira una llave.
+    SELECT COALESCE(array_agg(DISTINCT x), '{}') INTO v_previos FROM unnest(v_previos) x;
   END IF;
 
   -- ── LO VIEJO: se borra lo libre, se apunta lo protegido ───────────────
@@ -445,6 +452,9 @@ BEGIN
      WHERE sm.movement_type = 'consumo' AND sm.source_type = 'sale'
        AND sm.source_id IN (SELECT id FROM public.sale_line WHERE sale_id = p_sale_id)
        AND sm.recipe_item_id IS NOT NULL;
+    -- Mismo motivo que en el escritor: sin esto, un ingrediente que este bajo
+    -- las dos llaves rompe la nota con 21000.
+    SELECT COALESCE(array_agg(DISTINCT x), '{}') INTO v_previos FROM unnest(v_previos) x;
   END IF;
   IF array_length(v_previos, 1) IS NULL THEN RETURN 0; END IF;
 
