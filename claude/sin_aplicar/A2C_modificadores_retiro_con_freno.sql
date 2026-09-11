@@ -16,7 +16,11 @@
 --
 -- No borra: `is_active = false`. Una opción apagada sigue existiendo, sigue
 -- casando por código con los pedidos que la nombren (A2b la busca en último
--- lugar, no la descarta) y se vuelve a encender sola si Last la recupera.
+-- lugar, no la descarta) y SE VUELVE A ENCENDER SOLA si Last la recupera: la
+-- vuelta va en la misma pieza y por la misma vía (condición de Julio, 11/09
+-- 13:15). Sin eso, retirar sería una puerta de un solo sentido y los frenos no
+-- bastarían: lo que se colara por debajo del umbral quedaría apagado para
+-- siempre.
 --
 -- ── LOS TRES FRENOS, Y POR QUÉ HAY TRES ─────────────────────────────────
 --
@@ -107,6 +111,8 @@ DECLARE
   v_rescatados integer := 0;
   v_rescatables integer := 0;
   v_sin_codigo integer := 0;
+  v_reactivar  uuid[] := '{}';
+  v_reactivadas integer := 0;
 BEGIN
   -- FRENO 2 · la lista vacía no retira.
   IF p_account_id IS NULL
@@ -202,6 +208,33 @@ BEGIN
      ) q)
   INTO v_a_retirar, v_frenadas, v_visitadas, v_sin_ref, v_marcas;
 
+  -- ── LA VUELTA. Lo que Last VUELVE a servir se vuelve a encender solo.
+  --
+  -- Condición de Julio (11/09 13:15): «que sea reversible por la misma vía».
+  -- Retirar sin esto sería una puerta de un solo sentido, y entonces el freno
+  -- por marca no bastaría: una pasada incompleta que se colara por debajo del
+  -- umbral dejaría opciones apagadas para siempre, a mano de nadie.
+  --
+  -- Aquí NO hay freno, y es a propósito (regla 7): un freno protege de
+  -- ESCONDER, y encender no esconde nada. Lo que sí hay es cuenta y lista, que
+  -- es lo que convierte «ha pasado algo» en algo que se puede mirar.
+  --
+  -- El raíl sigue puesto: sólo marcas visitadas. Y sólo lo que Last sirve HOY,
+  -- que es exactamente `p_option_ext_ids`.
+  SELECT COALESCE(array_agg(mo.id), '{}')
+    INTO v_reactivar
+    FROM public.modifier_option mo
+    JOIN public.modifier_group  mg ON mg.id = mo.modifier_group_id
+    JOIN public.brand           b  ON b.id  = mg.brand_id
+   WHERE mo.account_id      = p_account_id
+     AND b.account_id       = p_account_id
+     AND mo.external_source = 'lastapp'
+     AND NOT mo.is_active
+     AND mg.brand_id        = ANY(p_brand_ids)
+     AND b.ownership_type   = 'licensed'
+     AND mo.external_id IS NOT NULL
+     AND mo.external_id = ANY(p_option_ext_ids);
+
   -- ── LO QUE EL RESCATE PUEDE SALVAR. Se cuenta ANTES de tocar nada, con la
   -- misma consulta que luego escribe, para que el `dry_run` y la pasada de
   -- verdad den el mismo número (regla 31: la misma vara a los dos lados).
@@ -225,6 +258,17 @@ BEGIN
     FROM public.modifier_option mo
     LEFT JOIN evidencia e ON e.opt = mo.id
    WHERE mo.id = ANY(v_a_retirar) AND mo.pos_modifier_id IS NULL;
+
+  IF p_aplicar AND COALESCE(array_length(v_reactivar, 1), 0) > 0 THEN
+    UPDATE public.modifier_option mo
+       SET is_active = true, updated_at = now()
+     WHERE mo.id = ANY(v_reactivar);
+    GET DIAGNOSTICS v_reactivadas = ROW_COUNT;
+    IF v_reactivadas <> COALESCE(array_length(v_reactivar, 1), 0) THEN
+      RAISE EXCEPTION 'A2c: el plan decia reencender % y se reencendieron %',
+        COALESCE(array_length(v_reactivar, 1), 0), v_reactivadas;
+    END IF;
+  END IF;
 
   IF p_aplicar AND COALESCE(array_length(v_a_retirar, 1), 0) > 0 THEN
     -- EL RESCATE DEL CÓDIGO, antes de apagar. Sólo donde la evidencia de los
@@ -305,6 +349,16 @@ BEGIN
     'opciones_en_last',   COALESCE(array_length(p_option_ext_ids, 1), 0),
     'opciones_retiradas', v_retiradas,
     'opciones_a_retirar', COALESCE(array_length(v_a_retirar, 1), 0),
+    'opciones_a_reencender', COALESCE(array_length(v_reactivar, 1), 0),
+    'opciones_reencendidas', v_reactivadas,
+    'reencendidas_cuales', (
+      SELECT COALESCE(jsonb_agg(jsonb_build_object('opcion', mo.name, 'marca', b.name)
+                      ORDER BY mo.name), '[]'::jsonb)
+        FROM public.modifier_option mo
+        JOIN public.modifier_group mg ON mg.id = mo.modifier_group_id
+        JOIN public.brand b ON b.id = mg.brand_id
+       WHERE mo.id = ANY(v_reactivar)
+    ),
     'codigos_rescatables',  v_rescatables,
     'codigos_rescatados',   v_rescatados,
     'retiradas_sin_codigo', v_sin_codigo,

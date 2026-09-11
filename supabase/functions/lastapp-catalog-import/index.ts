@@ -491,11 +491,20 @@ Deno.serve(async (req: Request) => {
   // (`platos_que_last_no_sirve` / `platos_inactivos_que_last_si_sirve`), y con
   // `aplicar_activo: true` se escribe. Contar no se puede desactivar.
   const aplicarActivo = body.aplicar_activo === true;
-  // Lo mismo para los EXTRAS que Last ya no sirve (A2c, 11/09). Mismo trato
-  // que `aplicar_activo` y por la misma razón: contar no se puede desactivar,
-  // escribir sí. El informe SIEMPRE trae el plan —qué se retiraría, en qué
-  // marca y con qué freno—, aunque el interruptor esté apagado.
-  const aplicarRetiro = body.aplicar_retiro === true;
+  // Los EXTRAS que Last ya no sirve (A2c, 11/09). A diferencia de
+  // `aplicar_activo`, este va ENCENDIDO por defecto: lo decidió Julio el 08/09
+  // —en las cedidas manda Last en qué está activo y qué no— y lo confirmó el
+  // 11/09 a las 13:15. Dejarlo apagado era lo que ya teníamos: extras que Last
+  // retiró hace meses siguen encendidos en Folvy sin que nadie lo sepa.
+  //
+  // Lo que lo hace encendible son los tres frenos (raíl de marcas visitadas,
+  // lista vacía que no retira, tope por marca) MÁS la vuelta: lo que Last
+  // recupera se reenciende solo en la pasada siguiente, por la misma vía. Sin
+  // esa vuelta esto sería una puerta de un solo sentido y no se encendería.
+  //
+  // `aplicar_retiro: false` lo apaga para una pasada suelta. Contar no se
+  // puede desactivar: el informe trae el plan entero siempre.
+  const aplicarRetiro = body.aplicar_retiro !== false;
   if (!accountId || !orgId) {
     return jsonResponse({ error: "account_id and lastapp_organization_id required" }, 400);
   }
@@ -1044,6 +1053,14 @@ Deno.serve(async (req: Request) => {
               `retiro FRENADO en ${m.marca}: ${m.sobran} de ${m.activas} (${m.pct} %) — ${m.motivo_del_freno}`,
             );
           }
+        }
+        // La vuelta también se ve, no sólo el retiro: si una opción se
+        // reenciende sola, eso es un cambio de carta y se cuenta como tal.
+        if ((retiro?.opciones_reencendidas ?? 0) > 0) {
+          report.warnings.push(
+            `Last vuelve a servir ${retiro.opciones_reencendidas} extra(s) que estaban retirados: ` +
+            (retiro.reencendidas_cuales ?? []).map((o: any) => `${o.opcion} (${o.marca})`).join(", "),
+          );
         }
         if ((retiro?.retiradas_sin_codigo ?? 0) > 0) {
           report.warnings.push(
