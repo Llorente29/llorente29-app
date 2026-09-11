@@ -153,3 +153,71 @@ Antes de aplicar: el cuerpo actual de `generate_sale_consumption` guardado con
 su huella `97a3533602349f6cebb7f55f3ab15fc3`, en
 `claude/vuelta_atras/`, probado con ida y vuelta hasta que la huella vuelva a
 salir exacta. Como la de A3.
+
+---
+
+## 5 · Resultado del primer ensayo completo (13:55, reloj de la base)
+
+Once casos, **diez en verde y uno rojo que era mío, no del código**.
+
+```
+C11 permisos         -> postgres | authenticated | service_role (intactos)
+C2  anterior al corte-> escritos=0  movs 5->5  huella IGUAL  notas=10
+C1  posterior        -> escritos=27 movs 27->27 suma igual  con_linea=27
+C4  dos veces        -> movs 27->27 suma igual
+C3  a caballo        -> protegido 1 mov (sigue), libre 1, nota=1, escritos=26
+C7  cancelada        -> el protegido conserva su mov, el resto 0, escritos=0
+    nota: «anulacion por debajo del corte: no se devuelve stock, el recuento
+           posterior ya conto lo que habia»
+C6  combo            -> movs 17->15  suma igual  con_linea=12   ← ROJO
+C9  sin enlazar      -> escritos=0 movs=0
+C5  extra cambia     -> 9/-448,089 · 9/-448,089 · 9/-448,089 (vuelve al sitio)
+C8  motor B          -> filas del motor viejo 13->11, protegidos=13
+C10 sin corte        -> corte NULL, sin nota: se reescribe
+```
+
+**C6 no era un fallo del código: era una aserción mía mal escrita.** Yo exigía
+que las 15 filas llevaran `sale_line_id`, y sólo lo llevan 12. Medido aparte,
+con una consulta que no toca nada: esa venta (08/09 23:21) implica **15
+ingredientes, 12 libres y 3 protegidos** por recuentos posteriores. Los 12
+libres se reescriben y llevan línea; los 3 protegidos conservan sus asientos
+viejos, que no tienen línea porque nadie se la puso nunca. 12 + 3 = 15. El
+código hace exactamente lo que debe.
+
+La aserción correcta, y la que va en la pasada definitiva:
+**todo movimiento sin `sale_line_id` tiene que pertenecer a un ingrediente con
+nota de protección en esa venta**. No «todos llevan línea».
+
+## 6 · El hallazgo que cambió el escritor: dos índices únicos dormidos
+
+Al rellenar `sale_line_id` saltó un `23505`. Hay **dos** índices únicos
+—`stock_movement_sale_dedup` y `stock_movement_sale_line_dedup`, idénticos—
+sobre `(sale_line_id, recipe_item_id) WHERE source_type='sale'`. Llevaban meses
+sin morder porque la columna estaba a NULL en las 68.582 filas: alguien diseñó
+la garantía y nunca se armó.
+
+Tienen razón: el motor viejo escribía una fila por cada renglón de
+`_sale_line_raw_consumption`, y el mismo ingrediente puede venir dos veces en
+una línea —una por la receta y otra por un extra—. Así que el escritor pasa a
+**sumar por (línea, ingrediente)**.
+
+**Medido a los dos lados, sobre 129 ventas reales de los últimos 2 días
+(regla 31):**
+
+| | antes | después |
+|---|---:|---:|
+| filas de movimiento | **1.474** | **1.367** |
+| suma total de `qty_base` | **74.950,7183** | **74.950,7183** |
+
+85 pares (línea, ingrediente) traían más de un renglón; 1 grupo se anula a cero
+y deja de tener asiento. **El número de asientos baja un 7,3 %; la cantidad
+total no se mueve ni una milésima.** El stock queda igual; el libro, más
+limpio.
+
+## 7 · Lo que falta antes de aplicar
+
+El ensayo de arriba corrió con el cuerpo **sin los comentarios** del fichero, y
+por eso su huella (`7b47480b…`) no es la del fichero (`3aa6ffcc…`). Eso no vale
+como prueba final: lo que se aplica es el fichero. Antes de las 23:45 se vuelve
+a correr **el fichero tal cual**, con la aserción de C6 corregida, y la huella
+que salga tiene que ser `3aa6ffcccc5a9719d58e33eaebb4309c`.
