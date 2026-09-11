@@ -148,7 +148,11 @@ const CAMPOS_DE_LAST: Record<string, string[]> = {
   menu_category: ["name"],
   menu_item: ["name", "price", "is_available", "menu_category_id", "product_type"],
   modifier_group: ["name", "min_selections", "max_selections"],
-  modifier_option: ["modifier_group_id", "name", "price_impact", "position"],
+  // `pos_modifier_id` va aquí Y NO SOLO EN EL INSERT (A1, 11/09): las 210
+  // opciones cedidas que ya existen se crearon sin él, y si no está en esta
+  // lista el importador no las tocaría nunca —«casa por external_id, ya está,
+  // salta»— y el código no llegaría jamás a las filas que importan.
+  modifier_option: ["modifier_group_id", "name", "price_impact", "position", "pos_modifier_id"],
   // `combo_item_id`, `combo_slot_id` y `modifier_group_id` son enlaces al padre,
   // y el padre lo decide entero el catálogo de Last. Van aquí desde el 09/09:
   // sin ellos, cuando un combo estrena fila `menu_item` —pasó con 12 en la
@@ -820,6 +824,32 @@ Deno.serve(async (req: Request) => {
     const orgComboById = new Map<string, any>();
     for (const c of orgCombos) orgComboById.set(c.id, c);
 
+    // ── ¿ESTÁN EN EL CATÁLOGO LOS CÓDIGOS QUE TRAEN LOS PEDIDOS? ──────────
+    //
+    // El freno del §2.1: A1 sólo sirve si `om.modifierId` es de verdad lo que
+    // llega en `organizationModifierId`. Se cuenta aquí, con la MISMA vara que
+    // va a usar A2 después, y se cuenta SIEMPRE —no sólo en seco— para que
+    // quede en el parte de cada pasada.
+    //
+    // La pregunta «¿es cedida?» la contesta `brand.ownership_type`, no el
+    // origen de la línea: medirlo por `external_source = 'lastapp'` da 408
+    // líneas donde hay 175, porque mete dentro marcas PROPIAS que entraron con
+    // esa etiqueta en junio. Por eso el recuento vive en SQL
+    // (`modificadores_cobertura_de_codigos`) y no aquí.
+    try {
+      const { data: cobertura, error: covErr } = await sb.rpc(
+        "modificadores_cobertura_de_codigos",
+        { p_account_id: accountId, p_catalog_ids: [...orgModifierById.keys()] },
+      );
+      if (covErr) {
+        report.warnings.push(`cobertura_de_codigos: ${covErr.message}`);
+      } else {
+        report.cobertura_de_codigos = cobertura;
+      }
+    } catch (e) {
+      report.warnings.push(`cobertura_de_codigos: ${String(e)}`);
+    }
+
     // ════════════════ FASE 4: filtrar a "en uso" + cascada ════════════════
 
     // 4.0 Productos componente de COMBO también están "en uso" (aunque no se
@@ -948,6 +978,16 @@ Deno.serve(async (req: Request) => {
           name: optName, price_impact: priceImpact, recipe_item_id: null,
           position: pos++,
           external_source: "lastapp", external_id: om.id, // id del organizationModifier (único en el grupo)
+          // EL CÓDIGO QUE SÍ TRAEN LOS PEDIDOS (A1, 11/09). `om.id` es el
+          // HUECO del extra dentro de esta pregunta; `om.modifierId` es EL
+          // EXTRA, y es lo que llega en `organizationModifierId` cuando alguien
+          // compra. Medido: de 53 referencias de pedidos cedidos en 30 días,
+          // sólo 2 coincidían con algún `external_id`. Con esto pasan a casar
+          // por código en vez de por nombre a ciegas.
+          //
+          // `external_id` NO se toca: sigue siendo la clave del importador, y
+          // es lo único único por pregunta.
+          pos_modifier_id: om.modifierId ?? null,
         });
       }
     }
