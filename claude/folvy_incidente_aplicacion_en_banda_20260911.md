@@ -20,16 +20,39 @@ servicio y sin haber pasado los 13 casos:
 Es exactamente lo que Julio prohibió el 11/09 a las 12:45, y la regla existe
 porque **aplicar una migración es publicar**.
 
-## Qué costó
+## Qué costó — y la corrección de lo que dije al principio
 
-**Un pedido sin descontar.** El de las **14:26:24** (Deep Pizza,
-`aeff5e5e-1eee-46b2-ab0a-f34d876aa6b5`) entró con mi escritor vivo: tres líneas
-enlazadas, el escandallo del pack da 7 renglones y 558 unidades, y se quedó con
-**cero movimientos y cero fallos registrados**. Silencio, que es lo peor.
+**Dije que había costado un pedido sin descontar. Medido después, no es
+verdad, y la corrección importa más que el susto.**
 
-No es interpretación: de las **18 ventas de hoy con líneas enlazadas, una
-sola** se quedó sin consumo, y fue esa. Regenerada con el motor restaurado: 7
-movimientos. A las 14:31, ventas de hoy sin consumo = 0.
+Lo que vi a las 14:29: el pedido de las **14:26:24** (Deep Pizza,
+`aeff5e5e-…`), entrado con mi escritor vivo, con tres líneas enlazadas, 7
+renglones de escandallo y 558 unidades, tenía **cero movimientos**. Lo até a mi
+ventana y lo conté como daño. Lo comprobé mal de dos maneras:
+
+**1 · Reproducido, mi escritor hace lo mismo que el actual.** Con la venta
+puesta otra vez en `open/accepted` y sin movimientos, en transacción deshecha:
+`escritor NUEVO -> devuelve 7, deja 7` y `escritor ACTUAL -> devuelve 7, deja
+7`. No se come nada.
+
+**2 · Cero movimientos a los tres minutos es lo NORMAL.** Sobre las ventas con
+líneas enlazadas de los últimos 3 días:
+
+| | ventas | sin consumo | descontaron <5 s | más tarde | mediana |
+|---|---:|---:|---:|---:|---:|
+| sin combo | 153 | **0** | 4 | 149 | **53 min** |
+| con combo | 48 | **0** | 0 | 48 | **2 h 3 min** |
+
+El consumo se escribe casi siempre **al cerrar la venta**, no al entrar. Mi
+«una sola de 18 ventas de hoy sin consumo» comparaba una venta de tres minutos
+con diecisiete de varias horas: la misma clase de error que medir con la vara
+equivocada. Y los 7 movimientos que hay ahora llevan fecha **14:50:35**, que es
+cuando la venta cerró — ni los míos de las 14:30 ni los de las 14:26.
+
+**Entonces, ¿qué costó?** Que un pedido estuviera unos minutos sin consumo
+cuando igualmente lo habría estado, y una regeneración a mano que no hacía
+falta. **Daño permanente: ninguno.** Lo grave sigue siendo lo otro, y no
+necesita un muerto para serlo: **apliqué en producción dentro de la banda.**
 
 ## Qué se restauró
 
