@@ -221,6 +221,103 @@ it('genera la captura de Aprobar recuento a 1280, antes y después', () => {
           </table>
         </PanelCocina>
       </div>
+
+      {/* ── §3 · APARTAR UNA LÍNEA ────────────────────────────────────── */}
+      <div className="cocina-pagina">
+        <div>
+          <h2 className="text-[15px] font-bold text-cocina-tinta">§3 · La última palabra es la de la persona</h2>
+          <p className="text-[12.5px] text-cocina-tinta-2 mt-1">
+            El 11/09 Julio corrigió a mano cinco productos que estaban en el recuento sin aprobar,
+            y al aprobar se sumaron las dos correcciones: Lima 1.000 → 1.360,7 g.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border-default bg-card overflow-hidden max-w-md">
+          <div className="px-4 py-3 border-b border-border-default font-medium text-text-primary">
+            Ajustar stock · Lima
+          </div>
+          <div className="px-4 py-4 space-y-4">
+            <div className="p-3 rounded-md bg-warning-bg border border-warning/30 text-[13px] text-text-secondary flex items-start gap-2">
+              <span className="text-warning shrink-0">⚠</span>
+              <span>
+                <span className="font-medium text-text-primary">
+                  Este producto está en el recuento INV-00218, sin aprobar.
+                </span>{' '}
+                Johanny Garzón Rodríguez contó 0 g. Si corriges aquí, esa línea del recuento
+                se aparta y no se aplicará: manda lo que dejes tú.
+              </span>
+            </div>
+            <div className="flex justify-between text-[13px] text-text-secondary">
+              <span>El sistema cree que hay</span>
+              <span className="tabular-nums">−360,72 g</span>
+            </div>
+          </div>
+        </div>
+
+        <PanelCocina>
+          <RotuloDePanel derecha="Ordenado por valor">Revisa antes de aprobar · 8</RotuloDePanel>
+          <table className="w-full border-collapse">
+            <Cabecera />
+            <tbody>
+              <tr className="border-b border-cocina-linea-suave">
+                <td className="px-4 py-3 align-top">
+                  <div className="text-[14px] font-bold text-cocina-tinta leading-tight">Lima</div>
+                  <div className="text-[12px] text-cocina-tinta-3 mt-0.5">Johanny Garzón Rodríguez · 12:35</div>
+                </td>
+                <td className="px-3 py-3 align-top text-[12.5px] text-cocina-tinta-2">No queda nada</td>
+                <td className="px-3 py-3 align-top num text-[13px] text-right text-cocina-tinta-2">−360,7{nb}g</td>
+                <td className="px-3 py-3 align-top num text-[15px] text-right font-bold text-cocina-tinta">0{nb}g</td>
+                <td className="px-3 py-3 align-top num text-[13px] text-right text-cocina-rojo">−100 %</td>
+                <td className="px-3 py-3 align-top num text-[13px] text-right">
+                  <span className="text-[11px] text-cocina-tinta-3">sin coste</span>
+                </td>
+                <td className="px-3 py-3 align-top">
+                  <div className="min-w-[150px]">
+                    <div className="text-[12.5px] font-semibold text-cocina-ambar">No se aplica</div>
+                    <div className="text-[11.5px] text-cocina-tinta-2 leading-snug mt-0.5">
+                      Se corrigió a mano el stock de este producto
+                    </div>
+                    <div className="text-[11px] text-cocina-tinta-3 mt-0.5">la apartó Julio</div>
+                  </div>
+                </td>
+                <td className="px-4 py-3 align-top">
+                  <div className="flex gap-2 justify-end flex-wrap">
+                    <BotonCocina peso="fantasma">Volver a aplicarla</BotonCocina>
+                  </div>
+                </td>
+              </tr>
+              <tr className="border-b border-cocina-linea-suave">
+                <td className="px-4 py-3 align-top">
+                  <div className="text-[14px] font-bold text-cocina-tinta leading-tight">Coca-Cola Original Lata</div>
+                  <div className="text-[12px] text-cocina-tinta-3 mt-0.5">Pamela Guzman Velásquez · 20:00</div>
+                </td>
+                <td className="px-3 py-3 align-top text-[12.5px] text-cocina-tinta-2">
+                  <div>4 unidades</div>
+                  <div className="flex gap-1.5 mt-1 flex-wrap">
+                    <PastillaCocina tono="rojo">No cuadró dos veces</PastillaCocina>
+                  </div>
+                </td>
+                <td className="px-3 py-3 align-top num text-[13px] text-right text-cocina-tinta-2">240{nb}ud</td>
+                <td className="px-3 py-3 align-top num text-[15px] text-right font-bold text-cocina-tinta">4{nb}ud</td>
+                <td className="px-3 py-3 align-top num text-[13px] text-right text-cocina-rojo">−98,3 %</td>
+                <td className="px-3 py-3 align-top num text-[13px] text-right text-cocina-tinta-2">139</td>
+                <td className="px-3 py-3 align-top">
+                  <div className="h-9 px-2 inline-flex items-center rounded-cocina border border-cocina-linea
+                                  bg-cocina-superficie text-[12.5px] text-cocina-tinta min-w-[150px]">
+                    Falta y no se sabe por qué
+                  </div>
+                </td>
+                <td className="px-4 py-3 align-top">
+                  <div className="flex gap-2 justify-end flex-wrap">
+                    <BotonCocina peso="relleno">Pedir recuento</BotonCocina>
+                    <BotonCocina peso="fantasma">No aplicar esta línea</BotonCocina>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </PanelCocina>
+      </div>
     </div>,
   )
 

@@ -89,6 +89,9 @@ export interface InventoryCountLine {
   /** La nota de «Otro». Obligatoria cuando el motivo es «otro». */
   reasonNote: string | null
   reasonByName: string | null
+  excludedAt: string | null
+  excludedByName: string | null
+  excludedReason: string | null
   countedByName: string | null
   countedAt: string | null
   /** Lo contó, se le pidió mirarlo otra vez, y le salió lo mismo. */
@@ -319,7 +322,7 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
     .select(`
       id, recipe_item_id, storage_area_id, position, system_qty, counted_qty,
       variance_qty, variance_pct, variance_value, abc_class, within_tolerance, reason_code,
-      reason_note, reason_by_name, needs_review, no_reference, counted_by_name, counted_at, counted_qty_confirmed,
+      reason_note, reason_by_name, excluded_at, excluded_by_name, excluded_reason, needs_review, no_reference, counted_by_name, counted_at, counted_qty_confirmed,
       recount_requested_at, recount_of,
       recipe_item:recipe_item_id (
         name, computed_cost, family_id, needs_review,
@@ -369,6 +372,9 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
       lineNoReference: Boolean(r.no_reference),
       reasonNote: (r.reason_note as string | null) ?? null,
       reasonByName: (r.reason_by_name as string | null) ?? null,
+      excludedAt: (r.excluded_at as string | null) ?? null,
+      excludedByName: (r.excluded_by_name as string | null) ?? null,
+      excludedReason: (r.excluded_reason as string | null) ?? null,
       countedByName: (r.counted_by_name as string | null) ?? null,
       countedAt: (r.counted_at as string | null) ?? null,
       confirmedTwice: r.counted_qty_confirmed != null,
@@ -446,6 +452,58 @@ export interface ApplyCountResult {
  * inicial, no es merma); si no, como 'ajuste' (variación). Cierra la capa 1.
  * Lanza error si hay líneas fuera de tolerancia sin motivo.
  */
+/**
+ * LA LÍNEA DE RECUENTO SIN APROBAR QUE TIENE ESTE ARTÍCULO, SI LA HAY.
+ *
+ * Para avisar ANTES de corregir el stock a mano, no después. El 11/09 cinco
+ * productos de Alcalá acabaron con las dos correcciones sumadas —la de Julio a
+ * las 07:53 y la del recuento, que lleva la hora de cuando se contó— porque
+ * nadie le dijo que ese producto estaba en un recuento pendiente.
+ */
+export interface PendingCountLine {
+  lineId: string
+  countId: string
+  countCode: string | null
+  countStatus: string
+  countedQty: number | null
+  countedAt: string | null
+  countedByName: string | null
+}
+
+export async function getPendingCountLine(
+  accountId: string, locationId: string, recipeItemId: string,
+): Promise<PendingCountLine | null> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('pending_count_line_for_item', {
+    p_account_id: accountId,
+    p_location_id: locationId,
+    p_recipe_item_id: recipeItemId,
+  })
+  if (error) throw new Error(error.message)
+  const r = (Array.isArray(data) ? data[0] : data) as Row | null
+  if (!r) return null
+  return {
+    lineId: r.line_id as string,
+    countId: r.count_id as string,
+    countCode: (r.count_code as string | null) ?? null,
+    countStatus: (r.count_status as string) ?? '',
+    countedQty: r.counted_qty == null ? null : Number(r.counted_qty),
+    countedAt: (r.counted_at as string | null) ?? null,
+    countedByName: (r.counted_by_name as string | null) ?? null,
+  }
+}
+
+/** Apartar una línea del recuento: no se aplicará al aprobar. */
+export async function setCountLineExcluded(
+  lineId: string, reason: string, excluded = true,
+): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('set_count_line_excluded', {
+    p_line_id: lineId, p_reason: reason, p_excluded: excluded,
+  })
+  if (error) throw new Error(error.message)
+}
+
 export async function approveInventoryCount(
   countId: string,
   userId?: string | null,

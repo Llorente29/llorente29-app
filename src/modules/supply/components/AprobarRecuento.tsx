@@ -29,6 +29,7 @@ import { useApp } from '@/context/AppContext'
 import {
   listCountLines,
   approveInventoryCount,
+  setCountLineExcluded,
   type InventoryCount,
   type InventoryCountLine,
 } from '@/modules/supply/services/inventoryCountService'
@@ -148,13 +149,15 @@ export default function AprobarRecuento({
 
   // Las que se pueden aprobar de una vez: las que cuadran, más las de revisar
   // que YA tienen motivo. El botón cuenta lo que va a hacer, no lo que hay.
+  // Una línea apartada no se aplica y no pide motivo: no cuenta para ninguno
+  // de los tres números del pie.
   const aprobables = useMemo(() => {
     if (!review) return 0
-    return review.counts.ok + review.toReview.filter(r => r.line.reasonCode).length
+    return review.counts.ok + review.toReview.filter(r => r.line.reasonCode && !r.line.excludedAt).length
   }, [review])
 
   const sinMotivo = useMemo(
-    () => review ? review.toReview.filter(r => !r.line.reasonCode).length : 0,
+    () => review ? review.toReview.filter(r => !r.line.reasonCode && !r.line.excludedAt).length : 0,
     [review],
   )
 
@@ -186,7 +189,7 @@ export default function AprobarRecuento({
   }, [review, soloLectura])
 
   const paraRecontar = useMemo(
-    () => review ? review.toReview.filter(r => !r.line.recountRequestedAt).length : 0,
+    () => review ? review.toReview.filter(r => !r.line.recountRequestedAt && !r.line.excludedAt).length : 0,
     [review],
   )
 
@@ -210,6 +213,50 @@ export default function AprobarRecuento({
       recargar()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar el motivo.')
+    } finally {
+      setBusyLine(null)
+    }
+  }
+
+  /**
+   * APARTAR UNA LÍNEA. No se aplica al aprobar, y se dice por qué.
+   *
+   * Hasta el 11/09 sólo se podía aprobar todo: pedir un recuento no excluía
+   * nada —`apply_inventory_count` miraba sólo `counted_qty IS NOT NULL`— así
+   * que una cifra que nadie se creía entraba igual.
+   */
+  async function onApartar(r: ReviewLine) {
+    const motivo = window.prompt(
+      `No aplicar la línea de ${r.line.itemName}.\n\n`
+      + '¿Por qué? Se guarda con tu nombre y se ve en la pantalla del recuento.',
+      '')
+    if (motivo === null) return
+    if (!motivo.trim()) {
+      setError('Apartar una línea necesita un motivo. Sin él, mañana nadie sabrá por qué no se aplicó.')
+      return
+    }
+    setBusyLine(r.line.id)
+    setError(null)
+    try {
+      await setCountLineExcluded(r.line.id, motivo.trim())
+      setFlash(`${r.line.itemName} queda fuera de este recuento: «${motivo.trim()}». No se aplicará al aprobar.`)
+      recargar()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo apartar la línea.')
+    } finally {
+      setBusyLine(null)
+    }
+  }
+
+  async function onDesapartar(r: ReviewLine) {
+    setBusyLine(r.line.id)
+    setError(null)
+    try {
+      await setCountLineExcluded(r.line.id, '', false)
+      setFlash(`${r.line.itemName} vuelve a entrar en el recuento.`)
+      recargar()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo devolver la línea.')
     } finally {
       setBusyLine(null)
     }
@@ -442,6 +489,8 @@ export default function AprobarRecuento({
                   soloLectura={soloLectura}
                   onMotivo={onMotivo}
                   onRecontar={onRecontar}
+                  onApartar={onApartar}
+                  onDesapartar={onDesapartar}
                 />
               ))}
             </tbody>
@@ -553,13 +602,15 @@ function cuandoLargo(iso: string): string {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function FilaRevision({
-  r, busy, soloLectura, onMotivo, onRecontar,
+  r, busy, soloLectura, onMotivo, onRecontar, onApartar, onDesapartar,
 }: {
   r: ReviewLine
   busy: boolean
   soloLectura: boolean
   onMotivo: (r: ReviewLine, code: string, note: string | null) => void
   onRecontar: (r: ReviewLine) => void
+  onApartar: (r: ReviewLine) => void
+  onDesapartar: (r: ReviewLine) => void
 }) {
   const l = r.line
   const [nota, setNota] = useState(l.reasonNote ?? '')
@@ -603,7 +654,15 @@ function FilaRevision({
             : nfEur.format(Math.abs(Math.round(l.varianceValue)))}
         </td>
         <td className="px-3 py-3 align-top">
-          {soloLectura ? (
+          {l.excludedAt ? (
+            <div className="min-w-[150px]">
+              <div className="text-[12.5px] font-semibold text-cocina-ambar">No se aplica</div>
+              <div className="text-[11.5px] text-cocina-tinta-2 leading-snug mt-0.5">{l.excludedReason}</div>
+              {l.excludedByName && (
+                <div className="text-[11px] text-cocina-tinta-3 mt-0.5">la apartó {l.excludedByName}</div>
+              )}
+            </div>
+          ) : soloLectura ? (
             <MotivoPuesto l={l} />
           ) : (
           <>
@@ -638,15 +697,26 @@ function FilaRevision({
         </td>
         <td className="px-4 py-3 align-top">
           {!soloLectura && (
-          <div className="flex gap-2 justify-end">
-            <BotonCocina
-              peso={contradice ? 'relleno' : 'borde'}
-              disabled={busy || Boolean(l.recountRequestedAt)}
-              onClick={() => onRecontar(r)}
-            >
-              {busy ? <Loader2 size={13} className="animate-spin" /> : null}
-              {l.recountRequestedAt ? 'Pedido' : 'Pedir recuento'}
-            </BotonCocina>
+          <div className="flex gap-2 justify-end flex-wrap">
+            {l.excludedAt ? (
+              <BotonCocina peso="fantasma" disabled={busy} onClick={() => onDesapartar(r)}>
+                Volver a aplicarla
+              </BotonCocina>
+            ) : (
+              <>
+                <BotonCocina
+                  peso={contradice ? 'relleno' : 'borde'}
+                  disabled={busy || Boolean(l.recountRequestedAt)}
+                  onClick={() => onRecontar(r)}
+                >
+                  {busy ? <Loader2 size={13} className="animate-spin" /> : null}
+                  {l.recountRequestedAt ? 'Pedido' : 'Pedir recuento'}
+                </BotonCocina>
+                <BotonCocina peso="fantasma" disabled={busy} onClick={() => onApartar(r)}>
+                  No aplicar esta línea
+                </BotonCocina>
+              </>
+            )}
           </div>
           )}
         </td>

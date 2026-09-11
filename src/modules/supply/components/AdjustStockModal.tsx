@@ -9,12 +9,15 @@
 // trabaja sobre un local concreto. No hay selector de local (sería error en cocina).
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, ArrowUp, ArrowDown, Loader2, Check } from 'lucide-react'
+import { X, ArrowUp, ArrowDown, Loader2, Check, AlertTriangle } from 'lucide-react'
 import { listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import type { PurchaseFormat } from '@/types/kitchen'
 import {
   registerAdjustment, ADJUST_REASONS, type AdjustmentResult,
 } from '@/modules/supply/services/stockAdjustmentService'
+import {
+  getPendingCountLine, type PendingCountLine,
+} from '@/modules/supply/services/inventoryCountService'
 
 const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 })
 const nf2 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 })
@@ -39,6 +42,7 @@ export default function AdjustStockModal({
 }) {
   const [formats, setFormats] = useState<PurchaseFormat[]>([])
   const [loading, setLoading] = useState(true)
+  const [pendiente, setPendiente] = useState<PendingCountLine | null>(null)
   const [countInput, setCountInput] = useState('')
   const [unitSel, setUnitSel] = useState<string>('base')   // 'base' | format.id
   const [reason, setReason] = useState('')
@@ -67,6 +71,17 @@ export default function AdjustStockModal({
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [target.recipeItemId])
+
+  // ¿ESTE PRODUCTO ESTÁ EN UN RECUENTO SIN APROBAR? Se pregunta al abrir, no
+  // al guardar: el aviso sirve para decidir, y después de escribir ya no hay
+  // nada que decidir (regla 8, el botón dice lo que pasa antes de pulsarlo).
+  useEffect(() => {
+    let cancel = false
+    getPendingCountLine(accountId, locationId, target.recipeItemId)
+      .then(p => { if (!cancel) setPendiente(p) })
+      .catch(() => { if (!cancel) setPendiente(null) })
+    return () => { cancel = true }
+  }, [accountId, locationId, target.recipeItemId])
 
   const selFormat = useMemo(
     () => (unitSel === 'base' ? null : formats.find(f => f.id === unitSel) ?? null),
@@ -117,6 +132,21 @@ export default function AdjustStockModal({
         </div>
 
         <div className="px-4 py-4 space-y-4">
+          {pendiente && (
+            <div className="p-3 rounded-md bg-warning-bg border border-warning/30 text-[13px] text-text-secondary flex items-start gap-2">
+              <AlertTriangle size={15} className="text-warning shrink-0 mt-0.5" />
+              <span>
+                <span className="font-medium text-text-primary">
+                  Este producto está en el recuento {pendiente.countCode ?? 'en curso'}, sin aprobar.
+                </span>{' '}
+                {pendiente.countedByName && pendiente.countedQty != null
+                  ? <>{pendiente.countedByName} contó {nf2.format(pendiente.countedQty)} {unit}. </>
+                  : null}
+                Si corriges aquí, esa línea del recuento se aparta y no se aplicará: manda lo que dejes tú.
+              </span>
+            </div>
+          )}
+
           <div className="flex justify-between text-[13px] text-text-secondary">
             <span>El sistema cree que hay</span>
             <span className="tabular-nums">{curMain}{selFormat ? ` · ${nf2.format(target.currentQtyBase)} ${unit}` : ''}</span>
