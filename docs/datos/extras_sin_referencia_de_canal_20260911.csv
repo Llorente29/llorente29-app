@@ -1,0 +1,32 @@
+extra,marca,grupo,opcion_id,grupo_id
+"Si, con patatas","Lovers Burgers","¿Quieres acompañar con unas patatas?",24ecabc0-f7c2-40ee-86ac-183042856fbe,c384d6aa-001a-4f44-9b71-f38aec6fe612
+"Quiero dos discos de carne","Lovers Burgers","¿Quieres dos discos de carne o solo uno?",2d9ed0e0-df12-4076-9e1e-e6f3e4700757,bdd75b5f-3dc8-417d-8de2-e77c89846b33
+"Solo un disco de carne","Lovers Burgers","¿Quieres dos discos de carne o solo uno?",2764be9b-bcc2-41e9-a1f6-c84f3f3618eb,bdd75b5f-3dc8-417d-8de2-e77c89846b33
+"Con Pepinillos","Lovers Burgers","¿Quieres pepinillos?",f3bca643-43f0-47fe-954a-ca9b188f3803,1c263ee7-9254-4034-91bb-92631ca78d56
+"Sin pepinillos","Lovers Burgers","¿Quieres pepinillos?",af08c795-e879-4ac9-81b7-f79854e625f8,1c263ee7-9254-4034-91bb-92631ca78d56
+"Nueva opción","Milanesa House","Nuevo grupo",47f0d443-88f0-4d48-a28b-910cf20e258f,ba0d1650-1b82-40f4-b66f-9651166495ab
+"Nueva opción","Milanesa House","Nuevo grupo",ae0f4d9e-19b5-45ef-ba9a-ae288a23834e,ba0d1650-1b82-40f4-b66f-9651166495ab
+"extra carne mixta","The Urban Kebab","Algun extra en tu pita?",1b51e974-34cb-47bd-9c15-d32c94422226,ea65dcb4-5bf1-47ef-bf99-6346acde4c52
+"extra carne mixta","The Urban Kebab","Algun extra en tu pita?",f3ad550b-f0c7-4a29-94f7-0dab54ff8c54,d9d7e1b4-c51f-405c-9bdd-4b61a332fb6a
+"extra carne mixta","The Urban Kebab","Algun extra en tu pita?",447c6f2b-3f12-4559-a8d4-7567d91fd310,c7261711-b6e7-42bb-b942-a45305337b2d
+"extra carne mixta","The Urban Kebab","Algun extra en tu pita?",55c72240-f9d9-4319-bcdf-340a0f14ebbd,ea87f8cb-1c36-4cda-a301-cd68b404ac94
+"Salsa Harissa (Picante)","The Urban Kebab","Algun extra en tu pita?",2c88007c-b09d-41cf-95be-f769c74aac59,d9d7e1b4-c51f-405c-9bdd-4b61a332fb6a
+"Salsa Harissa (Picante)","The Urban Kebab","Algun extra en tu pita?",70092e0f-2f44-479b-a2a6-822b13a29f98,ea87f8cb-1c36-4cda-a301-cd68b404ac94
+"Salsa Harissa (Picante)","The Urban Kebab","Algun extra en tu pita?",ad38d1a2-b2b2-41bb-bca8-cab25c97a764,c7261711-b6e7-42bb-b942-a45305337b2d
+"Salsa Harissa (Picante)","The Urban Kebab","Algun extra en tu pita?",fcef308f-c57d-4c3f-ab6d-a9e6ef51da1d,ea65dcb4-5bf1-47ef-bf99-6346acde4c52
+"Salsa Tzatziki (Recomendada)","The Urban Kebab","Algun extra en tu pita?",86568a83-9275-4d6f-bf0e-251b33edd85e,c7261711-b6e7-42bb-b942-a45305337b2d
+"Salsa Tzatziki (Recomendada)","The Urban Kebab","Algun extra en tu pita?",324c8e9c-e971-4ea0-96a5-99819f959488,d9d7e1b4-c51f-405c-9bdd-4b61a332fb6a
+"Salsa Tzatziki (Recomendada)","The Urban Kebab","Algun extra en tu pita?",6865a9c2-417c-4451-985c-2a1eb3ce3436,ea87f8cb-1c36-4cda-a301-cd68b404ac94
+"Salsa Tzatziki (Recomendada)","The Urban Kebab","Algun extra en tu pita?",ff4e5011-5c2f-4a3b-8ee8-ec05c7a1475b,ea65dcb4-5bf1-47ef-bf99-6346acde4c52
+"Salsa Yogur","The Urban Kebab","Algun extra en tu pita?",b43e5327-1265-4b85-9a6a-3a252d2af046,d9d7e1b4-c51f-405c-9bdd-4b61a332fb6a
+"Salsa Yogur","The Urban Kebab","Algun extra en tu pita?",a91d9493-9839-4db4-a704-856ad0ef8ff2,ea87f8cb-1c36-4cda-a301-cd68b404ac94
+"Salsa Yogur","The Urban Kebab","Algun extra en tu pita?",49781d95-8870-47da-9ca4-76d19794c351,ea65dcb4-5bf1-47ef-bf99-6346acde4c52
+"Salsa Yogur","The Urban Kebab","Algun extra en tu pita?",fef94329-4f75-45d0-9906-b603cb01af9c,c7261711-b6e7-42bb-b942-a45305337b2d
+"Sin Salsa Harisa","The Urban Kebab","Quieres quitar aguna salsa de tu kebab?",da576002-3e10-4611-b83a-6f2a63d8f8fd,11428ed2-7111-4f46-b2d7-6446db265dd5
+"Sin Salsa Harisa","The Urban Kebab","Quieres quitar aguna salsa de tu kebab?",663a1c42-6e2c-4c4b-820c-f68b0771f039,b88d3252-0a83-4af5-85a9-42ffbf19f29d
+"Sin Salsa Harisa","The Urban Kebab","Quieres quitar aguna salsa de tu kebab?",4513962b-8c09-4980-ae2f-510d1da0dd2c,3cf0eb67-44b1-4b78-ada3-73c72139c986
+"Sin Salsa Harisa","The Urban Kebab","Quieres quitar aguna salsa de tu kebab?",cf865988-839e-451e-96da-dbac44dbcf24,6d8dcec6-4193-4410-80ff-e4f3d9da2587
+"Sin Salsa Yogur","The Urban Kebab","Quieres quitar aguna salsa de tu kebab?",8fd01089-354c-48cb-94ef-e73635c82777,b88d3252-0a83-4af5-85a9-42ffbf19f29d
+"Sin Salsa Yogur","The Urban Kebab","Quieres quitar aguna salsa de tu kebab?",034e6bdc-01d2-49ee-8922-6ef8a9119170,3cf0eb67-44b1-4b78-ada3-73c72139c986
+"Sin Salsa Yogur","The Urban Kebab","Quieres quitar aguna salsa de tu kebab?",1d6db758-3a87-40f5-a970-5a43dd971f1c,11428ed2-7111-4f46-b2d7-6446db265dd5
+"Sin Salsa Yogur","The Urban Kebab","Quieres quitar aguna salsa de tu kebab?",7d385693-3d04-4467-a436-02d85f856ce7,6d8dcec6-4193-4410-80ff-e4f3d9da2587
