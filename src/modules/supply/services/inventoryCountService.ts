@@ -474,7 +474,13 @@ export async function getPendingCountLine(
   accountId: string, locationId: string, recipeItemId: string,
 ): Promise<PendingCountLine | null> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('pending_count_line_for_item', {
+  // RPC nueva: todavía no está en los tipos generados (`npm run types:gen`
+  // necesita el CLI de Supabase, que aquí no corre). Se castea igual que en
+  // `countApprovalService.getLinesRequiringReason`. 11/09/2026: sin esto el
+  // `tsc -b` del build falla aunque `tsc --noEmit` pase.
+  const { data, error } = await (supabase! as unknown as {
+    rpc: (f: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  }).rpc('pending_count_line_for_item', {
     p_account_id: accountId,
     p_location_id: locationId,
     p_recipe_item_id: recipeItemId,
@@ -498,7 +504,9 @@ export async function setCountLineExcluded(
   lineId: string, reason: string, excluded = true,
 ): Promise<void> {
   requireSupabase()
-  const { error } = await supabase!.rpc('set_count_line_excluded', {
+  const { error } = await (supabase! as unknown as {
+    rpc: (f: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  }).rpc('set_count_line_excluded', {
     p_line_id: lineId, p_reason: reason, p_excluded: excluded,
   })
   if (error) throw new Error(error.message)

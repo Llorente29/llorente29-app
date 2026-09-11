@@ -22,8 +22,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { CircleOff, Plus, RefreshCw, Loader2 } from 'lucide-react'
 import {
   listSoldOut, searchProducts, previewScopeBulk, setProductAvailability, setProductsAvailabilityBulk,
-  type SoldOutRow,
+  listSoldOutExtras, setExtraAvailability,
+  type SoldOutRow, type ExtraSoldOutRow,
 } from './services/tabletAvailabilityService'
+import AgotarExtraModal from './AgotarExtraModal'
 import AvailabilityBoard from '@/modules/kds/components/AvailabilityBoard'
 import AgotarProductoModal, { type AgotarProductoAdapter } from '@/modules/kds/components/AgotarProductoModal'
 
@@ -38,11 +40,15 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [showAgotar, setShowAgotar] = useState(false)
+  const [extras, setExtras] = useState<ExtraSoldOutRow[]>([])
+  const [showAgotarExtra, setShowAgotarExtra] = useState(false)
+  const [flash, setFlash] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
-      const data = await listSoldOut(token)
+      const [data, ex] = await Promise.all([listSoldOut(token), listSoldOutExtras(token)])
       setRows(data)
+      setExtras(ex)
       setError(null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando agotados')
@@ -61,6 +67,20 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
       await refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo reactivar')
+    } finally {
+      setBusyId(null)
+    }
+  }, [token, refresh])
+
+  const handleReactivarExtra = useCallback(async (row: ExtraSoldOutRow) => {
+    if (!row.optionId) return
+    setBusyId(row.clave)
+    try {
+      const r = await setExtraAvailability(token, row.optionId, true)
+      setFlash(`${row.name} vuelve a estar disponible en ${r.opciones} ${r.opciones === 1 ? 'sitio' : 'sitios'}.`)
+      await refresh()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo reactivar el extra')
     } finally {
       setBusyId(null)
     }
@@ -102,9 +122,21 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
           >
             <Plus size={18} /> Agotar producto
           </button>
+          <button
+            onClick={() => setShowAgotarExtra(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-900 ring-1 ring-amber-500/60 text-amber-300 font-bold hover:bg-zinc-800"
+          >
+            <Plus size={18} /> Agotar extra
+          </button>
         </div>
       </div>
 
+      {flash && (
+        <div className="mx-5 mt-3 rounded-lg bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/40 px-3 py-2 text-sm shrink-0 flex items-start justify-between gap-3">
+          <span>{flash}</span>
+          <button type="button" onClick={() => setFlash(null)} className="shrink-0 opacity-70">✕</button>
+        </div>
+      )}
       {error && (
         <div className="mx-5 mt-3 rounded-lg bg-red-500/15 text-red-200 ring-1 ring-red-500/40 px-3 py-2 text-sm shrink-0">
           {error}
@@ -181,7 +213,62 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
             </div>
           )}
         </AvailabilityBoard>
+
+        {/* ── EXTRAS AGOTADOS ──────────────────────────────────────────────
+            Van en su propia sección y no mezclados con los productos: en la
+            cocina un extra y un plato no se agotan por lo mismo ni se
+            reactivan a la vez. Se agrupan por NOMBRE, que es como los ve
+            quien cocina — «Salsa Yogur» es una salsa, no trece. */}
+        <section className="mt-6">
+          <div className="flex items-baseline gap-3 mb-3">
+            <h3 className="text-base font-bold text-zinc-200">Extras agotados ahora</h3>
+            <span className="text-sm text-zinc-500">{loading ? '' : extras.length}</span>
+          </div>
+          {extras.length === 0 ? (
+            <div className="rounded-xl bg-zinc-900/60 ring-1 ring-zinc-800 px-4 py-6 text-center text-zinc-600">
+              Ningún extra agotado en {locationName}.
+            </div>
+          ) : (
+            <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+              {extras.map((ex) => (
+                <div key={ex.clave} className="bg-zinc-900 ring-1 ring-zinc-800 rounded-xl p-3 flex flex-col gap-2">
+                  <div>
+                    <p className="font-semibold text-zinc-100">{ex.name}</p>
+                    <p className="text-xs text-zinc-500">
+                      Agotado en {ex.agotadas} de {ex.opciones} {ex.opciones === 1 ? 'sitio' : 'sitios'}
+                      {' · '}{ex.marcas} {ex.marcas === 1 ? 'marca' : 'marcas'}
+                    </p>
+                    {/* Lo que NO se ha podido agotar en el canal se dice aquí,
+                        no en una nota al pie (regla 7). */}
+                    {ex.sinRef > 0 && (
+                      <p className="text-xs text-amber-400 mt-0.5">
+                        {ex.sinRef} sin referencia de canal: siguen vendiéndose fuera
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => void handleReactivarExtra(ex)}
+                    disabled={busyId === ex.clave || !ex.optionId}
+                    className="w-full py-2.5 rounded-lg bg-success text-white font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {busyId === ex.clave ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    Reactivar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
+
+      {showAgotarExtra && (
+        <AgotarExtraModal
+          token={token}
+          locationName={locationName}
+          onClose={() => setShowAgotarExtra(false)}
+          onDone={(msg) => { setShowAgotarExtra(false); setFlash(msg); void refresh() }}
+        />
+      )}
 
       {showAgotar && (
         <AgotarProductoModal

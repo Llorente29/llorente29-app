@@ -225,3 +225,114 @@ export async function setProductsAvailabilityBulk(
     failed,
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXTRAS (11/09/2026)
+//
+// Un extra es lo que el cliente añade aparte: una salsa, unas tiras de pollo.
+// Hasta hoy sólo se podían agotar desde la oficina, y en cocina —que es quien
+// se queda sin salsa de yogur a las nueve de la noche— no había forma.
+//
+// SE AGRUPAN POR NOMBRE, no por `external_id`. Medido en Foodint: 241 opciones,
+// 210 con ref, y 210 refs distintas — es decir, la ref no agrupa nada. Pero 52
+// de 126 nombres tienen más de una copia, y «Salsa Yogur» tiene TRECE. Agotar
+// una sola dejaría las otras doce vendiéndose.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ExtraSoldOutRow {
+  clave: string
+  name: string
+  /** Una cualquiera del grupo CON referencia: el servidor resuelve el resto. */
+  optionId: string | null
+  /** Cuántas copias del extra hay en la cuenta, y cuántas están agotadas. */
+  opciones: number
+  agotadas: number
+  marcas: number
+  /** Copias SIN referencia de canal: no se pueden agotar en la plataforma. */
+  sinRef: number
+  reason: string
+  availableUntil: string | null
+  setAt: string | null
+}
+
+export interface ExtraPick {
+  clave: string
+  name: string
+  /** Una cualquiera del grupo: el servidor agota TODAS las del mismo nombre. */
+  optionId: string
+  opciones: number
+  marcas: number
+  conRef: number
+  sinRef: number
+}
+
+/** Extras agotados ahora mismo en el local del dispositivo. */
+export async function listSoldOutExtras(token: string): Promise<ExtraSoldOutRow[]> {
+  const data = await rpc<Record<string, unknown>[]>('extras_availability_panel_by_token', {
+    p_device_token: token,
+  })
+  return (data ?? []).map((r) => ({
+    clave: r.clave as string,
+    name: (r.name as string) ?? '(extra)',
+    optionId: (r.option_id as string) ?? null,
+    opciones: Number(r.opciones ?? 0),
+    agotadas: Number(r.agotadas ?? 0),
+    marcas: Number(r.marcas ?? 0),
+    sinRef: Number(r.sin_ref ?? 0),
+    reason: (r.reason as string) ?? 'manual',
+    availableUntil: (r.available_until as string) ?? null,
+    setAt: (r.set_at as string) ?? null,
+  }))
+}
+
+/** Busca extras de la carta, agrupados por nombre. */
+export async function searchExtras(token: string, query: string): Promise<ExtraPick[]> {
+  const term = query.trim()
+  if (term.length < 2) return []
+  const data = await rpc<Record<string, unknown>[]>('search_extras_by_token', {
+    p_device_token: token, p_query: term,
+  })
+  return (data ?? []).map((r) => ({
+    clave: r.clave as string,
+    name: (r.name as string) ?? '(extra)',
+    optionId: r.option_id as string,
+    opciones: Number(r.opciones ?? 0),
+    marcas: Number(r.marcas ?? 0),
+    conRef: Number(r.con_ref ?? 0),
+    sinRef: Number(r.sin_ref ?? 0),
+  }))
+}
+
+export interface ExtraAvailabilityResult {
+  /** Copias agotadas o reactivadas de verdad (las que tienen ref de canal). */
+  opciones: number
+  refs: number
+  /** Copias que se quedan fuera por no tener ref. Se dice, no se esconde. */
+  sinRef: number
+  dispatched: boolean
+}
+
+/** Agota o reactiva un extra — y con él, todas sus copias del mismo nombre. */
+export async function setExtraAvailability(
+  token: string,
+  optionId: string,
+  isAvailable: boolean,
+  reason: 'manual' | 'stock_out' = 'manual',
+  availableUntil: string | null = null,
+  reasonCode: string | null = null,
+): Promise<ExtraAvailabilityResult> {
+  const d = await rpc<Record<string, unknown>>('set_modifier_option_availability_by_token', {
+    p_device_token: token,
+    p_option_id: optionId,
+    p_is_available: isAvailable,
+    p_reason: reason,
+    p_available_until: availableUntil,
+    p_reason_code: reasonCode,
+  })
+  return {
+    opciones: Number(d?.opciones ?? 0),
+    refs: Number(d?.refs ?? 0),
+    sinRef: Number(d?.sin_ref ?? 0),
+    dispatched: d?.dispatched === true,
+  }
+}
