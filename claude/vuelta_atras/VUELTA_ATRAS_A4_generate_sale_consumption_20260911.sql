@@ -6,8 +6,8 @@
 -- se pega en el SQL Editor y se acabó.
 --
 -- HUELLA DE DESTINO: md5(prosrc) = 97a3533602349f6cebb7f55f3ab15fc3 · 3.595 bytes
--- Copiada byte a byte del `pg_proc.prosrc` VIVO el 11/09/2026 a las 14:25
--- (Madrid) y verificada aparte: el fichero da esa huella exacta, así que lo
+-- Copiada byte a byte del `pg_proc.prosrc` VIVO el 11/09/2026 a las 13:30
+-- (Madrid, reloj de la base) y verificada aparte: el fichero da esa huella exacta, así que lo
 -- que hay aquí es lo que está corriendo, no lo que dice el repositorio.
 --
 -- La firma no cambia (`uuid` → `integer`), así que `CREATE OR REPLACE` basta y

@@ -1,6 +1,6 @@
 # RECON de A4 · quién escribe el consumo, y qué encontré antes de tocarlo
 
-**11/09/2026, 13:40 (Madrid).** Medido contra producción, sin escribir nada.
+**11/09/2026, 13:25 (Madrid, reloj de la base).** Medido contra producción, sin escribir nada.
 Esto es lo que hay que saber ANTES de escribir A4, y hay dos cosas que
 contradicen lo que dábamos por hecho.
 

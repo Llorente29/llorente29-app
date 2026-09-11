@@ -1,6 +1,6 @@
 # A4 · los casos del ensayo, ESCRITOS ANTES DEL CÓDIGO
 
-**11/09/2026, 14:20 (Madrid).** Regla 32: un cambio de coste o de stock se
+**11/09/2026, 13:30 (Madrid, reloj de la base).** Regla 32: un cambio de coste o de stock se
 ensaya por sus CAMINOS, no por su fórmula. Y lo de A3: antes de ejecutar el
 ensayo, escribir qué casos cubre la muestra y **forzarlos si no salen solos**.
 Esta lista va primero, como pidió Julio, y el código se escribe contra ella.
