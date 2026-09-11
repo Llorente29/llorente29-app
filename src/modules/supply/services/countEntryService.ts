@@ -120,6 +120,20 @@ export async function saveCountLine(
   /** Confirmación expresa de una cantidad que la red de cordura rechazó. Vale
    *  para ESE total y sólo para ése: el servidor exige que coincida. */
   confirmTotal?: number,
+  /**
+   * QUIÉN CONTÓ, cuando no es quien teclea (p21, «Corregir ahora»). La oficina
+   * llama a cocina, cocina cuenta, la oficina apunta — y la línea tiene que
+   * quedar a nombre de quien contó, no de quien tecleó.
+   *
+   * Sin esto —el caso del móvil, y el que había hasta hoy— quien cuenta y
+   * quien teclea son la misma persona y el servidor la deduce de la sesión.
+   *
+   * El servidor NO se fía: comprueba que el empleado sea de la cuenta Y del
+   * local del recuento. Mandar a alguien de otro local da error, con nombre.
+   */
+  countedBy?: string,
+  /** 'tablet' (lo tecleó quien contó) o 'telefono' (lo dictó a la oficina). */
+  source?: 'tablet' | 'telefono',
 ): Promise<SaveCountLineResult> {
   requireSupabase()
   if (entries.length === 0) {
@@ -129,6 +143,8 @@ export async function saveCountLine(
     p_line_id: lineId,
     p_entries: entries.map(toPayload),
     p_confirm: confirmTotal ?? null,
+    p_counted_by: countedBy ?? null,
+    p_source: source ?? null,
   })
   if (error) {
     const code = (error as { code?: string }).code
@@ -168,6 +184,12 @@ export interface CountEntry {
   method: 'formato' | 'peso' | 'fraccion' | 'cero'
   attempt: number
   createdAt: string
+  /** Quien contó. Sellado por el servidor al guardar. */
+  countedByName: string | null
+  /** Quien lo APUNTÓ, cuando no es quien contó. NULL si son la misma persona. */
+  recordedByName: string | null
+  /** 'tablet' = lo tecleó quien contó. 'telefono' = lo dictó a la oficina. */
+  source: 'tablet' | 'telefono'
 }
 
 type Row = Record<string, unknown>
@@ -180,6 +202,7 @@ export async function listEntriesByCount(countId: string): Promise<Map<string, C
   })
     .from('inventory_count_entry')
     .select('id, line_id, format_id, qty, fraction, qty_in_base, method, attempt, created_at, ' +
+            'counted_by_name, recorded_by_name, source, ' +
             'inventory_count_line!inner(inventory_count_id), ' +
             'recipe_item_purchase_format(name, qty_in_base)')
     .eq('inventory_count_line.inventory_count_id', countId)
@@ -202,6 +225,9 @@ export async function listEntriesByCount(countId: string): Promise<Map<string, C
       method: r.method as CountEntry['method'],
       attempt: Number(r.attempt ?? 1),
       createdAt: r.created_at as string,
+      countedByName: (r.counted_by_name as string | null) ?? null,
+      recordedByName: (r.recorded_by_name as string | null) ?? null,
+      source: r.source === 'telefono' ? 'telefono' : 'tablet',
     }
     out.set(e.lineId, [...(out.get(e.lineId) ?? []), e])
   }
@@ -253,6 +279,48 @@ export function describirEntradas(entries: CountEntry[], baseUnit: string | null
     }
   })
   return trozos.join(' + ')
+}
+
+/**
+ * LA HISTORIA DE LA LÍNEA, un intento por línea de texto.
+ *
+ * «Pamela contó 4 ud a las 20:00» · «Johanny recontó 236 ud a las 08:10, por
+ * teléfono, apuntado por Julio». Julio lo pidió con esas palabras el 11/09: lo
+ * anterior no se borra, y la pantalla enseña las dos cosas.
+ *
+ * REGLA 30 · esto NO inventa nombres. Los intentos de antes del 11/09/2026 no
+ * guardaban `counted_by_name` en la entrada, y ahí se escribe «alguien» —que es
+ * lo que se sabe— en vez de colocar el nombre de quien firmó la línea, que
+ * puede no ser quien contó ese intento. Un nombre supuesto vale menos que el
+ * hueco.
+ */
+export interface IntentoContado {
+  attempt: number
+  /** El último es el que vale; los anteriores van tachados. */
+  esElVigente: boolean
+  qtyInBase: number
+  quien: string | null
+  cuando: string | null
+  porTelefono: boolean
+  apuntadoPor: string | null
+}
+
+export function historiaDeLaLinea(entries: CountEntry[]): IntentoContado[] {
+  if (entries.length === 0) return []
+  const ultimo = Math.max(...entries.map(e => e.attempt))
+  const porIntento = new Map<number, CountEntry[]>()
+  for (const e of entries) porIntento.set(e.attempt, [...(porIntento.get(e.attempt) ?? []), e])
+  return [...porIntento.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([attempt, es]) => ({
+      attempt,
+      esElVigente: attempt === ultimo,
+      qtyInBase: es.reduce((t, e) => t + e.qtyInBase, 0),
+      quien: es.find(e => e.countedByName)?.countedByName ?? null,
+      cuando: es.map(e => e.createdAt).sort().slice(-1)[0] ?? null,
+      porTelefono: es.some(e => e.source === 'telefono'),
+      apuntadoPor: es.find(e => e.recordedByName)?.recordedByName ?? null,
+    }))
 }
 
 /** ¿Hay algo estimado a ojo en el último intento? Manda la pastilla «A ojo». */

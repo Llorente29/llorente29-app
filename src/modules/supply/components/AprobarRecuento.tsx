@@ -46,7 +46,8 @@ import {
   type CountReviewThresholds,
   type HechosDeLaAprobacion,
 } from '@/modules/supply/services/countApprovalService'
-import { requestRecount } from '@/modules/supply/services/countEntryService'
+import { requestRecount, historiaDeLaLinea } from '@/modules/supply/services/countEntryService'
+import CorregirAhoraModal from '@/modules/supply/components/CorregirAhoraModal'
 import {
   PanelCocina, RotuloDePanel, CifraCocina, PastillaCocina, BotonCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
@@ -92,7 +93,7 @@ export default function AprobarRecuento({
   onBack: () => void
   onApproved: () => void
 }) {
-  const { authUserId, userProfile } = useApp()
+  const { authUserId, userProfile, staff } = useApp()
   const [lines, setLines] = useState<InventoryCountLine[]>([])
   const [review, setReview] = useState<CountReview | null>(null)
   const [th, setTh] = useState<CountReviewThresholds>(UMBRALES_POR_DEFECTO)
@@ -104,6 +105,28 @@ export default function AprobarRecuento({
   const [verCuadran, setVerCuadran] = useState(false)
   const [hechos, setHechos] = useState<HechosDeLaAprobacion | null>(null)
   const [tick, setTick] = useState(0)
+  /** La línea que se está corrigiendo por teléfono. Null = nadie al teléfono. */
+  const [corrigiendo, setCorrigiendo] = useState<ReviewLine | null>(null)
+
+  /**
+   * LA PLANTILLA DEL LOCAL, con el MISMO criterio que usa «Pedir recuento»
+   * para elegir a quién se le asigna: activo, y del local principal o con el
+   * local entre los asignados.
+   *
+   * Es a propósito el mismo que comprueba `save_count_line` en la base — allí
+   * por `location_id` o `assigned_locations` y por cuenta (regla 9 un piso más
+   * abajo). Si las dos listas no coincidieran, la pantalla ofrecería nombres
+   * que el servidor rechaza, que es la peor forma de equivocarse: una que sólo
+   * se ve al pulsar.
+   */
+  const plantilla = useMemo(
+    () => staff
+      .filter(e => e.active && (e.locationId === count.locationId
+                                || (e.assignedLocations || []).includes(count.locationId)))
+      .map(e => ({ id: e.id, name: e.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    [staff, count.locationId],
+  )
 
   const recargar = useCallback(() => setTick(t => t + 1), [])
 
@@ -225,12 +248,7 @@ export default function AprobarRecuento({
    * nada —`apply_inventory_count` miraba sólo `counted_qty IS NOT NULL`— así
    * que una cifra que nadie se creía entraba igual.
    */
-  async function onApartar(r: ReviewLine) {
-    const motivo = window.prompt(
-      `No aplicar la línea de ${r.line.itemName}.\n\n`
-      + '¿Por qué? Se guarda con tu nombre y se ve en la pantalla del recuento.',
-      '')
-    if (motivo === null) return
+  async function onApartar(r: ReviewLine, motivo: string) {
     if (!motivo.trim()) {
       setError('Apartar una línea necesita un motivo. Sin él, mañana nadie sabrá por qué no se aplicó.')
       return
@@ -246,6 +264,14 @@ export default function AprobarRecuento({
     } finally {
       setBusyLine(null)
     }
+  }
+
+  function onCorregido(msg: string) {
+    setCorrigiendo(null)
+    setFlash(msg)
+    // La línea se ha recalculado en la base (`_recompute_count_line_variance`),
+    // así que puede haber dejado de pedir motivo. Se recarga para verlo.
+    recargar()
   }
 
   async function onDesapartar(r: ReviewLine) {
@@ -345,6 +371,20 @@ export default function AprobarRecuento({
 
   return (
     <div className="cocina cocina-pagina">
+      {corrigiendo && (
+        <CorregirAhoraModal
+          lineId={corrigiendo.line.id}
+          recipeItemId={corrigiendo.line.recipeItemId}
+          itemName={corrigiendo.line.itemName}
+          baseUnit={corrigiendo.line.unitAbbr}
+          systemQty={corrigiendo.line.systemQty}
+          countedQty={corrigiendo.line.countedQty}
+          plantilla={plantilla}
+          onCerrar={() => setCorrigiendo(null)}
+          onCorregido={onCorregido}
+        />
+      )}
+
       {/* ── Cabecera ── */}
       <div className="flex flex-col gap-3.5">
         <button
@@ -487,6 +527,8 @@ export default function AprobarRecuento({
                   r={r}
                   busy={busyLine === r.line.id}
                   soloLectura={soloLectura}
+                  puedeCorregir={!soloLectura && count.status === 'en_revision'}
+                  onCorregir={setCorrigiendo}
                   onMotivo={onMotivo}
                   onRecontar={onRecontar}
                   onApartar={onApartar}
@@ -602,22 +644,47 @@ function cuandoLargo(iso: string): string {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function FilaRevision({
-  r, busy, soloLectura, onMotivo, onRecontar, onApartar, onDesapartar,
+  r, busy, soloLectura, puedeCorregir, onMotivo, onRecontar, onApartar, onDesapartar, onCorregir,
 }: {
   r: ReviewLine
   busy: boolean
   soloLectura: boolean
+  /** «Corregir ahora» sólo existe en revisión: es lo que hace la oficina antes
+   *  de aprobar. La base lo exige igual, así que aquí no se ofrece de más. */
+  puedeCorregir: boolean
   onMotivo: (r: ReviewLine, code: string, note: string | null) => void
   onRecontar: (r: ReviewLine) => void
-  onApartar: (r: ReviewLine) => void
+  onApartar: (r: ReviewLine, motivo: string) => void
   onDesapartar: (r: ReviewLine) => void
+  onCorregir: (r: ReviewLine) => void
 }) {
   const l = r.line
   const [nota, setNota] = useState(l.reasonNote ?? '')
+  const [apartando, setApartando] = useState(false)
+  const [motivoApartar, setMotivoApartar] = useState('')
   const pideNota = motivoPideNota(l.reasonCode)
   const contradice = r.contradiction !== ''
-  const pct = l.variancePct
-  const falta = (l.varianceQty ?? 0) < 0
+  const historia = historiaDeLaLinea(r.entries)
+
+  /**
+   * §2 · EL PORCENTAJE Y EL COLOR (encargo de Julio, 11/09 09:20).
+   *
+   * El porcentaje SÓLO existe si lo esperado es positivo. Con el teórico en
+   * cero o en negativo, «−480 %» no es una desviación: es una división sin
+   * significado, y el signo sale del revés. En su sitio va «—» y, debajo, en
+   * gris, por qué no hay número.
+   *
+   * Y EL COLOR SIGUE AL SIGNO DE LA DIFERENCIA, no al del porcentaje. Contar
+   * de más no es rojo: rojo es que falte. Antes se pintaba con
+   * `(varianceQty ?? 0) < 0`, que da VERDE a una línea sin diferencia
+   * calculada — y ahí el color afirmaba algo que nadie había medido.
+   */
+  const dif = l.varianceQty
+  const esperadoPositivo = (l.systemQty ?? 0) > 0
+  const pct = esperadoPositivo ? l.variancePct : null
+  const tonoDif = dif == null || dif === 0
+    ? 'text-cocina-tinta-3'
+    : dif < 0 ? 'text-cocina-rojo' : 'text-cocina-verde'
 
   return (
     <>
@@ -644,8 +711,17 @@ function FilaRevision({
         <td className="px-3 py-3 align-top num text-[15px] text-right font-bold text-cocina-tinta whitespace-nowrap">
           {qtyTxt(l.countedQty, l.unitAbbr)}
         </td>
-        <td className={`px-3 py-3 align-top num text-[13px] text-right whitespace-nowrap ${falta ? 'text-cocina-rojo' : 'text-cocina-verde'}`}>
+        <td className={`px-3 py-3 align-top num text-[13px] text-right whitespace-nowrap ${tonoDif}`}>
           {pct == null ? '—' : `${pct > 0 ? '+' : '−'}${nfPct.format(Math.abs(pct))} %`}
+          {pct == null && (
+            <div className="text-[10.5px] text-cocina-tinta-3 leading-tight mt-0.5 whitespace-normal">
+              {l.systemQty == null
+                ? 'Folvy no esperaba nada'
+                : l.systemQty < 0
+                  ? 'Folvy esperaba en negativo'
+                  : 'Folvy esperaba cero'}
+            </div>
+          )}
         </td>
         <td className="px-3 py-3 align-top num text-[13px] text-right text-cocina-tinta-2 whitespace-nowrap">
           {/* Nunca un 0 € callado: si no hay coste fiable, se dice. */}
@@ -704,23 +780,103 @@ function FilaRevision({
               </BotonCocina>
             ) : (
               <>
+                {/* «Corregir ahora» va PRIMERO y en relleno cuando la línea
+                    contradice: llamar a cocina y contarlo en el momento
+                    resuelve hoy lo que «Pedir recuento» resuelve mañana. */}
+                {puedeCorregir && (
+                  <BotonCocina
+                    peso={contradice ? 'relleno' : 'borde'}
+                    disabled={busy}
+                    onClick={() => onCorregir(r)}
+                  >
+                    Corregir ahora
+                  </BotonCocina>
+                )}
                 <BotonCocina
-                  peso={contradice ? 'relleno' : 'borde'}
+                  peso="borde"
                   disabled={busy || Boolean(l.recountRequestedAt)}
                   onClick={() => onRecontar(r)}
                 >
                   {busy ? <Loader2 size={13} className="animate-spin" /> : null}
                   {l.recountRequestedAt ? 'Pedido' : 'Pedir recuento'}
                 </BotonCocina>
-                <BotonCocina peso="fantasma" disabled={busy} onClick={() => onApartar(r)}>
-                  No aplicar esta línea
-                </BotonCocina>
+                {apartando ? (
+                  /* EL CAMPO EN LÍNEA, que sustituye al `window.prompt` del
+                     11/09. Un prompt del navegador no lleva los tokens de la
+                     maqueta, se puede bloquear, y no deja ver la fila de la que
+                     habla mientras se escribe el motivo. */
+                  <div className="flex flex-col gap-1.5 w-full items-end">
+                    <input
+                      autoFocus
+                      value={motivoApartar}
+                      onChange={e => setMotivoApartar(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && motivoApartar.trim()) onApartar(r, motivoApartar)
+                        if (e.key === 'Escape') { setApartando(false); setMotivoApartar('') }
+                      }}
+                      placeholder="¿Por qué no se aplica? (obligatorio)"
+                      className="h-9 px-2 rounded-cocina border border-cocina-ambar bg-cocina-superficie
+                                 text-[12.5px] text-cocina-tinta w-full min-w-[190px]"
+                    />
+                    <div className="flex gap-1.5">
+                      <BotonCocina
+                        peso="fantasma"
+                        disabled={busy}
+                        onClick={() => { setApartando(false); setMotivoApartar('') }}
+                      >
+                        Dejarlo
+                      </BotonCocina>
+                      <BotonCocina
+                        peso="borde"
+                        disabled={busy || !motivoApartar.trim()}
+                        onClick={() => onApartar(r, motivoApartar)}
+                      >
+                        No aplicarla
+                      </BotonCocina>
+                    </div>
+                  </div>
+                ) : (
+                  <BotonCocina peso="fantasma" disabled={busy} onClick={() => setApartando(true)}>
+                    No aplicar esta línea
+                  </BotonCocina>
+                )}
               </>
             )}
           </div>
           )}
         </td>
       </tr>
+
+      {/* LO ANTERIOR NO SE BORRA (Julio, 11/09). Cuando una línea se ha contado
+          más de una vez, la fila enseña las dos cosas: quién contó qué y
+          cuándo, con la cifra vieja TACHADA y la que vale en negrita. Sólo
+          aparece si hay más de un intento — en el caso normal no hay nada que
+          contar y una línea que dijera «1 intento» sería ruido. */}
+      {historia.length > 1 && (
+        <tr className="border-b border-cocina-linea-suave">
+          <td colSpan={8} className="px-4 pb-3 pt-0">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[11.5px] text-cocina-tinta-3">
+              {historia.map((h, i) => (
+                <span key={h.attempt} className="whitespace-nowrap">
+                  {i > 0 && <span className="mr-2 text-cocina-tinta-3">·</span>}
+                  <span className={h.esElVigente ? 'text-cocina-tinta-2' : ''}>
+                    {h.quien ? h.quien.trim().split(/\s+/)[0] : 'alguien'}{' '}
+                    {i === 0 ? 'contó' : 'recontó'}{' '}
+                  </span>
+                  <span className={h.esElVigente
+                    ? 'num font-bold text-cocina-tinta'
+                    : 'num line-through text-cocina-tinta-3'}>
+                    {qtyTxt(h.qtyInBase, l.unitAbbr)}
+                  </span>
+                  {h.cuando && <span> a las {hora(h.cuando)}</span>}
+                  {h.porTelefono && <span>, por teléfono</span>}
+                  {h.apuntadoPor && <span>, apuntado por {h.apuntadoPor.trim().split(/\s+/)[0]}</span>}
+                </span>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
 
       {contradice && (
         <tr className="bg-cocina-ambar-bg/45 border-b border-cocina-linea-suave">
