@@ -91,6 +91,12 @@
 -- partir de ahí las llamadas de tres argumentos serían ambiguas (42725). Se
 -- hace DROP de la firma de 3 y CREATE de la de 5, y se vuelven a dar los
 -- permisos, que el DROP se lleva por delante.
+--
+-- ESO ÚLTIMO SALIÓ MAL AQUÍ, y está contado donde toca: al final del fichero,
+-- y entero en p21b (20260911091340) y p21c (20260911091404). Devolver los
+-- permisos «equivalentes» no es devolver los que había: hay que MEDIR `proacl`
+-- después del CREATE, dentro de la misma migración, y no confiar en que un
+-- GRANT deshace lo que el CREATE concede solo.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -251,22 +257,15 @@ BEGIN
 END;
 $fn$;
 
--- NADIE LA LLAMA DESDE FUERA, Y NO PUEDE PODERSE.
+-- LOS PERMISOS DE ESTA FUNCION SE ARREGLAN EN p21b Y p21c, NO AQUI.
 --
--- `CREATE FUNCTION` concede EXECUTE a PUBLIC por defecto, y en este proyecto
--- PUBLIC incluye a `anon` y a `authenticated`: una función nueva nace expuesta
--- en PostgREST sin que nadie lo escriba. Ésta es SECURITY DEFINER y NO lleva
--- `belongs_to_account` dentro —no le hace falta, porque sólo la llama
--- `save_count_line`, que ya ha comprobado la cuenta— así que dejarla abierta
--- sería dar a cualquier usuario registrado, de cualquier cuenta, un botón para
--- reescribir las diferencias de CUALQUIER línea de recuento por su id.
---
--- Se cierra a PUBLIC y se deja sólo a `service_role`. `save_count_line` la
--- sigue llamando sin problema: corre como su dueño, no como quien la invoca.
-REVOKE ALL ON FUNCTION public._recompute_count_line_variance(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public._recompute_count_line_variance(uuid) FROM anon;
-REVOKE ALL ON FUNCTION public._recompute_count_line_variance(uuid) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public._recompute_count_line_variance(uuid) TO service_role;
+-- Esto es lo que se aplicó de verdad bajo la versión 20260911091247, y se deja
+-- tal cual para que el fichero diga la verdad. Estaba MAL: `CREATE FUNCTION`
+-- concede EXECUTE a PUBLIC, y este proyecto además concede a `anon` y
+-- `authenticated` por defecto en cada función nueva de `public`. Se midió
+-- DESPUÉS de aplicar —ahí está el fallo— y se corrigió en caliente con
+-- 20260911091340 (p21b) y 20260911091404 (p21c).
+GRANT EXECUTE ON FUNCTION public._recompute_count_line_variance(uuid) TO authenticated, service_role;
 
 DROP FUNCTION IF EXISTS public.save_count_line(uuid, jsonb, numeric);
 
@@ -696,23 +695,11 @@ BEGIN
 END;
 $function$;
 
--- El DROP se lleva los permisos. Se vuelven a dar EXACTAMENTE los que había
--- medidos antes de tocar: postgres, service_role y authenticated — MEDIDOS,
--- que son estos y no los que trae de fábrica:
---     postgres=X/postgres | service_role=X/postgres | authenticated=X/postgres
---
--- El REVOKE va primero y no sobra: `CREATE FUNCTION` concede EXECUTE a PUBLIC
--- por su cuenta, y PUBLIC aquí arrastra a `anon`. Sin este REVOKE la función
--- quedaría llamable SIN SESIÓN desde PostgREST — más abierta de lo que estaba
--- antes de esta migración, que es exactamente lo que un DROP + CREATE no puede
--- permitirse hacer a espaldas de nadie.
-REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric, uuid, text) FROM PUBLIC;
--- Y a `anon` por su nombre: este proyecto tiene ALTER DEFAULT PRIVILEGES que
--- conceden EXECUTE a `anon` y a `authenticated` en cada función nueva de
--- `public`, así que el REVOKE a PUBLIC no basta — la concesión a `anon` vuelve
--- a aparecer explícita. La firma vieja NO la tenía (medido: postgres,
--- service_role y authenticated, sin anon), y la nueva tampoco la tendrá.
-REVOKE ALL ON FUNCTION public.save_count_line(uuid, jsonb, numeric, uuid, text) FROM anon;
+-- El DROP se lleva los permisos, y esto era lo único que se hacía para
+-- devolverlos. NO BASTABA, y el fichero lo dice en vez de disimularlo: falta
+-- revocar PUBLIC y `anon`, que `CREATE FUNCTION` y las DEFAULT PRIVILEGES de
+-- este proyecto conceden solos. Se arregla en p21b y p21c, que van a
+-- continuación de ésta.
 GRANT EXECUTE ON FUNCTION public.save_count_line(uuid, jsonb, numeric, uuid, text)
   TO authenticated, service_role;
 
