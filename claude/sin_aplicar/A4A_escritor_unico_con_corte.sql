@@ -111,8 +111,16 @@ BEGIN
 END
 $pol$;
 
+-- MEDIDO SOBRE LA BASE SUCIA (12/09 00:25): la tabla que quedo aplicada a mano
+-- tenia `authenticated=arwdDxtm`, o sea INSERT, UPDATE y DELETE, no SELECT.
+-- No lo puse yo: son los privilegios POR DEFECTO de la cuenta sobre las tablas
+-- nuevas. Mi bloque revocaba a PUBLIC y a anon, pero NO a `authenticated`, asi
+-- que el ALL por defecto se quedaba. Lo tapaba la RLS —sin politica de
+-- escritura, escribir se deniega— pero eso es confiar en la segunda puerta
+-- teniendo la primera abierta, que es justo el fallo de p21.
 REVOKE ALL ON TABLE public.sale_consumption_skip FROM PUBLIC;
 REVOKE ALL ON TABLE public.sale_consumption_skip FROM anon;
+REVOKE ALL ON TABLE public.sale_consumption_skip FROM authenticated;
 GRANT SELECT ON TABLE public.sale_consumption_skip TO authenticated;
 GRANT ALL    ON TABLE public.sale_consumption_skip TO service_role;
 
@@ -181,6 +189,9 @@ AS $fn$ SELECT TIMESTAMPTZ '2026-08-05 00:00:00+02' $fn$;
 
 REVOKE ALL ON FUNCTION public._corte_motor_viejo() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public._corte_motor_viejo() FROM anon;
+-- Ayudante interno (`_`): no lo llama el front, y por defecto se habia quedado
+-- con EXECUTE para `authenticated`.
+REVOKE ALL ON FUNCTION public._corte_motor_viejo() FROM authenticated;
 
 COMMENT ON FUNCTION public._corte_motor_viejo() IS
   'Fecha de libro por debajo de la cual una venta PUEDE tener movimientos con la llave vieja (source_id = sale_line). Medido 11/09: la ultima es del 03/08 23:07. El vigia de consumo avisa si deja de ser verdad.';
@@ -667,7 +678,7 @@ REVOKE EXECUTE ON FUNCTION public.revert_sale_consumption(uuid) FROM authenticat
 -- cerrarla aqui, de madrugada y en el camino de los pedidos, seria meter dos
 -- cambios en uno. Pero si algo los hubiera movido, esto aborta.
 DO $acl$
-DECLARE v_gen text; v_rev text;
+DECLARE v_gen text; v_rev text; v_tabla text; v_viejo text; v_cortes text;
 BEGIN
   SELECT array_to_string(p.proacl, ' | ') INTO v_gen FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -683,6 +694,27 @@ BEGIN
   IF v_rev LIKE '%authenticated=%' OR v_rev NOT LIKE '%service_role=X%' THEN
     RAISE EXCEPTION 'A4a: revert deberia quedar sin authenticated y con service_role -> [%]', v_rev;
   END IF;
-  RAISE NOTICE 'A4a permisos: generate=[%] revert=[%]', v_gen, v_rev;
+  -- Y las puertas de lo NUEVO, que en base sucia venian abiertas de fabrica.
+  SELECT array_to_string(relacl, ' | ') INTO v_tabla FROM pg_class
+   WHERE relname = 'sale_consumption_skip' AND relnamespace = 'public'::regnamespace;
+  SELECT array_to_string(p.proacl, ' | ') INTO v_viejo FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = '_corte_motor_viejo';
+  SELECT array_to_string(p.proacl, ' | ') INTO v_cortes FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'cortes_aprobados';
+
+  IF v_tabla LIKE '%anon=%' OR v_tabla LIKE '%authenticated=arwd%' OR v_tabla LIKE '=arwd%' THEN
+    RAISE EXCEPTION 'A4a: sale_consumption_skip con la puerta abierta -> %', v_tabla;
+  END IF;
+  IF v_viejo LIKE '%anon=%' OR v_viejo LIKE '%authenticated=%' THEN
+    RAISE EXCEPTION 'A4a: _corte_motor_viejo con la puerta abierta -> %', v_viejo;
+  END IF;
+  IF v_cortes LIKE '%anon=%' THEN
+    RAISE EXCEPTION 'A4a: cortes_aprobados abierta a anon -> %', v_cortes;
+  END IF;
+
+  RAISE NOTICE 'A4a permisos: generate=[%] revert=[%] tabla=[%] corte_viejo=[%]',
+    v_gen, v_rev, v_tabla, v_viejo;
 END
 $acl$;

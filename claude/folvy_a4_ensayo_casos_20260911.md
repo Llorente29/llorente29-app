@@ -221,3 +221,130 @@ por eso su huella (`7b47480b…`) no es la del fichero (`3aa6ffcc…`). Eso no v
 como prueba final: lo que se aplica es el fichero. Antes de las 23:45 se vuelve
 a correr **el fichero tal cual**, con la aserción de C6 corregida, y la huella
 que salga tiene que ser `3aa6ffcccc5a9719d58e33eaebb4309c`.
+
+---
+
+## 8 · C14, que lo pidió Julio al dar luz verde a la clave ajena
+
+**Reprocesar un pedido de Last que YA tenga movimientos con `sale_line_id`.**
+
+- **Monta:** una venta de Last reciente, pasada primero por el escritor nuevo
+  para que sus movimientos lleven la llave de línea.
+- **Espera:** `reprocess_sale` borra y rehace las líneas **sin 23503**; los
+  movimientos siguen vivos, con su `source_id` y la llave **a NULL** (lo que
+  hace `ON DELETE SET NULL`); el escritor los reescribe; y **el stock queda
+  idéntico**, medido por ingrediente con la misma consulta a los dos lados.
+- **Fuerza:** sale solo desde que la clave ajena está en SET NULL
+  (`20260911221932`). Antes de eso reventaba, y eso fue el hallazgo del C13.
+
+Y una cosa que salió del repaso «sobre base sucia» y no estaba en ningún caso:
+**las puertas de lo nuevo venían abiertas de fábrica.** La tabla
+`sale_consumption_skip` que quedó aplicada a mano tenía
+`authenticated=arwdDxtm` —INSERT, UPDATE y DELETE— porque los privilegios por
+defecto de la cuenta los dan, y mi bloque revocaba a PUBLIC y a `anon` pero no
+a `authenticated`. Lo tapaba la RLS, que no tiene política de escritura; pero
+confiar en la segunda puerta teniendo la primera abierta es el fallo de p21
+otra vez. Arreglado, y la migración lo comprueba dentro: si la tabla o
+`_corte_motor_viejo` quedan abiertos, aborta.
+
+---
+
+## §9 · EL ENSAYO ENTERO, EN VERDE (12/09 00:33)
+
+Una sola llamada, contra el fichero tal cual, acabada en `RAISE EXCEPTION`.
+Transacción deshecha. **Fallos: 0.**
+
+```
+huellas: escritor 6c04a3e1abaa035549d286315f6c893f
+         revert   e66eb22634582aa69cad84d0cef9478b
+         reprocess 14e1e332a2bf552e9e6ae4793fb22f56
+C2  anterior al corte  -> escritos=0  movs 5->5  huella=IGUAL  notas=10
+C1  posterior          -> escritos=19 movs 19->19  suma -829,976->-829,976  con_linea=19
+C4  dos veces          -> movs 19->19  suma -829,976->-829,976
+C3  a caballo          -> protegido 2 movs, libre 1, nota=1
+C12 revert a caballo   -> borro 17, protegido conserva 2, el resto 0
+C7  cancelada          -> protegido 2, escritos=0
+C6  combo              -> movs 16->14  suma -1.060,579->-1.060,579  sin_linea=0
+C9  sin enlazar        -> escritos=0  movs=0
+C5  extra cambia       -> con 6/-704,000 · sin 6/-704,000 · otra vez 6/-704,000
+C8  motor B            -> filas viejas 14->3  protegidos=3
+C13 reprocesar vieja   -> lineas=1, filas viejas 3->0
+C14 reprocesar Last    -> antes con_linea=19 suma -829,976 · despues movs=19 suma -829,976 con_linea=17
+C10 sin corte          -> corte NULL, sin nota
+C11 permisos           -> postgres=X | authenticated=X | service_role=X
+```
+
+### Lo que hay que decir del ensayo, no solo su resultado
+
+**1. El rojo de la pasada anterior era del guion, no del fichero.** C12 salio
+«borro 19, protegido conserva 0» y arrastro a C7. Motivo MEDIDO, no supuesto:
+mi guion instalaba `generate_sale_consumption` y `reprocess_sale` pero NO el
+`revert_sale_consumption` nuevo, asi que corria el viejo —el que no sabe de
+cortes— y borraba tambien lo protegido. C7 llegaba despues y no encontraba
+nada que mirar.
+
+Repetido con el revert del fichero instalado y su huella comprobada DENTRO del
+ensayo: C12 pasa a «borro 17, protegido conserva 2, el resto 0».
+
+*La leccion, que es la que cuesta:* un ensayo que instala parte de un cambio
+prueba parte de un cambio. Y el resultado no se distingue de un defecto real.
+Si el ensayo instala funciones, comprueba la huella de TODAS las que instala,
+no solo la del protagonista. Es la regla 17 aplicada al ensayo y no solo a la
+migracion.
+
+**2. C14 cayo esta vez sobre la misma venta que C1.** Medido: las dos busquedas
+resolvieron a `0f3ec074-2ac1-4eda-b782-0170d9c19cc8`. O sea que C14 no ensayo
+un pedido de Last independiente, sino ese mismo, ya con el recuento aprobado de
+C3 y el cancelar/restaurar de C7 encima. Paso igual, y en un estado mas duro que
+el previsto. En la pasada anterior si eran distintas (17 movimientos, -629,976)
+y tambien paso: ha pasado en las dos formas. Pero la coincidencia es del sorteo
+del fixture, no del diseno, y por eso queda escrito.
+
+**3. HALLAZGO: un movimiento protegido pierde su `sale_line_id` al reprocesar.**
+Es el `con_linea=19 -> 17` de C14. `adapt_lastapp_order` borra y recrea las
+lineas, la clave ajena (`ON DELETE SET NULL`) pone la llave a NULL, y los libres
+se reescriben con las lineas nuevas — pero los protegidos NO se pueden
+reescribir, por definicion, asi que se quedan sin llave.
+
+El stock no se mueve (-829,976 a los dos lados) y la venta sigue siendo el
+origen; lo que se degrada es la trazabilidad POR LINEA de esas filas
+congeladas. Es el precio de congelarlas. Se dice ahora para que no aparezca
+dentro de tres semanas en un tablero como si fuera un fallo nuevo.
+
+### El repaso sobre la base sucia (00:25)
+
+Lo que quedo aplicado a mano en los resbalones de la noche, y como lo atraviesa
+el fichero:
+
+| Lo que quedo | Estado medido | El fichero |
+|---|---|---|
+| `sale_consumption_skip` | existe, RLS ON, politica puesta, `authenticated=arwdDxtm` | `CREATE TABLE IF NOT EXISTS`, politica tras `IF NOT EXISTS`, `REVOKE`/`GRANT` incondicionales -> corrige el `arwd` |
+| `cortes_aprobados`, `_corte_motor_viejo` | ya con las huellas del fichero | `CREATE OR REPLACE` |
+| `idx_icl_item_count` | ya existe | `IF NOT EXISTS` |
+| gemelo `stock_movement_sale_dedup` | ya borrado | `DROP INDEX IF EXISTS` |
+| `consumo_sin_descontar_watchdog` | ACL abierta a PUBLIC y anon | los tres `REVOKE` la cierran |
+| clave ajena | `confdeltype='n'`, validada | no se toca |
+
+Regla 17 contra el FICHERO, no contra lo ensayado de memoria:
+
+```
+cortes_aprobados            364a73db64e9586cd04fa7903c1d581c    403 b  OK
+_corte_motor_viejo          fbccf734a5d59f36cf6498bc01f8823a     45 b  OK
+generate_sale_consumption   6c04a3e1abaa035549d286315f6c893f  9.048 b  OK
+revert_sale_consumption     e66eb22634582aa69cad84d0cef9478b  4.325 b  OK
+reprocess_sale              14e1e332a2bf552e9e6ae4793fb22f56  1.525 b  OK
+consumo_sin_descontar_watchdog 743757af9cd59b26de88793d7102dcb5 3.038 b OK
+```
+
+Fichero == ensayo, byte a byte, en las seis.
+
+### Estado antes de aplicar (00:35 Madrid)
+
+Nada aplicado. Escritor vivo `97a3533602349f6cebb7f55f3ab15fc3` (el viejo),
+0 movimientos con `sale_line_id`, 68.159 de consumo, 0 fallos de consumo
+abiertos, 0 notas residuales. La unica venta de las ultimas 6 h sin consumo es
+`ec1600dc-a5c9-4531-b200-a7289fd162a6` de HubRise, CANCELADA — correcto, no es
+hallazgo.
+
+Para el paso 3: `compute_sale_line_consumption` no la llama NADIE (ni funcion
+ni trigger, barrido sobre `pg_proc.prosrc` y `pg_trigger`). El `DROP` es limpio.
