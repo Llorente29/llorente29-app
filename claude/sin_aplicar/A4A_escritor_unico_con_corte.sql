@@ -62,9 +62,11 @@
 -- Los tres arreglos, en orden de lo que dieron:
 --   · El escandallo se recorre UNA vez, con CTEs que escriben (`notas`,
 --     `puesto`) colgando de la misma pasada.
---   · La llave vieja sólo se busca si la venta puede tenerla: la última fila
---     del motor B es del 03/08 (medido), así que por debajo de 04/08 se mira y
---     por encima no. Una venta de hoy no paga ese peaje.
+--   · La llave vieja sólo se busca si la venta puede tenerla: la última venta
+--     con motor B tiene fecha de libro 03/08 23:07 (medido), así que el corte
+--     del atajo se pone en 05/08 —un día de margen— y por encima no se mira.
+--     Una venta de hoy no paga ese peaje. La fecha vive en
+--     `_corte_motor_viejo()` y el vigía de consumo avisa si deja de valer.
 --   · El corte se pide UNA vez por lado, en bloque, con `cortes_aprobados`, y
 --     con un índice nuevo sobre `inventory_count_line (recipe_item_id,
 --     inventory_count_id)`, que no existía.
