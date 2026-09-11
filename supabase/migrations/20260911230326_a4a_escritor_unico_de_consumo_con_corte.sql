@@ -1,9 +1,16 @@
 -- ════════════════════════════════════════════════════════════════════════
 -- A4a · UN SOLO ESCRITOR DE CONSUMO, Y QUE CONOZCA EL CORTE
 --
--- SIN APLICAR. Se aplica a partir de las 23:45 del reloj de la BASE
--- (`now() at time zone 'Europe/Madrid'`). Al aplicar se mueve a
--- `supabase/migrations/` con la versión que registre la base (regla 17).
+-- APLICADA el 12/09/2026 a las 01:03:26 (Madrid, reloj de la base), dentro de
+-- la ventana. Versión registrada: 20260911230326.
+--
+-- ENSAYADA C1–C14 el 12/09 a las 00:33: una sola llamada, contra este fichero
+-- tal cual, acabada en RAISE EXCEPTION. Transacción deshecha. Fallos: 0.
+-- El detalle está en `claude/folvy_a4_ensayo_casos_20260911.md` §9.
+--
+-- IDEMPOTENTE, y probado: la migración entera, leída de donde quedó
+-- registrada, se ha vuelto a pasar sobre la base ya migrada sin abortar, con
+-- las seis huellas idénticas a los dos lados.
 --
 -- VUELTA ATRÁS PREPARADA Y PROBADA:
 --   claude/vuelta_atras/VUELTA_ATRAS_A4_generate_sale_consumption_20260911.sql
@@ -130,7 +137,7 @@ COMMENT ON TABLE public.sale_consumption_skip IS
 -- ── (1) El indice que faltaba ───────────────────────────────────────────
 -- Sin el, cada consulta del corte se comia la tabla entera de lineas de
 -- recuento. 6.172 filas y 2,3 MB: se crea en un parpadeo, pero toma un lock de
--- escritura sobre `inventory_count_line`. Por eso va a las 23:45, cuando no
+-- escritura sobre `inventory_count_line`. Por eso va de madrugada, cuando no
 -- hay nadie contando.
 CREATE INDEX IF NOT EXISTS idx_icl_item_count
   ON public.inventory_count_line (recipe_item_id, inventory_count_id);

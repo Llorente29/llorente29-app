@@ -348,3 +348,107 @@ hallazgo.
 
 Para el paso 3: `compute_sale_line_consumption` no la llama NADIE (ni funcion
 ni trigger, barrido sobre `pg_proc.prosrc` y `pg_trigger`). El `DROP` es limpio.
+
+---
+
+## §10 · APLICADA, Y LA PRUEBA LLEGO SOLA (12/09 01:03 – 01:12)
+
+### Lo que se aplicó, en orden y verificando cada paso
+
+| hora (Madrid, reloj de la base) | qué | versión registrada |
+|---|---|---|
+| 01:03:26 | A4a, escritor único con corte | `20260911230326` |
+| 01:05:30 | `DROP compute_sale_line_consumption` | `20260911230530` |
+
+Las dos llevan su verificación DENTRO: si una sola huella no cuadra, la
+migración se deshace entera. Pasaron.
+
+### La cronología completa, medida — no reconstruida de memoria
+
+El registro de `lastapp_webhook_log` es lo que la cierra:
+
+```
+01:00:03.038  tab:closed  -> G007  |  el MOTOR VIEJO regenera: 10 filas, 0 con llave
+01:00:08.275  tab:closed  -> G546  |  el MOTOR VIEJO regenera:  7 filas, 0 con llave
+01:00:08.732  tab:closed  -> U446  |  el MOTOR VIEJO regenera:  6 filas, 0 con llave
+01:03:26      A4a aplicada
+01:05:30      DROP del motor B
+01:09:47.524  yo regenero esas tres con el escritor nuevo: 23 filas, 23 con llave
+01:10:05.564  tab:closed  -> U936  |  el ESCRITOR NUEVO, SOLO, sin que yo lo llame
+```
+
+### El susto, y por qué no era un susto
+
+La población congelada se movió: 68.159 -> 68.136, 23 filas menos. No lo dejé
+pasar. Las 23 son exactamente esas tres ventas, y **`con_llave = 0` es la firma
+de quién las escribió**: si las hubiera escrito el motor nuevo traerían
+`sale_line_id`. Las escribió el viejo, en los 13 minutos entre mi foto (00:50:14)
+y la aplicación (01:03:26).
+
+*La lección de la vara:* «población congelada por `created_at`» no está
+congelada — una regeneración legítima BORRA filas de ella. Con trafico vivo,
+entre la foto y el cambio hay una ventana, y esa ventana hay que medirla, no
+suponerla. La foto se toma lo más cerca posible del cambio, y si no se puede,
+se explica fila a fila lo que se movió en medio.
+
+### U936: la prueba que pedía Julio, y llegó sola
+
+Julio pidió 2 o 3 ventas reales cerradas DESPUES de A4a. El último pedido de
+anoche entró a las 23:38 (en 8 días, el más tardío es 23:59): no iba a entrar
+ninguno. Pero a las 01:10:05 llegó un `tab:closed` de Last para U936 —creada
+23:08:02, cerrada 23:20:13— y el escritor nuevo corrió SOLO:
+
+```
+U936  16 -> 14 movimientos  ·  suma -1.060,579 -> -1.060,579  ·  14 de 14 con sale_line_id
+```
+
+Las 14 son la misma suma en menos filas: una fila por (línea, ingrediente),
+que es lo que despierta el índice único al rellenar la llave. Es el caso C6 del
+ensayo, pasando en producción con el mismo número.
+
+Las otras tres, por el camino real (`generate_sale_consumption`):
+
+```
+G007  10 movs, 10 con llave, 3 líneas  ·  -491,6700 -> -491,670
+G546   7 movs,  7 con llave, 1 línea   ·  -306,7500 -> -306,750
+U446   6 movs,  6 con llave, 1 línea   ·  -216,0000 -> -216,000
+```
+
+### El «no he roto nada», con las dos cifras (regla 31)
+
+| medida | 00:47 (antes) | 01:12 (después) |
+|---|---|---|
+| suma `qty_base` de consumo | **-3.679.387,6226** | **-3.679.387,6226** |
+| artículos con `qty_on_hand` movido | — | **0 de 726** |
+| negativos | 207 | **207 · 0 nuevos** |
+| movimientos con llave vieja | 1.224 | **1.224** |
+| fallos de consumo abiertos | 0 | **0** |
+| notas de corte | 0 | 0 |
+| vigía del atajo | — | **0** |
+| `compute_sale_line_consumption` | viva | **fuera** |
+| movimientos con `sale_line_id` | **0** | **37** |
+
+### Idempotencia, probada y no afirmada
+
+La migración entera (37.752 caracteres), **leída de donde quedó registrada** —no
+una copia mía de ella— se volvió a pasar sobre la base ya migrada dentro de una
+transacción acabada en `RAISE EXCEPTION`: **no abortó**, y las seis huellas
+salieron idénticas a los dos lados.
+
+### Andamio, declarado y retirado
+
+Para comparar artículo a artículo hicieron falta dos tablas de copia
+(`_foto_stock_a4a`, `_foto_movs_a4a`). Se crearon con `execute_sql`, nunca las
+leyó ni escribió nada del producto, y se borraron al terminar: 0 quedan. Se dice
+aquí porque una tabla que aparece en la base sin migración es deriva, aunque
+dure veinte minutos.
+
+### Lo que queda dicho y NO arreglado
+
+- Un movimiento protegido por el corte **pierde su `sale_line_id` si la venta se
+  reprocesa**: la línea se borra y se recrea, y lo congelado no se puede
+  reescribir. El stock no se mueve; se degrada la trazabilidad por línea de esas
+  filas. Medido en C14.
+- Quedan **1.224 filas del motor viejo** y los **516 duplicados**. Autorizados
+  por Julio, van en su propia ventana, con la lista de artículos y cantidades
+  por local delante.
