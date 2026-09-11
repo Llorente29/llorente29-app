@@ -311,16 +311,24 @@ export default function InventoryCountSheet({
     return <div className="flex items-center gap-2 text-text-secondary text-sm p-6"><Loader2 size={16} className="animate-spin" /> Cargando conteo…</div>
   }
 
-  // ── PANTALLA 4 (§2.4, maqueta del 10/09) ────────────────────────────────
-  // Un conteo EN REVISIÓN ya no se aprueba en esta hoja: se aprueba en la
-  // pantalla que enseña cómo se contó cada cosa y qué contradice al recuento
-  // anterior. La hoja se queda con lo que sabe hacer —contar a ciegas— y la
-  // decisión se toma donde están los datos para tomarla.
+  // ── PANTALLA 4 (§2.4 del 10/09, ampliada el 11/09) ──────────────────────
+  // UN RECUENTO SE VE SIEMPRE EN LA MISMA PANTALLA. En revisión para decidir,
+  // y aprobado o anulado en solo lectura. Antes, al aprobar, Folvy devolvía a
+  // esta hoja —la tabla de «El sistema cree: No atribuible · Es esto»— y el
+  // recuento se veía en una pantalla distinta de la que se usó para revisarlo.
+  // Julio, 11/09: «¿Me manda a la pantalla que se supone que cambiamos?».
   //
-  // Se delega en vez de reescribir esta hoja entera porque el modo 'contando'
-  // no cambia y reescribirlo «de paso» sería cambiarle el aspecto a una
-  // pantalla que nadie ha comparado con una maqueta.
-  if (count && count.status === 'en_revision' && canApprove && activeAccountId) {
+  // `canApprove` sólo hace falta para DECIDIR. Un recuento ya aprobado lo puede
+  // mirar cualquiera que tenga acceso al local: no hay nada que tocar.
+  //
+  // Queda 'contando': esta hoja sigue siendo la de escribir cantidades a ciegas,
+  // que es otro oficio y otra maqueta. Va en el siguiente encargo.
+  const enLaPantallaNueva = count && activeAccountId && (
+    (count.status === 'en_revision' && canApprove)
+    || count.status === 'aprobado'
+    || count.status === 'anulado'
+  )
+  if (enLaPantallaNueva && count && activeAccountId) {
     return (
       <AprobarRecuento
         count={count}

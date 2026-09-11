@@ -31,7 +31,7 @@ function linea(p: Partial<InventoryCountLine>): InventoryCountLine {
     systemQty: 8875, countedQty: 0, varianceQty: -8875, variancePct: -100, varianceValue: -70.13,
     abcClass: 'A', withinTolerance: false, reasonCode: null,
     unitCost: 0.0079, familyId: null, familyName: null, needsReview: false, lineValue: 0,
-    lineNeedsReview: false, reasonNote: null,
+    lineNeedsReview: false, reasonNote: null, reasonByName: null,
     countedByName: 'Natacha del Valle Rondón', countedAt: '2026-09-04T18:39:37Z',
     confirmedTwice: false, recountRequestedAt: null, recountOf: null,
     ...p,

@@ -1,114 +1,226 @@
-// La franja de cifras y el pie de «Revisa antes de aprobar», antes y después
-// del arreglo del 11/09 («No me deja aprobar», INV-00218).
+// Aprobar recuento, antes y después del 11/09. Dos arreglos en la misma foto:
 //
-// NO reescribe el marcado: usa los MISMOS componentes que la pantalla
-// (`CifraCocina`, `BotonCocina`, `PanelCocina`) y les pone encima el CSS del
-// build. Si escribiera HTML propio para la foto, la foto no probaría nada
-// (regla 31: la prueba se escribe contra lo real).
+//   · 01:00 — la pantalla ofrecía «Aprobar los 28 que cuadran» y la base
+//     contestaba «13 línea(s) a revisar sin motivo» (una sola regla, p18).
+//   · 08:15 — al aprobar, Folvy devolvía a la tabla vieja, la de «El sistema
+//     cree: No atribuible · Es esto · Otra…». Julio: «¿Me manda a la pantalla
+//     que se supone que cambiamos?».
 //
-// Los datos son los de INV-00218 de Foodint Alcalá el 10/09/2026, medidos en
-// `inventory_count_line`: 35 productos, 28 contados, 7 líneas que piden motivo
-// según `count_lines_requiring_reason`, 21 que cuadran.
+// NO reescribe el marcado de la pantalla nueva: usa sus MISMOS componentes
+// (`CifraCocina`, `BotonCocina`, `PanelCocina`, `PastillaCocina`) con el CSS
+// del build. El bloque de ANTES sí copia el marcado de la hoja vieja, con sus
+// clases de verdad (`bg-accent-bg`, `text-text-primary`…), porque el objetivo
+// es justo enseñar las dos pantallas al lado.
+//
+// Los datos son los de INV-00218 de Foodint Alcalá, aprobado por Julio el
+// 11/09 a las 08:02 de Madrid: 35 productos, 28 contados, 12 con motivo,
+// 25 ajustes, −148,41 € a coste medio, 2 movimientos sin coste.
 
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  PanelCocina, RotuloDePanel, CifraCocina, BotonCocina,
+  PanelCocina, RotuloDePanel, CifraCocina, PastillaCocina, BotonCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { MOTIVOS_DE_COCINA } from '@/modules/supply/services/countApprovalService'
 
 const nfEur = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 })
+const nfPct = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 })
+const nb = ' '
 
-function Cifras({ cuadran, revisar }: { cuadran: number; revisar: number }) {
+type Fila = {
+  nombre: string; quien: string; hora: string; como: string
+  esperaba: string; contado: string; pct: number | null; eur: number | null
+  motivo: string; pastilla?: string
+}
+
+// Las doce que llevan motivo, tal y como están en `inventory_count_line`.
+const REVISADAS: Fila[] = [
+  { nombre: 'Coca-Cola Original Lata', quien: 'Pamela Guzman Velásquez', hora: '20:00',
+    como: '4 unidades', esperaba: `240${nb}ud`, contado: `4${nb}ud`, pct: -98.3, eur: -139.46,
+    motivo: 'robo_desconocido', pastilla: 'No cuadró dos veces' },
+  { nombre: 'Solomillo de Pollo Prefrito Piri-piri', quien: 'Johanny Garzón Rodríguez', hora: '12:38',
+    como: '25 bolsas de 1 kg', esperaba: `35${nb}kg`, contado: `25${nb}kg`, pct: -28.6, eur: -69.38,
+    motivo: 'error_conteo' },
+  { nombre: 'Carne de Birria', quien: 'Pamela Guzman Velásquez', hora: '20:30',
+    como: '6,921 kg pesados', esperaba: `4,96${nb}kg`, contado: `6,921${nb}kg`, pct: 39.5, eur: 37.55,
+    motivo: 'error_conteo' },
+  { nombre: 'Caldo de Birria', quien: 'Natacha del Valle Rondón', hora: '17:29',
+    como: '13,9 kg pesados', esperaba: `9,067${nb}kg`, contado: `13,9${nb}kg`, pct: 53.3, eur: 26.16,
+    motivo: 'error_recepcion' },
+  { nombre: 'Milanesa de Pollo Rebozado', quien: 'Johanny Garzón Rodríguez', hora: '12:42',
+    como: '4 unidades', esperaba: `7${nb}ud`, contado: `4${nb}ud`, pct: -42.9, eur: -5.55,
+    motivo: 'uso_sin_apuntar' },
+  { nombre: 'Humus', quien: 'Johanny Garzón Rodríguez', hora: '12:35',
+    como: '1 bote de 1 kg', esperaba: `−355${nb}g`, contado: `1${nb}kg`, pct: -381.7, eur: 0,
+    motivo: 'error_recepcion', pastilla: 'Folvy no tenía referencia' },
+  { nombre: 'Mantequilla con ajo', quien: 'Pamela Guzman Velásquez', hora: '19:52',
+    como: 'No queda nada', esperaba: `−10${nb}g`, contado: `0${nb}g`, pct: -100, eur: 0,
+    motivo: 'error_conteo', pastilla: 'Folvy no tenía referencia' },
+  { nombre: 'Relish Pepinillo y Cebolla 900 ml', quien: 'Pamela Guzman Velásquez', hora: '19:52',
+    como: '1 bote de 900 ml', esperaba: `−100${nb}g`, contado: `900${nb}g`, pct: -1000, eur: 0,
+    motivo: 'error_conteo', pastilla: 'Folvy no tenía referencia' },
+  { nombre: 'SALSA Yogur', quien: 'Johanny Garzón Rodríguez', hora: '12:34',
+    como: 'No queda nada', esperaba: `0${nb}g`, contado: `0${nb}g`, pct: null, eur: 0,
+    motivo: 'error_recepcion' },
+  { nombre: 'Lima', quien: 'Johanny Garzón Rodríguez', hora: '12:35',
+    como: 'No queda nada', esperaba: `−360,7${nb}g`, contado: `0${nb}g`, pct: -100, eur: 0,
+    motivo: 'error_conteo' },
+  { nombre: 'Colorador amarillo alimenticio', quien: 'Natacha del Valle Rondón', hora: '17:01',
+    como: 'No queda nada', esperaba: `−0,8${nb}g`, contado: `0${nb}g`, pct: -100, eur: 0,
+    motivo: 'merma' },
+  { nombre: 'Albahaca', quien: 'Natacha del Valle Rondón', hora: '17:01',
+    como: 'No queda nada', esperaba: `−11,8${nb}g`, contado: `0${nb}g`, pct: -100, eur: 0,
+    motivo: 'robo_desconocido' },
+]
+
+function etiquetaMotivo(v: string): string {
+  return MOTIVOS_DE_COCINA.find(m => m.value === v)?.label ?? v
+}
+
+function FilaLeida({ f }: { f: Fila }) {
+  const falta = (f.pct ?? 0) < 0
   return (
-    <div className="grid grid-cols-4 gap-px bg-cocina-linea-suave border border-cocina-linea rounded-cocina-md overflow-hidden shadow-cocina">
-      <CifraCocina titulo="Cuadran" valor={String(cuadran)} tono="bueno" pie="Se aprueban de una vez" />
-      <CifraCocina titulo="Para revisar" valor={String(revisar)} tono={revisar > 0 ? 'malo' : undefined}
-                   pie="Diferencia de un 25 % o más y 5 € o más" />
-      <CifraCocina titulo="Contradicen al recuento anterior" valor="4" pie="Sin entradas de por medio" />
-      <CifraCocina titulo="Valor de lo que hay que revisar" valor={`−${nfEur.format(139)}`} sufijo="€" tono="malo"
-                   pie={<>A coste medio del local</>} />
-    </div>
+    <tr className="border-b border-cocina-linea-suave">
+      <td className="px-4 py-3 align-top">
+        <div className="text-[14px] font-bold text-cocina-tinta leading-tight">{f.nombre}</div>
+        <div className="text-[12px] text-cocina-tinta-3 mt-0.5">{f.quien} · {f.hora}</div>
+      </td>
+      <td className="px-3 py-3 align-top text-[12.5px] text-cocina-tinta-2 max-w-[220px]">
+        <div>{f.como}</div>
+        {f.pastilla && (
+          <div className="flex gap-1.5 mt-1 flex-wrap">
+            <PastillaCocina tono={f.pastilla === 'No cuadró dos veces' ? 'rojo' : 'ambar'}>{f.pastilla}</PastillaCocina>
+          </div>
+        )}
+      </td>
+      <td className="px-3 py-3 align-top num text-[13px] text-right text-cocina-tinta-2 whitespace-nowrap">{f.esperaba}</td>
+      <td className="px-3 py-3 align-top num text-[15px] text-right font-bold text-cocina-tinta whitespace-nowrap">{f.contado}</td>
+      <td className={`px-3 py-3 align-top num text-[13px] text-right whitespace-nowrap ${falta ? 'text-cocina-rojo' : 'text-cocina-verde'}`}>
+        {f.pct == null ? '—' : `${f.pct > 0 ? '+' : '−'}${nfPct.format(Math.abs(f.pct))} %`}
+      </td>
+      <td className="px-3 py-3 align-top num text-[13px] text-right text-cocina-tinta-2 whitespace-nowrap">
+        {f.eur === 0 ? <span className="text-[11px] text-cocina-tinta-3">sin coste</span> : nfEur.format(Math.abs(Math.round(f.eur ?? 0)))}
+      </td>
+      <td className="px-3 py-3 align-top">
+        <div className="min-w-[150px]">
+          <div className="text-[12.5px] font-semibold text-cocina-tinta">{etiquetaMotivo(f.motivo)}</div>
+        </div>
+      </td>
+      <td className="px-4 py-3 align-top" />
+    </tr>
   )
 }
 
-function Pie({ sinMotivo, aprobables }: { sinMotivo: number; aprobables: number }) {
+function Cabecera({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="px-6 py-3 bg-cocina-superficie border-t border-cocina-linea
-                    flex items-center justify-between gap-4 flex-wrap">
-      <p className="text-[12px] text-cocina-tinta-2 leading-[1.5] min-w-0 flex-1">
-        <b className="text-cocina-tinta">Motivos:</b>{' '}
-        {MOTIVOS_DE_COCINA.map(m => m.label).join(' · ')}
-        {sinMotivo > 0 && (
-          <> — <b className="text-cocina-ambar">{sinMotivo} sin motivo</b>, y sin motivo no se aplican.</>
-        )}
-      </p>
-      <div className="flex gap-2 shrink-0">
-        <BotonCocina peso="borde">Pedir recuento de 7</BotonCocina>
-        {sinMotivo > 0 ? (
-          <BotonCocina peso="borde">{`Faltan ${sinMotivo} motivo${sinMotivo === 1 ? '' : 's'}`}</BotonCocina>
-        ) : (
-          <BotonCocina peso="relleno">{`Aprobar los ${aprobables} que cuadran`}</BotonCocina>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function Bloque({ titulo, nota, children }: { titulo: string; nota: string; children: React.ReactNode }) {
-  return (
-    <div className="cocina-pagina">
-      <div>
-        <h2 className="text-[15px] font-bold text-cocina-tinta">{titulo}</h2>
-        <p className="text-[12.5px] text-cocina-tinta-2 mt-1">{nota}</p>
-      </div>
-      {children}
-    </div>
+    <thead>
+      <tr className="bg-cocina-superficie-2 text-[11px] font-bold tracking-[.06em] uppercase text-cocina-tinta-3">
+        <th className="text-left px-4 py-2 font-bold">Producto · quién contó</th>
+        <th className="text-left px-3 py-2 font-bold">Cómo se contó</th>
+        <th className="text-right px-3 py-2 font-bold">Esperaba</th>
+        <th className="text-right px-3 py-2 font-bold">Contado</th>
+        <th className="text-right px-3 py-2 font-bold">Dif.</th>
+        <th className="text-right px-3 py-2 font-bold">€</th>
+        <th className="text-left px-3 py-2 font-bold">Motivo</th>
+        <th className="px-4 py-2">{children}</th>
+      </tr>
+    </thead>
   )
 }
 
 it('genera la captura de Aprobar recuento a 1280, antes y después', () => {
   const cuerpo = renderToStaticMarkup(
     <div className="cocina min-h-full">
-      <Bloque
-        titulo="ANTES · 11/09, 01:00"
-        nota={'La pantalla ofrecía «Aprobar los 28 que cuadran» y la base contestaba con 13 líneas '
-            + 'que la pantalla ni siquiera enseña. Sin forma de arreglarlo desde aquí.'}
-      >
-        <Cifras cuadran={21} revisar={7} />
-        <div className="rounded-cocina px-3.5 py-3 text-[13px] bg-cocina-rojo-bg text-cocina-rojo border border-cocina-rojo/35">
-          apply_inventory_count: 13 línea(s) a revisar sin motivo. Asigna un motivo antes de aprobar.
+
+      {/* ── ANTES ─────────────────────────────────────────────────────── */}
+      <div className="cocina-pagina">
+        <div>
+          <h2 className="text-[15px] font-bold text-cocina-tinta">ANTES · lo que salía al aprobar</h2>
+          <p className="text-[12.5px] text-cocina-tinta-2 mt-1">
+            La hoja vieja, con la atribución automática dentro del paso de aprobar.
+            Detrás de «Es esto» estaban los 212 «otro» del RECON del 10/09.
+          </p>
         </div>
-        <PanelCocina>
-          <RotuloDePanel derecha="Ordenado por valor">Revisa antes de aprobar · 7</RotuloDePanel>
-          <Pie sinMotivo={0} aprobables={28} />
-        </PanelCocina>
-      </Bloque>
+        <div className="rounded-lg border border-border-default overflow-hidden bg-card">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-page text-[11px] uppercase text-text-tertiary">
+                <th className="text-left px-3 py-2 font-medium">Artículo</th>
+                <th className="text-right px-3 py-2 font-medium">Sistema</th>
+                <th className="text-right px-3 py-2 font-medium">Contado</th>
+                <th className="text-right px-3 py-2 font-medium">Dif.</th>
+                <th className="text-left px-3 py-2 font-medium">Causa</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[['Coca-Cola Original Lata', '240', '4', '−98,3%'],
+                ['Solomillo de Pollo Prefrito', '35.000', '25.000', '−28,6%']].map(([n, s1, c, d]) => (
+                <tr key={n} className="border-t border-border-default">
+                  <td className="px-3 py-2 text-sm text-text-primary">{n}</td>
+                  <td className="px-3 py-2 text-sm text-right tabular-nums text-text-secondary">{s1}</td>
+                  <td className="px-3 py-2 text-sm text-right tabular-nums text-text-primary">{c}</td>
+                  <td className="px-3 py-2 text-sm text-right tabular-nums text-warning">{d}</td>
+                  <td className="px-3 py-2 min-w-[240px]">
+                    <div className="rounded-md border border-accent/20 bg-accent-bg/40 px-2.5 py-1.5 space-y-1">
+                      <div className="text-[12px] text-text-primary">El sistema cree: <b>No atribuible</b></div>
+                      <p className="text-[11px] text-text-secondary leading-snug">
+                        La cobertura del consumo no llega para proponer una causa.
+                      </p>
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded bg-accent text-text-on-accent font-medium">Es esto</span>
+                        <span className="px-1.5 py-0.5 text-[11px] border border-border-default rounded bg-card text-text-secondary">Otra…</span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      <Bloque
-        titulo="DESPUÉS · faltan motivos"
-        nota={'La misma regla en los dos sitios. El botón no ofrece aprobar lo que la base va a '
-            + 'rechazar: dice cuántos faltan y lleva a la primera fila que lo espera.'}
-      >
-        <Cifras cuadran={21} revisar={7} />
-        <PanelCocina>
-          <RotuloDePanel derecha="Ordenado por valor">Revisa antes de aprobar · 7</RotuloDePanel>
-          <Pie sinMotivo={2} aprobables={26} />
-        </PanelCocina>
-      </Bloque>
+      {/* ── DESPUÉS ───────────────────────────────────────────────────── */}
+      <div className="cocina-pagina">
+        <div>
+          <h2 className="text-[15px] font-bold text-cocina-tinta">DESPUÉS · la misma pantalla, en solo lectura</h2>
+          <p className="text-[12.5px] text-cocina-tinta-2 mt-1">
+            INV-00218 tal y como queda tras aprobarlo. Sin botones de aprobar, recontar ni desplegables.
+          </p>
+        </div>
 
-      <Bloque
-        titulo="DESPUÉS · con los siete motivos puestos"
-        nota="Lo que ve Julio en INV-00218 ahora mismo: los siete rellenados, nada pendiente."
-      >
-        <Cifras cuadran={21} revisar={7} />
+        <div className="flex justify-between items-end gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[24px] font-bold tracking-[-.015em] leading-[1.2] text-cocina-tinta">
+              Recuento del jueves 10
+            </h1>
+            <p className="text-[12.5px] text-cocina-tinta-2 mt-1.5">
+              INV-00218 · contado por Johanny Garzón Rodríguez, Natacha del Valle Rondón y Pamela Guzman Velásquez · 35 productos
+            </p>
+            <p className="text-[13px] text-cocina-verde font-semibold mt-1.5">
+              ✓ Aprobado por Julio el jueves 11 a las 08:02 · 25 productos ajustados · −148{nb}€ a coste medio (2 sin coste, fuera de esa suma)
+            </p>
+          </div>
+          <BotonCocina peso="borde">Ver los 16 que cuadran</BotonCocina>
+        </div>
+
+        <div className="grid grid-cols-4 gap-px bg-cocina-linea-suave border border-cocina-linea rounded-cocina-md overflow-hidden shadow-cocina">
+          <CifraCocina titulo="Cuadran" valor="16" tono="bueno" pie="Se aplicaron sin motivo" />
+          <CifraCocina titulo="Revisadas" valor="12" pie="Llevan motivo puesto a mano" />
+          <CifraCocina titulo="Sin contar" valor="7" pie="No entraron en el ajuste" />
+          <CifraCocina titulo="Valor ajustado" valor="−148" sufijo="€" tono="malo"
+                       pie={<>A coste medio · <b>2</b> sin coste, fuera de esta suma</>} />
+        </div>
+
         <PanelCocina>
-          <RotuloDePanel derecha="Ordenado por valor">Revisa antes de aprobar · 7</RotuloDePanel>
-          <Pie sinMotivo={0} aprobables={28} />
+          <RotuloDePanel derecha="Ordenado por valor">Lo que se revisó · 12</RotuloDePanel>
+          <table className="w-full border-collapse">
+            <Cabecera />
+            <tbody>{REVISADAS.map(f => <FilaLeida key={f.nombre} f={f} />)}</tbody>
+          </table>
         </PanelCocina>
-      </Bloque>
+      </div>
     </div>,
   )
 
@@ -132,16 +244,21 @@ it('genera la captura de Aprobar recuento a 1280, antes y después', () => {
   writeFileSync(resolve(__dirname, '../../../../dist/captura_aprobar_recuento.html'), html)
 })
 
-// La foto no puede enseñar botones que la pantalla no tiene (B84.2).
-describe('la captura y la pantalla usan los mismos textos de botón', () => {
-  const textos = (ruta: string) =>
-    [...readFileSync(resolve(__dirname, ruta), 'utf8')
-      .matchAll(/Faltan \$\{sinMotivo\} motivo|Aprobar los \$\{aprobables\} que cuadran/g)].map(m => m[0]).sort()
+// La foto no puede enseñar lo que la pantalla no tiene (B84.2).
+describe('la captura y la pantalla dicen lo mismo', () => {
+  const pagina = () => readFileSync(
+    resolve(__dirname, '../../../../src/modules/supply/components/AprobarRecuento.tsx'), 'utf8')
+  const foto = () => readFileSync(resolve(__dirname, './capturaAprobarRecuento.test.tsx'), 'utf8')
 
-  it('los dos botones del pie, en los dos ficheros', () => {
-    const enLaFoto = textos('./capturaAprobarRecuento.test.tsx')
-    const enLaPagina = textos('../../../../src/modules/supply/components/AprobarRecuento.tsx')
-    expect(enLaPagina.length).toBe(2)
-    expect(enLaFoto).toEqual(enLaPagina)
+  it('los cuatro títulos de las cifras en solo lectura', () => {
+    for (const t of ['Cuadran', 'Revisadas', 'Sin contar', 'Valor ajustado']) {
+      expect(pagina()).toContain(`titulo="${t}"`)
+      expect(foto()).toContain(`titulo="${t}"`)
+    }
+  })
+
+  it('el rótulo del panel aprobado', () => {
+    expect(pagina()).toContain("'Lo que se revisó'")
+    expect(foto()).toContain('Lo que se revisó · 12')
   })
 })

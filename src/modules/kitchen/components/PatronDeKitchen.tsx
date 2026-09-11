@@ -158,7 +158,7 @@ export function PastillaCocina({
 export function BotonCocina({
   peso = 'relleno', disabled, onClick, children, type = 'button',
 }: {
-  peso?: 'relleno' | 'borde' | 'fantasma'
+  peso?: 'relleno' | 'borde' | 'fantasma' | 'aviso'
   disabled?: boolean
   onClick?: () => void
   children: ReactNode
@@ -168,6 +168,9 @@ export function BotonCocina({
     relleno:  'border-cocina-acento bg-cocina-acento text-white',
     borde:    'border-cocina-acento bg-cocina-superficie text-cocina-acento-ink',
     fantasma: 'border-cocina-linea bg-transparent text-cocina-tinta-2',
+    // `aviso`: el siguiente paso que NO es aprobar. Tiene que verse sin pensar
+    // y no puede confundirse con el botón que aplica (11/09/2026).
+    aviso:    'border-cocina-ambar bg-cocina-ambar-bg text-cocina-ambar',
   }[peso]
   return (
     <button

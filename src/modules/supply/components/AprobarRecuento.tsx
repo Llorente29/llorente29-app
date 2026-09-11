@@ -35,6 +35,7 @@ import {
 import {
   buildCountReview,
   getCountReviewThresholds,
+  getApprovalFacts,
   saveReason,
   motivoPideNota,
   MOTIVOS_DE_COCINA,
@@ -42,6 +43,7 @@ import {
   type CountReview,
   type ReviewLine,
   type CountReviewThresholds,
+  type HechosDeLaAprobacion,
 } from '@/modules/supply/services/countApprovalService'
 import { requestRecount } from '@/modules/supply/services/countEntryService'
 import {
@@ -99,6 +101,7 @@ export default function AprobarRecuento({
   const [busyLine, setBusyLine] = useState<string | null>(null)
   const [approving, setApproving] = useState(false)
   const [verCuadran, setVerCuadran] = useState(false)
+  const [hechos, setHechos] = useState<HechosDeLaAprobacion | null>(null)
   const [tick, setTick] = useState(0)
 
   const recargar = useCallback(() => setTick(t => t + 1), [])
@@ -114,7 +117,13 @@ export default function AprobarRecuento({
         const umbrales = await getCountReviewThresholds(accountId)
         const ls = await listCountLines(count.id)
         const r = await buildCountReview(count.id, ls, umbrales)
+        // Lo aplicado sale del libro, no de la cabecera. Y sólo cuando hay algo
+        // aplicado: pedirlo antes de aprobar daría ceros que no significan nada.
+        const h = count.status === 'aprobado'
+          ? await getApprovalFacts(count.id).catch(() => null)
+          : null
         if (cancel) return
+        setHechos(h)
         setTh(umbrales)
         setLines(ls)
         setReview(r)
@@ -126,7 +135,16 @@ export default function AprobarRecuento({
       }
     })()
     return () => { cancel = true }
-  }, [count.id, accountId, tick])
+  }, [count.id, count.status, accountId, tick])
+
+  /**
+   * LO APROBADO NO SE TOCA DESDE AQUÍ (11/09/2026).
+   *
+   * Antes, al aprobar, Folvy devolvía a la tabla vieja —la de «El sistema cree:
+   * No atribuible · Es esto»— y el recuento se veía en una pantalla distinta de
+   * la que se había usado para revisarlo. Un recuento se ve SIEMPRE aquí.
+   */
+  const soloLectura = count.status === 'aprobado' || count.status === 'anulado'
 
   // Las que se pueden aprobar de una vez: las que cuadran, más las de revisar
   // que YA tienen motivo. El botón cuenta lo que va a hacer, no lo que hay.
@@ -139,6 +157,33 @@ export default function AprobarRecuento({
     () => review ? review.toReview.filter(r => !r.line.reasonCode).length : 0,
     [review],
   )
+
+  /**
+   * LO APROBADO SE LEE DE LA FILA, NO SE VUELVE A CALCULAR.
+   *
+   * Medido el 11/09 sobre INV-00218: la regla aplicada HOY marca 12 líneas y
+   * Julio revisó 7. No es un fallo de la regla — es que sus propias
+   * correcciones a mano de las 07:53 movieron el stock, y la razón
+   * `contradiccion` se calcula contra lo que se ha movido desde el recuento
+   * anterior. Recalcular sobre un recuento cerrado enseña un reparto que NUNCA
+   * existió.
+   *
+   * Así que, en solo lectura, «revisada» es un hecho guardado en la fila: que
+   * lleve motivo. Es la familia de la regla 30 — la lista con la que se decide
+   * no puede ser la lista con la que se lee lo ya decidido.
+   */
+  const vista = useMemo(() => {
+    if (!review) return null
+    if (!soloLectura) return review
+    const todas = [...review.toReview, ...review.ok]
+    const conMotivo = todas.filter(r => r.line.reasonCode)
+    conMotivo.sort((a, b) => Math.abs(b.line.varianceValue ?? 0) - Math.abs(a.line.varianceValue ?? 0))
+    return {
+      ...review,
+      toReview: conMotivo,
+      ok: todas.filter(r => !r.line.reasonCode),
+    }
+  }, [review, soloLectura])
 
   const paraRecontar = useMemo(
     () => review ? review.toReview.filter(r => !r.line.recountRequestedAt).length : 0,
@@ -250,6 +295,7 @@ export default function AprobarRecuento({
   const contadores = review?.counts
   const quienes = [...new Set(lines.map(l => l.countedByName).filter(Boolean))] as string[]
 
+
   return (
     <div className="cocina cocina-pagina">
       {/* ── Cabecera ── */}
@@ -271,10 +317,16 @@ export default function AprobarRecuento({
               {quienes.length > 0 && <> · contado por {listar(quienes)}</>}
               {' · '}{lines.length} producto{lines.length === 1 ? '' : 's'}
             </p>
+            {soloLectura && (
+              <p className="text-[13px] text-cocina-verde font-semibold mt-1.5 inline-flex items-center gap-1.5">
+                <Check size={14} />
+                {fraseDeLaAprobacion(count, hechos)}
+              </p>
+            )}
           </div>
-          {contadores && contadores.ok > 0 && (
+          {vista && vista.ok.length > 0 && (
             <BotonCocina peso="borde" onClick={() => setVerCuadran(v => !v)}>
-              {verCuadran ? 'Ocultar' : 'Ver'} los {contadores.ok} que cuadran
+              {verCuadran ? 'Ocultar' : 'Ver'} los {vista.ok.length} que cuadran
             </BotonCocina>
           )}
         </div>
@@ -292,8 +344,35 @@ export default function AprobarRecuento({
         </div>
       )}
 
-      {/* ── Las cuatro cifras ── */}
-      {contadores && (
+      {/* ── Las cuatro cifras, aprobado ──
+           «Contradicen» y «Valor de lo que hay que revisar» son cifras para
+           DECIDIR, y se recalculan contra el stock de hoy: en un recuento
+           cerrado enseñarían un número que no es el que se vio al aprobarlo.
+           Aquí van las dos que no se mueven: lo que quedó sin contar y lo que
+           de verdad se aplicó, leído del libro. */}
+      {soloLectura && vista && (
+        <div className="grid grid-cols-4 gap-px bg-cocina-linea-suave border border-cocina-linea rounded-cocina-md overflow-hidden shadow-cocina">
+          <CifraCocina titulo="Cuadran" valor={String(vista.ok.length)} tono="bueno"
+                       pie="Se aplicaron sin motivo" />
+          <CifraCocina titulo="Revisadas" valor={String(vista.toReview.length)}
+                       pie="Llevan motivo puesto a mano" />
+          <CifraCocina titulo="Sin contar" valor={String(lines.length - vista.ok.length - vista.toReview.length)}
+                       pie="No entraron en el ajuste" />
+          <CifraCocina
+            titulo="Valor ajustado"
+            valor={hechos?.valorNeto == null ? '—'
+              : `${hechos.valorNeto < 0 ? '−' : '+'}${nfEur.format(Math.abs(Math.round(hechos.valorNeto)))}`}
+            sufijo={hechos?.valorNeto == null ? undefined : '€'}
+            tono={(hechos?.valorNeto ?? 0) < 0 ? 'malo' : undefined}
+            pie={hechos && hechos.sinCoste > 0
+              ? <>A coste medio · <b>{hechos.sinCoste}</b> sin coste, fuera de esta suma</>
+              : <>A coste medio del local</>}
+          />
+        </div>
+      )}
+
+      {/* ── Las cuatro cifras, en revisión ── */}
+      {!soloLectura && contadores && (
         <div className="grid grid-cols-4 gap-px bg-cocina-linea-suave border border-cocina-linea rounded-cocina-md overflow-hidden shadow-cocina">
           <CifraCocina
             titulo="Cuadran" valor={String(contadores.ok)} tono="bueno"
@@ -327,14 +406,14 @@ export default function AprobarRecuento({
       {/* ── Revisa antes de aprobar ── */}
       <PanelCocina>
         <RotuloDePanel derecha="Ordenado por valor">
-          Revisa antes de aprobar · {contadores?.toReview ?? 0}
+          {soloLectura ? 'Lo que se revisó' : 'Revisa antes de aprobar'} · {vista?.toReview.length ?? 0}
         </RotuloDePanel>
 
-        {review && review.toReview.length === 0 ? (
+        {vista && vista.toReview.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <Check size={26} className="text-cocina-verde mx-auto" />
             <p className="text-[15px] font-bold text-cocina-tinta mt-2">
-              Todo cuadra: {review.counts.ok} de {review.counts.ok}
+              Todo cuadra: {vista.ok.length} de {vista.ok.length}
             </p>
             <p className="text-[12.5px] text-cocina-tinta-3 mt-1">
               Ninguna línea se sale de lo normal ni contradice al recuento anterior.
@@ -355,11 +434,12 @@ export default function AprobarRecuento({
               </tr>
             </thead>
             <tbody>
-              {review?.toReview.map(r => (
+              {vista?.toReview.map(r => (
                 <FilaRevision
                   key={r.line.id}
                   r={r}
                   busy={busyLine === r.line.id}
+                  soloLectura={soloLectura}
                   onMotivo={onMotivo}
                   onRecontar={onRecontar}
                 />
@@ -370,12 +450,12 @@ export default function AprobarRecuento({
       </PanelCocina>
 
       {/* ── Las que cuadran, cuando se piden ── */}
-      {verCuadran && review && (
+      {verCuadran && vista && (
         <PanelCocina>
-          <RotuloDePanel>Cuadran · {review.counts.ok}</RotuloDePanel>
+          <RotuloDePanel>Cuadran · {vista.ok.length}</RotuloDePanel>
           <table className="w-full border-collapse">
             <tbody>
-              {review.ok.map(r => (
+              {vista.ok.map(r => (
                 <tr key={r.line.id} className="border-b border-cocina-linea-suave last:border-0">
                   <td className="px-4 py-2.5 text-[13px] font-semibold text-cocina-tinta">{r.line.itemName}</td>
                   <td className="px-3 py-2.5 text-[12.5px] text-cocina-tinta-2">{r.howCounted}</td>
@@ -398,7 +478,9 @@ export default function AprobarRecuento({
         </PanelCocina>
       )}
 
-      {/* ── Pie fijo ── */}
+      {/* ── Pie fijo ── Sólo mientras haya algo que decidir. Un recuento
+           aprobado no ofrece botones: lo aplicado no se toca desde aquí. */}
+      {!soloLectura && (
       <div className="sticky bottom-0 -mx-6 -mb-[30px] px-6 py-3 bg-cocina-superficie border-t border-cocina-linea
                       flex items-center justify-between gap-4 flex-wrap">
         <p className="text-[12px] text-cocina-tinta-2 leading-[1.5] min-w-0 flex-1">
@@ -415,7 +497,7 @@ export default function AprobarRecuento({
             </BotonCocina>
           )}
           {sinMotivo > 0 ? (
-            <BotonCocina peso="borde" onClick={irAlPrimeroSinMotivo}>
+            <BotonCocina peso="aviso" onClick={irAlPrimeroSinMotivo}>
               {`Faltan ${sinMotivo} motivo${sinMotivo === 1 ? '' : 's'}`}
             </BotonCocina>
           ) : (
@@ -425,17 +507,57 @@ export default function AprobarRecuento({
           )}
         </div>
       </div>
+      )}
     </div>
   )
+}
+
+/**
+ * «Aprobado por Julio el jueves 11 a las 08:02 · 25 productos ajustados ·
+ *  −148,41 € a coste medio».
+ *
+ * Las cifras salen del libro, y lo que no se puede valorar se dice en vez de
+ * sumarse como cero (regla 7). Si falta el nombre o la hora, se dice también:
+ * inventarlos sería peor que no tenerlos.
+ */
+function fraseDeLaAprobacion(
+  count: InventoryCount,
+  hechos: HechosDeLaAprobacion | null,
+): string {
+  if (count.status === 'anulado') return 'Anulado. No ha tocado el stock.'
+  const quien = count.approvedByName ? `Aprobado por ${count.approvedByName}` : 'Aprobado'
+  const cuando = count.approvedAt ? ` ${cuandoLargo(count.approvedAt)}` : ''
+  if (!hechos) return `${quien}${cuando}.`
+  const n = `${hechos.ajustes} producto${hechos.ajustes === 1 ? '' : 's'} ajustado${hechos.ajustes === 1 ? '' : 's'}`
+  const val = hechos.valorNeto == null
+    ? 'sin coste fiable para valorarlo'
+    : `${hechos.valorNeto < 0 ? '−' : '+'}${nfEur.format(Math.abs(hechos.valorNeto))}\u00A0€ a coste medio`
+  const fuera = hechos.sinCoste > 0
+    ? ` (${hechos.sinCoste} sin coste, fuera de esa suma)`
+    : ''
+  return `${quien}${cuando} · ${n} · ${val}${fuera}`
+}
+
+/** «el jueves 11 a las 08:02», en hora de Madrid (regla 4). */
+function cuandoLargo(iso: string): string {
+  const d = new Date(iso)
+  const dia = new Intl.DateTimeFormat('es-ES', {
+    weekday: 'long', day: 'numeric', timeZone: 'Europe/Madrid',
+  }).format(d)
+  const hh = new Intl.DateTimeFormat('es-ES', {
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Madrid',
+  }).format(d)
+  return `el ${dia} a las ${hh}`
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 
 function FilaRevision({
-  r, busy, onMotivo, onRecontar,
+  r, busy, soloLectura, onMotivo, onRecontar,
 }: {
   r: ReviewLine
   busy: boolean
+  soloLectura: boolean
   onMotivo: (r: ReviewLine, code: string, note: string | null) => void
   onRecontar: (r: ReviewLine) => void
 }) {
@@ -481,6 +603,10 @@ function FilaRevision({
             : nfEur.format(Math.abs(Math.round(l.varianceValue)))}
         </td>
         <td className="px-3 py-3 align-top">
+          {soloLectura ? (
+            <MotivoPuesto l={l} />
+          ) : (
+          <>
           <select
             value={l.reasonCode ?? ''}
             disabled={busy}
@@ -507,8 +633,11 @@ function FilaRevision({
               </BotonCocina>
             </div>
           )}
+          </>
+          )}
         </td>
         <td className="px-4 py-3 align-top">
+          {!soloLectura && (
           <div className="flex gap-2 justify-end">
             <BotonCocina
               peso={contradice ? 'relleno' : 'borde'}
@@ -519,6 +648,7 @@ function FilaRevision({
               {l.recountRequestedAt ? 'Pedido' : 'Pedir recuento'}
             </BotonCocina>
           </div>
+          )}
         </td>
       </tr>
 
@@ -536,6 +666,32 @@ function FilaRevision({
         </tr>
       )}
     </>
+  )
+}
+
+/**
+ * El motivo que se puso, y quién lo puso.
+ *
+ * `reasonByName` se sella por trigger desde el 11/09/2026. Las líneas de antes
+ * no lo tienen, y entonces no se escribe nada: un «—» inventado o un nombre
+ * supuesto valdrían menos que el hueco (regla 30: el literal de reserva es para
+ * lo que no existe, no para lo que no se ha guardado).
+ */
+function MotivoPuesto({ l }: { l: InventoryCountLine }) {
+  if (!l.reasonCode) {
+    return <span className="text-[12.5px] text-cocina-tinta-3">sin motivo</span>
+  }
+  const etiqueta = MOTIVOS_DE_COCINA.find(m => m.value === l.reasonCode)?.label ?? l.reasonCode
+  return (
+    <div className="min-w-[150px]">
+      <div className="text-[12.5px] font-semibold text-cocina-tinta">{etiqueta}</div>
+      {l.reasonNote && (
+        <div className="text-[11.5px] text-cocina-tinta-2 leading-snug mt-0.5">{l.reasonNote}</div>
+      )}
+      {l.reasonByName && (
+        <div className="text-[11px] text-cocina-tinta-3 mt-0.5">lo puso {l.reasonByName}</div>
+      )}
+    </div>
   )
 }
 

@@ -115,6 +115,44 @@ export async function getLinesRequiringReason(
   return out
 }
 
+/**
+ * LO QUE DE VERDAD SE APLICÓ AL APROBAR.
+ *
+ * Sale del libro (`stock_movement`), no de la cabecera del recuento: la
+ * cabecera dice quién y cuándo, y el libro dice QUÉ. Si se contaran las líneas
+ * en vez de los movimientos, la cifra incluiría las que no movieron nada.
+ *
+ * `sinCoste` va aparte a propósito (regla 7): un total que se calla los
+ * movimientos que no sabe valorar es un total que miente.
+ */
+export interface HechosDeLaAprobacion {
+  ajustes: number
+  valorNeto: number | null
+  sinCoste: number
+}
+
+export async function getApprovalFacts(countId: string): Promise<HechosDeLaAprobacion> {
+  requireSupabase()
+  const { data, error } = await (supabase! as unknown as {
+    from: (t: string) => ReturnType<NonNullable<typeof supabase>['from']>
+  })
+    .from('stock_movement')
+    .select('qty_base, unit_cost')
+    .eq('source_type', 'inventory_count')
+    .eq('source_id', countId)
+  if (error) throw new Error(`No se pudieron leer los ajustes aplicados: ${error.message}`)
+  const filas = (data as Row[] | null) ?? []
+  let neto = 0
+  let conCoste = 0
+  let sinCoste = 0
+  for (const f of filas) {
+    if (f.unit_cost == null) { sinCoste += 1; continue }
+    neto += Number(f.qty_base) * Number(f.unit_cost)
+    conCoste += 1
+  }
+  return { ajustes: filas.length, valorNeto: conCoste > 0 ? neto : null, sinCoste }
+}
+
 export type MotivoRevision =
   'desviacion' | 'needs_review' | 'contradiccion' | 'a_ojo' | 'sin_referencia'
 

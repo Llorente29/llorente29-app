@@ -47,6 +47,7 @@ export interface InventoryCount {
   startedAt: string | null
   closedAt: string | null
   approvedAt: string | null
+  approvedByName: string | null
   createdAt: string
   lineCount?: number
 }
@@ -87,6 +88,7 @@ export interface InventoryCountLine {
   lineNoReference: boolean
   /** La nota de «Otro». Obligatoria cuando el motivo es «otro». */
   reasonNote: string | null
+  reasonByName: string | null
   countedByName: string | null
   countedAt: string | null
   /** Lo contó, se le pidió mirarlo otra vez, y le salió lo mismo. */
@@ -251,7 +253,7 @@ export async function listAreasWithItems(_accountId: string, locationId: string)
 export async function listInventoryCounts(accountId: string, locationId: string): Promise<InventoryCount[]> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, created_at, inventory_count_line(count)')
+    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, approved_by_name, created_at, inventory_count_line(count)')
     .eq('account_id', accountId)
     .eq('location_id', locationId)
     .order('created_at', { ascending: false })
@@ -274,6 +276,7 @@ export async function listInventoryCounts(accountId: string, locationId: string)
       startedAt: (r.started_at as string | null) ?? null,
       closedAt: (r.closed_at as string | null) ?? null,
       approvedAt: (r.approved_at as string | null) ?? null,
+      approvedByName: (r.approved_by_name as string | null) ?? null,
       createdAt: r.created_at as string,
       lineCount: Number(count),
     }
@@ -283,7 +286,7 @@ export async function listInventoryCounts(accountId: string, locationId: string)
 export async function getInventoryCount(countId: string): Promise<InventoryCount | null> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, created_at')
+    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, approved_by_name, created_at')
     .eq('id', countId)
     .maybeSingle()
   if (error) throw new Error(`Error cargando el conteo: ${error.message}`)
@@ -304,6 +307,7 @@ export async function getInventoryCount(countId: string): Promise<InventoryCount
     startedAt: (r.started_at as string | null) ?? null,
     closedAt: (r.closed_at as string | null) ?? null,
     approvedAt: (r.approved_at as string | null) ?? null,
+    approvedByName: (r.approved_by_name as string | null) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -315,7 +319,7 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
     .select(`
       id, recipe_item_id, storage_area_id, position, system_qty, counted_qty,
       variance_qty, variance_pct, variance_value, abc_class, within_tolerance, reason_code,
-      reason_note, needs_review, no_reference, counted_by_name, counted_at, counted_qty_confirmed,
+      reason_note, reason_by_name, needs_review, no_reference, counted_by_name, counted_at, counted_qty_confirmed,
       recount_requested_at, recount_of,
       recipe_item:recipe_item_id (
         name, computed_cost, family_id, needs_review,
@@ -364,6 +368,7 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
       lineNeedsReview: Boolean(r.needs_review),
       lineNoReference: Boolean(r.no_reference),
       reasonNote: (r.reason_note as string | null) ?? null,
+      reasonByName: (r.reason_by_name as string | null) ?? null,
       countedByName: (r.counted_by_name as string | null) ?? null,
       countedAt: (r.counted_at as string | null) ?? null,
       confirmedTwice: r.counted_qty_confirmed != null,
