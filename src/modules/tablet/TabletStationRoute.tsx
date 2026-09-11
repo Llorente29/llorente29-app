@@ -244,11 +244,16 @@ export default function TabletStationRoute() {
           <TabletAvailabilityTab token={token} locationName={locationName} />
         )}
 
-        {tab === 'pedidos' && (
-          <div className="h-full overflow-y-auto p-4 bg-page">
-            <OrdersFeed locationId={locInfo?.locationId ?? ''} token={token} />
-          </div>
-        )}
+        {/* PEDIDOS SE QUEDA MONTADO, SOLO SE ESCONDE (11/09/2026).
+            `OrdersFeed` es quien declara si hay trabajo en curso, y de eso
+            depende que la tablet NO se recargue en mitad de un servicio. Si se
+            desmontaba al cambiar de pestaña, su `declaraTrabajoEnCurso(clave, 0)`
+            de limpieza dejaba la estación diciendo «no hay nada» — y una tablet
+            aparcada en Disponibilidad, que es justo donde se agotan los extras,
+            se recargaba sola con comandas vivas. */}
+        <div className={`h-full overflow-y-auto p-4 bg-page${tab === 'pedidos' ? '' : ' hidden'}`}>
+          <OrdersFeed locationId={locInfo?.locationId ?? ''} token={token} />
+        </div>
 
         {tab === 'impresoras' && (
           <div className="h-full overflow-y-auto p-4 bg-page">
