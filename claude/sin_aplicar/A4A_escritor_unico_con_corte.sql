@@ -160,6 +160,29 @@ GRANT EXECUTE ON FUNCTION public.cortes_aprobados(uuid, uuid[]) TO service_role;
 COMMENT ON FUNCTION public.cortes_aprobados(uuid, uuid[]) IS
   'El corte de cada ingrediente en un local: la ultima linea de recuento APROBADO, con la misma vara que usa el motor de recuentos. Es LA definicion; nadie escribe otra.';
 
+-- ── (3b) LA FECHA DEL ATAJO, EN UNA SOLA PIEZA ─────────────────────────
+-- El atajo: una venta posterior a esta fecha NO puede tener movimientos con la
+-- llave vieja, asi que ni se buscan. Medido el 11/09 sobre las 1.224 filas del
+-- motor viejo que quedan: la ultima venta con motor B tiene fecha de libro
+-- 03/08 23:07:55 (la ultima ESCRITURA fue el 04/08 a la 01:10, del reproceso
+-- nocturno, pero de una venta del 03/08 — y lo que decide el atajo es la fecha
+-- de la venta, no la de la escritura).
+--
+-- Se deja un dia entero de margen: 05/08. Y vive aqui, en una funcion, para
+-- que el escritor, el revert y el vigia lean EL MISMO numero. Tres copias de
+-- una fecha es como se consigue que el vigia vigile otra cosa.
+CREATE OR REPLACE FUNCTION public._corte_motor_viejo()
+RETURNS timestamptz
+LANGUAGE sql
+IMMUTABLE
+AS $fn$ SELECT TIMESTAMPTZ '2026-08-05 00:00:00+02' $fn$;
+
+REVOKE ALL ON FUNCTION public._corte_motor_viejo() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public._corte_motor_viejo() FROM anon;
+
+COMMENT ON FUNCTION public._corte_motor_viejo() IS
+  'Fecha de libro por debajo de la cual una venta PUEDE tener movimientos con la llave vieja (source_id = sale_line). Medido 11/09: la ultima es del 03/08 23:07. El vigia de consumo avisa si deja de ser verdad.';
+
 -- ── (4) EL ESCRITOR UNICO ───────────────────────────────────────────────
 -- Misma firma (uuid -> integer), asi que CREATE OR REPLACE no crea sobrecarga
 -- (regla 2). La llaman `tg_sale_consumption_on_complete`,
@@ -198,12 +221,12 @@ BEGIN
          OR COALESCE(v_sale.order_status, '') IN ('cancelled', 'rejected')
          OR NOT COALESCE(v_sale.is_active, true);
 
-  -- El motor viejo escribia con la llave de la LINEA. Su ultima fila es del
-  -- 03/08 (medido sobre las 3.277 que quedan), asi que una venta posterior no
-  -- puede tener ninguna y no hace falta ni mirar. Buscarlas cuesta 28 ms por
-  -- venta porque el `OR source_id IN (...)` no puede usar `idx_sm_source`, y
-  -- ese peaje no lo paga un pedido de hoy.
-  v_legacy := v_fecha < TIMESTAMPTZ '2026-08-04 00:00:00+02';
+  -- El motor viejo escribia con la llave de la LINEA. Por encima del corte no
+  -- existe ninguna (ver `_corte_motor_viejo`, que es donde vive la fecha y su
+  -- medicion), asi que ni se buscan: ese `OR source_id IN (...)` cuesta 28 ms
+  -- por venta porque no puede usar `idx_sm_source`, y un pedido de hoy no tiene
+  -- por que pagarlo. El vigia de consumo avisa si deja de ser verdad.
+  v_legacy := v_fecha < public._corte_motor_viejo();
 
   -- ── LO QUE ESTA VENTA YA TIENE APUNTADO ───────────────────────────────
   SELECT COALESCE(array_agg(DISTINCT sm.recipe_item_id), '{}') INTO v_previos
@@ -390,8 +413,24 @@ DECLARE
 BEGIN
   SELECT * INTO v_sale FROM sale WHERE id = p_sale_id;
   IF NOT FOUND THEN RETURN 0; END IF;
+
+  -- GUARDA DE CUENTA, y con una excepcion que hay que decir en voz alta.
+  -- `belongs_to_account` se apoya en `auth.uid()`: MEDIDO, sin JWT devuelve
+  -- FALSE (rol postgres, uid NULL -> false). Y a esta funcion la llama
+  -- `cancel_sale`, que es lo que ejecutan los webhooks de Last y de HubRise
+  -- con service_role y sin JWT. Una guarda a secas aqui tumbaria TODAS las
+  -- anulaciones que llegan de las plataformas — el camino que ya se rompio en
+  -- silencio el 13/08.
+  -- Asi que la guarda muerde cuando hay una persona detras, y la puerta se
+  -- cierra por el otro lado: a `authenticated` se le quita el EXECUTE, porque
+  -- el front no la llama (barrido del 11/09: solo aparece en los tipos
+  -- generados). Sin persona y sin front, quien queda es el motor.
+  IF auth.uid() IS NOT NULL AND NOT public.belongs_to_account(v_sale.account_id) THEN
+    RAISE EXCEPTION 'revert_sale_consumption: sin acceso a la cuenta de la venta %', p_sale_id;
+  END IF;
+
   v_fecha  := COALESCE(v_sale.created_at, now());
-  v_legacy := v_fecha < TIMESTAMPTZ '2026-08-04 00:00:00+02';
+  v_legacy := v_fecha < public._corte_motor_viejo();
 
   SELECT COALESCE(array_agg(DISTINCT sm.recipe_item_id), '{}') INTO v_previos
     FROM public.stock_movement sm
@@ -521,6 +560,95 @@ BEGIN
 END;
 $fn$;
 
+-- ── (7) EL VIGIA DEL ATAJO ──────────────────────────────────────────────
+-- Condicion de Julio (11/09): un atajo que depende de un dato medido hoy
+-- necesita que alguien avise si ese dato deja de ser verdad.
+--
+-- La comprobacion NO es «filas con llave de linea creadas despues del 04/08»,
+-- y es importante por que: hoy hay 13 de esas, escritas el 04/08 a la 01:10
+-- por el reproceso nocturno, pero de una venta del 03/08 23:07. El atajo no
+-- mira cuando se escribio el movimiento: mira la FECHA DE LA VENTA. Vigilar lo
+-- otro seria un vigia que avisa de algo que no es el riesgo — y que ademas
+-- avisaria el primer dia, que es como se consigue que nadie lo lea.
+--
+-- Lo que tiene que seguir siendo cero: ningun movimiento con la llave vieja
+-- cuya VENTA tenga fecha de libro por encima del corte.
+CREATE OR REPLACE FUNCTION public.consumo_sin_descontar_watchdog()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $fn$
+DECLARE v_n integer; v_detalle text; v_b integer; v_b_detalle text;
+BEGIN
+  SELECT count(*), string_agg(
+           format('%s de %s (%s intentos, desde %s)',
+                  COALESCE(s.pos_short_code, s.platform_order_code, s.id::text),
+                  COALESCE(l.name, 'sin local'), f.attempts,
+                  to_char(f.first_failed_at AT TIME ZONE 'Europe/Madrid', 'DD/MM HH24:MI')),
+           E'\n' ORDER BY f.first_failed_at)
+    INTO v_n, v_detalle
+    FROM public.sale_consumption_failure f
+    JOIN public.sale s ON s.id = f.sale_id
+    LEFT JOIN public.locations l ON l.id = f.location_id
+   WHERE f.resolved_at IS NULL AND f.last_failed_at < now() - interval '1 hour';
+
+  IF COALESCE(v_n, 0) > 0 THEN
+    PERFORM public.encolar_alerta(
+      p_kind => 'consumo_sin_descontar_pendiente',
+      p_subject => format('%s pedido(s) siguen sin descontar del almacén', v_n),
+      p_message => 'El reintento automático no ha podido con estos. '
+                || 'Su consumo NO está en el stock:' || E'\n' || v_detalle,
+      p_debounce_kind => 'consumo_sin_descontar_pendiente',
+      p_debounce_window => interval '6 hours',
+      p_account_id => NULL, p_location_id => NULL, p_brand_id => NULL, p_severity => 'alto');
+  END IF;
+
+  -- EL ATAJO DEL MOTOR VIEJO. Tiene que seguir dando 0.
+  SELECT count(*), string_agg(DISTINCT COALESCE(s.pos_short_code, s.platform_order_code, s.id::text), ', ')
+    INTO v_b, v_b_detalle
+    FROM public.stock_movement sm
+    JOIN public.sale_line sl ON sl.id = sm.source_id
+    JOIN public.sale s       ON s.id = sl.sale_id
+   WHERE sm.movement_type = 'consumo'
+     AND sm.source_type   = 'sale'
+     AND COALESCE(s.created_at, s.sold_at) >= public._corte_motor_viejo();
+
+  IF COALESCE(v_b, 0) > 0 THEN
+    PERFORM public.encolar_alerta(
+      p_kind => 'motor_viejo_ha_vuelto_a_escribir',
+      p_subject => format('%s movimiento(s) de consumo con la llave vieja por encima del corte', v_b),
+      p_message => format(
+          'El escritor unico se salta la llave vieja en las ventas posteriores al %s porque, medido el '
+       || '11/09, no existia ninguna. Ya no es verdad: hay %s en %s venta(s) (%s). '
+       || 'Mientras esto no sea 0, esas ventas pueden estar descontando dos veces y el atajo hay que quitarlo.',
+          to_char(public._corte_motor_viejo() AT TIME ZONE 'Europe/Madrid', 'DD/MM/YYYY'),
+          v_b, (SELECT count(DISTINCT sl2.sale_id) FROM public.stock_movement sm2
+                  JOIN public.sale_line sl2 ON sl2.id = sm2.source_id
+                  JOIN public.sale s2 ON s2.id = sl2.sale_id
+                 WHERE sm2.movement_type='consumo' AND sm2.source_type='sale'
+                   AND COALESCE(s2.created_at, s2.sold_at) >= public._corte_motor_viejo()),
+          v_b_detalle),
+      p_debounce_kind => 'motor_viejo_ha_vuelto_a_escribir',
+      p_debounce_window => interval '6 hours',
+      p_account_id => NULL, p_location_id => NULL, p_brand_id => NULL, p_severity => 'critico');
+  END IF;
+
+  RETURN COALESCE(v_n, 0) + COALESCE(v_b, 0);
+END;
+$fn$;
+
+REVOKE ALL ON FUNCTION public.consumo_sin_descontar_watchdog() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.consumo_sin_descontar_watchdog() FROM anon;
+REVOKE ALL ON FUNCTION public.consumo_sin_descontar_watchdog() FROM authenticated;
+
+-- ── (8) LA PUERTA DE `revert_sale_consumption` ──────────────────────────
+-- El front no la llama (barrido del 11/09: solo esta en `src/types/database.ts`,
+-- que es generado). Quien la llama es `cancel_sale`, desde la base. Asi que
+-- `authenticated` sobra, y una funcion SECURITY DEFINER que borra stock no se
+-- deja abierta «por si acaso».
+REVOKE EXECUTE ON FUNCTION public.revert_sale_consumption(uuid) FROM authenticated;
+
 -- ── (6) LOS PERMISOS, MEDIDOS DENTRO DE LA MIGRACION ────────────────────
 -- No se tocan: `CREATE OR REPLACE` los conserva. Que `authenticated` pueda
 -- llamar a estas dos sin guarda de cuenta es una deuda declarada aparte;
@@ -535,10 +663,14 @@ BEGIN
   SELECT array_to_string(p.proacl, ' | ') INTO v_rev FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname = 'public' AND p.proname = 'revert_sale_consumption';
-  IF v_gen IS DISTINCT FROM 'postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres'
-     OR v_rev IS DISTINCT FROM 'postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres' THEN
-    RAISE EXCEPTION 'A4a: permisos movidos -> generate=[%] revert=[%]', v_gen, v_rev;
+  -- `generate` se queda como estaba (su deuda se cierra aparte, no de
+  -- madrugada y en el camino de los pedidos). `revert` pierde `authenticated`.
+  IF v_gen IS DISTINCT FROM 'postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres' THEN
+    RAISE EXCEPTION 'A4a: permisos de generate movidos -> [%]', v_gen;
   END IF;
-  RAISE NOTICE 'A4a permisos intactos';
+  IF v_rev LIKE '%authenticated=%' OR v_rev NOT LIKE '%service_role=X%' THEN
+    RAISE EXCEPTION 'A4a: revert deberia quedar sin authenticated y con service_role -> [%]', v_rev;
+  END IF;
+  RAISE NOTICE 'A4a permisos: generate=[%] revert=[%]', v_gen, v_rev;
 END
 $acl$;
