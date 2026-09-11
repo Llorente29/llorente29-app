@@ -718,3 +718,59 @@ BEGIN
     v_gen, v_rev, v_tabla, v_viejo;
 END
 $acl$;
+
+-- ── (9) LAS HUELLAS DE LO QUE ACABA DE QUEDAR REGISTRADO ────────────────
+-- Regla 17: el fichero lleva la version exacta que queda en la base. Aqui se
+-- comprueba, y si no cuadra la migracion se deshace entera.
+--
+-- Y se comprueban LAS SEIS, no solo la protagonista. Esto sale de un fallo de
+-- esta misma noche (12/09 00:33): mi ensayo instalaba `generate` y
+-- `reprocess` pero no el `revert` nuevo, y comprobaba solo dos huellas. Corrio
+-- el revert VIEJO —el que no sabe de cortes— y C12 salio en rojo por un hueco
+-- del ensayo, no por un defecto del cambio. Un ensayo a medias no se distingue
+-- de un defecto real: cuesta una vuelta entera averiguar cual de los dos es.
+DO $huellas$
+DECLARE
+  v_esperado CONSTANT text[][] := ARRAY[
+    ['generate_sale_consumption',      '6c04a3e1abaa035549d286315f6c893f'],
+    ['revert_sale_consumption',        'e66eb22634582aa69cad84d0cef9478b'],
+    ['reprocess_sale',                 '14e1e332a2bf552e9e6ae4793fb22f56'],
+    ['cortes_aprobados',               '364a73db64e9586cd04fa7903c1d581c'],
+    ['_corte_motor_viejo',             'fbccf734a5d59f36cf6498bc01f8823a'],
+    ['consumo_sin_descontar_watchdog', '743757af9cd59b26de88793d7102dcb5']
+  ];
+  v_i int; v_nombre text; v_quiero text; v_hay text; v_n int;
+BEGIN
+  FOR v_i IN 1 .. array_length(v_esperado, 1) LOOP
+    v_nombre := v_esperado[v_i][1];
+    v_quiero := v_esperado[v_i][2];
+
+    -- Regla 2: si `CREATE OR REPLACE` hubiera creado una SOBRECARGA en vez de
+    -- reemplazar, aqui saldrian dos filas. Se cuenta antes de mirar la huella.
+    SELECT count(*) INTO v_n FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.proname = v_nombre;
+    IF v_n <> 1 THEN
+      RAISE EXCEPTION 'A4a: % tiene % firmas, deberia tener 1 (sobrecarga, regla 2)', v_nombre, v_n;
+    END IF;
+
+    SELECT md5(p.prosrc) INTO v_hay FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.proname = v_nombre;
+    IF v_hay IS DISTINCT FROM v_quiero THEN
+      RAISE EXCEPTION 'A4a: % registrada con huella % y el fichero dice % (regla 17)',
+        v_nombre, v_hay, v_quiero;
+    END IF;
+  END LOOP;
+
+  -- Y las dos piezas que no son funciones.
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_icl_item_count'
+                   AND relnamespace = 'public'::regnamespace) THEN
+    RAISE EXCEPTION 'A4a: falta el indice idx_icl_item_count';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'stock_movement_sale_dedup'
+               AND relnamespace = 'public'::regnamespace) THEN
+    RAISE EXCEPTION 'A4a: el indice gemelo stock_movement_sale_dedup sigue ahi';
+  END IF;
+
+  RAISE NOTICE 'A4a: las 6 huellas cuadran con el fichero, una firma cada una, indice puesto y gemelo fuera.';
+END
+$huellas$;
