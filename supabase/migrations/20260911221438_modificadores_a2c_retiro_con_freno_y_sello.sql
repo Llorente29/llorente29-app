@@ -1,11 +1,10 @@
 -- ════════════════════════════════════════════════════════════════════════
 -- A2c · LO QUE LAST RETIRA SE RETIRA TAMBIÉN EN FOLVY, Y SE VE
 --
--- SIN APLICAR. Este fichero vive en `claude/sin_aplicar/` a propósito: el
--- 11/09 Julio cerró la banda («nada que toque la entrada de pedidos, el
--- consumo o el stock se aplica en la base entre las 12:15 y las 23:45»).
--- Cuando se aplique, se mueve a `supabase/migrations/` CON LA VERSIÓN EXACTA
--- que registre la base (regla 17). Mientras esté aquí, no está vivo.
+-- APLICADA el 12/09/2026 a las 00:14 (Madrid, reloj de la base), dentro de la
+-- ventana que abrió Julio a las 23:45. Version registrada: 20260911221438.
+-- Huella de la pieza: 797ee3d35c3a91a3348699f16dcb3323 — la MISMA que se
+-- ensayo (16 casos, 0 fallos), no una copia con otros comentarios.
 --
 -- ── QUÉ HACE ────────────────────────────────────────────────────────────
 -- El importador de Last construye, en cada pasada, la lista de opciones de
@@ -285,18 +284,6 @@ BEGIN
   INTO v_a_retirar, v_frenadas, v_visitadas, v_sin_ref, v_marcas;
 
   -- ── LA VUELTA. Lo que Last VUELVE a servir se vuelve a encender solo.
-  --
-  -- Condición de Julio (11/09 13:15): «que sea reversible por la misma vía».
-  -- Retirar sin esto sería una puerta de un solo sentido, y entonces el freno
-  -- por marca no bastaría: una pasada incompleta que se colara por debajo del
-  -- umbral dejaría opciones apagadas para siempre, a mano de nadie.
-  --
-  -- Aquí NO hay freno, y es a propósito (regla 7): un freno protege de
-  -- ESCONDER, y encender no esconde nada. Lo que sí hay es cuenta y lista, que
-  -- es lo que convierte «ha pasado algo» en algo que se puede mirar.
-  --
-  -- El raíl sigue puesto: sólo marcas visitadas. Y sólo lo que Last sirve HOY,
-  -- que es exactamente `p_option_ext_ids`.
   SELECT COALESCE(array_agg(mo.id), '{}')
     INTO v_reactivar
     FROM public.modifier_option mo
@@ -311,9 +298,7 @@ BEGIN
      AND mo.external_id IS NOT NULL
      AND mo.external_id = ANY(p_option_ext_ids);
 
-  -- ── LO QUE EL RESCATE PUEDE SALVAR. Se cuenta ANTES de tocar nada, con la
-  -- misma consulta que luego escribe, para que el `dry_run` y la pasada de
-  -- verdad den el mismo número (regla 31: la misma vara a los dos lados).
+  -- ── LO QUE EL RESCATE PUEDE SALVAR.
   WITH evidencia AS (
     SELECT sl.modifier_option_id AS opt, min(sl.external_product_id) AS ref
       FROM public.sale_line sl
@@ -384,16 +369,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- Regla 8: una marca frenada no se queda dentro de un JSON que a lo mejor
-  -- nadie abre. Interrumpe, y con contenido: marca, cifras y nombres.
-  --
-  -- Va por `encolar_alerta` y no por `_queue_system_alert` por dos razones: el
-  -- envoltorio deja `account_id` y `brand_id` en NULL —y esto es un aviso DE
-  -- una cuenta y DE una marca (regla 9)—, y devuelve el id, que es lo que
-  -- permite distinguir «encolado» de «callado a propósito» por el antirruido.
-  --
-  -- Un aviso POR MARCA, con su propia clave: si se frenan dos, el antirruido
-  -- de una no tapa a la otra.
   IF p_aplicar AND v_frenadas > 0 THEN
     FOR v_marca IN
       SELECT m FROM jsonb_array_elements(v_marcas) m WHERE (m->>'frenada')::boolean
@@ -455,25 +430,53 @@ REVOKE ALL ON FUNCTION public.modificadores_plan_de_retiro(uuid, uuid[], text[],
 REVOKE ALL ON FUNCTION public.modificadores_plan_de_retiro(uuid, uuid[], text[], boolean, integer, numeric) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.modificadores_plan_de_retiro(uuid, uuid[], text[], boolean, integer, numeric) TO service_role;
 
--- La comprobación de permisos va DENTRO de la migración, no después. El 11/09
--- p21 salió con la puerta abierta a `anon` porque `proacl` se miró cuando la
--- migración ya estaba aplicada, que es tarde.
-DO $acl$
-DECLARE v_acl text;
+-- Las 22 opciones que Julio retiro a mano el 11/09 a las 15:05 (6 preguntas de
+-- combos que ya no estaban en ningun plato: 5 de Smash Brothers y 1 vacia de
+-- Mila's). Se quedaron sin sello porque el campo no existia. No se reactivan y
+-- NO son retiro de Last: fue una persona.
+UPDATE public.modifier_option
+   SET deactivated_at = '2026-09-11 13:05:37.008036+00',
+       deactivated_by = 'persona'
+ WHERE updated_at = '2026-09-11 13:05:37.008036+00'
+   AND NOT is_active;
+
+-- La comprobacion va DENTRO: si algo no cuadra, esto aborta y no se aplica
+-- nada. El 11/09 p21 salio con la puerta abierta a `anon` porque `proacl` se
+-- miro cuando la migracion ya estaba aplicada, que es tarde.
+DO $verifica$
+DECLARE v_md5 text; v_acl text; v_persona int; v_nulos int; v_check int;
 BEGIN
-  SELECT array_to_string(p.proacl, ' | ') INTO v_acl
+  SELECT md5(p.prosrc), array_to_string(p.proacl, ' | ') INTO v_md5, v_acl
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname = 'public' AND p.proname = 'modificadores_plan_de_retiro';
-  -- PUBLIC sale como `=X/postgres`, con el hueco del beneficiario vacío: hay
-  -- que anclarlo al principio o detrás del separador, o `service_role=X/…` lo
-  -- dispara también y la guarda se vuelve inútil.
-  IF v_acl IS NULL
-     OR v_acl LIKE '%anon=%'
-     OR v_acl LIKE '%authenticated=%'
-     OR v_acl LIKE '=X/%'
-     OR v_acl LIKE '%| =X/%' THEN
-    RAISE EXCEPTION 'A2c: permisos mal puestos en modificadores_plan_de_retiro -> %', COALESCE(v_acl, '(nulo)');
+  SELECT count(*) INTO v_persona FROM public.modifier_option
+   WHERE deactivated_by = 'persona' AND deactivated_at = '2026-09-11 13:05:37.008036+00';
+  SELECT count(*) INTO v_nulos FROM public.modifier_option
+   WHERE NOT is_active AND deactivated_by IS NULL;
+  SELECT count(*) INTO v_check FROM pg_constraint
+   WHERE conrelid = 'public.modifier_option'::regclass
+     AND conname = 'modifier_option_deactivated_by_valid';
+
+  IF v_md5 <> '797ee3d35c3a91a3348699f16dcb3323' THEN
+    RAISE EXCEPTION 'A2c: la huella no es la ensayada -> %', v_md5;
   END IF;
-  RAISE NOTICE 'A2c permisos: %', v_acl;
+  IF v_acl IS NULL OR v_acl LIKE '%anon=%' OR v_acl LIKE '%authenticated=%'
+     OR v_acl LIKE '=X/%' OR v_acl LIKE '%| =X/%' THEN
+    RAISE EXCEPTION 'A2c: permisos mal puestos -> %', COALESCE(v_acl, '(nulo)');
+  END IF;
+  IF v_persona <> 22 THEN
+    RAISE EXCEPTION 'A2c: se esperaban 22 opciones marcadas como persona, hay %', v_persona;
+  END IF;
+  IF v_nulos <> 7 THEN
+    RAISE EXCEPTION 'A2c: se esperaban 7 apagadas sin sello, hay %', v_nulos;
+  END IF;
+  IF v_check <> 1 THEN
+    RAISE EXCEPTION 'A2c: falta el CHECK de deactivated_by';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+                  WHERE c.relname = 'modifier_option' AND t.tgname = 'trg_modifier_option_retiro') THEN
+    RAISE EXCEPTION 'A2c: falta el disparador del sello';
+  END IF;
+  RAISE NOTICE 'A2c OK · huella % · acl % · persona % · sin sello %', v_md5, v_acl, v_persona, v_nulos;
 END
-$acl$;
+$verifica$;
