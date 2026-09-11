@@ -524,15 +524,27 @@ export async function listSoldOutOptions(locationId: string | null): Promise<Sol
     for (const l of (locs as any[]) ?? []) nombrePorLocal.set(l.id as string, (l.name as string) ?? '')
   }
 
+  // LA LISTA CON LA QUE SE LEE TIENE QUE SER LA MISMA CON LA QUE SE ESCRIBE.
+  //
+  // Desde el 11/09 una opción de MARCA PROPIA sin `external_id` se agota con la
+  // referencia que publica el catálogo: `mo_<id>`. Buscarla por `external_id`
+  // no la encuentra, y la fila salía «(opción desconocida)» — que es la regla
+  // 30 en su forma más barata de cometer y más cara de ver.
   const refs = Array.from(new Set(filas.map(f => f.external_id as string)))
+  const idsDeRefInventada = refs
+    .filter(r => r.startsWith('mo_'))
+    .map(r => r.slice(3))
   const { data: opts } = await supabase!.from('modifier_option')
     .select('id, name, external_id, modifier_group:modifier_group_id(name)')
-    .in('external_id', refs)
+    .or([
+      `external_id.in.(${refs.filter(r => !r.startsWith('mo_')).map(r => `"${r}"`).join(',') || '""'})`,
+      idsDeRefInventada.length > 0 ? `id.in.(${idsDeRefInventada.join(',')})` : null,
+    ].filter(Boolean).join(','))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const infoPorRef = new Map<string, { id: string; name: string; grupo: string; filas: number }>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const o of (opts as any[]) ?? []) {
-    const ref = o.external_id as string
+    const ref = (o.external_id as string | null) ?? `mo_${o.id as string}`
     const prev = infoPorRef.get(ref)
     if (prev) { prev.filas += 1; continue }
     infoPorRef.set(ref, {

@@ -42,6 +42,13 @@
 //   menu_item_override con location_id — pero habría aparecido solo con el
 //   primero, publicando precios de marca en el escaparate de otro local.
 //
+// DEUDA DECLARADA (11/09/2026, Julio): ESTE PUBLICADOR NO GUARDA CUÁNDO PUBLICÓ.
+//   `brand_hubrise_catalog` tiene `created_at` y `updated_at` del ENLACE, no de
+//   la publicación. Así que hoy no se puede contestar desde la base a «¿tiene
+//   HubRise la carta de ahora?», que es justo la pregunta que hay que hacerse
+//   antes de fiarse de un 86. Se contestó a mano, empujando y mirando
+//   `availability_push_log`. Pendiente: sellar la fecha al publicar.
+//
 // sku_ref = menu_item.external_id (la MISMA matrícula que usa el 86). Donde falte
 //   (marcas nacidas en Folvy), se genera y PERSISTE 'fv_<id>' para que publicar y
 //   el 86 coincidan en la ref.
