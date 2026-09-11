@@ -491,6 +491,11 @@ Deno.serve(async (req: Request) => {
   // (`platos_que_last_no_sirve` / `platos_inactivos_que_last_si_sirve`), y con
   // `aplicar_activo: true` se escribe. Contar no se puede desactivar.
   const aplicarActivo = body.aplicar_activo === true;
+  // Lo mismo para los EXTRAS que Last ya no sirve (A2c, 11/09). Mismo trato
+  // que `aplicar_activo` y por la misma razón: contar no se puede desactivar,
+  // escribir sí. El informe SIEMPRE trae el plan —qué se retiraría, en qué
+  // marca y con qué freno—, aunque el interruptor esté apagado.
+  const aplicarRetiro = body.aplicar_retiro === true;
   if (!accountId || !orgId) {
     return jsonResponse({ error: "account_id and lastapp_organization_id required" }, 400);
   }
@@ -554,6 +559,7 @@ Deno.serve(async (req: Request) => {
   const report: any = {
     dry_run: dryRun,
     aplicar_activo: aplicarActivo,
+    aplicar_retiro: aplicarRetiro,
     // Con qué clave se ha comprobado que decide la base en esta pasada. Va en
     // el informe a propósito: una comprobación que no se ve no tranquiliza a
     // nadie, y el día que cambie un índice el informe lo enseña.
@@ -596,6 +602,9 @@ Deno.serve(async (req: Request) => {
       platos_que_last_no_sirve_ejemplo: [] as any[],
       platos_inactivos_que_last_si_sirve: 0,
       asignaciones_que_last_no_tiene: 0,
+      // A2c: el plan de retiro de EXTRAS, tal cual lo devuelve la base. Va
+      // entero a propósito: marca por marca, con sus cifras y su freno.
+      extras_que_last_no_sirve: null as any,
     },
     warnings: [] as string[],
   };
@@ -770,6 +779,7 @@ Deno.serve(async (req: Request) => {
     const inUseProducts = new Map<string, { brandId: string; brandName: string; catExtId: string | null; catName: string | null }>();
     const inUseCombos = new Map<string, { brandId: string; brandName: string }>();
     const categoryRows = new Map<string, { name: string; brandId: string }>(); // catExtId -> ...
+    const marcasConCatalogoRoto = new Set<string>();
 
     for (const catId of canonicalCatalogs) {
       const info = catalogInfo.get(catId)!;
@@ -780,6 +790,11 @@ Deno.serve(async (req: Request) => {
         catalog = await lastGet(`/catalogs/${catId}`, token, { "locationID": info.locId });
       } catch (e) {
         report.warnings.push(`catalog ${catId} (${info.brandName}): ${String(e)}`);
+        // A2c: una marca con un catálogo que no se ha podido leer NO cuenta
+        // como visitada, aunque otro catálogo suyo sí se haya leído. Media
+        // marca leída y tratada como entera es exactamente lo que retira de
+        // más.
+        marcasConCatalogoRoto.add(brandId);
         continue;
       }
       for (const cat of (catalog?.categories ?? [])) {
@@ -994,6 +1009,51 @@ Deno.serve(async (req: Request) => {
     const optionMap = await casarYActualizar(sb, "modifier_option", accountId, optionRows, dryRun, cuenta("modifier_option"));
     void optionMap;
     report.modifier_options = optionRows.length;
+
+    // ── LO QUE LAST YA NO SIRVE, EN EXTRAS (A2c) ────────────────────────────
+    //
+    // La decisión entera vive en `modificadores_plan_de_retiro`: el raíl (sólo
+    // marcas visitadas), la lista vacía que no retira, el freno por marca de
+    // Julio y el rescate del código antes de apagar. Aquí sólo se le pasa lo
+    // que esta pasada ha visto, porque eso es lo único que esta función sabe
+    // y la base no puede saber.
+    //
+    // VISITADA, para extras, es la marca cuyas PREGUNTAS ha recorrido esta
+    // pasada —no la que tiene platos—, menos las marcas con algún catálogo
+    // ilegible. Si una marca no aparece aquí, sus extras no se tocan aunque
+    // parezcan huérfanos: los 5 de Lobbers del 11/09 son justo ese caso.
+    const marcasVisitadasParaExtras = [...new Set(groupRows.map((g: any) => g.brand_id as string))]
+      .filter((b) => !marcasConCatalogoRoto.has(b));
+    try {
+      const { data: retiro, error: retErr } = await sb.rpc("modificadores_plan_de_retiro", {
+        p_account_id: accountId,
+        p_brand_ids: marcasVisitadasParaExtras,
+        p_option_ext_ids: [...new Set(optionRows.map((r: any) => r.external_id as string))],
+        p_aplicar: aplicarRetiro && !dryRun,
+      });
+      if (retErr) {
+        report.warnings.push(`retiro de extras: ${retErr.message}`);
+      } else {
+        report.sobrantes.extras_que_last_no_sirve = retiro;
+        // Regla 8: una marca frenada ya sale por `system_alert_queue`, pero
+        // también tiene que verse en el informe de la pasada, que es la
+        // pantalla que se mira primero.
+        for (const m of (retiro?.marcas ?? [])) {
+          if (m.frenada) {
+            report.warnings.push(
+              `retiro FRENADO en ${m.marca}: ${m.sobran} de ${m.activas} (${m.pct} %) — ${m.motivo_del_freno}`,
+            );
+          }
+        }
+        if ((retiro?.retiradas_sin_codigo ?? 0) > 0) {
+          report.warnings.push(
+            `retiro: ${retiro.retiradas_sin_codigo} opción(es) se apagan sin código; las líneas futuras con ese nombre no se enlazarán`,
+          );
+        }
+      }
+    } catch (e) {
+      report.warnings.push(`retiro de extras: ${String(e)}`);
+    }
 
     // 5.6 modifier_group_assignment (producto -> grupo)
     const assignRows: Array<any> = [];
