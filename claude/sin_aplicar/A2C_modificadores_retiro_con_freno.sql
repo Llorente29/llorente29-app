@@ -83,6 +83,82 @@
 -- con ese nombre se quedarían sin enlazar.
 -- ════════════════════════════════════════════════════════════════════════
 
+
+-- ════════════════════════════════════════════════════════════════════════
+-- §3 de Julio (11/09 13:15): «añade a `modifier_option` quién la retiró y
+-- cuándo, así, desde la primera retirada, el dato es verdad».
+--
+-- Dos columnas, no una: la fecha y el autor. Y un disparador que las rellena
+-- SOLO, para que sea verdad aunque quien apague la opción sea la pantalla y no
+-- esta pieza — si dependiera de que cada llamador se acuerde, el tablero 7
+-- diría «no se sabe» el día que alguien apague una a mano, que es justo el
+-- caso que hay que distinguir.
+--
+--   `deactivated_by = 'last'`    la retiró el importador porque Last dejó de servirla
+--   `deactivated_by = 'persona'` la apagó alguien desde Folvy
+--   NULL                          está encendida, o se apagó antes de que esto existiera
+--
+-- El CHECK admite NULL a propósito: hoy no hay ninguna opción apagada en las
+-- marcas cedidas, pero sí puede haberlas en marcas propias, y de ésas NO SE
+-- SABE quién las apagó. NULL es la verdad; inventar 'persona' sería rellenar
+-- un hueco con una suposición.
+--
+-- Y el CHECK se escribe contemplando los dos valores que se van a escribir:
+-- ése fue el fallo de A3 a las 12:32 —un CHECK sin el valor nuevo, 23514, y el
+-- pedido entero al suelo—, y no se repite.
+-- ════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.modifier_option
+  ADD COLUMN IF NOT EXISTS deactivated_at timestamptz,
+  ADD COLUMN IF NOT EXISTS deactivated_by text;
+
+DO $chk$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                  WHERE conrelid = 'public.modifier_option'::regclass
+                    AND conname = 'modifier_option_deactivated_by_valid') THEN
+    ALTER TABLE public.modifier_option
+      ADD CONSTRAINT modifier_option_deactivated_by_valid
+      CHECK (deactivated_by IS NULL OR deactivated_by IN ('last', 'persona'));
+  END IF;
+END
+$chk$;
+
+COMMENT ON COLUMN public.modifier_option.deactivated_at IS
+  'Cuando se apago esta opcion. NULL si esta encendida o si se apago antes de 09/2026.';
+COMMENT ON COLUMN public.modifier_option.deactivated_by IS
+  'Quien la apago: last (el importador, porque Last dejo de servirla) o persona (alguien desde Folvy). NULL = no se sabe.';
+
+CREATE OR REPLACE FUNCTION public.tg_modifier_option_retiro()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $tg$
+BEGIN
+  -- Se apaga: se sella cuando y quien. Si el llamador ya dijo quien —A2c dice
+  -- 'last'— se respeta; si no, fue una persona desde la pantalla.
+  IF OLD.is_active AND NOT NEW.is_active THEN
+    NEW.deactivated_at := COALESCE(NEW.deactivated_at, now());
+    NEW.deactivated_by := COALESCE(NEW.deactivated_by, 'persona');
+  -- Se enciende: el sello se borra. Una opcion encendida con fecha de retiro
+  -- seria una fila que se contradice a si misma, y el tablero 7 la pintaria.
+  ELSIF NOT OLD.is_active AND NEW.is_active THEN
+    NEW.deactivated_at := NULL;
+    NEW.deactivated_by := NULL;
+  END IF;
+  RETURN NEW;
+END;
+$tg$;
+
+REVOKE ALL ON FUNCTION public.tg_modifier_option_retiro() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.tg_modifier_option_retiro() FROM anon;
+REVOKE ALL ON FUNCTION public.tg_modifier_option_retiro() FROM authenticated;
+
+DROP TRIGGER IF EXISTS trg_modifier_option_retiro ON public.modifier_option;
+CREATE TRIGGER trg_modifier_option_retiro
+  BEFORE UPDATE OF is_active ON public.modifier_option
+  FOR EACH ROW EXECUTE FUNCTION public.tg_modifier_option_retiro();
+
 CREATE OR REPLACE FUNCTION public.modificadores_plan_de_retiro(
   p_account_id     uuid,
   p_brand_ids      uuid[],
@@ -261,7 +337,8 @@ BEGIN
 
   IF p_aplicar AND COALESCE(array_length(v_reactivar, 1), 0) > 0 THEN
     UPDATE public.modifier_option mo
-       SET is_active = true, updated_at = now()
+       SET is_active = true, deactivated_at = NULL, deactivated_by = NULL,
+           updated_at = now()
      WHERE mo.id = ANY(v_reactivar);
     GET DIAGNOSTICS v_reactivadas = ROW_COUNT;
     IF v_reactivadas <> COALESCE(array_length(v_reactivar, 1), 0) THEN
@@ -294,7 +371,8 @@ BEGIN
     GET DIAGNOSTICS v_rescatados = ROW_COUNT;
 
     UPDATE public.modifier_option mo
-       SET is_active = false, updated_at = now()
+       SET is_active = false, deactivated_at = now(), deactivated_by = 'last',
+           updated_at = now()
      WHERE mo.id = ANY(v_a_retirar);
     GET DIAGNOSTICS v_retiradas = ROW_COUNT;
 
