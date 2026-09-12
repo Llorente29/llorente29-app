@@ -363,3 +363,108 @@ Castilla.
 puede defender»**: negativo, o más de N veces el coste del escandallo. Con N=20
 son 2 filas más, las dos medidas y con nombre. El resto igual: se salta ese
 artículo y va a la lista.
+
+---
+
+# CAUSA RAÍZ de las ~912 · 12/09 10:05 · medida, no supuesta
+
+Julio: «no vale "se perdió el disparador" sin medirlo». No es el disparador.
+Son **tres causas encadenadas**, y la del medio no la había visto nadie.
+
+## 1 · Hasta el 12/08 · el disparo llegaba antes que las líneas
+
+Está escrito en el propio repositorio, en la cabecera de
+`20260812113446_..._consumo_al_escribir_lineas.sql`:
+
+> el webhook hace INSERT en sale -> el trigger salta -> pero las LINEAS todavia
+> no existen (las escribe adapt_lastapp_order DESPUES).
+> generate_sale_consumption recorre sale_line, no encuentra nada y escribe 0.
+> Nadie vuelve a lanzarlo.
+
+Arreglado el 12/08 con `trg_sale_line_consumption`
+(`after insert or update of menu_item_id on sale_line`, FOR EACH ROW).
+
+*(La cabecera de esa migración dice «FOR EACH STATEMENT» y el `create trigger`
+dice `for each row`. La nota está mal, el disparador no. Lo comprobé porque una
+función que usa `new` en un disparador de sentencia reventaría.)*
+
+## 2 · Del 12/08 al 23/08 · EL PLATO NO TENÍA RECETA
+
+El arreglo del 12/08 **no bajó la fuga**: 62 huecos la semana del 10/08 y 54 la
+del 17/08. Medido sobre las 91 ventas sin consumo de ese tramo:
+
+| | |
+|---|---:|
+| líneas de producto | 110 |
+| **sin plato asignado** | **0** |
+| plato **sin receta, todavía hoy** | 29 |
+| plato con receta | 81 |
+| …**con la receta enganchada DESPUÉS de la venta** | **81 de 81** |
+| primer enganche / último | **24/08** / 11/09 |
+
+**El disparador funcionaba. Lo que no existía era la receta.** El pedido
+entraba, `generate_sale_consumption` corría, no encontraba escandallo y escribía
+cero — que es lo correcto. Cuando alguien enganchó la receta al plato, a partir
+del 24/08, **nada volvió a mirar las ventas viejas.**
+
+*La deuda que esto deja, y sigue viva:* **enganchar una receta a un plato no
+recalcula las ventas pasadas de ese plato.** Cada vez que se configure un plato
+nuevo, sus ventas anteriores se quedan sin descontar para siempre. Y hoy hay
+**29 líneas apuntando a platos que siguen sin receta**.
+
+## 3 · Desde el 24/08 · el cron tapa dos días y ciega el resto
+
+`cron_recompute_missing_sale_consumption(2)`, instalado el 25/08, a las 01:30
+UTC. Sus tres filtros:
+
+```
+sold_at >= now() - 2 dias                 <- solo dos dias atras
+AND sold_at > max(ic.closed_at) del LOCAL <- su PROPIO corte, por local
+AND menu_item.recipe_item_id IS NOT NULL  <- mas estricto que el del motor
+```
+
+Su primera pasada (26/08 01:30) alcanzó hasta el 24/08 01:30. **Todo lo del
+23/08 hacia atrás ya era demasiado viejo, y nunca se barrió.** Por eso la serie
+se corta en seco el 23/08: no se arregló, **se quedó fuera de alcance**.
+
+**Y el corte del cron NO es el del motor.** El cron usa `max(closed_at)` por
+LOCAL; A4a usa `cortes_aprobados()` por INGREDIENTE con
+`COALESCE(counted_at, started_at, closed_at, created_at)`. **Dos definiciones
+del mismo corte** — justo lo que el §3 de la fase C prohíbe. El del cron es más
+grosero y salta ventas que el motor sí tocaría.
+
+## 4 · Lo que sigue vivo hoy
+
+Los **6 de HubRise** posteriores al 24/08 (29/08, 01/09, 03/09, 04/09, 06/09):
+medido uno a uno, **los seis fallan `pasa_el_corte_del_cron`**. El corte por
+local del cron los bloquea. Y ahí está el mecanismo que los entierra: una venta
+que se pasa de los dos días y luego recibe un recuento aprobado por encima
+**deja de ser visible para el cron, para siempre**.
+
+## 5 · Y una cosa que cambia el diseño del vigía
+
+Medido sobre los últimos 10 días (994 ventas): **ninguna se repara más de 12 h
+después.** El cron no está tapando nada hoy. Pero el consumo **no se escribe al
+entrar el pedido**:
+
+| origen | ventas | sin consumo | <5 min | 5 min–2 h | 2–12 h | >12 h | mediana |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| HubRise | 325 | 4 | 2 | 317 | 2 | 0 | 29 min |
+| Last | 669 | 0 | 1 | 20 | **648** | 0 | **125 min** |
+
+Se escribe **al cerrar la comanda** (`tab:closed`), no al aceptar el pedido.
+**Un vigía con umbral por debajo de 12 h ladraría cada noche** contra el
+funcionamiento normal. El umbral tiene que ser 12 h como mínimo, y yo pondría
+24 h.
+
+## 6 · Lo que esto obliga a añadir a la lista
+
+1. **Un barrido cuando se engancha una receta a un plato.** Sin eso, la causa 2
+   se repite con cada plato nuevo que se configure.
+2. **Los 29 platos sin receta**, con nombre, para que alguien los configure o
+   diga que no llevan.
+3. **Una sola definición del corte.** El cron tiene la suya; tiene que usar
+   `cortes_aprobados()`.
+4. **La ventana del cron (2 días) y su corte por local** dejan un agujero
+   permanente. O se amplía, o el vigía cubre lo que el cron no alcanza —
+   y entonces el vigía no puede usar el filtro del cron.
