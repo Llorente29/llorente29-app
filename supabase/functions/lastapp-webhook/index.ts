@@ -42,6 +42,7 @@
 // de ejecutar y la ingesta falla en silencio).
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // ── Normalización (idéntica al adaptador y al catálogo) ──
@@ -290,9 +291,86 @@ function resolveSaleBrand(
 // tab:updated/tab_products:updated (re-sync) y tab:closed (que además cierra).
 // GUARD DE ESTADO: una venta ya 'closed'/'cancelled' NO se re-adapta (un evento
 // tardío no puede corromper una venta consolidada, ni revertir su order_status).
+// ── EL PEDIDO ES LA COMANDA, NO LA FACTURA (13/09) ─────────────────────────
+//
+// QUE PASABA. Cerrar una comanda A MANO en Last emite una FACTURA NUEVA para
+// esa misma comanda. La identidad de la venta es `external_ref = bill.id`, asi
+// que la factura nueva no casaba con nada y nacia una segunda venta, que
+// ademas se cerraba y volvia a escribir consumo. El `tab.id` viajaba como
+// `external_tab_ref` pero era metadato: no lo miraba nadie.
+//
+// MEDIDO el 12/09, desde el 12/06: 25 comandas con una venta de mas, 649,17 EUR
+// contados dos veces y ~139 movimientos de almacen duplicados. Las tres de ese
+// dia se vieron porque la impresora de cocina saco tickets de pedidos ya
+// servidos. La rafaga del 02/07 20:01-20:03 —catorce— es el mismo mecanismo:
+// catorce comandas cerradas a mano seguidas, no un reproceso.
+//
+// LO QUE DISTINGUE UNA COSA DE LA OTRA (decision de Julio, 13/09):
+//   · FACTURA REPETIDA: mismo importe que una venta que ya existe para esa
+//     comanda -> NO se crea nada. Se apunta y se cuenta.
+//   · FACTURA ANADIDA: importe distinto, y entre todas suman la comanda -> es
+//     una CUENTA PARTIDA. Se crea, colgando de la misma comanda.
+//
+// POR QUE EL IMPORTE Y NO LAS LINEAS, que es lo que pedia la decision: medido,
+// `LastBill` NO trae lineas — solo totales (id, total, deliveryFee,
+// discountTotal, tax, taxableBase, payments). Las lineas que se guardan son
+// las del TAB, y son las mismas para las dos facturas. El importe es el unico
+// discriminador que Last da.
+//
+// Y HOY NO HAY NI UNA CUENTA PARTIDA que proteger: de los 25 pares, los 25
+// tienen el MISMO importe y ninguno nacio a la vez (94 minutos el mas rapido,
+// 10 dias el mas lento). Cuando entre sala con el cliente 2, las partidas
+// tendran importes distintos y pasaran por la otra rama.
+//
+// EL LIMITE, dicho: dos comensales que paguen EXACTAMENTE la mitad cada uno
+// darian dos facturas del mismo importe, y la segunda se leeria como repetida.
+// Por eso esto NUNCA es silencioso: cada vez que frena, lo cuenta en el
+// informe y lo encola como aviso con el id de la factura. Si alguna vez se
+// equivoca, se ve el mismo dia — que es lo contrario de lo que ha pasado
+// durante tres meses.
+async function ventaDeLaComanda(
+  sb: SupabaseClient, accountId: string, tabId: string | null, totalBill: number,
+): Promise<{ id: string; status: string; total: number } | null> {
+  if (!tabId) return null;
+  const { data, error } = await sb.from("sale")
+    .select("id, status, total, external_ref")
+    .eq("account_id", accountId).eq("source", "lastapp")
+    .eq("external_tab_ref", tabId).neq("status", "cancelled");
+  // Un buscador que no puede buscar NO deja pasar como si no hubiera nada: eso
+  // es justo como se crea el duplicado. Se lanza y el evento queda sin
+  // procesar, que se ve en `lastapp_webhook_log`.
+  if (error) throw new Error(`busqueda por comanda ${tabId}: ${error.message}`);
+  for (const v of data ?? []) {
+    // Redondeo a centimos: el total viaja como numeric y vuelve como cadena.
+    if (Math.abs(Number(v.total ?? 0) - totalBill) < 0.005) {
+      return { id: v.id as string, status: (v.status as string) ?? "open", total: Number(v.total ?? 0) };
+    }
+  }
+  return null;
+}
+
+/**
+ * Lo que el informe del receptor cuenta de este arreglo. Va SIEMPRE.
+ *
+ * SE PONE A CERO EN CADA PETICION, y no es un detalle: una edge function
+ * reutiliza el mismo isolate entre llamadas, asi que un contador de modulo
+ * sin reiniciar sumaria el de la peticion anterior y el informe diria «3
+ * facturas repetidas» en un aviso que no freno ninguna. Un contador que
+ * arrastra es peor que no tenerlo: parece medido.
+ */
+let elContadorDeComandas = contadorDeComandasNuevo();
+
+function contadorDeComandasNuevo() {
+  return {
+    facturas_repetidas: 0,
+    cuentas_partidas: 0,
+    detalle: [] as Array<Record<string, unknown>>,
+  };
+}
+
 async function upsertSale(
   sb: SupabaseClient, accountId: string, bill: LastBill, tab: LastTab, caches: HeaderCaches,
-): Promise<{ id: string; status: string; isNew: boolean } | null> {
+): Promise<{ id: string; status: string; isNew: boolean; repetida?: boolean } | null> {
   const billId = bill.id;
   if (!billId) return null;
   if (bill.deleted === true) return null;
@@ -345,6 +423,64 @@ async function upsertSale(
     return { id: (existing as { id: string }).id, status: "open", isNew: false };
   }
 
+  // ── LA GUARDA POR COMANDA ────────────────────────────────────────────────
+  // Esta factura no existe. Antes de crear una venta, se mira si la COMANDA ya
+  // tiene una con este mismo importe.
+  const yaEstaba = await ventaDeLaComanda(sb, accountId, tab.id ?? null, Number(common.total));
+  if (yaEstaba) {
+    elContadorDeComandas.facturas_repetidas++;
+    if (elContadorDeComandas.detalle.length < 20) {
+      elContadorDeComandas.detalle.push({
+        tipo: "factura repetida",
+        comanda: tab.id ?? null,
+        factura_nueva: String(billId),
+        venta_que_ya_existia: yaEstaba.id,
+        estado_de_esa_venta: yaEstaba.status,
+        importe: yaEstaba.total,
+        que_se_ha_hecho: yaEstaba.status === "open"
+          ? "no se crea otra; se refresca la que hay"
+          : "no se crea otra; la que hay ya estaba consolidada y no se toca",
+      });
+    }
+    console.error("COMANDA_CON_FACTURA_REPETIDA", tab.id, billId, yaEstaba.id);
+
+    // Si la que hay sigue abierta, se REFRESCA (es lo que pedia la decision:
+    // «como mucho se actualiza la que hay»). Si ya esta consolidada, no se
+    // toca: un evento tardio no corrompe una venta cerrada.
+    if (yaEstaba.status === "open") {
+      await sb.from("sale").update({ ...common, updated_at: new Date().toISOString() })
+        .eq("id", yaEstaba.id);
+      const { error: adaptErr } = await sb.rpc("adapt_lastapp_order", { p_sale_id: yaEstaba.id });
+      if (adaptErr) console.error(`re-adapt comanda ${tab.id}: ${adaptErr.message}`);
+    }
+    return { id: yaEstaba.id, status: yaEstaba.status, isNew: false, repetida: true };
+  }
+
+  // Importe distinto y la comanda ya tiene venta: es una CUENTA PARTIDA. Se
+  // crea, colgando de la misma comanda por `external_tab_ref`, y se cuenta
+  // para que se vea el dia que empiece a pasar.
+  if (tab.id) {
+    const { count, error: cErr } = await sb.from("sale")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", accountId).eq("source", "lastapp")
+      .eq("external_tab_ref", tab.id).neq("status", "cancelled");
+    if (cErr) throw new Error(`conteo de la comanda ${tab.id}: ${cErr.message}`);
+    if ((count ?? 0) > 0) {
+      elContadorDeComandas.cuentas_partidas++;
+      if (elContadorDeComandas.detalle.length < 20) {
+        elContadorDeComandas.detalle.push({
+          tipo: "cuenta partida",
+          comanda: tab.id,
+          factura_nueva: String(billId),
+          importe: Number(common.total),
+          ventas_que_ya_tenia: count,
+          que_se_ha_hecho: "se crea, colgando de la misma comanda",
+        });
+      }
+      console.error("COMANDA_CON_CUENTA_PARTIDA", tab.id, billId, count);
+    }
+  }
+
   // No existe -> nace 'open'.
   const { data: saleRow, error: saleErr } = await sb.from("sale").insert({
     account_id: accountId,
@@ -373,6 +509,12 @@ async function ingestBill(
   const r = await upsertSale(sb, accountId, bill, tab, caches);
   if (!r) return { written: false, reason: "no bill id / deleted" };
   if (r.status === "cancelled") return { written: false, reason: "cancelled, no close" };
+  // FACTURA REPETIDA: la venta de esta comanda ya existe y ya se cerro en su
+  // dia. Volver a cerrarla escribiria consumo por segunda vez, que es
+  // exactamente el dano que este arreglo viene a impedir.
+  if (r.repetida) {
+    return { written: false, reason: `factura repetida de la comanda ${tab.id ?? "?"}: no se cierra otra vez` };
+  }
 
   // close_sale: status='closed' + consolida COSTE + CONSUMO (motor canónico).
   const { error: closeErr } = await sb.rpc("close_sale", { p_sale_id: r.id });
@@ -451,6 +593,9 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
+
+  // A cero en cada peticion: ver la nota de `elContadorDeComandas`.
+  elContadorDeComandas = contadorDeComandasNuevo();
 
   const eventType = (payload?.type as string | undefined) ?? null;
   let note = "fase1-receptor";
@@ -579,6 +724,37 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // ── EL RASTRO DE LA GUARDA POR COMANDA ─────────────────────────────────
+  // Hoy no se enteraba nadie: los tres duplicados del 12/09 los vio Julio en
+  // la impresora de cocina, no en una pantalla. Va SIEMPRE en la respuesta,
+  // tambien cuando da cero: un contador que solo aparece cuando frena no se
+  // puede comparar con el de ayer (regla 8).
+  const comandas = { ...elContadorDeComandas };
+  if (comandas.facturas_repetidas > 0) {
+    const lineas = comandas.detalle
+      .filter((d) => d.tipo === "factura repetida")
+      .slice(0, 10)
+      .map((d) => `· comanda ${d.comanda} · factura nueva ${d.factura_nueva} · ${d.importe} EUR\n`
+                + `  la venta ${d.venta_que_ya_existia} ya existia (${d.estado_de_esa_venta}); ${d.que_se_ha_hecho}`)
+      .join("\n");
+    await encolarAlerta(sb, {
+      kind: "lastapp-webhook",
+      severity: "aviso",
+      subject: `Last ha mandado ${comandas.facturas_repetidas} factura(s) repetida(s) de comandas que ya tenian venta`,
+      message:
+        `Alguien ha cerrado a mano en Last una comanda que ya estaba servida, y Last ha emitido una `
+        + `factura nueva para ella. ANTES esto creaba una segunda venta y volvia a descontar del `
+        + `almacen; desde el 13/09 se frena aqui y no se crea nada.\n\n`
+        + `No hay nada que arreglar: es informativo. Sirve para saber cuantas veces pasa y en que `
+        + `comandas.\n\n${lineas}`,
+      debounceKind: claveDelDia("comanda_factura_repetida"),
+      debounceWindow: "6 hours",
+    }, {
+      supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
+      cronSecret: Deno.env.get("CRON_SECRET") ?? "",
+    });
+  }
+
   // Log SIEMPRE (auditoría).
   try {
     await sb.from("lastapp_webhook_log").insert({ headers, payload, note, processed: processedOk });
@@ -587,7 +763,10 @@ Deno.serve(async (req: Request) => {
   }
 
   // 200 SIEMPRE (Last considera entregado; reprocesamos desde el log si algo falló).
-  return new Response(JSON.stringify({ ok: true, event: eventType, processed: processedOk, error: processError }), {
+  return new Response(JSON.stringify({
+    ok: true, event: eventType, processed: processedOk, error: processError,
+    comandas,
+  }), {
     status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
