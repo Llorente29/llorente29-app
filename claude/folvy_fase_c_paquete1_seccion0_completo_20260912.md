@@ -162,3 +162,66 @@ mismos nombres. Toda consulta de estas pantallas lleva `account_id` (regla 9).
    encargo prohíbe. Pásamela como pasaste el encargo.
 
 Con esas tres, el §1 empieza.
+
+---
+
+# ADENDA · 11:05 · la franja del tablero 1, medida — y dos varas mías rotas
+
+La franja es lo único del tablero 1 que no estaba medido. Al medirla me he
+equivocado dos veces, y las dos merecen quedar escritas porque son trampas que
+volverán.
+
+## G1 · «Descuentan» NO se mide por `stock_movement.sale_line_id`
+
+Mi primera vara preguntaba si la **línea del extra** tenía un movimiento con su
+llave. Dio **0 de 1.378**, y no era verdad: el consumo de un extra se escribe
+colgando de la **línea del producto**, no de la del modificador —
+`_sale_line_raw_consumption` de la línea del plato ya trae dentro lo que aporta
+el modificador, y `base` agrupa por la línea del plato.
+
+Si la franja se hubiera construido con esa vara, **habría nacido diciendo 0 %**
+el día 1, con el almacén funcionando bien. La vara buena es: *el extra que la
+opción tiene decidido, ¿tiene movimiento en esa venta?*
+
+## G2 · El mismo NULO de esta mañana, otra vez
+
+`(mg.external_source = 'lastapp')` da **NULL** para una marca propia, no `false`.
+Mi recuento salió «cedidas 1.087 · propias 0 · sin saber 291». Las 291 son
+**propias**. Con `COALESCE(external_source,'propia')`: **lastapp 1.087 · propia
+291**. Es exactamente el agujero de la guarda de las 08:56, en otra consulta y
+cinco horas después. Va a la lista: **cualquier comparación con una columna que
+admite NULL se escribe con COALESCE o con `IS NOT DISTINCT FROM`.**
+
+## La franja, con las varas corregidas (Foodint, 30 días)
+
+| | |
+|---|---:|
+| líneas de extra vendidas | **1.378** |
+| de marca cedida · de marca propia | 1.087 · 291 |
+| con «qué lleva» decidido | **859** |
+| sin decidir | **519** |
+| que Folvy no conoce | **0** |
+| **descuentan del almacén** | **281 · el 20 %** |
+
+La maqueta pone 59 % (827 de 1.393) como ejemplo; la verdad de hoy es **20 %**.
+
+### Y una pregunta que sale de ahí y no es mía
+
+**859 tienen decidido qué llevan y sólo 281 descuentan.** Los 578 de diferencia
+pueden ser tres cosas legítimas —protegidos por el corte, frenados por precio
+indefendible, o que la receta del plato ya los lleve y el extra sustituya en vez
+de sumar— o una avería. **No lo he medido, y no lo pinto hasta saberlo**: una
+franja que diga «el 20 %» sin distinguir eso es un número que asusta sin
+enseñar. Eso es tablero 7, paquete 3.
+
+Para el paquete 1 propongo que la franja diga las cuatro cifras que **sí** están
+medidas (vendidas, con qué lleva, sin decidir, y las que Folvy no conoce) y deje
+el porcentaje para cuando el tablero 7 pueda explicarlo.
+
+## Lo que me falta para cerrar la RPC del tablero 1
+
+**La pastilla «N vendidas antes de llegar».** Está en la maqueta y no sé
+definirla sin inventármela: ¿ventas de una opción con fecha anterior a la de la
+propia opción en Folvy? ¿O las que entraron por la cola de excepciones antes de
+enlazarse? Dímelo y la pinto; mientras, la RPC no la devuelve y la fila no la
+enseña (regla 35).
