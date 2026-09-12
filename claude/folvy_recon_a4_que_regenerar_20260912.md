@@ -265,3 +265,101 @@ Y una que no es de A4 pero sale de aquí: **914 pedidos cerrados sin descontar y
 cero avisos.** Tape lo que tape A4, mientras no haya un vigía que cuente
 «ventas cerradas sin consumo» esto vuelve a pasar y nadie se entera. Es la
 regla 8, y es lo que yo pondría delante de todo lo demás.
+
+---
+
+# ADENDA · 12/09 09:15 · dos correcciones mías y una contradicción
+
+## A · Corrección 1: los costes negativos son 24, no 22
+
+Dije 22 en el parte. Son **24**, y Julio lo tenía bien. Mi consulta devolvió 24
+filas y yo conté mal las de la lista. Además hay **40 más a cero exacto**.
+
+## B · Corrección 2: mi filtro escondía 43 pedidos sin descontar
+
+Yo decía «quedan 6 posteriores al 24/08». Julio dice 49. Medido: la diferencia
+es **mía**, y está en mi propio filtro.
+
+| estado | estado_pedido | sin `closed_at` | ventas | Carabanchel |
+|---|---|---|---:|---:|
+| **`open`** | **`cancelled`** | sí | **44** | **40** |
+| `open` | `delivery_failed` | sí | 2 | 1 |
+| `cancelled` | `cancelled` | sí | 12 | 4 |
+
+**Yo excluyo `order_status IN ('cancelled','rejected')`** — y estos 44 lo
+llevan. Por eso no aparecían.
+
+*La lección, y es la misma de la regla 7 por otra puerta:* un filtro que
+excluye «lo anulado» da por hecho que anulado quiere decir anulado. Cuando el
+dato está en un estado contradictorio, ese filtro no protege de nada: esconde.
+
+**Las varas que probé y NINGUNA da el 48/42 de Julio** (con >24 h):
+`status <> 'closed'` → 2. `closed_at IS NULL` → 210 (¡155 de ellas YA tienen
+consumo!). `opened_at NOT NULL y closed_at NULL` → 207. `closed_at NULL y
+lastapp` → 204. `closed_at NULL y sin consumo` → 55. La buena es
+`status='open'`, que da 46 (44+2), 41 en Carabanchel. **Hay que fijar UNA y que
+el vigía cuente esa**, o el aviso discutirá con la pantalla desde el primer día.
+
+## C · LA CONTRADICCIÓN: dicen `cancelled` y no hay nadie que los cancelara
+
+Julio: «los pedidos abiertos de Carabanchel se sirvieron». Medido sobre los 14
+más recientes de los 44:
+
+- `accepted_at` = `created_at`, al minuto.
+- `ready_at`, `handed_to_courier_at`, `delivered_at`: **los tres en blanco, en
+  los 14**.
+- `paid` y `delivery_state`: **nulos**.
+- **`cancelled_at`: NULO** — aunque `order_status` diga `cancelled`.
+- Cinco de ellos con `updated_at` idéntico: 11/09 12:31. Un toque en lote.
+
+O sea: **nadie los canceló; la marca se la puso algo, no alguien.** Y tampoco
+hay rastro de que se prepararan ni se entregaran. El registro no dice que se
+sirvieran NI que se anularan: no dice nada.
+
+Lo que moverían si se cierran:
+
+| local | abiertas | pares | protegidos | **descontarían** | artículos | unidades |
+|---|---:|---:|---:|---:|---:|---:|
+| Alcalá | 4 | 25 | 25 | **0** | 0 | — |
+| **Carabanchel** | **41** | 453 | 276 | **177** | **49** | **7.525,0** |
+
+Del 15/08 al 10/09.
+
+## D · Las 522 con `add_item` sin descontar, medidas
+
+| local | ventas | pares | protegidos | **escriben** | artículos | unidades |
+|---|---:|---:|---:|---:|---:|---:|
+| Alcalá | 367 | 954 | 950 | **4** | 2 | +310,0 |
+| Carabanchel | 105 | 311 | 223 | **88** | 18 | +4.947,0 |
+| Plaza Castilla | 50 | 213 | 66 | **147** | 40 | +5.442,4 |
+
+*(Y un defecto que cacé en mi propia consulta antes de pasarlo: la primera
+versión no arrastraba `location_id` por el lado de «lo que hay», así que 113
+pares con −9.203 unidades salían agrupados bajo un local que no era el suyo. El
+`CASE` los mandaba al `ELSE`. Corregido: el local se toma SIEMPRE de la venta.)*
+
+Coste: **80,72 €**. Carabanchel 84,49 €, Alcalá 1,72 € y **Plaza Castilla
+−5,49 €**.
+
+## E · HALLAZGO: la guarda de coste imposible se queda corta
+
+Plaza Castilla sale en **negativo** por UNA fila:
+
+> **Albahaca · Plaza Castilla · 7,1536 €/gramo**, contra **0,0278** del
+> escandallo. **258 veces más.** 41,19 g valorados en 294,68 €.
+
+En esta regeneración esa fila sola vale **−84,16 €** y **le da la vuelta al
+signo de un local entero**: sin ella, el coste pasa de 80,72 € a 164,88 €.
+
+**La guarda de `avg_unit_cost < 0` NO la atrapa**, porque es positiva. Lo que
+quitaría la guarda de Julio son 6 filas por **−1,44 €** — calderilla al lado de
+esto.
+
+Hay **2 artículo-local con el coste medio más de 20 veces por encima de su
+escandallo**: Albahaca (258×) y Servilletas 30 x 40 (30×), las dos en Plaza
+Castilla.
+
+**Propuesta:** que la guarda no sea «precio negativo» sino **«precio que no se
+puede defender»**: negativo, o más de N veces el coste del escandallo. Con N=20
+son 2 filas más, las dos medidas y con nombre. El resto igual: se salta ese
+artículo y va a la lista.
