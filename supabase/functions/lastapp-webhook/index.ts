@@ -305,29 +305,35 @@ function resolveSaleBrand(
 // servidos. La rafaga del 02/07 20:01-20:03 —catorce— es el mismo mecanismo:
 // catorce comandas cerradas a mano seguidas, no un reproceso.
 //
-// LO QUE DISTINGUE UNA COSA DE LA OTRA (decision de Julio, 13/09):
-//   · FACTURA REPETIDA: mismo importe que una venta que ya existe para esa
-//     comanda -> NO se crea nada. Se apunta y se cuenta.
-//   · FACTURA ANADIDA: importe distinto, y entre todas suman la comanda -> es
-//     una CUENTA PARTIDA. Se crea, colgando de la misma comanda.
+// LO QUE DISTINGUE UNA COSA DE LA OTRA, Y NO ES EL IMPORTE (Julio, 13/09):
+// es EN QUE AVISO llega la factura.
 //
-// POR QUE EL IMPORTE Y NO LAS LINEAS, que es lo que pedia la decision: medido,
-// `LastBill` NO trae lineas — solo totales (id, total, deliveryFee,
-// discountTotal, tax, taxableBase, payments). Las lineas que se guardan son
-// las del TAB, y son las mismas para las dos facturas. El importe es el unico
-// discriminador que Last da.
+//   · Varias facturas en el MISMO aviso -> LEGITIMAS TODAS, y no se comparan
+//     nunca entre ellas. Asi llega una cuenta partida de sala: la comanda no
+//     tenia ninguna venta cuando empezo la peticion y sus facturas nacen
+//     juntas. Da igual que sean dos de 21,50 EUR. **En sala, pagar a medias no
+//     es un caso raro: es lo normal**, y un criterio por importe lo trataria
+//     de sospechoso el dia que entre el cliente 2.
+//   · Factura que llega en un aviso POSTERIOR, sobre una comanda QUE YA TENIA
+//     VENTA -> ahi si se compara, porque ahi es donde vive el fallo:
+//       – mismo importe -> FACTURA REPETIDA: no se crea nada, se apunta y se
+//         cuenta (como mucho se refresca la que hay, si sigue abierta);
+//       – importe distinto -> FACTURA ANADIDA: se crea, colgando de la misma
+//         comanda, y se cuenta.
 //
-// Y HOY NO HAY NI UNA CUENTA PARTIDA que proteger: de los 25 pares, los 25
-// tienen el MISMO importe y ninguno nacio a la vez (94 minutos el mas rapido,
-// 10 dias el mas lento). Cuando entre sala con el cliente 2, las partidas
-// tendran importes distintos y pasaran por la otra rama.
+// El importe sigue siendo el discriminador DENTRO del aviso posterior, y ahi
+// no hay alternativa: medido, `LastBill` NO trae lineas — solo totales (id,
+// total, deliveryFee, discountTotal, tax, taxableBase, payments). Las lineas
+// guardadas son las del TAB y son las mismas para las dos facturas.
 //
-// EL LIMITE, dicho: dos comensales que paguen EXACTAMENTE la mitad cada uno
-// darian dos facturas del mismo importe, y la segunda se leeria como repetida.
-// Por eso esto NUNCA es silencioso: cada vez que frena, lo cuenta en el
-// informe y lo encola como aviso con el id de la factura. Si alguna vez se
-// equivoca, se ve el mismo dia — que es lo contrario de lo que ha pasado
-// durante tres meses.
+// Los 25 pares medidos cumplen las dos mitades del criterio: los 25 tienen el
+// MISMO importe Y ninguno nacio a la vez —94 minutos el par mas rapido, 10
+// dias el mas lento—, o sea que todos entran por el aviso posterior. La foto
+// del «antes» es `ventasQueYaTeniaLaComanda`.
+//
+// Y esto NUNCA es silencioso: cada vez que frena, lo cuenta en el informe y lo
+// encola como aviso con el id de la factura. Si alguna vez se equivoca, se ve
+// el mismo dia — que es lo contrario de lo que ha pasado durante tres meses.
 async function ventaDeLaComanda(
   sb: SupabaseClient, accountId: string, tabId: string | null, totalBill: number,
 ): Promise<{ id: string; status: string; total: number } | null> {
@@ -368,12 +374,60 @@ function contadorDeComandasNuevo() {
   };
 }
 
+/**
+ * QUE VENTAS TENIA CADA COMANDA **ANTES** DE ESTA PETICION.
+ *
+ * Es el criterio que distingue de verdad, y no depende del importe:
+ *
+ *   · Varias facturas en el MISMO aviso -> legitimas todas. Una cuenta
+ *     partida de sala llega asi: la comanda no tenia ninguna venta cuando
+ *     empezo la peticion, y sus dos facturas nacen juntas. Nunca se comparan
+ *     entre ellas, aunque dos comensales paguen 21,50 EUR cada uno.
+ *   · Factura que llega en un aviso POSTERIOR, sobre una comanda que ya tenia
+ *     venta -> ahi si entra la guarda: mismo importe, repetida; distinto, se
+ *     crea y se cuenta.
+ *
+ * Se llena UNA VEZ por comanda y por peticion, la primera vez que se ve esa
+ * comanda, y por tanto retrata el estado ANTERIOR a tocar nada.
+ *
+ * IGUAL QUE EL CONTADOR: por peticion, no de modulo. Un mapa que sobreviviera
+ * entre llamadas diria que una comanda «ya la vi nacer» en una peticion que
+ * no la vio, y volveria a abrir el agujero por el otro lado.
+ */
+let loQueTeniaLaComanda = new Map<string, number>();
+
+async function ventasQueYaTeniaLaComanda(
+  sb: SupabaseClient, accountId: string, tabId: string,
+): Promise<number> {
+  const visto = loQueTeniaLaComanda.get(tabId);
+  if (visto !== undefined) return visto;
+  const { count, error } = await sb.from("sale")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", accountId).eq("source", "lastapp")
+    .eq("external_tab_ref", tabId).neq("status", "cancelled");
+  // Un contador que no puede contar NO deja pasar: ver la nota de
+  // `ventaDeLaComanda`.
+  if (error) throw new Error(`estado previo de la comanda ${tabId}: ${error.message}`);
+  const n = count ?? 0;
+  loQueTeniaLaComanda.set(tabId, n);
+  return n;
+}
+
 async function upsertSale(
   sb: SupabaseClient, accountId: string, bill: LastBill, tab: LastTab, caches: HeaderCaches,
 ): Promise<{ id: string; status: string; isNew: boolean; repetida?: boolean } | null> {
   const billId = bill.id;
   if (!billId) return null;
   if (bill.deleted === true) return null;
+
+  // LA FOTO DEL ANTES, y se toma AQUI a proposito: arriba del todo, antes de
+  // que nada de esta peticion escriba. Si se tomara mas abajo, la segunda
+  // factura de una cuenta partida encontraria la venta que acaba de crear la
+  // primera y se leeria a si misma como «la comanda ya tenia venta». Las
+  // facturas de un aviso se recorren en serie (`for … await`), asi que la
+  // primera que pasa por aqui deja retratado el estado anterior y las demas
+  // leen esa foto.
+  const ventasPrevias = tab.id ? await ventasQueYaTeniaLaComanda(sb, accountId, tab.id) : 0;
 
   const payType = bill.payments?.[0]?.type ?? tab.source ?? null;
   const slug = channelSlug(payType);
@@ -424,9 +478,14 @@ async function upsertSale(
   }
 
   // ── LA GUARDA POR COMANDA ────────────────────────────────────────────────
-  // Esta factura no existe. Antes de crear una venta, se mira si la COMANDA ya
-  // tiene una con este mismo importe.
-  const yaEstaba = await ventaDeLaComanda(sb, accountId, tab.id ?? null, Number(common.total));
+  // Esta factura no existe. La guarda entra SOLO si la comanda ya tenia venta
+  // ANTES de esta peticion — o sea, si esta factura llega en un aviso
+  // POSTERIOR. Las facturas que nacen juntas en el mismo aviso no se comparan
+  // nunca entre ellas: son legitimas por venir donde vienen, no por su
+  // importe, y dos comensales que paguen 21,50 EUR cada uno son dos ventas.
+  const yaEstaba = ventasPrevias > 0
+    ? await ventaDeLaComanda(sb, accountId, tab.id ?? null, Number(common.total))
+    : null;
   if (yaEstaba) {
     elContadorDeComandas.facturas_repetidas++;
     if (elContadorDeComandas.detalle.length < 20) {
@@ -456,29 +515,24 @@ async function upsertSale(
     return { id: yaEstaba.id, status: yaEstaba.status, isNew: false, repetida: true };
   }
 
-  // Importe distinto y la comanda ya tiene venta: es una CUENTA PARTIDA. Se
-  // crea, colgando de la misma comanda por `external_tab_ref`, y se cuenta
-  // para que se vea el dia que empiece a pasar.
-  if (tab.id) {
-    const { count, error: cErr } = await sb.from("sale")
-      .select("id", { count: "exact", head: true })
-      .eq("account_id", accountId).eq("source", "lastapp")
-      .eq("external_tab_ref", tab.id).neq("status", "cancelled");
-    if (cErr) throw new Error(`conteo de la comanda ${tab.id}: ${cErr.message}`);
-    if ((count ?? 0) > 0) {
-      elContadorDeComandas.cuentas_partidas++;
-      if (elContadorDeComandas.detalle.length < 20) {
-        elContadorDeComandas.detalle.push({
-          tipo: "cuenta partida",
-          comanda: tab.id,
-          factura_nueva: String(billId),
-          importe: Number(common.total),
-          ventas_que_ya_tenia: count,
-          que_se_ha_hecho: "se crea, colgando de la misma comanda",
-        });
-      }
-      console.error("COMANDA_CON_CUENTA_PARTIDA", tab.id, billId, count);
+  // Aviso posterior, importe distinto: una factura ANADIDA a una comanda que
+  // ya estaba cerrada. Se crea, colgando de la misma comanda por
+  // `external_tab_ref`, y se cuenta para que se vea el dia que empiece a
+  // pasar. (Una cuenta partida de sala normal no llega aqui: sus facturas
+  // nacen en el mismo aviso y `ventasPrevias` vale 0.)
+  if (tab.id && ventasPrevias > 0) {
+    elContadorDeComandas.cuentas_partidas++;
+    if (elContadorDeComandas.detalle.length < 20) {
+      elContadorDeComandas.detalle.push({
+        tipo: "factura anadida en aviso posterior",
+        comanda: tab.id,
+        factura_nueva: String(billId),
+        importe: Number(common.total),
+        ventas_que_ya_tenia: ventasPrevias,
+        que_se_ha_hecho: "se crea, colgando de la misma comanda",
+      });
     }
+    console.error("COMANDA_CON_CUENTA_PARTIDA", tab.id, billId, ventasPrevias);
   }
 
   // No existe -> nace 'open'.
@@ -594,8 +648,11 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
 
-  // A cero en cada peticion: ver la nota de `elContadorDeComandas`.
+  // A cero en cada peticion: ver la nota de `elContadorDeComandas`. El mapa va
+  // con el, y por el mismo motivo: una foto del «antes» heredada de la
+  // peticion anterior no es una foto del antes de esta.
   elContadorDeComandas = contadorDeComandasNuevo();
+  loQueTeniaLaComanda = new Map();
 
   const eventType = (payload?.type as string | undefined) ?? null;
   let note = "fase1-receptor";
