@@ -1,6 +1,14 @@
 -- ════════════════════════════════════════════════════════════════════════
 -- EL VIGÍA DE LAS VENTAS QUE NO DESCUENTAN
 --
+-- APLICADO el 12/09/2026 a las 08:43 (Madrid, reloj de la base), con la
+-- ventana abierta. Versión registrada: 20260912064357. Reloj: cada hora, en
+-- el minuto 20.
+--
+-- ENSAYADO a las 08:40 en una llamada acabada en RAISE EXCEPTION: 0 fallos.
+-- 106 en 383 ms, 5 avisos, cada uno con su cuenta, el freno frena, el arrastre
+-- va dicho y las puertas cerradas.
+--
 -- Sale de la causa raíz medida el 12/09: 912 pedidos cerrados sin descontar
 -- durante dos meses y CERO avisos. Regla 8: el silencio se lee como que
 -- funcionó. Mientras nadie cuente esto, vuelve a pasar y nadie se entera.
@@ -238,3 +246,10 @@ REVOKE ALL ON FUNCTION public.ventas_sin_descontar_watchdog() FROM authenticated
 
 COMMENT ON FUNCTION public.ventas_sin_descontar_watchdog() IS
   'Tres cuentas que no se mezclan, UNA POR CUENTA (regla 9): comanda viva sin cerrar (>24 h), venta en estado imposible, y venta cerrada que no ha descontado (>24 h, 7 dias). El umbral de 24 h esta medido: el consumo se escribe al cerrar la comanda, no al entrar el pedido.';
+
+-- ── El reloj ────────────────────────────────────────────────────────────
+-- Cada hora, en el minuto 20, para no chocar con el vigia de consumo (35) ni
+-- con el monton que arranca en el :00. El umbral es de 24 h y el freno de 24 h,
+-- asi que mirar cada hora no multiplica los avisos: solo hace que se vea antes.
+SELECT cron.schedule('ventas-sin-descontar-watchdog', '20 * * * *',
+                     $cron$SELECT public.ventas_sin_descontar_watchdog()$cron$);
