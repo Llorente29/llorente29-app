@@ -1,0 +1,80 @@
+{
+ "artboards": [
+  {
+   "file": "Main.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 1920,
+   "title": "1 · La lista de preguntas"
+  },
+  {
+   "file": "Grupo.dc.html",
+   "x": 1380,
+   "y": 0,
+   "w": 1280,
+   "h": 1160,
+   "title": "2 · Una pregunta propia, copiada 4 veces"
+  },
+  {
+   "file": "PonerEnPlatos.dc.html",
+   "x": 1380,
+   "y": 1280,
+   "w": 1280,
+   "h": 980,
+   "title": "3 · Poner en platos"
+  },
+  {
+   "file": "GrupoCedida.dc.html",
+   "x": 2760,
+   "y": 0,
+   "w": 1280,
+   "h": 860,
+   "title": "4 · Una pregunta de marca cedida"
+  },
+  {
+   "file": "CrearPregunta.dc.html",
+   "x": 0,
+   "y": 2040,
+   "w": 1280,
+   "h": 1100,
+   "title": "5 · Crear una pregunta y ponerla en platos"
+  },
+  {
+   "file": "FichaExtra.dc.html",
+   "x": 2760,
+   "y": 980,
+   "w": 1280,
+   "h": 1080,
+   "title": "6 · La ficha del extra: una por cosa real"
+  },
+  {
+   "file": "LoQueNoCuadra.dc.html",
+   "x": 1380,
+   "y": 2380,
+   "w": 1280,
+   "h": 1820,
+   "title": "7 · Lo que llega y no cuadra"
+  },
+  {
+   "file": "Juntar.dc.html",
+   "x": 2760,
+   "y": 2180,
+   "w": 1280,
+   "h": 900,
+   "title": "8 · Juntar copias en un extra"
+  }
+ ],
+ "annotations": [
+  {
+   "id": "nota-datos",
+   "x": 0,
+   "y": -170,
+   "w": 560,
+   "text": "Maqueta «Modificadores» · 11/09, segunda versión. Datos reales de Foodint a las 11:00. Tableros 1–4: lo aprobado en principio. Tableros 5–8: crear una pregunta y ponerla en platos, la ficha única del extra, la cola de lo que no cuadra y juntar copias."
+  }
+ ],
+ "launch": {
+  "view": "canvas"
+ }
+}
