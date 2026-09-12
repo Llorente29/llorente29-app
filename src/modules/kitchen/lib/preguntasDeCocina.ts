@@ -106,7 +106,10 @@ export function ventanaEnTexto(v: Ventana): string {
 // LOS 100 DE «¿Quieres añadir un postre?» SON REALES, y por eso existe el caso
 // de arriba: «Añadir hasta 100» no es una frase que diga nada. Por encima de
 // 20 se dice lo que significa. Con ejemplos inventados esto no habría salido.
-const MUCHOS = 20
+// Se EXPORTA porque el tablero 5 usa el mismo umbral al crear. Dos copias de
+// un umbral es como acaban diciendo cosas distintas la pantalla que crea y la
+// que lee.
+export const MUCHOS = 20
 
 export function quePuedeHacerElCliente(p: Pregunta): string {
   const tope = p.max >= MUCHOS ? null : p.max
