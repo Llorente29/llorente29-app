@@ -199,14 +199,20 @@ export default function KitchenModificadoresPage() {
           }
         />
 
-        <EstadoDeLaConsulta
-          cargando={cargando}
-          textoCargando="Leyendo las preguntas de la cuenta…"
-          error={error}
-          queSePregunto="las preguntas de esta cuenta"
-        />
-
-        {!cargando && !error && datos && (
+        {/* EL CARTEL DE VACÍO NO CONVIVE CON LA LISTA. Esto se pintaba suelto,
+            al lado del contenido, y la pantalla decía «la consulta no ha
+            devuelto ninguna fila» con las 65 preguntas justo debajo. Ahora va
+            en la misma forma que las otras cuatro pantallas —o el estado, o el
+            contenido, nunca los dos— y además `hayFilas` se lo dice. */}
+        {(cargando || error || !datos) ? (
+          <EstadoDeLaConsulta
+            cargando={cargando}
+            textoCargando="Leyendo las preguntas de la cuenta…"
+            error={error}
+            hayFilas={!!datos}
+            queSePregunto="las preguntas de esta cuenta"
+          />
+        ) : (
           <>
             <FranjaCocina
               tono="malo"

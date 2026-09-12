@@ -269,6 +269,7 @@ export default function KitchenProfitabilityPage() {
             cargando={cargando}
             textoCargando="Cruzando la carta con lo vendido…"
             error={error}
+            hayFilas={filas.length > 0}
             queSePregunto={marca ? `la rentabilidad de ${marca.name}` : 'la rentabilidad'}
             matiz={marca
               ? 'Si la marca tiene productos en su carta, es que ninguno ha llegado hasta aquí: revisa que tengan escandallo.'

@@ -22,6 +22,22 @@
 // Es la familia de las reglas 7 y 8: la 7 prohíbe esconder filas que existen, la 8
 // esconder que algo ha pasado; ésta prohíbe **afirmar sobre el negocio lo que sólo
 // se sabe de la consulta**.
+//
+// ── `hayFilas` ES OBLIGATORIA, Y ESO ES EL ARREGLO (12/09) ─────────────────
+//
+// Hasta hoy este componente no sabía si había filas: si no cargaba y no había
+// error, pintaba el cartel de vacío SIEMPRE. Funcionaba porque las cuatro
+// pantallas que lo usaban lo envolvían en un ternario y sólo lo pintaban
+// cuando ya sabían que no había nada. Disciplina, no garantía.
+//
+// El tablero 1 de Modificadores lo pintó suelto, al lado del contenido, y la
+// pantalla salió diciendo «la consulta no ha devuelto ninguna fila» con las
+// 65 preguntas pintadas justo debajo. Las dos cosas no pueden ser verdad, y
+// quien lea el cartel se cree el cartel: es peor que una pantalla en blanco.
+//
+// Ahora hay que contestar a la pregunta para poder usarlo, y si hay filas
+// devuelve `null`. Un componente que se puede usar mal en silencio se arregla
+// en el componente; si no, el siguiente que lo use vuelve a pagarlo.
 
 import { AlertTriangle, Loader2, Inbox } from 'lucide-react'
 
@@ -42,10 +58,16 @@ interface EstadoDeLaConsultaProps {
    * tiene 23 productos activos». Sin esto, el vacío se dice sin adornos.
    */
   matiz?: string | null
+  /**
+   * ¿Hay filas de verdad? OBLIGATORIA a propósito: sin contestarla no se puede
+   * usar este componente, y con ella el cartel de vacío no puede aparecer
+   * encima de una lista llena. Si es `true` y no hay error, no pinta nada.
+   */
+  hayFilas: boolean
 }
 
 export default function EstadoDeLaConsulta({
-  cargando, textoCargando, error, queSePregunto, matiz,
+  cargando, textoCargando, error, queSePregunto, matiz, hayFilas,
 }: EstadoDeLaConsultaProps) {
   if (cargando) {
     return (
@@ -76,6 +98,11 @@ export default function EstadoDeLaConsulta({
       </div>
     )
   }
+
+  // HAY FILAS: aquí no hay nada que decir, y decir algo sería mentir. El orden
+  // importa — va DESPUÉS del error, porque un fallo con filas viejas en
+  // pantalla sigue siendo un fallo y hay que contarlo.
+  if (hayFilas) return null
 
   return (
     <div className="bg-card border border-border-default rounded-xl p-8 text-center">
