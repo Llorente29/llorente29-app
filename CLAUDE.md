@@ -77,6 +77,33 @@ juzgar cada caso. Se aplicó una RPC de lectura a las 13:06 midiendo que no
 tocaba nada de eso —era correcto— pero el criterio no era comprobable por
 otro. Estas tres sí: se miden, se pegan y no se opinan.
 
+### Una cosa está aplicada cuando está en PRODUCCIÓN, no cuando está commiteada
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque.
+
+Para una edge function, **manda lo desplegado**. El commit no despliega: el
+despliegue lo dispara `push` a `main`, así que todo lo que vive en una rama
+sin fusionar está escrito y **sin efecto ninguno**. Se comprueba mirando los
+dos lados —lo desplegado contra `origin/main`— y se dice cuál de los dos va
+por delante.
+
+*Detector automático:* si un parte dice «X aplicada» y X toca una edge
+function, la pregunta es en qué versión desplegada está X. Si la respuesta es
+«está commiteada», X no está aplicada.
+
+*Y ojo con lo que arrastra la fusión:* fusionar a `main` no despliega solo la
+función que se quería tocar. **Publica también el front**, y con él la web de
+las tablets. Fusionar a las 14:10 es publicar en banda aunque el cambio
+pretendido fuese de una edge function que corre a las 03:20.
+
+*(12/09. A2c —el retiro de extras— se dio por aplicada el 11/09. Su mitad de
+base estaba viva —el sello, el disparador, el CHECK— pero el retiro vive en
+`lastapp-catalog-import`, y esa función seguía siendo la de antes: dos días
+commiteada y sin efecto. Lo desplegado era `origin/main` byte a byte, así que
+no había deriva: había dos commits sin fusionar. La pasada de las 03:20 no
+habría retirado nada y se habría ido a buscar una retirada que no podía
+existir. Salió al ir a desplegar el cinturón y comparar los dos lados.)*
+
 ### Numeradas por la secuencia maestra
 
 > Estas dos citan el número de `folvy_deudas_abiertas.md`, que es **la única
