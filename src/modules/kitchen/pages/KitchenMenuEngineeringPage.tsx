@@ -359,6 +359,7 @@ export default function KitchenMenuEngineeringPage() {
             cargando={cargando}
             textoCargando="Cruzando coste real con ventas reales…"
             error={error}
+            hayFilas={matriz.platos.length > 0}
             queSePregunto={marca
               ? `los ${verBebidas ? 'bebidas' : 'platos'} de ${marca.name} con coste y ventas en el periodo`
               : 'la ingeniería de menús'}

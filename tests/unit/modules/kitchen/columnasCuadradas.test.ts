@@ -64,14 +64,43 @@ describe('ninguna columna de Kitchen se estira con el contenido', () => {
 
   // Una sola columna elástica, y es la del nombre. Con dos, el reparto del
   // sobrante depende del contenido de las dos y volvemos al mismo sitio.
-  it('sólo una pista es elástica, y ninguna es `auto`', () => {
+  // ── AJUSTADO EL 12/09, y con el motivo delante ──────────────────────────
+  //
+  // Esto pedía «exactamente UNA pista elástica». Era un atajo: todas las tablas
+  // de entonces tenían esa forma. Pero lo que de verdad rompió el 08/09 no fue
+  // la cantidad de pistas elásticas — fue `auto`, que se estira con el
+  // CONTENIDO, y una última columna que medía 0 en la cabecera y 206 en la fila.
+  //
+  // El tablero 1 de Modificadores usa CINCO pistas proporcionales
+  // (`minmax(0,2.3fr) …`), y con eso el desfase no puede darse: `fr` reparte lo
+  // que SOBRA, y el `minmax(0, …)` clava el mínimo en 0, así que ninguna celda
+  // puede empujar su columna. Con la misma cadena en cabecera y filas, coinciden
+  // por construcción igual que antes.
+  //
+  // Así que se afloja una condición y se aprietan DOS, que son las que pesan:
+  //   · ninguna pista `auto` / `min-content` / `max-content` (igual que antes);
+  //   · toda pista elástica tiene que ser `minmax(0, …fr)`. Un `1fr` pelado
+  //     tiene mínimo automático —o sea, de contenido— y es el MISMO fallo del
+  //     08/09 con otro nombre. Antes no se vigilaba;
+  //   · la ÚLTIMA pista no puede ser elástica: es la columna del botón, la que
+  //     está vacía en la cabecera y llena en la fila. Antes tampoco se vigilaba.
+  it('ninguna pista se estira con el contenido, y la del botón es fija', () => {
     const malas: string[] = []
     for (const [nombre, rejilla] of Object.entries(TODAS_LAS_REJILLAS)) {
       const p = pistas(rejilla)
       const elasticas = p.filter((t) => t.includes('fr') || t === 'auto')
-      if (elasticas.length !== 1) malas.push(`${nombre}: ${elasticas.length} elásticas — ${p.join(' · ')}`)
+      if (elasticas.length < 1) malas.push(`${nombre}: ninguna pista elástica — ${p.join(' · ')}`)
       if (p.some((t) => t === 'auto' || t === 'min-content' || t === 'max-content')) {
         malas.push(`${nombre}: pista que se estira con el contenido`)
+      }
+      for (const t of p) {
+        if (t.includes('fr') && !/^minmax\(\s*0\s*,/.test(t)) {
+          malas.push(`${nombre}: «${t}» es elástica sin mínimo en 0 — el contenido puede empujarla`)
+        }
+      }
+      const ultima = p[p.length - 1]
+      if (ultima && (ultima.includes('fr') || ultima === 'auto')) {
+        malas.push(`${nombre}: la última pista («${ultima}») es la del botón y no puede ser elástica`)
       }
     }
     expect(malas, malas.join('\n')).toEqual([])

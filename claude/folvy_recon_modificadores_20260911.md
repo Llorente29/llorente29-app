@@ -215,3 +215,47 @@ El agujero es entero de las cedidas.
 
 En toda la historia hay **4.346** líneas de extra desde el **12/06**, de las
 que 34 están sin enlazar. Ése es el alcance de A4.
+
+---
+
+## 7 · Deuda apuntada para el tablero 7 (Fase C), 11/09 13:15
+
+Condición de Julio al encender `aplicar_retiro`: **«cada retirada se ve: en el
+informe de la pasada y, cuando exista, en el tablero 7, en *Ya no está en
+Last*»**.
+
+La mitad del informe ya está: `sobrantes.extras_que_last_no_sirve` trae el plan
+entero, marca por marca, y los frenos salen además en `warnings` y en
+`system_alert_queue`.
+
+Lo que falta, y es del tablero 7: una sección **«Ya no está en Last»** que lea
+las opciones retiradas por esta vía. Con lo que hay en la base se resuelve sin
+tabla nueva:
+
+```sql
+-- opciones de marca cedida apagadas, con cuándo y qué venden todavía
+SELECT b.name AS marca, mg.name AS pregunta, mo.name AS opcion,
+       mo.updated_at AS retirada_el,
+       (SELECT count(*) FROM sale_line sl WHERE sl.modifier_option_id = mo.id) AS lineas_historicas
+  FROM modifier_option mo
+  JOIN modifier_group mg ON mg.id = mo.modifier_group_id
+  JOIN brand b ON b.id = mg.brand_id
+ WHERE mo.account_id = :cuenta
+   AND b.ownership_type = 'licensed'
+   AND mo.external_source = 'lastapp'
+   AND NOT mo.is_active
+ ORDER BY mo.updated_at DESC;
+```
+
+**Regla 7 aquí:** esa sección NO puede tener umbral. Es una pantalla que el
+usuario abre a propósito; el umbral ordena y etiqueta, nunca decide qué filas
+existen. Y **regla 30**: el nombre de la opción se resuelve contra el catálogo
+ENTERO, no contra la lista que el selector filtra a activas — si no, las
+retiradas se quedarían justamente sin nombre, que es el fallo que esta pantalla
+existe para no cometer.
+
+Si se quisiera distinguir «la retiró Last» de «la apagó una persona», haría
+falta un campo más (`is_active_source` o una fila de bitácora). Hoy no lo hay y
+**no se puede afirmar cuál fue**: la pantalla dirá «ya no está en Last» sólo de
+las que la pieza apagó, y para eso hace falta ese campo. Queda dicho antes de
+construir el tablero, no después.

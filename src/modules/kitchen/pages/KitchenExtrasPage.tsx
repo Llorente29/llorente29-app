@@ -240,6 +240,7 @@ export default function KitchenExtrasPage() {
             cargando={cargando}
             textoCargando="Buscando los extras que cobran…"
             error={error}
+            hayFilas={!!datos}
             queSePregunto="los extras que cobran de esta cuenta"
           />
         ) : (

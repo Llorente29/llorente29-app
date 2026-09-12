@@ -46,6 +46,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 // marcas en `brands_skipped_empty` mientras `last-catalog-sync`, con el
 // endpoint bueno, traía 41 catálogos y 4.444 filas. Ver `_shared/lastapp.ts`.
 import { lastGet, resolveLocationCatalogs } from "../_shared/lastapp.ts";
+import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Canales que NO son de venta real (reporting interno). Reservado para Fase B
@@ -299,10 +300,29 @@ interface ContadorTabla {
   sin_cambios: number;
   total: number;
   cambios_ejemplo: any[];
+  /** Filas de MARCA PROPIA que el casador tocó y el cinturón ha dejado en paz. */
+  protegidas: number;
+  protegidas_ejemplo: FilaProtegida[];
 }
 
+/** Una fila que el cinturón ha apartado, con el porqué escrito. */
+interface FilaProtegida {
+  tabla: string;
+  id_en_folvy: string;
+  external_id: string;
+  nombre_en_folvy: string | null;
+  nombre_en_last: string | null;
+  por_que: string;
+}
+
+/** Lo que PostgREST devuelve de una fila ya existente: claves sueltas. */
+type FilaExistente = Record<string, unknown>;
+
 function contadorNuevo(): ContadorTabla {
-  return { nuevas: 0, actualizadas: 0, sin_cambios: 0, total: 0, cambios_ejemplo: [] };
+  return {
+    nuevas: 0, actualizadas: 0, sin_cambios: 0, total: 0, cambios_ejemplo: [],
+    protegidas: 0, protegidas_ejemplo: [],
+  };
 }
 
 // Compara un valor de Last con el que devuelve PostgREST. `numeric` vuelve como
@@ -319,6 +339,61 @@ function mismoValor(a: unknown, b: unknown): boolean {
   return String(a) === String(b);
 }
 
+// ── Quién es de marca propia, entre las filas que el casador ha alcanzado ──
+//
+// CEDIDA SE MIDE POR LA MARCA (`brand.ownership_type`), nunca por
+// `external_source`: 40 preguntas propias llevan la etiqueta `lastapp` de la
+// importación de junio, así que preguntar por el origen de la fila diría que
+// TODAS vinieron de Last. Lo mismo que ya hace `resuelveMarca` arriba y la RPC
+// del tablero 1.
+//
+// Para `modifier_option` la marca no está en la fila: se llega por su
+// pregunta. Por eso hace falta el segundo salto.
+async function propiasAlcanzadas(
+  sb: SupabaseClient,
+  tabla: "modifier_group" | "modifier_option",
+  existentes: FilaExistente[],
+  marcaPorId: Map<string, { name: string; ownership: string }>,
+): Promise<Map<string, string>> {
+  const fuera = new Map<string, string>();
+  if (existentes.length === 0) return fuera;
+
+  // groupId de cada fila alcanzada: en las preguntas es ella misma.
+  const groupIds = tabla === "modifier_group"
+    ? existentes.map((e) => String(e.id))
+    : [...new Set(existentes.map((e) => String(e.modifier_group_id ?? "")).filter(Boolean))];
+  if (groupIds.length === 0) return fuera;
+
+  const brandPorGroup = new Map<string, string | null>();
+  for (let i = 0; i < groupIds.length; i += 200) {
+    const { data, error } = await sb
+      .from("modifier_group")
+      .select("id, brand_id")
+      .in("id", groupIds.slice(i, i + 200));
+    // Un cinturón que no puede comprobar NO deja pasar: si la consulta falla,
+    // no se sabe de quién son esas filas, y escribir a ciegas sobre preguntas
+    // que pueden ser de Julio es justo lo que esto viene a impedir.
+    if (error) throw new Error(`cinturon ${tabla}: ${error.message}`);
+    for (const g of data ?? []) brandPorGroup.set(String(g.id), (g.brand_id as string) ?? null);
+  }
+
+  for (const e of existentes) {
+    const gid = tabla === "modifier_group" ? String(e.id) : String(e.modifier_group_id ?? "");
+    const brandId = brandPorGroup.get(gid) ?? null;
+    const marca = brandId ? marcaPorId.get(brandId) : undefined;
+    if (marca && marca.ownership === "licensed") continue;   // cedida: Last manda, adelante
+    fuera.set(
+      String(e.id),
+      marca
+        ? `marca propia «${marca.name}» (ownership_type = ${marca.ownership || "(sin tipo)"})`
+        : brandId
+          ? `marca ${brandId} que no está en esta cuenta`
+          : "sin marca: no se puede demostrar que sea cedida",
+    );
+  }
+  return fuera;
+}
+
 // ── Casa por (ámbito, external_id): inserta lo nuevo y ACTUALIZA lo de Last ──
 //
 // Devuelve un Map "ámbito|external_id" -> id de Folvy (preexistentes y nuevos).
@@ -327,6 +402,25 @@ function mismoValor(a: unknown, b: unknown): boolean {
 // así que un cambio hecho en el TPV no llegaba NUNCA. Esto es la otra mitad, y
 // va con dos frenos: sólo escribe las columnas de `CAMPOS_DE_LAST`, y sólo
 // sobre filas que de verdad han cambiado (si no, `sin_cambios`).
+//
+// ── EL CINTURÓN (12/09) ────────────────────────────────────────────────────
+// `protege` recibe las filas que YA EXISTÍAN y ha casado, y devuelve los ids
+// que esta función no puede tocar. Existe porque la guarda de `resuelveMarca`
+// es de AGUAS ARRIBA: descarta el catálogo de una marca propia antes de
+// construir filas. Pero aquí abajo el casado de `modifier_group` y
+// `modifier_option` va por `external_id` A SECAS —su AMBITO es `null`— y
+// alcanza a TODA la cuenta con `external_source = 'lastapp'`. Como 40
+// preguntas de marca PROPIA arrastran esa etiqueta desde junio, un
+// `external_id` de Last que coincidiera con el de una de ellas la alcanzaría
+// saltándose la guarda de arriba, que para entonces ya no está mirando.
+//
+// Y NO BASTA CON AVISAR DESPUÉS: un cinturón que se abrocha tras el golpe no
+// es un cinturón. La fila protegida se cae de las dos listas —ni se actualiza
+// ni se inserta— y queda contada, nombrada en el informe y avisada por la
+// cola. No se inserta tampoco: insertarla chocaría contra
+// `uq_modifier_group_external` y tumbaría la pasada entera.
+//
+// Hoy tiene que dar 0. El día que dé otra cosa, es que había algo que ver.
 async function casarYActualizar(
   sb: SupabaseClient,
   table: string,
@@ -334,6 +428,7 @@ async function casarYActualizar(
   rows: Array<Record<string, unknown> & { external_id: string }>,
   dryRun: boolean,
   contador: ContadorTabla,
+  protege?: (existentes: FilaExistente[]) => Promise<Map<string, string>>,
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   contador.total = rows.length;
@@ -361,6 +456,9 @@ async function casarYActualizar(
     if (error) throw new Error(`select ${table}: ${error.message}`);
     existentes.push(...(data ?? []));
   }
+  // 1.b) El cinturón, ANTES de repartir en actualizar/insertar.
+  const protegidas = protege ? await protege(existentes) : new Map<string, string>();
+
   const filaPorClave = new Map<string, any>();
   for (const e of existentes) {
     const k = clave(e);
@@ -377,6 +475,23 @@ async function casarYActualizar(
     if (vistas.has(k)) continue;
     vistas.add(k);
     const existente = filaPorClave.get(k);
+    if (existente && protegidas.has(existente.id as string)) {
+      // Ni se actualiza ni se inserta: se deja EXACTAMENTE como está. Lo que
+      // Last traía para esta clave no entra en esta pasada, y el informe dice
+      // cuál era.
+      contador.protegidas++;
+      if (contador.protegidas_ejemplo.length < 20) {
+        contador.protegidas_ejemplo.push({
+          tabla: table,
+          id_en_folvy: String(existente.id),
+          external_id: String(r.external_id),
+          nombre_en_folvy: existente.name != null ? String(existente.name) : null,
+          nombre_en_last: r.name != null ? String(r.name) : null,
+          por_que: protegidas.get(existente.id as string) ?? "(sin motivo)",
+        });
+      }
+      continue;
+    }
     if (!existente) {
       nuevas.push(r);
       continue;
@@ -491,6 +606,20 @@ Deno.serve(async (req: Request) => {
   // (`platos_que_last_no_sirve` / `platos_inactivos_que_last_si_sirve`), y con
   // `aplicar_activo: true` se escribe. Contar no se puede desactivar.
   const aplicarActivo = body.aplicar_activo === true;
+  // Los EXTRAS que Last ya no sirve (A2c, 11/09). A diferencia de
+  // `aplicar_activo`, este va ENCENDIDO por defecto: lo decidió Julio el 08/09
+  // —en las cedidas manda Last en qué está activo y qué no— y lo confirmó el
+  // 11/09 a las 13:15. Dejarlo apagado era lo que ya teníamos: extras que Last
+  // retiró hace meses siguen encendidos en Folvy sin que nadie lo sepa.
+  //
+  // Lo que lo hace encendible son los tres frenos (raíl de marcas visitadas,
+  // lista vacía que no retira, tope por marca) MÁS la vuelta: lo que Last
+  // recupera se reenciende solo en la pasada siguiente, por la misma vía. Sin
+  // esa vuelta esto sería una puerta de un solo sentido y no se encendería.
+  //
+  // `aplicar_retiro: false` lo apaga para una pasada suelta. Contar no se
+  // puede desactivar: el informe trae el plan entero siempre.
+  const aplicarRetiro = body.aplicar_retiro !== false;
   if (!accountId || !orgId) {
     return jsonResponse({ error: "account_id and lastapp_organization_id required" }, 400);
   }
@@ -554,6 +683,7 @@ Deno.serve(async (req: Request) => {
   const report: any = {
     dry_run: dryRun,
     aplicar_activo: aplicarActivo,
+    aplicar_retiro: aplicarRetiro,
     // Con qué clave se ha comprobado que decide la base en esta pasada. Va en
     // el informe a propósito: una comprobación que no se ve no tranquiliza a
     // nadie, y el día que cambie un índice el informe lo enseña.
@@ -589,6 +719,16 @@ Deno.serve(async (req: Request) => {
     // con la siguiente: "products: 186" no distingue 186 altas de 186 filas que
     // ya estaban y no han cambiado.
     tablas: {} as Record<string, ContadorTabla>,
+    // EL CINTURÓN DEL TABLERO 4. Va SIEMPRE en el informe, también cuando da
+    // cero: un contador que sólo aparece cuando falla no se puede comparar con
+    // el de ayer, y entonces nadie sabe si el cero es bueno o es que no se
+    // midió (regla 8). Hoy tiene que dar 0.
+    cinturon_marca_propia: {
+      preguntas_protegidas: 0,
+      opciones_protegidas: 0,
+      detalle: [] as FilaProtegida[],
+      aviso: null as string | null,
+    },
     // Lo que Last ya NO sirve y en Folvy sigue vivo. Se cuenta y se lista; no
     // se borra ni se archiva.
     sobrantes: {
@@ -596,6 +736,9 @@ Deno.serve(async (req: Request) => {
       platos_que_last_no_sirve_ejemplo: [] as any[],
       platos_inactivos_que_last_si_sirve: 0,
       asignaciones_que_last_no_tiene: 0,
+      // A2c: el plan de retiro de EXTRAS, tal cual lo devuelve la base. Va
+      // entero a propósito: marca por marca, con sus cifras y su freno.
+      extras_que_last_no_sirve: null as any,
     },
     warnings: [] as string[],
   };
@@ -770,6 +913,7 @@ Deno.serve(async (req: Request) => {
     const inUseProducts = new Map<string, { brandId: string; brandName: string; catExtId: string | null; catName: string | null }>();
     const inUseCombos = new Map<string, { brandId: string; brandName: string }>();
     const categoryRows = new Map<string, { name: string; brandId: string }>(); // catExtId -> ...
+    const marcasConCatalogoRoto = new Set<string>();
 
     for (const catId of canonicalCatalogs) {
       const info = catalogInfo.get(catId)!;
@@ -780,6 +924,11 @@ Deno.serve(async (req: Request) => {
         catalog = await lastGet(`/catalogs/${catId}`, token, { "locationID": info.locId });
       } catch (e) {
         report.warnings.push(`catalog ${catId} (${info.brandName}): ${String(e)}`);
+        // A2c: una marca con un catálogo que no se ha podido leer NO cuenta
+        // como visitada, aunque otro catálogo suyo sí se haya leído. Media
+        // marca leída y tratada como entera es exactamente lo que retira de
+        // más.
+        marcasConCatalogoRoto.add(brandId);
         continue;
       }
       for (const cat of (catalog?.categories ?? [])) {
@@ -957,7 +1106,10 @@ Deno.serve(async (req: Request) => {
         external_source: "lastapp", external_id: gid,
       });
     }
-    const groupMap = await casarYActualizar(sb, "modifier_group", accountId, groupRows, dryRun, cuenta("modifier_group"));
+    const groupMap = await casarYActualizar(
+      sb, "modifier_group", accountId, groupRows, dryRun, cuenta("modifier_group"),
+      (ex) => propiasAlcanzadas(sb, "modifier_group", ex, marcaPorId),
+    );
     report.modifier_groups = groupRows.length;
 
     // 5.5 modifier_option (de organizationModifiers: priceOverride manda)
@@ -991,9 +1143,65 @@ Deno.serve(async (req: Request) => {
         });
       }
     }
-    const optionMap = await casarYActualizar(sb, "modifier_option", accountId, optionRows, dryRun, cuenta("modifier_option"));
+    const optionMap = await casarYActualizar(
+      sb, "modifier_option", accountId, optionRows, dryRun, cuenta("modifier_option"),
+      (ex) => propiasAlcanzadas(sb, "modifier_option", ex, marcaPorId),
+    );
     void optionMap;
     report.modifier_options = optionRows.length;
+
+    // ── LO QUE LAST YA NO SIRVE, EN EXTRAS (A2c) ────────────────────────────
+    //
+    // La decisión entera vive en `modificadores_plan_de_retiro`: el raíl (sólo
+    // marcas visitadas), la lista vacía que no retira, el freno por marca de
+    // Julio y el rescate del código antes de apagar. Aquí sólo se le pasa lo
+    // que esta pasada ha visto, porque eso es lo único que esta función sabe
+    // y la base no puede saber.
+    //
+    // VISITADA, para extras, es la marca cuyas PREGUNTAS ha recorrido esta
+    // pasada —no la que tiene platos—, menos las marcas con algún catálogo
+    // ilegible. Si una marca no aparece aquí, sus extras no se tocan aunque
+    // parezcan huérfanos: los 5 de Lobbers del 11/09 son justo ese caso.
+    const marcasVisitadasParaExtras = [...new Set(groupRows.map((g: any) => g.brand_id as string))]
+      .filter((b) => !marcasConCatalogoRoto.has(b));
+    try {
+      const { data: retiro, error: retErr } = await sb.rpc("modificadores_plan_de_retiro", {
+        p_account_id: accountId,
+        p_brand_ids: marcasVisitadasParaExtras,
+        p_option_ext_ids: [...new Set(optionRows.map((r: any) => r.external_id as string))],
+        p_aplicar: aplicarRetiro && !dryRun,
+      });
+      if (retErr) {
+        report.warnings.push(`retiro de extras: ${retErr.message}`);
+      } else {
+        report.sobrantes.extras_que_last_no_sirve = retiro;
+        // Regla 8: una marca frenada ya sale por `system_alert_queue`, pero
+        // también tiene que verse en el informe de la pasada, que es la
+        // pantalla que se mira primero.
+        for (const m of (retiro?.marcas ?? [])) {
+          if (m.frenada) {
+            report.warnings.push(
+              `retiro FRENADO en ${m.marca}: ${m.sobran} de ${m.activas} (${m.pct} %) — ${m.motivo_del_freno}`,
+            );
+          }
+        }
+        // La vuelta también se ve, no sólo el retiro: si una opción se
+        // reenciende sola, eso es un cambio de carta y se cuenta como tal.
+        if ((retiro?.opciones_reencendidas ?? 0) > 0) {
+          report.warnings.push(
+            `Last vuelve a servir ${retiro.opciones_reencendidas} extra(s) que estaban retirados: ` +
+            (retiro.reencendidas_cuales ?? []).map((o: any) => `${o.opcion} (${o.marca})`).join(", "),
+          );
+        }
+        if ((retiro?.retiradas_sin_codigo ?? 0) > 0) {
+          report.warnings.push(
+            `retiro: ${retiro.retiradas_sin_codigo} opción(es) se apagan sin código; las líneas futuras con ese nombre no se enlazarán`,
+          );
+        }
+      }
+    } catch (e) {
+      report.warnings.push(`retiro de extras: ${String(e)}`);
+    }
 
     // 5.6 modifier_group_assignment (producto -> grupo)
     const assignRows: Array<any> = [];
@@ -1155,6 +1363,51 @@ Deno.serve(async (req: Request) => {
     // Resumen de marcas en uso RESUELTAS (excluye las no resueltas, ya listadas aparte).
     report.brands_in_use = [...new Set([...inUseProducts.values()].map((v) => v.brandName))]
       .filter((bn) => !report.brands_unresolved.includes(bn));
+
+    // ── EL CINTURÓN, EN EL INFORME Y EN LA COLA ────────────────────────────
+    const cintPreg = report.tablas["modifier_group"]?.protegidas ?? 0;
+    const cintOpc = report.tablas["modifier_option"]?.protegidas ?? 0;
+    report.cinturon_marca_propia.preguntas_protegidas = cintPreg;
+    report.cinturon_marca_propia.opciones_protegidas = cintOpc;
+    report.cinturon_marca_propia.detalle = [
+      ...(report.tablas["modifier_group"]?.protegidas_ejemplo ?? []),
+      ...(report.tablas["modifier_option"]?.protegidas_ejemplo ?? []),
+    ];
+
+    if (cintPreg + cintOpc > 0) {
+      // Que esto salte significa que el importador ha alcanzado por
+      // `external_id` algo que es de Julio. No ha escrito —para eso está el
+      // cinturón— pero alguien tiene que mirarlo el mismo día.
+      const lineas = report.cinturon_marca_propia.detalle.slice(0, 10).map((d: FilaProtegida) =>
+        `· ${d.tabla}: «${d.nombre_en_folvy ?? "(sin nombre)"}» (${d.id_en_folvy})\n` +
+        `  external_id ${d.external_id} · en Last se llama «${d.nombre_en_last ?? "(sin nombre)"}»\n` +
+        `  ${d.por_que}`
+      ).join("\n");
+      const resultado = await encolarAlerta(sb, {
+        kind: "lastapp-catalog-import",
+        severity: "alto",
+        subject: `El importador de Last ha alcanzado ${cintPreg + cintOpc} fila(s) de marca propia`,
+        message:
+          `La importación de catálogo de Last ha casado por external_id con ` +
+          `${cintPreg} pregunta(s) y ${cintOpc} opción(es) que pertenecen a marcas ` +
+          `PROPIAS. NO se han escrito: el cinturón las ha dejado exactamente como ` +
+          `estaban, y lo que Last traía para esas claves no ha entrado en esta pasada.\n\n` +
+          `Esto no debería poder pasar: la verdad de una marca propia es Folvy. ` +
+          `Hay que mirar por qué un external_id de Last coincide con el de una ` +
+          `pregunta de Julio antes de la próxima pasada.\n\n${lineas}` +
+          (dryRun ? "\n\n(Pasada EN SECO: no se ha escrito nada en ningún caso.)" : ""),
+        // La clave lleva el día y el modo: una pasada en seco hecha a mano no
+        // puede callar el aviso de la de las 03:20, que es la que importa.
+        debounceKind: claveDelDia("cinturon_marca_propia", accountId, dryRun ? "seco" : "real"),
+        debounceWindow: "20 hours",
+        accountId,
+      }, {
+        supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
+        cronSecret: Deno.env.get("CRON_SECRET") ?? "",
+      });
+      report.cinturon_marca_propia.aviso = resultado;
+      console.error("CINTURON_MARCA_PROPIA", cintPreg + cintOpc, resultado);
+    }
 
     return jsonResponse({ ok: true, ...report });
   } catch (e) {

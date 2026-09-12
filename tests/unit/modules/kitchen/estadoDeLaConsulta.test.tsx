@@ -1,69 +1,119 @@
+// Las dos reglas del estado de una consulta (Julio, 12/09 14:45), fijadas.
+//
+//   1. El vacío se pinta SÓLO cuando el dato es vacío, y entonces no se pinta
+//      nada más debajo.
+//   2. Un error NO se pinta como vacío: si la consulta falla, lo dice y lo
+//      dice con su motivo.
+//
+// LA SEGUNDA YA ESTABA (es B79, de junio). La primera no: el componente no
+// sabía si había filas, así que si no cargaba y no había error pintaba el
+// cartel de vacío SIEMPRE. Las cuatro pantallas que lo usaban acertaban porque
+// lo envolvían en un ternario; el tablero 1 lo pintó suelto y la pantalla salió
+// diciendo «no ha devuelto ninguna fila» con 65 preguntas debajo.
+//
+// Por eso `hayFilas` es obligatoria y por eso esto se prueba: la disciplina de
+// quien llama no es una garantía, y la siguiente pantalla la escribe otro.
+
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 
-// B79 (06/09/2026). Esta prueba existe por un cartel que mintió durante casi tres
-// meses.
-//
-// LA FACTURA. Rentabilidad decía «Esta marca no tiene platos en carta todavía»
-// sobre Ay Mamita Bowls, que tiene 23 productos activos. Y lo decía por DOS
-// motivos distintos que la pantalla no distinguía:
-//   1. la RPC devolvía cero filas (INNER JOIN contra un `channel_id` vacío);
-//   2. **y también cuando la carga fallaba** — `rows` se quedaba a [] y el mismo
-//      cartel convertía un error de permisos o de red en una afirmación sobre el
-//      inventario del cliente.
-//
-// El caso 2 es el que fija esta prueba, porque es el que no se ve venir: se
-// arregla la RPC, el cartel deja de salir, y el modo «error disfrazado de vacío»
-// sigue ahí esperando al siguiente fallo.
-//
-// Sin jsdom (environment: 'node'): `renderToStaticMarkup` basta para leer el texto.
+const VACIO = 'no ha devuelto ninguna fila'
 
-const html = (p: Parameters<typeof EstadoDeLaConsulta>[0]) =>
-  renderToStaticMarkup(<EstadoDeLaConsulta {...p} />)
-
-describe('EstadoDeLaConsulta · el error manda sobre el vacío', () => {
-  it('con error, NO dice que no haya datos: dice que no se han podido leer', () => {
-    const s = html({
-      error: 'Sin permiso para la economía de la marca 092fb053',
-      queSePregunto: 'la economía de Ay Mamita Bowls',
-      matiz: 'esto no debería salir cuando hay error',
-    })
-    expect(s).toContain('No se ha podido cargar la economía de Ay Mamita Bowls')
-    expect(s).toContain('Sin permiso para la economía de la marca 092fb053')
-    expect(s).toContain('no se han podido leer')
-    // Lo que NO puede pasar nunca: que un fallo se cuente como inventario vacío.
-    expect(s).not.toContain('no ha devuelto ninguna fila')
-    expect(s).not.toContain('esto no debería salir cuando hay error')
+describe('regla 1 · el vacío sólo cuando el dato es vacío', () => {
+  it('CON filas no pinta nada, ni cartel ni caja', () => {
+    const html = renderToStaticMarkup(
+      <EstadoDeLaConsulta hayFilas queSePregunto="las preguntas de esta cuenta" />,
+    )
+    expect(html).toBe('')
   })
 
-  it('sin error y vacío, habla de la CONSULTA, no del negocio del cliente', () => {
-    const s = html({
-      error: null,
-      queSePregunto: 'la economía de Ay Mamita Bowls',
-      matiz: 'revisa que tengan escandallo.',
-    })
-    expect(s).toContain('La consulta de la economía de Ay Mamita Bowls no ha devuelto ninguna fila')
-    expect(s).toContain('revisa que tengan escandallo.')
-    // La frase que costó tres meses no puede volver por ninguna vía.
-    expect(s).not.toContain('no tiene platos')
-    expect(s).not.toContain('Sin datos todavía')
+  it('SIN filas dice qué se preguntó, no qué se concluye del negocio', () => {
+    const html = renderToStaticMarkup(
+      <EstadoDeLaConsulta hayFilas={false} queSePregunto="las preguntas de esta cuenta" />,
+    )
+    expect(html).toContain(VACIO)
+    expect(html).toContain('las preguntas de esta cuenta')
   })
 
-  it('cargando gana a todo, y dice QUÉ está haciendo', () => {
-    const s = html({
-      cargando: true,
-      textoCargando: 'Cruzando coste real con ventas reales…',
-      error: 'un error que todavía no toca enseñar',
-      queSePregunto: 'la ingeniería de menús',
-    })
-    expect(s).toContain('Cruzando coste real con ventas reales…')
-    expect(s).not.toContain('un error que todavía no toca enseñar')
-    expect(s).not.toContain('no ha devuelto ninguna fila')
+  it('y el matiz sólo acompaña al vacío, nunca a la lista llena', () => {
+    const conMatiz = renderToStaticMarkup(
+      <EstadoDeLaConsulta hayFilas={false} queSePregunto="x" matiz="la marca tiene 23 productos" />,
+    )
+    expect(conMatiz).toContain('la marca tiene 23 productos')
+    expect(renderToStaticMarkup(
+      <EstadoDeLaConsulta hayFilas queSePregunto="x" matiz="la marca tiene 23 productos" />,
+    )).toBe('')
+  })
+})
+
+describe('regla 2 · un error no se disfraza de vacío', () => {
+  it('dice que falló, con su motivo, y que eso NO es «no hay datos»', () => {
+    const html = renderToStaticMarkup(
+      <EstadoDeLaConsulta
+        hayFilas={false}
+        error="permission denied for function modificadores_lista_preguntas"
+        queSePregunto="las preguntas de esta cuenta"
+      />,
+    )
+    expect(html).toContain('No se ha podido cargar')
+    expect(html).toContain('permission denied for function')
+    expect(html).not.toContain(VACIO)
   })
 
-  it('el matiz es opcional: sin él, el vacío se dice sin adornos', () => {
-    const s = html({ error: null, queSePregunto: 'la rentabilidad' })
-    expect(s).toContain('La consulta de la rentabilidad no ha devuelto ninguna fila')
+  it('un fallo CON filas viejas en pantalla sigue siendo un fallo y se cuenta', () => {
+    // El orden importa: `hayFilas` no puede callar un error. Si se leyera
+    // primero, una pantalla con datos de hace un minuto se tragaría el fallo
+    // de la recarga y nadie sabría que lo que mira está caducado.
+    const html = renderToStaticMarkup(
+      <EstadoDeLaConsulta hayFilas error="network timeout" queSePregunto="x" />,
+    )
+    expect(html).toContain('network timeout')
+    expect(html).not.toBe('')
+  })
+
+  it('y cargando no dice ni vacío ni error', () => {
+    const html = renderToStaticMarkup(
+      <EstadoDeLaConsulta hayFilas={false} cargando textoCargando="Leyendo…" queSePregunto="x" />,
+    )
+    expect(html).toContain('Leyendo…')
+    expect(html).not.toContain(VACIO)
+    expect(html).not.toContain('No se ha podido cargar')
+  })
+})
+
+// ── Y que ninguna pantalla lo pinte suelto ─────────────────────────────────
+// `hayFilas` obligatoria ya impide el fallo silencioso: sin contestarla no
+// compila. Esto vigila la otra mitad —que el estado y el contenido no se
+// pinten a la vez— leyendo las páginas: cada uso tiene que estar dentro de una
+// condición, no suelto entre dos bloques de contenido.
+describe('ninguna pantalla pinta el estado al lado del contenido', () => {
+  const PAGINAS = [
+    'KitchenMenuEngineeringPage', 'KitchenDashboardPage', 'KitchenProfitabilityPage',
+    'KitchenExtrasPage', 'KitchenModificadoresPage',
+  ]
+
+  it.each(PAGINAS)('%s lo envuelve en una condición', (pagina) => {
+    const src = readFileSync(
+      resolve(__dirname, `../../../../src/modules/kitchen/pages/${pagina}.tsx`), 'utf8',
+    )
+    const i = src.indexOf('<EstadoDeLaConsulta')
+    expect(i).toBeGreaterThan(-1)
+    // Lo que hay justo antes tiene que ser una condición abierta: `? (` de un
+    // ternario. Pintarlo suelto deja un `/>` o un `}` ahí, que es el fallo.
+    const antes = src.slice(0, i).trimEnd()
+    expect(antes.endsWith('? (')).toBe(true)
+  })
+
+  it('y todas contestan a hayFilas', () => {
+    for (const pagina of PAGINAS) {
+      const src = readFileSync(
+        resolve(__dirname, `../../../../src/modules/kitchen/pages/${pagina}.tsx`), 'utf8',
+      )
+      const bloque = src.slice(src.indexOf('<EstadoDeLaConsulta'))
+      expect(bloque.slice(0, bloque.indexOf('/>'))).toContain('hayFilas=')
+    }
   })
 })

@@ -243,6 +243,7 @@ export default function KitchenDashboardPage() {
             cargando={cargando}
             textoCargando="Sumando lo vendido y repasando el catálogo…"
             error={error}
+            hayFilas={!!comida && !!falta}
             queSePregunto="el resumen de la cocina"
             matiz="Si hay ventas en el periodo, es que ninguna ha llegado hasta aquí."
           />

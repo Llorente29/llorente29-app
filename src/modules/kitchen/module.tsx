@@ -11,13 +11,14 @@
 // normal de editar el plato, sin separación posible hoy — "sin rediseñar
 // la pantalla, simplemente el rol no entra ahí". Quien no tenga show_costes
 // tampoco puede editar platos/menús desde aquí.
-import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2, Table2, PlusCircle } from 'lucide-react'
+import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2, Table2, PlusCircle, MessageCircleQuestion } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
 import KitchenMenuPage from '@/modules/kitchen/pages/KitchenMenuPage'
 import KitchenCasadoPage from '@/modules/kitchen/pages/KitchenCasadoPage'
 import KitchenExtrasPage from '@/modules/kitchen/pages/KitchenExtrasPage'
+import KitchenModificadoresPage from '@/modules/kitchen/pages/KitchenModificadoresPage'
 import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
 import KitchenProfitabilityPage from '@/modules/kitchen/pages/KitchenProfitabilityPage'
 import KitchenMenuEngineeringPage from '@/modules/kitchen/pages/KitchenMenuEngineeringPage'
@@ -54,6 +55,7 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'menu',              element: <KitchenMenuPage /> },
     { path: 'casado',            element: <KitchenCasadoPage /> },
     { path: 'extras',            element: <KitchenExtrasPage /> },
+    { path: 'modificadores',     element: <KitchenModificadoresPage /> },
     { path: 'disponibilidad',    element: <KitchenAvailabilityPage /> },
     { path: 'disponibilidad-informes', element: <AvailabilityReportsPage /> },
     { path: 'proveedores',       element: <SuppliersPage /> },
@@ -76,6 +78,11 @@ export const kitchenModule: ModuleDefinition = {
       { id: 'kitchen_menu',          label: 'Cartas',              icon: UtensilsCrossed,   path: 'menu',             requiredRole: 'manager' },
       { id: 'kitchen_casado',        label: 'Casado',              icon: Link2,             path: 'casado',           requiredRole: 'manager' },
       { id: 'kitchen_extras',        label: 'Extras',              icon: PlusCircle,        path: 'extras',           requiredRole: 'manager', requiredPermission: 'show_costes' },
+      // Al lado de Extras y con SU MISMA puerta, que es lo que pide el encargo
+      // de la fase C (§0.3). No es una copia por pereza: esta pantalla enseña
+      // qué opciones cobran y cuáles no cuestan nada en Folvy, que es
+      // exactamente lo que `show_costes` protege en Extras.
+      { id: 'kitchen_modifiers',     label: 'Modificadores',       icon: MessageCircleQuestion, path: 'modificadores', requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
       { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },

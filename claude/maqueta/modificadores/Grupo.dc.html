@@ -1,0 +1,193 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+  <style>
+:root{
+  --ground:#EAEEF1; --surface:#FFFFFF; --surface-2:#F4F7F9; --line:#D3DCE2; --line-soft:#E4EAEE;
+  --ink:#101A21; --ink-2:#3D4C57; --muted:#65767F;
+  --accent:#0E5A5E; --accent-soft:#D8EAEA; --accent-ink:#0A4245;
+  --up:#2C6A4E; --up-soft:#DCEDE2; --down:#9C3A2A; --down-soft:#F5DFDA; --flag:#7E5A0E; --flag-soft:#F6EBCF;
+  --shadow:0 1px 2px rgba(16,26,33,.06), 0 8px 24px -16px rgba(16,26,33,.28);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}
+a{color:var(--accent)} a:hover{color:var(--accent-ink)}
+.num{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.shell{display:flex;min-height:100%;width:1280px;background:var(--ground)}
+.rail{width:196px;flex:0 0 196px;background:#101A21;color:#B3C3CB;padding:18px 0 24px;display:flex;flex-direction:column;gap:2px}
+.rail .logo{color:#fff;font-weight:700;font-size:15px;letter-spacing:-.01em;padding:0 18px 14px;display:flex;align-items:center;gap:9px}
+.rail .logo i{display:inline-block;width:18px;height:18px;border-radius:3px;background:#59B6BA}
+.rail .item{display:flex;align-items:center;height:36px;padding:0 18px;color:#B3C3CB;font-size:13px;border-left:3px solid transparent}
+.rail .item.on{color:#fff;background:#1B262C;border-left-color:#59B6BA;font-weight:600}
+.rail .sep{height:1px;background:#223037;margin:8px 18px}
+.main{flex:1 1 auto;min-width:0;padding:22px 26px 30px;display:flex;flex-direction:column;gap:14px}
+.crumb{font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+h1{font-size:24px;font-weight:700;letter-spacing:-.015em;margin:4px 0 0;line-height:1.2}
+.rule{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.5;max-width:760px}
+.ctrls{display:flex;gap:8px;align-items:center;flex:0 0 auto}
+.sel{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--line);background:var(--surface);border-radius:2px;font-size:13px;font-weight:500;color:var(--ink)}
+.sel .tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:3px;overflow:hidden;box-shadow:var(--shadow)}
+.kpi{background:var(--surface);padding:14px 16px 13px;display:flex;flex-direction:column;gap:4px;min-height:96px}
+.kpi .k{font-size:12px;font-weight:600;color:var(--ink-2)}
+.kpi .v{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.kpi .v small{font-size:14px;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:3px}
+.kpi .s{font-size:11.5px;color:var(--muted);line-height:1.4}
+.kpi.bad .v{color:var(--down)} .kpi.flag .v{color:var(--flag)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:5px 10px;border-radius:2px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.search{display:flex;align-items:center;gap:8px;height:34px;width:280px;padding:0 11px;border:1px solid var(--line);background:var(--surface);border-radius:2px;font-size:13px;color:var(--muted)}
+.search svg{width:15px;height:15px;stroke:var(--muted);fill:none;stroke-width:1.8}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:3px;box-shadow:var(--shadow)}
+.panel-h{padding:10px 16px;border-bottom:1px solid var(--line-soft);font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.th{display:grid;gap:14px;padding:8px 16px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line-soft);background:var(--surface-2)}
+.row{display:grid;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line-soft);min-height:56px}
+.row:last-child{border-bottom:0}
+.row .t{font-weight:600;font-size:13.5px}
+.row .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.row .c{font-size:13px;color:var(--ink-2)}
+.qh{display:flex;align-items:baseline;gap:10px;padding:12px 16px 8px;border-bottom:1px solid var(--line-soft);background:var(--surface-2)}
+.qh .n{font-size:14px;font-weight:700} .qh .d{font-size:12px;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 13px;border-radius:2px;font-size:12.5px;font-weight:600;white-space:nowrap;border:1px solid var(--accent);background:var(--accent);color:#fff}
+.btn.sec{background:var(--surface);color:var(--accent-ink)}
+.btn.ghost{background:transparent;border-color:var(--line);color:var(--ink-2)}
+.btn.warn{background:var(--flag-soft);border-color:#C9A457;color:var(--flag)}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:2px;letter-spacing:.02em;white-space:nowrap}
+.pill.down{background:var(--down-soft);color:var(--down)} .pill.up{background:var(--up-soft);color:var(--up)} .pill.flag{background:var(--flag-soft);color:var(--flag)} .pill.mute{background:var(--surface-2);color:var(--muted)}
+.r{text-align:right}
+.foot{font-size:11.5px;color:var(--muted);line-height:1.5}
+.banner{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:3px;border:1px solid #E2CF9E;background:var(--flag-soft)}
+.banner.info{border-color:#B7D3D4;background:var(--accent-soft)}
+.banner .bt{font-size:13.5px;font-weight:700;color:var(--ink)}
+.banner .bd{font-size:12.5px;color:var(--ink-2);margin-top:3px;line-height:1.5;max-width:720px}
+.field{display:flex;flex-direction:column;gap:6px;padding:12px 16px;border-bottom:1px solid var(--line-soft)}
+.field:last-child{border-bottom:0}
+.lab{font-size:12px;font-weight:600;color:var(--ink-2)}
+.help{font-size:11.5px;color:var(--muted)}
+.input{display:flex;align-items:center;height:38px;padding:0 12px;border:1px solid var(--line);border-radius:2px;background:var(--surface);font-size:14px;color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:2px;overflow:hidden;width:max-content}
+.seg span{padding:8px 14px;font-size:13px;color:var(--ink-2);border-right:1px solid var(--line);background:var(--surface)}
+.seg span:last-child{border-right:0}
+.seg span.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.step{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:2px;height:38px;width:max-content}
+.step b{width:38px;text-align:center;color:var(--ink-2);font-weight:600}
+.step span{width:44px;text-align:center;border-left:1px solid var(--line);border-right:1px solid var(--line);line-height:36px}
+.toggle{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink)}
+.toggle i{display:inline-block;width:34px;height:20px;border-radius:10px;background:var(--line);position:relative}
+.toggle i::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:7px;background:#fff}
+.toggle.on i{background:var(--accent)} .toggle.on i::after{left:auto;right:3px}
+.lock{width:13px;height:13px;stroke:var(--muted);fill:none;stroke-width:1.8;flex:0 0 auto}
+.check{width:18px;height:18px;border:1.5px solid var(--line);border-radius:2px;background:var(--surface);display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.check.on{background:var(--accent);border-color:var(--accent)}
+.check.dis{background:var(--line-soft);border-color:var(--line)}
+.check svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:2.4}
+.check.dis svg{stroke:var(--muted)}
+.add{display:flex;align-items:center;gap:8px;padding:12px 16px;font-size:13px;font-weight:600;color:var(--accent)}
+.muted{color:var(--muted)}
+</style>
+</helmet>
+<div class="shell">
+<div class="rail">
+  <div class="logo"><i></i>Folvy Kitchen</div>
+  <div class="item">Resumen</div>
+  <div class="item">Rentabilidad</div>
+  <div class="item">Ingeniería de carta</div>
+  <div class="item">Extras</div>
+  <div class="item on">Modificadores</div>
+  <div class="sep"></div>
+  <div class="item">Carta</div>
+  <div class="item">Almacén</div>
+</div>
+<div class="main">
+  <div class="head">
+    <div>
+      <div class="crumb">Kitchen · Modificadores · The Urban Kebab</div>
+      <h1>Algun extra en tu pita?</h1>
+      <div class="rule">The Urban Kebab · marca propia · lo que cambies aquí es lo que ve el cliente</div>
+    </div>
+    <div class="ctrls"><span class="btn ghost">Volver</span><span class="btn">Guardar</span></div>
+  </div>
+
+  <div class="banner">
+    <div>
+      <div class="bt">Esta pregunta está copiada 4 veces, una en cada plato</div>
+      <div class="bd">Kebab de Falafel, Kebab de Pollo Gyros, Kebab de Ternera Gyros y Kebab Mixto tienen cada uno su copia, con las mismas 4 opciones. Hoy hay que cambiarlas y agotarlas de una en una. Juntarlas deja una sola pregunta en los 4 platos.</div>
+    </div>
+    <div class="ctrls"><span class="btn sec">Ver las 4</span><span class="btn">Juntar las 4 en una</span></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="panel">
+        <div class="panel-h"><span>La pregunta</span></div>
+        <div class="field"><span class="lab">Lo que lee el cliente</span><span class="input">Algun extra en tu pita?</span><span class="help">Revisa la ortografía: así sale en Glovo, Uber y la web.</span></div>
+        <div class="field"><span class="lab">Qué puede hacer el cliente</span>
+          <div class="seg"><span>Elegir una</span><span class="on">Añadir varias</span><span>Quitar</span></div>
+        </div>
+        <div class="field" style="flex-direction:row;gap:36px">
+          <div style="display:flex;flex-direction:column;gap:6px"><span class="lab">¿Cuántas como mucho?</span><span class="step"><b>−</b><span class="num">5</span><b>+</b></span></div>
+          <div style="display:flex;flex-direction:column;gap:6px"><span class="lab">¿Tiene que elegir alguna?</span><span class="toggle"><i></i>No, puede no añadir nada</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><span>Opciones · 4</span><span>Precio que se suma al plato</span></div>
+        <div class="th" style="grid-template-columns: minmax(0,1.5fr) 90px minmax(0,1.6fr) 118px"><span>Opción</span><span class="r">Precio</span><span>Qué lleva</span><span>Se vende</span></div>
+        <div class="row" style="grid-template-columns: minmax(0,1.5fr) 90px minmax(0,1.6fr) 118px">
+  <span><span class="t">extra carne mixta</span><div class="sub">Extra «extra carne mixta» · en 4 opciones</div></span>
+  <span class="c num r">+3,50 €</span>
+  <span class="c">50 g de Kebab Ternera Loncheado + 50 g de Kebab Pollo Loncheado</span>
+  <span class="toggle on"><i></i>Sí</span>
+</div>
+        <div class="row" style="grid-template-columns: minmax(0,1.5fr) 90px minmax(0,1.6fr) 118px">
+  <span><span class="t">Salsa Yogur</span><div class="sub">Extra «Salsa Yogur» · en 13 opciones</div></span>
+  <span class="c num r">+1,50 €</span>
+  <span class="c">40 g de SALSA Yogur · lo dice el extra</span>
+  <span class="toggle on"><i></i>Sí</span>
+</div>
+        <div class="row" style="grid-template-columns: minmax(0,1.5fr) 90px minmax(0,1.6fr) 118px">
+  <span><span class="t">Salsa Harissa (Picante)</span><div class="sub">Extra «Salsa Harissa» · en 13 opciones</div></span>
+  <span class="c num r">+1,50 €</span>
+  <span class="pills"><span class="pill flag">Sin decidir</span><a style="font-size:12.5px;font-weight:600">Decidir</a></span>
+  <span class="toggle on"><i></i>Sí</span>
+</div>
+        <div class="row" style="grid-template-columns: minmax(0,1.5fr) 90px minmax(0,1.6fr) 118px">
+  <span><span class="t">Salsa Tzatziki (Recomendada)</span><div class="sub">Extra «Salsa Tzatziki» · en 11 opciones</div></span>
+  <span class="c num r">+2,00 €</span>
+  <span class="c">0,2 bote de Salsa Tzatziki 200g · lo dice el extra</span>
+  <span class="toggle on"><i></i>Sí</span>
+</div>
+        <div class="add" style="border-top:1px solid var(--line-soft)">+ Añadir opción</div>
+      </div>
+      <div class="foot">«Qué lleva» es del extra, no de la opción: se pone una vez y vale en todas las preguntas donde aparece. Aquí solo se cambia el precio.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><span>En qué platos está · 1</span></div>
+      <div class="row" style="grid-template-columns:minmax(0,1fr) auto">
+        <div><div class="t">Kebab de Falafel</div><div class="sub">The Urban Kebab</div></div>
+        <span class="btn ghost">Quitar</span>
+      </div>
+      <div class="field" style="background:var(--surface-2)">
+        <span class="lab">Las otras 3 copias están en</span>
+        <span class="help" style="font-size:12.5px;color:var(--ink-2);line-height:1.6">Kebab de Pollo Gyros · Kebab de Ternera Gyros · Kebab Mixto: Pollo y Ternera</span>
+      </div>
+      <div class="add">+ Poner en más platos</div>
+    </div>
+  </div>
+</div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -56,6 +56,11 @@ export const ANCHO_DE_BOTONES = {
   ingenieriaEstrellas: '70px',
   /** Extras: «Decir qué lleva» + «Ver dónde» (206 px). Tablero: 214. */
   extras: '214px',
+  /** Modificadores · lista de preguntas: un solo botón por fila, y el más
+   *  ancho de los tres es «Revisar» (71 px con las fuentes de verdad). El
+   *  tablero da 96 y se respeta: sobra, pero la columna es fija y por eso la
+   *  cabecera cuadra con las filas (regla 38). */
+  preguntas: '96px',
 } as const
 
 /** Resumen · por marca: marca · vendido · comida · coste conocido · botón. */
@@ -82,8 +87,19 @@ export const REJILLA_INGENIERIA_ESTRELLAS =
 export const REJILLA_EXTRAS =
   `minmax(0,1fr) 120px 90px 110px 150px ${ANCHO_DE_BOTONES.extras}`
 
+/**
+ * Modificadores · la lista de preguntas (tablero 1 de la fase C).
+ * Pregunta · qué puede hacer el cliente · opciones · en platos · qué le pasa ·
+ * botón. Las cinco primeras son elásticas, tal cual el `.dc.html` de la
+ * maqueta; la del botón es fija, que es lo que hace que la cabecera y la fila
+ * usen las mismas pistas.
+ */
+export const REJILLA_PREGUNTAS =
+  `minmax(0,2.3fr) minmax(0,1.25fr) minmax(0,0.8fr) minmax(0,0.75fr) minmax(0,1.7fr) ${ANCHO_DE_BOTONES.preguntas}`
+
 /** Todas, para que la prueba las recorra sin que haya que acordarse de añadirla. */
 export const TODAS_LAS_REJILLAS: Record<string, string> = {
   REJILLA_MARCAS, REJILLA_COSAS, REJILLA_CARTA,
   REJILLA_SIN_COSTE, REJILLA_INGENIERIA, REJILLA_INGENIERIA_ESTRELLAS, REJILLA_EXTRAS,
+  REJILLA_PREGUNTAS,
 }

@@ -53,6 +53,57 @@ Cada una costó un incidente real. La fecha es el día que se pagó.
    *(= regla 32 de la maestra.)*
    *(10/09, y lo pagó el servicio entero. Mi p8 dejó `avg_unit_cost` en NULL cuando no hay coste fiable —lo correcto, y lo pidió Julio— pero `recipe_item_location_stock.stock_value` era NOT NULL y se calcula `qty × avg`. Desde las 12:13 UTC, cualquier camino que recalculara stock abortaba con 23502 y se llevaba la transacción entera: 79 «Entregado al rider» por token, 33 cambios de estado, 10 mermas y 7 cierres de venta, todos rechazados. A las 22:00 había 12 pedidos «Listo» sin cerrar en Alcalá, el más antiguo de las 14:49. Mi ensayo de la p8 midió la media sobre 453 filas y no ejecutó ni una venta.)*
 
+### La banda de servicio, escrita para no tener que juzgarla
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Aquí se cita
+> para que exista en el repositorio, que es donde se lee.
+
+**Entre las 12:15 y las 23:45 (reloj de la base, `now() at time zone 'Europe/Madrid'`)
+no se aplica ninguna migración**, salvo que se cumplan LAS TRES:
+
+1. **No escribe.** `STABLE` o `IMMUTABLE`, o DDL que solo crea o reemplaza
+   lectura. Nada de `VOLATILE`, ni tablas, ni índices, ni restricciones, ni
+   permisos.
+2. **No la llama nada vivo.** 0 funciones, 0 crons, 0 disparadores, y el front
+   que la usa sin publicar. **Medido y puesto en el parte**, no supuesto.
+3. **Se dice ANTES de aplicarla**, no después.
+
+Si falla una, se espera a las 23:45. Y la duda va siempre a favor de esperar:
+la banda existe porque a las 13:00 hay gente cocinando.
+
+*Por qué está escrita así (12/09):* antes decía «nada que toque entrada de
+pedidos, consumo o stock», que es una regla en función del DAÑO y obliga a
+juzgar cada caso. Se aplicó una RPC de lectura a las 13:06 midiendo que no
+tocaba nada de eso —era correcto— pero el criterio no era comprobable por
+otro. Estas tres sí: se miden, se pegan y no se opinan.
+
+### Una cosa está aplicada cuando está en PRODUCCIÓN, no cuando está commiteada
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque.
+
+Para una edge function, **manda lo desplegado**. El commit no despliega: el
+despliegue lo dispara `push` a `main`, así que todo lo que vive en una rama
+sin fusionar está escrito y **sin efecto ninguno**. Se comprueba mirando los
+dos lados —lo desplegado contra `origin/main`— y se dice cuál de los dos va
+por delante.
+
+*Detector automático:* si un parte dice «X aplicada» y X toca una edge
+function, la pregunta es en qué versión desplegada está X. Si la respuesta es
+«está commiteada», X no está aplicada.
+
+*Y ojo con lo que arrastra la fusión:* fusionar a `main` no despliega solo la
+función que se quería tocar. **Publica también el front**, y con él la web de
+las tablets. Fusionar a las 14:10 es publicar en banda aunque el cambio
+pretendido fuese de una edge function que corre a las 03:20.
+
+*(12/09. A2c —el retiro de extras— se dio por aplicada el 11/09. Su mitad de
+base estaba viva —el sello, el disparador, el CHECK— pero el retiro vive en
+`lastapp-catalog-import`, y esa función seguía siendo la de antes: dos días
+commiteada y sin efecto. Lo desplegado era `origin/main` byte a byte, así que
+no había deriva: había dos commits sin fusionar. La pasada de las 03:20 no
+habría retirado nada y se habría ido a buscar una retirada que no podía
+existir. Salió al ir a desplegar el cinturón y comparar los dos lados.)*
+
 ### Numeradas por la secuencia maestra
 
 > Estas dos citan el número de `folvy_deudas_abiertas.md`, que es **la única
