@@ -18,14 +18,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  CabeceraCocina, CifrasCocina, CifraCocina, PastillaCocina, BotonCocina,
+  CabeceraCocina, CifrasCocina, CifraCocina, PastillaCocina,
   ChipCocina, PanelCocina, RotuloDePanel, FranjaCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { REJILLA_PREGUNTAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
-  platosPreocupa, pastillas, textoDelBoton, cuantasActivas, ordena,
-  tituloDeLaFranja, detalleDeLaFranja, tituloSinPlato, lineaSinPlato,
+  platosPreocupa, pastillas, cuantasActivas, ordena,
+  tituloDeLaFranja, detalleDeLaFranja, repartoDeLaFranja, tituloSinPlato, lineaSinPlato,
   subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista, MARCAS_A_LA_VISTA,
   type Pregunta, type TonoDePastilla,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
@@ -81,11 +81,7 @@ function Fila({ p, sinRaya }: { p: Pregunta; sinRaya?: boolean }) {
           ? <span className="text-[12px] text-cocina-tinta-3">—</span>
           : chapas.map((c) => <PastillaCocina key={c.texto} tono={TONO[c.tono]}>{c.texto}</PastillaCocina>)}
       </div>
-      <div className="text-right">
-        <BotonCocina peso={p.accion === 'abrir' ? 'borde' : 'aviso'} disabled>
-          {textoDelBoton(p.accion)}
-        </BotonCocina>
-      </div>
+      <div className="text-right" />
     </div>
   )
 }
@@ -135,9 +131,13 @@ describe('la foto es de las 65, no de una selección', () => {
     const todas = [...MARCAS_REALES.flatMap((m) => m.preguntas), ...SIN_PLATO_REALES]
     expect(todas.filter((p) => p.accion === 'juntar')).toHaveLength(10)
     expect(todas.filter((p) => p.accion === 'revisar')).toHaveLength(2)
-    expect(todas.filter((p) => p.opciones === 0)).toHaveLength(3)
     expect(todas.filter((p) => !p.activa)).toHaveLength(9)
     expect(todas.filter((p) => p.cedida)).toHaveLength(11)
+    // Las que se quedan sin opciones ACTIVAS son nueve, y las nueve están
+    // apagadas: ninguna pregunta viva se queda muda.
+    expect(todas.filter((p) => p.opciones === 0)).toHaveLength(9)
+    expect(todas.filter((p) => p.opciones === 0 && p.activa)).toHaveLength(0)
+    expect(todas.filter((p) => p.opcionesRetiradas > 0)).toHaveLength(10)
   })
 })
 
@@ -163,20 +163,26 @@ it('genera la captura del tablero 1 a 1280', () => {
         <FranjaCocina
           tono="malo"
           titulo={tituloDeLaFranja(FRANJA_REAL, VENTANA_REAL)}
-          detalle={detalleDeLaFranja(FRANJA_REAL)}
+          detalle={
+            <>
+              {detalleDeLaFranja(FRANJA_REAL)}
+              {' '}
+              <span className="text-cocina-tinta-3">{repartoDeLaFranja(FRANJA_REAL)}</span>
+            </>
+          }
         />
         <CifrasCocina>
           <CifraCocina titulo="Preguntas" valor={String(CIFRAS_REALES.preguntas)}
-            pie={`${ACTIVAS} activas · ${CIFRAS_REALES.opciones} opciones entre todas`} />
+            pie={`${ACTIVAS} activas · ${CIFRAS_REALES.opcionesActivas} opciones que se venden`} />
           <CifraCocina titulo="Platos con alguna pregunta" valor={String(CIFRAS_REALES.platosConPregunta)}
             sufijo={`de ${CIFRAS_REALES.platosActivos}`} pie="platos activos de todas las marcas" />
           <CifraCocina titulo="Repetidas" valor={String(CIFRAS_REALES.repetidasPreguntas)} tono="aviso"
             pie={`${CIFRAS_REALES.repetidasNombres} nombres que se repiten dentro de su marca`} />
           <CifraCocina titulo="Extras distintos" valor={String(CIFRAS_REALES.extrasDistintos)} tono="aviso"
-            pie={`detrás de las ${CIFRAS_REALES.opciones - CIFRAS_REALES.opcionesSinDecidir} opciones que ya lo tienen decidido`} />
-          <CifraCocina titulo="Opciones sin decidir qué llevan" valor={String(CIFRAS_REALES.opcionesSinDecidir)}
-            sufijo={`de ${CIFRAS_REALES.opciones}`} tono="malo"
-            pie={`${CIFRAS_REALES.opcionesSinDecidirCobran} cobran y en Folvy no cuestan nada`} />
+            pie={`detrás de las ${CIFRAS_REALES.opcionesDecididasActivas} opciones que ya lo tienen decidido`} />
+          <CifraCocina titulo="Opciones sin decidir qué llevan" valor={String(CIFRAS_REALES.opcionesSinDecidirActivas)}
+            sufijo={`de ${CIFRAS_REALES.opcionesActivas}`} tono="malo"
+            pie={`${CIFRAS_REALES.opcionesSinDecidirCobranActivas} cobran y en Folvy no cuestan nada · ${CIFRAS_REALES.opciones} opciones entre todas, ${CIFRAS_REALES.opciones - CIFRAS_REALES.opcionesActivas} retiradas`} />
         </CifrasCocina>
         <div className="flex justify-between items-center gap-3">
           <div className="flex gap-1.5 flex-wrap">
@@ -249,8 +255,14 @@ it('genera la captura del tablero 1 a 1280', () => {
   // sólo en los datos: si un texto se rompe al pintarlo, esto lo caza.
   expect(html).toContain('Mismo nombre, reglas distintas')
   expect(html).toContain('Copiada 4 veces')
-  expect(html).toContain('Sin opciones: no sale')
   expect(html).toContain('Se cambia en Last')
   expect(html).toContain('Apagada')
+  expect(html).toContain('3 retiradas')
   expect(html).toContain(chipDeMasMarcas(9))
+  // NINGÚN botón: los tres destinos llegan con los tableros 2, 4 y 5.
+  expect(html).not.toContain('>Abrir<')
+  expect(html).not.toContain('>Juntar<')
+  expect(html).not.toContain('>Revisar<')
+  // Y el rojo, sólo donde hay algo que hacer.
+  expect(html).not.toContain('Sin opciones: no sale')
 })

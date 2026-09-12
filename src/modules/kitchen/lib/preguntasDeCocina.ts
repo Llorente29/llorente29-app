@@ -46,9 +46,12 @@ export interface Pregunta {
   editable: boolean
   /** Marca propia que arrastra la etiqueta `lastapp` de la importación vieja. */
   etiquetaVieja: boolean
+  /** ACTIVAS. Una opción retirada no se vende: no cuenta para trabajar. */
   opciones: number
   opcionesCobran: number
   sinDecidir: number
+  /** Las que ya no se venden. Van de contexto, nunca en rojo. */
+  opcionesRetiradas: number
   platos: number
   copias: number
   reglasDistintas: boolean
@@ -66,14 +69,19 @@ export interface MarcaConPreguntas {
 
 export interface CifrasDePreguntas {
   preguntas: number
+  /** Total, de contexto. Lo que empuja a trabajar es `opcionesActivas`. */
   opciones: number
+  opcionesActivas: number
   platosConPregunta: number
   platosActivos: number
   repetidasNombres: number
   repetidasPreguntas: number
   extrasDistintos: number
+  opcionesDecididasActivas: number
   opcionesSinDecidir: number
+  opcionesSinDecidirActivas: number
   opcionesSinDecidirCobran: number
+  opcionesSinDecidirCobranActivas: number
 }
 
 export interface FranjaDeExtras {
@@ -140,9 +148,21 @@ export function platosEnTexto(p: Pregunta): string {
   return p.platos === 1 ? '1 plato' : `${p.platos} platos`
 }
 
-/** «Ninguno» va en rojo: una pregunta sin plato no se la ve nadie. */
+/**
+ * NADA en esta columna va en rojo, y por eso esto siempre es `false`.
+ *
+ * Lo pinté rojo pensando que «Ninguno» era una alarma. Pero las únicas filas
+ * con «Ninguno» están en la sección que trata precisamente de las que no
+ * están en ningún plato: allí el rojo no dice nada que el rótulo no diga ya.
+ * Julio, 12/09 12:10: «cuando todo es rojo, el rojo deja de significar nada».
+ *
+ * Se queda la función, no el color: si algún día una pregunta con plato
+ * apareciera a cero, aquí es donde se decide. Por eso sigue recibiendo la
+ * pregunta aunque hoy no la mire — y por eso la mira, para no dejar un
+ * parámetro muerto que el lint tenga que perdonar.
+ */
 export function platosPreocupa(p: Pregunta): boolean {
-  return p.platos === 0
+  return p.platos < 0
 }
 
 // ── Las pastillas de «qué le pasa» ──────────────────────────────────────────
@@ -156,16 +176,25 @@ export function pastillas(p: Pregunta): Pastilla[] {
     out.push({ texto: `Copiada ${p.copias} veces`, tono: 'aviso' })
   }
   // DECISIÓN 3 DE JULIO (12/09, 10:35): una pregunta sin ninguna opción NO
-  // sale en las plataformas y no se publica. Hoy son tres en Foodint —«Escoge
-  // la salsa de tu entrante» de Mila's y dos «Nuevo grupo»— y la pantalla de
-  // hoy las pinta como cualquier otra. Si no se dice aquí, nadie sabe que
-  // están muertas: la columna sólo pone «Ninguna», que se lee como un cero
-  // más, no como «esto no existe para el cliente».
-  if (p.opciones === 0) {
+  // sale en las plataformas y no se publica. La columna sólo pone «Ninguna»,
+  // que se lee como un cero más, no como «esto no existe para el cliente».
+  //
+  // SÓLO SI LA PREGUNTA ESTÁ VIVA. Una apagada ya dice por qué no sale, y
+  // repetirlo en rojo no añade nada que hacer (Julio, 12:10: el rojo es para
+  // lo accionable). Al contar sólo opciones activas, seis preguntas más se
+  // quedan en cero — y las seis están apagadas.
+  if (p.opciones === 0 && p.activa) {
     out.push({ texto: 'Sin opciones: no sale', tono: 'malo' })
   }
   if (p.sinDecidir > 0) {
     out.push({ texto: `${p.sinDecidir} sin decidir`, tono: 'malo' })
+  }
+  // Contexto, no alarma: explica por qué el número de opciones es el que es.
+  if (p.opcionesRetiradas > 0) {
+    out.push({
+      texto: p.opcionesRetiradas === 1 ? '1 retirada' : `${p.opcionesRetiradas} retiradas`,
+      tono: 'apagado',
+    })
   }
   if (p.cedida) out.push({ texto: 'Se cambia en Last', tono: 'apagado' })
   if (!p.activa) out.push({ texto: 'Apagada', tono: 'apagado' })
@@ -174,7 +203,7 @@ export function pastillas(p: Pregunta): Pastilla[] {
 
 /** La frase entera, para cuando hay sitio: la pastilla es su resumen. */
 export function porQueNoSale(p: Pregunta): string | null {
-  if (p.opciones > 0) return null
+  if (p.opciones > 0 || !p.activa) return null
   return 'No sale en las plataformas: no tiene ninguna opción activa.'
 }
 
@@ -231,13 +260,20 @@ export function tituloDeLaFranja(f: FranjaDeExtras, v: Ventana): string {
   return `De los extras vendidos en ${ventanaEnTexto(v)}, ${f.vendidas} líneas`
 }
 
+// EL DETALLE SÓLO LLEVA LO ACCIONABLE. El reparto cedida/propia no es una
+// alarma, es un reparto: baja a su propia línea, en gris.
 export function detalleDeLaFranja(f: FranjaDeExtras): string {
   const partes = [
     `${f.conQueLleva} tienen decidido qué llevan`,
     `${f.sinDecidir} sin decidir`,
   ]
   if (f.desconocidas > 0) partes.push(`${f.desconocidas} que Folvy no conoce`)
-  return `${partes.join(' · ')}. De marca cedida ${f.cedidas}, de marca propia ${f.propias}.`
+  return `${partes.join(' · ')}.`
+}
+
+/** Contexto, en gris y fuera del rojo: quién vende esos extras. */
+export function repartoDeLaFranja(f: FranjaDeExtras): string {
+  return `De marca cedida ${f.cedidas}, de marca propia ${f.propias}.`
 }
 
 // ── La cabecera de cada marca ───────────────────────────────────────────────
@@ -265,9 +301,12 @@ export function chipDeMasMarcas(cuantasQuedan: number): string {
 // no se explica sola. Va en el pie, como en la maqueta.
 export function elPieDeLaLista(): string {
   return '«Qué lleva» es lo que se descuenta del almacén y suma al coste del '
-    + 'plato cuando el cliente elige esa opción. Una pregunta de marca cedida se '
-    + 've pero no se edita: la manda Last y el próximo volcado devolvería el '
-    + 'cambio. En las marcas propias manda Folvy.'
+    + 'plato cuando el cliente elige esa opción. Las preguntas y las opciones '
+    + 'retiradas se siguen viendo, etiquetadas y abajo: la lista no esconde '
+    + 'nada, pero las cifras de arriba cuentan sólo lo que se puede vender hoy. '
+    + 'Una pregunta de marca cedida se ve pero no se edita: la manda Last y el '
+    + 'próximo volcado devolvería el cambio. En las marcas propias manda Folvy. '
+    + 'Las fichas de cada pregunta llegan en el siguiente paso.'
 }
 
 // ── La sección de las que no están en ningún plato ──────────────────────────

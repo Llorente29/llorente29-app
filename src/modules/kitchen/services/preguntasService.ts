@@ -40,7 +40,7 @@ export interface LasPreguntas {
   franja: FranjaDeExtras
   cifras: CifrasDePreguntas
   marcas: MarcaConPreguntas[]
-  sinPlato: { preguntas: number; opciones: number; filas: Pregunta[] }
+  sinPlato: { preguntas: number; opciones: number; opcionesRetiradas: number; filas: Pregunta[] }
 }
 
 function aPregunta(f: Fila): Pregunta {
@@ -60,6 +60,7 @@ function aPregunta(f: Fila): Pregunta {
     etiquetaVieja: bool(f.etiqueta_vieja),
     opciones: num(f.opciones),
     opcionesCobran: num(f.opciones_cobran),
+    opcionesRetiradas: num(f.opciones_retiradas),
     sinDecidir: num(f.sin_decidir),
     platos: num(f.platos),
     copias: num(f.copias),
@@ -102,13 +103,17 @@ export async function getPreguntas(accountId: string, dias = 30): Promise<LasPre
     cifras: {
       preguntas: num(cifras.preguntas),
       opciones: num(cifras.opciones),
+      opcionesActivas: num(cifras.opciones_activas),
       platosConPregunta: num(cifras.platos_con_pregunta),
       platosActivos: num(cifras.platos_activos),
       repetidasNombres: num(cifras.repetidas_nombres),
       repetidasPreguntas: num(cifras.repetidas_preguntas),
       extrasDistintos: num(cifras.extras_distintos),
+      opcionesDecididasActivas: num(cifras.opciones_decididas_activas),
       opcionesSinDecidir: num(cifras.opciones_sin_decidir),
+      opcionesSinDecidirActivas: num(cifras.opciones_sin_decidir_activas),
       opcionesSinDecidirCobran: num(cifras.opciones_sin_decidir_cobran),
+      opcionesSinDecidirCobranActivas: num(cifras.opciones_sin_decidir_cobran_activas),
     },
     marcas: ((d.marcas ?? []) as Fila[]).map((m) => ({
       id: str(m.id),
@@ -119,6 +124,7 @@ export async function getPreguntas(accountId: string, dias = 30): Promise<LasPre
     sinPlato: {
       preguntas: num(sinPlato.preguntas),
       opciones: num(sinPlato.opciones),
+      opcionesRetiradas: num(sinPlato.opciones_retiradas),
       filas: ((sinPlato.filas ?? []) as Fila[]).map(aPregunta),
     },
   }

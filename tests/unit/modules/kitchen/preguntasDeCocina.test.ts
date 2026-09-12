@@ -12,7 +12,7 @@ import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
   platosPreocupa, pastillas, textoDelBoton, porQueNoSeEdita, lineaDeEtiquetaVieja,
   cifraConBase, cuantasActivas, ordena, tituloDeLaFranja, detalleDeLaFranja,
-  tituloSinPlato, lineaSinPlato, porQueNoSale, subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista,
+  tituloSinPlato, lineaSinPlato, porQueNoSale, repartoDeLaFranja, subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista,
   MARCAS_A_LA_VISTA,
   type Pregunta,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
@@ -22,7 +22,7 @@ const P = (o: Partial<Pregunta> = {}): Pregunta => ({
   id: 'x', nombre: 'X', tipo: 'elige', dePago: false, min: 0, max: 1,
   obligatoria: false, repetible: false, activa: true, origen: 'propia',
   cedida: false, editable: true, etiquetaVieja: false,
-  opciones: 0, opcionesCobran: 0, sinDecidir: 0, platos: 0,
+  opciones: 0, opcionesCobran: 0, opcionesRetiradas: 0, sinDecidir: 0, platos: 0,
   copias: 1, reglasDistintas: false, accion: 'abrir', marca: null, ...o,
 })
 
@@ -104,10 +104,14 @@ describe('las columnas', () => {
     expect(opcionesEnTexto(DOS_DISCOS)).toBe('2 · 1 cobra')
     expect(opcionesEnTexto(SALSA_PITA)).toBe('3')
   })
-  it('«Ninguno» cuando no está en ningún plato, y preocupa', () => {
+  it('«Ninguno» cuando no está en ningún plato — y NO va en rojo', () => {
     expect(platosEnTexto(DOS_DISCOS)).toBe('Ninguno')
-    expect(platosPreocupa(DOS_DISCOS)).toBe(true)
     expect(platosEnTexto(POSTRE)).toBe('30 platos')
+    // Las únicas filas con «Ninguno» están en la sección que trata
+    // precisamente de las que no están en ningún plato. Allí el rojo no dice
+    // nada que el rótulo no diga ya, y gastarlo ahí se lo quita a lo que sí
+    // pide acción (Julio, 12/09 12:10).
+    expect(platosPreocupa(DOS_DISCOS)).toBe(false)
     expect(platosPreocupa(POSTRE)).toBe(false)
   })
 })
@@ -184,6 +188,11 @@ describe('la franja, sin porcentaje a propósito', () => {
     expect(tituloDeLaFranja(franja, ventana)).not.toContain('%')
     expect(detalleDeLaFranja(franja)).not.toContain('%')
   })
+  it('y el reparto cedida/propia sale del detalle: es un reparto, no una alarma', () => {
+    expect(detalleDeLaFranja(franja)).not.toContain('cedida')
+    expect(detalleDeLaFranja(franja)).toContain('sin decidir')
+    expect(repartoDeLaFranja(franja)).toBe('De marca cedida 1087, de marca propia 291.')
+  })
   it('y cuando no hay desconocidas, no se inventa la frase', () => {
     expect(detalleDeLaFranja(franja)).not.toContain('no conoce')
     expect(detalleDeLaFranja({ ...franja, desconocidas: 14 })).toContain('14 que Folvy no conoce')
@@ -205,32 +214,44 @@ describe('una pregunta sin ninguna opción no sale, y lo dice', () => {
   const TODAS = [...MARCAS_REALES.flatMap((m) => m.preguntas), ...SIN_PLATO_REALES]
   const vacias = TODAS.filter((p) => p.opciones === 0)
 
-  it('en Foodint son tres, y no me las he inventado', () => {
-    expect(vacias).toHaveLength(3)
-    expect(vacias.map((p) => p.nombre).sort()).toEqual(
-      ['Escoge la salsa de tu entrante', 'Nuevo grupo', 'Nuevo grupo'],
-    )
+  it('contando ACTIVAS son nueve, no tres — y no me las he inventado', () => {
+    // Con el total eran tres. Contando sólo lo que se puede vender hoy son
+    // nueve: seis más se quedan sin ninguna opción viva.
+    expect(vacias).toHaveLength(9)
+    expect(TODAS.filter((p) => p.opcionesRetiradas > 0)).toHaveLength(10)
   })
 
-  it('llevan la pastilla, y ninguna de las otras 62 la lleva', () => {
+  it('y LAS NUEVE están apagadas: ninguna pregunta viva se queda muda', () => {
+    expect(vacias.filter((p) => p.activa)).toHaveLength(0)
+  })
+
+  it('por eso hoy la pastilla roja no sale en ninguna fila, y está bien', () => {
+    // La pastilla es para lo accionable. Una pregunta apagada ya dice por qué
+    // no sale; repetirlo en rojo no añade nada que hacer.
     for (const p of TODAS) {
       const tiene = pastillas(p).some((c) => c.texto === 'Sin opciones: no sale')
-      expect(tiene).toBe(p.opciones === 0)
+      expect(tiene).toBe(p.opciones === 0 && p.activa)
     }
+    expect(TODAS.filter((p) => pastillas(p).some((c) => c.texto === 'Sin opciones: no sale'))).toHaveLength(0)
   })
 
-  it('y la frase entera está escrita para cuando haya sitio', () => {
-    expect(porQueNoSale(vacias[0])).toBe(
-      'No sale en las plataformas: no tiene ninguna opción activa.',
-    )
-    expect(porQueNoSale(P({ opciones: 1 }))).toBeNull()
+  it('pero en cuanto una viva se quede sin opciones, lo dice', () => {
+    const viva = P({ opciones: 0, activa: true })
+    expect(pastillas(viva).some((c) => c.texto === 'Sin opciones: no sale')).toBe(true)
+    expect(porQueNoSale(viva)).toBe('No sale en las plataformas: no tiene ninguna opción activa.')
+    expect(porQueNoSale(P({ opciones: 0, activa: false }))).toBeNull()
+    expect(porQueNoSale(P({ opciones: 1, activa: true }))).toBeNull()
   })
 
-  it('«Ninguna» en la columna no basta: se lee como un cero más', () => {
-    // Lo que prohíbe la regla 7 no es el dato ausente, es el dato que se lee
-    // mal. La columna dice cuántas hay; la pastilla dice qué significa.
-    expect(opcionesEnTexto(vacias[0])).toBe('Ninguna')
-    expect(pastillas(vacias[0])[0].tono).toBe('malo')
+  it('las retiradas se cuentan aparte, en gris, nunca en rojo', () => {
+    const kebab = MARCAS_REALES.flatMap((m) => m.preguntas)
+      .find((p) => p.nombre === '1. Escoge tu primer kebab')!
+    expect(kebab.opciones).toBe(3)
+    expect(kebab.opcionesRetiradas).toBe(3)
+    const chapa = pastillas(kebab).find((c) => c.texto === '3 retiradas')!
+    expect(chapa.tono).toBe('apagado')
+    expect(pastillas(P({ opciones: 1, opcionesRetiradas: 1 })).some((c) => c.texto === '1 retirada')).toBe(true)
+    expect(pastillas(P({ opciones: 1, opcionesRetiradas: 0 })).some((c) => c.texto.includes('retirada'))).toBe(false)
   })
 })
 
@@ -267,12 +288,14 @@ describe('las cifras de la cabecera cuadran con las filas', () => {
     expect(enMarcas + SIN_PLATO_REALES.length).toBe(65)
     expect(cuantasActivas(MARCAS_REALES, SIN_PLATO_REALES)).toBe(56)
   })
-  it('y las 15 sin plato suman 45 opciones: la cabecera no puede decir otra cosa', () => {
+  it('y las 15 sin plato suman 21 opciones vivas, no 45: 24 estaban retiradas', () => {
     const opciones = SIN_PLATO_REALES.reduce((a, p) => a + p.opciones, 0)
+    const retiradas = SIN_PLATO_REALES.reduce((a, p) => a + p.opcionesRetiradas, 0)
     expect(SIN_PLATO_REALES).toHaveLength(15)
-    expect(opciones).toBe(45)
+    expect(opciones).toBe(21)
+    expect(retiradas).toBe(24)
     expect(tituloSinPlato(SIN_PLATO_REALES.length, opciones))
-      .toBe('15 preguntas en ningún plato · 45 opciones')
+      .toBe('15 preguntas en ningún plato · 21 opciones')
   })
 })
 

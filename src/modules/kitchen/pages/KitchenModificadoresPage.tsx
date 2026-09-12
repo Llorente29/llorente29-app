@@ -41,15 +41,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
-  CabeceraCocina, CifrasCocina, CifraCocina, PastillaCocina, BotonCocina,
+  CabeceraCocina, CifrasCocina, CifraCocina, PastillaCocina,
   ChipCocina, PanelCocina, RotuloDePanel, FranjaCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { REJILLA_PREGUNTAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 import { getPreguntas, type LasPreguntas } from '@/modules/kitchen/services/preguntasService'
 import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
-  platosPreocupa, pastillas, textoDelBoton, cuantasActivas, ordena,
-  tituloDeLaFranja, detalleDeLaFranja, tituloSinPlato, lineaSinPlato,
+  platosPreocupa, pastillas, cuantasActivas, ordena,
+  tituloDeLaFranja, detalleDeLaFranja, repartoDeLaFranja, tituloSinPlato, lineaSinPlato,
   subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista, MARCAS_A_LA_VISTA,
   type Pregunta, type TonoDePastilla,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
@@ -84,15 +84,12 @@ function Fila({ p, sinRaya }: { p: Pregunta; sinRaya?: boolean }) {
               <PastillaCocina key={c.texto} tono={TONO[c.tono]}>{c.texto}</PastillaCocina>
             ))}
       </div>
-      <div className="text-right">
-        {/* Un solo botón por fila, y la RPC ya ha decidido cuál. «Abrir» lleva
-            al tablero 2 o al 4; los tres destinos llegan en este paquete, así
-            que el botón se pinta deshabilitado en vez de mentir con un enlace
-            que no va a ningún sitio. */}
-        <BotonCocina peso={p.accion === 'abrir' ? 'borde' : 'aviso'} disabled>
-          {textoDelBoton(p.accion)}
-        </BotonCocina>
-      </div>
+      {/* AQUÍ NO HAY BOTÓN TODAVÍA, y la columna se queda vacía a propósito.
+          Pintarlo en gris en las 65 filas le dice a quien la abra «esto está
+          roto» (Julio, 12:10). La regla 35 es no prometer un botón sin
+          destino: cuando existan los tableros 2, 4 y 5, aparece. Mientras
+          tanto lo dice el pie, con palabras. */}
+      <div className="text-right" />
     </div>
   )
 }
@@ -185,7 +182,7 @@ export default function KitchenModificadoresPage() {
   // no el resumen de la RPC: si algún día dejaran de coincidir, la cabecera
   // estaría contando filas que no están debajo (regla 38).
   const sinPlato = datos ? ordena(datos.sinPlato.filas) : []
-  const opcionesSinPlato = sinPlato.reduce((a, p) => a + p.opciones, 0)
+  const opcionesSinPlato = sinPlato.reduce((a, p) => a + p.opciones, 0)   // activas
 
   return (
     <div className="cocina min-h-full">
@@ -214,14 +211,20 @@ export default function KitchenModificadoresPage() {
             <FranjaCocina
               tono="malo"
               titulo={tituloDeLaFranja(datos.franja, datos.ventana)}
-              detalle={detalleDeLaFranja(datos.franja)}
+              detalle={
+                <>
+                  {detalleDeLaFranja(datos.franja)}
+                  {' '}
+                  <span className="text-cocina-tinta-3">{repartoDeLaFranja(datos.franja)}</span>
+                </>
+              }
             />
 
             <CifrasCocina>
               <CifraCocina
                 titulo="Preguntas"
                 valor={String(datos.cifras.preguntas)}
-                pie={`${activas} activas · ${datos.cifras.opciones} opciones entre todas`}
+                pie={`${activas} activas · ${datos.cifras.opcionesActivas} opciones que se venden`}
               />
               <CifraCocina
                 titulo="Platos con alguna pregunta"
@@ -237,21 +240,24 @@ export default function KitchenModificadoresPage() {
               />
               {/* La maqueta llama a esta cifra «Extras copiados» y le pone
                   encima el número de OPCIONES. No cuadra: la cabecera tiene que
-                  ir sobre su propio número (regla 38). El número es 54 —los
-                  extras distintos— y lo que enseña la copia es compararlo con
-                  las 104 opciones que ya tienen decidido qué llevan. */}
+                  ir sobre su propio número (regla 38). Y cuenta sólo extras
+                  detrás de opciones ACTIVAS: el impacto de una opción retirada
+                  no descuenta nada de nadie. */}
               <CifraCocina
                 titulo="Extras distintos"
                 valor={String(datos.cifras.extrasDistintos)}
                 tono="aviso"
-                pie={`detrás de las ${datos.cifras.opciones - datos.cifras.opcionesSinDecidir} opciones que ya lo tienen decidido`}
+                pie={`detrás de las ${datos.cifras.opcionesDecididasActivas} opciones que ya lo tienen decidido`}
               />
+              {/* LA CIFRA QUE MANDA EL TRABAJO cuenta lo que se puede vender
+                  hoy. Contaba retiradas dentro, y eso manda a decidir cosas que
+                  no existen. El total va de contexto, nunca de objetivo. */}
               <CifraCocina
                 titulo="Opciones sin decidir qué llevan"
-                valor={String(datos.cifras.opcionesSinDecidir)}
-                sufijo={`de ${datos.cifras.opciones}`}
-                tono={datos.cifras.opcionesSinDecidir > 0 ? 'malo' : undefined}
-                pie={`${datos.cifras.opcionesSinDecidirCobran} cobran y en Folvy no cuestan nada`}
+                valor={String(datos.cifras.opcionesSinDecidirActivas)}
+                sufijo={`de ${datos.cifras.opcionesActivas}`}
+                tono={datos.cifras.opcionesSinDecidirActivas > 0 ? 'malo' : undefined}
+                pie={`${datos.cifras.opcionesSinDecidirCobranActivas} cobran y en Folvy no cuestan nada · ${datos.cifras.opciones} opciones entre todas, ${datos.cifras.opciones - datos.cifras.opcionesActivas} retiradas`}
               />
             </CifrasCocina>
 
