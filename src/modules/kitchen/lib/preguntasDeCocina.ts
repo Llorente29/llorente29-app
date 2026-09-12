@@ -155,12 +155,27 @@ export function pastillas(p: Pregunta): Pastilla[] {
   } else if (p.copias > 1) {
     out.push({ texto: `Copiada ${p.copias} veces`, tono: 'aviso' })
   }
+  // DECISIÓN 3 DE JULIO (12/09, 10:35): una pregunta sin ninguna opción NO
+  // sale en las plataformas y no se publica. Hoy son tres en Foodint —«Escoge
+  // la salsa de tu entrante» de Mila's y dos «Nuevo grupo»— y la pantalla de
+  // hoy las pinta como cualquier otra. Si no se dice aquí, nadie sabe que
+  // están muertas: la columna sólo pone «Ninguna», que se lee como un cero
+  // más, no como «esto no existe para el cliente».
+  if (p.opciones === 0) {
+    out.push({ texto: 'Sin opciones: no sale', tono: 'malo' })
+  }
   if (p.sinDecidir > 0) {
     out.push({ texto: `${p.sinDecidir} sin decidir`, tono: 'malo' })
   }
   if (p.cedida) out.push({ texto: 'Se cambia en Last', tono: 'apagado' })
   if (!p.activa) out.push({ texto: 'Apagada', tono: 'apagado' })
   return out
+}
+
+/** La frase entera, para cuando hay sitio: la pastilla es su resumen. */
+export function porQueNoSale(p: Pregunta): string | null {
+  if (p.opciones > 0) return null
+  return 'No sale en las plataformas: no tiene ninguna opción activa.'
 }
 
 export function textoDelBoton(a: AccionDePregunta): string {
@@ -225,6 +240,36 @@ export function detalleDeLaFranja(f: FranjaDeExtras): string {
   return `${partes.join(' · ')}. De marca cedida ${f.cedidas}, de marca propia ${f.propias}.`
 }
 
+// ── La cabecera de cada marca ───────────────────────────────────────────────
+// La segunda mitad de la frase de la cedida NO es decoración: es lo único que
+// se puede hacer ahí. Sin ella, «la carta la manda Last» se lee como «aquí no
+// pintas nada», y no es verdad — lo que lleva cada opción sí es de Folvy.
+export function subtituloDeMarca(cedida: boolean): string {
+  return cedida
+    ? 'Marca cedida · la carta la manda Last. Aquí se pone lo que lleva cada opción'
+    : 'Marca propia · se edita aquí'
+}
+
+// ── Los chips de marca ──────────────────────────────────────────────────────
+// La maqueta enseña cinco y un «+ N marcas». Con 14 marcas la fila entera se
+// parte en dos y empuja la lista hacia abajo. El chip de más NO esconde nada:
+// abre el resto en el sitio (regla 7 — un tope ordena, no oculta).
+export const MARCAS_A_LA_VISTA = 5
+
+export function chipDeMasMarcas(cuantasQuedan: number): string {
+  return cuantasQuedan === 1 ? '+ 1 marca' : `+ ${cuantasQuedan} marcas`
+}
+
+// ── El pie ──────────────────────────────────────────────────────────────────
+// «Qué lleva» es la palabra que más se repite en la pantalla y la única que
+// no se explica sola. Va en el pie, como en la maqueta.
+export function elPieDeLaLista(): string {
+  return '«Qué lleva» es lo que se descuenta del almacén y suma al coste del '
+    + 'plato cuando el cliente elige esa opción. Una pregunta de marca cedida se '
+    + 've pero no se edita: la manda Last y el próximo volcado devolvería el '
+    + 'cambio. En las marcas propias manda Folvy.'
+}
+
 // ── La sección de las que no están en ningún plato ──────────────────────────
 export function tituloSinPlato(preguntas: number, opciones: number): string {
   const p = preguntas === 1 ? '1 pregunta' : `${preguntas} preguntas`
@@ -232,7 +277,11 @@ export function tituloSinPlato(preguntas: number, opciones: number): string {
   return `${p} en ningún plato · ${o}`
 }
 
+// Aquí no hay bloque de marca —estas 15 no cuelgan de ninguno—, así que la
+// marca hay que decirla en la fila. Lo que NO se repite es el hecho: el
+// rótulo del panel dice «en ningún plato» y la columna dice «Ninguno». Decirlo
+// una tercera vez debajo es ruido, y el ruido es lo que hace que se deje de
+// leer la línea que sí trae información.
 export function lineaSinPlato(p: Pregunta): string {
-  const marca = p.marca ? `${p.marca} · ` : ''
-  return `${marca}En ningún plato activo`
+  return p.marca ? `Marca: ${p.marca}` : 'Sin marca'
 }

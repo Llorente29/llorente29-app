@@ -12,9 +12,11 @@ import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
   platosPreocupa, pastillas, textoDelBoton, porQueNoSeEdita, lineaDeEtiquetaVieja,
   cifraConBase, cuantasActivas, ordena, tituloDeLaFranja, detalleDeLaFranja,
-  tituloSinPlato,
+  tituloSinPlato, lineaSinPlato, porQueNoSale, subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista,
+  MARCAS_A_LA_VISTA,
   type Pregunta,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
+import { MARCAS_REALES, SIN_PLATO_REALES } from './fixtures/preguntasReales'
 
 const P = (o: Partial<Pregunta> = {}): Pregunta => ({
   id: 'x', nombre: 'X', tipo: 'elige', dePago: false, min: 0, max: 1,
@@ -192,5 +194,98 @@ describe('las que no están en ningún plato', () => {
   it('el titular lleva las dos cifras', () => {
     expect(tituloSinPlato(15, 45)).toBe('15 preguntas en ningún plato · 45 opciones')
     expect(tituloSinPlato(1, 1)).toBe('1 pregunta en ningún plato · 1 opción')
+  })
+})
+
+// ── Lo que salió al pintar la captura con las 65 ───────────────────────────
+// Estas cuatro no las escribí al construir la pantalla: aparecieron al poner
+// la población entera delante. Van con las filas reales que las destaparon.
+
+describe('una pregunta sin ninguna opción no sale, y lo dice', () => {
+  const TODAS = [...MARCAS_REALES.flatMap((m) => m.preguntas), ...SIN_PLATO_REALES]
+  const vacias = TODAS.filter((p) => p.opciones === 0)
+
+  it('en Foodint son tres, y no me las he inventado', () => {
+    expect(vacias).toHaveLength(3)
+    expect(vacias.map((p) => p.nombre).sort()).toEqual(
+      ['Escoge la salsa de tu entrante', 'Nuevo grupo', 'Nuevo grupo'],
+    )
+  })
+
+  it('llevan la pastilla, y ninguna de las otras 62 la lleva', () => {
+    for (const p of TODAS) {
+      const tiene = pastillas(p).some((c) => c.texto === 'Sin opciones: no sale')
+      expect(tiene).toBe(p.opciones === 0)
+    }
+  })
+
+  it('y la frase entera está escrita para cuando haya sitio', () => {
+    expect(porQueNoSale(vacias[0])).toBe(
+      'No sale en las plataformas: no tiene ninguna opción activa.',
+    )
+    expect(porQueNoSale(P({ opciones: 1 }))).toBeNull()
+  })
+
+  it('«Ninguna» en la columna no basta: se lee como un cero más', () => {
+    // Lo que prohíbe la regla 7 no es el dato ausente, es el dato que se lee
+    // mal. La columna dice cuántas hay; la pastilla dice qué significa.
+    expect(opcionesEnTexto(vacias[0])).toBe('Ninguna')
+    expect(pastillas(vacias[0])[0].tono).toBe('malo')
+  })
+})
+
+describe('la cabecera de la marca dice lo que SÍ se puede hacer', () => {
+  it('la cedida no se queda en «aquí no pintas nada»', () => {
+    expect(subtituloDeMarca(true)).toContain('la carta la manda Last')
+    expect(subtituloDeMarca(true)).toContain('lo que lleva cada opción')
+  })
+  it('la propia, corta', () => {
+    expect(subtituloDeMarca(false)).toBe('Marca propia · se edita aquí')
+  })
+})
+
+describe('los chips de marca', () => {
+  it('con 14 marcas quedan 9 detrás del chip de más', () => {
+    expect(MARCAS_REALES).toHaveLength(14)
+    expect(chipDeMasMarcas(MARCAS_REALES.length - MARCAS_A_LA_VISTA)).toBe('+ 9 marcas')
+  })
+  it('y en singular no dice «1 marcas»', () => {
+    expect(chipDeMasMarcas(1)).toBe('+ 1 marca')
+  })
+})
+
+describe('el pie explica la palabra que más se repite', () => {
+  it('«Qué lleva», que es la que nadie sabe de dónde sale', () => {
+    expect(elPieDeLaLista()).toContain('se descuenta del almacén')
+    expect(elPieDeLaLista()).toContain('suma al coste del plato')
+  })
+})
+
+describe('las cifras de la cabecera cuadran con las filas', () => {
+  it('65 en total y 56 activas, contadas de las filas mismas', () => {
+    const enMarcas = MARCAS_REALES.reduce((a, m) => a + m.preguntas.length, 0)
+    expect(enMarcas + SIN_PLATO_REALES.length).toBe(65)
+    expect(cuantasActivas(MARCAS_REALES, SIN_PLATO_REALES)).toBe(56)
+  })
+  it('y las 15 sin plato suman 45 opciones: la cabecera no puede decir otra cosa', () => {
+    const opciones = SIN_PLATO_REALES.reduce((a, p) => a + p.opciones, 0)
+    expect(SIN_PLATO_REALES).toHaveLength(15)
+    expect(opciones).toBe(45)
+    expect(tituloSinPlato(SIN_PLATO_REALES.length, opciones))
+      .toBe('15 preguntas en ningún plato · 45 opciones')
+  })
+})
+
+describe('la línea de debajo en la sección sin plato', () => {
+  it('dice la marca, que es lo único que la fila no lleva ya', () => {
+    const conMarca = SIN_PLATO_REALES.find((p) => p.marca === 'Milanesa House')!
+    expect(lineaSinPlato(conMarca)).toBe('Marca: Milanesa House')
+  })
+  it('y no repite por tercera vez que no está en ningún plato', () => {
+    // El rótulo del panel ya lo dice, y la columna «En platos» pone «Ninguno».
+    for (const p of SIN_PLATO_REALES) {
+      expect(lineaSinPlato(p)).not.toContain('ningún plato')
+      expect(platosEnTexto(p)).toBe('Ninguno')
+    }
   })
 })

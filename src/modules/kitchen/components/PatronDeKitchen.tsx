@@ -122,9 +122,13 @@ export function CifraCocina({
   /** Lo pequeño que va pegado al número: «€», «de 120». */
   sufijo?: string
   pie: ReactNode
-  tono?: 'malo' | 'bueno'
+  /** `aviso` es el `.kpi.flag` de la maqueta: algo que mirar, no algo roto. */
+  tono?: 'malo' | 'bueno' | 'aviso'
 }) {
-  const color = tono === 'malo' ? 'text-cocina-rojo' : tono === 'bueno' ? 'text-cocina-verde' : ''
+  const color = tono === 'malo' ? 'text-cocina-rojo'
+    : tono === 'bueno' ? 'text-cocina-verde'
+    : tono === 'aviso' ? 'text-cocina-ambar'
+    : ''
   return (
     <div className="bg-cocina-superficie px-4 pt-3.5 pb-3 flex flex-col gap-1 min-h-[96px]">
       <div className="text-[12px] font-semibold text-cocina-tinta-2">{titulo}</div>
@@ -280,6 +284,43 @@ export function AvisoCocina({ children, onCerrar }: { children: ReactNode; onCer
  * separadas a los extremos— que en la maqueta es otra pieza para otra cosa.
  * Nadie lo habría visto nunca comparando su pantalla consigo misma.
  */
+/**
+ * `.banner` de la maqueta: la franja de arriba que enmarca la pantalla.
+ *
+ * NO es `AvisoCocina`. Esa es `.ok`, verde, y dice LO QUE ACABA DE PASAR
+ * (regla 8). Ésta es el estado de fondo con el que se entra: qué hay sobre la
+ * mesa antes de tocar nada. Mezclarlas haría que un estado permanente se leyera
+ * como una confirmación, y al revés.
+ *
+ * El botón es OPCIONAL a propósito: en el tablero 1 de Modificadores la franja
+ * nace sin él porque su destino —el tablero 7— llega en el paquete 3. Un botón
+ * sin destino no se pinta (regla 35), pero la franja sí: la cifra que enmarca
+ * la pantalla no espera a que exista el sitio adonde lleva.
+ */
+export function FranjaCocina({
+  tono = 'aviso', titulo, detalle, children,
+}: {
+  tono?: 'aviso' | 'malo' | 'info'
+  titulo: ReactNode
+  detalle: ReactNode
+  children?: ReactNode
+}) {
+  const clases = {
+    aviso: 'border-cocina-ambar bg-cocina-ambar-bg',
+    malo:  'border-cocina-rojo bg-cocina-rojo-bg',
+    info:  'border-cocina-acento bg-cocina-acento-bg',
+  }[tono]
+  return (
+    <div className={`flex gap-4 items-center justify-between px-4 py-3.5 rounded-cocina-md border ${clases}`}>
+      <div className="min-w-0">
+        <div className="text-[13.5px] font-bold text-cocina-tinta">{titulo}</div>
+        <div className="text-[12.5px] text-cocina-tinta-2 mt-[3px] leading-[1.5]">{detalle}</div>
+      </div>
+      {children && <div className="flex gap-2 items-center shrink-0">{children}</div>}
+    </div>
+  )
+}
+
 export function CabeceraDeBloque({
   nombre, detalle,
 }: { nombre: ReactNode; detalle?: ReactNode }) {
