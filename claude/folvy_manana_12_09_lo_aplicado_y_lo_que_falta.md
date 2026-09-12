@@ -194,3 +194,95 @@ cuánto, y no lo daría por bueno sin que lo decidas tú.
 - **466 pares duplicados** vivos bajo el corte: no tocan el stock de hoy
   (el recuento lo reancló), pero ensucian la historia de consumo y de coste.
 - El motor de coste medio y sus negativos.
+
+---
+
+# ADENDA · 10:11 · la nota y el paso 4, aplicados. Fase A cerrada.
+
+Julio contestó a las 10:00: sí a la nota, sí al paso 4 sobre las 341, el motor
+de coste medio detrás y no hoy.
+
+## 8 · La nota «el escandallo de hoy ya no lo pide» · `20260912080925`
+
+`fichero == registrado == producción` a la primera: `461355b5…` el texto,
+`b205e00c…` el cuerpo.
+
+Ensayo en transacción revertida, **0 fallos**, contra el caso real:
+
+| | antes | después |
+|---|---:|---:|
+| movimientos de Albahaca en las 6 ventas | 6, suma **−70,588** | **0** |
+| notas | **0** | **6** «ya no lo pide», con `corte` a NULO |
+
+Segunda pasada: siguen 6, ni duplica ni revienta con 21000. Los cinco casos de
+la guarda de precio, intactos. Y por CAMINOS: cerrar una venta 6→6, recibir un
+albarán (corre; ese borrador no escribió, 924→924), merma 1.670→1.665, aprobar
+un recuento 2.260→2.262.
+
+**La nota no inventa el motivo, y es a propósito.** Las causas posibles son
+tres —la receta cambió, la línea dejó de estar mapeada (D1), o un extra anula
+la cantidad— y distinguirlas pediría comparar versiones de escandallo que **no
+existen**: `recipe_item_version` tiene 1 fila, de 1 ficha (medido por Julio).
+Así que dice lo que se sabe, y dice también que no se puede saber cuál.
+
+## 9 · Paso 4 · las 341 posteriores al corte
+
+Población **341**. Regeneradas en 24.860 ms.
+
+| | |
+|---|---:|
+| filas artículo-local movidas | **18** |
+| de esas, bajan (consumo que faltaba) | 15 |
+| de esas, **suben** (consumo retirado) | **3** |
+| **subidas sin nota** | **0** |
+| negativos nuevos | 1 |
+
+Las tres subidas, todas con su nota:
+
+| artículo (Carabanchel) | sube | nota |
+|---|---:|---|
+| Albahaca | +70,6 | 6 × «ya no lo pide» |
+| Zanahoria | +27,5 | precio indefendible |
+| MAHOU 5 ESTRELLAS | +1,0 | precio indefendible |
+
+Y 2.683 notas de corte. **Nada se retira en silencio**, que era la condición.
+
+**Negativo nuevo: Milanesa Ternera Rebozado en Carabanchel, 0,0 → −14,0.**
+
+## 10 · Tres pares que siguen mudos, y no son de hoy
+
+Al verificar aparecen **3 pares (venta, artículo) sin movimiento y sin nota**.
+Mi guarda de la tanda los dejó pasar porque comprobaba las subidas a nivel
+artículo-local, no a nivel (venta, artículo). Dicho.
+
+No son cobertura: **el motor sí los pide**, 100 g cada uno.
+
+| venta | cuándo | local |
+|---|---|---|
+| `e3b236d9` | 05/09 19:03 | Alcalá |
+| `9193ee1b` | 06/09 14:09 | Carabanchel |
+| `5cf9f617` | 01/09 23:00 | Carabanchel |
+
+Los tres son **Salsa Sweet Chilli** en el mismo plato: **«Tequeños Ay Mamita
+(AMB)», `no_menu_item`** — la línea no está mapeada, así que **D1** la tira y
+el ingrediente nunca llega a `base`. Y como tampoco tenía movimiento previo,
+`retirados` no lo ve: `retirados` sólo habla de lo que SÍ estaba apuntado.
+
+**Es un tercer silencio de la misma familia, y es anterior a todo lo de hoy.**
+No lo arregla el motor: lo arregla **mapear ese plato**. Queda apuntado, no
+abierto — la fase A se cierra aquí.
+
+## 11 · Fase A cerrada · lo que queda apuntado
+
+- **Mapear «Tequeños Ay Mamita (AMB)»** (`no_menu_item`), y con ello los 3 pares.
+- **Sellar la versión del escandallo con la que se consumió**, midiendo antes
+  si `recipe_item_version` sirve para llevarlo o hay que hacerlo de otra forma.
+  Es la regla «hacia delante» de Julio, para que la §7.6 no vuelva nunca.
+- **El motor de coste medio**: de ahí salen los negativos que frenan a
+  Zanahoria, MAHOU, Salsa Melt, Salsa BBQ y Salsa Sweet Chilli.
+- **Queso Parmesano en Carabanchel a −31,6** y **Milanesa Ternera a −14,0**.
+- **466 pares duplicados** vivos bajo el corte: no tocan el stock de hoy, pero
+  ensucian la historia de consumo y de coste.
+- **La guarda de una tanda se comprueba al nivel en el que se escribe.** La mía
+  miró artículo-local y se le colaron tres pares venta-artículo. Regla 31: la
+  vara de la comprobación tiene que ser la del objeto que se escribe.
