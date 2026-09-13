@@ -61,21 +61,35 @@ Cada una costó un incidente real. La fecha es el día que se pagó.
 **Entre las 12:15 y las 23:45 (reloj de la base, `now() at time zone 'Europe/Madrid'`)
 no se aplica ninguna migración**, salvo que se cumplan LAS TRES:
 
-1. **No escribe.** `STABLE` o `IMMUTABLE`, o DDL que solo crea o reemplaza
-   lectura. Nada de `VOLATILE`, ni tablas, ni índices, ni restricciones, ni
-   permisos.
-2. **No la llama nada vivo.** 0 funciones, 0 crons, 0 disparadores, y el front
-   que la usa sin publicar. **Medido y puesto en el parte**, no supuesto.
-3. **Se dice ANTES de aplicarla**, no después.
+1. **No está en el camino del pedido.** Ni lo llama un disparador, ni un cron,
+   ni una función que sí lo esté. **Se CUENTA, no se supone**: `pg_proc`,
+   `cron.job` y `pg_trigger`, y el número va al parte.
+2. **No toma cierre exclusivo sobre una tabla que el pedido lee o escribe.** Un
+   `create or replace` de función, no lo toma. Un `CHECK` o un índice sobre una
+   tabla del camino, sí — y ésos esperan.
+3. **Se dice ANTES de aplicarlo**, con la medida delante.
 
 Si falla una, se espera a las 23:45. Y la duda va siempre a favor de esperar:
 la banda existe porque a las 13:00 hay gente cocinando.
 
-*Por qué está escrita así (12/09):* antes decía «nada que toque entrada de
-pedidos, consumo o stock», que es una regla en función del DAÑO y obliga a
-juzgar cada caso. Se aplicó una RPC de lectura a las 13:06 midiendo que no
-tocaba nada de eso —era correcto— pero el criterio no era comprobable por
-otro. Estas tres sí: se miden, se pegan y no se opinan.
+*Por qué está escrita así (13/09):* la versión anterior pedía que la migración
+«no escribiera» —`STABLE` o `IMMUTABLE`—, y eso no es lo que protege. Se vio al
+cerrar las tres puertas de `modifier_recipe_impact`: son `VOLATILE`, así que por
+la letra había que esperar a la noche, pero **no las llama nada vivo** (cero
+funciones, cero crons, cero disparadores, medido) y un `create or replace` de
+función no cierra ninguna tabla. Esperar habría dejado ocho horas más una puerta
+por la que se escribían decisiones que no descuentan nada. En cambio el `CHECK`
+sobre esa misma tabla sí espera, porque toma `ACCESS EXCLUSIVE` sobre algo que
+`_sale_line_raw_consumption` y `compute_sale_line_cost` leen en cada pedido.
+La banda protege **el camino por el que pasa un pedido vivo**, no la volatilidad
+declarada de una función. Las tres de arriba se miden, se pegan y no se opinan;
+la de antes obligaba a esperar por una etiqueta y a discutirlo cada día.
+
+*Por qué la anterior (12/09), que también fue una corrección:* antes decía «nada
+que toque entrada de pedidos, consumo o stock», que es una regla en función del
+DAÑO y obliga a juzgar cada caso. Se aplicó una RPC de lectura a las 13:06
+midiendo que no tocaba nada de eso —era correcto— pero el criterio no era
+comprobable por otro.
 
 ### Una cosa está aplicada cuando está en PRODUCCIÓN, no cuando está commiteada
 
