@@ -7,6 +7,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
 import {
+  laTarjetaDe, losBotones, textoDelDetalle, loDeLosIntentos,
+  type ClaseDeFallo,
+} from '@/modules/social/lib/laTarjetaDeError'
+import {
   listQueue, approvePost, unapprovePost, discardPost, retryPost,
   updateContent, requeueImage, regenerateCopy, markPublished,
   copyCaption, downloadImage, requestGeneration,
@@ -33,6 +37,57 @@ function Btn({ children, onClick, variant = 'ghost', disabled }: { children: Rea
   return <button style={styles[variant]} onClick={onClick} disabled={disabled}>{children}</button>
 }
 
+/**
+ * LA TARJETA DE ERROR. Lo que ve el dueño del negocio.
+ *
+ * Hasta el 13/09 aquí se pintaba el volcado en bruto de Meta —con su
+ * `fbtrace_id` y todo— delante de sus ojos, y sin decirle qué hacer. Ahora:
+ * una frase que se entiende, qué hacer, y el volcado detrás de «ver detalle»,
+ * que existe para quien lo arregla y no para quien no puede hacer nada con él.
+ */
+function TarjetaDeError({
+  clase, detalle, intentos, abierto, onDetalle,
+}: {
+  clase: ClaseDeFallo | null
+  detalle: string | null
+  intentos: number
+  abierto: boolean
+  onDetalle: () => void
+}) {
+  const t = laTarjetaDe(clase)
+  const colores: Record<typeof t.tono, { fondo: string; borde: string; tinta: string }> = {
+    calma:    { fondo: '#f4f6f8', borde: '#dde3e8', tinta: '#4a5560' },
+    atencion: { fondo: '#fdf6e8', borde: '#f0dcb0', tinta: '#7a5a12' },
+    malo:     { fondo: '#fdf1f0', borde: '#f0c6c2', tinta: '#b3261e' },
+  }
+  const c = colores[t.tono]
+  const losIntentos = t.esUnFallo ? loDeLosIntentos(intentos) : null
+  return (
+    <div style={{ marginTop: 10, padding: '10px 12px', background: c.fondo, border: `1px solid ${c.borde}`, borderRadius: 8 }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: c.tinta }}>{t.titulo}</p>
+      {t.queHacer && <p style={{ margin: '4px 0 0', fontSize: 12.5, color: c.tinta }}>{t.queHacer}</p>}
+      {losIntentos && (
+        <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--color-text-secondary, #888)' }}>{losIntentos}</p>
+      )}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8 }}>
+        {t.aDonde && (
+          <a href={t.aDonde.ruta} style={{ fontSize: 12.5, fontWeight: 600, color: c.tinta }}>{t.aDonde.texto}</a>
+        )}
+        {detalle && (
+          <button
+            type="button"
+            onClick={onDetalle}
+            style={{ fontSize: 12, background: 'none', border: 'none', padding: 0, color: 'var(--color-text-secondary, #888)', textDecoration: 'underline', cursor: 'pointer' }}
+          >{textoDelDetalle(abierto)}</button>
+        )}
+      </div>
+      {abierto && detalle && (
+        <pre style={{ marginTop: 8, marginBottom: 0, fontSize: 11, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--color-text-secondary, #777)', background: 'var(--color-surface, #fff)', border: '1px solid var(--color-border-default, #eee)', borderRadius: 6, padding: 8, maxHeight: 180, overflow: 'auto' }}>{detalle}</pre>
+      )}
+    </div>
+  )
+}
+
 export default function SocialQueuePage() {
   const { activeAccountId } = useApp()
   const [rows, setRows] = useState<SocialPostRow[]>([])
@@ -42,6 +97,8 @@ export default function SocialQueuePage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [confirmDiscardId, setConfirmDiscardId] = useState<string | null>(null)
+  // El volcado técnico empieza CERRADO, siempre. Se abre pidiéndolo.
+  const [detalleAbiertoId, setDetalleAbiertoId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editCopy, setEditCopy] = useState('')
   const [editTags, setEditTags] = useState('')
@@ -186,17 +243,34 @@ export default function SocialQueuePage() {
                     {row.reason && (
                       <p style={{ fontSize: 12, color: 'var(--color-text-secondary, #888)', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-border-default, #eee)', fontStyle: 'italic' }}>{row.reason}</p>
                     )}
-                    {row.status === 'error' && row.last_error && (
-                      <p style={{ fontSize: 12, color: '#b3261e', marginTop: 8 }}>Error al publicar: {row.last_error}</p>
+                    {(row.status === 'error' || row.error_kind === 'esperando') && (
+                      <TarjetaDeError
+                        clase={row.error_kind}
+                        detalle={row.last_error}
+                        intentos={row.attempts}
+                        abierto={detalleAbiertoId === row.id}
+                        onDetalle={() => setDetalleAbiertoId(detalleAbiertoId === row.id ? null : row.id)}
+                      />
                     )}
 
                     {row.status === 'publishing' ? (
                       <p style={{ fontSize: 12, color: 'var(--color-text-secondary, #999)', marginTop: 12 }}>Publicándose…</p>
                     ) : row.status === 'error' ? (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-                        <Btn variant="primary" onClick={() => onRetry(row)} disabled={busy}>Reintentar</Btn>
-                        <Btn onClick={() => startEdit(row)} disabled={busy}>Editar</Btn>
-                        <Btn variant="danger" onClick={() => onDiscard(row)} disabled={busy}>Descartar</Btn>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
+                        {losBotones(row.error_kind).map((b) => (
+                          b.id === 'reintentar'
+                            ? <Btn key={b.id} variant="primary" onClick={() => onRetry(row)} disabled={busy}>{b.texto}</Btn>
+                            : b.id === 'editar'
+                              ? <Btn key={b.id} onClick={() => startEdit(row)} disabled={busy}>{b.texto}</Btn>
+                              // Descartar es la excepción: se nota que pesa menos,
+                              // sin leerlo. Es el botón con el que se perdieron nueve.
+                              : <button
+                                  key={b.id}
+                                  onClick={() => onDiscard(row)}
+                                  disabled={busy}
+                                  style={{ fontSize: 12, fontWeight: 500, padding: '6px 4px', background: 'none', border: 'none', color: 'var(--color-text-secondary, #888)', textDecoration: 'underline', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}
+                                >{b.texto}</button>
+                        ))}
                       </div>
                     ) : row.status === 'approved' ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
