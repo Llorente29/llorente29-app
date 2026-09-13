@@ -45,7 +45,8 @@ import {
 import {
   tituloDelTipo, tipoEnLaBase, tituloDelQueLleva, queLlevaEnLaBase,
   laReglaDeLaPantalla, loQueVeraElCliente, porQueNoSePuedeCrear,
-  porQueNoSePuedeGuardar, loQueLeFaltaAlEfecto, textoDelBotonGuardar, laDeudaDeEstaPregunta,
+  porQueNoSePuedeGuardar, loQueLeFaltaAlEfecto, elEfectoDescuentaAlgo,
+  textoDelBotonGuardar, laDeudaDeEstaPregunta,
   precioEnTexto, lineaDelExtra, LOS_QUE_LLEVA,
   laOfertaDeLasIguales, lasQueQuedanFuera, dondeViveLaIgual,
   textoDelBotonDeLasIguales, laConfirmacionDeLasIguales,
@@ -112,7 +113,11 @@ export default function KitchenPreguntaPage() {
           setRepetible(d.pregunta.repetible)
           setFilas(d.pregunta.respuestas.map((r) => ({
             filaId: r.id, extraId: r.id, nombre: r.nombre, precio: r.precio,
-            queLleva: r.queLleva, yaEstabaDecidido: r.queLleva !== null,
+            queLleva: r.queLleva,
+            // NO «tiene efecto», sino «tiene efecto que descuenta algo». Las
+            // dos de las 11:40 tenían tipo y ficha y descontaban cero: darlas
+            // por decididas es lo que hizo mentir al contador (13/09).
+            yaEstabaDecidido: elEfectoDescuentaAlgo(r.queLleva, r.fichaId, r.cantidad),
             enCuantasPreguntas: r.enCuantasPreguntas,
             queLlevaEnTexto: r.fichaNombre
               ? `${r.cantidad ?? ''} ${r.fichaNombre}`.trim() : null,

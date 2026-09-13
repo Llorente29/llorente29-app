@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   tituloDelTipo, tipoEnLaBase, tituloDelQueLleva, queLlevaEnLaBase, loQueLeFaltaAlEfecto,
+  elEfectoDescuentaAlgo,
   laReglaDeLaPantalla, loQueVeraElCliente, porQueNoSePuedeCrear, sePuedeCrear,
   textoDelBotonCrear, laConfirmacion, ayudaDeLaCategoria, cuentaDePlatos,
   avisoDeParecida, lineaDelExtra, precioEnTexto, LOS_QUE_LLEVA,
@@ -459,5 +460,50 @@ describe('🔴 loQueLeFaltaAlEfecto · sin cantidad no se guarda', () => {
     // Cuánto sale del almacén cada vez lo decide quien lo sabe, no la pantalla.
     const faltan = loQueLeFaltaAlEfecto([o({ cantidad: '' })])
     expect(faltan.length).toBeGreaterThan(0)
+  })
+})
+
+// ── 🔴 LAS DOS COPIAS DE «DESCUENTA ALGO» NO SE PUEDEN SEPARAR ─────────────
+//
+// `elEfectoDescuentaAlgo` (front) y `_impacto_completo` (base) dicen lo mismo
+// en dos sitios, porque la pantalla tiene que juzgar antes de llamar a nadie.
+// La tabla de abajo es LA MISMA que se ensayó contra producción el 13/09 y dio
+// 13/13. Si alguien cambia una copia y no la otra, esto salta.
+describe('🔴 elEfectoDescuentaAlgo · la gemela de _impacto_completo', () => {
+  const F = 'ficha-1'
+  // [queLleva, ficha, cantidad, esperado] — mismos casos que el ensayo en SQL.
+  const CASOS: Array<[QueLleva | null, string | null, number | null, boolean]> = [
+    ['no_lleva_nada', null, null, true],   // none        · no pide nada
+    ['no_lleva_nada', F,    50,   true],   // y lo que sobre no estorba
+    ['multiplica',    null, 2,    true],   // multiply    · cantidad, sin ficha
+    ['multiplica',    null, null, false],
+    ['multiplica',    null, 0,    false],
+    ['lleva',         F,    50,   true],   // add_item    · ficha y cantidad
+    ['lleva',         F,    null, false],  //   ← el fallo del 13/09
+    ['lleva',         null, 50,   false],
+    ['lleva',         F,    0,    false],
+    ['quita',         F,    20,   true],   // remove_item · TAMBIÉN pide cantidad
+    ['quita',         F,    null, false],
+    ['cambia',        F,    null, false],  // replace_item
+    ['es_un_plato',   F,    1,    true],   // bundle
+    ['es_un_plato',   null, 1,    false],
+    [null,            F,    50,   false],  // nadie lo ha decidido
+  ]
+
+  it.each(CASOS)('%s · ficha %s · cantidad %s → %s', (q, f, c, esperado) => {
+    expect(elEfectoDescuentaAlgo(q, f, c)).toBe(esperado)
+  })
+
+  it('un «quita» sin cantidad NO cuenta como decidido', () => {
+    // El encargo suponía que un «quita el queso» no lleva cantidad. La tabla
+    // dice lo contrario: las 3 filas `remove_item` que existen llevan 20, y el
+    // motor resta lo que calcula de esa cantidad — sin ella no resta nada, o
+    // sea el mismo fallo con otro signo. Gana lo que se mide.
+    expect(elEfectoDescuentaAlgo('quita', F, null)).toBe(false)
+    expect(elEfectoDescuentaAlgo('quita', F, 20)).toBe(true)
+  })
+
+  it('y «multiplica» no pide artículo, porque el motor no lo mira', () => {
+    expect(elEfectoDescuentaAlgo('multiplica', null, 2)).toBe(true)
   })
 })

@@ -322,6 +322,42 @@ export function cuantasSinDecidir(ops: OpcionNueva[]): number {
 }
 
 /**
+ * ¿ESE EFECTO DESCUENTA ALGO? Gemela exacta de `_impacto_completo` en la base.
+ *
+ * ── POR QUÉ HAY DOS COPIAS, Y CÓMO NO SE SEPARAN (13/09) ──────────────────
+ *
+ * La verdad manda desde la base: la definición vive en `_impacto_completo`, la
+ * comparten las tres puertas de escritura y el contador del tablero 1, y desde
+ * las 23:45 la comparte el CHECK de la tabla. Esta copia existe porque la
+ * pantalla tiene que poder decir «esto no está decidido» ANTES de llamar a
+ * nadie, y llamar a la base para cada tecla no es una opción.
+ *
+ * Que no se separen lo vigila una prueba que recorre los seis tipos con la
+ * misma tabla de la verdad que se ensayó contra producción. Si alguien cambia
+ * una y no la otra, salta.
+ *
+ * Los seis tipos, medidos sobre las 131 filas de la tabla el 13/09:
+ *   · `no_lleva_nada` (none) — respuesta entera por sí misma, no pide nada.
+ *   · `multiplica` (multiply) — pide CANTIDAD y NO artículo: el motor escala la
+ *     receta del plato por (cantidad − 1) y no mira la ficha.
+ *   · los otros cuatro — piden artículo Y cantidad, «quita» incluido: el motor
+ *     resta lo que calcula de la cantidad, así que un quita sin cantidad no
+ *     resta nada. Las 3 filas `remove_item` que existen llevan cantidad 20.
+ */
+export function elEfectoDescuentaAlgo(
+  queLleva: QueLleva | null,
+  fichaId: string | null,
+  cantidad: number | null,
+): boolean {
+  if (queLleva === null) return false
+  if (queLleva === 'no_lleva_nada') return true
+  const hayCantidad = cantidad !== null && Number.isFinite(cantidad) && cantidad > 0
+  if (queLleva === 'multiplica') return hayCantidad
+  // `es_un_plato` es `bundle`: pide ficha y cantidad como los demás.
+  return fichaId !== null && hayCantidad
+}
+
+/**
  * La invitación al editar. `null` cuando no hay deuda: un aviso que aparece
  * siempre deja de leerse, y decir «0 sin decidir» en una pregunta limpia es
  * ruido con cara de dato.
