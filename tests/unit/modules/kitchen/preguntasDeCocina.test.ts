@@ -12,7 +12,7 @@ import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
   platosPreocupa, pastillas, textoDelBoton, porQueNoSeEdita, lineaDeEtiquetaVieja,
   cifraConBase, cuantasActivas, ordena, tituloDeLaFranja, detalleDeLaFranja,
-  tituloSinPlato, lineaSinPlato, porQueNoSale, repartoDeLaFranja, subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista,
+  tituloSinPlato, lineaSinPlato, porQueNoSale, repartoDeLaFranja, loAnuladoDeLaFranja, subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista,
   MARCAS_A_LA_VISTA,
   type Pregunta,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
@@ -179,10 +179,18 @@ describe('el orden', () => {
 })
 
 describe('la franja, sin porcentaje a propósito', () => {
-  const franja = { vendidas: 1378, conQueLleva: 859, sinDecidir: 519, desconocidas: 0, cedidas: 1087, propias: 291 }
-  const ventana = { dias: 30, desde: '2026-08-13', hasta: '2026-09-12' }
+  // POBLACIÓN REAL, 13/09 20:15, ya con la regla nueva: un pedido anulado no
+  // es demanda, así que las 21 líneas de pedidos anulados salen de las cifras
+  // de arriba y se cuentan aparte. Medido con la misma consulta que va a
+  // quedar dentro de la RPC, y cuadra por los dos lados: 1171+262 = 1433 y
+  // 1095+338 = 1433.
+  const franja = {
+    vendidas: 1433, conQueLleva: 1171, sinDecidir: 262, desconocidas: 0,
+    cedidas: 1095, propias: 338, anuladas: 21,
+  }
+  const ventana = { dias: 30, desde: '2026-08-14', hasta: '2026-09-13' }
   it('el titular dice el periodo y el volumen', () => {
-    expect(tituloDeLaFranja(franja, ventana)).toBe('De los extras vendidos en 30 días, 1378 líneas')
+    expect(tituloDeLaFranja(franja, ventana)).toBe('De los extras vendidos en 30 días, 1433 líneas')
   })
   it('NO pinta un porcentaje que el tablero 7 todavía no puede explicar', () => {
     expect(tituloDeLaFranja(franja, ventana)).not.toContain('%')
@@ -191,7 +199,16 @@ describe('la franja, sin porcentaje a propósito', () => {
   it('y el reparto cedida/propia sale del detalle: es un reparto, no una alarma', () => {
     expect(detalleDeLaFranja(franja)).not.toContain('cedida')
     expect(detalleDeLaFranja(franja)).toContain('sin decidir')
-    expect(repartoDeLaFranja(franja)).toBe('De marca cedida 1087, de marca propia 291.')
+    expect(repartoDeLaFranja(franja)).toBe('De marca cedida 1095, de marca propia 338.')
+  })
+  it('🔴 lo anulado se dice SIEMPRE, también cuando es cero', () => {
+    // Restar 21 líneas callando deja a quien mira sin saber por qué el número
+    // bajó de 1.454 a 1.433, y la vez siguiente ya no se cree ninguno de los
+    // dos. La frase no es opcional: es la mitad que explica la resta.
+    expect(loAnuladoDeLaFranja(franja)).toContain('21')
+    expect(loAnuladoDeLaFranja(franja)).toContain('no es demanda')
+    expect(loAnuladoDeLaFranja({ ...franja, anuladas: 0 })).toBe('Ningún pedido anulado en la ventana.')
+    expect(loAnuladoDeLaFranja({ ...franja, anuladas: 0 })).not.toBe('')
   })
   it('y cuando no hay desconocidas, no se inventa la frase', () => {
     expect(detalleDeLaFranja(franja)).not.toContain('no conoce')

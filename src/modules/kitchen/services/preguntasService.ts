@@ -99,6 +99,7 @@ export async function getPreguntas(accountId: string, dias = 30): Promise<LasPre
       desconocidas: num(franja.desconocidas),
       cedidas: num(franja.cedidas),
       propias: num(franja.propias),
+      anuladas: num(franja.anuladas),
     },
     cifras: {
       preguntas: num(cifras.preguntas),

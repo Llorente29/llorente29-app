@@ -50,7 +50,7 @@ import { getPreguntas, type LasPreguntas } from '@/modules/kitchen/services/preg
 import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
   platosPreocupa, pastillas, cuantasActivas, ordena,
-  tituloDeLaFranja, detalleDeLaFranja, repartoDeLaFranja, tituloSinPlato, lineaSinPlato,
+  tituloDeLaFranja, detalleDeLaFranja, repartoDeLaFranja, loAnuladoDeLaFranja, tituloSinPlato, lineaSinPlato,
   subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista, loQueHaceLaFila, MARCAS_A_LA_VISTA,
   type Pregunta, type TonoDePastilla,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
@@ -246,7 +246,9 @@ export default function KitchenModificadoresPage() {
                 <>
                   {detalleDeLaFranja(datos.franja)}
                   {' '}
-                  <span className="text-cocina-tinta-3">{repartoDeLaFranja(datos.franja)}</span>
+                  <span className="text-cocina-tinta-3">
+                    {repartoDeLaFranja(datos.franja)}{' '}{loAnuladoDeLaFranja(datos.franja)}
+                  </span>
                 </>
               }
             />

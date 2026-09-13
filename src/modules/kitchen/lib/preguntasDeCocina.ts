@@ -91,6 +91,8 @@ export interface FranjaDeExtras {
   desconocidas: number
   cedidas: number
   propias: number
+  /** Líneas de extra de pedidos ANULADOS, que ya NO entran en las de arriba. */
+  anuladas: number
 }
 
 export interface Ventana { dias: number; desde: string; hasta: string }
@@ -285,6 +287,17 @@ export function detalleDeLaFranja(f: FranjaDeExtras): string {
 /** Contexto, en gris y fuera del rojo: quién vende esos extras. */
 export function repartoDeLaFranja(f: FranjaDeExtras): string {
   return `De marca cedida ${f.cedidas}, de marca propia ${f.propias}.`
+}
+
+// LO ANULADO SE DICE, AUNQUE SEA CERO. Un pedido anulado no es demanda, así
+// que desde el 13/09 no entra en las cifras de arriba. Pero restarlo callando
+// deja a quien mira sin saber por qué el número bajó de 1.454 a 1.433, y la
+// vez siguiente ya no se cree ninguno de los dos. Se dice siempre, en gris y
+// en la misma línea del reparto.
+export function loAnuladoDeLaFranja(f: FranjaDeExtras): string {
+  return f.anuladas === 0
+    ? 'Ningún pedido anulado en la ventana.'
+    : `No se cuentan ${f.anuladas} de pedidos anulados: un pedido anulado no es demanda.`
 }
 
 // ── La cabecera de cada marca ───────────────────────────────────────────────
