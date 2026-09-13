@@ -33,8 +33,19 @@ import { MUCHOS } from './preguntasDeCocina'
 /** Lo que puede hacer el cliente. Las cuatro que la base ya usa. */
 export type TipoNuevaPregunta = 'elige' | 'anade' | 'quita' | 'sugiere'
 
-/** Las cinco respuestas a «qué lleva», tal y como las dibuja la maqueta. */
-export type QueLleva = 'lleva' | 'quita' | 'cambia' | 'es_un_plato' | 'no_lleva_nada'
+/**
+ * Las respuestas a «qué lleva». Son las SEIS que tiene el CHECK de
+ * `modifier_recipe_impact`, ni una inventada ni una escondida.
+ *
+ * El encargo nombra cinco y deja fuera `no_lleva_nada`. Va incluida a
+ * propósito, y esto es el porqué: sin ella, «Sin bebida» o «Sin Extras» no se
+ * podrían decidir NUNCA — se quedarían para siempre en la cuenta de las 110,
+ * porque no llevan nada y no hay forma de decirlo. Y el tablero 1 ya cuenta
+ * `none` como decidida (está escrito en su RPC), así que omitirla aquí dejaría
+ * las dos pantallas contando distinto.
+ */
+export type QueLleva =
+  | 'lleva' | 'quita' | 'cambia' | 'multiplica' | 'es_un_plato' | 'no_lleva_nada'
 
 /** Una opción en construcción: un extra con su precio EN ESTA pregunta. */
 export interface OpcionNueva {
@@ -110,21 +121,27 @@ export function tituloDelQueLleva(q: QueLleva): string {
     case 'lleva':          return 'Lleva…'
     case 'quita':          return 'Quita…'
     case 'cambia':         return 'Cambia…'
+    case 'multiplica':     return 'Doble de…'
     case 'es_un_plato':    return 'Es un plato'
     case 'no_lleva_nada':  return 'No lleva nada'
   }
 }
 
-/** El `impact_type` de la base. Los cinco están en su CHECK, medido el 12/09. */
+/** El `impact_type` de la base. Los SEIS están en su CHECK, medido el 13/09. */
 export function queLlevaEnLaBase(q: QueLleva): string {
   switch (q) {
     case 'lleva':         return 'add_item'
     case 'quita':         return 'remove_item'
     case 'cambia':        return 'replace_item'
+    case 'multiplica':    return 'multiply'
     case 'es_un_plato':   return 'bundle'
     case 'no_lleva_nada': return 'none'
   }
 }
+
+/** Todas, en el orden en que se ofrecen en la pantalla. */
+export const LOS_QUE_LLEVA: QueLleva[] =
+  ['lleva', 'quita', 'cambia', 'multiplica', 'es_un_plato', 'no_lleva_nada']
 
 /** La regla, en una línea, debajo del título. */
 export function laReglaDeLaPantalla(b: BorradorDePregunta): string {

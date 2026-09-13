@@ -11,7 +11,7 @@ import {
   tituloDelTipo, tipoEnLaBase, tituloDelQueLleva, queLlevaEnLaBase,
   laReglaDeLaPantalla, loQueVeraElCliente, porQueNoSePuedeCrear, sePuedeCrear,
   textoDelBotonCrear, laConfirmacion, ayudaDeLaCategoria, cuentaDePlatos,
-  avisoDeParecida, lineaDelExtra, precioEnTexto,
+  avisoDeParecida, lineaDelExtra, precioEnTexto, LOS_QUE_LLEVA,
   type BorradorDePregunta, type OpcionNueva,
 } from '@/modules/kitchen/lib/crearPreguntaDeCocina'
 
@@ -131,13 +131,26 @@ describe('las palabras de la pantalla y las claves de la base', () => {
     expect(tipoEnLaBase('sugiere')).toBe('cross_sell')
   })
 
-  it('los cinco «qué lleva», y su impact_type del CHECK', () => {
+  it('los SEIS «qué lleva», y su impact_type del CHECK', () => {
     expect(queLlevaEnLaBase('lleva')).toBe('add_item')
     expect(queLlevaEnLaBase('quita')).toBe('remove_item')
     expect(queLlevaEnLaBase('cambia')).toBe('replace_item')
+    expect(queLlevaEnLaBase('multiplica')).toBe('multiply')
     expect(queLlevaEnLaBase('es_un_plato')).toBe('bundle')
     expect(queLlevaEnLaBase('no_lleva_nada')).toBe('none')
     expect(tituloDelQueLleva('es_un_plato')).toBe('Es un plato')
+  })
+
+  it('🔴 y «no lleva nada» NO se puede quitar de la lista', () => {
+    // El encargo nombra cinco y la deja fuera. Sin ella, «Sin bebida» no se
+    // podría decidir nunca: se quedaría para siempre en las 110. Y el tablero 1
+    // ya cuenta `none` como decidida, así que omitirla aquí dejaría las dos
+    // pantallas contando distinto.
+    expect(LOS_QUE_LLEVA).toContain('no_lleva_nada')
+    expect(LOS_QUE_LLEVA).toHaveLength(6)
+    // Los seis del CHECK de modifier_recipe_impact, sin inventar ninguno.
+    expect(new Set(LOS_QUE_LLEVA.map(queLlevaEnLaBase))).toEqual(new Set(
+      ['add_item','remove_item','replace_item','multiply','bundle','none']))
   })
 
   it('la regla de la cabecera avisa de que hay que publicar', () => {
