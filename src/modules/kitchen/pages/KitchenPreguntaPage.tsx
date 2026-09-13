@@ -45,7 +45,7 @@ import {
 import {
   tituloDelTipo, tipoEnLaBase, tituloDelQueLleva, queLlevaEnLaBase,
   laReglaDeLaPantalla, loQueVeraElCliente, porQueNoSePuedeCrear,
-  porQueNoSePuedeGuardar, textoDelBotonGuardar, laDeudaDeEstaPregunta,
+  porQueNoSePuedeGuardar, loQueLeFaltaAlEfecto, textoDelBotonGuardar, laDeudaDeEstaPregunta,
   precioEnTexto, lineaDelExtra, LOS_QUE_LLEVA,
   laOfertaDeLasIguales, lasQueQuedanFuera, dondeViveLaIgual,
   textoDelBotonDeLasIguales, laConfirmacionDeLasIguales,
@@ -143,7 +143,15 @@ export default function KitchenPreguntaPage() {
     platosElegidos: editando ? (original?.platos ?? []) : ['siguiente-paso'],
   }), [marcaId, marca, nombre, tipo, max, obligatoria, repetible, filas, editando, original])
 
-  const faltan = editando ? porQueNoSePuedeGuardar(borrador) : porQueNoSePuedeCrear(borrador)
+  // Las dos listas juntas: lo que le falta a la PREGUNTA y lo que le falta al
+  // EFECTO de cada respuesta. La segunda no la puede ver `borrador` porque la
+  // ficha y la cantidad viven en la fila, no en `OpcionNueva` — y ésa fue la
+  // razón de que el 13/09 se guardaran dos efectos sin cantidad, que no
+  // descuentan nada.
+  const faltan = [
+    ...(editando ? porQueNoSePuedeGuardar(borrador) : porQueNoSePuedeCrear(borrador)),
+    ...loQueLeFaltaAlEfecto(filas),
+  ]
   const sePuede = faltan.length === 0
   const deuda = editando ? laDeudaDeEstaPregunta(filas) : null
 
@@ -419,8 +427,15 @@ function FilaDeRespuesta({
   const [aplicando, setAplicando] = useState(false)
   const [yaAplicado, setYaAplicado] = useState(false)
 
+  // LISTO = el efecto está COMPLETO, cantidad incluida. No basta con tener
+  // ficha: ofrecer repartir un efecto sin cantidad sería multiplicar por N el
+  // fallo del 13/09 —dos respuestas «decididas» que descuentan cero— en vez de
+  // cometerlo una vez. La misma regla que bloquea el guardado bloquea la
+  // oferta, y es la misma función: si se separan, se separan también el día que
+  // una cambie.
   const listo = fila.filaId !== null && fila.queLleva !== null
     && (fila.queLleva === 'no_lleva_nada' || fila.queLleva === 'es_un_plato' || fila.fichaId !== null)
+    && loQueLeFaltaAlEfecto([fila]).length === 0
 
   useEffect(() => {
     let vivo = true

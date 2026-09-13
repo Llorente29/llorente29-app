@@ -371,6 +371,70 @@ export function porQueNoSePuedeGuardar(b: BorradorDePregunta): string[] {
   return faltan
 }
 
+/**
+ * Lo que le falta al EFECTO de cada respuesta para que descuente de verdad.
+ *
+ * ── POR QUÉ EXISTE (13/09 13:25, y lo pagó una decisión de Julio) ──────────
+ *
+ * Esta mañana el tablero 5 dejó guardar dos respuestas de «Elige los
+ * ingredientes para tu Burrito/Bowl» —Maíz y Frijoles— con su ficha puesta y
+ * la casilla de cantidad EN BLANCO. El contador bajó de 107 a 105, o sea que
+ * la pantalla las dio por decididas. Y no descuentan nada:
+ *
+ *   `_sale_line_raw_consumption` hace `mri.quantity * COALESCE(m.quantity, 1)`
+ *   y la de la IZQUIERDA no está coalescida. `null × 1 = null`, `_qty_in_base`
+ *   devuelve null, y `explode_recipe_to_raws` con null devuelve CERO FILAS.
+ *   Medido: consumo 0, cuando con cantidad 1 sería 1.
+ *
+ * Es de la familia de la regla 7 y la 8, en su versión más cara: un número que
+ * dice «hecho» cuando no está hecho. Peor que el 107 de antes, porque el 105
+ * parece progreso.
+ *
+ * Y el candado no estaba en ningún sitio: ni en esta pantalla, ni en
+ * `kitchen_guardar_pregunta`, ni en `kitchen_extras_poner_lo_que_lleva`. Los 73
+ * `add_item` anteriores tienen cantidad porque la pantalla de Extras siempre la
+ * mandaba, no porque nada lo impidiera. El agujero es viejo; el tablero 5 solo
+ * fue el primero en dispararlo.
+ *
+ * ── POR QUÉ AQUÍ Y CON SU PROPIA FORMA ────────────────────────────────────
+ *
+ * `porQueNoSePuedeGuardar` no podía cazarlo: recibe un `BorradorDePregunta` y
+ * `OpcionNueva` NO LLEVA ni la ficha ni la cantidad — viven en la fila de la
+ * pantalla. **El candado estaba donde no está el dato**, que es la razón
+ * estructural de que faltara. Así que esta función pide justo lo que necesita.
+ *
+ * NO se rellena un 1 por nuestra cuenta. Una cantidad es cuánto sale del
+ * almacén cada vez que alguien elige esa respuesta: inventarla es escribir un
+ * consumo que nadie ha dicho. Se bloquea y se pide.
+ */
+export function loQueLeFaltaAlEfecto(
+  opciones: Array<{
+    nombre: string
+    queLleva: QueLleva | null
+    fichaId: string | null
+    cantidad: string
+  }>,
+): string[] {
+  const faltan: string[] = []
+  for (const o of opciones) {
+    // «No lleva nada» y «Es un plato» no piden ficha, así que tampoco cantidad.
+    if (o.queLleva === null || o.queLleva === 'no_lleva_nada' || o.queLleva === 'es_un_plato') continue
+    const como = o.nombre.trim() === '' ? 'Una respuesta' : `«${o.nombre.trim()}»`
+    if (o.fichaId === null) {
+      faltan.push(`${como} dice «${tituloDelQueLleva(o.queLleva).replace('…', '')}» pero no ha elegido el artículo.`)
+      continue
+    }
+    const n = Number(o.cantidad.trim().replace(',', '.'))
+    if (o.cantidad.trim() === '' || !Number.isFinite(n) || n <= 0) {
+      faltan.push(
+        `${como} no dice CUÁNTO. Sin cantidad no descuenta nada del almacén, `
+        + 'aunque la pregunta quede como decidida.',
+      )
+    }
+  }
+  return faltan
+}
+
 /** El botón, según se estrene o se edite. Siempre dice lo que hace. */
 export function textoDelBotonGuardar(b: BorradorDePregunta, editando: boolean): string {
   if (!editando) return 'Guardar y ponerla en platos'

@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  tituloDelTipo, tipoEnLaBase, tituloDelQueLleva, queLlevaEnLaBase,
+  tituloDelTipo, tipoEnLaBase, tituloDelQueLleva, queLlevaEnLaBase, loQueLeFaltaAlEfecto,
   laReglaDeLaPantalla, loQueVeraElCliente, porQueNoSePuedeCrear, sePuedeCrear,
   textoDelBotonCrear, laConfirmacion, ayudaDeLaCategoria, cuentaDePlatos,
   avisoDeParecida, lineaDelExtra, precioEnTexto, LOS_QUE_LLEVA,
@@ -402,5 +402,62 @@ describe('las iguales: se ofrecen, no se aplican a ciegas', () => {
     expect(t).toContain('2 sitios')
     expect(t).toContain('Meraki Pita, The Urban Kebab')
     expect(t).toContain('su propio registro de quién y cuándo')
+  })
+})
+
+// ── 🔴 UNA CANTIDAD QUE FALTA NO DESCUENTA NADA ────────────────────────────
+//
+// 13/09 13:25. Julio decidió Maíz y Frijoles desde el tablero 5 con su ficha y
+// la casilla de cantidad vacía. El contador bajó de 107 a 105 —o sea, la
+// pantalla las dio por hechas— y el consumo real es CERO: medido contra
+// producción, `explode_recipe_to_raws` con cantidad nula devuelve cero filas,
+// cuando con cantidad 1 devolvería 1.
+//
+// Un número que dice «hecho» sin estarlo es peor que el número alto de antes,
+// porque el 105 parece progreso. Esto lo fija.
+describe('🔴 loQueLeFaltaAlEfecto · sin cantidad no se guarda', () => {
+  const o = (x: Partial<{ nombre: string; queLleva: QueLleva | null; fichaId: string | null; cantidad: string }> = {}) => ({
+    nombre: 'Maíz', queLleva: 'lleva' as QueLleva | null, fichaId: 'ficha-maiz', cantidad: '1', ...x,
+  })
+
+  it('el caso real del 13/09: ficha puesta y cantidad en blanco → bloquea', () => {
+    const faltan = loQueLeFaltaAlEfecto([o({ cantidad: '' }), o({ nombre: 'Frijoles', cantidad: '' })])
+    expect(faltan).toHaveLength(2)
+    expect(faltan[0]).toContain('Maíz')
+    expect(faltan[0]).toContain('no dice CUÁNTO')
+    expect(faltan[0]).toContain('no descuenta nada')
+    expect(faltan[1]).toContain('Frijoles')
+  })
+
+  it('cero y negativo tampoco valen: descuentan nada o al revés', () => {
+    expect(loQueLeFaltaAlEfecto([o({ cantidad: '0' })])).toHaveLength(1)
+    expect(loQueLeFaltaAlEfecto([o({ cantidad: '-2' })])).toHaveLength(1)
+    expect(loQueLeFaltaAlEfecto([o({ cantidad: 'dos' })])).toHaveLength(1)
+  })
+
+  it('la coma decimal española sí vale: 0,2 es una cantidad', () => {
+    expect(loQueLeFaltaAlEfecto([o({ cantidad: '0,2' })])).toHaveLength(0)
+    expect(loQueLeFaltaAlEfecto([o({ cantidad: '0.2' })])).toHaveLength(0)
+  })
+
+  it('y falta la ficha: se dice eso, no la cantidad', () => {
+    const faltan = loQueLeFaltaAlEfecto([o({ fichaId: null, cantidad: '' })])
+    expect(faltan).toHaveLength(1)
+    expect(faltan[0]).toContain('no ha elegido el artículo')
+  })
+
+  it('«no lleva nada» y «es un plato» no piden ficha ni cantidad', () => {
+    expect(loQueLeFaltaAlEfecto([
+      o({ queLleva: 'no_lleva_nada', fichaId: null, cantidad: '' }),
+      o({ queLleva: 'es_un_plato', fichaId: null, cantidad: '' }),
+      o({ queLleva: null, fichaId: null, cantidad: '' }),
+    ])).toHaveLength(0)
+  })
+
+  it('NO se rellena un 1 por nuestra cuenta: se bloquea y se pide', () => {
+    // Inventar la cantidad sería escribir un consumo que nadie ha dicho.
+    // Cuánto sale del almacén cada vez lo decide quien lo sabe, no la pantalla.
+    const faltan = loQueLeFaltaAlEfecto([o({ cantidad: '' })])
+    expect(faltan.length).toBeGreaterThan(0)
   })
 })
