@@ -276,15 +276,21 @@ export function avisoDeParecida(
 }
 
 // ── La línea de cada opción ────────────────────────────────────────────────
-export function lineaDelExtra(o: OpcionNueva): string {
+//
+// LLEVA `editando` PORQUE LA FRASE CAMBIA, y no es un matiz: al CREAR, una
+// respuesta sin decidir impide crear; al EDITAR, no impide nada — se ofrece
+// resolverla. La primera versión decía «hasta decidirlo, la pregunta no se
+// puede crear» también editando, que es exactamente lo contrario del remate de
+// Julio y habría empujado a la gente a no tocar nada. Lo cazó la captura.
+export function lineaDelExtra(o: OpcionNueva, editando = false): string {
   if (o.yaEstabaDecidido) {
     const donde = o.enCuantasPreguntas === 1 ? 'en 1 pregunta' : `en ${o.enCuantasPreguntas} preguntas`
     return `Extra que ya existe · ${donde}`
   }
   if (o.extraId === null) return 'Extra nuevo · se crea al guardar'
   if (o.enCuantasPreguntas > 1) {
-    return `Existe ${o.enCuantasPreguntas} veces y ninguna dice qué lleva. `
-      + 'Hasta decidirlo, la pregunta no se puede crear.'
+    return `Existe ${o.enCuantasPreguntas} veces y ninguna dice qué lleva.`
+      + (editando ? '' : ' Hasta decidirlo, la pregunta no se puede crear.')
   }
   return 'Este extra todavía no dice qué lleva.'
 }
@@ -293,4 +299,142 @@ export function precioEnTexto(precio: number): string {
   if (precio === 0) return 'No cobra'
   const s = precio.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return `+${s} €`
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EDITAR UNA PREGUNTA QUE YA EXISTE (13/09)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// La asimetría, y es deliberada: CREAR exige decir qué lleva cada respuesta —
+// una opción nueva sin efecto es la fila 111 mientras limpiamos las 110—, pero
+// EDITAR no obliga a resolverlo todo de golpe. Si entrar a corregir un precio
+// obligara a resolver nueve fichas, nadie entraría a corregir el precio, y la
+// deuda se quedaría quieta por prudencia.
+//
+// EL REMATE DE JULIO (13/09 10:10): que editar OFREZCA resolverlas. Ofrecer, no
+// obligar. Así la deuda baja sola cada vez que alguien entra a tocar cualquier
+// cosa, en vez de esperar a que alguien se siente a hacer una limpieza que
+// nadie tiene tiempo de hacer.
+
+/** Cuántas respuestas de esta pregunta siguen sin decir qué llevan. */
+export function cuantasSinDecidir(ops: OpcionNueva[]): number {
+  return ops.filter((o) => o.queLleva === null && !o.yaEstabaDecidido).length
+}
+
+/**
+ * La invitación al editar. `null` cuando no hay deuda: un aviso que aparece
+ * siempre deja de leerse, y decir «0 sin decidir» en una pregunta limpia es
+ * ruido con cara de dato.
+ */
+export function laDeudaDeEstaPregunta(ops: OpcionNueva[]): string | null {
+  const n = cuantasSinDecidir(ops)
+  if (n === 0) return null
+  return n === 1
+    ? 'Una de estas respuestas todavía no dice qué lleva. ¿La dejamos resuelta ahora?'
+    : `${n} de estas respuestas todavía no dicen qué llevan. ¿Las dejamos resueltas ahora?`
+}
+
+/**
+ * Lo que impide GUARDAR una pregunta que ya existe. Es `porQueNoSePuedeCrear`
+ * menos las dos exigencias que solo tienen sentido al estrenarla:
+ *   · las respuestas viejas sin decidir NO bloquean (se ofrecen, ver arriba);
+ *   · los platos tampoco: se eligen en el tablero 3, y una pregunta que ya
+ *     estaba en platos no se queda sin ellos por editarle el nombre.
+ * Lo que SÍ sigue bloqueando: la marca cedida, el texto vacío, quedarse sin
+ * respuestas, los nombres repetidos y una respuesta NUEVA sin efecto.
+ */
+export function porQueNoSePuedeGuardar(b: BorradorDePregunta): string[] {
+  const faltan: string[] = []
+  if (b.marcaCedida) {
+    return ['Esta marca es cedida: su carta la manda Last y aquí no se edita.']
+  }
+  if (b.nombre.trim() === '') faltan.push('Falta lo que lee el cliente.')
+  if (b.opciones.length === 0) {
+    faltan.push('Falta al menos una respuesta: una pregunta sin respuestas no sale en las plataformas.')
+  }
+  const nuevasSinEfecto = b.opciones.filter(
+    (o) => o.extraId === null && o.queLleva === null && !o.yaEstabaDecidido,
+  )
+  if (nuevasSinEfecto.length > 0) {
+    faltan.push(
+      nuevasSinEfecto.length === 1
+        ? `«${nuevasSinEfecto[0].nombre}» es nueva y no dice qué lleva.`
+        : `${nuevasSinEfecto.length} respuestas nuevas no dicen qué llevan: `
+          + nuevasSinEfecto.map((o) => `«${o.nombre}»`).join(', ') + '.',
+    )
+  }
+  const repetidas = nombresRepetidos(b.opciones)
+  if (repetidas.length > 0) {
+    faltan.push(`Hay dos respuestas con el mismo nombre: ${repetidas.map((n) => `«${n}»`).join(', ')}.`)
+  }
+  if (b.max < 1) faltan.push('«¿Cuántas puede elegir?» tiene que ser 1 o más.')
+  return faltan
+}
+
+/** El botón, según se estrene o se edite. Siempre dice lo que hace. */
+export function textoDelBotonGuardar(b: BorradorDePregunta, editando: boolean): string {
+  if (!editando) return 'Guardar y ponerla en platos'
+  const n = cuantasSinDecidir(b.opciones)
+  return n === 0 ? 'Guardar cambios' : 'Guardar y ponerla en platos'
+}
+
+/** La confirmación al editar. Con contenido, y con lo que sigue sin pasar. */
+export function laConfirmacionAlEditar(
+  nombre: string, resueltas: number, retiradas: number,
+): string {
+  const partes = [`Guardada «${nombre.trim()}»`]
+  if (resueltas > 0) {
+    partes.push(resueltas === 1
+      ? 'con 1 respuesta que ya dice qué lleva'
+      : `con ${resueltas} respuestas que ya dicen qué llevan`)
+  }
+  if (retiradas > 0) {
+    partes.push(retiradas === 1 ? 'y 1 respuesta retirada' : `y ${retiradas} respuestas retiradas`)
+  }
+  return partes.join(', ')
+    + '. Todavía no está en Glovo ni en Uber: sale con la próxima publicación de la carta.'
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLERO 3 · PONERLA EN PLATOS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** El contador, siempre a la vista. Es la cifra que dice si la pregunta sirve. */
+export function elContadorDePlatos(n: number): string {
+  if (n === 0) return 'No está en ningún plato todavía'
+  return n === 1 ? 'Estará en 1 plato' : `Estará en ${n} platos`
+}
+
+/** «Marcar los 7 de Bebidas». El número por delante, no un «marcar todos». */
+export function marcarLaCategoria(nombre: string, cuantos: number): string {
+  return cuantos === 1 ? `Marcar el de ${nombre}` : `Marcar los ${cuantos} de ${nombre}`
+}
+
+/**
+ * Lo que cambia respecto a como estaba. Sin esto, guardar en el tablero 3 es un
+ * botón que no dice qué va a hacer — y quitar una pregunta de un plato es tan
+ * importante como ponerla.
+ */
+export function elCambioEnPlatos(antes: string[], ahora: string[]): string {
+  const seAnaden = ahora.filter((p) => !antes.includes(p)).length
+  const seQuitan = antes.filter((p) => !ahora.includes(p)).length
+  if (seAnaden === 0 && seQuitan === 0) return 'Sin cambios'
+  const partes: string[] = []
+  if (seAnaden > 0) partes.push(seAnaden === 1 ? 'se añade a 1 plato' : `se añade a ${seAnaden} platos`)
+  if (seQuitan > 0) partes.push(seQuitan === 1 ? 'se quita de 1 plato' : `se quita de ${seQuitan} platos`)
+  return partes.join(' y ').replace(/^./, (c) => c.toUpperCase())
+}
+
+/** La confirmación del tablero 3. Contenido, no un visto (regla 8). */
+export function laConfirmacionDePlatos(
+  pregunta: string, total: number, puestos: number, quitados: number,
+): string {
+  const donde = total === 0 ? 'ningún plato'
+    : total === 1 ? '1 plato' : `${total} platos`
+  const detalle: string[] = []
+  if (puestos > 0) detalle.push(puestos === 1 ? '1 nuevo' : `${puestos} nuevos`)
+  if (quitados > 0) detalle.push(quitados === 1 ? '1 quitado' : `${quitados} quitados`)
+  return `«${pregunta.trim()}» está en ${donde}`
+    + (detalle.length ? ` (${detalle.join(', ')})` : '')
+    + '. Pendiente de publicar: sale en Glovo y Uber con la próxima publicación de la carta.'
 }

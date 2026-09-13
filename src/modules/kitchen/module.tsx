@@ -19,6 +19,8 @@ import KitchenMenuPage from '@/modules/kitchen/pages/KitchenMenuPage'
 import KitchenCasadoPage from '@/modules/kitchen/pages/KitchenCasadoPage'
 import KitchenExtrasPage from '@/modules/kitchen/pages/KitchenExtrasPage'
 import KitchenModificadoresPage from '@/modules/kitchen/pages/KitchenModificadoresPage'
+import KitchenPreguntaPage from '@/modules/kitchen/pages/KitchenPreguntaPage'
+import KitchenPreguntaPlatosPage from '@/modules/kitchen/pages/KitchenPreguntaPlatosPage'
 import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
 import KitchenProfitabilityPage from '@/modules/kitchen/pages/KitchenProfitabilityPage'
 import KitchenMenuEngineeringPage from '@/modules/kitchen/pages/KitchenMenuEngineeringPage'
@@ -56,6 +58,12 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'casado',            element: <KitchenCasadoPage /> },
     { path: 'extras',            element: <KitchenExtrasPage /> },
     { path: 'modificadores',     element: <KitchenModificadoresPage /> },
+    // Tableros 5 y 3: crear/editar una pregunta y ponerla en platos. Van
+    // juntas a proposito — el 5 sin el 3 deja preguntas que no ve ningun
+    // cliente, y media pantalla no es media solucion.
+    { path: 'preguntas/nueva',            element: <KitchenPreguntaPage /> },
+    { path: 'preguntas/:preguntaId',      element: <KitchenPreguntaPage /> },
+    { path: 'preguntas/:preguntaId/platos', element: <KitchenPreguntaPlatosPage /> },
     { path: 'disponibilidad',    element: <KitchenAvailabilityPage /> },
     { path: 'disponibilidad-informes', element: <AvailabilityReportsPage /> },
     { path: 'proveedores',       element: <SuppliersPage /> },

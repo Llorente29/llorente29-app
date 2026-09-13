@@ -12,6 +12,9 @@ import {
   laReglaDeLaPantalla, loQueVeraElCliente, porQueNoSePuedeCrear, sePuedeCrear,
   textoDelBotonCrear, laConfirmacion, ayudaDeLaCategoria, cuentaDePlatos,
   avisoDeParecida, lineaDelExtra, precioEnTexto, LOS_QUE_LLEVA,
+  porQueNoSePuedeGuardar, cuantasSinDecidir, laDeudaDeEstaPregunta,
+  textoDelBotonGuardar, laConfirmacionAlEditar,
+  elContadorDePlatos, marcarLaCategoria, elCambioEnPlatos, laConfirmacionDePlatos,
   type BorradorDePregunta, type OpcionNueva,
 } from '@/modules/kitchen/lib/crearPreguntaDeCocina'
 
@@ -236,5 +239,96 @@ describe('la línea de cada extra', () => {
   it('y el nuevo dice que se crea al guardar', () => {
     expect(lineaDelExtra(OP({ extraId: null, queLleva: 'lleva', yaEstabaDecidido: false })))
       .toBe('Extra nuevo · se crea al guardar')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EDITAR, Y LA DEUDA QUE SE OFRECE EN VEZ DE EXIGIRSE (Julio, 13/09 10:10)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('editar no obliga, pero ofrece', () => {
+  const VIEJA_SIN_DECIDIR = OP({
+    extraId: 'e1', nombre: 'Salsa Harissa (Picante)', queLleva: null, yaEstabaDecidido: false,
+  })
+  const VIEJA_DECIDIDA = OP({ extraId: 'e2', nombre: 'Salsa Yogur', yaEstabaDecidido: true })
+  const NUEVA_SIN_EFECTO = OP({ extraId: null, nombre: 'Salsa Brava', queLleva: null, yaEstabaDecidido: false })
+
+  it('🔴 una respuesta VIEJA sin decidir NO impide guardar', () => {
+    // Si entrar a corregir un precio obligara a resolver nueve fichas, nadie
+    // entraría a corregir el precio. La deuda se quedaría quieta por prudencia.
+    expect(porQueNoSePuedeGuardar(B({ opciones: [VIEJA_DECIDIDA, VIEJA_SIN_DECIDIR] }))).toEqual([])
+  })
+
+  it('🔴 pero una respuesta NUEVA sin efecto sí: sería la fila 111', () => {
+    const faltan = porQueNoSePuedeGuardar(B({ opciones: [VIEJA_DECIDIDA, NUEVA_SIN_EFECTO] }))
+    expect(faltan).toHaveLength(1)
+    expect(faltan[0]).toContain('Salsa Brava')
+    expect(faltan[0]).toContain('nueva')
+  })
+
+  it('la deuda se OFRECE, con su número y en forma de pregunta', () => {
+    const tres = [VIEJA_SIN_DECIDIR, OP({ extraId: 'e3', nombre: 'B', queLleva: null, yaEstabaDecidido: false }),
+                  OP({ extraId: 'e4', nombre: 'C', queLleva: null, yaEstabaDecidido: false })]
+    expect(cuantasSinDecidir(tres)).toBe(3)
+    expect(laDeudaDeEstaPregunta(tres))
+      .toBe('3 de estas respuestas todavía no dicen qué llevan. ¿Las dejamos resueltas ahora?')
+    expect(laDeudaDeEstaPregunta([VIEJA_SIN_DECIDIR])).toContain('Una de estas respuestas')
+  })
+
+  it('y una pregunta limpia NO enseña el aviso: un aviso que sale siempre deja de leerse', () => {
+    expect(laDeudaDeEstaPregunta([VIEJA_DECIDIDA])).toBeNull()
+    expect(cuantasSinDecidir([VIEJA_DECIDIDA])).toBe(0)
+  })
+
+  it('editar tampoco exige platos: eso se decide en el tablero 3', () => {
+    expect(porQueNoSePuedeGuardar(B({ platosElegidos: [], opciones: [VIEJA_DECIDIDA] }))).toEqual([])
+    // Pero CREAR sí los exige: una pregunta nueva sin platos no la ve nadie.
+    expect(porQueNoSePuedeCrear(B({ platosElegidos: [] })).some((f) => f.includes('ningún cliente')))
+      .toBe(true)
+  })
+
+  it('y la cedida sigue bloqueando entera, también al editar', () => {
+    expect(porQueNoSePuedeGuardar(B({ marcaCedida: true }))).toHaveLength(1)
+  })
+
+  it('el botón dice lo que hace en cada caso', () => {
+    expect(textoDelBotonGuardar(B(), false)).toBe('Guardar y ponerla en platos')
+    expect(textoDelBotonGuardar(B({ opciones: [VIEJA_DECIDIDA] }), true)).toBe('Guardar cambios')
+  })
+
+  it('la confirmación de editar cuenta lo resuelto y lo retirado', () => {
+    const t = laConfirmacionAlEditar('¿Quieres salsa?', 3, 1)
+    expect(t).toContain('3 respuestas que ya dicen qué llevan')
+    expect(t).toContain('1 respuesta retirada')
+    expect(t).toContain('próxima publicación')
+    expect(laConfirmacionAlEditar('x', 0, 0)).not.toContain('respuestas que ya dicen')
+  })
+})
+
+describe('tablero 3 · el contador y lo que cambia', () => {
+  it('el contador está siempre, incluso a cero, y a cero dice la verdad', () => {
+    expect(elContadorDePlatos(0)).toBe('No está en ningún plato todavía')
+    expect(elContadorDePlatos(1)).toBe('Estará en 1 plato')
+    expect(elContadorDePlatos(14)).toBe('Estará en 14 platos')
+  })
+
+  it('el atajo de categoría lleva el número por delante', () => {
+    expect(marcarLaCategoria('Bebidas', 7)).toBe('Marcar los 7 de Bebidas')
+    expect(marcarLaCategoria('Postres', 1)).toBe('Marcar el de Postres')
+  })
+
+  it('🔴 y se dice lo que se QUITA, no solo lo que se pone', () => {
+    expect(elCambioEnPlatos(['a', 'b'], ['a', 'c'])).toBe('Se añade a 1 plato y se quita de 1 plato')
+    expect(elCambioEnPlatos([], ['a', 'b'])).toBe('Se añade a 2 platos')
+    expect(elCambioEnPlatos(['a'], [])).toBe('Se quita de 1 plato')
+    expect(elCambioEnPlatos(['a'], ['a'])).toBe('Sin cambios')
+  })
+
+  it('la confirmación dice dónde queda y que la carta no sale sola', () => {
+    const t = laConfirmacionDePlatos('¿Quieres salsa?', 14, 3, 1)
+    expect(t).toContain('está en 14 platos')
+    expect(t).toContain('3 nuevos')
+    expect(t).toContain('1 quitado')
+    expect(t).toContain('Pendiente de publicar')
   })
 })

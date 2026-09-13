@@ -38,11 +38,12 @@
 // en vez de desaparecer: son 15 con 45 opciones, y hoy no las ve nadie.
 
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import EstadoDeLaConsulta from '@/modules/kitchen/components/EstadoDeLaConsulta'
 import {
   CabeceraCocina, CifrasCocina, CifraCocina, PastillaCocina,
-  ChipCocina, PanelCocina, RotuloDePanel, FranjaCocina,
+  ChipCocina, PanelCocina, RotuloDePanel, FranjaCocina, BotonCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { REJILLA_PREGUNTAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 import { getPreguntas, type LasPreguntas } from '@/modules/kitchen/services/preguntasService'
@@ -122,6 +123,7 @@ function Cabecera() {
 
 export default function KitchenModificadoresPage() {
   const { activeAccountId } = useActiveAccount()
+  const navigate = useNavigate()
   const [datos, setDatos] = useState<LasPreguntas | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -197,7 +199,14 @@ export default function KitchenModificadoresPage() {
               llevan. Una misma pregunta se pone en todos los platos donde toca.
             </>
           }
-        />
+        >
+          {/* YA TIENE DESTINO (13/09). El 12/09 este boton no se pintaba porque
+              el tablero 5 no existia y un boton sin destino no se pinta (regla
+              35). Ahora existe, y con el el tablero 3 detras. */}
+          <BotonCocina peso="relleno" onClick={() => navigate('/kitchen/preguntas/nueva')}>
+            + Crear una pregunta
+          </BotonCocina>
+        </CabeceraCocina>
 
         {/* EL CARTEL DE VACÍO NO CONVIVE CON LA LISTA. Esto se pintaba suelto,
             al lado del contenido, y la pantalla decía «la consulta no ha

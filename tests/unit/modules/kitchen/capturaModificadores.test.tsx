@@ -19,7 +19,7 @@ import { writeFileSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   CabeceraCocina, CifrasCocina, CifraCocina, PastillaCocina,
-  ChipCocina, PanelCocina, RotuloDePanel, FranjaCocina,
+  ChipCocina, PanelCocina, RotuloDePanel, FranjaCocina, BotonCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import { REJILLA_PREGUNTAS } from '@/modules/kitchen/lib/rejillasDeCocina'
 import {
@@ -159,7 +159,10 @@ it('genera la captura del tablero 1 a 1280', () => {
               llevan. Una misma pregunta se pone en todos los platos donde toca.
             </>
           }
-        />
+        >
+          {/* El botón que el tablero 1 estrena hoy: ya tiene destino (regla 35). */}
+          <BotonCocina peso="relleno">+ Crear una pregunta</BotonCocina>
+        </CabeceraCocina>
         <FranjaCocina
           tono="malo"
           titulo={tituloDeLaFranja(FRANJA_REAL, VENTANA_REAL)}
