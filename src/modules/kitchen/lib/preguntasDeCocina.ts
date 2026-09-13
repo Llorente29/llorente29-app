@@ -113,7 +113,15 @@ export function ventanaEnTexto(v: Ventana): string {
 // que lee.
 export const MUCHOS = 20
 
-export function quePuedeHacerElCliente(p: Pregunta): string {
+/**
+ * Se acepta CUALQUIER cosa que traiga estos cuatro campos, no sólo una fila de
+ * la lista: la pantalla «desde el plato» hace la misma pregunta sobre una fila
+ * más pequeña, y duplicar esta frase en dos sitios es exactamente cómo dos
+ * pantallas acaban diciendo cosas distintas de la misma pregunta.
+ */
+export function quePuedeHacerElCliente(
+  p: Pick<Pregunta, 'tipo' | 'min' | 'max' | 'obligatoria'>,
+): string {
   const tope = p.max >= MUCHOS ? null : p.max
   if (p.tipo === 'quita') {
     return tope == null ? 'Quitar las que quiera' : `Quitar hasta ${tope}`
@@ -132,7 +140,7 @@ export function quePuedeHacerElCliente(p: Pregunta): string {
 }
 
 /** La segunda línea del nombre: «Añade · de pago», «Elige», «Quita · gratis». */
-export function queHaceEnElPlato(p: Pregunta): string {
+export function queHaceEnElPlato(p: Pick<Pregunta, 'tipo' | 'dePago'>): string {
   const verbo = p.tipo === 'quita' ? 'Quita'
     : (p.tipo === 'anade' || p.tipo === 'cross_sell') ? 'Añade'
     : 'Elige'
