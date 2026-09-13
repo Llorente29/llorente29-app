@@ -75,13 +75,26 @@ describe('isPublicAuthRoute', () => {
     expect(isPublicAuthRoute('/llorente29-app/login')).toBe(false)
   })
 
-  it('PUBLIC_AUTH_ROUTES contiene exactamente 4 rutas', () => {
+  it('matchea /acceso exactamente', () => {
+    expect(isPublicAuthRoute('/acceso')).toBe(true)
+  })
+
+  it('PUBLIC_AUTH_ROUTES contiene exactamente 5 rutas', () => {
     // Si alguien añade rutas nuevas, debe actualizar también los tests.
-    expect(PUBLIC_AUTH_ROUTES).toHaveLength(4)
+    //
+    // DE 4 A 5 (13/09). `/acceso` se añadió y esta prueba se quedó en 4, así
+    // que llevaba días en rojo. Tres partes la dieron por «deuda conocida» y
+    // se siguió publicando con ella encendida — hasta que Julio preguntó por
+    // qué sonaba la alarma. Una prueba roja permanente no es deuda: es un
+    // detector al que se le ha quitado la pila, y entonces ya no avisa del
+    // incendio de verdad. Si mañana alguien mete una sexta ruta pública sin
+    // querer, esto tiene que volver a sonar.
+    expect(PUBLIC_AUTH_ROUTES).toHaveLength(5)
     expect(PUBLIC_AUTH_ROUTES).toContain('/login')
     expect(PUBLIC_AUTH_ROUTES).toContain('/welcome')
     expect(PUBLIC_AUTH_ROUTES).toContain('/reset-password')
     expect(PUBLIC_AUTH_ROUTES).toContain('/reset-password/confirm')
+    expect(PUBLIC_AUTH_ROUTES).toContain('/acceso')
   })
 })
 

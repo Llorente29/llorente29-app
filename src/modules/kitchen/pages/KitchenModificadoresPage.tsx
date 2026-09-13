@@ -51,7 +51,7 @@ import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
   platosPreocupa, pastillas, cuantasActivas, ordena,
   tituloDeLaFranja, detalleDeLaFranja, repartoDeLaFranja, tituloSinPlato, lineaSinPlato,
-  subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista, MARCAS_A_LA_VISTA,
+  subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista, loQueHaceLaFila, MARCAS_A_LA_VISTA,
   type Pregunta, type TonoDePastilla,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
 
@@ -59,11 +59,19 @@ const TONO: Record<TonoDePastilla, 'rojo' | 'ambar' | 'apagado'> = {
   malo: 'rojo', aviso: 'ambar', apagado: 'apagado',
 }
 
-function Fila({ p, sinRaya }: { p: Pregunta; sinRaya?: boolean }) {
+// LA FILA ABRE LA PREGUNTA, y es un `button` de verdad, no un `div` con un
+// `onClick` encima. Con `button` el teclado y el lector de pantalla funcionan
+// solos —Intro, Espacio, tabulador, «botón»— y no hay que reimplementar a mano
+// lo que el navegador ya sabe hacer. La rejilla se pinta con `display:grid`
+// sobre el propio botón, así que la maqueta no cambia ni un píxel.
+function Fila({ p, sinRaya, onAbrir }: { p: Pregunta; sinRaya?: boolean; onAbrir: (id: string) => void }) {
   const chapas = pastillas(p)
   return (
-    <div
-      className={`grid items-center gap-3.5 px-4 py-2.5 min-h-[56px] ${sinRaya ? '' : 'border-b border-cocina-linea-suave last:border-b-0'} ${p.activa ? '' : 'opacity-60'}`}
+    <button
+      type="button"
+      onClick={() => onAbrir(p.id)}
+      title={`${loQueHaceLaFila(p.cedida)} «${p.nombre}»`}
+      className={`w-full text-left grid items-center gap-3.5 px-4 py-2.5 min-h-[56px] transition-base hover:bg-cocina-superficie-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cocina-acento focus-visible:ring-inset ${sinRaya ? '' : 'border-b border-cocina-linea-suave last:border-b-0'} ${p.activa ? '' : 'opacity-60'}`}
       style={{ gridTemplateColumns: REJILLA_PREGUNTAS }}
     >
       <div className="min-w-0">
@@ -85,13 +93,16 @@ function Fila({ p, sinRaya }: { p: Pregunta; sinRaya?: boolean }) {
               <PastillaCocina key={c.texto} tono={TONO[c.tono]}>{c.texto}</PastillaCocina>
             ))}
       </div>
-      {/* AQUÍ NO HAY BOTÓN TODAVÍA, y la columna se queda vacía a propósito.
-          Pintarlo en gris en las 65 filas le dice a quien la abra «esto está
-          roto» (Julio, 12:10). La regla 35 es no prometer un botón sin
-          destino: cuando existan los tableros 2, 4 y 5, aparece. Mientras
-          tanto lo dice el pie, con palabras. */}
-      <div className="text-right" />
-    </div>
+      {/* YA TIENE DESTINO (13/09). Esta columna estuvo vacía a propósito
+          mientras el tablero 5 no existía —regla 35, no se promete un botón
+          sin sitio adonde ir—. El tablero 5 se publicó a las 10:16 y el vacío
+          se quedó: 65 preguntas y ninguna manera de abrir una. La palabra la
+          pone la lib, no este JSX, para que se pueda leer y probar sin
+          navegador. */}
+      <div className="text-right text-[12.5px] font-semibold text-cocina-acento">
+        {loQueHaceLaFila(p.cedida)}
+      </div>
+    </button>
   )
 }
 
@@ -124,6 +135,11 @@ function Cabecera() {
 export default function KitchenModificadoresPage() {
   const { activeAccountId } = useActiveAccount()
   const navigate = useNavigate()
+  // Las rutas del módulo van absolutas —`/kitchen/...`—, igual que en las otras
+  // catorce pantallas de cocina: el Shell monta los módulos en la raíz, no bajo
+  // el slug de la cuenta. Comprobado con `matchRoutes` en la prueba de abajo, no
+  // supuesto: las tres rutas de preguntas casan.
+  const abrirPregunta = (id: string) => navigate(`/kitchen/preguntas/${id}`)
   const [datos, setDatos] = useState<LasPreguntas | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -321,7 +337,7 @@ export default function KitchenModificadoresPage() {
                       {subtituloDeMarca(m.cedida)}
                     </span>
                   </div>
-                  {m.preguntas.map((p) => <Fila key={p.id} p={p} />)}
+                  {m.preguntas.map((p) => <Fila key={p.id} p={p} onAbrir={abrirPregunta} />)}
                 </div>
               ))}
               {marcasVisibles.length === 0 && (
@@ -342,7 +358,7 @@ export default function KitchenModificadoresPage() {
                     leería como si fuera de la pregunta siguiente. */}
                 {sinPlato.map((p) => (
                   <div key={p.id} className="border-b border-cocina-linea-suave last:border-b-0">
-                    <Fila p={p} sinRaya />
+                    <Fila p={p} sinRaya onAbrir={abrirPregunta} />
                     <div className="px-4 pb-2.5 -mt-1.5 text-[11.5px] text-cocina-tinta-3">{lineaSinPlato(p)}</div>
                   </div>
                 ))}

@@ -308,8 +308,28 @@ export function elPieDeLaLista(): string {
     + 'retiradas se siguen viendo, etiquetadas y abajo: la lista no esconde '
     + 'nada, pero las cifras de arriba cuentan sólo lo que se puede vender hoy. '
     + 'Una pregunta de marca cedida se ve pero no se edita: la manda Last y el '
-    + 'próximo volcado devolvería el cambio. En las marcas propias manda Folvy. '
-    + 'Las fichas de cada pregunta llegan en el siguiente paso.'
+    + 'próximo volcado devolvería el cambio. En las marcas propias manda Folvy.'
+}
+
+/**
+ * Lo que se lee en la última columna de cada fila, que es la que la abre.
+ *
+ * POR QUÉ EXISTE ESTA PALABRA (13/09, y la pagó una pantalla publicada).
+ * Hasta hoy la fila era un `div` sin manejador y esta columna estaba vacía a
+ * propósito: el tablero 5 no existía y un botón sin destino no se pinta
+ * (regla 35). El tablero 5 se publicó a las 10:16 y NADIE retiró el vacío, así
+ * que la pantalla quedó con 65 preguntas y ni una manera de abrir ninguna.
+ * Julio lo dijo en once palabras: «pinchar en la pregunta no está funcionando».
+ *
+ * Y por eso la palabra va AQUÍ y no suelta en el JSX: una fila que se puede
+ * pinchar pero no lo dice es una promesa que solo conoce quien escribió el
+ * código. Lo que se puede hacer se escribe.
+ */
+export function loQueHaceLaFila(cedida: boolean): string {
+  // Las cedidas TAMBIÉN se abren. Se ven enteras y no se tocan, y la propia
+  // pregunta lo explica al entrar: esconder la puerta obligaría a creerse este
+  // renglón en vez de poder mirarlo (regla 7).
+  return cedida ? 'Ver' : 'Abrir'
 }
 
 // ── La sección de las que no están en ningún plato ──────────────────────────

@@ -26,9 +26,11 @@ import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
   platosPreocupa, pastillas, cuantasActivas, ordena,
   tituloDeLaFranja, detalleDeLaFranja, repartoDeLaFranja, tituloSinPlato, lineaSinPlato,
-  subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista, MARCAS_A_LA_VISTA,
+  subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista, loQueHaceLaFila, MARCAS_A_LA_VISTA,
   type Pregunta, type TonoDePastilla,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
+import { matchRoutes } from 'react-router-dom'
+import { kitchenModule } from '@/modules/kitchen/module'
 import {
   MARCAS_REALES, SIN_PLATO_REALES, CIFRAS_REALES, FRANJA_REAL, VENTANA_REAL,
 } from './fixtures/preguntasReales'
@@ -63,8 +65,10 @@ function Cabecera() {
 function Fila({ p, sinRaya }: { p: Pregunta; sinRaya?: boolean }) {
   const chapas = pastillas(p)
   return (
-    <div
-      className={`grid items-center gap-3.5 px-4 py-2.5 min-h-[56px] ${sinRaya ? '' : 'border-b border-cocina-linea-suave last:border-b-0'} ${p.activa ? '' : 'opacity-60'}`}
+    <button
+      type="button"
+      title={`${loQueHaceLaFila(p.cedida)} «${p.nombre}»`}
+      className={`w-full text-left grid items-center gap-3.5 px-4 py-2.5 min-h-[56px] transition-base hover:bg-cocina-superficie-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cocina-acento focus-visible:ring-inset ${sinRaya ? '' : 'border-b border-cocina-linea-suave last:border-b-0'} ${p.activa ? '' : 'opacity-60'}`}
       style={{ gridTemplateColumns: REJILLA_PREGUNTAS }}
     >
       <div className="min-w-0">
@@ -81,8 +85,10 @@ function Fila({ p, sinRaya }: { p: Pregunta; sinRaya?: boolean }) {
           ? <span className="text-[12px] text-cocina-tinta-3">—</span>
           : chapas.map((c) => <PastillaCocina key={c.texto} tono={TONO[c.tono]}>{c.texto}</PastillaCocina>)}
       </div>
-      <div className="text-right" />
-    </div>
+      <div className="text-right text-[12.5px] font-semibold text-cocina-acento">
+        {loQueHaceLaFila(p.cedida)}
+      </div>
+    </button>
   )
 }
 
@@ -138,6 +144,91 @@ describe('la foto es de las 65, no de una selección', () => {
     expect(todas.filter((p) => p.opciones === 0)).toHaveLength(9)
     expect(todas.filter((p) => p.opciones === 0 && p.activa)).toHaveLength(0)
     expect(todas.filter((p) => p.opcionesRetiradas > 0)).toHaveLength(10)
+  })
+})
+
+// ── 🔴 SE PUEDE ABRIR UNA PREGUNTA ─────────────────────────────────────────
+//
+// LO QUE PASÓ (13/09 11:30, y con la pantalla ya publicada). Julio: «pinchar en
+// la pregunta no está funcionando». Era exacto y era literal: la fila era un
+// `div` sin manejador y la última columna estaba VACÍA a propósito, por un
+// comentario del 12/09 que decía «cuando existan los tableros 2, 4 y 5,
+// aparece» (regla 35, no se pinta un botón sin destino). El tablero 5 se
+// publicó a las 10:16 y nadie retiró el vacío: 65 preguntas y ni una forma de
+// abrir ninguna.
+//
+// La regla 35 tiene una segunda mitad que no estaba escrita en ninguna parte, y
+// aquí queda: **el día que el destino existe, el botón es obligatorio**. Un
+// «todavía no» sin fecha se convierte solo en un «nunca», porque quien publica
+// el destino no es el mismo que escribió el hueco.
+//
+// Estas dos pruebas habrían cazado el fallo enteras: la primera cuenta cuántas
+// filas se pueden activar (antes: CERO), la segunda comprueba que el sitio al
+// que llevan EXISTE de verdad entre las rutas que monta el Shell.
+describe('🔴 cada pregunta de la lista se puede abrir', () => {
+  const todas = [...MARCAS_REALES.flatMap((m) => m.preguntas), ...SIN_PLATO_REALES]
+
+  it('ni una sola fila inerte: las 65 se pueden activar con ratón y con teclado', () => {
+    const html = renderToStaticMarkup(<>{todas.map((p) => <Fila key={p.id} p={p} />)}</>)
+    // `button` y no `div onClick`: el teclado, el foco y el lector de pantalla
+    // salen gratis. Contar los `<button` es contar las filas activables.
+    const activables = [...html.matchAll(/<button\b/g)].length
+    expect(activables, 'filas que se pueden pinchar').toBe(todas.length)
+    expect(activables).toBe(65)
+  })
+
+  it('y cada una DICE que se puede, con la palabra que le toca', () => {
+    // Una fila que se puede pinchar pero no lo dice es una promesa que solo
+    // conoce quien escribió el código.
+    const propia = renderToStaticMarkup(<Fila p={todas.find((p) => !p.cedida)!} />)
+    const cedida = renderToStaticMarkup(<Fila p={todas.find((p) => p.cedida)!} />)
+    expect(propia).toContain('Abrir')
+    // La cedida TAMBIÉN se abre —se ve entera y no se toca—, y por eso la
+    // palabra cambia: prometer «Abrir» y no dejar escribir sería peor.
+    expect(cedida).toContain('Ver')
+    expect(loQueHaceLaFila(false)).toBe('Abrir')
+    expect(loQueHaceLaFila(true)).toBe('Ver')
+  })
+
+  it('🔴 y LA PÁGINA DE VERDAD también, no sólo la foto', () => {
+    // Las dos guardas de arriba miran la `Fila` de ESTE fichero, que es una
+    // copia. Si mañana alguien vuelve a dejar inerte la de la página y no toca
+    // la foto, aquéllas seguirían verdes mientras la pantalla se rompe otra
+    // vez — que es EXACTAMENTE la forma del fallo de hoy. Así que esta lee el
+    // fichero de la página.
+    const pagina = readFileSync(
+      resolve(__dirname, '../../../../src/modules/kitchen/pages/KitchenModificadoresPage.tsx'), 'utf8')
+    const fila = pagina.slice(pagina.indexOf('function Fila('))
+    const cuerpo = fila.slice(0, fila.indexOf('\nfunction '))
+    expect(cuerpo, 'la fila de la página no es un <button>').toContain('<button')
+    expect(cuerpo, 'la fila de la página no llama a onAbrir').toContain('onAbrir(p.id)')
+    expect(cuerpo, 'la fila de la página no dice lo que hace').toContain('loQueHaceLaFila')
+    // Y que el destino se construya con el literal que la ruta espera.
+    expect(pagina).toContain('`/kitchen/preguntas/${id}`')
+  })
+
+  it('y el sitio al que lleva EXISTE entre las rutas que monta el Shell', () => {
+    // Montadas igual que en Shell.tsx:235, no de memoria.
+    const montadas = kitchenModule.routes.map((r) => ({
+      path: `${kitchenModule.basePath}/${r.path ?? ''}`.replace(/\/+$/, ''),
+    }))
+    // El destino real de la fila, el mismo literal que usa la página.
+    for (const p of [todas[0], todas[todas.length - 1]]) {
+      const destino = `/kitchen/preguntas/${p.id}`
+      const casa = matchRoutes(montadas, destino)
+      expect(casa, `${destino} no casa con ninguna ruta montada`).not.toBeNull()
+      expect(casa![casa!.length - 1].route.path).toBe('kitchen/preguntas/:preguntaId')
+    }
+    // Y los otros dos destinos del flujo, que se rompen igual de callados.
+    expect(matchRoutes(montadas, '/kitchen/preguntas/nueva')).not.toBeNull()
+    expect(matchRoutes(montadas, '/kitchen/preguntas/abc/platos')).not.toBeNull()
+  })
+})
+
+// El pie ya no puede prometer un paso siguiente que ya ha llegado.
+describe('el pie no promete lo que ya está hecho', () => {
+  it('no dice «en el siguiente paso»', () => {
+    expect(elPieDeLaLista()).not.toContain('siguiente paso')
   })
 })
 
@@ -245,7 +336,7 @@ it('genera la captura del tablero 1 a 1280', () => {
 <body><div class="marco"><nav class="rail">
 <div class="logo"><i></i>Folvy Kitchen</div>
 <a href="#">Resumen</a><a href="#">Cartas</a><a href="#">Casado</a><a href="#">Extras</a>
-<a class="on" href="#">Modificadores</a>
+<a class="on" href="#">Preguntas de la carta</a>
 <a href="#">Disponibilidad</a><a href="#">Informes de disponibilidad</a><div class="sep"></div>
 <a href="#">Ingredientes</a><a href="#">Proveedores</a><a href="#">Platos</a><a href="#">Precios</a>
 <div class="sep"></div><a href="#">Rentabilidad</a><a href="#">Ingeniería de menús</a>
@@ -262,8 +353,19 @@ it('genera la captura del tablero 1 a 1280', () => {
   expect(html).toContain('Apagada')
   expect(html).toContain('3 retiradas')
   expect(html).toContain(chipDeMasMarcas(9))
-  // NINGÚN botón: los tres destinos llegan con los tableros 2, 4 y 5.
-  expect(html).not.toContain('>Abrir<')
+  // ABRIR SÍ, Y LOS OTROS DOS TODAVÍA NO (13/09).
+  //
+  // Esta prueba decía «NINGÚN botón: los tres destinos llegan con los tableros
+  // 2, 4 y 5». Era correcta el 12/09 y dejó de serlo a las 10:16 del 13/09,
+  // cuando se publicó el tablero 5 — pero nadie la cambió, así que la pantalla
+  // salió sin manera de abrir una pregunta y la prueba lo bendijo. Al arreglar
+  // la fila, esta línea saltó: la regla vieja cazando el cambio. Hace bien, y
+  // por eso se corrige en vez de borrarla.
+  //
+  // «Juntar» y «Revisar» siguen prohibidos, y eso NO es papeleo: son los
+  // tableros 2 y 4, que aún no existen. El día que existan, esta prueba tiene
+  // que volver a saltar.
+  expect(html).toContain('Abrir')
   expect(html).not.toContain('>Juntar<')
   expect(html).not.toContain('>Revisar<')
   // Y el rojo, sólo donde hay algo que hacer.
