@@ -56,19 +56,23 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   checkForUpdate, installUpdate, prefetchUpdate, isUpdateDownloaded,
-  fetchUpdateWindow, reportAppVersion,
+  fetchUpdateWindow, reportAppVersion, reportBundleApplied,
   checkForBundleUpdate, prefetchOtaBundle, applyOtaBundle,
-  type RemoteVersion, type UpdateWindow,
+  type RemoteVersion, type RemoteBundle, type UpdateWindow,
 } from '../native/appUpdate'
 import { getDeviceToken } from '../native/print/printWorker'
+import {
+  loQueEsperaLaTablet, sePuedeAplicarAhora, NO_PUEDE_PREGUNTAR,
+} from '../modules/kds/lib/palabrasDeLaActualizacion'
 
 const RECHECK_MS = 15 * 60 * 1000  // re-chequea version.json/bundle.json cada 15 min
 const WINDOW_MS = 60 * 1000        // con update pendiente, mira la ventana cada minuto
 const IDLE_MS = 5 * 60 * 1000      // nadie toca la tablet desde hace 5 min
 const QUIET_MINUTES = 20           // minutos sin ventas que pide la RPC
-const BLIND_LIMIT = 30             // sondeos seguidos sin respuesta → dejar de exigirla
+const BLIND_LIMIT = 30             // sondeos seguidos sin respuesta → puerta CERRADA
 const SLOW_MS = 20 * 1000          // si la instalación tarda esto, revela la salida de emergencia
 const TIMEOUT_MS = 60 * 1000       // pasado esto damos la instalación por atascada (no colgamos)
+const AVISO_TRAS_MS = 30 * 1000    // la franja no aparece mientras alguien está tocando
 
 type Phase = 'prompt' | 'installing' | 'failed'
 
@@ -85,15 +89,6 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   })
 }
 
-// Motivo de espera en cristiano (para la tira discreta de las obligatorias).
-function reasonText(w: UpdateWindow | null, idleOk: boolean): string {
-  if (!idleOk) return 'Se instalará cuando la tablet quede libre.'
-  if (!w) return 'Se instalará en cuanto la cocina esté en calma.'
-  if (w.pendingJobs > 0) return 'Hay tickets imprimiéndose; se instalará al terminar.'
-  if (w.activeOrders > 0) return 'Hay pedidos en curso; se instalará al terminar el servicio.'
-  return 'Se instalará en cuanto la cocina esté en calma.'
-}
-
 export default function UpdateGate() {
   // ── Canal nativo (APK, Capa 1) ──────────────────────────────────────────
   const [update, setUpdate] = useState<RemoteVersion | null>(null)
@@ -108,27 +103,37 @@ export default function UpdateGate() {
   // ── Canal OTA (bundle web, Capa 2) ───────────────────────────────────────
   // Sin fase ni tarjeta: aplicar un bundle es set()+reload, nada que consentir.
   const [otaBundleId, setOtaBundleId] = useState<string | null>(null) // id LOCAL de Capgo, listo para set()
+  const [otaRemote, setOtaRemote] = useState<RemoteBundle | null>(null) // lo que anuncia bundle.json (trae `mandatory`)
   const otaCheckedRemote = useRef<number | null>(null) // remote.bundleId ya intentado descargar
   const otaApplying = useRef(false) // evita disparar set() dos veces a la vez
+  const [instalarYa, setInstalarYa] = useState(false) // lo ha pedido una persona mirando la pantalla
 
   // ── Señales compartidas por los dos canales ──────────────────────────────
   const [win, setWin] = useState<UpdateWindow | null>(null)
   const [idleOk, setIdleOk] = useState(false)
+  const [manosQuietas, setManosQuietas] = useState(false)
   const [blind, setBlind] = useState(false) // el servidor lleva demasiado rato mudo
   const lastTouch = useRef<number>(0)
   const blindCount = useRef<number>(0)
 
   // Telemetría de flota: qué versión (+ bundle OTA activo) corre esta tablet.
-  useEffect(() => { void reportAppVersion() }, [])
+  // `reportBundleApplied` es la pieza 1: sella CUÁNDO empezó a correr este
+  // paquete aquí, y solo si el número ha cambiado. Se llama al arrancar porque
+  // arrancar es la única prueba de que el paquete se aplicó de verdad.
+  useEffect(() => { void reportAppVersion(); void reportBundleApplied() }, [])
 
   // Inactividad táctil: la estación se considera "libre" tras IDLE_MS sin toques.
   useEffect(() => {
     lastTouch.current = Date.now()
-    const touch = () => { lastTouch.current = Date.now(); setIdleOk(false) }
+    const touch = () => { lastTouch.current = Date.now(); setIdleOk(false); setManosQuietas(false) }
     const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart', 'wheel']
     for (const e of events) window.addEventListener(e, touch, { passive: true })
     const id = window.setInterval(() => {
-      setIdleOk(Date.now() - lastTouch.current >= IDLE_MS)
+      const parado = Date.now() - lastTouch.current
+      setIdleOk(parado >= IDLE_MS)
+      // Umbral corto, solo para PINTAR: la franja no aparece encima de quien
+      // está pasando una comanda. No decide nada, solo cuándo se enseña.
+      setManosQuietas(parado >= AVISO_TRAS_MS)
     }, 15 * 1000)
     return () => {
       for (const e of events) window.removeEventListener(e, touch)
@@ -165,6 +170,7 @@ export default function UpdateGate() {
       try {
         const b = await checkForBundleUpdate()
         if (!alive || !b) return
+        setOtaRemote(b.remote)
         if (otaCheckedRemote.current !== b.remote.bundleId) {
           otaCheckedRemote.current = b.remote.bundleId
           const id = await prefetchOtaBundle(b.remote)
@@ -201,30 +207,56 @@ export default function UpdateGate() {
 
   const mandatory = update?.mandatory ?? false
   const isStation = getDeviceToken().length > 0
-  // Ventana abierta = la BBDD dice que sí (o no aplica) Y nadie está usando la
-  // tablet. Desconocido NO abre ventana en una estación: preferimos esperar a
-  // interrumpir. Salvo que la BBDD no tenga la RPC (migración sin aplicar) o
-  // lleve demasiado rato muda: ahí volvemos al comportamiento de siempre, para
-  // que una tablet no se quede sin actualizar nunca y en silencio.
-  const ciego = win?.unsupported === true || blind
-  const serverOk = !isStation || ciego ? true : win?.safe === true
-  const windowOpen = serverOk && idleOk
+
+  // ── PIEZA 2 · LA PUERTA CIEGA, QUE ESTABA AL REVÉS (13/09) ───────────────
+  // Antes: si la RPC no contestaba 30 veces seguidas, o no existía, se daba el
+  // visto bueno del servidor por bueno y la tablet se actualizaba igual. Ese es
+  // el agujero por el que una tablet se recarga en plena cena — justo cuando la
+  // red va mal, que es cuando más falla el sondeo.
+  //
+  // Ahora, sin respuesta NO se actualiza. Y la salida no desaparece: es que
+  // deja de ser automática. La publicación marcada como URGENTE
+  // (`mandatory` en version.json / bundle.json) pasa por encima de todo, y esa
+  // marca la pone una persona a propósito. Se cambia un valor por defecto
+  // silencioso por un acto deliberado, que es lo que tenía que ser.
+  //
+  // El miedo original —«una migración olvidada dejaría a la flota sin poder
+  // actualizarse jamás, y en silencio»— sigue siendo bueno, y por eso lo ciego
+  // ya no es silencioso: la franja de abajo lo dice en pantalla y la pantalla
+  // de oficina lo dice por dispositivo.
+  //
+  // ── PIEZA 3 · LAS DOS LLAVES, Y LAS DOS TIENEN QUE ABRIR ─────────────────
+  //   1ª el local está fuera de su horario de servicio (`enVentana`)
+  //   2ª la cocina está en calma (`safe`, la de siempre)
+  // Más la inactividad táctil, que se mide aquí y no en la base.
+  //
+  // La decisión entera vive en `sePuedeAplicarAhora`, en lib/, probada contra
+  // los estados reales sin montar React: es la regla que decide si una tablet
+  // se recarga en mitad de una cena, y tiene que poder leerse y discutirse.
+  const urgente = (update?.mandatory ?? false) || (otaRemote?.mandatory ?? false)
+  const { puede: windowOpen, ciego } = sePuedeAplicarAhora({
+    w: win, esEstacion: isStation, tabletLibre: idleOk, urgente, blind,
+  })
 
   // ── Aplicar OTA: SILENCIOSO, sin tarjeta — set()+reload no pide permiso a
   // nadie. Solo dispara si no hay update nativo (prioridad §4) y la ventana
   // está abierta. Si set() falla, se libera el flag y se reintenta en el
   // siguiente ciclo — la app nunca se queda a medias.
+  // `instalarYa` es la ÚNICA forma de saltarse la ventana, y no es un valor por
+  // defecto: es un dedo en un botón. Quien lo pulsa está mirando la pantalla y
+  // sabe si hay comandas encima.
   useEffect(() => {
-    if (!otaBundleId || update || !windowOpen || otaApplying.current) return
+    if (!otaBundleId || update || !(windowOpen || instalarYa) || otaApplying.current) return
     otaApplying.current = true
     void applyOtaBundle(otaBundleId).catch(() => {
       otaApplying.current = false
+      setInstalarYa(false)
       // El bundle no se pudo activar (raro: ya se verificó el checksum al
       // descargar). Se descarta para no reintentar en bucle con el mismo id
       // roto; el próximo bundle.json que salga se probará de cero.
       setOtaBundleId(null)
     })
-  }, [otaBundleId, update, windowOpen])
+  }, [otaBundleId, update, windowOpen, instalarYa])
 
   // Una vez el usuario empieza (o falla) el flujo NATIVO, la tarjeta se queda.
   const engaged = phase !== 'prompt'
@@ -268,8 +300,56 @@ export default function UpdateGate() {
     }
   }
 
-  // Sin actualización NATIVA visible: la OTA nunca pinta nada (silenciosa por
-  // diseño — ver cabecera). Nada que mostrar.
+  // ── §3a · LA FRANJA DE LA TABLET ─────────────────────────────────────────
+  // Hasta hoy el canal OTA no pintaba NADA: la versión nueva se aplicaba sola y
+  // el cocinero veía la pantalla recargarse sin explicación. Ahora, cuando hay
+  // una esperando, lo dice — en una franja de abajo, sin número de versión, sin
+  // parpadeo, sin fondo que capture clics: la cocina sigue operando detrás.
+  //
+  // NO aparece mientras alguien está tocando la tablet (`manosQuietas`), para
+  // que no salga encima de una comanda a medio pasar. Y lleva el botón, que es
+  // el único momento en que se salta la ventana: lo pide una persona que está
+  // mirando la pantalla y sabe lo que tiene delante.
+  const otaEsperando = otaBundleId !== null && !update && !windowOpen && !instalarYa
+  if (otaEsperando && manosQuietas) {
+    return (
+      <div
+        style={{
+          position: 'fixed', left: 16, right: 16, bottom: 16, zIndex: 100000,
+          display: 'flex', justifyContent: 'center', pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 14,
+            maxWidth: 560, width: '100%',
+            background: 'rgba(14,24,32,0.92)', color: '#cfe0ee',
+            border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12,
+            padding: '10px 12px 10px 16px', fontSize: 13.5, lineHeight: 1.4,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ color: '#fff' }}>Hay una versión nueva.</b>{' '}
+            {ciego
+              ? NO_PUEDE_PREGUNTAR
+              : loQueEsperaLaTablet(win, idleOk)}
+          </div>
+          <button
+            onClick={() => setInstalarYa(true)}
+            style={{
+              flexShrink: 0, padding: '9px 16px', borderRadius: 10, border: 'none',
+              background: '#1F9D6B', color: '#fff', fontWeight: 700, fontSize: 13.5,
+              cursor: 'pointer',
+            }}
+          >
+            Instalar ahora
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Sin actualización NATIVA visible y sin bundle esperando: nada que mostrar.
   if (!update) return null
 
   // ── Fuera de ventana ───────────────────────────────────────────────────────
@@ -288,7 +368,7 @@ export default function UpdateGate() {
         }}
       >
         <b style={{ color: '#fff' }}>Actualización preparada{downloaded ? '' : '…'}</b>
-        <div>{reasonText(win, idleOk)}</div>
+        <div>{loQueEsperaLaTablet(win, idleOk)}</div>
       </div>
     )
   }

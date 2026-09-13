@@ -774,6 +774,23 @@ export interface DeviceBundleStatus {
   horasDesfase: number | null
   /** al_dia · atrasado · muy_atrasado · builtin · desconocido */
   estado: 'al_dia' | 'atrasado' | 'muy_atrasado' | 'builtin' | 'desconocido'
+  /**
+   * CUÁNDO EMPEZÓ A CORRER su versión actual (13/09). No es lo mismo que
+   * `lastSeenAt` ni que el arranque de la app: solo se mueve cuando el paquete
+   * cambia de verdad. Es lo que permite decir «puesta al día a las 14:03».
+   */
+  aplicadoEn: string | null
+  /** Las dos llaves, tal y como las ve la propia tablet. */
+  enVentana: boolean | null
+  cocinaEnCalma: boolean | null
+  /**
+   * POR QUÉ no se ha puesto al día todavía. `null` = está al día y no espera a
+   * nada. Es una clave, no una frase: el castellano lo pone la pantalla.
+   */
+  motivoEspera:
+    | 'aparato_apagado' | 'no_da_senales' | 'servicio_o_margen'
+    | 'sin_horario_declarado_hoy' | 'fuera_de_ventana' | 'cocina_ocupada'
+    | 'a_punto_de_instalarse' | null
 }
 
 /**
@@ -798,6 +815,10 @@ export async function listDeviceBundleStatus(locationId: string): Promise<Device
     atrasoBundles: r.atraso_bundles ?? null,
     horasDesfase: r.horas_desfase ?? null,
     estado: (r.estado ?? 'desconocido') as DeviceBundleStatus['estado'],
+    aplicadoEn: (r.aplicado_en as string | null) ?? null,
+    enVentana: r.en_ventana ?? null,
+    cocinaEnCalma: r.cocina_en_calma ?? null,
+    motivoEspera: (r.motivo_espera ?? null) as DeviceBundleStatus['motivoEspera'],
   }))
 }
 

@@ -34,7 +34,14 @@ export interface RemoteVersion {
   mandatory: boolean
 }
 
-/** Señales de BBDD sobre si esta estación puede actualizarse ahora. */
+/**
+ * Señales de BBDD sobre si esta estación puede actualizarse ahora. Son DOS
+ * llaves y las dos tienen que abrir (13/09):
+ *   · `enVentana` — el local está FUERA de su horario de servicio, con 45
+ *     minutos de margen por los dos lados. Sale de `business_hours`.
+ *   · `safe`      — la cocina está en calma. Es la guarda de siempre, que pasa
+ *     a ser la SEGUNDA llave y no la única.
+ */
 export interface UpdateWindow {
   ok: boolean
   safe: boolean
@@ -42,6 +49,19 @@ export interface UpdateWindow {
   pendingJobs: number
   activeOrders: number
   minutesSinceSale: number | null
+  /** Primera llave. */
+  enVentana: boolean
+  /** Por qué no hay ventana: 'servicio_o_margen' | 'sin_horario_declarado_hoy'. */
+  motivoVentana: string | null
+  /** Cuándo se cierra la ventana abierta (ISO local), para poder decirlo. */
+  ventanaHasta: string | null
+  /**
+   * false = la BBDD contestó pero SIN la primera llave, o sea que corre una
+   * versión anterior a la migración del 13/09. No se adivina que sí: sin la
+   * primera llave no hay ventana, y la salida es marcar la publicación como
+   * urgente. Ver la nota de la puerta ciega en UpdateGate.
+   */
+  soportaVentana: boolean
   /** true = la RPC no existe en este proyecto (migración sin aplicar). Ver abajo. */
   unsupported?: boolean
 }
@@ -54,6 +74,9 @@ interface WindowRow {
   pending_jobs?: number
   active_orders?: number
   minutes_since_sale?: number | null
+  en_ventana?: boolean
+  motivo_ventana?: string | null
+  ventana_hasta?: string | null
 }
 
 /**
@@ -155,7 +178,12 @@ export async function fetchUpdateWindow(quietMinutes = 20): Promise<UpdateWindow
       const noExiste = code === 'PGRST202' || code === '42883' ||
         /could not find the function|does not exist/i.test(msg)
       if (noExiste) {
-        return { ok: false, safe: false, reasons: ['rpc_no_disponible'], pendingJobs: 0, activeOrders: 0, minutesSinceSale: null, unsupported: true }
+        return {
+          ok: false, safe: false, reasons: ['rpc_no_disponible'],
+          pendingJobs: 0, activeOrders: 0, minutesSinceSale: null,
+          enVentana: false, motivoVentana: 'rpc_no_disponible', ventanaHasta: null,
+          soportaVentana: false, unsupported: true,
+        }
       }
       return null
     }
@@ -168,9 +196,45 @@ export async function fetchUpdateWindow(quietMinutes = 20): Promise<UpdateWindow
       pendingJobs: Number(w.pending_jobs ?? 0),
       activeOrders: Number(w.active_orders ?? 0),
       minutesSinceSale: w.minutes_since_sale == null ? null : Number(w.minutes_since_sale),
+      enVentana: w.en_ventana === true,
+      motivoVentana: w.motivo_ventana ?? null,
+      ventanaHasta: w.ventana_hasta ?? null,
+      // Se mira si la CLAVE viene, no si viene `true`: así se distingue «la
+      // base dice que no hay ventana» de «la base no sabe de ventanas».
+      soportaVentana: 'en_ventana' in w,
     }
   } catch {
     return null
+  }
+}
+
+/**
+ * EL PAQUETE QUE CORRE AQUÍ, declarado a la base (13/09).
+ *
+ * Se llama al ARRANCAR, no al aplicar: aplicar es `set()` + recarga, que
+ * destruye el contexto JS, así que escribir antes registraría la INTENCIÓN.
+ * Si el bundle nuevo no arrancara, Capgo hace rollback al anterior y la base
+ * estaría diciendo que corre uno que no corre. Esto se ejecuta ya dentro del
+ * bundle nuevo: es la única prueba de que se aplicó de verdad.
+ *
+ * La RPC sella `bundle_applied_at` SOLO cuando el número cambia, así que
+ * llamarla en cada arranque no convierte el sello en «último arranque» — que
+ * es exactamente el agujero de `app_version_at` que esto viene a tapar.
+ *
+ * Best-effort como toda la telemetría: nunca estorba al arranque.
+ */
+export async function reportBundleApplied(): Promise<void> {
+  const token = getDeviceToken()
+  if (!token || !supabase || !Capacitor.isNativePlatform()) return
+  try {
+    const { bundle } = await CapacitorUpdater.current()
+    // El «builtin» es el que trae la APK de fábrica: cuenta como 0, igual que
+    // en checkForBundleUpdate, para que las dos cuentas digan lo mismo.
+    const id = bundle && bundle.id !== 'builtin' ? Number(bundle.version) : 0
+    if (!Number.isFinite(id)) return
+    await rpc('report_device_bundle_applied', { p_device_token: token, p_bundle_id: id })
+  } catch {
+    /* telemetría: nunca molesta */
   }
 }
 

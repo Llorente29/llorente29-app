@@ -13,6 +13,7 @@ import {
   listDeviceBundleStatus,
   type KdsDevice, type KitchenStation, type DeviceBundleStatus,
 } from '../services/kdsService'
+import { loQueLeeLaOficina } from '../lib/palabrasDeLaActualizacion'
 import QRCode from 'qrcode'
 import { supabase } from '../../../lib/supabase'
 
@@ -34,28 +35,11 @@ function estacionUrl(token: string): string {
  * con normalidad — por eso es más peligrosa que una apagada: nadie sospecha.
  * Aquí se ve el bundle de cada una, siempre, sin filtrar.
  */
+// El castellano y el rojo viven en `lib/palabrasDeLaActualizacion`, probados
+// contra los estados reales. Aquí solo se pinta.
 function bundleTexto(b: DeviceBundleStatus | undefined): { texto: string; rojo: boolean } | null {
   if (!b) return null
-  switch (b.estado) {
-    case 'al_dia':
-      return { texto: `bundle ${b.bundleActual} · al día`, rojo: false }
-    case 'builtin':
-      return { texto: 'sin actualizar nunca · código empotrado en el APK', rojo: true }
-    case 'desconocido':
-      return { texto: 'versión ilegible · SIN VIGILAR', rojo: true }
-    case 'muy_atrasado':
-      return {
-        texto: `bundle ${b.bundleActual} · el último es el ${b.ultimoBundle}`
-             + ` · lleva ${b.horasDesfase} h sin coger lo nuevo`,
-        rojo: true,
-      }
-    default:
-      return {
-        texto: `bundle ${b.bundleActual} · el último es el ${b.ultimoBundle}`
-             + (b.atrasoBundles ? ` (${b.atrasoBundles} por detrás)` : ''),
-        rojo: true,
-      }
-  }
+  return loQueLeeLaOficina(b)
 }
 
 function formatLastSeen(iso: string | null): string {
