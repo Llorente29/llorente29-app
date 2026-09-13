@@ -438,3 +438,100 @@ export function laConfirmacionDePlatos(
     + (detalle.length ? ` (${detalle.join(', ')})` : '')
     + '. Pendiente de publicar: sale en Glovo y Uber con la próxima publicación de la carta.'
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DECIDIR UNA VEZ PARA TODAS LAS IGUALES (Julio, 13/09 10:40)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// LA PALANCA, medida el 13/09: de 107 respuestas activas sin decidir hay solo
+// 62 nombres distintos. 69 de las 107 comparten nombre con otra, y 24 nombres
+// se llevan por delante esas 69 — el 65 %. «Salsa Harissa (Picante)» sale 7
+// veces, «Salsa Yogur» 6.
+//
+// Nadie va a entrar 107 veces a decir que la salsa de yogur lleva salsa de
+// yogur. La deuda no son 107 decisiones: son 62.
+//
+// SE OFRECE, NO SE HACE. La lista va delante con la pregunta y la marca de
+// cada una, y cada fila se puede desmarcar. Aplicar a ciegas «todas las que se
+// llamen así» es como se escribe en siete sitios una decisión que valía para
+// cuatro — y varias de estas cruzan DOS marcas propias.
+
+/** Una respuesta que se llama igual y sigue sin decidir. */
+export interface UnaIgual {
+  id: string
+  nombre: string
+  pregunta: string
+  marca: string
+}
+
+/** Una que se llama igual pero NO se toca, con su motivo. */
+export interface UnaQueQuedaFuera {
+  id: string
+  pregunta: string
+  marca: string
+  motivo: 'cedida' | 'ya_decidida' | 'apagada'
+}
+
+/**
+ * La oferta. `null` cuando no hay ninguna igual: un aviso que sale siempre
+ * deja de leerse.
+ */
+export function laOfertaDeLasIguales(iguales: UnaIgual[]): string | null {
+  if (iguales.length === 0) return null
+  const porMarca = new Map<string, number>()
+  for (const i of iguales) porMarca.set(i.marca, (porMarca.get(i.marca) ?? 0) + 1)
+  const reparto = [...porMarca.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([m, n]) => `${m} ×${n}`)
+    .join(', ')
+  return iguales.length === 1
+    ? `Esto mismo vale para otra que se llama igual, en ${reparto}. ¿La resuelvo?`
+    : `Esto mismo vale para estas ${iguales.length}: ${reparto}. ¿Las resuelvo?`
+}
+
+/**
+ * Las que se quedan fuera, dichas con su motivo. NO se esconden (regla 7):
+ * quien mira tiene que poder ver que hay más que no se tocan, y por qué. Sin
+ * esta línea, la pantalla estaría diciendo «son 5» cuando son 12.
+ */
+export function lasQueQuedanFuera(fuera: UnaQueQuedaFuera[]): string | null {
+  if (fuera.length === 0) return null
+  const cedidas = fuera.filter((f) => f.motivo === 'cedida').length
+  const decididas = fuera.filter((f) => f.motivo === 'ya_decidida').length
+  const apagadas = fuera.filter((f) => f.motivo === 'apagada').length
+  const partes: string[] = []
+  if (cedidas > 0) {
+    partes.push(cedidas === 1
+      ? '1 está en una marca que manda Last y no se toca'
+      : `${cedidas} están en marcas que manda Last y no se tocan`)
+  }
+  if (decididas > 0) {
+    partes.push(decididas === 1 ? '1 ya tiene decidido lo suyo' : `${decididas} ya tienen decidido lo suyo`)
+  }
+  if (apagadas > 0) {
+    partes.push(apagadas === 1 ? '1 está retirada' : `${apagadas} están retiradas`)
+  }
+  const total = fuera.length === 1 ? 'Hay otra que se llama igual' : `Hay otras ${fuera.length} que se llaman igual`
+  return `${total}: ${partes.join(', ')}.`
+}
+
+/** La línea de cada fila de la lista: dónde vive esa igual. */
+export function dondeViveLaIgual(i: UnaIgual): string {
+  return `${i.marca} · ${i.pregunta}`
+}
+
+/** El botón, que dice a cuántas va (regla 8). */
+export function textoDelBotonDeLasIguales(cuantasMarcadas: number): string {
+  if (cuantasMarcadas === 0) return 'Solo esta'
+  return cuantasMarcadas === 1
+    ? 'Resolver también la otra'
+    : `Resolver también las otras ${cuantasMarcadas}`
+}
+
+/** La confirmación, con contenido y con las marcas nombradas. */
+export function laConfirmacionDeLasIguales(nombre: string, donde: string[]): string {
+  if (donde.length === 0) return `«${nombre.trim()}» resuelta.`
+  const marcas = [...new Set(donde.map((d) => d.split(' · ')[0]))]
+  return `«${nombre.trim()}» resuelta en ${donde.length} ${donde.length === 1 ? 'sitio' : 'sitios'}`
+    + ` (${marcas.join(', ')}). Cada una queda con su propio registro de quién y cuándo.`
+}

@@ -15,6 +15,9 @@ import {
   porQueNoSePuedeGuardar, cuantasSinDecidir, laDeudaDeEstaPregunta,
   textoDelBotonGuardar, laConfirmacionAlEditar,
   elContadorDePlatos, marcarLaCategoria, elCambioEnPlatos, laConfirmacionDePlatos,
+  laOfertaDeLasIguales, lasQueQuedanFuera, dondeViveLaIgual,
+  textoDelBotonDeLasIguales, laConfirmacionDeLasIguales,
+  type UnaIgual, type UnaQueQuedaFuera,
   type BorradorDePregunta, type OpcionNueva,
 } from '@/modules/kitchen/lib/crearPreguntaDeCocina'
 
@@ -330,5 +333,74 @@ describe('tablero 3 · el contador y lo que cambia', () => {
     expect(t).toContain('3 nuevos')
     expect(t).toContain('1 quitado')
     expect(t).toContain('Pendiente de publicar')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DECIDIR UNA VEZ PARA TODAS LAS IGUALES
+// ═══════════════════════════════════════════════════════════════════════════
+// LOS DATOS SON REALES (regla 31), medidos el 13/09: «Salsa Yogur» sin decidir
+// sale 6 veces, y sus 5 iguales resolubles viven en DOS marcas propias —
+// Meraki Pita ×2 y The Urban Kebab ×3—. Otras 7 quedan fuera por estar ya
+// decididas. Ese cruce de marcas es justo por lo que la lista va delante.
+
+describe('las iguales: se ofrecen, no se aplican a ciegas', () => {
+  const IGUALES: UnaIgual[] = [
+    { id: 'a', nombre: 'Salsa Yogur', marca: 'Meraki Pita', pregunta: 'Escoge una salsa para tu pita' },
+    { id: 'b', nombre: 'Salsa Yogur', marca: 'Meraki Pita', pregunta: 'Escoge una salsa para tu pita' },
+    { id: 'c', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: '1. Escoge la salsa para tu primer kebab' },
+    { id: 'd', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: '2. Escoge la salsa para tu segundo kebab' },
+    { id: 'e', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: 'Escoge una salsa para tu bowl/plato' },
+  ]
+
+  it('la oferta lleva el número y el reparto por marca, y es una pregunta', () => {
+    const t = laOfertaDeLasIguales(IGUALES)!
+    expect(t).toContain('estas 5')
+    expect(t).toContain('The Urban Kebab ×3')
+    expect(t).toContain('Meraki Pita ×2')
+    expect(t.endsWith('¿Las resuelvo?')).toBe(true)
+  })
+
+  it('con una sola, habla en singular', () => {
+    expect(laOfertaDeLasIguales([IGUALES[0]])).toContain('¿La resuelvo?')
+  })
+
+  it('y sin ninguna NO se pinta nada: un aviso que sale siempre deja de leerse', () => {
+    expect(laOfertaDeLasIguales([])).toBeNull()
+  })
+
+  it('🔴 las que quedan fuera se DICEN, con su motivo (regla 7)', () => {
+    // Sin esta línea la pantalla diría «son 5» cuando son 12.
+    const fuera: UnaQueQuedaFuera[] = [
+      ...Array.from({ length: 7 }, (_, i) => ({
+        id: `f${i}`, marca: 'Meraki Pita', pregunta: 'x', motivo: 'ya_decidida' as const })),
+      { id: 'g', marca: 'Lobbers', pregunta: 'y', motivo: 'cedida' as const },
+    ]
+    const t = lasQueQuedanFuera(fuera)!
+    expect(t).toContain('otras 8')
+    expect(t).toContain('7 ya tienen decidido lo suyo')
+    expect(t).toContain('1 está en una marca que manda Last')
+  })
+
+  it('y si no queda ninguna fuera, tampoco se inventa la línea', () => {
+    expect(lasQueQuedanFuera([])).toBeNull()
+  })
+
+  it('cada fila dice DÓNDE vive: la marca y la pregunta', () => {
+    expect(dondeViveLaIgual(IGUALES[2])).toBe('The Urban Kebab · 1. Escoge la salsa para tu primer kebab')
+  })
+
+  it('el botón dice a cuántas va, y «solo esta» si se desmarcan todas', () => {
+    expect(textoDelBotonDeLasIguales(0)).toBe('Solo esta')
+    expect(textoDelBotonDeLasIguales(1)).toBe('Resolver también la otra')
+    expect(textoDelBotonDeLasIguales(5)).toBe('Resolver también las otras 5')
+  })
+
+  it('la confirmación nombra las marcas y recuerda que el rastro es por fila', () => {
+    const t = laConfirmacionDeLasIguales('Salsa Yogur',
+      ['Meraki Pita · Escoge una salsa para tu pita', 'The Urban Kebab · Escoge una salsa para tu bowl/plato'])
+    expect(t).toContain('2 sitios')
+    expect(t).toContain('Meraki Pita, The Urban Kebab')
+    expect(t).toContain('su propio registro de quién y cuándo')
   })
 })

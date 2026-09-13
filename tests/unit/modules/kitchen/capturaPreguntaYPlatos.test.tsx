@@ -24,7 +24,10 @@ import {
   precioEnTexto, lineaDelExtra, LOS_QUE_LLEVA, laDeudaDeEstaPregunta,
   elContadorDePlatos, marcarLaCategoria, elCambioEnPlatos, ayudaDeLaCategoria,
   textoDelBotonGuardar,
+  laOfertaDeLasIguales, lasQueQuedanFuera, dondeViveLaIgual,
+  textoDelBotonDeLasIguales,
   type BorradorDePregunta, type OpcionNueva, type TipoNuevaPregunta,
+  type UnaIgual, type UnaQueQuedaFuera,
 } from '@/modules/kitchen/lib/crearPreguntaDeCocina'
 
 const LOS_TIPOS: TipoNuevaPregunta[] = ['elige', 'anade', 'quita', 'sugiere']
@@ -42,6 +45,34 @@ const RESPUESTAS: OpcionNueva[] = [
   { extraId: 'o3', nombre: 'Salsa Harissa (Picante)', precio: 0, queLleva: null,
     yaEstabaDecidido: false, enCuantasPreguntas: 13, queLlevaEnTexto: null },
 ]
+
+/** LAS IGUALES DE «Salsa Tzatziki (Recomendada)», medidas el 13/09 en Foodint.
+ *  Ese nombre vive en 11 sitios. Quitando el que se está editando quedan 10:
+ *  CUATRO sin decidir en marcas propias —y una de ellas en OTRA marca, The
+ *  Urban Kebab, que es justo el cruce del que avisó Julio— y SEIS que ya tienen
+ *  lo suyo decidido y por eso no se pisan. Ni un nombre inventado. */
+const IGUALES: UnaIgual[] = [
+  { id: 'i1', nombre: 'Salsa Tzatziki (Recomendada)', marca: 'Meraki Pita',
+    pregunta: 'Escoge una salsa para tu pita' },
+  { id: 'i2', nombre: 'Salsa Tzatziki (Recomendada)', marca: 'Meraki Pita',
+    pregunta: 'Escoge una salsa para tu pita' },
+  { id: 'i3', nombre: 'Salsa Tzatziki (Recomendada)', marca: 'Meraki Pita',
+    pregunta: 'Te apetece un extra?' },
+  { id: 'i4', nombre: 'Salsa Tzatziki (Recomendada)', marca: 'The Urban Kebab',
+    pregunta: 'Escoge una salsa para tu bowl/plato' },
+]
+const FUERA: UnaQueQuedaFuera[] = [
+  { id: 'f1', marca: 'Meraki Pita',     pregunta: '¿Le añadimos salsa?',     motivo: 'ya_decidida' },
+  { id: 'f2', marca: 'Meraki Pita',     pregunta: 'Algun extra en tu pita?', motivo: 'ya_decidida' },
+  { id: 'f3', marca: 'The Urban Kebab', pregunta: 'Algun extra en tu pita?', motivo: 'ya_decidida' },
+  { id: 'f4', marca: 'The Urban Kebab', pregunta: 'Algun extra en tu pita?', motivo: 'ya_decidida' },
+  { id: 'f5', marca: 'The Urban Kebab', pregunta: 'Algun extra en tu pita?', motivo: 'ya_decidida' },
+  { id: 'f6', marca: 'The Urban Kebab', pregunta: 'Algun extra en tu pita?', motivo: 'ya_decidida' },
+]
+/** La oferta arranca con TODAS marcadas y cada fila se desmarca. En la foto va
+ *  una desmarcada a propósito: una lista donde no se puede quitar nada no es
+ *  una lista, es un aviso disfrazado. */
+const MARCADAS_IGUALES = ['i1', 'i2', 'i4']
 
 const BORRADOR: BorradorDePregunta = {
   marcaId: 'cc89c6eb', marcaNombre: 'Meraki Pita', marcaCedida: false,
@@ -167,6 +198,34 @@ function Tablero5() {
                           cantidad
                           <span className="w-20 h-9 px-2 flex items-center justify-end text-[13px] text-cocina-tinta bg-cocina-superficie border border-cocina-linea rounded-cocina">0,2</span>
                         </span>
+                      </div>
+                    )}
+                    {/* LA OFERTA, en la fila que acaba de decidirse y sin abrir
+                        nada encima: la decisión y su alcance se leen del tirón. */}
+                    {r.extraId === 'o2' && (
+                      <div className="rounded-cocina border border-cocina-acento/40 bg-cocina-acento-bg px-3 py-2.5 flex flex-col gap-2">
+                        <div className="text-[12.5px] font-semibold text-cocina-acento-ink">
+                          {laOfertaDeLasIguales(IGUALES)}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          {IGUALES.map((i) => {
+                            const marcada = MARCADAS_IGUALES.includes(i.id)
+                            return (
+                              <span key={i.id} className="flex items-center gap-2 text-left text-[12px] text-cocina-tinta">
+                                <span className={`shrink-0 w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center text-[9px] font-bold ${
+                                  marcada ? 'bg-cocina-acento border-cocina-acento text-white'
+                                          : 'border-cocina-linea text-transparent bg-cocina-superficie'}`}>✓</span>
+                                <span className="truncate">{dondeViveLaIgual(i)}</span>
+                              </span>
+                            )
+                          })}
+                        </div>
+                        <div className="text-[11px] text-cocina-tinta-3">{lasQueQuedanFuera(FUERA)}</div>
+                        <div>
+                          <BotonCocina peso="borde">
+                            {textoDelBotonDeLasIguales(MARCADAS_IGUALES.length)}
+                          </BotonCocina>
+                        </div>
                       </div>
                     )}
                     <div className="text-[11.5px] text-cocina-tinta-3">
@@ -374,7 +433,7 @@ it('genera las dos capturas a 1280', () => {
 <body><div class="marco"><nav class="rail">
 <div class="logo"><i></i>Folvy Kitchen</div>
 <a href="#">Resumen</a><a href="#">Cartas</a><a href="#">Casado</a><a href="#">Extras</a>
-<a class="${activo}" href="#">Modificadores</a>
+<a class="${activo}" href="#">Preguntas de la carta</a>
 <a href="#">Disponibilidad</a><a href="#">Informes de disponibilidad</a><div class="sep"></div>
 <a href="#">Ingredientes</a><a href="#">Proveedores</a><a href="#">Platos</a><a href="#">Precios</a>
 <div class="sep"></div><a href="#">Rentabilidad</a><a href="#">Ingeniería de menús</a>

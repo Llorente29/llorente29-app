@@ -38,7 +38,7 @@ import {
   PastillaCocina, AvisoCocina, InterruptorCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
 import {
-  getParaEditar, guardarPregunta, buscarFicha,
+  getParaEditar, guardarPregunta, buscarFicha, getLasIguales, aplicarALasIguales,
   type MarcaElegible, type PreguntaGuardada, type FichaDelEscandallo,
   type RespuestaAGuardar,
 } from '@/modules/kitchen/services/editorDePreguntasService'
@@ -47,7 +47,10 @@ import {
   laReglaDeLaPantalla, loQueVeraElCliente, porQueNoSePuedeCrear,
   porQueNoSePuedeGuardar, textoDelBotonGuardar, laDeudaDeEstaPregunta,
   precioEnTexto, lineaDelExtra, LOS_QUE_LLEVA,
+  laOfertaDeLasIguales, lasQueQuedanFuera, dondeViveLaIgual,
+  textoDelBotonDeLasIguales, laConfirmacionDeLasIguales,
   type BorradorDePregunta, type OpcionNueva, type QueLleva, type TipoNuevaPregunta,
+  type UnaIgual, type UnaQueQuedaFuera,
 } from '@/modules/kitchen/lib/crearPreguntaDeCocina'
 
 const LOS_TIPOS: TipoNuevaPregunta[] = ['elige', 'anade', 'quita', 'sugiere']
@@ -314,6 +317,7 @@ export default function KitchenPreguntaPage() {
                       accountId={accountId}
                       bloqueada={marca?.cedida ?? false}
                       editando={editando}
+                      onResuelto={(t) => setConfirmacion(t)}
                       onCambia={(p) => cambia(i, p)}
                       onQuita={() => setFilas((xs) => xs.filter((_, j) => j !== i))}
                     />
@@ -390,7 +394,7 @@ export default function KitchenPreguntaPage() {
 // Las tres cosas en la fila, sin abrir nada. Un modal para decir «40 g de
 // yogur» es esconder el contexto justo cuando hace falta.
 function FilaDeRespuesta({
-  fila, accountId, bloqueada, editando, onCambia, onQuita,
+  fila, accountId, bloqueada, editando, onCambia, onQuita, onResuelto,
 }: {
   fila: Fila
   accountId: string | null
@@ -398,11 +402,73 @@ function FilaDeRespuesta({
   editando: boolean
   onCambia: (p: Partial<Fila>) => void
   onQuita: () => void
+  onResuelto: (texto: string) => void
 }) {
   const [busca, setBusca] = useState('')
   const [fichas, setFichas] = useState<FichaDelEscandallo[]>([])
   const [abierto, setAbierto] = useState(false)
   const tiempo = useRef<number | null>(null)
+
+  // ── LAS IGUALES ─────────────────────────────────────────────────────────
+  // Se preguntan cuando esta respuesta ya tiene efecto y ficha, que es cuando
+  // hay algo que ofrecer. Antes de eso no se pregunta nada: sería pedirle a la
+  // base una lista para no enseñarla.
+  const [iguales, setIguales] = useState<UnaIgual[]>([])
+  const [fuera, setFuera] = useState<UnaQueQuedaFuera[]>([])
+  const [marcadas, setMarcadas] = useState<string[]>([])
+  const [aplicando, setAplicando] = useState(false)
+  const [yaAplicado, setYaAplicado] = useState(false)
+
+  const listo = fila.filaId !== null && fila.queLleva !== null
+    && (fila.queLleva === 'no_lleva_nada' || fila.queLleva === 'es_un_plato' || fila.fichaId !== null)
+
+  useEffect(() => {
+    let vivo = true
+    const id = fila.filaId
+    // El `setState` va SIEMPRE dentro de la parte asíncrona, nunca en el cuerpo
+    // del efecto: `react-hooks/set-state-in-effect` lo prohíbe y tiene razón —
+    // un setState síncrono aquí encadena repintados. (Ya me mordió el 12/09.)
+    void (async () => {
+      if (!accountId || !id || !listo || yaAplicado) {
+        if (vivo) { setIguales([]); setFuera([]) }
+        return
+      }
+      try {
+        const d = await getLasIguales(accountId, id)
+        if (!vivo) return
+        setIguales(d.iguales); setFuera(d.fuera)
+        setMarcadas(d.iguales.map((i) => i.id))   // todas marcadas, y se desmarcan
+      } catch {
+        if (vivo) { setIguales([]); setFuera([]) }
+      }
+    })()
+    return () => { vivo = false }
+  }, [accountId, fila.filaId, fila.queLleva, fila.fichaId, listo, yaAplicado])
+
+  async function resolverLasIguales() {
+    if (!accountId || !fila.filaId || fila.queLleva === null) return
+    setAplicando(true)
+    try {
+      const r = await aplicarALasIguales({
+        accountId,
+        opciones: [fila.filaId, ...marcadas],
+        efecto: {
+          tipo: queLlevaEnLaBase(fila.queLleva),
+          ficha: fila.fichaId,
+          cantidad: fila.cantidad.trim() === '' ? null : Number(fila.cantidad.replace(',', '.')),
+          unidad: fila.unidad,
+        },
+        actor: 'Oficina',
+      })
+      onResuelto(laConfirmacionDeLasIguales(fila.nombre, r.donde))
+      onCambia({ yaEstabaDecidido: true })
+      setYaAplicado(true)
+    } catch (e) {
+      onResuelto(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAplicando(false)
+    }
+  }
 
   const pideFichas = useCallback((texto: string) => {
     if (!accountId) return
@@ -494,6 +560,43 @@ function FilaDeRespuesta({
               className="w-20 h-9 px-2 text-right text-[13px] text-cocina-tinta bg-cocina-superficie border border-cocina-linea rounded-cocina outline-none focus:border-cocina-acento disabled:opacity-50"
             />
           </label>
+        </div>
+      )}
+
+      {/* ── LA OFERTA, dentro de la fila y sin abrir nada encima ───────── */}
+      {!bloqueada && iguales.length > 0 && (
+        <div className="rounded-cocina border border-cocina-acento/40 bg-cocina-acento-bg px-3 py-2.5 flex flex-col gap-2">
+          <div className="text-[12.5px] font-semibold text-cocina-acento-ink">
+            {laOfertaDeLasIguales(iguales)}
+          </div>
+          <div className="flex flex-col gap-1">
+            {iguales.map((i) => {
+              const marcada = marcadas.includes(i.id)
+              return (
+                <button
+                  key={i.id} type="button"
+                  onClick={() => setMarcadas((xs) =>
+                    xs.includes(i.id) ? xs.filter((x) => x !== i.id) : [...xs, i.id])}
+                  className="flex items-center gap-2 text-left text-[12px] text-cocina-tinta"
+                >
+                  <span className={`shrink-0 w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center text-[9px] font-bold ${
+                    marcada ? 'bg-cocina-acento border-cocina-acento text-white'
+                            : 'border-cocina-linea text-transparent bg-cocina-superficie'}`}>✓</span>
+                  <span className="truncate">{dondeViveLaIgual(i)}</span>
+                </button>
+              )
+            })}
+          </div>
+          {/* Las que no se tocan, DICHAS (regla 7): sin esto la pantalla diría
+              «son 5» cuando son 12. */}
+          {lasQueQuedanFuera(fuera) && (
+            <div className="text-[11px] text-cocina-tinta-3">{lasQueQuedanFuera(fuera)}</div>
+          )}
+          <div>
+            <BotonCocina peso="borde" disabled={aplicando} onClick={() => void resolverLasIguales()}>
+              {aplicando ? 'Resolviendo…' : textoDelBotonDeLasIguales(marcadas.length)}
+            </BotonCocina>
+          </div>
         </div>
       )}
 

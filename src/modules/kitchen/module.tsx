@@ -90,7 +90,7 @@ export const kitchenModule: ModuleDefinition = {
       // de la fase C (§0.3). No es una copia por pereza: esta pantalla enseña
       // qué opciones cobran y cuáles no cuestan nada en Folvy, que es
       // exactamente lo que `show_costes` protege en Extras.
-      { id: 'kitchen_modifiers',     label: 'Modificadores',       icon: MessageCircleQuestion, path: 'modificadores', requiredRole: 'manager', requiredPermission: 'show_costes' },
+      { id: 'kitchen_modifiers',     label: 'Preguntas de la carta', icon: MessageCircleQuestion, path: 'modificadores', requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
       { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },

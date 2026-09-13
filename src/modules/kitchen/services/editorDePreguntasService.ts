@@ -10,7 +10,9 @@
 // «una reglita» en el servicio es cómo acaban dos pantallas contando distinto.
 
 import { supabase } from '@/lib/supabase'
-import type { QueLleva, TipoNuevaPregunta } from '@/modules/kitchen/lib/crearPreguntaDeCocina'
+import type {
+  QueLleva, TipoNuevaPregunta, UnaIgual, UnaQueQuedaFuera,
+} from '@/modules/kitchen/lib/crearPreguntaDeCocina'
 
 function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new Error('Supabase no está configurado.')
@@ -273,5 +275,51 @@ export async function ponerEnPlatos(a: {
     puestos: Number(d.puestos ?? 0),
     quitados: Number(d.quitados ?? 0),
     total: Number(d.total ?? 0),
+  }
+}
+
+// ── Decidir una vez para todas las iguales ─────────────────────────────────
+
+export async function getLasIguales(
+  accountId: string, optionId: string,
+): Promise<{ iguales: UnaIgual[]; fuera: UnaQueQuedaFuera[] }> {
+  const d = await rpc<{ iguales: unknown[]; fuera: unknown[] }>(
+    'kitchen_las_iguales', { p_account: accountId, p_option_id: optionId })
+  return {
+    iguales: (d.iguales as Array<Record<string, unknown>>).map((x) => ({
+      id: x.id as string,
+      nombre: (x.nombre as string) ?? '',
+      pregunta: (x.pregunta as string) ?? '',
+      marca: (x.marca as string) ?? 'Sin marca',
+    })),
+    fuera: (d.fuera as Array<Record<string, unknown>>).map((x) => ({
+      id: x.id as string,
+      pregunta: (x.pregunta as string) ?? '',
+      marca: (x.marca as string) ?? 'Sin marca',
+      motivo: (x.motivo as UnaQueQuedaFuera['motivo']) ?? 'apagada',
+    })),
+  }
+}
+
+export async function aplicarALasIguales(a: {
+  accountId: string
+  opciones: string[]
+  efecto: { tipo: string; ficha: string | null; cantidad: number | null; unidad: string | null }
+  actor: string
+}): Promise<{ resueltas: number; donde: string[] }> {
+  const d = await rpc<Record<string, unknown>>('kitchen_aplicar_a_las_iguales', {
+    p_account: a.accountId,
+    p_opciones: a.opciones,
+    p_efecto: {
+      tipo: a.efecto.tipo,
+      ficha: a.efecto.ficha,
+      cantidad: a.efecto.cantidad == null ? null : String(a.efecto.cantidad),
+      unidad: a.efecto.unidad,
+    },
+    p_actor: a.actor,
+  })
+  return {
+    resueltas: Number(d.resueltas ?? 0),
+    donde: ((d.donde as string[]) ?? []),
   }
 }
