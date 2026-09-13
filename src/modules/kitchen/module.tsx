@@ -11,7 +11,7 @@
 // normal de editar el plato, sin separación posible hoy — "sin rediseñar
 // la pantalla, simplemente el rol no entra ahí". Quien no tenga show_costes
 // tampoco puede editar platos/menús desde aquí.
-import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2, Table2, PlusCircle, MessageCircleQuestion } from 'lucide-react'
+import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2, Table2, PlusCircle, MessageCircleQuestion, ListChecks } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
@@ -19,6 +19,8 @@ import KitchenMenuPage from '@/modules/kitchen/pages/KitchenMenuPage'
 import KitchenCasadoPage from '@/modules/kitchen/pages/KitchenCasadoPage'
 import KitchenExtrasPage from '@/modules/kitchen/pages/KitchenExtrasPage'
 import KitchenModificadoresPage from '@/modules/kitchen/pages/KitchenModificadoresPage'
+import KitchenLimpiarPage from '@/modules/kitchen/pages/KitchenLimpiarPage'
+import KitchenRespuestaPage from '@/modules/kitchen/pages/KitchenRespuestaPage'
 import KitchenPreguntaPage from '@/modules/kitchen/pages/KitchenPreguntaPage'
 import KitchenPreguntaPlatosPage from '@/modules/kitchen/pages/KitchenPreguntaPlatosPage'
 import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
@@ -61,6 +63,11 @@ export const kitchenModule: ModuleDefinition = {
     // Tableros 5 y 3: crear/editar una pregunta y ponerla en platos. Van
     // juntas a proposito — el 5 sin el 3 deja preguntas que no ve ningun
     // cliente, y media pantalla no es media solucion.
+    // La mitad que LIMPIA: los dos montones y la ficha de una respuesta. Se
+    // entra por la respuesta, no navegando por las cartas — que era justo lo
+    // que pedia Julio: «no tener que navegar por las cartas».
+    { path: 'limpiar',                    element: <KitchenLimpiarPage /> },
+    { path: 'respuestas/:respuestaId',    element: <KitchenRespuestaPage /> },
     { path: 'preguntas/nueva',            element: <KitchenPreguntaPage /> },
     { path: 'preguntas/:preguntaId',      element: <KitchenPreguntaPage /> },
     { path: 'preguntas/:preguntaId/platos', element: <KitchenPreguntaPlatosPage /> },
@@ -91,6 +98,8 @@ export const kitchenModule: ModuleDefinition = {
       // qué opciones cobran y cuáles no cuestan nada en Folvy, que es
       // exactamente lo que `show_costes` protege en Extras.
       { id: 'kitchen_modifiers',     label: 'Preguntas de la carta', icon: MessageCircleQuestion, path: 'modificadores', requiredRole: 'manager', requiredPermission: 'show_costes' },
+      // Entra por AQUI quien viene a trabajar, no a mirar: los dos montones.
+      { id: 'kitchen_limpiar',       label: 'Qué hay que trabajar', icon: ListChecks,           path: 'limpiar',       requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
       { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },

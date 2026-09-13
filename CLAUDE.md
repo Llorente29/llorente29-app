@@ -58,6 +58,18 @@ Cada una costó un incidente real. La fecha es el día que se pagó.
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Aquí se cita
 > para que exista en el repositorio, que es donde se lee.
 
+> **Publicar el FRONT ya no espera a ninguna hora** (13/09). Las tablets se
+> defienden solas: descargan cuando toca y aplican solo dentro de la ventana de
+> su local y con la cocina en calma. Medido el 13/09: los paquetes 291 y 292
+> cayeron con la cocina en servicio —50 ventas desde las 15:00 y pedidos
+> abiertos— y las tres tablets siguieron en el 290 que cogieron a las 12:06,
+> vivas y latiendo al minuto. Y el par que lo convierte en prueba: esas mismas
+> tres cogieron el 287, 288, 289 y 290 solas por la mañana. Recoge cuando puede
+> y espera cuando no.
+>
+> **La banda queda solo en la BASE, y solo para lo que toca el camino del
+> pedido.**
+
 **Entre las 12:15 y las 23:45 (reloj de la base, `now() at time zone 'Europe/Madrid'`)
 no se aplica ninguna migración**, salvo que se cumplan LAS TRES:
 
