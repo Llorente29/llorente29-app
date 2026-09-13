@@ -1,10 +1,29 @@
 // Las capturas a 1280 de la mitad que limpia: la entrada de dos montones y la
 // ficha de una respuesta.
 //
-// LOS DATOS SON REALES (regla 31). Salen de `kitchen_para_trabajar` sobre
-// Foodint el 13/09 a las 17:5x, con la deuda ya bajando: 66 sin decidir en 45
-// nombres, y 123 sin venta en 30 días que se reparten en 41 candidatas + 52
-// decididas hace poco + 30 cedidas. Ni un nombre inventado.
+// LOS DATOS SON REALES (regla 31), Y DE UNA SOLA MEDIDA. Salen de una única
+// llamada a `kitchen_para_trabajar` sobre Foodint el 13/09 a las 19:0x.
+//
+// ── POR QUÉ SE INSISTE EN «UNA SOLA MEDIDA» (13/09 18:50) ─────────────────
+// La versión anterior de esta foto decía «56 se pueden tocar» sobre 66 sin
+// decidir. Julio lo midió: eran 49 propias + 17 cedidas. El 56 no salía de
+// ninguna consulta — LO ESCRIBÍ YO A MANO en el fixture, en el fichero cuya
+// cabecera dice «los datos son reales». Es la regla 31 incumplida en la propia
+// prueba que la predica: medí `respuestas` y `nombres`, y el tercero lo puse a
+// ojo. La RPC estaba bien; la foto no.
+//
+// Y la ficha se contradecía en el mismo pintado: un aviso que decía «Resuelta
+// en 7 sitios» junto a tres filas marcadas «sin decidir». Las dos mitades
+// inventadas: ese aviso NO lo puede producir esa pantalla —su única
+// confirmación viene de retirar— y en producción las 11 filas vivas de «Salsa
+// Harissa (Picante)» están decididas.
+//
+// De ahí las tres guardas de abajo, que son las que faltaban:
+//   · la cabecera CUADRA consigo misma (39 + 17 = 56; 32 + 54 + 30 = 116);
+//   · la ficha no se contradice: si ninguna fila está sin decidir, no puede
+//     haber ni una pastilla que lo diga;
+//   · ningún aviso escrito a mano: lo que se pinta sale de una función de la
+//     lib, que es lo único que la pantalla sabe decir.
 //
 // Y LA FOTO USA LAS MISMAS PIEZAS QUE LA PANTALLA, comprobado abajo leyendo los
 // dos ficheros: una foto con una cabecera distinta de la de la pantalla hace
@@ -25,31 +44,30 @@ import {
   elDesgloseDeLoQueSobra, rotuloDeLasDecididasHacePoco, ROTULO_DE_LAS_CEDIDAS,
   loQueLlevaSinVenderse, loDeLosPedidosAnulados, cuandoSeDecidio,
   laLineaDeDondeEsta, laLineaDeCuantoSePide, loQuePasaSiRetiras,
-  textoDelBotonDeRetirar,
+  textoDelBotonDeRetirar, elAvisoDeQueSeVende, laConfirmacionDeRetirar,
+  cuantasDeAhiSiguenSinDecidir,
   type UnNombreSinDecidir, type UnaQueNadiePide, type DondeVive,
 } from '@/modules/kitchen/lib/loQueSobraYLoQueFalta'
 
 // ── Los datos, medidos el 13/09 a las 17:5x ────────────────────────────────
 
 const DIAS = 30
-const FALTA = { respuestas: 66, alcanzables: 56, nombres: 45 }
+/** Una sola llamada, 13/09 19:0x. Los tres de cada bloque SUMAN — ver guardas. */
+const FALTA = { respuestas: 56, alcanzables: 39, nombres: 43 }
+const FALTA_CEDIDAS = 17          // 39 + 17 = 56
 const SOBRA = {
-  respuestas: 123, candidatas: 41, alcanzables: 93,
-  decididasHacePoco: 52, cedidas: 30, preguntas: 36, conPedidoAnulado: 7,
+  respuestas: 116, candidatas: 32, alcanzables: 86,
+  decididasHacePoco: 54, cedidas: 30, preguntas: 36, conPedidoAnulado: 7,
   filas: [] as UnaQueNadiePide[], dias: DIAS,
 }
 
 const FALTAN: UnNombreSinDecidir[] = [
-  { nombre: 'Falafel.', cuantas: 3, alcanzables: 3,
-    marcas: ['The Urban Kebab'], entrarPor: '996c847c' },
-  { nombre: 'Pollo', cuantas: 3, alcanzables: 3,
-    marcas: ['The Urban Kebab'], entrarPor: '4fd816d8' },
-  { nombre: 'Doble Scandal Burger', cuantas: 2, alcanzables: 2,
-    marcas: ['Scandal Burgers'], entrarPor: 'a28f1eb8' },
-  { nombre: 'Doble Scandal Burger Bacon de POLLO', cuantas: 2, alcanzables: 2,
-    marcas: ['Scandal Burgers'], entrarPor: '49dfa253' },
-  { nombre: 'Doble Scandal Burger de POLLO', cuantas: 2, alcanzables: 2,
-    marcas: ['Scandal Burgers'], entrarPor: '556cc38c' },
+  { nombre: 'Doble Scandal Cheeseburger', cuantas: 2, alcanzables: 2,
+    marcas: ['Scandal Burgers'], entrarPor: 'df852b1d' },
+  { nombre: 'Doble Scandal Macabra', cuantas: 2, alcanzables: 2,
+    marcas: ['Scandal Burgers'], entrarPor: '4baaf4d3' },
+  { nombre: 'Doble Scandal Trufada', cuantas: 2, alcanzables: 2,
+    marcas: ['Scandal Burgers'], entrarPor: '82fd2c25' },
 ]
 
 const f = (x: Partial<UnaQueNadiePide>): UnaQueNadiePide => ({
@@ -64,8 +82,6 @@ const CANDIDATAS: UnaQueNadiePide[] = [
       pregunta: 'Elige tu segundo bocadillo' }),
   f({ id: '7ab0d492', nombre: 'Tiras de Pollo Kentucky (4 uds)', precio: 1.9,
       marca: "Mila's Sandwiches", pregunta: 'Escoge tu entrante' }),
-  f({ id: 'a28f1eb8', nombre: 'Doble Scandal Burger', precio: 2,
-      marca: 'Scandal Burgers', pregunta: 'Busca la Burger de tu Combo' }),
 ]
 
 /** 🔴 LAS QUE BAJAN. «Carnitas (Cerdo)» la decidió Julio a las 18:00:09 — si
@@ -86,23 +102,60 @@ const CEDIDAS: UnaQueNadiePide[] = [
       marca: 'Big Mike´s Burger Joint', pregunta: 'Extras (burger)' }),
 ]
 
-/** La ficha: «Salsa Harissa (Picante)», que vivía en 7 preguntas de 2 marcas. */
+/**
+ * La ficha: «Salsa Harissa (Picante)», tal y como está a las 19:0x. Las ONCE
+ * filas vivas, con sus platos de verdad, y LAS ONCE DECIDIDAS — que es lo que
+ * la foto anterior se inventó al pintar tres «sin decidir» que no existen.
+ */
 const SITIOS: DondeVive[] = [
-  { id: 's1', pregunta: 'Escoge una salsa para tu pita', preguntaId: 'g1',
-    marca: 'Meraki Pita', cedida: false, activa: true, esEsta: true, platos: 7, decidida: false },
-  { id: 's2', pregunta: 'Escoge una salsa para tu bowl/plato', preguntaId: 'g2',
-    marca: 'Meraki Pita', cedida: false, activa: true, esEsta: false, platos: 5, decidida: false },
-  { id: 's3', pregunta: '¿Le añadimos salsa?', preguntaId: 'g3',
-    marca: 'Meraki Pita', cedida: false, activa: true, esEsta: false, platos: 9, decidida: true },
-  { id: 's4', pregunta: 'Escoge una salsa para tu bowl/plato', preguntaId: 'g4',
-    marca: 'The Urban Kebab', cedida: false, activa: true, esEsta: false, platos: 13, decidida: false },
+  { id: '86545579', pregunta: 'Escoge una salsa para tu pita', preguntaId: 'g1',
+    marca: 'Meraki Pita', cedida: false, activa: true, esEsta: true, platos: 12, decidida: true },
+  { id: '80c6d895', pregunta: '¿Le añadimos salsa?', preguntaId: 'g2',
+    marca: 'Meraki Pita', cedida: false, activa: true, esEsta: false, platos: 1, decidida: true },
+  { id: 'a702ed6a', pregunta: 'Escoge una salsa para tu bowl/plato', preguntaId: 'g3',
+    marca: 'Meraki Pita', cedida: false, activa: true, esEsta: false, platos: 7, decidida: true },
+  { id: '4104d1a2', pregunta: 'Escoge una salsa para tu pita', preguntaId: 'g4',
+    marca: 'Meraki Pita', cedida: false, activa: true, esEsta: false, platos: 2, decidida: true },
+  { id: '1cef0b0d', pregunta: 'Te apetece un extra?', preguntaId: 'g5',
+    marca: 'Meraki Pita', cedida: false, activa: true, esEsta: false, platos: 1, decidida: true },
+  { id: 'fd265738', pregunta: '1. Escoge la salsa para tu primer kebab', preguntaId: 'g6',
+    marca: 'The Urban Kebab', cedida: false, activa: true, esEsta: false, platos: 2, decidida: true },
+  { id: 'cd8fffe3', pregunta: '2. Escoge la salsa para tu segundo kebab', preguntaId: 'g7',
+    marca: 'The Urban Kebab', cedida: false, activa: true, esEsta: false, platos: 1, decidida: true },
+  { id: '3c5da882', pregunta: 'Escoge una salsa para tu bowl/plato', preguntaId: 'g8',
+    marca: 'The Urban Kebab', cedida: false, activa: true, esEsta: false, platos: 7, decidida: true },
+  { id: '2c88007c', pregunta: 'Algun extra en tu pita?', preguntaId: 'g9',
+    marca: 'The Urban Kebab', cedida: false, activa: true, esEsta: false, platos: 1, decidida: true },
+  { id: 'ad38d1a2', pregunta: 'Algun extra en tu pita?', preguntaId: 'g10',
+    marca: 'The Urban Kebab', cedida: false, activa: true, esEsta: false, platos: 1, decidida: true },
+  { id: 'fcef308f', pregunta: 'Algun extra en tu pita?', preguntaId: 'g11',
+    marca: 'The Urban Kebab', cedida: false, activa: true, esEsta: false, platos: 1, decidida: true },
 ]
+/** Ventas de 30 días de la fila que se está mirando. Medidas: 4. */
+const VENTAS = { dias: DIAS, ventas: 4, anuladas: 0 }
 const LO_QUE_SE_RETIRA = {
   nombre: 'Salsa Harissa (Picante)', preguntas: SITIOS.length,
   platos: SITIOS.reduce((a, s) => a + s.platos, 0),
-  ventas: 0, dias: DIAS, cedida: false, marca: 'Meraki Pita',
+  ventas: VENTAS.ventas, dias: DIAS, cedida: false, marca: 'Meraki Pita',
 }
 const AHORA = new Date('2026-09-13T19:00:00Z')
+
+/**
+ * El texto de ESTE fichero hasta la raya de las guardas: los componentes de la
+ * foto y nada más. Las guardas de abajo se leen a sí mismas si se mira el
+ * fichero entero —sus comentarios llevan el patrón que buscan— y un detector
+ * que se detecta a sí mismo no detecta nada. Se cortaba por la primera palabra
+ * «describe», pero esa palabra sale antes en este mismo comentario: la raya es
+ * un corte que no se mueve.
+ */
+const RAYA_DE_LAS_GUARDAS = '// \u2500\u2500 Las guardas'
+
+function soloLosComponentes(): string {
+  const entero = readFileSync(resolve(__dirname, './capturaLimpiar.test.tsx'), 'utf8')
+  const corte = entero.indexOf(RAYA_DE_LAS_GUARDAS)
+  if (corte < 0) throw new Error('no encuentro la raya de las guardas')
+  return entero.slice(0, corte)
+}
 
 // ── Las piezas de fila, copiadas de la pantalla ────────────────────────────
 
@@ -225,9 +278,13 @@ function LaFicha() {
         </CabeceraCocina>
 
         <div className="mt-4 flex flex-col gap-4">
+          {/* EL AVISO SALE DE LA LIB, NO DE MI CABEZA. La versión anterior de
+              esta foto llevaba aquí un «Resuelta en 7 sitios» escrito a mano —
+              un mensaje que esta pantalla NO puede producir, porque su única
+              confirmación viene de retirar. La guarda de abajo lo impide. */}
           <AvisoCocina>
-            Resuelta en 7 sitios (Meraki Pita, The Urban Kebab). Cada una queda con su
-            propio registro de quién y cuándo.
+            {laConfirmacionDeRetirar({
+              respuestas: 1, preguntas: 0, pregunta: null, encendido: true })}
           </AvisoCocina>
 
           <PanelCocina>
@@ -245,7 +302,10 @@ function LaFicha() {
           </PanelCocina>
 
           <PanelCocina>
-            <RotuloDePanel derecha="3 sin decidir">{laLineaDeDondeEsta(SITIOS)}</RotuloDePanel>
+            <RotuloDePanel derecha={
+              cuantasDeAhiSiguenSinDecidir(SITIOS) > 0
+                ? `${cuantasDeAhiSiguenSinDecidir(SITIOS)} sin decidir` : 'todas decididas'
+            }>{laLineaDeDondeEsta(SITIOS)}</RotuloDePanel>
             <div>
               {SITIOS.map((s) => (
                 <button key={s.id} type="button"
@@ -270,7 +330,7 @@ function LaFicha() {
             <RotuloDePanel>Cuánto se pide</RotuloDePanel>
             <div className="px-4 pb-4">
               <span className="text-[13.5px] text-cocina-tinta underline decoration-cocina-linea underline-offset-4">
-                {laLineaDeCuantoSePide({ ventas: 0, anuladas: 0, dias: DIAS })}
+                {laLineaDeCuantoSePide(VENTAS)}
                 <span className="ml-1.5 text-[12px] text-cocina-acento">ver cuáles</span>
               </span>
             </div>
@@ -281,6 +341,11 @@ function LaFicha() {
             <div className="px-4 pb-4 flex flex-col gap-2.5">
               <p className="text-[13px] text-cocina-tinta leading-[1.55]">
                 {loQuePasaSiRetiras(LO_QUE_SE_RETIRA)}
+              </p>
+              {/* Si se vende, se dice MÁS FUERTE. Ésta se pidió 4 veces este
+                  mes: retirarla no se impide, pero no puede costar lo mismo. */}
+              <p className="text-[13px] font-semibold text-cocina-ambar leading-[1.5]">
+                {elAvisoDeQueSeVende(LO_QUE_SE_RETIRA)}
               </p>
               <p className="text-[11.5px] text-cocina-tinta-3 leading-[1.5]">
                 Se retira, no se borra: queda con quién y cuándo, se sigue viendo aquí y se
@@ -317,12 +382,79 @@ describe('la foto y la pantalla usan las mismas piezas', () => {
   })
 })
 
+describe('🔴 los números de la foto salen de UNA medida y CUADRAN', () => {
+  // Lo que faltaba el 13/09: la foto decía «56 se pueden tocar» sobre 66 sin
+  // decidir, y el 56 lo escribí yo a mano. 56 + 17 cedidas = 73, no 66: si esta
+  // suma hubiera existido, habría saltado en el momento.
+  it('lo que falta: propias + cedidas = el total', () => {
+    expect(FALTA.alcanzables + FALTA_CEDIDAS).toBe(FALTA.respuestas)
+    expect(FALTA.nombres).toBeLessThanOrEqual(FALTA.respuestas)
+  })
+
+  it('lo que sobra: candidatas + decididas hace poco + cedidas = el total', () => {
+    expect(SOBRA.candidatas + SOBRA.decididasHacePoco + SOBRA.cedidas)
+      .toBe(SOBRA.respuestas)
+    // Y «alcanzables» son las propias: el total menos las cedidas.
+    expect(SOBRA.alcanzables).toBe(SOBRA.respuestas - SOBRA.cedidas)
+  })
+
+  it('y las filas pintadas caben dentro de sus recuentos', () => {
+    expect(CANDIDATAS.length).toBeLessThanOrEqual(SOBRA.candidatas)
+    expect(HACE_POCO.length).toBeLessThanOrEqual(SOBRA.decididasHacePoco)
+    expect(CEDIDAS.length).toBeLessThanOrEqual(SOBRA.cedidas)
+    expect(FALTAN.length).toBeLessThanOrEqual(FALTA.nombres)
+    // Las que se pintan como candidatas TIENEN que serlo de verdad.
+    for (const c of CANDIDATAS) {
+      expect(c.cedida, c.nombre).toBe(false)
+      expect(c.decididaReciente, c.nombre).toBe(false)
+    }
+    for (const h of HACE_POCO) expect(h.decididaReciente, h.nombre).toBe(true)
+    for (const c of CEDIDAS) expect(c.cedida, c.nombre).toBe(true)
+  })
+})
+
+describe('🔴 la ficha no se contradice consigo misma', () => {
+  // Lo que faltaba: la foto anterior decía «Resuelta en 7 sitios» y debajo
+  // pintaba tres «sin decidir». Las dos mitades inventadas.
+  it('si ninguna fila está sin decidir, no se pinta ni una pastilla que lo diga', () => {
+    const sinDecidir = SITIOS.filter((s) => !s.decidida && !s.cedida).length
+    const html = renderToStaticMarkup(<LaFicha />)
+    const pastillas = [...html.matchAll(/sin decidir/g)].length
+    expect(sinDecidir).toBe(0)
+    expect(pastillas, 'dice «sin decidir» sin que lo haya').toBe(0)
+    expect(html).toContain('todas decididas')
+  })
+
+  it('y el número del rótulo es el de sus propias filas, no uno escrito aparte', () => {
+    // Se mira SOLO lo de arriba, donde viven los componentes: de `describe(`
+    // para abajo están estas mismas guardas, y sus comentarios contienen el
+    // patrón que buscan. Un detector que se detecta a sí mismo no detecta nada.
+    const p = soloLosComponentes()
+    // El rótulo se calcula; un literal con el número escrito al lado es
+    // exactamente cómo se coló la contradicción.
+    expect(p).not.toMatch(/derecha="\d+ sin decidir"/)
+    expect(p).toContain('cuantasDeAhiSiguenSinDecidir(SITIOS)')
+  })
+
+  it('🔴 y ningún aviso escrito a mano: lo que se pinta lo dice la lib', () => {
+    // Un aviso seguido de texto suelto es una frase que la pantalla no sabe
+    // decir. Detrás de la etiqueta tiene que venir una expresión.
+    const p = soloLosComponentes()
+    for (const m of p.matchAll(/<AvisoCocina[^>]*>\s*([^\s<{])/g)) {
+      throw new Error(`aviso escrito a mano en la captura: empieza por «${m[1]}»`)
+    }
+    expect(p).toContain('{laConfirmacionDeRetirar({')
+  })
+})
+
 describe('🔴 cada fila se puede abrir, y su destino existe', () => {
   it('las filas de los dos montones son botones de verdad', () => {
     const html = renderToStaticMarkup(<LosDosMontones />)
     const botones = [...html.matchAll(/<button\b/g)].length
-    // 5 que faltan + 3 candidatas + 2 que bajan + 1 cedida + los 2 de cabecera.
-    expect(botones).toBe(13)
+    // 3 que faltan + 2 candidatas + 2 que bajan + 1 cedida + los 2 de cabecera.
+    expect(botones).toBe(FALTAN.length + CANDIDATAS.length + HACE_POCO.length
+                         + CEDIDAS.length + 2)
+    expect(botones).toBe(10)
   })
 
   it('y LA PÁGINA DE VERDAD también, no sólo la foto', () => {
