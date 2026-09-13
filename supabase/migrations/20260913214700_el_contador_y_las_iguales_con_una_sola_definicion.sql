@@ -54,37 +54,77 @@
 --   2. Cierre exclusivo: `CREATE OR REPLACE FUNCTION` no toma ninguno.
 --   3. Se dice antes, con la medida delante.
 --
--- LA MEDIDA DE LOS DOS LADOS (regla 31). Misma llamada, misma cuenta, mismos
--- 30 dias, antes y despues. Como CERO filas confirmadas incumplen hoy
--- `_impacto_completo` --medido sobre la tabla entera--, las trece cifras
--- tienen que salir IDENTICAS. Si alguna se mueve, el cambio no es lo que creo
--- que es y hay que parar. El «antes», tomado a las 20:10:
+-- LA MEDIDA DE LOS DOS LADOS (regla 31), CORREGIDA POR JULIO A LAS 21:05.
 --
---   opciones 244 · preguntas 67 · platos_activos 591 · extras_distintos 55
---   opciones_activas 164 · repetidas_nombres 4 · platos_con_pregunta 135
---   repetidas_preguntas 12 · opciones_sin_decidir 82
---   opciones_decididas_activas 145 · opciones_sin_decidir_cobran 32
---   opciones_sin_decidir_activas 19 · opciones_sin_decidir_cobran_activas 6
+-- Mi primera version comparaba contra una foto tomada a las 20:10. A las
+-- 23:45 la cocina lleva cuatro horas mas vendiendo, asi que `vendidas` NO va
+-- a ser 1.454 aunque todo este perfecto --Julio ya medía 1.445 a las 21:00--
+-- y yo habria parado la tanda a medias por un pedido de cena. Que es el peor
+-- motivo posible para parar una tanda a medias.
 --
--- LA FRANJA SI SE MUEVE, y por eso va con PREVISION ESCRITA ANTES: prever el
--- numero y luego comprobarlo es la unica forma de que el «no he roto nada» no
--- sea una opinion (regla 31). Tomado y calculado a las 20:15:
+-- Asi que la linea base NO es una foto de antes: se toma AQUI DENTRO, en esta
+-- misma transaccion, justo antes de reemplazar nada. Y lo que se compara no
+-- son totales, son IDENTIDADES que tienen que cumplirse sea cual sea la hora:
 --
---                    antes    despues previsto    diferencia
---   vendidas          1454          1433            -21
---   con_que_lleva     1191          1171            -20
---   sin_decidir        263           262             -1
---   desconocidas         0             0              0
---   cedidas           1104          1095             -9
---   propias            350           338            -12
---   anuladas             -            21          cifra nueva
+--   1. Las CIFRAS de cabecera, las trece, IDENTICAS antes y despues. No
+--      dependen de ventas: cuentan preguntas, opciones y platos. Si se mueve
+--      una, el cambio de `decidida` no es el no-op que digo que es.
+--   2. vendidas_antes - vendidas_despues = anuladas.  La resta es EXACTAMENTE
+--      lo anulado, ni una linea mas.
+--   3. con_que_lleva + sin_decidir + desconocidas = vendidas.  Los tres son
+--      una particion exacta: `extra` solo puede ser no nulo si hay opcion.
+--   4. cedidas + propias = vendidas.
+--   5. Y las dos sumas de arriba tambien tienen que cerrar en el ANTES: si no
+--      cerraban ya, lo que esta mal es otra cosa y no se toca nada hoy.
 --
--- Y cuadra por los cuatro lados: 1171+262 = 1433, 1095+338 = 1433,
--- 20+1 = 21, 9+12 = 21. Si al aplicarlo sale otra cosa, el cambio no es lo
--- que creo que es: se para y se cuenta.
+-- Si alguna falla, la migracion ABORTA y no se escribe ni una letra. Parar es
+-- lo correcto; parar por la hora del dia, no.
+--
+-- Y para poder leer la RPC desde aqui hace falta ser alguien: es SECURITY
+-- DEFINER y pregunta por `belongs_to_account`. Se suplanta a Julio con
+-- `set_config(..., true)` --LOCAL a la transaccion, o sea que se deshace sola
+-- al cerrar-- y solo para LEER las dos fotos.
+--
+-- Referencia, no criterio: a las 20:10 la franja era 1454/1191/263/0/1104/350
+-- y la prevision 1433/1171/262/0/1095/338 + 21. Los deltas de aquel momento
+-- eran -21/-20/-1/-9/-12. Se dejan escritos para poder mirarlos, pero lo que
+-- decide son las cinco identidades de arriba.
 -- ==========================================================================
 
 BEGIN;
+
+-- ── 0 · LA LINEA BASE, TOMADA AQUI Y AHORA ────────────────────────────────
+DO $base$
+DECLARE v_rotas int; v_j jsonb; v_f jsonb;
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    '{"sub":"673fca49-f6b5-40ed-a8f7-558390acce10","role":"authenticated"}', true);
+
+  -- Si a esta hora hubiera filas confirmadas incompletas, el cambio de
+  -- `decidida` SI movería las cifras, y entonces esto no es un no-op y hay
+  -- que hablarlo antes, no descubrirlo despues.
+  SELECT count(*) INTO v_rotas FROM public.modifier_recipe_impact i
+   WHERE i.status = 'confirmed'
+     AND NOT public._impacto_completo(i.impact_type, i.target_recipe_item_id, i.quantity);
+  IF v_rotas <> 0 THEN
+    RAISE EXCEPTION 'hay % filas confirmadas incompletas: el cambio de «decidida» ya no es un no-op. No se ha escrito nada.', v_rotas;
+  END IF;
+
+  v_j := public.modificadores_lista_preguntas('51ad1792-6629-4ef7-833a-b57b09a86710', 30);
+  v_f := v_j -> 'franja';
+
+  -- Identidad 5: si el ANTES no cerraba, lo que esta mal es otra cosa.
+  IF (v_f->>'con_que_lleva')::int + (v_f->>'sin_decidir')::int + (v_f->>'desconocidas')::int
+       <> (v_f->>'vendidas')::int
+     OR (v_f->>'cedidas')::int + (v_f->>'propias')::int <> (v_f->>'vendidas')::int THEN
+    RAISE EXCEPTION 'la franja NO cerraba ya antes de tocar nada: %. No se ha escrito nada.', v_f;
+  END IF;
+
+  CREATE TEMPORARY TABLE _linea_base ON COMMIT DROP AS SELECT v_j AS foto;
+  RAISE NOTICE 'linea base tomada aqui mismo: %', v_f;
+END;
+$base$;
+
 
 CREATE OR REPLACE FUNCTION public.modificadores_lista_preguntas(
   p_account_id uuid,
@@ -407,5 +447,44 @@ BEGIN
   RAISE NOTICE 'una sola definicion, en sus cinco sitios';
 END;
 $huellas$;
+
+-- ── 9 · EL COTEJO. Si no cuadra, no se commitea ───────────────────────────
+DO $cotejo$
+DECLARE v_a jsonb; v_d jsonb; va jsonb; vd jsonb; v_anul int; v_baja int;
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    '{"sub":"673fca49-f6b5-40ed-a8f7-558390acce10","role":"authenticated"}', true);
+
+  SELECT foto INTO v_a FROM _linea_base;
+  v_d := public.modificadores_lista_preguntas('51ad1792-6629-4ef7-833a-b57b09a86710', 30);
+  va := v_a -> 'franja';  vd := v_d -> 'franja';
+
+  -- 1 · Las trece cifras, identicas. No dependen de ventas.
+  IF (v_a -> 'cifras') <> (v_d -> 'cifras') THEN
+    RAISE EXCEPTION 'las cifras de cabecera SE HAN MOVIDO. antes: % · despues: %. No se ha escrito nada.',
+      v_a -> 'cifras', v_d -> 'cifras';
+  END IF;
+
+  -- 2 · La bajada de `vendidas` es EXACTAMENTE lo anulado, ni una linea mas.
+  v_anul := (vd->>'anuladas')::int;
+  v_baja := (va->>'vendidas')::int - (vd->>'vendidas')::int;
+  IF v_baja <> v_anul THEN
+    RAISE EXCEPTION 'vendidas baja % y las anuladas son %: la resta no es lo anulado. No se ha escrito nada.',
+      v_baja, v_anul;
+  END IF;
+
+  -- 3 y 4 · Las dos sumas cierran en el DESPUES.
+  IF (vd->>'con_que_lleva')::int + (vd->>'sin_decidir')::int + (vd->>'desconocidas')::int
+       <> (vd->>'vendidas')::int THEN
+    RAISE EXCEPTION 'con_que_lleva + sin_decidir + desconocidas no da vendidas: %. No se ha escrito nada.', vd;
+  END IF;
+  IF (vd->>'cedidas')::int + (vd->>'propias')::int <> (vd->>'vendidas')::int THEN
+    RAISE EXCEPTION 'cedidas + propias no da vendidas: %. No se ha escrito nada.', vd;
+  END IF;
+
+  RAISE NOTICE 'COTEJO OK · cifras identicas · vendidas baja % = % anuladas · antes % · despues %',
+    v_baja, v_anul, va, vd;
+END;
+$cotejo$;
 
 COMMIT;
