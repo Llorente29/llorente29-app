@@ -24,6 +24,10 @@ export interface EstadoParaLaOficina {
   motivoEspera: MotivoEspera
   aplicadoEn: string | null
   horasDesfase: number | null
+  /** El local de esta tablet. La línea NOMBRA de dónde sale la ventana. */
+  local?: string | null
+  /** La última vez que alguien pulsó «Instalar ahora» aquí. */
+  instaladoAManoAt?: string | null
 }
 
 export function laHora(iso: string | null): string {
@@ -59,9 +63,22 @@ export const NO_PUEDE_PREGUNTAR =
 // espera a que acabe el servicio NO es una alarma, es el sistema funcionando.
 // Si todo se pinta rojo, el rojo deja de significar nada.
 export function loQueLeeLaOficina(b: EstadoParaLaOficina): { texto: string; rojo: boolean } {
+  // De dónde sale la ventana, con el local por su nombre. Si alguien no
+  // entiende por qué son las 17:15, la pantalla ha fallado (Julio, 13/09).
+  const donde = b.local ? ` de ${b.local}` : ''
+
+  // El rastro de «Instalar ahora» acompaña SIEMPRE, esté la tablet al día o no:
+  // es el único camino que se salta la ventana, y saltársela es justo lo que
+  // hay que poder leer sin deducirlo.
+  const aMano = laHora(b.instaladoAManoAt ?? null)
+  const rastro = aMano ? ` · alguien la instaló a mano a las ${aMano}` : ''
+
   if (b.estado === 'al_dia') {
     const cuando = laHora(b.aplicadoEn)
-    return { texto: cuando ? `Puesta al día a las ${cuando}` : 'Puesta al día', rojo: false }
+    return {
+      texto: (cuando ? `Puesta al día a las ${cuando}` : 'Puesta al día') + rastro,
+      rojo: false,
+    }
   }
   if (b.estado === 'builtin') {
     return { texto: 'Nunca se ha actualizado: sigue con lo que traía de fábrica', rojo: true }
@@ -75,32 +92,41 @@ export function loQueLeeLaOficina(b: EstadoParaLaOficina): { texto: string; rojo
   const cola = desde ? ` (sigue con la del ${desde})` : ''
   switch (b.motivoEspera) {
     case 'servicio_o_margen':
-      return { texto: `Esperando a que acabe el servicio${cola}`, rojo: false }
+      return {
+        texto: `Esperando a que acabe el servicio${donde}${cola}${rastro}`,
+        rojo: false,
+      }
     case 'cocina_ocupada':
-      return { texto: `Esperando: hay pedidos o tickets en marcha${cola}`, rojo: false }
+      return {
+        texto: `Esperando: hay pedidos o tickets en marcha${donde}${cola}${rastro}`,
+        rojo: false,
+      }
     case 'a_punto_de_instalarse':
-      return { texto: `A punto de instalarse${cola}`, rojo: false }
+      return {
+        texto: `A punto de instalarse: ${b.local ?? 'el local'} está fuera de su horario${cola}${rastro}`,
+        rojo: false,
+      }
     case 'sin_horario_declarado_hoy':
       return {
-        texto: 'No se actualiza: el local no tiene horario puesto para hoy, '
-             + 'y sin horario no se sabe cuándo es seguro',
+        texto: `No se actualiza: ${b.local ?? 'el local'} no tiene horario puesto para hoy, `
+             + 'y sin horario no se sabe cuándo es seguro' + rastro,
         rojo: true,
       }
     case 'aparato_apagado':
       return { texto: 'Revocada: no va a actualizarse', rojo: false }
     case 'no_da_senales':
       return {
-        texto: b.horasDesfase != null
+        texto: (b.horasDesfase != null
           ? `No da señales, y lleva ${b.horasDesfase} h sin coger lo nuevo`
-          : 'No da señales desde hace rato',
+          : 'No da señales desde hace rato') + rastro,
         rojo: true,
       }
     default:
       // Va por detrás y nada lo explica: eso sí pide que alguien mire.
       return {
-        texto: b.horasDesfase != null
+        texto: (b.horasDesfase != null
           ? `Lleva ${b.horasDesfase} h sin coger lo nuevo y no se sabe por qué`
-          : 'Va por detrás y no se sabe por qué',
+          : 'Va por detrás y no se sabe por qué') + rastro,
         rojo: b.estado === 'muy_atrasado',
       }
   }

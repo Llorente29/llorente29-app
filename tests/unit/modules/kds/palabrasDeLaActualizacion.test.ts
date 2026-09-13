@@ -115,8 +115,8 @@ describe('la franja de la tablet habla como un cocinero, no como un servidor', (
 
 describe('la línea de la oficina: en palabras, y el rojo solo si hay que hacer algo', () => {
   const B = (o: Partial<Parameters<typeof loQueLeeLaOficina>[0]> = {}) =>
-    loQueLeeLaOficina({ estado: 'atrasado', motivoEspera: null,
-                        aplicadoEn: null, horasDesfase: null, ...o })
+    loQueLeeLaOficina({ estado: 'atrasado', motivoEspera: null, aplicadoEn: null,
+                        horasDesfase: null, local: 'Foodint Carabanchel', ...o })
 
   it('al día dice la hora a la que se puso al día', () => {
     const r = B({ estado: 'al_dia', aplicadoEn: '2026-09-13T14:03:00Z', motivoEspera: null })
@@ -128,6 +128,26 @@ describe('la línea de la oficina: en palabras, y el rojo solo si hay que hacer 
     const r = B({ motivoEspera: 'servicio_o_margen', aplicadoEn: '2026-09-12T22:12:00Z' })
     expect(r.texto).toContain('Esperando a que acabe el servicio')
     expect(r.rojo).toBe(false)
+  })
+
+  it('🔴 y dice DE DÓNDE sale la ventana, con el local por su nombre', () => {
+    // «Si alguien no entiende por qué son las 17:15, la pantalla ha fallado.»
+    expect(B({ motivoEspera: 'servicio_o_margen' }).texto).toContain('Foodint Carabanchel')
+    expect(B({ motivoEspera: 'a_punto_de_instalarse' }).texto)
+      .toContain('Foodint Carabanchel está fuera de su horario')
+    expect(B({ motivoEspera: 'sin_horario_declarado_hoy' }).texto)
+      .toContain('Foodint Carabanchel no tiene horario puesto para hoy')
+  })
+
+  it('🔴 y si alguien se saltó la ventana a mano, se LEE, no se deduce', () => {
+    const conRastro = B({ motivoEspera: 'servicio_o_margen',
+                          instaladoAManoAt: '2026-09-13T12:32:00Z' })
+    expect(conRastro.texto).toMatch(/alguien la instaló a mano a las \d{2}:\d{2}/)
+    // También cuando ya está al día: el rastro no depende del estado.
+    expect(B({ estado: 'al_dia', instaladoAManoAt: '2026-09-13T12:32:00Z' }).texto)
+      .toContain('a mano')
+    // Y sin rastro no se inventa ninguno.
+    expect(B({ estado: 'al_dia' }).texto).not.toContain('a mano')
   })
 
   it('pero un local sin horario puesto sí lo es, y dice por qué', () => {
@@ -155,6 +175,7 @@ describe('la línea de la oficina: en palabras, y el rojo solo si hay que hacer 
       for (const motivoEspera of motivos) {
         const { texto } = loQueLeeLaOficina({
           estado, motivoEspera, aplicadoEn: '2026-09-13T12:00:00Z', horasDesfase: 4,
+          local: 'Foodint Alcalá',
         })
         expect(texto, `${estado}/${motivoEspera}`).not.toMatch(/bundle|paquete \d|_/)
         expect(texto.length, `${estado}/${motivoEspera}`).toBeGreaterThan(10)

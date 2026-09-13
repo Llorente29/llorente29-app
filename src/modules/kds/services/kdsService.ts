@@ -791,6 +791,10 @@ export interface DeviceBundleStatus {
     | 'aparato_apagado' | 'no_da_senales' | 'servicio_o_margen'
     | 'sin_horario_declarado_hoy' | 'fuera_de_ventana' | 'cocina_ocupada'
     | 'a_punto_de_instalarse' | null
+  /** El local de la tablet: la línea de oficina lo NOMBRA. */
+  local: string | null
+  /** La última vez que alguien pulsó «Instalar ahora» en esta tablet. */
+  instaladoAManoAt: string | null
 }
 
 /**
@@ -819,6 +823,8 @@ export async function listDeviceBundleStatus(locationId: string): Promise<Device
     enVentana: r.en_ventana ?? null,
     cocinaEnCalma: r.cocina_en_calma ?? null,
     motivoEspera: (r.motivo_espera ?? null) as DeviceBundleStatus['motivoEspera'],
+    local: (r.local as string | null) ?? null,
+    instaladoAManoAt: (r.instalado_a_mano_at as string | null) ?? null,
   }))
 }
 

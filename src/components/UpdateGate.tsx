@@ -56,7 +56,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   checkForUpdate, installUpdate, prefetchUpdate, isUpdateDownloaded,
-  fetchUpdateWindow, reportAppVersion, reportBundleApplied,
+  fetchUpdateWindow, reportAppVersion, reportBundleApplied, reportInstalacionAMano,
   checkForBundleUpdate, prefetchOtaBundle, applyOtaBundle,
   type RemoteVersion, type RemoteBundle, type UpdateWindow,
 } from '../native/appUpdate'
@@ -335,7 +335,7 @@ export default function UpdateGate() {
               : loQueEsperaLaTablet(win, idleOk)}
           </div>
           <button
-            onClick={() => setInstalarYa(true)}
+            onClick={() => { void reportInstalacionAMano().finally(() => setInstalarYa(true)) }}
             style={{
               flexShrink: 0, padding: '9px 16px', borderRadius: 10, border: 'none',
               background: '#1F9D6B', color: '#fff', fontWeight: 700, fontSize: 13.5,

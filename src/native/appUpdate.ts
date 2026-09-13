@@ -239,6 +239,28 @@ export async function reportBundleApplied(): Promise<void> {
 }
 
 /**
+ * ALGUIEN HA PULSADO «INSTALAR AHORA» (13/09).
+ *
+ * Es el único camino que se salta la ventana de mantenimiento, así que deja
+ * rastro: si una tablet se recarga en plena cena porque alguien lo pulsó, se
+ * lee en la pantalla de oficina, no se deduce.
+ *
+ * Se sella AL PULSAR, al revés que el paquete: que una persona lo pidiera es
+ * verdad tanto si el paquete arranca como si Capgo lo devuelve. Y por eso se
+ * espera (`await`) antes de aplicar — aplicar destruye el contexto JS, así que
+ * un sello disparado y no esperado se perdería justo en el caso que importa.
+ */
+export async function reportInstalacionAMano(): Promise<void> {
+  const token = getDeviceToken()
+  if (!token || !supabase) return
+  try {
+    await rpc('report_device_instalacion_a_mano', { p_device_token: token })
+  } catch {
+    /* el rastro no puede impedir la instalación que la persona ha pedido */
+  }
+}
+
+/**
  * Reporta a BBDD qué versión corre este dispositivo (kds_device.app_version).
  * Best-effort absoluto: cualquier fallo se traga: es telemetría, no puede
  * estorbar al arranque de una estación.
