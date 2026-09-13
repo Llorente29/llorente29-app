@@ -71,7 +71,8 @@ function salesChannelInsertToRow(
   }
 }
 
-function salesChannelUpdateToRow(
+// Exportado para las pruebas, igual que `rowToSalesChannel`. (13/09.)
+export function salesChannelUpdateToRow(
   patch: SalesChannelUpdate
 ): RowSalesChannelUpdate {
   const row: RowSalesChannelUpdate = {}

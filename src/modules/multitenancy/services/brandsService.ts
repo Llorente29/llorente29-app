@@ -65,7 +65,11 @@ export function rowToBrand(row: RowBrand): Brand {
   }
 }
 
-function brandInsertToRow(input: BrandInsert): RowBrandInsert {
+// EXPORTADOS PARA LAS PRUEBAS, igual que `rowToBrand` y por el mismo motivo.
+// Sin esto la pregunta que importa —«¿se puede BORRAR un campo?»— no se puede
+// contestar sin navegador: el mapeo de lectura no la contesta, la contesta el
+// de escritura. (13/09.)
+export function brandInsertToRow(input: BrandInsert): RowBrandInsert {
   return {
     account_id: input.accountId,
     name: input.name,
@@ -80,7 +84,7 @@ function brandInsertToRow(input: BrandInsert): RowBrandInsert {
   }
 }
 
-function brandUpdateToRow(patch: BrandUpdate): RowBrandUpdate {
+export function brandUpdateToRow(patch: BrandUpdate): RowBrandUpdate {
   const row: RowBrandUpdate = {}
   if (patch.name !== undefined) row.name = patch.name
   if (patch.slug !== undefined) row.slug = patch.slug
