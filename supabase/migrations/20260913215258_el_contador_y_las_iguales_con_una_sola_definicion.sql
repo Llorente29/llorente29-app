@@ -167,9 +167,9 @@ BEGIN
            -- lleva nada»), que es una respuesta y no un hueco. Hasta hoy aqui
            -- ponia solo «tiene impacto confirmado», y por eso el contador dio
            -- por decididas dos respuestas con ficha y SIN CANTIDAD, que
-           -- descuentan cero. Que cuenta como completo lo dice
-           -- `_impacto_completo`, en un solo sitio, el mismo que usan las tres
-           -- puertas de escritura y el candado de la tabla.
+           -- descuentan cero. Que cuenta como completo lo dice la funcion del
+           -- candado, en un solo sitio, el mismo que usan las tres puertas de
+           -- escritura y la propia tabla.
            EXISTS (SELECT 1 FROM public.modifier_recipe_impact i
                     WHERE i.modifier_option_id = o.id AND i.account_id = p_account_id
                       AND i.status = 'confirmed'
@@ -427,22 +427,31 @@ BEGIN
     IF v_n <> 1 THEN RAISE EXCEPTION '% tiene % firmas, no 1', v_src, v_n; END IF;
   END LOOP;
 
-  -- Dos predicados en el contador, tres en las iguales. Contarlos es lo que
-  -- impide que manana alguien arregle uno y se deje otro (que es exactamente
+  -- Dos LLAMADAS en el contador, tres en las iguales. Contarlas es lo que
+  -- impide que manana alguien arregle una y se deje otra (que es exactamente
   -- lo que habia pasado).
+  --
+  -- SE CUENTAN LLAMADAS, NO MENCIONES, y eso lo aprendi aqui mismo: la
+  -- primera version de esta huella buscaba `_impacto_completo` a secas y
+  -- ABORTO LA TANDA diciendo «el contador usa la definicion 3 veces, no 2».
+  -- Tenia razon en contar 3: el tercero era un COMENTARIO que nombra la
+  -- funcion. Una huella que se rompe porque alguien escribe un comentario no
+  -- vigila el codigo, vigila el texto. Medido en el fichero: el contador
+  -- tiene 3 menciones y 2 llamadas; las iguales, 3 y 3 --por eso esa no
+  -- saltaba, y habria seguido sin saltar el dia que importara--.
   SELECT count(*) INTO v_n
     FROM regexp_matches(
            (SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
              WHERE n.nspname='public' AND p.proname='modificadores_lista_preguntas'),
-           '_impacto_completo', 'g');
-  IF v_n <> 2 THEN RAISE EXCEPTION 'el contador usa la definicion % veces, no 2', v_n; END IF;
+           'public\._impacto_completo\(', 'g');
+  IF v_n <> 2 THEN RAISE EXCEPTION 'el contador LLAMA a la definicion % veces, no 2', v_n; END IF;
 
   SELECT count(*) INTO v_n
     FROM regexp_matches(
            (SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
              WHERE n.nspname='public' AND p.proname='kitchen_las_iguales'),
-           '_impacto_completo', 'g');
-  IF v_n <> 3 THEN RAISE EXCEPTION 'las iguales usan la definicion % veces, no 3', v_n; END IF;
+           'public\._impacto_completo\(', 'g');
+  IF v_n <> 3 THEN RAISE EXCEPTION 'las iguales LLAMAN a la definicion % veces, no 3', v_n; END IF;
 
   RAISE NOTICE 'una sola definicion, en sus cinco sitios';
 END;
