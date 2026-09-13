@@ -396,6 +396,20 @@ function contadorDeComandasNuevo() {
  */
 let loQueTeniaLaComanda = new Map<string, number>();
 
+/**
+ * CUÁNTAS VENTAS HA CREADO **ESTA PETICIÓN** POR COMANDA.
+ *
+ * La foto de arriba dice qué había antes; esto dice qué llevamos hechas ahora.
+ * Hace falta porque una cuenta partida legítima —dos facturas naciendo juntas—
+ * no dispara ninguna guarda, y sin esto no dispararía tampoco ningún contador:
+ * el informe diría 0 y 0, que es indistinguible de «no ha pasado nada». Es la
+ * regla 8 un piso más abajo — no basta con no esconder que algo se ha frenado,
+ * tampoco se puede esconder que una comanda ha traído dos ventas.
+ *
+ * Por petición, no de módulo, por el mismo motivo que las otras dos.
+ */
+let creadasEnEstaPeticion = new Map<string, number>();
+
 async function ventasQueYaTeniaLaComanda(
   sb: SupabaseClient, accountId: string, tabId: string,
 ): Promise<number> {
@@ -520,19 +534,27 @@ async function upsertSale(
   // `external_tab_ref`, y se cuenta para que se vea el dia que empiece a
   // pasar. (Una cuenta partida de sala normal no llega aqui: sus facturas
   // nacen en el mismo aviso y `ventasPrevias` vale 0.)
-  if (tab.id && ventasPrevias > 0) {
+  const yaCreadasAqui = tab.id ? (creadasEnEstaPeticion.get(tab.id) ?? 0) : 0;
+  if (tab.id && (ventasPrevias > 0 || yaCreadasAqui > 0)) {
     elContadorDeComandas.cuentas_partidas++;
     if (elContadorDeComandas.detalle.length < 20) {
       elContadorDeComandas.detalle.push({
-        tipo: "factura anadida en aviso posterior",
+        // Las dos formas se cuentan igual —son las dos una comanda con varias
+        // ventas— pero se NOMBRAN distinto, porque no significan lo mismo: la
+        // del mismo aviso es la sala pagando a medias, y la posterior es una
+        // factura anadida a una comanda ya cerrada.
+        tipo: ventasPrevias > 0
+          ? "factura anadida en aviso posterior"
+          : "cuenta partida en el mismo aviso",
         comanda: tab.id,
         factura_nueva: String(billId),
         importe: Number(common.total),
         ventas_que_ya_tenia: ventasPrevias,
+        ventas_creadas_en_este_aviso: yaCreadasAqui,
         que_se_ha_hecho: "se crea, colgando de la misma comanda",
       });
     }
-    console.error("COMANDA_CON_CUENTA_PARTIDA", tab.id, billId, ventasPrevias);
+    console.error("COMANDA_CON_CUENTA_PARTIDA", tab.id, billId, ventasPrevias, yaCreadasAqui);
   }
 
   // No existe -> nace 'open'.
@@ -553,6 +575,9 @@ async function upsertSale(
     await sb.from("sale").delete().eq("id", saleRow.id);
     throw new Error(`adapt_lastapp_order ${billId}: ${adaptErr.message}`);
   }
+  // Se apunta DESPUES de que la venta exista de verdad: si el adaptador falla,
+  // la venta se ha borrado arriba y contarla seria contar un fantasma.
+  if (tab.id) creadasEnEstaPeticion.set(tab.id, yaCreadasAqui + 1);
   return { id: saleRow.id, status: "open", isNew: true };
 }
 
@@ -653,6 +678,7 @@ Deno.serve(async (req: Request) => {
   // peticion anterior no es una foto del antes de esta.
   elContadorDeComandas = contadorDeComandasNuevo();
   loQueTeniaLaComanda = new Map();
+  creadasEnEstaPeticion = new Map();
 
   const eventType = (payload?.type as string | undefined) ?? null;
   let note = "fase1-receptor";
