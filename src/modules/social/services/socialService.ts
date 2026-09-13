@@ -4,6 +4,7 @@
 // Cola · acciones · publicación · parrilla · fase · directivas · generar ahora · N2 (escenas).
 
 import { supabase } from '@/lib/supabase'
+import type { ClaseDeFallo } from '@/modules/social/lib/laTarjetaDeError'
 
 export interface SocialPayload {
   copy?: string; hashtags?: string[]; image_url?: string | null; image_level?: string
@@ -14,13 +15,16 @@ export interface SocialPayload {
 export interface SocialPostRow {
   id: string; network: string; status: string; payload: SocialPayload
   reason: string | null; last_error: string | null
+  /** CLAVE de lo que ha pasado, no frase. Las frases viven en `lib/laTarjetaDeError`. */
+  error_kind: ClaseDeFallo | null
+  attempts: number
   scheduled_at: string | null; published_at: string | null; external_ref: string | null; created_at: string
 }
 export type LaunchPhase = 'apetito' | 'comunidad' | 'conversion'
 
 const QUEUE_STATUSES = ['draft', 'approved', 'scheduled', 'publishing', 'error']
 const GRID_STATUSES = ['published', 'scheduled']
-const SELECT = 'id, network, status, payload, reason, last_error, scheduled_at, published_at, external_ref, created_at'
+const SELECT = 'id, network, status, payload, reason, last_error, error_kind, attempts, scheduled_at, published_at, external_ref, created_at'
 
 function requireSupabase() { if (!supabase) throw new Error('Supabase no está disponible') }
 
