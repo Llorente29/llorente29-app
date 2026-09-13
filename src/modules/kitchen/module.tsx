@@ -11,7 +11,7 @@
 // normal de editar el plato, sin separación posible hoy — "sin rediseñar
 // la pantalla, simplemente el rol no entra ahí". Quien no tenga show_costes
 // tampoco puede editar platos/menús desde aquí.
-import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2, Table2, PlusCircle, MessageCircleQuestion, ListChecks } from 'lucide-react'
+import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2, Table2, PlusCircle, MessageCircleQuestion, ListChecks, Search } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
@@ -41,6 +41,8 @@ import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
 import PriceGridPage from '@/modules/kitchen/pages/PriceGridPage'
 import PriceGridErrorBoundary from '@/modules/kitchen/components/PriceGridErrorBoundary'
 import ProductosEn86 from '@/modules/kitchen/home/ProductosEn86'
+import KitchenPlatoPreguntasPage from '@/modules/kitchen/pages/KitchenPlatoPreguntasPage'
+import KitchenBuscarPage from '@/modules/kitchen/pages/KitchenBuscarPage'
 
 export const kitchenModule: ModuleDefinition = {
   // Identidad
@@ -71,6 +73,11 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'preguntas/nueva',            element: <KitchenPreguntaPage /> },
     { path: 'preguntas/:preguntaId',      element: <KitchenPreguntaPage /> },
     { path: 'preguntas/:preguntaId/platos', element: <KitchenPreguntaPlatosPage /> },
+    // Las dos que faltaban del gestor (13/09 20:05). Van al reves que las de
+    // arriba: desde el PLATO se ve que pregunta y se le quita una; y la caja
+    // busca por lo que las cosas LLEVAN, no solo por como se llaman.
+    { path: 'platos/:platoId',            element: <KitchenPlatoPreguntasPage /> },
+    { path: 'buscar',                     element: <KitchenBuscarPage /> },
     { path: 'disponibilidad',    element: <KitchenAvailabilityPage /> },
     { path: 'disponibilidad-informes', element: <AvailabilityReportsPage /> },
     { path: 'proveedores',       element: <SuppliersPage /> },
@@ -100,6 +107,10 @@ export const kitchenModule: ModuleDefinition = {
       { id: 'kitchen_modifiers',     label: 'Preguntas de la carta', icon: MessageCircleQuestion, path: 'modificadores', requiredRole: 'manager', requiredPermission: 'show_costes' },
       // Entra por AQUI quien viene a trabajar, no a mirar: los dos montones.
       { id: 'kitchen_limpiar',       label: 'Qué hay que trabajar', icon: ListChecks,           path: 'limpiar',       requiredRole: 'manager', requiredPermission: 'show_costes' },
+      // Busca por lo que LLEVA, no solo por el nombre: «Sin Salsa Harisa»
+      // esta mal escrita en produccion y su ficha es Harissa. Por nombre no
+      // aparece nunca; por ingrediente, la primera.
+      { id: 'kitchen_buscar',        label: 'Buscar',              icon: Search,               path: 'buscar',        requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
       { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },
