@@ -272,16 +272,34 @@ Deno.serve(async (req) => {
      * volver a funcionar: se apuntan los dos y quien mire compara las fechas.
      * Borrar la prueba de que algo se rompió es el fallo de la regla 30, y ya
      * lo pagamos una vez con A2c.
+     *
+     * 🔴 Y JAMÁS PUEDE CAMBIAR EL RESULTADO DE UNA PUBLICACIÓN (Julio, 14/09
+     * 11:20). La primera versión de esto no llevaba su propio `try`, y el
+     * sello del ÉXITO se llama DESPUÉS de marcar la fila como `published`,
+     * dentro del `try` grande. O sea que si la escritura del sello reventaba
+     * --un corte de red, nada más--, el `catch` de abajo llamaba a `fail` y
+     * ponía en `error` una publicación QUE YA HABÍA SALIDO en Instagram. Y
+     * como el éxito deja `ig_creation_id` en null, el reintento habría creado
+     * un contenedor nuevo y publicado OTRA VEZ: un duplicado en el Instagram
+     * del cliente por no poder escribir una fecha.
+     *
+     * El sello es informativo. Se traga lo suyo y se calla: lo que cuenta es
+     * lo que pasó con la publicación, no si pudimos anotarlo.
      */
     const selloDeLaLlave = async (ok: boolean, clase?: ClaseDeFallo) => {
-      const cuenta = (p as { social_account_id?: string | null }).social_account_id;
-      if (!cuenta) return;
-      const ahora = new Date().toISOString();
-      await supa.from("social_account")
-        .update(ok
-          ? { llave_ok_at: ahora }
-          : { llave_fallo_at: ahora, llave_fallo_clase: clase ?? "otro" })
-        .eq("id", cuenta);
+      try {
+        const cuenta = (p as { social_account_id?: string | null }).social_account_id;
+        if (!cuenta) return;
+        const ahora = new Date().toISOString();
+        await supa.from("social_account")
+          .update(ok
+            ? { llave_ok_at: ahora }
+            : { llave_fallo_at: ahora, llave_fallo_clase: clase ?? "otro" })
+          .eq("id", cuenta);
+      } catch {
+        // A propósito en silencio: ver arriba. Si no se pudo sellar, la ficha
+        // enseñará la fecha anterior, que es un dato viejo y no una mentira.
+      }
     };
 
     /** Un fallo DE VERDAD: se para, se cuenta el intento y se dice qué clase es. */
@@ -299,6 +317,11 @@ Deno.serve(async (req) => {
       // alguien vaya a Meta. El antirruido lo pone `encolar_alerta`: con la
       // llave muerta fallan las cinco de la pasada y no hacen falta cinco
       // correos.
+      // El aviso, con el mismo cinturón que el sello: si encolar revienta, NO
+      // puede tumbar la pasada. `fail` se llama desde dentro del `try` grande y
+      // también desde su `catch`; una excepción aquí se comería las que
+      // quedasen por publicar.
+      try {
       if (clase === "llave_caducada") {
         await supa.rpc("encolar_alerta", {
           p_kind: "social_llave_caducada",
@@ -315,6 +338,7 @@ Deno.serve(async (req) => {
           p_severity: "critico",
         });
       }
+      } catch { /* a propósito en silencio: ver arriba */ }
 
       out.push({ id: p.id, ok: false, clase, error: sinSecretos(msg).slice(0, 200) });
     };
