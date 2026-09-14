@@ -255,28 +255,260 @@ grant execute on function public.pase_board(text) to anon, authenticated, servic
 --   +   end if;
 
 
--- ═══ EL ENSAYO ═════════════════════════════════════════════════════════════
+
+
+-- ═══ ANTES DE TOCAR NADA · LA MITAD «ANTES» DE LA MEDICIÓN ═════════════════
 --
--- Dentro de la migración, contra la población REAL y todo revertido:
+-- 🔴 VA AQUÍ ARRIBA, ANTES DE LAS CUATRO PIEZAS, Y NO ES UN CAPRICHO DE ORDEN.
+-- El ensayo E dice «`kds_board` devuelve lo mismo que antes». Para que eso
+-- signifique algo, el «antes» tiene que tomarse con la función VIEJA todavía
+-- puesta. Mi primer borrador medía las dos mitades en el mismo bloque, después
+-- del `create or replace`: eso compara la función nueva consigo misma y sale
+-- verde siempre. Un «no he roto nada» sin dos cifras tomadas con la misma vara
+-- a los dos lados es una opinión (regla 33).
+create temp table _pase_antes on commit drop as
+select l.id as location_id, l.name as local,
+       (select d.token from kds_device d
+         where d.location_id = l.id and d.is_active order by d.label limit 1) as token,
+       jsonb_array_length(coalesce(
+         public.kds_board(l.id, (select d.token from kds_device d
+                                  where d.location_id = l.id and d.is_active
+                                  order by d.label limit 1)) -> 'tickets', '[]'::jsonb)) as tickets
+  from locations l
+ where l.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
+   and exists (select 1 from kds_device d where d.location_id = l.id and d.is_active);
+
+
+-- ═══ EL ENSAYO · A–H · EJECUTABLE, DENTRO DE LA MIGRACIÓN ══════════════════
 --
---  A · 🔴 ALCANCE POR CUENTA. Con el token de una tablet de Foodint, ninguna
---      tarjeta de otra cuenta. Se comprueba contando ventas del mismo local en
---      otras cuentas y exigiendo que no salga ni una.
---  B · EL PAPEL. Token de «Pase» (Alcalá) → 'pase'. Token de «Cocina» → 'cocina'.
---      Token de camichi4 (sin estación) → 'ambas'. Los tres, medidos hoy.
---  C · EL INTERRUPTOR. `pase_activo` false en los tres locales al aplicar, y
---      `pase_board` lo devuelve false. Nada se enciende solo.
---  D · SIN LLAVES NI DATOS DE MÁS: el jsonb no contiene `customer_phone`,
---      `delivery_address`, `public_token` ni nada con forma de secreto.
---      🔴 Y AHORA LA RAYA ES MÁS FINA, porque sí sale un teléfono: se exige que
---      esté el del REPARTIDOR (`rider_phone`) y que NO esté el del CLIENTE. El
---      ensayo compara los dos contra el texto del jsonb, no sólo el nombre del
---      campo: con el del cliente dentro, aunque fuese bajo otra etiqueta, el
---      ensayo tiene que caerse.
---  E · `kds_board` CON EL INTERRUPTOR APAGADO devuelve los MISMOS tickets que
---      antes, para Alcalá y para Carabanchel. Mismos números a los dos lados.
---  F · Y ENCENDIDO: un pedido con sello y sin expo marcada ya no sale.
---  G · EL SELLO: reabrir borra `ready_at`; marcar listo lo vuelve a poner.
---  H · EL REPARTIDOR, contra la población real: de las tarjetas con flota, TODAS
---      traen nombre y teléfono (medido hoy: 231 de 231 en 14 días), y ninguna
---      tarjeta de plataforma trae ninguno de los dos (0 de 1.424).
+-- Va al final del mismo fichero que aplica las cuatro piezas, así que corre
+-- DENTRO de su transacción: si algo no cuadra, `raise exception` se lleva por
+-- delante la migración entera y no queda nada a medias.
+--
+-- 🔴 LOS QUE PLANTAN ALGO LO DESHACEN SOLOS. Un `begin … exception` de plpgsql
+-- abre un punto de retorno implícito: se planta, se mira, y un `raise` propio
+-- devuelve la tabla a como estaba sin tocar el resto de la migración. Mismo
+-- patrón que el ensayo de la llave de Meta de esta mañana.
+--
+-- 🔴 NO SE ESCRIBE NINGÚN TOKEN EN NINGÚN SITIO. Se leen de `kds_device` dentro
+-- del bloque y no salen en ningún mensaje, ni siquiera en los de error.
+
+do $ensayo$
+declare
+  CUENTA    constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';  -- Foodint
+  PLANTILLA constant uuid := '00000000-0000-0000-0000-000000000001';  -- catálogo del sistema
+  ALCALA    constant uuid := '38158159-cd71-4056-950b-53425afac1ce';
+  v_tok_pase text; v_tok_cocina text; v_tok_ambas text;
+  v_b jsonb; v_papel text; v_n int; v_venta uuid; v_tel text;
+  v_fallos text[] := '{}';
+begin
+  select token into v_tok_pase   from kds_device
+   where account_id = CUENTA and label = 'Pase'   and location_id = ALCALA;
+  select token into v_tok_cocina from kds_device
+   where account_id = CUENTA and label = 'Cocina' and location_id = ALCALA;
+  select token into v_tok_ambas  from kds_device
+   where account_id = CUENTA and label = 'Tablet camichi4';
+
+  if v_tok_pase is null or v_tok_cocina is null or v_tok_ambas is null then
+    raise exception 'ENSAYO: faltan aparatos. Medido hoy: Alcalá tiene «Pase» '
+                    '(1 estación expo) y «Cocina» (1 prep), y Carabanchel '
+                    '«Tablet camichi4» (0 estaciones). Si esto falla es que el '
+                    'mapa de tablets ha cambiado, y entonces el ensayo B ya no '
+                    'dice lo que cree decir.';
+  end if;
+
+  -- ── A · ALCANCE POR CUENTA ──────────────────────────────────────────────
+  --
+  -- 🔴 MEDIDO ANTES DE ESCRIBIR ESTO: hoy NINGÚN local tiene ventas de más de
+  -- una cuenta (cero locales con `count(distinct account_id) > 1` en 90 días).
+  -- O sea que un ensayo que sólo CONTASE tarjetas ajenas daría verde sin haber
+  -- probado nada, porque no hay nada que pueda escaparse todavía. Eso es una
+  -- prueba espejo y la regla 31 no la admite.
+  --
+  -- Así que se PLANTA: se le cambia la cuenta a una venta viva de Alcalá y se
+  -- exige que desaparezca. Si `pase_board` filtrara sólo por local --que es lo
+  -- que hacía mi primer borrador-- seguiría saliendo y el ensayo se cae.
+  v_b := public.pase_board(v_tok_pase);
+  select count(*) into v_n
+    from jsonb_array_elements(v_b -> 'tarjetas') t
+   where not exists (select 1 from sale s
+                      where s.id = (t ->> 'sale_id')::uuid and s.account_id = CUENTA);
+  if v_n > 0 then v_fallos := v_fallos || format('A1: %s tarjetas de otra cuenta', v_n); end if;
+
+  select (t ->> 'sale_id')::uuid into v_venta from jsonb_array_elements(v_b -> 'tarjetas') t limit 1;
+  if v_venta is null then
+    -- No es un fallo: puede no haber pedido vivo. Pero se DICE, en vez de dar
+    -- por ensayado lo que no se ha ensayado (regla 32).
+    raise notice 'ENSAYO A2 · SIN ENSAYAR: no había ninguna tarjeta viva que plantar.';
+  else
+    begin
+      update sale set account_id = PLANTILLA where id = v_venta;
+      if exists (select 1 from jsonb_array_elements(public.pase_board(v_tok_pase) -> 'tarjetas') t
+                  where (t ->> 'sale_id')::uuid = v_venta) then
+        v_fallos := v_fallos || 'A2: una venta de OTRA cuenta sigue saliendo en el tablero';
+      end if;
+      raise exception 'DESHACER_A2';
+    exception when others then
+      if sqlerrm <> 'DESHACER_A2' then v_fallos := v_fallos || ('A2 sin ensayar: ' || sqlerrm); end if;
+    end;
+  end if;
+
+  -- ── B · EL PAPEL, de `kitchen_station.kind`. Cero campos nuevos. ─────────
+  v_papel := public.pase_board(v_tok_pase)   ->> 'papel';
+  if v_papel <> 'pase'   then v_fallos := v_fallos || ('B: «Pase» da ' || v_papel); end if;
+  v_papel := public.pase_board(v_tok_cocina) ->> 'papel';
+  if v_papel <> 'cocina' then v_fallos := v_fallos || ('B: «Cocina» da ' || v_papel); end if;
+  v_papel := public.pase_board(v_tok_ambas)  ->> 'papel';
+  if v_papel <> 'ambas'  then v_fallos := v_fallos || ('B: camichi4 da ' || v_papel); end if;
+
+  -- ── C · EL INTERRUPTOR NACE APAGADO, y el tablero lo dice ───────────────
+  select count(*) into v_n from kitchen_time_config where coalesce(pase_activo, false);
+  if v_n > 0 then v_fallos := v_fallos || format('C: %s locales nacen ENCENDIDOS', v_n); end if;
+  if (public.pase_board(v_tok_pase) ->> 'pase_activo') <> 'false' then
+    v_fallos := v_fallos || 'C: el tablero dice que está encendido';
+  end if;
+
+  -- ── D · SIN LLAVES NI DATOS DE MÁS ──────────────────────────────────────
+  --
+  -- 🔴 LA RAYA SE HA ESTRECHADO, porque ahora SÍ sale un teléfono: el del
+  -- repartidor, que es de casa. No basta con mirar el nombre del campo. Se
+  -- compara el VALOR del teléfono del cliente contra el texto entero del
+  -- jsonb, así que si se colara bajo otra etiqueta, el ensayo se cae igual.
+  v_b := public.pase_board(v_tok_pase);
+  for v_venta, v_tel in
+    select s.id, s.customer_phone from sale s
+     where s.id in (select (t ->> 'sale_id')::uuid from jsonb_array_elements(v_b -> 'tarjetas') t)
+       and nullif(trim(s.customer_phone), '') is not null
+  loop
+    if v_b::text like '%' || v_tel || '%' then
+      v_fallos := v_fallos || 'D: el teléfono del CLIENTE viaja en el tablero';
+      exit;
+    end if;
+  end loop;
+  if v_b::text ~ 'delivery_address|public_token|customer_phone|"token"' then
+    v_fallos := v_fallos || 'D: el jsonb trae dirección, token o teléfono de cliente';
+  end if;
+
+  -- ── H · EL REPARTIDOR, contra la población real ─────────────────────────
+  --
+  -- Medido hoy, 14 días: 231 repartos propios con flota, los 231 con nombre Y
+  -- teléfono, cero excepciones; y 0 de 1.424 de plataforma con cualquiera de
+  -- los dos. Aquí se exige lo mismo sobre lo que salga vivo.
+  select count(*) into v_n from jsonb_array_elements(v_b -> 'tarjetas') t
+   where coalesce((t ->> 'has_courier')::boolean, false)
+     and (nullif(trim(t ->> 'repartidor_nombre'), '') is null
+          or nullif(trim(t ->> 'repartidor_telefono'), '') is null);
+  if v_n > 0 then v_fallos := v_fallos || format('H: %s con flota y sin nombre o sin teléfono', v_n); end if;
+
+  select count(*) into v_n from jsonb_array_elements(v_b -> 'tarjetas') t
+   where coalesce(t ->> 'service_type', '') like '%platform%'
+     and (nullif(trim(t ->> 'repartidor_nombre'), '') is not null
+          or nullif(trim(t ->> 'repartidor_telefono'), '') is not null);
+  if v_n > 0 then v_fallos := v_fallos || format('H: %s de plataforma con repartidor inventado', v_n); end if;
+
+  if array_length(v_fallos, 1) > 0 then
+    raise exception 'ENSAYO A-D/H: %', array_to_string(v_fallos, ' · ');
+  end if;
+  raise notice 'ENSAYO A-D/H: en verde.';
+end
+$ensayo$;
+
+
+-- ═══ ENSAYO E · F · G · el tablero de cocina y el sello ════════════════════
+--
+-- 🔴 `kds_board` TOMA DOS ARGUMENTOS: `(p_location_id uuid, p_device_token text)`.
+-- Mi primer borrador lo llamaba con uno y se habría caído con un 42883 a las
+-- 23:45, con la banda encima. Comprobado contra `pg_proc` antes de escribirlo,
+-- que es lo que había que haber hecho la primera vez.
+do $ensayo_efg$
+declare
+  ALCALA constant uuid := '38158159-cd71-4056-950b-53425afac1ce';
+  v_tok_cocina text; v_venta uuid; v_n int; v_antes int; v_local text;
+  v_fallos text[] := '{}';
+begin
+  select token into v_tok_cocina from kds_device where label = 'Cocina' and location_id = ALCALA;
+
+  -- ── E · APAGADO, LOS MISMOS TICKETS QUE ANTES ───────────────────────────
+  -- Las dos mitades, con la misma vara: `_pase_antes` se llenó arriba con la
+  -- función vieja; esto vuelve a contar con la nueva, local por local.
+  for v_local, v_antes, v_n in
+    select a.local, a.tickets,
+           jsonb_array_length(coalesce(public.kds_board(a.location_id, a.token) -> 'tickets', '[]'::jsonb))
+      from _pase_antes a
+  loop
+    if v_n is distinct from v_antes then
+      v_fallos := v_fallos || format('E: %s tenía %s tickets y ahora %s, con el Pase APAGADO',
+                                     v_local, v_antes, v_n);
+    else
+      raise notice 'ENSAYO E · %: % tickets antes y % después.', v_local, v_antes, v_n;
+    end if;
+  end loop;
+
+  -- ── F y G · SE ENSAYAN POR EL CAMINO, NO POR LA FÓRMULA ─────────────────
+  --
+  -- Regla 10: la pregunta no es «¿sale el número?» sino «¿quién escribe esto y
+  -- qué le pasa a esa escritura?». Así que no se planta `ready_at` a mano: se
+  -- mueve el ESTADO, que es lo que hace la tablet, y se mira qué sella el
+  -- disparador. `sale` es el camino del pedido en persona, y por eso todo esto
+  -- va dentro de un punto de retorno y la tanda entera espera a las 23:45.
+  select (t ->> 'sale_id')::uuid into v_venta
+    from jsonb_array_elements(public.kds_board(ALCALA, v_tok_cocina) -> 'tickets') t
+   limit 1;
+
+  if v_venta is null then
+    raise notice 'ENSAYO F y G · SIN ENSAYAR: el tablero de cocina de Alcalá está '
+                 'vacío ahora mismo. Hay que volver a pasarlos con el local en '
+                 'servicio: medido hoy a las 19:00, Alcalá tenía 0 tickets y '
+                 'Carabanchel 1, así que esto puede pasar de verdad.';
+  else
+    begin
+      -- El camino de verdad: marcar listo desde la tablet.
+      update sale set order_status = 'awaiting_collection' where id = v_venta;
+      if (select ready_at from sale where id = v_venta) is null then
+        v_fallos := v_fallos || 'G: marcar listo NO sella `ready_at`';
+      end if;
+
+      -- F, apagado: sellado y todo, sigue en cocina porque el Pase no está.
+      if not exists (select 1 from jsonb_array_elements(public.kds_board(ALCALA, v_tok_cocina) -> 'tickets') t
+                      where (t ->> 'sale_id')::uuid = v_venta) then
+        v_fallos := v_fallos || 'F: con el Pase APAGADO un pedido sellado ya desaparece de cocina';
+      end if;
+
+      -- F, encendido: la expo deja de ser la única salida.
+      update kitchen_time_config set pase_activo = true where location_id = ALCALA;
+      if exists (select 1 from jsonb_array_elements(public.kds_board(ALCALA, v_tok_cocina) -> 'tickets') t
+                  where (t ->> 'sale_id')::uuid = v_venta) then
+        v_fallos := v_fallos || 'F: con el Pase ENCENDIDO un pedido sellado sigue en cocina';
+      end if;
+      update kitchen_time_config set pase_activo = false where location_id = ALCALA;
+
+      -- G, la vuelta: reabrir borra el sello y el pedido regresa al tablero.
+      update sale set order_status = 'in_preparation' where id = v_venta;
+      if (select ready_at from sale where id = v_venta) is not null then
+        v_fallos := v_fallos || 'G: reabrir NO borra el sello, y el pedido no vuelve a cocina';
+      end if;
+
+      raise exception 'DESHACER_FG';
+    exception when others then
+      if sqlerrm <> 'DESHACER_FG' then v_fallos := v_fallos || ('F/G sin ensayar: ' || sqlerrm); end if;
+    end;
+  end if;
+
+  if array_length(v_fallos, 1) > 0 then
+    raise exception 'ENSAYO E-G: %', array_to_string(v_fallos, ' · ');
+  end if;
+  raise notice 'ENSAYO E-G: en verde.';
+end
+$ensayo_efg$;
+
+
+-- ═══ LO QUE ESTE ENSAYO NO PRUEBA, DICHO ═══════════════════════════════════
+--
+--  · A2, F y G sólo corren si a las 23:45 hay pedidos vivos. Si no los hay,
+--    avisan por `notice` con las palabras SIN ENSAYAR, y eso se pega en el
+--    parte tal cual: no se da por bueno lo que no se ha probado.
+--  · E compara CUÁNTOS tickets, no cuáles. Con el interruptor apagado la
+--    condición nueva ni se evalúa, así que el número basta; el día que se
+--    encienda de verdad hay que comparar identificadores.
+--  · Nada de esto prueba que la tablet pinte bien. Eso son la maqueta y las 33
+--    pruebas de `lasTresZonas`, que no tocan la base.
