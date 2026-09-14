@@ -17,6 +17,7 @@ import {
   textoDelBotonGuardar, laConfirmacionAlEditar,
   elContadorDePlatos, marcarLaCategoria, elCambioEnPlatos, laConfirmacionDePlatos,
   laOfertaDeLasIguales, lasQueQuedanFuera, dondeViveLaIgual,
+  laEtiquetaDeLaIgual, loQuePasaConLasCedidas,
   textoDelBotonDeLasIguales, laConfirmacionDeLasIguales,
   type UnaIgual, type UnaQueQuedaFuera,
   type BorradorDePregunta, type OpcionNueva,
@@ -347,11 +348,11 @@ describe('tablero 3 · el contador y lo que cambia', () => {
 
 describe('las iguales: se ofrecen, no se aplican a ciegas', () => {
   const IGUALES: UnaIgual[] = [
-    { id: 'a', nombre: 'Salsa Yogur', marca: 'Meraki Pita', pregunta: 'Escoge una salsa para tu pita' },
-    { id: 'b', nombre: 'Salsa Yogur', marca: 'Meraki Pita', pregunta: 'Escoge una salsa para tu pita' },
-    { id: 'c', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: '1. Escoge la salsa para tu primer kebab' },
-    { id: 'd', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: '2. Escoge la salsa para tu segundo kebab' },
-    { id: 'e', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: 'Escoge una salsa para tu bowl/plato' },
+    { id: 'a', nombre: 'Salsa Yogur', marca: 'Meraki Pita', pregunta: 'Escoge una salsa para tu pita', cedida: false },
+    { id: 'b', nombre: 'Salsa Yogur', marca: 'Meraki Pita', pregunta: 'Escoge una salsa para tu pita', cedida: false },
+    { id: 'c', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: '1. Escoge la salsa para tu primer kebab', cedida: false },
+    { id: 'd', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: '2. Escoge la salsa para tu segundo kebab', cedida: false },
+    { id: 'e', nombre: 'Salsa Yogur', marca: 'The Urban Kebab', pregunta: 'Escoge una salsa para tu bowl/plato', cedida: false },
   ]
 
   it('la oferta lleva el número y el reparto por marca, y es una pregunta', () => {
@@ -374,17 +375,85 @@ describe('las iguales: se ofrecen, no se aplican a ciegas', () => {
     // Sin esta línea la pantalla diría «son 5» cuando son 12.
     const fuera: UnaQueQuedaFuera[] = [
       ...Array.from({ length: 7 }, (_, i) => ({
-        id: `f${i}`, marca: 'Meraki Pita', pregunta: 'x', motivo: 'ya_decidida' as const })),
-      { id: 'g', marca: 'Lobbers', pregunta: 'y', motivo: 'cedida' as const },
+        id: `f${i}`, marca: 'Meraki Pita', pregunta: 'x', motivo: 'ya_decidida' as const, cedida: false })),
+      { id: 'g', marca: 'Lobbers', pregunta: 'y', motivo: 'apagada' as const, cedida: true },
     ]
     const t = lasQueQuedanFuera(fuera)!
     expect(t).toContain('otras 8')
     expect(t).toContain('7 ya tienen decidido lo suyo')
-    expect(t).toContain('1 está en una marca que manda Last')
+    expect(t).toContain('1 está retirada')
+  })
+
+  it('🔴 el reparto CUADRA aunque llegue un motivo que no conocemos (regla 7)', () => {
+    // Esto no es hipotético: al quitar el motivo «cedida» la frase se quedó
+    // diciendo «hay otras 8: 7 ya tienen decidido lo suyo» y la octava
+    // desaparecía entre dos filtros que no cubrían todo. Contar de menos es
+    // exactamente lo que esta línea existe para impedir.
+    const fuera = [
+      { id: 'a', marca: 'M', pregunta: 'x', motivo: 'ya_decidida', cedida: false },
+      { id: 'b', marca: 'M', pregunta: 'x', motivo: 'lo_que_sea_manana', cedida: false },
+    ] as unknown as UnaQueQuedaFuera[]
+    const t = lasQueQuedanFuera(fuera)!
+    expect(t).toContain('otras 2')
+    expect(t).toContain('1 ya tiene decidido lo suyo')
+    expect(t).toContain('1 está retirada')
   })
 
   it('y si no queda ninguna fuera, tampoco se inventa la línea', () => {
     expect(lasQueQuedanFuera([])).toBeNull()
+  })
+
+  // ── LAS CEDIDAS ENTRAN (14/09) ───────────────────────────────────────────
+  // DATOS REALES, medidos en producción hoy:
+  //   · «Bacon» de Big Mike´s Burger Joint (cedida, decidida) y «Bacon» de
+  //     Milanesa Haus (cedida, SIN decidir). Antes ninguna de las dos se veía
+  //     desde la otra: las dos caían en el filtro de marca propia.
+  //   · «Sin pepinillos» de Lovers Burgers enseñaba a Lobbers con motivo
+  //     «cedida» — y Lobbers YA TENÍA FICHA desde hacía meses (regla 30).
+
+  const BACON: UnaIgual[] = [
+    { id: '5258f7cc-3216-4c49-ba16-8cdf3003199c', nombre: 'Bacon', marca: 'Milanesa Haus',
+      pregunta: 'Milanesa Haus, elige tus 3 Toppings.**', cedida: true },
+  ]
+
+  it('🔴 una cedida SE OFRECE: es lo que desbloquea la raya', () => {
+    const t = laOfertaDeLasIguales(BACON)!
+    expect(t).toContain('Milanesa Haus ×1')
+    expect(t).toContain('¿La resuelvo?')
+  })
+
+  it('la fila cedida lleva etiqueta, y la propia no lleva ninguna', () => {
+    expect(laEtiquetaDeLaIgual(BACON[0])).toBe('La carta la manda Last')
+    expect(laEtiquetaDeLaIgual(IGUALES[0])).toBeNull()
+  })
+
+  it('🔴 y se explica UNA vez qué se reescribe de madrugada y qué no', () => {
+    const t = loQuePasaConLasCedidas(BACON)!
+    expect(t).toContain('Una de ellas')
+    expect(t).toContain('de madrugada')
+    expect(t).toContain('el nombre y el precio, no esto')
+    // Y no se pinta cuando no hace falta: un aviso que sale siempre no se lee.
+    expect(loQuePasaConLasCedidas(IGUALES)).toBeNull()
+    expect(loQuePasaConLasCedidas([])).toBeNull()
+  })
+
+  it('con varias cedidas habla en plural y dice cuántas', () => {
+    const dos = [...BACON, { ...BACON[0], id: 'otra', marca: 'Lobbers' }]
+    expect(loQuePasaConLasCedidas(dos)!).toContain('2 de ellas')
+  })
+
+  it('🔴 la confirmación dice si se ha escrito en una carta que no es nuestra', () => {
+    const t = laConfirmacionDeLasIguales('Bacon',
+      ['Big Mike´s Burger Joint · Extras (burger)', 'Milanesa Haus · Milanesa Haus, elige tus 3 Toppings.**'], 2)
+    expect(t).toContain('resuelta en 2 sitios')
+    expect(t).toContain('2 de ellos la carta la manda Last')
+    expect(t).toContain('no el nombre ni el precio')
+  })
+
+  it('y no añade esa coletilla cuando no hay ninguna cedida', () => {
+    const t = laConfirmacionDeLasIguales('Salsa Yogur', ['Meraki Pita · Escoge una salsa para tu pita'], 0)
+    expect(t).not.toContain('Last')
+    expect(t).toContain('resuelta en 1 sitio')
   })
 
   it('cada fila dice DÓNDE vive: la marca y la pregunta', () => {

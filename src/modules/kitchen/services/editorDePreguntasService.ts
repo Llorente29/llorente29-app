@@ -291,12 +291,14 @@ export async function getLasIguales(
       nombre: (x.nombre as string) ?? '',
       pregunta: (x.pregunta as string) ?? '',
       marca: (x.marca as string) ?? 'Sin marca',
+      cedida: x.cedida === true,
     })),
     fuera: (d.fuera as Array<Record<string, unknown>>).map((x) => ({
       id: x.id as string,
       pregunta: (x.pregunta as string) ?? '',
       marca: (x.marca as string) ?? 'Sin marca',
       motivo: (x.motivo as UnaQueQuedaFuera['motivo']) ?? 'apagada',
+      cedida: x.cedida === true,
     })),
   }
 }
@@ -306,7 +308,7 @@ export async function aplicarALasIguales(a: {
   opciones: string[]
   efecto: { tipo: string; ficha: string | null; cantidad: number | null; unidad: string | null }
   actor: string
-}): Promise<{ resueltas: number; donde: string[] }> {
+}): Promise<{ resueltas: number; cedidas: number; donde: string[] }> {
   const d = await rpc<Record<string, unknown>>('kitchen_aplicar_a_las_iguales', {
     p_account: a.accountId,
     p_opciones: a.opciones,
@@ -320,6 +322,9 @@ export async function aplicarALasIguales(a: {
   })
   return {
     resueltas: Number(d.resueltas ?? 0),
+    // Cuántos de esos sitios son marcas cuya carta manda Last. Va a la
+    // confirmación: si se ha escrito en una carta que no es nuestra, se dice.
+    cedidas: Number(d.cedidas ?? 0),
     donde: ((d.donde as string[]) ?? []),
   }
 }

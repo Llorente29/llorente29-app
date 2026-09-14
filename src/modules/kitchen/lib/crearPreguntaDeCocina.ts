@@ -556,12 +556,33 @@ export function laConfirmacionDePlatos(
 // llamen así» es como se escribe en siete sitios una decisión que valía para
 // cuatro — y varias de estas cruzan DOS marcas propias.
 
+// ── LAS CEDIDAS ENTRAN (14/09) ─────────────────────────────────────────────
+//
+// Hasta hoy, una respuesta de una marca cuya carta manda Last se quedaba fuera
+// con motivo «cedida», y la pantalla escribía «está en una marca que manda Last
+// y no se toca». Las dos mitades eran falsas:
+//
+//   · SÍ se toca. La pantalla de Extras nunca ha mirado de quién es la marca, y
+//     por ahí ya se le ha puesto ficha a 37 respuestas cedidas.
+//   · Y peor: «cedida» se miraba ANTES que «ya decidida», así que tapaba el
+//     trabajo hecho. De las 17 cedidas que salían en esta caja, 16 YA ESTABAN
+//     DECIDIDAS y la pantalla las anunciaba como intocables (regla 30).
+//
+// Lo que se escribe aquí es la FICHA --qué descuenta del almacén--, y la ficha
+// es nuestra: el importador reescribe el nombre y el precio, no esto. Medido:
+// 18 de esas 37 fueron reimportadas DESPUÉS de tener ficha y la ficha sigue.
+//
+// Así que `cedida` deja de ser un MOTIVO y pasa a ser una ETIQUETA que viaja al
+// lado del motivo de verdad. Se abre la puerta; no se disimula por dónde entra.
+
 /** Una respuesta que se llama igual y sigue sin decidir. */
 export interface UnaIgual {
   id: string
   nombre: string
   pregunta: string
   marca: string
+  /** La carta de esa marca la manda Last. La ficha, no. */
+  cedida: boolean
 }
 
 /** Una que se llama igual pero NO se toca, con su motivo. */
@@ -569,7 +590,9 @@ export interface UnaQueQuedaFuera {
   id: string
   pregunta: string
   marca: string
-  motivo: 'cedida' | 'ya_decidida' | 'apagada'
+  motivo: 'ya_decidida' | 'apagada'
+  /** La carta de esa marca la manda Last. La ficha, no. */
+  cedida: boolean
 }
 
 /**
@@ -596,15 +619,19 @@ export function laOfertaDeLasIguales(iguales: UnaIgual[]): string | null {
  */
 export function lasQueQuedanFuera(fuera: UnaQueQuedaFuera[]): string | null {
   if (fuera.length === 0) return null
-  const cedidas = fuera.filter((f) => f.motivo === 'cedida').length
+  // «cedida» ya no es un motivo: una cedida se queda fuera por lo mismo que
+  // cualquier otra --ya decidida, o retirada-- o no se queda fuera.
+  //
+  // 🔴 EL REPARTO ES EXHAUSTIVO A PROPÓSITO (14/09). El segundo montón es «todo
+  // lo demás», no «las que ponga `apagada`. Al quitar el motivo «cedida» esta
+  // función se quedó diciendo «hay otras 8: 7 ya tienen decidido lo suyo» --la
+  // octava traía el motivo viejo y se caía por el agujero entre los dos
+  // filtros--. Lo cazó la prueba. Dos filtros que no cubren todos los casos son
+  // una frase que cuenta de menos, y eso es exactamente lo que la regla 7
+  // prohíbe: la línea existe para que nadie crea que son 5 cuando son 12.
   const decididas = fuera.filter((f) => f.motivo === 'ya_decidida').length
-  const apagadas = fuera.filter((f) => f.motivo === 'apagada').length
+  const apagadas = fuera.length - decididas
   const partes: string[] = []
-  if (cedidas > 0) {
-    partes.push(cedidas === 1
-      ? '1 está en una marca que manda Last y no se toca'
-      : `${cedidas} están en marcas que manda Last y no se tocan`)
-  }
   if (decididas > 0) {
     partes.push(decididas === 1 ? '1 ya tiene decidido lo suyo' : `${decididas} ya tienen decidido lo suyo`)
   }
@@ -620,6 +647,34 @@ export function dondeViveLaIgual(i: UnaIgual): string {
   return `${i.marca} · ${i.pregunta}`
 }
 
+/**
+ * LA ETIQUETA DE UNA FILA CEDIDA. `null` cuando la marca es nuestra: una
+ * etiqueta que sale en todas no distingue nada.
+ *
+ * No dice «no se toca» --que era mentira-- sino de quién es la carta. Lo que
+ * significa para quien mira lo explica la frase de abajo, una vez, arriba.
+ */
+export function laEtiquetaDeLaIgual(i: { cedida: boolean }): string | null {
+  return i.cedida ? 'La carta la manda Last' : null
+}
+
+/**
+ * QUÉ PASA CON LAS CEDIDAS, dicho una vez y en castellano de oficina.
+ *
+ * Sale sólo si hay alguna: un aviso que sale siempre deja de leerse. Y dice lo
+ * único que hace falta saber para pulsar tranquilo: qué se reescribe de
+ * madrugada y qué no.
+ */
+export function loQuePasaConLasCedidas(iguales: UnaIgual[]): string | null {
+  const n = iguales.filter((i) => i.cedida).length
+  if (n === 0) return null
+  const cuales = n === 1
+    ? 'Una de ellas es de una marca cuya carta manda Last'
+    : `${n} de ellas son de marcas cuya carta manda Last`
+  return `${cuales}. Lo que pongas aquí es lo que descuenta del almacén, y eso es nuestro:`
+    + ' la importación de madrugada reescribe el nombre y el precio, no esto.'
+}
+
 /** El botón, que dice a cuántas va (regla 8). */
 export function textoDelBotonDeLasIguales(cuantasMarcadas: number): string {
   if (cuantasMarcadas === 0) return 'Solo esta'
@@ -628,10 +683,22 @@ export function textoDelBotonDeLasIguales(cuantasMarcadas: number): string {
     : `Resolver también las otras ${cuantasMarcadas}`
 }
 
-/** La confirmación, con contenido y con las marcas nombradas. */
-export function laConfirmacionDeLasIguales(nombre: string, donde: string[]): string {
+/**
+ * La confirmación, con contenido y con las marcas nombradas (regla 8).
+ *
+ * `cedidas` es cuántos de esos sitios son marcas que manda Last. Se dice: si se
+ * ha escrito en una carta que no es nuestra, quien pulsó tiene que enterarse en
+ * la confirmación, no descubrirlo después.
+ */
+export function laConfirmacionDeLasIguales(
+  nombre: string, donde: string[], cedidas = 0,
+): string {
   if (donde.length === 0) return `«${nombre.trim()}» resuelta.`
   const marcas = [...new Set(donde.map((d) => d.split(' · ')[0]))]
+  const cola = cedidas > 0
+    ? ` En ${cedidas === 1 ? '1 de ellos' : `${cedidas} de ellos`} la carta la manda Last:`
+      + ' se ha guardado lo que descuenta, no el nombre ni el precio.'
+    : ''
   return `«${nombre.trim()}» resuelta en ${donde.length} ${donde.length === 1 ? 'sitio' : 'sitios'}`
-    + ` (${marcas.join(', ')}). Cada una queda con su propio registro de quién y cuándo.`
+    + ` (${marcas.join(', ')}). Cada una queda con su propio registro de quién y cuándo.${cola}`
 }
