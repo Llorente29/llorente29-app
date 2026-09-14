@@ -85,6 +85,13 @@ export interface FichaDeRespuesta {
   activa: boolean
   retiradaAt: string | null
   retiradaPor: string | null
+  /**
+   * El caso CONTRARIO al de arriba. Arriba está quién la apagó; esto es a
+   * quién se la volvieron a encender. Con valor y con la respuesta ACTIVA =
+   * alguien la quitó y la importación de madrugada la ha vuelto a poner.
+   */
+  reencendidaAt: string | null
+  reencendidaSobre: string | null
   cedida: boolean
   marca: string
   pregunta: string
@@ -127,6 +134,8 @@ export async function getFichaDeRespuesta(
     activa: d.activa === true,
     retiradaAt: (d.retirada_at as string | null) ?? null,
     retiradaPor: (d.retirada_por as string | null) ?? null,
+    reencendidaAt: (d.reencendida_at as string | null) ?? null,
+    reencendidaSobre: (d.reencendida_sobre as string | null) ?? null,
     cedida: d.cedida === true,
     marca: s(d.marca, 'Sin marca'),
     pregunta: s(d.pregunta),

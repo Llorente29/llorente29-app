@@ -368,3 +368,36 @@ export function tituloSinPlato(preguntas: number, opciones: number): string {
 export function lineaSinPlato(p: Pregunta): string {
   return p.marca ? `Marca: ${p.marca}` : 'Sin marca'
 }
+
+// ── LAST TE LO HA DESHECHO (14/09) ─────────────────────────────────────────
+//
+// Julio, 13/09 19:45: «A2c no se arregla quitándolo: se arregla haciéndolo
+// hablar». A2c es el trozo del importador que, cuando Last recupera una
+// opción que estaba apagada, la vuelve a encender sola. Eso está bien para lo
+// que apagó el propio importador. Lo que no puede quedar en silencio es
+// cuando deshace lo que decidió UNA PERSONA.
+//
+// Hasta hoy no sólo quedaba en silencio: al encenderla se borraba el sello de
+// quién la había apagado, o sea que desaparecía hasta la prueba. Ahora la fila
+// se queda marcada y esto es lo que se lee en la ficha de la respuesta.
+//
+// Y NO SE DICE UNA HORA, se dice «de madrugada». La hora de la pasada es cosa
+// nuestra y cambia; lo que le importa a quien lo lee es que pasó mientras no
+// estaba, y qué tiene que hacer para que no vuelva a pasar.
+
+/** `null` si no hay nada que contar: la marca sólo existe cuando la hay. */
+export function loQueLastTeHaDeshecho(
+  f: { activa: boolean; reencendidaSobre: string | null; reencendidaAt: string | null },
+  fecha: (iso: string) => string,
+): string | null {
+  // La marca sólo significa algo si la respuesta está ENCENDIDA: apagada,
+  // querría decir que alguien ya la volvió a quitar, y entonces se limpia
+  // sola en la base. Se comprueba aquí igual, porque una pantalla no debería
+  // depender de que el disparador no falle nunca.
+  if (!f.activa || f.reencendidaSobre !== 'persona') return null
+  const cuando = f.reencendidaAt ? ` el ${fecha(f.reencendidaAt)}` : ''
+  return `La habías quitado y Last la sigue sirviendo, así que la importación`
+    + ` de madrugada la ha vuelto a poner a la venta${cuando}.`
+    + ` Si tiene que estar quitada, hay que quitarla TAMBIÉN en Last:`
+    + ` mientras Last la sirva, volverá a encenderse cada noche.`
+}
