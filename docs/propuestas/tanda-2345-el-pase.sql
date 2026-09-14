@@ -46,19 +46,40 @@ set local statement_timeout = '60s';
 
 -- 🔴 Y UNA GUARDIA, PORQUE UN `set local` FUERA DE TRANSACCIÓN NO FALLA: suelta
 -- un aviso y no hace nada. O sea que la protección podría no estar puesta y la
--- migración seguir adelante tan contenta, que es un éxito silencioso de los de
--- la regla 8. Esto lo convierte en un fallo ruidoso. Comprobado que `3s` es la
--- forma normalizada que devuelve `current_setting`, no `3000ms` ni `00:00:03`.
+-- migración seguir adelante tan contenta --éxito silencioso de los de la regla
+-- 8-- y, peor, sin transacción no hay vuelta atrás y los ensayos que plantan
+-- DEJARÍAN LA PLANTA PUESTA. Esto lo convierte en un fallo ruidoso.
+--
+-- 🔴 Y SE COMPARA EN MILISEGUNDOS, NO EN CADENAS. Mi primera versión comparaba
+-- `current_setting(...) <> '60s'` y se habría disparado LAS 100 VECES DE 100,
+-- abortando la tanda entera sin que nada estuviera mal. Postgres NORMALIZA el
+-- valor al guardarlo y pasa a minutos en cuanto es múltiplo de 60 s:
+--
+--     escribes '3s'  → devuelve '3s'      escribes '60s' → devuelve '1min'
+--
+--   y no depende del parámetro: `lock_timeout = '60s'` también devuelve
+--   '1min', y `statement_timeout = '3s'` devuelve '3s'. Medido las cuatro
+--   combinaciones. Yo comprobé la normalización de UNO de los dos y escribí la
+--   conclusión para los dos.
+--
+-- `pg_settings` da el número en la unidad base, sin normalizar y sin adornos,
+-- así que no hay cadena que adivinar. Y el mensaje dice los DOS valores reales:
+-- si algún día salta, el parte trae el diagnóstico puesto.
+--
+-- Ensayada por sus dos lados antes de darla por buena, que es la única forma
+-- que prueba algo (regla 36): con `lock_timeout` a 5 s salta y dice
+-- «lock=5000 ms, statement=60000 ms»; con los dos bien, pasa.
 do $guardia$
+declare
+  v_lock int := (select setting::int from pg_settings where name = 'lock_timeout');
+  v_stmt int := (select setting::int from pg_settings where name = 'statement_timeout');
 begin
-  if current_setting('lock_timeout') <> '3s'
-     or current_setting('statement_timeout') <> '60s' then
-    raise exception 'GUARDIA: los relojes no han prendido (lock=% · statement=%). '
-                    'Si un `set local` no prende es que esto NO corre dentro de '
-                    'una transacción — y sin transacción no hay relojes, no hay '
-                    'vuelta atrás y los ensayos que plantan dejarían la planta '
-                    'puesta. NO SEGUIR.',
-                    current_setting('lock_timeout'), current_setting('statement_timeout');
+  if v_lock <> 3000 or v_stmt <> 60000 then
+    raise exception 'GUARDIA: los relojes no han prendido (lock=% ms, statement=% ms). '
+                    'Si un `set local` no prende es que esto NO corre dentro de una '
+                    'transacción — y sin transacción no hay relojes, no hay vuelta '
+                    'atrás y los ensayos que plantan dejarían la planta puesta. '
+                    'NO SEGUIR.', v_lock, v_stmt;
   end if;
 end
 $guardia$;
