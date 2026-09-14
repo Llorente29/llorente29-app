@@ -1,0 +1,132 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PROPUESTA · NO APLICAR · 14/09/2026
+-- Cómo queda `kds_board` cuando el Pase existe y la expo no se pinta.
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- 🔴 NO ESTÁ EN `supabase/migrations/` A PROPÓSITO: es un borrador para revisar
+-- con la maqueta ya aprobada. `db push` no lo ve y nadie lo aplica sin querer.
+--
+-- ── EL FRENO QUE HAY QUE VER ANTES DE ESCRIBIR NADA ───────────────────────
+--
+-- El encargo dice, del tablero de cocina: «la estación expo no se pinta donde
+-- hay Pase. `kds_bump` se queda como está: se quita la puerta, no se le pone un
+-- guardia».
+--
+-- Pero la puerta de la expo es **la única salida del tablero**. Esto es de
+-- `kds_board`, dentro del CTE `vivos`:
+--
+--     and not exists (
+--       select 1 from kds_ticket_station_state st
+--       join kitchen_station k on k.id = st.station_id
+--       where st.sale_id = s.id and k.kind = 'expo' and st.status = 'done'
+--     )
+--
+-- Un ticket desaparece del tablero de cocina cuando **se marca la expo**. No
+-- por el estado del pedido, no por el tiempo: por ese bump y nada más. (Lo
+-- único que además lo tira es la gracia de 2 h de los cerrados y cancelados.)
+--
+-- O sea que si la expo deja de pintarse y nadie la marca, **los tickets no se
+-- van del tablero**: se quedan hasta que la venta cierre y pasen dos horas. En
+-- Alcalá eso son ~83 pedidos al día apilándose en la pantalla de cocina.
+--
+-- Quitar la puerta sin poner la salida en otro sitio rompe el tablero.
+--
+-- ── LO QUE SE PROPONE, Y POR QUÉ ASÍ ──────────────────────────────────────
+--
+-- Que el tablero deje de depender del bump y **derive**: si el pedido ya está
+-- marcado listo, ya no es cosa de la cocina, lo haya marcado quien lo haya
+-- marcado. Un solo escritor —el Pase, sobre `order_status`— y el tablero lee.
+--
+-- Se añade UNA condición al CTE `vivos`, al lado de la que ya existe:
+--
+--     and coalesce(s.order_status, '') not in
+--         ('awaiting_collection','awaiting_shipment','in_delivery')
+--
+-- Y con eso:
+--   · el bump de la expo SIGUE funcionando igual donde no hay Pase (la
+--     condición vieja se queda; no se toca `kds_bump`)
+--   · donde hay Pase, el ticket sale del tablero al pulsar «Listo», que es
+--     justo lo que hace el bump hoy
+--   · y deja de depender de que exista una estación expo, que es lo que hace
+--     falta en camichi4
+--
+-- 🔴 PERO NO ES INOFENSIVO CON EL INTERRUPTOR APAGADO, y por eso se dice antes
+-- de escribirlo, como pide el §6.2 del encargo:
+--
+--   Hoy, con el botón «Listo» de un toque (`OrderCard.tsx:657`, que manda TODO
+--   a `awaiting_collection`), un pedido marcado desde la pestaña **Pedidos**
+--   pasa a `awaiting_collection` y **sigue viéndose en el tablero de cocina**
+--   hasta que alguien marque la expo. Con esta condición añadida, desaparecería.
+--
+--   Eso es un cambio de comportamiento en los locales con el Pase APAGADO.
+--   Puede ser una mejora --hoy la cocina ve tickets ya marcados-- pero es un
+--   cambio, y la vuelta atrás tiene que ser de verdad.
+--
+-- ── LAS DOS FORMAS DE HACERLO, Y CUÁL RECOMIENDO ──────────────────────────
+--
+--   A) La condición a secas. Simple, pero cambia el tablero también con el
+--      interruptor apagado. NO cumple el §6.4.
+--
+--   B) La condición **colgada del interruptor**: solo se aplica si
+--      `kitchen_time_config.pase_activo` está encendido en ese local. Apagado,
+--      `kds_board` se comporta byte a byte como hoy.
+--
+-- **Recomiendo B**, y es lo que va escrito abajo. Cuesta una lectura más de
+-- `kitchen_time_config` --que `kds_board` no hace hoy-- y a cambio el §6.4 se
+-- cumple de verdad: apagado, nada cambia.
+--
+-- ── LO QUE ESTO NO TOCA ───────────────────────────────────────────────────
+--
+-- `kds_bump` no se toca. `kitchen_station` no se toca. `expo_station_id` y la
+-- lista `stations` siguen saliendo en el JSON: quién los pinta lo decide el
+-- front, que es donde tiene que decidirse.
+
+
+-- ═══ EL DIFF, sobre la versión viva (md5 del cuerpo por comprobar al aplicar) ═══
+--
+-- En `kds_board`, dentro del CTE `vivos`, DESPUÉS de la condición del expo:
+--
+--       and not exists (
+--         select 1 from kds_ticket_station_state st
+--         join kitchen_station k on k.id = st.station_id
+--         where st.sale_id = s.id and k.kind = 'expo' and st.status = 'done'
+--       )
+--
+-- se añade:
+--
+-- +     -- 14/09: con el Pase ENCENDIDO en este local, un pedido ya marcado
+-- +     -- listo deja de ser cosa del tablero de cocina, lo haya marcado quien
+-- +     -- lo haya marcado. Sin esto, al dejar de pintarse la expo nadie la
+-- +     -- marca y los tickets no salen nunca del tablero.
+-- +     -- Apagado el interruptor, esta condición no existe y el tablero se
+-- +     -- comporta exactamente como antes (§6.4 del encargo).
+-- +     and (
+-- +       not coalesce((select k2.pase_activo from kitchen_time_config k2
+-- +                      where k2.location_id = v_location_id), false)
+-- +       or coalesce(s.order_status, '') not in
+-- +          ('awaiting_collection','awaiting_shipment','in_delivery')
+-- +     )
+--
+-- Nada más. Ni una línea fuera de ese CTE.
+
+
+-- ═══ EL ENSAYO, para cuando se aplique ═══
+--
+-- Va dentro de la propia migración, con la aserción antes y después y todo
+-- revertido. Los cuatro casos, contra la población REAL (regla 31):
+--
+--   A · INTERRUPTOR APAGADO, pedido en `awaiting_collection` sin expo marcada:
+--       TIENE que seguir saliendo en `kds_board`. Es el §6.4: apagado, nada
+--       cambia. Si este falla, la vuelta atrás no es vuelta atrás.
+--
+--   B · INTERRUPTOR ENCENDIDO, el mismo pedido: ya NO sale.
+--
+--   C · INTERRUPTOR ENCENDIDO, pedido en `in_preparation`: sigue saliendo.
+--       (Que no se lleve por delante lo que la cocina está haciendo.)
+--
+--   D · INTERRUPTOR ENCENDIDO, expo marcada `done` a la vieja usanza: no sale.
+--       La condición vieja sigue viva y `kds_bump` no se ha tocado.
+--
+-- Y el conteo de los dos lados con la misma vara: cuántos tickets devuelve
+-- `kds_board` para Alcalá y para Carabanchel, antes y después, con el
+-- interruptor apagado. Tienen que ser los MISMOS números.
