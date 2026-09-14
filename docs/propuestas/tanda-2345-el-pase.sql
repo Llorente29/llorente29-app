@@ -414,6 +414,53 @@ end
 $ensayo$;
 
 
+-- ═══ 🔴 QUÉ SALE DE LA TRANSACCIÓN · MEDIDO EL 14/09 ANTES DE APLICAR ══════
+--
+-- F y G mueven el ESTADO de una venta por el camino real, y ese camino dispara
+-- cosas que podrían salirse de la base. Si algo sale, el `rollback` no lo trae
+-- de vuelta: un ticket de bolsa impreso en Alcalá, o un «listo» dicho a Glovo,
+-- no se deshacen. Así que se comprobó, no se supuso.
+--
+-- 1 · NO EXISTE NINGUNA VÍA SÍNCRONA DE SALIR. Extensiones instaladas: sólo
+--     `pg_net` 0.20.0. Ni `http`, ni `dblink`, ni `pg_background`. Y CERO
+--     funciones en toda la base --de cualquier esquema-- llaman a un
+--     `http_post(` o `http_get(` que no sea `net.`. Todo lo que sale, sale
+--     encolado.
+--
+--     (Mi primera regex daba las dos de `pg_net` como síncronas: `[^a-z_]`
+--     admitía el punto de `net.`, así que `net.http_post(` casaba. El mismo
+--     fallo de regex de por la mañana con el conteo de llamadas. Excluido el
+--     punto, la cifra de verdad es 0.)
+--
+-- 2 · UN `pg_net` ENCOLADO Y REVERTIDO NO SALE. Ensayado con testigo a los dos
+--     lados, mismo mecanismo y misma forma de URL:
+--
+--       revertido (dentro de un punto de retorno) → 0 en la cola, 0 respuestas
+--       testigo   (sin revertir)                  → salió: respuesta id 145336
+--
+--     La ausencia sólo significa algo porque el testigo sí dejó fila. Sin él,
+--     un cero no distingue «no salió» de «no se encoló nunca».
+--
+-- 3 · LAS DOS QUE SALEN EN ESTE CAMINO, y salen las dos por `pg_net`:
+--       · `trg_sale_push_status` — su condición es exactamente
+--         `old.order_status is distinct from new.order_status`, o sea que F y G
+--         LA DISPARAN. Revertida, no sale.
+--       · `tg_auto_print_bag_on_ready` — mira `awaiting_collection` y encola en
+--         `print_job`. Es un `insert` normal: otra sesión no puede leer una fila
+--         sin confirmar, así que el agente de impresión no la ve.
+--       · `tg_auto_dispatch` usa `pg_net` pero no menciona ninguno de los
+--         estados de este camino: no se dispara aquí.
+--
+-- ⚠️ LO QUE SÍ SE SALE, Y NO ES UN DATO: EL CERROJO DE FILA. Mientras la
+--    migración corre, la venta plantada queda bloqueada. Si la tablet intenta
+--    tocar ESA venta en ese momento, espera a que terminemos. Son segundos y no
+--    deja rastro, pero es el único efecto que un `rollback` no borra, y por eso
+--    F y G plantan sobre UNA venta, la primera del tablero, y no sobre varias.
+--
+-- ⚠️ Y ESTO NO AUTORIZA A ENSAYAR EN SERVICIO. La banda acaba a las 23:45
+--    justo porque a esa hora puede quedar gente cocinando. Que el ensayo sea
+--    reversible no lo hace invisible.
+
 -- ═══ ENSAYO E · F · G · el tablero de cocina y el sello ════════════════════
 --
 -- 🔴 `kds_board` TOMA DOS ARGUMENTOS: `(p_location_id uuid, p_device_token text)`.
