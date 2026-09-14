@@ -17,6 +17,8 @@ import KdsBoard from '../kds/components/KdsBoard'
 import KdsAlarmOverlay from '../kds/components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from '../kds/components/AvailabilityNoticeOverlay'
 import TabletAvailabilityTab from './TabletAvailabilityTab'
+import PaseBoard from '@/modules/pase/PaseBoard'
+import { getLoQueEsLaTablet, type LoQueEsLaTablet } from '@/modules/pase/services/paseService'
 import OrdersFeed from '../orders/components/OrdersFeed'
 import { useNuevaVersion } from '@/shell/version/useNuevaVersion'
 import PrintersSettingsPage from '../printing/components/PrintersSettingsPage'
@@ -37,7 +39,7 @@ function clearToken(): void {
   try { window.localStorage.removeItem(TOKEN_KEY) } catch { /* noop */ }
 }
 
-type Tab = 'pedidos' | 'cocina' | 'disponibilidad' | 'impresoras'
+type Tab = 'pase' | 'pedidos' | 'cocina' | 'disponibilidad' | 'impresoras'
 
 export default function TabletStationRoute() {
   // 01/09 — LA TABLET SE RECARGA SOLA. No tiene a nadie delante que pulse un
@@ -47,11 +49,23 @@ export default function TabletStationRoute() {
   // Pero NUNCA en mitad de un pedido: `useNuevaVersion` pregunta cada 10 s si
   // hay trabajo en curso —lo declara OrdersFeed— y espera. No se rinde: cuando
   // la última comanda se cierra, recarga.
+  // ⚠️ B74: el margen que hace inofensivo el hueco de `OrdersFeed` son estos
+  // 10 s por defecto. Si se bajan, léela antes (declara 0 antes de saber).
   useNuevaVersion({ autoRecarga: true })
 
   const [token, setToken] = useState<string | null>(null)
   const [pasteValue, setPasteValue] = useState('')
   const [tab, setTab] = useState<Tab>('pedidos')
+
+  /**
+   * QUÉ ES ESTA TABLET · `null` = todavía no se sabe, y eso NO es «como hoy
+   * por defecto»: es que no se ha preguntado. Mientras tanto se enseña lo de
+   * hoy, que es la única respuesta que no puede sorprender a nadie.
+   *
+   * (Regla 32, del mismo día: un valor que significa «no lo sé» no comparte
+   * representación con uno medido. Ver B74.)
+   */
+  const [loQueEs, setLoQueEs] = useState<LoQueEsLaTablet | null>(null)
 
   // fix/tablet-robustez (12/08): valida con device_location_by_token (~16ms,
   // no kds_board ~1-2s) con reintento infinito ante red/lentitud — solo un
@@ -61,6 +75,23 @@ export default function TabletStationRoute() {
   // Tarea E.2: aviso visible cuando una comanda/ticket agota sus 3 intentos
   // de impresión — antes se perdía muda hasta que el cliente reclamaba.
   const [printFailure, setPrintFailure] = useState<PrintExhaustedInfo | null>(null)
+  // ── Qué es esta tablet · UNA pregunta al arrancar, no en cada sondeo ──────
+  //
+  // El reparto de pestañas no cambia durante un servicio; las tarjetas sí.
+  //
+  // 🔴 VA AQUÍ ARRIBA, con los demás hooks, y no junto al código que lo usa:
+  // más abajo hay DOS retornos tempranos --la pantalla de vincular y la de
+  // validando-- y un hook después de un return se llama condicionalmente. Lo
+  // puse ahí primero y lo cazó `react-hooks/rules-of-hooks`.
+  useEffect(() => {
+    if (!token) return
+    let vivo = true
+    void getLoQueEsLaTablet(token)
+      .then(r => { if (vivo) setLoQueEs(r) })
+      .catch(() => { /* se queda en null: se enseña lo de hoy */ })
+    return () => { vivo = false }
+  }, [token])
+
   useEffect(() => onPrintJobExhausted(setPrintFailure), [])
 
   // Resolución inicial del token: ?token= en la URL o localStorage.
@@ -175,12 +206,36 @@ export default function TabletStationRoute() {
   }
 
   // ── Terminal con barra de pestañas ────────────────────────────────────────
+  //
+  // 🔴 EL REPARTO LO DECIDE EL TIPO DE LA ESTACIÓN (`kitchen_station.kind`),
+  // no la etiqueta de la tablet. Y sólo cuando el interruptor del local está
+  // encendido: con `pase_activo` en false, esto es EXACTAMENTE lo de hoy.
+  //
+  //     estación expo  → Pase, sin tablero de cocina
+  //     estación prep  → tablero de cocina, sin Pase
+  //     sin estación   → las dos (camichi4, en Carabanchel)
+  //
+  // «Pedidos» desaparece donde hay Pase: era el segundo sitio donde se marca
+  // listo, y la regla es que sólo haya uno.
+  //
+  // Impresoras se queda en las TRES: es donde se arregla la impresora, y es
+  // justo la que tiene que dejar de fallar en silencio.
+  const hayPase = loQueEs?.pase_activo === true && loQueEs.papel !== 'cocina'
+  const hayCocina = !loQueEs?.pase_activo || loQueEs.papel !== 'pase'
+
   const tabs: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
-    { id: 'pedidos', label: 'Pedidos', icon: ClipboardList },
-    { id: 'cocina', label: 'Cocina', icon: MonitorPlay },
+    ...(hayPase ? [{ id: 'pase' as Tab, label: 'Pase', icon: ClipboardList }] : []),
+    ...(hayPase ? [] : [{ id: 'pedidos' as Tab, label: 'Pedidos', icon: ClipboardList }]),
+    ...(hayCocina ? [{ id: 'cocina' as Tab, label: 'Cocina', icon: MonitorPlay }] : []),
     { id: 'disponibilidad', label: 'Disponibilidad', icon: CircleOff },
     { id: 'impresoras', label: 'Impresoras', icon: PrinterIcon },
   ]
+
+  // Si la pestaña abierta deja de existir --el interruptor se apaga mientras
+  // se mira-- se cae a la primera, que siempre existe. Sin esto la pantalla se
+  // queda en blanco sin decir por qué.
+  const tabValida = tabs.some(t => t.id === tab)
+  const tabActual: Tab = tabValida ? tab : tabs[0].id
   const locInfo = validation.kind === 'valid' ? validation.info : null
   const locationName = locInfo?.locationName ?? 'Local'
 
@@ -195,7 +250,7 @@ export default function TabletStationRoute() {
 
         <nav className="flex-1 flex items-stretch justify-center gap-1">
           {tabs.map(({ id, label, icon: Icon }) => {
-            const active = tab === id
+            const active = tabActual === id
             return (
               <button
                 key={id}
@@ -238,24 +293,28 @@ export default function TabletStationRoute() {
       <AvailabilityNoticeOverlay locationId={locInfo?.locationId ?? null} token={token} />
 
       <main className="flex-1 min-h-0">
-        {tab === 'cocina' && <KdsBoard locationId={null} token={token} />}
+        {tabActual === 'pase' && <PaseBoard token={token} />}
 
-        {tab === 'disponibilidad' && (
+        {tabActual === 'cocina' && <KdsBoard locationId={null} token={token} />}
+
+        {tabActual === 'disponibilidad' && (
           <TabletAvailabilityTab token={token} locationName={locationName} />
         )}
 
         {/* PEDIDOS SE QUEDA MONTADO, SOLO SE ESCONDE (11/09/2026).
+            ⚠️ B74: y que no desmonte es lo que hoy tapa que declare 0 antes de
+            tener respuesta. Si algún día desmonta, léela antes.
             `OrdersFeed` es quien declara si hay trabajo en curso, y de eso
             depende que la tablet NO se recargue en mitad de un servicio. Si se
             desmontaba al cambiar de pestaña, su `declaraTrabajoEnCurso(clave, 0)`
             de limpieza dejaba la estación diciendo «no hay nada» — y una tablet
             aparcada en Disponibilidad, que es justo donde se agotan los extras,
             se recargaba sola con comandas vivas. */}
-        <div className={`h-full overflow-y-auto p-4 bg-page${tab === 'pedidos' ? '' : ' hidden'}`}>
+        <div className={`h-full overflow-y-auto p-4 bg-page${tabActual === 'pedidos' ? '' : ' hidden'}`}>
           <OrdersFeed locationId={locInfo?.locationId ?? ''} token={token} />
         </div>
 
-        {tab === 'impresoras' && (
+        {tabActual === 'impresoras' && (
           <div className="h-full overflow-y-auto p-4 bg-page">
             <div className="max-w-2xl mx-auto">
               <PrintersSettingsPage token={token} />

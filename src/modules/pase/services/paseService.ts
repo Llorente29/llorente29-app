@@ -69,8 +69,23 @@ export interface TarjetaDelPase extends PedidoDelPase {
   avanzo_quien: string | null
 }
 
+/**
+ * QUÉ ES ESTA TABLET, y lo decide el TIPO DE SU ESTACIÓN, que ya existe:
+ * `kitchen_station.kind`. Cero campos nuevos.
+ *
+ *     estación expo  → Pase, y NO tablero de cocina
+ *     estación prep  → tablero de cocina, y NO Pase
+ *     sin estación   → las dos (camichi4, en Carabanchel)
+ *
+ * Lo deriva la RPC y no la pantalla: una regla en dos sitios es una regla que
+ * un día dice dos cosas.
+ */
+export type PapelDeLaTablet = 'cocina' | 'pase' | 'ambas'
+
 export interface ElTablero {
   local: string | null
+  /** Qué es esta tablet. Lo deriva `pase_board` del `kind` de su estación. */
+  papel: PapelDeLaTablet
   /** El interruptor del local. Apagado = el Pase no se pinta en ningún sitio. */
   pase_activo: boolean
   ahora: string
@@ -132,7 +147,37 @@ function noLoSabeTodavia(e: unknown): boolean {
 }
 
 const TABLERO_SIN_INSTALAR: ElTablero = {
-  local: null, pase_activo: false, ahora: '', tarjetas: [], sin_instalar: true,
+  local: null, papel: 'ambas', pase_activo: false, ahora: '', tarjetas: [],
+  sin_instalar: true,
+}
+
+/**
+ * LO QUE VE LA TABLET MIENTRAS NO SE SABE, que es una pregunta distinta de la
+ * anterior y por eso tiene su propio tipo.
+ *
+ * `null` = todavía no se ha preguntado. NO es «ambas», NO es «apagado»: es que
+ * no se sabe. Quien lo reciba tiene que enseñar lo de hoy y no adivinar —
+ * misma familia que B74, donde un `0` significaba a la vez «no hay» y «no he
+ * mirado».
+ */
+export interface LoQueEsLaTablet {
+  papel: PapelDeLaTablet
+  pase_activo: boolean
+}
+
+/**
+ * QUÉ ES ESTA TABLET · se pregunta UNA VEZ al arrancar, no cada diez segundos.
+ *
+ * El reparto de pestañas no cambia durante un servicio; las tarjetas sí. Son
+ * dos preguntas con dos ritmos, y mezclarlas haría que la pantalla entera se
+ * repintara en cada sondeo.
+ *
+ * Devuelve `null` cuando no se sabe todavía, y el que llama enseña lo de hoy.
+ */
+export async function getLoQueEsLaTablet(token: string): Promise<LoQueEsLaTablet | null> {
+  const t = await getTablero(token)
+  if (t.sin_instalar) return null
+  return { papel: t.papel, pase_activo: t.pase_activo }
 }
 
 export async function getTablero(token: string): Promise<ElTablero> {
