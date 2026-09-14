@@ -49,6 +49,7 @@ import {
   textoDelBotonGuardar, laDeudaDeEstaPregunta,
   precioEnTexto, lineaDelExtra, LOS_QUE_LLEVA,
   laOfertaDeLasIguales, lasQueQuedanFuera, dondeViveLaIgual,
+  laEtiquetaDeLaIgual, loQuePasaConLasCedidas,
   textoDelBotonDeLasIguales, laConfirmacionDeLasIguales,
   type BorradorDePregunta, type OpcionNueva, type QueLleva, type TipoNuevaPregunta,
   type UnaIgual, type UnaQueQuedaFuera,
@@ -480,7 +481,7 @@ function FilaDeRespuesta({
         },
         actor: 'Oficina',
       })
-      onResuelto(laConfirmacionDeLasIguales(fila.nombre, r.donde))
+      onResuelto(laConfirmacionDeLasIguales(fila.nombre, r.donde, r.cedidas))
       onCambia({ yaEstabaDecidido: true })
       setYaAplicado(true)
     } catch (e) {
@@ -592,6 +593,7 @@ function FilaDeRespuesta({
           <div className="flex flex-col gap-1">
             {iguales.map((i) => {
               const marcada = marcadas.includes(i.id)
+              const etiqueta = laEtiquetaDeLaIgual(i)
               return (
                 <button
                   key={i.id} type="button"
@@ -603,10 +605,17 @@ function FilaDeRespuesta({
                     marcada ? 'bg-cocina-acento border-cocina-acento text-white'
                             : 'border-cocina-linea text-transparent bg-cocina-superficie'}`}>✓</span>
                   <span className="truncate">{dondeViveLaIgual(i)}</span>
+                  {/* La fila dice de quién es la carta. No se disimula por
+                      dónde se entra: se abre la puerta y se señala. */}
+                  {etiqueta && <PastillaCocina tono="apagado">{etiqueta}</PastillaCocina>}
                 </button>
               )
             })}
           </div>
+          {/* Qué significa eso, dicho UNA vez y sólo si hay alguna. */}
+          {loQuePasaConLasCedidas(iguales) && (
+            <div className="text-[11px] text-cocina-tinta-3">{loQuePasaConLasCedidas(iguales)}</div>
+          )}
           {/* Las que no se tocan, DICHAS (regla 7): sin esto la pantalla diría
               «son 5» cuando son 12. */}
           {lasQueQuedanFuera(fuera) && (

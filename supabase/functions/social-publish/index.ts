@@ -256,6 +256,52 @@ Deno.serve(async (req) => {
       .eq("id", p.id).eq("status", "approved").select("id");
     if (!claimed?.length) continue;
 
+    /**
+     * ⚠️ EL SELLO DE LA LLAVE (14/09).
+     *
+     * La llave de Meta vive 60 días. Eso no es una suposición: la de Foodint
+     * se creó el 05/07 a las 16:17 PDT y Meta dijo que caducó el 03/09 a las
+     * 16:12:45 PDT. Sesenta días clavados.
+     *
+     * Cuando murió no lo dijo nadie. Estuvo muerta del 04/09 al 13/09 --nueve
+     * días y veinte horas-- y lo único que quedaba de ello era un `last_error`
+     * dentro de una publicación fallida, que hay que ir a buscar. La cuenta no
+     * sabía nada de su propia llave, y no había pantalla donde mirarlo.
+     *
+     * Ahora cada pasada deja escrito lo que sabe. Y no se borra el fallo al
+     * volver a funcionar: se apuntan los dos y quien mire compara las fechas.
+     * Borrar la prueba de que algo se rompió es el fallo de la regla 30, y ya
+     * lo pagamos una vez con A2c.
+     *
+     * 🔴 Y JAMÁS PUEDE CAMBIAR EL RESULTADO DE UNA PUBLICACIÓN (Julio, 14/09
+     * 11:20). La primera versión de esto no llevaba su propio `try`, y el
+     * sello del ÉXITO se llama DESPUÉS de marcar la fila como `published`,
+     * dentro del `try` grande. O sea que si la escritura del sello reventaba
+     * --un corte de red, nada más--, el `catch` de abajo llamaba a `fail` y
+     * ponía en `error` una publicación QUE YA HABÍA SALIDO en Instagram. Y
+     * como el éxito deja `ig_creation_id` en null, el reintento habría creado
+     * un contenedor nuevo y publicado OTRA VEZ: un duplicado en el Instagram
+     * del cliente por no poder escribir una fecha.
+     *
+     * El sello es informativo. Se traga lo suyo y se calla: lo que cuenta es
+     * lo que pasó con la publicación, no si pudimos anotarlo.
+     */
+    const selloDeLaLlave = async (ok: boolean, clase?: ClaseDeFallo) => {
+      try {
+        const cuenta = (p as { social_account_id?: string | null }).social_account_id;
+        if (!cuenta) return;
+        const ahora = new Date().toISOString();
+        await supa.from("social_account")
+          .update(ok
+            ? { llave_ok_at: ahora }
+            : { llave_fallo_at: ahora, llave_fallo_clase: clase ?? "otro" })
+          .eq("id", cuenta);
+      } catch {
+        // A propósito en silencio: ver arriba. Si no se pudo sellar, la ficha
+        // enseñará la fecha anterior, que es un dato viejo y no una mentira.
+      }
+    };
+
     /** Un fallo DE VERDAD: se para, se cuenta el intento y se dice qué clase es. */
     const fail = async (msg: string, clase: ClaseDeFallo, borrarContenedor = true) => {
       await supa.from("social_post").update({
@@ -263,6 +309,37 @@ Deno.serve(async (req) => {
         ...(borrarContenedor ? { ig_creation_id: null } : {}),
         updated_at: new Date().toISOString(),
       }).eq("id", p.id);
+
+      await selloDeLaLlave(false, clase);
+
+      // Y si lo que ha fallado es LA LLAVE, eso interrumpe: no es una
+      // publicación que sale mal, es que no va a salir ninguna hasta que
+      // alguien vaya a Meta. El antirruido lo pone `encolar_alerta`: con la
+      // llave muerta fallan las cinco de la pasada y no hacen falta cinco
+      // correos.
+      // El aviso, con el mismo cinturón que el sello: si encolar revienta, NO
+      // puede tumbar la pasada. `fail` se llama desde dentro del `try` grande y
+      // también desde su `catch`; una excepción aquí se comería las que
+      // quedasen por publicar.
+      try {
+      if (clase === "llave_caducada") {
+        await supa.rpc("encolar_alerta", {
+          p_kind: "social_llave_caducada",
+          p_subject: "Instagram: la llave ha dejado de valer y no se publica nada",
+          p_message:
+            "Meta ha rechazado la llave de Instagram, asi que el agente no puede publicar. "
+            + "No es una publicacion que salga mal: no va a salir ninguna hasta que se renueve. "
+            + "Se renueva en Meta (app Folvy Social) y se guarda en el Vault con el nombre "
+            + (vaultName ?? "ig_token_foodint")
+            + ". Las publicaciones que hayan fallado quedan en la pantalla y se pueden reintentar despues.",
+          p_debounce_kind: "social_llave_caducada:" + p.account_id,
+          p_debounce_window: "06:00:00",
+          p_account_id: p.account_id,
+          p_severity: "critico",
+        });
+      }
+      } catch { /* a propósito en silencio: ver arriba */ }
+
       out.push({ id: p.id, ok: false, clase, error: sinSecretos(msg).slice(0, 200) });
     };
 
@@ -333,6 +410,11 @@ Deno.serve(async (req) => {
         await duerme(ENTRE_CONSULTAS_MS);
       }
 
+      // Si Meta ha contestado con un estado, la llave VALE. Se sella aquí y no
+      // sólo al publicar: una llave sana que lleva días sin publicar --porque
+      // no hay nada aprobado-- tiene que poder demostrar que está viva.
+      if (estado) await selloDeLaLlave(true);
+
       // No se pudo ni preguntar (llave, red). Eso sí es un fallo de verdad.
       if (!estado) {
         const clase = claseDeFallo(ultimoError);
@@ -392,6 +474,7 @@ Deno.serve(async (req) => {
         error_kind: null, ig_creation_id: null,
         updated_at: new Date().toISOString(),
       }).eq("id", p.id);
+      await selloDeLaLlave(true);
       out.push({
         id: p.id, ok: true, ig_media_id: j2.id, brand: pl.brand_name,
         // La espera, EN EL REGISTRO: es la prueba de que se preguntó y de que

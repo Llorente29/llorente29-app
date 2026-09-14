@@ -12,7 +12,7 @@ import {
   quePuedeHacerElCliente, queHaceEnElPlato, opcionesEnTexto, platosEnTexto,
   platosPreocupa, pastillas, textoDelBoton, porQueNoSeEdita, lineaDeEtiquetaVieja,
   cifraConBase, cuantasActivas, ordena, tituloDeLaFranja, detalleDeLaFranja,
-  tituloSinPlato, lineaSinPlato, porQueNoSale, repartoDeLaFranja, loAnuladoDeLaFranja, subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista,
+  tituloSinPlato, lineaSinPlato, loQueLastTeHaDeshecho, porQueNoSale, repartoDeLaFranja, loAnuladoDeLaFranja, subtituloDeMarca, chipDeMasMarcas, elPieDeLaLista,
   MARCAS_A_LA_VISTA,
   type Pregunta,
 } from '@/modules/kitchen/lib/preguntasDeCocina'
@@ -327,5 +327,51 @@ describe('la línea de debajo en la sección sin plato', () => {
       expect(lineaSinPlato(p)).not.toContain('ningún plato')
       expect(platosEnTexto(p)).toBe('Ninguno')
     }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A2c HABLA CUANDO DESHACE LO DE UNA PERSONA (14/09)
+// ═══════════════════════════════════════════════════════════════════════════
+// Medido en producción antes de escribir esto: 80 opciones apagadas en
+// Foodint, 72 por una persona y 1 por el importador. Las 72 están todas en
+// marcas propias y el raíl de A2c sólo entra en cedidas, así que hoy la
+// colisión no ocurre — pero `deleteModifierOption` apaga por REST sin mirar
+// de quién es la marca, y está en pantalla. Está a un clic.
+
+describe('cuando Last deshace lo que quitó una persona', () => {
+  const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-ES')
+  const F = (o: Partial<{ activa: boolean; reencendidaSobre: string | null; reencendidaAt: string | null }> = {}) =>
+    ({ activa: true, reencendidaSobre: 'persona', reencendidaAt: '2026-09-14T02:11:00Z', ...o })
+
+  it('🔴 lo dice, y dice qué hacer para que no vuelva a pasar', () => {
+    const t = loQueLastTeHaDeshecho(F(), fecha)!
+    expect(t).toContain('La habías quitado')
+    expect(t).toContain('quitarla TAMBIÉN en Last')
+    expect(t).toContain('volverá a encenderse cada noche')
+  })
+
+  it('🔴 y NO dice una hora: dice «de madrugada»', () => {
+    // La hora de la pasada es cosa nuestra y cambia. Lo que le importa a quien
+    // lo lee es que pasó mientras no estaba.
+    const t = loQueLastTeHaDeshecho(F(), fecha)!
+    expect(t).toContain('de madrugada')
+    expect(t).not.toMatch(/\d{1,2}:\d{2}/)
+  })
+
+  it('lleva la fecha si la hay, y se apaña sin ella', () => {
+    expect(loQueLastTeHaDeshecho(F(), fecha)!).toContain('el 14/9/2026')
+    expect(loQueLastTeHaDeshecho(F({ reencendidaAt: null }), fecha)!).toContain('a la venta.')
+  })
+
+  it('sin marca no se pinta nada: un aviso que sale siempre deja de leerse', () => {
+    expect(loQueLastTeHaDeshecho(F({ reencendidaSobre: null }), fecha)).toBeNull()
+  })
+
+  it('🔴 y APAGADA tampoco, aunque la marca siga puesta', () => {
+    // Si está apagada es que alguien ya la volvió a quitar. En la base la marca
+    // se limpia sola al apagarla, pero la pantalla no debe depender de que el
+    // disparador no falle nunca.
+    expect(loQueLastTeHaDeshecho(F({ activa: false }), fecha)).toBeNull()
   })
 })

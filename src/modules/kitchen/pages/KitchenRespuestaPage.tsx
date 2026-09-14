@@ -30,6 +30,7 @@ import {
   textoDelBotonDeRetirar, laConfirmacionDeRetirar,
 } from '@/modules/kitchen/lib/loQueSobraYLoQueFalta'
 import { tituloDelQueLleva } from '@/modules/kitchen/lib/crearPreguntaDeCocina'
+import { loQueLastTeHaDeshecho } from '@/modules/kitchen/lib/preguntasDeCocina'
 // `precio` y `total` vienen del servidor: si llegan nulos, `.toFixed` revienta
 // y `isFinite(null)` no lo caza. Los helpers devuelven un guión y siguen.
 import { fmtMoney } from '@/lib/format'
@@ -161,6 +162,25 @@ export default function KitchenRespuestaPage() {
                   <BotonCocina peso="borde" disabled={retirando}
                     onClick={() => void haceloDeVerdad(true)}>
                     Volver a ponerla
+                  </BotonCocina>
+                )}
+              </div>
+            )}
+
+            {/* ── LAST TE LO HA DESHECHO ──────────────────────────────────
+                El contrario del de arriba: aquélla está retirada; ésta está a
+                la venta porque el importador deshizo lo que decidió alguien.
+                Sin esto, quien la quitó no se entera nunca. */}
+            {loQueLastTeHaDeshecho(f, laFecha) && (
+              <div className="rounded-cocina px-3.5 py-3 text-[13px] bg-cocina-ambar-bg text-cocina-ambar border border-cocina-ambar/35 flex items-center justify-between gap-3">
+                <span>
+                  <b>Last la ha vuelto a encender.</b>{' '}
+                  {loQueLastTeHaDeshecho(f, laFecha)}
+                </span>
+                {!f.cedida && (
+                  <BotonCocina peso="borde" disabled={retirando}
+                    onClick={() => void haceloDeVerdad(false)}>
+                    Volver a quitarla
                   </BotonCocina>
                 )}
               </div>

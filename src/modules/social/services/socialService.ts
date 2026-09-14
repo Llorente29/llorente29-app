@@ -4,6 +4,7 @@
 // Cola · acciones · publicación · parrilla · fase · directivas · generar ahora · N2 (escenas).
 
 import { supabase } from '@/lib/supabase'
+import type { CuentaDeRed } from '@/modules/social/lib/laFichaDeLaCuenta'
 import type { ClaseDeFallo } from '@/modules/social/lib/laTarjetaDeError'
 
 export interface SocialPayload {
@@ -230,4 +231,35 @@ export async function downloadImage(url: string, filename = 'foodint.jpg'): Prom
   a.href = objectUrl; a.download = filename
   document.body.appendChild(a); a.click(); a.remove()
   URL.revokeObjectURL(objectUrl)
+}
+
+// ── LA FICHA DE LA CUENTA (14/09) ──────────────────────────────────────────
+// La RPC devuelve claves y fechas; las frases están en `lib/laFichaDeLaCuenta`.
+// Y no devuelve la llave ni un trozo de ella: sólo su nombre en el Vault, que
+// no es un secreto y es lo que hace falta para ir a renovarla.
+
+export async function getEstadoDeLasCuentas(accountId: string): Promise<CuentaDeRed[]> {
+  requireSupabase()
+  // El mismo puente que usa `limpiarLaCartaService`: los tipos generados de la
+  // base se regeneran con `npm run types:gen`, que necesita la CLI de Supabase,
+  // y esta RPC es de hoy. Se dice aquí para que no parezca un `any` suelto.
+  const call = (supabase!.rpc as unknown as (
+    f: string, a: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>).bind(supabase!)
+  const { data, error } = await call('social_estado_de_la_cuenta', { p_account: accountId })
+  if (error) throw new Error(error.message)
+  const d = (data ?? {}) as { cuentas?: Array<Record<string, unknown>> }
+  return (d.cuentas ?? []).map((c) => ({
+    red: (c.red as string) ?? '',
+    enlazada: c.enlazada === true,
+    enlazadaEl: (c.enlazada_el as string | null) ?? null,
+    llaveNombre: (c.llave_nombre as string | null) ?? null,
+    llaveOkAt: (c.llave_ok_at as string | null) ?? null,
+    llaveFalloAt: (c.llave_fallo_at as string | null) ?? null,
+    llaveFalloClase: (c.llave_fallo_clase as string | null) ?? null,
+    llaveCaducaEl: (c.llave_caduca_el as string | null) ?? null,
+    diasParaCaducar: c.dias_para_caducar === null || c.dias_para_caducar === undefined
+      ? null : Number(c.dias_para_caducar),
+    ultimaPublicacion: (c.ultima_publicacion as string | null) ?? null,
+  }))
 }
