@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   laSituacion, laZona, tieneBotonDeListo, loQuePasa, loQueNoSabemos,
-  elSubtitulo, elTono, loRepartimosConFlota, loRepartelaPlataforma,
+  elSubtitulo, elTono, losMinutos, loRepartimosConFlota, loRepartelaPlataforma,
   type PedidoDelPase,
 } from '@/modules/pase/lib/lasTresZonas'
 
@@ -161,5 +161,45 @@ describe('🔴 en toda la pantalla sólo se pulsa UNA cosa', () => {
       P({ order_status: 'delivery_failed', delivery_state: 'failed' }),
     ]
     expect(casos.filter(tieneBotonDeListo)).toHaveLength(1)
+  })
+})
+
+describe('🔴 desde cuándo se cuenta: cada zona mira un reloj distinto', () => {
+  const AHORA = new Date('2026-09-14T20:00:00Z')
+  const hace = (min: number) => new Date(AHORA.getTime() - min * 60_000).toISOString()
+
+  it('por marcar: desde que ENTRÓ el pedido', () => {
+    expect(losMinutos(P({ entro_at: hace(7) }), AHORA)).toBe(7)
+  })
+
+  it('esperando a que lo cojan: desde el SELLO, no desde que entró', () => {
+    const p = P({ has_courier: false, carrier_code: null,
+                  entro_at: hace(40), ready_at: hace(18) })
+    expect(losMinutos(p, AHORA)).toBe(18)
+  })
+
+  it('en ruta: desde el HANDOFF cuando lo hay', () => {
+    const p = P({ ready_at: hace(30), handed_to_courier_at: hace(12),
+                  delivery_state: 'in_delivery' })
+    expect(losMinutos(p, AHORA)).toBe(12)
+  })
+
+  it('🔴 y en ruta SIN handoff cae al sello: Catcher casi nunca lo manda', () => {
+    // Medido: de 250 repartos propios de 14 días, 226 tienen handoff y 229
+    // entrega. Sin este respaldo, 24 tarjetas se quedarían sin crono.
+    const p = P({ ready_at: hace(30), handed_to_courier_at: null,
+                  delivery_state: 'in_delivery' })
+    expect(losMinutos(p, AHORA)).toBe(30)
+  })
+
+  it('entregado: desde la ENTREGA', () => {
+    const p = P({ ready_at: hace(60), delivery_state: 'delivered',
+                  delivered_at: hace(4), order_status: 'completed' })
+    expect(losMinutos(p, AHORA)).toBe(4)
+  })
+
+  it('y sin instante que mirar devuelve null, no un cero que parece medido', () => {
+    // Regla 32: un «no lo sé» no se disfraza de valor.
+    expect(losMinutos(P({ entro_at: null }), AHORA)).toBeNull()
   })
 })

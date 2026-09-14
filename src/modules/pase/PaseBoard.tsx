@@ -21,7 +21,7 @@ import { Check, Clock, Truck, Printer, AlertTriangle, User, Camera } from 'lucid
 import { declaraTrabajoEnCurso } from '@/services/trabajoEnCurso'
 import {
   laZona, laSituacion, tieneBotonDeListo, loQuePasa, loQueNoSabemos,
-  elSubtitulo, elTono, type Zona, type Tono,
+  elSubtitulo, elTono, losMinutos, type Zona, type Tono,
 } from './lib/lasTresZonas'
 import {
   getTablero, marcarListo, reimprimirBolsa,
@@ -161,10 +161,10 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
           </button>
         ) : (
           <div className={`rounded-lg px-2.5 py-2.5 text-[14px] font-bold text-center
-                           flex items-center justify-center gap-2 ${TONO_CLS[elTono(t, t.minutos)]}`}>
+                           flex items-center justify-center gap-2 ${TONO_CLS[elTono(t, losMinutos(t))]}`}>
             {situacion === 'en_ruta' ? <Truck size={16} className="shrink-0" />
                                      : <Clock size={16} className="shrink-0" />}
-            <span className="min-w-0">{loQuePasa(t, t.minutos)}</span>
+            <span className="min-w-0">{loQuePasa(t, losMinutos(t))}</span>
           </div>
         )}
         {rota && (
@@ -217,7 +217,7 @@ export default function PaseBoard({ token, onCerrarAMano }: {
     for (const t of tablero?.tarjetas ?? []) {
       const z = laZona(t)
       if (!z) continue
-      if (z === 'entregados' && (t.minutos ?? 0) > MINUTOS_EN_ENTREGADOS) continue
+      if (z === 'entregados' && (losMinutos(t) ?? 0) > MINUTOS_EN_ENTREGADOS) continue
       m[z].push(t)
     }
     return m
@@ -237,9 +237,9 @@ export default function PaseBoard({ token, onCerrarAMano }: {
   }, [tablero, porZona.sigue_aqui.length])
 
   /** ¿Hay algo que lleve de más? El contador avisa sin cambiar de pestaña. */
-  const avisaEnRuta = porZona.en_ruta.some(t => elTono(t, t.minutos) === 'aviso')
+  const avisaEnRuta = porZona.en_ruta.some(t => elTono(t, losMinutos(t)) === 'aviso')
   const avisaAqui = porZona.sigue_aqui.some(
-    t => elTono(t, t.minutos) === 'aviso' || t.bolsa.estado === 'rota')
+    t => elTono(t, losMinutos(t)) === 'aviso' || t.bolsa.estado === 'rota')
 
   const pulsarListo = async (t: TarjetaDelPase) => {
     setOcupado(t.sale_id); setAviso(null)

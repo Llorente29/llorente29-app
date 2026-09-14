@@ -48,6 +48,8 @@ export interface PedidoDelPase {
   handed_to_courier_at: string | null
   delivered_at: string | null
   channel: string | null
+  /** Cuándo entró el pedido. El reloj de los que aún no tienen sello. */
+  entro_at?: string | null
 }
 
 export type Zona = 'sigue_aqui' | 'en_ruta' | 'entregados'
@@ -211,6 +213,41 @@ export type Tono = 'neutro' | 'bien' | 'aviso' | 'mal'
 /** A partir de estos minutos, el renglón se pone ámbar. Medido: 15 min de media. */
 export const MINUTOS_DE_MAS_EN_RUTA = 30
 export const MINUTOS_DE_MAS_SIN_COGER = 15
+
+/**
+ * DESDE CUÁNDO SE CUENTA, que no es lo mismo en cada zona.
+ *
+ * 🔴 Esto vive aquí y no en la RPC a propósito. El reloj que toca depende de la
+ * SITUACIÓN, y la situación se decide en este fichero: si la base calculara los
+ * minutos tendría que decidir la situación otra vez, y una regla en dos sitios
+ * es una regla que un día dice dos cosas.
+ *
+ * La base manda los instantes en crudo; aquí se elige cuál.
+ *
+ * Y el de «en ruta» tiene truco medido: `handed_to_courier_at` viene en NULL
+ * muchas veces --Catcher casi nunca lo manda-- así que el respaldo es
+ * `ready_at`, que es lo que ya hace la fila de reparto de la tarjeta de hoy.
+ */
+export function losMinutos(p: PedidoDelPase, ahora: Date = new Date()): number | null {
+  const desde = (iso: string | null | undefined): number | null => {
+    if (!iso) return null
+    const t = new Date(iso).getTime()
+    if (Number.isNaN(t)) return null
+    return Math.max(0, Math.round((ahora.getTime() - t) / 60_000))
+  }
+  switch (laSituacion(p)) {
+    case 'entregado':
+      return desde(p.delivered_at)
+    case 'en_ruta':
+      return desde(p.handed_to_courier_at) ?? desde(p.ready_at)
+    case 'esperando_que_lo_cojan':
+    case 'esperando_rider_plataforma':
+    case 'listo_sin_salir':
+      return desde(p.ready_at)
+    case 'por_marcar':
+      return desde(p.entro_at)
+  }
+}
 
 export function elTono(p: PedidoDelPase, minutos: number | null): Tono {
   const s = laSituacion(p)

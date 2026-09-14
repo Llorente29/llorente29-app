@@ -51,8 +51,6 @@ export interface TarjetaDelPase extends PedidoDelPase {
   cliente: string | null
   rider_nombre: string | null
   rider_transporte: string | null
-  /** Minutos desde el hito que toca en cada zona; los calcula la RPC. */
-  minutos: number | null
   lineas: { nombre: string; cantidad: number }[]
   bolsa: LaBolsa
   /**
