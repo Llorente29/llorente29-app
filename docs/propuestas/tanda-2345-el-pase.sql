@@ -23,6 +23,54 @@
 -- (0 de 10.719).
 
 
+-- ═══ 0 · LOS DOS RELOJES · VAN ANTES QUE NADA ══════════════════════════════
+--
+-- 🔴 `ADD COLUMN` TOMA ACCESS EXCLUSIVE, y una petición de ACCESS EXCLUSIVE no
+-- se limita a esperar: SE PONE EN LA COLA Y BLOQUEA A TODO EL QUE LLEGUE
+-- DETRÁS, aunque los de detrás sólo quieran leer. Si a las 23:45 hay algo
+-- tocando `kitchen_time_config` --un cron, un informe, una sesión olvidada
+-- abierta-- el ADD COLUMN espera, y detrás de él se apila el camino del pedido
+-- entero: esa tabla la leen `tg_auto_print_on_accept` y
+-- `tg_auto_print_bag_on_ready`.
+--
+-- Con esto, si no consigue el cerrojo en tres segundos la migración SE CAE
+-- SOLA y no ha pasado nada. Un fallo limpio que se reintenta a las 00:15 es
+-- infinitamente mejor que un minuto de cocina parada esperando.
+set local lock_timeout = '3s';
+
+-- Y un techo por SENTENCIA --no es un presupuesto para la tanda entera: cada
+-- sentencia tiene sus 60 s, y los bloques `do $ensayo$` cuentan como una--.
+-- Sesenta segundos sobran de largo para cuatro piezas y ocho ensayos. Si algo
+-- tarda más, es que algo va mal y cortar es la respuesta correcta.
+set local statement_timeout = '60s';
+
+-- 🔴 Y UNA GUARDIA, PORQUE UN `set local` FUERA DE TRANSACCIÓN NO FALLA: suelta
+-- un aviso y no hace nada. O sea que la protección podría no estar puesta y la
+-- migración seguir adelante tan contenta, que es un éxito silencioso de los de
+-- la regla 8. Esto lo convierte en un fallo ruidoso. Comprobado que `3s` es la
+-- forma normalizada que devuelve `current_setting`, no `3000ms` ni `00:00:03`.
+do $guardia$
+begin
+  if current_setting('lock_timeout') <> '3s'
+     or current_setting('statement_timeout') <> '60s' then
+    raise exception 'GUARDIA: los relojes no han prendido (lock=% · statement=%). '
+                    'Si un `set local` no prende es que esto NO corre dentro de '
+                    'una transacción — y sin transacción no hay relojes, no hay '
+                    'vuelta atrás y los ensayos que plantan dejarían la planta '
+                    'puesta. NO SEGUIR.',
+                    current_setting('lock_timeout'), current_setting('statement_timeout');
+  end if;
+end
+$guardia$;
+
+-- 🔴 EL `lock_timeout` SE QUEDA PUESTO PARA TODA LA TRANSACCIÓN, y es a
+-- propósito. Los ensayos que plantan toman cerrojo de fila sobre una venta
+-- viva; si la tablet la tiene cogida en ese instante, el ensayo se cae a los
+-- tres segundos, lo recoge su `exception` y sale como SIN ENSAYAR. Que es
+-- exactamente lo que tiene que pasar: antes sin ensayar que peleándose con la
+-- tablet por una fila en plena cocina.
+
+
 -- ═══ 1 · EL INTERRUPTOR ════════════════════════════════════════════════════
 alter table public.kitchen_time_config
   add column if not exists pase_activo boolean not null default false;
@@ -421,8 +469,12 @@ $ensayo$;
 -- de vuelta: un ticket de bolsa impreso en Alcalá, o un «listo» dicho a Glovo,
 -- no se deshacen. Así que se comprobó, no se supuso.
 --
--- 1 · NO EXISTE NINGUNA VÍA SÍNCRONA DE SALIR. Extensiones instaladas: sólo
---     `pg_net` 0.20.0. Ni `http`, ni `dblink`, ni `pg_background`. Y CERO
+-- 1 · NO EXISTE NINGUNA VÍA SÍNCRONA DE SALIR. Hay DIEZ extensiones instaladas
+--     --pg_cron, pg_net, pg_stat_statements, pg_trgm, pgcrypto, plpgsql,
+--     postgis, supabase_vault, unaccent y uuid-ossp-- y de las diez, la única
+--     que sale afuera es `pg_net` 0.20.0. Ni `http`, ni `dblink`, ni
+--     `pg_background`. (Mi parte de las 19:45 decía «sólo está instalada
+--     pg_net», que es otra cosa y es falsa: están las diez.) Y CERO
 --     funciones en toda la base --de cualquier esquema-- llaman a un
 --     `http_post(` o `http_get(` que no sea `net.`. Todo lo que sale, sale
 --     encolado.
