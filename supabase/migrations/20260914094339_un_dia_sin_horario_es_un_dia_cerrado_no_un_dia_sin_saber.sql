@@ -1,0 +1,33 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 🔴 ESTA MIGRACIÓN ESTABA MAL Y SE REVIRTIÓ 71 SEGUNDOS DESPUÉS
+--    (ver 20260914094450, que la deshace)
+-- 14/09/2026
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- Se deja en el repositorio porque ESTÁ REGISTRADA en producción y el fichero
+-- tiene que existir con su versión: una migración aplicada sin fichero es el
+-- agujero que costó las siete huérfanas de esta misma mañana.
+--
+-- QUÉ HACÍA: quitaba el freno de `_ventana_de_mantenimiento` que trata un día
+-- sin horario declarado como «no se sabe», y lo pasaba a tratarlo como «el
+-- local cierra ese día», o sea VENTANA LIBRE.
+--
+-- POR QUÉ ESTABA MAL: lo escribí sobre una premisa falsa --«Alcalá cierra los
+-- lunes»-- que salía de leer una ausencia de datos como una intención. Medido
+-- después: Alcalá vendió 487 veces en los DIEZ lunes de los últimos 70 días.
+-- Abre los lunes. Lo de hoy es una excepción de un día, dicha por Julio.
+--
+-- Y el fallo no era sólo de premisa, era de DIRECCIÓN: en `is_brand_open`,
+-- tratar un día sin declarar como cerrado falla del lado bueno (dejas de coger
+-- pedidos). En la ventana de mantenimiento, «cerrado» significa ventana LIBRE,
+-- y eso falla del lado malo: el lunes 21, con Alcalá abierto y sin lunes
+-- declarado, las dos tablets se habrían actualizado en mitad de la comida.
+--
+-- El contenido que se aplicó está en el histórico de git de este mismo
+-- fichero; aquí queda sólo la constancia, porque reproducirlo invitaría a
+-- volver a aplicarlo.
+--
+-- (Si alguien reconstruye la base desde cero, esta migración es un no-op: la
+--  siguiente deja la función exactamente como estaba antes de las dos.)
+
+SELECT 'migracion revertida por 20260914094450; sin efecto' AS nota;
