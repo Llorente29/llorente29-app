@@ -121,11 +121,17 @@ export function estaMarcadoListo(p: PedidoDelPase): boolean {
 export function laSituacion(p: PedidoDelPase): Situacion {
   // 1 · ¿Ha llegado? Lo dice la flota.
   //
-  // 🔴 Se preguntan las DOS cosas, y no es por si acaso: en 90 días hay 41
-  // ventas con `delivery_state = 'delivered'` y `delivered_at` SIN sellar. El
-  // sello sólo se escribe cuando el estado CAMBIA
-  // (`new.delivery_state is distinct from old.delivery_state`), así que una
-  // fila que nace ya entregada no lo lleva. Con sólo el sello se perderían 41.
+  // Se preguntan las DOS cosas. El sello sólo se escribe cuando el estado
+  // CAMBIA (`new.delivery_state is distinct from old.delivery_state`), así que
+  // una fila que nace ya entregada no lo lleva.
+  //
+  // 🔴 Y AQUÍ VA DICHO LO QUE ESTO CUBRE DE VERDAD, que es menos de lo que yo
+  // escribí primero. De las 43 filas así que hay en 90 días, LAS 43 están
+  // `completed` y ninguna tiene sello, handoff ni entrega: nacieron cerradas y
+  // no pasaron por cocina. `pase_board` no manda una venta cerrada sin ningún
+  // instante --no habría reloj que pintar-- así que por el tablero no llega ni
+  // una. Esto es una DEFENSA para el día que un broker mande «entregada y
+  // todavía abierta», no una rama que se recorra hoy.
   if (p.delivered_at != null || p.delivery_state === 'delivered' || p.delivery_state === 'finish') {
     return 'entregado'
   }

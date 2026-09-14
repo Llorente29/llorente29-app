@@ -177,6 +177,19 @@ begin
        and coalesce(s.order_status, '') not in ('rejected', 'cancelled', 'delivery_failed')
        -- Y lo cerrado sólo si la flota dice que llegó hace poco, que es lo
        -- único que entra en «Entregados». El front recorta a 20 min.
+       --
+       -- 🔴 OJO CON LO QUE ESTA RAYA DEJA FUERA, y es a propósito: una venta
+       -- `completed` con `delivery_state = 'delivered'` pero SIN `delivered_at`
+       -- no viaja, porque `null >= now() - interval` es null y null no pasa.
+       -- Medido: hay 43 así en 90 días --0,48 al día-- y LAS 43 no tienen ni
+       -- entrega, ni sello, ni handoff: nacieron cerradas y no pasaron por
+       -- cocina. Mandarlas sería pintar «Entregado» sin ninguna hora, de un
+       -- pedido que el local no ha visto. Que no viajen es lo correcto.
+       --
+       -- Lo que NO es correcto es lo que yo había escrito en el front: allí una
+       -- prueba decía cubrir «41 casos» de esta forma, y por aquí no le llega
+       -- ni uno. Corregido en `lasTresZonas.ts`: es una defensa, no un caso
+       -- cubierto.
        and (coalesce(s.order_status, '') <> 'completed'
             or s.delivered_at >= now() - interval '40 minutes'
             or s.delivery_state in ('in_delivery', 'picked_up'))

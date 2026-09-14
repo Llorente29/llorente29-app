@@ -68,9 +68,20 @@ describe('🔴 las cuatro filas reales que rompieron el primer diseño', () => {
     expect(laZona(p)).toBeNull()
   })
 
-  it('(41 casos) «delivered» SIN `delivered_at`: se cuenta igual como llegado', () => {
+  it('🔴 DEFENSA, NO CASO CUBIERTO · «delivered» sin `delivered_at`', () => {
     // El sello sólo escribe cuando el estado CAMBIA, así que una fila que nace
-    // ya entregada no lo lleva. Preguntando sólo por el sello se pierden 41.
+    // ya entregada no lo lleva, y preguntando sólo por el sello se perderían.
+    //
+    // 🔴 PERO ESTA PRUEBA NO CUBRE NINGUNA FILA VIVA, y decía que cubría 41.
+    // Medido después: de las 43 que hay en 90 días, LAS 43 son `completed` y
+    // NINGUNA tiene sello, ni handoff, ni entrega — nacieron cerradas y no
+    // pasaron por la cocina. `pase_board` no manda una venta cerrada sin
+    // ningún instante (no habría ni reloj que pintar), así que por el tablero
+    // no llega ni una. No existe la forma «entregada y todavía abierta».
+    //
+    // Se queda porque es una DEFENSA barata para el día que un broker nuevo
+    // mande eso, no porque proteja de algo que pase hoy. Llamarla «41 casos»
+    // era verde sobre algo que no puede ocurrir (regla 36).
     const p = P({ order_status: 'completed', delivery_state: 'delivered', delivered_at: null })
     expect(laSituacion(p)).toBe('entregado')
     expect(laZona(p)).toBe('entregados')
