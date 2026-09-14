@@ -181,10 +181,21 @@ begin
        -- 🔴 OJO CON LO QUE ESTA RAYA DEJA FUERA, y es a propósito: una venta
        -- `completed` con `delivery_state = 'delivered'` pero SIN `delivered_at`
        -- no viaja, porque `null >= now() - interval` es null y null no pasa.
-       -- Medido: hay 43 así en 90 días --0,48 al día-- y LAS 43 no tienen ni
-       -- entrega, ni sello, ni handoff: nacieron cerradas y no pasaron por
-       -- cocina. Mandarlas sería pintar «Entregado» sin ninguna hora, de un
-       -- pedido que el local no ha visto. Que no viajen es lo correcto.
+       -- Medido: hay 43 así --41 con `delivered` y 2 con `finish`-- y LAS 43
+       -- no tienen ni entrega, ni sello, ni handoff.
+       --
+       -- 🔴 Y NO SON UN GOTEO: son la semana en que se encendió el sello. Yo
+       -- escribí «0,48 al día» promediando a 90 días algo que sólo existió
+       -- doce. Todas están entre el 06/07 y el 24/07, todas en Alcalá y todas
+       -- de reparto nuestro con repartidor puesto. Por semanas se ve solo: el
+       -- sello no existía --0 de 101, 0 de 80, 0 de 95, 0 de 121--, aparece la
+       -- semana del 20/07 con 32 de 111, y esa misma semana concentra 39 de
+       -- los 43. Desde el 27/07, CERO, siete semanas seguidas.
+       --
+       -- O sea que la causa no es «no pasaron por cocina» --alguien las llevó,
+       -- tienen repartidor-- sino que entonces no había nada que sellara nada.
+       -- Está extinto. Mandarlas hoy sería pintar «Entregado» sin ninguna hora
+       -- de un pedido de julio. Que no viajen es lo correcto.
        --
        -- Lo que NO es correcto es lo que yo había escrito en el front: allí una
        -- prueba decía cubrir «41 casos» de esta forma, y por aquí no le llega

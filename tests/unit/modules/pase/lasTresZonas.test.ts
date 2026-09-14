@@ -73,15 +73,21 @@ describe('🔴 las cuatro filas reales que rompieron el primer diseño', () => {
     // ya entregada no lo lleva, y preguntando sólo por el sello se perderían.
     //
     // 🔴 PERO ESTA PRUEBA NO CUBRE NINGUNA FILA VIVA, y decía que cubría 41.
-    // Medido después: de las 43 que hay en 90 días, LAS 43 son `completed` y
-    // NINGUNA tiene sello, ni handoff, ni entrega — nacieron cerradas y no
-    // pasaron por la cocina. `pase_board` no manda una venta cerrada sin
-    // ningún instante (no habría ni reloj que pintar), así que por el tablero
-    // no llega ni una. No existe la forma «entregada y todavía abierta».
+    // Las 43 que hay (41 `delivered` + 2 `finish`) son todas `completed` y
+    // ninguna tiene sello, handoff ni entrega. `pase_board` no manda una venta
+    // cerrada sin ningún instante --no habría reloj que pintar-- así que por
+    // el tablero no llega ni una, y no existe la forma «entregada y todavía
+    // abierta».
     //
-    // Se queda porque es una DEFENSA barata para el día que un broker nuevo
-    // mande eso, no porque proteja de algo que pase hoy. Llamarla «41 casos»
-    // era verde sobre algo que no puede ocurrir (regla 36).
+    // Y ADEMÁS ESTÁN EXTINTAS: no son un goteo, son la semana en que se
+    // encendió el sello. Todas entre el 06/07 y el 24/07, y 39 de las 43 en la
+    // semana del 20/07, que es cuando el sello aparece por primera vez (32 de
+    // 111, después de cuatro semanas de cero). Desde el 27/07 no ha habido ni
+    // una en siete semanas.
+    //
+    // Se queda porque es una DEFENSA barata para el día que un broker mande
+    // «entregada y todavía abierta», no porque proteja de algo que pase hoy.
+    // Llamarla «41 casos» era verde sobre algo que no puede ocurrir (regla 36).
     const p = P({ order_status: 'completed', delivery_state: 'delivered', delivered_at: null })
     expect(laSituacion(p)).toBe('entregado')
     expect(laZona(p)).toBe('entregados')
