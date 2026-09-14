@@ -6,7 +6,11 @@
 
 import { useEffect, useState } from 'react'
 import { useApp } from '@/context/AppContext'
-import { getPhase, setPhase, type LaunchPhase } from '@/modules/social/services/socialService'
+import { getPhase, setPhase, getEstadoDeLasCuentas, type LaunchPhase } from '@/modules/social/services/socialService'
+import {
+  comoEstaLaCuenta, elTonoDeLaCuenta, laCuentaAtras, elRenglonDeLaCaducidad,
+  loUltimoQueSalio, REDES, type CuentaDeRed,
+} from '@/modules/social/lib/laFichaDeLaCuenta'
 import N2SettingsPanel from '@/modules/social/components/N2SettingsPanel'
 
 const PHASES: { key: LaunchPhase; title: string; desc: string }[] = [
@@ -14,6 +18,11 @@ const PHASES: { key: LaunchPhase; title: string; desc: string }[] = [
   { key: 'comunidad', title: 'Comunidad', desc: 'Construyes audiencia. Sigues sin ofertas: comunidad primero, venta después.' },
   { key: 'conversion', title: 'Conversión', desc: 'Enciendes las ofertas. El agente empieza a anunciar promos reales para convertir.' },
 ]
+
+/** La fecha como la lee una persona, no como la escribe una base de datos. */
+function laFechaCorta(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
 export default function SocialSettingsPage() {
   const { activeAccountId } = useApp()
@@ -23,6 +32,7 @@ export default function SocialSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [confirmTo, setConfirmTo] = useState<LaunchPhase | null>(null)
   const [saved, setSaved] = useState(false)
+  const [cuentas, setCuentas] = useState<CuentaDeRed[]>([])
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -32,6 +42,11 @@ export default function SocialSettingsPage() {
       .then(p => { if (alive) setPhaseState(p) })
       .catch(e => { if (alive) setError(e?.message ?? 'No se pudo cargar la fase') })
       .finally(() => { if (alive) setLoading(false) })
+    getEstadoDeLasCuentas(activeAccountId)
+      .then(c => { if (alive) setCuentas(c) })
+      // Si la ficha no carga, la pantalla NO se queda en blanco ni finge que
+      // todo va bien: se queda sin panel y la fase sigue funcionando.
+      .catch(() => { if (alive) setCuentas([]) })
     return () => { alive = false }
   }, [activeAccountId])
 
@@ -64,6 +79,51 @@ export default function SocialSettingsPage() {
           Fase del lanzamiento y ajustes de imagen con IA.
         </p>
       </header>
+
+      {/* ── LAS CUENTAS Y SUS LLAVES ─────────────────────────────────────
+          Esto no existía. La llave de Instagram estuvo muerta nueve días y
+          veinte horas (04/09 → 13/09) y no había ninguna pantalla donde
+          verlo: lo único que quedaba era el mensaje de Meta dentro de cinco
+          publicaciones fallidas. Va lo PRIMERO porque si no se puede
+          publicar, lo demás de esta pantalla da igual. */}
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary, #1a1a1a)', marginBottom: 4 }}>Las cuentas</h2>
+      <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #666)', marginTop: 0, marginBottom: 14 }}>
+        Dónde publica el agente, y si la llave de cada una sigue valiendo.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
+        {cuentas.map(c => {
+          const tono = elTonoDeLaCuenta(c)
+          const fondo = tono === 'malo' ? '#fdecea' : tono === 'aviso' ? '#fff6e5'
+            : tono === 'ok' ? '#e7f5ec' : 'var(--color-bg-muted, #f4f4f4)'
+          const borde = tono === 'malo' ? '#f0c6c2' : tono === 'aviso' ? '#f0dcb4'
+            : tono === 'ok' ? '#bfe3cd' : 'var(--color-border-default, #e5e5e5)'
+          const urgente = laCuentaAtras(c)
+          return (
+            <div key={c.red} style={{ padding: 14, borderRadius: 12, background: fondo, border: `1px solid ${borde}` }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary, #1a1a1a)' }}>
+                {REDES[c.red] ?? c.red}
+              </div>
+              <p style={{ fontSize: 13, margin: '6px 0 0', color: 'var(--color-text-primary, #333)' }}>
+                {comoEstaLaCuenta(c, laFechaCorta)}
+              </p>
+              {/* Lo que interrumpe va destacado; la fecha va siempre debajo. */}
+              {urgente && (
+                <p style={{ fontSize: 13, fontWeight: 600, margin: '6px 0 0', color: '#b3261e' }}>{urgente}</p>
+              )}
+              {loUltimoQueSalio(c, laFechaCorta) && (
+                <p style={{ fontSize: 12, margin: '6px 0 0', color: 'var(--color-text-secondary, #666)' }}>
+                  {loUltimoQueSalio(c, laFechaCorta)}
+                </p>
+              )}
+              {elRenglonDeLaCaducidad(c, laFechaCorta) && (
+                <p style={{ fontSize: 12, margin: '4px 0 0', color: 'var(--color-text-secondary, #777)' }}>
+                  {elRenglonDeLaCaducidad(c, laFechaCorta)}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary, #1a1a1a)', marginBottom: 4 }}>Fase del lanzamiento</h2>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #666)', marginTop: 0, marginBottom: 14 }}>
