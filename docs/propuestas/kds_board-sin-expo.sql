@@ -96,12 +96,45 @@
 --
 -- MEDIDO antes de decidir: en las **9.623 ventas** de la cuenta hay **CERO**
 -- pedidos con sello y en un estado de cocina. O sea que **reabrir no se ha
--- usado nunca**. La esquina es real y no ha ocurrido.
+-- usado nunca**.
 --
--- Se cubre con una aserción en el ensayo (caso E) y, si Julio quiere que
--- reabrir devuelva el ticket, con una línea en el sello --`new.ready_at := null`
--- al volver a `in_preparation`--, que es donde tiene que estar. **No se hace
--- ahora y no se decide aquí.**
+-- 🔴 PERO NO ES QUE NO HAYA BOTÓN. LO HAY, Y ESTÁ A TRES TOQUES.
+--
+-- Lo di por hipotético y fui a comprobarlo. Está vivo y se pinta:
+--
+--   · `OrdersFeed.tsx:60`  ... FILTERS.cerrados: s => s === 'completed'
+--     → hay una pestaña «Cerrados» en el feed
+--   · `ordersFeedService:139` ... TERMINAL_SET incluye 'completed'
+--   · `ordersFeedService:194` ... secondaryAction devuelve, para terminal:
+--     { label: 'Reabrir', next: 'in_preparation' }
+--   · `OrderCard.tsx:757-767` .. y ese botón SE RENDERIZA
+--
+-- O sea: pestaña Cerrados → cualquier pedido → «Reabrir». Hoy. Sin desplegar
+-- nada.
+--
+-- Eso cambia el peso del caso: no es «el día que alguien añada un botón». El
+-- botón está puesto, no se ha pulsado nunca en 9.623 ventas, y el día que se
+-- pulse con el Pase encendido el ticket NO volverá al tablero.
+--
+-- ── ASÍ QUE LA LÍNEA DEL SELLO NO ES OPCIONAL ─────────────────────────────
+--
+-- Va en `tg_sale_seal_kpi_hitos`, que es donde dijo el PM que tenía que estar,
+-- y va en la MISMA tanda de las 23:45 que `pase_activo`:
+--
+-- +   -- Al volver a cocina se borra el sello: `kds_board` pregunta por
+-- +   -- `ready_at`, no por el estado, así que sin esto un pedido reabierto no
+-- +   -- vuelve al tablero. El botón «Reabrir» existe y se pinta
+-- +   -- (OrderCard.tsx:757). Nunca se ha pulsado --0 de 9.623-- y por eso
+-- +   -- nadie lo ha notado.
+-- +   if new.order_status in ('new','received','accepted','in_preparation')
+-- +      and old.order_status is distinct from new.order_status
+-- +      and new.ready_at is not null then
+-- +     new.ready_at := null;
+-- +   end if;
+--
+-- Y es lo correcto por sí mismo, no sólo por `kds_board`: un pedido que vuelve
+-- a cocina no tiene hito de cocina cumplido. Hoy lo conserva, y el cronómetro
+-- de la tarjeta mide desde un «listo» que ya no vale.
 --
 -- ── EL ENSAYO ─────────────────────────────────────────────────────────────
 --
