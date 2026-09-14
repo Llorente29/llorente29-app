@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  laTarjetaDe, losBotones, textoDelDetalle, loDeLosIntentos,
+  laTarjetaDe, losBotones, textoDelDetalle, loDeLosIntentos, loQueSePublica,
   type ClaseDeFallo,
 } from '@/modules/social/lib/laTarjetaDeError'
 
@@ -78,6 +78,37 @@ describe('🔴 los tres botones no pesan lo mismo', () => {
     // Ofrecer «Reintentar» invita a pelearse con algo que se arregla solo, y
     // ofrecer «Descartar» es justo cómo se perdieron las nueve.
     expect(losBotones('esperando')).toEqual([])
+  })
+})
+
+describe('🔴 la que se está publicando, y la que se quedó atascada', () => {
+  const AHORA = new Date('2026-09-14T09:00:00Z')
+
+  it('recién empezada dice «Publicándose…» y no ofrece nada', () => {
+    const p = loQueSePublica('2026-09-14T08:58:00Z', AHORA)
+    expect(p.texto).toBe('Publicándose…')
+    expect(p.atascada).toBe(false)
+  })
+
+  it('pasados diez minutos dice que se cortó, con los minutos, y ofrece salida', () => {
+    // Antes aquí se pintaba «Publicándose…» para siempre y sin un botón al
+    // lado: la fila se quedaba visible, tranquilizadora y muerta.
+    const p = loQueSePublica('2026-09-14T08:43:00Z', AHORA)
+    expect(p.atascada).toBe(true)
+    expect(p.texto).toContain('17 minutos')
+    expect(p.texto).toContain('se cortó a medias')
+    // Y dice que se arregla sola además de a mano: no mete prisa falsa.
+    expect(p.texto).toContain('Vuelve sola a la cola')
+  })
+
+  it('justo en el borde todavía no es una avería', () => {
+    expect(loQueSePublica('2026-09-14T08:51:00Z', AHORA).atascada).toBe(false)  // 9 min
+    expect(loQueSePublica('2026-09-14T08:50:00Z', AHORA).atascada).toBe(true)   // 10 min
+  })
+
+  it('y sin fecha no se inventa una avería', () => {
+    expect(loQueSePublica(null, AHORA).atascada).toBe(false)
+    expect(loQueSePublica('no es una fecha', AHORA).atascada).toBe(false)
   })
 })
 
@@ -156,5 +187,12 @@ describe('🔴 la pantalla de verdad usa esta lib, no sus propias frases', () =>
 
   it('y el volcado sólo se pinta cuando el detalle está abierto', () => {
     expect(pagina).toContain('abierto && detalle')
+  })
+
+  it('🔴 y una `publishing` atascada ya no se queda sin salida', () => {
+    expect(pagina).toContain('loQueSePublica')
+    expect(pagina).toContain('Devolver a la cola')
+    // La línea vieja: un párrafo suelto y nada más.
+    expect(pagina).not.toMatch(/marginTop: 12 \}\}>Publicándose…<\/p>/)
   })
 })

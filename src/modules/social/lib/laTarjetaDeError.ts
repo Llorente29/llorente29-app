@@ -116,6 +116,42 @@ export function losBotones(clase: ClaseDeFallo | null): BotonDeLaTarjeta[] {
 }
 
 /**
+ * ⚠️ LA QUE SE ESTÁ PUBLICANDO, Y LA QUE SE QUEDÓ ATASCADA.
+ *
+ * Hasta hoy la pantalla pintaba «Publicándose…» y NI UN BOTÓN para cualquier
+ * fila en ese estado. Y `publishing` no tenía salida: ninguna función de la
+ * base la devolvía a la cola, así que una publicación que se quedara ahí se
+ * quedaba para siempre — visible, tranquilizadora y muerta. No es que
+ * desapareciera: es que la pantalla decía algo bueno sobre una fila que ya no
+ * iba a moverse. Misma familia que el «sin alertas» de Alcalá.
+ *
+ * Desde la v22 el publicador rescata solo las que lleven más de diez minutos
+ * paradas. Esto es la otra mitad: que quien lo esté mirando lo VEA, y pueda
+ * devolverla a la cola sin esperar al rescate.
+ */
+export interface LoQueSePublica {
+  texto: string
+  /** Si es true, la pantalla ofrece devolverla a la cola. */
+  atascada: boolean
+}
+
+/** Lo que se considera «lleva demasiado». El publicador usa el mismo número. */
+export const DEMASIADO_PUBLICANDOSE_MIN = 10
+
+export function loQueSePublica(desdeIso: string | null, ahora: Date = new Date()): LoQueSePublica {
+  if (!desdeIso) return { texto: 'Publicándose…', atascada: false }
+  const min = Math.floor((ahora.getTime() - new Date(desdeIso).getTime()) / 60000)
+  if (!Number.isFinite(min) || min < DEMASIADO_PUBLICANDOSE_MIN) {
+    return { texto: 'Publicándose…', atascada: false }
+  }
+  return {
+    texto: `Lleva ${min} minutos publicándose: eso es que se cortó a medias. `
+      + 'Vuelve sola a la cola en la próxima pasada, o la devuelves tú ahora.',
+    atascada: true,
+  }
+}
+
+/**
  * Y CUÁNDO SE HA INTENTADO YA DEMASIADO. A los 5 intentos no la recoge nadie,
  * y eso hoy no se dice en ningún sitio: la publicación se queda quieta y quien
  * mira no sabe por qué.

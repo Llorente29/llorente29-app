@@ -19,12 +19,14 @@ export interface SocialPostRow {
   error_kind: ClaseDeFallo | null
   attempts: number
   scheduled_at: string | null; published_at: string | null; external_ref: string | null; created_at: string
+  /** Cuándo se tocó por última vez. Es lo que dice si una `publishing` está atascada. */
+  updated_at: string | null
 }
 export type LaunchPhase = 'apetito' | 'comunidad' | 'conversion'
 
 const QUEUE_STATUSES = ['draft', 'approved', 'scheduled', 'publishing', 'error']
 const GRID_STATUSES = ['published', 'scheduled']
-const SELECT = 'id, network, status, payload, reason, last_error, error_kind, attempts, scheduled_at, published_at, external_ref, created_at'
+const SELECT = 'id, network, status, payload, reason, last_error, error_kind, attempts, scheduled_at, published_at, external_ref, created_at, updated_at'
 
 function requireSupabase() { if (!supabase) throw new Error('Supabase no está disponible') }
 
