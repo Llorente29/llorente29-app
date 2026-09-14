@@ -227,9 +227,14 @@ export default function PaseBoard({ token, onCerrarAMano }: {
   // sigue en la cocina: si hay algo ahí, la tablet NO se recarga sola.
   useEffect(() => {
     const clave = 'pase'
+    // 🔴 NO SE DECLARA HASTA SABER. Con `tablero == null` todavía no se ha
+    // preguntado, y declarar 0 ahí es decirle al vigía de versión «no hay nada»
+    // cuando puede haber cuatro comandas vivas. Ese tic es justo el mecanismo
+    // del incidente del 11/09, sólo que de una décima.
+    if (tablero == null) return
     declaraTrabajoEnCurso(clave, porZona.sigue_aqui.length)
     return () => declaraTrabajoEnCurso(clave, 0)
-  }, [porZona.sigue_aqui.length])
+  }, [tablero, porZona.sigue_aqui.length])
 
   /** ¿Hay algo que lleve de más? El contador avisa sin cambiar de pestaña. */
   const avisaEnRuta = porZona.en_ruta.some(t => elTono(t, t.minutos) === 'aviso')
@@ -298,7 +303,17 @@ export default function PaseBoard({ token, onCerrarAMano }: {
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-1.5 pb-2">
         {tablero == null ? (
+          /* El primer pintado es SIEMPRE el estado de carga, nunca un tablero
+             vacío: «no hay nada» y una décima después cuatro pedidos se paga en
+             confianza, y la confianza es lo único que hace que la usen. */
           <p className="text-center text-text-tertiary text-[13px] py-8">Cargando…</p>
+        ) : tablero.sin_instalar ? (
+          <p className="text-center text-text-secondary text-[13px] py-7 border border-dashed
+                        border-linea-fuerte rounded-xl leading-relaxed px-4">
+            <b className="block text-text-primary mb-1">El Pase todavía no está instalado en este local.</b>
+            La pantalla existe pero la base no la sirve aún. Si esto sigue aquí mañana,
+            hay que decirlo: no es que no haya pedidos, es que no se han podido pedir.
+          </p>
         ) : porZona[zona].length === 0 ? (
           <p className="text-center text-text-tertiary text-[13px] py-7 border border-dashed
                         border-linea-fuerte rounded-xl leading-relaxed">

@@ -75,6 +75,22 @@ export interface ElTablero {
   pase_activo: boolean
   ahora: string
   tarjetas: TarjetaDelPase[]
+  /**
+   * 🔴 «LA BASE TODAVÍA NO SABE DE ESTO», y se dice con palabras.
+   *
+   * Antes de la tanda de las 23:45 `pase_board` no existe, y hace falta un
+   * respaldo para que la tablet no enseñe un error por una pantalla apagada.
+   * Pero DESPUÉS esa rama no debería dispararse nunca más: si se dispara es
+   * porque alguien borró, renombró o revocó la función.
+   *
+   * Un respaldo que se traga el error y pinta un tablero vacío es la avería
+   * muda de siempre, sólo que aplazada. Así que deja rastro y la pantalla lo
+   * dice: «El Pase todavía no está instalado en este local». Si eso aparece
+   * cuando ya debería estar instalado, alguien lo lee y avisa.
+   *
+   * Y sirve igual para el cliente 2 que todavía no tenga la función.
+   */
+  sin_instalar?: boolean
 }
 
 function requireSupabase(): void {
@@ -115,16 +131,21 @@ function noLoSabeTodavia(e: unknown): boolean {
   return /42883|PGRST202|could not find the function|does not exist/i.test(m)
 }
 
-const TABLERO_APAGADO: ElTablero = {
-  local: null, pase_activo: false, ahora: '', tarjetas: [],
+const TABLERO_SIN_INSTALAR: ElTablero = {
+  local: null, pase_activo: false, ahora: '', tarjetas: [], sin_instalar: true,
 }
 
 export async function getTablero(token: string): Promise<ElTablero> {
   try {
     const t = await rpc<ElTablero>('pase_board', { p_device_token: token })
-    return t ?? TABLERO_APAGADO
+    return t ?? TABLERO_SIN_INSTALAR
   } catch (e) {
-    if (noLoSabeTodavia(e)) return TABLERO_APAGADO
+    if (noLoSabeTodavia(e)) {
+      // Rastro, además de la pantalla: sin esto, el día que alguien revoque la
+      // función no queda ni una línea de por qué el Pase se quedó en blanco.
+      console.warn('[pase] `pase_board` no existe en esta base todavía')
+      return TABLERO_SIN_INSTALAR
+    }
     throw e
   }
 }
