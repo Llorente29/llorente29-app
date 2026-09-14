@@ -36,6 +36,33 @@
 //
 // Y «todavía no está lista» NO es un fallo: no gasta intento de los 5 y no
 // deja la publicación en «error», de donde no sale sola.
+//
+// ── 14/09/2026 · LA LLAVE FUERA DE LA DIRECCIÓN, Y `publishing` DEJA DE SER
+//                UN POZO ────────────────────────────────────────────────────
+//
+// Dos fallos que Julio encontró leyendo la v21 ya desplegada, y un tercero que
+// salió al medirlos. La v21 llegó a publicar de verdad una vez (13/09 23:00:27,
+// `attempts 2`), o sea que los dos dejaron de ser teóricos esa noche.
+//
+//   1. LA LLAVE VIAJABA EN LA DIRECCIÓN. Ahora va en la cabecera. El motivo no
+//      es lo que haga un `fetch` roto --eso no lo hemos podido medir ninguno de
+//      los dos-- sino que una cadena de consulta la registra todo el que la
+//      toca por el camino, Meta el primero.
+//      Y encima un CEDAZO (`sinSecretos`) en el único sitio por el que se
+//      escribe `last_error`: la cabecera arregla ese sitio, el cedazo arregla
+//      el siguiente.
+//
+//   2. `publishing` NO TIENE SALIDA. Ninguna función de la base lo devuelve a
+//      `approved`; el buscador solo mira `approved`. Con el sondeo hay hasta
+//      150 s en vuelo por pasada, así que una ejecución que se corte deja
+//      publicaciones ahí para siempre. Dos remedios: un PLAZO COMPARTIDO por
+//      toda la pasada (60 s; la que no quepa se deja sin tocar) y un RESCATE
+//      al entrar (más de 10 min parada → vuelve a `approved` con su contenedor
+//      y se le devuelve el intento que gastó el reclamo).
+//
+//   3. Y LA PANTALLA LA PARALIZABA A LA VISTA: pintaba «Publicándose…» y ni un
+//      botón. No es que desapareciera: es que decía algo tranquilizador sobre
+//      una fila muerta. Eso se arregla en el front, no aquí.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -47,6 +74,52 @@ const GRAPH = "https://graph.instagram.com/v23.0";
 const PRIMERA_ESPERA_MS = 3_000;
 const ENTRE_CONSULTAS_MS = 5_000;
 const TECHO_MS = 30_000;
+
+/**
+ * EL PLAZO DE TODA LA PASADA, no de cada publicación (Julio, 13/09 23:15).
+ *
+ * Con el sondeo, una publicación puede tardar 30 s y se cogen 5 por pasada:
+ * hasta 150 s en vuelo. Si esa ejecución se corta --se le acaba el tiempo a la
+ * función, un despliegue en medio, cualquier cosa-- las que estuvieran a medias
+ * se quedan en `publishing`, y de ahí NO SALE NADIE: ninguna función de la base
+ * las devuelve a `approved`, el buscador solo mira `approved`, y la pantalla
+ * les pinta «Publicándose…» sin un solo botón al lado. Desaparecen en silencio
+ * estando a la vista.
+ *
+ * Con un plazo compartido, la que no quepa se deja SIN TOCAR para la pasada
+ * siguiente. Es mejor que bajar el `limit(5)` porque no depende de cuántas haya.
+ */
+const PLAZO_DE_LA_PASADA_MS = 60_000;
+
+/**
+ * Una publicación parada en `publishing` más de esto es una pasada que se
+ * murió a medias. Se rescata al entrar. Diez minutos es holgado: la pasada
+ * entera tiene un plazo de 60 s, así que nada sano llega ahí.
+ */
+const PARADA_DEMASIADO_MS = 10 * 60_000;
+
+/**
+ * ⚠️ EL CEDAZO. Todo lo que vaya a `last_error` pasa por aquí, SIEMPRE.
+ *
+ * `last_error` es una columna de la base Y lo que se pinta en la tarjeta de la
+ * pantalla. Cualquier texto que llegue ahí con una llave dentro deja esa llave
+ * guardada y enseñada.
+ *
+ * La llave ya no viaja en la URL --va en la cabecera, ver `estadoDelContenedor`--
+ * pero eso arregla ESE sitio y no el siguiente: mañana alguien añade una
+ * llamada, mete el token donde no debe, y el mensaje de error acaba en la
+ * pantalla. Un secreto no se guarda «por si acaso»: se quita antes de escribir,
+ * en el unico sitio por el que se escribe.
+ */
+function sinSecretos(texto: string): string {
+  return texto
+    .replace(/access_token=[^&\s"'})\]]+/gi, 'access_token=[QUITADO]')
+    .replace(/"access_token"\s*:\s*"[^"]*"/gi, '"access_token":"[QUITADO]"')
+    .replace(/(Bearer\s+)[A-Za-z0-9._-]{8,}/gi, '$1[QUITADO]')
+    // Los tokens de Meta son largos y empiezan por IG/EAA. Se corta por su
+    // forma, no por dónde aparecen: es la red de debajo de las tres de arriba.
+    .replace(/\b(IG|EAA)[A-Za-z0-9_-]{20,}/g, '[LLAVE QUITADA]');
+}
 
 /** Los estados que devuelve Instagram en `status_code`. Sólo uno autoriza. */
 type EstadoContenedor = "IN_PROGRESS" | "FINISHED" | "ERROR" | "EXPIRED" | "PUBLISHED";
@@ -96,14 +169,24 @@ async function igToken(vaultName: string): Promise<string | null> {
 
 /**
  * El estado del contenedor. `status_code` es el campo, y sus cinco valores son
- * los de arriba. El token viaja en la URL porque es como se consulta un nodo
- * de Graph; POR ESO ESTA URL NO SE REGISTRA NUNCA EN NINGÚN SITIO.
+ * los de arriba.
+ *
+ * LA LLAVE VA EN LA CABECERA, NO EN LA DIRECCIÓN (Julio, 13/09 23:15), y el
+ * motivo no depende de qué haga ningún runtime cuando un `fetch` revienta:
+ * una cadena de consulta LA REGISTRA TODO EL QUE LA TOCA POR EL CAMINO —Meta
+ * en su propio registro de accesos el primero, y cualquier intermediario entre
+ * medias—. La llave saldría de nuestro control aunque nosotros no la
+ * escribiéramos en ningún sitio nuestro.
+ *
+ * (Aquí ponía antes «POR ESO ESTA URL NO SE REGISTRA NUNCA EN NINGÚN SITIO».
+ *  Era una garantía escrita justo donde no se podía dar.)
  */
 async function estadoDelContenedor(
   creationId: string, token: string,
 ): Promise<{ estado: EstadoContenedor | null; error: unknown }> {
   const r = await fetch(
-    `${GRAPH}/${creationId}?fields=status_code&access_token=${encodeURIComponent(token)}`,
+    `${GRAPH}/${creationId}?fields=status_code`,
+    { headers: { Authorization: `Bearer ${token}` } },
   );
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j?.status_code) return { estado: null, error: j?.error ?? j };
@@ -113,6 +196,34 @@ async function estadoDelContenedor(
 Deno.serve(async (req) => {
   if (req.headers.get("x-agent-secret") !== AGENT_SECRET) return new Response("forbidden", { status: 403 });
   const out: Array<Record<string, unknown>> = [];
+  const arranqueDeLaPasada = Date.now();
+
+  // ── EL RESCATE. Lo primero de cada pasada, antes de buscar nada.
+  //
+  // `publishing` no tiene salida: ninguna funcion de la base lo devuelve a
+  // `approved` --la unica que nombra los dos estados es la RPC de la pantalla--
+  // y el buscador de abajo solo mira `approved`. Una publicacion que se quede
+  // ahi no la vuelve a coger nadie.
+  //
+  // Se conserva el `ig_creation_id`: es lo que hace que la pasada siguiente no
+  // empiece la carrera de cero. Y se DEVUELVE el intento que gasto el reclamo,
+  // porque esa pasada no llego a concluir: cobrarselo seria cobrarle al pedido
+  // que se cayera nuestra ejecucion.
+  const { data: rescatadas } = await supa.from("social_post")
+    .update({ status: "approved", error_kind: "esperando",
+              last_error: "Una pasada anterior se corto a medias y esta se quedo sin terminar. Vuelve a la cola con su contenedor.",
+              updated_at: new Date().toISOString() })
+    .eq("status", "publishing")
+    .lt("updated_at", new Date(Date.now() - PARADA_DEMASIADO_MS).toISOString())
+    .select("id, attempts");
+
+  for (const p of rescatadas ?? []) {
+    // El intento se devuelve una a una porque PostgREST no sabe restar.
+    await supa.from("social_post")
+      .update({ attempts: Math.max(0, (p.attempts ?? 1) - 1) })
+      .eq("id", p.id);
+    out.push({ id: p.id, rescatada: "estaba parada en publishing" });
+  }
 
   // Posts aprobados de cuentas de Instagram ENLAZADAS, sin programación futura
   const { data: posts } = await supa.from("social_post")
@@ -123,6 +234,14 @@ Deno.serve(async (req) => {
     .order("created_at").limit(5);
 
   for (const p of posts ?? []) {
+    // EL PLAZO DE LA PASADA. La que no quepa se deja SIN TOCAR --ni reclamada,
+    // ni marcada, ni nada-- para la siguiente. Se dice en el informe: una
+    // publicacion que no se mira tiene que poder verse que no se miro.
+    if (Date.now() - arranqueDeLaPasada > PLAZO_DE_LA_PASADA_MS) {
+      out.push({ id: p.id, aplazada: "se acabo el plazo de esta pasada, sin tocarla" });
+      continue;
+    }
+
     const sa: any = (p as any).social_account;
     if (!sa || sa.link_status !== "linked") { out.push({ id: p.id, skipped: "cuenta no enlazada" }); continue; }
     const igUserId = sa.config?.ig_user_id;
@@ -140,11 +259,11 @@ Deno.serve(async (req) => {
     /** Un fallo DE VERDAD: se para, se cuenta el intento y se dice qué clase es. */
     const fail = async (msg: string, clase: ClaseDeFallo, borrarContenedor = true) => {
       await supa.from("social_post").update({
-        status: "error", last_error: msg.slice(0, 400), error_kind: clase,
+        status: "error", last_error: sinSecretos(msg).slice(0, 400), error_kind: clase,
         ...(borrarContenedor ? { ig_creation_id: null } : {}),
         updated_at: new Date().toISOString(),
       }).eq("id", p.id);
-      out.push({ id: p.id, ok: false, clase, error: msg.slice(0, 200) });
+      out.push({ id: p.id, ok: false, clase, error: sinSecretos(msg).slice(0, 200) });
     };
 
     /**
@@ -155,7 +274,7 @@ Deno.serve(async (req) => {
     const devuelveALaCola = async (creationId: string | null, detalle: string) => {
       await supa.from("social_post").update({
         status: "approved", attempts: intentosPrevios,
-        error_kind: "esperando", last_error: detalle.slice(0, 400),
+        error_kind: "esperando", last_error: sinSecretos(detalle).slice(0, 400),
         ig_creation_id: creationId,
         updated_at: new Date().toISOString(),
       }).eq("id", p.id);

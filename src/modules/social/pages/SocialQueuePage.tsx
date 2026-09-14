@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
 import {
-  laTarjetaDe, losBotones, textoDelDetalle, loDeLosIntentos,
+  laTarjetaDe, losBotones, textoDelDetalle, loDeLosIntentos, loQueSePublica,
   type ClaseDeFallo,
 } from '@/modules/social/lib/laTarjetaDeError'
 import {
@@ -254,7 +254,20 @@ export default function SocialQueuePage() {
                     )}
 
                     {row.status === 'publishing' ? (
-                      <p style={{ fontSize: 12, color: 'var(--color-text-secondary, #999)', marginTop: 12 }}>Publicándose…</p>
+                      (() => {
+                        // Una atascada no se queda con un párrafo y sin salida.
+                        const p = loQueSePublica(row.updated_at ?? null)
+                        return (
+                          <div style={{ marginTop: 12 }}>
+                            <p style={{ fontSize: 12, color: p.atascada ? '#7a5a12' : 'var(--color-text-secondary, #999)', margin: 0 }}>{p.texto}</p>
+                            {p.atascada && (
+                              <div style={{ marginTop: 8 }}>
+                                <Btn variant="primary" onClick={() => onRetry(row)} disabled={busy}>Devolver a la cola</Btn>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()
                     ) : row.status === 'error' ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
                         {losBotones(row.error_kind).map((b) => (
