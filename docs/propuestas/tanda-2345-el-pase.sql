@@ -1,6 +1,18 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- TANDA DE LAS 23:45 · EL PASE · 14/09/2026 · NO APLICAR ANTES
+-- TANDA DEL PASE · 14/09/2026 · LA MITAD APLICADA, LA OTRA MITAD ESPERANDO
 -- ═══════════════════════════════════════════════════════════════════════════
+--
+-- 🟢 APLICADAS el 15/09 a las 00:30 de Madrid, fuera de la banda, en
+--    `supabase/migrations/20260914223229_el_pase_interruptor_y_tablero_las_dos_inertes.sql`:
+--      · pieza 1, `pase_activo`
+--      · pieza 2, `pase_board`
+--      · los dos relojes con su guardia, y los ensayos A, B, C, D y H
+--
+-- ⏸️ SIGUEN AQUÍ, SIN APLICAR, la pieza 3 (la condición de `kds_board`) y la
+--    pieza 4 (la línea del sello), con sus ensayos E, F y G. No se aplicaron
+--    porque a esa hora el tablero de cocina de Alcalá tenía CERO tickets: el
+--    ensayo E habría comparado cero contra cero, que no es verde sino SIN
+--    ENSAYAR. Van una mañana temprano, con tickets delante.
 --
 -- 🔴 FUERA DE `supabase/migrations/` A PROPÓSITO. Si estuviera ahí, la fusión a
 -- `main` la aplicaría por CI a la hora que fuese. Se aplica a mano a las 23:45
