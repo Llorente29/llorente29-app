@@ -77,8 +77,17 @@ export function comoEstaLaCuenta(c: CuentaDeRed, fecha: (iso: string) => string)
       return `La llave no vale: Meta la rechazó${c.llaveFalloAt ? ` el ${fecha(c.llaveFalloAt)}` : ''}.`
         + ' Hasta que se renueve no se publica nada.'
     case 'sin_estrenar':
-      return 'Enlazada, pero todavía no ha publicado nada desde que se vigila la llave.'
-        + ' Hasta que salga una publicación, que esté bien es una suposición.'
+      // 🔴 Dos frases distintas, y la diferencia importa. El sello se desplegó
+      // el 14/09 a las 11:29, así que hay cuentas que llevan años publicando y
+      // cero sellos. Decirles «todavía no ha publicado nada» al lado de «la
+      // última publicación salió el 14/9» es una contradicción en la misma
+      // tarjeta, y quien la lea concluye que la pantalla está rota.
+      return c.ultimaPublicacion
+        ? 'Enlazada. Lo último que salió fue antes de empezar a vigilar la llave, así que de la'
+          + ' llave de ahora no hay constancia todavía: que esté bien es una suposición hasta'
+          + ' la siguiente publicación.'
+        : 'Enlazada, pero todavía no ha publicado nada desde que se vigila la llave.'
+          + ' Hasta que salga una publicación, que esté bien es una suposición.'
     default:
       return `Publicando. La última vez que Meta aceptó la llave fue el ${fecha(c.llaveOkAt!)}.`
   }

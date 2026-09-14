@@ -7,6 +7,14 @@
 //   · Julio la renovó a mano el 13/09 a las 21:12:27 de Madrid
 //   · la siguiente caduca el 12/11/2026 a las 19:12:27 UTC
 // Los cinco fallos por llave caducada son del 07 al 12/09.
+//
+// 🔴 OJO CON `llaveOkAt` DE ABAJO: en PRODUCCIÓN sigue siendo NULL. El sello se
+// desplegó hoy a las 11:29 y desde entonces el publicador ha corrido 4 veces
+// sin nada que publicar, así que no ha sellado todavía. El valor que se usa
+// aquí es el `published_at` REAL de la última publicación (14/09 09:00:21 de
+// Madrid = 07:00:21 UTC), que es lo que se sellaría. No es un valor inventado,
+// pero tampoco es el que hay en la base: eso es exactamente el caso
+// `sin_estrenar` con publicación anterior, y tiene su prueba abajo.
 
 import { describe, it, expect } from 'vitest'
 import {
@@ -61,6 +69,25 @@ describe('en qué está la llave', () => {
     expect(enQueEstaLaLlave(c)).toBe('sin_estrenar')
     expect(comoEstaLaCuenta(c, fecha)).toContain('es una suposición')
     expect(elTonoDeLaCuenta(c)).toBe('aviso')
+  })
+
+  it('🔴 y sin_estrenar CON publicación anterior no se contradice a sí misma', () => {
+    // Éste es el estado REAL de Instagram ahora mismo: `llave_ok_at` NULL
+    // porque el sello es de las 11:29 de hoy, y `ultima_publicacion` el 14/09
+    // a las 09:00 de Madrid. Las dos frases salen en la misma tarjeta.
+    const c = C({ llaveOkAt: null, llaveFalloAt: null,
+                  ultimaPublicacion: '2026-09-14T07:00:21.178Z' })
+    const arriba = comoEstaLaCuenta(c, fecha)
+    expect(arriba).toContain('antes de empezar a vigilar la llave')
+    expect(arriba).not.toContain('todavía no ha publicado nada')
+    // Y la fecha se dice UNA vez, abajo, donde va el registro.
+    expect(arriba).not.toContain('14/9/2026')
+    expect(loUltimoQueSalio(c, fecha)).toContain('14/9/2026')
+  })
+
+  it('...pero si de verdad no ha publicado nunca, se dice tal cual', () => {
+    const c = C({ llaveOkAt: null, llaveFalloAt: null, ultimaPublicacion: null })
+    expect(comoEstaLaCuenta(c, fecha)).toContain('todavía no ha publicado nada')
   })
 
   it('sin enlazar se dice, y no se pinta en rojo', () => {
