@@ -98,3 +98,12 @@ verify_jwt = false
 # copia de lo que hubiera un martes.
 [functions.social-agent]
 verify_jwt = false
+
+# La renovadora de la llave de Instagram (14/09). La llama pg_cron con
+# `x-agent-secret`, igual que a `social-agent` y `social-publish`, asi que su
+# frontera es ese secreto y no un JWT. Se declara ANTES de existir en
+# produccion, porque el CI se planta con una funcion nueva sin declarar — y
+# hace bien: adivinar el verify_jwt de una funcion nueva es como se abre al
+# mundo algo que toca el Vault.
+[functions.social-token-refresh]
+verify_jwt = false
