@@ -49,8 +49,22 @@ export interface TarjetaDelPase extends PedidoDelPase {
   /** El logo de la marca, el mismo de la pegatina de la bolsa. */
   marca_logo_url: string | null
   cliente: string | null
-  rider_nombre: string | null
-  rider_transporte: string | null
+  /**
+   * EL REPARTIDOR, los tres campos del §4 de la enmienda.
+   *
+   * 🔴 El teléfono es el del REPARTIDOR, que es de casa. El del CLIENTE no
+   * viaja aquí: `pase_board` se pregunta en bucle mientras la tablet está
+   * encendida, y eso son datos de contacto viajando y cacheándose decenas de
+   * veces por hora para pedidos que nadie ha abierto. Va en `pase_ficha`, a la
+   * carta, cuando alguien abre la hoja.
+   *
+   * Y `quien_lo_lleva` NO viene de la base: es una frase derivada de canal +
+   * `service_type` + `carrier_code`, y se arma en `quienLoLleva()`. Escribirla
+   * también en SQL sería la misma regla en dos sitios.
+   */
+  repartidor_nombre: string | null
+  repartidor_telefono: string | null
+  repartidor_transporte: string | null
   lineas: { nombre: string; cantidad: number }[]
   bolsa: LaBolsa
   /**

@@ -133,8 +133,25 @@ begin
            'has_courier',   v.has_courier,
            'carrier_code',  v.carrier_code,
            'delivery_state', v.delivery_state,
-           'rider_nombre',     v.rider_name,
-           'rider_transporte', v.rider_transport_type,
+           -- EL REPARTIDOR · los tres campos del §4 de la enmienda del 14/09.
+           --
+           -- 🔴 De los tres, sólo UNO es un dato que faltaba: el teléfono.
+           -- `repartidor_nombre` ya viajaba (se llamaba `rider_nombre`) y
+           -- `quien_lo_lleva` NO es un dato, es una FRASE derivada de canal +
+           -- `service_type` + `carrier_code` --los tres ya van aquí en crudo--
+           -- así que se arma en `quienLoLleva()` y no se escribe también aquí:
+           -- la misma regla en dos sitios es una regla que un día dice dos
+           -- cosas. Es el mismo motivo por el que los minutos no se calculan
+           -- en esta función. Si Julio prefiere la frase en la base, se mueve
+           -- entera, no se duplica.
+           --
+           -- 🔴 Y es el teléfono del REPARTIDOR, que es de casa. Medido en 14
+           -- días: 231 repartos propios con flota, los 231 con nombre Y
+           -- teléfono; 0 con flota y sin nombre; 0 con nombre y sin flota. De
+           -- 1.424 pedidos de plataforma, CERO traen repartidor.
+           'repartidor_nombre',     v.rider_name,
+           'repartidor_telefono',   v.rider_phone,
+           'repartidor_transporte', v.rider_transport_type,
            -- Los instantes en crudo: el reloj lo elige el front.
            'entro_at',   coalesce(v.opened_at, v.sold_at, v.created_at),
            'ready_at',   v.ready_at,
@@ -251,7 +268,15 @@ grant execute on function public.pase_board(text) to anon, authenticated, servic
 --      `pase_board` lo devuelve false. Nada se enciende solo.
 --  D · SIN LLAVES NI DATOS DE MÁS: el jsonb no contiene `customer_phone`,
 --      `delivery_address`, `public_token` ni nada con forma de secreto.
+--      🔴 Y AHORA LA RAYA ES MÁS FINA, porque sí sale un teléfono: se exige que
+--      esté el del REPARTIDOR (`rider_phone`) y que NO esté el del CLIENTE. El
+--      ensayo compara los dos contra el texto del jsonb, no sólo el nombre del
+--      campo: con el del cliente dentro, aunque fuese bajo otra etiqueta, el
+--      ensayo tiene que caerse.
 --  E · `kds_board` CON EL INTERRUPTOR APAGADO devuelve los MISMOS tickets que
 --      antes, para Alcalá y para Carabanchel. Mismos números a los dos lados.
 --  F · Y ENCENDIDO: un pedido con sello y sin expo marcada ya no sale.
 --  G · EL SELLO: reabrir borra `ready_at`; marcar listo lo vuelve a poner.
+--  H · EL REPARTIDOR, contra la población real: de las tarjetas con flota, TODAS
+--      traen nombre y teléfono (medido hoy: 231 de 231 en 14 días), y ninguna
+--      tarjeta de plataforma trae ninguno de los dos (0 de 1.424).

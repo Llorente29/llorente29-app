@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import {
   laSituacion, laZona, tieneBotonDeListo, loQuePasa, loQueNoSabemos,
   elSubtitulo, elTono, losMinutos, loRepartimosConFlota, loRepartelaPlataforma,
+  quienLoLleva, esRecogida,
   type PedidoDelPase,
 } from '@/modules/pase/lib/lasTresZonas'
 
@@ -201,5 +202,100 @@ describe('🔴 desde cuándo se cuenta: cada zona mira un reloj distinto', () =>
   it('y sin instante que mirar devuelve null, no un cero que parece medido', () => {
     // Regla 32: un «no lo sé» no se disfraza de valor.
     expect(losMinutos(P({ entro_at: null }), AHORA)).toBeNull()
+  })
+})
+
+// ── QUIÉN LO LLEVA ────────────────────────────────────────────────────────
+//
+// Los cinco casos son los MEDIDOS hoy sobre 14 días de Foodint (1.681 ventas).
+// El reparto exacto está en el comentario de `quienLoLleva`.
+
+describe('quién lo lleva · los cinco casos de la población real', () => {
+  it('(231) propio con flota: dice el nombre y trae el teléfono del repartidor', () => {
+    const q = quienLoLleva(P({ repartidor_nombre: 'Marta', repartidor_telefono: '+34600111222' }))
+    expect(q.texto).toBe('Nuestro · Marta')
+    expect(q.telefono).toBe('+34600111222')
+    expect(q.esAviso).toBe(false)
+  })
+
+  it('(1.424) plataforma: dice quién reparte y NO se inventa repartidor', () => {
+    const q = quienLoLleva(P({ service_type: 'platform_delivery', has_courier: false,
+                               carrier_code: null, channel: 'Uber' }))
+    expect(q.texto).toBe('Lo reparte Uber')
+    expect(q.nombre).toBeNull()
+    expect(q.telefono).toBeNull()
+  })
+
+  it('🔴 (14) propio y sin coger: es un AVISO, no un hueco', () => {
+    // Comida nuestra, reparto nuestro y nadie asignado. El pase tiene que
+    // saberlo antes de que llame el cliente.
+    const q = quienLoLleva(P({ has_courier: false, carrier_code: null,
+                               repartidor_nombre: null, repartidor_telefono: null }))
+    expect(q.texto).toBe('Nuestro, y todavía no lo ha cogido nadie')
+    expect(q.esAviso).toBe(true)
+  })
+
+  it('(12) recogida: lo recoge el cliente, y no hay repartidor a quien llamar', () => {
+    const q = quienLoLleva(P({ service_type: 'pickup', has_courier: false, carrier_code: null }))
+    expect(q.texto).toBe('Lo recoge el cliente')
+    expect(q.telefono).toBeNull()
+    expect(q.esAviso).toBe(false)
+  })
+
+  it('(0 hoy) con flota y sin nombre: dice lo que sabe, no se queda en blanco', () => {
+    const q = quienLoLleva(P({ repartidor_nombre: null }))
+    expect(q.texto).toBe('Nuestro, ya asignado')
+  })
+
+  it('🔴 REGLA 32 · nunca en blanco, en ninguna combinación', () => {
+    const casos: PedidoDelPase[] = [
+      P(),
+      P({ service_type: 'platform_delivery', has_courier: false, carrier_code: null }),
+      P({ service_type: 'platform_delivery', channel: null, has_courier: false, carrier_code: null }),
+      P({ service_type: 'pickup', has_courier: false, carrier_code: null }),
+      P({ has_courier: false, carrier_code: null }),
+      P({ service_type: null, has_courier: false, carrier_code: null }),
+      P({ service_type: 'algo_que_no_existe', has_courier: false, carrier_code: null }),
+      P({ repartidor_nombre: '   ' }),
+    ]
+    for (const c of casos) expect(quienLoLleva(c).texto.trim()).not.toBe('')
+  })
+
+  it('y el cuarto valor que no existe hoy dice que no lo sabemos', () => {
+    // En 90 días `service_type` sólo vale platform_delivery, own_delivery o
+    // pickup, y nunca null. El día que entre un cuarto, esto no inventa nada.
+    const q = quienLoLleva(P({ service_type: 'catering', has_courier: false, carrier_code: null }))
+    expect(q.texto).toBe('No sabemos quién lo lleva')
+    expect(q.esAviso).toBe(true)
+  })
+})
+
+describe('🔴 la recogida: 12 tarjetas que decían algo que no pasa', () => {
+  const recogida = P({ service_type: 'pickup', has_courier: false, carrier_code: null,
+                       ready_at: '2026-09-14T19:16:00Z', order_status: 'awaiting_collection',
+                       channel: 'Uber' })
+
+  it('marcada, se queda en «Sigue aquí» con su propia situación', () => {
+    expect(esRecogida(recogida)).toBe(true)
+    expect(laSituacion(recogida)).toBe('lo_recoge_el_cliente')
+    expect(laZona(recogida)).toBe('sigue_aqui')
+    expect(tieneBotonDeListo(recogida)).toBe(false)
+  })
+
+  it('y NO dice «lo marca quien se lo lleve desde su móvil»: el cliente no tiene app', () => {
+    expect(loQuePasa(recogida, 8)).toBe('Listo, esperando a que lo recojan · 8 min')
+    expect(loQueNoSabemos(recogida)).toContain('Viene el cliente a por ello')
+    expect(loQueNoSabemos(recogida)).not.toContain('su móvil')
+    expect(elSubtitulo(recogida)).toBe('Uber · lo recoge el cliente')
+  })
+
+  it('se va al cerrarse la comanda, sin pintar que llegó (0 de 63 tienen entrega)', () => {
+    // Medido en 90 días: las 63 recogidas sin `delivery_state` y sin
+    // `delivered_at`. Nadie las marca nunca.
+    expect(laZona({ ...recogida, order_status: 'completed' })).toBeNull()
+  })
+
+  it('sin marcar sigue siendo «por marcar», y ése sí tiene botón', () => {
+    expect(tieneBotonDeListo({ ...recogida, ready_at: null })).toBe(true)
   })
 })

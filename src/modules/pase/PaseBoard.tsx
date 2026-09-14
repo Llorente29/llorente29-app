@@ -21,7 +21,7 @@ import { Check, Clock, Truck, Printer, AlertTriangle, User, Camera } from 'lucid
 import { declaraTrabajoEnCurso } from '@/services/trabajoEnCurso'
 import {
   laZona, laSituacion, tieneBotonDeListo, loQuePasa, loQueNoSabemos,
-  elSubtitulo, elTono, losMinutos, type Zona, type Tono,
+  elSubtitulo, elTono, losMinutos, quienLoLleva, type Zona, type Tono,
 } from './lib/lasTresZonas'
 import {
   getTablero, marcarListo, reimprimirBolsa,
@@ -115,6 +115,7 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
   const situacion = laSituacion(t)
   const conBoton = tieneBotonDeListo(t)
   const noSabemos = loQueNoSabemos(t)
+  const quien = quienLoLleva(t)
   const rota = t.bolsa.estado === 'rota'
 
   return (
@@ -134,6 +135,15 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
             {t.codigo ?? ''}
           </span>
         </div>
+
+        {/* QUIÉN LO LLEVA · siempre visible, porque es la pregunta que hace el
+            pase en voz alta cuando suena el timbre. El TELÉFONO no se pinta
+            aquí: llamar es algo que se consulta, no algo que cambie lo que
+            haces, y va en la hoja de detalle. */}
+        <p className={`text-[12.5px] font-bold leading-snug mt-1 truncate
+                       ${quien.esAviso ? 'text-warning' : 'text-text-secondary'}`}>
+          {quien.texto}
+        </p>
 
         {situacion === 'por_marcar' && t.lineas.length > 0 && (
           <div className="border-t border-lavado mt-1.5 pt-1.5">

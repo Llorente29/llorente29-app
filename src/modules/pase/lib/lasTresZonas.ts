@@ -50,6 +50,18 @@ export interface PedidoDelPase {
   channel: string | null
   /** Cuándo entró el pedido. El reloj de los que aún no tienen sello. */
   entro_at?: string | null
+  /**
+   * EL REPARTIDOR NUESTRO, cuando lo hay. Medido en 14 días de Foodint: de 245
+   * repartos propios, 231 tienen flota y los 231 traen nombre Y teléfono; cero
+   * con flota y sin nombre, cero con nombre y sin flota. Y de 1.424 pedidos de
+   * plataforma, CERO traen nombre: Glovo y Uber no nos dicen quién lo lleva.
+   *
+   * 🔴 Es el teléfono del REPARTIDOR, no el del cliente. El del cliente no
+   * viaja en el tablero --se pide en bucle, y en 1.685 pedidos sólo 229 traen
+   * uno de verdad-- y va en la ficha, a la carta.
+   */
+  repartidor_nombre?: string | null
+  repartidor_telefono?: string | null
 }
 
 export type Zona = 'sigue_aqui' | 'en_ruta' | 'entregados'
@@ -69,6 +81,7 @@ export type Situacion =
   | 'esperando_rider_plataforma'    // sigue aquí, lo reparte la plataforma
   | 'esperando_que_lo_cojan'        // sigue aquí, propio SIN flota: nadie lo ha cogido
   | 'listo_sin_salir'               // sigue aquí, propio CON flota, aún no ha salido
+  | 'lo_recoge_el_cliente'          // sigue aquí, viene el cliente a por ello
   | 'en_ruta'                       // ha salido de verdad
   | 'entregado'                     // ha llegado de verdad
 
@@ -81,6 +94,15 @@ export function loRepartelaPlataforma(p: PedidoDelPase): boolean {
 export function loRepartimosConFlota(p: PedidoDelPase): boolean {
   if (loRepartelaPlataforma(p)) return false
   return p.has_courier === true || (p.carrier_code ?? '') !== ''
+}
+
+/**
+ * ¿Lo recoge el cliente? Medido en 90 días: 63 ventas `pickup`, y las 63 sin
+ * `delivery_state` y sin `delivered_at`. Nadie las va a marcar nunca, porque no
+ * hay app de repartidor de por medio: el cliente viene al mostrador.
+ */
+export function esRecogida(p: PedidoDelPase): boolean {
+  return (p.service_type ?? '').toLowerCase() === 'pickup'
 }
 
 /** ¿Tiene sello de cocina? El hito, no el estado: un solo escritor. */
@@ -113,6 +135,12 @@ export function laSituacion(p: PedidoDelPase): Situacion {
   }
   // 3 · Sigue en el local. ¿Está marcado?
   if (!estaMarcadoListo(p)) return 'por_marcar'
+  // 🔴 La recogida, antes que las esperas de reparto. Sin esta raya un `pickup`
+  // marcado caía en «esperando_que_lo_cojan» --no tiene flota-- y la tarjeta
+  // decía «Lo marca quien se lo lleve, desde su móvil», que en una recogida no
+  // es nadie: el cliente no tiene app. Son 12 pedidos en 14 días diciendo algo
+  // que no pasa.
+  if (esRecogida(p)) return 'lo_recoge_el_cliente'
   if (loRepartelaPlataforma(p)) return 'esperando_rider_plataforma'
   if (!loRepartimosConFlota(p)) return 'esperando_que_lo_cojan'
   return 'listo_sin_salir'
@@ -162,6 +190,7 @@ export function quienReparte(p: PedidoDelPase): string {
 /** La línea bajo el nombre de la marca: canal y quién lo lleva. */
 export function elSubtitulo(p: PedidoDelPase): string {
   const canal = p.channel?.trim() || 'sin canal'
+  if (esRecogida(p)) return `${canal} · lo recoge el cliente`
   if (loRepartelaPlataforma(p)) return `${canal} · lo reparte ${quienReparte(p)}`
   if (loRepartimosConFlota(p)) return `${canal} · reparto nuestro`
   return `${canal} · lo lleva alguien de casa`
@@ -179,6 +208,9 @@ export function loQuePasa(p: PedidoDelPase, minutos: number | null): string {
                              : `Esperando a que alguien lo coja · ${minutos} min`
     case 'listo_sin_salir':
       return 'Listo, esperando al repartidor'
+    case 'lo_recoge_el_cliente':
+      return minutos == null ? 'Listo, esperando a que lo recojan'
+                             : `Listo, esperando a que lo recojan · ${minutos} min`
     case 'en_ruta':
       return minutos == null ? 'Salió hace un momento' : `Salió hace ${minutos} min`
     case 'entregado':
@@ -202,6 +234,9 @@ export function loQueNoSabemos(p: PedidoDelPase): string | null {
            + 'La tarjeta se va sola cuando se cierre la comanda en caja.'
     case 'esperando_que_lo_cojan':
       return 'Lo marca quien se lo lleve, desde su móvil. Aquí no se toca.'
+    case 'lo_recoge_el_cliente':
+      return 'Viene el cliente a por ello. Nadie lo va a marcar: la tarjeta se '
+           + 'va cuando se cierre la comanda en caja.'
     default:
       return null
   }
@@ -243,6 +278,7 @@ export function losMinutos(p: PedidoDelPase, ahora: Date = new Date()): number |
     case 'esperando_que_lo_cojan':
     case 'esperando_rider_plataforma':
     case 'listo_sin_salir':
+    case 'lo_recoge_el_cliente':
       return desde(p.ready_at)
     case 'por_marcar':
       return desde(p.entro_at)
@@ -255,8 +291,83 @@ export function elTono(p: PedidoDelPase, minutos: number | null): Tono {
   if (s === 'en_ruta') {
     return minutos != null && minutos > MINUTOS_DE_MAS_EN_RUTA ? 'aviso' : 'bien'
   }
-  if (s === 'esperando_que_lo_cojan') {
+  if (s === 'esperando_que_lo_cojan' || s === 'lo_recoge_el_cliente') {
     return minutos != null && minutos > MINUTOS_DE_MAS_SIN_COGER ? 'aviso' : 'neutro'
   }
   return 'neutro'
+}
+
+// ── QUIÉN LO LLEVA ────────────────────────────────────────────────────────
+//
+// La pregunta que hace el pase en voz alta cuando suena el timbre: «¿este de
+// quién es?». Hoy la tarjeta no la contesta, y la contesta mal quien adivina.
+//
+// 🔴 VIVE AQUÍ Y NO EN `pase_board` A PROPÓSITO, por lo mismo que `losMinutos`:
+// es una FRASE derivada de canal + `service_type` + `carrier_code`, no un dato.
+// La base ya manda los tres en crudo. Escribirla también en SQL sería la misma
+// regla en dos sitios, y una regla en dos sitios es una regla que un día dice
+// dos cosas. Lo único que la base tiene y el front no tenía es el TELÉFONO del
+// repartidor: eso sí es un campo nuevo, y ése sí se añade.
+
+export interface QuienLoLleva {
+  /** 🔴 NUNCA vacío (regla 32): si no se determina, se dice que no se sabe. */
+  texto: string
+  /** El nombre suelto, para la ficha. `null` = no lo tenemos. */
+  nombre: string | null
+  /** El teléfono del REPARTIDOR. `null` = no lo tenemos. Nunca el del cliente. */
+  telefono: string | null
+  /** true = esto no es un dato, es un aviso: se pinta en ámbar. */
+  esAviso: boolean
+}
+
+/**
+ * QUIÉN LO LLEVA, con las palabras que se usan en el pase.
+ *
+ * Los casos son los MEDIDOS (regla 31), 14 días de Foodint, 1.681 ventas:
+ *
+ *   1.424  plataforma           → «Lo reparte Glovo» · sin nombre ni teléfono
+ *     231  propio con flota     → «Nuestro · Marta» · con nombre Y teléfono
+ *      14  propio sin nadie     → AVISO: «Nuestro, y todavía no lo ha cogido…»
+ *      12  recogida             → «Lo recoge el cliente»
+ *       0  flota sin nombre     → «Nuestro, ya asignado» (no pasa hoy; no revienta)
+ *
+ * Y el último renglón es el que importa de verdad: hoy no ocurre, pero si un
+ * día Catcher manda la asignación sin el nombre, la tarjeta dice lo que sabe
+ * --que es nuestro y que hay alguien-- en vez de quedarse en blanco.
+ */
+export function quienLoLleva(p: PedidoDelPase): QuienLoLleva {
+  const nombre = p.repartidor_nombre?.trim() || null
+  const telefono = p.repartidor_telefono?.trim() || null
+
+  if (esRecogida(p)) {
+    return { texto: 'Lo recoge el cliente', nombre: null, telefono: null, esAviso: false }
+  }
+
+  if (loRepartelaPlataforma(p)) {
+    // Medido: de 1.424 pedidos de plataforma, CERO traen nombre de repartidor.
+    // Glovo y Uber no nos lo dicen, así que la tarjeta tampoco se lo inventa.
+    return { texto: `Lo reparte ${quienReparte(p)}`, nombre, telefono, esAviso: false }
+  }
+
+  if (loRepartimosConFlota(p)) {
+    return {
+      texto: nombre ? `Nuestro · ${nombre}` : 'Nuestro, ya asignado',
+      nombre, telefono, esAviso: false,
+    }
+  }
+
+  if ((p.service_type ?? '').toLowerCase() === 'own_delivery') {
+    // 14 en 14 días. No es un fallo del Pase: es un pedido nuestro que nadie ha
+    // cogido, y el pase tiene que saberlo ANTES de que el cliente llame.
+    return {
+      texto: 'Nuestro, y todavía no lo ha cogido nadie',
+      nombre: null, telefono: null, esAviso: true,
+    }
+  }
+
+  // 🔴 EL SUELO DE LA REGLA 32. Hoy no se pisa --en 90 días `service_type` sólo
+  // vale platform_delivery, own_delivery o pickup, y nunca null-- pero el día
+  // que entre un cuarto valor la tarjeta dirá que no lo sabe, no una frase
+  // bonita que resulte ser falsa.
+  return { texto: 'No sabemos quién lo lleva', nombre, telefono, esAviso: true }
 }
