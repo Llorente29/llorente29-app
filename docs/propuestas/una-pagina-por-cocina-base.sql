@@ -18,20 +18,34 @@
 -- preparación, 7 locales, una expo por local. Un local con dos salidas rompe el
 -- modelo viejo y no rompe el nuevo.
 --
--- ── 🔴 Y UN DETALLE DE CALENDARIO QUE CAMBIA ESTA MIGRACIÓN ───────────────
+-- ── 🔴 YA NO HAY SIETE FILAS EN FALSE: HAY UNA ENCENDIDA, Y CON NOMBRE ────
 --
--- El encargo dice «las siete filas están en false, no lo usa nadie y no hay
--- nada que migrar». Eso era cierto a las 09:20. **Deja de serlo a las 17:00**,
--- cuando Julio encienda Alcalá desde la pantalla.
+-- El encargo decía «las siete filas están en false, no lo usa nadie y no hay
+-- nada que migrar». Dejó de ser cierto el 15/09 a las 09:10:17 de Madrid.
+-- Medido, no recordado:
 --
--- Así que cuando esto se aplique --mañana por la mañana-- habrá EXACTAMENTE UN
--- local encendido, con su `pase_activo_at`, su `pase_activo_por` y su
--- `pase_activo_desde = 'pantalla'`. La mudanza tiene que llevarse el estado Y
--- LA TRAZA, no sólo crear columnas nuevas: si no, el lunes el Pase aparecería
--- apagado en Alcalá sin que nadie lo hubiera apagado, y la traza del primer
--- encendido de la historia se perdería.
+--     local  Foodint Alcalá (cuenta 51ad1792, local 38158159)
+--     pase_activo        true
+--     pase_activo_at     2026-09-15 09:10:17.829365 Madrid
+--     pase_activo_desde  'pantalla'
+--     pase_activo_por    673fca49 (Julio)
 --
--- El ensayo de abajo lo comprueba explícitamente en vez de suponerlo.
+-- El primer `true` de la historia de esta base vino de la pantalla, que era la
+-- condición. Lo escribo aquí y no sólo en un parte porque esta migración se
+-- aplica leyendo ESTE fichero.
+--
+-- Cuando esto se aplique habrá EXACTAMENTE UN local encendido, con su traza
+-- entera. La mudanza tiene que llevarse el estado Y LA TRAZA, no sólo crear
+-- columnas nuevas: si no, el Pase aparecería apagado en Alcalá sin que nadie lo
+-- hubiera apagado --en un local donde la cocina ya ha hecho un servicio entero
+-- con él-- y la traza del primer encendido se perdería. La guarda de abajo lo
+-- comprueba explícitamente en vez de suponerlo, y aborta la transacción entera.
+--
+-- Y el destino existe, medido con `account_id` delante (regla 9): Alcalá de
+-- Foodint tiene UNA estación `expo` activa, «Pase» [374ae104]. Agrupando sólo
+-- por NOMBRE salían dos --la de Foodint y la homónima de la plantilla-- que es
+-- exactamente la trampa de la regla 9, y por eso el CHECK y el `update` anclan
+-- en `location_id`, nunca en el nombre.
 
 set local lock_timeout = '3s';
 set local statement_timeout = '60s';
