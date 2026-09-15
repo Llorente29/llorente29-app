@@ -1,0 +1,154 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PROPUESTA · NO APLICAR · 14/09/2026 · v2
+-- Cómo queda `kds_board` cuando el Pase existe y la expo no se pinta.
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- 🔴 NO ESTÁ EN `supabase/migrations/` A PROPÓSITO: es un borrador para revisar
+-- con la maqueta ya aprobada. `db push` no lo ve y nadie lo aplica sin querer.
+--
+-- ── EL FRENO, QUE ES POR LO QUE ESTO EXISTE ───────────────────────────────
+--
+-- La puerta de la expo es **la única salida del tablero de cocina**. Esto es de
+-- `kds_board`, dentro del CTE `vivos`:
+--
+--     and not exists (
+--       select 1 from kds_ticket_station_state st
+--       join kitchen_station k on k.id = st.station_id
+--       where st.sale_id = s.id and k.kind = 'expo' and st.status = 'done'
+--     )
+--
+-- Un ticket desaparece cuando se marca la expo. No por el estado del pedido, no
+-- por el tiempo: por ese bump y nada más (más la gracia de 2 h de cerrados y
+-- cancelados). Si la expo deja de pintarse y nadie la marca, los tickets no se
+-- van nunca. En Alcalá son 83 pedidos al día apilándose.
+--
+-- ── 🔴 LA CORRECCIÓN DE LA v1: NADA DE UNA LISTA NUEVA ────────────────────
+--
+-- La v1 proponía añadir una lista de estados a mano:
+--
+--     and coalesce(s.order_status,'') not in
+--         ('awaiting_collection','awaiting_shipment','in_delivery')
+--
+-- **Mal.** Eso es una definición más de «el pedido ya no es de cocina», y ya
+-- hay cuatro. Contadas:
+--
+--   1. `tg_sale_seal_kpi_hitos` (base) ... ('awaiting_collection',
+--      'awaiting_shipment','in_delivery') → cuándo se sella `ready_at`
+--   2. `OrdersFeed.tsx:72`, filtro «Listos / reparto» ... LA MISMA TERNA
+--   3. `OrderCard.tsx:630`  READY_MILESTONE ... la terna + 'completed'
+--   4. `OrderCard.tsx:635`  READY_OR_CLOSE .... IDÉNTICA a la 3, cinco líneas
+--      más abajo, con otro nombre
+--
+-- Tres formas distintas de decir lo mismo, y dos de ellas copiadas a cinco
+-- líneas de distancia. La mía habría sido la quinta.
+--
+-- (No cuentan como definición, y por eso no están en la lista: `set_order_status`
+-- y `set_order_status_by_token` enumeran los 11 estados VÁLIDOS, que es otra
+-- cosa; `kds_bump` decide el DESTINO; y `trg_sale_push_status` lista lo que se
+-- EMPUJA a la plataforma.)
+--
+-- ── LO QUE SE PROPONE: NO PREGUNTAR POR LA LISTA, PREGUNTAR POR EL HECHO ──
+--
+-- `ready_at` **es** el hito de cocina. Y tiene UN SOLO ESCRITOR en todo el
+-- sistema, comprobado: `tg_sale_seal_kpi_hitos`. Cero escrituras desde el
+-- front, cero desde las edge functions.
+--
+-- Así que la pregunta no es «¿está el pedido en uno de estos tres estados?»
+-- sino **«¿tiene sello de listo?»**. Misma definición, una sola vez, y en el
+-- sitio donde ya vive:
+--
+--     s.ready_at is null
+--
+-- Cero listas nuevas. Y si mañana alguien añade un estado, lo añadirá al sello
+-- --que es el sitio natural-- y `kds_board` lo sigue sin tocarse.
+--
+-- ── EL DIFF ───────────────────────────────────────────────────────────────
+--
+-- En `kds_board`, CTE `vivos`, DESPUÉS de la condición del expo se añade:
+--
+-- +     -- 14/09: con el Pase ENCENDIDO, un pedido que ya tiene sello de cocina
+-- +     -- deja de ser cosa del tablero, lo haya marcado quien lo haya marcado.
+-- +     -- Sin esto, al dejar de pintarse la expo nadie la marca y los tickets
+-- +     -- no salen nunca.
+-- +     -- `ready_at` se pregunta en vez de repetir la lista de estados: es el
+-- +     -- mismo hito, tiene un único escritor (`tg_sale_seal_kpi_hitos`) y ya
+-- +     -- hay cuatro copias de esa lista por el sistema. Ésta no es la quinta.
+-- +     -- Apagado el interruptor, esta condición no existe (§6.4 del encargo).
+-- +     and (
+-- +       s.ready_at is null
+-- +       or not coalesce((select k2.pase_activo from kitchen_time_config k2
+-- +                         where k2.location_id = v_location_id), false)
+-- +     )
+--
+-- Nada más. Ni una línea fuera de ese CTE. `kds_bump` no se toca,
+-- `kitchen_station` no se toca, y `expo_station_id` y `stations` siguen
+-- saliendo en el JSON: quién los pinta lo decide el front.
+--
+-- ── 🔴 LA ESQUINA QUE TRAE `ready_at`, Y HAY QUE DECIRLA ──────────────────
+--
+-- El sello sólo escribe si está en null (`if new.ready_at is null then`), así
+-- que **NO se borra al reabrir**. «Reabrir» (`secondaryAction`, terminal →
+-- `in_preparation`) devolvería el pedido a la cocina pero con el sello puesto,
+-- y con esta condición **no volvería a aparecer en el tablero**.
+--
+-- Con una lista de estados sí volvería. Es la única diferencia real entre las
+-- dos formas, y va a favor de la lista.
+--
+-- MEDIDO antes de decidir: en las **9.623 ventas** de la cuenta hay **CERO**
+-- pedidos con sello y en un estado de cocina. O sea que **reabrir no se ha
+-- usado nunca**.
+--
+-- 🔴 PERO NO ES QUE NO HAYA BOTÓN. LO HAY, Y ESTÁ A TRES TOQUES.
+--
+-- Lo di por hipotético y fui a comprobarlo. Está vivo y se pinta:
+--
+--   · `OrdersFeed.tsx:60`  ... FILTERS.cerrados: s => s === 'completed'
+--     → hay una pestaña «Cerrados» en el feed
+--   · `ordersFeedService:139` ... TERMINAL_SET incluye 'completed'
+--   · `ordersFeedService:194` ... secondaryAction devuelve, para terminal:
+--     { label: 'Reabrir', next: 'in_preparation' }
+--   · `OrderCard.tsx:757-767` .. y ese botón SE RENDERIZA
+--
+-- O sea: pestaña Cerrados → cualquier pedido → «Reabrir». Hoy. Sin desplegar
+-- nada.
+--
+-- Eso cambia el peso del caso: no es «el día que alguien añada un botón». El
+-- botón está puesto, no se ha pulsado nunca en 9.623 ventas, y el día que se
+-- pulse con el Pase encendido el ticket NO volverá al tablero.
+--
+-- ── ASÍ QUE LA LÍNEA DEL SELLO NO ES OPCIONAL ─────────────────────────────
+--
+-- Va en `tg_sale_seal_kpi_hitos`, que es donde dijo el PM que tenía que estar,
+-- y va en la MISMA tanda de las 23:45 que `pase_activo`:
+--
+-- +   -- Al volver a cocina se borra el sello: `kds_board` pregunta por
+-- +   -- `ready_at`, no por el estado, así que sin esto un pedido reabierto no
+-- +   -- vuelve al tablero. El botón «Reabrir» existe y se pinta
+-- +   -- (OrderCard.tsx:757). Nunca se ha pulsado --0 de 9.623-- y por eso
+-- +   -- nadie lo ha notado.
+-- +   if new.order_status in ('new','received','accepted','in_preparation')
+-- +      and old.order_status is distinct from new.order_status
+-- +      and new.ready_at is not null then
+-- +     new.ready_at := null;
+-- +   end if;
+--
+-- Y es lo correcto por sí mismo, no sólo por `kds_board`: un pedido que vuelve
+-- a cocina no tiene hito de cocina cumplido. Hoy lo conserva, y el cronómetro
+-- de la tarjeta mide desde un «listo» que ya no vale.
+--
+-- ── EL ENSAYO ─────────────────────────────────────────────────────────────
+--
+-- Dentro de la propia migración, contra la población REAL y todo revertido:
+--
+--   A · APAGADO, pedido con `ready_at` y sin expo marcada → SIGUE saliendo.
+--       Es el §6.4. Si éste falla, la vuelta atrás no es vuelta atrás.
+--   B · ENCENDIDO, el mismo pedido → ya no sale.
+--   C · ENCENDIDO, pedido en `in_preparation` sin sello → sigue saliendo.
+--   D · ENCENDIDO, expo marcada `done` a la vieja usanza → no sale.
+--       La condición vieja sigue viva y `kds_bump` no se ha tocado.
+--   E · ENCENDIDO, pedido reabierto (sello puesto, estado `in_preparation`)
+--       → NO sale, y se deja escrito que es a propósito y medido (0 casos).
+--
+-- Y el recuento con la misma vara a los dos lados: cuántos tickets devuelve
+-- `kds_board` para Alcalá y para Carabanchel, antes y después, con el
+-- interruptor apagado. Los MISMOS números.

@@ -597,9 +597,26 @@ interface OrderCardProps {
   thresholds?: KitchenThresholds
   /** "Ahora" en ms, un tick por minuto desde el contenedor (no un intervalo por tarjeta). */
   nowMs: number
+  /**
+   * SIN EL BOTÓN DE «LISTO» (15/09/2026). La tablet del pase conserva
+   * «Pedidos» --se mira todo: pedidos, teléfonos, tiempos-- pero el gesto de
+   * marcar listo vive en la pestaña «Pase» y sólo ahí. Un sitio para pulsar,
+   * dos para mirar.
+   *
+   * 🔴 Quita DOS botones, no uno: el «Listo» verde y el primario cuando ese
+   * primario es la misma transición con otro nombre. En `in_preparation` el
+   * primario es «Marcar listo» → a `awaiting_collection` o a `in_delivery`,
+   * que es exactamente lo mismo que hace el verde. Quitar sólo el verde
+   * dejaría el gesto disponible por la puerta de al lado.
+   *
+   * Lo que NO quita: aceptar, empezar, rechazar, cancelar, reabrir, cerrar y
+   * reimprimir. Nunca fue quitar información ni quitar trabajo: fue que el
+   * «Listo» no estuviera en dos sitios.
+   */
+  sinMarcarListo?: boolean
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false }: OrderCardProps) {
   const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
   const now = nowMs
   const [busy, setBusy] = useState(false)
@@ -629,7 +646,16 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
   // posterior a in_delivery la maneja el reparto propio, no este botón.
   const READY_MILESTONE: OrderStatus[] = ['awaiting_collection', 'awaiting_shipment', 'in_delivery', 'completed']
   const reachedReady = READY_MILESTONE.includes(order.order_status)
-  const canMarkReady = order.order_status === 'accepted' || order.order_status === 'in_preparation'
+  const canMarkReady = !sinMarcarListo
+    && (order.order_status === 'accepted' || order.order_status === 'in_preparation')
+
+  // El primario TAMBIÉN es «Marcar listo» en `in_preparation` --a
+  // `awaiting_collection` si lo reparte la plataforma o se recoge, y a
+  // `in_delivery` si el reparto es nuestro--. Con el Pase encendido se va con
+  // el verde: si no, el mismo gesto seguiría disponible con otra etiqueta.
+  const primarioEsListo = primary != null
+    && (primary.next === 'awaiting_collection' || primary.next === 'in_delivery')
+  const primarioVisible = (sinMarcarListo && primarioEsListo) ? null : primary
 
   // Transiciones donde TODO debería estar hecho: avisar si quedan líneas sin marcar.
   const READY_OR_CLOSE: OrderStatus[] = ['awaiting_collection', 'awaiting_shipment', 'in_delivery', 'completed']
@@ -752,7 +778,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
           )}
         </div>
 
-        {onAdvance && (canMarkReady || primary || secondary) && (
+        {onAdvance && (canMarkReady || primarioVisible || secondary) && (
           <div className="flex items-center gap-2 mt-3">
             {secondary && (
               <button
@@ -777,13 +803,13 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
               >
                 {busy ? '…' : <><Check size={17} strokeWidth={3} /> Listo</>}
               </button>
-            ) : primary ? (
+            ) : primarioVisible ? (
               <button
-                onClick={() => run(primary.next)}
+                onClick={() => run(primarioVisible.next)}
                 disabled={busy}
                 className="ml-auto flex-1 px-4 py-2.5 rounded-xl text-[14px] font-extrabold bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50"
               >
-                {busy ? '…' : primary.label}
+                {busy ? '…' : primarioVisible.label}
               </button>
             ) : null}
           </div>

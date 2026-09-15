@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pase · tablet de 7 pulgadas</title>
+<style>
+  :root{
+    --page:#F6F7F8; --card:#FFF; --borde:#E9EBED; --linea:#D6D9DC; --lavado:#F0F1F2;
+    --tinta:#15171A; --t70:#4A4E54; --t2:#6B7077; --t3:#9CA1A8;
+    --ok:#1F9D6B; --okbg:#E7F4EE; --amb:#C2890F; --ambbg:#FAF0D8;
+    --mal:#E0492E; --malbg:#FBE8E3; --infobg:#E3E8ED; --infotx:#1E3A5F;
+    --pad:12px; --logo:40px; --f:15px; --accion:240px; --btn:62px;
+  }
+  @media (max-width:860px){ :root{ --pad:9px; --logo:34px; --f:13.5px; --accion:178px; --btn:56px; } }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html{height:100%}
+  body{height:100vh;background:var(--page);color:var(--tinta);overflow:hidden;
+       font:var(--f)/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+       -webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+
+  .barra{display:flex;align-items:center;gap:9px;padding:7px var(--pad);
+         background:var(--card);border-bottom:1px solid var(--borde);flex:none}
+  .barra b{font-size:calc(var(--f) + 1px);font-weight:800;letter-spacing:-.02em}
+  .barra span{font-size:calc(var(--f) - 2px);color:var(--t2);font-weight:600}
+  .barra .r{margin-left:auto;font-size:calc(var(--f) - 1px);color:var(--t3);
+            font-variant-numeric:tabular-nums;font-weight:700}
+
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:6px var(--pad);
+        background:var(--card);border-bottom:1px solid var(--borde);flex:none}
+  .tab{display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;
+       border:1px solid var(--borde);background:var(--page);border-radius:10px;
+       font-size:calc(var(--f) - 2px);font-weight:800;letter-spacing:.02em;color:var(--t2);
+       text-transform:uppercase;cursor:pointer;padding:0 6px}
+  .tab .c{font-variant-numeric:tabular-nums;background:var(--lavado);color:var(--t70);
+          border-radius:999px;padding:1px 8px}
+  .tab.on{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+  .tab.on .c{background:rgba(255,255,255,.18);color:#fff}
+  .tab.avisa .c{background:var(--ambbg);color:#7A5608}
+  .tab.on.avisa .c{background:var(--amb);color:#fff}
+
+  .pista{padding:5px var(--pad) 0;font-size:calc(var(--f) - 3px);color:var(--t3);flex:none}
+  .lista{flex:1;min-height:0;overflow-y:auto;padding:5px var(--pad) 8px}
+
+  /* ── La tarjeta es una FILA: en una tablet apaisada sobra ancho y falta alto ── */
+  .t{background:var(--card);border:1px solid var(--borde);border-radius:11px;
+     padding:8px 10px;margin-bottom:7px;
+     display:grid;grid-template-columns:minmax(0,1fr) var(--accion);gap:10px;align-items:stretch}
+  .t.solo{grid-template-columns:minmax(0,1fr)}
+  .t.fina{background:#FBFBFC;border-color:#EFF0F2}
+  .t.mal{border-color:#F0C4B9;background:#FFFBFA}
+  .cuerpo{min-width:0;display:flex;flex-direction:column;justify-content:center}
+  .accion{display:flex;flex-direction:column;justify-content:center;gap:4px}
+
+  .sup{display:flex;align-items:center;gap:8px}
+  .logo,.ini{width:var(--logo);height:var(--logo);border-radius:9px;flex:none}
+  .logo{object-fit:cover;background:var(--lavado);border:1px solid var(--borde)}
+  .ini{background:var(--lavado);border:1px dashed var(--linea);display:flex;
+       align-items:center;justify-content:center;font-size:calc(var(--f) - 3px);
+       font-weight:800;color:var(--t3);letter-spacing:-.02em}
+  .nom{min-width:0}
+  .nom b{display:block;font-size:calc(var(--f) + 1px);font-weight:800;letter-spacing:-.015em;
+         line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nom i{display:block;font-style:normal;font-size:calc(var(--f) - 3.5px);color:var(--t2);
+         font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cod{margin-left:auto;align-self:flex-start;font-size:calc(var(--f) - 4px);color:var(--t3);
+       font-variant-numeric:tabular-nums;flex:none}
+
+  .lin{border-top:1px solid var(--lavado);margin-top:6px;padding-top:5px}
+  .li{display:flex;gap:8px;padding:1px 0;align-items:baseline}
+  .li b{font-weight:800;min-width:20px;font-variant-numeric:tabular-nums}
+  .li span{color:var(--t70);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .go{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;flex:1;
+      min-height:var(--btn);border:0;border-radius:11px;background:var(--tinta);color:#fff;
+      font-size:calc(var(--f) + 3px);font-weight:800;letter-spacing:-.01em;cursor:pointer}
+  .go.alarma{background:var(--mal)}
+  .bajo{text-align:center;font-size:calc(var(--f) - 4px);color:var(--t3);line-height:1.3}
+
+  .est{display:flex;align-items:center;gap:8px;border-radius:9px;padding:9px 10px;
+       font-size:calc(var(--f) - 1px);font-weight:700;justify-content:center;text-align:center}
+  .est.espera{background:var(--infobg);color:var(--infotx)}
+  .est.tarde{background:var(--ambbg);color:#7A5608}
+  .est.va{background:var(--okbg);color:#14654A}
+  .est.roto{background:var(--malbg);color:#9C2D17}
+  .crono{font-variant-numeric:tabular-nums;font-weight:800}
+
+  .dice{font-size:calc(var(--f) - 3.5px);line-height:1.33;color:var(--t70);
+        margin-top:6px}
+  .tk{display:flex;align-items:center;gap:6px;margin-top:5px;
+      font-size:calc(var(--f) - 3.5px);color:var(--t3)}
+  .tk.ko{color:#9C2D17;font-weight:700}
+  .re{background:var(--card);border:1px solid var(--linea);color:var(--t70);
+      font-size:calc(var(--f) - 3px);font-weight:800;border-radius:9px;
+      padding:8px 10px;min-height:38px;cursor:pointer;width:100%}
+
+  .hecho{display:flex;align-items:center;gap:8px;font-size:calc(var(--f) - 1px);color:var(--t2);
+         margin-top:6px}
+  .tick{width:18px;height:18px;border-radius:50%;background:var(--okbg);color:var(--ok);flex:none;
+        display:flex;align-items:center;justify-content:center}
+  .vacia{text-align:center;color:var(--t3);font-size:calc(var(--f) - 3px);padding:14px 10px;
+         border:1px dashed var(--linea);border-radius:11px;line-height:1.5}
+
+  .exc{flex:none;display:flex;align-items:center;gap:9px;padding:6px var(--pad);
+       background:var(--card);border-top:1px solid var(--borde)}
+  .exc span{font-size:calc(var(--f) - 3.5px);color:var(--t2);min-width:0}
+  .exc button{margin-left:auto;flex:none;background:var(--card);border:1px solid var(--linea);
+              color:var(--t70);font-size:calc(var(--f) - 3px);font-weight:800;border-radius:9px;
+              padding:8px 12px;min-height:38px;cursor:pointer}
+  [hidden]{display:none!important}
+</style></head>
+<body>
+
+<div class="barra"><b>Pase</b><span>Foodint Alcalá</span><span class="r">21:34</span></div>
+
+<nav class="tabs">
+  <button class="tab" data-p="aqui">Sigue aquí <span class="c">4</span></button>
+  <button class="tab avisa" data-p="ruta">En ruta <span class="c">2</span></button>
+  <button class="tab" data-p="ent">Entregados <span class="c">2</span></button>
+</nav>
+
+<!-- ═══ SIGUE AQUÍ ═══ -->
+<p class="pista" data-p="aqui">Lo que todavía está en la cocina. Un toque y se va.</p>
+<div class="lista" data-p="aqui">
+
+  <article class="t">
+    <div class="cuerpo">
+      <div class="sup">
+        <img class="logo" alt="" src="https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/brand-logos/51ad1792-6629-4ef7-833a-b57b09a86710/5cb90109-1f41-4ae3-a780-a4f46a41b2dc/logo-1782455465678.png"
+             onerror="this.outerHTML='&lt;div class=ini&gt;MHa&lt;/div&gt;'">
+        <div class="nom"><b>Milanesa Haus</b><i>Glovo · reparto nuestro</i></div>
+        <span class="cod">#9c9c</span></div>
+      <div class="lin"><div class="li"><b>3×</b><span>Milanesa de Pollo Napolitana</span></div></div>
+    </div>
+    <div class="accion">
+      <button class="go"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        Listo</button>
+    </div>
+  </article>
+
+  <article class="t mal">
+    <div class="cuerpo">
+      <div class="sup">
+        <img class="logo" alt="" src="https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/brand-logos/51ad1792-6629-4ef7-833a-b57b09a86710/2b160122-c763-4ca5-8fd5-b74d06c910c5/logo-1782330276700.png"
+             onerror="this.outerHTML='&lt;div class=ini&gt;SB&lt;/div&gt;'">
+        <div class="nom"><b>Scandal Burgers</b><i>Glovo · reparto nuestro</i></div>
+        <span class="cod">#a3f1</span></div>
+      <div class="lin">
+        <div class="li"><b>2×</b><span>Scandal Burger Bacon Original</span></div>
+        <div class="li"><b>2×</b><span>Street Fries &amp; Truffle</span></div></div>
+      <p class="dice"><b>La bolsa no ha salido.</b> La impresora no contesta. El pedido se queda
+        aquí hasta que haya papel: sin etiqueta, la bolsa no se puede dar.</p>
+    </div>
+    <div class="accion">
+      <button class="go alarma"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 9V4h12v5"/><path d="M6 18H4v-7h16v7h-2"/><path d="M6 14h12v7H6z"/></svg>
+        Reimprimir</button>
+      <p class="bajo">intentado 3 veces · 21:29</p>
+    </div>
+  </article>
+
+  <article class="t fina">
+    <div class="cuerpo">
+      <div class="sup">
+        <img class="logo" alt="" src="https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/brand-logos/51ad1792-6629-4ef7-833a-b57b09a86710/de93e5b4-8ec2-451e-ae92-1a54f127d754/logo-1782455137103.png"
+             onerror="this.outerHTML='&lt;div class=ini&gt;BM&lt;/div&gt;'">
+        <div class="nom"><b>Big Mike´s Burger Joint</b><i>Glovo · lo reparte Glovo</i></div>
+        <span class="cod">#01a0</span></div>
+      <p class="dice">Glovo no nos dice cuándo sale ni cuándo llega. La tarjeta se va sola cuando
+        se cierre la comanda en caja.</p>
+      <div class="tk">Bolsa impresa 21:29 · listo por Marta</div>
+    </div>
+    <div class="accion">
+      <div class="est espera"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/>
+        <path d="M12 7v5l3 2"/></svg> Esperando al rider de Glovo</div>
+      <button class="re">Reimprimir bolsa</button>
+    </div>
+  </article>
+
+  <article class="t">
+    <div class="cuerpo">
+      <div class="sup">
+        <img class="logo" alt="" src="https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/brand-logos/51ad1792-6629-4ef7-833a-b57b09a86710/467da045-849d-4f66-b784-0fdff191c2f4/logo-1782455346869.png"
+             onerror="this.outerHTML='&lt;div class=ini&gt;DP&lt;/div&gt;'">
+        <div class="nom"><b>Deep Pizza</b><i>Tienda · lo lleva alguien de casa</i></div>
+        <span class="cod">#c9da</span></div>
+      <p class="dice">Lo marca quien se lo lleve, desde su móvil. Aquí no se toca.</p>
+      <div class="tk">Bolsa impresa 21:16 · <b>comprobado por foto</b></div>
+    </div>
+    <div class="accion">
+      <div class="est tarde"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/>
+        <path d="M12 7v5l3 2"/></svg> Sin coger <span class="crono">18 min</span></div>
+      <button class="re">Reimprimir bolsa</button>
+    </div>
+  </article>
+</div>
+
+<!-- ═══ EN RUTA ═══ -->
+<p class="pista" data-p="ruta" hidden>Sólo lo que sabemos que ha salido. Aquí no se pulsa nada.</p>
+<div class="lista" data-p="ruta" hidden>
+  <article class="t">
+    <div class="cuerpo">
+      <div class="sup">
+        <img class="logo" alt="" src="https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/brand-logos/51ad1792-6629-4ef7-833a-b57b09a86710/2b160122-c763-4ca5-8fd5-b74d06c910c5/logo-1782330276700.png"
+             onerror="this.outerHTML='&lt;div class=ini&gt;SB&lt;/div&gt;'">
+        <div class="nom"><b>Scandal Burgers</b><i>md shafiul alam 🛵 · lo dice la flota</i></div>
+        <span class="cod">#7c11</span></div>
+      <div class="tk">Cliente avisado por WhatsApp · 21:22</div>
+    </div>
+    <div class="accion">
+      <div class="est va"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h2l2-6h9l2 6h3"/>
+        <circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/></svg>
+        Salió hace <span class="crono">12 min</span></div>
+    </div>
+  </article>
+
+  <article class="t">
+    <div class="cuerpo">
+      <div class="sup">
+        <img class="logo" alt="" src="https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/brand-logos/51ad1792-6629-4ef7-833a-b57b09a86710/cc89c6eb-afb8-4308-884e-9aac83986b22/logo-1781906392451.png"
+             onerror="this.outerHTML='&lt;div class=ini&gt;MP&lt;/div&gt;'">
+        <div class="nom"><b>Meraki Pita</b><i>Mousomi Aktar 🚲 · lo dice la flota</i></div>
+        <span class="cod">#7b20</span></div>
+      <p class="dice">Lleva más de lo normal: la media de reparto son 15 min.</p>
+    </div>
+    <div class="accion">
+      <div class="est tarde"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h2l2-6h9l2 6h3"/>
+        <circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/></svg>
+        Salió hace <span class="crono">34 min</span></div>
+    </div>
+  </article>
+</div>
+
+<!-- ═══ ENTREGADOS ═══ -->
+<p class="pista" data-p="ent" hidden>Sólo lo que sabemos que ha llegado. Se vacía sola.</p>
+<div class="lista" data-p="ent" hidden>
+  <article class="t fina solo">
+    <div class="cuerpo"><div class="sup">
+      <img class="logo" alt="" src="https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/brand-logos/51ad1792-6629-4ef7-833a-b57b09a86710/501ffd59-19e1-4d75-81dd-70c5a1a2b1de/logo-1782330212855.png"
+           onerror="this.outerHTML='&lt;div class=ini&gt;MHo&lt;/div&gt;'">
+      <div class="nom"><b>Milanesa House</b><i>Javier · entregado hace 4 min</i></div>
+      <span class="cod">#4d81</span></div></div>
+  </article>
+  <article class="t fina solo">
+    <div class="cuerpo"><div class="sup">
+      <img class="logo" alt="" src="https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/brand-logos/51ad1792-6629-4ef7-833a-b57b09a86710/95635ce3-055f-4333-b3ec-1b4e9b2a0170/logo-1782329843260.png"
+           onerror="this.outerHTML='&lt;div class=ini&gt;BB&lt;/div&gt;'">
+      <div class="nom"><b>Bendito Burrito</b><i>maxime · entregado hace 11 min</i></div>
+      <span class="cod">#88c2</span></div></div>
+  </article>
+  <div class="vacia">Desaparecen a los 20 minutos. No hay nada que pulsar.</div>
+</div>
+
+<div class="exc">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA1A8" stroke-width="2.2"
+       stroke-linecap="round"><path d="M12 9v4"/><path d="M12 17h.01"/>
+    <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+  <span>El cliente no abre, el rider se queda sin batería… se cierra a mano y se apunta por qué.</span>
+  <button>Cerrar a mano</button>
+</div>
+
+<script>
+  const q = new URLSearchParams(location.search).get('p') || 'aqui';
+  document.querySelectorAll('.tab').forEach(b => {
+    b.classList.toggle('on', b.dataset.p === q);
+    b.onclick = () => { location.search = '?p=' + b.dataset.p };
+  });
+  document.querySelectorAll('[data-p]').forEach(el => {
+    if (!el.classList.contains('tab')) el.hidden = el.dataset.p !== q;
+  });
+</script>
+</body></html>
