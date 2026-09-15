@@ -17,8 +17,9 @@ import AutoAcceptSettings from '../components/AutoAcceptSettings'
 import StationsSettings from '@/modules/kds/components/StationsSettings'
 import FamilyRoutingSettings from '@/modules/kds/components/FamilyRoutingSettings'
 import DevicesSettings from '@/modules/kds/components/DevicesSettings'
+import AjustesDelPase from '@/modules/pase/components/AjustesDelPase'
 
-type TabKey = 'autoaccept' | 'estaciones' | 'ruteo' | 'dispositivos'
+type TabKey = 'autoaccept' | 'pase' | 'estaciones' | 'ruteo' | 'dispositivos'
 
 function LocationGuard() {
   return (
@@ -55,6 +56,7 @@ export default function OrdersSettingsPage() {
         onChange={v => setTab(v as TabKey)}
         tabs={[
           { value: 'autoaccept', label: 'Auto-aceptación' },
+          { value: 'pase', label: 'El Pase' },
           { value: 'estaciones', label: 'Estaciones' },
           { value: 'ruteo', label: 'Ruteo familias' },
           { value: 'dispositivos', label: 'Dispositivos' },
@@ -64,6 +66,12 @@ export default function OrdersSettingsPage() {
       <div className="pt-1">
         {/* Por cuenta: no exige local */}
         {tab === 'autoaccept' && <AutoAcceptSettings accountId={activeAccountId} />}
+
+        {/* El Pase NO exige elegir local, y es el punto: la pregunta que trae
+            aquí a alguien es «¿dónde está encendido?», y ésa no se contesta
+            entrando local por local. Se enseñan todos los de la cuenta a la
+            vez, que es lo que hoy no se podía ver en ningún sitio. */}
+        {tab === 'pase' && <AjustesDelPase />}
 
         {/* Por local: guard solo en estas tres pestañas */}
         {tab === 'estaciones' && (
