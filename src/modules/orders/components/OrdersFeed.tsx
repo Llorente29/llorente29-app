@@ -23,6 +23,10 @@ import {
   type OrderFeedItem, type OrderFeedLine, type OrderStatus,
   type KitchenDayBanner, type KitchenThresholds,
 } from '../services/ordersFeedService'
+import {
+  laFase, ordenDeLaFase, elDistintivoDelRider, LAS_FASES, ROTULO, ROTULO_VACIO,
+  type Fase,
+} from '../lib/lasFases'
 import OrderCard from './OrderCard'
 import KitchenDayBannerBar from './KitchenDayBanner'
 import ClosuresChip from '@/modules/kds/components/ClosuresChip'
@@ -48,22 +52,25 @@ function feedFingerprint(orders: OrderFeedItem[]): string {
     .join('|')
 }
 
-type FilterKey = 'activos' | 'nuevos' | 'curso' | 'cerrados' | 'incidencias'
 type ViewKey = 'grid' | 'kanban'
 
 interface CookTarget { menuItemId: string; qty: number; name: string }
 
-const FILTERS: Record<FilterKey, (s: OrderStatus) => boolean> = {
-  activos:     s => ['new','received','accepted','in_preparation','awaiting_collection','awaiting_shipment','in_delivery'].includes(s),
-  nuevos:      s => ['new','received'].includes(s),
-  curso:       s => ['accepted','in_preparation','awaiting_collection','awaiting_shipment','in_delivery'].includes(s),
-  cerrados:    s => s === 'completed',
-  incidencias: s => ['rejected','cancelled','delivery_failed'].includes(s),
-}
-
-const FILTER_LABEL: Record<FilterKey, string> = {
-  activos: 'Activos', nuevos: 'Nuevos', curso: 'En curso', cerrados: 'Cerrados', incidencias: 'Incidencias',
-}
+// ── LAS PESTAÑAS SON TRES, MÁS INCIDENCIAS (15/09/2026) ────────────────────
+//
+// Antes eran cinco --Activos · Nuevos · En curso · Cerrados · Incidencias-- y
+// se filtraban SÓLO por `order_status`, que es el estado que mueven cuatro
+// caminos distintos. Ahora la fase la decide `lasFases.laFase`, que mira el
+// SELLO DE COCINA (`ready_at`, un solo escritor en toda la base) y el cierre.
+//
+// Se retiran dos:
+//   «Activos» era la suma de las dos primeras y no contestaba a nada.
+//   «Nuevos» está vacío el 99,7 % del tiempo --mediana entrada→aceptado 1,22 s,
+//   y sólo 10 de 3.122 pasan de 30 s--: una pestaña que casi siempre está a
+//   cero enseña a no mirarla.
+//
+// 🔴 Y el rótulo NO se escribe aquí: sale de `ROTULO`, que es el único sitio
+// donde viven estas palabras en toda la aplicación (§3 del encargo).
 
 // Semáforo de columnas kanban (marca nueva): verde fresco / ámbar en curso / tinta por aceptar.
 const KANBAN: { key: string; label: string; dot: string; match: (s: OrderStatus) => boolean }[] = [
@@ -71,15 +78,6 @@ const KANBAN: { key: string; label: string; dot: string; match: (s: OrderStatus)
   { key: 'prep',  label: 'En preparación',   dot: '#C2890F', match: s => ['accepted','in_preparation'].includes(s) },
   { key: 'ready', label: 'Listos / reparto', dot: '#1F9D6B', match: s => ['awaiting_collection','awaiting_shipment','in_delivery'].includes(s) },
 ]
-
-function isNew(s: OrderStatus): boolean { return ['new','received'].includes(s) }
-
-function sortOrders(a: OrderFeedItem, b: OrderFeedItem): number {
-  const na = isNew(a.order_status) ? 0 : 1
-  const nb = isNew(b.order_status) ? 0 : 1
-  if (na !== nb) return na - nb
-  return b.minutos - a.minutos
-}
 
 interface OrdersFeedProps {
   locationId: string
@@ -90,11 +88,15 @@ interface OrdersFeedProps {
 }
 
 export default function OrdersFeed({ locationId, token, accountId, sinMarcarListo = false }: OrdersFeedProps) {
+  // La tablet es la que entra POR TOKEN. La oficina entra con sesión. No hay
+  // que inventar una prop nueva: la puerta por la que se entra ya lo dice.
+  const esTablet = Boolean(token)
   const [orders, setOrders] = useState<OrderFeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<ViewKey>('grid')
-  const [filter, setFilter] = useState<FilterKey>('activos')
+  // «En curso» abre por defecto: es la pregunta de quien está cocinando.
+  const [filter, setFilter] = useState<Fase>('en_curso')
   const [soundOn, setSoundOn] = useState(true)
   const [cook, setCook] = useState<CookTarget | null>(null)
   const [banner, setBanner] = useState<KitchenDayBanner | null>(null)
@@ -220,32 +222,65 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
     return () => { void supabase!.removeChannel(ch) }
   }, [locationId, token, refresh])
 
+  // La fase de cada pedido, UNA vez por ciclo. De aquí salen las cuatro
+  // pestañas, los cuatro contadores y lo que se pinta: así no puede haber un
+  // contador que diga 3 y una lista que enseñe 4.
+  //
+  // Depende de `nowMs` --el tic del minuto-- porque una de las cuatro
+  // condiciones es de tiempo: un pedido abierto cruza a incidencia a las 6
+  // horas él solo, sin que llegue nada nuevo del servidor.
+  const porFase = useMemo(() => {
+    const ahora = new Date(nowMs)
+    const mapa: Record<Fase, OrderFeedItem[]> = {
+      en_curso: [], esperando: [], terminado: [], incidencia: [],
+    }
+    for (const o of orders) mapa[laFase(o, ahora)].push(o)
+    for (const f of LAS_FASES) mapa[f].sort(ordenDeLaFase(f))
+    return mapa
+  }, [orders, nowMs])
+
   const counts = useMemo(() => ({
-    nuevos: orders.filter(o => FILTERS.nuevos(o.order_status)).length,
-    curso: orders.filter(o => FILTERS.curso(o.order_status)).length,
-    incidencias: orders.filter(o => FILTERS.incidencias(o.order_status)).length,
-  }), [orders])
+    en_curso: porFase.en_curso.length,
+    esperando: porFase.esperando.length,
+    incidencias: porFase.incidencia.length,
+  }), [porFase])
 
   // 01/09 — «NUNCA EN MITAD DE UN PEDIDO». La tablet se recarga sola cuando hay
   // versión nueva, y esta es la pantalla que sabe si es buen momento. Declara
   // lo que tiene abierto; el vigía de versión solo pregunta, no sabe qué es un
   // pedido.
   //
-  // Se cuentan los NUEVOS y los EN CURSO. Las incidencias NO: una puede
-  // quedarse abierta horas esperando a una plataforma, y contarla bloquearía la
-  // recarga para siempre — que es como no tener recarga.
+  // Se cuenta lo que está EN CURSO y lo que ESPERA AL REPARTIDOR: las dos son
+  // trabajo vivo. Las incidencias NO: una puede quedarse abierta horas
+  // esperando a una plataforma, y contarla bloquearía la recarga para siempre
+  // — que es como no tener recarga. (Antes eran «nuevos + en curso»; es el
+  // mismo conjunto con la taxonomía nueva.)
   useEffect(() => {
     const clave = `orders:${locationId ?? 'consolidado'}`
-    declaraTrabajoEnCurso(clave, counts.nuevos + counts.curso)
+    declaraTrabajoEnCurso(clave, counts.en_curso + counts.esperando)
     return () => declaraTrabajoEnCurso(clave, 0)
-  }, [locationId, counts.nuevos, counts.curso])
+  }, [locationId, counts.en_curso, counts.esperando])
 
-  const filtered = useMemo(
-    () => orders.filter(o => FILTERS[filter](o.order_status)).sort(sortOrders),
-    [orders, filter]
-  )
+  const filtered = porFase[filter]
 
-  const filterCount = (k: FilterKey) => orders.filter(o => FILTERS[k](o.order_status)).length
+  // 🔴 LA VISTA EFECTIVA, no la guardada. Si el conmutador desaparece con
+  // `view` ya en 'kanban' --una tablet que venía de la pantalla anterior, o un
+  // navegador con la pestaña abierta durante el despliegue-- quedaría el modo
+  // tres columnas SIN botón para salir de él. Se decide al pintar.
+  const vistaEfectiva: ViewKey = esTablet ? 'grid' : view
+
+  // 🔴 EL KANBAN NO SE FILTRA POR PESTAÑA, y es por coherencia, no por pereza.
+  // Sus tres columnas se reparten por `order_status`; ponerles encima el filtro
+  // de una fase dejaría dos columnas vacías POR CONSTRUCCIÓN --en «En curso» no
+  // hay nada que esté en «Listos / reparto»--, y una columna que no puede tener
+  // nada no es una columna vacía: es una columna mentirosa.
+  //
+  // Así que en la oficina el kanban sigue enseñando lo mismo que enseñaba antes
+  // de este cambio: lo vivo. Se retira de la tablet, que es lo que pedía el
+  // encargo; aquí no se toca.
+  const paraPintar = vistaEfectiva === 'kanban'
+    ? [...porFase.en_curso, ...porFase.esperando]
+    : filtered
 
   // Umbrales del local para el chip de cocina: del banner; reserva = defaults.
   const thresholds: KitchenThresholds = banner?.config ?? DEFAULT_KITCHEN_THRESHOLDS
@@ -267,8 +302,8 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
             <h1 className="font-display font-semibold text-[22px] leading-none tracking-tight">Pedidos</h1>
           </div>
           <div className="hidden sm:flex gap-4 text-text-secondary">
-            <span className="flex items-baseline gap-1.5"><b className="font-display text-[19px] tabular-nums text-text-primary">{counts.nuevos}</b><span className="text-[11px] uppercase tracking-wide">nuevos</span></span>
-            <span className="flex items-baseline gap-1.5"><b className="font-display text-[19px] tabular-nums text-text-primary">{counts.curso}</b><span className="text-[11px] uppercase tracking-wide">en curso</span></span>
+            <span className="flex items-baseline gap-1.5"><b className="font-display text-[19px] tabular-nums text-text-primary">{counts.en_curso}</b><span className="text-[11px] uppercase tracking-wide">en curso</span></span>
+            <span className="flex items-baseline gap-1.5"><b className="font-display text-[19px] tabular-nums text-text-primary">{counts.esperando}</b><span className="text-[11px] uppercase tracking-wide">esperando</span></span>
             {counts.incidencias > 0 && (
               <span className="flex items-baseline gap-1.5"><b className="font-display text-[19px] tabular-nums text-danger">{counts.incidencias}</b><span className="text-[11px] uppercase tracking-wide">incidencias</span></span>
             )}
@@ -283,22 +318,30 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
           <button onClick={() => pollHandleRef.current?.wake()} title="Actualizar" className="p-2 rounded-lg bg-card text-text-secondary border border-default hover:text-text-primary hover:bg-page">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
-          <div className="flex bg-accent-bg rounded-xl p-0.5 gap-0.5">
-            <button onClick={() => setView('grid')} className={`px-3 py-1.5 rounded-lg text-[13px] font-bold flex items-center gap-1.5 ${view === 'grid' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary'}`}><LayoutGrid size={15} /> Cuadrícula</button>
-            <button onClick={() => setView('kanban')} className={`px-3 py-1.5 rounded-lg text-[13px] font-bold flex items-center gap-1.5 ${view === 'kanban' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary'}`}><Columns3 size={15} /> Por estado</button>
-          </div>
+          {/* 🔴 «POR ESTADO» NO EXISTE EN LA TABLET (§5.3 del encargo).
+              Medido el pico simultáneo de 7 días: Alcalá 21 en cocina + 12
+              esperando, Carabanchel 20 + 20. En tres columnas eso son hasta 41
+              tarjetas a la vez en una pantalla de 7 pulgadas, y por eso nadie
+              lo usa. No se arregla el modo: se quita de donde estorba.
+              En la oficina --pantalla grande, sesión, sin token-- se queda. */}
+          {!esTablet && (
+            <div className="flex bg-accent-bg rounded-xl p-0.5 gap-0.5">
+              <button onClick={() => setView('grid')} className={`px-3 py-1.5 rounded-lg text-[13px] font-bold flex items-center gap-1.5 ${view === 'grid' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary'}`}><LayoutGrid size={15} /> Cuadrícula</button>
+              <button onClick={() => setView('kanban')} className={`px-3 py-1.5 rounded-lg text-[13px] font-bold flex items-center gap-1.5 ${view === 'kanban' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary'}`}><Columns3 size={15} /> Por estado</button>
+            </div>
+          )}
         </div>
 
         {/* Filtros */}
         <div className="flex gap-1.5 px-5 py-3 border-b border-default overflow-x-auto">
-          {(Object.keys(FILTERS) as FilterKey[]).map(k => (
+          {LAS_FASES.map(k => (
             <button
               key={k}
               onClick={() => setFilter(k)}
               className={`px-3.5 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap flex items-center gap-2 ${filter === k ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:text-text-primary'}`}
             >
-              {FILTER_LABEL[k]}
-              <span className={`text-[11px] font-extrabold px-1.5 py-px rounded-full tabular-nums ${filter === k ? 'bg-white/20 text-text-on-accent' : 'bg-accent-bg text-text-secondary'}`}>{filterCount(k)}</span>
+              {ROTULO[k]}
+              <span className={`text-[11px] font-extrabold px-1.5 py-px rounded-full tabular-nums ${filter === k ? 'bg-white/20 text-text-on-accent' : 'bg-accent-bg text-text-secondary'}`}>{porFase[k].length}</span>
             </button>
           ))}
         </div>
@@ -327,21 +370,26 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
 
           {loading && orders.length === 0 ? (
             <div className="grid place-items-center h-[50vh] text-text-secondary">Cargando pedidos…</div>
-          ) : filtered.length === 0 ? (
+          ) : paraPintar.length === 0 ? (
             <div className="grid place-items-center h-[50vh] text-center text-text-secondary">
               <div>
-                <div className="font-display text-[22px] text-text-primary mb-2">Sin pedidos ahora mismo</div>
-                <div className="text-sm">Entran solos en cuanto lleguen. Los nuevos sin aceptar aparecen arriba.</div>
+                {/* La frase dice qué pestaña está vacía, no «sin pedidos»: en
+                    «Esperando repartidor» vacío es una buena noticia y en
+                    «En curso» vacío es que no hay nada que cocinar. */}
+                <div className="font-display text-[22px] text-text-primary mb-2">
+                  {vistaEfectiva === 'kanban' ? 'Nada vivo ahora mismo.' : ROTULO_VACIO[filter]}
+                </div>
+                <div className="text-sm">Entran solos en cuanto lleguen.</div>
               </div>
             </div>
-          ) : view === 'grid' ? (
+          ) : vistaEfectiva === 'grid' ? (
             <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
-              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} />)}
+              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} distintivo={filter === 'esperando' ? elDistintivoDelRider(o) : null} />)}
             </div>
           ) : (
             <div className="grid gap-4 h-full" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               {KANBAN.map(col => {
-                const list = filtered.filter(o => col.match(o.order_status))
+                const list = paraPintar.filter(o => col.match(o.order_status))
                 return (
                   <div key={col.key} className="bg-card border border-default rounded-2xl flex flex-col min-h-0">
                     <div className="px-4 py-3 border-b border-default flex items-center gap-2.5 font-extrabold text-[14px] text-text-primary">

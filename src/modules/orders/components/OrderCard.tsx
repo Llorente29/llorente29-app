@@ -614,9 +614,20 @@ interface OrderCardProps {
    * «Listo» no estuviera en dos sitios.
    */
   sinMarcarListo?: boolean
+  /**
+   * LO QUE SABEMOS DEL REPARTIDOR, y sólo donde lo sabemos (15/09/2026).
+   *
+   * Lo decide `lasFases.elDistintivoDelRider`, no la tarjeta: aquí sólo se
+   * pinta. `null` --que es el 87,7 % de los pedidos, los de plataforma-- no
+   * deja hueco ni etiqueta: Glovo y Uber no nos dicen cuándo sale el rider, y
+   * una etiqueta gris diciendo «sin información» sería peor que nada.
+   *
+   * Hoy sólo lo pasa la pestaña «Esperando repartidor».
+   */
+  distintivo?: { texto: string; esAviso: boolean } | null
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null }: OrderCardProps) {
   const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
   const now = nowMs
   const [busy, setBusy] = useState(false)
@@ -728,6 +739,15 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         {reachedReady && (
           <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-success-bg text-success border border-success/30">
             <Check size={12} strokeWidth={3} /> Listo
+          </span>
+        )}
+        {distintivo && (
+          <span className={`inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full border ${
+            distintivo.esAviso
+              ? 'bg-warning-bg text-warning border-warning/30'
+              : 'bg-page text-text-secondary border-default'
+          }`}>
+            {distintivo.texto}
           </span>
         )}
       </div>
