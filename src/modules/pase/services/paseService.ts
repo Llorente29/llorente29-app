@@ -265,3 +265,90 @@ export interface ElApagado {
 export function apagarElPase(token: string): Promise<ElApagado> {
   return rpc<ElApagado>('pase_apagar', { p_device_token: token })
 }
+
+// ── EL INTERRUPTOR, DESDE LA OFICINA ──────────────────────────────────────
+//
+// Apagar se puede desde la tablet; encender no se podía desde ningún sitio, y
+// eso convertía la retirada en un viaje sin vuelta: el pase apaga un viernes a
+// las 21:30 y para reintentarlo el sábado había que esperar a que estuviera
+// alguien de fuera delante. Un interruptor que sólo el desarrollador puede
+// rearmar no es del cliente.
+//
+// 🔴 LA LECTURA NO LLEVA RPC. `kitchen_time_config` y `locations` ya tienen
+// RLS, y la política que gobierna esta tabla es la misma que gobierna los
+// horarios del local. Preguntar directamente es dejar que decida esa política
+// y no escribir una segunda. Comprobado con la sesión de Julio: ve TRES
+// locales, los suyos.
+//
+// 🔴 Y POR QUÉ IMPORTA: la cuenta plantilla tiene tres locales con los MISMOS
+// NOMBRES que producción --«Foodint Alcalá» existe dos veces en la base--. Por
+// eso nada de esto se ancla NUNCA en el nombre: se ancla en `location_id`, y el
+// nombre es sólo lo que se pinta (regla 9).
+
+export interface ElLocalYSuPase {
+  location_id: string
+  local: string
+  activo: boolean
+  /** null = nadie lo ha tocado desde que hay traza. No es «nunca se tocó». */
+  cuando: string | null
+  /** 'pantalla' | 'tablet' | null */
+  desde: string | null
+  /** Usuario si fue desde la pantalla, aparato si fue desde la tablet. */
+  por: string | null
+  motivo: string | null
+  /** Resuelto para pintar: el nombre de quien/lo que lo tocó. */
+  quien: string | null
+}
+
+export async function getLocalesYSuPase(): Promise<ElLocalYSuPase[]> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('kitchen_time_config')
+    .select('location_id, pase_activo, pase_activo_at, pase_activo_desde, pase_activo_por, pase_apagado_motivo, locations!inner(id, name)')
+  if (error) throw error
+
+  type Fila = {
+    location_id: string; pase_activo: boolean; pase_activo_at: string | null
+    pase_activo_desde: string | null; pase_activo_por: string | null
+    pase_apagado_motivo: string | null; locations: { id: string; name: string } | { id: string; name: string }[]
+  }
+  const filas = (data ?? []) as unknown as Fila[]
+
+  // Los nombres de quién: se piden en UNA tanda por tipo, no una por fila.
+  const deTablet = filas.filter(f => f.pase_activo_desde === 'tablet' && f.pase_activo_por).map(f => f.pase_activo_por!)
+  const dePantalla = filas.filter(f => f.pase_activo_desde === 'pantalla' && f.pase_activo_por).map(f => f.pase_activo_por!)
+
+  const nombres = new Map<string, string>()
+  if (deTablet.length > 0) {
+    const { data: ap } = await supabase!.from('kds_device').select('id, label').in('id', deTablet)
+    for (const d of (ap ?? []) as { id: string; label: string }[]) nombres.set(d.id, `la tablet «${d.label}»`)
+  }
+  if (dePantalla.length > 0) {
+    const { data: us } = await supabase!.from('user_profiles').select('user_id, display_name').in('user_id', dePantalla)
+    for (const u of (us ?? []) as { user_id: string; display_name: string | null }[]) {
+      if (u.display_name) nombres.set(u.user_id, u.display_name)
+    }
+  }
+
+  return filas.map(f => {
+    const loc = Array.isArray(f.locations) ? f.locations[0] : f.locations
+    return {
+      location_id: f.location_id,
+      local: loc?.name ?? 'Local sin nombre',
+      activo: f.pase_activo,
+      cuando: f.pase_activo_at,
+      desde: f.pase_activo_desde,
+      por: f.pase_activo_por,
+      motivo: f.pase_apagado_motivo,
+      // Si no se resuelve el nombre NO se inventa uno: se dice de dónde vino,
+      // que es lo que de verdad se sabe (regla 32).
+      quien: f.pase_activo_por ? (nombres.get(f.pase_activo_por) ?? null) : null,
+    }
+  }).sort((a, b) => a.local.localeCompare(b.local, 'es'))
+}
+
+export interface ElEncendido { local: string | null; activo: boolean; cuando: string; desde: string }
+
+export function encenderElPase(locationId: string): Promise<ElEncendido> {
+  return rpc<ElEncendido>('pase_encender', { p_location_id: locationId })
+}
