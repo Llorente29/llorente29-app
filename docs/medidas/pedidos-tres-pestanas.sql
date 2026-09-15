@@ -31,7 +31,14 @@
 -- 🔴 Y LLEVA `account_id` (regla 9): la cuenta plantilla tiene locales con los
 -- mismos nombres que producción.
 
-with v as (
+-- El arranque del día de negocio, con el huso de la CUENTA (`accounts.timezone`,
+-- con respaldo 'Europe/Madrid'), exactamente como lo calcula la RPC.
+with dia as (
+  select (date_trunc('day', (now() at time zone tz) - interval '4 hours')
+            + interval '4 hours') at time zone tz as v_day_start
+  from (select coalesce(a.timezone, 'Europe/Madrid') as tz
+        from accounts a where a.id = '51ad1792-6629-4ef7-833a-b57b09a86710') t
+), v as (
   select s.*,
     (s.order_status in ('cancelled','delivery_failed','rejected')
       or s.status = 'cancelled'
@@ -41,10 +48,14 @@ with v as (
   from sale s
   where s.account_id  = '51ad1792-6629-4ef7-833a-b57b09a86710'
     and s.location_id = '38158159-cd71-4056-950b-53425afac1ce'
-    -- La misma ventana que usa `orders_feed` para la oficina: el día de
-    -- negocio. La tablet ve menos; ver la nota del final.
-    and coalesce(s.closed_at, s.cancelled_at, s.sold_at, s.opened_at)
-          >= (now() at time zone 'Europe/Madrid')::date
+    -- 🔴 LA VENTANA DE LA OFICINA, COPIADA DE `orders_feed` Y NO APROXIMADA.
+    -- El día de negocio arranca a las 04:00 del huso de la CUENTA, no a la
+    -- medianoche: `c_business_day_cutoff_hours constant int := 4`, verificado
+    -- contra `pg_proc` el 16/09. A las 00:05 del 16/09 el día de negocio sigue
+    -- siendo el del 15, y cortar por medianoche se dejaba fuera el servicio
+    -- entero de la noche.
+    and coalesce(s.closed_at, s.cancelled_at, s.sold_at, s.opened_at) >= (select v_day_start from dia)
+    and coalesce(s.closed_at, s.cancelled_at, s.sold_at, s.opened_at) <  (select v_day_start from dia) + interval '1 day'
 ), f as (
   select case when f_inc                 then 'incidencia'
               when f_term                then 'terminado'
@@ -139,8 +150,18 @@ from f;
 -- venta o la apertura. El pedido que entró anoche y cerró hoy tiene `closed_at`
 -- de hoy y entra en el día de hoy. Es el orden correcto y ya estaba escrito así.
 --
--- ⚠️ LO QUE NO HE PODIDO COMPROBAR (Supabase caído la noche del 15/09): el valor
--- de `c_business_day_cutoff_hours`, que es lo que hace que `v_day_start` sea el
--- arranque del DÍA DE NEGOCIO y no la medianoche. Las consultas de arriba usan
--- la medianoche de Madrid, así que en las horas de madrugada pueden no dar lo
--- mismo que la pantalla. Se mira y se ajusta antes de fusionar.
+-- ✅ COMPROBADO EL 16/09, y la consulta de arriba ya lo lleva:
+--
+--     c_business_day_cutoff_hours constant int := 4;
+--     v_day_start := (date_trunc('day', (now() at time zone v_tz) - v_cutoff)
+--                       + v_cutoff) at time zone v_tz;
+--
+-- El día de negocio va de las 04:00 a las 04:00, con el huso de la CUENTA
+-- (`accounts.timezone`, respaldo 'Europe/Madrid'). Importaba: a las 00:05 del
+-- 16/09 el día de negocio seguía siendo el del 15, y mi corte por medianoche
+-- daba 0 en curso y 0 terminados donde la pantalla enseña 58 pedidos.
+--
+-- Y de paso, una sospecha que resultó infundada y por eso se mira en vez de
+-- contarse: el `at time zone v_tz` de la línea 27 SÍ está. Sin él, un 04:00 de
+-- Madrid se habría guardado como 04:00 UTC --las 06:00 de Madrid-- y el día de
+-- negocio habría empezado dos horas tarde todo el verano. Está bien escrito.
