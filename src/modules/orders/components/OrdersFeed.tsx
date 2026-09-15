@@ -24,7 +24,8 @@ import {
   type KitchenDayBanner, type KitchenThresholds,
 } from '../services/ordersFeedService'
 import {
-  laFase, ordenDeLaFase, elDistintivoDelRider, LAS_FASES, ROTULO, ROTULO_VACIO,
+  laFase, ordenDeLaFase, elDistintivoDelRider, LAS_FASES,
+  elRotulo, elRotuloVacio, HORAS_QUE_TRAE_LA_TABLET,
   type Fase,
 } from '../lib/lasFases'
 import OrderCard from './OrderCard'
@@ -69,8 +70,10 @@ interface CookTarget { menuItemId: string; qty: number; name: string }
 //   y sólo 10 de 3.122 pasan de 30 s--: una pestaña que casi siempre está a
 //   cero enseña a no mirarla.
 //
-// 🔴 Y el rótulo NO se escribe aquí: sale de `ROTULO`, que es el único sitio
-// donde viven estas palabras en toda la aplicación (§3 del encargo).
+// 🔴 Y el rótulo NO se escribe aquí: sale de `elRotulo`, que es el único sitio
+// donde viven estas palabras en todo el módulo (§3 del encargo). Es una función
+// y no un objeto porque «Terminados» lleva dentro el periodo que cubre cuando
+// la pantalla no cubre el día entero — la tablet.
 
 // Semáforo de columnas kanban (marca nueva): verde fresco / ámbar en curso / tinta por aceptar.
 const KANBAN: { key: string; label: string; dot: string; match: (s: OrderStatus) => boolean }[] = [
@@ -91,6 +94,10 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
   // La tablet es la que entra POR TOKEN. La oficina entra con sesión. No hay
   // que inventar una prop nueva: la puerta por la que se entra ya lo dice.
   const esTablet = Boolean(token)
+  // Cuántas horas tiene delante ESTA pantalla. La tablet, dos --es lo que trae
+  // `orders_feed_by_token`--; la oficina, el día de negocio entero, y por eso
+  // no declara alcance ninguno.
+  const laVentana = esTablet ? HORAS_QUE_TRAE_LA_TABLET : null
   const [orders, setOrders] = useState<OrderFeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -340,7 +347,7 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
               onClick={() => setFilter(k)}
               className={`px-3.5 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap flex items-center gap-2 ${filter === k ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:text-text-primary'}`}
             >
-              {ROTULO[k]}
+              {elRotulo(k, laVentana)}
               <span className={`text-[11px] font-extrabold px-1.5 py-px rounded-full tabular-nums ${filter === k ? 'bg-white/20 text-text-on-accent' : 'bg-accent-bg text-text-secondary'}`}>{porFase[k].length}</span>
             </button>
           ))}
@@ -377,7 +384,7 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
                     «Esperando repartidor» vacío es una buena noticia y en
                     «En curso» vacío es que no hay nada que cocinar. */}
                 <div className="font-display text-[22px] text-text-primary mb-2">
-                  {vistaEfectiva === 'kanban' ? 'Nada vivo ahora mismo.' : ROTULO_VACIO[filter]}
+                  {vistaEfectiva === 'kanban' ? 'Nada vivo ahora mismo.' : elRotuloVacio(filter, laVentana)}
                 </div>
                 <div className="text-sm">Entran solos en cuanto lleguen.</div>
               </div>

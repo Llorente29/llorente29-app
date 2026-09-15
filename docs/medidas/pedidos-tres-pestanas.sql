@@ -69,35 +69,78 @@ select
   count(*) filter (where f_inc and f_term)    as "En el cruce (los resuelve el orden)"
 from f;
 
--- ── LA NOTA DE LA TABLET, que es un hallazgo y no una nota al pie ──────────
+-- ── DECIDIDO EL 15/09: EL RÓTULO DICE EL PERIODO. NO SE TOCA LA RPC ───────
 --
--- «Terminados» se define «sólo del día en curso», y en la OFICINA se cumple:
--- `orders_feed` trae el día de negocio entero.
---
--- 🔴 EN LA TABLET NO. `orders_feed_by_token` trae lo abierto MÁS lo tocado en
--- las últimas 2 horas:
+-- En la TABLET la pestaña se llama «Terminados · últimas 2 h», porque eso es lo
+-- que `orders_feed_by_token` trae:
 --
 --     or coalesce(s.closed_at, s.cancelled_at, s.sold_at, s.opened_at)
 --          >= now() - interval '2 hours'
 --
--- Medido el 15/09 a las 23:05 en Alcalá: 35 pedidos terminados en el día, de
--- los cuales la tablet descarga 23. Doce no están, y no es un filtro de la
--- pantalla: no han llegado.
+-- Medido el 15/09 a las 23:05 en Alcalá: 35 terminados en el día, 23 los que la
+-- tablet descarga. No se ensancha la ventana: esa pestaña en el pase no es un
+-- informe, sirve para encontrar el pedido por el que pregunta un repartidor que
+-- acaba de llegar, y dos horas cubren eso de sobra. El día entero ya existe en
+-- la oficina, que es donde se mira un día.
 --
--- Esto choca con la regla 7 --una pantalla que se abre a propósito no esconde
--- filas-- y NO se arregla desde el front: o el rótulo de la pestaña dice qué
--- periodo cubre, o se ensancha la ventana de la RPC, que es tocar el camino
--- del pedido y por tanto una migración con su hora. Va al parte para que se
--- decida, no lo decido yo.
+-- Y la regla 7 queda CUMPLIDA, no esquivada: lo que prohíbe es la pantalla que
+-- parece completa sin serlo. Una que declara su alcance en el rótulo no esconde
+-- filas.
 --
--- Para verlo:
+-- Por tanto el §5.4 se comprueba SOBRE LO QUE CADA PANTALLA DECLARA CUBRIR:
+-- arriba, el día de negocio (oficina); abajo, las dos horas (tablet).
+
+with v as (
+  select s.*,
+    (s.order_status in ('cancelled','delivery_failed','rejected')
+      or s.status = 'cancelled'
+      or (s.status = 'open'
+          and coalesce(s.opened_at, s.sold_at) < now() - interval '6 hours')) as f_inc,
+    (s.status = 'closed' or s.order_status = 'completed')                     as f_term
+  from sale s
+  where s.account_id  = '51ad1792-6629-4ef7-833a-b57b09a86710'
+    and s.location_id = '38158159-cd71-4056-950b-53425afac1ce'
+    -- La ventana de la TABLET, literal: lo abierto SIEMPRE, más lo tocado en
+    -- las últimas 2 horas.
+    and (s.status = 'open'
+         or coalesce(s.closed_at, s.cancelled_at, s.sold_at, s.opened_at)
+              >= now() - interval '2 hours')
+), f as (
+  select case when f_inc                 then 'incidencia'
+              when f_term                then 'terminado'
+              when ready_at is not null  then 'esperando'
+              else                            'en_curso'
+         end as fase, f_inc, f_term
+  from v
+)
+select 'TABLET · últimas 2 h'                     as pantalla,
+       count(*) filter (where fase = 'en_curso')   as "En curso",
+       count(*) filter (where fase = 'esperando')  as "Esperando repartidor",
+       count(*) filter (where fase = 'terminado')  as "Terminados · últimas 2 h",
+       count(*) filter (where fase = 'incidencia') as "Incidencias",
+       count(*)                                    as "Total que trae la RPC",
+       count(*) filter (where f_inc and f_term)    as "En el cruce"
+from f;
+
+-- ── EL CABO SUELTO DEL §1b, CONTESTADO ────────────────────────────────────
 --
---   select count(*) filter (where true)                                as del_dia,
---          count(*) filter (where coalesce(closed_at, cancelled_at, sold_at, opened_at)
---                                 >= now() - interval '2 hours')       as los_que_ve_la_tablet
---   from sale
---   where account_id  = '51ad1792-6629-4ef7-833a-b57b09a86710'
---     and location_id = '38158159-cd71-4056-950b-53425afac1ce'
---     and (status = 'closed' or order_status = 'completed')
---     and (sold_at at time zone 'Europe/Madrid')::date
---           = (now() at time zone 'Europe/Madrid')::date;
+-- «Si `closed_at` no viaja, ¿con qué campo se recorta *sólo del día en curso*?
+-- Un pedido que entró anoche y se cerró hoy, ¿cae fuera?»
+--
+-- 🔴 NO CAE, y el motivo es que EL RECORTE NO LO HACE EL FRONT. `laFase` no
+-- mira fechas: clasifica lo que le llega. Quien recorta es la RPC, y ahí
+-- `closed_at` SÍ está disponible --se lee en el `where` aunque no se proyecte--.
+-- El `where` de `orders_feed`, literal:
+--
+--        coalesce(s.closed_at, s.cancelled_at, s.sold_at, s.opened_at) >= v_day_start
+--    and coalesce(s.closed_at, s.cancelled_at, s.sold_at, s.opened_at) <  v_day_start + interval '1 day'
+--
+-- O sea: se recorta por el cierre, y sólo a falta de él por la cancelación, la
+-- venta o la apertura. El pedido que entró anoche y cerró hoy tiene `closed_at`
+-- de hoy y entra en el día de hoy. Es el orden correcto y ya estaba escrito así.
+--
+-- ⚠️ LO QUE NO HE PODIDO COMPROBAR (Supabase caído la noche del 15/09): el valor
+-- de `c_business_day_cutoff_hours`, que es lo que hace que `v_day_start` sea el
+-- arranque del DÍA DE NEGOCIO y no la medianoche. Las consultas de arriba usan
+-- la medianoche de Madrid, así que en las horas de madrugada pueden no dar lo
+-- mismo que la pantalla. Se mira y se ajusta antes de fusionar.

@@ -92,6 +92,55 @@ export const ROTULO_VACIO: Record<Fase, string> = {
 }
 
 /**
+ * 🔴 LAS HORAS QUE LA TABLET TIENE DELANTE, Y DE DÓNDE SALE ESTE 2.
+ *
+ * No es una preferencia de pantalla: es lo que `orders_feed_by_token` decide
+ * traer. Su `where` termina así, literal:
+ *
+ *     or coalesce(s.closed_at, s.cancelled_at, s.sold_at, s.opened_at)
+ *          >= now() - interval '2 hours'
+ *
+ * Medido el 15/09 a las 23:05 en Alcalá: de 35 pedidos terminados en el día, la
+ * tablet descargaba 23. Los otros 12 no estaban filtrados por la pantalla: no
+ * habían llegado.
+ *
+ * ⚠️ SI ALGÚN DÍA SE CAMBIA ESE `interval` EN LA RPC, SE CAMBIA ESTE NÚMERO. Es
+ * la cara visible del mismo dato, y son dos ficheros: no hay forma de que el
+ * compilador lo ate (regla 40: lo que vive dentro de una cadena de SQL no lo
+ * mira nadie). Por eso está escrito aquí el `where` entero, para que quien
+ * toque uno encuentre el otro.
+ *
+ * La oficina no pasa este número: `orders_feed` trae el día de negocio entero.
+ */
+export const HORAS_QUE_TRAE_LA_TABLET = 2
+
+/**
+ * EL RÓTULO, CON SU ALCANCE DENTRO CUANDO LO TIENE.
+ *
+ * «Terminados» a secas, en una pantalla que sólo tiene dos horas delante, es la
+ * pantalla que PARECE completa y no lo está --que es exactamente lo que prohíbe
+ * la regla 7--. «Terminados · últimas 2 h» no esconde nada: declara lo que
+ * cubre, y quien busca el pedido de hace tres horas sabe que tiene que mirar en
+ * la oficina en vez de concluir que se ha perdido.
+ *
+ * `horasDeVentana = null` --la oficina-- deja el rótulo tal cual: ahí el día
+ * entero SÍ está, así que no hay alcance que declarar.
+ *
+ * Y sólo lo lleva «Terminados»: las otras tres no se recortan por ventana
+ * ninguna. Un pedido abierto viaja siempre, lo diga el reloj lo que diga.
+ */
+export function elRotulo(fase: Fase, horasDeVentana: number | null = null): string {
+  if (fase !== 'terminado' || horasDeVentana == null) return ROTULO[fase]
+  return `${ROTULO[fase]} · últimas ${horasDeVentana} h`
+}
+
+/** Lo mismo para la frase de la pestaña vacía: si hay alcance, se dice. */
+export function elRotuloVacio(fase: Fase, horasDeVentana: number | null = null): string {
+  if (fase !== 'terminado' || horasDeVentana == null) return ROTULO_VACIO[fase]
+  return `Nada terminado en las últimas ${horasDeVentana} horas.`
+}
+
+/**
  * A PARTIR DE CUÁNTAS HORAS abierto un pedido pasa a ser incidencia.
  *
  * Medido el 15/09 en Foodint: hay 13 pedidos `cancelled` que siguen con

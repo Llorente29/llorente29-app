@@ -14,7 +14,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   laFase, esIncidencia, estaTerminado, ordenDeLaFase, elDistintivoDelRider,
-  ROTULO, LAS_FASES, HORAS_PARA_SER_INCIDENCIA,
+  ROTULO, ROTULO_VACIO, elRotulo, elRotuloVacio, HORAS_QUE_TRAE_LA_TABLET,
+  LAS_FASES, HORAS_PARA_SER_INCIDENCIA,
   type PedidoConFase, type Fase,
 } from '@/modules/orders/lib/lasFases'
 
@@ -235,6 +236,31 @@ describe('los rótulos', () => {
   it('son cuatro y ninguno está vacío (regla 32)', () => {
     expect(LAS_FASES).toHaveLength(4)
     for (const f of LAS_FASES) expect(ROTULO[f].trim().length).toBeGreaterThan(0)
+  })
+
+  it('🔴 en la TABLET, «Terminados» dice el periodo que cubre', () => {
+    // La tablet sólo tiene 2 horas delante --es lo que trae
+    // `orders_feed_by_token`--. Medido el 15/09 a las 23:05: 35 terminados en
+    // el día, 23 descargados. Un rótulo que declara su alcance no esconde nada;
+    // uno que parece completo sin serlo, sí (regla 7).
+    expect(HORAS_QUE_TRAE_LA_TABLET).toBe(2)
+    expect(elRotulo('terminado', HORAS_QUE_TRAE_LA_TABLET)).toBe('Terminados · últimas 2 h')
+    expect(elRotuloVacio('terminado', HORAS_QUE_TRAE_LA_TABLET))
+      .toBe('Nada terminado en las últimas 2 horas.')
+  })
+
+  it('en la OFICINA el rótulo va limpio: ahí el día entero sí está', () => {
+    for (const f of LAS_FASES) {
+      expect(elRotulo(f)).toBe(ROTULO[f])
+      expect(elRotuloVacio(f)).toBe(ROTULO_VACIO[f])
+    }
+  })
+
+  it('🔴 el periodo lo lleva SÓLO «Terminados»: las otras tres no se recortan', () => {
+    for (const f of LAS_FASES) {
+      if (f === 'terminado') continue
+      expect(elRotulo(f, HORAS_QUE_TRAE_LA_TABLET)).toBe(ROTULO[f])
+    }
   })
 
   it('🔴 dice «Terminados», no «Entregados»', () => {
