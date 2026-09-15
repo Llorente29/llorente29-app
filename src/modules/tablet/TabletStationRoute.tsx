@@ -215,8 +215,16 @@ export default function TabletStationRoute() {
   //     estación prep  → tablero de cocina, sin Pase
   //     sin estación   → las dos (camichi4, en Carabanchel)
   //
-  // «Pedidos» desaparece donde hay Pase: era el segundo sitio donde se marca
-  // listo, y la regla es que sólo haya uno.
+  // «Pedidos» SE QUEDA EN LAS TRES (15/09/2026, corrección de Julio). Estuvo
+  // media jornada quitada de la tablet del pase, y era un error mío de
+  // planteamiento: la razón de quitarla nunca fue quitar información, fue que
+  // el «Listo» no estuviera en dos sitios. La pregunta buena no era «qué hacéis
+  // en Pedidos» sino «qué pasa cuando esto falle»: si el Pase se cuelga, la
+  // persona del pase tiene que poder seguir trabajando con la pantalla de
+  // siempre --pedidos, teléfonos, tiempos-- sin llamar a nadie.
+  //
+  // Así que con el Pase encendido la pestaña sigue, entera, y lo ÚNICO que le
+  // falta es el botón: `sinMarcarListo`. Un sitio para pulsar, dos para mirar.
   //
   // Impresoras se queda en las TRES: es donde se arregla la impresora, y es
   // justo la que tiene que dejar de fallar en silencio.
@@ -225,7 +233,7 @@ export default function TabletStationRoute() {
 
   const tabs: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
     ...(hayPase ? [{ id: 'pase' as Tab, label: 'Pase', icon: ClipboardList }] : []),
-    ...(hayPase ? [] : [{ id: 'pedidos' as Tab, label: 'Pedidos', icon: ClipboardList }]),
+    { id: 'pedidos', label: 'Pedidos', icon: ClipboardList },
     ...(hayCocina ? [{ id: 'cocina' as Tab, label: 'Cocina', icon: MonitorPlay }] : []),
     { id: 'disponibilidad', label: 'Disponibilidad', icon: CircleOff },
     { id: 'impresoras', label: 'Impresoras', icon: PrinterIcon },
@@ -293,7 +301,17 @@ export default function TabletStationRoute() {
       <AvailabilityNoticeOverlay locationId={locInfo?.locationId ?? null} token={token} />
 
       <main className="flex-1 min-h-0">
-        {tabActual === 'pase' && <PaseBoard token={token} />}
+        {tabActual === 'pase' && (
+          <PaseBoard
+            token={token}
+            /* Al apagar desde la tablet no se recarga la página --hay comandas
+               vivas y una recarga en servicio es justo lo que llevamos un mes
+               evitando--: se sabe el valor nuevo, porque lo confirmó la propia
+               escritura, así que se aplica aquí y la pestaña «Pase» desaparece
+               sola. `tabActual` cae a la primera, que es «Pedidos». */
+            onApagado={() => setLoQueEs(prev => prev && { ...prev, pase_activo: false })}
+          />
+        )}
 
         {tabActual === 'cocina' && <KdsBoard locationId={null} token={token} />}
 
@@ -311,7 +329,17 @@ export default function TabletStationRoute() {
             aparcada en Disponibilidad, que es justo donde se agotan los extras,
             se recargaba sola con comandas vivas. */}
         <div className={`h-full overflow-y-auto p-4 bg-page${tabActual === 'pedidos' ? '' : ' hidden'}`}>
-          <OrdersFeed locationId={locInfo?.locationId ?? ''} token={token} />
+          {hayPase && (
+            // Regla 8, un piso más abajo: si un botón desaparece y nadie dice
+            // por qué, quien lo busca concluye que la pantalla está rota.
+            <div className="max-w-5xl mx-auto mb-3 rounded-xl border border-default bg-card
+                            px-3.5 py-2.5 text-[13px] leading-snug text-text-secondary">
+              <b className="text-text-primary">El «Listo» se pulsa en la pestaña Pase.</b>{' '}
+              Aquí está todo el pedido —teléfonos, tiempos, líneas— y se puede
+              aceptar, cerrar y reimprimir. Lo único que no se marca aquí es listo.
+            </div>
+          )}
+          <OrdersFeed locationId={locInfo?.locationId ?? ''} token={token} sinMarcarListo={hayPase} />
         </div>
 
         {tabActual === 'impresoras' && (

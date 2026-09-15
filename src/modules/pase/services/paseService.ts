@@ -242,3 +242,26 @@ export function reimprimirBolsa(saleId: string, token: string): Promise<number> 
     p_doc_type: 'bag',
   })
 }
+
+// ── APAGAR EL PASE DESDE LA TABLET ────────────────────────────────────────
+//
+// El respaldo de verdad no es un segundo botón de «Listo»: es el interruptor a
+// `false`, que devuelve la tablet a como estaba —con su botón en «Pedidos»— y
+// no pierde ningún pedido. Hasta hoy eso sólo se podía hacer desde la oficina,
+// y un respaldo que hay que pedir por teléfono a las 21:00 no es un respaldo.
+//
+// 🔴 `pase_apagar` SÓLO APAGA. No hay forma de encender desde aquí, y no es un
+// olvido: encender cambia cómo trabaja el local entero y se decide con Julio
+// delante; apagar es volver a donde ya se estaba.
+
+export interface ElApagado {
+  local: string | null
+  /** Si de verdad estaba encendido. Apagar lo ya apagado no es un fallo, pero
+   *  la pantalla no puede decir que ha hecho algo que no ha hecho (regla 8). */
+  estaba: boolean
+  activo: boolean
+}
+
+export function apagarElPase(token: string): Promise<ElApagado> {
+  return rpc<ElApagado>('pase_apagar', { p_device_token: token })
+}

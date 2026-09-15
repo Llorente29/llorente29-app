@@ -81,9 +81,15 @@ function sortOrders(a: OrderFeedItem, b: OrderFeedItem): number {
   return b.minutos - a.minutos
 }
 
-interface OrdersFeedProps { locationId: string; token?: string | null; accountId?: string | null }
+interface OrdersFeedProps {
+  locationId: string
+  token?: string | null
+  accountId?: string | null
+  /** Con el Pase encendido, aquí se mira y no se marca listo. Ver `OrderCard`. */
+  sinMarcarListo?: boolean
+}
 
-export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedProps) {
+export default function OrdersFeed({ locationId, token, accountId, sinMarcarListo = false }: OrdersFeedProps) {
   const [orders, setOrders] = useState<OrderFeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -330,7 +336,7 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
             </div>
           ) : view === 'grid' ? (
             <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
-              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} />)}
+              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} />)}
             </div>
           ) : (
             <div className="grid gap-4 h-full" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -344,7 +350,7 @@ export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedP
                       <span className="ml-auto bg-accent-bg text-text-secondary text-[12px] font-extrabold px-2 py-px rounded-full tabular-nums">{list.length}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 bg-page">
-                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} />)}
+                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} />)}
                     </div>
                   </div>
                 )

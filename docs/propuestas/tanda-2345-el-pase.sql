@@ -8,11 +8,18 @@
 --      · pieza 2, `pase_board`
 --      · los dos relojes con su guardia, y los ensayos A, B, C, D y H
 --
--- ⏸️ SIGUEN AQUÍ, SIN APLICAR, la pieza 3 (la condición de `kds_board`) y la
---    pieza 4 (la línea del sello), con sus ensayos E, F y G. No se aplicaron
---    porque a esa hora el tablero de cocina de Alcalá tenía CERO tickets: el
---    ensayo E habría comparado cero contra cero, que no es verde sino SIN
---    ENSAYAR. Van una mañana temprano, con tickets delante.
+-- 🟢 APLICADAS el 15/09 a las 07:29 de Madrid, también fuera de la banda, en
+--    `supabase/migrations/20260915052948_el_pase_la_condicion_de_kds_board_y_la_linea_del_sello.sql`:
+--      · pieza 3, la condición de `kds_board`
+--      · pieza 4, la línea del sello
+--      · de propina: `search_path` y el revoke de PUBLIC en `kds_board`
+--
+-- 🟢 Y NO ESPERARON A QUE HUBIERA TRÁFICO. Los ensayos plantan su propia
+--    población dentro de un punto de retorno, que es lo que dice la regla 36:
+--    si el defecto no existe hoy en los datos, la prueba tiene que crearlo.
+--
+-- ESTE FICHERO YA NO TIENE NADA PENDIENTE. Se conserva por su razonamiento;
+-- lo que manda son las tres migraciones.
 --
 -- 🔴 FUERA DE `supabase/migrations/` A PROPÓSITO. Si estuviera ahí, la fusión a
 -- `main` la aplicaría por CI a la hora que fuese. Se aplica a mano a las 23:45

@@ -25,7 +25,7 @@ import {
 } from './lib/lasTresZonas'
 import {
   getTablero, marcarListo, reimprimirBolsa,
-  type TarjetaDelPase, type ElTablero,
+  type TarjetaDelPase, type ElTablero, apagarElPase,
 } from './services/paseService'
 
 const POLL_MS = 10_000
@@ -189,14 +189,19 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
   )
 }
 
-export default function PaseBoard({ token, onCerrarAMano }: {
+export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
   token: string
   onCerrarAMano?: () => void
+  /** Se ha apagado el Pase desde aquí. La tablet vuelve a la pantalla de siempre. */
+  onApagado?: () => void
 }) {
   const [tablero, setTablero] = useState<ElTablero | null>(null)
   const [zona, setZona] = useState<Zona>('sigue_aqui')
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
+  // El apagado: `false` = ni preguntado. `true` = preguntando. Ver la hoja.
+  const [preguntandoApagar, setPreguntandoApagar] = useState(false)
+  const [apagando, setApagando] = useState(false)
   const vivo = useRef(true)
 
   const refrescar = useCallback(async () => {
@@ -339,6 +344,74 @@ export default function PaseBoard({ token, onCerrarAMano }: {
           ))
         )}
       </div>
+
+      {/* ── LA SALIDA ────────────────────────────────────────────────────────
+          El respaldo del Pase no es un segundo botón de «Listo»: es el
+          interruptor a `false`, que devuelve esta tablet a la pantalla de
+          siempre sin perder un pedido. Y tiene que poder hacerlo la persona
+          del pase, sin llamar a la oficina a las 21:00.
+
+          🔴 DÓNDE VA, y las dos condiciones del encargo:
+            · NO se puede pulsar sin querer → vive en el pie, en el borde
+              opuesto al botón «Listo» (que está a la derecha de cada tarjeta),
+              fuera de la barra de pestañas, en letra pequeña y sin color de
+              acción. Y pregunta antes: un toque abre la hoja, no apaga.
+            · DICE QUÉ VA A PASAR antes de hacerlo, con las palabras del
+              encargo: «Vuelve la pantalla de siempre. No se pierde ningún
+              pedido.» */}
+      <div className="flex items-center px-3 py-1 bg-card border-t border-default shrink-0">
+        <button onClick={() => setPreguntandoApagar(true)}
+                className="text-[11.5px] text-text-tertiary underline underline-offset-2
+                           min-h-[30px] px-1">
+          Apagar el Pase
+        </button>
+      </div>
+
+      {preguntandoApagar && (
+        /* Sube desde abajo y tapa la pantalla: no se apaga de refilón. El botón
+           de quedarse va PRIMERO y es el grande, porque es lo que se quiere el
+           99 % de las veces que alguien abre esto por error. */
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-end"
+             onClick={() => { if (!apagando) setPreguntandoApagar(false) }}>
+          <div className="w-full bg-card rounded-t-2xl p-4" onClick={e => e.stopPropagation()}>
+            <b className="block text-[17px] font-extrabold tracking-tight mb-1">
+              ¿Apagar el Pase en este local?
+            </b>
+            <p className="text-[13.5px] leading-snug text-text-secondary mb-3.5">
+              Vuelve la pantalla de siempre. <b className="text-text-primary">No se pierde
+              ningún pedido.</b> El botón de «Listo» vuelve a estar en Pedidos, como antes.
+              Para volver a encenderlo hace falta la oficina.
+            </p>
+            <div className="flex gap-2.5">
+              <button onClick={() => setPreguntandoApagar(false)} disabled={apagando}
+                      className="flex-1 min-h-[52px] rounded-xl bg-accent text-text-on-accent
+                                 text-[15px] font-extrabold disabled:opacity-50">
+                No, seguir en el Pase
+              </button>
+              <button disabled={apagando}
+                      onClick={() => { void (async () => {
+                        setApagando(true)
+                        try {
+                          const r = await apagarElPase(token)
+                          // Regla 8: confirma con CONTENIDO, y dice la verdad
+                          // también cuando no ha tenido que hacer nada.
+                          setAviso(r.estaba
+                            ? `Pase apagado en ${r.local ?? 'este local'}. Vuelve la pantalla de siempre.`
+                            : `El Pase ya estaba apagado en ${r.local ?? 'este local'}.`)
+                          setPreguntandoApagar(false)
+                          onApagado?.()
+                        } catch (e) {
+                          setAviso(`No se ha podido apagar: ${(e as Error).message}. Sigue encendido.`)
+                        } finally { setApagando(false) }
+                      })() }}
+                      className="min-w-[128px] min-h-[52px] px-3 rounded-xl border border-linea-fuerte
+                                 bg-card text-text-secondary text-[14px] font-extrabold disabled:opacity-50">
+                {apagando ? '…' : 'Sí, apagar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* El cerrar a mano vive FUERA de las tarjetas: es una excepción, no un paso. */}
       {onCerrarAMano && (
