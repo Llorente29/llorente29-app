@@ -7,9 +7,15 @@ la función del §3.1 y las comprobaciones 1 y 2 del §5.
 
 ## Lo aplicado, y cuándo
 
-🔧 **APLICADA en producción** a las ~11:15 de Madrid,
-`20260916111500_parte_del_dia_lectura`. **Fuera de la banda** (empieza a las
-12:15), así que no hizo falta ninguna excepción. Las tres cuentas de la banda,
+🔧 **APLICADA en producción** el 16/09 a las **08:57:16 UTC = 10:57 de Madrid**,
+versión **`20260916085716`** (`parte_del_dia_lectura`). **Fuera de la banda**
+(empieza a las 12:15), así que no hizo falta ninguna excepción.
+
+> *Corregido el 16/09 a las 12:40.* Este parte decía «11:15» y el fichero se
+> llamaba `20260916111500`: las dos cifras eran de memoria, no leídas del
+> registro. La versión que registró la base es `20260916085716` y el fichero ya
+> se llama así. Misma familia que la errata de la hora del Pase: una cifra
+> puesta de memoria presentada como medida. Las tres cuentas de la banda,
 medidas antes por si acaso: función **nueva**, cero funciones que la llamen,
 cero crons, cero disparadores; y un `create function` no cierra ninguna tabla.
 Antes de aplicar se miró `list_migrations`: la última de la otra sesión es
@@ -81,42 +87,39 @@ amarillo, Pulled Pork y Tomate Pera), con su nota de corte del recuento que se
 cerró esa tarde entre las 19:31 y las 19:52. Salen como retenidos, no como
 faltantes. La regla 6 se lee de la nota del escritor, no se recalcula.
 
-**Un detalle medido de paso:** hay **6** notas en `sale_consumption_skip` para
-el 15/09, y el parte cuenta **5** retenidos. La sexta —Milanesa de Pollo
-Rebozado, pedido U495— tiene nota **y** tiene el movimiento escrito (esperado
-1,0 · escrito 1,0), así que cuenta como «bien», que es lo correcto. La nota
-sobra, pero no engaña a nadie.
+**La sexta nota, y por qué NO sobra.** Hay **6** notas en
+`sale_consumption_skip` para el 15/09 y el parte cuenta **5** retenidos. La
+sexta —Milanesa de Pollo Rebozado, pedido U495— tiene nota **y** movimiento
+escrito (esperado 1,0 · escrito 1,0), así que cuenta como «bien».
+
+> *Corregido el 16/09.* Escribí que «la nota sobra». No sobra. La secuencia es:
+> movimiento escrito a las **20:17**, recuento con corte a las **20:33**, nota
+> escrita a las **22:20** al regenerar. **La nota explica por qué ese movimiento
+> viejo sigue ahí y no se reescribió**: es el caso congelado de la regla 6, y es
+> verdad. Que cuente como «bien» es correcto, y la nota tiene su trabajo.
 
 ---
 
-## Lo que el 14/09 enseña y no estaba en el encargo
+## Lo que el 14/09 enseña — y NO es una avería
 
-El cuadre del 14/09 no está limpio: **410 bien · 27 faltan · 10 con cantidad
-distinta · 0 retenidos**, y **todos en Carabanchel**. Nueve pedidos: G120,
-G183, G199, G616, G957, U968, U970, U973, U984.
+> *Corregido el 16/09 a las 12:40, con la comprobación de Julio delante.* Lo
+> que sigue decía «consumo a medias silencioso» y «avería». **Era falso, y era
+> mío.** Julio lo comprobó pedido a pedido y lo he vuelto a medir yo contra la
+> base: las cuatro fichas están tocadas **hoy** —Korean Fried Chicken and Fries
+> 2.0 (KDB), Korean crispy Chicken Burger (KdB) y Ración patatas a las
+> **09:47:38**; WRAP CESAR CH a las **09:37:00**—. El escritor no falló: el
+> 14/09 esas fichas no tenían artículo y escribió lo que la carta decía
+> entonces. **El cuadre compara con la carta de hoy**, y por eso sale «falta».
+> `sale_consumption_failure` a 0 es lo correcto aquí: no reventó nada.
 
-No están por debajo de ningún corte: el último recuento aprobado de Carabanchel
-se cerró el **07/09 a las 22:15**, una semana antes.
+El cuadre del 14/09 da **410 bien · 27 faltan · 10 con cantidad distinta · 0
+retenidos**, todo en Carabanchel, en nueve pedidos: G120, G183, G199, G616,
+G957, U968, U970, U973, U984. No están bajo ningún corte (el último recuento
+aprobado de Carabanchel se cerró el 07/09 a las 22:15).
 
-Y la forma que tienen es la del consumo **a medias**, no la del que no se
-escribió:
-
-| pedido | artículo | esperado | escrito |
-|---|---|---|---|
-| U968 | Salsa Coreana | 61 | 1 |
-| U968 / G120 / U970 / U973 | Patatas Bastón | 570 | 270 |
-| U968 / G120 / U970 / U973 | Cebollino | 11 | 5 |
-| U984 | Salsa Coreana | 140 | 110 |
-| G199 | Solomillo de Pollo Prefrito Piri-piri | 280 | **0** |
-
-Esto es exactamente la población del §3.2: ventas que descontaron algo pero no
-todo. Confirma que la rama que ya tiene el cron de las 01:30 no las ve
-—`sale_consumption_failure` sigue con **0 filas**— y da con qué ensayar el
-reproceso ampliado con datos de verdad, sin inventarse nada (regla 31).
-
-**No lo he tocado.** Es el paso 4 y va con su ensayo y su huella.
-
----
+Es **exactamente la población que el paso 4 tiene que recuperar**: la ficha se
+arregló después de la venta. Y es lo que obliga a que el parte reparta los
+descuadres en dos, que es lo que entra esta noche.
 
 ## El cruce con las plataformas, funcionando desde dentro
 
