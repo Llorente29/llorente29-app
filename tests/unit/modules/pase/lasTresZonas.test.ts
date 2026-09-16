@@ -161,8 +161,10 @@ describe('la plataforma: se enseña, no se gestiona', () => {
 
   it('🔴 y con el grupo 1 dice quién reparte de verdad, igual en las dos', () => {
     const uberPorHubrise = { ...glovo, source: 'hubrise', channel: 'Uber' }
-    expect(elSubtitulo(uberPorHubrise)).toBe('Uber · lo reparte Uber')
-    expect(elSubtitulo(uberPorHubrise, 'pedidos')).toBe('Uber · lo reparte Uber')
+    // 🔴 «Uber · lo reparte Uber» decía lo mismo dos veces: arriba queda el
+    // canal, y quién reparte + la hora van en la ETIQUETA (16/09, Julio).
+    expect(elSubtitulo(uberPorHubrise)).toBe('Uber')
+    expect(elSubtitulo(uberPorHubrise, 'pedidos')).toBe('Uber')
     // Y la flota se ve como flota en las dos, que era lo que faltaba en G292.
     const nuestro = P({ channel: 'Glovo', service_type: 'own_delivery', carrier_code: 'catcher' })
     expect(elSubtitulo(nuestro)).toBe('Glovo · reparto nuestro')
@@ -381,8 +383,20 @@ describe('«Se lo ha llevado» y el ámbar de las bolsas · 16/09', () => {
   it('una recogida de mostrador tampoco: ahí no se lo lleva un repartidor', () => {
     expect(tieneBotonDeRecogida({ ...hecha, service_type: 'pickup' })).toBe(false)
   })
-  it('🔴 se ofrece también en el grupo 1: «suele llegar solo» no es «siempre»', () => {
+  it('se ofrece en plataforma, que es donde no hay otro escritor', () => {
     expect(tieneBotonDeRecogida({ ...hecha, source: 'hubrise', channel: 'Uber' })).toBe(true)
+  })
+  it('🔴 NO en los de nuestra flota: su recogida la avisa el repartidor', () => {
+    // 213 de 224 en 14 días llegan solas. Dos escritores para el mismo hito es
+    // como se acaba discutiendo cuál de las dos horas era la buena.
+    const nuestro = P({ service_type: 'own_delivery', carrier_code: 'catcher', has_courier: true,
+                        order_status: 'awaiting_collection', ready_at: '2026-09-16T18:38:36Z' })
+    expect(tieneBotonDeRecogida(nuestro)).toBe(false)
+  })
+  it('sí en un propio SIN flota: ésos no los coge nadie', () => {
+    const sinFlota = P({ service_type: 'own_delivery', carrier_code: null, has_courier: false,
+                         order_status: 'awaiting_collection', ready_at: '2026-09-16T18:38:36Z' })
+    expect(tieneBotonDeRecogida(sinFlota)).toBe(true)
   })
 
   it('🔴 los minutos van DENTRO de la frase, que es lo que faltaba', () => {

@@ -240,18 +240,26 @@ export function tieneBotonDeListo(p: PedidoDelPase): boolean {
  * del pase VE la bolsa salir por la puerta: es la única persona del sistema que
  * lo sabe en ese instante, y hasta hoy no tenía dónde decirlo.
  *
- * 🔴 SE OFRECE TAMBIÉN EN EL GRUPO 1, y es a propósito. Ahí la recogida suele
- * llegar sola --71 de 71 en Uber por HubRise-- pero «suele» no es «siempre», y
- * cuando el aviso tarda, el del pase lo sabe antes que el sistema. La RPC
- * escribe sólo si está vacío, así que pulsar cuando ya había hora no pisa nada:
- * manda el primero que lo supo, no el último que pulsó.
+ * 🔴 NO EN LOS DE NUESTRA FLOTA (16/09, Julio). Ahí la recogida la avisa el
+ * propio repartidor desde su móvil, y son los ÚNICOS de los que llega siempre:
+ * 213 de 224 en 14 días. Poner el botón sería ofrecer a mano lo que ya viene
+ * solo y bien, y dos escritores para el mismo hito es como se acaba discutiendo
+ * cuál de las dos horas era la buena.
  *
- * No aparece en una recogida de mostrador: ahí no se lo lleva un repartidor, y
- * el botón diría algo que no pasa.
+ * Queda, entonces, para lo que reparte una plataforma y para los propios SIN
+ * flota --los 14 de 14 días que no coge nadie--, que es justo donde no hay
+ * ningún otro escritor.
+ *
+ * Tampoco en una recogida de mostrador: ahí no se lo lleva un repartidor, y el
+ * botón diría algo que no pasa.
+ *
+ * La RPC sigue escribiendo sólo si está vacío, así que aunque un aviso llegue
+ * en medio no se pisa nada: manda el primero que lo supo.
  */
 export function tieneBotonDeRecogida(p: PedidoDelPase): boolean {
   if (laZona(p) !== 'sigue_aqui') return false
   if (esRecogida(p)) return false
+  if (loRepartimosConFlota(p)) return false
   return estaMarcadoListo(p) && p.handed_to_courier_at == null
 }
 
@@ -294,7 +302,12 @@ export function elSubtitulo(p: PedidoDelPase, donde: 'pase' | 'pedidos' = 'pase'
       return donde === 'pedidos' ? `${canal} · sin seguimiento`
                                  : `${canal} · lo recoge su repartidor`
     }
-    return `${canal} · lo reparte ${quienReparte(p)}`
+    // 🔴 «Uber · lo reparte Uber» decía lo mismo dos veces (16/09, Julio).
+    // Arriba queda el canal a secas; quién reparte y a qué hora recogió van en
+    // la ETIQUETA --«Lo reparte Uber · recogido 21:52»--, que es donde además
+    // cabe la hora. Cuando el que reparte NO es el canal, sí aporta y se dice.
+    const quien = quienReparte(p)
+    return quien.toLowerCase() === canal.toLowerCase() ? canal : `${canal} · lo reparte ${quien}`
   }
   return `${canal} · lo lleva alguien de casa`
 }

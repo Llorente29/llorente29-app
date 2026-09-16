@@ -147,10 +147,12 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir }: {
             dos líneas seguidas: «Glovo» y debajo «Lo reparte Glovo». Se queda
             donde SÍ dice algo nuevo: el nombre del de nuestra moto, o el aviso
             de que no lo ha cogido nadie. */}
-        {!loRepartelaPlataforma(t) && (
+        {(!loRepartelaPlataforma(t) || t.handed_to_courier_at != null) && (
           <p className={`text-[12.5px] font-bold leading-snug mt-1 truncate
                          ${quien.esAviso ? 'text-warning' : 'text-text-secondary'}`}>
             {quien.texto}
+            {t.handed_to_courier_at != null && loRepartelaPlataforma(t) &&
+              ` · recogido ${new Date(t.handed_to_courier_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`}
           </p>
         )}
 
