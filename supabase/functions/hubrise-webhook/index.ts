@@ -709,6 +709,53 @@ Deno.serve(async (req: Request) => {
 
         const r = await upsertSale(sb, loc.accountId, loc.locationId, order, { brandId, channelId, deliveryServiceType });
 
+        // ── LA RECOGIDA Y LA ENTREGA DE UBER, QUE HOY SE TIRABAN ──────────
+        //
+        // Uber por HubRise es de los pedidos de los que SÍ lo sabemos todo, y
+        // hasta hoy Folvy tiraba la mitad: en 7 días llegan 106 avisos de
+        // `in_delivery` y 87 de `completed`, y **cero** pedidos tenían
+        // `handed_to_courier_at` o `delivered_at`. Sin esto, un Uber salta de
+        // «Esperando» a «Terminado» y no está «En ruta» en su vida.
+        //
+        // Los dos sellos se escriben SOLO SI ESTÁN VACÍOS --el `.is(..., null)`
+        // lo hace en la propia escritura, sin leer antes-- para que un aviso
+        // repetido o tardío no mueva una hora ya buena.
+        //
+        // NO HAY ECO QUE FILTRAR, y va medido porque el encargo pedía mirarlo:
+        // de los 106 `in_delivery`, 9 llegan en el MISMO SEGUNDO que nuestro
+        // «Listo», y la tentación es tomarlos por el rebote de algo que
+        // hubiéramos empujado. No lo son:
+        //   · Folvy NO empuja `awaiting_collection` a HubRise. `pushOrderStatus`
+        //     solo se usa con `received` y `accepted`, y `order-advance` --lo
+        //     único que empuja estados-- solo habla con Last. No existe el
+        //     camino de vuelta.
+        //   · Lo que pasa es lo contrario: `tg_sale_seal_kpi_hitos` sella
+        //     `ready_at` cuando `order_status` pasa a `in_delivery`. En esos 9
+        //     NADIE PULSÓ «Listo» en cocina: lo selló el propio aviso de Uber, y
+        //     por eso coinciden al segundo.
+        // Así que se escribe la recogida siempre. Filtrar esos 9 sería tirar una
+        // recogida de verdad por una sospecha ya descartada. La mediana del
+        // resto son 8,9 min desde el «Listo», que es lo que tarda un rider.
+        if (r) {
+          const estadoEntrante = ((order["status"] as string | null) ?? "").toLowerCase();
+          const ahora = new Date().toISOString();
+          if (estadoEntrante === "in_delivery") {
+            const { error } = await sb.from("sale")
+              .update({ handed_to_courier_at: ahora })
+              .eq("id", r.id).is("handed_to_courier_at", null);
+            if (error) console.error(`sello recogida ${orderId}: ${error.message}`);
+          }
+          if (estadoEntrante === "completed") {
+            // ANTES del `close_sale` de abajo, a propósito: `close_sale` hace
+            // `coalesce(closed_at, delivered_at, now())`, así que el cierre
+            // hereda la hora de entrega en vez de la del arreglo.
+            const { error } = await sb.from("sale")
+              .update({ delivered_at: ahora })
+              .eq("id", r.id).is("delivered_at", null);
+            if (error) console.error(`sello entrega ${orderId}: ${error.message}`);
+          }
+        }
+
         if (r && canon === "closed" && r.status === "open") {
           // completed -> consolidar coste + consumo.
           const { error: closeErr } = await sb.rpc("close_sale", { p_sale_id: r.id });
