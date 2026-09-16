@@ -10,11 +10,15 @@
 // `updateDevice`…) y se reusa tal cual. Aquí sólo vive la LECTURA conjunta, que
 // es lo único que no existía: hasta ahora cada pestaña leía lo suyo.
 //
-// ⚠️ ESTE FICHERO LEE `kitchen_station.pase_activo`, QUE TODAVÍA NO EXISTE.
-// La mudanza del interruptor --de `kitchen_time_config` a `kitchen_station`--
-// está escrita en `docs/propuestas/una-pagina-por-cocina-base.sql` y SIN
-// APLICAR. Esta página no puede fusionarse antes que esa migración. Va dicho
-// aquí y no sólo en un parte, porque el parte no se lee al hacer merge.
+// ✅ `kitchen_station.pase_activo` y sus cuatro columnas de traza EXISTEN desde
+// la migración `20260915225209` (16/09, 00:52). Los 25 nombres que pide este
+// fichero se comprobaron uno a uno contra `information_schema` ese mismo día:
+// existen los 25 (regla 40 — lo que viaja dentro de una cadena no lo mira ni
+// `tsc` ni el lint).
+//
+// Mientras la migración no estuvo, aquí había un aviso de que este fichero no
+// podía fusionarse. Lo escribí en el código y no sólo en un parte, porque el
+// parte no se lee al hacer merge.
 
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 

@@ -24,9 +24,10 @@
 //    título lleva el nombre. Dos controles para una cosa es como acaban
 //    diciendo cosas distintas.
 //
-// ⚠️ DEPENDE DE UNA MIGRACIÓN SIN APLICAR: lee `kitchen_station.pase_activo`,
-// que todavía vive en `kitchen_time_config`. Ver `laCocina.ts`. Esta página no
-// se fusiona antes que `docs/propuestas/una-pagina-por-cocina-base.sql`.
+// ✅ LA BASE YA ESTÁ. `kitchen_station.pase_activo` y sus cuatro columnas de
+// traza existen desde la migración `20260915225209`, aplicada el 16/09 a las
+// 00:52. Mientras no estuvo, este fichero llevaba aquí el aviso de que no se
+// podía fusionar.
 
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Check, Plus } from 'lucide-react'
@@ -170,7 +171,17 @@ export default function LaCocinaDelLocal({ accountId, locationId }: {
             <article key={e.id}
                      className={`border-b border-default border-l-[3px] px-5 py-4 ${
                        e.kind === 'expo'
-                         ? 'bg-background-success/40 border-l-success'
+                         // 🔴 `bg-success-bg`, no `bg-background-success`. Ese
+                         // token NO EXISTE en el tema --sólo existe
+                         // `background-info`-- y Tailwind no se queja: la clase
+                         // se escribe, no casa con nada y la fila de salida se
+                         // queda sin su tinte. Nadie lo ve hasta que alguien
+                         // compara la pantalla con la maqueta.
+                         //
+                         // Es la regla 40 fuera del SQL: un nombre dentro de
+                         // una cadena de texto que ni `tsc` ni el lint miran.
+                         // Comprobado contra `tailwind.config.js` el 16/09.
+                         ? 'bg-success-bg/40 border-l-success'
                          : 'border-l-transparent'}`}>
               <div className="flex flex-wrap gap-y-2.5 gap-x-5 items-start justify-between">
                 <div className="min-w-0">
