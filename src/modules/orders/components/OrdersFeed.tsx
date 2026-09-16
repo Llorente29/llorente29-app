@@ -239,9 +239,12 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
   // horas él solo, sin que llegue nada nuevo del servidor.
   const porFase = useMemo(() => {
     const ahora = new Date(nowMs)
-    const mapa: Record<Fase, OrderFeedItem[]> = {
-      en_curso: [], esperando: [], terminado: [], incidencia: [],
-    }
+    // 🔴 SE CONSTRUYE DESDE `LAS_FASES`, no a mano (16/09). Escrito a mano, el
+    // día que entró «En ruta» este objeto se quedó con cuatro claves y el
+    // despliegue de producción murió en `tsc -b`. Así no puede volver a pasar:
+    // añadir una fase a la lista la añade aquí.
+    const mapa = Object.fromEntries(LAS_FASES.map(f => [f, [] as OrderFeedItem[]])) as Record<Fase, OrderFeedItem[]>
+
     for (const o of orders) mapa[laFase(o, ahora)].push(o)
     for (const f of LAS_FASES) mapa[f].sort(ordenDeLaFase(f))
     return mapa
