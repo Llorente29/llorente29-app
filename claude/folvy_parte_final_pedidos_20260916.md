@@ -69,8 +69,8 @@ La atribución está cerrada: esos pedidos tienen `delivery_state` en **null**, 
 que el disparador `tg_sale_seal_handed_to_courier` no pudo escribirlo —exige un
 cambio de `delivery_state`— y no queda otro escritor que la edge nueva.
 
-**La entrega**, dos veces: U88129 a las 22:16:28 y U987F2 a las 22:19:15, las dos
-cerrando la venta.
+**El sello de recogida de Uber, cuatro de cuatro.** La entrega, dos veces:
+U88129 a las 22:16:28 y U987F2 a las 22:19:15, las dos cerrando la venta.
 
 **Los ocho «Listo» devueltos**, leídos de la analítica de Last por `tabId`, con
 los ocho `tabId` casando por prefijo con el `external_tab_ref` que ya teníamos:
@@ -83,13 +83,36 @@ de cierre.
 
 ## 🔴 Lo que se torció por el camino, y lo pagué yo
 
-**Di por desplegada una función mirando el color del run.** El despliegue de las
+**LOS TRES SON EL MISMO ERROR CON TRES CARAS**: dar por buena una señal
+PARECIDA --el color, el nombre del comando, la naturaleza del fichero-- en vez
+de la señal PUBLICADA. De ahí sale la regla nueva de `CLAUDE.md`: *una fusión
+está hecha cuando Vercel dice READY en producción*.
+
+**1 · Di por desplegada una función mirando el color del run.** El despliegue de las
 19:41 salió VERDE y yo dije «las dos funciones». `hubrise-webhook` estaba
 **prohibida por nombre** en el propio workflow —lo dice su cabecera, y no la
 leí— así que solo salió `catcher-webhook`. La mitad de Uber de la pieza 2 estuvo
 **dos horas commiteada y sin efecto**, y lo descubrí porque U8C4DE pasó a
 `in_delivery` sin escribir su recogida. Es la regla 5 y la del repositorio a la
 vez. Queda escrito en `CLAUDE.md`, dentro de la regla 1, junto con la puerta.
+
+**2 · La fusión de las 22:09 no llegó a producción, y lo vio Julio, no yo.**
+Vercel murió en `tsc -b` con `TS2741: Property 'en_ruta' is missing`, y él abrió
+Pedidos y siguió viendo cuatro pestañas mientras yo daba el paquete por
+publicado. La causa: yo comprobaba con `npx tsc --noEmit`, y este repositorio
+usa *project references* — **`--noEmit` en la raíz no comprueba los proyectos
+referenciados**; `tsc -b`, el de `npm run build`, sí. Un comando parecido, no el
+comando. Medido después con la misma vara y en limpio: antes exit 2, ahora exit
+0. Y el arreglo no fue poner la clave que faltaba, sino construir el mapa desde
+`LAS_FASES` para que no haya que acordarse.
+
+**3 · Empujé el parte --sólo un `.md`-- sin volver a pasar el build**, dando por
+hecho que documentación no rompe nada. Arrastraba el mismo error, disparó otro
+despliegue de producción y otro correo de fallo.
+
+**El paquete OTA 304 nunca existió**: su run falló con el mismo error, así que
+ninguna tablet pudo coger un bundle de un commit que no compila. El **305** salió
+verde a las 22:26:51 desde el commit arreglado.
 
 **La primera prueba de la guarda medía mal.** La llamada y las comprobaciones
 iban en la misma sentencia `SELECT`, así que las subconsultas leían el snapshot
@@ -144,5 +167,5 @@ La solución de verdad es D14, «ver la pantalla de un local» sin token.
 ## Lo que queda mirando
 
 Las tres tablets siguen en **bundle 303** con **17 pedidos abiertos** y latiendo
-al minuto, que es exactamente lo correcto: recogen cuando pueden y esperan
-cuando no. El **304** entra cuando su cocina esté en calma.
+al minuto (22:27), que es exactamente lo correcto: recogen cuando pueden y
+esperan cuando no. El **305** --el bueno-- entra cuando su cocina esté en calma.

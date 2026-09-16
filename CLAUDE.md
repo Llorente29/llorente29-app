@@ -130,6 +130,40 @@ DAÑO y obliga a juzgar cada caso. Se aplicó una RPC de lectura a las 13:06
 midiendo que no tocaba nada de eso —era correcto— pero el criterio no era
 comprobable por otro.
 
+### Una fusión está hecha cuando VERCEL dice READY en producción
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> 16/09, después de la tercera del día.
+
+Fusionar a `main` no publica el front: **lo publica el build de Vercel, y el
+build puede fallar**. Mientras no diga READY, `main` y producción son dos cosas
+distintas, y el operario sigue viendo la pantalla de antes.
+
+- **Se comprueba en Vercel**, mirando el despliegue de producción y su estado.
+  El commit en `main` no vale; el correo de Vercel tampoco, porque llega tarde
+  y puede ser de un despliegue ya superado.
+- **Antes de CUALQUIER push a `main`, `npm run build` exacto y en limpio**
+  --borrando `*.tsbuildinfo`--. No un comando parecido: **ese**.
+- **También para un commit de sólo documentación.** Dispara despliegue igual.
+
+*Por qué, y lo pagué tres veces el mismo día (16/09):*
+
+1. Un workflow salió **VERDE sin desplegar** `hubrise-webhook` --la excluye por
+   nombre-- y lo di por desplegado. Dos horas commiteada y sin efecto.
+2. Comprobé el front con `npx tsc --noEmit`, y este repositorio usa *project
+   references*: **`tsc --noEmit` en la raíz NO comprueba los proyectos
+   referenciados**; `tsc -b`, que es lo que corre `npm run build`, SÍ. Mi
+   comprobación era un comando PARECIDO, no EL comando. La fusión de las 22:09
+   murió en Vercel con `TS2741: Property 'en_ruta' is missing`, y Julio siguió
+   viendo cuatro pestañas mientras yo daba el paquete por publicado.
+3. Empujé el parte --sólo un `.md`-- sin volver a pasar el build, dando por
+   hecho que documentación no rompe nada. Arrastraba el mismo error, disparó
+   otro despliegue de producción y otro correo de fallo.
+
+*Los tres son el mismo error con tres caras: dar por buena una señal PARECIDA
+--el color, el nombre del comando, la naturaleza del fichero-- en vez de la
+señal PUBLICADA.*
+
 ### Una cosa está aplicada cuando está en PRODUCCIÓN, no cuando está commiteada
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque.
