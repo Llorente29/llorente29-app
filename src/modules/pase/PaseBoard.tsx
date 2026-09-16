@@ -21,6 +21,7 @@ import { Check, Clock, Truck, Printer, AlertTriangle, User, Camera } from 'lucid
 import { declaraTrabajoEnCurso } from '@/services/trabajoEnCurso'
 import {
   laZona, laSituacion, tieneBotonDeListo, tieneBotonDeRecogida, loQuePasa, loQueNoSabemos,
+  loRepartelaPlataforma, sabemosSuCiclo, seVaSola, MINUTOS_PARA_IRSE_SOLA,
   elSubtitulo, elTono, losMinutos, quienLoLleva, type Zona, type Tono,
 } from './lib/lasTresZonas'
 import {
@@ -116,7 +117,6 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir }: {
   const situacion = laSituacion(t)
   const conBoton = tieneBotonDeListo(t)
   const conRecogida = tieneBotonDeRecogida(t)
-  const noSabemos = loQueNoSabemos(t)
   const quien = quienLoLleva(t)
   const rota = t.bolsa.estado === 'rota'
 
@@ -138,14 +138,21 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir }: {
           </span>
         </div>
 
-        {/* QUIÉN LO LLEVA · siempre visible, porque es la pregunta que hace el
-            pase en voz alta cuando suena el timbre. El TELÉFONO no se pinta
-            aquí: llamar es algo que se consulta, no algo que cambie lo que
-            haces, y va en la hoja de detalle. */}
-        <p className={`text-[12.5px] font-bold leading-snug mt-1 truncate
-                       ${quien.esAviso ? 'text-warning' : 'text-text-secondary'}`}>
-          {quien.texto}
-        </p>
+        {/* QUIÉN LO LLEVA · la pregunta que hace el pase en voz alta cuando
+            suena el timbre. El TELÉFONO no se pinta aquí: llamar es algo que se
+            consulta, no algo que cambie lo que haces, y va en la hoja de
+            detalle.
+            🔴 SÓLO CUANDO AÑADE ALGO (16/09). En un pedido de plataforma el
+            subtítulo ya dice quién reparte, así que esto repetía la misma idea
+            dos líneas seguidas: «Glovo» y debajo «Lo reparte Glovo». Se queda
+            donde SÍ dice algo nuevo: el nombre del de nuestra moto, o el aviso
+            de que no lo ha cogido nadie. */}
+        {!loRepartelaPlataforma(t) && (
+          <p className={`text-[12.5px] font-bold leading-snug mt-1 truncate
+                         ${quien.esAviso ? 'text-warning' : 'text-text-secondary'}`}>
+            {quien.texto}
+          </p>
+        )}
 
         {/* 🔴 LOS PLATOS, SIEMPRE (16/09). Estaban gateados a `por_marcar`, así
             que en cuanto alguien pulsaba «Listo» la bolsa se quedaba sin su
@@ -162,8 +169,7 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir }: {
           </div>
         )}
 
-        {noSabemos && <p className="text-[12px] leading-snug text-text-secondary mt-1.5">{noSabemos}</p>}
-        <LaBolsa t={t} onReimprimir={onReimprimir} />
+          <LaBolsa t={t} onReimprimir={onReimprimir} />
         <ComoAvanzo t={t} />
       </div>
 
@@ -215,6 +221,7 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
 }) {
   const [tablero, setTablero] = useState<ElTablero | null>(null)
   const [zona, setZona] = useState<Zona>('sigue_aqui')
+  const [verIdas, setVerIdas] = useState(false)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   // El apagado: `false` = ni preguntado. `true` = preguntando. Ver la hoja.
@@ -251,6 +258,10 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
       const z = laZona(t)
       if (!z) continue
       if (z === 'entregados' && (losMinutos(t) ?? 0) > MINUTOS_EN_ENTREGADOS) continue
+      // 🔴 A los 30 min, la del grupo 2 se va sola: de ella no va a llegar
+      // ningún aviso nunca, así que sólo ocupa sitio delante de las que sí
+      // esperan algo. NO se esconde: se cuentan abajo y se pueden ver.
+      if (seVaSola(t)) continue
       m[z].push(t)
     }
     return m
@@ -268,6 +279,28 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
     declaraTrabajoEnCurso(clave, porZona.sigue_aqui.length)
     return () => declaraTrabajoEnCurso(clave, 0)
   }, [tablero, porZona.sigue_aqui.length])
+
+  /**
+   * LAS QUE SE HAN IDO SOLAS, que se cuentan y se pueden ver (regla 7). Un
+   * umbral ordena; no esconde. Si desaparecieran en silencio, el del pase
+   * aprendería que las bolsas se evaporan y dejaría de creerse la pantalla.
+   */
+  const idasSolas = useMemo(
+    () => (tablero?.tarjetas ?? []).filter(t => seVaSola(t)),
+    [tablero])
+
+  /**
+   * EL AVISO DE LA ZONA, UNA VEZ ARRIBA Y NO EN CADA TARJETA (16/09). La frase
+   * es la misma para todas las del grupo 2, así que repetirla seis veces no
+   * informa: hace ruido y empuja hacia abajo lo que sí cambia de una a otra.
+   * Y sólo sale si en ESTA zona hay alguna del grupo 2.
+   */
+  const avisoDeLaZona = useMemo(() => {
+    const delGrupo2 = porZona[zona].filter(t => !sabemosSuCiclo(t))
+    if (delGrupo2.length === 0) return null
+    const primeros = delGrupo2.map(t => loQueNoSabemos(t)).filter(Boolean) as string[]
+    return primeros[0] ?? null
+  }, [porZona, zona])
 
   /** ¿Hay algo que lleve de más? El contador avisa sin cambiar de pestaña. */
   const avisaEnRuta = porZona.en_ruta.some(t => elTono(t, losMinutos(t)) === 'aviso')
@@ -350,12 +383,43 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
 
       <p className="px-3 pt-1.5 text-[12px] text-text-tertiary shrink-0">{actual.pista}</p>
 
+      {/* El aviso de la zona: una vez, arriba, y sólo si aquí hay del grupo 2. */}
+      {avisoDeLaZona && (
+        <p className="mx-3 mt-1.5 px-3 py-2 rounded-lg bg-accent-bg text-text-secondary
+                      text-[12.5px] leading-snug shrink-0">{avisoDeLaZona}</p>
+      )}
+
       {aviso && (
         <div className="mx-3 mt-1.5 px-3 py-2 rounded-lg bg-background-info text-text-info
                         text-[12.5px] flex items-center gap-2 shrink-0">
           <span className="min-w-0">{aviso}</span>
           <button onClick={() => setAviso(null)} className="ml-auto underline shrink-0">cerrar</button>
         </div>
+      )}
+
+      {/* 🔴 EL PIE DE LAS QUE SE FUERON SOLAS. La regla 7 en una línea: el
+          umbral decide el ORDEN, nunca la EXISTENCIA. Se dice cuántas, y el
+          «ver» las lista con su hora. */}
+      {zona === 'sigue_aqui' && idasSolas.length > 0 && (
+        <p className="mx-3 mt-1.5 px-3 py-2 rounded-lg bg-page border border-default
+                      text-[12.5px] text-text-secondary shrink-0">
+          <b className="tabular-nums">{idasSolas.length}</b>
+          {idasSolas.length === 1 ? ' se fue sola' : ' se fueron solas'} a los {MINUTOS_PARA_IRSE_SOLA} min
+          sin que nadie tocara{' · '}
+          <button onClick={() => setVerIdas(v => !v)} className="underline font-bold">
+            {verIdas ? 'ocultar' : 'ver'}
+          </button>
+          {verIdas && (
+            <span className="block mt-1.5 pt-1.5 border-t border-default">
+              {idasSolas.map(t => (
+                <span key={t.sale_id} className="block">
+                  {t.codigo ?? '—'} · {t.marca ?? 'sin marca'} · listo hace{' '}
+                  <b className="tabular-nums">{losMinutos(t) ?? '—'} min</b>
+                </span>
+              ))}
+            </span>
+          )}
+        </p>
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-1.5 pb-2">

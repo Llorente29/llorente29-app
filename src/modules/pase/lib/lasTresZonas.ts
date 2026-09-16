@@ -275,14 +275,27 @@ export function quienReparte(p: PedidoDelPase): string {
  * canal solo ya lo dice, y la frase de estado dice el resto. Se deja el «lo
  * reparte X» únicamente cuando X no es el canal, que es cuando aporta algo.
  */
-export function elSubtitulo(p: PedidoDelPase): string {
+export function elSubtitulo(p: PedidoDelPase, donde: 'pase' | 'pedidos' = 'pase'): string {
   const canal = p.channel?.trim() || 'sin canal'
   if (esRecogida(p)) return `${canal} · lo recoge el cliente`
-  if (loRepartelaPlataforma(p)) {
-    const quien = quienReparte(p)
-    return quien.toLowerCase() === canal.toLowerCase() ? canal : `${canal} · lo reparte ${quien}`
-  }
   if (loRepartimosConFlota(p)) return `${canal} · reparto nuestro`
+  if (loRepartelaPlataforma(p)) {
+    // 🔴 EL GRUPO, DENTRO DE LA ETIQUETA (16/09). «Glovo» a secas no decía
+    // quién reparte, y en Pedidos G292 y G941 se leían igual que un Glovo de
+    // plataforma aunque los lleve nuestra flota.
+    //
+    // Y las dos pantallas dicen lo MISMO con palabras distintas a propósito,
+    // porque preguntan cosas distintas: el Pase mira la bolsa que tiene
+    // delante --«lo recoge su repartidor», o sea, va a venir alguien a por
+    // ella-- y Pedidos mira el pedido entero --«sin seguimiento», o sea, de
+    // aquí en adelante no vamos a saber nada--. El predicado es uno solo;
+    // lo que cambia es la palabra.
+    if (!sabemosSuCiclo(p)) {
+      return donde === 'pedidos' ? `${canal} · sin seguimiento`
+                                 : `${canal} · lo recoge su repartidor`
+    }
+    return `${canal} · lo reparte ${quienReparte(p)}`
+  }
   return `${canal} · lo lleva alguien de casa`
 }
 
@@ -362,6 +375,39 @@ export const MINUTOS_DE_MAS_SIN_COGER = 15
  * número en dos ficheros es un número que un día dice dos cosas.
  */
 export const MINUTOS_DE_ESPERA_EN_AMBAR = 20
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * A LOS 30 MINUTOS, LA BOLSA DEL GRUPO 2 SE VA SOLA · 16/09/2026
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * Decisión de Julio al ver la maqueta: G265 llevaba 39 minutos desde el «Listo»
+ * y U511 31, y los dos seguían en «Sigue aquí» sin que nadie pudiera hacer nada
+ * con ellos. De un pedido del grupo 2 no va a llegar ningún aviso NUNCA, así
+ * que la tarjeta no espera nada: sólo ocupa sitio delante de las que sí.
+ *
+ * 🔴 NO ESCRIBE NADA EN LA VENTA. Irse de la pantalla no es un hecho del
+ * pedido: es que esta pantalla ya no tiene nada que decir de él. En Pedidos
+ * sigue estando, en Terminados, con su «Listo HH:MM · sin seguimiento».
+ *
+ * 🔴 Y NO SE VA EN SILENCIO (regla 7). El pie de la zona cuenta cuántas se han
+ * ido solas y deja ver cuáles. Un umbral ordena; no esconde. Si desapareciera
+ * sin decirlo, el del pase aprendería que las bolsas se evaporan, y a partir de
+ * ahí dejaría de creerse la pantalla entera.
+ *
+ * Sólo el grupo 2: una del grupo 1 se queda hasta que llegue su recogida, que
+ * es lo que estamos esperando.
+ */
+export const MINUTOS_PARA_IRSE_SOLA = 30
+
+/** ¿Esta bolsa ya no pinta nada en el Pase? Ver `MINUTOS_PARA_IRSE_SOLA`. */
+export function seVaSola(p: PedidoDelPase, ahora: Date = new Date()): boolean {
+  if (laZona(p) !== 'sigue_aqui') return false
+  if (sabemosSuCiclo(p)) return false
+  if (!estaMarcadoListo(p)) return false
+  const min = losMinutos(p, ahora)
+  return min != null && min >= MINUTOS_PARA_IRSE_SOLA
+}
 
 /**
  * DESDE CUÁNDO SE CUENTA, que no es lo mismo en cada zona.
@@ -470,10 +516,15 @@ export function quienLoLleva(p: PedidoDelPase): QuienLoLleva {
   }
 
   if (loRepartimosConFlota(p)) {
-    return {
-      texto: nombre ? `Nuestro · ${nombre}` : 'Nuestro, ya asignado',
-      nombre, telefono, esAviso: false,
+    // 🔴 «Nuestro, ya asignado» no decía QUIÉN (16/09). Cuando hay nombre se
+    // pone, y mientras no haya recogido se dice hacia dónde va: el que está en
+    // el pase necesita saber si el de la moto viene o ya se fue.
+    const viene = p.handed_to_courier_at == null && p.delivered_at == null
+    if (nombre) {
+      return { texto: viene ? `Nuestro · ${nombre} · en camino al local` : `Nuestro · ${nombre}`,
+               nombre, telefono, esAviso: false }
     }
+    return { texto: 'Nuestro, ya asignado', nombre, telefono, esAviso: false }
   }
 
   if ((p.service_type ?? '').toLowerCase() === 'own_delivery') {
