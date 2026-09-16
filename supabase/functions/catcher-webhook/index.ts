@@ -187,6 +187,44 @@ Deno.serve(async (req: Request) => {
     // no depende de la ventana temporal de orders_feed.
   }
 
+  // ── CIERRE AL ENTREGAR · URGENTE §3.1 (16/09/2026) ────────────────────
+  //
+  // EL HUECO QUE TAPA: el encargo del Pase quitó el cierre de cocina --«el
+  // pedido se cierra cuando se entrega»-- y nadie construyó el cierre al
+  // entregar. Resultado en producción el 16/09: G231 entregado a las 15:29 y
+  // G764 a las 16:16, los dos con `status='open'` y `closed_at` nulo, saliendo
+  // en «Esperando repartidor» con 146' y 107' en rojo mientras su propia
+  // tarjeta decía «Entregado».
+  //
+  // VA POR EL CAMINO DEL BOTÓN, no por uno nuevo: escribir
+  // `order_status='completed'` es exactamente lo que hace «Completar», y a
+  // partir de ahí la base hace el resto ella sola --`trg_sale_close_on_complete`
+  // llama a `close_sale`, que pone `closed_at` y consolida el coste--. Un
+  // segundo camino de cierre sería dos verdades.
+  //
+  // `closed_at` ES LA HORA DE ENTREGA sin tener que pasarla: `close_sale` hace
+  // `coalesce(closed_at, now())` y `tg_sale_seal_delivered` sella `delivered_at`
+  // con `now()` en este mismo UPDATE. Dentro de una transacción `now()` es el
+  // mismo instante para los dos, así que entrega y cierre quedan a la misma
+  // hora por construcción.
+  //
+  // EL EMPUJE SALE UNA VEZ, o ninguna, y las dos cosas son correctas:
+  // `trg_sale_push_status` solo dispara cuando `order_status` CAMBIA, así que
+  // un aviso repetido de Catcher no vuelve a empujar. Y solo empuja cuando
+  // `source='lastapp'`: para un pedido de HubRise --como G231 y G764-- no sale
+  // ningún empuje, porque hoy no existe ningún camino que mande `completed` a
+  // HubRise. Medido el 16/09.
+  //
+  // LAS TRES GUARDAS, que son las de arriba y no otras nuevas:
+  //   · no pisa un `failed` ya registrado (`wouldDowngradeFailure`);
+  //   · no pisa un terminal deliberado --cancelado o rechazado-- (`alreadyHandled`);
+  //   · no re-escribe si ya está `completed`, que además dejaría el disparador
+  //     mudo igualmente.
+  const isDelivered = state === "delivered";
+  if (isDelivered && !wouldDowngradeFailure && !alreadyHandled && curOrderStatus !== "completed") {
+    patch.order_status = "completed";
+  }
+
   // has_courier: booleano limpio "¿ya hay repartidor?".
   if (typeof body.hasCourier === "boolean") patch.has_courier = hasCourier;
 
