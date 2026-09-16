@@ -21,6 +21,8 @@
 // parte no se lee al hacer merge.
 
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
+import { listDeviceBundleStatus } from './kdsService'
+import { loQueLeeLaOficina } from '../lib/palabrasDeLaActualizacion'
 
 export type PapelDeEstacion = 'expo' | 'prep'
 
@@ -30,6 +32,25 @@ export interface LaTabletQueMira {
   /** Minutos desde la última señal. null = nunca ha dado una. */
   vistoHaceMin: number | null
   activa: boolean
+  /** Qué estaciones mira. Vacío = las mira todas (y eso es un aviso). */
+  estacionIds: string[]
+  /**
+   * 🔴 QUÉ PAQUETE CORRE Y POR QUÉ ESPERA, si espera.
+   *
+   * Esto casi se pierde en la retirada. «Dispositivos» era la ÚNICA pantalla
+   * que enseñaba `kds_device_bundle_status`, y el vigía de bundle desfasado
+   * (migración `20260902T0800`) justifica su umbral APOYÁNDOSE en que esa
+   * pantalla existe y no filtra: «el umbral de 24 h vive SOLO en el vigía que
+   * interrumpe» (regla 7). Retirarla sin traer esto dejaba al vigía sin su
+   * mitad que no esconde.
+   *
+   * Lo cazó el barrido de la regla 18 --mirar quién enlaza antes de borrar--,
+   * y no el front: lo dice un comentario de una migración.
+   *
+   * El castellano NO se reescribe aquí: sale de `loQueLeeLaOficina`, que es
+   * donde vive y está probado contra los estados reales.
+   */
+  paquete: { texto: string; rojo: boolean } | null
 }
 
 export interface LaEstacion {
@@ -68,6 +89,16 @@ export interface LaCocina {
    * puede quitar.
    */
   tabletsSinEstacion: LaTabletQueMira[]
+  /**
+   * TODAS las tablets activas del local, con las estaciones que miran.
+   *
+   * 🔴 Hace falta porque la página sustituye también a «Dispositivos», y esa
+   * pestaña no sólo listaba: daba de alta una tablet con su token, enseñaba el
+   * QR para vincularla, copiaba la URL y la revocaba. Retirarla sin esto dejaba
+   * la cuenta SIN NINGUNA FORMA de dar de alta una tablet --el 13/08 otra vez:
+   * una retirada que se lleva por delante algo que se usa--.
+   */
+  tablets: LaTabletQueMira[]
 }
 
 /**
@@ -120,7 +151,7 @@ interface FilaTablet {
 export async function getLaCocina(accountId: string, locationId: string): Promise<LaCocina> {
   if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
 
-  const [est, dev, loc, rutas] = await Promise.all([
+  const [est, dev, loc, rutas, paquetes] = await Promise.all([
     supabase.from('kitchen_station').select('*')
       .eq('account_id', accountId).eq('location_id', locationId)
       .order('display_order', { ascending: true }).order('name', { ascending: true }),
@@ -133,6 +164,10 @@ export async function getLaCocina(accountId: string, locationId: string): Promis
     // lo habría cazado la pantalla en blanco el día que alguien rutee algo.
     supabase.from('kitchen_family_route').select('station_id, family_id, recipe_family(id, name)')
       .eq('account_id', accountId),
+    // Best-effort, como en la pantalla que sustituye: si la RPC no contesta,
+    // la página sigue entera y sólo falta esta línea. Un fallo aquí no puede
+    // tumbar la configuración de la cocina.
+    listDeviceBundleStatus(locationId).catch(() => []),
   ])
   if (est.error) throw new Error(`La cocina · estaciones: ${est.error.message}`)
   if (dev.error) throw new Error(`La cocina · tablets: ${dev.error.message}`)
@@ -147,9 +182,16 @@ export async function getLaCocina(accountId: string, locationId: string): Promis
     porEstacion.set(r.station_id, lista)
   }
 
-  const comoTablet = (d: FilaTablet): LaTabletQueMira => ({
-    id: d.id, label: d.label, activa: d.is_active, vistoHaceMin: minutosDesde(d.last_seen_at),
-  })
+  const porAparato = new Map((paquetes ?? []).map(b => [b.deviceId, b]))
+
+  const comoTablet = (d: FilaTablet): LaTabletQueMira => {
+    const b = porAparato.get(d.id)
+    return {
+      id: d.id, label: d.label, activa: d.is_active, vistoHaceMin: minutosDesde(d.last_seen_at),
+      estacionIds: d.station_ids ?? [],
+      paquete: b ? loQueLeeLaOficina(b) : null,
+    }
+  }
 
   const estaciones: LaEstacion[] = filas.map(f => ({
     id: f.id,
@@ -174,5 +216,6 @@ export async function getLaCocina(accountId: string, locationId: string): Promis
     tabletsSinEstacion: tablets
       .filter(d => d.is_active && (d.station_ids ?? []).length === 0)
       .map(comoTablet),
+    tablets: tablets.filter(d => d.is_active).map(comoTablet),
   }
 }

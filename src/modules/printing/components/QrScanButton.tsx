@@ -8,7 +8,8 @@
 //  · Si ninguno está disponible, el botón NO se muestra y queda el pegado del
 //    token como fallback (nunca falla).
 //
-// El QR de la Estación (DevicesSettings) codifica `${origin}/estacion?token=…`;
+// El QR de la Estación (Ajustes de pedidos → La cocina) codifica
+// `${origin}/estacion?token=…`;
 // extractToken() saca el token tanto de esa URL como de un token en crudo.
 
 import { useEffect, useRef, useState } from 'react'
