@@ -625,15 +625,29 @@ interface OrderCardProps {
    * Hoy sólo lo pasa la pestaña «Esperando repartidor».
    */
   distintivo?: { texto: string; esAviso: boolean } | null
+  /**
+   * EL RELOJ DE LA TARJETA, cuando la pestaña sabe mejor que la RPC cuál toca.
+   *
+   * `order.minutos` cuenta SIEMPRE desde que entró el pedido, y eso solo vale
+   * en «En curso». Quien pinta la pestaña pasa aquí los minutos de la fase
+   * (`losMinutosDeLaTarjeta`) y su color (`elNivelDeLaTarjeta`). Sin estas dos,
+   * la tarjeta se comporta como siempre: la pestaña que no las pase no cambia.
+   */
+  minutosDeLaFase?: number | null
+  nivelDeLaFase?: 'fresh' | 'warn' | null
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, minutosDeLaFase, nivelDeLaFase }: OrderCardProps) {
   const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
   const now = nowMs
   const [busy, setBusy] = useState(false)
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [showTickets, setShowTickets] = useState(false)
-  const level = timeLevel(order.minutos)
+  // El número y su color: los de la fase si la pestaña los manda, y si no los
+  // de siempre. `minutosDeLaFase === undefined` es «no me lo han pasado»;
+  // `null` es «no hay reloj», y entonces no se pinta número.
+  const minutosPintados = minutosDeLaFase === undefined ? order.minutos : minutosDeLaFase
+  const level = nivelDeLaFase ?? timeLevel(minutosPintados ?? 0)
   const needsAction = isNeedsAction(order.order_status)
   const terminal = isTerminal(order.order_status)
   const critical = needsAction && level === 'late'
@@ -728,7 +742,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         </button>
         <span className="inline-flex items-center gap-1.5 font-extrabold text-[16px] tabular-nums font-mono" style={{ color: tc.text }}>
           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tc.spine }} />
-          {order.minutos}′
+          {minutosPintados == null ? '—' : `${minutosPintados}′`}
         </span>
       </div>
 

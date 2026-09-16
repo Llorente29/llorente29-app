@@ -16,6 +16,7 @@ import {
   laFase, esIncidencia, estaTerminado, ordenDeLaFase, elDistintivoDelRider,
   ROTULO, ROTULO_VACIO, elRotulo, elRotuloVacio, HORAS_QUE_TRAE_LA_TABLET,
   LAS_FASES, HORAS_PARA_SER_INCIDENCIA,
+  losMinutosDeLaTarjeta, elNivelDeLaTarjeta, MINUTOS_DE_ESPERA_EN_AMBAR,
   type PedidoConFase, type Fase,
 } from '@/modules/orders/lib/lasFases'
 
@@ -268,5 +269,123 @@ describe('los rótulos', () => {
     // lo único que sabemos es que se cerró la comanda.
     expect(ROTULO.terminado).toBe('Terminados')
     expect(Object.values(ROTULO).join(' ')).not.toMatch(/Entregad/)
+  })
+})
+
+
+// ── LO ENTREGADO Y SIN CERRAR · URGENTE del 16/09 ─────────────────────────
+//
+// 🔴 ESTAS DOS FORMAS NO ESTABAN EN LA POBLACIÓN DE ARRIBA, y no por descuido:
+// NO EXISTÍAN. Nacieron el 15/09 al quitar el cierre de cocina sin construir el
+// cierre al entregar. Medidas hoy sobre los mismos 14 días, con la consulta
+// `delivered_at is not null or delivery_state in ('delivered','finish')` y
+// `status <> 'closed'`:
+//
+//     2  awaiting_collection · open · sello+recogido+entregado · catcher   G231, G764  (del 16/09)
+//     1  cancelled · cancelled · entregado                       G447        (del 07/09)
+//
+// La primera es el fallo que se ve en pantalla. La segunda es la que prueba que
+// el ORDEN de `laFase` importa: también está entregada, y NO puede acabar en
+// «Terminados» porque la venta está cancelada.
+
+describe('lo entregado, aunque nadie lo haya cerrado', () => {
+  /** G231 tal cual estaba a las 17:30: entregado a las 15:29 y todavía abierto. */
+  const G231 = P({
+    order_status: 'awaiting_collection',
+    status: 'open',
+    service_type: 'own_delivery',
+    carrier_code: 'catcher',
+    has_courier: true,
+    ready_at: '2026-09-16T13:18:22Z',
+    handed_to_courier_at: '2026-09-16T13:20:06Z',
+    delivered_at: '2026-09-16T13:29:58Z',
+    delivery_state: 'delivered',
+    entro_at: '2026-09-16T12:55:00Z',
+  })
+
+  it('🔴 G231 está TERMINADO, no esperando: es el fallo que estaba en producción', () => {
+    expect(estaTerminado(G231)).toBe(true)
+    expect(laFase(G231, new Date('2026-09-16T15:45:00Z'))).toBe('terminado')
+  })
+
+  it('y antes del arreglo caía en «esperando» por tener sello', () => {
+    // La prueba de que el sello por sí solo no decide: sin la entrega, este
+    // mismo pedido sí está esperando.
+    const sinEntregar = P({ ...G231, delivered_at: null, delivery_state: 'assigned', handed_to_courier_at: null })
+    expect(laFase(sinEntregar, new Date('2026-09-16T15:45:00Z'))).toBe('esperando')
+  })
+
+  it('G764, la misma forma, el mismo sitio', () => {
+    const G764 = P({ ...G231, ready_at: '2026-09-16T13:57:16Z',
+      handed_to_courier_at: '2026-09-16T13:58:15Z', delivered_at: '2026-09-16T14:16:04Z' })
+    expect(laFase(G764, new Date('2026-09-16T15:45:00Z'))).toBe('terminado')
+  })
+
+  it('🔴 G447: entregada Y cancelada → incidencia, no «Terminados»', () => {
+    // Una venta cancelada no «salió bien», por mucho que la flota la marcara
+    // entregada. `esIncidencia` se pregunta primero y por eso esto sigue bien.
+    const G447 = P({
+      order_status: 'cancelled', status: 'cancelled',
+      service_type: 'own_delivery', carrier_code: 'catcher', has_courier: true,
+      ready_at: null, delivered_at: '2026-09-07T20:10:00Z', delivery_state: 'delivered',
+      entro_at: '2026-09-07T19:30:00Z',
+    })
+    expect(estaTerminado(G447)).toBe(true)          // lo está, por la entrega
+    expect(laFase(G447, AHORA)).toBe('incidencia')  // pero manda el orden
+  })
+
+  it('un pedido recogido y sin entregar sigue en «esperando», con su distintivo', () => {
+    const enRuta = P({ ...G231, delivered_at: null, delivery_state: 'in_delivery' })
+    expect(laFase(enRuta, new Date('2026-09-16T15:45:00Z'))).toBe('esperando')
+    expect(elDistintivoDelRider(enRuta)?.texto).toBe('Recogido · en ruta')
+  })
+})
+
+// ── EL NÚMERO GRANDE · URGENTE §3.3 ───────────────────────────────────────
+
+describe('el reloj de la tarjeta y su color', () => {
+  const ENTRO = '2026-09-16T12:55:00Z'      // 15:55 en Madrid
+  const LISTO = '2026-09-16T15:30:00Z'      // 17:30: dos horas y media después
+  const AHORA_3 = new Date('2026-09-16T15:45:00Z')  // 15 min después del sello
+
+  const esperando = P({
+    order_status: 'awaiting_collection', status: 'open',
+    service_type: 'own_delivery', carrier_code: 'catcher', has_courier: true,
+    ready_at: LISTO, entro_at: ENTRO, minutos: 170,
+  })
+
+  it('🔴 en «Esperando» cuenta desde «Listo», no desde que entró', () => {
+    // 170 era lo que pintaba la tarjeta: los minutos desde la entrada. Lo que
+    // se espera de verdad son 15.
+    expect(losMinutosDeLaTarjeta(esperando, 'esperando', AHORA_3)).toBe(15)
+  })
+
+  it('en «En curso» sigue contando desde que entró: ahí es la pregunta buena', () => {
+    const enCurso = P({ ...esperando, ready_at: null, order_status: 'accepted' })
+    expect(losMinutosDeLaTarjeta(enCurso, 'en_curso', AHORA_3)).toBe(170)
+  })
+
+  it('el color de «En curso» no lo decide este fichero, sino el semáforo de cocina', () => {
+    expect(elNivelDeLaTarjeta(esperando, 'en_curso', 170)).toBeNull()
+  })
+
+  it(`ámbar a partir de ${MINUTOS_DE_ESPERA_EN_AMBAR} min esperando, y no antes`, () => {
+    expect(elNivelDeLaTarjeta(esperando, 'esperando', MINUTOS_DE_ESPERA_EN_AMBAR)).toBe('fresh')
+    expect(elNivelDeLaTarjeta(esperando, 'esperando', MINUTOS_DE_ESPERA_EN_AMBAR + 1)).toBe('warn')
+  })
+
+  it('🔴 lo esperando no se pinta en rojo nunca: rojo es de cocina', () => {
+    expect(elNivelDeLaTarjeta(esperando, 'esperando', 300)).toBe('warn')
+  })
+
+  it('lo entregado cuenta desde la entrega y va en verde', () => {
+    const entregado = P({ ...esperando, delivered_at: '2026-09-16T15:29:58Z', delivery_state: 'delivered' })
+    expect(losMinutosDeLaTarjeta(entregado, 'terminado', AHORA_3)).toBe(15)
+    expect(elNivelDeLaTarjeta(entregado, 'terminado', 15)).toBe('fresh')
+  })
+
+  it('sin reloj no se inventa un cero: devuelve null y la tarjeta pinta «—»', () => {
+    const sinNada = P({ order_status: 'accepted', status: 'open', ready_at: null, entro_at: null, minutos: null })
+    expect(losMinutosDeLaTarjeta(sinNada, 'esperando', AHORA_3)).toBeNull()
   })
 })

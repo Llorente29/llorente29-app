@@ -44,7 +44,8 @@
 // Por eso este encargo NO necesita tocar la base.
 
 import {
-  laSituacion, estaMarcadoListo, esRecogida, loRepartelaPlataforma,
+  laSituacion, estaMarcadoListo, esRecogida, loRepartelaPlataforma, losMinutos,
+  MINUTOS_DE_MAS_EN_RUTA,
   type PedidoDelPase, type Situacion,
 } from '@/modules/pase/lib/lasTresZonas'
 
@@ -54,6 +55,8 @@ export interface PedidoConFase extends PedidoDelPase {
   status?: string | null
   /** Autoaceptación. Arranca el reloj de cocina. */
   accepted_at?: string | null
+  /** Lo que calcula la RPC: minutos desde que ENTRÓ. Sirve para «En curso». */
+  minutos?: number | null
 }
 
 export type Fase = 'en_curso' | 'esperando' | 'terminado' | 'incidencia'
@@ -191,8 +194,27 @@ export function esIncidencia(p: PedidoConFase, ahora: Date = new Date()): boolea
   return horas != null && horas > HORAS_PARA_SER_INCIDENCIA
 }
 
-/** ¿Está terminado? Ver arriba por qué se mira `status` y no `closed_at`. */
+/**
+ * ¿Está terminado? Ver arriba por qué se mira `status` y no `closed_at`.
+ *
+ * 🔴 Y LO ENTREGADO TAMBIÉN, aunque la venta siga abierta (URGENTE del 16/09).
+ *
+ * Esto es el fallo que estaba en producción: un pedido de nuestra flota
+ * entregado a las 15:29 seguía con `status='open'` y `order_status='awaiting_collection'`
+ * --porque el cierre al entregar no existía-- así que no era «terminado», la
+ * pregunta seguía bajando y caía en «esperando» por tener `ready_at`. La
+ * tarjeta decía «Entregado» dentro de «Esperando repartidor». G231 llevaba
+ * 146′ en rojo y G764 107′.
+ *
+ * La entrega no se pregunta aquí: se pregunta a `laSituacion`, que ya mira el
+ * eje de la flota (`delivered_at`, `delivery_state`) y es la misma que usa el
+ * Pase. Una regla, un sitio.
+ *
+ * Y va ANTES que el cierre a propósito: entregado es terminado aunque nadie
+ * haya cerrado todavía, que es justo lo que el encargo pide enseñar.
+ */
 export function estaTerminado(p: PedidoConFase): boolean {
+  if (laSituacion(p) === 'entregado') return true
   return (p.status ?? '') === 'closed' || (p.order_status ?? '') === 'completed'
 }
 
@@ -225,6 +247,61 @@ export function laFase(p: PedidoConFase, ahora: Date = new Date()): Fase {
 export function elRelojDeLaFase(p: PedidoConFase, fase: Fase): string | null {
   if (fase === 'esperando') return p.ready_at ?? p.entro_at ?? null
   return p.accepted_at ?? p.entro_at ?? null
+}
+
+/**
+ * A PARTIR DE CUÁNTOS MINUTOS SE PONE ÁMBAR lo que ya está hecho y espera.
+ * Decisión de Julio, 16/09. No es el semáforo de cocina: aquí no se está
+ * cocinando nada, se está esperando a que alguien lo recoja.
+ */
+export const MINUTOS_DE_ESPERA_EN_AMBAR = 20
+
+/**
+ * EL NÚMERO GRANDE DE LA TARJETA, y desde cuándo cuenta.
+ *
+ * 🔴 El fallo que arregla (URGENTE §3.3): `order.minutos` lo calcula la RPC
+ * SIEMPRE desde que entró el pedido. En «En curso» es lo que hay que ver. En
+ * «Esperando repartidor» no: ahí la pregunta es «cuánto lleva HECHO esperando»,
+ * y un pedido que entró a las 15:00 y se marcó listo a las 17:10 no lleva 146
+ * minutos esperando, lleva 16.
+ *
+ * Y para lo que ya salió, el reloj es otro todavía: `losMinutos` de
+ * `lasTresZonas` elige por SITUACIÓN --recogido cuenta desde la recogida,
+ * entregado desde la entrega-- y es el mismo que usa el Pase. No se reescribe
+ * aquí: se llama.
+ *
+ * `null` = no hay reloj que pintar. Nunca 0, que se leería como «recién hecho».
+ */
+export function losMinutosDeLaTarjeta(
+  p: PedidoConFase, fase: Fase, ahora: Date = new Date(),
+): number | null {
+  if (fase === 'en_curso') return p.minutos ?? losMinutos(p, ahora)
+  return losMinutos(p, ahora)
+}
+
+/**
+ * EL COLOR DE ESE NÚMERO. Tres niveles, los que ya pinta la tarjeta.
+ *
+ * En «En curso» manda el semáforo de cocina, que no se toca: es el que lleva
+ * los umbrales del local. En las demás fases el reloj mide otra cosa --espera,
+ * no cocción-- y el umbral es el de Julio: ámbar a los 20 minutos.
+ *
+ * Lo que ya salió o llegó no se pinta en rojo nunca: un pedido en la moto no es
+ * una avería de cocina, y el ámbar de «lleva mucho en ruta» ya lo decide
+ * `lasTresZonas` con su propio umbral.
+ */
+export function elNivelDeLaTarjeta(
+  p: PedidoConFase, fase: Fase, minutos: number | null,
+): 'fresh' | 'warn' | null {
+  // `null` = «aquí no mando yo»: en «En curso» el color lo decide el semáforo de
+  // cocina, con los umbrales del local. Decirlo con null y no con un valor
+  // inventado es lo que impide que este fichero pise aquello sin querer.
+  if (fase === 'en_curso') return null
+  if (minutos == null) return 'fresh'
+  const s = laSituacion(p)
+  if (s === 'entregado') return 'fresh'
+  if (s === 'en_ruta') return minutos > MINUTOS_DE_MAS_EN_RUTA ? 'warn' : 'fresh'
+  return minutos > MINUTOS_DE_ESPERA_EN_AMBAR ? 'warn' : 'fresh'
 }
 
 const AL_FINAL = Number.MAX_SAFE_INTEGER

@@ -25,6 +25,7 @@ import {
 } from '../services/ordersFeedService'
 import {
   laFase, ordenDeLaFase, elDistintivoDelRider, LAS_FASES,
+  losMinutosDeLaTarjeta, elNivelDeLaTarjeta,
   elRotulo, elRotuloVacio, HORAS_QUE_TRAE_LA_TABLET,
   type Fase,
 } from '../lib/lasFases'
@@ -391,7 +392,13 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
             </div>
           ) : vistaEfectiva === 'grid' ? (
             <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
-              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} distintivo={filter === 'esperando' ? elDistintivoDelRider(o) : null} />)}
+              {filtered.map(o => {
+                // El reloj de la tarjeta lo decide la FASE, no la RPC: en «En
+                // curso» los minutos desde que entró (y el semáforo de cocina),
+                // y en las demás los de la situación con el ámbar de los 20.
+                const minutosDeLaFase = losMinutosDeLaTarjeta(o, filter, new Date(nowMs))
+                return <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} distintivo={filter === 'esperando' ? elDistintivoDelRider(o) : null} minutosDeLaFase={minutosDeLaFase} nivelDeLaFase={elNivelDeLaTarjeta(o, filter, minutosDeLaFase)} />
+              })}
             </div>
           ) : (
             <div className="grid gap-4 h-full" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
