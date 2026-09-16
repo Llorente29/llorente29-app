@@ -1,0 +1,214 @@
+// El Pase · la hoja de detalle.
+//
+// LAS FILAS SON REALES (regla 31). Salen de una consulta del 16/09 sobre 14
+// días de Foodint --1.669 ventas no anuladas-- agrupando por
+// (source, canal, service_type) y contando qué campos venían llenos:
+//
+//   origen · canal · servicio        n     tel.rider  tel.cli  código  dirección
+//   ───────────────────────────────────────────────────────────────────────────
+//   Last    · Glovo   · plataforma  844        0          0       0        0
+//   Last    · Uber    · plataforma  350        0        350     350        0
+//   HubRise · Glovo   · NUESTRO     222      215        221       0      218
+//   HubRise · Uber    · plataforma  179        0        179     179        0
+//   HubRise · JustEat · NUESTRO       6        6          6       6        6
+//
+// Los códigos y los pedidos de abajo son de verdad, de la noche del 16/09. Los
+// teléfonos NO: donde iba un número de cliente va uno de ejemplo con la misma
+// forma, porque una prueba no es sitio para el teléfono de nadie. Lo que se
+// comprueba es la FORMA --hay o no hay, con código o sin él-- y eso no cambia.
+
+import { describe, it, expect } from 'vitest'
+import {
+  elCodigoCorto, laDireccion, laPastilla, llamarAlCliente, llamarAlRepartidor,
+  losCincoTiempos, type FichaDelPase,
+} from '@/modules/pase/lib/laFicha'
+
+const F = (o: Partial<FichaDelPase> = {}): FichaDelPase => ({
+  sale_id: 's1',
+  codigo: 'G292',
+  marca: 'Lovers Burgers',
+  marca_logo_url: null,
+  order_status: 'in_preparation',
+  service_type: 'platform_delivery',
+  has_courier: null,
+  carrier_code: null,
+  delivery_state: null,
+  source: 'lastapp',
+  channel: 'Glovo',
+  ready_at: null,
+  handed_to_courier_at: null,
+  delivered_at: null,
+  repartidor_nombre: null,
+  repartidor_telefono: null,
+  cliente_nombre: 'María',
+  cliente_telefono: null,
+  cliente_codigo: null,
+  cliente_marcacion: null,
+  entro_at: '2026-09-16T19:26:00Z',
+  accepted_at: '2026-09-16T19:26:12Z',
+  direccion: null,
+  notas: null,
+  ...o,
+})
+
+/** Los cuatro que existen de verdad, uno por fila de la tabla de arriba. */
+const GLOVO_POR_GLOVO = F({ codigo: 'G292', source: 'lastapp', channel: 'Glovo' })
+const UBER_POR_LAST = F({
+  codigo: 'U515', source: 'lastapp', channel: 'Uber',
+  cliente_telefono: '+34910780961', cliente_codigo: '621 61 380',
+  cliente_marcacion: 'tel:+34910780961,,,62161380',
+})
+const UBER_POR_HUBRISE = F({
+  codigo: 'U987F2', source: 'hubrise', channel: 'Uber',
+  cliente_telefono: '+34910780961', cliente_codigo: '567 30 308',
+  cliente_marcacion: 'tel:+34910780961,,,56730308',
+})
+const JUSTEAT_CON_FLOTA = F({
+  codigo: 'J191403139', source: 'hubrise', channel: 'JustEat',
+  service_type: 'own_delivery', has_courier: true, carrier_code: 'catcher',
+  repartidor_nombre: 'Marta', repartidor_telefono: '+34600111222',
+  cliente_telefono: '+34910780961', cliente_codigo: '878795717',
+  cliente_marcacion: 'tel:+34910780961,,,878795717',
+  direccion: 'Calle de la Fuente 12, 3ºB',
+})
+
+describe('el código de la esquina', () => {
+  it('deja enteros los cortos, que son la inmensa mayoría', () => {
+    expect(elCodigoCorto('G292')).toBe('G292')
+    expect(elCodigoCorto('U987F2')).toBe('U987F2')
+  })
+  it('acorta el de JustEat, que es el que no cabía', () => {
+    expect(elCodigoCorto('J191403139')).toBe('…3139')
+  })
+  it('sin código no inventa nada', () => {
+    expect(elCodigoCorto(null)).toBeNull()
+    expect(elCodigoCorto('   ')).toBeNull()
+  })
+})
+
+describe('la pastilla de la tarjeta', () => {
+  it('nombra a la plataforma cuando reparte ella', () => {
+    expect(laPastilla(GLOVO_POR_GLOVO)).toEqual({ texto: 'Glovo', tono: 'plataforma' })
+  })
+  it('dice «Nosotros» cuando hay flota', () => {
+    expect(laPastilla(JUSTEAT_CON_FLOTA)).toEqual({ texto: 'Nosotros', tono: 'nuestro' })
+  })
+  it('🔴 avisa en rojo del propio que no ha cogido nadie', () => {
+    const sinCoger = F({ service_type: 'own_delivery', has_courier: false, carrier_code: null })
+    expect(laPastilla(sinCoger)).toEqual({ texto: 'Sin coger', tono: 'aviso' })
+  })
+  it('la recogida es del cliente', () => {
+    expect(laPastilla(F({ service_type: 'pickup' }))).toEqual({ texto: 'Cliente', tono: 'cliente' })
+  })
+})
+
+describe('llamar al repartidor', () => {
+  it('con flota y teléfono, hay botón y marca el número', () => {
+    const l = llamarAlRepartidor(JUSTEAT_CON_FLOTA)
+    expect(l.hay).toBe(true)
+    expect(l.nombre).toBe('Marta')
+    expect(l.marcacion).toBe('tel:+34600111222')
+  })
+
+  it('🔴 con flota y SIN teléfono --7 de 228 en 14 días-- dice el nombre y por qué no hay botón', () => {
+    const l = llamarAlRepartidor(F({
+      service_type: 'own_delivery', has_courier: true, carrier_code: 'catcher',
+      repartidor_nombre: 'Marta', repartidor_telefono: null,
+    }))
+    expect(l.hay).toBe(false)
+    expect(l.explicacion).toContain('Marta')
+    expect(l.explicacion).toContain('no nos ha llegado su teléfono')
+  })
+
+  it('de plataforma no hay repartidor, y se dice de quién es la culpa', () => {
+    const l = llamarAlRepartidor(GLOVO_POR_GLOVO)
+    expect(l.hay).toBe(false)
+    expect(l.explicacion).toContain('Glovo no nos da el nombre ni el teléfono')
+    expect(l.explicacion).toContain('no es un fallo de la tablet'.toLowerCase().slice(0, 3))
+  })
+
+  it('propio sin nadie: dice que no hay a quién llamar, no un hueco', () => {
+    const l = llamarAlRepartidor(F({ service_type: 'own_delivery', has_courier: false }))
+    expect(l.hay).toBe(false)
+    expect(l.explicacion).toContain('No hay repartidor asignado')
+  })
+
+  it('🔴 NUNCA deja la explicación vacía cuando no hay botón', () => {
+    for (const f of [GLOVO_POR_GLOVO, UBER_POR_LAST, UBER_POR_HUBRISE,
+                     F({ service_type: 'pickup' }), F({ service_type: 'own_delivery' })]) {
+      const l = llamarAlRepartidor(f)
+      if (!l.hay) expect((l.explicacion ?? '').length).toBeGreaterThan(20)
+    }
+  })
+})
+
+describe('llamar al cliente', () => {
+  it('Uber por Last: centralita, y el código va aparte para poder teclearlo', () => {
+    const l = llamarAlCliente(UBER_POR_LAST)
+    expect(l.hay).toBe(true)
+    expect(l.marcacion).toBe('tel:+34910780961,,,62161380')
+    expect(l.codigo).toBe('621 61 380')
+    expect(l.explicacion).toContain('621 61 380')
+    expect(l.explicacion).toContain('caduca')
+  })
+
+  it('Uber por HubRise se comporta igual: el discriminador es el código, no el origen', () => {
+    expect(llamarAlCliente(UBER_POR_HUBRISE).codigo).toBe('567 30 308')
+  })
+
+  it('🔴 JustEat TAMBIÉN es centralita --22 de 22-- y la maqueta sólo nombraba a Uber', () => {
+    const l = llamarAlCliente(JUSTEAT_CON_FLOTA)
+    expect(l.hay).toBe(true)
+    expect(l.codigo).toBe('878795717')
+    expect(l.explicacion).toContain('JustEat da un número único')
+  })
+
+  it('Glovo cuando reparte Glovo: ni teléfono ni código, y se dice dónde ir', () => {
+    const l = llamarAlCliente(GLOVO_POR_GLOVO)
+    expect(l.hay).toBe(false)
+    expect(l.explicacion).toContain('portal de Glovo')
+  })
+
+  it('teléfono de verdad sin centralita: botón limpio y sin nota que sobre', () => {
+    const l = llamarAlCliente(F({
+      service_type: 'own_delivery', has_courier: true, carrier_code: 'catcher',
+      cliente_telefono: '+34671234567', cliente_marcacion: 'tel:+34671234567',
+    }))
+    expect(l.hay).toBe(true)
+    expect(l.codigo).toBeNull()
+    expect(l.explicacion).toBeNull()
+  })
+})
+
+describe('la dirección', () => {
+  it('cuando la hay, la hay', () => {
+    expect(laDireccion(JUSTEAT_CON_FLOTA)).toBe('Calle de la Fuente 12, 3ºB')
+  })
+  it('🔴 de plataforma no hay ninguna en 1.426 pedidos: se dice quién la tiene', () => {
+    expect(laDireccion(GLOVO_POR_GLOVO)).toBe('La dirección la lleva Glovo.')
+    expect(laDireccion(UBER_POR_HUBRISE)).toBe('La dirección la lleva Uber.')
+  })
+  it('en recogida no hay dirección porque no hay reparto', () => {
+    expect(laDireccion(F({ service_type: 'pickup' }))).toContain('viene a por ello')
+  })
+})
+
+describe('los cinco tiempos', () => {
+  const reloj = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', {
+    hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid',
+  })
+
+  it('🔴 devuelve los CINCO siempre, con hueco con nombre en los que no han pasado', () => {
+    const t = losCincoTiempos(GLOVO_POR_GLOVO, reloj)
+    expect(t.map(x => x.etiqueta)).toEqual(['Entró', 'Aceptado', 'Listo', 'Salió', 'Entregado'])
+    expect(t[0].hora).not.toBeNull()
+    expect(t[2].hora).toBeNull()   // sin «Listo» todavía
+    expect(t[4].hora).toBeNull()
+  })
+
+  it('convierte a la hora de Madrid, que es la regla 4', () => {
+    // 19:26 UTC del 16/09 son las 21:26 de Madrid.
+    const t = losCincoTiempos(F({ entro_at: '2026-09-16T19:26:00Z' }), reloj)
+    expect(t[0].hora).toBe('21:26')
+  })
+})

@@ -30,6 +30,7 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import type { PedidoDelPase } from '../lib/lasTresZonas'
+import type { FichaDelPase } from '../lib/laFicha'
 
 /** El estado del ticket de bolsa, que sale de `print_job`. */
 export interface LaBolsa {
@@ -367,4 +368,33 @@ export function marcarRecogido(saleId: string, token: string): Promise<string> {
     p_device_token: token,
     p_sale_id: saleId,
   })
+}
+
+/**
+ * LA HOJA DE DETALLE · 16/09/2026.
+ *
+ * A demanda, una sola vez, cuando alguien toca una tarjeta. NO va en el bucle
+ * de `pase_board` a propósito: aquí viajan teléfonos de cliente, y meterlos en
+ * una llamada que se repite cada pocos segundos sería mandar los datos de
+ * contacto de veinte pedidos para enseñar los de uno.
+ *
+ * Si la RPC todavía no existe en esta base, se devuelve `null` en vez de
+ * reventar: la hoja dice que no se ha podido cargar y la tablet sigue
+ * sirviendo. Es el mismo respaldo que `getTablero`, y por la misma razón --el
+ * front se fusiona antes que la migración--, pero SOLO para «no existe»: un
+ * fallo de red o de permisos tiene que verse.
+ */
+export async function getFicha(saleId: string, token: string): Promise<FichaDelPase | null> {
+  try {
+    return await rpc<FichaDelPase>('pase_ficha', {
+      p_device_token: token,
+      p_sale_id: saleId,
+    })
+  } catch (e) {
+    if (noLoSabeTodavia(e)) {
+      console.warn('[pase] `pase_ficha` no existe en esta base todavía')
+      return null
+    }
+    throw e
+  }
 }
