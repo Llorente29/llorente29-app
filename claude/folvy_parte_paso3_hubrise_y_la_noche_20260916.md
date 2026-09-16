@@ -117,10 +117,13 @@ gente despierta y con pedidos entrando para comprobar que la recepción sigue
 viva. **No a las 23:45**: esto toca el camino del pedido y quieres verlo con luz,
 no a medianoche.
 
-1. **Yo primero** (la noche anterior o a primera hora): meter `orders.read` en el
-   scope de `location` de la lista blanca de `hubrise-oauth-start` y desplegarlo.
-   Ojo: fusionar a `main` **publica también el front**, así que va fuera de
-   banda.
+1. **Hecho, a medias y dicho:** `orders.read` ya está **commiteado** en la lista
+   blanca de `hubrise-oauth-start` — `location[orders.read,orders.write]`, al
+   lado del `write`, nunca en su lugar. **Y commiteado NO es aplicado**: el
+   despliegue lo dispara el `push` a `main`, así que hasta que esa rama se
+   fusione la función desplegada sigue pidiendo solo `orders.write` y el paso 2
+   de abajo no serviría de nada. Ojo además: fusionar a `main` **publica también
+   el front**, y con él la web de las tablets — o sea, fuera de banda.
 2. **Julio, Carabanchel primero** (es el de menos pedidos). Abrir en el
    navegador:
    `https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/hubrise-oauth-start?account_id=51ad1792-6629-4ef7-833a-b57b09a86710&scope=location&location_id=92d7656e-082e-452a-8ebc-236b2d6ebf5f`
@@ -176,3 +179,16 @@ de 11 MB a esa hora. Si prefieres lo contrario, se cambia en un minuto.
 
 Antes de aplicar nada: `list_migrations`, por si la otra sesión ha dejado algo a
 medias.
+
+---
+
+## 6 · La comprobación 7 del §5, medida a los dos lados
+
+| | `origin/main` | esta rama |
+|---|---|---|
+| `npm run build` (incluye `tsc -b`) | ✔ | ✔ **built in 7,74 s** |
+| `npx eslint .` | **1377 problemas (1077 errores, 300 avisos)** | **1377 (1077, 300)** |
+
+El mismo número tomado con la misma vara a los dos lados: **no he añadido ni un
+aviso**. Los 1377 son deuda que ya estaba en `main`; no es de este encargo y no
+la toco.

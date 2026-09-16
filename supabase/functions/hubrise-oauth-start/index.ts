@@ -44,7 +44,14 @@ const HUBRISE_OAUTH_REDIRECT_URI = Deno.env.get("HUBRISE_OAUTH_REDIRECT_URI") ??
 const HUBRISE_AUTHORIZE_URL = Deno.env.get("HUBRISE_AUTHORIZE_URL") ??
   "https://manager.hubrise.com/oauth2/v1/authorize";
 const WRITER_SCOPE = "account[all_catalogs.write,inventory.write]";
-const LOCATION_SCOPE = "location[orders.write]";
+// 16/09/2026 — entra `orders.read` AL LADO de `orders.write`, nunca en su
+// lugar: `orders.write` es lo que sostiene la recepción de pedidos de todos los
+// días, y `orders.read` es lo que hace falta para pedir el LISTADO de pedidos
+// de un día. Sin el listado, el parte del día solo puede comparar las propias
+// con los avisos que le llegaron, y un pedido cuyo aviso nunca llegó es
+// invisible por definición. El scope de cuenta (WRITER_SCOPE) no se toca.
+// Julio dijo que sí el 16/09. Encargo del parte del día, §3.3.
+const LOCATION_SCOPE = "location[orders.read,orders.write]";
 const NONCE_MAX_AGE_MS = 15 * 60 * 1000;
 
 // Lista blanca CERRADA de scopes admitidos vía ?scope=<clave>. "writer" es el
