@@ -12,6 +12,8 @@ import {
   elSubtitulo, elTono, losMinutos, loRepartimosConFlota, loRepartelaPlataforma,
   quienLoLleva, esRecogida,
   type PedidoDelPase,
+  tieneBotonDeRecogida, MINUTOS_DE_ESPERA_EN_AMBAR,
+  seVaSola, MINUTOS_PARA_IRSE_SOLA, sabemosSuCiclo,
 } from '@/modules/pase/lib/lasTresZonas'
 
 const P = (o: Partial<PedidoDelPase> = {}): PedidoDelPase => ({
@@ -134,9 +136,48 @@ describe('la plataforma: se enseña, no se gestiona', () => {
   it('dice con esas palabras lo que no sabemos', () => {
     expect(loQuePasa(glovo, null)).toBe('Esperando al rider de Glovo')
     expect(loQueNoSabemos(glovo)).toContain('no nos dice cuándo sale ni cuándo llega')
-    expect(loQueNoSabemos(glovo)).toContain('se cierre la comanda en caja')
     expect(loQueNoSabemos(glovo)).not.toContain('entregado')
-    expect(elSubtitulo(glovo)).toBe('Glovo · lo reparte Glovo')
+  })
+
+  it('🔴 YA NO dice «la tarjeta se va sola cuando se cierre la comanda en caja»', () => {
+    // La frase describía un mundo que dejó de existir cuando cerrar dejó de ser
+    // un botón de cocina. Una nota de pantalla que envejece mal es peor que
+    // ninguna: el operario deja de creerse también las que dicen la verdad.
+    expect(loQueNoSabemos(glovo)).not.toContain('comanda en caja')
+    expect(loQueNoSabemos({ ...glovo, service_type: 'pickup' })).not.toContain('comanda en caja')
+  })
+
+  it('🔴 no dice dos veces quién reparte, y dice el GRUPO', () => {
+    // Antes: «Glovo · lo reparte Glovo», y debajo «Esperando al rider de
+    // Glovo». Tres veces la misma palabra en una tarjeta de cinco líneas.
+    // Y «Glovo» a secas tampoco valía: no decía quién reparte (16/09, Julio).
+    //
+    // Las dos pantallas dicen lo mismo con palabras distintas a propósito: el
+    // Pase mira la BOLSA que tiene delante --va a venir alguien a por ella-- y
+    // Pedidos mira el PEDIDO entero --de aquí en adelante no sabemos nada--.
+    expect(elSubtitulo(glovo)).toBe('Glovo · lo recoge su repartidor')
+    expect(elSubtitulo(glovo, 'pedidos')).toBe('Glovo · sin seguimiento')
+  })
+
+  it('🔴 y con el grupo 1 dice quién reparte de verdad, igual en las dos', () => {
+    const uberPorHubrise = { ...glovo, source: 'hubrise', channel: 'Uber' }
+    // 🔴 «Uber · lo reparte Uber» decía lo mismo dos veces: arriba queda el
+    // canal, y quién reparte + la hora van en la ETIQUETA (16/09, Julio).
+    expect(elSubtitulo(uberPorHubrise)).toBe('Uber')
+    expect(elSubtitulo(uberPorHubrise, 'pedidos')).toBe('Uber')
+    // Y la flota se ve como flota en las dos, que era lo que faltaba en G292.
+    const nuestro = P({ channel: 'Glovo', service_type: 'own_delivery', carrier_code: 'catcher' })
+    expect(elSubtitulo(nuestro)).toBe('Glovo · reparto nuestro')
+    expect(elSubtitulo(nuestro, 'pedidos')).toBe('Glovo · reparto nuestro')
+  })
+
+  it('🔴 a Uber por HubRise ya no se le dice que no sabemos cuándo sale', () => {
+    // U8C4DE llevaba ese aviso mientras Uber nos estaba diciendo la recogida.
+    const uberPorHubrise = { ...glovo, source: 'hubrise', channel: 'Uber' }
+    expect(loQueNoSabemos(uberPorHubrise)).toBeNull()
+    // Y por Last, el MISMO canal sigue sin decirnos nada: el aviso se queda.
+    const uberPorLast = { ...glovo, source: 'lastapp', channel: 'Uber' }
+    expect(loQueNoSabemos(uberPorLast)).toContain('no nos dice cuándo sale')
   })
 
   it('y con Uber lo dice con el nombre de Uber, no con uno genérico', () => {
@@ -230,7 +271,13 @@ describe('🔴 desde cuándo se cuenta: cada zona mira un reloj distinto', () =>
 describe('quién lo lleva · los cinco casos de la población real', () => {
   it('(231) propio con flota: dice el nombre y trae el teléfono del repartidor', () => {
     const q = quienLoLleva(P({ repartidor_nombre: 'Marta', repartidor_telefono: '+34600111222' }))
-    expect(q.texto).toBe('Nuestro · Marta')
+    // 🔴 Y dice HACIA DÓNDE va mientras no haya recogido (16/09): el del pase
+    // necesita saber si el de la moto viene o ya se fue. Antes, con G941, la
+    // tarjeta decía «Nuestro, ya asignado» y no decía quién.
+    expect(q.texto).toBe('Nuestro · Marta · en camino al local')
+    expect(quienLoLleva(P({ repartidor_nombre: 'Marta',
+                           handed_to_courier_at: '2026-09-16T18:31:00Z' })).texto)
+      .toBe('Nuestro · Marta')
     expect(q.telefono).toBe('+34600111222')
     expect(q.esAviso).toBe(false)
   })
@@ -314,5 +361,98 @@ describe('🔴 la recogida: 12 tarjetas que decían algo que no pasa', () => {
 
   it('sin marcar sigue siendo «por marcar», y ése sí tiene botón', () => {
     expect(tieneBotonDeListo({ ...recogida, ready_at: null })).toBe(true)
+  })
+})
+
+describe('«Se lo ha llevado» y el ámbar de las bolsas · 16/09', () => {
+  const hecha = P({
+    service_type: 'platform_delivery', has_courier: false, carrier_code: null,
+    channel: 'Glovo', order_status: 'awaiting_collection',
+    ready_at: '2026-09-16T18:38:36Z', handed_to_courier_at: null,
+  })
+
+  it('una bolsa hecha y sin recoger puede decir que se la han llevado', () => {
+    expect(tieneBotonDeRecogida(hecha)).toBe(true)
+  })
+  it('una que ya tiene la hora, no: no se pisa lo que ya sabíamos', () => {
+    expect(tieneBotonDeRecogida({ ...hecha, handed_to_courier_at: '2026-09-16T18:48:21Z' })).toBe(false)
+  })
+  it('una sin marcar tampoco: primero se marca «Listo»', () => {
+    expect(tieneBotonDeRecogida({ ...hecha, ready_at: null })).toBe(false)
+  })
+  it('una recogida de mostrador tampoco: ahí no se lo lleva un repartidor', () => {
+    expect(tieneBotonDeRecogida({ ...hecha, service_type: 'pickup' })).toBe(false)
+  })
+  it('se ofrece en plataforma, que es donde no hay otro escritor', () => {
+    expect(tieneBotonDeRecogida({ ...hecha, source: 'hubrise', channel: 'Uber' })).toBe(true)
+  })
+  it('🔴 NO en los de nuestra flota: su recogida la avisa el repartidor', () => {
+    // 213 de 224 en 14 días llegan solas. Dos escritores para el mismo hito es
+    // como se acaba discutiendo cuál de las dos horas era la buena.
+    const nuestro = P({ service_type: 'own_delivery', carrier_code: 'catcher', has_courier: true,
+                        order_status: 'awaiting_collection', ready_at: '2026-09-16T18:38:36Z' })
+    expect(tieneBotonDeRecogida(nuestro)).toBe(false)
+  })
+  it('sí en un propio SIN flota: ésos no los coge nadie', () => {
+    const sinFlota = P({ service_type: 'own_delivery', carrier_code: null, has_courier: false,
+                         order_status: 'awaiting_collection', ready_at: '2026-09-16T18:38:36Z' })
+    expect(tieneBotonDeRecogida(sinFlota)).toBe(true)
+  })
+
+  it('🔴 los minutos van DENTRO de la frase, que es lo que faltaba', () => {
+    // U8C4DE llevaba 24 minutos hecho y la pantalla decía sólo «Esperando al
+    // rider de Uber», igual que si acabara de salir de la plancha.
+    expect(loQuePasa(hecha, 24)).toBe('Esperando al rider de Glovo · 24 min')
+  })
+  it('🔴 y a los 20 minutos la bolsa se pone ámbar', () => {
+    expect(elTono(hecha, 19)).toBe('neutro')
+    expect(elTono(hecha, 21)).toBe('aviso')
+    expect(MINUTOS_DE_ESPERA_EN_AMBAR).toBe(20)
+  })
+})
+
+describe('a los 30 minutos la bolsa del grupo 2 se va sola · 16/09', () => {
+  const AHORA = new Date('2026-09-16T19:30:00Z')
+  // G265 y U511, reales: listos a las 20:51 y 20:59 de Madrid.
+  const G265 = P({ service_type: 'platform_delivery', has_courier: false, carrier_code: null,
+                   source: 'lastapp', channel: 'Glovo', order_status: 'awaiting_collection',
+                   ready_at: '2026-09-16T18:51:12.39881Z' })
+  const U511 = P({ service_type: 'platform_delivery', has_courier: false, carrier_code: null,
+                   source: 'lastapp', channel: 'Uber', order_status: 'awaiting_collection',
+                   ready_at: '2026-09-16T18:59:32.184566Z' })
+
+  it('G265, con 39 min, se va', () => {
+    expect(losMinutos(G265, AHORA)).toBe(39)
+    expect(seVaSola(G265, AHORA)).toBe(true)
+  })
+  it('U511, con 30 clavados, también', () => {
+    // Julio lo vio como 31 en la maqueta: medido a las 21:30:00 en punto salen
+    // 30,47 → 30. La cifra es la misma bolsa, y con 30 ya se va.
+    expect(losMinutos(U511, AHORA)).toBe(30)
+    expect(seVaSola(U511, AHORA)).toBe(true)
+  })
+  it('a los 29 todavía no, y a los 30 justos sí', () => {
+    const listo = (min: number) => P({
+      service_type: 'platform_delivery', has_courier: false, carrier_code: null,
+      source: 'lastapp', channel: 'Glovo', order_status: 'awaiting_collection',
+      ready_at: new Date(AHORA.getTime() - min * 60_000).toISOString() })
+    expect(seVaSola(listo(29), AHORA)).toBe(false)
+    expect(seVaSola(listo(30), AHORA)).toBe(true)
+    expect(MINUTOS_PARA_IRSE_SOLA).toBe(30)
+  })
+  it('🔴 la del GRUPO 1 no se va: de ésa sí estamos esperando algo', () => {
+    const uber = { ...G265, source: 'hubrise', channel: 'Uber' }
+    expect(sabemosSuCiclo(uber)).toBe(true)
+    expect(seVaSola(uber, AHORA)).toBe(false)
+  })
+  it('sin «Listo» tampoco: eso sigue en cocina', () => {
+    expect(seVaSola({ ...G265, ready_at: null }, AHORA)).toBe(false)
+  })
+  it('🔴 irse de la pantalla NO cambia el pedido: en Pedidos sigue en Terminados', () => {
+    // La zona del Pase y la fase de Pedidos son dos preguntas distintas, y
+    // ésta es la que lo demuestra: la misma venta, fuera del Pase y dentro de
+    // Terminados, sin que nadie haya escrito nada en la venta.
+    expect(laZona(G265)).toBe('sigue_aqui')   // sigue siendo su zona…
+    expect(seVaSola(G265, AHORA)).toBe(true)  // …pero la pantalla ya no la pinta
   })
 })

@@ -20,11 +20,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Clock, Truck, Printer, AlertTriangle, User, Camera } from 'lucide-react'
 import { declaraTrabajoEnCurso } from '@/services/trabajoEnCurso'
 import {
-  laZona, laSituacion, tieneBotonDeListo, loQuePasa, loQueNoSabemos,
+  laZona, laSituacion, tieneBotonDeListo, tieneBotonDeRecogida, loQuePasa, loQueNoSabemos,
+  loRepartelaPlataforma, sabemosSuCiclo, seVaSola, MINUTOS_PARA_IRSE_SOLA,
   elSubtitulo, elTono, losMinutos, quienLoLleva, type Zona, type Tono,
 } from './lib/lasTresZonas'
 import {
-  getTablero, marcarListo, reimprimirBolsa,
+  getTablero, marcarListo, marcarRecogido, reimprimirBolsa,
   type TarjetaDelPase, type ElTablero, apagarElPase,
 } from './services/paseService'
 
@@ -106,15 +107,16 @@ function ComoAvanzo({ t }: { t: TarjetaDelPase }) {
   )
 }
 
-function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
+function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir }: {
   t: TarjetaDelPase
   ocupado: boolean
   onListo: () => void
+  onRecogido: () => void
   onReimprimir: () => void
 }) {
   const situacion = laSituacion(t)
   const conBoton = tieneBotonDeListo(t)
-  const noSabemos = loQueNoSabemos(t)
+  const conRecogida = tieneBotonDeRecogida(t)
   const quien = quienLoLleva(t)
   const rota = t.bolsa.estado === 'rota'
 
@@ -136,16 +138,29 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
           </span>
         </div>
 
-        {/* QUIÉN LO LLEVA · siempre visible, porque es la pregunta que hace el
-            pase en voz alta cuando suena el timbre. El TELÉFONO no se pinta
-            aquí: llamar es algo que se consulta, no algo que cambie lo que
-            haces, y va en la hoja de detalle. */}
-        <p className={`text-[12.5px] font-bold leading-snug mt-1 truncate
-                       ${quien.esAviso ? 'text-warning' : 'text-text-secondary'}`}>
-          {quien.texto}
-        </p>
+        {/* QUIÉN LO LLEVA · la pregunta que hace el pase en voz alta cuando
+            suena el timbre. El TELÉFONO no se pinta aquí: llamar es algo que se
+            consulta, no algo que cambie lo que haces, y va en la hoja de
+            detalle.
+            🔴 SÓLO CUANDO AÑADE ALGO (16/09). En un pedido de plataforma el
+            subtítulo ya dice quién reparte, así que esto repetía la misma idea
+            dos líneas seguidas: «Glovo» y debajo «Lo reparte Glovo». Se queda
+            donde SÍ dice algo nuevo: el nombre del de nuestra moto, o el aviso
+            de que no lo ha cogido nadie. */}
+        {(!loRepartelaPlataforma(t) || t.handed_to_courier_at != null) && (
+          <p className={`text-[12.5px] font-bold leading-snug mt-1 truncate
+                         ${quien.esAviso ? 'text-warning' : 'text-text-secondary'}`}>
+            {quien.texto}
+            {t.handed_to_courier_at != null && loRepartelaPlataforma(t) &&
+              ` · recogido ${new Date(t.handed_to_courier_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`}
+          </p>
+        )}
 
-        {situacion === 'por_marcar' && t.lineas.length > 0 && (
+        {/* 🔴 LOS PLATOS, SIEMPRE (16/09). Estaban gateados a `por_marcar`, así
+            que en cuanto alguien pulsaba «Listo» la bolsa se quedaba sin su
+            contenido: justo cuando el del pase la coge de la estantería y tiene
+            que saber qué lleva dentro para dársela al rider correcto. */}
+        {t.lineas.length > 0 && (
           <div className="border-t border-lavado mt-1.5 pt-1.5">
             {t.lineas.map((l, i) => (
               <div key={i} className="flex gap-2 items-baseline">
@@ -156,8 +171,7 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
           </div>
         )}
 
-        {noSabemos && <p className="text-[12px] leading-snug text-text-secondary mt-1.5">{noSabemos}</p>}
-        <LaBolsa t={t} onReimprimir={onReimprimir} />
+          <LaBolsa t={t} onReimprimir={onReimprimir} />
         <ComoAvanzo t={t} />
       </div>
 
@@ -176,6 +190,18 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
                                      : <Clock size={16} className="shrink-0" />}
             <span className="min-w-0">{loQuePasa(t, losMinutos(t))}</span>
           </div>
+        )}
+        {/* 🔴 «SE LO HA LLEVADO» (16/09). El del pase VE la bolsa salir por la
+            puerta: es la única persona del sistema que lo sabe en ese instante,
+            y hasta hoy no tenía dónde decirlo. Escribe sólo si está vacío, así
+            que no pisa un aviso que hubiera llegado antes. */}
+        {conRecogida && (
+          <button onClick={onRecogido} disabled={ocupado}
+                  className="w-full min-h-[46px] rounded-xl border-2 border-accent text-accent
+                             text-[14.5px] font-extrabold flex items-center justify-center gap-2
+                             disabled:opacity-50">
+            <Truck size={16} strokeWidth={3} /> Se lo ha llevado
+          </button>
         )}
         {rota && (
           <button onClick={onReimprimir} disabled={ocupado}
@@ -197,6 +223,7 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
 }) {
   const [tablero, setTablero] = useState<ElTablero | null>(null)
   const [zona, setZona] = useState<Zona>('sigue_aqui')
+  const [verIdas, setVerIdas] = useState(false)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   // El apagado: `false` = ni preguntado. `true` = preguntando. Ver la hoja.
@@ -233,6 +260,10 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
       const z = laZona(t)
       if (!z) continue
       if (z === 'entregados' && (losMinutos(t) ?? 0) > MINUTOS_EN_ENTREGADOS) continue
+      // 🔴 A los 30 min, la del grupo 2 se va sola: de ella no va a llegar
+      // ningún aviso nunca, así que sólo ocupa sitio delante de las que sí
+      // esperan algo. NO se esconde: se cuentan abajo y se pueden ver.
+      if (seVaSola(t)) continue
       m[z].push(t)
     }
     return m
@@ -251,6 +282,28 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
     return () => declaraTrabajoEnCurso(clave, 0)
   }, [tablero, porZona.sigue_aqui.length])
 
+  /**
+   * LAS QUE SE HAN IDO SOLAS, que se cuentan y se pueden ver (regla 7). Un
+   * umbral ordena; no esconde. Si desaparecieran en silencio, el del pase
+   * aprendería que las bolsas se evaporan y dejaría de creerse la pantalla.
+   */
+  const idasSolas = useMemo(
+    () => (tablero?.tarjetas ?? []).filter(t => seVaSola(t)),
+    [tablero])
+
+  /**
+   * EL AVISO DE LA ZONA, UNA VEZ ARRIBA Y NO EN CADA TARJETA (16/09). La frase
+   * es la misma para todas las del grupo 2, así que repetirla seis veces no
+   * informa: hace ruido y empuja hacia abajo lo que sí cambia de una a otra.
+   * Y sólo sale si en ESTA zona hay alguna del grupo 2.
+   */
+  const avisoDeLaZona = useMemo(() => {
+    const delGrupo2 = porZona[zona].filter(t => !sabemosSuCiclo(t))
+    if (delGrupo2.length === 0) return null
+    const primeros = delGrupo2.map(t => loQueNoSabemos(t)).filter(Boolean) as string[]
+    return primeros[0] ?? null
+  }, [porZona, zona])
+
   /** ¿Hay algo que lleve de más? El contador avisa sin cambiar de pestaña. */
   const avisaEnRuta = porZona.en_ruta.some(t => elTono(t, losMinutos(t)) === 'aviso')
   const avisaAqui = porZona.sigue_aqui.some(
@@ -263,6 +316,30 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
       await refrescar()
     } catch (e) {
       setAviso(`No se ha podido marcar: ${String((e as { message?: string })?.message ?? e)}`)
+    } finally { setOcupado(null) }
+  }
+
+  /**
+   * «Se lo ha llevado». Confirma con CONTENIDO y no con un visto (regla 8): se
+   * dice la HORA que quedó escrita, que es lo que el del pase necesita poder
+   * comprobar. Y si ya había una --porque el aviso llegó primero-- se dice
+   * también, en vez de fingir que la acaba de poner él.
+   */
+  const pulsarRecogido = async (t: TarjetaDelPase) => {
+    setOcupado(t.sale_id); setAviso(null)
+    try {
+      const yaLaTenia = t.handed_to_courier_at != null
+      const hora = await marcarRecogido(t.sale_id, token)
+      const hhmm = hora
+        ? new Date(hora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+        : null
+      setAviso(
+        hhmm == null ? 'Apuntado, pero sin hora: avisa.'
+        : yaLaTenia  ? `Ya estaba apuntado a las ${hhmm}. No se ha cambiado.`
+                     : `Apuntado: se lo han llevado a las ${hhmm}.`)
+      await refrescar()
+    } catch (e) {
+      setAviso(`No se ha podido apuntar: ${String((e as { message?: string })?.message ?? e)}`)
     } finally { setOcupado(null) }
   }
 
@@ -308,12 +385,43 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
 
       <p className="px-3 pt-1.5 text-[12px] text-text-tertiary shrink-0">{actual.pista}</p>
 
+      {/* El aviso de la zona: una vez, arriba, y sólo si aquí hay del grupo 2. */}
+      {avisoDeLaZona && (
+        <p className="mx-3 mt-1.5 px-3 py-2 rounded-lg bg-accent-bg text-text-secondary
+                      text-[12.5px] leading-snug shrink-0">{avisoDeLaZona}</p>
+      )}
+
       {aviso && (
         <div className="mx-3 mt-1.5 px-3 py-2 rounded-lg bg-background-info text-text-info
                         text-[12.5px] flex items-center gap-2 shrink-0">
           <span className="min-w-0">{aviso}</span>
           <button onClick={() => setAviso(null)} className="ml-auto underline shrink-0">cerrar</button>
         </div>
+      )}
+
+      {/* 🔴 EL PIE DE LAS QUE SE FUERON SOLAS. La regla 7 en una línea: el
+          umbral decide el ORDEN, nunca la EXISTENCIA. Se dice cuántas, y el
+          «ver» las lista con su hora. */}
+      {zona === 'sigue_aqui' && idasSolas.length > 0 && (
+        <p className="mx-3 mt-1.5 px-3 py-2 rounded-lg bg-page border border-default
+                      text-[12.5px] text-text-secondary shrink-0">
+          <b className="tabular-nums">{idasSolas.length}</b>
+          {idasSolas.length === 1 ? ' se fue sola' : ' se fueron solas'} a los {MINUTOS_PARA_IRSE_SOLA} min
+          sin que nadie tocara{' · '}
+          <button onClick={() => setVerIdas(v => !v)} className="underline font-bold">
+            {verIdas ? 'ocultar' : 'ver'}
+          </button>
+          {verIdas && (
+            <span className="block mt-1.5 pt-1.5 border-t border-default">
+              {idasSolas.map(t => (
+                <span key={t.sale_id} className="block">
+                  {t.codigo ?? '—'} · {t.marca ?? 'sin marca'} · listo hace{' '}
+                  <b className="tabular-nums">{losMinutos(t) ?? '—'} min</b>
+                </span>
+              ))}
+            </span>
+          )}
+        </p>
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-1.5 pb-2">
@@ -340,6 +448,7 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
           porZona[zona].map(t => (
             <Tarjeta key={t.sale_id} t={t} ocupado={ocupado === t.sale_id}
                      onListo={() => void pulsarListo(t)}
+                     onRecogido={() => void pulsarRecogido(t)}
                      onReimprimir={() => void pulsarReimprimir(t)} />
           ))
         )}

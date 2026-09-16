@@ -450,7 +450,29 @@ async function upsertSale(
   const saleBrandId = resolveSaleBrand(tab, products, caches);
 
   // Campos de cabecera/economía comunes a insert y update.
-  // ⟵ NUEVO: order_status='accepted' (Last nace aceptado) + campos canónicos.
+  // ── EL CIERRE DE LAST NO PUEDE DEVOLVER EL PEDIDO A COCINA (16/09) ────────
+  //
+  // `order_status` NO viaja en `common`: nace con la venta y ya no se vuelve a
+  // escribir desde aqui. Last no tiene ciclo de pedido —solo sabe abrir y
+  // cerrar comandas— asi que su `accepted` es un valor de NACIMIENTO, no una
+  // verdad que refrescar. Quien manda en el ciclo despues es Folvy: cocina,
+  // el Pase y la plataforma.
+  //
+  // QUE PASABA. Un `tab:closed` (o un `tab:updated` tardio) sobre una venta
+  // todavia abierta reescribia `order_status='accepted'`. Eso es, letra por
+  // letra, lo que `tg_sale_seal_kpi_hitos` entiende por REABRIR: al volver a
+  // un estado de cocina borra `ready_at`. Un instante despues `ingestBill`
+  // ponia 'completed' y la venta se cerraba, ya sin la hora del «Listo».
+  //
+  // MEDIDO el 16/09 (ensayo en transaccion revertida sobre G858, la unica con
+  // prueba de impresion): con el «Listo» dado, ready_at 17:49:26; tras este
+  // update, BORRADO. `handed_to_courier_at` no se movio — no lo borra nadie.
+  //
+  // Los OCHO del dia: siete de Villaverde (92d7656e) y G858 de Alcala. El
+  // discriminador no es el local, es QUIEN cerro primero: las cinco que
+  // conservan el sello se cerraron a las 13:23 por otro camino, y cuando
+  // llego su `tab:closed` la guarda de abajo (status !== 'open') ya no dejo
+  // tocarlas. Las ocho seguian abiertas cuando llego el suyo.
   const common = {
     external_channel_text: payType,
     channel_id: channelId,
@@ -466,7 +488,6 @@ async function upsertSale(
     tax: typeof bill.tax === "number" ? bill.tax / 100 : null,
     taxable_base: typeof bill.taxableBase === "number" ? bill.taxableBase / 100 : null,
     service_type: mapServiceType(tab.pickupType),
-    order_status: "accepted",                 // ⟵ Last entra ya aceptado (decisión A)
     ...buildCanonicalFields(tab),             // ⟵ cliente/teléfono/dirección/address_status/hora/nota
     raw_products: JSON.stringify(products),
     raw_tab: JSON.stringify(tab),
@@ -566,6 +587,7 @@ async function upsertSale(
     opened_at: bill.creationTime ?? bill.finalizingTime ?? new Date().toISOString(),
     is_active: true,
     ...common,
+    order_status: "accepted",   // ⟵ SOLO al nacer: Last entra ya aceptado (decisión A)
   }).select("id").single();
   if (saleErr || !saleRow) throw new Error(`sale insert ${billId}: ${saleErr?.message ?? "unknown"}`);
 

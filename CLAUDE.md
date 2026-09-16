@@ -18,6 +18,33 @@ Cada una costó un incidente real. La fecha es el día que se pagó.
 1. **Ninguna corrección vive solo en el desplegado.** Si se toca una edge function, se commitea antes o inmediatamente después. Un deploy sin commit es una corrección con fecha de caducidad: el siguiente despliegue desde el repositorio la borra sin avisar.
    *(27/08, con dos muertos encima: el 13/08 un deploy de `hubrise-webhook` se llevó por delante la captura de `collection_code` — 14 días y 148 pedidos sin el código que ve el cliente — y `resolveHubriseToken` por conexión — el 404 del push. Ninguna de las dos estaba en git. Vigía: `edge-drift-watchdog`, diario.)*
 
+   **LA PUERTA DE LA PROHIBIDA** *(16/09, aceptada por Julio)*. De aquel
+   incidente salió que `hubrise-webhook` no se despliega desde el workflow.
+   «Nunca» estaba protegiendo dos cosas con la misma palabra: que no salga
+   **sola** —que es lo que pasó— y que no salga **nunca**. Lo primero es la
+   regla. Lo segundo dejaba como único camino un token en el portátil de
+   alguien, y eso es *peor*: un despliegue sin traza, desde un árbol que nadie
+   ve, que es exactamente cómo se pierde una corrección.
+   - La exclusión **automática** no se toca: un push a `main` no la despliega jamás.
+   - Se abre a mano, con **dos cerrojos** en una ejecución manual: nombrarla en
+     `funciones` **y** escribir su nombre entero en `la_prohibida`. Un dedo
+     torpe no la abre, y el resumen deja escrito quién la abrió y desde qué rama.
+   - **Antes de empujarla se mide la deriva**, y eso no lo puede hacer el
+     workflow: **lo desplegado contra `origin/main`**. Si difieren, hay una
+     corrección viva fuera de git y desplegar la borra — el 13/08, literal. La
+     medida se pega en el parte.
+   - **Y lo desplegado se comprueba después**, no se da por bueno con el color
+     del run. El 16/09 el workflow salió **verde sin desplegarla** —la
+     excluía— y di por hecho que había salido: la mitad de una pieza estuvo dos
+     horas commiteada y sin efecto. Se compara el md5 de lo desplegado con el
+     del fichero, y se prueba que arranca.
+   *(16/09: desplegada por la puerta a las 21:12, con el servicio en marcha y
+   hueco medido —0 pedidos de HubRise en 5 minutos—. md5 idénticos los dos
+   lados antes de empujar; v57 byte a byte igual a la rama después; un GET
+   devolvió 405, o sea que el módulo arranca, sin escribir nada. Los 7 pedidos
+   siguientes entraron con sus líneas, su consumo en UNA sola pasada y 0
+   fallos.)*
+
 2. **Añadir un parámetro a una función es DROP + CREATE, nunca CREATE OR REPLACE.** Replace no reemplaza: crea una SOBRECARGA, y a partir de ahí las llamadas con la firma vieja son ambiguas.
    *(27/08. Al añadir `p_debounce_window` a `_queue_system_alert` quedaron dos firmas; las llamadas de 4 argumentos empezaron a dar `ERROR 42725 … is not unique` y los SIETE vigías se quedaron sin poder encolar durante minutos. Se detectó porque se probó inmediatamente después de aplicar.)*
 

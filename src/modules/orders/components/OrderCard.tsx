@@ -29,6 +29,7 @@ import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
 import { fmtNum } from '@/lib/format'
 import { passCode } from '../lib/passCode'
+import { elSubtitulo } from '@/modules/pase/lib/lasTresZonas'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
 import {
@@ -625,15 +626,31 @@ interface OrderCardProps {
    * Hoy sólo lo pasa la pestaña «Esperando repartidor».
    */
   distintivo?: { texto: string; esAviso: boolean } | null
+  /** «Terminados» no lleva reloj: lo que hay que saber es la HORA, no un contador. */
+  sinReloj?: boolean
+  /**
+   * EL RELOJ DE LA TARJETA, cuando la pestaña sabe mejor que la RPC cuál toca.
+   *
+   * `order.minutos` cuenta SIEMPRE desde que entró el pedido, y eso solo vale
+   * en «En curso». Quien pinta la pestaña pasa aquí los minutos de la fase
+   * (`losMinutosDeLaTarjeta`) y su color (`elNivelDeLaTarjeta`). Sin estas dos,
+   * la tarjeta se comporta como siempre: la pestaña que no las pase no cambia.
+   */
+  minutosDeLaFase?: number | null
+  nivelDeLaFase?: 'fresh' | 'warn' | null
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase }: OrderCardProps) {
   const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
   const now = nowMs
   const [busy, setBusy] = useState(false)
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [showTickets, setShowTickets] = useState(false)
-  const level = timeLevel(order.minutos)
+  // El número y su color: los de la fase si la pestaña los manda, y si no los
+  // de siempre. `minutosDeLaFase === undefined` es «no me lo han pasado»;
+  // `null` es «no hay reloj», y entonces no se pinta número.
+  const minutosPintados = minutosDeLaFase === undefined ? order.minutos : minutosDeLaFase
+  const level = nivelDeLaFase ?? timeLevel(minutosPintados ?? 0)
   const needsAction = isNeedsAction(order.order_status)
   const terminal = isTerminal(order.order_status)
   const critical = needsAction && level === 'late'
@@ -726,10 +743,17 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         >
           <Printer size={15} />
         </button>
-        <span className="inline-flex items-center gap-1.5 font-extrabold text-[16px] tabular-nums font-mono" style={{ color: tc.text }}>
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tc.spine }} />
-          {order.minutos}′
-        </span>
+        {/* 🔴 EN «TERMINADOS» NO HAY RELOJ (16/09). Salía «46′» en verde y «39′»
+            en ámbar sin decir desde qué ni por qué alarmaban: un pedido
+            terminado no tiene nada que corra. La hora va en el distintivo
+            --«Entregado 20:43», «Listo 20:51 · sin seguimiento»-- que sí dice
+            desde cuándo. */}
+        {!sinReloj && (
+          <span className="inline-flex items-center gap-1.5 font-extrabold text-[16px] tabular-nums font-mono" style={{ color: tc.text }}>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tc.spine }} />
+            {minutosPintados == null ? '—' : `${minutosPintados}′`}
+          </span>
+        )}
       </div>
 
       <div className="px-4 pb-2 pl-5 text-[12.5px] font-bold text-text-secondary flex items-center gap-2">
@@ -753,7 +777,12 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
       </div>
 
       <div className="px-4 pb-2.5 pl-5 text-[12.5px] text-text-secondary flex items-center gap-2 flex-wrap">
+        {/* 🔴 QUIÉN REPARTE, EN LA ETIQUETA (16/09). Antes ponía sólo la marca y
+            el canal, así que G292 y G941 --que los lleva NUESTRA flota-- se
+            leían igual que un Glovo repartido por Glovo. Sale de `elSubtitulo`,
+            la misma función del Pase, para que las dos pantallas no se separen. */}
         <span>{order.brand || order.channel || '—'}</span>
+        <span className="opacity-70">· {elSubtitulo(order, 'pedidos')}</span>
         {/* El OTRO código (pequeño) + la ref interna del ticket: para incidencias. */}
         {pass.secondary && <span className="font-mono text-[11px] opacity-80" title="Otro código">· {pass.secondary}</span>}
         <span className="font-mono text-[11px] opacity-55" title="Referencia interna">· {ticketCode(order.external_tab_ref, order.external_ref)}</span>

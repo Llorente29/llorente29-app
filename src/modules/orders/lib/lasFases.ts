@@ -44,7 +44,8 @@
 // Por eso este encargo NO necesita tocar la base.
 
 import {
-  laSituacion, estaMarcadoListo, esRecogida, loRepartelaPlataforma,
+  laSituacion, estaMarcadoListo, esRecogida, loRepartelaPlataforma, losMinutos,
+  sabemosSuCiclo, quienLoLleva, MINUTOS_DE_MAS_EN_RUTA, MINUTOS_DE_ESPERA_EN_AMBAR,
   type PedidoDelPase, type Situacion,
 } from '@/modules/pase/lib/lasTresZonas'
 
@@ -54,12 +55,14 @@ export interface PedidoConFase extends PedidoDelPase {
   status?: string | null
   /** Autoaceptación. Arranca el reloj de cocina. */
   accepted_at?: string | null
+  /** Lo que calcula la RPC: minutos desde que ENTRÓ. Sirve para «En curso». */
+  minutos?: number | null
 }
 
-export type Fase = 'en_curso' | 'esperando' | 'terminado' | 'incidencia'
+export type Fase = 'en_curso' | 'esperando' | 'en_ruta' | 'terminado' | 'incidencia'
 
 /** El orden de las pestañas en pantalla. «En curso» abre por defecto. */
-export const LAS_FASES: Fase[] = ['en_curso', 'esperando', 'terminado', 'incidencia']
+export const LAS_FASES: Fase[] = ['en_curso', 'esperando', 'en_ruta', 'terminado', 'incidencia']
 
 /**
  * 🔴 LOS RÓTULOS, UNA SOLA VEZ EN TODA LA APLICACIÓN (§3 del encargo).
@@ -79,6 +82,7 @@ export const LAS_FASES: Fase[] = ['en_curso', 'esperando', 'terminado', 'inciden
 export const ROTULO: Record<Fase, string> = {
   en_curso: 'En curso',
   esperando: 'Esperando repartidor',
+  en_ruta: 'En ruta',
   terminado: 'Terminados',
   incidencia: 'Incidencias',
 }
@@ -87,6 +91,7 @@ export const ROTULO: Record<Fase, string> = {
 export const ROTULO_VACIO: Record<Fase, string> = {
   en_curso: 'Nada en cocina ahora mismo.',
   esperando: 'Nada hecho esperando a que se lo lleven.',
+  en_ruta: 'Nada de camino ahora mismo.',
   terminado: 'Todavía no se ha terminado ningún pedido.',
   incidencia: 'Ninguna incidencia. Es la buena noticia del día.',
 }
@@ -191,8 +196,27 @@ export function esIncidencia(p: PedidoConFase, ahora: Date = new Date()): boolea
   return horas != null && horas > HORAS_PARA_SER_INCIDENCIA
 }
 
-/** ¿Está terminado? Ver arriba por qué se mira `status` y no `closed_at`. */
+/**
+ * ¿Está terminado? Ver arriba por qué se mira `status` y no `closed_at`.
+ *
+ * 🔴 Y LO ENTREGADO TAMBIÉN, aunque la venta siga abierta (URGENTE del 16/09).
+ *
+ * Esto es el fallo que estaba en producción: un pedido de nuestra flota
+ * entregado a las 15:29 seguía con `status='open'` y `order_status='awaiting_collection'`
+ * --porque el cierre al entregar no existía-- así que no era «terminado», la
+ * pregunta seguía bajando y caía en «esperando» por tener `ready_at`. La
+ * tarjeta decía «Entregado» dentro de «Esperando repartidor». G231 llevaba
+ * 146′ en rojo y G764 107′.
+ *
+ * La entrega no se pregunta aquí: se pregunta a `laSituacion`, que ya mira el
+ * eje de la flota (`delivered_at`, `delivery_state`) y es la misma que usa el
+ * Pase. Una regla, un sitio.
+ *
+ * Y va ANTES que el cierre a propósito: entregado es terminado aunque nadie
+ * haya cerrado todavía, que es justo lo que el encargo pide enseñar.
+ */
 export function estaTerminado(p: PedidoConFase): boolean {
+  if (laSituacion(p) === 'entregado') return true
   return (p.status ?? '') === 'closed' || (p.order_status ?? '') === 'completed'
 }
 
@@ -206,9 +230,57 @@ export function estaTerminado(p: PedidoConFase): boolean {
  */
 export function laFase(p: PedidoConFase, ahora: Date = new Date()): Fase {
   if (esIncidencia(p, ahora)) return 'incidencia'
+
+  // 🔴 LO ENTREGADO, PRIMERO. Llegó: no está de camino ni esperando a nadie.
+  if (laSituacion(p) === 'entregado') return 'terminado'
+
+  // 🔴 «EN RUTA» (16/09). Decisión de Julio al ver la pantalla con cuatro
+  // pestañas: «¿de esperando pasa a terminado? ¿y lo que ocurre entre medias?».
+  //
+  // El 15/09 no se hizo pestaña porque solo el 12 % de los pedidos traía el
+  // dato, y una pestaña que unas veces recibe y otras no es una pestaña que no
+  // se mira. Con la opción A eso deja de pasar: a «Esperando» y a «En ruta»
+  // solo entran los del grupo 1, y de ésos SÍ sabemos la recogida. La pestaña
+  // siempre recibe lo que le toca.
+  //
+  // Y NO SE QUEDA ETERNA, que es el riesgo de una fase que espera un aviso:
+  // con la comanda ya cerrada se va a Terminados aunque no haya llegado la
+  // entrega. Si Catcher o Uber se comen el aviso de entrega, el pedido no se
+  // queda «de camino» toda la noche diciendo una hora que crece sin parar.
+  const cerrada = (p.status ?? '') === 'closed' || (p.order_status ?? '') === 'completed'
+  if (laSituacion(p) === 'en_ruta' && !cerrada) return 'en_ruta'
+
   if (estaTerminado(p)) return 'terminado'
-  if (estaMarcadoListo(p)) return 'esperando'
+
+  // 🔴 LA OPCIÓN A. Lo que está hecho y de lo que NO vamos a saber nada más no
+  // se queda esperando a un aviso que no existe: termina aquí, y la tarjeta lo
+  // dice con esas palabras («Listo HH:MM · sin seguimiento») en vez de fingir
+  // que sigue pasando algo. Es la misma honradez que hizo que «Terminados» no
+  // se llame «Entregados».
+  //
+  // Antes del 16/09 estos 1.197 pedidos de 14 días --todo lo de Last, Glovo
+  // repartido por Glovo, las recogidas-- se amontonaban en «Esperando
+  // repartidor» hasta que alguien cerraba la comanda. Ahí es donde la pestaña
+  // dejaba de significar nada.
+  if (estaMarcadoListo(p)) return sabemosSuCiclo(p) ? 'esperando' : 'terminado'
+
   return 'en_curso'
+}
+
+/**
+ * LO QUE PONE EN LA TARJETA DE «TERMINADOS», que no es lo mismo para todos.
+ *
+ * Un pedido del grupo 1 terminó porque LLEGÓ, y se dice la hora de entrega. Uno
+ * del grupo 2 terminó porque cocina acabó, y de ahí en adelante no sabemos
+ * nada: se dice la hora del «Listo» Y se dice que no hay seguimiento. Escribir
+ * «Entregado» ahí sería la mentira que esta pantalla vino a quitar.
+ *
+ * `null` = no hay hora que pintar; la tarjeta ya sabe qué hacer con eso.
+ */
+export function loQueDiceTerminados(p: PedidoConFase): { hora: string | null; sinSeguimiento: boolean } {
+  if (laSituacion(p) === 'entregado') return { hora: p.delivered_at ?? null, sinSeguimiento: false }
+  if (sabemosSuCiclo(p)) return { hora: p.delivered_at ?? p.ready_at ?? null, sinSeguimiento: false }
+  return { hora: p.ready_at ?? null, sinSeguimiento: true }
 }
 
 /**
@@ -224,7 +296,68 @@ export function laFase(p: PedidoConFase, ahora: Date = new Date()): Fase {
  */
 export function elRelojDeLaFase(p: PedidoConFase, fase: Fase): string | null {
   if (fase === 'esperando') return p.ready_at ?? p.entro_at ?? null
+  // «En ruta» se ordena por la RECOGIDA: el que salió antes lleva más tiempo
+  // fuera, que es lo que se pregunta mirando esa pestaña.
+  if (fase === 'en_ruta') return p.handed_to_courier_at ?? p.ready_at ?? p.entro_at ?? null
   return p.accepted_at ?? p.entro_at ?? null
+}
+
+/**
+ * A PARTIR DE CUÁNTOS MINUTOS SE PONE ÁMBAR lo que ya está hecho y espera.
+ * Decisión de Julio, 16/09.
+ *
+ * 🔴 SE MUDÓ a `lasTresZonas` el 16/09 por la noche y aquí sólo se re-exporta:
+ * el Pase necesita el MISMO número --sus bolsas no se ponían ámbar-- y un
+ * umbral escrito en dos ficheros es un umbral que un día dice dos cosas.
+ */
+export { MINUTOS_DE_ESPERA_EN_AMBAR }
+
+/**
+ * EL NÚMERO GRANDE DE LA TARJETA, y desde cuándo cuenta.
+ *
+ * 🔴 El fallo que arregla (URGENTE §3.3): `order.minutos` lo calcula la RPC
+ * SIEMPRE desde que entró el pedido. En «En curso» es lo que hay que ver. En
+ * «Esperando repartidor» no: ahí la pregunta es «cuánto lleva HECHO esperando»,
+ * y un pedido que entró a las 15:00 y se marcó listo a las 17:10 no lleva 146
+ * minutos esperando, lleva 16.
+ *
+ * Y para lo que ya salió, el reloj es otro todavía: `losMinutos` de
+ * `lasTresZonas` elige por SITUACIÓN --recogido cuenta desde la recogida,
+ * entregado desde la entrega-- y es el mismo que usa el Pase. No se reescribe
+ * aquí: se llama.
+ *
+ * `null` = no hay reloj que pintar. Nunca 0, que se leería como «recién hecho».
+ */
+export function losMinutosDeLaTarjeta(
+  p: PedidoConFase, fase: Fase, ahora: Date = new Date(),
+): number | null {
+  if (fase === 'en_curso') return p.minutos ?? losMinutos(p, ahora)
+  return losMinutos(p, ahora)
+}
+
+/**
+ * EL COLOR DE ESE NÚMERO. Tres niveles, los que ya pinta la tarjeta.
+ *
+ * En «En curso» manda el semáforo de cocina, que no se toca: es el que lleva
+ * los umbrales del local. En las demás fases el reloj mide otra cosa --espera,
+ * no cocción-- y el umbral es el de Julio: ámbar a los 20 minutos.
+ *
+ * Lo que ya salió o llegó no se pinta en rojo nunca: un pedido en la moto no es
+ * una avería de cocina, y el ámbar de «lleva mucho en ruta» ya lo decide
+ * `lasTresZonas` con su propio umbral.
+ */
+export function elNivelDeLaTarjeta(
+  p: PedidoConFase, fase: Fase, minutos: number | null,
+): 'fresh' | 'warn' | null {
+  // `null` = «aquí no mando yo»: en «En curso» el color lo decide el semáforo de
+  // cocina, con los umbrales del local. Decirlo con null y no con un valor
+  // inventado es lo que impide que este fichero pise aquello sin querer.
+  if (fase === 'en_curso') return null
+  if (minutos == null) return 'fresh'
+  const s = laSituacion(p)
+  if (s === 'entregado') return 'fresh'
+  if (s === 'en_ruta') return minutos > MINUTOS_DE_MAS_EN_RUTA ? 'warn' : 'fresh'
+  return minutos > MINUTOS_DE_ESPERA_EN_AMBAR ? 'warn' : 'fresh'
 }
 
 const AL_FINAL = Number.MAX_SAFE_INTEGER
@@ -268,10 +401,55 @@ export function ordenDeLaFase(fase: Fase) {
  * cocinero deja de mirar --y con ella deja de creerse las demás (regla 7)--.
  * Aquí, donde hay dato se ve y donde no lo hay no hay hueco que explicar.
  */
+/** HH:MM en la hora de Madrid. `sold_at` y compañía viajan en UTC (regla 4). */
+function aLaHoraDeMadrid(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
+}
+
+/**
+ * EL DISTINTIVO DE LA TARJETA, QUE DEPENDE DE LA PESTAÑA · 16/09/2026
+ *
+ * Una etiqueta pequeña que dice lo que el sitio de la tarjeta no puede decir:
+ * quién lo lleva y a qué hora salió, o que de éste no vamos a saber nada más.
+ *
+ * 🔴 «Listo HH:MM · SIN SEGUIMIENTO» es la mitad honesta de la opción A. Mandar
+ * un pedido a Terminados porque cocina acabó, y no decir por qué, sería peor
+ * que dejarlo esperando: quien lo mire creería que llegó. Lo que se sabe se
+ * dice, y lo que no, también.
+ */
+export function elDistintivoDeLaTarjeta(
+  p: PedidoConFase, fase: Fase,
+): { texto: string; esAviso: boolean } | null {
+  if (fase === 'en_ruta') {
+    const hora = aLaHoraDeMadrid(p.handed_to_courier_at)
+    const quien = quienLoLleva(p).texto
+    return { texto: hora ? `${quien} · recogido ${hora}` : quien, esAviso: false }
+  }
+  if (fase === 'terminado') {
+    const { hora, sinSeguimiento } = loQueDiceTerminados(p)
+    const hhmm = aLaHoraDeMadrid(hora)
+    if (sinSeguimiento) {
+      return { texto: hhmm ? `Listo ${hhmm} · sin seguimiento` : 'Sin seguimiento', esAviso: false }
+    }
+    if (laSituacion(p) === 'entregado' && hhmm) return { texto: `Entregado ${hhmm}`, esAviso: false }
+    return null
+  }
+  if (fase === 'esperando') return elDistintivoDelRider(p)
+  return null
+}
+
 export function elDistintivoDelRider(p: PedidoConFase): { texto: string; esAviso: boolean } | null {
   if (loRepartelaPlataforma(p)) return null       // no lo sabemos: no se dice nada
   const s: Situacion = laSituacion(p)
-  if (s === 'en_ruta') return { texto: 'Recogido · en ruta', esAviso: false }
+  // 🔴 «Recogido · en ruta» SE RETIRA (16/09). Existía porque un pedido ya
+  // recogido se quedaba dentro de «Esperando repartidor» y había que avisar de
+  // que en realidad ya iba de camino. Ahora eso es una PESTAÑA: repetirlo en
+  // el distintivo sería decir dos veces lo mismo, y el sitio donde está la
+  // tarjeta ya lo dice mejor que una etiqueta.
+  if (s === 'en_ruta') return null
   if (s === 'lo_recoge_el_cliente' || esRecogida(p)) {
     return { texto: 'Lo recoge el cliente', esAviso: false }
   }
