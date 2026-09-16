@@ -13,12 +13,31 @@ name: Desplegar edge functions
 #   y no es secreto (viaja en la URL de cada petición).
 #
 # ── LA PROHIBIDA ───────────────────────────────────────────────────────────
-# hubrise-webhook NO se despliega desde aquí. Nunca. Es el camino vivo de los
+# hubrise-webhook NO se despliega sola. Nunca. Es el camino vivo de los
 # pedidos de Alcalá y un despliegue suyo ya se llevó por delante dos
 # correcciones (13/08: collection_code y resolveHubriseToken). Está excluida
 # por nombre, y además hay una guarda que aborta el paso de despliegue si se
 # colara en la lista por cualquier vía. Si cambia, el workflow lo DICE en el
 # resumen y sigue sin desplegarla: callarlo sería peor que no excluirla.
+#
+# ── LA PUERTA, Y POR QUÉ EXISTE (16/09/2026) ───────────────────────────────
+# «Nunca» estaba protegiendo dos cosas distintas con la misma palabra: que no
+# salga SOLA --que es lo que pasó el 13/08-- y que no salga NUNCA. Lo primero
+# es la regla; lo segundo obligaba a que el único camino fuese un token en el
+# portátil de alguien, y eso es peor: un despliegue sin traza, desde un árbol
+# que nadie ve, que es exactamente cómo se pierde una corrección.
+#
+# Así que la exclusión AUTOMÁTICA no se toca: un push a main jamás la despliega.
+# Lo que se abre es una puerta que hay que empujar A PROPÓSITO y por duplicado:
+# nombrarla en `funciones` Y escribir su nombre entero en `la_prohibida`. Dos
+# campos, a mano, en una ejecución manual. Un dedo torpe no la abre.
+#
+# Y ANTES DE EMPUJARLA se mide la deriva: lo desplegado contra `origin/main`.
+# Si no son iguales, hay una corrección viva fuera de git y desplegar la borra
+# --el 13/08, literal--. Esa medida no la puede hacer el workflow (no sabe qué
+# hay desplegado hasta que pregunta), así que la hace quien abre la puerta, y
+# la pega. El 16/09 salió: md5 93abec6c950097fb9b93df3b4cb4f03c los dos lados,
+# 37.109 caracteres, cero deriva.
 #
 # ── POR QUÉ NO ES UN `deploy` A SECAS (01/09) ──────────────────────────────
 # Medido en producción ese día: de 63 funciones desplegadas, 43 corren con
@@ -48,6 +67,10 @@ on:
     inputs:
       funciones:
         description: 'Funciones a desplegar, separadas por espacios. Vacío = las que cambiaron en el último commit.'
+        required: false
+        default: ''
+      la_prohibida:
+        description: 'Para desplegar hubrise-webhook: escribe aquí su nombre ENTERO. Además tiene que ir en «funciones». Mide la deriva antes.'
         required: false
         default: ''
 
@@ -91,6 +114,7 @@ jobs:
         id: lista
         env:
           MANUAL: ${{ github.event.inputs.funciones }}
+          PROHIBIDA: ${{ github.event.inputs.la_prohibida }}
         run: |
           set -euo pipefail
 
@@ -120,7 +144,14 @@ jobs:
               continue
             fi
             if [ "$f" = "hubrise-webhook" ]; then
-              echo "::warning::hubrise-webhook HA CAMBIADO y NO se despliega: está prohibida (camino vivo de los pedidos de Alcalá). Si el cambio tiene que salir, lo despliega una persona a mano y a conciencia."
+              # LA PUERTA: manual, nombrada dos veces, y jamás en un push.
+              if [ -n "${MANUAL:-}" ] && [ "${PROHIBIDA:-}" = "hubrise-webhook" ]; then
+                echo "::warning::hubrise-webhook SE VA A DESPLEGAR por la puerta manual, abierta a proposito por ${{ github.actor }}."
+                echo "- :warning: **hubrise-webhook desplegada POR LA PUERTA** — abierta a mano por \`${{ github.actor }}\` desde \`${{ github.ref_name }}\`." >> "$GITHUB_STEP_SUMMARY"
+                FINAL="$FINAL $f"
+                continue
+              fi
+              echo "::warning::hubrise-webhook HA CAMBIADO y NO se despliega: esta prohibida (camino vivo de los pedidos de Alcala). Si el cambio tiene que salir, se abre la puerta a mano: ponerla en «funciones» Y escribir su nombre entero en «la_prohibida»."
               echo "- :no_entry: **hubrise-webhook cambió y NO se ha desplegado** (prohibida)." >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
@@ -146,14 +177,20 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           REF: ${{ steps.ref.outputs.ref }}
           FUNCIONES: ${{ steps.lista.outputs.funciones }}
+          PROHIBIDA: ${{ github.event.inputs.la_prohibida }}
         run: |
           set -euo pipefail
 
           # GUARDA DE ÚLTIMA LÍNEA. La exclusión de arriba ya la deja fuera;
-          # esto aborta si por cualquier camino se hubiera colado.
+          # esto aborta si por cualquier camino se hubiera colado SIN la puerta.
+          # La puerta se vuelve a comprobar aquí, entera y por su cuenta: una
+          # guarda que se fía de que la de arriba ya miró no es una guarda.
           for f in $FUNCIONES; do
             if [ "$f" = "hubrise-webhook" ]; then
-              echo "::error::hubrise-webhook ha llegado a la lista de despliegue. Se aborta."
+              if [ "${PROHIBIDA:-}" = "hubrise-webhook" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                continue
+              fi
+              echo "::error::hubrise-webhook ha llegado a la lista de despliegue sin la puerta abierta. Se aborta."
               exit 1
             fi
           done
