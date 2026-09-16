@@ -398,3 +398,35 @@ export async function getFicha(saleId: string, token: string): Promise<FichaDelP
     throw e
   }
 }
+
+/**
+ * CERRAR A MANO · 17/09/2026.
+ *
+ * 🔴 EL CAMINO ES EL ÚNICO QUE HAY: la RPC pone `order_status = 'completed'`,
+ * y de ahí lo coge `trg_sale_close_on_complete` → `close_sale`, igual que un
+ * pedido que se cierra solo. No se abre un segundo camino de cierre; lo único
+ * que añade es el MOTIVO, y va en la misma transacción para que no pueda
+ * quedar un pedido cerrado sin decir por qué.
+ *
+ * ⚠️ `cerrar_a_mano_by_token` NO ESTÁ APLICADA todavía: el SQL está escrito y
+ * espera el sí de Julio (parte del 17/09). Mientras no exista, esto devuelve un
+ * error CLARO en vez de un fallo raro, porque un botón que hace algo
+ * importante falla en pantalla o confirma, nunca calla (regla 8).
+ */
+export async function cerrarAMano(
+  saleId: string, token: string, motivo: string, texto: string,
+): Promise<void> {
+  try {
+    await rpc<void>('cerrar_a_mano_by_token', {
+      p_device_token: token,
+      p_sale_id: saleId,
+      p_motivo: motivo,
+      p_texto: texto || null,
+    })
+  } catch (e) {
+    if (noLoSabeTodavia(e)) {
+      throw new Error('el cierre a mano todavía no está aplicado en la base', { cause: e })
+    }
+    throw e
+  }
+}

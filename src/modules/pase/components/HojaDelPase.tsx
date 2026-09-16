@@ -94,6 +94,28 @@ function LogoDeLaHoja({ url, marca }: { url: string | null; marca: string | null
               className="w-9 h-9 rounded-lg shrink-0 object-cover bg-lavado border border-default" />
 }
 
+/**
+ * CÓMO AVANZÓ · lo que antes ponía «👤 Listo» y «Lo dice la flota» en la
+ * tarjeta. `null` cuando no se sabe: no se inventa un «por alguien».
+ */
+function elComoAvanzo(f: FichaDelPase): string | null {
+  if (f.avanzo_por === 'flota') return 'lo dice la flota'
+  if (f.avanzo_por === 'foto')  return f.avanzo_quien ? `comprobado por foto · ${f.avanzo_quien}` : 'comprobado por foto'
+  if (f.avanzo_por === 'persona') return f.avanzo_quien ? `por ${f.avanzo_quien}` : 'lo marcó una persona'
+  return null
+}
+
+/** LA BOLSA · el renglón que se fue de la tarjeta. Nunca vacío (regla 5). */
+function laBolsa(f: FichaDelPase): string {
+  const b = f.bolsa
+  if (!b || b.estado === 'sin_pedir') return 'Todavía no se ha pedido la etiqueta.'
+  const cuando = b.cuando ? ` ${b.cuando}` : ''
+  if (b.estado === 'hecha') return `Impresa${cuando}`
+  if (b.estado === 'esperando') return `Pedida${cuando}, esperando a la impresora`
+  return `NO HA SALIDO${cuando}`
+       + (b.intentos > 0 ? ` · intentado ${b.intentos} ${b.intentos === 1 ? 'vez' : 'veces'}` : '')
+}
+
 function Dato({ nombre, children }: { nombre: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3 items-baseline py-1.5 border-b border-lavado last:border-0">
@@ -209,10 +231,17 @@ export default function HojaDelPase({ saleId, token, onCerrar, fichaDePrueba }: 
                     {losCincoTiempos(ficha, hhmm).map(i => (
                       <span key={i.etiqueta} className={i.hora ? '' : 'text-text-tertiary'}>
                         {i.etiqueta} {i.hora ?? '—'}
+                        {/* CÓMO AVANZÓ, pegado al «Listo» porque es de ese hito
+                            de quien habla. Bajó de la tarjeta el 16/09 y sin
+                            esto se había quedado sin sitio en ninguna pantalla. */}
+                        {i.etiqueta === 'Listo' && i.hora && elComoAvanzo(ficha) && (
+                          <span className="text-text-tertiary"> · {elComoAvanzo(ficha)}</span>
+                        )}
                       </span>
                     ))}
                   </span>
                 </Dato>
+                <Dato nombre="Bolsa">{laBolsa(ficha)}</Dato>
                 <Dato nombre="Dirección">{laDireccion(ficha)}</Dato>
                 <Dato nombre="Notas">
                   {ficha.notas ?? 'Sin notas. De alergias no nos llega nada en ningún pedido: '

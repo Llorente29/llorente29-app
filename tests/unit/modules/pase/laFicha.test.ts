@@ -19,8 +19,8 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  elCodigoCorto, laDireccion, laPastilla, llamarAlCliente, llamarAlRepartidor,
-  losCincoTiempos, type FichaDelPase,
+  elCodigoAgrupado, elCodigoCorto, laDireccion, laPastilla, llamarAlCliente,
+  llamarAlRepartidor, losCincoTiempos, type FichaDelPase,
 } from '@/modules/pase/lib/laFicha'
 
 const F = (o: Partial<FichaDelPase> = {}): FichaDelPase => ({
@@ -159,7 +159,8 @@ describe('llamar al cliente', () => {
   it('🔴 JustEat TAMBIÉN es centralita --22 de 22-- y la maqueta sólo nombraba a Uber', () => {
     const l = llamarAlCliente(JUSTEAT_CON_FLOTA)
     expect(l.hay).toBe(true)
-    expect(l.codigo).toBe('878795717')
+    // Sale agrupado (17/09): JustEat lo manda de corrido y son nueve dígitos.
+    expect(l.codigo).toBe('878 795 717')
     expect(l.explicacion).toContain('JustEat da un número único')
   })
 
@@ -210,5 +211,27 @@ describe('los cinco tiempos', () => {
     // 19:26 UTC del 16/09 son las 21:26 de Madrid.
     const t = losCincoTiempos(F({ entro_at: '2026-09-16T19:26:00Z' }), reloj)
     expect(t[0].hora).toBe('21:26')
+  })
+})
+
+describe('el código de la centralita, agrupado igual en los dos canales', () => {
+  it('🔴 JustEat viene de corrido y se agrupa: la misma pantalla no puede leerse de dos maneras', () => {
+    expect(elCodigoAgrupado('878795717')).toBe('878 795 717')
+  })
+  it('🔴 Uber ya viene agrupado --987 de 987-- y NO se regrupa: son 8 dígitos y '
+   + 'forzar el 3-3-3 daría «567 303 08», un ritmo que Uber no usa en ningún sitio', () => {
+    expect(elCodigoAgrupado('567 30 308')).toBe('567 30 308')
+    expect(elCodigoAgrupado('325 19 763')).toBe('325 19 763')
+  })
+  it('lo que no son sólo dígitos se deja tal cual: no se sabe qué significa el espacio', () => {
+    expect(elCodigoAgrupado('AB-12 34')).toBe('AB-12 34')
+  })
+  it('sin código, nada', () => {
+    expect(elCodigoAgrupado(null)).toBeNull()
+  })
+  it('la explicación enseña el código YA agrupado, el mismo que se ve grande', () => {
+    const l = llamarAlCliente(JUSTEAT_CON_FLOTA)
+    expect(l.codigo).toBe('878 795 717')
+    expect(l.explicacion).toContain('878 795 717')
   })
 })

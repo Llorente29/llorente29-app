@@ -87,6 +87,46 @@ export interface FichaDelPase extends PedidoDelPase {
   accepted_at: string | null
   direccion: string | null
   notas: string | null
+  /**
+   * LO QUE SE FUE DE LA TARJETA Y TIENE QUE APARECER AQUÍ (17/09). Se quitaron
+   * de la tarjeta porque son datos de CONSULTA --compiten por el sitio con lo
+   * que se mira de lejos-- pero quitarlos de los dos sitios sería esconderlos,
+   * que es justo lo que prohíbe la regla 7. Bajan de zona, no desaparecen.
+   */
+  bolsa?: { estado: 'hecha' | 'esperando' | 'rota' | 'sin_pedir'; cuando: string | null; intentos: number } | null
+  /** 'flota' | 'persona' | 'foto'. Cómo avanzó, no quién pulsó. */
+  avanzo_por?: string | null
+  avanzo_quien?: string | null
+}
+
+/**
+ * EL CÓDIGO DE LA CENTRALITA, LEGIBLE EN GRUPOS · 17/09/2026.
+ *
+ * El encargo pedía «de tres en tres en los dos». MEDIDO sobre 30 días, 1.061
+ * códigos, resulta que no se puede, y el número manda sobre la instrucción:
+ *
+ *   Uber ..... 987 códigos · TODOS de 8 dígitos · TODOS ya agrupados «325 19 763»
+ *   JustEat ...  74 códigos · TODOS de 9 dígitos · NINGUNO agrupado «464322807»
+ *
+ * Ocho dígitos no se parten en treses. Forzarlo daría «567 303 08», que es un
+ * ritmo que Uber no usa en ningún sitio: quien esté comparando la tablet con
+ * otra pantalla vería dos agrupaciones distintas del mismo número, que es
+ * exactamente cómo se teclea un dígito de menos.
+ *
+ * Así que la regla es: **se respeta la agrupación que manda el conector, y al
+ * que no manda ninguna se le pone de tres en tres**. Con los datos de hoy eso
+ * deja Uber «567 30 308» y JustEat «878 795 717» --que es el 3-3-3 que pedía el
+ * encargo, porque nueve dígitos sí se parten-- y los dos se leen en grupos.
+ *
+ * Queda dicho en el parte para que Julio decida si prefiere el otro reparto.
+ */
+export function elCodigoAgrupado(codigo: string | null | undefined): string | null {
+  const c = (codigo ?? '').trim()
+  if (!c) return null
+  // Ya viene agrupado: no se toca. Es lo que enseña el canal en sus pantallas.
+  if (/\s/.test(c)) return c
+  if (!/^\d+$/.test(c)) return c
+  return c.replace(/(\d{3})(?=\d)/g, '$1 ')
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -223,10 +263,11 @@ export function llamarAlCliente(f: FichaDelPase): Llamada {
   const marcacion = f.cliente_marcacion?.trim() || (tel ? `tel:${tel.replace(/\s+/g, '')}` : null)
 
   if (tel && codigo) {
+    const agrupado = elCodigoAgrupado(codigo) ?? codigo
     return {
-      hay: true, nombre, marcacion, numero: tel, codigo,
+      hay: true, nombre, marcacion, numero: tel, codigo: agrupado,
       explicacion: `${canal} da un número único para todos y un código por pedido `
-                 + `— éste es ${codigo}. La tablet marca los dos seguidos. `
+                 + `— éste es ${agrupado}. La tablet marca los dos seguidos. `
                  + 'El código caduca al entregarse el pedido.',
     }
   }

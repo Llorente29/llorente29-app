@@ -41,6 +41,22 @@ function clearToken(): void {
 
 type Tab = 'pase' | 'pedidos' | 'cocina' | 'disponibilidad' | 'impresoras'
 
+/** El reloj de la barra. Hora de Madrid, que es la del local (regla 4). */
+function ElReloj() {
+  const [ahora, setAhora] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setAhora(new Date()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <span className="text-[15px] font-semibold text-zinc-300 tabular-nums">
+      {ahora.toLocaleTimeString('es-ES', {
+        hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid',
+      })}
+    </span>
+  )
+}
+
 export default function TabletStationRoute() {
   // 01/09 — LA TABLET SE RECARGA SOLA. No tiene a nadie delante que pulse un
   // botón, así que un aviso aquí no sirve de nada: la de Cocina se quedó cinco
@@ -274,6 +290,15 @@ export default function TabletStationRoute() {
             )
           })}
         </nav>
+
+        {/* LA HORA · la pedía la maqueta del Pase y no estaba en ningún sitio.
+            En una cocina el reloj de pared queda detrás y las manos están
+            ocupadas: si la pantalla dice «hace 21 min» sin decir de cuándo, no
+            hay con qué contrastarlo. Se refresca cada 30 s --no cada segundo--
+            porque no hay segundero que enseñar y cada tic es un render. */}
+        <div className="flex items-center px-3">
+          <ElReloj />
+        </div>
 
         <div className="flex items-center px-3">
           <button

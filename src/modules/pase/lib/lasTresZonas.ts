@@ -53,6 +53,13 @@ export interface PedidoDelPase {
   /** Cuándo entró el pedido. El reloj de los que aún no tienen sello. */
   entro_at?: string | null
   /**
+   * EL NOMBRE DEL CLIENTE, sólo para «Entregado a X». Ya viajaba en el tablero
+   * --lo manda `pase_board`-- y sube aquí porque la frase de «Entregados» lo
+   * necesita. Ni teléfono ni dirección: eso vive en la ficha, a la carta.
+   * Medido el 17/09: 1.667 de 1.667 ventas de 14 días traen nombre, Glovo incluido.
+   */
+  cliente?: string | null
+  /**
    * EL REPARTIDOR NUESTRO, cuando lo hay. Medido en 14 días de Foodint: de 245
    * repartos propios, 231 tienen flota y los 231 traen nombre Y teléfono; cero
    * con flota y sin nombre, cero con nombre y sin flota. Y de 1.424 pedidos de
@@ -216,7 +223,22 @@ export function laZona(p: PedidoDelPase): Zona | null {
 
   const s = laSituacion(p)
   if (s === 'entregado') return 'entregados'
-  if (s === 'en_ruta') return 'en_ruta'
+
+  // 🔴 «EN RUTA» ES SÓLO DEL GRUPO 1 · 17/09/2026.
+  //
+  // De un pedido del grupo 2 --Glovo por Glovo, cualquier cosa por Last-- no va
+  // a llegar NUNCA la entrega: 1.197 pedidos por Last en 14 días, 0 entregas.
+  // Así que una bolsa a la que alguien le pulsó «Se lo ha llevado» entraba en
+  // «En ruta» y se quedaba ahí para siempre, contando minutos de un reparto que
+  // nadie va a cerrar. G740 esta noche, con su 22:41 puesto a mano.
+  //
+  // Lo decidido el 16/09 es que esa bolsa SE VA DEL PASE al pulsarlo: el pase ya
+  // hizo lo suyo --la bolsa salió por la puerta-- y lo que pase después no lo va
+  // a saber. `null` es exactamente eso: esta tarjeta no se pinta en ninguna
+  // zona. Lo que NO se hace es fingir que se sigue: una zona que acumula
+  // pedidos que nunca se van es la misma familia que la regla 7, un piso más
+  // abajo — la pantalla enseña algo que no significa lo que parece.
+  if (s === 'en_ruta') return sabemosSuCiclo(p) ? 'en_ruta' : null
 
   // Cerrado sin que la flota diga que llegó: se va SIN pasar por «Entregados».
   // Es el caso de la plataforma --se cerró la comanda en caja, que no es que el
@@ -334,9 +356,32 @@ export function loQuePasa(p: PedidoDelPase, minutos: number | null): string {
                              : `Listo, esperando a que lo recojan · ${minutos} min`
     case 'en_ruta':
       return minutos == null ? 'Salió hace un momento' : `Salió hace ${minutos} min`
-    case 'entregado':
-      return minutos == null ? 'Entregado' : `Entregado hace ${minutos} min`
+    case 'entregado': {
+      // 🔴 CON NOMBRE (17/09). «Entregado hace 0 min» no dice a quién, y en una
+      // zona que se vacía sola en 20 minutos el nombre es lo único que permite
+      // reconocer el pedido cuando el cliente llama diciendo que no le ha
+      // llegado. Cuando no lo tenemos --Glovo por Glovo no manda ni el
+      // nombre-- se dice «Entregado» a secas, nunca «Entregado a —».
+      const quien = p.cliente?.trim() || null
+      const cuando = minutos == null ? 'Entregado'
+                   : minutos === 0   ? 'Entregado ahora mismo'
+                   : `Entregado hace ${minutos} min`
+      return quien ? cuando.replace('Entregado', `Entregado a ${quien}`) : cuando
+    }
   }
+}
+
+/**
+ * ¿LLEVA MÁS DE LO NORMAL EN LA CALLE? Sólo en «En ruta», y sólo del grupo 1:
+ * del grupo 2 ya no hay tarjetas en esa zona (ver `laZona`).
+ *
+ * Devuelve la frase o `null`. La frase dice el número medido, no un adjetivo:
+ * «lleva mucho» no se puede comprobar, «la media son 15 min» sí.
+ */
+export function elRetrasoEnRuta(p: PedidoDelPase, minutos: number | null): string | null {
+  if (laSituacion(p) !== 'en_ruta') return null
+  if (minutos == null || minutos <= MINUTOS_DE_MAS_EN_RUTA) return null
+  return `Lleva más de lo normal: la media de reparto son ${MEDIA_DE_REPARTO_MIN} min.`
 }
 
 /**
@@ -373,11 +418,67 @@ export function loQueNoSabemos(p: PedidoDelPase): string | null {
   }
 }
 
+/**
+ * EL AVISO DE LA ZONA · una vez arriba, y nombrando A TODAS LAS PLATAFORMAS que
+ * haya dentro (17/09).
+ *
+ * 🔴 Antes se cogía la frase del PRIMERO (`primeros[0]`), así que la zona decía
+ * «Glovo no nos dice cuándo sale» habiendo también un Uber por Last --U513 esta
+ * noche-- del que tampoco sabemos nada: nombraba a una y callaba la otra, y el
+ * del pase se queda esperando un aviso de Uber que no va a llegar.
+ *
+ * 🔴 Y sólo cuentan las que ESPERAN A UN RIDER DE PLATAFORMA. Un `pickup` o un
+ * reparto nuestro sin flota también son del grupo 2, pero de ellos la frase no
+ * es cierta: con `quienReparte` en la lista, un propio sin coger habría hecho
+ * decir «nosotros no nos dice cuándo sale». La pantalla no puede decir una
+ * frase que no significa nada.
+ */
+export function elAvisoDeLaZona(pedidos: PedidoDelPase[]): string | null {
+  const quienes = [...new Set(
+    pedidos.filter(p => !sabemosSuCiclo(p) && laSituacion(p) === 'esperando_rider_plataforma')
+           .map(p => quienReparte(p)),
+  )].filter(Boolean)
+  if (quienes.length === 0) return null
+  const lista = quienes.length === 1
+    ? quienes[0]
+    : `${quienes.slice(0, -1).join(', ')} y ${quienes[quienes.length - 1]}`
+  return `${lista} no ${quienes.length === 1 ? 'nos dice' : 'nos dicen'} cuándo sale ni cuándo llega.`
+}
+
 /** El tono del renglón de estado. Ámbar avisa; no hay rojos parpadeando. */
 export type Tono = 'neutro' | 'bien' | 'aviso' | 'mal'
 
-/** A partir de estos minutos, el renglón se pone ámbar. Medido: 15 min de media. */
-export const MINUTOS_DE_MAS_EN_RUTA = 30
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * CUÁNTO TARDA UN REPARTO DE VERDAD · medido el 17/09/2026
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * 387 repartos con recogida Y entrega selladas, 30 días de Foodint, contando
+ * de `handed_to_courier_at` a `delivered_at`:
+ *
+ *   flota nuestra ...... 378  media 14,6  mediana 12,6  p75 18,0  p90 25,3
+ *   Uber por HubRise ....   9  media 20,0  mediana 15,7  p75 26,8  p90 32,4
+ *   ───────────────────────────────────────────────────────────────────────
+ *   TODOS .............. 387  media 14,7  mediana 12,7  p75 18,1  p90 25,7
+ *                                                          máximo 67,9
+ *
+ * LA FRASE dice la MEDIA --«la media de reparto son 15 min»-- porque es lo que
+ * aprobó la maqueta y porque es verdad: 14,7 redondea a 15.
+ *
+ * EL ÁMBAR salta en el p90, 26 minutos: uno de cada diez. Avisar en la media
+ * pintaría de ámbar la mitad de la pantalla y entonces el ámbar no diría nada
+ * (regla 7: un umbral ordena, no esconde — y tampoco grita por todo).
+ *
+ * 🔴 Antes esto valía 30 con un comentario que decía «medido: 15 min de media».
+ * Ni el número era el medido ni el comentario correspondía al número. U987F2
+ * llevaba 23 minutos en ruta y salía en verde.
+ *
+ * Un solo umbral para los dos grupos, y va dicho: los 9 de Uber por HubRise no
+ * dan para un número propio. El día que den, se separan aquí.
+ */
+export const MINUTOS_DE_MAS_EN_RUTA = 26
+/** La media, para la frase. No decide nada: sólo se dice. */
+export const MEDIA_DE_REPARTO_MIN = 15
 export const MINUTOS_DE_MAS_SIN_COGER = 15
 /**
  * Lo que ya está HECHO y espera a que se lo lleven. Decisión de Julio, 16/09.

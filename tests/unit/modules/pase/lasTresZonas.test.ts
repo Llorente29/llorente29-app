@@ -13,7 +13,7 @@ import {
   quienLoLleva, esRecogida,
   type PedidoDelPase,
   tieneBotonDeRecogida, MINUTOS_DE_ESPERA_EN_AMBAR,
-  seVaSola, MINUTOS_PARA_IRSE_SOLA, sabemosSuCiclo,
+  seVaSola, MINUTOS_PARA_IRSE_SOLA, sabemosSuCiclo, elRetrasoEnRuta, elAvisoDeLaZona,
 } from '@/modules/pase/lib/lasTresZonas'
 
 const P = (o: Partial<PedidoDelPase> = {}): PedidoDelPase => ({
@@ -454,5 +454,106 @@ describe('a los 30 minutos la bolsa del grupo 2 se va sola · 16/09', () => {
     // Terminados, sin que nadie haya escrito nada en la venta.
     expect(laZona(G265)).toBe('sigue_aqui')   // sigue siendo su zona…
     expect(seVaSola(G265, AHORA)).toBe(true)  // …pero la pantalla ya no la pinta
+  })
+})
+
+// ── LO DECIDIDO EL 17/09 ───────────────────────────────────────────────────
+
+describe('«En ruta» es sólo del grupo 1', () => {
+  const recogido = { ready_at: '2026-09-16T20:25:00Z', handed_to_courier_at: '2026-09-16T20:41:00Z' }
+
+  it('🔴 un Glovo por Glovo al que alguien pulsó «Se lo ha llevado» SE VA del Pase', () => {
+    // G740, real, 16/09. Antes se quedaba en «En ruta» para siempre: por Last
+    // no llega ninguna entrega --1.197 pedidos en 14 días, 0 entregas-- así que
+    // la zona lo acumulaba contando minutos de un reparto que nadie va a cerrar.
+    const g740 = P({ ...recogido, source: 'lastapp', channel: 'Glovo',
+                     service_type: 'platform_delivery', has_courier: null, carrier_code: null })
+    expect(sabemosSuCiclo(g740)).toBe(false)
+    expect(laZona(g740)).toBeNull()
+  })
+
+  it('un Uber por HubRise recogido SÍ se queda: de ése sí llega la entrega', () => {
+    const uber = P({ ...recogido, source: 'hubrise', channel: 'Uber',
+                     service_type: 'platform_delivery', has_courier: null, carrier_code: null })
+    expect(sabemosSuCiclo(uber)).toBe(true)
+    expect(laZona(uber)).toBe('en_ruta')
+  })
+
+  it('nuestra flota se queda igual', () => {
+    expect(laZona(P({ ...recogido, service_type: 'own_delivery', has_courier: true,
+                      carrier_code: 'catcher' }))).toBe('en_ruta')
+  })
+})
+
+describe('lleva más de lo normal en la calle', () => {
+  const enRuta = (min: number) => {
+    const ahora = new Date('2026-09-16T22:00:00Z')
+    const salio = new Date(ahora.getTime() - min * 60_000).toISOString()
+    const p = P({ source: 'hubrise', channel: 'Uber', service_type: 'platform_delivery',
+                  ready_at: '2026-09-16T20:00:00Z', handed_to_courier_at: salio })
+    return { p, minutos: losMinutos(p, ahora) }
+  }
+
+  it('a los 23 min no dice nada: la media medida son 14,7 y el p90 25,7', () => {
+    const { p, minutos } = enRuta(23)
+    expect(elRetrasoEnRuta(p, minutos)).toBeNull()
+    expect(elTono(p, minutos)).toBe('bien')
+  })
+
+  it('🔴 pasado el p90 --26 min-- avisa, y la frase dice el número medido', () => {
+    const { p, minutos } = enRuta(40)
+    expect(elRetrasoEnRuta(p, minutos)).toBe(
+      'Lleva más de lo normal: la media de reparto son 15 min.')
+    expect(elTono(p, minutos)).toBe('aviso')
+  })
+
+  it('fuera de «En ruta» no aparece nunca', () => {
+    const p = P({ ready_at: '2026-09-16T20:00:00Z' })
+    expect(elRetrasoEnRuta(p, 999)).toBeNull()
+  })
+})
+
+describe('«Entregados» dice a quién', () => {
+  it('con nombre, lo dice: es lo único que permite reconocer el pedido', () => {
+    const p = P({ delivered_at: '2026-09-16T21:56:00Z', cliente: 'Javier R.' })
+    expect(loQuePasa(p, 4)).toBe('Entregado a Javier R. hace 4 min')
+  })
+  it('recién entregado no dice «hace 0 min»', () => {
+    const p = P({ delivered_at: '2026-09-16T22:00:00Z', cliente: 'Javier R.' })
+    expect(loQuePasa(p, 0)).toBe('Entregado a Javier R. ahora mismo')
+  })
+  it('🔴 sin nombre NO se inventa un «Entregado a —»', () => {
+    const p = P({ delivered_at: '2026-09-16T21:56:00Z', cliente: null })
+    expect(loQuePasa(p, 4)).toBe('Entregado hace 4 min')
+  })
+})
+
+describe('el aviso de la zona nombra a TODAS las plataformas', () => {
+  const glovo = P({ ready_at: '2026-09-16T20:08:00Z', source: 'lastapp', channel: 'Glovo',
+                    service_type: 'platform_delivery', has_courier: null, carrier_code: null })
+  const uberLast = P({ ready_at: '2026-09-16T20:08:00Z', source: 'lastapp', channel: 'Uber',
+                       service_type: 'platform_delivery', has_courier: null, carrier_code: null })
+  const uberHub = P({ ready_at: '2026-09-16T20:08:00Z', source: 'hubrise', channel: 'Uber',
+                      service_type: 'platform_delivery', has_courier: null, carrier_code: null })
+
+  it('con una sola, la nombra en singular', () => {
+    expect(elAvisoDeLaZona([glovo])).toBe('Glovo no nos dice cuándo sale ni cuándo llega.')
+  })
+  it('🔴 con Glovo y un Uber por LAST, las nombra a las dos', () => {
+    expect(elAvisoDeLaZona([glovo, uberLast]))
+      .toBe('Glovo y Uber no nos dicen cuándo sale ni cuándo llega.')
+  })
+  it('el Uber por HUBRISE no cuenta: de ése sí sabemos el ciclo', () => {
+    expect(elAvisoDeLaZona([glovo, uberHub])).toBe('Glovo no nos dice cuándo sale ni cuándo llega.')
+    expect(elAvisoDeLaZona([uberHub])).toBeNull()
+  })
+  it('🔴 un propio sin coger NO entra: diría «nosotros no nos dice cuándo sale»', () => {
+    const propio = P({ ready_at: '2026-09-16T20:08:00Z', service_type: 'own_delivery',
+                       has_courier: false, carrier_code: null })
+    expect(elAvisoDeLaZona([propio])).toBeNull()
+    expect(elAvisoDeLaZona([propio, glovo])).toBe('Glovo no nos dice cuándo sale ni cuándo llega.')
+  })
+  it('una recogida tampoco: no la reparte ninguna plataforma', () => {
+    expect(elAvisoDeLaZona([P({ ready_at: '2026-09-16T20:08:00Z', service_type: 'pickup' })])).toBeNull()
   })
 })

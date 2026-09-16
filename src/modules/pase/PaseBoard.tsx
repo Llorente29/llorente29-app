@@ -20,16 +20,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Clock, Truck, Printer, AlertTriangle, ChevronRight } from 'lucide-react'
 import { declaraTrabajoEnCurso } from '@/services/trabajoEnCurso'
 import {
-  laZona, laSituacion, tieneBotonDeListo, tieneBotonDeRecogida, loQuePasa, loQueNoSabemos,
-  sabemosSuCiclo, seVaSola, MINUTOS_PARA_IRSE_SOLA,
-  elSubtitulo, elTono, losMinutos, type Zona, type Tono,
+  laZona, laSituacion, tieneBotonDeListo, tieneBotonDeRecogida, loQuePasa,
+  seVaSola, MINUTOS_PARA_IRSE_SOLA, elRetrasoEnRuta, elAvisoDeLaZona,
+  loRepartelaPlataforma, esRecogida, quienLoLleva,
+  elTono, losMinutos, type Zona, type Tono,
 } from './lib/lasTresZonas'
 import {
-  getTablero, marcarListo, marcarRecogido, reimprimirBolsa,
+  getTablero, marcarListo, marcarRecogido, reimprimirBolsa, cerrarAMano,
   type TarjetaDelPase, type ElTablero, apagarElPase,
 } from './services/paseService'
 import { elCodigoCorto, laPastilla, type TonoPastilla } from './lib/laFicha'
 import HojaDelPase from './components/HojaDelPase'
+import CerrarAMano from './components/CerrarAMano'
+import { laConfirmacion, type ClaveMotivo } from './lib/elCierreAMano'
 
 const POLL_MS = 10_000
 /** Los entregados se van solos. No hay nada que pulsar. */
@@ -150,9 +153,14 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir, onAbrir }: {
                 {pastilla.texto}
               </span>
             </div>
-            <i className="block not-italic text-[11.5px] font-semibold text-text-secondary truncate">
-              {elSubtitulo(t)}
-            </i>
+            {/* 🔴 AQUÍ NO VA NADA (17/09). Debajo del nombre estaba
+                `elSubtitulo`, «Glovo · lo recoge su repartidor», y con la
+                pastilla arriba y el recuadro de espera a la derecha la MISMA
+                idea salía tres veces en una tarjeta de cinco líneas: «GLOVO»,
+                «Glovo · lo recoge su repartidor» y «Esperando al rider de
+                Glovo». La pastilla ya dice quién lo lleva. Lo que sí se queda
+                --abajo-- es lo que la pastilla no cabe a decir: el nombre de
+                nuestro repartidor y el aviso de que no lo ha cogido nadie. */}
           </div>
           <span className="ml-auto self-start flex items-center gap-0.5 text-[11px]
                            text-text-tertiary tabular-nums shrink-0">
@@ -161,11 +169,22 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir, onAbrir }: {
           </span>
         </div>
 
-        {/* La hora de la recogida cuando ya se la han llevado: es el único
-            trozo de «quién lo lleva» que cambia lo que hace el del pase --deja
-            de esperar al rider-- así que se queda. El resto está en la hoja. */}
+        {/* LA NOTA · sólo cuando añade algo a la pastilla, que es en los dos
+            casos de reparto NUESTRO: el nombre del que viene a por ello, y el
+            aviso en ámbar de que no lo ha cogido nadie. En un pedido de
+            plataforma la pastilla ya lo ha dicho todo y aquí no va nada. */}
+        {!loRepartelaPlataforma(t) && !esRecogida(t) && (
+          <p className={`text-[12.5px] font-bold leading-snug mt-1 truncate
+                         ${quienLoLleva(t).esAviso ? 'text-warning' : 'text-text-secondary'}`}>
+            {quienLoLleva(t).esAviso
+              ? 'Nuestro, y todavía no lo ha cogido nadie.'
+              : quienLoLleva(t).texto.replace(/^Nuestro · /, '')}
+          </p>
+        )}
+        {/* La hora de la recogida: el único trozo que cambia lo que hace el del
+            pase --deja de esperar al rider-- así que se queda en la tarjeta. */}
         {t.handed_to_courier_at != null && (
-          <p className="text-[12.5px] font-bold leading-snug mt-1 truncate text-text-secondary">
+          <p className="text-[12.5px] leading-snug mt-0.5 truncate text-text-tertiary">
             Recogido a las {new Date(t.handed_to_courier_at).toLocaleTimeString('es-ES',
               { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}
           </p>
@@ -187,6 +206,12 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir, onAbrir }: {
         )}
 
         <LaBolsaRota t={t} />
+        {/* LLEVA MÁS DE LO NORMAL · sólo en «En ruta» y sólo pasado el p90. */}
+        {elRetrasoEnRuta(t, losMinutos(t)) && (
+          <p className="text-[12px] leading-snug text-warning font-semibold mt-1.5">
+            {elRetrasoEnRuta(t, losMinutos(t))}
+          </p>
+        )}
       </button>
 
       <div className="flex flex-col justify-center gap-1">
@@ -241,6 +266,8 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
   const [ocupado, setOcupado] = useState<string | null>(null)
   /** Qué pedido tiene la hoja abierta. `null` = ninguna. */
   const [hoja, setHoja] = useState<string | null>(null)
+  /** El cierre a mano, que es una excepción y por eso vive fuera de la tarjeta. */
+  const [cerrando, setCerrando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
   // El apagado: `false` = ni preguntado. `true` = preguntando. Ver la hoja.
   const [preguntandoApagar, setPreguntandoApagar] = useState(false)
@@ -313,12 +340,8 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
    * informa: hace ruido y empuja hacia abajo lo que sí cambia de una a otra.
    * Y sólo sale si en ESTA zona hay alguna del grupo 2.
    */
-  const avisoDeLaZona = useMemo(() => {
-    const delGrupo2 = porZona[zona].filter(t => !sabemosSuCiclo(t))
-    if (delGrupo2.length === 0) return null
-    const primeros = delGrupo2.map(t => loQueNoSabemos(t)).filter(Boolean) as string[]
-    return primeros[0] ?? null
-  }, [porZona, zona])
+  const avisoDeLaZona = useMemo(
+    () => elAvisoDeLaZona(porZona[zona]), [porZona, zona])
 
   /** ¿Hay algo que lleve de más? El contador avisa sin cambiar de pestaña. */
   const avisaEnRuta = porZona.en_ruta.some(t => elTono(t, losMinutos(t)) === 'aviso')
@@ -548,14 +571,35 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
         <HojaDelPase key={hoja} saleId={hoja} token={token} onCerrar={() => setHoja(null)} />
       )}
 
-      {/* El cerrar a mano vive FUERA de las tarjetas: es una excepción, no un paso. */}
-      {onCerrarAMano && (
+      {/* 🔴 LA LISTA ENSEÑA TODO LO VIVO, no sólo lo de la zona abierta: lo que
+          más falta hace cerrar a mano es justo lo que ya no se pinta en ninguna
+          zona --una bolsa del grupo 2 que se fue sola a los 30 minutos-- y si
+          sólo se pudiera cerrar lo que se ve, eso no se podría cerrar nunca. */}
+      {cerrando && (
+        <CerrarAMano
+          pedidos={(tablero?.tarjetas ?? []).filter(t => laSituacion(t) !== 'entregado')}
+          onCerrar={() => setCerrando(false)}
+          onConfirmar={async (saleId, motivo: ClaveMotivo, texto) => {
+            const antes = (tablero?.tarjetas ?? []).find(t => t.sale_id === saleId)
+            await cerrarAMano(saleId, token, motivo, texto)
+            await refrescar()
+            return laConfirmacion(antes, motivo)
+          }} />
+      )}
+
+      {/* 🔴 EL PIE, CONECTADO (17/09). Estaba escrito desde el 14/09 y sólo se
+          pintaba si alguien pasaba `onCerrarAMano` — y nadie la pasaba: la
+          `TabletStationRoute` monta el Pase sin esa prop. Tres días escrito y
+          sin efecto, la misma familia que la prohibida del 16/09. Ahora el pie
+          se pinta siempre y abre su propia hoja; la prop se respeta si viene,
+          para no romper a quien la use. */}
+      {(
         <div className="flex items-center gap-2.5 px-3 py-1.5 bg-card border-t border-default shrink-0">
           <AlertTriangle size={16} className="text-text-tertiary shrink-0" />
           <span className="text-[12px] text-text-secondary min-w-0">
             El cliente no abre, el rider se queda sin batería… se cierra a mano y se apunta por qué.
           </span>
-          <button onClick={onCerrarAMano}
+          <button onClick={() => (onCerrarAMano ? onCerrarAMano() : setCerrando(true))}
                   className="ml-auto shrink-0 min-h-[38px] px-3 rounded-xl border border-linea-fuerte
                              bg-card text-text-secondary text-[12.5px] font-extrabold">
             Cerrar a mano
