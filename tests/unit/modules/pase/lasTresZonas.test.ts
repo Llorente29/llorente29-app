@@ -134,9 +134,30 @@ describe('la plataforma: se enseña, no se gestiona', () => {
   it('dice con esas palabras lo que no sabemos', () => {
     expect(loQuePasa(glovo, null)).toBe('Esperando al rider de Glovo')
     expect(loQueNoSabemos(glovo)).toContain('no nos dice cuándo sale ni cuándo llega')
-    expect(loQueNoSabemos(glovo)).toContain('se cierre la comanda en caja')
     expect(loQueNoSabemos(glovo)).not.toContain('entregado')
-    expect(elSubtitulo(glovo)).toBe('Glovo · lo reparte Glovo')
+  })
+
+  it('🔴 YA NO dice «la tarjeta se va sola cuando se cierre la comanda en caja»', () => {
+    // La frase describía un mundo que dejó de existir cuando cerrar dejó de ser
+    // un botón de cocina. Una nota de pantalla que envejece mal es peor que
+    // ninguna: el operario deja de creerse también las que dicen la verdad.
+    expect(loQueNoSabemos(glovo)).not.toContain('comanda en caja')
+    expect(loQueNoSabemos({ ...glovo, service_type: 'pickup' })).not.toContain('comanda en caja')
+  })
+
+  it('🔴 no dice dos veces quién reparte', () => {
+    // Antes: «Glovo · lo reparte Glovo», y debajo «Esperando al rider de
+    // Glovo». Tres veces la misma palabra en una tarjeta de cinco líneas.
+    expect(elSubtitulo(glovo)).toBe('Glovo')
+  })
+
+  it('🔴 a Uber por HubRise ya no se le dice que no sabemos cuándo sale', () => {
+    // U8C4DE llevaba ese aviso mientras Uber nos estaba diciendo la recogida.
+    const uberPorHubrise = { ...glovo, source: 'hubrise', channel: 'Uber' }
+    expect(loQueNoSabemos(uberPorHubrise)).toBeNull()
+    // Y por Last, el MISMO canal sigue sin decirnos nada: el aviso se queda.
+    const uberPorLast = { ...glovo, source: 'lastapp', channel: 'Uber' }
+    expect(loQueNoSabemos(uberPorLast)).toContain('no nos dice cuándo sale')
   })
 
   it('y con Uber lo dice con el nombre de Uber, no con uno genérico', () => {

@@ -48,6 +48,8 @@ export interface PedidoDelPase {
   handed_to_courier_at: string | null
   delivered_at: string | null
   channel: string | null
+  /** Por dónde entró: 'lastapp' | 'hubrise' | … Decide si sabemos su ciclo. */
+  source?: string | null
   /** Cuándo entró el pedido. El reloj de los que aún no tienen sello. */
   entro_at?: string | null
   /**
@@ -94,6 +96,54 @@ export function loRepartelaPlataforma(p: PedidoDelPase): boolean {
 export function loRepartimosConFlota(p: PedidoDelPase): boolean {
   if (loRepartelaPlataforma(p)) return false
   return p.has_courier === true || (p.carrier_code ?? '') !== ''
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * ¿SABEMOS SU CICLO? EL GRUPO 1 Y EL GRUPO 2, EN UN SOLO SITIO · 16/09/2026
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * De unos pedidos nos llega la recogida y la entrega, y de otros no nos llega
+ * NADA después del «Listo». De eso depende media pantalla: quién puede estar en
+ * «Esperando repartidor», quién pasa por «En ruta» y quién se va a Terminados
+ * en cuanto cocina termina. Por eso se decide aquí, una vez, y lo usan igual
+ * Pedidos y el Pase.
+ *
+ * 🔴 NO ES UNA SUPOSICIÓN POR CANAL: está contado. Avisos de HubRise de 7 días
+ * y ventas de 14, el 16/09:
+ *
+ *   flota nuestra (Catcher) ............ 213 de 224 con recogida Y entrega
+ *   Uber Eats por HubRise .............. 71 de 71 con `in_delivery`,
+ *                                        69 de 71 con `completed`
+ *   ─────────────────────────────────── el resto, cero de cero:
+ *   Glovo por HubRise (lo reparte Glovo)  133 avisos en 7 días, TODOS `new`
+ *   cualquier cosa por Last ............ 1.197 pedidos, 0 recogidas, 0 entregas
+ *   las recogidas de mostrador ......... nadie las marca nunca: no hay app
+ *
+ * Los 208 «con recogida» de la fila de Glovo por HubRise NO son de Glovo: son
+ * de Catcher, porque ésos los repartimos nosotros. Mirar solo el canal habría
+ * puesto a Glovo en el grupo 1 por un dato que no manda Glovo.
+ *
+ * ⚠️ LO QUE PASA SI SE CLASIFICA MAL, y por eso va medido y no a ojo: un grupo
+ * 2 marcado como 1 se queda esperando para siempre a un aviso que no va a
+ * llegar; un grupo 1 marcado como 2 se va a Terminados con el rider todavía en
+ * la puerta. Los dos errores se ven en pantalla, y ninguno se corrige solo.
+ *
+ * ⚠️ Y SI MAÑANA UN CONECTOR EMPIEZA O DEJA DE MANDAR EL CICLO, esto se queda
+ * mintiendo en silencio. Hoy no hay tabla de configuración por conector y no se
+ * construye una para dos casos; la señal de que hay que volver aquí es un
+ * «Esperando repartidor» que no se vacía nunca, o un Terminados con pedidos
+ * que luego resultan tener recogida.
+ */
+export function sabemosSuCiclo(p: PedidoDelPase): boolean {
+  // 1 · Lo llevamos nosotros: el ciclo lo manda Catcher, pedido a pedido.
+  if (loRepartimosConFlota(p)) return true
+  // 2 · Uber por HubRise. Las dos mitades cuentan: por Last, el MISMO canal no
+  //     manda nada (349 pedidos, 0 recogidas), así que el canal solo no basta.
+  const canal = (p.channel ?? '').trim().toLowerCase()
+  const porHubrise = (p.source ?? '').trim().toLowerCase() === 'hubrise'
+  if (porHubrise && (canal === 'uber' || canal === 'uber eats' || canal === 'ubereats')) return true
+  return false
 }
 
 /**
@@ -193,11 +243,23 @@ export function quienReparte(p: PedidoDelPase): string {
   return 'nosotros'
 }
 
-/** La línea bajo el nombre de la marca: canal y quién lo lleva. */
+/**
+ * La línea bajo el nombre de la marca: canal y quién lo lleva.
+ *
+ * 🔴 SIN DECIR DOS VECES LO MISMO (16/09). Antes salía «Uber · lo reparte
+ * Uber», y debajo `loQuePasa` remataba con «Esperando al rider de Uber»: tres
+ * veces la palabra Uber en una tarjeta de cinco líneas. Cuando el que reparte
+ * ES el canal --que es el caso de Glovo y Uber, o sea la inmensa mayoría-- el
+ * canal solo ya lo dice, y la frase de estado dice el resto. Se deja el «lo
+ * reparte X» únicamente cuando X no es el canal, que es cuando aporta algo.
+ */
 export function elSubtitulo(p: PedidoDelPase): string {
   const canal = p.channel?.trim() || 'sin canal'
   if (esRecogida(p)) return `${canal} · lo recoge el cliente`
-  if (loRepartelaPlataforma(p)) return `${canal} · lo reparte ${quienReparte(p)}`
+  if (loRepartelaPlataforma(p)) {
+    const quien = quienReparte(p)
+    return quien.toLowerCase() === canal.toLowerCase() ? canal : `${canal} · lo reparte ${quien}`
+  }
   if (loRepartimosConFlota(p)) return `${canal} · reparto nuestro`
   return `${canal} · lo lleva alguien de casa`
 }
@@ -236,13 +298,23 @@ export function loQuePasa(p: PedidoDelPase, minutos: number | null): string {
 export function loQueNoSabemos(p: PedidoDelPase): string | null {
   switch (laSituacion(p)) {
     case 'esperando_rider_plataforma':
-      return `${quienReparte(p)} no nos dice cuándo sale ni cuándo llega. `
-           + 'La tarjeta se va sola cuando se cierre la comanda en caja.'
+      // 🔴 Dos correcciones del 16/09, las dos porque la frase había dejado de
+      // ser verdad:
+      //
+      // 1 · SOLO si de verdad no lo sabemos. Uber por HubRise sí manda la
+      //     recogida --71 de 71-- desde que se desplegó el sello. A U8C4DE le
+      //     salía «Uber no nos dice cuándo sale» mientras Uber nos lo estaba
+      //     diciendo. Ahora lo decide `sabemosSuCiclo`, no el tipo de reparto.
+      // 2 · FUERA «la tarjeta se va sola cuando se cierre la comanda en caja»:
+      //     ese cierre ya no es un botón de cocina y la frase describía un
+      //     mundo que ya no existe. Una nota de pantalla que envejece mal es
+      //     peor que ninguna, porque el operario deja de creerse las demás.
+      if (sabemosSuCiclo(p)) return null
+      return `${quienReparte(p)} no nos dice cuándo sale ni cuándo llega.`
     case 'esperando_que_lo_cojan':
       return 'Lo marca quien se lo lleve, desde su móvil. Aquí no se toca.'
     case 'lo_recoge_el_cliente':
-      return 'Viene el cliente a por ello. Nadie lo va a marcar: la tarjeta se '
-           + 'va cuando se cierre la comanda en caja.'
+      return 'Viene el cliente a por ello. Nadie lo va a marcar.'
     default:
       return null
   }
