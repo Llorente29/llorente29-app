@@ -138,8 +138,9 @@ tiempo de preparación que incluya esos pedidos está contando ceros que no son
 ceros. No es raro: de 106 avisos de `in_delivery` en 7 días, 9 llegaban en el
 mismo segundo que el «Listo».
 
-**2 · En Uber por HubRise, `closed_at` va 0,4–1,1 s ANTES de `delivered_at`.**
-Medido: U88129 0,507 s, U987F2 1,105 s, U8C4DE 0,431 s. La causa es mía y es una
+**2 · En Uber por HubRise, `closed_at` va 0,4–1,3 s ANTES de `delivered_at`.**
+Medido sobre los cinco ciclos completos de esta noche: U8C4DE 0,431 s, U88129
+0,507 s, U987F2 1,105 s, UE17A4 1,268 s, UD12A3 0,409 s. La causa es mía y es una
 lectura incompleta: escribí el sello de entrega «antes del `close_sale`», y lo es
 —antes del explícito— pero el que manda es el del DISPARADOR, que corre dentro
 del `upsertSale` cuando `order_status` pasa a `completed`, o sea **antes** de que
@@ -164,8 +165,49 @@ La solución de verdad es D14, «ver la pantalla de un local» sin token.
 
 ---
 
-## Lo que queda mirando
+## El cierre de la vigilancia — 22:35
 
-Las tres tablets siguen en **bundle 303** con **17 pedidos abiertos** y latiendo
-al minuto (22:27), que es exactamente lo correcto: recogen cuando pueden y
-esperan cuando no. El **305** --el bueno-- entra cuando su cocina esté en calma.
+Tres comprobaciones, las tres con la consulta delante.
+
+**1 · Las tablets esperan, que es lo correcto.** Las tres activas siguen en
+**bundle 303** (lo cogieron a las 08:30) con la cocina en pleno servicio:
+**17 pedidos abiertos**, **18 ventas en la última hora** y la última entrando a
+las 22:32:23. Latiendo al minuto las tres — Cocina 22:33:22, Pase 22:33:32,
+camichi4 22:33:30. Ninguna aplicó un paquete con pedidos abiertos: eso habría
+sido el rojo. El **305** entra cuando su cocina calle. (El **304** no existe:
+su run murió con el mismo error de tipos, así que ninguna tablet pudo cogerlo.)
+
+**2 · El run 35 NO desplegó la prohibida, y se comprueba por lo desplegado.**
+El run de la fusión (`8b4c3a4c`, 22:09) salió verde con
+`FUNCIONES: catcher-webhook lastapp-webhook` — `hubrise-webhook` fuera, que es
+la exclusión automática haciendo su trabajo. Y no me quedo en la lista: lo
+desplegado sigue siendo la **v57 del 16/09 a las 21:12:06**, la de la puerta
+manual, y sus cuatro ficheros tienen el md5 exacto de `origin/main`:
+
+| fichero | md5 desplegado | md5 en `main` |
+|---|---|---|
+| `hubrise-webhook/index.ts` | `5988db5d5706406fb8565d629d0902a5` | igual |
+| `_shared/cors.ts` | `99668976c97e30ee852e0783a3663b1e` | igual |
+| `_shared/hubrisePush.ts` | `23a4dc02faa6efac1ca3d6d4528144c9` | igual |
+| `_shared/hubriseToken.ts` | `357223e304a268e571203399f3f07cdd` | igual |
+
+Cero deriva entre lo desplegado y el repositorio.
+
+**3 · La entrega de Uber por HubRise, cinco veces y el ciclo entero.**
+
+| pedido | Listo | recogida | entrega | cierre | cierre − entrega |
+|---|---|---|---|---|---|
+| U8C4DE | 20:38:36 | 20:48:21 | 21:38:59 | 21:38:59 | −0,431 s |
+| U987F2 | 21:50:34 | 21:52:29 | 22:19:15 | 22:19:14 | −1,105 s |
+| UE17A4 | 21:50:28 | 22:00:25 | 22:21:01 | 22:21:00 | −1,268 s |
+| U88129 | 21:50:32 | 22:00:43 | 22:16:28 | 22:16:27 | −0,507 s |
+| UD12A3 | 22:00:53 | 22:00:53 | 22:28:43 | 22:28:43 | −0,409 s |
+
+Los cinco con `delivery_state` en NULL, o sea que los sellos los escribió la
+edge nueva y no el disparador. Antes de esta noche, en 7 días, ni uno solo de
+los 209 pedidos de HubRise tenía recogida ni entrega. El desfase del cierre es
+la deuda 2; la recogida de UD12A3 en el mismo segundo que el «Listo» es la 1.
+
+**Y el front: READY.** `dpl_H24qFwfcTj1zXAXP1UdrmoYSw6dR`, producción, commit
+`895963f2`, READY a las **22:31:04** sirviendo `app.folvy.app`. Comprobado en
+Vercel, que es donde dice la regla que se comprueba.
