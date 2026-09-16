@@ -1,8 +1,10 @@
 -- ============================================================================
--- ⚠️  SIN APLICAR. Se aplica a partir de las 23:45 (hora de la base), con el sí
---     de Julio. El nombre lleva esa hora a propósito.
+-- APLICADA el 16/09 a las 15:53:23 UTC = 17:53 de Madrid, con el sí de Julio y
+-- con la ventana nueva: miércoles, las dos tiendas cerradas entre comida y
+-- cena, 0 pedidos en la última hora. La regla de «desde las 23:45» la anuló
+-- Julio esa misma tarde.
 --
--- POR QUÉ ESPERA: `sale_line` está en el camino del pedido —la escriben
+-- POR QUÉ ESPERABA: `sale_line` está en el camino del pedido —la escriben
 -- adapt_lastapp_order y adapt_hubrise_order, la lee _sale_line_raw_consumption
 -- en cada cierre de venta— y un CREATE INDEX toma ACCESS EXCLUSIVE sobre ella.
 -- Es el caso 2 de la banda de CLAUDE.md: espera, aunque tarde poco.
@@ -30,10 +32,20 @@
 --   línea a línea EN CADA VENTA que se cierra. El barrido se está pagando en el
 --   camino del pedido, en servicio, desde siempre.
 --
--- EL «DESPUÉS» ESTÁ POR MEDIR (regla 31): en cuanto se aplique, se vuelve a
--- tomar el mismo número con la misma vara —el cuadre del 15/09— y se pegan los
--- dos. Hasta entonces, la comprobación 6 del §5 (ninguna consulta del parte por
--- encima de 2 s) está SIN CUMPLIR y así se dice.
+-- EL DESPUÉS, MEDIDO CON LA MISMA VARA (regla 31), minutos después de aplicar:
+--
+--   | lo medido                                    | antes    | después  |
+--   |----------------------------------------------|----------|----------|
+--   | la consulta por parent_sale_line_id          | 9,205 ms | 0,181 ms |
+--   | el cuadre entero del 15/09                   | 5,154 s  | 0,261 s  |
+--   | generate_sale_consumption sobre G190 (27 mov.)| 0,208 s | 0,077 s  |
+--
+--   El plan pasa de `Seq Scan … Rows Removed by Filter: 31615` a
+--   `Index Scan using idx_sale_line_parent`. Y las cifras del parte no se
+--   mueven: 94 pedidos, 992 bien, 0 faltan, 5 retenidos, antes y después.
+--
+--   Con eso, la comprobación 6 del §5 (ninguna consulta del parte por encima de
+--   2 s) queda CUMPLIDA: 0,261 s.
 --
 -- Tamaño de la tabla al medir: 31.563 filas, 11 MB. La construcción del índice
 -- es de menos de un segundo; aun así espera, porque la regla no mide la

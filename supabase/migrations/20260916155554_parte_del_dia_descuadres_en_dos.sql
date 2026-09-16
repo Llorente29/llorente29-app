@@ -1,9 +1,14 @@
 -- ============================================================================
 -- EL PARTE DEL DÍA — §3.1 del encargo, con los descuadres repartidos en dos.
 --
--- ⚠️  SIN APLICAR. Va a las 23:45, DESPUÉS del índice de sale_line.
+-- APLICADA el 16/09 a las 15:55:54 UTC = 17:55 de Madrid, después del índice.
 --     Sustituye a 20260916085716_parte_del_dia_lectura (misma función, mismo
 --     contrato; lo que cambia está abajo).
+--
+--     Comprobado al aplicar, función y método en la MISMA sentencia: las trece
+--     cifras del 15/09 dan IGUAL (94 · 2.093,07 · 2 · 992 · 0 · 5 · 0 · 0 · 0 ·
+--     259 · 258 · 0 · 0), y el 14/09 reparte 37 recuperables y 0 averías en
+--     nueve pedidos.
 --
 -- QUÉ CAMBIA Y POR QUÉ (corrección de Julio, 16/09 12:40):
 --
@@ -216,7 +221,6 @@ hub_vivas_anuladas as (
   left join locations l on l.id = hv.location_id
   where he.ultimo in ('cancelled','rejected') and coalesce(hv.status,'') <> 'cancelled'
 ),
--- ── Los números que deciden el verde ───────────────────────────────────────
 -- ── El descuadre: ¿se puede recuperar, o es avería? ────────────────────────
 -- Referencia: cuándo se escribió el último movimiento de esa venta.
 ref as (
@@ -263,6 +267,7 @@ por_pedido as (
   from descuadre d left join recipe_item ri on ri.id = d.e_item
   group by 1,2,3,4,5
 ),
+-- ── Los números que deciden el verde ───────────────────────────────────────
 n as (
   select
     (select count(*) from cuadre where e_item is not null and w_item is null and k_item is null) as faltan,

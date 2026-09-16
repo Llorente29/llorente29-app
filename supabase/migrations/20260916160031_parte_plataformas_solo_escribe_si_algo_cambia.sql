@@ -1,32 +1,14 @@
 -- ============================================================================
--- §3.3 — LA PASADA QUE LLENA EL CRUCE, UNA VEZ AL DÍA.
+-- APLICADA el 16/09 a las 16:00:31 UTC = 18:00 de Madrid.
 --
--- ⚠️  SIN APLICAR. Va a las 23:45, después de la tabla. El cron nuevo también:
---     el §6 del encargo prohíbe tocar crons en banda.
+-- La pasada solo escribe si algo CAMBIA de verdad. Antes, una segunda pasada
+-- del mismo día reescribía las 145 filas para dejarlas exactamente igual: no
+-- duplicaba nada, pero el número que devolvía no significaba nada y la
+-- comprobación «pasada dos veces, la segunda no escribe» no se cumplía en
+-- sentido literal. Medido después del arreglo: segunda pasada = 0 y 0.
 --
--- Dos funciones, una por plataforma, SIN una línea compartida (§3.3: ninguna
--- relación entre las dos ni en código ni en pantalla), y una tercera que las
--- llama para un día y una cuenta.
---
--- De momento llenan con `origen='aviso'`: lo que ya está dentro de la base.
---   · Cedidas: `lastapp_webhook_log` con note='frontera-tab-cancelled',
---     casando `payload->'data'->>'name'` con `sale.platform_order_code`.
---     Medido el 16/09: de 85 tab:cancelled de 30 días, 79 existen en Folvy y
---     29 siguen vivos (751,33 €). El aviso llega; lo que falla es aplicarlo, y
---     eso es de la otra sesión.
---   · Propias: `external_webhook_log` con source='hubrise',
---     note='frontera-order-create' y '-update', casando `payload->>'order_id'`
---     con `sale.external_ref`. El 15/09: 24 de 24.
---
--- Lo que NO hace todavía, y por eso el parte lo dice en el pie: pedir el
--- LISTADO del día a cada plataforma. Es lo único que ve un pedido cuyo aviso
--- nunca llegó. Last se pide con
--- GET https://api.last.app/v2/bills?locationId=…&startDate=…&endDate=…&limit=100
--- (ojo al techo de 100 por día y local: hay que paginar o cantar el
--- desbordamiento). HubRise necesita `orders.read`, que hoy no está en la lista
--- blanca de scopes.
---
--- Idempotente: se puede pasar dos veces el mismo día sin escribir dos veces.
+-- El fichero de la pasada (20260916155814) lleva ya esto dentro. Este queda
+-- para que una base virgen reproduzca la misma secuencia.
 -- ============================================================================
 
 create or replace function public._parte_plataformas_cedidas(
@@ -86,15 +68,26 @@ begin
     -- una fila que ya venía del listado NO baja a 'aviso'
     origen = case when t.origen = 'listado' then 'listado' else excluded.origen end,
     visto_en = excluded.visto_en,
-    updated_at = now();
+    updated_at = now()
+  -- Solo escribe si algo CAMBIA. Sin esto, una segunda pasada del mismo día
+  -- reescribía las 145 filas para dejarlas igual, y el número que devuelve no
+  -- significaba nada. Con esto, un recuento distinto de cero en una pasada
+  -- posterior dice que de verdad ha cambiado algo (regla 8: lo que informa,
+  -- informa de algo).
+  where (t.location_id, t.sale_id, t.pedido_corto, t.en_plataforma, t.en_folvy,
+         t.anulado_plataforma, t.anulado_folvy, t.importe_folvy, t.origen, t.visto_en)
+        is distinct from
+        (excluded.location_id, excluded.sale_id, excluded.pedido_corto,
+         excluded.en_plataforma or t.en_plataforma, excluded.en_folvy,
+         excluded.anulado_plataforma or t.anulado_plataforma, excluded.anulado_folvy,
+         excluded.importe_folvy,
+         case when t.origen = 'listado' then 'listado' else excluded.origen end,
+         excluded.visto_en);
 
   get diagnostics v_n = row_count;
   return v_n;
 end;
 $fn$;
-
-comment on function public._parte_plataformas_cedidas(uuid, date) is
-'Llena el cruce de las CEDIDAS (Last) de un día, con lo que ya está en la base. Casa por platform_order_code. No toca nada de las propias. §3.3.';
 
 create or replace function public._parte_plataformas_propias(
   p_account_id uuid, p_dia date
@@ -143,7 +136,11 @@ begin
            k.ref as pedido_ref, v.location_id, v.id as sale_id, v.pos_short_code as pedido_corto,
            (a.oid is not null) as en_plataforma,
            (v.id is not null) as en_folvy,
-           (e.ultimo in ('cancelled','rejected')) as anulado_plataforma,
+           -- coalesce OBLIGATORIO: `e.ultimo` es null cuando ese pedido no tiene
+           -- ningún aviso de estado, y `null in (...)` es NULL, no false. Lo cazó
+           -- el NOT NULL de la columna al probar contra el 15/09 de verdad
+           -- (G800, 3qq6pj3): con ejemplos inventados habría pasado (regla 31).
+           coalesce(e.ultimo in ('cancelled','rejected'), false) as anulado_plataforma,
            coalesce(v.anulada, false) as anulado_folvy,
            null::numeric as importe_plataforma, v.total as importe_folvy,
            'aviso'::text as origen,
@@ -170,83 +167,28 @@ begin
     importe_folvy = excluded.importe_folvy,
     origen = case when t.origen = 'listado' then 'listado' else excluded.origen end,
     visto_en = excluded.visto_en,
-    updated_at = now();
+    updated_at = now()
+  -- Solo escribe si algo CAMBIA. Sin esto, una segunda pasada del mismo día
+  -- reescribía las 145 filas para dejarlas igual, y el número que devuelve no
+  -- significaba nada. Con esto, un recuento distinto de cero en una pasada
+  -- posterior dice que de verdad ha cambiado algo (regla 8: lo que informa,
+  -- informa de algo).
+  where (t.location_id, t.sale_id, t.pedido_corto, t.en_plataforma, t.en_folvy,
+         t.anulado_plataforma, t.anulado_folvy, t.importe_folvy, t.origen, t.visto_en)
+        is distinct from
+        (excluded.location_id, excluded.sale_id, excluded.pedido_corto,
+         excluded.en_plataforma or t.en_plataforma, excluded.en_folvy,
+         excluded.anulado_plataforma or t.anulado_plataforma, excluded.anulado_folvy,
+         excluded.importe_folvy,
+         case when t.origen = 'listado' then 'listado' else excluded.origen end,
+         excluded.visto_en);
 
   get diagnostics v_n = row_count;
   return v_n;
 end;
 $fn$;
 
-comment on function public._parte_plataformas_propias(uuid, date) is
-'Llena el cruce de las PROPIAS (HubRise) de un día, con los avisos que ya están en la base. Casa por external_ref contra el order_id del aviso. No toca nada de las cedidas. §3.3.';
-
-create or replace function public.parte_plataformas_refresh(
-  p_account_id uuid, p_dia date
-) returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $fn$
-declare v_ced integer; v_pro integer;
-begin
-  v_ced := public._parte_plataformas_cedidas(p_account_id, p_dia);
-  v_pro := public._parte_plataformas_propias(p_account_id, p_dia);
-  return jsonb_build_object('dia', p_dia, 'cedidas', v_ced, 'propias', v_pro);
-end;
-$fn$;
-
-comment on function public.parte_plataformas_refresh(uuid, date) is
-'Rehace el cruce de un día para una cuenta. Idempotente. §3.3.';
-
--- La pasada de cada mañana: ayer y anteayer, solo cuentas vivas y no internas.
--- Dos días a propósito: un aviso de anulación puede llegar de madrugada.
-create or replace function public.cron_parte_plataformas(p_days integer default 2)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $fn$
-declare
-  v_cuentas integer := 0; v_dias integer := 0;
-  v_ced integer := 0; v_pro integer := 0;
-  r record; d date; j jsonb;
-begin
-  for r in
-    select a.id from public.accounts a
-    where a.status = 'active' and coalesce(a.is_internal, false) = false
-  loop
-    v_cuentas := v_cuentas + 1;
-    for i in 1..greatest(coalesce(p_days,2),1) loop
-      d := ((now() at time zone 'Europe/Madrid')::date - i);
-      j := public.parte_plataformas_refresh(r.id, d);
-      v_ced := v_ced + coalesce((j->>'cedidas')::int, 0);
-      v_pro := v_pro + coalesce((j->>'propias')::int, 0);
-      v_dias := v_dias + 1;
-    end loop;
-  end loop;
-
-  -- Regla 8: una pasada que no cuenta lo que ha hecho es una pasada que no se
-  -- puede creer. pg_cron guarda este NOTICE.
-  raise notice 'cron_parte_plataformas: % cuentas, % días, % cedidas, % propias',
-    v_cuentas, v_dias, v_ced, v_pro;
-
-  return jsonb_build_object('cuentas', v_cuentas, 'dias', v_dias,
-                            'cedidas', v_ced, 'propias', v_pro);
-end;
-$fn$;
-
-comment on function public.cron_parte_plataformas(integer) is
-'La pasada de cada mañana del cruce con las plataformas: ayer y anteayer, solo cuentas activas y no internas. §3.3.';
-
 revoke all on function public._parte_plataformas_cedidas(uuid, date) from public, anon, authenticated;
 revoke all on function public._parte_plataformas_propias(uuid, date) from public, anon, authenticated;
-revoke all on function public.parte_plataformas_refresh(uuid, date) from public, anon;
-revoke all on function public.cron_parte_plataformas(integer) from public, anon, authenticated;
 grant execute on function public._parte_plataformas_cedidas(uuid, date) to service_role;
 grant execute on function public._parte_plataformas_propias(uuid, date) to service_role;
-grant execute on function public.parte_plataformas_refresh(uuid, date) to service_role;
-grant execute on function public.cron_parte_plataformas(integer) to service_role;
-
--- El cron. 06:00 de Madrid = 04:00 UTC. Va antes del aviso de las 08:30.
-select cron.schedule('parte-plataformas-diario', '0 4 * * *',
-                     $cron$select public.cron_parte_plataformas(2)$cron$);

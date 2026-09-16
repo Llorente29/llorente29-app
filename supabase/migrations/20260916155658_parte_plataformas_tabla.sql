@@ -1,8 +1,8 @@
 -- ============================================================================
 -- §3.3 — LA TABLA DEL CRUCE CON LAS PLATAFORMAS.
 --
--- ⚠️  SIN APLICAR. Va a las 23:45, después del índice y del parte con los
---     descuadres repartidos.
+-- APLICADA el 16/09 a las 15:56:58 UTC = 17:56 de Madrid. RLS encendida y
+--     comprobada.
 --
 -- Una fila por (cuenta, día, plataforma, pedido). Guarda las dos caras: lo que
 -- dice la plataforma y lo que dice Folvy. El parte la lee; no llama fuera.
