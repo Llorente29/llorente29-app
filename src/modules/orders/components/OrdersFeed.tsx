@@ -24,7 +24,7 @@ import {
   type KitchenDayBanner, type KitchenThresholds,
 } from '../services/ordersFeedService'
 import {
-  laFase, ordenDeLaFase, elDistintivoDelRider, LAS_FASES,
+  laFase, ordenDeLaFase, elDistintivoDeLaTarjeta, LAS_FASES,
   losMinutosDeLaTarjeta, elNivelDeLaTarjeta,
   elRotulo, elRotuloVacio, HORAS_QUE_TRAE_LA_TABLET,
   type Fase,
@@ -397,7 +397,7 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
                 // curso» los minutos desde que entró (y el semáforo de cocina),
                 // y en las demás los de la situación con el ámbar de los 20.
                 const minutosDeLaFase = losMinutosDeLaTarjeta(o, filter, new Date(nowMs))
-                return <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} distintivo={filter === 'esperando' ? elDistintivoDelRider(o) : null} minutosDeLaFase={minutosDeLaFase} nivelDeLaFase={elNivelDeLaTarjeta(o, filter, minutosDeLaFase)} />
+                return <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} distintivo={elDistintivoDeLaTarjeta(o, filter)} minutosDeLaFase={minutosDeLaFase} nivelDeLaFase={elNivelDeLaTarjeta(o, filter, minutosDeLaFase)} />
               })}
             </div>
           ) : (

@@ -12,6 +12,7 @@ import {
   elSubtitulo, elTono, losMinutos, loRepartimosConFlota, loRepartelaPlataforma,
   quienLoLleva, esRecogida,
   type PedidoDelPase,
+  tieneBotonDeRecogida, MINUTOS_DE_ESPERA_EN_AMBAR,
 } from '@/modules/pase/lib/lasTresZonas'
 
 const P = (o: Partial<PedidoDelPase> = {}): PedidoDelPase => ({
@@ -335,5 +336,40 @@ describe('🔴 la recogida: 12 tarjetas que decían algo que no pasa', () => {
 
   it('sin marcar sigue siendo «por marcar», y ése sí tiene botón', () => {
     expect(tieneBotonDeListo({ ...recogida, ready_at: null })).toBe(true)
+  })
+})
+
+describe('«Se lo ha llevado» y el ámbar de las bolsas · 16/09', () => {
+  const hecha = P({
+    service_type: 'platform_delivery', has_courier: false, carrier_code: null,
+    channel: 'Glovo', order_status: 'awaiting_collection',
+    ready_at: '2026-09-16T18:38:36Z', handed_to_courier_at: null,
+  })
+
+  it('una bolsa hecha y sin recoger puede decir que se la han llevado', () => {
+    expect(tieneBotonDeRecogida(hecha)).toBe(true)
+  })
+  it('una que ya tiene la hora, no: no se pisa lo que ya sabíamos', () => {
+    expect(tieneBotonDeRecogida({ ...hecha, handed_to_courier_at: '2026-09-16T18:48:21Z' })).toBe(false)
+  })
+  it('una sin marcar tampoco: primero se marca «Listo»', () => {
+    expect(tieneBotonDeRecogida({ ...hecha, ready_at: null })).toBe(false)
+  })
+  it('una recogida de mostrador tampoco: ahí no se lo lleva un repartidor', () => {
+    expect(tieneBotonDeRecogida({ ...hecha, service_type: 'pickup' })).toBe(false)
+  })
+  it('🔴 se ofrece también en el grupo 1: «suele llegar solo» no es «siempre»', () => {
+    expect(tieneBotonDeRecogida({ ...hecha, source: 'hubrise', channel: 'Uber' })).toBe(true)
+  })
+
+  it('🔴 los minutos van DENTRO de la frase, que es lo que faltaba', () => {
+    // U8C4DE llevaba 24 minutos hecho y la pantalla decía sólo «Esperando al
+    // rider de Uber», igual que si acabara de salir de la plancha.
+    expect(loQuePasa(hecha, 24)).toBe('Esperando al rider de Glovo · 24 min')
+  })
+  it('🔴 y a los 20 minutos la bolsa se pone ámbar', () => {
+    expect(elTono(hecha, 19)).toBe('neutro')
+    expect(elTono(hecha, 21)).toBe('aviso')
+    expect(MINUTOS_DE_ESPERA_EN_AMBAR).toBe(20)
   })
 })

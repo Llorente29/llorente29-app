@@ -233,6 +233,28 @@ export function tieneBotonDeListo(p: PedidoDelPase): boolean {
   return laZona(p) === 'sigue_aqui' && laSituacion(p) === 'por_marcar'
 }
 
+/**
+ * ¿SE PUEDE DECIR «SE LO HA LLEVADO»? · 16/09/2026
+ *
+ * La bolsa está hecha, sigue aquí y nadie ha escrito todavía la recogida. El
+ * del pase VE la bolsa salir por la puerta: es la única persona del sistema que
+ * lo sabe en ese instante, y hasta hoy no tenía dónde decirlo.
+ *
+ * 🔴 SE OFRECE TAMBIÉN EN EL GRUPO 1, y es a propósito. Ahí la recogida suele
+ * llegar sola --71 de 71 en Uber por HubRise-- pero «suele» no es «siempre», y
+ * cuando el aviso tarda, el del pase lo sabe antes que el sistema. La RPC
+ * escribe sólo si está vacío, así que pulsar cuando ya había hora no pisa nada:
+ * manda el primero que lo supo, no el último que pulsó.
+ *
+ * No aparece en una recogida de mostrador: ahí no se lo lleva un repartidor, y
+ * el botón diría algo que no pasa.
+ */
+export function tieneBotonDeRecogida(p: PedidoDelPase): boolean {
+  if (laZona(p) !== 'sigue_aqui') return false
+  if (esRecogida(p)) return false
+  return estaMarcadoListo(p) && p.handed_to_courier_at == null
+}
+
 // ── LAS PALABRAS ──────────────────────────────────────────────────────────
 //
 // Valen más que un estado. Donde no sabemos, se dice que no sabemos.
@@ -270,12 +292,17 @@ export function loQuePasa(p: PedidoDelPase, minutos: number | null): string {
     case 'por_marcar':
       return 'En cocina'
     case 'esperando_rider_plataforma':
-      return `Esperando al rider de ${quienReparte(p)}`
+      // Los minutos van DENTRO de la frase, como en las otras esperas: sin
+      // ellos, una bolsa hecha hace media hora se lee igual que una recién
+      // hecha, que es lo que pasaba el 16/09.
+      return minutos == null ? `Esperando al rider de ${quienReparte(p)}`
+                             : `Esperando al rider de ${quienReparte(p)} · ${minutos} min`
     case 'esperando_que_lo_cojan':
       return minutos == null ? 'Esperando a que alguien lo coja'
                              : `Esperando a que alguien lo coja · ${minutos} min`
     case 'listo_sin_salir':
-      return 'Listo, esperando al repartidor'
+      return minutos == null ? 'Listo, esperando al repartidor'
+                             : `Listo, esperando al repartidor · ${minutos} min`
     case 'lo_recoge_el_cliente':
       return minutos == null ? 'Listo, esperando a que lo recojan'
                              : `Listo, esperando a que lo recojan · ${minutos} min`
@@ -326,6 +353,15 @@ export type Tono = 'neutro' | 'bien' | 'aviso' | 'mal'
 /** A partir de estos minutos, el renglón se pone ámbar. Medido: 15 min de media. */
 export const MINUTOS_DE_MAS_EN_RUTA = 30
 export const MINUTOS_DE_MAS_SIN_COGER = 15
+/**
+ * Lo que ya está HECHO y espera a que se lo lleven. Decisión de Julio, 16/09.
+ * No es el semáforo de cocina: aquí no se cocina, se espera.
+ *
+ * 🔴 Vive aquí y no en `lasFases` --donde estaba-- porque el Pase lo necesita
+ * igual: U8C4DE llevaba 24 minutos hecho y la bolsa no se ponía ámbar. Un
+ * número en dos ficheros es un número que un día dice dos cosas.
+ */
+export const MINUTOS_DE_ESPERA_EN_AMBAR = 20
 
 /**
  * DESDE CUÁNDO SE CUENTA, que no es lo mismo en cada zona.
@@ -371,6 +407,12 @@ export function elTono(p: PedidoDelPase, minutos: number | null): Tono {
   }
   if (s === 'esperando_que_lo_cojan' || s === 'lo_recoge_el_cliente') {
     return minutos != null && minutos > MINUTOS_DE_MAS_SIN_COGER ? 'aviso' : 'neutro'
+  }
+  // 🔴 LO QUE ESPERA A UN RIDER TAMBIÉN AVISA (16/09). Antes devolvía 'neutro'
+  // siempre, así que una bolsa podía llevar media hora hecha sin que la pantalla
+  // lo dijera. U8C4DE llevaba 24 minutos y estaba en gris.
+  if (s === 'esperando_rider_plataforma' || s === 'listo_sin_salir') {
+    return minutos != null && minutos > MINUTOS_DE_ESPERA_EN_AMBAR ? 'aviso' : 'neutro'
   }
   return 'neutro'
 }

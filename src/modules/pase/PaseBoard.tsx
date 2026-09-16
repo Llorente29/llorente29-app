@@ -20,11 +20,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Clock, Truck, Printer, AlertTriangle, User, Camera } from 'lucide-react'
 import { declaraTrabajoEnCurso } from '@/services/trabajoEnCurso'
 import {
-  laZona, laSituacion, tieneBotonDeListo, loQuePasa, loQueNoSabemos,
+  laZona, laSituacion, tieneBotonDeListo, tieneBotonDeRecogida, loQuePasa, loQueNoSabemos,
   elSubtitulo, elTono, losMinutos, quienLoLleva, type Zona, type Tono,
 } from './lib/lasTresZonas'
 import {
-  getTablero, marcarListo, reimprimirBolsa,
+  getTablero, marcarListo, marcarRecogido, reimprimirBolsa,
   type TarjetaDelPase, type ElTablero, apagarElPase,
 } from './services/paseService'
 
@@ -106,14 +106,16 @@ function ComoAvanzo({ t }: { t: TarjetaDelPase }) {
   )
 }
 
-function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
+function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir }: {
   t: TarjetaDelPase
   ocupado: boolean
   onListo: () => void
+  onRecogido: () => void
   onReimprimir: () => void
 }) {
   const situacion = laSituacion(t)
   const conBoton = tieneBotonDeListo(t)
+  const conRecogida = tieneBotonDeRecogida(t)
   const noSabemos = loQueNoSabemos(t)
   const quien = quienLoLleva(t)
   const rota = t.bolsa.estado === 'rota'
@@ -145,7 +147,11 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
           {quien.texto}
         </p>
 
-        {situacion === 'por_marcar' && t.lineas.length > 0 && (
+        {/* 🔴 LOS PLATOS, SIEMPRE (16/09). Estaban gateados a `por_marcar`, así
+            que en cuanto alguien pulsaba «Listo» la bolsa se quedaba sin su
+            contenido: justo cuando el del pase la coge de la estantería y tiene
+            que saber qué lleva dentro para dársela al rider correcto. */}
+        {t.lineas.length > 0 && (
           <div className="border-t border-lavado mt-1.5 pt-1.5">
             {t.lineas.map((l, i) => (
               <div key={i} className="flex gap-2 items-baseline">
@@ -176,6 +182,18 @@ function Tarjeta({ t, ocupado, onListo, onReimprimir }: {
                                      : <Clock size={16} className="shrink-0" />}
             <span className="min-w-0">{loQuePasa(t, losMinutos(t))}</span>
           </div>
+        )}
+        {/* 🔴 «SE LO HA LLEVADO» (16/09). El del pase VE la bolsa salir por la
+            puerta: es la única persona del sistema que lo sabe en ese instante,
+            y hasta hoy no tenía dónde decirlo. Escribe sólo si está vacío, así
+            que no pisa un aviso que hubiera llegado antes. */}
+        {conRecogida && (
+          <button onClick={onRecogido} disabled={ocupado}
+                  className="w-full min-h-[46px] rounded-xl border-2 border-accent text-accent
+                             text-[14.5px] font-extrabold flex items-center justify-center gap-2
+                             disabled:opacity-50">
+            <Truck size={16} strokeWidth={3} /> Se lo ha llevado
+          </button>
         )}
         {rota && (
           <button onClick={onReimprimir} disabled={ocupado}
@@ -266,6 +284,30 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
     } finally { setOcupado(null) }
   }
 
+  /**
+   * «Se lo ha llevado». Confirma con CONTENIDO y no con un visto (regla 8): se
+   * dice la HORA que quedó escrita, que es lo que el del pase necesita poder
+   * comprobar. Y si ya había una --porque el aviso llegó primero-- se dice
+   * también, en vez de fingir que la acaba de poner él.
+   */
+  const pulsarRecogido = async (t: TarjetaDelPase) => {
+    setOcupado(t.sale_id); setAviso(null)
+    try {
+      const yaLaTenia = t.handed_to_courier_at != null
+      const hora = await marcarRecogido(t.sale_id, token)
+      const hhmm = hora
+        ? new Date(hora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+        : null
+      setAviso(
+        hhmm == null ? 'Apuntado, pero sin hora: avisa.'
+        : yaLaTenia  ? `Ya estaba apuntado a las ${hhmm}. No se ha cambiado.`
+                     : `Apuntado: se lo han llevado a las ${hhmm}.`)
+      await refrescar()
+    } catch (e) {
+      setAviso(`No se ha podido apuntar: ${String((e as { message?: string })?.message ?? e)}`)
+    } finally { setOcupado(null) }
+  }
+
   const pulsarReimprimir = async (t: TarjetaDelPase) => {
     setOcupado(t.sale_id); setAviso(null)
     try {
@@ -340,6 +382,7 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
           porZona[zona].map(t => (
             <Tarjeta key={t.sale_id} t={t} ocupado={ocupado === t.sale_id}
                      onListo={() => void pulsarListo(t)}
+                     onRecogido={() => void pulsarRecogido(t)}
                      onReimprimir={() => void pulsarReimprimir(t)} />
           ))
         )}

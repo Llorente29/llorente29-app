@@ -1,15 +1,19 @@
-// Pedidos · las cuatro fases.
+// Pedidos · las CINCO fases (16/09: entra «En ruta»).
 //
-// 🔴 LAS FILAS SON REALES, NO INVENTADAS (regla 31). Las 18 formas de abajo
+// 🔴 LAS FILAS SON REALES, NO INVENTADAS (regla 31). Las 28 formas de abajo
 // salen de UNA consulta sobre `sale` de Foodint, 14 días, agrupando por
-// (order_status, status, ready_at is not null, closed_at is not null,
-// service_type, carrier_code). Suman 1.709, que es el total del periodo. No hay
-// ni un caso de mi cabeza: si una forma no está aquí es que no ocurre.
+// (order_status, status, sello, recogida, entrega, service_type, GRUPO). Suman
+// 1.669, que es el total del periodo. No hay ni un caso de mi cabeza: si una
+// forma no está aquí es que no ocurre.
 //
-// Y las dos formas que obligan a fijar el ORDEN están marcadas: 7 ventas del
+// La dimensión nueva es el GRUPO --si sabemos su ciclo-- y sin ella la tabla ya
+// no vale: con la opción A dos pedidos idénticos en estado y sello van a
+// pestañas distintas según quién los reparta. La de ayer (18 formas, 1.709) no
+// lo miraba, así que se re-midió entera.
+//
+// Y las formas que obligan a fijar el ORDEN están marcadas: 10 ventas del
 // periodo cumplen «terminado» e «incidencia» a la vez, así que sin un orden
-// escrito se cuentan dos veces y el §5.4 del encargo --que la suma de los
-// contadores dé el total-- no cuadra.
+// escrito se cuentan dos veces y la suma de los contadores no da el total.
 
 import { describe, it, expect } from 'vitest'
 import {
@@ -17,7 +21,7 @@ import {
   ROTULO, ROTULO_VACIO, elRotulo, elRotuloVacio, HORAS_QUE_TRAE_LA_TABLET,
   LAS_FASES, HORAS_PARA_SER_INCIDENCIA,
   losMinutosDeLaTarjeta, elNivelDeLaTarjeta, MINUTOS_DE_ESPERA_EN_AMBAR,
-  loQueDiceTerminados,
+  loQueDiceTerminados, elDistintivoDeLaTarjeta,
   type PedidoConFase, type Fase,
 } from '@/modules/orders/lib/lasFases'
 import { sabemosSuCiclo } from '@/modules/pase/lib/lasTresZonas'
@@ -582,5 +586,23 @@ describe('las fases siguen siendo excluyentes y suman', () => {
   it('el orden de las pestañas es el decidido', () => {
     expect(LAS_FASES).toEqual(['en_curso', 'esperando', 'en_ruta', 'terminado', 'incidencia'])
     expect(ROTULO.en_ruta).toBe('En ruta')
+  })
+})
+
+describe('el distintivo que depende de la pestaña', () => {
+  it('En ruta: quién lo lleva y a qué hora se recogió', () => {
+    // U8C4DE: Uber lo recogió a las 20:48:21 de Madrid.
+    const d = elDistintivoDeLaTarjeta(U8C4DE, 'en_ruta')
+    expect(d?.texto).toContain('recogido 20:48')
+  })
+  it('Terminados con entrega: la hora de ENTREGA', () => {
+    expect(elDistintivoDeLaTarjeta(G292, 'terminado')?.texto).toBe('Entregado 20:43')
+  })
+  it('🔴 Terminados del grupo 2: lo dice, no lo esconde', () => {
+    expect(elDistintivoDeLaTarjeta(G265, 'terminado')?.texto).toBe('Listo 20:51 · sin seguimiento')
+    expect(elDistintivoDeLaTarjeta(U511, 'terminado')?.texto).toBe('Listo 20:59 · sin seguimiento')
+  })
+  it('En curso no lleva distintivo: no hay nada que añadir', () => {
+    expect(elDistintivoDeLaTarjeta(P({ ready_at: null }), 'en_curso')).toBeNull()
   })
 })

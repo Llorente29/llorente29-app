@@ -45,7 +45,7 @@
 
 import {
   laSituacion, estaMarcadoListo, esRecogida, loRepartelaPlataforma, losMinutos,
-  sabemosSuCiclo, MINUTOS_DE_MAS_EN_RUTA,
+  sabemosSuCiclo, quienLoLleva, MINUTOS_DE_MAS_EN_RUTA, MINUTOS_DE_ESPERA_EN_AMBAR,
   type PedidoDelPase, type Situacion,
 } from '@/modules/pase/lib/lasTresZonas'
 
@@ -304,10 +304,13 @@ export function elRelojDeLaFase(p: PedidoConFase, fase: Fase): string | null {
 
 /**
  * A PARTIR DE CUÁNTOS MINUTOS SE PONE ÁMBAR lo que ya está hecho y espera.
- * Decisión de Julio, 16/09. No es el semáforo de cocina: aquí no se está
- * cocinando nada, se está esperando a que alguien lo recoja.
+ * Decisión de Julio, 16/09.
+ *
+ * 🔴 SE MUDÓ a `lasTresZonas` el 16/09 por la noche y aquí sólo se re-exporta:
+ * el Pase necesita el MISMO número --sus bolsas no se ponían ámbar-- y un
+ * umbral escrito en dos ficheros es un umbral que un día dice dos cosas.
  */
-export const MINUTOS_DE_ESPERA_EN_AMBAR = 20
+export { MINUTOS_DE_ESPERA_EN_AMBAR }
 
 /**
  * EL NÚMERO GRANDE DE LA TARJETA, y desde cuándo cuenta.
@@ -398,6 +401,46 @@ export function ordenDeLaFase(fase: Fase) {
  * cocinero deja de mirar --y con ella deja de creerse las demás (regla 7)--.
  * Aquí, donde hay dato se ve y donde no lo hay no hay hueco que explicar.
  */
+/** HH:MM en la hora de Madrid. `sold_at` y compañía viajan en UTC (regla 4). */
+function aLaHoraDeMadrid(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
+}
+
+/**
+ * EL DISTINTIVO DE LA TARJETA, QUE DEPENDE DE LA PESTAÑA · 16/09/2026
+ *
+ * Una etiqueta pequeña que dice lo que el sitio de la tarjeta no puede decir:
+ * quién lo lleva y a qué hora salió, o que de éste no vamos a saber nada más.
+ *
+ * 🔴 «Listo HH:MM · SIN SEGUIMIENTO» es la mitad honesta de la opción A. Mandar
+ * un pedido a Terminados porque cocina acabó, y no decir por qué, sería peor
+ * que dejarlo esperando: quien lo mire creería que llegó. Lo que se sabe se
+ * dice, y lo que no, también.
+ */
+export function elDistintivoDeLaTarjeta(
+  p: PedidoConFase, fase: Fase,
+): { texto: string; esAviso: boolean } | null {
+  if (fase === 'en_ruta') {
+    const hora = aLaHoraDeMadrid(p.handed_to_courier_at)
+    const quien = quienLoLleva(p).texto
+    return { texto: hora ? `${quien} · recogido ${hora}` : quien, esAviso: false }
+  }
+  if (fase === 'terminado') {
+    const { hora, sinSeguimiento } = loQueDiceTerminados(p)
+    const hhmm = aLaHoraDeMadrid(hora)
+    if (sinSeguimiento) {
+      return { texto: hhmm ? `Listo ${hhmm} · sin seguimiento` : 'Sin seguimiento', esAviso: false }
+    }
+    if (laSituacion(p) === 'entregado' && hhmm) return { texto: `Entregado ${hhmm}`, esAviso: false }
+    return null
+  }
+  if (fase === 'esperando') return elDistintivoDelRider(p)
+  return null
+}
+
 export function elDistintivoDelRider(p: PedidoConFase): { texto: string; esAviso: boolean } | null {
   if (loRepartelaPlataforma(p)) return null       // no lo sabemos: no se dice nada
   const s: Situacion = laSituacion(p)

@@ -352,3 +352,19 @@ export interface ElEncendido { local: string | null; activo: boolean; cuando: st
 export function encenderElPase(locationId: string): Promise<ElEncendido> {
   return rpc<ElEncendido>('pase_encender', { p_location_id: locationId })
 }
+
+/**
+ * «SE LO HA LLEVADO» · 16/09/2026.
+ *
+ * Apunta la recogida a mano. NO avanza el pedido --`order_status` no se toca,
+ * así que esto no empuja nada a la plataforma--: sólo escribe el hito, y sólo
+ * si estaba vacío. Devuelve la hora que quedó, que es lo que la pantalla
+ * enseña; nunca un booleano, porque un botón que hace algo importante confirma
+ * con contenido (regla 8).
+ */
+export function marcarRecogido(saleId: string, token: string): Promise<string> {
+  return rpc<string>('marcar_recogido_by_token', {
+    p_device_token: token,
+    p_sale_id: saleId,
+  })
+}
