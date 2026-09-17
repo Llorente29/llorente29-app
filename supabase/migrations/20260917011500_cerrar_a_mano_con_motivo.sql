@@ -23,8 +23,19 @@
 --   · No hay ninguna tabla de eventos de pedido donde meterlo: `local_event` es
 --     de eventos de demanda (fiestas, obras), 38 filas, nada que ver.
 --
--- Por eso se añaden DOS COLUMNAS NUEVAS, no se recicla una que significa otra
--- cosa. Es la decisión que hay que aprobar.
+-- Por eso se añaden CUATRO COLUMNAS NUEVAS, no se recicla una que significa
+-- otra cosa:
+--
+--   manual_close_reason      qué motivo, de los cuatro
+--   manual_close_note        el texto libre, obligatorio con «otro»
+--   manual_closed_at         cuándo
+--   manual_closed_device_id  DESDE QUÉ TABLET (17/09, decisión de Julio)
+--
+-- La cuarta es la misma regla que «Se lo ha llevado»: de una acción que cierra
+-- un pedido a mano se apunta la hora Y el aparato. Sin ella, dentro de un mes
+-- se puede contar cuántos se cerraron y por qué, pero no desde dónde — y si un
+-- día una tablet cierra veinte seguidos, eso es justo lo que hay que poder ver.
+-- El valor ya lo tenemos resuelto: es el `v_device.id` del token.
 --
 -- ─────────────────────────────────────────────────────────────────────────────
 -- LA BANDA DE SERVICIO · este `alter table` **SÍ** toma `ACCESS EXCLUSIVE` sobre
@@ -34,16 +45,26 @@
 -- dure milisegundos: el cierre es exclusivo igual, y si cae detrás de una
 -- consulta larga la cola se traga los pedidos que entren mientras.
 --
--- VOLVER ATRÁS:
+-- VOLVER ATRÁS, entera:
 --   drop function if exists public.cerrar_a_mano_by_token(text, uuid, text, text);
---   alter table sale drop column if exists manual_close_reason;
---   alter table sale drop column if exists manual_close_note;
---   alter table sale drop column if exists manual_closed_at;
+--   alter table public.sale drop column if exists manual_close_reason;
+--   alter table public.sale drop column if exists manual_close_note;
+--   alter table public.sale drop column if exists manual_closed_at;
+--   alter table public.sale drop column if exists manual_closed_device_id;
+-- (los `drop column` también toman ACCESS EXCLUSIVE: fuera de banda igual.)
 -- ============================================================================
 
-alter table public.sale add column if not exists manual_close_reason text;
-alter table public.sale add column if not exists manual_close_note   text;
-alter table public.sale add column if not exists manual_closed_at    timestamptz;
+-- 🔴 SI NO COGE EL CIERRE EN 3 SEGUNDOS, ABORTA. Sin esto, un `alter table`
+-- que se encuentre la tabla ocupada se queda esperando en la cola Y ADEMÁS
+-- bloquea a todo el que llegue detrás, porque `ACCESS EXCLUSIVE` no deja
+-- adelantarse a nadie: una espera de treinta segundos a las 11:00 son treinta
+-- segundos de pedidos parados. Prefiero que falle y volver a intentarlo.
+set lock_timeout = '3s';
+
+alter table public.sale add column if not exists manual_close_reason     text;
+alter table public.sale add column if not exists manual_close_note       text;
+alter table public.sale add column if not exists manual_closed_at        timestamptz;
+alter table public.sale add column if not exists manual_closed_device_id uuid;
 
 comment on column public.sale.manual_close_reason is
   'Por qué se cerró a mano desde el Pase: cliente_no_abre | rider_no_puede | '
@@ -52,6 +73,9 @@ comment on column public.sale.manual_close_note is
   'El texto libre, obligatorio cuando el motivo es «otro».';
 comment on column public.sale.manual_closed_at is
   'Cuándo se cerró a mano. Distinto de closed_at, que lo pone close_sale.';
+comment on column public.sale.manual_closed_device_id is
+  'Desde qué tablet se cerró (kds_device.id). Misma regla que «Se lo ha '
+  'llevado»: de lo que se hace a mano se apunta la hora Y el aparato.';
 
 create or replace function public.cerrar_a_mano_by_token(
   p_device_token text,
@@ -110,10 +134,11 @@ begin
   --     queda un pedido cerrado sin decir por qué; y si fallara esto, no se
   --     cierra nada.
   update sale
-     set manual_close_reason = p_motivo,
-         manual_close_note   = nullif(btrim(p_texto), ''),
-         manual_closed_at    = now(),
-         updated_at          = now()
+     set manual_close_reason     = p_motivo,
+         manual_close_note       = nullif(btrim(p_texto), ''),
+         manual_closed_at        = now(),
+         manual_closed_device_id = v_device.id,
+         updated_at              = now()
    where id = p_sale_id;
 
   -- 2 · Y el cierre por el CAMINO ÚNICO. De aquí lo coge
@@ -128,6 +153,7 @@ begin
   return jsonb_build_object(
     'ya_estaba', false,
     'motivo',    p_motivo,
+    'aparato',   v_device.label,
     'closed_at', v_sale.closed_at);
 end;
 $$;

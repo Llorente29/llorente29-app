@@ -29,7 +29,7 @@ import {
   getTablero, marcarListo, marcarRecogido, reimprimirBolsa, cerrarAMano,
   type TarjetaDelPase, type ElTablero, apagarElPase,
 } from './services/paseService'
-import { elCodigoCorto, laPastilla, type TonoPastilla } from './lib/laFicha'
+import { laPastilla, type TonoPastilla } from './lib/laFicha'
 import HojaDelPase from './components/HojaDelPase'
 import CerrarAMano from './components/CerrarAMano'
 import { laConfirmacion, type ClaveMotivo } from './lib/elCierreAMano'
@@ -164,7 +164,8 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir, onAbrir }: {
           </div>
           <span className="ml-auto self-start flex items-center gap-0.5 text-[11px]
                            text-text-tertiary tabular-nums shrink-0">
-            {elCodigoCorto(t.codigo) ?? ''}
+            {/* ENTERO (17/09): tiene que casar con la pegatina de la bolsa. */}
+            {t.codigo ?? ''}
             <ChevronRight size={13} className="text-text-tertiary/70" />
           </span>
         </div>
@@ -511,11 +512,26 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
             · DICE QUÉ VA A PASAR antes de hacerlo, con las palabras del
               encargo: «Vuelve la pantalla de siempre. No se pierde ningún
               pedido.» */}
-      <div className="flex items-center px-3 py-1 bg-card border-t border-default shrink-0">
+      {/* 🔴 UN SOLO PIE (17/09). Había DOS filas --«Apagar el Pase» en una y el
+          aviso de cerrar a mano en otra-- y en 1024 × 600 eso son 68 píxeles
+          que se comen media tarjeta: con la barra de la estación, las
+          pestañas, el aviso de la zona y el pie de las que se fueron solas, se
+          veían dos tarjetas y media. Ahora es una fila: apagar a la izquierda,
+          pequeño y sin color de acción, y el cerrar a mano a la derecha. */}
+      <div className="flex items-center gap-2.5 px-3 py-1 bg-card border-t border-default shrink-0">
         <button onClick={() => setPreguntandoApagar(true)}
-                className="text-[11.5px] text-text-tertiary underline underline-offset-2
-                           min-h-[30px] px-1">
+                className="shrink-0 text-[11.5px] text-text-tertiary underline underline-offset-2
+                           min-h-[34px] px-1">
           Apagar el Pase
+        </button>
+        <AlertTriangle size={15} className="text-text-tertiary shrink-0 ml-auto" />
+        <span className="text-[11.5px] text-text-secondary min-w-0 truncate">
+          El cliente no abre, el rider se queda sin batería…
+        </span>
+        <button onClick={() => (onCerrarAMano ? onCerrarAMano() : setCerrando(true))}
+                className="shrink-0 min-h-[34px] px-3 rounded-xl border border-linea-fuerte
+                           bg-card text-text-secondary text-[12.5px] font-extrabold">
+          Cerrar a mano
         </button>
       </div>
 
@@ -587,25 +603,6 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
           }} />
       )}
 
-      {/* 🔴 EL PIE, CONECTADO (17/09). Estaba escrito desde el 14/09 y sólo se
-          pintaba si alguien pasaba `onCerrarAMano` — y nadie la pasaba: la
-          `TabletStationRoute` monta el Pase sin esa prop. Tres días escrito y
-          sin efecto, la misma familia que la prohibida del 16/09. Ahora el pie
-          se pinta siempre y abre su propia hoja; la prop se respeta si viene,
-          para no romper a quien la use. */}
-      {(
-        <div className="flex items-center gap-2.5 px-3 py-1.5 bg-card border-t border-default shrink-0">
-          <AlertTriangle size={16} className="text-text-tertiary shrink-0" />
-          <span className="text-[12px] text-text-secondary min-w-0">
-            El cliente no abre, el rider se queda sin batería… se cierra a mano y se apunta por qué.
-          </span>
-          <button onClick={() => (onCerrarAMano ? onCerrarAMano() : setCerrando(true))}
-                  className="ml-auto shrink-0 min-h-[38px] px-3 rounded-xl border border-linea-fuerte
-                             bg-card text-text-secondary text-[12.5px] font-extrabold">
-            Cerrar a mano
-          </button>
-        </div>
-      )}
     </div>
   )
 }

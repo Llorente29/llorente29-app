@@ -23,7 +23,7 @@
 import { useEffect, useState } from 'react'
 import { Phone, Printer, X, AlertTriangle } from 'lucide-react'
 import {
-  laDireccion, llamarAlCliente, llamarAlRepartidor, losCincoTiempos,
+  elComoAvanzo, laDireccion, llamarAlCliente, llamarAlRepartidor, losCincoTiempos,
   type FichaDelPase, type Llamada,
 } from '../lib/laFicha'
 import { quienLoLleva } from '../lib/lasTresZonas'
@@ -92,17 +92,6 @@ function LogoDeLaHoja({ url, marca }: { url: string | null; marca: string | null
   }
   return <img src={url} alt="" onError={() => setRoto(true)}
               className="w-9 h-9 rounded-lg shrink-0 object-cover bg-lavado border border-default" />
-}
-
-/**
- * CÓMO AVANZÓ · lo que antes ponía «👤 Listo» y «Lo dice la flota» en la
- * tarjeta. `null` cuando no se sabe: no se inventa un «por alguien».
- */
-function elComoAvanzo(f: FichaDelPase): string | null {
-  if (f.avanzo_por === 'flota') return 'lo dice la flota'
-  if (f.avanzo_por === 'foto')  return f.avanzo_quien ? `comprobado por foto · ${f.avanzo_quien}` : 'comprobado por foto'
-  if (f.avanzo_por === 'persona') return f.avanzo_quien ? `por ${f.avanzo_quien}` : 'lo marcó una persona'
-  return null
 }
 
 /** LA BOLSA · el renglón que se fue de la tarjeta. Nunca vacío (regla 5). */

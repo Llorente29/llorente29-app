@@ -169,10 +169,14 @@ export default function CerrarAMano({ pedidos, onCerrar, onConfirmar }: {
                 {error && (
                   <p className="mt-1.5 text-[12.5px] text-danger font-semibold text-center">{error}</p>
                 )}
+                {/* 🔴 SIN PALABRAS TÉCNICAS (17/09). Aquí ponía
+                    «--order_status = completed--», que no significa nada para
+                    quien está en el pase con la bolsa en la mano; y lo que sí
+                    necesita saber --que no se devuelve nada al almacén-- estaba
+                    dicho con la palabra «consumo», que es de la oficina. */}
                 <p className="mt-2 text-[11.5px] text-text-tertiary leading-snug">
-                  Se cierra por el mismo camino que un pedido normal
-                  --<span className="whitespace-nowrap">order_status = completed</span>-- y queda
-                  apuntado el motivo. El consumo NO se revierte: la comida se hizo.
+                  Se cierra como un pedido entregado y queda apuntado por qué.
+                  No se devuelve nada al almacén: la comida se hizo.
                 </p>
               </div>
             </div>

@@ -19,7 +19,7 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  elCodigoAgrupado, elCodigoCorto, laDireccion, laPastilla, llamarAlCliente,
+  elCodigoAgrupado, elComoAvanzo, elNombreCorto, laDireccion, laPastilla, llamarAlCliente,
   llamarAlRepartidor, losCincoTiempos, type FichaDelPase,
 } from '@/modules/pase/lib/laFicha'
 
@@ -72,17 +72,23 @@ const JUSTEAT_CON_FLOTA = F({
   direccion: 'Calle de la Fuente 12, 3ºB',
 })
 
-describe('el código de la esquina', () => {
-  it('deja enteros los cortos, que son la inmensa mayoría', () => {
-    expect(elCodigoCorto('G292')).toBe('G292')
-    expect(elCodigoCorto('U987F2')).toBe('U987F2')
+describe('el nombre corto de los botones', () => {
+  it('🔴 «Lelis Daibeth Ibarguen Valencia» no cabe en un botón: se corta como los clientes', () => {
+    expect(elNombreCorto('Lelis Daibeth Ibarguen Valencia')).toBe('Lelis D.')
   })
-  it('acorta el de JustEat, que es el que no cabía', () => {
-    expect(elCodigoCorto('J191403139')).toBe('…3139')
+  it('un nombre suelto se queda entero', () => {
+    expect(elNombreCorto('Marta')).toBe('Marta')
   })
-  it('sin código no inventa nada', () => {
-    expect(elCodigoCorto(null)).toBeNull()
-    expect(elCodigoCorto('   ')).toBeNull()
+  it('sin nombre, nada', () => {
+    expect(elNombreCorto(null)).toBeNull()
+    expect(elNombreCorto('   ')).toBeNull()
+  })
+  it('el botón del repartidor lo usa; el nombre entero vive en la tarjeta', () => {
+    const l = llamarAlRepartidor(F({
+      service_type: 'own_delivery', has_courier: true, carrier_code: 'catcher',
+      repartidor_nombre: 'Lelis Daibeth Ibarguen Valencia', repartidor_telefono: '+34627550000',
+    }))
+    expect(l.nombre).toBe('Lelis D.')
   })
 })
 
@@ -233,5 +239,53 @@ describe('el código de la centralita, agrupado igual en los dos canales', () =>
     const l = llamarAlCliente(JUSTEAT_CON_FLOTA)
     expect(l.codigo).toBe('878 795 717')
     expect(l.explicacion).toContain('878 795 717')
+  })
+})
+
+describe('cómo avanzó el «Listo», con los cuatro casos reales del 16/09', () => {
+  const caso = (o: Partial<FichaDelPase>) => elComoAvanzo(F(o))
+
+  it('J191403139 · nuestra flota → lo dice la flota', () => {
+    expect(caso({ service_type: 'own_delivery', has_courier: true, carrier_code: 'catcher',
+                  ready_at: '2026-09-16T20:49:11Z',
+                  handed_to_courier_at: '2026-09-16T20:49:49Z' })).toBe('lo dice la flota')
+  })
+
+  it('🔴 UD12A3 · 0,3 s entre el «Listo» y la recogida → lo puso el aviso de Uber', () => {
+    expect(caso({ channel: 'Uber', source: 'hubrise', service_type: 'platform_delivery',
+                  ready_at: '2026-09-16T20:00:53.0Z',
+                  handed_to_courier_at: '2026-09-16T20:00:53.3Z' }))
+      .toBe('nadie lo pulsó: lo puso la recogida de Uber')
+  })
+
+  it('🔴 U130B6 · 45,3 s → lo pulsó una persona, y la bolsa se pidió al segundo del «Listo»', () => {
+    expect(caso({ channel: 'Uber', source: 'hubrise', service_type: 'platform_delivery',
+                  ready_at: '2026-09-16T20:37:09Z',
+                  handed_to_courier_at: '2026-09-16T20:37:54Z' })).toBe('lo marcó una persona')
+  })
+
+  it('U2E2EC · 53,1 s → persona', () => {
+    expect(caso({ channel: 'Uber', source: 'hubrise', service_type: 'platform_delivery',
+                  ready_at: '2026-09-16T20:37:14Z',
+                  handed_to_courier_at: '2026-09-16T20:38:07Z' })).toBe('lo marcó una persona')
+  })
+
+  it('🔴 un pedido de PLATAFORMA no puede decir nunca «lo dice la flota»', () => {
+    for (const seg of [0, 1, 2, 3, 45, 600]) {
+      const r = caso({ channel: 'Glovo', source: 'lastapp', service_type: 'platform_delivery',
+                       ready_at: '2026-09-16T20:00:00Z',
+                       handed_to_courier_at: new Date(Date.parse('2026-09-16T20:00:00Z') + seg * 1000).toISOString() })
+      expect(r).not.toBe('lo dice la flota')
+    }
+  })
+
+  it('sin «Listo» todavía no dice nada', () => {
+    expect(caso({ ready_at: null })).toBeNull()
+  })
+
+  it('sin recogida, una plataforma dice que lo marcó una persona', () => {
+    expect(caso({ channel: 'Glovo', service_type: 'platform_delivery',
+                  ready_at: '2026-09-16T20:00:00Z', handed_to_courier_at: null }))
+      .toBe('lo marcó una persona')
   })
 })

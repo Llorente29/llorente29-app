@@ -358,6 +358,49 @@ export async function prefetchOtaBundle(remote: RemoteBundle): Promise<string | 
 }
 
 /**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ¿SIGUE PUBLICADO EL BUNDLE QUE TENGO DESCARGADO? · 17/09/2026
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Lo pagó el 305. La noche del 16/09 se retuvo un paquete quitando el
+ * manifiesto a las 23:04:43, y a la mañana siguiente las dos tablets de Alcalá
+ * lo instalaron igual, a las 07:51 y 07:52.
+ *
+ * POR QUÉ: `checkForBundleUpdate` mira el manifiesto, `prefetchOtaBundle` deja
+ * el zip EN EL DISCO de la tablet y guarda su id, y a partir de ahí
+ * `UpdateGate` sólo espera a que se abran las dos llaves --fuera de horario y
+ * cocina en calma-- para llamar a `applyOtaBundle(id)`. **Ese último paso no
+ * volvía a mirar el manifiesto nunca.** Entre que se subió el zip (22:26:48) y
+ * que se quitó el manifiesto (23:04:43) pasaron 38 minutos: suficiente para que
+ * las tablets se lo bajaran. Retirar el manifiesto después ya no paraba nada.
+ *
+ * ESTO LO CIERRA: antes de aplicar se vuelve a leer el manifiesto.
+ *   · contesta y dice OTRO bundleId  → NO se aplica (lo han retenido o lo han
+ *     sustituido). Ése es el caso del 305.
+ *   · contesta y dice el mismo       → adelante.
+ *   · 🔴 NO CONTESTA                 → se aplica igual, como hasta hoy.
+ *
+ * Lo último no es dejadez, es la lección del 13/09: una tablet que no puede
+ * actualizarse porque la red va mal se queda clavada en una versión vieja para
+ * siempre y en silencio. Aquí lo que se protege es un caso deliberado --alguien
+ * ha retirado un paquete-- y quien lo retira puede comprobar que el manifiesto
+ * responde. Sin respuesta no se sabe nada, y no saber nada no puede convertirse
+ * en no actualizar nunca.
+ */
+export async function sigueEstandoPublicado(bundleId: string): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return true
+  try {
+    const resp = await fetch(`${bundleUrl()}?t=${Date.now()}`, { cache: 'no-store' })
+    if (!resp.ok) return true                   // no contesta → no se sabe → adelante
+    const remote = (await resp.json()) as RemoteBundle
+    if (!remote || typeof remote.bundleId !== 'number') return true
+    return String(remote.bundleId) === String(bundleId)
+  } catch {
+    return true                                  // ídem: sin respuesta, adelante
+  }
+}
+
+/**
  * Aplica un bundle ya descargado: set() + reload inmediato (destruye el
  * contexto JS actual — por diseño de Capgo esta promesa normalmente no llega
  * a resolver). Si el bundle nuevo no arranca, notifyAppReady() no se llama a

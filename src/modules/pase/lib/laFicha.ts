@@ -130,26 +130,16 @@ export function elCodigoAgrupado(codigo: string | null | undefined): string | nu
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// EL CÓDIGO DE LA ESQUINA
+// EL CÓDIGO DE LA ESQUINA · ENTERO, decisión de Julio (17/09)
+//
+// Lo acorté a «…3139» sin que nadie lo pidiera --de hecho se me dijo que no lo
+// tocara-- y la decisión es la contraria: **va entero**, porque tiene que
+// coincidir con lo que lleva impreso la pegatina de la bolsa. Un código que no
+// se puede casar de un vistazo con la etiqueta no ordena nada: obliga a abrir
+// la ficha para comprobar una cosa que ya estaba en la pantalla.
+//
+// Aquí ya no hay función que valga: la tarjeta pinta `codigo` tal cual.
 // ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * El código corto para la esquina de la tarjeta. `J191403139` en crudo ocupa
- * media tarjeta y no se lee de un vistazo; `…3139` sí.
- *
- * 🔴 Y el largo NO se pierde: va entero en la cabecera de la hoja. Acortar en
- * la tarjeta es ordenar; acortar en los dos sitios sería esconder, que es
- * justo lo que prohíbe la regla 7.
- *
- * Medido sobre los códigos de 14 días: Glovo y Uber por Last son de 4 a 6
- * caracteres y salen enteros; los de Uber por HubRise, 6; los de JustEat, 10.
- */
-export function elCodigoCorto(codigo: string | null | undefined): string | null {
-  const c = (codigo ?? '').trim()
-  if (!c) return null
-  if (c.length <= 7) return c
-  return `…${c.slice(-4)}`
-}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // LA PASTILLA DE QUIÉN LO LLEVA · va en la tarjeta, al lado del nombre
@@ -177,6 +167,25 @@ export function laPastilla(p: PedidoDelPase): Pastilla {
 // ═════════════════════════════════════════════════════════════════════════════
 // LOS DOS BOTONES DE LLAMAR
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * EL NOMBRE, CORTO, para el rótulo de un botón · 17/09.
+ *
+ * «Llamar al repartidor · Lelis Daibeth Ibarguen Valencia» no cabe en un botón
+ * de una tablet apaisada: se corta a la mitad, y un botón cortado no se lee, se
+ * adivina. Se hace lo mismo que ya hacen los canales con los clientes --«Marta
+ * G.»--: nombre y la inicial del primer apellido.
+ *
+ * 🔴 SÓLO EN LOS BOTONES. En la línea de la tarjeta y en la fila «Quién lo
+ * lleva» va el nombre entero: ahí hay ancho, y es el sitio donde alguien puede
+ * necesitar el apellido completo para buscar a esa persona en otro sitio.
+ */
+export function elNombreCorto(nombre: string | null | undefined): string | null {
+  const partes = (nombre ?? '').trim().split(/\s+/).filter(Boolean)
+  if (partes.length === 0) return null
+  if (partes.length === 1) return partes[0]
+  return `${partes[0]} ${partes[1][0].toUpperCase()}.`
+}
 
 export interface Llamada {
   /** true = hay a quién llamar y el botón se pinta. */
@@ -221,8 +230,8 @@ export function llamarAlRepartidor(f: FichaDelPase): Llamada {
 
   if (tel) {
     return {
-      hay: true, nombre, marcacion: `tel:${tel.replace(/\s+/g, '')}`, numero: tel,
-      codigo: null, explicacion: null,
+      hay: true, nombre: elNombreCorto(nombre), marcacion: `tel:${tel.replace(/\s+/g, '')}`,
+      numero: tel, codigo: null, explicacion: null,
     }
   }
 
@@ -265,14 +274,15 @@ export function llamarAlCliente(f: FichaDelPase): Llamada {
   if (tel && codigo) {
     const agrupado = elCodigoAgrupado(codigo) ?? codigo
     return {
-      hay: true, nombre, marcacion, numero: tel, codigo: agrupado,
+      hay: true, nombre: elNombreCorto(nombre), marcacion, numero: tel, codigo: agrupado,
       explicacion: `${canal} da un número único para todos y un código por pedido `
                  + `— éste es ${agrupado}. La tablet marca los dos seguidos. `
                  + 'El código caduca al entregarse el pedido.',
     }
   }
 
-  if (tel) return { hay: true, nombre, marcacion, numero: tel, codigo: null, explicacion: null }
+  if (tel) return { hay: true, nombre: elNombreCorto(nombre), marcacion, numero: tel,
+                    codigo: null, explicacion: null }
 
   // 885 pedidos en 14 días, todos de Glovo repartido por Glovo.
   return {
@@ -280,6 +290,60 @@ export function llamarAlCliente(f: FichaDelPase): Llamada {
     explicacion: `De este pedido ${canal} tampoco nos da el teléfono del cliente. `
                + `Si hay que avisarle, se hace desde el portal de ${canal}.`,
   }
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CÓMO AVANZÓ EL «LISTO» · 17/09/2026
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Tres frases y ninguna se dice sin prueba. Se decide AQUÍ y no con el
+ * `avanzo_por` que manda la base, porque ese campo sale de
+ * `delivery_state is not null` y `delivery_state` es un campo de Catcher: en un
+ * pedido de plataforma no distingue nada. El front tiene los tres instantes y
+ * sabe quién reparte, así que puede decirlo mejor.
+ *
+ * 1 · NUESTRA FLOTA → «lo dice la flota». Sólo con `carrier_code`/`has_courier`,
+ *     que es lo único que significa Catcher. Antes bastaba con que hubiera
+ *     `delivery_state`, y por ahí se colaba un Uber diciendo «lo dice la flota».
+ *
+ * 2 · LO SELLÓ EL AVISO DE LA PLATAFORMA → «nadie lo pulsó: lo puso la recogida
+ *     de Uber». Es la deuda del «Listo sin pulsar»: `tg_sale_seal_kpi_hitos`
+ *     sella `ready_at` cuando llega el `in_delivery`, así que si nadie había
+ *     tocado la tablet, el «Listo» acaba siendo la hora de la recogida.
+ *
+ *     🔴 LA SEÑAL, MEDIDA, y por eso son DOS SEGUNDOS y no un número redondo:
+ *       UD12A3  listo 22:00:53 · recogida 22:00:53 →  0,3 s  ← lo selló el aviso
+ *       U130B6  listo 22:37:09 · recogida 22:37:54 → 45,3 s  ← lo pulsó alguien
+ *       U2E2EC  listo 22:37:14 · recogida 22:38:07 → 53,1 s  ← lo pulsó alguien
+ *       J191..  listo 22:49:11 · recogida 22:49:49 → 38,2 s  ← flota
+ *     Y la prueba que lo remata: en U130B6 la bolsa se pidió a las **22:37:09**,
+ *     al segundo del «Listo» --o sea que alguien lo pulsó y eso imprimió la
+ *     etiqueta--, mientras que en UD12A3 la bolsa se había pedido a las
+ *     **21:47:48**, TRECE MINUTOS antes de su `ready_at`.
+ *
+ *     ⚠️ Con nueve pedidos que tienen los dos sellos, dos segundos es lo que
+ *     separa hoy los dos grupos, no una ley. Si algún día un «Listo» de verdad
+ *     cae dentro de esos dos segundos, esta frase mentirá — y entonces habrá
+ *     que guardar QUIÉN escribió el sello, que es el arreglo de verdad.
+ *
+ * 3 · TODO LO DEMÁS → «lo marcó una persona». Nunca «por Ana»: la base no
+ *     guarda quién pulsó, y un nombre inventado es peor que no decir nada.
+ */
+const SEGUNDOS_DEL_SELLO_AUTOMATICO = 2
+
+export function elComoAvanzo(f: FichaDelPase): string | null {
+  if (!f.ready_at) return null
+  if (loRepartimosConFlota(f)) return 'lo dice la flota'
+
+  if (loRepartelaPlataforma(f) && f.handed_to_courier_at) {
+    const hueco = Math.abs(
+      new Date(f.ready_at).getTime() - new Date(f.handed_to_courier_at).getTime()) / 1000
+    if (hueco <= SEGUNDOS_DEL_SELLO_AUTOMATICO) {
+      return `nadie lo pulsó: lo puso la recogida de ${quienReparte(f)}`
+    }
+  }
+  return 'lo marcó una persona'
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
