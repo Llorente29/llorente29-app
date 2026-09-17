@@ -30,6 +30,7 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import type { PedidoDelPase } from '../lib/lasTresZonas'
+import type { FichaDelPase } from '../lib/laFicha'
 
 /** El estado del ticket de bolsa, que sale de `print_job`. */
 export interface LaBolsa {
@@ -367,4 +368,65 @@ export function marcarRecogido(saleId: string, token: string): Promise<string> {
     p_device_token: token,
     p_sale_id: saleId,
   })
+}
+
+/**
+ * LA HOJA DE DETALLE · 16/09/2026.
+ *
+ * A demanda, una sola vez, cuando alguien toca una tarjeta. NO va en el bucle
+ * de `pase_board` a propósito: aquí viajan teléfonos de cliente, y meterlos en
+ * una llamada que se repite cada pocos segundos sería mandar los datos de
+ * contacto de veinte pedidos para enseñar los de uno.
+ *
+ * Si la RPC todavía no existe en esta base, se devuelve `null` en vez de
+ * reventar: la hoja dice que no se ha podido cargar y la tablet sigue
+ * sirviendo. Es el mismo respaldo que `getTablero`, y por la misma razón --el
+ * front se fusiona antes que la migración--, pero SOLO para «no existe»: un
+ * fallo de red o de permisos tiene que verse.
+ */
+export async function getFicha(saleId: string, token: string): Promise<FichaDelPase | null> {
+  try {
+    return await rpc<FichaDelPase>('pase_ficha', {
+      p_device_token: token,
+      p_sale_id: saleId,
+    })
+  } catch (e) {
+    if (noLoSabeTodavia(e)) {
+      console.warn('[pase] `pase_ficha` no existe en esta base todavía')
+      return null
+    }
+    throw e
+  }
+}
+
+/**
+ * CERRAR A MANO · 17/09/2026.
+ *
+ * 🔴 EL CAMINO ES EL ÚNICO QUE HAY: la RPC pone `order_status = 'completed'`,
+ * y de ahí lo coge `trg_sale_close_on_complete` → `close_sale`, igual que un
+ * pedido que se cierra solo. No se abre un segundo camino de cierre; lo único
+ * que añade es el MOTIVO, y va en la misma transacción para que no pueda
+ * quedar un pedido cerrado sin decir por qué.
+ *
+ * ⚠️ `cerrar_a_mano_by_token` NO ESTÁ APLICADA todavía: el SQL está escrito y
+ * espera el sí de Julio (parte del 17/09). Mientras no exista, esto devuelve un
+ * error CLARO en vez de un fallo raro, porque un botón que hace algo
+ * importante falla en pantalla o confirma, nunca calla (regla 8).
+ */
+export async function cerrarAMano(
+  saleId: string, token: string, motivo: string, texto: string,
+): Promise<void> {
+  try {
+    await rpc<void>('cerrar_a_mano_by_token', {
+      p_device_token: token,
+      p_sale_id: saleId,
+      p_motivo: motivo,
+      p_texto: texto || null,
+    })
+  } catch (e) {
+    if (noLoSabeTodavia(e)) {
+      throw new Error('el cierre a mano todavía no está aplicado en la base', { cause: e })
+    }
+    throw e
+  }
 }

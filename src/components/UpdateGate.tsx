@@ -57,7 +57,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   checkForUpdate, installUpdate, prefetchUpdate, isUpdateDownloaded,
   fetchUpdateWindow, reportAppVersion, reportBundleApplied, reportInstalacionAMano,
-  checkForBundleUpdate, prefetchOtaBundle, applyOtaBundle,
+  checkForBundleUpdate, prefetchOtaBundle, applyOtaBundle, sigueEstandoPublicado,
   type RemoteVersion, type RemoteBundle, type UpdateWindow,
 } from '../native/appUpdate'
 import { getDeviceToken } from '../native/print/printWorker'
@@ -248,7 +248,22 @@ export default function UpdateGate() {
   useEffect(() => {
     if (!otaBundleId || update || !(windowOpen || instalarYa) || otaApplying.current) return
     otaApplying.current = true
-    void applyOtaBundle(otaBundleId).catch(() => {
+    // 🔴 SE VUELVE A MIRAR EL MANIFIESTO ANTES DE APLICAR (17/09). El 305 se
+    // instaló en Alcalá doce horas después de que se retirara su manifiesto,
+    // porque el zip ya estaba en el disco y este paso no preguntaba nada. Si el
+    // manifiesto contesta y ya no es ese bundle, se descarta lo descargado. Si
+    // no contesta, se aplica igual: ver `sigueEstandoPublicado`.
+    void (async () => {
+      const sigue = await sigueEstandoPublicado(otaBundleId)
+      if (!sigue) {
+        console.warn(`[folvy-ota] el bundle ${otaBundleId} ya no está publicado: no se aplica`)
+        otaApplying.current = false
+        setInstalarYa(false)
+        setOtaBundleId(null)
+        return
+      }
+      await applyOtaBundle(otaBundleId)
+    })().catch(() => {
       otaApplying.current = false
       setInstalarYa(false)
       // El bundle no se pudo activar (raro: ya se verificó el checksum al

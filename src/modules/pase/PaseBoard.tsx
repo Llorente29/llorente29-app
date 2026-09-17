@@ -17,27 +17,44 @@
 // 01/09. Va también en el ensayo, no sólo aquí.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Clock, Truck, Printer, AlertTriangle, User, Camera } from 'lucide-react'
+import { Check, Clock, Truck, Printer, AlertTriangle, ChevronRight } from 'lucide-react'
 import { declaraTrabajoEnCurso } from '@/services/trabajoEnCurso'
 import {
-  laZona, laSituacion, tieneBotonDeListo, tieneBotonDeRecogida, loQuePasa, loQueNoSabemos,
-  loRepartelaPlataforma, sabemosSuCiclo, seVaSola, MINUTOS_PARA_IRSE_SOLA,
-  elSubtitulo, elTono, losMinutos, quienLoLleva, type Zona, type Tono,
+  laZona, laSituacion, tieneBotonDeListo, tieneBotonDeRecogida, loQuePasa,
+  seVaSola, MINUTOS_PARA_IRSE_SOLA, elRetrasoEnRuta, elAvisoDeLaZona,
+  loRepartelaPlataforma, esRecogida, quienLoLleva,
+  elTono, losMinutos, type Zona, type Tono,
 } from './lib/lasTresZonas'
 import {
-  getTablero, marcarListo, marcarRecogido, reimprimirBolsa,
+  getTablero, marcarListo, marcarRecogido, reimprimirBolsa, cerrarAMano,
   type TarjetaDelPase, type ElTablero, apagarElPase,
 } from './services/paseService'
+import { laPastilla, type TonoPastilla } from './lib/laFicha'
+import HojaDelPase from './components/HojaDelPase'
+import CerrarAMano from './components/CerrarAMano'
+import { laConfirmacion, type ClaveMotivo } from './lib/elCierreAMano'
 
 const POLL_MS = 10_000
 /** Los entregados se van solos. No hay nada que pulsar. */
 const MINUTOS_EN_ENTREGADOS = 20
 
 const ZONAS: { id: Zona; nombre: string; pista: string }[] = [
-  { id: 'sigue_aqui', nombre: 'Sigue aquí', pista: 'Lo que todavía está en la cocina. Un toque y se va.' },
+  // 🔴 «Un toque y se va» dejó de ser verdad el 16/09 con la opción A: las
+  // bolsas de plataforma NO se van al pulsar «Listo», se van cuando alguien
+  // dice que se las han llevado o solas a los 30 minutos. La frase describía
+  // un comportamiento que ya no existe, que es la peor clase de frase.
+  { id: 'sigue_aqui', nombre: 'Sigue aquí', pista: 'Lo que todavía está en el local.' },
   { id: 'en_ruta',    nombre: 'En ruta',    pista: 'Sólo lo que sabemos que ha salido. Aquí no se pulsa nada.' },
   { id: 'entregados', nombre: 'Entregados', pista: 'Sólo lo que sabemos que ha llegado. Se vacía sola.' },
 ]
+
+/** La pastilla corta de quién lo lleva. Verde nosotros, roja lo que no tiene dueño. */
+const PASTILLA_CLS: Record<TonoPastilla, string> = {
+  nuestro:    'bg-success-bg text-success border-success/40',
+  plataforma: 'bg-page text-text-secondary border-default',
+  aviso:      'bg-danger-bg text-danger border-danger/40',
+  cliente:    'bg-page text-text-secondary border-default',
+}
 
 const TONO_CLS: Record<Tono, string> = {
   neutro: 'bg-page text-text-secondary',
@@ -70,89 +87,107 @@ function Logo({ t }: { t: TarjetaDelPase }) {
   )
 }
 
-/** El renglón de la bolsa. El HECHO, después; nunca una promesa antes. */
-function LaBolsa({ t, onReimprimir }: { t: TarjetaDelPase; onReimprimir: () => void }) {
-  if (t.bolsa.estado === 'sin_pedir') return null
-  if (t.bolsa.estado === 'rota') {
-    return (
-      <p className="text-[12px] leading-snug text-danger font-semibold mt-1.5">
-        La bolsa no ha salido. La impresora no contesta. El pedido se queda aquí hasta
-        que haya papel: sin etiqueta, la bolsa no se puede dar.
-        {t.bolsa.intentos > 0 && ` Intentado ${t.bolsa.intentos} ${t.bolsa.intentos === 1 ? 'vez' : 'veces'}.`}
-      </p>
-    )
-  }
+/**
+ * EL RENGLÓN DE LA BOLSA · sólo cuando NO ha salido.
+ *
+ * 🔴 (16/09) «Bolsa impresa · 21:29 · reimprimir» y «👤 Listo · Lo dice la
+ * flota» se han ido a la hoja de detalle, y no es una limpieza de estilo: la
+ * maqueta aprobada lo dice y la razón es que son datos de CONSULTA. En la
+ * tarjeta competían por el sitio con lo único que se mira de lejos --qué lleva
+ * dentro y si hay que hacer algo-- y encima ofrecían un «reimprimir» de una
+ * línea, subrayado y pequeño, justo al lado de un botón de 62 píxeles.
+ *
+ * Lo que SÍ se queda es la bolsa ROTA, porque eso no es una consulta: es una
+ * bolsa que no se puede dar, y tiene que verse sin abrir nada.
+ */
+function LaBolsaRota({ t }: { t: TarjetaDelPase }) {
+  if (t.bolsa.estado !== 'rota') return null
   return (
-    <button onClick={onReimprimir}
-            className="mt-1.5 text-[12px] text-text-tertiary hover:text-text-secondary text-left">
-      {t.bolsa.estado === 'hecha' ? 'Bolsa impresa' : 'Bolsa pedida'}
-      {t.bolsa.cuando && ` · ${t.bolsa.cuando}`} · <span className="underline">reimprimir</span>
-    </button>
+    <p className="text-[12px] leading-snug text-danger font-semibold mt-1.5">
+      La bolsa no ha salido. La impresora no contesta. El pedido se queda aquí hasta
+      que haya papel: sin etiqueta, la bolsa no se puede dar.
+      {t.bolsa.intentos > 0 && ` Intentado ${t.bolsa.intentos} ${t.bolsa.intentos === 1 ? 'vez' : 'veces'}`}
+      {t.bolsa.cuando && ` · ${t.bolsa.cuando}`}
+    </p>
   )
 }
 
-/** CÓMO avanzó, no quién pulsó. El día que entre la foto, se añade un caso. */
-function ComoAvanzo({ t }: { t: TarjetaDelPase }) {
-  if (!t.avanzo_por) return null
-  const Icono = t.avanzo_por === 'foto' ? Camera : t.avanzo_por === 'flota' ? Truck : User
-  const texto =
-    t.avanzo_por === 'foto'   ? `Comprobado por foto${t.avanzo_quien ? ` · ${t.avanzo_quien}` : ''}`
-    : t.avanzo_por === 'flota' ? 'Lo dice la flota'
-    : `Listo${t.avanzo_quien ? ` por ${t.avanzo_quien}` : ''}`
-  return (
-    <div className={`flex items-center gap-1.5 mt-1 text-[11.5px] ${
-      t.avanzo_por === 'foto' ? 'text-text-info' : 'text-text-tertiary'}`}>
-      <Icono size={13} className="shrink-0" /> {texto}
-    </div>
-  )
-}
-
-function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir }: {
+function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir, onAbrir }: {
   t: TarjetaDelPase
   ocupado: boolean
   onListo: () => void
   onRecogido: () => void
   onReimprimir: () => void
+  /** Abre la hoja de detalle. Regla 1 de la maqueta: el botón NO la abre. */
+  onAbrir: () => void
 }) {
   const situacion = laSituacion(t)
-  const conBoton = tieneBotonDeListo(t)
-  const conRecogida = tieneBotonDeRecogida(t)
-  const quien = quienLoLleva(t)
   const rota = t.bolsa.estado === 'rota'
+  // 🔴 Con la bolsa rota no hay «Listo»: el botón que sale es el de reimprimir.
+  // No es una opinión de diseño, es lo que dice la propia tarjeta dos líneas
+  // más arriba --sin etiqueta la bolsa no se puede dar-- y hasta hoy la pantalla
+  // se contradecía a sí misma ofreciendo las dos cosas a la vez.
+  const conBoton = tieneBotonDeListo(t) && !rota
+  const conRecogida = tieneBotonDeRecogida(t)
+  const pastilla = laPastilla(t)
 
   return (
     <article className={`grid gap-2.5 items-stretch rounded-xl border p-2.5 mb-1.5
                          ${rota ? 'border-danger/40 bg-danger-bg/25' : 'border-default bg-card'}`}
              style={{ gridTemplateColumns: 'minmax(0,1fr) 240px' }}>
-      <div className="min-w-0 flex flex-col justify-center">
-        <div className="flex items-center gap-2">
+      {/* TODA LA TARJETA MENOS LOS BOTONES ABRE LA HOJA. Es un <button> de
+          verdad --no un div con onClick-- para que funcione con teclado y lo
+          anuncie un lector de pantalla; los botones de acción viven en la otra
+          columna, fuera de éste, así que no hay un botón dentro de otro. */}
+      <button type="button" onClick={onAbrir}
+              className="min-w-0 flex flex-col justify-center text-left">
+        <div className="flex items-center gap-2 w-full">
           <Logo t={t} />
           <div className="min-w-0">
-            <b className="block text-[16px] font-extrabold tracking-tight truncate">{t.marca ?? 'Sin marca'}</b>
-            <i className="block not-italic text-[11.5px] font-semibold text-text-secondary truncate">
-              {elSubtitulo(t)}
-            </i>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <b className="text-[16px] font-extrabold tracking-tight truncate">{t.marca ?? 'Sin marca'}</b>
+              {/* LA PASTILLA · quién lo lleva, en una palabra. La frase larga
+                  --«Nuestro · Marta · en camino al local»-- es de la hoja. */}
+              <span className={`shrink-0 px-1.5 py-0.5 rounded-md border text-[10.5px]
+                                font-extrabold uppercase tracking-wide ${PASTILLA_CLS[pastilla.tono]}`}>
+                {pastilla.texto}
+              </span>
+            </div>
+            {/* 🔴 AQUÍ NO VA NADA (17/09). Debajo del nombre estaba
+                `elSubtitulo`, «Glovo · lo recoge su repartidor», y con la
+                pastilla arriba y el recuadro de espera a la derecha la MISMA
+                idea salía tres veces en una tarjeta de cinco líneas: «GLOVO»,
+                «Glovo · lo recoge su repartidor» y «Esperando al rider de
+                Glovo». La pastilla ya dice quién lo lleva. Lo que sí se queda
+                --abajo-- es lo que la pastilla no cabe a decir: el nombre de
+                nuestro repartidor y el aviso de que no lo ha cogido nadie. */}
           </div>
-          <span className="ml-auto self-start text-[11px] text-text-tertiary tabular-nums shrink-0">
+          <span className="ml-auto self-start flex items-center gap-0.5 text-[11px]
+                           text-text-tertiary tabular-nums shrink-0">
+            {/* ENTERO (17/09): tiene que casar con la pegatina de la bolsa. */}
             {t.codigo ?? ''}
+            <ChevronRight size={13} className="text-text-tertiary/70" />
           </span>
         </div>
 
-        {/* QUIÉN LO LLEVA · la pregunta que hace el pase en voz alta cuando
-            suena el timbre. El TELÉFONO no se pinta aquí: llamar es algo que se
-            consulta, no algo que cambie lo que haces, y va en la hoja de
-            detalle.
-            🔴 SÓLO CUANDO AÑADE ALGO (16/09). En un pedido de plataforma el
-            subtítulo ya dice quién reparte, así que esto repetía la misma idea
-            dos líneas seguidas: «Glovo» y debajo «Lo reparte Glovo». Se queda
-            donde SÍ dice algo nuevo: el nombre del de nuestra moto, o el aviso
-            de que no lo ha cogido nadie. */}
-        {(!loRepartelaPlataforma(t) || t.handed_to_courier_at != null) && (
+        {/* LA NOTA · sólo cuando añade algo a la pastilla, que es en los dos
+            casos de reparto NUESTRO: el nombre del que viene a por ello, y el
+            aviso en ámbar de que no lo ha cogido nadie. En un pedido de
+            plataforma la pastilla ya lo ha dicho todo y aquí no va nada. */}
+        {!loRepartelaPlataforma(t) && !esRecogida(t) && (
           <p className={`text-[12.5px] font-bold leading-snug mt-1 truncate
-                         ${quien.esAviso ? 'text-warning' : 'text-text-secondary'}`}>
-            {quien.texto}
-            {t.handed_to_courier_at != null && loRepartelaPlataforma(t) &&
-              ` · recogido ${new Date(t.handed_to_courier_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`}
+                         ${quienLoLleva(t).esAviso ? 'text-warning' : 'text-text-secondary'}`}>
+            {quienLoLleva(t).esAviso
+              ? 'Nuestro, y todavía no lo ha cogido nadie.'
+              : quienLoLleva(t).texto.replace(/^Nuestro · /, '')}
+          </p>
+        )}
+        {/* La hora de la recogida: el único trozo que cambia lo que hace el del
+            pase --deja de esperar al rider-- así que se queda en la tarjeta. */}
+        {t.handed_to_courier_at != null && (
+          <p className="text-[12.5px] leading-snug mt-0.5 truncate text-text-tertiary">
+            Recogido a las {new Date(t.handed_to_courier_at).toLocaleTimeString('es-ES',
+              { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}
           </p>
         )}
 
@@ -171,9 +206,14 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir }: {
           </div>
         )}
 
-          <LaBolsa t={t} onReimprimir={onReimprimir} />
-        <ComoAvanzo t={t} />
-      </div>
+        <LaBolsaRota t={t} />
+        {/* LLEVA MÁS DE LO NORMAL · sólo en «En ruta» y sólo pasado el p90. */}
+        {elRetrasoEnRuta(t, losMinutos(t)) && (
+          <p className="text-[12px] leading-snug text-warning font-semibold mt-1.5">
+            {elRetrasoEnRuta(t, losMinutos(t))}
+          </p>
+        )}
+      </button>
 
       <div className="flex flex-col justify-center gap-1">
         {conBoton ? (
@@ -225,6 +265,10 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
   const [zona, setZona] = useState<Zona>('sigue_aqui')
   const [verIdas, setVerIdas] = useState(false)
   const [ocupado, setOcupado] = useState<string | null>(null)
+  /** Qué pedido tiene la hoja abierta. `null` = ninguna. */
+  const [hoja, setHoja] = useState<string | null>(null)
+  /** El cierre a mano, que es una excepción y por eso vive fuera de la tarjeta. */
+  const [cerrando, setCerrando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
   // El apagado: `false` = ni preguntado. `true` = preguntando. Ver la hoja.
   const [preguntandoApagar, setPreguntandoApagar] = useState(false)
@@ -297,12 +341,8 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
    * informa: hace ruido y empuja hacia abajo lo que sí cambia de una a otra.
    * Y sólo sale si en ESTA zona hay alguna del grupo 2.
    */
-  const avisoDeLaZona = useMemo(() => {
-    const delGrupo2 = porZona[zona].filter(t => !sabemosSuCiclo(t))
-    if (delGrupo2.length === 0) return null
-    const primeros = delGrupo2.map(t => loQueNoSabemos(t)).filter(Boolean) as string[]
-    return primeros[0] ?? null
-  }, [porZona, zona])
+  const avisoDeLaZona = useMemo(
+    () => elAvisoDeLaZona(porZona[zona]), [porZona, zona])
 
   /** ¿Hay algo que lleve de más? El contador avisa sin cambiar de pestaña. */
   const avisaEnRuta = porZona.en_ruta.some(t => elTono(t, losMinutos(t)) === 'aviso')
@@ -360,7 +400,10 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
   const actual = ZONAS.find(z => z.id === zona)!
 
   return (
-    <div className="h-full flex flex-col bg-page">
+    // `relative`: la hoja de detalle se coloca DENTRO del Pase, no encima de la
+    // pantalla entera. Así la fila de pestañas de la estación --Pase, Pedidos,
+    // Cocina-- sigue estando donde estaba y nadie se queda atrapado.
+    <div className="h-full flex flex-col bg-page relative">
       <nav className="grid grid-cols-3 gap-1.5 p-2 bg-card border-b border-default shrink-0">
         {ZONAS.map(z => {
           const n = porZona[z.id].length
@@ -447,6 +490,7 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
         ) : (
           porZona[zona].map(t => (
             <Tarjeta key={t.sale_id} t={t} ocupado={ocupado === t.sale_id}
+                     onAbrir={() => setHoja(t.sale_id)}
                      onListo={() => void pulsarListo(t)}
                      onRecogido={() => void pulsarRecogido(t)}
                      onReimprimir={() => void pulsarReimprimir(t)} />
@@ -468,11 +512,26 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
             · DICE QUÉ VA A PASAR antes de hacerlo, con las palabras del
               encargo: «Vuelve la pantalla de siempre. No se pierde ningún
               pedido.» */}
-      <div className="flex items-center px-3 py-1 bg-card border-t border-default shrink-0">
+      {/* 🔴 UN SOLO PIE (17/09). Había DOS filas --«Apagar el Pase» en una y el
+          aviso de cerrar a mano en otra-- y en 1024 × 600 eso son 68 píxeles
+          que se comen media tarjeta: con la barra de la estación, las
+          pestañas, el aviso de la zona y el pie de las que se fueron solas, se
+          veían dos tarjetas y media. Ahora es una fila: apagar a la izquierda,
+          pequeño y sin color de acción, y el cerrar a mano a la derecha. */}
+      <div className="flex items-center gap-2.5 px-3 py-1 bg-card border-t border-default shrink-0">
         <button onClick={() => setPreguntandoApagar(true)}
-                className="text-[11.5px] text-text-tertiary underline underline-offset-2
-                           min-h-[30px] px-1">
+                className="shrink-0 text-[11.5px] text-text-tertiary underline underline-offset-2
+                           min-h-[34px] px-1">
           Apagar el Pase
+        </button>
+        <AlertTriangle size={15} className="text-text-tertiary shrink-0 ml-auto" />
+        <span className="text-[11.5px] text-text-secondary min-w-0 truncate">
+          El cliente no abre, el rider se queda sin batería…
+        </span>
+        <button onClick={() => (onCerrarAMano ? onCerrarAMano() : setCerrando(true))}
+                className="shrink-0 min-h-[34px] px-3 rounded-xl border border-linea-fuerte
+                           bg-card text-text-secondary text-[12.5px] font-extrabold">
+          Cerrar a mano
         </button>
       </div>
 
@@ -522,20 +581,28 @@ export default function PaseBoard({ token, onCerrarAMano, onApagado }: {
         </div>
       )}
 
-      {/* El cerrar a mano vive FUERA de las tarjetas: es una excepción, no un paso. */}
-      {onCerrarAMano && (
-        <div className="flex items-center gap-2.5 px-3 py-1.5 bg-card border-t border-default shrink-0">
-          <AlertTriangle size={16} className="text-text-tertiary shrink-0" />
-          <span className="text-[12px] text-text-secondary min-w-0">
-            El cliente no abre, el rider se queda sin batería… se cierra a mano y se apunta por qué.
-          </span>
-          <button onClick={onCerrarAMano}
-                  className="ml-auto shrink-0 min-h-[38px] px-3 rounded-xl border border-linea-fuerte
-                             bg-card text-text-secondary text-[12.5px] font-extrabold">
-            Cerrar a mano
-          </button>
-        </div>
+      {/* LA HOJA DE DETALLE. Va la última para quedar por encima de todo lo
+          demás, y dentro del contenedor `relative` de arriba. */}
+      {hoja && (
+        <HojaDelPase key={hoja} saleId={hoja} token={token} onCerrar={() => setHoja(null)} />
       )}
+
+      {/* 🔴 LA LISTA ENSEÑA TODO LO VIVO, no sólo lo de la zona abierta: lo que
+          más falta hace cerrar a mano es justo lo que ya no se pinta en ninguna
+          zona --una bolsa del grupo 2 que se fue sola a los 30 minutos-- y si
+          sólo se pudiera cerrar lo que se ve, eso no se podría cerrar nunca. */}
+      {cerrando && (
+        <CerrarAMano
+          pedidos={(tablero?.tarjetas ?? []).filter(t => laSituacion(t) !== 'entregado')}
+          onCerrar={() => setCerrando(false)}
+          onConfirmar={async (saleId, motivo: ClaveMotivo, texto) => {
+            const antes = (tablero?.tarjetas ?? []).find(t => t.sale_id === saleId)
+            await cerrarAMano(saleId, token, motivo, texto)
+            await refrescar()
+            return laConfirmacion(antes, motivo)
+          }} />
+      )}
+
     </div>
   )
 }

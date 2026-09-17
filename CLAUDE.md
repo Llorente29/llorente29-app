@@ -164,6 +164,56 @@ distintas, y el operario sigue viendo la pantalla de antes.
 --el color, el nombre del comando, la naturaleza del fichero-- en vez de la
 señal PUBLICADA.*
 
+### Retener un paquete OTA no es quitar el manifiesto
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Lo pagó el 305.
+
+Quitar `apps/bundle.json` impide que una tablet **descubra** un paquete nuevo.
+No impide que **instale** el que ya se bajó, y ésa es la diferencia que costó el
+incidente.
+
+*El camino, con `appUpdate.ts` y `UpdateGate.tsx` delante:*
+
+1. Cada ciclo, `checkForBundleUpdate()` lee `apps/bundle.json` y compara
+   `bundleId` con el que corre.
+2. Si hay uno nuevo, `prefetchOtaBundle()` lo **descarga al disco de la tablet**
+   --Capgo lo deja ahí, sin activar-- y se guarda su `id` en memoria.
+3. A partir de ese momento la tablet ya no necesita el manifiesto para nada:
+   sólo espera a que se abran las dos llaves (fuera del horario del local y
+   cocina en calma) y llama a `applyOtaBundle(id)`.
+
+*Lo que pasó el 16/09, con las horas:* el `bundle-305.zip` se subió a las
+**22:26:48** y el manifiesto se retiró a las **23:04:43**. **Treinta y ocho
+minutos** de ventana: suficiente para que las dos tablets de Alcalá se lo
+bajaran. Se quedaron encendidas toda la noche con el id en memoria y lo
+aplicaron por la mañana, con la cocina parada, a las **07:51:53** y
+**07:52:45**. La retención funcionó para lo que no se había descargado
+--Carabanchel siguió en el 303-- y no para lo que sí.
+
+**Cómo se retiene de verdad, y son las dos cosas:**
+
+1. **El manifiesto apunta a la versión que ya corren**, no se borra. Un
+   `bundle.json` con el `bundleId` que las tablets tienen puesto hace que
+   `remote.bundleId > currentId` sea falso y no haya descarga. Borrarlo también
+   vale para eso, pero un manifiesto que no existe no se puede consultar: ver
+   el punto 2.
+2. **La tablet vuelve a mirar el manifiesto ANTES de instalar lo descargado**
+   (`sigueEstandoPublicado`, 17/09). Si contesta y ya no es ese paquete, se
+   descarta. Si **no contesta, se aplica igual**: la lección del 13/09 es que
+   una tablet que no puede actualizarse porque la red va mal se queda clavada
+   para siempre y en silencio, y eso es peor.
+
+*Y lo que hay que asumir mientras tanto:* entre el minuto en que se sube un zip
+y el minuto en que se retira, cualquier tablet encendida puede habérselo
+bajado. **Un paquete retenido después de publicarse ya no se puede retirar de
+las tablets que lo cogieron: sólo se puede tapar publicando uno posterior.** Por
+eso el número del paquete nuevo tiene que ser MAYOR que el retenido.
+
+*Detector automático:* si un parte dice «retenido» y el zip llevaba minutos
+subido, la pregunta no es si el manifiesto está quitado, sino **qué
+`bundle_applied` tiene cada tablet** y si alguna lo tiene ya descargado. Lo
+primero se ve en `kds_device`; lo segundo, hoy, no se ve desde el servidor.
+
 ### Una cosa está aplicada cuando está en PRODUCCIÓN, no cuando está commiteada
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque.
