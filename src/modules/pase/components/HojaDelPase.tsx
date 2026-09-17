@@ -23,7 +23,7 @@
 import { useEffect, useState } from 'react'
 import { Phone, Printer, X, AlertTriangle } from 'lucide-react'
 import {
-  elComoAvanzo, laDireccion, llamarAlCliente, llamarAlRepartidor, losCincoTiempos,
+  laFuenteDe, laDireccion, llamarAlCliente, llamarAlRepartidor, losCincoTiempos,
   type FichaDelPase, type Llamada,
 } from '../lib/laFicha'
 import { quienLoLleva } from '../lib/lasTresZonas'
@@ -220,11 +220,13 @@ export default function HojaDelPase({ saleId, token, onCerrar, fichaDePrueba }: 
                     {losCincoTiempos(ficha, hhmm).map(i => (
                       <span key={i.etiqueta} className={i.hora ? '' : 'text-text-tertiary'}>
                         {i.etiqueta} {i.hora ?? '—'}
-                        {/* CÓMO AVANZÓ, pegado al «Listo» porque es de ese hito
-                            de quien habla. Bajó de la tarjeta el 16/09 y sin
-                            esto se había quedado sin sitio en ninguna pantalla. */}
-                        {i.etiqueta === 'Listo' && i.hora && elComoAvanzo(ficha) && (
-                          <span className="text-text-tertiary"> · {elComoAvanzo(ficha)}</span>
+                        {/* QUIÉN LO DICE, pegado a SU hito (17/09). Antes toda
+                            la frase colgaba del «Listo», y así un J191403139
+                            --pulsado por una persona y recogido 38 s después--
+                            decía «Listo · lo dice la flota». Lo que dice la
+                            flota es la salida y la entrega. */}
+                        {i.hora && laFuenteDe(ficha, i.etiqueta) && (
+                          <span className="text-text-tertiary"> · {laFuenteDe(ficha, i.etiqueta)}</span>
                         )}
                       </span>
                     ))}

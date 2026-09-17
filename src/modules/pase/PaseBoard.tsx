@@ -106,7 +106,7 @@ function LaBolsaRota({ t }: { t: TarjetaDelPase }) {
     <p className="text-[12px] leading-snug text-danger font-semibold mt-1.5">
       La bolsa no ha salido. La impresora no contesta. El pedido se queda aquí hasta
       que haya papel: sin etiqueta, la bolsa no se puede dar.
-      {t.bolsa.intentos > 0 && ` Intentado ${t.bolsa.intentos} ${t.bolsa.intentos === 1 ? 'vez' : 'veces'}.`}
+      {t.bolsa.intentos > 0 && ` Intentado ${t.bolsa.intentos} ${t.bolsa.intentos === 1 ? 'vez' : 'veces'}`}
       {t.bolsa.cuando && ` · ${t.bolsa.cuando}`}
     </p>
   )

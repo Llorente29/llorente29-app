@@ -19,7 +19,8 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  elCodigoAgrupado, elComoAvanzo, elNombreCorto, laDireccion, laPastilla, llamarAlCliente,
+  elCodigoAgrupado, elNombreCorto, laDireccion, laFuenteDe, laFuenteDeLaEntrega,
+  laFuenteDeLaSalida, laFuenteDelListo, laPastilla, llamarAlCliente,
   llamarAlRepartidor, losCincoTiempos, type FichaDelPase,
 } from '@/modules/pase/lib/laFicha'
 
@@ -242,50 +243,76 @@ describe('el código de la centralita, agrupado igual en los dos canales', () =>
   })
 })
 
-describe('cómo avanzó el «Listo», con los cuatro casos reales del 16/09', () => {
-  const caso = (o: Partial<FichaDelPase>) => elComoAvanzo(F(o))
-
-  it('J191403139 · nuestra flota → lo dice la flota', () => {
-    expect(caso({ service_type: 'own_delivery', has_courier: true, carrier_code: 'catcher',
-                  ready_at: '2026-09-16T20:49:11Z',
-                  handed_to_courier_at: '2026-09-16T20:49:49Z' })).toBe('lo dice la flota')
+describe('quién dice cada hito · los cuatro casos reales', () => {
+  // J191403139 · nuestra flota. Listo 22:49:11, recogida 22:49:49 → 38 s.
+  const flotaPulsado = F({
+    channel: 'JustEat', source: 'hubrise', service_type: 'own_delivery',
+    has_courier: true, carrier_code: 'catcher', delivery_state: 'delivered',
+    ready_at: '2026-09-16T20:49:11Z', handed_to_courier_at: '2026-09-16T20:49:49Z',
+    delivered_at: '2026-09-16T21:10:00Z',
+  })
+  // UD12A3 · Uber por HubRise. Listo y recogida en el mismo segundo.
+  const uberSellado = F({
+    channel: 'Uber', source: 'hubrise', service_type: 'platform_delivery',
+    ready_at: '2026-09-16T20:00:53.0Z', handed_to_courier_at: '2026-09-16T20:00:53.3Z',
+    delivered_at: '2026-09-16T20:28:43Z',
+  })
+  // U130B6 · Uber por HubRise. 45,3 s: lo pulsó una persona.
+  const uberPulsado = F({
+    channel: 'Uber', source: 'hubrise', service_type: 'platform_delivery',
+    ready_at: '2026-09-16T20:37:09Z', handed_to_courier_at: '2026-09-16T20:37:54Z',
+    delivered_at: '2026-09-16T20:51:02Z',
+  })
+  // G740 · Glovo por Glovo, con «Se lo ha llevado». De éste no llega nada.
+  const glovoBoton = F({
+    channel: 'Glovo', source: 'lastapp', service_type: 'platform_delivery',
+    ready_at: '2026-09-16T20:25:56Z', handed_to_courier_at: '2026-09-16T20:41:19Z',
   })
 
-  it('🔴 UD12A3 · 0,3 s entre el «Listo» y la recogida → lo puso el aviso de Uber', () => {
-    expect(caso({ channel: 'Uber', source: 'hubrise', service_type: 'platform_delivery',
-                  ready_at: '2026-09-16T20:00:53.0Z',
-                  handed_to_courier_at: '2026-09-16T20:00:53.3Z' }))
-      .toBe('nadie lo pulsó: lo puso la recogida de Uber')
+  it('🔴 J191403139 · el «Listo» lo pulsó una persona, no la flota: 38 s de hueco', () => {
+    expect(laFuenteDelListo(flotaPulsado)).toBe('lo marcó una persona')
+  })
+  it('J191403139 · la SALIDA y la ENTREGA sí las dice la flota', () => {
+    expect(laFuenteDeLaSalida(flotaPulsado)).toBe('lo dice la flota')
+    expect(laFuenteDeLaEntrega(flotaPulsado)).toBe('lo dice la flota')
   })
 
-  it('🔴 U130B6 · 45,3 s → lo pulsó una persona, y la bolsa se pidió al segundo del «Listo»', () => {
-    expect(caso({ channel: 'Uber', source: 'hubrise', service_type: 'platform_delivery',
-                  ready_at: '2026-09-16T20:37:09Z',
-                  handed_to_courier_at: '2026-09-16T20:37:54Z' })).toBe('lo marcó una persona')
+  it('UD12A3 · el «Listo» lo puso el aviso de Uber', () => {
+    expect(laFuenteDelListo(uberSellado)).toBe('nadie lo pulsó: lo puso la recogida de Uber')
+  })
+  it('UD12A3 · salida y entrega, las dice Uber', () => {
+    expect(laFuenteDeLaSalida(uberSellado)).toBe('lo dice Uber')
+    expect(laFuenteDeLaEntrega(uberSellado)).toBe('lo dice Uber')
   })
 
-  it('U2E2EC · 53,1 s → persona', () => {
-    expect(caso({ channel: 'Uber', source: 'hubrise', service_type: 'platform_delivery',
-                  ready_at: '2026-09-16T20:37:14Z',
-                  handed_to_courier_at: '2026-09-16T20:38:07Z' })).toBe('lo marcó una persona')
+  it('U130B6 · 45,3 s: lo pulsó una persona, y la salida la dice Uber', () => {
+    expect(laFuenteDelListo(uberPulsado)).toBe('lo marcó una persona')
+    expect(laFuenteDeLaSalida(uberPulsado)).toBe('lo dice Uber')
   })
 
-  it('🔴 un pedido de PLATAFORMA no puede decir nunca «lo dice la flota»', () => {
-    for (const seg of [0, 1, 2, 3, 45, 600]) {
-      const r = caso({ channel: 'Glovo', source: 'lastapp', service_type: 'platform_delivery',
-                       ready_at: '2026-09-16T20:00:00Z',
-                       handed_to_courier_at: new Date(Date.parse('2026-09-16T20:00:00Z') + seg * 1000).toISOString() })
-      expect(r).not.toBe('lo dice la flota')
-    }
+  it('🔴 G740 · de un Glovo por Glovo no llega ningún aviso: la salida la marcó una persona', () => {
+    expect(laFuenteDelListo(glovoBoton)).toBe('lo marcó una persona')
+    expect(laFuenteDeLaSalida(glovoBoton)).toBe('lo marcó una persona')
+    expect(laFuenteDeLaEntrega(glovoBoton)).toBeNull()
   })
 
-  it('sin «Listo» todavía no dice nada', () => {
-    expect(caso({ ready_at: null })).toBeNull()
+  it('con flota y sello automático se dice «nuestro repartidor», no el canal', () => {
+    expect(laFuenteDelListo(F({
+      channel: 'Glovo', source: 'hubrise', service_type: 'own_delivery',
+      has_courier: true, carrier_code: 'catcher',
+      ready_at: '2026-09-16T20:00:00.0Z', handed_to_courier_at: '2026-09-16T20:00:01.0Z',
+    }))).toBe('nadie lo pulsó: lo puso la recogida de nuestro repartidor')
   })
 
-  it('sin recogida, una plataforma dice que lo marcó una persona', () => {
-    expect(caso({ channel: 'Glovo', service_type: 'platform_delivery',
-                  ready_at: '2026-09-16T20:00:00Z', handed_to_courier_at: null }))
-      .toBe('lo marcó una persona')
+  it('cada hito recibe SU fuente y ninguna otra', () => {
+    expect(laFuenteDe(flotaPulsado, 'Listo')).toBe('lo marcó una persona')
+    expect(laFuenteDe(flotaPulsado, 'Salió')).toBe('lo dice la flota')
+    expect(laFuenteDe(flotaPulsado, 'Entró')).toBeNull()
+    expect(laFuenteDe(flotaPulsado, 'Aceptado')).toBeNull()
+  })
+
+  it('sin hito, sin fuente', () => {
+    expect(laFuenteDelListo(F({ ready_at: null }))).toBeNull()
+    expect(laFuenteDeLaSalida(F({ handed_to_courier_at: null }))).toBeNull()
   })
 })

@@ -65,7 +65,7 @@
 
 import {
   esRecogida, loRepartelaPlataforma, loRepartimosConFlota, quienReparte,
-  type PedidoDelPase,
+  sabemosSuCiclo, type PedidoDelPase,
 } from './lasTresZonas'
 
 /**
@@ -294,56 +294,84 @@ export function llamarAlCliente(f: FichaDelPase): Llamada {
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * CÓMO AVANZÓ EL «LISTO» · 17/09/2026
+ * QUIÉN DICE CADA HITO · 17/09/2026
  * ─────────────────────────────────────────────────────────────────────────────
  *
- * Tres frases y ninguna se dice sin prueba. Se decide AQUÍ y no con el
- * `avanzo_por` que manda la base, porque ese campo sale de
- * `delivery_state is not null` y `delivery_state` es un campo de Catcher: en un
- * pedido de plataforma no distingue nada. El front tiene los tres instantes y
- * sabe quién reparte, así que puede decirlo mejor.
+ * Tres hitos y tres preguntas distintas, y hasta hoy se contestaban con una
+ * sola frase pegada al «Listo». Estaba mal, y lo enseñó la propia tabla:
  *
- * 1 · NUESTRA FLOTA → «lo dice la flota». Sólo con `carrier_code`/`has_courier`,
- *     que es lo único que significa Catcher. Antes bastaba con que hubiera
- *     `delivery_state`, y por ahí se colaba un Uber diciendo «lo dice la flota».
+ *   J191403139  listo 22:49:11 · recogida 22:49:49 → 38 s
  *
- * 2 · LO SELLÓ EL AVISO DE LA PLATAFORMA → «nadie lo pulsó: lo puso la recogida
- *     de Uber». Es la deuda del «Listo sin pulsar»: `tg_sale_seal_kpi_hitos`
- *     sella `ready_at` cuando llega el `in_delivery`, así que si nadie había
- *     tocado la tablet, el «Listo» acaba siendo la hora de la recogida.
+ * Treinta y ocho segundos. Alguien pulsó «Listo», se imprimió la bolsa, y la
+ * flota avisó de la recogida después. Decir «Listo 22:49 · lo dice la flota»
+ * era atribuirle a Catcher un botón que pulsó una persona. **Lo que dice la
+ * flota es la SALIDA y la ENTREGA, no el «Listo».**
  *
- *     🔴 LA SEÑAL, MEDIDA, y por eso son DOS SEGUNDOS y no un número redondo:
- *       UD12A3  listo 22:00:53 · recogida 22:00:53 →  0,3 s  ← lo selló el aviso
- *       U130B6  listo 22:37:09 · recogida 22:37:54 → 45,3 s  ← lo pulsó alguien
- *       U2E2EC  listo 22:37:14 · recogida 22:38:07 → 53,1 s  ← lo pulsó alguien
- *       J191..  listo 22:49:11 · recogida 22:49:49 → 38,2 s  ← flota
- *     Y la prueba que lo remata: en U130B6 la bolsa se pidió a las **22:37:09**,
- *     al segundo del «Listo» --o sea que alguien lo pulsó y eso imprimió la
- *     etiqueta--, mientras que en UD12A3 la bolsa se había pedido a las
- *     **21:47:48**, TRECE MINUTOS antes de su `ready_at`.
+ * ── EL «LISTO» · la misma regla en todos los repartos ────────────────────────
+ * El sello lo puede escribir una persona (el botón) o el aviso de recogida, vía
+ * `tg_sale_seal_kpi_hitos`. Se distinguen por el hueco, y el umbral es el mismo
+ * para nuestra flota que para una plataforma, porque el mecanismo es el mismo:
  *
- *     ⚠️ Con nueve pedidos que tienen los dos sellos, dos segundos es lo que
- *     separa hoy los dos grupos, no una ley. Si algún día un «Listo» de verdad
- *     cae dentro de esos dos segundos, esta frase mentirá — y entonces habrá
- *     que guardar QUIÉN escribió el sello, que es el arreglo de verdad.
+ *   UD12A3      listo 22:00:53 · recogida 22:00:53 →  0,3 s ← lo selló el aviso
+ *   J191403139  listo 22:49:11 · recogida 22:49:49 → 38,2 s ← lo pulsó alguien
+ *   U130B6      listo 22:37:09 · recogida 22:37:54 → 45,3 s ← lo pulsó alguien
+ *   U2E2EC      listo 22:37:14 · recogida 22:38:07 → 53,1 s ← lo pulsó alguien
  *
- * 3 · TODO LO DEMÁS → «lo marcó una persona». Nunca «por Ana»: la base no
- *     guarda quién pulsó, y un nombre inventado es peor que no decir nada.
+ * Y la prueba que lo remata, la bolsa, que se imprime al pulsar «Listo»: en
+ * U130B6 se pidió a las **22:37:09**, al segundo; en UD12A3 a las **21:47:48**,
+ * TRECE MINUTOS antes de su `ready_at`.
+ *
+ * ⚠️ Con nueve pedidos que tienen los dos sellos, dos segundos es lo que separa
+ * hoy los dos grupos, no una ley. El arreglo de verdad es guardar QUIÉN
+ * escribió el sello; mientras no exista, esto es lo que se puede afirmar.
+ *
+ * ── LA SALIDA Y LA ENTREGA · quién avisó ─────────────────────────────────────
+ *   · nuestra flota  → «lo dice la flota» (Catcher, que es quien manda
+ *     `delivery_state`)
+ *   · plataforma de la que sí sabemos el ciclo → «lo dice Uber»
+ *   · lo demás → sólo puede haber llegado por el botón «Se lo ha llevado», así
+ *     que «lo marcó una persona». Es el caso de G740, un Glovo por Glovo.
  */
 const SEGUNDOS_DEL_SELLO_AUTOMATICO = 2
 
-export function elComoAvanzo(f: FichaDelPase): string | null {
+/** Quién escribió el «Listo». `null` si todavía no hay. */
+export function laFuenteDelListo(f: FichaDelPase): string | null {
   if (!f.ready_at) return null
-  if (loRepartimosConFlota(f)) return 'lo dice la flota'
-
-  if (loRepartelaPlataforma(f) && f.handed_to_courier_at) {
+  if (f.handed_to_courier_at) {
     const hueco = Math.abs(
       new Date(f.ready_at).getTime() - new Date(f.handed_to_courier_at).getTime()) / 1000
     if (hueco <= SEGUNDOS_DEL_SELLO_AUTOMATICO) {
-      return `nadie lo pulsó: lo puso la recogida de ${quienReparte(f)}`
+      const quien = loRepartimosConFlota(f) ? 'nuestro repartidor' : quienReparte(f)
+      return `nadie lo pulsó: lo puso la recogida de ${quien}`
     }
   }
   return 'lo marcó una persona'
+}
+
+/** Quién avisó de un hito de reparto --la salida o la entrega--. */
+function quienAviso(f: FichaDelPase): string {
+  if (loRepartimosConFlota(f)) return 'lo dice la flota'
+  if (sabemosSuCiclo(f)) return `lo dice ${quienReparte(f)}`
+  // Del grupo 2 no llega ningún aviso: si hay hora, la puso el botón.
+  return 'lo marcó una persona'
+}
+
+/** Quién dijo que salió. `null` si todavía no ha salido. */
+export function laFuenteDeLaSalida(f: FichaDelPase): string | null {
+  return f.handed_to_courier_at ? quienAviso(f) : null
+}
+
+/** Quién dijo que llegó. `null` si todavía no ha llegado. */
+export function laFuenteDeLaEntrega(f: FichaDelPase): string | null {
+  return f.delivered_at ? quienAviso(f) : null
+}
+
+/** La fuente que le toca a cada hito, para pintarla al lado de su hora. */
+export function laFuenteDe(f: FichaDelPase, etiqueta: string): string | null {
+  if (etiqueta === 'Listo')     return laFuenteDelListo(f)
+  if (etiqueta === 'Salió')     return laFuenteDeLaSalida(f)
+  if (etiqueta === 'Entregado') return laFuenteDeLaEntrega(f)
+  return null
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
