@@ -15,6 +15,9 @@
 
 **Leyenda:** ✅ hecho, visto y aprobado · 🟢 construido y probado, falta captura y el sí de Julio · 🟡 a medias · ❌ falta · ⏸ aplazado con fecha
 
+> **Esta es la copia de trabajo de Code.** La lista que manda es la del
+> proyecto; si discrepan, gana la del proyecto (Julio, 19/09).
+
 > **Estado del 19/09, después del encargo.** Nada está en ✅ y nada puede estarlo
 > todavía: las capturas a 1.280 px con datos reales no se pueden hacer desde el
 > contenedor donde corre Code (no hay `.env` ni credenciales de la aplicación),
@@ -22,6 +25,13 @@
 > rama. Lo que sí está: rama `claude/cool-thompson-msx9dg`, `npm run build`
 > exacto y en limpio en verde, 1.619 pruebas en verde y el lint medido a los dos
 > lados (6 problemas antes, 6 después, en los mismos ficheros).
+>
+> **Segunda vuelta (19/09, tras la respuesta de Julio).** Dos correcciones
+> aplicadas: el «50 formatos anidados» era mi consulta contando archivados —
+> **vivos son 38**— y la regla de «No cuadra» ya no sella un número pegado al
+> nombre del producto. El preview **no es alcanzable desde el entorno de Code**
+> (el proxy deniega el CONNECT con 403, queda la traza en el parte): las
+> capturas siguen siendo de Julio.
 
 ## A · El alta del artículo (artboard 1)
 
@@ -84,7 +94,7 @@
 | E2 | Tres filtros con su número: **Sin formato · 26** · **Sin referencia · 73** · **Coste a mano · 36** | 🟢 | contados en vivo. Hoy: **32 · 46 · 36** por artículo (el 73 de la maqueta son ENLACES, no artículos) |
 | E3 | Las filas a medias van **con fondo distinto** y sello «Falta el formato» | 🟢 | |
 | E4 | Botón **«Terminarlo»** que abre justo el paso que falta, no la ficha entera | 🟢 | abre la ficha por la sección de compra y, si no hay proveedor, con el formulario abierto |
-| E5 | Sellos de lo que no cuadra: **«No cuadra»** y **«Repetido»** | 🟢 | reglas medibles, probadas contra los 165 enlaces reales. Ver §5.4 del parte |
+| E5 | Sellos de lo que no cuadra: **«No cuadra»** y **«Repetido»** | 🟢 | reglas medibles, probadas contra los 165 enlaces reales. **Corregida el 19/09**: una magnitud solo habla del envase si lleva delante palabra de envase o de tamaño → 93 comprobables y **1 solo sello** (Aceite de Oliva Suave). Ver §5.1 del parte |
 | E6 | Lo terminado dice **«✓ terminado»**, sin ruido | 🟢 | |
 
 > **Los números de E1 y E2 no son los de la maqueta, y eso es un hallazgo, no un

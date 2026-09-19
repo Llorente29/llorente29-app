@@ -40,11 +40,44 @@ describe('«No cuadra» sobre la población real', () => {
     elTextoNoCuadra({ texto: e.texto, baseDim: e.baseDim, formato: formatoDe(e) }),
   )
 
-  it('sella exactamente los dos que no se explican de ninguna manera', () => {
+  it('sella exactamente UNO: el único que no se explica de ninguna manera', () => {
     expect(sellados.map((e) => `${e.articulo} · ${e.proveedor}`)).toEqual([
       'Aceite de Oliva Suave 0,4º · MAKRO DISTRIBUCION MAYORISTA SA',
-      'DELICIAS DE POLLO SOUTHERN · COHELDI, S.L.',
     ])
+  })
+
+  it('un número pegado al nombre del producto es el peso de una PIEZA, no del envase', () => {
+    // Corrección de Julio (19/09): «POLLO DELICIAS SUREÑAS METEORITOS 35G» —
+    // 35 g es un meteorito de pollo. Que 2.200 no sea múltiplo de 35 no dice
+    // nada malo del formato: se vende al peso.
+    //
+    // Y la medida que llevó la contraria a la pregunta: se preguntó cuántos de
+    // los 115 textos comparables nombraban el peso de la pieza esperando que
+    // fueran varios, y es UNO. La regla no se cambió por esa fila, se cambió
+    // por su significado — «una magnitud solo habla del envase si lleva
+    // delante una palabra de envase o de tamaño» — y el coste va medido en la
+    // prueba de abajo.
+    const e = ENLACES_REALES.find((x) => x.articulo === 'DELICIAS DE POLLO SOUTHERN')!
+    expect(magnitudesDelTexto(e.texto, e.baseDim)).toEqual([35])
+    expect(elTextoNoCuadra({ texto: e.texto, baseDim: e.baseDim, formato: formatoDe(e) })).toBe(false)
+  })
+
+  it('el coste de esa corrección, con el número delante', () => {
+    // Cuántos enlaces siguen siendo comprobables. Si alguien toca la lista de
+    // palabras o la ventana, este número se mueve y se ve. 115 antes, 93 ahora:
+    // 22 dejan de poder comprobarse porque su tamaño va pegado al nombre del
+    // producto y desde fuera no hay forma de saber de qué habla.
+    const comprobables = ENLACES_REALES.filter((e) => {
+      const f = formatoDe(e)
+      // un enlace es comprobable si, quitándole el formato, la regla tendría
+      // algo que comparar: se detecta poniéndole un total imposible.
+      return elTextoNoCuadra({
+        texto: e.texto,
+        baseDim: e.baseDim,
+        formato: { ...f, qtyInBase: 123456789, qtyPerParent: null, innerQtyInBase: null },
+      })
+    })
+    expect(comprobables).toHaveLength(93)
   })
 
   it('el caso que puso Julio: su texto dice 250 ml y el formato 1.000 ml', () => {

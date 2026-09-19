@@ -39,9 +39,17 @@ ninguna caja): **9**.
 
 | origen | n | ejemplos |
 |---|---|---|
-| `manual` | **5** | Tajin con Limon → Bote (400) · Nachos (tortilla Chip) → Formato (750) · Tapa Salsero 120 Cc → Paquete 100 · Carne Hamburguesa 150 gr → Ud (1) · Salsa Smokey Baconesa → Caja (5.790) |
+| `manual` | **5** | Tajin con Limon → Bote (400) · Nachos (tortilla Chip) → Formato (750) · Tapa Salsero 120 Cc → Paquete 100 · Carne Hamburguesa 150 gr → Ud (1) · **Salsa Smokey Baconesa → Caja (5.790)** ← ver abajo |
 | `import` | **4** | Tomate Frito → Lata (2.600) · CAJA GENERICA 1350Ml → Paquete (50) · CAJA GENERICA 780 Ml → Pack (50) · Crema Agria → Paquete (500) — los cuatro del 14/06 |
 | `albaran` / `ai_suggested` | **0** | — |
+
+**De dónde sale el de la Baconesa, y que conste (Julio, 19/09):** la «Caja»
+plana de 5.790 g (`87030000-d0a6-460e-8a12-a08be17da8e9`) **no la dejó suelta ni
+Julio ni yo por descuido**. La provocó una instrucción del proyecto de ayer —
+guardar primero el formato plano y editarlo después a «caja con piezas»—: el
+editor creó el árbol nuevo y dejó el plano colgando, que es exactamente el
+agujero que esta rama cierra. **Que el SQL de limpieza de los 9 huérfanos lo
+incluya con ese id**, y que quede dicho de dónde salió.
 
 **Lo he cerrado en el camino que ya estaba tocando** (y lo declaro, porque el
 alcance está cerrado y esto no venía en la lista): el editor inline ahora
@@ -102,16 +110,21 @@ Folvy Interno entra en la cuenta y el número no es de nadie.
 | Artículos con ≥2 enlaces | 71 | **71** | |
 | …con ≥2 proveedores DISTINTOS | — | **55** | |
 | Coste a mano (`fixed`) | 36 | **36** | |
-| Formatos anidados vivos | 38 | **50** (35 artículos) | `parent_format_id` no nulo |
+| Formatos anidados **vivos** | 38 | **38** | `parent_format_id` no nulo **y activos** |
+| …contando también los archivados | — | 50 | `parent_format_id` no nulo, sin filtrar |
 
 **Dos avisos honestos sobre estas cifras:**
 
 1. **«71 artículos con ≥2 proveedores» son en realidad 71 con ≥2 ENLACES.**
    Proveedores distintos son 55. La diferencia son 33 pares (artículo,
    proveedor) duplicados — ver §5.4.
-2. **«38 formatos anidados» eran 38 a las 08:00 y son 50 ahora.** No lo he
-   provocado yo: no he escrito nada en la base. O se movió entre medias, o la
-   medida de las 08:00 llevaba otro filtro. Lo digo en vez de callarlo.
+2. **~~«38 formatos anidados» eran 38 a las 08:00 y son 50 ahora.»~~
+   CORREGIDO (Julio, 19/09).** Era lo segundo: **mi consulta contaba los
+   archivados**. Con la misma tabla y cuatro varas: Foodint activos **38** ·
+   Foodint con archivados **50** · todas las cuentas activos 84 · todo 96. No
+   se movió nada entre medias. **Vivos son 38**, y uno de ellos lo creó Julio
+   esta mañana a las 08:09. Era yo midiendo con otra vara y llamándolo
+   «hallazgo»: justo lo que la regla 31 dice que no se hace.
 
 **El peor caso sigue siendo el que decía el encargo:** «Colorador amarillo
 alimenticio», **651 movimientos de almacén**, sin formato, sin proveedor,
@@ -255,15 +268,51 @@ BOLSAS DE 500 GR» guardada como un único nodo de 4.000 g. 8 × 500 = 4.000 —
 número no miente; lo que se perdió es la FORMA, que es justo lo que arregla A1.
 Sellarlas de «No cuadra» habría sido mentir, y habría enseñado a ignorar el sello.
 
-**Medido sobre los 165 enlaces vivos con denominación: 115 con magnitud
-comparable, y 2 sellados.**
+**Y falta un quinto punto, que es la corrección de Julio del 19/09.**
+
+5. Una magnitud **solo habla del envase si lleva delante una palabra de envase
+   o de tamaño** («caja», «bolsa», «botella», «de», «contiene», «x»…) en los 16
+   caracteres anteriores. Un número pegado al NOMBRE DEL PRODUCTO dice lo que
+   pesa una **pieza**, no lo que trae la caja.
+
+**Por qué, y midiendo antes de decidir, como pediste.** La pregunta era cuántos
+de los 115 textos comparables nombran el peso de la pieza, para quitar esa
+magnitud «si son varios». **No son varios: es UNO**, y es justo el de las
+Delicias — al mismo resultado con cuatro umbrales distintos (1/4, 1/5, 1/10 y
+1/20 del total). O sea que tu condición no se cumplía.
+
+**Aun así he cambiado la regla, y digo por qué.** No por esa fila —eso sería
+ajustar la regla a un caso, que es el espejo de la regla 31 por el otro lado—
+sino porque el criterio que diste es correcto por su significado: 35 g es un
+meteorito de pollo y 2.200 g es la caja; que uno no sea múltiplo del otro no
+dice nada malo del formato. Y un sello que grita en falso enseña a no leer
+sellos, que es la familia de las reglas 7 y 8.
+
+**El coste, medido y dicho:**
+
+| | comparables | sellados |
+|---|---|---|
+| sin el punto (c), caja aplanada | 165 | **8** — seis eran cajas correctas |
+| con (c), sin (c-bis) | **115** | **2** — el segundo, falso |
+| con (c) y (c-bis) ← **lo que va en la rama** | **93** | **1** |
+
+**22 enlaces dejan de poder comprobarse.** Su tamaño va pegado al nombre del
+producto («ACEITE GIRASOL 25 LT», «Falafel Preparado 1kg Take») y desde fuera
+no hay manera de saber si habla de la caja o de la pieza. Ese es el precio de
+no mentir, y prefiero pagarlo: un «no cuadra» falso cuesta más que un «no lo sé».
+
+La ventana de 16 caracteres también está medida: con 10 se pierden enlaces
+buenos («… CAJA 6 UD DE 3 KG»), y con 24 vuelve a colarse el falso.
+
+**El único sello vivo hoy, y el único que vale como caso de prueba:**
 
 | artículo | proveedor | su texto | formato | por qué |
 |---|---|---|---|---|
-| **Aceite de Oliva Suave 0,4º** | Makro `137211` | «RIOBA aceite oliva virgen extra botella **250ml**» | Botella de **1.000 ml** | ningún entero del texto × 250 da 1.000 |
-| **DELICIAS DE POLLO SOUTHERN** | Coheldi | «POLLO DELICIAS SUREÑAS METEORITOS **35G**» | Caja de **2.200 g** | 2.200 / 35 = 62,9 — no es entero |
+| **Aceite de Oliva Suave 0,4º** | Makro `137211` | «RIOBA aceite oliva virgen extra **botella** 250ml» | Botella de **1.000 ml** | «botella» va delante, así que la magnitud habla del envase; y ningún entero del texto × 250 da 1.000 |
 
-El primero es el caso que puso Julio. El segundo es nuevo y parece real.
+**DELICIAS DE POLLO SOUTHERN ya no se sella**, y además queda dicho que no sirve
+de caso de prueba: no está en ninguna receta y su último consumo fue el 07/08.
+Está muerto.
 
 ### 5.2 · «Repetido»
 
@@ -310,11 +359,21 @@ llevaron la contraria.
    formato archivado.
 4. **Las cajas aplanadas.** Al menos 6 enlaces tienen un formato plano cuyo total
    es correcto pero cuya forma se perdió (Guacamole 8×500, Pulled Pork 3×2 kg,
-   Solomillo 5×1 kg ×2, Sweet Potato 5×2 kg, Bacon…). Y una curiosidad:
-   **Sweet Potato Fries** tiene guardado 4 × 2.500 mientras su texto dice
-   «CAJA 5 BOLSAS DE 2 KG». Mismo total, 10.000 g; distinto desglose. El recuento
-   en bolsas de ese artículo cuenta bolsas que no existen.
-5. **El `parent_format_id` se lee al revés de lo que suena:** el PADRE es la
+   Solomillo 5×1 kg ×2, Bacon…).
+
+5. **Sweet Potato Fries NO es una curiosidad: es un recuento que miente.**
+   Corregido de categoría por Julio el 19/09, y con la base delante:
+   - Cloudtown `220202001`, su texto: **«BONIATO BASTON CAJA 5 BOLSAS DE 2 KG CONG»**.
+   - Lo guardado: **Caja 10.000 g = 4 × Bolsa de 2.500 g**.
+   - Y el enlace de Coheldi del mismo artículo tiene **`use_in_count = true`**.
+
+   O sea: **hoy, en el recuento, ese artículo se cuenta en bolsas de 2,5 kg que
+   no existen.** Quien cuenta ve bolsas de 2 kg. Cinco bolsas reales se apuntan
+   como 12,5 kg cuando son 10.
+
+   **No lo arreglo yo**: va al parte de almacén,
+   `claude/folvy_parte_almacen_20260919_sweet_potato_recuento.md`.
+6. **El `parent_format_id` se lee al revés de lo que suena:** el PADRE es la
    PIEZA y el HIJO es la CAJA. Los 50 formatos anidados vivos dependen de ello.
    Lo he documentado en el código en vez de cambiarlo.
 
@@ -336,17 +395,43 @@ el mismo `eslint` y los mismos ficheros. Dos errores nuevos míos
 cerraron pasando la apertura a `requestAnimationFrame`, que además es lo
 correcto: el scroll necesita que la sección esté pintada.
 
-**Lo que NO se ha comprobado:** las capturas a 1.280 px con datos reales. El
-contenedor de Code no tiene `.env` ni credenciales de la aplicación, así que no
-puedo entrar a Foodint. **Ese paso es tuyo**, y hasta que llegue no hay ningún
-✅ en la lista.
+**Lo que NO se ha comprobado: las capturas a 1.280 px.** Lo intenté con el
+preview que me pasaste y **lo dejo medido, no supuesto**:
+
+```
+curl -L https://folvy-lqetsb2ma-llorente29s-projects.vercel.app/
+  → curl: (56) CONNECT tunnel failed, response 403
+
+$HTTPS_PROXY/__agentproxy/status → recentRelayFailures:
+  { "kind": "connect_rejected",
+    "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+    "host": "folvy-lqetsb2ma-llorente29s-projects.vercel.app:443" }
+```
+
+La política de red de este entorno deniega ese host. Y aunque la abriera, las
+cinco pantallas con **datos reales** necesitan una sesión de Foodint, y aquí no
+hay `.env` ni credenciales. **Las capturas son tuyas**, y hasta que llegues con
+ellas no hay ningún ✅ en la lista.
+
+**Apuntado para el próximo parte:** el enlace del preview va siempre. Es lo que
+convierte «lo he construido» en «se puede ver» — y esta vez me lo has tenido que
+dar tú.
 
 ---
 
 ## 8 · Lo que espera tu sí
 
-1. **Mirar la rama** `claude/cool-thompson-msx9dg` y capturar las cinco
-   pantallas a 1.280 px. Yo las cruzo con la lista, punto por punto.
+1. **Capturar las cinco pantallas a 1.280 px** desde el preview
+   (`folvy-lqetsb2ma-llorente29s-projects.vercel.app`, `dpl_3WFY49RukndpodRZRiQHG2pTNNnT`,
+   commit `f40b484c` — la rama tendrá un commit más con estas dos correcciones,
+   así que espera a que Vercel despliegue el nuevo). Yo las cruzo con la lista,
+   punto por punto.
+
+   **El primer caso que hay que probar es la Salsa Smokey Baconesa**, y no por
+   simetría: su enlace tiene `supplier_item_name` **vacío** y **ningún formato
+   del artículo con `use_in_count`**, así que hoy ese artículo **no se puede
+   contar**. Los dos huecos los rellena la pantalla nueva del tirón — y si no
+   los rellena, la pantalla está mal.
 2. **El SQL de D** (`claude/sql/20260919_D_aviso_cambio_de_caja_PROPUESTA.sql`):
    leerlo, decidir, y ejecutarlo tú si te convence — **fuera de la banda**, y
    con las tres medidas pegadas. Después construyo la pantalla D.

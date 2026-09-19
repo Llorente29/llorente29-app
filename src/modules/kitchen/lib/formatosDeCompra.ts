@@ -112,15 +112,23 @@ export function cuentaDelFormato(f: FormatoParaRegla, baseAbbr: string): string 
 //      total. Ese último caso es la CAJA APLANADA: «CAJA 8 BOLSAS DE 500 GR»
 //      guardada como un único nodo de 4.000 g. El número es correcto —lo que
 //      se perdió es la forma—, así que sellarla de «No cuadra» sería mentir.
+//   c-bis) Y una magnitud solo HABLA del envase si lleva delante una palabra
+//      de envase o de tamaño («caja», «bolsa», «botella», «de», «contiene»…).
+//      Un número pegado al NOMBRE DEL PRODUCTO dice lo que pesa una PIEZA, no
+//      lo que trae la caja. Corrección de Julio del 19/09 sobre «POLLO
+//      DELICIAS SUREÑAS METEORITOS 35G»: 35 g es un meteorito de pollo, y que
+//      2.200 no sea múltiplo de 35 no dice nada malo del formato.
 //   d) Se sella solo si había al menos una magnitud comparable y NINGUNA
 //      quedó explicada.
 //
-// Medido así: 115 enlaces con magnitud comparable, 2 sellados —
-// «Aceite de Oliva Suave 0,4º» (Makro dice 250 ml, el formato 1.000 ml, y es
-// el caso que puso Julio) y «DELICIAS DE POLLO SOUTHERN» (Coheldi dice
-// piezas de 35 g y la caja son 2.200 g, que no es múltiplo de 35).
-// Con la regla sin el punto (c) salían 8, y seis de ellas eran cajas
-// aplanadas correctas: el sello habría gritado por nada.
+// Medido sobre los 165 enlaces reales, y cada paso con su cifra:
+//   · sin el punto (c): 8 sellos, y SEIS eran cajas aplanadas correctas.
+//   · con (c), sin (c-bis): 115 comparables, 2 sellos — y el segundo era falso.
+//   · con (c) y (c-bis): 93 comparables, 1 sello.
+// El coste de (c-bis) está medido y se dice: 22 enlaces dejan de poder
+// comprobarse, porque su tamaño va pegado al nombre del producto y desde
+// fuera no hay manera de saber si habla de la caja o de la pieza. Es el
+// precio de no mentir: un sello que grita en falso enseña a no leer sellos.
 
 const UNIDADES: Record<string, { dim: DimensionBase; aBase: number }> = {
   kg: { dim: 'weight', aBase: 1000 },
@@ -149,12 +157,32 @@ const UNIDADES: Record<string, { dim: DimensionBase; aBase: number }> = {
   unidades: { dim: 'unit', aBase: 1 },
 }
 
+// Palabras tras las que un número SÍ habla del envase: o nombran el envase, o
+// son la juntura de una frase de tamaño («caja DE 3 kg», «CONTIENE 24 latas»,
+// «CJ 5X1 kg»). Si delante no hay ninguna de estas, el número está pegado al
+// nombre del producto y dice el tamaño de una PIEZA.
+const ANTES_DE_TAMANO = [
+  'caja', 'cj', 'cja', 'bolsa', 'bote', 'lata', 'paquete', 'paq', 'pq', 'saco',
+  'garrafa', 'bidon', 'bidón', 'estuche', 'tarrina', 'pack', 'botella', 'frasco',
+  'cubo', 'malla', 'bandeja', 'manojo', 'doypack', 'sobre', 'rollo', 'bobina',
+  'carton', 'cartón', 'huevera', 'tazon', 'tazón', 'tarrico', 'envase', 'pieza',
+  'embalaje', 'cubeta', 'barqueta', 'ud', 'uds', 'unidad', 'unidades',
+  'de', 'en', 'x', 'contiene', 'total',
+]
+
+// Cuántos caracteres se miran por delante del número. 16 es lo medido: con 10
+// se pierden enlaces buenos («… CAJA 6 UD DE 3 KG»), y con 24 vuelve a colarse
+// el falso de las Delicias.
+const VENTANA_ANTES = 16
+
 // número + (espacios opcionales) + la tira de letras pegada.
 const TOKEN = /([0-9]+(?:[.,][0-9]+)?)\s*([a-záéíóúüñ]*)/gi
 
 interface TokenTexto {
   numero: number
   letras: string
+  /** dónde empieza el NÚMERO en el texto. Hace falta para mirar qué va delante. */
+  inicio: number
 }
 
 function tokens(texto: string): TokenTexto[] {
@@ -164,20 +192,33 @@ function tokens(texto: string): TokenTexto[] {
   while ((m = TOKEN.exec(texto)) !== null) {
     const numero = Number(m[1].replace(',', '.'))
     if (!Number.isFinite(numero)) continue
-    out.push({ numero, letras: (m[2] ?? '').toLowerCase() })
+    out.push({ numero, letras: (m[2] ?? '').toLowerCase(), inicio: m.index })
   }
   return out
 }
 
-/** Magnitudes del texto ya pasadas a la unidad base del artículo. */
-export function magnitudesDelTexto(texto: string, baseDim: DimensionBase): number[] {
+export interface MagnitudDelTexto {
+  /** ya pasada a la unidad base del artículo. */
+  valor: number
+  /** dónde empieza su número en el texto, para poder mirar qué lleva delante. */
+  inicio: number
+}
+
+/** Magnitudes del texto, con su sitio, ya en la unidad base del artículo. */
+export function magnitudesConSitio(texto: string, baseDim: DimensionBase): MagnitudDelTexto[] {
   return tokens(texto.toLowerCase())
     .map((t) => {
       const u = UNIDADES[t.letras]
       if (!u || u.dim !== baseDim) return null
-      return t.numero * u.aBase
+      const valor = t.numero * u.aBase
+      return valor > 0 ? { valor, inicio: t.inicio } : null
     })
-    .filter((v): v is number => v !== null && v > 0)
+    .filter((v): v is MagnitudDelTexto => v !== null)
+}
+
+/** Magnitudes del texto ya pasadas a la unidad base del artículo. */
+export function magnitudesDelTexto(texto: string, baseDim: DimensionBase): number[] {
+  return magnitudesConSitio(texto, baseDim).map((m) => m.valor)
 }
 
 /** Enteros sueltos del texto: los candidatos a «cuántas piezas trae la caja». */
@@ -207,7 +248,14 @@ export function elTextoNoCuadra(e: EntradaNoCuadra): boolean {
   const f = e.formato
   if (!(f.qtyInBase > 0)) return false
 
-  const magnitudes = magnitudesDelTexto(texto, e.baseDim)
+  // Solo las magnitudes que HABLAN del envase (c-bis).
+  const minusculas = texto.toLowerCase()
+  const magnitudes = magnitudesConSitio(texto, e.baseDim)
+    .filter((m) => {
+      const antes = minusculas.slice(Math.max(0, m.inicio - VENTANA_ANTES), m.inicio)
+      return ANTES_DE_TAMANO.some((w) => antes.includes(w))
+    })
+    .map((m) => m.valor)
   if (magnitudes.length === 0) return false
 
   const enteros = enterosDelTexto(texto)
