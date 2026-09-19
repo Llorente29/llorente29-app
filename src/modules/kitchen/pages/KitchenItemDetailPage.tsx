@@ -211,9 +211,11 @@ interface KitchenItemDetailPageProps {
   onBack: () => void
   /** Si llegamos desde una línea bloqueada de un escandallo, su recipeId (para volver). */
   returnTo?: string | null
+  /** E4 — «Terminarlo» desde la lista: abre la ficha por la compra. */
+  enfocarCompra?: boolean
 }
 
-export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: KitchenItemDetailPageProps) {
+export default function KitchenItemDetailPage({ itemId, onBack, returnTo, enfocarCompra = false }: KitchenItemDetailPageProps) {
   const { userProfile, authUserId, activeLocationId } = useApp()
   const navigate = useNavigate()
 
@@ -1349,7 +1351,7 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
 
           {/* PROVEEDORES Y COMPRA */}
           <div className="mt-4">
-            <PurchaseSourcesSection item={item} units={units} actorId={actorId} actorName={actorName} onChanged={() => { void refreshItem(); void refreshSuppliers() }} />
+            <PurchaseSourcesSection item={item} units={units} actorId={actorId} actorName={actorName} enfocar={enfocarCompra} onChanged={() => { void refreshItem(); void refreshSuppliers() }} />
           </div>
 
           {/* IVA */}

@@ -506,6 +506,8 @@ export interface PurchaseFormat {
   needsReview: boolean
   isActive: boolean
   archivedAt: string | null
+  /** Este formato es uno de los que se usan para CONTAR el inventario. */
+  useInCount: boolean
   createdAt: string
   updatedAt: string
   createdBy: string | null
@@ -549,6 +551,8 @@ export interface ArticleSupplier {
   recipeItemId: string
   supplierId: string
   supplierCode: string | null
+  /** Cómo llama ÉL al artículo: su denominación en el albarán. */
+  supplierItemName: string | null
   purchaseFormatId: string | null
   lastPrice: number | null
   // €/UNIDAD BASE, precio PACTADO (acordado) con el proveedor. NULL = sin pacto.
@@ -556,6 +560,13 @@ export interface ArticleSupplier {
   negotiatedPrice: number | null
   isPreferred: boolean
   isActive: boolean
+  /**
+   * Cuándo alguien dijo «está bien» sobre este enlace. Lo usa el aviso de
+   * proveedores que no se parecen (B4): una vez revisado, deja de gritar.
+   * No es un dato de coste: el coste sigue saliendo de lastPrice.
+   */
+  verifiedAt: string | null
+  verifiedBy: string | null
   createdAt: string
   updatedAt: string
 }
@@ -570,11 +581,17 @@ export interface ArticleSupplierInsert {
 }
 export interface ArticleSupplierUpdate {
   supplierCode?: string | null
+  // Cómo llama el PROVEEDOR a este artículo (su denominación en el albarán).
+  // Hasta el 19/09 solo lo escribía `learn_from_receipt` al confirmar una
+  // recepción: desde la ficha no se podía decir ni corregir.
+  supplierItemName?: string | null
   purchaseFormatId?: string | null
   lastPrice?: number | null
   negotiatedPrice?: number | null
   isPreferred?: boolean
   isActive?: boolean
+  verifiedAt?: string | null
+  verifiedBy?: string | null
 }
 
 // ─────────────────────────────────────────────────────────────────────
