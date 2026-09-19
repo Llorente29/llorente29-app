@@ -1271,13 +1271,20 @@ function IngredientCreateModal({
   const [dimension, setDimension] = useState<string>('')
   // Precio OPCIONAL en unidad humana (€/kg, €/L, €/ud según la dimensión).
   const [price, setPrice] = useState<string>('')
-  const [submitting, setSubmitting] = useState(false)
+  // Ya no hay «guardando…» en el paso 1: el paso 1 no escribe. La adopción
+  // desde el catálogo Folvy sí escribe, y tiene su propio `adoptingCode`.
+  const submitting = false
   const [error, setError] = useState<string | null>(null)
   // A1 · El alta tiene DOS pasos, porque la decisión 1 de Julio dice que al
   // crear un artículo se pregunta lo que hace falta — y de quién lo compras
   // hace falta. El paso 2 NO es un formulario nuevo: es la misma sección de
   // compra de la ficha, en `modoAlta`. Si fueran dos, habría dos sitios donde
   // arreglar el mismo fallo.
+  // `borrador` = lo tecleado en el paso 1, TODAVÍA SIN ESCRIBIR EN LA BASE.
+  // `creado` = el artículo de verdad, en cuanto el paso 2 lo guarda.
+  // Separarlos es lo que impide que un alta abandonada deje un artículo vacío
+  // en la lista — que es justo la lista que la pantalla E intenta ordenar.
+  const [borrador, setBorrador] = useState<RecipeItem | null>(null)
   const [creado, setCreado] = useState<RecipeItem | null>(null)
 
   // Unidad base = la FINA (is_base=true) de la dimensión elegida. Imposible no-fina.
@@ -1389,27 +1396,36 @@ function IngredientCreateModal({
       fixedCostBase = perBase
     }
 
-    setSubmitting(true)
+    // «Siguiente» NO escribe nada: solo avanza de paso con lo tecleado en la
+    // mano. El artículo nace en el paso 2, al guardar. Si aquí se creara, cada
+    // alta empezada y abandonada dejaría un artículo vacío en la lista.
     setError(null)
-    try {
-      const created = await createRecipeItem({
-        accountId,
-        type: 'raw',
-        name: trimmed,
-        baseUnitId: baseUnit.id,
-        costStrategy,
-        fixedCost: fixedCostBase,
-        createdBy: actorId,
-        createdByName: actorName,
-      })
-      // Paso 2, sin cerrar el modal: «De quién lo compras».
-      setSubmitting(false)
-      setCreado(created)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error desconocido'
-      setError(msg)
-      setSubmitting(false)
-    }
+    setBorrador({
+      id: '',
+      accountId,
+      type: 'raw',
+      name: trimmed,
+      baseUnitId: baseUnit.id,
+      costStrategy,
+      fixedCost: fixedCostBase,
+    } as RecipeItem)
+  }
+
+  // Lo que escribe de verdad, cuando el paso 2 guarda.
+  async function crearElArticulo(): Promise<RecipeItem> {
+    if (!borrador) throw new Error('No hay nada que crear todavía.')
+    const created = await createRecipeItem({
+      accountId: borrador.accountId,
+      type: 'raw',
+      name: borrador.name,
+      baseUnitId: borrador.baseUnitId,
+      costStrategy: borrador.costStrategy,
+      fixedCost: borrador.fixedCost,
+      createdBy: actorId,
+      createdByName: actorName,
+    })
+    setCreado(created)
+    return created
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -1435,7 +1451,7 @@ function IngredientCreateModal({
   // dando de alta esto es un solo recorrido: nombre → cómo se mide → de quién
   // lo compras. Sale por «Listo», y se puede salir sin proveedor: el artículo
   // queda a medias A PROPÓSITO y la lista lo dirá con su sello.
-  if (creado) {
+  if (borrador) {
     return (
       <div
         role="dialog"
@@ -1450,14 +1466,17 @@ function IngredientCreateModal({
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
             <div className="min-w-0">
               <h3 id="ingredient-create-title" className="text-base font-medium text-text-primary truncate">
-                {creado.name}
+                {borrador.name}
               </h3>
-              <p className="text-[11px] text-text-secondary">Paso 2 de 2 · De quién lo compras</p>
+              <p className="text-[11px] text-text-secondary">
+                Paso 2 de 2 · De quién lo compras
+                {creado === null && ' · todavía no se ha creado nada'}
+              </p>
             </div>
             <button
               type="button"
               aria-label="Cerrar"
-              onClick={() => onCreated(creado)}
+              onClick={() => (creado ? onCreated(creado) : onClose())}
               className="text-text-secondary hover:text-text-primary transition-base"
             >
               <X size={18} />
@@ -1466,25 +1485,39 @@ function IngredientCreateModal({
 
           <div className="px-4 py-4 overflow-y-auto">
             <PurchaseSourcesSection
-              item={creado}
+              item={creado ?? borrador}
               units={units}
               actorId={actorId}
               actorName={actorName}
               modoAlta
+              crearArticulo={creado ? undefined : crearElArticulo}
+              onArticuloCreado={setCreado}
             />
           </div>
 
           <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border-default">
             <p className="text-[11px] text-text-secondary">
-              Puedes salir sin proveedor: quedará en la lista marcado como «Falta el formato».
+              {creado
+                ? 'Ya está creado. Puedes seguir añadiéndole proveedores o salir.'
+                : 'Si sales ahora no se crea nada. Para crearlo sin proveedor, usa «Guardar y seguir luego».'}
             </p>
-            <button
-              type="button"
-              onClick={() => onCreated(creado)}
-              className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base shrink-0"
-            >
-              Listo
-            </button>
+            {creado ? (
+              <button
+                type="button"
+                onClick={() => onCreated(creado)}
+                className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base shrink-0"
+              >
+                Listo
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base shrink-0"
+              >
+                Cancelar
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1662,7 +1695,7 @@ function IngredientCreateModal({
             title={!dimension ? 'Elige antes cómo se mide el ingrediente' : undefined}
             className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
           >
-            {submitting ? 'Creando...' : 'Siguiente: de quién lo compras'}
+            Siguiente: de quién lo compras
           </button>
         </div>
       </div>

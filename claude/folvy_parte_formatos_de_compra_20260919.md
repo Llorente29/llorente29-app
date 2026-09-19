@@ -523,6 +523,59 @@ con verlo aparecer basta.
 Aceptado como **deuda aparte**: la barra horizontal es de toda la aplicación.
 No la cuelgo de esta rama ni la arreglo aquí.
 
+## 7 ter · Cuarta vuelta (19/09) — los dos retoques y el alta que escribía
+
+**La dirección de la rama, que es la que vale a partir de ahora:**
+`folvy-app-git-claude-cool-thompson-msx9dg-llorente29s-projects.vercel.app`.
+Apunta siempre al último commit, así que Julio no tiene que volver a entrar
+cada vez que empujo. La de cada despliegue queda retirada.
+
+### La pregunta: sí, «Siguiente» creaba. Era mi fallo y está cambiado
+
+**Con el camino delante, no de memoria.** Lo que había:
+
+```
+handleSubmit()  →  await createRecipeItem(...)  →  setCreado(created)
+```
+
+O sea: **pulsar «Siguiente: de quién lo compras» escribía el artículo**. Y
+tienes razón en lo que eso significa: cada alta empezada y abandonada dejaba un
+artículo vacío en la lista, justo la que la franja de «a medias» intenta
+ordenar. **El alta era la fábrica de lo que la pantalla E cuenta.**
+
+**Cómo queda:**
+
+| | |
+|---|---|
+| Paso 1, «Siguiente» | **no escribe nada.** `handleSubmit` no tiene ni un `await`: solo guarda lo tecleado en memoria como BORRADOR (`id` vacío) y avanza |
+| Paso 2, la sección de compra | trabaja contra el borrador: no consulta proveedores ni formatos del artículo porque todavía no existe |
+| «Guardar compra» | **aquí nace el artículo**, lo primero de todo, porque el formato y el enlace cuelgan de su id |
+| «Guardar y seguir luego» con el formulario en blanco | crea **solo el artículo** y lo dice: «… creado, todavía sin proveedor. Saldrá en la lista como "Falta el formato"» |
+| Cerrar o «Cancelar» | **no se crea nada**, y el pie lo avisa antes: «Si sales ahora no se crea nada» |
+
+`crearArticulo` se llama desde exactamente dos sitios, los dos dentro de
+`handleAdd`. Comprobado con `grep`, no con la cabeza.
+
+### Los dos retoques
+
+1. **«4,81 € / latas» → «/ lata».** Es el mismo animal que el plural, con la
+   otra piel: en la base ese formato se llama «Latas», y en un precio unitario
+   se dice cuánto cuesta UNA. `singular()` es el inverso exacto de `plural()`:
+   «-ones» → «-ón», «-ces» → «-z», y si no, se quita la «s».
+   **Y la prueba lo cazó**: mi primera versión quitaba «es» y devolvía
+   «botes» → «bot». En castellano «botes» es ambiguo —puede venir de «bote» o
+   de «bot»—, y en esta población todos los plurales son del tipo «+s».
+2. **El orden de la cabecera.** Ordenar por nombre agrupaba, pero dejaba
+   «botes · cajas»: el envase pequeño primero. Ahora **cada grupo va donde lo
+   pone su miembro más grande**, y dentro también de mayor a menor:
+
+   > Se cuenta en **cajas · latas de 3.000 g · latas de 1.600 g**
+
+### Comprobado
+
+`npm run build` exacto y en limpio ✓ · **1.633** pruebas en verde · lint **6 → 6**
+en los ficheros tocados (misma vara sobre `origin/main`), limpio en los nuevos.
+
 ## 8 · Lo que espera tu sí
 
 1. ~~Capturar las cinco pantallas~~ **hecho por Claude el 19/09.** Ahora:

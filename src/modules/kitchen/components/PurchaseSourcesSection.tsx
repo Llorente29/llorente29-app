@@ -62,6 +62,7 @@ import {
   loQueVaACambiar,
   num,
   plural,
+  singular,
   type FormatoParaRegla,
 } from '@/modules/kitchen/lib/formatosDeCompra'
 import type { RecomputedAncestor } from '@/modules/kitchen/services/costCascadeService'
@@ -159,6 +160,21 @@ interface PurchaseSourcesSectionProps {
    * sitios donde arreglar el mismo fallo.
    */
   modoAlta?: boolean
+  /**
+   * A1 (corrección de Julio, 19/09) — **el artículo nace al GUARDAR, no al
+   * pulsar «Siguiente»**. Cuando el alta pasa esta función, `item` es un
+   * BORRADOR sin `id`: la sección no consulta nada suyo, y al guardar llama
+   * primero aquí para que el artículo exista y sigue con el formato y el
+   * enlace sobre el id de verdad.
+   *
+   * Por qué importa: si el botón «Siguiente» creara, cada alta empezada y
+   * abandonada dejaría un artículo vacío en la lista — y esa lista es justo
+   * la que la pantalla E intenta ordenar. El alta sería la fábrica de lo que
+   * la franja de «a medias» cuenta.
+   */
+  crearArticulo?: () => Promise<RecipeItem>
+  /** Avisa al alta de que el artículo ya existe (y con qué id). */
+  onArticuloCreado?: (creado: RecipeItem) => void
 }
 
 export default function PurchaseSourcesSection({
@@ -169,7 +185,17 @@ export default function PurchaseSourcesSection({
   onChanged,
   enfocar = false,
   modoAlta = false,
+  crearArticulo,
+  onArticuloCreado,
 }: PurchaseSourcesSectionProps) {
+  // El artículo de verdad en cuanto exista. Hasta entonces, `item` es el
+  // borrador que trae el alta (con `id` vacío).
+  const [articuloReal, setArticuloReal] = useState<RecipeItem | null>(null)
+  const itemVivo = articuloReal ?? item
+  const esBorrador = itemVivo.id === ''
+  // Un borrador no enseña el coste actual: todavía no tiene ninguno, y un «—»
+  // grande en la cabecera del alta no dice nada. El resto de la sección sí es
+  // exactamente la misma.
   const seccionRef = useRef<HTMLDivElement | null>(null)
   const baseUnit = useMemo(
     () => units.find((u) => u.id === item.baseUnitId) ?? null,
@@ -246,16 +272,25 @@ export default function PurchaseSourcesSection({
     setLoading(true)
     setError(null)
     try {
+      // Un BORRADOR todavía no existe en la base: solo hacen falta los
+      // proveedores de la cuenta para poder elegir uno.
+      if (itemVivo.id === '') {
+        setSuppliers(await listSuppliers(itemVivo.accountId))
+        setLinks([])
+        setFormats([])
+        setUltimoAlbaran(new Map())
+        return
+      }
       const [sup, lnk, fmt] = await Promise.all([
-        listSuppliers(item.accountId),
-        listSuppliersByItem(item.id, { includeInactive: showArchived }),
-        listFormatsByItem(item.id),
+        listSuppliers(itemVivo.accountId),
+        listSuppliersByItem(itemVivo.id, { includeInactive: showArchived }),
+        listFormatsByItem(itemVivo.id),
       ])
       setSuppliers(sup)
       setLinks(lnk)
       setFormats(fmt)
       try {
-        setUltimoAlbaran(await ultimoAlbaranPorProveedor(item.accountId, item.id))
+        setUltimoAlbaran(await ultimoAlbaranPorProveedor(itemVivo.accountId, itemVivo.id))
       } catch (e) {
         console.error('[PurchaseSourcesSection] último albarán por proveedor', e)
         setUltimoAlbaran(new Map())
@@ -273,12 +308,12 @@ export default function PurchaseSourcesSection({
   useEffect(() => {
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id, showArchived])
+  }, [itemVivo.id, showArchived])
 
   // Handlers de gestión de la fila (principal / archivar / reactivar). Cada uno
   // recostea en el service (cascada); aquí recargamos y avisamos al detalle.
   async function handleMakePreferred(linkId: string) {
-    await setPreferredSupplier(linkId, item.id)
+    await setPreferredSupplier(linkId, itemVivo.id)
     setSuccessNote('Proveedor principal actualizado. Coste recalculado.')
     await reload()
     if (onChanged) onChanged()
@@ -431,6 +466,27 @@ export default function PurchaseSourcesSection({
         return
       }
     }
+    // ALTA + «Guardar y seguir luego» con el formulario en blanco: se crea
+    // solo el artículo. Es la ÚNICA forma de dejarlo a medias a propósito, y
+    // por eso es un botón con nombre y no una salida silenciosa.
+    const enBlanco =
+      supplierId === '' && formatName.trim() === '' && addCajaName.trim() === 'Caja' &&
+      qty.trim() === '' && addCount.trim() === '' && addInnerQty.trim() === '' && price.trim() === ''
+    if (seguirLuego && crearArticulo && itemVivo.id === '' && enBlanco) {
+      setSubmitting(true)
+      try {
+        const vivo = await crearArticulo()
+        setArticuloReal(vivo)
+        onArticuloCreado?.(vivo)
+        setSuccessNote(`${vivo.name} creado, todavía sin proveedor. Saldrá en la lista como «Falta el formato».`)
+        setAddOpen(false)
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : 'No se pudo crear el artículo.')
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
     if (addQtyInBase === null || !(addQtyInBase > 0)) {
       setFormError('Indica cuánto trae ese formato.')
       return
@@ -450,6 +506,16 @@ export default function PurchaseSourcesSection({
 
     setSubmitting(true)
     try {
+      // AQUÍ nace el artículo, si venimos del alta y todavía no existe.
+      // «Siguiente» no escribe nada: un alta empezada y abandonada no deja
+      // rastro. Esto es lo primero de la transacción porque todo lo de
+      // debajo —formato, enlace, conteo— cuelga de su id.
+      let vivo = itemVivo
+      if (vivo.id === '' && crearArticulo) {
+        vivo = await crearArticulo()
+        setArticuloReal(vivo)
+        onArticuloCreado?.(vivo)
+      }
       let supId = supplierId
       if (supId === '__new__') {
         const name = newSupplierName.trim()
@@ -459,7 +525,7 @@ export default function PurchaseSourcesSection({
           return
         }
         const created = await createSupplier({
-          accountId: item.accountId,
+          accountId: vivo.accountId,
           name,
           createdBy: actorId,
           createdByName: actorName,
@@ -482,15 +548,15 @@ export default function PurchaseSourcesSection({
       // El FLIP fixed→last_purchase lo decide el service: le pasamos la estrategia
       // actual del ingrediente. Si es 'fixed', el service la cambia antes del alta.
       const result = await setupSimplePurchase({
-        accountId: item.accountId,
-        itemId: item.id,
+        accountId: vivo.accountId,
+        itemId: vivo.id,
         formatName: fName,
         qtyInBase: addQtyInBase,
         supplierId: supId,
         lastPrice: perBase,
         supplierCode: supplierCode.trim() || null,
         isPreferred,
-        priorCostStrategy: item.costStrategy,
+        priorCostStrategy: vivo.costStrategy,
         createdBy: actorId,
         createdByName: actorName,
       })
@@ -504,8 +570,8 @@ export default function PurchaseSourcesSection({
       let piezaId: string | null = null
       if (addMode === 'pack' && addCountNum !== null && addInnerBase !== null) {
         const { caja, inner } = await ensurePackTree({
-          accountId: item.accountId,
-          itemId: item.id,
+          accountId: vivo.accountId,
+          itemId: vivo.id,
           count: addCountNum,
           innerQtyInBase: addInnerBase,
           innerName: addInnerName.trim() || 'Ud',
@@ -607,11 +673,15 @@ export default function PurchaseSourcesSection({
   const [platosQueLoUsan, setPlatosQueLoUsan] = useState<number | null>(null)
   useEffect(() => {
     let cancelado = false
-    previewRemoveIngredient(item.id)
+    // Un BORRADOR no está en ningún plato y su pie ni se pinta (va oculto en
+    // `modoAlta`): no se consulta y no se toca el estado — poner el 0 aquí
+    // encadenaba un render de más (react-hooks/set-state-in-effect).
+    if (itemVivo.id === '') return
+    previewRemoveIngredient(itemVivo.id)
       .then((platos) => { if (!cancelado) setPlatosQueLoUsan(platos.length) })
       .catch(() => { if (!cancelado) setPlatosQueLoUsan(null) })
     return () => { cancelado = true }
-  }, [item.id])
+  }, [itemVivo.id])
 
   async function marcarComoRevisado(linkId: string) {
     await updateArticleSupplier(linkId, {
@@ -654,6 +724,7 @@ export default function PurchaseSourcesSection({
             Se gasta en {baseAbbr || '—'} · Se cuenta en {seCuentaEn}
           </p>
         </div>
+        {!esBorrador && (
         <div className="text-right shrink-0">
           <div className="text-[11px] text-text-secondary leading-none">Coste actual</div>
           <div className="text-lg font-mono font-medium text-text-primary leading-tight">
@@ -665,6 +736,7 @@ export default function PurchaseSourcesSection({
             {principalNombre ? `según ${principalNombre}` : 'sin proveedor principal'}
           </div>
         </div>
+        )}
       </div>
 
       <div className="p-4 space-y-3">
@@ -734,9 +806,9 @@ export default function PurchaseSourcesSection({
               <SourceRow
                 key={link.id}
                 link={link}
-                accountId={item.accountId}
-                itemId={item.id}
-                costStrategy={item.costStrategy}
+                accountId={itemVivo.accountId}
+                itemId={itemVivo.id}
+                costStrategy={itemVivo.costStrategy}
                 actorId={actorId}
                 actorName={actorName}
                 supplierName={
@@ -1258,7 +1330,7 @@ export default function PurchaseSourcesSection({
                 disabled={submitting}
                 className="px-3 py-1.5 text-sm rounded-md border border-border-default text-text-secondary hover:text-text-primary transition-base disabled:opacity-50"
               >
-                Guardar y seguir luego
+                {modoAlta ? 'Guardar y seguir luego' : 'Guardar y seguir luego'}
               </button>
               <div className="flex items-center gap-2">
                 <button
@@ -1828,7 +1900,7 @@ function SourceRow({
             <>
               {' · '}
               {/* €/caja DERIVADO del €/base (last_price) × qtyInBase, solo informativo */}
-              <span className="font-mono">{fmtEur(formatPriceFromUnitCost(link.lastPrice, format.qtyInBase), 2)} / {format.name.toLowerCase()}</span>
+              <span className="font-mono">{fmtEur(formatPriceFromUnitCost(link.lastPrice, format.qtyInBase), 2)} / {singular(format.name).toLowerCase()}</span>
               {/* A5 · y a cuánto queda la PIEZA, cuando la caja tiene piezas.
                   Es el número con el que se compara de verdad en la cocina. */}
               {parentFormat && format.qtyPerParent !== null && format.qtyPerParent > 0 && (
@@ -1839,7 +1911,10 @@ function SourceRow({
                       formatPriceFromUnitCost(link.lastPrice, format.qtyInBase)! / format.qtyPerParent,
                       2,
                     )}{' '}
-                    / {parentFormat.name.toLowerCase()}
+                    {/* En un precio unitario la pieza va en SINGULAR: «/ lata»,
+                        no «/ latas» — en la base ese formato se llama «Latas».
+                        Es el mismo animal que el plural, con la otra piel. */}
+                    / {singular(parentFormat.name).toLowerCase()}
                   </span>
                 </>
               )}

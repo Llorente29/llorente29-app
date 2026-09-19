@@ -72,6 +72,28 @@ export function plural(nombre: string, n: number): string {
 }
 
 /**
+ * Singular, para un PRECIO UNITARIO: «4,81 € / lata», no «/ latas».
+ *
+ * Es el mismo animal que el plural, con la otra piel: los nombres que Julio
+ * escribe ya en plural («Latas», «botes», «bolsas») hay que devolverlos al
+ * singular cuando lo que se dice es cuánto cuesta UNA. Los 4 nombres vivos
+ * acabados en «s» de Foodint salen bien quitando la «s»; «-ones» vuelve a
+ * «-ón», que es el inverso exacto de lo que hace `plural`.
+ */
+export function singular(nombre: string): string {
+  const limpio = nombre.trim()
+  if (!/s$/i.test(limpio)) return limpio
+  // Los dos inversos exactos de `plural`, y nada más.
+  if (/ones$/i.test(limpio)) return `${limpio.slice(0, -4)}ón`
+  if (/ces$/i.test(limpio)) return `${limpio.slice(0, -3)}z`
+  // Y si no, se quita solo la «s». «botes» es ambiguo en castellano —puede
+  // venir de «bote» o de «bot»— y quitar «es» daba «bot»: lo cazó la prueba.
+  // En esta población todos los nombres en plural son del tipo «+s»
+  // (bolsas, botes, Latas), así que se quita una letra y se acierta.
+  return limpio.slice(0, -1)
+}
+
+/**
  * «Se cuenta en cajas · latas de 1.600 g · latas de 3.000 g».
  *
  * Dos cosas que se ven en los datos reales y que hay que respetar:
@@ -92,7 +114,22 @@ export function comoSeCuenta(
   const enPlural = formatos.map((f) => ({ ...f, etiqueta: plural(f.nombre, 2).toLowerCase() }))
   const veces = new Map<string, number>()
   enPlural.forEach((f) => veces.set(f.etiqueta, (veces.get(f.etiqueta) ?? 0) + 1))
-  return enPlural
+  // Las del mismo nombre, JUNTAS, y de mayor a menor. Antes salía «latas de
+  // 3.000 g · cajas · latas de 1.600 g»: las dos latas partidas por las cajas,
+  // y había que releer la línea. Ordenar por nombre agrupaba pero dejaba
+  // «botes · cajas», que es el envase pequeño primero; por eso cada grupo va
+  // donde lo pone su miembro MÁS GRANDE, y dentro también de mayor a menor.
+  const mayorDelGrupo = new Map<string, number>()
+  enPlural.forEach((f) =>
+    mayorDelGrupo.set(f.etiqueta, Math.max(mayorDelGrupo.get(f.etiqueta) ?? 0, f.qtyInBase)),
+  )
+  return [...enPlural]
+    .sort(
+      (a, b) =>
+        (mayorDelGrupo.get(b.etiqueta) ?? 0) - (mayorDelGrupo.get(a.etiqueta) ?? 0) ||
+        a.etiqueta.localeCompare(b.etiqueta, 'es') ||
+        b.qtyInBase - a.qtyInBase,
+    )
     .map((f) =>
       (veces.get(f.etiqueta) ?? 0) > 1
         ? `${f.etiqueta} de ${num(f.qtyInBase)} ${baseAbbr}`

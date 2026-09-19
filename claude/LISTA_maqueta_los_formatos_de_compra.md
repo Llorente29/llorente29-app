@@ -8,7 +8,11 @@
 
 **Maqueta:** «Los formatos de compra en la ficha del artículo», **aprobada por Julio el 19/09** («ok a todo») · https://claude.ai/artifact/H3wCwDSY1GdQ6uDky1BD7K
 
-**Estado 19/09, tercera vuelta.** Cruzado en el preview `a55a57e` (17 de 25 en 🟢) y **corregidas las tres cosas que bloqueaban** más los cuatro reparos menores. Pendiente: volver a mirar en el preview del commit nuevo.
+**Dirección fija de la rama:** `folvy-app-git-claude-cool-thompson-msx9dg-llorente29s-projects.vercel.app` (apunta siempre al último commit).
+
+**Estado 19/09, cuarta vuelta.** Los dos retoques hechos y **el alta ya no escribe al pulsar «Siguiente»**: el artículo nace al guardar, y «Guardar y seguir luego» es la única forma de dejarlo a medias a propósito. Un alta abandonada no deja rastro.
+
+**Tercera vuelta.** Cruzado en el preview `a55a57e` (17 de 25 en 🟢) y **corregidas las tres cosas que bloqueaban** más los cuatro reparos menores. Pendiente: volver a mirar en el preview del commit nuevo.
 
 **Las cinco decisiones que manda (Julio, 19/09):**
 1. **No hay pantalla nueva de formatos.** Todo dentro del flujo del artículo: al crearlo pregunta lo que hace falta; al modificarlo se despliega entero.
@@ -23,11 +27,11 @@
 
 | # | la maqueta dice | hoy | dónde está |
 |---|---|---|---|
-| A1 | El paso «De quién lo compras» trae **los dos modos desde el principio**: «De una pieza» y «Caja con piezas dentro» | 🟢 **corregido** | «+ Nuevo ingrediente» tiene ya **dos pasos**: el botón dice «Siguiente: de quién lo compras» y el paso 2 es **la misma sección de la ficha** en `modoAlta` (formulario abierto, sin los botones de escandallo ni el pie). No es un formulario nuevo — si lo fuera, habría dos sitios donde arreglar el mismo fallo |
+| A1 | El paso «De quién lo compras» trae **los dos modos desde el principio**: «De una pieza» y «Caja con piezas dentro» | 🟢 **corregido ×2** | **«Siguiente» ya no crea el artículo**: solo avanza con un borrador en memoria. El artículo nace al guardar; si se sale, no queda nada. «+ Nuevo ingrediente» tiene **dos pasos**: el botón dice «Siguiente: de quién lo compras» y el paso 2 es **la misma sección de la ficha** en `modoAlta` (formulario abierto, sin los botones de escandallo ni el pie). No es un formulario nuevo — si lo fuera, habría dos sitios donde arreglar el mismo fallo |
 | A2 | La fila se lee como una frase: **Caja · lleva · 6 · piezas de · Bote · de · 965 g** | 🟢 | sin cambios |
 | A3 | Debajo, la cuenta en verde: **«1 Caja = 6 Botes × 965 g = 5.790 g»** | 🟢 **corregido** | el separador de miles ya no baila: toda la sección pasa por la misma función. En es-ES el separador se omite por defecto en los números de cuatro cifras, así que las dos formas eran «correctas» — cantaba verlas juntas |
 | A4 | **Su referencia** y **cómo lo llama él**, uno al lado del otro, con su porqué debajo | 🟢 | sin cambios |
-| A5 | El precio es **el de la caja**, y al lado sale a cuánto queda el gramo y la pieza | 🟢 **corregido** | en la tarjeta sale ya el €/pieza cuando la caja tiene piezas (Alubias: 28,84 €/caja · 1,60 €/kg · 4,81 €/lata) |
+| A5 | El precio es **el de la caja**, y al lado sale a cuánto queda el gramo y la pieza | 🟢 **corregido ×2** | el €/pieza en la tarjeta, y **en singular**: «28,84 € / caja · 4,81 € / lata». `singular()` es el inverso exacto de `plural()` |
 | A6 | **«+ Añadir otro proveedor para este mismo artículo»**, con la nota de los 71 artículos | 🟢 | sin cambios |
 | A7 | **«¿En qué lo cuentas?»**: Cajas · Botes · unidad base | 🟢 | con el plural arreglado |
 | A8 | **«Cómo queda»**: las cuatro líneas juntas | 🟢 **corregido** | estaba construido pero **escondido hasta tener el formulario lleno**, o sea justo cuando ya no hacía falta. Ahora sale siempre con el formulario abierto y con «—» en lo que falta; se le ha añadido la línea del precio |
@@ -37,7 +41,7 @@
 
 | # | la maqueta dice | hoy | dónde está |
 |---|---|---|---|
-| B1 | Cabecera: **«Se gasta en g · Se cuenta en cajas»** y el coste grande, diciendo **de qué proveedor sale** | 🟢 **corregido** | «Se cuenta en **cajas · latas de 1.600 g · latas de 3.000 g**». Ni «latases», ni unidades fundidas, ni «y … y» |
+| B1 | Cabecera: **«Se gasta en g · Se cuenta en cajas»** y el coste grande, diciendo **de qué proveedor sale** | 🟢 **corregido ×2** | «Se cuenta en **cajas · latas de 3.000 g · latas de 1.600 g**»: agrupadas por nombre, cada grupo donde lo pone su miembro más grande. Ni «latases», ni unidades fundidas, ni «y … y» |
 | B2 | **Una tarjeta por proveedor**, con su referencia, su texto, su precio y su formato en una línea legible | 🟢 | con el €/pieza añadido |
 | B3 | El principal va marcado, y se ve **la fecha de su último albarán** | 🟢 | sin cambios |
 | B4 | **Aviso cuando dos proveedores no se parecen**, con «Revisar el formato» / «Está bien» | 🟢 | sin cambios |

@@ -16,6 +16,7 @@ import {
   frasePack,
   articulosConProveedorRepetido,
   plural,
+  singular,
   comoSeCuenta,
   loQueVaACambiar,
   type FormatoParaRegla,
@@ -223,6 +224,27 @@ describe('el plural, que salía en la línea más leída de la ficha', () => {
   })
 })
 
+describe('el singular, para un precio unitario', () => {
+  it('«4,81 € / lata», no «/ latas»', () => {
+    // El formato se llama «Latas» en la base; en un precio unitario se dice
+    // cuánto cuesta UNA. Mismo animal que el plural, otra piel.
+    expect(singular('Latas')).toBe('Lata')
+    expect(singular('botes')).toBe('bote')
+    expect(singular('bolsas')).toBe('bolsa')
+  })
+
+  it('«-ones» vuelve a «-ón», que es el inverso exacto de plural()', () => {
+    expect(singular('Bidones')).toBe('Bidón')
+    expect(singular(plural('Bidón', 2))).toBe('Bidón')
+  })
+
+  it('lo que ya está en singular no se toca', () => {
+    expect(singular('Caja')).toBe('Caja')
+    expect(singular('Bote')).toBe('Bote')
+    expect(singular('Pack')).toBe('Pack')
+  })
+})
+
 describe('«Se cuenta en …», con el caso real de Alubias rojas', () => {
   it('no funde dos envases distintos que se llaman casi igual', () => {
     // En la base: Caja = 18.000, Lata = 1.600 y Latas = 3.000, los tres
@@ -237,7 +259,10 @@ describe('«Se cuenta en …», con el caso real de Alubias rojas', () => {
         ],
         'g',
       ),
-    ).toBe('latas de 3.000 g · cajas · latas de 1.600 g')
+      // Y agrupadas: las dos latas juntas, la mayor primero. Antes salía
+      // «latas de 3.000 g · cajas · latas de 1.600 g», con las cajas partiendo
+      // las dos latas y obligando a releer la línea.
+    ).toBe('cajas · latas de 3.000 g · latas de 1.600 g')
   })
 
   it('cuando no chocan, el nombre va solo y se une con «·»', () => {
