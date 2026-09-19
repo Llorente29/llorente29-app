@@ -124,6 +124,74 @@ se contaron 0 pedidos en 5 minutos antes de empujar.
 - Ni el número del día, ni la pegatina nueva, ni la pantalla de entrega, ni
   la cola. Nada del encargo grande.
 
+## 8 bis · La pregunta del filtro, contestada (17:15)
+
+**No hereda `'bag' = any(doc_types)`.** Las líneas, tal cual:
+
+```sql
+for v_printer in
+  select id, doc_types, copies from printer
+  where account_id = new.account_id and location_id = new.location_id
+    and is_active and doc_types && array['bag','labels']::text[]
+loop
+  foreach v_doc in array array['bag','labels']::text[] loop
+    if v_doc = any (v_printer.doc_types)
+       and not exists ( … pj.doc_type = v_doc and pj.printer_id = v_printer.id … )
+    then
+```
+
+El bucle **ensancha** el conjunto de impresoras con `&&` (las que sacan bolsa
+**o** pegatinas) y dentro **enruta por doc_type**: `v_doc = any
+(v_printer.doc_types)` es lo que impide que una pegatina acabe en la máquina
+de la bolsa. Con la tabla `printer` de Alcalá delante:
+
+| impresora | doc_types | ¿entra al bucle? | qué encola |
+|---|---|---|---|
+| **Pase** | `{bag}` | sí, por `bag` | **solo `bag`** — `labels` no está en sus doc_types |
+| **Pegatina** | `{labels}` | sí, por `labels` | **solo `labels`** — `bag` no está en sus doc_types |
+| Cocina | `{kitchen}` | **no** | — |
+
+Los dos modos de fallo que señalas no ocurren: ni la pegatina va al papel de
+la bolsa, ni Alcalá se queda sin pegatinas. El dedup es el de siempre y es
+**por doc_type y por impresora**, así que cada máquina lleva su cuenta.
+
+Un bucle en vez de dos es la única diferencia con tu propuesta; el efecto es
+el mismo. Si prefieres dos `for` separados por legibilidad, es un cambio de
+cinco minutos: dilo y lo hago.
+
+## 8 ter · Tus dos menores
+
+**1 · El rastro de impresora de pegatinas ausente: tenías razón, y añadido.**
+
+Mi razonamiento («gritaría en los locales sin pegatinas») estaba mal aplicado,
+porque **a este código solo se llega con `bag_on_ready` activo**. Añadido con
+una condición que lo hace preciso:
+
+```sql
+if  not exists (… is_active and 'labels' = any(doc_types))
+and     exists (…              'labels' = any(doc_types)) then
+```
+
+O sea: se avisa **solo si el local tiene impresora de pegatinas y está
+DESACTIVADA**. Un local que nunca ha llevado pegatinas no grita.
+
+**Y una cosa que conviene saber: ese agujero existe HOY, no lo crea este
+cambio.** Hoy las pegatinas se encolan al entrar recorriendo solo impresoras
+activas; si alguien apaga la «Pegatina», tampoco se encola nada y tampoco
+avisa nadie. El vigía B60 no lo cubre: su regla A necesita trabajos en error
+y la B necesita cola, y una impresora desactivada no produce ni una cosa ni
+la otra. Con esto queda cubierto para Alcalá; **cubrirlo en general es del
+vigía, no de un disparador del camino del pedido**, y va a la cola.
+
+**2 · La atadura, escrita en voz alta.** Está ya en la cabecera de la
+migración, como deuda declarada:
+
+> A partir de este cambio las pegatinas dependen del mismo interruptor que la
+> bolsa (`kitchen_time_config.bag_on_ready`). **El día que la impresora de
+> pegatinas se vaya a cocina hay que desatarlas**, porque entonces saldrán en
+> un momento distinto al de la bolsa. Hará falta un interruptor propio y
+> separar los dos bucles. No se construye hoy porque hoy no existe ese caso.
+
 ## 9 · Después de aplicar
 
 La consulta del encargo, con la hora del `commit`:

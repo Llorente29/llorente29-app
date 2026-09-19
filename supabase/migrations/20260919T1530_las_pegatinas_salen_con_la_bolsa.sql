@@ -87,6 +87,20 @@
 -- 10/09, donde la excepción se llevaba la transacción entera por delante.
 --
 -- Aun así: LA APLICA JULIO, no yo, y con el hueco medido.
+--
+-- ─────────────────────────────────────────────────────────────────────
+-- DEUDA DECLARADA HOY, para no descubrirla el día que muerda
+-- ─────────────────────────────────────────────────────────────────────
+-- A partir de este cambio **las pegatinas dependen del mismo interruptor
+-- que la bolsa**: `kitchen_time_config.bag_on_ready`. Hoy eso simplifica —
+-- son el mismo momento y la misma mesa.
+--
+-- **El día que la impresora de pegatinas se vaya a COCINA, hay que
+-- desatarlas**, porque entonces tendrán que salir en un momento distinto
+-- al de la bolsa y este interruptor ya no sirve para las dos. Lo que hará
+-- falta entonces es un interruptor propio (`labels_on_ready`, o el que se
+-- decida) y separar los dos bucles. No se construye hoy porque hoy no
+-- existe ese caso, pero queda escrito aquí y en el parte.
 -- ---------------------------------------------------------------------------
 
 begin;
@@ -203,10 +217,7 @@ begin
       from kitchen_time_config k where k.location_id = new.location_id;
       if not coalesce(v_on, false) then return new; end if;
 
-      -- El rastro de fallo mudo se queda MIRANDO LA BOLSA a proposito: si no
-      -- hay impresora de bolsa tampoco va a haber pegatinas, y un aviso de
-      -- "sin impresora de labels" gritaria en todos los locales que no
-      -- llevan pegatinas, que son la mayoria.
+      -- El rastro de la BOLSA, igual que estaba.
       if not exists (
         select 1 from printer
         where account_id = new.account_id and location_id = new.location_id
@@ -223,6 +234,41 @@ begin
         );
       end if;
 
+      -- Y el rastro de las PEGATINAS (19/09). Se avisa SOLO si este local
+      -- tiene impresora de pegatinas y esta DESACTIVADA: eso es alguien que
+      -- la apago y un monton de etiquetas que no va a aparecer. Si el local
+      -- no tiene ninguna configurada, no grita -- un local que nunca ha
+      -- llevado pegatinas no tiene por que.
+      --
+      -- Aqui dentro ya solo se llega con bag_on_ready activo, asi que este
+      -- aviso no puede saltar en un local que saca la bolsa al entrar.
+      if not exists (
+        select 1 from printer
+        where account_id = new.account_id and location_id = new.location_id
+          and is_active and 'labels' = any(doc_types)
+      ) and exists (
+        select 1 from printer
+        where account_id = new.account_id and location_id = new.location_id
+          and 'labels' = any(doc_types)
+      ) then
+        insert into print_route_failure_log (account_id, location_id, sale_id, doc_type, detail)
+        select new.account_id, new.location_id, new.id, 'labels',
+               'tg_auto_print_bag_on_ready: hay impresora de pegatinas pero esta DESACTIVADA - este pedido sale sin pegatinas'
+        where not exists (
+          select 1 from print_route_failure_log
+          where location_id = new.location_id
+            and detail = 'tg_auto_print_bag_on_ready: hay impresora de pegatinas pero esta DESACTIVADA - este pedido sale sin pegatinas'
+            and created_at >= now() - interval '30 minutes'
+        );
+      end if;
+
+      -- CADA PAPEL A SU MAQUINA. El bucle coge las impresoras que sacan
+      -- bolsa O pegatinas, y dentro cada doc_type solo se encola en una
+      -- impresora que lo tenga en sus doc_types. En Alcala son maquinas
+      -- DISTINTAS -- Pase {bag} 192.168.1.132, Pegatina {labels}
+      -- 192.168.1.151 -- y por eso el filtro NO puede ser 'bag' = any(...):
+      -- heredarlo mandaria las pegatinas al papel de la bolsa, o dejaria a
+      -- Alcala sin pegatinas y en silencio.
       for v_printer in
         select id, doc_types, copies from printer
         where account_id = new.account_id and location_id = new.location_id
