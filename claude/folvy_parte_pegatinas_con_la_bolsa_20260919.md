@@ -1,8 +1,65 @@
 # PARTE · Las pegatinas dejan de salir al entrar
 
-**19/09/2026, 16:50.** Un solo cambio. **Escrito y SIN EJECUTAR: lo aplica Julio.**
+**19/09/2026.** Un solo cambio. **APLICADO a las 17:50 de Madrid por Code**, con
+el sí explícito de Julio («lo aplica code», 17:30). El revisor se retractó de
+aplicarla él por una razón correcta: la migración vive en la rama y él no lee el
+repositorio — no se ejecuta lo que no se puede leer.
+
+Estado: **aplicado y verificado en la base**; pendientes la comprobación de las
+20:30 y el papel en la mano.
 
 ---
+
+## 0 · APLICADO — 19/09, 17:50 Madrid
+
+**El sí:** Julio, 17:30, «lo aplica code». Dicho aquí, como se acordó.
+
+**El hueco, medido justo antes** (17:48:23 Madrid):
+
+| | |
+|---|---|
+| Ventas en Alcalá, últimos 15 min | **0** (la última, 17:17:18) |
+| Ventas en Alcalá, última hora | 2 |
+| Cola de impresión pendiente | **0** |
+| `tg_auto_print_on_accept` | `ec875f94…` — intacta |
+| `tg_auto_print_bag_on_ready` | `e5cd73be…` — intacta |
+
+Es el hueco entre comidas. La vuelta atrás, abierta al lado antes de empezar.
+
+**Aplicado en UNA transacción**, con la guarda de deriva dentro. Sin error.
+
+**Comprobado después, mirando lo desplegado:**
+
+| | antes | ahora |
+|---|---|---|
+| `tg_auto_print_on_accept` | `ec875f94…` | **`23b33e25…`** |
+| `tg_auto_print_bag_on_ready` | `e5cd73be…` | **`f06f29b7…`** |
+| ¿sobrecargas? (regla 2) | — | **1 de cada**, ninguna |
+| Disparadores enganchados | — | **3**, los de siempre |
+| La entrada se salta `labels` | — | **sí**, leído del cuerpo vivo |
+| El «Listo» coge `labels` | — | **sí**, leído del cuerpo vivo |
+
+**Un detalle que sale del dedup que ya existía:** al aplicar había **14 pedidos
+abiertos** en Alcalá cuyas pegatinas ya se habían encolado con el comportamiento
+viejo. Cuando esos pasen a «Listo», la guarda `(sale_id, source='auto',
+doc_type, printer_id)` **impide que se encolen otra vez**. No hay pegatinas
+duplicadas en los pedidos en vuelo.
+
+**Una advertencia para tu comprobación:** la apliqué con SQL directo en una
+transacción, para que un fallo no pudiera dejar una función cambiada y la otra
+no. Eso significa que **`supabase_migrations` NO la lista**: si miras «la última
+migración aplicada», seguirá diciendo 17/09. **No es que no esté aplicada** —
+la señal son los md5. El fichero vive en la rama como
+`supabase/migrations/20260919T1530_…`.
+
+### El primer pedido real después
+
+**Carabanchel, 18:00:31** — `kitchen` y `bag` a 0 s en «Impre», y **ninguna
+pegatina**. Correcto y esperado: esa impresora no tiene `labels` y ese local
+tiene `bag_on_ready = false`, así que no cambia nada. Confirma el cuidado nº 3
+con un pedido de verdad, no con un razonamiento.
+
+**Falta el pedido de Alcalá**, que es el caso.
 
 ## 1 · Los dos momentos, y cuál he movido
 
