@@ -8,6 +8,8 @@
 
 **Maqueta:** «Los formatos de compra en la ficha del artículo», **aprobada por Julio el 19/09** («ok a todo») · https://claude.ai/artifact/H3wCwDSY1GdQ6uDky1BD7K
 
+**PUBLICADO el 19/09.** `main` en `40c49c1`, **READY en producción a las 13:01:18** (Madrid), alias `app.folvy.app` y `foodint.folvy.app`. Queda por cerrar: el pase (lo mira quien tiene sesión) y **C3**, que se cierra mirando Alubias rojas en producción. Los 25 puntos pasan de 🟢 a ✅ cuando Julio lo vea en la aplicación.
+
 **Dirección fija de la rama:** `folvy-app-git-claude-cool-thompson-msx9dg-llorente29s-projects.vercel.app` (apunta siempre al último commit).
 
 **Estado 19/09, cuarta vuelta.** Los dos retoques hechos y **el alta ya no escribe al pulsar «Siguiente»**: el artículo nace al guardar, y «Guardar y seguir luego» es la única forma de dejarlo a medias a propósito. Un alta abandonada no deja rastro.
@@ -86,5 +88,5 @@
 1. ~~Capturas de cada pantalla real~~ **hecho: Claude entra al preview y lo mira directamente.**
 2. ~~Claude las cruza con esta lista~~ **hecho el 19/09.**
 3. ~~Las tres cosas que bloquean, corregidas~~ **hecho; pendiente de volver a mirar en el preview del commit nuevo.**
-4. `npm run build` exacto, fusión y READY en Vercel.
+4. ~~`npm run build` exacto, fusión y READY en Vercel~~ **hecho: `40c49c1`, READY 13:01:18.**
 5. Julio lo ve en la aplicación y cada punto pasa de 🟢 a ✅.

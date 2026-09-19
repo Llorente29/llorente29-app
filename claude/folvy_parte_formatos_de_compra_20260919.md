@@ -576,6 +576,41 @@ ordenar. **El alta era la fábrica de lo que la pantalla E cuenta.**
 `npm run build` exacto y en limpio ✓ · **1.633** pruebas en verde · lint **6 → 6**
 en los ficheros tocados (misma vara sobre `origin/main`), limpio en los nuevos.
 
+## 7 quater · PUBLICADO (19/09, 13:01 Madrid)
+
+**Autorizado por Julio**, con la condición 1 retirada por quien la puso: la
+regla del 13/09 dice que publicar el front ya no espera hora porque las
+tablets se defienden solas, y eso está medido; «con las tiendas tranquilas»
+era un recuerdo del susto del 16/09 puesto encima de un dato.
+
+| | |
+|---|---|
+| Fusión | desde `origin/main` (`b16d8f6`), **no** desde el `main` local, que estaba 38 commits por detrás |
+| `npm run build` exacto y en limpio **sobre el árbol fusionado** | ✓ 9,04 s |
+| Pruebas sobre el árbol fusionado | ✓ 1.633 |
+| Push a `main` | **12:59:53** Madrid |
+| `main` | **`40c49c1`** |
+| Despliegue de producción | `dpl_5rSGKowjuBie8pCWeB6kaadzcih6` |
+| Empezó a construir | 13:00:00 |
+| **READY en producción** | **13:01:18** (78 s) |
+| Alias servidos | `app.folvy.app` · `foodint.folvy.app` |
+
+**Comprobado mirando el despliegue de producción y su estado**, que es lo que
+manda la regla del 16/09: no el commit en `main`, no el correo de Vercel.
+
+**Lo que NO he comprobado yo, y queda de quien tiene sesión:**
+- **el pase después de publicar**, no solo el color del build;
+- **C3**, que se cierra mirando: abrir el editor de un formato con historia
+  (Alubias rojas, 15 usos desde el 23/06), cambiar una cifra y ver si aparece
+  «Lo que va a cambiar». Si no aparece, vuelve a 🟡 y se arregla.
+
+**Y la lección de la tarde, que es de las que se guardan:** de cada control
+nuevo, preguntar **qué escribe, no qué dice**. Esa pregunta no salió de cuatro
+vueltas leyendo el código: salió de mirar la pantalla, contar tres campos en
+el diálogo del alta y notar que lo que no cuadraba era lo que pasaba al
+pulsar. Cruzar contra la maqueta con la pantalla delante no es burocracia: es
+donde nacen esas preguntas.
+
 ## 8 · Lo que espera tu sí
 
 1. ~~Capturar las cinco pantallas~~ **hecho por Claude el 19/09.** Ahora:
