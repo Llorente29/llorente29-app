@@ -211,10 +211,53 @@ export function startPrintWorker(opts: { token: string; pollMs?: number }) {
   const ms = opts.pollMs || 3000;
   // fix/tablet-robustez (12/08), Tarea B: backoff en fallo (1s,2s,5s,10s,30s,
   // luego cada 30s), vuelve a los 3s normales en cuanto un reclamo funciona.
-  // fix/sondeo-adaptativo-tablet (13/08), Tarea B1: sin trabajo 20 ciclos
-  // seguidos (~1 min a 3s) sube progresivamente hasta 45s; vuelve a los 3s
-  // AL INSTANTE en cuanto haya un job que reclamar (ver wake() en pantalla).
-  pollHandle = runPollingLoop({ call: tick, normalIntervalMs: ms, idleIntervalMs: 45_000, idleAfter: 20 });
+  // fix/sondeo-adaptativo-tablet (13/08), Tarea B1: sin trabajo N ciclos
+  // seguidos sube progresivamente hasta 45s; vuelve a los 3s AL INSTANTE en
+  // cuanto haya un job que reclamar (ver wake() en pantalla).
+  //
+  // ── LA ESPERA DEL PAPEL (19/09) ──────────────────────────────────────
+  // `idleAfter` pasa de 20 a 200. Es la ÚNICA cifra que cambia.
+  //
+  // El síntoma: 15 s de espera media entre que un trabajo se encola y sale,
+  // p90 38 s, y un máximo clavado en 43-45 s hora tras hora.
+  //
+  // Lo que NO era, y costó descartarlo:
+  //  · No es la impresora: imprime en 1,2 s.
+  //  · No es saturación: en la hora de MÁS trabajo (21:00, 500 trabajos) la
+  //    espera es la MÁS BAJA, 12,4 s. Justo al revés de una cola llena.
+  //  · No es un canal de aviso roto. NO HAY canal: cero realtime, cero
+  //    notify sobre print_job. Comprobado, no supuesto.
+  //
+  // Lo que era: ESTE bucle. El máximo de 43-45 s no es un sondeo de 45 s,
+  // es `idleIntervalMs` — el techo de la rampa. Y el 21,7 % que sale en
+  // menos de 2 s son los trabajos que llegan mientras el bucle está en su
+  // modo rápido (media a 3 s = 1,5 s). La distribución plana de 0 a 45 s no
+  // es la firma de un sondeo fijo: es la de una rampa 3→6→12→24→45.
+  //
+  // Por qué 200 y no bajar `normalIntervalMs`: a 3 s el p90 YA es ~2,7 s.
+  // Bajarlo a 1 s mejora el tramo que ya va bien, no toca la cola de 20-45 s
+  // -que es la que duele- y triplica las consultas. Lo que cuesta caro es
+  // cuándo ARRANCA la rampa: hoy, a los 60 s de silencio, y en servicio un
+  // hueco de más de un minuto es de lo más normal.
+  //
+  // 200 ciclos ~ 10 min de silencio. MEDIDO sobre los huecos reales entre
+  // trabajos consecutivos, 13:00-23:59, 7 días:
+  //    Alcalá        1.534 huecos, mediana 0,4 min, 53 de más de 10 min (3,5 %)
+  //    Carabanchel     731 huecos, mediana 0,0 min, 98 de más de 10 min (13,4 %)
+  // O sea: en Alcalá -que es donde duele- el bucle no saldría de 3 s en el
+  // 96,5 % de los huecos. En Carabanchel seguirá rampando uno de cada siete;
+  // hoy da igual (allí la bolsa sale al entrar y no hay pegatinas), pero si
+  // algún día duele allí, 200 NO es suficiente y hará falta otra cosa -un
+  // aviso de verdad-, no un número más grande.
+  //
+  // El guardarraíl del 13/08 sigue entero: a los 60 min sin trabajo el bucle
+  // cae a 5 min (CLOSED_AFTER_MS/CLOSED_INTERVAL_MS en retryBackoff), que es
+  // lo que protege de verdad a una cocina cerrada. Lo único que cambia para
+  // una cocina en silencio es que sondea a 3 s durante 10 min en vez de 1:
+  // unas +180 consultas por hueco.
+  //
+  // VUELTA ATRÁS: la misma cifra al revés, 200 -> 20. Nada más.
+  pollHandle = runPollingLoop({ call: tick, normalIntervalMs: ms, idleIntervalMs: 45_000, idleAfter: 200 });
   console.log(`[folvy-print] worker iniciado (sondeo ${ms} ms)`);
 }
 
