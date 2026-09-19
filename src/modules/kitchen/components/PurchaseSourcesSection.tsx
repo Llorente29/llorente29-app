@@ -58,6 +58,9 @@ import {
 } from '@/modules/kitchen/services/estadoDeFormatosService'
 import {
   cuentaDelFormato,
+  comoSeCuenta,
+  loQueVaACambiar,
+  num,
   plural,
   type FormatoParaRegla,
 } from '@/modules/kitchen/lib/formatosDeCompra'
@@ -101,9 +104,12 @@ function fmtEur(v: number | null | undefined, maxDecimals = 2): string {
   }).format(v)
 }
 
-function fmtNum(v: number): string {
-  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(v)
-}
+// Los miles, con UNA sola vara en toda la sección. Antes había dos: la tarjeta
+// decía «5.790 g» y la línea verde del editor «5790 g», porque una pasaba por
+// `num()` (que fuerza el separador) y la otra por un Intl propio. En es-ES el
+// separador se omite por defecto en los números de cuatro cifras, así que las
+// dos eran «correctas» y por eso no cantaba: cantaba verlas juntas.
+const fmtNum = num
 
 // Fecha corta en castellano a partir de un `date` de la base (YYYY-MM-DD).
 // Se parte la cadena a mano en vez de pasarla por `new Date(...)`: un `date`
@@ -144,6 +150,15 @@ interface PurchaseSourcesSectionProps {
    * falta, no la ficha.
    */
   enfocar?: boolean
+  /**
+   * A1 — la sección va dentro del ALTA del artículo, como su segundo paso.
+   * Es la MISMA sección, no una copia: lo único que cambia es que se callan
+   * dos cosas que en un artículo recién nacido no dicen nada —los botones de
+   * escandallo y el desplegable de descatalogados— y que el formulario nace
+   * abierto. Construir un formulario aparte para el alta sería tener dos
+   * sitios donde arreglar el mismo fallo.
+   */
+  modoAlta?: boolean
 }
 
 export default function PurchaseSourcesSection({
@@ -153,6 +168,7 @@ export default function PurchaseSourcesSection({
   actorName,
   onChanged,
   enfocar = false,
+  modoAlta = false,
 }: PurchaseSourcesSectionProps) {
   const seccionRef = useRef<HTMLDivElement | null>(null)
   const baseUnit = useMemo(
@@ -179,8 +195,9 @@ export default function PurchaseSourcesSection({
   const [recalculatedDishes, setRecalculatedDishes] = useState<RecomputedAncestor[]>([])
   const [dishesOpen, setDishesOpen] = useState(false)
 
-  // Formulario de alta.
-  const [addOpen, setAddOpen] = useState(false)
+  // Formulario de alta. En el paso 2 del alta del artículo nace abierto: es
+  // justo la pregunta que el alta tiene que hacer.
+  const [addOpen, setAddOpen] = useState(modoAlta)
   const [supplierId, setSupplierId] = useState('')
   const [newSupplierName, setNewSupplierName] = useState('')
   const [formatName, setFormatName] = useState('')
@@ -564,10 +581,10 @@ export default function PurchaseSourcesSection({
   // Los formatos marcados para contar. Si no hay ninguno, se cuenta en la
   // unidad de siempre — y eso se DICE, no se calla.
   const formatosDeConteo = useMemo(() => formats.filter((f) => f.useInCount), [formats])
-  const seCuentaEn =
-    formatosDeConteo.length === 0
-      ? baseAbbr || 'la unidad base'
-      : formatosDeConteo.map((f) => plural(f.name, 2).toLowerCase()).join(' y ')
+  const seCuentaEn = comoSeCuenta(
+    formatosDeConteo.map((f) => ({ nombre: f.name, qtyInBase: f.qtyInBase })),
+    baseAbbr,
+  )
 
   // ── B4 · Dos proveedores que no se parecen ──
   // Se compara el €/base de cada uno contra el del PRINCIPAL (que es el que
@@ -750,7 +767,7 @@ export default function PurchaseSourcesSection({
           </div>
         )}
 
-        {!loading && !error && (
+        {!loading && !error && !modoAlta && (
           <button
             type="button"
             onClick={() => setShowArchived((v) => !v)}
@@ -1143,17 +1160,25 @@ export default function PurchaseSourcesSection({
               </div>
             )}
 
-            {/* A8 · «Cómo queda»: las cuatro preguntas juntas, que es lo que
-                nadie puede ver hoy sin abrir tres sitios distintos. */}
-            {addQtyInBase !== null && baseUnit && (
+            {/* A8 · «Cómo queda»: las cuatro preguntas juntas.
+                SIEMPRE visible mientras el formulario está abierto, con «—» en
+                lo que aún no se ha dicho. Antes solo aparecía cuando ya estaba
+                todo relleno, o sea justo cuando ya no hacía falta: quien abría
+                el formulario en blanco no veía las cuatro preguntas por ningún
+                lado. Enseñar el hueco es la mitad del trabajo de este resumen. */}
+            {baseUnit && (
               <div className="rounded-md border border-border-default bg-card px-3 py-2 space-y-1">
                 <div className="text-[11px] font-medium text-text-secondary">Cómo queda</div>
                 <p className="text-xs text-text-primary">
                   Lo compro:{' '}
-                  <span className="font-medium">
-                    {addMode === 'pack' && addCountNum !== null && addInnerBase !== null
-                      ? `${addCajaName.trim() || 'Caja'} de ${fmtNum(addCountNum)} ${plural(addInnerName.trim() || 'pieza', addCountNum).toLowerCase()} de ${fmtNum(addInnerBase)} ${baseUnit.abbreviation}`
-                      : `${formatName.trim() || 'formato'} de ${fmtNum(addQtyInBase)} ${baseUnit.abbreviation}`}
+                  <span className={addQtyInBase === null ? 'text-text-secondary' : 'font-medium'}>
+                    {addMode === 'pack'
+                      ? addCountNum !== null && addInnerBase !== null
+                        ? `${addCajaName.trim() || 'Caja'} de ${fmtNum(addCountNum)} ${plural(addInnerName.trim() || 'pieza', addCountNum).toLowerCase()} de ${fmtNum(addInnerBase)} ${baseUnit.abbreviation}`
+                        : '— dime cuántas piezas trae y cuánto lleva una —'
+                      : addQtyInBase !== null
+                        ? `${formatName.trim() || 'formato'} de ${fmtNum(addQtyInBase)} ${baseUnit.abbreviation}`
+                        : '— dime cómo viene y cuánto trae —'}
                   </span>
                 </p>
                 <p className="text-xs text-text-primary">
@@ -1171,12 +1196,21 @@ export default function PurchaseSourcesSection({
                 </p>
                 <p className="text-xs text-text-primary">
                   Él lo llama:{' '}
-                  <span className="font-medium">
+                  <span className={supplierItemName.trim() === '' ? 'text-text-secondary' : 'font-medium'}>
                     {supplierItemName.trim() !== '' ? supplierItemName.trim() : '— aún no lo has dicho —'}
                   </span>
                   {supplierCode.trim() !== '' && (
                     <span className="text-text-secondary font-mono"> · {supplierCode.trim()}</span>
                   )}
+                </p>
+                {/* Y el precio, que es la cuarta cosa que se mira antes de guardar */}
+                <p className="text-xs text-text-primary">
+                  Me cuesta:{' '}
+                  <span className={previewUnitCost === null ? 'text-text-secondary' : 'font-medium font-mono'}>
+                    {previewUnitCost !== null
+                      ? `${fmtEur(priceNum, 2)} · ${fmtEur(previewUnitCost, 5)} / ${baseUnit.abbreviation}`
+                      : '— sin precio todavía, se puede guardar y seguir luego —'}
+                  </span>
                 </p>
               </div>
             )}
@@ -1255,7 +1289,7 @@ export default function PurchaseSourcesSection({
         {/* B5 · El pie de la ficha: en qué sale en el recuento, en qué se
             gasta y cuántos platos lo usan. Las tres cosas que hay que saber
             antes de tocar un formato. */}
-        {!loading && !error && baseUnit && (
+        {!loading && !error && baseUnit && !modoAlta && (
           <div className="mt-3 pt-3 border-t border-border-default flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary">
             <span>
               En el recuento saldrá en <span className="text-text-primary">{seCuentaEn}</span>
@@ -1271,7 +1305,10 @@ export default function PurchaseSourcesSection({
           </div>
         )}
 
-        {/* Este ingrediente en los escandallos: sustituir / añadir / quitar (granular por plato) */}
+        {/* Este ingrediente en los escandallos: sustituir / añadir / quitar
+            (granular por plato). En el alta no se enseña: un artículo que
+            acaba de nacer no está en ningún escandallo todavía. */}
+        {!modoAlta && (
         <div className="mt-4 pt-3 border-t border-border-default">
           <div className="text-xs font-medium text-text-secondary mb-2">Este ingrediente en los escandallos</div>
           <div className="flex flex-wrap gap-2">
@@ -1289,6 +1326,7 @@ export default function PurchaseSourcesSection({
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {substituteOpen && (
@@ -1535,12 +1573,13 @@ function SourceRow({
   // C3 — lo que va a cambiar: el coste de hasta hoy y el de desde hoy.
   const nuevoTotalBase = fmtMode === 'pack' ? packTotalBase : fmtQtyInBase
   const costeHastaHoy = link.lastPrice
-  const precioDelFormato =
-    costeHastaHoy !== null && format ? formatPriceFromUnitCost(costeHastaHoy, format.qtyInBase) : null
-  const costeDesdeHoy =
-    precioDelFormato !== null && nuevoTotalBase !== null && nuevoTotalBase > 0
-      ? precioDelFormato / nuevoTotalBase
-      : null
+  // La cuenta vive en lib/ y está probada con los números reales de Alubias
+  // (28,84 € la caja de 18.000 g). Aquí solo se pinta.
+  const { precioDelFormato, costeDesdeHoy } = loQueVaACambiar({
+    costeHastaHoy,
+    totalHastaHoy: format?.qtyInBase ?? 0,
+    totalDesdeHoy: nuevoTotalBase,
+  })
   const contenidoCambia =
     format !== null && nuevoTotalBase !== null && Math.abs(nuevoTotalBase - format.qtyInBase) > 1e-9
 
@@ -1790,6 +1829,20 @@ function SourceRow({
               {' · '}
               {/* €/caja DERIVADO del €/base (last_price) × qtyInBase, solo informativo */}
               <span className="font-mono">{fmtEur(formatPriceFromUnitCost(link.lastPrice, format.qtyInBase), 2)} / {format.name.toLowerCase()}</span>
+              {/* A5 · y a cuánto queda la PIEZA, cuando la caja tiene piezas.
+                  Es el número con el que se compara de verdad en la cocina. */}
+              {parentFormat && format.qtyPerParent !== null && format.qtyPerParent > 0 && (
+                <>
+                  {' · '}
+                  <span className="font-mono">
+                    {fmtEur(
+                      formatPriceFromUnitCost(link.lastPrice, format.qtyInBase)! / format.qtyPerParent,
+                      2,
+                    )}{' '}
+                    / {parentFormat.name.toLowerCase()}
+                  </span>
+                </>
+              )}
             </>
           )}
           {!archived && format && !editingFmt && (
@@ -2043,11 +2096,14 @@ function SourceRow({
                 que es cuando sirve de algo. El formato guarda created_by /
                 created_by_name, así que esto no es una promesa: es lo que
                 `archiveAndReplacePurchaseFormat` escribe al crear el nuevo. */}
+            {/* C5 · En FUTURO. Antes decía «queda apuntado que lo cambió …»
+                antes de que nadie hubiera cambiado nada: anunciaba en pasado
+                algo que todavía no había pasado. */}
             <p className="text-[11px] text-text-secondary flex items-start gap-1.5 pt-0.5 border-t border-border-default">
               <Info className="w-3 h-3 mt-0.5 shrink-0" />
               <span>
-                Queda apuntado que lo cambió {actorName ?? 'quien haya entrado'}, hoy{' '}
-                {fmtFecha(new Date().toISOString().slice(0, 10))}.
+                Cuando guardes quedará apuntado que lo cambiaste{' '}
+                {actorName ? <>tú, {actorName}</> : 'tú'}, y la fecha de hoy.
                 {format?.createdByName
                   ? ` El de ahora lo puso ${format.createdByName} el ${fmtFecha(format.createdAt.slice(0, 10))}.`
                   : ''}

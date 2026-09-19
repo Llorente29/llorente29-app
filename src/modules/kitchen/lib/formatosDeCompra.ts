@@ -48,13 +48,81 @@ export function num(n: number): string {
   return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3, useGrouping: true }).format(n)
 }
 
-/** Plural de andar por casa para el nombre de una pieza («Bote» → «Botes»). */
+/**
+ * Plural de andar por casa para el nombre de una pieza («Bote» → «Botes»).
+ *
+ * Y lo primero: **si ya acaba en «s», no se toca**. Julio escribe «Latas» y el
+ * código le añadía «-es» — «latases», «boteses»—, y eso salía en la línea que
+ * dice en qué se cuenta el artículo, que es de las más leídas de la ficha.
+ *
+ * No es una lista de excepciones, es lo que dicen los datos: de los **281
+ * formatos vivos** de Foodint, **4** tienen el nombre ya en plural
+ * («bolsas», «botes», «Latas») y **ninguno** es una palabra singular acabada en
+ * «s». Medido el 19/09 contra `recipe_item_purchase_format`.
+ */
 export function plural(nombre: string, n: number): string {
   const limpio = nombre.trim()
   if (n === 1 || limpio === '') return limpio
+  if (/s$/i.test(limpio)) return limpio
+  // «Bidón» → «Bidones»: al pluralizar, la tilde del singular se cae.
+  if (/ón$/i.test(limpio)) return `${limpio.slice(0, -2)}ones`
   if (/[aeiouáéíóú]$/i.test(limpio)) return `${limpio}s`
   if (/[zZ]$/.test(limpio)) return `${limpio.slice(0, -1)}ces`
   return `${limpio}es`
+}
+
+/**
+ * «Se cuenta en cajas · latas de 1.600 g · latas de 3.000 g».
+ *
+ * Dos cosas que se ven en los datos reales y que hay que respetar:
+ *  · Alubias rojas tiene TRES formatos marcados para contar, y dos se llaman
+ *    «Lata» (1.600 g) y «Latas» (3.000 g). NO son un duplicado: son dos
+ *    envases distintos con el mismo nombre. Fundirlos escondería una fila que
+ *    existe, que es lo que prohíbe la regla 7.
+ *  · Por eso, cuando dos nombres coinciden al ponerlos en plural, cada uno
+ *    lleva detrás cuánto trae. Cuando no coinciden, el nombre va solo.
+ *
+ * Y se unen con «·», no con «y … y …».
+ */
+export function comoSeCuenta(
+  formatos: { nombre: string; qtyInBase: number }[],
+  baseAbbr: string,
+): string {
+  if (formatos.length === 0) return baseAbbr || 'la unidad base'
+  const enPlural = formatos.map((f) => ({ ...f, etiqueta: plural(f.nombre, 2).toLowerCase() }))
+  const veces = new Map<string, number>()
+  enPlural.forEach((f) => veces.set(f.etiqueta, (veces.get(f.etiqueta) ?? 0) + 1))
+  return enPlural
+    .map((f) =>
+      (veces.get(f.etiqueta) ?? 0) > 1
+        ? `${f.etiqueta} de ${num(f.qtyInBase)} ${baseAbbr}`
+        : f.etiqueta,
+    )
+    .join(' · ')
+}
+
+/**
+ * C3 · «Lo que va a cambiar». El precio del formato NO cambia —sigue costando
+ * lo mismo la caja—; lo que cambia es cuánto trae, y por eso cambia el coste
+ * por unidad base. Puro y probado aparte porque es la cifra que el operario
+ * va a usar para decidir si toca o no toca.
+ */
+export function loQueVaACambiar(params: {
+  /** €/base de hoy (article_supplier.last_price). */
+  costeHastaHoy: number | null
+  /** cuánto trae el formato de hoy. */
+  totalHastaHoy: number
+  /** cuánto va a traer. */
+  totalDesdeHoy: number | null
+}): { precioDelFormato: number | null; costeDesdeHoy: number | null } {
+  const { costeHastaHoy, totalHastaHoy, totalDesdeHoy } = params
+  if (costeHastaHoy === null || !(totalHastaHoy > 0)) {
+    return { precioDelFormato: null, costeDesdeHoy: null }
+  }
+  const precioDelFormato = costeHastaHoy * totalHastaHoy
+  const costeDesdeHoy =
+    totalDesdeHoy !== null && totalDesdeHoy > 0 ? precioDelFormato / totalDesdeHoy : null
+  return { precioDelFormato, costeDesdeHoy }
 }
 
 /**

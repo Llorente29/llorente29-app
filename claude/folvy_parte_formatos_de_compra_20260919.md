@@ -419,13 +419,121 @@ dar tú.
 
 ---
 
+## 7 bis · Tercera vuelta (19/09) — el cruce contra la maqueta
+
+Cruzado en el preview `a55a57e`: 17 de 25 puntos tal cual se aprobaron, y tres
+cosas bloqueando. Las tres, corregidas, más los cuatro reparos menores.
+
+### El plural, medido antes de arreglarlo
+
+El fallo que se veía: **«Se cuenta en latases y cajas y latas»**, y «boteses» en
+la Baconesa. Tres cosas en una frase.
+
+**La medida, que era lo que pedías:** de los **281 formatos vivos** de Foodint,
+**4** tienen el nombre ya en plural —«bolsas», «botes», «Latas»— y **ninguno** es
+una palabra singular acabada en «s». Así que la regla es **«si acaba en s, no se
+toca»**, que sale de los datos, y no una lista de excepciones.
+
+**Y la medida cambió el diagnóstico de lo otro: NO había unidad repetida.**
+Alubias rojas tiene de verdad **tres** formatos marcados para contar:
+
+| formato | contenido | conteo |
+|---|---|---|
+| Caja | 18.000 g | sí |
+| Lata | 1.600 g | sí |
+| **Latas** | **3.000 g** | sí |
+
+«Lata» y «Latas» **no son un duplicado**: son dos envases distintos con el mismo
+nombre —la lata de Makro y la lata de dentro de la caja de Cloudtown—. Iba a
+fundirlos por nombre, y habría escondido una fila que existe, que es justo lo que
+prohíbe la **regla 7**. Lo que hace ahora: cuando dos nombres chocan al ponerlos
+en plural, **cada uno lleva detrás cuánto trae**:
+
+> Se cuenta en **cajas · latas de 1.600 g · latas de 3.000 g**
+
+Unidos con «·». Y de paso, «Bidón» → «Bidones», que la tilde se cae.
+
+### El alta pregunta de quién lo compras
+
+Tenías razón y mi commit se pasó de título. Lo que había era el ENLACE: al crear
+un artículo, la ficha se abría por la compra con el formulario desplegado. Pero
+«+ Nuevo ingrediente» seguía preguntando tres cosas y punto, y la decisión 1 dice
+que **al crearlo pregunta lo que hace falta**.
+
+Ahora el alta tiene **dos pasos**, y el segundo es **la misma sección de la
+ficha** (`modoAlta`), no un formulario nuevo:
+
+1. Nombre · ¿Cómo se mide? · Precio (opcional) → **«Siguiente: de quién lo compras»**
+2. La sección de compra, con el formulario abierto, sin los botones de escandallo
+   ni el pie —que en un artículo recién nacido no dicen nada—. Sale por «Listo»,
+   y **se puede salir sin proveedor**: el artículo queda a medias a propósito y
+   la lista lo dirá con su sello.
+
+Si el paso 2 fuera una copia del formulario, habría dos sitios donde arreglar el
+mismo fallo. Por eso es el mismo componente con dos cosas calladas.
+
+### «Cómo queda» estaba, y escondido es como no estar
+
+A8 sí estaba construido, pero **solo aparecía cuando el formulario ya estaba
+relleno**, o sea justo cuando ya no hacía falta: quien lo abría en blanco no veía
+las cuatro preguntas por ningún lado. Es el mismo error de fondo que la regla 8,
+un piso más abajo — esconder que algo existe hasta que ya da igual.
+
+Ahora sale **siempre** con el formulario abierto, con «—» y una frase en lo que
+falta («— dime cuántas piezas trae y cuánto lleva una —»). Enseñar el hueco es la
+mitad del trabajo del resumen. Y se le ha añadido la cuarta línea que faltaba, la
+del precio.
+
+### Los cuatro reparos
+
+| | qué se ha hecho |
+|---|---|
+| **El €/pieza (A5)** | la tarjeta dice ya `28,84 € / caja · 4,81 € / lata` cuando la caja tiene piezas |
+| **El separador de miles** | una sola función en toda la sección. En es-ES el separador se omite por defecto en los números de cuatro cifras, así que «5790» y «5.790» eran las dos «correctas»: cantaba verlas juntas, no cada una por su lado |
+| **Cuatro sellos en una fila** | **uno**. Manda lo que está MAL (No cuadra, Repetido) sobre lo que FALTA (formato, referencia, coste); el resto va como «+N» y en el título, y se sigue contando en los tres filtros — no se esconde nada. Y «sin terminar» se calla cuando ya hay sello: repetía en vago lo que el sello dice con nombre |
+| **C5 en pasado** | en futuro: «Cuando guardes quedará apuntado que lo cambiaste tú, …» |
+
+### C3 · lo que preguntas, contestado
+
+**Sí está construido.** Es el bloque «Lo que va a cambiar» dentro del ámbar, y
+sale cuando el formato tiene movimientos **y** el contenido cambia de verdad.
+
+**Con qué caso lo probé: con ninguno en pantalla, y eso lo digo.** No puedo
+escribir en un formato de producción — igual que a ti te lo bloqueó el entorno, a
+mí me falta la sesión. Decir «lo he probado» sería lo que costó el 16/09.
+
+**Lo que sí he hecho esta vuelta**, para que deje de ser una promesa: he sacado
+la cuenta del componente a `lib/formatosDeCompra.ts` (`loQueVaACambiar`) y la he
+probado **con los números reales de Alubias**:
+
+| | |
+|---|---|
+| hasta hoy | Caja de **18.000 g**, 28,84 € → **0,0016022 €/g** |
+| si pasara a 6 × 2.500 | Caja de **15.000 g**, **los mismos 28,84 €** → **0,0019227 €/g** |
+
+Que es lo que dice la pantalla: **el precio de la caja no cambia; cambia cuánto
+trae, y por eso cambia el gramo.** La aritmética está fijada por prueba; lo que
+falta por ver es el montaje, y para eso hace falta que alguien teclee. **Déjalo
+en 🟡 hasta entonces**, no en ✅ — y si al mirarlo en el preview puedes abrir el
+editor de un formato con movimientos (Alubias sirve: 15 usos desde el 23/06),
+con verlo aparecer basta.
+
+### F3
+
+Aceptado como **deuda aparte**: la barra horizontal es de toda la aplicación.
+No la cuelgo de esta rama ni la arreglo aquí.
+
 ## 8 · Lo que espera tu sí
 
-1. **Capturar las cinco pantallas a 1.280 px** desde el preview
-   (`folvy-lqetsb2ma-llorente29s-projects.vercel.app`, `dpl_3WFY49RukndpodRZRiQHG2pTNNnT`,
-   commit `f40b484c` — la rama tendrá un commit más con estas dos correcciones,
-   así que espera a que Vercel despliegue el nuevo). Yo las cruzo con la lista,
-   punto por punto.
+1. ~~Capturar las cinco pantallas~~ **hecho por Claude el 19/09.** Ahora:
+   **volver a mirar el preview del commit nuevo** con las tres correcciones, y
+   dar o no el visto. Lo que conviene mirar primero:
+   - **Alubias rojas**: la cabecera debe decir «cajas · latas de 1.600 g · latas
+     de 3.000 g», y la tarjeta de Cloudtown el €/lata.
+   - **«+ Nuevo ingrediente»**: el botón dice «Siguiente: de quién lo compras» y
+     el paso 2 trae el formulario abierto.
+   - **Cualquier artículo a medias**: un solo sello por fila.
+   - **Alubias → editar formato**: si puedes teclear ahí, C3 se cierra.
 
    **El primer caso que hay que probar es la Salsa Smokey Baconesa**, y no por
    simetría: su enlace tiene `supplier_item_name` **vacío** y **ningún formato

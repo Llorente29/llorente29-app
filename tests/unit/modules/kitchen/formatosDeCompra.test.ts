@@ -15,6 +15,9 @@ import {
   cuentaDelFormato,
   frasePack,
   articulosConProveedorRepetido,
+  plural,
+  comoSeCuenta,
+  loQueVaACambiar,
   type FormatoParaRegla,
 } from '@/modules/kitchen/lib/formatosDeCompra'
 import { ENLACES_REALES } from './formatosDeCompra.poblacionReal'
@@ -192,5 +195,86 @@ describe('«Repetido»', () => {
         { recipeItemId: 'a', supplierId: 'y' },
       ]).size,
     ).toBe(0)
+  })
+})
+
+
+describe('el plural, que salía en la línea más leída de la ficha', () => {
+  it('no vuelve a pluralizar lo que ya está en plural', () => {
+    // Lo que se veía en el preview del 19/09: «latases», «boteses».
+    expect(plural('Latas', 2)).toBe('Latas')
+    expect(plural('botes', 2)).toBe('botes')
+    expect(plural('bolsas', 2)).toBe('bolsas')
+  })
+
+  it('sigue pluralizando lo que sí es singular', () => {
+    expect(plural('Caja', 2)).toBe('Cajas')
+    expect(plural('Bote', 2)).toBe('Botes')
+    expect(plural('Bidón', 2)).toBe('Bidones')  // la tilde se cae
+    expect(plural('Lata', 1)).toBe('Lata')
+  })
+
+  it('los 4 nombres vivos acabados en «s» de Foodint quedan intactos', () => {
+    // Medido el 19/09: de 281 formatos vivos, 4 acaban en «s» y los cuatro son
+    // de verdad plurales. Ninguno es una palabra singular acabada en «s».
+    for (const n of ['bolsas', 'botes', 'Latas']) {
+      expect(plural(n, 2)).toBe(n)
+    }
+  })
+})
+
+describe('«Se cuenta en …», con el caso real de Alubias rojas', () => {
+  it('no funde dos envases distintos que se llaman casi igual', () => {
+    // En la base: Caja = 18.000, Lata = 1.600 y Latas = 3.000, los tres
+    // marcados para contar. «Lata» y «Latas» NO son un duplicado: son dos
+    // envases distintos. Fundirlos escondería una fila que existe.
+    expect(
+      comoSeCuenta(
+        [
+          { nombre: 'Latas', qtyInBase: 3000 },
+          { nombre: 'Caja', qtyInBase: 18000 },
+          { nombre: 'Lata', qtyInBase: 1600 },
+        ],
+        'g',
+      ),
+    ).toBe('latas de 3.000 g · cajas · latas de 1.600 g')
+  })
+
+  it('cuando no chocan, el nombre va solo y se une con «·»', () => {
+    expect(comoSeCuenta([{ nombre: 'Caja', qtyInBase: 5790 }, { nombre: 'Bote', qtyInBase: 965 }], 'g'))
+      .toBe('cajas · botes')
+  })
+
+  it('sin ningún formato de conteo, se dice la unidad de siempre', () => {
+    expect(comoSeCuenta([], 'g')).toBe('g')
+  })
+})
+
+describe('C3 · lo que va a cambiar', () => {
+  it('el precio de la caja no cambia; cambia cuánto trae, y por eso el gramo', () => {
+    // Alubias rojas, Cloudtown, con los números de la base: 28,84 € la caja de
+    // 18.000 g = 0,00160222… €/g. Si la caja pasara a 6 × 2.500 = 15.000 g,
+    // la misma caja sale a 0,00192266… €/g.
+    // El €/g se escribe como la división que lo produce: el literal con 20
+    // decimales perdía precisión al compilarse (no-loss-of-precision) y además
+    // escondía de dónde salía el número.
+    const r = loQueVaACambiar({
+      costeHastaHoy: 28.84 / 18000,
+      totalHastaHoy: 18000,
+      totalDesdeHoy: 15000,
+    })
+    expect(r.precioDelFormato).toBeCloseTo(28.84, 2)
+    expect(r.costeDesdeHoy).toBeCloseTo(0.0019226666, 8)
+  })
+
+  it('sin precio de hoy no se inventa el de mañana', () => {
+    expect(loQueVaACambiar({ costeHastaHoy: null, totalHastaHoy: 18000, totalDesdeHoy: 15000 }))
+      .toEqual({ precioDelFormato: null, costeDesdeHoy: null })
+  })
+
+  it('sin total nuevo, se sabe el precio del formato pero no el coste nuevo', () => {
+    const r = loQueVaACambiar({ costeHastaHoy: 0.002, totalHastaHoy: 1000, totalDesdeHoy: null })
+    expect(r.precioDelFormato).toBeCloseTo(2, 6)
+    expect(r.costeDesdeHoy).toBeNull()
   })
 })

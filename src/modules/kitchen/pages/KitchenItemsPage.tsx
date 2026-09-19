@@ -40,6 +40,7 @@ import {
   getRawUsageCounts,
 } from '@/modules/kitchen/services/recipeItemService'
 import SimpleArticleCreateModal from '@/modules/kitchen/components/SimpleArticleCreateModal'
+import PurchaseSourcesSection from '@/modules/kitchen/components/PurchaseSourcesSection'
 import { searchTemplates, type IngredientTemplate } from '@/modules/kitchen/services/ingredientTemplateService'
 import { adoptFromTemplate } from '@/modules/kitchen/services/ingredientAdoptionService'
 import { enrichIngredientsBulk, type BulkEnrichProgress, type BulkEnrichResult } from '@/modules/kitchen/services/recipeBulkEnrichService'
@@ -149,6 +150,22 @@ function SellosDelArticulo({
   const aMedias = (estado?.sinFormato ?? false) || (estado?.sinReferencia ?? false) || costeAMano
   const sellos: { texto: string; titulo: string; tono: string; icono: ReactNode }[] = []
 
+  if (estado?.noCuadra) {
+    sellos.push({
+      texto: 'No cuadra',
+      titulo: estado.porQueNoCuadra ?? 'El texto del proveedor no casa con el formato guardado.',
+      tono: 'bg-danger-bg text-danger border-danger/30',
+      icono: <ScanLine className="w-3 h-3" />,
+    })
+  }
+  if (estado?.repetido) {
+    sellos.push({
+      texto: 'Repetido',
+      titulo: 'Dos enlaces vivos del mismo proveedor para este artículo.',
+      tono: 'bg-danger-bg text-danger border-danger/30',
+      icono: <Copy className="w-3 h-3" />,
+    })
+  }
   if (estado?.sinFormato) {
     sellos.push({
       texto: 'Falta el formato',
@@ -173,22 +190,6 @@ function SellosDelArticulo({
       icono: <Coins className="w-3 h-3" />,
     })
   }
-  if (estado?.noCuadra) {
-    sellos.push({
-      texto: 'No cuadra',
-      titulo: estado.porQueNoCuadra ?? 'El texto del proveedor no casa con el formato guardado.',
-      tono: 'bg-danger-bg text-danger border-danger/30',
-      icono: <ScanLine className="w-3 h-3" />,
-    })
-  }
-  if (estado?.repetido) {
-    sellos.push({
-      texto: 'Repetido',
-      titulo: 'Dos enlaces vivos del mismo proveedor para este artículo.',
-      tono: 'bg-danger-bg text-danger border-danger/30',
-      icono: <Copy className="w-3 h-3" />,
-    })
-  }
 
   // E6 · Lo terminado dice «terminado», y no dice nada más.
   if (sellos.length === 0 && !aMedias) {
@@ -199,20 +200,32 @@ function SellosDelArticulo({
       </span>
     )
   }
+  if (sellos.length === 0) return null
+
+  // UN SELLO POR FILA, que es lo que pedía la maqueta. Se veían hasta cuatro
+  // (Col Lombarda: «sin terminar» + «Falta el formato» + «Sin referencia» +
+  // «Terminarlo»), y con el fondo ámbar ya diciendo que está a medias, cuatro
+  // etiquetas no informan: tapan el nombre del artículo.
+  //
+  // El orden de `sellos` no es casual: manda lo que está MAL (no cuadra,
+  // repetido) sobre lo que FALTA (formato, referencia, coste). Lo demás no se
+  // esconde —eso sería la regla 7—: va en el título del sello, y sigue
+  // contándose en los filtros de arriba.
+  const [primero, ...resto] = sellos
+  const titulo =
+    resto.length === 0
+      ? primero.titulo
+      : `${primero.titulo}\n\nY además: ${resto.map(r => r.texto).join(' · ')}`
 
   return (
-    <>
-      {sellos.map(s => (
-        <span
-          key={s.texto}
-          title={s.titulo}
-          className={`ml-2 text-[11px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 align-middle ${s.tono}`}
-        >
-          {s.icono}
-          {s.texto}
-        </span>
-      ))}
-    </>
+    <span
+      title={titulo}
+      className={`ml-2 text-[11px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 align-middle ${primero.tono}`}
+    >
+      {primero.icono}
+      {primero.texto}
+      {resto.length > 0 && <span className="opacity-70">+{resto.length}</span>}
+    </span>
   )
 }
 
@@ -974,7 +987,10 @@ export default function KitchenItemsPage() {
                           </span>
                         )}
                         <PreparationChip item={item} className="ml-2" />
-                        <IngredientStatusChip item={item} className="ml-2" />
+                        {/* «sin terminar» / «sin coste» solo cuando NO hay
+                            sello de formato: si no, repite en vago lo que el
+                            sello dice con nombre y apellidos. */}
+                        {!aMedias && <IngredientStatusChip item={item} className="ml-2" />}
                         {activeTab === 'raw' && <SellosDelArticulo item={item} estado={estado} />}
                         {/* E4 · «Terminarlo» abre el paso que falta, no la
                             ficha entera: la ficha se abre por la sección de
@@ -1257,6 +1273,12 @@ function IngredientCreateModal({
   const [price, setPrice] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A1 · El alta tiene DOS pasos, porque la decisión 1 de Julio dice que al
+  // crear un artículo se pregunta lo que hace falta — y de quién lo compras
+  // hace falta. El paso 2 NO es un formulario nuevo: es la misma sección de
+  // compra de la ficha, en `modoAlta`. Si fueran dos, habría dos sitios donde
+  // arreglar el mismo fallo.
+  const [creado, setCreado] = useState<RecipeItem | null>(null)
 
   // Unidad base = la FINA (is_base=true) de la dimensión elegida. Imposible no-fina.
   const baseUnit = useMemo(
@@ -1380,7 +1402,9 @@ function IngredientCreateModal({
         createdBy: actorId,
         createdByName: actorName,
       })
-      onCreated(created)
+      // Paso 2, sin cerrar el modal: «De quién lo compras».
+      setSubmitting(false)
+      setCreado(created)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error desconocido'
       setError(msg)
@@ -1404,6 +1428,68 @@ function IngredientCreateModal({
   const DIMENSIONS = ['weight', 'volume', 'unit'].filter(
     dim => units.some(u => u.dimension === dim && u.isBase),
   )
+
+  // ── PASO 2 · De quién lo compras ──
+  // La MISMA sección de la ficha, en `modoAlta`. El artículo ya existe (hace
+  // falta su id para colgarle el formato y el enlace), pero para quien lo está
+  // dando de alta esto es un solo recorrido: nombre → cómo se mide → de quién
+  // lo compras. Sale por «Listo», y se puede salir sin proveedor: el artículo
+  // queda a medias A PROPÓSITO y la lista lo dirá con su sello.
+  if (creado) {
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ingredient-create-title"
+        className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
+      >
+        <div
+          className="bg-card w-full sm:max-w-2xl max-h-[95vh] sm:max-h-[90vh] rounded-t-xl sm:rounded-xl shadow-xl flex flex-col"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+            <div className="min-w-0">
+              <h3 id="ingredient-create-title" className="text-base font-medium text-text-primary truncate">
+                {creado.name}
+              </h3>
+              <p className="text-[11px] text-text-secondary">Paso 2 de 2 · De quién lo compras</p>
+            </div>
+            <button
+              type="button"
+              aria-label="Cerrar"
+              onClick={() => onCreated(creado)}
+              className="text-text-secondary hover:text-text-primary transition-base"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="px-4 py-4 overflow-y-auto">
+            <PurchaseSourcesSection
+              item={creado}
+              units={units}
+              actorId={actorId}
+              actorName={actorName}
+              modoAlta
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border-default">
+            <p className="text-[11px] text-text-secondary">
+              Puedes salir sin proveedor: quedará en la lista marcado como «Falta el formato».
+            </p>
+            <button
+              type="button"
+              onClick={() => onCreated(creado)}
+              className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base shrink-0"
+            >
+              Listo
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -1576,7 +1662,7 @@ function IngredientCreateModal({
             title={!dimension ? 'Elige antes cómo se mide el ingrediente' : undefined}
             className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
           >
-            {submitting ? 'Creando...' : 'Crear'}
+            {submitting ? 'Creando...' : 'Siguiente: de quién lo compras'}
           </button>
         </div>
       </div>
