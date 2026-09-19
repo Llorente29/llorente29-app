@@ -1,0 +1,358 @@
+# PARTE · Los formatos de compra: que el artículo se pueda terminar de una vez
+
+**19/09/2026** · rama `claude/cool-thompson-msx9dg` · un solo parte, como pide el encargo.
+
+**Marcado de acciones operativas:** `npm run build` exacto y en limpio ✅ · pruebas
+✅ · lint medido a los dos lados ✅ · commit ✅ · push a la rama ✅ · **fusión a
+`main` NO** · **nada aplicado en la base** · **nada en producción**.
+
+---
+
+## 0 · Lo primero: el síntoma tenía razón, la causa no era esa
+
+Julio, el 19/09: *«Tengo que poner el formato del proveedor y no me deja.»*
+
+**La Salsa Smokey Baconesa YA tiene su caja de 6 botes de 965 g en la base.**
+Cloudtown `520801061`, formato «Caja», `qty_in_base` 5.790, `qty_per_parent` 6,
+0,00741 €/g. Está bien puesta. Lo que no había era **una pantalla capaz de
+escribirla la primera vez**: el editor bueno solo aparecía DESPUÉS de guardar.
+
+O sea: la herramienta existía y se enseñaba tarde. Eso es lo que arregla este
+encargo.
+
+---
+
+## 1 · Lo que pedía el §5.1 — medido antes de tocar código
+
+### 1.1 · Qué escribe hoy cada camino, y cuál deja formatos huérfanos
+
+| camino | ¿crea formato? | ¿crea o toca el enlace? | ¿deja huérfanos? |
+|---|---|---|---|
+| **Alta de proveedor en la ficha** (`setupSimplePurchase`) | Sí, y **siempre PLANO**: solo `qty_in_base`. Aquí estaba el problema | `linkSupplierFormat` | **No.** Compensa: si el enlace falla, archiva el formato recién creado |
+| **Editor inline del formato** (`SourceRow.saveFmt`) | Sí: plano (`createPurchaseFormat`) o árbol (`ensurePackTree`, dos nodos) | `updateArticleSupplier` | **SÍ.** No compensaba, y al pasar de «Un total» a «Caja con piezas» dejaba el plano viejo sin enlazar |
+| **Recepción de albarán** (`resolve_goods_receipt_line_format`) | Sí: plano, `source='albaran'`, `needs_review=true`, y solo si el OCR resuelve y no hay ya uno igual | Inserta o actualiza `article_supplier` ella misma; al confirmar, además, `learn_from_receipt` | **No**: el formato nace ya pegado a la línea |
+| **Importación de catálogo** | Sí, `source='import'` | — | **SÍ** |
+
+**Huérfanos vivos hoy en Foodint** (formato activo, sin archivar, que no enlaza
+ningún `article_supplier`, ninguna `goods_receipt_line` y del que no cuelga
+ninguna caja): **9**.
+
+| origen | n | ejemplos |
+|---|---|---|
+| `manual` | **5** | Tajin con Limon → Bote (400) · Nachos (tortilla Chip) → Formato (750) · Tapa Salsero 120 Cc → Paquete 100 · Carne Hamburguesa 150 gr → Ud (1) · Salsa Smokey Baconesa → Caja (5.790) |
+| `import` | **4** | Tomate Frito → Lata (2.600) · CAJA GENERICA 1350Ml → Paquete (50) · CAJA GENERICA 780 Ml → Pack (50) · Crema Agria → Paquete (500) — los cuatro del 14/06 |
+| `albaran` / `ai_suggested` | **0** | — |
+
+**Lo he cerrado en el camino que ya estaba tocando** (y lo declaro, porque el
+alcance está cerrado y esto no venía en la lista): el editor inline ahora
+archiva el formato plano que queda suelto al pasar a «Caja con piezas», y el
+alta hace lo mismo. Los 9 huérfanos que YA existen **no los he tocado**: son
+datos, y los datos los limpia Julio con SQL revisable, no yo de paso.
+
+### 1.2 · La guarda de inmutabilidad, exactamente
+
+`trg_recipe_item_purchase_format_immutable` (migración `20260815T0000`), `BEFORE
+UPDATE ... FOR EACH ROW` sobre `recipe_item_purchase_format`.
+
+- **Qué bloquea:** ÚNICAMENTE un cambio de `qty_in_base`, y solo si existe al
+  menos una `goods_receipt_line` con ese `purchase_format_id` que tenga un
+  `stock_movement` con `source_type = 'goods_receipt_line'`.
+- **Qué NO bloquea:** el nombre, `use_in_count`, `is_active`, `archived_at`,
+  `parent_format_id`, `qty_per_parent`, `needs_review`… todo lo demás pasa.
+- **Mensaje, literal:**
+  > `Este formato tiene movimientos de stock asociados. Archívalo y crea uno nuevo -- no se puede editar su contenido (qty_in_base).`
+- `purchase_format_has_stock_movements(uuid)` es esa misma comprobación
+  expuesta al cliente.
+
+**Eso es lo que la pantalla C traduce a castellano**, y con el mismo número:
+`historiaDelFormato` cuenta **líneas con movimiento**, no líneas a secas, para
+que el aviso diga la cifra con la que la guarda decide y no una parecida.
+
+### 1.3 · De qué tabla sale la línea del albarán
+
+**`goods_receipt_line`.** Con el esquema delante, es la única de las tres que
+tiene a la vez lo que hace falta:
+
+| tabla | `purchase_format_id` | `supplier_code` | `qty_in_base` |
+|---|---|---|---|
+| **`goods_receipt_line`** | **sí** | **sí** | **sí** |
+| `supplier_invoice_line` | no | sí | no |
+| `purchase_order_line` | sí | no | no |
+
+El texto entero del proveedor es **`goods_receipt_line.raw_text`** (con
+`product_name` de reserva): es justo lo que `learn_from_receipt` copia a
+`article_supplier.supplier_item_name`.
+
+---
+
+## 2 · El estado de la cuenta, con la vara dicha (regla 9 y regla 31)
+
+Todo con `account_id = 51ad1792-…` (Foodint). Sin eso, el catálogo plantilla de
+Folvy Interno entra en la cuenta y el número no es de nadie.
+
+| | encargo (08:00) | medido ahora | vara |
+|---|---|---|---|
+| Artículos `raw` activos | 136 | **136** | `recipe_item` type='raw' e `is_active` |
+| Con proveedor y formato | 105 | **104** | tiene ≥1 enlace activo con formato |
+| A medias (sin formato) | 31 | **32** | ningún enlace activo con formato |
+| …de esos, con movimientos | 26 | **27** | `stock_movement` > 0 |
+| Enlaces activos | 269 | **269** | `article_supplier` `is_active` |
+| Sin referencia | 73 | **73 enlaces** / **46 artículos** | `supplier_code` nulo o vacío |
+| Enlaces sin formato | 7 | **7** | |
+| Artículos con ≥2 enlaces | 71 | **71** | |
+| …con ≥2 proveedores DISTINTOS | — | **55** | |
+| Coste a mano (`fixed`) | 36 | **36** | |
+| Formatos anidados vivos | 38 | **50** (35 artículos) | `parent_format_id` no nulo |
+
+**Dos avisos honestos sobre estas cifras:**
+
+1. **«71 artículos con ≥2 proveedores» son en realidad 71 con ≥2 ENLACES.**
+   Proveedores distintos son 55. La diferencia son 33 pares (artículo,
+   proveedor) duplicados — ver §5.4.
+2. **«38 formatos anidados» eran 38 a las 08:00 y son 50 ahora.** No lo he
+   provocado yo: no he escrito nada en la base. O se movió entre medias, o la
+   medida de las 08:00 llevaba otro filtro. Lo digo en vez de callarlo.
+
+**El peor caso sigue siendo el que decía el encargo:** «Colorador amarillo
+alimenticio», **651 movimientos de almacén**, sin formato, sin proveedor,
+`computed_cost` nulo.
+
+---
+
+## 3 · Lo construido
+
+Todo dentro del flujo del artículo. **Ninguna pantalla nueva** (decisión 1).
+
+### 3.1 · El alta (A)
+
+`PurchaseSourcesSection`, el formulario de «Añadir proveedor»:
+
+- **Los dos modos desde el principio.** «De una pieza» y «Caja con piezas
+  dentro». Es mover lo que ya existía en el editor, no inventarlo.
+- **La frase:** `Caja · lleva · 6 · piezas de · Bote · de · 965 g`, y debajo
+  `1 Caja = 6 Botes × 965 g = 5.790 g`. **El total se deriva**, nunca se teclea
+  por separado: no puede descuadrarse del desglose.
+- **Su referencia** (monoespaciada) y **cómo lo llama él**, con su porqué.
+  `supplier_item_name` se podía escribir desde la ficha: hasta hoy solo lo
+  escribía `learn_from_receipt` al confirmar un albarán.
+- **El precio es el de la caja**, y al lado el €/g y el €/pieza en vivo,
+  idénticos a lo que guardará el motor.
+- **«¿En qué lo cuentas?»** por artículo → `use_in_count`. **Sin migración**:
+  la columna existe desde el 10/09.
+- **«Cómo queda»**: lo compro · lo cuento · lo gasto · él lo llama.
+- **«Guardar y seguir luego»**: guarda el formato sin precio. Un artículo puede
+  quedarse a medias a propósito; lo que no puede es quedarse a medias en
+  silencio.
+- **Al crear un artículo**, la ficha se abre por la compra con el formulario ya
+  abierto: el alta y «de quién lo compras» son un solo flujo seguido.
+
+### 3.2 · La ficha abierta (B)
+
+- Cabecera **«Se gasta en g · Se cuenta en cajas»**, el coste grande y **de
+  quién sale** («según CLOUDTOWN, S.L.»).
+- **Una tarjeta por proveedor** con su referencia, su texto, su formato leído
+  como frase y su precio.
+- El principal marcado y **la fecha de su último albarán**.
+- **Aviso cuando dos proveedores no se parecen.** Salta al doble o a la mitad
+  del principal. Caso real: Alubias rojas, Makro 0,00054 contra Cloudtown
+  0,00160 €/g → «sale a un tercio del principal». «Está bien» escribe
+  `verified_at` y el aviso no vuelve; «Revisar el formato» abre el editor de ese
+  proveedor.
+- Pie: en qué sale en el recuento · en qué se gasta · cuántos platos lo usan.
+
+### 3.3 · Editar con historia detrás (C)
+
+La guarda **no se toca ni se rodea**: se explica antes.
+
+- **«Este formato ya se ha usado N veces desde el <fecha>»**, con N = líneas de
+  albarán **con movimiento de stock**, que es con lo que la guarda decide.
+- La frase que quita el miedo: no se tocan las entradas ni los costes de antes.
+- **«Lo que va a cambiar»**: hasta hoy / desde hoy, con el €/g de cada lado, y
+  la explicación de que el precio de la caja no cambia — cambia cuánto trae.
+- El botón pasa a decir **«Crear la versión nueva»** cuando ese es el caso.
+- **Queda apuntado quién y cuándo**, dicho ANTES, que es cuando sirve.
+- Y si el formato **no** tiene movimientos, también se dice: se puede corregir
+  tal cual. Un aviso que solo aparece cuando hay peligro enseña a leerlo.
+
+### 3.4 · Lo que está a medias (E)
+
+En la propia lista de artículos, sin zona dedicada:
+
+- Franja con el número **contado en vivo** y el porqué en la misma línea.
+- Tres filtros con su cifra: **Sin formato · 32** · **Sin referencia · 46** ·
+  **Coste a mano · 36**.
+- Filas a medias con fondo distinto y sus sellos.
+- **«Terminarlo»** abre la ficha por la sección de compra, y con el formulario
+  abierto si no hay ni un proveedor.
+- **«✓ terminado»** en lo que está listo, sin más ruido.
+
+---
+
+## 4 · Lo que no se ha construido, y por qué, con fecha
+
+### D · «La caja ha cambiado» — ⏸ 19/09, esperando el sí de Julio
+
+Es lo único del encargo que necesita **base nueva**, y la regla es que Claude
+Code propone y Julio ejecuta. El SQL está escrito entero y **sin ejecutar**:
+
+`claude/sql/20260919_D_aviso_cambio_de_caja_PROPUESTA.sql`
+
+- Tabla `purchase_format_pending` **aparte**, no una columna en
+  `recipe_item_purchase_format`. Si el formato en espera viviera en la misma
+  tabla, todo lo que hoy lee formatos (el conteo, el coste, el catálogo del
+  proveedor, los 50 nodos anidados) tendría que aprender a ignorarlo — y el día
+  que uno se olvidara, un formato que nadie ha aprobado estaría costeando platos.
+- `accept_pending_format` crea el formato nuevo (plano o árbol), repunta el
+  enlace y **archiva** el viejo. Archivar no es borrar: su id sigue vivo en los
+  albaranes y en `stock_movement`, y por eso no hace falta pelearse con la
+  guarda — no se edita ningún `qty_in_base`, se crea uno nuevo.
+- `reject_pending_format` **guarda el «no»**. Sin eso, el mismo albarán vuelve a
+  proponer lo mismo la semana que viene y el operario aprende a ignorar avisos.
+- **Ningún disparador. Nada en el camino del pedido.** Lo llama la aplicación al
+  CONFIRMAR un albarán.
+- Las tres medidas de la banda de servicio van escritas en el fichero, como
+  consultas para ejecutar y pegar. Y aun así: **esto no es urgente, si hay dudas
+  a las 23:45.**
+
+La pantalla D se construye **en cuanto esa base esté aplicada**. Construirla
+antes sería front llamando a una tabla que no existe: la regla 40 dice que eso
+no se ve al desplegar, se ve meses después y delante de quien menos culpa tiene.
+
+**Y una advertencia que me salió del propio fichero:** en el primer borrador de
+ese SQL escribí **`recipe_item_line`** (la tabla se llama **`recipe_line`**) y
+**`stock_movement.qty`** (la columna es **`qty_base`**). Los dos habrían pasado
+cualquier revisión de lectura y habrían reventado al ejecutarlos. Los cacé
+preguntando al esquema, no releyendo. Está anotado dentro del fichero.
+
+### F3 · 1.280 / 1.366 px — 🟡
+
+No lo he medido y no voy a decir que está bien. El diseño es fluido y las filas
+nuevas llevan `flex-wrap`, pero eso es un argumento, no una medida.
+
+---
+
+## 5 · Las reglas que había que proponer antes, y lo que dieron
+
+### 5.1 · «No cuadra»
+
+Una magnitud del texto del proveedor que el formato guardado **no explica de
+ninguna manera**.
+
+1. Del texto se sacan las magnitudes: número + unidad de **lista blanca**
+   (lista blanca y no «letras sueltas», porque «2 Latas» se leería como 2
+   litros). `gne` entra a propósito: es como escribe Makro los gramos netos.
+2. Solo cuentan las de la **misma dimensión** que la unidad base. «AGUA MINERAL
+   FUENTEVERA 50CL» sobre un artículo que se cuenta en unidades no dice nada del
+   formato: no se sella.
+3. Una magnitud queda **explicada** si coincide (±1 %) con el total del formato,
+   con su nº de piezas, con el contenido de una pieza, **o si algún entero
+   suelto del propio texto multiplicado por ella da el total**.
+4. Se sella solo si había magnitud comparable y **ninguna** quedó explicada.
+
+**El punto 3 es el que hace la regla honesta, y lo descubrió la prueba, no yo.**
+Sin él salían **8** sellos, y seis eran *cajas aplanadas correctas*: «CAJA 8
+BOLSAS DE 500 GR» guardada como un único nodo de 4.000 g. 8 × 500 = 4.000 — el
+número no miente; lo que se perdió es la FORMA, que es justo lo que arregla A1.
+Sellarlas de «No cuadra» habría sido mentir, y habría enseñado a ignorar el sello.
+
+**Medido sobre los 165 enlaces vivos con denominación: 115 con magnitud
+comparable, y 2 sellados.**
+
+| artículo | proveedor | su texto | formato | por qué |
+|---|---|---|---|---|
+| **Aceite de Oliva Suave 0,4º** | Makro `137211` | «RIOBA aceite oliva virgen extra botella **250ml**» | Botella de **1.000 ml** | ningún entero del texto × 250 da 1.000 |
+| **DELICIAS DE POLLO SOUTHERN** | Coheldi | «POLLO DELICIAS SUREÑAS METEORITOS **35G**» | Caja de **2.200 g** | 2.200 / 35 = 62,9 — no es entero |
+
+El primero es el caso que puso Julio. El segundo es nuevo y parece real.
+
+### 5.2 · «Repetido»
+
+**Dos o más enlaces VIVOS del mismo artículo con el mismo proveedor.** Medido:
+**33 pares, 22 artículos.**
+
+**Y no es descuido de nadie.** `learn_from_receipt` tiene dos `INSERT … ON
+CONFLICT` con claves distintas: uno por `(supplier_id, supplier_code,
+recipe_item_id)` cuando hay referencia, y otro por `(recipe_item_id,
+supplier_id) WHERE supplier_code IS NULL` cuando no la hay. Así que el mismo
+proveedor acaba con **una fila por referencia distinta MÁS una fila con
+referencia nula**, y se duplica solo. Se ve clavado en los dos casos del encargo:
+
+- **Aceite Alto Oleico**: Cloudtown `510101002` y Cloudtown sin referencia — y
+  **el principal es el que NO tiene referencia**.
+- **Agua Mineral 50 CL**: Bodega de Vallecas `3841236` y Bodega de Vallecas sin
+  referencia.
+
+Eso es una deuda de la base, no de la pantalla. **Va al parte, no al código**,
+como manda el encargo. El sello sirve para verla; arreglarla es otro encargo.
+
+### 5.3 · La prueba, contra la población real
+
+`tests/unit/modules/kitchen/formatosDeCompra.test.ts`, contra los **165 enlaces
+reales** leídos de la base el 19/09 (`formatosDeCompra.poblacionReal.ts`, con la
+consulta que los sacó escrita dentro). **13 pruebas, 13 en verde.**
+
+Con ejemplos inventados la regla del punto 3 no habría existido: los inventados
+confirman la suposición que los escribió. Fueron los nombres de verdad los que
+llevaron la contraria.
+
+---
+
+## 6 · Lo que he encontrado y no he tocado (va aquí, no al código)
+
+1. **Los 33 pares duplicados** y su causa en `learn_from_receipt` (§5.2).
+2. **Los 9 formatos huérfanos vivos** (5 manuales, 4 de la importación del 14/06).
+   He cerrado la puerta; la limpieza es un SQL que ejecuta Julio.
+3. **`resolve_goods_receipt_line_format` reutiliza formatos sin mirar
+   `archived_at`.** Su búsqueda es `f.account_id = … and f.item_id = … and
+   f.is_active and abs(f.qty_in_base - v_ocr_qty) < 0.01`. Como `archiveFormat`
+   pone `is_active=false` Y `archived_at`, hoy no muerde; pero cualquier camino
+   que archive poniendo solo `archived_at` haría que un albarán resucite un
+   formato archivado.
+4. **Las cajas aplanadas.** Al menos 6 enlaces tienen un formato plano cuyo total
+   es correcto pero cuya forma se perdió (Guacamole 8×500, Pulled Pork 3×2 kg,
+   Solomillo 5×1 kg ×2, Sweet Potato 5×2 kg, Bacon…). Y una curiosidad:
+   **Sweet Potato Fries** tiene guardado 4 × 2.500 mientras su texto dice
+   «CAJA 5 BOLSAS DE 2 KG». Mismo total, 10.000 g; distinto desglose. El recuento
+   en bolsas de ese artículo cuenta bolsas que no existen.
+5. **El `parent_format_id` se lee al revés de lo que suena:** el PADRE es la
+   PIEZA y el HIJO es la CAJA. Los 50 formatos anidados vivos dependen de ello.
+   Lo he documentado en el código en vez de cambiarlo.
+
+---
+
+## 7 · Comprobaciones, con las cifras a los dos lados
+
+| | antes (`origin/main`) | después |
+|---|---|---|
+| `npm run build` exacto, tras borrar `*.tsbuildinfo` | — | **✓ built in 9.49s** |
+| Pruebas | — | **106 ficheros, 1.619 pruebas, todas en verde** |
+| Lint, `PurchaseSourcesSection` + `KitchenItemsPage` | **6 problemas (6 errores)** | **6 problemas (6 errores)** |
+| Lint, `KitchenItemDetailPage` + `types/kitchen` + `purchaseFormatService` | **11 (5 errores, 6 avisos)** | **11 (5 errores, 6 avisos)** |
+| Lint, los 4 ficheros nuevos | no existían | **0** |
+
+El lint no es una opinión: se midió `origin/main` en un `git worktree` aparte con
+el mismo `eslint` y los mismos ficheros. Dos errores nuevos míos
+(`react-hooks/set-state-in-effect`, de abrir un panel dentro de un efecto) se
+cerraron pasando la apertura a `requestAnimationFrame`, que además es lo
+correcto: el scroll necesita que la sección esté pintada.
+
+**Lo que NO se ha comprobado:** las capturas a 1.280 px con datos reales. El
+contenedor de Code no tiene `.env` ni credenciales de la aplicación, así que no
+puedo entrar a Foodint. **Ese paso es tuyo**, y hasta que llegue no hay ningún
+✅ en la lista.
+
+---
+
+## 8 · Lo que espera tu sí
+
+1. **Mirar la rama** `claude/cool-thompson-msx9dg` y capturar las cinco
+   pantallas a 1.280 px. Yo las cruzo con la lista, punto por punto.
+2. **El SQL de D** (`claude/sql/20260919_D_aviso_cambio_de_caja_PROPUESTA.sql`):
+   leerlo, decidir, y ejecutarlo tú si te convence — **fuera de la banda**, y
+   con las tres medidas pegadas. Después construyo la pantalla D.
+3. **Fusionar a `main`**, sabiendo que eso publica también el front de las
+   tablets. Y que **no está hecho hasta que Vercel diga READY**, no cuando el
+   commit esté en `main`.
+4. Decidir si los **33 pares duplicados** y los **9 huérfanos** son un encargo
+   aparte. Yo creo que sí: son datos, y el arreglo de verdad está en
+   `learn_from_receipt`, no en una pantalla.

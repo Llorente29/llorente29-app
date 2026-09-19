@@ -27,8 +27,8 @@
 //    cascadea al cambiar is_preferred). Hoy isPreferred solo se fija en el alta.
 //  · Árbol de formatos anidado y foto→IA del albarán: fases siguientes.
 
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw, ArrowRightLeft, Trash2, Handshake, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw, ArrowRightLeft, Trash2, Handshake, X, History, CalendarDays, Info } from 'lucide-react'
 import IngredientSubstituteModal from '@/modules/kitchen/components/IngredientSubstituteModal'
 import IngredientAddModal from '@/modules/kitchen/components/IngredientAddModal'
 import IngredientRemoveModal from '@/modules/kitchen/components/IngredientRemoveModal'
@@ -47,8 +47,20 @@ import {
   setPreferredSupplier,
   unlinkSupplierFormat,
   reactivateSupplierLink,
+  previewRemoveIngredient,
 } from '@/modules/kitchen/services/purchaseFormatService'
 import { updateRecipeItem } from '@/modules/kitchen/services/recipeItemService'
+import { setUseInCount } from '@/modules/supply/services/countFormatService'
+import {
+  historiaDelFormato,
+  ultimoAlbaranPorProveedor,
+  type HistoriaDelFormato,
+} from '@/modules/kitchen/services/estadoDeFormatosService'
+import {
+  cuentaDelFormato,
+  plural,
+  type FormatoParaRegla,
+} from '@/modules/kitchen/lib/formatosDeCompra'
 import type { RecomputedAncestor } from '@/modules/kitchen/services/costCascadeService'
 import {
   convertToBase,
@@ -93,6 +105,31 @@ function fmtNum(v: number): string {
   return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(v)
 }
 
+// Fecha corta en castellano a partir de un `date` de la base (YYYY-MM-DD).
+// Se parte la cadena a mano en vez de pasarla por `new Date(...)`: un `date`
+// sin hora lo interpreta el navegador como UTC medianoche y en Madrid retrocede
+// un día. Es la misma trampa de la regla 4, un piso más abajo.
+function fmtFecha(iso: string | null): string {
+  if (!iso) return '—'
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  if (!y || !m || !d) return iso
+  return `${d}/${m}/${y}`
+}
+
+// El formato como lo necesitan las reglas puras (lib/formatosDeCompra).
+// El PADRE es la PIEZA y el HIJO es la CAJA: `parent_format_id` de la Caja
+// apunta al Bote y `qty_per_parent` dice cuántos botes trae. Se lee al revés
+// de lo que sugiere el nombre, y así lleva funcionando desde ensurePackTree.
+function comoRegla(f: PurchaseFormat, padre: PurchaseFormat | null): FormatoParaRegla {
+  return {
+    nombre: f.name,
+    qtyInBase: f.qtyInBase,
+    qtyPerParent: f.qtyPerParent,
+    innerQtyInBase: padre ? padre.qtyInBase : null,
+    innerNombre: padre ? padre.name : null,
+  }
+}
+
 interface PurchaseSourcesSectionProps {
   item: RecipeItem
   units: KitchenUnit[]
@@ -100,6 +137,13 @@ interface PurchaseSourcesSectionProps {
   actorName: string | null
   /** Lo llama tras cualquier cambio que altere el coste, para que el detalle refresque el item. */
   onChanged?: () => void
+  /**
+   * E4 — «Terminarlo» desde la lista: en vez de abrir la ficha entera y que
+   * el administrativo busque, la sección se trae a la vista y, si el artículo
+   * no tiene ni un proveedor, el formulario se abre solo. Es el paso que
+   * falta, no la ficha.
+   */
+  enfocar?: boolean
 }
 
 export default function PurchaseSourcesSection({
@@ -108,7 +152,9 @@ export default function PurchaseSourcesSection({
   actorId,
   actorName,
   onChanged,
+  enfocar = false,
 }: PurchaseSourcesSectionProps) {
+  const seccionRef = useRef<HTMLDivElement | null>(null)
   const baseUnit = useMemo(
     () => units.find((u) => u.id === item.baseUnitId) ?? null,
     [units, item.baseUnitId],
@@ -144,10 +190,32 @@ export default function PurchaseSourcesSection({
   const [price, setPrice] = useState('')
   const [isPreferred, setIsPreferred] = useState(false)
   const [supplierCode, setSupplierCode] = useState('')
+  // A4 — cómo lo llama ÉL (article_supplier.supplier_item_name). Hasta hoy solo
+  // lo escribía learn_from_receipt al confirmar un albarán; en el alta no se
+  // podía decir, y es justo lo que hace que sus albaranes casen solos.
+  const [supplierItemName, setSupplierItemName] = useState('')
+  // A1 — los DOS modos desde el principio. Hasta hoy «Caja con piezas» solo
+  // existía al EDITAR, o sea después de guardar: la primera vez había que
+  // aplanar la caja a mano y la herramienta buena se enseñaba después.
+  const [addMode, setAddMode] = useState<'simple' | 'pack'>('simple')
+  const [addCajaName, setAddCajaName] = useState('Caja')
+  const [addCount, setAddCount] = useState('')
+  const [addInnerName, setAddInnerName] = useState('')
+  const [addInnerQty, setAddInnerQty] = useState('')
+  const [addInnerUnitId, setAddInnerUnitId] = useState('')
+  const [addInnerDirectBase, setAddInnerDirectBase] = useState('')
+  // A7 — «¿En qué lo cuentas?». Lo decide quien crea el artículo (decisión 3
+  // de Julio). Se guarda en `use_in_count` del nodo que toque.
+  const [addCuentaEn, setAddCuentaEn] = useState<'caja' | 'pieza' | 'base'>('caja')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   // Mostrar también los proveedores archivados (descatalogados). Por defecto no.
   const [showArchived, setShowArchived] = useState(false)
+  // B3 — fecha del último albarán de cada proveedor. No bloquea la sección:
+  // si falla, las tarjetas se pintan igual y esa línea no aparece.
+  const [ultimoAlbaran, setUltimoAlbaran] = useState<Map<string, string>>(new Map())
+  // B4 — «Revisar el formato» abre el editor de formato de ESE enlace.
+  const [revisarFormatoDe, setRevisarFormatoDe] = useState<string | null>(null)
   const [substituteOpen, setSubstituteOpen] = useState(false)
   const [addIngredientOpen, setAddIngredientOpen] = useState(false)
   const [removeIngredientOpen, setRemoveIngredientOpen] = useState(false)
@@ -169,6 +237,12 @@ export default function PurchaseSourcesSection({
       setSuppliers(sup)
       setLinks(lnk)
       setFormats(fmt)
+      try {
+        setUltimoAlbaran(await ultimoAlbaranPorProveedor(item.accountId, item.id))
+      } catch (e) {
+        console.error('[PurchaseSourcesSection] último albarán por proveedor', e)
+        setUltimoAlbaran(new Map())
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error cargando proveedores.')
       setSuppliers([])
@@ -248,10 +322,43 @@ export default function PurchaseSourcesSection({
     if (d !== null && d > 0) resolvedQtyInBase = d
   }
 
+  // ── Modo PACK del alta: contenido de UNA pieza y total de la caja ──
+  // El total NUNCA se teclea: se DERIVA aquí, en un único sitio, igual que en
+  // ensurePackTree. Así es imposible que el total y el desglose se descuadren.
+  const addCountNum = parseDecimal(addCount)
+  const addInnerUnit = units.find((u) => u.id === addInnerUnitId) ?? null
+  const innerConversion =
+    parseDecimal(addInnerQty) !== null && addInnerUnit && baseUnit
+      ? convertToBase(parseDecimal(addInnerQty)!, addInnerUnit, baseUnit)
+      : null
+  const innerMismatch =
+    innerConversion !== null &&
+    innerConversion.ok === false &&
+    innerConversion.reason === 'dimension_mismatch'
+  let addInnerBase: number | null = null
+  if (innerConversion && innerConversion.ok) {
+    addInnerBase = innerConversion.qtyInBase
+  } else if (innerMismatch) {
+    const d = parseDecimal(addInnerDirectBase)
+    if (d !== null && d > 0) addInnerBase = d
+  }
+  const addPackTotalBase =
+    addInnerBase !== null && addCountNum !== null && addCountNum > 0
+      ? addInnerBase * addCountNum
+      : null
+
+  // El total que se guardará, sea cual sea el modo.
+  const addQtyInBase = addMode === 'pack' ? addPackTotalBase : resolvedQtyInBase
+
   const priceNum = parseDecimal(price)
   const previewUnitCost =
-    resolvedQtyInBase !== null && priceNum !== null
-      ? unitCostFromFormat(priceNum, resolvedQtyInBase)
+    addQtyInBase !== null && priceNum !== null
+      ? unitCostFromFormat(priceNum, addQtyInBase)
+      : null
+  // A5 — a cuánto queda la PIEZA (solo tiene sentido con caja con piezas).
+  const previewPiecePrice =
+    priceNum !== null && addCountNum !== null && addCountNum > 0 && addMode === 'pack'
+      ? priceNum / addCountNum
       : null
 
   function resetForm() {
@@ -264,6 +371,15 @@ export default function PurchaseSourcesSection({
     setPrice('')
     setIsPreferred(false)
     setSupplierCode('')
+    setSupplierItemName('')
+    setAddMode('simple')
+    setAddCajaName('Caja')
+    setAddCount('')
+    setAddInnerName('')
+    setAddInnerQty('')
+    setAddInnerUnitId(baseUnit?.id ?? '')
+    setAddInnerDirectBase('')
+    setAddCuentaEn('caja')
     setFormError(null)
   }
 
@@ -273,23 +389,41 @@ export default function PurchaseSourcesSection({
     setAddOpen(true)
   }
 
-  async function handleAdd() {
+  async function handleAdd(opts?: { seguirLuego?: boolean }) {
+    const seguirLuego = opts?.seguirLuego === true
     setFormError(null)
     if (!baseUnit) {
       setFormError('Este ingrediente no tiene unidad base; defínela antes de añadir un proveedor.')
       return
     }
-    const fName = formatName.trim()
+    // A9 — «Guardar y seguir luego»: el precio puede faltar. Lo que NO puede
+    // faltar es cómo viene, porque sin eso no hay formato que guardar y el
+    // artículo se queda exactamente igual de a medias que antes.
+    const fName = addMode === 'pack' ? (addCajaName.trim() || 'Caja') : formatName.trim()
     if (fName === '') {
       setFormError('Dale un nombre al formato (Caja, Saco, Garrafa…).')
       return
     }
-    if (resolvedQtyInBase === null || !(resolvedQtyInBase > 0)) {
+    if (addMode === 'pack') {
+      if (addCountNum === null || !(addCountNum > 0)) {
+        setFormError('Dime cuántas piezas trae la caja.')
+        return
+      }
+      if (addInnerBase === null || !(addInnerBase > 0)) {
+        setFormError('Dime cuánto lleva UNA pieza.')
+        return
+      }
+    }
+    if (addQtyInBase === null || !(addQtyInBase > 0)) {
       setFormError('Indica cuánto trae ese formato.')
       return
     }
-    if (priceNum === null || priceNum < 0) {
+    if (priceNum !== null && priceNum < 0) {
       setFormError('Pon un precio válido en €.')
+      return
+    }
+    if (!seguirLuego && priceNum === null) {
+      setFormError('Pon el precio, o usa «Guardar y seguir luego» si aún no lo sabes.')
       return
     }
     if (supplierId === '') {
@@ -321,8 +455,8 @@ export default function PurchaseSourcesSection({
       // (el motor lo lee directo, idéntico al previewUnitCost que ve en pantalla).
       // Si pasáramos el €/caja crudo, el motor lo leería como €/base e inflaría el
       // coste ×qtyInBase (el bug Delicias, ahora en el alta).
-      const perBase = unitCostFromFormat(priceNum, resolvedQtyInBase)
-      if (perBase === null) {
+      const perBase = priceNum === null ? null : unitCostFromFormat(priceNum, addQtyInBase)
+      if (priceNum !== null && perBase === null) {
         setFormError('No se pudo calcular el precio por unidad base. Revisa el precio y la cantidad.')
         setSubmitting(false)
         return
@@ -334,7 +468,7 @@ export default function PurchaseSourcesSection({
         accountId: item.accountId,
         itemId: item.id,
         formatName: fName,
-        qtyInBase: resolvedQtyInBase,
+        qtyInBase: addQtyInBase,
         supplierId: supId,
         lastPrice: perBase,
         supplierCode: supplierCode.trim() || null,
@@ -344,16 +478,71 @@ export default function PurchaseSourcesSection({
         createdByName: actorName,
       })
 
+      // A1/A2 — modo CAJA CON PIEZAS: el formato plano que acaba de crear el
+      // service se convierte en el ÁRBOL de verdad (pieza + caja) y el enlace
+      // se repunta a la caja. El plano se archiva para no dejarlo suelto: es
+      // el mismo huérfano que hoy deja el editor inline al pasar de un modo a
+      // otro, y aquí no lo repetimos.
+      let cajaId = result.format.id
+      let piezaId: string | null = null
+      if (addMode === 'pack' && addCountNum !== null && addInnerBase !== null) {
+        const { caja, inner } = await ensurePackTree({
+          accountId: item.accountId,
+          itemId: item.id,
+          count: addCountNum,
+          innerQtyInBase: addInnerBase,
+          innerName: addInnerName.trim() || 'Ud',
+          cajaName: fName,
+          source: 'manual',
+          createdBy: actorId,
+          createdByName: actorName,
+        })
+        cajaId = caja.id
+        piezaId = inner.id
+        await updateArticleSupplier(result.link.id, { purchaseFormatId: caja.id })
+        // Hay que descartar TAMBIÉN que sea la pieza, no solo la caja: con
+        // count = 1 el total y el contenido de una pieza son el mismo número,
+        // y ensurePackTree reutiliza como pieza cualquier nodo sin padre con
+        // ese contenido — o sea, justo el plano que acaba de crear el service.
+        // Sin esta segunda comprobación, archivaríamos la pieza del árbol que
+        // estamos montando y la caja quedaría colgando de un nodo archivado.
+        if (result.format.id !== caja.id && result.format.id !== inner.id) {
+          await updatePurchaseFormat(result.format.id, {
+            isActive: false,
+            archivedAt: new Date().toISOString(),
+          })
+        }
+      }
+
+      // A4 — la denominación del proveedor. Va en su propia llamada porque
+      // setupSimplePurchase no la acepta: se añade sin tocar su firma.
+      const denominacion = supplierItemName.trim()
+      if (denominacion !== '') {
+        await updateArticleSupplier(result.link.id, { supplierItemName: denominacion })
+      }
+
+      // A7 — en qué lo cuentas. 'base' = ni caja ni pieza: se cuenta en la
+      // unidad de siempre, así que ningún formato se marca.
+      try {
+        if (addCuentaEn === 'caja') await setUseInCount(cajaId, true)
+        else if (addCuentaEn === 'pieza' && piezaId) await setUseInCount(piezaId, true)
+      } catch (e) {
+        console.error('[PurchaseSourcesSection] no se pudo marcar el formato de conteo', e)
+      }
+
       resetForm()
       setAddOpen(false)
       setRecalculatedDishes(result.recalculatedDishes ?? [])
       setDishesOpen(false)
+      // REGLA 8 — la confirmación lleva CONTENIDO, no un visto.
       setSuccessNote(
-        result.ancestorsRecomputed > 0
-          ? `Coste actualizado. ${result.ancestorsRecomputed} plato${
-              result.ancestorsRecomputed === 1 ? '' : 's'
-            } recalculado${result.ancestorsRecomputed === 1 ? '' : 's'}.`
-          : 'Coste actualizado desde la compra.',
+        priceNum === null
+          ? `Guardado. ${fName} de ${fmtNum(addQtyInBase)} ${baseUnit.abbreviation}, sin precio todavía.`
+          : result.ancestorsRecomputed > 0
+            ? `Coste actualizado. ${result.ancestorsRecomputed} plato${
+                result.ancestorsRecomputed === 1 ? '' : 's'
+              } recalculado${result.ancestorsRecomputed === 1 ? '' : 's'}.`
+            : 'Coste actualizado desde la compra.',
       )
       await reload()
       if (onChanged) onChanged()
@@ -366,20 +555,97 @@ export default function PurchaseSourcesSection({
 
   const baseAbbr = baseUnit?.abbreviation ?? ''
 
+  // ── B1 · «Se gasta en g · Se cuenta en cajas», y de quién sale el coste ──
+  const activos = useMemo(() => links.filter((l) => l.isActive), [links])
+  const principal = useMemo(() => activos.find((l) => l.isPreferred) ?? null, [activos])
+  const principalNombre = principal
+    ? suppliersById.get(principal.supplierId)?.name ?? 'su proveedor'
+    : null
+  // Los formatos marcados para contar. Si no hay ninguno, se cuenta en la
+  // unidad de siempre — y eso se DICE, no se calla.
+  const formatosDeConteo = useMemo(() => formats.filter((f) => f.useInCount), [formats])
+  const seCuentaEn =
+    formatosDeConteo.length === 0
+      ? baseAbbr || 'la unidad base'
+      : formatosDeConteo.map((f) => plural(f.name, 2).toLowerCase()).join(' y ')
+
+  // ── B4 · Dos proveedores que no se parecen ──
+  // Se compara el €/base de cada uno contra el del PRINCIPAL (que es el que
+  // manda el coste). Salta al doble o a la mitad: por debajo de ahí la
+  // diferencia es negociación, no un formato mal puesto. Un enlace ya revisado
+  // (verifiedAt) deja de avisar: el aviso interrumpe, así que sí filtra
+  // (regla 7 — el umbral va donde interrumpe, no donde se listan las filas).
+  const discordantes = useMemo(() => {
+    if (!principal || principal.lastPrice === null || !(principal.lastPrice > 0)) return []
+    const ref = principal.lastPrice
+    return activos
+      .filter((l) => l.id !== principal.id)
+      .filter((l) => l.lastPrice !== null && l.lastPrice > 0)
+      .filter((l) => l.verifiedAt === null)
+      .map((l) => ({ link: l, razon: l.lastPrice! / ref }))
+      .filter((x) => x.razon >= 2 || x.razon <= 0.5)
+  }, [activos, principal])
+
+  // ── B5 · En cuántos platos entra este ingrediente ──
+  const [platosQueLoUsan, setPlatosQueLoUsan] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelado = false
+    previewRemoveIngredient(item.id)
+      .then((platos) => { if (!cancelado) setPlatosQueLoUsan(platos.length) })
+      .catch(() => { if (!cancelado) setPlatosQueLoUsan(null) })
+    return () => { cancelado = true }
+  }, [item.id])
+
+  async function marcarComoRevisado(linkId: string) {
+    await updateArticleSupplier(linkId, {
+      verifiedAt: new Date().toISOString(),
+      verifiedBy: actorId,
+    })
+    setSuccessNote('Anotado: ese proveedor está bien. El aviso no volverá a salir.')
+    await reload()
+  }
+
+  // E4 — traer la sección a la vista y abrir el formulario si no hay nada.
+  // Va en un requestAnimationFrame, no en el cuerpo del efecto: el scroll
+  // necesita que la sección esté PINTADA, y abrir el formulario antes del
+  // pintado encadena un render de más (react-hooks/set-state-in-effect dice
+  // exactamente eso). Después del pintado es una sola pasada.
+  useEffect(() => {
+    if (!enfocar || loading) return
+    const id = requestAnimationFrame(() => {
+      seccionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      if (links.filter((l) => l.isActive).length === 0) openAddForm()
+    })
+    return () => cancelAnimationFrame(id)
+    // Una sola vez, cuando la sección termina de cargar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enfocar, loading])
+
   return (
-    <div className="rounded-lg border border-border-default bg-card">
-      {/* Cabecera de la sección + coste actual del ingrediente */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-default">
-        <div className="flex items-center gap-2">
-          <Truck className="w-4 h-4 text-accent" />
-          <h3 className="text-sm font-medium text-text-primary">Compra / Proveedores</h3>
+    <div ref={seccionRef} className="rounded-lg border border-border-default bg-card scroll-mt-4">
+      {/* B1 · Cabecera: cómo se gasta, cómo se cuenta, y el coste diciendo de
+          QUIÉN sale. El coste sin nombre obliga a adivinar qué proveedor lo
+          está mandando; con 71 artículos de más de un proveedor, eso es
+          adivinar todos los días. */}
+      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-border-default">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Truck className="w-4 h-4 text-accent shrink-0" />
+            <h3 className="text-sm font-medium text-text-primary">Cómo lo compras</h3>
+          </div>
+          <p className="mt-1 text-xs text-text-secondary">
+            Se gasta en {baseAbbr || '—'} · Se cuenta en {seCuentaEn}
+          </p>
         </div>
-        <div className="text-right">
+        <div className="text-right shrink-0">
           <div className="text-[11px] text-text-secondary leading-none">Coste actual</div>
-          <div className="text-sm font-mono font-medium text-text-primary">
+          <div className="text-lg font-mono font-medium text-text-primary leading-tight">
             {item.computedCost !== null && item.computedCost !== undefined
               ? `${fmtEur(item.computedCost, 5)} / ${baseAbbr}`
               : '—'}
+          </div>
+          <div className="text-[11px] text-text-secondary">
+            {principalNombre ? `según ${principalNombre}` : 'sin proveedor principal'}
           </div>
         </div>
       </div>
@@ -402,6 +668,49 @@ export default function PurchaseSourcesSection({
           </div>
         )}
 
+        {/* B4 · Dos proveedores que no se parecen. No esconde ninguna fila
+            (esas siguen abajo, todas): solo avisa de la que chirría. */}
+        {!loading && !error && discordantes.length > 0 && principal && (
+          <div className="rounded-md border border-warning/30 bg-warning-bg p-3 space-y-2">
+            {discordantes.map(({ link, razon }) => {
+              const nombre = suppliersById.get(link.supplierId)?.name ?? 'Un proveedor'
+              const cuanto =
+                razon < 1
+                  ? `sale a ${razon <= 0.36 ? 'un tercio' : 'la mitad'} del principal`
+                  : `sale a ${razon >= 2.5 ? 'el triple' : 'el doble'} del principal`
+              return (
+                <div key={link.id} className="flex items-start justify-between gap-3 flex-wrap">
+                  <p className="text-xs text-text-primary flex items-start gap-1.5 min-w-0">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-warning shrink-0" />
+                    <span>
+                      <span className="font-medium">{nombre}</span> {cuanto}:{' '}
+                      <span className="font-mono">{fmtEur(link.lastPrice, 5)}</span> contra{' '}
+                      <span className="font-mono">{fmtEur(principal.lastPrice, 5)}</span> por{' '}
+                      {baseAbbr}. Suele ser el formato mal puesto, no el precio.
+                    </span>
+                  </p>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setRevisarFormatoDe(link.id)}
+                      className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-accent text-text-on-accent hover:opacity-90 transition-base"
+                    >
+                      Revisar el formato
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void marcarComoRevisado(link.id)}
+                      className="px-2.5 py-1 text-[11px] rounded-md border border-border-default text-text-secondary hover:text-text-primary transition-base"
+                    >
+                      Está bien
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {!loading && !error && links.length > 0 && (
           <div className="space-y-2">
             {links.map((link) => (
@@ -419,6 +728,13 @@ export default function PurchaseSourcesSection({
                     : 'Proveedor'
                 }
                 format={link.purchaseFormatId ? formatsById.get(link.purchaseFormatId) ?? null : null}
+                parentFormat={(() => {
+                  const f = link.purchaseFormatId ? formatsById.get(link.purchaseFormatId) : null
+                  return f && f.parentFormatId ? formatsById.get(f.parentFormatId) ?? null : null
+                })()}
+                ultimoAlbaran={ultimoAlbaran.get(link.supplierId) ?? null}
+                abrirFormato={revisarFormatoDe === link.id}
+                onFormatoAbierto={() => setRevisarFormatoDe(null)}
                 baseUnit={baseUnit}
                 priceUnits={qtyUnits}
                 onSaved={async () => {
@@ -482,17 +798,27 @@ export default function PurchaseSourcesSection({
           </div>
         )}
 
-        {/* Alta */}
+        {/* Alta · A6 — varios proveedores por artículo (decisión 2 de Julio) */}
         {!addOpen ? (
-          <button
-            type="button"
-            onClick={openAddForm}
-            disabled={loading || !baseUnit}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-          >
-            <Plus size={16} />
-            Añadir proveedor
-          </button>
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={openAddForm}
+              disabled={loading || !baseUnit}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+            >
+              <Plus size={16} />
+              {activos.length > 0
+                ? 'Añadir otro proveedor para este mismo artículo'
+                : 'Añadir proveedor'}
+            </button>
+            {activos.length > 0 && (
+              <p className="text-[11px] text-text-secondary">
+                Un artículo puede tener varios. Hoy hay 71 con más de uno, cada uno con su formato y
+                su referencia.
+              </p>
+            )}
+          </div>
         ) : (
           <div className="rounded-md border border-border-default bg-page p-3 space-y-3">
             {/* Proveedor */}
@@ -524,87 +850,238 @@ export default function PurchaseSourcesSection({
               )}
             </div>
 
-            {/* Formato */}
+            {/* A1 · Los DOS MODOS, desde el principio.
+                Hasta hoy «Caja con piezas» solo aparecía al EDITAR, o sea
+                después de guardar: la primera vez había que aplanar la caja a
+                mano. Es mover lo que ya existía, no inventarlo. */}
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">
                 ¿Cómo viene?
               </label>
-              <input
-                type="text"
-                value={formatName}
-                onChange={(e) => setFormatName(e.target.value)}
-                disabled={submitting}
-                placeholder="Ej: Caja, Saco, Garrafa…"
-                className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-              />
+              <div className="inline-flex rounded-md border border-border-default overflow-hidden text-xs">
+                <button
+                  type="button"
+                  onClick={() => setAddMode('simple')}
+                  disabled={submitting}
+                  className={`px-3 py-1.5 transition-base disabled:opacity-50 ${
+                    addMode === 'simple'
+                      ? 'bg-accent text-text-on-accent font-medium'
+                      : 'bg-card text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  De una pieza
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddMode('pack')}
+                  disabled={submitting}
+                  className={`px-3 py-1.5 border-l border-border-default transition-base disabled:opacity-50 ${
+                    addMode === 'pack'
+                      ? 'bg-accent text-text-on-accent font-medium'
+                      : 'bg-card text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  Caja con piezas dentro
+                </button>
+              </div>
             </div>
 
-            {/* ¿Cuánto trae? */}
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">
-                ¿Cuánto trae?
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
-                  disabled={submitting}
-                  placeholder="Ej: 5"
-                  className="flex-1 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-                />
-                <select
-                  value={qtyUnitId}
-                  onChange={(e) => setQtyUnitId(e.target.value)}
-                  disabled={submitting || qtyUnits.length === 0}
-                  className="w-28 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-                >
-                  {qtyUnits.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.abbreviation}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {addMode === 'simple' ? (
+              <>
+                <div>
+                  <input
+                    type="text"
+                    value={formatName}
+                    onChange={(e) => setFormatName(e.target.value)}
+                    disabled={submitting}
+                    placeholder="Ej: Saco, Garrafa, Bidón…"
+                    className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                  />
+                </div>
 
-              {/* Preview / reeducación en vivo */}
-              {conversion && conversion.ok && baseUnit && (
-                <p className="mt-1.5 text-[11px] text-success">
-                  → {fmtNum(conversion.qtyInBase)} {baseUnit.abbreviation} de {item.name}
-                </p>
-              )}
-              {isMismatch && baseUnit && selectedUnit && (
-                <div className="mt-1.5 space-y-1.5">
-                  <p className="text-[11px] text-warning flex items-start gap-1">
-                    <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                    <span>
-                      Lo mides en {DIM_LABEL[selectedUnit.dimension] ?? selectedUnit.dimension} pero{' '}
-                      {item.name} se cuenta en {DIM_LABEL[baseUnit.dimension] ?? baseUnit.dimension}.
-                      Dime el total en {baseUnit.abbreviation} para no inventarme la conversión.
-                    </span>
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-text-secondary">Total:</span>
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                    ¿Cuánto trae?
+                  </label>
+                  <div className="flex gap-2">
                     <input
                       type="text"
                       inputMode="decimal"
-                      value={directBase}
-                      onChange={(e) => setDirectBase(e.target.value)}
+                      value={qty}
+                      onChange={(e) => setQty(e.target.value)}
+                      disabled={submitting}
+                      placeholder="Ej: 5"
+                      className="flex-1 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                    />
+                    <select
+                      value={qtyUnitId}
+                      onChange={(e) => setQtyUnitId(e.target.value)}
+                      disabled={submitting || qtyUnits.length === 0}
+                      className="w-28 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                    >
+                      {qtyUnits.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.abbreviation}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {isMismatch && baseUnit && selectedUnit && (
+                    <div className="mt-1.5 space-y-1.5">
+                      <p className="text-[11px] text-warning flex items-start gap-1">
+                        <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        <span>
+                          Lo mides en {DIM_LABEL[selectedUnit.dimension] ?? selectedUnit.dimension} pero{' '}
+                          {item.name} se cuenta en {DIM_LABEL[baseUnit.dimension] ?? baseUnit.dimension}.
+                          Dime el total en {baseUnit.abbreviation} para no inventarme la conversión.
+                        </span>
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-text-secondary">Total:</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={directBase}
+                          onChange={(e) => setDirectBase(e.target.value)}
+                          disabled={submitting}
+                          placeholder={`en ${baseUnit.abbreviation}`}
+                          className="w-32 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                        />
+                        <span className="text-[11px] text-text-secondary">{baseUnit.abbreviation}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* A2 · La fila se lee como una FRASE:
+                 Caja · lleva · 6 · piezas de · Bote · de · 965 g */
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-text-primary">
+                  <input
+                    type="text"
+                    value={addCajaName}
+                    onChange={(e) => setAddCajaName(e.target.value)}
+                    disabled={submitting}
+                    aria-label="Nombre del contenedor"
+                    placeholder="Caja"
+                    className="w-28 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                  />
+                  <span className="text-text-secondary">lleva</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={addCount}
+                    onChange={(e) => setAddCount(e.target.value)}
+                    disabled={submitting}
+                    aria-label="Cuántas piezas trae"
+                    placeholder="6"
+                    className="w-16 px-2 py-1.5 text-sm text-center border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                  />
+                  <span className="text-text-secondary">piezas de</span>
+                  <input
+                    type="text"
+                    value={addInnerName}
+                    onChange={(e) => setAddInnerName(e.target.value)}
+                    disabled={submitting}
+                    aria-label="Nombre de la pieza"
+                    placeholder="Bote"
+                    className="w-28 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                  />
+                  <span className="text-text-secondary">de</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={addInnerQty}
+                    onChange={(e) => setAddInnerQty(e.target.value)}
+                    disabled={submitting}
+                    aria-label="Cuánto lleva una pieza"
+                    placeholder="965"
+                    className="w-20 px-2 py-1.5 text-sm text-right border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                  />
+                  <select
+                    value={addInnerUnitId}
+                    onChange={(e) => setAddInnerUnitId(e.target.value)}
+                    disabled={submitting || qtyUnits.length === 0}
+                    aria-label="Unidad del contenido de una pieza"
+                    className="w-20 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                  >
+                    {qtyUnits.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.abbreviation}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {innerMismatch && baseUnit && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-warning">
+                      Dime cuánto lleva UNA pieza en {baseUnit.abbreviation}:
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={addInnerDirectBase}
+                      onChange={(e) => setAddInnerDirectBase(e.target.value)}
                       disabled={submitting}
                       placeholder={`en ${baseUnit.abbreviation}`}
-                      className="w-32 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                      className="w-28 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                     />
-                    <span className="text-[11px] text-text-secondary">{baseUnit.abbreviation}</span>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            )}
+
+            {/* A3 · La cuenta hecha, debajo y en verde. El total NUNCA se
+                teclea: se deriva, así que no puede descuadrarse del desglose. */}
+            {addQtyInBase !== null && baseUnit && (
+              <p className="text-[11px] text-success font-mono">
+                {addMode === 'pack' && addCountNum !== null && addInnerBase !== null
+                  ? `1 ${addCajaName.trim() || 'Caja'} = ${fmtNum(addCountNum)} ${plural(addInnerName.trim() || 'pieza', addCountNum)} × ${fmtNum(addInnerBase)} ${baseUnit.abbreviation} = ${fmtNum(addQtyInBase)} ${baseUnit.abbreviation}`
+                  : `1 ${formatName.trim() || 'formato'} = ${fmtNum(addQtyInBase)} ${baseUnit.abbreviation}`}
+              </p>
+            )}
+
+            {/* A4 · Su referencia y cómo lo llama él, uno al lado del otro,
+                con su porqué debajo. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1">
+                  Su referencia
+                </label>
+                <input
+                  type="text"
+                  value={supplierCode}
+                  onChange={(e) => setSupplierCode(e.target.value)}
+                  disabled={submitting}
+                  placeholder="Ej: 520801061"
+                  className="w-full px-2 py-1.5 text-sm font-mono border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1">
+                  Cómo lo llama él
+                </label>
+                <input
+                  type="text"
+                  value={supplierItemName}
+                  onChange={(e) => setSupplierItemName(e.target.value)}
+                  disabled={submitting}
+                  placeholder="Su texto tal cual sale en el albarán"
+                  className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                />
+              </div>
+              <p className="sm:col-span-2 text-[11px] text-text-secondary">
+                Con ellas, sus albaranes casan solos. Hoy hay 73 enlaces sin referencia, y cada uno
+                es una línea que alguien tiene que emparejar a mano cuando llega la mercancía.
+              </p>
             </div>
 
-            {/* Precio */}
+            {/* A5 · El precio es el de la caja, y al lado a cuánto queda */}
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">
-                ¿Cuánto te cuesta ese formato? (€)
+                ¿Cuánto te cuesta {addMode === 'pack' ? `una ${(addCajaName.trim() || 'caja').toLowerCase()}` : 'ese formato'}? (€)
               </label>
               <input
                 type="text"
@@ -612,39 +1089,95 @@ export default function PurchaseSourcesSection({
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 disabled={submitting}
-                placeholder="Ej: 30"
+                placeholder="Ej: 42,91"
                 className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
               />
+              {previewUnitCost !== null && baseUnit && (
+                <div className="mt-1.5 rounded-md bg-accent-bg border border-accent/20 px-3 py-2 text-sm text-text-primary">
+                  <span className="font-mono font-medium">
+                    {fmtEur(previewUnitCost, 5)} / {baseUnit.abbreviation}
+                  </span>
+                  {previewPiecePrice !== null && (
+                    <span className="font-mono text-text-secondary">
+                      {' · '}
+                      {fmtEur(previewPiecePrice, 2)} / {(addInnerName.trim() || 'pieza').toLowerCase()}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Código del proveedor (opcional, ayuda al casado de OCR de factura) */}
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">
-                Código del proveedor <span className="text-text-tertiary font-normal">(opcional)</span>
-              </label>
-              <input
-                type="text"
-                value={supplierCode}
-                onChange={(e) => setSupplierCode(e.target.value)}
-                disabled={submitting}
-                placeholder="La referencia con la que este proveedor llama al artículo"
-                className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-              />
-              <p className="text-[11px] text-text-secondary mt-1">
-                Facilita casar las líneas cuando llegue su factura o albarán.
-              </p>
-            </div>
+            {/* A7 · ¿En qué lo cuentas? Lo elige quien crea el artículo
+                (decisión 3 de Julio). Se guarda en `use_in_count`. */}
+            {baseUnit && (
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1">
+                  ¿En qué lo cuentas?
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    ...(addMode === 'pack'
+                      ? [{ id: 'caja' as const, label: plural(addCajaName.trim() || 'Caja', 2) },
+                         { id: 'pieza' as const, label: plural(addInnerName.trim() || 'Pieza', 2) }]
+                      : [{ id: 'caja' as const, label: plural(formatName.trim() || 'Formato', 2) }]),
+                    { id: 'base' as const, label: baseUnit.abbreviation },
+                  ]).map((op) => (
+                    <button
+                      key={op.id}
+                      type="button"
+                      onClick={() => setAddCuentaEn(op.id)}
+                      disabled={submitting}
+                      className={`px-3 py-1.5 text-xs rounded-md border transition-base disabled:opacity-50 ${
+                        addCuentaEn === op.id
+                          ? 'bg-accent text-text-on-accent border-accent font-medium'
+                          : 'bg-card text-text-primary border-border-default hover:border-accent'
+                      }`}
+                    >
+                      {op.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-text-secondary mt-1">
+                  Es lo que verá quien haga el recuento de almacén. Se puede cambiar luego.
+                </p>
+              </div>
+            )}
 
-            {/* Remate didáctico: coste por unidad base, idéntico al motor */}
-            {previewUnitCost !== null && baseUnit && (
-              <div className="rounded-md bg-accent-bg border border-accent/20 px-3 py-2 text-sm text-text-primary">
-                <span className="font-mono">
-                  {fmtEur(priceNum, 2)} ÷ {fmtNum(resolvedQtyInBase!)} {baseUnit.abbreviation}
-                </span>{' '}
-                ={' '}
-                <span className="font-mono font-medium">
-                  {fmtEur(previewUnitCost, 5)} / {baseUnit.abbreviation}
-                </span>
+            {/* A8 · «Cómo queda»: las cuatro preguntas juntas, que es lo que
+                nadie puede ver hoy sin abrir tres sitios distintos. */}
+            {addQtyInBase !== null && baseUnit && (
+              <div className="rounded-md border border-border-default bg-card px-3 py-2 space-y-1">
+                <div className="text-[11px] font-medium text-text-secondary">Cómo queda</div>
+                <p className="text-xs text-text-primary">
+                  Lo compro:{' '}
+                  <span className="font-medium">
+                    {addMode === 'pack' && addCountNum !== null && addInnerBase !== null
+                      ? `${addCajaName.trim() || 'Caja'} de ${fmtNum(addCountNum)} ${plural(addInnerName.trim() || 'pieza', addCountNum).toLowerCase()} de ${fmtNum(addInnerBase)} ${baseUnit.abbreviation}`
+                      : `${formatName.trim() || 'formato'} de ${fmtNum(addQtyInBase)} ${baseUnit.abbreviation}`}
+                  </span>
+                </p>
+                <p className="text-xs text-text-primary">
+                  Lo cuento en:{' '}
+                  <span className="font-medium">
+                    {addCuentaEn === 'base'
+                      ? baseUnit.abbreviation
+                      : addCuentaEn === 'pieza'
+                        ? plural(addInnerName.trim() || 'Pieza', 2).toLowerCase()
+                        : plural((addMode === 'pack' ? addCajaName : formatName).trim() || 'Formato', 2).toLowerCase()}
+                  </span>
+                </p>
+                <p className="text-xs text-text-primary">
+                  Lo gasto en: <span className="font-medium">{baseUnit.abbreviation}</span>
+                </p>
+                <p className="text-xs text-text-primary">
+                  Él lo llama:{' '}
+                  <span className="font-medium">
+                    {supplierItemName.trim() !== '' ? supplierItemName.trim() : '— aún no lo has dicho —'}
+                  </span>
+                  {supplierCode.trim() !== '' && (
+                    <span className="text-text-secondary font-mono"> · {supplierCode.trim()}</span>
+                  )}
+                </p>
               </div>
             )}
 
@@ -680,28 +1213,61 @@ export default function PurchaseSourcesSection({
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-1">
+            {/* A9 · Un artículo puede quedarse a medias A PROPÓSITO. Lo que
+                no puede es quedarse a medias sin que nadie lo sepa: por eso
+                «Guardar y seguir luego» guarda el formato (que es lo que
+                faltaba) y deja el precio para cuando se sepa. */}
+            <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
               <button
                 type="button"
-                onClick={() => {
-                  resetForm()
-                  setAddOpen(false)
-                }}
+                onClick={() => void handleAdd({ seguirLuego: true })}
                 disabled={submitting}
-                className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-card transition-base disabled:opacity-50"
+                className="px-3 py-1.5 text-sm rounded-md border border-border-default text-text-secondary hover:text-text-primary transition-base disabled:opacity-50"
               >
-                Cancelar
+                Guardar y seguir luego
               </button>
-              <button
-                type="button"
-                onClick={handleAdd}
-                disabled={submitting}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-              >
-                {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {submitting ? 'Guardando…' : 'Guardar compra'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetForm()
+                    setAddOpen(false)
+                  }}
+                  disabled={submitting}
+                  className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-card transition-base disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleAdd()}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+                >
+                  {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {submitting ? 'Guardando…' : 'Guardar compra'}
+                </button>
+              </div>
             </div>
+          </div>
+        )}
+
+        {/* B5 · El pie de la ficha: en qué sale en el recuento, en qué se
+            gasta y cuántos platos lo usan. Las tres cosas que hay que saber
+            antes de tocar un formato. */}
+        {!loading && !error && baseUnit && (
+          <div className="mt-3 pt-3 border-t border-border-default flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary">
+            <span>
+              En el recuento saldrá en <span className="text-text-primary">{seCuentaEn}</span>
+            </span>
+            <span>
+              Se gasta en <span className="text-text-primary">{baseAbbr}</span>
+            </span>
+            <span>
+              {platosQueLoUsan === null
+                ? 'Platos que lo usan: —'
+                : `Lo usan ${platosQueLoUsan} plato${platosQueLoUsan === 1 ? '' : 's'}`}
+            </span>
           </div>
         )}
 
@@ -770,6 +1336,13 @@ interface SourceRowProps {
   actorName: string | null
   supplierName: string
   format: PurchaseFormat | null
+  /** El nodo PIEZA del que cuelga la caja (parent_format_id). */
+  parentFormat: PurchaseFormat | null
+  /** B3 — fecha del último albarán de este proveedor (ISO date) o null. */
+  ultimoAlbaran: string | null
+  /** B4 — «Revisar el formato» abre el editor de este enlace al montarse. */
+  abrirFormato: boolean
+  onFormatoAbierto: () => void
   baseUnit: KitchenUnit | null
   priceUnits: KitchenUnit[]   // unidades de la misma dimensión que la base (kg/g, L/ml, ud)
   onSaved: () => void | Promise<void>
@@ -792,6 +1365,10 @@ function SourceRow({
   actorName,
   supplierName,
   format,
+  parentFormat,
+  ultimoAlbaran,
+  abrirFormato,
+  onFormatoAbierto,
   baseUnit,
   priceUnits,
   onSaved,
@@ -851,17 +1428,72 @@ function SourceRow({
   const [packInnerQty, setPackInnerQty] = useState('')    // contenido de UNA pieza
   const [packUnitId, setPackUnitId] = useState<string>(baseUnit?.id ?? '')
   const [packDirectBase, setPackDirectBase] = useState('')
+  // C · lo que este formato lleva detrás, para poder EXPLICAR la guarda
+  // `trg_recipe_item_purchase_format_immutable` en vez de soltar su excepción.
+  const [historia, setHistoria] = useState<HistoriaDelFormato | null>(null)
+  // C4/A7 · ¿en qué lo cuentas? También aquí, no solo en el alta.
+  const [cuentaEn, setCuentaEn] = useState<'caja' | 'pieza' | 'base'>('base')
+  const [guardandoCuenta, setGuardandoCuenta] = useState(false)
 
   function openFmtEdit() {
     setFmtError(null)
-    setFmtMode('simple')
+    // Si el formato YA es una caja con piezas, el editor abre en ese modo y
+    // relleno: hasta hoy abría siempre en «Un total» y volvía a pedir el árbol
+    // desde cero, que es cómo se aplana una caja sin querer.
+    const esPack = format !== null && format.qtyPerParent !== null && parentFormat !== null
+    setFmtMode(esPack ? 'pack' : 'simple')
     setFmtName(format?.name ?? '')
     setFmtQty(format ? toInputStr(format.qtyInBase) : '')
     setFmtUnitId(baseUnit?.id ?? '')
     setFmtDirectBase('')
-    setPackCajaName('Caja'); setPackCount(''); setPackInnerName(''); setPackInnerQty('')
-    setPackUnitId(baseUnit?.id ?? ''); setPackDirectBase('')
+    setPackCajaName(esPack ? format!.name : 'Caja')
+    setPackCount(esPack ? toInputStr(format!.qtyPerParent!) : '')
+    setPackInnerName(esPack ? parentFormat!.name : '')
+    setPackInnerQty(esPack ? toInputStr(parentFormat!.qtyInBase) : '')
+    setPackUnitId(baseUnit?.id ?? '')
+    setPackDirectBase('')
+    setCuentaEn(
+      format?.useInCount ? 'caja' : parentFormat?.useInCount ? 'pieza' : 'base',
+    )
+    setHistoria(null)
+    if (format) {
+      historiaDelFormato(accountId, format.id)
+        .then(setHistoria)
+        .catch((e) => {
+          // Sin historia el editor sigue funcionando: lo que se pierde es la
+          // explicación, no la puerta. La guarda de la base sigue ahí.
+          console.error('[PurchaseSourcesSection] historia del formato', e)
+          setHistoria(null)
+        })
+    }
     setEditingFmt(true)
+  }
+
+  // B4 — «Revisar el formato» abre este editor desde el aviso de arriba.
+  // Mismo motivo que arriba: tras el pintado, no dentro del efecto.
+  useEffect(() => {
+    if (!abrirFormato) return
+    const id = requestAnimationFrame(() => {
+      openFmtEdit()
+      onFormatoAbierto()
+    })
+    return () => cancelAnimationFrame(id)
+    // Solo cuando el aviso lo pide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abrirFormato])
+
+  async function guardarCuentaEn(op: 'caja' | 'pieza' | 'base') {
+    setCuentaEn(op)
+    setGuardandoCuenta(true)
+    try {
+      if (format) await setUseInCount(format.id, op === 'caja')
+      if (parentFormat) await setUseInCount(parentFormat.id, op === 'pieza')
+      await onSaved()
+    } catch (e) {
+      setFmtError(e instanceof Error ? e.message : 'No se pudo cambiar en qué se cuenta.')
+    } finally {
+      setGuardandoCuenta(false)
+    }
   }
 
   // helper: convierte (cantidad + unidad) -> base, con fallback directo si la dimensión no cuadra
@@ -899,6 +1531,18 @@ function SourceRow({
     const c = convertToBase(q, u, baseUnit)
     return c !== null && c.ok === false && c.reason === 'dimension_mismatch'
   })()
+
+  // C3 — lo que va a cambiar: el coste de hasta hoy y el de desde hoy.
+  const nuevoTotalBase = fmtMode === 'pack' ? packTotalBase : fmtQtyInBase
+  const costeHastaHoy = link.lastPrice
+  const precioDelFormato =
+    costeHastaHoy !== null && format ? formatPriceFromUnitCost(costeHastaHoy, format.qtyInBase) : null
+  const costeDesdeHoy =
+    precioDelFormato !== null && nuevoTotalBase !== null && nuevoTotalBase > 0
+      ? precioDelFormato / nuevoTotalBase
+      : null
+  const contenidoCambia =
+    format !== null && nuevoTotalBase !== null && Math.abs(nuevoTotalBase - format.qtyInBase) > 1e-9
 
   async function saveFmt() {
     setFmtError(null)
@@ -947,12 +1591,23 @@ function SourceRow({
         if (packCountNum === null || !(packCountNum > 0)) { setFmtError('¿Cuántas piezas trae la caja?'); return }
         if (packInnerBase === null || !(packInnerBase > 0)) { setFmtError('Indica el contenido de UNA pieza.'); return }
         setSavingFmt(true)
-        const { caja } = await ensurePackTree({
+        const { caja, inner } = await ensurePackTree({
           accountId, itemId, count: packCountNum, innerQtyInBase: packInnerBase,
           innerName, cajaName, source: 'manual', createdBy: actorId, createdByName: actorName,
         })
         // enlaza el proveedor a la CAJA (el formato de compra)
         await updateArticleSupplier(link.id, { purchaseFormatId: caja.id })
+        // Y archiva el formato plano que había antes, si ha quedado suelto.
+        // Sin esto, pasar de «Un total» a «Caja con piezas» deja un nodo que
+        // ya no enlaza nadie: son 5 de los 9 huérfanos vivos que hay hoy en
+        // Foodint, todos con source='manual'. Archivar NO es borrar: los
+        // albaranes viejos siguen apuntando a su id y siguen cuadrando.
+        if (format && format.id !== caja.id && format.id !== inner.id) {
+          await updatePurchaseFormat(format.id, {
+            isActive: false,
+            archivedAt: new Date().toISOString(),
+          })
+        }
       }
       setEditingFmt(false)
       await onSaved()
@@ -1064,7 +1719,7 @@ function SourceRow({
   }
 
   return (
-    <div className={`flex items-center gap-2 rounded-md border border-border-default bg-page px-3 py-2 ${archived ? 'opacity-60' : ''}`}>
+    <div className={`flex items-start gap-2 rounded-md border ${link.isPreferred && !archived ? 'border-accent/40' : 'border-border-default'} bg-page px-3 py-2.5 ${archived ? 'opacity-60' : ''}`}>
       {/* Estrella: marca este proveedor como PRINCIPAL (exclusivo por ingrediente).
           El principal manda el coste del ingrediente. No se muestra en archivados. */}
       {!archived && (
@@ -1074,7 +1729,7 @@ function SourceRow({
           disabled={busy}
           aria-label={link.isPreferred ? 'Proveedor principal' : 'Marcar como principal'}
           title={link.isPreferred ? 'Principal de este ingrediente' : 'Marcar como principal'}
-          className={`flex-shrink-0 p-1 rounded-md transition-base disabled:opacity-50 ${
+          className={`flex-shrink-0 mt-0.5 p-1 rounded-md transition-base disabled:opacity-50 ${
             link.isPreferred ? 'text-warning' : 'text-text-secondary hover:text-warning'
           }`}
         >
@@ -1096,21 +1751,45 @@ function SourceRow({
               descatalogado
             </span>
           )}
+          {/* B3 · la fecha de su último albarán, junto al nombre */}
+          {ultimoAlbaran && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-text-secondary flex-shrink-0">
+              <CalendarDays className="w-3 h-3" />
+              último albarán {fmtFecha(ultimoAlbaran)}
+            </span>
+          )}
         </div>
-        {/* Detalle del formato: cuánto trae y, como secundario, el precio del formato. */}
-        <div className="text-xs text-text-secondary truncate">
-          {format ? `${format.name} · ${fmtNum(format.qtyInBase)} ${baseAbbr}` : 'Sin formato'}
+
+        {/* B2 · Su referencia, su texto y su formato en una línea LEGIBLE.
+            La referencia va en monoespaciada (F4): es un código, y en
+            proporcional el 0 y la O se confunden justo cuando hay que
+            teclearlo para casar un albarán. */}
+        {link.supplierCode ? (
+          <div className="text-[11px] text-text-secondary">
+            <span className="font-mono text-text-primary">{link.supplierCode}</span>
+            {link.supplierItemName && (
+              <span className="ml-1.5" title={link.supplierItemName}>
+                · {link.supplierItemName}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="text-[11px] text-warning inline-flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" />
+            Sin su referencia: sus albaranes hay que casarlos a mano
+          </div>
+        )}
+
+        {/* El formato, dicho como una frase y con la cuenta hecha. */}
+        <div className="text-xs text-text-secondary">
+          {format
+            ? cuentaDelFormato(comoRegla(format, parentFormat), baseAbbr)
+            : 'Sin formato'}
           {format && link.lastPrice !== null && (
             <>
               {' · '}
               {/* €/caja DERIVADO del €/base (last_price) × qtyInBase, solo informativo */}
               <span className="font-mono">{fmtEur(formatPriceFromUnitCost(link.lastPrice, format.qtyInBase), 2)} / {format.name.toLowerCase()}</span>
-            </>
-          )}
-          {link.supplierCode && (
-            <>
-              {' · '}
-              <span>cód. {link.supplierCode}</span>
             </>
           )}
           {!archived && format && !editingFmt && (
@@ -1141,6 +1820,71 @@ function SourceRow({
         {/* Editor de formato inline: modo SIMPLE o PACK */}
         {editingFmt && (
           <div className="mt-2 p-3 rounded-md border border-border-default bg-page space-y-3">
+            {/* C1/C2 · Este formato tiene historia detrás. Hasta hoy la guarda
+                `trg_recipe_item_purchase_format_immutable` cortaba el guardado
+                con su excepción en crudo; ahora se dice ANTES, en castellano,
+                y se dice también que no se pierde nada. */}
+            {historia !== null && historia.conMovimiento > 0 && (
+              <div className="rounded-md border border-warning/30 bg-warning-bg px-3 py-2 space-y-1.5">
+                <p className="text-xs text-text-primary flex items-start gap-1.5">
+                  <History className="w-3.5 h-3.5 mt-0.5 text-warning shrink-0" />
+                  <span>
+                    <span className="font-medium">
+                      Este formato ya se ha usado {historia.conMovimiento}{' '}
+                      {historia.conMovimiento === 1 ? 'vez' : 'veces'}
+                      {historia.desde ? ` desde el ${fmtFecha(historia.desde)}` : ''}.
+                    </span>
+                  </span>
+                </p>
+                <p className="text-[11px] text-text-secondary">
+                  No se tocan las entradas ni los costes de antes: lo que compraste con este formato
+                  sigue valiendo lo que valía. Lo de ahora es una versión nueva, desde hoy.
+                </p>
+
+                {/* C3 · Lo que va a cambiar, con el coste de cada lado */}
+                {contenidoCambia && format && baseUnit && (
+                  <div className="mt-1 rounded-md border border-border-default bg-card px-2.5 py-2 text-[11px] space-y-1">
+                    <div className="font-medium text-text-secondary">Lo que va a cambiar</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-secondary">
+                        Hasta hoy · {format.name} de {fmtNum(format.qtyInBase)} {baseUnit.abbreviation}
+                      </span>
+                      <span className="font-mono text-text-primary">
+                        {costeHastaHoy !== null
+                          ? `${fmtEur(costeHastaHoy, 5)} / ${baseUnit.abbreviation}`
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-secondary">
+                        Desde hoy · {(fmtMode === 'pack' ? packCajaName.trim() || 'Caja' : fmtName.trim() || format.name)} de{' '}
+                        {nuevoTotalBase !== null ? fmtNum(nuevoTotalBase) : '—'} {baseUnit.abbreviation}
+                      </span>
+                      <span className="font-mono text-text-primary">
+                        {costeDesdeHoy !== null
+                          ? `${fmtEur(costeDesdeHoy, 5)} / ${baseUnit.abbreviation}`
+                          : '—'}
+                      </span>
+                    </div>
+                    <p className="text-text-secondary pt-0.5">
+                      El precio de {(format.name).toLowerCase()} no cambia
+                      {precioDelFormato !== null ? ` (${fmtEur(precioDelFormato, 2)})` : ''}: lo que
+                      cambia es cuánto trae, y por eso cambia el {baseUnit.abbreviation}.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Un formato SIN movimientos se edita sin más: se dice también,
+                para que nadie tenga miedo de tocarlo. */}
+            {historia !== null && historia.conMovimiento === 0 && format && (
+              <p className="text-[11px] text-text-secondary flex items-start gap-1.5">
+                <Info className="w-3.5 h-3.5 mt-0.5 text-text-secondary shrink-0" />
+                <span>Este formato todavía no ha entrado en ningún albarán: se puede corregir tal cual.</span>
+              </p>
+            )}
+
             {/* selector de modo */}
             <div className="inline-flex rounded-md border border-border-default overflow-hidden text-xs">
               <button
@@ -1249,17 +1993,66 @@ function SourceRow({
               </p>
             )}
 
+            {/* C4 · «¿En qué lo cuentas?» también aquí, no solo en el alta */}
+            {format && baseUnit && (
+              <div>
+                <label className="block text-[11px] font-medium text-text-secondary mb-1">
+                  ¿En qué lo cuentas?
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { id: 'caja' as const, label: plural(fmtMode === 'pack' ? packCajaName.trim() || 'Caja' : fmtName.trim() || format.name, 2) },
+                    ...(parentFormat || fmtMode === 'pack'
+                      ? [{ id: 'pieza' as const, label: plural(parentFormat?.name ?? packInnerName.trim() ?? 'Pieza', 2) }]
+                      : []),
+                    { id: 'base' as const, label: baseUnit.abbreviation },
+                  ]).map((op) => (
+                    <button
+                      key={op.id}
+                      type="button"
+                      onClick={() => void guardarCuentaEn(op.id)}
+                      disabled={savingFmt || guardandoCuenta}
+                      className={`px-2.5 py-1 text-[11px] rounded-md border transition-base disabled:opacity-50 ${
+                        cuentaEn === op.id
+                          ? 'bg-accent text-text-on-accent border-accent font-medium'
+                          : 'bg-card text-text-primary border-border-default hover:border-accent'
+                      }`}
+                    >
+                      {op.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => void saveFmt()} disabled={savingFmt}
                 className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1">
                 {savingFmt ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                Guardar formato
+                {historia !== null && historia.conMovimiento > 0 && contenidoCambia
+                  ? 'Crear la versión nueva'
+                  : 'Guardar formato'}
               </button>
               <button type="button" onClick={() => setEditingFmt(false)} disabled={savingFmt}
                 className="px-2.5 py-1 text-xs text-text-secondary hover:text-text-primary disabled:opacity-50">
                 Cancelar
               </button>
             </div>
+
+            {/* C5 · Queda apuntado quién lo cambió y cuándo. Se dice ANTES,
+                que es cuando sirve de algo. El formato guarda created_by /
+                created_by_name, así que esto no es una promesa: es lo que
+                `archiveAndReplacePurchaseFormat` escribe al crear el nuevo. */}
+            <p className="text-[11px] text-text-secondary flex items-start gap-1.5 pt-0.5 border-t border-border-default">
+              <Info className="w-3 h-3 mt-0.5 shrink-0" />
+              <span>
+                Queda apuntado que lo cambió {actorName ?? 'quien haya entrado'}, hoy{' '}
+                {fmtFecha(new Date().toISOString().slice(0, 10))}.
+                {format?.createdByName
+                  ? ` El de ahora lo puso ${format.createdByName} el ${fmtFecha(format.createdAt.slice(0, 10))}.`
+                  : ''}
+              </span>
+            </p>
           </div>
         )}
 
@@ -1350,7 +2143,7 @@ function SourceRow({
         )}
       </div>
 
-      <div className="flex-shrink-0 flex items-center gap-1">
+      <div className="flex-shrink-0 flex items-start gap-1 pt-0.5">
         {editing ? (
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-1.5">

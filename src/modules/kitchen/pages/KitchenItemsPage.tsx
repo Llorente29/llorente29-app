@@ -29,7 +29,7 @@
 
 import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2, RefreshCw, Coins } from 'lucide-react'
+import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2, RefreshCw, Coins, PackageOpen, Hash, ScanLine, Copy } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -46,6 +46,10 @@ import { enrichIngredientsBulk, type BulkEnrichProgress, type BulkEnrichResult }
 import { recostAllRaws, type BulkRecostResult } from '@/modules/kitchen/services/costCascadeService'
 import { unitPriceToBase, pickDisplayUnit } from '@/modules/kitchen/lib/unitConversion'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import {
+  listEstadoDeFormatos,
+  type EstadoDeFormato,
+} from '@/modules/kitchen/services/estadoDeFormatosService'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import FamilyReviewPanel from '@/modules/kitchen/components/FamilyReviewPanel'
 import FamilyManagerPanel from '@/modules/kitchen/components/FamilyManagerPanel'
@@ -129,6 +133,89 @@ function IngredientStatusChip({ item, className = '' }: { item: RecipeItem; clas
   return null
 }
 
+// E3/E5/E6 · Los sellos de un artículo a medias, y el de terminado.
+// Viven aquí arriba, fuera del componente, por la misma razón que las reglas
+// puras viven en lib/: una función exportada desde un fichero de componente
+// añade avisos react-refresh al lint. Esta no se exporta, así que basta con
+// sacarla del cuerpo para no recrearla en cada render.
+function SellosDelArticulo({
+  item,
+  estado,
+}: {
+  item: RecipeItem
+  estado: EstadoDeFormato | undefined
+}) {
+  const costeAMano = item.costStrategy === 'fixed'
+  const aMedias = (estado?.sinFormato ?? false) || (estado?.sinReferencia ?? false) || costeAMano
+  const sellos: { texto: string; titulo: string; tono: string; icono: ReactNode }[] = []
+
+  if (estado?.sinFormato) {
+    sellos.push({
+      texto: 'Falta el formato',
+      titulo: 'Nadie le ha dicho a Folvy cómo viene: sin eso no se puede contar ni costear bien.',
+      tono: 'bg-warning-bg text-warning border-warning/30',
+      icono: <PackageOpen className="w-3 h-3" />,
+    })
+  }
+  if (estado?.sinReferencia) {
+    sellos.push({
+      texto: 'Sin referencia',
+      titulo: 'Algún proveedor va sin su código: sus albaranes hay que casarlos a mano.',
+      tono: 'bg-page text-text-secondary border-border-default',
+      icono: <Hash className="w-3 h-3" />,
+    })
+  }
+  if (costeAMano) {
+    sellos.push({
+      texto: 'Coste a mano',
+      titulo: 'Su coste está tecleado, no sale de la compra: un cambio de precio no llega solo.',
+      tono: 'bg-page text-text-secondary border-border-default',
+      icono: <Coins className="w-3 h-3" />,
+    })
+  }
+  if (estado?.noCuadra) {
+    sellos.push({
+      texto: 'No cuadra',
+      titulo: estado.porQueNoCuadra ?? 'El texto del proveedor no casa con el formato guardado.',
+      tono: 'bg-danger-bg text-danger border-danger/30',
+      icono: <ScanLine className="w-3 h-3" />,
+    })
+  }
+  if (estado?.repetido) {
+    sellos.push({
+      texto: 'Repetido',
+      titulo: 'Dos enlaces vivos del mismo proveedor para este artículo.',
+      tono: 'bg-danger-bg text-danger border-danger/30',
+      icono: <Copy className="w-3 h-3" />,
+    })
+  }
+
+  // E6 · Lo terminado dice «terminado», y no dice nada más.
+  if (sellos.length === 0 && !aMedias) {
+    return (
+      <span className="ml-2 text-[11px] text-success inline-flex items-center gap-1 align-middle">
+        <Check className="w-3 h-3" />
+        terminado
+      </span>
+    )
+  }
+
+  return (
+    <>
+      {sellos.map(s => (
+        <span
+          key={s.texto}
+          title={s.titulo}
+          className={`ml-2 text-[11px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 align-middle ${s.tono}`}
+        >
+          {s.icono}
+          {s.texto}
+        </span>
+      ))}
+    </>
+  )
+}
+
 export default function KitchenItemsPage() {
   const { userProfile, authUserId } = useApp()
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -153,6 +240,9 @@ export default function KitchenItemsPage() {
   const [simpleCreateOpen, setSimpleCreateOpen] = useState(false)
   // null = vista lista; un id = vista detalle del ingrediente.
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  // E4 — el artículo se ha abierto desde «Terminarlo»: la ficha entra por la
+  // sección de compra, que es donde está el hueco.
+  const [abiertoParaTerminar, setAbiertoParaTerminar] = useState(false)
   // Si llegamos desde una línea bloqueada de un escandallo, recordamos a qué
   // escandallo volver (?return=<recipeId>) para el botón "Volver al escandallo".
   const [returnTo, setReturnTo] = useState<string | null>(null)
@@ -194,6 +284,11 @@ export default function KitchenItemsPage() {
   // Buscador y filtro por familia (3d).
   const [search, setSearch] = useState('')
   const [familyFilter, setFamilyFilter] = useState<string>(NO_FAMILY_FILTER)
+  // E · Lo que está a medias, dentro de la propia lista (decisión 5 de Julio:
+  // sin zona dedicada). Los números se CUENTAN en vivo contra la base; ninguno
+  // está escrito a mano.
+  const [estadoFormatos, setEstadoFormatos] = useState<Map<string, EstadoDeFormato>>(new Map())
+  const [filtroAMedias, setFiltroAMedias] = useState<'ninguno' | 'sinFormato' | 'sinReferencia' | 'costeAMano'>('ninguno')
 
   useEffect(() => {
     if (accountsLoading) return
@@ -238,6 +333,31 @@ export default function KitchenItemsPage() {
         setUnits(allUnits)
         setFamilies(fams)
         setProposalSummary(summary)
+
+        // El estado de formatos solo tiene sentido en Ingredientes (son los
+        // únicos que se compran con formato). No bloquea la lista: si falla,
+        // la franja y los sellos no salen y la tabla se pinta igual.
+        if (activeTab !== 'raw') {
+          setEstadoFormatos(new Map())
+          return
+        }
+        const dimPorItem = new Map<string, string>()
+        const dimPorUnidad = new Map(allUnits.map((u) => [u.id, u.dimension as string]))
+        rows.forEach((it) => {
+          const d = dimPorUnidad.get(it.baseUnitId)
+          if (d) dimPorItem.set(it.id, d)
+        })
+        listEstadoDeFormatos(
+          activeAccountId,
+          rows.map((it) => it.id),
+          dimPorItem,
+        )
+          .then((res) => { if (!cancelled) setEstadoFormatos(res.porArticulo) })
+          .catch((e: unknown) => {
+            if (cancelled) return
+            console.error('listEstadoDeFormatos falló:', e)
+            setEstadoFormatos(new Map())
+          })
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -247,6 +367,7 @@ export default function KitchenItemsPage() {
         setUnits([])
         setFamilies([])
         setProposalSummary(null)
+        setEstadoFormatos(new Map())
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -281,15 +402,49 @@ export default function KitchenItemsPage() {
   }, [families])
 
   // Lista filtrada por buscador (nombre) y por familia (3d). En cliente: rápido.
+  // E1/E2 · Los recuentos, contados en vivo sobre los artículos cargados.
+  // «A medias» es la UNIÓN de los tres, no su suma: un artículo puede estar en
+  // varios. Se dice el número y se dice el desglose, porque una franja que
+  // dijera «31» mientras los filtros suman más sería justo la nota al pie que
+  // la regla 7 prohíbe.
+  const recuentos = useMemo(() => {
+    let sinFormato = 0
+    let sinReferencia = 0
+    let costeAMano = 0
+    let aMedias = 0
+    for (const it of items) {
+      const e = estadoFormatos.get(it.id)
+      const sf = e?.sinFormato ?? false
+      const sr = e?.sinReferencia ?? false
+      const cm = it.costStrategy === 'fixed'
+      if (sf) sinFormato += 1
+      if (sr) sinReferencia += 1
+      if (cm) costeAMano += 1
+      if (sf || sr || cm) aMedias += 1
+    }
+    return { sinFormato, sinReferencia, costeAMano, aMedias }
+  }, [items, estadoFormatos])
+
+  function estaAMedias(item: RecipeItem): boolean {
+    const e = estadoFormatos.get(item.id)
+    return (e?.sinFormato ?? false) || (e?.sinReferencia ?? false) || item.costStrategy === 'fixed'
+  }
+
   const visibleItems = useMemo(() => {
     const q = search.trim().toLowerCase()
     return items.filter(item => {
       if (q !== '' && !item.name.toLowerCase().includes(q)) return false
+      if (activeTab === 'raw' && filtroAMedias !== 'ninguno') {
+        const e = estadoFormatos.get(item.id)
+        if (filtroAMedias === 'sinFormato' && !(e?.sinFormato ?? false)) return false
+        if (filtroAMedias === 'sinReferencia' && !(e?.sinReferencia ?? false)) return false
+        if (filtroAMedias === 'costeAMano' && item.costStrategy !== 'fixed') return false
+      }
       if (familyFilter === NO_FAMILY_FILTER) return true
       if (familyFilter === UNCLASSIFIED) return item.familyId === null
       return item.familyId === familyFilter
     })
-  }, [items, search, familyFilter])
+  }, [items, search, familyFilter, filtroAMedias, estadoFormatos, activeTab])
 
   // Ingredientes pendientes (needs_review) — los que la IA puede completar.
   // IMPORTANTE: este hook DEBE declararse ANTES del `return` condicional de la
@@ -304,11 +459,16 @@ export default function KitchenItemsPage() {
   // Abre un artículo donde de verdad se edita: la PREPARACIÓN en su escandallo
   // (no se compra, no tiene proveedor: lo suyo son sus líneas); el resto, en la
   // ficha de ingrediente de siempre.
-  function openItem(item: RecipeItem) {
+  // `paraTerminar` distingue «he pulsado la fila» de «he pulsado Terminarlo»:
+  // en el segundo caso la ficha entra por la sección de compra. Va como
+  // argumento y no como dos setState seguidos porque React agrupa las
+  // actualizaciones y la última ganaría.
+  function openItem(item: RecipeItem, paraTerminar = false) {
     if (item.type === 'recipe') {
       navigate('/kitchen/recetas?recipe=' + item.id)
       return
     }
+    setAbiertoParaTerminar(paraTerminar)
     setSelectedItemId(item.id)
   }
 
@@ -319,7 +479,12 @@ export default function KitchenItemsPage() {
     // Salto al sitio donde se continúa: una preparación nace VACÍA y lo
     // siguiente es ponerle sus ingredientes (su escandallo); para el resto, es
     // decirle a Folvy de quién se compra (y ver el coste fluir) en su ficha.
-    openItem(created)
+    //
+    // A1 · El alta ENCADENA con «De quién lo compras»: la ficha se abre por la
+    // sección de compra y, como el artículo nuevo no tiene ningún proveedor,
+    // el formulario se abre solo — con los dos modos delante. Sin pantalla
+    // nueva (decisión 1 de Julio): es el mismo flujo del artículo, seguido.
+    openItem(created, created.type !== 'recipe')
   }
 
   // El buscador del modal puede resolver a un ingrediente que YA EXISTE en la
@@ -347,15 +512,18 @@ export default function KitchenItemsPage() {
         onBack={() => {
           setSelectedItemId(null)
           setReturnTo(null)
+          setAbiertoParaTerminar(false)
           setReloadTick(t => t + 1)
         }}
       >
         <KitchenItemDetailPage
           itemId={selectedItemId}
           returnTo={returnTo}
+          enfocarCompra={abiertoParaTerminar}
           onBack={() => {
             setSelectedItemId(null)
             setReturnTo(null)
+            setAbiertoParaTerminar(false)
             setReloadTick(t => t + 1)
           }}
         />
@@ -614,6 +782,58 @@ export default function KitchenItemsPage() {
         </div>
       )}
 
+      {/* E1/E2 · Lo que está a medias, en la propia lista (decisión 5 de
+          Julio: sin zona dedicada). El número de la franja es la UNIÓN de los
+          tres filtros, no su suma: un artículo puede estar en varios, y una
+          franja que dijera un número que no cuadra con los filtros enseñaría
+          al operario a no creerse ninguno de los dos. */}
+      {activeTab === 'raw' && !loading && !error && recuentos.aMedias > 0 && (
+        <div className="p-3 rounded-md bg-warning-bg border border-warning/30 space-y-2">
+          <p className="text-sm text-text-primary flex items-start gap-2">
+            <AlertTriangle size={16} className="text-warning shrink-0 mt-0.5" />
+            <span>
+              <span className="font-medium">{recuentos.aMedias} artículos están a medias</span>
+              <span className="text-text-secondary">
+                {' '}— les falta el formato, la referencia del proveedor, o su coste sigue tecleado a
+                mano en vez de salir de la compra.
+              </span>
+            </span>
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {([
+              { id: 'sinFormato' as const, label: 'Sin formato', n: recuentos.sinFormato },
+              { id: 'sinReferencia' as const, label: 'Sin referencia', n: recuentos.sinReferencia },
+              { id: 'costeAMano' as const, label: 'Coste a mano', n: recuentos.costeAMano },
+            ]).map(f => {
+              const activo = filtroAMedias === f.id
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFiltroAMedias(activo ? 'ninguno' : f.id)}
+                  className={`px-2.5 py-1 text-xs rounded-md border transition-base ${
+                    activo
+                      ? 'bg-accent text-text-on-accent border-accent font-medium'
+                      : 'bg-card text-text-primary border-border-default hover:border-accent'
+                  }`}
+                >
+                  {f.label} · <span className="tabular-nums">{f.n}</span>
+                </button>
+              )
+            })}
+            {filtroAMedias !== 'ninguno' && (
+              <button
+                type="button"
+                onClick={() => setFiltroAMedias('ninguno')}
+                className="px-2 py-1 text-xs text-text-secondary hover:text-text-primary transition-base inline-flex items-center gap-1"
+              >
+                <X size={12} /> quitar el filtro
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Buscador + filtro por familia (3d) */}
       {!loading && !error && items.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -733,11 +953,16 @@ export default function KitchenItemsPage() {
                 {visibleItems.map(item => {
                   const unit = unitsById.get(item.baseUnitId)
                   const famName = item.familyId ? familyNameById.get(item.familyId) ?? null : null
+                  const estado = activeTab === 'raw' ? estadoFormatos.get(item.id) : undefined
+                  // E3 · las filas a medias van con fondo distinto.
+                  const aMedias = activeTab === 'raw' && estaAMedias(item)
                   return (
                     <tr
                       key={item.id}
                       onClick={() => openItem(item)}
-                      className="border-b border-border-default last:border-0 hover:bg-accent-bg cursor-pointer transition-base"
+                      className={`border-b border-border-default last:border-0 hover:bg-accent-bg cursor-pointer transition-base ${
+                        aMedias ? 'bg-warning-bg/40' : ''
+                      }`}
                     >
                       <td className="p-3">
                         <span className="font-medium text-text-primary">
@@ -750,6 +975,19 @@ export default function KitchenItemsPage() {
                         )}
                         <PreparationChip item={item} className="ml-2" />
                         <IngredientStatusChip item={item} className="ml-2" />
+                        {activeTab === 'raw' && <SellosDelArticulo item={item} estado={estado} />}
+                        {/* E4 · «Terminarlo» abre el paso que falta, no la
+                            ficha entera: la ficha se abre por la sección de
+                            compra, que es donde está el hueco. */}
+                        {aMedias && (
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); openItem(item, true) }}
+                            className="ml-2 text-[11px] px-2 py-0.5 rounded-md bg-accent text-text-on-accent hover:opacity-90 transition-base align-middle"
+                          >
+                            Terminarlo
+                          </button>
+                        )}
                       </td>
                       <td className="p-3">
                         {item.type === 'recipe' ? (

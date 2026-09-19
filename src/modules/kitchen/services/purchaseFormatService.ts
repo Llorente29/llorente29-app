@@ -175,6 +175,7 @@ export function rowToPurchaseFormat(row: RowPurchaseFormat): PurchaseFormat {
     needsReview: row.needs_review,
     isActive: row.is_active,
     archivedAt: row.archived_at,
+    useInCount: Boolean((row as unknown as { use_in_count?: boolean }).use_in_count),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by,
@@ -318,11 +319,18 @@ export function rowToArticleSupplier(row: RowArticleSupplier): ArticleSupplier {
     recipeItemId: row.recipe_item_id,
     supplierId: row.supplier_id,
     supplierCode: row.supplier_code,
+    supplierItemName: row.supplier_item_name,
     purchaseFormatId: row.purchase_format_id,
     lastPrice: row.last_price,
     negotiatedPrice: row.negotiated_price,
     isPreferred: row.is_preferred,
     isActive: row.is_active,
+    // `verified_at`/`verified_by` existen en la base (comprobado el 19/09 en
+    // information_schema.columns) pero son posteriores a la última generación
+    // de types/database.ts. Mismo patrón acotado que notify_group: el select
+    // es '*', así que la columna llega; el cast solo la deja leer.
+    verifiedAt: (row as unknown as { verified_at?: string | null }).verified_at ?? null,
+    verifiedBy: (row as unknown as { verified_by?: string | null }).verified_by ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -343,11 +351,19 @@ function articleSupplierInsertToRow(input: ArticleSupplierInsert): RowArticleSup
 function articleSupplierUpdateToRow(patch: ArticleSupplierUpdate): RowArticleSupplierUpdate {
   const row: RowArticleSupplierUpdate = {}
   if (patch.supplierCode !== undefined) row.supplier_code = patch.supplierCode
+  if (patch.supplierItemName !== undefined) row.supplier_item_name = patch.supplierItemName
   if (patch.purchaseFormatId !== undefined) row.purchase_format_id = patch.purchaseFormatId
   if (patch.lastPrice !== undefined) row.last_price = patch.lastPrice
   if (patch.negotiatedPrice !== undefined) row.negotiated_price = patch.negotiatedPrice
   if (patch.isPreferred !== undefined) row.is_preferred = patch.isPreferred
   if (patch.isActive !== undefined) row.is_active = patch.isActive
+  // Mismo motivo que arriba: columnas vivas en la base, aún no en los types.
+  if (patch.verifiedAt !== undefined) {
+    ;(row as unknown as Record<string, unknown>).verified_at = patch.verifiedAt
+  }
+  if (patch.verifiedBy !== undefined) {
+    ;(row as unknown as Record<string, unknown>).verified_by = patch.verifiedBy
+  }
   return row
 }
 
@@ -526,7 +542,11 @@ export interface SimplePurchaseSetup {
   formatName: string        // "Saco", "Caja", "Garrafa"...
   qtyInBase: number         // cuánto vale ese formato en la base del ingrediente
   supplierId: string
-  lastPrice: number
+  // null = «guardar y seguir luego»: el formato queda definido y el precio se
+  // pone cuando se sepa. `article_supplier.last_price` es nullable y el motor
+  // (`kitchen_recompute_raw_cost`) ya trata el hueco como «sin coste»; lo que
+  // NO puede quedar a medias es el formato, que es justo lo que faltaba.
+  lastPrice: number | null
   supplierCode?: string | null
   isPreferred?: boolean
   source?: PurchaseFormatSource
