@@ -1,7 +1,16 @@
 # PARTE · El número del día y la pegatina de 80 mm
 
-**20/09/2026.** Lotes 1 y 2 del encargo del 20/09. Rama `claude/jolly-carson-exjwn3`,
-commit `08adad5`. **Nada aplicado en producción.**
+**20/09/2026.** Lotes 1 y 2 del encargo del 20/09. Rama `claude/jolly-carson-exjwn3`.
+**Nada aplicado en producción.**
+
+**Preview, en la dirección fija de la rama:**
+<https://folvy-app-git-claude-jolly-carson-exjwn3-llorente29s-projects.vercel.app>
+
+> Ojo con lo que el preview enseña y lo que no. **La tarjeta del pase** sí: es web.
+> **La pegatina y el ticket NO**, porque los pinta la app de la tablet contra una
+> impresora — el preview no tiene ninguna. Y el **número** sólo aparece cuando la
+> migración esté aplicada; hasta entonces la tarjeta enseña el código de pase en el
+> hueco del número, que es exactamente lo que tiene que hacer.
 
 ---
 
