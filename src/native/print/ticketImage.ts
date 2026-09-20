@@ -30,7 +30,7 @@
 // ---------------------------------------------------------------------------
 
 import QRCode from 'qrcode'
-import { passCode, type PassCode, type PassCodeInput } from '@/modules/orders/lib/passCode'
+import { numeroGrande, passCode, type PassCode, type PassCodeInput } from '@/modules/orders/lib/passCode'
 import { allergenLabel, isAllergenCode } from '@/modules/kitchen/lib/allergens'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
 import dejaVuRegularUrl from './assets/DejaVuSans.ttf?url'
@@ -534,9 +534,10 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
   //
   // El código NO se pierde —eso sería esconderlo, que es la regla 7—: va abajo,
   // monoespaciado y al mayor escalón que entra, que es donde manda (la entrega).
-  const numeroDelDia = order.pase_numero === null || order.pase_numero === undefined
-    ? (pc.emph || '—')          // sin número todavía: lo que el pase canta. Nunca un hueco.
-    : String(order.pase_numero)
+  // El número grande sale del CÓDIGO DE PASE (20/09, 13:10), no de un contador:
+  // es lo que el repartidor pide. Y de `passCode`, nunca de `pos_short_code` a
+  // secas — los dos campos discrepan en 1.887 de 1.887 pedidos de Glovo por Last.
+  const numeroDelDia = numeroGrande(pc)
   let numSize = 132
   ctx.font = fnt(numSize, true)
   while (numSize > 60 && ctx.measureText(numeroDelDia).width > W * 0.52) {

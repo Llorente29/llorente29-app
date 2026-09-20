@@ -69,38 +69,6 @@ function iniciales(nombre: string | null): string {
     .map(p => p[0]).join('').toUpperCase()
 }
 
-/**
- * EL NÚMERO DEL DÍA · 20/09/2026, maqueta «La tarjeta por dentro».
- *
- * Lo más grande de la tarjeta, y a propósito: es lo único que enlaza esta fila
- * con la pegatina que está pegada a la caja y con el ticket que tiene el
- * cocinero en la mano. Julio, el 18/09, con quince pedidos encima: «era
- * excesivamente complicado saber para qué pedidos eran».
- *
- * 🔴 Y NUNCA UN HUECO. Un pedido anterior a la migración no tiene número; en
- * vez de dejar el sitio en blanco —que se lee como «la tablet está rota»— se
- * pinta el código de pase, que es lo que ese pedido sí tiene. Misma regla 5 de
- * la hoja de detalle: donde no hay dato, se pone lo que hay.
- *
- * `tabular-nums` para que el 1 ocupe lo mismo que el 8 y la columna no baile
- * entre filas; el tamaño baja un escalón con tres cifras porque en Alcalá el
- * día más cargado llegó a 139 (medido, 30 días).
- */
-function ElNumero({ t }: { t: TarjetaDelPase }) {
-  const hay = t.numero !== null && t.numero !== undefined
-  const texto = hay ? String(t.numero) : (t.codigo ?? '—')
-  const tam = hay
-    ? (texto.length >= 3 ? 'text-[34px]' : 'text-[42px]')
-    : 'text-[20px]'
-  return (
-    <span className={`shrink-0 min-w-[62px] text-center font-extrabold tabular-nums
-                      leading-none tracking-tight ${tam}`}
-          title={hay ? 'Número del día' : 'Este pedido es anterior al número del día'}>
-      {texto}
-    </span>
-  )
-}
-
 function Logo({ t }: { t: TarjetaDelPase }) {
   const [roto, setRoto] = useState(false)
   // Hueco de datos a la vista, no un marcador que parezca un logo: si falta, se
@@ -174,7 +142,6 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir, onAbrir }: {
       <button type="button" onClick={onAbrir}
               className="min-w-0 flex flex-col justify-center text-left">
         <div className="flex items-center gap-2 w-full">
-          <ElNumero t={t} />
           <Logo t={t} />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -254,10 +221,7 @@ function Tarjeta({ t, ocupado, onListo, onRecogido, onReimprimir, onAbrir }: {
                   className="w-full flex-1 min-h-[62px] rounded-xl bg-accent text-text-on-accent
                              text-[18px] font-extrabold tracking-tight flex items-center justify-center
                              gap-2 disabled:opacity-50">
-            {/* «Listo · 41» y no «Listo» a secas (maqueta del 19/09): con quince
-                tarjetas en pantalla, el botón tiene que decir a qué pedido
-                pertenece o se pulsa el de al lado. */}
-            {ocupado ? '…' : <><Check size={20} strokeWidth={3.2} /> Listo{t.numero != null ? ` · ${t.numero}` : ''}</>}
+            {ocupado ? '…' : <><Check size={20} strokeWidth={3.2} /> Listo</>}
           </button>
         ) : (
           <div className={`rounded-lg px-2.5 py-2.5 text-[14px] font-bold text-center

@@ -224,10 +224,14 @@ export function startPrintWorker(opts: { token: string; pollMs?: number }) {
   const ms = opts.pollMs || 3000;
   // fix/tablet-robustez (12/08), Tarea B: backoff en fallo (1s,2s,5s,10s,30s,
   // luego cada 30s), vuelve a los 3s normales en cuanto un reclamo funciona.
-  // fix/sondeo-adaptativo-tablet (13/08), Tarea B1: sin trabajo 20 ciclos
-  // seguidos (~1 min a 3s) sube progresivamente hasta 45s; vuelve a los 3s
+  // fix/sondeo-adaptativo-tablet (13/08), Tarea B1: sin trabajo 200 ciclos
+  // seguidos (~10 min a 3s) sube progresivamente hasta 45s; vuelve a los 3s
   // AL INSTANTE en cuanto haya un job que reclamar (ver wake() en pantalla).
-  pollHandle = runPollingLoop({ call: tick, normalIntervalMs: ms, idleIntervalMs: 45_000, idleAfter: 20 });
+  //
+  // 20 -> 200 (20/09): con 20 ciclos la cola se alejaba a los 60 segundos de
+  // calma, que en servicio pasa entre dos pedidos. El papel salía tarde sin
+  // que nada fallara. A 200 ciclos hacen falta diez minutos de silencio real.
+  pollHandle = runPollingLoop({ call: tick, normalIntervalMs: ms, idleIntervalMs: 45_000, idleAfter: 200 });
   console.log(`[folvy-print] worker iniciado (sondeo ${ms} ms)`);
 }
 

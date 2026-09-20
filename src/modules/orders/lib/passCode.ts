@@ -130,3 +130,44 @@ export function passCode(o: PassCodeInput): PassCode {
 
   return { source, full, lead, emph, secondary, secondarySource }
 }
+
+// ── EL NÚMERO GRANDE (20/09/2026, 11:05) ────────────────────────────────────
+//
+// Lo que se lee desde el otro lado del pase, en la pegatina, en el ticket de
+// cocina y en la tarjeta. Son las CUATRO ÚLTIMAS del código de pase.
+//
+// Julio, desde el pase: «son los que te pide el repartidor, los que
+// identifican el pedido en la plataforma, los que va a buscar en su cajón de
+// la moto entre varias bolsas». Y para Glovo, confirmado por él mismo: «el
+// repartidor pide G961» — que es el código entero, porque en Glovo son cuatro.
+//
+// 🔴 SALE DE `passCode()`, NUNCA DE `pos_short_code` A SECAS. Medido sobre 30
+//    días y la cuenta entera, los dos campos discrepan en:
+//      · Glovo por Last ....... 1.887 de 1.887   (`G043` vs `101749314182`)
+//      · Uber  por Last .......   747 de   747   (`U483` vs `AD817`)
+//      · Just Eat por Last ....    58 de    58
+//    y sólo coinciden en lo que entra por HubRise (377 + 19). Coger el campo
+//    crudo habría puesto en la pegatina un número que el repartidor no canta
+//    en 2.692 pedidos de 3.124. `passCode.ts` existe desde el 25/07 por esto.
+//
+// LA GUARDA: cuatro caracteres repiten más que el código entero. Si otro
+// pedido VIVO termina igual, el número crece a cinco, y a seis, hasta que sea
+// único. Nunca dos iguales en silencio.
+//
+// `ocupados` son los códigos de pase COMPLETOS de los demás pedidos vivos. Sin
+// esa lista —y el papel se imprime de uno en uno, así que ahí no la hay— se
+// devuelven las cuatro últimas sin más: en la pegatina el código ENTERO va
+// impreso debajo, en monoespaciada, así que un empate no es silencioso.
+// Medido en Alcalá, 30 días: cero empates en 45 minutos, doce en 3 horas.
+export function numeroGrande(pc: PassCode, ocupados?: Iterable<string>): string {
+  const full = clean(pc.full).toUpperCase()
+  if (!full) return '—'
+  const otros = ocupados
+    ? [...ocupados].map(c => clean(c).toUpperCase()).filter(c => c && c !== full)
+    : []
+  for (let n = 4; n < full.length; n++) {
+    const cola = full.slice(-n)
+    if (!otros.some(o => o.endsWith(cola))) return cola
+  }
+  return full
+}

@@ -56,7 +56,7 @@
 
 import QRCode from 'qrcode'
 import { allergenLabel, isAllergenCode } from '@/modules/kitchen/lib/allergens'
-import { passCode } from '@/modules/orders/lib/passCode'
+import { numeroGrande, passCode } from '@/modules/orders/lib/passCode'
 import { ensureFonts } from './ticketImage'
 import { flattenItems, qrEtiqueta } from './ticketRenderer'
 
@@ -219,7 +219,6 @@ interface PedidoParaPegatina {
   bag_token?: string | null
   customer_name?: string | null
   entro_at?: string | null
-  pase_numero?: number | null
   channel?: string | null
   pos_short_code?: string | null
   platform_order_code?: string | null
@@ -235,6 +234,8 @@ interface Pieza {
   numero: string
   /** «1 de 3». */
   deCuantas: string
+  /** El canal, pequeño, bajo el número: la letra sólo sobrevive en Glovo. */
+  canal: string
   marca: string
   plato: string
   detalle: string[]
@@ -242,15 +243,6 @@ interface Pieza {
   codigo: string
   pie: string
   qr: string | null
-}
-
-/** El número GRANDE. Si el pedido todavía no tiene número del día —una venta
- *  anterior a la migración, o un fallo del contador— NO se deja un hueco: se
- *  pone lo que el pase canta, que es el código. Regla de la hoja del pase:
- *  donde no hay dato, se pone lo que sí hay, nunca un blanco. */
-function elNumeroGrande(order: PedidoParaPegatina, pc: { emph: string }): string {
-  const n = order.pase_numero
-  return (n === null || n === undefined) ? (pc.emph || '—') : String(n)
 }
 
 async function pintarPieza(p: Pieza): Promise<HTMLCanvasElement> {
@@ -285,7 +277,7 @@ async function pintarPieza(p: Pieza): Promise<HTMLCanvasElement> {
   const numAlto = Math.round(numSize * 0.80)
   const qrImg = p.qr ? await qrEtiquetaImg(p.qr) : null
   const qrAlto = qrImg ? qrImg.height : 0
-  const altoIzquierda = numAlto + 10 + 38 + (qrImg ? 14 + qrAlto : 0)
+  const altoIzquierda = numAlto + 10 + 38 + 4 + 24 + 10 + (qrImg ? qrAlto : 0)
 
   // 🔴 TODAS LAS PEGATINAS DEL MISMO ALTO, y esto se vio dibujándolas, no
   //    leyéndolas. Con el alto libre salían a 47,8 · 43,1 · 36,5 y 33,5 mm
@@ -296,7 +288,7 @@ async function pintarPieza(p: Pieza): Promise<HTMLCanvasElement> {
   //
   //    El mínimo es el alto natural de la pegatina COMPLETA (número de dos
   //    cifras + QR). Lo que necesite más, crece; nada se recorta nunca.
-  const ALTO_MIN = 382      // 47,8 mm: 14 + 106 de número + 10 + 38 + 14 + 186 de QR + 14
+  const ALTO_MIN = 392      // 49 mm: 14 + 106 nº + 10 + 38 + 24 canal + 10 + 186 QR + 14
   const H = Math.max(ALTO_MIN, PAD + Math.max(altoIzquierda, altoDerecha) + PAD)
 
   const canvas = newCanvas(W, H)
@@ -311,7 +303,16 @@ async function pintarPieza(p: Pieza): Promise<HTMLCanvasElement> {
   yi += numAlto + 10
   ctx.font = fnt(38, true)
   ctx.fillText(p.deCuantas, PAD, yi)
-  yi += 38 + 14
+  yi += 38 + 4
+  // EL CANAL, pequeño, bajo el número (20/09). Con las cuatro últimas la letra
+  // del canal sólo sobrevive en Glovo (`G961`): Uber nunca la tuvo y Just Eat
+  // la pierde en los códigos largos. Sin esto, `9B96` no dice de quién es.
+  if (p.canal) {
+    ctx.font = fnt(20, true); ctx.fillStyle = MUT
+    ctx.fillText(p.canal.toUpperCase(), PAD, yi)
+    ctx.fillStyle = INK
+  }
+  yi += 24 + 10
   if (qrImg) ctx.drawImage(qrImg, PAD, yi)
 
   // ── Derecha: de qué marca, qué lleva, qué alérgenos y el código ──
@@ -366,7 +367,7 @@ export async function renderLabelImages(order: PedidoParaPegatina): Promise<HTML
   const comida = items.filter(it => !it.isDrink)
   const bebidas = items.filter(it => it.isDrink)
   const total = comida.length + (bebidas.length > 0 ? 1 : 0)
-  const numero = elNumeroGrande(order, pc)
+  const numero = numeroGrande(pc)
   const quien = (order.customer_name || '').split(' ')[0] || ''
   const hora = order.entro_at
     ? new Date(order.entro_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
@@ -381,6 +382,7 @@ export async function renderLabelImages(order: PedidoParaPegatina): Promise<HTML
       titulo: `Pegatina ${i}/${total}`,
       numero,
       deCuantas: `${i} de ${total}`,
+      canal: (order.channel ?? '').trim(),
       marca: order.brand ?? '',
       plato: it.name,
       detalle: (it.modifiers || []).map(m => m.name ?? '').filter(Boolean),
@@ -396,6 +398,7 @@ export async function renderLabelImages(order: PedidoParaPegatina): Promise<HTML
       titulo: 'Pegatina bebidas',
       numero,
       deCuantas: `${i} de ${total}`,
+      canal: (order.channel ?? '').trim(),
       marca: order.brand ?? '',
       plato: 'Bebidas y postres',
       detalle: bebidas.map(b => `${b.qty}x ${b.name}`),
