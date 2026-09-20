@@ -336,6 +336,32 @@ export async function checkForBundleUpdate(): Promise<{ remote: RemoteBundle } |
 }
 
 /**
+ * UN PAQUETE DESCARGADO SON DOS NÚMEROS DISTINTOS, Y CONFUNDIRLOS COSTÓ EL
+ * 307 Y EL 308 (20/09).
+ *
+ * Capgo no guarda los paquetes por su número: les pone un identificador SUYO,
+ * local, opaco (`info.id`, del tipo `9f3c1a2b-…`), y ése es el único que
+ * entiende `set()`. El número publicado --el 308 de `bundle.json`-- viaja
+ * aparte, en `version`, porque se lo pasamos nosotros al descargar.
+ *
+ * Mientras sólo hacía falta uno, devolver el `id` suelto bastaba. Desde que
+ * hay que volver a mirar el manifiesto antes de aplicar (17/09) hacen falta
+ * los DOS, y un `string` suelto no dice cuál de los dos es: se pasó el `id`
+ * donde iba el número, la comparación no coincidió NUNCA y las tres tablets
+ * descartaron dos paquetes seguidos, en silencio y sin un solo error.
+ *
+ * Por eso ya no se devuelve un `string`. Se devuelve `PaqueteDescargado`, que
+ * lleva los dos con su nombre puesto: el comprobador de tipos no distingue dos
+ * cadenas, pero sí dos campos.
+ */
+export interface PaqueteDescargado {
+  /** Identificador LOCAL de Capgo. Es lo ÚNICO que acepta `set()`. */
+  id: string
+  /** El número publicado en `bundle.json`. Es lo ÚNICO que se compara con el manifiesto. */
+  numero: number
+}
+
+/**
  * Descarga el bundle en 2º plano (Capgo lo deja en disco, sin activar). El
  * `version` que se le pasa es el bundleId como texto: es lo que luego lee
  * checkForBundleUpdate() vía CapacitorUpdater.current().bundle.version para
@@ -343,7 +369,7 @@ export async function checkForBundleUpdate(): Promise<{ remote: RemoteBundle } |
  * download() rechaza y aquí se traga como "no descargado" — se reintenta en
  * el siguiente ciclo, nunca se aplica un bundle corrupto.
  */
-export async function prefetchOtaBundle(remote: RemoteBundle): Promise<string | null> {
+export async function prefetchOtaBundle(remote: RemoteBundle): Promise<PaqueteDescargado | null> {
   if (!Capacitor.isNativePlatform()) return null
   try {
     const info = await CapacitorUpdater.download({
@@ -351,7 +377,8 @@ export async function prefetchOtaBundle(remote: RemoteBundle): Promise<string | 
       version: String(remote.bundleId),
       checksum: remote.sha256,
     })
-    return info?.id ?? null
+    if (!info?.id) return null
+    return { id: info.id, numero: remote.bundleId }
   } catch {
     return null
   }
@@ -386,15 +413,24 @@ export async function prefetchOtaBundle(remote: RemoteBundle): Promise<string | 
  * ha retirado un paquete-- y quien lo retira puede comprobar que el manifiesto
  * responde. Sin respuesta no se sabe nada, y no saber nada no puede convertirse
  * en no actualizar nunca.
+ *
+ * 🔴 Y LO QUE COSTÓ EL 307 Y EL 308 (20/09): esto compara NÚMEROS PUBLICADOS,
+ * no identificadores de Capgo. La primera versión recibía el `id` local
+ * --`9f3c1a2b-…`-- y lo comparaba contra el `308` del manifiesto. Nunca podían
+ * coincidir, así que la respuesta era SIEMPRE «ya no está publicado» y la
+ * tablet descartaba todo lo que se bajaba. Dos paquetes seguidos, tres tablets,
+ * cero errores en pantalla: el fallo silencioso de manual. Por eso el parámetro
+ * ya no es un `string` que valga para cualquier cosa, sino el `numero` de
+ * `PaqueteDescargado`, que sólo puede venir de `bundle.json`.
  */
-export async function sigueEstandoPublicado(bundleId: string): Promise<boolean> {
+export async function sigueEstandoPublicado(numeroDescargado: number): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return true
   try {
     const resp = await fetch(`${bundleUrl()}?t=${Date.now()}`, { cache: 'no-store' })
     if (!resp.ok) return true                   // no contesta → no se sabe → adelante
     const remote = (await resp.json()) as RemoteBundle
     if (!remote || typeof remote.bundleId !== 'number') return true
-    return String(remote.bundleId) === String(bundleId)
+    return remote.bundleId === numeroDescargado
   } catch {
     return true                                  // ídem: sin respuesta, adelante
   }

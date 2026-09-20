@@ -1,41 +1,44 @@
 -- ---------------------------------------------------------------------------
--- LOS ALÉRGENOS Y EL RESOLUTOR DE LA CÁMARA · 20/09/2026
+-- EL ESTADO DE LOS ALÉRGENOS Y EL RESOLUTOR DE LA CÁMARA · 20/09/2026, 15:30
 -- ---------------------------------------------------------------------------
 --
--- Esto es lo que SOBREVIVE de `20260920073000_el_numero_del_dia.sql`, que se
--- retira entera. Aquella migración construía un contador diario
--- (`pase_day_counter`) para dar un número corto por local y día. A las 12:10
--- Julio cambió el número grande: ya no es un contador, son **las cuatro
--- últimas del código que pide el repartidor**, que es un dato que YA existe en
--- la venta. Un número derivado no necesita contador, ni columna, ni disparador.
+-- 🔴 SIN APLICAR. Va después de las 23:45: `order_for_print` está en el camino
+--    del pedido —lo llama el worker de impresión en cada trabajo— así que falla
+--    la condición 1 de la banda. La condición 2 se cumple de sobra: es un
+--    `create or replace` de función y no cierra ninguna tabla.
 --
--- 🔴 La migración retirada NUNCA se aplicó. Comprobado contra la base antes de
---    borrarla: no existen `sale.pase_numero`, `sale.pase_dia`,
---    `pase_day_counter`, `tg_sale_pase_numero` ni `label_token.pase_numero`.
---    Por eso se BORRA en vez de escribir una que la deshaga: no hay nada que
---    deshacer, y dejar en el repositorio una migración que no está en la base
---    es exactamente la deriva que la regla 17 prohíbe, del revés.
+-- 🔴 Y VA NUMERADA DESPUÉS DE `20260920150000` A PROPÓSITO. Esto empezó siendo
+--    `20260920133000`, escrita ANTES de que a las 15:00 se aplicara a mano la
+--    traducción de alérgenos y el filtro de emojis. Si se hubiera quedado con
+--    aquel número, una reconstrucción del repositorio en orden habría hecho
+--    esto:
 --
--- Y la ESTABILIDAD EN REIMPRESIÓN deja de necesitar código: el número sale del
--- código de pase, que no cambia entre la primera impresión y la segunda. Antes
--- había que garantizarla con un `pase_numero` asignado una vez; ahora se
--- cumple por construcción. Menos piezas, misma garantía.
+--      133000 → pone el cuerpo VIEJO (alérgenos en inglés, emojis dentro)
+--      150000 → pone el cuerpo de las 15:00, y se lleva por delante allergens_state
 --
--- ── BANDA DE SERVICIO ───────────────────────────────────────────────────────
+--    Es decir: se perdía una de las dos, en silencio, según el orden. Renumerar
+--    no es cosmética; es lo que hace que las dos sobrevivan.
 --
--- 🔴 **Después de las 23:45.** Ya NO hay disparador ni columnas —la condición 2
---    se cumple de sobra, ningún ACCESS EXCLUSIVE sobre ninguna tabla— pero
---    `order_for_print` SÍ está en el camino del pedido: lo llama el worker de
---    impresión en cada trabajo. La condición 1 falla, y la banda dice que la
---    duda va siempre a favor de esperar. Contado, no supuesto:
---    `order_for_print` lo invoca `printWorker.ts` en cada `bag`, `kitchen` y
---    `labels` — 624 veces en los dos últimos días sólo en Alcalá.
+-- DE DÓNDE SALE ESTE CUERPO, Y CÓMO SE COMPROBÓ
 --
--- ---------------------------------------------------------------------------
-
-begin;
-
--- ── 1 · Los tres estados de los alérgenos ──────────────────────────────────
+--    NO está transcrito. Se partió del cuerpo DESPLEGADO
+--    (`pg_get_functiondef`, md5 `6ef9b0079af6492879dca7bfaf9b11a4`, el de las
+--    15:00) y se le insertaron DOS fragmentos, contando las anclas antes de
+--    sustituir: 1 aparición en `padres`, 1 en el `jsonb_build_object`. Si no
+--    hubieran cuadrado, se paraba.
+--
+--    Ensayado contra producción con ese mismo método y deshecho con una
+--    excepción. Sobre un pedido real de hoy en Alcalá:
+--
+--      lineas=2 · con allergens_state=2 · nombres con emoji=0
+--      · PACK UNO PA UNO (DC)  ->  []                              [unknown]  hijas=3
+--      · Tres Leches           ->  [Gluten, Huevos, Lácteos]       [listed]   tokens=1
+--
+--    O sea: el estado entra, la traducción de las 15:00 sigue, el filtro de
+--    emojis sigue, y los `unit_tokens` —los QR— no se mueven. Comprobado
+--    después: la huella de producción seguía siendo `6ef9b007…`, sin rastro.
+--
+-- ── 1 · POR QUÉ HACEN FALTA TRES ESTADOS Y NO DOS ──────────────────────────
 --
 -- 🔴 UNA CAJA DE ALÉRGENOS VACÍA SE LEE COMO «ESTE PLATO NO TIENE ALÉRGENOS»,
 --    y eso es una afirmación falsa sobre comida, impresa y pegada a la caja.
@@ -54,19 +57,22 @@ begin;
 -- tirar a la basura trabajo ya hecho — la regla 30. Así que la base manda el
 -- ESTADO y el papel sólo pinta lo que diga:
 --
---   'listed'  → hay `contains`: se listan.
+--   'listed'  → hay `contains`: se listan (ya en castellano desde las 15:00).
 --   'none'    → sin `contains` y sin ninguna `unknown`: «Ninguno de los 14».
 --   'unknown' → todo lo demás: «Sin datos». Son 14 platos, listados en el parte.
 --
--- La firma NO cambia, así que `create or replace` no crea sobrecarga (regla 2:
+-- La firma no cambia, así que `create or replace` no crea sobrecarga (regla 2:
 -- esa regla es para cambios de firma).
+-- ---------------------------------------------------------------------------
 
-create or replace function public.order_for_print(p_device_token text, p_sale_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path to 'public'
-as $$
+begin;
+
+CREATE OR REPLACE FUNCTION public.order_for_print(p_device_token text, p_sale_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
 declare
   v_device      kds_device;
   v_account_id  uuid;
@@ -78,11 +84,14 @@ begin
   end if;
   v_account_id := v_device.account_id;
 
+  -- Pobla descuento por línea (Last + HubRise) just-in-time. No falla si no hay.
   begin
     perform public.fill_line_discounts(p_sale_id);
+    -- C9 L1: acuña los tokens de etiqueta si no existen. Idempotente: la
+    -- reimpresion pasa por aqui otra vez y devuelve LOS MISMOS.
     perform public.ensure_label_tokens(p_sale_id);
   exception when others then
-    null;
+    null;  -- el ticket no se cae por un descuento mal formado
   end;
 
   with v as (
@@ -107,11 +116,11 @@ begin
     where nullif(btrim(prod->>'comments'),'') is not null and (prod->>'organizationProductId') is not null
   ),
   padres as (
-    select sl.sale_id, sl.id as line_id, sl.product_name, sl.quantity, sl.line_type,
+    select sl.sale_id, sl.id as line_id, btrim(regexp_replace(sl.product_name, '[^ -ɏ€]', '', 'g')) as product_name, sl.quantity, sl.line_type,
            sl.menu_item_id, sl.external_product_id, sl.unit_price, sl.line_total,
            sl.original_unit_price, sl.discount_label,
            mi.category as menu_category, df.name as family, df.color as family_color, df.icon as family_icon,
-           array(select allergen_code from recipe_item_allergen a where a.recipe_item_id = ri.id and a.state='contains') as allergens,
+           array(select case a.allergen_code when 'gluten' then 'Gluten' when 'milk' then 'Lácteos' when 'eggs' then 'Huevos' when 'sulphites' then 'Sulfitos' when 'mustard' then 'Mostaza' when 'soy' then 'Soja' when 'sesame' then 'Sésamo' when 'celery' then 'Apio' when 'nuts' then 'Frutos de cáscara' when 'fish' then 'Pescado' when 'molluscs' then 'Moluscos' when 'crustaceans' then 'Crustáceos' when 'peanuts' then 'Cacahuetes' when 'lupin' then 'Altramuces' else initcap(a.allergen_code) end from recipe_item_allergen a where a.recipe_item_id = ri.id and a.state='contains') as allergens,
            case
              when ri.id is null then 'unknown'
              when exists (select 1 from recipe_item_allergen a where a.recipe_item_id = ri.id and a.state='contains') then 'listed'
@@ -126,7 +135,7 @@ begin
     where sl.sale_id = p_sale_id and sl.parent_sale_line_id is null
   ),
   hijas as (
-    select sl.parent_sale_line_id, sl.sale_id, sl.id as line_id, sl.product_name, sl.quantity,
+    select sl.parent_sale_line_id, sl.sale_id, sl.id as line_id, btrim(regexp_replace(sl.product_name, '[^ -ɏ€]', '', 'g')) as product_name, sl.quantity,
            sl.line_type, sl.external_product_id, sl.menu_item_id, mg.group_type,
            dfh.name as family, dfh.color as family_color, mih.category as menu_category,
            case when sl.line_type='combo_item' then 1 when mg.group_type='removal' then 2
@@ -174,7 +183,8 @@ begin
 
   return v_result;
 end;
-$$;
+$function$
+;
 
 -- ── 2 · El resolutor de texto del SEGUNDO LECTOR de la cámara ──────────────
 --
@@ -264,15 +274,3 @@ revoke all on function public.pase_resolver_texto(text, text) from public, anon;
 grant execute on function public.pase_resolver_texto(text, text) to authenticated, service_role;
 
 commit;
-
--- ---------------------------------------------------------------------------
--- VUELTA ATRÁS, en la misma ventana:
---
---   · `pase_resolver_texto`: `drop function if exists
---     public.pase_resolver_texto(text, text);` — no la llama nadie todavía.
---   · `order_for_print`: volver a la definición anterior, que es ésta misma
---     sin `allergens_state`. Quitarlo sólo devuelve la caja de alérgenos a su
---     regla binaria; no rompe el papel.
---
--- Ninguna de las dos toca datos, así que la vuelta atrás no pierde nada.
--- ---------------------------------------------------------------------------

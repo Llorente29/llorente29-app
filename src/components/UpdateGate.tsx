@@ -58,6 +58,7 @@ import {
   checkForUpdate, installUpdate, prefetchUpdate, isUpdateDownloaded,
   fetchUpdateWindow, reportAppVersion, reportBundleApplied, reportInstalacionAMano,
   checkForBundleUpdate, prefetchOtaBundle, applyOtaBundle, sigueEstandoPublicado,
+  type PaqueteDescargado,
   type RemoteVersion, type RemoteBundle, type UpdateWindow,
 } from '../native/appUpdate'
 import { getDeviceToken } from '../native/print/printWorker'
@@ -102,7 +103,11 @@ export default function UpdateGate() {
 
   // ── Canal OTA (bundle web, Capa 2) ───────────────────────────────────────
   // Sin fase ni tarjeta: aplicar un bundle es set()+reload, nada que consentir.
-  const [otaBundleId, setOtaBundleId] = useState<string | null>(null) // id LOCAL de Capgo, listo para set()
+  // Los DOS números del paquete descargado, cada uno con su nombre: el `id`
+  // local de Capgo (lo único que acepta set()) y el `numero` publicado (lo
+  // único que se compara con el manifiesto). Guardar sólo uno fue el fallo
+  // del 307 y el 308 — ver `PaqueteDescargado` en appUpdate.ts.
+  const [otaPaquete, setOtaPaquete] = useState<PaqueteDescargado | null>(null)
   const [otaRemote, setOtaRemote] = useState<RemoteBundle | null>(null) // lo que anuncia bundle.json (trae `mandatory`)
   const otaCheckedRemote = useRef<number | null>(null) // remote.bundleId ya intentado descargar
   const otaApplying = useRef(false) // evita disparar set() dos veces a la vez
@@ -173,8 +178,8 @@ export default function UpdateGate() {
         setOtaRemote(b.remote)
         if (otaCheckedRemote.current !== b.remote.bundleId) {
           otaCheckedRemote.current = b.remote.bundleId
-          const id = await prefetchOtaBundle(b.remote)
-          if (alive) setOtaBundleId(id)
+          const p = await prefetchOtaBundle(b.remote)
+          if (alive) setOtaPaquete(p)
         }
       } catch { /* silencioso */ }
     }
@@ -185,7 +190,7 @@ export default function UpdateGate() {
 
   // Con una actualización pendiente (nativa visible O bundle OTA descargado),
   // sondea la ventana segura (barato, 1/min) — MISMA señal para los dos canales.
-  const otaPending = otaBundleId !== null
+  const otaPending = otaPaquete !== null
   useEffect(() => {
     if (!((update && phase === 'prompt') || otaPending)) return
     let alive = true
@@ -246,7 +251,7 @@ export default function UpdateGate() {
   // defecto: es un dedo en un botón. Quien lo pulsa está mirando la pantalla y
   // sabe si hay comandas encima.
   useEffect(() => {
-    if (!otaBundleId || update || !(windowOpen || instalarYa) || otaApplying.current) return
+    if (!otaPaquete || update || !(windowOpen || instalarYa) || otaApplying.current) return
     otaApplying.current = true
     // 🔴 SE VUELVE A MIRAR EL MANIFIESTO ANTES DE APLICAR (17/09). El 305 se
     // instaló en Alcalá doce horas después de que se retirara su manifiesto,
@@ -254,24 +259,24 @@ export default function UpdateGate() {
     // manifiesto contesta y ya no es ese bundle, se descarta lo descargado. Si
     // no contesta, se aplica igual: ver `sigueEstandoPublicado`.
     void (async () => {
-      const sigue = await sigueEstandoPublicado(otaBundleId)
+      const sigue = await sigueEstandoPublicado(otaPaquete.numero)
       if (!sigue) {
-        console.warn(`[folvy-ota] el bundle ${otaBundleId} ya no está publicado: no se aplica`)
+        console.warn(`[folvy-ota] el bundle ${otaPaquete.numero} ya no está publicado: no se aplica`)
         otaApplying.current = false
         setInstalarYa(false)
-        setOtaBundleId(null)
+        setOtaPaquete(null)
         return
       }
-      await applyOtaBundle(otaBundleId)
+      await applyOtaBundle(otaPaquete.id)
     })().catch(() => {
       otaApplying.current = false
       setInstalarYa(false)
       // El bundle no se pudo activar (raro: ya se verificó el checksum al
       // descargar). Se descarta para no reintentar en bucle con el mismo id
       // roto; el próximo bundle.json que salga se probará de cero.
-      setOtaBundleId(null)
+      setOtaPaquete(null)
     })
-  }, [otaBundleId, update, windowOpen, instalarYa])
+  }, [otaPaquete, update, windowOpen, instalarYa])
 
   // Una vez el usuario empieza (o falla) el flujo NATIVO, la tarjeta se queda.
   const engaged = phase !== 'prompt'
@@ -325,7 +330,7 @@ export default function UpdateGate() {
   // que no salga encima de una comanda a medio pasar. Y lleva el botón, que es
   // el único momento en que se salta la ventana: lo pide una persona que está
   // mirando la pantalla y sabe lo que tiene delante.
-  const otaEsperando = otaBundleId !== null && !update && !windowOpen && !instalarYa
+  const otaEsperando = otaPaquete !== null && !update && !windowOpen && !instalarYa
   if (otaEsperando && manosQuietas) {
     return (
       <div
