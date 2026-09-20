@@ -18,7 +18,8 @@
 //
 // RENDER: la BOLSA y la COCINA salen como IMAGEN (canvas→ráster), con el
 // renderer APROBADO portado a ticketImage.ts (idéntico al agente Node / Milanesa
-// House). Las pegatinas siguen por TEXTO por ahora (renderForType/renderDoc).
+// House). Las PEGATINAS también, desde el 20/09 (labelImage.ts), con caída a
+// TEXTO si el canvas falla.
 //
 // CONFIG DEL PAPEL DESDE BBDD (26/07): claim_print_jobs devuelve, junto a cada
 // job, un `config` con los flags del local (hoy: bag_qr). Lo que el papel enseña
@@ -30,6 +31,7 @@ import { supabase } from '@/lib/supabase';
 import { renderForType } from './ticketRenderer';
 import { renderDoc } from './escpos';
 import { renderBagImage, renderKitchenImage, canvasToEscpos } from './ticketImage';
+import { renderLabelImages } from './labelImage';
 import { EscposPrinter } from './EscposPrinter';
 import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff';
 
@@ -165,8 +167,19 @@ async function tick(): Promise<boolean> {
             buffers.push(canvasToEscpos(await renderBagImage(order, fiscal || undefined, { bagQr })));
           } else if (doc_type === 'kitchen') {
             buffers.push(canvasToEscpos(await renderKitchenImage(order)));
+          } else if (doc_type === 'labels') {
+            // PEGATINAS POR IMAGEN (20/09). Por texto la ESC/POS sólo da cuatro
+            // escalones de tamaño y el número del día no se podía leer desde el
+            // otro lado del pase. Si el render por imagen falla, se cae al de
+            // TEXTO de siempre: una pegatina fea es un pedido que sale; ninguna
+            // pegatina es una bolsa que no se puede dar (regla B53).
+            try {
+              for (const c of await renderLabelImages(order)) buffers.push(canvasToEscpos(c));
+            } catch (e) {
+              console.error('[folvy-print] pegatina por imagen falló, se cae a texto:', e instanceof Error ? e.message : e);
+              for (const doc of renderForType(order, doc_type)) buffers.push(renderDoc(doc));
+            }
           } else {
-            // pegatinas (labels) siguen por texto de momento
             for (const doc of renderForType(order, doc_type)) buffers.push(renderDoc(doc));
           }
         } else {

@@ -31,6 +31,7 @@
 
 import QRCode from 'qrcode'
 import { passCode, type PassCode, type PassCodeInput } from '@/modules/orders/lib/passCode'
+import { allergenLabel, isAllergenCode } from '@/modules/kitchen/lib/allergens'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
 import dejaVuRegularUrl from './assets/DejaVuSans.ttf?url'
 import dejaVuBoldUrl from './assets/DejaVuSans-Bold.ttf?url'
@@ -56,6 +57,11 @@ function fmtDate(iso: any) {
   if (!iso) return ''
   const d = new Date(iso)
   return d.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+/** Sólo la hora, en Madrid. La base manda UTC (regla 4): aquí se convierte. */
+function hhmmMadrid(iso: string | null | undefined) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
 }
 /** CÓDIGO DE PASE — regla única compartida (passCode.ts). Nunca duplicar aquí. */
 function pass(order: PassCodeInput): PassCode {
@@ -450,10 +456,6 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
   ctx.fillStyle = INK; ctx.textBaseline = 'top'
   let y = PAD + 30   // más aire arriba (antes del código)
 
-  const centerT = (t: string, size: number, bold?: boolean, fill = INK) => {
-    ctx.font = fnt(size, bold); ctx.fillStyle = fill; ctx.textAlign = 'center'
-    ctx.fillText(t || '', W / 2, y); ctx.textAlign = 'left'; y += size + 8
-  }
   const rule = () => { y += 6; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke(); y += 16 }
   // Separador fino entre platos (que no se amontonen).
   const thinRule = () => { y += 6; ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke(); y += 14 }
@@ -522,16 +524,42 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
   // Quita un código de marca al final del nombre (p.ej. " (BB)"): 2-4 mayúsculas.
   const cleanName = (n: string) => (n || '').replace(/\s*\([A-ZÑ]{2,4}\)\s*$/, '').trim()
 
-  // Cabecera: el MISMO código de pase que la bolsa y la pantalla (regla única).
-  passBand(ctx, pc, () => y, (ny) => { y = ny })
-  centerT((order.brand ?? '').toUpperCase(), 26, true)
-  const sec = secondaryField(order, pc)
-  if (sec) centerT(sec.label.replace(/:$/, '') + ' ' + sec.value, 20, false, MUT)
-  centerT(fmtDate(order.entro_at), 20, false, MUT)
-  y += 4
-  centerT(deliveryLabel(order.service_type), 24, true)
-  if (order.customer_name) centerT((order.customer_name || '').split(' ')[0], 24, true)
-  if (order.expected_time) centerT('Recogida ' + fmtDate(order.expected_time), 22, false, MUT)
+  // ── CABECERA · EL NÚMERO DEL DÍA MANDA (20/09, maqueta «El ticket de cocina»)
+  //
+  // Antes aquí iba el CÓDIGO DE PASE en banda negra a 92 px. Ahora arriba va el
+  // NÚMERO DEL DÍA, que es lo que enlaza este papel con la pegatina de la caja
+  // y con el botón «Listo · 41» de la tablet, y el código de pase baja al pie.
+  // Principio 1 de la maqueta: una sola cosa grande por superficie. Tener el
+  // número y el código los dos enormes sería no tener ninguno.
+  //
+  // El código NO se pierde —eso sería esconderlo, que es la regla 7—: va abajo,
+  // monoespaciado y al mayor escalón que entra, que es donde manda (la entrega).
+  const numeroDelDia = order.pase_numero === null || order.pase_numero === undefined
+    ? (pc.emph || '—')          // sin número todavía: lo que el pase canta. Nunca un hueco.
+    : String(order.pase_numero)
+  let numSize = 132
+  ctx.font = fnt(numSize, true)
+  while (numSize > 60 && ctx.measureText(numeroDelDia).width > W * 0.52) {
+    numSize -= 4; ctx.font = fnt(numSize, true)
+  }
+  const yCab = y
+  ctx.fillStyle = INK; ctx.textAlign = 'left'
+  ctx.fillText(numeroDelDia, PAD, yCab - Math.round(numSize * 0.12))
+  ctx.textAlign = 'right'
+  ctx.font = fnt(24, true)
+  ctx.fillText((order.channel ?? deliveryLabel(order.service_type) ?? '').toString(), W - PAD, yCab + 6)
+  ctx.font = fnt(22, false); ctx.fillStyle = MUT
+  ctx.fillText(hhmmMadrid(order.entro_at), W - PAD, yCab + 38)
+  ctx.textAlign = 'left'; ctx.fillStyle = INK
+  y = yCab + Math.round(numSize * 0.80) + 10
+
+  wrapLeft((order.brand ?? '').toString(), 26, true)
+  y += 2
+  // Alineadas a la IZQUIERDA con la marca y el número: un ticket con tres
+  // ejes distintos obliga a buscar cada dato. La maqueta tiene un solo margen.
+  wrapLeft(deliveryLabel(order.service_type), 24, true)
+  if (order.customer_name) wrapLeft((order.customer_name || '').split(' ')[0], 24, true)
+  if (order.expected_time) wrapLeft('Recogida ' + fmtDate(order.expected_time), 22, false, PAD, MUT)
   rule()
 
   // Agrupar por familia; los platos SIN familia van al final SIN cabecera "Otros".
@@ -554,8 +582,15 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
       const rem = m.tone === 'remove'
       wrapLeft(m.text, rem ? 26 : 24, rem, PAD + 20, rem ? INK : MUT)
     }
-    const al = (line.allergens || [])
-    if (al.length) wrapLeft('! ' + al.join(' · '), 24, true, PAD + 20)
+    // 🔴 EN CASTELLANO (20/09). La base guarda el código estable en inglés
+    // («gluten», «milk») y hasta hoy el ticket imprimía ESE código: la cocina
+    // de Alcalá leía «eggs · milk · sulphites». La etiqueta visible sale de
+    // allergens.ts, que es la fuente única — aquí no se traduce a mano.
+    const al = (line.allergens || []) as string[]
+    if (al.length) {
+      const enCastellano = al.map(c => (isAllergenCode(c) ? allergenLabel(c, 'es') : c))
+      wrapLeft('! ' + enCastellano.join(' · '), 24, true, PAD + 20)
+    }
     if (line.customer_note) noteBox(line.customer_note)
     y += 14
   }
@@ -568,6 +603,33 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
   // Sin familia: sin cabecera, directo.
   if (famKeys.length && nofam.length) firstLine = true
   for (const line of nofam) drawLine(line)
+
+  // ── PIE · el número otra vez y el código de pase, como en la maqueta ──────
+  //
+  // El número se repite abajo a propósito: el ticket sale del rollo y lo
+  // primero que asoma por la boca de la impresora es el final. Repetirlo
+  // cuesta 8 mm de papel y ahorra darle la vuelta a la comanda.
+  rule()
+  const yPie = y
+  ctx.fillStyle = INK; ctx.textAlign = 'left'
+  ctx.font = fnt(56, true)
+  ctx.fillText(numeroDelDia, PAD, yPie)
+  let codSize = 40
+  const codigoPase = pc.full || '—'
+  ctx.font = `${codSize}px "DejaVu Sans Mono", "Roboto Mono", monospace`
+  while (codSize > 16 && ctx.measureText(codigoPase).width > W * 0.52) {
+    codSize -= 2
+    ctx.font = `${codSize}px "DejaVu Sans Mono", "Roboto Mono", monospace`
+  }
+  ctx.textAlign = 'right'
+  ctx.fillText(codigoPase, W - PAD, yPie + 4)
+  const secPie = secondaryField(order, pc)
+  if (secPie) {
+    ctx.font = fnt(18, false); ctx.fillStyle = MUT
+    ctx.fillText(secPie.label.replace(/:$/, '') + ' ' + secPie.value, W - PAD, yPie + 4 + codSize + 6)
+  }
+  ctx.textAlign = 'left'; ctx.fillStyle = INK
+  y = yPie + Math.max(60, codSize + 30)
 
   const out = newCanvas(W, y + 48)   // más aire abajo (antes del corte)
   out.getContext('2d')!.drawImage(canvas, 0, 0)

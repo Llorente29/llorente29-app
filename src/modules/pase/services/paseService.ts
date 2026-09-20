@@ -46,6 +46,17 @@ export interface LaBolsa {
 export interface TarjetaDelPase extends PedidoDelPase {
   /** El número corto que se lee en la esquina. */
   codigo: string | null
+  /**
+   * EL NÚMERO DEL DÍA (20/09). Corto, por local y día de servicio, el MISMO
+   * que va en el ticket de cocina y en la pegatina de la caja. Es lo que
+   * enlaza las tres superficies: hasta hoy el mismo pedido llevaba tres
+   * números distintos y ninguno grande.
+   *
+   * Es `null` en los pedidos anteriores a la migración y si el contador
+   * fallase. La tarjeta no deja un hueco: enseña el código de pase en su
+   * sitio (ver `elNumeroGrande` en PaseBoard).
+   */
+  numero: number | null
   marca: string | null
   /** El logo de la marca, el mismo de la pegatina de la bolsa. */
   marca_logo_url: string | null

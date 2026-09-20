@@ -83,7 +83,11 @@ function allergenList(line: any) {
 // Las BEBIDAS siguen colapsando en una sola etiqueta de bolsa: no se expanden y
 // por eso llevan `unitNo: null`. Limitacion aceptada y anotada en el diseño (la
 // cantidad de bebidas no sera verificable), no un defecto a arreglar aqui.
-function flattenItems(order: any) {
+// EXPORTADA a proposito (20/09): la pegatina por imagen (`labelImage.ts`) usa
+// ESTA y no una copia. El reparto de unidades y la pareja (lineId, unitNo) son
+// la identidad de una etiqueta desde el 04/09; dos copias de esa regla es una
+// regla que un dia dice dos cosas.
+export function flattenItems(order: any) {
   const out: any[] = [];
   const pushExpanded = (it: any) => {
     if (it.isDrink) { out.push({ ...it, unitNo: null }); return; }
@@ -94,10 +98,10 @@ function flattenItems(order: any) {
     const comboComponents = (line.children || []).filter((c: any) => c.line_type === 'combo_item');
     if (comboComponents.length > 0) {
       for (const comp of comboComponents) {
-        pushExpanded({ lineId: comp.line_id ?? null, unitTokens: comp.unit_tokens ?? null, name: comp.name, qty: comp.qty, family: comp.family, allergens: line.allergens || [], modifiers: [], isDrink: isDrinkOrDessert(comp.family, comp.name) });
+        pushExpanded({ lineId: comp.line_id ?? null, unitTokens: comp.unit_tokens ?? null, name: comp.name, qty: comp.qty, family: comp.family, allergens: line.allergens || [], allergensState: line.allergens_state ?? null, modifiers: [], isDrink: isDrinkOrDessert(comp.family, comp.name) });
       }
     } else {
-      pushExpanded({ lineId: line.line_id ?? null, unitTokens: line.unit_tokens ?? null, name: line.name, qty: line.qty, family: line.family, allergens: line.allergens || [], modifiers: (line.children || []).filter((c: any) => c.line_type !== 'combo_item'), isDrink: isDrinkOrDessert(line.family, line.name) });
+      pushExpanded({ lineId: line.line_id ?? null, unitTokens: line.unit_tokens ?? null, name: line.name, qty: line.qty, family: line.family, allergens: line.allergens || [], allergensState: line.allergens_state ?? null, modifiers: (line.children || []).filter((c: any) => c.line_type !== 'combo_item'), isDrink: isDrinkOrDessert(line.family, line.name) });
     }
   }
   return out;
@@ -225,7 +229,7 @@ export function renderKitchenTicket(order: any): TicketDoc {
 // Subir a mayusculas SOLO el token no sirve: sigue saliendo byte. Tiene que ir
 // todo. El esquema y el dominio son insensibles a mayusculas por norma y por
 // DNS; de la ruta /E/ se encarga label-scan.
-function qrEtiqueta(order: { brand_shop_url?: string | null }, token: string | null | undefined): string | null {
+export function qrEtiqueta(order: { brand_shop_url?: string | null }, token: string | null | undefined): string | null {
   const tienda = String(order.brand_shop_url ?? '').trim();
   if (!tienda) return null;
   if (!token) return tienda.toUpperCase();
