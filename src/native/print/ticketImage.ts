@@ -338,9 +338,17 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   y += 10
 
   // Código (banda) — EN SU SITIO Y A SU TAMAÑO, los del diseño aprobado. Lo
-  // único que cambia respecto al 24/06 es de dónde sale la cifra: `passCode`
-  // en vez de `pos_short_code` a secas.
-  band(pc.full, 46)
+  // único que cambia respecto al 24/06 es de dónde sale la cifra.
+  //
+  // 🔴 Y CANTA LO MISMO QUE LA PEGATINA, carácter por carácter (21/09). Con
+  // `pc.full` no lo hacía: la pegatina usa `numeroGrande(pc)` --las cuatro
+  // últimas-- y la banda enseñaba el código entero. Coincidían sólo cuando el
+  // código ya tenía 4 (Glovo), y divergían en 1.074 de 3.295 pedidos de 30
+  // días (33 %): TODO Uber por los dos orígenes --«000D7» contra «00D7»-- y
+  // Just Eat por HubRise, cuyo `pos_short_code` trae 10 caracteres
+  // («J190354836» contra «4836»). Dos papeles del mismo pedido con dos
+  // números es el fallo mudo que este trabajo existe para evitar.
+  band(numeroGrande(pc), 46)
 
   // Datos del pedido — el OTRO código en la línea fina (para incidencias).
   const sec = secondaryField(order, pc)
@@ -372,9 +380,12 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
     for (const m of modifierLines(line.children)) left('      ' + m.text, 21, false, MUT)
   }
   y += 14; rule()
+  // En el aprobado SIEMPRE hay algo entre las dos rayas: envío y/o descuento.
+  // Sin nada que poner, la segunda raya dejaba un bloque vacío (21/09).
+  const hayExtras = !!order.delivery_cost || !!order.discount_amount
   if (order.delivery_cost) lr('Gastos de envío:', money(order.delivery_cost), 23)
   if (order.discount_amount) lr('Descuento:', '-' + money(order.discount_amount), 23)
-  y += 10; rule()
+  if (hayExtras) { y += 10; rule() }
 
   // IVA (10% hostelería)
   const total = Number(order.total ?? 0)
