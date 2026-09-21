@@ -56,12 +56,27 @@ En cuanto **`Cocina` y `Tablet camichi4`** enseñen 309 en
 su código llega por Vercel y su `bundle_applied: 306` es un resto de cuando era
 APK.
 
+**🔴 El nombre NO se adivina, se busca.** El 21/09 lo retiró otra mano con otro
+nombre --`bundle.json.pausa-20260921`, a las 07:35:06-- y la consulta de
+reponer que había escrita aquí buscaba `bundle.json.retenido-309`: no habría
+encontrado nada, y habría parecido que no hay manifiesto que reponer. Se busca
+primero:
+
+```sql
+select o.name, to_char(o.updated_at at time zone 'Europe/Madrid','DD/MM HH24:MI:SS') as tocado
+  from storage.objects o join storage.buckets b on b.id = o.bucket_id
+ where b.name = 'apps' and o.name like 'bundle.json%'
+ order by o.updated_at desc;
+```
+
+y se repone el que salga, por su nombre exacto:
+
 ```sql
 update storage.objects o
    set name = 'bundle.json'
   from storage.buckets b
  where b.id = o.bucket_id and b.name = 'apps'
-   and o.name = 'bundle.json.retenido-309';
+   and o.name = '<el nombre que haya salido arriba>';
 ```
 
 Con el manifiesto retirado no hay descubrimiento: una tablet que se reinicie en
