@@ -22,7 +22,9 @@
 // TEXTO si el canvas falla.
 //
 // CONFIG DEL PAPEL DESDE BBDD (26/07): claim_print_jobs devuelve, junto a cada
-// job, un `config` con los flags del local (hoy: bag_qr). Lo que el papel enseña
+// job, un `config` con los flags del local. Hoy no se lee ninguno: el QR del
+// pedido se retiró el 21/09 al recuperar el diseño aprobado de la bolsa, y
+// `kitchen_time_config.bag_qr` queda en BBDD sin consumidor. Lo que el papel enseña
 // se enciende y se apaga con un UPDATE, sin APK nueva. Si un job llega sin
 // `config` (RPC antigua), se asume todo apagado = papel de siempre.
 
@@ -150,11 +152,9 @@ async function tick(): Promise<boolean> {
     if (!Array.isArray(jobs) || jobs.length === 0) return false;
 
     for (const job of jobs) {
-      const { job_id, doc_type, payload, printer, config, attempts } = job;
+      const { job_id, doc_type, payload, printer, attempts } = job;
       const ip = printer?.ip;
       const port = printer?.port || 9100;
-      // Flags del papel gobernados por BBDD. Sin `config` (RPC antigua) → apagado.
-      const bagQr = config?.bag_qr === true;
       try {
         if (!ip) throw new Error(`impresora ${printer?.name} sin IP`);
         const buffers: Uint8Array[] = [];
@@ -164,7 +164,7 @@ async function tick(): Promise<boolean> {
           if (doc_type === 'bag') {
             let fiscal: any = null;
             try { fiscal = await rpc('fiscal_for_print', { p_device_token: deviceToken, p_sale_id: payload.sale_id }); } catch { /* sin fiscal */ }
-            buffers.push(canvasToEscpos(await renderBagImage(order, fiscal || undefined, { bagQr })));
+            buffers.push(canvasToEscpos(await renderBagImage(order, fiscal || undefined)));
           } else if (doc_type === 'kitchen') {
             buffers.push(canvasToEscpos(await renderKitchenImage(order)));
           } else if (doc_type === 'labels') {

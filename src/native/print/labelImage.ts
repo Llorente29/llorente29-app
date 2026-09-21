@@ -57,7 +57,7 @@
 import QRCode from 'qrcode'
 import { allergenLabel, isAllergenCode } from '@/modules/kitchen/lib/allergens'
 import { numeroGrande, passCode } from '@/modules/orders/lib/passCode'
-import { ensureFonts } from './ticketImage'
+import { ensureFonts, enLineas } from './ticketImage'
 import { flattenItems, qrEtiqueta } from './ticketRenderer'
 
 // ── Lienzo y escala ─────────────────────────────────────────────────────────
@@ -127,21 +127,6 @@ function alMayorEscalonQueEntre(
   const ancho = ctx.measureText(texto).width
   if (ancho <= 0) return menor
   return Math.max(9, Math.floor(menor * anchoMax / ancho))
-}
-
-/** Parte en líneas por palabras. No parte palabras: si una sola palabra no
- *  cabe, se devuelve igual y quien llama encoge la fuente. */
-function enLineas(ctx: CanvasRenderingContext2D, texto: string, anchoMax: number): string[] {
-  const palabras = (texto || '').split(/\s+/).filter(Boolean)
-  const out: string[] = []
-  let linea = ''
-  for (const p of palabras) {
-    const prueba = linea ? linea + ' ' + p : p
-    if (ctx.measureText(prueba).width <= anchoMax) linea = prueba
-    else { if (linea) out.push(linea); linea = p }
-  }
-  if (linea) out.push(linea)
-  return out.length ? out : ['']
 }
 
 /** Texto ENTERO en como mucho `maxLineas`, encogiendo la fuente hasta que quepa.
