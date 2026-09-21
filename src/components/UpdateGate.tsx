@@ -177,8 +177,15 @@ export default function UpdateGate() {
         if (!alive || !b) return
         setOtaRemote(b.remote)
         if (otaCheckedRemote.current !== b.remote.bundleId) {
-          otaCheckedRemote.current = b.remote.bundleId
+          // 🔴 SE APUNTA DESPUÉS DE QUE HAYA PAQUETE, NO ANTES (21/09).
+          // Apuntarlo antes dejaba la tablet SORDA para ese número si la
+          // descarga fallaba: `prefetchOtaBundle` se traga cualquier error y
+          // devuelve null, el ciclo de 15 min volvía, veía el mismo número ya
+          // apuntado y no hacía nada. Ni reintento, ni aviso, ni rastro —
+          // hasta reabrir la app o hasta que saliera un número mayor. Es lo que
+          // dejó a Cocina y camichi4 con el 309 apuntado y el disco vacío.
           const p = await prefetchOtaBundle(b.remote)
+          if (p) otaCheckedRemote.current = b.remote.bundleId
           if (alive) setOtaPaquete(p)
         }
       } catch { /* silencioso */ }

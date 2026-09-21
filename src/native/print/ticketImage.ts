@@ -13,20 +13,33 @@
 // bag/kitchen; usa este módulo. (El agente Node conserva su copia gemela como
 // referencia; convergencia a un módulo compartido = deuda futura declarada.)
 //
-// ── CÓDIGO DE PASE (26/07) ──────────────────────────────────────────────────
-// El número que el repartidor CANTA al llegar sale ARRIBA DEL TODO y al máximo
-// tamaño que permite el papel (80 mm). La regla de qué código es NO vive aquí:
+// ── CÓDIGO DE PASE (26/07, recolocado el 21/09) ─────────────────────────────
+// El número que el repartidor CANTA al llegar va en la banda negra, en el sitio
+// y al tamaño del diseño aprobado. La regla de qué código es NO vive aquí:
 // se importa de src/modules/orders/lib/passCode.ts, la MISMA que usan la tarjeta
 // de /orders, la previsualización web y el renderer de texto. La causa raíz del
 // bug que esto cierra fue justo tener dos reglas (aquí una, allí otra): a partir
 // de ahora hay UNA. El segundo código baja a la línea fina, para incidencias.
 //
-// ── QR DEL PEDIDO (26/07, APAGADO por defecto) ──────────────────────────────
-// Si el local tiene kitchen_time_config.bag_qr = true, la bolsa lleva además un
-// QR con el sale_id (asociación pedido↔cámara del frente de visión). El flag
-// viaja en el job (claim_print_jobs → job.config.bag_qr): se enciende y se apaga
-// con un UPDATE en BBDD, sin APK nueva. Con el flag en false el papel sale
-// EXACTAMENTE como hoy salvo el código de pase.
+// ── EL TICKET DE BOLSA VUELVE A SU DISEÑO DEL 24/06 (21/09) ─────────────────
+// Julio: «ya tiene un diseño propio y que no se puede cambiar», «en algún
+// momento ha sufrido alguna modificación no autorizada». La tenía: el 26/07
+// (`7475943`, por el merge `327cbdc`) la banda del código se hizo enorme y se
+// subió ENCIMA DEL LOGO, se quitó la banda que iba después de «Factura
+// Simplificada», y se añadió un QR del pedido que nadie aprobó.
+//
+// Aquí se recupera el aprobado --que es `4225053`, el portado 1:1 del agente de
+// Node-- con UNA diferencia deliberada y dos arreglos:
+//   · el NÚMERO de la banda sale de `passCode`, no de `pos_short_code`. La
+//     posición y el tamaño son los del aprobado; sólo cambia de dónde sale la
+//     cifra, porque el campo crudo discrepa del que canta el repartidor en
+//     2.692 de 3.124 pedidos (medido el 20/09).
+//   · el nombre del artículo ENVUELVE POR PALABRAS y el precio tiene columna
+//     fija: antes los dos se pintaban sin limitar el ancho y un nombre largo se
+//     superponía al precio («…Pita Mixta Gyros31,80 €», Alcalá 20/09).
+//   · el QR del pedido se retira. No estaba en el aprobado y estaba APAGADO en
+//     los siete locales (`kitchen_time_config.bag_qr = false`), así que no
+//     cambia ni un ticket de los que salen hoy.
 // ---------------------------------------------------------------------------
 
 import QRCode from 'qrcode'
@@ -41,12 +54,6 @@ const W = 576            // 80mm @ 203dpi
 const PAD = 28
 const INK = '#000000'
 const MUT = '#444444'
-
-/** Opciones de render gobernadas desde BBDD (llegan en el job, no en la APK). */
-export interface BagRenderOptions {
-  /** kitchen_time_config.bag_qr — QR con el sale_id en la bolsa. Def. false. */
-  bagQr?: boolean
-}
 
 function fnt(size: number, bold?: boolean) { return `${size}px ${bold ? 'FolvyBold' : 'Folvy'}` }
 function money(n: any) {
@@ -100,6 +107,23 @@ function modifierLines(children: any) {
 }
 
 // ── Canvas / fuentes / imágenes (WebView) ────────────────────────────────────
+
+/** Parte en líneas POR PALABRAS. No parte palabras nunca: si una sola no cabe,
+ *  se devuelve igual y sobresale — preferible a cortarla por la mitad, que es
+ *  exactamente el fallo que se ve en papel cuando envuelve la impresora.
+ *  Vive aquí y la importa `labelImage`: una regla, un sitio. */
+export function enLineas(ctx: CanvasRenderingContext2D, texto: string, anchoMax: number): string[] {
+  const palabras = (texto || '').split(/\s+/).filter(Boolean)
+  const out: string[] = []
+  let linea = ''
+  for (const p of palabras) {
+    const prueba = linea ? linea + ' ' + p : p
+    if (ctx.measureText(prueba).width <= anchoMax) linea = prueba
+    else { if (linea) out.push(linea); linea = p }
+  }
+  if (linea) out.push(linea)
+  return out.length ? out : ['']
+}
 
 function newCanvas(w: number, h: number): HTMLCanvasElement {
   const c = document.createElement('canvas')
@@ -156,14 +180,6 @@ async function qrImage(data: string): Promise<HTMLImageElement | null> {
   } catch { return null }
 }
 
-/** QR de texto CRUDO (sale_id): al escanearlo sale exactamente ese texto, sin
- *  prefijos ni URL — es lo que espera el frente de visión. */
-async function qrImageRaw(data: string): Promise<HTMLImageElement | null> {
-  try {
-    const dataUrl = await QRCode.toDataURL(data, { margin: 2, scale: 6, errorCorrectionLevel: 'M' })
-    return await loadImageSrc(dataUrl)
-  } catch { return null }
-}
 
 let folvyPie: Promise<HTMLImageElement | null> | null = null
 function loadFolvyPie(): Promise<HTMLImageElement | null> {
@@ -195,7 +211,7 @@ function autocropBox(img: CanvasImageSource & { width: number; height: number })
 /** Bolsa/factura como IMAGEN — idéntica al ticket aprobado (Milanesa House).
  *  Enriquece con logo de marca, pie Folvy y dirección desglosada, como el agente.
  *  `opts.bagQr` (flag de BBDD) añade el QR con el sale_id. */
-export async function renderBagImage(order: any, fiscal?: any, opts?: BagRenderOptions): Promise<HTMLCanvasElement> {
+export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanvasElement> {
   await ensureFonts()
   const logoImg = await loadRemoteImage(order.brand_logo_url)
   const folvyImg = await loadFolvyPie()
@@ -235,6 +251,35 @@ export async function renderBagImage(order: any, fiscal?: any, opts?: BagRenderO
     text(r, fnt(size, boldR), { align: 'right', fill })
     y += lineH(size)
   }
+  // ── UNA LÍNEA DE ARTÍCULO ──────────────────────────────────────────────
+  // El precio RESERVA su columna a la derecha y el nombre usa lo que queda,
+  // partiendo por palabras. Antes los dos se pintaban con `fillText` sin
+  // limitar ancho y un nombre largo se metía DEBAJO del precio: en papel salía
+  // «2x The Mixed Master: Pita Mixta Gyros31,80 €» (Alcalá, 20/09).
+  const filaArticulo = (
+    etiqueta: string, precio: string, size: number,
+    o: { boldPrecio?: boolean; fillPrecio?: string; tachar?: boolean; sangria?: number } = {},
+  ) => {
+    const { boldPrecio = false, fillPrecio = INK, tachar = false, sangria = 0 } = o
+    ctx.font = fnt(size, boldPrecio)
+    const pw = ctx.measureText(precio).width
+    const x0 = PAD + sangria
+    const anchoNombre = (W - PAD - pw - 12) - x0
+
+    // El precio va en la PRIMERA línea, en su columna.
+    text(precio, fnt(size, boldPrecio), { align: 'right', fill: fillPrecio })
+    if (tachar) {
+      ctx.strokeStyle = fillPrecio; ctx.lineWidth = 2; ctx.setLineDash([])
+      ctx.beginPath(); ctx.moveTo(W - PAD - pw, y + 13); ctx.lineTo(W - PAD, y + 13); ctx.stroke()
+    }
+
+    ctx.font = fnt(size, false)
+    const lineas = enLineas(ctx, etiqueta, anchoNombre)
+    lineas.forEach((ln, i) => {
+      text(ln, fnt(size, false), { x: i === 0 ? x0 : x0 + 22 })
+      y += lineH(size)
+    })
+  }
   const rule = (dashed = false) => {
     y += 6; ctx.strokeStyle = INK; ctx.lineWidth = 2
     ctx.setLineDash(dashed ? [6, 6] : [])
@@ -267,24 +312,6 @@ export async function renderBagImage(order: any, fiscal?: any, opts?: BagRenderO
     }
   }
 
-  // ── CÓDIGO DE PASE: banda negra, ARRIBA DEL TODO, al máximo que quepa ──
-  // `emph` es lo que canta el repartidor (dígitos de Glovo / últimos 4 de Uber):
-  // va enorme. `lead` es el prefijo (la "G"), a la mitad de tamaño: informa sin
-  // competir. El tamaño se autoajusta midiendo el texto real, así que un código
-  // de 12 dígitos entra igual que uno de 3, sin desbordar el papel.
-  passBand(ctx, pc, () => y, (ny) => { y = ny })
-
-  // QR del pedido (sale_id) — sólo si el local lo tiene encendido en BBDD.
-  if (opts?.bagQr && order.sale_id) {
-    const qrImg = await qrImageRaw(String(order.sale_id))
-    if (qrImg) {
-      const qs = 170
-      ctx.drawImage(qrImg, (W - qs) / 2, y, qs, qs)
-      y += qs + 6
-      center('Pedido ' + String(order.sale_id).slice(0, 8), 18, false, 10, MUT)
-    }
-  }
-
   // LOGO (protagonista, sin deformar)
   let logoDrawn = false
   if (logoImg) {
@@ -310,6 +337,11 @@ export async function renderBagImage(order: any, fiscal?: any, opts?: BagRenderO
   lr('Factura Simplificada', fiscal?.ticketNumber ?? (order.external_tab_ref ?? '—'), 24)
   y += 10
 
+  // Código (banda) — EN SU SITIO Y A SU TAMAÑO, los del diseño aprobado. Lo
+  // único que cambia respecto al 24/06 es de dónde sale la cifra: `passCode`
+  // en vez de `pos_short_code` a secas.
+  band(pc.full, 46)
+
   // Datos del pedido — el OTRO código en la línea fina (para incidencias).
   const sec = secondaryField(order, pc)
   if (sec) field(sec.label, sec.value)
@@ -330,16 +362,12 @@ export async function renderBagImage(order: any, fiscal?: any, opts?: BagRenderO
   for (const line of order.lineas || []) {
     const label = `${line.qty}x  ${line.name}`
     if (line.original_unit_price != null) {
-      text(label, fnt(23, false))
-      const orig = money(line.original_unit_price * line.qty)
-      ctx.font = fnt(23, false); const ow = ctx.measureText(orig).width
-      text(orig, fnt(23, false), { align: 'right', fill: '#888888' })
-      ctx.strokeStyle = '#888888'; ctx.lineWidth = 2; ctx.setLineDash([])
-      ctx.beginPath(); ctx.moveTo(W - PAD - ow, y + 13); ctx.lineTo(W - PAD, y + 13); ctx.stroke()
-      y += lineH(23)
-      lr('   ' + (line.discount_label || 'Descuento'), money(line.line_total), 22, true)
+      filaArticulo(label, money(line.original_unit_price * line.qty), 23,
+                   { fillPrecio: '#888888', tachar: true })
+      filaArticulo(line.discount_label || 'Descuento', money(line.line_total), 22,
+                   { boldPrecio: true, sangria: 24 })
     } else {
-      lr(label, money(line.line_total), 23)
+      filaArticulo(label, money(line.line_total), 23)
     }
     for (const m of modifierLines(line.children)) left('      ' + m.text, 21, false, MUT)
   }
@@ -390,55 +418,6 @@ export async function renderBagImage(order: any, fiscal?: any, opts?: BagRenderO
   const out = newCanvas(W, y)
   out.getContext('2d')!.drawImage(canvas, 0, 0)
   return out
-}
-
-// ── Banda del código de pase (compartida bolsa + cocina) ─────────────────────
-
-/** Pinta la banda negra con el código de pase al MAYOR tamaño que cabe en 80 mm.
- *  `lead` (prefijo) sale a ~55% del tamaño de `emph` (lo cantado). El llamador
- *  pasa lectores/escritores de `y` porque el motor de ambos tickets es posicional. */
-function passBand(
-  ctx: CanvasRenderingContext2D,
-  pc: PassCode,
-  getY: () => number,
-  setY: (v: number) => void,
-): void {
-  const innerW = (W - PAD + 6) - (PAD - 6) - 28   // ancho útil dentro de la banda
-  const LEAD_RATIO = 0.55
-  const MAX = 92, MIN = 34
-  let size = MAX
-  const widthAt = (s: number) => {
-    ctx.font = fnt(s, true)
-    const ew = ctx.measureText(pc.emph || '').width
-    if (!pc.lead) return { ew, lw: 0, total: ew }
-    ctx.font = fnt(Math.round(s * LEAD_RATIO), true)
-    const lw = ctx.measureText(pc.lead).width
-    return { ew, lw, total: ew + lw + 6 }
-  }
-  while (size > MIN && widthAt(size).total > innerW) size -= 2
-
-  const { ew, lw } = widthAt(size)
-  const y0 = getY()
-  const h = size + 30
-  ctx.fillStyle = INK
-  ctx.fillRect(PAD - 6, y0 - 2, (W - PAD + 6) - (PAD - 6), h + 2)
-
-  // Bloque centrado: [lead pequeño][emph enorme], alineados por la base.
-  const totalW = lw + (lw ? 6 : 0) + ew
-  const x0 = (W - totalW) / 2
-  const baseline = y0 + h - 16
-  ctx.fillStyle = '#ffffff'
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  if (lw) {
-    ctx.font = fnt(Math.round(size * LEAD_RATIO), true)
-    ctx.fillText(pc.lead, x0, baseline)
-  }
-  ctx.font = fnt(size, true)
-  ctx.fillText(pc.emph || '—', x0 + lw + (lw ? 6 : 0), baseline)
-  ctx.textBaseline = 'top'
-  ctx.fillStyle = INK
-  setY(y0 + h + 14)
 }
 
 // ── COCINA (nueva, mismo motor imagen; layout limpio) ────────────────────────
