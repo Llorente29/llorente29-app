@@ -1,5 +1,33 @@
 # Runbook · La retirada del manifiesto para meter el 309
 
+> 🔴 **SUPERADO el 21/09 a las 08:05, y NO se ejecuta.** El manifiesto y los
+> pedidos los lleva **A**, un solo operador. Aquí no se renombra `bundle.json`,
+> no se abren ni cierran pedidos y no se empuja a `main`. Esto queda como
+> registro de lo que se pensó y de por qué hizo falta; las órdenes vivas están
+> en el documento de A del 21/09 08:05.
+>
+> **Lo que este documento tuvo mal, y costó una hora de diagnóstico cruzado:**
+>
+> - Nombraba una fila que nunca existió, `bundle.json.retenido-309`. La que se
+>   usó fue `bundle.json.pausa-20260921`, ya renombrada de vuelta. **No queda
+>   ninguna fila huérfana.**
+> - Y el error de fondo: **daba por hecho que quien mirara la base sería el
+>   único tocándola.** Los movimientos que leí a las 07:35 como «alguien está
+>   trabajando en las tablets» eran de A, por SQL, y de ahí salió una teoría
+>   entera —la del reloj de inactividad— apoyada en un hecho inventado. Dos
+>   manos sobre la misma palanca producen diagnósticos que encajan y son
+>   falsos.
+>
+> **Lo que sigue siendo verdad y merece releerse:** por qué el 404 es la única
+> palanca con el código del 306, que «Instalar ahora» NO la sustituye, y el
+> tope de que una tablet con el número apuntado y el disco vacío no se recupera
+> sin reabrir la app.
+>
+> Y el hallazgo que salió de aquí, que es de código y no de operación: en
+> `UpdateGate`, `otaCheckedRemote` se apunta ANTES de que la descarga exista y
+> no se borra si falla, así que una sola descarga fallida deja ese número
+> marcado para siempre. Es la razón de que el reinicio sea obligatorio.
+
 **21/09/2026, 01:10.** Vive en el repositorio a propósito: si se queda sólo en
 una conversación, desaparece con ella. Eso es la regla 1.
 
