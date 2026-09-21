@@ -74,18 +74,44 @@ function hhmmMadrid(iso: string | null | undefined) {
 function pass(order: PassCodeInput): PassCode {
   return passCode(order)
 }
-/** El OTRO código, con etiqueta honesta: el de la plataforma lleva su nombre;
- *  el corto de Folvy no se disfraza de código del canal. null si no hay. */
-function secondaryField(order: PassCodeInput, pc: PassCode): { label: string; value: string } | null {
-  if (!pc.secondary) return null
+/**
+ * LAS LÍNEAS FINAS DE CÓDIGO (restaurado el 21/09).
+ *
+ * El aprobado del 24/06 imprimía `Código <canal>: <nº de plataforma>` bajo la
+ * banda, para TODOS los canales: la banda es para el repartidor y la línea fina
+ * para soporte. Julio, 20/09: «el repartidor pide G961, pero si tienes que
+ * hablar con soporte de Glovo te piden el número largo».
+ *
+ * Con la banda cantando sólo las cuatro últimas, esa línea deja de ser un extra
+ * y pasa a ser el único sitio donde el código entero aparece.
+ *
+ * 🔴 Y «completo» NO siempre es `platform_order_code`: por HubRise, Glovo manda
+ * el corto ahí (`798`) y el largo de soporte en `platform_order_ref`
+ * (`101778132092`). Restaurar la línea del aprobado al pie de la letra habría
+ * cambiado el largo por el corto — lo contrario de para lo que existe. Quien
+ * sabe cuál es el bueno es `passCode`, no esto.
+ *
+ * El «Código interno» se queda DEBAJO, y es deuda declarada: hoy es lo único
+ * que une la bolsa con la tarjeta del pase, porque `pase_board` sigue
+ * devolviendo `coalesce(pos_short_code, platform_order_code)` — el interno — en
+ * 668 de 1.045 pedidos de Uber de 30 días. Se quita el día que la tarjeta cante
+ * `passCode`, y ese día es otro encargo.
+ */
+function lineasDeCodigo(order: PassCodeInput, pc: PassCode): Array<{ label: string; value: string }> {
+  const out: Array<{ label: string; value: string }> = []
   const ch = (order.channel ?? '').trim()
-  // De la plataforma = su nº largo (Glovo, para reclamar) o su código corto.
-  // Cuál de los dos es lo decide passCode.ts; aquí sólo se etiqueta.
-  const isPlatform = pc.secondarySource !== 'short'
-  return {
-    label: (isPlatform && ch) ? `Código ${ch}:` : 'Código interno:',
-    value: pc.secondary,
-  }
+
+  // 1 · El de la plataforma, ENTERO. Si `passCode` lo puso de segundo (Glovo,
+  //     Just Eat) ya viene elegido; si lo puso de principal (Uber) es `full`.
+  const dePlataforma = pc.secondarySource !== 'short' ? pc.secondary
+                     : (pc.source === 'platform' ? pc.full : null)
+  if (ch && dePlataforma) out.push({ label: `Código ${ch}:`, value: dePlataforma })
+
+  // 2 · El interno de Folvy, sólo si no se lee ya en la banda.
+  const interno = pc.secondarySource === 'short' ? pc.secondary : null
+  if (interno) out.push({ label: 'Código interno:', value: interno })
+
+  return out
 }
 function deliveryLabel(st: any) {
   const t = (st ?? '').toLowerCase()
@@ -350,9 +376,9 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   // números es el fallo mudo que este trabajo existe para evitar.
   band(numeroGrande(pc), 46)
 
-  // Datos del pedido — el OTRO código en la línea fina (para incidencias).
-  const sec = secondaryField(order, pc)
-  if (sec) field(sec.label, sec.value)
+  // Datos del pedido — los códigos enteros en la línea fina: el de la
+  // plataforma para soporte, y el interno mientras el pase lo necesite.
+  for (const l of lineasDeCodigo(order, pc)) field(l.label, l.value)
   field('Método:', deliveryLabel(order.service_type))
   if (order.expected_time) field('Hora programada:', fmtDate(order.expected_time))
   else field('Hora programada:', 'Lo antes posible')
@@ -614,7 +640,9 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
   }
   ctx.textAlign = 'right'
   ctx.fillText(codigoPase, W - PAD, yPie + 4)
-  const secPie = secondaryField(order, pc)
+  // El pie de cocina lleva UNA línea, la de soporte: la primera de
+  // `lineasDeCodigo`, que es la misma regla que usa la bolsa.
+  const [secPie] = lineasDeCodigo(order, pc)
   if (secPie) {
     ctx.font = fnt(18, false); ctx.fillStyle = MUT
     ctx.fillText(secPie.label.replace(/:$/, '') + ' ' + secPie.value, W - PAD, yPie + 4 + codSize + 6)
