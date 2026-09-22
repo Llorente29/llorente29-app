@@ -361,3 +361,82 @@ aparecería también cuando alguien pide el **kebab suelto**, que hoy no la tien
 
 Con esa respuesta, la salsa entra en los dos combos de una pasada y las dos
 migraciones se pasan del tirón.
+
+---
+
+# ADENDA 3 — 22/09, 21:2x. La salsa, contestada. Y lo que destapa.
+
+> Julio: «La salsa se elige para cada kebab del duo, y **sustituye**, la idea
+> creo que es mejor que la pregunta sea sin salsa harisa o sin salsa yogur o
+> sin ninguna».
+
+## La buena noticia: ese grupo YA existe y no hay que crear nada
+
+El modelo que describes —el kebab **viene con las dos** y el cliente quita la
+que no quiera— es exactamente el grupo **«Quieres quitar aguna salsa de tu
+kebab?»**, que ya cuelga de las **cuatro** fichas de kebab con sus dos opciones
+y sus dos impactos confirmados.
+
+Y como el grupo cuelga de la **ficha**, viaja dentro del deal: cada kebab del
+Duo lleva su propia pregunta. Eso es literalmente «se elige para cada kebab».
+Está probado sobre la población real: **33 de los 182 hijos de deal** que han
+entrado por HubRise desde el 06/08 traen `options` no vacías.
+
+El «sin ninguna» tampoco hay que añadirlo: el grupo es **de 0 a 2**, así que no
+marcar nada YA es «con las dos», y marcar las dos es «sin ninguna».
+
+**Consecuencia: las dos migraciones de los combos no necesitan hueco de salsa
+ni grupo nuevo. Quedan como están, terminadas.**
+
+## La mala: el escandallo no sostiene ese modelo
+
+| la carta ofrece | la receta pone | pedido |
+|---|---|---|
+| «Sin Salsa **Harisa**» resta **50 g** de `REC-00003` | **NADA. Cero harissa.** | **15 veces** desde el 17/06 |
+| «Sin Salsa **Yogur**» resta **50 g** de `RAW-00127` | **30 g** | 9 veces |
+
+- **750 g de harissa restados de una salsa que nunca entró en el plato.** Stock
+  negativo puro, desde junio.
+- **180 g de yogur de más**, 20 cada vez.
+- Y de paso: el extra de pago «Salsa Harissa (Picante)» del combo pone **0,5**
+  donde sus hermanas usan 50–60. `REC-00003` rinde **820 g por tanda**, así que
+  son gramos: **medio gramo de salsa** por un extra de +1,50 €.
+
+**La invariante, que no es opinión:** lo que quita un «Sin X» tiene que ser
+exactamente lo que pone la receta. Si no, cada vez que alguien lo pide el
+almacén se descuadra en la diferencia. Hoy no cuadra ninguna de las dos.
+
+## 🔴 Me falta UN número y no lo invento
+
+`supabase/migrations/20260922T2200_la_salsa_del_kebab_cuadra.sql` está escrita
+entera, con sus guardas y su comprobación de la invariante. **Bloqueada por un
+dato:**
+
+> **¿Cuántos gramos de Salsa Mayo Harissa lleva un kebab?**
+
+El yogur se arregla solo: la receta dice **30** y es un valor que alguien puso a
+propósito, así que manda la receta y el «Sin Salsa Yogur» baja de 50 a 30.
+
+La harissa no tiene de dónde tirar: el único número que existe es el **50** del
+«Sin», que es lo que alguien *creyó* que llevaba. Se escribe una vez arriba del
+fichero (`\set g_harissa`) y el resto lo usa.
+
+Con 50 g, el kebab sube **+0,234 €** de coste (0,00468 €/g × 50), igual en los
+cuatro.
+
+**Y falta el ensayo por caminos** (regla 10): esto sí mueve coste y stock, así
+que antes del `commit` hay que cerrar una venta, recibir un albarán, apuntar una
+merma y aprobar un recuento dentro de la misma transacción. No los he escrito
+todavía porque un ensayo con un gramaje inventado no mide nada.
+
+## Estado de los tres ficheros
+
+| fichero | estado |
+|---|---|
+| `20260922T0030_…_individual_a_combo.sql` | **terminada**, sin aplicar |
+| `20260922T2100_…_duo_a_combo.sql` | **terminada**, sin aplicar |
+| `20260922T2200_la_salsa_del_kebab_cuadra.sql` | **bloqueada** por los gramos de harissa |
+
+Los dos combos se pueden pasar **ya**, sin esperar a la salsa: publican el kebab
+de la carta con su pregunta de quitar, que es lo que has pedido. Lo de la salsa
+arregla un descuadre que viene de junio y va por su cuenta.
