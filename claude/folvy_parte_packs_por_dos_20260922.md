@@ -140,3 +140,111 @@ se queda como está.
 Aviso a cocina y pase, hoy, en las dos cocinas: **cuando un pack o menú viene
 «2×» o «3×», todo lo de dentro va por 2 o por 3, aunque la pegatina o la tablet
 digan otra cosa.** Eso lo tienes que dar tú, yo no llego a la cocina.
+
+---
+
+# ADENDA — 22/09, 18:00–18:40. Lo aplicado, y el susto de en medio
+
+> Visto bueno de Julio a las 18:00. Se aplicó la migración; el paquete de las
+> tablets **no pudo salir**.
+
+## 1. La ternera SÍ estaba
+
+Contado, no mirado: en la captura salen **2 pegatinas de quesatacos de ternera**
+(3/7 y 4/7), 2 de birria, 2 de quesadilla y `4x Coca Cola` en la de bolsa. Los
+cuatro componentes. Lo que viste cortado era el volcado, no el ticket.
+
+## 2. La migración está APLICADA y verificada
+
+Las tres condiciones de la banda, medidas antes (18:11 Madrid, dentro de la
+banda; 0 pedidos en 30 min, el último a las 16:10):
+
+1. **¿En el camino del pedido?** **SÍ — falla por la letra.** `order_for_print`
+   la llama. 1 función, 0 crons, 0 disparadores.
+2. **¿Cierra alguna tabla del pedido?** No. Un `create or replace` de función no
+   toma `ACCESS EXCLUSIVE`.
+3. Dicho antes de aplicarlo, con la medida delante.
+
+Se aplicó igual, con autorización expresa de Julio por escrito y con la hora.
+Queda escrito que la 1 falla.
+
+**Pasada con `rollback`:** 10 acuñados, 2ª pasada 0 (idempotente), 11 tokens,
+0 huérfanos, E3 sin mover los packs de uno. **Revertido de verdad**, comprobado:
+6 tokens y la función vieja.
+
+**Pasada con `commit`:** 10 acuñados. Comprobado **sobre lo vivo**, no sobre la
+respuesta:
+
+| | |
+|---|---|
+| la función viva multiplica por el padre | **SÍ** |
+| firmas de `ensure_label_tokens` | **1** (sin sobrecarga, regla 2) |
+| G587 · birria / ternera / quesadilla | 2 / 2 / 2 |
+| G587 · Coca Cola | 4 |
+| G587 · bolsa | 1 |
+| **G587 · total** | **11** — 10 de unidad + 1 de bolsa |
+| G587 · huérfanos | **0** |
+
+## 3. 🔴 El susto: el que imprime era OTRO fichero
+
+Yendo a por el paquete encontré que **mi arreglo estaba a medias**. Hay dos
+renderizadores:
+
+- `src/modules/orders/lib/ticketRenderer.ts` — la vista previa de la pantalla.
+  **Es el que yo había arreglado, y el que sale en la captura que aprobaste.**
+- `src/native/print/ticketRenderer.ts` — el worker **nativo**, el que manda a la
+  Sunmi, y del que tira `labelImage.ts` para la pegatina por imagen.
+
+El segundo tenía el mismo fallo intacto. **El paquete habría salido con las
+pegatinas igual de mal, y el parte diciendo que estaban bien.**
+
+La regla se ha mudado a `src/lib/unidadesDeComponente.ts`, que es lo que
+provocó el fallo: el worker nativo no puede importar de `ordersFeedService` sin
+arrastrarse Supabase, así que la regla se había quedado a un lado de la
+frontera. Ahora la importan los cinco.
+
+Y no es cosmético: `flattenItems` reparte `unitNo` 1..N dentro de su línea, y la
+pareja `(lineId, unitNo)` es la identidad de una etiqueta. Si el papel numera
+1..2 y la base acuñó 1..4, una etiqueta escaneada no casa con ningún token.
+
+Pruebas nuevas contra el nativo: **3 en rojo contra el código viejo**, las tres
+que miden el fallo. **1.659 en verde.** Lint **1.379 / 1.379** (la primera
+pasada dejó +7 errores míos por usar `any`; medidos fichero a fichero y
+quitados). Build exacto y en limpio, verde.
+
+## 4. 🔴 El paquete de las tablets NO salió
+
+**No es el trabajo: es el permiso.** `git push origin main` lo deniega la
+pasarela del entorno. Es el mismo muro del 21/09.
+
+Y no hay otra puerta: `.github/workflows/build-apk.yml` dispara **solo** con
+`on: push: branches: [main]`, sin `workflow_dispatch`. Publicar desde una rama
+tampoco valdría: el propio workflow avisa de que sin las `VITE_` el bundle sale
+como `local`.
+
+Estado de las tablets ahora (las tres vistas hace menos de un minuto):
+
+| tablet | local | plataforma | paquete |
+|---|---|---|---|
+| Cocina | Alcalá | android | **310** (22/09 00:50) |
+| Tablet camichi4 | Carabanchel | android | **306** (17/09 10:04) |
+| Pase | Alcalá | web | le llega por Vercel |
+
+Carabanchel sigue cuatro paquetes atrás. Y la ventana hoy **sí estaba abierta**
+en los dos locales hasta las **19:45** — o sea que el paquete habría entrado. El
+tapón fue el permiso, no la ventana.
+
+## 5. 🔴 Lo que esto significa para la cena de HOY
+
+**Las pegatinas siguen saliendo mal esta noche.** El número de pegatinas lo
+decide `flattenItems` en la **tablet**, no la base. La migración arregla los
+*tokens* —la identidad de cada etiqueta— pero no cuántas se imprimen.
+
+Hasta que el paquete entre, sigue en pie el aviso a cocina: **un pack «2×» lleva
+todo por dos, aunque la pegatina diga otra cosa.**
+
+## 6. Lo que necesito
+
+**Que fusiones tú a `main`**, o que me des el permiso. Son tres commits en la
+rama y el árbol tiene el build verde. Detrás va: paquete nuevo → las dos Android
+se lo bajan → lo aplican en su ventana.
