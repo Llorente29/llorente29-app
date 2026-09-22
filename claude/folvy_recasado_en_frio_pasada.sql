@@ -10,8 +10,12 @@
 --   1. `ALTER TABLE ... DISABLE TRIGGER` toma SHARE ROW EXCLUSIVE sobre
 --      `sale_line`: un pedido que entrase ESPERA a que acabe.
 --   2. Mientras dura, el disparador esta desarmado PARA TODAS LAS SESIONES.
---      Un pedido que se colase se cerraria SIN DESCONTAR y nadie lo veria.
---      Ese es el riesgo real, y por eso la guarda mide el hueco.
+--      Medido: el consumo al cerrar vive en `sale` (trg_sale_consumption_on_
+--      complete), no en `sale_line`, y `generate_sale_consumption` borra y
+--      regenera, asi que es idempotente. Un pedido que se colase se REPARA
+--      SOLO en su siguiente cambio de estado. La exposicion real es un pedido
+--      cuyas lineas entren en la ventana y cuyo estado no cambie nunca mas.
+--      Por eso se mide el hueco igual, pero el riesgo no es catastrofico.
 --
 -- EL FALLO QUE HAY QUE TEMER: que esto se commitee con el disparador
 -- desarmado. Folvy dejaria de descontar PARA SIEMPRE y en silencio — no
@@ -33,8 +37,15 @@ select to_char(now() at time zone 'Europe/Madrid','DD/MM HH24:MI') as madrid,
        (select count(*) from public.sale
          where account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
            and coalesce(order_status,'') not in ('completed','cancelled','rejected')
-           and sold_at >= now() - interval '6 hours')               as pedidos_abiertos;
--- Exigido: hora >= 23:45 Madrid, pedidos_20min = 0, pedidos_abiertos = 0.
+           and sold_at >= now() - interval '6 hours')               as pedidos_sin_cerrar;
+-- Exigido: hora >= 23:45 Madrid y pedidos_20min = 0.
+-- `pedidos_sin_cerrar` es INFORMATIVO, no un veto: el 22/09 a las 23:49 habia
+-- 13 en `awaiting_collection` esperando rider, que es normal a esa hora y no
+-- se van a cero. Exigir cero aqui era una guarda que nunca se podria cumplir,
+-- y una guarda que no se cumple nunca acaba saltandose a mano. Lo que importa
+-- es que no ENTREN pedidos nuevos, y eso lo mide `pedidos_20min`.
+-- Si alguno lleva horas sin moverse, eso es otro problema (el del 10/09) y se
+-- mira antes de seguir.
 
 -- ── PASO 1 · EN SECO, con el disparador ARMADO ────────────────────────────
 -- No escribe nada. Da las cifras que tienen que cuadrar con el paso 3.

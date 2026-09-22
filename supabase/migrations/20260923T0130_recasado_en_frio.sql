@@ -32,6 +32,18 @@
 -- «no consumio porque se recaso en frio» de «no consumio porque esta rota».
 -- Sin esa tabla, este arreglo le mete ruido al cierre por euros.
 --
+-- ── ENSAYADA EL 22/09 A LAS 23:52, CON ROLLBACK ───────────────────────────
+-- Hueco medido: 0 pedidos en 20 minutos, el ultimo a las 23:16.
+--   E1 en seco   506 miradas · 290 por id · 173 por nombre · 3 ambiguas
+--                40 sin casar · 5.457,01 EUR · 463 bajo corte
+--   E2 enclavamiento  OK, impidio escribir con el disparador armado
+--   E3 escribio  463 lineas · 5.457,01 EUR
+--   C1 stock quieto   OK · stock_movement 88.126 -> 88.126   <- el punto entero
+--   C2 constancia     OK · 463 casadas y 463 en el registro
+--   C3 rearmado       OK
+-- Y el rollback comprobado despues: tabla fuera, funcion fuera, disparador en
+-- 'O', stock_movement en 88.126, las lineas sin casar intactas.
+--
 -- ── EL DESARME, Y POR QUE ASI ─────────────────────────────────────────────
 -- Se desarma UN SOLO disparador, no la sesion entera:
 --   * `session_replication_role='replica'` apagaria TAMBIEN las claves ajenas
@@ -42,6 +54,17 @@
 --     A cambio vale para TODAS las sesiones mientras dure, asi que la pasada
 --     va fuera de servicio y con hueco medido. Y toma SHARE ROW EXCLUSIVE
 --     sobre `sale_line`: un pedido que entrase ESPERA, no falla, pero espera.
+--
+-- CUANTO se arriesga en esa ventana, medido y no supuesto —porque lo escribi
+-- peor de lo que es—: el consumo al cerrar NO vive en `sale_line`, vive en
+-- `sale` (`trg_sale_consumption_on_complete`, que llama a
+-- `generate_sale_consumption`), y ese no se desarma. Ademas
+-- `generate_sale_consumption` BORRA los movimientos previos y los regenera,
+-- asi que es idempotente. Conclusion: un pedido que se colase en la ventana
+-- se REPARA SOLO en su siguiente cambio de estado. La exposicion real es un
+-- pedido cuyas lineas entren dentro de la ventana y cuyo `order_status` no
+-- vuelva a cambiar nunca. Sigue habiendo que medir el hueco, pero no es
+-- «deja de descontar para siempre», que es lo que puse primero.
 --
 -- ── POR QUE `map_source` NO LLEVA UN VALOR NUEVO ──────────────────────────
 -- La primera version escribia `map_source='recast_frio'`. No se puede, y el
