@@ -25,6 +25,13 @@
 -- El Kebab Combo Duo NO entra aqui: no tiene ni un grupo de extras en la base y
 -- su composicion exacta la tiene que decir Julio.
 -- ============================================================================
+-- ⚠️  APLICADA el 22/09/2026 a las 21:05 (Madrid), con la cena en marcha.
+--     Se aplico TODO menos el borrado de asignaciones de grupos y el apagado
+--     de los grupos vacios: eso vive ahora en
+--     20260922T2300_limpieza_grupos_de_los_combos.sql y va con la publicacion.
+--     Comprobado sobre lo vivo: 5 huecos, 18 opciones, 0 sin articulo,
+--     precios 12,50 / 20,50 y matriculas intactas.
+-- ----------------------------------------------------------------------------
 
 begin;
 

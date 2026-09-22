@@ -248,3 +248,59 @@ todo por dos, aunque la pegatina diga otra cosa.**
 **Que fusiones tú a `main`**, o que me des el permiso. Son tres commits en la
 rama y el árbol tiene el build verde. Detrás va: paquete nuevo → las dos Android
 se lo bajan → lo aplican en su ventana.
+
+---
+
+# CIERRE — 22/09, 18:54–20:05. El paquete entró en Alcalá. Carabanchel no.
+
+## La cadena, comprobada sobre lo publicado y no sobre el color del run
+
+| paso | | hora (Madrid) |
+|---|---|---|
+| PR #131 fusionado a `main` | ✅ | 18:54 |
+| Build `#311` | ✅ success | 18:55:37 |
+| **`bundle-311.zip` en el bucket** (5,37 MB) | ✅ | **18:55:33** |
+| **`bundle.json` apuntando al 311** | ✅ | **18:55:34** |
+| **Vercel PRODUCCIÓN en READY** (commit `b599120`) | ✅ | 18:5x |
+
+El zip y el manifiesto se comprobaron en `storage.objects`, que es lo servido.
+El `curl` directo al bucket lo bloquea el proxy del entorno.
+
+## Las tablets
+
+| tablet | local | antes | **ahora** | cuándo |
+|---|---|---|---|---|
+| **Cocina** | Alcalá | 310 | **311** ✅ | **19:05:35** |
+| Pase | Alcalá | web | **311** ✅ | 19:05:36 |
+| **Tablet camichi4** | Carabanchel | 306 | **306** ❌ | 17/09 10:04 |
+
+**Alcalá lo cogió sola a las 19:05**, con 40 minutos de margen sobre el cierre
+de la ventana (19:45). El Pase, que es web, recargó con el código nuevo.
+
+**Carabanchel no, y era lo previsto.** Está en el 306, el paquete que lleva el
+fallo del id/número: se baja lo nuevo y lo descarta en silencio. Ahora está viva
+(latiendo al minuto), así que no fue un problema de red.
+
+Y la ventana de las dos **ya está cerrada** (`en_ventana: false`).
+
+## Lo que queda, y necesita una persona en el local
+
+El truco del manifiesto **ya no sirve esta noche**: el 306 apunta el número que
+descartó en `otaCheckedRemote` y no vuelve a bajárselo hasta que se reinicie la
+app. Han pasado más de dos horas desde la publicación.
+
+Para Carabanchel quedan dos caminos, los dos con alguien delante de la tablet:
+
+1. **Pulsar «Instalar ahora»** en la tablet. `instalarYa` es lo único que se
+   salta la ventana, así que sirve aunque esté cerrada.
+2. **Reiniciar la app** y repetir el ciclo: dejar que se baje el 311 y retirar
+   `bundle.json` antes de que lo descarte.
+
+## Lo que esto significa mañana
+
+- **Alcalá: arreglado.** Las pegatinas de un pack 2× salen 6 + la de bebidas.
+- **Carabanchel: sigue mal.** Mantener el aviso a cocina allí: un pack «2×»
+  lleva todo por dos, aunque la pegatina diga otra cosa.
+- **La base está bien en los dos locales**: `ensure_label_tokens` acuña las
+  unidades reales desde las 18:2x. Lo que falta en Carabanchel es solo cuántas
+  se imprimen.

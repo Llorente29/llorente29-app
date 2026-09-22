@@ -222,3 +222,298 @@ eso no se ensayan.
 
 No reproceso nada de lo anterior. G160 y las dos ventas previas se quedan como
 están.
+
+---
+
+# ADENDA — 22/09, 20:40. El Duo: la composición estaba en la base
+
+> Julio pidió volver al Duo. Antes de repetirle la pregunta, fui a buscarla.
+
+## No la he deducido: la he ENCONTRADO
+
+El encargo decía «preguntar a Julio la composición exacta; no deducirla». No
+hizo falta deducir nada. **Los grupos del segundo kebab existen en la base**,
+activos y huérfanos:
+
+| grupo | id | | opciones |
+|---|---|---|---|
+| «2. Escoge tu segundo kebab» | `a58d72e7…` | 1 de 1 | 6, **0 vivas** |
+| «2. Elige el tipo de carne de tu 2º Kebab» | `a6a59e57…` | 1 de 1 | 4, 4 vivas |
+| «2. Escoge la salsa para tu segundo kebab» | `e4942692…` | 1 a 3 | 3, 2 vivas |
+
+Espejo exacto de los tres del «primer» kebab que se quedó el Individual, con
+los **mismos recargos**: 0 / +0,80 / +0,50 / +0,90.
+
+**Las tres cosas que lo cierran, medidas:**
+
+1. Los **seis** grupos (los tres del 1º y los tres del 2º) tienen **UN SOLO
+   sello de creación**: `12/06/2026 11:21:35.364111`. Misma importación de Last,
+   mismo instante.
+2. Son los **únicos tres grupos huérfanos de toda la marca**. No hay nada más
+   suelto que pudiera pertenecer a otro producto.
+3. El Duo **no tiene ni una línea de venta** en su historia, así que no existe
+   ningún pedido que pueda contradecirlo.
+
+El Individual se quedó los del «primer» kebab. El único producto de la carta que
+puede usar los del «segundo» es el Duo. **El Duo son dos kebabs, cada uno con su
+carne y su salsa.**
+
+En Last ya no está: busqué el producto en las cuatro cocinas y no aparece —
+estos combos viven solo en HubRise. Y `external_catalog_product` guarda el
+producto (20,50 €, activo, visto el 06/09) pero no sus grupos.
+
+## 🔴 Lo que sigue sin saberse: EL ENTRANTE
+
+«Escoge tu entrante favorito» está asignado **solo** al Individual. Pero el Duo
+no tiene **ninguna** asignación de nada, así que esa ausencia no prueba nada.
+
+**¿Uno, dos o ninguno?** Eso sí te lo tengo que preguntar.
+
+*La aritmética apunta a uno, y va dicho que es aritmética y no la carta:*
+Individual 12,50 € = 1 kebab + 1 entrante. Duo 20,50 €. La diferencia son
+**8,00 €**, que es un segundo kebab y poco más. Dos entrantes no caben en 8.
+
+## Lo escrito
+
+`supabase/migrations/20260922T2100_kebab_combo_duo_a_combo.sql` — **propuesta,
+sin aplicar**, con cuatro guardas (una comprueba que los tres grupos del segundo
+kebab **siguen huérfanos**: si alguien se los asigna entre medias, la premisa ha
+cambiado y aborta).
+
+Lleva los **dos huecos de kebab montados** y el del entrante **escrito y
+comentado**: si dices «uno», se descomenta; si dices «dos», se duplica; si dices
+«ninguno», se borra.
+
+Verificado en seco contra la carta real: los dos huecos dan **8 filas, todas con
+artículo** (DSH-00010 / 00009 / 00008 / 00011, dos veces).
+
+## Un defecto que sale al comparar los dos grupos
+
+El **«Mixto» del SEGUNDO** kebab descuenta **las dos carnes**: 50 g de
+`RAW-00058` Ternera **y** 50 g de `RAW-00057` Pollo.
+El **«Mixto» del PRIMERO** solo descuenta la **ternera**. Le falta el pollo.
+
+O sea que el roto es el del Individual, y se ve porque su gemelo está bien. Deja
+de importar en cuanto el Individual sea combo (ese grupo se desasigna y el
+escandallo pasa a salir de `DSH-00008`, que sí lleva las dos). Si la conversión
+se retrasa, es una línea:
+
+```sql
+-- SIN APLICAR. Solo si el Individual tarda en pasar a combo.
+insert into public.modifier_recipe_impact
+  (account_id, modifier_option_id, impact_type, target_recipe_item_id, quantity, status, source)
+values ('51ad1792-6629-4ef7-833a-b57b09a86710', 'f4e199c1-30fe-4f2d-a1ba-7d4b86f15774',
+        'add_item', 'f612bc62-ea42-4060-949c-15dbef42baa8', 50, 'confirmed', 'human');
+```
+
+## Las preguntas que quedan, ya solo dos
+
+1. **La salsa** (del encargo del Individual, sin cambios): el kebab de la carta
+   ya lleva 30 g de yogur dentro. ¿Se queda así, o grupo nuevo de salsa gratis
+   que se vería también en el kebab suelto?
+2. **El entrante del Duo**: ¿uno, dos o ninguno?
+
+Con esas dos, las dos migraciones se pasan del tirón, fuera de servicio.
+
+---
+
+# ADENDA 2 — 22/09, 21:0x. Julio responde el Duo
+
+> «el entrante es uno y kebab 2 y la salsa es lo mismo que en el individual,
+> pero para 2 kebab»
+
+## Lo que queda montado
+
+`20260922T2100_kebab_combo_duo_a_combo.sql` ya lleva **los tres huecos**:
+
+| hueco | | opciones |
+|---|---|---|
+| Elige tu primer Kebab | 1 de 1 | Pollo 0 · Ternera +0,80 · Mixto +0,50 · Falafel +0,90 |
+| Elige tu segundo Kebab | 1 de 1 | las mismas cuatro, mismos recargos |
+| Escoge tu entrante favorito | 1 de 1 | Patatas Harisa 0 · Falafel +0,90 · Rollitos +1,00 |
+
+Verificado en seco: **11 filas, todas con artículo**.
+
+Coste del Duo más barato (2× Pollo Gyros + Patatas Harisa): **6,64 €** sobre
+20,50 € de venta, un 32 %.
+
+## 🔴 La salsa sigue abierta, y la respuesta la deja abierta a propósito
+
+«Lo mismo que en el individual» define el Duo **en función del Individual** — y
+la salsa del Individual es justo la pregunta que falta. No la doy por contestada.
+
+Y aquí importa el doble: **montarla mal en el Duo la monta mal DOS veces.**
+
+El dato que la decide: las cuatro fichas de kebab **ya llevan 30 g de
+`RAW-00127` SALSA Yogur dentro del escandallo**. Así que la pregunta no es si
+hay elección de salsa, es qué consume esa elección:
+
+- **Si SUSTITUYE** (la salsa elegida reemplaza al yogur de la ficha):
+  Yogur → impacto **0** (ya está dentro). Harissa → **quitar** 30 g de
+  `RAW-00127` y **añadir** 0,5 de `REC-00003`.
+- **Si SE SUMA** (la salsa elegida va encima):
+  Yogur → +50 g, total **80 g** por kebab; en un Duo con dos yogures, **160 g**
+  en vez de 60.
+
+**Y en los dos casos hay un efecto lateral que tienes que saber:** el grupo
+cuelga de la **ficha del kebab**, no del combo. O sea que la elección de salsa
+aparecería también cuando alguien pide el **kebab suelto**, que hoy no la tiene.
+
+Con esa respuesta, la salsa entra en los dos combos de una pasada y las dos
+migraciones se pasan del tirón.
+
+---
+
+# ADENDA 3 — 22/09, 21:2x. La salsa, contestada. Y lo que destapa.
+
+> Julio: «La salsa se elige para cada kebab del duo, y **sustituye**, la idea
+> creo que es mejor que la pregunta sea sin salsa harisa o sin salsa yogur o
+> sin ninguna».
+
+## La buena noticia: ese grupo YA existe y no hay que crear nada
+
+El modelo que describes —el kebab **viene con las dos** y el cliente quita la
+que no quiera— es exactamente el grupo **«Quieres quitar aguna salsa de tu
+kebab?»**, que ya cuelga de las **cuatro** fichas de kebab con sus dos opciones
+y sus dos impactos confirmados.
+
+Y como el grupo cuelga de la **ficha**, viaja dentro del deal: cada kebab del
+Duo lleva su propia pregunta. Eso es literalmente «se elige para cada kebab».
+Está probado sobre la población real: **33 de los 182 hijos de deal** que han
+entrado por HubRise desde el 06/08 traen `options` no vacías.
+
+El «sin ninguna» tampoco hay que añadirlo: el grupo es **de 0 a 2**, así que no
+marcar nada YA es «con las dos», y marcar las dos es «sin ninguna».
+
+**Consecuencia: las dos migraciones de los combos no necesitan hueco de salsa
+ni grupo nuevo. Quedan como están, terminadas.**
+
+## La mala: el escandallo no sostiene ese modelo
+
+| la carta ofrece | la receta pone | pedido |
+|---|---|---|
+| «Sin Salsa **Harisa**» resta **50 g** de `REC-00003` | **NADA. Cero harissa.** | **15 veces** desde el 17/06 |
+| «Sin Salsa **Yogur**» resta **50 g** de `RAW-00127` | **30 g** | 9 veces |
+
+- **750 g de harissa restados de una salsa que nunca entró en el plato.** Stock
+  negativo puro, desde junio.
+- **180 g de yogur de más**, 20 cada vez.
+- Y de paso: el extra de pago «Salsa Harissa (Picante)» del combo pone **0,5**
+  donde sus hermanas usan 50–60. `REC-00003` rinde **820 g por tanda**, así que
+  son gramos: **medio gramo de salsa** por un extra de +1,50 €.
+
+**La invariante, que no es opinión:** lo que quita un «Sin X» tiene que ser
+exactamente lo que pone la receta. Si no, cada vez que alguien lo pide el
+almacén se descuadra en la diferencia. Hoy no cuadra ninguna de las dos.
+
+## 🔴 Me falta UN número y no lo invento
+
+`supabase/migrations/20260922T2200_la_salsa_del_kebab_cuadra.sql` está escrita
+entera, con sus guardas y su comprobación de la invariante. **Bloqueada por un
+dato:**
+
+> **¿Cuántos gramos de Salsa Mayo Harissa lleva un kebab?**
+
+El yogur se arregla solo: la receta dice **30** y es un valor que alguien puso a
+propósito, así que manda la receta y el «Sin Salsa Yogur» baja de 50 a 30.
+
+La harissa no tiene de dónde tirar: el único número que existe es el **50** del
+«Sin», que es lo que alguien *creyó* que llevaba. Se escribe una vez arriba del
+fichero (`\set g_harissa`) y el resto lo usa.
+
+Con 50 g, el kebab sube **+0,234 €** de coste (0,00468 €/g × 50), igual en los
+cuatro.
+
+**Y falta el ensayo por caminos** (regla 10): esto sí mueve coste y stock, así
+que antes del `commit` hay que cerrar una venta, recibir un albarán, apuntar una
+merma y aprobar un recuento dentro de la misma transacción. No los he escrito
+todavía porque un ensayo con un gramaje inventado no mide nada.
+
+## Estado de los tres ficheros
+
+| fichero | estado |
+|---|---|
+| `20260922T0030_…_individual_a_combo.sql` | **terminada**, sin aplicar |
+| `20260922T2100_…_duo_a_combo.sql` | **terminada**, sin aplicar |
+| `20260922T2200_la_salsa_del_kebab_cuadra.sql` | **bloqueada** por los gramos de harissa |
+
+Los dos combos se pueden pasar **ya**, sin esperar a la salsa: publican el kebab
+de la carta con su pregunta de quitar, que es lo que has pedido. Lo de la salsa
+arregla un descuadre que viene de junio y va por su cuenta.
+
+---
+
+# ADENDA 4 — 22/09, 21:05–21:3x. Los dos combos APLICADOS, y la salsa escrita
+
+## Los dos combos están aplicados
+
+Pasada con `rollback`, comprobado que revirtió (`item/item`, 0 huecos), repetida
+con `commit`. Verificado **sobre lo vivo**:
+
+| | |
+|---|---|
+| fichas en `combo` | Individual 12,50 · Duo 20,50 |
+| huecos | **5** · opciones **18** · **sin artículo: 0** |
+| matrículas | intactas las dos |
+| coste por defecto | Individual **4,554 €** (36 %) · Duo **6,642 €** (32 %) |
+
+**Se aplicó a las 21:05 con la cena a pleno** — 17 pedidos en 30 minutos, el
+último hacía 40 segundos. Se pudo porque lo aplicado es **inerte para el camino
+del pedido**, y eso se midió antes:
+
+- `adapt_hubrise_order`, `_sale_line_raw_consumption` y `compute_sale_line_cost`
+  **no leen** `product_type` ni `combo_slot`.
+- 0 crons y 0 disparadores sobre `combo_slot` / `combo_slot_option`.
+- El disparador de precio de `menu_item` es `AFTER UPDATE **OF price**` con
+  `WHEN (old.price IS DISTINCT FROM new.price)`: no se tocó el precio.
+- Bloqueos de fila, cero DDL.
+
+**Se sacó de la pasada** el borrado de las 4 asignaciones de grupos:
+`modifier_group_assignment` **sí** la lee `resolver_opcion_de_extra` en su paso 1
+en cada pedido vivo. Su paso 2 casa por `ref` en toda la cuenta y lo rescataría
+—leído, no supuesto— pero con la cena así no hacía falta meter esa tabla. Vive
+en `20260922T2300_limpieza_grupos_de_los_combos.sql` y va **con la publicación**.
+
+**Nada ha cambiado para el cliente todavía.** HubRise sigue sirviendo la carta
+del 1 de septiembre.
+
+## La salsa: 30 g, y escrita
+
+> Julio: «La harisa son 30 grs igual que el yogur».
+
+`20260922T2200_la_salsa_del_kebab_cuadra.sql` reescrita:
+
+- **+30 g de `REC-00003`** en los cuatro kebabs.
+- **«Sin Salsa Yogur» y «Sin Salsa Harisa» pasan los dos a 30**, que es la
+  invariante: lo que quita un «Sin X» tiene que ser lo que pone la receta.
+- El **0,5** del grupo de salsa del combo pasa a 30. Esas opciones quedan
+  dormidas al publicar, pero un medio gramo olvidado ahí es una mina.
+
+**Lo que NO se toca, y se midió antes de decidirlo:** el extra **de pago**
+«Algun extra en tu pita?» está **bien** — Salsa Harissa extra **50 g** (37
+pedidos) y Salsa Yogur extra **40 g** (62 pedidos). Son raciones de extra, más
+grandes que la de serie a propósito. Y las Patatas Harisa con sus 60 g, igual.
+
+**El coste sube +0,1403 € por kebab**, igual en los cuatro. Ese número está
+medido por el camino real —explotar 30 g de `REC-00003` a sus dos materias
+primas— y no calculado como 30 × `computed_cost`, que da 0,1404. Una milésima,
+pero manda el camino.
+
+## 🔴 Ésta NO se pasa en banda, y no es lo mismo que las otras dos
+
+Las de los combos eran inertes. **Ésta toca `recipe_line`, que lee
+`explode_recipe_to_raws` en CADA cierre de venta.** Pasarla con la cena en
+marcha parte el servicio por la mitad: los pedidos de antes consumen una cosa y
+los de después otra, con el corte a mitad de turno y sin que nadie lo sepa.
+
+Lleva una **tercera guarda que aborta sola** si son entre las 12:00 y las 23:45,
+diciendo la hora y cuántos pedidos hay en los últimos 30 minutos.
+
+**Y le falta el ensayo por los cuatro caminos** (regla 10) — cerrar una venta,
+recibir un albarán, apuntar una merma, aprobar un recuento. Los cuatro RPC están
+localizados (`close_sale`, `confirm_goods_receipt`, `register_waste`,
+`apply_inventory_count`) pero **sin escribir, y eso es el hallazgo, no un
+descuido**: cada uno necesita una fila real sobre la que operar (una venta
+abierta de un kebab, un albarán en borrador, un recuento sin aprobar) y esas
+filas cambian cada día. Se escriben con la base delante esa noche. Si alguno no
+se puede ensayar, se dice y **no se hace el commit**.
