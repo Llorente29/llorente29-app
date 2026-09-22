@@ -517,3 +517,67 @@ descuido**: cada uno necesita una fila real sobre la que operar (una venta
 abierta de un kebab, un albarán en borrador, un recuento sin aprobar) y esas
 filas cambian cada día. Se escriben con la base delante esa noche. Si alguno no
 se puede ensayar, se dice y **no se hace el commit**.
+
+---
+
+## PUBLICADA · 23/09/2026 00:43
+
+Julio pulsó «Publicar». Comprobado por el lado que manda, no por el color del
+botón:
+
+| publicación | estado global | conexión | resultado |
+|---|---|---|---|
+| 00:43:22 | `done` | **ninguna** | **no envió nada** |
+| 00:43:26 | `done` | `5qqxx` The Urban Kebab | **ok**, sellado 00:43:27 |
+| 00:43:41 | `done` | `5qqxx` The Urban Kebab | **ok**, sellado 00:43:42 |
+
+Antes iban las dos migraciones que faltaban, aplicadas a las 00:39 con la
+cocina parada: la salsa (harissa a 30 g en los cuatro kebabs, los «Sin X» a 30,
+el medio gramo del combo a 30, y los cuatro costes recalculados) y la limpieza
+de grupos. Publicar sin eso habría puesto en la carta un «Sin Salsa Harisa» que
+resta una harissa que la receta no pone.
+
+Se fue también **«Montmartre.»**, que vivía en los dos grupos «Escoge tu
+primer/segundo kebab» —los que se apagaron— y llevaba apagado desde el 13/09
+sin dejar de verse, porque la carta no se publicaba desde el 01/09 19:48.
+
+### 🔴 DEUDA NUEVA: `catalog_publish.status = 'done'` NO significa publicado
+
+La publicación de las **00:43:22 salió `done` con CERO conexiones**: no envió un
+byte. Si Julio solo hubiera pulsado esa, se habría ido a dormir creyendo que
+estaba hecho. Y no es un caso raro:
+
+| estado | forma | veces |
+|---|---|---|
+| `done` | con conexión | 97 |
+| **`done`** | **sin conexión — no envió nada** | **12** |
+| `failed` | con conexión | 4 |
+| `partial` | con conexión | 1 |
+
+**Doce publicaciones históricas dicen `done` sin haber enviado nada.** Es la
+misma familia que el workflow verde del 16/09 que excluía `hubrise-webhook`: una
+señal PARECIDA dada por buena en lugar de la señal PUBLICADA.
+
+*La señal buena, y la única:* `catalog_publish_target.status='ok'` con su
+`published_at`. El estado global no distingue «publicado» de «no había nada que
+publicar».
+
+*Detector automático:* si un parte dice «carta publicada» y solo cita el estado
+global, la pregunta es **cuántas filas de `catalog_publish_target` tiene esa
+publicación**. Cero filas es cero bytes.
+
+*(Y sigue en pie la deuda del 11/09: el publicador no sella la fecha en
+`brand_hubrise_catalog`, así que no se puede preguntar «¿tiene HubRise la carta
+de ahora?» sin mirar `catalog_publish_target`.)*
+
+### Lo que NO está probado todavía
+
+Que un cliente pida un Kebab Combo y entre como **deal** con sus `combo_item`,
+case por matrícula y descuente. Eso necesita un pedido real y no lo hay aún.
+
+Lo comprobable desde aquí, sí está: el publicador emite `ref = external_id` del
+combo y `adapt_hubrise_order` casa el `deal_key` por `external_id` con
+`hubrise_strip_ns` — el circuito cierra. Y las dos matrículas son **únicas** en
+la cuenta (1 y 1), así que el casado no puede salir ambiguo.
+
+Vuelta programada a las 14:30 para mirar el primer combo real.
