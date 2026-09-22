@@ -22,7 +22,8 @@
 // external_ref de Last. La función ticketNumber() centraliza la regla.
 
 import type { OrderFeedItem, OrderFeedLine, OrderFeedChild } from '../services/ordersFeedService'
-import { childVisual, unidadesDeComponente } from '../services/ordersFeedService'
+import { childVisual } from '../services/ordersFeedService'
+import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from './passCode'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
 

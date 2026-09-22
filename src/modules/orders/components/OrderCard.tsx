@@ -28,12 +28,13 @@ import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
 import { fmtNum } from '@/lib/format'
+import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from '../lib/passCode'
 import { elSubtitulo } from '@/modules/pase/lib/lasTresZonas'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
 import {
-  primaryAction, secondaryAction, childVisual, unidadesDeComponente, deliveryView,
+  primaryAction, secondaryAction, childVisual, deliveryView,
   isOwnDeliveryUndispatched, dispatchOrder,
   portalDeLaPlataforma, coordenadasDeEntrega, type CoordenadasEntrega,
   cookingChip, DEFAULT_KITCHEN_THRESHOLDS,

@@ -22,7 +22,7 @@
 // donde hay que multiplicar 2x2=4 y no quedarse en ninguno de los dos doses.
 
 import { describe, it, expect } from 'vitest'
-import { unidadesDeComponente } from '../../../../src/modules/orders/services/ordersFeedService'
+import { unidadesDeComponente } from '../../../../src/lib/unidadesDeComponente'
 import type { OrderFeedItem, OrderFeedLine, OrderFeedChild } from '../../../../src/modules/orders/services/ordersFeedService'
 import { renderLabels, renderKitchenTicket, renderBagTicket } from '../../../../src/modules/orders/lib/ticketRenderer'
 
@@ -172,5 +172,59 @@ describe('lo que NO puede cambiar', () => {
   it('un plato suelto 2x sigue dando 2 pegatinas', () => {
     const suelto = pedido('G002', [linea('QUESADILLA DOS COYOTES (DC)', 2, [])])
     expect(renderLabels(suelto)).toHaveLength(2)
+  })
+})
+
+// ── EL SEGUNDO RENDERIZADOR, el que imprime de verdad ───────────────────────
+//
+// Esto se me escapo en la primera pasada y casi sale un paquete con las
+// pegatinas igual de mal (22/09, 18:20). Hay DOS renderizadores:
+//   · `modules/orders/lib/ticketRenderer`  -> la vista previa en pantalla
+//   · `native/print/ticketRenderer`        -> el worker NATIVO, el del papel
+// y la pegatina por imagen (`labelImage.ts`) usa el `flattenItems` del NATIVO.
+// Arreglar solo el primero deja el papel exactamente igual de roto.
+//
+// Y hay una condicion que no es cosmetica: el numero de unidades que reparte
+// `flattenItems` TIENE que ser el mismo que acuña `ensure_label_tokens` en la
+// base, porque la pareja (lineId, unitNo) es la identidad de una etiqueta. Si
+// el papel dice unitNo 1..2 y la base acuño 1..4, una etiqueta escaneada no
+// casa con ningun token.
+import { flattenItems as flattenNativo } from '../../../../src/native/print/ticketRenderer'
+
+/** Lo que reparte el `flattenItems` del nativo, con los campos que miramos.
+ *  Tipado aqui a proposito: el renderizador nativo es `any` por dentro (es un
+ *  port del agente), pero una prueba que usa `any` no comprueba la forma. */
+interface PiezaNativa { name: string; qty: number; unitNo: number | null; isDrink: boolean }
+const piezasDe = (o: OrderFeedItem): PiezaNativa[] => flattenNativo(o) as PiezaNativa[]
+
+describe('el renderizador NATIVO (el que imprime)', () => {
+  it('G587 reparte 6 piezas de comida y la bebida sin expandir', () => {
+    const piezas = piezasDe(G587)
+    const comida = piezas.filter((p) => !p.isDrink)
+    const bebida = piezas.filter((p) => p.isDrink)
+    expect(comida).toHaveLength(6)   // antes eran 3
+    expect(bebida).toHaveLength(1)   // las bebidas colapsan a proposito
+    expect(bebida[0].qty).toBe(4)    // 2 latas x 2 packs
+  })
+
+  it('numera las unidades 1..N dentro de su linea, como la base', () => {
+    // La base acuña unit_no 1..2 por cada quesataco y 1..4 para la Coca Cola.
+    const piezas = piezasDe(G587)
+    const ternera = piezas.filter((p) => p.name === 'QUESATACOS DE TERNERA (DC)')
+    expect(ternera.map((p) => p.unitNo)).toEqual([1, 2])
+  })
+
+  it('G089 y U053 reparten 3 de cada componente', () => {
+    expect(piezasDe(G089).filter((p) => !p.isDrink)).toHaveLength(6)
+    expect(piezasDe(U053).filter((p) => !p.isDrink)).toHaveLength(6)
+  })
+
+  it('un combo 1x no cambia', () => {
+    const uno = pedido('G001', [linea('PACK PA 2  DC', 1, [
+      hijo('QUESADILLA DOS COYOTES (DC)', 1),
+      hijo('Coca Cola', 2, 'Bebidas sin alcohol'),
+    ])])
+    const piezas = piezasDe(uno)
+    expect(piezas.filter((p) => !p.isDrink)).toHaveLength(1)
   })
 })

@@ -26,7 +26,7 @@ import { Check, ChefHat, Undo2, AlertTriangle } from 'lucide-react'
 import type { KdsTicket, KdsLine, KdsLineChild } from '../services/kdsService'
 import { ticketCode, channelBadge, timeLevel, timeChipClasses } from '../kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
-import { unidadesDeComponente } from '@/modules/orders/services/ordersFeedService'
+import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 
 const SIN_ESTACION = '__none__'
 
