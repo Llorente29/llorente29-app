@@ -2,7 +2,14 @@
 -- La salsa del kebab: que el escandallo diga lo que la carta ya ofrece
 -- ----------------------------------------------------------------------------
 -- 22/09/2026. Cuenta Foodint 51ad1792-6629-4ef7-833a-b57b09a86710.
--- PROPUESTA. NO APLICADA.
+-- APLICADA el 23/09/2026 a las 00:39 (Madrid), con la cocina parada: 0 pedidos
+-- en 30 minutos, el ultimo a las 23:16. Pasada en seco antes, con rollback.
+--   C1 invariante  OK · 8 filas, todas 30 = 30
+--   C2 coste       cada kebab sube EXACTAMENTE 0,1403 (la harissa y nada mas):
+--                  DSH-00008 2,4052 -> 2,5455 · DSH-00009 2,4434 -> 2,5837
+--                  DSH-00010 2,3636 -> 2,5039 · DSH-00011 1,6524 -> 1,7928
+--   C3 computed == explosion  OK · las 4 cuadran
+-- Verificado sobre lo vivo: 1 linea de harissa en cada uno, computed = explosion.
 --
 -- 🔴 ESTA **NO** SE PUEDE PASAR EN BANDA, y no es lo mismo que las dos de los
 --    combos. Aquellas eran inertes para el camino del pedido; ESTA lo toca de
@@ -93,14 +100,22 @@ begin
 end $$;
 
 -- ── 1) La harissa entra en el escandallo: 30 g, igual que el yogur ─────────
+-- `unit_id` es NOT NULL y la primera version de este fichero no lo ponia: la
+-- migracion habria REVENTADO con 23502 en la primera fila. Lo cazo la pasada
+-- con rollback del 23/09 00:34.
+-- La unidad no se elige a ojo, se lee: gramos es la unidad BASE de REC-00003,
+-- es con la que entra el yogur en los cuatro kebabs, y es con la que la
+-- harissa ya entra en DSH-00374 (30) y DSH-00389 (60). No hay ambiguedad.
 insert into public.recipe_line
-  (account_id, parent_item_id, child_item_id, quantity_net, quantity_gross, position, comment)
+  (account_id, parent_item_id, child_item_id, quantity_net, quantity_gross,
+   unit_id, position, comment)
 select '51ad1792-6629-4ef7-833a-b57b09a86710', p.id, h.id, 30, 30,
+       h.base_unit_id,
        (select max(rl2.position)+1 from public.recipe_line rl2
          where rl2.parent_item_id=p.id and rl2.account_id=p.account_id),
        'Salsa de serie, 30 g igual que el yogur (Julio, 22/09/2026). El cliente la quita con «Sin Salsa Harisa».'
 from public.recipe_item p
-cross join (select id from public.recipe_item
+cross join (select id, base_unit_id from public.recipe_item
              where account_id='51ad1792-6629-4ef7-833a-b57b09a86710' and folvy_code='REC-00003') h
 where p.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
   and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011');
@@ -137,6 +152,28 @@ update public.modifier_recipe_impact mri
    and mri.impact_type = 'add_item'
    and mri.quantity = 0.5;
 
+-- ── 4) EL RECALCULO DEL COSTE, que tampoco estaba ─────────────────────────
+-- `recipe_line` NO tiene disparador que recalcule el coste: medido el 23/09,
+-- solo lleva anticiclos y `updated_at`. Sin esto, la explosion sube 0,1403 y
+-- `computed_cost` se queda como estaba — o sea que la invariante que el
+-- envase dejo en pie a las 00:01 (computed == explosion) se rompe en
+-- SILENCIO, y el coste de plato se queda corto hasta que alguien recalcule.
+-- Se usa la version sin guarda porque `kitchen_recompute_item` exige
+-- `belongs_to_account`, que sin JWT es false (medido).
+-- Los cuatro y nadie mas: estos kebabs no cuelgan de ningun escandallo
+-- (medido: 0 usos como hijo en `recipe_line`), solo son opciones de hueco de
+-- combo, y el coste del combo se calcula por venta, no se guarda en una ficha.
+do $$
+declare v_id uuid;
+begin
+  for v_id in select id from public.recipe_item
+               where account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
+                 and folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
+  loop
+    perform public._kitchen_recompute_item_unguarded(v_id);
+  end loop;
+end $$;
+
 -- ── C1 · LA INVARIANTE ─────────────────────────────────────────────────────
 select p.folvy_code as kebab, c.folvy_code as salsa, c.name,
        coalesce(rl.quantity_gross, rl.quantity_net) as pone_la_receta,
@@ -166,8 +203,17 @@ select p.folvy_code, p.name,
  where p.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
    and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
  order by p.folvy_code;
--- ANTES (medido el 22/09, sin la harissa):
+-- 🔴 EL «ANTES» DE ESTE FICHERO ESTABA CADUCADO, y casi mide otra cosa.
+-- Se escribio el 22/09 con el envase todavia INVISIBLE:
 --   DSH-00008 2,1298 · DSH-00009 2,1680 · DSH-00010 2,0882 · DSH-00011 1,3770
+-- El 23/09 a las 00:01 entro `packaging` en explode_recipe_to_raws y esos
+-- mismos platos pasaron a:
+--   DSH-00008 2,4052 · DSH-00009 2,4434 · DSH-00010 2,3636 · DSH-00011 1,6524
+-- Comparar contra los de arriba habria dado una diferencia de 0,27 y la
+-- conclusion de que la harissa cuesta el doble de lo que cuesta. La vara se
+-- vuelve a tomar la misma noche, antes de escribir (regla 31).
+-- ESPERADO: cada uno sube 0,1403 = 30 g de REC-00003 explotada a sus dos raws.
+--   DSH-00008 2,5455 · DSH-00009 2,5837 · DSH-00010 2,5039 · DSH-00011 1,7927
 -- La subida tiene que ser +0,1403 EUR, IGUAL en los cuatro. Ese numero esta
 -- MEDIDO por el camino real (explotar 30 g de REC-00003 a sus 2 materias
 -- primas), no calculado como 30 x computed_cost, que da 0,1404: un milesima
