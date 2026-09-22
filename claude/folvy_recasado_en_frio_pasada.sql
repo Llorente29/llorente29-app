@@ -4,6 +4,12 @@
 -- 22/09/2026. Cuenta Foodint 51ad1792-6629-4ef7-833a-b57b09a86710.
 -- Requiere `supabase/migrations/20260923T0130_recasado_en_frio.sql` aplicada.
 --
+-- CORRIDA el 23/09/2026 a las 00:08 (Madrid) — Julio: «pasa el recasado ahora
+-- en frio». Hueco medido: 0 pedidos en 20 min, el ultimo a las 23:16. Pasada
+-- en seco primero (463 casadas, C1/C2/C3 en verde), luego con commit, y
+-- verificado sobre lo vivo. 463 lineas / 5.457,01 EUR, CERO movimientos de
+-- stock. Si se vuelve a correr, no repite: `on conflict (sale_line_id)`.
+--
 -- ESTO NO ES UNA MIGRACION: es una OPERACION, y se ejecuta con alguien
 -- delante. Va fuera de servicio (nunca entre 12:15 y 23:45) y con hueco
 -- medido, por dos motivos distintos:

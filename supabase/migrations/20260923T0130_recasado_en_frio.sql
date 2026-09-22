@@ -3,7 +3,19 @@
 -- ----------------------------------------------------------------------------
 -- 22/09/2026. Cuenta Foodint 51ad1792-6629-4ef7-833a-b57b09a86710.
 -- Decision de Julio, 22/09 23:3x: «recasar en frio, sin consumir».
--- PROPUESTA. NO APLICADA.
+-- APLICADA el 23/09/2026 a las 00:07 (Madrid), y LA PASADA CORRIDA a las 00:08,
+-- con la cocina parada: 0 pedidos en 20 minutos, el ultimo a las 23:16.
+--   La pasada   463 casadas (290 por id · 173 por nombre) · 5.457,01 EUR
+--               3 ambiguas (no se eligio) · 40 sin casar · 463 bajo corte
+--   C1 stock quieto   OK · stock_movement 88.133 -> 88.133
+--   C2 constancia     OK · 463 casadas y 463 en el registro
+--   C3 rearmado       OK
+--   Sobre lo vivo: disparador en 'O', UNA sola definicion, 88.133 movimientos,
+--   463 filas en sale_line_recast_frio, y de esas 463 las que tienen algun
+--   movimiento de stock son CERO. Ese cero es la pieza entera.
+--   Cubre del 24/08 21:43 al 20/09 16:13, 336 ventas.
+--   Recuperado el caso que abrio el encargo: «Korean Crispy Menu (Para 2) KDB»,
+--   20 lineas, 718,00 EUR.
 --
 -- ── POR QUE HACE FALTA ESTO Y NO VALE `recast_lastapp_sales` ──────────────
 -- El encargo pide recasar EL CASADO, no el stock. Medido:
