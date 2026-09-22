@@ -6,6 +6,7 @@
 import type { TicketDoc } from './escpos';
 import { passCode } from '@/modules/orders/lib/passCode';
 import { direccionParaMostrar } from '@/lib/direccionEntrega';
+import { unidadesDeComponente } from '@/lib/unidadesDeComponente';
 
 function ticketNumber(order: any) { return order.external_tab_ref ?? order.external_ref ?? '—'; }
 // CÓDIGO DE PASE (lo que canta el repartidor): Glovo → pos_short_code; Uber →
@@ -55,8 +56,17 @@ function childTone(c: any) {
     default: return looksRemove ? 'remove' : 'add';
   }
 }
-function modifierLines(children: any) {
+// `parentQty` es la cantidad de la LINEA PADRE. Un componente de combo lleva
+// delante sus unidades REALES (componente x pack): hasta el 21/09 salia sin
+// numero ninguno, asi que un «2x PACK» con tres cosas dentro se leia en cocina
+// como una de cada. Con una sola unidad se deja el texto pelado, como antes.
+// Los modificadores (no componentes) no usan parentQty: cuelgan de su pieza.
+function modifierLines(children: any, parentQty: number = 1) {
   return (children || []).map((c: any) => {
+    if (c.line_type === 'combo_item') {
+      const uds = unidadesDeComponente(c.qty, parentQty);
+      return { text: uds > 1 ? `${uds}x ${c.name}` : c.name, tone: 'neutral' };
+    }
     const tone = childTone(c);
     const prefix = tone === 'remove' ? 'SIN ' : tone === 'add' ? '+ ' : '';
     const cleanName = (c.name || '').replace(/^\s*(sin|no|quitar|without|sans)\s+/i, '');
@@ -98,7 +108,10 @@ export function flattenItems(order: any) {
     const comboComponents = (line.children || []).filter((c: any) => c.line_type === 'combo_item');
     if (comboComponents.length > 0) {
       for (const comp of comboComponents) {
-        pushExpanded({ lineId: comp.line_id ?? null, unitTokens: comp.unit_tokens ?? null, name: comp.name, qty: comp.qty, family: comp.family, allergens: line.allergens || [], allergensState: line.allergens_state ?? null, modifiers: [], isDrink: isDrinkOrDessert(comp.family, comp.name) });
+        // qty = componente x pack. TIENE que dar el mismo numero que
+        // `ensure_label_tokens` en la base, o la pareja (lineId, unitNo) de una
+        // etiqueta impresa no casa con ningun token y no se puede identificar.
+        pushExpanded({ lineId: comp.line_id ?? null, unitTokens: comp.unit_tokens ?? null, name: comp.name, qty: unidadesDeComponente(comp.qty, line.qty), family: comp.family, allergens: line.allergens || [], allergensState: line.allergens_state ?? null, modifiers: [], isDrink: isDrinkOrDessert(comp.family, comp.name) });
       }
     } else {
       pushExpanded({ lineId: line.line_id ?? null, unitTokens: line.unit_tokens ?? null, name: line.name, qty: line.qty, family: line.family, allergens: line.allergens || [], allergensState: line.allergens_state ?? null, modifiers: (line.children || []).filter((c: any) => c.line_type !== 'combo_item'), isDrink: isDrinkOrDessert(line.family, line.name) });
@@ -145,7 +158,7 @@ export function renderBagTicket(order: any, fiscal?: any): TicketDoc {
     } else {
       b.push({ kind: 'priceRow', label, final: money(line.line_total) });
     }
-    for (const m of modifierLines(line.children)) b.push({ kind: 'text', text: '   ' + m.text });
+    for (const m of modifierLines(line.children, line.qty)) b.push({ kind: 'text', text: '   ' + m.text });
   }
   b.push({ kind: 'space' });
   b.push({ kind: 'rule' });
@@ -195,7 +208,7 @@ export function renderKitchenTicket(order: any): TicketDoc {
     b.push({ kind: 'banner', text: key });
     for (const line of groups.get(key)!) {
       b.push({ kind: 'text', text: `${line.qty}x ${line.name}`, bold: true, size: 3 });
-      for (const m of modifierLines(line.children)) {
+      for (const m of modifierLines(line.children, line.qty)) {
         b.push({ kind: 'text', text: '  ' + m.text, bold: m.tone === 'remove', size: m.tone === 'remove' ? 2 : 1 });
       }
       const al = allergenList(line);

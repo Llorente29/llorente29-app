@@ -28,6 +28,7 @@ import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
 import { fmtNum } from '@/lib/format'
+import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from '../lib/passCode'
 import { elSubtitulo } from '@/modules/pase/lib/lasTresZonas'
 import ChannelBadge from './ChannelBadge'
@@ -128,12 +129,15 @@ function BrandAvatar({ name, logoUrl, color }: { name: string | null; logoUrl: s
 
 // ── Sub-render ──────────────────────────────────────────────────────────────
 
-function ChildRow({ child }: { child: OrderFeedChild }) {
-  // Componente de combo: neutro, sin signo (forma parte del plato).
+function ChildRow({ child, parentQty }: { child: OrderFeedChild; parentQty: number }) {
+  // Componente de combo: neutro, sin signo (forma parte del plato). La cantidad
+  // que se pinta son las unidades REALES (componente x pack): hasta el 21/09 se
+  // pintaba la del componente a secas y un pack 2x se leía como uno.
   if (child.line_type === 'combo_item') {
+    const uds = unidadesDeComponente(child.qty, parentQty)
     return (
       <div className="flex items-center gap-2 text-[13px] font-semibold px-2.5 py-1 rounded-lg bg-page border border-default text-text-secondary">
-        <span className="opacity-60">·</span>{child.qty > 1 ? `${child.qty}× ` : ''}{child.name}
+        <span className="opacity-60">·</span>{uds > 1 ? `${uds}× ` : ''}{child.name}
       </div>
     )
   }
@@ -210,7 +214,7 @@ function LineRow({
 
       {line.children.length > 0 && (
         <div className="mt-2 ml-[58px] flex flex-col gap-1.5">
-          {line.children.map(c => <ChildRow key={c.line_id} child={c} />)}
+          {line.children.map(c => <ChildRow key={c.line_id} child={c} parentQty={line.qty} />)}
         </div>
       )}
 

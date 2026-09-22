@@ -23,6 +23,7 @@
 
 import type { OrderFeedItem, OrderFeedLine, OrderFeedChild } from '../services/ordersFeedService'
 import { childVisual } from '../services/ordersFeedService'
+import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from './passCode'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
 
@@ -133,7 +134,9 @@ function flattenItems(order: OrderFeedItem): FlatItem[] {
       for (const comp of comboComponents) {
         pushExpanded({
           name: comp.name,
-          qty: comp.qty,
+          // Lo de dentro va por la cantidad del pack (G587, 21/09): un pack 2x
+          // con una quesadilla dentro son DOS quesadillas, dos pegatinas.
+          qty: unidadesDeComponente(comp.qty, line.qty),
           family: comp.family,
           allergens: line.allergens,                 // alérgenos del plato padre (aprox.)
           modifiers: [],                             // los modificadores de combo cuelgan aparte; simplificamos
@@ -155,9 +158,24 @@ function flattenItems(order: OrderFeedItem): FlatItem[] {
   return out
 }
 
-/** Modificadores de una línea, en texto legible con su signo (sin/＋). */
-function modifierLines(children: OrderFeedChild[]): { text: string; tone: string }[] {
+/** Modificadores y componentes de una línea, en texto legible con su signo
+ *  (sin/＋). Los COMPONENTES de un combo llevan delante sus unidades REALES:
+ *  hasta el 21/09 salían sin número ninguno, así que un «2x PACK» con tres
+ *  cosas dentro se leía en cocina como una de cada. `parentQty` es la cantidad
+ *  de la línea padre; los modificadores (no componentes) no la usan, porque
+ *  cuelgan de su pieza y no del pack. */
+function modifierLines(
+  children: OrderFeedChild[],
+  parentQty: number = 1,
+): { text: string; tone: string }[] {
   return children.map((c) => {
+    if (c.line_type === 'combo_item') {
+      // Con una sola unidad se deja el texto pelado, que es como sale hoy: un
+      // combo 1x no cambia ni una letra. En cuanto hay dos o más, el número va
+      // DELANTE, que es lo que faltaba el 21/09.
+      const uds = unidadesDeComponente(c.qty, parentQty)
+      return { text: uds > 1 ? `${uds}x ${c.name}` : c.name, tone: 'neutral' }
+    }
     const v = childVisual(c)
     const prefix = v.tone === 'remove' ? 'SIN ' : v.tone === 'add' ? '+ ' : ''
     const cleanName = c.name.replace(/^\s*(sin|no|quitar|without|sans)\s+/i, '')
@@ -199,7 +217,7 @@ export function renderBagTicket(order: OrderFeedItem, fiscal?: { legalName?: str
   b.push({ kind: 'banner', text: 'Productos' })
   for (const line of order.lineas) {
     b.push({ kind: 'row', left: `${line.qty}x ${line.name}`, right: money(line.line_total), bold: true })
-    for (const m of modifierLines(line.children)) {
+    for (const m of modifierLines(line.children, line.qty)) {
       b.push({ kind: 'text', text: '   ' + m.text, muted: true })
     }
   }
@@ -262,7 +280,7 @@ export function renderKitchenTicket(order: OrderFeedItem): TicketDoc {
     b.push({ kind: 'banner', text: key })
     for (const line of groups.get(key)!) {
       b.push({ kind: 'row', left: `${line.qty}x  ${line.name}`, right: '', bold: true })
-      for (const m of modifierLines(line.children)) {
+      for (const m of modifierLines(line.children, line.qty)) {
         b.push({ kind: 'text', text: '    ' + m.text, muted: m.tone !== 'remove' })
       }
       if (line.customer_note) b.push({ kind: 'text', text: '    » ' + line.customer_note, bold: true })

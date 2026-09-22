@@ -195,6 +195,9 @@ export interface ChildVisual { tone: ChildTone; confirmed: boolean }
 
 const LOOKS_REMOVE = /^\s*(sin|no|quitar|without|sans)\b/i
 
+// La regla de las unidades de un componente de combo NO vive aqui: vive en
+// `@/lib/unidadesDeComponente`. Tiene que poder importarla tambien el worker
+// NATIVO de impresion, y este fichero arrastra Supabase.
 /**
  * Decide cómo pintar una hija combinando el dato del catálogo (group_type, fiable)
  * con el texto como desempate/red de seguridad. confirmed=false => inferido.

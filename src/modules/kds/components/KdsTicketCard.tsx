@@ -26,6 +26,7 @@ import { Check, ChefHat, Undo2, AlertTriangle } from 'lucide-react'
 import type { KdsTicket, KdsLine, KdsLineChild } from '../services/kdsService'
 import { ticketCode, channelBadge, timeLevel, timeChipClasses } from '../kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
+import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 
 const SIN_ESTACION = '__none__'
 
@@ -300,7 +301,14 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
                 {comboItems.map(c => (
                   <li key={c.line_id} className={`leading-tight ${struck ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
                     <span className="text-[15px] font-medium">
-                      {c.qty > 1 && <span className="text-zinc-400 mr-1 tabular-nums">{c.qty}×</span>}
+                      {/* Unidades REALES: componente x pack. Un «2× PACK» con una
+                          quesadilla dentro son DOS quesadillas (G587, 21/09).
+                          Con una sola unidad no se pinta número, igual que antes. */}
+                      {unidadesDeComponente(c.qty, line.qty) > 1 && (
+                        <span className="text-zinc-400 mr-1 tabular-nums">
+                          {unidadesDeComponente(c.qty, line.qty)}×
+                        </span>
+                      )}
                       {c.name}
                     </span>
                     {c.customer_note && <NoteChip note={c.customer_note} />}
