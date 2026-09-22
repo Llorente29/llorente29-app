@@ -440,3 +440,80 @@ todavía porque un ensayo con un gramaje inventado no mide nada.
 Los dos combos se pueden pasar **ya**, sin esperar a la salsa: publican el kebab
 de la carta con su pregunta de quitar, que es lo que has pedido. Lo de la salsa
 arregla un descuadre que viene de junio y va por su cuenta.
+
+---
+
+# ADENDA 4 — 22/09, 21:05–21:3x. Los dos combos APLICADOS, y la salsa escrita
+
+## Los dos combos están aplicados
+
+Pasada con `rollback`, comprobado que revirtió (`item/item`, 0 huecos), repetida
+con `commit`. Verificado **sobre lo vivo**:
+
+| | |
+|---|---|
+| fichas en `combo` | Individual 12,50 · Duo 20,50 |
+| huecos | **5** · opciones **18** · **sin artículo: 0** |
+| matrículas | intactas las dos |
+| coste por defecto | Individual **4,554 €** (36 %) · Duo **6,642 €** (32 %) |
+
+**Se aplicó a las 21:05 con la cena a pleno** — 17 pedidos en 30 minutos, el
+último hacía 40 segundos. Se pudo porque lo aplicado es **inerte para el camino
+del pedido**, y eso se midió antes:
+
+- `adapt_hubrise_order`, `_sale_line_raw_consumption` y `compute_sale_line_cost`
+  **no leen** `product_type` ni `combo_slot`.
+- 0 crons y 0 disparadores sobre `combo_slot` / `combo_slot_option`.
+- El disparador de precio de `menu_item` es `AFTER UPDATE **OF price**` con
+  `WHEN (old.price IS DISTINCT FROM new.price)`: no se tocó el precio.
+- Bloqueos de fila, cero DDL.
+
+**Se sacó de la pasada** el borrado de las 4 asignaciones de grupos:
+`modifier_group_assignment` **sí** la lee `resolver_opcion_de_extra` en su paso 1
+en cada pedido vivo. Su paso 2 casa por `ref` en toda la cuenta y lo rescataría
+—leído, no supuesto— pero con la cena así no hacía falta meter esa tabla. Vive
+en `20260922T2300_limpieza_grupos_de_los_combos.sql` y va **con la publicación**.
+
+**Nada ha cambiado para el cliente todavía.** HubRise sigue sirviendo la carta
+del 1 de septiembre.
+
+## La salsa: 30 g, y escrita
+
+> Julio: «La harisa son 30 grs igual que el yogur».
+
+`20260922T2200_la_salsa_del_kebab_cuadra.sql` reescrita:
+
+- **+30 g de `REC-00003`** en los cuatro kebabs.
+- **«Sin Salsa Yogur» y «Sin Salsa Harisa» pasan los dos a 30**, que es la
+  invariante: lo que quita un «Sin X» tiene que ser lo que pone la receta.
+- El **0,5** del grupo de salsa del combo pasa a 30. Esas opciones quedan
+  dormidas al publicar, pero un medio gramo olvidado ahí es una mina.
+
+**Lo que NO se toca, y se midió antes de decidirlo:** el extra **de pago**
+«Algun extra en tu pita?» está **bien** — Salsa Harissa extra **50 g** (37
+pedidos) y Salsa Yogur extra **40 g** (62 pedidos). Son raciones de extra, más
+grandes que la de serie a propósito. Y las Patatas Harisa con sus 60 g, igual.
+
+**El coste sube +0,1403 € por kebab**, igual en los cuatro. Ese número está
+medido por el camino real —explotar 30 g de `REC-00003` a sus dos materias
+primas— y no calculado como 30 × `computed_cost`, que da 0,1404. Una milésima,
+pero manda el camino.
+
+## 🔴 Ésta NO se pasa en banda, y no es lo mismo que las otras dos
+
+Las de los combos eran inertes. **Ésta toca `recipe_line`, que lee
+`explode_recipe_to_raws` en CADA cierre de venta.** Pasarla con la cena en
+marcha parte el servicio por la mitad: los pedidos de antes consumen una cosa y
+los de después otra, con el corte a mitad de turno y sin que nadie lo sepa.
+
+Lleva una **tercera guarda que aborta sola** si son entre las 12:00 y las 23:45,
+diciendo la hora y cuántos pedidos hay en los últimos 30 minutos.
+
+**Y le falta el ensayo por los cuatro caminos** (regla 10) — cerrar una venta,
+recibir un albarán, apuntar una merma, aprobar un recuento. Los cuatro RPC están
+localizados (`close_sale`, `confirm_goods_receipt`, `register_waste`,
+`apply_inventory_count`) pero **sin escribir, y eso es el hallazgo, no un
+descuido**: cada uno necesita una fila real sobre la que operar (una venta
+abierta de un kebab, un albarán en borrador, un recuento sin aprobar) y esas
+filas cambian cada día. Se escriben con la base delante esa noche. Si alguno no
+se puede ensayar, se dice y **no se hace el commit**.

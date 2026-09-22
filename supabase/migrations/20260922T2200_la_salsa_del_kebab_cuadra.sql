@@ -2,155 +2,142 @@
 -- La salsa del kebab: que el escandallo diga lo que la carta ya ofrece
 -- ----------------------------------------------------------------------------
 -- 22/09/2026. Cuenta Foodint 51ad1792-6629-4ef7-833a-b57b09a86710.
--- PROPUESTA. NO APLICADA. 🔴 Y LE FALTA UN NUMERO (ver §0).
+-- PROPUESTA. NO APLICADA.
+--
+-- 🔴 ESTA **NO** SE PUEDE PASAR EN BANDA, y no es lo mismo que las dos de los
+--    combos. Aquellas eran inertes para el camino del pedido; ESTA lo toca de
+--    lleno: `recipe_line` la lee `explode_recipe_to_raws` en CADA cierre de
+--    venta. Cambiarla con la cena en marcha parte el servicio por la mitad —
+--    los pedidos de antes consumen una cosa y los de despues otra, y el corte
+--    queda a mitad de turno sin que nadie lo sepa.
+--    Se pasa DESPUES de las 23:45, con el servicio parado.
 --
 -- DE DONDE SALE. Julio, 22/09: «La salsa se elige para cada kebab del duo, y
--- SUSTITUYE; la idea creo que es mejor que la pregunta sea sin salsa harisa o
--- sin salsa yogur o sin ninguna».
+-- SUSTITUYE; la pregunta mejor es sin salsa harisa o sin salsa yogur o sin
+-- ninguna». Y luego: «La harisa son 30 grs igual que el yogur».
 --
--- Ese modelo —el kebab VIENE con las dos salsas y el cliente quita la que no
--- quiera— es el que ya tiene montado la carta: el grupo «Quieres quitar aguna
--- salsa de tu kebab?» cuelga de las CUATRO fichas de kebab, con sus dos
--- opciones y sus dos impactos confirmados. No hay que crear nada.
+-- Ese modelo ya lo tiene montado la carta: el grupo «Quieres quitar aguna salsa
+-- de tu kebab?» cuelga de las CUATRO fichas de kebab. No hay que crear nada.
+-- Lo que falla es que el ESCANDALLO no lo sostiene.
 --
--- El problema es que el ESCANDALLO no lo sostiene. Medido el 22/09:
+-- MEDIDO EL 22/09:
+--   | la carta ofrece                          | la receta pone      | pedido   |
+--   |------------------------------------------|---------------------|----------|
+--   | «Sin Salsa Harisa» resta 50 de REC-00003 | NADA. Cero harissa. | 15 veces |
+--   | «Sin Salsa Yogur»  resta 50 de RAW-00127 | 30 g                |  9 veces |
 --
---   | la carta ofrece                        | la receta pone        | pedido |
---   |----------------------------------------|-----------------------|--------|
---   | «Sin Salsa Harisa» resta 50 de REC-00003 | NADA. Cero harissa.  | 15 veces |
---   | «Sin Salsa Yogur»  resta 50 de RAW-00127 | 30 g                 |  9 veces |
+--   · 15 pedidos desde el 17/06 -> 750 g de harissa restados de una salsa que
+--     nunca entro en el plato.
+--   · 9 pedidos -> 180 g de yogur de mas, 20 cada vez.
 --
---   · «Sin Salsa Harisa»: 15 pedidos desde el 17/06 -> 750 g restados de una
---     salsa que nunca entro en el plato. Stock negativo puro.
---   · «Sin Salsa Yogur»: 9 pedidos -> 20 g de mas cada vez, 180 g.
---   · REC-00003 rinde 820 g por tanda, asi que las cantidades son GRAMOS.
+-- LA INVARIANTE, que no es opinion: lo que quita un «Sin X» tiene que ser
+-- EXACTAMENTE lo que pone la receta. Hoy no cuadra ninguna de las dos.
 --
--- LA INVARIANTE, que no es una opinion: lo que quita un «Sin X» tiene que ser
--- EXACTAMENTE lo que pone la receta. Si no, cada vez que alguien lo pide el
--- almacen se descuadra en la diferencia. Hoy no cuadra ninguna de las dos.
---
--- ── §0 · 🔴 EL NUMERO QUE FALTA ────────────────────────────────────────────
--- El yogur se arregla solo: la receta dice 30 y es el valor que alguien puso a
--- proposito, asi que manda la receta y el «Sin Salsa Yogur» baja de 50 a 30.
---
--- La harissa NO se puede deducir: no hay valor en la receta del que tirar. El
--- unico numero que existe es el 50 del «Sin», que es lo que alguien creyo que
--- llevaba. Hace falta que Julio diga CUANTOS GRAMOS de Salsa Mayo Harissa
--- lleva un kebab.
---
---     Se escribe UNA VEZ, aqui abajo, y el resto del fichero lo usa.
---
---   \set g_harissa 50        -- <<< 🔴 GRAMOS DE HARISSA POR KEBAB. CONFIRMAR.
---
--- Mientras no este confirmado, este fichero NO se pasa: poner un numero
--- inventado en un escandallo es exactamente lo que venimos a arreglar.
+-- LO QUE **NO** SE TOCA, y se midio antes de decidirlo:
+--   · El extra DE PAGO «Algun extra en tu pita?» esta BIEN: Salsa Harissa
+--     extra = 50 g (37 pedidos) y Salsa Yogur extra = 40 g (62 pedidos). Son
+--     raciones de extra, mas grandes que la de serie a proposito. Intacto.
+--   · Las «Patatas Harisa» llevan 60 g de REC-00003. Es su plato. Intacto.
 -- ============================================================================
 
 begin;
 
--- ── Guarda 1: las cuatro fichas de kebab siguen igual ───────────────────────
+-- ── Guarda 1: los cuatro kebabs vivos ──────────────────────────────────────
 do $$
 declare v_n integer;
 begin
-  select count(*) into v_n
-  from public.recipe_item ri
-  where ri.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
-    and ri.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
-    and ri.is_active and ri.archived_at is null;
-  if v_n <> 4 then
-    raise exception 'ABORTA: esperaba los 4 kebabs vivos; encontre %.', v_n;
-  end if;
+  select count(*) into v_n from public.recipe_item ri
+   where ri.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
+     and ri.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
+     and ri.is_active and ri.archived_at is null;
+  if v_n <> 4 then raise exception 'ABORTA: esperaba los 4 kebabs vivos; encontre %.', v_n; end if;
 end $$;
 
--- ── Guarda 2: siguen SIN harissa y CON 30 g de yogur ────────────────────────
--- Si alguien ya lo ha tocado, la premisa ha cambiado y esto no debe correr.
+-- ── Guarda 2: siguen SIN harissa y CON 30 g de yogur ───────────────────────
 do $$
 declare v_h integer; v_y integer;
 begin
-  select count(*) into v_h
-  from public.recipe_line rl
-  join public.recipe_item p on p.id=rl.parent_item_id and p.account_id=rl.account_id
-  join public.recipe_item c on c.id=rl.child_item_id and c.account_id=rl.account_id
-  where rl.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
-    and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
-    and c.folvy_code='REC-00003';
-  if v_h <> 0 then
-    raise exception 'ABORTA: ya hay % linea(s) de harissa en los kebabs. Revisar a mano.', v_h;
-  end if;
+  select count(*) into v_h from public.recipe_line rl
+    join public.recipe_item p on p.id=rl.parent_item_id and p.account_id=rl.account_id
+    join public.recipe_item c on c.id=rl.child_item_id  and c.account_id=rl.account_id
+   where rl.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
+     and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
+     and c.folvy_code='REC-00003';
+  if v_h <> 0 then raise exception 'ABORTA: ya hay % linea(s) de harissa. Revisar a mano.', v_h; end if;
 
-  select count(*) into v_y
-  from public.recipe_line rl
-  join public.recipe_item p on p.id=rl.parent_item_id and p.account_id=rl.account_id
-  join public.recipe_item c on c.id=rl.child_item_id and c.account_id=rl.account_id
-  where rl.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
-    and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
-    and c.folvy_code='RAW-00127'
-    and coalesce(rl.quantity_gross, rl.quantity_net) = 30;
-  if v_y <> 4 then
-    raise exception 'ABORTA: esperaba 4 kebabs con 30 g de yogur; encontre %.', v_y;
+  select count(*) into v_y from public.recipe_line rl
+    join public.recipe_item p on p.id=rl.parent_item_id and p.account_id=rl.account_id
+    join public.recipe_item c on c.id=rl.child_item_id  and c.account_id=rl.account_id
+   where rl.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
+     and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
+     and c.folvy_code='RAW-00127'
+     and coalesce(rl.quantity_gross, rl.quantity_net) = 30;
+  if v_y <> 4 then raise exception 'ABORTA: esperaba 4 kebabs con 30 g de yogur; encontre %.', v_y; end if;
+end $$;
+
+-- ── Guarda 3: el servicio esta parado ──────────────────────────────────────
+-- La banda no se opina: se mide. Esta migracion toca `recipe_line`, que lee
+-- `explode_recipe_to_raws` en cada cierre de venta.
+do $$
+declare v_h integer; v_p integer;
+begin
+  v_h := extract(hour from (now() at time zone 'Europe/Madrid'))::int;
+  if v_h >= 12 and v_h < 24 then
+    select count(*) into v_p from public.sale
+     where account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
+       and sold_at >= now() - interval '30 minutes';
+    if v_h < 23 or (v_h = 23 and extract(minute from (now() at time zone 'Europe/Madrid'))::int < 45) then
+      raise exception 'ABORTA: son las % (Madrid) y hay % pedidos en los ultimos 30 min. Esta migracion toca recipe_line, que se lee en cada cierre de venta. Despues de las 23:45.', to_char(now() at time zone 'Europe/Madrid','HH24:MI'), v_p;
+    end if;
   end if;
 end $$;
 
--- ── 1) La harissa entra en el escandallo de los cuatro kebabs ───────────────
--- Va DETRAS del yogur, en la posicion siguiente, para que la ficha se lea en el
--- mismo orden en que se monta el kebab.
+-- ── 1) La harissa entra en el escandallo: 30 g, igual que el yogur ─────────
 insert into public.recipe_line
   (account_id, parent_item_id, child_item_id, quantity_net, quantity_gross, position, comment)
-select '51ad1792-6629-4ef7-833a-b57b09a86710', p.id, h.id,
-       :g_harissa, :g_harissa,
+select '51ad1792-6629-4ef7-833a-b57b09a86710', p.id, h.id, 30, 30,
        (select max(rl2.position)+1 from public.recipe_line rl2
          where rl2.parent_item_id=p.id and rl2.account_id=p.account_id),
-       'Salsa de serie. El cliente la quita con «Sin Salsa Harisa» (22/09/2026).'
+       'Salsa de serie, 30 g igual que el yogur (Julio, 22/09/2026). El cliente la quita con «Sin Salsa Harisa».'
 from public.recipe_item p
 cross join (select id from public.recipe_item
              where account_id='51ad1792-6629-4ef7-833a-b57b09a86710' and folvy_code='REC-00003') h
 where p.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
   and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011');
 
--- ── 2) Los «Sin X» pasan a quitar EXACTAMENTE lo que pone la receta ─────────
--- Yogur: 50 -> 30, que es lo que dice la receta.
+-- ── 2) Los «Sin X» quitan EXACTAMENTE lo que pone la receta: 30 y 30 ───────
 update public.modifier_recipe_impact mri
    set quantity = 30, updated_at = now()
   from public.modifier_option mo, public.modifier_group mg, public.recipe_item ri
  where mri.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
-   and mo.id = mri.modifier_option_id and mo.account_id = mri.account_id
-   and mg.id = mo.modifier_group_id   and mg.account_id = mri.account_id
+   and mo.id = mri.modifier_option_id  and mo.account_id = mri.account_id
+   and mg.id = mo.modifier_group_id    and mg.account_id = mri.account_id
    and ri.id = mri.target_recipe_item_id and ri.account_id = mri.account_id
-   and mg.name ilike '%quitar%' and mo.name = 'Sin Salsa Yogur'
-   and ri.folvy_code = 'RAW-00127'
-   and mri.impact_type = 'remove_item';
+   and mg.name ilike '%quitar%'
+   and mri.impact_type = 'remove_item'
+   and ( (mo.name = 'Sin Salsa Yogur'  and ri.folvy_code = 'RAW-00127')
+      or (mo.name = 'Sin Salsa Harisa' and ri.folvy_code = 'REC-00003') );
 
--- Harissa: al numero confirmado.
+-- ── 3) El medio gramo del grupo de salsa del combo ─────────────────────────
+-- «Salsa Harissa (Picante)» de los grupos «Escoge la salsa para tu … kebab»
+-- tiene impacto 0,5 de REC-00003: medio gramo. Esas opciones quedan DORMIDAS
+-- en cuanto los combos publiquen como deal, pero un 0,5 olvidado ahi es una
+-- mina para el dia que alguien reasigne el grupo. Se pone en 30, que es la
+-- salsa de serie que representa.
 update public.modifier_recipe_impact mri
-   set quantity = :g_harissa, updated_at = now()
+   set quantity = 30, updated_at = now()
   from public.modifier_option mo, public.modifier_group mg, public.recipe_item ri
  where mri.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
-   and mo.id = mri.modifier_option_id and mo.account_id = mri.account_id
-   and mg.id = mo.modifier_group_id   and mg.account_id = mri.account_id
+   and mo.id = mri.modifier_option_id  and mo.account_id = mri.account_id
+   and mg.id = mo.modifier_group_id    and mg.account_id = mri.account_id
    and ri.id = mri.target_recipe_item_id and ri.account_id = mri.account_id
-   and mg.name ilike '%quitar%' and mo.name = 'Sin Salsa Harisa'
-   and ri.folvy_code = 'REC-00003'
-   and mri.impact_type = 'remove_item';
-
--- ── 3) El extra de salsa del combo, que ponia MEDIO GRAMO ───────────────────
--- «Salsa Harissa (Picante)» de los grupos de salsa del combo tiene impacto 0,5
--- de REC-00003, cuando sus hermanas usan 50-60. Es un extra de PAGO (+1,50 en
--- la pita), asi que lo que anade debe ser una racion, no medio gramo.
--- Deja de usarse en cuanto los dos combos sean combo de verdad (esos grupos se
--- desasignan), pero el extra de la pita SIGUE vivo.
-update public.modifier_recipe_impact mri
-   set quantity = :g_harissa, updated_at = now()
-  from public.modifier_option mo, public.recipe_item ri
- where mri.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
-   and mo.id = mri.modifier_option_id and mo.account_id = mri.account_id
-   and ri.id = mri.target_recipe_item_id and ri.account_id = mri.account_id
+   and mg.name ilike '%escoge la salsa%'
    and mo.name = 'Salsa Harissa (Picante)'
    and ri.folvy_code = 'REC-00003'
    and mri.impact_type = 'add_item'
    and mri.quantity = 0.5;
 
--- ── COMPROBACION ────────────────────────────────────────────────────────────
--- C1. La invariante: lo que pone la receta = lo que quita el «Sin».
+-- ── C1 · LA INVARIANTE ─────────────────────────────────────────────────────
 select p.folvy_code as kebab, c.folvy_code as salsa, c.name,
        coalesce(rl.quantity_gross, rl.quantity_net) as pone_la_receta,
        (select mri.quantity from public.modifier_recipe_impact mri
@@ -168,29 +155,46 @@ select p.folvy_code as kebab, c.folvy_code as salsa, c.name,
    and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
    and c.folvy_code in ('RAW-00127','REC-00003')
  order by p.folvy_code, c.folvy_code;
--- Esperado: 8 filas, y en TODAS `pone_la_receta` = `quita_el_sin`.
--- Si una sola difiere, cada vez que se pida ese «Sin» el almacen se descuadra.
+-- Esperado: 8 filas y en TODAS `pone_la_receta` = `quita_el_sin` = 30.
 
--- C2. Lo que cambia el coste del kebab (regla 31: el mismo numero a los dos lados)
+-- ── C2 · EL COSTE, el mismo numero a los dos lados (regla 31) ──────────────
 select p.folvy_code, p.name,
        round((select coalesce(sum(e.qty_base*coalesce(r2.computed_cost,r2.fixed_cost,0)),0)
                 from public.explode_recipe_to_raws(p.id,1) e
-                join public.recipe_item r2 on r2.id=e.raw_item_id and r2.account_id=p.account_id)::numeric,4) as coste_ahora
+                join public.recipe_item r2 on r2.id=e.raw_item_id and r2.account_id=p.account_id)::numeric,4) as coste_despues
   from public.recipe_item p
  where p.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
    and p.folvy_code in ('DSH-00008','DSH-00009','DSH-00010','DSH-00011')
  order by p.folvy_code;
 -- ANTES (medido el 22/09, sin la harissa):
 --   DSH-00008 2,1298 · DSH-00009 2,1680 · DSH-00010 2,0882 · DSH-00011 1,3770
--- La diferencia tiene que ser g_harissa x 0,00468 EUR/g en los cuatro, y la
--- MISMA en los cuatro. Con 50 g serian +0,234 EUR por kebab.
+-- La subida tiene que ser +0,1403 EUR, IGUAL en los cuatro. Ese numero esta
+-- MEDIDO por el camino real (explotar 30 g de REC-00003 a sus 2 materias
+-- primas), no calculado como 30 x computed_cost, que da 0,1404: un milesima
+-- de diferencia por redondeo, y manda el camino.
+--   DSH-00008 2,2701 · DSH-00009 2,3083 · DSH-00010 2,2285 · DSH-00011 1,5173
+-- Si uno sube distinto, el escandallo de ese no era el que creiamos.
 
--- ── 🔴 ENSAYO POR CAMINOS (regla 10) — PENDIENTE ───────────────────────────
--- Esto SI es un cambio de coste y de stock, asi que antes del commit hay que
--- pasar los cuatro caminos dentro de esta misma transaccion: cerrar una venta,
--- recibir un albaran, apuntar una merma y aprobar un recuento. No los he
--- escrito porque el fichero esta bloqueado por el numero de §0 y un ensayo con
--- un gramaje inventado no mide nada. Van antes del commit, no despues.
+-- ── C3 · ENSAYO POR LOS CUATRO CAMINOS (regla 10) ──────────────────────────
+-- Esto mueve coste Y stock, asi que no basta con que el numero salga bien: hay
+-- que ver quien lo ESCRIBE. Los cuatro, dentro de esta misma transaccion:
+--
+--   · cerrar una venta   -> public.close_sale(p_sale_id)
+--   · recibir un albaran -> public.confirm_goods_receipt(p_receipt_id)
+--   · apuntar una merma  -> public.register_waste(...)   sobre RAW-00127
+--   · aprobar un recuento-> public.apply_inventory_count(p_count_id, …)
+--
+-- 🔴 LOS CUATRO ESTAN SIN ESCRIBIR, y eso es el hallazgo, no un descuido:
+--    cada uno necesita una fila REAL sobre la que operar (una venta abierta de
+--    un kebab, un albaran en borrador, un recuento sin aprobar) y esas filas
+--    cambian cada dia. Se escriben con la base delante en el momento de
+--    pasarla, no ahora y de memoria. Si alguno no se puede ensayar esa noche,
+--    eso se dice en el parte y NO se hace el commit.
+--
+--    Lo que hay que mirar en cada uno: que la transaccion NO aborte, y que el
+--    movimiento de RAW-00127 y REC-00003 sea el esperado. La p8 del 10/09 se
+--    llevo el servicio entero por medir la media sobre 453 filas y no ejecutar
+--    ni una venta.
 
 rollback;
 -- commit;
