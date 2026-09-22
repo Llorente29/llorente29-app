@@ -111,8 +111,19 @@ from (
     case
       when menu_item_id is null                                then '1 · sin casar con la carta'
       when recipe_item_id is null and not es_combo and n_real=0 then '2 · sin ficha y sin descontar'
+      -- 23/09: ANTES que la 3, porque si no se la traga. El recasado en frio
+      -- dejo 463 lineas CON plato y SIN consumo, a proposito. Caen en la 3
+      -- («con ficha y cero movimientos») y ahi parecen una averia. Casilla
+      -- propia, NO filtro: existen, cuentan euros, y no van a descontar
+      -- nunca. Esconderlas seria «sin alertas» habiendo filas (regla 7).
+      when exists (select 1 from public.sale_line_recast_frio f
+                    where f.sale_line_id = cmp.id)         then '3b · recasada en frio (no descontara nunca)'
       when n_esp > 0 and n_real = 0                            then '3 · con ficha y cero movimientos'
       when n_faltan > 0                                        then '4 · descuenta, le falta un ingrediente'
+      -- 23/09 00:01: esta casilla YA NO CRECE. `explode_recipe_to_raws` acepta
+      -- 'packaging' desde entonces, asi que el envase de lo que se venda a
+      -- partir de ahora si se mueve. Lo de antes se queda: no se reproceso
+      -- nada (regla del 18/09) y cuadra en el primer recuento.
       when n_envases > 0                                       then '5 · la comida si, el envase nunca'
       else                                                          '6 · completo'
     end as casilla
@@ -120,5 +131,5 @@ from (
 ) z
 group by casilla
 union all
-select 'TOTAL (tiene que ser la suma de las seis)', count(*), round(sum(eur)::numeric,2) from u
+select 'TOTAL (tiene que ser la suma de las siete)', count(*), round(sum(eur)::numeric,2) from u
 order by casilla;
