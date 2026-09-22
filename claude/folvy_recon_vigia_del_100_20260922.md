@@ -104,3 +104,76 @@ Son **24.486,51 € de venta en diez días** en esa casilla, y 1.337,67 € de c
 de envase en 30 días. Es la casilla más gorda con diferencia, y hasta que no se
 decida, el vigía tiene que enseñarla como causa propia y no mezclarla con las
 demás — que es como está montada la consulta.
+
+---
+
+# ADENDA — 22/09, 22:0x. «El envase descuenta, arréglalo»
+
+## El titular no era el del encargo
+
+El encargo decía: «si el envase debe descontar, se arregla; si no, no puede
+estar en el escandallo dando un coste de plato que no es real».
+
+**Ya estaba dando el coste, y el coste era real.**
+`_kitchen_recompute_item_unguarded` suma **todas** las líneas del escandallo a
+`computed_cost` —envase incluido— y guarda en `packaging_cost` solo la rebanada,
+para informar. Medido:
+
+| plato | `computed_cost` | explosión | envase |
+|---|---:|---:|---:|
+| DSH-00010 Kebab de Pollo | 2,3636 | 2,0882 | 0,2754 |
+| DSH-00015 Rollitos Feta | 1,6941 | 1,4700 | 0,2241 |
+| DSH-00389 Patatas Harisa | 2,7122 | 2,4654 | 0,2469 |
+
+Cuadra al céntimo en las tres. O sea: **la cuenta de resultados está bien y lo
+único roto es el stock.** No es un arreglo de coste, es un arreglo de
+inventario — y por eso **no hay riesgo de duplicar coste**: `computed_cost` no
+sale de la función que se toca.
+
+## El arreglo: una condición, una palabra
+
+```sql
+IF v_item.type IN ('raw', 'tool', 'packaging')   -- entra 'packaging'
+   OR (v_item.type = 'recipe' AND COALESCE(v_item.is_stockable, false)) THEN
+```
+
+No había filtro que quitar. Un `packaging` no es raw ni tool ni receta
+stockable, así que caía a la rama compuesta, buscaba líneas hijas, no tenía, y
+devolvía cero filas. **Invisible por construcción.**
+
+## El terreno, medido antes de tocar (escenario p8 del 10/09)
+
+| | |
+|---|---|
+| envases activos | 60 |
+| **sin unidad base** | **0** |
+| en escandallo y sin coste | 1 → la guarda 2 lo caza |
+| líneas de escandallo de envase sin unidad | **0** |
+| ya con fila de stock | 62 |
+| `recipe_item_location_stock` NOT NULL | id, account_id, recipe_item_id, location_id, qty_on_hand, updated_at |
+
+**`stock_value` no es `NOT NULL` aquí**, así que el fallo exacto de la p8 —que
+abortaba la transacción entera y se llevó 79 pedidos— **no aplica**. El terreno
+es más firme de lo que temía.
+
+## 🔴 No la paso, y llevo tres guardas para que no se pase sola
+
+`supabase/migrations/20260922T2330_el_envase_descuenta.sql`.
+
+**Esto es EL motor de consumo**, leído en cada cierre de venta. La guarda 1
+aborta si hay un solo pedido en los últimos 30 minutos. Son las 22:0x y la cena
+sigue.
+
+Y **no se hace commit sin los cuatro caminos en verde** (regla 10): cerrar una
+venta de un plato con envase, recibir un albarán, apuntar una merma, aprobar un
+recuento. Los RPC están localizados; **los ids no van escritos** porque cambian
+cada día y un ensayo contra una fila inventada no mide nada. Se rellenan con la
+base delante esa noche. Si alguno no se puede ensayar, eso es el hallazgo: se
+dice y no se hace commit.
+
+## Lo que hay que decirle a quien cuente
+
+No se reprocesa nada (regla del 18/09). **El stock de envase arranca
+descuadrado** —lleva meses sin descontarse— y no se arregla solo: se arregla en
+el primer recuento después de aplicar esto. Antes de ese recuento, las cifras de
+cajas y bolsas siguen sin valer.
