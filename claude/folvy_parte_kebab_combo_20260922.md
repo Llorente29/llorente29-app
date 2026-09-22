@@ -222,3 +222,95 @@ eso no se ensayan.
 
 No reproceso nada de lo anterior. G160 y las dos ventas previas se quedan como
 están.
+
+---
+
+# ADENDA — 22/09, 20:40. El Duo: la composición estaba en la base
+
+> Julio pidió volver al Duo. Antes de repetirle la pregunta, fui a buscarla.
+
+## No la he deducido: la he ENCONTRADO
+
+El encargo decía «preguntar a Julio la composición exacta; no deducirla». No
+hizo falta deducir nada. **Los grupos del segundo kebab existen en la base**,
+activos y huérfanos:
+
+| grupo | id | | opciones |
+|---|---|---|---|
+| «2. Escoge tu segundo kebab» | `a58d72e7…` | 1 de 1 | 6, **0 vivas** |
+| «2. Elige el tipo de carne de tu 2º Kebab» | `a6a59e57…` | 1 de 1 | 4, 4 vivas |
+| «2. Escoge la salsa para tu segundo kebab» | `e4942692…` | 1 a 3 | 3, 2 vivas |
+
+Espejo exacto de los tres del «primer» kebab que se quedó el Individual, con
+los **mismos recargos**: 0 / +0,80 / +0,50 / +0,90.
+
+**Las tres cosas que lo cierran, medidas:**
+
+1. Los **seis** grupos (los tres del 1º y los tres del 2º) tienen **UN SOLO
+   sello de creación**: `12/06/2026 11:21:35.364111`. Misma importación de Last,
+   mismo instante.
+2. Son los **únicos tres grupos huérfanos de toda la marca**. No hay nada más
+   suelto que pudiera pertenecer a otro producto.
+3. El Duo **no tiene ni una línea de venta** en su historia, así que no existe
+   ningún pedido que pueda contradecirlo.
+
+El Individual se quedó los del «primer» kebab. El único producto de la carta que
+puede usar los del «segundo» es el Duo. **El Duo son dos kebabs, cada uno con su
+carne y su salsa.**
+
+En Last ya no está: busqué el producto en las cuatro cocinas y no aparece —
+estos combos viven solo en HubRise. Y `external_catalog_product` guarda el
+producto (20,50 €, activo, visto el 06/09) pero no sus grupos.
+
+## 🔴 Lo que sigue sin saberse: EL ENTRANTE
+
+«Escoge tu entrante favorito» está asignado **solo** al Individual. Pero el Duo
+no tiene **ninguna** asignación de nada, así que esa ausencia no prueba nada.
+
+**¿Uno, dos o ninguno?** Eso sí te lo tengo que preguntar.
+
+*La aritmética apunta a uno, y va dicho que es aritmética y no la carta:*
+Individual 12,50 € = 1 kebab + 1 entrante. Duo 20,50 €. La diferencia son
+**8,00 €**, que es un segundo kebab y poco más. Dos entrantes no caben en 8.
+
+## Lo escrito
+
+`supabase/migrations/20260922T2100_kebab_combo_duo_a_combo.sql` — **propuesta,
+sin aplicar**, con cuatro guardas (una comprueba que los tres grupos del segundo
+kebab **siguen huérfanos**: si alguien se los asigna entre medias, la premisa ha
+cambiado y aborta).
+
+Lleva los **dos huecos de kebab montados** y el del entrante **escrito y
+comentado**: si dices «uno», se descomenta; si dices «dos», se duplica; si dices
+«ninguno», se borra.
+
+Verificado en seco contra la carta real: los dos huecos dan **8 filas, todas con
+artículo** (DSH-00010 / 00009 / 00008 / 00011, dos veces).
+
+## Un defecto que sale al comparar los dos grupos
+
+El **«Mixto» del SEGUNDO** kebab descuenta **las dos carnes**: 50 g de
+`RAW-00058` Ternera **y** 50 g de `RAW-00057` Pollo.
+El **«Mixto» del PRIMERO** solo descuenta la **ternera**. Le falta el pollo.
+
+O sea que el roto es el del Individual, y se ve porque su gemelo está bien. Deja
+de importar en cuanto el Individual sea combo (ese grupo se desasigna y el
+escandallo pasa a salir de `DSH-00008`, que sí lleva las dos). Si la conversión
+se retrasa, es una línea:
+
+```sql
+-- SIN APLICAR. Solo si el Individual tarda en pasar a combo.
+insert into public.modifier_recipe_impact
+  (account_id, modifier_option_id, impact_type, target_recipe_item_id, quantity, status, source)
+values ('51ad1792-6629-4ef7-833a-b57b09a86710', 'f4e199c1-30fe-4f2d-a1ba-7d4b86f15774',
+        'add_item', 'f612bc62-ea42-4060-949c-15dbef42baa8', 50, 'confirmed', 'human');
+```
+
+## Las preguntas que quedan, ya solo dos
+
+1. **La salsa** (del encargo del Individual, sin cambios): el kebab de la carta
+   ya lleva 30 g de yogur dentro. ¿Se queda así, o grupo nuevo de salsa gratis
+   que se vería también en el kebab suelto?
+2. **El entrante del Duo**: ¿uno, dos o ninguno?
+
+Con esas dos, las dos migraciones se pasan del tirón, fuera de servicio.
