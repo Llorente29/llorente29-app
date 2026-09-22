@@ -25,15 +25,19 @@
 -- Los recargos del segundo kebab son IDENTICOS a los del primero (0 / +0,80 /
 -- +0,50 / +0,90), asi que el cliente paga lo mismo por cada mitad.
 --
--- 🔴 LO QUE SIGUE SIN SABERSE, Y POR ESO ESTE FICHERO NO ESTA ENTERO:
---    EL ENTRANTE. El grupo «Escoge tu entrante favorito» (02668c11) esta
---    asignado SOLO al Individual — pero el Duo no tiene NINGUNA asignacion de
---    nada, asi que esa ausencia no prueba nada. Puede llevar uno, dos o ninguno.
---    El hueco esta escrito abajo y COMENTADO. Lo descomenta Julio cuando diga
---    cual de las tres.
---    (La aritmetica APUNTA a uno, y va dicho que es aritmetica y no la carta:
---     Individual 12,50 = 1 kebab + 1 entrante. Duo 20,50. La diferencia son
---     8,00 €, que es un segundo kebab y poco mas. Dos entrantes no caben en 8.)
+-- RESPONDIDO POR JULIO (22/09): «el entrante es uno y kebab 2, y la salsa es lo
+-- mismo que en el individual, pero para 2 kebab». O sea: 2 kebabs + 1 entrante,
+-- y la salsa se comporta como en el Individual, dos veces.
+--
+-- 🔴 LO QUE ESTE FICHERO NO MONTA, Y NO ES UN OLVIDO: LA SALSA. Sigue abierta
+--    la misma pregunta que bloquea al Individual, y montarla mal aqui la
+--    montaria mal DOS veces. Las cuatro fichas de kebab YA llevan 30 g de
+--    RAW-00127 SALSA Yogur dentro del escandallo; si encima se cuelga el grupo
+--    de salsa con su impacto de 50 g, un Duo con dos yogures descontaria 160 g
+--    en vez de 60. Cuando Julio diga si la salsa elegida SUSTITUYE al yogur de
+--    la ficha o se SUMA, la salsa entra en los dos combos a la vez.
+--    Mientras tanto, el Duo publicado ensena lo que ensena el kebab de la carta
+--    en cada hueco: «quitar salsa» y los extras de pago.
 -- ============================================================================
 
 begin;
@@ -128,29 +132,28 @@ where cs.account_id    = '51ad1792-6629-4ef7-833a-b57b09a86710'
   and cs.combo_item_id = 'a53c577d-0b8e-4a5c-8d78-bae73c2b8a70'
   and cs.name in ('Elige tu primer Kebab','Elige tu segundo Kebab');
 
--- ── 3) 🔴 EL ENTRANTE — DESCOMENTAR SOLO CUANDO JULIO LO DIGA ───────────────
--- Si el Duo lleva UN entrante, quitar los comentarios de este bloque entero.
--- Si lleva DOS, duplicarlo cambiando el nombre y la posicion (2 y 3).
--- Si no lleva ninguno, borrar el bloque y ya esta.
---
--- insert into public.combo_slot
---   (account_id, combo_item_id, name, min_selections, max_selections, position, is_active)
--- values
---   ('51ad1792-6629-4ef7-833a-b57b09a86710','a53c577d-0b8e-4a5c-8d78-bae73c2b8a70',
---    'Escoge tu entrante favorito', 1, 1, 2, true);
---
--- insert into public.combo_slot_option
---   (account_id, combo_slot_id, menu_item_id, price_impact, is_default, position, is_active)
--- select '51ad1792-6629-4ef7-833a-b57b09a86710', cs.id, v.menu_item_id, v.price_impact, v.is_default, v.pos, true
--- from public.combo_slot cs
--- cross join (values
---   ('59615289-a92c-434e-96c6-cf4f0fa61516'::uuid, 0.00::numeric, true , 0),  -- Patatas Harisa DSH-00389
---   ('960bc26c-a6fd-4596-9d56-3cce5cfacfdd'      , 0.90         , false, 1),  -- Falafel c/ yogur DSH-00368
---   ('560a02e6-17e0-4b87-a229-3c96de2cd800'      , 1.00         , false, 2)   -- Rollitos Feta DSH-00015
--- ) as v(menu_item_id, price_impact, is_default, pos)
--- where cs.account_id    = '51ad1792-6629-4ef7-833a-b57b09a86710'
---   and cs.combo_item_id = 'a53c577d-0b8e-4a5c-8d78-bae73c2b8a70'
---   and cs.name          = 'Escoge tu entrante favorito';
+-- ── 3) El entrante: UNO ─────────────────────────────────────────────────────
+-- Respondido por Julio el 22/09: «el entrante es uno y kebab 2». Mismas tres
+-- opciones y mismos recargos que el Individual, que es lo que ya cobraba Last.
+-- «Hummus con pan de pita» sigue fuera: opcion apagada y ficha sin articulo.
+insert into public.combo_slot
+  (account_id, combo_item_id, name, min_selections, max_selections, position, is_active)
+values
+  ('51ad1792-6629-4ef7-833a-b57b09a86710','a53c577d-0b8e-4a5c-8d78-bae73c2b8a70',
+   'Escoge tu entrante favorito', 1, 1, 2, true);
+
+insert into public.combo_slot_option
+  (account_id, combo_slot_id, menu_item_id, price_impact, is_default, position, is_active)
+select '51ad1792-6629-4ef7-833a-b57b09a86710', cs.id, v.menu_item_id, v.price_impact, v.is_default, v.pos, true
+from public.combo_slot cs
+cross join (values
+  ('59615289-a92c-434e-96c6-cf4f0fa61516'::uuid, 0.00::numeric, true , 0),  -- Patatas Harisa      DSH-00389
+  ('960bc26c-a6fd-4596-9d56-3cce5cfacfdd'      , 0.90         , false, 1),  -- Falafel c/ yogur    DSH-00368
+  ('560a02e6-17e0-4b87-a229-3c96de2cd800'      , 1.00         , false, 2)   -- Rollitos Feta       DSH-00015
+) as v(menu_item_id, price_impact, is_default, pos)
+where cs.account_id    = '51ad1792-6629-4ef7-833a-b57b09a86710'
+  and cs.combo_item_id = 'a53c577d-0b8e-4a5c-8d78-bae73c2b8a70'
+  and cs.name          = 'Escoge tu entrante favorito';
 
 -- ── 4) El grupo vacio del segundo kebab se apaga ────────────────────────────
 -- Cero opciones vivas, igual que su gemelo del primero. No se borra: sus
@@ -170,9 +173,9 @@ select cs.position as hueco, cs.name as hueco_nombre, cs.min_selections, cs.max_
  where cs.account_id='51ad1792-6629-4ef7-833a-b57b09a86710'
    and cs.combo_item_id='a53c577d-0b8e-4a5c-8d78-bae73c2b8a70'
  order by cs.position, cso.position;
--- Esperado SIN entrante: 8 filas (4 + 4), TODAS con articulo.
--- Esperado CON un entrante: 11 filas.
--- Una fila sin articulo es un componente que no descuenta.
+-- Esperado: 11 filas (4 + 4 kebabs + 3 entrantes), TODAS con articulo.
+-- Una fila sin articulo es un componente que no descuenta, que es el fallo que
+-- venimos a arreglar.
 
 select 'ficha' as que, product_type, price, external_id, is_active, is_available
   from public.menu_item

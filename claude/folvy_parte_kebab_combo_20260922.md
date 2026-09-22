@@ -314,3 +314,50 @@ values ('51ad1792-6629-4ef7-833a-b57b09a86710', 'f4e199c1-30fe-4f2d-a1ba-7d4b86f
 2. **El entrante del Duo**: ¿uno, dos o ninguno?
 
 Con esas dos, las dos migraciones se pasan del tirón, fuera de servicio.
+
+---
+
+# ADENDA 2 — 22/09, 21:0x. Julio responde el Duo
+
+> «el entrante es uno y kebab 2 y la salsa es lo mismo que en el individual,
+> pero para 2 kebab»
+
+## Lo que queda montado
+
+`20260922T2100_kebab_combo_duo_a_combo.sql` ya lleva **los tres huecos**:
+
+| hueco | | opciones |
+|---|---|---|
+| Elige tu primer Kebab | 1 de 1 | Pollo 0 · Ternera +0,80 · Mixto +0,50 · Falafel +0,90 |
+| Elige tu segundo Kebab | 1 de 1 | las mismas cuatro, mismos recargos |
+| Escoge tu entrante favorito | 1 de 1 | Patatas Harisa 0 · Falafel +0,90 · Rollitos +1,00 |
+
+Verificado en seco: **11 filas, todas con artículo**.
+
+Coste del Duo más barato (2× Pollo Gyros + Patatas Harisa): **6,64 €** sobre
+20,50 € de venta, un 32 %.
+
+## 🔴 La salsa sigue abierta, y la respuesta la deja abierta a propósito
+
+«Lo mismo que en el individual» define el Duo **en función del Individual** — y
+la salsa del Individual es justo la pregunta que falta. No la doy por contestada.
+
+Y aquí importa el doble: **montarla mal en el Duo la monta mal DOS veces.**
+
+El dato que la decide: las cuatro fichas de kebab **ya llevan 30 g de
+`RAW-00127` SALSA Yogur dentro del escandallo**. Así que la pregunta no es si
+hay elección de salsa, es qué consume esa elección:
+
+- **Si SUSTITUYE** (la salsa elegida reemplaza al yogur de la ficha):
+  Yogur → impacto **0** (ya está dentro). Harissa → **quitar** 30 g de
+  `RAW-00127` y **añadir** 0,5 de `REC-00003`.
+- **Si SE SUMA** (la salsa elegida va encima):
+  Yogur → +50 g, total **80 g** por kebab; en un Duo con dos yogures, **160 g**
+  en vez de 60.
+
+**Y en los dos casos hay un efecto lateral que tienes que saber:** el grupo
+cuelga de la **ficha del kebab**, no del combo. O sea que la elección de salsa
+aparecería también cuando alguien pide el **kebab suelto**, que hoy no la tiene.
+
+Con esa respuesta, la salsa entra en los dos combos de una pasada y las dos
+migraciones se pasan del tirón.
