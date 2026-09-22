@@ -3,7 +3,32 @@
 -- ----------------------------------------------------------------------------
 -- 22/09/2026. Cuenta Foodint 51ad1792-6629-4ef7-833a-b57b09a86710.
 -- Decidido por Julio: «el envase descuenta, arreglalo».
--- PROPUESTA. NO APLICADA.
+-- ✅ APLICADA el 23/09/2026 a las 00:01 (Madrid), con la cocina parada.
+--    Hueco medido: 0 pedidos en 30 minutos, el ultimo a las 23:16.
+--
+--    ENSAYO POR LOS CAMINOS, antes, en transaccion revertida:
+--      Guarda 1  OK · 00:00 Madrid, 0 pedidos en 30 min
+--      Guarda 2  OK · forma la medida, 0 sin unidad, 0 en escandallo sin coste
+--      C1        OK · DSH-00010 pasa de 9 a 13 filas, 4 de envase
+--      C2        OK · 2,3636 = 2,3636 · 1,6941 = 1,6941 · 2,7122 = 2,7122
+--      C3.1      OK · close_sale(U608, Quesatacos Carnitas, 6 lineas de envase)
+--                     cerro SIN ABORTAR · movimientos 8 -> 14 · de envase 0 -> 6
+--      C3.2/3/4  NO AFECTADOS, y esta vez medido de verdad: cerrando el grafo
+--                de llamadas entero (8 saltos), confirm_goods_receipt,
+--                register_waste y apply_inventory_count NO alcanzan
+--                explode_recipe_to_raws. La unica que llega es close_sale, a 3
+--                saltos. Mi sondeo anterior se quedaba en 2 y por eso decia que
+--                close_sale tampoco: era el sondeo, no el hecho.
+--    Rollback comprobado despues: 1 firma, sin 'packaging', 9 filas, U608 otra
+--    vez 'open' con sus 8 movimientos.
+--
+--    VERIFICADO SOBRE LO VIVO tras el commit: 1 sola firma (sin sobrecarga),
+--    la funcion viva tiene 'packaging', DSH-00010 da 13 filas, y U608 sigue
+--    'open' con 8 movimientos — el cierre del ensayo NO salio de la transaccion.
+--
+--    PENDIENTE DE VER EN PEDIDO REAL: a las 00:01 hay 0 movimientos de envase
+--    por venta, porque no ha cerrado ninguna desde el cambio. El autocierre
+--    corre a las 03:10 y ahi se comprueba.
 --
 -- 🔴 NO SE PASA EN BANDA. Esto es EL motor de consumo. Se pasa con el servicio
 --    parado, y NO se hace commit sin los cuatro caminos del §C3 en verde.
