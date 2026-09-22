@@ -1,0 +1,142 @@
+# PARTE — Los packs pedidos «2×» salían «1×». G587 y los otros 41.
+
+> 22/09/2026. Encargo urgente de Julio, por delante del combo del kebab.
+> Cuenta Foodint `51ad1792-6629-4ef7-833a-b57b09a86710` · proyecto `xzmpnchlguibclvxyynt`.
+> Venta del incidente: `a6750ed3-0a6e-46fa-b982-5044f4ba56ff` (G587).
+
+## El número del día
+
+Medido en seco sobre 30 días de la cuenta, con la misma vara a los dos lados:
+
+| | ventas | piezas hoy | piezas con el arreglo | faltaban |
+|---|---:|---:|---:|---:|
+| **packs de uno** | 733 | 2.279 | 2.279 | **0** |
+| **packs pedidos 2× o más** | **42** | 114 | 246 | **+132** |
+
+**132 piezas en 30 días que ni se pegaron ni se cocinaron.** Y cero movimiento
+en las otras 733 ventas: lo que no tenía que cambiar no cambia.
+
+Son 42 pedidos, no los ~30 que decía el encargo.
+
+## Lo que hacía falta arreglar, y dónde estaba
+
+La regla es una: **unidades = `hijo.quantity` × `padre.quantity`**. La base ya la
+sabía —`_sale_line_raw_consumption` multiplica el hijo por la cantidad del
+padre, y por eso el stock de G587 sí descontó dos packs— y no la sabía **nada de
+lo que ve una persona**. Estaba escrita cuatro veces, mal, en cuatro sitios:
+
+| dónde | qué hacía |
+|---|---|
+| `ensure_label_tokens` (BBDD) | `greatest(1, round(h.quantity))` sin el padre |
+| `ticketRenderer.ts` · `flattenItems` | `qty: comp.qty` sin el padre |
+| `OrderCard.tsx` · `ChildRow` | `child.qty > 1 ? …` sin el padre |
+| `KdsTicketCard.tsx` | `c.qty > 1 && …` sin el padre |
+
+Ahora vive **en un solo sitio**, `unidadesDeComponente()` en
+`ordersFeedService.ts`, junto a `childVisual`, y la usan los cuatro. La misma
+regla escrita en cuatro sitios es una regla que un día dice cuatro cosas — que
+es exactamente cómo llegamos hasta aquí.
+
+## Dos cosas del encargo que la base contaba distinto
+
+**1. En el ticket y en la bolsa no ponía «1×»: no ponía NADA.**
+`childVisual` devuelve `neutral` para un `combo_item`, y `modifierLines` pinta
+los neutros sin prefijo. Medido con el fichero de captura corrido en las dos
+ramas:
+
+```
+ANTES (código de hoy)              DESPUÉS (esta rama)
+  2x  PACK PA 2  DC                  2x  PACK PA 2  DC
+      QUESATACOS DE BIRRIA…              2x QUESATACOS DE BIRRIA…
+      QUESATACOS DE TERNERA…             2x QUESATACOS DE TERNERA…
+      QUESADILLA DOS COYOTES…            2x QUESADILLA DOS COYOTES…
+      Coca Cola                          4x Coca Cola
+  PEGATINAS: 4                       PEGATINAS: 7
+```
+
+Es peor que un «1×», porque una línea sin número se lee como una de cada y nadie
+sospecha nada.
+
+**2. Los tokens de G587 no tienen `line_id` nulo: lo tienen MUERTO.**
+Son 6 tokens: 1 de bolsa (nulo **por diseño**, así se acuña) y 5 de unidad, y
+**los 5 apuntan a una `sale_line` que ya no existe**. `label_token.line_id` **no
+tiene clave ajena** a `sale_line`, así que nadie los limpia cuando el adaptador
+borra y reinserta las líneas.
+
+No es solo G587: **1.949 de 8.473 tokens de toda la tabla (23 %) apuntan a una
+línea muerta.** Una reimpresión de cualquiera de esos pedidos no sabe a qué
+pieza va cada pegatina.
+
+## Qué hay hecho
+
+**Front (aplicado en la rama, build y pruebas en verde):**
+- `ordersFeedService.ts`: `unidadesDeComponente()`, la regla, con suelo en 1 —
+  un dato ausente nunca puede dar cero piezas, porque un cero se lee como «no
+  lleva nada» y vuelve a salir la bolsa a medias.
+- `ticketRenderer.ts`: pegatinas (`flattenItems`), ticket de cocina y ticket de
+  bolsa. El diseño del ticket de bolsa del 21/09 **no se toca**: solo entra el
+  número delante del componente, dentro de la misma fila.
+- `OrderCard.tsx` y `KdsTicketCard.tsx`: la tarjeta, en cocina y en el pase.
+
+**Base (propuesta, NO aplicada):**
+`supabase/migrations/20260922T0100_tokens_de_etiqueta_por_pack.sql`
+- `ensure_label_tokens` multiplica por el padre. `CREATE OR REPLACE` con la
+  **misma firma** — no se añade ningún parámetro, que sería DROP + CREATE.
+- Barre los tokens huérfanos **de la venta que se está imprimiendo**, y **nunca
+  los escaneados**: eso es historia de una bolsa que alguien leyó.
+- Termina en `rollback;` con tres comprobaciones para pegar aquí.
+
+## Lo verificado, y con qué
+
+| qué | cómo | resultado |
+|---|---|---|
+| G587 da 10 unidades + bolsa | el `objetivo` de la migración, en seco contra la base | 2+2+2+4 = **10** ✅ |
+| pegatinas de G587 | `packsPorDos.test.ts` sobre los datos reales | 4 → **7** (6 comida + 1 bebidas) ✅ |
+| G089 y U053 (3×) | mismo test | 3 de cada componente ✅ |
+| un combo 1× no cambia | mismo test | idéntico, sin «1×» donde hoy no hay nada ✅ |
+| un suelto 2× sigue dando 2 | mismo test | ✅ |
+| pruebas | `npx vitest run` | **1.655 en verde**, 109 ficheros |
+| lint | `npx eslint .` en las **dos** ramas | **1.379 / 1.379**. Ni un aviso nuevo |
+| build | `npm run build` exacto, sin `*.tsbuildinfo` | **verde**, exit 0 |
+
+El ensayo cubre **un solo camino, el de imprimir**, y va dicho: ni la recepción
+de albarán, ni la merma, ni el recuento tocan `label_token`, y el consumo lo
+calcula `_sale_line_raw_consumption`, que **no se toca**.
+
+## Lo que falta, y es tuyo
+
+1. **Tu visto bueno a la captura.** `npx vitest run --disable-console-intercept
+   tests/unit/modules/orders/capturaG587.test.ts` imprime el G587 como saldría
+   por la impresora. Yo he pegado arriba el antes y el después; falta que lo
+   mires.
+2. **Pasar la migración** con `rollback`, leer E1/E2/E3, y repetir con `commit`.
+   Son las 15:4x de Madrid: **dentro de la banda**, no la he tocado.
+3. **El paquete de las tablets**, fuera de servicio y por el procedimiento de
+   `claude/PENDIENTE_UNICO_las_tablets_20260921.md`. Sin tu visto bueno no hay
+   paquete.
+4. **El primer pedido real con un pack 2×**, mirado en papel en Alcalá.
+
+## Lo que no he tocado
+
+`_sale_line_raw_consumption` y los adaptadores de venta: el dato está bien y el
+almacén cuadra. Y no se reprocesa ninguna venta pasada (regla del 18/09): G587
+se queda como está.
+
+## Anotado aparte
+
+- El total de G587 en la base es **62,86 €**, no los 89,80 € del encargo. Los
+  89,80 serán el bruto antes del descuento de Glovo; lo digo por si la
+  reclamación se pelea con una cifra u otra.
+- Los **1.949 tokens huérfanos** que ya existen no los limpia esta migración:
+  solo se sanean los de la venta que se reimprime. Barrerlos todos es una
+  decisión aparte y te la dejo escrita, no la tomo yo.
+- La causa de fondo sigue viva: los tokens se acuñan **al imprimir**
+  (`order_for_print`) y las líneas se reescriben **después** en cada
+  actualización del pedido. El barrido lo arregla en el momento que importa —la
+  reimpresión— pero la raíz es que no hay clave ajena y nadie avisa.
+
+## Mientras tanto
+
+Aviso a cocina y pase, hoy, en las dos cocinas: **cuando un pack o menú viene
+«2×» o «3×», todo lo de dentro va por 2 o por 3, aunque la pegatina o la tablet
+digan otra cosa.** Eso lo tienes que dar tú, yo no llego a la cocina.

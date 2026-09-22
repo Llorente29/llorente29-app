@@ -196,6 +196,39 @@ export interface ChildVisual { tone: ChildTone; confirmed: boolean }
 const LOOKS_REMOVE = /^\s*(sin|no|quitar|without|sans)\b/i
 
 /**
+ * UNIDADES REALES DE UN COMPONENTE DE COMBO. **Una sola regla, un solo sitio.**
+ *
+ *     unidades = cantidad del componente x cantidad del pack
+ *
+ * `sale_line.quantity` de un `combo_item` es la cantidad POR PACK, no el total:
+ * un «PACK PA 2 DC» pedido 2x con una quesadilla dentro son DOS quesadillas.
+ * El almacen ya lo hacia asi (`_sale_line_raw_consumption` multiplica el hijo
+ * por la cantidad del padre) y por eso el stock siempre cuadro; lo que NO lo
+ * hacia era nada de lo que ve una persona — ni el ticket, ni la tablet, ni la
+ * pegatina.
+ *
+ * Lo paga el G587 del 21/09 (Alcala, Dos Coyotes, Glovo 101780066538): 2 packs
+ * pedidos, pegatinas para uno, cocina hizo uno, el pase lo dio por completo y
+ * salio. Reclamacion de Glovo por producto no entregado y -31,43 EUR al partner.
+ *
+ * Vive AQUI, junto a `childVisual`, y no en cada pantalla, porque la misma
+ * regla escrita en cuatro sitios es una regla que un dia dice cuatro cosas —
+ * que es exactamente como llegamos hasta aqui.
+ */
+export function unidadesDeComponente(
+  cantidadDelComponente: number | null | undefined,
+  cantidadDelPadre: number | null | undefined,
+): number {
+  const hijo  = Number(cantidadDelComponente)
+  const padre = Number(cantidadDelPadre)
+  // Un dato ausente o roto NUNCA puede acabar en cero piezas: un cero se lee
+  // como "no lleva nada" y sale otra bolsa incompleta. Suelo en 1.
+  const h = Number.isFinite(hijo)  && hijo  > 0 ? hijo  : 1
+  const p = Number.isFinite(padre) && padre > 0 ? padre : 1
+  return Math.max(1, Math.round(h * p))
+}
+
+/**
  * Decide cómo pintar una hija combinando el dato del catálogo (group_type, fiable)
  * con el texto como desempate/red de seguridad. confirmed=false => inferido.
  */
