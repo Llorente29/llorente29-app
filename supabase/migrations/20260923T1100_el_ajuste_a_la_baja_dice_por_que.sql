@@ -3,7 +3,23 @@
 -- ----------------------------------------------------------------------------
 -- 23/09/2026. Cuenta Foodint 51ad1792-6629-4ef7-833a-b57b09a86710.
 -- Punto 3 del encargo «Que los términos de la resta sean medibles».
--- PROPUESTA. NO APLICADA.
+-- APLICADA el 23/09/2026 a las 11:22 (Madrid), fuera de la ventana 12:15-00:30
+-- que pide el encargo para tocar la pantalla: 0 pedidos en 30 minutos (el
+-- ultimo de anoche a las 23:16) y 0 ajustes en curso.
+--
+-- Aplicada por `apply_migration`, asi que SI queda en
+-- `supabase_migrations.schema_migrations` (version 20260923092237). Las cuatro
+-- de la noche del 22 al 23 no estan: se aplicaron por SQL directo y el
+-- historial de la base no las ve. Deuda apuntada, no arreglada aqui.
+--
+-- COMPROBADO SOBRE LA FUNCION VIVA, en transaccion revertida y suplantando a
+-- un usuario real de la cuenta:
+--   bajada count_correction SIN nota ... rechazada
+--   bajada «Otro» ...................... rechazada
+--   bajada «Merma» ..................... rechazada
+--   bajada CON explicacion ............. pasa
+--   SUBIDA «Otro» sin nota ............. pasa   (no se toca)
+-- Una sola firma. Saldo de las servilletas intacto en 1.943.
 --
 -- ── LO QUE DICE EL ENCARGO, Y LO QUE DICEN LOS DATOS ──────────────────────
 -- El encargo parte de «lo que se pierde se está borrando a mano»: 178 ajustes
