@@ -25,6 +25,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, AlertTriangle, Check, ChevronLeft } from 'lucide-react'
+import { fmtMoney } from '@/lib/format'
 import { useApp } from '@/context/AppContext'
 import {
   listCountLines,
@@ -45,6 +46,7 @@ import {
   type ReviewLine,
   type CountReviewThresholds,
   type HechosDeLaAprobacion,
+  getLoQueSeDescarta, type LoQueSeDescarta,
 } from '@/modules/supply/services/countApprovalService'
 import { requestRecount, historiaDeLaLinea } from '@/modules/supply/services/countEntryService'
 import CorregirAhoraModal from '@/modules/supply/components/CorregirAhoraModal'
@@ -104,6 +106,9 @@ export default function AprobarRecuento({
   const [approving, setApproving] = useState(false)
   const [verCuadran, setVerCuadran] = useState(false)
   const [hechos, setHechos] = useState<HechosDeLaAprobacion | null>(null)
+  /** Lo que este recuento va a dejar sin consumo escrito. Null = aún no se sabe. */
+  const [seDescarta, setSeDescarta] = useState<LoQueSeDescarta | null>(null)
+  const [verDescartadas, setVerDescartadas] = useState(false)
   const [tick, setTick] = useState(0)
   /** La línea que se está corrigiendo por teléfono. Null = nadie al teléfono. */
   const [corrigiendo, setCorrigiendo] = useState<ReviewLine | null>(null)
@@ -146,7 +151,15 @@ export default function AprobarRecuento({
         const h = count.status === 'aprobado'
           ? await getApprovalFacts(count.id).catch(() => null)
           : null
+        // Lo que se va a descartar SOLO tiene sentido antes de aprobar: después
+        // ya está descartado y el número sería una acusación sin remedio.
+        // Si falla, se queda en null y la pantalla no dice nada — aprobar no
+        // puede depender de que este aviso se pueda calcular.
+        const d = count.status === 'aprobado'
+          ? null
+          : await getLoQueSeDescarta(count.id).catch(() => null)
         if (cancel) return
+        setSeDescarta(d)
         setHechos(h)
         setTh(umbrales)
         setLines(ls)
@@ -581,6 +594,42 @@ export default function AprobarRecuento({
             <> — <b className="text-cocina-ambar">{sinMotivo} sin motivo</b>, y sin motivo no se aplican.</>
           )}
         </p>
+        {/* ── LO QUE ESTE RECUENTO VA A DEJAR SIN DESCONTAR (23/09/2026) ──
+            No bloquea: avisa. Aprobar con esto delante es una decisión; que
+            se descarte en silencio, no (regla 8). */}
+        {seDescarta && seDescarta.ventas > 0 && (
+          <div className="mt-2 p-3 rounded-md bg-warning-bg border border-warning/30 text-[13px] text-text-secondary">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={15} className="text-warning shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="text-text-primary font-medium">
+                  {seDescarta.ventas} venta{seDescarta.ventas === 1 ? '' : 's'} por {fmtMoney(seDescarta.euros)} todavía no han descontado.
+                </span>{' '}
+                Tocan {seDescarta.articulosAfectados} artículo{seDescarta.articulosAfectados === 1 ? '' : 's'} de este recuento.
+                Al aprobar, ese consumo <b>no se escribirá nunca</b>: el recuento ya cuenta lo que falta,
+                pero esa comida dejará de aparecer como vendida en el almacén.
+                <button type="button" onClick={() => setVerDescartadas(v => !v)}
+                  className="ml-1 underline text-text-primary hover:opacity-80">
+                  {verDescartadas ? 'ocultar' : 'ver cuáles'}
+                </button>
+                {verDescartadas && (
+                  <ul className="mt-2 space-y-0.5 tabular-nums">
+                    {seDescarta.detalle.map(d => (
+                      <li key={`${d.pedido}-${d.cuando}`}>
+                        {d.pedido} · {d.cuando} · {fmtMoney(d.euros)}
+                      </li>
+                    ))}
+                    {seDescarta.ventas > seDescarta.detalle.length && (
+                      <li className="text-text-tertiary">
+                        …y {seDescarta.ventas - seDescarta.detalle.length} más.
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex gap-2 shrink-0">
           {paraRecontar > 0 && (
             <BotonCocina peso="borde" onClick={() => void onRecontarTodas()} disabled={approving || busyLine !== null}>
