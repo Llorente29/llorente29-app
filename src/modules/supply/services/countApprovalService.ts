@@ -360,3 +360,83 @@ export async function saveReason(
     .eq('id', lineId)
   if (error) throw new Error(`No se pudo guardar el motivo: ${error.message}`)
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * LO QUE SE VA A DESCARTAR AL APROBAR (23/09/2026, punto 5 del encargo
+ * «Que los términos de la resta sean medibles»).
+ *
+ * Al aprobar un recuento, `generate_sale_consumption` deja de escribir el
+ * consumo de las ventas anteriores al corte y anota el descarte en
+ * `sale_consumption_skip`. Para el stock es correcto —el recuento ya vio lo
+ * que faltaba— pero ese consumo teórico NO SE ESCRIBE NUNCA, y es justo el
+ * término que se quiere medir.
+ *
+ * Esto NO bloquea nada: a veces se aprueba igualmente y está bien. Lo que no
+ * puede pasar es que se descarte en silencio (regla 8).
+ *
+ * Medido en Alcalá, 13-21/09, atribuyendo cada nota al recuento cuyo corte
+ * coincide: INV-00226 11 ventas/245,00 €; INV-00227 7/144,50; INV-00243
+ * 7/194,47; INV-00240 4/72,02; INV-00232 2/29,83. Pequeño y sistemático.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface VentaPendiente {
+  pedido: string
+  cuando: string
+  euros: number
+}
+
+export interface LoQueSeDescarta {
+  ventas: number
+  euros: number
+  articulosAfectados: number
+  detalle: VentaPendiente[]
+}
+
+/**
+ * Cuenta las ventas del local cuyo consumo aún no se ha escrito y que tocan
+ * algún artículo de este recuento. La vara es la del motor
+ * (`_sale_line_raw_consumption`), no una copia del escandallo.
+ *
+ * Devuelve ceros —nunca lanza— si Supabase no está: esta pantalla tiene que
+ * poder aprobarse aunque el aviso no se pueda calcular.
+ */
+export async function getLoQueSeDescarta(countId: string): Promise<LoQueSeDescarta> {
+  const vacio: LoQueSeDescarta = { ventas: 0, euros: 0, articulosAfectados: 0, detalle: [] }
+  // `isSupabaseEnabled` es una CONSTANTE booleana, no una función. Llamarla
+  // compila en JS y revienta en tiempo de ejecución; lo cazó `tsc -b`.
+  if (!isSupabaseEnabled || !supabase) return vacio
+
+  // El cast acotado es el patrón de la casa (ver `getCountReviewThresholds`
+  // y `getReviewContext` en este mismo fichero): la RPC es nueva y todavía no
+  // está en `src/types/database.ts`, que es generado. Regenerar el fichero
+  // entero por una función traería un diff de miles de líneas y su propia
+  // deriva; el cast deja la frontera a la vista, que es lo que avisa la regla
+  // 40 — el nombre viaja dentro de una cadena y NO lo mira el comprobador.
+  // Comprobado a mano contra `pg_proc` el 23/09: existe, 1 sola firma.
+  const { data, error } = await (supabase! as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  }).rpc('ventas_pendientes_al_aprobar', { p_count_id: countId })
+  if (error) throw new Error(`No se pudo calcular lo que se descarta: ${error.message}`)
+
+  interface Fila {
+    ventas?: number | null
+    euros?: number | null
+    articulos_afectados?: number | null
+    detalle?: unknown
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as Fila | null | undefined
+  if (!row) return vacio
+
+  return {
+    ventas: Number(row.ventas ?? 0),
+    euros: Number(row.euros ?? 0),
+    articulosAfectados: Number(row.articulos_afectados ?? 0),
+    detalle: Array.isArray(row.detalle)
+      ? (row.detalle as Record<string, unknown>[]).map(d => ({
+          pedido: String(d.pedido ?? '?'),
+          cuando: String(d.cuando ?? ''),
+          euros: Number(d.euros ?? 0),
+        }))
+      : [],
+  }
+}

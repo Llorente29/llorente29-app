@@ -1,7 +1,11 @@
 -- ============================================================================
 -- Lo que se dejó FUERA de la pasada de las 21:05, y por qué
 -- ----------------------------------------------------------------------------
--- 22/09/2026. PROPUESTA. NO APLICADA. Va CON la publicación de la carta, que
+-- APLICADA el 23/09/2026 a las 00:39 (Madrid), en la misma transaccion que la
+-- salsa. Comprobado: 0 grupos colgando del Individual y 0 grupos «escoge tu
+-- kebab» activos. Con eso se va tambien «Montmartre.», que vivia en esos dos
+-- grupos y llevaba apagado desde el 13/09 sin que el cliente dejara de verlo.
+-- Va CON la publicación de la carta, que
 -- es fuera de servicio de todas formas.
 --
 -- Las dos migraciones de los combos (20260922T0030 y T2100) se aplicaron el

@@ -7,6 +7,13 @@
 //
 // El stock es por LOCAL: este modal se abre desde el peek de Zonas, que ya
 // trabaja sobre un local concreto. No hay selector de local (sería error en cocina).
+//
+// 23/09/2026 — EL AJUSTE A LA BAJA DEJA DE SER UN CAJÓN (encargo de Julio).
+// Bajar stock exige decir por qué: «Otro» no vale, «Merma»/«Caducado» mandan a
+// la pantalla de Merma (si sale por merma tiene que contar como merma), y una
+// corrección de conteo pide nota. Al ALZA no cambia nada: no es la fuga.
+// La regla vive en `lib/ajusteALaBaja` y la repite la RPC, porque la pantalla
+// no es la única puerta.
 
 import { useEffect, useMemo, useState } from 'react'
 import { X, ArrowUp, ArrowDown, Loader2, Check, AlertTriangle } from 'lucide-react'
@@ -18,6 +25,7 @@ import {
 import {
   getPendingCountLine, type PendingCountLine,
 } from '@/modules/supply/services/inventoryCountService'
+import { veredictoDeAjuste, NOTA_MINIMA } from '@/modules/supply/lib/ajusteALaBaja'
 
 const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 })
 const nf2 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 })
@@ -96,7 +104,12 @@ export default function AdjustStockModal({
   }, [countInput, selFormat])
 
   const delta = countedBase == null ? null : countedBase - target.currentQtyBase
-  const canSave = countedBase != null && reason.length > 0 && !saving
+
+  // La misma regla que aplica la RPC (src/modules/supply/lib/ajusteALaBaja).
+  // Aquí es para no dejar pulsar; allí, para que no entre por otra puerta.
+  const veredicto = veredictoDeAjuste(delta, reason, notes)
+  const esBajada = delta != null && delta < 0
+  const canSave = countedBase != null && reason.length > 0 && veredicto.ok && !saving
 
   const curMain = selFormat
     ? `≈ ${nf1.format(target.currentQtyBase / selFormat.qtyInBase)} ${selFormat.name}`
@@ -190,10 +203,29 @@ export default function AdjustStockModal({
             </div>
           </div>
 
+          {!veredicto.ok && reason.length > 0 && (
+            <div className={`p-3 rounded-md text-[13px] flex items-start gap-2 ${
+              veredicto.vaAMerma
+                ? 'bg-warning-bg border border-warning/30 text-text-secondary'
+                : 'bg-danger-bg border border-danger/30 text-text-secondary'}`}>
+              <AlertTriangle size={15} className={`shrink-0 mt-0.5 ${veredicto.vaAMerma ? 'text-warning' : 'text-danger'}`} />
+              <span>{veredicto.motivo}</span>
+            </div>
+          )}
+
           <div>
-            <div className="text-xs text-text-tertiary mb-1.5">Nota (opcional)</div>
+            <div className="text-xs text-text-tertiary mb-1.5">
+              {esBajada && reason === 'count_correction'
+                ? `Qué ha pasado (obligatorio, mínimo ${NOTA_MINIMA} caracteres)`
+                : 'Nota (opcional)'}
+            </div>
             <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="Detalle, lote, quién…" className="w-full px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary" />
+              placeholder={esBajada && reason === 'count_correction'
+                ? 'Ej.: estaban en cajas de 24, no en unidades'
+                : 'Detalle, lote, quién…'}
+              className={`w-full px-2.5 py-1.5 text-sm border rounded-md bg-page text-text-primary ${
+                esBajada && reason === 'count_correction' && (notes.trim().length < NOTA_MINIMA)
+                  ? 'border-danger/50' : 'border-border-default'}`} />
           </div>
 
           {error && <div className="text-[13px] text-danger">{error}</div>}
