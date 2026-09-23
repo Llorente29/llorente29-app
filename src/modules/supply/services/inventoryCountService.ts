@@ -779,6 +779,34 @@ export interface CauseContext {
   consumoIncompleto: boolean
 }
 
+/**
+ * ENCARGO CODE 23/09 punto 4 — la entrada deja de ser un término mudo.
+ *
+ * `receiptsQtyBase` se medía en la base, se transportaba hasta aquí, se tipaba…
+ * y NINGUNA rama la leía. El término estaba en la mesa y no llegaba a ninguna
+ * decisión ni a ninguna pantalla. Desde hoy va escrito en la evidencia de las
+ * dos hipótesis que dependen de él, para que lo juzgue quien revisa.
+ *
+ * El número lleva SIGNO a propósito: la oficina corrige albaranes a la baja y
+ * `void_goods_receipt` revierte anulaciones, así que el neto por albarán puede
+ * ser negativo. En el conteo vivo 771648e1 la Milanesa de Pollo Rebozado netea
+ * −22,44 kg por ALB-00146. Decir «entraron 0» ahí era mentira; decir «entraron
+ * −22,44» es feo pero cierto, y por eso la frase cambia según el signo.
+ *
+ * No cambia ni el `reasonCode` ni la `confidence` de ninguna causa: el término
+ * ordena y etiqueta, no decide (regla 7).
+ */
+function fraseDeEntradas(receiptsQtyBase: number, unitAbbr: string | null): string {
+  if (receiptsQtyBase > 0) {
+    return ` Por albarán entraron ${fmtQtyHelper(receiptsQtyBase, unitAbbr)} en el periodo.`
+  }
+  if (receiptsQtyBase < 0) {
+    return ` Por albarán el periodo neteó ${fmtQtyHelper(receiptsQtyBase, unitAbbr)}:` +
+      ' hay correcciones o anulaciones de oficina que restan más de lo que entró.'
+  }
+  return ' Por albarán no entró nada en el periodo.'
+}
+
 /** Clasifica una desviación cruzando con el contexto del periodo. */
 export function classifyCauseV2(
   line: InventoryCountLine,
@@ -857,7 +885,8 @@ export function classifyCauseV2(
     return {
       reasonCode: 'robo_desconocido',
       label: 'Sin causa clara',
-      evidence: 'Falta producto sin merma, traspaso ni consumo de escandallo que lo explique. Requiere revisión manual.',
+      evidence: 'Falta producto sin merma, traspaso ni consumo de escandallo que lo explique. Requiere revisión manual.'
+        + fraseDeEntradas(ctx.receiptsQtyBase, line.unitAbbr),
       confidence: 'low',
     }
   }
@@ -868,7 +897,8 @@ export function classifyCauseV2(
     return {
       reasonCode: 'error_recepcion',
       label: 'Recepción sin registrar',
-      evidence: 'Sobra producto: probablemente llegó mercancía que no se registró como recepción.',
+      evidence: 'Sobra producto: probablemente llegó mercancía que no se registró como recepción.'
+        + fraseDeEntradas(ctx.receiptsQtyBase, line.unitAbbr),
       confidence: 'low',
     }
   }
