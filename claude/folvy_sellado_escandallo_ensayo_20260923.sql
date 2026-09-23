@@ -1,0 +1,68 @@
+-- ENSAYO del punto 2 (sellado automatico del escandallo), 23/09.
+-- TODO dentro de begin/rollback. Se aplica la migracion entera, se prueban los
+-- comportamientos y se recorren los CUATRO CAMINOS (regla 10), y se revierte.
+--
+-- Como se corre: pegar la migracion 20260924T0045 completa detras del `begin;`,
+-- y luego este bloque. Los resultados del 23/09 estan al pie.
+--
+-- OJO CON UNA TRAMPA DEL PROPIO ENSAYO: la semilla y las pruebas caen en la
+-- MISMA transaccion, y transaction_timestamp() es UNA para toda ella. Sin
+-- retrasar a mano la version viva antes de cada paso, todo entraria por la rama
+-- (b) —"misma transaccion"— y ningun paso abriria version nueva. Por eso existe
+-- pg_temp.otra_transaccion(): simula la transaccion distinta que en produccion
+-- SI habra. Sin esto el ensayo habria salido verde midiendo otra cosa.
+
+create or replace function pg_temp.otra_transaccion(p uuid) returns void language sql as
+$t$ update public.recipe_item_version set valid_from = valid_from - interval '1 hour'
+     where recipe_item_id = p and valid_to is null; $t$;
+
+-- ─── COMPORTAMIENTO ────────────────────────────────────────────────────────
+-- Ficha: efed6b69 · DSH-00016 «Crispy Falafel & Greek Dip (3 uds)», 6 lineas.
+--
+--  B1  dos ediciones en una transaccion .................... 2 versiones   OK
+--  B2  la viva es automatica y recoge las DOS .............. true          OK
+--  B3  la baja de una linea abre version ................... 3 versiones   OK
+--  B4  la foto viva tiene 5 lineas (eran 6) ................ 5             OK
+--  B5  sellar sin cambio no crea version ................... 3 versiones   OK
+--  B6  la version a mano sigue existiendo y es v4 .......... 1             OK
+--  B7  su foto NO la pisa la edicion posterior ............. true          OK
+--  B8  la nueva es v5, automatica .......................... 5/true        OK
+--  B9  un ingrediente sin escandallo no genera version ..... 0             OK
+--
+-- B6-B8 son LA RED DEL RESTORE y por poco no existen: restore_recipe_version
+-- guarda el estado actual como version y LUEGO reescribe las lineas. Si el
+-- sellado automatico colapsara en cualquier version de la misma transaccion,
+-- sobrescribiria justo esa foto. De ahi la columna is_auto: la rama (b) solo
+-- colapsa sobre una version automatica. La version a mano se creo llamando a
+-- create_recipe_version DE VERDAD, suplantando a un usuario admin real de la
+-- cuenta, no insertando la fila a mano (regla 39).
+--
+-- Semilla: 244 filas (169 Foodint + 75 plantilla), 0 cerradas, 0 fichas con dos
+-- versiones vivas. La fila del 30/06 se respeta.
+
+-- ─── LOS CUATRO CAMINOS (regla 10) ─────────────────────────────────────────
+-- Recorridos como un USUARIO REAL de la cuenta, no como postgres: las guardas
+-- de tenencia rechazan a postgres y la primera pasada confundio eso con un fallo
+-- del cambio. Andamio del ensayo, dentro de la transaccion revertida: el albaran
+-- borrador tenia 2 lineas sin decidir y el recuento 15 sin motivo; sus guardas
+-- —correctas— paraban el camino antes de escribir, asi que se decidieron aqui.
+--
+--   camino                                  antes  despues  versiones  veredicto
+--   1 cerrar una venta (regenerar consumo)    14     14      169->169    OK
+--   2 recibir un albaran (confirmar)          15     15      169->169    corrio limpio, 0 escrituras nuevas
+--   3 apuntar una merma                        0      1      169->169    OK
+--   4 aprobar un recuento                     20     22      169->169    OK
+--
+-- EL CAMINO 2 ES EL HALLAZGO, Y SE DICE (regla 10): corrio sin excepcion y no
+-- perdio nada, pero no escribio movimientos NUEVOS, porque las 15 lineas
+-- posteables de ALB-00173 ya estaban posteadas —adjust_goods_receipt_line las
+-- va posteando segun se casan— y las 2 que quedaban las marque yo como no
+-- mercancia. O sea: de los cuatro, el unico cuya ESCRITURA no he llegado a
+-- ejercer sobre un borrador virgen es el del albaran. Los otros tres escriben.
+--
+-- Lo que importa esta en la ultima columna y es identico en los cuatro: el
+-- sellado NO se mete en el camino del pedido. Y no podia: medido, las unicas
+-- siete funciones que escriben recipe_line son de catalogo —
+-- add_ingredient_to_recipes, duplicate_recipe_item, materialize_recipe_session,
+-- migrate_kitchen_core, remove_ingredient_from_recipes, restore_recipe_version,
+-- substitute_ingredient_in_recipes— y ninguna corre al vender.
