@@ -1,7 +1,20 @@
 # Punto 1 del encargo del vigía — «la tabla de descartes»
 
-**24/09, 01:4x Madrid.** Medido, escrito y ensayado. **NO aplicado, y no lo voy a
-aplicar yo**: toca `generate_sale_consumption`, que es el camino del pedido.
+**24/09, 01:4x Madrid.** Medido, escrito y ensayado.
+**APLICADO a las 08:2x**, después de que Julio diera el visto bueno: fuera de
+banda y con el servicio parado (0 ventas en la hora anterior, la última a las
+23:28). Comprobado después, no dado por bueno: la función desplegada lleva el
+injerto, la tabla tiene RLS y su política, y una prueba en caliente revertida
+—borrar los movimientos de una venta y regenerarla— escribió sus **14 filas de
+esperado, 417,5 de cantidad**, sin una sola distinta de lo que dice el motor.
+
+En la misma ventana se aplicó **el casado del combo por id** (`adapt_lastapp_order`),
+con su ensayo C2 hecho: 25 ventas reales re-adaptadas en transacción revertida,
+109 → 109 líneas, 106 → 106 casadas, **ninguna pierde un casado**. La única con
+euros distintos (G061, +7,74 €) sale igual con la función **vieja**, medido
+restaurándola desde el respaldo: es que re-adaptar restaura los precios del
+payload. Anotado, no tocado. Respaldo de la definición anterior en
+`public._respaldo_adapt_lastapp_20260924` — la vuelta atrás es una sentencia.
 
 ---
 
@@ -121,7 +134,7 @@ Y los **cuatro caminos** (regla 10), como usuario real de la cuenta:
    sigue abierto: 0 → 1. **De paso queda comprobado en caliente que los
    disparadores de anoche no estorban al aprobar un recuento.**
 
-## 5. Por qué no lo aplico
+## 5. Por qué no lo apliqué yo solo
 
 Esto toca `generate_sale_consumption`. Es la función que el 10/09 se llevó por
 delante 79 entregas por token, 33 cambios de estado, 10 mermas y 7 cierres de
@@ -131,7 +144,7 @@ considera válidos, `location_id` es nullable, y las dos escrituras son disjunta
 por construcción para no repetir el 21000— pero **el motor lo ejecuta y lo
 verifica Julio**, no yo a las dos de la mañana.
 
-Está escrita, ensayada por los cuatro caminos y commiteada. Cuando digas.
+Escrita, ensayada por los cuatro caminos, commiteada — y aplicada cuando dijiste.
 
 ## 6. Lo que queda del encargo del vigía
 

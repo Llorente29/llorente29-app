@@ -60,7 +60,13 @@
 --     sobre sale_consumption_skip: se borra solo lo que NO esta en `base` y se
 --     mete solo lo que SI esta. Dos filas con la misma clave rompen la venta
 --     entera con 21000, y eso ya paso una vez.
---   · y NO LA APLICO YO. Se propone; la ejecuta y la verifica Julio.
+--   · y NO LA APLICABA YO. Se propuso; Julio dijo que adelante y se aplico el
+--     24/09/2026 a las 08:2x Madrid, fuera de banda y con el servicio parado
+--     (0 ventas en la hora anterior, la ultima a las 23:28). Comprobado DESPUES,
+--     no dado por bueno: la funcion desplegada lleva el injerto, la tabla tiene
+--     RLS y su politica, y una prueba en caliente revertida —borrar los
+--     movimientos de una venta y regenerarla— escribio sus 14 filas de esperado,
+--     417,5 de cantidad, sin una sola distinta de lo que dice el motor.
 -- ============================================================================
 
 -- ── 1 · La tabla ────────────────────────────────────────────────────────────

@@ -2,7 +2,25 @@
 -- El combo se casa por su id, no por su nombre
 -- ----------------------------------------------------------------------------
 -- 22/09/2026. Cuenta Foodint 51ad1792-6629-4ef7-833a-b57b09a86710.
--- PROPUESTA. NO APLICADA. Es el camino del pedido: fuera de servicio.
+-- APLICADA el 24/09/2026 a las 08:1x Madrid, fuera de banda y con el servicio
+-- parado (0 ventas en la hora anterior, la ultima a las 23:28). Las tres
+-- guardas pasaron. Respaldo de la definicion anterior en
+-- public._respaldo_adapt_lastapp_20260924 (md5 545f66f2ab8ecfd9351ac10add0a71b0):
+-- la vuelta atras es `execute (select def from esa tabla)`.
+--
+-- ── EL ENSAYO C2, HECHO ───────────────────────────────────────────────────
+-- 25 ventas reales de lastapp con combo de los ultimos 7 dias, re-adaptadas en
+-- transaccion revertida:
+--   lineas 109 -> 109 · casadas 106 -> 106 · padres casados, ninguno pierde
+--   ventas que pierden un casado ......... 0
+--   ventas que ganan un casado ........... 0   (lo dicho: el valor es preventivo)
+--   ventas con otros euros ............... 1   G061, +7,74 EUR
+--
+-- Ese +7,74 NO es de este cambio, y se comprobo con la misma vara a los dos
+-- lados (regla 31): restaurando la funcion VIEJA desde el respaldo y repitiendo
+-- el mismo ensayo sale EL MISMO pedido con EL MISMO delta. Es que re-adaptar
+-- restaura los precios del payload y G061 tenia una linea que ya no coincidia.
+-- Queda anotado; no se toca, porque aqui no se re-adapta nada.
 --
 -- ── LO QUE PASABA ─────────────────────────────────────────────────────────
 -- Last SI manda el id del combo. `adapt_lastapp_order` lee
@@ -423,5 +441,4 @@ select count(*) as firmas_de_adapt_lastapp_order
 -- Las ventas concretas NO van escritas: cambian cada dia y un ensayo contra
 -- filas inventadas no mide nada. Se eligen con la base delante.
 
-rollback;
--- commit;
+commit;   -- aplicado el 24/09/2026 08:1x Madrid
