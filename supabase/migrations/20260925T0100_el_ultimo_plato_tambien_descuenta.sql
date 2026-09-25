@@ -33,7 +33,7 @@
 -- Todas se tapan al cerrar (`close_sale` y `tg_sale_consumption_on_complete`
 -- llaman a generate_sale_consumption con todas las líneas ya dentro). Mediana
 -- de la venta al cierre: 125 minutos. Durante esa ventana el stock de esos
--- pedidos está corto, y lo leen el KDS, el panel de stock y los avisos.
+-- pedidos está corto (ver abajo quién lo lee: pantallas, nada automático).
 --
 -- Exposición HOY, pedidos vivos sin cerrar desde el 11/09, comparando lo que
 -- pide el motor (solo lectura) contra lo asentado: TRES, y solo uno es esto.
@@ -118,34 +118,30 @@
 -- `DROP TRIGGER` toma ACCESS EXCLUSIVE sobre `sale_line`, que se escribe en
 -- cada pedido. Falla la condición 2 de la banda: NO se aplica en servicio.
 -- DESPUÉS DE LAS 00:30 (reloj de la base, Europe/Madrid), no a las 23:50.
--- CLAUDE.md escribe la banda como 12:15–23:45; el método la lleva a las 00:30,
--- y los datos le dan la razón: el 24/09 entró un pedido a las 23:29 y el 23/09
--- a las 23:23. La duda va a favor de esperar. Con `lock_timeout` de 3 s: si
+-- HAY DOS BANDAS ESCRITAS Y SE CONTRADICEN: CLAUDE.md dice 12:15–23:45 y
+-- `folvy_parte_diario_descuento_METODO.md` (fuera del repo) 12:15–00:30. Hasta
+-- que se unifiquen, manda la más larga: el 24/09 entró un pedido a las 23:29 y
+-- el 23/09 a las 23:23. La duda va a favor de esperar. Con `lock_timeout` de 3 s: si
 -- hay un pedido entrando, la migración falla sin dejar nada y se reintenta; no
 -- deja cola detrás de ella.
 -- ============================================================================
 --
--- ── LO QUE ESTE FALLO HACE DURANTE EL SERVICIO (medido 25/09 ~10:45) ──────
--- El cierre repara el asiento, pero un pedido de Last tarda 125 min de mediana
--- en cerrarse. Mientras tanto, el stock en caché (`recipe_item_location_stock`)
--- no ha descontado el combo o el extra del último plato. Quién lee ese stock
--- durante la tarde, contado en pg_proc, cron.job y src/:
---   · Agotar productos (86): NO lo lee. `set_product_availability*` y
---     `_set_product_availability_core` no tocan el stock; agotar es a mano
---     (tablet o panel). No hay auto-86 por stock que llegue tarde.
---   · Avisos de falta de género: ninguno en servicio. De los 56 crons, ninguno
---     de día lee stock; el único que avisa desde la caché es el recuento
---     automático (`_generate_daily_count_core`, 04:00), con todo ya cerrado.
---   · Pantallas: Niveles de stock, Stock negativo, stock por artículo en
---     cocina, zonas de almacén, AvT y Pendientes (`pending_board`). Enseñan un
---     stock inflado por lo que falte hasta el cierre.
---   · Compra: `suggest_purchase_qty` resta lo que hay en caché. De 22 pedidos a
---     proveedor de Foodint en 30 días, 13 se crearon entre las 12:00 y las
---     22:00, o sea con este hueco abierto. Una sugerencia a media tarde puede
---     quedarse corta por lo que falte.
--- Conclusión: no hay automatismo que decida mal por esto; hay personas que
--- miran un número inflado. Éste es el motivo para aplicarlo esta noche y no
--- «cuando toque».
+-- ── QUIÉN LEE EL STOCK MIENTRAS EL PEDIDO NO CIERRA (apéndice, 25/09) ─────
+-- No es el motivo del arreglo: una venta que no descuenta se arregla porque es
+-- un fallo, no por sus consecuencias aguas abajo. Queda medido para no
+-- repetirlo (pg_proc, cron.job y src/):
+--   · Agotar productos (86): no lee el stock; es a mano.
+--   · Avisos de falta en servicio: ninguno. El único aviso que sale del stock
+--     es el recuento automático de las 04:00, con todo cerrado.
+--   · Pantallas de stock, AvT y Pendientes: sí enseñan el número inflado.
+--   · Compra (`suggest_purchase_qty`): lee el stock, pero no hay nada que
+--     revisar. CORREGIDO: aquí se dijo «13 de 22 pedidos a proveedor entre las
+--     12:00 y las 22:00», y la hora es la vara equivocada; la buena es cuántas
+--     ventas había abiertas en ese instante, DEL MISMO LOCAL y DE LAST. Con
+--     esa: 14 de 22 con cero abiertas, y el peor, 15 (20/09 14:51), unos 3
+--     combos. Repetido desde Code y cuadra; con otras varas sale distinto
+--     (todas las fuentes y el mismo local: 11 con cero y peor 17; sin filtrar
+--     por local: 8 y 36), así que la definición va aquí escrita.
 
 begin;
 
