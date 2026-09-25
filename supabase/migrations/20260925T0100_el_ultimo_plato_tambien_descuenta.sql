@@ -3,7 +3,14 @@
 -- al final de la transacción que las escribe
 -- ----------------------------------------------------------------------------
 -- 25/09/2026. Encargo «El extra del último plato no asienta al entrar el pedido».
--- PROPUESTA. SIN APLICAR. La aplica Julio, fuera de banda (ver el AVISO).
+-- APLICADA el 25/09/2026 a las 11:0x (Madrid) por Julio, fuera de banda: 0
+-- pedidos en la hora anterior, el último el 24/09 a las 23:29. Registrada en
+-- supabase_migrations como 20260925090015 el_ultimo_plato_tambien_descuenta.
+--
+-- EL SQL DE ABAJO ES EL DESPLEGADO, sacado de pg_get_functiondef el 25/09 a las
+-- 11:06 (md5 01778790ef0ddc94492167b17eb336ad), no el que se propuso. Base y
+-- repositorio cuentan lo mismo. La propuesta que se ensayó a las 10:34 era
+-- distinta en dos cosas; van dichas en «LO APLICADO».
 --
 -- ── LA CAUSA, LEÍDA EN LO DESPLEGADO ──────────────────────────────────────
 -- Lo vivo el 25/09 10:16 es lo mismo que el repositorio (md5 de
@@ -42,25 +49,32 @@
 --   G351  HubRise delivery_failed      14/09 22:11  solo envase (anterior al 23/09)
 -- Exactamente lo que decía el parte.
 --
--- ── EL ARREGLO: EL CAMINO 2 DEL ENCARGO ───────────────────────────────────
+-- ── LO APLICADO ───────────────────────────────────────────────────────────
 -- El disparador pasa a CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED.
 -- Corre al COMMIT, cuando la ingesta ya ha metido todas las líneas, así que el
--- resultado deja de depender del orden de inserción. Y se quita el corte por
--- `line_type`: al commit ya no hace falta, porque lo que se recalcula es la
--- venta entera con todo dentro.
+-- resultado deja de depender del orden de inserción. En INSERT se quita el
+-- corte por `line_type`. Un pedido de 5 productos llamaba 5 veces a
+-- generate_sale_consumption sobre la venta entera; ahora, una.
 --
--- Postgres no tiene disparadores de restricción POR SENTENCIA: el evento se
--- encola por FILA. Para no recalcular la venta N veces al commit, cada pasada
--- deja una marca en la transacción (`set_config(..., true)`, local: muere con
--- ella) con la venta Y LA HUELLA DE SUS LÍNEAS. Si llega otro evento de la
--- misma venta y las líneas son las mismas, no se repite. Si alguien hubiera
--- escrito más líneas después de una pasada (un `SET CONSTRAINTS ... IMMEDIATE`
--- a mitad; medido: CERO funciones de public y cero ficheros del repositorio
--- lo usan), la huella cambia y se recalcula. Nunca se salta una pasada que
--- haga falta; como mucho sobra una, y esa la anula la guarda FV001.
---
--- Efecto colateral bueno: un pedido de 5 productos llamaba 5 veces a
--- generate_sale_consumption sobre la venta entera. Ahora, una.
+-- Dos diferencias con la propuesta ensayada a las 10:34:
+--   1. EVENTOS. Se aplicó `AFTER INSERT OR UPDATE` (cualquier columna) y el
+--      filtro vive dentro: en UPDATE solo sigue si `menu_item_id` cambia de
+--      valor. La razón que se dio, que un constraint trigger no admite
+--      `UPDATE OF columna`, NO es cierta: el ensayo de las 10:34 creó
+--      `after insert or update of menu_item_id ... deferrable initially
+--      deferred` sin error. Lo aplicado es equivalente en efecto (y algo más
+--      estricto: un UPDATE que escribe el mismo valor ya no recalcula). El
+--      coste es que cualquier UPDATE de `sale_line` —el barrido de coste de las
+--      04:50, por ejemplo— encola un evento por fila que sale en la primera
+--      línea de la función.
+--   2. MARCA. La propuesta marcaba venta + huella de sus líneas; lo aplicado
+--      marca SOLO la venta, una vez por transacción. Diferencia medida en el
+--      reensayo (C): si en la MISMA transacción se escriben líneas, se fuerza
+--      el commit diferido con `SET CONSTRAINTS ... IMMEDIATE` y luego se
+--      escriben más líneas de la misma venta, ese segundo lote NO recalcula
+--      (U622 se quedó en 0 movimientos). Hoy no pasa: cero funciones de public
+--      y cero ficheros del repositorio usan `SET CONSTRAINTS` (medido 25/09).
+--      Si algún día alguien lo usa, ésta es la línea que hay que mirar.
 --
 -- ── LO QUE NO SE TOCA ─────────────────────────────────────────────────────
 --   · generate_sale_consumption, _sale_line_raw_consumption, los adaptadores:
@@ -75,15 +89,15 @@
 --     que desarmar → escribir → rearmar en la misma transacción sigue sin
 --     consumir (un evento solo se encola si el disparador está armado cuando
 --     se escribe la fila).
---   · Los eventos: los mismos que hoy (INSERT, y UPDATE OF menu_item_id). No se
---     amplía nada.
+--   · El alcance: INSERT de cualquier línea, y UPDATE solo cuando cambia
+--     `menu_item_id`, como antes (ver «LO APLICADO», punto 1).
 --   · Ninguna edge function. Ningún fichero del front.
 --
 -- ── NO SE REPROCESA NADA HACIA ATRÁS ──────────────────────────────────────
 -- Esto no toca ni una venta existente. U093 asentará su salsa cuando se cierre,
 -- como hoy. G034 y G351 van al recuento del domingo 27/09 (regla del 18/09).
 --
--- ── ENSAYADA EL 25/09 A LAS 10:34 (Madrid), REVERTIDA ─────────────────────
+-- ── ENSAYADA EL 25/09 A LAS 10:34 (Madrid), REVERTIDA — sobre la PROPUESTA ──
 -- Script: docs/propuestas/ensayo_el_ultimo_plato_tambien_descuenta.sql. Hueco
 -- medido: 0 pedidos en la última hora, el último el 24/09 a las 23:29.
 -- Ingesta REAL: adapt_lastapp_order re-inserta las líneas en el orden del
@@ -113,17 +127,25 @@
 -- arriba— así que no pasan por este disparador; no se ensayan porque no hay
 -- nada suyo que cambie.
 --
+-- ── REENSAYADA CONTRA LO DESPLEGADO, 25/09 11:06, REVERTIDA ───────────────
+-- Misma técnica que arriba (adapt_lastapp_order, bloque que acaba en RAISE),
+-- ya con el disparador aplicado. 0 pedidos en la hora anterior.
+--   A  ingesta real, al commit      U093 29 movs · falta NADA
+--                                   U622 11 movs · falta NADA   <- el combo
+--   B  UPDATE que no cambia menu_item_id (lo que hace el recosteo): 0 movs
+--      tras borrar los de U622 a mano -> no recalcula, correcto
+--   C  segundo lote en la misma transacción tras SET CONSTRAINTS IMMEDIATE:
+--      no recalcula (ver «LO APLICADO», punto 2)
+--   D  recasado en frío: desarmar -> cambiar menu_item_id -> rearmar -> commit:
+--      29 movs, no recalcula -> el enclavamiento sigue protegiendo
+--
 -- ============================================================================
--- AVISO: ESTO VA POR EL CAMINO DEL PEDIDO Y TIENE QUE ESPERAR A LA NOCHE.
--- `DROP TRIGGER` toma ACCESS EXCLUSIVE sobre `sale_line`, que se escribe en
--- cada pedido. Falla la condición 2 de la banda: NO se aplica en servicio.
--- DESPUÉS DE LAS 00:30 (reloj de la base, Europe/Madrid), no a las 23:50.
--- HAY DOS BANDAS ESCRITAS Y SE CONTRADICEN: CLAUDE.md dice 12:15–23:45 y
--- `folvy_parte_diario_descuento_METODO.md` (fuera del repo) 12:15–00:30. Hasta
--- que se unifiquen, manda la más larga: el 24/09 entró un pedido a las 23:29 y
--- el 23/09 a las 23:23. La duda va a favor de esperar. Con `lock_timeout` de 3 s: si
--- hay un pedido entrando, la migración falla sin dejar nada y se reintenta; no
--- deja cola detrás de ella.
+-- DÓNDE SE PODÍA APLICAR: `DROP TRIGGER` toma ACCESS EXCLUSIVE sobre
+-- `sale_line`, que se escribe en cada pedido, así que falla la condición 2 de
+-- la banda y solo cabe fuera de ella. La banda es 12:15–00:30 (Madrid):
+-- 30 días medidos (26/08–24/09), el pedido más tardío a las 23:59, 6 de 30
+-- días con alguno después de las 23:45 y 0 de 30 después de las 00:15. Se
+-- aplicó a las 11:0x, antes de que abriera.
 -- ============================================================================
 --
 -- ── QUIÉN LEE EL STOCK MIENTRAS EL PEDIDO NO CIERRA (apéndice, 25/09) ─────
@@ -143,67 +165,49 @@
 --     (todas las fuentes y el mismo local: 11 con cero y peor 17; sin filtrar
 --     por local: 8 y 36), así que la definición va aquí escrita.
 
-begin;
-
-set local lock_timeout = '3s';
-
--- ── 1. La función ─────────────────────────────────────────────────────────
--- Misma firma (sin argumentos, devuelve trigger): CREATE OR REPLACE no crea
--- sobrecarga (regla 2 no aplica).
-create or replace function public.tg_sale_line_consumption()
-returns trigger
-language plpgsql
-security definer
-set search_path to 'public'
-as $fn$
+CREATE OR REPLACE FUNCTION public.tg_sale_line_consumption()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
 declare
-  v_sale_id uuid; v_sale record; v_n integer; v_state text; v_msg text;
-  v_huella  text; v_marca text; v_hechas text;
+  v_sale_id uuid; v_sale record; v_n integer; v_state text; v_msg text; v_marca text;
 begin
-  -- DIFERIDO (25/09/2026): esto corre al COMMIT de la transacción que escribe
-  -- las líneas, no al escribir cada una. A esas alturas la ingesta ya ha metido
-  -- el pedido entero —productos, extras e hijos de combo— y el recálculo ve lo
-  -- mismo que verá el cierre. Antes corría fila a fila y las hijas del ÚLTIMO
-  -- producto no llegaban nunca: G246 (Mayo Smokey) y U093 (Sweet Chili).
   v_sale_id := new.sale_id;
-  if v_sale_id is null then return null; end if;
+  if v_sale_id is null then return new; end if;
+
+  -- En UPDATE se mantiene el alcance de antes: solo cuando cambia menu_item_id.
+  -- En INSERT entra cualquier line_type (ese es el arreglo).
+  if tg_op = 'UPDATE' and new.menu_item_id is not distinct from old.menu_item_id then
+    return new;
+  end if;
+
+  -- Una sola vez por venta y por transaccion.
+  v_marca := 'folvy.consumo_' || replace(v_sale_id::text, '-', '');
+  if coalesce(current_setting(v_marca, true), '') = '1' then
+    return new;
+  end if;
+
   select id, status, order_status, is_active into v_sale
     from public.sale where id = v_sale_id;
-  if not found then return null; end if;
+  if not found then return new; end if;
+
   -- No consumir ventas canceladas ni inactivas.
   if coalesce(v_sale.status,'') = 'cancelled'
      or coalesce(v_sale.order_status,'') in ('cancelled','rejected')
      or not coalesce(v_sale.is_active, true) then
-    return null;
+    return new;
   end if;
 
-  -- UNA pasada por venta y por forma de sus líneas. Sin esto, un pedido de 20
-  -- líneas recalcularía 20 veces al commit (el evento es por fila). Ya NO se
-  -- corta por line_type: una hija también dispara, y la marca las agrupa.
-  select md5(coalesce(string_agg(
-           sl.id::text || '|' || coalesce(sl.line_type,'') || '|'
-           || coalesce(sl.parent_sale_line_id::text,'') || '|'
-           || coalesce(sl.menu_item_id::text,'') || '|'
-           || coalesce(sl.modifier_option_id::text,'') || '|'
-           || coalesce(sl.quantity::text,'') || '|'
-           || coalesce(sl.ignored_at::text,''),
-           ',' order by sl.id), ''))
-    into v_huella
-    from public.sale_line sl where sl.sale_id = v_sale_id;
-  v_marca  := v_sale_id::text || ':' || v_huella;
-  v_hechas := coalesce(current_setting('folvy.consumo_lineas_hecho', true), '');
-  if strpos(v_hechas, v_marca) > 0 then
-    return null;
-  end if;
+  perform set_config(v_marca, '1', true);
 
   v_n := public.generate_sale_consumption(v_sale_id);
-  perform set_config('folvy.consumo_lineas_hecho', v_hechas || ' ' || v_marca, true);
-  -- Salió bien: si esta venta arrastraba un fallo, se cierra con contenido.
   perform public._resolver_fallo_de_consumo(v_sale_id, v_n);
-  return null;
+  return new;
+
 exception when others then
-  -- No tumbamos la ingesta —y ahora menos: un error aquí sería un COMMIT
-  -- fallido y el pedido entero se perdería— pero el fallo deja FILA y ALERTA.
+  -- No tumbamos la ingesta, pero el fallo deja FILA y ALERTA.
   v_state := sqlstate;
   v_msg   := sqlerrm;
   begin
@@ -212,48 +216,15 @@ exception when others then
     raise warning 'tg_sale_line_consumption: no se pudo apuntar el fallo de la venta % : %',
       v_sale_id, sqlerrm;
   end;
-  -- Marcada también: el fallo ya está apuntado y lo reintenta el cron
-  -- (cron_recompute_missing_sale_consumption lee los fallos sin resolver).
-  -- Repetirlo por cada línea del mismo pedido solo repetiría el error.
-  if v_marca is not null then
-    perform set_config('folvy.consumo_lineas_hecho',
-                       coalesce(v_hechas,'') || ' ' || v_marca, true);
-  end if;
   raise warning 'tg_sale_line_consumption: venta % : %', v_sale_id, v_msg;
-  return null;
+  return new;
 end;
-$fn$;
+$function$;
 
--- ── 2. El disparador: mismo nombre, mismos eventos, diferido ──────────────
 drop trigger if exists trg_sale_line_consumption on public.sale_line;
+
 create constraint trigger trg_sale_line_consumption
-  after insert or update of menu_item_id on public.sale_line
+  after insert or update on public.sale_line
   deferrable initially deferred
-  for each row execute function public.tg_sale_line_consumption();
-
--- ── 3. Comprobación antes del commit ──────────────────────────────────────
-do $$
-declare v_t record; v_defs integer;
-begin
-  select t.tgenabled, t.tgdeferrable, t.tginitdeferred, t.tgconstraint
-    into v_t
-    from pg_trigger t
-   where t.tgrelid = 'public.sale_line'::regclass
-     and t.tgname  = 'trg_sale_line_consumption';
-  if not found then
-    raise exception 'falta el trigger trg_sale_line_consumption';
-  end if;
-  if v_t.tgenabled <> 'O' or not v_t.tgdeferrable or not v_t.tginitdeferred
-     or v_t.tgconstraint = 0 then
-    raise exception 'trg_sale_line_consumption no ha quedado diferido y armado: % % % %',
-      v_t.tgenabled, v_t.tgdeferrable, v_t.tginitdeferred, v_t.tgconstraint;
-  end if;
-  select count(*) into v_defs from pg_proc
-   where proname = 'tg_sale_line_consumption'
-     and pronamespace = 'public'::regnamespace;
-  if v_defs <> 1 then
-    raise exception 'tg_sale_line_consumption tiene % definiciones', v_defs;
-  end if;
-end $$;
-
-commit;
+  for each row
+  execute function public.tg_sale_line_consumption();

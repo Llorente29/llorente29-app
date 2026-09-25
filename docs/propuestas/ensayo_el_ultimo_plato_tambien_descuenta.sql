@@ -1,4 +1,11 @@
 -- ENSAYO de 20260925T0100_el_ultimo_plato_tambien_descuenta.sql
+--
+-- OJO: esto ensayó la PROPUESTA (marca por venta + huella, UPDATE OF
+-- menu_item_id), no lo que se aplicó el 25/09 a las 11:0x. Lo aplicado se
+-- reensayó a las 11:06 contra la base viva; resultado en la cabecera de la
+-- migración («REENSAYADA CONTRA LO DESPLEGADO»). El bloque de abajo reinstala
+-- la función de la propuesta: NO correrlo tal cual contra la base de hoy
+-- salvo que se quiera comparar, y siempre revertido.
 -- Todo dentro de UN bloque que termina en RAISE EXCEPTION: no queda nada
 -- escrito (ni la función auxiliar de pg_temp, ni el disparador nuevo, ni un
 -- solo movimiento). El resultado viaja en el mensaje del error.

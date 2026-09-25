@@ -97,7 +97,7 @@ Cada una costó un incidente real. La fecha es el día que se pagó.
 > **La banda queda solo en la BASE, y solo para lo que toca el camino del
 > pedido.**
 
-**Entre las 12:15 y las 23:45 (reloj de la base, `now() at time zone 'Europe/Madrid'`)
+**Entre las 12:15 y las 00:30 (reloj de la base, `now() at time zone 'Europe/Madrid'`)
 no se aplica ninguna migración**, salvo que se cumplan LAS TRES:
 
 1. **No está en el camino del pedido.** Ni lo llama un disparador, ni un cron,
@@ -108,8 +108,14 @@ no se aplica ninguna migración**, salvo que se cumplan LAS TRES:
    tabla del camino, sí — y ésos esperan.
 3. **Se dice ANTES de aplicarlo**, con la medida delante.
 
-Si falla una, se espera a las 23:45. Y la duda va siempre a favor de esperar:
+Si falla una, se espera a las 00:30. Y la duda va siempre a favor de esperar:
 la banda existe porque a las 13:00 hay gente cocinando.
+
+*Por qué acaba a las 00:30 y no a las 23:45 (25/09):* había dos bandas escritas
+—ésta decía 23:45, el método del parte diario 00:30— y se zanjó con datos, 30
+días y todas las fuentes (26/08–24/09): el pedido más tardío entró a las
+**23:59**, **6 de 30 días** tuvieron alguno después de las 23:45 y **0 de 30**
+después de las 00:15. Con 23:45, uno de cada cinco días se aplicaba en servicio.
 
 *Por qué está escrita así (13/09):* la versión anterior pedía que la migración
 «no escribiera» —`STABLE` o `IMMUTABLE`—, y eso no es lo que protege. Se vio al
