@@ -80,7 +80,7 @@ export type RowBrandChannelRateUpdate  = Tables['brand_channel_rate']['Update']
 // NO son enums (regla §6.2: verbatimModuleSyntax/erasableSyntaxOnly).
 // ─────────────────────────────────────────────────────────────────────
 export type RecipeItemType   = 'raw' | 'recipe' | 'tool' | 'dish' | 'packaging'
-export type CostStrategy     = 'fixed' | 'last_purchase' | 'average_weighted' | 'average_window'
+export type CostStrategy     = 'fixed' | 'last_purchase' | 'average_weighted'
 export type ConservationType = 'fridge' | 'freezer' | 'dry' | 'hot'
 export type ServiceType      = 'platform_delivery' | 'own_delivery' | 'pickup'
 export type CommissionBase   = 'pvp_con_iva' | 'pvp_sin_iva'

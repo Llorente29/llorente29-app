@@ -51,6 +51,7 @@ import PurchaseSourcesSection from '@/modules/kitchen/components/PurchaseSources
 import { ReviewBanner } from '@/modules/kitchen/components/ReviewBanner'
 import ItemStockPanel from '@/modules/kitchen/components/ItemStockPanel'
 import ItemMovementsPanel from '@/modules/kitchen/components/ItemMovementsPanel'
+import ItemCostBasisPanel from '@/modules/kitchen/components/ItemCostBasisPanel'
 import ItemVatSelector from '@/modules/kitchen/components/ItemVatSelector'
 import IngredientAiAssistButton from '@/modules/kitchen/components/IngredientAiAssistButton'
 import { getIngredientExtras } from '@/modules/kitchen/services/recipeAiService'
@@ -143,12 +144,12 @@ const CONSERVATION_OPTIONS: { value: ConservationType; label: string }[] = [
 ]
 
 // Estrategias de coste REALES del enum en BBDD (CHECK recipe_item_cost_strategy_valid:
-// 'fixed' | 'last_purchase' | 'average_weighted' | 'average_window'). Son 4, no 6:
-// el CHECK no admite más (la BBDD es la verdad). Etiquetas estilo tspoon.
+// 'fixed' | 'last_purchase' | 'average_weighted'). 'average_window' se retiró el
+// 27/09: nadie la calculaba distinta de la media. La ventana es una por cuenta
+// (kitchen_settings.cost_window_days_default, 90 días), no por artículo.
 const COST_STRATEGY_OPTIONS: { value: CostStrategy; label: string; hint: string }[] = [
   { value: 'last_purchase', label: 'Último precio de compra', hint: 'El coste lo manda el último precio del proveedor principal.' },
-  { value: 'average_weighted', label: 'Precio medio ponderado de las compras', hint: 'Media de las compras ponderada por cantidad recibida.' },
-  { value: 'average_window', label: 'Precio medio de las últimas compras', hint: 'Media de las compras dentro de una ventana reciente.' },
+  { value: 'average_weighted', label: 'Precio medio ponderado de las compras', hint: 'Lo que has pagado de verdad: los albaranes de los últimos 90 días, ponderados por cantidad. Sin compras recientes, la última conocida.' },
   { value: 'fixed', label: 'Precio fijo (tecleado a mano)', hint: 'El coste lo fijas tú; la compra no lo pisa.' },
 ]
 
@@ -761,7 +762,9 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo, enfoca
     { label: 'Unidad', ok: okUnidad },
     { label: 'Proveedor', ok: okProveedor },
   ]
-  const costOrigin = item.costStrategy === 'fixed' ? 'Tecleado a mano' : 'Desde la compra'
+  const costOrigin = item.costStrategy === 'fixed' ? 'Tecleado a mano'
+    : item.costStrategy === 'average_weighted' ? 'Media de las compras'
+    : 'Último precio de compra'
 
   return (
     <div className="max-w-6xl pb-8">
@@ -1167,6 +1170,23 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo, enfoca
                 <DataCell label="Actualizado" value={formatDateShort(item.costUpdatedAt)} />
               </div>
             </CollapsibleSection>
+
+            {item.type !== 'recipe' && item.type !== 'dish' && item.costStrategy !== 'fixed' && (
+              <CollapsibleSection icon={<FileText size={16} />} title="De dónde sale el coste">
+                <ItemCostBasisPanel
+                  itemId={item.id}
+                  unitAbbr={baseUnit?.abbreviation ?? null}
+                  onApproved={async () => {
+                    try {
+                      await recomputeItemAndAncestors(item.id)
+                    } catch (e) {
+                      console.error('KitchenItemDetailPage: recosteo tras pasar a media falló', e)
+                    }
+                    await refreshItem()
+                  }}
+                />
+              </CollapsibleSection>
+            )}
 
             {(isRaw || item.type === 'recipe') && (
             <CollapsibleSection
