@@ -174,7 +174,11 @@ begin
        and exists (select 1 from public.sale_line sl
                     cross join lateral public._sale_line_raw_consumption(sl.id) r
                     where sl.sale_id = s.id and r.raw_item_id = v_birria)
-     order by (s.status = 'open') desc, s.sold_at desc limit 1;
+       -- (27/09) con consumo ya asentado: una venta anterior al último
+       -- recuento aprobado no asienta (corte, regla 6) y no mide nada.
+       and exists (select 1 from public.stock_movement sm
+                    where sm.source_type = 'sale' and sm.source_id = s.id)
+     order by s.sold_at desc limit 1;
     if v_sale is null then
       v_out := v_out || E'\nP3 NO SE PUDO ENSAYAR: ninguna venta de 3 días consume Carne de Birria';
     else
@@ -210,6 +214,11 @@ begin
       if v_status = 'contando' then
         perform public.close_inventory_count(v_cnt);
       end if;
+      -- (27/09) Un recuento real no se aprueba sin motivos (lo exige
+      -- apply_inventory_count). Se ponen DENTRO del ensayo, que se revierte.
+      update public.inventory_count_line set reason_code = 'error_conteo'
+       where id in (select q.line_id from public.count_lines_requiring_reason(v_cnt) q)
+         and coalesce(reason_code, '') = '';
       select * into v_r from public.apply_inventory_count(v_cnt, c_julio, 'Julio', false);
       v_out := v_out || format(E'\nP4 recuento %s (%s): ajustes %s, artículos recalculados %s',
                  left(v_cnt::text, 8), v_status, v_r.adjustments, v_r.items_recomputed);

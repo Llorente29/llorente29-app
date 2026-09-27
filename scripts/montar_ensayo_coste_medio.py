@@ -18,7 +18,10 @@ cuerpo = [
     linea for linea in MIGRACION.read_text(encoding='utf-8').splitlines()
     if linea.strip().lower() not in ('begin;', 'commit;')
 ]
-plantilla = PLANTILLA.read_text(encoding='utf-8')
-if plantilla.count(MARCA) != 1:
-    raise SystemExit(f'la plantilla debe tener exactamente una marca {MARCA}')
-print(plantilla.replace(MARCA, '\n'.join(cuerpo)))
+# Solo cuenta la línea que ES la marca: la cabecera la cita en un comentario.
+lineas = PLANTILLA.read_text(encoding='utf-8').splitlines()
+marcas = [i for i, linea in enumerate(lineas) if linea.strip() == MARCA]
+if len(marcas) != 1:
+    raise SystemExit(f'la plantilla debe tener exactamente una línea {MARCA}')
+i = marcas[0]
+print('\n'.join(lineas[:i] + cuerpo + lineas[i + 1:]))

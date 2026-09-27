@@ -9,6 +9,12 @@
 -- sobre una tabla que el pedido lee en cada línea: `_sale_line_raw_consumption`,
 -- `compute_sale_line_cost`). Va FUERA DE BANDA, después de las 00:30.
 --
+-- ENSAYADA el 27/09 a las 08:20 y 09:12 (Madrid) contra la base viva, entera y
+-- revertida (docs/propuestas/ensayo_el_coste_es_lo_que_se_compro.sql): ningún
+-- computed_cost se mueve; los 16 quietos se encienden con diferencia 0;
+-- recibir, anular, merma, cerrar venta y aprobar recuento pasan. Resultado
+-- literal en el parte, sección 10.
+--
 -- ── LA CAUSA, LEÍDA EN LO DESPLEGADO (26/09 17:49 Madrid) ──────────────────
 -- `kitchen_recompute_raw_cost` (md5 f1ae243e8129bded94eba67aa26c4348) solo
 -- distingue 'fixed'. 'last_purchase', 'average_weighted' y 'average_window'

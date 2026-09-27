@@ -217,7 +217,89 @@ habría marcado `needs_review` en los que no tienen compras.
 
 ## 10 · Ensayo de los cuatro caminos (regla 10)
 
-Programado para las 00:45 del 27/09, fuera de banda, contra la base viva y
-revertido entero. Resultado: se pega aquí debajo cuando corra.
+Corrido el **27/09 a las 08:20 y a las 09:12 (Madrid)**, fuera de banda, con 0
+ventas en la media hora anterior a cada pasada. Contra la base viva, con la
+migración entera dentro de un único `DO` que termina en `RAISE`: no queda nada
+escrito. Se montó con `scripts/montar_ensayo_coste_medio.py`, quitando del SQL
+solo las líneas en blanco y las de comentario.
 
-_(pendiente)_
+**Pasada 1 (08:20), el ensayo entero.** Resultado literal:
+
+```
+E1 computed_cost, tabla entera: antes 190dec4f despues 190dec4f → IGUAL
+ rollout Folvy Interno · plantilla · no_aplica: 159
+ rollout Foodint · archivado · no_aplica: 7
+ rollout Foodint · imposible · pendiente: 2
+ rollout Foodint · quieto · pendiente: 16
+ rollout Foodint · se_mueve · pendiente: 30
+ rollout Foodint · sin_compras · pendiente: 20
+ rollout Kitchen Grill LstQ · ventana_retirada · no_aplica: 56
+ estrategias ahora: fixed=696, last_purchase=391
+E2 quietos encendidos 16, no encendidos 0, diferencia máxima 0 €/base
+E3 Patatas Bastón: {"antes": 0.00728, "despues": 0.00191855813953488372, "metodo": "media",
+   "lineas": 20, "descartadas": 2, "pct_descartadas": 10.0, "encendido": true, "aviso_descartes": false}
+E3b Sweet Potato «solo si no cambia»: {"antes": 0.0224, "con_media": 0.00550971428571428571,
+   "motivo": "el coste se movería", "encendido": false}
+E4 pasada: recalculados 17, cambiados 0, avisos 4, fallos []
+ AVISO Coste medio: 4 artículo(s) descartan más del 20 % de sus compras
+   Guacamole: 2 de 5 líneas fuera de la media (ALB-00098, ALB-00173)
+   Pan de Pita 21 cm: 1 de 2 líneas fuera de la media (ALB-00090)
+   Queso Gouda Loncheado: 6 de 26 líneas fuera de la media (ALB-00041, ALB-00045, ALB-00048, ALB-00053, ALB-00058, ALB-00059)
+   Tortilla Trigo 30 cm: 5 de 13 líneas fuera de la media (ALB-00041, ALB-00045, ALB-00048, ALB-00058, ALB-00059)
+E5 ventana 30 d, sin albarán: cambiados 1 de 17 · Patatas Bastón 0.0019186 → 0.0017368
+E5b de vuelta a 90: cambiados 1
+P1 recibido (recibido): 0.01915 → 0.01988653846153846154 · esperado 0.01988653846153846154 · OK
+   anulado: 0.01915 · vuelve al de antes
+P2 merma 10 g: 0.28725 € (10 × coste 0.01915 = 0.1915)
+P3 venta 01bff565 (open → closed): 3 líneas, coste 14.4005 €, movimientos de birria 0
+P4 FALLÓ: Faltan motivos en 10 productos: Caldo de Birria, Cilantro, … (P0001)
+```
+
+**Pasada 2 (09:12), P3 y P4 corregidos.** Llevó E1 y E2 (para tener los 16 a
+media) y los dos caminos que en la pasada 1 no midieron nada. E3–E5, P1 y P2 no
+se repitieron: ya habían pasado y el código que miden no cambió.
+
+```
+E1 computed_cost, tabla entera: antes 190dec4f despues 190dec4f → IGUAL
+E2 quietos encendidos 16, no encendidos 0, diferencia máxima 0 €/base
+P3 venta 3e534a98 (closed → closed): 1 líneas, coste 5.6262 €, movimientos de birria 1
+P4 recuento 2fa2ff32 (en_revision): ajustes 22, artículos recalculados 25
+```
+
+Después de cada pasada, comprobado: `recipe_item_cost_rollout` no existe,
+0 funciones nuevas en `pg_proc`, 0 albaranes `ENSAYO-COSTE`, siguen los 234
+`average_weighted`, las 3 ventanas en 30, U093 sigue abierta y el recuento
+`2fa2ff32` sigue en revisión, sin ningún motivo puesto.
+
+**Lectura, criterio por criterio:**
+
+- **Criterio 7** (los quietos, ni un céntimo): 16 encendidos, diferencia
+  máxima **0**. La migración no mueve **ningún** `computed_cost` de toda la
+  tabla (huella igual antes y después, las tres cuentas). Medido dos veces.
+- **Criterio 8** (los que se mueven, apagados): la guarda «solo si no cambia»
+  NO enciende Sweet Potato y lo dice (0,0224 → 0,00551).
+- **Criterio 4** (aviso con albaranes): sale, con sus albaranes, en la pasada.
+- **Criterio 6** (la ventana caduca sola): con la ventana en 30 días y ningún
+  albarán, la pasada mueve Patatas Bastón 0,00192 → 0,00174. La caducidad se
+  simuló acortando la ventana: el paso de los días no se puede ensayar.
+- **P1 recibir → confirmar → anular:** la media sube exactamente a lo esperado
+  (a 20 decimales) y al anular vuelve **exactamente** al coste de antes. El
+  disparador nuevo del albarán hace su trabajo: el recibido salta con el
+  albarán ya en `recibido`.
+- **P2 merma:** sale sin error. **Ojo, no es un fallo, pero hay que saberlo:**
+  la merma se valora a **0,0287 €/g**, no al coste del escandallo (0,0192): usa
+  el coste medio de ALMACÉN. Son los dos números que el encargo pide no mezclar,
+  y esto lo confirma: el cambio no toca la valoración de la merma.
+- **P3 cerrar una venta.** En la pasada 1 eligió **U093** (abierta desde el
+  24/09), que **no tiene ni un movimiento de consumo**, ni antes ni después del
+  cierre. No medía nada. Cae casi seguro en el corte del último recuento
+  aprobado (regla 6), pero **no lo he verificado**: queda como pregunta, no como
+  conclusión. En la pasada 2 se eligió la venta más reciente que sí tiene
+  consumo asentado: cierra, cuesta y asienta la birria (1 movimiento).
+- **P4 aprobar un recuento.** En la pasada 1 lo paró la regla de negocio
+  «Faltan motivos en 10 productos». En la pasada 2 se pusieron motivos
+  `error_conteo` DENTRO del ensayo, y se aprobó: 22 ajustes, 25 artículos
+  recalculados, sin error.
+
+**Los cuatro caminos pasan con la migración puesta.** Queda pendiente lo que
+dice el orden de salida de arriba: aplicarla (Julio) y encender los 16.
