@@ -11,9 +11,11 @@
 -- ENSAYADA el 27/09 ~16:00 (solo lectura, la clasificación con la misma
 -- vara que la función, sobre 30 días de Foodint, 27/08–26/09):
 --   · antes: 61 líneas «FICHA SIN ARTÍCULO» de 16 fichas;
---   · después: el burrito de birria (7 líneas) deja de ser causa; las otras
---     54 líneas de 15 fichas siguen igual (PLATO Kebaba y Doble Scandal
---     incluidas);
+--   · con solo el burrito: 7 líneas dejan de ser causa; 54 de 15 fichas igual;
+--   · con el burrito y los 7 combos (lista definitiva, 27/09 ~17:30): 49
+--     líneas dejan de ser causa (7 burrito + 42 combos) y 12 siguen como
+--     «FICHA SIN ARTÍCULO» (PLATO Kebaba y Doble Scandal incluidas). La
+--     guarda de la migración, con sus mismos filtros, deja pasar las 8;
 --   · U645: 0 líneas; U645 sin su extra de ternera (simulado, sin tocar la
 --     venta): «COMPONENTE SIN CARNE ELEGIDA».
 -- El aviso `venta_producto_sin_casar` (sales_unmapped_watchdog) NO comparte
@@ -44,8 +46,8 @@
 --
 -- ── LO QUE HACE ───────────────────────────────────────────────────────────
 -- 1. `menu_item_articulo_en_extra`: la lista de fichas cuyo artículo lo pone
---    un extra obligatorio, decidido a mano. Arranca con UNA: el burrito de
---    birria de Dos Coyotes (97ac7a7e).
+--    un extra obligatorio, decidido a mano. Arranca con 8: el burrito de
+--    birria de Dos Coyotes (97ac7a7e) y las 7 fichas de combo.
 -- 2. En el parte, para una línea product/combo_item que no es combo y cuya
 --    ficha no tiene artículo:
 --      · ficha en la lista y el pedido trae un extra que aporta artículo
@@ -56,9 +58,8 @@
 -- 3. El % de «descuenta» cuenta como que descuenta el primer caso, para que
 --    el número y la causa no cuenten historias distintas (regla 7).
 --
--- Combos Smash, Combo Individual/Doble, Kebab Combo, Burrito A Tu Manera y
--- Keburger se quedan FUERA hasta que Julio los meta en la lista: siguen
--- saliendo como hasta hoy.
+-- Burrito A Tu Manera y Keburger se quedan FUERA hasta que Julio los meta en
+-- la lista: siguen saliendo como hasta hoy.
 --
 -- ── BANDA ─────────────────────────────────────────────────────────────────
 -- La función del parte no está en el camino del pedido: la llama
@@ -93,20 +94,38 @@ comment on table public.menu_item_articulo_en_extra is
   'diario no las cuenta como «ficha sin artículo» si el pedido trae ese extra, y '
   'avisa «componente sin carne elegida» si no lo trae.';
 
--- La primera, por id (regla 9) y comprobando que es la que se cree.
+-- Las fichas, por id (regla 9: por nombre hay homónimos, archivadas y vivas)
+-- y comprobando que cada una es la que se cree: cuenta, nombre y sin artículo.
+-- 1 burrito (27/09, opción A) + 7 fichas de combo (27/09, Julio: «mete también
+-- los combos»). Medido: las 7 montan su contenido con extras obligatorios.
+--   · Smash vivos (f3185ba5, 3f924443): hoy llegan como combo de verdad, con
+--     sus componentes; no caen en esta rama. Quedan en la lista por si vuelven
+--     a llegar con extras.
+--   · Kebab Combo Individual (39c33485): vivo, llega con extras que aportan.
+--   · Smash antiguos (489af7f1, 43b22f0d) y Mila's (63eb87b0, 85ebfa0e):
+--     archivados; solo cuentan al rehacer el parte de días pasados.
 insert into public.menu_item_articulo_en_extra (menu_item_id, account_id, decidido_by_name, nota)
-select mi.id, mi.account_id, 'Julio',
-       'Opción A del 27/09: la carne la pone el extra «Escoge Tu Proteina Burrito - Dos Coyotes**».'
-  from public.menu_item mi
- where mi.id = '97ac7a7e-c238-43bc-ae9e-ca50cadffe73'
-   and mi.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
-   and mi.name = 'Burrito de birria (Dos Coyotes).'
+select mi.id, mi.account_id, 'Julio', f.nota
+  from (values
+    ('97ac7a7e-c238-43bc-ae9e-ca50cadffe73'::uuid, 'Burrito de birria (Dos Coyotes).',
+     'Opción A del 27/09: la carne la pone el extra «Escoge Tu Proteina Burrito - Dos Coyotes**».'),
+    ('f3185ba5-ddd9-4818-a24c-8559f035dfed'::uuid, 'Combo Duo Smash',        'Combo: el contenido lo ponen sus extras (27/09).'),
+    ('3f924443-b0b0-45ed-b704-06d71448ae75'::uuid, 'Combo Individual Smash', 'Combo: el contenido lo ponen sus extras (27/09).'),
+    ('39c33485-b04a-4f08-8db2-97dafb2e0565'::uuid, 'Kebab Combo Individual', 'Combo: el contenido lo ponen sus extras (27/09).'),
+    ('489af7f1-cb2e-4c45-9b1b-4a0a50fdbe27'::uuid, 'Combo Individual Smash', 'Combo (ficha archivada): el contenido lo ponían sus extras (27/09).'),
+    ('43b22f0d-f02b-489b-9350-e07df15ceb84'::uuid, 'Combo Duo Smash',        'Combo (ficha archivada): el contenido lo ponían sus extras (27/09).'),
+    ('63eb87b0-96f2-40d7-bc29-8e3daf1cd5d5'::uuid, 'Combo Individual',       'Combo (ficha archivada): el contenido lo ponían sus extras (27/09).'),
+    ('85ebfa0e-cd6d-4ca6-b650-fabd2aa8b96f'::uuid, 'Combo Doble',            'Combo (ficha archivada): el contenido lo ponían sus extras (27/09).')
+  ) as f(id, nombre, nota)
+  join public.menu_item mi on mi.id = f.id
+ where mi.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
+   and mi.name = f.nombre
    and mi.recipe_item_id is null;
 
 do $$
 begin
-  if (select count(*) from public.menu_item_articulo_en_extra) <> 1 then
-    raise exception 'la ficha del burrito no es la esperada: no se aplica nada';
+  if (select count(*) from public.menu_item_articulo_en_extra) <> 8 then
+    raise exception 'alguna ficha no es la esperada (esperaba 8): no se aplica nada';
   end if;
 end
 $$;
