@@ -3,10 +3,12 @@
 Encargo: «El coste del artículo pasa a media ponderada, y 68 artículos llevan
 meses creyendo que ya la tenían».
 
-**Estado (27/09 12:10): BASE APLICADA, FRONT SIN FUSIONAR.** La migración está
-en producción desde las 11:52 y los 16 quietos están a media desde las 12:05
-(sección 11). El front sigue en la rama `claude/laughing-ride-bjax75`: hasta que
-se fusione, la ficha no enseña «De dónde sale el coste».
+**Estado (27/09 12:15): TODO EN PRODUCCIÓN.** Base aplicada a las 11:52, los 16
+quietos a media desde las 12:05 y el front fusionado a `main` (`2325cc0`, avance
+directo) con Vercel **READY** en producción (`dpl_9jAEBouoo7GCVVk1LPrgq5AHFT1i`).
+Antes del push: `npm run build` exacto y en limpio ✓, 1676 pruebas ✓. El push
+no toca `supabase/functions` (ningún despliegue de edge functions) y sí dispara
+`build-apk` (paquete nuevo para las tablets, que lo aplican en su ventana).
 
 - Migración: `supabase/migrations/20260927T0100_el_coste_es_lo_que_se_compro.sql`
 - Ensayo (4 caminos, revertido): `docs/propuestas/ensayo_el_coste_es_lo_que_se_compro.sql`,
