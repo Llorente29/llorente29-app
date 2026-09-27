@@ -16,8 +16,8 @@
 --     líneas dejan de ser causa (7 burrito + 42 combos) y 12 siguen como
 --     «FICHA SIN ARTÍCULO» (PLATO Kebaba y Doble Scandal incluidas). La
 --     guarda de la migración, con sus mismos filtros, deja pasar las 8;
---   · lista definitiva con Burrito A Tu Manera y las dos Keburger (~18:15):
---     guarda 11 de 11; 52 líneas dejan de ser causa y 9 siguen avisando, de
+--   · lista definitiva (~18:30), sin la Keburger CheesBacon, que no se ha
+--     vendido nunca y no cambia la medida: guarda 10 de 10; 52 líneas dejan de ser causa y 9 siguen avisando, de
 --     8 fichas (PLATO Kebaba, Doble Scandal, Burrito vegetariano, Butter Parm
 --     cheese-sticks, Hummus, Korean Fresh Salad, Korean vegan burger, Marquesa);
 --   · U645: 0 líneas; U645 sin su extra de ternera (simulado, sin tocar la
@@ -50,9 +50,9 @@
 --
 -- ── LO QUE HACE ───────────────────────────────────────────────────────────
 -- 1. `menu_item_articulo_en_extra`: la lista de fichas cuyo artículo lo pone
---    un extra obligatorio, decidido a mano. Arranca con 11: el burrito de
+--    un extra obligatorio, decidido a mano. Arranca con 10: el burrito de
 --    birria de Dos Coyotes (97ac7a7e), las 7 fichas de combo, el Burrito A Tu
---    Manera y las dos Keburger.
+--    Manera y la Keburger Clásica.
 -- 2. En el parte, para una línea product/combo_item que no es combo y cuya
 --    ficha no tiene artículo:
 --      · ficha en la lista y el pedido trae un extra que aporta artículo
@@ -101,9 +101,10 @@ comment on table public.menu_item_articulo_en_extra is
 -- Las fichas, por id (regla 9: por nombre hay homónimos, archivadas y vivas)
 -- y comprobando que cada una es la que se cree: cuenta, nombre y sin artículo.
 -- 1 burrito (27/09, opción A) + 7 fichas de combo (27/09, Julio: «mete también
--- los combos») + Burrito A Tu Manera y las dos Keburger (27/09, Julio: «marca
--- también burrito a tu manera y keburger»). Medido: todas montan su contenido
--- con extras obligatorios (min 1).
+-- los combos») + Burrito A Tu Manera y la Keburger Clásica (27/09, Julio:
+-- «marca también burrito a tu manera y keburger»; la Keburger CheesBacon,
+-- nunca vendida, la quitó él: «quita cheesbacon»). Medido: todas montan su
+-- contenido con extras obligatorios (min 1).
 --   · OJO, dicho a Julio: en la Keburger el extra pone la PROTEÍNA; el pan y lo
 --     demás de la burger no están en ningún sitio y siguen sin descontarse.
 --     Con la ficha en la lista, el parte ya no lo avisa.
@@ -126,8 +127,7 @@ select mi.id, mi.account_id, 'Julio', f.nota
     ('63eb87b0-96f2-40d7-bc29-8e3daf1cd5d5'::uuid, 'Combo Individual',       'Combo (ficha archivada): el contenido lo ponían sus extras (27/09).'),
     ('85ebfa0e-cd6d-4ca6-b650-fabd2aa8b96f'::uuid, 'Combo Doble',            'Combo (ficha archivada): el contenido lo ponían sus extras (27/09).'),
     ('ccd89f39-7441-47b4-9485-1f699e8ed307'::uuid, 'Burrito A Tu Manera',    '«A tu manera»: proteína, ingredientes y salsa los ponen sus extras obligatorios (27/09).'),
-    ('72fe13c6-38b2-4c3b-8b51-9477b04d0693'::uuid, 'Keburger Clásica',       'La proteína la pone el extra «Elige la proteina de tu Keburger» (27/09).'),
-    ('2066bdad-c923-41bc-bc44-d1d766c311fb'::uuid, 'Keburger CheesBacon',    'La proteína la pone el extra «Elige la proteina de tu Keburger» (27/09). Nunca vendida hasta hoy.')
+    ('72fe13c6-38b2-4c3b-8b51-9477b04d0693'::uuid, 'Keburger Clásica',       'La proteína la pone el extra «Elige la proteina de tu Keburger» (27/09).')
   ) as f(id, nombre, nota)
   join public.menu_item mi on mi.id = f.id
  where mi.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
@@ -136,8 +136,8 @@ select mi.id, mi.account_id, 'Julio', f.nota
 
 do $$
 begin
-  if (select count(*) from public.menu_item_articulo_en_extra) <> 11 then
-    raise exception 'alguna ficha no es la esperada (esperaba 11): no se aplica nada';
+  if (select count(*) from public.menu_item_articulo_en_extra) <> 10 then
+    raise exception 'alguna ficha no es la esperada (esperaba 10): no se aplica nada';
   end if;
 end
 $$;
