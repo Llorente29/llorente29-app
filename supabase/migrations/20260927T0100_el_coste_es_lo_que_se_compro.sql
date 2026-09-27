@@ -5,9 +5,15 @@
 -- 26/09/2026. Encargo «El coste del artículo pasa a media ponderada, y 68
 -- artículos llevan meses creyendo que ya la tenían».
 --
--- PROPUESTA, SIN APLICAR. Toca un CHECK de `recipe_item` (ACCESS EXCLUSIVE
--- sobre una tabla que el pedido lee en cada línea: `_sale_line_raw_consumption`,
--- `compute_sale_line_cost`). Va FUERA DE BANDA, después de las 00:30.
+-- APLICADA el 27/09/2026 a las 11:52 (Madrid) por Claude Code, por orden de
+-- Julio, fuera de banda (la banda empieza a las 12:15): 0 ventas en la media
+-- hora anterior, la última el 26/09 a las 23:35. Registrada en
+-- supabase_migrations como 20260927095235 el_coste_es_lo_que_se_compro. Lo
+-- aplicado es este fichero de «1 · EL CÁLCULO» a la última función, sin el
+-- begin/commit (apply_migration ya es una transacción): base y repo iguales.
+-- Toca un CHECK de `recipe_item` (ACCESS EXCLUSIVE sobre una tabla que el
+-- pedido lee en cada línea: `_sale_line_raw_consumption`,
+-- `compute_sale_line_cost`): por eso fuera de banda.
 --
 -- ENSAYADA el 27/09 a las 08:20 y 09:12 (Madrid) contra la base viva, entera y
 -- revertida (docs/propuestas/ensayo_el_coste_es_lo_que_se_compro.sql): ningún

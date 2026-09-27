@@ -3,8 +3,10 @@
 Encargo: «El coste del artículo pasa a media ponderada, y 68 artículos llevan
 meses creyendo que ya la tenían».
 
-**Estado: PROPUESTO, SIN APLICAR.** Nada de esto está en producción. Migración
-y front en la rama `claude/laughing-ride-bjax75`, sin fusionar.
+**Estado (27/09 12:10): BASE APLICADA, FRONT SIN FUSIONAR.** La migración está
+en producción desde las 11:52 y los 16 quietos están a media desde las 12:05
+(sección 11). El front sigue en la rama `claude/laughing-ride-bjax75`: hasta que
+se fusione, la ficha no enseña «De dónde sale el coste».
 
 - Migración: `supabase/migrations/20260927T0100_el_coste_es_lo_que_se_compro.sql`
 - Ensayo (4 caminos, revertido): `docs/propuestas/ensayo_el_coste_es_lo_que_se_compro.sql`,
@@ -303,3 +305,51 @@ Después de cada pasada, comprobado: `recipe_item_cost_rollout` no existe,
 
 **Los cuatro caminos pasan con la migración puesta.** Queda pendiente lo que
 dice el orden de salida de arriba: aplicarla (Julio) y encender los 16.
+
+## 11 · Aplicado (27/09, por Claude Code, por orden de Julio)
+
+**Antes de aplicar (10:16 Madrid):** 0 ventas en la última media hora (la
+última, el 26/09 a las 23:35); motor sin tocar (md5 `f1ae243e…`); huella de
+`computed_cost`, tabla entera: `190dec4f13c9bc56d375ac3b29554903` (1.087 filas).
+
+**11:52 — migración aplicada.** `supabase_migrations`: `20260927095235
+el_coste_es_lo_que_se_compro`. Comprobado después:
+
+- Las 8 funciones existen; `kitchen_recompute_raw_cost` tiene **una** sola firma
+  (regla 2); md5 del motor nuevo `726293f8d44e82034a3d0af193a88b82`.
+- Los dos disparadores del albarán existen.
+- `kitchen_settings`: las tres cuentas, 90 días y `last_purchase`.
+- Grupos, idénticos al ensayo: Foodint quieto 16 · se_mueve 30 · imposible 2 ·
+  sin_compras 20 · archivado 7; plantilla 159; ventana_retirada 56.
+
+**La huella de costes NO coincidió** (`f1b00d01…` después), y no es la
+migración. A las **11:03:48**, entre la huella y la aplicación, alguien cambió a
+mano el precio de proveedor de **Patatas Bastón** (0,00728 → **0,00182 €/g**,
+1,82 €/kg). Eso recalculó la patata y 35 platos: son las 36 filas con
+`cost_updated_at` entre las 10:16 y las 11:52. Con coste recalculado durante o
+después de la migración: **0 filas**. La migración no escribe `computed_cost`.
+Mi error de método: la huella tenía que tomarse en la misma transacción que la
+migración, no una hora y media antes. Patatas Bastón sigue `pendiente` en
+`se_mueve`: con 1,82 €/kg a mano, la media (1,92) ya solo la movería un +5 %.
+
+**12:05 — los 16 quietos, encendidos** con `encender_coste_medio_quietos`,
+suplantando a Julio (la función pide admin). 16 de 16, `antes = despues`
+exacto en los 16. En `recipe_item_cost_rollout.decidido_by_name` queda escrito
+«lo ejecutó Claude Code por orden de Julio». Platos recalculados por el
+encendido: **0**.
+
+**Estado final en Foodint:** `average_weighted` 16, `last_purchase` 136,
+`fixed` 254. Rollout: encendido 16 · pendiente 52 · no_aplica 7. Los 16 llevan
+su `cost_basis`. Regla 40, las dos RPC del front probadas contra la base:
+`article_cost_breakdown` (Milanesa: media, 1,93334 €/ud, 9 líneas, 1 fuera) y
+`article_cost_review` (13 artículos con alguna línea fuera).
+
+**Lo que queda:**
+1. Fusionar el front (`npm run build` en limpio, y READY en Vercel).
+2. Arreglar Servilletas y Aceite en la recepción.
+3. Julio aprueba los 30 que se mueven, uno a uno, desde la ficha.
+4. Decidir los 20 sin compras.
+5. La primera pasada nocturna con la media es **esta noche a las 04:00**:
+   mañana hay que mirar su resultado en `cron.job_run_details` y si ha llegado
+   el aviso `coste_medio_descartes` (se esperan 4: Guacamole, Pan de Pita,
+   Gouda y Tortilla Trigo).
