@@ -355,3 +355,52 @@ su `cost_basis`. Regla 40, las dos RPC del front probadas contra la base:
    mañana hay que mirar su resultado en `cron.job_run_details` y si ha llegado
    el aviso `coste_medio_descartes` (se esperan 4: Guacamole, Pan de Pita,
    Gouda y Tortilla Trigo).
+
+## 12 · Servilletas y Aceite, arreglados (27/09 ~15:15, por orden de Julio)
+
+**Por qué no por la pantalla de recepción:** `adjust_goods_receipt_line` solo
+corrige albaranes en `recibido`, y los cuatro están `confirmado`. Su camino para
+un confirmado es «anular y corregir». Además, en una línea que ya entró al
+almacén, la corrección asienta la diferencia **con fecha de hoy**. Alcalá tiene
+11 recuentos aprobados de servilletas y 10 de aceite **después** de esos
+albaranes (el último, el 21/09): su stock ya es lo contado. Asentar ahora habría
+metido 8.700 servilletas y 4.750 ml de aceite que no existen.
+
+**Lo hecho: solo el documento** (formato y `qty_in_base` de la línea, con nota
+en `notes`), sin movimiento de stock. La guarda del UPDATE exigía el formato y
+la cantidad viejos: 5 líneas, 5 cambiadas.
+
+| Albarán | Local | Antes | Ahora |
+|---|---|---|---|
+| ALB-00056 | Plaza Castilla | Paquete 150 → 150 ud | Caja 4500 → 4.500 ud |
+| ALB-00084 | Alcalá | Paquete 150 → 150 ud | Caja 4500 → 4.500 ud |
+| ALB-00102 | Alcalá | Paquete 150 → 150 ud (sin importe) | Caja 4500 → 4.500 ud |
+| ALB-00033 | Alcalá | «Unidad» 150 de OTRO artículo (`66a018eb…`) | Paquete 150 de Servilletas (600 ud, igual) |
+| ALB-00045 | Alcalá | Botella 250 ml (archivado) → 250 ml | Garrafa 5000 → 5.000 ml |
+
+**Comprobado después:** stock idéntico en las seis ubicaciones (servilletas
+1.482 / 150 / 9.824; aceite 1.247 / 763,1 / 4.815,8 ml). En la media hora
+siguiente, los únicos movimientos de esos dos artículos fueron 4 consumos de
+venta del servicio (−5), ninguno mío.
+
+**La media, ya sana:**
+- Servilletas: 0,0092237 €/ud con 3 líneas y **0 fuera** (antes 0,2767 y el
+  guardia tiraba la buena). Frente a hoy, −0,001 %: 41,51 € contra 41,507 € del
+  mismo producto en dos albaranes. Por el criterio estricto queda en `se_mueve`.
+- Aceite: 26,75 € ÷ 5.000 ml = **5,35 €/L** (antes 107 €/L), `poco_dato`
+  (una compra). Frente a hoy (4,50 €/L), +18,9 %.
+
+Los dos pasan de `imposible` a `se_mueve`, `pendiente`: se aprueban desde la
+ficha como el resto.
+
+**Queda dicho, no arreglado:**
+- **Plaza Castilla nunca ha contado servilletas.** Su stock es 150 exactos
+  desde el 25/08: la caja de 4.500 entró como 150 y no se ha consumido ninguna
+  en el sistema. Lo arregla un recuento, no un ajuste inventado.
+- **ALB-00014 y ALB-00030 (Carabanchel)**: «RIOBA aceite oliva **virgen extra**
+  botella 250 ml» a 3,04 € está casado a *Aceite de Oliva Suave 0,4º*. Parece otro
+  producto. Está fuera de la ventana de 90 días, así que no afecta a la media;
+  no lo he tocado.
+- Los movimientos de stock de las líneas corregidas siguen con la cantidad
+  vieja (150 / 250). El documento y su movimiento no coinciden, a propósito: el
+  stock lo mandan los recuentos.
