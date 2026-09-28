@@ -206,3 +206,50 @@ e `inventory_count.created_at`.
   de la de las patatas, o las sustituye?**
 - **P3 · ¿Paso la migración esta noche** (después de las 00:30), primero con
   `rollback` y el ensayo, y solo después con `commit`?
+
+---
+
+# ADENDA — 28/09, 12:1x. Julio contesta
+
+> «1 sí · 2 se sustituye solo si es menú · 3 si se puede ahora mejor»
+
+**P1 · Prioridades:** se quedan como estaban.
+
+**P3 · ¿Ahora?** No se puede. Eran las **12:12**, a tres minutos de la banda, y
+esto no pasa la condición 1: `_sale_line_raw_consumption` y
+`compute_sale_line_cost` corren en cada cierre de venta. La duda va a favor de
+esperar. **Se pasa a partir de las 00:30**: primero con `rollback` y el ensayo
+pegado, y el `commit` solo si salen los cuatro caminos. Queda programada la
+vuelta a esta sesión a las 00:40.
+
+**P2 · La caja del menú sustituye, y solo en los menús.** Esto cambia la parte
+2, y a mejor:
+
+- **Tabla propia en vez de columna:** `menu_item_combo_consumo`, con filas
+  `add` (lo que el menú añade) y `remove` (lo que el menú sustituye en sus
+  componentes). **Desaparece el `ALTER TABLE` sobre `menu_item`**, que era lo
+  único de la migración que tomaba un cierre exclusivo sobre una tabla del
+  pedido.
+- **Un `remove` nunca resta más de lo que los componentes de esa venta han
+  gastado** de ese artículo. Si el hijo elegido no lleva caja, resta cero. Restar
+  a ciegas sería devolver al almacén una caja que nunca salió.
+- **Medido antes de escribirlo (30 días, menús de Chivuos):** las cuatro
+  hamburguesas que salen en menú llevan «Caja Burger Individual Chivuos», y las
+  patatas (65) y los boniatos (7) llevan «CAJA GENERICA 780 Ml». Así que en
+  todos los menús vendidos el cambio es exacto: −1, −1, +1.
+- **Datos:** los 10 «MENÚ … + PATATAS + BEBIDA» de Chivuos llevan +1 «Caja
+  Hamburguesas Menú Chivuo´s», −1 «Caja Burger Individual Chivuos» y −1 «CAJA
+  GENERICA 780 Ml». **Los tres packs no se tocan.** Hay guarda: si no son 10
+  menús o alguna caja no es `packaging`, aborta.
+- **Coste por menú:** −0,7992 − (la genérica) + 0,18524. La caja individual
+  vale 0,7992 € y la del menú 0,18524 €, así que el menú sale **más barato** de
+  lo que se estaba contando.
+
+**Ventas pasadas: no se reprocesan.** He comprobado por qué se puede decir. El
+cron de las 01:30 (`cron_recompute_missing_sale_consumption(2)`) solo regenera
+ventas **sin ningún consumo** o con un fallo sin resolver. Un menú ya descontado
+no vuelve a pasar por el motor salvo que alguien lo reprocese a mano.
+
+**El ensayo** tiene ahora un E1c con ANTES/DESPUÉS de las tres cajas y del coste
+de la línea, y un **E1d** que comprueba que un pack de Chivuos regenerado no
+cambia.

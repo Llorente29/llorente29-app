@@ -6,10 +6,10 @@
 --   Se pasa primero así, se leen las comprobaciones del final, y solo entonces
 --   se cambia la última línea por COMMIT.
 --
--- BANDA: toca `_sale_line_raw_consumption` (lo llama `generate_sale_consumption`
--- en CADA cierre de venta) y hace ALTER TABLE sobre `menu_item`, que el pedido
--- lee siempre. Falla las condiciones 1 y 2 de la banda: solo entre 00:30 y
--- 12:15 de Madrid. La guarda G0 aborta sola fuera de esa ventana.
+-- BANDA: toca `_sale_line_raw_consumption` y `compute_sale_line_cost`, que
+-- corren en CADA cierre de venta. Falla la condición 1 de la banda: solo entre
+-- 00:30 y 12:15 de Madrid. La guarda G0 aborta sola fuera de esa ventana.
+-- (Ya no hay ALTER TABLE: la parte 2 va en tabla propia, no en `menu_item`.)
 --
 -- QUÉ HACE
 --   Parte 1 · grupo de equivalencia.
@@ -24,13 +24,20 @@
 --     · Datos: los dos compuestos del 28/09 pasan a ser grupos, con sus dos
 --       modelos como miembros. Las 46 recetas NO se tocan: ya apuntan al grupo.
 --   Parte 2 · consumo propio del combo.
---     · Columna `menu_item.combo_own_recipe_item_id`.
---     · `_sale_line_raw_consumption` (rama combo) la descuenta ADEMÁS de los
---       `combo_item`; `compute_sale_line_cost` (rama combo) suma su coste.
---     · Datos: NINGUNO. Qué ficha lleva qué caja espera a Julio (ver parte, P2):
---       la hamburguesa del menú ya gasta su propia caja y las patatas la suya.
+--     · Tabla `menu_item_combo_consumo`: por ficha combo, artículos que el menú
+--       AÑADE ('add') o que SUSTITUYE a los de sus componentes ('remove').
+--     · `_sale_line_raw_consumption` (rama combo) lo aplica además de los
+--       `combo_item`; `compute_sale_line_cost` (rama combo) lo valora igual.
+--     · Un 'remove' NUNCA quita más de lo que los componentes de ESA venta han
+--       gastado de ese artículo: si el hijo elegido no lo lleva, resta cero. Un
+--       'remove' que restara a ciegas sería una devolución fantasma al almacén.
+--     · Datos (Julio, 28/09: «se sustituye solo si es menú»): en los 10 «MENÚ …
+--       + PATATAS + BEBIDA» de Chivuos, +1 Caja Hamburguesas Menú Chivuo´s,
+--       −1 Caja Burger Individual Chivuos y −1 CAJA GENERICA 780 Ml. Los packs
+--       no se tocan. Medido: en los menús las 4 hamburguesas llevan su caja
+--       individual y las patatas y los boniatos la genérica (30 días, 100 %).
 --
--- POR QUÉ UNA COLUMNA NUEVA Y NO `menu_item.recipe_item_id`
+-- POR QUÉ NO EN `menu_item.recipe_item_id`
 --   Medido el 28/09: de 68 combos vivos, UNO tiene artículo, «Menú Coca Cola
 --   Milanesa de Pollo Napolitana» (Milanesa Haus), y su receta es el plato
 --   ENTERO: Milanesa de Pollo Napolitana MH ×1 + Coca-Cola Original Lata ×1. Sus
@@ -38,7 +45,7 @@
 --   descontar `recipe_item_id`, esas 11 ventas descontarían la milanesa y la
 --   lata DOS veces. `recipe_item_id` en un combo significa «todo el menú» (lo
 --   usa la rama de producto cuando el combo llega SIN hijos); el consumo propio
---   es otra cosa y va en otra columna.
+--   es otra cosa y va en su propia tabla.
 --
 -- LO QUE NO HACE
 --   · No reprocesa ninguna venta (regla del 18/09). Ver «regeneración» abajo.
@@ -101,6 +108,15 @@ begin
   select count(*) into n from menu_item
    where account_id = v_acc and product_type = 'combo' and archived_at is null and recipe_item_id is not null;
   if n <> 1 then raise exception 'G1: hay % combos con artículo (se midió 1). Volver a mirar antes de seguir.', n; end if;
+  -- Los 10 menús de Chivuos, y solo menús (no packs).
+  select count(*) into n from menu_item mi join brand b on b.id = mi.brand_id and b.account_id = mi.account_id
+   where mi.account_id = v_acc and b.name = 'Chivuos' and mi.product_type = 'combo'
+     and mi.archived_at is null and mi.name ilike 'MENÚ%PATATAS%BEBIDA%';
+  if n <> 10 then raise exception 'G1: hay % menús «MENÚ … PATATAS … BEBIDA» en Chivuos (se midieron 10).', n; end if;
+  -- Las tres cajas, de la cuenta y packaging (un 'remove' tiene que ser hoja).
+  select count(*) into n from recipe_item where account_id = v_acc and type = 'packaging' and id in (
+    'faeac2ea-2b0f-4c54-9dc5-99881876f522', '44fd1158-f566-4ec2-8c89-c27f4546d035', 'da393c0a-9e3c-4ba8-91d4-db444fd922fc');
+  if n <> 3 then raise exception 'G1: falta alguna de las tres cajas de Chivuos o ya no es packaging (hay %).', n; end if;
 end $g1$;
 
 -- ═══ PARTE 1 · GRUPO DE EQUIVALENCIA ═══════════════════════════════════════
@@ -242,13 +258,30 @@ $function$;
 
 -- ═══ PARTE 2 · CONSUMO PROPIO DEL COMBO ════════════════════════════════════
 
-alter table public.menu_item
-  add column if not exists combo_own_recipe_item_id uuid references public.recipe_item(id);
-comment on column public.menu_item.combo_own_recipe_item_id is
-  'Consumo PROPIO de un combo (28/09): lo que gasta el menú y no es de ningún componente '
-  '(la caja del menú). Se descuenta ADEMÁS de los combo_item, solo cuando el pedido llega '
-  'con combo_item. Puede apuntar directo a un packaging o a una receta. No confundir con '
-  'recipe_item_id, que en un combo es la receta ENTERA para cuando llega sin hijos.';
+create table if not exists public.menu_item_combo_consumo (
+  id              uuid primary key default gen_random_uuid(),
+  account_id      uuid not null references public.accounts(id) on delete cascade,
+  menu_item_id    uuid not null references public.menu_item(id) on delete cascade,
+  recipe_item_id  uuid not null references public.recipe_item(id),
+  quantity        numeric not null check (quantity > 0),
+  efecto          text not null check (efecto in ('add', 'remove')),
+  created_at      timestamptz not null default now(),
+  constraint menu_item_combo_consumo_unico unique (menu_item_id, recipe_item_id)
+);
+comment on table public.menu_item_combo_consumo is
+  'Consumo PROPIO de un combo (28/09). add: lo gasta el menú y no es de ningún componente '
+  '(la caja del menú). remove: el menú lo SUSTITUYE en sus componentes (la caja de la '
+  'hamburguesa, cuando va dentro de la caja del menú); nunca resta más de lo que los '
+  'componentes de esa venta han gastado. Solo se aplica cuando el pedido llega con '
+  'combo_item. quantity en unidad base del artículo. No confundir con menu_item.recipe_item_id, '
+  'que en un combo es la receta ENTERA para cuando llega sin hijos.';
+create index if not exists menu_item_combo_consumo_ficha on public.menu_item_combo_consumo (menu_item_id);
+
+alter table public.menu_item_combo_consumo enable row level security;
+drop policy if exists menu_item_combo_consumo_all on public.menu_item_combo_consumo;
+create policy menu_item_combo_consumo_all on public.menu_item_combo_consumo
+  for all using (public.belongs_to_account(account_id))
+  with check (public.belongs_to_account(account_id));
 
 -- ═══ EL LECTOR: _sale_line_raw_consumption ═════════════════════════════════
 -- Misma firma (uuid) -> CREATE OR REPLACE vale (regla 2: no se añade parámetro).
@@ -287,12 +320,30 @@ begin
     cross join lateral public.explode_recipe_to_raws_en_local(mi.recipe_item_id, 1, v_loc, p_sale_line_id) e
     where c.parent_sale_line_id = p_sale_line_id and c.line_type = 'combo_item';
 
-    -- --- COMBO: consumo PROPIO del menú (28/09) ---
+    -- --- COMBO: consumo PROPIO del menú (28/09) · lo que AÑADE ---
     return query
     select e.raw_item_id, e.qty_base * v_qty
-    from menu_item mi
-    cross join lateral public.explode_recipe_to_raws_en_local(mi.combo_own_recipe_item_id, 1, v_loc, p_sale_line_id) e
-    where mi.id = v_line.menu_item_id and mi.combo_own_recipe_item_id is not null;
+    from menu_item_combo_consumo cc
+    cross join lateral public.explode_recipe_to_raws_en_local(cc.recipe_item_id, cc.quantity, v_loc, p_sale_line_id) e
+    where cc.menu_item_id = v_line.menu_item_id and cc.efecto = 'add';
+
+    -- --- COMBO: consumo PROPIO del menú · lo que SUSTITUYE ---
+    -- Se resta como mucho lo que los hijos de ESTA línea han gastado de ese
+    -- artículo (por unidad de menú). Si el hijo elegido no lo lleva, cero.
+    return query
+    select cc.recipe_item_id,
+           - least(cc.quantity, coalesce(g.gastado, 0)) * v_qty
+    from menu_item_combo_consumo cc
+    cross join lateral (
+      select sum(e.qty_base * coalesce(c.quantity, 1)) as gastado
+        from sale_line c
+        join menu_item mi on mi.id = c.menu_item_id
+        cross join lateral public.explode_recipe_to_raws_en_local(mi.recipe_item_id, 1, v_loc, p_sale_line_id) e
+       where c.parent_sale_line_id = p_sale_line_id and c.line_type = 'combo_item'
+         and e.raw_item_id = cc.recipe_item_id
+    ) g
+    where cc.menu_item_id = v_line.menu_item_id and cc.efecto = 'remove'
+      and coalesce(g.gastado, 0) > 0;
 
     -- modificadores de hijo: add / bundle / replace (+)
     return query
@@ -408,8 +459,9 @@ declare
   v_comp_base   numeric;
   v_comp_mod    numeric;
   v_comp_recipe uuid;
-  v_own_item    uuid;
+  v_own         record;
   v_own_cost    numeric;
+  v_gastado     numeric;
 begin
   select * into v_line from sale_line where id = p_sale_line_id;
   if not found then return null; end if;
@@ -464,16 +516,26 @@ begin
       v_combo_total := v_combo_total + (v_comp_base + v_comp_mod) * coalesce(v_child.quantity, 1);
     end loop;
 
-    -- ── consumo PROPIO del menú (28/09) ──
-    select mi.combo_own_recipe_item_id into v_own_item from menu_item mi where mi.id = v_line.menu_item_id;
-    if v_own_item is not null then
-      select coalesce(ri.computed_cost, ri.fixed_cost) into v_own_cost from recipe_item ri where ri.id = v_own_item;
+    -- ── consumo PROPIO del menú (28/09): la misma regla que el consumo ──
+    for v_own in
+      select cc.recipe_item_id, cc.quantity, cc.efecto
+        from menu_item_combo_consumo cc where cc.menu_item_id = v_line.menu_item_id
+    loop
+      select coalesce(ri.computed_cost, ri.fixed_cost) into v_own_cost from recipe_item ri where ri.id = v_own.recipe_item_id;
       if v_own_cost is null then
         v_incomplete := true;
+      elsif v_own.efecto = 'add' then
+        v_combo_total := v_combo_total + v_own_cost * v_own.quantity;
       else
-        v_combo_total := v_combo_total + v_own_cost;
+        select sum(e.qty_base * coalesce(c.quantity, 1)) into v_gastado
+          from sale_line c
+          join menu_item mi on mi.id = c.menu_item_id
+          cross join lateral public.explode_recipe_to_raws(mi.recipe_item_id, 1) e
+         where c.parent_sale_line_id = p_sale_line_id and c.line_type = 'combo_item'
+           and e.raw_item_id = v_own.recipe_item_id;
+        v_combo_total := v_combo_total - v_own_cost * least(v_own.quantity, coalesce(v_gastado, 0));
       end if;
-    end if;
+    end loop;
 
     if v_incomplete then
       update sale_line set computed_cost = null, cost_computed_at = now() where id = p_sale_line_id;
@@ -564,6 +626,17 @@ begin
     (v_acc, '5b6f84f2-bccd-40d4-b09a-b84d193a9db6', v_m120, 1),
     (v_acc, '5b6f84f2-bccd-40d4-b09a-b84d193a9db6', '545df9a1-1b51-43af-a2ed-59cc88b5696c', 2);
 
+  -- Parte 2: los 10 menús de Chivuos. La caja del menú sustituye a la de la
+  -- hamburguesa y a la de las patatas (Julio, 28/09: «se sustituye solo si es menú»).
+  insert into menu_item_combo_consumo (account_id, menu_item_id, recipe_item_id, quantity, efecto)
+  select v_acc, mi.id, x.item, 1, x.efecto
+    from menu_item mi join brand b on b.id = mi.brand_id and b.account_id = mi.account_id
+   cross join (values ('faeac2ea-2b0f-4c54-9dc5-99881876f522'::uuid, 'add'),
+                      ('44fd1158-f566-4ec2-8c89-c27f4546d035'::uuid, 'remove'),
+                      ('da393c0a-9e3c-4ba8-91d4-db444fd922fc'::uuid, 'remove')) x(item, efecto)
+   where mi.account_id = v_acc and b.name = 'Chivuos' and mi.product_type = 'combo'
+     and mi.archived_at is null and mi.name ilike 'MENÚ%PATATAS%BEBIDA%';
+
   update recipe_item set notes = coalesce(notes || E'\n', '') ||
     '28/09: GRUPO de equivalencia (recipe_item_equivalente). Al vender baja del primer miembro con '
     'existencias en el local. Su recipe_line apunta al miembro 1 y es lo que usan coste y alérgenos.'
@@ -608,6 +681,11 @@ select count(*) as recetas,
   from (select distinct parent_item_id from recipe_line
          where child_item_id in ('49ac031a-d071-43bf-8a47-28cb1a10e1e8', '5b6f84f2-bccd-40d4-b09a-b84d193a9db6')) p;
 -- Se mide ANTES (en la misma sesión, antes del BEGIN) y DESPUÉS, con la misma consulta (regla 31).
+
+-- C4 · los menús de Chivuos: 10 fichas × 3 filas (1 add, 2 remove).
+select efecto, count(*) as filas, count(distinct menu_item_id) as menus
+  from menu_item_combo_consumo group by efecto order by efecto;
+-- Esperado: add 10 / 10 · remove 20 / 10.
 
 rollback;
 -- commit;   -- solo tras leer G0–G1 y C1–C3, y con el ensayo de los cuatro caminos pegado.

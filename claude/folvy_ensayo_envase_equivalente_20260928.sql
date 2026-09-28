@@ -68,12 +68,11 @@ begin
     insert into _ensayo values ('E1b', 'FALLO ' || sqlstate, sqlerrm);
   end;
 
-  -- ── E1c · VENTA de menú de Chivuos con consumo propio ──
-  -- Solo DENTRO del ensayo se le pone la caja al menú más vendido; en la
-  -- migración no va (espera a Julio, P2 del parte).
+  -- ── E1c · VENTA de menú de Chivuos: la caja del menú SUSTITUYE ──
+  -- La migración ya ha puesto las tres filas (add caja menú, remove caja
+  -- burger individual, remove caja genérica). Se regenera la última venta
+  -- cerrada del menú más vendido y se miran sus cajas.
   begin
-    update menu_item set combo_own_recipe_item_id = 'faeac2ea-2b0f-4c54-9dc5-99881876f522'
-     where id = '155f8114-721c-4224-a5a8-b4ca4c571cbe';
     select sl.sale_id, sl.id into v_sale, v_line
       from sale_line sl join sale s on s.id = sl.sale_id
      where s.account_id = v_acc and sl.menu_item_id = '155f8114-721c-4224-a5a8-b4ca4c571cbe'
@@ -83,15 +82,40 @@ begin
     if v_sale is null then
       insert into _ensayo values ('E1c', 'NO ENSAYABLE', 'ninguna venta cerrada del menú con combo_item');
     else
+      insert into _ensayo
+      select 'E1c', 'ANTES · ' || r.name, round(-sm.qty_base, 3)::text
+        from stock_movement sm join recipe_item r on r.id = sm.recipe_item_id
+       where sm.source_type = 'sale' and sm.source_id = v_sale
+         and sm.recipe_item_id in ('faeac2ea-2b0f-4c54-9dc5-99881876f522', '44fd1158-f566-4ec2-8c89-c27f4546d035',
+                                   'da393c0a-9e3c-4ba8-91d4-db444fd922fc');
+      insert into _ensayo values ('E1c', 'ANTES · coste de la línea', (select computed_cost::text from sale_line where id = v_line));
       perform generate_sale_consumption(v_sale);
       insert into _ensayo
-      select 'E1c', r.name, round(-sm.qty_base, 3)::text
+      select 'E1c', 'DESPUÉS · ' || r.name, round(-sm.qty_base, 3)::text
         from stock_movement sm join recipe_item r on r.id = sm.recipe_item_id
-       where sm.source_type = 'sale' and sm.source_id = v_sale and r.type = 'packaging';
-      insert into _ensayo values ('E1c', 'coste de la línea con caja', compute_sale_line_cost(v_line)::text);
+       where sm.source_type = 'sale' and sm.source_id = v_sale
+         and sm.recipe_item_id in ('faeac2ea-2b0f-4c54-9dc5-99881876f522', '44fd1158-f566-4ec2-8c89-c27f4546d035',
+                                   'da393c0a-9e3c-4ba8-91d4-db444fd922fc');
+      insert into _ensayo values ('E1c', 'DESPUÉS · coste de la línea', compute_sale_line_cost(v_line)::text);
     end if;
   exception when others then
     insert into _ensayo values ('E1c', 'FALLO ' || sqlstate, sqlerrm);
+  end;
+
+  -- ── E1d · un PACK de Chivuos no cambia (solo menús) ──
+  begin
+    select sl.sale_id into v_sale
+      from sale_line sl join sale s on s.id = sl.sale_id
+     where s.account_id = v_acc and sl.menu_item_id = '8376db7f-dea9-4764-873e-c1f3cd73b5ab'
+       and s.status = 'closed' order by s.sold_at desc limit 1;
+    if v_sale is not null then
+      select count(*) into v_n from stock_movement where source_id = v_sale and source_type = 'sale';
+      perform generate_sale_consumption(v_sale);
+      insert into _ensayo values ('E1d', 'Pack Single Hero: movimientos antes / después',
+        v_n::text || ' / ' || (select count(*) from stock_movement where source_id = v_sale and source_type = 'sale')::text);
+    end if;
+  exception when others then
+    insert into _ensayo values ('E1d', 'FALLO ' || sqlstate, sqlerrm);
   end;
 
   -- ── E2 · ALBARÁN: confirmar un borrador real ──
@@ -149,7 +173,9 @@ select * from _ensayo order by paso;
 --   E1a · «Salsero Pp 120 Cc con Tapa» con la cantidad de la receta, y NI vaso
 --         NI tapa de 120.
 --   E1b · el mismo número de movimientos antes y después.
---   E1c · «Caja Hamburguesas Menú Chivuo´s» 1, además de las cajas de sus
---         componentes; y un coste de línea no nulo.
+--   E1c · ANTES: caja burger individual 1 y caja genérica 1. DESPUÉS: SOLO
+--         «Caja Hamburguesas Menú Chivuo´s» 1 (las otras dos netean a cero y no
+--         dejan fila). Coste DESPUÉS = ANTES − 0,7992 − genérica + 0,18524.
+--   E1d · el pack, mismos movimientos antes y después.
 --   E2, E3, E4 · sin FALLO. Un NO ENSAYABLE se pega tal cual en el parte y
 --         NO se hace commit sin decidir qué se hace con él.
