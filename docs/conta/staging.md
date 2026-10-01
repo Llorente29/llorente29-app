@@ -120,6 +120,31 @@ Fuera de `public`:
 - **Funciones:** sus 1.558 de `public` incluyen las de PostGIS. Las propias son
   779.
 
+## Semillas del C01
+
+`supabase/seeds/conta/seed_c01_staging.sql`, cargado el 01/10/2026 a las 22:40
+(UTC). Dos cuentas inventadas, una por lado de la prueba de aislamiento:
+
+| | A · Taberna de Prueba Norte | B · Cocina de Prueba Sur |
+|---|---|---|
+| usuario (admin) | `a.admin@prueba.folvy.test` | `b.admin@prueba.folvy.test` |
+| local | Norte Centro | Sur Mercado |
+| proveedores | Hermanos Ruiz (email + teléfono + dirección), Bebidas Sol (teléfono), Panadería Luna (nada) | Carnes Sur (email), Limpiezas Brillo (nada) |
+| factura aprobada | F-2026-0915 · 1.283,15 € | S-118 · 462,00 € |
+| interruptor `conta` | **sí** | no |
+
+Medido después de cargar: 2 cuentas, 2 `auth.users`, 2 `auth.identities`,
+2 `user_profiles`, 2 locales, 5 proveedores, 2 facturas aprobadas (con su
+código puesto por el disparador), 1 interruptor.
+
+La contraseña de los dos usuarios **no está en el repositorio ni viaja en
+claro**: el fichero lleva el marcador `__HASH_CLAVE_PRUEBAS__`, que se sustituye
+por el hash bcrypt calculado en local (el comando va en la cabecera del
+fichero). La clave la tiene Julio aparte.
+
+La semilla se niega a correr si la base tiene alguna cuenta que no sea de
+prueba (o sea, si no es `staging-conta`) o si ya está cargada.
+
 ## Lo que NO se copia, a propósito
 
 - **Datos**: ni una fila de producción ni de Folvy Interno. Solo semillas
