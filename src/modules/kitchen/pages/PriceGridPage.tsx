@@ -967,7 +967,7 @@ export default function PriceGridPage() {
                             )}
                             {c.channelName}
                           </span>
-                          <span className={`block ml-auto max-w-[11rem] normal-case tracking-normal font-medium mt-0.5 leading-snug ${
+                          <span className={`block ml-auto max-w-[14rem] normal-case tracking-normal font-medium mt-0.5 leading-snug ${
                             c.ruta.kind === 'folvy' ? 'text-success'
                               : c.ruta.kind === 'interno' ? 'text-tinta-25'
                               : c.ruta.kind === 'mixto' ? 'text-tinta-70'
