@@ -4,6 +4,10 @@
 -- ----------------------------------------------------------------------------
 -- 01/10/2026. Deuda del parte «Pantalla de precios por canal».
 --
+-- APLICADA el 01/10/2026 a las 10:2x (Madrid) por Julio, a mano en el SQL
+-- Editor, Run 1 y Run 2 tal cual. Comprobado por Julio y repetido por Claude
+-- Code a las 10:29: C1 CHECK con dry_run, C2 = 13, C3 = 0, C4 = 97.
+--
 -- PARA APLICAR A MANO EN EL SQL EDITOR. Sin begin/commit: el editor los
 -- descarta sin avisar (folvy_reglas §3). La atomicidad la da que cada Run es
 -- UN solo bloque `do $$ … $$`: si la guarda o el recuento fallan, el bloque
