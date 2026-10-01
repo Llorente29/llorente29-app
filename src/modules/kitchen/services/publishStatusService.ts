@@ -102,6 +102,9 @@ export async function getBrandPublishStatus(
   const { data: pubs, error } = await sb.from('catalog_publish')
     .select('id, status, note, requested_at')
     .eq('account_id', accountId).eq('brand_id', brandId)
+    // (01/10) Un ensayo no es una publicación. Si la última fila fuera un
+    // dry_run, la carta diría «publicado» sin que nada hubiera salido.
+    .neq('status', 'dry_run')
     .order('requested_at', { ascending: false }).limit(1)
   if (error) throw new Error(`Error leyendo estado de publicación: ${error.message}`)
 
@@ -139,6 +142,7 @@ export async function getBrandPublishHistory(
   const { data: pubs, error } = await sb.from('catalog_publish')
     .select('id, status, note, requested_at')
     .eq('account_id', accountId).eq('brand_id', brandId)
+    .neq('status', 'dry_run')   // los ensayos no son historial de publicaciones
     .order('requested_at', { ascending: false }).limit(limit)
   if (error) throw new Error(`Error leyendo historial de publicación: ${error.message}`)
 
