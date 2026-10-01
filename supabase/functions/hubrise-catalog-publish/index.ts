@@ -341,8 +341,16 @@ Deno.serve(async (req: Request) => {
   );
 
   // ── Crear el trabajo de publicación ───
+  // UN ENSAYO NO ES UNA PUBLICACIÓN (01/10). Hasta hoy el dry_run se apuntaba
+  // como 'pending' y acababa en 'done', igual que una publicación de verdad:
+  // 13 filas de Foodint (19/08–01/10) sin un solo target, y el estado de la
+  // carta lee la ÚLTIMA fila, así que un ensayo podía hacerla decir
+  // «publicado» sin que nada hubiera salido. Ahora el ensayo NACE 'dry_run' y
+  // no cambia de estado nunca, ni aunque falle a medias: lo que distingue un
+  // ensayo no puede depender de que el ensayo llegue al final.
+  const estadoEnsayo = "dry_run";
   const { data: pub, error: pubErr } = await sb.from("catalog_publish")
-    .insert({ account_id: accountId, brand_id: brandId, requested_by: user.id, status: "pending" })
+    .insert({ account_id: accountId, brand_id: brandId, requested_by: user.id, status: dryRun ? estadoEnsayo : "pending" })
     .select("id").single();
   if (pubErr || !pub) return json({ ok: false, error: `no se pudo registrar la publicación: ${pubErr?.message}` }, 500);
   const publishId = pub.id as string;
@@ -766,7 +774,10 @@ Deno.serve(async (req: Request) => {
     if (usesUncat) categories.push({ ref: UNCAT_REF, name: "Sin categoría" });
 
     if (sortedProducts.length === 0 && dealsPayload.length === 0) {
-      await sb.from("catalog_publish").update({ status: "failed", note: "carta vacía (sin productos ni combos publicables)" }).eq("id", publishId);
+      await sb.from("catalog_publish").update({
+        status: dryRun ? estadoEnsayo : "failed",
+        note: `${dryRun ? "ensayo: " : ""}carta vacía (sin productos ni combos publicables)`,
+      }).eq("id", publishId);
       return json({ ok: false, error: "La carta no tiene productos ni combos publicables.", warnings }, 200);
     }
 
@@ -879,8 +890,10 @@ Deno.serve(async (req: Request) => {
       // brand_id, requested_by, requested_at, status, note). Pedirla devolvía 400
       // y el .then(ok, err) se lo tragaba: la fila se quedaba en 'pending' para
       // siempre. Verificado en information_schema el 18/08.
-      await sb.from("catalog_publish").update({ status: "done" })
-        .eq("id", publishId).then(() => {}, () => {});
+      // El estado se queda en 'dry_run'; sólo se apunta qué se ensayó.
+      await sb.from("catalog_publish").update({
+        note: `ensayo sin publicar · ${conns.length} catálogo(s) en alcance · ${sortedProducts.length} producto(s)`,
+      }).eq("id", publishId).then(() => {}, () => {});
       return json({
         ok: true,
         dry_run: true,
@@ -972,7 +985,10 @@ Deno.serve(async (req: Request) => {
     }, 200);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await sb.from("catalog_publish").update({ status: "failed", note: msg.slice(0, 300) }).eq("id", publishId);
+    await sb.from("catalog_publish").update({
+      status: dryRun ? estadoEnsayo : "failed",
+      note: `${dryRun ? "ensayo: " : ""}${msg}`.slice(0, 300),
+    }).eq("id", publishId);
     return json({ ok: false, error: msg, publish_id: publishId }, 500);
   }
 });
