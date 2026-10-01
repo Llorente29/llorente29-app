@@ -217,11 +217,23 @@ Deno.serve(async (req: Request) => {
   // ── Autorización por RLS: leer la marca con el cliente del USUARIO ───
   const { data: brand, error: brErr } = await sbUser
     .from("brand")
-    .select("id, account_id, name, catalog_source, slug")
+    .select("id, account_id, name, catalog_source, slug, ownership_type")
     .eq("id", brandId)
     .maybeSingle();
   if (brErr) return json({ ok: false, error: `acceso a marca: ${brErr.message}` }, 403);
   if (!brand) return json({ ok: false, error: "marca no encontrada o sin acceso" }, 403);
+  // CEDIDAS: EL PRECIO NO SE TOCA, NUNCA (regla de Julio, 01/10). Va por la
+  // MARCA y va PRIMERO, antes que catalog_source: hoy las 18 cedidas (9 de
+  // Foodint y 9 de Folvy Interno, medido el 01/10) son catalog_source='pos' y
+  // ya se paraban abajo, pero eso era una coincidencia de datos, no una regla.
+  // El día que una cedida pase a 'folvy', esta puerta sigue cerrada. Ni
+  // dry_run: no hay nada que ensayar.
+  if ((brand.ownership_type as string) !== "own") {
+    return json({
+      ok: false,
+      error: "Marca cedida: el precio no se cambia desde Folvy. No se ha publicado nada.",
+    }, 200);
+  }
   if ((brand.catalog_source as string) !== "folvy") {
     return json({
       ok: false,
@@ -291,9 +303,12 @@ Deno.serve(async (req: Request) => {
     });
   }
   if (conns.length === 0) {
+    console.warn(`hubrise-catalog-publish: brand=${brandId} sin catalogo (ni brand_hubrise_catalog ni external_brand_map)`);
     return json({
       ok: false,
-      error: "La marca no tiene catálogo HubRise (revisa brand_hubrise_catalog / external_brand_map).",
+      // Lo lee el cliente en la rejilla: sin el nombre de la fontanería. El
+      // detalle técnico va al log.
+      error: "Esta marca no está conectada a ninguna plataforma desde Folvy. No se ha publicado nada.",
     }, 200);
   }
 
@@ -309,13 +324,14 @@ Deno.serve(async (req: Request) => {
     conns.length = 0;
     conns.push(...kept);
     if (conns.length === 0) {
+      console.warn(`hubrise-catalog-publish: brand=${brandId} sin catalogo en ${requestedLocationId} (descartados ${descartadasPorAmbito} de otros locales)`);
       // Nunca publicar "por si acaso" a todos cuando se pidió uno: si el local
       // pedido no tiene catálogo, se dice y no se toca nada.
       return json({
         ok: false,
         scope: "single",
         requested_location_id: requestedLocationId,
-        error: `La marca no tiene catálogo HubRise en el local pedido (se descartaron ${descartadasPorAmbito} catálogo(s) de otros locales). No se ha publicado nada.`,
+        error: "En ese local la marca no está conectada a ninguna plataforma desde Folvy. No se ha publicado nada.",
       }, 200);
     }
   }
