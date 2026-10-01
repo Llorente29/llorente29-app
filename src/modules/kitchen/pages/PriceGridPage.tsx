@@ -50,11 +50,14 @@
 //     sobre la escritura, el texto de la barra y el alcance de publicar, así
 //     que no pueden discrepar.
 //
-//   · SI ESE CANAL LLEGA.  La ruta es POR LOCAL (Uber sale por HubRise en
-//     Alcalá y por Last en Carabanchel) y hasta hoy la pantalla no la miraba:
-//     dejaba teclear el precio de Glovo en Alcalá, que se gestiona en Last, sin
-//     decir que ese número no se publica en ningún sitio. Ahora cada columna lo
-//     dice y la celda que no llega no se edita (channelRouteService).
+//   · SI ESE CANAL LLEGA.  La ruta es POR LOCAL y hasta el 21/08 la pantalla
+//     no la miraba: dejaba teclear precios que no se publicaban en ningún
+//     sitio. Ahora cada columna lo dice en una frase y la celda que no llega
+//     no se edita (channelRouteService). Desde el 01/10: una marca CEDIDA no
+//     se edita nunca, «todos los locales» dice en cuáles llega y en cuáles no,
+//     y si las ventas contradicen la ruta declarada la pantalla lo avisa.
+//     El cliente no ve nunca el nombre de la fontanería: publica Folvy o la
+//     plataforma no está conectada a Folvy.
 //
 //   · PUBLICAR.  Guardar y publicar dejan de ser dos actos que hay que conocer:
 //     al guardar, la pantalla dice qué canales llegan, cuáles no y por qué, y
@@ -83,8 +86,9 @@ import {
   type OperationEntry, type Banda,
 } from '@/modules/kitchen/services/priceGridService'
 import {
-  listChannelRoutes, veredicto, esEditable, llegaAPlataforma, ROUTE_LABEL, ROUTE_NOTA,
-  type RouteRow, type RouteVerdict,
+  listChannelRoutes, listVentasPorRuta, veredicto, esEditable, llegaAPlataforma,
+  fraseDeRuta, candadoDeRuta, motivoDeNoLlegar, derivas, fraseDeDeriva, nombresCortos, enumeraCorta,
+  type RouteRow, type RouteVerdict, type VentasPorRuta,
 } from '@/modules/kitchen/services/channelRouteService'
 import {
   publishBrandCatalog, listPublishLocations, alcanceDePublicacion, enumeraNombres,
@@ -151,6 +155,9 @@ export default function PriceGridPage() {
   const [locationId, setLocationId] = useState<string | null>(null)
   const [cuentaInterna, setCuentaInterna] = useState(false)
   const [rutas, setRutas] = useState<RouteRow[]>([])
+  // Ventas de las propias por (local, canal, vía). null = no se pudieron leer,
+  // y eso se DICE: no saber si hay deriva no es no haberla.
+  const [ventasRuta, setVentasRuta] = useState<VentasPorRuta[] | null>([])
   // Publicar, desde aquí mismo (§4.3): cambiar y publicar dejan de ser dos
   // actos que el usuario tiene que conocer por su cuenta.
   const [trasGuardar, setTrasGuardar] = useState<{ celdas: number; canales: string[] } | null>(null)
@@ -275,7 +282,12 @@ export default function PriceGridPage() {
     // escribir y avisa: perder la pantalla de precios por no poder leer una
     // tabla declarativa sería peor que el problema que resuelve.
     listChannelRoutes(activeAccountId).then(setRutas).catch(() => setRutas([]))
+    listVentasPorRuta(activeAccountId).then(setVentasRuta).catch(() => setVentasRuta(null))
   }, [activeAccountId])
+
+  // CEDIDA = el precio no se toca, nunca (regla de Julio, 01/10). Va por la
+  // MARCA, no por que la tabla de rutas no tenga filas de cedidas.
+  const marcaCedida = brands.find((b) => b.id === brandId)?.ownershipType === 'licensed'
 
   // ── carga de la rejilla ───
   const claveCarga = `${brandId ?? ''}::${locationId ?? ''}::${reloadKey}`
@@ -310,7 +322,8 @@ export default function PriceGridPage() {
   }, [brandId, locationId, reloadKey])
 
   // ── columnas y bloques de carta ───
-  // Cada canal lleva pegado SI LLEGA A ALGÚN SITIO desde este local. Va aquí y
+  // Cada canal lleva pegado SI LLEGA A ALGÚN SITIO desde este local (o desde
+  // cada local, si se mira «todos»). Va aquí y
   // no en la celda para que el encabezado, la celda, la operación en lote y la
   // frase de guardado lean todos el mismo veredicto: si se calculara en cada
   // sitio, podrían discrepar, que es de donde salen estos problemas.
@@ -323,17 +336,41 @@ export default function PriceGridPage() {
       else m.set(c.channelId, { channelId: c.channelId, channelName: c.channelName, channelType: c.channelType, cols: [c] })
     }
     return Array.from(m.values()).map((c) => {
-      const ruta = veredicto(rutas, locationId, c.channelId, c.channelType)
+      const ruta = veredicto({
+        rows: rutas, locationId, locales: locations,
+        channelId: c.channelId, channelType: c.channelType, cedida: marcaCedida,
+      })
       return { ...c, ruta, editable: esEditable(ruta) }
     })
-  }, [grid, rutas, locationId])
+  }, [grid, rutas, locationId, locations, marcaCedida])
 
   /** Los canales de esta pantalla que SÍ llegarían a una plataforma al publicar. */
   const canalesQuePublican = useMemo(
     () => canales.filter((c) => llegaAPlataforma(c.ruta)), [canales])
   /** Los que NO, con su motivo — para poder decirlo, no para esconderlo. */
   const canalesQueNo = useMemo(
-    () => canales.filter((c) => c.ruta.kind === 'last' || c.ruta.kind === 'ninguna'), [canales])
+    () => canales.filter((c) => !llegaAPlataforma(c.ruta) && c.ruta.kind !== 'interno'), [canales])
+
+  // ── LA RUTA NO DEPENDE DE QUE ALGUIEN SE ACUERDE (01/10) ───
+  // Lo declarado contra por dónde han entrado las ventas de las propias. Sólo
+  // canales de reparto de esta rejilla y sólo los locales que se están mirando.
+  // Una cedida no tiene ruta que vigilar: su precio no se toca.
+  const avisosDeriva = useMemo(() => {
+    if (marcaCedida || !ventasRuta) return [] as Array<{ key: string; channelId: string; texto: string }>
+    const hoy = new Date().toISOString().slice(0, 10)
+    const delivery = new Map(canales.filter((c) => c.channelType === 'delivery').map((c) => [c.channelId, c.channelName]))
+    const mirados = new Set(locationId ? [locationId] : locations.map((l) => l.id))
+    const cortos = nombresCortos(locations)
+    return derivas(rutas, ventasRuta, hoy)
+      .filter((d) => delivery.has(d.channelId) && mirados.has(d.locationId))
+      .map((d) => ({
+        key: `${d.locationId}::${d.channelId}`,
+        channelId: d.channelId,
+        texto: fraseDeDeriva(d, delivery.get(d.channelId) ?? '',
+          cortos.get(d.locationId) ?? locations.find((l) => l.id === d.locationId)?.name ?? 'un local'),
+      }))
+  }, [marcaCedida, ventasRuta, canales, locationId, locations, rutas])
+  const canalesConDeriva = useMemo(() => new Set(avisosDeriva.map((a) => a.channelId)), [avisosDeriva])
 
   const todasLasSecciones = useMemo(
     () => (grid ? agruparPorCarta(grid.products, orden) : []), [grid, orden])
@@ -518,6 +555,7 @@ export default function PriceGridPage() {
 
   async function construirPreview() {
     if (!grid || !brandId || pendientes.size === 0) return
+    if (marcaCedida) { setAviso('Marca cedida: el precio no se cambia desde Folvy.'); return }
     setAviso(null); setAsumoPerdida(false)
 
     // El margen NUNCA se recalcula aquí: se le pide al servidor con p_overrides.
@@ -578,6 +616,8 @@ export default function PriceGridPage() {
 
   async function guardar() {
     if (!preview || !activeAccountId || !puedeGuardar) return
+    // Segunda cerradura, por si algo llega aquí sin pasar por la celda.
+    if (marcaCedida) { setAviso('Marca cedida: el precio no se cambia desde Folvy.'); return }
     setSaving(true); setAviso(null)
     try {
       const entries: OperationEntry[] = Array.from(pendientes.values()).map((p) => ({
@@ -629,6 +669,7 @@ export default function PriceGridPage() {
    */
   async function publicarAhora() {
     if (!brandId || publicando) return
+    if (marcaCedida) { setAviso('Marca cedida: el precio no se cambia desde Folvy.'); return }
     // Publicar reemplaza el escaparate VIVO. Si son varios locales, se dice
     // cuáles por su nombre y se pide un sí aparte: no es un permiso que se
     // niegue, es una consecuencia que no se puede descubrir después. Aquí no
@@ -795,6 +836,29 @@ export default function PriceGridPage() {
             </div>
           )}
 
+          {/* (01/10) LA RUTA NO DEPENDE DE QUE ALGUIEN SE ACUERDE. Si las ventas
+              de los últimos días entran por otra vía que la declarada, se dice
+              aquí. No se cambia sola: se avisa para que se corrija. */}
+          {avisosDeriva.length > 0 && (
+            <div className="mt-3 border border-warning/50 bg-warning-bg/40 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-tinta">
+                <AlertTriangle className="w-3.5 h-3.5 text-warning" />
+                {avisosDeriva.length === 1
+                  ? 'Una columna no casa con los pedidos que entran'
+                  : `${avisosDeriva.length} columnas no casan con los pedidos que entran`}
+              </div>
+              <ul className="mt-1.5 space-y-1">
+                {avisosDeriva.map((a) => <li key={a.key} className="text-xs text-text-secondary">{a.texto}</li>)}
+              </ul>
+            </div>
+          )}
+          {ventasRuta === null && !marcaCedida && (
+            <div className="mt-3 border border-linea-fuerte bg-lavado rounded-lg p-3 text-xs text-tinta-70">
+              No se han podido leer los pedidos de los últimos días: hoy esta pantalla no puede comprobar si lo que
+              dice cada columna casa con por dónde entran.
+            </div>
+          )}
+
           {/* panel de operación en lote — AÑADE pendientes, no guarda */}
           <div className="mt-4 bg-card border border-border-default rounded-xl p-3 flex flex-wrap items-end gap-3">
             <Campo label="Categoría">
@@ -869,8 +933,11 @@ export default function PriceGridPage() {
             <div className="mt-3 text-[11px] text-tinta-45">
               Pulsa cualquier precio para cambiarlo. <b>Enter</b> acepta y baja · <b>Tab</b> acepta y va a la derecha ·{' '}
               <b>salir de la celda</b> acepta también · <b>Esc</b> descarta esa edición. Para{' '}
-              <b>volver al precio base</b>, deja el campo vacío. Las columnas con candado no se tocan desde{' '}
-              aquí: ese precio no saldría de Folvy. Nada se escribe hasta pulsar <b>Guardar</b>.
+              <b>volver al precio base</b>, deja el campo vacío.{' '}
+              {marcaCedida
+                ? <>Esta marca es <b>cedida</b>: su precio no se cambia desde Folvy.</>
+                : <>Las columnas con candado no se tocan desde aquí: ese precio no saldría de Folvy.</>}{' '}
+              Nada se escribe hasta pulsar <b>Guardar</b>.
             </div>
           )}
 
@@ -891,19 +958,22 @@ export default function PriceGridPage() {
                     ? canales.map((c) => (
                         // §4.1 — DEBAJO DEL NOMBRE, SI LLEGA. Es el dato que
                         // faltaba: la ruta es por local y hasta hoy no se miraba.
-                        <th key={c.channelId} className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-tinta-45 whitespace-nowrap align-top">
-                          {c.channelName}
-                          <span className={`block normal-case tracking-normal font-medium mt-0.5 ${
+                        // (01/10) UNA frase por columna, en el idioma de quien
+                        // pone precios. Nada de fontanería.
+                        <th key={c.channelId} className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-tinta-45 align-top">
+                          <span className="whitespace-nowrap inline-flex items-center gap-1">
+                            {canalesConDeriva.has(c.channelId) && (
+                              <AlertTriangle className="w-3 h-3 text-warning" aria-label="Las ventas no casan con lo que dice esta columna" />
+                            )}
+                            {c.channelName}
+                          </span>
+                          <span className={`block ml-auto max-w-[14rem] normal-case tracking-normal font-medium mt-0.5 leading-snug ${
                             c.ruta.kind === 'folvy' ? 'text-success'
                               : c.ruta.kind === 'interno' ? 'text-tinta-25'
+                              : c.ruta.kind === 'mixto' ? 'text-tinta-70'
                               : 'text-warning'}`}>
-                            {ROUTE_LABEL[c.ruta.kind]}
+                            {fraseDeRuta(c.ruta)}
                           </span>
-                          {ROUTE_NOTA[c.ruta.kind] && (
-                            <span className="block normal-case tracking-normal font-normal text-tinta-25">
-                              {ROUTE_NOTA[c.ruta.kind]}
-                            </span>
-                          )}
                         </th>))
                     : grid.columns.map((c) => (
                         <th key={c.key} className="text-right px-3 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-tinta-45 whitespace-nowrap">
@@ -962,7 +1032,7 @@ export default function PriceGridPage() {
                                     <div className="tabular-nums text-sm text-tinta-25">{eur(cell.price)}</div>
                                     <div className="text-[10px] text-tinta-45 mt-0.5 flex items-center justify-end gap-1">
                                       <Lock className="w-2.5 h-2.5" />
-                                      {c.ruta.kind === 'last' ? 'en Last' : 'no se publica'}
+                                      {candadoDeRuta(c.ruta)}
                                     </div>
                                   </td>
                                 )
@@ -1117,15 +1187,15 @@ export default function PriceGridPage() {
                   {canalesQuePublican.length > 0 ? (
                     <p>
                       Se publicarán en{' '}
-                      <b className="text-tinta">{canalesQuePublican.map((c) => c.channelName).join(' y ')}</b>.
+                      <b className="text-tinta">{enumeraCorta(canalesQuePublican.map((c) =>
+                        c.ruta.kind === 'mixto' ? `${c.channelName} (sólo en ${enumeraCorta(c.ruta.llegaEn)})` : c.channelName))}</b>.
                     </p>
                   ) : (
                     <p>De aquí <b className="text-tinta">no sale nada a ninguna plataforma</b>.</p>
                   )}
                   {canalesQueNo.map((c) => (
                     <p key={c.channelId}>
-                      <b className="text-tinta">{c.channelName} no</b>:{' '}
-                      {c.ruta.kind === 'last' ? 'se gestiona en Last.' : 'no se publica desde Folvy.'}
+                      <b className="text-tinta">{c.channelName} no</b>: {motivoDeNoLlegar(c.ruta)}.
                     </p>
                   ))}
                   {ultimaOperacion && (
@@ -1139,8 +1209,9 @@ export default function PriceGridPage() {
                     className="px-3 py-2 rounded-lg border border-linea-fuerte text-sm font-semibold">
                     Dejarlo guardado sin publicar
                   </button>
-                  <button onClick={publicarAhora} disabled={publicando || canalesQuePublican.length === 0}
-                    title={canalesQuePublican.length === 0 ? 'Ningún canal de este local publica desde Folvy' : `Publica en ${dondeNombre}`}
+                  <button onClick={publicarAhora} disabled={publicando || marcaCedida || canalesQuePublican.length === 0}
+                    title={marcaCedida ? 'Marca cedida: el precio no se cambia desde Folvy'
+                      : canalesQuePublican.length === 0 ? 'Ninguna plataforma de este sitio está conectada a Folvy' : `Publica en ${dondeNombre}`}
                     className="px-4 py-2 rounded-lg bg-tinta text-white text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5">
                     {publicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
                     {publicando ? 'Publicando…' : 'Publicar ahora'}
