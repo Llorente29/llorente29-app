@@ -4,9 +4,19 @@
 -- ----------------------------------------------------------------------------
 -- 01/10/2026. Deuda del parte «Pantalla de precios por canal».
 --
--- APLICADA el 01/10/2026 a las 10:2x (Madrid) por Julio, a mano en el SQL
--- Editor, Run 1 y Run 2 tal cual. Comprobado por Julio y repetido por Claude
--- Code a las 10:29: C1 CHECK con dry_run, C2 = 13, C3 = 0, C4 = 97.
+-- APLICADA el 01/10/2026 entre las 10:19 y las 10:29 (Madrid) por Julio, a
+-- mano en el SQL Editor, Run 1 y Run 2 tal cual. La hora la da Julio («10:2x»)
+-- y la acotan dos lecturas de la base: a las 10:19 el CHECK seguía siendo el
+-- viejo (tras el ensayo revertido) y a las 10:29 ya admitía dry_run. El minuto
+-- exacto no se puede leer: los logs de la base no guardan ni el ALTER ni los
+-- NOTICE del SQL Editor (buscado en postgres_logs y edge_logs, 08:15–08:31 UTC).
+-- Comprobado por Julio y repetido por Claude Code a las 10:29: C1 CHECK con
+-- dry_run, C2 = 13, C3 = 0, C4 = 97.
+--
+-- DESPUÉS DEL DESPLIEGUE (v54 de hubrise-catalog-publish, 10:33): ensayo de
+-- Meraki Pita lanzado por Julio a las 10:39:23 → status 'dry_run', nota
+-- «ensayo sin publicar · 2 catálogo(s) en alcance · 29 producto(s)», 0
+-- targets. Foodint: 14 ensayos, done 97; done sin catálogo (tabla entera): 0.
 --
 -- PARA APLICAR A MANO EN EL SQL EDITOR. Sin begin/commit: el editor los
 -- descarta sin avisar (folvy_reglas §3). La atomicidad la da que cada Run es
