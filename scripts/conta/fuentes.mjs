@@ -102,20 +102,27 @@ async function descargarBoe(id) {
     http: dia.http, titulo, actualizadoEnFuente: null, texto: dia.http === 200 ? textoBoe(dia.cuerpo) : '', ext: 'txt' }
 }
 
+/** El título es el de la norma buscada: empieza por su número (no una que la cita o la modifica). */
+function tituloBueno(f, titulo) {
+  if (f.tituloEmpiezaPor) return titulo.trim().startsWith(f.tituloEmpiezaPor)
+  if (f.tituloDebeContener) return titulo.includes(f.tituloDebeContener)
+  return titulo.includes(f.debeContener)
+}
+
 async function descargarUna(f) {
   if (f.tipo === 'boe') {
     const probados = []
     if (f.id) {
       const d = await descargarBoe(f.id)
       probados.push(`${f.id}: «${d.titulo.slice(0, 60)}»`)
-      if (d.http === 200 && (d.titulo.includes(f.debeContener) || d.texto.includes(f.debeContener)) && (!f.tituloDebeContener || d.titulo.includes(f.tituloDebeContener))) return d
+      if (d.http === 200 && (d.titulo.includes(f.debeContener) || d.texto.includes(f.debeContener)) && tituloBueno(f, d.titulo)) return d
     }
     if (f.buscar) {
       const b = await buscarEnBoe(f.buscar)
-      for (const id of b.ids.slice(0, 5)) {
+      for (const id of b.ids.slice(0, 10)) {
         const d = await descargarBoe(id)
         probados.push(`${id}: «${d.titulo.slice(0, 60)}»`)
-        if (d.http === 200 && d.titulo.includes(f.tituloDebeContener ?? f.debeContener)) return { ...d, nota: `encontrada buscando «${f.buscar}»` }
+        if (d.http === 200 && tituloBueno(f, d.titulo)) return { ...d, nota: `encontrada buscando «${f.buscar}»` }
       }
       if (b.ids.length === 0) probados.push(`búsqueda «${f.buscar}» sin resultados (HTTP ${b.http}): ${b.muestra}`)
     }

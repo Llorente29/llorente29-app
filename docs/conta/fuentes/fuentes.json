@@ -68,9 +68,9 @@
       "clave": "rd-10-2025",
       "nombre": "Real Decreto 10/2025, CNAE-2025",
       "tipo": "boe",
-      "id": "BOE-A-2025-616",
       "debeContener": "Clasificación Nacional de Actividades Económicas",
-      "tituloDebeContener": "10/2025"
+      "buscar": "\"Real Decreto 10/2025\"",
+      "tituloEmpiezaPor": "Real Decreto 10/2025"
     },
     {
       "clave": "ley-20-1991",
@@ -78,39 +78,40 @@
       "tipo": "boe",
       "debeContener": "Canarias",
       "buscar": "\"Régimen Económico Fiscal de Canarias\"",
-      "tituloDebeContener": "Ley 20/1991"
+      "tituloDebeContener": "Ley 20/1991",
+      "tituloEmpiezaPor": "Ley 20/1991"
     },
     {
       "clave": "ley-8-1991-ipsi",
       "nombre": "Ley 8/1991, Impuesto sobre la Producción, los Servicios y la Importación (Ceuta y Melilla)",
       "tipo": "boe",
-      "buscar": "\"Producción, los Servicios y la Importación\"",
-      "tituloDebeContener": "Ley 8/1991",
-      "debeContener": "Ceuta"
+      "buscar": "\"Ley 8/1991\"",
+      "debeContener": "Ceuta",
+      "tituloEmpiezaPor": "Ley 8/1991"
     },
     {
       "clave": "ley-3-2004",
       "nombre": "Ley 3/2004, de medidas de lucha contra la morosidad en las operaciones comerciales",
       "tipo": "boe",
-      "buscar": "morosidad",
-      "tituloDebeContener": "Ley 3/2004",
-      "debeContener": "morosidad"
+      "buscar": "\"Ley 3/2004\"",
+      "debeContener": "morosidad",
+      "tituloEmpiezaPor": "Ley 3/2004"
     },
     {
       "clave": "ley-7-2012",
       "nombre": "Ley 7/2012, prevención y lucha contra el fraude fiscal (límite de pagos en efectivo)",
       "tipo": "boe",
-      "buscar": "\"lucha contra el fraude\"",
-      "tituloDebeContener": "Ley 7/2012",
-      "debeContener": "efectivo"
+      "buscar": "\"Ley 7/2012\"",
+      "debeContener": "efectivo",
+      "tituloEmpiezaPor": "Ley 7/2012"
     },
     {
       "clave": "rd-1619-2012",
       "nombre": "Real Decreto 1619/2012, Reglamento de facturación",
       "tipo": "boe",
-      "buscar": "\"obligaciones de facturación\"",
-      "tituloDebeContener": "1619/2012",
-      "debeContener": "factura"
+      "buscar": "\"Real Decreto 1619/2012\"",
+      "debeContener": "factura",
+      "tituloEmpiezaPor": "Real Decreto 1619/2012"
     },
     {
       "clave": "orden-eha-451-2008",
@@ -118,7 +119,96 @@
       "tipo": "boe",
       "buscar": "\"número de identificación fiscal\"",
       "tituloDebeContener": "EHA/451/2008",
-      "debeContener": "identificación fiscal"
+      "debeContener": "identificación fiscal",
+      "tituloEmpiezaPor": "Orden EHA/451/2008"
+    },
+    {
+      "clave": "orden-modelo-303",
+      "nombre": "Orden que aprueba el modelo 303",
+      "tipo": "boe",
+      "buscar": "\"modelo 303\"",
+      "tituloDebeContener": "modelo 303",
+      "debeContener": "303"
+    },
+    {
+      "clave": "orden-modelo-390",
+      "nombre": "Orden que aprueba el modelo 390",
+      "tipo": "boe",
+      "buscar": "\"modelo 390\"",
+      "tituloDebeContener": "modelo 390",
+      "debeContener": "390"
+    },
+    {
+      "clave": "orden-modelo-111",
+      "nombre": "Orden que aprueba el modelo 111",
+      "tipo": "boe",
+      "buscar": "\"modelo 111\"",
+      "tituloDebeContener": "modelo 111",
+      "debeContener": "111"
+    },
+    {
+      "clave": "orden-modelo-115",
+      "nombre": "Orden que aprueba el modelo 115",
+      "tipo": "boe",
+      "buscar": "\"modelo 115\"",
+      "tituloDebeContener": "modelo 115",
+      "debeContener": "115"
+    },
+    {
+      "clave": "orden-modelo-130",
+      "nombre": "Orden que aprueba el modelo 130",
+      "tipo": "boe",
+      "buscar": "\"modelo 130\"",
+      "tituloDebeContener": "modelo 130",
+      "debeContener": "130"
+    },
+    {
+      "clave": "orden-modelo-200",
+      "nombre": "Orden que aprueba el modelo 200",
+      "tipo": "boe",
+      "buscar": "\"modelo 200\"",
+      "tituloDebeContener": "modelo 200",
+      "debeContener": "200"
+    },
+    {
+      "clave": "orden-modelo-202",
+      "nombre": "Orden que aprueba el modelo 202",
+      "tipo": "boe",
+      "buscar": "\"modelo 202\"",
+      "tituloDebeContener": "modelo 202",
+      "debeContener": "202"
+    },
+    {
+      "clave": "orden-modelo-347",
+      "nombre": "Orden que aprueba el modelo 347",
+      "tipo": "boe",
+      "buscar": "\"modelo 347\"",
+      "tituloDebeContener": "modelo 347",
+      "debeContener": "347"
+    },
+    {
+      "clave": "orden-modelo-349",
+      "nombre": "Orden que aprueba el modelo 349",
+      "tipo": "boe",
+      "buscar": "\"modelo 349\"",
+      "tituloDebeContener": "modelo 349",
+      "debeContener": "349"
+    },
+    {
+      "clave": "orden-modelo-190",
+      "nombre": "Orden que aprueba el modelo 190",
+      "tipo": "boe",
+      "buscar": "\"modelo 190\"",
+      "tituloDebeContener": "modelo 190",
+      "debeContener": "190"
+    },
+    {
+      "clave": "orden-modelo-180",
+      "nombre": "Orden que aprueba el modelo 180",
+      "tipo": "boe",
+      "buscar": "\"modelo 180\"",
+      "tituloDebeContener": "modelo 180",
+      "debeContener": "180"
     },
     {
       "clave": "istac-iae",
