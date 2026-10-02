@@ -115,15 +115,22 @@ Deno.serve(async (req) => {
 
   const r = await preguntarVies(pais, numero);
   const ahora = new Date().toISOString();
-  const { error: e2 } = await sb
+  // Con RLS, un UPDATE sin permiso NO da error: toca 0 filas. Por eso se pide
+  // la fila de vuelta: si no vuelve, no se ha apuntado nada y hay que decirlo
+  // (regla 8: un éxito que no lo es es peor que un fallo).
+  const { data: escrita, error: e2 } = await sb
     .from("supplier")
     .update({
       tax_id_check_status: r.estado,
       tax_id_checked_at: ahora,
       tax_id_verified_at: r.estado === "valid" ? ahora : null,
     })
-    .eq("id", supplierId);
-  if (e2) return json({ error: `no se pudo apuntar el resultado: ${e2.message}` }, 403);
+    .eq("id", supplierId)
+    .select("id");
+  if (e2) return json({ error: `no se pudo apuntar el resultado: ${e2.message}` }, 500);
+  if (!escrita || escrita.length === 0) {
+    return json({ error: "no tienes permiso para cambiar este proveedor (hace falta ser admin o encargado)", status: r.estado }, 403);
+  }
 
   return json({ status: r.estado, name: r.nombre, address: r.direccion, motivo: r.motivo ?? null });
 });
