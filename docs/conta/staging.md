@@ -231,6 +231,43 @@ rastro, las dos facturas en `aprobada` sin vencimiento ni pago.
 - `auth`, `storage`, `realtime`: los pone Supabase. Solo se copian los buckets
   y las políticas de storage.
 
+## Entrar a mano: funciones, hook y vista previa de Vercel (02/10)
+
+Para que Julio pruebe la ficha él mismo en la vista previa de la rama.
+
+**Edge functions desplegadas en la rama** (los ids son los de producción, pero
+las versiones no: producción no se ha tocado).
+
+| Función | Versión en staging-conta | Producción | Comprobado |
+|---|---|---|---|
+| `check-account-status` | v59 | v56, intacta | desplegada desde el fichero de la rama; leída de vuelta el 02/10: mismo código (`index.ts`, `_shared/cors.ts`, `deno.json`), `verify_jwt = true` |
+| `conta-vies-check` | v1 | no existe todavía | md5 `38c17cb3…` = fichero de la rama |
+
+**Hook de claims** (`custom_access_token_hook`): la función es idéntica en los
+dos lados (md5 `7d1f1daf…`, mismos permisos). Pero en la rama **no está
+activado en la configuración de Auth**, y sin él `check-account-status` no ve
+los claims `folvy.*` y el login se queda en la primera pantalla. Activarlo no
+se hace por SQL ni hay herramienta para ello: se hace en el panel,
+**Authentication → Hooks → Customize Access Token → Postgres →
+`public.custom_access_token_hook`**.
+
+**Usuario para entrar a mano:** se crea en el panel (**Authentication → Users →
+Add user**, con contraseña y «Auto confirm»), nunca en el repositorio. Después
+se le da `user_profiles` admin de la cuenta de prueba A por el workflow de
+aplicar SQL, con sus guardas.
+
+**Vercel:** dos variables de **vista previa limitadas a la rama**
+`conta/c01-ficha-proveedor`, `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`,
+las dos de staging-conta. Las generales de vista previa siguen apuntando a
+producción. Ojo: una variable solo entra en los builds que **empiezan después**
+de crearla. El despliegue de `1ac5dbe` empezó 36 s antes que las variables y,
+por tanto, va contra **producción**: no se usa. Los despliegues desde `62f0bcf`
+van contra staging. Cómo se comprueba sin abrir el JS: la franja de arriba
+dice «base de pruebas staging-conta: los datos son inventados».
+
+Las pruebas e2e no dependen de nada de esto: entran por la API y dejan la
+sesión en el navegador.
+
 ## Cómo se repite
 
 1. Pasos 1 a 4 de arriba, en orden.
