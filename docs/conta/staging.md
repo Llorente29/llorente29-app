@@ -187,6 +187,38 @@ conectar.
 lo hace el workflow: se apunta después, comprobado con consultas, con la
 versión y el nombre del fichero.
 
+### Tandas aplicadas
+
+| Fecha (UTC) | Ejecución | Ficheros | Resultado |
+|---|---|---|---|
+| 02/10 06:07 | [36971337003](https://github.com/Llorente29/llorente29-app/actions/runs/36971337003) (2.º intento; el 1.º falló en la guarda 3 por la contraseña del secreto, sin aplicar nada) | `20261002T0100_c01_ficha_proveedor_estructura.sql` (md5 `331acd7a`), `20261002T0110_c01_ficha_proveedor_datos.sql` (`7828b3e8`), `staging/sql/20261002_borrar_c01_prueba_conector.sql` | los 3 aplicados; «C01 datos OK: 3 contactos principales y 1 propuestas de dirección»; 1 fila de prueba borrada |
+| 02/10 06:12 | [36972413440](https://github.com/Llorente29/llorente29-app/actions/runs/36972413440) | `staging/sql/20261002_ensayo_c01_caminos.sql` | ensayo de 17 caminos, sin dejar nada escrito (abajo) |
+
+Registradas después en el historial, con la hora en que se aplicaron:
+`20261002060717 c01_ficha_proveedor_estructura` y
+`20261002060718 c01_ficha_proveedor_datos` (536 filas en total).
+
+**Ensayo de los caminos del C01** (02/10, como admin de A y de B con su JWT):
+
+| # | Camino | Resultado |
+|---|---|---|
+| 1 | `compliance_docs_due` con un certificado de banco que caduca | `Hermanos Ruiz → pedidos@hermanosruiz.test` (el email sale del contacto principal) |
+| 2 | Qué ve A | 3 proveedores, 2 contactos, 1 propuesta, 1 factura, 12 tipos de gasto; de B, 0 y 0 |
+| 3 | Marcar como pagada | `pagada`, 2026-10-01, transferencia, «Admin Norte» |
+| 4 | Deshacer | vuelve a `aprobada`, sin fecha ni forma de pago |
+| 5 | Cambiar vencimiento | 2026-10-24, «Admin Norte» |
+| 6 | Rastro | `paid`, `unpaid`, `due_date_changed`, los tres con su nombre |
+| 7–9 | A paga, deshace o cambia el vencimiento de una factura de B | rechazado: «No encuentro esa factura.» |
+| 10–11 | A edita o borra un contacto de B | 0 filas |
+| 12–13 | A crea un contacto en B, o uno suyo colgado de un proveedor de B | rechazado por el disparador de misma cuenta |
+| 14 | Escribir el rastro a mano | rechazado: sin permiso de INSERT |
+| 15 | A crea una propuesta en B | rechazado por la RLS |
+| 16 | `refresh_supplier_proposals` sin lecturas automáticas | 0 |
+| 17 | Qué ve B | 2 proveedores, 1 contacto, 0 propuestas, 0 rastro; su contacto, intacto |
+
+Después, medido por el conector: 0 documentos de cumplimiento, 0 filas de
+rastro, las dos facturas en `aprobada` sin vencimiento ni pago.
+
 ## Lo que NO se copia, a propósito
 
 - **Datos**: ni una fila de producción ni de Folvy Interno. Solo semillas
