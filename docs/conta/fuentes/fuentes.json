@@ -87,7 +87,8 @@
       "tipo": "boe",
       "buscar": "\"Ley 8/1991\"",
       "debeContener": "Ceuta",
-      "tituloEmpiezaPor": "Ley 8/1991"
+      "tituloEmpiezaPor": "Ley 8/1991",
+      "id": "BOE-A-1991-7243"
     },
     {
       "clave": "ley-3-2004",
@@ -95,7 +96,8 @@
       "tipo": "boe",
       "buscar": "\"Ley 3/2004\"",
       "debeContener": "morosidad",
-      "tituloEmpiezaPor": "Ley 3/2004"
+      "tituloEmpiezaPor": "Ley 3/2004",
+      "id": "BOE-A-2004-21998"
     },
     {
       "clave": "ley-7-2012",
@@ -103,7 +105,8 @@
       "tipo": "boe",
       "buscar": "\"Ley 7/2012\"",
       "debeContener": "efectivo",
-      "tituloEmpiezaPor": "Ley 7/2012"
+      "tituloEmpiezaPor": "Ley 7/2012",
+      "id": "BOE-A-2012-13416"
     },
     {
       "clave": "rd-1619-2012",
@@ -111,7 +114,8 @@
       "tipo": "boe",
       "buscar": "\"Real Decreto 1619/2012\"",
       "debeContener": "factura",
-      "tituloEmpiezaPor": "Real Decreto 1619/2012"
+      "tituloEmpiezaPor": "Real Decreto 1619/2012",
+      "id": "BOE-A-2012-14696"
     },
     {
       "clave": "orden-eha-451-2008",
@@ -209,6 +213,41 @@
       "buscar": "\"modelo 180\"",
       "tituloDebeContener": "modelo 180",
       "debeContener": "180"
+    },
+    {
+      "clave": "rdl-4-2024",
+      "nombre": "Real Decreto-ley 4/2024 (IVA del aceite de oliva y alimentos, 2024)",
+      "tipo": "boe",
+      "buscar": "\"Real Decreto-ley 4/2024\"",
+      "tituloEmpiezaPor": "Real Decreto-ley 4/2024",
+      "debeContener": "aceite",
+      "id": "BOE-A-2024-13149"
+    },
+    {
+      "clave": "rdl-19-2018",
+      "nombre": "Real Decreto-ley 19/2018, de servicios de pago",
+      "tipo": "boe",
+      "buscar": "\"Real Decreto-ley 19/2018\"",
+      "tituloEmpiezaPor": "Real Decreto-ley 19/2018",
+      "debeContener": "transferencia",
+      "id": "BOE-A-2018-16036"
+    },
+    {
+      "clave": "ley-canarias-4-2012",
+      "nombre": "Ley 4/2012 de Canarias, de medidas administrativas y fiscales (tipos del IGIC)",
+      "tipo": "boe",
+      "buscar": "\"Ley 4/2012, de 25 de junio\"",
+      "tituloEmpiezaPor": "Ley 4/2012, de 25 de junio",
+      "debeContener": "Impuesto General Indirecto Canario"
+    },
+    {
+      "clave": "rd-1065-2007",
+      "nombre": "Real Decreto 1065/2007, Reglamento general de gestión e inspección tributaria",
+      "tipo": "boe",
+      "buscar": "\"Real Decreto 1065/2007\"",
+      "tituloEmpiezaPor": "Real Decreto 1065/2007",
+      "debeContener": "terceras personas",
+      "id": "BOE-A-2007-15984"
     },
     {
       "clave": "istac-iae",
