@@ -145,6 +145,48 @@ fichero). La clave la tiene Julio aparte.
 La semilla se niega a correr si la base tiene alguna cuenta que no sea de
 prueba (o sea, si no es `staging-conta`) o si ya está cargada.
 
+## Cómo se aplica SQL en la rama: el workflow, no el conector
+
+Desde el 02/10/2026 las migraciones y el SQL de staging-conta los aplica
+`.github/workflows/aplicar-staging-conta.yml`. El conector de Supabase pide
+confirmación para cualquier sentencia con `DROP` o `DELETE` y la petición
+caduca a los 60 s: la estructura del C01 no entró dos veces, y ni siquiera un
+`drop table if exists` de una tabla que no existe. Las lecturas por el
+conector siguen sirviendo para comprobar.
+
+**Cómo se usa.** Se escribe en `supabase/staging/aplicar.txt` la lista
+ordenada de ficheros de esta tanda (una ruta por línea; `#` comenta) y se
+empuja a una rama `conta/**`. Funciona desde la propia rama, sin estar en
+`main`. Solo lo dispara un cambio en el manifiesto: tocar un `.sql` o el
+propio workflow no aplica nada. El manifiesto es **la tanda de esa
+ejecución**: para la siguiente se reescribe entero, no se añade debajo.
+
+**Qué hace con cada fichero.** `psql` 17 con `-X -v ON_ERROR_STOP=1 -1 -f`:
+el fichero entero en una transacción, que el primer error revierte. Si uno
+falla, los siguientes no se aplican. El log del job enseña la salida de cada
+fichero (sus `NOTICE`, por ejemplo «C01 datos OK…») y el resumen del job, una
+tabla con fichero, md5 y resultado.
+
+**Qué ficheros acepta.** Solo `.sql` bajo `supabase/migrations/`,
+`supabase/staging/sql/` o `supabase/seeds/conta/`, sin `..` y que existan. Una
+ruta mala aborta la tanda antes de conectar.
+
+**Por qué no puede tocar producción.** Usa un único secreto de base de datos,
+`STAGING_CONTA_DB_URL`, y tres guardas antes de aplicar nada:
+
+1. La URL contiene `oseymswjlzplqoxrfjzi` (staging-conta).
+2. La URL **no** contiene `xzmpnchlguibclvxyynt` (producción).
+3. Ya conectado, en `accounts` **no** están ni Foodint ni Folvy Interno.
+   Producción tiene las dos siempre; staging-conta, ninguna. Esta guarda no se
+   fía de la URL: mira qué base hay al otro lado.
+
+La URL no sale en el log: su usuario, contraseña y host se enmascaran antes de
+conectar.
+
+**El registro en el historial** (`supabase_migrations.schema_migrations`) no
+lo hace el workflow: se apunta después, comprobado con consultas, con la
+versión y el nombre del fichero.
+
 ## Lo que NO se copia, a propósito
 
 - **Datos**: ni una fila de producción ni de Folvy Interno. Solo semillas
