@@ -1,8 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 02/10/2026 · 3.ª tanda: deja a Hermanos Ruiz (cuenta A) como en la maqueta,
-# para las capturas de la ficha. Solo datos inventados de las semillas.
+# 02/10/2026 · 4.ª tanda: acceso de administrador a la cuenta de prueba A para
+# el usuario de Julio, para probar la ficha a mano en la vista previa.
 # (1.ª: estructura y datos del C01 y borrado de c01_prueba_conector.
-#  2.ª: ensayo de los caminos del C01, sin dejar nada escrito.)
-supabase/seeds/conta/seed_c01_capturas.sql
+#  2.ª: ensayo de los caminos del C01, sin dejar nada escrito.
+#  3.ª: Hermanos Ruiz como en la maqueta, para las capturas.)
+supabase/staging/sql/20261002_acceso_julio_cuenta_a.sql
