@@ -12,6 +12,12 @@ import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 import { validarIban } from '@/modules/conta/lib/iban'
 import { validarFormatoVatEu } from '@/modules/conta/lib/vatEu'
 
+/**
+ * Estructura del BIC (ISO 9362): 4 letras de banco, 2 de país, 2 de
+ * localidad y, opcionalmente, 3 de oficina.
+ */
+const BIC = /^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/
+
 export interface ProblemaFicha {
   campo: keyof FichaProveedor
   mensaje: string
@@ -52,6 +58,19 @@ export function validarFicha(f: FichaProveedor, otrosDeLaCuenta: OtroProveedor[]
   if (f.iban) {
     const r = validarIban(f.iban)
     if (!r.ok) errores.push({ campo: 'iban', mensaje: r.motivo })
+    // Comparación con Holded: el BIC es obligatorio para un IBAN de fuera de
+    // España (un pago SEPA a otro país lo pide); con uno español, opcional.
+    else if (!r.normalizado.startsWith('ES') && !f.bic?.trim()) {
+      errores.push({ campo: 'bic', mensaje: 'Este IBAN no es español: hace falta su BIC (el código del banco, de 8 u 11 letras y números).' })
+    }
+  }
+
+  if (f.bic?.trim() && !BIC.test(f.bic.trim().toUpperCase())) {
+    errores.push({ campo: 'bic', mensaje: 'Este BIC no es correcto: tiene 8 u 11 letras y números (por ejemplo, CAIXESBBXXX).' })
+  }
+
+  if (f.earlyPaymentDiscountPct !== null && (f.earlyPaymentDiscountPct < 0 || f.earlyPaymentDiscountPct > 100)) {
+    errores.push({ campo: 'earlyPaymentDiscountPct', mensaje: 'El descuento por pronto pago va de 0 a 100 %.' })
   }
 
   if (f.entityKind === 'self_employed' && f.irpfWithholdingPct === null) {

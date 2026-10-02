@@ -1971,6 +1971,11 @@ export async function quickCreateItemFromLine(
 
 // Alta de proveedor desde la cabecera del albarán. Mejora 1: vuelca TODO lo que
 // el OCR leyó (no solo nombre+NIF) — teléfono/email/dirección/registro sanitario.
+//
+// C01 (02/10/2026): ya no escribe supplier.email/phone/address, que quedan
+// obsoletas. El teléfono y el email van a un contacto PRINCIPAL (una sola
+// fuente de verdad) y la dirección queda como PROPUESTA que la persona
+// confirma en la ficha: nada leído se da por bueno en silencio.
 export interface SupplierContact {
   email?: string | null
   phone?: string | null
@@ -1985,23 +1990,46 @@ export async function quickCreateSupplier(
   contact: SupplierContact | null,
   createdBy: string | null,
   createdByName: string | null,
-): Promise<Supplier> {
+): Promise<Supplier & { aviso: string | null }> {
   requireSupabase()
   const clean = (v: string | null | undefined) => {
     const t = (v ?? '').trim()
     return t === '' ? null : t
   }
-  return await createSupplier({
+  const created = await createSupplier({
     accountId,
     name: name.trim(),
     taxId: clean(taxId),
-    email: clean(contact?.email),
-    phone: clean(contact?.phone),
-    address: clean(contact?.address),
     healthRegistryNo: clean(contact?.healthRegistryNo),
     createdBy,
     createdByName,
   })
+  const phone = clean(contact?.phone)
+  const email = clean(contact?.email)
+  const address = clean(contact?.address)
+  // Lo que falle aquí no deshace el alta: el proveedor ya existe y queda
+  // elegido en la recepción. Pero no se calla (regla 8): vuelve como aviso.
+  try {
+    if (phone || email) {
+      const { error } = await from('supplier_contact').insert({
+        account_id: accountId, supplier_id: created.id, name: created.name, role: 'other',
+        phone, email, is_primary: true,
+        notes: 'Leído de su albarán al darlo de alta. Falta decir su papel.',
+        created_by: createdBy, created_by_name: createdByName,
+      })
+      if (error) throw new Error(error.message)
+    }
+    if (address) {
+      const { error } = await from('supplier_proposal').insert({
+        account_id: accountId, supplier_id: created.id, field: 'fiscal_address',
+        value: { line: address }, source: 'goods_receipt', source_label: 'Leído de su albarán',
+      })
+      if (error) throw new Error(error.message)
+    }
+  } catch (e) {
+    return { ...created, aviso: `Proveedor creado, pero no se pudo guardar su contacto o su dirección (${e instanceof Error ? e.message : String(e)}). Complétalo en su ficha.` }
+  }
+  return { ...created, aviso: null }
 }
 
 // Flip de estrategia de coste (Tramo A): los artículos que cobran su coste de un

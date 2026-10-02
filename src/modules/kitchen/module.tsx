@@ -35,7 +35,15 @@ import OfferRulesPage from '@/modules/kitchen/pages/OfferRulesPage'
 import PlatformOffersPage from '@/modules/kitchen/pages/PlatformOffersPage'
 import KitchenAvailabilityPage from '@/modules/kitchen/pages/KitchenAvailabilityPage'
 import AvailabilityReportsPage from '@/modules/kitchen/pages/AvailabilityReportsPage'
-import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
+// C01 (02/10/2026): la lista y la ficha de proveedor son de contabilidad y no
+// dependen de Cocina. Cocina las monta aquí porque aquí está su entrada de
+// menú, y les aporta sus extensiones (artículos que le compras). Las rutas,
+// la etiqueta y las migas salen de src/config/navegacion.ts.
+import ProveedoresPage from '@/modules/conta/pages/ProveedoresPage'
+import FichaProveedorPage from '@/modules/conta/pages/FichaProveedorPage'
+import { extensionesCocina } from '@/modules/kitchen/proveedores/extensionesCocina'
+import { PROVEEDORES, redireccionesDelModulo } from '@/config/navegacion'
+import RedireccionNavegacion from '@/components/RedireccionNavegacion'
 // REJILLA DE PRECIOS (18/08): todos los precios de una marca por canal, para
 // auditarlos y corregirlos en lote. No publica en plataformas.
 import PriceGridPage from '@/modules/kitchen/pages/PriceGridPage'
@@ -80,7 +88,11 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'buscar',                     element: <KitchenBuscarPage /> },
     { path: 'disponibilidad',    element: <KitchenAvailabilityPage /> },
     { path: 'disponibilidad-informes', element: <AvailabilityReportsPage /> },
-    { path: 'proveedores',       element: <SuppliersPage /> },
+    { path: PROVEEDORES.lista,    element: <ProveedoresPage extensiones={extensionesCocina} /> },
+    { path: PROVEEDORES.ficha,    element: <FichaProveedorPage extensiones={extensionesCocina} /> },
+    { path: PROVEEDORES.apartado, element: <FichaProveedorPage extensiones={extensionesCocina} /> },
+    // Direcciones viejas que siguen funcionando (hoy, ninguna).
+    ...redireccionesDelModulo('kitchen').map((r) => ({ path: r.path, element: <RedireccionNavegacion hasta={r.hasta} /> })),
     { path: 'recetas',           element: <KitchenRecipesPage /> },
     // Cortafuegos de vista: la rejilla no se ha podido abrir en un navegador
     // desde este contenedor (sin sesión). Si revienta al dibujarse, se queda
@@ -114,7 +126,7 @@ export const kitchenModule: ModuleDefinition = {
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
       { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },
-      { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,             path: 'proveedores',      requiredRole: 'manager', requiredPermission: 'show_proveedores' },
+      { id: 'kitchen_suppliers',     label: PROVEEDORES.etiquetaMenu, icon: Truck,          path: PROVEEDORES.lista,  requiredRole: 'manager', requiredPermission: 'show_proveedores' },
       { id: 'kitchen_recipes',       label: 'Platos',              icon: BookOpen,          path: 'recetas',          requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_prices',        label: 'Precios',             icon: Table2,            path: 'precios',          requiredRole: 'manager', requiredPermission: 'show_costes' },
       { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,        path: 'rentabilidad',     requiredRole: 'manager', requiredPermission: 'show_costes' },

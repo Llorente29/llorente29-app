@@ -6,6 +6,7 @@
 // y verla en la lista. Patrón calcado de GoodsReceiptsPage.
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, FileText, Loader2, Trash2, X, ScanLine, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
@@ -83,8 +84,15 @@ export default function SupplierInvoicesPage() {
   const [reloadTick, setReloadTick] = useState(0)
   const [busyId, setBusyId] = useState<string | null>(null)
 
+  // C01: la ficha de proveedor abre aquí con ?escanear=1&proveedor=<id>
+  // («Subir factura») o ?escanear=camara («Foto factura» del móvil): se entra
+  // directo al escaneo y, si la lectura no reconoce al proveedor, se propone el
+  // de la ficha de la que se viene.
+  const [params, setParams] = useSearchParams()
+  const proveedorDeLaFicha = params.get('proveedor')
+
   // Alta manual
-  const [view, setView] = useState<'list' | 'scan' | 'detail'>('list')
+  const [view, setView] = useState<'list' | 'scan' | 'detail'>(params.get('escanear') ? 'scan' : 'list')
   const [detailId, setDetailId] = useState<string | null>(null)
   const [detailLines, setDetailLines] = useState<SupplierInvoiceLine[]>([])
   const [detailHead, setDetailHead] = useState<SupplierInvoice | null>(null)
@@ -316,8 +324,10 @@ export default function SupplierInvoicesPage() {
     return (
       <InvoiceScanPanel
         accountId={activeAccountId}
-        onBack={() => setView('list')}
-        onCreateInvoice={applyOcrPrefill}
+        onBack={() => { setView('list'); if (params.has('escanear')) { params.delete('escanear'); params.delete('proveedor'); setParams(params, { replace: true }) } }}
+        onCreateInvoice={(ocr) => applyOcrPrefill(
+          !ocr.supplierId && proveedorDeLaFicha ? { ...ocr, supplierId: proveedorDeLaFicha, unmatchedSupplier: false } : ocr,
+        )}
       />
     )
   }

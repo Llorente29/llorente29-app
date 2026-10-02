@@ -43,6 +43,24 @@ export interface FichaProveedor {
   healthRegistryNo: string | null
   isActive: boolean
   notes: string | null
+  // Comparación con Holded (respuesta 2 de Julio, punto 5). Ninguno cuenta
+  // para el % de ficha completa.
+  website: string | null
+  tags: string[]
+  /** BIC/SWIFT. Obligatorio si el IBAN no es español. */
+  bic: string | null
+  /** Mandato de domiciliación: solo se enseña si la forma de pago es domiciliación. */
+  sepaMandateRef: string | null
+  sepaMandateDate: string | null   // 'YYYY-MM-DD'
+  currency: string
+  earlyPaymentDiscountPct: number | null
+  // Lo que ya traía la ficha anterior y se conserva.
+  /** Factura con el IVA dentro del importe de línea (ver Supplier.ivaIncluidoEnLinea). */
+  ivaIncluidoEnLinea: boolean
+  taxIdCheckedAt: string | null
+  archivedAt: string | null
+  createdAt: string | null
+  createdByName: string | null
 }
 
 export interface ContactoProveedor {

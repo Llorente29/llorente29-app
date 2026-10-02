@@ -14,6 +14,9 @@ const vacia: FichaProveedor = {
   defaultLocationId: null, paymentMethod: null, paymentTermsDays: null, paymentFixedDays: [],
   iban: null, ibanVerifiedAt: null, bankName: null, ledgerAccountCode: null,
   healthRegistryNo: null, isActive: true, notes: null,
+  website: null, tags: [], bic: null, sepaMandateRef: null, sepaMandateDate: null,
+  currency: 'EUR', earlyPaymentDiscountPct: null,
+  ivaIncluidoEnLinea: false, taxIdCheckedAt: null, archivedAt: null, createdAt: null, createdByName: null,
 }
 const completa: FichaProveedor = {
   ...vacia, legalName: 'Hermanos Ruiz Distribución, S.L.', taxId: 'B87123790', taxIdType: 'nif_es',
@@ -181,5 +184,20 @@ describe('validaciones al guardar (§5.7)', () => {
       'El carácter de control no cuadra: revisa el NIF de la empresa.',
       'Este IBAN no es correcto: revisa los dígitos.',
     ])
+  })
+  // BIC (comparación con Holded, respuesta 2 de Julio). El IBAN alemán es el
+  // ejemplo del registro de IBAN de SWIFT (DE89 3704 0044 0532 0130 00); los BIC
+  // son de bancos reales: DEUTDEFF (Deutsche Bank) y CAIXESBBXXX (CaixaBank).
+  it('un IBAN de fuera de España pide el BIC', () => {
+    const r = validarFicha({ ...completa, iban: 'DE89370400440532013000' }, [])
+    expect(r.errores.map((e) => e.campo)).toEqual(['bic'])
+  })
+  it('con su BIC, el IBAN extranjero pasa', () => {
+    expect(validarFicha({ ...completa, iban: 'DE89370400440532013000', bic: 'DEUTDEFF' }, []).errores).toEqual([])
+  })
+  it('con un IBAN español el BIC es opcional, pero si se escribe tiene que tener forma de BIC', () => {
+    expect(validarFicha({ ...completa, bic: null }, []).errores).toEqual([])
+    expect(validarFicha({ ...completa, bic: 'CAIXESBBXXX' }, []).errores).toEqual([])
+    expect(validarFicha({ ...completa, bic: 'CAIXA' }, []).errores.map((e) => e.campo)).toEqual(['bic'])
   })
 })
