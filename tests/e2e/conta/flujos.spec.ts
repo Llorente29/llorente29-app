@@ -106,7 +106,9 @@ test('crear, rechazar lo malo, confirmar lo leído y completar la ficha al 100 %
     await page.getByLabel('Teléfono').fill(tel)
     await page.getByRole('dialog').getByRole('button', { name: 'Guardar' }).click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
-    await expect(page.getByText(nombre)).toBeVisible()
+    // La confirmación con contenido (regla 8) y el contacto en la lista.
+    await expect(page.getByRole('status').filter({ hasText: `${nombre} añadido como contacto` })).toBeVisible()
+    await expect(page.locator('.cf-contacto-nombre', { hasText: nombre })).toBeVisible()
   }
 
   // Documentos: el certificado del banco.
