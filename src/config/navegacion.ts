@@ -111,3 +111,125 @@ export function resolverRedireccion(hasta: string, params: Record<string, string
     encodeURIComponent(params[nombre] ?? ''),
   )
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Módulo de contabilidad (C00, 02/10/2026)
+//
+// El módulo tiene su menú propio, el de las maquetas del C00
+// (docs/conta/maquetas/c00/). Todas sus entradas están declaradas AQUÍ, también
+// las de pantallas que aún no existen: esas llevan `ruta: null` y NO se pintan
+// (encargo C00 §7, «las entradas de pantallas que aún no existen no se
+// muestran»). Cuando una pantalla llegue, se le pone su ruta y aparece sola.
+//
+// No depende de Cocina para nada: el módulo podrá venderse solo.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Nombre de los iconos de línea fina de la maqueta (src/modules/conta/ui/Icono.tsx). */
+export type IconoConta =
+  | 'inicio' | 'porHacer' | 'documentos' | 'bancos' | 'personas' | 'pagos'
+  | 'facturas' | 'impuestos' | 'negocio' | 'libros' | 'ajustes' | 'folvy'
+
+export const CONTA = {
+  /** basePath del módulo en el Shell. */
+  modulo: 'conta',
+  nombre: 'Contabilidad',
+  /** Interruptor de `feature_flags` que enseña el módulo en la barra de Folvy. */
+  interruptor: 'conta',
+  rutas: {
+    /** Tu empresa (Ajustes). Es la portada del módulo mientras no haya Inicio. */
+    empresa: 'ajustes',
+    /** Un apartado de Tu empresa (en el móvil, una pantalla por apartado). */
+    empresaApartado: 'ajustes/empresa/:apartado',
+    /** Tablas generales: la primera tabla. */
+    tablas: 'ajustes/tablas',
+    /** Una tabla general concreta. */
+    tabla: 'ajustes/tablas/:tabla',
+    /** Alta conversada de una empresa. */
+    alta: 'alta',
+  },
+} as const
+
+export interface EntradaMenuConta {
+  id: string
+  etiqueta: string
+  icono: IconoConta
+  /** Ruta relativa al módulo. `null` = la pantalla aún no existe: no se pinta. */
+  ruta: string | null
+}
+
+/** El menú de la maqueta, en su orden y con sus separaciones (grupos). */
+export const MENU_CONTA: EntradaMenuConta[][] = [
+  [
+    { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: null },
+    { id: 'por-hacer', etiqueta: 'Por hacer', icono: 'porHacer', ruta: null },
+  ],
+  [
+    { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: null },
+    { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
+    // La lista y la ficha de proveedores del C01 viven hoy en Cocina. Se traen
+    // aquí cuando el C01 termine encima del C00 (pendiente en el PR #138).
+    { id: 'terceros', etiqueta: 'Clientes y proveedores', icono: 'personas', ruta: null },
+    { id: 'pagos', etiqueta: 'Pagos y cobros', icono: 'pagos', ruta: null },
+    { id: 'emitidas', etiqueta: 'Facturas que emites', icono: 'facturas', ruta: null },
+  ],
+  [
+    { id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: null },
+    { id: 'negocio', etiqueta: 'Cómo va tu negocio', icono: 'negocio', ruta: null },
+    { id: 'libros', etiqueta: 'Libros', icono: 'libros', ruta: null },
+  ],
+  [
+    { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: CONTA.rutas.empresa },
+  ],
+]
+
+/** La barra inferior del móvil: dos a cada lado del botón central de la IA. */
+export const BARRA_CONTA: { izquierda: EntradaMenuConta[]; derecha: EntradaMenuConta[] } = {
+  izquierda: [
+    { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: null },
+    { id: 'por-hacer', etiqueta: 'Por hacer', icono: 'porHacer', ruta: null },
+  ],
+  derecha: [
+    { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
+    { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: CONTA.rutas.empresa },
+  ],
+}
+
+/** Las pestañas de Ajustes, en su orden. */
+export const PESTANAS_AJUSTES: EntradaMenuConta[] = [
+  { id: 'empresa', etiqueta: 'Tu empresa', icono: 'ajustes', ruta: CONTA.rutas.empresa },
+  { id: 'tablas', etiqueta: 'Tablas generales', icono: 'ajustes', ruta: CONTA.rutas.tablas },
+  // Vuelve con «Personas y asesor» (respuesta 1 del C00, D4).
+  { id: 'personas', etiqueta: 'Personas y asesor', icono: 'personas', ruta: null },
+  { id: 'avisos', etiqueta: 'Avisos', icono: 'porHacer', ruta: null },
+]
+
+/** Solo las entradas que existen: lo que se pinta. */
+export function entradasVisibles(lista: EntradaMenuConta[]): (EntradaMenuConta & { ruta: string })[] {
+  return lista.filter((e): e is EntradaMenuConta & { ruta: string } => e.ruta !== null)
+}
+
+/** Dirección absoluta de una ruta del módulo, con sus parámetros rellenos. */
+export function rutaConta(relativa: string, params: Record<string, string> = {}): string {
+  const rellena = relativa.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, n: string) => encodeURIComponent(params[n] ?? ''))
+  return `/${CONTA.modulo}/${rellena}`.replace(/\/+$/, '')
+}
+
+export const rutaTuEmpresa = (): string => rutaConta(CONTA.rutas.empresa)
+export const rutaApartadoEmpresa = (apartado: string): string => rutaConta(CONTA.rutas.empresaApartado, { apartado })
+export const rutaTablasGenerales = (tabla?: string): string =>
+  tabla ? rutaConta(CONTA.rutas.tabla, { tabla }) : rutaConta(CONTA.rutas.tablas)
+export const rutaAltaEmpresa = (): string => rutaConta(CONTA.rutas.alta)
+
+/**
+ * ¿Qué entrada del menú está activa para esta dirección? La de prefijo más
+ * largo, como el Shell (C01): «ajustes/tablas/impuestos» sigue siendo Ajustes.
+ */
+export function entradaActiva(pathname: string, lista: EntradaMenuConta[]): string | null {
+  const base = `/${CONTA.modulo}`
+  if (!pathname.startsWith(base)) return null
+  const resto = pathname.slice(base.length).replace(/^\/+|\/+$/g, '')
+  const candidatas = entradasVisibles(lista)
+    .filter(e => resto === e.ruta || (e.ruta === '' ? true : resto.startsWith(`${e.ruta}/`)))
+    .sort((a, b) => b.ruta.length - a.ruta.length)
+  return candidatas[0]?.id ?? null
+}
