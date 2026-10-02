@@ -13,7 +13,7 @@ export default function TuEmpresaPage() {
     <>
       <Cabecera antetitulo="Ajustes" titulo="Tu empresa" />
       <PestanasPildora entradas={PESTANAS_AJUSTES} etiqueta="Ajustes" />
-      {cargando ? <TarjetaCargando /> : error ? <ErrorConReintento mensaje={error} reintentar={recargar} /> : !activa ? (
+      {cargando && !activa ? <TarjetaCargando /> : error ? <ErrorConReintento mensaje={error} reintentar={recargar} /> : !activa ? (
         <div className="cx-tarjeta">
           <Vacio titulo="Aún no has dado de alta tu empresa."
             explicacion="Cuéntame a qué te dedicas y la dejo montada: tus impuestos, tu ejercicio y tus tablas. Son tres minutos y no hace falta saber de contabilidad."

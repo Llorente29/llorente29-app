@@ -90,6 +90,9 @@ test('cuenta A: impuestos como en la maqueta, con el IVA reducido abierto', asyn
   await expect(page.getByText(/Comprobado en la fuente oficial el/)).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/tablas-${movil ? 'movil' : 'ordenador'}.png`, fullPage: true })
+  // Y sigue abierta después de la captura: si la página se desmonta (por
+  // ejemplo, al llegar la sesión y recargar la cuenta), la fila se cierra.
+  await expect(page.getByText('472 · Hacienda Pública, IVA soportado')).toBeVisible()
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 })
 

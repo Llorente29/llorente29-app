@@ -40,7 +40,10 @@ export default function TablasGeneralesPage() {
     </>
   )
 
-  if (cargandoEmpresas) return <>{cabecera}<TarjetaCargando /></>
+  // Solo esqueleto si aún no hay empresa: si ya la hay, una recarga de la
+  // cuenta (al llegar la sesión, accountsLoading parpadea) no desmonta la
+  // pantalla ni cierra la fila que la persona tenía abierta.
+  if (cargandoEmpresas && !activa) return <>{cabecera}<TarjetaCargando /></>
   if (errorEmpresas) return <>{cabecera}<ErrorConReintento mensaje={errorEmpresas} reintentar={recargarEmpresas} /></>
   if (!activa) {
     return (
