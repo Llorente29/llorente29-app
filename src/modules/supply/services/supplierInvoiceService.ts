@@ -9,6 +9,7 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import type { OcrDocument, OcrLine } from '@/modules/supply/services/goodsReceiptService'
+import { calcularVencimiento } from '@/modules/conta/lib/cifras'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -479,6 +480,25 @@ export async function runInvoiceMatch(invoiceId: string): Promise<InvoiceMatchSu
   }
 }
 
+/** El vencimiento que toca al aprobar, o null si ya tiene uno o no hay con qué calcularlo. */
+async function vencimientoAlAprobar(invoiceId: string): Promise<string | null> {
+  const { data: inv } = await from('supplier_invoice')
+    .select('invoice_date, due_date, supplier_id, account_id')
+    .eq('id', invoiceId)
+    .maybeSingle()
+  const f = inv as Row | null
+  if (!f || f.due_date || !f.invoice_date || !f.supplier_id) return null
+  const { data: sup } = await from('supplier')
+    .select('payment_terms_days, payment_fixed_days')
+    .eq('id', f.supplier_id as string)
+    .eq('account_id', f.account_id as string)
+    .maybeSingle()
+  const s = sup as Row | null
+  if (!s || s.payment_terms_days === null || s.payment_terms_days === undefined) return null
+  const fijos = Array.isArray(s.payment_fixed_days) ? (s.payment_fixed_days as unknown[]).map(Number) : []
+  return calcularVencimiento(f.invoice_date as string, Number(s.payment_terms_days), fijos)
+}
+
 /** Aprueba la factura (registra quién/cuándo — audit). El eslabón coste es C3.4. */
 export async function approveInvoice(
   invoiceId: string, approvedBy: string | null, approvedByName: string | null,
@@ -491,6 +511,11 @@ export async function approveInvoice(
       ? 'Esta factura requiere aprobación de un administrador.'
       : 'No tienes permiso para aprobar facturas.')
   }
+  // C01 §4.4 — al aprobar, el vencimiento sale de las condiciones del
+  // proveedor (plazo en días y, si los tiene, días fijos de pago). Si la
+  // factura ya trae uno (puesto a mano antes), se respeta. Sin plazo en la
+  // ficha no se inventa: queda sin vencimiento y la ficha lo dice.
+  const venc = await vencimientoAlAprobar(invoiceId)
   const { error } = await from('supplier_invoice')
     .update({
       status: 'aprobada',
@@ -498,6 +523,7 @@ export async function approveInvoice(
       approved_by: approvedBy,
       approved_by_name: approvedByName,
       updated_at: new Date().toISOString(),
+      ...(venc ? { due_date: venc } : {}),
     })
     .eq('id', invoiceId)
   if (error) throw new Error(`No se pudo aprobar: ${error.message}`)

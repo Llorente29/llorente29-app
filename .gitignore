@@ -65,3 +65,7 @@ keystore_b64.txt
 
 android/app/release/
 build-out.txt
+
+# Playwright (C01)
+playwright-report/
+test-results/

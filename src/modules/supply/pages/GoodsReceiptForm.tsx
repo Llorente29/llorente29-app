@@ -1169,6 +1169,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       setSuppliers(s => [...s, created].sort((a, b) => a.name.localeCompare(b.name)))
       setSupplierId(created.id)
       setSupCreate(false)
+      // C01: el alta salió pero el contacto o la dirección no; se dice.
+      if (created.aviso) setError(created.aviso)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo crear el proveedor.')
     } finally {

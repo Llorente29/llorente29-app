@@ -30,6 +30,11 @@ const clink = (): any => (supabase as any).from('compliance_document_link')
 export const DOC_FAMILIES = [
   'food_spec', 'chemical_spec', 'chemical_sds', 'pest_contract', 'pest_spec',
   'water_analysis', 'oil_manager', 'supplier_approval', 'other',
+  // C01 (02/10/2026): el certificado del banco de un proveedor vive en esta
+  // misma tabla (el encargo pide no crear otra de documentos). Se ve en la
+  // lista de APPCC como uno más, para no esconder filas (regla 7), pero NO
+  // cuenta en la cobertura de APPCC: no es un requisito sanitario.
+  'bank_ownership_certificate',
 ] as const
 export type DocFamily = typeof DOC_FAMILIES[number]
 
@@ -43,7 +48,11 @@ export const DOC_FAMILY_LABEL: Record<DocFamily, string> = {
   oil_manager: 'Gestor de aceite usado',
   supplier_approval: 'Homologación de proveedores',
   other: 'Otros',
+  bank_ownership_certificate: 'Certificados de titularidad bancaria',
 }
+
+/** Familias que no son de APPCC y por eso no cuentan en su cobertura. */
+const FUERA_DE_APPCC: ReadonlySet<DocFamily> = new Set<DocFamily>(['bank_ownership_certificate'])
 
 export type DocStatus = 'pending_ocr' | 'pending_review' | 'active' | 'superseded' | 'expired'
 
@@ -327,7 +336,7 @@ const SOON_DAYS = 30
 export function coverageByFamily(docs: ComplianceDocument[]): FamilyCoverage[] {
   const now = Date.now()
   const soon = now + SOON_DAYS * 24 * 3600 * 1000
-  return DOC_FAMILIES.map((family) => {
+  return DOC_FAMILIES.filter((f) => !FUERA_DE_APPCC.has(f)).map((family) => {
     const list = docs.filter((d) => d.doc_family === family && d.status !== 'superseded')
     let expiringSoon = 0
     let expired = 0

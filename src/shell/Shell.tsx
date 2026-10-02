@@ -172,8 +172,15 @@ export default function Shell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleBasePath, pendingLoading, pendingFreshCount])
 
+  // Exacta primero. Si no la hay, la entrada cuya ruta es el PREFIJO más largo
+  // de la URL: «proveedores/<id>/pago» sigue siendo Proveedores (C01, 02/10).
+  // Antes caía a la primera entrada y el menú marcaba «Resumen» dentro de una
+  // ficha. Solo cambia lo que antes no encontraba nada.
   const activeItem = activeModule
     ? (activeModule.sidebar.items.find(i => i.path === itemPathFromUrl)
+       ?? [...activeModule.sidebar.items]
+            .filter(i => i.path !== '' && itemPathFromUrl.startsWith(`${i.path}/`))
+            .sort((a, b) => b.path.length - a.path.length)[0]
        ?? activeModule.sidebar.items[0])
     : undefined
 
