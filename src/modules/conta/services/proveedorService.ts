@@ -354,18 +354,27 @@ export interface TipoGasto {
   oculto: boolean
 }
 
-/** El catálogo global, con la marca de los que esta cuenta ha ocultado. */
+/**
+ * El catálogo global, con la marca de los que esta cuenta ha ocultado.
+ *
+ * Desde el C00 el nombre de cada tipo es el título oficial de su cuenta
+ * («Compras de mercaderías») y lo coloquial de antes («Comida y bebida») está
+ * en `example`. La ficha del C01 no cambia de aspecto hasta la tarea 7: sigue
+ * enseñando lo coloquial, y solo las filas de serie (las propias de cada
+ * empresa llegan con esa tarea).
+ */
 export async function listarTiposGasto(accountId: string): Promise<TipoGasto[]> {
   requireSupabase()
   const [{ data, error }, { data: ocultos, error: e2 }] = await Promise.all([
-    from('expense_category').select('id, code, name, pgc_account_hint').eq('is_active', true).order('sort_order'),
+    from('expense_category').select('id, code, name, example, pgc_account_hint')
+      .eq('is_active', true).eq('is_system', true).order('sort_order'),
     from('expense_category_hidden').select('expense_category_id').eq('account_id', accountId),
   ])
   if (error) throw new Error(`No se pudieron cargar los tipos de gasto: ${error.message}`)
   if (e2) throw new Error(`No se pudieron cargar los tipos de gasto: ${e2.message}`)
   const set = new Set(((ocultos as Fila[] | null) ?? []).map((o) => o.expense_category_id as string))
   return ((data as Fila[] | null) ?? []).map((r) => ({
-    id: r.id as string, code: r.code as string, name: r.name as string,
+    id: r.id as string, code: r.code as string, name: ((r.example as string | null) ?? r.name) as string,
     pgcAccountHint: r.pgc_account_hint as string, oculto: set.has(r.id as string),
   }))
 }

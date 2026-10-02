@@ -219,6 +219,37 @@ Registradas después en el historial, con la hora en que se aplicaron:
 Después, medido por el conector: 0 documentos de cumplimiento, 0 filas de
 rastro, las dos facturas en `aprobada` sin vencimiento ni pago.
 
+### Tandas del C00
+
+| Fecha (UTC) | Ejecución | Ficheros | Resultado |
+|---|---|---|---|
+| 02/10 17:07 | [37038618070](https://github.com/Llorente29/llorente29-app/actions/runs/37038618070) | migraciones `0100`, `0110` y `0120` del C00 y `staging/sql/20261003_ensayo_c00_reglas.sql` | aplicadas; ensayo de 25 casos con A y B sin dejar nada escrito |
+| 02/10 18:33 | [37048236943](https://github.com/Llorente29/llorente29-app/actions/runs/37048236943) | `seeds/conta/seed_c00_catalogo_iva_cocina.sql`, `0130` (md5 en el registro), `ensayo_c00_d1.sql`, `0140` (`a566166e`), `ensayo_c00_d1.sql` otra vez | ver D1 abajo |
+| 02/10 18:4x | la del commit `8a1ffb2` | `seeds/conta/seed_c00_empresas_prueba.sql` | A «Taberna de Prueba Norte» (península; 303, 390, 111, 115, 202; 1 banco y 1 serie) y B «Cocina de Prueba Sur» (Canarias; 111) |
+
+Registradas después en el historial: `20261003000100 c00_catalogos_oficiales`,
+`20261003000110 c00_empresa`, `20261003000120 c00_tablas_generales`,
+`20261003000130 c00_valores_de_serie` y `20261003000140
+c00_vat_rate_lee_de_impuestos` (541 filas en total).
+
+**Lo que dejó la 0130**, medido por el conector: 1.432 epígrafes del IAE (los
+1.438 del ISTAC menos 6 códigos técnicos: `_N`, `_O`, `_T`, `_U`, `_X`, `_Z`),
+1.060 de la CNAE-2025, 275 países, 280 monedas, 14 impuestos, 5 retenciones,
+4 formas de pago, 4 plazos, 4 textos, 9 modelos, los 12 tipos de gasto con su
+referencia y 6 filas del puente.
+
+**D1, con la misma vara a los dos lados** (5 categorías × cada día de 2024 a
+2026 = 5.480 pares; solo lectura):
+
+| | `vat_rate_for` lee de | pares | con tipo | ≠ consulta de la 0140 | ≠ `vat_rate_for` |
+|---|---|---|---|---|---|
+| antes de la 0140 | `vat_rate` | 5.480 | 3.742 | 0 | 0 |
+| después de la 0140 | `tax_rate` (vista `vat_category_rate`) | 5.480 | 3.742 | 0 | 0 |
+
+La vara sabe fallar: en local, con un 5 % puesto a propósito en
+`alimento_basico` dentro de una transacción revertida, da 730 diferencias (los
+días de 2025 y 2026 de esa categoría).
+
 ## Lo que NO se copia, a propósito
 
 - **Datos**: ni una fila de producción ni de Folvy Interno. Solo semillas
