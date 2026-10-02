@@ -1,7 +1,9 @@
 ## [no]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Incluye la corrección de errores publicada en BOE num. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [preambulo]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 La disposición final primera de la Ley 16/2007, de 4 de julio, de reforma y adaptación de la legislación mercantil en materia contable para su armonización internacional con base en la normativa de la Unión Europea, autoriza al Gobierno para que, mediante real decreto, apruebe el Plan General de Contabilidad, así como sus modificaciones y normas complementarias, al objeto de desarrollar los aspectos contenidos en la propia Ley.
 El Plan General de Contabilidad constituye el desarrollo reglamentario en materia de cuentas anuales individuales de la legislación mercantil, que ha sido objeto de una profunda modificación, fruto de la estrategia diseñada por la Unión Europea en materia de información financiera, de las recomendaciones que, a la vista de la citada estrategia, formuló la Comisión de expertos que elaboró el Informe sobre la situación actual de la contabilidad en España y líneas básicas para abordar su reforma, y de la decisión en el marco antes descrito de armonizar nuestra legislación mercantil contable a los nuevos planteamientos europeos.
 Adicionalmente, de acuerdo con la disposición final primera de la Ley 16/2007, el Gobierno debe aprobar un Plan General de Contabilidad de Pequeñas y Medianas Empresas (en adelante, también Plan General de Contabilidad de PYMES) que tenga en consideración las especiales características de estas empresas. Con el objetivo de conseguir una mejor sistemática normativa, se ha considerado conveniente que sea otro real decreto el que apruebe el citado texto, que tienen la posibilidad de aplicar todas aquellas empresas que, no quedando excluidas de su ámbito subjetivo, puedan formular sus cuentas anuales empleando los modelos abreviados de balance, estado de cambios en el patrimonio neto y memoria.
@@ -28,20 +30,24 @@ En su virtud, a propuesta del Ministro de Economía y Hacienda, de acuerdo con e
 DISPONGO:
 
 ## [a1]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Artículo 1. Aprobación del Plan.
 Se aprueba el Plan General de Contabilidad, cuyo texto se inserta a continuación.
 
 ## [a2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Artículo 2. Obligatoriedad del Plan.
 El Plan General de Contabilidad será de aplicación obligatoria para todas las empresas, cualquiera que sea su forma jurídica, individual o societaria, sin perjuicio de aquellas empresas que puedan aplicar el Plan General de Contabilidad de Pequeñas y Medianas Empresas (en adelante, también Plan General de Contabilidad de PYMES).
 No obstante lo dispuesto en el párrafo anterior, no tendrán carácter vinculante los movimientos contables incluidos en la quinta parte del Plan General de Contabilidad y los aspectos relativos a numeración y denominación de cuentas incluidos en la cuarta parte, excepto en aquellos aspectos que contengan criterios de registro o valoración.
 
 ## [daunica]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición adicional única. Ajustes derivados de la aplicación del Plan General de Contabilidad.
 Al inicio del primer ejercicio en el que la empresa deje de aplicar el Plan General de Contabilidad de PYMES, incluidos, en su caso, los criterios de registro y valoración específicos para microempresas, el Plan General de Contabilidad se aplicará de forma retroactiva, debiendo registrarse todos los activos y pasivos cuyo reconocimiento exige el Plan General de Contabilidad. La contrapartida de los ajustes que deban realizarse será una partida de reservas salvo que, de acuerdo con los criterios incluidos en la segunda parte del Plan General de Contabilidad, deban utilizarse otras partidas del patrimonio neto.
 En las primeras cuentas anuales que se formulen aplicando el Plan General de Contabilidad se creará en la memoria un apartado específico con la denominación «Aspectos derivados de la transición al Plan General de Contabilidad», en el que se incluirá una explicación de las principales diferencias entre los criterios contables aplicados en el ejercicio anterior y los actuales, así como la cuantificación del impacto que produce esta variación de criterios contables en el patrimonio neto de la empresa.
 
 ## [dtprimera]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición transitoria primera. Reglas generales para la aplicación del Plan General de Contabilidad en el primer ejercicio que se inicie a partir de 1 de enero de 2008.
 1. Los criterios contenidos en el Plan General de Contabilidad deberán aplicarse de forma retroactiva con las excepciones que se indican en las disposiciones transitorias segunda y tercera de este real decreto.
 A tal efecto, el balance de apertura del ejercicio en que se aplique por primera vez el Plan General de Contabilidad (en adelante, el balance de apertura), se elaborará de acuerdo con las siguientes reglas:
@@ -53,6 +59,7 @@ Si la empresa decide no hacer uso de la opción anterior, valorará todos sus el
 2. La contrapartida de los ajustes que deban realizarse para dar cumplimiento a la primera aplicación será una partida de reservas, con las excepciones previstas en las disposiciones transitorias de este real decreto y salvo que, de acuerdo con los criterios incluidos en la segunda parte del Plan General de Contabilidad, deban utilizarse otras partidas.
 
 ## [dtsegunda]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición transitoria segunda. Excepciones a la regla general de primera aplicación.
 1. La empresa podrá aplicar las siguientes excepciones a la regla general incluida en la disposición transitoria primera de este real decreto:
 a) Las diferencias de conversión acumuladas que surjan en la primera aplicación de la norma de registro y valoración 11.ª 2 «Conversión de las cuentas anuales a la moneda de presentación», podrán contabilizarse directa y definitivamente en las reservas voluntarias.
@@ -68,6 +75,7 @@ c) Estimaciones. En el balance de apertura, salvo evidencia objetiva de que se p
 d) Activos no corrientes y grupos enajenables de elementos, mantenidos para la venta y operaciones interrumpidas. La empresa aplicará los nuevos criterios de forma prospectiva y a partir de la información disponible en la fecha del balance de apertura.
 
 ## [dttercera]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición transitoria tercera. Reglas específicas en relación con las combinaciones de negocios.
 En la elaboración del balance de apertura, se tomarán en consideración las siguientes reglas en relación con las combinaciones de negocios realizadas con anterioridad a la fecha de su elaboración:
 1. Se reconocerán todos los activos adquiridos y pasivos asumidos en esas combinaciones, con las siguientes salvedades:
@@ -90,6 +98,7 @@ f) La amortización acumulada del fondo de comercio se dará de baja contra el p
 5. Los ajustes anteriores realizados en los activos y pasivos reconocidos afectarán a los impuestos diferidos.
 
 ## [dtcuaa]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición transitoria cuarta. Información a incluir en las cuentas anuales del primer ejercicio que se inicie a partir de 1 de enero de 2008.
 En las primeras cuentas anuales que se formulen aplicando el Plan General de Contabilidad, se deberá incorporar la siguiente información:
 1. A los efectos de la obligación establecida en el artículo 35.6 del Código de Comercio, y a los efectos derivados de la aplicación del principio de uniformidad y del requisito de comparabilidad, las cuentas anuales correspondientes al ejercicio que se inicie a partir de la entrada en vigor del Plan General de Contabilidad, se considerarán cuentas anuales iniciales, por lo que no se reflejarán cifras comparativas en las referidas cuentas.
@@ -105,12 +114,14 @@ b) Si como consecuencia de los ajustes a realizar en la fecha de transición se 
 3. Fecha de transición es la fecha del balance de apertura del ejercicio en que se aplique por primera vez el presente Plan General de Contabilidad, salvo que la empresa incluya información comparativa del ejercicio anterior adaptada, en cuyo caso, será la fecha del balance de apertura de dicho ejercicio anterior.
 
 ## [dtquinta]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición transitoria quinta. Desarrollos normativos en materia contable.
 1. Con carácter general, las adaptaciones sectoriales y otras disposiciones de desarrollo en materia contable en vigor a la fecha de publicación de este real decreto seguirán aplicándose en todo aquello que no se oponga a lo dispuesto en el Código de Comercio, Texto Refundido de la Ley de Sociedades Anónimas, aprobado por Real Decreto Legislativo 1564/1989, de 22 de diciembre, Ley 2/1995, de 23 de marzo, de Sociedades de Responsabilidad Limitada, disposiciones específicas y en el presente Plan General de Contabilidad.
 En particular, las entidades que realicen actividades no mercantiles que vengan obligadas por sus disposiciones específicas, a aplicar alguna adaptación del Plan General de Contabilidad, seguirán aplicando sus respectivas normas de adaptación en los términos dispuestos en el párrafo anterior, debiendo aplicar los contenidos del Plan General de Contabilidad o, en su caso, del Plan General de Contabilidad de PYMES en todos aquellos aspectos que han sido modificados. Se deberán respetar en todo caso las particularidades que en relación con la contabilidad de dichas entidades establezcan, en su caso, sus disposiciones específicas.
 2. Hasta que se aprueben las nuevas adaptaciones del Plan General de Contabilidad a las sociedades concesionarias de autopistas, túneles, puentes y otras vías de peaje y a las empresas del sector de abastecimiento y saneamiento de aguas, se mantienen en vigor los criterios relativos a los gastos financieros diferidos de financiación de autopistas, túneles, puentes y otras vías de peaje y los gastos financieros diferidos de financiación de activos del inmovilizado necesarios para llevar a cabo la actividad de abastecimiento y saneamiento de aguas, establecidos en la norma 7.3 de valoración contenida en la quinta parte de las normas de adaptación del Plan General de Contabilidad a estas empresas, aprobadas ambas por Órdenes del Ministerio de Economía y Hacienda de 10 de diciembre de 1998.
 3. Se mantiene expresamente en vigor el régimen transitorio, aprobado por Orden del Ministerio de Economía y Hacienda de 29 de diciembre de 1999, a aplicar contablemente en la exteriorización de los compromisos por pensiones regulada en el Reglamento sobre la Instrumentación de los Compromisos por Pensiones de las Empresas con los Trabajadores y Beneficiarios, aprobado por Real Decreto 1588/1999, de 15 de octubre.
 4. Los criterios por los que se establece la delimitación entre fondos propios y fondos ajenos en las normas sobre los aspectos contables de las sociedades cooperativas, aprobadas por Orden del Ministerio de Economía 3614/2003, de 16 de diciembre, podrán seguir aplicándose hasta 31 de diciembre de 2009.
+### versión · vigente desde 2010-01-01 · BOE-A-2009-21045
 Disposición transitoria quinta. Desarrollos normativos en materia contable.
 1. Con carácter general, las adaptaciones sectoriales y otras disposiciones de desarrollo en materia contable en vigor a la fecha de publicación de este real decreto seguirán aplicándose en todo aquello que no se oponga a lo dispuesto en el Código de Comercio, Texto Refundido de la Ley de Sociedades Anónimas, aprobado por Real Decreto Legislativo 1564/1989, de 22 de diciembre, Ley 2/1995, de 23 de marzo, de Sociedades de Responsabilidad Limitada, disposiciones específicas y en el presente Plan General de Contabilidad.
 En particular, las entidades que realicen actividades no mercantiles que vengan obligadas por sus disposiciones específicas, a aplicar alguna adaptación del Plan General de Contabilidad, seguirán aplicando sus respectivas normas de adaptación en los términos dispuestos en el párrafo anterior, debiendo aplicar los contenidos del Plan General de Contabilidad o, en su caso, del Plan General de Contabilidad de PYMES en todos aquellos aspectos que han sido modificados. Se deberán respetar en todo caso las particularidades que en relación con la contabilidad de dichas entidades establezcan, en su caso, sus disposiciones específicas.
@@ -120,6 +131,7 @@ En particular, las entidades que realicen actividades no mercantiles que vengan 
 Se modifica el apartado 4 por el art. único del Real Decreto 2003/2009, de 23 de diciembre. Ref. BOE-A-2009-21045.
 
 ## [dtsexta]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición transitoria sexta. Empresas que se hayan incluido en cuentas anuales consolidadas de acuerdo con las normas internacionales de información financiera adoptadas en la Unión Europea.
 Las empresas cuyos elementos patrimoniales se hayan integrado, previamente a la primera aplicación del presente Plan General de Contabilidad, en unas cuentas anuales consolidadas en las que se hayan aplicado las normas internacionales de información financiera adoptadas por los Reglamentos de la Comisión Europea, podrán valorar los elementos patrimoniales de sus cuentas anuales individuales en el primer ejercicio en que resulte de aplicación el Plan General de Contabilidad, de acuerdo con los importes por los que se incluyan en las cuentas anuales consolidadas, excluidos los ajustes y eliminaciones inherentes a la consolidación y los efectos de la combinación de negocios derivados de la adquisición, siempre y cuando:
 1. Los criterios valorativos aplicados sean equivalentes a los establecidos en el presente Plan General de Contabilidad y en las disposiciones de este real decreto.
@@ -127,10 +139,12 @@ Las empresas cuyos elementos patrimoniales se hayan integrado, previamente a la 
 3. Esta opción se aplique de forma uniforme para todos los elementos patrimoniales de la empresa.
 
 ## [dtseptima]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición transitoria séptima. Referencias a las Normas para la Formulación de Cuentas Anuales Consolidadas en el Plan General de Contabilidad.
 Las remisiones contenidas en el Plan General de Contabilidad a las Normas para la Formulación de Cuentas Anuales Consolidadas, supondrán la aplicación de los criterios contenidos en el Real Decreto 1815/1991, de 20 de diciembre, por el que se aprueban las Normas para la Formulación de Cuentas Anuales Consolidadas, hasta el momento en que éste se modifique.
 
 ## [dt]
+### versión · vigente desde 2024-12-22 · BOE-A-2024-26694
 Disposición transitoria octava. Excepción temporal obligatoria al reconocimiento e información en la memoria de los activos y pasivos por impuestos diferidos derivados de la implementación de la ley por la que se establece un Impuesto Complementario y demás normas nacionales aprobadas para garantizar un nivel mínimo global de imposición para los grupos multinacionales o los grupos nacionales de gran magnitud.
 Como excepción a los requisitos previstos en el Plan General de Contabilidad, la entidad no reconocerá los activos y pasivos por impuestos diferidos derivados de la implementación de la ley por la que se establece un Impuesto Complementario y demás normas nacionales aprobadas para garantizar un nivel mínimo global de imposición para los grupos multinacionales o los grupos nacionales de gran magnitud, ni incluirá en la memoria de las cuentas anuales información al respecto.
 No obstante, la entidad deberá suministrar la siguiente información:
@@ -141,43 +155,53 @@ En la medida en que la entidad no conozca o no pueda estimar razonablemente dich
 Se añade por la disposición final 10 de la Ley 7/2024, de 20 de diciembre. Ref. BOE-A-2024-26694#df-10
 
 ## [ddunica]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición derogatoria única. Derogación normativa.
 Se deroga el Real Decreto 1643/1990, de 20 de diciembre, por el que se aprueba el Plan General de Contabilidad y las demás normas de igual o inferior rango que se opongan a lo establecido en el presente real decreto.
 
 ## [dfprimera]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición final primera. Habilitación para la aprobación de adaptaciones sectoriales.
 El Ministro de Economía y Hacienda, a propuesta del Instituto de Contabilidad y Auditoría de Cuentas, aprobará mediante orden ministerial las adaptaciones sectoriales del Plan General de Contabilidad. Estas adaptaciones sectoriales se elaborarán tomando en consideración las características y naturaleza de las actividades del sector concreto de que se trate, adecuándose al mismo tanto las normas de registro y valoración, como la estructura, nomenclatura y terminología de las cuentas anuales.
 
 ## [dfsegunda]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición final segunda. Habilitación para la aprobación de adaptaciones por razón de sujeto.
 El Ministro de Economía y Hacienda, a propuesta del Instituto de Contabilidad y Auditoría de Cuentas y mediante orden ministerial, podrá adaptar las normas de registro y valoración, las normas de elaboración y la estructura, nomenclatura y terminología de las cuentas anuales a las condiciones concretas del sujeto contable.
 
 ## [dftercera]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición final tercera. Habilitación para la aprobación de normas de desarrollo del Plan General de Contabilidad.
 El Instituto de Contabilidad y Auditoría de Cuentas podrá aprobar, mediante resolución, normas de obligado cumplimiento que desarrollen el Plan General de Contabilidad y sus normas complementarias, en particular, en relación con las normas de registro y valoración y las normas de elaboración de las cuentas anuales. Estas normas deberán ajustarse al procedimiento de elaboración regulado en el artículo 24.1 de la Ley 50/1997, de 27 de noviembre, del Gobierno.
 
 ## [dfcuaa]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición final cuarta. Plazo de aprobación de determinadas adaptaciones del Plan General de Contabilidad.
 En el plazo de un año a contar desde la entrada en vigor del Plan General de Contabilidad, el Ministro de Economía y Hacienda aprobará las adaptaciones sectoriales del Plan General de Contabilidad a las sociedades concesionarias de autopistas, túneles, puentes y otras vías de peaje y a las empresas del sector de abastecimiento y saneamiento de aguas.
 
 ## [dfquinta]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición final quinta. Título competencial.
 El presente real decreto tiene el carácter de desarrollo de la legislación mercantil, de acuerdo con lo dispuesto en el artículo 149.1.6.ª de la Constitución.
 
 ## [dfsexta]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Disposición final sexta. Entrada en vigor.
 La presente norma entrará en vigor el día 1 de enero de 2008 y será de aplicación en los términos previstos en el presente real decreto, para los ejercicios que se inicien a partir de dicha fecha.
 
 ## [firma]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Dado en Madrid, el 16 de noviembre de 2007.
 JUAN CARLOS R.
 El Vicepresidente Segundo del Gobierno y Ministro de Economía y Hacienda,
 PEDRO SOLBES MIRA
 
 ## [plan]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 PLAN GENERAL DE CONTABILIDAD
 
 ## [introduccion]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 INTRODUCCIÓN
 I
 1. Con la aprobación del Plan General de Contabilidad por el Decreto 530/1973, de 22 de febrero, España se incorporó a las tendencias modernas sobre normalización contable.
@@ -313,10 +337,12 @@ IV
 Por otro lado, la experiencia de los últimos años ha revelado el carácter dinámico del modelo contable propuesto por las Instituciones comunitarias. A pesar de haberse producido en la Unión Europea una aprobación completa de los pronunciamientos emitidos por el IASB, el objetivo de convergencia que a su vez se ha fijado este organismo con las normas aprobadas por el Financial Accounting Standards Board (FASB) americano, es previsible que motive futuras modificaciones en los Reglamentos comunitarios. Ante este panorama, y sin perjuicio de la posible conveniencia de realizar en el futuro modificaciones del Plan General de Contabilidad, deberá valorarse que el conocimiento de la norma es un elemento imprescindible para lograr un alto nivel de cumplimiento, lo que hace aconsejable un cierto nivel de estabilidad. En consecuencia, en aras de proteger la seguridad jurídica que debe presidir toda actividad normalizadora, la probable revisión en el futuro del Plan General de Contabilidad y sus disposiciones de desarrollo sólo deberían obedecer a cambios sustanciales a nivel internacional, que a su vez fuesen el inevitable desencadenante de modificaciones en el Marco Conceptual, las normas de registro y valoración o las normas de elaboración de las cuentas anuales.
 
 ## [primerapae]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 PRIMERA PARTE
 MARCO CONCEPTUAL DE LA CONTABILIDAD
 
 ## [A1]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 1.º Cuentas anuales. Imagen fiel
 Las cuentas anuales de una empresa comprenden el balance, la cuenta de pérdidas y ganancias, el estado de cambios en el patrimonio neto, el estado de flujos de efectivo y la memoria. Estos documentos forman una unidad. No obstante, el estado de flujos de efectivo no será obligatorio para las empresas que puedan formular balance, estado de cambios en el patrimonio neto y memoria abreviados.
 Las cuentas anuales deben redactarse con claridad, de forma que la información suministrada sea comprensible y útil para los usuarios al tomar sus decisiones económicas, debiendo mostrar la imagen fiel del patrimonio, de la situación financiera y de los resultados de la empresa, de conformidad con las disposiciones legales.
@@ -324,6 +350,7 @@ La aplicación sistemática y regular de los requisitos, principios y criterios 
 Cuando se considere que el cumplimiento de los requisitos, principios y criterios contables incluidos en este Plan General de Contabilidad no sea suficiente para mostrar la mencionada imagen fiel, se suministrarán en la memoria las informaciones complementarias precisas para alcanzar este objetivo.
 En aquellos casos excepcionales en los que dicho cumplimiento fuera incompatible con la imagen fiel que deben proporcionar las cuentas anuales, se considerará improcedente dicha aplicación. En tales casos, en la memoria se motivará suficientemente esta circunstancia y se explicará su influencia sobre el patrimonio, la situación financiera y los resultados de la empresa.
 El sujeto contable que informa como persona jurídica individual, en el marco de este Plan General de Contabilidad, lo hará con independencia del grupo de empresas al que pueda pertenecer, sin perjuicio de las normas particulares recogidas en la segunda parte de este Plan y de los desgloses informativos que deban incorporarse en las cuentas anuales.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 1.º Cuentas anuales. Imagen fiel
 Las cuentas anuales de una empresa comprenden el balance, la cuenta de pérdidas y ganancias, el estado de cambios en el patrimonio neto, el estado de flujos de efectivo y la memoria. Estos documentos forman una unidad. No obstante, el estado de cambios en el patrimonio neto y el estado de flujos de efectivo no serán obligatorios para las empresas que puedan formular balance y memoria abreviados.
 Las cuentas anuales deben redactarse con claridad, de forma que la información suministrada sea comprensible y útil para los usuarios al tomar sus decisiones económicas, debiendo mostrar la imagen fiel del patrimonio, de la situación financiera y de los resultados de la empresa, de conformidad con las disposiciones legales.
@@ -335,6 +362,7 @@ Se modifica el párrafo primero por el art. 1.1 del Real Decreto 602/2016, de 2 
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [A2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 2.º Requisitos de la información a incluir en las cuentas anuales
 La información incluida en las cuentas anuales debe ser relevante y fiable.
 La información es relevante cuando es útil para la toma de decisiones económicas, es decir, cuando ayuda a evaluar sucesos pasados, presentes o futuros, o bien a confirmar o corregir evaluaciones realizadas anteriormente. En particular, para cumplir con este requisito, las cuentas anuales deben mostrar adecuadamente los riesgos a los que se enfrenta la empresa.
@@ -343,6 +371,7 @@ Una cualidad derivada de la fiabilidad es la integridad, que se alcanza cuando l
 Adicionalmente, la información financiera debe cumplir con las cualidades de comparabilidad y claridad. La comparabilidad, que debe extenderse tanto a las cuentas anuales de una empresa en el tiempo como a las de diferentes empresas en el mismo momento y para el mismo periodo de tiempo, debe permitir contrastar la situación y rentabilidad de las empresas, e implica un tratamiento similar para las transacciones y demás sucesos económicos que se producen en circunstancias parecidas. Por su parte, la claridad implica que, sobre la base de un razonable conocimiento de las actividades económicas, la contabilidad y las finanzas empresariales, los usuarios de las cuentas anuales, mediante un examen diligente de la información suministrada, puedan formarse juicios que les faciliten la toma de decisiones.
 
 ## [A3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 3.º Principios contables
 La contabilidad de la empresa y, en especial, el registro y la valoración de los elementos de las cuentas anuales, se desarrollarán aplicando obligatoriamente los principios contables que se indican a continuación:
 1. Empresa en funcionamiento. Se considerará, salvo prueba en contrario, que la gestión de la empresa continuará en un futuro previsible, por lo que la aplicación de los principios y criterios contables no tiene el propósito de determinar el valor del patrimonio neto a efectos de su transmisión global o parcial, ni el importe resultante en caso de liquidación.
@@ -357,6 +386,7 @@ Deberán tenerse en cuenta las amortizaciones y correcciones de valor por deteri
 En los casos de conflicto entre principios contables, deberá prevalecer el que mejor conduzca a que las cuentas anuales expresen la imagen fiel del patrimonio, de la situación financiera y de los resultados de la empresa.
 
 ## [A4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 4.º Elementos de las cuentas anuales
 Los elementos que, cuando cumplan los criterios de reconocimiento que se establecen posteriormente, se registran en el balance, son:
 1. Activos: bienes, derechos y otros recursos controlados económicamente por la empresa, resultantes de sucesos pasados, de los que se espera que la empresa obtenga beneficios o rendimientos económicos en el futuro.
@@ -368,6 +398,7 @@ Los elementos que, cuando cumplan los criterios de reconocimiento que se estable
 Los ingresos y gastos del ejercicio se imputarán a la cuenta de pérdidas y ganancias y formarán parte del resultado, excepto cuando proceda su imputación directa al patrimonio neto, en cuyo caso se presentarán en el estado de cambios en el patrimonio neto, de acuerdo con lo previsto en la segunda parte de este Plan General de Contabilidad o en una norma que lo desarrolle.
 
 ## [A5]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 5.º Criterios de registro o reconocimiento contable de los elementos de las cuentas anuales
 El registro o reconocimiento contable es el proceso por el que se incorporan al balance, la cuenta de pérdidas y ganancias o el estado de cambios en el patrimonio neto, los diferentes elementos de las cuentas anuales, de acuerdo con lo dispuesto en las normas de registro relativas a cada uno de ellos, incluidas en la segunda parte de este Plan General de Contabilidad.
 El registro de los elementos procederá cuando, cumpliéndose la definición de los mismos incluida en el apartado anterior, se cumplan los criterios de probabilidad en la obtención o cesión de recursos que incorporen beneficios o rendimientos económicos y su valor pueda determinarse con un adecuado grado de fiabilidad. Cuando el valor debe estimarse, el uso de estimaciones razonables no menoscaba su fiabilidad. En particular:
@@ -378,6 +409,7 @@ El registro de los elementos procederá cuando, cumpliéndose la definición de 
 Se registrarán en el periodo a que se refieren las cuentas anuales, los ingresos y gastos devengados en éste, estableciéndose en los casos en que sea pertinente, una correlación entre ambos, que en ningún caso puede llevar al registro de activos o pasivos que no satisfagan la definición de éstos.
 
 ## [A6]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 6.º Criterios de valoración
 La valoración es el proceso por el que se asigna un valor monetario a cada uno de los elementos integrantes de las cuentas anuales, de acuerdo con lo dispuesto en las normas de valoración relativas a cada uno de ellos, incluidas en la segunda parte de este Plan General de Contabilidad.
 A tal efecto, se tendrán en cuenta los siguientes criterios valorativos y definiciones relacionadas:
@@ -416,6 +448,7 @@ El valor contable o en libros es el importe neto por el que un activo o un pasiv
 El valor residual de un activo es el importe que la empresa estima que podría obtener en el momento actual por su venta u otra forma de disposición, una vez deducidos los costes de venta, tomando en consideración que el activo hubiese alcanzado la antigüedad y demás condiciones que se espera que tenga al final de su vida útil.
 La vida útil es el periodo durante el cual la empresa espera utilizar el activo amortizable o el número de unidades de producción que espera obtener del mismo. En particular, en el caso de activos sometidos a reversión, su vida útil es el periodo concesional cuando éste sea inferior a la vida económica del activo.
 La vida económica es el periodo durante el cual se espera que el activo sea utilizable por parte de uno o más usuarios o el número de unidades de producción que se espera obtener del activo por parte de uno o más usuarios.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 6.º Criterios de valoración
 La valoración es el proceso por el que se asigna un valor monetario a cada uno de los elementos integrantes de las cuentas anuales, de acuerdo con lo dispuesto en las normas de valoración relativas a cada uno de ellos, incluidas en la segunda parte de este Plan General de Contabilidad.
 A tal efecto, se tendrán en cuenta los siguientes criterios valorativos y definiciones relacionadas:
@@ -474,6 +507,7 @@ Se modifica el apartado 2 por el art. 1.1 del Real Decreto 1/2021, de 12 de ener
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [A7]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 7.º Principios y normas de contabilidad generalmente aceptados
 Se considerarán principios y normas de contabilidad generalmente aceptados los establecidos en:
 a) El Código de Comercio y la restante legislación mercantil.
@@ -482,15 +516,18 @@ c) Las normas de desarrollo que, en materia contable, establezca en su caso el I
 d) la demás legislación española que sea específicamente aplicable.
 
 ## [segundapae]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 SEGUNDA PARTE
 NORMAS DE REGISTRO Y VALORACIÓN
 
 ## [A1-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 1.ª Desarrollo del Marco Conceptual de la Contabilidad
 1. Las normas de registro y valoración desarrollan los principios contables y otras disposiciones contenidas en la primera parte de este texto, relativa al Marco Conceptual de la Contabilidad. Incluyen criterios y reglas aplicables a distintas transacciones o hechos económicos, así como también a diversos elementos patrimoniales.
 2. Las normas de registro y valoración que se formulan seguidamente son de aplicación obligatoria.
 
 ## [A2-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 2.ª Inmovilizado material
 1. Valoración inicial
 Los bienes comprendidos en el inmovilizado material se valorarán por su coste, ya sea éste el precio de adquisición o el coste de producción.
@@ -532,6 +569,7 @@ La diferencia entre el importe que, en su caso, se obtenga de un elemento del in
 Los créditos por venta de inmovilizado se valorarán de acuerdo con lo dispuesto en la norma relativa a instrumentos financieros.
 
 ## [A3-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 3.ª Normas particulares sobre inmovilizado material
 En particular se aplicarán las normas que a continuación se expresan con respecto a los bienes que en cada caso se indican:
 a) Solares sin edificar. Se incluirán en su precio de adquisición los gastos de acondicionamiento, como cierres, movimiento de tierras, obras de saneamiento y drenaje, los de derribo de construcciones cuando sea necesario para poder efectuar obras de nueva planta, los gastos de inspección y levantamiento de planos cuando se efectúen con carácter previo a su adquisición, así como, en su caso, la estimación inicial del valor actual de las obligaciones presentes derivadas de los costes de rehabilitación del solar.
@@ -549,10 +587,12 @@ Cuando se realice la gran reparación, su coste se reconocerá en el valor conta
 h) En los acuerdos que, de conformidad con la norma relativa a arrendamientos y otras operaciones de naturaleza similar, deban calificarse como arrendamientos operativos, las inversiones realizadas por el arrendatario que no sean separables del activo arrendado o cedido en uso, se contabilizarán como inmovilizados materiales cuando cumplan la definición de activo. La amortización de estas inversiones se realizará en función de su vida útil que será la duración del contrato de arrendamiento o cesión –incluido el periodo de renovación cuando existan evidencias que soporten que la misma se va a producir–, cuando ésta sea inferior a la vida económica del activo.
 
 ## [A4-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 4.ª Inversiones inmobiliarias
 Los criterios contenidos en las normas anteriores, relativas al inmovilizado material, se aplicarán a las inversiones inmobiliarias.
 
 ## [A5-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 5.ª Inmovilizado intangible
 Los criterios contenidos en las normas relativas al inmovilizado material, se aplicarán a los elementos del inmovilizado intangible, sin perjuicio de lo dispuesto a continuación, de lo previsto en las normas particulares sobre el inmovilizado intangible, así como de lo establecido para el fondo de comercio en la norma relativa a combinaciones de negocios.
 1. Reconocimiento
@@ -564,6 +604,7 @@ En ningún caso se reconocerán como inmovilizados intangibles los gastos ocasio
 2. Valoración posterior
 La empresa apreciará si la vida útil de un inmovilizado intangible es definida o indefinida. Un inmovilizado intangible tendrá una vida útil indefinida cuando, sobre la base de un análisis de todos los factores relevantes, no haya un límite previsible del periodo a lo largo del cual se espera que el activo genere entradas de flujos netos de efectivo para la empresa.
 Un elemento de inmovilizado intangible con una vida útil indefinida no se amortizará, aunque deberá analizarse su eventual deterioro siempre que existan indicios del mismo y al menos anualmente. La vida útil de un inmovilizado intangible que no esté siendo amortizado se revisará cada ejercicio para determinar si existen hechos y circunstancias que permitan seguir manteniendo una vida útil indefinida para ese activo. En caso contrario, se cambiará la vida útil de indefinida a definida, procediéndose según lo dispuesto en relación con los cambios en la estimación contable, salvo que se tratara de un error.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 5.ª Inmovilizado intangible
 Los criterios contenidos en las normas relativas al inmovilizado material, se aplicarán a los elementos del inmovilizado intangible, sin perjuicio de lo dispuesto a continuación, de lo previsto en las normas particulares sobre el inmovilizado intangible, así como de lo establecido para el fondo de comercio en la norma relativa a combinaciones de negocios.
 1. Reconocimiento
@@ -580,6 +621,7 @@ Se modifica el apartado 2 por el art. 1.2 del Real Decreto 602/2016, de 2 de dic
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [A6-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 6.ª Normas particulares sobre el inmovilizado intangible
 En particular se aplicarán las normas que se expresan con respecto a los bienes y derechos que en cada caso se indican:
 a) Investigación y desarrollo. Los gastos de investigación serán gastos del ejercicio en que se realicen. No obstante podrán activarse como inmovilizado intangible desde el momento en que cumplan las siguientes condiciones:
@@ -598,6 +640,7 @@ En ningún caso podrán figurar en el activo los gastos de mantenimiento de la a
 Se aplicarán los mismos criterios de registro y amortización que los establecidos para los gastos de desarrollo, aplicándose respecto a la corrección valorativa por deterioro los criterios especificados con carácter general para los inmovilizados intangibles.
 f) Otros inmovilizados intangibles. Además de los elementos intangibles anteriormente mencionados, existen otros que serán reconocidos como tales en balance, siempre que cumplan los criterios contenidos en el Marco Conceptual de la Contabilidad y los requisitos especificados en estas normas de registro y valoración. Entre tales elementos se pueden mencionar los siguientes: concesiones administrativas, derechos comerciales, propiedad intelectual o licencias.
 Los elementos anteriores deben ser objeto de amortización y corrección valorativa por deterioro según lo especificado con carácter general para los inmovilizados intangibles.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 6.ª Normas particulares sobre el inmovilizado intangible
 En particular se aplicarán las normas que se expresan con respecto a los bienes y derechos que en cada caso se indican:
 a) Investigación y desarrollo. Los gastos de investigación serán gastos del ejercicio en que se realicen. No obstante podrán activarse como inmovilizado intangible desde el momento en que cumplan las siguientes condiciones:
@@ -623,6 +666,7 @@ Se modifica la letra c) por el art. 1.3 del Real Decreto 602/2016, de 2 de dicie
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [A7-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 7.ª Activos no corrientes y grupos enajenables de elementos, mantenidos para la venta
 1. Activos no corrientes mantenidos para la venta
 La empresa clasificará un activo no corriente como mantenido para la venta si su valor contable se recuperará fundamentalmente a través de su venta, en lugar de por su uso continuado, y siempre que se cumplan los siguientes requisitos:
@@ -646,6 +690,7 @@ Se entiende por grupo enajenable de elementos mantenidos para la venta, el conju
 Para su valoración se aplicarán las mismas reglas que en el apartado anterior. En consecuencia, los activos y sus pasivos asociados que queden excluidos de su ámbito de aplicación, se valoran de acuerdo con la norma específica que les sea aplicable. Una vez efectuada esta valoración, el grupo de elementos de forma conjunta se valorará por el menor importe entre su valor contable y su valor razonable menos los costes de venta. En caso de que proceda registrar en este grupo de elementos valorados de forma conjunta una corrección valorativa por deterioro del valor, se reducirá el valor contable de los activos no corrientes del grupo siguiendo el criterio de reparto establecido en el apartado 2.2 de la norma relativa al inmovilizado material.
 
 ## [A8]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 8.ª Arrendamientos y otras operaciones de naturaleza similar
 Se entiende por arrendamiento, a efectos de esta norma, cualquier acuerdo, con independencia de su instrumentación jurídica, por el que el arrendador cede al arrendatario, a cambio de percibir una suma única de dinero o una serie de pagos o cuotas, el derecho a utilizar un activo durante un periodo de tiempo determinado, con independencia de que el arrendador quede obligado a prestar servicios en relación con la explotación o mantenimiento de dicho activo.
 La calificación de los contratos como arrendamientos financieros u operativos depende de las circunstancias de cada una de las partes del contrato por lo que podrán ser calificados de forma diferente por el arrendatario y el arrendador.
@@ -685,6 +730,7 @@ No obstante, como normalmente el terreno tiene una vida económica indefinida, e
 A estos efectos, los pagos mínimos por el arrendamiento se distribuirán entre el terrero y el edificio en proporción a los valores razonables relativos que representan los derechos de arrendamiento de ambos componentes, a menos que tal distribución no sea fiable, en cuyo caso todo el arrendamiento se clasificará como financiero, salvo que resulte evidente que es operativo.
 
 ## [A9]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 9.ª Instrumentos financieros
 Un instrumento financiero es un contrato que da lugar a un activo financiero en una empresa y, simultáneamente, a un pasivo financiero o a un instrumento de patrimonio en otra empresa.
 La presente norma resulta de aplicación a los siguientes instrumentos financieros:
@@ -924,6 +970,7 @@ Las operaciones de cobertura de inversiones netas en negocios en el extranjero e
 La inversión neta en un negocio en el extranjero está compuesta, además de por la participación en el patrimonio neto, por cualquier partida monetaria a cobrar o pagar, cuya liquidación no está contemplada ni es probable que se produzca en un futuro previsible, excluidas las partidas de carácter comercial.
 Los instrumentos de cobertura se valorarán y registrarán de acuerdo con su naturaleza en la medida en que no sean, o dejen de ser, coberturas eficaces.
 Redactados los apartados 2.5.3 y 3.2 conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 9.ª Instrumentos financieros
 Un instrumento financiero es un contrato que da lugar a un activo financiero en una empresa y, simultáneamente, a un pasivo financiero o a un instrumento de patrimonio en otra empresa.
 La presente norma resulta de aplicación a los siguientes instrumentos financieros:
@@ -1165,6 +1212,7 @@ Los instrumentos de cobertura se valorarán y registrarán de acuerdo con su nat
 Se modifica el apartado 2.5.1 por el art. 4.1 del Real Decreto 1159/2010, de 17 de septiembre. Ref. BOE-A-2010-14621#a4.
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 Redactados los apartados 2.5.3 y 3.2 conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 9.ª Instrumentos financieros
 Un instrumento financiero es un contrato que da lugar a un activo financiero en una empresa y, simultáneamente, a un pasivo financiero o a un instrumento de patrimonio en otra empresa.
 La presente norma resulta de aplicación a los siguientes instrumentos financieros:
@@ -1464,6 +1512,7 @@ Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas
 Redactados los apartados 2.5.3 y 3.2 conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [A10]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 10.ª Existencias
 1. Valoración inicial
 Los bienes y servicios comprendidos en las existencias se valorarán por su coste, ya sea el precio de adquisición o el coste de producción.
@@ -1485,6 +1534,7 @@ Cuando el valor neto realizable de las existencias sea inferior a su precio de a
 En el caso de las materias primas y otras materias consumibles en el proceso de producción, no se realizará corrección valorativa siempre que se espere que los productos terminados a los que se incorporen sean vendidos por encima del coste. Cuando proceda realizar corrección valorativa, el precio de reposición de las materias primas y otras materias consumibles puede ser la mejor medida disponible de su valor neto realizable.
 Adicionalmente, los bienes o servicios que hubiesen sido objeto de un contrato de venta o de prestación de servicios en firme cuyo cumplimiento deba tener lugar posteriormente, no serán objeto de la corrección valorativa, a condición de que el precio de venta estipulado en dicho contrato cubra, como mínimo, el coste de tales bienes o servicios, más todos los costes pendientes de realizar que sean necesarios para la ejecución del contrato.
 Si las circunstancias que causaron la corrección del valor de las existencias hubiesen dejado de existir, el importe de la corrección será objeto de reversión reconociéndolo como un ingreso en la cuenta de pérdidas y ganancias.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 10.ª Existencias
 1. Valoración inicial
 Los bienes, servicios y otros activos comprendidos en las existencias se valorarán por su coste, ya sea el precio de adquisición o el coste de producción.
@@ -1512,6 +1562,7 @@ Se modifica el primer párrafo del apartado 1 y se añade el apartado 3 por el a
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [A11]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 11.ª Moneda extranjera
 1. Transacciones en moneda extranjera
 Una transacción en moneda extranjera es aquélla cuyo importe se denomina o exige su liquidación en una moneda distinta de la funcional.
@@ -1548,6 +1599,7 @@ La moneda de presentación es la moneda en que se formulan las cuentas anuales, 
 Excepcionalmente, cuando la moneda o monedas funcionales de una empresa española sean distintas del euro, la conversión de sus cuentas anuales a la moneda de presentación se realizará aplicando los criterios establecidos sobre «Conversión de estados financieros en moneda funcional distinta de la moneda de presentación» en las Normas para la Formulación de las Cuentas Anuales Consolidadas, que desarrollan el Código de Comercio.
 Las diferencias de conversión se registrarán directamente en el patrimonio neto.
 Cuando una empresa española sea partícipe en activos o explotaciones en el extranjero controlados conjuntamente según se definen en la norma relativa a negocios conjuntos y la moneda funcional de esos negocios no sea el euro, se seguirán los procedimientos de conversión a moneda de presentación indicados anteriormente. Para los negocios conjuntos que se integren en las cuentas anuales del partícipe, las transacciones en moneda extranjera realizadas por dichos negocios se convertirán a moneda funcional aplicando las reglas contenidas en el apartado primero de esta misma norma. Estos mismos criterios serán aplicables a las sucursales de la empresa en el extranjero.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 11.ª Moneda extranjera
 1. Transacciones en moneda extranjera
 Una transacción en moneda extranjera es aquélla cuyo importe se denomina o exige su liquidación en una moneda distinta de la funcional.
@@ -1588,6 +1640,7 @@ Se modifican los apartados 1.2.1 y 1.2.2.2 por el art. 1.4 del Real Decreto 1/20
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [A12]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 12.ª Impuesto sobre el Valor Añadido (IVA), Impuesto General Indirecto Canario (IGIC) y otros Impuestos indirectos
 El IVA soportado no deducible formará parte del precio de adquisición de los activos corrientes y no corrientes, así como de los servicios, que sean objeto de las operaciones gravadas por el impuesto. En el caso de autoconsumo interno, esto es, producción propia con destino al inmovilizado de la empresa, el IVA no deducible se adicionará al coste de los respectivos activos no corrientes.
 No alterarán las valoraciones iniciales las rectificaciones en el importe del IVA soportado no deducible, consecuencia de la regularización derivada de la prorrata definitiva, incluida la regularización por bienes de inversión.
@@ -1596,6 +1649,7 @@ Las reglas sobre el IVA soportado no deducible serán aplicables, en su caso, al
 Las reglas sobre el IVA repercutido serán aplicables, en su caso, al IGIC y a cualquier otro impuesto indirecto que grave las operaciones realizadas por la empresa y que sea recibido por cuenta de la Hacienda Pública. Sin embargo, se contabilizarán como gastos y por tanto no reducirán la cifra de negocios, aquellos tributos que para determinar la cuota a ingresar tomen como referencia la cifra de negocios u otra magnitud relacionada, pero cuyo hecho imponible no sea la operación por la que se transmiten los activos o se prestan los servicios.
 
 ## [A13]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 13.ª Impuestos sobre beneficios
 Los impuestos sobre el beneficio a los que se refiere esta norma son aquellos impuestos directos, ya sean nacionales o extranjeros, que se liquidan a partir de un resultado empresarial calculado de acuerdo con las normas fiscales que sean de aplicación.
 Cuando dicho cálculo no se realice en función de las transacciones económicas reales, sino mediante la utilización de signos, índices y módulos objetivos, no se aplicará la parte de esta norma que corresponda al impuesto diferido, sin perjuicio de que cuando estos procedimientos se apliquen sólo parcialmente en el cálculo del impuesto o en la determinación de las rentas, puedan surgir activos o pasivos por impuesto diferido.
@@ -1653,6 +1707,7 @@ c) Los importes derivados de cualquier ajuste valorativo de los pasivos o activo
 También en este caso particular, el gasto (ingreso) total por el impuesto sobre beneficios comprenderá la parte relativa al impuesto corriente y la parte correspondiente al impuesto diferido calculado de acuerdo con lo expresado en este caso.
 5. Empresarios individuales
 En el caso de empresarios individuales no deberá lucir ningún importe en la rúbrica correspondiente al impuesto sobre beneficios. A estos efectos, al final del ejercicio las retenciones soportadas y los pagos fraccionados del Impuesto sobre la Renta de las Personas Físicas deberán ser objeto del correspondiente traspaso a la cuenta del titular de la empresa.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 13.ª Impuestos sobre beneficios
 Los impuestos sobre el beneficio a los que se refiere esta norma son aquellos impuestos directos, ya sean nacionales o extranjeros, que se liquidan a partir de un resultado empresarial calculado de acuerdo con las normas fiscales que sean de aplicación.
 Cuando dicho cálculo no se realice en función de las transacciones económicas reales, sino mediante la utilización de signos, índices y módulos objetivos, no se aplicará la parte de esta norma que corresponda al impuesto diferido, sin perjuicio de que cuando estos procedimientos se apliquen sólo parcialmente en el cálculo del impuesto o en la determinación de las rentas, puedan surgir activos o pasivos por impuesto diferido.
@@ -1713,6 +1768,7 @@ Se modifican los apartados 2.2, 2.3 y 4 por el art. 4.2 del Real Decreto 1159/20
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [A14]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 14.ª Ingresos por ventas y prestación de servicios
 1. Aspectos comunes
 Los ingresos procedentes de la venta de bienes y de la prestación de servicios se valorarán por el valor razonable de la contrapartida, recibida o por recibir, derivada de los mismos, que, salvo evidencia en contrario, será el precio acordado para dichos bienes o servicios, deducido: el importe de cualquier descuento, rebaja en el precio u otras partidas similares que la empresa pueda conceder, así como los intereses incorporados al nominal de los créditos. No obstante, podrán incluirse los intereses incorporados a los créditos comerciales con vencimiento no superior a un año que no tengan un tipo de interés contractual, cuando el efecto de no actualizar los flujos de efectivo no sea significativo.
@@ -1737,6 +1793,7 @@ c) El grado de realización de la transacción, en la fecha de cierre del ejerci
 d) Los costes ya incurridos en la prestación, así como los que quedan por incurrir hasta completarla, pueden ser valorados con fiabilidad.
 La empresa revisará y, si es necesario, modificará las estimaciones del ingreso por recibir, a medida que el servicio se va prestando. La necesidad de tales revisiones no indica, necesariamente, que el desenlace o resultado de la operación de prestación de servicios no pueda ser estimado con fiabilidad.
 Cuando el resultado de una transacción que implique la prestación de servicios no pueda ser estimado de forma fiable, se reconocerán ingresos, sólo en la cuantía en que los gastos reconocidos se consideren recuperables.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 14.ª Ingresos por ventas y prestación de servicios
 1. Aspectos comunes.
 Una empresa reconocerá los ingresos por el desarrollo ordinario de su actividad cuando se produzca la transferencia del control de los bienes o servicios comprometidos con los clientes. En ese momento, la empresa valorará el ingreso por el importe que refleje la contraprestación a la que espere tener derecho a cambio de dichos bienes o servicios.
@@ -1784,6 +1841,7 @@ Se modifica por el art. 1.5 del Real Decreto 1/2021, de 12 de enero. Ref. BOE-A-
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [A15]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 15.ª Provisiones y contingencias
 1. Reconocimiento
 La empresa reconocerá como provisiones los pasivos que, cumpliendo la definición y los criterios de registro o reconocimiento contable contenidos en el Marco Conceptual de la Contabilidad, resulten indeterminados respecto a su importe o a la fecha en que se cancelarán. Las provisiones pueden venir determinadas por una disposición legal, contractual o por una obligación implícita o tácita. En este último caso, su nacimiento se sitúa en la expectativa válida creada por la empresa frente a terceros, de asunción de una obligación por parte de aquélla.
@@ -1793,6 +1851,7 @@ De acuerdo con la información disponible en cada momento, las provisiones se va
 La compensación a recibir de un tercero en el momento de liquidar la obligación, no supondrá una minoración del importe de la deuda, sin perjuicio del reconocimiento en el activo de la empresa del correspondiente derecho de cobro, siempre que no existan dudas de que dicho reembolso será percibido. El importe por el que se registrará el citado activo no podrá exceder del importe de la obligación registrada contablemente. Sólo cuando exista un vínculo legal o contractual, por el que se haya exteriorizado parte del riesgo, y en virtud del cual la empresa no esté obligada a responder, se tendrá en cuenta para estimar el importe por el que, en su caso, figurará la provisión.
 
 ## [A16]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 16.ª Pasivos por retribuciones a largo plazo al personal
 Tendrán la consideración de retribuciones a largo plazo al personal, las prestaciones post-empleo, tales como pensiones y otras prestaciones por jubilación o retiro, así como cualquier otra prestación a largo plazo que suponga una compensación económica a satisfacer con carácter diferido, respecto al momento en el que se presta el servicio. No serán objeto de esta norma las retribuciones basadas en instrumentos de patrimonio a que se refiere la siguiente norma.
 1. Retribuciones a largo plazo de aportación definida
@@ -1811,6 +1870,7 @@ b) Si se trata de derechos revocables, el gasto se imputará a la cuenta de pér
 Los costes por servicios pasados surgidos en cualquier otro tipo de retribución a largo plazo al personal se reconocerán inmediatamente como gastos en la cuenta de pérdidas y ganancias por su valor actual.
 
 ## [A17]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 17.ª Transacciones con pagos basados en instrumentos de patrimonio
 Tendrán la consideración de transacciones con pagos basados en instrumentos de patrimonio aquéllas que, a cambio de recibir bienes o servicios, incluidos los servicios prestados por los empleados, sean liquidadas por la empresa con instrumentos de patrimonio propio o con un importe que esté basado en el valor de instrumentos de patrimonio propio, tales como opciones sobre acciones o derechos sobre la revalorización de las acciones.
 1. Reconocimiento
@@ -1825,6 +1885,7 @@ En las transacciones que se liquiden en efectivo, los bienes o servicios recibid
 Posteriormente, y hasta su liquidación, el pasivo correspondiente se valorará, por su valor razonable en la fecha de cierre de cada ejercicio, imputándose a la cuenta de pérdidas y ganancias cualquier cambio de valoración ocurrido durante el ejercicio.
 
 ## [A18]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 18.ª Subvenciones, donaciones y legados recibidos
 1. Subvenciones, donaciones y legados otorgados por terceros distintos a los socios o propietarios
 1.1. Reconocimiento
@@ -1850,6 +1911,7 @@ Las subvenciones, donaciones y legados no reintegrables recibidos de socios o pr
 No obstante, en el caso de empresas pertenecientes al sector público que reciban subvenciones, donaciones o legados de la entidad pública dominante para financiar la realización de actividades de interés público o general, la contabilización de dichas ayudas públicas se efectuará de acuerdo con los criterios contenidos en el apartado anterior de esta norma.
 
 ## [A19]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 19.ª Combinaciones de negocios
 1. Ámbito y normas de aplicación
 La presente norma regula la forma en que las empresas deben contabilizar las combinaciones de negocios en las que participen, entendidas como aquellas operaciones en las que una empresa adquiere el control de uno o varios negocios.
@@ -1923,6 +1985,7 @@ b) En cada una de las transacciones individuales se determinará el fondo de com
 c) La diferencia entre el valor razonable de la participación de la adquirente en los elementos identificables de la empresa adquirida en cada una de las fechas de las transacciones individuales y su valor razonable en la fecha de adquisición se reconocerá directamente en las reservas de la empresa neta del efecto impositivo.
 d) Si con anterioridad, la inversión en la participada se hubiera valorado por su valor razonable, se desharán los ajustes de valoración realizados previamente para dejar valorada la participación por su coste histórico.
 Redactada la letra c) del apartado 2.7 conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 19.ª Combinaciones de negocios
 1. Ámbito y normas de aplicación.
 La presente norma regula la forma en que las empresas deben contabilizar las combinaciones de negocios en las que participen, entendidas como aquellas operaciones en las que una empresa adquiere el control de uno o varios negocios.
@@ -2058,6 +2121,7 @@ Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas
 Redactada la letra c) del apartado 2.7 conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [A20]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 20.ª Negocios conjuntos
 1. Ámbito de aplicación
 Un negocio conjunto es una actividad económica controlada conjuntamente por dos o más personas físicas o jurídicas. A estos efectos, control conjunto es un acuerdo estatutario o contractual en virtud del cual dos o más personas, que serán denominadas en la presente norma «partícipes»: convienen compartir el poder de dirigir las políticas financiera y de explotación sobre una actividad económica con el fin de obtener beneficios económicos, de tal manera que las decisiones estratégicas, tanto financieras como de explotación, relativas a la actividad requieran el consentimiento unánime de todos los partícipes.
@@ -2077,6 +2141,7 @@ Si el negocio conjunto elabora estados financieros a efectos del control de su g
 El partícipe registrará su participación en una empresa controlada de forma conjunta de acuerdo con lo previsto respecto a las inversiones en el patrimonio de empresas del grupo, multigrupo y asociadas en el apartado 2.5 de la norma relativa a instrumentos financieros.
 
 ## [A21]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 21.ª Operaciones entre empresas del grupo
 1. Alcance y regla general
 La presente norma será de aplicación a las operaciones realizadas entre empresas del mismo grupo, tal y como éstas quedan definidas en la norma 13.ª de elaboración de las cuentas anuales.
@@ -2091,6 +2156,7 @@ En las operaciones entre empresas del grupo en las que intervenga la empresa dom
 En el caso de operaciones entre otras empresas del grupo, los elementos patrimoniales del negocio se valorarán según los valores contables existentes antes de la operación en las cuentas anuales individuales.
 La diferencia que pudiera ponerse de manifiesto en el registro contable por la aplicación de los criterios anteriores, se registrará en una partida de reservas.
 A los efectos de lo dispuesto en esta norma, no se considerará que las participaciones en el patrimonio neto de otras empresas constituyen en sí mismas un negocio.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 21.ª Operaciones entre empresas del grupo
 1. Alcance y regla general
 La presente norma será de aplicación a las operaciones realizadas entre empresas del mismo grupo, tal y como éstas quedan definidas en la norma 13.ª de elaboración de las cuentas anuales.
@@ -2127,6 +2193,7 @@ Se modifica el apartado 2 por el art. 4.4 del Real Decreto 1159/2010, de 17 de s
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [A22]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 22.ª Cambios en criterios contables, errores y estimaciones contables
 Cuando se produzca un cambio de criterio contable, que sólo procederá de acuerdo con lo establecido en el principio de uniformidad, se aplicará de forma retroactiva y su efecto se calculará desde el ejercicio más antiguo para el que se disponga de información.
 El ingreso o gasto correspondiente a ejercicios anteriores que se derive de dicha aplicación motivará, en el ejercicio en que se produce el cambio de criterio, el correspondiente ajuste por el efecto acumulado de las variaciones de los activos y pasivos, el cual se imputará directamente en el patrimonio neto, en concreto, en una partida de reservas salvo que afectara a un gasto o un ingreso que se imputó en los ejercicios previos directamente en otra partida del patrimonio neto. Asimismo se modificarán las cifras afectadas en la información comparativa de los ejercicios a los que le afecte el cambio de criterio contable.
@@ -2136,22 +2203,27 @@ Siempre que se produzcan cambios de criterio contable o subsanación de errores 
 Asimismo, se informará en la memoria de los cambios en estimaciones contables que hayan producido efectos significativos en el ejercicio actual, o que vayan a producirlos en ejercicios posteriores.
 
 ## [A23]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 23.ª Hechos posteriores al cierre del ejercicio
 Los hechos posteriores que pongan de manifiesto condiciones que ya existían al cierre del ejercicio, deberán tenerse en cuenta para la formulación de las cuentas anuales. Estos hechos posteriores motivarán en las cuentas anuales, en función de su naturaleza, un ajuste, información en la memoria o ambos.
 Los hechos posteriores al cierre del ejercicio que pongan de manifiesto condiciones que no existían al cierre del mismo, no supondrán un ajuste en las cuentas anuales. No obstante, cuando los hechos sean de tal importancia que si no se facilitara información al respecto podría distorsionarse la capacidad de evaluación de los usuarios de las cuentas anuales, se deberá incluir en la memoria información respecto a la naturaleza del hecho posterior conjuntamente con una estimación de su efecto o, en su caso, una manifestación acerca de la imposibilidad de realizar dicha estimación.
 En todo caso, en la formulación de las cuentas anuales deberá tenerse en cuenta toda información que pueda afectar a la aplicación del principio de empresa en funcionamiento. En consecuencia, las cuentas anuales no se formularán sobre la base de dicho principio si los gestores, aunque sea con posterioridad al cierre del ejercicio, determinan que tienen la intención de liquidar la empresa o cesar en su actividad o que no existe una alternativa más realista que hacerlo.
 
 ## [tercerapae]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 TERCERA PARTE
 CUENTAS ANUALES
 
 ## [inormas]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 I. NORMAS DE ELABORACIÓN DE LAS CUENTAS ANUALES
 
 ## [A1-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 1.ª Documentos que integran las cuentas anuales
 Las cuentas anuales comprenden el balance, la cuenta de pérdidas y ganancias, el estado de cambios en el patrimonio neto, el estado de flujos de efectivo y la memoria. Estos documentos forman una unidad y deben ser redactados de conformidad con lo previsto en el Código de Comercio, en el Texto Refundido de la Ley de Sociedades Anónimas, en la Ley de Sociedades de Responsabilidad Limitada y en este Plan General de Contabilidad; en particular, sobre la base del Marco Conceptual de la Contabilidad y con la finalidad de mostrar la imagen fiel del patrimonio, de la situación financiera y de los resultados de la empresa.
 Cuando pueda formularse balance, estado de cambios en el patrimonio neto y memoria en modelo abreviado, el estado de flujos de efectivo no será obligatorio.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 1.ª Documentos que integran las cuentas anuales
 Las cuentas anuales comprenden el balance, la cuenta de pérdidas y ganancias, el estado de cambios en el patrimonio neto, el estado de flujos de efectivo y la memoria. Estos documentos forman una unidad y deben ser redactados de conformidad con lo previsto en el Código de Comercio, el texto refundido de la Ley de Sociedades de Capital y en este Plan General de Contabilidad; en particular, sobre la base del Marco Conceptual de la Contabilidad y con la finalidad de mostrar la imagen fiel del patrimonio, de la situación financiera y de los resultados de la empresa.
 Cuando pueda formularse balance y memoria en modelo abreviado, el estado de cambios en el patrimonio neto y el estado de flujos de efectivo no serán obligatorios.
@@ -2159,6 +2231,7 @@ Se modifica por el art. 1.4 del Real Decreto 602/2016, de 2 de diciembre. Ref. B
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [A2-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 2.ª Formulación de cuentas anuales
 1. Las cuentas anuales se elaborarán con una periodicidad de doce meses, salvo en los casos de constitución, modificación de la fecha de cierre del ejercicio social o disolución.
 2. Las cuentas anuales deberán ser formuladas por el empresario o los administradores, quienes responderán de su veracidad, en el plazo máximo de tres meses, a contar desde el cierre del ejercicio. A estos efectos, las cuentas anuales expresarán la fecha en que se hubieran formulado y deberán ser firmadas por el empresario, por todos los socios ilimitadamente responsables por las deudas sociales, o por todos los administradores de la sociedad; si faltara la firma de alguno de ellos, se hará expresa indicación de la causa, en cada uno de los documentos en que falte.
@@ -2166,10 +2239,12 @@ Esta modificación produce efectos desde el 1 de enero de 2016 en los términos 
 4. Las cuentas anuales se elaborarán expresando sus valores en euros; no obstante lo anterior, podrán expresarse los valores en miles o millones de euros cuando la magnitud de las cifras así lo aconseje, debiendo indicarse esta circunstancia en las cuentas anuales.
 
 ## [A3-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 3.ª Estructura de las cuentas anuales
 Las cuentas anuales de las sociedades anónimas, incluidas las laborales, de las sociedades de responsabilidad limitada, incluidas las laborales, de las sociedades en comandita por acciones y de las sociedades cooperativas deberán adaptarse al modelo normal. Las sociedades colectivas y comanditarias simples, cuando a la fecha de cierre del ejercicio todos los socios colectivos sean sociedades españolas o extranjeras, también deberán adaptarse al modelo normal.
 
 ## [A4-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 4.ª Cuentas anuales abreviadas
 1. Las sociedades señaladas en la norma anterior podrán utilizar los modelos de cuentas anuales abreviados en los siguientes casos:
 a) Balance y memoria abreviados: Las sociedades en las que a la fecha de cierre del ejercicio concurran, al menos, dos de las circunstancias siguientes:
@@ -2190,6 +2265,7 @@ Se modifica por el art. 1.5 del Real Decreto 602/2016, de 2 de diciembre. Ref. B
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [A5-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 5.ª Normas comunes al balance, la cuenta de pérdidas y ganancias, el estado de cambios en el patrimonio neto y el estado de flujos de efectivo
 Sin perjuicio de lo dispuesto en las normas particulares, el balance, la cuenta de pérdidas y ganancias, el estado de cambios en el patrimonio neto y el estado de flujos de efectivo, se formularán teniendo en cuenta las siguientes reglas:
 1. En cada partida deberán figurar, además de las cifras del ejercicio que se cierra, las correspondientes al ejercicio inmediatamente anterior. A estos efectos, cuando unas y otras no sean comparables, bien por haberse producido una modificación en la estructura, bien por realizarse un cambio de criterio contable o subsanación de error, se deberá proceder a adaptar el ejercicio precedente, a efectos de su presentación en el ejercicio al que se refieren las cuentas anuales, informando de ello detalladamente en la memoria.
@@ -2201,6 +2277,7 @@ Sin perjuicio de lo dispuesto en las normas particulares, el balance, la cuenta 
 7. Cuando proceda, cada partida contendrá una referencia cruzada a la información correspondiente dentro de la memoria.
 8. Los créditos y deudas con empresas del grupo y asociadas, así como los ingresos y gastos derivados de ellos, figurarán en las partidas correspondientes, con separación de las que no correspondan a empresas del grupo o asociadas, respectivamente. En cualquier caso, en las partidas relativas a empresas asociadas también se incluirán las relaciones con empresas multigrupo.
 9. Las empresas que participen en uno o varios negocios conjuntos que no tengan personalidad jurídica (uniones temporales de empresas, comunidades de bienes, etc.) deberán presentar esta información, atendiendo a lo dispuesto en la norma de registro y valoración relativa a negocios conjuntos, integrando en cada partida de los modelos de los distintos estados financieros las cantidades correspondientes a los negocios conjuntos en los que participen, e informando sobre su desglose en la memoria.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 5.ª Normas comunes al balance, la cuenta de pérdidas y ganancias, el estado de cambios en el patrimonio neto y el estado de flujos de efectivo
 Sin perjuicio de lo dispuesto en las normas particulares, el balance, la cuenta de pérdidas y ganancias, el estado de cambios en el patrimonio neto y el estado de flujos de efectivo, se formularán teniendo en cuenta las siguientes reglas:
 1. En cada partida deberán figurar, además de las cifras del ejercicio que se cierra, las correspondientes al ejercicio inmediatamente anterior. A estos efectos, cuando unas y otras no sean comparables, bien por haberse producido una modificación en la estructura, bien por realizarse un cambio de criterio contable o subsanación de error, se deberá proceder a adaptar el ejercicio precedente, a efectos de su presentación en el ejercicio al que se refieren las cuentas anuales, informando de ello detalladamente en la memoria.
@@ -2219,6 +2296,7 @@ Se añade la regla 10 por el art. 4.5 del Real Decreto 1159/2010, de 17 de septi
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [A6-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 6.ª Balance
 El balance, que comprende, con la debida separación, el activo, el pasivo y el patrimonio neto de la empresa, se formulará teniendo en cuenta que:
 1. La clasificación entre partidas corrientes y no corrientes se realizará de acuerdo con los siguientes criterios:
@@ -2257,6 +2335,7 @@ b) En otro caso, minorarán el epígrafe A-1.IX «Otros instrumentos de patrimon
 16. Cuando la empresa tenga deudas con proveedores con vencimiento superior a un año, esta partida del epígrafe C.V. del pasivo, se desglosará para recoger separadamente los proveedores a largo plazo y a corto plazo. Si el plazo de vencimiento fuera superior al ciclo normal de explotación, se creará el epígrafe B.VI en el pasivo no corriente, con la denominación «Acreedores comerciales no corrientes».
 17. Cuando la empresa haya emitido instrumentos financieros que deban reconocerse como pasivos financieros pero que por sus características especiales pueden producir efectos específicos en otras normativas, incorporará un epígrafe específico tanto en el pasivo no corriente como en el corriente, denominado «Deuda con características especiales a largo plazo» y «Deuda con características especiales a corto plazo». En la memoria se detallarán las características de estas emisiones.
 18. La empresa presentará en el balance, de forma separada del resto de los activos y pasivos, los activos no corrientes mantenidos para la venta y los activos correspondientes a un grupo enajenable de elementos mantenidos para la venta, que figurarán en el epígrafe B.I. del activo y los pasivos que formen parte de un grupo enajenable de elementos mantenidos para la venta, que figurarán en el epígrafe C.I. del pasivo. Estos activos y pasivos no se compensarán, ni se presentarán como un único importe.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 6.ª Balance
 El balance, que comprende, con la debida separación, el activo, el pasivo y el patrimonio neto de la empresa, se formulará teniendo en cuenta que:
 1. La clasificación entre partidas corrientes y no corrientes se realizará de acuerdo con los siguientes criterios:
@@ -2299,6 +2378,7 @@ Se modifican los apartados 9 y 13 por el art. 1.6 del Real Decreto 1/2021, de 12
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [A7-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 7.ª Cuenta de pérdidas y ganancias
 La cuenta de pérdidas y ganancias recoge el resultado del ejercicio, formado por los ingresos y los gastos del mismo, excepto cuando proceda su imputación directa al patrimonio neto de acuerdo con lo previsto en las normas de registro y valoración. La cuenta de pérdidas y ganancias se formulará teniendo en cuenta que:
 1. Los ingresos y gastos se clasificarán de acuerdo con su naturaleza.
@@ -2321,6 +2401,7 @@ b) Forme parte de un plan individual y coordinado para enajenar o disponer por o
 c) Sea una empresa dependiente adquirida exclusivamente con la finalidad de venderla.
 A estos efectos, se entiende por componente de una empresa las actividades o flujos de efectivo que, por estar separados y ser independientes en su funcionamiento o a efectos de información financiera, se distinguen claramente del resto de la empresa, tal como una empresa dependiente o un segmento de negocio o geográfico.
 12. Los ingresos y gastos generados por los activos no corrientes y grupos enajenables de elementos, mantenidos para la venta, que no cumplan los requisitos para calificarlos como operaciones interrumpidas, se reconocerán en la partida de la cuenta de pérdidas y ganancias que corresponda según su naturaleza.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 7.ª Cuenta de pérdidas y ganancias
 La cuenta de pérdidas y ganancias recoge el resultado del ejercicio, formado por los ingresos y los gastos del mismo, excepto cuando proceda su imputación directa al patrimonio neto de acuerdo con lo previsto en las normas de registro y valoración. La cuenta de pérdidas y ganancias se formulará teniendo en cuenta que:
 1. Los ingresos y gastos se clasificarán de acuerdo con su naturaleza.
@@ -2347,6 +2428,7 @@ Se modifica el apartado 10 por el art. 1.7 del Real Decreto 1/2021, de 12 de ene
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [A8-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 8.ª Estado de cambios en el patrimonio neto
 El estado de cambios en el patrimonio neto tiene dos partes.
 1. La primera, denominada «Estado de ingresos y gastos reconocidos»: recoge los cambios en el patrimonio neto derivados de:
@@ -2369,6 +2451,7 @@ Este documento se formulará teniendo en cuenta que:
 2.2 La aplicación que en un ejercicio se realiza del resultado del ejercicio anterior, se reflejará en:
 – La partida 4. «Distribución de dividendos» del epígrafe B.II o D.II «Operaciones con socios o propietarios».
 – El epígrafe B.III o D.III «Otras variaciones del patrimonio neto»: por las restantes aplicaciones que supongan reclasificaciones de partidas de patrimonio neto.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 8.ª Estado de cambios en el patrimonio neto
 El estado de cambios en el patrimonio neto tiene dos partes.
 1. La primera, denominada «Estado de ingresos y gastos reconocidos»: recoge los cambios en el patrimonio neto derivados de:
@@ -2395,6 +2478,7 @@ Se modifica el apartado 1.2 por el art. 1.8 del Real Decreto 1/2021, de 12 de en
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [A9-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 9.ª Estado de flujos de efectivo
 El estado de flujos de efectivo informa sobre el origen y la utilización de los activos monetarios representativos de efectivo y otros activos líquidos equivalentes, clasificando los movimientos por actividades e indicando la variación neta de dicha magnitud en el ejercicio.
 Se entiende por efectivo y otros activos líquidos equivalentes, los que como tal figuran en el epígrafe B.VII del activo del balance, es decir, la tesorería depositada en la caja de la empresa, los depósitos bancarios a la vista y los instrumentos financieros que sean convertibles en efectivo y que en el momento de su adquisición, su vencimiento no fuera superior a tres meses, siempre que no exista riesgo significativo de cambios de valor y formen parte de la política de gestión normal de la tesorería de la empresa.
@@ -2424,6 +2508,7 @@ En caso de existir una operación de inversión que implique una contraprestaci�
 11. Cuando la empresa posea deuda con características especiales, los flujos de efectivo procedentes de ésta, se incluirán como flujos de efectivo de las actividades de financiación, en una partida específica denominada «Deudas con características especiales» dentro del epígrafe 10. «Cobros y pagos por instrumentos de pasivo financiero».
 
 ## [A10-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 10.ª Memoria
 La memoria completa, amplía y comenta la información contenida en los otros documentos que integran las cuentas anuales. Se formulará teniendo en cuenta que:
 1. El modelo de la memoria recoge la información mínima a cumplimentar; no obstante, en aquellos casos en que la información que se solicita no sea significativa no se cumplimentarán los apartados correspondientes.
@@ -2433,14 +2518,17 @@ La memoria completa, amplía y comenta la información contenida en los otros do
 5. Lo establecido en la nota 4 de la memoria se deberá adaptar para su presentación, en todo caso, de modo sintético y conforme a la exigencia de claridad.
 
 ## [A11-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 11.ª Cifra anual de negocios
 El importe neto de la cifra anual de negocios se determinará deduciendo del importe de las ventas de los productos y de las prestaciones de servicios u otros ingresos correspondientes a las actividades ordinarias de la empresa, el importe de cualquier descuento (bonificaciones y demás reducciones sobre las ventas) y el del impuesto sobre el valor añadido y otros impuestos directamente relacionados con las mismas, que deban ser objeto de repercusión.
 
 ## [A12-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 12.ª Número medio de trabajadores
 Para la determinación del número medio de trabajadores se considerarán todas aquellas personas que tengan o hayan tenido alguna relación laboral con la empresa durante el ejercicio, promediadas según el tiempo durante el cual hayan prestado sus servicios.
 
 ## [A13-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 13.ª Empresas del grupo, multigrupo y asociadas
 A efectos de la presentación de las cuentas anuales de una empresa o sociedad se entenderá que otra empresa forma parte del grupo cuando ambas estén vinculadas por una relación de control, directa o indirecta, análoga a la prevista en el artículo 42 del Código de Comercio para los grupos de sociedades o cuando las empresas estén controladas por cualquier medio por una o varias personas físicas o jurídicas, que actúen conjuntamente o se hallen bajo dirección única por acuerdos o cláusulas estatutarias.
 Se entenderá que una empresa es asociada cuando, sin que se trate de una empresa del grupo, en el sentido señalado anteriormente, la empresa o alguna o algunas de las empresas del grupo en caso de existir éste, incluidas las entidades o personas físicas dominantes, ejerzan sobre tal empresa una influencia significativa por tener una participación en ella que, creando con ésta una vinculación duradera, esté destinada a contribuir a su actividad.
@@ -2457,10 +2545,12 @@ Se presumirá, salvo prueba en contrario, que existe influencia significativa cu
 Se entenderá por empresa multigrupo aquella que esté gestionada conjuntamente por la empresa o alguna o algunas de las empresas del grupo en caso de existir éste, incluidas las entidades o personas físicas dominantes, y uno o varios terceros ajenos al grupo de empresas.
 
 ## [A14-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 14.ª Estados financieros intermedios
 Los estados financieros intermedios se presentarán con la forma y los criterios establecidos para las cuentas anuales.
 
 ## [A15-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 15.ª Partes vinculadas
 1. Una parte se considera vinculada a otra cuando una de ellas o un conjunto que actúa en concierto, ejerce o tiene la posibilidad de ejercer directa o indirectamente o en virtud de pactos o acuerdos entre accionistas o partícipes, el control sobre otra o una influencia significativa en la toma de decisiones financieras y de explotación de la otra.
 2. En cualquier caso se considerarán partes vinculadas:
@@ -2479,9 +2569,11 @@ c) Los ascendientes, descendientes y hermanos del cónyuge o persona con análog
 d) Las personas a su cargo o a cargo del cónyuge o persona con análoga relación de afectividad.
 
 ## [iimodelosnormales]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 II. MODELOS NORMALES DE CUENTAS ANUALES
 
 ## [balance]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 BALANCE AL CIERRE DEL EJERCICIO 200X
 N° CUENTAS
 ACTIVO
@@ -2709,6 +2801,7 @@ V. Acreedores comerciales y otras cuentas a pagar.
 VI. Periodificaciones a corto plazo.
 TOTAL PATRIMONIO NETO Y PASIVO (A + B + C)
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 BALANCE AL CIERRE DEL EJERCICIO 200X
 N° CUENTAS
 ACTIVO
@@ -2938,6 +3031,7 @@ TOTAL PATRIMONIO NETO Y PASIVO (A + B + C)
 Se modifica por el art. 4.6.1 del Real Decreto 1159/2010, de 17 de septiembre. Ref. BOE-A-2010-14621#a4.
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 BALANCE AL CIERRE DEL EJERCICIO 200X
 N° CUENTAS
 ACTIVO
@@ -3169,6 +3263,7 @@ Esta modificación produce efectos desde el 1 de enero de 2016 en los términos 
 Se modifica por el art. 4.6.1 del Real Decreto 1159/2010, de 17 de septiembre. Ref. BOE-A-2010-14621#a4.
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 BALANCE AL CIERRE DEL EJERCICIO 200X
 N° CUENTAS
 ACTIVO
@@ -3404,6 +3499,7 @@ Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [cuenta]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 CUENTA DE PÉRDIDAS Y GANANCIAS CORRESPONDIENTE AL EJERCICIO TERMINADO EL .... DE 200X
 N° CUENTAS
 Nota
@@ -3502,6 +3598,7 @@ B) OPERACIONES INTERRUMPIDAS
 18. Resultado del ejercicio procedente de operaciones interrumpidas neto de impuestos.
 A.5) RESULTADO DEL EJERCICIO (A.4+18)
 * Su signo puede ser positivo o negativo
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 CUENTA DE PÉRDIDAS Y GANANCIAS CORRESPONDIENTE AL EJERCICIO TERMINADO EL .... DE 200X
 N° CUENTAS
 Nota
@@ -3604,6 +3701,7 @@ Se modifica la partida 14 por el art. 1.10 del Real Decreto 1/2021, de 12 de ene
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [estadodecambios]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 ESTADO DE CAMBIOS EN EL PATRIMONIO NETO CORRESPONDIENTE AL EJERCICIO TERMINADO EL ... DE 200X
 A) ESTADO DE INGRESOS Y GASTOS RECONOCIDOS CORRESPONDIENTE AL EJERCICIO TERMINADO EL ... DE 200X
 N° CUENTAS
@@ -3686,6 +3784,7 @@ II. Operaciones con socios o propietarios.
 7. Otras operaciones con socios o propietarios.
 III. Otras variaciones del patrimonio neto.
 E. SALDO, FINAL DEL AÑO 200X
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 ESTADO DE CAMBIOS EN EL PATRIMONIO NETO CORRESPONDIENTE AL EJERCICIO TERMINADO EL ... DE 200X
 A) ESTADO DE INGRESOS Y GASTOS RECONOCIDOS CORRESPONDIENTE AL EJERCICIO TERMINADO EL ... DE 200X
 N° CUENTAS
@@ -3772,6 +3871,7 @@ Se modifica el apartado 1 de los epígrafes I y VI por el art. 1.11 del Real Dec
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [estadodeflujos]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 ESTADO DE FLUJOS DE EFECTIVO CORRESPONDIENTE AL EJERCICIO TERMINADO EL ... DE 200X
 NOTAS
 200X
@@ -3850,16 +3950,19 @@ Efectivo o equivalentes al comienzo del ejercicio.
 Efectivo o equivalentes al final del ejercicio.
 
 ## [memoria]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 MEMORIA
 CONTENIDO DE LA MEMORIA
 
 ## [A1-4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 1. Actividad de la empresa
 En este apartado se describirá el objeto social de la empresa y la actividad o actividades a que se dedique. En particular:
 1. Domicilio y forma legal de la empresa, así como el lugar donde desarrolle las actividades, si fuese diferente de la sede social.
 2. Una descripción de la naturaleza de la explotación de la empresa, así como de sus principales actividades.
 3. En el caso de pertenecer a un grupo de sociedades, en los términos previstos en el artículo 42 del Código de Comercio, incluso cuando la sociedad dominante esté domiciliada fuera del territorio español, se informará sobre su nombre, así como el de la sociedad dominante directa y de la dominante última del grupo, la residencia de estas sociedades y el Registro Mercantil donde estén depositadas las cuentas anuales consolidadas, la fecha de formulación de las mismas o, si procediera, las circunstancias que eximan de la obligación de consolidar.
 4. Cuando exista una moneda funcional distinta del euro, se pondrá claramente de manifiesto esta circunstancia, indicando los criterios tenidos en cuenta para su determinación.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 1. Actividad de la empresa
 En este apartado se describirá el objeto social de la empresa y la actividad o actividades a que se dedique. En particular:
 1. Domicilio y forma legal de la empresa, así como el lugar donde desarrolle las actividades, si fuese diferente de la sede social.
@@ -3872,6 +3975,7 @@ Se modifica el apartado 3 por el art. 4.7 del Real Decreto 1159/2010, de 17 de s
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [A2-4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 2. Bases de presentación de las cuentas anuales
 1. Imagen fiel:
 a) La empresa deberá hacer una declaración explícita de que las cuentas anuales reflejan la imagen fiel del patrimonio, de la situación financiera y de los resultados de la empresa, así como de la veracidad de los flujos incorporados en el estado de flujos de efectivo.
@@ -3907,6 +4011,7 @@ c) Si la aplicación retroactiva fuera impracticable, se informará sobre tal he
 No será necesario incluir información comparativa en este apartado.
 
 ## [A3-4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 3. Aplicación de resultados
 1. Información sobre la propuesta de aplicación del resultado del ejercicio, de acuerdo con el siguiente esquema:
 Base de reparto
@@ -3931,6 +4036,7 @@ Total
 3. Limitaciones para la distribución de dividendos.
 
 ## [A4-4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 4. Normas de registro y valoración
 Se indicarán los criterios contables aplicados en relación con las siguientes partidas:
 1. Inmovilizado intangible; indicando los criterios utilizados de capitalización o activación, amortización y correcciones valorativas por deterioro.
@@ -3972,6 +4078,7 @@ b) Descripción del método de estimación y cálculo de las provisiones derivad
 19. Criterios empleados en transacciones entre partes vinculadas.
 20. Activos no corrientes mantenidos para la venta; se indicarán los criterios seguidos para calificar y valorar dichos activos o grupos de elementos como mantenidos para la venta, incluyendo los pasivos asociados.
 21. Operaciones interrumpidas; criterios para identificar y calificar una actividad como interrumpida, así como los ingresos y gastos que originan.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 4. Normas de registro y valoración
 Se indicarán los criterios contables aplicados en relación con las siguientes partidas:
 1. Inmovilizado intangible; indicando los criterios utilizados de capitalización o activación, amortización y correcciones valorativas por deterioro.
@@ -4014,6 +4121,7 @@ b) Descripción del método de estimación y cálculo de las provisiones derivad
 21. Operaciones interrumpidas; criterios para identificar y calificar una actividad como interrumpida, así como los ingresos y gastos que originan.
 Se modifica el punto 1 por el art. 1.7 del Real Decreto 602/2016, de 2 de diciembre. Ref. BOE-A-2016-11954#ap.
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 4. Normas de registro y valoración
 Se indicarán los criterios contables aplicados en relación con las siguientes partidas:
 1. Inmovilizado intangible; indicando los criterios utilizados de capitalización o activación, amortización y correcciones valorativas por deterioro.
@@ -4060,6 +4168,7 @@ Se modifica el punto 1 por el art. 1.7 del Real Decreto 602/2016, de 2 de diciem
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [A5-4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 5. Inmovilizado material
 1. Análisis del movimiento durante el ejercicio de cada partida del balance incluida en este epígrafe y de sus correspondientes amortizaciones acumuladas y correcciones valorativas por deterioro acumuladas; indicando lo siguiente:
 a) Saldo inicial.
@@ -4096,6 +4205,7 @@ r) En el caso de inmuebles, se indicará de forma separada el valor de la constr
 s) El resultado del ejercicio derivado de la enajenación o disposición por otros medios de elementos del inmovilizado material.
 
 ## [A6-4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 6. Inversiones inmobiliarias
 Además de la información requerida en la nota anterior, se describirán los inmuebles clasificados como inversiones inmobiliarias, y se informará de:
 1. Tipos de inversiones inmobiliarias y destino que se dé a las mismas.
@@ -4104,6 +4214,7 @@ Además de la información requerida en la nota anterior, se describirán los in
 4. Obligaciones contractuales para adquisición, construcción o desarrollo de inversiones inmobiliarias o para reparaciones, mantenimiento o mejoras.
 
 ## [A7-4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 7. Inmovilizado intangible
 7.1 General.
 Salvo en relación con el fondo de comercio, respecto al cual deberá suministrarse la información referida en el apartado 2 de esta nota, se incluirá la siguiente información:
@@ -4158,6 +4269,7 @@ c) Criterio empleado para determinar el valor razonable menos los costes de vent
 d) Si el método empleado fuera el valor en uso, se señalará el tipo o tipos de actualización utilizados en las estimaciones actuales y en las anteriores, una descripción de las hipótesis clave sobre las que se han basado las proyecciones de flujos de efectivo y de cómo se han determinado sus valores, el periodo que abarca la proyección de los flujos de efectivo y la tasa de crecimiento de éstos a partir del quinto año.
 5. Respecto a las pérdidas por deterioro agregadas para las que no se revela la información señalada en el número anterior, los principales sucesos y circunstancias que han llevado al reconocimiento de tales correcciones valorativas por deterioro.
 6. Las hipótesis utilizadas para la determinación del importe recuperable de los activos o de las unidades generadoras de efectivo.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 7. Inmovilizado intangible
 7.1 General.
 Salvo en relación con el fondo de comercio, respecto al cual deberá suministrarse la información referida en el apartado 2 de esta nota, se incluirá la siguiente información:
@@ -4213,6 +4325,7 @@ d) Si el método empleado fuera el valor en uso, se señalará el tipo o tipos d
 6. Las hipótesis utilizadas para la determinación del importe recuperable de los activos o de las unidades generadoras de efectivo.
 Se modifica el apartado 7.2.2 por el art. 4.8 del Real Decreto 1159/2010, de 17 de septiembre. Ref. BOE-A-2010-14621#a4.
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 7. Inmovilizado intangible
 7.1 General.
 Salvo en relación con el fondo de comercio, respecto al cual deberá suministrarse la información referida en el apartado 2 de esta nota, se incluirá la siguiente información:
@@ -4274,6 +4387,7 @@ Se modifica el apartado 7.2.2 por el art. 4.8 del Real Decreto 1159/2010, de 17 
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [A8-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 8. Arrendamientos y otras operaciones de naturaleza similar
 La información que se requiere a continuación para las operaciones de arrendamiento, también deberá suministrarse cuando la empresa realice otras operaciones de naturaleza similar.
 8.1 Arrendamientos financieros.
@@ -4322,6 +4436,7 @@ d) Una descripción general de los acuerdos significativos de arrendamiento, don
 Redactado el apartado 8.1.1.f) conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [A9-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 9. Instrumentos financieros
 9.1 Consideraciones generales.
 La información requerida en los apartados siguientes será de aplicación a los instrumentos financieros incluidos en el alcance de la norma de registro y valoración novena.
@@ -4525,6 +4640,7 @@ h) Acciones de la sociedad admitidas a cotización.
 i) Opciones emitidas u otros contratos por la sociedad sobre sus propias acciones, que deban calificarse como fondos propios, describiendo sus condiciones e importes correspondientes.
 j) Circunstancias específicas relativas a subvenciones, donaciones y legados otorgados por socios o propietarios.
 Redactado el apartado 9.2.3.b) conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 9. Instrumentos financieros
 9.1 Consideraciones generales y objetivo.
 La información requerida en los apartados siguientes será de aplicación a los instrumentos financieros incluidos en el alcance de la norma de registro y valoración novena.
@@ -4766,6 +4882,7 @@ Esta modificación será de aplicación para los ejercicios que se inicien a par
 Redactado el apartado 9.2.3.b) conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [A10-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 10. Existencias
 Se informará sobre:
 a) Las circunstancias que han motivado las correcciones valorativas por deterioro de las existencias y, en su caso, la reversión de dichas correcciones, reconocidas en el ejercicio, así como su importe.
@@ -4775,6 +4892,7 @@ d) Limitaciones en la disponibilidad de las existencias por garantías, pignorac
 e) Cualquiera otra circunstancia de carácter sustantivo que afecte a la titularidad, disponibilidad o valoración de las existencias, tal como: litigios, seguros, embargos, etc.
 
 ## [A11-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 11. Moneda extranjera
 1. Importe global de los elementos de activo y pasivo denominados en moneda extranjera, incluyendo un desglose de activos y pasivos más significativos clasificados por monedas. También se indicarán los importes correspondientes a compras, ventas y servicios recibidos y prestados.
 2. La empresa revelará la siguiente información:
@@ -4788,6 +4906,7 @@ a) El hecho de que las cuentas anuales, así como las cifras correspondientes a 
 b) La identificación y valor del índice general de precios a la fecha de cierre del ejercicio, así como el movimiento del mismo durante el ejercicio corriente y el anterior.
 
 ## [A12-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 12. Situación fiscal
 12.1 Impuestos sobre beneficios.
 Explicación de la diferencia que exista entre el importe neto de los ingresos y gastos del ejercicio y la base imponible (resultado fiscal). Con este objeto, se incluirá la siguiente conciliación, teniendo en cuenta que aquellas diferencias entre dichas magnitudes que no se identifican como temporarias de acuerdo con la norma de registro y valoración, se calificarán como diferencias permanentes.
@@ -4862,6 +4981,7 @@ Además, deberá indicarse la siguiente información:
 11. Cualquier otra circunstancia de carácter sustantivo en relación con la situación fiscal.
 12.2 Otros tributos.
 Se informará sobre cualquier circunstancia de carácter significativo en relación con otros tributos; en particular cualquier contingencia de carácter fiscal, así como los ejercicios pendientes de comprobación.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 12. Situación fiscal
 12.1 Impuestos sobre beneficios.
 Explicación de la diferencia que exista entre el importe neto de los ingresos y gastos del ejercicio y la base imponible (resultado fiscal). Con este objeto, se incluirá la siguiente conciliación, teniendo en cuenta que aquellas diferencias entre dichas magnitudes que no se identifican como temporarias de acuerdo con la norma de registro y valoración, se calificarán como diferencias permanentes.
@@ -4940,12 +5060,14 @@ Se suprime el punto 4 del apartado 12.1 por el art. 4.9 del Real Decreto 1159/20
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [A13-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 13. Ingresos y Gastos
 1. El desglose de las partidas 4.a) y 4.b) de la cuenta de pérdidas y ganancias, «Consumo de mercaderías» y «Consumo de materias primas y otras materias consumibles» distinguiendo entre compras y variación de existencias. Asimismo, se diferenciarán las compras nacionales, las adquisiciones intracomunitarias y las importaciones.
 Desglose de la partida 6.b) de la cuenta de pérdidas y ganancias «Cargas sociales»: distinguiendo entre aportaciones y dotaciones para pensiones y otras cargas sociales.
 En el caso de que la empresa formule la cuenta de pérdidas y ganancias abreviada deberá incluir en este apartado los desgloses antes indicados en relación con las partidas 4. «Aprovisionamientos» y 6. «Gastos de personal»: del modelo abreviado de dicha cuenta.
 2. El importe de la venta de bienes y prestación de servicios producidos por permuta de bienes no monetarios y servicios.
 3. Los resultados originados fuera de la actividad normal de la empresa incluidos en la partida «Otros resultados».
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 13. Ingresos y Gastos
 13.1 Consideraciones generales y objetivo.
 1. El objetivo de los requerimientos de información a incluir en esta nota de la memoria en relación con los ingresos es que la empresa proporcione información suficiente que permita a los usuarios de las cuentas anuales comprender la naturaleza, importe, calendario e incertidumbre de los ingresos de actividades ordinarias y flujos de efectivo que surgen de contratos con clientes. Para lograr este objetivo, la empresa suministrará información cualitativa y cuantitativa sobre los siguientes aspectos:
@@ -5007,6 +5129,7 @@ Se modifica por el art. 1.14 del Real Decreto 1/2021, de 12 de enero. Ref. BOE-A
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [A14-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 14. Provisiones y contingencias
 1. Para cada provisión reconocida en el balance deberá indicarse:
 a) Análisis del movimiento de cada partida del balance durante el ejercicio, indicando:
@@ -5034,6 +5157,7 @@ c) Información sobre los criterios utilizados para su estimación, así como lo
 4. Excepcionalmente en los casos en que mediando litigio con un tercero, la información exigida en los apartados anteriores perjudique seriamente la posición de la empresa, no será preciso que se suministre dicha información, pero se describirá la naturaleza del litigio e informará de la omisión de esta información y de las razones que han llevado a tomar tal decisión.
 
 ## [A15-3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 15. Información sobre medio ambiente
 Se facilitará información sobre:
 a) Descripción y características de los sistemas, equipos e instalaciones más significativos incorporados al inmovilizado material, cuyo fin sea la minimización del impacto medioambiental y la protección y mejora del medio ambiente indicando su naturaleza, destino, así como el valor contable y la correspondiente amortización acumulada de los mismos siempre que pueda determinarse de forma individualizada, así como las correcciones valorativas por deterioro, diferenciando las reconocidas en el ejercicio, de las acumuladas.
@@ -5044,6 +5168,7 @@ e) Inversiones realizadas durante el ejercicio por razones medioambientales.
 f) Compensaciones a recibir de terceros.
 
 ## [A16-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 16. Retribuciones a largo plazo al personal
 1. Cuando la empresa otorgue retribuciones a largo plazo al personal de aportación o prestación definida, deberá incluir una descripción general del tipo de plan de que se trate.
 2. Para el caso de retribuciones a largo plazo al personal de prestación definida, adicionalmente, se incluirá la información requerida para las provisiones reconocidas en el balance en el apartado 1 de la nota 14, así como se detallará:
@@ -5052,6 +5177,7 @@ b) Importe de las partidas incluidas en el valor razonable de los activos afecto
 c) Principales hipótesis actuariales utilizadas, con sus valores a la fecha de cierre del ejercicio.
 
 ## [A17-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 17. Transacciones con pagos basados en instrumentos de patrimonio
 Para cada acuerdo de pagos basados en instrumentos de patrimonio, deberá indicarse:
 1. Descripción de cada tipo de acuerdo de pagos basados en instrumentos de patrimonio que haya existido a lo largo del ejercicio, con indicación del beneficiario. Si dichos acuerdos tienen características similares se podrá informar sobre los mismos de forma conjunta, siempre que dicha información permita comprender la naturaleza y el alcance de dichos acuerdos.
@@ -5065,6 +5191,7 @@ Se deberá indicar el efecto que hayan tenido las transacciones con pagos basado
 4. Cuando no se pueda estimar con fiabilidad el valor razonable de los bienes y servicios recibidos, según se establece en la norma de registro y valoración, se informará sobre este hecho, explicando los motivos de dicha imposibilidad.
 
 ## [A18-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 18. Subvenciones, donaciones y legados
 Se informará sobre:
 1. El importe y características de las subvenciones, donaciones y legados recibidos que aparecen en el balance, así como los imputados en la cuenta de pérdidas y ganancias.
@@ -5073,6 +5200,7 @@ Se informará sobre:
 4. Información sobre el cumplimiento o no de las condiciones asociadas a las subvenciones, donaciones y legados.
 
 ## [A19-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 19. Combinaciones de negocios
 1. La empresa adquirente indicará, para cada una de las combinaciones de negocios que haya efectuado durante el ejercicio, la siguiente información:
 a) Los nombres y descripciones de las empresas o negocios que se combinen.
@@ -5099,6 +5227,7 @@ En el caso de que esta información no pudiese ser suministrada, se señalará e
 a) Si el importe reconocido en cuentas se ha determinado provisionalmente, se señalarán los motivos por los que el reconocimiento inicial no es completo, los activos adquiridos y compromisos asumidos para los que el periodo de valoración está abierto y el importe y naturaleza de cualquier ajuste en la valoración efectuado durante el ejercicio.
 b) Una descripción de los hechos o circunstancias posteriores a la adquisición que han dado lugar al reconocimiento durante el ejercicio de impuestos diferidos adquiridos como parte de la combinación de negocios.
 c) El importe y una justificación de cualquier ganancia o pérdida reconocida en el ejercicio que esté relacionada con los activos adquiridos o pasivos asumidos y sea de tal importe, naturaleza o incidencia que esta información sea relevante para comprender las cuentas anuales de la empresa resultante de la combinación de negocios.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 19. Combinaciones de negocios
 1. La empresa adquirente indicará, para cada una de las combinaciones de negocios que tenga lugar durante el ejercicio, la siguiente información:
 a) El nombre y descripción de la empresa o empresas adquiridas.
@@ -5136,6 +5265,7 @@ Se modifica por el art. 4.10 del Real Decreto 1159/2010, de 17 de septiembre. Re
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [A20-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 20. Negocios conjuntos
 1. La empresa indicará y describirá los intereses significativos en negocios conjuntos realizando un detalle de la forma que adopta el negocio, distinguiendo entre:
 a) Explotaciones controladas conjuntamente, y
@@ -5148,6 +5278,7 @@ c) Aquellas contingencias que surgen debido a que la empresa como partícipe pue
 a) Cualquier compromiso de inversión de capital, que haya asumido en relación con su participación en negocios conjuntos, así como su parte de los compromisos de inversión de capital asumidos conjuntamente con otros partícipes, y
 b) Su participación en los compromisos de inversión de capital asumidos por los propios negocios conjuntos.
 4. Se desglosará para cada partida significativa del balance, de la cuenta de pérdidas y ganancias, del estado de flujos de efectivo y del estado de cambios en el patrimonio neto, los importes correspondientes a cada negocio conjunto.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 20. Negocios conjuntos
 1. La empresa indicará y describirá los intereses significativos en negocios conjuntos realizando un detalle de la forma que adopta el negocio, distinguiendo entre:
 a) Explotaciones controladas conjuntamente, y
@@ -5164,6 +5295,7 @@ Se modifica el apartado 4 por el art. 4.11 del Real Decreto 1159/2010, de 17 de 
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [A21-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 21. Activos no corrientes mantenidos para la venta y operaciones interrumpidas
 1. Para cada actividad que deba ser clasificada como interrumpida, deberá indicarse:
 a) Los ingresos, los gastos y el resultado antes de impuestos de las actividades interrumpidas, reconocidos en la cuenta de pérdidas y ganancias.
@@ -5179,6 +5311,7 @@ c) Los ajustes que se efectúen en el ejercicio corriente a los importes present
 3. Cuando los requisitos para calificar un activo no corriente o un grupo enajenable de elementos como mantenidos para la venta se cumplan después de la fecha de cierre del ejercicio, pero antes de la formulación de las cuentas anuales, la empresa no los calificará como mantenidos para la venta en las cuentas anuales que formule. No obstante deberá suministrar en relación con los mismos la información descrita en la letra a) del apartado anterior.
 
 ## [A22-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 22. Hechos posteriores al cierre
 La empresa informará de:
 1. Los hechos posteriores que pongan de manifiesto circunstancias que ya existían en la fecha de cierre del ejercicio que no hayan supuesto, de acuerdo con su naturaleza, la inclusión de un ajuste en las cifras contenidas en las cuentas anuales, pero la información contenida en la memoria debe ser modificada de acuerdo con dicho hecho posterior.
@@ -5189,6 +5322,7 @@ b) Potencial impacto del hecho posterior sobre la situación de la empresa.
 c) Factores mitigantes relacionados, en su caso, con el hecho posterior.
 
 ## [A23-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 23. Operaciones con partes vinculadas
 1. La información sobre operaciones con partes vinculadas se suministrará separadamente para cada una de las siguientes categorías:
 a) Entidad dominante.
@@ -5228,6 +5362,7 @@ p) Acuerdos de condonación de deudas y prescripción de las mismas.
 También deberá informarse sobre el importe de los anticipos y créditos concedidos al personal de alta dirección y a los miembros de los órganos de administración, con indicación del tipo de interés, sus características esenciales y los importes eventualmente devueltos, así como las obligaciones asumidas por cuenta de ellos a título de garantía. Cuando los miembros del órgano de administración sean personas jurídicas, los requerimientos anteriores se referirán a las personas físicas que los representen. Estas informaciones se podrán dar de forma global por cada categoría, recogiendo separadamente los correspondientes al personal de alta dirección de los relativos a los miembros del órgano de administración.
 7. Las empresas que se organicen bajo la forma jurídica de sociedad anónima, deberán especificar la participación de los administradores en el capital de otra sociedad con el mismo, análogo o complementario género de actividad al que constituya el objeto social, así como los cargos o las funciones que en ella ejerzan, así como la realización por cuenta propia o ajena, del mismo, análogo o complementario género de actividad del que constituya el objeto social de la empresa.
 8. En el caso de pertenecer a un grupo de empresas, se describirá la estructura financiera del grupo.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 23. Operaciones con partes vinculadas
 1. La información sobre operaciones con partes vinculadas se suministrará separadamente para cada una de las siguientes categorías:
 a) Entidad dominante.
@@ -5272,6 +5407,7 @@ Se modifican los puntos 6 y 7 por el art. 1.11 del Real Decreto 602/2016, de 2 d
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [A24]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 24. Otra información
 Se incluirá información sobre:
 1. El número medio de personas empleadas en el curso del ejercicio, expresado por categorías.
@@ -5282,6 +5418,7 @@ La distribución por sexos al término del ejercicio del personal de la sociedad
 5. Cuando la sociedad sea la de mayor activo del conjunto de sociedades domiciliadas en España, sometidas a una misma unidad de decisión, porque estén controladas por cualquier medio por una o varias personas físicas o jurídicas, no obligadas a consolidar, que actúen conjuntamente, o porque se hallen bajo dirección única por acuerdos o cláusulas estatutarias, deberá incluir una descripción de las citadas sociedades, señalando el motivo por el que se encuentran bajo una misma unidad de decisión, e informará sobre el importe agregado de los activos, pasivos, patrimonio neto, cifra de negocios y resultado del conjunto de las citadas sociedades.
 Se entiende por sociedad de mayor activo aquella que en el momento de su incorporación a la unidad de decisión, presente una cifra mayor en el total activo del modelo del balance.
 6. Cuando la sociedad no sea la de mayor activo del conjunto de sociedades sometidas a una unidad de decisión en los términos señalados en el punto anterior, indicará la unidad de decisión a la que pertenece y el Registro Mercantil donde estén depositadas las cuentas anuales de la sociedad que contiene la información exigida en el punto anterior.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 24. Otra información
 Se incluirá información sobre:
 1. El número medio de personas empleadas en el curso del ejercicio, expresado por categorías.
@@ -5296,6 +5433,7 @@ Se entiende por sociedad de mayor activo aquella que en el momento de su incorpo
 7. La conclusión, la modificación o la extinción anticipada de cualquier contrato entre una sociedad mercantil y cualquiera de sus socios o administradores o persona que actúe por cuenta de ellos, cuando se trate de una operación ajena al tráfico ordinario de la sociedad o que no se realice en condiciones normales.
 Se modifica el punto 1 y se añade el 7 por el art. 1.12 del Real Decreto 602/2016, de 2 de diciembre. Ref. BOE-A-2016-11954#ap.
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 24. Otra información
 Se incluirá información sobre:
 1. El número medio de personas empleadas en el curso del ejercicio, expresado por categorías.
@@ -5315,14 +5453,17 @@ Se modifica el punto 1 y se añade el 7 por el art. 1.12 del Real Decreto 602/20
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [A25]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 25. Información segmentada
 La empresa informará de la distribución del importe neto de la cifra de negocios correspondiente a sus actividades ordinarias, por categorías de actividades, así como por mercados geográficos, en la medida en que, desde el punto de vista de la organización de la venta de productos y de la prestación de servicios u otros ingresos correspondientes a las actividades ordinarias de la empresa, esas categorías y mercados difieran entre sí de una forma considerable.
 Las empresas que puedan formular cuenta de pérdidas y ganancias abreviada podrán omitir esta información.
 
 ## [iiimodelosabreviados]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 III. MODELOS ABREVIADOS DE CUENTAS ANUALES
 
 ## [balanceabreviado-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 BALANCE ABREVIADO AL CIERRE DEL EJERCICIO 200X
 N° CUENTAS
 ACTIVO
@@ -5443,6 +5584,7 @@ V. Acreedores comerciales y otras cuentas a pagar.
 VI. Periodificaciones a corto plazo.
 TOTAL PATRIMONIO NETO Y PASIVO (A + B + C)
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 BALANCE ABREVIADO AL CIERRE DEL EJERCICIO 200X
 N° CUENTAS
 ACTIVO
@@ -5567,6 +5709,7 @@ Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [cuentaabreviada]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 CUENTA DE PÉRDIDAS Y GANANCIAS ABREVIADA CORRESPONDIENTE AL EJERCICIO TERMINADO EL ... DE 200X
 N.° Cuentas
 Nota
@@ -5614,6 +5757,7 @@ D) RESULTADO DEL EJERCICIO (C + 17)
 * Su signo puede ser positivo o negativo
 
 ## [estadoabreviado]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 ESTADO ABREVIADO DE CAMBIOS EN EL PATRIMONIO NETO CORRESPONDIENTE AL EJERCICIO TERMINADO EL .... DE 200X
 A) ESTADO ABREVIADO DE INGRESOS Y GASTOS RECONOCIDOS CORRESPONDIENTE AL EJERCICIO TERMINADO EL .... DE 200X
 N° CUENTAS
@@ -5684,6 +5828,7 @@ E. SALDO, FINAL DEL AÑO 200X
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [contenidodelamemoriaabreviada]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 CONTENIDO DE LA MEMORIA ABREVIADA
 1. Actividad de la empresa
 En este apartado se describirá el objeto social de la empresa y la actividad o actividades a que se dedique. En particular:
@@ -5946,6 +6091,7 @@ También deberá informarse sobre el importe de los anticipos y créditos conced
 Se incluirá información sobre:
 1. El número medio de personas empleadas en el curso del ejercicio, expresado por categorías.
 2. La naturaleza y el propósito de negocio de los acuerdos de la empresa que no figuren en balance y sobre los que no se haya incorporado información en otra nota de la memoria, así como su posible impacto financiero, siempre que esta información sea significativa y de ayuda para la determinación de la posición financiera de la empresa.
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 CONTENIDO DE LA MEMORIA ABREVIADA
 1. Actividad de la empresa
 En este apartado se describirá el objeto social de la empresa y la actividad o actividades a que se dedique. En particular:
@@ -6067,10 +6213,12 @@ Se modifica por el art. 1.13 del Real Decreto 602/2016, de 2 de diciembre. Ref. 
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [cuaapae]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 CUARTA PARTE
 CUADRO DE CUENTAS
 
 ## [grupo1]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 1
 Financiación básica
 10.
@@ -6285,6 +6433,7 @@ Acciones o participaciones emitidas consideradas como pasivos financieros
 Suscriptores de acciones consideradas como pasivos financieros
 199.
 Acciones o participaciones emitidas consideradas como pasivos financieros pendientes de inscripción.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 1
 Financiación básica
 10.
@@ -6503,6 +6652,7 @@ Se modifica la cuenta 133 por el art. 1.16.1 del Real Decreto 1/2021, de 12 de e
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [grupo2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 2
 Activo no corriente
 20.
@@ -6737,6 +6887,7 @@ Deterioro de valor de créditos a largo plazo a otras partes vinculadas
 Deterioro de valor de valores representativos de deuda a largo plazo
 298.
 Deterioro de valor de créditos a largo plazo
+### versión · vigente desde 2016-12-18 · BOE-A-2016-11954
 Grupo 2
 Activo no corriente
 20.
@@ -6975,6 +7126,7 @@ Deterioro de valor de valores representativos de deuda a largo plazo
 Deterioro de valor de créditos a largo plazo
 Se modifica el subgrupo 28 por el art. 1.14 del Real Decreto 602/2016, de 2 de diciembre. Ref. BOE-A-2016-11954#ap.
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 2
 Activo no corriente
 20.
@@ -7217,6 +7369,7 @@ Se modifica el subgrupo 28 por el art. 1.14 del Real Decreto 602/2016, de 2 de d
 Esta modificación produce efectos desde el 1 de enero de 2016 en los términos establecidos en la disposición adicional 2 del citado Real Decreto.
 
 ## [grupo3]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 3
 Existencias
 30.
@@ -7297,6 +7450,7 @@ Deterioro de valor de los productos terminados
 Deterioro de valor de los subproductos, residuos y materiales recuperados
 
 ## [grupo4]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 4
 Acreedores y deudores por operaciones comerciales
 40.
@@ -7491,6 +7645,7 @@ Provisión por contratos onerosos
 Provisión para otras operaciones comerciales
 
 ## [grupo5]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 5
 Cuentas financieras
 50.
@@ -7830,6 +7985,7 @@ Deterioro de valor de existencias, deudores comerciales y otras cuentas a cobrar
 5994.
 Deterioro de valor de otros activos mantenidos para la venta
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 5
 Cuentas financieras
 50.
@@ -8173,6 +8329,7 @@ Esta modificación será de aplicación para los ejercicios que se inicien a par
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [grupo6]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 6
 Compras y gastos
 60.
@@ -8518,6 +8675,7 @@ Pérdidas por deterioro de créditos a corto plazo, otras partes vinculadas
 6993.
 Pérdidas por deterioro de créditos a corto plazo, otras empresas
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 6
 Compras y gastos
 60.
@@ -8867,6 +9025,7 @@ Esta modificación será de aplicación para los ejercicios que se inicien a par
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [grupo7]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 7
 Ventas e ingresos
 70.
@@ -9151,6 +9310,7 @@ Reversión del deterioro de créditos a corto plazo, empresas asociadas
 Reversión del deterioro de créditos a corto plazo, otras partes vinculadas
 7993.
 Reversión del deterioro de créditos a corto plazo, otras empresas
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 7
 Ventas e ingresos
 70.
@@ -9439,6 +9599,7 @@ Se modifica la cuenta 763 por el art. 1.16.5 del Real Decreto 1/2021, de 12 de e
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [grupo8]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 8
 Gastos imputados al patrimonio neto
 80.
@@ -9509,6 +9670,7 @@ GASTOS DE PARTICIPACIONES EN EMPRESAS DEL GRUPO O ASOCIADAS CON AJUSTES VALORATI
 Deterioro de participaciones en el patrimonio, empresas del grupo
 892.
 Deterioro de participaciones en el patrimonio, empresas asociadas
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 8
 Gastos imputados al patrimonio neto
 80.
@@ -9583,6 +9745,7 @@ Se modifican las cuentas 800 y 802 por el art. 1.16.6 y 7 del Real Decreto 1/202
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [grupo9]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 9
 Ingresos imputados al patrimonio neto
 90.
@@ -9637,6 +9800,7 @@ Recuperación de ajustes valorativos negativos previos, empresas asociadas
 Transferencia por deterioro de ajustes valorativos negativos previos, empresas del grupo
 994.
 Transferencia por deterioro de ajustes valorativos negativos previos, empresas asociadas
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 9
 Ingresos imputados al patrimonio neto
 90.
@@ -9695,10 +9859,12 @@ Se modifican las cuentas 900 y 902 por el art. 1.16.8 y 9 del Real Decreto 1/202
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [quintapae]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 QUINTA PARTE
 DEFINICIONES Y RELACIONES CONTABLES
 
 ## [grupo1-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 1
 Financiación básica
 Comprende el patrimonio neto y la financiación ajena a largo plazo de la empresa destinados, en general, a financiar el activo no corriente y a cubrir un margen razonable del corriente; incluye también situaciones transitorias de financiación.
@@ -10449,6 +10615,7 @@ a) Se abonará por el valor nominal y, en su caso, la prima de emisión o asunci
 b) Se cargará:
 b1) En el momento de la inscripción del capital en el Registro Mercantil, con abono, a las cuentas 150 y 502.
 b2) En los supuestos en que no se suscriban acciones o participaciones emitidas, con abono a la cuenta 195.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 Grupo 1
 Financiación básica
 Comprende el patrimonio neto y la financiación ajena a largo plazo de la empresa destinados, en general, a financiar el activo no corriente y a cubrir un margen razonable del corriente; incluye también situaciones transitorias de financiación.
@@ -11197,6 +11364,7 @@ b1) En el momento de la inscripción del capital en el Registro Mercantil, con a
 b2) En los supuestos en que no se suscriban acciones o participaciones emitidas, con abono a la cuenta 195.
 Se modifican las cuentas 110, 113 y 133 por el art. 4.12 del Real Decreto 1159/2010, de 17 de septiembre. Ref. BOE-A-2010-14621.
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 1
 Financiación básica
 Comprende el patrimonio neto y la financiación ajena a largo plazo de la empresa destinados, en general, a financiar el activo no corriente y a cubrir un margen razonable del corriente; incluye también situaciones transitorias de financiación.
@@ -11949,6 +12117,7 @@ Se modifican las cuentas 110, 113 y 133 por el art. 4.12 del Real Decreto 1159/2
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [grupo2-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 2
 Activo no corriente
 Comprende los activos destinados a servir de forma duradera en las actividades de la empresa, incluidas las inversiones financieras cuyo vencimiento, enajenación o realización se espera habrá de producirse en un plazo superior a un año.
@@ -12438,6 +12607,7 @@ Su movimiento es análogo al señalado para la cuenta 294.
 Importe de las correcciones valorativas por deterioro del valor en créditos del subgrupo 25.
 Su movimiento es análogo al señalado para la cuenta 295.
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 2
 Activo no corriente
 Comprende los activos destinados a servir de forma duradera en las actividades de la empresa, incluidas las inversiones financieras cuyo vencimiento, enajenación o realización se espera habrá de producirse en un plazo superior a un año.
@@ -12927,6 +13097,7 @@ Esta modificación será de aplicación para los ejercicios que se inicien a par
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [grupo3-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 3
 Existencias
 Son activos poseídos para ser vendidos en el curso normal de la explotación, en proceso de producción o en forma de materiales o suministros para ser consumidos en el proceso de producción o en la prestación de servicios.
@@ -13051,6 +13222,7 @@ a) Se abonarán por la estimación del deterioro que se realice en el ejercicio 
 b) Se cargarán por la estimación del deterioro efectuado al cierre del ejercicio precedente, con abono a la cuenta 793.
 
 ## [grupo4-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 4
 Acreedores y deudores por operaciones comerciales
 Instrumentos financieros y cuentas que tengan su origen en el tráfico de la empresa, así como las cuentas con las Administraciones Públicas, incluso las que correspondan a saldos con vencimiento superior a un año. Para estas últimas y a efectos de su clasificación, se podrán utilizar los subgrupos 42 y 45 o proceder a dicha reclasificación en las propias cuentas.
@@ -13576,6 +13748,7 @@ Provisión para cobertura de gastos por devoluciones de ventas, garantías de re
 Su movimiento es el siguiente:
 a) Se abonará, al cierre del ejercicio, por el importe de la estimación realizada, con cargo a la cuenta 6959.
 b) Se cargará, al cierre del ejercicio, por la dotación efectuada en el año anterior, con abono a la cuenta 79549.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 4
 Acreedores y deudores por operaciones comerciales
 Instrumentos financieros y cuentas que tengan su origen en el tráfico de la empresa, así como las cuentas con las Administraciones Públicas, incluso las que correspondan a saldos con vencimiento superior a un año. Para estas últimas y a efectos de su clasificación, se podrán utilizar los subgrupos 42 y 45 o proceder a dicha reclasificación en las propias cuentas.
@@ -14105,6 +14278,7 @@ Se modifica la introducción al Grupo 4 por el art. 1.17.10 del Real Decreto 1/2
 Esta modificación será de aplicación para los ejercicios que se inicien a partir del 1 de enero de 2021, según establece la disposición final única del citado Real Decreto.
 
 ## [grupo5-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 5
 Cuentas financieras
 Instrumentos financieros por operaciones no comerciales, es decir, por operaciones ajenas al tráfico cuyo vencimiento, enajenación o realización se espera habrá de producirse en un plazo no superior a un año y medios líquidos disponibles.
@@ -15003,6 +15177,7 @@ b) Se cargará:
 b1) Cuando desaparezcan las causas que determinaron el reconocimiento de la corrección valorativa por deterioro, con abono a la cuenta que corresponda del subgrupo 79.
 b2) Cuando se enajene el activo o se dé de baja del activo por cualquier otro motivo, con abono a cuentas del subgrupo 58.
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 5
 Cuentas financieras
 Instrumentos financieros por operaciones no comerciales, es decir, por operaciones ajenas al tráfico cuyo vencimiento, enajenación o realización se espera habrá de producirse en un plazo no superior a un año y medios líquidos disponibles.
@@ -15905,6 +16080,7 @@ Esta modificación será de aplicación para los ejercicios que se inicien a par
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [grupo6-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 6
 Compras y gastos
 Aprovisionamientos de mercaderías y demás bienes adquiridos por la empresa para revenderlos, bien sea sin alterar su forma y sustancia, o previo sometimiento a procesos industriales de adaptación, transformación o construcción. Comprende también todos los gastos del ejercicio, incluidas las adquisiciones de servicios y de materiales consumibles, la variación de existencias adquiridas y otros gastos y pérdidas del ejercicio.
@@ -16363,6 +16539,7 @@ Se cargará por el importe de la depreciación estimada, con abono a las cuentas
 Corrección valorativa por deterioro del valor en créditos de los subgrupos 53 y 54 o, en su caso, del subgrupo 58.
 Se cargará por el importe del deterioro estimado, con abono a las cuentas 595, 598 ó 599.
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 6
 Compras y gastos
 Aprovisionamientos de mercaderías y demás bienes adquiridos por la empresa para revenderlos, bien sea sin alterar su forma y sustancia, o previo sometimiento a procesos industriales de adaptación, transformación o construcción. Comprende también todos los gastos del ejercicio, incluidas las adquisiciones de servicios y de materiales consumibles, la variación de existencias adquiridas y otros gastos y pérdidas del ejercicio.
@@ -16828,6 +17005,7 @@ Esta modificación será de aplicación para los ejercicios que se inicien a par
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [grupo7-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 7
 Ventas e ingresos
 Enajenación de bienes y prestación de servicios que son objeto del tráfico de la empresa; comprende también otros ingresos, variación de existencias y beneficios del ejercicio.
@@ -17143,6 +17321,7 @@ Se abonará por el importe de la corrección de valor, con cargo a las cuentas 5
 Corrección valorativa, por la recuperación de valor en créditos de los subgrupos 53 y 54 o, en su caso, del subgrupo 58.
 Se abonará por el importe de la corrección de valor, con cargo a las cuentas 595, 598 ó 599.
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 7
 Ventas e ingresos
 Enajenación de bienes y prestación de servicios que son objeto del tráfico de la empresa; comprende también otros ingresos, variación de existencias y beneficios del ejercicio.
@@ -17465,6 +17644,7 @@ Esta modificación será de aplicación para los ejercicios que se inicien a par
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
 
 ## [grupo8-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 8
 Gastos imputados al patrimonio neto
 80.
@@ -17648,6 +17828,7 @@ Las cuentas de este subgrupo recogerán las pérdidas por deterioro de participa
 Su movimiento es el siguiente:
 a) Se cargarán en el momento en que se produzca el deterioro de valor del activo financiero, hasta el límite de los ajustes valorativos positivos previos, con abono a las cuentas 240 ó 530.
 b) Se abonarán, al cierre del ejercicio, con cargo a la cuenta 133.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 Grupo 8
 Gastos imputados al patrimonio neto
 80.
@@ -17834,6 +18015,7 @@ a) Se cargarán en el momento en que se produzca el deterioro de valor del activ
 b) Se abonarán, al cierre del ejercicio, con cargo a la cuenta 133.
 Se modifica la cuenta 802 por el art. 4.12 del Real Decreto 1159/2010, de 17 de septiembre. Ref. BOE-A-2010-14621#a4.
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 8
 Gastos imputados al patrimonio neto
 80.
@@ -18023,6 +18205,7 @@ Se modifica la cuenta 802 por el art. 4.12 del Real Decreto 1159/2010, de 17 de 
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 
 ## [grupo9-2]
+### versión · vigente desde 2008-01-01 · BOE-A-2007-19884
 Grupo 9
 Ingresos imputados al patrimonio neto
 90.
@@ -18151,6 +18334,7 @@ Su movimiento es el siguiente:
 a) Se abonarán en el momento en que se produzca el deterioro del activo financiero, por los ajustes valorativos negativos previos, con cargo a las cuentas 696 ó 698.
 b) Se cargarán, al cierre del ejercicio, con abono a la cuenta 133.
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2010-09-25 · BOE-A-2010-14621
 Grupo 9
 Ingresos imputados al patrimonio neto
 90.
@@ -18282,6 +18466,7 @@ b) Se cargarán, al cierre del ejercicio, con abono a la cuenta 133.
 Se modifica la cuenta 902 por el art. 4.12 del Real Decreto 1159/2010, de 17 de septiembre. Ref. BOE-A-2010-14621#a4.
 Téngase en cuenta que el citado Real Decreto será de aplicación a las cuentas anuales individuales y consolidadas de los ejercicios que se inicien a partir de 1 de enero de 2010.
 Redactado conforme a la corrección de errores publicada en BOE núm. 312, de 29 de diciembre de 2007. Ref. BOE-A-2007-22441.
+### versión · vigente desde 2021-01-31 · BOE-A-2021-1350
 Grupo 9
 Ingresos imputados al patrimonio neto
 90.
