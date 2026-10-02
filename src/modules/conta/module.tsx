@@ -16,6 +16,7 @@ import '@/modules/conta/estilo'
 import { MarcoConta } from '@/modules/conta/marco/MarcoConta'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import TuEmpresaPage from '@/modules/conta/pages/TuEmpresaPage'
+import TablasGeneralesPage from '@/modules/conta/pages/TablasGeneralesPage'
 
 const enMarco = (pagina: ReactNode, ejemplo: string) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo}>{pagina}</MarcoConta></EmpresasProveedor>
@@ -33,6 +34,8 @@ export const contaModule: ModuleDefinition = {
   routes: [
     { path: '', element: <Navigate to={CONTA.rutas.empresa} replace /> },
     { path: CONTA.rutas.empresa, element: enMarco(<TuEmpresaPage />, 'Añade a Pablo como apoderado') },
+    { path: CONTA.rutas.tablas, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
+    { path: CONTA.rutas.tabla, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: '*', element: <Navigate to={`/${CONTA.modulo}/${CONTA.rutas.empresa}`} replace /> },
   ],
   sidebar: {

@@ -1,11 +1,13 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 2.ª tanda: tarea 3. Las tres migraciones del C00 (catálogos
-# oficiales VACÍOS, la empresa y las tablas generales) y, después, el ensayo de
-# las reglas de la base con los usuarios A y B, que NO deja nada escrito.
-# (1.ª del C00: comprobación de solo lectura del estado de staging.)
-supabase/migrations/20261003T0100_c00_catalogos_oficiales.sql
-supabase/migrations/20261003T0110_c00_empresa.sql
-supabase/migrations/20261003T0120_c00_tablas_generales.sql
-supabase/staging/sql/20261003_ensayo_c00_reglas.sql
+# 03/10/2026 · C00, 3.ª tanda: tarea 4. El catálogo de IVA de Cocina (copia de
+# producción, global, para poder medir D1), los valores de serie con su fuente,
+# el ensayo de D1 ANTES de que vat_rate_for cambie, la 0140 (vat_rate_for lee
+# de tax_rate) y el MISMO ensayo DESPUÉS. Los dos ensayos solo leen.
+# (2.ª del C00: las migraciones 0100, 0110 y 0120 y el ensayo de sus reglas.)
+supabase/seeds/conta/seed_c00_catalogo_iva_cocina.sql
+supabase/migrations/20261003T0130_c00_valores_de_serie.sql
+supabase/staging/sql/20261003_ensayo_c00_d1.sql
+supabase/migrations/20261003T0140_c00_vat_rate_lee_de_impuestos.sql
+supabase/staging/sql/20261003_ensayo_c00_d1.sql

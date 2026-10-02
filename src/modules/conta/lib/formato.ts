@@ -73,3 +73,8 @@ export function iniciales(nombre: string): string {
   if (palabras.length === 1) return palabras[0].slice(0, 2).toUpperCase()
   return (palabras[0][0] + palabras[1][0]).toUpperCase()
 }
+
+/** Un porcentaje como en la maqueta: 21 → «21 %», 5.2 → «5,2 %», 9.5 → «9,5 %». */
+export function porcentaje(n: number): string {
+  return `${String(Number(n)).replace('.', ',')} %`
+}

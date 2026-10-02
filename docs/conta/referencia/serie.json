@@ -1,5 +1,5 @@
 {
- "generado_desde": "2026-10-02T17:31:48.959Z",
+ "generado_desde": "2026-10-02T18:10:30.129Z",
  "tablas": {
   "country": {
    "fuente": "eu-paises",
@@ -11,11 +11,11 @@
   },
   "iae_heading": {
    "fuente": "istac-iae",
-   "filas": 1000
+   "filas": 1432
   },
   "cnae_code": {
    "fuente": "istac-cnae-2025",
-   "filas": 1000
+   "filas": 1060
   },
   "vat_scheme": {
    "filas": [
@@ -308,6 +308,22 @@
        "fuente": "orden-modelo-180",
        "bloque": "*",
        "literal": "El modelo 115 en pesetas que figura como anexo I de la presente Orden"
+      }
+     ]
+    },
+    {
+     "code": "130",
+     "name": "Pago a cuenta del IRPF",
+     "description": null,
+     "legal_ref": "Orden EHA/672/2007, de 19 de marzo, por la que se aprueban los modelos 130 y 131 para la autoliquidación de los pagos fraccionados a cuenta del Impuesto sobre la Renta de las Personas Físicas correspondientes, respectivamente, a actividades económicas en estimacion directa y a actividades económicas en estimación objetiva, el modelo 310 de declaración ordinaria para la autoliquidaciòn del régimen simplificado del Impuesto sobre el Valor Añadido, se determinan el lugar y forma de presentación de los mismos y se modifica en materia de domiciliación bancaria la Orden EHA/3398/2006, de 26 de octubre",
+     "fuenteOrden": "orden-modelo-130",
+     "source_key": "orden-modelo-130",
+     "verified_at": "2026-10-02",
+     "pruebas": [
+      {
+       "fuente": "orden-modelo-130",
+       "bloque": "*",
+       "literal": "Se aprueba el modelo 130. Impuesto sobre la Renta de las Personas Físicas. Actividades económicas en estimación directa. Pago fraccionado."
       }
      ]
     }
@@ -1153,7 +1169,89 @@
    ]
   },
   "payment_term": {
-   "filas": []
+   "filas": [
+    {
+     "code": "contado",
+     "name": "Al contado",
+     "example": "El mismo día de la factura",
+     "days": [
+      0
+     ],
+     "fixed_days": [],
+     "legal_ref": "Ley 3/2004, art. 4.3 (como mucho 60 días)",
+     "sort_order": 10,
+     "source_key": "ley-3-2004",
+     "verified_at": "2026-10-02",
+     "pruebas": [
+      {
+       "fuente": "ley-3-2004",
+       "bloque": "a4",
+       "literal": "sin que, en ningún caso, se pueda acordar un plazo superior a 60 días naturales"
+      }
+     ]
+    },
+    {
+     "code": "30_dias",
+     "name": "30 días",
+     "example": "Lo que vale si no se pacta otro plazo",
+     "days": [
+      30
+     ],
+     "fixed_days": [],
+     "legal_ref": "Ley 3/2004, art. 4.1",
+     "sort_order": 20,
+     "source_key": "ley-3-2004",
+     "verified_at": "2026-10-02",
+     "pruebas": [
+      {
+       "fuente": "ley-3-2004",
+       "bloque": "a4",
+       "literal": "será de treinta días naturales después de la fecha de recepción de las mercancías o prestación de los servicios"
+      }
+     ]
+    },
+    {
+     "code": "60_dias",
+     "name": "60 días",
+     "example": "El plazo más largo que se puede pactar entre empresas",
+     "days": [
+      60
+     ],
+     "fixed_days": [],
+     "legal_ref": "Ley 3/2004, art. 4.3",
+     "sort_order": 30,
+     "source_key": "ley-3-2004",
+     "verified_at": "2026-10-02",
+     "pruebas": [
+      {
+       "fuente": "ley-3-2004",
+       "bloque": "a4",
+       "literal": "sin que, en ningún caso, se pueda acordar un plazo superior a 60 días naturales"
+      }
+     ]
+    },
+    {
+     "code": "30_60_dias",
+     "name": "30 y 60 días",
+     "example": "La mitad a los 30 días y la otra mitad a los 60",
+     "days": [
+      30,
+      60
+     ],
+     "fixed_days": [],
+     "legal_ref": "Ley 3/2004, art. 4.3 (como mucho 60 días)",
+     "sort_order": 40,
+     "source_key": "ley-3-2004",
+     "verified_at": "2026-10-02",
+     "pruebas": [
+      {
+       "fuente": "ley-3-2004",
+       "bloque": "a4",
+       "literal": "sin que, en ningún caso, se pueda acordar un plazo superior a 60 días naturales"
+      }
+     ]
+    }
+   ]
   },
   "entry_text": {
    "filas": [
@@ -1355,33 +1453,8 @@
   },
   {
    "tabla": "tax_form",
-   "code": "130",
-   "por": "falta la orden que aprueba el modelo 130: la búsqueda del BOE no la encuentra"
-  },
-  {
-   "tabla": "tax_form",
    "code": "200",
    "por": "falta la orden que aprueba el modelo 200: la búsqueda del BOE no la encuentra"
-  },
-  {
-   "tabla": "payment_term",
-   "code": "contado",
-   "por": "falta descargar la Ley 3/2004 (morosidad): sin ella no se cargan plazos de serie"
-  },
-  {
-   "tabla": "payment_term",
-   "code": "30_dias",
-   "por": "falta descargar la Ley 3/2004 (morosidad)"
-  },
-  {
-   "tabla": "payment_term",
-   "code": "60_dias",
-   "por": "falta descargar la Ley 3/2004 (morosidad)"
-  },
-  {
-   "tabla": "payment_term",
-   "code": "30_60",
-   "por": "falta descargar la Ley 3/2004 (morosidad)"
   }
  ]
 }
