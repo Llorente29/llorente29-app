@@ -50,24 +50,67 @@ function textoBoe(xml) {
   return lineas.join('\n').trim() + '\n'
 }
 
+const espera = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** Pide una URL; si el servidor falla (5xx o red), reintenta dos veces. */
 async function pedir(url, opciones = {}) {
-  const r = await fetch(url, { ...opciones, headers: { 'User-Agent': UA, ...(opciones.headers ?? {}) } })
-  const cuerpo = await r.text()
-  return { http: r.status, cuerpo }
+  let ultimo = { http: 0, cuerpo: '' }
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      const r = await fetch(url, { ...opciones, headers: { 'User-Agent': UA, ...(opciones.headers ?? {}) } })
+      ultimo = { http: r.status, cuerpo: await r.text() }
+      if (r.status < 500) return ultimo
+    } catch (e) { ultimo = { http: 0, cuerpo: String(e) } }
+    await espera(3000 * (intento + 1))
+  }
+  return ultimo
+}
+
+/** Busca en la legislación consolidada del BOE por texto del título; devuelve los identificadores encontrados. */
+async function buscarEnBoe(texto) {
+  const q = JSON.stringify({ query: { query_string: { query: `titulo:(${texto})` } } })
+  const r = await pedir(`https://www.boe.es/datosabiertos/api/legislacion-consolidada?query=${encodeURIComponent(q)}&limit=10`,
+    { headers: { Accept: 'application/json' } })
+  const ids = [...new Set(r.cuerpo.match(/BOE-A-\d{4}-\d+/g) ?? [])]
+  return { ids, http: r.http, muestra: r.cuerpo.slice(0, 300) }
+}
+
+/** Una norma del BOE: primero la base consolidada; si no está, el BOE del día. */
+async function descargarBoe(id) {
+  const base = `https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/${id}`
+  const meta = await pedir(`${base}/metadatos`, { headers: { Accept: 'application/xml' } })
+  const texto = await pedir(`${base}/texto`, { headers: { Accept: 'application/xml' } })
+  if (texto.http === 200) {
+    const titulo = sinEtiquetas((meta.cuerpo.match(/<titulo>([\s\S]*?)<\/titulo>/) ?? [])[1] ?? '')
+    const actualizado = ((meta.cuerpo.match(/<fecha_actualizacion>([\s\S]*?)<\/fecha_actualizacion>/) ?? [])[1] ?? '').trim()
+    return { id, url: `https://www.boe.es/buscar/act.php?id=${id}`, urlDatos: `${base}/texto`, http: 200, titulo,
+      actualizadoEnFuente: actualizado || null, texto: textoBoe(texto.cuerpo), ext: 'txt' }
+  }
+  // No consolidada (p. ej. una norma que solo aprueba una clasificación): el BOE del día.
+  const dia = await pedir(`https://www.boe.es/diario_boe/xml.php?id=${id}`, { headers: { Accept: 'application/xml' } })
+  const titulo = sinEtiquetas((dia.cuerpo.match(/<titulo>([\s\S]*?)<\/titulo>/) ?? [])[1] ?? '')
+  return { id, url: `https://www.boe.es/diario_boe/txt.php?id=${id}`, urlDatos: `https://www.boe.es/diario_boe/xml.php?id=${id}`,
+    http: dia.http, titulo, actualizadoEnFuente: null, texto: dia.http === 200 ? textoBoe(dia.cuerpo) : '', ext: 'txt' }
 }
 
 async function descargarUna(f) {
   if (f.tipo === 'boe') {
-    const base = `https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/${f.id}`
-    const meta = await pedir(`${base}/metadatos`, { headers: { Accept: 'application/xml' } })
-    const texto = await pedir(`${base}/texto`, { headers: { Accept: 'application/xml' } })
-    const titulo = sinEtiquetas((meta.cuerpo.match(/<titulo>([\s\S]*?)<\/titulo>/) ?? [])[1] ?? '')
-    const actualizado = ((meta.cuerpo.match(/<fecha_actualizacion>([\s\S]*?)<\/fecha_actualizacion>/) ?? [])[1] ?? '').trim()
-    return {
-      url: `https://www.boe.es/buscar/act.php?id=${f.id}`, urlDatos: `${base}/texto`,
-      http: texto.http, titulo, actualizadoEnFuente: actualizado || null,
-      texto: texto.http === 200 ? textoBoe(texto.cuerpo) : '', ext: 'txt',
+    const probados = []
+    if (f.id) {
+      const d = await descargarBoe(f.id)
+      probados.push(`${f.id}: «${d.titulo.slice(0, 60)}»`)
+      if (d.http === 200 && (d.titulo.includes(f.debeContener) || d.texto.includes(f.debeContener)) && (!f.tituloDebeContener || d.titulo.includes(f.tituloDebeContener))) return d
     }
+    if (f.buscar) {
+      const b = await buscarEnBoe(f.buscar)
+      for (const id of b.ids.slice(0, 5)) {
+        const d = await descargarBoe(id)
+        probados.push(`${id}: «${d.titulo.slice(0, 60)}»`)
+        if (d.http === 200 && d.titulo.includes(f.tituloDebeContener ?? f.debeContener)) return { ...d, nota: `encontrada buscando «${f.buscar}»` }
+      }
+      if (b.ids.length === 0) probados.push(`búsqueda «${f.buscar}» sin resultados (HTTP ${b.http}): ${b.muestra}`)
+    }
+    return { url: f.id ?? f.buscar, http: 404, titulo: '', texto: '', ext: 'txt', error: `No encontrada. Probado: ${probados.join(' | ')}` }
   }
   if (f.tipo === 'sparql') {
     const r = await pedir(f.url, {
@@ -104,6 +147,7 @@ async function main() {
       nombre: f.nombre, url: d.url, urlDatos: d.urlDatos ?? null, http: d.http, titulo: d.titulo,
       actualizadoEnFuente: d.actualizadoEnFuente ?? null, fecha, sha256: huella, bytes: d.texto.length,
       contieneLoEsperado: contiene, fichero: ok ? fichero : null, error: d.error ?? null,
+      idBoe: d.id ?? null, nota: d.nota ?? null,
     }
     const antes = previo.fuentes?.[f.clave]?.sha256 ?? null
     if (ok && antes && antes !== huella) cambios.push(`- **${f.nombre}** (${d.url}): la huella pasa de \`${antes.slice(0, 12)}…\` a \`${huella.slice(0, 12)}…\`. Actualizada en la fuente: ${d.actualizadoEnFuente ?? 'no lo dice'}.`)

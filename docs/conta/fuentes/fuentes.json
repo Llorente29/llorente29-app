@@ -1,20 +1,158 @@
 {
   "_que_es": "Lista de fuentes oficiales del módulo de contabilidad (C00, respuesta 1, D7). scripts/conta/fuentes.mjs las descarga desde GitHub Actions y deja en docs/conta/fuentes/ el texto, la URL, la fecha y la huella sha256. Ningún valor de serie se carga sin estar aquí.",
   "fuentes": [
-    { "clave": "ley-37-1992", "nombre": "Ley 37/1992, del Impuesto sobre el Valor Añadido", "tipo": "boe", "id": "BOE-A-1992-28740", "debeContener": "Impuesto sobre el Valor Añadido" },
-    { "clave": "rd-1624-1992", "nombre": "Real Decreto 1624/1992, Reglamento del IVA", "tipo": "boe", "id": "BOE-A-1992-28925", "debeContener": "Reglamento del Impuesto sobre el Valor Añadido" },
-    { "clave": "ley-35-2006", "nombre": "Ley 35/2006, del IRPF", "tipo": "boe", "id": "BOE-A-2006-20764", "debeContener": "Impuesto sobre la Renta de las Personas Físicas" },
-    { "clave": "rd-439-2007", "nombre": "Real Decreto 439/2007, Reglamento del IRPF", "tipo": "boe", "id": "BOE-A-2007-6820", "debeContener": "Reglamento del Impuesto sobre la Renta de las Personas Físicas" },
-    { "clave": "rd-1514-2007", "nombre": "Real Decreto 1514/2007, Plan General de Contabilidad", "tipo": "boe", "id": "BOE-A-2007-19884", "debeContener": "Plan General de Contabilidad" },
-    { "clave": "rd-1515-2007", "nombre": "Real Decreto 1515/2007, PGC de Pymes", "tipo": "boe", "id": "BOE-A-2007-19966", "debeContener": "Pequeñas y Medianas Empresas" },
-    { "clave": "codigo-comercio", "nombre": "Código de Comercio", "tipo": "boe", "id": "BOE-A-1885-6627", "debeContener": "Código de Comercio" },
-    { "clave": "ley-27-2014", "nombre": "Ley 27/2014, del Impuesto sobre Sociedades", "tipo": "boe", "id": "BOE-A-2014-12328", "debeContener": "Impuesto sobre Sociedades" },
-    { "clave": "rdl-1175-1990", "nombre": "RDL 1175/1990, tarifas e instrucción del IAE", "tipo": "boe", "id": "BOE-A-1990-23930", "debeContener": "Impuesto sobre Actividades Económicas" },
-    { "clave": "rd-10-2025", "nombre": "Real Decreto 10/2025, CNAE-2025", "tipo": "boe", "id": "BOE-A-2025-616", "debeContener": "Clasificación Nacional de Actividades Económicas" },
-    { "clave": "ley-20-1991", "nombre": "Ley 20/1991, aspectos fiscales del REF de Canarias (IGIC)", "tipo": "boe", "id": "BOE-A-1991-14392", "debeContener": "Canarias" },
-    { "clave": "istac-iae", "nombre": "ISTAC · Clasificación del IAE (CL_IAE)", "tipo": "url", "formato": "json", "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_IAE/01.000/codes?limit=5000", "debeContener": "671" },
-    { "clave": "istac-cnae-2025", "nombre": "ISTAC · CNAE-2025 (CL_CNAE_2025)", "tipo": "url", "formato": "json", "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_CNAE_2025/01.000/codes?limit=5000", "debeContener": "56" },
-    { "clave": "eu-paises", "nombre": "Oficina de Publicaciones de la UE · tabla de países (ISO 3166)", "tipo": "sparql", "formato": "csv", "url": "https://publications.europa.eu/webapi/rdf/sparql", "consulta": "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> PREFIX dc: <http://purl.org/dc/elements/1.1/> SELECT ?alfa2 ?alfa3 ?nombre WHERE { ?p skos:inScheme <http://publications.europa.eu/resource/authority/country> ; skos:prefLabel ?nombre ; skos:notation ?n2 ; skos:notation ?n3 . FILTER(lang(?nombre) = 'es') FILTER(datatype(?n2) = <http://publications.europa.eu/ontology/euvoc#ISO_3166_1_ALPHA_2>) FILTER(datatype(?n3) = <http://publications.europa.eu/ontology/euvoc#ISO_3166_1_ALPHA_3>) BIND(str(?n2) AS ?alfa2) BIND(str(?n3) AS ?alfa3) } ORDER BY ?alfa2", "debeContener": "ES" },
-    { "clave": "eu-monedas", "nombre": "Oficina de Publicaciones de la UE · tabla de monedas (ISO 4217)", "tipo": "sparql", "formato": "csv", "url": "https://publications.europa.eu/webapi/rdf/sparql", "consulta": "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> SELECT ?codigo ?nombre WHERE { ?m skos:inScheme <http://publications.europa.eu/resource/authority/currency> ; skos:prefLabel ?nombre ; skos:notation ?n . FILTER(lang(?nombre) = 'es') FILTER(datatype(?n) = <http://publications.europa.eu/ontology/euvoc#ISO_4217_3>) BIND(str(?n) AS ?codigo) } ORDER BY ?codigo", "debeContener": "EUR" }
+    {
+      "clave": "ley-37-1992",
+      "nombre": "Ley 37/1992, del Impuesto sobre el Valor Añadido",
+      "tipo": "boe",
+      "id": "BOE-A-1992-28740",
+      "debeContener": "Impuesto sobre el Valor Añadido"
+    },
+    {
+      "clave": "rd-1624-1992",
+      "nombre": "Real Decreto 1624/1992, Reglamento del IVA",
+      "tipo": "boe",
+      "id": "BOE-A-1992-28925",
+      "debeContener": "Reglamento del Impuesto sobre el Valor Añadido"
+    },
+    {
+      "clave": "ley-35-2006",
+      "nombre": "Ley 35/2006, del IRPF",
+      "tipo": "boe",
+      "id": "BOE-A-2006-20764",
+      "debeContener": "Impuesto sobre la Renta de las Personas Físicas"
+    },
+    {
+      "clave": "rd-439-2007",
+      "nombre": "Real Decreto 439/2007, Reglamento del IRPF",
+      "tipo": "boe",
+      "id": "BOE-A-2007-6820",
+      "debeContener": "Reglamento del Impuesto sobre la Renta de las Personas Físicas"
+    },
+    {
+      "clave": "rd-1514-2007",
+      "nombre": "Real Decreto 1514/2007, Plan General de Contabilidad",
+      "tipo": "boe",
+      "id": "BOE-A-2007-19884",
+      "debeContener": "Plan General de Contabilidad"
+    },
+    {
+      "clave": "rd-1515-2007",
+      "nombre": "Real Decreto 1515/2007, PGC de Pymes",
+      "tipo": "boe",
+      "id": "BOE-A-2007-19966",
+      "debeContener": "Pequeñas y Medianas Empresas"
+    },
+    {
+      "clave": "codigo-comercio",
+      "nombre": "Código de Comercio",
+      "tipo": "boe",
+      "id": "BOE-A-1885-6627",
+      "debeContener": "Código de Comercio"
+    },
+    {
+      "clave": "ley-27-2014",
+      "nombre": "Ley 27/2014, del Impuesto sobre Sociedades",
+      "tipo": "boe",
+      "id": "BOE-A-2014-12328",
+      "debeContener": "Impuesto sobre Sociedades"
+    },
+    {
+      "clave": "rdl-1175-1990",
+      "nombre": "RDL 1175/1990, tarifas e instrucción del IAE",
+      "tipo": "boe",
+      "id": "BOE-A-1990-23930",
+      "debeContener": "Impuesto sobre Actividades Económicas"
+    },
+    {
+      "clave": "rd-10-2025",
+      "nombre": "Real Decreto 10/2025, CNAE-2025",
+      "tipo": "boe",
+      "id": "BOE-A-2025-616",
+      "debeContener": "Clasificación Nacional de Actividades Económicas",
+      "tituloDebeContener": "10/2025"
+    },
+    {
+      "clave": "ley-20-1991",
+      "nombre": "Ley 20/1991, aspectos fiscales del REF de Canarias (IGIC)",
+      "tipo": "boe",
+      "debeContener": "Canarias",
+      "buscar": "\"Régimen Económico Fiscal de Canarias\"",
+      "tituloDebeContener": "Ley 20/1991"
+    },
+    {
+      "clave": "ley-8-1991-ipsi",
+      "nombre": "Ley 8/1991, Impuesto sobre la Producción, los Servicios y la Importación (Ceuta y Melilla)",
+      "tipo": "boe",
+      "buscar": "\"Producción, los Servicios y la Importación\"",
+      "tituloDebeContener": "Ley 8/1991",
+      "debeContener": "Ceuta"
+    },
+    {
+      "clave": "ley-3-2004",
+      "nombre": "Ley 3/2004, de medidas de lucha contra la morosidad en las operaciones comerciales",
+      "tipo": "boe",
+      "buscar": "morosidad",
+      "tituloDebeContener": "Ley 3/2004",
+      "debeContener": "morosidad"
+    },
+    {
+      "clave": "ley-7-2012",
+      "nombre": "Ley 7/2012, prevención y lucha contra el fraude fiscal (límite de pagos en efectivo)",
+      "tipo": "boe",
+      "buscar": "\"lucha contra el fraude\"",
+      "tituloDebeContener": "Ley 7/2012",
+      "debeContener": "efectivo"
+    },
+    {
+      "clave": "rd-1619-2012",
+      "nombre": "Real Decreto 1619/2012, Reglamento de facturación",
+      "tipo": "boe",
+      "buscar": "\"obligaciones de facturación\"",
+      "tituloDebeContener": "1619/2012",
+      "debeContener": "factura"
+    },
+    {
+      "clave": "orden-eha-451-2008",
+      "nombre": "Orden EHA/451/2008, composición del NIF de las personas jurídicas y entidades sin personalidad",
+      "tipo": "boe",
+      "buscar": "\"número de identificación fiscal\"",
+      "tituloDebeContener": "EHA/451/2008",
+      "debeContener": "identificación fiscal"
+    },
+    {
+      "clave": "istac-iae",
+      "nombre": "ISTAC · Clasificación del IAE (CL_IAE)",
+      "tipo": "url",
+      "formato": "json",
+      "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_IAE/01.000/codes?limit=5000",
+      "debeContener": "671"
+    },
+    {
+      "clave": "istac-cnae-2025",
+      "nombre": "ISTAC · CNAE-2025 (CL_CNAE_2025)",
+      "tipo": "url",
+      "formato": "json",
+      "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_CNAE_2025/01.000/codes?limit=5000",
+      "debeContener": "56"
+    },
+    {
+      "clave": "eu-paises",
+      "nombre": "Oficina de Publicaciones de la UE · tabla de países (ISO 3166)",
+      "tipo": "sparql",
+      "formato": "csv",
+      "url": "https://publications.europa.eu/webapi/rdf/sparql",
+      "consulta": "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> SELECT ?alfa2 ?alfa3 ?nombre WHERE { ?p skos:inScheme <http://publications.europa.eu/resource/authority/country> ; skos:prefLabel ?nombre ; skos:notation ?n2 ; skos:notation ?n3 . FILTER(lang(?nombre) = 'es') FILTER(regex(str(datatype(?n2)), 'ALPHA_2$')) FILTER(regex(str(datatype(?n3)), 'ALPHA_3$')) BIND(str(?n2) AS ?alfa2) BIND(str(?n3) AS ?alfa3) } ORDER BY ?alfa2",
+      "debeContener": "ES"
+    },
+    {
+      "clave": "eu-monedas",
+      "nombre": "Oficina de Publicaciones de la UE · tabla de monedas (ISO 4217)",
+      "tipo": "sparql",
+      "formato": "csv",
+      "url": "https://publications.europa.eu/webapi/rdf/sparql",
+      "consulta": "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> SELECT ?codigo ?nombre WHERE { ?m skos:inScheme <http://publications.europa.eu/resource/authority/currency> ; skos:prefLabel ?nombre ; skos:notation ?n . FILTER(lang(?nombre) = 'es') FILTER(regex(str(datatype(?n)), '4217')) BIND(str(?n) AS ?codigo) } ORDER BY ?codigo",
+      "debeContener": "EUR"
+    }
   ]
 }
