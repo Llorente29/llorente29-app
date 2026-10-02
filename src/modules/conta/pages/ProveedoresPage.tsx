@@ -94,31 +94,31 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
       {filas && filas.length === 0 && <div className="cf-tarjeta"><p style={{ margin: 0 }}>Aún no hay proveedores. Pulsa «Nuevo proveedor» para empezar.</p></div>}
       {filas && filas.length > 0 && visibles.length === 0 && <div className="cf-tarjeta"><p style={{ margin: 0 }}>Ningún proveedor coincide con «{busca.trim()}».</p></div>}
       {visibles.length > 0 && (
-        <div className="cf-tabla" role="table" aria-label="Proveedores">
-          <div className="cf-tabla-fila cf-tabla-cabeza" role="row">
-            <span role="columnheader">Proveedor</span>
-            <span role="columnheader">NIF</span>
-            <span role="columnheader">Ficha</span>
-            <span role="columnheader">Le debes</span>
-            <span role="columnheader">{columna?.titulo ?? ''}</span>
+        <nav className="cf-tabla" aria-label="Proveedores">
+          <div className="cf-tabla-fila cf-tabla-cabeza" aria-hidden="true">
+            <span>Proveedor</span>
+            <span>NIF</span>
+            <span>Ficha</span>
+            <span>Le debes</span>
+            <span>{columna?.titulo ?? ''}</span>
           </div>
           {visibles.map(({ ficha: f, pct, debe }) => (
-            <Link key={f.id} to={rutaFichaProveedor(f.id)} className="cf-tabla-fila" role="row">
-              <span role="cell" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <Link key={f.id} to={rutaFichaProveedor(f.id)} className="cf-tabla-fila">
+              <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <span style={{ fontWeight: 600 }}>{f.name}</span>
                 {f.legalName && <span className="cf-nota" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.legalName}</span>}
               </span>
-              <span role="cell" style={{ fontVariantNumeric: 'tabular-nums' }}>{f.taxId ?? <span className="cf-nota">Sin NIF</span>}</span>
-              <span role="cell" className="cf-mini-pista" aria-label={`Ficha al ${pct} %`}>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{f.taxId ?? <span className="cf-nota">Sin NIF</span>}</span>
+              <span className="cf-mini-pista" aria-label={`Ficha al ${pct} %`}>
                 <span className="cf-pista"><div style={{ width: `${pct}%` }} /></span>{pct} %
               </span>
-              <span role="cell" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: debe ? 600 : 400 }}>
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: debe ? 600 : 400 }}>
                 {debe === null ? <span className="cf-nota">Sin facturas</span> : euros(debe)}
               </span>
-              <span role="cell" className="cf-nota">{columna ? (extra[f.id] ?? 0) : ''}</span>
+              <span className="cf-nota">{columna ? (extra[f.id] ?? 0) : ''}</span>
             </Link>
           ))}
-        </div>
+        </nav>
       )}
       {filas && <p className="cf-nota" style={{ margin: 0 }}>{filas.length === 1 ? '1 proveedor' : `${filas.length} proveedores`}{busca.trim() ? ` · ${visibles.length} con «${busca.trim()}»` : ''}</p>}
       {nuevo && activeAccountId && <NuevoProveedor accountId={activeAccountId} otros={filas?.map((x) => x.ficha) ?? []} alCerrar={() => setNuevo(false)} />}
