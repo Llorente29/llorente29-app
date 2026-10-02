@@ -34,6 +34,7 @@ export const contaModule: ModuleDefinition = {
   routes: [
     { path: '', element: <Navigate to={CONTA.rutas.empresa} replace /> },
     { path: CONTA.rutas.empresa, element: enMarco(<TuEmpresaPage />, 'Añade a Pablo como apoderado') },
+    { path: CONTA.rutas.empresaApartado, element: enMarco(<TuEmpresaPage />, 'Añade a Pablo como apoderado') },
     { path: CONTA.rutas.tablas, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.tabla, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: '*', element: <Navigate to={`/${CONTA.modulo}/${CONTA.rutas.empresa}`} replace /> },

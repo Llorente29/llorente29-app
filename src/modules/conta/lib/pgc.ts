@@ -6,7 +6,7 @@
 //
 // Origen: RD 1514/2007, cuarta parte (cuadro de cuentas): subgrupos 60 y 62
 // (tipos de gasto) y, desde el C00, 47 (las cuentas indicadas de impuestos y
-// retenciones) y 57 (bancos y cajas). El plan contable de cada cuenta llega con
+// retenciones), 57 (bancos y cajas) y 129 (el resultado). El plan contable llega con
 // el C02; esto solo pone nombre a la pista que ya guardan las tablas.
 // tests/conta/cumplimiento/pgc.test.ts comprueba cada título, literal, en el
 // texto oficial descargado.
@@ -24,6 +24,7 @@ export const NOMBRE_CUENTA_PGC: Readonly<Record<string, string>> = {
   '627': 'Publicidad, propaganda y relaciones públicas',
   '628': 'Suministros',
   '629': 'Otros servicios',
+  '129': 'Resultado del ejercicio',
   '472': 'Hacienda Pública, IVA soportado',
   '477': 'Hacienda Pública, IVA repercutido',
   '4751': 'Hacienda Pública, acreedora por retenciones practicadas',
