@@ -3,8 +3,17 @@
 //
 // La medida del C01 (nada tapado por la burbuja ni por la barra inferior),
 // generalizada para las pantallas del C00 (encargo §9.5): se le dice cuál es
-// la raíz del contenido y qué piezas flotan encima, y devuelve lo que quede
-// debajo a cuatro alturas de scroll. La prueba exige que no haya nada.
+// la raíz del contenido y qué piezas flotan encima, y devuelve lo que se queda
+// debajo SIN REMEDIO. La prueba exige que no haya nada.
+//
+// «Sin remedio» se mide con la página bajada del todo. Las piezas flotantes
+// del módulo van pegadas ABAJO (la barra «Pregunta o pide algo», la barra
+// inferior del móvil), así que en una página larga todo pasa por debajo de
+// ellas a media altura: eso no es tapar, se ve bajando un poco más. Lo que no
+// se puede ver nunca es lo que sigue debajo cuando ya no se puede bajar más:
+// ahí es donde el relleno inferior del marco tiene que dejar sitio. (Hasta el
+// 03/10 se miraba a cuatro alturas; con las tablas largas del C00 eso contaba
+// como tapadas filas que se ven bajando, y no medía lo que quería medir.)
 
 import type { Page } from '@playwright/test'
 
@@ -14,7 +23,7 @@ const cruza = (a: Caja, b: Caja) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < 
 export async function loQueTapan(page: Page, raiz: string, flotantes: string[]): Promise<string[]> {
   const tapado = new Set<string>()
   const alto = await page.evaluate(() => document.documentElement.scrollHeight)
-  for (const y of [0, alto / 3, (2 * alto) / 3, alto]) {
+  for (const y of [alto]) {
     await page.evaluate((yy) => window.scrollTo(0, yy), y)
     const encontrado = await page.evaluate(([r, fl]) => {
       const caja = (el: Element) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height } }
