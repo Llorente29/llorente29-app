@@ -24,6 +24,7 @@ import { signOut } from '@/services/authService'
 import NotificationBell from '@/components/NotificationBell'
 import { configuracionModule } from '@/modules/configuracion/module'
 import type { ModuleDefinition } from './types'
+import { useFeatureGate } from '@/platform/feature-gate/useFeatureGate'
 import type { UserProfileRole, Account } from '@/types/multitenancy'
 
 // Clave especial del Home general (no es un módulo, es del Shell).
@@ -100,6 +101,8 @@ export default function ShellTopBar({
   const isMobile = useIsMobile()
   const { isPlatformAdmin } = usePlatformAdmin()
   const { hasPermission, role } = usePermissions()
+  // C00: un módulo con interruptor solo sale si la cuenta lo tiene encendido.
+  const { has: tieneInterruptor } = useFeatureGate()
 
   // Selector de cuenta: SOLO para platform admin (acceso exclusivo de staff).
   const canSwitchAccount = isPlatformAdmin && !!onSwitchAccount && accounts.length > 0
@@ -119,7 +122,9 @@ export default function ShellTopBar({
 
   // Pestañas: solo los módulos con al menos un item visible. "Inicio" queda
   // fuera (es del Shell, no un módulo, y siempre se ve).
-  const visibleModules = modules.filter(m => isModuleVisible(m, hasPermission, role))
+  const visibleModules = modules
+    .filter(m => isModuleVisible(m, hasPermission, role))
+    .filter(m => !m.featureFlag || tieneInterruptor(m.featureFlag))
   // R1.3b: en móvil, los módulos del overflow (Team) se listan en el menú del
   // avatar (no caben en la barra inferior por el héroe IA central).
   const overflowModules = isMobile ? visibleModules.filter(m => isMobileOverflowModule(m.id)) : []
