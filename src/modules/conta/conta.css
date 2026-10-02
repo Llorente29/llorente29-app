@@ -42,11 +42,17 @@
   gap: 16px;
 }
 /* La ficha ocupa el ancho del contenido con su propio fondo Cream. */
-.cf-lienzo { margin: -24px -26px; padding: 24px 44px 28px; min-height: 100%; }
+.cf-lienzo { margin: -24px -26px; padding: 24px 44px 28px; min-height: calc(100vh - 64px); box-sizing: border-box; }
 @media (max-width: 767px) { .cf-lienzo { margin: -16px; padding: 0; gap: 0; } }
 
 .cf a { color: var(--cf-ink); }
 .cf a:hover { color: var(--cf-ink-hover); }
+/* Enlaces con forma de botón o de aviso: su color manda sobre el de `.cf a`
+   (sin esto, «Subir factura» salía azul sobre azul en la primera captura). */
+.cf a.cf-boton, .cf a.cf-boton:hover { color: #fff; }
+.cf a.cf-anadir, .cf a.cf-anadir:hover { color: var(--cf-ambar); }
+.cf a.cf-aviso, .cf a.cf-aviso:hover { color: #5E300B; text-decoration: none; }
+.cf a.cf-tabla-fila, .cf a.cf-tabla-fila:hover { color: var(--cf-texto); }
 .cf :focus-visible { outline: 3px solid var(--cf-ember); outline-offset: 2px; border-radius: 6px; }
 .cf h1, .cf h2, .cf h3 { margin: 0; }
 .cf button { font-family: var(--cf-sans); }
