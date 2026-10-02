@@ -1,13 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 3.ª tanda: tarea 4. El catálogo de IVA de Cocina (copia de
-# producción, global, para poder medir D1), los valores de serie con su fuente,
-# el ensayo de D1 ANTES de que vat_rate_for cambie, la 0140 (vat_rate_for lee
-# de tax_rate) y el MISMO ensayo DESPUÉS. Los dos ensayos solo leen.
-# (2.ª del C00: las migraciones 0100, 0110 y 0120 y el ensayo de sus reglas.)
-supabase/seeds/conta/seed_c00_catalogo_iva_cocina.sql
-supabase/migrations/20261003T0130_c00_valores_de_serie.sql
-supabase/staging/sql/20261003_ensayo_c00_d1.sql
-supabase/migrations/20261003T0140_c00_vat_rate_lee_de_impuestos.sql
-supabase/staging/sql/20261003_ensayo_c00_d1.sql
+# 03/10/2026 · C00, 4.ª tanda: una empresa INVENTADA en cada cuenta de prueba
+# (A en península, B en Canarias), para que las tablas generales —que son de
+# cada empresa— tengan pantalla que probar y fotografiar.
+# (3.ª: catálogo de IVA de Cocina, 0130, ensayo D1, 0140, ensayo D1.)
+supabase/seeds/conta/seed_c00_empresas_prueba.sql
