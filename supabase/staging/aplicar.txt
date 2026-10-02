@@ -1,0 +1,6 @@
+# Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
+# propia transacción. Para la siguiente tanda se reescribe entero.
+# 02/10/2026 · C01, primera ejecución del workflow.
+supabase/migrations/20261002T0100_c01_ficha_proveedor_estructura.sql
+supabase/migrations/20261002T0110_c01_ficha_proveedor_datos.sql
+supabase/staging/sql/20261002_borrar_c01_prueba_conector.sql
