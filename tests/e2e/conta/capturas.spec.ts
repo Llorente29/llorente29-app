@@ -8,6 +8,7 @@
 
 import { test, expect } from '@playwright/test'
 import { CUENTA_A, HERMANOS_RUIZ, entrarComo } from './sesion'
+import { loQueTapaLaBarra, loQueTapaLaBurbuja } from './burbuja'
 
 const DIR = 'docs/conta/capturas'
 
@@ -25,6 +26,9 @@ test('ficha de Hermanos Ruiz', async ({ page }, info) => {
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0)
   await page.screenshot({ path: `${DIR}/ficha-${movil ? 'movil' : 'ordenador'}.png`, fullPage: !movil })
   if (movil) await page.screenshot({ path: `${DIR}/ficha-movil-entera.png`, fullPage: true })
+  // Ni la burbuja (ordenador) ni la barra inferior (móvil) tapan nada.
+  expect(movil ? await loQueTapaLaBarra(page) : await loQueTapaLaBurbuja(page)).toEqual([])
+  if (movil) await page.screenshot({ path: `${DIR}/ficha-movil-final.png` })
 })
 
 test('un apartado de la ficha', async ({ page }, info) => {
@@ -33,6 +37,7 @@ test('un apartado de la ficha', async ({ page }, info) => {
   await expect(page.getByLabel('IBAN', { exact: true })).toHaveValue('ES91 2100 0418 4502 0005 1332')
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/pago-${movil ? 'movil' : 'ordenador'}.png`, fullPage: true })
+  expect(movil ? await loQueTapaLaBarra(page) : await loQueTapaLaBurbuja(page)).toEqual([])
 })
 
 test('lista de proveedores', async ({ page }, info) => {
@@ -42,4 +47,5 @@ test('lista de proveedores', async ({ page }, info) => {
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/lista-${movil ? 'movil' : 'ordenador'}.png`, fullPage: true })
+  expect(movil ? await loQueTapaLaBarra(page) : await loQueTapaLaBurbuja(page)).toEqual([])
 })

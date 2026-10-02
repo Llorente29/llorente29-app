@@ -42,8 +42,20 @@
   gap: 16px;
 }
 /* La ficha ocupa el ancho del contenido con su propio fondo Cream. */
-.cf-lienzo { margin: -24px -26px; padding: 24px 44px 28px; min-height: calc(100vh - 64px); box-sizing: border-box; }
-@media (max-width: 767px) { .cf-lienzo { margin: -16px; padding: 0; gap: 0; } }
+/* La burbuja de Folvy AI no tapa NADA de estas pantallas (02/10, revisión de
+ * Julio a las capturas). Se resuelve aquí, en la ficha y la lista, sin tocar
+ * la burbuja para el resto de Folvy:
+ *  · Ordenador: el botón flotante es un círculo de 56 px a 24 px del borde
+ *    derecho (FolvyAIBubble, `fixed bottom-6 right-6`). El lienzo llega hasta
+ *    ese borde, así que el contenido se queda a 96 px de él: 24 + 56 + 16 de
+ *    aire. Toda la columna, no solo el final, porque la burbuja es fija y
+ *    pasa por encima de lo que haya en esa esquina a cualquier altura.
+ *  · Móvil: no hay botón flotante; lo que tapa es la barra inferior y su
+ *    botón central, que sobresale. El Shell deja 80 px abajo; aquí se añaden
+ *    56 más para que la última fila suba por encima del botón al llegar al
+ *    final. La prueba tests/e2e/conta/capturas.spec.ts lo MIDE. */
+.cf-lienzo { margin: -24px -26px; padding: 24px 96px 28px 44px; min-height: calc(100vh - 64px); box-sizing: border-box; }
+@media (max-width: 767px) { .cf-lienzo { margin: -16px -16px 0; padding: 0 0 56px; gap: 0; } }
 
 .cf a { color: var(--cf-ink); }
 .cf a:hover { color: var(--cf-ink-hover); }
