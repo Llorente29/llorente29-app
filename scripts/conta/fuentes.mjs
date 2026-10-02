@@ -35,15 +35,24 @@ function entidades(s) {
 }
 const sinEtiquetas = (s) => entidades(s.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim()
 
-/** Texto de la legislación consolidada del BOE: un encabezado por bloque y sus párrafos. */
+/**
+ * Texto de la legislación consolidada del BOE: un encabezado por bloque
+ * (artículo), y dentro, cada VERSIÓN con su fecha de vigencia y la norma que
+ * la introdujo. La última versión de cada bloque es la vigente.
+ */
 function textoBoe(xml) {
   const lineas = []
-  const re = /<bloque\b[^>]*\bid="([^"]+)"[^>]*>|<p\b[^>]*>([\s\S]*?)<\/p>/g
+  const re = /<bloque\b[^>]*\bid="([^"]+)"[^>]*>|<version\b([^>]*)>|<p\b[^>]*>([\s\S]*?)<\/p>/g
   let m
   while ((m = re.exec(xml)) !== null) {
     if (m[1]) lineas.push('', `## [${m[1]}]`)
-    else {
-      const t = sinEtiquetas(m[2] ?? '')
+    else if (m[2] !== undefined) {
+      const at = (n) => ((m[2].match(new RegExp(`${n}="([^"]*)"`)) ?? [])[1] ?? '')
+      const f = at('fecha_vigencia')
+      const fecha = f.length === 8 ? `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}` : (f || '¿?')
+      lineas.push(`### versión · vigente desde ${fecha} · ${at('id_norma') || 'norma sin identificar'}`)
+    } else {
+      const t = sinEtiquetas(m[3] ?? '')
       if (t) lineas.push(t)
     }
   }
