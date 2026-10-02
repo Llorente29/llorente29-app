@@ -1,0 +1,77 @@
+name: Fuentes oficiales de contabilidad
+
+# QUÉ HACE (C00, respuesta 1 de Julio, D7)
+# Descarga las fuentes oficiales que usa el módulo de contabilidad (BOE, ISTAC,
+# Oficina de Publicaciones de la UE…) y deja en la rama, en docs/conta/fuentes/,
+# el texto de cada una con su URL, su fecha y su huella sha256. Los valores de
+# serie (impuestos, retenciones, países, monedas, IAE, CNAE) se cargan a
+# staging DESDE ESOS FICHEROS, por el workflow de aplicar SQL de siempre.
+#
+# Corre aquí porque desde el contenedor de trabajo esas webs no se alcanzan.
+#
+# CUÁNDO: un push a conta/** que cambie la lista (fuentes.json) o el guion, o
+# a mano. El agente nocturno «Normativa al día» (tarea 8) usa el mismo guion en
+# modo «comparar», que no cambia nada: solo avisa.
+
+on:
+  push:
+    branches: ['conta/**']
+    paths:
+      - 'docs/conta/fuentes/fuentes.json'
+      - 'scripts/conta/fuentes.mjs'
+      - '.github/workflows/fuentes-oficiales-conta.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: fuentes-oficiales-conta-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  descargar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Descargar las fuentes
+        id: descarga
+        continue-on-error: true
+        run: node scripts/conta/fuentes.mjs descargar
+
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo "## Fuentes oficiales de contabilidad"
+            echo
+            echo "| Fuente | HTTP | Contiene lo esperado | Título | Huella |"
+            echo "|---|---|---|---|---|"
+            node -e '
+              const r = require("./docs/conta/fuentes/registro.json");
+              for (const [k, f] of Object.entries(r.fuentes))
+                console.log(`| ${k} | ${f.http} | ${f.contieneLoEsperado ? "sí" : "**NO**"} | ${(f.titulo||"").slice(0,70)} | \`${(f.sha256||"—").slice(0,12)}\` |`)
+            '
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Subir los textos a la rama
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/conta/fuentes
+          if git diff --cached --quiet; then echo "Nada nuevo."; exit 0; fi
+          git commit -m "Conta · Fuentes oficiales descargadas (${GITHUB_SHA::7})"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
+
+      - name: Falló alguna fuente
+        if: steps.descarga.outcome == 'failure'
+        run: |
+          echo "::error::Alguna fuente no se ha podido comprobar: ver el resumen. Lo que sí se descargó está subido."
+          exit 1

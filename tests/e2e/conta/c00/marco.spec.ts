@@ -43,11 +43,12 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
     await page.getByRole('button', { name: 'Preguntar a Folvy' }).click()
   } else {
     await page.keyboard.press('Control+k')
-    await expect(page.getByLabel('Pregunta a Folvy')).toBeFocused()
-    await page.getByLabel('Pregunta a Folvy').fill('¿Qué IVA lleva el pan?')
+    const barra = page.getByRole('textbox', { name: 'Pregunta a Folvy' })
+    await expect(barra).toBeFocused()
+    await barra.fill('¿Qué IVA lleva el pan?')
     await page.keyboard.press('Enter')
   }
-  await expect(page.getByRole('status').filter({ hasText: 'Muy pronto' })).toBeVisible()
+  await expect(page.getByRole('status').getByText(/Muy pronto/)).toBeVisible()
 
   await page.screenshot({ path: `${DIR}/marco-${movil ? 'movil' : 'ordenador'}.png`, fullPage: true })
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])

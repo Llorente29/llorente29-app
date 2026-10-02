@@ -44,7 +44,7 @@ export function BarraPregunta({ ejemplo }: { ejemplo: string }) {
   }, [])
 
   return (
-    <form className="cx-pregunta" role="search" aria-label="Pregunta a Folvy"
+    <form className="cx-pregunta" role="search" aria-label="Barra de Folvy"
       onSubmit={(e) => { e.preventDefault(); avisar() }}>
       <Aviso visible={visible} />
       <div className="cx-pregunta-barra">
