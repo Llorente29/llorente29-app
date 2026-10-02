@@ -54,6 +54,33 @@ export interface UsoFicha {
 const FALTA_PARA_PROPONER = (f: FichaProveedor) =>
   !f.taxId?.trim() || !f.legalName?.trim() || !f.fiscalStreet?.trim()
 
+type Lectura = { tipo: 'listo'; datos: DatosFicha } | { tipo: 'no-existe' }
+
+/** Todo lo de la ficha, sin tocar estado de React. */
+async function leerFicha(
+  accountId: string, supplierId: string, yaPropuesto: { current: string | null },
+): Promise<Lectura> {
+  const ficha = await obtenerFicha(supplierId)
+  if (!ficha || ficha.accountId !== accountId) return { tipo: 'no-existe' }
+  if (yaPropuesto.current !== supplierId && FALTA_PARA_PROPONER(ficha)) {
+    yaPropuesto.current = supplierId
+    // Si falla, la ficha se abre igual: proponer es una ayuda, no un requisito.
+    await refrescarPropuestas(supplierId).catch(() => 0)
+  }
+  const [contactos, propuestas, tiposGasto, locales, facturas, documentos, todos, conta] = await Promise.all([
+    listarContactos(supplierId),
+    listarPropuestas(supplierId),
+    listarTiposGasto(accountId),
+    listarLocales(accountId),
+    listarFacturas(accountId, supplierId),
+    listarDocumentos(accountId, supplierId),
+    listarProveedores(accountId),
+    contaActiva(accountId),
+  ])
+  const otros = todos.map((p) => ({ id: p.id, name: p.name, taxId: p.taxId }))
+  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta } }
+}
+
 export function useFichaProveedor(accountId: string | null, supplierId: string): UsoFicha {
   const [estado, setEstado] = useState<UsoFicha['estado']>('cargando')
   const [error, setError] = useState<string | null>(null)
@@ -62,40 +89,32 @@ export function useFichaProveedor(accountId: string | null, supplierId: string):
   const yaPropuesto = useRef<string | null>(null)
   const yaVies = useRef<string | null>(null)
 
-  // No pone «cargando» ella misma: el estado inicial ya lo es, la página monta
-  // la ficha con key={supplierId} (otro proveedor = estado nuevo) y
-  // «Reintentar» lo pone desde el botón. Así el efecto no cambia estado de
-  // forma síncrona (react-hooks/set-state-in-effect).
+  // Lee y aplica. El efecto aplica el resultado en el `.then` (no cambia estado
+  // en su cuerpo: react-hooks/set-state-in-effect); el estado inicial ya es
+  // «cargando», la página monta la ficha con key={supplierId} (otro proveedor =
+  // estado nuevo) y «Reintentar» pone el esqueleto desde el botón.
+  const aplicar = useCallback((r: Lectura) => {
+    if (r.tipo === 'no-existe') { setDatos(null); setEstado('no-existe') }
+    else { setDatos(r.datos); setEstado('listo') }
+  }, [])
+  const fallar = useCallback((e: unknown) => {
+    setError(e instanceof Error ? e.message : 'No se pudo abrir la ficha.')
+    setEstado('error')
+  }, [])
+
   const cargar = useCallback(async () => {
     if (!accountId) return
-    try {
-      const ficha = await obtenerFicha(supplierId)
-      if (!ficha || ficha.accountId !== accountId) { setEstado('no-existe'); setDatos(null); return }
-      if (yaPropuesto.current !== supplierId && FALTA_PARA_PROPONER(ficha)) {
-        yaPropuesto.current = supplierId
-        // Si falla, la ficha se abre igual: proponer es una ayuda, no un requisito.
-        await refrescarPropuestas(supplierId).catch(() => 0)
-      }
-      const [contactos, propuestas, tiposGasto, locales, facturas, documentos, todos, conta] = await Promise.all([
-        listarContactos(supplierId),
-        listarPropuestas(supplierId),
-        listarTiposGasto(accountId),
-        listarLocales(accountId),
-        listarFacturas(accountId, supplierId),
-        listarDocumentos(accountId, supplierId),
-        listarProveedores(accountId),
-        contaActiva(accountId),
-      ])
-      const otros = todos.map((p) => ({ id: p.id, name: p.name, taxId: p.taxId }))
-      setDatos({ ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta })
-      setEstado('listo')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo abrir la ficha.')
-      setEstado('error')
-    }
-  }, [accountId, supplierId])
+    try { aplicar(await leerFicha(accountId, supplierId, yaPropuesto)) } catch (e) { fallar(e) }
+  }, [accountId, supplierId, aplicar, fallar])
 
-  useEffect(() => { void cargar() }, [cargar])
+  useEffect(() => {
+    if (!accountId) return
+    let vivo = true
+    leerFicha(accountId, supplierId, yaPropuesto)
+      .then((r) => { if (vivo) aplicar(r) })
+      .catch((e) => { if (vivo) fallar(e) })
+    return () => { vivo = false }
+  }, [accountId, supplierId, aplicar, fallar])
 
   const comprobarNifUe = useCallback(async () => {
     setComprobandoVies(true)
