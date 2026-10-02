@@ -85,19 +85,17 @@
       "clave": "ley-8-1991-ipsi",
       "nombre": "Ley 8/1991, Impuesto sobre la Producción, los Servicios y la Importación (Ceuta y Melilla)",
       "tipo": "boe",
-      "buscar": "\"Ley 8/1991\"",
+      "buscar": "Importación en las Ciudades de Ceuta y Melilla",
       "debeContener": "Ceuta",
-      "tituloEmpiezaPor": "Ley 8/1991",
-      "id": "BOE-A-1991-7243"
+      "tituloEmpiezaPor": "Ley 8/1991, de 25 de marzo"
     },
     {
       "clave": "ley-3-2004",
       "nombre": "Ley 3/2004, de medidas de lucha contra la morosidad en las operaciones comerciales",
       "tipo": "boe",
-      "buscar": "\"Ley 3/2004\"",
+      "buscar": "morosidad operaciones comerciales",
       "debeContener": "morosidad",
-      "tituloEmpiezaPor": "Ley 3/2004",
-      "id": "BOE-A-2004-21998"
+      "tituloEmpiezaPor": "Ley 3/2004, de 29 de diciembre"
     },
     {
       "clave": "ley-7-2012",
@@ -162,16 +160,16 @@
       "clave": "orden-modelo-130",
       "nombre": "Orden que aprueba el modelo 130",
       "tipo": "boe",
-      "buscar": "\"modelo 130\"",
-      "tituloDebeContener": "modelo 130",
+      "buscar": "\"modelos 130 y 131\"",
+      "tituloDebeContener": "130",
       "debeContener": "130"
     },
     {
       "clave": "orden-modelo-200",
       "nombre": "Orden que aprueba el modelo 200",
       "tipo": "boe",
-      "buscar": "\"modelo 200\"",
-      "tituloDebeContener": "modelo 200",
+      "buscar": "\"modelo 200\" Sociedades",
+      "tituloDebeContener": "aprueban los modelos 200",
       "debeContener": "200"
     },
     {
@@ -202,8 +200,8 @@
       "clave": "orden-modelo-190",
       "nombre": "Orden que aprueba el modelo 190",
       "tipo": "boe",
-      "buscar": "\"modelo 190\"",
-      "tituloDebeContener": "modelo 190",
+      "buscar": "\"modelo 190\" resumen anual retenciones",
+      "tituloDebeContener": "aprueba el modelo 190",
       "debeContener": "190"
     },
     {

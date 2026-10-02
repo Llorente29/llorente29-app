@@ -49,6 +49,7 @@
 // hacen desde la misma pantalla: 164 fichas sin categoria que hay que rellenar,
 // y 145 propuestas que hay que confirmar.
 
+import { tiposPorCategoria } from '@/modules/conta/services/impuestosParaCocina'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
 /** De dónde sale el tipo. `ninguno` = no se sabe: hay que preguntarlo. */
@@ -109,7 +110,7 @@ export async function resolveVatRates(itemIds: string[]): Promise<Record<string,
       // mirando si la fila trae la clave (mismo truco que notify_group).
       sb.from('recipe_item').select('*').in('id', ids),
       sb.from('vat_category').select('id, code, name'),
-      sb.from('vat_rate').select('category_id, rate, valid_from, valid_to'),
+      tiposPorCategoria().then((data) => ({ data, error: null }), (error: unknown) => ({ data: null, error })),
       sb.from('family_vat_default').select('family_name, vat_category_id, is_mixed'),
     ])
     if (itemsRes.error) throw itemsRes.error
@@ -275,7 +276,7 @@ export async function categoriasParaTipo(rate: number): Promise<CategoriaFiscal[
   try {
     const [catsRes, ratesRes] = await Promise.all([
       sb.from('vat_category').select('id, code, name, is_active'),
-      sb.from('vat_rate').select('category_id, rate, valid_from, valid_to'),
+      tiposPorCategoria().then((data) => ({ data, error: null }), (error: unknown) => ({ data: null, error })),
     ])
     if (catsRes.error) throw catsRes.error
     if (ratesRes.error) throw ratesRes.error

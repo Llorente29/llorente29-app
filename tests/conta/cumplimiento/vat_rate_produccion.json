@@ -1,0 +1,11 @@
+{
+  "_que_es": "Las 6 filas de vat_rate de PRODUCCIÓN (catálogo global, sin cuenta), leídas en solo lectura el 03/10/2026 con: select c.code, r.rate, r.equivalence_surcharge, r.valid_from, r.valid_to from vat_rate r join vat_category c on c.id = r.category_id order by c.code, r.valid_from. Es el «antes» de D1: el puente tiene que dar exactamente esto.",
+  "filas": [
+    { "category_code": "aceite_oliva", "rate": 2, "surcharge": 0.26, "valid_from": "2024-10-01", "valid_to": "2024-12-31" },
+    { "category_code": "aceite_oliva", "rate": 4, "surcharge": 0.5, "valid_from": "2025-01-01", "valid_to": null },
+    { "category_code": "alimento_basico", "rate": 4, "surcharge": 0.5, "valid_from": "2025-01-01", "valid_to": null },
+    { "category_code": "alimento_general", "rate": 10, "surcharge": 1.4, "valid_from": "2025-01-01", "valid_to": null },
+    { "category_code": "bebida_alcoholica", "rate": 21, "surcharge": 5.2, "valid_from": "2025-01-01", "valid_to": null },
+    { "category_code": "no_alimentario", "rate": 21, "surcharge": 5.2, "valid_from": "2025-01-01", "valid_to": null }
+  ]
+}
