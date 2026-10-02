@@ -35,7 +35,23 @@ function mensajeNif(tipo: TaxIdType, valor: string): string | null {
   return null
 }
 
+/**
+ * El formulario va aparte y con `key`: al confirmar un dato leído, se vuelve
+ * a montar con lo que hay ya en la ficha. Sin eso, el campo se quedaba con el
+ * valor de antes y «Guardar» pisaba lo recién confirmado (lo cazó la prueba
+ * e2e de propuestas, 02/10).
+ */
 export default function DatosFiscales() {
+  const [vuelta, setVuelta] = useState(0)
+  return (
+    <>
+      <Propuestas alDecidir={() => setVuelta((v) => v + 1)} />
+      <FormularioFiscal key={vuelta} />
+    </>
+  )
+}
+
+function FormularioFiscal() {
   const { datos, guardar, comprobandoVies } = useFicha()
   const f = datos.ficha
   const [name, setName] = useState(f.name)
@@ -137,7 +153,6 @@ export default function DatosFiscales() {
 
   return (
     <>
-      <Propuestas />
       <form className="cf-form" onSubmit={enviar} noValidate>
         {fallo && <div className="cf-error" role="alert">{fallo}</div>}
         <Campo campo="name" etiqueta="Nombre con el que lo conocéis" error={err('name')}>

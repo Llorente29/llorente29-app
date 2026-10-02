@@ -19,12 +19,12 @@ const QUE: Record<Propuesta['field'], string> = {
   fiscal_address: 'Dirección fiscal',
 }
 
-export function Propuestas() {
+export function Propuestas({ alDecidir }: { alDecidir?: () => void } = {}) {
   const { datos } = useFicha()
   if (datos.propuestas.length === 0) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} aria-label="Datos leídos por confirmar">
-      {datos.propuestas.map((p) => <UnaPropuesta key={p.id} p={p} />)}
+      {datos.propuestas.map((p) => <UnaPropuesta key={p.id} p={p} alDecidir={alDecidir} />)}
     </div>
   )
 }
@@ -35,7 +35,7 @@ function textoDe(v: unknown): string {
   return ''
 }
 
-function UnaPropuesta({ p }: { p: Propuesta }) {
+function UnaPropuesta({ p, alDecidir }: { p: Propuesta; alDecidir?: () => void }) {
   const { datos, actor, recargar } = useFicha()
   const linea = textoDe(p.value)
   const reparto = p.field === 'fiscal_address' ? proponerDireccion(linea) : null
@@ -70,6 +70,7 @@ function UnaPropuesta({ p }: { p: Propuesta }) {
       }
       await decidirPropuesta(datos.ficha.id, p.id, d, d === 'confirmed' ? cambios() : {}, actor)
       await recargar()
+      alDecidir?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar.')
       setOcupado(false)

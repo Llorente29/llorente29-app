@@ -34,15 +34,19 @@ export function ListaFacturas({ facturas, vacio = 'Aún no hay facturas suyas.' 
               <span className={`cf-estado ${e.clase}`}>{e.texto}</span>
             </>
           )
+          // El papel de lista va en el envoltorio, no en el botón: un botón con
+          // role="listitem" deja de ser un botón para el teclado y los lectores.
           return accionable ? (
-            <button
-              key={f.id} type="button" role="listitem" className="cf-factura"
-              style={{ width: '100%', background: 'none', border: 'none', borderBottom: '1px solid var(--cf-linea)', cursor: 'pointer', textAlign: 'left', font: 'inherit', color: 'inherit', minHeight: 44 }}
-              onClick={() => setAbierta(f)}
-              aria-label={`Factura ${f.invoiceNumber ?? ''}, ${e.texto}. Abrir para pagar o cambiar el vencimiento`}
-            >
-              {contenido}
-            </button>
+            <div key={f.id} role="listitem">
+              <button
+                type="button" className="cf-factura"
+                style={{ width: '100%', background: 'none', border: 'none', borderBottom: '1px solid var(--cf-linea)', cursor: 'pointer', textAlign: 'left', font: 'inherit', color: 'inherit', minHeight: 44 }}
+                onClick={() => setAbierta(f)}
+                aria-label={`Factura ${f.invoiceNumber ?? ''}, ${e.texto}. Abrir para pagar o cambiar el vencimiento`}
+              >
+                {contenido}
+              </button>
+            </div>
           ) : (
             <div key={f.id} role="listitem" className="cf-factura">{contenido}</div>
           )
