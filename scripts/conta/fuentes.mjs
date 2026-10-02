@@ -137,6 +137,26 @@ async function descargarUna(f) {
     return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: 'csv' }
   }
   const r = await pedir(f.url, { headers: { Accept: f.formato === 'json' ? 'application/json' : '*/*' } })
+  // Listas paginadas (ISTAC: 1.000 por página): se siguen las páginas y se juntan.
+  if (f.formato === 'json' && r.http === 200) {
+    const primera = JSON.parse(r.cuerpo)
+    if (Array.isArray(primera.code) && primera.nextLink) {
+      const todos = [...primera.code]
+      let siguiente = primera.nextLink
+      for (let i = 0; siguiente && i < 50; i++) {
+        const p = await pedir(siguiente, { headers: { Accept: 'application/json' } })
+        if (p.http !== 200) return { url: f.url, http: p.http, titulo: f.nombre, texto: '', ext: 'json', error: `página ${i + 2}: HTTP ${p.http}` }
+        const j = JSON.parse(p.cuerpo)
+        todos.push(...(j.code ?? []))
+        siguiente = j.nextLink && j.nextLink !== siguiente ? j.nextLink : null
+      }
+      if (primera.total && todos.length !== primera.total) {
+        return { url: f.url, http: 200, titulo: f.nombre, texto: '', ext: 'json', error: `esperaba ${primera.total} códigos y hay ${todos.length}` }
+      }
+      const junto = { total: todos.length, code: todos }
+      return { url: f.url, http: 200, titulo: f.nombre, actualizadoEnFuente: null, texto: JSON.stringify(junto, null, 1) + '\n', ext: 'json' }
+    }
+  }
   return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: f.formato ?? 'txt' }
 }
 

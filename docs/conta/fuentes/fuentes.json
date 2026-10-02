@@ -254,7 +254,7 @@
       "nombre": "ISTAC · Clasificación del IAE (CL_IAE)",
       "tipo": "url",
       "formato": "json",
-      "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_IAE/01.000/codes?limit=5000",
+      "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_IAE/01.000/codes?limit=1000",
       "debeContener": "671"
     },
     {
@@ -262,7 +262,7 @@
       "nombre": "ISTAC · CNAE-2025 (CL_CNAE_2025)",
       "tipo": "url",
       "formato": "json",
-      "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_CNAE_2025/01.000/codes?limit=5000",
+      "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_CNAE_2025/01.000/codes?limit=1000",
       "debeContener": "56"
     },
     {
