@@ -1,8 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 02/10/2026 · 2.ª tanda: ENSAYO de los caminos del C01. No escribe nada (se
-# deshace solo y lo comprueba); el resultado sale como NOTICE en el log.
-# (1.ª tanda, ejecución 36971337003: estructura y datos del C01 y borrado de
-# la fila c01_prueba_conector.)
-supabase/staging/sql/20261002_ensayo_c01_caminos.sql
+# 02/10/2026 · 3.ª tanda: deja a Hermanos Ruiz (cuenta A) como en la maqueta,
+# para las capturas de la ficha. Solo datos inventados de las semillas.
+# (1.ª: estructura y datos del C01 y borrado de c01_prueba_conector.
+#  2.ª: ensayo de los caminos del C01, sin dejar nada escrito.)
+supabase/seeds/conta/seed_c01_capturas.sql
