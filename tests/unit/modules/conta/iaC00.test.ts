@@ -153,6 +153,8 @@ describe('el registro, en palabras', () => {
     expect(queHizo(r({ action: 'anadir_actividad', after: { description: 'Restaurante' } }))).toBe('Añadió la actividad «Restaurante»')
     // Dejar el valor de serie que ya tenía es ponerlo, no cambiarlo (lo vio la captura del 03/10).
     expect(queHizo(r({ field: 'account_digits', before: 8, after: '8' }))).toBe('Puso los dígitos de las cuentas: 8')
+    expect(queHizo(r({ field: 'tax_forms', before: [], after: ['111', '303'] }))).toBe('Puso los modelos que presentas: 111, 303')
+    expect(queHizo(r({ field: 'tax_forms', before: ['303'], after: ['111', '303'] }))).toBe('Cambió los modelos que presentas: 111, 303')
     // La forma jurídica, por su nombre del catálogo y no por su código («nif_b»).
     expect(queHizo(r({ field: 'legal_form_code', before: null, after: 'nif_b', afterName: 'Sociedades de responsabilidad limitada' })))
       .toBe('Puso el tipo de empresa: Sociedades de responsabilidad limitada')

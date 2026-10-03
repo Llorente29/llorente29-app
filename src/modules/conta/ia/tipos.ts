@@ -105,7 +105,8 @@ export function queHizo(r: Registro): string {
   const campo = CAMPO[r.field ?? ''] ?? r.field ?? 'un dato'
   // «Cambió» solo si había OTRA cosa: dejar el valor que ya tenía (el de
   // serie de la columna) es ponerlo, no cambiarlo.
-  const cambio = r.before !== null && r.before !== undefined && !mismoValor(r.before, r.after)
+  const vacio = r.before === null || r.before === undefined || r.before === '' || (Array.isArray(r.before) && r.before.length === 0)
+  const cambio = !vacio && !mismoValor(r.before, r.after)
   const verbo = r.source === 'import' ? 'Trajo de tu cuenta' : cambio ? 'Cambió' : 'Puso'
   return `${verbo} ${campo}: ${r.afterName ?? valorEnPalabras(r.field, r.after)}`
 }
