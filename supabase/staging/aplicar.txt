@@ -1,9 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 15.ª tanda (respuesta 3 de Julio, punto 5): lo que le
-# faltaba a la ficha de la empresa para presentar el 200 y depositar las
-# cuentas (constitución, DEHú, plantilla media, auditoría, firmantes y la
-# entidad dominante del grupo).
-# (14.ª: la 0190 otra vez, con la fecha de las formas jurídicas.)
-supabase/migrations/20261003T0200_c00_ficha_para_presentar.sql
+# 03/10/2026 · C00, 16.ª tanda (respuesta 4 de Julio, arreglo 3): la tabla de
+# serie código postal → población (postal_code_place), de GeoNames (CC BY 4.0),
+# para que el alta proponga la población. Solo añade una tabla nueva.
+# (15.ª: la 0200, lo que le faltaba a la ficha para el 200 y el depósito.)
+supabase/migrations/20261003T0210_c00_codigo_postal.sql
