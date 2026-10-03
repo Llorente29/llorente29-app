@@ -79,13 +79,14 @@ const CAMPO: Record<string, string> = {
   fiscal_city: 'la población', fiscal_province: 'la provincia', tax_territory: 'dónde está tu empresa',
   vat_scheme_code: 'el régimen del IVA', vat_period: 'cada cuánto presentas el IVA', vat_cash_basis: 'el criterio de caja',
   vat_surcharge: 'el recargo de equivalencia', chart_kind: 'el plan contable', account_digits: 'los dígitos de las cuentas',
-  tax_forms: 'los modelos que presentas',
+  tax_forms: 'los modelos que presentas', sales_tax_rate_code: 'el IVA de tus ventas',
 }
 
 const VALOR: Record<string, Record<string, string>> = {
   vat_period: { quarterly: 'cada tres meses', monthly: 'cada mes' },
   tax_territory: { peninsula_baleares: 'Península y Baleares', canarias: 'Canarias', ceuta_melilla: 'Ceuta y Melilla' },
   chart_kind: { pymes: 'el plan de pymes', normal: 'el plan general' },
+  sales_tax_rate_code: { iva_reducido: '10 %', iva_general: '21 %', iva_superreducido: '4 %' },
 }
 
 export function valorEnPalabras(field: string | null, v: unknown): string {

@@ -8,6 +8,7 @@ import { useState, type FormEvent } from 'react'
 import { Chip, Dato } from '@/modules/conta/ui/piezas'
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import { cuentaPgc } from '@/modules/conta/lib/pgc'
+import { TEXTO_IVA_VENTAS } from '@/modules/conta/lib/ivaVentas'
 import {
   NOMBRE_CORTO_MODELO, TERRITORIOS, direccionEnUnaLinea, revisarDigitos, revisarPorcentajeProrrata, revisarQuienEres,
   textoIva, textoRegistro, type CambiosQuienEres, type DatosEmpresa, type PerfilFiscal,
@@ -119,7 +120,7 @@ function FormQuienEres({ d, guardando, cancelar, guardar }: {
 
 const PERFIL_VACIO: PerfilFiscal = {
   taxTerritory: 'peninsula_baleares', vatSchemeCode: null, vatCashBasis: false, vatSurcharge: false, vatPeriod: 'quarterly',
-  vatProrata: false, vatProrataPct: null, sii: false, chartKind: 'pymes', accountDigits: 8, taxForms: [],
+  vatProrata: false, vatProrataPct: null, sii: false, chartKind: 'pymes', accountDigits: 8, taxForms: [], salesTaxRateCode: null,
 }
 
 export function TusImpuestos({ d, quien, alCambiar, movil }: Props) {
@@ -151,6 +152,12 @@ export function TusImpuestos({ d, quien, alCambiar, movil }: Props) {
             <Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id}
               campos={[['vat_period', p.vatPeriod], ['vat_scheme_code', p.vatSchemeCode], ['tax_territory', p.taxTerritory]]} />
           </Dato>
+          {p.taxTerritory === 'peninsula_baleares' && (
+            <Dato etiqueta="IVA de tus ventas">
+              {p.salesTaxRateCode ? TEXTO_IVA_VENTAS[p.salesTaxRateCode] ?? p.salesTaxRateCode : <span className="cx-dato-vacio">Sin decir</span>}
+              <Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['sales_tax_rate_code', p.salesTaxRateCode]]} />
+            </Dato>
+          )}
           <Dato etiqueta="Criterio de caja">{p.vatCashBasis ? 'Sí' : 'No'}<Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['vat_cash_basis', p.vatCashBasis]]} /></Dato>
           <Dato etiqueta="Recargo de equivalencia">{p.vatSurcharge ? 'Sí' : 'No'}<Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['vat_surcharge', p.vatSurcharge]]} /></Dato>
           <div className="cx-dato" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
@@ -192,6 +199,10 @@ function FormImpuestos({ d, guardando, cancelar, guardar }: {
             cambiar={(v) => pon('vatPeriod')(v as PerfilFiscal['vatPeriod'])}
             opciones={[{ valor: 'quarterly', texto: 'Cada tres meses' }, { valor: 'monthly', texto: 'Cada mes' }]}
             ayuda="Cada mes solo por encima de 6.010.121,04 € de operaciones el año anterior (RIVA, art. 71.3)." />
+          <CampoLista etiqueta="IVA de tus ventas" valor={p.salesTaxRateCode ?? ''} deshabilitado={guardando}
+            cambiar={(v) => pon('salesTaxRateCode')(v === '' ? null : v)}
+            opciones={[{ valor: '', texto: 'Sin decir' }, ...Object.entries(TEXTO_IVA_VENTAS).map(([valor, texto]) => ({ valor, texto }))]}
+            ayuda="Comidas y bebidas para consumir en el acto, también a domicilio: 10 % (Ley 37/1992, art. 91.Uno.2.2.º)." />
           <div className="cx-formulario-fila">
             <CampoSiNo etiqueta="Criterio de caja" valor={p.vatCashBasis} cambiar={pon('vatCashBasis')} deshabilitado={guardando} />
             <CampoSiNo etiqueta="Recargo de equivalencia" valor={p.vatSurcharge} cambiar={pon('vatSurcharge')} deshabilitado={guardando} />

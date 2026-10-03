@@ -47,6 +47,7 @@ function aPerfil(r: Fila): PerfilFiscal {
     vatPeriod: r.vat_period === 'monthly' ? 'monthly' : 'quarterly', vatProrata: r.vat_prorata === true,
     vatProrataPct: num(r.vat_prorata_pct), sii: r.sii === true, chartKind: r.chart_kind === 'normal' ? 'normal' : 'pymes',
     accountDigits: Number(r.account_digits ?? 8), taxForms: Array.isArray(r.tax_forms) ? (r.tax_forms as unknown[]).map(String) : [],
+    salesTaxRateCode: txt(r.sales_tax_rate_code),
   }
 }
 
@@ -130,7 +131,7 @@ export async function guardarPerfil(accountId: string, companyId: string, userId
     company_id: companyId, account_id: accountId, tax_territory: p.taxTerritory, vat_scheme_code: p.vatSchemeCode,
     vat_cash_basis: p.vatCashBasis, vat_surcharge: p.vatSurcharge, vat_period: p.vatPeriod, vat_prorata: p.vatProrata,
     vat_prorata_pct: p.vatProrata ? p.vatProrataPct : null, sii: p.sii, chart_kind: p.chartKind,
-    account_digits: p.accountDigits, tax_forms: p.taxForms, updated_by: userId,
+    account_digits: p.accountDigits, tax_forms: p.taxForms, sales_tax_rate_code: p.salesTaxRateCode, updated_by: userId,
   }, { onConflict: 'company_id' })
   if (error) throw new Error(mensaje('No se ha guardado', error))
 }

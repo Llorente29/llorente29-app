@@ -127,3 +127,13 @@ export async function buscarParaGrupos(grupos: Grupo[]): Promise<Map<string, { i
   }))
   return out
 }
+
+/**
+ * Al volver a «A qué te dedicas» durante el alta (respuesta 3): las actividades
+ * que se apuntaron en el alta se quitan y se ponen las nuevas. Solo mientras
+ * el alta está a medias: con el alta terminada, se cambian en «Tu empresa».
+ */
+export async function quitarActividadesDelAlta(companyId: string): Promise<void> {
+  const { error } = await tabla('company_activity').delete().eq('company_id', companyId)
+  if (error) throw new Error(mensaje('No se han podido quitar las actividades de antes', error))
+}

@@ -22,7 +22,7 @@ const EMPRESA: Empresa = {
 }
 const PERFIL: PerfilFiscal = {
   taxTerritory: 'peninsula_baleares', vatSchemeCode: null, vatCashBasis: false, vatSurcharge: false, vatPeriod: 'quarterly',
-  vatProrata: false, vatProrataPct: null, sii: false, chartKind: 'pymes', accountDigits: 8, taxForms: ['303', '390', '111', '115', '202'],
+  vatProrata: false, vatProrataPct: null, sii: false, chartKind: 'pymes', accountDigits: 8, taxForms: ['303', '390', '111', '115', '202'], salesTaxRateCode: 'iva_reducido',
 }
 const REGIMENES = [{ code: 'general', name: 'Régimen general' }, { code: 'simplificado', name: 'Régimen simplificado' }]
 const datos = (p: Partial<DatosEmpresa> = {}): DatosEmpresa => ({

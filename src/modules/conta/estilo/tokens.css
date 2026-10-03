@@ -64,6 +64,11 @@
   --cx-sombra-barra: 0 12px 40px rgba(14, 26, 43, 0.14);
   --cx-sombra-ia: 0 8px 20px rgba(47, 91, 255, 0.4);
   --cx-halo-ia: 0 0 0 5px rgba(46, 230, 168, 0.25);
+  /* Alta, segunda vuelta (respuesta 3; maquetas N1bAlta y N1cAlta). */
+  --cx-sombra-entrada: 0 14px 40px rgba(47, 91, 255, 0.16);   /* La caja de escribir del alta */
+  --cx-blanco-velo: rgba(255, 255, 255, 0.72);               /* Carril «Lo que llevamos», translúcido */
+  --cx-velo-app: rgba(233, 237, 243, 0.55);                  /* Folvy atenuado detrás de la ventana */
+  --cx-velo-hoja: rgba(14, 26, 43, 0.32);                    /* Detrás de la hoja del móvil */
   --cx-degradado:
     radial-gradient(900px 500px at 85% -10%, #E3FBF2 0%, rgba(227, 251, 242, 0) 70%),
     radial-gradient(700px 500px at 10% 110%, #EAF0FF 0%, rgba(234, 240, 255, 0) 70%);

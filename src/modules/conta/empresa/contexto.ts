@@ -14,6 +14,9 @@ export interface EmpresaResumen {
   nif: string | null
   /** El alta está terminada. Si no, el menú lleva a seguirla. */
   completa: boolean
+  /** Por dónde va el alta (company.setup_step), para el «Alta a medias · 4 de 6». */
+  pasoAlta: string | null
+  tieneDireccion: boolean
 }
 
 export interface EstadoEmpresas {

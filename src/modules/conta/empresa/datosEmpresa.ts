@@ -45,6 +45,8 @@ export interface PerfilFiscal {
   chartKind: 'pymes' | 'normal'
   accountDigits: number
   taxForms: string[]
+  /** El IVA de tus ventas (tax_rate.code), si se sabe. Respuesta 3 del C00. */
+  salesTaxRateCode: string | null
 }
 
 export interface Actividad {

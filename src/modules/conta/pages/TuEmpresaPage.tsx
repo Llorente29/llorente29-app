@@ -19,7 +19,8 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { PESTANAS_AJUSTES, rutaAltaEmpresa, rutaApartadoEmpresa, rutaTuEmpresa } from '@/config/navegacion'
 import { Cabecera, Chip, ErrorConReintento, PestanasPildora, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
-import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { useEmpresas, type EmpresaResumen } from '@/modules/conta/empresa/contexto'
+import { TOTAL_PUNTOS, hechosDeUnaAMedias } from '@/modules/conta/alta/llevamos'
 import { CabeceraEmpresa } from '@/modules/conta/marco/MenuConta'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useDatosEmpresa } from '@/modules/conta/empresa/useDatosEmpresa'
@@ -35,6 +36,17 @@ function EtiquetaListo({ d, hoy }: { d: DatosEmpresa; hoy: string }) {
   return falta.length === 0
     ? <Chip tono="ia">Todo listo para llevar tu contabilidad</Chip>
     : <Chip tono="ambar">{fraseFalta(falta)}</Chip>
+}
+
+/** Respuesta 3: salir del alta deja aquí el aviso para seguirla. */
+function AvisoAltaAMedias({ e }: { e: EmpresaResumen }) {
+  const hechos = hechosDeUnaAMedias(e.pasoAlta, e.razonSocial !== null, e.tieneDireccion)
+  return (
+    <div className="cx-aviso-alta" role="status" aria-label="Alta a medias">
+      <span><b>Alta a medias</b> · {e.razonSocial ?? 'empresa sin nombre todavía'} · <span className="cx-cifra">{hechos} de {TOTAL_PUNTOS}</span></span>
+      <Link to={rutaAltaEmpresa()} className="cx-boton">Seguir</Link>
+    </div>
+  )
 }
 
 function UnApartado({ id, d, quien, alCambiar, movil, hoy }: {
@@ -66,12 +78,14 @@ export default function TuEmpresaPage() {
   if (elegido && !movil) return <Navigate to={rutaTuEmpresa()} replace />
 
   const d = datos.datos
+  const aMedias = empresas.find((e) => !e.completa) ?? null
   const cabecera = (
     <>
       <Cabecera antetitulo="Ajustes" titulo="Tu empresa" derecha={d && !movil ? <EtiquetaListo d={d} hoy={hoy} /> : undefined} />
       {/* También en el móvil, aunque M2 no las dibuja: sin ellas no se llega a
           Tablas generales desde el teléfono (lo cazó el e2e de la cuenta B). */}
       <PestanasPildora entradas={PESTANAS_AJUSTES} etiqueta="Ajustes" />
+      {aMedias && <AvisoAltaAMedias e={aMedias} />}
     </>
   )
 

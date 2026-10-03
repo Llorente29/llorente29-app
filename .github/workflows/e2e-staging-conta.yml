@@ -10,12 +10,12 @@ name: Pruebas e2e en staging-conta
 # Desde ese contenedor no se llega a *.supabase.co (el proxy lo corta).
 #
 # CÓMO ENTRA, SIN NINGÚN SECRETO NUEVO
-# Los tres usuarios de prueba (a.admin@, b.admin@ y a.encargado@prueba.folvy.test,
-# de las semillas) reciben en cada ejecución una contraseña ALEATORIA, que se
+# Los cuatro usuarios de prueba (a.admin@, b.admin@, a.encargado@ y
+# c.admin@prueba.folvy.test, de las semillas) reciben en cada ejecución una contraseña ALEATORIA, que se
 # enmascara y no sale de este job. Se pone con el mismo y único secreto del
 # otro workflow, STAGING_CONTA_DB_URL, y con las mismas tres guardas: la URL es
 # de staging-conta, no es de producción, y al otro lado no hay ni Foodint ni
-# Folvy Interno. La UPDATE solo toca esos tres usuarios, por id y por email.
+# Folvy Interno. La UPDATE solo toca esos cuatro usuarios, por id y por email.
 #
 # La URL y la clave anónima de staging-conta van escritas abajo: son públicas
 # por diseño (las lleva cualquier navegador que abra la app) y no dan acceso a
@@ -90,16 +90,18 @@ jobs:
           with c as (
             update auth.users set encrypted_password = extensions.crypt(:'clave', extensions.gen_salt('bf'))
              where id in ('c01a0000-0000-4000-8000-0000000000a1', 'c01b0000-0000-4000-8000-0000000000b1',
-                          'c01a0000-0000-4000-8000-0000000000a6')
-               and email in ('a.admin@prueba.folvy.test', 'b.admin@prueba.folvy.test', 'a.encargado@prueba.folvy.test')
+                          'c01a0000-0000-4000-8000-0000000000a6', 'c01c0000-0000-4000-8000-0000000000c1')
+               and email in ('a.admin@prueba.folvy.test', 'b.admin@prueba.folvy.test', 'a.encargado@prueba.folvy.test',
+                             'c.admin@prueba.folvy.test')
             returning 1)
           select count(*) from c;
           SQL
           )
-          # Los dos administradores (C01) y el encargado de A (C00, tarea 8: RLS de socios).
-          if [ "$(echo "$n" | tr -d '[:space:]')" != "3" ]; then echo "::error::Esperaba 3 usuarios de prueba y he tocado $n."; exit 1; fi
+          # Los dos administradores (C01), el encargado de A (C00, tarea 8: RLS de
+          # socios) y el administrador de C, sin empresa (C00, respuesta 3: el alta a pantalla completa).
+          if [ "$(echo "$n" | tr -d '[:space:]')" != "4" ]; then echo "::error::Esperaba 4 usuarios de prueba y he tocado $n."; exit 1; fi
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
-          echo "Contraseña de un solo uso puesta a los 3 usuarios de prueba."
+          echo "Contraseña de un solo uso puesta a los 4 usuarios de prueba."
 
       - uses: actions/setup-node@v4
         with:

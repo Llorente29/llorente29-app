@@ -30,7 +30,7 @@ const GRUPOS: { clave: string; descripcion: string; palabras: string[]; iae: str
     iae: ['restaurantes'], cnae: ['Restaurantes'] },
   { clave: 'bar', descripcion: 'Bar o cafetería', palabras: ['bar', 'bares', 'cafeteria', 'cafeterias', 'cafe', 'cafes', 'copas', 'cerveceria', 'tapas'],
     iae: ['cafés y bares', 'cafeterías'], cnae: ['Servicios de bebidas'] },
-  { clave: 'domicilio', descripcion: 'Comida a domicilio', palabras: ['domicilio', 'reparto', 'repartimos', 'repartir', 'delivery', 'envio', 'envios', 'para llevar'],
+  { clave: 'domicilio', descripcion: 'Comida a domicilio', palabras: ['domicilio', 'reparto', 'repartimos', 'repartir', 'delivery', 'envio', 'envios', 'para llevar', 'dark kitchen', 'plataformas', 'glovo', 'uber eats', 'just eat'],
     iae: ['propios de la restauración', 'fuera de dichos'], cnae: ['Restaurantes'] },
   { clave: 'catering', descripcion: 'Catering', palabras: ['catering', 'eventos', 'banquetes'],
     iae: [], cnae: ['catering'] },
@@ -43,7 +43,9 @@ const GRUPOS: { clave: string; descripcion: string; palabras: string[]; iae: str
 ]
 
 const VACIAS = new Set(['tambien', 'nosotros', 'somos', 'tenemos', 'hacemos', 'nuestro', 'nuestra', 'sobre', 'todo', 'para',
-  'como', 'pero', 'desde', 'hasta', 'mucho', 'poco', 'tipo', 'cosas', 'local', 'negocio', 'empresa', 'dedicamos'])
+  'como', 'pero', 'desde', 'hasta', 'mucho', 'poco', 'tipo', 'cosas', 'local', 'negocio', 'empresa', 'dedicamos',
+  // «comida» suelta acompaña a lo que se hace («reparto de comida»): buscada sola da «Comida» del IAE 673.
+  'comida', 'kitchen'])
 
 /** Minúsculas y sin tildes: «Cafetería» → «cafeteria». */
 export const normalizar = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()

@@ -16,12 +16,14 @@ export function aResumen(r: Record<string, unknown>): EmpresaResumen {
     razonSocial: razon,
     nif: txt(r.tax_id),
     completa: r.setup_completed_at !== null && r.setup_completed_at !== undefined,
+    pasoAlta: txt(r.setup_step),
+    tieneDireccion: txt(r.fiscal_street) !== null,
   }
 }
 
 export async function listarEmpresas(accountId: string): Promise<EmpresaResumen[]> {
   const { data, error } = await tabla('company')
-    .select('id, legal_name, trade_name, tax_id, setup_completed_at')
+    .select('id, legal_name, trade_name, tax_id, setup_completed_at, setup_step, fiscal_street')
     .eq('account_id', accountId)
     .eq('is_active', true)
     .order('created_at', { ascending: true })

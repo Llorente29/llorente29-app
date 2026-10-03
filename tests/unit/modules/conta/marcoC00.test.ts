@@ -64,7 +64,7 @@ describe('contrato con la cuenta', () => {
 })
 
 describe('empresa activa', () => {
-  const e = (id: string): EmpresaResumen => ({ id, nombre: id, razonSocial: null, nif: null, completa: true })
+  const e = (id: string): EmpresaResumen => ({ id, nombre: id, razonSocial: null, nif: null, completa: true, pasoAlta: 'hecho', tieneDireccion: true })
   it('la recordada si existe; si no, la primera; sin empresas, ninguna', () => {
     expect(empresaQueQuedaActiva([e('a'), e('b')], 'b')?.id).toBe('b')
     expect(empresaQueQuedaActiva([e('a'), e('b')], 'borrada')?.id).toBe('a')

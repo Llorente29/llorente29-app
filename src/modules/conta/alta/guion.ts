@@ -30,8 +30,15 @@ export interface Pregunta {
   clave: ClavePregunta
   /** La pregunta, en palabras de la calle. */
   texto: string
-  /** Por qué la respuesta normal es esa (regla 2 de la IA). */
+  /** Por qué la respuesta normal es esa (regla 2 de la IA). Va al registro. */
   porque: string | null
+  /**
+   * El bocadillo «¿Por qué lo pregunto?» (respuesta 3): para qué sirve el dato
+   * y qué pasa si no lo sabes, en dos frases.
+   */
+  ayuda: string
+  /** Lo que se dice antes de la pregunta al empezar un paso («Ahora las cuentas.»). */
+  transicion?: string
   /** Las respuestas de un toque; la primera es la normal (va marcada). */
   opciones: OpcionAlta[]
   /** Si además se puede escribir: qué. */
@@ -96,6 +103,7 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
         clave: 'nif',
         texto: c.nif ? `En tu cuenta de Folvy pone el NIF ${c.nif}. ¿Es el de la empresa?` : '¿Cuál es el NIF de la empresa?',
         porque: c.nif ? 'Es el que tiene tu cuenta de Folvy.' : null,
+        ayuda: 'El NIF identifica a la empresa ante Hacienda y sale en todas tus facturas. Si no lo tienes a mano, sigo sin él y lo pones luego, pero sin él no se puede terminar el alta.',
         opciones: c.nif ? [{ valor: 'cuenta', texto: `Sí, ${c.nif}` }] : [],
         entrada: 'nif', normal: c.nif ? 'cuenta' : '', noLoSe: 'No lo sé ahora',
       }]
@@ -106,12 +114,15 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
         {
           clave: 'nombre', texto: '¿Cómo se llama la empresa? El nombre que sale en el NIF.',
           porque: nombre ? `Es el que tiene tu cuenta de Folvy${c.razonSocial ? ' como razón social' : ''}.` : null,
+          ayuda: 'La razón social es el nombre legal: el que sale en el NIF, en tus facturas y en tus impuestos. Si no lo sabes ahora, se lo apunto a tu asesor y lo pones luego en «Tu empresa».',
+          transicion: 'Ahora, el nombre.',
           opciones: nombre ? [{ valor: 'cuenta', texto: `Sí, «${nombre}»` }] : [],
           entrada: 'texto', normal: nombre ? 'cuenta' : '', noLoSe: 'No lo sé ahora',
         },
         {
           clave: 'direccion', texto: dir ? `¿La dirección fiscal es ${dir}?` : '¿Cuál es la dirección fiscal?',
           porque: dir ? 'Es la de facturación de tu cuenta de Folvy.' : null,
+          ayuda: 'La dirección fiscal dice qué impuesto llevas: IVA en la península y Baleares, IGIC en Canarias, IPSI en Ceuta y Melilla. Si no la sabes, sigo con IVA y la pones luego.',
           opciones: dir ? [{ valor: 'cuenta', texto: 'Sí, esa' }] : [],
           entrada: 'direccion', normal: dir ? 'cuenta' : '', noLoSe: 'La pongo luego',
         },
@@ -119,8 +130,9 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
     }
     case 'actividad':
       return [{
-        clave: 'actividad', texto: '¿A qué os dedicáis? Dímelo con tus palabras: «Restaurante, y también repartimos a domicilio».',
-        porque: null, opciones: [], entrada: 'actividad', normal: '', noLoSe: 'No lo sé, que lo mire mi asesor',
+        clave: 'actividad', texto: '¿A qué os dedicáis? Cuéntamelo como quieras: «Restaurante, y también repartimos a domicilio».',
+        porque: null, transicion: 'Ahora, lo que hacéis.',
+        ayuda: 'Con lo que hacéis busco tu epígrafe del IAE y tu CNAE en los catálogos oficiales, y de ahí salen tus impuestos y el IVA de tus ventas. Si no lo sabes, se lo apunto a tu asesor y la añades luego.', opciones: [], entrada: 'actividad', normal: '', noLoSe: 'No lo sé, que lo mire mi asesor',
       }]
     case 'impuestos': {
       const { territorio } = territorioPorCp(ctx.cp)
@@ -133,6 +145,8 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
       if (territorio === 'peninsula_baleares') {
         out.push({
           clave: 'periodo', texto: '¿Presentas el IVA cada tres meses? Es lo normal en tu caso.', porque: prop.periodoIva.porque,
+          transicion: 'Ahora, tus impuestos.',
+          ayuda: 'El IVA se presenta cada tres meses salvo que factures más de 6 millones al año. Si no lo sabes, lo dejo en cada tres meses y se lo apunto a tu asesor.',
           opciones: [{ valor: 'quarterly', texto: 'Sí, cada tres meses' }, { valor: 'monthly', texto: 'Cada mes' }],
           entrada: null, normal: 'quarterly', noLoSe: 'No lo sé, pregúntaselo a mi asesor',
         })
@@ -140,12 +154,15 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
       out.push({
         clave: 'retiene', texto: '¿Pagas nóminas o facturas de profesionales (asesor, abogado…) con retención?',
         porque: 'Casi todos los negocios con empleados o con gestoría retienen IRPF; eso se declara cada trimestre en el 111.',
+        transicion: territorio === 'peninsula_baleares' ? undefined : 'Ahora, tus impuestos.',
+        ayuda: 'Lo que retienes en nóminas y facturas de profesionales se declara cada trimestre en el 111 y en enero en su resumen, el 190. Si no lo sabes, lo dejo en «sí», que es lo normal, y se lo apunto a tu asesor.',
         opciones: [{ valor: 'si', texto: 'Sí' }, { valor: 'no', texto: 'No' }],
         entrada: null, normal: 'si', noLoSe: 'No lo sé',
       })
       out.push({
         clave: 'alquiler', texto: '¿Pagas el alquiler de un local con retención?',
         porque: 'Si el local es alquilado a una empresa o a un particular que te factura con retención, esa retención va al 115.',
+        ayuda: 'La retención del alquiler de un local se declara cada trimestre en el 115 y en enero en su resumen, el 180. Si no lo sabes, lo dejo en «sí» y se lo apunto a tu asesor.',
         opciones: [{ valor: 'si', texto: 'Sí' }, { valor: 'no', texto: 'No' }],
         entrada: null, normal: 'si', noLoSe: 'No lo sé',
       })
@@ -153,6 +170,7 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
         out.push({
           clave: 'retenido70', texto: 'El año pasado, ¿al menos el 70 % de tus ingresos llevó retención?',
           porque: 'Si es así, no adelantas el IRPF cada trimestre (RD 439/2007, art. 109.2).',
+          ayuda: 'Si al menos el 70 % de lo que facturaste llevó retención, no adelantas el IRPF cada trimestre. Si no lo sabes, lo dejo en «no» y se lo apunto a tu asesor.',
           opciones: [{ valor: 'no', texto: 'No' }, { valor: 'si', texto: 'Sí' }],
           entrada: null, normal: 'no', noLoSe: 'No lo sé',
         })
@@ -164,25 +182,27 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
         tipo: ctx.tipo ?? 'company', territorio: territorioPorCp(ctx.cp).territorio, actividades: ctx.clases, retiene: null,
         alquilaConRetencion: null, volumenAnoAnterior: null, inicioActividad: null, hoy: ctx.hoy,
       })
-      const e = prop.ejercicio.valor
       return [{
         clave: 'cuentas',
-        texto: `Te dejo el plan de pymes, con cuentas de 8 dígitos, y el ejercicio ${e.code} del ${fecha(e.startsOn)} al ${fecha(e.endsOn)}. ¿Lo dejo así?`,
-        porque: `${prop.plan.porque} ${prop.ejercicio.porque}`,
-        opciones: [{ valor: 'si', texto: 'Sí, déjalo así' }], entrada: null, normal: 'si', noLoSe: 'No lo sé, que lo mire mi asesor',
+        texto: '¿Prefieres el plan de pymes o el general? Para una empresa de tu tamaño, lo normal es el de pymes.',
+        porque: `${prop.plan.porque} ${prop.ejercicio.porque}`, transicion: 'Ahora las cuentas.',
+        ayuda: 'El plan contable es la lista de cuentas donde se apunta todo. El de pymes es más corto y vale si facturas menos de 8 M€ y sois menos de 50. Si no lo sabes, dejo ese: se puede cambiar después sin perder nada.',
+        opciones: [{ valor: 'pymes', texto: 'El de pymes, el normal' }, { valor: 'normal', texto: 'El general' }],
+        entrada: null, normal: 'pymes', noLoSe: 'Que lo decida mi asesor',
       }]
     }
     case 'banco':
       return [{
-        clave: 'banco', texto: 'Por último: ¿cuál es el IBAN de la cuenta del banco de la empresa?',
-        porque: null, opciones: [], entrada: 'iban', normal: '', noLoSe: 'Lo pongo luego',
+        clave: 'banco', texto: '¿Cuál es el IBAN de la cuenta del banco de la empresa?',
+        porque: null, transicion: 'Por último, tu banco.',
+        ayuda: 'Con el IBAN cuadro tus movimientos del banco con tus facturas. Es opcional: si no lo tienes a mano, lo pones cuando quieras.', opciones: [], entrada: 'iban', normal: '', noLoSe: 'Lo pongo luego',
       }]
     case 'hecho':
       return []
   }
 }
 
-const fecha = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}` }
+export const fecha = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}` }
 
 /** La pregunta que toca: la primera del paso que aún no tiene respuesta. */
 export function preguntaActual(paso: PasoAlta, ctx: ContextoAlta): Pregunta | null {
