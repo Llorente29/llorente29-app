@@ -545,8 +545,10 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
             placeholder={movil ? 'Contesta con tus palabras' : 'Contesta con tus palabras, como se lo dirías a tu gestor'}
             aria-label="Tu respuesta" disabled={ocupado || paso === 'hecho'}
             inputMode={pregunta?.entrada === 'nif' || pregunta?.entrada === 'iban' ? 'text' : undefined} autoComplete="off" />
-          {/* La etiqueta no se selecciona ni se lleva el foco: tocarla envía, como la tecla. */}
-          {!movil && <kbd className="cx-alta-tecla" aria-hidden="true" onMouseDown={(e) => e.preventDefault()} onClick={() => enviarTexto()}>Intro</kbd>}
+          {/* Solo con texto escrito (respuesta 5). No se selecciona ni se lleva el foco: tocarla envía, como la tecla. */}
+          {!movil && texto.trim() !== '' && (
+            <kbd className="cx-alta-tecla" aria-hidden="true" onMouseDown={(e) => e.preventDefault()} onClick={() => enviarTexto()}>↵ Intro</kbd>
+          )}
           <button type="submit" className="cx-alta-enviar" aria-label="Enviar" disabled={texto.trim() === '' || ocupado || paso === 'hecho'}
             onMouseDown={(e) => e.preventDefault()}><Flecha /></button>
           <button type="button" className="cx-voz" aria-label="Hablar" onClick={() => setMuyPronto(true)}><Microfono /></button>

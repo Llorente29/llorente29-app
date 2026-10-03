@@ -23,6 +23,9 @@ Además, **las cifras dependen de los datos de prueba, no del diseño**: el núm
 5. **El texto del bocadillo de las cuentas añade «Si no lo sabes, dejo ese».** Lo pide la respuesta: qué pasa si no lo sabes.
 6. **Los modelos que dice son 111, 190, 200, 202, 303, 347 y 390.** Son los anuales del punto 2. La maqueta, de antes, pone 111, 115, 202 y 303.
 7. **La caja lleva botón de enviar (respuesta 4), y la maqueta no.** Es una flecha de 48 px, azul `#2F5BFF`, a la izquierda del micro. Está gris y apagada sin texto y se enciende al escribir. El micro se queda. **La maqueta N1b cambia en esto**: fue un fallo de la maqueta, que solo tenía micro. Intro envía, y la etiqueta «Intro» no se selecciona; tocarla también envía.
+8. **«↵ Intro» solo con texto escrito, en azul suave (respuesta 5).** Lleva fondo `#EAF0FF` y texto `#2F5BFF`. Con la caja vacía solo están la flecha gris y el micro; al escribir salen «↵ Intro» y la flecha azul.
+
+   ![«↵ Intro» con texto escrito](alta-intro.png)
 
 ### La dirección con la población puesta por el código postal (respuesta 4, arreglo 3)
 

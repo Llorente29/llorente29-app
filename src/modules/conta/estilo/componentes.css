@@ -472,8 +472,10 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 .cx-alta-input { flex-grow: 1; border: none; outline: none; background: transparent; font-size: 17px; color: var(--cx-texto); min-width: 0; height: 40px; }
 .cx .cx-alta-input:focus-visible { outline: none; }
 .cx-alta-input:disabled { background: transparent; }
+/* «↵ Intro» (respuesta 5): se ve sin gritar, azul suave, y solo cuando hay texto escrito. */
 .cx-alta-tecla {
-  font-family: var(--cx-letra-cifras); font-size: 12px; color: var(--cx-apoyo); border: 1px solid var(--cx-borde-campo); border-radius: 8px; padding: 4px 8px;
+  font-family: var(--cx-letra-cifras); font-size: 12px; font-weight: 600; color: var(--cx-azul); background: var(--cx-azul-suave);
+  border: none; border-radius: 8px; padding: 5px 9px; white-space: nowrap;
   user-select: none; -webkit-user-select: none; cursor: pointer;
 }
 /* Enviar (respuesta 4): flecha, 48 px, azul; a la izquierda del micro y activo solo con texto. */

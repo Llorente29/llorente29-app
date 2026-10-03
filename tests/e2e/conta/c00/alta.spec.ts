@@ -271,13 +271,21 @@ test.describe('Intro envía (respuesta 4)', () => {
       await expect(log(page).getByText(/NIF/).last()).toBeVisible()
       const enviar = page.getByRole('button', { name: 'Enviar' })
       await expect(enviar).toBeDisabled() // sin texto, apagado
+      // Vacía la caja: solo la flecha gris y el micro; «↵ Intro» sale al escribir (respuesta 5).
       const tecla = page.locator('kbd.cx-alta-tecla')
-      expect(await tecla.evaluate((k) => getComputedStyle(k).userSelect)).toBe('none')
+      await expect(tecla).toHaveCount(0)
 
       const nif = cifInventado()
       await page.getByRole('textbox', { name: 'Tu respuesta' }).click()
       await page.keyboard.type(nif)
       await expect(enviar).toBeEnabled()
+      await expect(tecla).toHaveText('↵ Intro')
+      expect(await tecla.evaluate((k) => {
+        const c = getComputedStyle(k)
+        return { seleccion: c.userSelect, color: c.color, fondo: c.backgroundColor }
+      })).toEqual({ seleccion: 'none', color: 'rgb(47, 91, 255)', fondo: 'rgb(234, 240, 255)' })
+      await page.evaluate(() => document.fonts.ready)
+      await page.screenshot({ path: `${DIR}/alta-intro.png` })
       await page.keyboard.press('Enter')
       await expect(log(page).getByText(`Entendido: NIF ${nif}. Con él empiezo la ficha de tu empresa.`)).toBeVisible()
       await expect(page.getByRole('textbox', { name: 'Tu respuesta' })).toHaveValue('')
