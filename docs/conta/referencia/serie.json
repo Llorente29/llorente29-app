@@ -1,5 +1,5 @@
 {
- "generado_desde": "2026-10-02T18:10:30.129Z",
+ "generado_desde": "2026-10-03T16:36:09.317Z",
  "tablas": {
   "country": {
    "fuente": "eu-paises",
@@ -26,7 +26,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Dos (los especiales son voluntarios, salvo tres)",
      "sort_order": 0,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -42,7 +42,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.1",
      "sort_order": 10,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -58,7 +58,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.2",
      "sort_order": 20,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -74,7 +74,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.3",
      "sort_order": 30,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -90,7 +90,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.4",
      "sort_order": 40,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -106,7 +106,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.5",
      "sort_order": 50,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -122,7 +122,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.6",
      "sort_order": 60,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -138,7 +138,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.7",
      "sort_order": 70,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -154,7 +154,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.8",
      "sort_order": 80,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -170,7 +170,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.9",
      "sort_order": 90,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -189,8 +189,10 @@
      "description": null,
      "legal_ref": "Orden EHA/3786/2008, de 29 de diciembre, por la que se aprueban el modelo 303 Impuesto sobre el Valor Añadido, Autoliquidación, y el modelo 308 Impuesto sobre el Valor Añadido, solicitud de devolución: Recargo de equivalencia, artículo 30 bis del Reglamento del IVA y sujetos pasivos ocasionales y se modifican los Anexos I y II de la Orden EHA/3434/2007, de 23 de noviembre, por la que se aprueban los modelos 322 de autoliquidación mensual, modelo individual, y 353 de autoliquidación mensual, modelo agregado, así como otra normativa tributaria",
      "fuenteOrden": "orden-modelo-303",
+     "annual_form_code": "390",
+     "annual_legal_ref": "Ley 37/1992, art. 164.Uno.6.º",
      "source_key": "orden-modelo-303",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-303",
@@ -202,11 +204,11 @@
     {
      "code": "390",
      "name": "Resumen anual del IVA",
-     "description": null,
+     "description": "En enero resumes el IVA de todo el año.",
      "legal_ref": "Orden EHA/3111/2009, de 5 de noviembre, por la que se aprueba el modelo 390 de declaración-resumen anual del Impuesto sobre el Valor Añadido y se modifica el anexo I de la Orden EHA/1274/2007, de 26 de abril, por la que se aprueban los modelos 036 de Declaración censal de alta, modificación y baja en el Censo de empresarios, profesionales y retenedores y 037 Declaración censal simplificada de alta, modificación y baja en el Censo de empresarios, profesionales y retenedores",
      "fuenteOrden": "orden-modelo-390",
      "source_key": "orden-modelo-390",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-390",
@@ -221,8 +223,10 @@
      "description": null,
      "legal_ref": "Orden EHA/586/2011, de 9 de marzo, por la que se aprueba el modelo 111 de autoliquidación de retenciones e ingresos a cuenta del Impuesto sobre la Renta de las Personas Físicas sobre rendimientos del trabajo y de actividades económicas, premios y determinadas ganancias patrimoniales e imputaciones de renta y se modifica otra normativa tributaria",
      "fuenteOrden": "orden-modelo-111",
+     "annual_form_code": "190",
+     "annual_legal_ref": "RD 439/2007 (Reglamento del IRPF), art. 108.2",
      "source_key": "orden-modelo-111",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-111",
@@ -237,8 +241,10 @@
      "description": null,
      "legal_ref": "Orden HFP/227/2017, de 13 de marzo, por la que se aprueba el modelo 202 para efectuar los pagos fraccionados a cuenta del Impuesto sobre Sociedades y del Impuesto sobre la Renta de no Residentes correspondiente a establecimientos permanentes y entidades en régimen de atribución de rentas constituidas en el extranjero con presencia en territorio español, y el modelo 222 para efectuar los pagos fraccionados a cuenta del Impuesto sobre Sociedades en régimen de consolidación fiscal y se establecen las condiciones generales y el procedimiento para su presentación electrónica",
      "fuenteOrden": "orden-modelo-202",
+     "annual_form_code": "200",
+     "annual_legal_ref": "Ley 27/2014, art. 124.1",
      "source_key": "orden-modelo-202",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-202",
@@ -250,11 +256,13 @@
     {
      "code": "347",
      "name": "Operaciones con terceros",
-     "description": null,
+     "description": "En febrero declaras a quién has comprado o vendido más de 3.005,06 € en el año.",
      "legal_ref": "Orden EHA/3012/2008, de 20 de octubre, por la que se aprueba el modelo 347 de Declaración anual de operaciones con terceras personas, así como los diseños físicos y lógicos y el lugar, forma y plazo de presentación",
      "fuenteOrden": "orden-modelo-347",
+     "default_for": "company_not_sii",
+     "default_legal_ref": "RD 1065/2007, arts. 31 a 35; no lo presenta quien lleva el SII (art. 32.e)",
      "source_key": "orden-modelo-347",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-347",
@@ -270,7 +278,7 @@
      "legal_ref": "Orden EHA/769/2010, de 18 de marzo, por la que se aprueba el modelo 349 de declaración recapitulativa de operaciones intracomunitarias, así como los diseños físicos y lógicos y el lugar, forma y plazo de presentación, se establecen las condiciones generales y el procedimiento para su presentación telemática, y se modifica la Orden HAC/3625/2003, de 23 de diciembre, por la que se aprueban el modelo 309 de declaración-liquidación no periódica del Impuesto sobre el Valor Añadido, y otras normas tributarias",
      "fuenteOrden": "orden-modelo-349",
      "source_key": "orden-modelo-349",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-349",
@@ -280,13 +288,29 @@
      ]
     },
     {
+     "code": "190",
+     "name": "Resumen anual de retenciones",
+     "description": "En enero resumes las retenciones de todo el año.",
+     "legal_ref": "Orden EHA/3127/2009, de 10 de noviembre, por la que se aprueba el modelo 190 para la declaración del resumen anual de retenciones e ingresos a cuenta del Impuesto sobre la Renta de las Personas Físicas sobre rendimientos del trabajo y de actividades económicas, premios y determinadas ganancias patrimoniales e imputaciones de renta y se modifican las condiciones para la presentación por vía telemática de los modelos 111 y 117 por los obligados tributarios que tengan la consideración de grandes empresas, así como la hoja interior de relación de socios, herederos, comuneros o partícipes del modelo 184 y los diseños lógicos de los modelos 184 y 193",
+     "fuenteOrden": "orden-modelo-190",
+     "source_key": "orden-modelo-190",
+     "verified_at": "2026-10-03",
+     "pruebas": [
+      {
+       "fuente": "orden-modelo-190",
+       "bloque": "*",
+       "literal": "Se aprueba el modelo 190"
+      }
+     ]
+    },
+    {
      "code": "180",
      "name": "Resumen anual de retenciones del alquiler",
-     "description": null,
+     "description": "En enero resumes las retenciones del alquiler de todo el año.",
      "legal_ref": "Orden de 20 de noviembre de 2000 por la que se aprueban los modelos 115, en pesetas y en euros, de declaración-documento de ingreso, los modelos 180, en pesetas y en euros, del resumen anual de retenciones e ingresos a cuenta sobre determinadas rentas o rendimientos procedentes del arrendamiento o subarrendamiento de inmuebles urbanos del Impuesto sobre la Renta de las Personas Físicas, del Impuesto sobre Sociedades y del Impuesto sobre la Renta de no Residentes, correspondiente a establecimientos permanentes, así como los diseños físicos y lógicos para la sustitución de las hojas interiores del citado modelo 180 por soportes directamente legibles por ordenador y se establecen las condiciones generales y el procedimiento para su presentación telemática",
      "fuenteOrden": "orden-modelo-180",
      "source_key": "orden-modelo-180",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-180",
@@ -301,8 +325,10 @@
      "description": null,
      "legal_ref": "Orden de 20 de noviembre de 2000 por la que se aprueban los modelos 115, en pesetas y en euros, de declaración-documento de ingreso, los modelos 180, en pesetas y en euros, del resumen anual de retenciones e ingresos a cuenta sobre determinadas rentas o rendimientos procedentes del arrendamiento o subarrendamiento de inmuebles urbanos del Impuesto sobre la Renta de las Personas Físicas, del Impuesto sobre Sociedades y del Impuesto sobre la Renta de no Residentes, correspondiente a establecimientos permanentes, así como los diseños físicos y lógicos para la sustitución de las hojas interiores del citado modelo 180 por soportes directamente legibles por ordenador y se establecen las condiciones generales y el procedimiento para su presentación telemática",
      "fuenteOrden": "orden-modelo-180",
+     "annual_form_code": "180",
+     "annual_legal_ref": "RD 439/2007 (Reglamento del IRPF), art. 108.2",
      "source_key": "orden-modelo-180",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-180",
@@ -318,12 +344,27 @@
      "legal_ref": "Orden EHA/672/2007, de 19 de marzo, por la que se aprueban los modelos 130 y 131 para la autoliquidación de los pagos fraccionados a cuenta del Impuesto sobre la Renta de las Personas Físicas correspondientes, respectivamente, a actividades económicas en estimacion directa y a actividades económicas en estimación objetiva, el modelo 310 de declaración ordinaria para la autoliquidaciòn del régimen simplificado del Impuesto sobre el Valor Añadido, se determinan el lugar y forma de presentación de los mismos y se modifica en materia de domiciliación bancaria la Orden EHA/3398/2006, de 26 de octubre",
      "fuenteOrden": "orden-modelo-130",
      "source_key": "orden-modelo-130",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "orden-modelo-130",
        "bloque": "*",
        "literal": "Se aprueba el modelo 130. Impuesto sobre la Renta de las Personas Físicas. Actividades económicas en estimación directa. Pago fraccionado."
+      }
+     ]
+    },
+    {
+     "code": "200",
+     "name": "Impuesto sobre Sociedades",
+     "description": "En julio declaras el Impuesto sobre Sociedades del año.",
+     "legal_ref": "Ley 27/2014, art. 124.1 (el modelo de cada ejercicio lo aprueba una orden anual de Hacienda; la vigente no está en la base consolidada del BOE)",
+     "source_key": "ley-27-2014",
+     "verified_at": "2026-10-03",
+     "pruebas": [
+      {
+       "fuente": "ley-27-2014",
+       "bloque": "a124",
+       "literal": "Los contribuyentes estarán obligados a presentar una declaración por este Impuesto"
       }
      ]
     }
@@ -436,7 +477,7 @@
       }
      ],
      "source_key": "rd-1065-2007",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     }
    ]
   },
@@ -461,7 +502,7 @@
      "legal_ref": "Ley 37/1992, art. 90.Uno; recargo: art. 161.1.º",
      "sort_order": 10,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -504,7 +545,7 @@
      "legal_ref": "Ley 37/1992, art. 91.Uno; recargo: art. 161.2.º",
      "sort_order": 20,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -548,7 +589,7 @@
      "legal_ref": "Ley 37/1992, art. 91.Dos; recargo: art. 161.3.º",
      "sort_order": 30,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -586,7 +627,7 @@
      "legal_ref": "Real Decreto-ley 4/2024, art. 1.Dos.2",
      "sort_order": 35,
      "source_key": "rdl-4-2024",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rdl-4-2024",
@@ -654,7 +695,7 @@
      "legal_ref": "Real Decreto-ley 4/2024, art. 1.Dos.1",
      "sort_order": 36,
      "source_key": "rdl-4-2024",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rdl-4-2024",
@@ -702,7 +743,7 @@
      "legal_ref": "Ley 37/1992, art. 20",
      "sort_order": 40,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -737,7 +778,7 @@
      "legal_ref": "Ley 37/1992, art. 13.1.º (adquisiciones intracomunitarias) y art. 90",
      "sort_order": 50,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -775,7 +816,7 @@
      "legal_ref": "Ley 37/1992, art. 84.Uno.2.º y art. 90",
      "sort_order": 60,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -817,7 +858,7 @@
      },
      "desde_por": "ley-canarias-4-2012 [a5-3]: redacción vigente desde 2024-01-01 (BOE-A-2024-10011)",
      "source_key": "ley-canarias-4-2012",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-canarias-4-2012",
@@ -849,7 +890,7 @@
      },
      "desde_por": "ley-canarias-4-2012 [a5-3]: redacción vigente desde 2024-01-01 (BOE-A-2024-10011)",
      "source_key": "ley-canarias-4-2012",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-canarias-4-2012",
@@ -881,7 +922,7 @@
      },
      "desde_por": "ley-canarias-4-2012 [a5-3]: redacción vigente desde 2024-01-01 (BOE-A-2024-10011)",
      "source_key": "ley-canarias-4-2012",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-canarias-4-2012",
@@ -913,7 +954,7 @@
      },
      "desde_por": "ley-canarias-4-2012 [a5-3]: redacción vigente desde 2024-01-01 (BOE-A-2024-10011)",
      "source_key": "ley-canarias-4-2012",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-canarias-4-2012",
@@ -945,7 +986,7 @@
      },
      "desde_por": "ley-canarias-4-2012 [a5-3]: redacción vigente desde 2024-01-01 (BOE-A-2024-10011)",
      "source_key": "ley-canarias-4-2012",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-canarias-4-2012",
@@ -977,7 +1018,7 @@
      },
      "desde_por": "ley-canarias-4-2012 [a5-3]: redacción vigente desde 2024-01-01 (BOE-A-2024-10011)",
      "source_key": "ley-canarias-4-2012",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-canarias-4-2012",
@@ -1009,7 +1050,7 @@
      },
      "desde_por": "ley-canarias-4-2012 [a5-3]: redacción vigente desde 2024-01-01 (BOE-A-2024-10011)",
      "source_key": "ley-canarias-4-2012",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-canarias-4-2012",
@@ -1042,7 +1083,7 @@
      },
      "desde_por": "rd-439-2007 [a95]: redacción vigente desde 2023-01-26 (BOE-A-2023-2023)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1071,7 +1112,7 @@
      },
      "desde_por": "rd-439-2007 [a95]: redacción vigente desde 2023-01-26 (BOE-A-2023-2023)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1100,7 +1141,7 @@
      },
      "desde_por": "rd-439-2007 [a80]: redacción vigente desde 2023-12-07 (BOE-A-2023-24841)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1129,7 +1170,7 @@
      },
      "desde_por": "rd-439-2007 [a100]: redacción vigente desde 2018-12-23 (BOE-A-2018-17601)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1158,7 +1199,7 @@
      },
      "desde_por": "rd-439-2007 [a90]: redacción vigente desde 2018-12-23 (BOE-A-2018-17601)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1179,7 +1220,7 @@
      "legal_ref": "Real Decreto-ley 19/2018, art. 3.45",
      "sort_order": 10,
      "source_key": "rdl-19-2018",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rdl-19-2018",
@@ -1196,7 +1237,7 @@
      "legal_ref": "Real Decreto-ley 19/2018, art. 3.1",
      "sort_order": 20,
      "source_key": "rdl-19-2018",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rdl-19-2018",
@@ -1213,7 +1254,7 @@
      "legal_ref": "Real Decreto-ley 19/2018, art. 3.23 (instrumento de pago)",
      "sort_order": 30,
      "source_key": "rdl-19-2018",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "rdl-19-2018",
@@ -1230,7 +1271,7 @@
      "legal_ref": "Ley 7/2012, art. 7.1 (límite de 1.000 €)",
      "sort_order": 40,
      "source_key": "ley-7-2012",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-7-2012",
@@ -1254,7 +1295,7 @@
      "legal_ref": "Ley 3/2004, art. 4.3 (como mucho 60 días)",
      "sort_order": 10,
      "source_key": "ley-3-2004",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-3-2004",
@@ -1274,7 +1315,7 @@
      "legal_ref": "Ley 3/2004, art. 4.1",
      "sort_order": 20,
      "source_key": "ley-3-2004",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-3-2004",
@@ -1294,7 +1335,7 @@
      "legal_ref": "Ley 3/2004, art. 4.3",
      "sort_order": 30,
      "source_key": "ley-3-2004",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-3-2004",
@@ -1315,7 +1356,7 @@
      "legal_ref": "Ley 3/2004, art. 4.3 (como mucho 60 días)",
      "sort_order": 40,
      "source_key": "ley-3-2004",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "ley-3-2004",
@@ -1335,7 +1376,7 @@
      "legal_ref": "Código de Comercio, art. 28.2 (Libro Diario)",
      "sort_order": 10,
      "source_key": "codigo-comercio",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "codigo-comercio",
@@ -1351,7 +1392,7 @@
      "legal_ref": "Código de Comercio, art. 28.2 (Libro Diario)",
      "sort_order": 20,
      "source_key": "codigo-comercio",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "codigo-comercio",
@@ -1367,7 +1408,7 @@
      "legal_ref": "Código de Comercio, art. 28.2 (Libro Diario)",
      "sort_order": 30,
      "source_key": "codigo-comercio",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "codigo-comercio",
@@ -1383,7 +1424,7 @@
      "legal_ref": "Código de Comercio, art. 28.2 (Libro Diario)",
      "sort_order": 40,
      "source_key": "codigo-comercio",
-     "verified_at": "2026-10-02",
+     "verified_at": "2026-10-03",
      "pruebas": [
       {
        "fuente": "codigo-comercio",
@@ -1401,73 +1442,73 @@
      "code": "food_beverage",
      "pgc": "600",
      "name": "Compras de mercaderías",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "packaging",
      "pgc": "602",
      "name": "Compras de otros aprovisionamientos",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "cleaning_tableware",
      "pgc": "602",
      "name": "Compras de otros aprovisionamientos",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "rent",
      "pgc": "621",
      "name": "Arrendamientos y cánones",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "repairs",
      "pgc": "622",
      "name": "Reparaciones y conservación",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "professional",
      "pgc": "623",
      "name": "Servicios de profesionales independientes",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "transport",
      "pgc": "624",
      "name": "Transportes",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "insurance",
      "pgc": "625",
      "name": "Primas de seguros",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "bank_platform_fees",
      "pgc": "626",
      "name": "Servicios bancarios y similares",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "advertising",
      "pgc": "627",
      "name": "Publicidad, propaganda y relaciones públicas",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "utilities",
      "pgc": "628",
      "name": "Suministros",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     },
     {
      "code": "other_services",
      "pgc": "629",
      "name": "Otros servicios",
-     "verified_at": "2026-10-02"
+     "verified_at": "2026-10-03"
     }
    ]
   },
@@ -1525,16 +1566,5 @@
    ]
   }
  },
- "apartadas": [
-  {
-   "tabla": "tax_form",
-   "code": "190",
-   "por": "la orden encontrada (HAP/2178/2014) aprueba el modelo 410 y solo modifica el 190: falta la que lo aprueba"
-  },
-  {
-   "tabla": "tax_form",
-   "code": "200",
-   "por": "falta la orden que aprueba el modelo 200: la búsqueda del BOE no la encuentra"
-  }
- ]
+ "apartadas": []
 }

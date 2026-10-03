@@ -155,12 +155,14 @@
      "bloque": "*",
      "literal": "modelo 303 de autoliquidación del Impuesto sobre el Valor Añadido"
     }
-   ]
+   ],
+   "annual_form_code": "390",
+   "annual_legal_ref": "Ley 37/1992, art. 164.Uno.6.º"
   },
   {
    "code": "390",
    "name": "Resumen anual del IVA",
-   "description": null,
+   "description": "En enero resumes el IVA de todo el año.",
    "legal_ref": null,
    "fuenteOrden": "orden-modelo-390",
    "pruebas": [
@@ -183,7 +185,9 @@
      "bloque": "*",
      "literal": "modelo 111"
     }
-   ]
+   ],
+   "annual_form_code": "190",
+   "annual_legal_ref": "RD 439/2007 (Reglamento del IRPF), art. 108.2"
   },
   {
    "code": "202",
@@ -197,12 +201,14 @@
      "bloque": "*",
      "literal": "modelo 202 para efectuar los pagos fraccionados a cuenta del Impuesto sobre Sociedades"
     }
-   ]
+   ],
+   "annual_form_code": "200",
+   "annual_legal_ref": "Ley 27/2014, art. 124.1"
   },
   {
    "code": "347",
    "name": "Operaciones con terceros",
-   "description": null,
+   "description": "En febrero declaras a quién has comprado o vendido más de 3.005,06 € en el año.",
    "legal_ref": null,
    "fuenteOrden": "orden-modelo-347",
    "pruebas": [
@@ -211,7 +217,9 @@
      "bloque": "*",
      "literal": "modelo 347 de Declaración anual de operaciones con terceras personas"
     }
-   ]
+   ],
+   "default_for": "company_not_sii",
+   "default_legal_ref": "RD 1065/2007, arts. 31 a 35; no lo presenta quien lleva el SII (art. 32.e)"
   },
   {
    "code": "349",
@@ -230,22 +238,21 @@
   {
    "code": "190",
    "name": "Resumen anual de retenciones",
-   "description": null,
+   "description": "En enero resumes las retenciones de todo el año.",
    "legal_ref": null,
    "fuenteOrden": "orden-modelo-190",
    "pruebas": [
     {
      "fuente": "orden-modelo-190",
      "bloque": "*",
-     "literal": "modelo 190"
+     "literal": "Se aprueba el modelo 190"
     }
-   ],
-   "pendiente": "la orden encontrada (HAP/2178/2014) aprueba el modelo 410 y solo modifica el 190: falta la que lo aprueba"
+   ]
   },
   {
    "code": "180",
    "name": "Resumen anual de retenciones del alquiler",
-   "description": null,
+   "description": "En enero resumes las retenciones del alquiler de todo el año.",
    "legal_ref": null,
    "fuenteOrden": "orden-modelo-180",
    "pruebas": [
@@ -268,7 +275,9 @@
      "bloque": "*",
      "literal": "El modelo 115 en pesetas que figura como anexo I de la presente Orden"
     }
-   ]
+   ],
+   "annual_form_code": "180",
+   "annual_legal_ref": "RD 439/2007 (Reglamento del IRPF), art. 108.2"
   },
   {
    "code": "130",
@@ -287,10 +296,15 @@
   {
    "code": "200",
    "name": "Impuesto sobre Sociedades",
-   "description": null,
-   "legal_ref": null,
-   "pendiente": "falta la orden que aprueba el modelo 200: la búsqueda del BOE no la encuentra",
-   "pruebas": []
+   "description": "En julio declaras el Impuesto sobre Sociedades del año.",
+   "legal_ref": "Ley 27/2014, art. 124.1 (el modelo de cada ejercicio lo aprueba una orden anual de Hacienda; la vigente no está en la base consolidada del BOE)",
+   "pruebas": [
+    {
+     "fuente": "ley-27-2014",
+     "bloque": "a124",
+     "literal": "Los contribuyentes estarán obligados a presentar una declaración por este Impuesto"
+    }
+   ]
   }
  ],
  "legal_form": [
