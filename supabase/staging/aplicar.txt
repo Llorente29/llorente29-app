@@ -1,11 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 6.ª tanda: tarea 6. La base de la IA (0160: origen de cada
-# dato, registro con deshacer y sugerencias), su ensayo con A y B (que NO deja
-# nada escrito) y un proveedor de PRUEBA en B para que la sugerencia real del
-# 115 tenga con qué salir.
-# (5.ª: 0150 y el ensayo de «Tu empresa».)
-supabase/migrations/20261003T0160_c00_ia_base.sql
-supabase/staging/sql/20261003_ensayo_c00_ia.sql
+# 03/10/2026 · C00, 7.ª tanda: el mismo proveedor de PRUEBA (alquiler al 19 %)
+# también en A, para que la empresa que crea el e2e del alta vea la
+# sugerencia del 115 en cada ejecución. Idempotente: el de B ya está.
+# (6.ª: 0160, su ensayo y el proveedor de prueba de B.)
 supabase/seeds/conta/seed_c00_sugerencia_prueba.sql

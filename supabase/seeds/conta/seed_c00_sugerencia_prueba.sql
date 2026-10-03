@@ -15,9 +15,16 @@ select 'c01b0000-0000-4000-8000-00000000000b', 'Locales del Sur (alquiler)', 'Lo
        (select id from public.expense_category where is_system and pgc_account_hint = '621' limit 1), 19
  where not exists (select 1 from public.supplier where account_id = 'c01b0000-0000-4000-8000-00000000000b' and name = 'Locales del Sur (alquiler)');
 
+insert into public.supplier (account_id, name, legal_name, tax_id, tax_id_type, entity_kind, country_code, expense_category_id, irpf_withholding_pct)
+select 'c01a0000-0000-4000-8000-00000000000a', 'Locales del Norte (alquiler)', 'Locales del Norte, S.L.', 'B28000024', 'nif_es', 'company', 'ES',
+       (select id from public.expense_category where is_system and pgc_account_hint = '621' limit 1), 19
+ where not exists (select 1 from public.supplier where account_id = 'c01a0000-0000-4000-8000-00000000000a' and name = 'Locales del Norte (alquiler)');
+
 do $$
 begin
-  raise notice 'SUGERENCIA DE PRUEBA: proveedores de alquiler al 19 %% en B: %',
+  raise notice 'SUGERENCIA DE PRUEBA: proveedores de alquiler al 19 %% en A: % · en B: %',
+    (select count(*) from public.supplier s join public.expense_category e on e.id = s.expense_category_id
+      where s.account_id = 'c01a0000-0000-4000-8000-00000000000a' and e.pgc_account_hint = '621' and s.irpf_withholding_pct = 19),
     (select count(*) from public.supplier s join public.expense_category e on e.id = s.expense_category_id
       where s.account_id = 'c01b0000-0000-4000-8000-00000000000b' and e.pgc_account_hint = '621' and s.irpf_withholding_pct = 19);
 end $$;
