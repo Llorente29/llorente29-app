@@ -16,7 +16,7 @@ Además, **las cifras dependen de los datos de prueba, no del diseño**: el núm
 |---|---|
 | ![N1b](../../maquetas/c00/N1bAlta.png) | ![alta ordenador](alta-ordenador.png) |
 
-1. **La conversación tiene scroll y el titular queda arriba, fuera de la captura.** La prueba llega a «Tus cuentas» escribiendo y contestando, así que hay más conversación que en la maqueta.
+1. **La pantalla no hace scroll, la conversación sí.** El titular se queda arriba y la caja de escribir, abajo, como en la maqueta. La prueba llega a «Tus cuentas» escribiendo y contestando, así que hay más conversación que en la maqueta.
 2. **Las preguntas ya contestadas se quedan en la conversación, cada una con lo que la IA apuntó delante.** En la maqueta, con dos respuestas, no se nota.
 3. **«Tus impuestos» dice «IVA cada tres meses» sin los modelos.** Los modelos se guardan al terminar el paso y la captura es justo antes. Se ven en la del móvil y en «Tu empresa».
 4. **El bocadillo «¿Por qué lo pregunto?» sale plegado y se abre al tocarlo.** La captura lo tiene abierto, como la maqueta.
