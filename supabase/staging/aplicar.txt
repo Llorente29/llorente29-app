@@ -1,7 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 13.ª tanda (respuesta 3 de Julio, punto 4): las empresas
-# de prueba de A y B, coherentes con la regla de los modelos. Solo staging.
-# (12.ª: los anuales por regla en la tabla de modelos.)
-supabase/staging/sql/20261003_coherencia_datos_prueba.sql
+# 03/10/2026 · C00, 14.ª tanda (respuesta 3 de Julio, punto 4): la 0190 otra
+# vez, ahora también con la fecha de comprobación de las formas jurídicas (lo
+# encontró el agente la primera vez que corrió). Todo en ella se puede aplicar
+# dos veces sin cambiar nada más.
+# (13.ª: las empresas de prueba de A y B, coherentes.)
+supabase/migrations/20261003T0190_c00_modelos_anuales.sql

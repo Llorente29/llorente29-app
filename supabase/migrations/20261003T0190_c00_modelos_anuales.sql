@@ -150,6 +150,8 @@ update public.expense_category set verified_at = '2026-10-03' where code = 'adve
 update public.expense_category set verified_at = '2026-10-03' where code = 'utilities' and is_system and verified_at is distinct from '2026-10-03';
 update public.expense_category set verified_at = '2026-10-03' where code = 'other_services' and is_system and verified_at is distinct from '2026-10-03';
 
+update public.legal_form set verified_at = '2026-10-03' where code = 'persona_fisica' and verified_at is distinct from '2026-10-03';
+
 -- ── Aceptar una sugerencia de modelo añade también su anual ─────────────────
 create or replace function public.conta_sugerencia_responder(p_sugerencia uuid, p_acepta boolean)
 returns jsonb language plpgsql security definer set search_path = public as $$
