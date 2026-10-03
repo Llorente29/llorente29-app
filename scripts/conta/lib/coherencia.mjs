@@ -181,7 +181,9 @@ export function revisarCoherencia(bd, extra = {}) {
     if (!tocaPresentar(e)) continue
     const donde = `${e.legal_name ?? 'Empresa sin nombre'} (cuenta ${String(e.account_id).slice(0, 8)})`
     for (const f of faltaParaPresentar(e, extra.hoy ?? new Date().toISOString().slice(0, 10))) {
-      h('ambar', 'presentar', donde, `Falta «${f.texto}», que pide${f.para.length > 1 ? 'n' : ''} ${f.para.map((p) => NOMBRE_DOC[p]).join(' y ')}.`,
+      const docs = f.para.filter((p) => p !== 'notificaciones')
+      const para = docs.length ? `que pide${docs.length > 1 ? 'n' : ''} ${docs.map((p) => NOMBRE_DOC[p]).join(' y ')}` : 'que hace falta para las notificaciones'
+      h('ambar', 'presentar', donde, `Falta «${f.texto}», ${para}.`,
         'Orden del modelo 200 del ejercicio y Orden JUS de los modelos de depósito de cuentas (hoja de identificación)')
     }
   }

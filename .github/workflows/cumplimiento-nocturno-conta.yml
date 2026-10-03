@@ -125,7 +125,7 @@ jobs:
         if: steps.revisar.outcome == 'failure' && github.event_name != 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          TITULO: 'Conta · Cumplimiento: los datos maestros no cuadran con la fuente oficial'
+          TITULO: 'Conta · Cumplimiento: los datos maestros no cuadran con la fuente, o hay fallos de coherencia'
         run: |
           set -euo pipefail
           enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
@@ -137,7 +137,7 @@ jobs:
       - name: Resultado
         if: steps.revisar.outcome == 'failure'
         run: |
-          echo "::error::Los datos maestros no cuadran con la fuente: ver el informe del resumen."
+          echo "::error::Los datos maestros no cuadran con la fuente o hay fallos de coherencia en rojo: ver el informe del resumen."
           exit 1
 
   normativa:
