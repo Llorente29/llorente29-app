@@ -1,0 +1,336 @@
+name: Aplicar SQL en PRODUCCIÓN (contabilidad)
+
+# QUÉ HACE (C00, respuestas 6 y 7 de Julio)
+# Aplica en PRODUCCIÓN la tanda de supabase/produccion/aplicar.txt (o, en modo
+# «vuelta_atras», la de supabase/produccion/vuelta-atras.txt). Es la copia del
+# de staging con las guardas AL REVÉS, y además:
+#
+#   · Solo a mano (workflow_dispatch). NUNCA por push. Pide escribir
+#     «produccion» en el campo `confirmo`.
+#   · Solo entre las 00:30 y las 12:15 de Madrid (la banda de servicio de
+#     CLAUDE.md). Fuera, no conecta. Y se vuelve a mirar antes de CADA fichero.
+#   · Comprueba que la URL es la de producción y que al otro lado está Foodint.
+#   · Antes de nada, analiza la tanda (scripts/conta/produccion/analizar.mjs) y
+#     escribe en el informe qué crea o altera cada fichero. PARA si un fichero,
+#     sobre algo que ya existe en producción, borra o renombra una tabla,
+#     columna, vista o función, cambia datos (update/delete), reemplaza una
+#     función que no sea vat_rate_for, o vat_rate_for con otra firma. SIGUE, con
+#     informe, si solo añade.
+#   · Modo «ensayo»: TODO en una transacción, D1 y recuento dentro, y ROLLBACK.
+#     No queda nada.
+#   · Modo «real»: solo si hay un ENSAYO EN VERDE DEL MISMO COMMIT. Un fichero
+#     por transacción; para al primer fallo y deja escrito qué ficheros
+#     quedaron aplicados. D1 antes y después del fichero que reemplaza
+#     vat_rate_for: si da alguna diferencia (salvo la decidida del 4T2024),
+#     para y no aplica lo siguiente. Al final, D1 y recuento de filas de serie.
+#   · lock_timeout de 5 s: si un fichero tiene que esperar un cierre (porque
+#     algo de Cocina está usando la tabla), falla en vez de quedarse en cola
+#     delante de los pedidos.
+#
+# LO QUE JULIO HACE UNA VEZ
+#   Settings → Secrets and variables → Actions → New repository secret
+#     PROD_CONTA_DB_URL   cadena de conexión de PRODUCCIÓN con permiso de
+#                         escritura (Connect → Session pooler). Solo la usa
+#                         este workflow.
+#   La URL no se imprime: usuario, contraseña y host se enmascaran antes de
+#   conectar, y psql nunca la recibe por la línea de órdenes que se ve.
+#
+# OJO: GitHub solo deja lanzar un workflow_dispatch si el fichero del workflow
+# existe en la rama por defecto (main). Ver el informe del PR #138.
+
+run-name: "${{ inputs.modo }} · ${{ github.ref_name }} · ${{ github.sha }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmo:
+        description: 'Escribe «produccion» (sin tilde) para confirmar que esto toca PRODUCCIÓN.'
+        required: true
+        type: string
+      modo:
+        description: 'ensayo = todo en una transacción y rollback; real = aplica (solo con un ensayo en verde de este mismo commit); vuelta_atras = aplica supabase/produccion/vuelta-atras.txt'
+        required: true
+        type: choice
+        options: [ensayo, real, vuelta_atras]
+        default: ensayo
+
+# Nunca dos a la vez contra producción.
+concurrency:
+  group: aplicar-produccion-conta
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROD_REF: xzmpnchlguibclvxyynt
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      MODO: ${{ inputs.modo }}
+      PSQL: /usr/lib/postgresql/17/bin/psql
+      PGAPPNAME: gha-produccion-conta-${{ github.run_id }}
+      PGOPTIONS: -c lock_timeout=5s
+      INFORME: /tmp/informe.md
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirmación y modo
+        env:
+          CONFIRMO: ${{ inputs.confirmo }}
+        run: |
+          set -euo pipefail
+          if [ "$CONFIRMO" != "produccion" ]; then
+            echo "::error::Hay que escribir «produccion» en «confirmo». No se hace nada."
+            exit 1
+          fi
+          case "$MODO" in ensayo|real|vuelta_atras) ;; *) echo "::error::Modo desconocido: $MODO"; exit 1 ;; esac
+          {
+            echo "# Producción · modo **$MODO**"
+            echo
+            echo "Rama \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA}\` · lanzado por **${GITHUB_ACTOR}** · $(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M') de Madrid"
+            echo
+          } > "$INFORME"
+
+      - name: Ventana · solo entre las 00:30 y las 12:15 de Madrid
+        run: |
+          set -euo pipefail
+          hm=$(TZ=Europe/Madrid date +%H%M)
+          if [ "$((10#$hm))" -lt 30 ] || [ "$((10#$hm))" -ge 1215 ]; then
+            echo "::error::Son las ${hm:0:2}:${hm:2:2} en Madrid: fuera de la ventana 00:30–12:15. No se conecta."
+            exit 1
+          fi
+          echo "Son las ${hm:0:2}:${hm:2:2} en Madrid: dentro de la ventana."
+
+      - name: Guarda 1 y 2 · el secreto apunta a PRODUCCIÓN y no a staging
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ]; then
+            echo "::error::Falta el secreto PROD_CONTA_DB_URL. No se aplica nada."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in
+            *"$PROD_REF"*) echo "La URL es de producción." ;;
+            *) echo "::error::La URL no es de producción (no contiene su ref). Abortado sin conectar."; exit 1 ;;
+          esac
+
+      - name: Leer y validar el manifiesto
+        run: |
+          set -euo pipefail
+          if [ "$MODO" = "vuelta_atras" ]; then M=supabase/produccion/vuelta-atras.txt; PAT='^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.down\.sql$'
+          else M=supabase/produccion/aplicar.txt; PAT='^supabase/migrations/[A-Za-z0-9_./-]+\.sql$'; fi
+          grep -vE '^\s*(#|$)' "$M" | sed -E 's/\s+$//' > /tmp/tanda.txt || true
+          n=$(wc -l < /tmp/tanda.txt)
+          [ "$n" -gt 0 ] || { echo "::error::El manifiesto $M no lista ningún fichero."; exit 1; }
+          mal=0
+          while IFS= read -r f; do
+            if ! printf '%s' "$f" | grep -qE "$PAT" || printf '%s' "$f" | grep -q '\.\.'; then echo "::error::Ruta no permitida: $f"; mal=1; continue; fi
+            [ -f "$f" ] || { echo "::error::No existe: $f"; mal=1; }
+          done < /tmp/tanda.txt
+          [ "$mal" -eq 0 ] || exit 1
+          echo "Tanda ($M), $n ficheros:"; nl -ba /tmp/tanda.txt
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          "$PSQL" --version
+
+      - name: Guarda 3 · al otro lado está Foodint
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.accounts where id = '$FOODINT'")
+          if [ "$r" != "1" ]; then
+            echo "::error::Al otro lado no está la cuenta de Foodint: NO es producción. Abortado sin aplicar nada."
+            exit 1
+          fi
+          echo "Al otro lado está Foodint: es producción."
+
+      - name: Modo real · hace falta un ensayo en verde de este mismo commit
+        if: inputs.modo == 'real'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/aplicar-produccion-conta.yml/runs?head_sha=${GITHUB_SHA}&status=success&per_page=50" \
+                --jq '[.workflow_runs[] | select(.display_title | startswith("ensayo · "))] | length')
+          if [ "$n" -lt 1 ]; then
+            echo "::error::No hay ningún ENSAYO en verde del commit ${GITHUB_SHA}. Primero el ensayo, luego el real."
+            exit 1
+          fi
+          echo "Hay $n ensayo(s) en verde de este commit."
+          echo "Ensayo en verde de este mismo commit: sí ($n)." >> "$INFORME"; echo >> "$INFORME"
+
+      - name: Análisis · qué crea o altera cada fichero (y si alguno PARA)
+        if: inputs.modo != 'vuelta_atras'
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          node scripts/conta/produccion/analizar.mjs objetivos $(cat /tmp/tanda.txt) > /tmp/objetivos.json
+          # Qué de todo eso existe YA en producción (solo lee).
+          node -e '
+            const o = require("/tmp/objetivos.json");
+            const v = (xs) => xs.length ? xs.map((x) => `(${JSON.stringify(x).replace(/"/g, "\x27")})`).join(",") : "(null)";
+            console.log(`select json_build_object(
+              \x27tablas\x27, (select coalesce(json_agg(n), \x27[]\x27) from (values ${v(o.tablas)}) t(n) where n is not null and to_regclass(n) is not null),
+              \x27funciones\x27, (select coalesce(json_agg(n), \x27[]\x27) from (values ${v(o.funciones)}) t(n) where n is not null and to_regprocedure(n) is not null))`)
+          ' > /tmp/existentes.sql
+          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f /tmp/existentes.sql > /tmp/existentes.json
+          echo "Existentes en producción:"; cat /tmp/existentes.json
+          set +e
+          node scripts/conta/produccion/analizar.mjs decidir /tmp/existentes.json $(cat /tmp/tanda.txt) > /tmp/analisis.md
+          para=$?
+          set -e
+          grep -v '^VAT_RATE_FOR_EN:' /tmp/analisis.md >> "$INFORME"
+          sed -n 's/^VAT_RATE_FOR_EN: //p' /tmp/analisis.md > /tmp/vat_rate_for_en.txt
+          if [ "$para" -ne 0 ]; then
+            echo "::error::El análisis PARA: algún fichero borra, renombra o cambia datos de algo que ya existe. No se aplica nada. Ver el informe."
+            cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Antes · D1 y recuento de filas de serie
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/d1.sql > /tmp/d1-antes.csv
+          echo "D1 antes: $(wc -l < /tmp/d1-antes.csv) pares categoría × día."
+          { echo "## Antes"; echo; echo "D1: $(wc -l < /tmp/d1-antes.csv) pares categoría × día leídos de \`vat_rate_for\`."; echo; } >> "$INFORME"
+
+      - name: ENSAYO · todo en una transacción, y ROLLBACK
+        if: inputs.modo == 'ensayo'
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          {
+            echo '\set ON_ERROR_STOP 1'
+            echo 'begin;'
+            i=0
+            while IFS= read -r f; do
+              i=$((i+1))
+              echo "\\echo '>>> [$i] $f'"
+              echo "\\i $f"
+            done < /tmp/tanda.txt
+            echo "\\echo '>>> D1 y recuento, dentro de la transacción'"
+            echo '\pset format csv'
+            echo '\pset tuples_only on'
+            echo '\o /tmp/d1-despues.csv'
+            echo '\i scripts/conta/produccion/d1.sql'
+            echo '\o /tmp/recuento-despues.csv'
+            echo '\i scripts/conta/produccion/recuento-serie.sql'
+            echo '\o'
+            echo 'rollback;'
+            echo "\\echo '>>> ROLLBACK: no queda nada.'"
+          } > /tmp/ensayo.sql
+          set +e
+          "$PSQL" "$DB_URL" -X -f /tmp/ensayo.sql > /tmp/ensayo.log 2>&1
+          rc=$?
+          set -e
+          grep -E '^>>>|ERROR|NOTICE' /tmp/ensayo.log | head -200
+          if [ "$rc" -ne 0 ]; then
+            ult=$(grep '^>>>' /tmp/ensayo.log | tail -1)
+            { echo "## Ensayo: **FALLA**"; echo; echo "Falló en: \`$ult\`. La conexión se cerró sin commit: no ha quedado nada."; echo; echo '```'; grep -E 'ERROR|DETAIL|CONTEXT' /tmp/ensayo.log | head -20; echo '```'; } >> "$INFORME"
+            cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::El ensayo falla en: $ult"
+            exit 1
+          fi
+          set +e
+          node scripts/conta/produccion/d1-comparar.mjs /tmp/d1-antes.csv /tmp/d1-despues.csv > /tmp/d1.txt
+          d1=$?
+          set -e
+          { echo "## Ensayo: todo entra"; echo; echo "Los $(wc -l < /tmp/tanda.txt) ficheros, en una transacción, y **ROLLBACK**: en producción no ha quedado nada."; echo
+            echo "**D1 (antes ↔ con la tanda):** $(head -1 /tmp/d1.txt)"; tail -n +2 /tmp/d1.txt; echo
+            echo "**Filas de serie con la tanda:**"; echo; echo '| Tabla | Filas |'; echo '|---|---|'
+            sed -E 's/^([^,]*),(.*)$/| \1 | \2 |/' /tmp/recuento-despues.csv; echo; } >> "$INFORME"
+          if [ "$d1" -ne 0 ]; then echo "::error::D1 da diferencias no decididas."; cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
+
+      - name: REAL · fichero a fichero, para al primer fallo
+        if: inputs.modo == 'real' || inputs.modo == 'vuelta_atras'
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -uo pipefail
+          { echo "## Aplicación"; echo; echo '| # | Fichero | md5 | Resultado |'; echo '|---|---|---|---|'; } >> "$INFORME"
+          vrf=" $(cat /tmp/vat_rate_for_en.txt 2>/dev/null || true) "
+          i=0; fallo=0
+          while IFS= read -r f; do
+            i=$((i+1)); md5=$(md5sum "$f" | cut -d' ' -f1)
+            if [ "$fallo" -ne 0 ]; then echo "| $i | \`$f\` | \`$md5\` | no aplicado (paró antes) |" >> "$INFORME"; continue; fi
+            hm=$(TZ=Europe/Madrid date +%H%M)
+            if [ "$((10#$hm))" -lt 30 ] || [ "$((10#$hm))" -ge 1215 ]; then
+              echo "| $i | \`$f\` | \`$md5\` | **no aplicado: las ${hm:0:2}:${hm:2:2}, fuera de la ventana** |" >> "$INFORME"; fallo=1; continue
+            fi
+            echo "::group::[$i] $f (md5 $md5)"
+            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" 2>&1; then
+              echo "::endgroup::"
+              echo "| $i | \`$f\` | \`$md5\` | **aplicado** $(TZ=Europe/Madrid date +%H:%M:%S) |" >> "$INFORME"
+            else
+              echo "::endgroup::"
+              echo "::error::FALLÓ [$i] $f — revertido entero. Los siguientes no se aplican."
+              echo "| $i | \`$f\` | \`$md5\` | **FALLÓ, revertido entero** |" >> "$INFORME"; fallo=1; continue
+            fi
+            # D1 justo después del fichero que reemplaza vat_rate_for: si cambia algo, para.
+            case "$vrf" in *" $f "*)
+              "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/d1.sql > /tmp/d1-tras-vrf.csv
+              if node scripts/conta/produccion/d1-comparar.mjs /tmp/d1-antes.csv /tmp/d1-tras-vrf.csv > /tmp/d1-vrf.txt; then
+                echo "| | D1 tras \`$(basename "$f")\` | | $(head -1 /tmp/d1-vrf.txt) |" >> "$INFORME"
+              else
+                echo "| | D1 tras \`$(basename "$f")\` | | **DIFERENCIAS: para** · $(head -1 /tmp/d1-vrf.txt) |" >> "$INFORME"
+                echo "::error::D1 da diferencias tras $f. No se aplica nada más."; cat /tmp/d1-vrf.txt; fallo=1
+              fi ;;
+            esac
+          done < /tmp/tanda.txt
+          echo >> "$INFORME"
+          exit "$fallo"
+
+      - name: Después · D1 y recuento de filas de serie
+        if: (inputs.modo == 'real' || inputs.modo == 'vuelta_atras') && always()
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -uo pipefail
+          "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/d1.sql > /tmp/d1-despues.csv
+          node scripts/conta/produccion/d1-comparar.mjs /tmp/d1-antes.csv /tmp/d1-despues.csv > /tmp/d1.txt; d1=$?
+          { echo "## Después"; echo; echo "**D1 (antes ↔ después):** $(head -1 /tmp/d1.txt)"; tail -n +2 /tmp/d1.txt; echo; } >> "$INFORME"
+          if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/recuento-serie.sql > /tmp/recuento.csv 2>/tmp/recuento.err; then
+            { echo "**Filas de serie:**"; echo; echo '| Tabla | Filas |'; echo '|---|---|'; sed -E 's/^([^,]*),(.*)$/| \1 | \2 |/' /tmp/recuento.csv; echo; } >> "$INFORME"
+          else
+            { echo "**Filas de serie:** no se han podido contar ($(head -1 /tmp/recuento.err))."; echo; } >> "$INFORME"
+          fi
+          exit "$d1"
+
+      - name: Informe
+        if: always()
+        run: |
+          [ -f "$INFORME" ] && cat "$INFORME" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Guardar el informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-produccion-${{ inputs.modo }}-${{ github.run_id }}
+          path: /tmp/informe.md
+          if-no-files-found: warn
+          retention-days: 90

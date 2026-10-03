@@ -27,6 +27,9 @@ on:
       - 'docs/**'
       - '**/*.md'
       - 'supabase/**'
+      # C00 R8 (04/10/2026): cambiar un workflow no cambia el front; sin esto
+      # salía un paquete OTA idéntico al anterior.
+      - '.github/**'
   workflow_dispatch:
 
 jobs:
