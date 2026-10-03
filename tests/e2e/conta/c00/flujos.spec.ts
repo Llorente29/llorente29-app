@@ -75,7 +75,7 @@ test('cambiar de empresa, rechazar una sugerencia y cambiar un dato que puso la 
     const tipo = page.locator('.cx-dato').filter({ has: page.getByText('Tipo', { exact: true }) })
     await expect(tipo.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toBeVisible()
     await page.getByRole('button', { name: 'Cambiar quién eres' }).click()
-    await page.getByLabel('Tipo').selectOption({ label: 'Sociedades anónimas' })
+    await page.getByLabel('Tipo', { exact: true }).selectOption({ label: 'Sociedades anónimas' }) // no «Tipo de vía»
     await page.getByRole('button', { name: 'Guardar' }).click()
     await expect(tipo.getByText('Sociedades anónimas')).toBeVisible()
     await expect(tipo.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toHaveCount(0)
@@ -107,7 +107,8 @@ test('añadir un impuesto propio y borrarlo', async ({ page }, info) => {
     await page.getByRole('button', { name: 'Borrar' }).click()
     await page.getByRole('button', { name: 'Sí, borrar' }).click()
     await expect(page.getByRole('status').getByText(`Borrado «${nombre}».`)).toBeVisible()
-    await expect(page.getByText(nombre)).toHaveCount(0)
+    // Exacto: el aviso «Borrado «…».» también lleva el nombre.
+    await expect(page.getByText(nombre, { exact: true })).toHaveCount(0)
   } finally {
     // Si se quedó a medias, fuera por la API.
     await rest(s, 'DELETE', `tax_rate?account_id=eq.${CUENTA_A.id}&is_system=eq.false&name=like.Impuesto%20e2e*`)
