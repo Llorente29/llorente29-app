@@ -12,7 +12,8 @@
 // ventanas encima de ventanas). Cada cambio confirma con contenido o falla en
 // pantalla (regla 8).
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Chip, Guardado, Inicial } from '@/modules/conta/ui/piezas'
 import {
   agruparConceptos, cuentaDe, textoVigencia, valeHoy,
@@ -52,7 +53,14 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
 }) {
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [busca, setBusca] = useState('')
-  const [abierta, setAbierta] = useState<string | null>(null)
+  // La fila abierta vive en la dirección (?fila=…), no en el componente: si la
+  // aplicación se vuelve a montar (App.tsx enseña «Cargando…» mientras recarga
+  // la cuenta), la fila sigue abierta; y «atrás» y los enlaces la respetan.
+  const [params, setParams] = useSearchParams()
+  const abierta = params.get('fila')
+  const setAbierta = useCallback((id: string | null) => {
+    setParams((p) => { const n = new URLSearchParams(p); if (id) n.set('fila', id); else n.delete('fila'); return n }, { replace: true })
+  }, [setParams])
   const [modo, setModo] = useState<Modo>('ver')
   const [anadiendo, setAnadiendo] = useState(false)
   const [guardando, setGuardando] = useState(false)

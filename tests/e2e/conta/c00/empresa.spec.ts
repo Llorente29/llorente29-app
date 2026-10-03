@@ -47,7 +47,7 @@ test('cuenta A: completar la empresa, cerrar y reabrir un mes, como en la maquet
     await expect(actividad.getByRole('status').getByText('Añadida «Restaurante» como tu actividad principal.')).toBeVisible()
   }
   await expect(actividad.getByText('Epígrafe 671 · CNAE 5611 · desde marzo de 2022')).toBeVisible()
-  await expect(actividad.getByText('Principal')).toBeVisible()
+  await expect(actividad.getByText('Principal', { exact: true })).toBeVisible()
 
   // El ejercicio de este año.
   const ano = new Date().getFullYear()

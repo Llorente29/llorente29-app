@@ -64,7 +64,9 @@ export default function TuEmpresaPage() {
   const cabecera = (
     <>
       <Cabecera antetitulo="Ajustes" titulo="Tu empresa" derecha={d && !movil ? <EtiquetaListo d={d} hoy={hoy} /> : undefined} />
-      {!movil && <PestanasPildora entradas={PESTANAS_AJUSTES} etiqueta="Ajustes" />}
+      {/* También en el móvil, aunque M2 no las dibuja: sin ellas no se llega a
+          Tablas generales desde el teléfono (lo cazó el e2e de la cuenta B). */}
+      <PestanasPildora entradas={PESTANAS_AJUSTES} etiqueta="Ajustes" />
     </>
   )
 
