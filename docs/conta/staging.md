@@ -228,12 +228,15 @@ rastro, las dos facturas en `aprobada` sin vencimiento ni pago.
 | 02/10 18:4x | la del commit `8a1ffb2` | `seeds/conta/seed_c00_empresas_prueba.sql` | A «Taberna de Prueba Norte» (península; 303, 390, 111, 115, 202; 1 banco y 1 serie) y B «Cocina de Prueba Sur» (Canarias; 111) |
 
 | 02/10 23:49 | [37079327827](https://github.com/Llorente29/llorente29-app/actions/runs/37079327827) | `0150` (md5 `c704f6e7`) y `staging/sql/20261003_ensayo_c00_t5.sql` (`3fa90a65`) | ver «Ensayo de la tarea 5» abajo |
+| 03/10 05:35 | [37100317334](https://github.com/Llorente29/llorente29-app/actions/runs/37100317334) | `0160` (base de la IA), `staging/sql/20261003_ensayo_c00_ia.sql` (`5123a7ee`) y `seeds/conta/seed_c00_sugerencia_prueba.sql` | ver «Ensayo de la IA» abajo; 1 alquiler al 19 % de prueba en B |
+| 03/10 05:55 | [37101379040](https://github.com/Llorente29/llorente29-app/actions/runs/37101379040) | `seeds/conta/seed_c00_sugerencia_prueba.sql` otra vez, ya con A | el mismo alquiler de prueba en A, para el e2e del alta |
 
 Registradas después en el historial: `20261003000100 c00_catalogos_oficiales`,
 `20261003000110 c00_empresa`, `20261003000120 c00_tablas_generales`,
 `20261003000130 c00_valores_de_serie` y `20261003000140
 c00_vat_rate_lee_de_impuestos` (541 filas en total) y, tras la 5.ª tanda,
-`20261003000150 c00_actividad_principal` (542).
+`20261003000150 c00_actividad_principal` (542) y, tras la 6.ª,
+`20261003000160 c00_ia_base` (543).
 
 **Lo que dejó la 0130**, medido por el conector: 1.432 epígrafes del IAE (los
 1.438 del ISTAC menos 6 códigos técnicos: `_N`, `_O`, `_T`, `_U`, `_X`, `_Z`),
@@ -259,6 +262,26 @@ y su criterio de caja; añade una socia y la ve. B no puede hacer principal una
 actividad de A, cambia 0 filas del nombre o los impuestos de A, ve 0 socios de
 A y no puede cerrar un mes de A. Los mismos 13 resultados en local que en
 staging.
+
+**Ensayo de la IA** (0160; A y B con su token; nada escrito: orígenes,
+registro, sugerencias, actividades y proveedores de A, su nombre comercial y
+sus modelos, iguales antes y después). La IA pone el nombre comercial y queda
+su origen con el motivo y el valor; la persona lo cambia y el origen deja de
+coincidir (sin marca); deshacer entonces se niega («Ese dato ya lo cambió
+alguien después: no lo deshago para no pisarlo»); sin cambio en medio,
+deshacer devuelve el valor y quita el origen. La IA no puede cambiar el NIF ni
+actuar sin porqué, ni poner un epígrafe que no está en el IAE; sí el 677.9, y
+se deshace. Nadie escribe el registro a mano. Con un alquiler al 19 % y una
+gestoría al 15 %: 2 sugerencias; rechazada la del 115, no vuelve; aceptada la
+del 111, pone el modelo, queda en el registro y se deshace. B no pone ni
+deshace nada en A y ve 0 filas de su registro y sus sugerencias. Los mismos 16
+resultados en local que en staging.
+
+**Dato de prueba, dicho:** la sugerencia que se ve en staging sale de una
+regla real (alquiler de la cuenta 621 con un 19 % de retención y la empresa sin
+el 115) sobre un proveedor INVENTADO, «Locales del Norte/Sur (alquiler)», en A
+y en B. En producción no puede salir todavía: las columnas de la ficha de
+proveedor (C01) no están allí.
 
 La vara sabe fallar: en local, con un 5 % puesto a propósito en
 `alimento_basico` dentro de una transacción revertida, da 730 diferencias (los
