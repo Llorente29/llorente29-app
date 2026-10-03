@@ -12,10 +12,10 @@ name: Cumplimiento de contabilidad contra PRODUCCIÓN (solo lectura)
 # tiene permiso para abrirlas), ni commits. El informe sale en el resumen de
 # la ejecución y como artefacto; de ahí va al PR.
 #
-# CUÁNDO: solo a mano. Desde la rama, empujando un cambio a
-# docs/conta/cumplimiento/lanzar-agentes-produccion.txt (mientras el C00 no
-# esté en main), o con workflow_dispatch una vez fusionado. Se lanza DESPUÉS
-# de las migraciones y ANTES de la fusión.
+# CUÁNDO: solo a mano, con el botón «Run workflow» (workflow_dispatch),
+# eligiendo la rama conta/c00-empresa-y-tablas mientras el C00 no esté en
+# main. Ningún push lo lanza. Se lanza DESPUÉS de las migraciones y ANTES de
+# la fusión.
 #
 # LO QUE JULIO HACE UNA VEZ
 #   1. Ejecuta scripts/conta/crear-usuario-lectura.sql en producción y le pone
@@ -29,10 +29,6 @@ name: Cumplimiento de contabilidad contra PRODUCCIÓN (solo lectura)
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['conta/**']
-    paths:
-      - 'docs/conta/cumplimiento/lanzar-agentes-produccion.txt'
 
 concurrency:
   group: cumplimiento-produccion-conta
