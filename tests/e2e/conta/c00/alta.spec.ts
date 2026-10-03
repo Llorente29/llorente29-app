@@ -8,7 +8,8 @@
 // Cada prueba crea su propia empresa en la cuenta A, con un NIF inventado y un
 // nombre que empieza por «Alta e2e», y la borra al acabar por la API, con la
 // sesión del usuario (lo que cuelga de ella se va en cascada). Si una prueba
-// anterior se quedó a medias, su empresa se borra antes de empezar.
+// anterior se quedó a medias, su empresa se borra antes de empezar: toda
+// empresa sin terminar de la cuenta A.
 //
 // La sugerencia del 115 sale porque la cuenta A tiene un alquiler al 19 % de
 // PRUEBA (seed_c00_sugerencia_prueba.sql) y en el alta se contesta que no se
@@ -22,10 +23,19 @@ import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 const DIR = 'docs/conta/capturas/c00'
 
 async function borrarEmpresasDePrueba(s: Sesion) {
-  const r = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${CUENTA_A.id}&or=(legal_name.like.Alta%20e2e*,legal_name.is.null)&setup_completed_at=is.null`)
-  for (const c of r.datos ?? []) await rest(s, 'DELETE', `company?id=eq.${c.id}`)
+  // Toda empresa SIN TERMINAR de la cuenta A es de estas pruebas: la única de
+  // verdad (la de la semilla) está terminada. No se filtra por el nombre,
+  // porque una prueba que se rompe a mitad puede haber guardado cualquier cosa
+  // en él (le pasó a una: guardó la actividad como razón social).
+  const r = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${CUENTA_A.id}&setup_completed_at=is.null`)
   const r2 = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${CUENTA_A.id}&legal_name=like.Alta%20e2e*`)
-  for (const c of r2.datos ?? []) await rest(s, 'DELETE', `company?id=eq.${c.id}`)
+  const ids = new Set([...(r.datos ?? []), ...(r2.datos ?? [])].map((c) => c.id))
+  for (const id of ids) {
+    // La RLS puede «borrar» cero filas sin dar error: se cuenta lo borrado.
+    const b = await rest<unknown[]>(s, 'DELETE', `company?id=eq.${id}`)
+    expect(b.status, `Borrar la empresa de prueba ${id}`).toBeLessThan(300)
+    expect((b.datos ?? []).length, `Borrar la empresa de prueba ${id}`).toBe(1)
+  }
 }
 
 async function decir(page: Page, texto: string) {

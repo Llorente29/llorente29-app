@@ -85,8 +85,13 @@ export default function AltaPage() {
   const fin = useRef<HTMLDivElement>(null)
   const sigId = useRef(1)
 
+  // El paso lo fija quien avanza, en el momento: si se esperase a que la base
+  // devuelva el setup_step nuevo, entre medias volvería la pregunta del paso
+  // anterior y la siguiente respuesta se guardaría donde no es. Al volver a
+  // entrar (otro dispositivo, o un remontaje), manda el de la base.
+  const [pasoLocal, setPasoLocal] = useState<PasoAlta | null>(null)
   const paso: PasoAlta = !companyId ? 'nif'
-    : d && PASOS_VALIDOS.includes(d.empresa.setupStep as PasoAlta) ? d.empresa.setupStep as PasoAlta : 'nombre'
+    : pasoLocal ?? (d && PASOS_VALIDOS.includes(d.empresa.setupStep as PasoAlta) ? d.empresa.setupStep as PasoAlta : 'nombre')
 
   const ctx: ContextoAlta | null = cuenta ? {
     cuenta, tipo: d?.empresa.entityKind ?? null, cp: d?.empresa.fiscalPostalCode ?? null,
@@ -108,6 +113,7 @@ export default function AltaPage() {
   async function avanzar(siguiente: PasoAlta, id = companyId) {
     if (!id) return
     await ponerPaso(id, siguiente)
+    setPasoLocal(siguiente)
     setRespuestas({})
     datos.recargar()
   }
@@ -128,7 +134,7 @@ export default function AltaPage() {
         case 'nif': {
           const nif = valor === 'cuenta' ? ctx.cuenta.nif : noLoSe ? null : valor
           id = await crearEmpresa(accountId, userId, nif)
-          setCreada(id); elegir(id); recargarEmpresas()
+          setCreada(id); setPasoLocal('nombre'); elegir(id); recargarEmpresas()
           if (noLoSe) await apuntarDuda(accountId, id, userId, 'nif', p.texto, 'Sin NIF')
           decir('folvy', nif ? 'Apuntado. Ahora, el nombre.' : 'Lo dejo sin NIF por ahora; se lo apunto a tu asesor. Sin él no se puede terminar el alta.')
           return // crearEmpresa ya deja el paso en «nombre»
@@ -190,6 +196,7 @@ export default function AltaPage() {
         case 'banco': {
           if (!noLoSe) await anadirBanco(accountId, id!, userId, valor)
           await terminarAlta(id!)
+          setPasoLocal('hecho')
           recargarEmpresas()
           decir('folvy', <>Listo: tu empresa está montada. {noLoSe ? 'El banco lo pones cuando quieras en «Tablas generales».' : ''} Todo lo que he puesto lleva la marca «IA» y su porqué, y lo puedes cambiar o deshacer en <Link to={rutaTuEmpresa()}>Tu empresa</Link>.</>)
           datos.recargar()
