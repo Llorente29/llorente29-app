@@ -44,6 +44,25 @@ if (viejos.length) {
   }
   l.push('')
 }
+// Las órdenes de los modelos anuales que se vigilan una a una (respuesta 3 del
+// C00, punto 4): 180, 190, 200 y 347. Cada una, con la orden que tenemos y si
+// es la que vale. El 200 se aprueba cada año: se mira de qué ejercicio es.
+const registro = JSON.parse(readFileSync('docs/conta/fuentes/registro.json', 'utf8')).fuentes
+const VIGILADAS = [['180', 'orden-modelo-180'], ['190', 'orden-modelo-190'], ['200', 'orden-modelo-200'], ['347', 'orden-modelo-347']]
+const anoActual = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric' }).format(new Date()))
+l.push('## Las órdenes de los modelos anuales', '')
+for (const [modelo, clave] of VIGILADAS) {
+  const r = registro[clave]
+  if (!r || r.http !== 200) { l.push(`- **${modelo}**: la orden no se ha podido descargar del BOE.`); continue }
+  const titulo = String(r.titulo).replace(/,? por la que .*/, '')
+  const ejercicio = Number((String(r.titulo).match(/iniciados entre el 1 de enero y el 31 de diciembre de (\d{4})/) ?? [])[1])
+  if (modelo === '200' && (!ejercicio || ejercicio < anoActual - 1)) {
+    l.push(`- **${modelo}**: ${titulo}, que es la del ejercicio ${ejercicio || '¿?'}. La del ejercicio vigente no está en la base consolidada del BOE: pendiente, se busca a mano.`)
+  } else {
+    l.push(`- **${modelo}**: ${titulo}${ejercicio ? `, ejercicio ${ejercicio}` : ''}. Comprobada en el BOE el ${String(r.fecha ?? '').slice(0, 10) || 'día de la última descarga'}.`)
+  }
+}
+l.push('')
 const texto = l.join('\n')
 writeFileSync(salida, texto)
 console.log(texto)

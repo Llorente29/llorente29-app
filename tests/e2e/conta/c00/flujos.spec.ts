@@ -38,7 +38,18 @@ async function crearSegundaEmpresa(s: Sesion, nombre: string): Promise<string> {
 }
 
 async function borrarEmpresa(s: Sesion, id: string | null) {
-  if (id) await rest(s, 'DELETE', `company?id=eq.${id}&account_id=eq.${CUENTA_A.id}`)
+  if (!id) return
+  // La RLS puede «borrar» cero filas sin dar error: se cuenta lo borrado (en
+  // staging se habían quedado empresas «Flujos e2e movil» sin que nadie se enterase).
+  const b = await rest<unknown[]>(s, 'DELETE', `company?id=eq.${id}&account_id=eq.${CUENTA_A.id}`)
+  expect(b.status, `Borrar la empresa de prueba ${id}: ${JSON.stringify(b.datos)}`).toBeLessThan(300)
+  expect((b.datos ?? []).length, `Borrar la empresa de prueba ${id}: ${JSON.stringify(b.datos)}`).toBe(1)
+}
+
+/** Lo que se quedó de una ejecución anterior que no pudo limpiar. */
+async function borrarRestos(s: Sesion) {
+  const r = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${CUENTA_A.id}&legal_name=like.Flujos%20e2e*`)
+  for (const c of r.datos ?? []) await borrarEmpresa(s, c.id)
 }
 
 async function cambiarA(page: Page, nombre: RegExp) {
@@ -49,6 +60,7 @@ async function cambiarA(page: Page, nombre: RegExp) {
 test('cambiar de empresa, rechazar una sugerencia y cambiar un dato que puso la IA', async ({ page }, info) => {
   const movil = info.project.name === 'movil'
   const s = await entrarComo(page, CUENTA_A.email)
+  await borrarRestos(s)
   const nombre = `Flujos e2e ${info.project.name} ${Date.now()}`
   let id: string | null = null
   try {

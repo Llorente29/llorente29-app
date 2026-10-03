@@ -27,6 +27,30 @@ select json_build_object(
                             'valid_to', b.valid_to, 'note', b.note) order by c.code, b.valid_from), '[]')
                          from public.vat_category_tax b join public.vat_category c on c.id = b.vat_category_id)
   ),
+  -- Coherencia (respuesta 3, punto 4): empresa por empresa, de todas las cuentas
+  -- de esta base. Cada fila lleva su account_id (regla 9): el informe dice de
+  -- qué cuenta es cada caso. Solo lee.
+  'empresas', (select coalesce(json_agg(json_build_object(
+      'id', c.id, 'account_id', c.account_id, 'legal_name', c.legal_name, 'entity_kind', c.entity_kind,
+      'completa', c.setup_completed_at is not null,
+      'tax_territory', p.tax_territory, 'tax_forms', p.tax_forms, 'sii', p.sii, 'sales_tax_rate_code', p.sales_tax_rate_code,
+      'account_digits', p.account_digits,
+      'actividades', (select coalesce(json_agg(json_build_object('description', a.description, 'iae_code', a.iae_code,
+                        'cnae_code', a.cnae_code, 'ended_on', a.ended_on) order by a.is_main desc, a.created_at), '[]')
+                      from public.company_activity a where a.company_id = c.id)
+    ) order by c.account_id, c.created_at), '[]')
+    from public.company c left join public.company_tax_profile p on p.company_id = c.id where c.is_active),
+  'plazos', (select coalesce(json_agg(json_build_object('account_id', t.account_id, 'is_system', t.is_system, 'code', t.code,
+      'name', t.name, 'days', t.days) order by t.is_system desc, t.account_id, t.code), '[]') from public.payment_term t),
+  'proveedores_plazo', (select coalesce(json_agg(json_build_object('account_id', s.account_id, 'name', s.name,
+      'payment_terms_days', s.payment_terms_days) order by s.account_id, s.name), '[]')
+    from public.supplier s where s.payment_terms_days > 60 and s.is_active is not false),
+  'cuentas_apunte', (select coalesce(json_agg(json_build_object('account_id', s.account_id, 'name', s.name,
+      'ledger_account_code', s.ledger_account_code, 'account_digits', d.digitos) order by s.account_id, s.name), '[]')
+    from public.supplier s
+    join (select c.account_id, max(p.account_digits) digitos from public.company c
+            join public.company_tax_profile p on p.company_id = c.id group by c.account_id) d on d.account_id = s.account_id
+    where s.ledger_account_code is not null),
   'recuentos', json_build_object(
     'country',     (select count(*) from public.country),
     'currency',    (select count(*) from public.currency),

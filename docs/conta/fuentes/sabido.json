@@ -8,8 +8,8 @@
     },
     {
       "clave": "orden-modelo-200",
-      "desde": "2026-10-02",
-      "por": "Falta la orden que aprueba el modelo 200: la búsqueda del BOE no la encuentra. El 200 está apartado de la serie hasta tenerla (pendiente del PR #138)."
+      "desde": "2026-10-03",
+      "por": "La base consolidada del BOE solo tiene la Orden HAC/565/2020, que es la del modelo 200 del ejercicio 2019. La del ejercicio vigente no está: se busca a mano. El 200 está cargado con la ley que obliga a declararlo (Ley 27/2014, art. 124.1). Pendiente del PR #138."
     },
     {
       "clave": "eu-paises",
