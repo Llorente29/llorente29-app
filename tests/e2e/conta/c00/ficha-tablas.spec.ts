@@ -30,6 +30,7 @@ async function dejarComoEstaba(s: Sesion) {
 
 /** Los valores de la lista de sugerencias de un campo. */
 async function sugerencias(page: Page, etiqueta: string): Promise<string[]> {
+  await expect(page.getByLabel(etiqueta)).toBeVisible()
   const lista = await page.getByLabel(etiqueta).getAttribute('list')
   expect(lista, `«${etiqueta}» lleva su lista`).toBeTruthy()
   return page.evaluate((id) => Array.from(document.getElementById(id!)?.querySelectorAll('option') ?? []).map((o) => o.value), lista)
@@ -60,8 +61,8 @@ test('cuenta A: el IVA, la retención, la forma y el plazo salen de las tablas, 
     await expect(page.getByText('· ya no está en tus tablas')).toBeVisible()
 
     await page.goto(`/kitchen/proveedores/${HERMANOS_RUIZ}/pago`)
-    const formas = await page.getByLabel('Forma de pago').locator('option').allTextContents()
-    expect(formas).toEqual(['Sin decir', 'Transferencia', 'Domiciliación', 'Tarjeta', 'Efectivo'])
+    // Se espera a la pantalla cargada: leer las opciones al momento daba una lista vacía.
+    await expect(page.getByLabel('Forma de pago').locator('option')).toHaveText(['Sin decir', 'Transferencia', 'Domiciliación', 'Tarjeta', 'Efectivo'])
     // «30 y 60 días» no cabe en un solo plazo (D6): no se sugiere.
     expect(await sugerencias(page, 'Plazo (días desde la factura)')).toEqual(['0', '30', '60'])
   } finally {
@@ -78,8 +79,10 @@ test('cuenta A: ocultar un tipo de gasto en la ficha lo oculta en «Tablas gener
     await page.getByRole('button', { name: 'Elegir qué tipos de gasto usa tu negocio' }).click()
     const seguros = page.getByRole('checkbox', { name: /^Seguros/ })
     await expect(seguros).toBeChecked()
-    await seguros.uncheck()
+    // La casilla guarda y luego se relee: cambia al acabar, no en el clic.
+    await seguros.click()
     await expect(page.getByText('Seguros: ya no sale al elegir.')).toBeVisible()
+    await expect(seguros).not.toBeChecked()
 
     await page.goto('/conta/ajustes/tablas/tipos-de-gasto')
     await page.getByRole('button', { name: 'Abrir Primas de seguros' }).click()
