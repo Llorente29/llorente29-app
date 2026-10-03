@@ -112,6 +112,27 @@ export const NORMAS = {
     cita: 'Ley 27/2014, art. 27.1', fuente: 'ley-27-2014', bloque: 'a27',
     literal: 'El período impositivo coincidirá con el ejercicio económico de la entidad.',
   },
+  // ── Los resúmenes anuales (respuesta 3 del C00): todo periódico lleva su anual ──
+  irpfResumenAnualRetenciones: {
+    cita: 'RD 439/2007 (Reglamento del IRPF), art. 108.2', fuente: 'rd-439-2007', bloque: 'a108',
+    literal: 'una declaración anual de las retenciones e ingresos a cuenta efectuados',
+  },
+  ivaDeclaracionResumenAnual: {
+    cita: 'Ley 37/1992, art. 164.Uno.6.º', fuente: 'ley-37-1992', bloque: 'a164',
+    literal: 'los sujetos pasivos deberán presentar una declaración-resumen anual',
+  },
+  isDeclaracionAnual: {
+    cita: 'Ley 27/2014, art. 124.1', fuente: 'ley-27-2014', bloque: 'a124',
+    literal: 'Los contribuyentes estarán obligados a presentar una declaración por este Impuesto',
+  },
+  operacionesConTerceros: {
+    cita: 'RD 1065/2007, arts. 31 a 35', fuente: 'rd-1065-2007', bloque: 'a31',
+    literal: 'deberán presentar una declaración anual relativa a sus operaciones con terceras personas',
+  },
+  operacionesConTercerosSii: {
+    cita: 'RD 1065/2007, art. 32.e)', fuente: 'rd-1065-2007', bloque: 'a32',
+    literal: 'Los obligados tributarios a que se refiere el artículo 62.6 del Reglamento del Impuesto sobre el Valor Añadido',
+  },
 } as const satisfies Record<string, Norma>
 
 export type ClaveNorma = keyof typeof NORMAS

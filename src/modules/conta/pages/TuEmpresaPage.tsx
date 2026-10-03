@@ -15,6 +15,7 @@
 // reparto a domicilio de la maqueta necesitaría las ventas de Cocina, y
 // contabilidad no depende de Cocina: no se inventa.
 
+import { useEffect } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { PESTANAS_AJUSTES, rutaAltaEmpresa, rutaApartadoEmpresa, rutaTuEmpresa } from '@/config/navegacion'
@@ -71,6 +72,10 @@ export default function TuEmpresaPage() {
   const { cargando, error, activa, recargar, empresas } = useEmpresas()
   const datos = useDatosEmpresa(accountId, activa?.id ?? null, esAdmin)
   const hoy = hoyEnMadrid()
+  // Al llegar aquí desde el alta (salir, cerrar la ventana o el botón atrás),
+  // la lista de empresas puede ser la de antes: el proveedor se reutiliza
+  // entre rutas. Se relee, para que «Alta a medias · N de 6» diga lo de ahora.
+  useEffect(() => { recargar() }, [recargar])
 
   const elegido = param === undefined ? null : buscarApartado(param)
   if (param !== undefined && !elegido) return <Navigate to={rutaTuEmpresa()} replace />

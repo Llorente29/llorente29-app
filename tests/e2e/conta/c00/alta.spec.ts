@@ -299,12 +299,15 @@ test('cuenta A: otra empresa en la ventana, con píldoras; cerrar guarda; y lo q
     await expect(sugerencia.getByText(/Lo veo en Locales del Norte \(alquiler\)/)).toBeVisible()
     await page.screenshot({ path: `${DIR}/ia-sugerencia.png`, fullPage: true })
     await sugerencia.getByRole('button', { name: 'Sí, añádelo' }).click()
-    await expect(page.getByText('Añadido el modelo 115 a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho Folvy».')).toBeVisible()
+    // Respuesta 3: con el 115 entra su resumen anual, el 180 (la regla de la tabla de modelos).
+    await expect(page.getByText('Añadidos el modelo 115 y su resumen anual, el 180, a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho Folvy».')).toBeVisible()
     await expect(page.getByRole('region', { name: 'Lo que propone Folvy' })).toHaveCount(0)
 
     const registro = page.getByRole('list', { name: 'Lo que ha hecho Folvy' })
     await expect(registro.getByText('Puso el IVA de tus ventas: 10 %')).toBeVisible()
-    const conEl115 = registro.getByText(/^(Puso|Cambió) los modelos que presentas: .*115/)
+    // Los anuales y el 347 salen de la regla de la tabla (respuesta 3, punto 2).
+    await expect(registro.getByText('Puso los modelos que presentas: 111, 190, 200, 202, 303, 347, 390')).toBeVisible()
+    const conEl115 = registro.getByText(/^(Puso|Cambió) los modelos que presentas: .*115, 180/)
     await expect(conEl115).toBeVisible()
     await registro.getByRole('button', { name: /^Deshacer: (Puso|Cambió) los modelos que presentas: .*115/ }).click()
     await expect(page.getByText(/^Deshecho: (puso|cambió) los modelos que presentas: /)).toBeVisible()

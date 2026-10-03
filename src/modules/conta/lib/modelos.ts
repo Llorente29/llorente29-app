@@ -9,9 +9,15 @@
 // El número de cada modelo lo aprueba una orden ministerial; su referencia va
 // en la tabla de modelos (tax_form) con su fuente. Aquí está la OBLIGACIÓN.
 //
-// Fuera, a propósito (no fundamentado todavía con fuente descargada): 347
-// (operaciones con terceros), 349 (intracomunitarias), 200 (declaración anual
-// de sociedades), 131 (estimación objetiva) y los del IGIC/IPSI.
+// Aquí salen los PERIÓDICOS (303, 111, 115, 202, 130). Los resúmenes anuales
+// y el 347 no son una lista en el código: salen de una REGLA que vive en la
+// tabla de modelos (tax_form, filas de serie con su norma) — respuesta 3 del
+// C00: todo periódico lleva su anual (111→190, 115→180, 303→390, 202→200) y
+// el 347 va por defecto en toda sociedad que no esté en el SII. Ver
+// anadirAnuales y coherenciaModelos, abajo.
+//
+// Fuera, a propósito (no fundamentado todavía con fuente descargada): 349
+// (intracomunitarias), 131 (estimación objetiva) y los del IGIC/IPSI.
 
 import type { ClaveNorma } from '@/modules/conta/lib/normas'
 
@@ -57,8 +63,6 @@ export function modelosQuePresenta(p: PerfilParaModelos): ResultadoModelos {
     } else {
       modelos.push({ codigo: '303', nombre: 'IVA', norma: 'ivaPeriodoTrimestral',
         porque: 'Declaras el IVA de cada período: lo que cobras menos lo que pagas.' })
-      modelos.push({ codigo: '390', nombre: 'Resumen anual del IVA', norma: 'ivaResumenAnual',
-        porque: 'Además de cada período, el IVA lleva un resumen del año.' })
     }
   } else {
     preguntas.push({ clave: 'impuesto_territorio', pregunta: p.territorio === 'canarias'
@@ -99,4 +103,84 @@ export function modelosQuePresenta(p: PerfilParaModelos): ResultadoModelos {
     }
   }
   return { modelos, preguntas }
+}
+
+// ── Los anuales y el 347: la regla de la tabla de modelos ───────────────────
+
+/** Una fila de la tabla de modelos (tax_form) con su regla. */
+export interface ReglaModelo {
+  codigo: string
+  nombre: string
+  /** Para qué es, en una frase («En enero resumes las retenciones de todo el año.»). */
+  descripcion: string | null
+  /** El resumen anual de este periódico, si lo tiene, y la norma que lo obliga. */
+  anual: string | null
+  normaAnual: string | null
+  /** Si va por defecto, para quién, y su norma. */
+  porDefecto: 'company_not_sii' | null
+  normaPorDefecto: string | null
+}
+
+export interface PerfilAnuales { tipo: TipoEmpresa; sii: boolean }
+
+export interface ModeloConPorque { codigo: string; porque: string }
+
+const porqueDe = (r: ReglaModelo | undefined, norma: string | null): string =>
+  `${r?.descripcion ?? `Modelo ${r?.codigo ?? ''}.`}${norma ? ` (${norma})` : ''}`
+
+/**
+ * A los periódicos que presenta, les añade lo que manda la tabla: el anual de
+ * cada uno y lo que va por defecto (el 347 en una sociedad fuera del SII).
+ * Cada uno con su porqué en una frase y su norma. Ordenados por código.
+ */
+export function anadirAnuales(periodicos: ModeloConPorque[], reglas: ReglaModelo[], perfil: PerfilAnuales): ModeloConPorque[] {
+  const porCodigo = new Map(reglas.map((r) => [r.codigo, r]))
+  const out = new Map(periodicos.map((m) => [m.codigo, m]))
+  for (const m of periodicos) {
+    const r = porCodigo.get(m.codigo)
+    if (r?.anual && !out.has(r.anual)) out.set(r.anual, { codigo: r.anual, porque: porqueDe(porCodigo.get(r.anual), r.normaAnual) })
+  }
+  for (const r of reglas) {
+    if (r.porDefecto === 'company_not_sii' && perfil.tipo === 'company' && !perfil.sii && !out.has(r.codigo)) {
+      out.set(r.codigo, { codigo: r.codigo, porque: porqueDe(r, r.normaPorDefecto) })
+    }
+  }
+  return [...out.values()].sort((a, b) => a.codigo.localeCompare(b.codigo))
+}
+
+export interface Incoherencia {
+  clave: 'periodico_sin_anual' | 'anual_sin_periodico' | 'falta_por_defecto' | 'sobra_por_defecto'
+  modelo: string
+  texto: string
+  norma: string | null
+}
+
+/**
+ * Lo que no cuadra en los modelos de una empresa, con la regla de la tabla
+ * (respuesta 3, punto 4: coherencia, no recuento). Cada caso con su norma.
+ */
+export function coherenciaModelos(modelos: string[], reglas: ReglaModelo[], perfil: PerfilAnuales): Incoherencia[] {
+  const tiene = new Set(modelos)
+  const out: Incoherencia[] = []
+  for (const r of reglas) {
+    if (r.anual && tiene.has(r.codigo) && !tiene.has(r.anual)) {
+      out.push({ clave: 'periodico_sin_anual', modelo: r.codigo, norma: r.normaAnual,
+        texto: `Presenta el ${r.codigo} y no su resumen anual, el ${r.anual}.` })
+    }
+    if (r.anual && tiene.has(r.anual) && !tiene.has(r.codigo)) {
+      out.push({ clave: 'anual_sin_periodico', modelo: r.anual, norma: r.normaAnual,
+        texto: `Presenta el ${r.anual} (resumen anual) sin el ${r.codigo} del que resume.` })
+    }
+    if (r.porDefecto === 'company_not_sii' && perfil.tipo === 'company') {
+      if (!perfil.sii && !tiene.has(r.codigo)) {
+        out.push({ clave: 'falta_por_defecto', modelo: r.codigo, norma: r.normaPorDefecto,
+          texto: `Es una sociedad fuera del SII y no tiene el ${r.codigo}.` })
+      }
+      if (perfil.sii && tiene.has(r.codigo)) {
+        out.push({ clave: 'sobra_por_defecto', modelo: r.codigo, norma: r.normaPorDefecto,
+          texto: `Lleva el SII y tiene el ${r.codigo}, que con el SII no se presenta.` })
+      }
+    }
+  }
+  return out
 }

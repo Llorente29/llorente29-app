@@ -26,9 +26,13 @@ export interface Sugerencia {
 }
 
 /** Lo que queda hecho al aceptar una sugerencia, dicho con contenido (regla 8). */
-export function hechoAlAceptar(s: Sugerencia): string {
+export function hechoAlAceptar(s: Sugerencia, anadidos: string[] = []): string {
   if (s.kind === 'modelo' && typeof s.payload.modelo === 'string') {
-    return `Añadido el modelo ${s.payload.modelo} a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho Folvy».`
+    // Con su anual, si la tabla de modelos lo manda (respuesta 3: todo periódico lleva su anual).
+    const otros = anadidos.filter((m) => m !== s.payload.modelo)
+    return otros.length
+      ? `Añadidos el modelo ${s.payload.modelo} y su resumen anual, el ${otros.join(' y el ')}, a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho Folvy».`
+      : `Añadido el modelo ${s.payload.modelo} a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho Folvy».`
   }
   return 'Hecho. Si no era así, lo deshaces en «Lo que ha hecho Folvy».'
 }

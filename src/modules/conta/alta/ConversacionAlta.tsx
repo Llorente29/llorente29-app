@@ -55,6 +55,8 @@ import {
   quitarActividadesDelAlta, terminarAlta, type DireccionAlta,
 } from '@/modules/conta/services/altaService'
 import { anadirActividadConIa, ponerConIa } from '@/modules/conta/services/iaService'
+import { leerReglasModelos } from '@/modules/conta/services/modelosService'
+import type { ReglaModelo } from '@/modules/conta/lib/modelos'
 import { abrirEjercicio, anadirActividad, buscarCnae, buscarIae, type OpcionCodigo } from '@/modules/conta/services/empresaDatosService'
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import { validarIban } from '@/modules/conta/lib/iban'
@@ -104,6 +106,18 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       .catch(() => { if (vivo) setCuenta({ nombre: null, razonSocial: null, nif: null, direccion: null }) })
     return () => { vivo = false }
   }, [accountId])
+
+  // La regla de los anuales y del 347 vive en la tabla de modelos.
+  const [reglas, setReglas] = useState<ReglaModelo[] | null>(null)
+  const [falloReglas, setFalloReglas] = useState<string | null>(null)
+  const [vueltaReglas, setVueltaReglas] = useState(0)
+  useEffect(() => {
+    let vivo = true
+    leerReglasModelos()
+      .then((r) => { if (vivo) { setReglas(r); setFalloReglas(null) } })
+      .catch((e: unknown) => { if (vivo) setFalloReglas(e instanceof Error ? e.message : String(e)) })
+    return () => { vivo = false }
+  }, [vueltaReglas])
 
   const [respuestas, setRespuestas] = useState<Partial<Record<ClavePregunta, string>>>({})
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
@@ -305,7 +319,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
         await ponerConIa(id, 'company_tax_profile', 'vat_scheme_code', 'general',
           ctx.tipo === 'self_employed' ? 'Lo normal es el régimen general; si tu actividad está en módulos, lo confirma tu asesor.' : 'Una sociedad va en el régimen general (Ley 37/1992, art. 122).')
       }
-      const m = modelosDeRespuestas({ ...ctx, respuestas: r })
+      const m = modelosDeRespuestas({ ...ctx, respuestas: r }, reglas ?? [])
       await ponerConIa(id, 'company_tax_profile', 'tax_forms', m.modelos, m.porque)
       apuntado(fraseModelos(m.modelos))
     }
@@ -421,8 +435,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const hechos = cuantosHechos(puntos)
 
   // ── Pintar ────────────────────────────────────────────────────────────
-  const cargandoTodo = cargandoEmpresas || !cuenta || (companyId !== null && datos.cargando && !d)
-  const fallo = companyId && !datos.cargando && (datos.error || !d)
+  const cargandoTodo = cargandoEmpresas || !cuenta || (!reglas && !falloReglas) || (companyId !== null && datos.cargando && !d)
+  const fallo = falloReglas ?? (companyId && !datos.cargando ? (datos.error ?? (d ? null : 'No se ha podido leer.')) : null)
 
   const ultimo = mensajes[mensajes.length - 1]
   const juntoConPregunta = pregunta && ultimo?.de === 'folvy' && ultimo.junto ? ultimo : null
@@ -503,7 +517,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   )
 
   const cuerpo = cargandoTodo ? <TarjetaCargando />
-    : fallo ? <ErrorConReintento mensaje={datos.error ?? 'No se ha podido leer.'} reintentar={datos.recargar} />
+    : fallo ? <ErrorConReintento mensaje={fallo} reintentar={() => { if (falloReglas) setVueltaReglas((v) => v + 1); else datos.recargar() }} />
       : conversacion
 
   // ── Ventana flotante (N1c) ────────────────────────────────────────────

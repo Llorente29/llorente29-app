@@ -10,8 +10,8 @@ export interface Hacer {
   guardando: boolean
   hecho: string | null
   fallo: string | null
-  /** Devuelve true si salió bien. */
-  hacer: (accion: () => Promise<void>, exito: string) => Promise<boolean>
+  /** Devuelve true si salió bien. El éxito puede depender de lo que hizo: entonces, una función que lo dice al acabar. */
+  hacer: (accion: () => Promise<void>, exito: string | (() => string)) => Promise<boolean>
   limpiar: () => void
 }
 
@@ -19,11 +19,11 @@ export function useHacer(despues: () => void): Hacer {
   const [guardando, setGuardando] = useState(false)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
-  const hacer = useCallback(async (accion: () => Promise<void>, exito: string) => {
+  const hacer = useCallback(async (accion: () => Promise<void>, exito: string | (() => string)) => {
     setGuardando(true); setHecho(null); setFallo(null)
     try {
       await accion()
-      setHecho(exito)
+      setHecho(typeof exito === 'function' ? exito() : exito)
       despues()
       return true
     } catch (e) {

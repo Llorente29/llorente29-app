@@ -55,7 +55,8 @@ describe('2 · propuesta por defecto del alta, cada una con su porqué', () => {
     expect(p.plan.valor).toBe('pymes')
     expect(p.digitos.valor).toBe(8)
     expect(p.ejercicio.valor).toEqual({ code: '2026', startsOn: '2026-01-01', endsOn: '2026-12-31' })
-    expect(p.modelos.valor.map((m) => m.codigo)).toEqual(['303', '390', '111', '115', '202'])
+    // Los periódicos; los anuales y el 347 los añade la regla de la tabla (respuesta 3, modelosAnualesC00.test.ts).
+    expect(p.modelos.valor.map((m) => m.codigo)).toEqual(['303', '111', '115', '202'])
   })
   it('cada propuesta dice por qué, en una frase', () => {
     const p = proponerAlta(base)
@@ -120,7 +121,7 @@ describe('3 · ejercicios y meses cerrados', () => {
 describe('4 · modelos que presenta', () => {
   it('lo que no se sabe se pregunta, no se adivina', () => {
     const r = modelosQuePresenta({ ...base, retiene: null, alquilaConRetencion: null })
-    expect(r.modelos.map((m) => m.codigo)).toEqual(['303', '390', '202'])
+    expect(r.modelos.map((m) => m.codigo)).toEqual(['303', '202'])
     expect(r.preguntas.map((q) => q.clave)).toEqual(['retiene', 'alquiler'])
   })
   it('autónomo profesional con 70 % retenido no adelanta IRPF; con 60 %, sí (130)', () => {

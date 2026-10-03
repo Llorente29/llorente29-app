@@ -56,8 +56,12 @@ export async function cargarIa(companyId: string): Promise<{ origenes: Origen[];
   }
 }
 
-export async function responderSugerencia(id: string, acepta: boolean): Promise<void> {
-  try { await rpc('conta_sugerencia_responder', { p_sugerencia: id, p_acepta: acepta }) } catch (e) { throw sinPrefijo(e) }
+/** Contesta una sugerencia. Si se acepta, devuelve los modelos que quedaron añadidos (el sugerido y su anual). */
+export async function responderSugerencia(id: string, acepta: boolean): Promise<string[]> {
+  try {
+    const r = await rpc('conta_sugerencia_responder', { p_sugerencia: id, p_acepta: acepta }) as { anadidos?: unknown } | null
+    return Array.isArray(r?.anadidos) ? r.anadidos.map(String) : []
+  } catch (e) { throw sinPrefijo(e) }
 }
 
 export async function deshacer(registroId: string): Promise<void> {

@@ -18,7 +18,7 @@
 
 import type { DatosDeLaCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
-import { modelosQuePresenta, type ClaseActividad, type Territorio, type TipoEmpresa } from '@/modules/conta/lib/modelos'
+import { anadirAnuales, modelosQuePresenta, type ClaseActividad, type ReglaModelo, type Territorio, type TipoEmpresa } from '@/modules/conta/lib/modelos'
 import { provinciaPorCp } from '@/modules/conta/lib/direccion'
 
 export type PasoAlta = 'nif' | 'nombre' | 'actividad' | 'impuestos' | 'cuentas' | 'banco' | 'hecho'
@@ -223,17 +223,21 @@ const siNo = (v: string | undefined, normal: boolean): boolean => (v === 'si' ? 
  * regla del núcleo (modelosQuePresenta): lo que no se puede fundamentar no se
  * deduce.
  */
-export function modelosDeRespuestas(ctx: ContextoAlta): { modelos: string[]; porque: string } {
+export function modelosDeRespuestas(ctx: ContextoAlta, reglas: ReglaModelo[]): { modelos: string[]; porque: string } {
   const { territorio } = territorioPorCp(ctx.cp)
   const r = ctx.respuestas
+  const tipo = ctx.tipo ?? 'company'
   const res = modelosQuePresenta({
-    tipo: ctx.tipo ?? 'company', territorio, actividades: ctx.clases,
+    tipo, territorio, actividades: ctx.clases,
     retiene: siNo(r.retiene, true), alquilaConRetencion: siNo(r.alquiler, true),
     porcentajeIngresosRetenidos: r.retenido70 === undefined ? null : siNo(r.retenido70, false) ? 70 : 0,
   })
-  const modelos = res.modelos.map((m) => m.codigo).sort()
-  const porque = res.modelos.length
-    ? res.modelos.map((m) => `${m.codigo}: ${m.porque}`).join(' ')
+  // Una empresa que se da de alta no lleva el SII: es voluntario por debajo de
+  // 6 millones, y quien lo lleva lo dice en «Tus impuestos».
+  const todos = anadirAnuales(res.modelos.map((m) => ({ codigo: m.codigo, porque: m.porque })), reglas, { tipo, sii: false })
+  const modelos = todos.map((m) => m.codigo)
+  const porque = todos.length
+    ? todos.map((m) => `${m.codigo}: ${m.porque}`).join(' ')
     : 'Con lo que me has dicho, no presentas ningún modelo de los que conozco.'
   return { modelos, porque }
 }

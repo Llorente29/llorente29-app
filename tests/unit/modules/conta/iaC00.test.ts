@@ -8,6 +8,7 @@ import {
   NUMERO_PASO, modelosDeRespuestas, pasoSiguiente, preguntaActual, territorioPorCp, textoDuda, todasLasPreguntas,
   type ContextoAlta,
 } from '@/modules/conta/alta/guion'
+import { aReglaModelo } from '@/modules/conta/services/modelosService'
 import { hechoAlAceptar, marcaDe, mismoValor, queHizo, sePuedeDeshacer, type Origen, type Registro } from '@/modules/conta/ia/tipos'
 
 // ── El catálogo real, tal como lo carga la migración 0130 ───────────────────
@@ -70,6 +71,9 @@ describe('de las palabras de la persona al catálogo oficial (§6.4: nunca inven
   })
 })
 
+/** Las reglas de los modelos, de la referencia de serie (las mismas filas que carga la base). */
+const REGLAS = (JSON.parse(readFileSync('docs/conta/referencia/serie.json', 'utf8')).tablas.tax_form.filas as Record<string, unknown>[]).map(aReglaModelo)
+
 // ── El guion ────────────────────────────────────────────────────────────────
 const SIN_CUENTA = { nombre: null, razonSocial: null, nif: null, direccion: null }
 const ctx = (c: Partial<ContextoAlta> = {}): ContextoAlta => ({
@@ -113,12 +117,13 @@ describe('el guion del alta', () => {
     expect(territorioPorCp('35001').porque).toBe('Tu código postal (35001) es de Las Palmas, en Canarias: allí no hay IVA, sino IGIC (Ley 37/1992, art. 3).')
     expect(territorioPorCp('51001').territorio).toBe('ceuta_melilla')
   })
-  it('los modelos salen de las respuestas, con la regla del núcleo', () => {
-    expect(modelosDeRespuestas(ctx({ respuestas: { periodo: 'quarterly', retiene: 'si', alquiler: 'si' } })).modelos).toEqual(['111', '115', '202', '303', '390'])
-    expect(modelosDeRespuestas(ctx({ respuestas: { retiene: 'no', alquiler: 'no' } })).modelos).toEqual(['202', '303', '390'])
+  it('los modelos salen de las respuestas, con la regla del núcleo y los anuales de la tabla', () => {
+    expect(modelosDeRespuestas(ctx({ respuestas: { periodo: 'quarterly', retiene: 'si', alquiler: 'si' } }), REGLAS).modelos)
+      .toEqual(['111', '115', '180', '190', '200', '202', '303', '347', '390'])
+    expect(modelosDeRespuestas(ctx({ respuestas: { retiene: 'no', alquiler: 'no' } }), REGLAS).modelos).toEqual(['200', '202', '303', '347', '390'])
     // «No lo sé» deja la normal (sí).
-    expect(modelosDeRespuestas(ctx({ respuestas: { retiene: '__nolose', alquiler: 'no' } })).modelos).toContain('111')
-    expect(modelosDeRespuestas(ctx({ cp: '35001', respuestas: { retiene: 'no', alquiler: 'no' } })).modelos).toEqual(['202'])
+    expect(modelosDeRespuestas(ctx({ respuestas: { retiene: '__nolose', alquiler: 'no' } }), REGLAS).modelos).toContain('111')
+    expect(modelosDeRespuestas(ctx({ cp: '35001', respuestas: { retiene: 'no', alquiler: 'no' } }), REGLAS).modelos).toEqual(['200', '202', '347'])
   })
 })
 

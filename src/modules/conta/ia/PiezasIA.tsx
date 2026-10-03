@@ -28,11 +28,11 @@ export function Sugerencias({ sugerencias, alCambiar }: { sugerencias: Sugerenci
         <BloqueIA key={s.id} titulo={s.title} porque={s.why} acciones={(
           <>
             <button type="button" className="cx-boton" disabled={h.guardando}
-              onClick={() => void h.hacer(() => responderSugerencia(s.id, true), hechoAlAceptar(s))}>
+              onClick={() => { let anadidos: string[] = []; void h.hacer(async () => { anadidos = await responderSugerencia(s.id, true) }, () => hechoAlAceptar(s, anadidos)) }}>
               Sí, añádelo
             </button>
             <button type="button" className="cx-boton-sec" disabled={h.guardando}
-              onClick={() => void h.hacer(() => responderSugerencia(s.id, false), 'Vale, no lo añado. No te lo vuelvo a proponer por lo mismo.')}>
+              onClick={() => void h.hacer(async () => { await responderSugerencia(s.id, false) }, 'Vale, no lo añado. No te lo vuelvo a proponer por lo mismo.')}>
               No, gracias
             </button>
           </>
