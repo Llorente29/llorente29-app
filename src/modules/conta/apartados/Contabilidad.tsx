@@ -87,7 +87,11 @@ export default function Contabilidad() {
             {datos.tiposGasto.map((t) => (
               <label key={t.id} className="cf-casilla" style={{ border: 'none', padding: 0 }}>
                 <input type="checkbox" checked={!t.oculto} onChange={async (e) => {
-                  try { await ocultarTipoGastoUnificado(f.accountId, datos.opciones.empresa?.id ?? null, t.id, !e.target.checked, actor.id); await recargar(); avisar(e.target.checked ? `${t.name}: vuelve a salir.` : `${t.name}: ya no sale al elegir.`) }
+                  // Se lee UNA vez y antes de esperar: tras el primer await, React ya
+                  // ha devuelto la casilla (controlada) a su valor y el aviso salía
+                  // al revés («vuelve a salir» al quitarlo). Lo cazó el e2e de la T7.
+                  const ocultar = !e.target.checked
+                  try { await ocultarTipoGastoUnificado(f.accountId, datos.opciones.empresa?.id ?? null, t.id, ocultar, actor.id); await recargar(); avisar(ocultar ? `${t.name}: ya no sale al elegir.` : `${t.name}: vuelve a salir.`) }
                   catch (e2) { setFallo(e2 instanceof Error ? e2.message : 'No se pudo cambiar.') }
                 }} />
                 <span>{t.name} <span className="cf-nota">· {cuentaPgc(t.pgcAccountHint)}</span></span>
