@@ -1,8 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 7.ª tanda: el mismo proveedor de PRUEBA (alquiler al 19 %)
-# también en A, para que la empresa que crea el e2e del alta vea la
-# sugerencia del 115 en cada ejecución. Idempotente: el de B ya está.
-# (6.ª: 0160, su ensayo y el proveedor de prueba de B.)
-supabase/seeds/conta/seed_c00_sugerencia_prueba.sql
+# 03/10/2026 · C00, 8.ª tanda (tarea 8): un ENCARGADO de prueba en la cuenta A
+# (a.encargado@prueba.folvy.test, rol manager), para la prueba de RLS «los
+# socios y cargos solo los ve un administrador». Solo staging; sin contraseña
+# conocida: se la pone el workflow e2e en cada ejecución.
+# (7.ª: el proveedor de prueba del alquiler, también en A.)
+supabase/seeds/conta/seed_c00_encargado_prueba.sql
