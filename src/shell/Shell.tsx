@@ -172,8 +172,15 @@ export default function Shell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleBasePath, pendingLoading, pendingFreshCount])
 
+  // Exacta primero. Si no la hay, la entrada cuya ruta es el PREFIJO más largo
+  // de la URL: «proveedores/<id>/pago» sigue siendo Proveedores (C01, 02/10).
+  // Antes caía a la primera entrada y el menú marcaba «Resumen» dentro de una
+  // ficha. Solo cambia lo que antes no encontraba nada.
   const activeItem = activeModule
     ? (activeModule.sidebar.items.find(i => i.path === itemPathFromUrl)
+       ?? [...activeModule.sidebar.items]
+            .filter(i => i.path !== '' && itemPathFromUrl.startsWith(`${i.path}/`))
+            .sort((a, b) => b.path.length - a.path.length)[0]
        ?? activeModule.sidebar.items[0])
     : undefined
 
@@ -238,9 +245,15 @@ export default function Shell() {
     </Routes>
   ) : null
 
+  // C00 (02/10): un módulo con marco propio (contabilidad) trae su menú, su
+  // barra inferior y su barra de la IA. El Shell solo monta sus rutas: no pone
+  // encima ni su barra de módulos, ni su sidebar, ni su barra inferior, ni la
+  // burbuja de Folvy AI. Los demás módulos no cambian.
+  const marcoPropio = activeModule?.chrome === 'propio'
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
-      <ShellTopBar
+      {!marcoPropio && <ShellTopBar
         activeKey={activeKey}
         onSelect={goToKey}
         onOpenSettings={openSettings}
@@ -252,7 +265,7 @@ export default function Shell() {
         accounts={selectorAccounts}
         onSwitchAccount={isPlatformAdmin ? switchAccount : undefined}
         pendingCount={pendingActionableCount}
-      />
+      />}
 
       {/* Banda "Estás gestionando: [cliente]" — EXCLUSIVO platform admin. Deja
           claro en qué cliente se está operando al saltar entre cuentas. Full-width
@@ -271,7 +284,9 @@ export default function Shell() {
           <span>Estás gestionando: <b>{shownAccount.name}</b></span>
         </div>
       )}
-      {activeModule ? (
+      {activeModule && marcoPropio ? (
+        <div className="flex-1 w-full min-w-0">{moduleRoutesEl}</div>
+      ) : activeModule ? (
         isMobile ? (
           <div className="flex-1 flex flex-col">
             <MobileModuleTabs
@@ -317,7 +332,7 @@ export default function Shell() {
       {/* R1.3b: el chat de IA, controlado por el Shell. En móvil sin launcher
           flotante (lo abre el héroe de la barra); en escritorio, su botón
           flotante de siempre, ahora gobernado por el mismo estado. */}
-      <FolvyAIBubble open={aiOpen} onOpenChange={setAiOpen} hideLauncher={isMobile} module={activeModule?.id} />
+      {!marcoPropio && <FolvyAIBubble open={aiOpen} onOpenChange={setAiOpen} hideLauncher={isMobile} module={activeModule?.id} />}
 
       {/* 01/09: el aviso de versión nueva. Vive en el Shell porque el problema
           no era de ninguna pantalla en concreto: la SPA pide index.html UNA vez
@@ -328,7 +343,7 @@ export default function Shell() {
       <AvisoNuevaVersion />
 
       {/* R1.2/R1.3b: barra inferior solo en móvil, con la IA como héroe central. */}
-      {isMobile && (
+      {isMobile && !marcoPropio && (
         <ShellBottomNav
           activeKey={activeKey}
           onSelect={goToKey}

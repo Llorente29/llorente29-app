@@ -1,0 +1,22 @@
+-- ============================================================================
+-- C01 · Ficha de proveedor completa — DATOS EXISTENTES · RECORTADA (C00 R7)
+-- ----------------------------------------------------------------------------
+-- Va DESPUÉS de 20261002T0100_c01_ficha_proveedor_estructura.sql.
+--
+-- RESPUESTA 7 DEL C00 (03/10/2026, decisión de Julio): el C01 se separa del
+-- PR #138 y Foodint queda exactamente como hoy. De esta migración se queda
+-- solo lo que crea tablas o añade columnas, y no tenía nada de eso: era
+-- entera movimiento de datos. Por eso queda SIN SENTENCIAS.
+--
+-- Lo que tenía y se ha ido al C01 (rama conta/c01-ficha-proveedor, PR #137):
+--   1. Email y teléfono de supplier → un supplier_contact principal.
+--   2. supplier.address → propuesta de dirección «por confirmar»
+--      (supplier_proposal, source='legacy_address').
+--   3. compliance_docs_due leyendo el email del contacto principal en vez de
+--      supplier.email (el aviso automático de ficha técnica caducada).
+-- Irá con la ficha de proveedor nueva, en su encargo, con una migración propia
+-- y las dos pantallas leyendo lo mismo mientras convivan.
+--
+-- OJO, staging-conta: allí se aplicó la versión ENTERA el 02/10. Staging tiene
+-- los contactos y las propuestas movidos; producción no los tendrá.
+-- ============================================================================

@@ -1,0 +1,1295 @@
+{
+ "_que_es": "Filas de serie elegidas a mano, CADA UNA con sus pruebas (literal del texto oficial descargado). scripts/conta/serie.mjs las comprueba y genera la migración. Las que llevan «pendiente» no se cargan y se dice por qué.",
+ "vat_scheme": [
+  {
+   "code": "general",
+   "name": "Régimen general",
+   "description": "El que se aplica si no hay un régimen especial",
+   "legal_ref": "Ley 37/1992, art. 120.Dos (los especiales son voluntarios, salvo tres)",
+   "sort_order": 0,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "Los regímenes especiales regulados en este Título tendrán carácter voluntario, a excepción de"
+    }
+   ]
+  },
+  {
+   "code": "simplificado",
+   "name": "Régimen simplificado",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.1",
+   "sort_order": 10,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "1.º Régimen simplificado."
+    }
+   ]
+  },
+  {
+   "code": "agricultura",
+   "name": "Agricultura, ganadería y pesca",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.2",
+   "sort_order": 20,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "2.º Régimen especial de la agricultura, ganadería y pesca."
+    }
+   ]
+  },
+  {
+   "code": "bienes_usados",
+   "name": "Bienes usados, arte y antigüedades",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.3",
+   "sort_order": 30,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "3.º Régimen especial de los bienes usados, objetos de arte, antigüedades y objetos de colección."
+    }
+   ]
+  },
+  {
+   "code": "oro_inversion",
+   "name": "Oro de inversión",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.4",
+   "sort_order": 40,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "4.º Régimen especial aplicable a las operaciones con oro de inversión."
+    }
+   ]
+  },
+  {
+   "code": "agencias_viajes",
+   "name": "Agencias de viajes",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.5",
+   "sort_order": 50,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "5.º Régimen especial de las agencias de viajes."
+    }
+   ]
+  },
+  {
+   "code": "recargo_equivalencia",
+   "name": "Recargo de equivalencia",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.6",
+   "sort_order": 60,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "6.º Régimen especial del recargo de equivalencia."
+    }
+   ]
+  },
+  {
+   "code": "ventas_distancia",
+   "name": "Ventas a distancia (ventanilla única)",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.7",
+   "sort_order": 70,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "7.º Regímenes especiales aplicables a las ventas a distancia y a determinadas entregas interiores de bienes y prestaciones de servicios."
+    }
+   ]
+  },
+  {
+   "code": "grupo_entidades",
+   "name": "Grupo de entidades",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.8",
+   "sort_order": 80,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "8.º Régimen especial del grupo de entidades."
+    }
+   ]
+  },
+  {
+   "code": "criterio_caja",
+   "name": "Criterio de caja",
+   "description": null,
+   "legal_ref": "Ley 37/1992, art. 120.Uno.9",
+   "sort_order": 90,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a120",
+     "literal": "9.º Régimen especial del criterio de caja."
+    }
+   ]
+  }
+ ],
+ "tax_form": [
+  {
+   "code": "303",
+   "name": "IVA",
+   "description": null,
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-303",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-303",
+     "bloque": "*",
+     "literal": "modelo 303 de autoliquidación del Impuesto sobre el Valor Añadido"
+    }
+   ],
+   "annual_form_code": "390",
+   "annual_legal_ref": "Ley 37/1992, art. 164.Uno.6.º"
+  },
+  {
+   "code": "390",
+   "name": "Resumen anual del IVA",
+   "description": "En enero resumes el IVA de todo el año.",
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-390",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-390",
+     "bloque": "*",
+     "literal": "modelo 390 de «Declaración-resumen anual del Impuesto sobre el Valor Añadido»"
+    }
+   ]
+  },
+  {
+   "code": "111",
+   "name": "Retenciones",
+   "description": null,
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-111",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-111",
+     "bloque": "*",
+     "literal": "modelo 111"
+    }
+   ],
+   "annual_form_code": "190",
+   "annual_legal_ref": "RD 439/2007 (Reglamento del IRPF), art. 108.2"
+  },
+  {
+   "code": "202",
+   "name": "Pago fraccionado de Sociedades",
+   "description": null,
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-202",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-202",
+     "bloque": "*",
+     "literal": "modelo 202 para efectuar los pagos fraccionados a cuenta del Impuesto sobre Sociedades"
+    }
+   ],
+   "annual_form_code": "200",
+   "annual_legal_ref": "Ley 27/2014, art. 124.1"
+  },
+  {
+   "code": "347",
+   "name": "Operaciones con terceros",
+   "description": "En febrero declaras a quién has comprado o vendido más de 3.005,06 € en el año.",
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-347",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-347",
+     "bloque": "*",
+     "literal": "modelo 347 de Declaración anual de operaciones con terceras personas"
+    }
+   ],
+   "default_for": "company_not_sii",
+   "default_legal_ref": "RD 1065/2007, arts. 31 a 35; no lo presenta quien lleva el SII (art. 32.e)"
+  },
+  {
+   "code": "349",
+   "name": "Operaciones intracomunitarias",
+   "description": null,
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-349",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-349",
+     "bloque": "*",
+     "literal": "modelo 349, de Declaración recapitulativa de operaciones intracomunitarias"
+    }
+   ]
+  },
+  {
+   "code": "190",
+   "name": "Resumen anual de retenciones",
+   "description": "En enero resumes las retenciones de todo el año.",
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-190",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-190",
+     "bloque": "*",
+     "literal": "Se aprueba el modelo 190"
+    }
+   ]
+  },
+  {
+   "code": "180",
+   "name": "Resumen anual de retenciones del alquiler",
+   "description": "En enero resumes las retenciones del alquiler de todo el año.",
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-180",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-180",
+     "bloque": "*",
+     "literal": "modelo 180 para el resumen anual"
+    }
+   ]
+  },
+  {
+   "code": "115",
+   "name": "Retenciones del alquiler",
+   "description": null,
+   "legal_ref": null,
+   "fuenteOrden": "orden-modelo-180",
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-180",
+     "bloque": "*",
+     "literal": "El modelo 115 en pesetas que figura como anexo I de la presente Orden"
+    }
+   ],
+   "annual_form_code": "180",
+   "annual_legal_ref": "RD 439/2007 (Reglamento del IRPF), art. 108.2"
+  },
+  {
+   "code": "130",
+   "name": "Pago a cuenta del IRPF",
+   "description": null,
+   "legal_ref": null,
+   "pruebas": [
+    {
+     "fuente": "orden-modelo-130",
+     "bloque": "*",
+     "literal": "Se aprueba el modelo 130. Impuesto sobre la Renta de las Personas Físicas. Actividades económicas en estimación directa. Pago fraccionado."
+    }
+   ],
+   "fuenteOrden": "orden-modelo-130"
+  },
+  {
+   "code": "200",
+   "name": "Impuesto sobre Sociedades",
+   "description": "En julio declaras el Impuesto sobre Sociedades del año.",
+   "legal_ref": "Ley 27/2014, art. 124.1 (el modelo de cada ejercicio lo aprueba una orden anual de Hacienda; la vigente no está en la base consolidada del BOE)",
+   "pruebas": [
+    {
+     "fuente": "ley-27-2014",
+     "bloque": "a124",
+     "literal": "Los contribuyentes estarán obligados a presentar una declaración por este Impuesto"
+    }
+   ]
+  }
+ ],
+ "legal_form": [
+  {
+   "code": "persona_fisica",
+   "name": "Persona física (autónomo)",
+   "entity_kind": "self_employed",
+   "legal_ref": "RD 1065/2007, art. 19 (NIF de las personas físicas)",
+   "sort_order": 5,
+   "pruebas": [
+    {
+     "fuente": "rd-1065-2007",
+     "bloque": "a19",
+     "literal": "Para las personas físicas de nacionalidad española, el número de identificación fiscal será el número de su documento nacional de identidad"
+    }
+   ]
+  }
+ ],
+ "tax_rate": [
+  {
+   "code": "iva_general",
+   "name": "IVA general",
+   "example": "Casi todo lo que compras",
+   "tax_system": "iva",
+   "territory": "peninsula_baleares",
+   "treatment": "taxed",
+   "rate": 21,
+   "surcharge_rate": 5.2,
+   "valid_from": "2012-09-01",
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [
+    "303"
+   ],
+   "legal_ref": "Ley 37/1992, art. 90.Uno; recargo: art. 161.1.º",
+   "sort_order": 10,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a90",
+     "literal": "El Impuesto se exigirá al tipo del 21 por ciento"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a90",
+     "literal": "con efectos desde el 1 de septiembre de 2012, por el art. 23.2 del Real Decreto-ley 20/2012"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a161",
+     "literal": "1.º Con carácter general, el 5,2 por ciento."
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a161",
+     "literal": "Se modifica, con efectos desde el 1 de septiembre de 2012, por el art. 23.5 del Real Decreto-ley 20/2012"
+    }
+   ]
+  },
+  {
+   "code": "iva_reducido",
+   "name": "IVA reducido",
+   "example": "Hostelería, alimentos, transporte",
+   "tax_system": "iva",
+   "territory": "peninsula_baleares",
+   "treatment": "taxed",
+   "rate": 10,
+   "surcharge_rate": 1.4,
+   "valid_from": "2012-09-01",
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [
+    "303"
+   ],
+   "legal_ref": "Ley 37/1992, art. 91.Uno; recargo: art. 161.2.º",
+   "sort_order": 20,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a91",
+     "literal": "Se aplicará el tipo del 10 por ciento a las operaciones siguientes"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a91",
+     "literal": "con efectos desde el 1 de septiembre de 2012, por el art. 23.3 del Real Decreto-ley 20/2012",
+     "cualquierVersion": true
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a161",
+     "literal": "el 1,4 por ciento."
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a161",
+     "literal": "Se modifica, con efectos desde el 1 de septiembre de 2012, por el art. 23.5 del Real Decreto-ley 20/2012"
+    }
+   ]
+  },
+  {
+   "code": "iva_superreducido",
+   "name": "IVA superreducido",
+   "example": "Pan, leche, huevos, fruta, verdura, aceite de oliva",
+   "tax_system": "iva",
+   "territory": "peninsula_baleares",
+   "treatment": "taxed",
+   "rate": 4,
+   "surcharge_rate": 0.5,
+   "valid_from": "2012-09-01",
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [
+    "303"
+   ],
+   "legal_ref": "Ley 37/1992, art. 91.Dos; recargo: art. 161.3.º",
+   "sort_order": 30,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a91",
+     "literal": "Se aplicará el tipo del 4 por ciento a las operaciones siguientes"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a161",
+     "literal": "el 0,50 por ciento."
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a161",
+     "literal": "Se modifica, con efectos desde el 1 de septiembre de 2012, por el art. 23.5 del Real Decreto-ley 20/2012"
+    }
+   ]
+  },
+  {
+   "code": "iva_basicos_4t2024",
+   "name": "IVA alimentos básicos (oct.–dic. 2024)",
+   "example": "Tipo temporal: pan, harinas, leche, quesos, huevos, frutas, verduras, hortalizas, legumbres, tubérculos, cereales y aceite de oliva",
+   "tax_system": "iva",
+   "territory": "peninsula_baleares",
+   "treatment": "taxed",
+   "rate": 2,
+   "surcharge_rate": 0.26,
+   "valid_from": "2024-10-01",
+   "valid_to": "2024-12-31",
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [
+    "303"
+   ],
+   "legal_ref": "Real Decreto-ley 4/2024, art. 1.Dos.2",
+   "sort_order": 35,
+   "pruebas": [
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "Dos. Con efectos desde el 1 de octubre de 2024 y vigencia hasta el 31 de diciembre de 2024:"
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "Se aplicará el tipo del 2 por ciento del Impuesto sobre el Valor Añadido"
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "g) Los aceites de oliva."
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "será del 0,26 por ciento."
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "a) El pan común, así como la masa de pan común congelada"
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "b) Las harinas panificables."
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "d) Los quesos."
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "e) Los huevos."
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "f) Las frutas, verduras, hortalizas, legumbres, tubérculos y cereales"
+    }
+   ]
+  },
+  {
+   "code": "iva_pasta_semillas_4t2024",
+   "name": "IVA pasta y aceites de semillas (oct.–dic. 2024)",
+   "example": "Tipo temporal: pastas alimenticias y aceites de semillas",
+   "tax_system": "iva",
+   "territory": "peninsula_baleares",
+   "treatment": "taxed",
+   "rate": 7.5,
+   "surcharge_rate": 1,
+   "valid_from": "2024-10-01",
+   "valid_to": "2024-12-31",
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [
+    "303"
+   ],
+   "legal_ref": "Real Decreto-ley 4/2024, art. 1.Dos.1",
+   "sort_order": 36,
+   "pruebas": [
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "Dos. Con efectos desde el 1 de octubre de 2024 y vigencia hasta el 31 de diciembre de 2024:"
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "1. Se aplicará el tipo del 7,5 por ciento del Impuesto sobre el Valor Añadido"
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "a) Los aceites de semillas."
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "b) Las pastas alimenticias."
+    },
+    {
+     "fuente": "rdl-4-2024",
+     "bloque": "a1",
+     "literal": "El tipo del recargo de equivalencia aplicable a estas operaciones será del 1 por ciento."
+    }
+   ]
+  },
+  {
+   "code": "exento",
+   "name": "Exento o 0 %",
+   "example": "Seguros, alquileres de vivienda, sanidad, enseñanza",
+   "tax_system": "iva",
+   "territory": "peninsula_baleares",
+   "treatment": "exempt",
+   "rate": 0,
+   "surcharge_rate": null,
+   "valid_from": "1993-01-01",
+   "valid_to": null,
+   "pgc_input_hint": null,
+   "pgc_output_hint": null,
+   "declared_in": [
+    "303"
+   ],
+   "legal_ref": "Ley 37/1992, art. 20",
+   "sort_order": 40,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a20",
+     "literal": "Uno. Estarán exentas de este impuesto las siguientes operaciones:"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a20",
+     "literal": "### versión · vigente desde 1993-01-01 · BOE-A-1992-28740",
+     "cualquierVersion": true
+    }
+   ]
+  },
+  {
+   "code": "ue_compra",
+   "name": "Compra en otro país de la UE",
+   "example": "El IVA lo declaras tú",
+   "tax_system": "iva",
+   "territory": "peninsula_baleares",
+   "treatment": "intra_eu",
+   "rate": 21,
+   "surcharge_rate": null,
+   "valid_from": "2012-09-01",
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [
+    "303",
+    "349"
+   ],
+   "legal_ref": "Ley 37/1992, art. 13.1.º (adquisiciones intracomunitarias) y art. 90",
+   "sort_order": 50,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a13",
+     "literal": "1.ª Las adquisiciones intracomunitarias de bienes efectuadas a título oneroso por empresarios, profesionales"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a90",
+     "literal": "El Impuesto se exigirá al tipo del 21 por ciento"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a90",
+     "literal": "con efectos desde el 1 de septiembre de 2012, por el art. 23.2 del Real Decreto-ley 20/2012"
+    }
+   ]
+  },
+  {
+   "code": "isp",
+   "name": "Inversión del sujeto pasivo",
+   "example": "Obras, ciertos servicios de empresas de fuera: el IVA lo declaras tú",
+   "tax_system": "iva",
+   "territory": "peninsula_baleares",
+   "treatment": "reverse_charge",
+   "rate": 21,
+   "surcharge_rate": null,
+   "valid_from": "2012-09-01",
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [
+    "303"
+   ],
+   "legal_ref": "Ley 37/1992, art. 84.Uno.2.º y art. 90",
+   "sort_order": 60,
+   "pruebas": [
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a84",
+     "literal": "2.º Los empresarios o profesionales para quienes se realicen las operaciones sujetas al Impuesto en los supuestos que se indican a continuación"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a90",
+     "literal": "El Impuesto se exigirá al tipo del 21 por ciento"
+    },
+    {
+     "fuente": "ley-37-1992",
+     "bloque": "a90",
+     "literal": "con efectos desde el 1 de septiembre de 2012, por el art. 23.2 del Real Decreto-ley 20/2012"
+    }
+   ]
+  },
+  {
+   "code": "igic_cero",
+   "name": "IGIC tipo cero",
+   "example": "Canarias",
+   "tax_system": "igic",
+   "territory": "canarias",
+   "treatment": "taxed",
+   "rate": 0,
+   "surcharge_rate": null,
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [],
+   "legal_ref": "Ley 4/2012 de Canarias, art. 51.1",
+   "sort_order": 110,
+   "pruebas": [
+    {
+     "fuente": "ley-canarias-4-2012",
+     "bloque": "a5-3",
+     "literal": "a) El tipo cero, aplicable a las entregas de bienes y prestaciones de servicios señaladas en el artículo 52"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "ley-canarias-4-2012",
+    "bloque": "a5-3",
+    "literal": "a) El tipo cero, aplicable a las entregas de bienes y prestaciones de servicios señaladas en el artículo 52"
+   }
+  },
+  {
+   "code": "igic_reducido_3",
+   "name": "IGIC reducido",
+   "example": "Canarias",
+   "tax_system": "igic",
+   "territory": "canarias",
+   "treatment": "taxed",
+   "rate": 3,
+   "surcharge_rate": null,
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [],
+   "legal_ref": "Ley 4/2012 de Canarias, art. 51.1",
+   "sort_order": 120,
+   "pruebas": [
+    {
+     "fuente": "ley-canarias-4-2012",
+     "bloque": "a5-3",
+     "literal": "b) El tipo reducido del 3 por ciento"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "ley-canarias-4-2012",
+    "bloque": "a5-3",
+    "literal": "b) El tipo reducido del 3 por ciento"
+   }
+  },
+  {
+   "code": "igic_reducido_5",
+   "name": "IGIC reducido (bienes)",
+   "example": "Canarias",
+   "tax_system": "igic",
+   "territory": "canarias",
+   "treatment": "taxed",
+   "rate": 5,
+   "surcharge_rate": null,
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [],
+   "legal_ref": "Ley 4/2012 de Canarias, art. 51.1",
+   "sort_order": 130,
+   "pruebas": [
+    {
+     "fuente": "ley-canarias-4-2012",
+     "bloque": "a5-3",
+     "literal": "c) El tipo reducido del 5 por ciento"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "ley-canarias-4-2012",
+    "bloque": "a5-3",
+    "literal": "c) El tipo reducido del 5 por ciento"
+   }
+  },
+  {
+   "code": "igic_general",
+   "name": "IGIC general",
+   "example": "Canarias",
+   "tax_system": "igic",
+   "territory": "canarias",
+   "treatment": "taxed",
+   "rate": 7,
+   "surcharge_rate": null,
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [],
+   "legal_ref": "Ley 4/2012 de Canarias, art. 51.1",
+   "sort_order": 140,
+   "pruebas": [
+    {
+     "fuente": "ley-canarias-4-2012",
+     "bloque": "a5-3",
+     "literal": "d) El tipo general del 7 por ciento"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "ley-canarias-4-2012",
+    "bloque": "a5-3",
+    "literal": "d) El tipo general del 7 por ciento"
+   }
+  },
+  {
+   "code": "igic_incrementado_95",
+   "name": "IGIC incrementado",
+   "example": "Canarias",
+   "tax_system": "igic",
+   "territory": "canarias",
+   "treatment": "taxed",
+   "rate": 9.5,
+   "surcharge_rate": null,
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [],
+   "legal_ref": "Ley 4/2012 de Canarias, art. 51.1",
+   "sort_order": 150,
+   "pruebas": [
+    {
+     "fuente": "ley-canarias-4-2012",
+     "bloque": "a5-3",
+     "literal": "e) El tipo incrementado del 9,5 por ciento"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "ley-canarias-4-2012",
+    "bloque": "a5-3",
+    "literal": "e) El tipo incrementado del 9,5 por ciento"
+   }
+  },
+  {
+   "code": "igic_incrementado_15",
+   "name": "IGIC incrementado",
+   "example": "Canarias",
+   "tax_system": "igic",
+   "territory": "canarias",
+   "treatment": "taxed",
+   "rate": 15,
+   "surcharge_rate": null,
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [],
+   "legal_ref": "Ley 4/2012 de Canarias, art. 51.1",
+   "sort_order": 160,
+   "pruebas": [
+    {
+     "fuente": "ley-canarias-4-2012",
+     "bloque": "a5-3",
+     "literal": "f) El tipo incrementado del 15 por ciento"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "ley-canarias-4-2012",
+    "bloque": "a5-3",
+    "literal": "f) El tipo incrementado del 15 por ciento"
+   }
+  },
+  {
+   "code": "igic_especial",
+   "name": "IGIC especial",
+   "example": "Canarias",
+   "tax_system": "igic",
+   "territory": "canarias",
+   "treatment": "taxed",
+   "rate": 20,
+   "surcharge_rate": null,
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_input_hint": "472",
+   "pgc_output_hint": "477",
+   "declared_in": [],
+   "legal_ref": "Ley 4/2012 de Canarias, art. 51.1",
+   "sort_order": 170,
+   "pruebas": [
+    {
+     "fuente": "ley-canarias-4-2012",
+     "bloque": "a5-3",
+     "literal": "g) El tipo especial del 20 por ciento"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "ley-canarias-4-2012",
+    "bloque": "a5-3",
+    "literal": "g) El tipo especial del 20 por ciento"
+   }
+  }
+ ],
+ "withholding_rate": [
+  {
+   "code": "profesional",
+   "name": "Profesionales",
+   "example": "Asesor, abogado, arquitecto…",
+   "rate": 15,
+   "model_190_key": null,
+   "model_190_subkey": null,
+   "filed_in": "111",
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_hint": "4751",
+   "legal_ref": "RD 439/2007, art. 95.1",
+   "sort_order": 10,
+   "pruebas": [
+    {
+     "fuente": "rd-439-2007",
+     "bloque": "a95",
+     "literal": "se aplicará el tipo de retención del 15 por ciento sobre los ingresos íntegros satisfechos"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "rd-439-2007",
+    "bloque": "a95",
+    "literal": "se aplicará el tipo de retención del 15 por ciento sobre los ingresos íntegros satisfechos"
+   }
+  },
+  {
+   "code": "profesional_inicio",
+   "name": "Profesionales que empiezan",
+   "example": "Los tres primeros años de actividad",
+   "rate": 7,
+   "model_190_key": null,
+   "model_190_subkey": null,
+   "filed_in": "111",
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_hint": "4751",
+   "legal_ref": "RD 439/2007, art. 95.1, párrafo segundo",
+   "sort_order": 20,
+   "pruebas": [
+    {
+     "fuente": "rd-439-2007",
+     "bloque": "a95",
+     "literal": "el tipo de retención será del 7 por ciento en el período impositivo de inicio de actividades y en los dos siguientes"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "rd-439-2007",
+    "bloque": "a95",
+    "literal": "el tipo de retención será del 7 por ciento en el período impositivo de inicio de actividades y en los dos siguientes"
+   }
+  },
+  {
+   "code": "administradores",
+   "name": "Administradores y consejeros",
+   "example": "Lo que cobra un administrador por serlo",
+   "rate": 35,
+   "model_190_key": null,
+   "model_190_subkey": null,
+   "filed_in": "111",
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_hint": "4751",
+   "legal_ref": "RD 439/2007, art. 80.1.3.º",
+   "sort_order": 30,
+   "pruebas": [
+    {
+     "fuente": "rd-439-2007",
+     "bloque": "a80",
+     "literal": "3.º El 35 por ciento para las retribuciones que se perciban por la condición de administradores"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "rd-439-2007",
+    "bloque": "a80",
+    "literal": "3.º El 35 por ciento para las retribuciones que se perciban por la condición de administradores"
+   }
+  },
+  {
+   "code": "alquiler",
+   "name": "Alquiler de local",
+   "example": "La renta del local donde trabajas",
+   "rate": 19,
+   "model_190_key": null,
+   "model_190_subkey": null,
+   "filed_in": "115",
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_hint": "4751",
+   "legal_ref": "RD 439/2007, art. 100",
+   "sort_order": 40,
+   "pruebas": [
+    {
+     "fuente": "rd-439-2007",
+     "bloque": "a100",
+     "literal": "será el resultado de aplicar el porcentaje del 19 por ciento sobre todos los conceptos que se satisfagan al arrendador"
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "rd-439-2007",
+    "bloque": "a100",
+    "literal": "será el resultado de aplicar el porcentaje del 19 por ciento sobre todos los conceptos que se satisfagan al arrendador"
+   }
+  },
+  {
+   "code": "capital",
+   "name": "Intereses y dividendos",
+   "example": "Lo que pagas a socios o prestamistas por su capital",
+   "rate": 19,
+   "model_190_key": null,
+   "model_190_subkey": null,
+   "filed_in": "123",
+   "valid_from": null,
+   "valid_to": null,
+   "pgc_hint": "4751",
+   "legal_ref": "RD 439/2007, art. 90.1",
+   "sort_order": 50,
+   "pruebas": [
+    {
+     "fuente": "rd-439-2007",
+     "bloque": "a90",
+     "literal": "1. La retención a practicar sobre los rendimientos del capital mobiliario será el resultado de aplicar a la base de retención el porcentaje del 19 por ciento."
+    }
+   ],
+   "desdeAuto": {
+    "fuente": "rd-439-2007",
+    "bloque": "a90",
+    "literal": "1. La retención a practicar sobre los rendimientos del capital mobiliario será el resultado de aplicar a la base de retención el porcentaje del 19 por ciento."
+   }
+  }
+ ],
+ "payment_method": [
+  {
+   "code": "transferencia",
+   "name": "Transferencia",
+   "example": "Le pagas desde tu banco",
+   "kind": "transfer",
+   "legal_ref": "Real Decreto-ley 19/2018, art. 3.45",
+   "sort_order": 10,
+   "pruebas": [
+    {
+     "fuente": "rdl-19-2018",
+     "bloque": "ar-3",
+     "literal": "45. Transferencia: servicio de pago destinado a efectuar un abono en una cuenta de pago de un beneficiario"
+    }
+   ]
+  },
+  {
+   "code": "domiciliacion",
+   "name": "Domiciliación",
+   "example": "Te lo cargan en tu cuenta",
+   "kind": "direct_debit",
+   "legal_ref": "Real Decreto-ley 19/2018, art. 3.1",
+   "sort_order": 20,
+   "pruebas": [
+    {
+     "fuente": "rdl-19-2018",
+     "bloque": "ar-3",
+     "literal": "1. Adeudo domiciliado: servicio de pago destinado a efectuar un cargo en la cuenta de pago del ordenante"
+    }
+   ]
+  },
+  {
+   "code": "tarjeta",
+   "name": "Tarjeta",
+   "example": "Con tarjeta de la empresa",
+   "kind": "card",
+   "legal_ref": "Real Decreto-ley 19/2018, art. 3.23 (instrumento de pago)",
+   "sort_order": 30,
+   "pruebas": [
+    {
+     "fuente": "rdl-19-2018",
+     "bloque": "ar-3",
+     "literal": "23. Instrumento de pago: cualquier dispositivo personalizado o conjunto de procedimientos"
+    }
+   ]
+  },
+  {
+   "code": "efectivo",
+   "name": "Efectivo",
+   "example": "En billetes y monedas; nunca 1.000 € o más entre empresas",
+   "kind": "cash",
+   "legal_ref": "Ley 7/2012, art. 7.1 (límite de 1.000 €)",
+   "sort_order": 40,
+   "pruebas": [
+    {
+     "fuente": "ley-7-2012",
+     "bloque": "a7",
+     "literal": "con un importe igual o superior a 1.000 euros o su contravalor en moneda extranjera"
+    }
+   ]
+  }
+ ],
+ "payment_term": [
+  {
+   "code": "contado",
+   "name": "Al contado",
+   "example": "El mismo día de la factura",
+   "days": [
+    0
+   ],
+   "fixed_days": [],
+   "legal_ref": "Ley 3/2004, art. 4.3 (como mucho 60 días)",
+   "sort_order": 10,
+   "pruebas": [
+    {
+     "fuente": "ley-3-2004",
+     "bloque": "a4",
+     "literal": "sin que, en ningún caso, se pueda acordar un plazo superior a 60 días naturales"
+    }
+   ]
+  },
+  {
+   "code": "30_dias",
+   "name": "30 días",
+   "example": "Lo que vale si no se pacta otro plazo",
+   "days": [
+    30
+   ],
+   "fixed_days": [],
+   "legal_ref": "Ley 3/2004, art. 4.1",
+   "sort_order": 20,
+   "pruebas": [
+    {
+     "fuente": "ley-3-2004",
+     "bloque": "a4",
+     "literal": "será de treinta días naturales después de la fecha de recepción de las mercancías o prestación de los servicios"
+    }
+   ]
+  },
+  {
+   "code": "60_dias",
+   "name": "60 días",
+   "example": "El plazo más largo que se puede pactar entre empresas",
+   "days": [
+    60
+   ],
+   "fixed_days": [],
+   "legal_ref": "Ley 3/2004, art. 4.3",
+   "sort_order": 30,
+   "pruebas": [
+    {
+     "fuente": "ley-3-2004",
+     "bloque": "a4",
+     "literal": "sin que, en ningún caso, se pueda acordar un plazo superior a 60 días naturales"
+    }
+   ]
+  },
+  {
+   "code": "30_60_dias",
+   "name": "30 y 60 días",
+   "example": "La mitad a los 30 días y la otra mitad a los 60",
+   "days": [
+    30,
+    60
+   ],
+   "fixed_days": [],
+   "legal_ref": "Ley 3/2004, art. 4.3 (como mucho 60 días)",
+   "sort_order": 40,
+   "pruebas": [
+    {
+     "fuente": "ley-3-2004",
+     "bloque": "a4",
+     "literal": "sin que, en ningún caso, se pueda acordar un plazo superior a 60 días naturales"
+    }
+   ]
+  }
+ ],
+ "entry_text": [
+  {
+   "code": "su_factura",
+   "text": "Su factura n.º *",
+   "purpose": "purchase_invoice",
+   "legal_ref": "Código de Comercio, art. 28.2 (Libro Diario)",
+   "sort_order": 10,
+   "pruebas": [
+    {
+     "fuente": "codigo-comercio",
+     "bloque": "art28",
+     "literal": "2. El Libro Diario registrará día a día todas las operaciones relativas a la actividad de la empresa."
+    }
+   ]
+  },
+  {
+   "code": "nuestra_factura",
+   "text": "Nuestra factura n.º *",
+   "purpose": "sales_invoice",
+   "legal_ref": "Código de Comercio, art. 28.2 (Libro Diario)",
+   "sort_order": 20,
+   "pruebas": [
+    {
+     "fuente": "codigo-comercio",
+     "bloque": "art28",
+     "literal": "2. El Libro Diario registrará día a día todas las operaciones relativas a la actividad de la empresa."
+    }
+   ]
+  },
+  {
+   "code": "pago_factura",
+   "text": "Pago de su factura n.º *",
+   "purpose": "payment",
+   "legal_ref": "Código de Comercio, art. 28.2 (Libro Diario)",
+   "sort_order": 30,
+   "pruebas": [
+    {
+     "fuente": "codigo-comercio",
+     "bloque": "art28",
+     "literal": "2. El Libro Diario registrará día a día todas las operaciones relativas a la actividad de la empresa."
+    }
+   ]
+  },
+  {
+   "code": "cobro_factura",
+   "text": "Cobro de nuestra factura n.º *",
+   "purpose": "collection",
+   "legal_ref": "Código de Comercio, art. 28.2 (Libro Diario)",
+   "sort_order": 40,
+   "pruebas": [
+    {
+     "fuente": "codigo-comercio",
+     "bloque": "art28",
+     "literal": "2. El Libro Diario registrará día a día todas las operaciones relativas a la actividad de la empresa."
+    }
+   ]
+  }
+ ],
+ "expense_category": [
+  {
+   "code": "food_beverage",
+   "pgc": "600"
+  },
+  {
+   "code": "packaging",
+   "pgc": "602"
+  },
+  {
+   "code": "cleaning_tableware",
+   "pgc": "602"
+  },
+  {
+   "code": "rent",
+   "pgc": "621"
+  },
+  {
+   "code": "repairs",
+   "pgc": "622"
+  },
+  {
+   "code": "professional",
+   "pgc": "623"
+  },
+  {
+   "code": "transport",
+   "pgc": "624"
+  },
+  {
+   "code": "insurance",
+   "pgc": "625"
+  },
+  {
+   "code": "bank_platform_fees",
+   "pgc": "626"
+  },
+  {
+   "code": "advertising",
+   "pgc": "627"
+  },
+  {
+   "code": "utilities",
+   "pgc": "628"
+  },
+  {
+   "code": "other_services",
+   "pgc": "629"
+  }
+ ],
+ "vat_category_tax": [
+  {
+   "category_code": "alimento_basico",
+   "tax_code": "iva_basicos_4t2024",
+   "valid_from": "2024-10-01",
+   "valid_to": "2024-12-31",
+   "note": "2 % en el último trimestre de 2024 a todos los básicos (RD-ley 4/2024, art. 1.Dos.2). Decisión de Julio, respuesta 2 del C00: vat_rate de producción solo lo tenía para el aceite."
+  },
+  {
+   "category_code": "alimento_basico",
+   "tax_code": "iva_superreducido",
+   "valid_from": "2025-01-01",
+   "valid_to": null,
+   "note": "Como vat_rate hoy: 4 % desde 2025 (RD-ley 4/2024, art. 2)"
+  },
+  {
+   "category_code": "aceite_oliva",
+   "tax_code": "iva_basicos_4t2024",
+   "valid_from": "2024-10-01",
+   "valid_to": "2024-12-31",
+   "note": "Como vat_rate hoy: 2 % en el último trimestre de 2024 (RD-ley 4/2024, art. 1.Dos.2)"
+  },
+  {
+   "category_code": "aceite_oliva",
+   "tax_code": "iva_superreducido",
+   "valid_from": "2025-01-01",
+   "valid_to": null,
+   "note": "Como vat_rate hoy: 4 % desde 2025"
+  },
+  {
+   "category_code": "alimento_general",
+   "tax_code": "iva_reducido",
+   "valid_from": "2025-01-01",
+   "valid_to": null,
+   "note": "Como vat_rate hoy: 10 % desde 2025"
+  },
+  {
+   "category_code": "bebida_alcoholica",
+   "tax_code": "iva_general",
+   "valid_from": "2025-01-01",
+   "valid_to": null,
+   "note": "Como vat_rate hoy: 21 % desde 2025"
+  },
+  {
+   "category_code": "no_alimentario",
+   "tax_code": "iva_general",
+   "valid_from": "2025-01-01",
+   "valid_to": null,
+   "note": "Como vat_rate hoy: 21 % desde 2025"
+  }
+ ]
+}

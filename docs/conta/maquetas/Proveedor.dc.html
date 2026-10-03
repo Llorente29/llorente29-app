@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ficha de proveedor</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1E3A5F}a:hover{color:#142a45}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; background: #F5F4F0; font-family: Inter, system-ui, sans-serif; color: #1B1F24">
+
+<nav style="width: 232px; flex-shrink: 0; background: #1E3A5F; color: #E8EDF3; display: flex; flex-direction: column; padding: 28px 16px; box-sizing: border-box; gap: 4px" aria-label="Menú principal">
+<div style="font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 600; color: #FFFFFF; padding: 0 12px 28px">folvy</div>
+<a href="#" style="padding: 12px; border-radius: 10px; color: #C9D3DF; text-decoration: none; font-size: 15px">Inicio</a>
+<a href="#" style="padding: 12px; border-radius: 10px; color: #C9D3DF; text-decoration: none; font-size: 15px">Ventas</a>
+<a href="#" aria-current="page" style="padding: 12px; border-radius: 10px; color: #FFFFFF; background: rgba(255,255,255,0.12); text-decoration: none; font-size: 15px; font-weight: 600">Compras</a>
+<a href="#" style="padding: 12px; border-radius: 10px; color: #C9D3DF; text-decoration: none; font-size: 15px">Equipo</a>
+<a href="Main.dc.html" style="display: flex; justify-content: space-between; padding: 12px; border-radius: 10px; color: #C9D3DF; text-decoration: none; font-size: 15px">Contabilidad<span style="background: #D67542; color: #1B1F24; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px">6</span></a>
+<a href="#" style="padding: 12px; border-radius: 10px; color: #C9D3DF; text-decoration: none; font-size: 15px">Ajustes</a>
+</nav>
+
+<main style="flex-grow: 1; padding: 24px 44px 28px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; min-width: 0">
+
+<div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #5A6470">
+<a href="#" style="color: #1E3A5F; font-weight: 500; text-decoration: none">Compras</a><span aria-hidden="true">›</span><a href="#" style="color: #1E3A5F; font-weight: 500; text-decoration: none">Proveedores</a><span aria-hidden="true">›</span><span style="color: #1B1F24; font-weight: 600">Hermanos Ruiz</span>
+</div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 24px">
+<div style="display: flex; align-items: center; gap: 18px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #1E3A5F; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 600">HR</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 32px; font-weight: 600; color: #1E3A5F">Hermanos Ruiz</h1>
+<div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #5A6470">
+<span>Hermanos Ruiz Distribución, S.L.</span><span aria-hidden="true">·</span><span>B12345678</span>
+<span style="display: inline-flex; align-items: center; gap: 4px; color: #1D5E3B; font-weight: 600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>NIF comprobado</span>
+</div>
+<div style="display: flex; gap: 8px">
+<span style="padding: 4px 10px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E2DED6; font-size: 13px; color: #3D4B5C">Comida y bebida</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E2DED6; font-size: 13px; color: #3D4B5C">Transferencia a 30 días</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #E3F1E9; font-size: 13px; color: #1D5E3B; font-weight: 500">Activo</span>
+</div>
+</div>
+</div>
+<div style="display: flex; gap: 10px">
+<button type="button" style="height: 46px; padding: 0 18px; border-radius: 12px; border: 1px solid #1E3A5F; background: #FFFFFF; color: #1E3A5F; font-family: Inter, sans-serif; font-size: 15px; font-weight: 600; cursor: pointer">Editar ficha</button>
+<button type="button" style="height: 46px; padding: 0 20px; border-radius: 12px; border: none; background: #1E3A5F; color: #FFFFFF; font-family: Inter, sans-serif; font-size: 15px; font-weight: 600; cursor: pointer">Subir factura</button>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 18px; background: #FFFFFF; border-radius: 14px; padding: 14px 20px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)">
+<div style="display: flex; flex-direction: column; gap: 6px; width: 220px; flex-shrink: 0">
+<div style="font-size: 14px; font-weight: 600">Ficha al 80 %</div>
+<div style="height: 8px; border-radius: 999px; background: #ECEAE4; overflow: hidden"><div style="width: 80%; height: 100%; background: #1E3A5F; border-radius: 999px"></div></div>
+</div>
+<div style="font-size: 14px; color: #5A6470; flex-grow: 1">Falta: <a href="#" style="font-weight: 600">certificado de titularidad bancaria</a> · <a href="#" style="font-weight: 600">contacto de administración</a></div>
+<div style="font-size: 13px; color: #5A6470">Datos leídos de su primera factura y confirmados por ti</div>
+</div>
+
+<div role="tablist" style="display: flex; gap: 4px; border-bottom: 1px solid #E2DED6">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="7">
+<button type="button" role="tab" aria-selected="{{t.sel}}" style="height: 46px; padding: 0 16px; border: none; background: transparent; border-bottom: {{t.borde}}; font-family: Inter, sans-serif; font-size: 15px; font-weight: {{t.peso}}; color: {{t.color}}; cursor: pointer">{{t.nombre}}</button>
+</sc-for>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+<div style="background: #FFFFFF; border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)"><span style="font-size: 13px; color: #5A6470; font-weight: 600">Le has comprado este año</span><span style="font-family: Fraunces, Georgia, serif; font-size: 30px; font-weight: 600">18.420 €</span></div>
+<div style="background: #FFFFFF; border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)"><span style="font-size: 13px; color: #A2501F; font-weight: 600">Le debes</span><span style="font-family: Fraunces, Georgia, serif; font-size: 30px; font-weight: 600">1.283,15 €</span></div>
+<div style="background: #FFFFFF; border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)"><span style="font-size: 13px; color: #5A6470; font-weight: 600">Próximo pago</span><span style="font-family: Fraunces, Georgia, serif; font-size: 30px; font-weight: 600">24 oct</span></div>
+<div style="background: #FFFFFF; border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)"><span style="font-size: 13px; color: #5A6470; font-weight: 600">Facturas este año</span><span style="font-family: Fraunces, Georgia, serif; font-size: 30px; font-weight: 600">23</span></div>
+</div>
+
+<div style="display: flex; gap: 14px; flex-grow: 1; min-height: 0">
+
+<div style="flex: 1.25; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<section style="background: #FFFFFF; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)">
+<h2 style="margin: 0; font-size: 15px; font-weight: 700; color: #1E3A5F">Impuestos</h2>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Régimen de IVA</span><span style="font-size: 15px; font-weight: 500">General</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">IVA habitual</span><span style="font-size: 15px; font-weight: 500">10 % y 21 %</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Retención</span><span style="font-size: 15px; font-weight: 500">No aplica (sociedad)</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Dirección fiscal</span><span style="font-size: 15px; font-weight: 500">C/ Ejemplo 12, 28021 Madrid</span></div>
+</section>
+<section style="background: #FFFFFF; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)">
+<h2 style="margin: 0; font-size: 15px; font-weight: 700; color: #1E3A5F">Cómo le pagas</h2>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Forma de pago</span><span style="font-size: 15px; font-weight: 500">Transferencia</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Plazo</span><span style="font-size: 15px; font-weight: 500">30 días desde factura</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Cuenta bancaria</span><span style="font-size: 15px; font-weight: 500">ES12 •••• •••• 4567</span><span style="font-size: 12px; color: #1D5E3B; font-weight: 600">IBAN comprobado</span></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #FBEBDD; font-size: 13px; color: #5E300B">Falta el certificado del banco</div>
+</section>
+<section style="background: #FFFFFF; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)">
+<h2 style="margin: 0; font-size: 15px; font-weight: 700; color: #1E3A5F">Contabilidad</h2>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Sus facturas se apuntan en</span><span style="font-size: 15px; font-weight: 500">Comida y bebida</span><span style="font-size: 12px; color: #5A6470">600 · Compras de mercaderías</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Su cuenta</span><span style="font-size: 15px; font-weight: 500">400.0000.123</span><span style="font-size: 12px; color: #5A6470">Saldo: le debes 1.283,15 €</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Local habitual</span><span style="font-size: 15px; font-weight: 500">Todos</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5A6470">Registro sanitario</span><span style="font-size: 15px; font-weight: 500">Anotado</span></div>
+</section>
+</div>
+
+<div style="flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0">
+<section style="background: #FFFFFF; border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(30,58,95,0.06)">
+<h2 style="margin: 0; font-size: 15px; font-weight: 700; color: #1E3A5F">Con quién hablas</h2>
+<div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px"><div style="display: flex; flex-direction: column"><span style="font-weight: 600">Ana Ruiz</span><span style="color: #5A6470; font-size: 13px">Pedidos · 600 000 000</span></div><a href="#" style="font-weight: 600; font-size: 14px">Llamar</a></div>
+<div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px"><div style="display: flex; flex-direction: column"><span style="font-weight: 600">Luis Martín</span><span style="color: #5A6470; font-size: 13px">Comercial · luis@ejemplo.es</span></div><a href="#" style="font-weight: 600; font-size: 14px">Escribir</a></div>
+<a href="#" style="display: flex; align-items: center; justify-content: center; height: 44px; border-radius: 10px; border: 1px dashed #C9A27E; color: #7A3F10; font-size: 14px; font-weight: 600; text-decoration: none">+ Añadir contacto de administración</a>
+</section>
+<section style="background: #FFFFFF; border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 2px rgba(30,58,95,0.06); flex-grow: 1">
+<h2 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1E3A5F">Últimas facturas</h2>
+<sc-for list="{{facturas}}" as="f" hint-placeholder-count="4">
+<div style="display: grid; grid-template-columns: 70px 1fr 100px 110px; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid #F1EFEA; font-size: 14px">
+<span style="color: #5A6470">{{f.fecha}}</span><span>{{f.num}}</span><span style="text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">{{f.importe}}</span>
+<span style="justify-self: end; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{f.fondo}}; color: {{f.tinta}}">{{f.estado}}</span>
+</div>
+</sc-for>
+</section>
+</div>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+const nombres = ['Resumen', 'Datos fiscales', 'Contactos', 'Pago', 'Contabilidad', 'Documentos', 'Historial'];
+return {
+tabs: nombres.map((n, i) => ({ nombre: n, sel: i === 0 ? 'true' : 'false', borde: i === 0 ? '3px solid #D67542' : '3px solid transparent', peso: i === 0 ? '600' : '500', color: i === 0 ? '#1B1F24' : '#5A6470' })),
+facturas: [
+{ fecha: '24/09', num: 'F-2026-0915', importe: '1.283,15 €', estado: 'Por pagar', fondo: '#FBEBDD', tinta: '#7A3F10' },
+{ fecha: '10/09', num: 'F-2026-0871', importe: '964,40 €', estado: 'Pagada', fondo: '#E3F1E9', tinta: '#1D5E3B' },
+{ fecha: '27/08', num: 'F-2026-0802', importe: '1.102,75 €', estado: 'Pagada', fondo: '#E3F1E9', tinta: '#1D5E3B' },
+{ fecha: '13/08', num: 'F-2026-0760', importe: '788,30 €', estado: 'Pagada', fondo: '#E3F1E9', tinta: '#1D5E3B' }
+]
+};
+}
+}
+</script>
+</body>
+</html>
