@@ -30,8 +30,9 @@ begin
     values (a_cuenta, 'Taberna de Prueba Norte, S.L.', 'Taberna de Prueba Norte', 'B28000016', 'nif_es', 'company',
       'Calle', 'de la Prueba', '12', '28001', 'Madrid', 'Madrid', 'ES', 'hecho', now(), a_user)
     returning id into emp_a;
-    insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms)
-    values (emp_a, a_cuenta, 'peninsula_baleares', 'quarterly', 'pymes', 8, array['303', '390', '111', '115', '202']);
+    -- Con sus anuales y el 347 (respuesta 3: la regla de la tabla de modelos) y el IVA de sus ventas al 10 %.
+    insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms, sales_tax_rate_code)
+    values (emp_a, a_cuenta, 'peninsula_baleares', 'quarterly', 'pymes', 8, array['111', '115', '180', '190', '200', '202', '303', '347', '390'], 'iva_reducido');
     -- IBAN de ejemplo de la documentación bancaria (válido por su control, no es de nadie).
     insert into public.treasury_account (account_id, company_id, kind, name, iban, pgc_hint, is_default, created_by)
     values (a_cuenta, emp_a, 'bank', 'Cuenta principal', 'ES9121000418450200051332', '572', true, a_user);
@@ -48,7 +49,7 @@ begin
       'Calle', 'del Ensayo', '3', '35001', 'Las Palmas de Gran Canaria', 'Las Palmas', 'ES', 'hecho', now())
     returning id into emp_b;
     insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms)
-    values (emp_b, b_cuenta, 'canarias', 'quarterly', 'pymes', 8, array['111']);
+    values (emp_b, b_cuenta, 'canarias', 'quarterly', 'pymes', 8, array['111', '190', '200', '202', '347']);
   end if;
 
   raise notice 'EMPRESAS DE PRUEBA: A % · B % · empresas en total: %', emp_a, emp_b, (select count(*) from public.company);

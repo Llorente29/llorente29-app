@@ -1,9 +1,7 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 12.ª tanda (respuesta 3 de Julio, punto 2): los
-# resúmenes anuales por regla en la tabla de modelos (111→190, 115→180,
-# 303→390, 202→200; el 347 por defecto en una sociedad fuera del SII), las
-# filas del 190 y del 200, y aceptar la sugerencia del 115 añade el 180.
-# (11.ª: el IVA de tus ventas y la cuenta C sin empresa.)
-supabase/migrations/20261003T0190_c00_modelos_anuales.sql
+# 03/10/2026 · C00, 13.ª tanda (respuesta 3 de Julio, punto 4): las empresas
+# de prueba de A y B, coherentes con la regla de los modelos. Solo staging.
+# (12.ª: los anuales por regla en la tabla de modelos.)
+supabase/staging/sql/20261003_coherencia_datos_prueba.sql
