@@ -168,9 +168,10 @@
       "clave": "orden-modelo-200",
       "nombre": "Orden que aprueba el modelo 200",
       "tipo": "boe",
-      "buscar": "\"modelo 200\" Sociedades",
-      "tituloDebeContener": "aprueban los modelos 200",
-      "debeContener": "200"
+      "buscar": "\"modelos de declaración del Impuesto sobre Sociedades\"",
+      "tituloDebeContener": "aprueban los modelos de declaración del Impuesto sobre Sociedades",
+      "debeContener": "200",
+      "nota": "Respuesta 3: cada año sale una orden que aprueba el 200 del ejercicio; su título dice «modelos de declaración del Impuesto sobre Sociedades», no «modelo 200»."
     },
     {
       "clave": "orden-modelo-202",
@@ -200,9 +201,10 @@
       "clave": "orden-modelo-190",
       "nombre": "Orden que aprueba el modelo 190",
       "tipo": "boe",
-      "buscar": "\"modelo 190\" resumen anual retenciones",
-      "tituloDebeContener": "aprueba el modelo 190",
-      "debeContener": "190"
+      "buscar": "\"EHA/3127/2009\"",
+      "debeContener": "190",
+      "tituloEmpiezaPor": "Orden EHA/3127/2009",
+      "nota": "Respuesta 3: la búsqueda por «modelo 190» devolvía la HAP/2178/2014, que solo lo modifica. La que lo aprueba es la EHA/3127/2009."
     },
     {
       "clave": "orden-modelo-180",
