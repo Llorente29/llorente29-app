@@ -43,3 +43,13 @@ export function Microfono() {
     </svg>
   )
 }
+
+/** La flecha de enviar de la caja del alta (respuesta 4 del C00). */
+export function Flecha() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M10 16V4M4.5 9.5L10 4l5.5 5.5" />
+    </svg>
+  )
+}

@@ -474,7 +474,14 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 .cx-alta-input:disabled { background: transparent; }
 .cx-alta-tecla {
   font-family: var(--cx-letra-cifras); font-size: 12px; color: var(--cx-apoyo); border: 1px solid var(--cx-borde-campo); border-radius: 8px; padding: 4px 8px;
+  user-select: none; -webkit-user-select: none; cursor: pointer;
 }
+/* Enviar (respuesta 4): flecha, 48 px, azul; a la izquierda del micro y activo solo con texto. */
+.cx-alta-enviar {
+  width: 48px; height: 48px; border-radius: 50%; border: none; background: var(--cx-azul); color: var(--cx-blanco);
+  cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.cx-alta-enviar:disabled { background: var(--cx-borde-campo); color: var(--cx-blanco); cursor: default; }
 .cx-alta-entrada .cx-voz { width: 48px; height: 48px; }
 .cx-alta-entrada .cx-muy-pronto { bottom: 74px; }
 .cx-alta-pista { font-size: 13px; color: var(--cx-apoyo); padding-left: 22px; }
@@ -620,3 +627,6 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
   .cx-meses { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .cx-detalle-contable { flex-direction: column; align-items: stretch; }
 }
+
+/* La etiqueta de un campo con su marca «IA» al lado (población por el código postal). */
+.cx-alta-etiqueta-ia { display: flex; align-items: center; gap: 6px; }

@@ -56,7 +56,13 @@ export async function ponerNombre(companyId: string, nombre: string, deLaCuenta:
 
 export interface DireccionAlta { calle: string; numero: string; codigoPostal: string; poblacion: string; provincia: string }
 
-export async function ponerDireccion(companyId: string, d: DireccionAlta, deLaCuenta: boolean): Promise<void> {
+/**
+ * La dirección del alta. Lo que dedujo la IA (la población por el código
+ * postal, la provincia por sus dos primeras cifras) va con su marca y su
+ * porqué, por conta_ia_poner; lo demás lo escribió la persona y va sin marca.
+ */
+export async function ponerDireccion(companyId: string, d: DireccionAlta, deLaCuenta: boolean,
+  deducido?: { poblacion: string | null; provincia: string | null }): Promise<void> {
   const campos: [string, string][] = [
     ['fiscal_street', d.calle], ['fiscal_number', d.numero], ['fiscal_postal_code', d.codigoPostal],
     ['fiscal_city', d.poblacion], ['fiscal_province', d.provincia],
@@ -65,9 +71,15 @@ export async function ponerDireccion(companyId: string, d: DireccionAlta, deLaCu
     for (const [c, v] of campos) if (v.trim() !== '') await ponerConIa(companyId, 'company', c, v.trim(), DE_LA_CUENTA, 'import')
     return
   }
-  const fila = Object.fromEntries(campos.map(([c, v]) => [c, v.trim() === '' ? null : v.trim()]))
+  const porIa: Record<string, string | null> = { fiscal_city: deducido?.poblacion ?? null, fiscal_province: deducido?.provincia ?? null }
+  // Lo deducido entra vacío aquí y lo pone la IA: así «Deshacer» lo deja como estaba.
+  const fila = Object.fromEntries(campos.map(([c, v]) => [c, v.trim() === '' || porIa[c] ? null : v.trim()]))
   const { error } = await tabla('company').update(fila).eq('id', companyId)
   if (error) throw new Error(mensaje('No se ha guardado la dirección', error))
+  for (const [c, v] of campos) {
+    const porque = porIa[c]
+    if (porque && v.trim() !== '') await ponerConIa(companyId, 'company', c, v.trim(), porque)
+  }
 }
 
 /** La persona eligió otra cosa que la propuesta: se guarda como suya (sin marca). */

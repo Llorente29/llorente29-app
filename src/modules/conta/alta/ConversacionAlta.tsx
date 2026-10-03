@@ -33,8 +33,8 @@ import { rutaTuEmpresa } from '@/config/navegacion'
 import { useCuentaConta, leerDatosDeLaCuenta, type DatosDeLaCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDatosEmpresa } from '@/modules/conta/empresa/useDatosEmpresa'
-import { TarjetaCargando, ErrorConReintento } from '@/modules/conta/ui/piezas'
-import { Microfono } from '@/modules/conta/ui/Icono'
+import { TarjetaCargando, ErrorConReintento, MarcaIA } from '@/modules/conta/ui/piezas'
+import { Flecha, Microfono } from '@/modules/conta/ui/Icono'
 import { TEXTO_MUY_PRONTO } from '@/modules/conta/marco/muyPronto'
 import {
   PASOS, modelosDeRespuestas, pasoSiguiente, preguntaActual, territorioPorCp, textoDuda, todasLasPreguntas,
@@ -61,6 +61,8 @@ import { abrirEjercicio, anadirActividad, buscarCnae, buscarIae, type OpcionCodi
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import { validarIban } from '@/modules/conta/lib/iban'
 import { provinciaPorCp } from '@/modules/conta/lib/direccion'
+import { entenderDireccion, proponerPoblacion, type DireccionEntendida, type PoblacionPropuesta } from '@/modules/conta/lib/codigoPostal'
+import { lugaresPorCp } from '@/modules/conta/services/codigoPostalService'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
 import { ivaDeVentas, type ActividadParaIva } from '@/modules/conta/lib/ivaVentas'
@@ -128,7 +130,10 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const [hoja, setHoja] = useState(false)
   const [texto, setTexto] = useState('')
   const [vuelta, setVuelta] = useState<Vuelta | null>(null)
+  /** La dirección dicha en una frase, repartida en los campos; la vuelta cambia la clave del formulario. */
+  const [direccionDicha, setDireccionDicha] = useState<{ vuelta: number; d: DireccionEntendida } | null>(null)
   const fin = useRef<HTMLDivElement>(null)
+  const entrada = useRef<HTMLInputElement>(null)
   const sigId = useRef(1)
 
   // El paso lo fija quien avanza, en el momento (si se esperase a la base,
@@ -204,7 +209,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
     return iva.codigo
   }
 
-  async function responder(p: Pregunta, valor: string, mostrado: string, extra?: { direccion?: DireccionAlta }) {
+  async function responder(p: Pregunta, valor: string, mostrado: string, extra?: { direccion?: DireccionAlta; deducido?: DeducidoDireccion }) {
     if (!ctx || !accountId) return
     const noLoSe = valor === '__nolose'
     fijarPregunta(p)
@@ -235,7 +240,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
             await ponerDireccion(id!, { calle: c.calle ?? '', numero: '', codigoPostal: c.codigoPostal ?? '', poblacion: c.poblacion ?? '', provincia: c.provincia ?? provinciaPorCp(c.codigoPostal ?? '') ?? '' }, true)
             linea = [c.calle, [c.codigoPostal, c.poblacion].filter(Boolean).join(' ')].filter(Boolean).join(', ')
           } else if (extra?.direccion) {
-            await ponerDireccion(id!, extra.direccion, false)
+            await ponerDireccion(id!, extra.direccion, false, extra.deducido)
+            setDireccionDicha(null)
             const x = extra.direccion
             linea = `${[x.calle, x.numero].filter((s) => s.trim() !== '').join(' ')}, ${x.codigoPostal} ${x.poblacion}`.trim()
           }
@@ -385,8 +391,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
     setHoja(false)
   }
 
-  function enviarTexto(e: FormEvent) {
-    e.preventDefault()
+  function enviarTexto(e?: FormEvent) {
+    e?.preventDefault()
     const t = texto.trim()
     if (t === '' || ocupado) return
     setTexto('')
@@ -416,7 +422,10 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       if (ent.tipo === 'opcion') { void responder(pregunta, ent.valor, t); return }
       fijarPregunta(pregunta)
       decir('persona', t)
-      decir('folvy', 'Para no apuntarla mal, ponla en los campos de abajo: calle, número, código postal y población.')
+      const dir = entenderDireccion(t)
+      if (!dir) { decir('folvy', 'No he sacado una dirección de eso. Ponla en los campos de abajo: calle, número, código postal y población.'); return }
+      setDireccionDicha((x) => ({ vuelta: (x?.vuelta ?? 0) + 1, d: dir }))
+      decir('folvy', <>La he repartido en los campos de abajo: <b>{[dir.calle, dir.numero].filter(Boolean).join(' ')}</b>{dir.codigoPostal ? <>, código postal <b>{dir.codigoPostal}</b></> : null}{dir.poblacion ? <>, <b>{dir.poblacion}</b></> : dir.codigoPostal ? ' y la población por el código postal' : null}. Mírala y pulsa «Es esta».</>)
       return
     }
     if (pregunta.entrada === 'texto' || pregunta.entrada === 'actividad') {
@@ -433,6 +442,33 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const actual: ClavePregunta | null = pregunta?.clave ?? (propuestas || aMano ? 'actividad' : null)
   const puntos = loQueLlevamos({ paso, actual, valores: valoresDe(d, hoy), contestadas: Object.keys(respuestas) as ClavePregunta[] })
   const hechos = cuantosHechos(puntos)
+
+  // ── Intro envía (respuesta 4) ─────────────────────────────────────────
+  // Intro envía desde la caja, se haya escrito o pegado, en los dos marcos y
+  // en el móvil. Y si el foco se ha ido de la caja (se tocó una respuesta
+  // rápida que ya no existe, o la etiqueta «Intro»), Intro sigue enviando lo
+  // que hay escrito: nunca un Intro que no hace nada.
+  const enviarAhora = useRef(enviarTexto)
+  useEffect(() => { enviarAhora.current = enviarTexto })
+  useEffect(() => {
+    const alPulsar = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented) return
+      const a = document.activeElement
+      const libre = !a || a === document.body || !(a instanceof HTMLElement) || !a.closest('input, textarea, select, button, a, [contenteditable="true"]')
+      if (!libre || (entrada.current?.value.trim() ?? '') === '') return
+      e.preventDefault()
+      enviarAhora.current()
+    }
+    window.addEventListener('keydown', alPulsar)
+    return () => window.removeEventListener('keydown', alPulsar)
+  }, [])
+  // Al acabar de guardar, si el foco se quedó en el aire, vuelve a la caja (no en el móvil: abriría el teclado).
+  const claveActual = pregunta?.clave ?? null
+  useEffect(() => {
+    if (movil || ocupado || !claveActual) return
+    const a = document.activeElement
+    if (!a || a === document.body) entrada.current?.focus()
+  }, [movil, ocupado, claveActual])
 
   // ── Pintar ────────────────────────────────────────────────────────────
   const cargandoTodo = cargandoEmpresas || !cuenta || (!reglas && !falloReglas) || (companyId !== null && datos.cargando && !d)
@@ -471,7 +507,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           </div>
         )}
         {pregunta?.entrada === 'direccion' && !ocupado && (
-          <FormDireccion guardar={(dir) => void responder(pregunta, 'escrita', `${dir.calle} ${dir.numero}, ${dir.codigoPostal} ${dir.poblacion}`, { direccion: dir })} />
+          <FormDireccion key={direccionDicha?.vuelta ?? 0} inicial={direccionDicha?.d ?? null}
+            guardar={(dir, ia) => void responder(pregunta, 'escrita', `${dir.calle} ${dir.numero}, ${dir.codigoPostal} ${dir.poblacion}`, { direccion: dir, deducido: ia })} />
         )}
         {propuestas && !ocupado && (
           <fieldset className="cx-fieldset cx-alta-propuestas">
@@ -503,11 +540,15 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
 
       <div className="cx-alta-escribir">
         <form className="cx-alta-entrada" onSubmit={enviarTexto} aria-label="Escribe tu respuesta">
-          <input className="cx-alta-input" value={texto} onChange={(e) => setTexto(e.target.value)}
+          <input ref={entrada} className="cx-alta-input" value={texto} onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) { e.preventDefault(); enviarTexto() } }}
             placeholder={movil ? 'Contesta con tus palabras' : 'Contesta con tus palabras, como se lo dirías a tu gestor'}
             aria-label="Tu respuesta" disabled={ocupado || paso === 'hecho'}
             inputMode={pregunta?.entrada === 'nif' || pregunta?.entrada === 'iban' ? 'text' : undefined} autoComplete="off" />
-          {!movil && <kbd className="cx-alta-tecla">Intro</kbd>}
+          {/* La etiqueta no se selecciona ni se lleva el foco: tocarla envía, como la tecla. */}
+          {!movil && <kbd className="cx-alta-tecla" aria-hidden="true" onMouseDown={(e) => e.preventDefault()} onClick={() => enviarTexto()}>Intro</kbd>}
+          <button type="submit" className="cx-alta-enviar" aria-label="Enviar" disabled={texto.trim() === '' || ocupado || paso === 'hecho'}
+            onMouseDown={(e) => e.preventDefault()}><Flecha /></button>
           <button type="button" className="cx-voz" aria-label="Hablar" onClick={() => setMuyPronto(true)}><Microfono /></button>
           <div role="status" aria-live="polite">{muyPronto && <span className="cx-muy-pronto">{TEXTO_MUY_PRONTO}</span>}</div>
         </form>
@@ -744,22 +785,81 @@ function Pildoras({ puntos, volver }: { puntos: Punto[]; volver: (c: ClavePunto)
   )
 }
 
-function FormDireccion({ guardar }: { guardar: (d: DireccionAlta) => void }) {
-  const [v, setV] = useState<DireccionAlta>({ calle: '', numero: '', codigoPostal: '', poblacion: '', provincia: '' })
+/** Lo que la IA dedujo de la dirección: va con su marca «IA» y su porqué. */
+interface DeducidoDireccion { poblacion: string | null; provincia: string | null }
+
+/**
+ * La dirección en sus campos. Con un código postal, la población se propone
+ * sola desde la tabla de serie, marcada «IA» y confirmable con «Es esta» (la
+ * regla de Julio: lo que la IA puede deducir nunca se deja en blanco). Si la
+ * persona dijo la ciudad en la frase, manda lo que dijo.
+ */
+function FormDireccion({ inicial, guardar }: { inicial: DireccionEntendida | null; guardar: (d: DireccionAlta, ia: DeducidoDireccion) => void }) {
+  const [v, setV] = useState<DireccionAlta>({
+    calle: inicial?.calle ?? '', numero: inicial?.numero ?? '', codigoPostal: inicial?.codigoPostal ?? '', poblacion: inicial?.poblacion ?? '', provincia: '',
+  })
+  /** La propuesta de la IA, mientras la población sea la que propuso (al escribir encima, deja de serlo). */
+  const [propuesta, setPropuesta] = useState<PoblacionPropuesta | null>(null)
+  const [falloCp, setFalloCp] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   const pon = (k: keyof DireccionAlta) => (e: { target: { value: string } }) => setV((x) => ({ ...x, [k]: e.target.value }))
+  const cp = v.codigoPostal.trim()
+  const deLaIa = propuesta !== null && v.poblacion === propuesta.valor
+  const vacia = v.poblacion.trim() === ''
+
+  // Lo que hay en pantalla cuando llega la respuesta: lo escrito por la persona mientras tanto no se pisa.
+  const ahora = useRef({ poblacion: v.poblacion, deLaIa })
+  useEffect(() => { ahora.current = { poblacion: v.poblacion, deLaIa } })
+
+  useEffect(() => {
+    if (!/^\d{5}$/.test(cp)) return
+    let vivo = true
+    lugaresPorCp(cp)
+      .then((l) => {
+        if (!vivo) return
+        const libre = ahora.current.poblacion.trim() === '' || ahora.current.deLaIa
+        if (!libre) return
+        const p = proponerPoblacion(cp, l)
+        setFalloCp(p ? null : `No tengo el código postal ${cp} en la tabla de códigos postales: escribe la población.`)
+        setPropuesta(p)
+        setV((x) => ({ ...x, poblacion: p ? p.valor : '' }))
+      })
+      .catch((e: unknown) => { if (vivo) setFalloCp(`No he podido mirar la población del código postal: ${e instanceof Error ? e.message : String(e)}. Escríbela.`) })
+    return () => { vivo = false }
+  }, [cp, vacia])
+
+  const provincia = provinciaPorCp(cp)
+  const idOtras = useId()
   return (
     <form className="cx-formulario cx-alta-direccion" noValidate aria-label="Dirección fiscal" onSubmit={(e) => {
       e.preventDefault()
-      if (v.calle.trim() === '' || !/^\d{5}$/.test(v.codigoPostal.trim())) { setFallo('Pon al menos la calle y un código postal de cinco cifras.'); return }
-      guardar({ ...v, provincia: v.provincia || provinciaPorCp(v.codigoPostal.trim()) || '' })
+      if (v.calle.trim() === '' || !/^\d{5}$/.test(cp)) { setFallo('Pon al menos la calle y un código postal de cinco cifras.'); return }
+      if (v.poblacion.trim() === '') { setFallo('Falta la población.'); return }
+      guardar({ ...v, codigoPostal: cp, provincia: provincia ?? '' }, {
+        poblacion: deLaIa ? propuesta.porque : null,
+        provincia: provincia ? `Por el código postal ${cp}: sus dos primeras cifras, ${cp.slice(0, 2)}, son de la provincia de ${provincia}.` : null,
+      })
     }}>
       <div className="cx-formulario-fila">
         <div className="cx-campo"><label htmlFor="alta-calle">Calle</label><input id="alta-calle" className="cx-input" value={v.calle} onChange={pon('calle')} /></div>
         <div className="cx-campo"><label htmlFor="alta-num">Número</label><input id="alta-num" className="cx-input" value={v.numero} onChange={pon('numero')} /></div>
         <div className="cx-campo"><label htmlFor="alta-cp">Código postal</label><input id="alta-cp" className="cx-input" inputMode="numeric" value={v.codigoPostal} onChange={pon('codigoPostal')} /></div>
-        <div className="cx-campo"><label htmlFor="alta-pob">Población</label><input id="alta-pob" className="cx-input" value={v.poblacion} onChange={pon('poblacion')} /></div>
+        <div className="cx-campo">
+          <span className="cx-alta-etiqueta-ia">
+            <label htmlFor="alta-pob">Población</label>
+            {deLaIa && <MarcaIA motivo={propuesta.porque} />}
+          </span>
+          <input id="alta-pob" className="cx-input" value={v.poblacion} onChange={pon('poblacion')}
+            list={deLaIa && propuesta.otras.length > 0 ? idOtras : undefined} />
+          {deLaIa && propuesta.otras.length > 0 && <datalist id={idOtras}>{[propuesta.valor, ...propuesta.otras].map((o) => <option key={o} value={o} />)}</datalist>}
+        </div>
       </div>
+      {deLaIa && (
+        <span className="cx-ayuda" role="status">
+          La población la he puesto por el código postal{provincia ? <> (provincia de {provincia})</> : null}. Si no es, cámbiala; si es, pulsa «Es esta».
+        </span>
+      )}
+      {falloCp && <span className="cx-error" role="alert">{falloCp}</span>}
       {fallo && <span className="cx-error" role="alert">{fallo}</span>}
       <div className="cx-pie"><button type="submit" className="cx-boton">Es esta</button></div>
     </form>

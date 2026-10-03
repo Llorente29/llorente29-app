@@ -73,6 +73,22 @@ async function decir(page: Page, texto: string) {
   await entrada.press('Enter')
 }
 
+/** Como lo hace una persona (respuesta 4): toca la caja, teclea letra a letra y pulsa Intro en el teclado. */
+async function teclear(page: Page, texto: string) {
+  const entrada = page.getByRole('textbox', { name: 'Tu respuesta' })
+  await expect(entrada).toBeEnabled()
+  await entrada.click()
+  await page.keyboard.type(texto)
+  await page.keyboard.press('Enter')
+}
+
+/** Lo que guardó la IA en un campo de la empresa, con su motivo (ai_data_origin). */
+async function origen(s: Sesion, cuenta: string, empresa: string, campo: string) {
+  const r = await rest<{ source: string; reason: string }[]>(s, 'GET',
+    `ai_data_origin?select=source,reason&account_id=eq.${cuenta}&company_id=eq.${empresa}&table_key=eq.company&field=eq.${campo}`)
+  return r.datos ?? []
+}
+
 const log = (page: Page) => page.getByRole('log', { name: 'Conversación del alta' })
 const PREGUNTA_CUENTAS = '¿Prefieres el plan de pymes o el general? Para una empresa de tu tamaño, lo normal es el de pymes.'
 
@@ -232,6 +248,126 @@ test.describe('cuenta C: salir, atrás y cerrar no pierden nada', () => {
       await otra.goto('/conta/alta')
       await expect(log(otra).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
       await expect(otra.getByRole('complementary', { name: 'Lo que llevamos' }).getByText(/^Plan general · 8 dígitos/)).toBeVisible()
+    } finally {
+      await borrarEmpresas(s, CUENTA_C.id, true)
+    }
+  })
+})
+
+// ── Intro envía, en los tres marcos (respuesta 4) ───────────────────────────
+//
+// Julio escribió el NIF en la ventana, pulsó Intro y no pasó nada; la etiqueta
+// «Intro» quedó seleccionada como texto. Aquí se teclea como él: tocar la caja,
+// letra a letra, e Intro en el teclado; nunca `fill` ni un clic en un botón.
+
+test.describe('Intro envía (respuesta 4)', () => {
+  test('pantalla completa (cuenta C): Intro envía, la etiqueta «Intro» no se selecciona, el botón de enviar va con el texto, y la dirección de Julio trae la población', async ({ page }, info) => {
+    test.skip(info.project.name === 'movil', 'El móvil tiene la suya')
+    const s = await entrarComo(page, CUENTA_C.email)
+    await borrarEmpresas(s, CUENTA_C.id, true)
+    try {
+      await page.goto('/conta/alta')
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(log(page).getByText(/NIF/).last()).toBeVisible()
+      const enviar = page.getByRole('button', { name: 'Enviar' })
+      await expect(enviar).toBeDisabled() // sin texto, apagado
+      const tecla = page.locator('kbd.cx-alta-tecla')
+      expect(await tecla.evaluate((k) => getComputedStyle(k).userSelect)).toBe('none')
+
+      const nif = cifInventado()
+      await page.getByRole('textbox', { name: 'Tu respuesta' }).click()
+      await page.keyboard.type(nif)
+      await expect(enviar).toBeEnabled()
+      await page.keyboard.press('Enter')
+      await expect(log(page).getByText(`Entendido: NIF ${nif}. Con él empiezo la ficha de tu empresa.`)).toBeVisible()
+      await expect(page.getByRole('textbox', { name: 'Tu respuesta' })).toHaveValue('')
+
+      // Lo que hizo Julio: escribir y tocar la etiqueta «Intro». Envía, y no deja nada seleccionado.
+      const nombre = `Alta e2e Intro ${Date.now()}`
+      await page.getByRole('textbox', { name: 'Tu respuesta' }).click()
+      await page.keyboard.type(nombre)
+      await tecla.dblclick()
+      await expect(log(page).getByText(`Entendido: ${nombre}. Lo he puesto como razón social.`)).toBeVisible()
+      expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
+
+      // La dirección de Julio, dicha en una frase: calle, número y código postal de la frase; la población, de la tabla.
+      await teclear(page, 'Avda Ensanche de Vallecas 106, 28051')
+      await expect(page.getByLabel('Calle')).toHaveValue('Avda Ensanche de Vallecas')
+      await expect(page.getByLabel('Número')).toHaveValue('106')
+      await expect(page.getByLabel('Código postal')).toHaveValue('28051')
+      await expect(page.getByLabel('Población')).toHaveValue('Madrid')
+      const formulario = page.getByRole('form', { name: 'Dirección fiscal' })
+      const marca = formulario.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })
+      await expect(marca).toBeVisible()
+      await marca.click()
+      await expect(formulario.getByRole('note')).toContainText('Por el código postal 28051')
+      await page.evaluate(() => document.fonts.ready)
+      await page.screenshot({ path: `${DIR}/alta-direccion-cp.png` })
+      await formulario.getByRole('button', { name: 'Es esta' }).click()
+      await expect(log(page).getByText('Apuntada la dirección: Avda Ensanche de Vallecas 106, 28051 Madrid.')).toBeVisible()
+
+      // En la base: la población y la provincia, puestas por la IA con su porqué; la calle, de la persona.
+      const empresa = (await rest<{ id: string; fiscal_city: string; fiscal_province: string }[]>(s, 'GET',
+        `company?select=id,fiscal_city,fiscal_province&account_id=eq.${CUENTA_C.id}`)).datos[0]
+      expect(empresa).toMatchObject({ fiscal_city: 'Madrid', fiscal_province: 'Madrid' })
+      expect(await origen(s, CUENTA_C.id, empresa.id, 'fiscal_city')).toEqual([expect.objectContaining({ source: 'ai', reason: expect.stringContaining('28051') })])
+      expect(await origen(s, CUENTA_C.id, empresa.id, 'fiscal_province')).toEqual([expect.objectContaining({ source: 'ai' })])
+      expect(await origen(s, CUENTA_C.id, empresa.id, 'fiscal_street')).toEqual([])
+
+      // Y el botón de enviar, con el ratón.
+      await page.getByRole('textbox', { name: 'Tu respuesta' }).click()
+      await page.keyboard.type('somos dark kitchen, solo reparto de comida a domicilio por plataformas')
+      await enviar.click()
+      await expect(page.getByRole('button', { name: 'Añadir las marcadas' })).toBeVisible()
+    } finally {
+      await borrarEmpresas(s, CUENTA_C.id, true)
+    }
+  })
+
+  test('ventana (cuenta A): Intro envía, y un código postal de otra provincia trae su población', async ({ page }, info) => {
+    test.skip(info.project.name === 'movil', 'El móvil tiene la suya')
+    const s = await entrarComo(page, CUENTA_A.email)
+    await borrarEmpresas(s, CUENTA_A.id, false)
+    try {
+      await page.goto('/conta/alta')
+      const ventana = page.getByRole('dialog', { name: 'Cuéntame la empresa y la dejo montada' })
+      await expect(ventana).toBeVisible()
+      await expect(log(page).getByText(/NIF/).last()).toBeVisible()
+      const nif = cifInventado()
+      await teclear(page, nif)
+      await expect(log(page).getByText(`Entendido: NIF ${nif}. Con él empiezo la ficha de tu empresa.`)).toBeVisible()
+      const nombre = `Alta e2e Intro ventana ${Date.now()}`
+      await teclear(page, nombre)
+      await expect(log(page).getByText(`Entendido: ${nombre}. Lo he puesto como razón social.`)).toBeVisible()
+
+      // Otra provincia, en los campos: el código postal basta para la población.
+      await page.getByLabel('Calle').fill('Carrer de Pelai')
+      await page.getByLabel('Número').fill('12')
+      await page.getByLabel('Código postal').fill('08001')
+      await expect(page.getByLabel('Población')).toHaveValue('Barcelona')
+      await expect(page.getByRole('form', { name: 'Dirección fiscal' }).getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toBeVisible()
+      await page.getByRole('button', { name: 'Es esta' }).click()
+      await expect(log(page).getByText('Apuntada la dirección: Carrer de Pelai 12, 08001 Barcelona.')).toBeVisible()
+      await expect(ventana).toBeVisible()
+    } finally {
+      await borrarEmpresas(s, CUENTA_A.id, false)
+    }
+  })
+
+  test('móvil (cuenta C): Intro del teclado envía', async ({ page }, info) => {
+    test.skip(info.project.name !== 'movil', 'La forma del móvil')
+    const s = await entrarComo(page, CUENTA_C.email)
+    await borrarEmpresas(s, CUENTA_C.id, true)
+    try {
+      await page.goto('/conta/alta')
+      await expect(log(page).getByText(/NIF/).last()).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Enviar' })).toBeDisabled()
+      const nif = cifInventado()
+      await teclear(page, nif)
+      await expect(log(page).getByText(`Entendido: NIF ${nif}. Con él empiezo la ficha de tu empresa.`)).toBeVisible()
+      const nombre = `Alta e2e Intro móvil ${Date.now()}`
+      await teclear(page, nombre)
+      await expect(log(page).getByText(`Entendido: ${nombre}. Lo he puesto como razón social.`)).toBeVisible()
     } finally {
       await borrarEmpresas(s, CUENTA_C.id, true)
     }
