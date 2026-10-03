@@ -10,6 +10,7 @@
 import type { ContactoProveedor, FichaProveedor } from '@/modules/conta/types'
 import { PAYMENT_METHOD_LABEL, VAT_REGIME_LABEL } from '@/modules/conta/types'
 import { nombreFormaPago, type OpcionesFicha } from '@/modules/conta/lib/opcionesFicha'
+import { codigoDeApunte } from '@/modules/conta/lib/pgc'
 import type { Falta } from '@/modules/conta/lib/completitud'
 import { diaMesCorto, eurosExactos, listaPorcentajes } from '@/modules/conta/lib/formato'
 
@@ -110,7 +111,8 @@ export function lineaApartado(ap: Apartado, d: DatosResumen): LineaApartado {
       return { detalle: etiquetaPago(f, d.opciones ?? null) ?? 'Sin forma de pago', falta: false }
     case 'contabilidad':
       return {
-        detalle: d.tipoGasto ? `${d.tipoGasto.name} · ${d.tipoGasto.pgcAccountHint}` : 'Sin tipo de gasto',
+        // La cuenta de apunte, con la longitud de la empresa si se sabe (respuesta 3, punto 3).
+        detalle: d.tipoGasto ? `${d.tipoGasto.name} · ${d.opciones?.digitos ? codigoDeApunte(d.tipoGasto.pgcAccountHint, d.opciones.digitos) : d.tipoGasto.pgcAccountHint}` : 'Sin tipo de gasto',
         falta: false,
       }
     case 'documentos':

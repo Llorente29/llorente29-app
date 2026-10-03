@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { useFicha } from '@/modules/conta/components/FichaContexto'
 import { Campo, Dato, Guardado } from '@/modules/conta/components/ui'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
-import { cuentaPgc } from '@/modules/conta/lib/pgc'
+import { cuentaEnLaFicha } from '@/modules/conta/lib/opcionesFicha'
 import { Link } from 'react-router-dom'
 import { ocultarTipoGasto } from '@/modules/conta/services/fichaTablasService'
 import { rutaAltaEmpresa } from '@/config/navegacion'
@@ -52,7 +52,7 @@ export default function Contabilidad() {
     <>
       <form className="cf-form" onSubmit={enviar} noValidate>
         {fallo && <div className="cf-error" role="alert">{fallo}</div>}
-        <Campo campo="expenseCategoryId" etiqueta="Sus facturas se apuntan en" ayuda={elegido ? cuentaPgc(elegido.pgcAccountHint) : 'El tipo de gasto que son casi todas sus facturas.'}>
+        <Campo campo="expenseCategoryId" etiqueta="Sus facturas se apuntan en" ayuda={elegido ? cuentaEnLaFicha(datos.opciones, elegido.pgcAccountHint) : 'El tipo de gasto que son casi todas sus facturas.'}>
           {(p) => (
             <select {...p} className="cf-select" value={tipo} onChange={(e) => setTipo(e.target.value)}>
               <option value="">Sin decir</option>
@@ -103,7 +103,7 @@ export default function Contabilidad() {
                   try { await ocultarTipoGasto(f.accountId, empresaId, t.id, ocultar, actor.id); await recargar(); avisar(ocultar ? `${t.name}: ya no sale al elegir.` : `${t.name}: vuelve a salir.`) }
                   catch (e2) { setFallo(e2 instanceof Error ? e2.message : 'No se pudo cambiar.') }
                 }} />
-                <span>{t.name} <span className="cf-nota">· {cuentaPgc(t.pgcAccountHint)}</span></span>
+                <span>{t.name} <span className="cf-nota">· {cuentaEnLaFicha(datos.opciones, t.pgcAccountHint)}</span></span>
               </label>
             ))}
           </div>

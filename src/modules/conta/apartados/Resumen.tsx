@@ -14,10 +14,9 @@ import { Propuestas } from '@/modules/conta/components/Propuestas'
 import { diaMes, euros, listaPorcentajes } from '@/modules/conta/lib/formato'
 import { enmascararIban } from '@/modules/conta/lib/iban'
 import { pideIban } from '@/modules/conta/lib/completitud'
-import { cuentaPgc } from '@/modules/conta/lib/pgc'
 import { tieneCertificadoBanco } from '@/modules/conta/services/proveedorService'
 import { PAYMENT_METHOD_LABEL, ROLE_LABEL, VAT_REGIME_LABEL } from '@/modules/conta/types'
-import { nombreFormaPago } from '@/modules/conta/lib/opcionesFicha'
+import { cuentaEnLaFicha, nombreFormaPago } from '@/modules/conta/lib/opcionesFicha'
 import { accionContacto, textoDireccion, textoPlazo, textoRetencion } from '@/modules/conta/lib/textosFicha'
 import type { SeccionDeFicha } from '@/modules/conta/extensiones'
 
@@ -93,7 +92,7 @@ export function BloqueContabilidad() {
   const local = datos.locales.find((l) => l.id === f.defaultLocationId)
   return (
     <Tarjeta titulo="Contabilidad" id="b-contabilidad">
-      <Dato etiqueta="Sus facturas se apuntan en" valor={tipo?.name} pie={tipo ? cuentaPgc(tipo.pgcAccountHint) : undefined} />
+      <Dato etiqueta="Sus facturas se apuntan en" valor={tipo?.name} pie={tipo ? cuentaEnLaFicha(datos.opciones, tipo.pgcAccountHint) : undefined} />
       {/* Lo único del C01 que va tras el interruptor `conta` (respuesta 1, punto 6). */}
       {datos.conta && (
         <Dato

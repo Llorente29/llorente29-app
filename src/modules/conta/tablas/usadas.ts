@@ -35,6 +35,8 @@ export interface ContextoUso {
   pais: string | null
   proveedores: ProveedorParaUso[]
   hoy: string
+  /** company_tax_profile.account_digits: la longitud de las cuentas de apunte (respuesta 3, punto 3). */
+  digitos: number
 }
 
 export interface Uso {

@@ -24,7 +24,7 @@ function filasDe(tablaBd: string): FilaGeneral[] {
   }))
 }
 
-const sinProveedores: ContextoUso = { territorio: 'peninsula_baleares', modelos: [], pais: 'ES', proveedores: [], hoy: HOY }
+const sinProveedores: ContextoUso = { territorio: 'peninsula_baleares', modelos: [], pais: 'ES', proveedores: [], hoy: HOY, digitos: 8 }
 const prov = (p: Partial<ProveedorParaUso>): ProveedorParaUso => ({
   usualVatRates: [], irpfPct: null, paymentMethod: null, paymentTermsDays: null, paymentFixedDays: [],
   expenseCategoryId: null, countryCode: 'ES', currency: 'EUR', ...p,

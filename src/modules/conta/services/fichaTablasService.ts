@@ -62,7 +62,7 @@ export async function leerOpcionesFicha(accountId: string, hoy: string): Promise
         .in('table_key', ['tax_rate', 'withholding_rate', 'payment_method', 'payment_term']), 'lo que has ocultado')
       : Promise.resolve([] as Fila[]),
     cid
-      ? leer(tabla('company_tax_profile').select('tax_territory').eq('account_id', accountId).eq('company_id', cid), 'dónde está tu empresa')
+      ? leer(tabla('company_tax_profile').select('tax_territory, account_digits').eq('account_id', accountId).eq('company_id', cid), 'dónde está tu empresa')
       : Promise.resolve([] as Fila[]),
   ])
   const t = perfil[0]?.tax_territory
@@ -81,7 +81,8 @@ export async function leerOpcionesFicha(accountId: string, hoy: string): Promise
       days: Array.isArray(r.days) ? r.days.map(Number) : [], fixedDays: Array.isArray(r.fixed_days) ? r.fixed_days.map(Number) : [],
     })),
   }
-  return construirOpciones(filas, new Set(ajustes.map((a) => String(a.row_id))), territorio, hoy, empresa)
+  const digitos = perfil[0]?.account_digits === undefined || perfil[0]?.account_digits === null ? null : Number(perfil[0].account_digits)
+  return construirOpciones(filas, new Set(ajustes.map((a) => String(a.row_id))), territorio, hoy, empresa, digitos)
 }
 
 // ── Tipos de gasto: qué está oculto ─────────────────────────────────────────

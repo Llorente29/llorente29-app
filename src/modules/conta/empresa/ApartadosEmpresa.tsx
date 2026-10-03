@@ -7,7 +7,7 @@
 import { useState, type FormEvent } from 'react'
 import { Chip, Dato } from '@/modules/conta/ui/piezas'
 import { validarNifEs } from '@/modules/conta/lib/nif'
-import { cuentaPgc } from '@/modules/conta/lib/pgc'
+import { cuentaDeApunte } from '@/modules/conta/lib/pgc'
 import { TEXTO_IVA_VENTAS } from '@/modules/conta/lib/ivaVentas'
 import {
   NOMBRE_CORTO_MODELO, TERRITORIOS, direccionEnUnaLinea, revisarDigitos, revisarPorcentajeProrrata, revisarQuienEres,
@@ -260,10 +260,11 @@ export function DetalleContable({ d, quien, alCambiar, movil }: Props) {
         <>
           <Dato etiqueta="Plan contable">{p.chartKind === 'pymes' ? 'Plan de pymes' : 'Plan general (grandes empresas)'}<Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['chart_kind', p.chartKind]]} /></Dato>
           <Dato etiqueta="Dígitos de las cuentas">{String(p.accountDigits)}<Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['account_digits', p.accountDigits]]} /></Dato>
-          <Dato etiqueta="IVA que pagas">{cuentaPgc('472')}</Dato>
-          <Dato etiqueta="IVA que cobras">{cuentaPgc('477')}</Dato>
-          <Dato etiqueta="Retenciones">{cuentaPgc('4751')}</Dato>
-          <Dato etiqueta="Resultado">{cuentaPgc('129')}</Dato>
+          {/* Cuentas de apunte: con la longitud de la empresa (respuesta 3, punto 3). */}
+          <Dato etiqueta="IVA que pagas">{cuentaDeApunte('472', p.accountDigits)}</Dato>
+          <Dato etiqueta="IVA que cobras">{cuentaDeApunte('477', p.accountDigits)}</Dato>
+          <Dato etiqueta="Retenciones">{cuentaDeApunte('4751', p.accountDigits)}</Dato>
+          <Dato etiqueta="Resultado">{cuentaDeApunte('129', p.accountDigits)}</Dato>
           <Dato etiqueta="Prorrata">{p.vatProrata ? `Sí · ${String(p.vatProrataPct ?? '').replace('.', ',')} %` : 'No'}</Dato>
           <Dato etiqueta="SII (libros del IVA al día)">{p.sii ? 'Sí' : 'No'}</Dato>
           <p className="cx-ayuda">Viene puesto; lo normal es no tocarlo.</p>

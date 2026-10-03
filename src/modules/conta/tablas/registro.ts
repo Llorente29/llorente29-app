@@ -9,7 +9,8 @@
 // tabla tiene vigencias, «Dónde lo usas», «Origen» (De serie / Tuyo) y el
 // enlace que abre el detalle en la misma fila.
 
-import { cuentaPgc } from '@/modules/conta/lib/pgc'
+import { codigoDeApunte, cuentaDeApunte, cuentaPgc } from '@/modules/conta/lib/pgc'
+import type { ContextoUso } from '@/modules/conta/tablas/usadas'
 import { formatearIban, normalizarIban, validarIban } from '@/modules/conta/lib/iban'
 import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 import { porcentaje } from '@/modules/conta/lib/formato'
@@ -55,7 +56,7 @@ export type CuentaEditable = 'pgc_hint' | 'pgc_input_hint' | 'pgc_output_hint'
 export interface Columna {
   id: string
   etiqueta: string
-  valor: (f: FilaGeneral) => string
+  valor: (f: FilaGeneral, ctx?: ContextoUso) => string
   /** Cifra: letra de cifras y alineada a la derecha. */
   cifra?: boolean
   /** Más apagada (texto de apoyo). */
@@ -66,7 +67,8 @@ export interface Columna {
 
 export interface DatoDetalle {
   etiqueta: string
-  valor: (f: FilaGeneral) => string | null
+  /** El contexto, para lo que depende de la empresa (la longitud de sus cuentas). */
+  valor: (f: FilaGeneral, ctx?: ContextoUso) => string | null
 }
 
 export type TipoCampo = 'texto' | 'porcentaje' | 'fecha' | 'opciones' | 'listaDias' | 'listaDiasMes' | 'entero' | 'siNo' | 'iban' | 'opcionesBancos'
@@ -144,9 +146,10 @@ export function cuentaDe(f: FilaGeneral, c: CuentaEditable): string | null {
   return oNada(txt(propia ?? d(f, c)))
 }
 
-const cuentaTexto = (f: FilaGeneral, c: CuentaEditable): string | null => {
+/** La cuenta de apunte con la longitud de la empresa (respuesta 3, punto 3); sin empresa, el código del plan. */
+const cuentaTexto = (f: FilaGeneral, c: CuentaEditable, ctx?: ContextoUso): string | null => {
   const v = cuentaDe(f, c)
-  return v ? cuentaPgc(v) : null
+  return v ? (ctx ? cuentaDeApunte(v, ctx.digitos) : cuentaPgc(v)) : null
 }
 
 /** «30» → [30]; «30, 60 y 90» → [30, 60, 90]. null si hay algo que no es un número entero. */
@@ -253,8 +256,8 @@ const IMPUESTOS: DefinicionTabla = {
   detalle: [
     { etiqueta: 'Qué es', valor: (f) => `${SISTEMA_IMPUESTO[txt(d(f, 'tax_system'))] ?? ''} · ${TRATAMIENTO[txt(d(f, 'treatment'))] ?? ''}` },
     { etiqueta: 'Dónde vale', valor: (f) => TERRITORIO[txt(d(f, 'territory'))] ?? null },
-    { etiqueta: 'IVA que pagas', valor: (f) => cuentaTexto(f, 'pgc_input_hint') },
-    { etiqueta: 'IVA que cobras', valor: (f) => cuentaTexto(f, 'pgc_output_hint') },
+    { etiqueta: 'IVA que pagas', valor: (f, ctx) => cuentaTexto(f, 'pgc_input_hint', ctx) },
+    { etiqueta: 'IVA que cobras', valor: (f, ctx) => cuentaTexto(f, 'pgc_output_hint', ctx) },
     { etiqueta: 'Se declara en', valor: modelos },
   ],
   cuentasEditables: [
@@ -312,7 +315,7 @@ const RETENCIONES: DefinicionTabla = {
       const k = oNada(txt(d(f, 'model_190_key')))
       return k ? `${k}${d(f, 'model_190_subkey') ? `.${txt(d(f, 'model_190_subkey'))}` : ''}` : null
     } },
-    { etiqueta: 'Cuenta', valor: (f) => cuentaTexto(f, 'pgc_hint') },
+    { etiqueta: 'Cuenta', valor: (f, ctx) => cuentaTexto(f, 'pgc_hint', ctx) },
   ],
   cuentasEditables: [{ clave: 'pgc_hint', etiqueta: 'Cuenta de la retención' }],
   formulario: [
@@ -478,7 +481,7 @@ const BANCOS: DefinicionTabla = {
     { etiqueta: 'Tipo', valor: (f) => CAJA[txt(d(f, 'kind'))] ?? null },
     { etiqueta: 'IBAN', valor: (f) => (d(f, 'iban') ? formatearIban(txt(d(f, 'iban'))) : null) },
     { etiqueta: 'BIC', valor: (f) => oNada(txt(d(f, 'bic'))) },
-    { etiqueta: 'Cuenta', valor: (f) => cuentaTexto(f, 'pgc_hint') },
+    { etiqueta: 'Cuenta', valor: (f, ctx) => cuentaTexto(f, 'pgc_hint', ctx) },
     { etiqueta: 'La que se usa si no eliges', valor: (f) => (d(f, 'is_default') ? 'Sí' : 'No') },
   ],
   cuentasEditables: [],
@@ -519,10 +522,11 @@ const TIPOS_GASTO: DefinicionTabla = {
   apoyoFila: (f) => oNada(txt(d(f, 'example'))),
   columnas: [
     { id: 'kind', etiqueta: 'Es', apoyo: true, ancho: '90px', valor: (f) => GASTO_O_INGRESO[txt(d(f, 'kind'))] ?? '' },
-    { id: 'cuenta', etiqueta: 'Cuenta', cifra: true, apoyo: true, ancho: '80px', valor: (f) => txt(d(f, 'pgc_account_hint')) },
+    { id: 'cuenta', etiqueta: 'Cuenta', cifra: true, apoyo: true, ancho: '96px',
+      valor: (f, ctx) => (ctx ? codigoDeApunte(txt(d(f, 'pgc_account_hint')), ctx.digitos) : txt(d(f, 'pgc_account_hint'))) },
   ],
   detalle: [
-    { etiqueta: 'Cuenta', valor: (f) => cuentaPgc(txt(d(f, 'pgc_account_hint'))) },
+    { etiqueta: 'Cuenta', valor: (f, ctx) => (ctx ? cuentaDeApunte(txt(d(f, 'pgc_account_hint')), ctx.digitos) : cuentaPgc(txt(d(f, 'pgc_account_hint')))) },
     { etiqueta: 'Lo que suele ser', valor: (f) => oNada(txt(d(f, 'example'))) },
     { etiqueta: 'Es', valor: (f) => GASTO_O_INGRESO[txt(d(f, 'kind'))] ?? null },
   ],

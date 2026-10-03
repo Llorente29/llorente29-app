@@ -93,7 +93,7 @@ const texto = (v: unknown): string | null => (typeof v === 'string' && v !== '' 
 /** Lo que hace falta para saber qué filas usa la empresa. */
 export async function cargarContextoUso(accountId: string, companyId: string, hoy: string): Promise<Omit<ContextoUso, 'hoy'> & { hoy: string }> {
   const [perfil, empresa, prov] = await Promise.all([
-    tabla('company_tax_profile').select('tax_territory, tax_forms').eq('company_id', companyId).maybeSingle(),
+    tabla('company_tax_profile').select('tax_territory, tax_forms, account_digits').eq('company_id', companyId).maybeSingle(),
     tabla('company').select('fiscal_country').eq('id', companyId).maybeSingle(),
     tabla('supplier')
       .select('usual_vat_rates, irpf_withholding_pct, payment_method, payment_terms_days, payment_fixed_days, expense_category_id, country_code, currency, is_active, archived_at')
@@ -120,6 +120,7 @@ export async function cargarContextoUso(accountId: string, companyId: string, ho
     pais: texto(e?.fiscal_country),
     proveedores,
     hoy,
+    digitos: numero(p?.account_digits) ?? 8,
   }
 }
 

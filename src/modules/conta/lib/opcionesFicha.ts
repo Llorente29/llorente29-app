@@ -14,6 +14,7 @@
 //   · Una fila oculta no se ofrece al elegir (para eso se oculta), pero no
 //     desaparece de lo guardado.
 
+import { cuentaDeApunte, cuentaPgc } from '@/modules/conta/lib/pgc'
 import type { PaymentMethod } from '@/modules/conta/types'
 
 export type Territorio = 'peninsula_baleares' | 'canarias' | 'ceuta_melilla'
@@ -48,6 +49,8 @@ export interface OpcionesFicha {
   retenciones: Opcion<number>[]
   formasPago: Opcion<PaymentMethod>[]
   plazos: Opcion<number>[]
+  /** La longitud de las cuentas de la empresa; null sin empresa o sin perfil (respuesta 3, punto 3). */
+  digitos: number | null
 }
 
 const vigente = (desde: string, hasta: string | null, hoy: string) => desde <= hoy && (hasta === null || hasta >= hoy)
@@ -61,7 +64,7 @@ const FORMAS_DE_LA_FICHA: readonly PaymentMethod[] = ['transfer', 'direct_debit'
  * `ocultas`: ids que la empresa ocultó (general_row_setting.hidden).
  */
 export function construirOpciones(filas: FilasFicha, ocultas: ReadonlySet<string>, territorio: Territorio, hoy: string,
-  empresa: OpcionesFicha['empresa']): OpcionesFicha {
+  empresa: OpcionesFicha['empresa'], digitos: number | null = null): OpcionesFicha {
   const visible = (id: string) => !ocultas.has(id)
   const impuesto = IMPUESTO_DEL_TERRITORIO[territorio]
 
@@ -109,6 +112,7 @@ export function construirOpciones(filas: FilasFicha, ocultas: ReadonlySet<string
     retenciones: lista(retenciones).sort((a, b) => a.valor - b.valor),
     formasPago: lista(formas),
     plazos: lista(plazos).sort((a, b) => a.valor - b.valor),
+    digitos,
   }
 }
 
@@ -134,4 +138,13 @@ export function formasDelDesplegable(o: OpcionesFicha, guardada: PaymentMethod |
 /** El nombre de una forma de pago guardada, de la tabla si está; si no, el de siempre. */
 export function nombreFormaPago(o: OpcionesFicha | null, valor: PaymentMethod, nombreDeReserva: Record<PaymentMethod, string>): string {
   return o?.formasPago.find((f) => f.valor === valor)?.nombre ?? nombreDeReserva[valor]
+}
+
+/**
+ * La cuenta donde se apuntan las facturas, en la ficha: con la longitud de la
+ * empresa («62500000 · Primas de seguros»). Sin empresa no hay longitud: el
+ * código del plan, que es lo único que se sabe (respuesta 3, punto 3).
+ */
+export function cuentaEnLaFicha(o: Pick<OpcionesFicha, 'digitos'>, codigoPlan: string): string {
+  return o.digitos === null ? cuentaPgc(codigoPlan) : cuentaDeApunte(codigoPlan, o.digitos)
 }

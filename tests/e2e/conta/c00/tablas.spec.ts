@@ -85,15 +85,16 @@ test('cuenta A: impuestos como en la maqueta, con el IVA reducido abierto', asyn
     await expect(page.getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
     await page.getByRole('button', { name: 'Abrir IVA reducido' }).click()
   }
-  await expect(page.getByText('472 · Hacienda Pública, IVA soportado')).toBeVisible()
-  await expect(page.getByText('477 · Hacienda Pública, IVA repercutido')).toBeVisible()
+  // Cuentas de apunte con la longitud de la empresa: A lleva 8 dígitos (respuesta 3, punto 3).
+  await expect(page.getByText('47200000 · Hacienda Pública, IVA soportado')).toBeVisible()
+  await expect(page.getByText('47700000 · Hacienda Pública, IVA repercutido')).toBeVisible()
   await expect(page.getByText('Modelo 303')).toBeVisible()
   await expect(page.getByText(/Comprobado en la fuente oficial el/)).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/tablas-${movil ? 'movil' : 'ordenador'}.png`, fullPage: true })
   // Y sigue abierta después de la captura: si la página se desmonta (por
   // ejemplo, al llegar la sesión y recargar la cuenta), la fila se cierra.
-  await expect(page.getByText('472 · Hacienda Pública, IVA soportado')).toBeVisible()
+  await expect(page.getByText('47200000 · Hacienda Pública, IVA soportado')).toBeVisible()
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 })
 

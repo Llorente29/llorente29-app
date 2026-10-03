@@ -149,7 +149,7 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
   )
 
   const detalle = (c: ConceptoConUso) => (
-    <Detalle def={def} c={c} hoy={ctx.hoy} modo={modo} setModo={setModo} guardando={guardando} fallo={fallo}
+    <Detalle def={def} c={c} hoy={ctx.hoy} ctx={ctx} modo={modo} setModo={setModo} guardando={guardando} fallo={fallo}
       bancos={bancos} movil={movil}
       ocultar={(oculta) => void hacer(() => guardarAjuste(quien, def, c.fila, { hidden: oculta }),
         oculta ? `Ocultado «${nombre(c.fila)}»: ya no sale en tus desplegables. Sigue aquí, en «Los demás».`
@@ -166,7 +166,7 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
   if (movil) {
     const fila = (c: ConceptoConUso) => {
       const abiertaEsta = abierta === c.fila.id
-      const cifra = def.columnas[0]?.valor(c.fila)
+      const cifra = def.columnas[0]?.valor(c.fila, ctx)
       return (
         <div key={c.fila.id} className={abiertaEsta ? 'cx-tablas-movil-abierta' : undefined}>
           <button type="button" className="cx-lista-fila" aria-expanded={abiertaEsta} aria-controls={`det-${c.fila.id}`}
@@ -219,7 +219,7 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
         </div>
         {def.columnas.map((col) => (
           <div role="cell" key={col.id} className={`${col.cifra ? 'cx-cifra cx-rejilla-cifra' : ''}${col.apoyo ? ' cx-rejilla-apoyo' : ''}`}>
-            {col.valor(c.fila)}
+            {col.valor(c.fila, ctx)}
           </div>
         ))}
         {def.conVigencia && (
@@ -295,8 +295,9 @@ function Origen({ c, hoy }: { c: ConceptoConUso; hoy: string }) {
 
 // ── El detalle, en la misma fila ───────────────────────────────────────────
 
-function Detalle({ def, c, hoy, modo, setModo, guardando, fallo, bancos, movil, ocultar, guardarCuentas, editar, vigencia, borrar }: {
+function Detalle({ def, c, hoy, ctx, modo, setModo, guardando, fallo, bancos, movil, ocultar, guardarCuentas, editar, vigencia, borrar }: {
   def: DefinicionTabla
+  ctx: ContextoUso
   c: ConceptoConUso
   hoy: string
   modo: Modo
@@ -313,10 +314,10 @@ function Detalle({ def, c, hoy, modo, setModo, guardando, fallo, bancos, movil, 
 }) {
   const f = c.fila
   const datos = [
-    ...(movil ? def.columnas.slice(1).map((col) => ({ etiqueta: col.etiqueta, valor: col.valor(f) })) : []),
+    ...(movil ? def.columnas.slice(1).map((col) => ({ etiqueta: col.etiqueta, valor: col.valor(f, ctx) })) : []),
     ...(movil && def.conVigencia ? [{ etiqueta: 'Vigente', valor: textoVigencia(f, hoy) }] : []),
     ...(movil ? [{ etiqueta: 'Dónde lo usas', valor: c.uso.donde }] : []),
-    ...def.detalle.map((d) => ({ etiqueta: d.etiqueta, valor: d.valor(f) })),
+    ...def.detalle.map((d) => ({ etiqueta: d.etiqueta, valor: d.valor(f, ctx) })),
   ].filter((d) => d.valor !== null && d.valor !== '')
 
   if (modo === 'editar') {
