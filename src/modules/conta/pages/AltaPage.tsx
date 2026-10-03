@@ -355,7 +355,9 @@ export default function AltaPage() {
               <button key={o.valor} type="button" className={i === 0 ? 'cx-boton' : 'cx-boton-sec'}
                 onClick={() => void responder(pregunta, o.valor, o.texto)}>{o.texto}</button>
             ))}
-            <button type="button" className="cx-boton-sec" onClick={() => void responder(pregunta, '__nolose', pregunta.noLoSe)}>{pregunta.noLoSe}</button>
+            {/* En el móvil, «No lo sé» a secas (M1), para que quepa al lado de la otra; la frase entera, para quien lee con lector. */}
+            <button type="button" className="cx-boton-sec" aria-label={pregunta.noLoSe}
+              onClick={() => void responder(pregunta, '__nolose', pregunta.noLoSe)}>{movil ? 'No lo sé' : pregunta.noLoSe}</button>
           </div>
         )}
         {pregunta?.entrada === 'direccion' && !ocupado && (

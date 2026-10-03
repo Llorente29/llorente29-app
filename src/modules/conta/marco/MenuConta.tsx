@@ -6,7 +6,9 @@
 //
 // Lo que la maqueta no dibuja y hace falta dentro de Folvy: «Volver a Folvy»,
 // para salir del módulo al resto de la aplicación (el módulo trae su propio
-// marco y tapa la barra de Folvy).
+// marco y tapa la barra de Folvy). Y en el móvil, la barra inferior no tiene
+// sitio para la empresa: «Tu empresa» saca esta misma cabecera cuando la
+// cuenta lleva más de una (con una sola no hay nada que cambiar).
 
 import { useId, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -18,7 +20,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { BotonIAMovil } from '@/modules/conta/marco/BarraPregunta'
 import { iniciales } from '@/modules/conta/lib/formato'
 
-function CabeceraEmpresa() {
+export function CabeceraEmpresa() {
   const { activa, empresas, elegir, cargando } = useEmpresas()
   const [abierta, setAbierta] = useState(false)
   const idLista = useId()

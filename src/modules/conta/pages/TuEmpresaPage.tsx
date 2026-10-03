@@ -20,6 +20,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { PESTANAS_AJUSTES, rutaAltaEmpresa, rutaApartadoEmpresa, rutaTuEmpresa } from '@/config/navegacion'
 import { Cabecera, Chip, ErrorConReintento, PestanasPildora, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { CabeceraEmpresa } from '@/modules/conta/marco/MenuConta'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useDatosEmpresa } from '@/modules/conta/empresa/useDatosEmpresa'
 import { APARTADOS, apartado as buscarApartado, type ClaveApartado, type Quien } from '@/modules/conta/empresa/apartados'
@@ -55,7 +56,7 @@ export default function TuEmpresaPage() {
   const { apartado: param } = useParams()
   const movil = useIsMobile()
   const { accountId, userId, esAdmin } = useCuentaConta()
-  const { cargando, error, activa, recargar } = useEmpresas()
+  const { cargando, error, activa, recargar, empresas } = useEmpresas()
   const datos = useDatosEmpresa(accountId, activa?.id ?? null, esAdmin)
   const hoy = hoyEnMadrid()
 
@@ -116,6 +117,9 @@ export default function TuEmpresaPage() {
     return (
       <>
         {cabecera}
+        {/* M2 dibuja una sola empresa. Con más de una, en el móvil no hay otro
+            sitio para cambiar: la misma cabecera que el menú del ordenador. */}
+        {empresas.length > 1 && <div className="cx-tarjeta cx-empresa-movil"><CabeceraEmpresa /></div>}
         <EtiquetaListo d={d} hoy={hoy} />
         <Sugerencias sugerencias={d.ia.sugerencias} alCambiar={datos.recargar} />
         <nav aria-label="Apartados de tu empresa" className="cx-lista">

@@ -77,6 +77,10 @@
   margin: 0 4px 10px; padding: 6px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja);
   display: flex; flex-direction: column; gap: 2px;
 }
+/* En el móvil, la misma cabecera dentro de una tarjeta, arriba de «Tu empresa». */
+.cx-empresa-movil { padding: 10px 8px; }
+.cx-empresa-movil .cx-menu-empresa { padding: 6px 10px; }
+.cx-empresa-movil .cx-menu-empresas { margin: 8px 0 0; }
 
 /* ── Cabecera de página y pestañas en píldora ─────────────────────── */
 .cx-cabecera { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
