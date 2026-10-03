@@ -415,9 +415,9 @@ export interface Supplier {
   accountId: string
   name: string
   taxId: string | null
-  // email, phone y address: OBSOLETAS desde el C01 (02/10/2026). El email y el
-  // teléfono viven en supplier_contact y la dirección en fiscal_*; ver
-  // src/modules/conta. Se quitan del tipo para que nada pueda volver a leerlas.
+  email: string | null
+  phone: string | null
+  address: string | null
   healthRegistryNo: string | null
   notes: string | null
   /**
@@ -465,6 +465,9 @@ export interface SupplierInsert {
   accountId: string
   name: string
   taxId?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
   healthRegistryNo?: string | null
   notes?: string | null
   createdBy?: string | null
@@ -473,6 +476,9 @@ export interface SupplierInsert {
 export interface SupplierUpdate {
   name?: string
   taxId?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
   healthRegistryNo?: string | null
   notes?: string | null
   /** §4 — ver Supplier.ivaIncluidoEnLinea. Solo se envía si el control está vivo. */

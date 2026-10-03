@@ -121,4 +121,4 @@ La cuenta B no tiene el interruptor `conta` ni los módulos de Cocina, y el mód
 
 ## Ficha de proveedor (N4)
 
-No se construye en este encargo. La tarea 7 solo la prepara: lee el IVA, la retención, la forma y el plazo de pago de las tablas generales, **sin cambiar su aspecto**. Sus capturas son las del C01 (`docs/conta/capturas/`).
+No se construye en este encargo. **Desde la respuesta 7, la ficha nueva tampoco va en este PR**: se separó al C01 (#137) para que Foodint quede exactamente como hoy. Cocina › Proveedores es la pantalla de siempre. Sus capturas son las del C01 (`docs/conta/capturas/`).

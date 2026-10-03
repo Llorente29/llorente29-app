@@ -55,7 +55,9 @@ export function rowToSupplier(row: RowSupplier): Supplier {
     accountId: row.account_id,
     name: row.name,
     taxId: row.tax_id,
-    // email/phone/address: obsoletas desde el C01; ya no se exponen.
+    email: row.email,
+    phone: row.phone,
+    address: row.address,
     healthRegistryNo: row.health_registry_no,
     notes: row.notes,
     // El select es '*', así que el dato SIEMPRE venía; lo que faltaba era
@@ -89,6 +91,9 @@ function supplierInsertToRow(input: SupplierInsert): RowSupplierInsert {
     account_id: input.accountId,
     name: input.name,
     tax_id: input.taxId ?? null,
+    email: input.email ?? null,
+    phone: input.phone ?? null,
+    address: input.address ?? null,
     health_registry_no: input.healthRegistryNo ?? null,
     notes: input.notes ?? null,
     created_by: input.createdBy ?? null,
@@ -100,6 +105,9 @@ function supplierUpdateToRow(patch: SupplierUpdate): RowSupplierUpdate {
   const row: RowSupplierUpdate = {}
   if (patch.name !== undefined) row.name = patch.name
   if (patch.taxId !== undefined) row.tax_id = patch.taxId
+  if (patch.email !== undefined) row.email = patch.email
+  if (patch.phone !== undefined) row.phone = patch.phone
+  if (patch.address !== undefined) row.address = patch.address
   if (patch.healthRegistryNo !== undefined) row.health_registry_no = patch.healthRegistryNo
   if (patch.notes !== undefined) row.notes = patch.notes
   // §4 — solo viaja si quien llama lo pone. La ficha únicamente lo pone cuando
@@ -441,24 +449,6 @@ export async function listLinksBySupplier(supplierId: string): Promise<ArticleSu
     .order('is_preferred', { ascending: false })
   if (error) throw new Error(`Error listando artículos del proveedor ${supplierId}: ${error.message}`)
   return (data ?? []).map(rowToArticleSupplier)
-}
-
-/**
- * Cuántos artículos activos le compras a cada proveedor de la cuenta, en UNA
- * consulta (la lista vieja hacía una por proveedor). La usa la columna
- * «Artículos» que Cocina aporta a la lista de proveedores (C01).
- */
-export async function countLinksBySupplier(accountId: string): Promise<Record<string, number>> {
-  requireSupabase()
-  const { data, error } = await supabase!
-    .from('article_supplier')
-    .select('supplier_id')
-    .eq('account_id', accountId)
-    .eq('is_active', true)
-  if (error) throw new Error(`Error contando artículos por proveedor: ${error.message}`)
-  const cuenta: Record<string, number> = {}
-  for (const r of data ?? []) cuenta[r.supplier_id] = (cuenta[r.supplier_id] ?? 0) + 1
-  return cuenta
 }
 
 // Marca un proveedor como PRINCIPAL de un ingrediente de forma EXCLUSIVA:

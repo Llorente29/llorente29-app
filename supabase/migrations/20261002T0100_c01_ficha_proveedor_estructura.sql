@@ -120,9 +120,10 @@ comment on column public.supplier.legal_name is 'C01. Razón social. name sigue 
 comment on column public.supplier.tax_id_check_status is 'C01. valid/invalid/pending. pending = VIES no contestó; la ficha dice «Comprobando con la UE…» y se reintenta. No bloquea.';
 comment on column public.supplier.iban is 'C01. Sin espacios y en mayúsculas. Validado ISO 13616 (módulo 97) en el núcleo antes de guardar.';
 comment on column public.supplier.ledger_account_code is 'C01. Vacío hasta C02 (plan contable): «Se asigna al activar el plan contable».';
-comment on column public.supplier.email is 'OBSOLETA desde C01 (01/10/2026): el email vive en supplier_contact. No leer ni escribir. Se borra en un encargo posterior.';
-comment on column public.supplier.phone is 'OBSOLETA desde C01 (01/10/2026): el teléfono vive en supplier_contact. No leer ni escribir. Se borra en un encargo posterior.';
-comment on column public.supplier.address is 'OBSOLETA desde C01 (01/10/2026): la dirección fiscal vive en fiscal_*. Su reparto se propone en supplier_proposal. No leer ni escribir.';
+-- C00 R7 (03/10/2026): aquí marcaba supplier.email/phone/address como
+-- OBSOLETAS. Ya no: el C01 se separó del PR #138 y Cocina las sigue leyendo y
+-- escribiendo (pantalla de Proveedores de siempre, alta desde el albarán,
+-- compliance_docs_due). Se marcarán con la ficha nueva, en su encargo.
 
 -- ── 3 · supplier_contact ────────────────────────────────────────────────────
 create table if not exists public.supplier_contact (
@@ -141,7 +142,7 @@ create table if not exists public.supplier_contact (
   created_by_name text
 );
 comment on table public.supplier_contact is
-  'C01. Personas de contacto de un proveedor, cada una con su papel. ÚNICA fuente de email y teléfono del proveedor (supplier.email/phone quedan obsoletas).';
+  'C01. Personas de contacto de un proveedor, cada una con su papel. Hasta la ficha nueva (C01), el email y el teléfono que usa Cocina siguen en supplier.email/phone.';
 create index if not exists idx_supplier_contact_supplier on public.supplier_contact (supplier_id);
 create index if not exists idx_supplier_contact_account on public.supplier_contact (account_id);
 -- Un solo contacto principal por proveedor.

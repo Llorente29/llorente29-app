@@ -3,17 +3,17 @@
 //
 // RLS entre las dos cuentas de prueba (encargo C01 §7.4 y respuesta 1 punto 4):
 // la cuenta B no ve ni puede tocar proveedores, contactos ni pagos de la A.
-// Por la API con la sesión de B (lo mismo que haría su navegador) y por la
-// pantalla. Primero, el control: A sí ve lo suyo; si no, la prueba no prueba nada.
+// Por la API con la sesión de B (lo mismo que haría su navegador). Primero, el control: A sí ve lo suyo; si no, la prueba no prueba nada.
 //
 // No escribe nada en A: si alguna escritura de B entrase, la prueba falla Y
 // lo dice, y las semillas se vuelven a cargar con seed_c01_capturas.sql.
 
 import { test, expect } from '@playwright/test'
-import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo, pedirSesion } from './sesion'
+import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, pedirSesion } from './sesion'
 import { rest } from './api'
 
-test('la cuenta B no ve ni toca nada de la cuenta A', async ({ page }, info) => {
+test('la cuenta B no ve ni toca nada de la cuenta A', async ({ browserName }, info) => {
+  void browserName
   test.skip(info.project.name === 'movil', 'La RLS no depende del tamaño de pantalla')
   const a = await pedirSesion(CUENTA_A.email)
   const b = await pedirSesion(CUENTA_B.email)
@@ -66,9 +66,6 @@ test('la cuenta B no ve ni toca nada de la cuenta A', async ({ page }, info) => 
   const contactosDespues = await rest<unknown[]>(a, 'GET', `supplier_contact?select=id&supplier_id=eq.${HERMANOS_RUIZ}`)
   expect(contactosDespues.datos.length).toBe(contactosA.datos.length)
 
-  // Por la pantalla: B abre la dirección de la ficha de A y no la ve.
-  await entrarComo(page, CUENTA_B.email)
-  await page.goto(`/kitchen/proveedores/${HERMANOS_RUIZ}`)
-  await expect(page.getByText('Ese proveedor no existe o no es de esta cuenta.')).toBeVisible()
-  await expect(page.getByText('Hermanos Ruiz')).toHaveCount(0)
+  // La parte de la pantalla (B abre la ficha nueva de A) se fue con la ficha
+  // al C01 (#137, respuesta 7 del C00): en #138, Proveedores es la de siempre.
 })
