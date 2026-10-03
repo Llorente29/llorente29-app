@@ -135,13 +135,3 @@ export function formasDelDesplegable(o: OpcionesFicha, guardada: PaymentMethod |
 export function nombreFormaPago(o: OpcionesFicha | null, valor: PaymentMethod, nombreDeReserva: Record<PaymentMethod, string>): string {
   return o?.formasPago.find((f) => f.valor === valor)?.nombre ?? nombreDeReserva[valor]
 }
-
-/**
- * Si un tipo de gasto está oculto, con las dos formas de ocultarlo unificadas:
- * manda lo que diga la empresa (general_row_setting, explícito: sí o no); si
- * la empresa no ha dicho nada, lo que dijo la cuenta en el C01
- * (expense_category_hidden).
- */
-export function tipoGastoOculto(id: string, ajustesEmpresa: ReadonlyMap<string, boolean>, ocultosCuenta: ReadonlySet<string>): boolean {
-  return ajustesEmpresa.get(id) ?? ocultosCuenta.has(id)
-}

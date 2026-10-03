@@ -364,18 +364,14 @@ export interface TipoGasto {
  * enseñando lo coloquial, y solo las filas de serie (las propias de cada
  * empresa llegan con esa tarea).
  */
-/**
- * Los tipos de gasto de serie, con si están ocultos. Las dos formas de
- * ocultarlos (la del C01, por cuenta, y la del C00, por empresa) se leen
- * juntas: manda la de la empresa si dijo algo (fichaTablasService).
- */
+/** Los tipos de gasto de serie, con si la empresa los ha ocultado (general_row_setting, C00). */
 export async function listarTiposGasto(accountId: string, companyId: string | null): Promise<TipoGasto[]> {
   requireSupabase()
   const { data, error } = await from('expense_category').select('id, code, name, example, pgc_account_hint')
     .eq('is_active', true).eq('is_system', true).order('sort_order')
   if (error) throw new Error(`No se pudieron cargar los tipos de gasto: ${error.message}`)
   const filas = (data as Fila[] | null) ?? []
-  const ocultos = await tiposGastoOcultos(accountId, companyId, filas.map((r) => r.id as string))
+  const ocultos = await tiposGastoOcultos(accountId, companyId)
   return filas.map((r) => ({
     id: r.id as string, code: r.code as string, name: ((r.example as string | null) ?? r.name) as string,
     pgcAccountHint: r.pgc_account_hint as string, oculto: ocultos.has(r.id as string),

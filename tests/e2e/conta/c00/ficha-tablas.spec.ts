@@ -3,8 +3,9 @@
 //
 // Tarea 7 del C00: la ficha de proveedor del C01 LEE de las tablas generales
 // el IVA, la retención, la forma y el plazo de pago, sin cambiar su aspecto.
-// Y las dos formas de ocultar un tipo de gasto dicen lo mismo en la ficha y en
-// «Tablas generales».
+// Y un tipo de gasto se oculta en un solo sitio (general_row_setting, por
+// empresa): lo que se oculta en la ficha sale oculto en «Tablas generales», y
+// al revés.
 //
 // Lo que se oculta aquí se deja como estaba al acabar; si una prueba se rompe
 // a mitad, la limpieza lo borra por la API con la sesión del usuario.
@@ -25,7 +26,6 @@ async function dejarComoEstaba(s: Sesion) {
   for (const id of [IVA_REDUCIDO, SEGUROS]) {
     await rest(s, 'DELETE', `general_row_setting?account_id=eq.${CUENTA_A.id}&company_id=eq.${EMPRESA_A}&row_id=eq.${id}`)
   }
-  await rest(s, 'DELETE', `expense_category_hidden?account_id=eq.${CUENTA_A.id}&expense_category_id=eq.${SEGUROS}`)
 }
 
 /** Los valores de la lista de sugerencias de un campo. */

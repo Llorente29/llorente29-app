@@ -1,8 +1,8 @@
 // src/modules/conta/services/fichaTablasService.ts
 //
 // C00, tarea 7: lo que la ficha de proveedor del C01 lee de las tablas
-// generales del C00 (IVA, retención, forma y plazo de pago) y los tipos de
-// gasto con sus dos formas de ocultarlos unificadas. Las reglas, en
+// generales del C00 (IVA, retención, forma y plazo de pago) y qué tipos de
+// gasto ha ocultado la empresa (general_row_setting). Las reglas, en
 // ../lib/opcionesFicha.ts (puras).
 //
 // De qué empresa: el proveedor es de la CUENTA y las tablas son de la
@@ -15,16 +15,12 @@
 // ya lo haga. Regla 40, nombres entre comillas comprobados contra las
 // migraciones 20261002T0100 (C01) y 20261003T0110/0120 (C00): company,
 // company_tax_profile.tax_territory, tax_rate, withholding_rate,
-// payment_method, payment_term, general_row_setting, expense_category,
-// expense_category_hidden.
+// payment_method, payment_term, general_row_setting, expense_category.
 
 import { tabla, mensaje } from '@/modules/conta/services/bd'
 import { listarEmpresas } from '@/modules/conta/services/empresaService'
 import { claveEmpresaElegida, empresaQueQuedaActiva } from '@/modules/conta/empresa/contexto'
-import {
-  construirOpciones, tipoGastoOculto,
-  type FilasFicha, type OpcionesFicha, type Territorio,
-} from '@/modules/conta/lib/opcionesFicha'
+import { construirOpciones, type FilasFicha, type OpcionesFicha, type Territorio } from '@/modules/conta/lib/opcionesFicha'
 
 type Fila = Record<string, unknown>
 const TERRITORIOS: readonly Territorio[] = ['peninsula_baleares', 'canarias', 'ceuta_melilla']
@@ -88,39 +84,29 @@ export async function leerOpcionesFicha(accountId: string, hoy: string): Promise
   return construirOpciones(filas, new Set(ajustes.map((a) => String(a.row_id))), territorio, hoy, empresa)
 }
 
-// ── Tipos de gasto: una sola forma de saber si están ocultos ────────────────
+// ── Tipos de gasto: qué está oculto ─────────────────────────────────────────
+// Una sola forma de ocultar: la del C00, por empresa, en general_row_setting
+// (la misma que «Tablas generales»). La del C01 (expense_category_hidden) se
+// quitó antes de llegar a producción (respuesta 2 del C00).
 
-/** Qué tipos de gasto están ocultos para esta cuenta y su empresa (ver tipoGastoOculto). */
-export async function tiposGastoOcultos(accountId: string, companyId: string | null, ids: readonly string[]): Promise<Set<string>> {
-  const [cuenta, empresa] = await Promise.all([
-    leer(tabla('expense_category_hidden').select('expense_category_id').eq('account_id', accountId), 'los tipos de gasto ocultos'),
-    companyId
-      ? leer(tabla('general_row_setting').select('row_id, hidden').eq('account_id', accountId).eq('company_id', companyId).eq('table_key', 'expense_category'), 'los tipos de gasto ocultos')
-      : Promise.resolve([] as Fila[]),
-  ])
-  const deCuenta = new Set(cuenta.map((c) => String(c.expense_category_id)))
-  const deEmpresa = new Map(empresa.map((a) => [String(a.row_id), a.hidden === true]))
-  return new Set(ids.filter((id) => tipoGastoOculto(id, deEmpresa, deCuenta)))
+/** Qué tipos de gasto ha ocultado la empresa. Sin empresa, ninguno. */
+export async function tiposGastoOcultos(accountId: string, companyId: string | null): Promise<Set<string>> {
+  if (!companyId) return new Set()
+  const filas = await leer(tabla('general_row_setting').select('row_id, hidden').eq('account_id', accountId).eq('company_id', companyId)
+    .eq('table_key', 'expense_category').eq('hidden', true), 'los tipos de gasto ocultos')
+  return new Set(filas.map((a) => String(a.row_id)))
 }
 
 /**
- * Oculta o vuelve a enseñar un tipo de gasto. Con empresa, en sus ajustes
- * (lo mismo que hace «Tablas generales», y manda sobre lo de la cuenta); sin
- * empresa, en la lista de la cuenta del C01. Solo toca `hidden`: las cuentas
- * que la empresa hubiera cambiado se quedan como estaban.
+ * Oculta o vuelve a enseñar un tipo de gasto en los ajustes de la empresa:
+ * lo mismo que hace «Tablas generales». Solo toca `hidden`: las cuentas que la
+ * empresa hubiera cambiado se quedan como estaban.
  */
-export async function ocultarTipoGastoUnificado(accountId: string, companyId: string | null, expenseCategoryId: string,
+export async function ocultarTipoGasto(accountId: string, companyId: string, expenseCategoryId: string,
   ocultar: boolean, actorId: string | null): Promise<void> {
-  if (companyId) {
-    const { error } = await tabla('general_row_setting').upsert({
-      account_id: accountId, company_id: companyId, table_key: 'expense_category', row_id: expenseCategoryId,
-      hidden: ocultar, updated_at: new Date().toISOString(), updated_by: actorId,
-    }, { onConflict: 'company_id,table_key,row_id' })
-    if (error) throw new Error(mensaje('No se pudo cambiar la lista de tipos de gasto', error))
-    return
-  }
-  const { error } = ocultar
-    ? await tabla('expense_category_hidden').insert({ account_id: accountId, expense_category_id: expenseCategoryId, created_by: actorId })
-    : await tabla('expense_category_hidden').delete().eq('account_id', accountId).eq('expense_category_id', expenseCategoryId)
-  if (error && (error as { code?: string }).code !== '23505') throw new Error(mensaje('No se pudo cambiar la lista de tipos de gasto', error))
+  const { error } = await tabla('general_row_setting').upsert({
+    account_id: accountId, company_id: companyId, table_key: 'expense_category', row_id: expenseCategoryId,
+    hidden: ocultar, updated_at: new Date().toISOString(), updated_by: actorId,
+  }, { onConflict: 'company_id,table_key,row_id' })
+  if (error) throw new Error(mensaje('No se pudo cambiar la lista de tipos de gasto', error))
 }

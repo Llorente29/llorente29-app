@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import filasReales from './datos/filas-serie-c00.json'
 import {
-  casillasIva, construirOpciones, formasDelDesplegable, nombreFormaPago, tipoGastoOculto, type FilasFicha,
+  casillasIva, construirOpciones, formasDelDesplegable, nombreFormaPago, type FilasFicha,
 } from '@/modules/conta/lib/opcionesFicha'
 import { PAYMENT_METHOD_LABEL } from '@/modules/conta/types'
 
@@ -76,15 +76,5 @@ describe('la ficha lee de las tablas generales', () => {
     expect(o.formasPago.filter((f) => f.valor === 'transfer')).toEqual([{ valor: 'transfer', nombre: 'Transferencia BBVA' }])
     expect(nombreFormaPago(o, 'transfer', PAYMENT_METHOD_LABEL)).toBe('Transferencia BBVA')
     expect(nombreFormaPago(null, 'transfer', PAYMENT_METHOD_LABEL)).toBe('Transferencia')
-  })
-})
-
-describe('las dos formas de ocultar un tipo de gasto, unificadas', () => {
-  it('manda lo que dijo la empresa; si no dijo nada, lo de la cuenta', () => {
-    const cuenta = new Set(['a'])
-    expect(tipoGastoOculto('a', new Map(), cuenta)).toBe(true)
-    expect(tipoGastoOculto('a', new Map([['a', false]]), cuenta)).toBe(false)
-    expect(tipoGastoOculto('b', new Map([['b', true]]), cuenta)).toBe(true)
-    expect(tipoGastoOculto('c', new Map(), cuenta)).toBe(false)
   })
 })

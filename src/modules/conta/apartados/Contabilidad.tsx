@@ -13,7 +13,9 @@ import { useFicha } from '@/modules/conta/components/FichaContexto'
 import { Campo, Dato, Guardado } from '@/modules/conta/components/ui'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
 import { cuentaPgc } from '@/modules/conta/lib/pgc'
-import { ocultarTipoGastoUnificado } from '@/modules/conta/services/fichaTablasService'
+import { Link } from 'react-router-dom'
+import { ocultarTipoGasto } from '@/modules/conta/services/fichaTablasService'
+import { rutaAltaEmpresa } from '@/config/navegacion'
 
 export default function Contabilidad() {
   const { datos, guardar, actor, recargar } = useFicha()
@@ -25,6 +27,7 @@ export default function Contabilidad() {
   const [fallo, setFallo] = useState<string | null>(null)
   const [aviso, avisar] = useAvisoGuardado()
   const [verLista, setVerLista] = useState(false)
+  const empresaId = datos.opciones.empresa?.id ?? null
 
   // Se ofrecen los que la cuenta usa, y siempre el que ya tiene puesto aunque
   // esté oculto: ocultar un tipo no puede borrar en silencio lo ya elegido.
@@ -83,15 +86,21 @@ export default function Contabilidad() {
         </button>
         {verLista && (
           <div className="cf-tarjeta" style={{ gap: 4 }}>
-            <p className="cf-nota" style={{ margin: 0 }}>Los que quites no saldrán al elegir. Afecta a todos los proveedores de tu cuenta.</p>
-            {datos.tiposGasto.map((t) => (
+            {/* Se ocultan en los ajustes de la EMPRESA (general_row_setting, C00). Sin
+                empresa no hay dónde: se dice, en vez de casillas que no harían nada (regla 8). */}
+            {!empresaId ? (
+              <p className="cf-nota" style={{ margin: 0 }}>
+                Para elegir qué tipos de gasto usa tu negocio, primero <Link to={rutaAltaEmpresa()}>da de alta tu empresa</Link> en contabilidad.
+              </p>
+            ) : <p className="cf-nota" style={{ margin: 0 }}>Los que quites no saldrán al elegir. Afecta a todos los proveedores de tu cuenta.</p>}
+            {empresaId && datos.tiposGasto.map((t) => (
               <label key={t.id} className="cf-casilla" style={{ border: 'none', padding: 0 }}>
                 <input type="checkbox" checked={!t.oculto} onChange={async (e) => {
                   // Se lee UNA vez y antes de esperar: tras el primer await, React ya
                   // ha devuelto la casilla (controlada) a su valor y el aviso salía
                   // al revés («vuelve a salir» al quitarlo). Lo cazó el e2e de la T7.
                   const ocultar = !e.target.checked
-                  try { await ocultarTipoGastoUnificado(f.accountId, datos.opciones.empresa?.id ?? null, t.id, ocultar, actor.id); await recargar(); avisar(ocultar ? `${t.name}: ya no sale al elegir.` : `${t.name}: vuelve a salir.`) }
+                  try { await ocultarTipoGasto(f.accountId, empresaId, t.id, ocultar, actor.id); await recargar(); avisar(ocultar ? `${t.name}: ya no sale al elegir.` : `${t.name}: vuelve a salir.`) }
                   catch (e2) { setFallo(e2 instanceof Error ? e2.message : 'No se pudo cambiar.') }
                 }} />
                 <span>{t.name} <span className="cf-nota">· {cuentaPgc(t.pgcAccountHint)}</span></span>

@@ -14,8 +14,8 @@
 
 -- ── 1 · Catálogo GLOBAL de tipos de gasto ───────────────────────────────────
 -- Excepción declarada a «toda tabla nueva lleva account_id»: es un catálogo de
--- Folvy para todas las cuentas (como vat_category). Cada cuenta oculta los que
--- no use en expense_category_hidden, que sí lleva account_id. C02 lo enlazará
+-- Folvy para todas las cuentas (como vat_category). Cada empresa oculta los que
+-- no use en general_row_setting (C00), que sí lleva account_id. C02 lo enlazará
 -- con el plan contable de cada cuenta; pgc_account_hint es la cuenta del PGC.
 create table if not exists public.expense_category (
   id               uuid primary key default gen_random_uuid(),
@@ -51,29 +51,11 @@ create policy expense_category_select on public.expense_category
 revoke all on table public.expense_category from anon, authenticated;
 grant select on table public.expense_category to authenticated;
 
-create table if not exists public.expense_category_hidden (
-  account_id          uuid not null references public.accounts(id) on delete cascade,
-  expense_category_id uuid not null references public.expense_category(id) on delete cascade,
-  created_at          timestamptz not null default now(),
-  created_by          uuid,
-  primary key (account_id, expense_category_id)
-);
-comment on table public.expense_category_hidden is
-  'C01. Tipos de gasto que una cuenta no usa y no quiere ver en sus listas.';
-alter table public.expense_category_hidden enable row level security;
-drop policy if exists expense_category_hidden_select on public.expense_category_hidden;
-create policy expense_category_hidden_select on public.expense_category_hidden
-  for select using (belongs_to_account(account_id));
-drop policy if exists expense_category_hidden_insert on public.expense_category_hidden;
-create policy expense_category_hidden_insert on public.expense_category_hidden
-  for insert with check (current_user_is_admin_or_manager_of(account_id));
-drop policy if exists expense_category_hidden_update on public.expense_category_hidden;
-create policy expense_category_hidden_update on public.expense_category_hidden
-  for update using (current_user_is_admin_or_manager_of(account_id));
-drop policy if exists expense_category_hidden_delete on public.expense_category_hidden;
-create policy expense_category_hidden_delete on public.expense_category_hidden
-  for delete using (current_user_is_admin_or_manager_of(account_id));
-revoke all on table public.expense_category_hidden from anon;
+-- (Aquí estaba expense_category_hidden, la forma del C01 de que una cuenta
+-- ocultara tipos de gasto. Quitada antes de llegar a producción por decisión de
+-- Julio, respuesta 2 del C00: el C00 ya oculta filas de cualquier tabla general
+-- por empresa, en general_row_setting, y una segunda tabla solo para tipos de
+-- gasto sería un cadáver desde el primer día. La ficha del C01 lee de ahí.)
 
 -- ── 2 · supplier: columnas nuevas ───────────────────────────────────────────
 alter table public.supplier
