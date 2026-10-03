@@ -50,6 +50,11 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
   }
   await expect(page.getByRole('status').getByText(/Muy pronto/)).toBeVisible()
 
+  // Los solapes se miden con la pantalla CARGADA: con el esqueleto delante no
+  // hay nada que tapar y la medida pasa sin medir (así pasó hasta el 03/10, y
+  // falló el día que el contenido llegó a mitad de medida).
+  await expect(page.getByText('Socios y cargos').first()).toBeVisible()
+
   await page.screenshot({ path: `${DIR}/marco-${movil ? 'movil' : 'ordenador'}.png`, fullPage: true })
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 })

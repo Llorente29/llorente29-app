@@ -22,7 +22,17 @@ const cruza = (a: Caja, b: Caja) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < 
 
 export async function loQueTapan(page: Page, raiz: string, flotantes: string[]): Promise<string[]> {
   const tapado = new Set<string>()
-  const alto = await page.evaluate(() => document.documentElement.scrollHeight)
+  // Se mide con la página QUIETA: si aún llega contenido, la medida se hace
+  // sobre una página que ya no existe (03/10: pasaba con el esqueleto y falló
+  // el día que los datos llegaron a mitad de medida).
+  const altura = () => page.evaluate(() => document.documentElement.scrollHeight)
+  let alto = await altura()
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(250)
+    const ahora = await altura()
+    if (ahora === alto) break
+    alto = ahora
+  }
   for (const y of [alto]) {
     await page.evaluate((yy) => window.scrollTo(0, yy), y)
     const encontrado = await page.evaluate(([r, fl]) => {
@@ -47,6 +57,7 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
       return { error: null, tapado: out }
     }, [raiz, flotantes] as const)
     if (encontrado.error) throw new Error(encontrado.error)
+    if (await altura() !== alto) throw new Error('La página cambió de alto mientras se medía: la medida no vale')
     encontrado.tapado.forEach((t) => tapado.add(t))
   }
   await page.evaluate(() => window.scrollTo(0, 0))
