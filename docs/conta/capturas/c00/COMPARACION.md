@@ -22,6 +22,13 @@ Además, **las cifras dependen de los datos de prueba, no del diseño**: el núm
 4. **El bocadillo «¿Por qué lo pregunto?» sale plegado y se abre al tocarlo.** La captura lo tiene abierto, como la maqueta.
 5. **El texto del bocadillo de las cuentas añade «Si no lo sabes, dejo ese».** Lo pide la respuesta: qué pasa si no lo sabes.
 6. **Los modelos que dice son 111, 190, 200, 202, 303, 347 y 390.** Son los anuales del punto 2. La maqueta, de antes, pone 111, 115, 202 y 303.
+7. **La caja lleva botón de enviar (respuesta 4), y la maqueta no.** Es una flecha de 48 px, azul `#2F5BFF`, a la izquierda del micro. Está gris y apagada sin texto y se enciende al escribir. El micro se queda. **La maqueta N1b cambia en esto**: fue un fallo de la maqueta, que solo tenía micro. Intro envía, y la etiqueta «Intro» no se selecciona; tocarla también envía.
+
+### La dirección con la población puesta por el código postal (respuesta 4, arreglo 3)
+
+![dirección con población por el código postal](alta-direccion-cp.png)
+
+La frase de Julio, «Avda Ensanche de Vallecas 106, 28051», escrita en la caja y repartida en los campos. La población, **Madrid**, sale del código postal (tabla `postal_code_place`, GeoNames, CC BY 4.0) con su marca «IA» abierta: el porqué tapa el campo, que dice «Madrid» (la prueba lo comprueba, y que en la base queda puesta por la IA con ese porqué). «Es esta» la confirma. No hay maqueta de este paso.
 
 ## Alta · ventana flotante, otra empresa (N1c, respuesta 3)
 
@@ -33,6 +40,7 @@ Además, **las cifras dependen de los datos de prueba, no del diseño**: el núm
 2. **«A qué te dedicas» sale con su nombre y sin su valor en el instante de la captura**: la actividad acaba de guardarse y se está releyendo. Un segundo después dice «Restaurante · 671 y 1 más».
 3. **Las dos notas de fuera** («Cada píldora…» y «Puedes cerrar la ventana…») salen desde 1440 px, que es el ancho de la maqueta. Más estrecho, no caben y no salen. El bocadillo del porqué, que sí es de la pregunta, vuelve entonces dentro.
 4. **Cerrar es la «×», y también Escape.** Las dos dejan en «Tu empresa» el aviso «Alta a medias · N de 6 · Seguir».
+5. **El mismo botón de enviar que en N1b (respuesta 4).** La maqueta N1c tampoco lo tenía: **cambia en esto**.
 
 ## Alta · móvil (M1, adaptada a la respuesta 3)
 
@@ -43,6 +51,7 @@ Además, **las cifras dependen de los datos de prueba, no del diseño**: el núm
 1. **A pantalla completa; «4 de 6» arriba sube la hoja.** No hay maqueta nueva: la respuesta dice que M1 se adapta a esto.
 2. **«Salir y seguir luego» también en el móvil.**
 3. **Desde la hoja también se vuelve a un punto**: se toca y la hoja se cierra en esa pregunta.
+4. **Enviar también en el móvil (respuesta 4)**, a la izquierda del micro. La etiqueta «Intro» no sale: el teclado del móvil ya trae su tecla, y la prueba envía con ella.
 
 ## Tu empresa · «Para presentar el 200 y depositar las cuentas» (respuesta 3, punto 5)
 
