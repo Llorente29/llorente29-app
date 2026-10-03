@@ -1,0 +1,7 @@
+# VUELTA ATRÁS en producción (C00, respuesta 7). Solo si Julio lo decide: el
+# workflow lo hace con modo «vuelta_atras», con las mismas guardas y la misma
+# ventana. Al revés de como se aplicaron. Cada una para sin tocar nada si
+# perdería datos. Probadas en staging (supabase/staging/sql/20261004_prueba_vuelta_atras.sql).
+supabase/vuelta-atras/20261003T0140_c00_vat_rate_lee_de_impuestos.down.sql
+supabase/vuelta-atras/20261003T0110_c00_empresa.down.sql
+supabase/vuelta-atras/20261002T0100_c01_ficha_proveedor_estructura.down.sql

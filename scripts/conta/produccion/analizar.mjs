@@ -120,7 +120,12 @@ export function clasificar(s, dentroDeDo = false) {
   else if ((m = t.match(new RegExp(`^create policy ${ID} on ${ID}`, 'i')))) add('crea', 'politica', nombre(m[2]), m[1])
   else if ((m = t.match(new RegExp(`^drop policy (?:if exists )?${ID} on ${ID}`, 'i')))) add('quita', 'politica', nombre(m[2]), m[1])
   else if ((m = t.match(new RegExp(`^drop trigger (?:if exists )?${ID} on ${ID}`, 'i')))) add('quita', 'disparador', nombre(m[2]), m[1])
-  else if ((m = t.match(new RegExp(`^drop (table|view|materialized view|function|index|type|sequence|schema) (?:if exists )?${ID}`, 'i')))) add('borra', m[1].toLowerCase().replace('function', 'funcion').replace('table', 'tabla').replace(/^view$/, 'vista'), nombre(m[2]))
+  else if ((m = t.match(new RegExp(`^drop function (?:if exists )?${ID}\\s*(\\([^)]*\\))?`, 'i')))) {
+    // Con firma, normalizada como la de create function; sin ella, todas las del nombre.
+    const f = m[2] ? firma(`create function ${m[1]}${m[2]}`) : nombre(m[1])
+    add('borra', 'funcion', f ?? nombre(m[1]))
+  }
+  else if ((m = t.match(new RegExp(`^drop (table|view|materialized view|index|type|sequence|schema) (?:if exists )?${ID}`, 'i')))) add('borra', m[1].toLowerCase().replace('table', 'tabla').replace(/^view$/, 'vista'), nombre(m[2]))
   else if ((m = t.match(new RegExp(`^alter (table|view|function) (?:if exists )?(?:only )?${ID}`, 'i')))) {
     const tipo = m[1].toLowerCase() === 'table' ? 'tabla' : m[1].toLowerCase() === 'view' ? 'vista' : 'funcion'
     const obj = nombre(m[2])
@@ -206,6 +211,7 @@ if (modo === 'objetivos') {
   const porFichero = Object.fromEntries(ficheros.map((f) => [f, analizarFichero(f)]))
   const deLaTanda = creadosPorLaTanda(porFichero)
   const existe = (o) => {
+    if (o.tipo === 'funcion' && !o.objeto.includes('(')) return [...exFunciones].some((f) => f.startsWith(`${o.objeto}(`))
     if (o.tipo === 'funcion') return exFunciones.has(o.objeto) && !deLaTanda.has(o.objeto)
     const t = tablaDe(o)
     return exTablas.has(t) && !deLaTanda.has(t)

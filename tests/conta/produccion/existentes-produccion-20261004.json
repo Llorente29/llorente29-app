@@ -1,0 +1,1 @@
+{"tablas":["public.compliance_document","public.supplier","public.supplier_invoice","public.vat_rate"],"funciones":["public.vat_rate_for(uuid,date)"]}
