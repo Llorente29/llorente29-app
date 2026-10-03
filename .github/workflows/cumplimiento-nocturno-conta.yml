@@ -1,0 +1,177 @@
+name: Cumplimiento nocturno de contabilidad
+
+# QUÉ HACE (C00 §9.2)
+# Los dos agentes de cumplimiento del módulo de contabilidad, cada noche:
+#
+#   · «Datos maestros e impuestos»: recorre las filas de serie de staging-conta
+#     (scripts/conta/agente-datos-maestros.sql, SOLO LEE) y comprueba que cada
+#     una lleva su norma y su fecha de comprobación, que no hay dos vigentes a
+#     la vez para el mismo concepto y que los valores son los de
+#     docs/conta/referencia/serie.json (sacada de las fuentes oficiales).
+#   · «Normativa al día»: vuelve a descargar las fuentes oficiales citadas y
+#     las compara con la última descarga (scripts/conta/fuentes.mjs comparar).
+#
+# Ninguno cambia nada. Dejan su informe en lenguaje normal en el resumen de la
+# ejecución y, si algo no cuadra en una ejecución nocturna o lanzada a mano,
+# abren un aviso (una incidencia en GitHub; si ya hay una abierta del mismo
+# agente, le añaden un comentario en vez de abrir otra).
+#
+# CUÁNDO
+#   · Cada noche a las 01:40 UTC (03:40 en Madrid en verano). OJO: GitHub solo
+#     corre lo programado desde la rama principal; hasta que el C00 se fusione,
+#     no corre solo.
+#   · A mano (workflow_dispatch).
+#   · Con un push a conta/** que cambie los propios agentes: así se ve el
+#     primer informe desde la rama. En ese caso NO abre avisos: solo informa.
+#
+# LO QUE NO PUEDE HACER: TOCAR PRODUCCIÓN
+# Las mismas tres guardas que aplicar-staging-conta.yml (la URL es de
+# staging-conta, no es de producción, y al otro lado no hay cuentas de
+# producción), y además la sesión va en modo SOLO LECTURA. La URL no se
+# imprime.
+
+on:
+  schedule:
+    - cron: '40 1 * * *'
+  workflow_dispatch:
+  push:
+    branches: ['conta/**']
+    paths:
+      - 'scripts/conta/agente-datos-maestros.*'
+      - 'scripts/conta/lib/datosMaestros.mjs'
+      - '.github/workflows/cumplimiento-nocturno-conta.yml'
+
+concurrency:
+  group: cumplimiento-nocturno-conta-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  datos-maestros:
+    name: Datos maestros e impuestos
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ]; then echo "::error::Falta el secreto STAGING_CONTA_DB_URL."; exit 1; fi
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 · al otro lado no hay producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+        run: |
+          set -euo pipefail
+          r=$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select count(*) from public.accounts
+            where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')")
+          if [ "$r" != "0" ]; then echo "::error::La base tiene cuentas de producción. Abortado."; exit 1; fi
+
+      - name: Volcar las filas de serie (solo lectura)
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+        run: |
+          set -euo pipefail
+          export PGAPPNAME="gha-cumplimiento-conta-${GITHUB_RUN_ID}"
+          /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-datos-maestros.sql > /tmp/bd.json
+
+      - name: Revisar contra la referencia
+        id: revisar
+        continue-on-error: true
+        run: node scripts/conta/agente-datos-maestros.mjs /tmp/bd.json /tmp/informe.md staging-conta
+
+      - name: Informe
+        if: always()
+        run: |
+          if [ -f /tmp/informe.md ]; then cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Aviso
+        if: steps.revisar.outcome == 'failure' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · Cumplimiento: los datos maestros no cuadran con la fuente oficial'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe.md)" "$enlace" > /tmp/aviso.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso.md; fi
+
+      - name: Resultado
+        if: steps.revisar.outcome == 'failure'
+        run: |
+          echo "::error::Los datos maestros no cuadran con la fuente: ver el informe del resumen."
+          exit 1
+
+  normativa:
+    name: Normativa al día
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Comparar las fuentes con la última descarga
+        run: node scripts/conta/fuentes.mjs comparar
+
+      - name: Informe
+        id: informe
+        if: always()
+        run: |
+          f=docs/conta/fuentes/cambios.md
+          if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; fi
+          # Cada fuente que cambió o no se pudo comprobar es una línea «- ».
+          if [ -f "$f" ] && grep -q '^- ' "$f"; then echo "hay=si" >> "$GITHUB_OUTPUT"; else echo "hay=no" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Aviso
+        if: steps.informe.outputs.hay == 'si' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · Normativa al día: ha cambiado una fuente oficial'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat docs/conta/fuentes/cambios.md)" "$enlace" > /tmp/aviso.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso.md; fi
+
+      - name: Resultado
+        if: steps.informe.outputs.hay == 'si'
+        run: |
+          echo "::warning::Ha cambiado alguna fuente oficial, o no se ha podido comprobar: ver el informe."
