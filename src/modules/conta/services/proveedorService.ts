@@ -13,6 +13,7 @@
 
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import { rpcSinTipar } from '@/lib/rpcSinTipar'
+import { tiposGastoOcultos } from '@/modules/conta/services/fichaTablasService'
 import type {
   ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor,
   PaymentMethod, TaxIdCheckStatus, TaxIdType, VatRegime,
@@ -363,19 +364,21 @@ export interface TipoGasto {
  * enseñando lo coloquial, y solo las filas de serie (las propias de cada
  * empresa llegan con esa tarea).
  */
-export async function listarTiposGasto(accountId: string): Promise<TipoGasto[]> {
+/**
+ * Los tipos de gasto de serie, con si están ocultos. Las dos formas de
+ * ocultarlos (la del C01, por cuenta, y la del C00, por empresa) se leen
+ * juntas: manda la de la empresa si dijo algo (fichaTablasService).
+ */
+export async function listarTiposGasto(accountId: string, companyId: string | null): Promise<TipoGasto[]> {
   requireSupabase()
-  const [{ data, error }, { data: ocultos, error: e2 }] = await Promise.all([
-    from('expense_category').select('id, code, name, example, pgc_account_hint')
-      .eq('is_active', true).eq('is_system', true).order('sort_order'),
-    from('expense_category_hidden').select('expense_category_id').eq('account_id', accountId),
-  ])
+  const { data, error } = await from('expense_category').select('id, code, name, example, pgc_account_hint')
+    .eq('is_active', true).eq('is_system', true).order('sort_order')
   if (error) throw new Error(`No se pudieron cargar los tipos de gasto: ${error.message}`)
-  if (e2) throw new Error(`No se pudieron cargar los tipos de gasto: ${e2.message}`)
-  const set = new Set(((ocultos as Fila[] | null) ?? []).map((o) => o.expense_category_id as string))
-  return ((data as Fila[] | null) ?? []).map((r) => ({
+  const filas = (data as Fila[] | null) ?? []
+  const ocultos = await tiposGastoOcultos(accountId, companyId, filas.map((r) => r.id as string))
+  return filas.map((r) => ({
     id: r.id as string, code: r.code as string, name: ((r.example as string | null) ?? r.name) as string,
-    pgcAccountHint: r.pgc_account_hint as string, oculto: set.has(r.id as string),
+    pgcAccountHint: r.pgc_account_hint as string, oculto: ocultos.has(r.id as string),
   }))
 }
 
@@ -606,11 +609,3 @@ export async function comprobarVies(supplierId: string): Promise<ResultadoVies> 
   }
 }
 
-/** Oculta (o vuelve a enseñar) un tipo de gasto en las listas de ESTA cuenta. */
-export async function ocultarTipoGasto(accountId: string, expenseCategoryId: string, ocultar: boolean, actorId: string | null): Promise<void> {
-  requireSupabase()
-  const { error } = ocultar
-    ? await from('expense_category_hidden').insert({ account_id: accountId, expense_category_id: expenseCategoryId, created_by: actorId })
-    : await from('expense_category_hidden').delete().eq('account_id', accountId).eq('expense_category_id', expenseCategoryId)
-  if (error && error.code !== '23505') throw new Error(`No se pudo cambiar la lista de tipos de gasto: ${error.message}`)
-}

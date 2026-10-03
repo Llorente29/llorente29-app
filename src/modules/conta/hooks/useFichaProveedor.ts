@@ -21,6 +21,8 @@ import { calcularCompletitud, type Completitud } from '@/modules/conta/lib/compl
 import { calcularCifras, type CifrasFicha } from '@/modules/conta/lib/cifras'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { validarFicha, type ResultadoValidacion } from '@/modules/conta/lib/validacionesFicha'
+import { leerOpcionesFicha } from '@/modules/conta/services/fichaTablasService'
+import type { OpcionesFicha } from '@/modules/conta/lib/opcionesFicha'
 
 export interface DatosFicha {
   ficha: FichaProveedor
@@ -32,6 +34,8 @@ export interface DatosFicha {
   documentos: DocumentoProveedor[]
   otros: { id: string; name: string; taxId: string | null }[]
   conta: boolean
+  /** IVA, retención, forma y plazo de pago, de las tablas generales del C00 (tarea 7). */
+  opciones: OpcionesFicha
 }
 
 export interface UsoFicha {
@@ -67,10 +71,12 @@ async function leerFicha(
     // Si falla, la ficha se abre igual: proponer es una ayuda, no un requisito.
     await refrescarPropuestas(supplierId).catch(() => 0)
   }
+  // Primero las tablas: de ellas sale la empresa, y con ella qué tipos de gasto ocultó.
+  const opciones = await leerOpcionesFicha(accountId, hoyEnMadrid())
   const [contactos, propuestas, tiposGasto, locales, facturas, documentos, todos, conta] = await Promise.all([
     listarContactos(supplierId),
     listarPropuestas(supplierId),
-    listarTiposGasto(accountId),
+    listarTiposGasto(accountId, opciones.empresa?.id ?? null),
     listarLocales(accountId),
     listarFacturas(accountId, supplierId),
     listarDocumentos(accountId, supplierId),
@@ -78,7 +84,7 @@ async function leerFicha(
     contaActiva(accountId),
   ])
   const otros = todos.map((p) => ({ id: p.id, name: p.name, taxId: p.taxId }))
-  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta } }
+  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta, opciones } }
 }
 
 export function useFichaProveedor(accountId: string | null, supplierId: string): UsoFicha {

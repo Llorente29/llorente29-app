@@ -17,6 +17,7 @@ import { pideIban } from '@/modules/conta/lib/completitud'
 import { cuentaPgc } from '@/modules/conta/lib/pgc'
 import { tieneCertificadoBanco } from '@/modules/conta/services/proveedorService'
 import { PAYMENT_METHOD_LABEL, ROLE_LABEL, VAT_REGIME_LABEL } from '@/modules/conta/types'
+import { nombreFormaPago } from '@/modules/conta/lib/opcionesFicha'
 import { accionContacto, textoDireccion, textoPlazo, textoRetencion } from '@/modules/conta/lib/textosFicha'
 import type { SeccionDeFicha } from '@/modules/conta/extensiones'
 
@@ -69,7 +70,7 @@ export function BloquePago() {
   const cert = tieneCertificadoBanco(datos.documentos)
   return (
     <Tarjeta titulo="Cómo le pagas" id="b-pago">
-      <Dato etiqueta="Forma de pago" valor={f.paymentMethod ? PAYMENT_METHOD_LABEL[f.paymentMethod] : null} />
+      <Dato etiqueta="Forma de pago" valor={f.paymentMethod ? nombreFormaPago(datos.opciones, f.paymentMethod, PAYMENT_METHOD_LABEL) : null} />
       <Dato etiqueta="Plazo" valor={textoPlazo(f)} />
       <Dato
         etiqueta="Cuenta bancaria"

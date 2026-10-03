@@ -10,7 +10,7 @@
 //   · Extranjero (fuera de la UE): se guarda tal cual.
 // Web y etiquetas: comparación con Holded (respuesta 2). No cuentan para el %.
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFicha } from '@/modules/conta/components/FichaContexto'
 import { Campo, Dialogo, Guardado } from '@/modules/conta/components/ui'
@@ -22,8 +22,12 @@ import { provinciaPorCp } from '@/modules/conta/lib/direccion'
 import { rutaListaProveedores } from '@/config/navegacion'
 import { VAT_REGIME_LABEL, type EntityKind, type FichaProveedor, type TaxIdType, type VatRegime } from '@/modules/conta/types'
 import type { ProblemaFicha } from '@/modules/conta/lib/validacionesFicha'
+import { IMPUESTO_DEL_TERRITORIO, casillasIva } from '@/modules/conta/lib/opcionesFicha'
+import { porcentaje } from '@/modules/conta/lib/formato'
 
-const TIPOS_IVA = [0, 4, 5, 10, 21]
+// Los tipos de IVA y las retenciones salen de las tablas generales del C00
+// (tarea 7), no de una lista escrita aquí: ver lib/opcionesFicha.ts.
+const NOMBRE_IMPUESTO = { iva: 'IVA', igic: 'IGIC', ipsi: 'IPSI' } as const
 const TIPO_ID: Record<TaxIdType, string> = { nif_es: 'NIF español', vat_eu: 'NIF-IVA de otro país de la UE', foreign: 'De fuera de la UE' }
 
 /** El mensaje del NIF al momento, en lenguaje normal. null = nada que decir. */
@@ -67,6 +71,7 @@ function FormularioFiscal() {
   const [vatRegime, setVatRegime] = useState<VatRegime | ''>(f.vatRegime ?? '')
   const [rates, setRates] = useState<number[]>(f.usualVatRates)
   const [irpf, setIrpf] = useState(f.irpfWithholdingPct !== null ? String(f.irpfWithholdingPct) : '')
+  const listaRet = useId()
   const [ivaLinea, setIvaLinea] = useState(f.ivaIncluidoEnLinea)
   const [website, setWebsite] = useState(f.website ?? '')
   const [tags, setTags] = useState(f.tags.join(', '))
@@ -216,19 +221,29 @@ function FormularioFiscal() {
           )}
         </Campo>
         <div className="cf-campo" role="group" aria-labelledby="iva-hab">
-          <span className="cf-label" id="iva-hab">IVA habitual en sus facturas</span>
+          <span className="cf-label" id="iva-hab">{NOMBRE_IMPUESTO[IMPUESTO_DEL_TERRITORIO[datos.opciones.territorio]]} habitual en sus facturas</span>
           <div className="cf-casillas">
-            {TIPOS_IVA.map((t) => (
-              <label key={t} className="cf-casilla">
-                <input type="checkbox" checked={rates.includes(t)} onChange={(e) => setRates((r) => e.target.checked ? [...r, t] : r.filter((x) => x !== t))} />
-                {t} %
+            {casillasIva(datos.opciones, f.usualVatRates).map((c) => (
+              <label key={c.valor} className="cf-casilla" title={c.nombre ?? undefined}>
+                <input type="checkbox" checked={rates.includes(c.valor)} onChange={(e) => setRates((r) => e.target.checked ? [...r, c.valor] : r.filter((x) => x !== c.valor))} />
+                {porcentaje(c.valor)}
+                {/* Lo guardado sale aunque las tablas ya no lo ofrezcan (regla 30), y lo dice. */}
+                {!c.ofrecida && <span className="cf-nota">· ya no está en tus tablas</span>}
               </label>
             ))}
           </div>
         </div>
         <Campo campo="irpfWithholdingPct" etiqueta="Retención de IRPF (%)" error={err('irpfWithholdingPct')} aviso={av('irpfWithholdingPct')}
           ayuda="Solo si te factura con retención: autónomos y alquileres. Vacío = no aplica.">
-          {(p) => <input {...p} className="cf-input" value={irpf} inputMode="decimal" onChange={(e) => setIrpf(e.target.value)} />}
+          {(p) => (
+            <>
+              <input {...p} className="cf-input" value={irpf} inputMode="decimal" list={listaRet} onChange={(e) => setIrpf(e.target.value)} />
+              {/* Las retenciones vigentes de las tablas, como sugerencia: se puede escribir otra. */}
+              <datalist id={listaRet}>
+                {datos.opciones.retenciones.map((r) => <option key={r.valor} value={String(r.valor).replace('.', ',')}>{r.nombre}</option>)}
+              </datalist>
+            </>
+          )}
         </Campo>
         <label className="cf-casilla" style={{ alignSelf: 'flex-start' }}>
           <input type="checkbox" checked={ivaLinea} onChange={(e) => setIvaLinea(e.target.checked)} />

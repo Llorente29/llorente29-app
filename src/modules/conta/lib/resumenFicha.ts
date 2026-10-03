@@ -9,6 +9,7 @@
 
 import type { ContactoProveedor, FichaProveedor } from '@/modules/conta/types'
 import { PAYMENT_METHOD_LABEL, VAT_REGIME_LABEL } from '@/modules/conta/types'
+import { nombreFormaPago, type OpcionesFicha } from '@/modules/conta/lib/opcionesFicha'
 import type { Falta } from '@/modules/conta/lib/completitud'
 import { diaMesCorto, eurosExactos, listaPorcentajes } from '@/modules/conta/lib/formato'
 
@@ -42,9 +43,10 @@ export function esApartado(s: string | undefined): s is Apartado {
 }
 
 /** «Transferencia a 30 días», «Domiciliación, días 5 y 20», «Efectivo». null si no hay forma. */
-export function etiquetaPago(f: FichaProveedor): string | null {
+export function etiquetaPago(f: FichaProveedor, opciones: OpcionesFicha | null = null): string | null {
   if (!f.paymentMethod) return null
-  const forma = PAYMENT_METHOD_LABEL[f.paymentMethod]
+  // El nombre, de las tablas generales (tarea 7 del C00); si no, el de siempre.
+  const forma = nombreFormaPago(opciones, f.paymentMethod, PAYMENT_METHOD_LABEL)
   const partes: string[] = []
   if (f.paymentTermsDays !== null) partes.push(f.paymentTermsDays === 0 ? 'al contado' : `a ${f.paymentTermsDays} días`)
   if (f.paymentFixedDays.length > 0) {
@@ -67,6 +69,8 @@ export interface DatosResumen {
   tipoGasto: { name: string; pgcAccountHint: string } | null
   ultimaFactura: { invoiceDate: string | null; grandTotal: number | null } | null
   numDocumentos: number
+  /** Las tablas generales (tarea 7 del C00): de ahí el nombre de la forma de pago. */
+  opciones?: OpcionesFicha | null
 }
 
 const FALTA_EN: Record<Exclude<Apartado, 'resumen' | 'historial' | 'facturas'>, Partial<Record<string, string>>> = {
@@ -103,7 +107,7 @@ export function lineaApartado(ap: Apartado, d: DatosResumen): LineaApartado {
       return { detalle: n === 1 ? '1 contacto' : `${n} contactos`, falta: false }
     }
     case 'pago':
-      return { detalle: etiquetaPago(f) ?? 'Sin forma de pago', falta: false }
+      return { detalle: etiquetaPago(f, d.opciones ?? null) ?? 'Sin forma de pago', falta: false }
     case 'contabilidad':
       return {
         detalle: d.tipoGasto ? `${d.tipoGasto.name} · ${d.tipoGasto.pgcAccountHint}` : 'Sin tipo de gasto',

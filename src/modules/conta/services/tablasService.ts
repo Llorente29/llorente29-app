@@ -12,6 +12,7 @@
 // migraciones 20261003T0100/0110/0120 y la del C01: tax_rate, withholding_rate,
 // payment_method, payment_term, invoice_series, treasury_account,
 // expense_category, entry_text, country, currency, general_row_setting,
+// expense_category_hidden (la forma de ocultar del C01, unificada en la tarea 7),
 // company, company_tax_profile, supplier.
 
 import { tabla, mensaje } from '@/modules/conta/services/bd'
@@ -60,9 +61,13 @@ async function leer(def: DefinicionTabla, tablaBd: string, companyId: string): P
 export type FilasPorTabla = Record<string, FilaGeneral[]>
 
 /** Todas las tablas de una vez (son pocas filas): así el menú lleva sus cifras. */
-export async function cargarTablasGenerales(companyId: string): Promise<FilasPorTabla> {
-  const { data: ajustesBd, error } = await tabla('general_row_setting').select('*').eq('company_id', companyId)
+export async function cargarTablasGenerales(accountId: string, companyId: string): Promise<FilasPorTabla> {
+  const [{ data: ajustesBd, error }, { data: ocultosCuenta, error: e2 }] = await Promise.all([
+    tabla('general_row_setting').select('*').eq('account_id', accountId).eq('company_id', companyId),
+    tabla('expense_category_hidden').select('expense_category_id').eq('account_id', accountId),
+  ])
   if (error) throw new Error(mensaje('No se han podido leer tus cambios en las tablas', error))
+  if (e2) throw new Error(mensaje('No se han podido leer tus cambios en las tablas', e2))
   const ajustes = new Map<string, AjusteSerie>()
   for (const a of (ajustesBd ?? []) as Fila[]) {
     ajustes.set(`${String(a.table_key)}:${String(a.row_id)}`, {
@@ -71,6 +76,13 @@ export async function cargarTablasGenerales(companyId: string): Promise<FilasPor
       pgc_input_hint: (a.pgc_input_hint as string | null) ?? null,
       pgc_output_hint: (a.pgc_output_hint as string | null) ?? null,
     })
+  }
+  // Un tipo de gasto ocultado en la ficha de proveedor del C01 (por cuenta) sale
+  // oculto también aquí, salvo que la empresa haya dicho otra cosa: las dos
+  // formas de ocultar, unificadas (tipoGastoOculto, lib/opcionesFicha.ts).
+  for (const o of (ocultosCuenta ?? []) as Fila[]) {
+    const k = `expense_category:${String(o.expense_category_id)}`
+    if (!ajustes.has(k)) ajustes.set(k, { hidden: true, pgc_hint: null, pgc_input_hint: null, pgc_output_hint: null })
   }
   const salida: FilasPorTabla = {}
   await Promise.all(TABLAS_GENERALES.map(async (def) => {

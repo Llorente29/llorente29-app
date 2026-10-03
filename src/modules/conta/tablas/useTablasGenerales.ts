@@ -31,7 +31,7 @@ export function useTablasGenerales(accountId: string | null, companyId: string |
   useEffect(() => {
     if (!accountId || !companyId || !clave) return
     let vivo = true
-    Promise.all([cargarTablasGenerales(companyId), cargarContextoUso(accountId, companyId, hoyEnMadrid())])
+    Promise.all([cargarTablasGenerales(accountId, companyId), cargarContextoUso(accountId, companyId, hoyEnMadrid())])
       .then(([filas, ctx]) => { if (vivo) setCarga({ clave, filas, ctx, error: null }) })
       .catch((e: unknown) => { if (vivo) setCarga({ clave, filas: {}, ctx: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }

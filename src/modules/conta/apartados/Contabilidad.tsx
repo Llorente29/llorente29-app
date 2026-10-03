@@ -13,7 +13,7 @@ import { useFicha } from '@/modules/conta/components/FichaContexto'
 import { Campo, Dato, Guardado } from '@/modules/conta/components/ui'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
 import { cuentaPgc } from '@/modules/conta/lib/pgc'
-import { ocultarTipoGasto } from '@/modules/conta/services/proveedorService'
+import { ocultarTipoGastoUnificado } from '@/modules/conta/services/fichaTablasService'
 
 export default function Contabilidad() {
   const { datos, guardar, actor, recargar } = useFicha()
@@ -87,7 +87,7 @@ export default function Contabilidad() {
             {datos.tiposGasto.map((t) => (
               <label key={t.id} className="cf-casilla" style={{ border: 'none', padding: 0 }}>
                 <input type="checkbox" checked={!t.oculto} onChange={async (e) => {
-                  try { await ocultarTipoGasto(f.accountId, t.id, !e.target.checked, actor.id); await recargar(); avisar(e.target.checked ? `${t.name}: vuelve a salir.` : `${t.name}: ya no sale al elegir.`) }
+                  try { await ocultarTipoGastoUnificado(f.accountId, datos.opciones.empresa?.id ?? null, t.id, !e.target.checked, actor.id); await recargar(); avisar(e.target.checked ? `${t.name}: vuelve a salir.` : `${t.name}: ya no sale al elegir.`) }
                   catch (e2) { setFallo(e2 instanceof Error ? e2.message : 'No se pudo cambiar.') }
                 }} />
                 <span>{t.name} <span className="cf-nota">· {cuentaPgc(t.pgcAccountHint)}</span></span>

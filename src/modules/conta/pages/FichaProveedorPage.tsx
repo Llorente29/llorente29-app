@@ -135,7 +135,7 @@ function Escritorio({ ap }: { ap: Apartado }) {
   const { datos, completitud, rutaApartado } = useFicha()
   const f = datos.ficha
   const tipo = datos.tiposGasto.find((t) => t.id === f.expenseCategoryId)
-  const pago = etiquetaPago(f)
+  const pago = etiquetaPago(f, datos.opciones)
   const pct = completitud?.pct ?? 0
   const faltan = completitud?.faltan ?? []
   const pendientes = datos.propuestas.length
@@ -222,7 +222,7 @@ function PortadaMovil() {
   const llamar = contactoParaLlamar(datos.contactos)
   const tipo = datos.tiposGasto.find((t) => t.id === f.expenseCategoryId) ?? null
   const ultima = datos.facturas[0] ?? null
-  const base = { ficha: f, contactos: datos.contactos, faltan: completitud?.faltan ?? [], tipoGasto: tipo, ultimaFactura: ultima, numDocumentos: datos.documentos.length }
+  const base = { ficha: f, contactos: datos.contactos, faltan: completitud?.faltan ?? [], tipoGasto: tipo, ultimaFactura: ultima, numDocumentos: datos.documentos.length, opciones: datos.opciones }
 
   return (
     <>

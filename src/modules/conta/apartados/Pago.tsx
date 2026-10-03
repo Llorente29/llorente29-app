@@ -7,14 +7,19 @@
 //
 // El IBAN se comprueba al momento (ISO 13616, módulo 97) y se guarda sin
 // espacios y en mayúsculas; uno válido queda «IBAN comprobado».
+//
+// Las formas de pago y los plazos salen de las tablas generales del C00
+// (tarea 7, lib/opcionesFicha.ts); la ficha sigue guardando el tipo de forma
+// y los días, como en el C01.
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useFicha } from '@/modules/conta/components/FichaContexto'
 import { Campo, Guardado } from '@/modules/conta/components/ui'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
 import { formatearIban, normalizarIban, validarIban } from '@/modules/conta/lib/iban'
 import { PAYMENT_METHOD_LABEL, type FichaProveedor, type PaymentMethod } from '@/modules/conta/types'
 import type { ProblemaFicha } from '@/modules/conta/lib/validacionesFicha'
+import { formasDelDesplegable } from '@/modules/conta/lib/opcionesFicha'
 
 const MONEDAS = ['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'DKK', 'NOK', 'PLN', 'CZK', 'HUF', 'RON']
 
@@ -42,6 +47,7 @@ export default function Pago() {
   const [ocupado, setOcupado] = useState(false)
   const [fallo, setFallo] = useState<string | null>(null)
   const [aviso, avisar] = useAvisoGuardado()
+  const listaPlazos = useId()
 
   const ibanAlMomento = useMemo(() => {
     if (!iban.trim()) return null
@@ -102,13 +108,23 @@ export default function Pago() {
         {(p) => (
           <select {...p} className="cf-select" value={metodo} onChange={(e) => setMetodo(e.target.value as PaymentMethod | '')}>
             <option value="">Sin decir</option>
-            {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((m) => <option key={m} value={m}>{PAYMENT_METHOD_LABEL[m]}</option>)}
+            {formasDelDesplegable(datos.opciones, f.paymentMethod, PAYMENT_METHOD_LABEL).map((m) => (
+              <option key={m.valor} value={m.valor}>{m.ofrecida ? m.nombre : `${m.nombre} (ya no está en tus tablas)`}</option>
+            ))}
           </select>
         )}
       </Campo>
       <div className="cf-fila">
         <Campo campo="paymentTermsDays" etiqueta="Plazo (días desde la factura)" error={err('paymentTermsDays')} ayuda="0 = al contado.">
-          {(p) => <input {...p} className="cf-input" value={plazo} inputMode="numeric" onChange={(e) => setPlazo(e.target.value)} />}
+          {(p) => (
+            <>
+              <input {...p} className="cf-input" value={plazo} inputMode="numeric" list={listaPlazos} onChange={(e) => setPlazo(e.target.value)} />
+              {/* Los plazos de las tablas, como sugerencia (los de varios vencimientos aún no caben aquí: D6). */}
+              <datalist id={listaPlazos}>
+                {datos.opciones.plazos.map((t) => <option key={t.valor} value={String(t.valor)}>{t.nombre}</option>)}
+              </datalist>
+            </>
+          )}
         </Campo>
         <Campo campo="paymentFixedDays" etiqueta="Días fijos de pago" error={err('paymentFixedDays')} ayuda="Si paga solo ciertos días del mes: «5, 20». Opcional.">
           {(p) => <input {...p} className="cf-input" value={dias} inputMode="numeric" onChange={(e) => setDias(e.target.value)} />}
