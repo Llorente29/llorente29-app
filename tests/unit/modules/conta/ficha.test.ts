@@ -170,6 +170,12 @@ describe('validaciones al guardar (§5.7)', () => {
     expect(r.errores).toEqual([])
     expect(r.avisos.map((a) => a.campo)).toEqual(['irpfWithholdingPct'])
   })
+  it('plazo de más de 60 días: avisa (Ley 3/2004, art. 4.3), no bloquea', () => {
+    const r = validarFicha({ ...completa, paymentTermsDays: 90 }, [])
+    expect(r.errores).toEqual([])
+    expect(r.avisos).toEqual([{ campo: 'paymentTermsDays', mensaje: 'Supera los 60 días que permite la ley de morosidad entre empresas.' }])
+    expect(validarFicha({ ...completa, paymentTermsDays: 60 }, []).avisos).toEqual([])
+  })
   it('intracomunitario sin NIF-IVA UE: bloquea', () => {
     const r = validarFicha({ ...completa, vatRegime: 'intracomunitario' }, [])
     expect(r.errores.map((e) => e.campo)).toContain('taxId')

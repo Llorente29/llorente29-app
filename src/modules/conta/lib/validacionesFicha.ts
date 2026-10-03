@@ -5,12 +5,14 @@
 // Dos tipos de resultado, y no es lo mismo:
 //   · error  → bloquea el guardado (NIF repetido en la cuenta; intracomunitario
 //              sin NIF-IVA UE; NIF o IBAN que no pasan su algoritmo);
-//   · aviso  → se enseña y deja guardar (autónomo sin retención).
+//   · aviso  → se enseña y deja guardar (autónomo sin retención; plazo de pago
+//              de más de 60 días, Ley 3/2004).
 
 import type { FichaProveedor } from '@/modules/conta/types'
 import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 import { validarIban } from '@/modules/conta/lib/iban'
 import { validarFormatoVatEu } from '@/modules/conta/lib/vatEu'
+import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 
 /**
  * Estructura del BIC (ISO 9362): 4 letras de banco, 2 de país, 2 de
@@ -72,6 +74,10 @@ export function validarFicha(f: FichaProveedor, otrosDeLaCuenta: OtroProveedor[]
   if (f.earlyPaymentDiscountPct !== null && (f.earlyPaymentDiscountPct < 0 || f.earlyPaymentDiscountPct > 100)) {
     errores.push({ campo: 'earlyPaymentDiscountPct', mensaje: 'El descuento por pronto pago va de 0 a 100 %.' })
   }
+
+  // Ley 3/2004, art. 4.3: más de 60 días entre empresas. Se guarda, pero se avisa (respuesta 2 del C00).
+  const plazoLargo = f.paymentTermsDays !== null ? avisoPlazo([f.paymentTermsDays]) : null
+  if (plazoLargo) avisos.push({ campo: 'paymentTermsDays', mensaje: `${plazoLargo}.` })
 
   if (f.entityKind === 'self_employed' && f.irpfWithholdingPct === null) {
     avisos.push({ campo: 'irpfWithholdingPct', mensaje: 'Es autónomo y no tiene retención anotada. Si te factura con retención de IRPF, apúntala.' })

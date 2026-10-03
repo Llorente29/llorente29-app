@@ -30,14 +30,18 @@ export function FormularioFila({ def, inicial, editando, bancos, titulo, guardan
     if (Object.keys(f).length === 0) onGuardar(valores)
   }
 
+  // Los avisos no paran el guardado: se ven mientras se escribe (p. ej. un plazo de más de 60 días).
+  const avisos = def.avisos?.(valores) ?? {}
+
   const campo = (c: CampoFormulario) => {
     const id = `${base}-${c.clave}`
     const fallo = fallos[c.clave]
+    const aviso = fallo ? undefined : avisos[c.clave]
     const bloqueado = editando && c.fijoAlEditar === true
     const comun = {
       id, name: c.clave, className: 'cx-input', value: valores[c.clave] ?? '', disabled: bloqueado || guardando,
       'aria-invalid': fallo ? true : undefined,
-      'aria-describedby': [c.ayuda || bloqueado ? `${id}-ayuda` : '', fallo ? `${id}-fallo` : ''].filter(Boolean).join(' ') || undefined,
+      'aria-describedby': [c.ayuda || bloqueado ? `${id}-ayuda` : '', fallo ? `${id}-fallo` : '', aviso ? `${id}-aviso` : ''].filter(Boolean).join(' ') || undefined,
       onChange: (e: { target: { value: string } }) => setValores((v) => ({ ...v, [c.clave]: e.target.value })),
     }
     const opciones = c.tipo === 'siNo' ? [{ valor: 'si', texto: 'Sí' }, { valor: 'no', texto: 'No' }]
@@ -60,6 +64,7 @@ export function FormularioFila({ def, inicial, editando, bancos, titulo, guardan
           </span>
         )}
         {fallo && <span id={`${id}-fallo`} className="cx-error" role="alert">{fallo}</span>}
+        {aviso && <span id={`${id}-aviso`} className="cx-aviso" role="status">{aviso}</span>}
       </div>
     )
   }

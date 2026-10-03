@@ -20,6 +20,7 @@ import { formatearIban, normalizarIban, validarIban } from '@/modules/conta/lib/
 import { PAYMENT_METHOD_LABEL, type FichaProveedor, type PaymentMethod } from '@/modules/conta/types'
 import type { ProblemaFicha } from '@/modules/conta/lib/validacionesFicha'
 import { formasDelDesplegable } from '@/modules/conta/lib/opcionesFicha'
+import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 
 const MONEDAS = ['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'DKK', 'NOK', 'PLN', 'CZK', 'HUF', 'RON']
 
@@ -115,7 +116,8 @@ export default function Pago() {
         )}
       </Campo>
       <div className="cf-fila">
-        <Campo campo="paymentTermsDays" etiqueta="Plazo (días desde la factura)" error={err('paymentTermsDays')} ayuda="0 = al contado.">
+        <Campo campo="paymentTermsDays" etiqueta="Plazo (días desde la factura)" error={err('paymentTermsDays')} ayuda="0 = al contado."
+          aviso={/^\d+$/.test(plazo.trim()) ? avisoPlazo([Number(plazo)]) : null}>
           {(p) => (
             <>
               <input {...p} className="cf-input" value={plazo} inputMode="numeric" list={listaPlazos} onChange={(e) => setPlazo(e.target.value)} />

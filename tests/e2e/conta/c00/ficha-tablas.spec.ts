@@ -65,6 +65,12 @@ test('cuenta A: el IVA, la retención, la forma y el plazo salen de las tablas, 
     await expect(page.getByLabel('Forma de pago').locator('option')).toHaveText(['Sin decir', 'Transferencia', 'Domiciliación', 'Tarjeta', 'Efectivo'])
     // «30 y 60 días» no cabe en un solo plazo (D6): no se sugiere.
     expect(await sugerencias(page, 'Plazo (días desde la factura)')).toEqual(['0', '30', '60'])
+    // Ley 3/2004, art. 4.3: más de 60 días avisa mientras se escribe, sin impedir guardar (respuesta 2).
+    const plazo = page.getByLabel('Plazo (días desde la factura)')
+    await plazo.fill('90')
+    await expect(page.getByText('Supera los 60 días que permite la ley de morosidad entre empresas')).toBeVisible()
+    await plazo.fill('60')
+    await expect(page.getByText('Supera los 60 días que permite la ley de morosidad entre empresas')).toHaveCount(0)
   } finally {
     await dejarComoEstaba(s)
   }

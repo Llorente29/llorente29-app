@@ -11,6 +11,7 @@
 
 import { cuentaPgc } from '@/modules/conta/lib/pgc'
 import { formatearIban, normalizarIban, validarIban } from '@/modules/conta/lib/iban'
+import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 import { porcentaje } from '@/modules/conta/lib/formato'
 
 // ── Las filas, ya leídas ────────────────────────────────────────────────────
@@ -113,6 +114,8 @@ export interface DefinicionTabla {
   formulario: CampoFormulario[]
   /** Comprueba lo escrito; devuelve los fallos por campo. */
   validar: (v: Valores) => Record<string, string>
+  /** Avisos que NO impiden guardar (se enseñan mientras se escribe). */
+  avisos?: (v: Valores) => Record<string, string>
   /** Lo escrito → columnas de la base (sin cuenta, empresa ni is_system). */
   aBase: (v: Valores) => Record<string, unknown>
   /** Una fila → lo que se escribe en el formulario al editarla. */
@@ -384,13 +387,14 @@ const PLAZOS: DefinicionTabla = {
   detalle: [
     { etiqueta: 'Vence', valor: (f) => textoPlazo(lista(d(f, 'days')).map(Number), lista(d(f, 'fixed_days')).map(Number)) },
     { etiqueta: 'Varios vencimientos', valor: (f) => (lista(d(f, 'days')).length > 1 ? 'Se definen aquí; el reparto en pagos llega con Pagos y cobros' : null) },
+    { etiqueta: 'Ley de morosidad', valor: (f) => avisoPlazo(lista(d(f, 'days')).map(Number)) },
   ],
   cuentasEditables: [],
   formulario: [
     { clave: 'name', etiqueta: 'Nombre', tipo: 'texto', obligatorio: true },
     { clave: 'example', etiqueta: 'Para qué es', tipo: 'texto' },
     { clave: 'days', etiqueta: 'Días desde la factura', tipo: 'listaDias', obligatorio: true, porDefecto: '30',
-      ayuda: 'Uno o varios, separados por comas: «30» o «30, 60, 90». 0 es al contado.' },
+      ayuda: 'Uno o varios, separados por comas: «30» o «30, 60». 0 es al contado.' },
     { clave: 'fixed_days', etiqueta: 'Días fijos de pago del mes', tipo: 'listaDiasMes', ayuda: 'Si pagas solo ciertos días: «5, 20».' },
   ],
   validar: (v) => {
@@ -400,6 +404,11 @@ const PLAZOS: DefinicionTabla = {
     const fijos = leerListaEnteros(v.fixed_days ?? '')
     if (fijos === null || fijos.some((n) => n < 1 || n > 31)) fallos.fixed_days = 'Los días del mes van del 1 al 31.'
     return fallos
+  },
+  // Ley 3/2004, art. 4.3: más de 60 días se puede guardar, pero se avisa (respuesta 2 de Julio).
+  avisos: (v): Record<string, string> => {
+    const a = avisoPlazo(leerListaEnteros(v.days ?? '') ?? [])
+    return a ? { days: a } : {}
   },
   aBase: (v) => ({ name: v.name.trim(), example: nulo(v.example), days: leerListaEnteros(v.days) ?? [0], fixed_days: leerListaEnteros(v.fixed_days ?? '') ?? [] }),
   aValores: (f) => ({ name: txt(d(f, 'name')), example: txt(d(f, 'example')), days: lista(d(f, 'days')).join(', '), fixed_days: lista(d(f, 'fixed_days')).join(', ') }),
