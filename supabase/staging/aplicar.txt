@@ -1,8 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 10.ª tanda (respuesta 2 de Julio): fuera
-# expense_category_hidden, que se quita de la migración del C01 antes de
-# producción. Solo staging, solo si está vacía.
-# (9.ª: el 2 % del 4.º trimestre de 2024 a todos los básicos y la medida D1.)
-supabase/staging/sql/20261003_quitar_expense_category_hidden.sql
+# 03/10/2026 · C00, 11.ª tanda (respuesta 3 de Julio, punto 1: el alta nueva):
+# el IVA de tus ventas en el perfil fiscal, y una cuenta C de prueba SIN
+# empresa para probar el alta a pantalla completa (N1bAlta).
+# (10.ª: fuera expense_category_hidden.)
+supabase/migrations/20261003T0180_c00_iva_de_ventas.sql
+supabase/seeds/conta/seed_c00_cuenta_c_sin_empresa.sql
