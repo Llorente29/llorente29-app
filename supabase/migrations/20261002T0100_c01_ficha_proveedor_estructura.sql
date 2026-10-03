@@ -29,7 +29,12 @@ create table if not exists public.expense_category (
 comment on table public.expense_category is
   'C01. Tipos de gasto (catálogo global de Folvy). pgc_account_hint = cuenta del PGC (RD 1514/2007) que le corresponde; C02 lo enlaza con el plan contable de cada cuenta.';
 
-insert into public.expense_category (code, name, pgc_account_hint, sort_order) values
+-- Solo los que faltan (C00 R7): así el fichero se puede volver a aplicar
+-- después del C00, cuya 0120 exige más campos a las filas de serie (la
+-- restricción expense_category_serie se comprueba antes que el on conflict).
+-- La primera vez, la tabla está vacía y entran los doce, como antes.
+insert into public.expense_category (code, name, pgc_account_hint, sort_order)
+select v.code, v.name, v.pgc_account_hint, v.sort_order from (values
   ('food_beverage',      'Comida y bebida',                     '600', 10),
   ('packaging',          'Envases, embalajes y desechables',    '602', 20),
   ('cleaning_tableware', 'Limpieza y menaje',                   '602', 30),
@@ -42,6 +47,8 @@ insert into public.expense_category (code, name, pgc_account_hint, sort_order) v
   ('advertising',        'Publicidad',                          '627', 100),
   ('utilities',          'Luz, agua, gas y teléfono',           '628', 110),
   ('other_services',     'Otros servicios',                     '629', 120)
+) as v(code, name, pgc_account_hint, sort_order)
+where not exists (select 1 from public.expense_category e where e.code = v.code)
 on conflict (code) do nothing;
 
 alter table public.expense_category enable row level security;
