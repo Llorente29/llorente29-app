@@ -86,7 +86,9 @@ test('cuenta A: ocultar un tipo de gasto en la ficha lo oculta en «Tablas gener
 
     await page.goto('/conta/ajustes/tablas/tipos-de-gasto')
     await page.getByRole('button', { name: 'Abrir Primas de seguros' }).click()
-    await expect(page.getByRole('rowgroup', { name: 'Los demás' }).getByText('Oculto', { exact: true })).toBeVisible()
+    // «Los demás» es una cabecera; la fila va a continuación, no dentro: se mira la fila.
+    const fila = page.getByRole('rowgroup').filter({ has: page.getByRole('button', { name: 'Cerrar Primas de seguros' }) })
+    await expect(fila.getByText('Oculto', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Volver a mostrar' }).click()
     await expect(page.getByRole('status').getByText('«Primas de seguros» vuelve a salir en tus desplegables.')).toBeVisible()
 
