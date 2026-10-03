@@ -1,0 +1,168 @@
+name: Cumplimiento de contabilidad contra PRODUCCIÓN (solo lectura)
+
+# QUÉ HACE (C00, respuestas 6 y 7 de Julio)
+# Los dos agentes de cumplimiento, contra PRODUCCIÓN y en SOLO LECTURA:
+#   · «Datos maestros e impuestos»: las filas de serie y la coherencia de cada
+#     empresa, con el mismo guion que el nocturno de staging.
+#   · «Normativa al día»: las fuentes oficiales contra la última descarga (no
+#     toca ninguna base).
+#
+# EN ESTE MODO NO ESCRIBE NADA EN NINGÚN SITIO: ni en la base (usuario de solo
+# lectura y sesión read-only), ni incidencias en GitHub (este workflow no
+# tiene permiso para abrirlas), ni commits. El informe sale en el resumen de
+# la ejecución y como artefacto; de ahí va al PR.
+#
+# CUÁNDO: solo a mano. Desde la rama, empujando un cambio a
+# docs/conta/cumplimiento/lanzar-agentes-produccion.txt (mientras el C00 no
+# esté en main), o con workflow_dispatch una vez fusionado. Se lanza DESPUÉS
+# de las migraciones y ANTES de la fusión.
+#
+# LO QUE JULIO HACE UNA VEZ
+#   1. Ejecuta scripts/conta/crear-usuario-lectura.sql en producción y le pone
+#      contraseña al rol conta_lectura.
+#   2. Crea el secreto PROD_CONTA_RO_DB_URL (Session pooler, usuario
+#      conta_lectura.xzmpnchlguibclvxyynt).
+#
+# GUARDAS: la URL es de producción y no de staging; el usuario es conta_lectura;
+# al otro lado está Foodint (tiene proveedores); la sesión es de solo lectura (se comprueba antes
+# de leer nada); y el usuario no tiene ningún permiso de escritura.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['conta/**']
+    paths:
+      - 'docs/conta/cumplimiento/lanzar-agentes-produccion.txt'
+
+concurrency:
+  group: cumplimiento-produccion-conta
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  datos-maestros:
+    name: Datos maestros e impuestos · PRODUCCIÓN
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROD_REF: xzmpnchlguibclvxyynt
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      PSQL: /usr/lib/postgresql/17/bin/psql
+      PGAPPNAME: gha-cumplimiento-produccion-${{ github.run_id }}
+      PGOPTIONS: '-c default_transaction_read_only=on'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guarda 1 y 2 · producción, y no con el usuario de escritura
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          usuario = (u.username or "").split(".")[0]
+          if usuario != "conta_lectura":
+              print(f"::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura. Abortado sin conectar.")
+              raise SystemExit(1)
+          PY
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "La URL es de producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 y 4 · Foodint al otro lado, sesión de solo lectura y sin permisos de escritura
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            -- Foodint, por sus proveedores: conta_lectura no lee accounts (no está en lo que leen los agentes).
+            select (select count(*) from public.supplier where account_id = '$FOODINT') > 0
+               and current_setting('transaction_read_only') = 'on'
+               and not exists (select 1 from information_schema.role_table_grants
+                                where grantee = current_user and privilege_type <> 'SELECT')
+          " 2>&1) || { echo "::error::No se ha podido comprobar: $r"; exit 1; }
+          if [ "$r" != "t" ]; then
+            echo "::error::Falla una guarda: o no está Foodint, o la sesión no es de solo lectura, o el usuario tiene algún permiso que no es SELECT."
+            exit 1
+          fi
+          echo "Producción (está Foodint), sesión de solo lectura, y el usuario solo tiene SELECT."
+
+      - name: Volcar las filas de serie (solo lectura)
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-datos-maestros.sql > /tmp/bd.json
+
+      - name: Revisar contra la referencia
+        id: revisar
+        continue-on-error: true
+        run: node scripts/conta/agente-datos-maestros.mjs /tmp/bd.json /tmp/informe.md producción
+
+      - name: Informe
+        if: always()
+        run: |
+          if [ -f /tmp/informe.md ]; then cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Guardar el informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-datos-maestros-produccion-${{ github.run_id }}
+          path: /tmp/informe.md
+          if-no-files-found: warn
+
+      - name: Resultado
+        if: steps.revisar.outcome == 'failure'
+        run: |
+          echo "::error::Los datos maestros de producción no cuadran con la fuente, o hay fallos de coherencia: ver el informe."
+          exit 1
+
+  normativa:
+    name: Normativa al día
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Comparar las fuentes con la última descarga
+        run: node scripts/conta/fuentes.mjs comparar
+      - name: Separar lo nuevo de lo ya sabido
+        id: informe
+        continue-on-error: true
+        run: node scripts/conta/normativa-aviso.mjs /tmp/informe-normativa.md
+      - name: Informe
+        if: always()
+        run: |
+          if [ -f /tmp/informe-normativa.md ]; then cat /tmp/informe-normativa.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Guardar el informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-normativa-${{ github.run_id }}
+          path: /tmp/informe-normativa.md
+          if-no-files-found: warn
+      - name: Resultado
+        if: steps.informe.outcome == 'failure'
+        run: |
+          echo "::warning::Ha cambiado alguna fuente oficial, o no se ha podido comprobar: ver el informe."
