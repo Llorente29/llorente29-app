@@ -282,6 +282,16 @@
       "url": "https://publications.europa.eu/webapi/rdf/sparql",
       "consulta": "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> SELECT ?codigo ?nombre WHERE { ?m skos:inScheme <http://publications.europa.eu/resource/authority/currency> ; skos:prefLabel ?nombre ; skos:notation ?n . FILTER(lang(?nombre) = 'es') FILTER(regex(str(datatype(?n)), '4217')) BIND(str(?n) AS ?codigo) } ORDER BY ?codigo",
       "debeContener": "EUR"
+    },
+    {
+      "clave": "geonames-cp-es",
+      "nombre": "GeoNames · códigos postales de España (CC BY 4.0, geonames.org)",
+      "tipo": "zip",
+      "formato": "tsv",
+      "url": "https://download.geonames.org/export/zip/ES.zip",
+      "dentro": "ES.txt",
+      "licencia": "Creative Commons Attribution 4.0 (CC BY 4.0). Atribución: GeoNames, https://www.geonames.org/",
+      "debeContener": "28051"
     }
   ]
 }

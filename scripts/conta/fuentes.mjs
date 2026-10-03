@@ -16,8 +16,10 @@
 //
 // Sin dependencias: Node 20+ (fetch y crypto).
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, mkdtemp } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const DIR = 'docs/conta/fuentes'
@@ -109,7 +111,33 @@ function tituloBueno(f, titulo) {
   return titulo.includes(f.debeContener)
 }
 
+/**
+ * Un fichero dentro de un zip (GeoNames publica los códigos postales así). Se
+ * baja el zip, se saca SOLO el fichero que dice la fuente con `unzip` (está en
+ * los ejecutores de Actions) y se guarda su texto; la huella es la del texto.
+ */
+async function descargarZip(f) {
+  let http = 0
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      const r = await fetch(f.url, { headers: { 'User-Agent': UA } })
+      http = r.status
+      if (r.status === 200) {
+        const dir = await mkdtemp(join(tmpdir(), 'fuente-'))
+        const zip = join(dir, 'f.zip')
+        await writeFile(zip, Buffer.from(await r.arrayBuffer()))
+        const texto = execFileSync('unzip', ['-p', zip, f.dentro], { maxBuffer: 64 * 1024 * 1024 }).toString('utf8')
+        return { url: f.url, http, titulo: f.nombre, actualizadoEnFuente: r.headers.get('last-modified'), texto, ext: f.formato ?? 'txt' }
+      }
+      if (r.status < 500) break
+    } catch (e) { if (intento === 2) return { url: f.url, http, titulo: f.nombre, texto: '', ext: f.formato ?? 'txt', error: String(e) } }
+    await espera(3000 * (intento + 1))
+  }
+  return { url: f.url, http, titulo: f.nombre, texto: '', ext: f.formato ?? 'txt', error: `HTTP ${http}` }
+}
+
 async function descargarUna(f) {
+  if (f.tipo === 'zip') return descargarZip(f)
   if (f.tipo === 'boe') {
     const probados = []
     if (f.id) {
