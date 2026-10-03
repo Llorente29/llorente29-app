@@ -151,6 +151,11 @@ describe('el registro, en palabras', () => {
     expect(queHizo(r({ field: 'tax_forms', before: null, after: ['111', '303'] }))).toBe('Puso los modelos que presentas: 111, 303')
     expect(queHizo(r({ source: 'import', field: 'legal_name', before: null, after: 'Taberna, S.L.' }))).toBe('Trajo de tu cuenta la razón social: Taberna, S.L.')
     expect(queHizo(r({ action: 'anadir_actividad', after: { description: 'Restaurante' } }))).toBe('Añadió la actividad «Restaurante»')
+    // Dejar el valor de serie que ya tenía es ponerlo, no cambiarlo (lo vio la captura del 03/10).
+    expect(queHizo(r({ field: 'account_digits', before: 8, after: '8' }))).toBe('Puso los dígitos de las cuentas: 8')
+    // La forma jurídica, por su nombre del catálogo y no por su código («nif_b»).
+    expect(queHizo(r({ field: 'legal_form_code', before: null, after: 'nif_b', afterName: 'Sociedades de responsabilidad limitada' })))
+      .toBe('Puso el tipo de empresa: Sociedades de responsabilidad limitada')
   })
   it('lo deshecho no se vuelve a deshacer y dice quién', () => {
     expect(sePuedeDeshacer(r({ undoneAt: '2026-10-03', undoneByName: 'Admin Norte' }))).toEqual({ ok: false, motivo: 'Deshecho por Admin Norte' })

@@ -123,7 +123,12 @@ test('cuenta A: el alta conversada entera, y lo que hizo la IA se ve, se explica
     // Deshecha, la sugerencia NO vuelve: ya se contestó.
     await page.reload()
     await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+    // Primero que haya cargado: un «no está» mirado con el esqueleto delante
+    // siempre se cumple, y no prueba nada.
+    await expect(registro.getByText('Deshecho por Admin Norte').first()).toBeVisible()
+    await expect(page.getByText(nombre).first()).toBeVisible()
     await expect(page.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toHaveCount(0)
+    await expect(registro.getByText('Puso el tipo de empresa: Sociedades de responsabilidad limitada')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/ia-registro.png`, fullPage: true })
     expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])

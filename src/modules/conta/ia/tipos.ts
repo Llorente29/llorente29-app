@@ -47,6 +47,8 @@ export interface Registro {
   undoneAt: string | null
   undoneByName: string | null
   suggestionId: string | null
+  /** El nombre del valor puesto, cuando el valor es un código de un catálogo (la forma jurídica). */
+  afterName?: string | null
 }
 
 /** Igualdad de valores tal como los guarda la base (jsonb) y los lee la app. */
@@ -101,8 +103,11 @@ export function queHizo(r: Registro): string {
     return `Añadió la actividad «${desc}»`
   }
   const campo = CAMPO[r.field ?? ''] ?? r.field ?? 'un dato'
-  const verbo = r.source === 'import' ? 'Trajo de tu cuenta' : r.before === null || r.before === undefined ? 'Puso' : 'Cambió'
-  return `${verbo} ${campo}: ${valorEnPalabras(r.field, r.after)}`
+  // «Cambió» solo si había OTRA cosa: dejar el valor que ya tenía (el de
+  // serie de la columna) es ponerlo, no cambiarlo.
+  const cambio = r.before !== null && r.before !== undefined && !mismoValor(r.before, r.after)
+  const verbo = r.source === 'import' ? 'Trajo de tu cuenta' : cambio ? 'Cambió' : 'Puso'
+  return `${verbo} ${campo}: ${r.afterName ?? valorEnPalabras(r.field, r.after)}`
 }
 
 /** Si se puede deshacer y, si no, por qué. */

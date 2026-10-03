@@ -29,6 +29,13 @@ export async function cargarIa(companyId: string): Promise<{ origenes: Origen[];
     leer(tabla('ai_suggestion').select('id, kind, reason_key, title, why, payload, status, created_at').eq('company_id', companyId).eq('status', 'open').order('created_at'), 'las sugerencias'),
     leer(tabla('ai_action_log').select('*').eq('company_id', companyId).order('done_at', { ascending: false }).limit(50), 'lo que ha hecho Folvy'),
   ])
+  // La forma jurídica se guarda por código: su nombre, del catálogo (regla 30:
+  // se busca en el catálogo entero, no en una lista filtrada).
+  const formas = [...new Set(r.filter((x) => x.field === 'legal_form_code' && typeof x.after_value === 'string').map((x) => String(x.after_value)))]
+  const nombreForma = new Map<string, string>()
+  if (formas.length) {
+    for (const f of await leer(tabla('legal_form').select('code, name').in('code', formas), 'los tipos de empresa')) nombreForma.set(String(f.code), String(f.name))
+  }
   return {
     origenes: o.map((x): Origen => ({
       tableKey: String(x.table_key), rowId: String(x.row_id), field: String(x.field),
@@ -44,6 +51,7 @@ export async function cargarIa(companyId: string): Promise<{ origenes: Origen[];
       before: x.before_value ?? null, after: x.after_value ?? null, reason: String(x.reason),
       doneAt: String(x.done_at), doneForName: txt(x.done_for_name), undoneAt: txt(x.undone_at), undoneByName: txt(x.undone_by_name),
       suggestionId: txt(x.suggestion_id),
+      afterName: x.field === 'legal_form_code' ? nombreForma.get(String(x.after_value)) ?? null : null,
     })),
   }
 }
