@@ -41,6 +41,8 @@ on:
       - 'scripts/conta/lib/datosMaestros.mjs'
       - 'scripts/conta/normativa-aviso.mjs'
       - 'docs/conta/fuentes/sabido.json'
+      # Mientras el C00 no esté en main: lanzarlo a mano desde la rama (respuesta 2).
+      - 'docs/conta/cumplimiento/lanzar-agentes.txt'
       - '.github/workflows/cumplimiento-nocturno-conta.yml'
 
 concurrency:
