@@ -27,7 +27,19 @@ export interface Empresa {
   fiscalProvince: string | null
   fiscalCountry: string
   registryName: string | null
+  /** Tomo, folio, hoja e inscripción del Registro Mercantil (respuesta 3, punto 5). */
+  registryVolume: string | null
+  registryFolio: string | null
   registrySheet: string | null
+  registryEntry: string | null
+  /** Fecha de constitución. */
+  incorporatedOn: string | null
+  /** Correo y teléfono de los avisos de notificaciones (DEHú). */
+  dehuEmail: string | null
+  dehuPhone: string | null
+  /** Teléfono y correo de contacto de la empresa (hoja de identificación del depósito). */
+  phone?: string | null
+  email?: string | null
   /** Por dónde va el alta conversada (company.setup_step). */
   setupStep: string
   setupCompletedAt: string | null
@@ -62,7 +74,25 @@ export interface Actividad {
   isMain: boolean
 }
 
-export interface EjercicioBd extends Ejercicio { id: string; status: 'open' | 'closed' }
+export interface EjercicioBd extends Ejercicio {
+  id: string
+  status: 'open' | 'closed'
+  /** Lo que el 200 y el depósito piden de cada ejercicio (respuesta 3, punto 5). */
+  averageStaffFixed?: number | null
+  averageStaffTemporary?: number | null
+  /** null = sin decir. */
+  isAudited?: boolean | null
+  auditorName?: string | null
+  auditorTaxId?: string | null
+  auditOpinion?: 'favorable' | 'con_salvedades' | 'desfavorable' | 'denegada' | null
+}
+
+export const OPINION_AUDITOR: Record<string, string> = {
+  favorable: 'Favorable', con_salvedades: 'Con salvedades', desfavorable: 'Desfavorable', denegada: 'Denegada',
+}
+
+/** La entidad dominante del grupo, si la hay (company_relation de tipo grupo). */
+export interface Dominante { id: string; nombre: string; nif: string | null }
 
 export interface Cierre { mes: string; quien: string | null; cuando: string }
 
@@ -74,6 +104,8 @@ export interface Socio {
   ownershipPct: number | null
   startedOn: string | null
   endedOn: string | null
+  /** Firma las cuentas anuales. */
+  signsAccounts?: boolean
 }
 
 export interface Opcion { code: string; name: string }
@@ -87,6 +119,8 @@ export interface DatosEmpresa {
   cierres: Cierre[]
   /** null = quien mira no es administrador: los socios no se le enseñan. */
   socios: Socio[] | null
+  /** La entidad dominante del grupo, si la hay; undefined si no se ha leído. */
+  dominante?: Dominante | null
   formasJuridicas: Opcion[]
   regimenes: Opcion[]
   modelos: Opcion[]
@@ -142,9 +176,13 @@ function abreviarVia(t: string): string {
   return m[t.trim().toLowerCase()] ?? t
 }
 
-/** El registro mercantil: «Madrid · M-000000». */
+/** El registro mercantil: «Madrid · tomo 1234, folio 56, hoja M-000000, inscripción 1.ª». */
 export function textoRegistro(e: Empresa): string | null {
-  const partes = [e.registryName, e.registrySheet].filter((p): p is string => !!p && p.trim() !== '')
+  const datos = [
+    e.registryVolume && `tomo ${e.registryVolume}`, e.registryFolio && `folio ${e.registryFolio}`,
+    e.registrySheet && `hoja ${e.registrySheet}`, e.registryEntry && `inscripción ${e.registryEntry}`,
+  ].filter((p): p is string => !!p && p.trim() !== '')
+  const partes = [e.registryName, datos.length ? datos.join(', ') : null].filter((p): p is string => !!p && p.trim() !== '')
   return partes.length ? partes.join(' · ') : null
 }
 
@@ -254,10 +292,25 @@ export interface CambiosQuienEres {
   fiscalProvince: string
   registryName: string
   registrySheet: string
+  /** Respuesta 3, punto 5. Opcionales: el formulario antiguo no los trae. */
+  registryVolume?: string
+  registryFolio?: string
+  registryEntry?: string
+  incorporatedOn?: string
+  dehuEmail?: string
+  dehuPhone?: string
+  phone?: string
+  email?: string
 }
 
 export function revisarQuienEres(c: CambiosQuienEres, pais: string): Record<string, string> {
   const f: Record<string, string> = {}
+  if (c.dehuEmail && c.dehuEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.dehuEmail.trim())) {
+    f.dehuEmail = 'Ese correo no tiene buena pinta: falta la @ o el dominio.'
+  }
+  if (c.incorporatedOn && c.incorporatedOn.trim() !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(c.incorporatedOn.trim())) {
+    f.incorporatedOn = 'Pon la fecha completa: día, mes y año.'
+  }
   if (c.legalName.trim() === '') f.legalName = 'Falta la razón social: el nombre que sale en el NIF.'
   if (pais === 'ES' && c.fiscalPostalCode.trim() !== '' && !/^\d{5}$/.test(c.fiscalPostalCode.trim())) {
     f.fiscalPostalCode = 'El código postal son cinco cifras.'

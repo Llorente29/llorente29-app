@@ -9,12 +9,13 @@ import { Chip, Dato } from '@/modules/conta/ui/piezas'
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import { cuentaDeApunte } from '@/modules/conta/lib/pgc'
 import { TEXTO_IVA_VENTAS } from '@/modules/conta/lib/ivaVentas'
+import { fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
   NOMBRE_CORTO_MODELO, TERRITORIOS, direccionEnUnaLinea, revisarDigitos, revisarPorcentajeProrrata, revisarQuienEres,
   textoIva, textoRegistro, type CambiosQuienEres, type DatosEmpresa, type PerfilFiscal,
 } from '@/modules/conta/empresa/datosEmpresa'
 import type { Quien } from '@/modules/conta/empresa/apartados'
-import { guardarPerfil, guardarQuienEres } from '@/modules/conta/services/empresaDatosService'
+import { guardarDominante, guardarPerfil, guardarQuienEres } from '@/modules/conta/services/empresaDatosService'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
 import { Marca } from '@/modules/conta/ia/Marca'
 import { CampoLista, CampoSiNo, CampoTexto, PieFormulario, Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
@@ -40,7 +41,10 @@ export function QuienEres({ d, quien, alCambiar, movil }: Props) {
       <TarjetaApartado titulo="Quién eres" movil={movil}>
         <FormQuienEres d={d} guardando={h.guardando} cancelar={() => { setEditando(false); h.limpiar() }}
           guardar={async (c) => {
-            if (await h.hacer(() => guardarQuienEres(quien.companyId, quien.userId, c), `Guardado: ${c.legalName.trim()}.`)) setEditando(false)
+            if (await h.hacer(async () => {
+              await guardarQuienEres(quien.companyId, quien.userId, c)
+              await guardarDominante(quien.accountId, quien.companyId, quien.userId, d.dominante, c.dominanteNombre, c.dominanteNif, hoyEnMadrid())
+            }, `Guardado: ${c.legalName.trim()}.`)) setEditando(false)
           }} />
         <Resultado hecho={null} fallo={h.fallo} />
       </TarjetaApartado>
@@ -61,24 +65,38 @@ export function QuienEres({ d, quien, alCambiar, movil }: Props) {
       </Dato>
       <Dato etiqueta="Dirección fiscal">{direccionEnUnaLinea(e) && <>{direccionEnUnaLinea(e)}<Marca origenes={d.ia.origenes} tabla="company" fila={e.id}
         campos={[['fiscal_street', e.fiscalStreet], ['fiscal_number', e.fiscalNumber], ['fiscal_city', e.fiscalCity], ['fiscal_postal_code', e.fiscalPostalCode]]} /></>}</Dato>
+      {e.entityKind !== 'self_employed' && <Dato etiqueta="Constituida el">{e.incorporatedOn && fechaLarga(e.incorporatedOn)}</Dato>}
       {e.entityKind !== 'self_employed' && <Dato etiqueta="Registro mercantil">{textoRegistro(e)}</Dato>}
+      <Dato etiqueta="Contacto">{[e.phone, e.email].filter(Boolean).join(' · ') || null}</Dato>
+      <Dato etiqueta="Avisos de notificaciones (DEHú)">{[e.dehuEmail, e.dehuPhone].filter(Boolean).join(' · ') || null}</Dato>
+      {e.entityKind !== 'self_employed' && (
+        <Dato etiqueta="Grupo" vacio="No es de ningún grupo">{d.dominante && `Entidad dominante: ${d.dominante.nombre}${d.dominante.nif ? ` · ${d.dominante.nif}` : ''}`}</Dato>
+      )}
+      {/* Respuesta 3, punto 5: el certificado no va en la ficha; va en «Certificados y accesos», cifrado y con quién puede usarlo. */}
+      <Dato etiqueta="Certificado digital"><span className="cx-dato-vacio">Aún no · irá en «Certificados y accesos»</span></Dato>
       <Resultado hecho={h.hecho} fallo={null} />
     </TarjetaApartado>
   )
 }
 
+type CambiosConGrupo = CambiosQuienEres & { dominanteNombre: string; dominanteNif: string }
+
 function FormQuienEres({ d, guardando, cancelar, guardar }: {
-  d: DatosEmpresa; guardando: boolean; cancelar: () => void; guardar: (c: CambiosQuienEres) => void
+  d: DatosEmpresa; guardando: boolean; cancelar: () => void; guardar: (c: CambiosConGrupo) => void
 }) {
   const e = d.empresa
-  const [c, setC] = useState<CambiosQuienEres>({
+  const [c, setC] = useState<CambiosConGrupo>({
+    registryVolume: e.registryVolume ?? '', registryFolio: e.registryFolio ?? '', registryEntry: e.registryEntry ?? '',
+    incorporatedOn: e.incorporatedOn ?? '', dehuEmail: e.dehuEmail ?? '', dehuPhone: e.dehuPhone ?? '',
+    phone: e.phone ?? '', email: e.email ?? '',
+    dominanteNombre: d.dominante?.nombre ?? '', dominanteNif: d.dominante?.nif ?? '',
     legalName: e.legalName ?? '', tradeName: e.tradeName ?? '', legalFormCode: e.legalFormCode ?? '',
     fiscalStreetType: e.fiscalStreetType ?? '', fiscalStreet: e.fiscalStreet ?? '', fiscalNumber: e.fiscalNumber ?? '',
     fiscalExtra: e.fiscalExtra ?? '', fiscalPostalCode: e.fiscalPostalCode ?? '', fiscalCity: e.fiscalCity ?? '',
     fiscalProvince: e.fiscalProvince ?? '', registryName: e.registryName ?? '', registrySheet: e.registrySheet ?? '',
   })
   const [fallos, setFallos] = useState<Record<string, string>>({})
-  const pon = (k: keyof CambiosQuienEres) => (v: string) => setC((x) => ({ ...x, [k]: v }))
+  const pon = (k: keyof CambiosConGrupo) => (v: string) => setC((x) => ({ ...x, [k]: v }))
   const enviar = (ev: FormEvent) => {
     ev.preventDefault()
     const f = revisarQuienEres(c, e.fiscalCountry)
@@ -106,11 +124,32 @@ function FormQuienEres({ d, guardando, cancelar, guardar }: {
         <CampoTexto etiqueta="Provincia" valor={c.fiscalProvince} cambiar={pon('fiscalProvince')} deshabilitado={guardando} />
       </div>
       {d.empresa.entityKind !== 'self_employed' && (
-        <div className="cx-formulario-fila">
-          <CampoTexto etiqueta="Registro mercantil de" valor={c.registryName} cambiar={pon('registryName')} deshabilitado={guardando} />
-          <CampoTexto etiqueta="Hoja" valor={c.registrySheet} cambiar={pon('registrySheet')} ayuda="Por ejemplo M-000000." deshabilitado={guardando} />
-        </div>
+        <>
+          {/* Lo que piden el 200 y el depósito de cuentas (respuesta 3, punto 5). */}
+          <CampoTexto etiqueta="Fecha de constitución" tipo="date" valor={c.incorporatedOn ?? ''} cambiar={pon('incorporatedOn')}
+            fallo={fallos.incorporatedOn} deshabilitado={guardando} />
+          <div className="cx-formulario-fila">
+            <CampoTexto etiqueta="Registro mercantil de" valor={c.registryName} cambiar={pon('registryName')} deshabilitado={guardando} />
+            <CampoTexto etiqueta="Tomo" valor={c.registryVolume ?? ''} cambiar={pon('registryVolume')} deshabilitado={guardando} />
+            <CampoTexto etiqueta="Folio" valor={c.registryFolio ?? ''} cambiar={pon('registryFolio')} deshabilitado={guardando} />
+            <CampoTexto etiqueta="Hoja" valor={c.registrySheet} cambiar={pon('registrySheet')} ayuda="Por ejemplo M-000000." deshabilitado={guardando} />
+            <CampoTexto etiqueta="Inscripción" valor={c.registryEntry ?? ''} cambiar={pon('registryEntry')} ayuda="Por ejemplo 1.ª" deshabilitado={guardando} />
+          </div>
+          <div className="cx-formulario-fila">
+            <CampoTexto etiqueta="Entidad dominante del grupo (si la hay)" valor={c.dominanteNombre} cambiar={pon('dominanteNombre')} deshabilitado={guardando} />
+            <CampoTexto etiqueta="NIF de la dominante" valor={c.dominanteNif} cambiar={pon('dominanteNif')} deshabilitado={guardando} />
+          </div>
+        </>
       )}
+      <div className="cx-formulario-fila">
+        <CampoTexto etiqueta="Teléfono de la empresa" valor={c.phone ?? ''} cambiar={pon('phone')} deshabilitado={guardando} />
+        <CampoTexto etiqueta="Correo de la empresa" valor={c.email ?? ''} cambiar={pon('email')} deshabilitado={guardando} />
+      </div>
+      <div className="cx-formulario-fila">
+        <CampoTexto etiqueta="Correo de avisos de notificaciones (DEHú)" valor={c.dehuEmail ?? ''} cambiar={pon('dehuEmail')}
+          fallo={fallos.dehuEmail} ayuda="Donde te avisan de que tienes una notificación de Hacienda o de la Seguridad Social." deshabilitado={guardando} />
+        <CampoTexto etiqueta="Teléfono de avisos (DEHú)" valor={c.dehuPhone ?? ''} cambiar={pon('dehuPhone')} deshabilitado={guardando} />
+      </div>
       <PieFormulario guardando={guardando} cancelar={cancelar} />
     </form>
   )

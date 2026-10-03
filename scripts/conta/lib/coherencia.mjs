@@ -91,10 +91,61 @@ export function pantallasConCuentaCorta(ficheros) {
     .map((f) => f.ruta)
 }
 
+// ── La ficha basta para presentar (respuesta 3, punto 5) ────────────────────
+// La misma lista que src/modules/conta/lib/presentar.ts (requisitosParaPresentar),
+// sobre el volcado de la base. La prueba compara las dos.
+
+const ROLES_DE_REPRESENTANTE = ['administrator', 'representative', 'president']
+const NOMBRE_DOC = { '200': 'el modelo 200', deposito: 'el depósito de cuentas', notificaciones: 'las notificaciones' }
+
+/** El ejercicio que se presentaría: el último cerrado; si no hay, el de hoy. */
+function ejercicioParaPresentar(ejercicios, hoy) {
+  const cerrados = ejercicios.filter((x) => x.status === 'closed').sort((a, b) => String(b.ends_on).localeCompare(String(a.ends_on)))
+  return cerrados[0] ?? ejercicios.find((x) => String(x.starts_on) <= hoy && String(x.ends_on) >= hoy) ?? null
+}
+
+export function tocaPresentar(e) {
+  return e.entity_kind === 'company' && ((e.ejercicios ?? []).some((x) => x.status === 'closed') || lista(e.tax_forms).includes('200'))
+}
+
+/** Lo que falta (clave, texto, para), como en la app. Solo sociedades. */
+export function faltaParaPresentar(e, hoy) {
+  if (e.entity_kind !== 'company') return []
+  const ll = (v) => !vacio(v)
+  // El volcado no saca el NIF de las personas: solo si lo tienen (tax_id_puesto).
+  const conNif = (p) => p.tax_id_puesto === true || ll(p.tax_id)
+  const vivas = (e.actividades ?? []).filter((a) => vacio(a.ended_on))
+  const principal = vivas.find((a) => a.is_main) ?? vivas[0]
+  const socios = (e.personas ?? []).filter((p) => vacio(p.ended_on))
+  const ej = ejercicioParaPresentar(e.ejercicios ?? [], hoy)
+  const r = [
+    ['razon_social', 'Razón social', ['200', 'deposito'], ll(e.legal_name)],
+    ['nif', 'NIF', ['200', 'deposito'], ll(e.tax_id)],
+    ['forma', 'Forma jurídica', ['200', 'deposito'], ll(e.legal_form_code)],
+    ['domicilio', 'Domicilio fiscal completo', ['200', 'deposito'], ll(e.fiscal_street) && ll(e.fiscal_postal_code) && ll(e.fiscal_city)],
+    ['constitucion', 'Fecha de constitución', ['200', 'deposito'], ll(e.incorporated_on)],
+    ['registro', 'Datos del Registro Mercantil: registro, tomo, folio, hoja e inscripción', ['deposito'],
+      [e.registry_name, e.registry_volume, e.registry_folio, e.registry_sheet, e.registry_entry].every(ll)],
+    ['contacto', 'Teléfono o correo de la empresa', ['deposito'], ll(e.phone) || ll(e.email)],
+    ['dehu', 'Correo para los avisos de notificaciones (DEHú)', ['notificaciones'], ll(e.dehu_email)],
+    ['cnae', 'CNAE de la actividad principal', ['200', 'deposito'], ll(principal?.cnae_code)],
+    ['representante', 'Un representante legal (administrador o apoderado) con su NIF', ['200'],
+      socios.some((p) => lista(p.roles).some((x) => ROLES_DE_REPRESENTANTE.includes(x)) && conNif(p))],
+    ['socios', 'Los socios con un 5 % o más, con su NIF y su porcentaje', ['200'],
+      socios.some((p) => p.ownership_pct !== null && p.ownership_pct !== undefined) && socios.filter((p) => Number(p.ownership_pct ?? 0) >= 5).every(conNif)],
+    ['firmantes', 'Quién firma las cuentas anuales', ['deposito'], socios.some((p) => p.signs_accounts === true)],
+    ['plantilla', `Plantilla media${ej ? ` de ${ej.code}` : ''}, fija y no fija`, ['200', 'deposito'],
+      !!ej && ej.average_staff_fixed !== null && ej.average_staff_fixed !== undefined && ej.average_staff_temporary !== null && ej.average_staff_temporary !== undefined],
+    ['auditoria', `Si las cuentas${ej ? ` de ${ej.code}` : ''} están auditadas y, si lo están, el auditor y su opinión`, ['200', 'deposito'],
+      !!ej && (ej.is_audited === false || (ej.is_audited === true && ll(ej.auditor_name) && ll(ej.audit_opinion)))],
+  ]
+  return r.filter((x) => !x[3]).map(([clave, texto, para]) => ({ clave, texto, para }))
+}
+
 /**
  * @param {object} bd  el volcado (agente-datos-maestros.sql): tablas.tax_form, tablas.tax_rate,
  *   tablas.withholding_rate, empresas, plazos, proveedores_plazo, cuentas_apunte
- * @param {{ ficheros?: { ruta: string, texto: string }[] }} extra
+ * @param {{ ficheros?: { ruta: string, texto: string }[], hoy?: string }} extra
  * @returns {{ nivel: 'rojo'|'ambar', tipo: string, donde: string, detalle: string, norma: string|null }[]}
  */
 export function revisarCoherencia(bd, extra = {}) {
@@ -121,6 +172,17 @@ export function revisarCoherencia(bd, extra = {}) {
     // 5b. Hostelería (también la que solo reparte) sin el IVA de sus ventas al 10 %.
     if (e.tax_territory === 'peninsula_baleares' && vivas.some((a) => esHosteleria(a.iae_code, a.cnae_code)) && e.sales_tax_rate_code !== 'iva_reducido') {
       h('rojo', 'iva_ventas', donde, `Es hostelería y el IVA de sus ventas está en ${e.sales_tax_rate_code ?? 'nada'}, no en el 10 %.`, NORMA_IVA_VENTAS)
+    }
+  }
+
+  // Punto 5. Sociedad a la que ya le toca presentar (ejercicio cerrado o el 200
+  // previsto) y le falta algo que piden el 200 o el depósito: ámbar, con el campo.
+  for (const e of empresas) {
+    if (!tocaPresentar(e)) continue
+    const donde = `${e.legal_name ?? 'Empresa sin nombre'} (cuenta ${String(e.account_id).slice(0, 8)})`
+    for (const f of faltaParaPresentar(e, extra.hoy ?? new Date().toISOString().slice(0, 10))) {
+      h('ambar', 'presentar', donde, `Falta «${f.texto}», que pide${f.para.length > 1 ? 'n' : ''} ${f.para.map((p) => NOMBRE_DOC[p]).join(' y ')}.`,
+        'Orden del modelo 200 del ejercicio y Orden JUS de los modelos de depósito de cuentas (hoja de identificación)')
     }
   }
 
@@ -156,7 +218,7 @@ export function revisarCoherencia(bd, extra = {}) {
 
 const TITULO = {
   modelos: 'Modelos sin su resumen anual (o al revés)', modelo_347: 'El 347', hueco: 'Huecos en la vigencia', plazo: 'Plazos de pago de más de 60 días',
-  iae_cnae: 'Epígrafe y CNAE que no casan', iva_ventas: 'El IVA de las ventas de la hostelería', cuenta_corta: 'Cuentas más cortas que las de la empresa',
+  iae_cnae: 'Epígrafe y CNAE que no casan', presentar: 'Lo que falta para presentar el 200 y depositar las cuentas', iva_ventas: 'El IVA de las ventas de la hostelería', cuenta_corta: 'Cuentas más cortas que las de la empresa',
 }
 
 /** La parte del informe que dice la coherencia, en lenguaje normal. */

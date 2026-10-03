@@ -35,9 +35,22 @@ select json_build_object(
       'completa', c.setup_completed_at is not null,
       'tax_territory', p.tax_territory, 'tax_forms', p.tax_forms, 'sii', p.sii, 'sales_tax_rate_code', p.sales_tax_rate_code,
       'account_digits', p.account_digits,
+      -- Lo que piden el 200 y el depósito (respuesta 3, punto 5).
+      'tax_id', c.tax_id, 'legal_form_code', c.legal_form_code, 'fiscal_street', c.fiscal_street,
+      'fiscal_postal_code', c.fiscal_postal_code, 'fiscal_city', c.fiscal_city, 'incorporated_on', c.incorporated_on,
+      'registry_name', c.registry_name, 'registry_volume', c.registry_volume, 'registry_folio', c.registry_folio,
+      'registry_sheet', c.registry_sheet, 'registry_entry', c.registry_entry, 'phone', c.phone, 'email', c.email,
+      'dehu_email', c.dehu_email,
       'actividades', (select coalesce(json_agg(json_build_object('description', a.description, 'iae_code', a.iae_code,
-                        'cnae_code', a.cnae_code, 'ended_on', a.ended_on) order by a.is_main desc, a.created_at), '[]')
-                      from public.company_activity a where a.company_id = c.id)
+                        'cnae_code', a.cnae_code, 'ended_on', a.ended_on, 'is_main', a.is_main) order by a.is_main desc, a.created_at), '[]')
+                      from public.company_activity a where a.company_id = c.id),
+      'personas', (select coalesce(json_agg(json_build_object('roles', x.roles, 'tax_id_puesto', x.tax_id is not null,
+                        'ownership_pct', x.ownership_pct, 'signs_accounts', x.signs_accounts, 'ended_on', x.ended_on)), '[]')
+                   from public.company_person x where x.company_id = c.id),
+      'ejercicios', (select coalesce(json_agg(json_build_object('code', y.code, 'status', y.status, 'starts_on', y.starts_on,
+                        'ends_on', y.ends_on, 'average_staff_fixed', y.average_staff_fixed, 'average_staff_temporary', y.average_staff_temporary,
+                        'is_audited', y.is_audited, 'auditor_name', y.auditor_name, 'audit_opinion', y.audit_opinion) order by y.starts_on), '[]')
+                     from public.fiscal_year y where y.company_id = c.id)
     ) order by c.account_id, c.created_at), '[]')
     from public.company c left join public.company_tax_profile p on p.company_id = c.id where c.is_active),
   'plazos', (select coalesce(json_agg(json_build_object('account_id', t.account_id, 'is_system', t.is_system, 'code', t.code,

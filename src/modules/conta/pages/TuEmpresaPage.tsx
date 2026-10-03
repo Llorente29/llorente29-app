@@ -31,6 +31,7 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { DetalleContable, QuienEres, TusImpuestos } from '@/modules/conta/empresa/ApartadosEmpresa'
 import { Actividades, EjercicioMeses, Socios } from '@/modules/conta/empresa/ApartadosActividad'
 import { RegistroIA, Sugerencias } from '@/modules/conta/ia/PiezasIA'
+import { ParaPresentar } from '@/modules/conta/empresa/ApartadoPresentar'
 
 function EtiquetaListo({ d, hoy }: { d: DatosEmpresa; hoy: string }) {
   const falta = loQueFalta(d, hoy)
@@ -60,6 +61,7 @@ function UnApartado({ id, d, quien, alCambiar, movil, hoy }: {
     case 'impuestos': return <TusImpuestos {...p} />
     case 'ejercicio': return <EjercicioMeses {...p} />
     case 'socios': return <Socios {...p} />
+    case 'presentar': return <ParaPresentar d={d} movil={movil} hoy={hoy} />
     case 'detalle': return <DetalleContable {...p} />
     case 'registro': return <RegistroIA registro={d.ia.registro} alCambiar={alCambiar} movil={movil} />
   }
@@ -175,6 +177,7 @@ export default function TuEmpresaPage() {
         <EjercicioMeses {...comun} />
         <Socios {...comun} />
       </div>
+      <ParaPresentar d={d} movil={false} hoy={hoy} />
       <DetalleContable {...comun} />
       <RegistroIA registro={d.ia.registro} alCambiar={datos.recargar} movil={false} />
     </>

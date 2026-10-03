@@ -35,7 +35,10 @@ function aEmpresa(r: Fila): Empresa {
     legalFormCode: txt(r.legal_form_code), fiscalStreetType: txt(r.fiscal_street_type), fiscalStreet: txt(r.fiscal_street),
     fiscalNumber: txt(r.fiscal_number), fiscalExtra: txt(r.fiscal_extra), fiscalPostalCode: txt(r.fiscal_postal_code),
     fiscalCity: txt(r.fiscal_city), fiscalProvince: txt(r.fiscal_province), fiscalCountry: txt(r.fiscal_country) ?? 'ES',
-    registryName: txt(r.registry_name), registrySheet: txt(r.registry_sheet),
+    registryName: txt(r.registry_name), registryVolume: txt(r.registry_volume), registryFolio: txt(r.registry_folio),
+    registrySheet: txt(r.registry_sheet), registryEntry: txt(r.registry_entry),
+    incorporatedOn: txt(r.incorporated_on), dehuEmail: txt(r.dehu_email), dehuPhone: txt(r.dehu_phone),
+    phone: txt(r.phone), email: txt(r.email),
     setupStep: txt(r.setup_step) ?? 'nif', setupCompletedAt: txt(r.setup_completed_at),
   }
 }
@@ -51,6 +54,12 @@ function aPerfil(r: Fila): PerfilFiscal {
   }
 }
 
+/** La entidad dominante del grupo: la relación de grupo vigente marcada como dominante. */
+function dominante(relaciones: Fila[]): DatosEmpresa['dominante'] {
+  const r = relaciones.find((x) => x.kind === 'group' && x.related_is_parent === true && !txt(x.to_on))
+  return r ? { id: String(r.id), nombre: String(r.third_party_name ?? ''), nif: txt(r.third_party_tax_id) } : null
+}
+
 async function leer<T>(p: PromiseLike<{ data: unknown; error: { message: string } | null }>, que: string): Promise<T> {
   const { data, error } = await p
   if (error) throw new Error(mensaje(`No se ha podido leer ${que}`, error))
@@ -58,11 +67,12 @@ async function leer<T>(p: PromiseLike<{ data: unknown; error: { message: string 
 }
 
 export async function cargarDatosEmpresa(accountId: string, companyId: string, esAdmin: boolean): Promise<DatosEmpresa> {
-  const [empresa, perfil, acts, ejs, locks, socios, formas, regimenes, modelos] = await Promise.all([
+  const [empresa, perfil, acts, ejs, locks, socios, formas, regimenes, modelos, relaciones] = await Promise.all([
     leer<Fila | null>(tabla('company').select('*').eq('id', companyId).eq('account_id', accountId).maybeSingle(), 'la empresa'),
     leer<Fila | null>(tabla('company_tax_profile').select('*').eq('company_id', companyId).maybeSingle(), 'tus impuestos'),
     leer<Fila[]>(tabla('company_activity').select('*').eq('company_id', companyId).order('is_main', { ascending: false }).order('started_on'), 'a qué te dedicas'),
-    leer<Fila[]>(tabla('fiscal_year').select('id, code, starts_on, ends_on, status').eq('company_id', companyId).order('starts_on'), 'los ejercicios'),
+    leer<Fila[]>(tabla('fiscal_year').select('id, code, starts_on, ends_on, status, average_staff_fixed, average_staff_temporary, is_audited, auditor_name, auditor_tax_id, audit_opinion')
+      .eq('company_id', companyId).order('starts_on'), 'los ejercicios'),
     leer<Fila[]>(tabla('fiscal_period_lock').select('month, locked_at, locked_by_name').eq('company_id', companyId).is('reopened_at', null), 'los meses cerrados'),
     esAdmin
       ? leer<Fila[]>(tabla('company_person').select('*').eq('company_id', companyId).order('ownership_pct', { ascending: false, nullsFirst: false }), 'los socios')
@@ -70,6 +80,8 @@ export async function cargarDatosEmpresa(accountId: string, companyId: string, e
     leer<Fila[]>(tabla('legal_form').select('code, name').order('sort_order'), 'las formas jurídicas'),
     leer<Fila[]>(tabla('vat_scheme').select('code, name').order('sort_order'), 'los regímenes del IVA'),
     leer<Fila[]>(tabla('tax_form').select('code, name').order('code'), 'los modelos'),
+    leer<Fila[]>(tabla('company_relation').select('id, kind, third_party_name, third_party_tax_id, related_is_parent, to_on')
+      .eq('company_id', companyId).eq('account_id', accountId), 'el grupo'),
   ])
   if (!empresa) throw new Error('Esa empresa no está en tu cuenta.')
   const ia = await cargarIa(companyId)
@@ -97,13 +109,18 @@ export async function cargarDatosEmpresa(accountId: string, companyId: string, e
     ejercicios: ejs.map((e): EjercicioBd => ({
       id: String(e.id), code: String(e.code), startsOn: String(e.starts_on), endsOn: String(e.ends_on),
       status: e.status === 'closed' ? 'closed' : 'open',
+      averageStaffFixed: num(e.average_staff_fixed), averageStaffTemporary: num(e.average_staff_temporary),
+      isAudited: typeof e.is_audited === 'boolean' ? e.is_audited : null,
+      auditorName: txt(e.auditor_name), auditorTaxId: txt(e.auditor_tax_id),
+      auditOpinion: (txt(e.audit_opinion) as EjercicioBd['auditOpinion']) ?? null,
     })),
     cierres: locks.map((l): Cierre => ({ mes: String(l.month), quien: txt(l.locked_by_name), cuando: String(l.locked_at) })),
     socios: socios === null ? null : socios.map((s): Socio => ({
       id: String(s.id), fullName: String(s.full_name), taxId: txt(s.tax_id),
       roles: Array.isArray(s.roles) ? (s.roles as unknown[]).map(String) : [], ownershipPct: num(s.ownership_pct),
-      startedOn: txt(s.started_on), endedOn: txt(s.ended_on),
+      startedOn: txt(s.started_on), endedOn: txt(s.ended_on), signsAccounts: s.signs_accounts === true,
     })),
+    dominante: dominante(relaciones),
     formasJuridicas: formas.map(opcion),
     regimenes: regimenes.map(opcion),
     modelos: modelos.map(opcion),
@@ -119,6 +136,11 @@ export async function guardarQuienEres(companyId: string, userId: string | null,
     fiscal_street_type: nulo(c.fiscalStreetType), fiscal_street: nulo(c.fiscalStreet), fiscal_number: nulo(c.fiscalNumber),
     fiscal_extra: nulo(c.fiscalExtra), fiscal_postal_code: nulo(c.fiscalPostalCode), fiscal_city: nulo(c.fiscalCity),
     fiscal_province: nulo(c.fiscalProvince), registry_name: nulo(c.registryName), registry_sheet: nulo(c.registrySheet),
+    ...(c.registryVolume === undefined ? {} : {
+      registry_volume: nulo(c.registryVolume), registry_folio: nulo(c.registryFolio ?? ''), registry_entry: nulo(c.registryEntry ?? ''),
+      incorporated_on: nulo(c.incorporatedOn ?? ''), dehu_email: nulo(c.dehuEmail ?? ''), dehu_phone: nulo(c.dehuPhone ?? ''),
+      phone: nulo(c.phone ?? ''), email: nulo(c.email ?? ''),
+    }),
     updated_by: userId,
   }).eq('id', companyId)
   if (error) throw new Error(mensaje('No se ha guardado', error))
@@ -213,12 +235,15 @@ export interface CambiosSocio {
   taxId: string
   roles: string[]
   ownershipPct: string
+  /** Firma las cuentas anuales (respuesta 3, punto 5). */
+  signsAccounts?: boolean
 }
 
 export async function guardarSocio(accountId: string, companyId: string, userId: string | null, id: string | null, c: CambiosSocio): Promise<void> {
   const fila = {
     full_name: c.fullName.trim(), tax_id: nulo(c.taxId), roles: c.roles,
     ownership_pct: c.ownershipPct.trim() === '' ? null : Number(c.ownershipPct.replace(',', '.')),
+    ...(c.signsAccounts === undefined ? {} : { signs_accounts: c.signsAccounts }),
   }
   const { error } = id
     ? await tabla('company_person').update(fila).eq('id', id)
@@ -229,5 +254,47 @@ export async function guardarSocio(accountId: string, companyId: string, userId:
 /** Deja de ser socio o de tener el cargo: no se borra, se le pone fecha de fin. */
 export async function darDeBajaSocio(id: string, fecha: string): Promise<void> {
   const { error } = await tabla('company_person').update({ ended_on: fecha }).eq('id', id)
+  if (error) throw new Error(mensaje('No se ha guardado', error))
+}
+
+// ── Lo que el 200 y el depósito piden de cada ejercicio (respuesta 3, punto 5) ──
+
+export interface CambiosEjercicio {
+  averageStaffFixed: string
+  averageStaffTemporary: string
+  /** 'si' | 'no' | '' (sin decir). */
+  auditada: string
+  auditorName: string
+  auditorTaxId: string
+  auditOpinion: string
+}
+
+export async function guardarDatosEjercicio(ejercicioId: string, c: CambiosEjercicio): Promise<void> {
+  const n = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')))
+  const auditada = c.auditada === 'si' ? true : c.auditada === 'no' ? false : null
+  const { error } = await tabla('fiscal_year').update({
+    average_staff_fixed: n(c.averageStaffFixed), average_staff_temporary: n(c.averageStaffTemporary), is_audited: auditada,
+    auditor_name: auditada ? nulo(c.auditorName) : null, auditor_tax_id: auditada ? nulo(c.auditorTaxId) : null,
+    audit_opinion: auditada ? nulo(c.auditOpinion) : null,
+  }).eq('id', ejercicioId)
+  if (error) throw new Error(mensaje('No se ha guardado', error))
+}
+
+/**
+ * La entidad dominante del grupo: una relación de tipo grupo marcada como
+ * dominante. Sin nombre, se quita (se le pone fecha de fin: no se borra).
+ */
+export async function guardarDominante(accountId: string, companyId: string, userId: string | null,
+  actual: { id: string } | null | undefined, nombre: string, nif: string, hoy: string): Promise<void> {
+  if (nombre.trim() === '') {
+    if (!actual) return
+    const { error } = await tabla('company_relation').update({ to_on: hoy }).eq('id', actual.id)
+    if (error) throw new Error(mensaje('No se ha guardado', error))
+    return
+  }
+  const fila = { kind: 'group', third_party_name: nombre.trim(), third_party_tax_id: nulo(nif), related_is_parent: true }
+  const { error } = actual
+    ? await tabla('company_relation').update(fila).eq('id', actual.id)
+    : await tabla('company_relation').insert({ ...fila, account_id: accountId, company_id: companyId, created_by: userId })
   if (error) throw new Error(mensaje('No se ha guardado', error))
 }

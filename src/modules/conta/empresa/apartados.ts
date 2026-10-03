@@ -7,8 +7,9 @@
 import {
   ejercicioActual, mesesConEstado, resumenMeses, textoIva, type DatosEmpresa,
 } from '@/modules/conta/empresa/datosEmpresa'
+import { faltan, requisitosParaPresentar } from '@/modules/conta/lib/presentar'
 
-export type ClaveApartado = 'quien-eres' | 'actividad' | 'impuestos' | 'ejercicio' | 'socios' | 'detalle' | 'registro'
+export type ClaveApartado = 'quien-eres' | 'actividad' | 'impuestos' | 'ejercicio' | 'socios' | 'presentar' | 'detalle' | 'registro'
 
 export interface Quien { accountId: string; companyId: string; userId: string | null }
 
@@ -56,6 +57,15 @@ export const APARTADOS: readonly Apartado[] = [
       if (d.socios === null) return 'Solo lo ve un administrador'
       const n = d.socios.filter((s) => s.endedOn === null).length
       return n === 0 ? 'Sin poner' : `${n} ${n === 1 ? 'persona' : 'personas'}`
+    },
+  },
+  {
+    // Respuesta 3, punto 5: lo que piden el 200 y el depósito de cuentas, ya en la ficha.
+    id: 'presentar', titulo: () => 'Para presentar el 200 y depositar las cuentas',
+    resumen: (d, hoy) => {
+      if (d.empresa.entityKind !== 'company') return 'Solo para sociedades'
+      const n = faltan(requisitosParaPresentar(d, hoy)).length
+      return n === 0 ? 'Está todo' : n === 1 ? 'Falta 1 cosa' : `Faltan ${n} cosas`
     },
   },
   { id: 'detalle', titulo: () => 'Detalle contable', resumen: () => 'Viene puesto; lo normal es no tocarlo' },

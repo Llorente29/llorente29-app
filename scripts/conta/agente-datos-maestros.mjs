@@ -41,7 +41,7 @@ const filasMiradas = Object.keys(TABLAS_FILA_A_FILA).reduce((n, t) => n + (bd.ta
 
 const hallazgos = revisar(bd, ref, hoy)
 // Coherencia, no recuento (respuesta 3, punto 4): que lo que hay cumpla las normas.
-const coherencia = revisarCoherencia(bd, { ficheros: ficherosDe('src/modules/conta') })
+const coherencia = revisarCoherencia(bd, { ficheros: ficherosDe('src/modules/conta'), hoy })
 const empresasMiradas = (bd.empresas ?? []).filter((e) => e.completa).length
 const texto = informe(hallazgos, { donde, hoy, referencia: String(ref.generado_desde).slice(0, 10), filasMiradas })
   + '\n' + informeCoherencia(coherencia, { empresasMiradas })

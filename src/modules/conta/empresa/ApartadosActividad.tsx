@@ -5,21 +5,22 @@
 // cada cambio confirma con contenido o enseña el fallo.
 
 import { useEffect, useState, type FormEvent } from 'react'
-import { Chip, Inicial } from '@/modules/conta/ui/piezas'
+import { Chip, Dato, Inicial } from '@/modules/conta/ui/piezas'
 import { fechaLarga, iniciales, porcentaje } from '@/modules/conta/lib/formato'
 import { revisarSocios } from '@/modules/conta/lib/validacionesEmpresa'
 import {
   CLASE_ACTIVIDAD, ROLES, codigoIae, ejercicioActual, ejercicioPropuesto, mesParaCerrar, mesParaReabrir, mesYAno,
-  mesesConEstado, nombreMes, textoRoles, type Actividad, type DatosEmpresa, type Socio,
+  mesesConEstado, nombreMes, OPINION_AUDITOR, textoRoles, type Actividad, type DatosEmpresa, type EjercicioBd, type Socio,
 } from '@/modules/conta/empresa/datosEmpresa'
+import { ejercicioParaPresentar } from '@/modules/conta/lib/presentar'
 import type { Quien } from '@/modules/conta/empresa/apartados'
 import {
-  abrirEjercicio, anadirActividad, buscarCnae, buscarIae, cerrarMes, darDeBajaSocio, guardarSocio, hacerPrincipal,
-  reabrirMes, terminarActividad, type CambiosSocio, type OpcionCodigo,
+  abrirEjercicio, anadirActividad, buscarCnae, buscarIae, cerrarMes, darDeBajaSocio, guardarDatosEjercicio, guardarSocio, hacerPrincipal,
+  reabrirMes, terminarActividad, type CambiosEjercicio, type CambiosSocio, type OpcionCodigo,
 } from '@/modules/conta/services/empresaDatosService'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
 import { Marca } from '@/modules/conta/ia/Marca'
-import { CampoLista, CampoTexto, PieFormulario, Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
+import { CampoLista, CampoSiNo, CampoTexto, PieFormulario, Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
 
 interface Props { d: DatosEmpresa; quien: Quien; alCambiar: () => void; movil: boolean; hoy: string }
 
@@ -303,14 +304,100 @@ export function EjercicioMeses({ d, quien, alCambiar, movil, hoy }: Props) {
           <PieFormulario guardando={h.guardando} cancelar={() => { setReabriendo(false); setMotivo('') }} textoGuardar="Reabrir" />
         </form>
       )}
+      <ParaLasCuentas d={d} alCambiar={alCambiar} hoy={hoy} />
       <Resultado hecho={h.hecho} fallo={h.fallo} />
     </TarjetaApartado>
   )
 }
 
+/**
+ * Lo que el modelo 200 y el depósito de cuentas piden de cada ejercicio
+ * (respuesta 3, punto 5): la plantilla media y la auditoría. Del ejercicio que
+ * se presentaría: el último cerrado o, si no hay, el de ahora.
+ */
+function ParaLasCuentas({ d, alCambiar, hoy }: { d: DatosEmpresa; alCambiar: () => void; hoy: string }) {
+  const h = useHacer(alCambiar)
+  const [editando, setEditando] = useState(false)
+  const ej = ejercicioParaPresentar(d, hoy)
+  if (!ej || d.empresa.entityKind !== 'company') return null
+  const plantilla = ej.averageStaffFixed === null || ej.averageStaffFixed === undefined || ej.averageStaffTemporary === null || ej.averageStaffTemporary === undefined
+    ? null : `${cifra(ej.averageStaffFixed)} fija · ${cifra(ej.averageStaffTemporary)} no fija`
+  const auditoria = ej.isAudited === true
+    ? `Sí${ej.auditorName ? ` · ${ej.auditorName}` : ''}${ej.auditOpinion ? ` · ${OPINION_AUDITOR[ej.auditOpinion]}` : ''}`
+    : ej.isAudited === false ? 'No' : null
+  return (
+    <section className="cx-para-cuentas" aria-label={`Para el 200 y las cuentas de ${ej.code}`}>
+      <div className="cx-para-cuentas-cabeza">
+        <span className="cx-etiqueta">Para el 200 y las cuentas de {ej.code}</span>
+        {!editando && <button type="button" className="cx-enlace" onClick={() => { setEditando(true); h.limpiar() }} aria-label={`Cambiar la plantilla y la auditoría de ${ej.code}`}>Cambiar</button>}
+      </div>
+      {editando ? (
+        <FormParaLasCuentas ej={ej} guardando={h.guardando} cancelar={() => { setEditando(false); h.limpiar() }}
+          guardar={async (c) => {
+            if (await h.hacer(() => guardarDatosEjercicio(ej.id, c),
+              `Guardado para ${ej.code}: plantilla ${c.averageStaffFixed || '—'} fija y ${c.averageStaffTemporary || '—'} no fija; ${c.auditada === 'si' ? 'auditada' : c.auditada === 'no' ? 'sin auditar' : 'auditoría sin decir'}.`)) setEditando(false)
+          }} />
+      ) : (
+        <>
+          <Dato etiqueta="Plantilla media">{plantilla}</Dato>
+          <Dato etiqueta="Cuentas auditadas">{auditoria}</Dato>
+        </>
+      )}
+      <Resultado hecho={h.hecho} fallo={h.fallo} />
+    </section>
+  )
+}
+
+function FormParaLasCuentas({ ej, guardando, cancelar, guardar }: {
+  ej: EjercicioBd; guardando: boolean; cancelar: () => void; guardar: (c: CambiosEjercicio) => void
+}) {
+  const t = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v).replace('.', ','))
+  const [c, setC] = useState<CambiosEjercicio>({
+    averageStaffFixed: t(ej.averageStaffFixed), averageStaffTemporary: t(ej.averageStaffTemporary),
+    auditada: ej.isAudited === true ? 'si' : ej.isAudited === false ? 'no' : '',
+    auditorName: ej.auditorName ?? '', auditorTaxId: ej.auditorTaxId ?? '', auditOpinion: ej.auditOpinion ?? '',
+  })
+  const [fallos, setFallos] = useState<Record<string, string>>({})
+  const pon = (k: keyof CambiosEjercicio) => (v: string) => setC((x) => ({ ...x, [k]: v }))
+  return (
+    <form className="cx-formulario" noValidate aria-label={`Plantilla y auditoría de ${ej.code}`} onSubmit={(e) => {
+      e.preventDefault()
+      const f: Record<string, string> = {}
+      for (const k of ['averageStaffFixed', 'averageStaffTemporary'] as const) {
+        const v = c[k].trim()
+        if (v !== '' && !(Number(v.replace(',', '.')) >= 0)) f[k] = 'Un número de personas, con decimales si hace falta (2,5).'
+      }
+      if (c.auditada === 'si' && c.auditorName.trim() === '') f.auditorName = 'Di quién las auditó.'
+      setFallos(f)
+      if (Object.keys(f).length === 0) guardar(c)
+    }}>
+      <div className="cx-formulario-fila">
+        <CampoTexto etiqueta="Plantilla media fija" valor={c.averageStaffFixed} cambiar={pon('averageStaffFixed')} modo="decimal"
+          fallo={fallos.averageStaffFixed} ayuda="Personas de media en el año; 2,5 si hace falta." deshabilitado={guardando} />
+        <CampoTexto etiqueta="Plantilla media no fija" valor={c.averageStaffTemporary} cambiar={pon('averageStaffTemporary')} modo="decimal"
+          fallo={fallos.averageStaffTemporary} deshabilitado={guardando} />
+      </div>
+      <CampoLista etiqueta="¿Cuentas auditadas?" valor={c.auditada} cambiar={pon('auditada')} deshabilitado={guardando}
+        opciones={[{ valor: '', texto: 'Sin decir' }, { valor: 'no', texto: 'No' }, { valor: 'si', texto: 'Sí' }]} />
+      {c.auditada === 'si' && (
+        <div className="cx-formulario-fila">
+          <CampoTexto etiqueta="Auditor" valor={c.auditorName} cambiar={pon('auditorName')} fallo={fallos.auditorName} deshabilitado={guardando} />
+          <CampoTexto etiqueta="NIF del auditor" valor={c.auditorTaxId} cambiar={pon('auditorTaxId')} deshabilitado={guardando} />
+          <CampoLista etiqueta="Opinión" valor={c.auditOpinion} cambiar={pon('auditOpinion')} deshabilitado={guardando}
+            opciones={[{ valor: '', texto: 'Sin decir' }, ...Object.entries(OPINION_AUDITOR).map(([valor, texto]) => ({ valor, texto }))]} />
+        </div>
+      )}
+      <PieFormulario guardando={guardando} cancelar={cancelar} />
+    </form>
+  )
+}
+
 // ── Socios y cargos ─────────────────────────────────────────────────────────
 
-const SOCIO_VACIO: CambiosSocio = { fullName: '', taxId: '', roles: [], ownershipPct: '' }
+/** «2,5»: la plantilla media, con coma. */
+const cifra = (n: number): string => String(Math.round(n * 100) / 100).replace('.', ',')
+
+const SOCIO_VACIO: CambiosSocio = { fullName: '', taxId: '', roles: [], ownershipPct: '', signsAccounts: false }
 
 export function Socios({ d, quien, alCambiar, movil, hoy }: Props) {
   const [editando, setEditando] = useState<string | 'nuevo' | null>(null)
@@ -348,7 +435,9 @@ export function Socios({ d, quien, alCambiar, movil, hoy }: Props) {
               <Inicial texto={iniciales(s.fullName)} redonda />
               <span className="cx-fila-texto">
                 <span className="cx-fila-titulo">{s.fullName}</span>
-                {s.roles.length > 0 && <span className="cx-fila-apoyo">{textoRoles(s.roles)}</span>}
+                {(s.roles.length > 0 || s.signsAccounts) && (
+                  <span className="cx-fila-apoyo">{[s.roles.length ? textoRoles(s.roles) : null, s.signsAccounts ? 'firma las cuentas' : null].filter(Boolean).join(' · ')}</span>
+                )}
               </span>
               {s.ownershipPct !== null && <span className="cx-cifra">{porcentaje(s.ownershipPct)}</span>}
             </button>
@@ -368,7 +457,8 @@ function FormSocio({ inicial, otros, guardando, cancelar, guardar, darDeBaja }: 
   guardar: (c: CambiosSocio) => void; darDeBaja?: () => void
 }) {
   const [c, setC] = useState<CambiosSocio>(inicial
-    ? { fullName: inicial.fullName, taxId: inicial.taxId ?? '', roles: inicial.roles, ownershipPct: inicial.ownershipPct === null ? '' : String(inicial.ownershipPct).replace('.', ',') }
+    ? { fullName: inicial.fullName, taxId: inicial.taxId ?? '', roles: inicial.roles, ownershipPct: inicial.ownershipPct === null ? '' : String(inicial.ownershipPct).replace('.', ','),
+        signsAccounts: inicial.signsAccounts === true }
     : SOCIO_VACIO)
   const [fallos, setFallos] = useState<Record<string, string>>({})
   const alternar = (r: string) => setC((x) => ({ ...x, roles: x.roles.includes(r) ? x.roles.filter((y) => y !== r) : [...x.roles, r] }))
@@ -402,6 +492,8 @@ function FormSocio({ inicial, otros, guardando, cancelar, guardar, darDeBaja }: 
       </fieldset>
       <CampoTexto etiqueta="Porcentaje de la empresa (si es socio)" valor={c.ownershipPct} cambiar={(v) => setC((x) => ({ ...x, ownershipPct: v }))}
         modo="decimal" fallo={fallos.ownershipPct} deshabilitado={guardando} />
+      {/* Respuesta 3, punto 5: quién firma las cuentas que se depositan en el Registro Mercantil. */}
+      <CampoSiNo etiqueta="Firma las cuentas anuales" valor={c.signsAccounts === true} cambiar={(v) => setC((x) => ({ ...x, signsAccounts: v }))} deshabilitado={guardando} />
       <div className="cx-pie">
         {darDeBaja && <button type="button" className="cx-boton-sec" onClick={darDeBaja} disabled={guardando} style={{ marginRight: 'auto' }}>Ya no está</button>}
         <button type="button" className="cx-boton-sec" onClick={cancelar} disabled={guardando}>Cancelar</button>

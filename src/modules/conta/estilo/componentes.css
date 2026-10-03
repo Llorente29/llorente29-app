@@ -426,6 +426,19 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 .cx-alta-direccion { margin-left: 46px; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque); padding: 16px; }
 .cx-alta-guardando { padding-left: 46px; margin: 0; }
 
+/* «Para presentar el 200 y depositar las cuentas» (respuesta 3, punto 5). */
+.cx-presentar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cx-presentar-fila { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
+.cx-presentar-marca {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; background: var(--cx-neutro-suave); color: var(--cx-neutro-texto);
+}
+.cx-presentar-hecho .cx-presentar-marca { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cx-presentar-toca .cx-presentar-marca { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cx-presentar-toca .cx-fila-apoyo { color: var(--cx-ambar); }
+.cx-para-cuentas { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--cx-linea); padding-top: 12px; }
+.cx-para-cuentas-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
 /* El aviso «Alta a medias · 4 de 6 · Seguir» de «Tu empresa». */
 .cx-aviso-alta {
   display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--cx-ambar-suave);

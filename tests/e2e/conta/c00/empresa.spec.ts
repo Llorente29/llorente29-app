@@ -147,3 +147,55 @@ test('un apartado que no existe vuelve a Tu empresa', async ({ page }) => {
   await page.goto('/conta/ajustes/empresa/no-existe')
   await expect(page).toHaveURL(/\/conta\/ajustes$/)
 })
+
+// Respuesta 3, punto 5: lo que piden el 200 y el depósito de cuentas, ya en la ficha.
+test('cuenta A: la ficha basta para presentar el 200 y depositar las cuentas', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Escribe: solo en un tamaño')
+  await entrarComo(page, CUENTA_A.email)
+  await page.goto('/conta/ajustes')
+  await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+  const presentar = await tarjeta(page, 'Para presentar el 200 y depositar las cuentas')
+  await expect(presentar.getByText('Fecha de constitución', { exact: true })).toBeVisible()
+
+  // Quién eres: constitución, Registro Mercantil completo, contacto y DEHú. El certificado, aún no.
+  const quien = await tarjeta(page, 'Quién eres')
+  await expect(quien.getByText('Aún no · irá en «Certificados y accesos»')).toBeVisible()
+  await page.getByRole('button', { name: 'Cambiar quién eres' }).click()
+  await page.getByLabel('Fecha de constitución').fill('2020-01-15')
+  await page.getByLabel('Registro mercantil de').fill('Madrid')
+  await page.getByLabel('Tomo', { exact: true }).fill('40000')
+  await page.getByLabel('Folio', { exact: true }).fill('1')
+  await page.getByLabel('Hoja', { exact: true }).fill('M-700000')
+  await page.getByLabel('Inscripción', { exact: true }).fill('1.ª')
+  await page.getByLabel('Teléfono de la empresa').fill('910000000')
+  await page.getByLabel('Correo de avisos de notificaciones (DEHú)').fill('no-es-un-correo')
+  await page.getByRole('button', { name: 'Guardar' }).click()
+  await expect(page.getByText('Ese correo no tiene buena pinta: falta la @ o el dominio.')).toBeVisible()
+  await page.getByLabel('Correo de avisos de notificaciones (DEHú)').fill('avisos@prueba.folvy.test')
+  await page.getByRole('button', { name: 'Guardar' }).click()
+  await expect(quien.getByText('15/01/2020')).toBeVisible()
+  await expect(quien.getByText('Madrid · tomo 40000, folio 1, hoja M-700000, inscripción 1.ª')).toBeVisible()
+
+  // El ejercicio: plantilla media y auditoría.
+  await page.getByRole('button', { name: /^Cambiar la plantilla y la auditoría de / }).click()
+  await page.getByLabel('Plantilla media fija').fill('3')
+  await page.getByLabel('Plantilla media no fija').fill('1,5')
+  await page.getByLabel('¿Cuentas auditadas?').selectOption('no')
+  await page.getByRole('button', { name: 'Guardar' }).click()
+  await expect(page.getByText('3 fija · 1,5 no fija')).toBeVisible()
+
+  // Socios: la administradora firma las cuentas y tiene su NIF.
+  const socios = await tarjeta(page, 'Socios y cargos')
+  await socios.getByRole('button', { name: 'Cambiar Marta Ruiz Sanz' }).click()
+  await page.getByLabel('NIF (si quieres)').fill('00000000T')
+  await page.getByLabel('Firma las cuentas anuales').selectOption('si')
+  await page.getByRole('button', { name: 'Guardar' }).click()
+  await expect(socios.getByText(/firma las cuentas/)).toBeVisible()
+
+  // Lo puesto sale como hecho en «Para presentar».
+  for (const t of ['Fecha de constitución', 'Datos del Registro Mercantil: registro, tomo, folio, hoja e inscripción', 'Quién firma las cuentas anuales']) {
+    await expect(presentar.locator('.cx-presentar-fila').filter({ hasText: t })).toContainText('Hecho')
+  }
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: 'docs/conta/capturas/c00/empresa-presentar.png', fullPage: true })
+})
