@@ -32,7 +32,8 @@ test('cuenta B (Canarias, sin interruptor ni Cocina): impuestos con el IGIC arri
   await expect(usas).toBeVisible()
   await expect(page.getByRole('rowgroup', { name: 'Los demás' })).toBeVisible()
   await expect(page.getByText('Los que usas · 7')).toBeVisible()
-  await expect(page.getByText('Los demás · 7')).toBeVisible()
+  // 8 desde la respuesta 2: el 7,5 % de pasta y aceites de semillas (4T2024) es un impuesto de serie más.
+  await expect(page.getByText('Los demás · 8')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Abrir IGIC general' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Abrir IVA general' })).toBeVisible()
 
