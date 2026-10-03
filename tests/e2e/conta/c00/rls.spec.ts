@@ -99,8 +99,9 @@ test('los socios y cargos solo los ve un administrador', async () => {
   }
   let socio: string | null = null
   try {
-    const r = await rest<{ id: string }[]>(admin, 'POST', 'company_person', { account_id: CUENTA_A.id, company_id: EMPRESA_A, full_name: 'Socia de prueba RLS', ownership_pct: 50 })
-    expect(r.status, 'el administrador apunta una socia').toBe(201)
+    const r = await rest<{ id: string }[]>(admin, 'POST', 'company_person', { account_id: CUENTA_A.id, company_id: EMPRESA_A, full_name: 'Socia de prueba RLS', ownership_pct: 10 })
+    // Con un 10 %: A ya tiene una socia con el 60 % y la base no deja pasar del 100 (company_person_hasta_cien).
+    expect(r.status, `el administrador apunta una socia: ${JSON.stringify(r.datos)}`).toBe(201)
     socio = r.datos[0].id
 
     expect(filas(await rest(admin, 'GET', `company_person?select=id&id=eq.${socio}`)), 'el administrador la ve').toBe(1)
