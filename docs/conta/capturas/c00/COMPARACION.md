@@ -10,27 +10,48 @@ Además, **las cifras dependen de los datos de prueba, no del diseño**: el núm
 
 ---
 
-## Alta conversada · ordenador (N1)
+## Alta · pantalla completa, la primera empresa (N1b, respuesta 3)
 
-| Maqueta | Captura |
+| Maqueta | Captura (cuenta C, sin ninguna empresa) |
 |---|---|
-| ![N1](../../maquetas/c00/N1Alta.png) | ![alta ordenador](alta-ordenador.png) |
+| ![N1b](../../maquetas/c00/N1bAlta.png) | ![alta ordenador](alta-ordenador.png) |
 
-1. **No se consulta el censo por el NIF**, así que el nombre y la dirección se preguntan. La maqueta los saca del censo («Del censo, por tu NIF») con la marca IA. Un proveedor de pago que dé la razón social por el NIF está pendiente (D3). Lo que escribe la persona no lleva marca: no lo puso la IA.
-2. **Falta la fila «IVA de tus ventas · 10 %».** El ticket al 10 % está como pregunta en la sección «Norma» del PR (bebidas alcohólicas, reparto a domicilio). No se pone un tipo de venta hasta tener la respuesta.
-3. **No sale el asesor** («Julián, tu asesor, lo está viendo» y su comentario). D4: sin asesor en el alta.
-4. **El titular «Cuéntame tu negocio…» se recoge al empezar.** Sin censo la conversación tiene tres preguntas más, y el titular se comería la pantalla.
-5. **«Tus cuentas» sale como «Enseguida»** hasta su paso, en lugar de «Plan de pymes, ya adaptado». Se pone en su paso, con su marca.
+1. **La conversación tiene scroll y el titular queda arriba, fuera de la captura.** La prueba llega a «Tus cuentas» escribiendo y contestando, así que hay más conversación que en la maqueta.
+2. **Las preguntas ya contestadas se quedan en la conversación, cada una con lo que la IA apuntó delante.** En la maqueta, con dos respuestas, no se nota.
+3. **«Tus impuestos» dice «IVA cada tres meses» sin los modelos.** Los modelos se guardan al terminar el paso y la captura es justo antes. Se ven en la del móvil y en «Tu empresa».
+4. **El bocadillo «¿Por qué lo pregunto?» sale plegado y se abre al tocarlo.** La captura lo tiene abierto, como la maqueta.
+5. **El texto del bocadillo de las cuentas añade «Si no lo sabes, dejo ese».** Lo pide la respuesta: qué pasa si no lo sabes.
+6. **Los modelos que dice son 111, 190, 200, 202, 303, 347 y 390.** Son los anuales del punto 2. La maqueta, de antes, pone 111, 115, 202 y 303.
 
-## Alta conversada · móvil (M1)
+## Alta · ventana flotante, otra empresa (N1c, respuesta 3)
 
-| Maqueta | Captura |
+| Maqueta | Captura (cuenta A, que ya tiene la suya) |
 |---|---|
-| ![M1](../../maquetas/c00/M1Alta.png) | ![alta móvil](alta-movil.png) |
+| ![N1c](../../maquetas/c00/N1cAlta.png) | ![alta ventana](alta-ventana.png) |
 
-1. **La tarjeta de arriba dice lo último que apuntó** («Añadió la actividad «Comida a domicilio»», con su marca), como M1. Lo que apunta es otra cosa, por la diferencia 2 de N1.
-2. **«Cada mes» y «No lo sé» van en dos columnas**, como M1. El botón dice «No lo sé» y la frase entera va en su etiqueta accesible. *(Corregido en la tarea 8: antes salía el texto largo y no cabía.)*
-3. **La conversación sale entera**, por la diferencia 1 de N1.
+1. **Una píldora por punto** («✓ Alta e2e… · B…», «✓ Calle del Ensayo 7, Madrid»). La maqueta separa el nombre y el NIF en dos.
+2. **«A qué te dedicas» sale con su nombre y sin su valor en el instante de la captura**: la actividad acaba de guardarse y se está releyendo. Un segundo después dice «Restaurante · 671 y 1 más».
+3. **Las dos notas de fuera** («Cada píldora…» y «Puedes cerrar la ventana…») salen desde 1440 px, que es el ancho de la maqueta. Más estrecho, no caben y no salen. El bocadillo del porqué, que sí es de la pregunta, vuelve entonces dentro.
+4. **Cerrar es la «×», y también Escape.** Las dos dejan en «Tu empresa» el aviso «Alta a medias · N de 6 · Seguir».
+
+## Alta · móvil (M1, adaptada a la respuesta 3)
+
+| Conversación | «Lo que llevamos», la hoja |
+|---|---|
+| ![alta móvil](alta-movil.png) | ![hoja](alta-movil-hoja.png) |
+
+1. **A pantalla completa; «4 de 6» arriba sube la hoja.** No hay maqueta nueva: la respuesta dice que M1 se adapta a esto.
+2. **«Salir y seguir luego» también en el móvil.**
+3. **Desde la hoja también se vuelve a un punto**: se toca y la hoja se cierra en esa pregunta.
+
+## Tu empresa · «Para presentar el 200 y depositar las cuentas» (respuesta 3, punto 5)
+
+![para presentar](empresa-presentar.png)
+
+No tiene maqueta: lo pide la respuesta. Lo que piden el 200 y el depósito, uno a uno, con ✓ o «falta» y dónde se pone. El cruce está en [`C00_ficha_vs_modelos.md`](../../C00_ficha_vs_modelos.md).
+- **A la Taberna le falta la forma jurídica de verdad.** El «Tipo: Sociedad» de «Quién eres» sale del tipo de NIF; el código de forma jurídica está vacío.
+- **El certificado digital sale como hueco**: «Aún no · irá en «Certificados y accesos»».
+- La franja amarilla y la barra de la IA a media página son las de siempre: la captura es de página entera.
 
 ## Tu empresa · ordenador (N2)
 
