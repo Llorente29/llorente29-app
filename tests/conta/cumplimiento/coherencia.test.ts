@@ -75,7 +75,11 @@ describe('lo que está bien no avisa', () => {
     const e = { account_id: 'x', legal_name: 'Nueva', entity_kind: 'company', completa: true, tax_territory: 'peninsula_baleares', sii: false,
       tax_forms: ['111', '115', '180', '190', '200', '202', '303', '347', '390'], sales_tax_rate_code: 'iva_reducido', account_digits: 8,
       actividades: [{ description: 'Comida a domicilio', iae_code: '1_6779', cnae_code: '5611', ended_on: null }] }
-    expect(revisarCoherencia(bd({ empresas: [e] }))).toEqual([])
+    // Ni un fallo en rojo. Lo que sí sale es ámbar: lleva el 200 y aún no tiene
+    // los datos que pide (constitución, registro…): eso es el punto 5, y es verdad.
+    const r = revisarCoherencia(bd({ empresas: [e] }), { hoy: '2026-10-03' })
+    expect(r.filter((x: { nivel: string }) => x.nivel === 'rojo')).toEqual([])
+    expect(r.every((x: { tipo: string }) => x.tipo === 'presentar')).toBe(true)
   })
 })
 

@@ -73,6 +73,7 @@ describe('los textos, como la maqueta', () => {
       ['Tus impuestos', 'IVA general · cada tres meses'],
       ['Ejercicio 2026', 'Septiembre y octubre abiertos'],
       ['Socios y cargos', 'Sin poner'],
+      ['Para presentar el 200 y depositar las cuentas', 'Faltan 9 cosas'],
       ['Detalle contable', 'Viene puesto; lo normal es no tocarlo'],
       ['Lo que ha hecho Folvy', 'Nada todavía'],
     ])
