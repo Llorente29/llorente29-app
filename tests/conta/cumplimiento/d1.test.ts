@@ -32,9 +32,31 @@ function despues(): Fila[] {
   return out.sort((a, b) => a.category_code.localeCompare(b.category_code) || a.valid_from.localeCompare(b.valid_from))
 }
 
+/**
+ * Lo que el puente da a propósito y vat_rate de producción no tenía. Respuesta 2
+ * de Julio (C00): el 2 % del último trimestre de 2024 a TODOS los alimentos
+ * básicos (RD-ley 4/2024, art. 1.Dos.2); producción solo lo tenía para el aceite.
+ */
+const DECIDIDO_DESPUES: Fila[] = [
+  { category_code: 'alimento_basico', rate: 2, surcharge: 0.26, valid_from: '2024-10-01', valid_to: '2024-12-31' },
+]
+
 describe('D1 · el puente da lo mismo que vat_rate de producción', () => {
-  it('las 6 filas, idénticas (categoría, %, recargo, vigencia)', () => {
-    expect(despues()).toEqual(antes)
+  it('las 6 filas, idénticas (categoría, %, recargo, vigencia), más SOLO el tramo decidido', () => {
+    const esperado = [...antes, ...DECIDIDO_DESPUES]
+      .sort((a: Fila, b: Fila) => a.category_code.localeCompare(b.category_code) || a.valid_from.localeCompare(b.valid_from))
+    expect(despues()).toEqual(esperado)
+  })
+
+  it('fuera del 4.º trimestre de 2024 no cambia nada', () => {
+    const fuera = (f: Fila) => !(f.valid_from >= '2024-10-01' && (f.valid_to ?? '9999') <= '2024-12-31')
+    expect(despues().filter(fuera)).toEqual(antes.filter(fuera))
+  })
+
+  it('la pasta y los aceites de semillas (7,5 %) están cargados como impuesto, sin puente: no hay categoría para ellos', () => {
+    const t = (serie.tablas.tax_rate.filas as { code: string; rate: number; surcharge_rate: number }[]).find((x) => x.code === 'iva_pasta_semillas_4t2024')
+    expect(t).toMatchObject({ rate: 7.5, surcharge_rate: 1 })
+    expect((serie.tablas.vat_category_tax.filas as { tax_code: string }[]).some((b) => b.tax_code === 'iva_pasta_semillas_4t2024')).toBe(false)
   })
 })
 

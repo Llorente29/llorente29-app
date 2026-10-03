@@ -1,9 +1,10 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 8.ª tanda (tarea 8): un ENCARGADO de prueba en la cuenta A
-# (a.encargado@prueba.folvy.test, rol manager), para la prueba de RLS «los
-# socios y cargos solo los ve un administrador». Solo staging; sin contraseña
-# conocida: se la pone el workflow e2e en cada ejecución.
-# (7.ª: el proveedor de prueba del alquiler, también en A.)
-supabase/seeds/conta/seed_c00_encargado_prueba.sql
+# 03/10/2026 · C00, 9.ª tanda (respuesta 2 de Julio): el 2 % del 4.º trimestre
+# de 2024 a todos los básicos y el 7,5 % de la pasta y los aceites de semillas
+# (RD-ley 4/2024, art. 1.Dos), y después la medida D1, que tiene que dar 0
+# diferencias fuera de ese trimestre y solo la decidida dentro.
+# (8.ª: el encargado de prueba de la cuenta A.)
+supabase/migrations/20261003T0170_c00_basicos_4t2024.sql
+supabase/staging/sql/20261003_ensayo_c00_d1.sql

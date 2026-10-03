@@ -3152,8 +3152,11 @@ insert into public.tax_rate (is_system, code, name, example, tax_system, territo
 select true, 'iva_superreducido', 'IVA superreducido', 'Pan, leche, huevos, fruta, verdura, aceite de oliva', 'iva', 'peninsula_baleares', 'taxed', 4, 0.5, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 91.Dos; recargo: art. 161.3.º', '2026-10-02', 'ley-37-1992', 30
 where not exists (select 1 from public.tax_rate where is_system and code = 'iva_superreducido' and valid_from = '2012-09-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
-select true, 'iva_basicos_4t2024', 'IVA alimentos básicos (oct.–dic. 2024)', 'Tipo temporal: pan, leche, huevos, fruta, verdura, aceite de oliva', 'iva', 'peninsula_baleares', 'taxed', 2, 0.26, '2024-10-01', '2024-12-31', '472', '477', array['303']::text[], 'Real Decreto-ley 4/2024, art. 1.Dos.2', '2026-10-02', 'rdl-4-2024', 35
+select true, 'iva_basicos_4t2024', 'IVA alimentos básicos (oct.–dic. 2024)', 'Tipo temporal: pan, harinas, leche, quesos, huevos, frutas, verduras, hortalizas, legumbres, tubérculos, cereales y aceite de oliva', 'iva', 'peninsula_baleares', 'taxed', 2, 0.26, '2024-10-01', '2024-12-31', '472', '477', array['303']::text[], 'Real Decreto-ley 4/2024, art. 1.Dos.2', '2026-10-02', 'rdl-4-2024', 35
 where not exists (select 1 from public.tax_rate where is_system and code = 'iva_basicos_4t2024' and valid_from = '2024-10-01');
+insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
+select true, 'iva_pasta_semillas_4t2024', 'IVA pasta y aceites de semillas (oct.–dic. 2024)', 'Tipo temporal: pastas alimenticias y aceites de semillas', 'iva', 'peninsula_baleares', 'taxed', 7.5, 1, '2024-10-01', '2024-12-31', '472', '477', array['303']::text[], 'Real Decreto-ley 4/2024, art. 1.Dos.1', '2026-10-02', 'rdl-4-2024', 36
+where not exists (select 1 from public.tax_rate where is_system and code = 'iva_pasta_semillas_4t2024' and valid_from = '2024-10-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
 select true, 'exento', 'Exento o 0 %', 'Seguros, alquileres de vivienda, sanidad, enseñanza', 'iva', 'peninsula_baleares', 'exempt', 0, null, '1993-01-01', null, null, null, array['303']::text[], 'Ley 37/1992, art. 20', '2026-10-02', 'ley-37-1992', 40
 where not exists (select 1 from public.tax_rate where is_system and code = 'exento' and valid_from = '1993-01-01');
@@ -3269,6 +3272,9 @@ alter table public.expense_category drop constraint if exists expense_category_s
 alter table public.expense_category add constraint expense_category_serie check (public.conta_fila_serie_ok(is_system, account_id, company_id, legal_ref, verified_at, source_key));
 
 -- ── D1 · Puente de las categorías de IVA de Cocina hacia tax_rate ──────────
+insert into public.vat_category_tax (vat_category_id, tax_code, valid_from, valid_to, note)
+select c.id, 'iva_basicos_4t2024', '2024-10-01', '2024-12-31', '2 % en el último trimestre de 2024 a todos los básicos (RD-ley 4/2024, art. 1.Dos.2). Decisión de Julio, respuesta 2 del C00: vat_rate de producción solo lo tenía para el aceite.' from public.vat_category c where c.code = 'alimento_basico'
+on conflict (vat_category_id, valid_from) do nothing;
 insert into public.vat_category_tax (vat_category_id, tax_code, valid_from, valid_to, note)
 select c.id, 'iva_superreducido', '2025-01-01', null, 'Como vat_rate hoy: 4 % desde 2025 (RD-ley 4/2024, art. 2)' from public.vat_category c where c.code = 'alimento_basico'
 on conflict (vat_category_id, valid_from) do nothing;

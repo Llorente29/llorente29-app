@@ -570,7 +570,7 @@
     {
      "code": "iva_basicos_4t2024",
      "name": "IVA alimentos básicos (oct.–dic. 2024)",
-     "example": "Tipo temporal: pan, leche, huevos, fruta, verdura, aceite de oliva",
+     "example": "Tipo temporal: pan, harinas, leche, quesos, huevos, frutas, verduras, hortalizas, legumbres, tubérculos, cereales y aceite de oliva",
      "tax_system": "iva",
      "territory": "peninsula_baleares",
      "treatment": "taxed",
@@ -607,6 +607,79 @@
        "fuente": "rdl-4-2024",
        "bloque": "a1",
        "literal": "será del 0,26 por ciento."
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "a) El pan común, así como la masa de pan común congelada"
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "b) Las harinas panificables."
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "d) Los quesos."
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "e) Los huevos."
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "f) Las frutas, verduras, hortalizas, legumbres, tubérculos y cereales"
+      }
+     ]
+    },
+    {
+     "code": "iva_pasta_semillas_4t2024",
+     "name": "IVA pasta y aceites de semillas (oct.–dic. 2024)",
+     "example": "Tipo temporal: pastas alimenticias y aceites de semillas",
+     "tax_system": "iva",
+     "territory": "peninsula_baleares",
+     "treatment": "taxed",
+     "rate": 7.5,
+     "surcharge_rate": 1,
+     "valid_from": "2024-10-01",
+     "valid_to": "2024-12-31",
+     "pgc_input_hint": "472",
+     "pgc_output_hint": "477",
+     "declared_in": [
+      "303"
+     ],
+     "legal_ref": "Real Decreto-ley 4/2024, art. 1.Dos.1",
+     "sort_order": 36,
+     "source_key": "rdl-4-2024",
+     "verified_at": "2026-10-02",
+     "pruebas": [
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "Dos. Con efectos desde el 1 de octubre de 2024 y vigencia hasta el 31 de diciembre de 2024:"
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "1. Se aplicará el tipo del 7,5 por ciento del Impuesto sobre el Valor Añadido"
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "a) Los aceites de semillas."
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "b) Las pastas alimenticias."
+      },
+      {
+       "fuente": "rdl-4-2024",
+       "bloque": "a1",
+       "literal": "El tipo del recargo de equivalencia aplicable a estas operaciones será del 1 por ciento."
       }
      ]
     },
@@ -1400,6 +1473,13 @@
   },
   "vat_category_tax": {
    "filas": [
+    {
+     "category_code": "alimento_basico",
+     "tax_code": "iva_basicos_4t2024",
+     "valid_from": "2024-10-01",
+     "valid_to": "2024-12-31",
+     "note": "2 % en el último trimestre de 2024 a todos los básicos (RD-ley 4/2024, art. 1.Dos.2). Decisión de Julio, respuesta 2 del C00: vat_rate de producción solo lo tenía para el aceite."
+    },
     {
      "category_code": "alimento_basico",
      "tax_code": "iva_superreducido",

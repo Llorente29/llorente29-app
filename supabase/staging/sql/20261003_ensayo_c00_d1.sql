@@ -46,8 +46,15 @@ begin
     from public.vat_category c cross join dias d
   ), n as (
     select count(*) as pares,
-           count(*) filter (where antes is distinct from despues) as dif_nueva,
-           count(*) filter (where antes is distinct from funcion) as dif_funcion,
+           count(*) filter (where antes is distinct from despues
+             and not (code = 'alimento_basico' and dia between date '2024-10-01' and date '2024-12-31'
+                      and antes is null and despues = row(2.00::numeric, 0.26::numeric))) as dif_nueva,
+           -- Respuesta 2 de Julio: el 2 % del 4.º trimestre de 2024 a todos los
+           -- básicos es una diferencia DECIDIDA (vat_rate solo lo tenía para el
+           -- aceite). No cuenta como fallo; cualquier otra, sí.
+           count(*) filter (where antes is distinct from funcion
+             and not (code = 'alimento_basico' and dia between date '2024-10-01' and date '2024-12-31'
+                      and antes is null and funcion = row(2.00::numeric, 0.26::numeric))) as dif_funcion,
            count(*) filter (where antes is not null)              as con_tipo
       from pares
   ), segmentos as (
