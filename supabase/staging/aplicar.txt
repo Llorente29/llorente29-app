@@ -1,8 +1,10 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 03/10/2026 · C00, 16.ª tanda (respuesta 4 de Julio, arreglo 3): la tabla de
-# serie código postal → población (postal_code_place), de GeoNames (CC BY 4.0),
-# para que el alta proponga la población. Solo añade una tabla nueva.
-# (15.ª: la 0200, lo que le faltaba a la ficha para el 200 y el depósito.)
-supabase/migrations/20261003T0210_c00_codigo_postal.sql
+# 04/10/2026 · C00, 17.ª tanda (respuesta 7 de Julio): PRUEBA de las vueltas
+# atrás de los ficheros de producción que alteran algo de Cocina. Las aplica,
+# comprueba que dejan supplier, supplier_invoice, compliance_document y
+# vat_rate_for como en producción, vuelve a aplicar las migraciones y termina
+# en ROLLBACK: staging queda igual que estaba.
+# (16.ª: la 0210, códigos postales.)
+supabase/staging/sql/20261004_prueba_vuelta_atras.sql
