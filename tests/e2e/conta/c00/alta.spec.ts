@@ -16,7 +16,7 @@
 // paga alquiler con retención. La regla es real; el dato, de prueba.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo, type Sesion } from '../sesion'
+import { CUENTA_A, CUENTA_B, entrarComo, type Sesion } from '../sesion'
 import { cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
@@ -158,4 +158,19 @@ test('cuenta A en el móvil: el alta, como M1', async ({ page }, info) => {
   } finally {
     await borrarEmpresasDePrueba(s)
   }
+})
+
+test('cuenta B (Canarias, sin interruptor ni Cocina): su sugerencia, con sus datos, y nada de A', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Solo lee: basta un tamaño')
+  await entrarComo(page, CUENTA_B.email)
+  await page.goto('/conta/ajustes')
+  await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+  await expect(page.getByText('Cocina de Prueba Sur, S.L.').first()).toBeVisible()
+  // La regla es la misma; el dato que la fundamenta, el de B. No se contesta:
+  // contestarla la cerraría para siempre y la prueba no se podría repetir.
+  const sugerencia = page.getByRole('region', { name: 'Lo que propone Folvy' })
+  await expect(sugerencia.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toBeVisible()
+  await expect(sugerencia.getByText(/Lo veo en Locales del Sur \(alquiler\)/)).toBeVisible()
+  await expect(page.getByText(/Locales del Norte/)).toHaveCount(0)
+  await expect(page.getByText(/Admin Norte/)).toHaveCount(0)
 })
