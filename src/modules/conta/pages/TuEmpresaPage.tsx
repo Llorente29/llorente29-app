@@ -9,9 +9,11 @@
 // La etiqueta de la cabecera dice «Todo listo para llevar tu contabilidad»
 // solo si no falta nada; si falta algo, dice qué (regla 7: no se esconde).
 //
-// El bloque verde de la maqueta («Desde septiembre repartes a domicilio…») es
-// una SUGERENCIA de la IA: llega con la tarea 6, con su porqué, su registro y
-// su deshacer. Hasta entonces no se inventa.
+// El bloque verde de la maqueta es una SUGERENCIA de la IA (§6.2): sale solo
+// si se puede fundamentar con datos de la propia cuenta (hoy, el 115 por un
+// alquiler con retención y el 111 por retenciones a profesionales). La del
+// reparto a domicilio de la maqueta necesitaría las ventas de Cocina, y
+// contabilidad no depende de Cocina: no se inventa.
 
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -25,6 +27,7 @@ import { fraseFalta, loQueFalta, mesesConEstado, ejercicioActual, type DatosEmpr
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { DetalleContable, QuienEres, TusImpuestos } from '@/modules/conta/empresa/ApartadosEmpresa'
 import { Actividades, EjercicioMeses, Socios } from '@/modules/conta/empresa/ApartadosActividad'
+import { RegistroIA, Sugerencias } from '@/modules/conta/ia/PiezasIA'
 
 function EtiquetaListo({ d, hoy }: { d: DatosEmpresa; hoy: string }) {
   const falta = loQueFalta(d, hoy)
@@ -44,6 +47,7 @@ function UnApartado({ id, d, quien, alCambiar, movil, hoy }: {
     case 'ejercicio': return <EjercicioMeses {...p} />
     case 'socios': return <Socios {...p} />
     case 'detalle': return <DetalleContable {...p} />
+    case 'registro': return <RegistroIA registro={d.ia.registro} alCambiar={alCambiar} movil={movil} />
   }
 }
 
@@ -113,6 +117,7 @@ export default function TuEmpresaPage() {
       <>
         {cabecera}
         <EtiquetaListo d={d} hoy={hoy} />
+        <Sugerencias sugerencias={d.ia.sugerencias} alCambiar={datos.recargar} />
         <nav aria-label="Apartados de tu empresa" className="cx-lista">
           {APARTADOS.map((a) => (
             <Link key={a.id} to={rutaApartadoEmpresa(a.id)} className="cx-lista-fila">
@@ -137,6 +142,7 @@ export default function TuEmpresaPage() {
   return (
     <>
       {cabecera}
+      <Sugerencias sugerencias={d.ia.sugerencias} alCambiar={datos.recargar} />
       <div className="cx-rejilla-3">
         <QuienEres {...comun} />
         <Actividades {...comun} />
@@ -147,6 +153,7 @@ export default function TuEmpresaPage() {
         <Socios {...comun} />
       </div>
       <DetalleContable {...comun} />
+      <RegistroIA registro={d.ia.registro} alCambiar={datos.recargar} movil={false} />
     </>
   )
 }

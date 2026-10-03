@@ -6,6 +6,7 @@
 // el IVA en palabras de la calle).
 
 import { mesesDe, siguienteMesACerrar, mesQueSePuedeReabrir, type Ejercicio } from '@/modules/conta/lib/ejercicios'
+import type { Origen, Registro, Sugerencia } from '@/modules/conta/ia/tipos'
 
 // ── Lo que se lee ───────────────────────────────────────────────────────────
 
@@ -27,6 +28,9 @@ export interface Empresa {
   fiscalCountry: string
   registryName: string | null
   registrySheet: string | null
+  /** Por dónde va el alta conversada (company.setup_step). */
+  setupStep: string
+  setupCompletedAt: string | null
 }
 
 export interface PerfilFiscal {
@@ -84,6 +88,8 @@ export interface DatosEmpresa {
   formasJuridicas: Opcion[]
   regimenes: Opcion[]
   modelos: Opcion[]
+  /** Lo de la IA: de dónde sale cada dato, lo que propone y lo que ha hecho (§6.1–6.3). */
+  ia: { origenes: Origen[]; sugerencias: Sugerencia[]; registro: Registro[] }
 }
 
 // ── Textos ──────────────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import {
   reabrirMes, terminarActividad, type CambiosSocio, type OpcionCodigo,
 } from '@/modules/conta/services/empresaDatosService'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
+import { Marca } from '@/modules/conta/ia/Marca'
 import { CampoLista, CampoTexto, PieFormulario, Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
 
 interface Props { d: DatosEmpresa; quien: Quien; alCambiar: () => void; movil: boolean; hoy: string }
@@ -63,7 +64,12 @@ export function Actividades({ d, quien, alCambiar, movil, hoy }: Props) {
                 <span className="cx-actividad-nombre">{a.description}</span>
                 {a.isMain && <Chip>Principal</Chip>}
               </button>
-              {lineaCodigos(a) && <span className="cx-fila-apoyo">{lineaCodigos(a)}</span>}
+              {lineaCodigos(a) && (
+                <span className="cx-fila-apoyo cx-con-marca">
+                  {lineaCodigos(a)}
+                  <Marca origenes={d.ia.origenes} tabla="company_activity" fila={a.id} campos={[['description', a.description]]} />
+                </span>
+              )}
               {abiertaEsta && (
                 <div className="cx-actividad-detalle">
                   {a.iaeTitle && <span className="cx-ayuda">IAE: {a.iaeTitle}</span>}
@@ -127,8 +133,8 @@ function FormDejar({ a, hoy, guardando, cancelar, guardar }: {
   )
 }
 
-/** Busca en una lista oficial mientras se escribe y deja elegir uno. */
-function Buscador({ etiqueta, ayuda, buscar, elegido, elegir, mostrarCodigo, deshabilitado }: {
+/** Busca en una lista oficial mientras se escribe y deja elegir uno. (También lo usa el alta.) */
+export function Buscador({ etiqueta, ayuda, buscar, elegido, elegir, mostrarCodigo, deshabilitado }: {
   etiqueta: string; ayuda: string; buscar: (t: string) => Promise<OpcionCodigo[]>
   elegido: OpcionCodigo | null; elegir: (o: OpcionCodigo | null) => void
   mostrarCodigo: (c: string) => string; deshabilitado: boolean

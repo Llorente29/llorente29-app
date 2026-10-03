@@ -373,6 +373,15 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 .cx-mes-abierto { background: var(--cx-azul-suave); color: var(--cx-azul); }
 .cx-mes-futuro { background: var(--cx-pendiente); color: var(--cx-apoyo); }
 .cx-meses-pie { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 14px; }
+/* La IA en «Tu empresa» (§6.1–6.3) */
+.cx-sugerencias { display: flex; flex-direction: column; gap: 10px; }
+.cx-con-marca { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cx-registro { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cx-registro li { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+.cx-registro li .cx-fila-texto { gap: 2px; }
+.cx-registro-deshecho .cx-fila-titulo { text-decoration: line-through; color: var(--cx-apoyo); }
+.cx-dato-etiqueta .cx-marca-ia { margin-left: 6px; }
+
 /* Los doce caben en una fila del móvil (390 px), como en M2. */
 .cx-meses-mini { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; padding-top: 8px; max-width: 330px; }
 .cx-meses-mini .cx-mes { min-height: 0; height: 30px; border-radius: 8px; font-size: 12px; }
@@ -383,6 +392,71 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 }
 .cx-socio .cx-inicial { width: 42px; height: 42px; }
 .cx-socio .cx-cifra { font-size: 17px; white-space: nowrap; }
+
+/* ── Alta conversada (maquetas N1Alta y M1Alta) ───────────────────── */
+.cx-alta { display: flex; gap: 40px; padding: 28px 28px 28px 44px; min-height: 100vh; }
+.cx-alta-conversacion { flex: 1 1 0; min-width: 0; max-width: 560px; display: flex; flex-direction: column; gap: 14px; }
+.cx-alta-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cx-alta-logo { font-size: 26px; font-weight: 700; letter-spacing: -1px; }
+.cx-alta-titular { padding: 24px 0 0; }
+.cx-alta-h1 { margin: 0; font-size: 38px; font-weight: 600; letter-spacing: -1.4px; line-height: 1.1; max-width: 380px; }
+.cx-alta-mensajes { flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding-top: 16px; }
+.cx-alta-folvy { display: flex; align-items: flex-end; gap: 12px; }
+.cx-alta-persona { display: flex; justify-content: flex-end; }
+.cx-alta-punto {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--cx-verde-suave); border: 1px solid var(--cx-ia-borde);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.cx-alta-punto span { width: 10px; height: 10px; border-radius: 50%; background: var(--cx-ia); }
+.cx-alta-burbuja {
+  background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque);
+  padding: 14px 18px; font-size: 16px; line-height: 1.45; max-width: 440px; display: flex; flex-direction: column; gap: 6px;
+}
+.cx-alta-persona .cx-alta-burbuja { background: var(--cx-azul); color: var(--cx-blanco); border-color: var(--cx-azul); border-bottom-right-radius: 6px; }
+.cx-alta-porque { font-size: 14px; color: var(--cx-apoyo); }
+.cx-alta-fallo { color: var(--cx-rojo); }
+.cx-alta-respuestas { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 46px; }
+.cx-alta-propuestas { padding-left: 46px; gap: 8px; }
+.cx-alta-propuesta {
+  display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--cx-linea);
+  border-radius: var(--cx-radio-caja); background: var(--cx-blanco); cursor: pointer;
+}
+.cx-alta-propuesta input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--cx-azul); flex-shrink: 0; }
+.cx-alta-direccion { margin-left: 46px; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque); padding: 16px; }
+.cx-alta-entrada {
+  position: relative; height: 62px; background: var(--cx-blanco); border: 1px solid var(--cx-borde-campo); border-radius: 999px;
+  display: flex; align-items: center; gap: 10px; padding: 0 8px 0 24px;
+}
+.cx-alta-entrada:focus-within { outline: 3px solid var(--cx-azul); outline-offset: 2px; }
+.cx-alta-input { flex-grow: 1; border: none; outline: none; background: transparent; font-size: 16px; color: var(--cx-texto); min-width: 0; height: 44px; }
+.cx .cx-alta-input:focus-visible { outline: none; }
+.cx-alta-entrada .cx-muy-pronto { bottom: 70px; }
+.cx-alta-panel { flex: 1 1 0; min-width: 0; align-self: stretch; padding: 32px 36px; display: flex; flex-direction: column; }
+.cx-alta-panel-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 10px; flex-wrap: wrap; }
+.cx-alta-progreso { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.cx-alta-barra { width: 190px; height: 8px; border-radius: 999px; background: var(--cx-linea); overflow: hidden; display: block; }
+.cx-alta-barra span { display: block; height: 100%; background: var(--cx-ia); border-radius: 999px; }
+.cx-alta-fila {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--cx-linea);
+  font-size: 16px; min-height: 56px;
+}
+.cx-alta-fila-actual { background: var(--cx-azul-suave); border: 1px solid var(--cx-azul-borde); border-radius: var(--cx-radio-caja); padding: 14px 16px; margin: 0 -16px; }
+.cx-alta-fila-etiqueta { color: var(--cx-apoyo); }
+.cx-alta-fila-actual .cx-alta-fila-etiqueta { color: var(--cx-texto); font-weight: 600; }
+.cx-alta-fila-valor { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; }
+.cx-alta-fila-linea { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
+.cx-alta-preguntando { color: var(--cx-azul); font-weight: 600; }
+.cx-alta-ultimo { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; }
+@media (max-width: 767px) {
+  .cx-alta { flex-direction: column; padding: 18px 16px; gap: 12px; }
+  .cx-alta-conversacion { max-width: none; }
+  .cx-alta-respuestas, .cx-alta-propuestas { padding-left: 0; }
+  .cx-alta-respuestas > * { flex: 1 1 45%; height: 52px; font-size: 16px; }
+  .cx-alta-respuestas > :first-child { flex-basis: 100%; }
+  .cx-alta-direccion { margin-left: 0; }
+  .cx-alta-panel { padding: 18px; }
+  .cx-alta-barra { width: 120px; }
+}
 
 /* ── Móvil ─────────────────────────────────────────────────────────── */
 @media (max-width: 767px) {

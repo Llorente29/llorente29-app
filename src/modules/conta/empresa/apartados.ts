@@ -8,7 +8,7 @@ import {
   ejercicioActual, mesesConEstado, resumenMeses, textoIva, type DatosEmpresa,
 } from '@/modules/conta/empresa/datosEmpresa'
 
-export type ClaveApartado = 'quien-eres' | 'actividad' | 'impuestos' | 'ejercicio' | 'socios' | 'detalle'
+export type ClaveApartado = 'quien-eres' | 'actividad' | 'impuestos' | 'ejercicio' | 'socios' | 'detalle' | 'registro'
 
 export interface Quien { accountId: string; companyId: string; userId: string | null }
 
@@ -59,6 +59,13 @@ export const APARTADOS: readonly Apartado[] = [
     },
   },
   { id: 'detalle', titulo: () => 'Detalle contable', resumen: () => 'Viene puesto; lo normal es no tocarlo' },
+  {
+    id: 'registro', titulo: () => 'Lo que ha hecho Folvy',
+    resumen: (d) => {
+      const vivas = d.ia.registro.filter((r) => !r.undoneAt).length
+      return vivas === 0 ? 'Nada todavía' : `${vivas} ${vivas === 1 ? 'cosa' : 'cosas'}; se pueden deshacer`
+    },
+  },
 ]
 
 export const apartado = (id: string | undefined): Apartado | null => APARTADOS.find((a) => a.id === id) ?? null

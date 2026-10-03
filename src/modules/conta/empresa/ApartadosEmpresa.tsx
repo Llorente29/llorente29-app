@@ -15,6 +15,7 @@ import {
 import type { Quien } from '@/modules/conta/empresa/apartados'
 import { guardarPerfil, guardarQuienEres } from '@/modules/conta/services/empresaDatosService'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
+import { Marca } from '@/modules/conta/ia/Marca'
 import { CampoLista, CampoSiNo, CampoTexto, PieFormulario, Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
 
 interface Props { d: DatosEmpresa; quien: Quien; alCambiar: () => void; movil: boolean }
@@ -46,16 +47,19 @@ export function QuienEres({ d, quien, alCambiar, movil }: Props) {
   }
   return (
     <TarjetaApartado titulo="Quién eres" movil={movil} accion={BOTON_CAMBIAR(() => { setEditando(true); h.limpiar() }, 'quién eres')}>
-      <Dato etiqueta="Razón social">{e.legalName}</Dato>
-      {e.tradeName && e.tradeName !== e.legalName && <Dato etiqueta="Nombre comercial">{e.tradeName}</Dato>}
-      <Dato etiqueta="Tipo">{forma}</Dato>
+      <Dato etiqueta="Razón social">{e.legalName && <>{e.legalName}<Marca origenes={d.ia.origenes} tabla="company" fila={e.id} campos={[['legal_name', e.legalName]]} /></>}</Dato>
+      {e.tradeName && e.tradeName !== e.legalName && (
+        <Dato etiqueta="Nombre comercial">{e.tradeName}<Marca origenes={d.ia.origenes} tabla="company" fila={e.id} campos={[['trade_name', e.tradeName]]} /></Dato>
+      )}
+      <Dato etiqueta="Tipo">{forma && <>{forma}<Marca origenes={d.ia.origenes} tabla="company" fila={e.id} campos={[['legal_form_code', e.legalFormCode]]} /></>}</Dato>
       <Dato etiqueta="NIF">
         {e.taxId && <>
           <span className="cx-cifra" style={{ fontSize: 15 }}>{e.taxId}</span>
           {nifOk && <span className="cx-visto" role="img" aria-label="La letra de control cuadra">✓</span>}
         </>}
       </Dato>
-      <Dato etiqueta="Dirección fiscal">{direccionEnUnaLinea(e)}</Dato>
+      <Dato etiqueta="Dirección fiscal">{direccionEnUnaLinea(e) && <>{direccionEnUnaLinea(e)}<Marca origenes={d.ia.origenes} tabla="company" fila={e.id}
+        campos={[['fiscal_street', e.fiscalStreet], ['fiscal_number', e.fiscalNumber], ['fiscal_city', e.fiscalCity], ['fiscal_postal_code', e.fiscalPostalCode]]} /></>}</Dato>
       {e.entityKind !== 'self_employed' && <Dato etiqueta="Registro mercantil">{textoRegistro(e)}</Dato>}
       <Resultado hecho={h.hecho} fallo={null} />
     </TarjetaApartado>
@@ -142,11 +146,15 @@ export function TusImpuestos({ d, quien, alCambiar, movil }: Props) {
         <p className="cx-vacio">Aún no están puestos tus impuestos. Con «Cambiar» los pones.</p>
       ) : (
         <>
-          <Dato etiqueta={p.taxTerritory === 'canarias' ? 'IGIC' : p.taxTerritory === 'ceuta_melilla' ? 'IPSI' : 'IVA'}>{textoIva(p, d.regimenes)}</Dato>
-          <Dato etiqueta="Criterio de caja">{p.vatCashBasis ? 'Sí' : 'No'}</Dato>
-          <Dato etiqueta="Recargo de equivalencia">{p.vatSurcharge ? 'Sí' : 'No'}</Dato>
+          <Dato etiqueta={p.taxTerritory === 'canarias' ? 'IGIC' : p.taxTerritory === 'ceuta_melilla' ? 'IPSI' : 'IVA'}>
+            {textoIva(p, d.regimenes)}
+            <Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id}
+              campos={[['vat_period', p.vatPeriod], ['vat_scheme_code', p.vatSchemeCode], ['tax_territory', p.taxTerritory]]} />
+          </Dato>
+          <Dato etiqueta="Criterio de caja">{p.vatCashBasis ? 'Sí' : 'No'}<Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['vat_cash_basis', p.vatCashBasis]]} /></Dato>
+          <Dato etiqueta="Recargo de equivalencia">{p.vatSurcharge ? 'Sí' : 'No'}<Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['vat_surcharge', p.vatSurcharge]]} /></Dato>
           <div className="cx-dato" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-            <span className="cx-dato-etiqueta">Presentas</span>
+            <span className="cx-dato-etiqueta">Presentas <Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['tax_forms', p.taxForms]]} /></span>
             {p.taxForms.length === 0 ? <span className="cx-dato-vacio">Ningún modelo puesto</span> : (
               <ul className="cx-chips" aria-label="Modelos que presentas">
                 {p.taxForms.map((m) => (
@@ -239,8 +247,8 @@ export function DetalleContable({ d, quien, alCambiar, movil }: Props) {
           }} />
       ) : (
         <>
-          <Dato etiqueta="Plan contable">{p.chartKind === 'pymes' ? 'Plan de pymes' : 'Plan general (grandes empresas)'}</Dato>
-          <Dato etiqueta="Dígitos de las cuentas">{String(p.accountDigits)}</Dato>
+          <Dato etiqueta="Plan contable">{p.chartKind === 'pymes' ? 'Plan de pymes' : 'Plan general (grandes empresas)'}<Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['chart_kind', p.chartKind]]} /></Dato>
+          <Dato etiqueta="Dígitos de las cuentas">{String(p.accountDigits)}<Marca origenes={d.ia.origenes} tabla="company_tax_profile" fila={d.empresa.id} campos={[['account_digits', p.accountDigits]]} /></Dato>
           <Dato etiqueta="IVA que pagas">{cuentaPgc('472')}</Dato>
           <Dato etiqueta="IVA que cobras">{cuentaPgc('477')}</Dato>
           <Dato etiqueta="Retenciones">{cuentaPgc('4751')}</Dato>

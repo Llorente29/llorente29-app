@@ -122,13 +122,14 @@ export function BloqueIA({ titulo, porque, acciones }: { titulo: ReactNode; porq
  * La marca «IA» de un dato que puso la IA. Al tocarla enseña el motivo
  * (encargo C00 §6.1). Es un botón: se alcanza con teclado.
  */
-export function MarcaIA({ motivo }: { motivo: string }) {
+export function MarcaIA({ motivo, importado = false }: { motivo: string; importado?: boolean }) {
   const [abierta, setAbierta] = useState(false)
   const id = useId()
   return (
     <span style={{ position: 'relative', display: 'inline-flex' }}>
       <button type="button" className="cx-marca-ia" aria-expanded={abierta} aria-controls={id}
-        aria-label="Lo puso Folvy. Ver por qué" onClick={() => setAbierta((v) => !v)}>IA</button>
+        aria-label={importado ? 'Vino de los datos de tu cuenta. Ver de dónde' : 'Lo puso Folvy. Ver por qué'}
+        onClick={() => setAbierta((v) => !v)}>{importado ? 'Importado' : 'IA'}</button>
       {abierta && (
         <span id={id} role="note" className="cx-ia-porque" style={{
           position: 'absolute', right: 0, top: 30, zIndex: 5, width: 260, padding: '10px 12px', borderRadius: 12,

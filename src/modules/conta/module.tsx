@@ -17,6 +17,7 @@ import { MarcoConta } from '@/modules/conta/marco/MarcoConta'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import TuEmpresaPage from '@/modules/conta/pages/TuEmpresaPage'
 import TablasGeneralesPage from '@/modules/conta/pages/TablasGeneralesPage'
+import AltaPage from '@/modules/conta/pages/AltaPage'
 
 const enMarco = (pagina: ReactNode, ejemplo: string) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo}>{pagina}</MarcoConta></EmpresasProveedor>
@@ -37,6 +38,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.empresaApartado, element: enMarco(<TuEmpresaPage />, 'Añade a Pablo como apoderado') },
     { path: CONTA.rutas.tablas, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.tabla, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
+    // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
+    { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },
     { path: '*', element: <Navigate to={`/${CONTA.modulo}/${CONTA.rutas.empresa}`} replace /> },
   ],
   sidebar: {

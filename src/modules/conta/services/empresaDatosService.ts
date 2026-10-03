@@ -18,6 +18,7 @@ import type {
 } from '@/modules/conta/empresa/datosEmpresa'
 import type { Ejercicio } from '@/modules/conta/lib/ejercicios'
 import { limpiarTitulo } from '@/modules/conta/empresa/datosEmpresa'
+import { cargarIa } from '@/modules/conta/services/iaService'
 
 type Fila = Record<string, unknown>
 const txt = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null)
@@ -35,6 +36,7 @@ function aEmpresa(r: Fila): Empresa {
     fiscalNumber: txt(r.fiscal_number), fiscalExtra: txt(r.fiscal_extra), fiscalPostalCode: txt(r.fiscal_postal_code),
     fiscalCity: txt(r.fiscal_city), fiscalProvince: txt(r.fiscal_province), fiscalCountry: txt(r.fiscal_country) ?? 'ES',
     registryName: txt(r.registry_name), registrySheet: txt(r.registry_sheet),
+    setupStep: txt(r.setup_step) ?? 'nif', setupCompletedAt: txt(r.setup_completed_at),
   }
 }
 
@@ -69,6 +71,7 @@ export async function cargarDatosEmpresa(accountId: string, companyId: string, e
     leer<Fila[]>(tabla('tax_form').select('code, name').order('code'), 'los modelos'),
   ])
   if (!empresa) throw new Error('Esa empresa no está en tu cuenta.')
+  const ia = await cargarIa(companyId)
 
   // Títulos del IAE y de la CNAE de las actividades, en dos lecturas.
   const iaes = [...new Set(acts.map((a) => txt(a.iae_code)).filter((c): c is string => c !== null))]
@@ -103,6 +106,7 @@ export async function cargarDatosEmpresa(accountId: string, companyId: string, e
     formasJuridicas: formas.map(opcion),
     regimenes: regimenes.map(opcion),
     modelos: modelos.map(opcion),
+    ia,
   }
 }
 

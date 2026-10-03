@@ -18,7 +18,7 @@ const EMPRESA: Empresa = {
   id: 'c', legalName: 'Taberna de Prueba Norte, S.L.', tradeName: 'Taberna de Prueba Norte', taxId: 'B28000016', taxIdVerifiedAt: null,
   entityKind: 'company', legalFormCode: 'nif_b', fiscalStreetType: 'Calle', fiscalStreet: 'de la Prueba', fiscalNumber: '12',
   fiscalExtra: null, fiscalPostalCode: '28001', fiscalCity: 'Madrid', fiscalProvince: 'Madrid', fiscalCountry: 'ES',
-  registryName: null, registrySheet: null,
+  registryName: null, registrySheet: null, setupStep: 'hecho', setupCompletedAt: '2026-10-01T00:00:00Z',
 }
 const PERFIL: PerfilFiscal = {
   taxTerritory: 'peninsula_baleares', vatSchemeCode: null, vatCashBasis: false, vatSurcharge: false, vatPeriod: 'quarterly',
@@ -26,7 +26,7 @@ const PERFIL: PerfilFiscal = {
 }
 const REGIMENES = [{ code: 'general', name: 'Régimen general' }, { code: 'simplificado', name: 'Régimen simplificado' }]
 const datos = (p: Partial<DatosEmpresa> = {}): DatosEmpresa => ({
-  empresa: EMPRESA, perfil: PERFIL, ejercicios: [EJ], cierres: [], socios: [], formasJuridicas: [], regimenes: REGIMENES, modelos: [],
+  empresa: EMPRESA, perfil: PERFIL, ejercicios: [EJ], cierres: [], socios: [], formasJuridicas: [], regimenes: REGIMENES, modelos: [], ia: { origenes: [], sugerencias: [], registro: [] },
   actividades: [{ id: 'a', kind: 'business', iaeCode: '1_6711', iaeTitle: null, cnaeCode: '5611', cnaeTitle: null, description: 'Restaurante', startedOn: '2022-03-01', endedOn: null, isMain: true }],
   ...p,
 })
@@ -74,6 +74,7 @@ describe('los textos, como la maqueta', () => {
       ['Ejercicio 2026', 'Septiembre y octubre abiertos'],
       ['Socios y cargos', 'Sin poner'],
       ['Detalle contable', 'Viene puesto; lo normal es no tocarlo'],
+      ['Lo que ha hecho Folvy', 'Nada todavía'],
     ])
     expect(APARTADOS[4].resumen(datos({ socios: null }), HOY)).toBe('Solo lo ve un administrador')
   })
