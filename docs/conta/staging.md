@@ -227,10 +227,13 @@ rastro, las dos facturas en `aprobada` sin vencimiento ni pago.
 | 02/10 18:33 | [37048236943](https://github.com/Llorente29/llorente29-app/actions/runs/37048236943) | `seeds/conta/seed_c00_catalogo_iva_cocina.sql`, `0130` (md5 en el registro), `ensayo_c00_d1.sql`, `0140` (`a566166e`), `ensayo_c00_d1.sql` otra vez | ver D1 abajo |
 | 02/10 18:4x | la del commit `8a1ffb2` | `seeds/conta/seed_c00_empresas_prueba.sql` | A «Taberna de Prueba Norte» (península; 303, 390, 111, 115, 202; 1 banco y 1 serie) y B «Cocina de Prueba Sur» (Canarias; 111) |
 
+| 02/10 23:49 | [37079327827](https://github.com/Llorente29/llorente29-app/actions/runs/37079327827) | `0150` (md5 `c704f6e7`) y `staging/sql/20261003_ensayo_c00_t5.sql` (`3fa90a65`) | ver «Ensayo de la tarea 5» abajo |
+
 Registradas después en el historial: `20261003000100 c00_catalogos_oficiales`,
 `20261003000110 c00_empresa`, `20261003000120 c00_tablas_generales`,
 `20261003000130 c00_valores_de_serie` y `20261003000140
-c00_vat_rate_lee_de_impuestos` (541 filas en total).
+c00_vat_rate_lee_de_impuestos` (541 filas en total) y, tras la 5.ª tanda,
+`20261003000150 c00_actividad_principal` (542).
 
 **Lo que dejó la 0130**, medido por el conector: 1.432 epígrafes del IAE (los
 1.438 del ISTAC menos 6 códigos técnicos: `_N`, `_O`, `_T`, `_U`, `_X`, `_Z`),
@@ -245,6 +248,17 @@ referencia y 6 filas del puente.
 |---|---|---|---|---|---|
 | antes de la 0140 | `vat_rate` | 5.480 | 3.742 | 0 | 0 |
 | después de la 0140 | `tax_rate` (vista `vat_category_rate`) | 5.480 | 3.742 | 0 | 0 |
+
+**Ensayo de la tarea 5** (con A y B y su token; nada escrito: el recuento de
+actividades, ejercicios, cierres y socios de la empresa de A y la huella de su
+perfil fiscal, iguales antes y después): A cambia la actividad principal en un
+paso; no puede hacer principal una terminada; abre el ejercicio 2026, cierra
+enero, no puede cerrar marzo con febrero abierto, no reabre sin motivo y
+reabre con motivo («reabierto por Admin Norte»); cambia su registro mercantil
+y su criterio de caja; añade una socia y la ve. B no puede hacer principal una
+actividad de A, cambia 0 filas del nombre o los impuestos de A, ve 0 socios de
+A y no puede cerrar un mes de A. Los mismos 13 resultados en local que en
+staging.
 
 La vara sabe fallar: en local, con un 5 % puesto a propósito en
 `alimento_basico` dentro de una transacción revertida, da 730 diferencias (los

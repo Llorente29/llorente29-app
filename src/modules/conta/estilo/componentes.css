@@ -373,8 +373,9 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 .cx-mes-abierto { background: var(--cx-azul-suave); color: var(--cx-azul); }
 .cx-mes-futuro { background: var(--cx-pendiente); color: var(--cx-apoyo); }
 .cx-meses-pie { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 14px; }
-.cx-meses-mini { display: flex; gap: 6px; padding-top: 8px; flex-wrap: wrap; }
-.cx-meses-mini .cx-mes { min-height: 0; width: 30px; height: 32px; border-radius: 9px; font-size: 13px; }
+/* Los doce caben en una fila del móvil (390 px), como en M2. */
+.cx-meses-mini { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; padding-top: 8px; max-width: 330px; }
+.cx-meses-mini .cx-mes { min-height: 0; height: 30px; border-radius: 8px; font-size: 12px; }
 .cx-socios { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .cx-socio {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: none; border-top: 1px solid var(--cx-linea);
