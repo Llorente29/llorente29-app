@@ -1,0 +1,20 @@
+{
+  "_que_es": "Lo que el agente «Normativa al día» ya ha avisado y está apuntado como pendiente. Sigue saliendo en el informe, en su sección, pero no abre otro aviso cada noche (regla 7: el umbral decide lo que interrumpe, no lo que existe). Cada entrada lleva por qué y desde cuándo; cuando se arregle, se quita de aquí.",
+  "sabido": [
+    {
+      "clave": "orden-modelo-115",
+      "desde": "2026-10-02",
+      "por": "La búsqueda del BOE no encuentra la orden que aprueba el modelo 115. El modelo está cargado con su norma por otra fuente; falta localizar la orden y corregir la búsqueda."
+    },
+    {
+      "clave": "orden-modelo-200",
+      "desde": "2026-10-02",
+      "por": "Falta la orden que aprueba el modelo 200: la búsqueda del BOE no la encuentra. El 200 está apartado de la serie hasta tenerla (pendiente del PR #138)."
+    },
+    {
+      "clave": "eu-paises",
+      "desde": "2026-10-03",
+      "por": "La consulta ordena solo por alfa2 y hay 275 filas para unos 250 códigos: los países con varios nombres salen en distinto orden en cada descarga y la huella cambia sin que cambie nada. Pendiente: ordenar también por nombre y regenerar la 0130 (pendiente del PR #138)."
+    }
+  ]
+}

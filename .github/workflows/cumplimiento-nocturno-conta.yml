@@ -39,6 +39,8 @@ on:
     paths:
       - 'scripts/conta/agente-datos-maestros.*'
       - 'scripts/conta/lib/datosMaestros.mjs'
+      - 'scripts/conta/normativa-aviso.mjs'
+      - 'docs/conta/fuentes/sabido.json'
       - '.github/workflows/cumplimiento-nocturno-conta.yml'
 
 concurrency:
@@ -149,29 +151,31 @@ jobs:
       - name: Comparar las fuentes con la última descarga
         run: node scripts/conta/fuentes.mjs comparar
 
-      - name: Informe
+      - name: Separar lo nuevo de lo ya sabido
         id: informe
+        continue-on-error: true
+        run: node scripts/conta/normativa-aviso.mjs /tmp/informe-normativa.md
+
+      - name: Informe
         if: always()
         run: |
-          f=docs/conta/fuentes/cambios.md
-          if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; fi
-          # Cada fuente que cambió o no se pudo comprobar es una línea «- ».
-          if [ -f "$f" ] && grep -q '^- ' "$f"; then echo "hay=si" >> "$GITHUB_OUTPUT"; else echo "hay=no" >> "$GITHUB_OUTPUT"; fi
+          if [ -f /tmp/informe-normativa.md ]; then cat /tmp/informe-normativa.md >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Aviso
-        if: steps.informe.outputs.hay == 'si' && github.event_name != 'push'
+        # Solo lo NUEVO abre aviso; lo ya sabido sale en el informe (docs/conta/fuentes/sabido.json).
+        if: steps.informe.outcome == 'failure' && github.event_name != 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           TITULO: 'Conta · Normativa al día: ha cambiado una fuente oficial'
         run: |
           set -euo pipefail
           enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          printf '%s\n\nEjecución: %s\n' "$(cat docs/conta/fuentes/cambios.md)" "$enlace" > /tmp/aviso.md
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe-normativa.md)" "$enlace" > /tmp/aviso.md
           n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
           if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso.md
           else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso.md; fi
 
       - name: Resultado
-        if: steps.informe.outputs.hay == 'si'
+        if: steps.informe.outcome == 'failure'
         run: |
           echo "::warning::Ha cambiado alguna fuente oficial, o no se ha podido comprobar: ver el informe."

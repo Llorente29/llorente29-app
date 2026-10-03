@@ -20,6 +20,8 @@ export const CLAVE_STORAGE = 'sb-oseymswjlzplqoxrfjzi-auth-token'
 
 export const CUENTA_A = { id: 'c01a0000-0000-4000-8000-00000000000a', email: 'a.admin@prueba.folvy.test' }
 export const CUENTA_B = { id: 'c01b0000-0000-4000-8000-00000000000b', email: 'b.admin@prueba.folvy.test' }
+/** El encargado de A (rol manager, no administrador): semilla seed_c00_encargado_prueba.sql. */
+export const ENCARGADO_A = { id: 'c01a0000-0000-4000-8000-0000000000a6', email: 'a.encargado@prueba.folvy.test' }
 export const HERMANOS_RUIZ = 'c01a0000-0000-4000-8000-0000000000a3'
 export const CARNES_SUR = 'c01b0000-0000-4000-8000-0000000000b3'
 
