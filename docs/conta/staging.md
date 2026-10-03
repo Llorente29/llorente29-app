@@ -336,6 +336,29 @@ dice «base de pruebas staging-conta: los datos son inventados».
 Las pruebas e2e no dependen de nada de esto: entran por la API y dejan la
 sesión en el navegador.
 
+## Vista previa del C00 (03/10)
+
+Para que Julio pruebe el C00 con su usuario (tarea 9 del encargo).
+
+- **Vercel:** las dos variables de vista previa, **limitadas a la rama**
+  `conta/c00-empresa-y-tablas` (`VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`,
+  de staging-conta), creadas el 03/10. Las generales de vista previa siguen
+  apuntando a producción. **Antes de esa hora, cada push a la rama desplegó una
+  vista previa contra PRODUCCIÓN: no se usan.** Vale el primer despliegue que
+  empezó después de crearlas, y los siguientes. Se comprueba igual que en el
+  C01, sin abrir el JS: la franja de arriba dice «base de pruebas staging-conta:
+  los datos son inventados».
+- **Usuario:** el de Julio ya existe en staging-conta desde el C01, como
+  administrador de la cuenta de prueba A (Taberna de Prueba Norte). Con él ve
+  la empresa de A, las tablas, el registro de la IA y la sugerencia del 115.
+- **Hook de claims:** igual que en el C01. Si el login se queda en la primera
+  pantalla, falta activarlo en el panel (**Authentication → Hooks → Customize
+  Access Token → Postgres → `public.custom_access_token_hook`**).
+- **Para ver el alta desde cero** hace falta una cuenta sin empresa terminada.
+  Con A, el alta se abre desde el menú: «Cambiar de empresa → + Dar de alta otra
+  empresa». La empresa que cree se queda en A; la limpieza del e2e borra las
+  que se queden **a medias**.
+
 ## Cómo se repite
 
 1. Pasos 1 a 4 de arriba, en orden.
