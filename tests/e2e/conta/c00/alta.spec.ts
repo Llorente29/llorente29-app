@@ -140,6 +140,10 @@ test('cuenta A en el móvil: el alta, como M1', async ({ page }, info) => {
     await empezarAlta(page, s, `Alta e2e móvil ${Date.now()}`)
     await expect(page.getByText('3 de 5')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Ver todo' })).toBeVisible()
+    // La tarjeta de arriba dice lo ÚLTIMO que apuntó: la segunda actividad.
+    const tarjeta = page.getByRole('region', { name: 'Tu empresa' })
+    await expect(tarjeta.getByText('Añadió la actividad «Comida a domicilio»')).toBeVisible()
+    await expect(tarjeta.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/alta-movil.png`, fullPage: true })
     // Se sigue desde otro dispositivo: al volver a entrar, sigue donde lo dejó.

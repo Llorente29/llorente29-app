@@ -41,7 +41,7 @@ import { validarIban } from '@/modules/conta/lib/iban'
 import { provinciaPorCp } from '@/modules/conta/lib/direccion'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
-import { marcaDe } from '@/modules/conta/ia/tipos'
+import { marcaDe, queHizo } from '@/modules/conta/ia/tipos'
 import {
   codigoIae, direccionEnUnaLinea, ejercicioActual, textoIva, type DatosEmpresa,
 } from '@/modules/conta/empresa/datosEmpresa'
@@ -314,7 +314,13 @@ export default function AltaPage() {
           <section className="cx-tarjeta cx-alta-ultimo" aria-label="Tu empresa">
             <div className="cx-fila-texto">
               <span className="cx-ayuda">Tu empresa{ultimo ? ' · acabo de apuntar' : ''}</span>
-              {ultimo && <span className="cx-fila-titulo">{ultimo.reason.length > 60 ? `${ultimo.reason.slice(0, 60)}…` : ultimo.reason}</span>}
+              {/* Como M1: QUÉ apuntó, con su marca; el porqué, al tocar la marca. */}
+              {ultimo && (
+                <span className="cx-fila-titulo" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{queHizo(ultimo)}</span>
+                  <MarcaIA motivo={ultimo.reason} importado={ultimo.source === 'import'} />
+                </span>
+              )}
             </div>
             <button type="button" className="cx-enlace" aria-expanded={verTodo} onClick={() => setVerTodo((v) => !v)}>{verTodo ? 'Cerrar' : 'Ver todo'}</button>
           </section>
