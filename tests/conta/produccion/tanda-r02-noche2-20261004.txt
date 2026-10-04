@@ -1,0 +1,20 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml, solo a mano («confirmo:
+# produccion»), solo entre las 00:30 y las 12:15 de Madrid, primero en ENSAYO
+# (todo en una transacción y rollback) y, con un ensayo en verde del mismo
+# commit, en REAL (un fichero por transacción, para al primer fallo).
+#
+# R02 · Quién reparte, NOCHE 2: la ELIMINACIÓN del interruptor antiguo
+# (docs/reparto/R02_informe_final.md §4). Va después del real de la noche 1
+# (04/10, 10:19) y de la fusión del front (#140, Vercel READY, 04/10).
+# PARA a propósito y va en el campo «autorizo», nombre entero:
+#
+#   20261005T0200_r02_elimina_interruptor_antiguo.sql
+#
+# Su guarda se para si alguna función lee brand.own_delivery_enabled o llama a
+# marca_reparte_propio. Guarda antes los valores en r02_interruptor_antiguo.
+# Medido en producción el 04/10 (solo lectura): 0 funciones, vistas, políticas,
+# dependencias ni crons que los nombren; 69 funciones de borde desplegadas, solo
+# un comentario en hubrise-webhook; 2 marcas con valor (Foodint, las dos apagadas).
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261005T0200_r02_elimina_interruptor_antiguo.sql

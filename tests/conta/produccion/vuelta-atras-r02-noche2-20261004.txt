@@ -1,0 +1,9 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas y la misma ventana.
+#
+# R02 · NOCHE 2: deshace la eliminación del interruptor antiguo. Vuelve a poner
+# brand.own_delivery_enabled con los valores guardados en r02_interruptor_antiguo
+# y recrea marca_reparte_propio tal cual estaba. Probada en staging
+# (supabase/staging/sql/20261005_r02_prueba_vuelta_atras.sql).
+# (La del C00 era: 0140 vat_rate_for, 0110 empresa, C01 0100 ficha de proveedor.)
+supabase/vuelta-atras/20261005T0200_r02_elimina_interruptor_antiguo.down.sql

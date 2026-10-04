@@ -2,6 +2,9 @@
 // REALES y lo que EXISTÍA en producción el 04/10/2026 (leído en solo lectura).
 //   · La del C00, ya aplicada: copia fija en tanda-c00-20261004.txt.
 //   · La noche 1 del R02, ya aplicada: copia fija en tanda-r02-noche1-20261004.txt.
+//   · La noche 2 del R02 (la eliminación, 0200), ya aplicada: copia fija en
+//     tanda-r02-noche2-20261004.txt, con su vuelta atrás en
+//     vuelta-atras-r02-noche2-20261004.txt (llegó a main después, desde 7470dc78).
 //   · La de datos del C01b, ya aplicada (real 37219796909): copia fija en
 //     tanda-c01b-datos-20261004.txt.
 //   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): la
@@ -88,6 +91,36 @@ describe('la noche 1 del R02 (ya aplicada), tal cual', () => {
   it('ninguno toca vat_rate_for, y la 0120 lleva el aviso del execute dinámico (los feeds)', () => {
     expect(viva.filter((f) => decidir(p.porFichero[f], p.existe).tocaVatRateFor)).toEqual([])
     expect(decidir(p.porFichero[viva[2]], p.existe).avisos.length).toBeGreaterThan(0)
+  })
+})
+
+describe('la noche 2 del R02 (la eliminación, 0200; ya aplicada), tal cual', () => {
+  const COPIA = 'tests/conta/produccion/tanda-r02-noche2-20261004.txt'
+  const viva = leerTanda(COPIA)
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-r02-0200-20261004.json'))
+  const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
+
+  it('es solo la 0200, sola', () => {
+    expect(viva).toEqual(['supabase/migrations/20261005T0200_r02_elimina_interruptor_antiguo.sql'])
+  })
+
+  it('PARA, y para por borrar la columna y la función que existían', () => {
+    expect(paran()).toEqual(viva)
+    const motivos = decidir(p.porFichero[viva[0]], p.existe).para.join('\n')
+    expect(motivos).toContain('marca_reparte_propio')
+    expect(motivos).toContain('own_delivery_enabled')
+  })
+
+  it('el comentario de la copia dice, para «autorizo», exactamente los que paran', () => {
+    const linea = readFileSync(COPIA, 'utf8').split('\n').find((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))
+    expect(linea).toBeDefined()
+    expect(linea!.replace(/^#/, '').trim().split(/\s+/)).toEqual(paran().map((f) => f.replace(/^.*\//, '')))
+  })
+
+  it('su vuelta atrás era la suya, y existe', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-r02-noche2-20261004.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261005T0200_r02_elimina_interruptor_antiguo.down.sql'])
+    expect(readFileSync(atras[0], 'utf8')).toContain('add column if not exists own_delivery_enabled')
   })
 })
 
