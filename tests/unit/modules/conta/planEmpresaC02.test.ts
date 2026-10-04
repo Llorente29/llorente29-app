@@ -11,7 +11,7 @@ import serie from '../../../../supabase/conta/pgc/serie.json'
 import equivalencias from '../../../../supabase/conta/pgc/equivalencias.json'
 import ref from '../../../../docs/conta/referencia/serie.json'
 import {
-  DEFINICION_400, DEFINICION_410, activar, cambioDePlan, hojaDeProveedor, coherencia, nuevaSubcuenta, puedeOcultar, rellenar, renumerar, salidaNumeracionAgotada,
+  DEFINICION_400, DEFINICION_410, activar, cambioDePlan, fusionar, hojaDeProveedor, limpiarPalabras, puedeCerrar, coherencia, nuevaSubcuenta, puedeOcultar, rellenar, renumerar, salidaNumeracionAgotada,
   siguienteLibre, subcuenta, type CuentaEmpresa, type Equivalencia, type HojaSerie,
 } from '@/modules/conta/lib/planEmpresa'
 
@@ -232,5 +232,32 @@ describe('cambio de plan (D4)', () => {
       expect(e.candidatos.length, e.code).toBeGreaterThan(0)
       for (const c of e.candidatos) expect(c.cita).toMatch(/^RD 1514\/2007, cuarta parte/)
     }
+  })
+})
+
+describe('duplicadas, cerrar y palabras clave', () => {
+  const { cuentas, enlaces } = base()
+  const c = (code: string) => cuentas.find((x) => x.code === code)!
+  it('antes del primer asiento la duplicada se borra y sus enlaces pasan a la que queda', () => {
+    const dup = { ...c('40000002'), code: '40000099', name: 'Proveedor 2 (repetido)' }
+    const r = fusionar(dup, c('40000002'), [...enlaces, { entity: 'supplier', entityId: 'p2', role: 'principal', code: '40000099' }], false)
+    expect(r).toMatchObject({ ok: true, modo: 'borrar', mueve: [{ entity: 'supplier', entityId: 'p2', code: '40000002' }] })
+  })
+  it('después, fusionar (historial y deshacer los hace el C04)', () => {
+    const r = fusionar({ ...c('40000002'), code: '40000099' }, c('40000002'), enlaces, true)
+    expect(r).toMatchObject({ ok: true, modo: 'fusionar' })
+  })
+  it('no son duplicadas: otra hoja, dos terceros distintos, o la que sobra es de serie', () => {
+    expect(fusionar(c('40000001'), c('57200001'), enlaces, false)).toMatchObject({ ok: false })
+    expect(fusionar(c('40000001'), c('40000002'), enlaces, false)).toEqual({ ok: false, motivo: 'Las dos son subcuentas de terceros distintos: no son duplicadas.' })
+    expect(fusionar(c('40000000'), c('40000001'), enlaces, false)).toMatchObject({ ok: false, motivo: expect.stringMatching(/es de serie/) })
+  })
+  it('cerrar solo con historial; sin asientos, ocultar', () => {
+    expect(puedeCerrar(c('68100000'), enlaces, false)).toEqual({ ok: false, motivo: 'Aún no hay asientos: no hay nada que cerrar. Si no la usas, ocúltala.' })
+    expect(puedeCerrar(c('68100000'), enlaces, true)).toEqual({ ok: true })
+    expect(puedeCerrar(c('62100000'), enlaces, true).ok).toBe(false)
+  })
+  it('palabras clave limpias', () => {
+    expect(limpiarPalabras([' Glovo ', 'glovo', 'Uber  Eats', ''])).toEqual(['glovo', 'uber eats'])
   })
 })

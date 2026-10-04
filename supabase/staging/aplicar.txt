@@ -1,9 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02, respuesta 2: proveedores en 400 o 410 según su tipo de
-# gasto (0130) y la prueba del plan por empresa con la regla nueva y las dos
-# vueltas atrás (0130 y 0120), ENTERA en ROLLBACK. Ningún plan queda activado.
-# Tandas anteriores del C02: 37231787433, 37233699050 y la de la 0120 (504d9bf).
-supabase/migrations/20261007T0130_c02_proveedor_400_410.sql
+# 05/10/2026 · C02, tarea 3 (cierre): duplicadas, cerrar y palabras clave
+# (0140) y la prueba del plan por empresa con las tres vueltas atrás (0140,
+# 0130, 0120), ENTERA en ROLLBACK. Ningún plan queda activado.
+# Anterior: 37240764949 (0130 y prueba, en verde).
+supabase/migrations/20261007T0140_c02_duplicadas_cerrar_palabras.sql
 supabase/staging/sql/20261007_c02_prueba_plan.sql

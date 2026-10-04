@@ -11,7 +11,8 @@
 --      43000000 común.
 --   2. Coherencia: retenciones a 47510000, alquiler a 62100000; una cuenta
 --      enlazada no se oculta; una libre sí; un tercero no comparte subcuenta.
---   3. Añadir subcuenta: la siguiente libre; renumerar 8 → 10.
+--   3. Añadir subcuenta: la siguiente libre; una duplicada se borra y su
+--      enlace pasa (0140); cerrar sin asientos no; palabras clave; renumerar 8 → 10.
 --   4. Activar dos veces no se puede.
 --   5. B (Canarias): IGIC; el 0 % va a la hoja. Y B no puede tocar el plan de A.
 --   6. Vuelta atrás.
@@ -65,6 +66,27 @@ begin
   -- 3. Añadir y renumerar.
   r := public.company_account_add(emp, '4000', 'Proveedor nuevo', 'Lo que le compras', null, null, 'Prueba C02');
   if r->>'code' <> '40000005' then raise exception 'PRUEBA C02: la nueva es %', r->>'code'; end if;
+  -- Duplicada (0140): antes del primer asiento se borra y sus enlaces pasan.
+  r := public.company_account_add(emp, '4000', 'Proveedor nuevo (repetido)', null, 'supplier', 'prov-repetido', 'Prueba C02');
+  if r->>'code' <> '40000006' then raise exception 'PRUEBA C02: la repetida es %', r->>'code'; end if;
+  r := public.company_account_merge((r->>'id')::uuid, (select id from public.company_account where company_id = emp and code = '40000005'), 'Prueba C02');
+  if r->>'modo' <> 'borrar' or (r->>'enlaces')::int <> 1 then raise exception 'PRUEBA C02: fusionar = %', r; end if;
+  if exists (select 1 from public.company_account where company_id = emp and code = '40000006') then raise exception 'PRUEBA C02: la duplicada sigue'; end if;
+  if (select a.code from public.company_account_link l join public.company_account a on a.id = l.company_account_id where l.company_id = emp and l.entity_id = 'prov-repetido') <> '40000005' then
+    raise exception 'PRUEBA C02: el enlace de la duplicada no ha pasado a la que queda';
+  end if;
+  begin
+    perform public.company_account_merge((select id from public.company_account where company_id = emp and code = '40000001'), (select id from public.company_account where company_id = emp and code = '40000002'));
+    raise exception 'PRUEBA C02: ha fusionado dos proveedores distintos';
+  exception when invalid_parameter_value then fallo := sqlerrm; end;
+  -- Cerrar sin asientos no; palabras clave limpias.
+  begin
+    perform public.company_account_close((select id from public.company_account where company_id = emp and code = '68100000'));
+    raise exception 'PRUEBA C02: ha cerrado una cuenta sin asientos';
+  exception when invalid_parameter_value then fallo := sqlerrm; end;
+  if public.company_account_set_keywords((select id from public.company_account where company_id = emp and code = '62100000'), array[' Alquiler ', 'alquiler', 'Local  del Norte'])
+     is distinct from array['alquiler', 'local del norte'] then raise exception 'PRUEBA C02: palabras clave mal limpiadas'; end if;
+
   r := public.company_chart_set_digits(emp, 10, 'Prueba C02');
   if (select string_agg(code, ' ' order by code) from public.company_account where company_id = emp and code in ('4000000005', '4720000021', '4700000000', '5720000001', '4100000001')) is distinct from '4000000005 4100000001 4700000000 4720000021 5720000001' then
     raise exception 'PRUEBA C02: el renumerado no da lo esperado';
@@ -120,7 +142,8 @@ begin
 end $$;
 reset role;
 
-\echo '>>> 6. Vuelta atrás (0130 y luego 0120)'
+\echo '>>> 6. Vuelta atrás (0140, 0130 y luego 0120)'
+\ir ../../vuelta-atras/20261007T0140_c02_duplicadas_cerrar_palabras.down.sql
 \ir ../../vuelta-atras/20261007T0130_c02_proveedor_400_410.down.sql
 do $$ begin
   if exists (select 1 from information_schema.columns where table_name = 'expense_category' and column_name = 'supplier_account_leaf') then

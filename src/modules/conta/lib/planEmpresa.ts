@@ -325,3 +325,47 @@ export function cambioDePlan(
   }
   return { ok: true, anadir: [...hojas.pymes].filter((h) => !tiene.has(h)).sort(), elegir: [], aviso: AVISO_TAMANO }
 }
+
+// ── Duplicadas, cerrar y palabras clave (encargo §3) ────────────────────────
+
+export type Fusion =
+  | { ok: true; modo: 'borrar' | 'fusionar'; mueve: Enlace[]; porque: string }
+  | { ok: false; motivo: string }
+
+/**
+ * Dos cuentas duplicadas. Antes del primer asiento la que sobra se BORRA y sus
+ * enlaces pasan a la que queda; después se FUSIONA (QuickBooks, Pennylane): el
+ * historial pasa a la que queda, con registro y «Deshacer» 24 h (eso lo hace
+ * el C04, que es quien tiene apuntes). Solo entre cuentas de la misma hoja, y
+ * una de serie nunca es la que sobra.
+ */
+export function fusionar(sobra: CuentaEmpresa, queda: CuentaEmpresa, enlaces: readonly Enlace[], bloqueada: boolean): Fusion {
+  if (sobra.code === queda.code) return { ok: false, motivo: 'Es la misma cuenta.' }
+  if (sobra.templateCode !== queda.templateCode) return { ok: false, motivo: `${sobra.code} y ${queda.code} no cuelgan de la misma cuenta del plan: no son duplicadas.` }
+  if (sobra.kind === 'template') return { ok: false, motivo: `${sobra.code} es de serie: no se puede quitar. Fusiona al revés.` }
+  if (queda.status !== 'activa') return { ok: false, motivo: `${queda.code} está ${queda.status}: elige una activa para quedarte.` }
+  const mueve = enlaces.filter((l) => l.code === sobra.code).map((l) => ({ ...l, code: queda.code }))
+  const terceros = new Set([...enlaces.filter((l) => l.code === queda.code), ...mueve].filter((l) => TERCEROS.includes(l.entity)).map((l) => `${l.entity}:${l.entityId}`))
+  if (terceros.size > 1 && !queda.isCommon) return { ok: false, motivo: `Las dos son subcuentas de terceros distintos: no son duplicadas.` }
+  return bloqueada
+    ? { ok: true, modo: 'fusionar', mueve, porque: `Ya hay asientos: ${sobra.code} pasa su historial a ${queda.code} y queda cerrada. Se puede deshacer durante 24 horas.` }
+    : { ok: true, modo: 'borrar', mueve, porque: `Aún no hay asientos: ${sobra.code} se borra y lo que apuntaba a ella pasa a ${queda.code}.` }
+}
+
+/** Cerrar es para cuentas con historial; sin asientos, lo que toca es ocultar. */
+export function puedeCerrar(cuenta: CuentaEmpresa, enlaces: readonly Enlace[], bloqueada: boolean): { ok: true } | { ok: false; motivo: string } {
+  if (!bloqueada) return { ok: false, motivo: 'Aún no hay asientos: no hay nada que cerrar. Si no la usas, ocúltala.' }
+  if (cuenta.status === 'cerrada') return { ok: false, motivo: 'Ya está cerrada.' }
+  const l = enlaces.find((x) => x.code === cuenta.code)
+  return l ? { ok: false, motivo: `Tiene un enlace activo (${l.entity}). Cambia antes ese enlace a otra cuenta.` } : { ok: true }
+}
+
+/** Palabras clave de una cuenta (Puzzle): limpias, sin repetir, en minúsculas; como mucho 20. */
+export function limpiarPalabras(palabras: readonly string[]): string[] {
+  const out: string[] = []
+  for (const p of palabras) {
+    const w = p.trim().replace(/\s+/g, ' ').toLocaleLowerCase('es')
+    if (w && w.length <= 40 && !out.includes(w)) out.push(w)
+  }
+  return out.slice(0, 20)
+}
