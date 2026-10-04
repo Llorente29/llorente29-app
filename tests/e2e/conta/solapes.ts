@@ -25,12 +25,18 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
   // Se mide con la página QUIETA: si aún llega contenido, la medida se hace
   // sobre una página que ya no existe (03/10: pasaba con el esqueleto y falló
   // el día que los datos llegaron a mitad de medida).
+  // 04/10 (e2e 37215123423): una sola lectura igual no basta. La ficha de
+  // proveedor sincroniza lo aprendido y recarga DESPUÉS de pintarse, y eso
+  // llegaba más tarde que 250 ms. Ahora: red quieta y el mismo alto durante
+  // un segundo (cuatro lecturas seguidas), hasta 10 s.
   const altura = () => page.evaluate(() => document.documentElement.scrollHeight)
+  await page.waitForLoadState('networkidle').catch(() => undefined)
   let alto = await altura()
-  for (let i = 0; i < 20; i++) {
+  let iguales = 0
+  for (let i = 0; i < 40 && iguales < 4; i++) {
     await page.waitForTimeout(250)
     const ahora = await altura()
-    if (ahora === alto) break
+    iguales = ahora === alto ? iguales + 1 : 0
     alto = ahora
   }
   for (const y of [alto]) {
