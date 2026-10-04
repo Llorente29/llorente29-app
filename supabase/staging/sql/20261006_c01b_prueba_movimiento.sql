@@ -98,6 +98,10 @@ values ('c1b0f000-0000-4000-8000-0000000000f1', 'Clon viejo C01b', 'clon-viejo-c
        ('c1b0f000-0000-4000-8000-0000000000f2', 'Clon nuevo C01b', 'clon-nuevo-c01b', 'active', 'restaurante');
 \ir ../../vuelta-atras/20261006T0120_c01b_lectores.down.sql
 select * from public.migrate_kitchen_core('c01a0000-0000-4000-8000-00000000000a', 'c1b0f000-0000-4000-8000-0000000000f1', true);
+-- migrate_kitchen_core crea tablas temporales «on commit drop»: dentro de una
+-- misma transacción no se puede llamar dos veces sin quitarlas (así es en
+-- producción; no lo cambia el C01b).
+drop table if exists _nucleo, _map_family, _map_supplier, _map_item;
 \ir ../../migrations/20261006T0120_c01b_lectores.sql
 select * from public.migrate_kitchen_core('c01a0000-0000-4000-8000-00000000000a', 'c1b0f000-0000-4000-8000-0000000000f2', true);
 do $$
