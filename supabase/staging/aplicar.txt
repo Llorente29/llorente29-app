@@ -3,9 +3,9 @@
 #
 # 05/10/2026 · C02, tarea 4, 3.º: la 0150 corregida (el cambio de plan chocaba:
 # la 2550 del general rellenada es el mismo código que la 255 de pymes). Se
-# deshace la 0150 de antes con su vuelta atrás, se aplica la nueva, y la
+# deshace la 0150 de antes con su vuelta atrás y se aplica la nueva (en un
+# fichero de staging que incluye las dos, una transacción), y la
 # prueba (ahora también con el camino de elegir) ENTERA en ROLLBACK.
 # Anteriores: 37242370880 (0150 vieja, prueba en rojo) y 37243497321 (el error).
-supabase/vuelta-atras/20261007T0150_c02_deshacer_cambio_plan.down.sql
-supabase/migrations/20261007T0150_c02_deshacer_cambio_plan.sql
+supabase/staging/sql/20261007_c02_reaplicar_0150.sql
 supabase/staging/sql/20261007_c02_prueba_plan.sql
