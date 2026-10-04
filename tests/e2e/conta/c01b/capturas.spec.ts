@@ -96,8 +96,11 @@ test('Panadería Luna (respuesta 2): IBAN distinto al de la ficha y posible repe
   await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Es el nuevo IBAN' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'No es suyo' })).toBeEnabled()
+  await expect(page.getByRole('dialog')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: `${DIR}/iban-distinto-factura-${lado(page)}.png`, fullPage: true })
+  // El diálogo flota sobre la ventana: la captura de página entera, en el
+  // ordenador, salía sin él (e2e 37214203335). Se captura lo que se ve.
+  await page.screenshot({ path: `${DIR}/iban-distinto-factura-${lado(page)}.png`, fullPage: false })
 })
 
 test('dirección «por confirmar» (Mercados del Norte): el reparto propuesto con «Es esta / Corregir»', async ({ page }) => {
