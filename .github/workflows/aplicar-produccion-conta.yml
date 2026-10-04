@@ -16,6 +16,16 @@ name: Aplicar SQL en PRODUCCIÓN (contabilidad)
 #     columna, vista o función, cambia datos (update/delete), reemplaza una
 #     función que no sea vat_rate_for, o vat_rate_for con otra firma. SIGUE, con
 #     informe, si solo añade.
+#   · PARAR A PROPÓSITO (04/10, R02): hay ficheros que paran porque tienen
+#     que parar — reemplazan funciones de Cocina, sanean pedidos, eliminan una
+#     columna — y que Julio decide aplicar. Para esos está el campo `autorizo`:
+#     se escribe el NOMBRE ENTERO de cada fichero (sin carpeta). Dos cerrojos,
+#     como la puerta de la prohibida (CLAUDE.md, regla 1): estar en el
+#     manifiesto Y estar escrito aquí. Solo levanta la parada de los ficheros
+#     nombrados; uno que para y no está escrito sigue parando la tanda entera,
+#     y un nombre escrito que no está en la tanda o que no para también la para
+#     (un dedo torpe no abre nada). El informe deja escrito qué se autorizó,
+#     quién y desde qué rama.
 #   · Modo «ensayo»: TODO en una transacción, D1 y recuento dentro, y ROLLBACK.
 #     No queda nada.
 #   · Modo «real»: solo si hay un ENSAYO EN VERDE DEL MISMO COMMIT. Un fichero
@@ -53,6 +63,11 @@ on:
         type: choice
         options: [ensayo, real, vuelta_atras]
         default: ensayo
+      autorizo:
+        description: 'Solo si la tanda lleva ficheros que PARAN a propósito: el nombre ENTERO de cada uno, sin carpeta, separados por espacios (p. ej. 20261005T0120_r02_lectores_de_la_resolucion.sql). Vacío = ninguno.'
+        required: false
+        type: string
+        default: ''
 
 # Nunca dos a la vez contra producción.
 concurrency:
@@ -184,6 +199,7 @@ jobs:
         if: inputs.modo != 'vuelta_atras'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+          AUTORIZO: ${{ inputs.autorizo }}
         run: |
           set -euo pipefail
           node scripts/conta/produccion/analizar.mjs objetivos $(cat /tmp/tanda.txt) > /tmp/objetivos.json
@@ -203,10 +219,33 @@ jobs:
           set -e
           grep -v '^VAT_RATE_FOR_EN:' /tmp/analisis.md >> "$INFORME"
           sed -n 's/^VAT_RATE_FOR_EN: //p' /tmp/analisis.md > /tmp/vat_rate_for_en.txt
-          if [ "$para" -ne 0 ]; then
-            echo "::error::El análisis PARA: algún fichero borra, renombra o cambia datos de algo que ya existe. No se aplica nada. Ver el informe."
+          # Los que PARAN, sacados del propio análisis (una línea «### `fichero` — **PARA**» por cada uno).
+          sed -n 's/^### `\([^`]*\)` — \*\*PARA\*\*$/\1/p' /tmp/analisis.md > /tmp/paran.txt
+          # Lo autorizado: nombres enteros, sin carpeta, uno por línea.
+          set -f; printf '%s\n' $AUTORIZO | sed '/^$/d' > /tmp/autorizo.txt; set +f
+          mal=0
+          while IFS= read -r n; do
+            if [ "$n" != "$(basename -- "$n")" ]; then echo "::error::«$n»: va el nombre sin carpeta."; mal=1; continue; fi
+            if ! grep -qxF "supabase/migrations/$n" /tmp/tanda.txt; then echo "::error::Autorizas «$n», pero no está en la tanda."; mal=1; continue; fi
+            if ! grep -qxF "supabase/migrations/$n" /tmp/paran.txt; then echo "::error::Autorizas «$n», pero no PARA: no hace falta autorizarlo. Quítalo."; mal=1; fi
+          done < /tmp/autorizo.txt
+          falta=0
+          while IFS= read -r f; do
+            grep -qxF "$(basename -- "$f")" /tmp/autorizo.txt || { echo "::error::PARA y no está autorizado: $(basename -- "$f")"; falta=1; }
+          done < /tmp/paran.txt
+          if [ "$para" -ne 0 ] && [ ! -s /tmp/paran.txt ]; then
+            echo "::error::El análisis terminó mal sin decir qué fichero para. No se aplica nada."; mal=1
+          fi
+          if [ "$mal" -ne 0 ] || [ "$falta" -ne 0 ]; then
+            echo "::error::El análisis PARA: algún fichero borra, renombra o cambia datos de algo que ya existe, y no está autorizado en «autorizo» (o lo autorizado no cuadra). No se aplica nada. Ver el informe."
             cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
             exit 1
+          fi
+          if [ -s /tmp/paran.txt ]; then
+            { echo "## Autorizados a mano"; echo
+              echo "Estos ficheros PARAN y se aplican porque **${GITHUB_ACTOR}** los nombró enteros en «autorizo», desde la rama \`${GITHUB_REF_NAME}\`:"; echo
+              while IFS= read -r f; do echo "- \`$f\` (md5 \`$(md5sum "$f" | cut -d' ' -f1)\`)"; done < /tmp/paran.txt; echo; } >> "$INFORME"
+            echo "Autorizados a mano: $(tr '\n' ' ' < /tmp/paran.txt)"
           fi
 
       - name: Antes · D1 y recuento de filas de serie
