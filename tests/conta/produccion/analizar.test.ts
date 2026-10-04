@@ -1,9 +1,10 @@
 // La regla del workflow de producción (respuesta 7 del C00) contra tandas
 // REALES y lo que EXISTÍA en producción el 04/10/2026 (leído en solo lectura).
 //   · La del C00, ya aplicada: copia fija en tanda-c00-20261004.txt.
+//   · La noche 1 del R02, ya aplicada (04/10): copia fija en tanda-r02-noche1-20261004.txt.
 //   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): la
-//     noche 1 del R02. Al reescribir el manifiesto para otra tanda, esta parte
-//     se reescribe con él.
+//     noche 2 del R02, la eliminación (0200). Al reescribir el manifiesto para
+//     otra tanda, esta parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -57,8 +58,8 @@ describe('la tanda del C00 (ya aplicada), tal cual', () => {
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
-  const viva = leerTanda('supabase/produccion/aplicar.txt')
+describe('la noche 1 del R02 (ya aplicada), tal cual', () => {
+  const viva = leerTanda('tests/conta/produccion/tanda-r02-noche1-20261004.txt')
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-r02-20261004.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
 
@@ -76,7 +77,7 @@ describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
 
   it('el comentario del manifiesto dice, para «autorizo», exactamente los que paran', () => {
     // La línea que se copia al campo: un comentario solo con nombres de fichero.
-    const linea = readFileSync('supabase/produccion/aplicar.txt', 'utf8').split('\n')
+    const linea = readFileSync('tests/conta/produccion/tanda-r02-noche1-20261004.txt', 'utf8').split('\n')
       .find((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))
     expect(linea).toBeDefined()
     expect(linea!.replace(/^#/, '').trim().split(/\s+/)).toEqual(paran().map((f) => f.replace(/^.*\//, '')))
@@ -85,6 +86,36 @@ describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
   it('ninguno toca vat_rate_for, y la 0120 lleva el aviso del execute dinámico (los feeds)', () => {
     expect(viva.filter((f) => decidir(p.porFichero[f], p.existe).tocaVatRateFor)).toEqual([])
     expect(decidir(p.porFichero[viva[2]], p.existe).avisos.length).toBeGreaterThan(0)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): noche 2 del R02, la eliminación', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-r02-0200-20261004.json'))
+  const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
+
+  it('es solo la 0200, sola', () => {
+    expect(viva).toEqual(['supabase/migrations/20261005T0200_r02_elimina_interruptor_antiguo.sql'])
+  })
+
+  it('PARA, y para por borrar la columna y la función que existen', () => {
+    expect(paran()).toEqual(viva)
+    const motivos = decidir(p.porFichero[viva[0]], p.existe).para.join('\n')
+    expect(motivos).toContain('marca_reparte_propio')
+    expect(motivos).toContain('own_delivery_enabled')
+  })
+
+  it('el comentario del manifiesto dice, para «autorizo», exactamente los que paran', () => {
+    const linea = readFileSync(MANIFIESTO, 'utf8').split('\n').find((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))
+    expect(linea).toBeDefined()
+    expect(linea!.replace(/^#/, '').trim().split(/\s+/)).toEqual(paran().map((f) => f.replace(/^.*\//, '')))
+  })
+
+  it('su vuelta atrás está en el manifiesto de vuelta atrás, y existe', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261005T0200_r02_elimina_interruptor_antiguo.down.sql'])
+    expect(readFileSync(atras[0], 'utf8')).toContain('add column if not exists own_delivery_enabled')
   })
 })
 

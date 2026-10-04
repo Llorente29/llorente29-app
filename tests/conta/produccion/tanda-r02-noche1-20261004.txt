@@ -1,0 +1,23 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml, solo a mano («confirmo:
+# produccion»), solo entre las 00:30 y las 12:15 de Madrid, primero en ENSAYO
+# (todo en una transacción y rollback) y, con un ensayo en verde del mismo
+# commit, en REAL (un fichero por transacción, para al primer fallo).
+#
+# R02 · Quién reparte, NOCHE 1 (docs/reparto/R02_informe_final.md §4).
+# Dos de estos PARAN a propósito y van en el campo «autorizo», nombres enteros:
+#
+#   20261005T0120_r02_lectores_de_la_resolucion.sql 20261005T0210_r02_saneado_pedidos_abiertos.sql
+#
+# · 0120 reemplaza las funciones de Cocina que leen la resolución (en el camino
+#   del pedido: por eso de noche).
+# · 0210 sanea los pedidos abiertos de ese momento; la lista sale en su salida
+#   y lo de antes queda en r02_saneado_registro.
+# La ELIMINACIÓN (0200) NO va aquí: va sola, en otra tanda, DESPUÉS de fusionar
+# el front y con Vercel en READY.
+supabase/migrations/20261005T0100_r02_brand_delivery_policy.sql
+supabase/migrations/20261005T0110_r02_filas_migradas.sql
+supabase/migrations/20261005T0120_r02_lectores_de_la_resolucion.sql
+supabase/migrations/20261005T0130_r02_guardar_celdas.sql
+supabase/migrations/20261005T0140_r02_sugerencia_ia.sql
+supabase/migrations/20261005T0210_r02_saneado_pedidos_abiertos.sql
