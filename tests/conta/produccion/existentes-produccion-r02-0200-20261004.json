@@ -1,0 +1,5 @@
+{
+ "nota": "Lo que EXISTÍA en producción el 04/10/2026, después de la noche 1 del R02, de lo que nombra la 0200 (to_regclass / to_regprocedure, solo lectura).",
+ "tablas": ["public.brand"],
+ "funciones": ["public.marca_reparte_propio(public.brand)"]
+}
