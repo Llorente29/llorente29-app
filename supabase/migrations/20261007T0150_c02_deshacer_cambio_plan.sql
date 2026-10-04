@@ -129,32 +129,44 @@ begin
   end if;
 
   perform set_config('conta.plan_cambio', '1', true);
-  -- 1. Las hojas del plan nuevo que faltan.
-  insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, kind, is_common, source, created_by, created_by_name)
-  select v_cuenta, p_company, p_a, rpad(p.code, v_d, '0'), p.code, p.name, p.plain_name, 'template', p.code in ('4000', '4100', '4300'), 'serie', auth.uid(), p_quien_nombre
-    from public.pgc_account p
-   where p.plan = p_a and p.is_leaf and p.valid_to is null
-     and not exists (select 1 from public.company_account a where a.company_id = p_company and a.template_code = p.code and a.kind = 'template');
-  get diagnostics n_anadidas = row_count;
-  -- 2. Lo elegido, a su hoja (solo pymes → general).
+  -- El orden importa: una hoja del plan nuevo rellenada puede dar el mismo
+  -- código que una hoja del viejo (2550 del general y 255 de pymes, las dos
+  -- 2550000000 con 10 dígitos). Por eso:
+  -- 1. Fuera las hojas de serie que el plan nuevo no tiene y no llevan nada.
+  delete from public.company_account a
+   where a.company_id = p_company and a.kind = 'template'
+     and not exists (select 1 from public.pgc_account p where p.plan = p_a and p.code = a.template_code and p.is_leaf and p.valid_to is null)
+     and not exists (select 1 from public.company_account_link l where l.company_account_id = a.id);
+  get diagnostics n_quitadas = row_count;
+  -- 2. Lo elegido, a su hoja (solo pymes → general). Una hoja de serie con
+  --    enlaces cuyo código ya es el de su elegida se convierte en su sitio.
   for r in select key code, value hoja from jsonb_each_text(p_elecciones) loop
     select id into v_destino from public.company_account where company_id = p_company and code = r.code;
     if v_destino is null then continue; end if;
     if (select kind from public.company_account where id = v_destino) = 'own' then
       v_code := public.company_account_siguiente(p_company, r.hoja, v_d);
       update public.company_account set template_code = r.hoja, code = v_code, updated_at = now() where id = v_destino;
+    elsif r.code = rpad(r.hoja, v_d, '0') then
+      update public.company_account a set template_code = p.code, name = p.name, plain_name = p.plain_name, updated_at = now()
+        from public.pgc_account p where a.id = v_destino and p.plan = p_a and p.code = r.hoja and p.valid_to is null;
     else
-      update public.company_account_link set company_account_id = (select id from public.company_account where company_id = p_company and kind = 'template' and template_code = r.hoja)
+      insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, kind, source, created_by, created_by_name)
+      select v_cuenta, p_company, p_a, rpad(p.code, v_d, '0'), p.code, p.name, p.plain_name, 'template', 'serie', auth.uid(), p_quien_nombre
+        from public.pgc_account p where p.plan = p_a and p.code = r.hoja and p.valid_to is null
+      on conflict (company_id, code) do nothing;
+      update public.company_account_link set company_account_id = (select id from public.company_account where company_id = p_company and code = rpad(r.hoja, v_d, '0'))
        where company_account_id = v_destino;
+      delete from public.company_account where id = v_destino;
     end if;
     n_movidas := n_movidas + 1;
   end loop;
-  -- 3. Las hojas de serie que el plan nuevo no tiene, sin nada: fuera.
-  delete from public.company_account a
-   where a.company_id = p_company and a.kind = 'template'
-     and not exists (select 1 from public.pgc_account p where p.plan = p_a and p.code = a.template_code and p.is_leaf and p.valid_to is null)
-     and not exists (select 1 from public.company_account_link l where l.company_account_id = a.id);
-  get diagnostics n_quitadas = row_count;
+  -- 3. Las hojas del plan nuevo que faltan.
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, kind, is_common, source, created_by, created_by_name)
+  select v_cuenta, p_company, p_a, rpad(p.code, v_d, '0'), p.code, p.name, p.plain_name, 'template', p.code in ('4000', '4100', '4300'), 'serie', auth.uid(), p_quien_nombre
+    from public.pgc_account p
+   where p.plan = p_a and p.is_leaf and p.valid_to is null
+     and not exists (select 1 from public.company_account a where a.company_id = p_company and a.template_code = p.code and a.kind = 'template');
+  get diagnostics n_anadidas = row_count;
   update public.company_account set plan = p_a, updated_at = now() where company_id = p_company;
   update public.company_tax_profile set chart_kind = case p_a when 'general' then 'normal' else 'pymes' end, updated_at = now(), updated_by = auth.uid()
    where company_id = p_company;

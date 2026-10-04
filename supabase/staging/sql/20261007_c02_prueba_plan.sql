@@ -121,10 +121,27 @@ begin
     perform public.company_chart_activate(emp);
     raise exception 'PRUEBA C02: se ha activado dos veces';
   exception when unique_violation then fallo := sqlerrm; end;
-  -- Cambio de plan (0150): pymes → general añade las hojas que faltan; A no
-  -- tiene nada en las 12 hojas que cambian, así que no hay que elegir.
-  r := public.company_chart_change_plan(emp, 'general', '{}', 'Prueba C02');
-  if not (r->>'cambiado')::boolean or (r->>'anadidas')::int < 100 then raise exception 'PRUEBA C02: pymes → general = %', r; end if;
+  -- Cambio de plan (0150): pymes → general. Para ensayar el camino de elegir,
+  -- algo en la 255 de pymes (que en el general se divide en 2550 y 2553): un
+  -- enlace en su hoja y una subcuenta propia. Sin elegir, no se cambia nada.
+  perform public.company_account_link_set(emp, 'expense_category', 'prueba-255', 'principal',
+    (select id from public.company_account where company_id = emp and code = '2550000000'), 'Prueba C02');
+  r := public.company_account_add(emp, '255', 'Derivado propio', null, null, null, 'Prueba C02');
+  if r->>'code' <> '2550000001' then raise exception 'PRUEBA C02: la subcuenta de 255 es %', r->>'code'; end if;
+  begin
+    perform public.company_chart_change_plan(emp, 'general', '{}', 'Prueba C02');
+    raise exception 'PRUEBA C02: ha cambiado de plan sin elegir';
+  exception when invalid_parameter_value then fallo := sqlerrm; end;
+  if fallo not like '%2550000000, 2550000001%' then raise exception 'PRUEBA C02: sin elegir dice «%»', fallo; end if;
+  r := public.company_chart_change_plan(emp, 'general', '{"2550000000": "2550", "2550000001": "2553"}', 'Prueba C02');
+  if not (r->>'cambiado')::boolean or (r->>'anadidas')::int < 100 or (r->>'movidas')::int <> 2 then raise exception 'PRUEBA C02: pymes → general = %', r; end if;
+  -- La hoja con enlace se convierte en su sitio (mismo código, 2550); la propia va a 2553.
+  if (select a.code || '/' || a.template_code from public.company_account_link l join public.company_account a on a.id = l.company_account_id
+       where l.company_id = emp and l.entity_id = 'prueba-255') <> '2550000000/2550' then raise exception 'PRUEBA C02: el enlace de 255 no está en 2550'; end if;
+  if not exists (select 1 from public.company_account where company_id = emp and code = '2553000001' and template_code = '2553' and name = 'Derivado propio') then
+    raise exception 'PRUEBA C02: la subcuenta propia no ha ido a 2553';
+  end if;
+  if exists (select 1 from public.company_account where company_id = emp and template_code = '255') then raise exception 'PRUEBA C02: queda algo en la 255'; end if;
   if (select chart_kind from public.company_tax_profile where company_id = emp) <> 'normal' then raise exception 'PRUEBA C02: el perfil no dice plan general'; end if;
   if exists (select 1 from public.company_account where company_id = emp and plan <> 'general') then raise exception 'PRUEBA C02: quedan cuentas del plan de pymes'; end if;
   -- General → pymes con una subcuenta en el grupo 8: bloqueado, con la lista.

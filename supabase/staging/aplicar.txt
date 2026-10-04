@@ -1,7 +1,11 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02, tarea 4, 2.º: solo la prueba del plan por empresa. La 0150
-# ya entró en el 1.º (37242370880); su prueba falló y aquí se repite, con el
-# error de psql como anotación (aplicar-staging-conta.yml), ENTERA en ROLLBACK.
+# 05/10/2026 · C02, tarea 4, 3.º: la 0150 corregida (el cambio de plan chocaba:
+# la 2550 del general rellenada es el mismo código que la 255 de pymes). Se
+# deshace la 0150 de antes con su vuelta atrás, se aplica la nueva, y la
+# prueba (ahora también con el camino de elegir) ENTERA en ROLLBACK.
+# Anteriores: 37242370880 (0150 vieja, prueba en rojo) y 37243497321 (el error).
+supabase/vuelta-atras/20261007T0150_c02_deshacer_cambio_plan.down.sql
+supabase/migrations/20261007T0150_c02_deshacer_cambio_plan.sql
 supabase/staging/sql/20261007_c02_prueba_plan.sql
