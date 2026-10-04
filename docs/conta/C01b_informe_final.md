@@ -60,8 +60,19 @@ Rama `conta/c01b-ficha-proveedor`, PR #143. Encargo en `docs/conta/encargos/enca
 
 La vuelta atrás de la tanda de datos está en `supabase/produccion/vuelta-atras.txt`: los cuatro `.down.sql` al revés, probados en staging.
 
+### Hecho, 04/10/2026
+
+| Paso | Resultado |
+|---|---|
+| Tanda de datos (0100–0135) | Ensayo 37219525506 y real 37219796909, en verde. Fuera de ventana con `fuera_de_ventana: si`: 0 tablas o funciones del camino del pedido. |
+| Antes = después en producción | 0 faltan en las dos cuentas (Foodint: 1 email, 3 teléfonos, 4 direcciones; Folvy Interno: 1, 2 y 2; ningún IVA). |
+| Fusión del front | #143 → `7c1e9eb5`, Vercel `dpl_97VvxRXV…` READY en app.folvy.app; APK y OTA 37220135683 en verde. |
+| Eliminación (0140) | Ensayo 37223884963 y real 37224003636, en verde. Las cuatro columnas fuera; `notify_group` sigue; `c01b_columnas_eliminadas` con los mismos valores (y 0 faltan contra contactos y propuestas); `compliance_docs_due` responde; 0 errores en los registros de la base desde el real. |
+| Tipos | `src/types/database.ts`: quitadas de `supplier` email, phone y address. La regeneración ENTERA desde producción no compila (457 errores: el fichero era del 13/09 y hay vistas nuevas que rompen la inferencia, como las de PostGIS); queda como pendiente aparte. |
+
 ## 4. Pendientes y hallazgos (fuera del encargo, o para decidir)
 
+0. **`src/types/database.ts` lleva tres semanas sin regenerarse.** Regenerado entero desde producción da 457 errores de tipos: vistas nuevas (p. ej. `goods_receipt_posting_status`, `vat_category_rate`) rompen la inferencia de `from(string)`, como ya hacían las de PostGIS que `scripts/gen-types.mjs` limpia. Para el C01b solo se han quitado las tres columnas de `supplier`; la regeneración entera es trabajo aparte.
 1. **Analizador de producción: tres huecos, arreglados en esta rama.**
    - (a) Un `--` dentro de un `do $$` se comía el resto del bloque.
    - (b) No miraba las CTE que escriben.

@@ -15445,55 +15445,46 @@ export type Database = {
       supplier: {
         Row: {
           account_id: string
-          address: string | null
           archived_at: string | null
           created_at: string
           created_by: string | null
           created_by_name: string | null
-          email: string | null
           health_registry_no: string | null
           id: string
           is_active: boolean
           name: string
           notes: string | null
           notify_group: string | null
-          phone: string | null
           tax_id: string | null
           updated_at: string
         }
         Insert: {
           account_id: string
-          address?: string | null
           archived_at?: string | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
-          email?: string | null
           health_registry_no?: string | null
           id?: string
           is_active?: boolean
           name: string
           notes?: string | null
           notify_group?: string | null
-          phone?: string | null
           tax_id?: string | null
           updated_at?: string
         }
         Update: {
           account_id?: string
-          address?: string | null
           archived_at?: string | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
-          email?: string | null
           health_registry_no?: string | null
           id?: string
           is_active?: boolean
           name?: string
           notes?: string | null
           notify_group?: string | null
-          phone?: string | null
           tax_id?: string | null
           updated_at?: string
         }
