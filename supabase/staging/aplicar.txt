@@ -1,8 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02, tarea 4, 4.º: solo la prueba del plan por empresa, que ya no
-# cuenta con un número fijo de proveedores (las e2e crean y archivan), ENTERA en
-# ROLLBACK. La 0150 corregida ya entró en el 3.º (37243904260: la 2550 del
-# general rellenada chocaba con la 255 de pymes; se deshizo y se aplicó la buena).
-supabase/staging/sql/20261007_c02_prueba_plan.sql
+# 05/10/2026 · Limpieza: dos actividades «Restaurante» que la e2e de «Tu
+# empresa» añadió de más la noche del 04/10 (contó con el esqueleto delante;
+# corregida en el mismo commit). Exactamente dos, o no se toca nada.
+# Anterior: 37244371668 (prueba del plan, en verde).
+supabase/staging/sql/20261005_e2e_quitar_actividades_repetidas.sql

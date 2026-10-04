@@ -40,6 +40,10 @@ test('cuenta A: completar la empresa, cerrar y reabrir un mes, como en la maquet
 
   // A qué te dedicas: Restaurante, con su epígrafe y su CNAE buscados en las listas oficiales.
   const actividad = await tarjeta(page, 'A qué te dedicas')
+  // count() no espera: primero, que la tarjeta haya cargado (con el índice del
+  // C02 se llega por navegación y el 05/10 contó 0 con el esqueleto delante, y
+  // añadió «Restaurante» dos veces).
+  await expect(actividad.getByRole('button', { name: '+ Añadir' })).toBeVisible()
   if (await actividad.getByRole('button', { name: /^Restaurante/ }).count() === 0) {
     await actividad.getByRole('button', { name: '+ Añadir' }).click()
     await actividad.getByLabel('A qué te dedicas').fill('Restaurante')

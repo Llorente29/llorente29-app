@@ -82,8 +82,8 @@ test('cuenta A: activar, buscar «alquiler», añadir y deshacer, ocultar y volv
   await page.getByRole('button', { name: 'Ocultar' }).click()
   await expect(page.getByText(/Tiene un enlace activo: cambia antes ese enlace a otra cuenta\./)).toBeVisible()
 
-  // El historial lo cuenta.
-  await expect(page.getByRole('list', { name: 'Historial de cambios' }).getByText(/^Ocultada 68100000/)).toBeVisible()
+  // El historial lo cuenta (el de esta vez es el primero: va de lo último a lo primero).
+  await expect(page.getByRole('list', { name: 'Historial de cambios' }).getByText(/^Ocultada 68100000/).first()).toBeVisible()
 })
 
 test('cuenta A: «Qué va a cada sitio» responde con sus palabras', async ({ page }, info) => {
