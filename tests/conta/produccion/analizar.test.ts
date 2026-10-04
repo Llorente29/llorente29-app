@@ -103,6 +103,22 @@ describe('lo que tiene que parar', () => {
     expect(sup('delete from public.supplier_invoice').para).toHaveLength(1)
     expect(sup("do $$ begin update public.supplier set notes = null; end $$").para).toHaveLength(1)
   })
+  // C01b, 04/10: la 0110 salía «sigue» y cambia datos. Dos huecos: un «--»
+  // dentro de un DO se comía el resto del bloque (se leía en una sola línea),
+  // y las CTE que escriben no se miraban.
+  it('…aunque el DO lleve comentarios «--» dentro', () => {
+    expect(sup('do $$\nbegin\n  -- 1. Contactos\n  update public.supplier s set notes = null;\nend $$').para).toHaveLength(1)
+  })
+  it('…y aunque el cambio vaya dentro de un with (CTE que escribe)', () => {
+    expect(sup('with n as (update public.supplier s set notes = null returning id) select count(*) from n').para).toHaveLength(1)
+    expect(sup('with f as (delete from public.supplier_invoice where false returning id) select 1 from f').para).toHaveLength(1)
+    expect(sup('do $$\nbegin\n  -- una CTE\n  with n as (delete from public.supplier where false returning id) select count(*) into v from n;\nend $$').para).toHaveLength(1)
+  })
+  it('la 0110 del C01b (datos) PARA: va en «autorizo»', () => {
+    const ops = analizarFichero('supabase/migrations/20261006T0110_c01b_datos.sql')
+    const r = decidir(ops, (o: Op) => ['public.supplier', 'public.supplier_contact', 'public.supplier_proposal'].includes(o.objeto))
+    expect(r.para.some((l: string) => l.includes('`public.supplier` · update'))).toBe(true)
+  })
   it('reemplazar una función que no es vat_rate_for, o vat_rate_for con otra firma', () => {
     expect(sup('create or replace function public.vat_rate_for(p uuid, d date, x int) returns int language sql as $$ select 1 $$').para).toHaveLength(0)
     // Otra firma = otra función: no existe, así que es nueva (y crearía una sobrecarga: regla 2). Se ve en el informe.

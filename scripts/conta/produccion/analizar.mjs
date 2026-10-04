@@ -101,12 +101,15 @@ export function clasificar(s, dentroDeDo = false) {
   const r = []
   const add = (accion, tipo, objeto, detalle = '') => r.push({ accion, tipo, objeto, detalle, dentroDeDo })
 
-  const cuerpo = cuerpoDo(t)
+  // El cuerpo del DO se lee del texto ORIGINAL, con sus saltos de línea: con
+  // todo en una línea, un comentario «--» dentro del bloque se comía el resto
+  // y el bloque entero salía vacío (lo cazó la 0110 del C01b, 04/10).
+  const cuerpo = cuerpoDo(s.trim())
   if (cuerpo !== null) {
     for (const x of sentencias(cuerpo)) {
       // Dentro de un DO hay bloques begin/end, if, loop…: se buscan las órdenes que importan en cada trozo.
       for (const trozo of x.split(/\b(?:begin|then|else|loop)\b/i)) r.push(...clasificar(trozo.trim(), true))
-      if (/\bexecute\b/i.test(x)) add('dinamico', 'desconocido', '(execute dinámico)', x.slice(0, 160))
+      if (/\bexecute\b/i.test(x)) add('dinamico', 'desconocido', '(execute dinámico)', x.replace(/\s+/g, ' ').slice(0, 160))
     }
     return r
   }
@@ -152,6 +155,13 @@ export function clasificar(s, dentroDeDo = false) {
   else if ((m = t.match(new RegExp(`^truncate (?:table )?(?:only )?${ID}`, 'i')))) add('cambia_datos', 'tabla', nombre(m[1]), 'truncate')
   else if ((m = t.match(new RegExp(`^insert into ${ID}`, 'i')))) add('inserta', 'tabla', nombre(m[1]), /on conflict[\s\S]*do update/i.test(t) ? 'insert … on conflict do update' : 'insert')
   else if ((m = t.match(new RegExp(`^comment on (?:column|table|function|view) ${ID}`, 'i')))) add('comenta', 'comentario', nombre(m[1]))
+  else if (/^with\b/i.test(t)) {
+    // Una CTE que escribe («with n as (insert into … returning …) select …»):
+    // cada insert, update o delete de dentro cuenta como si fuera suelto.
+    for (const x of t.matchAll(new RegExp(`\\binsert into ${ID}`, 'gi'))) add('inserta', 'tabla', nombre(x[1]), 'insert (dentro de un with)')
+    for (const x of t.matchAll(new RegExp(`\\bupdate (?:only )?${ID}(?: (?:as )?[A-Za-z_][A-Za-z0-9_]*)? set\\b`, 'gi'))) add('cambia_datos', 'tabla', nombre(x[1]), 'update (dentro de un with)')
+    for (const x of t.matchAll(new RegExp(`\\bdelete from (?:only )?${ID}`, 'gi'))) add('cambia_datos', 'tabla', nombre(x[1]), 'delete (dentro de un with)')
+  }
   else if (/^(grant|revoke)\b/i.test(t)) add('permiso', 'permiso', low.slice(0, 120))
   else if (/^(begin|commit|rollback|end|start transaction)\b/i.test(low) && !dentroDeDo) add('transaccion', 'control', low)
   else if (!dentroDeDo && /^(select|set|reset|notify|analyze)\b/i.test(low)) add('otro', 'otro', low.slice(0, 80))

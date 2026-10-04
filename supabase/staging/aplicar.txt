@@ -1,10 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · C01b, 2.ª tanda (tarea 5): «Lo que he aprendido» y «Lo que ha
-# hecho Folvy» (0130: dos tablas nuevas, tres columnas nuevas en
-# supplier_invoice para «no es repetida» y tres funciones) y su prueba como el
-# administrador de A y el de B, con la vuelta atrás (termina en ROLLBACK).
-# La 1.ª tanda (seed, 0100, 0110, 0120) ya está aplicada: ejecución 37192967088.
-supabase/migrations/20261006T0130_c01b_aprendizaje.sql
-supabase/staging/sql/20261006_c01b_prueba_aprendizaje.sql
+# 06/10/2026 · C01b, 3.ª tanda (tarea 6): la prueba de la eliminación de las
+# columnas viejas (0140) con su vuelta atrás. Va ENTERA en ROLLBACK: staging
+# se queda con las columnas, como producción hasta la tanda de eliminación.
+# Tandas anteriores: 37192967088 (seed, 0100–0120) y 37195827926 (0130).
+supabase/staging/sql/20261006_c01b_prueba_elimina.sql
