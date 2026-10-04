@@ -72,7 +72,9 @@ La vuelta atrás de la tanda de datos está en `supabase/produccion/vuelta-atras
 
 ## 4. Pendientes y hallazgos (fuera del encargo, o para decidir)
 
-0. **`src/types/database.ts` lleva tres semanas sin regenerarse.** Regenerado entero desde producción da 457 errores de tipos: vistas nuevas (p. ej. `goods_receipt_posting_status`, `vat_category_rate`) rompen la inferencia de `from(string)`, como ya hacían las de PostGIS que `scripts/gen-types.mjs` limpia. Para el C01b solo se han quitado las tres columnas de `supplier`; la regeneración entera es trabajo aparte.
+0. **Pendientes aparte, decididos por Julio (04/10):**
+   - **Regenerar `src/types/database.ts` entero.** Regenerado a lo bruto desde producción da 457 errores de tipos: el fichero es del 13/09, y vistas nuevas como `goods_receipt_posting_status` o `vat_category_rate` rompen la inferencia de `from(string)`, como ya hacían las de PostGIS que limpia `scripts/gen-types.mjs`. **Va en un encargo propio, con las vistas tipadas una a una, no a lo bruto.** Para el C01b solo se han quitado de `supplier` las tres columnas que ya no existen.
+   - **Lo que quedó del R02 fuera de `main`.** El manifiesto de la eliminación (0200), su vuelta atrás y la prueba del analizador sobre él (`7470dc78`, rama `reparto-r02-marca-plataforma`, medido el 04/10: es el único commit de esa rama que no está en `main`) necesitan el mismo tratamiento que este PR: llevarlos a `main` para que el historial de tandas aplicadas viva en el repositorio. Ojo: el manifiesto vivo de `main` será el de la 0140 del C01b; la 0200 entraría como copia fija (`tests/conta/produccion/`), como ya están la noche 1 del R02 y la tanda de datos del C01b.
 1. **Analizador de producción: tres huecos, arreglados en esta rama.**
    - (a) Un `--` dentro de un `do $$` se comía el resto del bloque.
    - (b) No miraba las CTE que escriben.
