@@ -16,6 +16,11 @@
 .cx-rp-izq { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .cx-rp-der { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
 .cx-rp-der h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+/* En 360 px los dos botones no caben al lado del texto (lo dejaban a 0 de ancho):
+   como en la maqueta, el texto arriba y los botones debajo. */
+.cx-rp-der .cx-ia-bloque { flex-wrap: wrap; align-items: flex-start; }
+.cx-rp-der .cx-ia-texto { flex: 1 1 calc(100% - 30px); }
+.cx-rp-der .cx-ia-acciones { flex: 1 1 100%; flex-wrap: wrap; padding-left: 24px; }
 .cx-rp-apoyo { font-size: 14px; color: var(--cx-apoyo); }
 
 /* ── La tabla ───────────────────────────────────────────────────────────── */

@@ -82,10 +82,14 @@ test('la cocina: ámbar sin dirección, gris si reparte la plataforma, nada en r
   await page.addInitScript((id) => { window.localStorage.setItem('andy-app-active-location', id) }, NORTE_CENTRO)
   await page.goto('/orders')
 
-  const ambar = page.getByTestId('etiqueta-reparto').filter({ hasText: 'Nosotros · falta la dirección' }).first()
+  // E2E01 (Burger Norte · Just Eat). Hay otro ámbar en el local (7B000, Uber):
+  // se elige por la plataforma, no por el orden.
+  const ambar = page.getByTestId('etiqueta-reparto')
+    .filter({ hasText: 'Nosotros · falta la dirección' }).filter({ hasText: 'Just Eat no la ha mandado' }).first()
   await expect(ambar).toBeVisible()
   await expect(ambar).toHaveAttribute('data-tono', 'ambar')
-  await expect(ambar.getByText('Just Eat no la ha mandado')).toBeVisible()
+  await expect(page.getByTestId('etiqueta-reparto').filter({ hasText: 'Uber no la ha mandado' }).first())
+    .toHaveAttribute('data-tono', 'ambar')
   const gris = page.getByTestId('etiqueta-reparto').filter({ hasText: 'La reparte Glovo' }).first()
   await expect(gris).toHaveAttribute('data-tono', 'gris')
   await expect(page.getByText('No se pudo despachar')).toHaveCount(0)
