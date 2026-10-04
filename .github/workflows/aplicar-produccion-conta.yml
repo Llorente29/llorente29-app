@@ -7,8 +7,16 @@ name: Aplicar SQL en PRODUCCIÓN (contabilidad)
 #
 #   · Solo a mano (workflow_dispatch). NUNCA por push. Pide escribir
 #     «produccion» en el campo `confirmo`.
-#   · Solo entre las 00:30 y las 12:15 de Madrid (la banda de servicio de
-#     CLAUDE.md). Fuera, no conecta. Y se vuelve a mirar antes de CADA fichero.
+#   · Entre las 00:30 y las 12:15 de Madrid (la banda de servicio de
+#     CLAUDE.md) aplica sin más. FUERA de esa ventana (04/10, respuesta 2 del
+#     C01b) solo si se cumplen las dos:
+#       1. quien lo lanza escribe «si» en `fuera_de_ventana`, y
+#       2. NINGÚN fichero de la tanda toca el camino del pedido: ni una tabla
+#          ni una función de la lista CAMINO_TABLAS / CAMINO_FUNCIONES de abajo
+#          (ventas, pedidos, despacho, cocina, stock), ni una función que
+#          disparen esas tablas o que llame un cron (se pregunta a la base).
+#     Si falla una, no aplica nada. El informe deja escrito quién lo abrió,
+#     a qué hora y la medida. La ventana se vuelve a mirar antes de CADA fichero.
 #   · Comprueba que la URL es la de producción y que al otro lado está Foodint.
 #   · Antes de nada, analiza la tanda (scripts/conta/produccion/analizar.mjs) y
 #     escribe en el informe qué crea o altera cada fichero. PARA si un fichero,
@@ -63,6 +71,12 @@ on:
         type: choice
         options: [ensayo, real, vuelta_atras]
         default: ensayo
+      fuera_de_ventana:
+        description: 'Fuera de 00:30–12:15 de Madrid: «si» para aplicar AUNQUE sea en servicio. Solo vale si ningún fichero toca el camino del pedido (ventas, pedidos, despacho, cocina, stock); si alguno lo toca, para igual.'
+        required: false
+        type: choice
+        options: ['no', 'si']
+        default: 'no'
       autorizo:
         description: 'Solo si la tanda lleva ficheros que PARAN a propósito: el nombre ENTERO de cada uno, sin carpeta, separados por espacios (p. ej. 20261005T0120_r02_lectores_de_la_resolucion.sql). Vacío = ninguno.'
         required: false
@@ -91,6 +105,13 @@ jobs:
       PGAPPNAME: gha-produccion-conta-${{ github.run_id }}
       PGOPTIONS: -c lock_timeout=5s
       INFORME: /tmp/informe.md
+      FUERA_PEDIDO: ${{ inputs.fuera_de_ventana }}
+      # EL CAMINO DEL PEDIDO, lista explícita (expresiones sobre el nombre con
+      # esquema). Tablas y funciones de ventas, pedidos, despacho, cocina y
+      # stock. Si un fichero nombra una de éstas, fuera de la ventana PARA.
+      # Ampliarla es cambiar esta línea, a la vista en el PR.
+      CAMINO_TABLAS: '^public\.(sale|sale_.*|sales_.*|order_.*|delivery_.*|dispatch_.*|courier.*|brand_delivery_policy|kds_.*|kitchen_.*|pase_.*|stock_.*|recipe_.*|modifier_.*)$'
+      CAMINO_FUNCIONES: '^public\.(_?sale_.*|tg_sale.*|compute_sale.*|_?consum.*|resolve_(dispatch|delivery).*|dispatch.*|delivery.*|courier.*|orders_feed.*|kds_.*|kitchen_.*|pase_.*|_?stock_.*|recipe_.*|modifier_.*|hubrise.*|lastapp.*)(\(|$)'
     steps:
       - uses: actions/checkout@v4
 
@@ -111,15 +132,21 @@ jobs:
             echo
           } > "$INFORME"
 
-      - name: Ventana · solo entre las 00:30 y las 12:15 de Madrid
+      - name: Ventana · entre las 00:30 y las 12:15 de Madrid (fuera, solo con «si» y sin tocar el pedido)
         run: |
           set -euo pipefail
           hm=$(TZ=Europe/Madrid date +%H%M)
-          if [ "$((10#$hm))" -lt 30 ] || [ "$((10#$hm))" -ge 1215 ]; then
-            echo "::error::Son las ${hm:0:2}:${hm:2:2} en Madrid: fuera de la ventana 00:30–12:15. No se conecta."
+          if [ "$((10#$hm))" -ge 30 ] && [ "$((10#$hm))" -lt 1215 ]; then
+            echo "Son las ${hm:0:2}:${hm:2:2} en Madrid: dentro de la ventana."
+            exit 0
+          fi
+          if [ "$FUERA_PEDIDO" != "si" ]; then
+            echo "::error::Son las ${hm:0:2}:${hm:2:2} en Madrid: fuera de la ventana 00:30–12:15. No se conecta. (Si ningún fichero toca el camino del pedido, se puede lanzar con «fuera_de_ventana: si».)"
             exit 1
           fi
-          echo "Son las ${hm:0:2}:${hm:2:2} en Madrid: dentro de la ventana."
+          echo "FUERA_DE_VENTANA=1" >> "$GITHUB_ENV"
+          echo "Son las ${hm:0:2}:${hm:2:2} en Madrid: FUERA de la ventana, con «fuera_de_ventana: si». Se comprueba que ningún fichero toque el camino del pedido antes de aplicar nada."
+          { echo "**Fuera de la ventana** (${hm:0:2}:${hm:2:2} de Madrid): lo pidió **${GITHUB_ACTOR}** con «fuera_de_ventana: si»."; echo; } >> "$INFORME"
 
       - name: Guarda 1 y 2 · el secreto apunta a PRODUCCIÓN y no a staging
         env:
@@ -159,6 +186,25 @@ jobs:
           [ "$mal" -eq 0 ] || exit 1
           echo "Tanda ($M), $n ficheros:"; nl -ba /tmp/tanda.txt
 
+      - name: Fuera de la ventana · 1, lo que NOMBRA cada fichero (sin conectar)
+        if: env.FUERA_DE_VENTANA == '1'
+        run: |
+          set -euo pipefail
+          node scripts/conta/produccion/analizar.mjs objetivos $(cat /tmp/tanda.txt) > /tmp/objetivos-camino.json
+          node -e '
+            const o = require("/tmp/objetivos-camino.json")
+            const t = new RegExp(process.env.CAMINO_TABLAS), f = new RegExp(process.env.CAMINO_FUNCIONES)
+            const malas = [...o.tablas.filter((x) => t.test(x)), ...o.funciones.filter((x) => f.test(x))]
+            require("fs").writeFileSync("/tmp/camino-nombrados.txt", malas.join("\n"))
+            console.log(`Nombra ${o.tablas.length} tablas y ${o.funciones.length} funciones; del camino del pedido: ${malas.length}.`)
+          '
+          if [ -s /tmp/camino-nombrados.txt ]; then
+            echo "::error::Fuera de la ventana y la tanda toca el camino del pedido: $(tr '\n' ' ' < /tmp/camino-nombrados.txt). No se aplica nada: a las 00:30."
+            { echo "## Fuera de la ventana: **PARA**"; echo; echo "La tanda nombra del camino del pedido:"; echo; sed 's/^/- `/; s/$/`/' /tmp/camino-nombrados.txt; echo; } >> "$INFORME"
+            cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
       - name: Instalar psql 17
         run: |
           set -euo pipefail
@@ -179,6 +225,39 @@ jobs:
             exit 1
           fi
           echo "Al otro lado está Foodint: es producción."
+
+      - name: Fuera de la ventana · 2, lo que DISPARAN o llaman las tablas del pedido (se pregunta a la base)
+        if: env.FUERA_DE_VENTANA == '1'
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          # Las funciones de la tanda (con firma) que son disparador de una
+          # tabla del camino, o que nombra un cron. Solo lee.
+          funcs=$(node -e 'console.log(require("/tmp/objetivos-camino.json").funciones.join("|"))')
+          cat > /tmp/camino-base.sql <<'SQL'
+          with f(n) as (select x from unnest(string_to_array(:'funcs', '|')) x where x <> '')
+          select f.n || ' (disparador de ' || t.tgrelid::regclass::text || ')'
+            from f join pg_trigger t on not t.tgisinternal and t.tgfoid = to_regprocedure(f.n)
+           where ('public.' || (select relname from pg_class c where c.oid = t.tgrelid)) ~ :'camino'
+          union
+          select f.n || ' (cron ' || j.jobname || ')'
+            from f join cron.job j on j.command ~* ('\m' || split_part(split_part(f.n, '(', 1), '.', 2) || '\M');
+          SQL
+          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v funcs="$funcs" -v camino="$CAMINO_TABLAS" -f /tmp/camino-base.sql > /tmp/camino-base.txt
+          tablas=$(node -e 'console.log(require("/tmp/objetivos-camino.json").tablas.length)')
+          funciones=$(node -e 'console.log(require("/tmp/objetivos-camino.json").funciones.length)')
+          if [ -s /tmp/camino-base.txt ]; then
+            echo "::error::Fuera de la ventana y hay funciones de la tanda en el camino del pedido: $(tr '\n' ' ' < /tmp/camino-base.txt). No se aplica nada."
+            { echo "## Fuera de la ventana: **PARA**"; echo; echo "Funciones de la tanda que dispara o llama el camino del pedido:"; echo; sed 's/^/- /' /tmp/camino-base.txt; echo; } >> "$INFORME"
+            cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          { echo "## Fuera de la ventana: medida"; echo
+            echo "- Nombra $tablas tablas y $funciones funciones; **0** en la lista del camino del pedido (\`CAMINO_TABLAS\`, \`CAMINO_FUNCIONES\`)."
+            echo "- De sus funciones, **0** son disparador de una tabla del camino o las llama un cron (pg_trigger, cron.job)."
+            echo; } >> "$INFORME"
+          echo "Fuera de la ventana, pero nada toca el camino del pedido: sigue."
 
       - name: Modo real · hace falta un ensayo en verde de este mismo commit
         if: inputs.modo == 'real'
@@ -318,7 +397,7 @@ jobs:
             i=$((i+1)); md5=$(md5sum "$f" | cut -d' ' -f1)
             if [ "$fallo" -ne 0 ]; then echo "| $i | \`$f\` | \`$md5\` | no aplicado (paró antes) |" >> "$INFORME"; continue; fi
             hm=$(TZ=Europe/Madrid date +%H%M)
-            if [ "$((10#$hm))" -lt 30 ] || [ "$((10#$hm))" -ge 1215 ]; then
+            if [ "${FUERA_DE_VENTANA:-0}" != "1" ] && { [ "$((10#$hm))" -lt 30 ] || [ "$((10#$hm))" -ge 1215 ]; }; then
               echo "| $i | \`$f\` | \`$md5\` | **no aplicado: las ${hm:0:2}:${hm:2:2}, fuera de la ventana** |" >> "$INFORME"; fallo=1; continue
             fi
             echo "::group::[$i] $f (md5 $md5)"
