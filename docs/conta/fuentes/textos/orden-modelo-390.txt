@@ -1,0 +1,465 @@
+## [preambulo]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+La Ley 4/2008, de 23 de diciembre, por la que se suprime el gravamen del Impuesto sobre el Patrimonio, se generaliza el sistema de devolución mensual en el Impuesto sobre el Valor Añadido, y se introducen otras modificaciones en la normativa tributaria, da una nueva redacción al artículo 116 de la Ley 37/1992, de 28 de diciembre, del Impuesto sobre el Valor Añadido, estableciendo la posibilidad de que los sujetos pasivos que opten por ello, con independencia de la naturaleza de sus operaciones y del volumen de éstas, y de acuerdo con las condiciones, términos, requisitos y procedimiento establecidos reglamentariamente, puedan solicitar la devolución del saldo a su favor pendiente al final de cada período de liquidación.
+Por su parte, el Real Decreto 2126/2008, de 26 de diciembre, modifica el artículo 30 del Reglamento del Impuesto sobre el Valor Añadido, aprobado por el Real Decreto 1624/1992, de 29 de diciembre, de forma que aquellos sujetos pasivos que opten por ejercitar el derecho a la devolución establecido en los artículos 116 y 163 nonies de la Ley del Impuesto, deben estar inscritos en el registro de devolución mensual regulado en dicho artículo. Asimismo, el citado Real Decreto introduce un nuevo artículo 30 bis en el articulado del Reglamento del Impuesto, de acuerdo con el cual los sujetos pasivos que ejerzan la actividad de transporte de viajeros o de mercancías por carretera y tributen por el régimen simplificado del Impuesto podrán solicitar la devolución de las cuotas soportadas deducibles en la adquisición de medios de transporte afectos a dicha actividad durante los primeros 20 días naturales del mes siguiente a aquél en el cual hayan realizado la adquisición de los medios de transporte y siempre que cumplan determinados requisitos.
+Con la finalidad de hacer posible la solicitud de devolución del saldo a favor de los sujetos pasivos pendiente al final de cada periodo de liquidación y de facilitar y simplificar, en lo posible, el cumplimiento de la obligación de determinar la deuda tributaria que incumbe a los sujetos pasivos del Impuesto, la Orden EHA/3786/2008, de 29 de diciembre, aprobó un único modelo 303 de autoliquidación del Impuesto sobre el Valor Añadido que sustituía a los modelos 300, 330, 332 y 320, así como, un nuevo modelo 308 para articular un sistema que permitiera solicitar las devoluciones del Impuesto en los supuestos previstos en el artículo 30 bis del Reglamento del Impuesto sobre el Valor Añadido.
+Tras la unificación de los modelos generales de autoliquidación del Impuesto sobre el Valor Añadido en un único modelo 303, considerando que es objetivo fundamental de la Administración tributaria reducir, en la medida de lo posible, las cargas administrativas indirectas que se deriven del cumplimiento de las obligaciones fiscales, resulta aconsejable unificar a su vez los modelos 390 «Declaración-resumen anual del Impuesto sobre el Valor Añadido» y 392 «Grandes Empresas. Declaración-resumen anual del Impuesto sobre el Valor Añadido», en un solo modelo 390 de «Declaración-resumen anual del Impuesto sobre el Valor Añadido», que se pueda utilizar por todos los sujetos pasivos del Impuesto que estén obligados a la presentación de una declaración-resumen anual de acuerdo con lo previsto en el artículo 71.6 del Reglamento del Impuesto.
+Asimismo, la aprobación del modelo 308 de solicitud de devolución del Impuesto sobre el Valor Añadido, y el establecimiento del nuevo registro de devolución mensual, hace necesario que en el nuevo modelo 390 de declaración-resumen anual, se incluyan las referencias correspondientes al registro de devolución mensual y la información sobre las cuotas soportadas deducibles en la adquisición de medios de transporte afectos a la actividad de transporte de viajeros o de mercancías por carretera respecto de las cuales, los sujetos pasivos que ejerzan dicha actividad y tributen en régimen simplificado, hayan solicitado la devolución. Por otra parte, es conveniente reestructurar la información relativa al resultado de las operaciones, consignando de forma separada la concerniente a los sujetos pasivos que tributan en el Régimen especial del grupo de entidades.
+También, se ha considerado oportuno modificar el literal de las casillas B1, B2 del modelo 036 de Declaración censal de alta, modificación y baja en el Censo de empresarios, profesionales y retenedores, suprimiendo la denominación «constituida en España» o «constituida en el extranjero», eliminando así la dualidad de significados que tenían dichas casillas y por tanto la confusión que implicaba. Asimismo, se ha modificado el literal de la casilla B3, añadiendo «de Constitución», con la finalidad de aclarar el contenido de dicha casilla. Para realizar dichos cambios, se ha modificado el anexo I de la Orden EHA/1274/2007, de 26 de abril, por la que se aprueban los modelos 036 de Declaración censal de alta, modificación y baja en el Censo de empresarios, profesionales y retenedores y 037 Declaración censal simplificada de alta, modificación y baja en el Censo de empresarios, profesionales y retenedores.
+El artículo 117 del Reglamento General de las actuaciones y los procedimientos de gestión e inspección tributaria y de desarrollo de las normas comunes de los procedimientos de aplicación de los tributos, aprobado por el Real Decreto 1065/2007, de 27 de julio, habilita, en el ámbito del Estado, al Ministro de Economía y Hacienda para aprobar los modelos de declaración, autoliquidación y comunicación de datos, así como establecer la forma, lugar y plazos de su presentación.
+En su virtud dispongo:
+
+## [a1]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Artículo 1. Aprobación del modelo 390.
+1. Se aprueba el modelo 390 «Declaración-resumen anual del Impuesto sobre el Valor Añadido», que figura como anexo I de la presente Orden.
+Este modelo será presentado por los sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, incluidos los sujetos pasivos que tengan la consideración de grandes empresas por haber excedido de 6.010.121,04 euros su volumen de operaciones en el año natural inmediatamente anterior, calculado conforme a lo dispuesto en el artículo 121 de la Ley 37/1992, de 28 de diciembre, del Impuesto sobre el Valor Añadido, y los sujetos pasivos autorizados a la presentación conjunta de las autoliquidaciones, según lo dispuesto en el artículo 71.5 del Reglamento del Impuesto.
+El modelo 390 consta de dos ejemplares: uno para la Administración y otro para el sujeto pasivo. El número identificativo que habrá de figurar en dicho modelo será un número secuencial cuyos tres primeros dígitos se corresponderán con el código 390.
+2. Serán igualmente válidas las declaraciones-resumen anual que, ajustándose a los contenidos del modelo aprobado en la presente Orden, se realicen con el módulo de impresión en papel blanco que, en su caso y a estos efectos, elabore la Agencia Estatal de Administración Tributaria.
+Los datos impresos en estas declaraciones prevalecerán sobre las alteraciones o correcciones manuales que pudieran producirse sobre los mismos, por lo que éstas no producirán efectos ante la Administración tributaria.
+3. Se aprueba el modelo de sobre para la declaración-resumen anual del Impuesto sobre el Valor Añadido, que figura como anexo II de la presente Orden, y que debe utilizarse por los sujetos pasivos que presenten el modelo 390 en impreso, en el que se introducirá el ejemplar para la Administración de cada una de las hojas del modelo.
+No obstante, cuando la declaración-resumen anual se realice con el módulo de impresión en papel blanco a que se refiere el apartado 2 anterior, se utilizará el sobre de retorno «Programa de ayuda», aprobado en la Orden EHA/702/2006, de 9 de marzo, por la que se aprueban los modelos de declaración del Impuesto sobre la Renta de las Personas Físicas y del Impuesto sobre el Patrimonio, ejercicio 2005, se establecen el procedimiento de remisión del borrador de declaración del Impuesto sobre la Renta de las Personas Físicas y las condiciones para su confirmación o suscripción, se determinan el lugar, forma y plazos de presentación de los mismos, así como las condiciones generales y el procedimiento para su presentación por medios telemáticos o telefónicos, tal y como establece la disposición adicional única de la citada Orden.
+### versión · vigente desde 2012-12-22 · BOE-A-2012-15380
+Artículo 1. Aprobación del modelo 390.
+1. Se aprueba el modelo 390 «Declaración-resumen anual del Impuesto sobre el Valor Añadido», que figura como anexo I de la presente Orden.
+Este modelo será presentado por los sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, incluidos los sujetos pasivos que tengan la consideración de grandes empresas por haber excedido de 6.010.121,04 euros su volumen de operaciones en el año natural inmediatamente anterior, calculado conforme a lo dispuesto en el artículo 121 de la Ley 37/1992, de 28 de diciembre, del Impuesto sobre el Valor Añadido, y los sujetos pasivos autorizados a la presentación conjunta de las autoliquidaciones, según lo dispuesto en el artículo 71.5 del Reglamento del Impuesto.
+El modelo 390 consta de dos ejemplares: uno para la Administración y otro para el sujeto pasivo. El número identificativo que habrá de figurar en dicho modelo será un número secuencial cuyos tres primeros dígitos se corresponderán con el código 390.
+2. Serán igualmente válidas las declaraciones-resumen anual que se realicen por medio del programa de ayuda elaborado por la Agencia Estatal de Administración tributaria o por cualquier otro medio que genere una declaración que se ajuste a la estructura de datos definida y publicada por la Agencia Estatal de Administración Tributaria en su página web, en la dirección electrónica http://www.agenciatributaria.es.
+Los datos impresos en estas declaraciones prevalecerán sobre las alteraciones o correcciones manuales que pudieran introducirse sobre los mismos, por lo que éstas no producirán efectos ante la Administración Tributaria.
+3. Se aprueba el modelo de sobre para la declaración-resumen anual del Impuesto sobre el Valor Añadido, que figura como anexo II de la presente Orden, y que debe utilizarse por los sujetos pasivos que presenten el modelo 390 en impreso, en el que se introducirá el ejemplar para la Administración de cada una de las hojas del modelo.
+No obstante, cuando la declaración-resumen anual se realice con el módulo de impresión en papel blanco a que se refiere el apartado 2 anterior, se utilizará el sobre de retorno «Programa de ayuda», aprobado en la Orden EHA/702/2006, de 9 de marzo, por la que se aprueban los modelos de declaración del Impuesto sobre la Renta de las Personas Físicas y del Impuesto sobre el Patrimonio, ejercicio 2005, se establecen el procedimiento de remisión del borrador de declaración del Impuesto sobre la Renta de las Personas Físicas y las condiciones para su confirmación o suscripción, se determinan el lugar, forma y plazos de presentación de los mismos, así como las condiciones generales y el procedimiento para su presentación por medios telemáticos o telefónicos, tal y como establece la disposición adicional única de la citada Orden.
+Se modifica el apartado 2 por el art. 1.2 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+### versión · vigente desde 2014-12-20 · BOE-A-2014-13180
+Artículo 1. Aprobación del modelo 390.
+1. Se aprueba el modelo 390 «Declaración-resumen anual del Impuesto sobre el Valor Añadido», que figura como anexo I de la presente orden.
+El número identificativo que habrá de figurar en dicho modelo será un número secuencial cuyos tres primeros dígitos se corresponderán con el código 390.
+2. Este modelo será presentado por los sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, del Impuesto sobre el Valor Añadido, y los sujetos pasivos autorizados a la presentación conjunta de las autoliquidaciones, según lo dispuesto en el artículo 71.7 del Reglamento del Impuesto.
+3. No obstante lo anterior, de acuerdo con la habilitación conferida en los apartados 1 y 7 del artículo 71 del Reglamento del Impuesto sobre el Valor Añadido, se excluye de la obligación de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido a los siguientes sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, con periodo de liquidación trimestral que tributando solo en territorio común realicen exclusivamente las actividades siguientes:
+a) Actividades que tributen en régimen simplificado del Impuesto sobre el Valor Añadido, y/o
+b) Actividad de arrendamiento de bienes inmuebles urbanos.
+Esta exoneración quedará condicionada a que se cumplimente la información adicional que se requiera a estos efectos en el modelo de autoliquidación del Impuesto para identificar las actividades a las que se refiere la declaración y consignar el detalle del volumen total de operaciones realizadas en el ejercicio. La exoneración de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido no procederá en el caso de que no exista obligación de presentar la autoliquidación correspondiente al último periodo de liquidación del ejercicio por haber declarado la baja en el Censo de Empresarios, Profesionales y Retenedores antes del inicio del mismo.
+Se modifica por el art. 2.1 de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se modifica el apartado 2 por el art. 1.2 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+### versión · vigente desde 2016-10-12 · BOE-A-2016-9315
+Artículo 1. Aprobación del modelo 390.
+1. Se aprueba el modelo 390 «Declaración-resumen anual del Impuesto sobre el Valor Añadido», que figura como anexo I de la presente orden.
+El número identificativo que habrá de figurar en dicho modelo será un número secuencial cuyos tres primeros dígitos se corresponderán con el código 390.
+2. Este modelo será presentado por los sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, del Impuesto sobre el Valor Añadido, y los sujetos pasivos autorizados a la presentación conjunta de las autoliquidaciones, según lo dispuesto en el artículo 71.7 del Reglamento del Impuesto.
+3. No obstante lo anterior, de acuerdo con la habilitación conferida en los apartados 1 y 7 del artículo 71 del Reglamento del Impuesto sobre el Valor Añadido, se excluye de la obligación de presentar la declaración-resumen anual del Impuesto sobre el Valor Añadido a los siguientes sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, con periodo de liquidación trimestral que tributando solo en territorio común realicen exclusivamente las actividades siguientes:
+a) Actividades que tributen en régimen simplificado del Impuesto sobre el Valor Añadido, y/o
+b) Actividad de arrendamiento de bienes inmuebles urbanos.
+La exoneración de presentar la declaración-resumen anual del Impuesto sobre el Valor Añadido no procederá en el caso de que no exista obligación de presentar la autoliquidación correspondiente al último periodo de liquidación del ejercicio por haber declarado la baja en el Censo de Empresarios, Profesionales y Retenedores antes del inicio del mismo.
+4. Los sujetos pasivos excluidos de la obligación de presentar la declaración-resumen anual del Impuesto sobre el Valor Añadido deberán cumplimentar el apartado específico reservado a los sujetos pasivos exonerados de la declaración-resumen anual del Impuesto requerido a estos efectos en el modelo de autoliquidación del Impuesto correspondiente al último periodo de liquidación del año en relación con las actividades a las que se refiere la declaración y el detalle del volumen total de operaciones realizadas en el ejercicio.
+Se modifica por el art. 3 de la Orden HAP/1626/2016, de 6 de octubre. Ref. BOE-A-2016-9315.
+Esta modificación será de aplicación, por primera vez, para la presentación de las declaraciones-resúmenes anuales correspondientes a 2016 del modelo 390, según establece la disposición final única de la citada Orden.
+Se modifica por el art. 2.1 de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se modifica el apartado 2 por el art. 1.2 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+### versión · vigente desde 2017-07-01 · BOE-A-2017-5312
+Artículo 1. Aprobación del modelo 390.
+1. Se aprueba el modelo 390 «Declaración-resumen anual del Impuesto sobre el Valor Añadido», que figura como anexo V de la presente orden.
+El número identificativo que habrá de figurar en dicho modelo será un número secuencial cuyos tres primeros dígitos se corresponderán con el código 390.
+2. Este modelo será presentado por los sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, del Impuesto sobre el Valor Añadido, y los sujetos pasivos autorizados a la presentación conjunta de las autoliquidaciones, según lo dispuesto en el artículo 71.7 del Reglamento del Impuesto, aprobado por el Real Decreto 1624/1992, de 29 de diciembre.
+3. No obstante lo anterior, de acuerdo con la habilitación conferida en los apartados 1 y 7 del artículo 71 del Reglamento del Impuesto sobre el Valor Añadido, aprobado por el Real Decreto 1624/1992, de 29 de diciembre, se excluye de la obligación de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido a los siguientes sujetos pasivos del Impuesto:
+a) Sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, con periodo de liquidación trimestral que tributando solo en territorio común realicen exclusivamente las actividades siguientes:
+i) Actividades que tributen en régimen simplificado del Impuesto sobre el Valor Añadido, y/o
+ii) Actividad de arrendamiento de bienes inmuebles urbanos.
+b) Sujetos pasivos que lleven los libros registro a través de la Sede electrónica de la Agencia Estatal de Administración Tributaria de acuerdo con lo previsto en el artículo 62.6 del Reglamento del Impuesto sobre el Valor Añadido, aprobado por el Real Decreto 1624/1992, de 29 de diciembre.
+En ambos supuestos la exoneración de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido no procederá en el caso de que no exista obligación de presentar la autoliquidación correspondiente al último periodo de liquidación del ejercicio.
+4. Los sujetos pasivos excluidos de la obligación de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido deberán cumplimentar el apartado específico reservado a los mismos, requerido a estos efectos en el modelo de autoliquidación del Impuesto correspondiente al último periodo de liquidación del año, en relación, con la información sobre el tipo de actividades económicas a las que se refiere su declaración, en su caso, sobre el porcentaje de prorrata aplicable, sectores diferenciados y porcentajes de tributación a varias Administraciones, así como del detalle del volumen total de operaciones realizadas en el ejercicio.
+Téngase en cuenta que esta última actualización del artículo establecida por la disposición final 5 de la Orden HFP/417/2017, de 12 de mayo. Ref. BOE-A-2017-5312, entra en vigor el 1 de julio de 2017, según determina su disposición final 6.
+Redacción anterior
+"Artículo 1. Aprobación del modelo 390.
+1. Se aprueba el modelo 390 «Declaración-resumen anual del Impuesto sobre el Valor Añadido», que figura como anexo I de la presente orden.
+El número identificativo que habrá de figurar en dicho modelo será un número secuencial cuyos tres primeros dígitos se corresponderán con el código 390.
+2. Este modelo será presentado por los sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, del Impuesto sobre el Valor Añadido, y los sujetos pasivos autorizados a la presentación conjunta de las autoliquidaciones, según lo dispuesto en el artículo 71.7 del Reglamento del Impuesto.
+3. No obstante lo anterior, de acuerdo con la habilitación conferida en los apartados 1 y 7 del artículo 71 del Reglamento del Impuesto sobre el Valor Añadido, se excluye de la obligación de presentar la declaración-resumen anual del Impuesto sobre el Valor Añadido a los siguientes sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, con periodo de liquidación trimestral que tributando solo en territorio común realicen exclusivamente las actividades siguientes:
+a) Actividades que tributen en régimen simplificado del Impuesto sobre el Valor Añadido, y/o
+b) Actividad de arrendamiento de bienes inmuebles urbanos.
+La exoneración de presentar la declaración-resumen anual del Impuesto sobre el Valor Añadido no procederá en el caso de que no exista obligación de presentar la autoliquidación correspondiente al último periodo de liquidación del ejercicio por haber declarado la baja en el Censo de Empresarios, Profesionales y Retenedores antes del inicio del mismo.
+4. Los sujetos pasivos excluidos de la obligación de presentar la declaración-resumen anual del Impuesto sobre el Valor Añadido deberán cumplimentar el apartado específico reservado a los sujetos pasivos exonerados de la declaración-resumen anual del Impuesto requerido a estos efectos en el modelo de autoliquidación del Impuesto correspondiente al último periodo de liquidación del año en relación con las actividades a las que se refiere la declaración y el detalle del volumen total de operaciones realizadas en el ejercicio."
+Se modifica por la disposición final 5 de la Orden HFP/417/2017, de 12 de mayo. Ref. BOE-A-2017-5312
+Esta modificación entra en vigor el 1 de julio de 2017, según establece la disposición final 6 de la citada Orden.
+Se modifica por el art. 3 de la Orden HAP/1626/2016, de 6 de octubre. Ref. BOE-A-2016-9315.
+Esta modificación será de aplicación, por primera vez, para la presentación de las declaraciones-resúmenes anuales correspondientes a 2016 del modelo 390, según establece la disposición final única de la citada Orden.
+Se modifica por el art. 2.1 de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se modifica el apartado 2 por el art. 1.2 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+### versión · vigente desde 2018-11-01 · BOE-A-2018-14901
+Artículo 1. Aprobación del modelo 390.
+1. Se aprueba el modelo 390 “Declaración-resumen anual del Impuesto sobre el Valor Añadido”, que figura como anexo I de la presente orden.
+El número identificativo que habrá de figurar en dicho modelo será un número secuencial cuyos tres primeros dígitos se corresponderán con el código 390.
+2. Este modelo será presentado por los sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, del Impuesto sobre el Valor Añadido, y los sujetos pasivos autorizados a la presentación conjunta de las autoliquidaciones, según lo dispuesto en el artículo 71.7 del Reglamento del Impuesto, aprobado por el Real Decreto 1624/1992, de 29 de diciembre.
+3. No obstante lo anterior, de acuerdo con la habilitación conferida en los apartados 1 y 7 del artículo 71 del Reglamento del Impuesto sobre el Valor Añadido, aprobado por el Real Decreto 1624/1992, de 29 de diciembre, se excluye de la obligación de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido a los siguientes sujetos pasivos del Impuesto:
+a) Sujetos pasivos del Impuesto obligados a la presentación de autoliquidaciones periódicas, con periodo de liquidación trimestral que tributando solo en territorio común realicen exclusivamente las actividades siguientes:
+i) Actividades que tributen en régimen simplificado del Impuesto sobre el Valor Añadido, y/o
+ii) Actividad de arrendamiento de bienes inmuebles urbanos.
+La exclusión de la obligación de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido prevista en esta letra a) se mantendrá en el caso de que los sujetos pasivos realicen, además, actividades por las que no exista obligación de presentar autoliquidaciones periódicas.
+b) Sujetos pasivos que lleven los libros registro a través de la Sede electrónica de la Agencia Estatal de Administración Tributaria de acuerdo con lo previsto en el artículo 62.6 del Reglamento del Impuesto sobre el Valor Añadido, aprobado por el Real Decreto 1624/1992, de 29 de diciembre.
+En ambos supuestos la exoneración de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido no procederá en el caso de que no exista obligación de presentar la autoliquidación correspondiente al último periodo de liquidación del ejercicio.
+4. Los sujetos pasivos excluidos de la obligación de presentar la Declaración-resumen anual del Impuesto sobre el Valor Añadido deberán cumplimentar el apartado específico reservado a los mismos, requerido a estos efectos en el modelo de autoliquidación del Impuesto correspondiente al último periodo de liquidación del año, en relación, con la información sobre el tipo de actividades económicas a las que se refiere su declaración, en su caso, sobre el porcentaje de prorrata aplicable, sectores diferenciados y porcentajes de tributación a varias Administraciones, así como del detalle del volumen total de operaciones realizadas en el ejercicio.
+Se modifican los apartados 1 y 3 por el art. 4.1 de la Orden HAC/1148/2018, de 18 de octubre. Ref. BOE-A-2018-14901
+Téngase en cuenta, para su aplicación, la disposición final única de la citada Orden.
+Se modifica por la disposición final 5 de la Orden HFP/417/2017, de 12 de mayo. Ref. BOE-A-2017-5312
+Esta modificación entra en vigor el 1 de julio de 2017, según establece la disposición final 6 de la citada Orden.
+Se modifica por el art. 3 de la Orden HAP/1626/2016, de 6 de octubre. Ref. BOE-A-2016-9315.
+Esta modificación será de aplicación, por primera vez, para la presentación de las declaraciones-resúmenes anuales correspondientes a 2016 del modelo 390, según establece la disposición final única de la citada Orden.
+Se modifica por el art. 2.1 de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se modifica el apartado 2 por el art. 1.2 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+
+## [a2]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Artículo 2. Formas de presentación.
+1. En el supuesto de sujetos pasivos cuyo período de liquidación coincida con el mes natural, de acuerdo con lo establecido en los apartados 1.º, 2.º, 3.º y 4.º del artículo 71.3 del Reglamento del Impuesto sobre el Valor Añadido, y en el de aquellas entidades que tengan forma jurídica de sociedad anónima o sociedad de responsabilidad limitada, la presentación de este modelo se efectuará de forma obligatoria por vía telemática a través de Internet, en las condiciones y de acuerdo con el procedimiento previsto en los artículos 4 y 5 de la presente Orden.
+2. En los demás supuestos, la presentación del modelo 390 podrá realizarse en impreso o, potestativamente, por vía telemática a través de Internet.
+3. Los sujetos pasivos que opten por la presentación de la última autoliquidación periódica del Impuesto por vía telemática a través de Internet, presentarán asimismo la declaración-resumen anual por vía telemática a través de Internet.
+### versión · vigente desde 2012-12-22 · BOE-A-2012-15380
+Artículo 2. Formas de presentación.
+1. En el supuesto de sujetos pasivos cuyo período de liquidación coincida con el mes natural, de acuerdo con lo establecido en los apartados 1º, 2º, 3º y 4º del artículo 71.3 del Reglamento del Impuesto sobre el Valor Añadido, y en el de aquellas entidades que tengan forma jurídica de sociedad anónima o sociedad de responsabilidad limitada, la presentación de este modelo se efectuará de forma obligatoria por vía telemática a través de Internet, en las condiciones y de acuerdo con el procedimiento previsto en los artículos 6 y 7 de la presente orden.
+2. En los demás supuestos, la presentación del modelo 390 podrá realizarse en impreso o, potestativamente, por vía telemática a través de Internet.
+3. Si la declaración-resumen anual se obtiene por medio del programa de ayuda elaborado por la Agencia Estatal de Administración Tributaria o por cualquier otro medio que genere una declaración que se ajuste a la estructura de datos definida y publicada por la Agencia Estatal de Administración Tributaria en su página web, en la dirección electrónica http://www.agenciatributaria.es, la presentación del modelo 390 podrá realizarse a través del procedimiento descrito en los artículos 4 y 5 de esta orden.
+4. Los sujetos pasivos que opten por la presentación de la última autoliquidación periódica del Impuesto por vía telemática a través de Internet, presentarán asimismo la declaración-resumen anual por vía telemática a través de Internet.
+Se modifica por el art. 1.3 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+Artículo 2. Formas de presentación.
+La presentación del modelo 390 se regirá por lo dispuesto en la Orden HAP/2194/2013, de 22 de noviembre, por la que se regulan los procedimientos y las condiciones generales para la presentación de determinadas autoliquidaciones, declaraciones informativas, declaraciones censales, comunicaciones y solicitudes de devolución, de naturaleza tributaria.
+Téngase en cuenta que esta modificación, efectuada por el art. 3.1 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290, entra en vigor el 1 de enero de 2023 según establece su disposición final única.
+Redacción anterior:
+"1. En el supuesto de sujetos pasivos cuyo período de liquidación coincida con el mes natural, de acuerdo con lo establecido en los apartados 1º, 2º, 3º y 4º del artículo 71.3 del Reglamento del Impuesto sobre el Valor Añadido, y en el de aquellas entidades que tengan forma jurídica de sociedad anónima o sociedad de responsabilidad limitada, la presentación de este modelo se efectuará de forma obligatoria por vía telemática a través de Internet, en las condiciones y de acuerdo con el procedimiento previsto en los artículos 6 y 7 de la presente orden.
+2. En los demás supuestos, la presentación del modelo 390 podrá realizarse en impreso o, potestativamente, por vía telemática a través de Internet.
+3. Si la declaración-resumen anual se obtiene por medio del programa de ayuda elaborado por la Agencia Estatal de Administración Tributaria o por cualquier otro medio que genere una declaración que se ajuste a la estructura de datos definida y publicada por la Agencia Estatal de Administración Tributaria en su página web, en la dirección electrónica http://www.agenciatributaria.es, la presentación del modelo 390 podrá realizarse a través del procedimiento descrito en los artículos 4 y 5 de esta orden.
+4. Los sujetos pasivos que opten por la presentación de la última autoliquidación periódica del Impuesto por vía telemática a través de Internet, presentarán asimismo la declaración-resumen anual por vía telemática a través de Internet."
+Se modifica, con efectos de 1 de enero de 2023, por el art. 3.1 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290
+Se modifica por el art. 1.3 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+
+## [a3]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Artículo 3. Lugar y procedimiento de presentación del modelo 390 en impreso.
+1. Si el resultado de la última autoliquidación periódica es a ingresar, ésta y la declaración-resumen anual se presentarán en cualquier entidad de crédito situada en territorio español que actúe como colaboradora en la gestión recaudatoria. En el caso de que la declaración-resumen anual carezca de las etiquetas identificativas suministradas por la Agencia Estatal de Administración Tributaria se acompañará esta declaración de fotocopia de la tarjeta o documento acreditativo del número de identificación fiscal.
+2. Si el resultado de la última autoliquidación periódica es a compensar o sin actividad, ésta y la declaración-resumen anual deberán presentarse directamente o enviarse por correo certificado a la Delegación o Administración de la Agencia Estatal de Administración Tributaria correspondiente al domicilio fiscal del declarante, o bien a la Delegación Central de Grandes Contribuyentes o a la Unidad de Gestión de Grandes Empresas de la Agencia Estatal de Administración Tributaria, según proceda, en función de la adscripción del sujeto pasivo a una u otra Delegación o Unidad, adjuntando a la declaración fotocopia acreditativa del número de identificación fiscal si la misma no lleva adheridas las correspondientes etiquetas identificativas.
+No obstante lo anterior, no será preciso adjuntar fotocopia del documento acreditativo del número de identificación fiscal (NIF) cuando se trate de declaraciones correspondientes a personas físicas que se presenten personalmente en las oficinas de la Agencia Estatal de Administración Tributaria, siempre que acrediten su identidad.
+3. Si el resultado de la última autoliquidación periódica es a devolver, ésta y la declaración-resumen anual se presentarán en la entidad de crédito situada en territorio español que actúe como colaboradora en la gestión recaudatoria donde se desee recibir la devolución. Asimismo, podrán presentarse en la Delegación o Administración de la Agencia Estatal de Administración Tributaria correspondiente al domicilio fiscal del declarante, o bien en la Delegación Central de Grandes Contribuyentes o en la Unidad de Gestión de Grandes Empresas de la Agencia Estatal de Administración Tributaria, según proceda en función de la adscripción del sujeto pasivo a una u otra Delegación o Unidad, adjuntando a la declaración-resumen fotocopia acreditativa del número de identificación fiscal si la misma no lleva adheridas las etiquetas identificativas suministradas por la Agencia Estatal de Administración Tributaria.
+No obstante lo anterior, no será preciso adjuntar fotocopia del documento acreditativo del número de identificación fiscal (NIF) cuando se trate de declaraciones correspondientes a personas físicas que se presenten personalmente en las oficinas de la Agencia Estatal de Administración Tributaria, siempre que acrediten su identidad.
+4. Si el resultado de la última autoliquidación periódica es a devolver, y se ha solicitado la devolución mediante la emisión de cheque cruzado o nominativo del Banco de España, ésta y la declaración-resumen anual se presentarán en la Delegación o Administración de la Agencia Estatal de Administración Tributaria correspondiente al domicilio fiscal del declarante, o bien en la Delegación Central de Grandes Contribuyentes o en la Unidad de Gestión de Grandes Empresas de la Agencia Estatal de Administración Tributaria, según proceda en función de la adscripción del sujeto pasivo a una u otra Delegación o Unidad, adjuntando a la declaración fotocopia acreditativa del número de identificación fiscal si la misma no lleva adheridas las etiquetas identificativas suministradas por la Agencia Estatal de Administración Tributaria.
+No obstante lo anterior, no será preciso adjuntar fotocopia del documento acreditativo del número de identificación fiscal (NIF) cuando se trate de declaraciones correspondientes a personas físicas que se presenten personalmente en las oficinas de la Agencia Estatal de Administración Tributaria, siempre que acrediten su identidad.
+5. Los sujetos pasivos acogidos al sistema de cuenta corriente en materia tributaria que presenten en impreso la última autoliquidación periódica del Impuesto, presentarán ésta y la declaración-resumen anual en la Delegación de la Agencia Estatal de Administración Tributaria o en la Administración de la misma en cuya demarcación territorial tenga su domicilio fiscal el sujeto pasivo.
+6. Los sujetos pasivos acogidos a la presentación conjunta de las autoliquidaciones del Impuesto sobre el Valor Añadido, presentarán la declaración-resumen anual directamente o por correo certificado en la Delegación de la Agencia Estatal de Administración Tributaria o en la Administración de la misma en cuya demarcación territorial tenga su domicilio fiscal el sujeto pasivo.
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+Artículo 3. Lugar y procedimiento de presentación del modelo 390 en impreso.
+(Suprimido)
+Téngase en cuenta que este artículo, suprimido por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290, entra en vigor el 1 de enero de 2023 según establece su disposición final única.
+Redacción anterior:
+"1. Si el resultado de la última autoliquidación periódica es a ingresar, ésta y la declaración-resumen anual se presentarán en cualquier entidad de crédito situada en territorio español que actúe como colaboradora en la gestión recaudatoria. En el caso de que la declaración-resumen anual carezca de las etiquetas identificativas suministradas por la Agencia Estatal de Administración Tributaria se acompañará esta declaración de fotocopia de la tarjeta o documento acreditativo del número de identificación fiscal.
+2. Si el resultado de la última autoliquidación periódica es a compensar o sin actividad, ésta y la declaración-resumen anual deberán presentarse directamente o enviarse por correo certificado a la Delegación o Administración de la Agencia Estatal de Administración Tributaria correspondiente al domicilio fiscal del declarante, o bien a la Delegación Central de Grandes Contribuyentes o a la Unidad de Gestión de Grandes Empresas de la Agencia Estatal de Administración Tributaria, según proceda, en función de la adscripción del sujeto pasivo a una u otra Delegación o Unidad, adjuntando a la declaración fotocopia acreditativa del número de identificación fiscal si la misma no lleva adheridas las correspondientes etiquetas identificativas.
+No obstante lo anterior, no será preciso adjuntar fotocopia del documento acreditativo del número de identificación fiscal (NIF) cuando se trate de declaraciones correspondientes a personas físicas que se presenten personalmente en las oficinas de la Agencia Estatal de Administración Tributaria, siempre que acrediten su identidad.
+3. Si el resultado de la última autoliquidación periódica es a devolver, ésta y la declaración-resumen anual se presentarán en la entidad de crédito situada en territorio español que actúe como colaboradora en la gestión recaudatoria donde se desee recibir la devolución. Asimismo, podrán presentarse en la Delegación o Administración de la Agencia Estatal de Administración Tributaria correspondiente al domicilio fiscal del declarante, o bien en la Delegación Central de Grandes Contribuyentes o en la Unidad de Gestión de Grandes Empresas de la Agencia Estatal de Administración Tributaria, según proceda en función de la adscripción del sujeto pasivo a una u otra Delegación o Unidad, adjuntando a la declaración-resumen fotocopia acreditativa del número de identificación fiscal si la misma no lleva adheridas las etiquetas identificativas suministradas por la Agencia Estatal de Administración Tributaria.
+No obstante lo anterior, no será preciso adjuntar fotocopia del documento acreditativo del número de identificación fiscal (NIF) cuando se trate de declaraciones correspondientes a personas físicas que se presenten personalmente en las oficinas de la Agencia Estatal de Administración Tributaria, siempre que acrediten su identidad.
+4. Si el resultado de la última autoliquidación periódica es a devolver, y se ha solicitado la devolución mediante la emisión de cheque cruzado o nominativo del Banco de España, ésta y la declaración-resumen anual se presentarán en la Delegación o Administración de la Agencia Estatal de Administración Tributaria correspondiente al domicilio fiscal del declarante, o bien en la Delegación Central de Grandes Contribuyentes o en la Unidad de Gestión de Grandes Empresas de la Agencia Estatal de Administración Tributaria, según proceda en función de la adscripción del sujeto pasivo a una u otra Delegación o Unidad, adjuntando a la declaración fotocopia acreditativa del número de identificación fiscal si la misma no lleva adheridas las etiquetas identificativas suministradas por la Agencia Estatal de Administración Tributaria.
+No obstante lo anterior, no será preciso adjuntar fotocopia del documento acreditativo del número de identificación fiscal (NIF) cuando se trate de declaraciones correspondientes a personas físicas que se presenten personalmente en las oficinas de la Agencia Estatal de Administración Tributaria, siempre que acrediten su identidad.
+5. Los sujetos pasivos acogidos al sistema de cuenta corriente en materia tributaria que presenten en impreso la última autoliquidación periódica del Impuesto, presentarán ésta y la declaración-resumen anual en la Delegación de la Agencia Estatal de Administración Tributaria o en la Administración de la misma en cuya demarcación territorial tenga su domicilio fiscal el sujeto pasivo.
+6. Los sujetos pasivos acogidos a la presentación conjunta de las autoliquidaciones del Impuesto sobre el Valor Añadido, presentarán la declaración-resumen anual directamente o por correo certificado en la Delegación de la Agencia Estatal de Administración Tributaria o en la Administración de la misma en cuya demarcación territorial tenga su domicilio fiscal el sujeto pasivo."
+Se suprime, con efectos de 1 de enero de 2023, por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290
+
+## [a4]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Artículo 4. Condiciones generales para la presentación telemática por Internet de la declaración-resumen anual del Impuesto sobre el Valor Añadido, modelo 390.
+1. La presentación de la declaración por vía telemática a través de Internet podrá ser efectuada bien por el propio declarante o bien por un tercero que actúe en su representación, de acuerdo con lo establecido en los artículos 79 a 81, ambos inclusive, del Reglamento General de las actuaciones y los procedimientos de gestión e inspección tributaria y de desarrollo de las normas comunes de los procedimientos de aplicación de los tributos, y en la Orden HAC/1398/2003, de 27 de mayo, por la que se establecen los supuestos y condiciones en que podrá hacerse efectiva la colaboración social en la gestión de los tributos, y se extiende ésta expresamente a la presentación telemática de determinados modelos de declaración y otros documentos tributarios.
+2. La presentación telemática a través de Internet del modelo 390 estará sujeta al cumplimiento de los siguientes requisitos:
+a) El declarante deberá disponer de Número de Identificación Fiscal (NIF).
+b) El declarante deberá tener instalado en el navegador un certificado electrónico X.509.V3 expedido por la Fábrica Nacional de la Moneda y Timbre-Real Casa de la Moneda, de acuerdo con el procedimiento establecido en los anexos III y VI de la Orden de 24 de abril de 2000, por la que se establecen las condiciones generales y el procedimiento para la presentación telemática de declaraciones del Impuesto sobre la Renta de las Personas Físicas, o cualquier otro certificado de entre los que se encuentren admitidos por la Agencia Estatal de Administración Tributaria, de acuerdo con lo previsto en la Orden HAC/1181/2003, de 12 de mayo, por la que se establecen normas específicas sobre el uso de la firma electrónica en las relaciones tributarias por medios electrónicos, informáticos y telemáticos con la Agencia Estatal de Administración Tributaria.
+c) Si el presentador es una persona o entidad autorizada para presentar declaraciones en representación de terceras personas, deberá tener instalado en el navegador su certificado electrónico X.509.V3 expedido por la Fábrica Nacional de la Moneda y Timbre-Real Casa de la Moneda, o cualquier otro certificado electrónico admitido en las relaciones de la Agencia Estatal de Administración Tributaria por medios electrónicos, informáticos o telemáticos, en los términos previstos en la citada Orden de 12 de mayo de 2003.
+d) Para efectuar la presentación telemática a través de Internet de las declaraciones correspondientes al modelo 390, el declarante o, en su caso, el presentador autorizado, deberá utilizar previamente un programa de ayuda para obtener el fichero con la declaración a transmitir. Este programa de ayuda podrá ser el desarrollado por la Agencia Estatal de Administración Tributaria para las declaraciones correspondientes al citado modelo u otros que obtengan un fichero con el mismo formato. Asimismo, los declarantes que opten por esta modalidad de presentación deberán tener en cuenta las normas técnicas que se requieren para efectuar la citada presentación y que se encuentran recogidas en el anexo II de la citada Orden de 24 de abril de 2000.
+3. En aquellos casos en que se detecten anomalías de tipo formal en la transmisión telemática a través de Internet de declaraciones, dicha circunstancia se pondrá en conocimiento del presentador de la declaración por el propio sistema mediante los correspondientes mensajes de error, para que proceda a su subsanación.
+4. En el supuesto de que por razones de carácter técnico no fuera posible efectuar la presentación por vía telemática a través de Internet en el plazo establecido en el artículo 6 de la presente Orden, la presentación podrá efectuarse durante los tres días siguientes al de la finalización del mencionado plazo.
+5. No se podrá efectuar la presentación telemática de las declaraciones correspondientes al modelo 390 en los siguientes supuestos:
+a) Sujetos pasivos con más de 6 actividades acogidas al Régimen Simplificado del Impuesto sobre el Valor Añadido (excepto actividades agrícolas, ganaderas y forestales).
+b) Sujetos pasivos con más de 5 actividades agrícolas, ganaderas y forestales acogidas al Régimen Simplificado del Impuesto sobre el Valor Añadido.
+c) Sujetos pasivos que desarrollen más de 30 actividades a incluir en el apartado 12 (prorratas) del modelo, salvo los sujetos pasivos que tengan la consideración de grandes empresas por haber excedido de 6.010.121,04 euros su volumen de operaciones en el año natural inmediatamente anterior, calculado conforme a lo dispuesto en el artículo 121 de la Ley 37/1992, del Impuesto sobre el Valor Añadido.
+### versión · vigente desde 2012-12-22 · BOE-A-2012-15380
+Artículo 4. Opción de presentación de la declaración-resumen anual, modelo 390, obtenido mediante la utilización del servicio de impresión desarrollado a estos efectos por la Agencia Estatal de Administración Tributaria.
+Los sujetos pasivos que no estén obligados a presentar la declaración-resumen anual, modelo 390, por vía telemática a través de Internet y que hayan obtenido la misma utilizando el servicio de impresión a través de la Sede Electrónica, dirección electrónica https://www.agenciatributaria.gob.es, desarrollado a estos efectos por la Agencia Estatal de Administración Tributaria, podrán optar por realizar la presentación del modelo en impreso, a través del procedimiento descrito en el artículo 3 de la presente orden, o bien mediante el envío de un mensaje SMS según el procedimiento descrito en el artículo 5 de la presente orden.
+Se modifica por el art. 1.4 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior redacción pasa a ser el artículo 6.
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+Artículo 4. Opción de presentación de la declaración-resumen anual, modelo 390, obtenido mediante la utilización del servicio de impresión desarrollado a estos efectos por la Agencia Estatal de Administración Tributaria.
+(Suprimido)
+Téngase en cuenta que este artículo, suprimido por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290, entra en vigor el 1 de enero de 2023 según establece su disposición final única.
+Redacción anterior:
+"Los sujetos pasivos que no estén obligados a presentar la declaración-resumen anual, modelo 390, por vía telemática a través de Internet y que hayan obtenido la misma utilizando el servicio de impresión a través de la Sede Electrónica, dirección electrónica https://www.agenciatributaria.gob.es, desarrollado a estos efectos por la Agencia Estatal de Administración Tributaria, podrán optar por realizar la presentación del modelo en impreso, a través del procedimiento descrito en el artículo 3 de la presente orden, o bien mediante el envío de un mensaje SMS según el procedimiento descrito en el artículo 5 de la presente orden."
+Se suprime, con efectos de 1 de enero de 2023, por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290
+Se modifica por el art. 1.4 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior redacción pasa a ser el artículo 6.
+
+## [a5]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Artículo 5. Procedimiento para la presentación telemática por Internet de la declaración-resumen anual del Impuesto sobre el Valor Añadido, modelo 390.
+El procedimiento para la presentación telemática de la declaración correspondiente al modelo 390 será el siguiente:
+1. El declarante se pondrá en comunicación con la Agencia Estatal de Administración Tributaria a través de Internet o de cualquier otra vía equivalente que permita la conexión, en la dirección electrónica: http://agenciatributaria.es, y seleccionará el modelo de declaración a transmitir. A continuación, procederá a transmitir la correspondiente declaración con la firma electrónica generada al seleccionar el certificado electrónico instalado en el navegador a tal efecto.
+Si el presentador es una persona o entidad autorizada a presentar declaraciones en representación de terceras personas se requerirá una única firma, la correspondiente a su certificado.
+2. Si la declaración es aceptada, la Agencia Estatal de Administración Tributaria le devolverá en pantalla los datos recogidos en el anexo III validados con un código electrónico de 16 caracteres, además de la fecha y hora de presentación. En el supuesto de que la presentación fuese rechazada, se mostrará en pantalla la descripción de los errores detectados. En este caso, se deberá proceder a subsanar los mismos con el programa de ayuda con el que se generó el fichero repitiendo la presentación si el error fuese originado por otro motivo.
+3. El presentador deberá conservar la declaración aceptada y los datos recogidos en el anexo III validados con el correspondiente código electrónico.
+### versión · vigente desde 2012-12-22 · BOE-A-2012-15380
+Artículo 5. Presentación de la declaración resumen-anual, modelo 390 por mensaje SMS.
+La presentación de la declaración se realizará mediante el envío de un mensaje SMS dirigido a tal efecto a la Agencia Estatal de Administración Tributaria. El sujeto pasivo hará constar en el mensaje, entre otros datos, su Número de Identificación Fiscal (NIF), el modelo y el número identificativo de la declaración generado mediante la utilización del servicio de impresión a través de la Sede Electrónica dirección electrónica https://www.agenciatributaria.gob.es, desarrollado a estos efectos por la Agencia Estatal de Administración Tributaria.
+La Agencia Estatal de Administración Tributaria devolverá un mensaje SMS al contribuyente, confirmando la presentación de la declaración efectuada junto con un código seguro de verificación de 16 caracteres que deberá conservar.
+En caso de no realizarse la confirmación, la Agencia Estatal de Administración Tributaria enviará un mensaje SMS al contribuyente comunicando dicha circunstancia e indicando el error que haya existido.
+Se modifica por el art. 1.5 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior redacción pasa a ser el artículo 7.
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+Artículo 5. Presentación de la declaración resumen-anual, modelo 390 por mensaje SMS.
+(Suprimido)
+Téngase en cuenta que este artículo, suprimido por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290, entra en vigor el 1 de enero de 2023 según establece su disposición final única.
+Redacción anterior:
+"La presentación de la declaración se realizará mediante el envío de un mensaje SMS dirigido a tal efecto a la Agencia Estatal de Administración Tributaria. El sujeto pasivo hará constar en el mensaje, entre otros datos, su Número de Identificación Fiscal (NIF), el modelo y el número identificativo de la declaración generado mediante la utilización del servicio de impresión a través de la Sede Electrónica dirección electrónica https://www.agenciatributaria.gob.es, desarrollado a estos efectos por la Agencia Estatal de Administración Tributaria.
+La Agencia Estatal de Administración Tributaria devolverá un mensaje SMS al contribuyente, confirmando la presentación de la declaración efectuada junto con un código seguro de verificación de 16 caracteres que deberá conservar.
+En caso de no realizarse la confirmación, la Agencia Estatal de Administración Tributaria enviará un mensaje SMS al contribuyente comunicando dicha circunstancia e indicando el error que haya existido."
+Se suprime, con efectos de 1 de enero de 2023, por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290
+Se modifica por el art. 1.5 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior redacción pasa a ser el artículo 7.
+
+## [a6]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Artículo 6. Plazo de presentación del modelo 390.
+La declaración-resumen anual del Impuesto sobre el Valor Añadido deberá presentarse en los treinta primeros días naturales del mes de enero siguiente al año al que se refiere la declaración, sin perjuicio, de lo establecido en el apartado 4 del artículo 4 de esta Orden.
+### versión · vigente desde 2012-12-22 · BOE-A-2012-15380
+Artículo 6. Condiciones generales para la presentación telemática por Internet de la declaración-resumen anual del Impuesto sobre el Valor Añadido, modelo 390.
+1. La presentación de la declaración por vía telemática a través de Internet podrá ser efectuada bien por el propio declarante o bien por un tercero que actúe en su representación, de acuerdo con lo establecido en los artículos 79 a 81, ambos inclusive, del Reglamento General de las actuaciones y los procedimientos de gestión e inspección tributaria y de desarrollo de las normas comunes de los procedimientos de aplicación de los tributos, y en la Orden HAC/1398/2003, de 27 de mayo, por la que se establecen los supuestos y condiciones en que podrá hacerse efectiva la colaboración social en la gestión de los tributos, y se extiende ésta expresamente a la presentación telemática de determinados modelos de declaración y otros documentos tributarios.
+2. La presentación telemática a través de Internet del modelo 390 estará sujeta al cumplimiento de los siguientes requisitos:
+a) El declarante deberá disponer de Número de Identificación Fiscal (NIF).
+b) El declarante deberá tener instalado en el navegador un certificado electrónico X.509.V3 expedido por la Fábrica Nacional de la Moneda y Timbre-Real Casa de la Moneda, de acuerdo con el procedimiento establecido en los anexos III y VI de la Orden de 24 de abril de 2000, por la que se establecen las condiciones generales y el procedimiento para la presentación telemática de declaraciones del Impuesto sobre la Renta de las Personas Físicas, o cualquier otro certificado de entre los que se encuentren admitidos por la Agencia Estatal de Administración Tributaria, de acuerdo con lo previsto en la Orden HAC/1181/2003, de 12 de mayo, por la que se establecen normas específicas sobre el uso de la firma electrónica en las relaciones tributarias por medios electrónicos, informáticos y telemáticos con la Agencia Estatal de Administración Tributaria.
+c) Si el presentador es una persona o entidad autorizada para presentar declaraciones en representación de terceras personas, deberá tener instalado en el navegador su certificado electrónico X.509.V3 expedido por la Fábrica Nacional de la Moneda y Timbre-Real Casa de la Moneda, o cualquier otro certificado electrónico admitido en las relaciones de la Agencia Estatal de Administración Tributaria por medios electrónicos, informáticos o telemáticos, en los términos previstos en la citada Orden de 12 de mayo de 2003.
+d) Para efectuar la presentación telemática a través de Internet de las declaraciones correspondientes al modelo 390, el declarante o, en su caso, el presentador autorizado, deberá utilizar previamente un programa de ayuda para obtener el fichero con la declaración a transmitir. Este programa de ayuda podrá ser el desarrollado por la Agencia Estatal de Administración Tributaria para las declaraciones correspondientes al citado modelo u otros que obtengan un fichero con el mismo formato. Asimismo, los declarantes que opten por esta modalidad de presentación deberán tener en cuenta las normas técnicas que se requieren para efectuar la citada presentación y que se encuentran recogidas en el anexo II de la citada Orden de 24 de abril de 2000.
+3. En aquellos casos en que se detecten anomalías de tipo formal en la transmisión telemática a través de Internet de declaraciones, dicha circunstancia se pondrá en conocimiento del presentador de la declaración por el propio sistema mediante los correspondientes mensajes de error, para que proceda a su subsanación.
+4. En el supuesto de que por razones de carácter técnico no fuera posible efectuar la presentación por vía telemática a través de Internet en el plazo establecido en el artículo 6 de la presente Orden, la presentación podrá efectuarse durante los tres días siguientes al de la finalización del mencionado plazo.
+5. No se podrá efectuar la presentación telemática de las declaraciones correspondientes al modelo 390 en los siguientes supuestos:
+a) Sujetos pasivos con más de 6 actividades acogidas al Régimen Simplificado del Impuesto sobre el Valor Añadido (excepto actividades agrícolas, ganaderas y forestales).
+b) Sujetos pasivos con más de 5 actividades agrícolas, ganaderas y forestales acogidas al Régimen Simplificado del Impuesto sobre el Valor Añadido.
+c) Sujetos pasivos que desarrollen más de 30 actividades a incluir en el apartado 12 (prorratas) del modelo, salvo los sujetos pasivos que tengan la consideración de grandes empresas por haber excedido de 6.010.121,04 euros su volumen de operaciones en el año natural inmediatamente anterior, calculado conforme a lo dispuesto en el artículo 121 de la Ley 37/1992, del Impuesto sobre el Valor Añadido.
+Se renumera por el art. 1.6 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior numeración era art. 4.
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+Artículo 6. Condiciones generales para la presentación telemática por Internet de la declaración-resumen anual del Impuesto sobre el Valor Añadido, modelo 390.
+(Suprimido)
+Téngase en cuenta que este artículo, suprimido por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290, entra en vigor el 1 de enero de 2023 según establece su disposición final única.
+Redacción anterior:
+"1. La presentación de la declaración por vía telemática a través de Internet podrá ser efectuada bien por el propio declarante o bien por un tercero que actúe en su representación, de acuerdo con lo establecido en los artículos 79 a 81, ambos inclusive, del Reglamento General de las actuaciones y los procedimientos de gestión e inspección tributaria y de desarrollo de las normas comunes de los procedimientos de aplicación de los tributos, y en la Orden HAC/1398/2003, de 27 de mayo, por la que se establecen los supuestos y condiciones en que podrá hacerse efectiva la colaboración social en la gestión de los tributos, y se extiende ésta expresamente a la presentación telemática de determinados modelos de declaración y otros documentos tributarios.
+2. La presentación telemática a través de Internet del modelo 390 estará sujeta al cumplimiento de los siguientes requisitos:
+a) El declarante deberá disponer de Número de Identificación Fiscal (NIF).
+b) El declarante deberá tener instalado en el navegador un certificado electrónico X.509.V3 expedido por la Fábrica Nacional de la Moneda y Timbre-Real Casa de la Moneda, de acuerdo con el procedimiento establecido en los anexos III y VI de la Orden de 24 de abril de 2000, por la que se establecen las condiciones generales y el procedimiento para la presentación telemática de declaraciones del Impuesto sobre la Renta de las Personas Físicas, o cualquier otro certificado de entre los que se encuentren admitidos por la Agencia Estatal de Administración Tributaria, de acuerdo con lo previsto en la Orden HAC/1181/2003, de 12 de mayo, por la que se establecen normas específicas sobre el uso de la firma electrónica en las relaciones tributarias por medios electrónicos, informáticos y telemáticos con la Agencia Estatal de Administración Tributaria.
+c) Si el presentador es una persona o entidad autorizada para presentar declaraciones en representación de terceras personas, deberá tener instalado en el navegador su certificado electrónico X.509.V3 expedido por la Fábrica Nacional de la Moneda y Timbre-Real Casa de la Moneda, o cualquier otro certificado electrónico admitido en las relaciones de la Agencia Estatal de Administración Tributaria por medios electrónicos, informáticos o telemáticos, en los términos previstos en la citada Orden de 12 de mayo de 2003.
+d) Para efectuar la presentación telemática a través de Internet de las declaraciones correspondientes al modelo 390, el declarante o, en su caso, el presentador autorizado, deberá utilizar previamente un programa de ayuda para obtener el fichero con la declaración a transmitir. Este programa de ayuda podrá ser el desarrollado por la Agencia Estatal de Administración Tributaria para las declaraciones correspondientes al citado modelo u otros que obtengan un fichero con el mismo formato. Asimismo, los declarantes que opten por esta modalidad de presentación deberán tener en cuenta las normas técnicas que se requieren para efectuar la citada presentación y que se encuentran recogidas en el anexo II de la citada Orden de 24 de abril de 2000.
+3. En aquellos casos en que se detecten anomalías de tipo formal en la transmisión telemática a través de Internet de declaraciones, dicha circunstancia se pondrá en conocimiento del presentador de la declaración por el propio sistema mediante los correspondientes mensajes de error, para que proceda a su subsanación.
+4. En el supuesto de que por razones de carácter técnico no fuera posible efectuar la presentación por vía telemática a través de Internet en el plazo establecido en el artículo 6 de la presente Orden, la presentación podrá efectuarse durante los tres días siguientes al de la finalización del mencionado plazo.
+5. No se podrá efectuar la presentación telemática de las declaraciones correspondientes al modelo 390 en los siguientes supuestos:
+a) Sujetos pasivos con más de 6 actividades acogidas al Régimen Simplificado del Impuesto sobre el Valor Añadido (excepto actividades agrícolas, ganaderas y forestales).
+b) Sujetos pasivos con más de 5 actividades agrícolas, ganaderas y forestales acogidas al Régimen Simplificado del Impuesto sobre el Valor Añadido.
+c) Sujetos pasivos que desarrollen más de 30 actividades a incluir en el apartado 12 (prorratas) del modelo, salvo los sujetos pasivos que tengan la consideración de grandes empresas por haber excedido de 6.010.121,04 euros su volumen de operaciones en el año natural inmediatamente anterior, calculado conforme a lo dispuesto en el artículo 121 de la Ley 37/1992, del Impuesto sobre el Valor Añadido."
+Se suprime, con efectos de 1 de enero de 2023, por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290
+Se renumera por el art. 1.6 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior numeración era art. 4.
+
+## [a7]
+### versión · vigente desde 2012-12-22 · BOE-A-2012-15380
+Artículo 7. Procedimiento para la presentación telemática por Internet de la declaración-resumen anual del Impuesto sobre el Valor Añadido, modelo 390.
+El procedimiento para la presentación telemática de la declaración correspondiente al modelo 390 será el siguiente:
+1. El declarante se pondrá en comunicación con la Agencia Estatal de Administración Tributaria a través de Internet o de cualquier otra vía equivalente que permita la conexión, en la dirección electrónica: http://agenciatributaria.es, y seleccionará el modelo de declaración a transmitir. A continuación, procederá a transmitir la correspondiente declaración con la firma electrónica generada al seleccionar el certificado electrónico instalado en el navegador a tal efecto.
+Si el presentador es una persona o entidad autorizada a presentar declaraciones en representación de terceras personas se requerirá una única firma, la correspondiente a su certificado.
+2. Si la declaración es aceptada, la Agencia Estatal de Administración Tributaria le devolverá en pantalla los datos recogidos en el anexo III validados con un código electrónico de 16 caracteres, además de la fecha y hora de presentación. En el supuesto de que la presentación fuese rechazada, se mostrará en pantalla la descripción de los errores detectados. En este caso, se deberá proceder a subsanar los mismos con el programa de ayuda con el que se generó el fichero repitiendo la presentación si el error fuese originado por otro motivo.
+3. El presentador deberá conservar la declaración aceptada y los datos recogidos en el anexo III validados con el correspondiente código electrónico.
+Se añade por el art. 1.6 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior numeración era art. 5.
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+Artículo 7. Procedimiento para la presentación telemática por Internet de la declaración-resumen anual del Impuesto sobre el Valor Añadido, modelo 390.
+(Suprimido)
+Téngase en cuenta que este artículo, suprimido por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290, entra en vigor el 1 de enero de 2023 según establece su disposición final única.
+Redacción anterior:
+"El procedimiento para la presentación telemática de la declaración correspondiente al modelo 390 será el siguiente:
+1. El declarante se pondrá en comunicación con la Agencia Estatal de Administración Tributaria a través de Internet o de cualquier otra vía equivalente que permita la conexión, en la dirección electrónica: http://agenciatributaria.es, y seleccionará el modelo de declaración a transmitir. A continuación, procederá a transmitir la correspondiente declaración con la firma electrónica generada al seleccionar el certificado electrónico instalado en el navegador a tal efecto.
+Si el presentador es una persona o entidad autorizada a presentar declaraciones en representación de terceras personas se requerirá una única firma, la correspondiente a su certificado.
+2. Si la declaración es aceptada, la Agencia Estatal de Administración Tributaria le devolverá en pantalla los datos recogidos en el anexo III validados con un código electrónico de 16 caracteres, además de la fecha y hora de presentación. En el supuesto de que la presentación fuese rechazada, se mostrará en pantalla la descripción de los errores detectados. En este caso, se deberá proceder a subsanar los mismos con el programa de ayuda con el que se generó el fichero repitiendo la presentación si el error fuese originado por otro motivo.
+3. El presentador deberá conservar la declaración aceptada y los datos recogidos en el anexo III validados con el correspondiente código electrónico."
+Se suprime, con efectos de 1 de enero de 2023, por el art. 3.2 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290
+Se añade por el art. 1.6 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior numeración era art. 5.
+
+## [a8]
+### versión · vigente desde 2012-12-22 · BOE-A-2012-15380
+Artículo 8. Plazo de presentación del modelo 390.
+La declaración-resumen anual del Impuesto sobre el Valor Añadido deberá presentarse en los treinta primeros días naturales del mes de enero siguiente al año al que se refiere la declaración, sin perjuicio, de lo establecido en el apartado 4 del artículo 4 de esta Orden.
+Se añade por el art. 1.6 de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Su anterior numeración era art. 6.
+
+## [ddunica]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Disposición derogatoria única. Derogación de modelos de declaración, y de las normas que regulan el lugar, forma y plazo de su presentación, así como las condiciones y procedimiento para su presentación telemática por Internet.
+Quedan derogadas las siguientes disposiciones:
+1. La Orden de 26 de noviembre de 1999 por la que se aprueban los modelos 390 y 392 de declaración-resumen anual del Impuesto sobre el Valor Añadido en euros.
+2. La Orden de 19 de noviembre de 2001 por la que se aprueba el modelo 390 de declaración-resumen anual del Impuesto sobre el Valor Añadido en euros.
+3. En lo relativo al modelo 392, se derogan los artículos Cuarto, Quinto y Sexto de la Orden EHA/3061/2005, de 3 de octubre, por la que se establecen las condiciones y el procedimiento para la presentación telemática por Internet de las declaraciones correspondientes al modelo 038 y el procedimiento para la presentación telemática por teleproceso de las declaraciones correspondientes al modelo 180, se regula el lugar, plazo y forma de presentación de la declaración-resumen anual correspondiente al modelo 392 y se modifican determinadas normas de presentación de los modelos de declaración 180, 193, 345, 347 y 349, y otras normas tributarias.
+4. Los artículos 1 y 2 de la Orden EHA/3397/2006, de 26 de octubre, por la que se aprueban los modelos 390 y 392 de declaración resumen anual del Impuesto sobre el Valor Añadido y el modelo 430 de declaración del Impuesto sobre las Primas de Seguros.
+5. El apartado 3 del artículo 4 de la Orden EHA/3435/2007, de 23 de noviembre, por la que aprueban los modelos de autoliquidación 117, 123, 124, 126, 128 y 300 y se establecen medidas para la promoción y ampliación de la presentación telemática de determinadas autoliquidaciones, resúmenes anuales y declaraciones informativas de carácter tributario, y lo dispuesto en relación con el modelo 390 en el apartado 5 del artículo 4 de la misma Orden.
+
+## [dfprimera]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Disposición final primera. Modificación del anexo I de la Orden EHA/1274/2007, de 26 de abril, por la que se aprueban los modelos 036 de Declaración censal de alta, modificación y baja en el Censo de empresarios, profesionales y retenedores y 037 Declaración censal simplificada de alta, modificación y baja en el Censo de empresarios, profesionales y retenedores.
+Se modifica la denominación de las casillas B1, B2,B3, 631,632 y 633 del modelo 036 de declaración censal de alta, modificación y baja en el Censo de empresarios, profesionales y retenedores que figura en el anexo I de la Orden EHA/1274/2007, de 26 de abril, que pasarán a denominarse:
+«B1 Persona jurídica o entidad residente en España».
+«B2 Persona jurídica o entidad NO residente en España».
+«B3 Código del país de constitución».
+«631 Actividades art. 18.3 texto refundido Ley IRNR».
+«632 Actividades art. 18.4 texto refundido Ley IRNR».
+«633 Opción por el régimen general, en los términos del artículo 18.4 del texto refundido Ley IRNR».
+
+## [dfsegunda]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Disposición final segunda. Entrada en vigor.
+La presente Orden entrará en vigor el día siguiente al de su publicación en el «Boletín Oficial del Estado», y afectará por primera vez a las declaraciones ajustadas al modelo 390 referidas a la información correspondiente al ejercicio 2009.
+
+## [firma]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+Madrid, 5 de noviembre de 2009.–La Vicepresidenta Segunda del Gobierno y Ministra de Economía y Hacienda, Elena Salgado Méndez.
+
+## [ani]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+ANEXO I
+### versión · vigente desde 2010-12-01 · BOE-A-2010-18367
+ANEXO I
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2012-12-22 · BOE-A-2012-15380
+ANEXO I
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2014-12-20 · BOE-A-2014-13180
+ANEXO I
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2015-11-19 · BOE-A-2015-12436
+ANEXO I
+Se sustituye por el art. 2 y el Anexo de la Orden HAP/2429/2015, de 10 de noviembre. Ref. BOE-A-2015-12436.
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2018-11-01 · BOE-A-2018-14901
+ANEXO I
+Se sustituye por el art. 4.2 y el Anexo III de la Orden HAC/1148/2018, de 18 de octubre. Ref. BOE-A-2018-14901
+Téngase en cuenta, para su aplicación, la disposición final única de la citada Orden.
+Se sustituye por el art. 2 y el Anexo de la Orden HAP/2429/2015, de 10 de noviembre. Ref. BOE-A-2015-12436.
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2020-01-01 · BOE-A-2019-18750
+ANEXO I
+Se sustituye por el art. 1 y Anexo de la Orden HAC/1274/2019, de 18 de diciembre. Ref. BOE-A-2019-18750
+Se sustituye por el art. 4.2 y el Anexo III de la Orden HAC/1148/2018, de 18 de octubre. Ref. BOE-A-2018-14901
+Téngase en cuenta, para su aplicación, la disposición final única de la citada Orden.
+Se sustituye por el art. 2 y el Anexo de la Orden HAP/2429/2015, de 10 de noviembre. Ref. BOE-A-2015-12436.
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2021-07-01 · BOE-A-2021-10509
+ANEXO I
+Modelo 390 de declaración-resumen anual del Impuesto sobre el Valor Añadido
+Se sustituye por el art. 3 y anexo III de la Orden HAC/646/2021, de 22 de junio. Ref. BOE-A-2021-10509
+Téngase en cuenta que será aplicable por primera vez a la declaración-resumen anual, correspondiente al ejercicio 2021, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 1 y Anexo de la Orden HAC/1274/2019, de 18 de diciembre. Ref. BOE-A-2019-18750
+Se sustituye por el art. 4.2 y el Anexo III de la Orden HAC/1148/2018, de 18 de octubre. Ref. BOE-A-2018-14901
+Téngase en cuenta, para su aplicación, la disposición final única de la citada Orden.
+Se sustituye por el art. 2 y el Anexo de la Orden HAP/2429/2015, de 10 de noviembre. Ref. BOE-A-2015-12436.
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+ANEXO I
+Modelo 390 de declaración-resumen anual del Impuesto sobre el Valor Añadido
+Téngase en cuenta que este modelo, modificado por el que figura como Anexo III de la Orden HFP/1124/2022, de 18 de noviembre Ref. BOE-A-2022-19290, será aplicable por primera vez a las autoliquidaciones correspondientes a los periodos de liquidación que se inicien a partir del 1 de enero de 2023, según establece su disposición final única.
+Se sustituye por el que figura como Anexo III de la Orden HFP/1124/2022, de 18 de noviembre, según establece su art. 3.3. Ref. BOE-A-2022-19290
+Téngase en cuenta que será aplicable por primera vez a las autoliquidaciones correspondientes a los periodos de liquidación que se inicien a partir del 1 de enero de 2023, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 3 y anexo III de la Orden HAC/646/2021, de 22 de junio. Ref. BOE-A-2021-10509
+Téngase en cuenta que será aplicable por primera vez a la declaración-resumen anual, correspondiente al ejercicio 2021, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 1 y Anexo de la Orden HAC/1274/2019, de 18 de diciembre. Ref. BOE-A-2019-18750
+Se sustituye por el art. 4.2 y el Anexo III de la Orden HAC/1148/2018, de 18 de octubre. Ref. BOE-A-2018-14901
+Téngase en cuenta, para su aplicación, la disposición final única de la citada Orden.
+Se sustituye por el art. 2 y el Anexo de la Orden HAP/2429/2015, de 10 de noviembre. Ref. BOE-A-2015-12436.
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2024-01-01 · BOE-A-2023-26632
+ANEXO I
+Modelo 390 de declaración-resumen anual del Impuesto sobre el Valor Añadido
+Se sustituye la página 2 del modelo 390 por la que figura en el Anexo IV de la Orden HFP/1397/2023, de 26 de diciembre, según establece su art. 3. Ref. BOE-A-2023-26632
+Esta modificación se aplicará por primera vez a las declaraciones informativas modelo 390 correspondiente al ejercicio 2023, según establece la disposición final única de la citada Orden.
+Se sustituye por el que figura como Anexo III de la Orden HFP/1124/2022, de 18 de noviembre, según establece su art. 3.3. Ref. BOE-A-2022-19290
+Téngase en cuenta que será aplicable por primera vez a las autoliquidaciones correspondientes a los periodos de liquidación que se inicien a partir del 1 de enero de 2023, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 3 y anexo III de la Orden HAC/646/2021, de 22 de junio. Ref. BOE-A-2021-10509
+Téngase en cuenta que será aplicable por primera vez a la declaración-resumen anual, correspondiente al ejercicio 2021, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 1 y Anexo de la Orden HAC/1274/2019, de 18 de diciembre. Ref. BOE-A-2019-18750
+Se sustituye por el art. 4.2 y el Anexo III de la Orden HAC/1148/2018, de 18 de octubre. Ref. BOE-A-2018-14901
+Téngase en cuenta, para su aplicación, la disposición final única de la citada Orden.
+Se sustituye por el art. 2 y el Anexo de la Orden HAP/2429/2015, de 10 de noviembre. Ref. BOE-A-2015-12436.
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2024-11-01 · BOE-A-2024-21961
+ANEXO I
+Modelo 390 de declaración-resumen anual del Impuesto sobre el Valor Añadido
+Se sustituye por el que figura como anexo II de la Orden HAC/1167/2024, de 17 de octubre, según establece su art. 2. Ref. BOE-A-2024-21961
+Téngase en cuenta que será aplicable por primera vez a la declaración-resumen anual, correspondiente al ejercicio 2024, según establece la disposición final única de la citada Orden.
+Se sustituye la página 2 del modelo 390 por la que figura en el Anexo IV de la Orden HFP/1397/2023, de 26 de diciembre, según establece su art. 3. Ref. BOE-A-2023-26632
+Esta modificación se aplicará por primera vez a las declaraciones informativas modelo 390 correspondiente al ejercicio 2023, según establece la disposición final única de la citada Orden.
+Se sustituye por el que figura como Anexo III de la Orden HFP/1124/2022, de 18 de noviembre, según establece su art. 3.3. Ref. BOE-A-2022-19290
+Téngase en cuenta que será aplicable por primera vez a las autoliquidaciones correspondientes a los periodos de liquidación que se inicien a partir del 1 de enero de 2023, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 3 y anexo III de la Orden HAC/646/2021, de 22 de junio. Ref. BOE-A-2021-10509
+Téngase en cuenta que será aplicable por primera vez a la declaración-resumen anual, correspondiente al ejercicio 2021, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 1 y Anexo de la Orden HAC/1274/2019, de 18 de diciembre. Ref. BOE-A-2019-18750
+Se sustituye por el art. 4.2 y el Anexo III de la Orden HAC/1148/2018, de 18 de octubre. Ref. BOE-A-2018-14901
+Téngase en cuenta, para su aplicación, la disposición final única de la citada Orden.
+Se sustituye por el art. 2 y el Anexo de la Orden HAP/2429/2015, de 10 de noviembre. Ref. BOE-A-2015-12436.
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+### versión · vigente desde 2026-01-27 · BOE-A-2026-1761
+ANEXO I
+Modelo 390 de declaración-resumen anual del Impuesto sobre el Valor Añadido
+Se sustituye por el que figura como anexo IV de la Orden HAC/27/2026, de 22 de enero, según establece su art. 3. Ref. BOE-A-2026-1761
+Téngase en cuenta que será aplicable por primera vez a la declaración-resumen anual correspondiente al ejercicio 2026, según establece la disposición final única.2 de la citada Orden.
+Se sustituye por el que figura como anexo II de la Orden HAC/1167/2024, de 17 de octubre, según establece su art. 2. Ref. BOE-A-2024-21961
+Téngase en cuenta que será aplicable por primera vez a la declaración-resumen anual, correspondiente al ejercicio 2024, según establece la disposición final única de la citada Orden.
+Se sustituye la página 2 del modelo 390 por la que figura en el Anexo IV de la Orden HFP/1397/2023, de 26 de diciembre, según establece su art. 3. Ref. BOE-A-2023-26632
+Esta modificación se aplicará por primera vez a las declaraciones informativas modelo 390 correspondiente al ejercicio 2023, según establece la disposición final única de la citada Orden.
+Se sustituye por el que figura como Anexo III de la Orden HFP/1124/2022, de 18 de noviembre, según establece su art. 3.3. Ref. BOE-A-2022-19290
+Téngase en cuenta que será aplicable por primera vez a las autoliquidaciones correspondientes a los periodos de liquidación que se inicien a partir del 1 de enero de 2023, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 3 y anexo III de la Orden HAC/646/2021, de 22 de junio. Ref. BOE-A-2021-10509
+Téngase en cuenta que será aplicable por primera vez a la declaración-resumen anual, correspondiente al ejercicio 2021, según establece la disposición final única de la citada Orden.
+Se sustituye por el art. 1 y Anexo de la Orden HAC/1274/2019, de 18 de diciembre. Ref. BOE-A-2019-18750
+Se sustituye por el art. 4.2 y el Anexo III de la Orden HAC/1148/2018, de 18 de octubre. Ref. BOE-A-2018-14901
+Téngase en cuenta, para su aplicación, la disposición final única de la citada Orden.
+Se sustituye por el art. 2 y el Anexo de la Orden HAP/2429/2015, de 10 de noviembre. Ref. BOE-A-2015-12436.
+Se sustituye por el art. 2.2 y el Anexo II de la Orden HAP/2373/2014, de 9 de diciembre. Ref. BOE-A-2014-13180.
+Se sustituye por el art. 1.1 y el Anexo I de la Orden HAP/2725/2012, de 19 de diciembre. Ref. BOE-A-2012-15380.
+Se sustituye por el art. 2 y el Anexo II de la Orden EHA/3061/2010, de 22 de noviembre. Ref. BOE-A-2010-18367.
+
+## [anii]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+ANEXO II
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+ANEXO II
+(Suprimido)
+Téngase en cuenta que la supresión de este anexo, establecida por el art. 3.4 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290, entra en vigor el 1 de enero de 2023 según determina su disposición final única.
+Se suprime, con efectos de 1 de enero de 2023, por el art. 3.4 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290
+
+## [aniii]
+### versión · vigente desde 2009-11-21 · BOE-A-2009-18472
+ANEXO III
+390. IVA Resumen anual. Ejercicio: NNNN
+NÚMERO IDENTIFICATIVO
+IDENTIFICACIÓN DEL SUJETO PASIVO
+– NIF: XNNNNNNNX
+– APELLIDOS Y NOMBRE O RAZÓN SOCIAL
+IMPORTE DE LA CASILLA 86:
+(Resultado de la liquidación)
+IMPORTE DE LA CASILLA 94:
+(Resultado de la liquidación anual atribuible a territorio común)
+### versión · vigente desde 2023-01-01 · BOE-A-2022-19290
+ANEXO III
+(Suprimido)
+Téngase en cuenta que la supresión de este anexo, establecida por el art. 3.4 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290, entra en vigor el 1 de enero de 2023 según determina su disposición final única.
+Se suprime, con efectos de 1 de enero de 2023, por el art. 3.4 de la Orden HFP/1124/2022, de 18 de noviembre de 2022. Ref. BOE-A-2022-19290

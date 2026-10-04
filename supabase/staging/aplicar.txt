@@ -1,0 +1,9 @@
+# Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
+# propia transacción. Para la siguiente tanda se reescribe entero.
+#
+# 04/10/2026 · C00, 18.ª tanda: PRUEBA de un rol «conta_migraciones» (encargo
+# de Julio: aplicar la tanda de producción sin la contraseña de postgres).
+# Crea el rol, intenta darle la membresía de postgres y prueba si, sin ella,
+# puede alterar supplier y reemplazar vat_rate_for. Termina en ROLLBACK.
+# (17.ª: la prueba de las vueltas atrás.)
+supabase/staging/sql/20261004_prueba_usuario_migraciones.sql

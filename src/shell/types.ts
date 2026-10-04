@@ -162,6 +162,18 @@ export interface ModuleDefinition {
   // Navegación interna
   sidebar: ModuleSidebarDefinition
 
+  // Quién dibuja el marco (C00, 02/10/2026). Ausente o 'shell' = como siempre:
+  // barra de módulos, sidebar, barra inferior y burbuja de Folvy AI los pone el
+  // Shell. 'propio' = el módulo trae su marco entero (menú, barra inferior y
+  // barra de la IA de sus maquetas) y el Shell solo monta sus rutas. Hoy lo usa
+  // contabilidad, que tiene que poder venderse sola.
+  chrome?: 'shell' | 'propio'
+
+  // Interruptor de `feature_flags` que hace falta para que el módulo salga en
+  // la barra de Folvy (C00). Sin él, la entrada no se pinta; las rutas siguen
+  // montadas (las protege la RLS, no el menú).
+  featureFlag?: string
+
   // Eventos (opcional)
   publishes?: EventDescriptor[]
   subscribes?: EventDescriptor[]

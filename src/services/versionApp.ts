@@ -60,6 +60,39 @@ export function esProduccion(): boolean {
   return entornoDeBuild() === 'production'
 }
 
+// ── Qué base de datos hay detrás (02/10) ────────────────────────────────────
+// Una preview puede apuntar a producción (lo del 01/09) o a una base de
+// pruebas como staging-conta. La franja tiene que decir la verdad en los dos
+// casos: «los datos son reales» en una base de pruebas es mentira, y enseña a
+// no creerse la franja el día que sí lo son.
+const REF_PRODUCCION = 'xzmpnchlguibclvxyynt'
+const BASES_DE_PRUEBA: Record<string, string> = {
+  oseymswjlzplqoxrfjzi: 'staging-conta',
+}
+
+export type BaseDeDatos =
+  | { tipo: 'produccion' }
+  | { tipo: 'pruebas'; nombre: string }
+  | { tipo: 'desconocida'; host: string | null }
+
+/** A qué base apunta este build, por la URL de Supabase con la que se construyó. */
+export function baseDeDatos(url: string | undefined = import.meta.env.VITE_SUPABASE_URL as string | undefined): BaseDeDatos {
+  if (!url) return { tipo: 'desconocida', host: null }
+  let host: string
+  try { host = new URL(url).hostname } catch { return { tipo: 'desconocida', host: null } }
+  const ref = host.split('.')[0]
+  if (ref === REF_PRODUCCION) return { tipo: 'produccion' }
+  if (ref in BASES_DE_PRUEBA) return { tipo: 'pruebas', nombre: BASES_DE_PRUEBA[ref] }
+  return { tipo: 'desconocida', host }
+}
+
+/** La segunda mitad de la franja: qué datos se están viendo. */
+export function textoDeLosDatos(b: BaseDeDatos): string {
+  if (b.tipo === 'produccion') return 'los datos que ves SÍ son reales'
+  if (b.tipo === 'pruebas') return `base de pruebas ${b.nombre}: los datos son inventados`
+  return b.host ? `base de datos: ${b.host}` : 'sin base de datos configurada'
+}
+
 /** Lo que esta build sabe de sí misma. `null` en dev (no hay plugin). */
 export function buildEnEjecucion(): string | null {
   try {

@@ -15,6 +15,7 @@
 import { Home, Inbox } from 'lucide-react'
 import { HOME_KEY, PENDIENTES_KEY } from './ShellTopBar'
 import { getOrderedModules } from './moduleRegistry'
+import { useFeatureGate } from '@/platform/feature-gate/useFeatureGate'
 import { isMobileOverflowModule } from './shellMobileNav'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import type { ModuleDefinition } from './types'
@@ -68,10 +69,13 @@ function isModuleVisible(
 
 export default function ShellBottomNav({ activeKey, onSelect, onOpenAI, aiActive = false, pendingCount = 0 }: ShellBottomNavProps) {
   const { hasPermission, role } = usePermissions()
+  // C00: un módulo con interruptor solo sale si la cuenta lo tiene encendido.
+  const { has: tieneInterruptor } = useFeatureGate()
 
   // Módulos visibles, EXCLUYENDO los del overflow (van al menú del avatar).
   const barModules = getOrderedModules()
     .filter(m => isModuleVisible(m, hasPermission, role))
+    .filter(m => !m.featureFlag || tieneInterruptor(m.featureFlag))
     .filter(m => !isMobileOverflowModule(m.id))
 
   // Pestañas de la barra: Inicio + Pendientes (con badge) + módulos de barra.

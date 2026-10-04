@@ -1,0 +1,9 @@
+# Lanzador de los agentes de cumplimiento del C00, mientras el C00 no esté en
+# main (respuesta 2 de Julio). GitHub solo corre lo programado desde la rama
+# principal, y desde una rama no se puede lanzar a mano por la API: un push que
+# cambie este fichero lanza cumplimiento-nocturno-conta.yml en la rama. Una
+# línea por lanzamiento; el informe de cada uno va al PR #138.
+#
+# Cuando el C00 se fusione, esto sobra: corren solos cada noche.
+2026-10-03 · primer lanzamiento diario
+2026-10-03 · respuesta 3 entregada: lanzamiento a mano con la coherencia y lo de presentar

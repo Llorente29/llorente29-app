@@ -1,0 +1,297 @@
+{
+  "_que_es": "Lista de fuentes oficiales del módulo de contabilidad (C00, respuesta 1, D7). scripts/conta/fuentes.mjs las descarga desde GitHub Actions y deja en docs/conta/fuentes/ el texto, la URL, la fecha y la huella sha256. Ningún valor de serie se carga sin estar aquí.",
+  "fuentes": [
+    {
+      "clave": "ley-37-1992",
+      "nombre": "Ley 37/1992, del Impuesto sobre el Valor Añadido",
+      "tipo": "boe",
+      "id": "BOE-A-1992-28740",
+      "debeContener": "Impuesto sobre el Valor Añadido"
+    },
+    {
+      "clave": "rd-1624-1992",
+      "nombre": "Real Decreto 1624/1992, Reglamento del IVA",
+      "tipo": "boe",
+      "id": "BOE-A-1992-28925",
+      "debeContener": "Reglamento del Impuesto sobre el Valor Añadido"
+    },
+    {
+      "clave": "ley-35-2006",
+      "nombre": "Ley 35/2006, del IRPF",
+      "tipo": "boe",
+      "id": "BOE-A-2006-20764",
+      "debeContener": "Impuesto sobre la Renta de las Personas Físicas"
+    },
+    {
+      "clave": "rd-439-2007",
+      "nombre": "Real Decreto 439/2007, Reglamento del IRPF",
+      "tipo": "boe",
+      "id": "BOE-A-2007-6820",
+      "debeContener": "Reglamento del Impuesto sobre la Renta de las Personas Físicas"
+    },
+    {
+      "clave": "rd-1514-2007",
+      "nombre": "Real Decreto 1514/2007, Plan General de Contabilidad",
+      "tipo": "boe",
+      "id": "BOE-A-2007-19884",
+      "debeContener": "Plan General de Contabilidad"
+    },
+    {
+      "clave": "rd-1515-2007",
+      "nombre": "Real Decreto 1515/2007, PGC de Pymes",
+      "tipo": "boe",
+      "id": "BOE-A-2007-19966",
+      "debeContener": "Pequeñas y Medianas Empresas"
+    },
+    {
+      "clave": "codigo-comercio",
+      "nombre": "Código de Comercio",
+      "tipo": "boe",
+      "id": "BOE-A-1885-6627",
+      "debeContener": "Código de Comercio"
+    },
+    {
+      "clave": "ley-27-2014",
+      "nombre": "Ley 27/2014, del Impuesto sobre Sociedades",
+      "tipo": "boe",
+      "id": "BOE-A-2014-12328",
+      "debeContener": "Impuesto sobre Sociedades"
+    },
+    {
+      "clave": "rdl-1175-1990",
+      "nombre": "RDL 1175/1990, tarifas e instrucción del IAE",
+      "tipo": "boe",
+      "id": "BOE-A-1990-23930",
+      "debeContener": "Impuesto sobre Actividades Económicas"
+    },
+    {
+      "clave": "rd-10-2025",
+      "nombre": "Real Decreto 10/2025, CNAE-2025",
+      "tipo": "boe",
+      "debeContener": "Clasificación Nacional de Actividades Económicas",
+      "buscar": "\"Real Decreto 10/2025\"",
+      "tituloEmpiezaPor": "Real Decreto 10/2025"
+    },
+    {
+      "clave": "ley-20-1991",
+      "nombre": "Ley 20/1991, aspectos fiscales del REF de Canarias (IGIC)",
+      "tipo": "boe",
+      "debeContener": "Canarias",
+      "buscar": "\"Régimen Económico Fiscal de Canarias\"",
+      "tituloDebeContener": "Ley 20/1991",
+      "tituloEmpiezaPor": "Ley 20/1991"
+    },
+    {
+      "clave": "ley-8-1991-ipsi",
+      "nombre": "Ley 8/1991, Impuesto sobre la Producción, los Servicios y la Importación (Ceuta y Melilla)",
+      "tipo": "boe",
+      "buscar": "Importación en las Ciudades de Ceuta y Melilla",
+      "debeContener": "Ceuta",
+      "tituloEmpiezaPor": "Ley 8/1991, de 25 de marzo"
+    },
+    {
+      "clave": "ley-3-2004",
+      "nombre": "Ley 3/2004, de medidas de lucha contra la morosidad en las operaciones comerciales",
+      "tipo": "boe",
+      "buscar": "morosidad operaciones comerciales",
+      "debeContener": "morosidad",
+      "tituloEmpiezaPor": "Ley 3/2004, de 29 de diciembre"
+    },
+    {
+      "clave": "ley-7-2012",
+      "nombre": "Ley 7/2012, prevención y lucha contra el fraude fiscal (límite de pagos en efectivo)",
+      "tipo": "boe",
+      "buscar": "\"Ley 7/2012\"",
+      "debeContener": "efectivo",
+      "tituloEmpiezaPor": "Ley 7/2012",
+      "id": "BOE-A-2012-13416"
+    },
+    {
+      "clave": "rd-1619-2012",
+      "nombre": "Real Decreto 1619/2012, Reglamento de facturación",
+      "tipo": "boe",
+      "buscar": "\"Real Decreto 1619/2012\"",
+      "debeContener": "factura",
+      "tituloEmpiezaPor": "Real Decreto 1619/2012",
+      "id": "BOE-A-2012-14696"
+    },
+    {
+      "clave": "orden-eha-451-2008",
+      "nombre": "Orden EHA/451/2008, composición del NIF de las personas jurídicas y entidades sin personalidad",
+      "tipo": "boe",
+      "buscar": "\"número de identificación fiscal\"",
+      "tituloDebeContener": "EHA/451/2008",
+      "debeContener": "identificación fiscal",
+      "tituloEmpiezaPor": "Orden EHA/451/2008"
+    },
+    {
+      "clave": "orden-modelo-303",
+      "nombre": "Orden que aprueba el modelo 303",
+      "tipo": "boe",
+      "buscar": "\"modelo 303\"",
+      "tituloDebeContener": "modelo 303",
+      "debeContener": "303"
+    },
+    {
+      "clave": "orden-modelo-390",
+      "nombre": "Orden que aprueba el modelo 390",
+      "tipo": "boe",
+      "buscar": "\"modelo 390\"",
+      "tituloDebeContener": "modelo 390",
+      "debeContener": "390"
+    },
+    {
+      "clave": "orden-modelo-111",
+      "nombre": "Orden que aprueba el modelo 111",
+      "tipo": "boe",
+      "buscar": "\"modelo 111\"",
+      "tituloDebeContener": "modelo 111",
+      "debeContener": "111"
+    },
+    {
+      "clave": "orden-modelo-115",
+      "nombre": "Orden que aprueba el modelo 115",
+      "tipo": "boe",
+      "buscar": "\"modelo 115\"",
+      "tituloDebeContener": "modelo 115",
+      "debeContener": "115"
+    },
+    {
+      "clave": "orden-modelo-130",
+      "nombre": "Orden que aprueba el modelo 130",
+      "tipo": "boe",
+      "buscar": "\"modelos 130 y 131\"",
+      "tituloDebeContener": "130",
+      "debeContener": "130"
+    },
+    {
+      "clave": "orden-modelo-200",
+      "nombre": "Orden que aprueba el modelo 200",
+      "tipo": "boe",
+      "buscar": "\"modelos de declaración del Impuesto sobre Sociedades\"",
+      "tituloDebeContener": "aprueban los modelos de declaración del Impuesto sobre Sociedades",
+      "debeContener": "200",
+      "nota": "Respuesta 3: cada año sale una orden que aprueba el 200 del ejercicio; su título dice «modelos de declaración del Impuesto sobre Sociedades», no «modelo 200»."
+    },
+    {
+      "clave": "orden-modelo-202",
+      "nombre": "Orden que aprueba el modelo 202",
+      "tipo": "boe",
+      "buscar": "\"modelo 202\"",
+      "tituloDebeContener": "modelo 202",
+      "debeContener": "202"
+    },
+    {
+      "clave": "orden-modelo-347",
+      "nombre": "Orden que aprueba el modelo 347",
+      "tipo": "boe",
+      "buscar": "\"modelo 347\"",
+      "tituloDebeContener": "modelo 347",
+      "debeContener": "347"
+    },
+    {
+      "clave": "orden-modelo-349",
+      "nombre": "Orden que aprueba el modelo 349",
+      "tipo": "boe",
+      "buscar": "\"modelo 349\"",
+      "tituloDebeContener": "modelo 349",
+      "debeContener": "349"
+    },
+    {
+      "clave": "orden-modelo-190",
+      "nombre": "Orden que aprueba el modelo 190",
+      "tipo": "boe",
+      "buscar": "\"EHA/3127/2009\"",
+      "debeContener": "190",
+      "tituloEmpiezaPor": "Orden EHA/3127/2009",
+      "nota": "Respuesta 3: la búsqueda por «modelo 190» devolvía la HAP/2178/2014, que solo lo modifica. La que lo aprueba es la EHA/3127/2009."
+    },
+    {
+      "clave": "orden-modelo-180",
+      "nombre": "Orden que aprueba el modelo 180",
+      "tipo": "boe",
+      "buscar": "\"modelo 180\"",
+      "tituloDebeContener": "modelo 180",
+      "debeContener": "180"
+    },
+    {
+      "clave": "rdl-4-2024",
+      "nombre": "Real Decreto-ley 4/2024 (IVA del aceite de oliva y alimentos, 2024)",
+      "tipo": "boe",
+      "buscar": "\"Real Decreto-ley 4/2024\"",
+      "tituloEmpiezaPor": "Real Decreto-ley 4/2024",
+      "debeContener": "aceite",
+      "id": "BOE-A-2024-13149"
+    },
+    {
+      "clave": "rdl-19-2018",
+      "nombre": "Real Decreto-ley 19/2018, de servicios de pago",
+      "tipo": "boe",
+      "buscar": "\"Real Decreto-ley 19/2018\"",
+      "tituloEmpiezaPor": "Real Decreto-ley 19/2018",
+      "debeContener": "transferencia",
+      "id": "BOE-A-2018-16036"
+    },
+    {
+      "clave": "ley-canarias-4-2012",
+      "nombre": "Ley 4/2012 de Canarias, de medidas administrativas y fiscales (tipos del IGIC)",
+      "tipo": "boe",
+      "buscar": "\"Ley 4/2012, de 25 de junio\"",
+      "tituloEmpiezaPor": "Ley 4/2012, de 25 de junio",
+      "debeContener": "Impuesto General Indirecto Canario"
+    },
+    {
+      "clave": "rd-1065-2007",
+      "nombre": "Real Decreto 1065/2007, Reglamento general de gestión e inspección tributaria",
+      "tipo": "boe",
+      "buscar": "\"Real Decreto 1065/2007\"",
+      "tituloEmpiezaPor": "Real Decreto 1065/2007",
+      "debeContener": "terceras personas",
+      "id": "BOE-A-2007-15984"
+    },
+    {
+      "clave": "istac-iae",
+      "nombre": "ISTAC · Clasificación del IAE (CL_IAE)",
+      "tipo": "url",
+      "formato": "json",
+      "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_IAE/01.000/codes?limit=1000",
+      "debeContener": "671"
+    },
+    {
+      "clave": "istac-cnae-2025",
+      "nombre": "ISTAC · CNAE-2025 (CL_CNAE_2025)",
+      "tipo": "url",
+      "formato": "json",
+      "url": "https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_CNAE_2025/01.000/codes?limit=1000",
+      "debeContener": "56"
+    },
+    {
+      "clave": "eu-paises",
+      "nombre": "Oficina de Publicaciones de la UE · tabla de países (ISO 3166)",
+      "tipo": "sparql",
+      "formato": "csv",
+      "url": "https://publications.europa.eu/webapi/rdf/sparql",
+      "consulta": "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> SELECT ?alfa2 ?alfa3 ?nombre WHERE { ?p skos:inScheme <http://publications.europa.eu/resource/authority/country> ; skos:prefLabel ?nombre ; skos:notation ?n2 ; skos:notation ?n3 . FILTER(lang(?nombre) = 'es') FILTER(regex(str(datatype(?n2)), 'ALPHA_2$')) FILTER(regex(str(datatype(?n3)), 'ALPHA_3$')) BIND(str(?n2) AS ?alfa2) BIND(str(?n3) AS ?alfa3) } ORDER BY ?alfa2",
+      "debeContener": "ES"
+    },
+    {
+      "clave": "eu-monedas",
+      "nombre": "Oficina de Publicaciones de la UE · tabla de monedas (ISO 4217)",
+      "tipo": "sparql",
+      "formato": "csv",
+      "url": "https://publications.europa.eu/webapi/rdf/sparql",
+      "consulta": "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> SELECT ?codigo ?nombre WHERE { ?m skos:inScheme <http://publications.europa.eu/resource/authority/currency> ; skos:prefLabel ?nombre ; skos:notation ?n . FILTER(lang(?nombre) = 'es') FILTER(regex(str(datatype(?n)), '4217')) BIND(str(?n) AS ?codigo) } ORDER BY ?codigo",
+      "debeContener": "EUR"
+    },
+    {
+      "clave": "geonames-cp-es",
+      "nombre": "GeoNames · códigos postales de España (CC BY 4.0, geonames.org)",
+      "tipo": "zip",
+      "formato": "tsv",
+      "url": "https://download.geonames.org/export/zip/ES.zip",
+      "dentro": "ES.txt",
+      "licencia": "Creative Commons Attribution 4.0 (CC BY 4.0). Atribución: GeoNames, https://www.geonames.org/",
+      "debeContener": "28051"
+    }
+  ]
+}

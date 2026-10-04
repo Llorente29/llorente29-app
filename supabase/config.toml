@@ -107,3 +107,10 @@ verify_jwt = false
 # mundo algo que toca el Vault.
 [functions.social-token-refresh]
 verify_jwt = false
+
+# (02/10) conta-vies-check · C01. Comprueba en VIES el NIF-IVA europeo de un
+# proveedor y apunta el resultado en su ficha. verify_jwt = true: la llama la
+# ficha con la sesión de quien la tiene abierta, y lee y escribe con ESE JWT
+# (la RLS decide). Nunca la llama un cron ni una plataforma.
+[functions.conta-vies-check]
+verify_jwt = true

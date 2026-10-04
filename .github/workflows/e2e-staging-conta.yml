@@ -1,0 +1,143 @@
+name: Pruebas e2e en staging-conta
+
+# QUÉ HACE
+# Pasa las pruebas de extremo a extremo del módulo de contabilidad
+# (tests/e2e, Playwright) contra staging-conta, en ordenador (1440 × 900) y en
+# móvil (390 × 844), y deja las capturas en docs/conta/capturas/ de la misma
+# rama, para compararlas con las maquetas en el PR.
+#
+# POR QUÉ AQUÍ Y NO EN EL CONTENEDOR DE DESARROLLO
+# Desde ese contenedor no se llega a *.supabase.co (el proxy lo corta).
+#
+# CÓMO ENTRA, SIN NINGÚN SECRETO NUEVO
+# Los cuatro usuarios de prueba (a.admin@, b.admin@, a.encargado@ y
+# c.admin@prueba.folvy.test, de las semillas) reciben en cada ejecución una contraseña ALEATORIA, que se
+# enmascara y no sale de este job. Se pone con el mismo y único secreto del
+# otro workflow, STAGING_CONTA_DB_URL, y con las mismas tres guardas: la URL es
+# de staging-conta, no es de producción, y al otro lado no hay ni Foodint ni
+# Folvy Interno. La UPDATE solo toca esos cuatro usuarios, por id y por email.
+#
+# La URL y la clave anónima de staging-conta van escritas abajo: son públicas
+# por diseño (las lleva cualquier navegador que abra la app) y no dan acceso a
+# nada que la RLS no permita. No sirven para producción.
+#
+# CUÁNDO SE DISPARA
+# Un push a conta/** que toque la app, las pruebas o este workflow.
+
+on:
+  push:
+    branches: ['conta/**']
+    paths:
+      - 'src/**'
+      - 'tests/e2e/**'
+      - 'playwright.config.ts'
+      - '.github/workflows/e2e-staging-conta.yml'
+
+concurrency:
+  group: e2e-staging-conta-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+      VITE_SUPABASE_URL: https://oseymswjlzplqoxrfjzi.supabase.co
+      VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zZXltc3dqbHpwbHFveHJmanppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4ODYzNzUsImV4cCI6MjEwNjQ2MjM3NX0.xszvWohb2R7MWidy1ZsIL0IZg2E55aQSFRc1WX8A4js
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ]; then echo "::error::Falta STAGING_CONTA_DB_URL."; exit 1; fi
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 y contraseña de un solo uso para los usuarios de prueba
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710','00000000-0000-0000-0000-000000000001')")
+          if [ "$r" != "0" ]; then echo "::error::Al otro lado hay cuentas de producción. Abortado."; exit 1; fi
+          CLAVE=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
+          echo "::add-mask::$CLAVE"
+          n=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v clave="$CLAVE" <<'SQL'
+          with c as (
+            update auth.users set encrypted_password = extensions.crypt(:'clave', extensions.gen_salt('bf'))
+             where id in ('c01a0000-0000-4000-8000-0000000000a1', 'c01b0000-0000-4000-8000-0000000000b1',
+                          'c01a0000-0000-4000-8000-0000000000a6', 'c01c0000-0000-4000-8000-0000000000c1')
+               and email in ('a.admin@prueba.folvy.test', 'b.admin@prueba.folvy.test', 'a.encargado@prueba.folvy.test',
+                             'c.admin@prueba.folvy.test')
+            returning 1)
+          select count(*) from c;
+          SQL
+          )
+          # Los dos administradores (C01), el encargado de A (C00, tarea 8: RLS de
+          # socios) y el administrador de C, sin empresa (C00, respuesta 3: el alta a pantalla completa).
+          if [ "$(echo "$n" | tr -d '[:space:]')" != "4" ]; then echo "::error::Esperaba 4 usuarios de prueba y he tocado $n."; exit 1; fi
+          echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
+          echo "Contraseña de un solo uso puesta a los 4 usuarios de prueba."
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias
+        run: npm ci
+
+      - name: Build contra staging-conta
+        run: npm run build
+
+      - name: Navegador de Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas (ordenador y móvil)
+        run: npx playwright test
+
+      - name: Informe de Playwright
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+
+      - name: Subir las capturas a la rama
+        if: success()
+        run: |
+          set -euo pipefail
+          git config user.name "folvy-e2e"
+          git config user.email "e2e@folvy.invalid"
+          git add docs/conta/capturas
+          if git diff --cached --quiet; then echo "Las capturas no han cambiado."; exit 0; fi
+          git commit -m "Conta · Capturas en staging-conta (${GITHUB_SHA::7}, ordenador y móvil)"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

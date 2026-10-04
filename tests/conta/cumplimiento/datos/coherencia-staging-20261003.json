@@ -1,0 +1,16 @@
+{
+ "_que_es": "Volcado de coherencia de staging-conta, 03/10/2026 ~17:00 (respuesta 3 del C00, punto 4), con la consulta de scripts/conta/agente-datos-maestros.sql. Sin los id de empresa. Son los FALLOS REALES que encontró el agente la primera vez: no vuelven sin que nadie se entere.",
+ "empresas": [
+  {"account_id":"c01a0000-0000-4000-8000-00000000000a","legal_name":"Taberna de Prueba Norte, S.L.","entity_kind":"company","completa":true,"tax_territory":"peninsula_baleares","tax_forms":["111","115","180","202","303","347","390"],"sii":false,"sales_tax_rate_code":null,"account_digits":8,"actividades":[{"description":"Restaurante","iae_code":"1_671","cnae_code":"5611","ended_on":null}]},
+  {"account_id":"c01a0000-0000-4000-8000-00000000000a","legal_name":"Llorente29 Food, S.L.","entity_kind":"company","completa":true,"tax_territory":"peninsula_baleares","tax_forms":["111","115","202","303","390"],"sii":false,"sales_tax_rate_code":null,"account_digits":8,"actividades":[{"description":"Comida a domicilio","iae_code":"1_6779","cnae_code":"5611","ended_on":null}]},
+  {"account_id":"c01b0000-0000-4000-8000-00000000000b","legal_name":"Cocina de Prueba Sur, S.L.","entity_kind":"company","completa":true,"tax_territory":"canarias","tax_forms":["111"],"sii":false,"sales_tax_rate_code":null,"account_digits":8,"actividades":[]}
+ ],
+ "plazos": [
+  {"account_id":null,"is_system":true,"code":"30_60_dias","name":"30 y 60 días","days":[30,60]},
+  {"account_id":null,"is_system":true,"code":"30_dias","name":"30 días","days":[30]},
+  {"account_id":null,"is_system":true,"code":"60_dias","name":"60 días","days":[60]},
+  {"account_id":null,"is_system":true,"code":"contado","name":"Al contado","days":[0]}
+ ],
+ "proveedores_plazo": [],
+ "cuentas_apunte": []
+}

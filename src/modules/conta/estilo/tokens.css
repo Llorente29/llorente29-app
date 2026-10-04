@@ -1,0 +1,75 @@
+/* src/modules/conta/estilo/tokens.css
+ *
+ * EL ÚNICO SITIO de los colores, letras, radios y sombras del estilo nuevo de
+ * contabilidad (C00, aprobado por Julio el 02/10/2026). Si Julio pide cambiar
+ * un color, se cambia AQUÍ y en ningún otro sitio: ningún componente lleva un
+ * hex escrito.
+ *
+ * Todo cuelga de `.cx` (el contenedor del módulo): fuera de él no existe nada
+ * de esto, y el resto de Folvy no se entera.
+ *
+ * Contraste medido (WCAG, 02/10): texto/fondo 16,29 · apoyo/blanco 5,81 ·
+ * apoyo/fondo 5,41 · blanco/azul 5,17 · azul/azul suave 4,53 · verde
+ * oscuro/verde suave 4,92 · ámbar 6,11 · texto/verde IA 10,82.
+ * OJO: el verde de la IA sobre blanco da 1,62. Es SIEMPRE fondo (con texto
+ * oscuro encima), nunca color de letra.
+ */
+
+.cx {
+  /* ── Los diez del encargo (§7) ─────────────────────────────────────── */
+  --cx-texto: #0E1A2B;          /* Texto principal */
+  --cx-apoyo: #5B6678;          /* Etiquetas y ayudas */
+  --cx-azul: #2F5BFF;           /* Botón principal, enlaces, menú activo */
+  --cx-azul-suave: #EAF0FF;     /* Fondo del menú activo y de lo seleccionado */
+  --cx-ia: #2EE6A8;             /* Punto de la IA, progreso, hecho (solo fondo) */
+  --cx-verde-oscuro: #0B7A55;   /* Texto sobre verde suave */
+  --cx-verde-suave: #E3FBF2;    /* Fondo de lo que dice o hace la IA */
+  --cx-ambar-suave: #FFF1DC;    /* Fondo de duda o aviso */
+  --cx-ambar: #8A4B00;          /* Texto de duda o aviso */
+  --cx-linea: #E6EAF0;          /* Bordes y separadores */
+  --cx-fondo: #F5F7FA;          /* Fondo de página */
+  --cx-blanco: #FFFFFF;
+
+  /* ── Tonos que usan las maquetas y el encargo no nombraba ──────────── */
+  --cx-borde-campo: #C9D0DC;    /* Borde de campos y botones blancos */
+  --cx-neutro-suave: #EEF1F5;   /* Píldora neutra («Principal», «303 IVA») */
+  --cx-neutro-texto: #2B3648;   /* Texto de la píldora neutra */
+  --cx-pendiente: #F1F3F6;      /* Fondo de lo que aún no ha llegado (meses) */
+  --cx-ia-apoyo: #1F4B3C;       /* Texto de apoyo sobre verde suave */
+  --cx-ia-borde: #B9EFD8;       /* Borde del bloque de la IA */
+  --cx-ia-borde-fuerte: #8FE3C2;/* Borde discontinuo de lo propuesto */
+  --cx-azul-borde: #C9D7FF;     /* Borde de lo seleccionado */
+  --cx-rojo: #A3201A;           /* Error (texto) — 6,6:1 sobre su fondo */
+  --cx-rojo-suave: #FDECEA;     /* Error (fondo) */
+
+  /* Iniciales de color (la «fila con inicial»). Siempre con texto oscuro. */
+  --cx-inicial-1: #C5D3FF;      /* azul */
+  --cx-inicial-2: #B9EFD8;      /* verde */
+  --cx-inicial-3: #FFD9A8;      /* naranja */
+  --cx-inicial-4: #E5D4FF;      /* lila */
+  --cx-inicial-5: #D9F2C4;      /* lima */
+  --cx-inicial-6: #EEF1F5;      /* gris */
+
+  /* ── Letra ──────────────────────────────────────────────────────────── */
+  --cx-letra: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
+  --cx-letra-cifras: 'Geist Mono Variable', 'Geist Mono', 'SF Mono', Menlo, monospace;
+
+  /* ── Formas ─────────────────────────────────────────────────────────── */
+  --cx-radio-tarjeta: 24px;
+  --cx-radio-bloque: 20px;
+  --cx-radio-caja: 14px;
+  --cx-radio-boton: 12px;
+  --cx-sombra-menu: 0 8px 30px rgba(14, 26, 43, 0.05);
+  --cx-sombra-flotante: 0 16px 50px rgba(14, 26, 43, 0.18);
+  --cx-sombra-barra: 0 12px 40px rgba(14, 26, 43, 0.14);
+  --cx-sombra-ia: 0 8px 20px rgba(47, 91, 255, 0.4);
+  --cx-halo-ia: 0 0 0 5px rgba(46, 230, 168, 0.25);
+  /* Alta, segunda vuelta (respuesta 3; maquetas N1bAlta y N1cAlta). */
+  --cx-sombra-entrada: 0 14px 40px rgba(47, 91, 255, 0.16);   /* La caja de escribir del alta */
+  --cx-blanco-velo: rgba(255, 255, 255, 0.72);               /* Carril «Lo que llevamos», translúcido */
+  --cx-velo-app: rgba(233, 237, 243, 0.55);                  /* Folvy atenuado detrás de la ventana */
+  --cx-velo-hoja: rgba(14, 26, 43, 0.32);                    /* Detrás de la hoja del móvil */
+  --cx-degradado:
+    radial-gradient(900px 500px at 85% -10%, #E3FBF2 0%, rgba(227, 251, 242, 0) 70%),
+    radial-gradient(700px 500px at 10% 110%, #EAF0FF 0%, rgba(234, 240, 255, 0) 70%);
+}

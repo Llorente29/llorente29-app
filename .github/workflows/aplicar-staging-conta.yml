@@ -1,0 +1,180 @@
+name: Aplicar SQL en staging-conta
+
+# QUÉ HACE
+# Aplica en staging-conta (la rama de Supabase del módulo de contabilidad,
+# ref oseymswjlzplqoxrfjzi) los ficheros SQL que diga el manifiesto
+# supabase/staging/aplicar.txt, en su orden, cada uno en UNA transacción:
+# o entra entero o no entra nada. Si uno falla, los siguientes no se aplican.
+#
+# POR QUÉ EXISTE (02/10/2026)
+# El conector de Supabase pide confirmación para cualquier sentencia con DROP
+# o DELETE y la petición caduca a los 60 s: la estructura del C01 no pudo
+# entrar dos veces seguidas, y ni siquiera un `drop table if exists` de una
+# tabla inexistente. Las migraciones de staging dejan de depender de él.
+#
+# CUÁNDO SE DISPARA
+# Un push a una rama conta/** que cambie supabase/staging/aplicar.txt. Funciona
+# desde la propia rama, sin estar en main. Nada más lo dispara: ni tocar un
+# .sql ni tocar este workflow. El manifiesto es la tanda de ESTA ejecución;
+# para la siguiente se reescribe entero.
+#
+# LO QUE NO PUEDE HACER: TOCAR PRODUCCIÓN
+# Usa un único secreto de base de datos, STAGING_CONTA_DB_URL, y tres guardas
+# antes de aplicar nada:
+#   1. La URL contiene oseymswjlzplqoxrfjzi (staging-conta).
+#   2. La URL NO contiene xzmpnchlguibclvxyynt (producción).
+#   3. Ya conectado, la base NO tiene ni Foodint ni Folvy Interno en accounts.
+#      Producción tiene las dos siempre; staging-conta, ninguna (solo semillas).
+#      Esta no depende de lo que diga la URL: mira lo que hay al otro lado.
+# Si falla una, el job aborta sin aplicar nada.
+#
+# LO QUE JULIO HACE UNA VEZ
+#   Settings → Secrets and variables → Actions → New repository secret
+#     Nombre:  STAGING_CONTA_DB_URL
+#     Valor:   la cadena de conexión de staging-conta (Connect → Session pooler)
+#
+# La URL no se imprime: el usuario, la contraseña y el host se enmascaran antes
+# de conectar, y psql nunca recibe la URL por la línea de órdenes que se ve.
+
+on:
+  push:
+    branches: ['conta/**']
+    paths:
+      - 'supabase/staging/aplicar.txt'
+
+# Dos tandas a la vez sobre la misma base se pisan. Se encolan.
+concurrency:
+  group: aplicar-staging-conta
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+      MANIFIESTO: supabase/staging/aplicar.txt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ]; then
+            echo "::error::Falta el secreto STAGING_CONTA_DB_URL. No se aplica nada."
+            exit 1
+          fi
+          # Enmascarar las piezas de la URL antes de cualquier otra cosa.
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in
+            *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;;
+          esac
+          case "$DB_URL" in
+            *"$STAGING_REF"*) echo "La URL es de staging-conta." ;;
+            *) echo "::error::La URL no es de staging-conta (no contiene su ref). Abortado sin conectar."; exit 1 ;;
+          esac
+
+      - name: Leer y validar el manifiesto
+        id: manifiesto
+        run: |
+          set -euo pipefail
+          # Líneas sin comentarios ni blancos, en su orden.
+          grep -vE '^\s*(#|$)' "$MANIFIESTO" | sed -E 's/\s+$//' > /tmp/tanda.txt || true
+          n=$(wc -l < /tmp/tanda.txt)
+          if [ "$n" -eq 0 ]; then
+            echo "::error::El manifiesto no lista ningún fichero."
+            exit 1
+          fi
+          mal=0
+          while IFS= read -r f; do
+            # Solo SQL de las carpetas de migraciones, de staging o de semillas
+            # de contabilidad; sin rutas con «..».
+            if ! printf '%s' "$f" | grep -qE '^supabase/(migrations|staging/sql|seeds/conta)/[A-Za-z0-9_./-]+\.sql$' \
+               || printf '%s' "$f" | grep -q '\.\.'; then
+              echo "::error::Ruta no permitida en el manifiesto: $f"; mal=1; continue
+            fi
+            if [ ! -f "$f" ]; then
+              echo "::error::No existe: $f"; mal=1
+            fi
+          done < /tmp/tanda.txt
+          [ "$mal" -eq 0 ] || exit 1
+          echo "Tanda de $n ficheros, en este orden:"
+          nl -ba /tmp/tanda.txt
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          /usr/lib/postgresql/17/bin/psql --version
+
+      - name: Guarda 3 · al otro lado no hay producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-staging-conta-${GITHUB_RUN_ID}"
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select count(*) from public.accounts
+            where id in ('51ad1792-6629-4ef7-833a-b57b09a86710',   -- Foodint
+                         '00000000-0000-0000-0000-000000000001')   -- Folvy Interno
+          ")
+          if [ "$r" != "0" ]; then
+            echo "::error::La base tiene cuentas de producción ($r). NO es staging-conta. Abortado sin aplicar nada."
+            exit 1
+          fi
+          echo "Al otro lado no hay ni Foodint ni Folvy Interno: es staging-conta."
+
+      - name: Aplicar, fichero a fichero
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -uo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-staging-conta-${GITHUB_RUN_ID}"
+          {
+            echo "## Aplicar SQL en staging-conta"
+            echo
+            echo "Rama \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA::7}\` · lanzado por ${GITHUB_ACTOR}"
+            echo
+            echo "| # | Fichero | md5 | Resultado |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          i=0; fallo=0
+          while IFS= read -r f; do
+            i=$((i+1))
+            md5=$(md5sum "$f" | cut -d' ' -f1)
+            if [ "$fallo" -ne 0 ]; then
+              echo "| $i | \`$f\` | \`$md5\` | no aplicado (falló uno anterior) |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            echo "::group::[$i] $f  (md5 $md5)"
+            # -1: todo el fichero en una transacción. ON_ERROR_STOP: el primer
+            # error la revierte entera. -X: sin .psqlrc.
+            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" 2>&1; then
+              echo "::endgroup::"
+              echo "OK [$i] $f"
+              echo "| $i | \`$f\` | \`$md5\` | **aplicado** |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::endgroup::"
+              echo "::error::FALLÓ [$i] $f — revertido entero. Los siguientes no se aplican."
+              echo "| $i | \`$f\` | \`$md5\` | **FALLÓ, revertido entero** |" >> "$GITHUB_STEP_SUMMARY"
+              fallo=1
+            fi
+          done < /tmp/tanda.txt
+          exit "$fallo"
