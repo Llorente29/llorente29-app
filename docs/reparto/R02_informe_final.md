@@ -122,5 +122,10 @@ con fuentes.
 
 ## 9. Lo siguiente es tuyo
 
-Probar la vista previa de Vercel de esta rama contra staging-conta. Después, ensayo y real en el orden del §4, y
-la fusión.
+1. Abrir la vista previa de la rama:
+   `https://folvy-app-git-reparto-r02-marca-plataforma-llorente29s-projects.vercel.app`, con
+   `a.admin@prueba.folvy.test` (cuenta A de las semillas; la clave, la de siempre de staging).
+2. **Antes de tocar nada, mirar la franja de arriba**: tiene que decir «base de pruebas staging-conta». Si dice
+   otra cosa, no se toca nada. Yo comprobé la configuración (las dos variables de la rama), no el JS publicado.
+3. Ajustes › Quién reparte, y Folvy Orders › Pedidos con el local Norte Centro.
+4. Después, ensayo y real en el orden del §4, y la fusión.
