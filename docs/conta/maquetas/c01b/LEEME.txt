@@ -1,0 +1,3 @@
+Maquetas C01b: ficha de proveedor en estilo nuevo. N4Proveedor (ordenador 1440x900), M4Proveedor (movil 390x844). Datos inventados.
+
+Aprobadas para el C01b (04/10/2026). Sustituyen a ../Proveedor.dc.html y ../ProveedorMovil.dc.html (C01), que quedan obsoletas.
