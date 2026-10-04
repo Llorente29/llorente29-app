@@ -34,11 +34,25 @@ export interface EtiquetaRepartoProps {
   franja?: boolean
 }
 
+// Lo que acaba de pasar en cada pedido, unos segundos. Al cambiar a «la
+// reparte X», el pedido se recarga y pasa a pintarse en OTRA rama de la
+// tarjeta (la de plataforma), con otra etiqueta: el «Hecho» que vivía en la
+// de antes se perdía, a veces antes de que nadie lo viera (regla 8; e2e
+// 37216044758, 04/10: la celda se escribió y la pantalla no dijo nada).
+const RECIENTES = new Map<string, { texto: string; hasta: number }>()
+const DURA_MS = 20_000
+function reciente(saleId: string): string | null {
+  const r = RECIENTES.get(saleId)
+  if (!r) return null
+  if (r.hasta < Date.now()) { RECIENTES.delete(saleId); return null }
+  return r.texto
+}
+
 export default function EtiquetaReparto({
   pedido, portal = null, puedeDecidir = false, onDespachar, despachando = false, onCambiado, franja = true,
 }: EtiquetaRepartoProps) {
   const [cambiando, setCambiando] = useState(false)
-  const [resultado, setResultado] = useState<string | null>(null)
+  const [resultado, setResultado] = useState<string | null>(() => reciente(pedido.sale_id))
   const [error, setError] = useState<string | null>(null)
   const e = etiquetaDeReparto(pedido)
   if (!e) return null
@@ -49,7 +63,9 @@ export default function EtiquetaReparto({
     setCambiando(true); setError(null)
     try {
       await cambiarDesdePedido(pedido.sale_id, 'platform')
-      setResultado(`Hecho: a partir de ahora esta marca en ${plataforma} la reparte ${plataforma}. Este pedido ya no se despacha.`)
+      const texto = `Hecho: a partir de ahora esta marca en ${plataforma} la reparte ${plataforma}. Este pedido ya no se despacha.`
+      RECIENTES.set(pedido.sale_id, { texto, hasta: Date.now() + DURA_MS })
+      setResultado(texto)
       onCambiado?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se ha podido cambiar.')

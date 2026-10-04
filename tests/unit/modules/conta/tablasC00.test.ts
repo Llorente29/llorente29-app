@@ -26,7 +26,7 @@ function filasDe(tablaBd: string): FilaGeneral[] {
 
 const sinProveedores: ContextoUso = { territorio: 'peninsula_baleares', modelos: [], pais: 'ES', proveedores: [], hoy: HOY, digitos: 8 }
 const prov = (p: Partial<ProveedorParaUso>): ProveedorParaUso => ({
-  usualVatRates: [], irpfPct: null, paymentMethod: null, paymentTermsDays: null, paymentFixedDays: [],
+  usualTaxRateIds: [], irpfPct: null, paymentMethod: null, paymentTermsDays: null, paymentFixedDays: [],
   expenseCategoryId: null, countryCode: 'ES', currency: 'EUR', ...p,
 })
 
@@ -117,8 +117,12 @@ describe('«Los que usas» (D5: ordena y etiqueta, nunca quita)', () => {
   })
 
   it('cuenta proveedores por su IVA habitual, pero no confunde el 21 % normal con el de la UE', () => {
-    const ctx = { ...sinProveedores, proveedores: [prov({ usualVatRates: [21, 10] }), prov({ usualVatRates: [21] }), prov({ usualVatRates: [0] })] }
+    // C01b: el proveedor apunta la FILA (usual_tax_rate_ids), no el porcentaje.
     const filas = filasDe('tax_rate')
+    const de = (code: string) => filas.find((f) => f.code === code)!.id
+    const ctx = { ...sinProveedores, proveedores: [
+      prov({ usualTaxRateIds: [de('iva_general'), de('iva_reducido')] }), prov({ usualTaxRateIds: [de('iva_general')] }), prov({ usualTaxRateIds: [de('exento')] }),
+    ] }
     const uso = (code: string) => usoDeFila('impuestos', filas.find((f) => f.code === code)!, ctx)
     expect(uso('iva_general')).toEqual({ usada: true, donde: '2 proveedores' })
     expect(uso('iva_reducido')).toEqual({ usada: true, donde: '1 proveedor' })

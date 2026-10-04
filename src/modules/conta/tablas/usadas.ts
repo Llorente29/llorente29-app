@@ -16,7 +16,8 @@ import { valeHoy } from '@/modules/conta/tablas/registro'
 
 /** Lo que importa de un proveedor para saber qué usa (supplier, de la cuenta). */
 export interface ProveedorParaUso {
-  usualVatRates: number[]
+  /** Los IVA habituales, por id de `tax_rate` (C01b). */
+  usualTaxRateIds: string[]
   irpfPct: number | null
   paymentMethod: string | null
   paymentTermsDays: number | null
@@ -63,15 +64,11 @@ export function usoDeFila(tabla: ClaveTabla, f: FilaGeneral, ctx: ContextoUso): 
   const dato = (c: string) => f.datos[c]
   switch (tabla) {
     case 'impuestos': {
-      const rate = Number(dato('rate'))
       const trato = String(dato('treatment'))
-      // usual_vat_rates de la ficha del C01 son porcentajes sueltos: se cuentan
-      // contra los impuestos normales (con impuesto o exentos) que valen hoy y
-      // son del territorio de la empresa, no contra las compras en la UE ni la
-      // inversión del sujeto pasivo, que llevan el mismo 21 %.
-      const comparable = (trato === 'taxed' || trato === 'exempt') && valeHoy(f, ctx.hoy)
-        && (ctx.territorio === null || dato('territory') === ctx.territorio)
-      const n = comparable ? ctx.proveedores.filter((p) => p.usualVatRates.some((r) => igual(r, rate))).length : 0
+      // Desde el C01b la ficha guarda la FILA (usual_tax_rate_ids), no el
+      // porcentaje: se cuenta exactamente quién la apunta. Antes se casaba
+      // por porcentaje y una compra en la UE al 21 % contaba como el 21 %.
+      const n = ctx.proveedores.filter((p) => p.usualTaxRateIds.includes(f.id)).length
       const territorio = trato === 'taxed' && valeHoy(f, ctx.hoy) && ctx.territorio !== null && dato('territory') === ctx.territorio
       return conProveedores(n, territorio ? { usada: true, donde: 'Tu territorio' } : propia(f))
     }

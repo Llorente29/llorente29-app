@@ -10,6 +10,8 @@ export type VatRegime =
   | 'inversion_sujeto_pasivo' | 'extranjero'
 export type PaymentMethod = 'transfer' | 'direct_debit' | 'card' | 'cash'
 export type ContactRole = 'orders' | 'sales' | 'admin' | 'delivery' | 'other'
+/** Cada cuánto factura (C01b; columna supplier.invoicing_frequency). */
+export type InvoicingFrequency = 'per_delivery' | 'weekly' | 'fortnightly' | 'monthly' | 'other'
 /** Estado de la comprobación del NIF. 'pending' = VIES no contestó y se reintentará. */
 export type TaxIdCheckStatus = 'valid' | 'invalid' | 'pending'
 
@@ -29,7 +31,8 @@ export interface FichaProveedor {
   fiscalCity: string | null
   fiscalProvince: string | null
   vatRegime: VatRegime | null
-  usualVatRates: number[]
+  /** Los IVA habituales de sus facturas: referencias a `tax_rate` (C01b; antes, porcentajes sueltos). */
+  usualTaxRateIds: string[]
   irpfWithholdingPct: number | null
   expenseCategoryId: string | null
   defaultLocationId: string | null
@@ -38,6 +41,10 @@ export interface FichaProveedor {
   paymentFixedDays: number[]
   iban: string | null
   ibanVerifiedAt: string | null
+  /** C01b R2 · El IBAN de antes y quién lo cambió desde una factura («Es el nuevo IBAN»). Solo lectura. */
+  ibanPrevious: string | null
+  ibanChangedAt: string | null
+  ibanChangedByName: string | null
   bankName: string | null
   ledgerAccountCode: string | null
   healthRegistryNo: string | null
@@ -57,6 +64,7 @@ export interface FichaProveedor {
   // Lo que ya traía la ficha anterior y se conserva.
   /** Factura con el IVA dentro del importe de línea (ver Supplier.ivaIncluidoEnLinea). */
   ivaIncluidoEnLinea: boolean
+  invoicingFrequency: InvoicingFrequency | null
   taxIdCheckedAt: string | null
   archivedAt: string | null
   createdAt: string | null
@@ -98,6 +106,14 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   direct_debit: 'Domiciliación',
   card: 'Tarjeta',
   cash: 'Efectivo',
+}
+
+export const INVOICING_FREQUENCY_LABEL: Record<InvoicingFrequency, string> = {
+  per_delivery: 'Con cada entrega',
+  weekly: 'Cada semana',
+  fortnightly: 'Cada quince días',
+  monthly: 'Una al mes',
+  other: 'De otra forma',
 }
 
 export const VAT_REGIME_LABEL: Record<VatRegime, string> = {

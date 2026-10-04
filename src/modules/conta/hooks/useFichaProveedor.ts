@@ -14,11 +14,14 @@ import type { ContactoProveedor, FichaProveedor } from '@/modules/conta/types'
 import {
   comprobarVies, contaActiva, guardarFicha, listarContactos, listarDocumentos, listarFacturas,
   listarLocales, listarPropuestas, listarProveedores, listarTiposGasto, obtenerFicha,
-  refrescarPropuestas, tieneCertificadoBanco,
+  refrescarPropuestas, tieneCertificadoBanco, ivaDeLasFacturas, listarAprendido, sincronizarAprendido,
   type DocumentoProveedor, type FacturaDeProveedor, type Local, type Propuesta, type TipoGasto,
 } from '@/modules/conta/services/proveedorService'
 import { calcularCompletitud, type Completitud } from '@/modules/conta/lib/completitud'
 import { calcularCifras, type CifrasFicha } from '@/modules/conta/lib/cifras'
+import { detectarRepetidas, type Repetida } from '@/modules/conta/lib/repetidas'
+import { aprender, confirmacionesDeFacturas, type Aprendido } from '@/modules/conta/lib/aprendizaje'
+import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/modules/conta/types'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { validarFicha, type ResultadoValidacion } from '@/modules/conta/lib/validacionesFicha'
 import { leerOpcionesFicha } from '@/modules/conta/services/fichaTablasService'
@@ -32,10 +35,26 @@ export interface DatosFicha {
   locales: Local[]
   facturas: FacturaDeProveedor[]
   documentos: DocumentoProveedor[]
-  otros: { id: string; name: string; taxId: string | null }[]
+  /**
+   * Los demás proveedores de la cuenta (no archivados): para el NIF repetido y
+   * para poner primero lo que más se usa (tipo de gasto, IVA, retención, plazo).
+   */
+  otros: OtroDeLaCuenta[]
   conta: boolean
   /** IVA, retención, forma y plazo de pago, de las tablas generales del C00 (tarea 7). */
   opciones: OpcionesFicha
+  /** «Lo que he aprendido de este proveedor», tal como está guardado (C01b, tarea 5). */
+  aprendidos: Aprendido[]
+}
+
+export interface OtroDeLaCuenta {
+  id: string
+  name: string
+  taxId: string | null
+  expenseCategoryId: string | null
+  usualTaxRateIds: string[]
+  irpfWithholdingPct: number | null
+  paymentTermsDays: number | null
 }
 
 export interface UsoFicha {
@@ -43,7 +62,12 @@ export interface UsoFicha {
   error: string | null
   datos: DatosFicha | null
   completitud: Completitud | null
+  /** Las facturas que repiten número e importe de otra anterior: no cuentan en ninguna cifra (C01b §4). */
+  repetidas: Map<string, Repetida>
+  /** Sin las repetidas. */
   cifras: CifrasFicha | null
+  /** «Lo que he aprendido de este proveedor» (C01b §4). */
+  aprendidos: Aprendido[]
   comprobandoVies: boolean
   /** Vuelve a leer sin enseñar el esqueleto (tras guardar). */
   recargar: () => Promise<void>
@@ -57,6 +81,39 @@ export interface UsoFicha {
 
 const FALTA_PARA_PROPONER = (f: FichaProveedor) =>
   !f.taxId?.trim() || !f.legalName?.trim() || !f.fiscalStreet?.trim()
+
+const repetidasDe = (facturas: FacturaDeProveedor[]) =>
+  detectarRepetidas(facturas.map((f) => ({ id: f.id, number: f.invoiceNumber, total: f.grandTotal, status: f.status, createdAt: f.createdAt, fecha: f.invoiceDate, noRepetidaConfirmada: f.noRepetidaConfirmada })))
+
+const mismo = (a: Aprendido[], b: Aprendido[]) => {
+  const clave = (xs: Aprendido[]) => xs.filter((x) => !x.aMano).map((x) => `${x.campo}=${x.valor}`).sort().join('|')
+  return clave(a) === clave(b)
+}
+
+/**
+ * Lo aprendido (C01b, tarea 5): el núcleo lo saca de las facturas (aprender)
+ * y, si no es lo que hay guardado, se guarda en una transacción y queda en
+ * «Lo que ha hecho Folvy». Lo fijado a mano no se toca. Si quien mira no
+ * puede escribir (no es administrador ni encargado), se enseña lo calculado
+ * sin guardarlo: aprender es proponer, nunca apuntar.
+ */
+async function leerAprendido(supplierId: string, facturas: FacturaDeProveedor[]): Promise<Aprendido[]> {
+  const repetidas = repetidasDe(facturas)
+  const [guardado, iva] = await Promise.all([
+    listarAprendido(supplierId),
+    ivaDeLasFacturas(facturas.filter((f) => f.status === 'aprobada' || f.status === 'pagada').map((f) => f.id)),
+  ])
+  const aMano = guardado.filter((g) => g.aMano).map((g) => ({ ...g, desde: g.desde ?? '', hasta: g.hasta ?? '' }))
+  const confirmaciones = confirmacionesDeFacturas(facturas, iva, new Set(repetidas.keys()),
+    (m) => PAYMENT_METHOD_LABEL[m as PaymentMethod] ?? m)
+  const calculado = aprender(confirmaciones)
+  const comoEsta = guardado.map((g) => ({ ...g, desde: g.desde ?? '', hasta: g.hasta ?? '' }))
+  if (!mismo(calculado, comoEsta)) {
+    try { await sincronizarAprendido(supplierId, calculado) } catch { /* sin permiso de escritura: se enseña lo calculado */ }
+  }
+  const fijados = new Set(aMano.map((a) => a.campo))
+  return [...aMano, ...calculado.filter((c) => !fijados.has(c.campo))]
+}
 
 type Lectura = { tipo: 'listo'; datos: DatosFicha } | { tipo: 'no-existe' }
 
@@ -83,8 +140,12 @@ async function leerFicha(
     listarProveedores(accountId),
     contaActiva(accountId),
   ])
-  const otros = todos.map((p) => ({ id: p.id, name: p.name, taxId: p.taxId }))
-  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta, opciones } }
+  const aprendidos = await leerAprendido(supplierId, facturas).catch(() => [] as Aprendido[])
+  const otros = todos.map((p) => ({
+    id: p.id, name: p.name, taxId: p.taxId, expenseCategoryId: p.expenseCategoryId, usualTaxRateIds: p.usualTaxRateIds,
+    irpfWithholdingPct: p.irpfWithholdingPct, paymentTermsDays: p.paymentTermsDays,
+  }))
+  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta, opciones, aprendidos } }
 }
 
 export function useFichaProveedor(accountId: string | null, supplierId: string): UsoFicha {
@@ -159,13 +220,17 @@ export function useFichaProveedor(accountId: string | null, supplierId: string):
   }, [datos, comprobarNifUe])
 
   const completitud = useMemo(() => datos
-    ? calcularCompletitud({ ficha: datos.ficha, contactos: datos.contactos, tieneCertificadoBanco: tieneCertificadoBanco(datos.documentos) })
+    ? calcularCompletitud({ ficha: datos.ficha, contactos: datos.contactos, tieneCertificadoBanco: tieneCertificadoBanco(datos.documentos, datos.ficha.ibanChangedAt) })
     : null, [datos])
 
-  const cifras = useMemo(() => datos ? calcularCifras(datos.facturas, hoyEnMadrid()) : null, [datos])
+  const repetidas = useMemo(() => datos ? repetidasDe(datos.facturas) : new Map<string, Repetida>(), [datos])
+
+  // Una repetida no se apunta: no cuenta en «Le has comprado», «Le debes» ni el próximo pago.
+  const cifras = useMemo(() => datos ? calcularCifras(datos.facturas.filter((f) => !repetidas.has(f.id)), hoyEnMadrid()) : null, [datos, repetidas])
 
   return {
-    estado, error, datos, completitud, cifras, comprobandoVies,
+    estado, error, datos, completitud, repetidas, cifras, comprobandoVies,
+    aprendidos: datos?.aprendidos ?? [],
     recargar: () => cargar(),
     reintentar: () => { setEstado('cargando'); setError(null); void cargar() },
     guardar,

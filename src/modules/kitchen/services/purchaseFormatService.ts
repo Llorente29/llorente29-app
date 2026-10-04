@@ -15,6 +15,7 @@
 //  · Trazabilidad IA de serie (source/ai_confidence/needs_review) para foto→IA.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import { proponerDireccion } from '@/modules/conta/lib/direccion'
 import type {
   Supplier,
   SupplierInsert,
@@ -49,15 +50,51 @@ function requireSupabase(): void {
 // ═══════════════════════════════════════════════════════════════════════
 // supplier
 // ═══════════════════════════════════════════════════════════════════════
+// C01b · UNA SOLA FUENTE. El email y el teléfono del proveedor viven en
+// supplier_contact (el principal, o el primero que tenga el dato) y la
+// dirección en los campos fiscales estructurados (o, mientras nadie la
+// confirma, en la propuesta «por confirmar»). Las columnas viejas
+// supplier.email / phone / address ya no se leen ni se escriben aquí; se
+// borran en su propio fichero (C01b, eliminación).
+// Regla 40: supplier_contact y supplier_proposal comprobadas en el esquema
+// (claves ajenas supplier_contact.supplier_id y supplier_proposal.supplier_id).
+const SUPPLIER_SELECT = '*, supplier_contact(email, phone, is_primary, role), supplier_proposal(field, status, value)'
+
+// supplier_contact y supplier_proposal (C01) aún no están en el database.ts
+// generado: se leen y escriben sin tipar, como en los servicios de conta.
+function sinTipar(table: string) {
+  return (supabase! as unknown as {
+    from: (t: string) => ReturnType<NonNullable<typeof supabase>['from']>
+  }).from(table)
+}
+
+type ContactoFila = { email: string | null; phone: string | null; is_primary: boolean; role: string }
+type PropuestaFila = { field: string; status: string; value: { line?: string } | null }
+
+function contactoDe(row: RowSupplier, campo: 'email' | 'phone'): string | null {
+  const cs = ((row as unknown as { supplier_contact?: ContactoFila[] }).supplier_contact ?? [])
+    .filter((c) => (c[campo] ?? '').trim() !== '')
+    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
+  return cs[0]?.[campo] ?? null
+}
+
+function direccionDe(row: RowSupplier): string | null {
+  const r = row as unknown as { fiscal_street?: string | null; fiscal_postal_code?: string | null; fiscal_city?: string | null; supplier_proposal?: PropuestaFila[] }
+  const calle = (r.fiscal_street ?? '').trim()
+  if (calle) return [calle, [r.fiscal_postal_code, r.fiscal_city].filter(Boolean).join(' ')].filter((x) => x && x.trim()).join(', ')
+  const pendiente = (r.supplier_proposal ?? []).find((p) => p.field === 'fiscal_address' && p.status === 'pending')
+  return pendiente?.value?.line?.trim() || null
+}
+
 export function rowToSupplier(row: RowSupplier): Supplier {
   return {
     id: row.id,
     accountId: row.account_id,
     name: row.name,
     taxId: row.tax_id,
-    email: row.email,
-    phone: row.phone,
-    address: row.address,
+    email: contactoDe(row, 'email'),
+    phone: contactoDe(row, 'phone'),
+    address: direccionDe(row),
     healthRegistryNo: row.health_registry_no,
     notes: row.notes,
     // El select es '*', así que el dato SIEMPRE venía; lo que faltaba era
@@ -91,9 +128,6 @@ function supplierInsertToRow(input: SupplierInsert): RowSupplierInsert {
     account_id: input.accountId,
     name: input.name,
     tax_id: input.taxId ?? null,
-    email: input.email ?? null,
-    phone: input.phone ?? null,
-    address: input.address ?? null,
     health_registry_no: input.healthRegistryNo ?? null,
     notes: input.notes ?? null,
     created_by: input.createdBy ?? null,
@@ -105,9 +139,6 @@ function supplierUpdateToRow(patch: SupplierUpdate): RowSupplierUpdate {
   const row: RowSupplierUpdate = {}
   if (patch.name !== undefined) row.name = patch.name
   if (patch.taxId !== undefined) row.tax_id = patch.taxId
-  if (patch.email !== undefined) row.email = patch.email
-  if (patch.phone !== undefined) row.phone = patch.phone
-  if (patch.address !== undefined) row.address = patch.address
   if (patch.healthRegistryNo !== undefined) row.health_registry_no = patch.healthRegistryNo
   if (patch.notes !== undefined) row.notes = patch.notes
   // §4 — solo viaja si quien llama lo pone. La ficha únicamente lo pone cuando
@@ -125,35 +156,95 @@ export async function listSuppliers(accountId: string): Promise<Supplier[]> {
   requireSupabase()
   const { data, error } = await supabase!
     .from('supplier')
-    .select('*')
+    .select(SUPPLIER_SELECT)
     .eq('account_id', accountId)
     .is('archived_at', null)
     .order('name', { ascending: true })
   if (error) throw new Error(`Error listando proveedores: ${error.message}`)
-  return (data ?? []).map(rowToSupplier)
+  return ((data ?? []) as unknown as RowSupplier[]).map(rowToSupplier)
 }
 
-export async function createSupplier(input: SupplierInsert): Promise<Supplier> {
+/**
+ * C01b · Email y teléfono → el contacto PRINCIPAL (se crea si no hay; si lo
+ * hay, se le pone). Dirección en una línea → propuesta «por confirmar»
+ * repartida por el núcleo (nunca se reparte en silencio en los campos
+ * fiscales). `origen` dice de dónde vino, para la ficha.
+ */
+async function escribirContactoYDireccion(
+  supplierId: string,
+  accountId: string,
+  datos: { email?: string | null; phone?: string | null; address?: string | null },
+  origen: 'goods_receipt' | 'legacy_address',
+  quien: string | null,
+): Promise<void> {
+  const limpio = (v: string | null | undefined) => (v ?? '').trim() || null
+  const tocaEmail = datos.email !== undefined
+  const tocaTel = datos.phone !== undefined
+  if (tocaEmail || tocaTel) {
+    const { data: principal, error: e1 } = await sinTipar('supplier_contact').select('id').eq('supplier_id', supplierId).eq('is_primary', true).maybeSingle()
+    if (e1) throw new Error(`Error leyendo el contacto del proveedor: ${e1.message}`)
+    const cambios: Record<string, string | null> = {}
+    if (tocaEmail) cambios.email = limpio(datos.email)
+    if (tocaTel) cambios.phone = limpio(datos.phone)
+    const idPrincipal = (principal as { id?: string } | null)?.id
+    if (idPrincipal) {
+      const { error } = await sinTipar('supplier_contact').update(cambios as never).eq('id', idPrincipal)
+      if (error) throw new Error(`Error guardando el contacto del proveedor: ${error.message}`)
+    } else if (cambios.email || cambios.phone) {
+      const { data: prov } = await supabase!.from('supplier').select('name').eq('id', supplierId).single()
+      const { error } = await sinTipar('supplier_contact').insert({
+        account_id: accountId, supplier_id: supplierId, name: prov?.name ?? 'Contacto', role: 'other',
+        is_primary: true, created_by_name: quien, ...cambios,
+      } as never)
+      if (error) throw new Error(`Error creando el contacto del proveedor: ${error.message}`)
+    }
+  }
+  const linea = limpio(datos.address)
+  if (datos.address !== undefined && linea) {
+    const p = proponerDireccion(linea)
+    const { error } = await sinTipar('supplier_proposal').insert({
+      account_id: accountId, supplier_id: supplierId, field: 'fiscal_address',
+      value: { line: linea, street: p?.street ?? null, postal_code: p?.postalCode ?? null, city: p?.city ?? null, province: p?.province ?? null },
+      source: origen,
+      source_label: origen === 'goods_receipt' ? 'Leído de un albarán' : 'Escrita en la ficha',
+    } as never)
+    if (error) throw new Error(`Error guardando la dirección por confirmar: ${error.message}`)
+  }
+}
+
+export async function createSupplier(input: SupplierInsert, origen: 'goods_receipt' | 'legacy_address' = 'legacy_address'): Promise<Supplier> {
   requireSupabase()
   const { data, error } = await supabase!
-    .from('supplier').insert(supplierInsertToRow(input)).select('*').single()
+    .from('supplier').insert(supplierInsertToRow(input)).select('id').single()
   if (error) throw new Error(`Error creando proveedor: ${error.message}`)
-  return rowToSupplier(data)
+  await escribirContactoYDireccion(data.id, input.accountId,
+    { email: input.email, phone: input.phone, address: input.address }, origen, input.createdByName ?? null)
+  const creado = await getSupplierById(data.id)
+  if (!creado) throw new Error('Error creando proveedor: no se ha podido leer después de crearlo.')
+  return creado
 }
 
 export async function updateSupplier(id: string, patch: SupplierUpdate): Promise<Supplier> {
   requireSupabase()
   const rowPatch = supplierUpdateToRow(patch)
-  if (Object.keys(rowPatch).length === 0) {
+  let accountId: string | null = null
+  if (Object.keys(rowPatch).length > 0) {
     const { data, error } = await supabase!
-      .from('supplier').select('*').eq('id', id).single()
-    if (error) throw new Error(`Error obteniendo proveedor ${id}: ${error.message}`)
-    return rowToSupplier(data)
+      .from('supplier').update(rowPatch).eq('id', id).select('account_id').single()
+    if (error) throw new Error(`Error actualizando proveedor ${id}: ${error.message}`)
+    accountId = data.account_id
   }
-  const { data, error } = await supabase!
-    .from('supplier').update(rowPatch).eq('id', id).select('*').single()
-  if (error) throw new Error(`Error actualizando proveedor ${id}: ${error.message}`)
-  return rowToSupplier(data)
+  if (patch.email !== undefined || patch.phone !== undefined || patch.address !== undefined) {
+    if (!accountId) {
+      const { data, error } = await supabase!.from('supplier').select('account_id').eq('id', id).single()
+      if (error) throw new Error(`Error obteniendo proveedor ${id}: ${error.message}`)
+      accountId = data.account_id
+    }
+    await escribirContactoYDireccion(id, accountId!, { email: patch.email, phone: patch.phone, address: patch.address }, 'legacy_address', null)
+  }
+  const actualizado = await getSupplierById(id)
+  if (!actualizado) throw new Error(`Error obteniendo proveedor ${id}`)
+  return actualizado
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -431,9 +522,9 @@ export async function updateArticleSupplier(
 export async function getSupplierById(id: string): Promise<Supplier | null> {
   requireSupabase()
   const { data, error } = await supabase!
-    .from('supplier').select('*').eq('id', id).maybeSingle()
+    .from('supplier').select(SUPPLIER_SELECT).eq('id', id).maybeSingle()
   if (error) throw new Error(`Error obteniendo proveedor ${id}: ${error.message}`)
-  return data ? rowToSupplier(data) : null
+  return data ? rowToSupplier(data as unknown as RowSupplier) : null
 }
 
 // Los vínculos activos (article_supplier) de un proveedor: los artículos que le

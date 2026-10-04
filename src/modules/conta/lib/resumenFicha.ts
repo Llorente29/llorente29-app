@@ -9,14 +9,14 @@
 
 import type { ContactoProveedor, FichaProveedor } from '@/modules/conta/types'
 import { PAYMENT_METHOD_LABEL, VAT_REGIME_LABEL } from '@/modules/conta/types'
-import { nombreFormaPago, type OpcionesFicha } from '@/modules/conta/lib/opcionesFicha'
+import { nombreFormaPago, porcentajesIva, type OpcionesFicha } from '@/modules/conta/lib/opcionesFicha'
 import { codigoDeApunte } from '@/modules/conta/lib/pgc'
 import type { Falta } from '@/modules/conta/lib/completitud'
 import { diaMesCorto, eurosExactos, listaPorcentajes } from '@/modules/conta/lib/formato'
 
 /** Las pantallas de la ficha. En ordenador son pestañas; en el móvil, apartados. */
 export type Apartado =
-  | 'resumen' | 'datos-fiscales' | 'contactos' | 'pago' | 'contabilidad' | 'documentos' | 'historial' | 'facturas'
+  | 'resumen' | 'datos-fiscales' | 'contactos' | 'pago' | 'contabilidad' | 'documentos' | 'historial' | 'facturas' | 'articulos'
 
 export const NOMBRE_APARTADO: Record<Apartado, string> = {
   resumen: 'Resumen',
@@ -27,12 +27,20 @@ export const NOMBRE_APARTADO: Record<Apartado, string> = {
   documentos: 'Documentos',
   historial: 'Historial',
   facturas: 'Facturas',
+  articulos: 'Artículos que le compras',
 }
 
-/** Pestañas del ordenador, en el orden de la maqueta. */
-export const PESTANAS: Apartado[] = ['resumen', 'datos-fiscales', 'contactos', 'pago', 'contabilidad', 'documentos', 'historial']
-/** Apartados de la lista del móvil, en el orden de la maqueta. */
-export const APARTADOS_MOVIL: Apartado[] = ['datos-fiscales', 'contactos', 'pago', 'contabilidad', 'documentos', 'facturas']
+/** En el móvil, «Pago» se dice como en la maqueta M4. */
+export const NOMBRE_APARTADO_MOVIL: Partial<Record<Apartado, string>> = { pago: 'Cómo le pagas' }
+
+/**
+ * Pestañas de edición del ordenador (N4: «Datos fiscales · Contactos · Pago ·
+ * Contabilidad · Documentos»). «Historial» va detrás: lo traía la ficha del
+ * C01 y no se pierde.
+ */
+export const PESTANAS: Apartado[] = ['datos-fiscales', 'contactos', 'pago', 'contabilidad', 'documentos', 'historial']
+/** Apartados de la lista del móvil, en el orden de la maqueta M4. «Artículos» solo si la cuenta compra con Cocina. */
+export const APARTADOS_MOVIL: Apartado[] = ['datos-fiscales', 'contactos', 'pago', 'contabilidad', 'documentos', 'facturas', 'articulos']
 
 /** La pestaña de la completitud (`Falta.destino.pestana`) → el apartado de la URL. */
 export function apartadoDe(pestana: Falta['destino']['pestana']): Apartado {
@@ -74,7 +82,7 @@ export interface DatosResumen {
   opciones?: OpcionesFicha | null
 }
 
-const FALTA_EN: Record<Exclude<Apartado, 'resumen' | 'historial' | 'facturas'>, Partial<Record<string, string>>> = {
+const FALTA_EN: Record<Exclude<Apartado, 'resumen' | 'historial' | 'facturas' | 'articulos'>, Partial<Record<string, string>>> = {
   'datos-fiscales': { nif: 'Falta comprobar el NIF', razon_social: 'Falta la razón social', direccion: 'Falta la dirección fiscal', regimen_iva: 'Falta el régimen de IVA' },
   contactos: { contacto_pedidos: 'Falta el de pedidos', contacto_admin: 'Falta el de administración' },
   pago: { forma_pago: 'Falta la forma y el plazo de pago', iban: 'Falta el IBAN comprobado' },
@@ -100,7 +108,8 @@ export function lineaApartado(ap: Apartado, d: DatosResumen): LineaApartado {
   switch (ap) {
     case 'datos-fiscales': {
       const regimen = f.vatRegime ? VAT_REGIME_LABEL[f.vatRegime] : null
-      const iva = f.usualVatRates.length > 0 ? listaPorcentajes(f.usualVatRates) : null
+      const rates = porcentajesIva(d.opciones ?? null, f.usualTaxRateIds)
+      const iva = rates.length > 0 ? listaPorcentajes(rates) : null
       return { detalle: [regimen, iva].filter(Boolean).join(' · ') || 'Completos', falta: false }
     }
     case 'contactos': {

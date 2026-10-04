@@ -10,19 +10,19 @@ const vacia: FichaProveedor = {
   id: 's1', accountId: 'a1', name: 'Hermanos Ruiz', legalName: null, taxId: null, taxIdType: null,
   countryCode: 'ES', entityKind: null, taxIdVerifiedAt: null, taxIdCheckStatus: null,
   fiscalStreet: null, fiscalPostalCode: null, fiscalCity: null, fiscalProvince: null,
-  vatRegime: null, usualVatRates: [], irpfWithholdingPct: null, expenseCategoryId: null,
+  vatRegime: null, usualTaxRateIds: [], irpfWithholdingPct: null, expenseCategoryId: null,
   defaultLocationId: null, paymentMethod: null, paymentTermsDays: null, paymentFixedDays: [],
   iban: null, ibanVerifiedAt: null, bankName: null, ledgerAccountCode: null,
   healthRegistryNo: null, isActive: true, notes: null,
   website: null, tags: [], bic: null, sepaMandateRef: null, sepaMandateDate: null,
   currency: 'EUR', earlyPaymentDiscountPct: null,
-  ivaIncluidoEnLinea: false, taxIdCheckedAt: null, archivedAt: null, createdAt: null, createdByName: null,
+  ivaIncluidoEnLinea: false, invoicingFrequency: null, taxIdCheckedAt: null, archivedAt: null, createdAt: null, createdByName: null,
 }
 const completa: FichaProveedor = {
   ...vacia, legalName: 'Hermanos Ruiz Distribución, S.L.', taxId: 'B87123790', taxIdType: 'nif_es',
   entityKind: 'company', taxIdVerifiedAt: '2026-10-01T10:00:00Z', taxIdCheckStatus: 'valid',
   fiscalStreet: 'C/ Ejemplo 12', fiscalPostalCode: '28021', fiscalCity: 'Madrid', fiscalProvince: 'Madrid',
-  vatRegime: 'general', usualVatRates: [10, 21], expenseCategoryId: 'cat-600',
+  vatRegime: 'general', usualTaxRateIds: ['t10', 't21'], expenseCategoryId: 'cat-600',
   paymentMethod: 'transfer', paymentTermsDays: 30, iban: 'ES9121000418450200051332',
   ibanVerifiedAt: '2026-10-01T10:00:00Z',
 }
@@ -39,7 +39,7 @@ describe('completitud (§5.5)', () => {
   it('la maqueta: todo menos certificado del banco y contacto de administración → 90 de 100', () => {
     const r = calcularCompletitud({ ficha: completa, contactos: [contacto('orders'), contacto('sales')], tieneCertificadoBanco: false })
     expect(r.pct).toBe(90)
-    expect(r.faltan.map((f) => f.texto)).toEqual(['contacto de administración', 'certificado de titularidad bancaria'])
+    expect(r.faltan.map((f) => f.texto)).toEqual(['contacto de administración', 'certificado del banco'])
   })
 
   it('todo hecho → 100 %, sin nada que falte', () => {

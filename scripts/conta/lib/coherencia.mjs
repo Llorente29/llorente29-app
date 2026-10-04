@@ -144,7 +144,7 @@ export function faltaParaPresentar(e, hoy) {
 
 /**
  * @param {object} bd  el volcado (agente-datos-maestros.sql): tablas.tax_form, tablas.tax_rate,
- *   tablas.withholding_rate, empresas, plazos, proveedores_plazo, cuentas_apunte
+ *   tablas.withholding_rate, empresas, plazos, proveedores_plazo, proveedores_iva, cuentas_apunte
  * @param {{ ficheros?: { ruta: string, texto: string }[], hoy?: string }} extra
  * @returns {{ nivel: 'rojo'|'ambar', tipo: string, donde: string, detalle: string, norma: string|null }[]}
  */
@@ -202,6 +202,16 @@ export function revisarCoherencia(bd, extra = {}) {
   }
   for (const s of bd.proveedores_plazo ?? []) {
     if (Number(s.payment_terms_days) > PLAZO_MAXIMO) h('rojo', 'plazo', `Proveedor ${s.name} (cuenta ${String(s.account_id).slice(0, 8)})`, `Paga a ${s.payment_terms_days} días, más de ${PLAZO_MAXIMO}.`, NORMA_PLAZO)
+  }
+
+  // 5 bis. C01b (decisión 8): el IVA habitual de cada proveedor apunta a un
+  // tax_rate que existe, es de serie o de su cuenta (rojo si no) y vale hoy
+  // (ámbar si no: se guarda, pero ya no se puede poner en una factura de hoy).
+  for (const v of bd.proveedores_iva ?? []) {
+    const donde = `Proveedor ${v.name} (cuenta ${String(v.account_id).slice(0, 8)})`
+    if (v.motivo === 'no_existe') h('rojo', 'iva_proveedor', donde, `Su IVA habitual apunta a un impuesto que no existe en las tablas (${v.tax_rate_id}).`, null)
+    else if (v.motivo === 'otra_cuenta') h('rojo', 'iva_proveedor', donde, `Su IVA habitual (${v.code}) es un impuesto propio de OTRA cuenta.`, null)
+    else h('ambar', 'iva_proveedor', donde, `Su IVA habitual (${v.code}) no vale hoy: vigente del ${v.valid_from} al ${v.valid_to ?? '—'}.`, null)
   }
 
   // 6. Cuentas de apunte más cortas que la longitud de la empresa: en los datos…

@@ -72,7 +72,7 @@ export function calcularCompletitud({ ficha: f, contactos, tieneCertificadoBanco
     { hecho: contactos.some((c) => c.role === 'admin'), aplica: true,
       falta: { clave: 'contacto_admin', texto: 'contacto de administración', destino: { pestana: 'contactos', campo: 'admin' }, peso: 5 } },
     { hecho: tieneCertificadoBanco, aplica: tieneIban,
-      falta: { clave: 'certificado_banco', texto: 'certificado de titularidad bancaria', destino: { pestana: 'documentos', campo: 'bank_ownership_certificate' }, peso: 5 } },
+      falta: { clave: 'certificado_banco', texto: 'certificado del banco', destino: { pestana: 'documentos', campo: 'bank_ownership_certificate' }, peso: 5 } },
   ]
   const aplicables = items.filter((i) => i.aplica)
   const total = aplicables.reduce((s, i) => s + i.falta.peso, 0)

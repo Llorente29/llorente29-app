@@ -1971,6 +1971,9 @@ export async function quickCreateItemFromLine(
 
 // Alta de proveedor desde la cabecera del albarán. Mejora 1: vuelca TODO lo que
 // el OCR leyó (no solo nombre+NIF) — teléfono/email/dirección/registro sanitario.
+// C01b (decisión 5): el email y el teléfono van al contacto PRINCIPAL y la
+// dirección a una propuesta «por confirmar» marcada «Leído de un albarán»; ya
+// no se escribe en supplier.email / phone / address.
 export interface SupplierContact {
   email?: string | null
   phone?: string | null
@@ -2001,7 +2004,7 @@ export async function quickCreateSupplier(
     healthRegistryNo: clean(contact?.healthRegistryNo),
     createdBy,
     createdByName,
-  })
+  }, 'goods_receipt')
 }
 
 // Flip de estrategia de coste (Tramo A): los artículos que cobran su coste de un

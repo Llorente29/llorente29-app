@@ -56,3 +56,49 @@ const ESTADO: Record<string, { texto: string; clase: string }> = {
 export function estadoFactura(status: string): { texto: string; clase: string } {
   return ESTADO[status] ?? { texto: status, clase: 'cf-estado-otro' }
 }
+
+/**
+ * «Pedírselo por correo» (N4): el borrador del correo al proveedor con lo que
+ * le falta a su ficha y él puede dar. Lo de dentro de casa (en qué tipo de
+ * gasto se apuntan sus facturas) no se le pide. Va al contacto de
+ * administración; si no hay, al principal; si no, a cualquiera con email; y si
+ * nadie tiene email, el borrador sale sin destinatario (lo escribe la
+ * persona). Folvy no envía nada: abre el borrador.
+ */
+export function correoPedirDatos(
+  f: Pick<FichaProveedor, 'name'>, contactos: ContactoProveedor[], faltan: { clave: string; texto: string }[], firma: string | null,
+): { href: string; para: string | null; pide: string[] } | null {
+  const QUE: Record<string, string> = {
+    nif: 'vuestro NIF',
+    razon_social: 'vuestra razón social, tal como sale en las facturas',
+    direccion: 'vuestra dirección fiscal completa (calle, código postal, población y provincia)',
+    regimen_iva: 'vuestro régimen de IVA',
+    forma_pago: 'la forma y el plazo de pago que aplicáis',
+    iban: 'el IBAN donde os pagamos',
+    certificado_banco: 'un certificado de titularidad de esa cuenta, del banco',
+    contacto_admin: 'una persona de administración (nombre, teléfono y email) para facturas y pagos',
+    contacto_pedidos: 'una persona de pedidos (nombre y teléfono)',
+  }
+  const pide = faltan.map((x) => QUE[x.clave]).filter((x): x is string => !!x)
+  if (pide.length === 0) return null
+  const conEmail = (c: ContactoProveedor) => !!c.email?.trim()
+  const para = contactos.find((c) => c.role === 'admin' && conEmail(c))
+    ?? contactos.find((c) => c.isPrimary && conEmail(c))
+    ?? contactos.find(conEmail)
+    ?? null
+  const asunto = `Datos para vuestra ficha de proveedor${firma ? ` en ${firma}` : ''}`
+  const cuerpo = [
+    'Hola:',
+    '',
+    `Estamos completando la ficha de ${f.name} y nos faltan estos datos:`,
+    '',
+    ...pide.map((p) => `- ${p}`),
+    '',
+    '¿Nos los podéis enviar respondiendo a este correo?',
+    '',
+    'Gracias.',
+    ...(firma ? ['', firma] : []),
+  ].join('\n')
+  const q = `subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`
+  return { href: `mailto:${para?.email ? encodeURIComponent(para.email.trim()) : ''}?${q}`, para: para?.email?.trim() ?? null, pide }
+}

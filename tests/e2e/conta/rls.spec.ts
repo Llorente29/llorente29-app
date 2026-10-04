@@ -23,7 +23,8 @@ test('la cuenta B no ve ni toca nada de la cuenta A', async ({ browserName }, in
   expect(suyo.datos).toHaveLength(1)
   const contactosA = await rest<unknown[]>(a, 'GET', `supplier_contact?select=id&supplier_id=eq.${HERMANOS_RUIZ}`)
   expect(contactosA.datos.length).toBeGreaterThan(0)
-  const facturaA = await rest<{ id: string }[]>(a, 'GET', `supplier_invoice?select=id&supplier_id=eq.${HERMANOS_RUIZ}&invoice_number=eq.F-2026-0915`)
+  // La aprobada: desde la semilla del C01b hay otra F-2026-0915, la repetida (en revisión).
+  const facturaA = await rest<{ id: string }[]>(a, 'GET', `supplier_invoice?select=id&supplier_id=eq.${HERMANOS_RUIZ}&invoice_number=eq.F-2026-0915&status=in.(aprobada,pagada)`)
   expect(facturaA.datos).toHaveLength(1)
   const factura = facturaA.datos[0].id
 

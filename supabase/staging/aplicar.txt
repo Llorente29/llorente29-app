@@ -1,18 +1,13 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · R02, 5.ª tanda. HALLAZGO: orders_feed y orders_feed_by_token
-# (el feed de la cocina) llaman a marca_reparte_propio, que la 0200 borra; la
-# guarda de la 0200 solo buscaba la columna. En staging la 0200 ya entró, así
-# que su feed está roto desde la 3.ª tanda (producción no se ha tocado). La
-# 0120 cambia ahora en los dos feeds SOLO esa expresión (brand_own_delivery =
-# service_type del pedido), y la guarda de la 0200 busca también a quien llame
-# a la función. Se reaplica la 0120 (arregla el feed de staging) y se pasan
-# todas las pruebas, más la del feed.
-# (6.ª: la 0120 ya entró en la 5.ª y arregló el feed; la prueba del feed
-# llamaba a orders_feed con la cuenta y es con el LOCAL, y devuelve jsonb.)
-supabase/staging/sql/20261005_r02_prueba_feeds.sql
-supabase/staging/sql/20261005_r02_prueba_sugerencia.sql
-supabase/staging/sql/20261005_r02_prueba_cero_diferencias.sql
-supabase/staging/sql/20261005_r02_prueba_resolucion.sql
-supabase/staging/sql/20261005_r02_prueba_vuelta_atras.sql
+# 04/10/2026 · C01b, respuesta 2: IBAN distinto en una factura (0135, que se
+# queda en staging como irá a producción), la semilla de los dos casos nuevos
+# (posible repetida e IBAN distinto, en Panadería Luna) y la prueba de la 0135
+# con su vuelta atrás, ENTERA en ROLLBACK.
+# 2.º intento: solo la prueba. La 0135 y la semilla ya entraron en el 1.º
+# (37201429635); la prueba falló por un caso mal escrito (IBAN leído sin
+# normalizar, que la restricción rechaza, como debe).
+# Tandas anteriores: 37192967088 (seed, 0100–0120), 37195827926 (0130) y
+# 37196540632 (prueba de la 0140).
+supabase/staging/sql/20261006_c01b_prueba_iban.sql

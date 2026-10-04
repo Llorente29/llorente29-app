@@ -57,8 +57,8 @@ describe('la tanda del C00 (ya aplicada), tal cual', () => {
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
-  const viva = leerTanda('supabase/produccion/aplicar.txt')
+describe('la noche 1 del R02 (ya aplicada), tal cual', () => {
+  const viva = leerTanda('tests/conta/produccion/tanda-r02-noche1-20261004.txt')
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-r02-20261004.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
 
@@ -76,7 +76,7 @@ describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
 
   it('el comentario del manifiesto dice, para «autorizo», exactamente los que paran', () => {
     // La línea que se copia al campo: un comentario solo con nombres de fichero.
-    const linea = readFileSync('supabase/produccion/aplicar.txt', 'utf8').split('\n')
+    const linea = readFileSync('tests/conta/produccion/tanda-r02-noche1-20261004.txt', 'utf8').split('\n')
       .find((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))
     expect(linea).toBeDefined()
     expect(linea!.replace(/^#/, '').trim().split(/\s+/)).toEqual(paran().map((f) => f.replace(/^.*\//, '')))
@@ -85,6 +85,34 @@ describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
   it('ninguno toca vat_rate_for, y la 0120 lleva el aviso del execute dinámico (los feeds)', () => {
     expect(viva.filter((f) => decidir(p.porFichero[f], p.existe).tocaVatRateFor)).toEqual([])
     expect(decidir(p.porFichero[viva[2]], p.existe).avisos.length).toBeGreaterThan(0)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): datos del C01b', () => {
+  const viva = leerTanda('supabase/produccion/aplicar.txt')
+  // Lo que existe en producción, medido en solo lectura el 04/10/2026.
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c01b-20261004.json'))
+  const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
+
+  it('son 0100–0135, en orden; la eliminación (0140) NO va', () => {
+    expect(viva.map((f) => f.replace(/^.*\/20261006T(\d{4})_.*$/, '$1'))).toEqual(['0100', '0110', '0120', '0130', '0135'])
+    expect(viva.some((f) => f.includes('0140_c01b_elimina'))).toBe(false)
+  })
+  it('PARAN exactamente 0110 (cambia datos de supplier) y 0120 (reemplaza dos funciones): los de «autorizo»', () => {
+    expect(paran()).toEqual(['supabase/migrations/20261006T0110_c01b_datos.sql', 'supabase/migrations/20261006T0120_c01b_lectores.sql'])
+  })
+  it('el comentario del manifiesto dice, para «autorizo», exactamente los que paran', () => {
+    const linea = readFileSync('supabase/produccion/aplicar.txt', 'utf8').split('\n').find((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))
+    expect(linea!.replace(/^#/, '').trim().split(/\s+/)).toEqual(paran().map((f) => f.replace(/^.*\//, '')))
+  })
+  it('la vuelta atrás tiene un .down.sql por fichero, al revés', () => {
+    const downs = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(downs).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+  })
+  it('y la eliminación (0140), en su tanda, PARA por borrar las cuatro columnas', () => {
+    const ops = analizarFichero('supabase/migrations/20261006T0140_c01b_elimina.sql')
+    const r = decidir(ops, (o: Op) => o.objeto === 'public.supplier')
+    expect(r.para.filter((l: string) => l.startsWith('borra · columna'))).toHaveLength(4)
   })
 })
 
@@ -102,6 +130,22 @@ describe('lo que tiene que parar', () => {
     expect(sup("update public.supplier set name = 'x'").para).toHaveLength(1)
     expect(sup('delete from public.supplier_invoice').para).toHaveLength(1)
     expect(sup("do $$ begin update public.supplier set notes = null; end $$").para).toHaveLength(1)
+  })
+  // C01b, 04/10: la 0110 salía «sigue» y cambia datos. Dos huecos: un «--»
+  // dentro de un DO se comía el resto del bloque (se leía en una sola línea),
+  // y las CTE que escriben no se miraban.
+  it('…aunque el DO lleve comentarios «--» dentro', () => {
+    expect(sup('do $$\nbegin\n  -- 1. Contactos\n  update public.supplier s set notes = null;\nend $$').para).toHaveLength(1)
+  })
+  it('…y aunque el cambio vaya dentro de un with (CTE que escribe)', () => {
+    expect(sup('with n as (update public.supplier s set notes = null returning id) select count(*) from n').para).toHaveLength(1)
+    expect(sup('with f as (delete from public.supplier_invoice where false returning id) select 1 from f').para).toHaveLength(1)
+    expect(sup('do $$\nbegin\n  -- una CTE\n  with n as (delete from public.supplier where false returning id) select count(*) into v from n;\nend $$').para).toHaveLength(1)
+  })
+  it('la 0110 del C01b (datos) PARA: va en «autorizo»', () => {
+    const ops = analizarFichero('supabase/migrations/20261006T0110_c01b_datos.sql')
+    const r = decidir(ops, (o: Op) => ['public.supplier', 'public.supplier_contact', 'public.supplier_proposal'].includes(o.objeto))
+    expect(r.para.some((l: string) => l.includes('`public.supplier` · update'))).toBe(true)
   })
   it('reemplazar una función que no es vat_rate_for, o vat_rate_for con otra firma', () => {
     expect(sup('create or replace function public.vat_rate_for(p uuid, d date, x int) returns int language sql as $$ select 1 $$').para).toHaveLength(0)

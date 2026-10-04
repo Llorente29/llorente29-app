@@ -14,8 +14,10 @@
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import { rpcSinTipar } from '@/lib/rpcSinTipar'
 import { tiposGastoOcultos } from '@/modules/conta/services/fichaTablasService'
+import type { Aprendido, CampoAprendido } from '@/modules/conta/lib/aprendizaje'
+import { certificadoVale, type DecisionIban } from '@/modules/conta/lib/ibanFactura'
 import type {
-  ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor,
+  ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor, InvoicingFrequency,
   PaymentMethod, TaxIdCheckStatus, TaxIdType, VatRegime,
 } from '@/modules/conta/types'
 
@@ -35,6 +37,7 @@ function from(tabla: string) {
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const num = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v))
 const nums = (v: unknown): number[] => (Array.isArray(v) ? v.map(Number).filter((n) => !Number.isNaN(n)) : [])
+const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
 
 // ═══════════════════════════════════════════════════════════════════════════
 // La ficha
@@ -58,7 +61,7 @@ export function filaAFicha(r: Fila): FichaProveedor {
     fiscalCity: str(r.fiscal_city),
     fiscalProvince: str(r.fiscal_province),
     vatRegime: str(r.vat_regime) as VatRegime | null,
-    usualVatRates: nums(r.usual_vat_rates),
+    usualTaxRateIds: ids(r.usual_tax_rate_ids),
     irpfWithholdingPct: num(r.irpf_withholding_pct),
     expenseCategoryId: str(r.expense_category_id),
     defaultLocationId: str(r.default_location_id),
@@ -67,6 +70,9 @@ export function filaAFicha(r: Fila): FichaProveedor {
     paymentFixedDays: nums(r.payment_fixed_days),
     iban: str(r.iban),
     ibanVerifiedAt: str(r.iban_verified_at),
+    ibanPrevious: str(r.iban_previous),
+    ibanChangedAt: str(r.iban_changed_at),
+    ibanChangedByName: str(r.iban_changed_by_name),
     bankName: str(r.bank_name),
     ledgerAccountCode: str(r.ledger_account_code),
     healthRegistryNo: str(r.health_registry_no),
@@ -80,6 +86,7 @@ export function filaAFicha(r: Fila): FichaProveedor {
     currency: str(r.currency) ?? 'EUR',
     earlyPaymentDiscountPct: num(r.early_payment_discount_pct),
     ivaIncluidoEnLinea: r.iva_incluido_en_linea === true,
+    invoicingFrequency: str(r.invoicing_frequency) as InvoicingFrequency | null,
     archivedAt: str(r.archived_at),
     createdAt: str(r.created_at),
     createdByName: str(r.created_by_name),
@@ -92,7 +99,7 @@ const COLUMNA: Partial<Record<keyof FichaProveedor, string>> = {
   countryCode: 'country_code', entityKind: 'entity_kind', taxIdVerifiedAt: 'tax_id_verified_at',
   taxIdCheckStatus: 'tax_id_check_status', taxIdCheckedAt: 'tax_id_checked_at',
   fiscalStreet: 'fiscal_street', fiscalPostalCode: 'fiscal_postal_code', fiscalCity: 'fiscal_city',
-  fiscalProvince: 'fiscal_province', vatRegime: 'vat_regime', usualVatRates: 'usual_vat_rates',
+  fiscalProvince: 'fiscal_province', vatRegime: 'vat_regime', usualTaxRateIds: 'usual_tax_rate_ids',
   irpfWithholdingPct: 'irpf_withholding_pct', expenseCategoryId: 'expense_category_id',
   defaultLocationId: 'default_location_id', paymentMethod: 'payment_method',
   paymentTermsDays: 'payment_terms_days', paymentFixedDays: 'payment_fixed_days', iban: 'iban',
@@ -100,6 +107,7 @@ const COLUMNA: Partial<Record<keyof FichaProveedor, string>> = {
   isActive: 'is_active', notes: 'notes', website: 'website', tags: 'tags', bic: 'bic',
   sepaMandateRef: 'sepa_mandate_ref', sepaMandateDate: 'sepa_mandate_date', currency: 'currency',
   earlyPaymentDiscountPct: 'early_payment_discount_pct', ivaIncluidoEnLinea: 'iva_incluido_en_linea',
+  invoicingFrequency: 'invoicing_frequency',
   archivedAt: 'archived_at',
 }
 
@@ -143,13 +151,15 @@ export interface ProveedorEnLista {
   isActive: boolean
 }
 
-/** Los proveedores activos de la cuenta (para la lista y el NIF repetido). */
-export async function listarProveedores(accountId: string): Promise<FichaProveedor[]> {
+/**
+ * Los proveedores de la cuenta (para la lista y el NIF repetido). Por omisión,
+ * los que no están archivados; con `archivados`, solo los archivados (el
+ * filtro «Archivados» de la lista).
+ */
+export async function listarProveedores(accountId: string, { archivados = false }: { archivados?: boolean } = {}): Promise<FichaProveedor[]> {
   requireSupabase()
-  const { data, error } = await from('supplier')
-    .select('*')
-    .eq('account_id', accountId)
-    .is('archived_at', null)
+  const q = from('supplier').select('*').eq('account_id', accountId)
+  const { data, error } = await (archivados ? q.not('archived_at', 'is', null) : q.is('archived_at', null))
     .order('name', { ascending: true })
   if (error) throw new Error(`No se pudo cargar la lista de proveedores: ${error.message}`)
   return ((data as Fila[] | null) ?? []).map(filaAFicha)
@@ -393,16 +403,25 @@ export async function listarLocales(accountId: string): Promise<Local[]> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface FacturaDeProveedor extends FacturaParaCifras {
+  /** Cuándo entró en Folvy: decide cuál de dos repetidas es la buena. */
+  createdAt: string
+  /** Alguien dijo «no es repetida» (C01b, 0130): no se vuelve a marcar. */
+  noRepetidaConfirmada: boolean
   code: string | null
   paidMethod: PaymentMethod | null
   paidByName: string | null
+  /** C01b R2 · El IBAN que trae la factura (lo rellena la lectura) y lo que decidió una persona. */
+  readIban: string | null
+  ibanDecision: DecisionIban | null
+  ibanDecisionAt: string | null
+  ibanDecisionByName: string | null
 }
 
 /** Facturas del proveedor, sin las anuladas, de la más reciente a la más antigua. */
 export async function listarFacturas(accountId: string, supplierId: string): Promise<FacturaDeProveedor[]> {
   requireSupabase()
   const { data, error } = await from('supplier_invoice')
-    .select('id, code, status, invoice_number, invoice_date, grand_total, due_date, paid_at, paid_method, paid_by_name')
+    .select('id, code, status, invoice_number, invoice_date, grand_total, due_date, paid_at, paid_method, paid_by_name, created_at, not_duplicate_confirmed_at, read_iban, iban_decision, iban_decision_at, iban_decision_by_name')
     .eq('account_id', accountId)
     .eq('supplier_id', supplierId)
     .neq('status', 'anulada')
@@ -410,6 +429,8 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
   if (error) throw new Error(`No se pudieron cargar sus facturas: ${error.message}`)
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
+    createdAt: r.created_at as string,
+    noRepetidaConfirmada: !!r.not_duplicate_confirmed_at,
     code: str(r.code),
     status: r.status as string,
     invoiceNumber: str(r.invoice_number),
@@ -419,20 +440,30 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
     paidAt: str(r.paid_at),
     paidMethod: str(r.paid_method) as PaymentMethod | null,
     paidByName: str(r.paid_by_name),
+    readIban: str(r.read_iban),
+    ibanDecision: str(r.iban_decision) as DecisionIban | null,
+    ibanDecisionAt: str(r.iban_decision_at),
+    ibanDecisionByName: str(r.iban_decision_by_name),
   }))
 }
 
-/** Facturas de toda la cuenta, para el «le debes» de la lista sin N consultas. */
-export async function listarFacturasDeLaCuenta(accountId: string): Promise<(FacturaParaCifras & { supplierId: string | null })[]> {
+/**
+ * Facturas de toda la cuenta, para el «le debes» y la última factura de la
+ * lista sin N consultas. Todas menos las anuladas: para saber cuál de dos
+ * repetidas es la buena hacen falta también las que aún no se han aprobado.
+ */
+export async function listarFacturasDeLaCuenta(accountId: string): Promise<(FacturaParaCifras & { supplierId: string | null; createdAt: string; noRepetidaConfirmada: boolean })[]> {
   requireSupabase()
   const { data, error } = await from('supplier_invoice')
-    .select('id, supplier_id, status, invoice_number, invoice_date, grand_total, due_date, paid_at')
+    .select('id, supplier_id, status, invoice_number, invoice_date, grand_total, due_date, paid_at, created_at, not_duplicate_confirmed_at')
     .eq('account_id', accountId)
-    .in('status', ['aprobada', 'pagada'])
+    .neq('status', 'anulada')
   if (error) throw new Error(`No se pudieron cargar las facturas: ${error.message}`)
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
     supplierId: str(r.supplier_id),
+    createdAt: r.created_at as string,
+    noRepetidaConfirmada: !!r.not_duplicate_confirmed_at,
     status: r.status as string,
     invoiceNumber: str(r.invoice_number),
     invoiceDate: str(r.invoice_date),
@@ -481,22 +512,31 @@ export async function listarDocumentos(accountId: string, supplierId: string): P
   }))
 }
 
-/** ¿Tiene un certificado de titularidad bancaria vigente? (no sustituido) */
-export function tieneCertificadoBanco(docs: DocumentoProveedor[]): boolean {
-  return docs.some((d) => d.docFamily === 'bank_ownership_certificate' && d.status !== 'superseded' && d.status !== 'expired')
+/**
+ * ¿Tiene un certificado de titularidad bancaria vigente (no sustituido) y
+ * posterior al último cambio de IBAN? El de la cuenta vieja no vale (C01b R2).
+ */
+export function tieneCertificadoBanco(docs: DocumentoProveedor[], ibanCambiadoAt: string | null = null): boolean {
+  return docs.some((d) => d.docFamily === 'bank_ownership_certificate' && d.status !== 'superseded' && d.status !== 'expired'
+    && certificadoVale(d.createdAt, ibanCambiadoAt))
 }
 
-/** Proveedores de la cuenta con certificado del banco, para el % de la lista. */
-export async function proveedoresConCertificadoBanco(accountId: string): Promise<Set<string>> {
+/** Por proveedor, cuándo se subió su último certificado del banco vigente: para el % de la lista. */
+export async function proveedoresConCertificadoBanco(accountId: string): Promise<Map<string, string>> {
   requireSupabase()
   const { data, error } = await from('compliance_document')
-    .select('supplier_id, status')
+    .select('supplier_id, status, created_at')
     .eq('account_id', accountId)
     .eq('doc_family', 'bank_ownership_certificate')
   if (error) throw new Error(`No se pudieron cargar los documentos: ${error.message}`)
-  return new Set(((data as Fila[] | null) ?? [])
-    .filter((r) => r.status !== 'superseded' && r.status !== 'expired' && r.supplier_id)
-    .map((r) => r.supplier_id as string))
+  const ultimo = new Map<string, string>()
+  for (const r of (data as Fila[] | null) ?? []) {
+    if (r.status === 'superseded' || r.status === 'expired' || !r.supplier_id) continue
+    const id = r.supplier_id as string
+    const at = r.created_at as string
+    if (!ultimo.has(id) || at > ultimo.get(id)!) ultimo.set(id, at)
+  }
+  return ultimo
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -543,6 +583,17 @@ export async function listarHistorial(
     if (!p.decided_at) continue
     const verbo = p.status === 'confirmed' ? 'Confirmó' : 'Descartó'
     sucesos.push({ cuando: p.decided_at as string, quien: str(p.decided_by_name), que: `${verbo} ${CAMPO[p.field as string] ?? 'un dato'} propuesto` })
+  }
+  // IBAN distinto en una factura (C01b R2): lo que decidió cada persona.
+  for (const f of facturas) {
+    if (!f.ibanDecision || !f.ibanDecisionAt) continue
+    const n = num_.get(f.id) ?? ''
+    sucesos.push({
+      cuando: f.ibanDecisionAt, quien: f.ibanDecisionByName,
+      que: f.ibanDecision === 'es_el_nuevo'
+        ? `Cambió el IBAN de la ficha por el de la factura ${n}${f.readIban ? ` (…${f.readIban.slice(-4)})` : ''}${ficha.ibanPrevious ? `; antes, …${ficha.ibanPrevious.slice(-4)}` : ''}`
+        : `Dijo que el IBAN de la factura ${n} no es suyo: se paga al de la ficha`,
+    })
   }
   for (const l of (pagos.data as Fila[] | null) ?? []) {
     const n = num_.get(l.invoice_id as string) ?? ''
@@ -605,3 +656,89 @@ export async function comprobarVies(supplierId: string): Promise<ResultadoVies> 
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Lo que he aprendido (C01b, tarea 5; migración 20261006T0130)
+// ═══════════════════════════════════════════════════════════════════════════
+// Nombres de la base entre comillas (regla 40), de la 0130: supplier_learning,
+// supplier_learning_log, supplier_learning_sync, supplier_learning_fix,
+// supplier_invoice_not_duplicate; y supplier_invoice_line.vat_pct.
+
+/** Los tipos de IVA de las líneas de cada factura (para aprender el IVA). */
+export async function ivaDeLasFacturas(invoiceIds: string[]): Promise<Map<string, number[]>> {
+  requireSupabase()
+  const out = new Map<string, number[]>()
+  if (invoiceIds.length === 0) return out
+  const { data, error } = await from('supplier_invoice_line').select('supplier_invoice_id, vat_pct').in('supplier_invoice_id', invoiceIds)
+  if (error) throw new Error(`No se pudo leer el IVA de sus facturas: ${error.message}`)
+  for (const r of (data as Fila[] | null) ?? []) {
+    const v = num(r.vat_pct)
+    if (v === null) continue
+    const id = r.supplier_invoice_id as string
+    out.set(id, [...(out.get(id) ?? []), v])
+  }
+  return out
+}
+
+export interface AprendidoGuardado {
+  campo: CampoAprendido
+  valor: string
+  etiqueta: string
+  porque: string
+  veces: number
+  desde: string | null
+  hasta: string | null
+  aMano: boolean
+}
+
+export async function listarAprendido(supplierId: string): Promise<AprendidoGuardado[]> {
+  requireSupabase()
+  const { data, error } = await from('supplier_learning').select('campo, valor, etiqueta, porque, veces, desde, hasta, a_mano').eq('supplier_id', supplierId)
+  if (error) throw new Error(`No se pudo leer lo aprendido: ${error.message}`)
+  return ((data as Fila[] | null) ?? []).map((r) => ({
+    campo: r.campo as CampoAprendido, valor: r.valor as string, etiqueta: r.etiqueta as string, porque: r.porque as string,
+    veces: Number(r.veces ?? 0), desde: str(r.desde), hasta: str(r.hasta), aMano: r.a_mano === true,
+  }))
+}
+
+/** Guarda lo que decide el núcleo; devuelve cuántas cosas apuntó en «Lo que ha hecho Folvy». */
+export async function sincronizarAprendido(supplierId: string, items: Aprendido[]): Promise<number> {
+  return rpcSinTipar<number>('supplier_learning_sync', {
+    p_supplier_id: supplierId,
+    p_items: items.filter((a) => !a.aMano).map((a) => ({ campo: a.campo, valor: a.valor, etiqueta: a.etiqueta, porque: a.porque, veces: a.veces, desde: a.desde, hasta: a.hasta })),
+  })
+}
+
+/** «Cambiar»: fija a mano (o, con valor null, lo devuelve a Folvy). */
+export async function fijarAprendido(supplierId: string, campo: CampoAprendido, valor: string | null, etiqueta: string | null, quien: string | null): Promise<void> {
+  await rpcSinTipar<null>('supplier_learning_fix', { p_supplier_id: supplierId, p_campo: campo, p_valor: valor, p_etiqueta: etiqueta, p_quien_nombre: quien })
+}
+
+export async function noEsRepetida(invoiceId: string, quien: string | null): Promise<void> {
+  await rpcSinTipar<null>('supplier_invoice_not_duplicate', { p_invoice_id: invoiceId, p_quien_nombre: quien })
+}
+
+/** IBAN distinto en una factura: «Es el nuevo IBAN» (pasa a la ficha) o «No es suyo». */
+export async function decidirIban(invoiceId: string, decision: DecisionIban, quien: string | null): Promise<void> {
+  await rpcSinTipar<null>('supplier_invoice_iban_decide', { p_invoice_id: invoiceId, p_decision: decision, p_quien_nombre: quien })
+}
+
+export interface HechoPorFolvy {
+  campo: CampoAprendido
+  que: 'aprendido' | 'olvidado' | 'fijado_a_mano' | 'devuelto_a_folvy'
+  etiqueta: string | null
+  porque: string
+  cuando: string
+  quien: string | null
+}
+
+export async function listarHechoPorFolvy(supplierId: string): Promise<HechoPorFolvy[]> {
+  requireSupabase()
+  const { data, error } = await from('supplier_learning_log').select('campo, que, etiqueta, porque, hecho_at, hecho_por_nombre')
+    .eq('supplier_id', supplierId).order('hecho_at', { ascending: false }).limit(50)
+  if (error) throw new Error(`No se pudo leer lo que ha hecho Folvy: ${error.message}`)
+  return ((data as Fila[] | null) ?? []).map((r) => ({
+    campo: r.campo as CampoAprendido, que: r.que as HechoPorFolvy['que'], etiqueta: str(r.etiqueta),
+    porque: r.porque as string, cuando: r.hecho_at as string, quien: str(r.hecho_por_nombre),
+  }))
+}

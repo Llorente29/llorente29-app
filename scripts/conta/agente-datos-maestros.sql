@@ -58,6 +58,23 @@ select json_build_object(
   'proveedores_plazo', (select coalesce(json_agg(json_build_object('account_id', s.account_id, 'name', s.name,
       'payment_terms_days', s.payment_terms_days) order by s.account_id, s.name), '[]')
     from public.supplier s where s.payment_terms_days > 60 and s.is_active is not false),
+  -- C01b (respuesta 1, decisión 8): todo IVA habitual de un proveedor apunta a
+  -- un tax_rate que existe, es de serie o de su cuenta y vale hoy. Se lee con
+  -- to_jsonb(s) para no fallar en una base donde la columna aún no existe
+  -- (producción antes de la tanda de datos del C01b): ahí sale vacío.
+  'proveedores_iva', (select coalesce(json_agg(json_build_object('account_id', s.account_id, 'name', s.name,
+      'tax_rate_id', x.id, 'code', t.code, 'valid_from', t.valid_from, 'valid_to', t.valid_to,
+      'motivo', case when t.id is null then 'no_existe'
+                     when not t.is_system and t.account_id is distinct from s.account_id then 'otra_cuenta'
+                     else 'no_vigente' end) order by s.account_id, s.name), '[]')
+    from public.supplier s
+    cross join lateral jsonb_array_elements_text(coalesce(to_jsonb(s)->'usual_tax_rate_ids', '[]'::jsonb)) x(id)
+    left join public.tax_rate t on t.id::text = x.id
+    where s.is_active is not false
+      and (t.id is null
+           or (not t.is_system and t.account_id is distinct from s.account_id)
+           or t.valid_from > current_date
+           or (t.valid_to is not null and t.valid_to < current_date))),
   'cuentas_apunte', (select coalesce(json_agg(json_build_object('account_id', s.account_id, 'name', s.name,
       'ledger_account_code', s.ledger_account_code, 'account_digits', d.digitos) order by s.account_id, s.name), '[]')
     from public.supplier s

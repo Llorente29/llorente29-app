@@ -4,20 +4,26 @@
 # (todo en una transacción y rollback) y, con un ensayo en verde del mismo
 # commit, en REAL (un fichero por transacción, para al primer fallo).
 #
-# R02 · Quién reparte, NOCHE 1 (docs/reparto/R02_informe_final.md §4).
+# C01b · Ficha de proveedor, TANDA DE DATOS (encargo §9). Va ANTES de fusionar
+# el front: la ficha nueva lee lo que crean estos ficheros.
 # Dos de estos PARAN a propósito y van en el campo «autorizo», nombres enteros:
 #
-#   20261005T0120_r02_lectores_de_la_resolucion.sql 20261005T0210_r02_saneado_pedidos_abiertos.sql
+#   20261006T0110_c01b_datos.sql 20261006T0120_c01b_lectores.sql
 #
-# · 0120 reemplaza las funciones de Cocina que leen la resolución (en el camino
-#   del pedido: por eso de noche).
-# · 0210 sanea los pedidos abiertos de ese momento; la lista sale en su salida
-#   y lo de antes queda en r02_saneado_registro.
-# La ELIMINACIÓN (0200) NO va aquí: va sola, en otra tanda, DESPUÉS de fusionar
-# el front y con Vercel en READY.
-supabase/migrations/20261005T0100_r02_brand_delivery_policy.sql
-supabase/migrations/20261005T0110_r02_filas_migradas.sql
-supabase/migrations/20261005T0120_r02_lectores_de_la_resolucion.sql
-supabase/migrations/20261005T0130_r02_guardar_celdas.sql
-supabase/migrations/20261005T0140_r02_sugerencia_ia.sql
-supabase/migrations/20261005T0210_r02_saneado_pedidos_abiertos.sql
+# · 0110 mueve email, teléfono y dirección de las columnas viejas de supplier
+#   a supplier_contact y a supplier_proposal («por confirmar»), y el IVA a
+#   usual_tax_rate_ids; todas las cuentas, con antes = después dentro y
+#   registro fila a fila (c01b_movimiento_registro).
+# · 0120 reemplaza compliance_docs_due y migrate_kitchen_core para que lean
+#   del contacto (ninguna está en el camino del pedido).
+# · 0135 (respuesta 2) solo añade: IBAN leído y decisión en supplier_invoice,
+#   rastro del cambio de IBAN en supplier, la función de decidir y el freno
+#   (disparador al pasar a «pagada»). No para.
+# Antes = después en producción tras el real: scripts/conta/c01b_antes_despues.sql.
+# La ELIMINACIÓN de las columnas viejas (0140) NO va aquí: va sola, en otra
+# tanda, DESPUÉS de fusionar el front y con Vercel en READY.
+supabase/migrations/20261006T0100_c01b_estructura.sql
+supabase/migrations/20261006T0110_c01b_datos.sql
+supabase/migrations/20261006T0120_c01b_lectores.sql
+supabase/migrations/20261006T0130_c01b_aprendizaje.sql
+supabase/migrations/20261006T0135_c01b_iban_factura.sql
