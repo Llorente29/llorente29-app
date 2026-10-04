@@ -25,6 +25,7 @@
 -- las columnas viejas tiene que estar en su sitio nuevo, proveedor a
 -- proveedor. Si falta uno, aborta y no queda nada (una transacción).
 -- Las columnas viejas NO se tocan aquí: se borran en su propio fichero.
+-- Se puede volver a lanzar: lo que ya movió no lo repite.
 -- ============================================================================
 
 -- La territorialidad de cada cuenta: la de su empresa; sin empresa, península.
@@ -117,7 +118,9 @@ begin
   select s.account_id, s.id, 'address', btrim(s.address), 'ya_en_ficha', null
     from public.supplier s
    where nullif(btrim(s.address), '') is not null
-     and nullif(btrim(s.fiscal_street), '') is not null;
+     and nullif(btrim(s.fiscal_street), '') is not null
+     and not exists (select 1 from public.c01b_movimiento_registro r
+                      where r.supplier_id = s.id and r.campo = 'address' and r.destino = 'ya_en_ficha');
 
   if v_contactos <> v_esperados_contactos or v_propuestas <> v_esperadas_propuestas then
     raise exception 'C01b datos ABORTADO: contactos %/% y propuestas %/% no cuadran. No se ha tocado nada.',
@@ -148,7 +151,10 @@ begin
    where s.id = q.supplier_id and cardinality(s.usual_tax_rate_ids) = 0;
 
   insert into public.c01b_movimiento_registro (account_id, supplier_id, campo, valor, destino, destino_id)
-  select account_id, supplier_id, 'usual_vat_rates', pct::text, 'supplier.usual_tax_rate_ids', candidatos[1] from c01b_iva;
+  select i.account_id, i.supplier_id, 'usual_vat_rates', i.pct::text, 'supplier.usual_tax_rate_ids', i.candidatos[1]
+    from c01b_iva i
+   where not exists (select 1 from public.c01b_movimiento_registro r
+                      where r.supplier_id = i.supplier_id and r.campo = 'usual_vat_rates' and r.valor = i.pct::text);
 
   -- ── ANTES = DESPUÉS, proveedor a proveedor ───────────────────────────────
   select count(*) into v_faltan from (

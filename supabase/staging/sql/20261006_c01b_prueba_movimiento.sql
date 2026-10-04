@@ -58,21 +58,36 @@ end $$;
 savepoint cdd;
 do $$
 declare
-  a_ruiz constant uuid := 'c01a0000-0000-4000-8000-0000000000a3';
+  a_cuenta constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
+  a_ruiz   constant uuid := 'c01a0000-0000-4000-8000-0000000000a3';
   v text;
 begin
+  -- La ficha técnica de Hermanos Ruiz (semilla C01b) está en la lista.
+  if not exists (select 1 from public.compliance_docs_due(30) where supplier_id = a_ruiz) then
+    raise exception 'PRUEBA C01b: la ficha técnica de Hermanos Ruiz no sale en compliance_docs_due.';
+  end if;
+  -- a) Su principal (semilla del C01) no tiene email y no hay administración:
+  --    no se manda nada (decisión 3), aunque haya otro contacto con email.
+  if exists (select 1 from public.supplier_contact where supplier_id = a_ruiz and (is_primary or role = 'admin') and nullif(btrim(email), '') is not null) then
+    raise exception 'PRUEBA C01b: la semilla ya no es el caso «sin destinatario»; revisa la prueba.';
+  end if;
   select supplier_email into v from public.compliance_docs_due(30) where supplier_id = a_ruiz;
-  if v is null then raise exception 'PRUEBA C01b: la ficha técnica de Hermanos Ruiz no sale con email.'; end if;
-  -- Con un contacto de administración, va a él.
+  if v is not null then raise exception 'PRUEBA C01b a): sin administración ni principal con email sale %', v; end if;
+  -- b) Con un contacto de administración, va a él.
   insert into public.supplier_contact (account_id, supplier_id, name, role, email)
-  values ('c01a0000-0000-4000-8000-00000000000a', a_ruiz, 'Administración prueba', 'admin', 'admin.prueba@hermanosruiz.test');
+  values (a_cuenta, a_ruiz, 'Administración prueba', 'admin', 'admin.prueba@hermanosruiz.test');
   select supplier_email into v from public.compliance_docs_due(30) where supplier_id = a_ruiz;
-  if v <> 'admin.prueba@hermanosruiz.test' then raise exception 'PRUEBA C01b: no va a administración, va a %', v; end if;
-  -- Sin ningún contacto con email, no se manda nada.
+  if v is distinct from 'admin.prueba@hermanosruiz.test' then raise exception 'PRUEBA C01b b): no va a administración, va a %', v; end if;
+  -- c) Sin administración y con principal con email, al principal.
+  delete from public.supplier_contact where supplier_id = a_ruiz and role = 'admin';
+  update public.supplier_contact set email = 'principal.prueba@hermanosruiz.test' where supplier_id = a_ruiz and is_primary;
+  select supplier_email into v from public.compliance_docs_due(30) where supplier_id = a_ruiz;
+  if v is distinct from 'principal.prueba@hermanosruiz.test' then raise exception 'PRUEBA C01b c): no va al principal, va a %', v; end if;
+  -- d) Nadie con email: nada.
   update public.supplier_contact set email = null where supplier_id = a_ruiz;
   select supplier_email into v from public.compliance_docs_due(30) where supplier_id = a_ruiz;
-  if v is not null then raise exception 'PRUEBA C01b: sin contactos con email sigue saliendo %', v; end if;
-  raise notice 'compliance_docs_due: OK';
+  if v is not null then raise exception 'PRUEBA C01b d): sin contactos con email sigue saliendo %', v; end if;
+  raise notice 'compliance_docs_due: OK (sin destinatario, administración, principal, nadie).';
 end $$;
 rollback to savepoint cdd;
 

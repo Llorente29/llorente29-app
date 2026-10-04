@@ -6,8 +6,7 @@
 # (0120) y su prueba: antes = después, compliance_docs_due, clonado de la
 # plantilla con la función vieja y la nueva, y la vuelta atrás con los md5 de
 # producción (termina en ROLLBACK).
-# 3.er intento: la semilla se presenta como el admin de A al insertar los artículos
-# de proveedor (el recálculo de coste comprueba el usuario con belongs_to_account).
+# 4.º intento: la prueba de compliance_docs_due cubre los cuatro casos de la regla.
 supabase/seeds/conta/seed_c01b_staging.sql
 supabase/migrations/20261006T0100_c01b_estructura.sql
 supabase/migrations/20261006T0110_c01b_datos.sql
