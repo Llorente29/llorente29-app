@@ -632,3 +632,51 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
 
 /* La etiqueta de un campo con su marca «IA» al lado (población por el código postal). */
 .cx-alta-etiqueta-ia { display: flex; align-items: center; gap: 6px; }
+
+/* ── Ajustes como índice lateral (C02 §5a, maqueta N6Ajustes) ───────── */
+.cx-ajustes { display: flex; gap: 14px; align-items: flex-start; }
+.cx-ajustes-indice { width: 300px; flex-shrink: 0; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.cx-ajustes-grupo { display: flex; flex-direction: column; gap: 2px; }
+.cx-ajustes-grupo + .cx-ajustes-grupo { margin-top: 8px; }
+.cx .cx-ajustes-grupo-titulo { margin: 0; padding: 8px 14px 4px; font-size: 13px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; text-transform: uppercase; }
+.cx-ajustes-enlace { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; min-height: 44px; border-radius: var(--cx-radio-boton); text-decoration: none; }
+.cx .cx-ajustes-enlace { color: var(--cx-texto); }
+.cx-ajustes-enlace:hover { background: var(--cx-fondo); }
+.cx .cx-ajustes-enlace[aria-current='page'] { background: var(--cx-azul-suave); color: var(--cx-azul); }
+.cx-ajustes-enlace-titulo { font-size: 15px; font-weight: 500; }
+.cx .cx-ajustes-enlace[aria-current='page'] .cx-ajustes-enlace-titulo { font-weight: 600; }
+.cx-ajustes-enlace-apoyo { font-size: 13px; color: var(--cx-apoyo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.cx-ajustes-panel { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.cx-ajustes-panel-cabeza { display: flex; flex-direction: column; gap: 4px; }
+.cx .cx-ajustes-panel-titulo { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.3px; }
+.cx-ajustes-lista { display: flex; flex-direction: column; gap: 12px; }
+.cx-ajustes-lista .cx-ajustes-grupo-titulo { padding: 4px 4px 0; }
+.cx-rejilla-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.cx-columna { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Plan contable (C02 §5c, maqueta N5Plan) ───────────────────────── */
+.cx-plan-cabeza { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.cx-plan-botones { display: flex; gap: 10px; flex-wrap: wrap; }
+.cx-plan { display: flex; flex-direction: column; gap: 12px; }
+.cx-plan-columnas { grid-template-columns: 130px minmax(0, 1fr) 180px 110px 70px; column-gap: 12px; }
+.cx-plan-numero { font-weight: 600; }
+.cx-plan-cuenta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cx-plan-titulo { font-weight: 600; }
+.cx-plan-titulo-cabecera { font-weight: 700; }
+.cx-plan-plain { font-size: 13px; color: var(--cx-apoyo); }
+.cx-plan-sub .cx-plan-numero, .cx-plan-sub .cx-plan-cuenta { padding-left: 22px; }
+.cx-plan-sin-uso { color: var(--cx-apoyo); }
+.cx-plan-sin-uso .cx-plan-titulo { font-weight: 500; }
+.cx-plan-oculta { opacity: 0.7; }
+.cx-plan-abierta { border: 2px solid var(--cx-azul); border-radius: 18px; }
+.cx-plan-pie { margin: 0; font-size: 13px; }
+.cx-plan-cabecera-movil { font-weight: 600; color: var(--cx-apoyo); cursor: default; }
+.cx-lista-fila.cx-plan-sub { padding-left: 32px; }
+
+@media (max-width: 1100px) {
+  .cx-ajustes-indice { width: 240px; }
+  .cx-plan-columnas { grid-template-columns: 110px minmax(0, 1fr) 140px 100px 64px; }
+}
+@media (max-width: 767px) {
+  .cx-rejilla-2 { grid-template-columns: 1fr; }
+}

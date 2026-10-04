@@ -1,9 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02, tarea 3 (cierre): duplicadas, cerrar y palabras clave
-# (0140) y la prueba del plan por empresa con las tres vueltas atrás (0140,
-# 0130, 0120), ENTERA en ROLLBACK. Ningún plan queda activado.
-# Anterior: 37240764949 (0130 y prueba, en verde).
-supabase/migrations/20261007T0140_c02_duplicadas_cerrar_palabras.sql
+# 05/10/2026 · C02, tarea 4: deshacer una subcuenta, cambio de plan y la guarda
+# del perfil (0150), y la prueba del plan por empresa con las cuatro vueltas
+# atrás, ENTERA en ROLLBACK. Ningún plan queda activado.
+# Anterior: 37241014000 (0140 y prueba, en verde).
+supabase/migrations/20261007T0150_c02_deshacer_cambio_plan.sql
 supabase/staging/sql/20261007_c02_prueba_plan.sql

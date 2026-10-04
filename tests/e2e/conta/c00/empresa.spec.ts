@@ -3,6 +3,9 @@
 //
 // Tarea 5 del C00: Ajustes › Tu empresa (maquetas N2Empresa y M2Empresa), con
 // las empresas de prueba de supabase/seeds/conta/seed_c00_empresas_prueba.sql.
+// Desde el C02 (§5a, N6Ajustes) «Tu empresa» se reparte en cuatro entradas del
+// índice de Ajustes: Tu empresa, Tus impuestos, Socios y cargos y Ejercicio.
+// Las pruebas entran por la suya; lo de dentro no ha cambiado.
 //
 // Lo que deja puesto en A (la actividad, el ejercicio de este año, una socia)
 // es lo que la maqueta enseña y solo se añade si no está: la prueba se puede
@@ -23,15 +26,17 @@ test('cuenta A: completar la empresa, cerrar y reabrir un mes, como en la maquet
   test.skip(info.project.name === 'movil', 'Escribe: solo en un tamaño')
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/ajustes')
-  await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Tu empresa' })).toBeVisible()
 
   const quien = await tarjeta(page, 'Quién eres')
   await expect(quien.getByText('Taberna de Prueba Norte, S.L.')).toBeVisible()
   await expect(quien.getByText('B28000016')).toBeVisible()
   await expect(quien.getByRole('img', { name: 'La letra de control cuadra' })).toBeVisible()
+  await page.goto('/conta/ajustes/impuestos')
   const impuestos = await tarjeta(page, 'Tus impuestos')
   await expect(impuestos.getByText('General · cada tres meses')).toBeVisible()
   for (const m of ['303 IVA', '111 Retenciones', '115 Alquiler', '202 Sociedades']) await expect(impuestos.getByText(m)).toBeVisible()
+  await page.goto('/conta/ajustes/empresa')
 
   // A qué te dedicas: Restaurante, con su epígrafe y su CNAE buscados en las listas oficiales.
   const actividad = await tarjeta(page, 'A qué te dedicas')
@@ -50,6 +55,7 @@ test('cuenta A: completar la empresa, cerrar y reabrir un mes, como en la maquet
   await expect(actividad.getByText('Principal', { exact: true })).toBeVisible()
 
   // El ejercicio de este año.
+  await page.goto('/conta/ajustes/ejercicio')
   const ano = new Date().getFullYear()
   const abrir = page.getByRole('button', { name: `Abrir el ejercicio ${ano}` })
   if (await abrir.count()) {
@@ -76,6 +82,7 @@ test('cuenta A: completar la empresa, cerrar y reabrir un mes, como en la maquet
   }
 
   // Socios y cargos.
+  await page.goto('/conta/ajustes/socios')
   const socios = await tarjeta(page, 'Socios y cargos')
   if (await socios.getByRole('button', { name: 'Cambiar Marta Ruiz Sanz' }).count() === 0) {
     await socios.getByRole('button', { name: '+ Añadir' }).click()
@@ -94,29 +101,31 @@ test('cuenta A: completar la empresa, cerrar y reabrir un mes, como en la maquet
   await expect(socios.getByText('Administrador · socio')).toBeVisible()
 
   // Con todo puesto, la cabecera lo dice.
+  await page.goto('/conta/ajustes')
+  await expect(page.getByRole('heading', { level: 2, name: 'Tu empresa' })).toBeVisible()
   await expect(page.getByText('Todo listo para llevar tu contabilidad')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/empresa-ordenador.png`, fullPage: true })
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 })
 
-test('cuenta A en el móvil: la lista de apartados y uno, en dos pasos', async ({ page }, info) => {
+test('cuenta A en el móvil: el índice de Ajustes y una entrada, en dos pasos', async ({ page }, info) => {
   test.skip(info.project.name !== 'movil', 'La forma del móvil')
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/ajustes')
-  const lista = page.getByRole('navigation', { name: 'Apartados de tu empresa' })
-  await expect(lista.getByRole('link', { name: /Quién eres.*Taberna de Prueba Norte, S\.L\. · B28000016/ })).toBeVisible()
+  const lista = page.getByRole('navigation', { name: 'Ajustes' })
+  await expect(lista.getByRole('link', { name: /Tu empresa.*Taberna de Prueba Norte, S\.L\. · B28000016/ })).toBeVisible()
   await expect(lista.getByRole('link', { name: /Tus impuestos.*IVA general · cada tres meses/ })).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/empresa-movil.png`, fullPage: true })
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 
   await lista.getByRole('link', { name: /^Tus impuestos/ }).click()
-  await expect(page).toHaveURL(/\/conta\/ajustes\/empresa\/impuestos$/)
+  await expect(page).toHaveURL(/\/conta\/ajustes\/impuestos$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Tus impuestos' })).toBeVisible()
   await expect(page.getByText('Recargo de equivalencia')).toBeVisible()
   await page.screenshot({ path: `${DIR}/empresa-movil-impuestos.png`, fullPage: true })
-  await page.getByRole('link', { name: 'Volver a tu empresa' }).click()
+  await page.getByRole('link', { name: 'Volver a ajustes' }).click()
   await expect(page).toHaveURL(/\/conta\/ajustes$/)
 })
 
@@ -127,8 +136,10 @@ test('cuenta B (Canarias, sin interruptor ni Cocina): su empresa, su IGIC y abri
   const quien = await tarjeta(page, 'Quién eres')
   await expect(quien.getByText('Cocina de Prueba Sur, S.L.')).toBeVisible()
   await expect(quien.getByText('Taberna de Prueba Norte')).toHaveCount(0)
+  await page.goto('/conta/ajustes/impuestos')
   await expect((await tarjeta(page, 'Tus impuestos')).getByText('IGIC (Canarias)')).toBeVisible()
   // Lo que falta se dice: nunca «Todo listo» con huecos.
+  await page.goto('/conta/ajustes/ejercicio')
   await expect(page.getByText(/^Falta .*a qué te dedicas/)).toBeVisible()
   await expect(page.getByText('Todo listo para llevar tu contabilidad')).toHaveCount(0)
   const ano = new Date().getFullYear()
@@ -138,13 +149,18 @@ test('cuenta B (Canarias, sin interruptor ni Cocina): su empresa, su IGIC y abri
     await expect(page.getByText(`Abierto el ejercicio ${ano}.`)).toBeVisible()
   }
   await expect(page.getByRole('heading', { level: 2, name: `Ejercicio ${ano}` })).toBeVisible()
+  await page.goto('/conta/ajustes/socios')
   await expect((await tarjeta(page, 'Socios y cargos')).getByText('Aún no has puesto socios ni cargos.')).toBeVisible()
   await page.screenshot({ path: `${DIR}/empresa-b-canarias.png`, fullPage: true })
 })
 
-test('un apartado que no existe vuelve a Tu empresa', async ({ page }) => {
+test('una dirección vieja o que no existe va a su sitio del índice', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/ajustes/empresa/no-existe')
+  await expect(page).toHaveURL(/\/conta\/ajustes\/empresa$/)
+  await page.goto('/conta/ajustes/empresa/socios')
+  await expect(page).toHaveURL(/\/conta\/ajustes\/socios$/)
+  await page.goto('/conta/ajustes/no-existe')
   await expect(page).toHaveURL(/\/conta\/ajustes$/)
 })
 
@@ -152,12 +168,12 @@ test('un apartado que no existe vuelve a Tu empresa', async ({ page }) => {
 test('cuenta A: la ficha basta para presentar el 200 y depositar las cuentas', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe: solo en un tamaño')
   await entrarComo(page, CUENTA_A.email)
-  await page.goto('/conta/ajustes')
-  await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+  await page.goto('/conta/ajustes/impuestos')
   const presentar = await tarjeta(page, 'Para presentar el 200 y depositar las cuentas')
   await expect(presentar.getByText('Fecha de constitución', { exact: true })).toBeVisible()
 
   // Quién eres: constitución, Registro Mercantil completo, contacto y DEHú. El certificado, aún no.
+  await page.goto('/conta/ajustes/empresa')
   const quien = await tarjeta(page, 'Quién eres')
   await expect(quien.getByText('Aún no · irá en «Certificados y accesos»')).toBeVisible()
   await page.getByRole('button', { name: 'Cambiar quién eres' }).click()
@@ -177,6 +193,7 @@ test('cuenta A: la ficha basta para presentar el 200 y depositar las cuentas', a
   await expect(quien.getByText('Madrid · tomo 40000, folio 1, hoja M-700000, inscripción 1.ª')).toBeVisible()
 
   // El ejercicio: plantilla media y auditoría.
+  await page.goto('/conta/ajustes/ejercicio')
   await page.getByRole('button', { name: /^Cambiar la plantilla y la auditoría de / }).click()
   await page.getByLabel('Plantilla media fija').fill('3')
   await page.getByLabel('Plantilla media no fija').fill('1,5')
@@ -185,6 +202,7 @@ test('cuenta A: la ficha basta para presentar el 200 y depositar las cuentas', a
   await expect(page.getByText('3 fija · 1,5 no fija')).toBeVisible()
 
   // Socios: la administradora firma las cuentas y tiene su NIF.
+  await page.goto('/conta/ajustes/socios')
   const socios = await tarjeta(page, 'Socios y cargos')
   await socios.getByRole('button', { name: 'Cambiar Marta Ruiz Sanz' }).click()
   await page.getByLabel('NIF (si quieres)').fill('00000000T')
@@ -193,6 +211,7 @@ test('cuenta A: la ficha basta para presentar el 200 y depositar las cuentas', a
   await expect(socios.getByText(/firma las cuentas/)).toBeVisible()
 
   // Lo puesto sale como hecho en «Para presentar».
+  await page.goto('/conta/ajustes/impuestos')
   for (const t of ['Fecha de constitución', 'Datos del Registro Mercantil: registro, tomo, folio, hoja e inscripción', 'Quién firma las cuentas anuales']) {
     await expect(presentar.locator('.cx-presentar-fila').filter({ hasText: t })).toContainText('Hecho')
   }

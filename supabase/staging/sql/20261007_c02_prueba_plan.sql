@@ -19,6 +19,11 @@
 
 begin;
 
+\echo '>>> 0. Desde cero: las e2e dejan el plan de A y de B activado; aquí se quita (dentro del ROLLBACK)'
+delete from public.company_account_link where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
+delete from public.company_account_log where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
+delete from public.company_account where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
+
 \echo '>>> 1-4. Como el administrador de A'
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 set local role authenticated;
@@ -42,6 +47,14 @@ begin
   if (select supplier_account_leaf from public.expense_category where is_system and code = 'rent') <> '4100' then raise exception 'PRUEBA C02: el alquiler no va a 4100'; end if;
   if not (select is_common from public.company_account where company_id = emp and code = '43000000') then raise exception 'PRUEBA C02: 43000000 no es la común'; end if;
   if exists (select 1 from public.company_account where company_id = emp and template_code = '4300' and kind = 'own') then raise exception 'PRUEBA C02: hay subcuentas de 430 (D5)'; end if;
+
+  -- La guarda del perfil (0150): con el plan activado, la longitud no se cambia por fuera.
+  -- (Va antes de renumerar: company_chart_set_digits abre la guarda hasta el final de la transacción.)
+  begin
+    update public.company_tax_profile set account_digits = 10 where company_id = emp;
+    raise exception 'PRUEBA C02: se ha cambiado la longitud por fuera del plan';
+  exception when check_violation then fallo := sqlerrm; end;
+  raise notice 'PRUEBA C02 · guarda del perfil: %', fallo;
 
   -- 2. Enlaces y coherencia.
   select string_agg(distinct a.code, ' ') into v from public.company_account_link l join public.company_account a on a.id = l.company_account_id
@@ -87,6 +100,11 @@ begin
   if public.company_account_set_keywords((select id from public.company_account where company_id = emp and code = '62100000'), array[' Alquiler ', 'alquiler', 'Local  del Norte'])
      is distinct from array['alquiler', 'local del norte'] then raise exception 'PRUEBA C02: palabras clave mal limpiadas'; end if;
 
+  -- Deshacer una recién añadida (0150).
+  r := public.company_account_add(emp, '629', 'Para deshacer', null, null, null, 'Prueba C02');
+  perform public.company_account_undo_add((r->>'id')::uuid, 'Prueba C02');
+  if exists (select 1 from public.company_account where id = (r->>'id')::uuid) then raise exception 'PRUEBA C02: deshacer no la ha quitado'; end if;
+
   r := public.company_chart_set_digits(emp, 10, 'Prueba C02');
   if (select string_agg(code, ' ' order by code) from public.company_account where company_id = emp and code in ('4000000005', '4720000021', '4700000000', '5720000001', '4100000001')) is distinct from '4000000005 4100000001 4700000000 4720000021 5720000001' then
     raise exception 'PRUEBA C02: el renumerado no da lo esperado';
@@ -103,6 +121,20 @@ begin
     perform public.company_chart_activate(emp);
     raise exception 'PRUEBA C02: se ha activado dos veces';
   exception when unique_violation then fallo := sqlerrm; end;
+  -- Cambio de plan (0150): pymes → general añade las hojas que faltan; A no
+  -- tiene nada en las 12 hojas que cambian, así que no hay que elegir.
+  r := public.company_chart_change_plan(emp, 'general', '{}', 'Prueba C02');
+  if not (r->>'cambiado')::boolean or (r->>'anadidas')::int < 100 then raise exception 'PRUEBA C02: pymes → general = %', r; end if;
+  if (select chart_kind from public.company_tax_profile where company_id = emp) <> 'normal' then raise exception 'PRUEBA C02: el perfil no dice plan general'; end if;
+  if exists (select 1 from public.company_account where company_id = emp and plan <> 'general') then raise exception 'PRUEBA C02: quedan cuentas del plan de pymes'; end if;
+  -- General → pymes con una subcuenta en el grupo 8: bloqueado, con la lista.
+  perform public.company_account_add(emp, '800', 'Ajuste de prueba', null, null, null, 'Prueba C02');
+  begin
+    perform public.company_chart_change_plan(emp, 'pymes', '{}', 'Prueba C02');
+    raise exception 'PRUEBA C02: general → pymes con datos en el grupo 8 no se ha bloqueado';
+  exception when invalid_parameter_value then fallo := sqlerrm; end;
+  raise notice 'PRUEBA C02 · general → pymes: %', fallo;
+
   select count(*) into n from public.company_account_log where company_id = emp;
   raise notice 'PRUEBA C02 · 1-4 en verde (% entradas en el registro)', n;
 end $$;
@@ -142,7 +174,8 @@ begin
 end $$;
 reset role;
 
-\echo '>>> 6. Vuelta atrás (0140, 0130 y luego 0120)'
+\echo '>>> 6. Vuelta atrás (0150, 0140, 0130 y luego 0120)'
+\ir ../../vuelta-atras/20261007T0150_c02_deshacer_cambio_plan.down.sql
 \ir ../../vuelta-atras/20261007T0140_c02_duplicadas_cerrar_palabras.down.sql
 \ir ../../vuelta-atras/20261007T0130_c02_proveedor_400_410.down.sql
 do $$ begin

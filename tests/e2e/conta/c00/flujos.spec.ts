@@ -66,9 +66,9 @@ test('cambiar de empresa, rechazar una sugerencia y cambiar un dato que puso la 
   try {
     id = await crearSegundaEmpresa(s, nombre)
     await page.goto('/conta/ajustes')
-    await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible()
 
-    // Cambiar de empresa (en el móvil, la cabecera sale arriba de «Tu empresa» porque hay dos).
+    // Cambiar de empresa (en el móvil, la cabecera sale arriba del índice de Ajustes porque hay dos).
     await cambiarA(page, new RegExp(escapar(nombre)))
     const sugerencia = page.getByRole('region', { name: 'Lo que propone Folvy' })
     await expect(sugerencia.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toBeVisible()
@@ -79,11 +79,11 @@ test('cambiar de empresa, rechazar una sugerencia y cambiar un dato que puso la 
     await expect(page.getByText('Vale, no lo añado. No te lo vuelvo a proponer por lo mismo.')).toBeVisible()
     await page.reload()
     await expect(page.getByText(nombre).first()).toBeVisible()
-    await expect(page.getByText(movil ? 'Quién eres' : 'Razón social').first()).toBeVisible() // ya ha cargado
+    await expect(page.getByText(movil ? 'Tu empresa' : 'Razón social').first()).toBeVisible() // ya ha cargado
     await expect(page.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toHaveCount(0)
 
     // Cambiar el tipo, que puso la IA: la marca se va del dato.
-    if (movil) await page.getByRole('link', { name: /^Quién eres/ }).click()
+    if (movil) await page.getByRole('link', { name: /^Tu empresa/ }).click()
     const tipo = page.locator('.cx-dato').filter({ has: page.getByText('Tipo', { exact: true }) })
     await expect(tipo.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toBeVisible()
     await page.getByRole('button', { name: 'Cambiar quién eres' }).click()

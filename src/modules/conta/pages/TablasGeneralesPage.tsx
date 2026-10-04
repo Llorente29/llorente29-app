@@ -5,11 +5,15 @@
 // Ordenador: las nueve tablas a la izquierda con sus cifras y la elegida a la
 // derecha. Móvil: la lista de tablas y, al tocar una, esa tabla con «atrás».
 // Nunca más de dos pasos hasta una tabla (encargo §7).
+//
+// Desde el C02 (§5a) vive dentro del marco de Ajustes (índice lateral), sin
+// cambiar nada por dentro.
 
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { PESTANAS_AJUSTES, rutaAltaEmpresa, rutaTablasGenerales } from '@/config/navegacion'
-import { Cabecera, ErrorConReintento, PestanasPildora, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
+import { rutaAltaEmpresa, rutaTablasGenerales } from '@/config/navegacion'
+import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
+import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/MarcoAjustes'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { TABLAS_GENERALES, agruparConceptos, definicion, type DefinicionTabla } from '@/modules/conta/tablas/registro'
@@ -23,6 +27,10 @@ function cuantos(def: DefinicionTabla, filas: FilasPorTabla, hoy: string): numbe
 }
 
 export default function TablasGeneralesPage() {
+  return <MarcoAjustes entrada="tablas"><Tablas /></MarcoAjustes>
+}
+
+function Tablas() {
   const { tabla } = useParams()
   const movil = useIsMobile()
   const { accountId, userId } = useCuentaConta()
@@ -33,11 +41,8 @@ export default function TablasGeneralesPage() {
   if (tabla !== undefined && !elegida) return <Navigate to={rutaTablasGenerales()} replace />
   const def = elegida ?? (movil ? null : TABLAS_GENERALES[0])
 
-  const cabecera = !(movil && def) && (
-    <>
-      <Cabecera antetitulo="Ajustes" titulo="Tablas generales" />
-      <PestanasPildora entradas={PESTANAS_AJUSTES} etiqueta="Ajustes" />
-    </>
+  const cabecera = movil ? (!def && <CabeceraEntradaMovil titulo="Tablas generales" />) : (
+    <div className="cx-ajustes-panel-cabeza"><h2 className="cx-ajustes-panel-titulo">Tablas generales</h2></div>
   )
 
   // Solo esqueleto si aún no hay empresa: si ya la hay, una recarga de la

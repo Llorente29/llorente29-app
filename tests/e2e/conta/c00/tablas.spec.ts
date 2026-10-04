@@ -23,7 +23,7 @@ async function abrirTablas(page: Page, email: string, tabla = '') {
 test('cuenta B (Canarias, sin interruptor ni Cocina): impuestos con el IGIC arriba y sin quitar ninguna fila', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'El reparto es el mismo; el móvil se mira con A')
   await abrirTablas(page, CUENTA_B.email, 'impuestos')
-  await expect(page.getByRole('heading', { level: 1, name: 'Tablas generales' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tablas generales', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
 
   // Abre con TODAS (D5): «Todos» pulsado, y las dos separaciones a la vista.

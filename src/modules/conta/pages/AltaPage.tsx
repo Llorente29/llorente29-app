@@ -14,7 +14,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { ConversacionAlta } from '@/modules/conta/alta/ConversacionAlta'
 import { MarcoConta } from '@/modules/conta/marco/MarcoConta'
-import TuEmpresaPage from '@/modules/conta/pages/TuEmpresaPage'
+import AjustesPage from '@/modules/conta/pages/AjustesPage'
 
 export default function AltaPage() {
   const movil = useIsMobile()
@@ -29,7 +29,7 @@ export default function AltaPage() {
     <>
       {/* Folvy detrás, atenuado y sin poder tocarse: la ventana manda. */}
       <div inert aria-hidden="true" className="cx-alta-detras">
-        <MarcoConta ejemplo="Añade a Pablo como apoderado"><TuEmpresaPage /></MarcoConta>
+        <MarcoConta ejemplo="Añade a Pablo como apoderado"><AjustesPage /></MarcoConta>
       </div>
       <ConversacionAlta marco="ventana" />
     </>

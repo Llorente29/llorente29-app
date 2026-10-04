@@ -204,7 +204,7 @@ test.describe('cuenta C: salir, atrás y cerrar no pierden nada', () => {
       await expect(log(page).getByText(new RegExp(`^Seguimos donde lo dejaste con ${escapar(nombre)}\\.$`))).toBeVisible()
       await expect(log(page).getByText(PREGUNTA_CUENTAS)).toBeVisible()
       await page.getByRole('button', { name: 'Salir y seguir luego' }).click()
-      await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+      await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible()
       const aviso = page.getByRole('status', { name: 'Alta a medias' })
       await expect(aviso).toContainText(`Alta a medias · ${nombre} · 4 de 6`)
       await aviso.getByRole('link', { name: 'Seguir' }).click()
@@ -429,14 +429,13 @@ test('cuenta A: otra empresa en la ventana, con píldoras; cerrar guarda; y lo q
 
     // En «Tu empresa»: la marca, la sugerencia real y el registro.
     await log(page).getByRole('link', { name: 'Tu empresa' }).click()
-    await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Tu empresa' })).toBeVisible()
     await expect(page.getByText(nombre).first()).toBeVisible()
     await expect(page.getByRole('status', { name: 'Alta a medias' })).toHaveCount(0)
     const marcas = page.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })
     await expect(marcas.first()).toBeVisible()
     await marcas.first().click()
     await expect(page.getByRole('note').first()).toBeVisible()
-    await expect(page.locator('.cx-dato').filter({ hasText: 'IVA de tus ventas' })).toContainText('10 %')
 
     const sugerencia = page.getByRole('region', { name: 'Lo que propone Folvy' })
     await expect(sugerencia.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toBeVisible()
@@ -446,6 +445,10 @@ test('cuenta A: otra empresa en la ventana, con píldoras; cerrar guarda; y lo q
     // Respuesta 3: con el 115 entra su resumen anual, el 180 (la regla de la tabla de modelos).
     await expect(page.getByText('Añadidos el modelo 115 y su resumen anual, el 180, a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho Folvy».')).toBeVisible()
     await expect(page.getByRole('region', { name: 'Lo que propone Folvy' })).toHaveCount(0)
+    // C02 §5a: el IVA de tus ventas está en «Tus impuestos», y el registro en «Lo que ha hecho Folvy».
+    await page.goto('/conta/ajustes/impuestos')
+    await expect(page.locator('.cx-dato').filter({ hasText: 'IVA de tus ventas' })).toContainText('10 %')
+    await page.goto('/conta/ajustes/folvy')
 
     const registro = page.getByRole('list', { name: 'Lo que ha hecho Folvy' })
     await expect(registro.getByText('Puso el IVA de tus ventas: 10 %')).toBeVisible()
@@ -458,12 +461,16 @@ test('cuenta A: otra empresa en la ventana, con píldoras; cerrar guarda; y lo q
     await expect(registro.getByText('Deshecho por Admin Norte').first()).toBeVisible()
     // Deshecha, la sugerencia NO vuelve: ya se contestó.
     await page.reload()
-    await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Lo que ha hecho Folvy' })).toBeVisible()
     // Primero que haya cargado: un «no está» mirado con el esqueleto delante siempre se cumple.
     await expect(registro.getByText('Deshecho por Admin Norte').first()).toBeVisible()
-    await expect(page.getByText(nombre).first()).toBeVisible()
-    await expect(page.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toHaveCount(0)
     await expect(registro.getByText('Puso el tipo de empresa: Sociedades de responsabilidad limitada')).toBeVisible()
+    await page.goto('/conta/ajustes')
+    await expect(page.getByText(nombre).first()).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Tu empresa' })).toBeVisible()
+    await expect(page.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toHaveCount(0)
+    await page.goto('/conta/ajustes/folvy')
+    await expect(registro.getByText('Deshecho por Admin Norte').first()).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/ia-registro.png`, fullPage: true })
     expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
@@ -507,7 +514,7 @@ test('cuenta B (Canarias, sin interruptor ni Cocina): su sugerencia, con sus dat
   test.skip(info.project.name === 'movil', 'Solo lee: basta un tamaño')
   await entrarComo(page, CUENTA_B.email)
   await page.goto('/conta/ajustes')
-  await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Tu empresa' })).toBeVisible()
   await expect(page.getByText('Cocina de Prueba Sur, S.L.').first()).toBeVisible()
   // La regla es la misma; el dato que la fundamenta, el de B. No se contesta:
   // contestarla la cerraría para siempre y la prueba no se podría repetir.
