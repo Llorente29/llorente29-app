@@ -1,9 +1,18 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 04/10/2026 · C00, 18.ª tanda: PRUEBA de un rol «conta_migraciones» (encargo
-# de Julio: aplicar la tanda de producción sin la contraseña de postgres).
-# Crea el rol, intenta darle la membresía de postgres y prueba si, sin ella,
-# puede alterar supplier y reemplazar vat_rate_for. Termina en ROLLBACK.
-# (17.ª: la prueba de las vueltas atrás.)
-supabase/staging/sql/20261004_prueba_usuario_migraciones.sql
+# 05/10/2026 · R02, 5.ª tanda. HALLAZGO: orders_feed y orders_feed_by_token
+# (el feed de la cocina) llaman a marca_reparte_propio, que la 0200 borra; la
+# guarda de la 0200 solo buscaba la columna. En staging la 0200 ya entró, así
+# que su feed está roto desde la 3.ª tanda (producción no se ha tocado). La
+# 0120 cambia ahora en los dos feeds SOLO esa expresión (brand_own_delivery =
+# service_type del pedido), y la guarda de la 0200 busca también a quien llame
+# a la función. Se reaplica la 0120 (arregla el feed de staging) y se pasan
+# todas las pruebas, más la del feed.
+# (6.ª: la 0120 ya entró en la 5.ª y arregló el feed; la prueba del feed
+# llamaba a orders_feed con la cuenta y es con el LOCAL, y devuelve jsonb.)
+supabase/staging/sql/20261005_r02_prueba_feeds.sql
+supabase/staging/sql/20261005_r02_prueba_sugerencia.sql
+supabase/staging/sql/20261005_r02_prueba_cero_diferencias.sql
+supabase/staging/sql/20261005_r02_prueba_resolucion.sql
+supabase/staging/sql/20261005_r02_prueba_vuelta_atras.sql

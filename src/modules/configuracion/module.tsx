@@ -17,13 +17,14 @@
 //
 // Fichero .tsx porque los `element` de las rutas son JSX.
 
-import { MapPin, Tag, Bell, UserCog, Bike } from 'lucide-react'
+import { MapPin, Tag, Bell, UserCog, Bike, Truck } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import { LocationsPage } from '@/pages/OtherPages'
 import BrandsPage from '@/modules/multitenancy/pages/BrandsPage'
 import AvisosSettingsPage from '@/pages/AvisosSettingsPage'
 import RepartoSettingsPage from '@/pages/RepartoSettingsPage'
+import QuienRepartePage from '@/modules/reparto/pages/QuienRepartePage'
 import UsuariosAccesosPage from '@/pages/UsuariosAccesosPage'
 
 export const configuracionModule: ModuleDefinition = {
@@ -39,6 +40,8 @@ export const configuracionModule: ModuleDefinition = {
     { path: 'marcas',    element: <BrandsPage /> },
     { path: 'avisos',    element: <AvisosSettingsPage /> },
     { path: 'reparto',   element: <RepartoSettingsPage /> },
+    // R02: quién reparte cada marca en cada plataforma (estilo nuevo).
+    { path: 'quien-reparte', element: <QuienRepartePage /> },
     { path: 'usuarios',  element: <UsuariosAccesosPage /> },
   ],
 
@@ -48,6 +51,8 @@ export const configuracionModule: ModuleDefinition = {
       { id: 'config_marcas',   label: 'Marcas',             icon: Tag,     path: 'marcas',   requiredRole: 'admin' },
       { id: 'config_avisos',   label: 'Avisos',             icon: Bell,    path: 'avisos',   requiredPermission: 'show_tspoon_settings' },
       { id: 'config_reparto',  label: 'Reparto',            icon: Bike,    path: 'reparto',  requiredRole: 'admin' },
+      // R02: la decide el encargado del local también (la base lo permite a admin y manager).
+      { id: 'config_quien_reparte', label: 'Quién reparte', icon: Truck, path: 'quien-reparte', requiredRole: 'manager' },
       { id: 'config_usuarios', label: 'Usuarios y accesos', icon: UserCog, path: 'usuarios', requiredRole: 'admin' },
     ],
   },

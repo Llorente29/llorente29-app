@@ -26,9 +26,11 @@ name: Pruebas e2e en staging-conta
 
 on:
   push:
-    branches: ['conta/**']
+    # reparto-**: el R02 (quién reparte), con sus pruebas en tests/e2e/reparto.
+    branches: ['conta/**', 'reparto-**']
     paths:
       - 'src/**'
+      - 'supabase/seeds/reparto/seed_r02_e2e.sql'
       - 'tests/e2e/**'
       - 'playwright.config.ts'
       - '.github/workflows/e2e-staging-conta.yml'
@@ -102,6 +104,12 @@ jobs:
           if [ "$(echo "$n" | tr -d '[:space:]')" != "4" ]; then echo "::error::Esperaba 4 usuarios de prueba y he tocado $n."; exit 1; fi
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
           echo "Contraseña de un solo uso puesta a los 4 usuarios de prueba."
+          # R02: el escenario de reparto, igual en cada ejecución (pedidos vivos de
+          # hoy, celdas como las dejó la migración, sin respuestas a Folvy).
+          if [ -f supabase/seeds/reparto/seed_r02_e2e.sql ]; then
+            "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -q -f supabase/seeds/reparto/seed_r02_e2e.sql
+            echo "Escenario del R02 preparado."
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -137,7 +145,8 @@ jobs:
           git config user.name "folvy-e2e"
           git config user.email "e2e@folvy.invalid"
           git add docs/conta/capturas
+          [ -d docs/reparto/capturas ] && git add docs/reparto/capturas
           if git diff --cached --quiet; then echo "Las capturas no han cambiado."; exit 0; fi
-          git commit -m "Conta · Capturas en staging-conta (${GITHUB_SHA::7}, ordenador y móvil)"
+          git commit -m "Capturas en staging-conta (${GITHUB_SHA::7}, ordenador y móvil)"
           git pull --rebase origin "$GITHUB_REF_NAME"
           git push origin "HEAD:$GITHUB_REF_NAME"

@@ -80,10 +80,11 @@ export interface OrderFeedItem {
   brand_qr_caption: string | null
   brand_ownership_type: 'own' | 'licensed' | null
   /**
-   * ¿Esta marca hace reparto propio? Lo decide la BASE, no la pantalla:
-   * `public.marca_reparte_propio(brand)`, la MISMA función con la que
-   * `resolve_dispatch` decide si despacha. Si aquí se recalculara, habría dos
-   * implementaciones de una regla y un día dirían cosas distintas.
+   * ¿Este pedido lo repartimos nosotros? Lo decide la BASE, no la pantalla.
+   * Desde el R02 (05/10) es la modalidad con la que entró el pedido
+   * (`service_type = 'own_delivery'`), que la puso `resolve_delivery_by` al
+   * entrar: la MISMA decisión que respeta `resolve_dispatch`. Antes era el
+   * interruptor por marca (`marca_reparte_propio`), que ya no existe.
    *
    * `null` = el feed no lo manda todavía (base sin la migración) o el pedido no
    * tiene marca. En los dos casos se trata como «sí reparte», que es lo de
@@ -416,10 +417,10 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
 /**
  * ¿La marca de este pedido hace reparto propio?
  *
- * LEE la respuesta que da la base (`brand_own_delivery`, calculado con
- * `public.marca_reparte_propio`). NO la recalcula, y eso es el punto: la misma
- * función decide si `resolve_dispatch` despacha y si esta pantalla enseña algo
- * de despacho. Cuando la regla vive en dos sitios, funcionan los dos hasta que
+ * LEE la respuesta que da la base (`brand_own_delivery`: desde el R02, la
+ * modalidad con la que entró el pedido). NO la recalcula, y eso es el punto: la
+ * misma decisión hace que `resolve_dispatch` despache y que esta pantalla
+ * enseñe algo de despacho. Cuando la regla vive en dos sitios, funcionan los dos hasta que
  * alguien arregla uno — y entonces el otro miente sin que se note.
  *
  * Ausente o `null` → se da por «sí reparte»: es el comportamiento de siempre,

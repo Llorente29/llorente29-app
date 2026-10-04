@@ -1,0 +1,12 @@
+{
+ "nota": "Lo que EXISTÍA en producción el 04/10/2026 de lo que nombra la tanda del R02 (to_regclass / to_regprocedure, solo lectura). Ver docs/reparto/R02_analisis_workflow.md.",
+ "tablas": ["public.brand", "public.sale"],
+ "funciones": [
+  "public.brand_price_grid(uuid,uuid,jsonb)",
+  "public.dispatch_watchdog_scan(integer)",
+  "public.marca_reparte_propio(uuid)",
+  "public.metrica_direcciones_de_reparto(uuid,integer)",
+  "public.resolve_dispatch(uuid)",
+  "public.tg_sale_service_type_por_interruptor()"
+ ]
+}

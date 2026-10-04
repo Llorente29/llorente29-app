@@ -1,7 +1,10 @@
-// La regla del workflow de producción (respuesta 7 del C00), contra la tanda
-// REAL (supabase/produccion/aplicar.txt) y lo que EXISTÍA en producción el
-// 04/10/2026 (leído en solo lectura: existentes-produccion-20261004.json).
-// Y los casos que tienen que parar, sobre esa misma población.
+// La regla del workflow de producción (respuesta 7 del C00) contra tandas
+// REALES y lo que EXISTÍA en producción el 04/10/2026 (leído en solo lectura).
+//   · La del C00, ya aplicada: copia fija en tanda-c00-20261004.txt.
+//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): la
+//     noche 1 del R02. Al reescribir el manifiesto para otra tanda, esta parte
+//     se reescribe con él.
+// Y los casos que tienen que parar, sobre la población del C00.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
@@ -9,15 +12,23 @@ import { describe, expect, it } from 'vitest'
 import { analizarFichero, clasificar, creadosPorLaTanda, decidir, sentencias } from '../../../scripts/conta/produccion/analizar.mjs'
 
 type Op = { accion: string; tipo: string; objeto: string; detalle: string }
-const tanda = readFileSync('supabase/produccion/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
-const existentes = JSON.parse(readFileSync('tests/conta/produccion/existentes-produccion-20261004.json', 'utf8')) as { tablas: string[]; funciones: string[] }
-const porFichero: Record<string, Op[]> = Object.fromEntries(tanda.map((f) => [f, analizarFichero(f)]))
-const deLaTanda = creadosPorLaTanda(porFichero) as Set<string>
-const existe = (o: Op) => o.tipo === 'funcion'
-  ? (o.objeto.includes('(') ? existentes.funciones.includes(o.objeto) && !deLaTanda.has(o.objeto) : existentes.funciones.some((f) => f.startsWith(`${o.objeto}(`)))
-  : existentes.tablas.includes(o.objeto.replace(/\(.*$/, '')) && !deLaTanda.has(o.objeto.replace(/\(.*$/, ''))
+type Existentes = { tablas: string[]; funciones: string[] }
+const leerTanda = (f: string) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+const leerExistentes = (f: string) => JSON.parse(readFileSync(f, 'utf8')) as Existentes
+function poblacion(tanda: string[], ex: Existentes) {
+  const porFichero: Record<string, Op[]> = Object.fromEntries(tanda.map((f) => [f, analizarFichero(f)]))
+  const deLaTanda = creadosPorLaTanda(porFichero) as Set<string>
+  const existe = (o: Op) => o.tipo === 'funcion'
+    ? (o.objeto.includes('(') ? ex.funciones.includes(o.objeto) && !deLaTanda.has(o.objeto) : ex.funciones.some((f) => f.startsWith(`${o.objeto}(`)))
+    : ex.tablas.includes(o.objeto.replace(/\(.*$/, '')) && !deLaTanda.has(o.objeto.replace(/\(.*$/, ''))
+  return { porFichero, existe }
+}
 
-describe('la tanda de producción, tal cual', () => {
+const tanda = leerTanda('tests/conta/produccion/tanda-c00-20261004.txt')
+const existentes = leerExistentes('tests/conta/produccion/existentes-produccion-20261004.json')
+const { porFichero, existe } = poblacion(tanda, existentes)
+
+describe('la tanda del C00 (ya aplicada), tal cual', () => {
   it('son las dos del C01 y las doce del C00, en orden', () => {
     expect(tanda[0]).toContain('20261002T0100_c01')
     expect(tanda[1]).toContain('20261002T0110_c01')
@@ -43,6 +54,37 @@ describe('la tanda de producción, tal cual', () => {
 
   it('la T0110 recortada no tiene ninguna sentencia', () => {
     expect(sentencias(readFileSync(tanda[1], 'utf8'))).toEqual([])
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
+  const viva = leerTanda('supabase/produccion/aplicar.txt')
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-r02-20261004.json'))
+  const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
+
+  it('son 0100–0140 y el saneado 0210, en orden; la eliminación (0200) NO va', () => {
+    expect(viva.map((f) => f.replace(/^.*\/20261005T(\d{4})_.*$/, '$1'))).toEqual(['0100', '0110', '0120', '0130', '0140', '0210'])
+    expect(viva.some((f) => f.includes('0200_r02_elimina'))).toBe(false)
+  })
+
+  it('PARAN exactamente 0120 y 0210: los dos que van en «autorizo»', () => {
+    expect(paran()).toEqual([
+      'supabase/migrations/20261005T0120_r02_lectores_de_la_resolucion.sql',
+      'supabase/migrations/20261005T0210_r02_saneado_pedidos_abiertos.sql',
+    ])
+  })
+
+  it('el comentario del manifiesto dice, para «autorizo», exactamente los que paran', () => {
+    // La línea que se copia al campo: un comentario solo con nombres de fichero.
+    const linea = readFileSync('supabase/produccion/aplicar.txt', 'utf8').split('\n')
+      .find((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))
+    expect(linea).toBeDefined()
+    expect(linea!.replace(/^#/, '').trim().split(/\s+/)).toEqual(paran().map((f) => f.replace(/^.*\//, '')))
+  })
+
+  it('ninguno toca vat_rate_for, y la 0120 lleva el aviso del execute dinámico (los feeds)', () => {
+    expect(viva.filter((f) => decidir(p.porFichero[f], p.existe).tocaVatRateFor)).toEqual([])
+    expect(decidir(p.porFichero[viva[2]], p.existe).avisos.length).toBeGreaterThan(0)
   })
 })
 
