@@ -58,7 +58,7 @@ describe('el cuadro del BOE, tal cual (antes de corregir)', () => {
 describe('la serie: cuadro + correcciones con cita (D1)', () => {
   it.each([
     ['pymes', 772, 615, 8],
-    ['general', 897, 713, 10],
+    ['general', 898, 714, 11],
   ] as const)('%s: %i códigos, %i hojas, %i corregidas y ningún hallazgo', (plan, total, nHojas, nCorr) => {
     const { cuentas, hallazgos } = construirSerie(T[plan], plan, correcciones)
     expect(hallazgos).toEqual([])
@@ -85,6 +85,7 @@ describe('la serie: cuadro + correcciones con cita (D1)', () => {
     expect(nombre('general', '501')).toBe('Obligaciones y bonos convertibles a corto plazo')
     expect(nombre('general', '502')).toBe('Acciones o participaciones a corto plazo consideradas como pasivos financieros')
     expect(nombre('general', '74')).toBe('SUBVENCIONES, DONACIONES Y LEGADOS')
+    expect(nombre('general', '1141')).toBe('Reservas estatutarias')
   })
 
   it('cero choques al rellenar las hojas, de 6 a 12 dígitos (D2, D3)', () => {
@@ -131,6 +132,18 @@ describe('lo que el agente tiene que cazar', () => {
     expect(construirSerie(T.general, 'general', sin).hallazgos.join('\n')).toMatch(/general 546: el cuadro dice .* No está ni corregida ni aceptada/)
   })
 
+  it('una cuenta que la quinta parte trae y el cuadro no, sin corregir ni aceptar', () => {
+    const sin = { ...correcciones, correcciones: correcciones.correcciones.filter((c) => !(c.plan === 'general' && c.code === '1141')) }
+    expect(construirSerie(T.general, 'general', sin).hallazgos).toEqual([
+      'general 1141: la quinta parte la trae («Reservas estatutarias») y el cuadro no. No está ni corregida ni aceptada.',
+    ])
+  })
+
+  it('añadir una cuenta con un solo testigo no vale', () => {
+    const corr = conCambio('general', '1141', (c) => ({ ...c, cita: { ...c.cita, literal: [c.cita.literal[0]] } }))
+    expect(construirSerie(T.general, 'general', corr).hallazgos.join('\n')).toMatch(/general 1141: para añadir una cuenta que el cuadro no trae hacen falta la lista y la definición/)
+  })
+
   it('una errata que en realidad es otro título (más de 3 caracteres)', () => {
     const corr = conCambio('pymes', '664', (c) => ({ ...c, tituloCorrecto: 'Dividendos de acciones o participaciones consideradas como pasivos financieros' }))
     expect(construirSerie(T.pymes, 'pymes', corr).hallazgos.join('\n')).toMatch(/pymes 664: entre el cuadro y la corrección hay más de 3 caracteres/)
@@ -149,10 +162,10 @@ describe('lo que el agente tiene que cazar', () => {
 describe('serie.json (lo que se carga) es lo que sale del BOE', () => {
   it('mismos recuentos que la serie construida aquí', () => {
     expect(serie.resumen.pymes.codigosSinGrupos).toBe(772)
-    expect(serie.resumen.general.codigosSinGrupos).toBe(897)
+    expect(serie.resumen.general.codigosSinGrupos).toBe(898)
     expect(serie.resumen.pymes.hojas).toBe(615)
-    expect(serie.resumen.general.hojas).toBe(713)
-    expect(serie.cuentas).toHaveLength(779 + 906)
+    expect(serie.resumen.general.hojas).toBe(714)
+    expect(serie.cuentas).toHaveLength(779 + 907)
   })
 
   it('el RD 1/2021 no toca el cuadro de pymes (artículo segundo, comprobado en el propio RD)', () => {

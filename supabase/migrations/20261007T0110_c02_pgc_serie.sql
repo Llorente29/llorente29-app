@@ -5,7 +5,7 @@
 -- quinta parte) + supabase/conta/pgc/en-la-calle.json.
 --
 -- pymes: 779 filas (772 sin contar los grupos), 615 hojas, 8 corregidas.
--- general: 906 filas (897 sin contar los grupos), 713 hojas, 10 corregidas.
+-- general: 907 filas (898 sin contar los grupos), 714 hojas, 11 corregidas.
 -- RD 1/2021, artículo segundo: 4 puntos (Uno: primera, Dos: segunda, Tres: tercera, Cuatro: tercera); ninguno toca la cuarta parte (cuadro de cuentas) ni la quinta.
 --
 -- SOLO AÑADE filas a pgc_account (nueva en la 0100). Si ya están, no las toca.
@@ -817,6 +817,7 @@ insert into public.pgc_account (plan, code, name, boe_name, correction_kind, pla
 ('general', '113', 'Reservas voluntarias', 'Reservas voluntarias', null, null, 1, '11', true, 'RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1, redacción vigente desde 2021-01-31 (BOE-A-2021-1350)', '2021-01-31', 'BOE-A-2021-1350', 'rd-1514-2007', '6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d', '2026-10-03'),
 ('general', '114', 'Reservas especiales', 'Reservas especiales', null, null, 1, '11', false, 'RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1, redacción vigente desde 2021-01-31 (BOE-A-2021-1350)', '2021-01-31', 'BOE-A-2021-1350', 'rd-1514-2007', '6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d', '2026-10-03'),
 ('general', '1140', 'Reservas para acciones o participaciones de la sociedad dominante', 'Reservas para acciones o participaciones de la sociedad dominante', null, null, 1, '114', true, 'RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1, redacción vigente desde 2021-01-31 (BOE-A-2021-1350)', '2021-01-31', 'BOE-A-2021-1350', 'rd-1514-2007', '6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d', '2026-10-03'),
+('general', '1141', 'Reservas estatutarias', null, 'falta', null, 1, '114', true, 'RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1, redacción vigente desde 2021-01-31 (BOE-A-2021-1350); título corregido con cita de la quinta parte (falta, supabase/conta/pgc/correcciones.json)', '2021-01-31', 'BOE-A-2021-1350', 'rd-1514-2007', '6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d', '2026-10-03'),
 ('general', '1142', 'Reserva por capital amortizado', 'Reserva por capital amortizado', null, null, 1, '114', true, 'RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1, redacción vigente desde 2021-01-31 (BOE-A-2021-1350)', '2021-01-31', 'BOE-A-2021-1350', 'rd-1514-2007', '6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d', '2026-10-03'),
 ('general', '1143', 'Reserva por fondo de comercio', 'Reserva por fondo de comercio', null, null, 1, '114', true, 'RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1, redacción vigente desde 2021-01-31 (BOE-A-2021-1350)', '2021-01-31', 'BOE-A-2021-1350', 'rd-1514-2007', '6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d', '2026-10-03'),
 ('general', '1144', 'Reservas por acciones propias aceptadas en garantía', 'Reservas por acciones propias aceptadas en garantía', null, null, 1, '114', true, 'RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1, redacción vigente desde 2021-01-31 (BOE-A-2021-1350)', '2021-01-31', 'BOE-A-2021-1350', 'rd-1514-2007', '6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d', '2026-10-03'),

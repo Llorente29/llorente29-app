@@ -3,7 +3,7 @@
 -- C02, tarea 2 · Prueba de la serie del plan contable en staging-conta, una
 -- vez aplicadas 20261007T0100 y 0110. Termina en ROLLBACK: no deja nada.
 --
---   1. Recuentos: pymes 772 códigos y 615 hojas; general 897 y 713 (con la 502
+--   1. Recuentos: pymes 772 códigos y 615 hojas; general 898 y 714 (con la 502 y la 1141
 --      recuperada); 7 y 9 grupos; pymes sin grupos 8 ni 9.
 --   2. Las correcciones están puestas (232 y 606 de pymes, 500/501/502 del
 --      general) con el título del BOE al lado.
@@ -22,7 +22,7 @@ begin
   if (n, h, g) is distinct from (772, 615, 7) then raise exception 'PRUEBA C02: pymes tiene % códigos, % hojas y % grupos (esperado 772, 615, 7)', n, h, g; end if;
   select count(*) filter (where length(code) > 1), count(*) filter (where is_leaf), count(*) filter (where length(code) = 1)
     into n, h, g from public.pgc_account where plan = 'general' and valid_to is null;
-  if (n, h, g) is distinct from (897, 713, 9) then raise exception 'PRUEBA C02: general tiene % códigos, % hojas y % grupos (esperado 897, 713, 9)', n, h, g; end if;
+  if (n, h, g) is distinct from (898, 714, 9) then raise exception 'PRUEBA C02: general tiene % códigos, % hojas y % grupos (esperado 898, 714, 9)', n, h, g; end if;
   if exists (select 1 from public.pgc_account where plan = 'pymes' and group_code in (8, 9)) then
     raise exception 'PRUEBA C02: pymes tiene cuentas de los grupos 8 o 9';
   end if;
@@ -57,7 +57,7 @@ set local role authenticated;
 do $$
 declare fallo text;
 begin
-  if (select count(*) from public.pgc_account) <> 779 + 906 then raise exception 'PRUEBA C02: con sesión no se lee la serie entera'; end if;
+  if (select count(*) from public.pgc_account) <> 779 + 907 then raise exception 'PRUEBA C02: con sesión no se lee la serie entera'; end if;
   begin
     insert into public.pgc_account (plan, code, name, group_code, parent_code, is_leaf, legal_ref, valid_from, boe_version_id, source_key, source_sha256, verified_at)
     values ('pymes', '6299', 'Inventada', 6, '629', true, 'x', current_date, 'x', 'rd-1515-2007', 'x', current_date);

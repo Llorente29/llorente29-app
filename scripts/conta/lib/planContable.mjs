@@ -199,7 +199,7 @@ export function revisarCorreccion(c, { cuadroPorCodigo, quinta, textoBloque }) {
   const dice = (t) => titulos.includes(t)
   if (c.tipo === 'falta') {
     if (enCuadro) p.push(`${yo}: ya sale en el cuadro («${enCuadro.name}»): la corrección sobra.`)
-    if (!dice(c.tituloCorrecto)) p.push(`${yo}: la cita no trae el título «${c.tituloCorrecto}».`)
+    if (titulos.length < 2 || !titulos.every((t) => t === c.tituloCorrecto)) p.push(`${yo}: para añadir una cuenta que el cuadro no trae hacen falta la lista y la definición de la quinta parte, y las dos diciendo «${c.tituloCorrecto}».`)
     return p
   }
   if (!enCuadro) return [...p, `${yo}: no sale en el cuadro.`]
@@ -277,8 +277,18 @@ export function construirSerie(texto, plan, { correcciones, aceptadas }) {
     const f = porCodigo.get(code)
     hallazgos.push(`${plan} ${code}: el cuadro dice «${f.name}» y la quinta parte «${q.listas.get(code) ?? q.definiciones.get(code)}». No está ni corregida ni aceptada.`)
   }
+  // Cuentas que la quinta parte trae y el cuadro no (la 502 y la 1141 del
+  // general): o se añaden con su cita (tipo «falta») o se aceptan con su porqué.
+  const soloEnQuinta = new Set([...q.listas.keys(), ...q.definiciones.keys()].filter((k) => !porCodigo.has(k)))
+  for (const code of soloEnQuinta) {
+    if (corregidas.has(code) || aceptadasPor.has(code)) continue
+    hallazgos.push(`${plan} ${code}: la quinta parte la trae («${q.listas.get(code) ?? q.definiciones.get(code)}») y el cuadro no. No está ni corregida ni aceptada.`)
+  }
   for (const a of acept) {
-    if (!difieren.has(a.code)) hallazgos.push(`${plan} ${a.code}: estaba aceptada como diferencia, pero el cuadro ya coincide con la quinta parte: sobra.`)
+    if (a.tituloCuadro === null) {
+      if (porCodigo.has(a.code)) hallazgos.push(`${plan} ${a.code}: estaba aceptada como ausente del cuadro, pero ya sale en él: sobra.`)
+      else if (!soloEnQuinta.has(a.code)) hallazgos.push(`${plan} ${a.code}: estaba aceptada como ausente del cuadro, pero la quinta parte ya no la trae: sobra.`)
+    } else if (!difieren.has(a.code)) hallazgos.push(`${plan} ${a.code}: estaba aceptada como diferencia, pero el cuadro ya coincide con la quinta parte: sobra.`)
     else if (porCodigo.get(a.code)?.name !== a.tituloCuadro) hallazgos.push(`${plan} ${a.code}: el cuadro ya no dice «${a.tituloCuadro}»: hay que revisar la aceptada.`)
   }
 

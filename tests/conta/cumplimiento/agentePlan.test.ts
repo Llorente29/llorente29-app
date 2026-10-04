@@ -61,7 +61,7 @@ describe('agente «Plan contable» · serie', () => {
 
   it('el informe dice el caso concreto', () => {
     const t = informePlan([{ nivel: 'rojo', texto: 'Base · pymes 621 (Arrendamientos y cánones): falta en pgc_account.' }],
-      { donde: 'staging-conta', hoy: '2026-10-04', filas: 1684, resumen: serie.resumen })
+      { donde: 'staging-conta', hoy: '2026-10-04', filas: 1685, resumen: serie.resumen })
     expect(t).toMatch(/\*\*1 en rojo:\*\*\n\n- Base · pymes 621/)
   })
 })

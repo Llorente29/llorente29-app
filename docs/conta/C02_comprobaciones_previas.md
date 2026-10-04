@@ -5,6 +5,15 @@
 > se ha escrito código de la pantalla: esto es el informe y **paro** aquí.
 > Lo que va en negrita al final son decisiones de Julio antes de la tarea 2.
 
+> **Corrección (tarea 2, 04/10).** Con el lector definitivo
+> (`scripts/conta/lib/planContable.mjs`) algunas cifras de este informe cambian:
+> - Solo en pymes hay **9** códigos, no 12. Solo en el general hay **136**, no 133. Con título distinto hay **14**, no 27. Las cifras de antes salían de un lector que pegaba las notas de la consolidación al título.
+> - Las diferencias reales entre la cuarta y la quinta parte están en `supabase/conta/pgc/correcciones.json`: **19 corregidas** con cita y **21 aceptadas** con su porqué.
+> - Además, la quinta parte trae dos cuentas que el cuadro del general no trae: la **502**, perdida por las líneas fundidas de 500/501, y la **1141 «Reservas estatutarias»**. Se añaden con dos testigos, la lista y la definición de la quinta parte.
+> - La serie queda así: pymes **772** códigos y **615** hojas; general **898** y **714**.
+> - Los códigos llegan a **5 dígitos**: 76200…76213, 79544 y 79549.
+> - El RD 1/2021, comprobado en el propio RD (su artículo segundo), no toca el cuadro de pymes.
+
 ## 1. Qué hay hoy de cuentas contables
 
 ### Base (producción, solo lectura, 04/10; toda cifra lleva cuenta — regla 9)

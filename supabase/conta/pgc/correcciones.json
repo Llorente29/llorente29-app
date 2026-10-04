@@ -4,7 +4,7 @@
   "tipos": {
     "titulo_de_otra_cuenta": "El cuadro le pone el título de otra cuenta (otraCuenta). El título correcto es el de la quinta parte.",
     "lineas_fundidas": "El cuadro junta dos títulos en una línea. El correcto es el de la quinta parte, que es el principio de esa línea.",
-    "falta": "La cuenta no sale en el cuadro (por unas líneas fundidas) y la quinta parte la lista y la define.",
+    "falta": "La cuenta no sale en el cuadro y la quinta parte la lista y la define (dos testigos).",
     "errata": "Errata tipográfica del cuadro (letra, acento o espacio): el título correcto es literal de la quinta parte y difiere en 3 caracteres o menos.",
     "dos_testigos": "La lista y la definición de la quinta parte dicen lo mismo, y el cuadro otra cosa: mandan las dos.",
     "espacio": "Solo falta un espacio entre dos palabras del propio cuadro. La cita es la línea de la misma cuenta en la quinta parte."
@@ -252,6 +252,22 @@
     },
     {
       "plan": "general",
+      "code": "1141",
+      "tipo": "falta",
+      "tituloCuadro": null,
+      "tituloCorrecto": "Reservas estatutarias",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo1-2",
+        "literal": [
+          "1141.\nReservas estatutarias",
+          "1141. Reservas estatutarias"
+        ]
+      },
+      "nota": "El cuadro vigente del general (2008 y RD 1/2021) salta de 1140 a 1142; la quinta parte vigente la lista en el subgrupo 11 y la define. En pymes sí sale en el cuadro."
+    },
+    {
+      "plan": "general",
       "code": "546",
       "tipo": "dos_testigos",
       "tituloCuadro": "Intereses a corto plazo de valores representativos de deudas",
@@ -433,6 +449,22 @@
       "quintaLista": "Exceso de provisión por retribuciones a largo plazo al personal",
       "quintaDefinicion": null,
       "motivo": "Solo la lista de la quinta parte añade «a largo plazo»; no hay definición propia que desempate."
+    },
+    {
+      "plan": "general",
+      "code": "6634",
+      "tituloCuadro": null,
+      "quintaLista": null,
+      "quintaDefinicion": "Pérdidas de otros instrumentos financieros",
+      "motivo": "Solo la trae una definición de la quinta parte, sin la lista del subgrupo; el cuadro vigente (redacción del RD 1/2021) no la lleva. No se añade: un solo testigo no basta para crear una cuenta."
+    },
+    {
+      "plan": "general",
+      "code": "7634",
+      "tituloCuadro": null,
+      "quintaLista": null,
+      "quintaDefinicion": "Beneficios de otros instrumentos financieros",
+      "motivo": "Solo la trae una definición de la quinta parte, sin la lista del subgrupo; el cuadro vigente (redacción del RD 1/2021) no la lleva. No se añade: un solo testigo no basta para crear una cuenta."
     }
   ]
 }
