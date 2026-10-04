@@ -381,3 +381,21 @@ as $function$
     on u.channel_id = e.channel_id
    and u.service_type is not distinct from e.service_type;
 $function$;
+
+-- ── 6. Los dos feeds, como estaban: el cambio contrario, solo esa expresión ──
+do $$
+declare
+  f text; d text; n int;
+  viejo constant text := 'public.marca_reparte_propio(b) as brand_own_delivery';
+  nuevo constant text := '(v.service_type = ''own_delivery'') as brand_own_delivery';
+begin
+  foreach f in array array['public.orders_feed(uuid)', 'public.orders_feed_by_token(text)'] loop
+    d := pg_get_functiondef(f::regprocedure);
+    n := (length(d) - length(replace(d, nuevo, ''))) / length(nuevo);
+    if n = 0 and position(viejo in d) > 0 then continue; end if;
+    if n <> 1 then
+      raise exception 'VUELTA ATRÁS 0120 (R02): en % la expresión nueva aparece % veces (se esperaba 1). No se toca nada.', f, n;
+    end if;
+    execute replace(d, nuevo, viejo);
+  end loop;
+end $$;

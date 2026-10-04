@@ -1,11 +1,16 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · R02, 4.ª tanda: solo pruebas. La 3.ª aplicó la 0120 y la 0200
-# (ya sin la columna del interruptor) y paró en la prueba de la sugerencia: la
-# FUNCIÓN acertaba y la EXPECTATIVA estaba mal --el pedido vivo 7B000 de Pita
-# del Sur en Uber, sin dirección, que se sembró después, entra en la racha--.
-# Se corrige la expectativa (7A1F1, 7A1F2, 7B000) y se pasan todas.
+# 05/10/2026 · R02, 5.ª tanda. HALLAZGO: orders_feed y orders_feed_by_token
+# (el feed de la cocina) llaman a marca_reparte_propio, que la 0200 borra; la
+# guarda de la 0200 solo buscaba la columna. En staging la 0200 ya entró, así
+# que su feed está roto desde la 3.ª tanda (producción no se ha tocado). La
+# 0120 cambia ahora en los dos feeds SOLO esa expresión (brand_own_delivery =
+# service_type del pedido), y la guarda de la 0200 busca también a quien llame
+# a la función. Se reaplica la 0120 (arregla el feed de staging) y se pasan
+# todas las pruebas, más la del feed.
+supabase/migrations/20261005T0120_r02_lectores_de_la_resolucion.sql
+supabase/staging/sql/20261005_r02_prueba_feeds.sql
 supabase/staging/sql/20261005_r02_prueba_sugerencia.sql
 supabase/staging/sql/20261005_r02_prueba_cero_diferencias.sql
 supabase/staging/sql/20261005_r02_prueba_resolucion.sql

@@ -9,7 +9,8 @@
 --   0200 → vuelve brand.own_delivery_enabled con sus valores y
 --          marca_reparte_propio idéntica a la de producción (md5)
 --   0140, 0130 → fuera las funciones nuevas
---   0120 → las cinco funciones idénticas a las de producción del 04/10 (md5)
+--   0120 → las siete funciones (cinco lectores y los dos feeds) idénticas a
+--          las de producción del 04/10 (md5)
 --   0110 → fuera las filas migradas
 --   0100 → fuera la tabla y la resolución
 -- Y las guardas: cada una tiene que PARAR cuando toca (se prueban antes, con
@@ -93,7 +94,7 @@ end $$;
 \ir ../../vuelta-atras/20261005T0140_r02_sugerencia_ia.down.sql
 \ir ../../vuelta-atras/20261005T0130_r02_guardar_celdas.down.sql
 
-\echo '== 0120 · los cinco lectores, como en producción'
+\echo '== 0120 · los cinco lectores y los dos feeds, como en producción'
 \ir ../../vuelta-atras/20261005T0120_r02_lectores_de_la_resolucion.down.sql
 select p.proname, md5(p.prosrc) = v.md5 as igual_que_produccion
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
@@ -101,7 +102,9 @@ select p.proname, md5(p.prosrc) = v.md5 as igual_que_produccion
                ('dispatch_watchdog_scan', 'f37ee45fcd26e5c0061d9743c85bb8b1'),
                ('metrica_direcciones_de_reparto', '340b17c6da556291e6631bac36a61279'),
                ('resolve_dispatch', 'b965d8d7ab81012198db34a618736292'),
-               ('tg_sale_service_type_por_interruptor', 'acf6fdab742eb0688ba25eaa58167c84')) v(proname, md5)
+               ('tg_sale_service_type_por_interruptor', 'acf6fdab742eb0688ba25eaa58167c84'),
+               ('orders_feed', '6ab77b7c4c551dbc1870ab83fda7c2c7'),
+               ('orders_feed_by_token', '095016d019cec8747b5bd97b675b4691')) v(proname, md5)
     on v.proname = p.proname
  order by 1;
 do $$ begin
@@ -110,8 +113,10 @@ do $$ begin
                     ('dispatch_watchdog_scan', 'f37ee45fcd26e5c0061d9743c85bb8b1'),
                     ('metrica_direcciones_de_reparto', '340b17c6da556291e6631bac36a61279'),
                     ('resolve_dispatch', 'b965d8d7ab81012198db34a618736292'),
-                    ('tg_sale_service_type_por_interruptor', 'acf6fdab742eb0688ba25eaa58167c84')) v(proname, md5)
-         on v.proname = p.proname and md5(p.prosrc) = v.md5) <> 5 then
+                    ('tg_sale_service_type_por_interruptor', 'acf6fdab742eb0688ba25eaa58167c84'),
+                    ('orders_feed', '6ab77b7c4c551dbc1870ab83fda7c2c7'),
+                    ('orders_feed_by_token', '095016d019cec8747b5bd97b675b4691')) v(proname, md5)
+         on v.proname = p.proname and md5(p.prosrc) = v.md5) <> 7 then
     raise exception 'PRUEBA: algún lector no ha vuelto idéntico al de producción.';
   end if;
 end $$;

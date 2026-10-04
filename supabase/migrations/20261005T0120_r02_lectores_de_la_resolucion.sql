@@ -420,3 +420,36 @@ as $$
     on u.channel_id = e.channel_id
    and u.service_type is not distinct from e.service_type;
 $$;
+
+-- ── 6. Los dos feeds de pedidos (cocina y tablet por token) ─────────────────
+-- Devolvían brand_own_delivery = marca_reparte_propio(b): el interruptor por
+-- marca. La web lo usa para decidir si un pedido «propio» enseña algo de
+-- despacho. Con el R02 quién reparte un pedido ya está decidido en su
+-- service_type (lo puso la resolución al entrar), así que brand_own_delivery
+-- pasa a ser eso. No se reescribe la función a mano: se toma su definición
+-- ACTUAL y se cambia SOLO esa expresión (una vez en cada una; si no está
+-- exactamente una vez, para). El resto queda idéntico byte a byte. La vuelta
+-- atrás hace el cambio contrario y la prueba compara el md5 con producción.
+-- (Encontrado al revisar quién llamaba a marca_reparte_propio antes de borrarla.)
+do $$
+declare
+  f   text;
+  d   text;
+  viejo constant text := 'public.marca_reparte_propio(b) as brand_own_delivery';
+  nuevo constant text := '(v.service_type = ''own_delivery'') as brand_own_delivery';
+  n   int;
+begin
+  foreach f in array array['public.orders_feed(uuid)', 'public.orders_feed_by_token(text)'] loop
+    d := pg_get_functiondef(f::regprocedure);
+    n := (length(d) - length(replace(d, viejo, ''))) / length(viejo);
+    if n = 0 and position(nuevo in d) > 0 then
+      raise notice 'R02 0120: % ya estaba cambiada; no se toca.', f;
+      continue;
+    end if;
+    if n <> 1 then
+      raise exception 'R02 0120: en % la expresión de brand_own_delivery aparece % veces (se esperaba 1). No se toca nada.', f, n;
+    end if;
+    execute replace(d, viejo, nuevo);
+    raise notice 'R02 0120: % · brand_own_delivery sale ya del service_type del pedido.', f;
+  end loop;
+end $$;

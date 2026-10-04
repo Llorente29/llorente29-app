@@ -7,10 +7,11 @@
 -- ante un borrado de objeto de Cocina y Julio tiene que darle el visto bueno
 -- por separado». Tarea 6.
 --
--- VA LA ÚLTIMA: después de 0100–0130 (y del saneado 0210), cuando ya nada lo
+-- VA LA ÚLTIMA: después de 0100–0140 (y del saneado 0210), cuando ya nada lo
 -- lee. Medido en producción el 04/10: lo leían resolve_dispatch,
 -- tg_sale_service_type_por_interruptor, metrica_direcciones_de_reparto y
--- marca_reparte_propio; los tres primeros los cambia la 0120, la cuarta se
+-- marca_reparte_propio; y a marca_reparte_propio la llamaban resolve_dispatch,
+-- orders_feed y orders_feed_by_token. Todos los cambia la 0120; la función se
 -- borra aquí. Ninguna vista, política ni dependencia registrada sobre la
 -- columna. En la web lo leían BrandDeliverySection y brandDeliveryService,
 -- que el R02 retira.
@@ -32,6 +33,16 @@ begin
      and p.proname <> 'marca_reparte_propio';
   if v is not null then
     raise exception 'R02 0200: todavía leen brand.own_delivery_enabled: %. No se borra nada.', v;
+  end if;
+  -- Y nadie llama ya a marca_reparte_propio (el 04/10 la llamaban resolve_dispatch,
+  -- orders_feed y orders_feed_by_token; los tres los cambia la 0120).
+  select string_agg(p.oid::regprocedure::text, ', ') into v
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname not in ('pg_catalog', 'information_schema')
+     and p.prosrc ilike '%marca_reparte_propio%'
+     and p.proname <> 'marca_reparte_propio';
+  if v is not null then
+    raise exception 'R02 0200: todavía llaman a marca_reparte_propio: %. No se borra nada.', v;
   end if;
 end $$;
 
