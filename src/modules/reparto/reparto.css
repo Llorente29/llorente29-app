@@ -29,7 +29,8 @@
   overflow: hidden; display: flex; flex-direction: column;
 }
 .cx-rp-fila {
-  display: grid; grid-template-columns: minmax(0, 1.1fr) repeat(var(--cx-rp-columnas, 3), minmax(0, 1fr));
+  /* Las plataformas nunca cortan «Plataforma | Nosotros» (min-content): si falta sitio, cede la marca. */
+  display: grid; grid-template-columns: minmax(0, 1.1fr) repeat(var(--cx-rp-columnas, 3), minmax(min-content, 1fr));
   column-gap: 8px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--cx-linea);
 }
 .cx-rp-fila-cabeza { padding: 14px 14px 10px; align-items: end; border-top: none; }
@@ -55,7 +56,7 @@
   background: var(--cx-neutro-suave); max-width: 100%; box-sizing: border-box;
 }
 .cx-rp-seg button {
-  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 0 0 auto; white-space: nowrap;
   height: 36px; padding: 0 10px; border: none; border-radius: 10px; font-family: inherit; font-size: 13px;
   cursor: pointer; background: transparent; color: var(--cx-apoyo);
 }
