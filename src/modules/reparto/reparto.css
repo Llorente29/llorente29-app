@@ -29,8 +29,8 @@
   overflow: hidden; display: flex; flex-direction: column;
 }
 .cx-rp-fila {
-  display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(var(--cx-rp-columnas, 3), minmax(0, 1fr));
-  align-items: center; padding: 8px 14px; border-top: 1px solid var(--cx-linea);
+  display: grid; grid-template-columns: minmax(0, 1.1fr) repeat(var(--cx-rp-columnas, 3), minmax(0, 1fr));
+  column-gap: 8px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--cx-linea);
 }
 .cx-rp-fila-cabeza { padding: 14px 14px 10px; align-items: end; border-top: none; }
 .cx-rp-fila-herencia { background: var(--cx-fondo); padding: 9px 14px; }
@@ -52,10 +52,11 @@
 .cx-rp-celda-plataforma { display: none; }
 .cx-rp-seg {
   position: relative; display: inline-flex; gap: 2px; padding: 3px; border-radius: 13px;
-  background: var(--cx-neutro-suave);
+  background: var(--cx-neutro-suave); max-width: 100%; box-sizing: border-box;
 }
 .cx-rp-seg button {
-  height: 36px; padding: 0 12px; border: none; border-radius: 10px; font-family: inherit; font-size: 13px;
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  height: 36px; padding: 0 10px; border: none; border-radius: 10px; font-family: inherit; font-size: 13px;
   cursor: pointer; background: transparent; color: var(--cx-apoyo);
 }
 .cx-rp-seg button:disabled { cursor: progress; }
@@ -66,7 +67,7 @@
 .cx-rp-seg button:focus-visible { outline: 3px solid var(--cx-azul); outline-offset: 2px; }
 .cx-rp-hereda { font-size: 11px; color: var(--cx-apoyo); }
 .cx-rp-aviso {
-  position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%;
+  position: absolute; z-index: 2; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--cx-ambar-suave); border: 2px solid var(--cx-blanco); display: flex; align-items: center;
   justify-content: center; font-size: 10px; font-weight: 700; color: var(--cx-ambar);
 }
