@@ -8,6 +8,7 @@ import { correoPedirDatos } from '@/modules/conta/lib/textosFicha'
 import { porUso } from '@/modules/conta/lib/masUsados'
 import { repartoPropuesto } from '@/modules/conta/lib/direccion'
 import type { ContactoProveedor } from '@/modules/conta/types'
+import { aprender, confirmacionesDeFacturas, etiquetaIva, type FacturaParaAprender } from '@/modules/conta/lib/aprendizaje'
 
 const c = (p: Partial<ContactoProveedor>): ContactoProveedor =>
   ({ id: 'x', supplierId: 's', name: 'Ana', role: 'orders', phone: null, email: null, isPrimary: false, notes: null, ...p })
@@ -58,5 +59,41 @@ describe('dirección por confirmar', () => {
   })
   it('una anterior con solo la línea se reparte con el núcleo', () => {
     expect(repartoPropuesto({ line: 'C/ Ejemplo 12, 28021 Madrid' }).reparto.postalCode).toBe('28021')
+  })
+})
+
+
+describe('de dónde se aprende (tarea 5)', () => {
+  const fac = (id: string, fecha: string, extra: Partial<FacturaParaAprender> = {}): FacturaParaAprender =>
+    ({ id, status: 'aprobada', invoiceDate: fecha, createdAt: `${fecha}T10:00:00Z`, paidAt: null, paidMethod: null, ...extra })
+
+  it('población real de producción (04/10, Foodint, solo lectura): 1 factura aprobada con IVA 4 y 21; no se aprende nada', () => {
+    const facturas = [fac('f1', '2026-08-06')]
+    const c = confirmacionesDeFacturas(facturas, new Map([['f1', [21, 4, 21]]]), new Set(), (m) => m)
+    expect(c).toEqual([{ campo: 'tax_rates', valor: '4,21', etiqueta: 'IVA al 4 % y al 21 %', at: '2026-08-06', origen: 'factura' }])
+    expect(aprender(c)).toEqual([])
+  })
+
+  it('tres facturas iguales: «IVA al 10 % y al 21 %», así vienen todas; y el pago lo confirmó la persona', () => {
+    const facturas = ['2026-08-13', '2026-08-27', '2026-09-10'].map((d, i) =>
+      fac(`f${i}`, d, { status: 'pagada', paidAt: d, paidMethod: 'transfer' }))
+    const iva = new Map(facturas.map((f) => [f.id, [10, 21]]))
+    const a = aprender(confirmacionesDeFacturas(facturas, iva, new Set(), () => 'Transferencia'))
+    expect(a.map((x) => [x.etiqueta, x.porque])).toEqual([
+      ['IVA al 10 % y al 21 %', 'Así vienen todas sus facturas'],
+      ['Le pagas por transferencia', 'Lo confirmaste tú 3 veces'],
+    ])
+  })
+
+  it('las repetidas, los borradores y las que están en revisión no cuentan', () => {
+    const facturas = [fac('a', '2026-09-01'), fac('b', '2026-09-02', { status: 'en_revision' }), fac('c', '2026-09-03')]
+    const c = confirmacionesDeFacturas(facturas, new Map([['a', [21]], ['b', [21]], ['c', [21]]]), new Set(['c']), (m) => m)
+    expect(c.map((x) => x.at)).toEqual(['2026-09-01'])
+  })
+
+  it('cómo se dice el IVA', () => {
+    expect(etiquetaIva([21])).toBe('IVA al 21 %')
+    expect(etiquetaIva([21, 4, 10])).toBe('IVA al 4 %, al 10 % y al 21 %')
+    expect(etiquetaIva([0])).toBe('Sin IVA (exento o 0 %)')
   })
 })

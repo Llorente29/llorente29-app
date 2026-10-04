@@ -16,7 +16,7 @@ import { Link } from 'react-router-dom'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { Dialogo, HechoConDeshacer } from '@/modules/conta/proveedor/piezas'
 import { Vacio } from '@/modules/conta/ui/piezas'
-import { cambiarVencimiento, deshacerPago, marcarPagada, type FacturaDeProveedor } from '@/modules/conta/services/proveedorService'
+import { cambiarVencimiento, deshacerPago, marcarPagada, noEsRepetida, type FacturaDeProveedor } from '@/modules/conta/services/proveedorService'
 import { diaMesCorto, eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/modules/conta/types'
 import { rutaSubirFacturaProveedor } from '@/config/navegacion'
@@ -94,7 +94,7 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
   factura: FacturaDeProveedor; alCerrar: () => void
   alHecho: (h: { texto: string; deshacer?: () => Promise<void> }) => void
 }) {
-  const { datos, repetidas, recargar } = useFicha()
+  const { datos, repetidas, recargar, actor } = useFicha()
   const [fecha, setFecha] = useState(hoyEnMadrid())
   const [forma, setForma] = useState<PaymentMethod | ''>(datos.ficha.paymentMethod ?? '')
   const [venc, setVenc] = useState(f.dueDate ?? '')
@@ -132,6 +132,13 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
           {original && <> La de arriba es la {numero(original)} del {original.invoiceDate ? fechaLarga(original.invoiceDate) : 'sin fecha'}, que entró antes.</>}
           {' '}No cuenta en lo que le has comprado ni en lo que le debes.
         </div>
+      )}
+      {rep && (
+        <button type="button" className="cx-boton-sec" disabled={ocupado} style={{ alignSelf: 'flex-start' }}
+          onClick={() => hacer(() => noEsRepetida(f.id, actor.name),
+            `Factura ${num} apuntada: no es repetida.${f.status === 'aprobada' || f.status === 'pagada' ? ' Ya cuenta en lo que le has comprado y en lo que le debes.' : ' Contará cuando se apruebe.'}`)}>
+          {ocupado ? 'Guardando…' : 'No es repetida: apuntarla'}
+        </button>
       )}
 
       {f.status === 'aprobada' && !rep && (

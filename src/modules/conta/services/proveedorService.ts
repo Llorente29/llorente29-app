@@ -14,6 +14,7 @@
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import { rpcSinTipar } from '@/lib/rpcSinTipar'
 import { tiposGastoOcultos } from '@/modules/conta/services/fichaTablasService'
+import type { Aprendido, CampoAprendido } from '@/modules/conta/lib/aprendizaje'
 import type {
   ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor, InvoicingFrequency,
   PaymentMethod, TaxIdCheckStatus, TaxIdType, VatRegime,
@@ -400,6 +401,8 @@ export async function listarLocales(accountId: string): Promise<Local[]> {
 export interface FacturaDeProveedor extends FacturaParaCifras {
   /** Cuándo entró en Folvy: decide cuál de dos repetidas es la buena. */
   createdAt: string
+  /** Alguien dijo «no es repetida» (C01b, 0130): no se vuelve a marcar. */
+  noRepetidaConfirmada: boolean
   code: string | null
   paidMethod: PaymentMethod | null
   paidByName: string | null
@@ -409,7 +412,7 @@ export interface FacturaDeProveedor extends FacturaParaCifras {
 export async function listarFacturas(accountId: string, supplierId: string): Promise<FacturaDeProveedor[]> {
   requireSupabase()
   const { data, error } = await from('supplier_invoice')
-    .select('id, code, status, invoice_number, invoice_date, grand_total, due_date, paid_at, paid_method, paid_by_name, created_at')
+    .select('id, code, status, invoice_number, invoice_date, grand_total, due_date, paid_at, paid_method, paid_by_name, created_at, not_duplicate_confirmed_at')
     .eq('account_id', accountId)
     .eq('supplier_id', supplierId)
     .neq('status', 'anulada')
@@ -418,6 +421,7 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
     createdAt: r.created_at as string,
+    noRepetidaConfirmada: !!r.not_duplicate_confirmed_at,
     code: str(r.code),
     status: r.status as string,
     invoiceNumber: str(r.invoice_number),
@@ -435,10 +439,10 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
  * lista sin N consultas. Todas menos las anuladas: para saber cuál de dos
  * repetidas es la buena hacen falta también las que aún no se han aprobado.
  */
-export async function listarFacturasDeLaCuenta(accountId: string): Promise<(FacturaParaCifras & { supplierId: string | null; createdAt: string })[]> {
+export async function listarFacturasDeLaCuenta(accountId: string): Promise<(FacturaParaCifras & { supplierId: string | null; createdAt: string; noRepetidaConfirmada: boolean })[]> {
   requireSupabase()
   const { data, error } = await from('supplier_invoice')
-    .select('id, supplier_id, status, invoice_number, invoice_date, grand_total, due_date, paid_at, created_at')
+    .select('id, supplier_id, status, invoice_number, invoice_date, grand_total, due_date, paid_at, created_at, not_duplicate_confirmed_at')
     .eq('account_id', accountId)
     .neq('status', 'anulada')
   if (error) throw new Error(`No se pudieron cargar las facturas: ${error.message}`)
@@ -446,6 +450,7 @@ export async function listarFacturasDeLaCuenta(accountId: string): Promise<(Fact
     id: r.id as string,
     supplierId: str(r.supplier_id),
     createdAt: r.created_at as string,
+    noRepetidaConfirmada: !!r.not_duplicate_confirmed_at,
     status: r.status as string,
     invoiceNumber: str(r.invoice_number),
     invoiceDate: str(r.invoice_date),
@@ -618,3 +623,84 @@ export async function comprobarVies(supplierId: string): Promise<ResultadoVies> 
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Lo que he aprendido (C01b, tarea 5; migración 20261006T0130)
+// ═══════════════════════════════════════════════════════════════════════════
+// Nombres de la base entre comillas (regla 40), de la 0130: supplier_learning,
+// supplier_learning_log, supplier_learning_sync, supplier_learning_fix,
+// supplier_invoice_not_duplicate; y supplier_invoice_line.vat_pct.
+
+/** Los tipos de IVA de las líneas de cada factura (para aprender el IVA). */
+export async function ivaDeLasFacturas(invoiceIds: string[]): Promise<Map<string, number[]>> {
+  requireSupabase()
+  const out = new Map<string, number[]>()
+  if (invoiceIds.length === 0) return out
+  const { data, error } = await from('supplier_invoice_line').select('supplier_invoice_id, vat_pct').in('supplier_invoice_id', invoiceIds)
+  if (error) throw new Error(`No se pudo leer el IVA de sus facturas: ${error.message}`)
+  for (const r of (data as Fila[] | null) ?? []) {
+    const v = num(r.vat_pct)
+    if (v === null) continue
+    const id = r.supplier_invoice_id as string
+    out.set(id, [...(out.get(id) ?? []), v])
+  }
+  return out
+}
+
+export interface AprendidoGuardado {
+  campo: CampoAprendido
+  valor: string
+  etiqueta: string
+  porque: string
+  veces: number
+  desde: string | null
+  hasta: string | null
+  aMano: boolean
+}
+
+export async function listarAprendido(supplierId: string): Promise<AprendidoGuardado[]> {
+  requireSupabase()
+  const { data, error } = await from('supplier_learning').select('campo, valor, etiqueta, porque, veces, desde, hasta, a_mano').eq('supplier_id', supplierId)
+  if (error) throw new Error(`No se pudo leer lo aprendido: ${error.message}`)
+  return ((data as Fila[] | null) ?? []).map((r) => ({
+    campo: r.campo as CampoAprendido, valor: r.valor as string, etiqueta: r.etiqueta as string, porque: r.porque as string,
+    veces: Number(r.veces ?? 0), desde: str(r.desde), hasta: str(r.hasta), aMano: r.a_mano === true,
+  }))
+}
+
+/** Guarda lo que decide el núcleo; devuelve cuántas cosas apuntó en «Lo que ha hecho Folvy». */
+export async function sincronizarAprendido(supplierId: string, items: Aprendido[]): Promise<number> {
+  return rpcSinTipar<number>('supplier_learning_sync', {
+    p_supplier_id: supplierId,
+    p_items: items.filter((a) => !a.aMano).map((a) => ({ campo: a.campo, valor: a.valor, etiqueta: a.etiqueta, porque: a.porque, veces: a.veces, desde: a.desde, hasta: a.hasta })),
+  })
+}
+
+/** «Cambiar»: fija a mano (o, con valor null, lo devuelve a Folvy). */
+export async function fijarAprendido(supplierId: string, campo: CampoAprendido, valor: string | null, etiqueta: string | null, quien: string | null): Promise<void> {
+  await rpcSinTipar<null>('supplier_learning_fix', { p_supplier_id: supplierId, p_campo: campo, p_valor: valor, p_etiqueta: etiqueta, p_quien_nombre: quien })
+}
+
+export async function noEsRepetida(invoiceId: string, quien: string | null): Promise<void> {
+  await rpcSinTipar<null>('supplier_invoice_not_duplicate', { p_invoice_id: invoiceId, p_quien_nombre: quien })
+}
+
+export interface HechoPorFolvy {
+  campo: CampoAprendido
+  que: 'aprendido' | 'olvidado' | 'fijado_a_mano' | 'devuelto_a_folvy'
+  etiqueta: string | null
+  porque: string
+  cuando: string
+  quien: string | null
+}
+
+export async function listarHechoPorFolvy(supplierId: string): Promise<HechoPorFolvy[]> {
+  requireSupabase()
+  const { data, error } = await from('supplier_learning_log').select('campo, que, etiqueta, porque, hecho_at, hecho_por_nombre')
+    .eq('supplier_id', supplierId).order('hecho_at', { ascending: false }).limit(50)
+  if (error) throw new Error(`No se pudo leer lo que ha hecho Folvy: ${error.message}`)
+  return ((data as Fila[] | null) ?? []).map((r) => ({
+    campo: r.campo as CampoAprendido, que: r.que as HechoPorFolvy['que'], etiqueta: str(r.etiqueta),
+    porque: r.porque as string, cuando: r.hecho_at as string, quien: str(r.hecho_por_nombre),
+  }))
+}

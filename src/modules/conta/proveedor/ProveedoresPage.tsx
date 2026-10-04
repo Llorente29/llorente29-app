@@ -83,7 +83,7 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
         const suyos = contactos.filter((c) => c.supplierId === ficha.id)
         const { pct, faltan } = calcularCompletitud({ ficha, contactos: suyos, tieneCertificadoBanco: certs.has(ficha.id) })
         const deEl = facturas.filter((x) => x.supplierId === ficha.id)
-        const rep = detectarRepetidas(deEl.map((x) => ({ id: x.id, number: x.invoiceNumber, total: x.grandTotal, status: x.status, createdAt: x.createdAt })))
+        const rep = detectarRepetidas(deEl.map((x) => ({ id: x.id, number: x.invoiceNumber, total: x.grandTotal, status: x.status, createdAt: x.createdAt, noRepetidaConfirmada: x.noRepetidaConfirmada })))
         const buenas = deEl.filter((x) => !rep.has(x.id))
         const debe = calcularCifras(buenas, hoy).leDebes
         const u = buenas.filter((x) => x.invoiceDate).sort((a, b) => (b.invoiceDate ?? '').localeCompare(a.invoiceDate ?? ''))[0] ?? null

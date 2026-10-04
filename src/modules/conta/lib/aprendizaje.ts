@@ -98,3 +98,53 @@ export function aprender(confirmaciones: readonly Confirmacion[], fijados: reado
 export function propuestaParaFactura(aprendidos: readonly Aprendido[]): { campo: CampoAprendido; valor: string; etiqueta: string; porque: string; necesitaConfirmacion: true }[] {
   return aprendidos.map((a) => ({ campo: a.campo, valor: a.valor, etiqueta: a.etiqueta, porque: a.porque, necesitaConfirmacion: true as const }))
 }
+
+// ── De dónde salen las confirmaciones, HOY (C01b, tarea 5) ─────────────────
+// Solo de lo que ya guarda una factura:
+//   · IVA: los tipos de las líneas de cada factura aprobada o pagada → «así
+//     vienen sus facturas» (origen 'factura').
+//   · Forma de pago: la que apuntó la persona al marcarla pagada → «lo
+//     confirmaste tú» (origen 'persona').
+// El tipo de gasto, la retención y el IBAN no se guardan hoy por factura: no
+// hay de dónde aprenderlos sin inventar. Llegan con la pantalla de apuntar
+// facturas (C02); mientras, se pueden fijar a mano con «Cambiar». Las
+// repetidas no cuentan (no se han apuntado).
+
+export interface FacturaParaAprender {
+  id: string
+  status: string
+  invoiceDate: string | null
+  createdAt: string
+  paidAt: string | null
+  paidMethod: string | null
+}
+
+const lista = (t: string[]) => (t.length <= 1 ? t.join('') : `${t.slice(0, -1).join(', ')} y ${t[t.length - 1]}`)
+const pct = (n: number) => `${String(n).replace('.', ',')} %`
+
+/** «IVA al 10 % y al 21 %», «IVA al 21 %», «Sin IVA (exento o 0 %)». */
+export function etiquetaIva(rates: readonly number[]): string {
+  const r = [...new Set(rates)].sort((a, b) => a - b)
+  if (r.length === 1 && r[0] === 0) return 'Sin IVA (exento o 0 %)'
+  return `IVA al ${lista(r.map((x, i) => (i === 0 ? pct(x) : `al ${pct(x)}`)))}`
+}
+
+export function confirmacionesDeFacturas(
+  facturas: readonly FacturaParaAprender[],
+  ivaPorFactura: ReadonlyMap<string, readonly number[]>,
+  repetidas: ReadonlySet<string>,
+  nombreForma: (metodo: string) => string,
+): Confirmacion[] {
+  const out: Confirmacion[] = []
+  for (const f of facturas) {
+    if (repetidas.has(f.id) || (f.status !== 'aprobada' && f.status !== 'pagada')) continue
+    const rates = [...new Set(ivaPorFactura.get(f.id) ?? [])].sort((a, b) => a - b)
+    if (rates.length > 0) {
+      out.push({ campo: 'tax_rates', valor: rates.join(','), etiqueta: etiquetaIva(rates), at: f.invoiceDate ?? f.createdAt, origen: 'factura' })
+    }
+    if (f.status === 'pagada' && f.paidMethod) {
+      out.push({ campo: 'payment', valor: f.paidMethod, etiqueta: `Le pagas por ${nombreForma(f.paidMethod).toLowerCase()}`, at: f.paidAt ?? f.createdAt, origen: 'persona' })
+    }
+  }
+  return out
+}
