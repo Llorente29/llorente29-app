@@ -65,6 +65,14 @@ describe('activar el plan en una empresa', () => {
     expect(general).toEqual(['repercutido:47700021', 'soportado:47200021'])
   })
 
+  it('IGIC (Canarias): 7, 3, 5, 9,5, 15 y 20 con su subcuenta; el 0 % va a la hoja, sin subcuenta', () => {
+    const igic = filas('tax_rate').filter((t) => t.tax_system === 'igic' && t.treatment === 'taxed' && t.valid_to === null).map((t) => ({ id: String(t.code), rate: Number(t.rate) }))
+    const r = activar({ hojas: HOJAS.pymes, digitos: 8, ivas: igic, retenciones: [], gastos: [], bancos: [], proveedores: [], cuentaComun: { proveedores: false } })
+    expect(r.avisos).toEqual([])
+    expect(r.cuentas.filter((c) => c.kind === 'own' && c.templateCode === '472').map((c) => c.code)).toEqual(['47200003', '47200005', '47200007', '47200015', '47200020', '47200095'])
+    expect(r.enlaces.filter((l) => l.entityId === 'igic_cero').map((l) => l.code).sort()).toEqual(['47200000', '47700000'])
+  })
+
   it('cada retención a 4751 y cada tipo de gasto a su 6xx: enlaces reales, no pistas', () => {
     const { enlaces } = base()
     const ret = enlaces.filter((l) => l.entity === 'withholding_rate')

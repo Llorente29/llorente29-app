@@ -151,6 +151,8 @@ export function activar(e: EntradaActivacion): SalidaActivacion {
   for (const t of e.ivas) porTipo.set(sufijoDeTipo(t.rate), [...(porTipo.get(sufijoDeTipo(t.rate)) ?? []), t.id])
   for (const [suf, ids] of [...porTipo].sort((a, b) => b[0] - a[0])) {
     for (const [hoja, papel, nombre] of [['472', 'soportado', 'IVA soportado'], ['477', 'repercutido', 'IVA repercutido']] as const) {
+      // Un tipo al 0 % (el IGIC cero) no lleva cuota: va a la hoja, sin subcuenta.
+      if (suf === 0) { for (const id of ids) enlaces.push({ entity: 'tax_rate', entityId: id, role: papel, code: rellenar(hoja, d) }); continue }
       const code = subcuenta(hoja, d, suf)
       if (!code || ocupados.has(code)) { avisos.push(`No cabe la subcuenta de ${hoja} para el ${suf} %.`); continue }
       cuentas.push({ code, templateCode: hoja, name: `${nombre} ${suf} %`, kind: 'own', status: 'activa' })

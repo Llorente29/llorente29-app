@@ -1,9 +1,10 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 04/10/2026 · C02, tarea 2, 2.º: la 0110 regenerada con la 1141 del general
-# (la quinta parte la lista y la define; el cuadro la pierde). Solo añade esa
-# fila (on conflict do nothing). Y la prueba, ENTERA en ROLLBACK.
-# 1.º: 0100, 0110 y la prueba, en verde (run 37231787433).
-supabase/migrations/20261007T0110_c02_pgc_serie.sql
-supabase/staging/sql/20261007_c02_prueba_serie.sql
+# 04/10/2026 · C02, tarea 3: el plan de cada empresa (0120) y su prueba con la
+# vuelta atrás, ENTERA en ROLLBACK. La 0120 se queda en staging como irá a
+# producción; ningún plan queda activado (la prueba activa y deshace).
+# Tandas anteriores del C02: 37231787433 (0100, 0110 y prueba) y 37233699050
+# (0110 con la 1141 y prueba).
+supabase/migrations/20261007T0120_c02_plan_empresa.sql
+supabase/staging/sql/20261007_c02_prueba_plan.sql
