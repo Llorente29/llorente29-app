@@ -118,6 +118,14 @@ describe('lo que está mal falla en rojo, con el caso y su norma', () => {
       'Pasa de 60 días: 30, 60, 90. Ley 3/2004, art. 4.3', 'Paga a 90 días, más de 60. Ley 3/2004, art. 4.3',
     ])
   })
+  it('C01b: el IVA habitual de un proveedor apunta a un impuesto que existe, es suyo o de serie, y vale hoy', () => {
+    const r = revisarCoherencia(bd({ proveedores_iva: [
+      { account_id: 'c01a0000-x', name: 'Hermanos Ruiz', tax_rate_id: 'id-perdido', code: null, valid_from: null, valid_to: null, motivo: 'no_existe' },
+      { account_id: 'c01a0000-x', name: 'Panadería Luna', tax_rate_id: 'id-b', code: 'iva_b', valid_from: '2026-01-01', valid_to: null, motivo: 'otra_cuenta' },
+      { account_id: 'c01a0000-x', name: 'Bebidas Sol', tax_rate_id: 'id-2', code: 'iva_basicos_4t2024', valid_from: '2024-10-01', valid_to: '2024-12-31', motivo: 'no_vigente' },
+    ] }))
+    expect(r.filter((x: { tipo: string }) => x.tipo === 'iva_proveedor').map((x: { nivel: string }) => x.nivel)).toEqual(['rojo', 'rojo', 'ambar'])
+  })
   it('epígrafe sin CNAE, y epígrafe y CNAE que no casan', () => {
     const e = (actividades: Fila[]) => ({ account_id: 'x', legal_name: 'E', entity_kind: 'self_employed', completa: true, tax_territory: 'canarias',
       tax_forms: [], sii: false, sales_tax_rate_code: null, account_digits: 8, actividades })
