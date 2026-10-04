@@ -19,6 +19,8 @@ import {
 } from '@/modules/conta/services/proveedorService'
 import { calcularCompletitud, type Completitud } from '@/modules/conta/lib/completitud'
 import { calcularCifras, type CifrasFicha } from '@/modules/conta/lib/cifras'
+import { detectarRepetidas, type Repetida } from '@/modules/conta/lib/repetidas'
+import type { Aprendido } from '@/modules/conta/lib/aprendizaje'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { validarFicha, type ResultadoValidacion } from '@/modules/conta/lib/validacionesFicha'
 import { leerOpcionesFicha } from '@/modules/conta/services/fichaTablasService'
@@ -32,10 +34,24 @@ export interface DatosFicha {
   locales: Local[]
   facturas: FacturaDeProveedor[]
   documentos: DocumentoProveedor[]
-  otros: { id: string; name: string; taxId: string | null }[]
+  /**
+   * Los demás proveedores de la cuenta (no archivados): para el NIF repetido y
+   * para poner primero lo que más se usa (tipo de gasto, IVA, retención, plazo).
+   */
+  otros: OtroDeLaCuenta[]
   conta: boolean
   /** IVA, retención, forma y plazo de pago, de las tablas generales del C00 (tarea 7). */
   opciones: OpcionesFicha
+}
+
+export interface OtroDeLaCuenta {
+  id: string
+  name: string
+  taxId: string | null
+  expenseCategoryId: string | null
+  usualTaxRateIds: string[]
+  irpfWithholdingPct: number | null
+  paymentTermsDays: number | null
 }
 
 export interface UsoFicha {
@@ -43,7 +59,12 @@ export interface UsoFicha {
   error: string | null
   datos: DatosFicha | null
   completitud: Completitud | null
+  /** Las facturas que repiten número e importe de otra anterior: no cuentan en ninguna cifra (C01b §4). */
+  repetidas: Map<string, Repetida>
+  /** Sin las repetidas. */
   cifras: CifrasFicha | null
+  /** «Lo que he aprendido de este proveedor» (C01b §4). */
+  aprendidos: Aprendido[]
   comprobandoVies: boolean
   /** Vuelve a leer sin enseñar el esqueleto (tras guardar). */
   recargar: () => Promise<void>
@@ -57,6 +78,9 @@ export interface UsoFicha {
 
 const FALTA_PARA_PROPONER = (f: FichaProveedor) =>
   !f.taxId?.trim() || !f.legalName?.trim() || !f.fiscalStreet?.trim()
+
+// Se rellena con la tarea 5 del C01b (tabla y funciones de lo aprendido).
+const SIN_APRENDIDOS: Aprendido[] = []
 
 type Lectura = { tipo: 'listo'; datos: DatosFicha } | { tipo: 'no-existe' }
 
@@ -83,7 +107,10 @@ async function leerFicha(
     listarProveedores(accountId),
     contaActiva(accountId),
   ])
-  const otros = todos.map((p) => ({ id: p.id, name: p.name, taxId: p.taxId }))
+  const otros = todos.map((p) => ({
+    id: p.id, name: p.name, taxId: p.taxId, expenseCategoryId: p.expenseCategoryId, usualTaxRateIds: p.usualTaxRateIds,
+    irpfWithholdingPct: p.irpfWithholdingPct, paymentTermsDays: p.paymentTermsDays,
+  }))
   return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta, opciones } }
 }
 
@@ -162,10 +189,16 @@ export function useFichaProveedor(accountId: string | null, supplierId: string):
     ? calcularCompletitud({ ficha: datos.ficha, contactos: datos.contactos, tieneCertificadoBanco: tieneCertificadoBanco(datos.documentos) })
     : null, [datos])
 
-  const cifras = useMemo(() => datos ? calcularCifras(datos.facturas, hoyEnMadrid()) : null, [datos])
+  const repetidas = useMemo(() => datos
+    ? detectarRepetidas(datos.facturas.map((f) => ({ id: f.id, number: f.invoiceNumber, total: f.grandTotal, status: f.status, createdAt: f.createdAt })))
+    : new Map<string, Repetida>(), [datos])
+
+  // Una repetida no se apunta: no cuenta en «Le has comprado», «Le debes» ni el próximo pago.
+  const cifras = useMemo(() => datos ? calcularCifras(datos.facturas.filter((f) => !repetidas.has(f.id)), hoyEnMadrid()) : null, [datos, repetidas])
 
   return {
-    estado, error, datos, completitud, cifras, comprobandoVies,
+    estado, error, datos, completitud, repetidas, cifras, comprobandoVies,
+    aprendidos: SIN_APRENDIDOS,
     recargar: () => cargar(),
     reintentar: () => { setEstado('cargando'); setError(null); void cargar() },
     guardar,

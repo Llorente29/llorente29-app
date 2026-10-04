@@ -67,3 +67,20 @@ export function proponerDireccion(linea: string | null): DireccionPropuesta | nu
     province: provincia,
   }
 }
+
+/**
+ * El reparto de una dirección «por confirmar» (supplier_proposal.value de
+ * `fiscal_address`): desde el C01b el valor ya lo trae repartido (`street`,
+ * `postal_code`, `city`, `province`, con la población de la tabla de códigos
+ * postales); uno anterior solo traía `line`, y se reparte aquí con el núcleo.
+ */
+export function repartoPropuesto(value: unknown): { linea: string; reparto: DireccionPropuesta } {
+  const v = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const t = (x: unknown) => (typeof x === 'string' && x.trim() !== '' ? x.trim() : null)
+  const linea = typeof value === 'string' ? value : t(v.line) ?? ''
+  const traeReparto = ['street', 'postal_code', 'city', 'province'].some((k) => k in v)
+  if (traeReparto) {
+    return { linea, reparto: { street: t(v.street), postalCode: t(v.postal_code), city: t(v.city), province: t(v.province) } }
+  }
+  return { linea, reparto: proponerDireccion(linea) ?? { street: null, postalCode: null, city: null, province: null } }
+}

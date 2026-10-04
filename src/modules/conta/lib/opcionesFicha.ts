@@ -1,11 +1,11 @@
 // src/modules/conta/lib/opcionesFicha.ts
 //
 // C00, tarea 7: la ficha de proveedor del C01 LEE de las tablas generales el
-// IVA, la retención, la forma y el plazo de pago, sin cambiar su aspecto. La
-// ficha sigue guardando en las columnas del C01 (`usual_vat_rates`,
-// `irpf_withholding_pct`, `payment_method`, `payment_terms_days`); lo que
-// cambia es de dónde salen las opciones. Funciones puras: el servicio lee y
-// esto decide.
+// IVA, la retención, la forma y el plazo de pago. Desde el C01b el IVA
+// habitual se GUARDA como referencia a la fila de `tax_rate`
+// (`usual_tax_rate_ids`); la retención, la forma y el plazo siguen en las
+// columnas del C01 (`irpf_withholding_pct`, `payment_method`,
+// `payment_terms_days`). Funciones puras: el servicio lee y esto decide.
 //
 // Dos reglas que no se negocian:
 //   · La lista con la que se ELIGE no es la lista con la que se LEE (regla 30):
@@ -41,11 +41,25 @@ export interface FilasFicha {
 
 export interface Opcion<V> { valor: V; nombre: string }
 
+/** Una fila de IVA (o IGIC/IPSI) por su id: lo que guarda la ficha desde el C01b. */
+export interface FilaIva {
+  id: string
+  rate: number
+  nombre: string
+  /** ¿Se ofrece HOY al elegir? (de su territorio, vigente, no oculta, con impuesto o exenta) */
+  ofrecida: boolean
+}
+
 export interface OpcionesFicha {
   /** La empresa de la que salen (sus filas propias y lo que ocultó), o null: solo las de serie. */
   empresa: { id: string; nombre: string } | null
   territorio: Territorio
   tiposIva: Opcion<number>[]
+  /**
+   * Todas las filas de impuesto leídas, por id, ofrecidas o no: con ellas se
+   * ELIGE (las ofrecidas) y se LEE lo guardado (todas), regla 30.
+   */
+  iva: FilaIva[]
   retenciones: Opcion<number>[]
   formasPago: Opcion<PaymentMethod>[]
   plazos: Opcion<number>[]
@@ -72,10 +86,12 @@ export function construirOpciones(filas: FilasFicha, ocultas: ReadonlySet<string
   // (sujetos o exentos; la inversión del sujeto pasivo y la compra en la UE son
   // un tratamiento, no un tipo que te cobre el proveedor).
   const tiposIva = new Map<number, string>()
+  const iva: FilaIva[] = []
   for (const t of [...filas.impuestos].sort(porOrden)) {
-    if (t.taxSystem !== impuesto || t.territory !== territorio || !visible(t.id)) continue
-    if (t.treatment !== 'taxed' && t.treatment !== 'exempt') continue
-    if (!vigente(t.validFrom, t.validTo, hoy)) continue
+    const ofrecida = t.taxSystem === impuesto && t.territory === territorio && visible(t.id)
+      && (t.treatment === 'taxed' || t.treatment === 'exempt') && vigente(t.validFrom, t.validTo, hoy)
+    iva.push({ id: t.id, rate: t.rate, nombre: t.name, ofrecida })
+    if (!ofrecida) continue
     const previo = tiposIva.get(t.rate)
     tiposIva.set(t.rate, previo ? `${previo} · ${t.name}` : t.name)
   }
@@ -109,6 +125,7 @@ export function construirOpciones(filas: FilasFicha, ocultas: ReadonlySet<string
   return {
     empresa, territorio,
     tiposIva: lista(tiposIva).sort((a, b) => a.valor - b.valor),
+    iva,
     retenciones: lista(retenciones).sort((a, b) => a.valor - b.valor),
     formasPago: lista(formas),
     plazos: lista(plazos).sort((a, b) => a.valor - b.valor),
@@ -116,16 +133,38 @@ export function construirOpciones(filas: FilasFicha, ocultas: ReadonlySet<string
   }
 }
 
-export interface Casilla { valor: number; nombre: string | null; ofrecida: boolean }
+export interface Casilla {
+  /** El id de la fila de `tax_rate`: lo que se guarda. */
+  id: string
+  rate: number | null
+  nombre: string | null
+  ofrecida: boolean
+}
 
 /**
- * Las casillas de IVA de la ficha: las que ofrece la tabla y, además, las que
- * el proveedor ya tiene guardadas aunque la tabla no las ofrezca (regla 30).
+ * Las casillas de IVA de la ficha: las filas que ofrece la tabla y, además,
+ * las que el proveedor ya tiene guardadas aunque la tabla ya no las ofrezca
+ * (regla 30: la lista con la que se elige no es la lista con la que se lee).
+ * Un id guardado que ni siquiera está entre las filas leídas sale igual, sin
+ * porcentaje: existe, y la pantalla lo dice.
  */
-export function casillasIva(o: OpcionesFicha, guardadas: readonly number[]): Casilla[] {
-  const out = new Map<number, Casilla>(o.tiposIva.map((t) => [t.valor, { valor: t.valor, nombre: t.nombre, ofrecida: true }]))
-  for (const g of guardadas) if (!out.has(g)) out.set(g, { valor: g, nombre: null, ofrecida: false })
-  return [...out.values()].sort((a, b) => a.valor - b.valor)
+export function casillasIva(o: OpcionesFicha, guardadas: readonly string[]): Casilla[] {
+  const porId = new Map(o.iva.map((f) => [f.id, f]))
+  const out = new Map<string, Casilla>()
+  for (const f of o.iva) if (f.ofrecida) out.set(f.id, { id: f.id, rate: f.rate, nombre: f.nombre, ofrecida: true })
+  for (const g of guardadas) {
+    if (out.has(g)) continue
+    const f = porId.get(g)
+    out.set(g, { id: g, rate: f?.rate ?? null, nombre: f?.nombre ?? null, ofrecida: false })
+  }
+  return [...out.values()].sort((a, b) => (a.rate ?? 999) - (b.rate ?? 999) || (a.nombre ?? '').localeCompare(b.nombre ?? ''))
+}
+
+/** Los porcentajes de los IVA guardados, ordenados y sin repetir. Los que no se encuentran no suman. */
+export function porcentajesIva(o: Pick<OpcionesFicha, 'iva'> | null, guardadas: readonly string[]): number[] {
+  if (!o) return []
+  const porId = new Map(o.iva.map((f) => [f.id, f.rate]))
+  return [...new Set(guardadas.map((g) => porId.get(g)).filter((r): r is number => r !== undefined))].sort((a, b) => a - b)
 }
 
 /** Las formas de pago del desplegable: las de la tabla y, si la guardada no está, también. */

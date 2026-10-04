@@ -15,7 +15,7 @@ import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import { rpcSinTipar } from '@/lib/rpcSinTipar'
 import { tiposGastoOcultos } from '@/modules/conta/services/fichaTablasService'
 import type {
-  ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor,
+  ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor, InvoicingFrequency,
   PaymentMethod, TaxIdCheckStatus, TaxIdType, VatRegime,
 } from '@/modules/conta/types'
 
@@ -35,6 +35,7 @@ function from(tabla: string) {
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const num = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v))
 const nums = (v: unknown): number[] => (Array.isArray(v) ? v.map(Number).filter((n) => !Number.isNaN(n)) : [])
+const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
 
 // ═══════════════════════════════════════════════════════════════════════════
 // La ficha
@@ -58,7 +59,7 @@ export function filaAFicha(r: Fila): FichaProveedor {
     fiscalCity: str(r.fiscal_city),
     fiscalProvince: str(r.fiscal_province),
     vatRegime: str(r.vat_regime) as VatRegime | null,
-    usualVatRates: nums(r.usual_vat_rates),
+    usualTaxRateIds: ids(r.usual_tax_rate_ids),
     irpfWithholdingPct: num(r.irpf_withholding_pct),
     expenseCategoryId: str(r.expense_category_id),
     defaultLocationId: str(r.default_location_id),
@@ -80,6 +81,7 @@ export function filaAFicha(r: Fila): FichaProveedor {
     currency: str(r.currency) ?? 'EUR',
     earlyPaymentDiscountPct: num(r.early_payment_discount_pct),
     ivaIncluidoEnLinea: r.iva_incluido_en_linea === true,
+    invoicingFrequency: str(r.invoicing_frequency) as InvoicingFrequency | null,
     archivedAt: str(r.archived_at),
     createdAt: str(r.created_at),
     createdByName: str(r.created_by_name),
@@ -92,7 +94,7 @@ const COLUMNA: Partial<Record<keyof FichaProveedor, string>> = {
   countryCode: 'country_code', entityKind: 'entity_kind', taxIdVerifiedAt: 'tax_id_verified_at',
   taxIdCheckStatus: 'tax_id_check_status', taxIdCheckedAt: 'tax_id_checked_at',
   fiscalStreet: 'fiscal_street', fiscalPostalCode: 'fiscal_postal_code', fiscalCity: 'fiscal_city',
-  fiscalProvince: 'fiscal_province', vatRegime: 'vat_regime', usualVatRates: 'usual_vat_rates',
+  fiscalProvince: 'fiscal_province', vatRegime: 'vat_regime', usualTaxRateIds: 'usual_tax_rate_ids',
   irpfWithholdingPct: 'irpf_withholding_pct', expenseCategoryId: 'expense_category_id',
   defaultLocationId: 'default_location_id', paymentMethod: 'payment_method',
   paymentTermsDays: 'payment_terms_days', paymentFixedDays: 'payment_fixed_days', iban: 'iban',
@@ -100,6 +102,7 @@ const COLUMNA: Partial<Record<keyof FichaProveedor, string>> = {
   isActive: 'is_active', notes: 'notes', website: 'website', tags: 'tags', bic: 'bic',
   sepaMandateRef: 'sepa_mandate_ref', sepaMandateDate: 'sepa_mandate_date', currency: 'currency',
   earlyPaymentDiscountPct: 'early_payment_discount_pct', ivaIncluidoEnLinea: 'iva_incluido_en_linea',
+  invoicingFrequency: 'invoicing_frequency',
   archivedAt: 'archived_at',
 }
 
@@ -143,13 +146,15 @@ export interface ProveedorEnLista {
   isActive: boolean
 }
 
-/** Los proveedores activos de la cuenta (para la lista y el NIF repetido). */
-export async function listarProveedores(accountId: string): Promise<FichaProveedor[]> {
+/**
+ * Los proveedores de la cuenta (para la lista y el NIF repetido). Por omisión,
+ * los que no están archivados; con `archivados`, solo los archivados (el
+ * filtro «Archivados» de la lista).
+ */
+export async function listarProveedores(accountId: string, { archivados = false }: { archivados?: boolean } = {}): Promise<FichaProveedor[]> {
   requireSupabase()
-  const { data, error } = await from('supplier')
-    .select('*')
-    .eq('account_id', accountId)
-    .is('archived_at', null)
+  const q = from('supplier').select('*').eq('account_id', accountId)
+  const { data, error } = await (archivados ? q.not('archived_at', 'is', null) : q.is('archived_at', null))
     .order('name', { ascending: true })
   if (error) throw new Error(`No se pudo cargar la lista de proveedores: ${error.message}`)
   return ((data as Fila[] | null) ?? []).map(filaAFicha)
@@ -393,6 +398,8 @@ export async function listarLocales(accountId: string): Promise<Local[]> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface FacturaDeProveedor extends FacturaParaCifras {
+  /** Cuándo entró en Folvy: decide cuál de dos repetidas es la buena. */
+  createdAt: string
   code: string | null
   paidMethod: PaymentMethod | null
   paidByName: string | null
@@ -402,7 +409,7 @@ export interface FacturaDeProveedor extends FacturaParaCifras {
 export async function listarFacturas(accountId: string, supplierId: string): Promise<FacturaDeProveedor[]> {
   requireSupabase()
   const { data, error } = await from('supplier_invoice')
-    .select('id, code, status, invoice_number, invoice_date, grand_total, due_date, paid_at, paid_method, paid_by_name')
+    .select('id, code, status, invoice_number, invoice_date, grand_total, due_date, paid_at, paid_method, paid_by_name, created_at')
     .eq('account_id', accountId)
     .eq('supplier_id', supplierId)
     .neq('status', 'anulada')
@@ -410,6 +417,7 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
   if (error) throw new Error(`No se pudieron cargar sus facturas: ${error.message}`)
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
+    createdAt: r.created_at as string,
     code: str(r.code),
     status: r.status as string,
     invoiceNumber: str(r.invoice_number),
@@ -422,17 +430,22 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
   }))
 }
 
-/** Facturas de toda la cuenta, para el «le debes» de la lista sin N consultas. */
-export async function listarFacturasDeLaCuenta(accountId: string): Promise<(FacturaParaCifras & { supplierId: string | null })[]> {
+/**
+ * Facturas de toda la cuenta, para el «le debes» y la última factura de la
+ * lista sin N consultas. Todas menos las anuladas: para saber cuál de dos
+ * repetidas es la buena hacen falta también las que aún no se han aprobado.
+ */
+export async function listarFacturasDeLaCuenta(accountId: string): Promise<(FacturaParaCifras & { supplierId: string | null; createdAt: string })[]> {
   requireSupabase()
   const { data, error } = await from('supplier_invoice')
-    .select('id, supplier_id, status, invoice_number, invoice_date, grand_total, due_date, paid_at')
+    .select('id, supplier_id, status, invoice_number, invoice_date, grand_total, due_date, paid_at, created_at')
     .eq('account_id', accountId)
-    .in('status', ['aprobada', 'pagada'])
+    .neq('status', 'anulada')
   if (error) throw new Error(`No se pudieron cargar las facturas: ${error.message}`)
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
     supplierId: str(r.supplier_id),
+    createdAt: r.created_at as string,
     status: r.status as string,
     invoiceNumber: str(r.invoice_number),
     invoiceDate: str(r.invoice_date),

@@ -1,13 +1,13 @@
-// src/modules/conta/apartados/Documentos.tsx
+// src/modules/conta/proveedor/Documentos.tsx
 //
 // Los documentos del proveedor, de `compliance_document` (la tabla que ya
-// existía; el encargo pide no crear otra). Aquí se sube el certificado de
-// titularidad bancaria (familia nueva del C01) y se ven los demás: fichas
-// técnicas, homologación… con su caducidad.
+// existía; no se crea otra). Aquí se sube el certificado de titularidad
+// bancaria y se ven los demás (fichas técnicas, homologación…) con su
+// caducidad. Lo que caduca pronto sale en ámbar.
 
 import { useRef, useState } from 'react'
-import { useFicha } from '@/modules/conta/components/FichaContexto'
-import { Guardado } from '@/modules/conta/components/ui'
+import { useFicha } from '@/modules/conta/proveedor/contexto'
+import { Guardado, Vacio } from '@/modules/conta/ui/piezas'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
 import { tieneCertificadoBanco } from '@/modules/conta/services/proveedorService'
 import { DOC_FAMILY_LABEL, uploadComplianceDocument, type DocFamily } from '@/modules/appcc/services/complianceDocumentService'
@@ -17,6 +17,13 @@ const ESTADO: Record<string, string> = {
   pending_ocr: 'Leyendo…', pending_review: 'Por revisar', active: 'Vigente', superseded: 'Sustituido', expired: 'Caducado',
 }
 
+/** ¿Caduca en 30 días o menos (o ya ha caducado)? */
+function caducaPronto(expiresAt: string | null, hoy: string): boolean {
+  if (!expiresAt) return false
+  const dias = (Date.parse(expiresAt.slice(0, 10)) - Date.parse(hoy)) / 86_400_000
+  return dias <= 30
+}
+
 export default function Documentos() {
   const { datos, recargar } = useFicha()
   const entrada = useRef<HTMLInputElement>(null)
@@ -24,6 +31,7 @@ export default function Documentos() {
   const [fallo, setFallo] = useState<string | null>(null)
   const [aviso, avisar] = useAvisoGuardado()
   const cert = tieneCertificadoBanco(datos.documentos)
+  const hoy = hoyEnMadrid()
 
   async function subir(e: React.ChangeEvent<HTMLInputElement>) {
     const archivo = e.target.files?.[0]
@@ -37,7 +45,7 @@ export default function Documentos() {
         title: `Certificado de titularidad bancaria · ${datos.ficha.name}`,
         file: archivo,
         supplierId: datos.ficha.id,
-        issuedAt: hoyEnMadrid(),
+        issuedAt: hoy,
       })
       await recargar()
       avisar(`Certificado del banco subido (${archivo.name}).`)
@@ -49,38 +57,39 @@ export default function Documentos() {
   }
 
   return (
-    <div className="cf-form cf-form-ancho" style={{ maxWidth: 720 }}>
-      {fallo && <div className="cf-error" role="alert">{fallo}</div>}
+    <div className="cx-formulario">
+      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {datos.ficha.iban && !cert && (
-        <div className="cf-aviso" id="campo-bank_ownership_certificate">
+        <div className="cx-aviso" id="campo-bank_ownership_certificate" tabIndex={-1}>
           Falta el certificado del banco: el papel del banco que dice que esa cuenta es suya. Protege de cambios de IBAN fraudulentos.
         </div>
       )}
-      <div className="cf-pie-form">
-        <button type="button" className={cert ? 'cf-boton-sec' : 'cf-boton'} disabled={ocupado} onClick={() => entrada.current?.click()}>
+      <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>
+        <button type="button" className={cert ? 'cx-boton-sec' : 'cx-boton'} disabled={ocupado} onClick={() => entrada.current?.click()}>
           {ocupado ? 'Subiendo…' : cert ? 'Subir otro certificado del banco' : 'Subir certificado del banco'}
         </button>
         <input ref={entrada} type="file" accept="application/pdf,image/*" hidden onChange={subir} aria-label="Certificado de titularidad bancaria" />
-        <Guardado texto={aviso} />
       </div>
-      {datos.documentos.length === 0
-        ? <p className="cf-nota" style={{ margin: 0 }}>Aún no hay documentos suyos.</p>
-        : (
-          <div className="cf-tarjeta" style={{ gap: 0 }}>
-            {datos.documentos.map((d) => (
-              <div key={d.id} className="cf-contacto" style={{ padding: '10px 0', borderBottom: '1px solid var(--cf-linea)' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <span className="cf-contacto-nombre">{d.title}</span>
-                  <span className="cf-contacto-detalle">
+      <Guardado texto={aviso} />
+      <div className="cx-tarjeta" style={{ padding: '6px 18px' }}>
+        {datos.documentos.length === 0
+          ? <div style={{ padding: '12px 0' }}><Vacio titulo="Aún no hay documentos suyos." explicacion="Su certificado del banco, sus fichas técnicas y su homologación se guardan aquí." /></div>
+          : datos.documentos.map((d) => {
+            const pronto = d.status === 'active' && caducaPronto(d.expiresAt, hoy)
+            return (
+              <div key={d.id} className="cxp-contacto">
+                <div className="cxp-contacto-texto">
+                  <div className="cxp-contacto-nombre">{d.title}</div>
+                  <div className={pronto ? 'cxp-incompleta' : 'cxp-contacto-apoyo'}>
                     {DOC_FAMILY_LABEL[d.docFamily as DocFamily] ?? d.docFamily}
                     {d.expiresAt ? ` · caduca el ${fechaLarga(d.expiresAt)}` : ''}
-                  </span>
+                  </div>
                 </div>
-                <span className={`cf-estado ${d.status === 'active' ? 'cf-estado-pagada' : 'cf-estado-otro'}`}>{ESTADO[d.status] ?? d.status}</span>
+                <span className={`cx-chip${d.status === 'active' ? (pronto ? ' cx-chip-ambar' : ' cx-chip-ia') : ''}`}>{ESTADO[d.status] ?? d.status}</span>
               </div>
-            ))}
-          </div>
-        )}
+            )
+          })}
+      </div>
     </div>
   )
 }

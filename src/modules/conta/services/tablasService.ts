@@ -96,7 +96,7 @@ export async function cargarContextoUso(accountId: string, companyId: string, ho
     tabla('company_tax_profile').select('tax_territory, tax_forms, account_digits').eq('company_id', companyId).maybeSingle(),
     tabla('company').select('fiscal_country').eq('id', companyId).maybeSingle(),
     tabla('supplier')
-      .select('usual_vat_rates, irpf_withholding_pct, payment_method, payment_terms_days, payment_fixed_days, expense_category_id, country_code, currency, is_active, archived_at')
+      .select('usual_tax_rate_ids, irpf_withholding_pct, payment_method, payment_terms_days, payment_fixed_days, expense_category_id, country_code, currency, is_active, archived_at')
       .eq('account_id', accountId),
   ])
   for (const r of [perfil, empresa, prov]) if (r.error) throw new Error(mensaje('No se ha podido saber qué usas', r.error))
@@ -105,7 +105,7 @@ export async function cargarContextoUso(accountId: string, companyId: string, ho
   const proveedores: ProveedorParaUso[] = ((prov.data ?? []) as Fila[])
     .filter((s) => s.is_active !== false && !s.archived_at)
     .map((s) => ({
-      usualVatRates: numeros(s.usual_vat_rates),
+      usualTaxRateIds: Array.isArray(s.usual_tax_rate_ids) ? (s.usual_tax_rate_ids as unknown[]).map(String) : [],
       irpfPct: numero(s.irpf_withholding_pct),
       paymentMethod: texto(s.payment_method),
       paymentTermsDays: numero(s.payment_terms_days),

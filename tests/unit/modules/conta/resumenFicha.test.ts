@@ -13,12 +13,12 @@ const ficha: FichaProveedor = {
   taxId: 'B87123790', taxIdType: 'nif_es', countryCode: 'ES', entityKind: 'company',
   taxIdVerifiedAt: '2026-10-01T10:00:00Z', taxIdCheckStatus: 'valid', taxIdCheckedAt: null,
   fiscalStreet: 'C/ Ejemplo 12', fiscalPostalCode: '28021', fiscalCity: 'Madrid', fiscalProvince: 'Madrid',
-  vatRegime: 'general', usualVatRates: [10, 21], irpfWithholdingPct: null, expenseCategoryId: 'cat-600',
+  vatRegime: 'general', usualTaxRateIds: ['t10', 't21'], irpfWithholdingPct: null, expenseCategoryId: 'cat-600',
   defaultLocationId: null, paymentMethod: 'transfer', paymentTermsDays: 30, paymentFixedDays: [],
   iban: 'ES9121000418450200051332', ibanVerifiedAt: '2026-10-01T10:00:00Z', bankName: null,
   ledgerAccountCode: null, healthRegistryNo: 'RGSEAA', isActive: true, notes: null,
   website: null, tags: [], bic: null, sepaMandateRef: null, sepaMandateDate: null, currency: 'EUR',
-  earlyPaymentDiscountPct: null, ivaIncluidoEnLinea: false, archivedAt: null, createdAt: null, createdByName: null,
+  earlyPaymentDiscountPct: null, ivaIncluidoEnLinea: false, invoicingFrequency: null, archivedAt: null, createdAt: null, createdByName: null,
 }
 const pedidos: ContactoProveedor = { id: 'c1', supplierId: 's1', name: 'Ana Ruiz', role: 'orders', phone: '600000000', email: null, isPrimary: true, notes: null }
 const comercial: ContactoProveedor = { id: 'c2', supplierId: 's1', name: 'Luis Martín', role: 'sales', phone: null, email: 'luis@ejemplo.es', isPrimary: false, notes: null }
@@ -31,6 +31,11 @@ function datos(): DatosResumen {
     tipoGasto: { name: 'Comida y bebida', pgcAccountHint: '600' },
     ultimaFactura: { invoiceDate: '2026-09-24', grandTotal: 1283.15 },
     numDocumentos: 0,
+    // C01b: la ficha guarda las filas de tax_rate; el porcentaje sale de las tablas.
+    opciones: {
+      empresa: null, territorio: 'peninsula_baleares', tiposIva: [], retenciones: [], formasPago: [], plazos: [], digitos: null,
+      iva: [{ id: 't10', rate: 10, nombre: 'IVA reducido', ofrecida: true }, { id: 't21', rate: 21, nombre: 'IVA general', ofrecida: true }],
+    },
   }
 }
 

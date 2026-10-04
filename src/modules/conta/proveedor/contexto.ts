@@ -1,4 +1,4 @@
-// src/modules/conta/components/FichaContexto.tsx
+// src/modules/conta/proveedor/contexto.ts
 //
 // Lo que comparten todas las pantallas de una ficha: los datos cargados, cómo
 // guardar, quién es la persona y cómo ir a un apartado (o a un campo concreto,

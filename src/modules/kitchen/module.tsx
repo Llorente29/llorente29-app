@@ -35,7 +35,13 @@ import OfferRulesPage from '@/modules/kitchen/pages/OfferRulesPage'
 import PlatformOffersPage from '@/modules/kitchen/pages/PlatformOffersPage'
 import KitchenAvailabilityPage from '@/modules/kitchen/pages/KitchenAvailabilityPage'
 import AvailabilityReportsPage from '@/modules/kitchen/pages/AvailabilityReportsPage'
-import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
+// PROVEEDORES (C01b, 04/10/2026): la lista y la ficha del estilo nuevo, la
+// MISMA pantalla para Cocina y Contabilidad (una página y una ruta). Cocina le
+// pasa sus piezas («Artículos que le compras», «Migrar artículos»).
+import ProveedoresPage from '@/modules/conta/proveedor/ProveedoresPage'
+import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
+import { EXTENSIONES_COCINA } from '@/modules/kitchen/proveedores/extensionesProveedor'
+import { PROVEEDORES } from '@/config/navegacion'
 // REJILLA DE PRECIOS (18/08): todos los precios de una marca por canal, para
 // auditarlos y corregirlos en lote. No publica en plataformas.
 import PriceGridPage from '@/modules/kitchen/pages/PriceGridPage'
@@ -80,7 +86,9 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'buscar',                     element: <KitchenBuscarPage /> },
     { path: 'disponibilidad',    element: <KitchenAvailabilityPage /> },
     { path: 'disponibilidad-informes', element: <AvailabilityReportsPage /> },
-    { path: 'proveedores',       element: <SuppliersPage /> },
+    { path: PROVEEDORES.lista,    element: <ProveedoresPage extensiones={EXTENSIONES_COCINA} /> },
+    { path: PROVEEDORES.ficha,    element: <FichaProveedorPage extensiones={EXTENSIONES_COCINA} /> },
+    { path: PROVEEDORES.apartado, element: <FichaProveedorPage extensiones={EXTENSIONES_COCINA} /> },
     { path: 'recetas',           element: <KitchenRecipesPage /> },
     // Cortafuegos de vista: la rejilla no se ha podido abrir en un navegador
     // desde este contenedor (sin sesión). Si revienta al dibujarse, se queda

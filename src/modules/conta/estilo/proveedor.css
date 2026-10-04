@@ -1,0 +1,206 @@
+/* src/modules/conta/estilo/proveedor.css
+ *
+ * La ficha y la lista de proveedores en el estilo nuevo (C01b, maquetas
+ * N4Proveedor y M4Proveedor). Solo tokens de tokens.css: ningún color escrito
+ * aquí. Las piezas comunes (tarjeta, botones, campos, píldoras) son las de
+ * componentes.css; esto es lo propio de la ficha.
+ *
+ * La ficha vive dentro de Cocina (decisión 7 de la respuesta 1: una página y
+ * una ruta), así que se monta DENTRO del marco de Folvy y no en el del módulo
+ * de contabilidad: `.cx-incrustado` le quita al `.cx` la altura de pantalla
+ * completa y centra la barra «Pregunta o pide algo» en la ventana.
+ */
+
+.cx-incrustado {
+  min-height: auto; background-attachment: scroll; border-radius: var(--cx-radio-tarjeta);
+  padding: 18px 18px 104px; display: flex; flex-direction: column; gap: 14px;
+}
+.cx-incrustado .cx-pregunta { left: 50%; width: min(620px, calc(100vw - 48px)); }
+
+/* ── Cabecera de la ficha ─────────────────────────────────────────── */
+.cxp-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+.cxp-identidad { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.cxp-avatar {
+  width: 60px; height: 60px; border-radius: 20px; background: var(--cx-inicial-3); color: var(--cx-texto);
+  display: flex; align-items: center; justify-content: center; font-size: 23px; font-weight: 700; flex-shrink: 0;
+}
+.cxp-titulos { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cxp-migas { font-size: 14px; color: var(--cx-apoyo); display: flex; gap: 4px; flex-wrap: wrap; }
+.cx .cxp-migas a { color: var(--cx-apoyo); text-decoration: none; }
+.cx .cxp-migas a:hover { text-decoration: underline; }
+.cxp-nombre { margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -1.1px; line-height: 1.15; overflow-wrap: anywhere; }
+.cxp-pildoras { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cxp-acciones { display: flex; gap: 10px; align-items: center; position: relative; }
+
+/* El menú «···» (Archivar / Recuperar) */
+.cxp-menu {
+  position: absolute; right: 0; top: 52px; z-index: 30; min-width: 220px; background: var(--cx-blanco);
+  border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); box-shadow: var(--cx-sombra-flotante);
+  padding: 6px; display: flex; flex-direction: column;
+}
+.cxp-menu button {
+  min-height: 44px; text-align: left; padding: 0 12px; border: none; background: none; border-radius: 10px;
+  font-size: 15px; color: var(--cx-texto); cursor: pointer;
+}
+.cxp-menu button:hover { background: var(--cx-fondo); }
+
+/* ── «Ficha al N %» ───────────────────────────────────────────────── */
+.cxp-pct { display: flex; align-items: center; gap: 18px; padding: 14px 20px; flex-wrap: wrap; }
+.cxp-pct-barra { display: flex; flex-direction: column; gap: 6px; width: 190px; flex-shrink: 0; }
+.cxp-pct-barra strong { font-size: 14px; font-weight: 600; }
+.cxp-pista { height: 8px; border-radius: 99px; background: var(--cx-linea); overflow: hidden; }
+.cxp-pista > span { display: block; height: 100%; background: var(--cx-ia); }
+.cxp-falta { font-size: 15px; color: var(--cx-apoyo); flex: 1 1 280px; }
+.cxp-falta a { font-weight: 600; }
+
+/* ── Las cuatro cifras ────────────────────────────────────────────── */
+.cxp-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.cxp-cifra { padding: 16px 18px; display: flex; flex-direction: column; gap: 5px; }
+.cxp-cifra-et { font-size: 14px; color: var(--cx-apoyo); }
+.cxp-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 24px; font-weight: 600; letter-spacing: -0.8px; white-space: nowrap; }
+.cxp-cifra-pie { font-size: 13px; color: var(--cx-apoyo); font-weight: 500; }
+.cxp-cifra-pie-ambar { color: var(--cx-ambar); }
+
+/* ── Columnas: facturas | lo aprendido + contactos + notas ──────── */
+.cxp-columnas { display: flex; gap: 14px; align-items: flex-start; }
+.cxp-col-ancha { flex: 1.35; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.cxp-col-estrecha { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+/* Facturas */
+.cxp-factura {
+  display: grid; grid-template-columns: 70px minmax(0, 1fr) 110px 110px 60px; align-items: center; gap: 10px;
+  padding: 10px 0; border-top: 1px solid var(--cx-linea);
+}
+.cxp-factura-fecha { font-family: var(--cx-letra-cifras); font-size: 14px; color: var(--cx-apoyo); }
+.cxp-factura-num { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.cxp-factura-explica { display: block; font-size: 13px; color: var(--cx-ambar); font-weight: 400; }
+.cxp-factura-importe { font-family: var(--cx-letra-cifras); font-size: 15px; font-weight: 600; text-align: right; white-space: nowrap; }
+.cxp-factura-estado { text-align: right; }
+.cxp-factura-ver { text-align: right; }
+.cxp-factura-ver .cx-enlace { font-size: 14px; }
+.cxp-hecho {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  font-size: 14px; color: var(--cx-verde-oscuro); background: var(--cx-verde-suave); border-radius: 10px; padding: 8px 12px;
+}
+
+/* «Lo que he aprendido de este proveedor» */
+.cxp-aprendido { background: var(--cx-verde-suave); border: 1px solid var(--cx-ia-borde); border-radius: var(--cx-radio-tarjeta); padding: 18px 22px; }
+.cxp-aprendido-cabeza { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; }
+.cxp-aprendido-cabeza h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.cxp-aprendido-fila {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--cx-ia-borde);
+}
+.cxp-aprendido-texto { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cxp-aprendido-que { font-size: 15px; font-weight: 600; }
+.cxp-aprendido-porque { font-size: 13px; color: var(--cx-ia-apoyo); }
+.cx .cxp-aprendido .cx-enlace { color: var(--cx-verde-oscuro); font-size: 13px; flex-shrink: 0; }
+.cxp-aprendido-vacio { font-size: 14px; color: var(--cx-ia-apoyo); border-top: 1px solid var(--cx-ia-borde); padding-top: 9px; }
+
+/* «Con quién hablas» */
+.cxp-contacto { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--cx-linea); }
+.cxp-contacto-texto { flex-grow: 1; min-width: 0; }
+.cxp-contacto-nombre { font-size: 15px; font-weight: 600; }
+.cxp-contacto-apoyo { font-size: 13px; color: var(--cx-apoyo); overflow-wrap: anywhere; }
+.cxp-contacto a, .cxp-contacto .cx-enlace { font-size: 14px; font-weight: 600; flex-shrink: 0; }
+
+/* Notas */
+.cxp-notas { font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; border-top: 1px solid var(--cx-linea); padding-top: 9px; }
+
+/* Bloque plegable («Artículos que le compras») */
+.cxp-plegable summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; min-height: 44px; }
+.cxp-plegable summary::-webkit-details-marker { display: none; }
+.cxp-plegable summary .cx-tarjeta-titulo::after { content: ' ›'; color: var(--cx-apoyo); }
+.cxp-plegable[open] summary .cx-tarjeta-titulo::after { content: ' ⌄'; }
+
+/* ── Pestañas de edición ──────────────────────────────────────────── */
+.cxp-edicion { display: flex; flex-direction: column; gap: 14px; }
+.cxp-edicion-cuerpo { max-width: 640px; }
+.cxp-volver { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; text-decoration: none; min-height: 44px; }
+
+/* «Se guarda al salir del campo» */
+.cxp-guardado-discreto { font-size: 13px; color: var(--cx-verde-oscuro); min-height: 18px; }
+.cxp-se-guarda { font-size: 13px; color: var(--cx-apoyo); }
+
+/* Dirección «por confirmar» y datos leídos */
+.cxp-propuesta {
+  border: 1px dashed var(--cx-ia-borde-fuerte); background: var(--cx-verde-suave); border-radius: var(--cx-radio-bloque);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.cxp-propuesta-cabeza { display: flex; flex-direction: column; gap: 2px; }
+.cxp-propuesta-reparto { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 14px; font-size: 15px; margin: 0; }
+.cxp-propuesta-reparto dt { color: var(--cx-ia-apoyo); }
+.cxp-propuesta-reparto dd { margin: 0; font-weight: 600; }
+
+/* ── Ventana (diálogo) ────────────────────────────────────────────── */
+.cxp-velo {
+  position: fixed; inset: 0; z-index: 60; background: var(--cx-velo-hoja); display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.cxp-dialogo {
+  background: var(--cx-blanco); border-radius: var(--cx-radio-tarjeta); box-shadow: var(--cx-sombra-flotante);
+  width: min(520px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 14px;
+}
+.cxp-dialogo h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.4px; }
+
+/* ── Lista de proveedores ─────────────────────────────────────────── */
+.cxp-lista-barra { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cx .cxp-buscar { height: 44px; max-width: 360px; font-size: 15px; padding: 0 14px; }
+.cxp-tabla { display: flex; flex-direction: column; }
+.cxp-tabla-cabeza, .cxp-tabla-fila {
+  display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.6fr) 130px 130px minmax(0, 1.3fr); gap: 12px; align-items: center;
+}
+.cxp-tabla-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; padding: 6px 12px; }
+.cxp-tabla-fila {
+  padding: 10px 12px; border-top: 1px solid var(--cx-linea); text-decoration: none; min-height: 60px; border-radius: 12px;
+}
+.cx .cxp-tabla-fila { color: var(--cx-texto); }
+.cxp-tabla-fila:hover { background: var(--cx-fondo); }
+.cxp-tabla-nombre { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cxp-tabla-nombre > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.cxp-tabla-titulo { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.cxp-tabla-apoyo { font-size: 13px; color: var(--cx-apoyo); }
+.cxp-tabla-cifra { font-family: var(--cx-letra-cifras); font-weight: 600; text-align: right; white-space: nowrap; }
+.cxp-tabla-cifra-apoyo { font-family: var(--cx-letra-cifras); color: var(--cx-apoyo); text-align: right; white-space: nowrap; font-size: 14px; }
+.cxp-tabla-estado { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.cxp-incompleta { font-size: 13px; color: var(--cx-ambar); }
+
+/* ── Móvil (M4Proveedor) ──────────────────────────────────────────── */
+.cxm-arriba { display: flex; align-items: center; gap: 12px; }
+.cxm-arriba .cx-atras { border-radius: 50%; }
+.cxm-arriba-texto { flex-grow: 1; font-size: 15px; color: var(--cx-apoyo); }
+.cxm-identidad { display: flex; gap: 14px; align-items: center; }
+.cxm-identidad .cxp-avatar { width: 52px; height: 52px; border-radius: 16px; font-size: 20px; }
+.cxm-nombre { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.6px; line-height: 1.15; overflow-wrap: anywhere; }
+.cxm-sub { font-size: 14px; color: var(--cx-apoyo); }
+.cxm-ok { color: var(--cx-verde-oscuro); }
+.cxm-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cxm-botones > * { height: 52px; font-size: 16px; border-radius: 16px; }
+.cxm-cifras { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cxm-cifras .cxp-cifra { padding: 12px 14px; gap: 2px; border-radius: var(--cx-radio-bloque); }
+.cxm-cifras .cxp-cifra-valor { font-size: 20px; }
+.cxm-aprendido { display: flex; gap: 12px; align-items: flex-start; }
+.cxm-aprendido .cx-ia-punto { margin-top: 6px; }
+.cxm-apartado { min-height: 56px; }
+.cxm-apartado-falta { color: var(--cx-ambar); }
+
+@media (max-width: 1100px) {
+  .cxp-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cxp-columnas { flex-direction: column; align-items: stretch; }
+  .cxp-tabla-cabeza, .cxp-tabla-fila { grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) 120px 120px; }
+  .cxp-tabla-cabeza > :nth-child(5), .cxp-tabla-fila > :nth-child(5) { display: none; }
+}
+@media (max-width: 767px) {
+  .cx-incrustado { padding: 0 0 24px; background: none; gap: 12px; }
+  .cxp-factura { grid-template-columns: 52px minmax(0, 1fr) auto; grid-template-areas: 'fecha num importe' 'fecha estado ver'; row-gap: 4px; }
+  .cxp-factura-fecha { grid-area: fecha; }
+  .cxp-factura-num { grid-area: num; }
+  .cxp-factura-importe { grid-area: importe; }
+  .cxp-factura-estado { grid-area: estado; text-align: left; }
+  .cxp-factura-ver { grid-area: ver; }
+  .cxp-tabla-cabeza { display: none; }
+  .cxp-tabla-fila { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+  .cxp-tabla-fila > :nth-child(2) { grid-column: 1 / -1; order: 3; }
+  .cxp-tabla-fila > :nth-child(4), .cxp-tabla-fila > :nth-child(5) { display: none; }
+  .cx .cxp-buscar { max-width: none; flex: 1 1 100%; }
+  .cxp-dialogo { align-self: flex-end; border-radius: var(--cx-radio-tarjeta) var(--cx-radio-tarjeta) 0 0; }
+  .cxp-velo { padding: 0; align-items: flex-end; }
+}

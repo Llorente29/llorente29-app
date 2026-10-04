@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import filasReales from './datos/filas-serie-c00.json'
 import {
-  casillasIva, construirOpciones, formasDelDesplegable, nombreFormaPago, type FilasFicha,
+  casillasIva, construirOpciones, formasDelDesplegable, nombreFormaPago, porcentajesIva, type FilasFicha,
 } from '@/modules/conta/lib/opcionesFicha'
 import { PAYMENT_METHOD_LABEL } from '@/modules/conta/types'
 
@@ -59,13 +59,21 @@ describe('la ficha lee de las tablas generales', () => {
 
   it('…pero lo que el proveedor ya tiene guardado sale siempre, y dice por qué (regla 30)', () => {
     const o = construirOpciones(filas, new Set([id('IVA reducido'), filas.formasPago[0].id]), 'peninsula_baleares', HOY, null)
-    expect(casillasIva(o, [5, 10, 21])).toEqual([
-      { valor: 0, nombre: 'Exento o 0 %', ofrecida: true },
-      { valor: 4, nombre: 'IVA superreducido', ofrecida: true },
-      { valor: 5, nombre: null, ofrecida: false },
-      { valor: 10, nombre: null, ofrecida: false },
-      { valor: 21, nombre: 'IVA general', ofrecida: true },
+    // C01b: la ficha guarda la FILA de tax_rate. Guardadas: el 10 % (oculto), el
+    // 2 % de 2024 (ya no vigente), el general y un id que ya no está en las tablas.
+    const guardadas = [id('IVA reducido'), id('IVA alimentos básicos (oct.–dic. 2024)'), id('IVA general'), 'id-que-ya-no-existe']
+    expect(casillasIva(o, guardadas)).toEqual([
+      { id: id('Exento o 0 %'), rate: 0, nombre: 'Exento o 0 %', ofrecida: true },
+      { id: id('IVA alimentos básicos (oct.–dic. 2024)'), rate: 2, nombre: 'IVA alimentos básicos (oct.–dic. 2024)', ofrecida: false },
+      { id: id('IVA superreducido'), rate: 4, nombre: 'IVA superreducido', ofrecida: true },
+      { id: id('IVA reducido'), rate: 10, nombre: 'IVA reducido', ofrecida: false },
+      { id: id('IVA general'), rate: 21, nombre: 'IVA general', ofrecida: true },
+      // Existe en la ficha aunque ya no esté en ninguna tabla: sale, sin porcentaje, y no se esconde.
+      { id: 'id-que-ya-no-existe', rate: null, nombre: null, ofrecida: false },
     ])
+    // Las compras en la UE y la inversión del sujeto pasivo también son 21 %, pero no se ofrecen.
+    expect(casillasIva(o, []).map((c) => c.nombre)).toEqual(['Exento o 0 %', 'IVA superreducido', 'IVA general'])
+    expect(porcentajesIva(o, guardadas)).toEqual([2, 10, 21])
     const formas = formasDelDesplegable(o, 'transfer', PAYMENT_METHOD_LABEL)
     expect(formas.find((f) => f.valor === 'transfer')).toEqual({ valor: 'transfer', nombre: 'Transferencia', ofrecida: false })
   })

@@ -1,12 +1,12 @@
-// src/modules/conta/apartados/Historial.tsx
+// src/modules/conta/proveedor/Historial.tsx
 //
 // Lo que ha pasado con este proveedor: alta, contactos, datos confirmados o
 // descartados, pagos y cambios de vencimiento. Cada suceso sale de la tabla
-// que lo guarda (ver listarHistorial); no hay una tabla de historial aparte.
+// que lo guarda (listarHistorial); no hay una tabla de historial aparte.
 
 import { useEffect, useState } from 'react'
-import { useFicha } from '@/modules/conta/components/FichaContexto'
-import { ErrorConReintento, Hueso } from '@/modules/conta/components/ui'
+import { useFicha } from '@/modules/conta/proveedor/contexto'
+import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { listarHistorial, type Suceso } from '@/modules/conta/services/proveedorService'
 
 const cuando = (iso: string) =>
@@ -26,15 +26,17 @@ export default function Historial() {
     return () => { vivo = false }
   }, [datos.ficha, datos.facturas, vuelta])
 
-  if (error) return <ErrorConReintento mensaje={error} alReintentar={() => { setError(null); setSucesos(null); setVuelta((v) => v + 1) }} />
-  if (!sucesos) return <div aria-busy="true"><Hueso alto={44} /><div style={{ height: 8 }} /><Hueso alto={44} /></div>
-  if (sucesos.length === 0) return <p className="cf-nota">Aún no hay nada apuntado.</p>
+  if (error) return <ErrorConReintento mensaje={error} reintentar={() => { setError(null); setSucesos(null); setVuelta((v) => v + 1) }} />
+  if (!sucesos) return <TarjetaCargando />
   return (
-    <div className="cf-tarjeta" style={{ gap: 0, maxWidth: 820 }}>
+    <div className="cx-tarjeta" style={{ padding: '6px 18px' }}>
+      {sucesos.length === 0 && <div style={{ padding: '12px 0' }}><Vacio titulo="Aún no hay nada apuntado." explicacion="Aquí sale quién lo dio de alta, quién confirmó sus datos y quién apuntó sus pagos." /></div>}
       {sucesos.map((s, i) => (
-        <div key={i} className="cf-suceso">
-          <span className="cf-nota">{cuando(s.cuando)}</span>
-          <span>{s.que}{s.quien ? <span className="cf-nota"> · {s.quien}</span> : null}</span>
+        <div key={i} className="cxp-contacto">
+          <div className="cxp-contacto-texto">
+            <div style={{ fontSize: 15 }}>{s.que}</div>
+            <div className="cxp-contacto-apoyo">{cuando(s.cuando)}{s.quien ? ` · ${s.quien}` : ''}</div>
+          </div>
         </div>
       ))}
     </div>

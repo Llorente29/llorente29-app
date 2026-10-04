@@ -22,7 +22,9 @@
 // manager) — comunica datos a la gestoría, no es operativa de local.
 
 import { Truck, ClipboardList, PackageCheck, FileText, Boxes, Send, AlertTriangle, Scale } from 'lucide-react'
+import { Navigate } from 'react-router-dom'
 import type { ModuleDefinition } from '@/shell/types'
+import { rutaListaProveedores } from '@/config/navegacion'
 import SupplyOrdersPage from '@/modules/supply/pages/SupplyOrdersPage'
 import GoodsReceiptsPage from '@/modules/supply/pages/GoodsReceiptsPage'
 import PendientesRecepcionPage from '@/modules/supply/pages/PendientesRecepcionPage'
@@ -48,6 +50,9 @@ export const supplyModule: ModuleDefinition = {
     { path: 'recepciones', element: <GoodsReceiptsPage /> },
     { path: 'pendientes', element: <PendientesRecepcionPage /> },
     { path: 'facturas', element: <SupplierInvoicesPage /> },
+    // C01b (respuesta 1, decisión 7): Proveedores es UNA página con UNA ruta,
+    // la de Cocina. Desde Compras se llega a ella; no se duplica.
+    { path: 'proveedores', element: <Navigate to={rutaListaProveedores()} replace /> },
     { path: 'inventario', element: <InventoryPage /> },
     { path: 'formatos-conteo', element: <FormatosDeConteoPage /> },
     { path: 'comunicar-ctb', element: <CtbNotifyPage /> },
@@ -60,6 +65,7 @@ export const supplyModule: ModuleDefinition = {
       { id: 'supply_receipts', label: 'Recepciones', icon: PackageCheck, path: 'recepciones', requiredPermission: 'show_recepcion' },
       { id: 'supply_pending', label: 'Pendientes', icon: AlertTriangle, path: 'pendientes', requiredPermission: 'show_recepcion' },
       { id: 'supply_invoices', label: 'Facturas', icon: FileText, path: 'facturas', requiredPermission: 'show_facturas' },
+      { id: 'supply_suppliers', label: 'Proveedores', icon: Truck, path: 'proveedores', requiredPermission: 'show_proveedores' },
       { id: 'supply_inventory', label: 'Almacén', icon: Boxes, path: 'inventario', requiredPermission: 'show_inventory' },
       // §2.6: la pantalla donde se decide con qué formatos se cuenta cada
       // producto. Cuelga de Almacén porque es lo que hay que dejar claro ANTES
