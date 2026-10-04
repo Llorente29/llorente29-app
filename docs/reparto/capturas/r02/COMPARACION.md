@@ -46,7 +46,9 @@ Capturas hechas por `tests/e2e/reparto/quien-reparte.spec.ts` en staging-conta (
 7. **Primera captura: celdas de columnas vecinas pegadas y el «!» de Pita · Uber tapado** por la columna de al
    lado. Corregido en `de602c7` (hueco entre columnas, aviso por encima). Esa segunda captura sacó otro: los
    botones encogían y la opción marcada salía cortada («Platafor…»). Corregido después: las columnas de
-   plataforma nunca bajan del ancho de su celda y, si falta sitio, cede la columna de la marca. Las capturas de
+   plataforma miden lo mismo en todas las filas (mínimo 180 px, donde cabe la opción marcada en negrita), así que
+   cuadran de arriba abajo, y si falta sitio cede la columna de la marca. Por debajo de 1280 px «Qué ve la
+   cocina» pasa debajo de la tabla, y por debajo de 1000 px salen las tarjetas del móvil. Las capturas de
    esta carpeta son las de después; medido antes con la letra de verdad (Geist), 1440 px, sin corte ni desborde.
 
 ## La cocina

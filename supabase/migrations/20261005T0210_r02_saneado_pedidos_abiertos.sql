@@ -6,8 +6,8 @@
 --
 -- VA APARTE porque ESCRIBE en `sale`, una tabla del pedido: el workflow de
 -- producción para ante un update sobre una tabla de Cocina y Julio tiene que
--- darle el visto bueno por separado. Va DESPUÉS de los cuatro del R02
--- (0100–0130), que son los que dejan la resolución nueva en su sitio.
+-- darle el visto bueno por separado. Va DESPUÉS de los cinco del R02
+-- (0100–0140), que son los que dejan la resolución nueva en su sitio.
 --
 -- A QUÉ PEDIDOS: los VIVOS de HubRise y Last (status 'open' y order_status
 -- que no sea ya un final: completed, cancelled, rejected, delivery_failed),

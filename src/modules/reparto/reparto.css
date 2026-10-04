@@ -29,8 +29,9 @@
   overflow: hidden; display: flex; flex-direction: column;
 }
 .cx-rp-fila {
-  /* Las plataformas nunca cortan «Plataforma | Nosotros» (min-content): si falta sitio, cede la marca. */
-  display: grid; grid-template-columns: minmax(0, 1.1fr) repeat(var(--cx-rp-columnas, 3), minmax(min-content, 1fr));
+  /* Las plataformas nunca cortan «Plataforma | Nosotros» (180 px caben con la opción marcada en negrita) y
+     miden lo mismo en todas las filas, para que las columnas cuadren; si falta sitio, cede la marca. */
+  display: grid; grid-template-columns: minmax(0, 1.1fr) repeat(var(--cx-rp-columnas, 3), minmax(180px, 1fr));
   column-gap: 8px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--cx-linea);
 }
 .cx-rp-fila-cabeza { padding: 14px 14px 10px; align-items: end; border-top: none; }
@@ -119,7 +120,13 @@
 .cx-et-franja { margin: 0 16px 10px 20px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--cx-linea); background: var(--cx-blanco); }
 
 /* ── Móvil: una tarjeta por marca, las plataformas en vertical ──────────── */
-@media (max-width: 900px) {
+/* Sin sitio para la tabla y la columna de 360 px lado a lado: la columna, debajo. */
+@media (max-width: 1280px) {
+  .cx-rp-cuerpo { flex-direction: column; align-items: stretch; }
+  .cx-rp-der { width: 100%; }
+}
+
+@media (max-width: 1000px) {
   .cx-rp { padding: 14px 12px 32px; }
   .cx-rp-titulo { font-size: 26px; }
   .cx-rp-cuerpo { flex-direction: column; }
