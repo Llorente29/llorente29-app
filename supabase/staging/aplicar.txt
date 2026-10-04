@@ -1,9 +1,16 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 04/10/2026 · C00, 18.ª tanda: PRUEBA de un rol «conta_migraciones» (encargo
-# de Julio: aplicar la tanda de producción sin la contraseña de postgres).
-# Crea el rol, intenta darle la membresía de postgres y prueba si, sin ella,
-# puede alterar supplier y reemplazar vat_rate_for. Termina en ROLLBACK.
-# (17.ª: la prueba de las vueltas atrás.)
-supabase/staging/sql/20261004_prueba_usuario_migraciones.sql
+# 05/10/2026 · R02 (quién reparte), 1.ª tanda:
+#   semillas inventadas → foto de ANTES con las funciones de hoy → las cuatro
+#   migraciones del R02 → foto de DESPUÉS y comparación (0 diferencias en
+#   HubRise) → pruebas de la resolución, el guardado y el R01 (acaban en
+#   rollback). Si falla una, las siguientes no se aplican.
+supabase/seeds/reparto/seed_r02_quien_reparte.sql
+supabase/staging/sql/20261005_r02_foto_antes.sql
+supabase/migrations/20261005T0100_r02_brand_delivery_policy.sql
+supabase/migrations/20261005T0110_r02_filas_migradas.sql
+supabase/migrations/20261005T0120_r02_lectores_de_la_resolucion.sql
+supabase/migrations/20261005T0130_r02_guardar_celdas.sql
+supabase/staging/sql/20261005_r02_prueba_cero_diferencias.sql
+supabase/staging/sql/20261005_r02_prueba_resolucion.sql

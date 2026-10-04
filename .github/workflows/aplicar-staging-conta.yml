@@ -13,7 +13,7 @@ name: Aplicar SQL en staging-conta
 # tabla inexistente. Las migraciones de staging dejan de depender de él.
 #
 # CUÁNDO SE DISPARA
-# Un push a una rama conta/** que cambie supabase/staging/aplicar.txt. Funciona
+# Un push a una rama conta/** o reparto-** que cambie supabase/staging/aplicar.txt. Funciona
 # desde la propia rama, sin estar en main. Nada más lo dispara: ni tocar un
 # .sql ni tocar este workflow. El manifiesto es la tanda de ESTA ejecución;
 # para la siguiente se reescribe entero.
@@ -38,7 +38,8 @@ name: Aplicar SQL en staging-conta
 
 on:
   push:
-    branches: ['conta/**']
+    # reparto-**: el R02 (quién reparte) usa la misma tanda y las mismas guardas.
+    branches: ['conta/**', 'reparto-**']
     paths:
       - 'supabase/staging/aplicar.txt'
 
@@ -100,8 +101,8 @@ jobs:
           mal=0
           while IFS= read -r f; do
             # Solo SQL de las carpetas de migraciones, de staging o de semillas
-            # de contabilidad; sin rutas con «..».
-            if ! printf '%s' "$f" | grep -qE '^supabase/(migrations|staging/sql|seeds/conta)/[A-Za-z0-9_./-]+\.sql$' \
+            # de contabilidad y de reparto (R02); sin rutas con «..».
+            if ! printf '%s' "$f" | grep -qE '^supabase/(migrations|staging/sql|seeds/conta|seeds/reparto)/[A-Za-z0-9_./-]+\.sql$' \
                || printf '%s' "$f" | grep -q '\.\.'; then
               echo "::error::Ruta no permitida en el manifiesto: $f"; mal=1; continue
             fi
