@@ -75,5 +75,20 @@
 | «Qué se apunta aquí» | No | Sí, en lenguaje de la calle |
 | Bancos | Prefijo `572`, caja `570`, transferencias `57299` | `572` desde `treasury_account`, una subcuenta por cuenta bancaria |
 
-### Pendiente
-- Cegid Diez: «formato de cuentas», «dígitos del plan», «cambio de subcuentas», «renumerar» — con las capturas de Julio.
+### Cegid Diez (D6, con las capturas de Julio)
+
+> Seis capturas anonimizadas de la contabilidad de un cliente en Diez, en
+> `docs/conta/capturas/diez/` (su LEEME dice qué se ha difuminado). Lo que se ve
+> en ellas; lo que no se ve, va como «pendiente de captura».
+
+| Captura | Qué hace Diez | Folvy (C02) |
+|---|---|---|
+| 1 · Ficha de proveedor | **El proveedor es la subcuenta**: la ficha se abre desde el plan de cuentas (pestañas Subcuentas · Datos proveedor · Movimientos · Saldos · Norma contable). Lleva por defecto para sus facturas: hasta tres tipos de IVA, la retención, el % de IVA deducible, el tipo de operación, la **subcuenta de gasto** (una subcuenta de 623, no la cuenta), la de suplidos, y la de pago. Marcas: recargo de equivalencia, no incluir en el 347, proveedor genérico, criterio de caja, REAGP. | Igual en lo esencial: una subcuenta por proveedor enlazada a su ficha (`company_account_link`), y la pestaña Contabilidad (N7) con su cuenta, dónde se apuntan sus facturas, IVA, retención y desde dónde se le paga. **No cubrimos aún**: subcuenta de suplidos, % de IVA deducible, tipo de operación, «pago directo factura». Van al C04 (factura recibida). La marca del 347 ya estaba apuntada para tesorería e impuestos. |
+| 1 y 4 · Qué cuenta usa | Este cliente apunta a sus proveedores de servicios en **410** (41000002, 41000003), no en 400, y el gasto en **subcuentas** de 623 (62300001, 62300002). | **Hallazgo para la tarea 3**: hoy al activar todo proveedor va a 4000. Propongo que vaya a **4100 (acreedores)** cuando su tipo de gasto no es una compra (grupo 62 y siguientes) y a **4000** cuando lo es (60x), que es lo que hace este asesor y lo que dice el PGC de pymes en su quinta parte: 400 son «Deudas con suministradores de mercancías y de los demás bienes definidos en el grupo 3» y 410 «Deudas con suministradores de servicios que no tienen la condición estricta de proveedores». Pendiente de que Julio lo confirme. |
+| 2 · Movimientos | Por subcuenta: fecha, serie, documento, concepto, debe, haber y saldo, con selector de ejercicio y de subcuenta. | Es el «Ver extracto» de la pestaña Contabilidad, preparado para el C04. |
+| 3 · Saldos | Por meses, con apertura y cierre: debe, haber, saldo deudor, acreedor y acumulado, y los totales del año. | Es la tarjeta «Saldo y movimientos» (N7), que se llena con el C04. |
+| 4 · Factura recibida | Proveedor (subcuenta), bases y cuotas de IVA, retención, suplidos, contrapartida a la subcuenta de gasto, pago y **la vista del asiento** al lado del documento escaneado. El IVA soportado va a **47200000**, la cuenta sin subcuenta por tipo. | Referencia para el C04. Ojo: nosotros creamos una 472 por tipo (47200021…), como pide el encargo; Diez, en este cliente, usa una sola. Al importar desde Diez (pendiente fuera del C02) habrá que casar las dos. |
+| 5 · Impuesto sobre Sociedades | Cinta con caracteres, correcciones, compensación de bases, deducciones, modelo 200. | Fuera del C02 (el C00 ya cubre la ficha frente al 200). |
+| 6 · Conciliación bancaria | Extracto por banco (57200001, 57200002) con el concepto bancario, el del asiento, la subcuenta asignada, «validado» y «contabilizado». Las plataformas de reparto tienen **su propia 430** (43000002, 43000003) y aparece la 407 (anticipos a proveedores). | Confirma D5: las plataformas serán clientes con su subcuenta en el C03, por la misma regla que los proveedores. Referencia para la conciliación, que viene después. |
+
+**Pendiente de captura** (las seis no lo enseñan): «formato de cuentas» y «dígitos del plan» (dónde se fija la longitud y si se bloquea), «cambio de subcuentas» y «renumerar». Lo que hacemos nosotros está escrito y probado (longitud 6–12 fija desde el primer asiento, renumerado que conserva el número de cada subcuenta); el contraste con Diez en esos cuatro puntos se cierra cuando lleguen esas pantallas.
