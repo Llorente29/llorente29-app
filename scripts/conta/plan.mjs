@@ -74,7 +74,7 @@ for (const plan of Object.keys(PLANES)) {
     const pn = calle[c.code] ?? null
     if (pn) usadasCalle.add(c.code)
     const reforma = c.norma && c.norma !== PLANES[plan].idBoe ? `, redacción vigente desde ${c.desde} (${c.norma})` : ''
-    const corr = c.correccion ? `; título corregido con cita de la quinta parte (${c.correccion}, supabase/conta/pgc/correcciones.json)` : ''
+    const corr = c.correccion ? `; título corregido con cita de la ${c.correccion === 'espacio' ? 'propia línea del cuadro' : 'quinta parte'} (${c.correccion}, supabase/conta/pgc/correcciones.json)` : ''
     salida.push({
       plan, code: c.code, name: c.name, boe_name: c.boeName, correction_kind: c.correccion, plain_name: pn,
       group_code: c.group, parent_code: c.parent, is_leaf: c.hoja,

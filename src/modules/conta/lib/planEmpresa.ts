@@ -120,7 +120,8 @@ export interface EntradaActivacion {
   retenciones: readonly { id: string; pgcHint: string | null }[]
   gastos: readonly { id: string; pgcHint: string | null }[]
   bancos: readonly { id: string; name: string }[]
-  proveedores: readonly { id: string; name: string }[]
+  /** gastoPista: la cuenta del 6 de su tipo de gasto; hoja: la marca del tipo de gasto (expense_category.supplier_account_leaf), si la tiene. */
+  proveedores: readonly { id: string; name: string; gastoPista?: string | null; hoja?: HojaProveedor | null }[]
   cuentaComun: { proveedores: boolean }
 }
 
@@ -144,7 +145,7 @@ export function activar(e: EntradaActivacion): SalidaActivacion {
   const enlaces: Enlace[] = []
   const hojaRellena = (code: string) => (porHoja.has(code) ? rellenar(code, d) : null)
   const comun = (code: string) => { const c = cuentas.find((x) => x.templateCode === code && x.kind === 'template'); if (c) c.isCommon = true }
-  comun('4000'); comun('4300')
+  comun('4000'); comun('4100'); comun('4300')
 
   // IVA: una subcuenta por tipo, en 472 y en 477.
   const porTipo = new Map<number, string[]>()
@@ -183,8 +184,34 @@ export function activar(e: EntradaActivacion): SalidaActivacion {
     }
   }
   terceros(e.bancos, '572', 'bank_account', 'Bancos', false)
-  terceros(e.proveedores, '4000', 'supplier', 'Proveedores', e.cuentaComun.proveedores)
+  // Proveedores: 4000 si lo que vende es mercancía, 4100 si son servicios
+  // (respuesta 2 de Julio, del contraste con Diez). Por orden de nombre en cada hoja.
+  for (const hoja of ['4000', '4100'] as const) {
+    terceros(e.proveedores.filter((p) => hojaDeProveedor(p.gastoPista ?? null, p.hoja ?? null).hoja === hoja), hoja, 'supplier',
+      hoja === '4000' ? 'Proveedores' : 'Acreedores', e.cuentaComun.proveedores)
+  }
   return { cuentas: cuentas.sort((a, b) => a.code.localeCompare(b.code)), enlaces, avisos }
+}
+
+export type HojaProveedor = '4000' | '4100'
+
+/** Las dos definiciones de la quinta parte del PGC de pymes que hacen la regla (citadas, literales). */
+export const DEFINICION_400 = '400. Proveedores. Deudas con suministradores de mercancías y de los demás bienes definidos en el grupo 3.'
+export const DEFINICION_410 = '410. Acreedores por prestaciones de servicios. Deudas con suministradores de servicios que no tienen la condición estricta de proveedores.'
+
+/**
+ * De qué hoja cuelga la subcuenta de un proveedor (respuesta 2 de Julio): la
+ * marca de su tipo de gasto si la tiene; si no, por su cuenta del 6: compras
+ * (grupo 60) → 4000 «Proveedores (euros)»; servicios (62 y demás) → 4100
+ * «Acreedores por prestaciones de servicios (euros)». Sin tipo de gasto, 4000
+ * hasta que se le ponga: lo dice el porqué y la ficha tiene «Cambiar».
+ */
+export function hojaDeProveedor(gastoPista: string | null, marca: HojaProveedor | null): { hoja: HojaProveedor; porque: string } {
+  if (marca) return { hoja: marca, porque: marca === '4000' ? `Su tipo de gasto va a proveedores: ${DEFINICION_400}` : `Su tipo de gasto va a acreedores: ${DEFINICION_410}` }
+  if (!gastoPista) return { hoja: '4000', porque: 'Aún no tiene tipo de gasto: va a 400, proveedores, hasta que se le ponga. Si te vende servicios, cámbialo a 410.' }
+  return gastoPista.startsWith('60')
+    ? { hoja: '4000', porque: `Le compras mercancía (${gastoPista}): ${DEFINICION_400}` }
+    : { hoja: '4100', porque: `Te presta servicios (${gastoPista}): ${DEFINICION_410}` }
 }
 
 /** Una subcuenta de la empresa nueva: siguiente código libre bajo su hoja. */

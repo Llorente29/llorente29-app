@@ -11,7 +11,7 @@ import serie from '../../../../supabase/conta/pgc/serie.json'
 import equivalencias from '../../../../supabase/conta/pgc/equivalencias.json'
 import ref from '../../../../docs/conta/referencia/serie.json'
 import {
-  activar, cambioDePlan, coherencia, nuevaSubcuenta, puedeOcultar, rellenar, renumerar, salidaNumeracionAgotada,
+  DEFINICION_400, DEFINICION_410, activar, cambioDePlan, hojaDeProveedor, coherencia, nuevaSubcuenta, puedeOcultar, rellenar, renumerar, salidaNumeracionAgotada,
   siguienteLibre, subcuenta, type CuentaEmpresa, type Equivalencia, type HojaSerie,
 } from '@/modules/conta/lib/planEmpresa'
 
@@ -107,6 +107,30 @@ describe('activar el plan en una empresa', () => {
   it('el resultado es coherente', () => {
     const { cuentas, enlaces } = base()
     expect(coherencia(cuentas, enlaces, SET.pymes, 8)).toEqual([])
+  })
+})
+
+describe('400 o 410 según lo que vende (respuesta 2)', () => {
+  it('cada tipo de gasto de serie va a su hoja: compras (60) a 4000, servicios a 4100', () => {
+    const r = Object.fromEntries(GASTOS.map((g) => [g.id, hojaDeProveedor(g.pgcHint, null).hoja]))
+    expect(r).toEqual({ food_beverage: '4000', cleaning_tableware: '4000', packaging: '4000', rent: '4100', repairs: '4100', professional: '4100',
+      transport: '4100', insurance: '4100', bank_platform_fees: '4100', advertising: '4100', utilities: '4100', other_services: '4100' })
+  })
+  it('la marca del tipo de gasto manda; sin tipo de gasto, 4000 y lo dice', () => {
+    expect(hojaDeProveedor('621', '4000').hoja).toBe('4000')
+    expect(hojaDeProveedor(null, null)).toEqual({ hoja: '4000', porque: 'Aún no tiene tipo de gasto: va a 400, proveedores, hasta que se le ponga. Si te vende servicios, cámbialo a 410.' })
+    expect(hojaDeProveedor('628', null).porque).toContain(DEFINICION_410)
+    expect(hojaDeProveedor('600', null).porque).toContain(DEFINICION_400)
+  })
+  it('al activar: los de mercancía en 4000 y los de servicios en 4100, cada hoja con su numeración', () => {
+    const r = activar({ hojas: HOJAS.pymes, digitos: 8, ivas: [], retenciones: [], gastos: [], bancos: [], cuentaComun: { proveedores: false },
+      proveedores: [{ id: 'a', name: 'Bebidas', gastoPista: '600' }, { id: 'b', name: 'Local', gastoPista: '621' }, { id: 'c', name: 'Sin tipo' }, { id: 'd', name: 'Luz', gastoPista: '628' }] })
+    expect(Object.fromEntries(r.enlaces.map((l) => [l.entityId, l.code]))).toEqual({ a: '40000001', c: '40000002', b: '41000001', d: '41000002' })
+    expect(r.cuentas.find((c) => c.code === '41000001')?.name).toBe('Acreedores · Local')
+    const comun = activar({ hojas: HOJAS.pymes, digitos: 8, ivas: [], retenciones: [], gastos: [], bancos: [], cuentaComun: { proveedores: true },
+      proveedores: [{ id: 'a', name: 'Bebidas', gastoPista: '600' }, { id: 'b', name: 'Local', gastoPista: '621' }] })
+    expect(Object.fromEntries(comun.enlaces.map((l) => [l.entityId, l.code]))).toEqual({ a: '40000000', b: '41000000' })
+    expect(coherencia(comun.cuentas, comun.enlaces, SET.pymes, 8)).toEqual([])
   })
 })
 

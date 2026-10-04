@@ -179,3 +179,12 @@ describe('serie.json (lo que se carga) es lo que sale del BOE', () => {
     expect(serie.cuentas.find((c) => c.plan === 'pymes' && c.code === '621')?.plain_name).toMatch(/alquiler del local/)
   })
 })
+
+describe('las definiciones que usa la regla 400/410 son literales del BOE', () => {
+  it('400 y 410, quinta parte del PGC de pymes', async () => {
+    const { DEFINICION_400, DEFINICION_410 } = await import('@/modules/conta/lib/planEmpresa')
+    const q = textoVigente(T.pymes, 'grupo4-2')!.replace(/\n/g, ' ')
+    expect(q).toContain(DEFINICION_400)
+    expect(q).toContain(DEFINICION_410)
+  })
+})

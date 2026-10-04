@@ -190,7 +190,10 @@ export function revisarCorreccion(c, { cuadroPorCodigo, quinta, textoBloque }) {
   const yo = `${c.plan} ${c.code}`
   const literales = c.cita?.literal ?? []
   if (!literales.length) return [`${yo}: corrección sin cita. Nada se corrige sin cita.`]
-  if (c.cita.parte !== 'quinta') p.push(`${yo}: la cita no es de la quinta parte.`)
+  // Una errata de espacio no cambia palabras: se cita el propio cuadro (respuesta
+  // 2 de Julio, la 90 del general). Todas las demás, la quinta parte.
+  const parte = c.tipo === 'espacio' ? 'cuarta' : 'quinta'
+  if (c.cita.parte !== parte) p.push(`${yo}: la cita tiene que ser de la ${parte} parte.`)
   const bloque = textoBloque(c.cita.bloque)
   if (bloque === null) return [`${yo}: el bloque citado (${c.cita.bloque}) no está en el texto descargado.`]
   for (const l of literales) if (!bloque.includes(l)) p.push(`${yo}: la cita ya no está en la versión vigente de ${c.cita.bloque}: «${l.replace(/\n/g, ' ')}».`)
@@ -228,6 +231,7 @@ export function revisarCorreccion(c, { cuadroPorCodigo, quinta, textoBloque }) {
       break
     case 'espacio':
       if (c.tituloCuadro.replace(/\s/g, '') !== c.tituloCorrecto.replace(/\s/g, '')) p.push(`${yo}: la corrección cambia algo más que un espacio.`)
+      if (!dice(c.tituloCuadro)) p.push(`${yo}: la cita no es la línea del cuadro («${c.tituloCuadro}»).`)
       break
     default:
       p.push(`${yo}: tipo de corrección desconocido «${c.tipo}».`)

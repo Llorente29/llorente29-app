@@ -6,7 +6,9 @@
 -- (tests/unit/modules/conta/planEmpresaC02.test.ts) con las mismas entradas.
 --
 --   1. A (península): 615 hojas, 472/477 para 21, 10 y 4, 57200001 para su
---      banco, 40000001…40000005 para sus 5 proveedores, 43000000 común.
+--      banco; sus 4 proveedores de mercancía o sin tipo de gasto en
+--      40000001…40000004 y el de alquiler en 41000001 (0130, 400 o 410);
+--      43000000 común.
 --   2. Coherencia: retenciones a 47510000, alquiler a 62100000; una cuenta
 --      enlazada no se oculta; una libre sí; un tercero no comparte subcuenta.
 --   3. Añadir subcuenta: la siguiente libre; renumerar 8 → 10.
@@ -33,7 +35,10 @@ begin
   select string_agg(code, ' ' order by code) into v from public.company_account where company_id = emp and kind = 'own' and template_code = '572';
   if v is distinct from '57200001' then raise exception 'PRUEBA C02: bancos de A = %', v; end if;
   select string_agg(code, ' ' order by code) into v from public.company_account where company_id = emp and kind = 'own' and template_code = '4000';
-  if v is distinct from '40000001 40000002 40000003 40000004 40000005' then raise exception 'PRUEBA C02: proveedores de A = %', v; end if;
+  if v is distinct from '40000001 40000002 40000003 40000004' then raise exception 'PRUEBA C02: proveedores de A = %', v; end if;
+  select string_agg(code || ' ' || name, ' | ' order by code) into v from public.company_account where company_id = emp and kind = 'own' and template_code = '4100';
+  if v is distinct from '41000001 Acreedores · Locales del Norte (alquiler)' then raise exception 'PRUEBA C02: acreedores de A = %', v; end if;
+  if (select supplier_account_leaf from public.expense_category where is_system and code = 'rent') <> '4100' then raise exception 'PRUEBA C02: el alquiler no va a 4100'; end if;
   if not (select is_common from public.company_account where company_id = emp and code = '43000000') then raise exception 'PRUEBA C02: 43000000 no es la común'; end if;
   if exists (select 1 from public.company_account where company_id = emp and template_code = '4300' and kind = 'own') then raise exception 'PRUEBA C02: hay subcuentas de 430 (D5)'; end if;
 
@@ -59,9 +64,9 @@ begin
 
   -- 3. Añadir y renumerar.
   r := public.company_account_add(emp, '4000', 'Proveedor nuevo', 'Lo que le compras', null, null, 'Prueba C02');
-  if r->>'code' <> '40000006' then raise exception 'PRUEBA C02: la nueva es %', r->>'code'; end if;
+  if r->>'code' <> '40000005' then raise exception 'PRUEBA C02: la nueva es %', r->>'code'; end if;
   r := public.company_chart_set_digits(emp, 10, 'Prueba C02');
-  if (select string_agg(code, ' ' order by code) from public.company_account where company_id = emp and code in ('4000000006', '4720000021', '4700000000', '5720000001')) is distinct from '4000000006 4700000000 4720000021 5720000001' then
+  if (select string_agg(code, ' ' order by code) from public.company_account where company_id = emp and code in ('4000000005', '4720000021', '4700000000', '5720000001', '4100000001')) is distinct from '4000000005 4100000001 4700000000 4720000021 5720000001' then
     raise exception 'PRUEBA C02: el renumerado no da lo esperado';
   end if;
   if exists (select 1 from public.company_account where company_id = emp and length(code) <> 10) then raise exception 'PRUEBA C02: quedan cuentas sin renumerar'; end if;
@@ -96,8 +101,10 @@ begin
     join public.tax_rate t on t.id::text = l.entity_id where l.company_id = emp and t.code = 'igic_cero';
   if v is distinct from '47200000 47700000' then raise exception 'PRUEBA C02: IGIC cero a %', v; end if;
   -- Cuenta común de proveedores: todos a 40000000, ninguna subcuenta.
-  if exists (select 1 from public.company_account where company_id = emp and template_code = '4000' and kind = 'own') then raise exception 'PRUEBA C02: B pidió cuenta común y tiene subcuentas'; end if;
-  if (select count(distinct l.company_account_id) from public.company_account_link l where l.company_id = emp and l.entity = 'supplier') <> 1 then raise exception 'PRUEBA C02: los proveedores de B no van todos a la común'; end if;
+  if exists (select 1 from public.company_account where company_id = emp and template_code in ('4000', '4100') and kind = 'own') then raise exception 'PRUEBA C02: B pidió cuenta común y tiene subcuentas'; end if;
+  select string_agg(distinct a.code, ' ' order by a.code) into v from public.company_account_link l join public.company_account a on a.id = l.company_account_id
+   where l.company_id = emp and l.entity = 'supplier';
+  if v is distinct from '40000000 41000000' then raise exception 'PRUEBA C02: los proveedores de B van a % (esperado las dos comunes)', v; end if;
   -- B no ve ni toca el plan de A.
   if exists (select 1 from public.company_account where account_id = 'c01a0000-0000-4000-8000-00000000000a') then raise exception 'PRUEBA C02: B ve cuentas de A'; end if;
   begin
@@ -113,7 +120,13 @@ begin
 end $$;
 reset role;
 
-\echo '>>> 6. Vuelta atrás'
+\echo '>>> 6. Vuelta atrás (0130 y luego 0120)'
+\ir ../../vuelta-atras/20261007T0130_c02_proveedor_400_410.down.sql
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'expense_category' and column_name = 'supplier_account_leaf') then
+    raise exception 'PRUEBA C02: la vuelta atrás de la 0130 no quita la marca';
+  end if;
+end $$;
 \ir ../../vuelta-atras/20261007T0120_c02_plan_empresa.down.sql
 do $$ begin
   if to_regclass('public.company_account') is not null then raise exception 'PRUEBA C02: la vuelta atrás no quita company_account'; end if;

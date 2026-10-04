@@ -7,7 +7,7 @@
     "falta": "La cuenta no sale en el cuadro y la quinta parte la lista y la define (dos testigos).",
     "errata": "Errata tipográfica del cuadro (letra, acento o espacio): el título correcto es literal de la quinta parte y difiere en 3 caracteres o menos.",
     "dos_testigos": "La lista y la definición de la quinta parte dicen lo mismo, y el cuadro otra cosa: mandan las dos.",
-    "espacio": "Solo falta un espacio entre dos palabras del propio cuadro. La cita es la línea de la misma cuenta en la quinta parte."
+    "espacio": "Solo falta un espacio entre dos palabras del propio cuadro. La cita es la línea del cuadro (cuarta parte): no cambia palabras."
   },
   "correcciones": [
     {
@@ -194,13 +194,13 @@
       "tituloCuadro": "INGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOSY PASIVOS",
       "tituloCorrecto": "INGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOS Y PASIVOS",
       "cita": {
-        "parte": "quinta",
-        "bloque": "grupo9-2",
+        "parte": "cuarta",
+        "bloque": "grupo9",
         "literal": [
-          "90.\nINGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOS FINANCIEROS"
+          "90.\nINGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOSY PASIVOS"
         ]
       },
-      "nota": "La cita no trae el título corregido: la quinta parte conserva «ACTIVOS FINANCIEROS» (ver la aceptada del 80). La corrección solo separa «ACTIVOSY»; las palabras son las del propio cuadro vigente."
+      "nota": "Solo se separa «ACTIVOSY»: errata de espacio que no cambia palabras, citando el propio cuadro (respuesta 2 de Julio). La diferencia de palabras con la quinta parte («ACTIVOS FINANCIEROS») está en las aceptadas."
     },
     {
       "plan": "general",
@@ -465,6 +465,14 @@
       "quintaLista": null,
       "quintaDefinicion": "Beneficios de otros instrumentos financieros",
       "motivo": "Solo la trae una definición de la quinta parte, sin la lista del subgrupo; el cuadro vigente (redacción del RD 1/2021) no la lleva. No se añade: un solo testigo no basta para crear una cuenta."
+    },
+    {
+      "plan": "general",
+      "code": "90",
+      "tituloCuadro": "INGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOSY PASIVOS",
+      "quintaLista": "INGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOS FINANCIEROS",
+      "quintaDefinicion": null,
+      "motivo": "El cuadro vigente (RD 1/2021) dice «ACTIVOS Y PASIVOS» (con el espacio corregido) y la lista de la quinta parte «ACTIVOS FINANCIEROS». No inventamos cuál de las dos redacciones es la buena: se queda la del cuadro, como en la 80."
     }
   ]
 }
