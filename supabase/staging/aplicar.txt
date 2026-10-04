@@ -4,5 +4,6 @@
 # 06/10/2026 · C01b, 3.ª tanda (tarea 6): la prueba de la eliminación de las
 # columnas viejas (0140) con su vuelta atrás. Va ENTERA en ROLLBACK: staging
 # se queda con las columnas, como producción hasta la tanda de eliminación.
+# 2.º intento: sin borrar a mano la cuenta clonada (la quita el ROLLBACK).
 # Tandas anteriores: 37192967088 (seed, 0100–0120) y 37195827926 (0130).
 supabase/staging/sql/20261006_c01b_prueba_elimina.sql

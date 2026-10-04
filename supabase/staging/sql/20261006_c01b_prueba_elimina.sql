@@ -46,7 +46,8 @@ begin
   end if;
   raise notice 'Lectores sin las columnas: OK.';
 end $$;
-delete from public.accounts where id = 'c1b0f000-0000-4000-8000-0000000000f3';
+-- La cuenta clonada no se borra a mano: su borrado en cascada recalcula
+-- costes de artículos ya borrados y falla. La quita el ROLLBACK final.
 
 \echo '>>> 4. Vuelta atrás'
 \ir ../../vuelta-atras/20261006T0140_c01b_elimina.down.sql
