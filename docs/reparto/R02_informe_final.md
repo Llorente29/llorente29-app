@@ -69,6 +69,22 @@ Vueltas atrás, en `supabase/vuelta-atras/`, en orden **0210 → 0200 → 0140 �
 
 El front necesita que existan las funciones de la 4 y la 5. Fusionarlo antes deja la pantalla sin poder guardar.
 
+**Cómo se lanza (desde el 04/10, con el campo «autorizo» del #141):** Actions → «Aplicar SQL en PRODUCCIÓN
+(contabilidad)» → rama `reparto-r02-marca-plataforma`. El manifiesto `supabase/produccion/aplicar.txt` ya trae
+la noche 1 (1–6). En el formulario:
+- `confirmo: produccion`
+- `modo: ensayo` primero, y después `real`
+- `autorizo: 20261005T0120_r02_lectores_de_la_resolucion.sql 20261005T0210_r02_saneado_pedidos_abiertos.sql`
+
+Si falta un nombre, o sobra uno que no para, el workflow para sin conectar a aplicar nada. La 0200 irá en su
+propia tanda (manifiesto nuevo y `autorizo: 20261005T0200_r02_elimina_interruptor_antiguo.sql`) después de la
+fusión.
+
+**Pendiente:** el modo `vuelta_atras` solo acepta ficheros `*.down.sql` y no correría las guardas del R02
+(`*.down.guarda.sql`; la de 0100 impide tirar la tabla si ya hay decisiones a mano). Por eso no he dejado
+preparado el manifiesto de vuelta atrás del R02. Hay que darle al workflow cómo correr la guarda antes de su
+vuelta atrás.
+
 ## 5. Lista de pedidos saneados
 
 La da la propia 0210 al aplicarse: sale la lista de qué pedido cambia y a qué, y lo de antes queda en
@@ -95,9 +111,9 @@ entran ahí si siguen abiertos al aplicar. La lista de verdad es la de esa noche
 
 ## 7. Pendientes (fuera del encargo, sin tocar)
 
-1. **El workflow de producción no tiene cómo autorizar un fichero que PARA.** El R02 tiene tres (0120, 0210 y
-   0200). Hace falta un mecanismo con dos cerrojos, como el de la prohibida: nombrar el fichero y escribir su
-   nombre entero. Sin eso, esos tres no se pueden lanzar desde el workflow.
+1. ~~El workflow de producción no tiene cómo autorizar un fichero que PARA.~~ **Hecho el 04/10** con el campo
+   «autorizo» ([#141](https://github.com/Llorente29/llorente29-app/pull/141), en `main` y en esta rama). Queda lo
+   de las guardas de la vuelta atrás (ver §4).
 2. **`tg_auto_dispatch` lleva escrita la URL de producción de `catcher-dispatch`.** En staging dejé los locales en
    despacho `manual` para que un pedido de prueba no llame a producción. Hay que sacarla a configuración.
 3. **`hubrise-webhook` (la prohibida) no se toca.** Sigue leyendo `channel_delivery_policy` para su primera
