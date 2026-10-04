@@ -146,7 +146,7 @@
 .cx .cxp-buscar { height: 44px; max-width: 360px; font-size: 15px; padding: 0 14px; }
 .cxp-tabla { display: flex; flex-direction: column; }
 .cxp-tabla-cabeza, .cxp-tabla-fila {
-  display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.6fr) 130px 130px minmax(0, 1.3fr); gap: 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.3fr) 120px 140px minmax(0, 1.5fr); gap: 16px; align-items: center;
 }
 .cxp-tabla-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; padding: 6px 12px; }
 .cxp-tabla-fila {
@@ -160,6 +160,7 @@
 .cxp-tabla-apoyo { font-size: 13px; color: var(--cx-apoyo); }
 .cxp-tabla-cifra { font-family: var(--cx-letra-cifras); font-weight: 600; text-align: right; white-space: nowrap; }
 .cxp-tabla-cifra-apoyo { font-family: var(--cx-letra-cifras); color: var(--cx-apoyo); text-align: right; white-space: nowrap; font-size: 14px; }
+.cxp-tabla-ultima { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; overflow-wrap: anywhere; }
 .cxp-tabla-estado { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .cxp-incompleta { font-size: 13px; color: var(--cx-ambar); }
 
@@ -173,7 +174,7 @@
 .cxm-sub { font-size: 14px; color: var(--cx-apoyo); }
 .cxm-ok { color: var(--cx-verde-oscuro); }
 .cxm-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.cxm-botones > * { height: 52px; font-size: 16px; border-radius: 16px; }
+.cxm-botones > * { height: 52px; font-size: 15px; border-radius: 16px; min-width: 0; padding: 0 10px; white-space: normal; text-align: center; line-height: 1.15; }
 .cxm-cifras { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cxm-cifras .cxp-cifra { padding: 12px 14px; gap: 2px; border-radius: var(--cx-radio-bloque); }
 .cxm-cifras .cxp-cifra-valor { font-size: 20px; }
@@ -205,3 +206,8 @@
   .cxp-dialogo { align-self: flex-end; border-radius: var(--cx-radio-tarjeta) var(--cx-radio-tarjeta) 0 0; }
   .cxp-velo { padding: 0; align-items: flex-end; }
 }
+
+/* Las píldoras para elegir llevan su borde: sin él, las no marcadas parecían
+   texto suelto y no algo que se toca (capturas del 04/10). */
+.cx .cx-campo .cx-pildora { border: 1px solid var(--cx-borde-campo); background: var(--cx-blanco); color: var(--cx-texto); }
+.cx .cx-campo .cx-pildora[aria-pressed='true'] { border-color: var(--cx-azul-borde); background: var(--cx-azul-suave); color: var(--cx-azul); }

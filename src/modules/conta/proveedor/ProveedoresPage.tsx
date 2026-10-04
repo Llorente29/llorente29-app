@@ -46,6 +46,11 @@ function normaliza(t: string): string {
   return t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
+/** «1 artículo», «2 artículos». */
+function cuantos(n: number, plural: string): string {
+  return n === 1 ? `1 ${plural.replace(/s$/, '')}` : `${n} ${plural}`
+}
+
 /** «falta NIF comprobado y IBAN comprobado», «falta razón social, dirección fiscal y 3 más». */
 function textoFalta(faltan: Falta[]): string {
   const t = faltan.map((f) => f.texto)
@@ -125,7 +130,7 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
       <div className="cxp-lista-barra">
         <label htmlFor="buscar-prov" className="cx-oculto">Buscar proveedor</label>
         <input id="buscar-prov" className="cx-input cxp-buscar" type="search" value={busca} onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por nombre, NIF, tipo de gasto o etiqueta" />
+          placeholder="Buscar por nombre, NIF o tipo de gasto" />
         <div className="cx-tablas-filtros" role="group" aria-label="Qué proveedores ver">
           <button type="button" className="cx-pildora" aria-pressed={!archivados} onClick={() => cambiarFiltro(false)}>En uso</button>
           <button type="button" className="cx-pildora" aria-pressed={archivados} onClick={() => cambiarFiltro(true)}>Archivados</button>
@@ -163,13 +168,18 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
                   <span>
                     <span className="cxp-tabla-titulo">{f.name}</span>
                     <span className="cxp-tabla-apoyo">
-                      {[f.legalName, f.taxId ?? 'Sin NIF', columna ? `${extra[f.id] ?? 0} ${columna.titulo.toLowerCase()}` : null].filter(Boolean).join(' · ')}
+                      {[f.legalName, f.taxId ?? 'Sin NIF', columna ? cuantos(extra[f.id] ?? 0, columna.titulo.toLowerCase()) : null].filter(Boolean).join(' · ')}
                     </span>
                   </span>
                 </span>
                 <span className="cxp-tabla-apoyo">{tipo ?? 'Sin tipo de gasto'}</span>
-                <span className={debe ? 'cxp-tabla-cifra' : 'cxp-tabla-cifra-apoyo'}>{debe === null ? 'Sin facturas' : euros(debe)}</span>
-                <span className="cxp-tabla-cifra-apoyo">{ultima ? `${ultima.fecha ? diaMesCorto(ultima.fecha) : '—'}${ultima.numero ? ` · ${ultima.numero}` : ''}` : '—'}</span>
+                {debe === null
+                  ? <span className="cxp-tabla-apoyo" style={{ textAlign: 'right' }}>Sin facturas</span>
+                  : <span className={debe ? 'cxp-tabla-cifra' : 'cxp-tabla-cifra-apoyo'}>{euros(debe)}</span>}
+                <span className="cxp-tabla-ultima">
+                  {ultima ? <><span className="cxp-tabla-cifra-apoyo">{ultima.fecha ? diaMesCorto(ultima.fecha) : '—'}</span>
+                    {ultima.numero && <span className="cxp-tabla-apoyo">{ultima.numero}</span>}</> : <span className="cxp-tabla-apoyo">—</span>}
+                </span>
                 <span className="cxp-tabla-estado">
                   {f.archivedAt ? <span className="cx-chip">Archivado</span>
                     : faltan.length === 0 ? <span className="cx-chip cx-chip-ia">Completa</span>

@@ -17,7 +17,7 @@ describe('pedírselo por correo', () => {
   const faltan = [
     { clave: 'contacto_admin', texto: 'contacto de administración' },
     { clave: 'tipo_gasto', texto: 'tipo de gasto' },
-    { clave: 'certificado_banco', texto: 'certificado de titularidad bancaria' },
+    { clave: 'certificado_banco', texto: 'certificado del banco' },
   ]
   it('va al de administración; si no, al principal; si no, a cualquiera con email', () => {
     const admin = c({ id: 'a', role: 'admin', email: 'admin@p.test' })

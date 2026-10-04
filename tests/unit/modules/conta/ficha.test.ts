@@ -39,7 +39,7 @@ describe('completitud (§5.5)', () => {
   it('la maqueta: todo menos certificado del banco y contacto de administración → 90 de 100', () => {
     const r = calcularCompletitud({ ficha: completa, contactos: [contacto('orders'), contacto('sales')], tieneCertificadoBanco: false })
     expect(r.pct).toBe(90)
-    expect(r.faltan.map((f) => f.texto)).toEqual(['contacto de administración', 'certificado de titularidad bancaria'])
+    expect(r.faltan.map((f) => f.texto)).toEqual(['contacto de administración', 'certificado del banco'])
   })
 
   it('todo hecho → 100 %, sin nada que falte', () => {
