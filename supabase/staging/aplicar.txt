@@ -1,14 +1,10 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · C01b, 1.ª tanda (tarea 2): los casos que faltaban en las
-# semillas, la estructura (0100), el movimiento de datos (0110), los lectores
-# (0120) y su prueba: antes = después, compliance_docs_due, clonado de la
-# plantilla con la función vieja y la nueva, y la vuelta atrás con los md5 de
-# producción (termina en ROLLBACK).
-# 5.º intento: la prueba quita las tablas temporales de migrate_kitchen_core entre los dos clonados.
-supabase/seeds/conta/seed_c01b_staging.sql
-supabase/migrations/20261006T0100_c01b_estructura.sql
-supabase/migrations/20261006T0110_c01b_datos.sql
-supabase/migrations/20261006T0120_c01b_lectores.sql
-supabase/staging/sql/20261006_c01b_prueba_movimiento.sql
+# 06/10/2026 · C01b, 2.ª tanda (tarea 5): «Lo que he aprendido» y «Lo que ha
+# hecho Folvy» (0130: dos tablas nuevas, tres columnas nuevas en
+# supplier_invoice para «no es repetida» y tres funciones) y su prueba como el
+# administrador de A y el de B, con la vuelta atrás (termina en ROLLBACK).
+# La 1.ª tanda (seed, 0100, 0110, 0120) ya está aplicada: ejecución 37192967088.
+supabase/migrations/20261006T0130_c01b_aprendizaje.sql
+supabase/staging/sql/20261006_c01b_prueba_aprendizaje.sql
