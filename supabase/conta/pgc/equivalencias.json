@@ -1,0 +1,528 @@
+{
+ "_que_es": "C02 · D4. GENERADO por scripts/conta/plan.mjs desde la serie: hojas de pymes que en el general no son hoja. Al pasar de pymes a general, Folvy enseña los candidatos (cada uno con su línea del cuadro) y la persona confirma uno a uno; solo hay propuesta cuando hay un único candidato.",
+ "pymes_a_general": [
+  {
+   "code": "176",
+   "name": "Pasivos por derivados financieros a largo plazo",
+   "tipo": "se_divide",
+   "padreEnGeneral": "176",
+   "candidatos": [
+    {
+     "code": "1765",
+     "name": "Pasivos por derivados financieros a largo plazo, cartera de negociación",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1: «1765. Pasivos por derivados financieros a largo plazo, cartera de negociación»"
+    },
+    {
+     "code": "1768",
+     "name": "Pasivos por derivados financieros a largo plazo, instrumentos de cobertura",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 1: «1768. Pasivos por derivados financieros a largo plazo, instrumentos de cobertura»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "255",
+   "name": "Activos por derivados financieros a largo plazo",
+   "tipo": "se_divide",
+   "padreEnGeneral": "255",
+   "candidatos": [
+    {
+     "code": "2550",
+     "name": "Activos por derivados financieros a largo plazo, cartera de negociación",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2550. Activos por derivados financieros a largo plazo, cartera de negociación»"
+    },
+    {
+     "code": "2553",
+     "name": "Activos por derivados financieros a largo plazo, instrumentos de cobertura",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2553. Activos por derivados financieros a largo plazo, instrumentos de cobertura»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "2935",
+   "name": "Deterioro de valor de participaciones a largo plazo en otras partes vinculadas",
+   "tipo": "no_existe",
+   "padreEnGeneral": "293",
+   "candidatos": [
+    {
+     "code": "2933",
+     "name": "Deterioro de valor de participaciones a largo plazo en empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2933. Deterioro de valor de participaciones a largo plazo en empresas del grupo»"
+    },
+    {
+     "code": "2934",
+     "name": "Deterioro de valor de participaciones a largo plazo en empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2934. Deterioro de valor de participaciones a largo plazo en empresas asociadas»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "296",
+   "name": "Deterioro de valor de participaciones en el patrimonio neto a largo plazo",
+   "tipo": "no_existe",
+   "padreEnGeneral": "29",
+   "candidatos": [
+    {
+     "code": "2900",
+     "name": "Deterioro de valor de investigación",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2900. Deterioro de valor de investigación»"
+    },
+    {
+     "code": "2901",
+     "name": "Deterioro del valor de desarrollo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2901. Deterioro del valor de desarrollo»"
+    },
+    {
+     "code": "2902",
+     "name": "Deterioro de valor de concesiones administrativas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2902. Deterioro de valor de concesiones administrativas»"
+    },
+    {
+     "code": "2903",
+     "name": "Deterioro de valor de propiedad industrial",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2903. Deterioro de valor de propiedad industrial»"
+    },
+    {
+     "code": "2905",
+     "name": "Deterioro de valor de derechos de traspaso",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2905. Deterioro de valor de derechos de traspaso»"
+    },
+    {
+     "code": "2906",
+     "name": "Deterioro de valor de aplicaciones informáticas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2906. Deterioro de valor de aplicaciones informáticas»"
+    },
+    {
+     "code": "2910",
+     "name": "Deterioro de valor de terrenos y bienes naturales",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2910. Deterioro de valor de terrenos y bienes naturales»"
+    },
+    {
+     "code": "2911",
+     "name": "Deterioro de valor de construcciones",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2911. Deterioro de valor de construcciones»"
+    },
+    {
+     "code": "2912",
+     "name": "Deterioro de valor de instalaciones técnicas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2912. Deterioro de valor de instalaciones técnicas»"
+    },
+    {
+     "code": "2913",
+     "name": "Deterioro de valor de maquinaria",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2913. Deterioro de valor de maquinaria»"
+    },
+    {
+     "code": "2914",
+     "name": "Deterioro de valor de utillaje",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2914. Deterioro de valor de utillaje»"
+    },
+    {
+     "code": "2915",
+     "name": "Deterioro de valor de otras instalaciones",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2915. Deterioro de valor de otras instalaciones»"
+    },
+    {
+     "code": "2916",
+     "name": "Deterioro de valor de mobiliario",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2916. Deterioro de valor de mobiliario»"
+    },
+    {
+     "code": "2917",
+     "name": "Deterioro de valor de equipos para procesos de información",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2917. Deterioro de valor de equipos para procesos de información»"
+    },
+    {
+     "code": "2918",
+     "name": "Deterioro de valor de elementos de transporte",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2918. Deterioro de valor de elementos de transporte»"
+    },
+    {
+     "code": "2919",
+     "name": "Deterioro de valor de otro inmovilizado material",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2919. Deterioro de valor de otro inmovilizado material»"
+    },
+    {
+     "code": "2920",
+     "name": "Deterioro de valor de los terrenos y bienes naturales",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2920. Deterioro de valor de los terrenos y bienes naturales»"
+    },
+    {
+     "code": "2921",
+     "name": "Deterioro de valor de construcciones",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2921. Deterioro de valor de construcciones»"
+    },
+    {
+     "code": "2933",
+     "name": "Deterioro de valor de participaciones a largo plazo en empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2933. Deterioro de valor de participaciones a largo plazo en empresas del grupo»"
+    },
+    {
+     "code": "2934",
+     "name": "Deterioro de valor de participaciones a largo plazo en empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2934. Deterioro de valor de participaciones a largo plazo en empresas asociadas»"
+    },
+    {
+     "code": "2943",
+     "name": "Deterioro de valor de valores representativos de deuda a largo plazo de empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2943. Deterioro de valor de valores representativos de deuda a largo plazo de empresas del grupo»"
+    },
+    {
+     "code": "2944",
+     "name": "Deterioro de valor de valores representativos de deuda a largo plazo de empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2944. Deterioro de valor de valores representativos de deuda a largo plazo de empresas asociadas»"
+    },
+    {
+     "code": "2945",
+     "name": "Deterioro de valor de valores representativos de deuda a largo plazo de otras partes vinculadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2945. Deterioro de valor de valores representativos de deuda a largo plazo de otras partes vinculadas»"
+    },
+    {
+     "code": "2953",
+     "name": "Deterioro de valor de créditos a largo plazo a empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2953. Deterioro de valor de créditos a largo plazo a empresas del grupo»"
+    },
+    {
+     "code": "2954",
+     "name": "Deterioro de valor de créditos a largo plazo a empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2954. Deterioro de valor de créditos a largo plazo a empresas asociadas»"
+    },
+    {
+     "code": "2955",
+     "name": "Deterioro de valor de créditos a largo plazo a otras partes vinculadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «2955. Deterioro de valor de créditos a largo plazo a otras partes vinculadas»"
+    },
+    {
+     "code": "297",
+     "name": "Deterioro de valor de valores representativos de deuda a largo plazo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «297. Deterioro de valor de valores representativos de deuda a largo plazo»"
+    },
+    {
+     "code": "298",
+     "name": "Deterioro de valor de créditos a largo plazo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 2: «298. Deterioro de valor de créditos a largo plazo»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "5935",
+   "name": "Deterioro de valor de participaciones a corto plazo en otras partes vinculadas",
+   "tipo": "no_existe",
+   "padreEnGeneral": "593",
+   "candidatos": [
+    {
+     "code": "5933",
+     "name": "Deterioro de valor de participaciones a corto plazo en empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5933. Deterioro de valor de participaciones a corto plazo en empresas del grupo»"
+    },
+    {
+     "code": "5934",
+     "name": "Deterioro de valor de participaciones a corto plazo en empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5934. Deterioro de valor de participaciones a corto plazo en empresas asociadas»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "596",
+   "name": "Deterioro de valor de participaciones a corto plazo",
+   "tipo": "no_existe",
+   "padreEnGeneral": "59",
+   "candidatos": [
+    {
+     "code": "5933",
+     "name": "Deterioro de valor de participaciones a corto plazo en empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5933. Deterioro de valor de participaciones a corto plazo en empresas del grupo»"
+    },
+    {
+     "code": "5934",
+     "name": "Deterioro de valor de participaciones a corto plazo en empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5934. Deterioro de valor de participaciones a corto plazo en empresas asociadas»"
+    },
+    {
+     "code": "5943",
+     "name": "Deterioro de valor de valores representativos de deuda a corto plazo de empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5943. Deterioro de valor de valores representativos de deuda a corto plazo de empresas del grupo»"
+    },
+    {
+     "code": "5944",
+     "name": "Deterioro de valor de valores representativos de deuda a corto plazo de empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5944. Deterioro de valor de valores representativos de deuda a corto plazo de empresas asociadas»"
+    },
+    {
+     "code": "5945",
+     "name": "Deterioro de valor de valores representativos de deuda a corto plazo de otras partes vinculadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5945. Deterioro de valor de valores representativos de deuda a corto plazo de otras partes vinculadas»"
+    },
+    {
+     "code": "5953",
+     "name": "Deterioro de valor de créditos a corto plazo a empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5953. Deterioro de valor de créditos a corto plazo a empresas del grupo»"
+    },
+    {
+     "code": "5954",
+     "name": "Deterioro de valor de créditos a corto plazo a empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5954. Deterioro de valor de créditos a corto plazo a empresas asociadas»"
+    },
+    {
+     "code": "5955",
+     "name": "Deterioro de valor de créditos a corto plazo a otras partes vinculadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5955. Deterioro de valor de créditos a corto plazo a otras partes vinculadas»"
+    },
+    {
+     "code": "597",
+     "name": "Deterioro de valor de valores representativos de deuda a corto plazo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «597. Deterioro de valor de valores representativos de deuda a corto plazo»"
+    },
+    {
+     "code": "598",
+     "name": "Deterioro de valor de créditos a corto plazo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «598. Deterioro de valor de créditos a corto plazo»"
+    },
+    {
+     "code": "5990",
+     "name": "Deterioro de valor de inmovilizado no corriente mantenido para la venta",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5990. Deterioro de valor de inmovilizado no corriente mantenido para la venta»"
+    },
+    {
+     "code": "5991",
+     "name": "Deterioro de valor de inversiones con personas y entidades vinculadas no corrientes mantenidas para la venta",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5991. Deterioro de valor de inversiones con personas y entidades vinculadas no corrientes mantenidas para la venta»"
+    },
+    {
+     "code": "5992",
+     "name": "Deterioro de valor de inversiones financieras no corrientes mantenidas para la venta",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5992. Deterioro de valor de inversiones financieras no corrientes mantenidas para la venta»"
+    },
+    {
+     "code": "5993",
+     "name": "Deterioro de valor de existencias, deudores comerciales y otras cuentas a cobrar integrados en un grupo enajenable mantenido para la venta",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5993. Deterioro de valor de existencias, deudores comerciales y otras cuentas a cobrar integrados en un grupo enajenable mantenido para la venta»"
+    },
+    {
+     "code": "5994",
+     "name": "Deterioro de valor de otros activos mantenidos para la venta",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 5: «5994. Deterioro de valor de otros activos mantenidos para la venta»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "663",
+   "name": "Pérdidas por valoración de activos y pasivos financieros por su valor razonable",
+   "tipo": "se_divide",
+   "padreEnGeneral": "663",
+   "candidatos": [
+    {
+     "code": "6630",
+     "name": "Pérdidas de cartera de negociación",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6630. Pérdidas de cartera de negociación»"
+    },
+    {
+     "code": "6631",
+     "name": "Pérdidas de designados por la empresa",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6631. Pérdidas de designados por la empresa»"
+    },
+    {
+     "code": "6632",
+     "name": "Pérdidas de activos financieros a valor razonable con cambios en el patrimonio neto",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6632. Pérdidas de activos financieros a valor razonable con cambios en el patrimonio neto»"
+    },
+    {
+     "code": "6633",
+     "name": "Pérdidas de instrumentos de cobertura",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6633. Pérdidas de instrumentos de cobertura»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "6655",
+   "name": "Intereses por operaciones de «factoring» con entidades de crédito asociadas",
+   "tipo": "no_existe",
+   "padreEnGeneral": "665",
+   "candidatos": [
+    {
+     "code": "6650",
+     "name": "Intereses por descuento de efectos en entidades de crédito del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6650. Intereses por descuento de efectos en entidades de crédito del grupo»"
+    },
+    {
+     "code": "6651",
+     "name": "Intereses por descuento de efectos en entidades de crédito asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6651. Intereses por descuento de efectos en entidades de crédito asociadas»"
+    },
+    {
+     "code": "6652",
+     "name": "Intereses por descuento de efectos en otras entidades de crédito vinculadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6652. Intereses por descuento de efectos en otras entidades de crédito vinculadas»"
+    },
+    {
+     "code": "6653",
+     "name": "Intereses por descuento de efectos en otras entidades de crédito",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6653. Intereses por descuento de efectos en otras entidades de crédito»"
+    },
+    {
+     "code": "6654",
+     "name": "Intereses por operaciones de «factoring» con entidades de crédito del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6654. Intereses por operaciones de «factoring» con entidades de crédito del grupo»"
+    },
+    {
+     "code": "6657",
+     "name": "Intereses por operaciones de «factoring» con otras entidades de crédito",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6657. Intereses por operaciones de «factoring» con otras entidades de crédito»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "6656",
+   "name": "Intereses por operaciones de «factoring» con otras entidades de crédito vinculadas",
+   "tipo": "no_existe",
+   "padreEnGeneral": "665",
+   "candidatos": [
+    {
+     "code": "6650",
+     "name": "Intereses por descuento de efectos en entidades de crédito del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6650. Intereses por descuento de efectos en entidades de crédito del grupo»"
+    },
+    {
+     "code": "6651",
+     "name": "Intereses por descuento de efectos en entidades de crédito asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6651. Intereses por descuento de efectos en entidades de crédito asociadas»"
+    },
+    {
+     "code": "6652",
+     "name": "Intereses por descuento de efectos en otras entidades de crédito vinculadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6652. Intereses por descuento de efectos en otras entidades de crédito vinculadas»"
+    },
+    {
+     "code": "6653",
+     "name": "Intereses por descuento de efectos en otras entidades de crédito",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6653. Intereses por descuento de efectos en otras entidades de crédito»"
+    },
+    {
+     "code": "6654",
+     "name": "Intereses por operaciones de «factoring» con entidades de crédito del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6654. Intereses por operaciones de «factoring» con entidades de crédito del grupo»"
+    },
+    {
+     "code": "6657",
+     "name": "Intereses por operaciones de «factoring» con otras entidades de crédito",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 6: «6657. Intereses por operaciones de «factoring» con otras entidades de crédito»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "763",
+   "name": "Beneficios por valoración de activos y pasivos financieros por su valor razonable",
+   "tipo": "se_divide",
+   "padreEnGeneral": "763",
+   "candidatos": [
+    {
+     "code": "7630",
+     "name": "Beneficios de cartera de negociación",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7630. Beneficios de cartera de negociación»"
+    },
+    {
+     "code": "7631",
+     "name": "Beneficios de designados por la empresa",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7631. Beneficios de designados por la empresa»"
+    },
+    {
+     "code": "7632",
+     "name": "Beneficios de activos financieros a valor razonable con cambios en el patrimonio neto",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7632. Beneficios de activos financieros a valor razonable con cambios en el patrimonio neto»"
+    },
+    {
+     "code": "7633",
+     "name": "Beneficios de instrumentos de cobertura",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7633. Beneficios de instrumentos de cobertura»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "7962",
+   "name": "Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, otras partes vinculadas",
+   "tipo": "no_existe",
+   "padreEnGeneral": "796",
+   "candidatos": [
+    {
+     "code": "7960",
+     "name": "Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7960. Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, empresas del grupo»"
+    },
+    {
+     "code": "7961",
+     "name": "Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7961. Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, empresas asociadas»"
+    },
+    {
+     "code": "7965",
+     "name": "Reversión del deterioro de valores representativos de deuda a largo plazo, empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7965. Reversión del deterioro de valores representativos de deuda a largo plazo, empresas del grupo»"
+    },
+    {
+     "code": "7966",
+     "name": "Reversión del deterioro de valores representativos de deuda a largo plazo, empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7966. Reversión del deterioro de valores representativos de deuda a largo plazo, empresas asociadas»"
+    },
+    {
+     "code": "7967",
+     "name": "Reversión del deterioro de valores representativos de deuda a largo plazo, otras partes vinculadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7967. Reversión del deterioro de valores representativos de deuda a largo plazo, otras partes vinculadas»"
+    },
+    {
+     "code": "7968",
+     "name": "Reversión del deterioro de valores representativos de deuda a largo plazo, otras empresas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7968. Reversión del deterioro de valores representativos de deuda a largo plazo, otras empresas»"
+    }
+   ],
+   "propuesta": null
+  },
+  {
+   "code": "7963",
+   "name": "Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, otras empresas",
+   "tipo": "no_existe",
+   "padreEnGeneral": "796",
+   "candidatos": [
+    {
+     "code": "7960",
+     "name": "Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7960. Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, empresas del grupo»"
+    },
+    {
+     "code": "7961",
+     "name": "Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7961. Reversión del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo, empresas asociadas»"
+    },
+    {
+     "code": "7965",
+     "name": "Reversión del deterioro de valores representativos de deuda a largo plazo, empresas del grupo",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7965. Reversión del deterioro de valores representativos de deuda a largo plazo, empresas del grupo»"
+    },
+    {
+     "code": "7966",
+     "name": "Reversión del deterioro de valores representativos de deuda a largo plazo, empresas asociadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7966. Reversión del deterioro de valores representativos de deuda a largo plazo, empresas asociadas»"
+    },
+    {
+     "code": "7967",
+     "name": "Reversión del deterioro de valores representativos de deuda a largo plazo, otras partes vinculadas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7967. Reversión del deterioro de valores representativos de deuda a largo plazo, otras partes vinculadas»"
+    },
+    {
+     "code": "7968",
+     "name": "Reversión del deterioro de valores representativos de deuda a largo plazo, otras empresas",
+     "cita": "RD 1514/2007, cuarta parte (cuadro de cuentas), grupo 7: «7968. Reversión del deterioro de valores representativos de deuda a largo plazo, otras empresas»"
+    }
+   ],
+   "propuesta": null
+  }
+ ]
+}

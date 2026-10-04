@@ -7,6 +7,7 @@
 
 import { mesesDe, siguienteMesACerrar, mesQueSePuedeReabrir, type Ejercicio } from '@/modules/conta/lib/ejercicios'
 import type { Origen, Registro, Sugerencia } from '@/modules/conta/ia/tipos'
+import { DIGITOS_MAXIMOS, DIGITOS_MINIMOS } from '@/modules/conta/lib/pgc'
 
 // ── Lo que se lee ───────────────────────────────────────────────────────────
 
@@ -326,7 +327,7 @@ export function revisarPorcentajeProrrata(pct: string): string | null {
 
 export function revisarDigitos(d: string): string | null {
   const n = Number(d)
-  return Number.isInteger(n) && n >= 4 && n <= 12 ? null : 'Las cuentas van de 4 a 12 dígitos.'
+  return Number.isInteger(n) && n >= DIGITOS_MINIMOS && n <= DIGITOS_MAXIMOS ? null : `Las cuentas van de ${DIGITOS_MINIMOS} a ${DIGITOS_MAXIMOS} dígitos.`
 }
 
 // ── Códigos ─────────────────────────────────────────────────────────────────

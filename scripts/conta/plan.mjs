@@ -25,12 +25,13 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { PLANES, construirSerie, textoVigente } from './lib/planContable.mjs'
+import { PLANES, construirSerie, equivalencias, textoVigente } from './lib/planContable.mjs'
 
 const FUENTES = 'docs/conta/fuentes'
 const PGC = 'supabase/conta/pgc'
 const SERIE = join(PGC, 'serie.json')
 const MIGRACION = 'supabase/migrations/20261007T0110_c02_pgc_serie.sql'
+const EQUIVALENCIAS = join(PGC, 'equivalencias.json')
 const modo = process.argv[2] ?? 'generar'
 
 const registro = JSON.parse(readFileSync(join(FUENTES, 'registro.json'), 'utf8'))
@@ -60,12 +61,14 @@ else {
 
 // ── La serie de cada plan ───────────────────────────────────────────────────
 const usadasCalle = new Set()
+const construidas = {}
 const salida = []
 const resumen = {}
 for (const plan of Object.keys(PLANES)) {
   const f = fuente(PLANES[plan].fuente)
   const { cuentas, hallazgos } = construirSerie(f.texto, plan, correcciones)
   fallos.push(...hallazgos)
+  construidas[plan] = cuentas
   const verificado = f.fecha.slice(0, 10)
   for (const c of cuentas) {
     const pn = calle[c.code] ?? null
@@ -92,6 +95,12 @@ if (fallos.length) {
   console.error('No se genera la serie del plan contable:\n' + fallos.map((x) => `  · ${x}`).join('\n'))
   process.exit(1)
 }
+
+const equiv = {
+  _que_es: 'C02 · D4. GENERADO por scripts/conta/plan.mjs desde la serie: hojas de pymes que en el general no son hoja. Al pasar de pymes a general, Folvy enseña los candidatos (cada uno con su línea del cuadro) y la persona confirma uno a uno; solo hay propuesta cuando hay un único candidato.',
+  pymes_a_general: equivalencias(construidas.pymes, construidas.general),
+}
+const equivJson = JSON.stringify(equiv, null, 1) + '\n'
 
 // ── Ficheros ────────────────────────────────────────────────────────────────
 const q = (v) => (v === null || v === undefined ? 'null' : `'${String(v).replace(/'/g, "''")}'`)
@@ -135,11 +144,12 @@ const sql = [
 
 if (modo === 'comprobar') {
   const igual = (ruta, nuevo) => existsSync(ruta) && readFileSync(ruta, 'utf8') === nuevo
-  const distintos = [[SERIE, json], [MIGRACION, sql]].filter(([r, t]) => !igual(r, t)).map(([r]) => r)
+  const distintos = [[SERIE, json], [MIGRACION, sql], [EQUIVALENCIAS, equivJson]].filter(([r, t]) => !igual(r, t)).map(([r]) => r)
   if (distintos.length) { console.error(`La serie del plan contable no está al día (node scripts/conta/plan.mjs): ${distintos.join(', ')}`); process.exit(1) }
   console.log('Serie del plan contable al día.', JSON.stringify(resumen))
 } else {
   writeFileSync(SERIE, json)
   writeFileSync(MIGRACION, sql)
+  writeFileSync(EQUIVALENCIAS, equivJson)
   console.log('Serie del plan contable generada.', JSON.stringify(resumen, null, 1))
 }

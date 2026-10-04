@@ -314,3 +314,29 @@ export function construirSerie(texto, plan, { correcciones, aceptadas }) {
   for (const c of cuentas) if (c.code.length > 1 && !c.parent) hallazgos.push(`${plan} ${c.code}: no tiene cuenta padre en el cuadro.`)
   return { cuentas, hallazgos }
 }
+
+// ── Cambio de plan (D4) ──────────────────────────────────────────────────────
+
+/**
+ * Hojas de pymes que en el general no son hoja (o no existen): al pasar de
+ * pymes a general, lo que cuelgue de ellas necesita otra cuenta. Para cada una,
+ * los candidatos del general, sacados del cuadro:
+ *   · «se_divide»: la cuenta existe en el general pero tiene hijas → sus hijas.
+ *   · «no_existe»: el general no la tiene → todas las hojas que cuelgan de su padre.
+ * Folvy solo propone una cuando hay UN candidato; con varios, elige la persona
+ * (nada se mueve sin confirmar). La cita es la línea del cuadro de cada candidato.
+ */
+export function equivalencias(pymes, general) {
+  const g = new Map(general.map((c) => [c.code, c]))
+  const hijasHoja = (padre) => general.filter((c) => c.code !== padre && c.code.startsWith(padre) && c.hoja)
+  const out = []
+  for (const c of pymes) {
+    if (!c.hoja || g.get(c.code)?.hoja) continue
+    const enGeneral = g.get(c.code)
+    const tipo = enGeneral ? 'se_divide' : 'no_existe'
+    const base = enGeneral ? c.code : c.parent
+    const candidatos = hijasHoja(base).map((x) => ({ code: x.code, name: x.name, cita: `${PLANES.general.norma}, cuarta parte (cuadro de cuentas), grupo ${x.group}: «${x.code}. ${x.boeName ?? x.name}»` }))
+    out.push({ code: c.code, name: c.name, tipo, padreEnGeneral: base, candidatos, propuesta: candidatos.length === 1 ? candidatos[0].code : null })
+  }
+  return out
+}
