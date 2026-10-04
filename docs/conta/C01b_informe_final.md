@@ -60,8 +60,21 @@ Rama `conta/c01b-ficha-proveedor`, PR #143. Encargo en `docs/conta/encargos/enca
 
 La vuelta atrás de la tanda de datos está en `supabase/produccion/vuelta-atras.txt`: los cuatro `.down.sql` al revés, probados en staging.
 
+### Hecho, 04/10/2026
+
+| Paso | Resultado |
+|---|---|
+| Tanda de datos (0100–0135) | Ensayo 37219525506 y real 37219796909, en verde. Fuera de ventana con `fuera_de_ventana: si`: 0 tablas o funciones del camino del pedido. |
+| Antes = después en producción | 0 faltan en las dos cuentas (Foodint: 1 email, 3 teléfonos, 4 direcciones; Folvy Interno: 1, 2 y 2; ningún IVA). |
+| Fusión del front | #143 → `7c1e9eb5`, Vercel `dpl_97VvxRXV…` READY en app.folvy.app; APK y OTA 37220135683 en verde. |
+| Eliminación (0140) | Ensayo 37223884963 y real 37224003636, en verde. Las cuatro columnas fuera; `notify_group` sigue; `c01b_columnas_eliminadas` con los mismos valores (y 0 faltan contra contactos y propuestas); `compliance_docs_due` responde; 0 errores en los registros de la base desde el real. |
+| Tipos | `src/types/database.ts`: quitadas de `supplier` email, phone y address. La regeneración ENTERA desde producción no compila (457 errores: el fichero era del 13/09 y hay vistas nuevas que rompen la inferencia, como las de PostGIS); queda como pendiente aparte. |
+
 ## 4. Pendientes y hallazgos (fuera del encargo, o para decidir)
 
+0. **Pendientes aparte, decididos por Julio (04/10):**
+   - **Regenerar `src/types/database.ts` entero.** Regenerado a lo bruto desde producción da 457 errores de tipos: el fichero es del 13/09, y vistas nuevas como `goods_receipt_posting_status` o `vat_category_rate` rompen la inferencia de `from(string)`, como ya hacían las de PostGIS que limpia `scripts/gen-types.mjs`. **Va en un encargo propio, con las vistas tipadas una a una, no a lo bruto.** Para el C01b solo se han quitado de `supplier` las tres columnas que ya no existen.
+   - **Lo que quedó del R02 fuera de `main`.** El manifiesto de la eliminación (0200), su vuelta atrás y la prueba del analizador sobre él (`7470dc78`, rama `reparto-r02-marca-plataforma`, medido el 04/10: es el único commit de esa rama que no está en `main`) necesitan el mismo tratamiento que este PR: llevarlos a `main` para que el historial de tandas aplicadas viva en el repositorio. Ojo: el manifiesto vivo de `main` será el de la 0140 del C01b; la 0200 entraría como copia fija (`tests/conta/produccion/`), como ya están la noche 1 del R02 y la tanda de datos del C01b.
 1. **Analizador de producción: tres huecos, arreglados en esta rama.**
    - (a) Un `--` dentro de un `do $$` se comía el resto del bloque.
    - (b) No miraba las CTE que escriben.

@@ -1,13 +1,10 @@
-# VUELTA ATRÁS en producción (C00, respuesta 7). Solo si Julio lo decide: el
-# workflow lo hace con modo «vuelta_atras», con las mismas guardas y la misma
-# ventana. Al revés de como se aplicaron.
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas y la misma ventana.
 #
-# C01b · tanda de datos (0100–0135). Probadas en staging: 0100/0110/0120 en
-# supabase/staging/sql/20261006_c01b_prueba_movimiento.sql (md5 de las
-# funciones = producción al final), 0130 en 20261006_c01b_prueba_aprendizaje.sql
-# y 0135 en 20261006_c01b_prueba_iban.sql.
-supabase/vuelta-atras/20261006T0135_c01b_iban_factura.down.sql
-supabase/vuelta-atras/20261006T0130_c01b_aprendizaje.down.sql
-supabase/vuelta-atras/20261006T0120_c01b_lectores.down.sql
-supabase/vuelta-atras/20261006T0110_c01b_datos.down.sql
-supabase/vuelta-atras/20261006T0100_c01b_estructura.down.sql
+# C01b · TANDA DE ELIMINACIÓN: deshace la 0140. Vuelve a poner supplier.email,
+# .phone, .address (text, nulos) y .usual_vat_rates (numeric[] not null
+# default '{}') con los valores guardados en c01b_columnas_eliminadas, y
+# comprueba que todo ha vuelto antes de quitar la copia. Probada en staging
+# (supabase/staging/sql/20261006_c01b_prueba_elimina.sql, 37196540632).
+# (La de la tanda de datos era: 0135, 0130, 0120, 0110 y 0100, al revés.)
+supabase/vuelta-atras/20261006T0140_c01b_elimina.down.sql

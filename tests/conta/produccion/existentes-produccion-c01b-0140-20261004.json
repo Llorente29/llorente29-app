@@ -1,0 +1,5 @@
+{
+ "nota": "Lo que EXISTÍA en producción el 04/10/2026 a las 19:37 de Madrid, después del real de la tanda de datos del C01b (37219796909) y de la fusión del front (#143), de lo que nombra la 0140 (to_regclass, solo lectura). c01b_columnas_eliminadas aún no existe: la crea la 0140.",
+ "tablas": ["public.supplier"],
+ "funciones": []
+}
