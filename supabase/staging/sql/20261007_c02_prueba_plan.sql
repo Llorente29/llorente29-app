@@ -30,8 +30,17 @@ set local role authenticated;
 do $$
 declare
   emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
-  r jsonb; v text; n int; fallo text;
+  r jsonb; v text; n int; fallo text; n4000 int; n4100 int;
+  sig text; rep text;
 begin
+  -- Los proveedores de A no son fijos (las e2e crean y archivan): lo esperado
+  -- sale de los que hay, con la regla de la 0130 (60 → 4000; resto → 4100; sin tipo → 4000).
+  select count(*) filter (where h = '4000'), count(*) filter (where h = '4100') into n4000, n4100 from (
+    select coalesce(g.supplier_account_leaf, case when g.pgc_account_hint like '60%' then '4000' when g.pgc_account_hint is not null then '4100' else '4000' end) h
+      from public.supplier s left join public.expense_category g on g.id = s.expense_category_id
+     where s.account_id = 'c01a0000-0000-4000-8000-00000000000a' and s.archived_at is null) x;
+  sig := '4000' || lpad((n4000 + 1)::text, 4, '0');
+  rep := '4000' || lpad((n4000 + 2)::text, 4, '0');
   r := public.company_chart_activate(emp, false, 'Prueba C02');
   raise notice 'PRUEBA C02 · activar A: %', r;
   if (r->>'cuentas')::int <> 615 then raise exception 'PRUEBA C02: A tiene % hojas (esperado 615)', r->>'cuentas'; end if;
@@ -41,9 +50,13 @@ begin
   select string_agg(code, ' ' order by code) into v from public.company_account where company_id = emp and kind = 'own' and template_code = '572';
   if v is distinct from '57200001' then raise exception 'PRUEBA C02: bancos de A = %', v; end if;
   select string_agg(code, ' ' order by code) into v from public.company_account where company_id = emp and kind = 'own' and template_code = '4000';
-  if v is distinct from '40000001 40000002 40000003 40000004' then raise exception 'PRUEBA C02: proveedores de A = %', v; end if;
-  select string_agg(code || ' ' || name, ' | ' order by code) into v from public.company_account where company_id = emp and kind = 'own' and template_code = '4100';
-  if v is distinct from '41000001 Acreedores · Locales del Norte (alquiler)' then raise exception 'PRUEBA C02: acreedores de A = %', v; end if;
+  if v is distinct from (select string_agg('4000' || lpad(i::text, 4, '0'), ' ' order by i) from generate_series(1, n4000) i) then raise exception 'PRUEBA C02: proveedores de A = % (esperados %)', v, n4000; end if;
+  if (select count(*) from public.company_account where company_id = emp and kind = 'own' and template_code = '4100') <> n4100 then raise exception 'PRUEBA C02: acreedores de A ≠ %', n4100; end if;
+  -- Locales del Norte (alquiler, 621) va a 4100.
+  if (select a.template_code from public.company_account_link l join public.company_account a on a.id = l.company_account_id
+       where l.company_id = emp and l.entity = 'supplier' and l.entity_id = (select id::text from public.supplier where account_id = 'c01a0000-0000-4000-8000-00000000000a' and name = 'Locales del Norte (alquiler)')) is distinct from '4100' then
+    raise exception 'PRUEBA C02: Locales del Norte no va a 4100';
+  end if;
   if (select supplier_account_leaf from public.expense_category where is_system and code = 'rent') <> '4100' then raise exception 'PRUEBA C02: el alquiler no va a 4100'; end if;
   if not (select is_common from public.company_account where company_id = emp and code = '43000000') then raise exception 'PRUEBA C02: 43000000 no es la común'; end if;
   if exists (select 1 from public.company_account where company_id = emp and template_code = '4300' and kind = 'own') then raise exception 'PRUEBA C02: hay subcuentas de 430 (D5)'; end if;
@@ -78,14 +91,14 @@ begin
 
   -- 3. Añadir y renumerar.
   r := public.company_account_add(emp, '4000', 'Proveedor nuevo', 'Lo que le compras', null, null, 'Prueba C02');
-  if r->>'code' <> '40000005' then raise exception 'PRUEBA C02: la nueva es %', r->>'code'; end if;
+  if r->>'code' <> sig then raise exception 'PRUEBA C02: la nueva es % (esperada %)', r->>'code', sig; end if;
   -- Duplicada (0140): antes del primer asiento se borra y sus enlaces pasan.
   r := public.company_account_add(emp, '4000', 'Proveedor nuevo (repetido)', null, 'supplier', 'prov-repetido', 'Prueba C02');
-  if r->>'code' <> '40000006' then raise exception 'PRUEBA C02: la repetida es %', r->>'code'; end if;
-  r := public.company_account_merge((r->>'id')::uuid, (select id from public.company_account where company_id = emp and code = '40000005'), 'Prueba C02');
+  if r->>'code' <> rep then raise exception 'PRUEBA C02: la repetida es %', r->>'code'; end if;
+  r := public.company_account_merge((r->>'id')::uuid, (select id from public.company_account where company_id = emp and code = sig), 'Prueba C02');
   if r->>'modo' <> 'borrar' or (r->>'enlaces')::int <> 1 then raise exception 'PRUEBA C02: fusionar = %', r; end if;
-  if exists (select 1 from public.company_account where company_id = emp and code = '40000006') then raise exception 'PRUEBA C02: la duplicada sigue'; end if;
-  if (select a.code from public.company_account_link l join public.company_account a on a.id = l.company_account_id where l.company_id = emp and l.entity_id = 'prov-repetido') <> '40000005' then
+  if exists (select 1 from public.company_account where company_id = emp and code = rep) then raise exception 'PRUEBA C02: la duplicada sigue'; end if;
+  if (select a.code from public.company_account_link l join public.company_account a on a.id = l.company_account_id where l.company_id = emp and l.entity_id = 'prov-repetido') <> sig then
     raise exception 'PRUEBA C02: el enlace de la duplicada no ha pasado a la que queda';
   end if;
   begin
@@ -106,7 +119,7 @@ begin
   if exists (select 1 from public.company_account where id = (r->>'id')::uuid) then raise exception 'PRUEBA C02: deshacer no la ha quitado'; end if;
 
   r := public.company_chart_set_digits(emp, 10, 'Prueba C02');
-  if (select string_agg(code, ' ' order by code) from public.company_account where company_id = emp and code in ('4000000005', '4720000021', '4700000000', '5720000001', '4100000001')) is distinct from '4000000005 4100000001 4700000000 4720000021 5720000001' then
+  if (select string_agg(code, ' ' order by code) from public.company_account where company_id = emp and code in ('4000' || lpad((n4000 + 1)::text, 6, '0'), '4720000021', '4700000000', '5720000001')) is distinct from ('4000' || lpad((n4000 + 1)::text, 6, '0')) || ' 4700000000 4720000021 5720000001' then
     raise exception 'PRUEBA C02: el renumerado no da lo esperado';
   end if;
   if exists (select 1 from public.company_account where company_id = emp and length(code) <> 10) then raise exception 'PRUEBA C02: quedan cuentas sin renumerar'; end if;

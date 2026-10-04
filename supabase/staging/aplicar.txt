@@ -1,11 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02, tarea 4, 3.º: la 0150 corregida (el cambio de plan chocaba:
-# la 2550 del general rellenada es el mismo código que la 255 de pymes). Se
-# deshace la 0150 de antes con su vuelta atrás y se aplica la nueva (en un
-# fichero de staging que incluye las dos, una transacción), y la
-# prueba (ahora también con el camino de elegir) ENTERA en ROLLBACK.
-# Anteriores: 37242370880 (0150 vieja, prueba en rojo) y 37243497321 (el error).
-supabase/staging/sql/20261007_c02_reaplicar_0150.sql
+# 05/10/2026 · C02, tarea 4, 4.º: solo la prueba del plan por empresa, que ya no
+# cuenta con un número fijo de proveedores (las e2e crean y archivan), ENTERA en
+# ROLLBACK. La 0150 corregida ya entró en el 3.º (37243904260: la 2550 del
+# general rellenada chocaba con la 255 de pymes; se deshizo y se aplicó la buena).
 supabase/staging/sql/20261007_c02_prueba_plan.sql
