@@ -61,21 +61,29 @@ begin
          ('c1b0a000-0000-4000-8000-000000000303', a_cuenta, i_hamb, i_ace, 0.01, u_l,  3)
   on conflict (id) do nothing;
 
+  -- trg_article_supplier_recompute_cost recalcula el coste comprobando que el
+  -- USUARIO tiene acceso al artículo, y aquí no hay usuario (conecta el
+  -- workflow). Como migrate_kitchen_core: disparadores apagados solo para los
+  -- artículos de proveedor; el coste no importa en la semilla.
+  perform set_config('session_replication_role', 'replica', true);
   insert into public.article_supplier (id, account_id, recipe_item_id, supplier_id, last_price, is_preferred, is_active, supplier_item_name)
   values ('c1b0a000-0000-4000-8000-000000000401', a_cuenta, i_tom, a_ruiz, 2.40, true,  true, 'TOMATE PERA CAT. I'),
          ('c1b0a000-0000-4000-8000-000000000402', a_cuenta, i_ace, a_ruiz, 8.90, true,  true, 'ACEITE OLIVA VIRGEN 5L'),
          ('c1b0a000-0000-4000-8000-000000000403', a_cuenta, i_pan, a_luna, 0.35, true,  true, 'PAN BRIOCHE HAMBURGUESA'),
          ('c1b0a000-0000-4000-8000-000000000404', a_cuenta, i_agu, a_sol,  0.30, true,  true, 'AGUA MINERAL 50CL')
   on conflict (id) do nothing;
+  perform set_config('session_replication_role', 'origin', true);
 
   -- El proveedor de la dirección libre sin CP (columna vieja, a propósito).
   insert into public.supplier (id, account_id, name, tax_id, phone, address, created_by_name)
   values (a_norte, a_cuenta, 'Mercados del Norte', 'B91000034', '600 000 007', 'Calle Mayor 3, Alcobendas', 'Semillas C01b')
   on conflict (id) do nothing;
   -- Y lo que le compras a él (después de crearlo, por la clave ajena).
+  perform set_config('session_replication_role', 'replica', true);
   insert into public.article_supplier (id, account_id, recipe_item_id, supplier_id, last_price, is_preferred, is_active, supplier_item_name)
   values ('c1b0a000-0000-4000-8000-000000000405', a_cuenta, i_tom, a_norte, 2.65, false, true, 'TOMATE PERA')
   on conflict (id) do nothing;
+  perform set_config('session_replication_role', 'origin', true);
 
   -- La repetida: mismo número e importe que la F-2026-0915 aprobada.
   insert into public.supplier_invoice (id, account_id, supplier_id, location_id, invoice_number, invoice_date, status,
