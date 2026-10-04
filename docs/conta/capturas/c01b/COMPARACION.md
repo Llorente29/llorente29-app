@@ -53,6 +53,14 @@ la e2e `tests/e2e/conta/c01b/capturas.spec.ts` (ordenador 1440 × 900 y móvil
    - Columnas: nombre (con razón social, NIF y artículos), tipo de gasto, «Le debes», última factura y la píldora ámbar «Ficha incompleta · N %» con lo que falta.
    - Filtro «En uso / Archivados».
    - En el móvil: nombre, «Le debes» y la ficha.
+9. **«···» en cada fila de la lista (respuesta 2, punto 3; la maqueta no lo dibuja).** `lista-menu-ordenador.png` y `lista-menu-movil.png`.
+   - «Abrir», «Subir factura» y «Archivar proveedor» (o «Recuperar proveedor» en Archivados), sin entrar en la ficha.
+   - Va fuera del enlace de la fila, a la derecha; en el móvil, arriba a la derecha. Archivar pregunta antes, como en la ficha, y las dos dicen lo que ha pasado.
+10. **IBAN distinto al de la ficha (respuesta 2, punto 1; la maqueta no lo dibuja).** `iban-distinto-ficha-*.png` y `iban-distinto-factura-*.png`, con Panadería Luna de la semilla.
+   - En la ficha, un aviso ámbar arriba: qué factura, qué cuenta trae (los cuatro últimos) y cuál tienes.
+   - En la lista de facturas, «IBAN distinto» en ámbar con su explicación en una línea.
+   - En la factura: las dos cuentas enteras, «Es el nuevo IBAN» / «No es suyo», y «Marcar como pagada» desactivado con el porqué.
+11. **«¿Posible repetida?» (respuesta 2, punto 2).** Misma píldora ámbar que «¿Repetida?», con su porqué: «Misma fecha e importe que la L-0412, con otro número. No la he apuntado.»
 
 ## Arreglado tras la primera captura (04/10)
 

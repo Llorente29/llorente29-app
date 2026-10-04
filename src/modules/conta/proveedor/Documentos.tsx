@@ -30,7 +30,7 @@ export default function Documentos() {
   const [ocupado, setOcupado] = useState(false)
   const [fallo, setFallo] = useState<string | null>(null)
   const [aviso, avisar] = useAvisoGuardado()
-  const cert = tieneCertificadoBanco(datos.documentos)
+  const cert = tieneCertificadoBanco(datos.documentos, datos.ficha.ibanChangedAt)
   const hoy = hoyEnMadrid()
 
   async function subir(e: React.ChangeEvent<HTMLInputElement>) {
@@ -61,7 +61,9 @@ export default function Documentos() {
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {datos.ficha.iban && !cert && (
         <div className="cx-aviso" id="campo-bank_ownership_certificate" tabIndex={-1}>
-          Falta el certificado del banco: el papel del banco que dice que esa cuenta es suya. Protege de cambios de IBAN fraudulentos.
+          {datos.ficha.ibanChangedAt
+            ? <>Falta el certificado del banco de la cuenta NUEVA: el IBAN cambió el {fechaLarga(datos.ficha.ibanChangedAt.slice(0, 10))}{datos.ficha.ibanChangedByName ? ` (lo cambió ${datos.ficha.ibanChangedByName})` : ''} y el certificado de antes ya no vale.</>
+            : 'Falta el certificado del banco: el papel del banco que dice que esa cuenta es suya. Protege de cambios de IBAN fraudulentos.'}
         </div>
       )}
       <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>

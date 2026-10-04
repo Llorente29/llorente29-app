@@ -20,6 +20,7 @@ import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c01b'
 const MERCADOS_NORTE = 'c1b0a000-0000-4000-8000-0000000000a6'
+const PANADERIA_LUNA = 'c01a0000-0000-4000-8000-0000000000a5'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // Lo que flota encima: en el ordenador, la barra «Pregunta o pide algo»; en el
@@ -65,6 +66,38 @@ test('ficha de Hermanos Ruiz (cuenta A): la repetida en ámbar y fuera de las ci
     await expect(page.getByRole('link', { name: /Artículos que le compras/ })).toBeVisible()
   }
   await capturar(page, 'ficha')
+})
+
+test('lista: el «···» de una fila (Abrir, Subir factura, Archivar) sin entrar en la ficha', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  await page.goto('/kitchen/proveedores')
+  await page.getByRole('button', { name: 'Más acciones de Panadería Luna' }).click()
+  const menu = page.getByRole('menu', { name: 'Acciones de Panadería Luna' })
+  await expect(menu.getByRole('menuitem', { name: 'Abrir' })).toBeVisible()
+  await expect(menu.getByRole('menuitem', { name: 'Subir factura' })).toBeVisible()
+  await expect(menu.getByRole('menuitem', { name: 'Archivar proveedor' })).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/lista-menu-${lado(page)}.png`, fullPage: true })
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+})
+
+test('Panadería Luna (respuesta 2): IBAN distinto al de la ficha y posible repetida', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  await page.goto(`/kitchen/proveedores/${PANADERIA_LUNA}`)
+  await expect(page.getByRole('alert').filter({ hasText: 'IBAN distinto al de la ficha.' })).toBeVisible()
+  await expect(page.getByText(/La factura L-0431 trae la cuenta …7890 y en la ficha tienes la …7892\./)).toBeVisible()
+  await capturar(page, 'iban-distinto-ficha')
+  await page.goto(`/kitchen/proveedores/${PANADERIA_LUNA}/facturas`)
+  await expect(page.getByText('¿Posible repetida?')).toBeVisible()
+  await expect(page.getByText('Misma fecha e importe que la L-0412, con otro número. No la he apuntado.')).toBeVisible()
+  await expect(page.getByText('IBAN distinto', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Ver la factura L-0431' }).click()
+  await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Es el nuevo IBAN' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'No es suyo' })).toBeEnabled()
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/iban-distinto-factura-${lado(page)}.png`, fullPage: true })
 })
 
 test('dirección «por confirmar» (Mercados del Norte): el reparto propuesto con «Es esta / Corregir»', async ({ page }) => {

@@ -197,6 +197,113 @@ test.describe('cuenta A', () => {
     }
   })
 
+  test('posible repetida (misma fecha e importe, otro número): fuera de las cifras hasta «No es repetida»', async ({ page }) => {
+    const s = await entrarComo(page, CUENTA_A.email)
+    const id = await crearPorApi(s, CUENTA_A.id)
+    try {
+      const factura = (num: string) => ({
+        account_id: CUENTA_A.id, supplier_id: id, location_id: LOCAL_A, invoice_number: num, invoice_date: '2026-09-22',
+        due_date: '2026-10-22', status: 'aprobada', tax_base_total: 100, tax_total: 21, grand_total: 121,
+      })
+      for (const n of ['E2E-100', 'E2E-1OO']) {
+        const r = await rest(s, 'POST', 'supplier_invoice', factura(n))
+        expect(r.status, JSON.stringify(r.datos)).toBe(201)
+      }
+      const leDebes = page.locator('.cxp-cifra').filter({ hasText: 'Le debes' })
+      await page.goto(ficha(id))
+      await expect(leDebes).toContainText('121')
+      await expect(leDebes).not.toContainText('242')
+      await page.goto(ficha(id, 'facturas'))
+      await expect(page.getByText('¿Posible repetida?')).toBeVisible()
+      await expect(page.getByText('Misma fecha e importe que la E2E-100, con otro número. No la he apuntado.')).toBeVisible()
+      await page.getByRole('button', { name: 'Ver la factura E2E-1OO' }).click()
+      await page.getByRole('button', { name: 'No es repetida: apuntarla' }).click()
+      await expect(page.getByText(/Factura E2E-1OO apuntada: no es repetida/)).toBeVisible()
+      await expect(page.getByText('¿Posible repetida?')).toHaveCount(0)
+      await page.goto(ficha(id))
+      await expect(leDebes).toContainText('242')
+    } finally {
+      await borrarProveedor(s, id)
+    }
+  })
+
+  test('IBAN distinto en una factura: aviso, pago frenado (también en la base), «No es suyo» y «Es el nuevo IBAN»', async ({ page }) => {
+    const s = await entrarComo(page, CUENTA_A.email)
+    const id = await crearPorApi(s, CUENTA_A.id, { iban: 'ES9121000418450200051332', iban_verified_at: new Date().toISOString() })
+    try {
+      const factura = (num: string) => ({
+        account_id: CUENTA_A.id, supplier_id: id, location_id: LOCAL_A, invoice_number: num, invoice_date: '2026-09-25',
+        due_date: '2026-10-25', status: 'aprobada', tax_base_total: 100, tax_total: 21, grand_total: 121, read_iban: 'ES7921000813610123456789',
+      })
+      const f1 = await rest<{ id: string }[]>(s, 'POST', 'supplier_invoice', { ...factura('E2E-IB-1'), grand_total: 50 })
+      expect(f1.status, JSON.stringify(f1.datos)).toBe(201)
+      const f2 = await rest<{ id: string }[]>(s, 'POST', 'supplier_invoice', factura('E2E-IB-2'))
+      expect(f2.status, JSON.stringify(f2.datos)).toBe(201)
+
+      // La base lo frena aunque se salte la pantalla.
+      const pago = await rest<{ message?: string }>(s, 'POST', 'rpc/mark_supplier_invoice_paid', { p_invoice_id: f1.datos[0].id, p_paid_at: '2026-10-04', p_method: 'transfer' })
+      expect(pago.status).toBeGreaterThanOrEqual(400)
+      expect(pago.datos.message).toContain('IBAN distinto al de la ficha')
+
+      await page.goto(ficha(id))
+      await expect(page.getByRole('alert').filter({ hasText: 'IBAN distinto al de la ficha.' })).toContainText('2 facturas traen otra cuenta')
+      await page.goto(ficha(id, 'facturas'))
+      await expect(page.getByText('IBAN distinto', { exact: true })).toHaveCount(2)
+
+      // «No es suyo»: la ficha se queda y ya se puede pagar.
+      await page.getByRole('button', { name: 'Ver la factura E2E-IB-1' }).click()
+      await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toBeDisabled()
+      await page.getByRole('button', { name: 'No es suyo' }).click()
+      await expect(page.getByText(/el IBAN de la factura E2E-IB-1 no es suyo\. Se queda el de la ficha \(…1332\)/)).toBeVisible()
+      await page.getByRole('button', { name: 'Ver la factura E2E-IB-1' }).click()
+      await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toBeEnabled()
+      await page.getByRole('button', { name: 'Cerrar' }).click()
+
+      // «Es el nuevo IBAN»: pasa a la ficha, con quién y cuándo, y pide el certificado.
+      await page.getByRole('button', { name: 'Ver la factura E2E-IB-2' }).click()
+      await page.getByRole('button', { name: 'Es el nuevo IBAN' }).click()
+      await expect(page.getByText(/cambiado a …6789 \(antes …1332\)\. Queda apuntado quién y cuándo/)).toBeVisible()
+      await expect(page.getByText('IBAN distinto', { exact: true })).toHaveCount(0)
+      const despues = await rest<{ iban: string; iban_previous: string; iban_changed_at: string | null }[]>(s, 'GET', `supplier?select=iban,iban_previous,iban_changed_at&id=eq.${id}`)
+      expect(despues.datos[0]).toMatchObject({ iban: 'ES7921000813610123456789', iban_previous: 'ES9121000418450200051332' })
+      expect(despues.datos[0].iban_changed_at).not.toBeNull()
+      await page.goto(ficha(id, 'documentos'))
+      await expect(page.getByText(/Falta el certificado del banco de la cuenta NUEVA/)).toBeVisible()
+      await page.goto(ficha(id, 'historial'))
+      await expect(page.getByText(/Cambió el IBAN de la ficha por el de la factura E2E-IB-2 \(…6789\); antes, …1332/)).toBeVisible()
+      await expect(page.getByText(/Dijo que el IBAN de la factura E2E-IB-1 no es suyo/)).toBeVisible()
+    } finally {
+      await borrarProveedor(s, id)
+    }
+  })
+
+  test('el «···» de la lista: archivar (pregunta) y recuperar sin entrar en la ficha', async ({ page }) => {
+    const s = await entrarComo(page, CUENTA_A.email)
+    const id = await crearPorApi(s, CUENTA_A.id)
+    try {
+      const { datos } = await rest<{ name: string }[]>(s, 'GET', `supplier?select=name&id=eq.${id}`)
+      const nombre = datos[0].name
+      await page.goto('/kitchen/proveedores')
+      await page.getByLabel('Buscar proveedor').fill(nombre)
+      await page.getByRole('button', { name: `Más acciones de ${nombre}` }).click()
+      await page.getByRole('menuitem', { name: 'Archivar proveedor' }).click()
+      await page.getByRole('dialog').getByRole('button', { name: 'Archivar' }).click()
+      await expect(page.getByText(`${nombre} archivado. Ya no sale en la lista; está en «Archivados» y sus facturas siguen ahí.`)).toBeVisible()
+      await expect(page.getByRole('link', { name: new RegExp(nombre) })).toHaveCount(0)
+      await page.getByRole('button', { name: 'Archivados' }).click()
+      await page.getByRole('button', { name: `Más acciones de ${nombre}` }).click()
+      await expect(page.getByRole('menuitem', { name: 'Subir factura' })).toHaveCount(0)
+      await page.getByRole('menuitem', { name: 'Recuperar proveedor' }).click()
+      await expect(page.getByText(`${nombre} recuperado: vuelve a salir en la lista de proveedores.`)).toBeVisible()
+      await page.getByRole('button', { name: 'En uso' }).click()
+      await page.getByRole('button', { name: `Más acciones de ${nombre}` }).click()
+      await page.getByRole('menuitem', { name: 'Abrir' }).click()
+      await expect(page).toHaveURL(new RegExp(`/kitchen/proveedores/${id}$`))
+    } finally {
+      await borrarProveedor(s, id)
+    }
+  })
+
   test('«Artículos que le compras» y «Migrar artículos» funcionan como antes (sin migrar)', async ({ page }) => {
     await entrarComo(page, CUENTA_A.email)
     await page.goto(ficha(HERMANOS_RUIZ, movil(page) ? 'articulos' : ''))
@@ -259,6 +366,12 @@ test('RLS de lo nuevo del C01b: B no ve lo aprendido de A ni puede tocarlo', asy
     expect(r.status, rpc).toBeGreaterThanOrEqual(400)
     expect(r.datos.message, rpc).toContain('no existe o no es de tu cuenta')
   }
+  // El IBAN distinto (0135): B no decide sobre una factura de A (la de Panadería Luna de la semilla).
+  const decide = await rest<{ message?: string }>(b, 'POST', 'rpc/supplier_invoice_iban_decide', {
+    p_invoice_id: 'c1b0a000-0000-4000-8000-000000000513', p_decision: 'es_el_nuevo', p_quien_nombre: 'Intruso',
+  })
+  expect(decide.status).toBeGreaterThanOrEqual(400)
+  expect(decide.datos.message).toContain('no existe o no es de tu cuenta')
   const intruso = await rest(b, 'POST', 'supplier_learning', {
     account_id: CUENTA_A.id, supplier_id: HERMANOS_RUIZ, campo: 'payment', valor: 'cash', etiqueta: 'x', porque: 'x',
   })

@@ -8,12 +8,16 @@
 // dicho aquí.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { claveNumero, detectarRepetidas, EXPLICACION_REPETIDA, type FacturaParaRepetida } from '@/modules/conta/lib/repetidas'
+import { claveNumero, detectarRepetidas, EXPLICACION_REPETIDA, explicacionPosible, type FacturaParaRepetida } from '@/modules/conta/lib/repetidas'
 import { aprender, propuestaParaFactura, VECES_PARA_APRENDER, type Confirmacion } from '@/modules/conta/lib/aprendizaje'
 import { avisoPlazo, AVISO_PLAZO_MOROSIDAD } from '@/modules/conta/lib/morosidad'
 
 const real = JSON.parse(readFileSync('tests/unit/modules/conta/datos/numeros-albaran-foodint-20261004.json', 'utf8')) as {
   total: number; por_proveedor: Record<string, string[]>
+}
+
+const conFecha = JSON.parse(readFileSync('tests/unit/modules/conta/datos/albaranes-fecha-importe-foodint-20261004.json', 'utf8')) as {
+  total: number; filas: { p: number; n: string; f: string; i: number; anulado: boolean; entro: string }[]
 }
 
 const factura = (id: string, number: string | null, total: number | null, createdAt: string, extra: Partial<FacturaParaRepetida> = {}): FacturaParaRepetida =>
@@ -67,7 +71,7 @@ describe('repetida · la regla', () => {
       factura('a', 'f-2026-0915 ', 1283.15, '2026-09-24T10:00:00Z'),
     ])
     expect([...r.keys()]).toEqual(['b'])
-    expect(r.get('b')).toEqual({ deId: 'a', explicacion: EXPLICACION_REPETIDA })
+    expect(r.get('b')).toEqual({ deId: 'a', nivel: 'repetida', explicacion: EXPLICACION_REPETIDA })
   })
   it('mismo número e importe distinto en un céntimo: no es repetida', () => {
     expect(detectarRepetidas([factura('a', 'F-1', 10, '1'), factura('b', 'F-1', 10.01, '2')]).size).toBe(0)
@@ -81,6 +85,94 @@ describe('repetida · la regla', () => {
   it('sin número o sin importe no se puede decir: no se marca', () => {
     expect(detectarRepetidas([factura('a', null, 10, '1'), factura('b', null, 10, '2')]).size).toBe(0)
     expect(detectarRepetidas([factura('a', 'F-1', null, '1'), factura('b', 'F-1', null, '2')]).size).toBe(0)
+  })
+})
+
+describe('posible repetida · contra los 179 albaranes reales, con su fecha y su importe', () => {
+  const porProveedor = new Map<number, typeof conFecha.filas>()
+  for (const r of conFecha.filas) porProveedor.set(r.p, [...(porProveedor.get(r.p) ?? []), r])
+  const comoFacturas = (filas: typeof conFecha.filas) => filas.map((r, i): FacturaParaRepetida =>
+    ({ id: `${r.p}-${i}`, number: r.n, total: r.i, fecha: r.f, status: r.anulado ? 'anulada' : 'aprobada', createdAt: r.entro }))
+
+  it('es la misma población que la de los números (179, mismos números por proveedor)', () => {
+    expect(conFecha.total).toBe(179)
+    expect(conFecha.filas).toHaveLength(179)
+    const a = Object.values(real.por_proveedor).map((v) => [...v].sort().join('|')).sort()
+    const b = [...porProveedor.values()].map((v) => v.map((r) => r.n).sort().join('|')).sort()
+    expect(b).toEqual(a)
+  })
+
+  it('con sus fechas e importes de verdad no sale NINGUNA, ni repetida ni posible (0 falsos positivos)', () => {
+    const marcadas: string[] = []
+    for (const filas of porProveedor.values()) {
+      for (const [id, r] of detectarRepetidas(comoFacturas(filas))) marcadas.push(`${id}:${r.nivel}`)
+    }
+    // El único número repetido con el mismo importe (T2826/1092) tiene la
+    // primera anulada: se volvió a meter bien. Nada que marcar.
+    expect(marcadas).toEqual([])
+  })
+
+  it('sin la fecha, el importe solo daría falsos positivos: se repite en 4 proveedores', () => {
+    let mismosImportes = 0
+    for (const filas of porProveedor.values()) {
+      const vistos = new Set<number>()
+      for (const r of filas.filter((x) => !x.anulado)) {
+        const c = Math.round(r.i * 100)
+        if (vistos.has(c)) mismosImportes++
+        vistos.add(c)
+      }
+    }
+    // 1 + 2 + 2 + 3: con solo el importe serían 8 avisos falsos.
+    expect(mismosImportes).toBe(8)
+  })
+
+  it('si una de ellas volviera con el número mal leído, la caza con su porqué', () => {
+    // La población real, más UNA copia de un albarán real con otro número.
+    const filas = porProveedor.get(9)!
+    const fs = comoFacturas(filas)
+    const copia = { ...fs[0], id: 'copia', number: `${fs[0].number}-B`, createdAt: '2026-10-04T12:00:00' }
+    const r = detectarRepetidas([...fs, copia])
+    expect([...r.keys()]).toEqual(['copia'])
+    expect(r.get('copia')).toEqual({ deId: fs[0].id, nivel: 'posible', explicacion: explicacionPosible(fs[0].number) })
+    expect(r.get('copia')!.explicacion).toBe(`Misma fecha e importe que la ${fs[0].number}, con otro número. No la he apuntado.`)
+  })
+})
+
+describe('posible repetida · la regla', () => {
+  const f = (id: string, number: string | null, total: number | null, fecha: string | null, createdAt: string, extra: Partial<FacturaParaRepetida> = {}) =>
+    factura(id, number, total, createdAt, { fecha, ...extra })
+
+  it('misma fecha e importe, otro número: «¿Posible repetida?» la segunda', () => {
+    const r = detectarRepetidas([f('a', 'F-10', 50, '2026-09-01', '1'), f('b', 'F-11', 50, '2026-09-01', '2')])
+    expect(r.get('b')).toEqual({ deId: 'a', nivel: 'posible', explicacion: 'Misma fecha e importe que la F-10, con otro número. No la he apuntado.' })
+    expect(r.has('a')).toBe(false)
+  })
+  it('mismo número e importe gana: es «¿Repetida?», no posible', () => {
+    expect(detectarRepetidas([f('a', 'F-10', 50, '2026-09-01', '1'), f('b', 'F-10', 50, '2026-09-01', '2')]).get('b')?.nivel).toBe('repetida')
+  })
+  it('otra fecha o un céntimo de diferencia: nada', () => {
+    expect(detectarRepetidas([f('a', 'F-10', 50, '2026-09-01', '1'), f('b', 'F-11', 50, '2026-09-02', '2')]).size).toBe(0)
+    expect(detectarRepetidas([f('a', 'F-10', 50, '2026-09-01', '1'), f('b', 'F-11', 50.01, '2026-09-01', '2')]).size).toBe(0)
+  })
+  it('importe 0 o sin fecha no casa nada', () => {
+    expect(detectarRepetidas([f('a', 'F-10', 0, '2026-09-01', '1'), f('b', 'F-11', 0, '2026-09-01', '2')]).size).toBe(0)
+    expect(detectarRepetidas([f('a', 'F-10', 50, null, '1'), f('b', 'F-11', 50, null, '2')]).size).toBe(0)
+  })
+  it('sin número ninguna de las dos («0», «sn»): posible, y lo dice', () => {
+    const r = detectarRepetidas([f('a', '0', 50, '2026-09-01', '1'), f('b', 'sn', 50, '2026-09-01', '2')])
+    expect(r.get('b')?.explicacion).toBe('Misma fecha e importe que la de arriba, y ninguna de las dos trae número. No la he apuntado.')
+  })
+  it('«no es repetida» la apunta y no se vuelve a marcar; la tercera igual sí', () => {
+    const r = detectarRepetidas([
+      f('a', 'F-10', 50, '2026-09-01', '1'),
+      f('b', 'F-11', 50, '2026-09-01', '2', { noRepetidaConfirmada: true }),
+      f('c', 'F-12', 50, '2026-09-01', '3'),
+    ])
+    expect([...r.keys()]).toEqual(['c'])
+    expect(r.get('c')?.deId).toBe('a')
+  })
+  it('una anulada no cuenta como original', () => {
+    expect(detectarRepetidas([f('a', 'F-10', 50, '2026-09-01', '1', { status: 'anulada' }), f('b', 'F-11', 50, '2026-09-01', '2')]).size).toBe(0)
   })
 })
 

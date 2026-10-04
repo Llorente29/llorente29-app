@@ -41,6 +41,10 @@ export interface FichaProveedor {
   paymentFixedDays: number[]
   iban: string | null
   ibanVerifiedAt: string | null
+  /** C01b R2 · El IBAN de antes y quién lo cambió desde una factura («Es el nuevo IBAN»). Solo lectura. */
+  ibanPrevious: string | null
+  ibanChangedAt: string | null
+  ibanChangedByName: string | null
   bankName: string | null
   ledgerAccountCode: string | null
   healthRegistryNo: string | null

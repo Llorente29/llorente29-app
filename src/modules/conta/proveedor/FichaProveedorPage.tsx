@@ -37,7 +37,7 @@ import { diaMes, euros, eurosExactos, iniciales } from '@/modules/conta/lib/form
 import { PAYMENT_METHOD_LABEL } from '@/modules/conta/types'
 import { BloqueAprendido, FraseAprendido } from '@/modules/conta/proveedor/Aprendido'
 import { ConQuienHablas } from '@/modules/conta/proveedor/Contactos'
-import { ListaFacturas, TarjetaFacturas } from '@/modules/conta/proveedor/Facturas'
+import { AvisoIban, ListaFacturas, TarjetaFacturas } from '@/modules/conta/proveedor/Facturas'
 import { Notas } from '@/modules/conta/proveedor/Notas'
 import DatosFiscales from '@/modules/conta/proveedor/DatosFiscales'
 import Contactos from '@/modules/conta/proveedor/Contactos'
@@ -309,6 +309,7 @@ function Resumen({ secciones }: { secciones: SeccionDeFicha[] }) {
   return (
     <>
       <Cabecera />
+      <AvisoIban />
       <BarraCompleta />
       <Cifras />
       <div className="cxp-columnas">
@@ -407,6 +408,7 @@ function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
           : <Link className="cx-boton-sec" to={`${rutaApartado('contactos')}?nuevo=orders`}><IconoTelefono />Añadir a pedidos</Link>}
         <Link className="cx-boton" to={rutaSubirFacturaProveedor(f.id, true)}><IconoCamara />Foto de factura</Link>
       </div>
+      <AvisoIban />
       {datos.propuestas.length > 0 && (
         <Link className="cx-aviso" to={rutaApartado('datos-fiscales')} style={{ textDecoration: 'none' }}>
           {datos.propuestas.length === 1 ? 'Hay 1 dato por confirmar' : `Hay ${datos.propuestas.length} datos por confirmar`}

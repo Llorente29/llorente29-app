@@ -11,23 +11,27 @@
 // facturas repetidas: la lista y la ficha no pueden contar distinto.
 // Un umbral ordena, no esconde (regla 7): todos los proveedores salen; los
 // archivados, en su filtro.
+// Cada fila lleva su «···» (respuesta 2, punto 3): Abrir, Subir factura y
+// Archivar/Recuperar sin entrar en la ficha. Archivar pregunta antes, como en
+// la ficha; las dos confirman con contenido (regla 8).
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import '@/modules/conta/estilo'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { migasProveedores, rutaFichaProveedor } from '@/config/navegacion'
+import { migasProveedores, rutaFichaProveedor, rutaSubirFacturaProveedor } from '@/config/navegacion'
 import { Campo, Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Guardado, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
 import { BarraPregunta } from '@/modules/conta/marco/BarraPregunta'
 import {
-  crearProveedor, listarContactosDeLaCuenta, listarFacturasDeLaCuenta, listarProveedores, listarTiposGasto, proveedoresConCertificadoBanco,
+  crearProveedor, guardarFicha, listarContactosDeLaCuenta, listarFacturasDeLaCuenta, listarProveedores, listarTiposGasto, proveedoresConCertificadoBanco,
 } from '@/modules/conta/services/proveedorService'
 import { calcularCompletitud, type Falta } from '@/modules/conta/lib/completitud'
 import { calcularCifras } from '@/modules/conta/lib/cifras'
 import { detectarRepetidas } from '@/modules/conta/lib/repetidas'
+import { certificadoVale } from '@/modules/conta/lib/ibanFactura'
 import { diaMesCorto, euros, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
 import { normalizarNif, tipoEntidadPorNif, validarNifEs } from '@/modules/conta/lib/nif'
 import type { ExtensionesProveedor } from '@/modules/conta/extensiones'
@@ -69,7 +73,24 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
   const [busca, setBusca] = useState('')
   const [archivados, setArchivados] = useState(false)
   const [nuevo, setNuevo] = useState(false)
+  const [archivar, setArchivar] = useState<FichaProveedor | null>(null)
+  const [hecho, setHecho] = useState<string | null>(null)
+  const [fallo, setFallo] = useState<string | null>(null)
   const avisoLlegada = (location.state as { aviso?: string } | null)?.aviso ?? null
+
+  /** Archivar o recuperar desde la fila: sale de esta vista (está en la otra) y lo dice. */
+  async function cambiarArchivo(f: FichaProveedor, archivar: boolean) {
+    setFallo(null); setHecho(null)
+    try {
+      await guardarFicha(f.id, archivar ? { isActive: false, archivedAt: new Date().toISOString() } : { isActive: true, archivedAt: null })
+      setFilas((xs) => xs?.filter((x) => x.ficha.id !== f.id) ?? xs)
+      setHecho(archivar
+        ? `${f.name} archivado. Ya no sale en la lista; está en «Archivados» y sus facturas siguen ahí.`
+        : `${f.name} recuperado: vuelve a salir en la lista de proveedores.`)
+    } catch (e) {
+      setFallo(e instanceof Error ? e.message : archivar ? 'No se pudo archivar.' : 'No se pudo recuperar.')
+    }
+  }
 
   useEffect(() => {
     if (accountsLoading || !activeAccountId) return
@@ -86,9 +107,9 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
       const nombreTipo = new Map(tipos.map((t) => [t.id, t.name]))
       setFilas(provs.map((ficha) => {
         const suyos = contactos.filter((c) => c.supplierId === ficha.id)
-        const { pct, faltan } = calcularCompletitud({ ficha, contactos: suyos, tieneCertificadoBanco: certs.has(ficha.id) })
+        const { pct, faltan } = calcularCompletitud({ ficha, contactos: suyos, tieneCertificadoBanco: certs.has(ficha.id) && certificadoVale(certs.get(ficha.id)!, ficha.ibanChangedAt) })
         const deEl = facturas.filter((x) => x.supplierId === ficha.id)
-        const rep = detectarRepetidas(deEl.map((x) => ({ id: x.id, number: x.invoiceNumber, total: x.grandTotal, status: x.status, createdAt: x.createdAt, noRepetidaConfirmada: x.noRepetidaConfirmada })))
+        const rep = detectarRepetidas(deEl.map((x) => ({ id: x.id, number: x.invoiceNumber, total: x.grandTotal, status: x.status, createdAt: x.createdAt, fecha: x.invoiceDate, noRepetidaConfirmada: x.noRepetidaConfirmada })))
         const buenas = deEl.filter((x) => !rep.has(x.id))
         const debe = calcularCifras(buenas, hoy).leDebes
         const u = buenas.filter((x) => x.invoiceDate).sort((a, b) => (b.invoiceDate ?? '').localeCompare(a.invoiceDate ?? ''))[0] ?? null
@@ -125,7 +146,9 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
         </div>
         <button type="button" className="cx-boton" onClick={() => setNuevo(true)} disabled={!activeAccountId}>Nuevo proveedor</button>
       </header>
-      {avisoLlegada && <Guardado texto={avisoLlegada} />}
+      {avisoLlegada && !hecho && <Guardado texto={avisoLlegada} />}
+      <Guardado texto={hecho} />
+      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
 
       <div className="cxp-lista-barra">
         <label htmlFor="buscar-prov" className="cx-oculto">Buscar proveedor</label>
@@ -162,7 +185,8 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
               <span style={{ textAlign: 'right' }}>Última factura</span><span>Ficha</span>
             </div>
             {visibles.map(({ ficha: f, pct, faltan, debe, ultima, tipo }) => (
-              <Link key={f.id} to={rutaFichaProveedor(f.id)} className="cxp-tabla-fila">
+              <div key={f.id} className="cxp-tabla-envoltura">
+              <Link to={rutaFichaProveedor(f.id)} className="cxp-tabla-fila">
                 <span className="cxp-tabla-nombre">
                   <Inicial texto={iniciales(f.name)} />
                   <span>
@@ -189,6 +213,8 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
                       </>}
                 </span>
               </Link>
+              <MenuFila ficha={f} alArchivar={() => setArchivar(f)} alRecuperar={() => void cambiarArchivo(f, false)} />
+              </div>
             ))}
           </div>
         </section>
@@ -199,8 +225,46 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
           {busca.trim() ? ` · ${visibles.length} con «${busca.trim()}»` : ''}
         </p>
       )}
+      {archivar && (
+        <Dialogo titulo={`¿Archivar ${archivar.name}?`} alCerrar={() => setArchivar(null)}>
+          <p style={{ margin: 0, fontSize: 15 }}>Dejará de salir en la lista de proveedores (sale en «Archivados» y se puede recuperar). No se borra nada: sus facturas, contactos y documentos se quedan.</p>
+          <div className="cx-pie">
+            <button type="button" className="cx-boton-sec" onClick={() => setArchivar(null)}>Cancelar</button>
+            <button type="button" className="cx-boton" onClick={() => { const f = archivar; setArchivar(null); void cambiarArchivo(f, true) }}>Archivar</button>
+          </div>
+        </Dialogo>
+      )}
       {nuevo && activeAccountId && <NuevoProveedor accountId={activeAccountId} otros={filas?.map((x) => x.ficha) ?? []} alCerrar={() => setNuevo(false)} />}
       {!movil && <BarraPregunta ejemplo="¿A quién le debo más este mes?" />}
+    </div>
+  )
+}
+
+/** «···» de una fila: Abrir, Subir factura, Archivar o Recuperar. */
+function MenuFila({ ficha: f, alArchivar, alRecuperar }: { ficha: FichaProveedor; alArchivar: () => void; alRecuperar: () => void }) {
+  const [abierto, setAbierto] = useState(false)
+  const caja = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!abierto) return
+    const fuera = (e: MouseEvent) => { if (!caja.current?.contains(e.target as Node)) setAbierto(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false) }
+    document.addEventListener('mousedown', fuera)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', esc) }
+  }, [abierto])
+  return (
+    <div className="cxp-tabla-mas" ref={caja}>
+      <button type="button" className="cx-boton-sec cx-mas" aria-haspopup="menu" aria-expanded={abierto}
+        aria-label={`Más acciones de ${f.name}`} onClick={() => setAbierto((v) => !v)}>···</button>
+      {abierto && (
+        <div className="cxp-menu" role="menu" aria-label={`Acciones de ${f.name}`}>
+          <Link role="menuitem" to={rutaFichaProveedor(f.id)}>Abrir</Link>
+          {!f.archivedAt && <Link role="menuitem" to={rutaSubirFacturaProveedor(f.id)}>Subir factura</Link>}
+          {f.archivedAt
+            ? <button type="button" role="menuitem" onClick={() => { setAbierto(false); alRecuperar() }}>Recuperar proveedor</button>
+            : <button type="button" role="menuitem" onClick={() => { setAbierto(false); alArchivar() }}>Archivar proveedor</button>}
+        </div>
+      )}
     </div>
   )
 }

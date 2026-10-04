@@ -36,7 +36,14 @@ begin
   insert into public.supplier_invoice (account_id, supplier_id, location_id, invoice_number, invoice_date, status, grand_total, read_iban)
   values (cuenta, ruiz, loc, 'P0135-2', date '2026-10-01', 'aprobada', 200, otro) returning id into f2;
   insert into public.supplier_invoice (account_id, supplier_id, location_id, invoice_number, invoice_date, status, grand_total, read_iban)
-  values (cuenta, ruiz, loc, 'P0135-3', date '2026-10-01', 'aprobada', 300, 'es91 2100 0418 4502 0005 1332') returning id into f3;
+  values (cuenta, ruiz, loc, 'P0135-3', date '2026-10-01', 'aprobada', 300, ficha) returning id into f3;
+  -- Lo leído se guarda normalizado: con espacios o en minúsculas no entra.
+  begin
+    insert into public.supplier_invoice (account_id, supplier_id, location_id, invoice_number, invoice_date, status, grand_total, read_iban)
+    values (cuenta, ruiz, loc, 'P0135-X', date '2026-10-01', 'aprobada', 1, 'es91 2100 0418 4502 0005 1332');
+    raise exception 'PRUEBA 0135: ha entrado un IBAN leído sin normalizar';
+  exception when check_violation then null;
+  end;
   insert into public.supplier_invoice (account_id, supplier_id, location_id, invoice_number, invoice_date, status, grand_total)
   values (cuenta, ruiz, loc, 'P0135-4', date '2026-10-01', 'aprobada', 400) returning id into f4;
 

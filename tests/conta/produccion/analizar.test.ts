@@ -94,8 +94,8 @@ describe('la tanda de AHORA (manifiesto vivo): datos del C01b', () => {
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c01b-20261004.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
 
-  it('son 0100–0130, en orden; la eliminación (0140) NO va', () => {
-    expect(viva.map((f) => f.replace(/^.*\/20261006T(\d{4})_.*$/, '$1'))).toEqual(['0100', '0110', '0120', '0130'])
+  it('son 0100–0135, en orden; la eliminación (0140) NO va', () => {
+    expect(viva.map((f) => f.replace(/^.*\/20261006T(\d{4})_.*$/, '$1'))).toEqual(['0100', '0110', '0120', '0130', '0135'])
     expect(viva.some((f) => f.includes('0140_c01b_elimina'))).toBe(false)
   })
   it('PARAN exactamente 0110 (cambia datos de supplier) y 0120 (reemplaza dos funciones): los de «autorizo»', () => {

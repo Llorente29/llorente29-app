@@ -4,6 +4,11 @@
 // fecha, número, importe y estado — «Pagada» en verde, «Por pagar» en azul y
 // «¿Repetida?» en ámbar con su explicación en una línea (C01b §4: mismo
 // número e importe que otra anterior; no se apunta en ninguna cifra).
+// «¿Posible repetida?» (respuesta 2): misma fecha e importe con otro número;
+// la misma decisión.
+// «IBAN distinto al de la ficha» (respuesta 2, punto 1): la lectura trajo otra
+// cuenta. «Marcar como pagada» queda desactivado (y la base lo rechaza) hasta
+// que alguien decide «Es el nuevo IBAN» o «No es suyo».
 //
 // «Ver» abre la factura: «Marcar como pagada» (y luego «Deshacer» en la misma
 // pantalla), cambiar el vencimiento, o «Deshacer el pago» si ya lo estaba.
@@ -16,10 +21,13 @@ import { Link } from 'react-router-dom'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { Dialogo, HechoConDeshacer } from '@/modules/conta/proveedor/piezas'
 import { Vacio } from '@/modules/conta/ui/piezas'
-import { cambiarVencimiento, deshacerPago, marcarPagada, noEsRepetida, type FacturaDeProveedor } from '@/modules/conta/services/proveedorService'
+import { cambiarVencimiento, decidirIban, deshacerPago, marcarPagada, noEsRepetida, type FacturaDeProveedor } from '@/modules/conta/services/proveedorService'
 import { diaMesCorto, eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/modules/conta/types'
 import { rutaSubirFacturaProveedor } from '@/config/navegacion'
+import { ETIQUETA_REPETIDA } from '@/modules/conta/lib/repetidas'
+import { AVISO_IBAN_DISTINTO, facturaFrenada, puedeSerElNuevo } from '@/modules/conta/lib/ibanFactura'
+import { formatearIban, normalizarIban } from '@/modules/conta/lib/iban'
 
 const ESTADO: Record<string, { texto: string; tono: string }> = {
   aprobada: { texto: 'Por pagar', tono: 'cx-chip cx-chip-azul' },
@@ -28,9 +36,31 @@ const ESTADO: Record<string, { texto: string; tono: string }> = {
   en_revision: { texto: 'En revisión', tono: 'cx-chip' },
   con_discrepancias: { texto: 'Con diferencias', tono: 'cx-chip' },
 }
-const REPETIDA = { texto: '¿Repetida?', tono: 'cx-chip cx-chip-ambar' }
 
 const numero = (f: FacturaDeProveedor) => f.invoiceNumber ?? f.code ?? 'Sin número'
+
+const ultimas4 = (iban: string | null) => iban ? `…${normalizarIban(iban).slice(-4)}` : '—'
+
+/**
+ * El aviso de la ficha (resumen y portada del móvil): qué facturas traen otro
+ * IBAN y que no se paguen hasta decidir. Lleva a la lista de facturas.
+ */
+export function AvisoIban() {
+  const { datos, rutaApartado } = useFicha()
+  const distintas = datos.facturas.filter((f) => facturaFrenada(f, datos.ficha.iban))
+  if (distintas.length === 0) return null
+  const f = distintas[0]
+  return (
+    <div className="cx-aviso" role="alert">
+      <strong>{AVISO_IBAN_DISTINTO}.</strong>{' '}
+      {distintas.length === 1
+        ? <>La factura {numero(f)} trae la cuenta {ultimas4(f.readIban)} y en la ficha tienes la {ultimas4(datos.ficha.iban)}.</>
+        : <>{distintas.length} facturas traen otra cuenta que la de la ficha ({ultimas4(datos.ficha.iban)}).</>}
+      {' '}No se puede marcar como pagada hasta que decidas si es su nuevo IBAN.{' '}
+      <Link to={rutaApartado('facturas')}>{distintas.length === 1 ? 'Ver la factura' : 'Ver las facturas'}</Link>
+    </div>
+  )
+}
 
 /** La tarjeta «Facturas» del resumen: las últimas `max`, con «Ver todas». */
 export function TarjetaFacturas({ max = 6 }: { max?: number }) {
@@ -65,13 +95,17 @@ export function ListaFacturas({ facturas }: { facturas: FacturaDeProveedor[] }) 
       <div role="list" aria-label="Facturas">
         {facturas.map((f) => {
           const rep = repetidas.get(f.id)
-          const e = rep ? REPETIDA : ESTADO[f.status] ?? { texto: f.status, tono: 'cx-chip' }
+          const frena = facturaFrenada(f, datos.ficha.iban)
+          const e = rep ? { texto: ETIQUETA_REPETIDA[rep.nivel], tono: 'cx-chip cx-chip-ambar' }
+            : frena ? { texto: 'IBAN distinto', tono: 'cx-chip cx-chip-ambar' }
+            : ESTADO[f.status] ?? { texto: f.status, tono: 'cx-chip' }
           return (
             <div key={f.id} role="listitem" className="cxp-factura">
               <span className="cxp-factura-fecha">{f.invoiceDate ? diaMesCorto(f.invoiceDate) : '—'}</span>
               <span className="cxp-factura-num">
-                {numero(f)}{rep ? ' (otra vez)' : ''}
+                {numero(f)}{rep?.nivel === 'repetida' ? ' (otra vez)' : ''}
                 {rep && <span className="cxp-factura-explica">{rep.explicacion}</span>}
+                {!rep && frena && <span className="cxp-factura-explica">{AVISO_IBAN_DISTINTO}: trae la {ultimas4(f.readIban)}. No la pagues hasta decidir.</span>}
               </span>
               <span className="cxp-factura-importe">{f.grandTotal !== null ? eurosExactos(f.grandTotal) : '—'}</span>
               <span className="cxp-factura-estado"><span className={e.tono}>{e.texto}</span></span>
@@ -104,6 +138,8 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
   const num = numero(f)
   const rep = repetidas.get(f.id)
   const original = rep ? datos.facturas.find((x) => x.id === rep.deId) : null
+  const frena = facturaFrenada(f, datos.ficha.iban)
+  const nuevo = puedeSerElNuevo(f.readIban)
 
   async function hacer(accion: () => Promise<void>, texto: string, deshacer?: () => Promise<void>) {
     setOcupado(true); setError(null)
@@ -128,7 +164,7 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
 
       {rep && (
         <div className="cx-aviso">
-          <strong>¿Repetida?</strong> {rep.explicacion}
+          <strong>{ETIQUETA_REPETIDA[rep.nivel]}</strong> {rep.explicacion}
           {original && <> La de arriba es la {numero(original)} del {original.invoiceDate ? fechaLarga(original.invoiceDate) : 'sin fecha'}, que entró antes.</>}
           {' '}No cuenta en lo que le has comprado ni en lo que le debes.
         </div>
@@ -139,6 +175,35 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
             `Factura ${num} apuntada: no es repetida.${f.status === 'aprobada' || f.status === 'pagada' ? ' Ya cuenta en lo que le has comprado y en lo que le debes.' : ' Contará cuando se apruebe.'}`)}>
           {ocupado ? 'Guardando…' : 'No es repetida: apuntarla'}
         </button>
+      )}
+
+      {frena && f.readIban && (
+        <div className="cx-aviso">
+          <strong>{AVISO_IBAN_DISTINTO}.</strong> La factura trae <span className="cx-cifra">{formatearIban(normalizarIban(f.readIban))}</span>;
+          {' '}en la ficha tienes <span className="cx-cifra">{datos.ficha.iban ? formatearIban(normalizarIban(datos.ficha.iban)) : '—'}</span>.
+          {' '}Un cambio de cuenta en una factura es el engaño más común: si no te lo ha dicho el proveedor, llámale antes de decidir.
+        </div>
+      )}
+      {frena && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" className="cx-boton-sec" disabled={ocupado || !nuevo.ok}
+            onClick={() => hacer(() => decidirIban(f.id, 'es_el_nuevo', actor.name),
+              `IBAN de ${datos.ficha.name} cambiado a ${ultimas4(f.readIban)} (antes ${ultimas4(datos.ficha.iban)}). Queda apuntado quién y cuándo. Sube el certificado del banco de la cuenta nueva en Documentos.`)}>
+            Es el nuevo IBAN
+          </button>
+          <button type="button" className="cx-boton-sec" disabled={ocupado}
+            onClick={() => hacer(() => decidirIban(f.id, 'no_es_suyo', actor.name),
+              `Apuntado: el IBAN de la factura ${num} no es suyo. Se queda el de la ficha (${ultimas4(datos.ficha.iban)}); págala a ése.`)}>
+            No es suyo
+          </button>
+          {!nuevo.ok && <span className="cx-ayuda" style={{ flexBasis: '100%' }}>{nuevo.motivo}</span>}
+        </div>
+      )}
+      {f.ibanDecision && f.ibanDecisionAt && (
+        <p className="cx-ayuda" style={{ margin: 0 }}>
+          {f.ibanDecision === 'es_el_nuevo' ? 'Su IBAN pasó a la ficha' : 'Su IBAN no es del proveedor: se paga al de la ficha'}
+          {` el ${fechaLarga(f.ibanDecisionAt.slice(0, 10))}`}{f.ibanDecisionByName ? ` (lo decidió ${f.ibanDecisionByName})` : ''}.
+        </p>
       )}
 
       {f.status === 'aprobada' && !rep && (
@@ -156,7 +221,8 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
               </select>
             </div>
           </div>
-          <button type="button" className="cx-boton" disabled={ocupado || !fecha}
+          {frena && <span className="cx-ayuda">«Marcar como pagada» está desactivado hasta que decidas sobre el IBAN.</span>}
+          <button type="button" className="cx-boton" disabled={ocupado || !fecha || frena}
             onClick={() => hacer(
               () => marcarPagada(f.id, fecha, forma || null),
               `Factura ${num} marcada como pagada el ${fechaLarga(fecha)}. Ya no le debes esos ${importe}.`,

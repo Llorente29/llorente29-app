@@ -15,6 +15,7 @@ import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import { rpcSinTipar } from '@/lib/rpcSinTipar'
 import { tiposGastoOcultos } from '@/modules/conta/services/fichaTablasService'
 import type { Aprendido, CampoAprendido } from '@/modules/conta/lib/aprendizaje'
+import { certificadoVale, type DecisionIban } from '@/modules/conta/lib/ibanFactura'
 import type {
   ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor, InvoicingFrequency,
   PaymentMethod, TaxIdCheckStatus, TaxIdType, VatRegime,
@@ -69,6 +70,9 @@ export function filaAFicha(r: Fila): FichaProveedor {
     paymentFixedDays: nums(r.payment_fixed_days),
     iban: str(r.iban),
     ibanVerifiedAt: str(r.iban_verified_at),
+    ibanPrevious: str(r.iban_previous),
+    ibanChangedAt: str(r.iban_changed_at),
+    ibanChangedByName: str(r.iban_changed_by_name),
     bankName: str(r.bank_name),
     ledgerAccountCode: str(r.ledger_account_code),
     healthRegistryNo: str(r.health_registry_no),
@@ -406,13 +410,18 @@ export interface FacturaDeProveedor extends FacturaParaCifras {
   code: string | null
   paidMethod: PaymentMethod | null
   paidByName: string | null
+  /** C01b R2 · El IBAN que trae la factura (lo rellena la lectura) y lo que decidió una persona. */
+  readIban: string | null
+  ibanDecision: DecisionIban | null
+  ibanDecisionAt: string | null
+  ibanDecisionByName: string | null
 }
 
 /** Facturas del proveedor, sin las anuladas, de la más reciente a la más antigua. */
 export async function listarFacturas(accountId: string, supplierId: string): Promise<FacturaDeProveedor[]> {
   requireSupabase()
   const { data, error } = await from('supplier_invoice')
-    .select('id, code, status, invoice_number, invoice_date, grand_total, due_date, paid_at, paid_method, paid_by_name, created_at, not_duplicate_confirmed_at')
+    .select('id, code, status, invoice_number, invoice_date, grand_total, due_date, paid_at, paid_method, paid_by_name, created_at, not_duplicate_confirmed_at, read_iban, iban_decision, iban_decision_at, iban_decision_by_name')
     .eq('account_id', accountId)
     .eq('supplier_id', supplierId)
     .neq('status', 'anulada')
@@ -431,6 +440,10 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
     paidAt: str(r.paid_at),
     paidMethod: str(r.paid_method) as PaymentMethod | null,
     paidByName: str(r.paid_by_name),
+    readIban: str(r.read_iban),
+    ibanDecision: str(r.iban_decision) as DecisionIban | null,
+    ibanDecisionAt: str(r.iban_decision_at),
+    ibanDecisionByName: str(r.iban_decision_by_name),
   }))
 }
 
@@ -499,22 +512,31 @@ export async function listarDocumentos(accountId: string, supplierId: string): P
   }))
 }
 
-/** ¿Tiene un certificado de titularidad bancaria vigente? (no sustituido) */
-export function tieneCertificadoBanco(docs: DocumentoProveedor[]): boolean {
-  return docs.some((d) => d.docFamily === 'bank_ownership_certificate' && d.status !== 'superseded' && d.status !== 'expired')
+/**
+ * ¿Tiene un certificado de titularidad bancaria vigente (no sustituido) y
+ * posterior al último cambio de IBAN? El de la cuenta vieja no vale (C01b R2).
+ */
+export function tieneCertificadoBanco(docs: DocumentoProveedor[], ibanCambiadoAt: string | null = null): boolean {
+  return docs.some((d) => d.docFamily === 'bank_ownership_certificate' && d.status !== 'superseded' && d.status !== 'expired'
+    && certificadoVale(d.createdAt, ibanCambiadoAt))
 }
 
-/** Proveedores de la cuenta con certificado del banco, para el % de la lista. */
-export async function proveedoresConCertificadoBanco(accountId: string): Promise<Set<string>> {
+/** Por proveedor, cuándo se subió su último certificado del banco vigente: para el % de la lista. */
+export async function proveedoresConCertificadoBanco(accountId: string): Promise<Map<string, string>> {
   requireSupabase()
   const { data, error } = await from('compliance_document')
-    .select('supplier_id, status')
+    .select('supplier_id, status, created_at')
     .eq('account_id', accountId)
     .eq('doc_family', 'bank_ownership_certificate')
   if (error) throw new Error(`No se pudieron cargar los documentos: ${error.message}`)
-  return new Set(((data as Fila[] | null) ?? [])
-    .filter((r) => r.status !== 'superseded' && r.status !== 'expired' && r.supplier_id)
-    .map((r) => r.supplier_id as string))
+  const ultimo = new Map<string, string>()
+  for (const r of (data as Fila[] | null) ?? []) {
+    if (r.status === 'superseded' || r.status === 'expired' || !r.supplier_id) continue
+    const id = r.supplier_id as string
+    const at = r.created_at as string
+    if (!ultimo.has(id) || at > ultimo.get(id)!) ultimo.set(id, at)
+  }
+  return ultimo
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -561,6 +583,17 @@ export async function listarHistorial(
     if (!p.decided_at) continue
     const verbo = p.status === 'confirmed' ? 'Confirmó' : 'Descartó'
     sucesos.push({ cuando: p.decided_at as string, quien: str(p.decided_by_name), que: `${verbo} ${CAMPO[p.field as string] ?? 'un dato'} propuesto` })
+  }
+  // IBAN distinto en una factura (C01b R2): lo que decidió cada persona.
+  for (const f of facturas) {
+    if (!f.ibanDecision || !f.ibanDecisionAt) continue
+    const n = num_.get(f.id) ?? ''
+    sucesos.push({
+      cuando: f.ibanDecisionAt, quien: f.ibanDecisionByName,
+      que: f.ibanDecision === 'es_el_nuevo'
+        ? `Cambió el IBAN de la ficha por el de la factura ${n}${f.readIban ? ` (…${f.readIban.slice(-4)})` : ''}${ficha.ibanPrevious ? `; antes, …${ficha.ibanPrevious.slice(-4)}` : ''}`
+        : `Dijo que el IBAN de la factura ${n} no es suyo: se paga al de la ficha`,
+    })
   }
   for (const l of (pagos.data as Fila[] | null) ?? []) {
     const n = num_.get(l.invoice_id as string) ?? ''
@@ -683,6 +716,11 @@ export async function fijarAprendido(supplierId: string, campo: CampoAprendido, 
 
 export async function noEsRepetida(invoiceId: string, quien: string | null): Promise<void> {
   await rpcSinTipar<null>('supplier_invoice_not_duplicate', { p_invoice_id: invoiceId, p_quien_nombre: quien })
+}
+
+/** IBAN distinto en una factura: «Es el nuevo IBAN» (pasa a la ficha) o «No es suyo». */
+export async function decidirIban(invoiceId: string, decision: DecisionIban, quien: string | null): Promise<void> {
+  await rpcSinTipar<null>('supplier_invoice_iban_decide', { p_invoice_id: invoiceId, p_decision: decision, p_quien_nombre: quien })
 }
 
 export interface HechoPorFolvy {

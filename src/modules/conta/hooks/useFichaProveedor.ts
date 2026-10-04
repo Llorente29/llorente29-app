@@ -83,7 +83,7 @@ const FALTA_PARA_PROPONER = (f: FichaProveedor) =>
   !f.taxId?.trim() || !f.legalName?.trim() || !f.fiscalStreet?.trim()
 
 const repetidasDe = (facturas: FacturaDeProveedor[]) =>
-  detectarRepetidas(facturas.map((f) => ({ id: f.id, number: f.invoiceNumber, total: f.grandTotal, status: f.status, createdAt: f.createdAt, noRepetidaConfirmada: f.noRepetidaConfirmada })))
+  detectarRepetidas(facturas.map((f) => ({ id: f.id, number: f.invoiceNumber, total: f.grandTotal, status: f.status, createdAt: f.createdAt, fecha: f.invoiceDate, noRepetidaConfirmada: f.noRepetidaConfirmada })))
 
 const mismo = (a: Aprendido[], b: Aprendido[]) => {
   const clave = (xs: Aprendido[]) => xs.filter((x) => !x.aMano).map((x) => `${x.campo}=${x.valor}`).sort().join('|')
@@ -220,7 +220,7 @@ export function useFichaProveedor(accountId: string | null, supplierId: string):
   }, [datos, comprobarNifUe])
 
   const completitud = useMemo(() => datos
-    ? calcularCompletitud({ ficha: datos.ficha, contactos: datos.contactos, tieneCertificadoBanco: tieneCertificadoBanco(datos.documentos) })
+    ? calcularCompletitud({ ficha: datos.ficha, contactos: datos.contactos, tieneCertificadoBanco: tieneCertificadoBanco(datos.documentos, datos.ficha.ibanChangedAt) })
     : null, [datos])
 
   const repetidas = useMemo(() => datos ? repetidasDe(datos.facturas) : new Map<string, Repetida>(), [datos])
