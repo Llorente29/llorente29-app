@@ -189,13 +189,19 @@ async function descargarUna(f) {
 }
 
 async function main() {
-  const { fuentes } = JSON.parse(await readFile(join(DIR, 'fuentes.json'), 'utf8'))
+  const todas = JSON.parse(await readFile(join(DIR, 'fuentes.json'), 'utf8')).fuentes
+  // FUENTES_SOLO=clave1,clave2 descarga solo esas (el agente «Plan contable»
+  // vuelve a bajar el PGC cada noche para ver si el BOE ha corregido una
+  // errata). El registro conserva las demás tal y como estaban.
+  const solo = (process.env.FUENTES_SOLO ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+  const fuentes = solo.length ? todas.filter((f) => solo.includes(f.clave)) : todas
+  if (solo.length && fuentes.length !== solo.length) throw new Error(`FUENTES_SOLO nombra fuentes que no están en fuentes.json: ${solo.join(', ')}`)
   let previo = { fuentes: {} }
   try { previo = JSON.parse(await readFile(join(DIR, 'registro.json'), 'utf8')) } catch { /* primera vez */ }
   await mkdir(join(DIR, 'textos'), { recursive: true })
 
   const fecha = new Date().toISOString()
-  const registro = { descargado: fecha, fuentes: {} }
+  const registro = { descargado: fecha, fuentes: solo.length ? { ...previo.fuentes } : {} }
   const cambios = []
   let fallos = 0
 
@@ -207,9 +213,16 @@ async function main() {
     const ok = d.http === 200 && d.texto.length > 0 && contiene
     if (!ok) fallos++
     const fichero = `textos/${f.clave}.${d.ext}`
+    // Si el texto es el mismo (misma huella), la fecha de descarga se queda la
+    // de la primera vez que se bajó ESE texto, y la de hoy va a «comprobado».
+    // Los valores de serie citan esa fecha (official_source.downloaded_at,
+    // verified_at) y ya están aplicados: volver a bajar lo mismo no puede
+    // cambiarlos (C02, 04/10: una descarga idéntica rompía serie.mjs comprobar).
+    const previa = previo.fuentes?.[f.clave]
+    const mismo = ok && previa?.sha256 === huella && previa?.fecha
     registro.fuentes[f.clave] = {
       nombre: f.nombre, url: d.url, urlDatos: d.urlDatos ?? null, http: d.http, titulo: d.titulo,
-      actualizadoEnFuente: d.actualizadoEnFuente ?? null, fecha, sha256: huella, bytes: d.texto.length,
+      actualizadoEnFuente: d.actualizadoEnFuente ?? null, fecha: mismo ? previa.fecha : fecha, comprobado: fecha, sha256: huella, bytes: d.texto.length,
       contieneLoEsperado: contiene, fichero: ok ? fichero : null, error: d.error ?? null,
       idBoe: d.id ?? null, nota: d.nota ?? null,
     }
@@ -221,6 +234,8 @@ async function main() {
   }
 
   if (modo === 'descargar') {
+    // «descargado» es la fecha del texto más reciente, no la de la ejecución.
+    registro.descargado = Object.values(registro.fuentes).map((x) => x.fecha).filter(Boolean).sort().at(-1) ?? fecha
     await writeFile(join(DIR, 'registro.json'), JSON.stringify(registro, null, 2) + '\n')
   } else {
     const informe = [

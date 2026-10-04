@@ -1,0 +1,438 @@
+{
+  "_que_es": "C02 · Correcciones al cuadro de cuentas del BOE (decisión D1 de Julio, 04/10/2026). La serie del plan contable es el cuadro de cuentas (cuarta parte) del texto consolidado que descarga Actions más ESTA lista. Nada se corrige sin cita: cada corrección lleva el texto literal de la quinta parte (definiciones y relaciones contables) del mismo texto, y scripts/conta/plan.mjs comprueba que ese texto sigue estando en la versión vigente del bloque citado. Si el BOE corrige la errata algún día, la corrección sobra y el agente «Plan contable» lo dice. Hay diferencia cuando el título del cuadro no coincide con NINGUNO de los dos testigos de la quinta parte (la lista del subgrupo y el encabezado de la definición); si coincide con uno, son dos contra uno y la errata es de la quinta parte. Las 'aceptadas' son diferencias en las que se queda el cuadro, cada una con su porqué. Toda diferencia nueva que no esté corregida ni aceptada es rojo.",
+  "normalizacion": "Se quita el guion blando (U+00AD), se juntan los espacios y se quita el punto final, a los dos lados. Las notas de la consolidación («Redactado conforme a…», «Se modifica la cuenta…») no son título.",
+  "tipos": {
+    "titulo_de_otra_cuenta": "El cuadro le pone el título de otra cuenta (otraCuenta). El título correcto es el de la quinta parte.",
+    "lineas_fundidas": "El cuadro junta dos títulos en una línea. El correcto es el de la quinta parte, que es el principio de esa línea.",
+    "falta": "La cuenta no sale en el cuadro (por unas líneas fundidas) y la quinta parte la lista y la define.",
+    "errata": "Errata tipográfica del cuadro (letra, acento o espacio): el título correcto es literal de la quinta parte y difiere en 3 caracteres o menos.",
+    "dos_testigos": "La lista y la definición de la quinta parte dicen lo mismo, y el cuadro otra cosa: mandan las dos.",
+    "espacio": "Solo falta un espacio entre dos palabras del propio cuadro. La cita es la línea de la misma cuenta en la quinta parte."
+  },
+  "correcciones": [
+    {
+      "plan": "pymes",
+      "code": "50",
+      "tipo": "errata",
+      "tituloCuadro": "EMPRÉSTITOS, DEUDAS CON CARÁCTERÍSTICAS ESPECIALES Y OTRAS EMISIONES ANÁLOGAS A CORTO PLAZO",
+      "tituloCorrecto": "EMPRÉSTITOS, DEUDAS CON CARACTERÍSTICAS ESPECIALES Y OTRAS EMISIONES ANÁLOGAS A CORTO PLAZO",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo5-2",
+        "literal": [
+          "50.\nEMPRÉSTITOS, DEUDAS CON CARACTERÍSTICAS ESPECIALES Y OTRAS EMISIONES ANÁLOGAS A CORTO PLAZO"
+        ]
+      }
+    },
+    {
+      "plan": "pymes",
+      "code": "232",
+      "tipo": "titulo_de_otra_cuenta",
+      "tituloCuadro": "Propiedad industrial",
+      "tituloCorrecto": "Instalaciones técnicas en montaje",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo2-2",
+        "literal": [
+          "232.\nInstalaciones técnicas en montaje."
+        ]
+      },
+      "otraCuenta": "203"
+    },
+    {
+      "plan": "pymes",
+      "code": "233",
+      "tipo": "titulo_de_otra_cuenta",
+      "tituloCuadro": "Propiedad industrial",
+      "tituloCorrecto": "Maquinaria en montaje",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo2-2",
+        "literal": [
+          "233.\nMaquinaria en montaje."
+        ]
+      },
+      "otraCuenta": "203"
+    },
+    {
+      "plan": "pymes",
+      "code": "237",
+      "tipo": "titulo_de_otra_cuenta",
+      "tituloCuadro": "Propiedad industrial",
+      "tituloCorrecto": "Equipos para procesos de información en montaje",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo2-2",
+        "literal": [
+          "237.\nEquipos para procesos de información en montaje."
+        ]
+      },
+      "otraCuenta": "203"
+    },
+    {
+      "plan": "pymes",
+      "code": "239",
+      "tipo": "titulo_de_otra_cuenta",
+      "tituloCuadro": "Propiedad industrial",
+      "tituloCorrecto": "Anticipos para inmovilizaciones materiales",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo2-2",
+        "literal": [
+          "239.\nAnticipos para inmovilizaciones materiales.",
+          "239. Anticipos para inmovilizaciones materiales."
+        ]
+      },
+      "otraCuenta": "203"
+    },
+    {
+      "plan": "pymes",
+      "code": "250",
+      "tipo": "errata",
+      "tituloCuadro": "Inversiones financieras alargo plazo en instrumentos de patrimonio",
+      "tituloCorrecto": "Inversiones financieras a largo plazo en instrumentos de patrimonio",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo2-2",
+        "literal": [
+          "250.\nInversiones financieras a largo plazo en instrumentos de patrimonio.",
+          "250. Inversiones financieras a largo plazo en instrumentos de patrimonio"
+        ]
+      }
+    },
+    {
+      "plan": "pymes",
+      "code": "606",
+      "tipo": "titulo_de_otra_cuenta",
+      "tituloCuadro": "Proveedores, otras partes vinculadas",
+      "tituloCorrecto": "Descuentos sobre compras por pronto pago",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo6-2",
+        "literal": [
+          "606.\nDescuentos sobre compras por pronto pago.",
+          "606. Descuentos sobre compras por pronto pago."
+        ]
+      },
+      "otraCuenta": "405"
+    },
+    {
+      "plan": "pymes",
+      "code": "664",
+      "tipo": "errata",
+      "tituloCuadro": "Gastor por dividendos de acciones o participaciones consideradas como pasivos financieros",
+      "tituloCorrecto": "Gastos por dividendos de acciones o participaciones consideradas como pasivos financieros",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo6-2",
+        "literal": [
+          "664.\nDividendos de acciones o participaciones consideradas como pasivos financieros.",
+          "664. Gastos por dividendos de acciones o participaciones consideradas como pasivos financieros"
+        ]
+      }
+    },
+    {
+      "plan": "general",
+      "code": "50",
+      "tipo": "errata",
+      "tituloCuadro": "EMPRÉSTITOS, DEUDAS CON CARÁCTERÍSTICAS ESPECIALES Y OTRAS EMISIONES ANÁLOGAS A CORTO PLAZO",
+      "tituloCorrecto": "EMPRÉSTITOS, DEUDAS CON CARACTERÍSTICAS ESPECIALES Y OTRAS EMISIONES ANÁLOGAS A CORTO PLAZO",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo5-2",
+        "literal": [
+          "50.\nEMPRÉSTITOS, DEUDAS CON CARACTERÍSTICAS ESPECIALES Y OTRAS EMISIONES ANÁLOGAS A CORTO PLAZO"
+        ]
+      }
+    },
+    {
+      "plan": "general",
+      "code": "69",
+      "tipo": "errata",
+      "tituloCuadro": "PÉRDIDAS POR DETERIOROY OTRAS DOTACIONES",
+      "tituloCorrecto": "PÉRDIDAS POR DETERIORO Y OTRAS DOTACIONES",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo6-2",
+        "literal": [
+          "69.\nPÉRDIDAS POR DETERIORO Y OTRAS DOTACIONES"
+        ]
+      }
+    },
+    {
+      "plan": "general",
+      "code": "74",
+      "tipo": "errata",
+      "tituloCuadro": "SUBVENCIONES, DONACIONESY LEGADOS",
+      "tituloCorrecto": "SUBVENCIONES, DONACIONES Y LEGADOS",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo7-2",
+        "literal": [
+          "74.\nSUBVENCIONES, DONACIONES Y LEGADOS"
+        ]
+      }
+    },
+    {
+      "plan": "general",
+      "code": "84",
+      "tipo": "errata",
+      "tituloCuadro": "TRANSFERENCIAS DE SUBVENCIONES, DONACIONESY LEGADOS",
+      "tituloCorrecto": "TRANSFERENCIAS DE SUBVENCIONES, DONACIONES Y LEGADOS",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo8-2",
+        "literal": [
+          "84.\nTRANSFERENCIAS DE SUBVENCIONES, DONACIONES Y LEGADOS"
+        ]
+      }
+    },
+    {
+      "plan": "general",
+      "code": "90",
+      "tipo": "espacio",
+      "tituloCuadro": "INGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOSY PASIVOS",
+      "tituloCorrecto": "INGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOS Y PASIVOS",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo9-2",
+        "literal": [
+          "90.\nINGRESOS FINANCIEROS POR VALORACIÓN DE ACTIVOS FINANCIEROS"
+        ]
+      },
+      "nota": "La cita no trae el título corregido: la quinta parte conserva «ACTIVOS FINANCIEROS» (ver la aceptada del 80). La corrección solo separa «ACTIVOSY»; las palabras son las del propio cuadro vigente."
+    },
+    {
+      "plan": "general",
+      "code": "500",
+      "tipo": "lineas_fundidas",
+      "tituloCuadro": "Obligaciones y bonos a corto plazo Obligaciones y bonos convertibles a corto plazo",
+      "tituloCorrecto": "Obligaciones y bonos a corto plazo",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo5-2",
+        "literal": [
+          "500.\nObligaciones y bonos a corto plazo",
+          "500. Obligaciones y bonos a corto plazo"
+        ]
+      },
+      "nota": "El cuadro junta en la línea de 500 su título y el de 501, y corre los demás una posición: 501 lleva el de 502 y 502 no sale. Van juntas las tres correcciones (500, 501 y 502)."
+    },
+    {
+      "plan": "general",
+      "code": "501",
+      "tipo": "titulo_de_otra_cuenta",
+      "tituloCuadro": "Acciones o participaciones a corto plazo consideradas como pasivos financieros",
+      "tituloCorrecto": "Obligaciones y bonos convertibles a corto plazo",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo5-2",
+        "literal": [
+          "501.\nObligaciones y bonos convertibles a corto plazo",
+          "501. Obligaciones y bonos convertibles a corto plazo"
+        ]
+      },
+      "otraCuenta": "502"
+    },
+    {
+      "plan": "general",
+      "code": "502",
+      "tipo": "falta",
+      "tituloCuadro": null,
+      "tituloCorrecto": "Acciones o participaciones a corto plazo consideradas como pasivos financieros",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo5-2",
+        "literal": [
+          "502.\nAcciones o participaciones a corto plazo consideradas como pasivos financieros",
+          "502. Acciones o participaciones a corto plazo consideradas como pasivos financieros"
+        ]
+      },
+      "nota": "No sale en el cuadro por las líneas fundidas de 500/501. La quinta parte la lista y la define."
+    },
+    {
+      "plan": "general",
+      "code": "546",
+      "tipo": "dos_testigos",
+      "tituloCuadro": "Intereses a corto plazo de valores representativos de deudas",
+      "tituloCorrecto": "Intereses a corto plazo de valores representativos de deuda",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo5-2",
+        "literal": [
+          "546.\nIntereses a corto plazo de valores representativos de deuda.",
+          "546. Intereses a corto plazo de valores representativos de deuda."
+        ]
+      }
+    },
+    {
+      "plan": "general",
+      "code": "800",
+      "tipo": "dos_testigos",
+      "tituloCuadro": "Pérdidas de activos financieros a valor razonable con cambios en el patrimonio neto",
+      "tituloCorrecto": "Pérdidas en activos financieros a valor razonable con cambios en el patrimonio neto",
+      "cita": {
+        "parte": "quinta",
+        "bloque": "grupo8-2",
+        "literal": [
+          "800.\nPérdidas en activos financieros a valor razonable con cambios en el patrimonio neto",
+          "800. Pérdidas en activos financieros a valor razonable con cambios en el patrimonio neto"
+        ]
+      }
+    }
+  ],
+  "aceptadas": [
+    {
+      "plan": "pymes",
+      "code": "35",
+      "tituloCuadro": "PRODUCTOS TERMINADOS",
+      "quintaLista": "PRODUCTOSTERMINADOS",
+      "quintaDefinicion": null,
+      "motivo": "La errata está en la quinta parte («PRODUCTOSTERMINADOS»); el cuadro está bien."
+    },
+    {
+      "plan": "pymes",
+      "code": "598",
+      "tituloCuadro": "Deterioro de valor de créditos a corto plazo",
+      "quintaLista": "Deterioro de valor de créditos a corto plazO",
+      "quintaDefinicion": "Deterioro de valor de acreditos a corto plazo",
+      "motivo": "Las erratas están en la quinta parte («plazO», «acreditos»); el cuadro está bien."
+    },
+    {
+      "plan": "pymes",
+      "code": "5303",
+      "tituloCuadro": "Participaciones a corto plazo, en empresas del grupo",
+      "quintaLista": "Participaciones a corto plazo en empresas del grupo",
+      "quintaDefinicion": null,
+      "motivo": "Solo cambia una coma; no hay definición propia que desempate y no es una errata evidente."
+    },
+    {
+      "plan": "pymes",
+      "code": "5304",
+      "tituloCuadro": "Participaciones a corto plazo, en empresas asociadas",
+      "quintaLista": "Participaciones a corto plazo en empresas asociadas",
+      "quintaDefinicion": null,
+      "motivo": "Solo cambia una coma; no hay definición propia que desempate y no es una errata evidente."
+    },
+    {
+      "plan": "pymes",
+      "code": "5305",
+      "tituloCuadro": "Participaciones a corto plazo, en otras partes vinculadas",
+      "quintaLista": "Participaciones a corto plazo en otras partes vinculadas",
+      "quintaDefinicion": "Participaciones a corto plazo en otras partes vinculadas",
+      "motivo": "Solo cambia una coma y la definición de la quinta parte va sin ella, pero no es una errata evidente: se queda el cuadro."
+    },
+    {
+      "plan": "pymes",
+      "code": "5333",
+      "tituloCuadro": "Intereses a corto plazo de valores representativos de deuda en empresas del grupo",
+      "quintaLista": "Intereses a corto plazo de valores representativos de deuda de empresas del grupo",
+      "quintaDefinicion": null,
+      "motivo": "«en» o «de» empresas del grupo: las dos se leen bien y no hay definición propia que desempate."
+    },
+    {
+      "plan": "pymes",
+      "code": "5334",
+      "tituloCuadro": "Intereses a corto plazo de valores representativos de deuda en empresas asociadas",
+      "quintaLista": "Intereses a corto plazo de valores representativos de deuda de empresas asociadas",
+      "quintaDefinicion": null,
+      "motivo": "«en» o «de» empresas asociadas: las dos se leen bien y no hay definición propia que desempate."
+    },
+    {
+      "plan": "pymes",
+      "code": "5335",
+      "tituloCuadro": "Intereses a corto plazo de valores representativos de deuda en otras partes vinculadas",
+      "quintaLista": "Intereses a corto plazo de valores representativos de deuda de otras partes vinculadas",
+      "quintaDefinicion": null,
+      "motivo": "«en» o «de» otras partes vinculadas: las dos se leen bien y no hay definición propia que desempate."
+    },
+    {
+      "plan": "general",
+      "code": "11",
+      "tituloCuadro": "RESERVAS Y OTROS INSTRUMENTOS DE PATRIMONIO",
+      "quintaLista": "RESERVAS Y OTROS INSTRUMENTOS DE PATRIMONIO NETO",
+      "quintaDefinicion": null,
+      "motivo": "Solo la lista de la quinta parte añade «NETO»; no hay definición propia que desempate."
+    },
+    {
+      "plan": "general",
+      "code": "80",
+      "tituloCuadro": "GASTOS FINANCIEROS POR VALORACIÓN DE ACTIVOS Y PASIVOS",
+      "quintaLista": "GASTOS FINANCIEROS POR VALORACIÓN DE ACTIVOS FINANCIEROS",
+      "quintaDefinicion": null,
+      "motivo": "El cuadro vigente (RD 1/2021) dice «ACTIVOS Y PASIVOS»; la lista de la quinta parte conserva «ACTIVOS FINANCIEROS». Manda el cuadro."
+    },
+    {
+      "plan": "general",
+      "code": "99",
+      "tituloCuadro": "INGRESOS DE PARTICIPACIONES EN EMPRESAS DEL GRUPO O ASOCIADAS CON AJUSTES VALORATIVOS NEGATIVOS PREVIOS",
+      "quintaLista": "INGRESOS DE PARTICIPACIONES EN EL PATRIMONIO DE EMPRESAS DEL GRUPO O ASOCIADAS CON AJUSTES VALORATIVOS NEGATIVOS PREVIOS",
+      "quintaDefinicion": null,
+      "motivo": "Solo la lista de la quinta parte añade «EN EL PATRIMONIO DE»; no hay definición propia que desempate."
+    },
+    {
+      "plan": "general",
+      "code": "260",
+      "tituloCuadro": "Fianzas constituidas a largo plazo",
+      "quintaLista": null,
+      "quintaDefinicion": "265",
+      "motivo": "En la quinta parte la lista del subgrupo 26 sale desordenada en el texto consolidado («260.» seguido de «265»); el cuadro está bien."
+    },
+    {
+      "plan": "general",
+      "code": "1623",
+      "tituloCuadro": "Acreedores por arrendamiento financiero a largo plazo, empresas de grupo",
+      "quintaLista": "Acreedores por arrendamiento financiero a largo plazo, empresas del grupo",
+      "quintaDefinicion": null,
+      "motivo": "«de grupo» por «del grupo»: probable errata, pero solo la lista de la quinta parte lo dice, sin definición propia."
+    },
+    {
+      "plan": "general",
+      "code": "5303",
+      "tituloCuadro": "Participaciones a corto plazo, en empresas del grupo",
+      "quintaLista": "Participaciones a corto plazo en empresas del grupo",
+      "quintaDefinicion": null,
+      "motivo": "Solo cambia una coma; no es una errata evidente."
+    },
+    {
+      "plan": "general",
+      "code": "5304",
+      "tituloCuadro": "Participaciones a corto plazo, en empresas asociadas",
+      "quintaLista": "Participaciones a corto plazo en empresas asociadas",
+      "quintaDefinicion": null,
+      "motivo": "Solo cambia una coma; no es una errata evidente."
+    },
+    {
+      "plan": "general",
+      "code": "5305",
+      "tituloCuadro": "Participaciones a corto plazo, en otras partes vinculadas",
+      "quintaLista": "Participaciones a corto plazo en otras partes vinculadas",
+      "quintaDefinicion": "Participaciones a corto plazo en otras partes vinculadas",
+      "motivo": "Solo cambia una coma y la definición de la quinta parte va sin ella, pero no es una errata evidente: se queda el cuadro."
+    },
+    {
+      "plan": "general",
+      "code": "6450",
+      "tituloCuadro": "Retribuciones al personal liquidados con instrumentos de patrimonio",
+      "quintaLista": "Retribuciones al personal liquidadas con instrumentos de patrimonio",
+      "quintaDefinicion": null,
+      "motivo": "«liquidados» por «liquidadas»: probable errata de concordancia, pero solo la lista de la quinta parte lo dice, sin definición propia."
+    },
+    {
+      "plan": "general",
+      "code": "6457",
+      "tituloCuadro": "Retribuciones al personal liquidados en efectivo basado en instrumentos de patrimonio",
+      "quintaLista": "Retribuciones al personal liquidadas en efectivo basado en instrumentos de patrimonio",
+      "quintaDefinicion": null,
+      "motivo": "«liquidados» por «liquidadas»: probable errata de concordancia, pero solo la lista de la quinta parte lo dice, sin definición propia."
+    },
+    {
+      "plan": "general",
+      "code": "7950",
+      "tituloCuadro": "Exceso de provisión por retribuciones al personal",
+      "quintaLista": "Exceso de provisión por retribuciones a largo plazo al personal",
+      "quintaDefinicion": null,
+      "motivo": "Solo la lista de la quinta parte añade «a largo plazo»; no hay definición propia que desempate."
+    }
+  ]
+}

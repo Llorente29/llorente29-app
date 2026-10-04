@@ -37,7 +37,9 @@ const registro = JSON.parse(readFileSync(join(FUENTES, 'registro.json'), 'utf8')
 const manual = JSON.parse(readFileSync(join(REF, 'serie-manual.json'), 'utf8'))
 const fallos = []
 
+const fuentesUsadas = new Set()
 function fuente(clave) {
+  fuentesUsadas.add(clave)
   const f = registro.fuentes[clave]
   if (!f || !f.fichero) throw new Error(`La fuente «${clave}» no está descargada: no se puede cargar nada que dependa de ella.`)
   return f
@@ -318,6 +320,9 @@ on conflict (vat_category_id, valid_from) do nothing;`)
 }
 sql.push('')
 const salidaSql = sql.join('\n') + '\n'
+// La fecha del texto más reciente de los que se han usado (no la de la última
+// descarga de todas: añadir una fuente que esta serie no usa no la cambia).
+ref.generado_desde = [...fuentesUsadas].map((k) => registro.fuentes[k].fecha).sort().at(-1)
 const salidaRef = JSON.stringify(ref, null, 1) + '\n'
 
 if (modo === 'comprobar') {
