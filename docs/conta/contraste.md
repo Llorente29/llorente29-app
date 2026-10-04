@@ -58,3 +58,22 @@
 
 7. Un dato que cambia adónde va el dinero (el IBAN) nunca se cambia solo: frena el pago, y la persona decide.
 8. Una sospecha de repetida no se apunta en las cifras hasta que la persona decide, y siempre dice por qué.
+
+## Plan contable (C02, comprobaciones previas, 04/10/2026)
+
+> Contraste del encargo (Holded, Pennylane, Odoo `es_pymes`, Xero, QuickBooks,
+> Sage 50, Contasol, Puzzle, Digits) hecho por Julio antes de escribirlo. Lo
+> medido aquí es solo **Odoo**, desde su repositorio público; Holded y Pennylane
+> no se alcanzan desde el contenedor, y las capturas de **Cegid Diez** están
+> pendientes. Detalle en `C02_comprobaciones_previas.md` §5.
+
+| Qué | Odoo `l10n_es` (medido) | Folvy (propuesta C02) |
+|---|---|---|
+| De dónde sale el plan | Plantilla escrita a mano: 588 cuentas comunes + 44 de pymes | Cuadro del BOE descargado por Actions, con huella y vigencia |
+| Título | Corregido y reescrito, sin decir de dónde sale cada corrección | Título oficial; las erratas del BOE se corrigen solo con cita de la quinta parte |
+| Nivel | Cuentas de apunte (`4000`, `4100`, `4300`), no el cuadro | Cuadro (3–4 dígitos) de serie + subcuentas de la longitud elegida |
+| «Qué se apunta aquí» | No | Sí, en lenguaje de la calle |
+| Bancos | Prefijo `572`, caja `570`, transferencias `57299` | `572` desde `treasury_account`, una subcuenta por cuenta bancaria |
+
+### Pendiente
+- Cegid Diez: «formato de cuentas», «dígitos del plan», «cambio de subcuentas», «renumerar» — con las capturas de Julio.
