@@ -1,9 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 04/10/2026 · C00, 18.ª tanda: PRUEBA de un rol «conta_migraciones» (encargo
-# de Julio: aplicar la tanda de producción sin la contraseña de postgres).
-# Crea el rol, intenta darle la membresía de postgres y prueba si, sin ella,
-# puede alterar supplier y reemplazar vat_rate_for. Termina en ROLLBACK.
-# (17.ª: la prueba de las vueltas atrás.)
-supabase/staging/sql/20261004_prueba_usuario_migraciones.sql
+# 04/10/2026 · 19.ª tanda: limpieza para el agente nocturno (encargo de Julio).
+# Borra la empresa «Llorente29 Food, S.L.» que Julio dio de alta a mano en la
+# cuenta A (era la de los 5 fallos rojos) y rellena en la empresa de prueba B
+# lo que no rompe la prueba e2e. (18.ª: prueba del rol conta_migraciones.)
+supabase/staging/sql/20261004_limpieza_agente_nocturno.sql
