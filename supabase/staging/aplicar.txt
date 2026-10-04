@@ -1,16 +1,11 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · R02 (quién reparte), 3.ª tanda. La 2.ª aplicó 0120, 0140, los
-# dos pedidos vivos y el saneado 0210, y la guarda de la 0200 PARÓ: el
-# comentario nuevo de resolve_dispatch nombraba la columna del interruptor y
-# la guarda busca el nombre en el código de las funciones. Se quita del
-# comentario y se sigue desde ahí:
-#   0120 otra vez → eliminación del interruptor 0200 (fichero aparte) →
-#   pruebas: sugerencia, 0 diferencias otra vez (ya sin la columna),
-#   resolución otra vez, y TODAS las vueltas atrás (acaba en rollback).
-supabase/migrations/20261005T0120_r02_lectores_de_la_resolucion.sql
-supabase/migrations/20261005T0200_r02_elimina_interruptor_antiguo.sql
+# 05/10/2026 · R02, 4.ª tanda: solo pruebas. La 3.ª aplicó la 0120 y la 0200
+# (ya sin la columna del interruptor) y paró en la prueba de la sugerencia: la
+# FUNCIÓN acertaba y la EXPECTATIVA estaba mal --el pedido vivo 7B000 de Pita
+# del Sur en Uber, sin dirección, que se sembró después, entra en la racha--.
+# Se corrige la expectativa (7A1F1, 7A1F2, 7B000) y se pasan todas.
 supabase/staging/sql/20261005_r02_prueba_sugerencia.sql
 supabase/staging/sql/20261005_r02_prueba_cero_diferencias.sql
 supabase/staging/sql/20261005_r02_prueba_resolucion.sql

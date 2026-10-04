@@ -2,7 +2,8 @@
 -- SOLO STAGING-CONTA · R02 · PRUEBA DE LA SUGERENCIA DE FOLVY (tarea 5)
 -- ----------------------------------------------------------------------------
 -- Sobre las semillas: Pita del Sur (cuenta A) lleva 3 pedidos «propios»
--- seguidos de Uber sin dirección (7A1F0, 7A1F1, 7A1F2). Comprueba:
+-- seguidos de Uber sin dirección; con el pedido vivo 7B000 (seed_r02_pedidos_vivos)
+-- los tres últimos son 7A1F1, 7A1F2 y 7B000. Comprueba:
 --   1. que Folvy lo propone, con esos tres pedidos y para la cuenta A sola;
 --   2. «No, lo arreglo en Uber»: queda escrito y no se vuelve a proponer;
 --      la celda no cambia;
@@ -28,7 +29,7 @@ begin
 
     select string_agg(brand_name || ' · ' || channel_slug || ' · ' || array_to_string(codigos, ','), ' | '), max(last_sale_id::text)::uuid
       into t, v_last from public.reparto_sugerencias(a_cuenta);
-    esperado := esperado || E'\n1 propone: Pita del Sur · uber · 7A1F0,7A1F1,7A1F2';
+    esperado := esperado || E'\n1 propone: Pita del Sur · uber · 7A1F1,7A1F2,7B000';
     obtenido := obtenido || E'\n1 propone: ' || coalesce(t, 'nada');
 
     -- 2 · No.
