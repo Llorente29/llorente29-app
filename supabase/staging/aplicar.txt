@@ -1,17 +1,15 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · R02 (quién reparte), 2.ª tanda:
-#   0120 otra vez (añade folvy.reparto_tal_cual para la vuelta atrás del
-#   saneado) → 0140 sugerencia de Folvy → dos pedidos vivos inventados →
-#   saneado 0210 (fichero aparte) → eliminación del interruptor 0200 (fichero
-#   aparte) → pruebas: sugerencia, 0 diferencias otra vez (ya sin la columna),
+# 05/10/2026 · R02 (quién reparte), 3.ª tanda. La 2.ª aplicó 0120, 0140, los
+# dos pedidos vivos y el saneado 0210, y la guarda de la 0200 PARÓ: el
+# comentario nuevo de resolve_dispatch nombraba la columna del interruptor y
+# la guarda busca el nombre en el código de las funciones. Se quita del
+# comentario y se sigue desde ahí:
+#   0120 otra vez → eliminación del interruptor 0200 (fichero aparte) →
+#   pruebas: sugerencia, 0 diferencias otra vez (ya sin la columna),
 #   resolución otra vez, y TODAS las vueltas atrás (acaba en rollback).
-# (1.ª tanda: semillas, foto de antes, 0100–0130, 0 diferencias y resolución.)
 supabase/migrations/20261005T0120_r02_lectores_de_la_resolucion.sql
-supabase/migrations/20261005T0140_r02_sugerencia_ia.sql
-supabase/seeds/reparto/seed_r02_pedidos_vivos.sql
-supabase/migrations/20261005T0210_r02_saneado_pedidos_abiertos.sql
 supabase/migrations/20261005T0200_r02_elimina_interruptor_antiguo.sql
 supabase/staging/sql/20261005_r02_prueba_sugerencia.sql
 supabase/staging/sql/20261005_r02_prueba_cero_diferencias.sql

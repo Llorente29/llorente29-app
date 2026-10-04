@@ -129,8 +129,8 @@ BEGIN
   END IF;
 
   -- GUARD (R02, 05/10): QUIÉN REPARTE YA ESTÁ DECIDIDO.
-  -- Antes aquí se miraba el interruptor por marca (own_delivery_enabled), que
-  -- valía para todas las plataformas a la vez y no cabía en la realidad
+  -- Antes aquí se miraba el interruptor por marca, que valía para todas las
+  -- plataformas a la vez y no cabía en la realidad
   -- (Smash: Glovo reparte Glovo, Uber repartimos nosotros). Ahora lo decide
   -- resolve_delivery_by al ENTRAR el pedido y queda escrito en su
   -- service_type. Aquí solo se respeta: si no es own_delivery, no se despacha.
