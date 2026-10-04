@@ -128,8 +128,9 @@ entran ahí si siguen abiertos al aplicar. La lista de verdad es la de esa noche
    pasarlo a privado tras revisar `docs/` y `claude/`; ya estaba apuntado del C00.
 8. **staging-conta aparece «Unhealthy»** en Supabase (apuntado del C00, sin mirar aún).
 9. **La cabecera de Pedidos en el móvil** se monta: los botones de sonido y refrescar tapan «Pedidos». Ya estaba así.
-10. **Agentes del C00:** cada noche saldrán en rojo mientras la empresa de prueba de la cuenta B de staging tenga la
-    ficha incompleta (modelo 200 y depósito). Son datos inventados.
+10. ~~Agentes del C00 en rojo~~. El 04/10 dije que era por la ficha incompleta de la empresa B, y **no era así**: los
+    5 rojos eran de «Llorente29 Food, S.L.», dada de alta a mano en la cuenta A de staging. Ya está borrada y el agente
+    sale verde (07:51 UTC). La B solo daba avisos naranjas; le relleno lo que no rompe la prueba e2e del C00.
 
 ## 8. Contraste
 
