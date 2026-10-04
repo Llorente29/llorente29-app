@@ -1,0 +1,24 @@
+# Tanda de PRODUCCIÓN (C00, respuesta 7). Una ruta por línea, en orden. La
+# aplica .github/workflows/aplicar-produccion-conta.yml, solo a mano
+# (workflow_dispatch con «confirmo: produccion»), solo entre las 00:30 y las
+# 12:15 de Madrid, primero en ENSAYO (todo en una transacción y rollback) y,
+# con un ensayo en verde del mismo commit, en REAL (un fichero por
+# transacción, para al primer fallo).
+#
+# Primero las dos del C01 (el C00 necesita expense_category; la T0110 va
+# recortada, sin sentencias: el movimiento de datos se fue con la ficha nueva
+# al #137) y después las del C00.
+supabase/migrations/20261002T0100_c01_ficha_proveedor_estructura.sql
+supabase/migrations/20261002T0110_c01_ficha_proveedor_datos.sql
+supabase/migrations/20261003T0100_c00_catalogos_oficiales.sql
+supabase/migrations/20261003T0110_c00_empresa.sql
+supabase/migrations/20261003T0120_c00_tablas_generales.sql
+supabase/migrations/20261003T0130_c00_valores_de_serie.sql
+supabase/migrations/20261003T0140_c00_vat_rate_lee_de_impuestos.sql
+supabase/migrations/20261003T0150_c00_actividad_principal.sql
+supabase/migrations/20261003T0160_c00_ia_base.sql
+supabase/migrations/20261003T0170_c00_basicos_4t2024.sql
+supabase/migrations/20261003T0180_c00_iva_de_ventas.sql
+supabase/migrations/20261003T0190_c00_modelos_anuales.sql
+supabase/migrations/20261003T0200_c00_ficha_para_presentar.sql
+supabase/migrations/20261003T0210_c00_codigo_postal.sql
