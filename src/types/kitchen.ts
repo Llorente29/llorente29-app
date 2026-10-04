@@ -415,6 +415,12 @@ export interface Supplier {
   accountId: string
   name: string
   taxId: string | null
+  /**
+   * C01b · Ya NO son columnas de supplier. email y phone salen de
+   * supplier_contact (el principal, o el primero que lo tenga); address, de
+   * los campos fiscales estructurados o, mientras nadie la confirma, de la
+   * propuesta «por confirmar». Ver purchaseFormatService.rowToSupplier.
+   */
   email: string | null
   phone: string | null
   address: string | null
