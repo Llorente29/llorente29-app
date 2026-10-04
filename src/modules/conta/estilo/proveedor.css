@@ -197,9 +197,10 @@
   .cxp-factura-estado { grid-area: estado; text-align: left; }
   .cxp-factura-ver { grid-area: ver; }
   .cxp-tabla-cabeza { display: none; }
-  .cxp-tabla-fila { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
-  .cxp-tabla-fila > :nth-child(2) { grid-column: 1 / -1; order: 3; }
-  .cxp-tabla-fila > :nth-child(4), .cxp-tabla-fila > :nth-child(5) { display: none; }
+  /* Móvil: nombre y «Le debes» arriba; debajo, cómo está la ficha. */
+  .cxp-tabla-fila { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  .cxp-tabla-fila > :nth-child(2), .cxp-tabla-fila > :nth-child(4) { display: none; }
+  .cxp-tabla-fila > :nth-child(5) { display: flex; grid-column: 1 / -1; padding-left: 48px; }
   .cx .cxp-buscar { max-width: none; flex: 1 1 100%; }
   .cxp-dialogo { align-self: flex-end; border-radius: var(--cx-radio-tarjeta) var(--cx-radio-tarjeta) 0 0; }
   .cxp-velo { padding: 0; align-items: flex-end; }

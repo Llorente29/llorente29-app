@@ -53,7 +53,7 @@ export default function ArticulosQueLeCompras({ ctx }: { ctx: ContextoExtension 
         </summary>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
           {/* La pieza de Cocina de siempre: precio pactado, principal y quitar. */}
-          <SupplierItemsSection supplier={proveedor} onChanged={alCambiar} />
+          <SupplierItemsSection supplier={proveedor} onChanged={alCambiar} sinCabecera />
           {cuantos > 0 && (
             <button type="button" className="cx-boton-sec" style={{ alignSelf: 'flex-start' }} onClick={() => setMigrar(true)}>
               Migrar artículos a otro proveedor

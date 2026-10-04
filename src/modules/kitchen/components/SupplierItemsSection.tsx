@@ -77,9 +77,14 @@ interface SupplierItemsSectionProps {
   supplier: Supplier
   /** Se llama tras cualquier cambio (precio/principal/quitar) por si el padre refresca contadores. */
   onChanged?: () => void
+  /**
+   * Dentro de la ficha del estilo nuevo (C01b) el título y el marco los pone
+   * la tarjeta «Artículos que le compras»: aquí, sin cabecera ni borde.
+   */
+  sinCabecera?: boolean
 }
 
-export default function SupplierItemsSection({ supplier, onChanged }: SupplierItemsSectionProps) {
+export default function SupplierItemsSection({ supplier, onChanged, sinCabecera = false }: SupplierItemsSectionProps) {
   const [links, setLinks] = useState<ArticleSupplier[]>([])
   const [items, setItems] = useState<RecipeItem[]>([])
   const [units, setUnits] = useState<KitchenUnit[]>([])
@@ -144,16 +149,18 @@ export default function SupplierItemsSection({ supplier, onChanged }: SupplierIt
   }
 
   return (
-    <div className="rounded-lg border border-border-default bg-card">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-default">
-        <ShoppingBag className="w-4 h-4 text-accent" />
-        <h3 className="text-sm font-medium text-text-primary">Artículos que le compras</h3>
-        {!loading && !error && links.length > 0 && (
-          <span className="text-xs text-text-secondary">({links.length})</span>
-        )}
-      </div>
+    <div className={sinCabecera ? '' : 'rounded-lg border border-border-default bg-card'}>
+      {!sinCabecera && (
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-default">
+          <ShoppingBag className="w-4 h-4 text-accent" />
+          <h3 className="text-sm font-medium text-text-primary">Artículos que le compras</h3>
+          {!loading && !error && links.length > 0 && (
+            <span className="text-xs text-text-secondary">({links.length})</span>
+          )}
+        </div>
+      )}
 
-      <div className="p-4 space-y-2">
+      <div className={sinCabecera ? 'space-y-2' : 'p-4 space-y-2'}>
         {loading && (
           <div className="text-sm text-text-secondary py-4 text-center">Cargando artículos…</div>
         )}

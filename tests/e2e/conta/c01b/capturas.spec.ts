@@ -22,10 +22,16 @@ const DIR = 'docs/conta/capturas/c01b'
 const MERCADOS_NORTE = 'c1b0a000-0000-4000-8000-0000000000a6'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
+// Lo que flota encima: en el ordenador, la barra «Pregunta o pide algo»; en el
+// móvil la ficha vive dentro de Cocina, y lo que flota es la barra de abajo
+// de Folvy (no la del módulo de contabilidad).
+const BARRA_FOLVY_MOVIL = 'nav[aria-label="Navegacion principal"]'
+
 async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
-  expect(await loQueTapan(page, '.cx-incrustado', FLOTANTES_CONTA)).toEqual([])
+  const flotantes = lado(page) === 'movil' ? [BARRA_FOLVY_MOVIL] : FLOTANTES_CONTA
+  expect(await loQueTapan(page, '.cx-incrustado', flotantes)).toEqual([])
 }
 
 test('lista de proveedores (cuenta A): ficha incompleta con lo que falta, y Archivados', async ({ page }) => {
@@ -53,7 +59,7 @@ test('ficha de Hermanos Ruiz (cuenta A): la repetida en ámbar y fuera de las ci
     await expect(page.getByRole('heading', { name: 'Con quién hablas' })).toBeVisible()
     // «Le debes» cuenta la F-2026-0915 una vez: 1.283,15 €, no el doble.
     await expect(page.locator('.cxp-cifra').filter({ hasText: 'Le debes' })).not.toContainText('2.566,3')
-    await expect(page.getByRole('heading', { name: 'Artículos que le compras' })).toBeVisible()
+    await expect(page.locator('#cxp-articulos')).toHaveText('Artículos que le compras')
   } else {
     await expect(page.getByRole('link', { name: /Datos fiscales/ })).toBeVisible()
     await expect(page.getByRole('link', { name: /Artículos que le compras/ })).toBeVisible()
