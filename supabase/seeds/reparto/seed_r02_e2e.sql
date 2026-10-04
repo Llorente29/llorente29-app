@@ -11,7 +11,12 @@
 --     de Prueba · Glovo, lo reparte Glovo (etiqueta gris);
 --   · las celdas que tocan las pruebas, como las dejó la migración;
 --   · sin respuestas a Folvy en la cuenta A (la sugerencia de Pita del Sur en
---     Uber vuelve a salir).
+--     Uber vuelve a salir);
+--   · el 7B000 (Pita del Sur · Uber, sin dirección, de seed_r02_pedidos_vivos)
+--     otra vez de hoy y abierto: la prueba de la cocina lo busca como el
+--     segundo ámbar del local, y esa semilla se metió UNA vez, con la hora de
+--     aquel momento. A las 7 horas el feed ya no lo enseña (e2e 37202533508,
+--     04/10: «Uber no la ha mandado» no encontrado, en ordenador y móvil).
 -- Inventado, sin datos de cliente. Locales en dispatch_mode 'manual': ningún
 -- disparador llama a Catcher.
 -- ============================================================================
@@ -33,6 +38,15 @@ on conflict (id) do update
   set sold_at = excluded.sold_at, created_at = excluded.created_at, status = 'open', order_status = 'accepted',
       service_type = excluded.service_type, delivery_address = null, dispatch_error = null,
       delivery_alarm_at = null, delivery_alarm_kind = null, delivery_alarm_ack_at = null, updated_at = now();
+
+-- El 7B000, de hoy otra vez (no se crea aquí: si no existe, no hace nada).
+-- Sigue siendo el más nuevo de Pita del Sur en Uber, como espera
+-- 20261005_r02_prueba_sugerencia.sql.
+update public.sale
+   set sold_at = now() - interval '8 minutes', created_at = now() - interval '8 minutes',
+       status = 'open', order_status = 'accepted', updated_at = now()
+ where id = 'e0200000-0000-4000-8000-0000000052a1'
+   and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
 select set_config('folvy.reparto_tal_cual', '', true);
 
