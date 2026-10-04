@@ -1,29 +1,33 @@
 # Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
 # .github/workflows/aplicar-produccion-conta.yml, solo a mano («confirmo:
-# produccion»), solo entre las 00:30 y las 12:15 de Madrid, primero en ENSAYO
-# (todo en una transacción y rollback) y, con un ensayo en verde del mismo
-# commit, en REAL (un fichero por transacción, para al primer fallo).
+# produccion»), entre las 00:30 y las 12:15 de Madrid (fuera, solo con
+# «fuera_de_ventana: si» y si ningún fichero toca el camino del pedido),
+# primero en ENSAYO (todo en una transacción y rollback) y, con un ensayo en
+# verde del mismo commit, en REAL (un fichero por transacción, para al primer
+# fallo).
 #
-# C01b · Ficha de proveedor, TANDA DE DATOS (encargo §9). Va ANTES de fusionar
-# el front: la ficha nueva lee lo que crean estos ficheros.
-# Dos de estos PARAN a propósito y van en el campo «autorizo», nombres enteros:
+# C01b · Ficha de proveedor, TANDA DE ELIMINACIÓN (encargo §9). Va después del
+# real de la tanda de datos (37219796909, 04/10), del antes = después en
+# producción (0 faltan en las dos cuentas) y de la fusión del front (#143,
+# Vercel READY, 04/10). PARA a propósito y va en el campo «autorizo», nombre
+# entero:
 #
-#   20261006T0110_c01b_datos.sql 20261006T0120_c01b_lectores.sql
+#   20261006T0140_c01b_elimina.sql
 #
-# · 0110 mueve email, teléfono y dirección de las columnas viejas de supplier
-#   a supplier_contact y a supplier_proposal («por confirmar»), y el IVA a
-#   usual_tax_rate_ids; todas las cuentas, con antes = después dentro y
-#   registro fila a fila (c01b_movimiento_registro).
-# · 0120 reemplaza compliance_docs_due y migrate_kitchen_core para que lean
-#   del contacto (ninguna está en el camino del pedido).
-# · 0135 (respuesta 2) solo añade: IBAN leído y decisión en supplier_invoice,
-#   rastro del cambio de IBAN en supplier, la función de decidir y el freno
-#   (disparador al pasar a «pagada»). No para.
-# Antes = después en producción tras el real: scripts/conta/c01b_antes_despues.sql.
-# La ELIMINACIÓN de las columnas viejas (0140) NO va aquí: va sola, en otra
-# tanda, DESPUÉS de fusionar el front y con Vercel en READY.
-supabase/migrations/20261006T0100_c01b_estructura.sql
-supabase/migrations/20261006T0110_c01b_datos.sql
-supabase/migrations/20261006T0120_c01b_lectores.sql
-supabase/migrations/20261006T0130_c01b_aprendizaje.sql
-supabase/migrations/20261006T0135_c01b_iban_factura.sql
+# Borra supplier.email, .phone, .address y .usual_vat_rates (notify_group se
+# queda). Antes copia los valores en c01b_columnas_eliminadas. Sus guardas
+# paran si compliance_docs_due o migrate_kitchen_core no son las de la 0120
+# (por su md5) o si falta algo en su sitio nuevo.
+# Medido en producción el 04/10 a las 19:37 (solo lectura): 0 funciones,
+# vistas, políticas ni crons las nombran; md5 de las dos funciones = los de la
+# guarda (7a8c769e…, ab2746d6…); con valor: Foodint 1 email, 3 teléfonos,
+# 4 direcciones; Folvy Interno 1, 2 y 2; ningún IVA. Ningún push a main ha
+# tocado supabase/functions desde la revisión de las 69 funciones de borde.
+# Cierre: el «drop column» toma ACCESS EXCLUSIVE sobre supplier un instante.
+# Medido: 0 disparadores de tablas del pedido (ventas, pedidos, despacho,
+# cocina, stock) nombran supplier, ni ningún cron; quien lo lee es compras
+# (disparadores de article_supplier, goods_receipt y goods_receipt_line) y el
+# recálculo nocturno (kitchen-recompute-nightly, 04:00 UTC). Con lock_timeout
+# de 5 s, si está ocupada, falla en vez de esperar.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261006T0140_c01b_elimina.sql
