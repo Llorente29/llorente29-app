@@ -98,11 +98,15 @@ test('la cocina: ámbar sin dirección, gris si reparte la plataforma, nada en r
 
   if (movil) return
   // «Cambiar a “la reparte Just Eat”»: escribe la celda y recoloca ESTE pedido.
-  await ambar.getByRole('button', { name: 'Cambiar a «la reparte Just Eat»' }).click()
-  await expect(page.getByText('Hecho: a partir de ahora esta marca en Just Eat la reparte Just Eat.')).toBeVisible()
-  await expect(page.getByTestId('etiqueta-reparto').filter({ hasText: 'La reparte Just Eat' }).first()).toBeVisible()
-  // Y se deja como estaba (la semilla lo vuelve a poner en cada ejecución).
-  await rpc(s, 'reparto_cambiar_desde_pedido', { p_sale_id: 'e0200000-0000-4000-8000-0000000053a1', p_delivery_by: 'own' })
+  // Y se deja como estaba AUNQUE falle a medias: si no, la prueba del móvil,
+  // en la misma ejecución, ya no encuentra el ámbar (e2e 37216044758).
+  try {
+    await ambar.getByRole('button', { name: 'Cambiar a «la reparte Just Eat»' }).click()
+    await expect(page.getByText('Hecho: a partir de ahora esta marca en Just Eat la reparte Just Eat.')).toBeVisible()
+    await expect(page.getByTestId('etiqueta-reparto').filter({ hasText: 'La reparte Just Eat' }).first()).toBeVisible()
+  } finally {
+    await rpc(s, 'reparto_cambiar_desde_pedido', { p_sale_id: 'e0200000-0000-4000-8000-0000000053a1', p_delivery_by: 'own' })
+  }
 })
 
 test('la cuenta B no ve las marcas de A ni puede cambiar sus celdas', async ({ page }, info) => {
