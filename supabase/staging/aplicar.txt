@@ -1,16 +1,19 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · R02 (quién reparte), 1.ª tanda:
-#   semillas inventadas → foto de ANTES con las funciones de hoy → las cuatro
-#   migraciones del R02 → foto de DESPUÉS y comparación (0 diferencias en
-#   HubRise) → pruebas de la resolución, el guardado y el R01 (acaban en
-#   rollback). Si falla una, las siguientes no se aplican.
-supabase/seeds/reparto/seed_r02_quien_reparte.sql
-supabase/staging/sql/20261005_r02_foto_antes.sql
-supabase/migrations/20261005T0100_r02_brand_delivery_policy.sql
-supabase/migrations/20261005T0110_r02_filas_migradas.sql
+# 05/10/2026 · R02 (quién reparte), 2.ª tanda:
+#   0120 otra vez (añade folvy.reparto_tal_cual para la vuelta atrás del
+#   saneado) → 0140 sugerencia de Folvy → dos pedidos vivos inventados →
+#   saneado 0210 (fichero aparte) → eliminación del interruptor 0200 (fichero
+#   aparte) → pruebas: sugerencia, 0 diferencias otra vez (ya sin la columna),
+#   resolución otra vez, y TODAS las vueltas atrás (acaba en rollback).
+# (1.ª tanda: semillas, foto de antes, 0100–0130, 0 diferencias y resolución.)
 supabase/migrations/20261005T0120_r02_lectores_de_la_resolucion.sql
-supabase/migrations/20261005T0130_r02_guardar_celdas.sql
+supabase/migrations/20261005T0140_r02_sugerencia_ia.sql
+supabase/seeds/reparto/seed_r02_pedidos_vivos.sql
+supabase/migrations/20261005T0210_r02_saneado_pedidos_abiertos.sql
+supabase/migrations/20261005T0200_r02_elimina_interruptor_antiguo.sql
+supabase/staging/sql/20261005_r02_prueba_sugerencia.sql
 supabase/staging/sql/20261005_r02_prueba_cero_diferencias.sql
 supabase/staging/sql/20261005_r02_prueba_resolucion.sql
+supabase/staging/sql/20261005_r02_prueba_vuelta_atras.sql

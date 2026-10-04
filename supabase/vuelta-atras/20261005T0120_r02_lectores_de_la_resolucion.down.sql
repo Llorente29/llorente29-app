@@ -1,108 +1,55 @@
 -- ============================================================================
--- R02 · 3/4 · LOS LECTORES PASAN A LA RESOLUCIÓN ÚNICA
+-- VUELTA ATRÁS de 20261005T0120_r02_lectores_de_la_resolucion.sql
 -- ----------------------------------------------------------------------------
--- Va DESPUÉS del 2/4: cuando esto entra, las filas migradas ya reproducen lo
--- de hoy, así que cambiar de lector no cambia ninguna decisión (prueba de 0
--- diferencias: supabase/staging/sql/20261005_r02_prueba_cero_diferencias.sql).
+-- Devuelve las cinco funciones EXACTAMENTE como estaban en producción el
+-- 04/10/2026 (copiadas de pg_proc de producción, solo lectura): vuelven a
+-- leer el interruptor por marca (brand.own_delivery_enabled) y la herencia
+-- por tipo de marca. Mismas firmas: CREATE OR REPLACE, nada se borra.
 --
--- Todo es CREATE OR REPLACE con la MISMA firma (regla 2: no se añade ningún
--- parámetro; nada de sobrecargas). No se borra nada: el interruptor antiguo
--- deja de leerse aquí y la columna se elimina en el fichero aparte 0200.
---
--- QUÉ CAMBIA
---   1. tg_sale_service_type_por_interruptor (el disparador de ENTRADA; se
---      queda con su nombre para no borrar ni renombrar un objeto de Cocina
---      en este fichero): ahora PONE el service_type de reparto de los pedidos
---      de HubRise y de Last con resolve_delivery_by. «El service_type se pone
---      con la resolución, no al revés.» Un pedido ya abierto NO se toca:
---      cambiar una celda se aplica a los siguientes.
---   2. resolve_dispatch: deja de mirar el interruptor. Quién reparte ya está
---      decidido en el service_type (lo puso la resolución al entrar); aquí
---      solo se respeta. Mismo resultado que antes para todo pedido que entre
---      después de la migración.
---   3. dispatch_watchdog_scan: un «propio» sin dirección ya no es una alarma
---      roja. Es la etiqueta ámbar «Nosotros · falta la dirección» y la cocina
---      cocina igual (encargo §5). La alarma sigue para lo que sí se podía
---      despachar y no salió.
---   4. metrica_direcciones_de_reparto: el eje «quién reparte» sale de la
---      resolución, no del interruptor.
---   5. brand_price_grid: qué modalidad de precio aplica sale de la resolución
---      por MARCA, no de la herencia por tipo de marca (respuesta 1, punto 4).
---      Los precios no cambian: solo policy_allowed / policy_reason.
+-- ORDEN: si ya se aplicó la eliminación del interruptor (0200), su vuelta
+-- atrás va ANTES que esta (vuelve a poner la columna). La guarda lo comprueba.
+-- Las filas de brand_delivery_policy se quedan (no las lee nadie después de
+-- esto); las quita, si se quiere, la vuelta atrás de la 0100.
 -- ============================================================================
 
--- ── 1. El disparador de entrada ────────────────────────────────────────────
+\ir 20261005T0120_r02_lectores_de_la_resolucion.down.guarda.sql
+
+-- ── 1. El disparador de entrada, como estaba ───────────────────────────────
 create or replace function public.tg_sale_service_type_por_interruptor()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
-as $$
+set search_path to 'public'
+as $function$
 declare
-  v_slug       text;
-  v_by         text;
-  v_recalcular boolean;
+  v_apagado boolean;
 begin
-  -- Solo los pedidos que llegan de las plataformas. La tienda propia, el TPV
-  -- y lo manual deciden su modalidad ellos mismos (hoy: 22 + 3 + 2 ventas).
-  if coalesce(new.source, '') not in ('hubrise', 'lastapp') then return new; end if;
   if new.brand_id is null then return new; end if;
-  -- Solo la modalidad de reparto. Recogida y en local no se tocan.
-  if new.service_type is null or new.service_type not in ('own_delivery', 'platform_delivery') then
-    return new;
+  if coalesce(new.source, '') <> 'hubrise' then return new; end if;
+  if new.service_type is distinct from 'own_delivery' then return new; end if;
+
+  -- CONDICION 2: sin direccion. Con direccion no se toca — ver arriba.
+  if coalesce(btrim(new.delivery_address), '') <> '' then return new; end if;
+
+  select b.own_delivery_enabled is false
+    into v_apagado
+    from public.brand b
+   where b.id = new.brand_id;
+
+  if v_apagado then
+    new.service_type := 'platform_delivery';
   end if;
-
-  -- Una vuelta atrás que devuelve a un pedido la modalidad que tenía la pone
-  -- tal cual (supabase/vuelta-atras/20261005T0210…down.sql). Nadie más la usa.
-  if coalesce(current_setting('folvy.reparto_tal_cual', true), '') = 'on' then return new; end if;
-
-  if tg_op = 'UPDATE' then
-    -- Los webhooks reescriben el pedido en cada cambio de estado y mandan otra
-    -- vez su modalidad. Un pedido ya abierto conserva la que se le puso al
-    -- entrar, salvo que:
-    --   · hasta ahora no se pudiera resolver (sin marca o sin canal), o
-    --   · alguien lo pida a propósito en esta transacción
-    --     (reparto_cambiar_celda_desde_pedido o el saneado del despliegue).
-    v_recalcular :=
-         old.service_type is null
-      or old.service_type not in ('own_delivery', 'platform_delivery')
-      or old.brand_id is null
-      or old.channel_id is distinct from new.channel_id
-      or coalesce(current_setting('folvy.reparto_recalcular', true), '') = 'on';
-    if not v_recalcular then
-      new.service_type := old.service_type;
-      return new;
-    end if;
-  end if;
-
-  select sc.slug into v_slug
-    from public.sales_channel sc
-   where sc.id = new.channel_id and sc.account_id = new.account_id;
-  if coalesce(btrim(v_slug), '') = '' then return new; end if;   -- sin canal: como llegue
-
-  select r.delivery_by into v_by
-    from public.resolve_delivery_by(new.account_id, new.brand_id, v_slug, new.location_id) r;
-
-  new.service_type := case when v_by = 'own' then 'own_delivery' else 'platform_delivery' end;
   return new;
 end;
-$$;
+$function$;
 
-comment on function public.tg_sale_service_type_por_interruptor() is
-  'R02 · Pone el service_type de reparto (own_delivery / platform_delivery) de los pedidos de HubRise y Last '
-  'con resolve_delivery_by al ENTRAR. Un pedido abierto conserva el suyo. El nombre es el de antes para no '
-  'renombrar un objeto de Cocina; ya no lee ningún interruptor.';
-
--- El disparador ya existe con este nombre y esta función (BEFORE INSERT OR
--- UPDATE ON sale). No se toca.
-
--- ── 2. resolve_dispatch ────────────────────────────────────────────────────
+-- ── 2. resolve_dispatch, como estaba ───────────────────────────────────────
 create or replace function public.resolve_dispatch(p_sale_id uuid)
 returns table(carrier text, reason text)
 language plpgsql
 security definer
-set search_path = public
-as $$
+set search_path to 'public'
+as $function$
 DECLARE
   v_sale   record;
   v_mode   text;
@@ -120,6 +67,8 @@ DECLARE
   v_dist   numeric;
   v_chain  text[];
   v_c      text;
+  v_brand_enabled boolean;
+  v_sin_poner boolean;
 BEGIN
   SELECT s.account_id, s.location_id, s.brand_id, s.total, s.service_type, s.raw_tab,
          s.delivery_address
@@ -128,22 +77,38 @@ BEGIN
     RETURN QUERY SELECT NULL::text, 'venta no encontrada'::text; RETURN;
   END IF;
 
-  -- GUARD (R02, 05/10): QUIÉN REPARTE YA ESTÁ DECIDIDO.
-  -- Antes aquí se miraba el interruptor por marca (own_delivery_enabled), que
-  -- valía para todas las plataformas a la vez y no cabía en la realidad
-  -- (Smash: Glovo reparte Glovo, Uber repartimos nosotros). Ahora lo decide
-  -- resolve_delivery_by al ENTRAR el pedido y queda escrito en su
-  -- service_type. Aquí solo se respeta: si no es own_delivery, no se despacha.
-  -- Así cambiar una celda en «Quién reparte» no toca pedidos ya abiertos.
-  IF v_sale.service_type IS DISTINCT FROM 'own_delivery' THEN
-    RETURN QUERY SELECT NULL::text, 'la reparte la plataforma: no se despacha'::text;
-    RETURN;
+  -- GUARD: interruptor de reparto propio por marca.
+  -- own_delivery_enabled NULL → deriva de ownership_type (propia=on, cedida=off).
+  -- Si está apagado → no despacha a nadie (ni flota ni Catcher). Corta aquí.
+  IF v_sale.brand_id IS NOT NULL THEN
+    SELECT public.marca_reparte_propio(b), (b.own_delivery_enabled IS NULL)
+      INTO v_brand_enabled, v_sin_poner
+      FROM public.brand b WHERE b.id = v_sale.brand_id;
+    IF v_brand_enabled IS NOT TRUE THEN
+      -- 🔴 EL MOTIVO DE VERDAD, NO UNO INVENTADO (14/09).
+      --
+      -- Aqui se devolvia SIEMPRE «marca sin reparto propio (interruptor
+      -- apagado)», y eso es falso en la mayoria de los casos. Cuando
+      -- `own_delivery_enabled` esta SIN PONER, el reparto se decide por el
+      -- TIPO DE MARCA --cedida = no la repartimos nosotros-- y nadie ha
+      -- apagado ningun interruptor.
+      --
+      -- Medido el 14/09 sobre las 8 de septiembre: 5 son Dos Coyotes (cedida,
+      -- sin poner: nadie toco nada) y 3 son Smash Brothers Burgers (propia,
+      -- apagada a mano de verdad). El mismo texto para las dos cosas manda a
+      -- quien lo lea a buscar un interruptor que en un caso no existe.
+      RETURN QUERY SELECT NULL::text,
+        CASE WHEN v_sin_poner
+          THEN 'esta marca no la repartimos nosotros: es cedida y no tiene reparto propio'
+          ELSE 'el reparto propio de esta marca esta apagado' END;
+      RETURN;
+    END IF;
   END IF;
 
-  -- GUARD (31/08): SIN DIRECCION NO SE DESPACHA. Condicion previa, antes de
-  -- mirar reglas, distancias o repartidores. No se puede repartir lo que no se
-  -- sabe donde va. En la cocina es la etiqueta ámbar «Nosotros · falta la
-  -- dirección» (R02), no una alarma.
+  -- GUARD NUEVO (31/08): SIN DIRECCION NO SE DESPACHA. Condicion previa, antes
+  -- de mirar reglas, distancias o repartidores. No se puede repartir lo que no
+  -- se sabe donde va, y en Glovo la ausencia de direccion es justamente la
+  -- señal de que reparte la plataforma.
   IF coalesce(btrim(v_sale.delivery_address), '') = '' THEN
     RETURN QUERY SELECT NULL::text,
       'sin dirección de entrega: la plataforma no la ha enviado'::text;
@@ -219,15 +184,15 @@ BEGIN
   RETURN QUERY SELECT v_broker,
     ('regla '||v_rule.priority||' -> cadena agotada; broker por defecto ('||v_broker||')')::text;
 END;
-$$;
+$function$;
 
--- ── 3. El vigía del despacho ───────────────────────────────────────────────
+-- ── 3. El vigía, como estaba ───────────────────────────────────────────────
 create or replace function public.dispatch_watchdog_scan(p_grace_minutes integer default 8)
 returns integer
 language plpgsql
 security definer
-set search_path = public
-as $$
+set search_path to 'public'
+as $function$
 declare
   v_count integer := 0;
   v_row   record;
@@ -245,10 +210,6 @@ begin
        and s.delivery_alarm_at is null
        and s.created_at > now() - interval '24 hours'
        and now() - coalesce(s.accepted_at, s.created_at) > make_interval(mins => greatest(p_grace_minutes,1))
-       -- R02 (05/10): un «propio» SIN dirección no es una alarma. La cocina
-       -- lo ve en ámbar («Nosotros · falta la dirección») con sus dos
-       -- acciones; el reparto nunca pinta el pedido en rojo.
-       and coalesce(btrim(s.delivery_address), '') <> ''
        and not exists (
          select 1 from public.delivery_assignment da
           where da.sale_id = s.id and da.state not in ('failed','canceled'))
@@ -258,7 +219,8 @@ begin
 
     if v_carrier is null then
       -- NO SE ENVIO. El guard hizo su trabajo. Se marca para que se vea, pero
-      -- con el motivo REAL y sin decir «enviado».
+      -- con el motivo REAL y sin decir «enviado»: afirmar un envio que no pasó
+      -- es lo que hizo creer durante 20 dias que el interruptor no se leia.
       update public.sale s
          set delivery_alarm_at    = now(),
              delivery_alarm_kind   = 'no_despachado',
@@ -283,17 +245,15 @@ begin
   end loop;
   return v_count;
 end;
-$$;
+$function$;
 
--- ── 4. La métrica de direcciones ───────────────────────────────────────────
+-- ── 4. La métrica, como estaba ─────────────────────────────────────────────
 create or replace function public.metrica_direcciones_de_reparto(p_account_id uuid, p_dias integer default 30)
-returns table(reparto text, marca text, pasarela text, canal text, pedidos bigint, sin_direccion bigint,
-              sin_direccion_pct numeric, con_coordenadas bigint, coords_en_delivery bigint, coords_en_customer bigint)
+returns table(reparto text, marca text, pasarela text, canal text, pedidos bigint, sin_direccion bigint, sin_direccion_pct numeric, con_coordenadas bigint, coords_en_delivery bigint, coords_en_customer bigint)
 language plpgsql
-stable
-security definer
-set search_path = public
-as $$
+stable security definer
+set search_path to 'public'
+as $function$
 begin
   -- service_role (informes, cron) pasa; un usuario tiene que ser de la cuenta.
   if current_setting('request.jwt.claims', true) is not null
@@ -304,15 +264,15 @@ begin
   return query
   with base as (
     select
-      -- EJE 1, quien reparte: lo que dice «Quién reparte» HOY para esa marca
-      -- en ese canal y local (R02). Antes, el interruptor por marca.
-      case when (select r.delivery_by
-                   from public.resolve_delivery_by(s.account_id, s.brand_id, sc.slug, s.location_id) r) = 'own'
+      -- EJE 1, quien reparte. NULL = no declarado = se asume que nosotros.
+      -- Ver la nota de arriba: para las 9 licenciadas eso es falso hoy.
+      case when coalesce(b.own_delivery_enabled, true)
            then 'nosotros' else 'plataforma' end as reparto,
       -- EJE 2, de quien es la marca. Nada que ver con el anterior.
       case b.ownership_type
            when 'own'      then 'propia'
            when 'licensed' then 'licenciada'
+           when null       then 'sin marca'
            else coalesce(b.ownership_type, 'sin marca')
       end as marca,
       coalesce(s.source, '(sin source)') as pasarela,
@@ -323,8 +283,7 @@ begin
       case when left(btrim(coalesce(s.raw_tab, '')), 1) = '{'
            then nullif(s.raw_tab::jsonb->'customer'->>'latitude', '') end as lat_customer
     from public.sale s
-    left join public.brand b on b.id = s.brand_id and b.account_id = s.account_id
-    left join public.sales_channel sc on sc.id = s.channel_id and sc.account_id = s.account_id
+    left join public.brand b on b.id = s.brand_id
     where s.account_id = p_account_id
       and s.service_type = 'own_delivery'
       and s.created_at > now() - make_interval(days => greatest(1, p_dias))
@@ -347,19 +306,15 @@ begin
            count(*) filter (where b.sin_dir) desc,
            count(*) desc;
 end;
-$$;
+$function$;
 
--- ── 5. La rejilla de precios ───────────────────────────────────────────────
+-- ── 5. La rejilla de precios, como estaba ──────────────────────────────────
 create or replace function public.brand_price_grid(p_brand_id uuid, p_location_id uuid default null::uuid, p_overrides jsonb default null::jsonb)
-returns table(menu_item_id uuid, menu_item_name text, category_id uuid, category_name text, product_type text,
-              base_price numeric, channel_id uuid, channel_name text, channel_type text, service_type text,
-              price numeric, price_source text, is_location_override boolean, is_available boolean, vat_rate numeric,
-              cost_available boolean, net_margin numeric, net_margin_pct numeric, contribution_margin_pct numeric,
-              channel_orders_30d integer, policy_allowed boolean, policy_reason text)
+returns table(menu_item_id uuid, menu_item_name text, category_id uuid, category_name text, product_type text, base_price numeric, channel_id uuid, channel_name text, channel_type text, service_type text, price numeric, price_source text, is_location_override boolean, is_available boolean, vat_rate numeric, cost_available boolean, net_margin numeric, net_margin_pct numeric, contribution_margin_pct numeric, channel_orders_30d integer, policy_allowed boolean, policy_reason text)
 language sql
 stable
-set search_path = public
-as $$
+set search_path to 'public'
+as $function$
   with marca as (
     select b.id, b.account_id, coalesce(b.ownership_type, 'own') as ownership_type
     from brand b where b.id = p_brand_id
@@ -377,16 +332,6 @@ as $$
     where s.account_id = m.account_id
       and s.created_at >= now() - interval '30 days'
     group by s.channel_id, s.service_type
-  ),
-  -- R02: quién reparte ESTA marca en cada canal (y local), con la misma
-  -- resolución que el pedido. Antes: la herencia por tipo de marca.
-  quien as (
-    select sc.id as channel_id,
-           case r.delivery_by when 'own' then 'own_delivery' else 'platform_delivery' end as service_type,
-           r.source
-      from marca m
-      join sales_channel sc on sc.account_id = m.account_id
-      cross join lateral public.resolve_delivery_by(m.account_id, m.id, sc.slug, p_location_id) r
   )
   select
     p.id, p.name, p.menu_category_id, mc.name, p.product_type, p.price,
@@ -397,16 +342,33 @@ as $$
     case
       when e.channel_type <> 'delivery' then true
       when e.service_type is null or e.service_type = 'pickup' then true
-      else q.service_type is not distinct from e.service_type
+      else exists (
+        select 1
+        from channel_delivery_policy pol
+        join sales_channel sc
+          on sc.slug = pol.channel_slug and sc.account_id = pol.account_id
+        where pol.account_id = m.account_id
+          and sc.id = e.channel_id
+          and pol.ownership_type = m.ownership_type
+          and pol.service_type = e.service_type)
     end,
     case
       when e.channel_type <> 'delivery' then null
       when e.service_type is null or e.service_type = 'pickup' then null
-      when q.service_type is not distinct from e.service_type then null
-      when q.source = 'default'
-        then 'Nadie ha dicho quién reparte esta marca en este canal: se toma «la reparte la plataforma».'
-      else 'En «Quién reparte», esta marca en este canal la reparte '
-           || case q.service_type when 'own_delivery' then 'Folvy (nosotros)' else 'la plataforma' end || '.'
+      when exists (
+        select 1 from channel_delivery_policy pol
+        join sales_channel sc on sc.slug = pol.channel_slug and sc.account_id = pol.account_id
+        where pol.account_id = m.account_id and sc.id = e.channel_id
+          and pol.ownership_type = m.ownership_type and pol.service_type = e.service_type)
+        then null
+      when exists (
+        select 1 from channel_delivery_policy pol
+        join sales_channel sc on sc.slug = pol.channel_slug and sc.account_id = pol.account_id
+        where pol.account_id = m.account_id and sc.id = e.channel_id
+          and pol.ownership_type = m.ownership_type)
+        then 'La politica de reparto de este canal dice otra modalidad para marcas '
+             || m.ownership_type || '.'
+      else 'Sin politica de reparto declarada para este canal y tipo de marca. No se adivina.'
     end
   from productos p
   cross join marca m
@@ -415,8 +377,7 @@ as $$
     p.id,
     case when p_overrides is null then null else p_overrides -> (p.id::text) end,
     p_location_id) e
-  left join quien q on q.channel_id = e.channel_id
   left join uso_30d u
     on u.channel_id = e.channel_id
    and u.service_type is not distinct from e.service_type;
-$$;
+$function$;

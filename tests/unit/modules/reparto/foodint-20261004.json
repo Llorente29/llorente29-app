@@ -1,0 +1,32 @@
+{
+  "_fuente": "Producción, solo lectura, 04/10/2026 ~07:30 Madrid. account_id = Foodint (51ad1792-…). Marcas (tipo e interruptor) y channel_delivery_policy tal cual (docs/reparto/R02_comprobaciones_previas.md §1-2). Sin datos de clientes.",
+  "canales": ["glovo", "justeat", "uber"],
+  "herencias": [
+    { "channelSlug": "glovo",   "ownershipType": "own",      "serviceType": "own_delivery" },
+    { "channelSlug": "glovo",   "ownershipType": "licensed", "serviceType": "platform_delivery" },
+    { "channelSlug": "justeat", "ownershipType": "own",      "serviceType": "own_delivery" },
+    { "channelSlug": "justeat", "ownershipType": "licensed", "serviceType": "platform_delivery" },
+    { "channelSlug": "uber",    "ownershipType": "own",      "serviceType": "own_delivery" },
+    { "channelSlug": "uber",    "ownershipType": "licensed", "serviceType": "platform_delivery" }
+  ],
+  "marcas": [
+    { "nombre": "Koreans do it better - Fried Chicken", "tipo": "licensed", "interruptor": null },
+    { "nombre": "Dos Coyotes", "tipo": "licensed", "interruptor": null },
+    { "nombre": "Milanesa Haus", "tipo": "licensed", "interruptor": null },
+    { "nombre": "Meraki Pita", "tipo": "own", "interruptor": null },
+    { "nombre": "Big Mike´s Burger Joint", "tipo": "licensed", "interruptor": null },
+    { "nombre": "Birria Burrito", "tipo": "licensed", "interruptor": null },
+    { "nombre": "Milanesa House", "tipo": "own", "interruptor": null },
+    { "nombre": "Ay Mamita Bowls", "tipo": "licensed", "interruptor": null },
+    { "nombre": "Chivuos", "tipo": "licensed", "interruptor": null },
+    { "nombre": "Smash Brothers Burgers", "tipo": "own", "interruptor": false },
+    { "nombre": "Lovers Burgers", "tipo": "own", "interruptor": false },
+    { "nombre": "Mila's Sandwiches", "tipo": "own", "interruptor": null },
+    { "nombre": "Bendito Burrito", "tipo": "own", "interruptor": null },
+    { "nombre": "Deep Pizza", "tipo": "licensed", "interruptor": null },
+    { "nombre": "Scandal Burgers", "tipo": "own", "interruptor": null },
+    { "nombre": "The Urban Kebab", "tipo": "own", "interruptor": null },
+    { "nombre": "Dirty Burger", "tipo": "own", "interruptor": null },
+    { "nombre": "Lobbers", "tipo": "licensed", "interruptor": null }
+  ]
+}
