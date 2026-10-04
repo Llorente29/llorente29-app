@@ -108,7 +108,26 @@ export function clasificar(s, dentroDeDo = false) {
   if (cuerpo !== null) {
     for (const x of sentencias(cuerpo)) {
       // Dentro de un DO hay bloques begin/end, if, loop…: se buscan las órdenes que importan en cada trozo.
+      const antes = r.length
       for (const trozo of x.split(/\b(?:begin|then|else|loop)\b/i)) r.push(...clasificar(trozo.trim(), true))
+      // Y las escrituras de la sentencia ENTERA: un «case when … then … else»
+      // dentro de una CTE la parte en trozos y el insert de detrás ya no
+      // empieza por «with» (la 0110 del C01b, 04/10). Sin repetir lo ya visto.
+      const visto = new Set(r.slice(antes).map((o) => `${o.accion}|${o.objeto}`))
+      const plano = x.replace(/\s+/g, ' ')
+      const escrituras = [
+        [new RegExp(`\\binsert into ${ID}`, 'gi'), 'inserta', 'insert'],
+        [new RegExp(`\\bupdate (?:only )?${ID}(?: (?:as )?[A-Za-z_][A-Za-z0-9_]*)? set\\b`, 'gi'), 'cambia_datos', 'update'],
+        [new RegExp(`\\bdelete from (?:only )?${ID}`, 'gi'), 'cambia_datos', 'delete'],
+      ]
+      for (const [re, accion, que] of escrituras) {
+        for (const m of plano.matchAll(re)) {
+          const obj = nombre(m[1])
+          if (visto.has(`${accion}|${obj}`)) continue
+          visto.add(`${accion}|${obj}`)
+          add(accion, 'tabla', obj, `${que} (dentro de una sentencia compuesta)`)
+        }
+      }
       if (/\bexecute\b/i.test(x)) add('dinamico', 'desconocido', '(execute dinámico)', x.replace(/\s+/g, ' ').slice(0, 160))
     }
     return r

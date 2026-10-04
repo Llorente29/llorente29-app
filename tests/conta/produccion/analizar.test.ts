@@ -57,8 +57,8 @@ describe('la tanda del C00 (ya aplicada), tal cual', () => {
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
-  const viva = leerTanda('supabase/produccion/aplicar.txt')
+describe('la noche 1 del R02 (ya aplicada), tal cual', () => {
+  const viva = leerTanda('tests/conta/produccion/tanda-r02-noche1-20261004.txt')
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-r02-20261004.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
 
@@ -76,7 +76,7 @@ describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
 
   it('el comentario del manifiesto dice, para «autorizo», exactamente los que paran', () => {
     // La línea que se copia al campo: un comentario solo con nombres de fichero.
-    const linea = readFileSync('supabase/produccion/aplicar.txt', 'utf8').split('\n')
+    const linea = readFileSync('tests/conta/produccion/tanda-r02-noche1-20261004.txt', 'utf8').split('\n')
       .find((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))
     expect(linea).toBeDefined()
     expect(linea!.replace(/^#/, '').trim().split(/\s+/)).toEqual(paran().map((f) => f.replace(/^.*\//, '')))
@@ -85,6 +85,34 @@ describe('la tanda de AHORA (manifiesto vivo): noche 1 del R02', () => {
   it('ninguno toca vat_rate_for, y la 0120 lleva el aviso del execute dinámico (los feeds)', () => {
     expect(viva.filter((f) => decidir(p.porFichero[f], p.existe).tocaVatRateFor)).toEqual([])
     expect(decidir(p.porFichero[viva[2]], p.existe).avisos.length).toBeGreaterThan(0)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): datos del C01b', () => {
+  const viva = leerTanda('supabase/produccion/aplicar.txt')
+  // Lo que existe en producción, medido en solo lectura el 04/10/2026.
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c01b-20261004.json'))
+  const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
+
+  it('son 0100–0130, en orden; la eliminación (0140) NO va', () => {
+    expect(viva.map((f) => f.replace(/^.*\/20261006T(\d{4})_.*$/, '$1'))).toEqual(['0100', '0110', '0120', '0130'])
+    expect(viva.some((f) => f.includes('0140_c01b_elimina'))).toBe(false)
+  })
+  it('PARAN exactamente 0110 (cambia datos de supplier) y 0120 (reemplaza dos funciones): los de «autorizo»', () => {
+    expect(paran()).toEqual(['supabase/migrations/20261006T0110_c01b_datos.sql', 'supabase/migrations/20261006T0120_c01b_lectores.sql'])
+  })
+  it('el comentario del manifiesto dice, para «autorizo», exactamente los que paran', () => {
+    const linea = readFileSync('supabase/produccion/aplicar.txt', 'utf8').split('\n').find((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))
+    expect(linea!.replace(/^#/, '').trim().split(/\s+/)).toEqual(paran().map((f) => f.replace(/^.*\//, '')))
+  })
+  it('la vuelta atrás tiene un .down.sql por fichero, al revés', () => {
+    const downs = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(downs).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+  })
+  it('y la eliminación (0140), en su tanda, PARA por borrar las cuatro columnas', () => {
+    const ops = analizarFichero('supabase/migrations/20261006T0140_c01b_elimina.sql')
+    const r = decidir(ops, (o: Op) => o.objeto === 'public.supplier')
+    expect(r.para.filter((l: string) => l.startsWith('borra · columna'))).toHaveLength(4)
   })
 })
 

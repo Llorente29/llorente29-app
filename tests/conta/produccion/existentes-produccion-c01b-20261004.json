@@ -1,0 +1,1 @@
+{"tablas":["public.supplier","public.supplier_contact","public.supplier_invoice","public.supplier_proposal"],"funciones":["public.compliance_docs_due(integer)","public.migrate_kitchen_core(uuid,uuid,boolean)"]}
