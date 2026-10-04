@@ -15,7 +15,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PLANES } from './lib/planContable.mjs'
-import { informePlan, revisarSerieEnBase, revisarSerieEnTexto } from './lib/agentePlan.mjs'
+import { informePlan, revisarEmpresas, revisarSerieEnBase, revisarSerieEnTexto } from './lib/agentePlan.mjs'
 
 const [, , rutaBd, rutaInforme = 'informe-plan-contable.md', donde = 'staging-conta'] = process.argv
 if (!rutaBd) { console.error('Uso: node scripts/conta/agente-plan-contable.mjs <volcado.json> [informe.md] [dónde]'); process.exit(2) }
@@ -30,7 +30,7 @@ const textos = Object.fromEntries(Object.entries(PLANES).map(([plan, p]) => {
 }))
 const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 
-const hallazgos = [...revisarSerieEnTexto(textos, correcciones), ...revisarSerieEnBase(bd.pgc_account ?? [], serie)]
+const hallazgos = [...revisarSerieEnTexto(textos, correcciones), ...revisarSerieEnBase(bd.pgc_account ?? [], serie), ...revisarEmpresas(bd, serie)]
 const texto = informePlan(hallazgos, { donde, hoy, filas: (bd.pgc_account ?? []).length, resumen: serie.resumen })
 writeFileSync(rutaInforme, texto)
 console.log(texto)

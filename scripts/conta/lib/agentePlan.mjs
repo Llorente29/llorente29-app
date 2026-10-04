@@ -57,3 +57,49 @@ export function informePlan(hallazgos, { donde, hoy, filas, resumen }) {
   else l.push(`**${rojos.length} en rojo:**`, '', ...rojos.map((h) => `- ${h.texto}`))
   return l.join('\n') + '\n'
 }
+
+// ── Empresa por empresa (tarea 3) ───────────────────────────────────────────
+
+/**
+ * Para cada empresa con el plan activado (encargo §4):
+ *   · tiene TODAS las hojas de su plan;
+ *   · todas sus cuentas tienen la longitud de la empresa;
+ *   · todo enlace apunta a una cuenta suya que existe y está activa;
+ *   · hay 472 y 477 para cada tipo de IVA (o IGIC) vigente de su territorio.
+ * Cada caso lleva la cuenta (account_id) de la que es (regla 9).
+ */
+export function revisarEmpresas(bd, serie) {
+  const out = []
+  const hojas = { pymes: new Set(), general: new Set() }
+  for (const c of serie.cuentas) if (c.is_leaf) hojas[c.plan].add(c.code)
+  const cuentas = bd.company_account ?? []
+  const enlaces = bd.company_account_link ?? []
+  for (const e of bd.empresas_plan ?? []) {
+    const yo = `${e.legal_name} (cuenta ${String(e.account_id).slice(0, 8)})`
+    const suyas = cuentas.filter((c) => c.company_id === e.id)
+    if (!suyas.length) continue
+    const plan = e.chart_kind === 'normal' ? 'general' : 'pymes'
+    const porId = new Map(suyas.map((c) => [c.id, c]))
+    const tiene = new Set(suyas.filter((c) => c.kind === 'template').map((c) => c.template_code))
+    const faltan = [...hojas[plan]].filter((h) => !tiene.has(h))
+    if (faltan.length) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: le faltan ${faltan.length} cuentas de serie de su plan (${faltan.slice(0, 8).join(', ')}${faltan.length > 8 ? '…' : ''}).` })
+    const otroPlan = suyas.filter((c) => c.plan !== plan)
+    if (otroPlan.length) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: ${otroPlan.length} cuentas son del plan ${otroPlan[0].plan} y la empresa usa el de ${plan}.` })
+    const largas = suyas.filter((c) => c.code.length !== Number(e.account_digits))
+    if (largas.length) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: ${largas.length} cuentas no tienen ${e.account_digits} dígitos (${largas.slice(0, 5).map((c) => c.code).join(', ')}).` })
+    for (const l of enlaces.filter((x) => x.company_id === e.id)) {
+      const c = porId.get(l.company_account_id)
+      if (!c) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: un ${l.entity} apunta a una cuenta que no es de la empresa.` })
+      else if (c.status !== 'activa') out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: un ${l.entity} apunta a ${c.code}, que está ${c.status}.` })
+    }
+    const sistema = e.tax_territory === 'canarias' ? 'igic' : 'iva'
+    for (const t of (bd.tipos_vigentes ?? []).filter((x) => x.tax_system === sistema && (x.is_system || x.account_id === e.account_id))) {
+      for (const papel of ['soportado', 'repercutido']) {
+        if (!enlaces.some((l) => l.company_id === e.id && l.entity === 'tax_rate' && l.entity_id === t.id && l.role === papel)) {
+          out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: el tipo ${t.code} (${t.rate} %) no tiene cuenta de IVA ${papel}.` })
+        }
+      }
+    }
+  }
+  return out
+}
