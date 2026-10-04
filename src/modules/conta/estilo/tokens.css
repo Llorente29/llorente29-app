@@ -6,7 +6,9 @@
  * hex escrito.
  *
  * Todo cuelga de `.cx` (el contenedor del módulo): fuera de él no existe nada
- * de esto, y el resto de Folvy no se entera.
+ * de esto, y el resto de Folvy no se entera. `.cx-colores` da SOLO los
+ * colores, sin letra ni fondo, a una pieza suelta del estilo nuevo dentro de
+ * una pantalla vieja (R02: la etiqueta de reparto de la tarjeta del pedido).
  *
  * Contraste medido (WCAG, 02/10): texto/fondo 16,29 · apoyo/blanco 5,81 ·
  * apoyo/fondo 5,41 · blanco/azul 5,17 · azul/azul suave 4,53 · verde
@@ -15,7 +17,7 @@
  * oscuro encima), nunca color de letra.
  */
 
-.cx {
+.cx, .cx-colores {
   /* ── Los diez del encargo (§7) ─────────────────────────────────────── */
   --cx-texto: #0E1A2B;          /* Texto principal */
   --cx-apoyo: #5B6678;          /* Etiquetas y ayudas */

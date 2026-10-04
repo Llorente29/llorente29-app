@@ -1,0 +1,131 @@
+/* src/modules/reparto/reparto.css
+ *
+ * R02 · «Quién reparte» (maqueta docs/reparto/maquetas/r02/R1Reparto) y la
+ * etiqueta de reparto de la tarjeta del pedido. Estilo nuevo (guía del C00):
+ * NINGÚN color escrito aquí; todos salen de src/modules/conta/estilo/tokens.css
+ * (var(--cx-…)), que es el único sitio de los colores.
+ */
+
+/* ── Página ─────────────────────────────────────────────────────────────── */
+.cx-rp { min-height: 100%; padding: 22px 22px 40px; box-sizing: border-box; }
+.cx-rp-cabeza { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+.cx-rp-miga { font-size: 14px; color: var(--cx-apoyo); }
+.cx-rp-titulo { margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -1.1px; }
+.cx-rp-intro { font-size: 15px; color: var(--cx-apoyo); margin: 12px 0; max-width: 820px; }
+.cx-rp-cuerpo { display: flex; gap: 18px; align-items: flex-start; }
+.cx-rp-izq { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.cx-rp-der { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+.cx-rp-der h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+.cx-rp-apoyo { font-size: 14px; color: var(--cx-apoyo); }
+
+/* ── La tabla ───────────────────────────────────────────────────────────── */
+.cx-rp-tabla {
+  background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta);
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.cx-rp-fila {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(var(--cx-rp-columnas, 3), minmax(0, 1fr));
+  align-items: center; padding: 8px 14px; border-top: 1px solid var(--cx-linea);
+}
+.cx-rp-fila-cabeza { padding: 14px 14px 10px; align-items: end; border-top: none; }
+.cx-rp-fila-herencia { background: var(--cx-fondo); padding: 9px 14px; }
+.cx-rp-fila-local { background: var(--cx-fondo); padding: 6px 14px 6px 64px; }
+.cx-rp-col { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; text-align: center; }
+.cx-rp-col-marca { text-align: left; }
+.cx-rp-col-nombre { font-size: 14px; color: var(--cx-texto); }
+.cx-rp-col-ayuda { font-weight: 400; }
+.cx-rp-marca { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cx-rp-marca-nombre { font-size: 15px; font-weight: 600; }
+.cx-rp-marca-apoyo { font-size: 13px; color: var(--cx-apoyo); }
+.cx-rp-enlace {
+  background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: var(--cx-azul);
+  text-decoration: underline; cursor: pointer;
+}
+
+/* ── La celda: «Plataforma | Nosotros» ──────────────────────────────────── */
+.cx-rp-celda { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.cx-rp-celda-plataforma { display: none; }
+.cx-rp-seg {
+  position: relative; display: inline-flex; gap: 2px; padding: 3px; border-radius: 13px;
+  background: var(--cx-neutro-suave);
+}
+.cx-rp-seg button {
+  height: 36px; padding: 0 12px; border: none; border-radius: 10px; font-family: inherit; font-size: 13px;
+  cursor: pointer; background: transparent; color: var(--cx-apoyo);
+}
+.cx-rp-seg button:disabled { cursor: progress; }
+.cx-rp-seg button[aria-pressed='true'].cx-rp-decidida { background: var(--cx-azul); color: var(--cx-blanco); font-weight: 600; }
+.cx-rp-seg button[aria-pressed='true'].cx-rp-heredada {
+  background: var(--cx-blanco); color: var(--cx-texto); font-weight: 600; box-shadow: inset 0 0 0 2px var(--cx-borde-campo);
+}
+.cx-rp-seg button:focus-visible { outline: 3px solid var(--cx-azul); outline-offset: 2px; }
+.cx-rp-hereda { font-size: 11px; color: var(--cx-apoyo); }
+.cx-rp-aviso {
+  position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--cx-ambar-suave); border: 2px solid var(--cx-blanco); display: flex; align-items: center;
+  justify-content: center; font-size: 10px; font-weight: 700; color: var(--cx-ambar);
+}
+.cx-rp-celda-error { font-size: 12px; color: var(--cx-rojo); background: var(--cx-rojo-suave); border-radius: 8px; padding: 3px 8px; max-width: 220px; text-align: center; }
+
+/* ── Pie: leyenda, guardado y Deshacer ──────────────────────────────────── */
+.cx-rp-pie {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 8px 14px;
+  border-top: 1px solid var(--cx-linea); font-size: 13px; color: var(--cx-apoyo);
+}
+.cx-rp-muestra { display: inline-block; width: 12px; height: 12px; border-radius: 4px; vertical-align: -2px; margin-right: 4px; }
+.cx-rp-muestra-decidida { background: var(--cx-azul); }
+.cx-rp-muestra-heredada { box-shadow: inset 0 0 0 2px var(--cx-borde-campo); }
+.cx-rp-muestra-aviso { background: var(--cx-ambar-suave); border-radius: 50%; }
+.cx-rp-hueco { flex-grow: 1; }
+.cx-rp-guardado { font-size: 14px; color: var(--cx-verde-oscuro); background: var(--cx-verde-suave); border-radius: 12px; padding: 8px 12px; }
+.cx-rp-guardado-aviso { color: var(--cx-ambar); background: var(--cx-ambar-suave); }
+
+/* ── Panel «Qué ve la cocina» ───────────────────────────────────────────── */
+.cx-rp-pedido {
+  background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.cx-rp-pedido-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.cx-rp-pedido-numero { font-family: var(--cx-letra-cifras); font-size: 15px; font-weight: 600; }
+.cx-rp-pedido-donde { font-size: 13px; color: var(--cx-apoyo); }
+.cx-rp-folvy h3 { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
+.cx-rp-folvy ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cx-rp-folvy li { font-size: 13px; color: var(--cx-apoyo); }
+
+/* ── La etiqueta de reparto (también dentro de la tarjeta del pedido) ───── */
+.cx-et { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--cx-letra); }
+.cx-et-pildora { padding: 4px 11px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.cx-et-gris .cx-et-pildora { background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+.cx-et-verde .cx-et-pildora { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cx-et-ambar .cx-et-pildora { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cx-et-azul .cx-et-pildora { background: var(--cx-azul-suave); color: var(--cx-azul); }
+.cx-et-detalle { font-size: 13px; color: var(--cx-apoyo); }
+.cx-et-acciones { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 13px; font-weight: 600; }
+.cx-et-acciones button, .cx-et-acciones a {
+  background: none; border: none; padding: 0; font: inherit; color: var(--cx-azul); cursor: pointer; text-decoration: underline;
+}
+.cx-et-acciones button:disabled { opacity: 0.55; cursor: progress; }
+.cx-et-resultado { font-size: 13px; color: var(--cx-verde-oscuro); }
+.cx-et-error { font-size: 13px; color: var(--cx-rojo); }
+
+/* Dentro de la tarjeta vieja del pedido: una franja sin borde de color. */
+.cx-et-franja { margin: 0 16px 10px 20px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--cx-linea); background: var(--cx-blanco); }
+
+/* ── Móvil: una tarjeta por marca, las plataformas en vertical ──────────── */
+@media (max-width: 900px) {
+  .cx-rp { padding: 14px 12px 32px; }
+  .cx-rp-titulo { font-size: 26px; }
+  .cx-rp-cuerpo { flex-direction: column; }
+  .cx-rp-der { width: 100%; }
+  .cx-rp-tabla { background: transparent; border: none; border-radius: 0; gap: 10px; overflow: visible; }
+  .cx-rp-fila-cabeza { display: none; }
+  .cx-rp-fila, .cx-rp-fila-herencia, .cx-rp-fila-local {
+    grid-template-columns: 1fr; gap: 8px; background: var(--cx-blanco); border: 1px solid var(--cx-linea);
+    border-radius: var(--cx-radio-bloque); padding: 12px 14px;
+  }
+  .cx-rp-fila-herencia { background: var(--cx-fondo); }
+  .cx-rp-fila-local { margin-left: 18px; }
+  .cx-rp-celda { flex-direction: row; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; }
+  .cx-rp-celda-plataforma { display: inline; font-size: 14px; font-weight: 600; }
+  .cx-rp-pie { background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque); }
+}

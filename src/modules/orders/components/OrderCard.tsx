@@ -24,7 +24,7 @@
 // la decide `deliveryView().phase` en el servicio; aquí solo se pinta.
 
 import { useEffect, useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag, MapPin, ExternalLink } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, AlertTriangle, ShoppingBag, MapPin, ExternalLink } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
 import { fmtNum } from '@/lib/format'
@@ -33,6 +33,7 @@ import { passCode } from '../lib/passCode'
 import { elSubtitulo } from '@/modules/pase/lib/lasTresZonas'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
+import EtiquetaReparto from '@/modules/reparto/components/EtiquetaReparto'
 import {
   primaryAction, secondaryAction, childVisual, deliveryView,
   isOwnDeliveryUndispatched, dispatchOrder,
@@ -252,7 +253,8 @@ function transportMeta(t: string | null): { emoji: string; label: string; car: b
 function statePillCls(tone: DeliveryTone): string {
   switch (tone) {
     case 'done':     return 'text-success bg-success-bg border-success/30'
-    case 'failed':   return 'text-danger bg-danger-bg border-danger/30'
+    // R02: el reparto nunca pinta en rojo; un reparto fallido es un aviso (ámbar).
+    case 'failed':   return 'text-warning bg-warning-bg border-warning/30'
     case 'canceled': return 'text-text-secondary bg-page border-default'
     case 'pending':  return 'text-warning bg-warning-bg border-warning/30'
     default:         return 'text-success bg-success-bg border-success/30'
@@ -301,7 +303,7 @@ function GreenCallPill({ phone, label = true, big = false }: { phone: string; la
 // que va a una zona. No se despacha automáticamente con ellas: eso sigue
 // bloqueado y es otra decisión.
 function SinDireccionAviso(
-  { order, portal }: { order: OrderFeedItem; portal: { url: string; nombre: string } | null },
+  { order, portal, compacto = false }: { order: OrderFeedItem; portal: { url: string; nombre: string } | null; compacto?: boolean },
 ) {
   const [coords, setCoords] = useState<CoordenadasEntrega | null>(null)
 
@@ -314,15 +316,18 @@ function SinDireccionAviso(
   }, [order.sale_id])
 
   const canal = order.channel?.trim() || 'La plataforma'
+  // R02: con la etiqueta de reparto encima, aquí solo quedan las coordenadas
+  // (lo que «falta la dirección» y el portal ya lo dicen la etiqueta y su acción).
+  if (compacto && coords?.hay !== true) return null
   return (
-    <div className="px-3 py-2.5 border-b border-[#CFE4FA] bg-white/60">
-      <div className="flex items-start gap-2">
+    <div className={compacto ? 'mx-4 mb-2.5 ml-5 px-3 py-2 rounded-xl border border-default bg-white' : 'px-3 py-2.5 border-b border-[#CFE4FA] bg-white/60'}>
+      {!compacto && <div className="flex items-start gap-2">
         <AlertTriangle size={15} className="text-[#B4690E] shrink-0 mt-0.5" />
         <div className="text-[12.5px] leading-snug text-gray-700">
           <b className="block text-[11px] uppercase tracking-wide text-[#B4690E]">Falta la dirección</b>
           {canal} no ha enviado la dirección de entrega.
         </div>
-      </div>
+      </div>}
 
       {coords?.hay === true && Number.isFinite(Number(coords.lat)) && Number.isFinite(Number(coords.lng)) && (
         <div className="mt-2 flex items-start gap-2">
@@ -343,13 +348,13 @@ function SinDireccionAviso(
         </div>
       )}
 
-      {coords?.hay === false && (
+      {!compacto && coords?.hay === false && (
         <div className="mt-2 text-[11.5px] text-gray-500 pl-[23px]">
           Tampoco hay coordenadas: {coords.motivo}.
         </div>
       )}
 
-      {portal && (
+      {!compacto && portal && (
         <a
           href={portal.url}
           target="_blank" rel="noopener noreferrer"
@@ -364,7 +369,14 @@ function SinDireccionAviso(
 }
 
 // ── Fila de reparto. Caras según el estado del despacho propio. ──
-function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatched?: () => void }) {
+// R02 (05/10): el reparto NUNCA pinta el pedido en rojo. Un «propio» que no ha
+// salido (sin dirección, o con dirección y sin rider) es la etiqueta ÁMBAR de
+// src/modules/reparto/components/EtiquetaReparto.tsx, con sus acciones; lo
+// que reparte la plataforma, la GRIS. Antes: tarjeta roja y «Reintentar
+// despacho», que sin dirección no podía funcionar nunca.
+function DeliveryRow({ order, onDispatched, puedeDecidirReparto = false, onRepartoCambiado }: {
+  order: OrderFeedItem; onDispatched?: () => void; puedeDecidirReparto?: boolean; onRepartoCambiado?: () => void
+}) {
   const [dispatching, setDispatching] = useState(false)
   const [dispatchErr, setDispatchErr] = useState<string | null>(null)
   const d: DeliveryView = deliveryView(order)
@@ -382,46 +394,30 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
     }
   }
 
-  // (A) Reparto propio SIN despachar (modo manual o tras fallo): botón en la fila.
-  // En modo 'off' (lo despacha un sistema externo) NO se muestra botón: Folvy no despacha.
+  // (A) Reparto propio SIN despachar (modo manual, tras fallo o sin dirección).
+  // En modo 'off' (lo despacha un sistema externo) Folvy no despacha: nada aquí.
   if (isOwnDeliveryUndispatched(order) && order.dispatch_mode !== 'off') {
-    const failed = !!order.dispatch_error
-    const errMsg = dispatchErr ?? order.dispatch_error
     const sinDireccion = !(order.delivery_address ?? '').trim()
     const portal = portalDeLaPlataforma(order.channel)
     return (
-      <div className={`mx-4 mb-2.5 ml-5 rounded-xl border overflow-hidden ${failed ? 'border-danger/40 bg-danger-bg' : 'border-[#CFE4FA] bg-[#F0F7FF]'}`}>
-        {sinDireccion && <SinDireccionAviso order={order} portal={portal} />}
-        {failed && errMsg && (
-          <div className="flex items-start gap-2 px-3 py-2.5 border-b border-danger/20">
-            <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" />
-            <span className="text-[12.5px] text-danger leading-snug">
-              <b className="block text-[11px] uppercase tracking-wide">No se pudo despachar</b>
-              {errMsg}
-            </span>
-          </div>
-        )}
-        <button
-          onClick={doDispatch}
-          disabled={dispatching}
-          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[13.5px] font-bold disabled:opacity-60 ${
-            failed ? 'text-white bg-danger' : 'text-[#2563A8]'
-          }`}
-        >
-          {dispatching
-            ? <><RefreshCw size={15} className="animate-spin" /> Despachando…</>
-            : failed
-              ? <><RefreshCw size={15} /> Reintentar despacho</>
-              : <><Bike size={16} /> Despachar reparto</>}
-        </button>
-      </div>
+      <>
+        <EtiquetaReparto
+          pedido={{ ...order, dispatch_error: dispatchErr ?? order.dispatch_error }}
+          portal={portal}
+          puedeDecidir={puedeDecidirReparto}
+          onDespachar={doDispatch}
+          despachando={dispatching}
+          onCambiado={onRepartoCambiado}
+        />
+        {sinDireccion && <SinDireccionAviso order={order} portal={portal} compacto />}
+      </>
     )
   }
 
   if (d.kind === 'none') return null
 
   // (B) Plataforma (Glovo/Uber/JE): informativo; si hay soporte, plegable con su teléfono.
-  if (d.kind === 'platform') return <PlatformDeliveryRow view={d} />
+  if (d.kind === 'platform') return <PlatformDeliveryRow view={d} order={order} />
 
   // (C) Reparto propio despachado: prominencia POR FASE.
   const tp = transportMeta(d.transport)
@@ -560,30 +556,19 @@ function OwnDeliveryRow({ view }: { view: DeliveryView }) {
 }
 
 // Fila de plataforma (Glovo/Uber/JE): "Lo lleva {plataforma}", plegable con soporte.
-function PlatformDeliveryRow({ view }: { view: DeliveryView }) {
-  const [open, setOpen] = useState(false)
-  const canOpen = !!view.supportPhone
+function PlatformDeliveryRow({ view, order }: { view: DeliveryView; order: OrderFeedItem }) {
+  // R02: la etiqueta GRIS «La reparte X» (sin despacho, sin aviso). El
+  // teléfono de soporte de la plataforma, si lo hay, debajo.
   return (
-    <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] overflow-hidden">
-      <button
-        onClick={() => canOpen && setOpen(o => !o)}
-        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${canOpen ? 'cursor-pointer' : 'cursor-default'}`}
-      >
-        <Bike size={16} className="text-[#2563A8] shrink-0" />
-        <span className="text-[13px] font-bold text-[#2563A8]">Lo lleva {view.carrierLabel}</span>
-        {canOpen && (
-          <span className="ml-auto text-[#2563A8] shrink-0">
-            {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </span>
-        )}
-      </button>
-      {open && canOpen && (
-        <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t border-[#DCEAFB]">
+    <>
+      <EtiquetaReparto pedido={order} />
+      {view.supportPhone && (
+        <div className="mx-4 mb-2.5 ml-5 flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-default">
           <span className="text-[12.5px] text-text-secondary">Soporte {view.carrierLabel}</span>
-          <CallPill phone={view.supportPhone!} />
+          <CallPill phone={view.supportPhone} />
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -642,9 +627,15 @@ interface OrderCardProps {
    */
   minutosDeLaFase?: number | null
   nivelDeLaFase?: 'fresh' | 'warn' | null
+  /**
+   * R02: la web con sesión (no la tablet) puede cambiar quién reparte desde la
+   * etiqueta ámbar («Cambiar a “la reparte Uber”»). Tras cambiarlo, refrescar.
+   */
+  puedeDecidirReparto?: boolean
+  onRepartoCambiado?: () => void
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase, puedeDecidirReparto = false, onRepartoCambiado }: OrderCardProps) {
   const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
   const now = nowMs
   const [busy, setBusy] = useState(false)
@@ -814,7 +805,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         ))}
       </div>
 
-      <DeliveryRow order={order} />
+      <DeliveryRow order={order} puedeDecidirReparto={puedeDecidirReparto} onRepartoCambiado={onRepartoCambiado} />
 
       <div className="px-4 py-3 pl-5 border-t border-default">
         <div className="flex items-center gap-3">

@@ -400,7 +400,7 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
                 // curso» los minutos desde que entró (y el semáforo de cocina),
                 // y en las demás los de la situación con el ámbar de los 20.
                 const minutosDeLaFase = losMinutosDeLaTarjeta(o, filter, new Date(nowMs))
-                return <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} distintivo={elDistintivoDeLaTarjeta(o, filter)} sinReloj={filter === 'terminado'} minutosDeLaFase={minutosDeLaFase} nivelDeLaFase={elNivelDeLaTarjeta(o, filter, minutosDeLaFase)} />
+                return <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} distintivo={elDistintivoDeLaTarjeta(o, filter)} sinReloj={filter === 'terminado'} minutosDeLaFase={minutosDeLaFase} nivelDeLaFase={elNivelDeLaTarjeta(o, filter, minutosDeLaFase)} puedeDecidirReparto={!esTablet} onRepartoCambiado={refresh} />
               })}
             </div>
           ) : (
@@ -415,7 +415,7 @@ export default function OrdersFeed({ locationId, token, accountId, sinMarcarList
                       <span className="ml-auto bg-accent-bg text-text-secondary text-[12px] font-extrabold px-2 py-px rounded-full tabular-nums">{list.length}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 bg-page">
-                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} />)}
+                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} sinMarcarListo={sinMarcarListo} puedeDecidirReparto={!esTablet} onRepartoCambiado={refresh} />)}
                     </div>
                   </div>
                 )

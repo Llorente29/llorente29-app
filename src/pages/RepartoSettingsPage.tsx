@@ -15,9 +15,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { CheckCircle2, Plus, Trash2, Pencil, X, ChevronUp, ChevronDown, Copy, Link2, RefreshCw, Download } from 'lucide-react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabase'
-import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import BrandDeliverySection from '@/modules/integrations/components/BrandDeliverySection'
-import ChannelDeliveryPolicySection from '@/modules/integrations/components/ChannelDeliveryPolicySection'
+import { Link } from 'react-router-dom'
 
 async function rpc<T = unknown>(fn: string, args: Record<string, unknown>): Promise<{ data: T | null; error: { message: string } | null }> {
   if (!supabase) return { data: null, error: { message: 'Supabase no configurado' } }
@@ -95,7 +93,6 @@ const DISPATCH_MODES: { val: string; label: string }[] = [
 ]
 
 export default function RepartoSettingsPage() {
-  const { activeAccountId } = useActiveAccount()
   const [loading, setLoading] = useState(true)
   const [locs, setLocs] = useState<Loc[]>([])
   const [carriers, setCarriers] = useState<Carrier[]>([])
@@ -829,11 +826,16 @@ export default function RepartoSettingsPage() {
           ))}
       </Card>
 
-      {/* E) Reparto propio por marca */}
-      {activeAccountId && <BrandDeliverySection accountId={activeAccountId} />}
-
-      {/* E.2) Quién reparte según plataforma (ENCARGO CODE 13/08 noche fix/hubrise-service-type-reparto) */}
-      {activeAccountId && <ChannelDeliveryPolicySection accountId={activeAccountId} />}
+      {/* E) Quién reparte: R02 (05/10). El interruptor por marca y la política
+          por tipo de marca se retiraron; ahora es una sola pantalla, marca ×
+          plataforma, en estilo nuevo. */}
+      <Card className="p-5">
+        <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Quién reparte</p>
+        <p className="text-sm text-text-secondary">
+          Para cada marca y plataforma, si el pedido lo reparte la plataforma o lo mandamos nosotros a Catcher.
+          {' '}<Link to="../quien-reparte" relative="path" className="text-accent font-medium">Abrir «Quién reparte»</Link>
+        </p>
+      </Card>
 
       {/* F) Zonas (enlace) */}
       <Card className="p-5">
