@@ -27,3 +27,34 @@
 4. Ejercicio y bloqueo en su pestaña, plan y dígitos bloqueados tras el primer asiento.
 5. Lo que usa otro módulo vive allí y la ficha enlaza.
 6. Ninguna casilla de un modelo o del depósito se teclea dentro del modelo: tiene campo en la ficha.
+
+## Ficha de proveedor (C01b, respuesta 2, 04/10/2026)
+
+> Contraste de Julio antes de desplegar, con **Holded, Pennylane, Xero,
+> QuickBooks, Sage, Odoo y Apicbase**. Aquí queda escrito lo que decidió. El
+> detalle de Holded, Pennylane y Cegid Diez, con sus fuentes, está en
+> `C01b_contraste.md`. Lo de Xero, QuickBooks, Sage, Odoo y Apicbase es lectura
+> de Julio; no lo he podido comprobar desde aquí (el proxy corta sus páginas de
+> ayuda).
+
+### Entra ahora (PR #143)
+
+| Qué | Quién lo hace | Folvy |
+|---|---|---|
+| IBAN distinto en una factura = aviso y freno | Pennylane (aprobación de IBAN) | La factura en ámbar «IBAN distinto al de la ficha», aviso en la ficha y «Marcar como pagada» desactivado (y rechazado por la base) hasta «Es el nuevo IBAN» o «No es suyo». Lo primero pasa a la ficha con el de antes, quién y cuándo, y pide el certificado del banco de la cuenta nueva. Nada se cambia solo. |
+| Repetida en dos niveles | Pennylane (posible duplicado) | «¿Repetida?»: mismo número e importe. «¿Posible repetida?»: misma fecha e importe con otro número, con su porqué. La misma decisión humana. Contra los 179 albaranes reales de Foodint: 0 falsos positivos. |
+| Acciones en la fila de la lista | La mayoría | «···» con Abrir, Subir factura y Archivar/Recuperar, sin entrar en la ficha. |
+
+### Apuntado, no se hace ahora
+
+| Qué | Dónde va |
+|---|---|
+| Alta del proveedor desde la factura, con nombre, NIF e IBAN precargados | Encargo de facturas de proveedor |
+| Mínimo de pedido, días de entrega y hora límite por local | Encargo de Cocina (condiciones de pedido) |
+| Fusión de proveedores duplicados | Con tesorería e impuestos |
+| Mandato SEPA y marca del 347 en la ficha | Tesorería e impuestos |
+
+### Reglas que propongo fijar (las fija Julio)
+
+7. Un dato que cambia adónde va el dinero (el IBAN) nunca se cambia solo: frena el pago, y la persona decide.
+8. Una sospecha de repetida no se apunta en las cifras hasta que la persona decide, y siempre dice por qué.
