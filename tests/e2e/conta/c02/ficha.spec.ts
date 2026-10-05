@@ -7,7 +7,7 @@
 // maqueta (docs/conta/capturas/c02/).
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, HERMANOS_RUIZ, entrarComo } from '../sesion'
+import { CARNES_SUR, CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c02'
@@ -42,6 +42,14 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   await expect(iva).toContainText(/472\d{5} · IVA soportado/)
   await expect(iva).not.toContainText(/%\s*\d+(,\d+)?\s*%/)
   await expect(cuentas.getByText('Tipo de operación')).toBeVisible()
+  // Respuesta 3: la pestaña es solo N7. Ni un desplegable ni un campo fuera de
+  // las tarjetas, y «Sus facturas se apuntan en» una sola vez. Local habitual
+  // y el registro sanitario editable ya no están aquí.
+  const pestana = page.locator('.cxp-cuentas')
+  await expect(pestana.locator('select, input, textarea')).toHaveCount(0)
+  await expect(page.getByText('Sus facturas se apuntan en', { exact: true })).toHaveCount(1)
+  await expect(page.getByLabel('Local habitual')).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Qué tipos de gasto usa tu negocio' })).toBeVisible()
   await expect(saldo.locator('.cx-dato').filter({ hasText: 'Saldo con él' })).toContainText('Sin apuntes todavía')
   await expect(saldo.locator('.cx-dato').filter({ hasText: 'Va al 347 este año' })).toContainText(/^Va al 347 este año(Sí|No|Tu empresa)/)
 
@@ -76,3 +84,16 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   const flotantes = lado(page) === 'movil' ? [BARRA_FOLVY_MOVIL] : FLOTANTES_CONTA
   expect(await loQueTapan(page, '.cx-incrustado', flotantes)).toEqual([])
 })
+
+test('«Local habitual» va en el bloque de Cocina: en A sí (compra con Cocina), en B no existe', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Lee: basta un tamaño')
+  await entrarComo(page, CUENTA_A.email)
+  await page.goto(`/kitchen/proveedores/${HERMANOS_RUIZ}`)
+  const cocina = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Artículos que le compras' }) })
+  await expect(cocina.getByLabel('Local habitual')).toBeVisible()
+  await entrarComo(page, CUENTA_B.email)
+  await page.goto(`/kitchen/proveedores/${CARNES_SUR}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Carnes Sur' })).toBeVisible()
+  await expect(page.getByLabel('Local habitual')).toHaveCount(0)
+})
+

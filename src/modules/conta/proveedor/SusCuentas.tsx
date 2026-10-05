@@ -8,6 +8,10 @@
 //     o número; el cambio va por company_account_link_set y queda en el
 //     registro del plan. El IVA no: la cuenta de cada tipo es de la EMPRESA y
 //     se cambia en el plan (se dice y se enlaza).
+//   · «Sus facturas se apuntan en» se cambia SOLO aquí (respuesta 3): su tipo
+//     de gasto (con la cuenta a la que lleva) o una cuenta para él, en el
+//     mismo buscador. Su «Cambiar» lleva el id `campo-expenseCategoryId`:
+//     ahí llevan «Falta: tipo de gasto» y «Lo que he aprendido».
 //   · Cambiar dice qué ha pasado, con contenido (regla 8).
 //   · Los apuntes llegan con el C04: hasta entonces el saldo y el extracto lo
 //     dicen claro, sin ceros que parezcan datos.
@@ -16,7 +20,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { Chip, Dato, ErrorConReintento, Tarjeta, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
-import { rutaPlan } from '@/config/navegacion'
+import { rutaPlan, rutaTablasGenerales } from '@/config/navegacion'
+import { cuentaEnLaFicha } from '@/modules/conta/lib/opcionesFicha'
+import { porUso } from '@/modules/conta/lib/masUsados'
 import { encaja } from '@/modules/conta/lib/planVista'
 import { euros, eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
@@ -60,11 +66,19 @@ function useCuentas(accountId: string, companyId: string | null) {
   return { datos, error, recargar }
 }
 
-function FilaCuenta({ l, cambiar, quitar }: { l: LineaCuenta; cambiar: (cuentaId: string) => Promise<void>; quitar: () => Promise<void> }) {
+export interface TipoElegible { id: string; titulo: string; code: string }
+
+function FilaCuenta({ l, cambiar, quitar, tipos, elegirTipo, idCambiar }: {
+  l: LineaCuenta; cambiar: (cuentaId: string) => Promise<void>; quitar: () => Promise<void>
+  /** Solo «Sus facturas»: elegir su tipo de gasto, en el mismo buscador. */
+  tipos?: readonly TipoElegible[]; elegirTipo?: (id: string) => Promise<void>; idCambiar?: string
+}) {
   const [abierta, setAbierta] = useState(false)
   const [busca, setBusca] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const opciones = useMemo(() => l.opciones.filter((o) => encaja(busca, { code: o.code, name: o.titulo, plainName: null })), [l.opciones, busca])
+  const deTipo = useMemo(() => (tipos ?? []).filter((t) => encaja(busca, { code: t.code, name: t.titulo, plainName: null })), [tipos, busca])
+  const total = opciones.length + deTipo.length
   const valor = l.cuentas.length
     ? <>{l.cuentas.map((c, i) => <span key={c.id}>{i > 0 && <span className="cx-dato-vacio"> y </span>}{c.titulo}</span>)}</>
     : null
@@ -73,8 +87,8 @@ function FilaCuenta({ l, cambiar, quitar }: { l: LineaCuenta; cambiar: (cuentaId
       <Dato etiqueta={l.etiqueta}>
         {valor ? <>{valor}{l.texto && <span className="cx-dato-vacio">· {l.texto}</span>}</> : <span>{l.texto ?? 'Sin poner'}</span>}
         {l.ia && <Chip tono="ia">IA</Chip>}
-        {l.papel && l.opciones.length > 0 && (
-          <button type="button" className="cx-enlace" aria-expanded={abierta} aria-label={`Cambiar: ${l.etiqueta}`} onClick={() => setAbierta((a) => !a)}>
+        {l.papel && (l.opciones.length > 0 || (tipos?.length ?? 0) > 0) && (
+          <button type="button" id={idCambiar} className="cx-enlace" aria-expanded={abierta} aria-label={`Cambiar: ${l.etiqueta}`} onClick={() => setAbierta((a) => !a)}>
             {abierta ? 'Cerrar' : 'Cambiar'}
           </button>
         )}
@@ -86,12 +100,26 @@ function FilaCuenta({ l, cambiar, quitar }: { l: LineaCuenta; cambiar: (cuentaId
           <input className="cx-input" placeholder="Busca por nombre o número" aria-label={`Buscar cuenta: ${l.etiqueta}`} value={busca} onChange={(e) => setBusca(e.target.value)} />
           <select className="cx-input" aria-label={`Cuenta: ${l.etiqueta}`} value="" disabled={ocupado}
             onChange={async (e) => {
-              if (!e.target.value) return
+              const v = e.target.value
+              if (!v) return
               setOcupado(true)
-              try { await cambiar(e.target.value); setAbierta(false); setBusca('') } finally { setOcupado(false) }
+              try {
+                if (v.startsWith('tipo:') && elegirTipo) await elegirTipo(v.slice(5))
+                else await cambiar(v)
+                setAbierta(false); setBusca('')
+              } finally { setOcupado(false) }
             }}>
-            <option value="">{opciones.length ? `Elige entre ${opciones.length}` : 'Ninguna encaja'}</option>
-            {opciones.map((o) => <option key={o.id} value={o.id}>{o.titulo}</option>)}
+            <option value="">{total ? `Elige entre ${total}` : 'Ninguna encaja'}</option>
+            {deTipo.length > 0 ? (
+              <>
+                <optgroup label="Por su tipo de gasto">
+                  {deTipo.map((t) => <option key={t.id} value={`tipo:${t.id}`}>{t.titulo}</option>)}
+                </optgroup>
+                <optgroup label="Una cuenta solo para él">
+                  {opciones.map((o) => <option key={o.id} value={o.id}>{o.titulo}</option>)}
+                </optgroup>
+              </>
+            ) : opciones.map((o) => <option key={o.id} value={o.id}>{o.titulo}</option>)}
           </select>
           {l.propia && (
             <button type="button" className="cx-boton-sec" disabled={ocupado} onClick={async () => { setOcupado(true); try { await quitar(); setAbierta(false) } finally { setOcupado(false) } }}>
@@ -161,7 +189,7 @@ function Extracto({ ejercicios, alCerrar }: { ejercicios: DatosCuentasProveedor[
 }
 
 export function SusCuentas() {
-  const { datos, repetidas, actor, movil } = useFicha()
+  const { datos, repetidas, actor, movil, guardar } = useFicha()
   const f = datos.ficha
   const empresaId = datos.opciones.empresa?.id ?? null
   const { datos: d, error, recargar } = useCuentas(f.accountId, empresaId)
@@ -202,6 +230,18 @@ export function SusCuentas() {
   const saldo = APUNTES.length ? textoSaldo(extracto(APUNTES).at(-1)!.saldo) : null
   const ultimo = APUNTES.length ? [...APUNTES].sort((a, b) => a.fecha.localeCompare(b.fecha)).at(-1)! : null
 
+  // Los tipos de gasto que se pueden elegir: los no ocultos (y el suyo aunque lo esté, regla 30), los más usados primero.
+  const tipos: TipoElegible[] = porUso(
+    datos.tiposGasto.filter((t) => !t.oculto || t.id === f.expenseCategoryId), (t) => t.id, datos.otros.map((o) => o.expenseCategoryId),
+  ).map((t) => ({ id: t.id, code: t.pgcAccountHint, titulo: `${t.name} → ${cuentaEnLaFicha(datos.opciones, t.pgcAccountHint)}${t.oculto ? ' (oculto en tu cuenta)' : ''}` }))
+  const facturas = lineas.find((l) => l.clave === 'facturas')
+  const elegirTipo = (id: string) => hacer(facturas!, async () => {
+    const r = await guardar({ expenseCategoryId: id })
+    if (r.errores.length) throw new Error(r.errores.map((e) => e.mensaje).join(' '))
+    // Si tenía una cuenta suya, vuelve a la de su tipo.
+    if (facturas?.propia) await quitarCuentaProveedor(empresaId, f.id, 'gasto', actor.name)
+  }, `Sus facturas van ahora a ${cuentaEnLaFicha(datos.opciones, datos.tiposGasto.find((x) => x.id === id)?.pgcAccountHint ?? '')}, por su tipo de gasto «${datos.tiposGasto.find((x) => x.id === id)?.name ?? ''}».`)
+
   const hacer = async (l: LineaCuenta, que: () => Promise<void>, frase: string) => {
     setHecho(null); setFallo(null)
     try { await que(); setHecho(frase); recargar() } catch (e) { setFallo(e instanceof Error ? e.message : `No se ha podido cambiar: ${l.etiqueta}.`) }
@@ -213,6 +253,7 @@ export function SusCuentas() {
         <Tarjeta titulo="Sus cuentas">
           {lineas.map((l) => (
             <FilaCuenta key={l.clave} l={l}
+              {...(l.clave === 'facturas' ? { tipos, elegirTipo, idCambiar: 'campo-expenseCategoryId' } : {})}
               cambiar={(id) => hacer(l, () => cambiarCuentaProveedor(empresaId, f.id, l.papel!, id, actor.name),
                 `${QUE_CAMBIA[l.clave] ?? l.etiqueta} ${l.opciones.find((o) => o.id === id)?.titulo ?? ''}. Queda en el historial del plan.`)}
               quitar={() => hacer(l, () => quitarCuentaProveedor(empresaId, f.id, l.papel!, actor.name),
@@ -226,7 +267,10 @@ export function SusCuentas() {
           ))}
           <div role="status" aria-live="polite">{hecho && <div className="cx-guardado">{hecho}</div>}</div>
           {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-          <p className="cx-ayuda" style={{ margin: '8px 0 0' }}>Cada línea se cambia con las cuentas de tu plan; las marcadas IA salen de lo que Folvy ha aprendido de sus facturas.</p>
+          <p className="cx-ayuda cxp-cuentas-pie">
+            Cada línea se cambia con las cuentas de tu plan; las marcadas IA salen de lo que Folvy ha aprendido de sus facturas.{' '}
+            <Link to={rutaTablasGenerales('tipos-de-gasto')}>Qué tipos de gasto usa tu negocio</Link>
+          </p>
         </Tarjeta>
         <Tarjeta titulo="Saldo y movimientos" accion={<button type="button" className="cx-enlace" aria-expanded={verExtracto} onClick={() => setVerExtracto((v) => !v)}>Ver extracto</button>}>
           <Dato etiqueta="Saldo con él" vacio="Sin apuntes todavía">{saldo && <>{saldo.importe} <span className="cx-dato-vacio">{saldo.lado}</span></>}</Dato>

@@ -231,7 +231,16 @@ function Contenido() {
   const [abierta, setAbierta] = useState<string | null>(null)
   const [anadiendo, setAnadiendo] = useState(false)
   const p = plan.datos
-  const filas = useMemo(() => (p ? filasPlan({ serie: p.serie, cuentas: p.cuentas, enlaces: p.enlaces, grupo, busqueda, orden }) : []), [p, grupo, busqueda, orden])
+  // «Qué se apunta aquí» de cada subcuenta de IVA: el ejemplo de su tipo en la tabla del C00 (respuesta 3).
+  const plainDe = useMemo(() => {
+    const m = new Map<string, string>()
+    if (!p) return m
+    const ejemplo = new Map(p.paraPropuestas.tiposIva.filter((t) => t.example).map((t) => [t.id, t.example!]))
+    const propias = new Set(p.cuentas.filter((c) => c.kind === 'own').map((c) => c.id))
+    for (const l of p.enlaces) if (l.entity === 'tax_rate' && propias.has(l.companyAccountId) && ejemplo.has(l.entityId)) m.set(l.companyAccountId, ejemplo.get(l.entityId)!)
+    return m
+  }, [p])
+  const filas = useMemo(() => (p ? filasPlan({ serie: p.serie, cuentas: p.cuentas, enlaces: p.enlaces, grupo, busqueda, orden, plainDe }) : []), [p, grupo, busqueda, orden, plainDe])
   // Lo que propone la IA (tarea 5). Los apuntes llegan con el C04: sin ellos no hay «sin uso».
   const propuestas = useMemo(() => (p && p.activo ? propuestasDelPlan({
     digitos: p.digitos, serie: p.serie, cuentas: p.cuentas, enlaces: p.enlaces,

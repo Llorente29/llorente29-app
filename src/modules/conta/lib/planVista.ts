@@ -12,6 +12,10 @@
 //     debajo, en gris; con «Todas», en orden de código.
 //   · Buscar por nombre, número, «qué se apunta aquí» o palabra clave:
 //     «alquiler» encuentra la 621 por lo que se apunta en ella.
+//   · «Qué se apunta aquí» en TODA cuenta de apunte (respuesta 3): la suya; si
+//     su hoja no tiene uno propio, el de la cuenta de arriba más cercana que lo
+//     tenga (40000000 → el de la 400). Las subcuentas de IVA, el ejemplo de su
+//     tipo en la tabla del C00 (`plainDe`); las de terceros llevan «1 proveedor».
 
 import type { Entidad, EstadoCuenta, Papel } from '@/modules/conta/lib/planEmpresa'
 
@@ -68,6 +72,16 @@ export interface EntradaVista {
   grupo: number | null
   busqueda: string
   orden: 'usadas' | 'todas'
+  /** «Qué se apunta aquí» que no sale de la serie: el de cada subcuenta de IVA (id de cuenta → ejemplo del tipo, C00). */
+  plainDe?: ReadonlyMap<string, string>
+}
+
+/** El «qué se apunta aquí» de una cuenta del cuadro: el suyo o el de la cuenta de arriba más cercana. */
+export function plainHeredado(code: string, porCodigo: ReadonlyMap<string, CuentaSeriePlan>): string | null {
+  for (let s = porCodigo.get(code); s; s = s.parentCode ? porCodigo.get(s.parentCode) : undefined) {
+    if (s.plainName) return s.plainName
+  }
+  return null
 }
 
 /**
@@ -83,8 +97,17 @@ export function filasPlan(e: EntradaVista): FilaPlan[] {
   const buscando = e.busqueda.trim() !== ''
   const serie = e.serie.filter((s) => s.code.length > 1 && (buscando || e.grupo === null || s.groupCode === e.grupo))
   const usadaCuenta = (c: CuentaPlan) => c.kind === 'own' || (enlacesDe.get(c.id)?.length ?? 0) > 0
+  const serieCodigo = new Map(e.serie.map((s) => [s.code, s]))
+  const deTercero = (c: CuentaPlan) => (enlacesDe.get(c.id) ?? []).some((l) => l.role === 'principal' && ['supplier', 'customer', 'bank_account'].includes(l.entity))
+  const plainDe = (c: CuentaPlan): string | null => {
+    if (c.plainName) return c.plainName
+    const propio = e.plainDe?.get(c.id)
+    if (propio) return propio
+    if (c.kind === 'own' && deTercero(c)) return null // ya dice «1 proveedor»
+    return plainHeredado(c.templateCode, serieCodigo)
+  }
   const filaCuenta = (c: CuentaPlan, tipo: 'cuenta' | 'subcuenta'): FilaPlan => ({
-    clave: c.id, tipo, numero: c.code, titulo: c.name, plain: c.plainName, lleva: loQueLleva(enlacesDe.get(c.id) ?? []),
+    clave: c.id, tipo, numero: c.code, titulo: c.name, plain: plainDe(c), lleva: loQueLleva(enlacesDe.get(c.id) ?? []),
     origen: c.source === 'ai_accepted' || c.kind === 'own' ? 'tuya' : 'serie', usada: usadaCuenta(c), cuentaId: c.id, estado: c.status,
   })
 

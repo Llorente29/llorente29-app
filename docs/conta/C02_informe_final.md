@@ -28,6 +28,7 @@ Julio. El PR no se fusiona sin «fusiona».
 | `20261007T0150_c02_deshacer_cambio_plan` | Deshacer una subcuenta, cambio de plan, guarda del perfil | 1 |
 | `20261007T0160_c02_cuentas_del_proveedor` | Papeles del proveedor: gasto, pago, suplidos | 1 |
 | `20261007T0180_c02_propuestas_plan` | Contestar las propuestas; el IVA nombrado por su tipo | 1 |
+| `20261007T0185_c02_lectura` | SELECT a `conta_lectura` (si existe) sobre las cuatro tablas del plan: los agentes leen desde el primer día | 1 |
 | `20261007T0170_c02_elimina` | **Borra** `supplier.ledger_account_code` (copia antes) | **2, con `autorizo`**, después de que el front que ya no la lee esté en producción (Vercel READY) |
 
 Medido en producción, en solo lectura, el 05/10:
@@ -53,7 +54,6 @@ Ninguna toca el camino del pedido: son tablas y funciones de contabilidad. Aun a
 
 ## Pendiente, fuera del C02
 
-- **El usuario de solo lectura** de los agentes en producción tiene que poder leer `pgc_account` y las tres tablas `company_account*` antes de que el agente «Plan contable» corra allí.
 - **«Por hacer» no tiene pantalla todavía.** La bandeja de propuestas de confianza baja vive en la pantalla del plan («Para revisar») hasta que exista.
 - **Llegan con el C04 (factura recibida):**
   - los apuntes del extracto y del saldo;

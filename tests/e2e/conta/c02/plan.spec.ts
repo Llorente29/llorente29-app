@@ -45,6 +45,10 @@ test('cuenta A: activar, buscar «alquiler», añadir y deshacer, ocultar y volv
   await expect(plan.getByRole('row').filter({ hasText: /^400Proveedores/ })).toBeVisible()
   await expect(plan.getByRole('row').filter({ hasText: 'Acreedores · Locales del Norte (alquiler)' })).toContainText('41000001')
   await expect(plan.getByRole('row').filter({ hasText: /^47200021IVA soportado 21 %/ })).toContainText('1 tipo de IVA')
+  // Respuesta 3: «qué se apunta aquí» también en las cuentas de apunte. La 40000000
+  // hereda el de la 400; la 47200010, el ejemplo de su tipo en la tabla del C00.
+  await expect(plan.getByRole('row').filter({ hasText: /^40000000/ })).toContainText('Lo que debes a quienes te venden género')
+  await expect(plan.getByRole('row').filter({ hasText: /^47200010/ })).toContainText('Hostelería, alimentos, transporte')
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/plan-ordenador.png`, fullPage: true })
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])

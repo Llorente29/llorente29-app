@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import serie from '../../../../supabase/conta/pgc/serie.json'
 import ref from '../../../../docs/conta/referencia/serie.json'
 import { activar } from '@/modules/conta/lib/planEmpresa'
-import { cuentasPorGrupo, encaja, filasPlan, loQueLleva, resumenPlan, type CuentaPlan, type CuentaSeriePlan, type EnlacePlan } from '@/modules/conta/lib/planVista'
+import { cuentasPorGrupo, encaja, filasPlan, loQueLleva, plainHeredado, resumenPlan, type CuentaPlan, type CuentaSeriePlan, type EnlacePlan } from '@/modules/conta/lib/planVista'
 
 type Fila = Record<string, unknown>
 const SERIE: CuentaSeriePlan[] = serie.cuentas.filter((c) => c.plan === 'pymes')
@@ -76,3 +76,37 @@ describe('cifras y resumen', () => {
     expect([...cuentasPorGrupo(CUENTAS).keys()].sort()).toEqual([1, 2, 3, 4, 5, 6, 7])
   })
 })
+
+describe('«qué se apunta aquí» en toda cuenta de apunte (respuesta 3)', () => {
+  // Los ejemplos de los tipos de IVA, de la tabla del C00 (no del código).
+  const ejemplo = new Map(filas('tax_rate').map((t) => [String(t.code), String(t.example)]))
+  const plainDe = new Map(ENLACES.filter((l) => l.entity === 'tax_rate' && ejemplo.has(l.entityId) && CUENTAS.find((c) => c.id === l.companyAccountId)?.kind === 'own')
+    .map((l) => [l.companyAccountId, ejemplo.get(l.entityId)!]))
+  // Las de la serie, como las deja la base al activar: plain_name de su propia hoja (null si no tiene).
+  const comoEnLaBase = CUENTAS.map((c) => (c.kind === 'template' ? { ...c, plainName: SERIE.find((s) => s.code === c.templateCode)?.plainName ?? null } : c))
+  const f = filasPlan({ serie: SERIE, cuentas: comoEnLaBase, enlaces: ENLACES, grupo: 4, busqueda: '', orden: 'todas', plainDe })
+  const de = (n: string) => f.find((x) => x.numero === n)!
+
+  it('una hoja sin texto propio hereda el de su cuenta de arriba (40000000 → el de la 400)', () => {
+    expect(SERIE.find((s) => s.code === '4000')!.plainName).toBeNull()
+    expect(de('40000000').plain).toBe(SERIE.find((s) => s.code === '400')!.plainName)
+    expect(de('40000000').plain).not.toBeNull()
+  })
+  it('las subcuentas de IVA, el ejemplo de su tipo en la tabla del C00; las de terceros, sin texto (llevan «1 proveedor»)', () => {
+    expect(de('47200010').plain).toBe('Hostelería, alimentos, transporte')
+    expect(de('47200021').plain).toBe('Casi todo lo que compras')
+    expect(de('40000001')).toMatchObject({ plain: null, lleva: '1 proveedor' })
+  })
+  it('toda cuenta de apunte con texto en su cadena lo enseña; las que no lo tienen en ninguna parte, se cuentan', () => {
+    const cadena = new Map(SERIE.map((x) => [x.code, x]))
+    const deberia = (code: string) => plainHeredado(code, cadena) !== null
+    const apunte = f.filter((x) => x.cuentaId && x.tipo === 'cuenta')
+    // Las que tienen texto en su cadena lo enseñan, todas.
+    expect(apunte.filter((x) => deberia(comoEnLaBase.find((c) => c.id === x.cuentaId)!.templateCode) && !x.plain).map((x) => x.numero)).toEqual([])
+    // Medido el 05/10 con la serie real: en el grupo 4, 17 de 73 hojas llevan texto
+    // (propio o heredado). «Qué se apunta aquí» está escrito para 58 cuentas
+    // (en-la-calle.json); el resto no tiene texto en ninguna cuenta de arriba.
+    expect([apunte.filter((x) => x.plain).length, apunte.length]).toEqual([17, 73])
+  })
+})
+

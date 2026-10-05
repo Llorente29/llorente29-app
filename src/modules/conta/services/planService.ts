@@ -37,7 +37,8 @@ export interface DatosPlan {
   paraPropuestas: {
     proveedores: ProveedorPropuesta[]
     gastos: { id: string; name: string; pgcHint: string | null }[]
-    tiposIva: { id: string; name: string; rate: number }[]
+    /** Con el ejemplo de la tabla del C00: es el «qué se apunta aquí» de su 472/477 (respuesta 3). */
+    tiposIva: { id: string; name: string; rate: number; example: string | null }[]
     contestadas: string[]
   }
 }
@@ -62,7 +63,7 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
     leer<Fila>(tabla('supplier').select('id, name, expense_category_id, vat_regime, country_code').eq('account_id', accountId).is('archived_at', null).order('name'), 'los proveedores'),
     leer<Fila>(tabla('treasury_account').select('id, name').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'bank').eq('is_active', true).order('name'), 'los bancos'),
     leer<Fila>(tabla('expense_category').select('id, name, pgc_account_hint, supplier_account_leaf, company_id').or(`is_system.eq.true,account_id.eq.${accountId}`), 'los tipos de gasto'),
-    leer<Fila>(tabla('tax_rate').select('id, name, rate, company_id').eq('tax_system', sistema).eq('treatment', 'taxed')
+    leer<Fila>(tabla('tax_rate').select('id, name, rate, example, company_id').eq('tax_system', sistema).eq('treatment', 'taxed')
       .or(`is_system.eq.true,account_id.eq.${accountId}`).or(`valid_to.is.null,valid_to.gte.${hoy}`), 'los tipos de IVA'),
     leer<Fila>(tabla('ai_suggestion').select('reason_key').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'plan'), 'las propuestas contestadas'),
   ])
@@ -90,7 +91,7 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
         }
       }),
       gastos: [...gastoDe.values()].map((g) => ({ id: String(g.id), name: String(g.name), pgcHint: (g.pgc_account_hint as string) ?? null })),
-      tiposIva: tipos.filter(deEsta).map((t) => ({ id: String(t.id), name: String(t.name), rate: Number(t.rate) })),
+      tiposIva: tipos.filter(deEsta).map((t) => ({ id: String(t.id), name: String(t.name), rate: Number(t.rate), example: (t.example as string) ?? null })),
       contestadas: contestadas.map((c) => String(c.reason_key)),
     },
   }

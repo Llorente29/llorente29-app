@@ -80,11 +80,14 @@ test.describe('cuenta A', () => {
       await expect(page.getByText('Guardado: IBAN comprobado.')).toBeVisible()
       if (movil(page)) return
 
+      // C02 (respuesta 3): el tipo de gasto se elige desde la tarjeta «Sus cuentas»,
+      // en el «Cambiar» de «Sus facturas se apuntan en» (el mismo #campo-expenseCategoryId).
       await page.goto(ficha(id, 'contabilidad'))
-      const tipo = page.locator('#campo-expenseCategoryId')
-      const primero = await tipo.locator('option').nth(1).getAttribute('value')
+      await page.locator('#campo-expenseCategoryId').click()
+      const tipo = page.getByRole('combobox', { name: 'Cuenta: Sus facturas se apuntan en' })
+      const primero = await tipo.locator('option[value^="tipo:"]').first().getAttribute('value')
       await tipo.selectOption(primero!)
-      await expect(page.getByText(/^Guardado: sus facturas van a /)).toBeVisible()
+      await expect(page.getByRole('status').getByText(/^Sus facturas van ahora a \d{8} · .+, por su tipo de gasto «.+»\.$/)).toBeVisible()
 
       await page.goto(ficha(id, 'contactos'))
       for (const [papel, nombreC, dato] of [['Pedidos', 'Ana Pedidos', '600000001'], ['Administración', 'Luis Admin', 'admin@e2e.test']] as const) {
