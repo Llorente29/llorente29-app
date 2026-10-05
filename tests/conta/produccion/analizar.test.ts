@@ -7,9 +7,12 @@
 //     vuelta-atras-r02-noche2-20261004.txt (llegó a main después, desde 7470dc78).
 //   · La de datos del C01b, ya aplicada (real 37219796909): copia fija en
 //     tanda-c01b-datos-20261004.txt.
+//   · La eliminación del C01b (0140), ya aplicada (columnas fuera y copia en
+//     su tabla, medido el 05/10): copia fija en tanda-c01b-elimina-20261004.txt,
+//     con su vuelta atrás en vuelta-atras-c01b-elimina-20261004.txt.
 //   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): la
-//     eliminación del C01b (0140). Al reescribir el manifiesto para otra
-//     tanda, esta parte se reescribe con él.
+//     tanda 1 del C02, con lo que existía en producción el 05/10. Al reescribir
+//     el manifiesto para otra tanda, esta parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -153,8 +156,8 @@ describe('la tanda de datos del C01b (ya aplicada, real 37219796909), tal cual',
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): la eliminación del C01b (0140)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la eliminación del C01b (0140), ya aplicada', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c01b-elimina-20261004.txt'
   const viva = leerTanda(MANIFIESTO)
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c01b-0140-20261004.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
@@ -179,11 +182,41 @@ describe('la tanda de AHORA (manifiesto vivo): la eliminación del C01b (0140)',
   })
 
   it('su vuelta atrás está en el manifiesto de vuelta atrás, y devuelve las cuatro con su tipo', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c01b-elimina-20261004.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261006T0140_c01b_elimina.down.sql'])
     const sql = readFileSync(atras[0], 'utf8')
     expect(sql).toContain('add column if not exists email text')
     expect(sql).toContain("add column if not exists usual_vat_rates numeric[] not null default '{}'")
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): la tanda 1 del C02', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c02-tanda1-20261005.json'))
+  const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
+
+  it('son las doce del C02 sin la 0170 (que va sola, en la tanda 2), en orden', () => {
+    expect(viva.map((f) => f.match(/T(\d{4})_/)![1])).toEqual(['0100', '0110', '0115', '0120', '0130', '0140', '0150', '0160', '0180', '0185', '0187', '0189'])
+    expect(viva.some((f) => f.includes('0170'))).toBe(false)
+  })
+
+  it('PARA solo la 0130, por rellenar las columnas que ella misma añade a expense_category', () => {
+    expect(paran()).toEqual(['supabase/migrations/20261007T0130_c02_proveedor_400_410.sql'])
+    const motivos = decidir(p.porFichero[paran()[0]], p.existe).para
+    expect(motivos).toHaveLength(2)
+    for (const m of motivos) expect(m).toMatch(/^cambia_datos · tabla · `?public\.expense_category`? · update/)
+    const sql = readFileSync(paran()[0], 'utf8')
+    expect(sql.match(/^update public\.expense_category\s+set supplier_account_leaf = '(4000|4100)',\s+supplier_account_ref = /gm)).toHaveLength(2)
+  })
+
+  it('la 0130 está nombrada para «autorizo» en la cabecera del manifiesto', () => {
+    expect(readFileSync(MANIFIESTO, 'utf8')).toMatch(/^#\s+20261007T0130_c02_proveedor_400_410\.sql\s*$/m)
+  })
+
+  it('su vuelta atrás es la de las doce, al revés', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
   })
 })
 

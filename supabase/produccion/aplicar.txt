@@ -6,28 +6,46 @@
 # verde del mismo commit, en REAL (un fichero por transacción, para al primer
 # fallo).
 #
-# C01b · Ficha de proveedor, TANDA DE ELIMINACIÓN (encargo §9). Va después del
-# real de la tanda de datos (37219796909, 04/10), del antes = después en
-# producción (0 faltan en las dos cuentas) y de la fusión del front (#143,
-# Vercel READY, 04/10). PARA a propósito y va en el campo «autorizo», nombre
-# entero:
+# C02 · Plan contable, TANDA 1 (respuesta 6). Desde la rama conta/c02-plan-contable,
+# ANTES de fusionar el PR #147. Todo nuevo del C02, fuera del camino del pedido:
+# el workflow cuenta 0 nombres de su lista (CAMINO_TABLAS / CAMINO_FUNCIONES).
 #
-#   20261006T0140_c01b_elimina.sql
+# UNO PARA y va en el campo «autorizo», nombre entero:
 #
-# Borra supplier.email, .phone, .address y .usual_vat_rates (notify_group se
-# queda). Antes copia los valores en c01b_columnas_eliminadas. Sus guardas
-# paran si compliance_docs_due o migrate_kitchen_core no son las de la 0120
-# (por su md5) o si falta algo en su sitio nuevo.
-# Medido en producción el 04/10 a las 19:37 (solo lectura): 0 funciones,
-# vistas, políticas ni crons las nombran; md5 de las dos funciones = los de la
-# guarda (7a8c769e…, ab2746d6…); con valor: Foodint 1 email, 3 teléfonos,
-# 4 direcciones; Folvy Interno 1, 2 y 2; ningún IVA. Ningún push a main ha
-# tocado supabase/functions desde la revisión de las 69 funciones de borde.
-# Cierre: el «drop column» toma ACCESS EXCLUSIVE sobre supplier un instante.
-# Medido: 0 disparadores de tablas del pedido (ventas, pedidos, despacho,
-# cocina, stock) nombran supplier, ni ningún cron; quien lo lee es compras
-# (disparadores de article_supplier, goods_receipt y goods_receipt_line) y el
-# recálculo nocturno (kitchen-recompute-nightly, 04:00 UTC). Con lock_timeout
-# de 5 s, si está ocupada, falla en vez de esperar.
+#   20261007T0130_c02_proveedor_400_410.sql
+#
+# Para por dos «update» sobre expense_category, que ya existe. Solo rellenan
+# las dos columnas que la propia 0130 acaba de añadir (supplier_account_leaf y
+# supplier_account_ref), vacías hasta ese momento: no cambian ningún dato que
+# ya estuviera. Medido en producción el 05/10 (solo lectura; catálogo global,
+# tabla entera): 12 tipos de gasto, los 12 de serie; 3 van a la 4000 (60x) y
+# 9 a la 4100 (62x); 0 sin regla, así que su guarda pasa.
+#
+# El resto solo añade sobre algo existente (analizado el 05/10 con lo que
+# existe hoy: ai_suggestion, company_tax_profile, expense_category,
+# official_source, supplier, tax_rate, treasury_account, withholding_rate; ni una
+# función del C02):
+#   · 0110 inserta las tres fuentes del BOE en official_source;
+#   · 0120 cambia el CHECK de company_tax_profile (6 a 12 dígitos; el único
+#     perfil tiene 8) y 0150 le pone un disparador; 0180 amplía el CHECK de
+#     ai_suggestion ('modelo', 'plan');
+#   · 0187 pone un disparador AFTER DELETE en supplier, treasury_account,
+#     expense_category, tax_rate y withholding_rate.
+# Cierres: los «add constraint», «add column» y «create trigger» toman un cierre
+# un instante sobre esas tablas, ninguna del camino del pedido. Avisos para una
+# persona: los «execute» dinámicos de 0120, 0140, 0150 y 0185 son permisos
+# (RLS, grant select / execute), legibles en el fichero.
+#
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261006T0140_c01b_elimina.sql
+supabase/migrations/20261007T0100_c02_pgc_account.sql
+supabase/migrations/20261007T0110_c02_pgc_serie.sql
+supabase/migrations/20261007T0115_c02_pgc_definicion.sql
+supabase/migrations/20261007T0120_c02_plan_empresa.sql
+supabase/migrations/20261007T0130_c02_proveedor_400_410.sql
+supabase/migrations/20261007T0140_c02_duplicadas_cerrar_palabras.sql
+supabase/migrations/20261007T0150_c02_deshacer_cambio_plan.sql
+supabase/migrations/20261007T0160_c02_cuentas_del_proveedor.sql
+supabase/migrations/20261007T0180_c02_propuestas_plan.sql
+supabase/migrations/20261007T0185_c02_lectura.sql
+supabase/migrations/20261007T0187_c02_enlaces_sin_dueno.sql
+supabase/migrations/20261007T0189_c02_renombrar_subcuenta.sql
