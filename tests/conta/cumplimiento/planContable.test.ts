@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import correcciones from '../../../supabase/conta/pgc/correcciones.json'
 import serie from '../../../supabase/conta/pgc/serie.json'
 import {
-  PLANES, choques, construirSerie, cuadro, hojas, rellenar, revisarCorreccion, quintaParte, textoVigente,
+  PLANES, choques, construirSerie, cuadro, definicionesBoe, hojas, primeraFrase, rellenar, revisarCorreccion, quintaParte, textoVigente,
 } from '../../../scripts/conta/lib/planContable.mjs'
 
 type Plan = 'pymes' | 'general'
@@ -186,5 +186,59 @@ describe('las definiciones que usa la regla 400/410 son literales del BOE', () =
     const q = textoVigente(T.pymes, 'grupo4-2')!.replace(/\n/g, ' ')
     expect(q).toContain(DEFINICION_400)
     expect(q).toContain(DEFINICION_410)
+  })
+})
+
+// Respuesta 4 del C02: la reserva de «qué se apunta aquí» es la primera frase
+// de la definición de la quinta parte. Casos sacados del texto real, uno por
+// cada forma en que el BOE escribe una definición.
+describe('definiciones de la quinta parte (reserva de «qué se apunta aquí»)', () => {
+  const D = definicionesBoe(T.pymes, 'pymes')
+  it('una cuenta con su encabezado: la primera frase, literal', () => {
+    expect(D.get('400')).toBe('Deudas con suministradores de mercancías y de los demás bienes definidos en el grupo 3.')
+    expect(D.get('629')).toBe('Los no comprendidos en las cuentas anteriores.')
+  })
+  it('encabezados de varias cuentas: lista («570/571», «600/601/602/607») y rango («700/705», «230/237»)', () => {
+    expect(D.get('570')).toBe('Disponibilidades de medios líquidos en caja.')
+    expect(D.get('571')).toBe(D.get('570'))
+    expect(D.get('600')).toBe('Aprovisionamiento de la empresa de bienes incluidos en los subgrupos 30, 31 y 32.')
+    expect(D.get('607')).toBe(D.get('600'))
+    expect(D.get('603')).not.toBe(D.get('600')) // no está en la lista: no se la lleva
+    expect(D.get('702')).toBe('Transacciones, con salida o entrega de los bienes o servicios objeto de tráfico de la empresa, mediante precio.')
+    expect(D.get('233')).toBe(D.get('230'))
+  })
+  it('un subtítulo corto va con la frase que lo define («Arrendamientos.» en la 621)', () => {
+    expect(D.get('621')).toBe('Arrendamientos. Los devengados por el alquiler o arrendamiento operativo de bienes muebles e inmuebles en uso o a disposición de la empresa.')
+  })
+  it('el subgrupo, cuando el primer párrafo tras su lista lo define; las notas no cuentan', () => {
+    expect(D.get('30')).toBe('Bienes adquiridos por la empresa y destinados a la venta sin transformación.')
+    expect(D.get('22')).toMatch(/^Activos no corrientes que sean inmuebles .*en lugar de para…$/)
+    expect(D.has('41')).toBe(false) // «Cuando los acreedores sean empresas del grupo…»: una nota
+    expect(D.has('56')).toBe(false) // «La parte de las fianzas y depósitos…»: otra
+  })
+  it('lo que sigue al encabezado y es el movimiento, no es definición', () => {
+    expect(D.has('1030')).toBe(false) // «Su movimiento es el siguiente:»
+    expect(D.has('6301')).toBe(false) // «a) Se cargará:»
+  })
+  it('primera frase: corta en el punto que abre otra frase, no en abreviaturas', () => {
+    expect(primeraFrase('Uno. Dos.')).toBe('Uno.')
+    expect(primeraFrase('Según el art. 33 del texto. Otra.')).toBe('Según el art. 33 del texto.')
+    expect(primeraFrase('Activos para:')).toBe('Activos para…')
+  })
+  it('con la herencia hacia arriba, ninguna hoja de pymes se queda sin texto (medido: 0 de 615)', () => {
+    const cuentas = serie.cuentas.filter((c) => c.plan === 'pymes')
+    const por = new Map(cuentas.map((c) => [c.code, c]))
+    const tiene = (code: string | null): boolean => !!code && (!!por.get(code)?.plain_name || !!por.get(code)?.boe_definition || tiene(por.get(code)?.parent_code ?? null))
+    const hojas_ = cuentas.filter((c) => c.is_leaf)
+    expect(hojas_.length).toBe(615)
+    expect(hojas_.filter((c) => !tiene(c.code)).map((c) => c.code)).toEqual([])
+  })
+  it('en el general quedan sin texto los grupos 8 y 9: el BOE solo da su movimiento (medido: 42 de 714)', () => {
+    const cuentas = serie.cuentas.filter((c) => c.plan === 'general')
+    const por = new Map(cuentas.map((c) => [c.code, c]))
+    const tiene = (code: string | null): boolean => !!code && (!!por.get(code)?.plain_name || !!por.get(code)?.boe_definition || tiene(por.get(code)?.parent_code ?? null))
+    const sin = cuentas.filter((c) => c.is_leaf && !tiene(c.code))
+    expect([sin.length, cuentas.filter((c) => c.is_leaf).length]).toEqual([42, 714])
+    expect(new Set(sin.map((c) => c.group_code))).toEqual(new Set([8, 9]))
   })
 })

@@ -7,7 +7,9 @@
 //   · el cuadro de cuentas (cuarta parte) de cada plan;
 //   · más supabase/conta/pgc/correcciones.json (D1: nada se corrige sin cita
 //     literal de la quinta parte del mismo texto; se comprueba aquí);
-//   · más supabase/conta/pgc/en-la-calle.json («qué se apunta aquí», de Folvy).
+//   · más supabase/conta/pgc/en-la-calle.json («qué se apunta aquí», de Folvy);
+//   · más la primera frase de la definición de cada código en la quinta parte
+//     (boe_definition): la reserva de «qué se apunta aquí» (respuesta 4).
 //
 // Y comprueba, antes de escribir nada, que el artículo del RD 1/2021 que
 // modifica el plan de pymes (artículo segundo) sigue sin tocar el cuadro de
@@ -18,6 +20,7 @@
 //   · supabase/conta/pgc/serie.json — cada cuenta con su fuente, huella y,
 //     si la hay, su corrección (el «fichero de referencia» del agente).
 //   · supabase/migrations/20261007T0110_c02_pgc_serie.sql
+//   · supabase/migrations/20261007T0115_c02_pgc_definicion.sql
 //
 //   node scripts/conta/plan.mjs             → genera
 //   node scripts/conta/plan.mjs comprobar   → regenera en memoria y falla si
@@ -25,12 +28,13 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { PLANES, construirSerie, equivalencias, textoVigente } from './lib/planContable.mjs'
+import { PLANES, construirSerie, definicionesBoe, equivalencias, textoVigente } from './lib/planContable.mjs'
 
 const FUENTES = 'docs/conta/fuentes'
 const PGC = 'supabase/conta/pgc'
 const SERIE = join(PGC, 'serie.json')
 const MIGRACION = 'supabase/migrations/20261007T0110_c02_pgc_serie.sql'
+const MIGRACION_DEF = 'supabase/migrations/20261007T0115_c02_pgc_definicion.sql'
 const EQUIVALENCIAS = join(PGC, 'equivalencias.json')
 const modo = process.argv[2] ?? 'generar'
 
@@ -69,6 +73,8 @@ for (const plan of Object.keys(PLANES)) {
   const { cuentas, hallazgos } = construirSerie(f.texto, plan, correcciones)
   fallos.push(...hallazgos)
   construidas[plan] = cuentas
+  const defs = definicionesBoe(f.texto, plan)
+  const enSerie = new Set(cuentas.map((c) => c.code))
   const verificado = f.fecha.slice(0, 10)
   for (const c of cuentas) {
     const pn = calle[c.code] ?? null
@@ -76,7 +82,7 @@ for (const plan of Object.keys(PLANES)) {
     const reforma = c.norma && c.norma !== PLANES[plan].idBoe ? `, redacción vigente desde ${c.desde} (${c.norma})` : ''
     const corr = c.correccion ? `; título corregido con cita de la ${c.correccion === 'espacio' ? 'propia línea del cuadro' : 'quinta parte'} (${c.correccion}, supabase/conta/pgc/correcciones.json)` : ''
     salida.push({
-      plan, code: c.code, name: c.name, boe_name: c.boeName, correction_kind: c.correccion, plain_name: pn,
+      plan, code: c.code, name: c.name, boe_name: c.boeName, correction_kind: c.correccion, plain_name: pn, boe_definition: defs.get(c.code) ?? null,
       group_code: c.group, parent_code: c.parent, is_leaf: c.hoja,
       legal_ref: `${PLANES[plan].norma}, cuarta parte (cuadro de cuentas), grupo ${c.group}${reforma}${corr}`,
       valid_from: c.desde, boe_version_id: c.norma, source_key: PLANES[plan].fuente, source_sha256: f.sha256, verified_at: verificado,
@@ -87,6 +93,8 @@ for (const plan of Object.keys(PLANES)) {
     filas: cuentas.length, codigosSinGrupos: sinGrupos.length, hojas: cuentas.filter((c) => c.hoja).length,
     porDigitos: Object.fromEntries([1, 2, 3, 4, 5].map((n) => [n, cuentas.filter((c) => c.code.length === n).length])),
     corregidas: cuentas.filter((c) => c.correccion).length,
+    conDefinicion: cuentas.filter((c) => defs.has(c.code)).length,
+    definicionesFueraDelCuadro: [...defs.keys()].filter((k) => !enSerie.has(k)).sort(),
   }
 }
 for (const code of Object.keys(calle)) if (!usadasCalle.has(code)) fallos.push(`en-la-calle.json: la cuenta ${code} no existe en ningún plan.`)
@@ -142,14 +150,44 @@ const sql = [
   '',
 ].join('\n')
 
+const conDef = salida.filter((c) => c.boe_definition)
+const sqlDef = [
+  '-- ============================================================================',
+  '-- C02 · Plan contable — 2b · LA RESERVA DEL BOE de «qué se apunta aquí».',
+  '-- GENERADA por scripts/conta/plan.mjs: no se edita a mano.',
+  '--',
+  '-- Respuesta 4 del C02: toda cuenta de apunte sin texto propio ni heredado',
+  '-- enseña la primera frase de la DEFINICIÓN de la quinta parte del BOE, la del',
+  '-- código más cercano hacia arriba que la tenga, con «(PGC)» al final. Aquí',
+  '-- solo se guarda la de cada código que el BOE define; la herencia se resuelve',
+  '-- al enseñar. plain_name no se toca: cuando llegue el texto de hostelería, lo',
+  '-- sustituye sin migración.',
+  '--',
+  ...Object.entries(resumen).map(([p, r]) => `-- ${p}: ${r.conDefinicion} de ${r.filas} códigos con definición propia.`),
+  '--',
+  '-- SOLO AÑADE una columna a pgc_account (nueva en la 0100) y la rellena.',
+  '-- ============================================================================',
+  '',
+  'alter table public.pgc_account add column if not exists boe_definition text;',
+  "comment on column public.pgc_account.boe_definition is 'Primera frase de la definición de este código en la quinta parte del plan (BOE), literal. Reserva de «qué se apunta aquí» cuando no hay plain_name propio ni heredado; se enseña con «(PGC)». La herencia se resuelve al enseñar.';",
+  '',
+  'update public.pgc_account p set boe_definition = d.boe_definition',
+  '  from (values',
+  conDef.map((c) => `  (${q(c.plan)}, ${q(c.code)}, ${q(c.valid_from)}::date, ${q(c.boe_definition)})`).join(',\n'),
+  '  ) as d (plan, code, valid_from, boe_definition)',
+  ' where p.plan = d.plan and p.code = d.code and p.valid_from = d.valid_from;',
+  '',
+].join('\n')
+
 if (modo === 'comprobar') {
   const igual = (ruta, nuevo) => existsSync(ruta) && readFileSync(ruta, 'utf8') === nuevo
-  const distintos = [[SERIE, json], [MIGRACION, sql], [EQUIVALENCIAS, equivJson]].filter(([r, t]) => !igual(r, t)).map(([r]) => r)
+  const distintos = [[SERIE, json], [MIGRACION, sql], [MIGRACION_DEF, sqlDef], [EQUIVALENCIAS, equivJson]].filter(([r, t]) => !igual(r, t)).map(([r]) => r)
   if (distintos.length) { console.error(`La serie del plan contable no está al día (node scripts/conta/plan.mjs): ${distintos.join(', ')}`); process.exit(1) }
   console.log('Serie del plan contable al día.', JSON.stringify(resumen))
 } else {
   writeFileSync(SERIE, json)
   writeFileSync(MIGRACION, sql)
+  writeFileSync(MIGRACION_DEF, sqlDef)
   writeFileSync(EQUIVALENCIAS, equivJson)
   console.log('Serie del plan contable generada.', JSON.stringify(resumen, null, 1))
 }

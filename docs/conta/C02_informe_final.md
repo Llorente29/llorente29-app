@@ -22,6 +22,7 @@ Julio. El PR no se fusiona sin «fusiona».
 |---|---|---|
 | `20261007T0100_c02_pgc_account` | La tabla de la serie | 1 |
 | `20261007T0110_c02_pgc_serie` | La serie (generada por `plan.mjs`) | 1 |
+| `20261007T0115_c02_pgc_definicion` | La reserva de «qué se apunta aquí»: la primera frase de la definición de cada código en la quinta parte del BOE (generada por `plan.mjs`; pymes 450, general 492). `plain_name` no se toca | 1 |
 | `20261007T0120_c02_plan_empresa` | `company_account`, `company_account_link`, `company_account_log` y sus funciones; dígitos 6–12 | 1 |
 | `20261007T0130_c02_proveedor_400_410` | La marca 400/410 en `expense_category` | 1 |
 | `20261007T0140_c02_duplicadas_cerrar_palabras` | Fusionar, cerrar, palabras clave | 1 |
@@ -54,6 +55,8 @@ Ninguna toca el camino del pedido: son tablas y funciones de contabilidad. Aun a
 - **La e2e de Socios** contaba antes de que cargara la tarjeta.
 
 ## Pendiente, fuera del C02
+
+- **Textos de hostelería en «qué se apunta aquí» (C02b).** Ahora toda cuenta de apunte sin texto propio ni heredado enseña la definición del BOE con «(PGC)». Los textos de las cuentas que usa un restaurante (grupos 4 a 7) llegan como fichero de datos con cita, en un encargo corto, y sustituyen la reserva sin migración. En el plan general, los grupos 8 y 9 (42 cuentas) siguen solo con el título: el BOE solo da su movimiento.
 
 - **«Por hacer» no tiene pantalla todavía.** La bandeja de propuestas de confianza baja vive en la pantalla del plan («Para revisar») hasta que exista.
 - **Llegan con el C04 (factura recibida):**

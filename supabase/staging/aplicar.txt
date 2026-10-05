@@ -1,9 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02 · La 0187: al borrar un proveedor, banco, tipo de gasto,
-# tipo de IVA o retención se quitan sus enlaces del plan (con registro), y se
-# limpian los huérfanos (5 en staging, de la e2e de propuestas). Y su prueba.
-# Anterior: 37302680572 (0185 y su prueba, en verde).
-supabase/migrations/20261007T0187_c02_enlaces_sin_dueno.sql
-supabase/staging/sql/20261007_c02_prueba_sin_dueno.sql
+# 05/10/2026 · C02 · Respuesta 4: la 0115, reserva del BOE de «qué se apunta
+# aquí» (primera frase de la definición de la quinta parte, por código; la
+# herencia se resuelve al enseñar). Y su prueba.
+# Anterior: 37319503205 (0187 y su prueba, en verde).
+supabase/migrations/20261007T0115_c02_pgc_definicion.sql
+supabase/staging/sql/20261007_c02_prueba_definicion.sql

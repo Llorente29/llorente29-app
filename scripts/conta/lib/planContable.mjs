@@ -239,6 +239,72 @@ export function revisarCorreccion(c, { cuadroPorCodigo, quinta, textoBloque }) {
   return p
 }
 
+/**
+ * La primera frase de un párrafo del BOE: hasta el primer punto seguido de
+ * otra frase (mayúscula, comillas o paréntesis). Si el párrafo sigue en una
+ * lista («…en lugar de para:»), se cierra con «…».
+ */
+export function primeraFrase(parrafo) {
+  const t = String(parrafo).replace(/\u00ad/g, '').replace(/\s+/g, ' ').trim()
+  const m = t.match(/^(.+?\.)(?=\s+[«"(¿A-ZÁÉÍÓÚÑ])/)
+  const f = m ? m[1] : t
+  return f.endsWith(':') ? `${f.slice(0, -1)}…` : f
+}
+
+// Lo que sigue a un encabezado y NO es su definición: el movimiento, dónde
+// figura en el balance, o notas sobre otras cuentas («Cuando los acreedores
+// sean…», «La parte de las fianzas…»).
+const NO_DEFINE = /^(Su movimiento|Figurar|Con carácter general|Las cuentas|La cuenta|En esta cuenta|Estas cuentas|Cuando|La parte|[a-z]\d?\))/
+
+/**
+ * Reserva de «qué se apunta aquí» (respuesta 4 del C02): la primera frase de
+ * la DEFINICIÓN de cada código en la quinta parte del plan, versión vigente.
+ * Devuelve Map(código → frase), solo con los códigos que el BOE define:
+ *   · «400. Proveedores.» y su primer párrafo;
+ *   · encabezados de varias cuentas: «570/571. Caja,. . .» (lista) y
+ *     «230/237», «700/705. Ventas de . . .» (dos códigos no seguidos: rango);
+ *   · un subtítulo corto delante de la frase («Arrendamientos.» en la 621) va
+ *     con ella;
+ *   · el subgrupo («30.» y su título en mayúsculas), cuando el primer párrafo
+ *     tras su lista de cuentas lo define («Bienes adquiridos por la empresa…»).
+ * La herencia (el código más cercano hacia arriba) se resuelve al enseñar.
+ */
+export function definicionesBoe(texto, plan) {
+  const bs = bloques(texto)
+  const out = new Map()
+  for (let g = 1; g <= PLANES[plan].grupos; g++) {
+    const vs = bs.get(`grupo${g}-2`)
+    if (!vs) continue
+    const l = vigente(vs).lineas.map((x) => x.trim()).filter(Boolean)
+    for (let i = 0; i < l.length; i++) {
+      const sg = l[i].match(/^(\d{2})\.$/)
+      if (!sg || !l[i + 1] || l[i + 1] !== l[i + 1].toUpperCase()) continue
+      let j = i + 2
+      while (j < l.length && /^\d{3,5}\.$/.test(l[j]) && l[j + 1] && !/^\d/.test(l[j + 1])) j += 2
+      const p = l[j] ?? ''
+      if (j > i + 2 && !/^\d/.test(p) && !NO_DEFINE.test(p)) out.set(sg[1], primeraFrase(p))
+    }
+    for (let i = 0; i < l.length; i++) {
+      const m = l[i].match(/^(\d{3,5}(?:\/\d{3,5})*)(?:\.\s*|\s+|$)(.*)$/)
+      if (!m) continue
+      const codigos = m[1].split('/')
+      if (codigos.length === 1 && !m[2]) continue // la lista del subgrupo: «570.» y el título debajo
+      let lista = codigos
+      const [a, b] = codigos.map(Number)
+      if (codigos.length === 2 && codigos[0].length === codigos[1].length && b - a > 1) {
+        lista = []
+        for (let n = a; n <= b; n++) lista.push(String(n))
+      }
+      const sig = l[i + 1] ?? ''
+      if (/^\d{2,5}(\/\d{2,5})*(\.|\s|$)/.test(sig) || NO_DEFINE.test(sig)) continue
+      let frase = primeraFrase(sig)
+      if (frase.split(' ').length <= 3 && frase === sig && l[i + 2] && !/^\d/.test(l[i + 2])) frase = `${frase} ${primeraFrase(l[i + 2])}`
+      for (const c of lista) if (!out.has(c)) out.set(c, frase)
+    }
+  }
+  return out
+}
+
 /** Texto (literal, sin normalizar) de la versión vigente de un bloque, o null. */
 export function textoVigente(texto, id) {
   const vs = bloques(texto).get(id)

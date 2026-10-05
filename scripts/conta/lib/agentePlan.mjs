@@ -9,13 +9,14 @@
 //      ningún hallazgo. Si el BOE corrige una errata, la corrección sobra y se
 //      dice; si cambia una cita o aparece una diferencia nueva, también.
 //   2. La base: pgc_account es EXACTAMENTE supabase/conta/pgc/serie.json
-//      (mismos códigos, títulos, título del BOE, corrección, jerarquía y hojas).
+//      (mismos códigos, títulos, título del BOE, corrección, definición de la
+//      quinta parte, jerarquía y hojas).
 //
 // Rojo con el caso concreto. Pura: recibe el volcado y los textos.
 
 import { PLANES, construirSerie } from './planContable.mjs'
 
-const CAMPOS = ['name', 'boe_name', 'correction_kind', 'plain_name', 'group_code', 'parent_code', 'is_leaf', 'valid_from', 'source_key']
+const CAMPOS = ['name', 'boe_name', 'correction_kind', 'plain_name', 'boe_definition', 'group_code', 'parent_code', 'is_leaf', 'valid_from', 'source_key']
 
 export function revisarSerieEnTexto(textos, correcciones) {
   const out = []
