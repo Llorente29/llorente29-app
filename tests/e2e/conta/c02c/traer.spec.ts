@@ -73,6 +73,8 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
   const s = await entrarComo(page, CUENTA_A.email)
   // Si la pantalla se cae, que el log lo diga (el informe de Playwright no siempre se puede bajar).
   page.on('pageerror', (e) => console.log(`[error de la página] ${e.message}`))
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log(`[consola ${m.type()}] ${m.text().slice(0, 300)}`) })
+  page.on('framenavigated', (f) => { if (f === page.mainFrame()) console.log(`[navega] ${f.url()}`) })
   await borrarRestos(s)
   let id: string | null = null
   try {
@@ -94,7 +96,9 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     await expect(fila(page, '47510015')).toContainText('hay 2 iguales: 47510015 y 47510019')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/revisar-ordenador.png`, fullPage: true })
+    console.log(`[tras la captura] tabla: ${await page.getByRole('table', { name: 'Cuentas que se traen' }).count()}`)
     expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+    console.log(`[tras medir] tabla: ${await page.getByRole('table', { name: 'Cuentas que se traen' }).count()}`)
 
     // Sin decidir lo dudoso, no se sigue.
     const siguiente = page.getByRole('button', { name: 'Siguiente: traer el plan →' })

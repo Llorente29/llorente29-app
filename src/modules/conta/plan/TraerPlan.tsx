@@ -349,6 +349,15 @@ export function TraerPlan({ p, empezarDeCero, alTraer }: { p: DatosPlan; empezar
   const [revision, setRevision] = useState<Revision | null>(guardada?.version === 1 && guardada.filas ? guardada as Revision : null)
   const [importId, setImportId] = useState<string | null>(p.importacion?.estado === 'revision' ? p.importacion.id : null)
   const [paso, setPaso] = useState<Paso>(revision ? 2 : 1)
+  // Si el asistente se monta antes de que el plan relea la importación guardada,
+  // la adopta cuando llega (una vez por importación: la que se tira no vuelve).
+  const [vista, setVista] = useState<string | null>(importId)
+  const abierta = p.importacion?.estado === 'revision' ? p.importacion : null
+  if (abierta && abierta.id !== vista) {
+    setVista(abierta.id)
+    const g = abierta.revision as Partial<Revision>
+    if (!revision && g.version === 1 && g.filas) { setRevision(g as Revision); setImportId(abierta.id); setPaso(2) }
+  }
   const [fichas, setFichas] = useState<{ proveedores: FichaProveedor[]; bancos: FichaBanco[] } | null>(null)
   const hojas = useMemo(() => new Set(p.serie.filter((s) => s.isLeaf).map((s) => s.code)), [p.serie])
   const nombreFichero = (r: Revision) => `«${r.ficheros.join('», «')}» · ${resumir(r.lectura, { plan: p.plan, digitos: p.digitos }, hojas).frase}`
@@ -372,7 +381,7 @@ export function TraerPlan({ p, empezarDeCero, alTraer }: { p: DatosPlan; empezar
     const filas = proponer({ cuentas: resumen.cuentas, terceros: lectura.terceros, proveedores: f.proveedores, bancos: f.bancos, programa: datosPrograma(programa).nombre })
     const r: Revision = { version: 1, programa, ficheros: nombres, huella, lectura, filas }
     const id = await guardarImportacion(quien.companyId, programa, nombres, huella, r as unknown as Record<string, unknown>, null)
-    setImportId(id); setRevision(r)
+    setImportId(id); setVista(id); setRevision(r)
     // Nada que revisar: directo al 3 (encargo §5).
     setPaso(contar(filas).revisar === 0 ? 3 : 2)
     // El plan vuelve a leerse con la importación ya guardada: si la pantalla se monta de nuevo, sigue aquí.
