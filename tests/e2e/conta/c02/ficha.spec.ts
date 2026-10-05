@@ -64,6 +64,8 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   await expect(ext.getByText('Aún no hay apuntes con este proveedor.')).toBeVisible()
   await ext.getByRole('button', { name: 'Saldos por mes' }).click()
   await expect(ext.getByRole('button', { name: 'Saldos por mes' })).toHaveAttribute('aria-pressed', 'true')
+  // El extracto, en su propia captura (de elemento: no cambia el tamaño de la ventana).
+  await ext.screenshot({ path: `${DIR}/ficha-extracto-${lado(page)}.png` })
 
   // Las dos tarjetas siguen ahí antes de la captura (no el esqueleto).
   await expect(cuentas.locator('.cx-dato').filter({ hasText: 'Su cuenta' })).toBeVisible()

@@ -40,6 +40,8 @@ const QUE_CAMBIA: Record<string, string> = {
  * mientras lo vuelve a pedir, en vez del esqueleto.
  */
 const ULTIMO = new Map<string, DatosCuentasProveedor>()
+/** Los proveedores con el extracto abierto (misma razón). */
+const EXTRACTO_ABIERTO = new Set<string>()
 
 function useCuentas(accountId: string, companyId: string | null) {
   const clave = `${accountId}:${companyId ?? ''}`
@@ -165,7 +167,13 @@ export function SusCuentas() {
   const { datos: d, error, recargar } = useCuentas(f.accountId, empresaId)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
-  const [verExtracto, setVerExtracto] = useState(false)
+  // Si la pieza se vuelve a montar, el extracto sigue como estaba (abierto o cerrado).
+  const [verExtracto, setVer] = useState(() => EXTRACTO_ABIERTO.has(f.id))
+  const setVerExtracto = (v: boolean | ((x: boolean) => boolean)) => setVer((x) => {
+    const n = typeof v === 'function' ? v(x) : v
+    if (n) EXTRACTO_ABIERTO.add(f.id); else EXTRACTO_ABIERTO.delete(f.id)
+    return n
+  })
 
   if (!empresaId) {
     return <div className="cx-tarjeta"><Vacio titulo="Sus cuentas salen del plan contable de tu empresa." explicacion="Primero da de alta tu empresa en contabilidad." /></div>

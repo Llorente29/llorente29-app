@@ -90,6 +90,7 @@ function Formulario() {
   }
 
   return (
+    <>
     <div className="cx-formulario">
       {g.fallo && <div className="cx-error" role="alert">{g.fallo}</div>}
       <Campo campo="expenseCategoryId" etiqueta="Sus facturas se apuntan en"
@@ -123,7 +124,9 @@ function Formulario() {
         {verLista ? 'Cerrar la lista de tipos de gasto' : 'Elegir qué tipos de gasto usa tu negocio'}
       </button>
       {contenido}
-      {datos.conta && <SusCuentas />}
     </div>
+    {/* A todo el ancho de la pestaña, como en N7 (el formulario de arriba se queda en 640). */}
+    {datos.conta && <div className="cxp-cuentas"><SusCuentas /></div>}
+    </>
   )
 }

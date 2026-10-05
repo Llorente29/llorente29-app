@@ -227,6 +227,10 @@
 .cx .cx-campo .cx-pildora[aria-pressed='true'] { border-color: var(--cx-azul-borde); background: var(--cx-azul-suave); color: var(--cx-azul); }
 
 /* ── C02 · Sus cuentas y el extracto (maqueta N7FichaConta) ───────────── */
+/* Las dos tarjetas a todo el ancho; los campos de arriba, a 640 como siempre. */
+.cxp-edicion-cuerpo:has(> .cxp-cuentas) { max-width: none; }
+.cxp-edicion-cuerpo:has(> .cxp-cuentas) > .cx-formulario { max-width: 640px; }
+.cxp-cuentas { display: flex; flex-direction: column; gap: 14px; margin-top: 22px; }
 .cxp-cuenta { display: flex; flex-direction: column; }
 .cxp-cuenta .cx-dato-valor { flex-wrap: wrap; justify-content: flex-end; }
 .cxp-cuenta-nota { margin: -6px 0 6px; text-align: right; font-size: 12px; }
