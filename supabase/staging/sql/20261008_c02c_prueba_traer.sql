@@ -6,7 +6,7 @@
 -- administradores de A y de B (pasa por la RLS). Termina en ROLLBACK.
 --
 -- Lo que manda el asistente (planTraer, el mismo núcleo de la pantalla):
---   96 cuentas tuyas · 34 fichas nuevas · 46 enlaces a proveedores y bancos (46 cuentas) · 2 retenciones con modelo
+--   96 cuentas tuyas · 34 fichas nuevas · 46 enlaces a proveedores y bancos (48 cuentas) · 2 retenciones con modelo
 --   cifras de la revisión: 55 tal cual · 7 para revisar · 2 cambian · 34 nuevas
 --
 --   1. Traer: importar y activar en un paso. Código exacto, nombre de la ficha,
@@ -104,7 +104,7 @@ begin
   if exists (select 1 from public.company_account_link l join public.company_account a on a.id = l.company_account_id where a.company_id = emp and a.code in ('43000004', '41000100')) then raise exception 'PRUEBA C02c: una cuenta sin ficha tiene enlace'; end if;
   -- Una entrada en «Lo que ha hecho Folvy».
   select detalle into v from public.company_account_log where company_id = emp and que = 'importado';
-  if v is distinct from 'Plan traído de Cegid Diez · 96 cuentas · 46 enlaces · 34 fichas nuevas' then raise exception 'PRUEBA C02c: registro = %', v; end if;
+  if v is distinct from 'Plan traído de Cegid Diez · 96 cuentas · 48 enlaces · 34 fichas nuevas' then raise exception 'PRUEBA C02c: registro = %', v; end if;
   raise notice 'PRUEBA C02c · 1 en verde';
 
   -- 2 · La IA propondría a «Hielo Polar del Barrio» (no venía en Diez) la siguiente libre dentro de lo traído.

@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { adivinarColumnas, juntar, leerTabla, partirCsv, resumir, type Lectura } from '../../../../../src/modules/conta/lib/importarPlan'
-import { cifras, decidir, planTraer, proponer, validar, type FichaBanco, type FichaProveedor } from '../../../../../src/modules/conta/lib/propuestaImportacion'
+import { cifras, cuentasEnlazadas, decidir, planTraer, proponer, validar, type FichaBanco, type FichaProveedor } from '../../../../../src/modules/conta/lib/propuestaImportacion'
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 const dir = join(raiz, 'tests/conta/fixtures/importar/diez')
@@ -50,7 +50,7 @@ const problemas = validar(filas)
 if (problemas.length) throw new Error(problemas.map((p) => p.texto).join('\n'))
 const plan = planTraer(filas, r.cuentas, lectura.terceros)
 const k = cifras(filas)
-const enlazadas = new Set(plan.enlaces.map((l) => l.code)).size
+const enlazadas = cuentasEnlazadas(plan)
 const lit = (s: string) => `'${s.replace(/'/g, "''")}'`
 const planJson = JSON.stringify(plan)
 

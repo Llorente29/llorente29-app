@@ -7,5 +7,6 @@
 # Anterior: la 0189 del C02 y su prueba.
 # 37377481112: 0100, 0110 y 0120 entraron; la prueba falló (alias «x» en
 # company_chart_import_apply). La 0100, corregida, se vuelve a aplicar.
-supabase/staging/sql/20261008_c02c_reaplicar_0100.sql
+# 37378020269: la 0100 se reaplicó bien; la prueba llegó al registro (48
+# cuentas enlazadas: las retenciones con modelo también cuentan). Solo la prueba.
 supabase/staging/sql/20261008_c02c_prueba_traer.sql

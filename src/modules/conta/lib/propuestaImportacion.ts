@@ -379,9 +379,13 @@ export function planTraer(filas: readonly FilaRevision[], cuentas: readonly Cuen
   return out
 }
 
+/** Cuántas cuentas traídas quedan enlazadas (a una ficha, a un banco o a un modelo de retenciones). La base cuenta lo mismo. */
+export const cuentasEnlazadas = (p: PlanTraer): number => new Set([...p.enlaces.map((l) => l.code), ...p.retenciones.map((r) => r.code)]).size
+
 /** «96 cuentas tuyas con su número de Diez · 79 enlazadas · 6 nuevas · el IVA pasa a ir por tipo». */
 export function resumenTraer(p: PlanTraer, programa: string, ivaCambia: boolean): string {
-  const enlazadas = new Set(p.enlaces.map((l) => l.code)).size
+  // Enlazada = la cuenta traída va a algo de Folvy: una ficha, un banco o un modelo de retenciones.
+  const enlazadas = cuentasEnlazadas(p)
   return [
     `${p.cuentas.length} cuentas tuyas con su número de ${programa}`,
     `${enlazadas} enlazadas`,
