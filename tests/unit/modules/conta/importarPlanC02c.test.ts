@@ -103,7 +103,7 @@ describe('lectura de tabla (CSV/Excel) con asignación de columnas', () => {
     expect(columnas?.nombre).toBe(2)
   })
   it('CSV con comillas, punto y coma dentro y BOM', () => {
-    expect(partirCsv('﻿codigo;nombre\n43000005;"NORTE SOCIOS; S.L."\n')).toEqual([['codigo', 'nombre'], ['43000005', 'NORTE SOCIOS; S.L.']])
+    expect(partirCsv('\uFEFFcodigo;nombre\n43000005;"NORTE SOCIOS; S.L."\n')).toEqual([['codigo', 'nombre'], ['43000005', 'NORTE SOCIOS; S.L.']])
     expect(partirCsv('a,b\r\n1,"x ""y"""\r\n')).toEqual([['a', 'b'], ['1', 'x "y"']])
   })
 })

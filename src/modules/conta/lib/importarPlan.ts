@@ -210,7 +210,7 @@ export interface Columnas { codigo: number; nombre: number; nif: number | null }
 
 /** Parte un CSV respetando comillas. El separador se adivina con la primera línea (; , o tabulador). */
 export function partirCsv(texto: string): string[][] {
-  const t = texto.replace(/^﻿/, '')
+  const t = texto.replace(/^\uFEFF/, '')
   const primera = t.split(/\r?\n/, 1)[0] ?? ''
   const sep = [';', '\t', ','].map((s) => [s, primera.split(s).length] as const).sort((a, b) => b[1] - a[1])[0][0]
   const filas: string[][] = []
