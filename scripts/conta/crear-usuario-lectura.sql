@@ -59,7 +59,9 @@ declare
     -- Coherencia de cada empresa (C00).
     'company', 'company_tax_profile', 'company_activity', 'company_person', 'fiscal_year',
     -- Lo que ya existe y el agente cruza: categorías de IVA de Cocina y plazos/cuentas de proveedor.
-    'vat_category', 'supplier'];
+    'vat_category', 'supplier',
+    -- El plan contable (C02): la serie y el plan de cada empresa (también lo da la migración 20261007T0185).
+    'pgc_account', 'company_account', 'company_account_link', 'company_account_log'];
   faltan text := '';
 begin
   foreach t in array tablas loop
@@ -72,7 +74,7 @@ begin
   if faltan <> '' then
     raise notice 'Aún no existen (vuelve a ejecutar esto después de las migraciones):%', faltan;
   else
-    raise notice 'conta_lectura puede leer las 21 tablas de los agentes, y nada más.';
+    raise notice 'conta_lectura puede leer las 25 tablas de los agentes, y nada más.';
   end if;
 end $$;
 

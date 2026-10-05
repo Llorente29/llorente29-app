@@ -167,12 +167,19 @@ jobs:
             echo "::group::[$i] $f  (md5 $md5)"
             # -1: todo el fichero en una transacción. ON_ERROR_STOP: el primer
             # error la revierte entera. -X: sin .psqlrc.
-            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" 2>&1; then
+            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" > /tmp/salida.txt 2>&1; then
+              cat /tmp/salida.txt
               echo "::endgroup::"
               echo "OK [$i] $f"
               echo "| $i | \`$f\` | \`$md5\` | **aplicado** |" >> "$GITHUB_STEP_SUMMARY"
             else
+              cat /tmp/salida.txt
               echo "::endgroup::"
+              # El error de psql también como anotación: los registros de la
+              # ejecución no siempre se pueden descargar, las anotaciones sí.
+              # Solo las líneas de ERROR y CONTEXT (nunca la URL: psql no la imprime).
+              err=$(grep -E '^(psql:.*)?(ERROR|CONTEXT|DETALLE|DETAIL|LÍNEA|LINE)' /tmp/salida.txt | head -8 | tr '\n' ' ' | cut -c1-900)
+              echo "::error title=psql [$i]::${err:-sin mensaje de error}"
               echo "::error::FALLÓ [$i] $f — revertido entero. Los siguientes no se aplican."
               echo "| $i | \`$f\` | \`$md5\` | **FALLÓ, revertido entero** |" >> "$GITHUB_STEP_SUMMARY"
               fallo=1

@@ -12,7 +12,8 @@
 // migraciones 20261003T0100/0110/0120 y la del C01: tax_rate, withholding_rate,
 // payment_method, payment_term, invoice_series, treasury_account,
 // expense_category, entry_text, country, currency, general_row_setting,
-// company, company_tax_profile, supplier.
+// company, company_tax_profile, supplier; y del C02 (20261007T0120),
+// company_account y company_account_link.
 
 import { tabla, mensaje } from '@/modules/conta/services/bd'
 import type { AjusteSerie, CuentaEditable, DefinicionTabla, FilaGeneral, Valores } from '@/modules/conta/tablas/registro'
@@ -92,14 +93,18 @@ const texto = (v: unknown): string | null => (typeof v === 'string' && v !== '' 
 
 /** Lo que hace falta para saber qué filas usa la empresa. */
 export async function cargarContextoUso(accountId: string, companyId: string, hoy: string): Promise<Omit<ContextoUso, 'hoy'> & { hoy: string }> {
-  const [perfil, empresa, prov] = await Promise.all([
+  const [perfil, empresa, prov, enlaces, cuentas] = await Promise.all([
     tabla('company_tax_profile').select('tax_territory, tax_forms, account_digits').eq('company_id', companyId).maybeSingle(),
     tabla('company').select('fiscal_country').eq('id', companyId).maybeSingle(),
     tabla('supplier')
       .select('usual_tax_rate_ids, irpf_withholding_pct, payment_method, payment_terms_days, payment_fixed_days, expense_category_id, country_code, currency, is_active, archived_at')
       .eq('account_id', accountId),
+    tabla('company_account_link').select('company_account_id, entity_id, role')
+      .eq('account_id', accountId).eq('company_id', companyId).in('entity', ['tax_rate', 'withholding_rate', 'bank_account', 'expense_category']),
+    tabla('company_account').select('id, code, name').eq('account_id', accountId).eq('company_id', companyId),
   ])
-  for (const r of [perfil, empresa, prov]) if (r.error) throw new Error(mensaje('No se ha podido saber qué usas', r.error))
+  for (const r of [perfil, empresa, prov, enlaces, cuentas]) if (r.error) throw new Error(mensaje('No se ha podido saber qué usas', r.error))
+  const codigo = new Map(((cuentas.data ?? []) as Fila[]).map((c) => [String(c.id), `${String(c.code)} · ${String(c.name)}`]))
   const p = (perfil.data ?? null) as Fila | null
   const e = (empresa.data ?? null) as Fila | null
   const proveedores: ProveedorParaUso[] = ((prov.data ?? []) as Fila[])
@@ -121,6 +126,10 @@ export async function cargarContextoUso(accountId: string, companyId: string, ho
     proveedores,
     hoy,
     digitos: numero(p?.account_digits) ?? 8,
+    cuentasDelPlan: Object.fromEntries(((enlaces.data ?? []) as Fila[]).flatMap((l) => {
+      const code = codigo.get(String(l.company_account_id))
+      return code ? [[`${String(l.entity_id)}:${String(l.role)}`, code]] : []
+    })),
   }
 }
 

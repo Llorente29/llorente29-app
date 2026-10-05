@@ -75,12 +75,6 @@ select json_build_object(
            or (not t.is_system and t.account_id is distinct from s.account_id)
            or t.valid_from > current_date
            or (t.valid_to is not null and t.valid_to < current_date))),
-  'cuentas_apunte', (select coalesce(json_agg(json_build_object('account_id', s.account_id, 'name', s.name,
-      'ledger_account_code', s.ledger_account_code, 'account_digits', d.digitos) order by s.account_id, s.name), '[]')
-    from public.supplier s
-    join (select c.account_id, max(p.account_digits) digitos from public.company c
-            join public.company_tax_profile p on p.company_id = c.id group by c.account_id) d on d.account_id = s.account_id
-    where s.ledger_account_code is not null),
   'recuentos', json_build_object(
     'country',     (select count(*) from public.country),
     'currency',    (select count(*) from public.currency),

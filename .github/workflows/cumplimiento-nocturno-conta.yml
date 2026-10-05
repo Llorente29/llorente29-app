@@ -1,7 +1,7 @@
 name: Cumplimiento nocturno de contabilidad
 
 # QUÉ HACE (C00 §9.2)
-# Los dos agentes de cumplimiento del módulo de contabilidad, cada noche:
+# Los agentes de cumplimiento del módulo de contabilidad, cada noche:
 #
 #   · «Datos maestros e impuestos»: recorre las filas de serie de staging-conta
 #     (scripts/conta/agente-datos-maestros.sql, SOLO LEE) y comprueba que cada
@@ -10,6 +10,10 @@ name: Cumplimiento nocturno de contabilidad
 #     docs/conta/referencia/serie.json (sacada de las fuentes oficiales).
 #   · «Normativa al día»: vuelve a descargar las fuentes oficiales citadas y
 #     las compara con la última descarga (scripts/conta/fuentes.mjs comparar).
+#   · «Plan contable» (C02): vuelve a bajar el PGC del BOE y comprueba que la
+#     serie (cuadro + correcciones citadas) sigue saliendo limpia —si el BOE
+#     corrige una errata, la corrección sobra y lo dice— y que pgc_account de
+#     staging-conta es exactamente supabase/conta/pgc/serie.json.
 #
 # Ninguno cambia nada. Dejan su informe en lenguaje normal en el resumen de la
 # ejecución y, si algo no cuadra en una ejecución nocturna o lanzada a mano,
@@ -40,6 +44,10 @@ on:
       - 'scripts/conta/agente-datos-maestros.*'
       - 'scripts/conta/lib/datosMaestros.mjs'
       - 'scripts/conta/normativa-aviso.mjs'
+      - 'scripts/conta/agente-plan-contable.*'
+      - 'scripts/conta/lib/agentePlan.mjs'
+      - 'scripts/conta/lib/planContable.mjs'
+      - 'supabase/conta/pgc/**'
       - 'docs/conta/fuentes/sabido.json'
       # Mientras el C00 no esté en main: lanzarlo a mano desde la rama (respuesta 2).
       - 'docs/conta/cumplimiento/lanzar-agentes.txt'
@@ -181,3 +189,94 @@ jobs:
         if: steps.informe.outcome == 'failure'
         run: |
           echo "::warning::Ha cambiado alguna fuente oficial, o no se ha podido comprobar: ver el informe."
+
+  plan-contable:
+    name: Plan contable
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ]; then echo "::error::Falta el secreto STAGING_CONTA_DB_URL."; exit 1; fi
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 · al otro lado no hay producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+        run: |
+          set -euo pipefail
+          r=$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select count(*) from public.accounts
+            where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')")
+          if [ "$r" != "0" ]; then echo "::error::La base tiene cuentas de producción. Abortado."; exit 1; fi
+
+      - name: Volver a bajar el PGC del BOE (no se sube a ninguna parte)
+        env:
+          FUENTES_SOLO: rd-1514-2007,rd-1515-2007,rd-1-2021
+        run: node scripts/conta/fuentes.mjs descargar
+
+      - name: Volcar pgc_account (solo lectura)
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+        run: |
+          set -euo pipefail
+          export PGAPPNAME="gha-plan-contable-${GITHUB_RUN_ID}"
+          /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-plan-contable.sql > /tmp/bd-plan.json
+
+      - name: Revisar
+        id: revisar
+        continue-on-error: true
+        run: node scripts/conta/agente-plan-contable.mjs /tmp/bd-plan.json /tmp/informe-plan.md staging-conta
+
+      - name: Informe
+        if: always()
+        run: |
+          if [ -f /tmp/informe-plan.md ]; then cat /tmp/informe-plan.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Aviso
+        if: steps.revisar.outcome == 'failure' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · Plan contable: la serie no cuadra con el BOE o con la base'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe-plan.md)" "$enlace" > /tmp/aviso.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso.md; fi
+
+      - name: Resultado
+        if: steps.revisar.outcome == 'failure'
+        run: |
+          echo "::error::La serie del plan contable no cuadra: ver el informe del resumen."
+          exit 1

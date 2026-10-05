@@ -23,7 +23,7 @@ async function abrirTablas(page: Page, email: string, tabla = '') {
 test('cuenta B (Canarias, sin interruptor ni Cocina): impuestos con el IGIC arriba y sin quitar ninguna fila', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'El reparto es el mismo; el móvil se mira con A')
   await abrirTablas(page, CUENTA_B.email, 'impuestos')
-  await expect(page.getByRole('heading', { level: 1, name: 'Tablas generales' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tablas generales', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
 
   // Abre con TODAS (D5): «Todos» pulsado, y las dos separaciones a la vista.
@@ -86,15 +86,19 @@ test('cuenta A: impuestos como en la maqueta, con el IVA reducido abierto', asyn
     await page.getByRole('button', { name: 'Abrir IVA reducido' }).click()
   }
   // Cuentas de apunte con la longitud de la empresa: A lleva 8 dígitos (respuesta 3, punto 3).
-  await expect(page.getByText('47200000 · Hacienda Pública, IVA soportado')).toBeVisible()
-  await expect(page.getByText('47700000 · Hacienda Pública, IVA repercutido')).toBeVisible()
+  const ivaSoportado = /^(47200000 · Hacienda Pública, IVA soportado|47200010 · IVA soportado 10 %)$/
+  // Desde el C02 (tarea 6), con el plan activado sale la cuenta REAL del tipo
+  // (la 47200010 del 10 %); sin plan, la pista. La e2e del C02 deja el plan de
+  // A activado, pero en un staging limpio esta prueba corre antes: valen las dos.
+  await expect(page.getByText(ivaSoportado)).toBeVisible()
+  await expect(page.getByText(/^(47700000 · Hacienda Pública, IVA repercutido|47700010 · IVA repercutido 10 %)$/)).toBeVisible()
   await expect(page.getByText('Modelo 303')).toBeVisible()
   await expect(page.getByText(/Comprobado en la fuente oficial el/)).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/tablas-${movil ? 'movil' : 'ordenador'}.png`, fullPage: true })
   // Y sigue abierta después de la captura: si la página se desmonta (por
   // ejemplo, al llegar la sesión y recargar la cuenta), la fila se cierra.
-  await expect(page.getByText('47200000 · Hacienda Pública, IVA soportado')).toBeVisible()
+  await expect(page.getByText(ivaSoportado)).toBeVisible()
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 })
 

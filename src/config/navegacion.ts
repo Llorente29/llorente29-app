@@ -146,6 +146,19 @@ export const CONTA = {
     tabla: 'ajustes/tablas/:tabla',
     /** Alta conversada de una empresa. */
     alta: 'alta',
+    /** Una entrada del índice de Ajustes (C02 §5a): ajustes/impuestos, ajustes/socios… */
+    ajustesEntrada: 'ajustes/:entrada',
+    /** Ajustes › Plan contable (C02, maqueta N5Plan dentro del marco de N6). */
+    plan: 'ajustes/plan',
+    /** Ajustes › Plan contable › Qué va a cada sitio. */
+    planSitio: 'ajustes/plan/que-va-a-cada-sitio',
+    /** La dirección vieja de una cuenta del plan: redirige a su Mayor (respuesta 5). */
+    planCuenta: 'ajustes/plan/cuenta/:codigo',
+    /**
+     * Una cuenta del plan (respuesta 5): el Mayor si es de apunte o subcuenta
+     * (40000002), «Sumas y saldos» de ese nivel si tiene hijas (400, 4).
+     */
+    mayor: 'plan/:codigo',
   },
 } as const
 
@@ -203,6 +216,52 @@ export const PESTANAS_AJUSTES: EntradaMenuConta[] = [
   { id: 'avisos', etiqueta: 'Avisos', icono: 'porHacer', ruta: null },
 ]
 
+/**
+ * Ajustes como índice lateral agrupado (C02 §5a, maqueta N6Ajustes): solo
+ * contabilidad, nada de Cocina ni reparto. Cada entrada abre su contenido a la
+ * derecha (en el móvil, su pantalla). Las que aún no tienen pantalla salen con
+ * su aviso «aún no» (`hueco`), como pide el encargo para Certificados: el
+ * índice dice lo que habrá, y la entrada dice que todavía no está.
+ */
+export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string }
+export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
+  {
+    grupo: 'Empresa',
+    entradas: [
+      { id: 'empresa', etiqueta: 'Tu empresa', ruta: 'ajustes/empresa' },
+      { id: 'impuestos', etiqueta: 'Tus impuestos', ruta: 'ajustes/impuestos' },
+      { id: 'socios', etiqueta: 'Socios y cargos', ruta: 'ajustes/socios' },
+      { id: 'ejercicio', etiqueta: 'Ejercicio', ruta: 'ajustes/ejercicio' },
+    ],
+  },
+  {
+    grupo: 'Contabilidad',
+    entradas: [
+      { id: 'plan', etiqueta: 'Plan contable', ruta: 'ajustes/plan' },
+      { id: 'tablas', etiqueta: 'Tablas generales', ruta: 'ajustes/tablas' },
+      { id: 'numeracion', etiqueta: 'Numeración', ruta: 'ajustes/numeracion', hueco: 'Las series de tus facturas llegan con las facturas que emites.' },
+      { id: 'certificados', etiqueta: 'Certificados y accesos', ruta: 'ajustes/certificados', hueco: 'El certificado digital y los accesos a la sede de Hacienda llegan con la presentación de impuestos.' },
+    ],
+  },
+  {
+    grupo: 'Acceso y avisos',
+    entradas: [
+      { id: 'personas', etiqueta: 'Personas y asesor', ruta: 'ajustes/personas', hueco: 'Quién entra y qué ve, y el acceso de tu asesor, llegan en un encargo propio.' },
+      { id: 'avisos', etiqueta: 'Avisos', ruta: 'ajustes/avisos', hueco: 'Qué te avisa Folvy y por dónde llega en un encargo propio.' },
+      { id: 'folvy', etiqueta: 'Lo que ha hecho Folvy', ruta: 'ajustes/folvy' },
+    ],
+  },
+]
+
+export const entradaAjustes = (id: string | undefined): EntradaAjustes | null =>
+  INDICE_AJUSTES.flatMap((g) => g.entradas).find((e) => e.id === id) ?? null
+
+/** El apartado viejo del móvil (ajustes/empresa/:apartado) → su entrada del índice. */
+export const ENTRADA_DE_APARTADO: Record<string, string> = {
+  'quien-eres': 'empresa', actividad: 'empresa', impuestos: 'impuestos', presentar: 'impuestos', detalle: 'impuestos',
+  ejercicio: 'ejercicio', socios: 'socios', registro: 'folvy',
+}
+
 /** Solo las entradas que existen: lo que se pinta. */
 export function entradasVisibles(lista: EntradaMenuConta[]): (EntradaMenuConta & { ruta: string })[] {
   return lista.filter((e): e is EntradaMenuConta & { ruta: string } => e.ruta !== null)
@@ -219,6 +278,10 @@ export const rutaApartadoEmpresa = (apartado: string): string => rutaConta(CONTA
 export const rutaTablasGenerales = (tabla?: string): string =>
   tabla ? rutaConta(CONTA.rutas.tabla, { tabla }) : rutaConta(CONTA.rutas.tablas)
 export const rutaAltaEmpresa = (): string => rutaConta(CONTA.rutas.alta)
+export const rutaAjustes = (entrada?: string): string => (entrada ? rutaConta(CONTA.rutas.ajustesEntrada, { entrada }) : rutaConta(CONTA.rutas.empresa))
+export const rutaPlan = (): string => rutaConta(CONTA.rutas.plan)
+export const rutaPlanSitio = (): string => rutaConta(CONTA.rutas.planSitio)
+export const rutaMayor = (codigo: string): string => rutaConta(CONTA.rutas.mayor, { codigo })
 
 /**
  * ¿Qué entrada del menú está activa para esta dirección? La de prefijo más

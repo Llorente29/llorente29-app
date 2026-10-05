@@ -632,3 +632,83 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
 
 /* La etiqueta de un campo con su marca «IA» al lado (población por el código postal). */
 .cx-alta-etiqueta-ia { display: flex; align-items: center; gap: 6px; }
+
+/* ── Ajustes como índice lateral (C02 §5a, maqueta N6Ajustes) ───────── */
+.cx-ajustes { display: flex; gap: 14px; align-items: flex-start; }
+.cx-ajustes-indice { width: 300px; flex-shrink: 0; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.cx-ajustes-grupo { display: flex; flex-direction: column; gap: 2px; }
+.cx-ajustes-grupo + .cx-ajustes-grupo { margin-top: 8px; }
+.cx .cx-ajustes-grupo-titulo { margin: 0; padding: 8px 14px 4px; font-size: 13px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; text-transform: uppercase; }
+.cx-ajustes-enlace { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; min-height: 44px; border-radius: var(--cx-radio-boton); text-decoration: none; }
+.cx .cx-ajustes-enlace { color: var(--cx-texto); }
+.cx-ajustes-enlace:hover { background: var(--cx-fondo); }
+.cx .cx-ajustes-enlace[aria-current='page'] { background: var(--cx-azul-suave); color: var(--cx-azul); }
+.cx-ajustes-enlace-titulo { font-size: 15px; font-weight: 500; }
+.cx .cx-ajustes-enlace[aria-current='page'] .cx-ajustes-enlace-titulo { font-weight: 600; }
+.cx-ajustes-enlace-apoyo { font-size: 13px; color: var(--cx-apoyo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.cx-ajustes-panel { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.cx-ajustes-panel-cabeza { display: flex; flex-direction: column; gap: 4px; }
+.cx .cx-ajustes-panel-titulo { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.3px; }
+.cx-ajustes-lista { display: flex; flex-direction: column; gap: 12px; }
+.cx-ajustes-lista .cx-ajustes-grupo-titulo { padding: 4px 4px 0; }
+.cx-rejilla-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.cx-columna { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Plan contable (C02 §5c, maqueta N5Plan) ───────────────────────── */
+.cx-plan-cabeza { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.cx-plan-botones { display: flex; gap: 10px; flex-wrap: wrap; }
+.cx-plan { display: flex; flex-direction: column; gap: 12px; }
+.cx-plan-columnas { grid-template-columns: 170px minmax(0, 1fr) 140px 96px 56px; column-gap: 12px; }
+/* El árbol (respuesta 5): la flecha y el número se sangran por nivel; la fila entera se pincha. */
+.cx-plan-nodo { cursor: pointer; }
+.cx-plan-nodo:focus-visible { outline: 2px solid var(--cx-azul); outline-offset: -2px; border-radius: 12px; }
+.cx-plan-numero { display: flex; align-items: center; gap: 4px; padding-left: calc(var(--nivel, 0) * 14px); white-space: nowrap; }
+.cx-plan-flecha { flex: 0 0 22px; width: 22px; height: 22px; padding: 0; border: none; background: none; color: var(--cx-apoyo); font-size: 14px; line-height: 1; cursor: pointer; border-radius: 6px; }
+button.cx-plan-flecha:hover { background: var(--cx-fondo); color: var(--cx-texto); }
+.cx-plan-grupo .cx-plan-titulo-cabecera { font-size: 16px; }
+.cx-plan-subgrupo .cx-plan-titulo-cabecera { text-transform: uppercase; font-size: 13px; letter-spacing: 0.4px; color: var(--cx-apoyo); }
+.cx .cx-plan-enlace { color: inherit; text-decoration: none; }
+.cx-plan-nodo:hover .cx-plan-enlace, .cx-plan-enlace:focus-visible { color: var(--cx-azul); text-decoration: underline; }
+.cx-plan-resumen { font-weight: 400; font-size: 13px; color: var(--cx-apoyo); text-transform: none; letter-spacing: 0; }
+.cx-plan-ruta { font-family: var(--cx-letra-cifras); font-size: 12px; color: var(--cx-apoyo); }
+.cx-plan-accion { display: flex; justify-content: flex-end; }
+.cx-plan-mas { position: relative; }
+.cx-plan-mas .cx-mas { width: 36px; height: 36px; padding: 0; }
+.cx-plan-mas .cxp-menu { top: 40px; }
+/* El Mayor de una cuenta y Sumas y saldos (respuesta 5). */
+.cx-mayor { display: flex; flex-direction: column; gap: 12px; }
+.cx-mayor-cabeza { display: flex; flex-direction: column; gap: 4px; }
+.cx-mayor-ante { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--cx-apoyo); }
+.cx-mayor-volver { align-self: flex-start; font-size: 14px; }
+.cx-mayor-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); column-gap: 24px; }
+.cx-mayor-enlaces { display: flex; gap: 10px; flex-wrap: wrap; }
+.cx-plan-movil-fila { display: flex; flex-direction: column; }
+.cx-plan-movil-subs { padding: 0 16px 12px; font-size: 14px; }
+/* Las propuestas de la IA sobre el plan (tarea 5) y su bandeja de revisión. */
+.cx-plan-propuestas { display: flex; flex-direction: column; gap: 10px; }
+.cx-plan-revisar summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+/* El buscador ocupa lo que dejan los dos botones: que no se corte su ejemplo. */
+.cx-plan .cx-tablas-barra .cx-buscar { flex: 1 1 280px; width: auto; max-width: none; }
+.cx-plan-numero { font-weight: 600; }
+.cx-plan-cuenta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cx-plan-titulo { font-weight: 600; }
+.cx-plan-titulo-cabecera { font-weight: 700; }
+.cx-plan-plain { font-size: 13px; color: var(--cx-apoyo); }
+/* Reserva del BOE (respuesta 4): misma letra que el texto, la marca más pequeña. */
+.cx-plan-pgc { font-size: 11px; color: var(--cx-apoyo); white-space: nowrap; }
+.cx-plan-sub .cx-plan-numero, .cx-plan-sub .cx-plan-cuenta { padding-left: 22px; }
+.cx-plan-sin-uso { color: var(--cx-apoyo); }
+.cx-plan-sin-uso .cx-plan-titulo { font-weight: 500; }
+.cx-plan-oculta { opacity: 0.7; }
+.cx-plan-abierta { border: 2px solid var(--cx-azul); border-radius: 18px; }
+.cx-plan-pie { margin: 0; font-size: 13px; }
+.cx-plan-cabecera-movil { font-weight: 600; color: var(--cx-apoyo); cursor: default; }
+.cx-lista-fila.cx-plan-sub { padding-left: 32px; }
+
+@media (max-width: 1100px) {
+  .cx-ajustes-indice { width: 240px; }
+  .cx-plan-columnas { grid-template-columns: 170px minmax(0, 1fr) 140px 100px 64px; }
+}
+@media (max-width: 767px) {
+  .cx-rejilla-2 { grid-template-columns: 1fr; }
+}

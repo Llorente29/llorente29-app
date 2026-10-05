@@ -147,7 +147,13 @@ export function cuentaDe(f: FilaGeneral, c: CuentaEditable): string | null {
 }
 
 /** La cuenta de apunte con la longitud de la empresa (respuesta 3, punto 3); sin empresa, el código del plan. */
+/** Qué papel del enlace del plan (0120) corresponde a cada columna de cuenta. */
+const PAPEL_DE: Record<CuentaEditable, string> = { pgc_hint: 'principal', pgc_input_hint: 'soportado', pgc_output_hint: 'repercutido' }
+
+/** Con el plan activado, la cuenta real enlazada (C02, tarea 6); sin él, la pista con la longitud de la empresa. */
 const cuentaTexto = (f: FilaGeneral, c: CuentaEditable, ctx?: ContextoUso): string | null => {
+  const delPlan = ctx?.cuentasDelPlan?.[`${f.id}:${PAPEL_DE[c]}`]
+  if (delPlan) return delPlan
   const v = cuentaDe(f, c)
   return v ? (ctx ? cuentaDeApunte(v, ctx.digitos) : cuentaPgc(v)) : null
 }

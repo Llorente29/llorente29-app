@@ -1,7 +1,7 @@
 // src/modules/kitchen/proveedores/ArticulosQueLeCompras.tsx
 //
 // «Artículos que le compras» dentro de la ficha de proveedor del estilo nuevo
-// (C01b): lo que hacía la pantalla vieja de Cocina sigue aquí, como bloque
+// (C01b), con el «Local habitual» arriba (C02, respuesta 3: no es contabilidad): lo que hacía la pantalla vieja de Cocina sigue aquí, como bloque
 // propio. Los artículos, su precio pactado y el principal se gestionan con
 // SupplierItemsSection (la misma pieza de antes); «Migrar artículos» pasa a
 // la ventana del estilo nuevo con la misma previsualización de siempre.
@@ -17,6 +17,7 @@ import {
   type SupplierMigrationPreview, type SupplierMigrationResult,
 } from '@/modules/kitchen/services/purchaseFormatService'
 import SupplierItemsSection from '@/modules/kitchen/components/SupplierItemsSection'
+import LocalHabitual from '@/modules/kitchen/proveedores/LocalHabitual'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { rutaListaProveedores } from '@/config/navegacion'
 import type { ContextoExtension } from '@/modules/conta/extensiones'
@@ -46,6 +47,8 @@ export default function ArticulosQueLeCompras({ ctx }: { ctx: ContextoExtension 
 
   return (
     <section className="cx-tarjeta" aria-labelledby="cxp-articulos">
+      {/* El local al que suele servir: es de Cocina, no de contabilidad (C02, respuesta 3). */}
+      <div style={{ maxWidth: 420, paddingBottom: 10 }}><LocalHabitual accountId={ctx.accountId} supplierId={ctx.supplierId} /></div>
       <details className="cxp-plegable" open={cuantos <= PLEGADO_DESDE}>
         <summary>
           <h2 id="cxp-articulos" className="cx-tarjeta-titulo">Artículos que le compras</h2>

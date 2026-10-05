@@ -44,6 +44,14 @@
       "debeContener": "Pequeñas y Medianas Empresas"
     },
     {
+      "clave": "rd-1-2021",
+      "nombre": "Real Decreto 1/2021, modifica el PGC, el PGC de Pymes y otras normas contables",
+      "tipo": "boe",
+      "id": "BOE-A-2021-1350",
+      "debeContener": "Plan General de Contabilidad",
+      "tituloEmpiezaPor": "Real Decreto 1/2021"
+    },
+    {
       "clave": "codigo-comercio",
       "nombre": "Código de Comercio",
       "tipo": "boe",

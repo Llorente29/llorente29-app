@@ -17,7 +17,11 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
+  // En Actions, también «github»: cada fallo sale como anotación de la
+  // ejecución (el informe y los registros no siempre se pueden descargar).
+  reporter: process.env.CI
+    ? [['list'], ['github'], ['html', { open: 'never', outputFolder: 'playwright-report' }]]
+    : [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
     baseURL: 'http://127.0.0.1:4173',
     locale: 'es-ES',

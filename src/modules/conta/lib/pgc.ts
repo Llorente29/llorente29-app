@@ -42,8 +42,12 @@ export function cuentaPgc(codigo: string): string {
   return n ? `${codigo} · ${n}` : codigo
 }
 
-/** Las longitudes de cuenta que se dejan elegir (company_tax_profile.account_digits). */
-export const DIGITOS_MINIMOS = 4
+/**
+ * Las longitudes de cuenta que se dejan elegir (company_tax_profile.account_digits).
+ * De 6 a 12 desde el C02 (D3 de Julio): las hojas del cuadro llegan a 4 dígitos
+ * (y diez a 5), y con menos de 6 no queda sitio para subcuentas.
+ */
+export const DIGITOS_MINIMOS = 6
 export const DIGITOS_MAXIMOS = 12
 
 /**

@@ -80,6 +80,8 @@ export interface DatosResumen {
   numDocumentos: number
   /** Las tablas generales (tarea 7 del C00): de ahí el nombre de la forma de pago. */
   opciones?: OpcionesFicha | null
+  /** C02 §5b: su cuenta y la de sus facturas, de los enlaces del plan (null sin plan activado). */
+  cuentas?: { suCuenta: string | null; facturas: string | null } | null
 }
 
 const FALTA_EN: Record<Exclude<Apartado, 'resumen' | 'historial' | 'facturas' | 'articulos'>, Partial<Record<string, string>>> = {
@@ -119,6 +121,13 @@ export function lineaApartado(ap: Apartado, d: DatosResumen): LineaApartado {
     case 'pago':
       return { detalle: etiquetaPago(f, d.opciones ?? null) ?? 'Sin forma de pago', falta: false }
     case 'contabilidad':
+      // Con el plan activado: las dos cuentas de verdad (C02 §5b), no la pista del tipo de gasto.
+      if (d.cuentas) {
+        return {
+          detalle: [d.cuentas.suCuenta ? `Su cuenta ${d.cuentas.suCuenta}` : 'Sin cuenta', d.cuentas.facturas ? `facturas a ${d.cuentas.facturas}` : d.tipoGasto ? d.tipoGasto.name : 'sin tipo de gasto'].join(' · '),
+          falta: false,
+        }
+      }
       return {
         // La cuenta de apunte, con la longitud de la empresa si se sabe (respuesta 3, punto 3).
         detalle: d.tipoGasto ? `${d.tipoGasto.name} · ${d.opciones?.digitos ? codigoDeApunte(d.tipoGasto.pgcAccountHint, d.opciones.digitos) : d.tipoGasto.pgcAccountHint}` : 'Sin tipo de gasto',

@@ -38,6 +38,12 @@ export interface ContextoUso {
   hoy: string
   /** company_tax_profile.account_digits: la longitud de las cuentas de apunte (respuesta 3, punto 3). */
   digitos: number
+  /**
+   * C02, tarea 6: con el plan activado, la cuenta REAL de cada fila
+   * («id:papel» → «código · nombre», de company_account_link): la 472/477 de cada tipo de
+   * IVA, la 4751 de cada retención, la 572 de cada banco. Vacío sin plan.
+   */
+  cuentasDelPlan?: Readonly<Record<string, string>>
 }
 
 export interface Uso {

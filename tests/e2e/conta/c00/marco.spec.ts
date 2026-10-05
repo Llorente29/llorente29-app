@@ -17,7 +17,8 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
   await entrarComo(page, CUENTA_B.email)
   await page.goto('/conta')
   await expect(page).toHaveURL(/\/conta\/ajustes$/)
-  await expect(page.getByRole('heading', { level: 1, name: 'Tu empresa' })).toBeVisible()
+  // C02 §5a: Ajustes es un índice; en el ordenador abre «Tu empresa», en el móvil el índice.
+  await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible()
 
   // El marco es el del módulo, no el de Folvy: ni barra de módulos ni burbuja.
   await expect(page.getByRole('navigation', { name: 'Menú de contabilidad' })).toBeVisible()
@@ -29,8 +30,9 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
   for (const sinPantalla of ['Documentos', 'Bancos', 'Libros', 'Por hacer']) {
     await expect(page.getByRole('link', { name: sinPantalla, exact: true })).toHaveCount(0)
   }
-  await expect(page.getByRole('link', { name: 'Tablas generales' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Personas y asesor' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /^Tablas generales/ })).toBeVisible()
+  // El índice dice lo que habrá (C02, N6): «Personas y asesor» sale, y su pantalla dice «aún no».
+  await expect(page.getByRole('link', { name: /^Personas y asesor/ })).toBeVisible()
 
   // Letra Geist dentro del módulo.
   await page.evaluate(() => document.fonts.ready)

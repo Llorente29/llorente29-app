@@ -225,3 +225,28 @@
    texto suelto y no algo que se toca (capturas del 04/10). */
 .cx .cx-campo .cx-pildora { border: 1px solid var(--cx-borde-campo); background: var(--cx-blanco); color: var(--cx-texto); }
 .cx .cx-campo .cx-pildora[aria-pressed='true'] { border-color: var(--cx-azul-borde); background: var(--cx-azul-suave); color: var(--cx-azul); }
+
+/* ── C02 · Sus cuentas y el extracto (maqueta N7FichaConta) ───────────── */
+/* La pestaña es solo N7: las dos tarjetas a todo el ancho (respuesta 3). */
+.cxp-edicion-cuerpo:has(.cxp-cuentas) { max-width: none; }
+.cxp-cuentas { display: flex; flex-direction: column; gap: 14px; }
+.cxp-cuentas-pie { margin: 8px 0 0; font-size: 13px; }
+.cxp-cuenta { display: flex; flex-direction: column; }
+.cxp-cuenta .cx-dato-valor { flex-wrap: wrap; justify-content: flex-end; }
+.cxp-cuenta-nota { margin: -6px 0 6px; text-align: right; font-size: 12px; }
+/* La cuenta lleva a su Mayor (respuesta 5): se lee como dato, se nota que es enlace al pasar. */
+.cxp-cuenta-mayor { color: inherit; text-decoration: underline; text-decoration-color: var(--cx-linea); text-underline-offset: 3px; }
+.cxp-cuenta-mayor:hover, .cxp-cuenta-mayor:focus-visible { color: var(--cx-azul); text-decoration-color: currentColor; }
+.cxp-cuenta-elegir { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 12px; }
+.cxp-extracto-barra { align-items: center; padding-bottom: 10px; }
+.cxp-extracto { width: 100%; border-collapse: collapse; font-size: 14px; }
+.cxp-extracto th { text-align: left; color: var(--cx-apoyo); font-weight: 500; padding: 8px 6px; border-bottom: 1px solid var(--cx-linea); }
+.cxp-extracto td { padding: 8px 6px; border-bottom: 1px solid var(--cx-linea); font-variant-numeric: tabular-nums; }
+.cxp-extracto td:nth-child(n+4), .cxp-extracto th:nth-child(n+4) { text-align: right; }
+@media (max-width: 720px) {
+  .cxp-extracto { display: block; overflow-x: auto; }
+  /* En el móvil, la etiqueta arriba y la cuenta debajo, a todo el ancho. */
+  .cxp-cuenta .cx-dato { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .cxp-cuenta .cx-dato-valor { justify-content: flex-start; text-align: left; }
+  .cxp-cuenta-nota { text-align: left; margin-top: 0; }
+}

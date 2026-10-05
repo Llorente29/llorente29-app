@@ -1,0 +1,1 @@
+Capturas de Cegid Diez (contabilidad de un cliente de Folvy), con NIF, nombres, direcciones, conceptos e IBAN difuminados. Sirven para el contraste del C02 (ficha-subcuenta, movimientos, saldos), del C04 (factura recibida) y de la conciliacion bancaria. Pueden ir al repositorio: no contienen datos de nadie.

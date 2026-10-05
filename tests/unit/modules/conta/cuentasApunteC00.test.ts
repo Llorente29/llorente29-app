@@ -21,7 +21,7 @@ describe('la cuenta de apunte, con la longitud de la empresa', () => {
   })
   it('todas las pistas reales de la serie salen con exactamente los dígitos de la empresa, para cada longitud', () => {
     expect(PISTAS.length).toBeGreaterThan(10)
-    for (const d of [4, 6, 8, 10, 12]) {
+    for (const d of [6, 8, 10, 12]) {
       for (const p of PISTAS) {
         const c = codigoDeApunte(p, d)
         expect(c.length, `${p} con ${d}`).toBe(Math.max(d, p.length))

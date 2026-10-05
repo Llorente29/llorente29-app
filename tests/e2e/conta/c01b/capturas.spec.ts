@@ -130,5 +130,7 @@ test('cuenta B (sin `conta`): la ficha funciona entera, con Contabilidad plegado
   const plegado = page.locator('details.cxp-plegable').first()
   await expect(plegado).toBeVisible()
   await expect(plegado).not.toHaveAttribute('open', '')
+  // Plegado de verdad: lo de dentro no se ve (C02: dentro van las tarjetas de N7).
+  await expect(plegado.getByText('Sus cuentas', { exact: true })).toBeHidden()
   await capturar(page, 'cuenta-b-contabilidad')
 })

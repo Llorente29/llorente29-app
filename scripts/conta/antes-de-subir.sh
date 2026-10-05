@@ -27,6 +27,7 @@ npx eslint --max-warnings 0 src/modules/conta tests/unit/modules/conta tests/con
 paso '2/5 · valores de serie idénticos a sus fuentes'
 node scripts/conta/serie.mjs comprobar
 node scripts/conta/codigos-postales.mjs comprobar
+node scripts/conta/plan.mjs comprobar
 
 paso '3/5 · unitarias y de cumplimiento'
 npx vitest run

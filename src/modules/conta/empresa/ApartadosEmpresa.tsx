@@ -5,6 +5,8 @@
 // cada cambio confirma con contenido o enseña el fallo.
 
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaPlan } from '@/config/navegacion'
 import { Chip, Dato } from '@/modules/conta/ui/piezas'
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import { cuentaDeApunte } from '@/modules/conta/lib/pgc'
@@ -266,7 +268,12 @@ function FormImpuestos({ d, guardando, cancelar, guardar }: {
 
 // ── Detalle contable ────────────────────────────────────────────────────────
 
-export function DetalleContable({ d, quien, alCambiar, movil }: Props) {
+/**
+ * Con el plan contable activado (C02), el plan y la longitud ya no se cambian
+ * aquí: cambiar la longitud renumera las subcuentas y cambiar de plan pide
+ * elegir cuenta por cuenta; las dos cosas se hacen en Ajustes › Plan contable.
+ */
+export function DetalleContable({ d, quien, alCambiar, movil, planActivo = false }: Props & { planActivo?: boolean }) {
   const [abierto, setAbierto] = useState(movil)
   const [editando, setEditando] = useState(false)
   const h = useHacer(alCambiar)
@@ -290,7 +297,7 @@ export function DetalleContable({ d, quien, alCambiar, movil }: Props) {
     <TarjetaApartado titulo="Detalle contable" movil={movil}
       accion={!movil && !editando ? <button type="button" className="cx-enlace" onClick={() => setAbierto(false)} aria-expanded>Cerrar</button> : undefined}>
       {!p ? <p className="cx-vacio">Se pone con tus impuestos.</p> : editando ? (
-        <FormDetalle p={p} guardando={h.guardando} cancelar={() => { setEditando(false); h.limpiar() }}
+        <FormDetalle p={p} planActivo={planActivo} guardando={h.guardando} cancelar={() => { setEditando(false); h.limpiar() }}
           guardar={async (nuevo) => {
             if (await h.hacer(() => guardarPerfil(quien.accountId, quien.companyId, quien.userId, nuevo),
               `Guardado: plan de ${nuevo.chartKind === 'pymes' ? 'pymes' : 'grandes empresas'}, cuentas de ${nuevo.accountDigits} dígitos.`)) setEditando(false)
@@ -307,6 +314,10 @@ export function DetalleContable({ d, quien, alCambiar, movil }: Props) {
           <Dato etiqueta="Prorrata">{p.vatProrata ? `Sí · ${String(p.vatProrataPct ?? '').replace('.', ',')} %` : 'No'}</Dato>
           <Dato etiqueta="SII (libros del IVA al día)">{p.sii ? 'Sí' : 'No'}</Dato>
           <p className="cx-ayuda">Viene puesto; lo normal es no tocarlo.</p>
+          <p className="cx-ayuda">
+            {planActivo ? 'Tu plan contable está activado: sus cuentas, la longitud y el cambio de plan están en ' : 'El plan de cuentas de tu empresa está en '}
+            <Link to={rutaPlan()} className="cx-enlace">Plan contable</Link>.
+          </p>
           <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>
             <button type="button" className="cx-boton-sec" onClick={() => { setEditando(true); h.limpiar() }}>Cambiar</button>
           </div>
@@ -317,8 +328,8 @@ export function DetalleContable({ d, quien, alCambiar, movil }: Props) {
   )
 }
 
-function FormDetalle({ p: inicial, guardando, cancelar, guardar }: {
-  p: PerfilFiscal; guardando: boolean; cancelar: () => void; guardar: (p: PerfilFiscal) => void
+function FormDetalle({ p: inicial, planActivo, guardando, cancelar, guardar }: {
+  p: PerfilFiscal; planActivo: boolean; guardando: boolean; cancelar: () => void; guardar: (p: PerfilFiscal) => void
 }) {
   const [p, setP] = useState(inicial)
   const [digitos, setDigitos] = useState(String(inicial.accountDigits))
@@ -336,10 +347,11 @@ function FormDetalle({ p: inicial, guardando, cancelar, guardar }: {
       }
     }}>
       <div className="cx-aviso">Viene puesto para lo normal. Cámbialo solo si tu asesor te lo dice.</div>
-      <CampoLista etiqueta="Plan contable" valor={p.chartKind} deshabilitado={guardando}
+      {planActivo && <p className="cx-ayuda">El plan y los dígitos se cambian en <Link to={rutaPlan()} className="cx-enlace">Plan contable</Link>: cambiarlos renumera tus subcuentas o pide elegir cuenta por cuenta.</p>}
+      <CampoLista etiqueta="Plan contable" valor={p.chartKind} deshabilitado={guardando || planActivo}
         cambiar={(v) => setP((x) => ({ ...x, chartKind: v as PerfilFiscal['chartKind'] }))}
         opciones={[{ valor: 'pymes', texto: 'Plan de pymes' }, { valor: 'normal', texto: 'Plan general (grandes empresas)' }]} />
-      <CampoTexto etiqueta="Dígitos de las cuentas" valor={digitos} cambiar={setDigitos} modo="numeric" fallo={fallos.digitos} deshabilitado={guardando} />
+      <CampoTexto etiqueta="Dígitos de las cuentas" valor={digitos} cambiar={setDigitos} modo="numeric" fallo={fallos.digitos} deshabilitado={guardando || planActivo} />
       <div className="cx-formulario-fila">
         <CampoSiNo etiqueta="Prorrata" valor={p.vatProrata} cambiar={(v) => setP((x) => ({ ...x, vatProrata: v }))} deshabilitado={guardando} />
         {p.vatProrata && <CampoTexto etiqueta="Porcentaje de prorrata" valor={prorrata} cambiar={setProrrata} modo="decimal" fallo={fallos.prorrata} deshabilitado={guardando} />}
