@@ -23,6 +23,7 @@ import { cascadeFromItem } from '@/modules/kitchen/services/costCascadeService'
 import { createRecipeItem, updateRecipeItem, recomputeRecipeItem } from '@/modules/kitchen/services/recipeItemService'
 import { createSupplier } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
+import type { Database } from '@/types/database'
 
 // ENCARGO CODE (13/08) fix/recepcion-p2-oficina, §4/§5 — vocabulario del motivo
 // que pone LA OFICINA al cambiar una cantidad que ya había contado quien
@@ -1618,6 +1619,9 @@ export async function resolveGoodsReceiptLineFormat(params: {
   createdByName?: string | null
 }): Promise<ResolvedLineFormat> {
   requireSupabase()
+  // Los argumentos van con NULL a propósito: la función no es STRICT y los
+  // trata (medido en pg_proc, 05/10). El generador de tipos no sabe expresar
+  // un argumento nulo y los marca `string`; el cast dice lo que la base acepta.
   const { data, error } = await supabase!.rpc('resolve_goods_receipt_line_format', {
     p_account_id: params.accountId,
     p_ai_session_id: params.aiSessionId,
@@ -1626,7 +1630,7 @@ export async function resolveGoodsReceiptLineFormat(params: {
     p_supplier_id: params.supplierId,
     p_created_by: params.createdBy ?? null,
     p_created_by_name: params.createdByName ?? null,
-  })
+  } as unknown as Database['public']['Functions']['resolve_goods_receipt_line_format']['Args'])
   if (error) throw new Error(`Error resolviendo el formato: ${error.message}`)
   const row = (Array.isArray(data) ? data[0] : data) as Row | null
   return {
