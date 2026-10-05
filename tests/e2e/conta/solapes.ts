@@ -30,7 +30,18 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
   // llegaba más tarde que 250 ms. Ahora: red quieta y el mismo alto durante
   // un segundo (cuatro lecturas seguidas), hasta 10 s.
   const altura = () => page.evaluate(() => document.documentElement.scrollHeight)
-  await page.waitForLoadState('networkidle').catch(() => undefined)
+  // 06/10 (e2e 37386131148): sin tope, «networkidle» espera hasta que muere la
+  // prueba si la página no deja de pedir (Playwright no le pone ninguno). Diez
+  // segundos, y si no se calla la red, que el log diga QUÉ sigue pidiendo: un
+  // bucle de peticiones es un fallo de la app, no algo que esperar.
+  const abiertas = new Map<object, string>()
+  const alPedir = (r: { url: () => string }) => abiertas.set(r, r.url())
+  const alAcabar = (r: object) => abiertas.delete(r)
+  page.on('request', alPedir); page.on('requestfinished', alAcabar); page.on('requestfailed', alAcabar)
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {
+    console.log(`[red sin parar] ${page.url()} · ${abiertas.size} abiertas: ${[...new Set(abiertas.values())].slice(0, 10).join(' · ')}`)
+  })
+  page.off('request', alPedir); page.off('requestfinished', alAcabar); page.off('requestfailed', alAcabar)
   let alto = await altura()
   let iguales = 0
   for (let i = 0; i < 40 && iguales < 4; i++) {

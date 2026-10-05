@@ -20,7 +20,9 @@ import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c02c'
 const FIXTURE = 'tests/conta/fixtures/importar/diez'
-const FICHEROS = ['plan.csv', 'proveedores.csv', 'clientes.csv'].map((f) => `${FIXTURE}/${f}`)
+// En el ordenador, los tres PDF de Diez (el lector de pdfjs en el navegador, con su worker); en el móvil, los CSV.
+const CSV = ['plan.csv', 'proveedores.csv', 'clientes.csv'].map((f) => `${FIXTURE}/${f}`)
+const PDF = ['proveedores.pdf', 'plan.pdf', 'clientes.pdf'].map((f) => `${FIXTURE}/${f}`)
 
 async function crearEmpresa(s: Sesion, nombre: string): Promise<string> {
   const r = await rest<{ id: string }[]>(s, 'POST', 'company', {
@@ -56,11 +58,18 @@ async function abrirPlan(page: Page, empresa: string) {
   await page.goto('/conta/ajustes/plan')
 }
 
-async function hastaLaRevision(page: Page) {
+async function hastaLaRevision(page: Page, ficheros: string[]) {
   await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toBeVisible()
   await page.getByRole('button', { name: /^Cegid Diez/ }).click()
   await expect(page.getByRole('heading', { name: 'Traer tu plan de Cegid Diez' })).toBeVisible()
-  await page.getByLabel('Elegir los ficheros').setInputFiles(FICHEROS)
+  await page.getByLabel('Elegir los ficheros').setInputFiles(ficheros)
+  if (ficheros === PDF) {
+    // Cada PDF dice lo que ha leído y que cuadra con su pie (el plan, aunque llegue el segundo, manda al juntar).
+    await expect(page.getByText(/^«plan\.pdf»: plan de cuentas de Diez · \d+ subcuentas \(el PDF dice \d+: cuadra\)\.$/)).toBeVisible()
+    await expect(page.getByText('«proveedores.pdf»: proveedores y acreedores de Diez · 57 cuentas, 41 con NIF (el PDF dice 57: cuadra).')).toBeVisible()
+    await expect(page.getByText('«clientes.pdf»: clientes y deudores de Diez · 9 cuentas, 3 con NIF (el PDF dice 9: cuadra).')).toBeVisible()
+    await expect(page.getByLabel('Código de la cuenta')).toHaveCount(0)
+  }
   await expect(page.getByRole('status').filter({ hasText: /cuentas, 96 tuyas · plan de pymes · 8 dígitos, igual que aquí/ })).toBeVisible()
   await page.getByRole('button', { name: 'Siguiente: revisar →' }).click()
   await expect(page.getByRole('table', { name: 'Cuentas que se traen' })).toBeVisible()
@@ -82,7 +91,7 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     await abrirPlan(page, id)
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/paso1-ordenador.png`, fullPage: true })
-    await hastaLaRevision(page)
+    await hastaLaRevision(page, PDF)
 
     // Las cuatro cifras y lo que manda la regla (encargo §4, respuesta 1).
     await expect(page.getByText('Entran tal cual')).toBeVisible()
@@ -144,7 +153,9 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     await expect(historial.getByText(/^Plan traído de Cegid Diez · 96 cuentas · \d+ enlaces · \d+ fichas nuevas$/)).toBeVisible()
     page.once('dialog', (d) => void d.accept())
     await historial.getByRole('button', { name: 'Deshacer entero' }).click()
-    await expect(page.getByText(/^Deshecho el plan traído: se han quitado 96 cuentas y \d+ fichas nuevas\./)).toBeVisible()
+    const deshecho = page.getByText(/^Deshecho el plan traído: se han quitado \d+ cuentas \(las 96 de Diez y \d+ que puso Folvy\) y \d+ fichas nuevas\./)
+    await deshecho.waitFor({ timeout: 15000 }).catch(async () => console.log(`[sin «Deshecho»]\n${(await page.locator('.cx-principal').innerText()).slice(0, 1500)}`))
+    await expect(deshecho).toBeVisible()
     await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toBeVisible()
     const quedan = await rest<unknown[]>(s, 'GET', `supplier?select=id&account_id=eq.${CUENTA_A.id}&import_id=not.is.null`)
     expect(quedan.datos, 'deshacer no deja fichas nuevas').toHaveLength(0)
@@ -163,7 +174,7 @@ test('móvil: la revisión se guarda para seguir luego, y se tira', async ({ pag
     await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/paso1-movil.png`, fullPage: true })
-    await hastaLaRevision(page)
+    await hastaLaRevision(page, CSV)
     await expect(page.getByText('Si te es más cómodo, guarda y decídelas en el ordenador.')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/revisar-movil.png`, fullPage: true })

@@ -14,12 +14,22 @@
 //   clientes.csv      igual (7; 3 con NIF)
 //   folvy.json        lo que hay en Folvy en la cuenta A de staging para casar:
 //                     proveedores (con y sin NIF) y bancos (uno con el IBAN de Diez).
+//   plan.pdf, proveedores.pdf, clientes.pdf
+//                     los mismos datos con la FORMA de los PDF de Diez (respuesta
+//                     1.4): la página, las columnas en su x, la empresa arriba a la
+//                     derecha, «(N registros)» y «Página: X de Y». La forma se tomó
+//                     de los tres PDF de un cliente real, que se miraron fuera del
+//                     repositorio y se borraron; de ellos no queda ni un dato aquí.
+//                     Como en Diez, cada letra va colocada con un ajuste de
+//                     posición, y en algunos nombres uno grande parte la palabra
+//                     para quien lea el texto «montado» («NOR TE»).
 //
 // Los NIF son CIF de letra B con su dígito de control bien calculado, en la
 // serie B99xxxxx (inventada). Los IBAN, españoles válidos (mod 97) con la
 // entidad 9999, que no existe.
 
 import { writeFileSync } from 'node:fs'
+import { escribirPdfDiez } from './pdfDiez.mjs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
@@ -170,4 +180,24 @@ const folvy = {
   bancos: [{ name: 'Banco Prueba', iban: ibanUno }],
 }
 writeFileSync(join(aqui, 'folvy.json'), JSON.stringify(folvy, null, 2) + '\n')
-console.log(`plan.csv ${filas.length} filas (${tuyas.length} tuyas) · proveedores.csv ${proveedores.length} (${conNifTerceros} con NIF) · clientes.csv ${clientes.length} · folvy.json`)
+
+// ── Los mismos datos en PDF, con la forma de Diez ────────────────────────────
+// Como en el listado real: la cuenta «cabecera» de cada grupo de terceros va
+// también en el listado (40000000 PROVEEDORES…), y un código postal de
+// Barcelona sale sin su cero (Diez escribe 8018 por 08018).
+const conDir = (lista, desde) => lista.map((p, i) => {
+  const [direccion, cp, poblacion, provincia] = dir(i + desde)
+  return { ...p, direccion, cp, poblacion, provincia }
+})
+const provPdf = conDir(proveedores, 0)
+const barcelona = provPdf.find((x) => x.code === '40000005')
+Object.assign(barcelona, { direccion: 'CALLE INVENTADA DEL MAR, 86', cp: '8018', poblacion: 'BARCELONA', provincia: 'BARCELONA' })
+const nombreDe = (code) => filas.find((f) => f[0] === code)[1]
+const cab = (code) => ({ code, nombre: nombreDe(code), nif: '', direccion: '', cp: '', poblacion: '', provincia: '' })
+escribirPdfDiez(join(aqui, 'plan.pdf'), { tipo: 'plan', filas })
+escribirPdfDiez(join(aqui, 'proveedores.pdf'), {
+  tipo: 'proveedores',
+  terceros: [cab('40000000'), ...provPdf.filter((x) => x.code.startsWith('400')), cab('41000000'), ...provPdf.filter((x) => x.code.startsWith('410'))],
+})
+escribirPdfDiez(join(aqui, 'clientes.pdf'), { tipo: 'clientes', terceros: [cab('43000000'), ...conDir(clientes, 60), cab('44000000')] })
+console.log(`plan.csv ${filas.length} filas (${tuyas.length} tuyas) · proveedores.csv ${proveedores.length} (${conNifTerceros} con NIF) · clientes.csv ${clientes.length} · folvy.json · plan.pdf, proveedores.pdf, clientes.pdf`)

@@ -31,7 +31,8 @@ import {
   cifras as contar, decidir, filtrar, planTraer, proponer, resumenTraer, validar,
   type Decision, type FichaBanco, type FichaProveedor, type FilaRevision, type Filtro,
 } from '@/modules/conta/lib/propuestaImportacion'
-import { ACEPTA, abrir, FicheroNoValido, type FicheroAbierto } from '@/modules/conta/plan/leerFicheros'
+import type { LecturaPdf } from '@/modules/conta/lib/lectorDiez'
+import { ACEPTA, abrir, type FicheroAbierto } from '@/modules/conta/plan/leerFicheros'
 import { fichasParaCasar, guardarImportacion, huellaDe, tirarImportacion, traerPlan } from '@/modules/conta/services/importarService'
 import type { DatosPlan } from '@/modules/conta/services/planService'
 
@@ -60,6 +61,14 @@ function Pasos({ paso }: { paso: Paso }) {
 }
 
 // ── Paso 1 ──────────────────────────────────────────────────────────────────
+
+/** Lo leído de un PDF de Diez, en una línea: qué es y cuánto trae, contado contra su propio pie. */
+function lineaPdf(nombre: string, l: LecturaPdf): string {
+  const que = l.listado === 'plan' ? 'plan de cuentas' : l.listado === 'proveedores' ? 'proveedores y acreedores' : 'clientes y deudores'
+  const n = l.lectura.cuentas.length
+  const conNif = l.listado === 'plan' ? '' : `, ${l.lectura.terceros.length} con NIF`
+  return `«${nombre}»: ${que} de Diez · ${n} ${l.listado === 'plan' ? 'subcuentas' : 'cuentas'}${conNif}${l.registros !== null ? ` (el PDF dice ${l.registros}: cuadra)` : ''}.`
+}
 
 interface TablaAbierta { fichero: FicheroAbierto; columnas: Columnas | null; cabecera: boolean }
 
@@ -105,8 +114,12 @@ function PasoFichero({ p, empezarDeCero, seguir }: {
   const hojas = useMemo(() => new Set(p.serie.filter((s) => s.isLeaf).map((s) => s.code)), [p.serie])
 
   const lectura = useMemo<Lectura | null>(() => {
-    if (!programa || !tablas.length || tablas.some((t) => !t.columnas || t.columnas.codigo < 0 || t.columnas.nombre < 0)) return null
-    return juntar(programa, tablas.map((t) => leerTabla(programa, t.fichero.filas, t.columnas!, t.cabecera)))
+    if (!programa || !tablas.length) return null
+    const sinColumnas = (t: TablaAbierta) => !t.fichero.pdf && (!t.columnas || t.columnas.codigo < 0 || t.columnas.nombre < 0)
+    if (tablas.some(sinColumnas)) return null
+    // El plan delante: al juntar manda el nombre que trae el plan.
+    const orden = [...tablas].sort((a, b) => Number(b.fichero.pdf?.listado === 'plan') - Number(a.fichero.pdf?.listado === 'plan'))
+    return juntar(programa, orden.map((t) => t.fichero.pdf ? t.fichero.pdf.lectura : leerTabla(programa, t.fichero.filas, t.columnas!, t.cabecera)))
   }, [programa, tablas])
   const resumen = useMemo(() => (lectura ? resumir(lectura, { plan: p.plan, digitos: p.digitos }, hojas) : null), [lectura, p.plan, p.digitos, hojas])
 
@@ -115,12 +128,7 @@ function PasoFichero({ p, empezarDeCero, seguir }: {
     if (!fs.length || !programa) return
     setLeyendo(true); setFallo(null)
     try {
-      const abiertos = await Promise.all(fs.map(abrir))
-      if (abiertos.some((a) => a.clase === 'pdf')) {
-        throw new FicheroNoValido(programa === 'diez'
-          ? 'Folvy aún no lee el PDF de Diez en esta versión de prueba. En Diez, exporta los mismos listados a Excel («Plan de cuentas» y los de proveedores y clientes) y suéltalos aquí.'
-          : 'De este programa Folvy lee Excel o CSV, no PDF: expórtalo a Excel y suéltalo aquí.')
-      }
+      const abiertos = await Promise.all(fs.map((f) => abrir(f, programa)))
       setTablas(abiertos.map((f) => { const a = adivinarColumnas(f.filas); return { fichero: f, columnas: a.columnas, cabecera: a.cabecera } }))
       setHuella(await huellaDe(abiertos.map((a) => a.bytes)))
     } catch (e) {
@@ -170,8 +178,9 @@ function PasoFichero({ p, empezarDeCero, seguir }: {
         <span className="cx-fila-apoyo">Se leen en tu dispositivo: no se sube el fichero, solo las cuentas que tiene.</span>
       </label>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      {tablas.map((t, i) => (
-        <Asignar key={t.fichero.nombre + i} t={t} cambiar={(c) => setTablas((ts) => ts.map((x, j) => (j === i ? { ...x, columnas: c } : x)))} />
+      {tablas.map((t, i) => (t.fichero.pdf
+        ? <p key={t.fichero.nombre + i} className="cx-ayuda cx-traer-pdf" style={{ margin: 0 }}>{lineaPdf(t.fichero.nombre, t.fichero.pdf)}</p>
+        : <Asignar key={t.fichero.nombre + i} t={t} cambiar={(c) => setTablas((ts) => ts.map((x, j) => (j === i ? { ...x, columnas: c } : x)))} />
       ))}
       {tablas.length > 0 && !lectura && <p className="cx-ayuda" role="status">Dime qué columna lleva el código y cuál el nombre de cada fichero.</p>}
       {resumen && (resumen.ok
