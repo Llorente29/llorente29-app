@@ -112,6 +112,9 @@ export function salidaNumeracionAgotada(
 }
 
 /** El sufijo de 472/477 por tipo de IVA: el tipo en enteros (21 → …021); 9,5 % → 95. */
+/** 21 → «21 %»; 7,5 → «7,5 %». El nombre de una subcuenta de IVA. */
+export const textoTipo = (rate: number): string => `${String(rate).replace('.', ',')} %`
+
 export function sufijoDeTipo(rate: number): number {
   return Number.isInteger(rate) ? rate : Math.round(rate * 10)
 }
@@ -153,14 +156,16 @@ export function activar(e: EntradaActivacion): SalidaActivacion {
 
   // IVA: una subcuenta por tipo, en 472 y en 477.
   const porTipo = new Map<number, string[]>()
-  for (const t of e.ivas) porTipo.set(sufijoDeTipo(t.rate), [...(porTipo.get(sufijoDeTipo(t.rate)) ?? []), t.id])
+  const tipoDe = new Map<number, number>()
+  for (const t of e.ivas) { porTipo.set(sufijoDeTipo(t.rate), [...(porTipo.get(sufijoDeTipo(t.rate)) ?? []), t.id]); tipoDe.set(sufijoDeTipo(t.rate), t.rate) }
   for (const [suf, ids] of [...porTipo].sort((a, b) => b[0] - a[0])) {
     for (const [hoja, papel, nombre] of [['472', 'soportado', 'IVA soportado'], ['477', 'repercutido', 'IVA repercutido']] as const) {
       // Un tipo al 0 % (el IGIC cero) no lleva cuota: va a la hoja, sin subcuenta.
       if (suf === 0) { for (const id of ids) enlaces.push({ entity: 'tax_rate', entityId: id, role: papel, code: rellenar(hoja, d) }); continue }
       const code = subcuenta(hoja, d, suf)
       if (!code || ocupados.has(code)) { avisos.push(`No cabe la subcuenta de ${hoja} para el ${suf} %.`); continue }
-      cuentas.push({ code, templateCode: hoja, name: `${nombre} ${suf} %`, kind: 'own', status: 'activa' })
+      // El nombre lleva el TIPO («7,5 %»); el código, su sufijo (47200075).
+      cuentas.push({ code, templateCode: hoja, name: `${nombre} ${textoTipo(tipoDe.get(suf)!)}`, kind: 'own', status: 'activa' })
       ocupados.add(code)
       for (const id of ids) enlaces.push({ entity: 'tax_rate', entityId: id, role: papel, code })
     }

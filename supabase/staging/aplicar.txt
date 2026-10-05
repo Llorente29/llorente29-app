@@ -1,10 +1,10 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02 · Eliminación de supplier.ledger_account_code (0170, su
-# propia tanda; en producción irá con `autorizo`). Nadie la lee ya: ni el
-# código (este mismo commit), ni la base, ni lo desplegado. Y su prueba, que
-# comprueba la vuelta atrás dentro de un ROLLBACK.
-# Anterior: 37269410510 (0160 y su prueba, en verde).
-supabase/migrations/20261007T0170_c02_elimina.sql
-supabase/staging/sql/20261007_c02_prueba_elimina.sql
+# 05/10/2026 · C02, tarea 5: la 0180 (contestar las propuestas de la IA sobre
+# el plan, todo o nada, con origen IA aceptada y registro; y el nombre del IVA
+# con el tipo, no con el sufijo) y su prueba con los JWT de A y B, que
+# termina en ROLLBACK después de probar la vuelta atrás.
+# Anterior: 37274185317 (0170, eliminación de supplier.ledger_account_code, en verde).
+supabase/migrations/20261007T0180_c02_propuestas_plan.sql
+supabase/staging/sql/20261007_c02_prueba_propuestas.sql

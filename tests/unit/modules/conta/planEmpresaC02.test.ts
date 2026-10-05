@@ -261,3 +261,10 @@ describe('duplicadas, cerrar y palabras clave', () => {
     expect(limpiarPalabras([' Glovo ', 'glovo', 'Uber  Eats', ''])).toEqual(['glovo', 'uber eats'])
   })
 })
+
+describe('el nombre de una subcuenta de IVA lleva el tipo, no el sufijo del código', () => {
+  it('7,5 % → 47200075 «IVA soportado 7,5 %» (no «75 %»)', () => {
+    const r = activar({ hojas: HOJAS.pymes, digitos: 8, ivas: [{ id: 't75', rate: 7.5 }], retenciones: [], gastos: [], bancos: [], proveedores: [], cuentaComun: { proveedores: false } })
+    expect(r.cuentas.filter((c) => c.kind === 'own').map((c) => [c.code, c.name])).toEqual([['47200075', 'IVA soportado 7,5 %'], ['47700075', 'IVA repercutido 7,5 %']])
+  })
+})
