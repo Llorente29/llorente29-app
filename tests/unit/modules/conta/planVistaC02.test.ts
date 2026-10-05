@@ -12,7 +12,7 @@ import { cuentasPorGrupo, encaja, filasPlan, loQueLleva, plainHeredado, resumenP
 
 type Fila = Record<string, unknown>
 const SERIE: CuentaSeriePlan[] = serie.cuentas.filter((c) => c.plan === 'pymes')
-  .map((c) => ({ code: c.code, name: c.name, plainName: c.plain_name, groupCode: c.group_code, parentCode: c.parent_code, isLeaf: c.is_leaf }))
+  .map((c) => ({ code: c.code, name: c.name, plainName: c.plain_name, boeDefinition: c.boe_definition, groupCode: c.group_code, parentCode: c.parent_code, isLeaf: c.is_leaf }))
 const filas = (t: string) => (ref.tablas as Record<string, { filas: unknown }>)[t].filas as Fila[]
 const r = activar({
   hojas: SERIE.filter((s) => s.isLeaf).map((s) => ({ code: s.code, name: s.name, plainName: s.plainName })), digitos: 8,
@@ -28,6 +28,8 @@ const CUENTAS: CuentaPlan[] = r.cuentas.map((c) => ({
   keywords: c.code === '41000001' ? ['local', 'casero'] : [], kind: c.kind, status: c.status, isCommon: !!c.isCommon, source: 'serie',
 }))
 const ENLACES: EnlacePlan[] = r.enlaces.map((l) => ({ companyAccountId: l.code, entity: l.entity, entityId: l.entityId, role: l.role }))
+// Medido con la serie real el 05/10 (respuesta 4): [grupo, de Folvy, del BOE, sin nada].
+const MEDIDO = [[1, 4, 65, 0], [2, 8, 85, 0], [3, 2, 28, 0], [4, 17, 56, 0], [5, 8, 102, 0], [6, 30, 102, 0], [7, 10, 98, 0]]
 const vista = (o: Partial<Parameters<typeof filasPlan>[0]>) => filasPlan({ serie: SERIE, cuentas: CUENTAS, enlaces: ENLACES, grupo: 4, busqueda: '', orden: 'todas', ...o })
 
 describe('filas del plan', () => {
@@ -97,16 +99,43 @@ describe('«qué se apunta aquí» en toda cuenta de apunte (respuesta 3)', () =
     expect(de('47200021').plain).toBe('Casi todo lo que compras')
     expect(de('40000001')).toMatchObject({ plain: null, lleva: '1 proveedor' })
   })
-  it('toda cuenta de apunte con texto en su cadena lo enseña; las que no lo tienen en ninguna parte, se cuentan', () => {
+  it('toda cuenta de apunte con texto en su cadena lo enseña, y ése manda sobre el del BOE', () => {
     const cadena = new Map(SERIE.map((x) => [x.code, x]))
     const deberia = (code: string) => plainHeredado(code, cadena) !== null
     const apunte = f.filter((x) => x.cuentaId && x.tipo === 'cuenta')
-    // Las que tienen texto en su cadena lo enseñan, todas.
-    expect(apunte.filter((x) => deberia(comoEnLaBase.find((c) => c.id === x.cuentaId)!.templateCode) && !x.plain).map((x) => x.numero)).toEqual([])
-    // Medido el 05/10 con la serie real: en el grupo 4, 17 de 73 hojas llevan texto
-    // (propio o heredado). «Qué se apunta aquí» está escrito para 58 cuentas
-    // (en-la-calle.json); el resto no tiene texto en ninguna cuenta de arriba.
-    expect([apunte.filter((x) => x.plain).length, apunte.length]).toEqual([17, 73])
+    expect(apunte.filter((x) => deberia(comoEnLaBase.find((c) => c.id === x.cuentaId)!.templateCode) && (!x.plain || x.plainPgc)).map((x) => x.numero)).toEqual([])
+    // La 400 tiene las dos cosas (texto de Folvy y definición del BOE): sale el de Folvy, sin marca.
+    expect(SERIE.find((s) => s.code === '400')!.boeDefinition).not.toBeNull()
+    expect(de('40000000').plainPgc).toBe(false)
+  })
+})
+
+describe('reserva del BOE cuando no hay texto (respuesta 4)', () => {
+  const comoEnLaBase = CUENTAS.map((c) => (c.kind === 'template' ? { ...c, plainName: SERIE.find((s) => s.code === c.templateCode)?.plainName ?? null } : c))
+  const enGrupo = (g: number) => filasPlan({ serie: SERIE, cuentas: comoEnLaBase, enlaces: ENLACES, grupo: g, busqueda: '', orden: 'todas' })
+  it('la definición propia de su código, marcada (PGC): 40300000 → la de la 403', () => {
+    expect(SERIE.find((s) => s.code === '403')!.plainName).toBeNull()
+    expect(enGrupo(4).find((x) => x.numero === '40300000')).toMatchObject({
+      plain: 'Deudas con las empresas del grupo en su calidad de proveedores, incluso si las deudas se han formalizado en efectos de giro.', plainPgc: true,
+    })
+  })
+  it('si su código no la tiene, la del más cercano hacia arriba: 22000000 → la del subgrupo 22', () => {
+    expect(SERIE.find((s) => s.code === '220')!.boeDefinition).toBeNull()
+    const fila = enGrupo(2).find((x) => x.numero === '22000000')!
+    expect(fila.plainPgc).toBe(true)
+    expect(fila.plain).toBe(SERIE.find((s) => s.code === '22')!.boeDefinition)
+  })
+  it('las subcuentas de terceros siguen sin texto: llevan «1 proveedor»', () => {
+    expect(enGrupo(4).find((x) => x.numero === '40000001')).toMatchObject({ plain: null, plainPgc: false, lleva: '1 proveedor' })
+  })
+  it('ninguna cuenta de apunte del plan de pymes sale solo con el título (medido con la serie real, grupo a grupo)', () => {
+    const cuenta = [1, 2, 3, 4, 5, 6, 7].map((g) => {
+      const ap = enGrupo(g).filter((x) => x.cuentaId && x.tipo === 'cuenta')
+      return [g, ap.filter((x) => x.plain && !x.plainPgc).length, ap.filter((x) => x.plainPgc).length, ap.filter((x) => !x.plain).length]
+    })
+    // [grupo, de Folvy (propio o heredado), del BOE, sin nada]
+    expect(cuenta.map((c) => c[3])).toEqual([0, 0, 0, 0, 0, 0, 0])
+    expect(cuenta).toEqual(MEDIDO)
   })
 })
 

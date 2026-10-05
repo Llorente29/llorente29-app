@@ -21,7 +21,7 @@ import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/Marc
 import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
 import { CampoLista, CampoTexto, Resultado } from '@/modules/conta/empresa/campos'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
-import { cuentasPorGrupo, encaja, filasPlan, lineaDelPlan, type CuentaPlan, type FilaPlan } from '@/modules/conta/lib/planVista'
+import { cuentasPorGrupo, encaja, filasPlan, lineaDelPlan, queSeApunta, type CuentaPlan, type FilaPlan } from '@/modules/conta/lib/planVista'
 import { limpiarPalabras, siguienteLibre, type Entidad } from '@/modules/conta/lib/planEmpresa'
 import { activarPlan, anadirSubcuenta, deshacerSubcuenta, ocultarCuenta, ponerPalabras, type DatosPlan } from '@/modules/conta/services/planService'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
@@ -128,7 +128,12 @@ function AnadirSubcuenta({ p, cerrar }: { p: DatosPlan; cerrar: () => void }) {
 
 // ── Una cuenta abierta ──────────────────────────────────────────────────────
 
-function CuentaAbierta({ c, p }: { c: CuentaPlan; p: DatosPlan }) {
+/** Marca de la reserva del BOE (respuesta 4): la definición del PGC, no un texto escrito para hostelería. */
+function Pgc() {
+  return <> <span className="cx-plan-pgc" title="Definición del Plan General de Contabilidad (BOE, quinta parte)">(PGC)</span></>
+}
+
+function CuentaAbierta({ c, p, plainDe }: { c: CuentaPlan; p: DatosPlan; plainDe: ReadonlyMap<string, string> }) {
   const { plan } = useAjustes()
   const h = useHacer(plan.recargar)
   const [palabras, setPalabras] = useState(c.keywords.join(', '))
@@ -136,9 +141,10 @@ function CuentaAbierta({ c, p }: { c: CuentaPlan; p: DatosPlan }) {
   const nombreDe = (entity: Entidad, id: string) =>
     entity === 'supplier' ? p.proveedores.find((x) => x.id === id)?.name ?? id : entity === 'bank_account' ? p.bancos.find((x) => x.id === id)?.name ?? id : id
   const historial = p.registro.filter((r) => r.code === c.code)
+  const q = queSeApunta(c, { serie: p.serie, enlaces: p.enlaces, plainDe })
   return (
     <div className="cx-tablas-detalle">
-      {c.plainName && <p className="cx-ayuda" style={{ margin: 0 }}>Qué se apunta aquí: {c.plainName}</p>}
+      {q && <p className="cx-ayuda" style={{ margin: 0 }}>Qué se apunta aquí: {q.texto}{q.pgc && <Pgc />}</p>}
       <div className="cx-seccion-titulo">Enlaces</div>
       {enlaces.length === 0 ? <p className="cx-vacio">Nada apunta a esta cuenta.</p> : (
         <ul className="cx-registro" aria-label={`Lo que apunta a ${c.code}`}>
@@ -176,7 +182,7 @@ function Origen({ f }: { f: FilaPlan }) {
   return f.origen === 'tuya' ? <Chip tono="azul">Tuya</Chip> : f.origen === 'propuesta' ? <Chip tono="ia">Propuesta</Chip> : <Chip tono="ia">De serie</Chip>
 }
 
-function Tabla({ p, filas, abierta, abrir }: { p: DatosPlan; filas: FilaPlan[]; abierta: string | null; abrir: (id: string | null) => void }) {
+function Tabla({ p, filas, abierta, abrir, plainDe }: { p: DatosPlan; filas: FilaPlan[]; abierta: string | null; abrir: (id: string | null) => void; plainDe: ReadonlyMap<string, string> }) {
   if (filas.length === 0) return <p className="cx-vacio">Ninguna cuenta encaja con lo que buscas.</p>
   return (
     <div className="cx-rejilla cx-plan-rejilla" role="table" aria-label="Plan contable">
@@ -194,7 +200,7 @@ function Tabla({ p, filas, abierta, abrir }: { p: DatosPlan; filas: FilaPlan[]; 
               <span role="cell" className="cx-cifra cx-plan-numero">{f.numero}</span>
               <span role="cell" className="cx-plan-cuenta">
                 <span className={f.tipo === 'cabecera' ? 'cx-plan-titulo-cabecera' : 'cx-plan-titulo'}>{f.titulo}{f.estado === 'oculta' ? ' · oculta' : ''}</span>
-                {f.plain && <span className="cx-plan-plain">{f.plain}</span>}
+                {f.plain && <span className="cx-plan-plain">{f.plain}{f.plainPgc && <Pgc />}</span>}
               </span>
               <span role="cell" className="cx-rejilla-apoyo">{f.lleva ?? ''}</span>
               <span role="cell"><Origen f={f} /></span>
@@ -205,7 +211,7 @@ function Tabla({ p, filas, abierta, abrir }: { p: DatosPlan; filas: FilaPlan[]; 
                 )}
               </span>
             </div>
-            {abiertaEsta && c && <CuentaAbierta c={c} p={p} />}
+            {abiertaEsta && c && <CuentaAbierta c={c} p={p} plainDe={plainDe} />}
           </div>
         )
       })}
@@ -258,7 +264,7 @@ function Contenido() {
     return (
       <>
         <CabeceraEntradaMovil titulo={c ? `${c.code} · ${c.name}` : codigo} antetitulo="Plan contable" atras={rutaPlan()} />
-        {c ? <section className="cx-tarjeta"><CuentaAbierta c={c} p={p} /></section> : <p className="cx-vacio">Esa cuenta no está en tu plan.</p>}
+        {c ? <section className="cx-tarjeta"><CuentaAbierta c={c} p={p} plainDe={plainDe} /></section> : <p className="cx-vacio">Esa cuenta no está en tu plan.</p>}
       </>
     )
   }
@@ -311,7 +317,7 @@ function Contenido() {
               <Link key={f.clave} to={rutaPlanCuenta(f.numero)} className={`cx-lista-fila${f.tipo === 'subcuenta' ? ' cx-plan-sub' : ''}${!f.usada ? ' cx-plan-sin-uso' : ''}`}>
                 <span className="cx-lista-fila-texto">
                   <span className="cx-lista-fila-titulo"><span className="cx-cifra">{f.numero}</span> · {f.titulo}</span>
-                  {(f.plain || f.lleva) && <span className="cx-lista-fila-apoyo">{[f.lleva, f.plain].filter(Boolean).join(' · ')}</span>}
+                  {(f.plain || f.lleva) && <span className="cx-lista-fila-apoyo">{[f.lleva, f.plain].filter(Boolean).join(' · ')}{f.plain && f.plainPgc && <Pgc />}</span>}
                 </span>
                 <span className="cx-flecha" aria-hidden="true">›</span>
               </Link>
@@ -319,7 +325,7 @@ function Contenido() {
               <div key={f.clave} className="cx-lista-fila cx-plan-cabecera-movil"><span className="cx-cifra">{f.numero}</span> · {f.titulo}</div>
             ))}
           </div>
-        ) : <Tabla p={p} filas={filas} abierta={abierta} abrir={setAbierta} />}
+        ) : <Tabla p={p} filas={filas} abierta={abierta} abrir={setAbierta} plainDe={plainDe} />}
       </section>
       <RegistroPlan registro={p.registro.slice(0, 10)} titulo="Historial de cambios" movil={movil} />
       <Pie p={p} />

@@ -49,6 +49,12 @@ test('cuenta A: activar, buscar «alquiler», añadir y deshacer, ocultar y volv
   // hereda el de la 400; la 47200010, el ejemplo de su tipo en la tabla del C00.
   await expect(plan.getByRole('row').filter({ hasText: /^40000000/ })).toContainText('Lo que debes a quienes te venden género')
   await expect(plan.getByRole('row').filter({ hasText: /^47200010/ })).toContainText('Hostelería, alimentos, transporte')
+  // Respuesta 4: sin texto propio ni heredado, la primera frase de la definición
+  // del BOE, con «(PGC)». La 40300000 no tiene texto de Folvy; la 40000000, sí (y sin marca).
+  const fila403 = plan.getByRole('row').filter({ hasText: /^40300000/ })
+  await expect(fila403).toContainText('Deudas con las empresas del grupo en su calidad de proveedores')
+  await expect(fila403.locator('.cx-plan-pgc')).toHaveText('(PGC)')
+  await expect(plan.getByRole('row').filter({ hasText: /^40000000/ }).locator('.cx-plan-pgc')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/plan-ordenador.png`, fullPage: true })
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])

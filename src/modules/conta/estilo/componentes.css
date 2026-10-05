@@ -669,6 +669,8 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
 .cx-plan-titulo { font-weight: 600; }
 .cx-plan-titulo-cabecera { font-weight: 700; }
 .cx-plan-plain { font-size: 13px; color: var(--cx-apoyo); }
+/* Reserva del BOE (respuesta 4): misma letra que el texto, la marca más pequeña. */
+.cx-plan-pgc { font-size: 11px; color: var(--cx-apoyo); white-space: nowrap; }
 .cx-plan-sub .cx-plan-numero, .cx-plan-sub .cx-plan-cuenta { padding-left: 22px; }
 .cx-plan-sin-uso { color: var(--cx-apoyo); }
 .cx-plan-sin-uso .cx-plan-titulo { font-weight: 500; }

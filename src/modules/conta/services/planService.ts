@@ -56,7 +56,7 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
   const hoy = new Date().toISOString().slice(0, 10)
   const sistema = perfil?.tax_territory === 'canarias' ? 'igic' : 'iva'
   const [serie, cuentas, enlaces, registro, proveedores, bancos, gastos, tipos, contestadas] = await Promise.all([
-    leer<Fila>(tabla('pgc_account').select('code, name, plain_name, group_code, parent_code, is_leaf').eq('plan', plan).is('valid_to', null).order('code'), 'el cuadro de cuentas'),
+    leer<Fila>(tabla('pgc_account').select('code, name, plain_name, boe_definition, group_code, parent_code, is_leaf').eq('plan', plan).is('valid_to', null).order('code'), 'el cuadro de cuentas'),
     leer<Fila>(tabla('company_account').select('id, code, template_code, name, plain_name, keywords, kind, status, is_common, source').eq('account_id', accountId).eq('company_id', companyId).order('code'), 'las cuentas de la empresa'),
     leer<Fila>(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
     leer<Fila>(tabla('company_account_log').select('id, que, code, detalle, done_at, done_by_name, source').eq('account_id', accountId).eq('company_id', companyId).order('done_at', { ascending: false }).limit(50), 'el historial del plan'),
@@ -72,7 +72,7 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
   const gastoDe = new Map(gastos.filter(deEsta).map((g) => [String(g.id), g]))
   return {
     plan, digitos, activo: cuentas.length > 0,
-    serie: serie.map((s) => ({ code: String(s.code), name: String(s.name), plainName: (s.plain_name as string) ?? null, groupCode: Number(s.group_code), parentCode: (s.parent_code as string) ?? null, isLeaf: s.is_leaf === true })),
+    serie: serie.map((s) => ({ code: String(s.code), name: String(s.name), plainName: (s.plain_name as string) ?? null, boeDefinition: (s.boe_definition as string) ?? null, groupCode: Number(s.group_code), parentCode: (s.parent_code as string) ?? null, isLeaf: s.is_leaf === true })),
     cuentas: cuentas.map((c) => ({
       id: String(c.id), code: String(c.code), templateCode: String(c.template_code), name: String(c.name), plainName: (c.plain_name as string) ?? null,
       keywords: Array.isArray(c.keywords) ? (c.keywords as unknown[]).map(String) : [], kind: c.kind === 'own' ? 'own' : 'template',

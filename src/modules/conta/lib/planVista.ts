@@ -16,10 +16,19 @@
 //     su hoja no tiene uno propio, el de la cuenta de arriba más cercana que lo
 //     tenga (40000000 → el de la 400). Las subcuentas de IVA, el ejemplo de su
 //     tipo en la tabla del C00 (`plainDe`); las de terceros llevan «1 proveedor».
+//     Si ni la cuenta ni ninguna de arriba tiene texto (respuesta 4), la primera
+//     frase de la definición del BOE (quinta parte) del código más cercano hacia
+//     arriba que la tenga, marcada `plainPgc` para que la pantalla le ponga
+//     «(PGC)». No se guarda en plain_name: cuando llegue el texto de hostelería,
+//     lo sustituye solo.
 
 import type { Entidad, EstadoCuenta, Papel } from '@/modules/conta/lib/planEmpresa'
 
-export interface CuentaSeriePlan { code: string; name: string; plainName: string | null; groupCode: number; parentCode: string | null; isLeaf: boolean }
+export interface CuentaSeriePlan {
+  code: string; name: string; plainName: string | null; groupCode: number; parentCode: string | null; isLeaf: boolean
+  /** Primera frase de su definición en la quinta parte del BOE (pgc_account.boe_definition), o null. */
+  boeDefinition?: string | null
+}
 export interface CuentaPlan {
   id: string; code: string; templateCode: string; name: string; plainName: string | null; keywords: string[]
   kind: 'template' | 'own'; status: EstadoCuenta; isCommon: boolean; source: 'serie' | 'manual' | 'ai_accepted'
@@ -34,6 +43,8 @@ export interface FilaPlan {
   numero: string
   titulo: string
   plain: string | null
+  /** `plain` es la definición del BOE (reserva), no un texto de Folvy: se enseña con «(PGC)». */
+  plainPgc: boolean
   lleva: string | null
   origen: Origen | null
   usada: boolean
@@ -84,6 +95,37 @@ export function plainHeredado(code: string, porCodigo: ReadonlyMap<string, Cuent
   return null
 }
 
+/** La primera frase de la definición del BOE de una cuenta del cuadro: la suya o la de la cuenta de arriba más cercana. */
+export function definicionHeredada(code: string, porCodigo: ReadonlyMap<string, CuentaSeriePlan>): string | null {
+  for (let s = porCodigo.get(code); s; s = s.parentCode ? porCodigo.get(s.parentCode) : undefined) {
+    if (s.boeDefinition) return s.boeDefinition
+  }
+  return null
+}
+
+export interface QueSeApunta { texto: string; pgc: boolean }
+
+/**
+ * «Qué se apunta aquí» de una cuenta de la empresa, en este orden: el suyo; el
+ * ejemplo de su tipo de IVA (`plainDe`); nada si es la subcuenta de un tercero
+ * (ya dice «1 proveedor»); el heredado de la serie; la definición del BOE.
+ */
+export function queSeApunta(
+  c: CuentaPlan,
+  e: { serie: readonly CuentaSeriePlan[]; enlaces: readonly EnlacePlan[]; plainDe?: ReadonlyMap<string, string> },
+  serieCodigo: ReadonlyMap<string, CuentaSeriePlan> = new Map(e.serie.map((s) => [s.code, s])),
+): QueSeApunta | null {
+  if (c.plainName) return { texto: c.plainName, pgc: false }
+  const propio = e.plainDe?.get(c.id)
+  if (propio) return { texto: propio, pgc: false }
+  const deTercero = e.enlaces.some((l) => l.companyAccountId === c.id && l.role === 'principal' && ['supplier', 'customer', 'bank_account'].includes(l.entity))
+  if (c.kind === 'own' && deTercero) return null
+  const heredado = plainHeredado(c.templateCode, serieCodigo)
+  if (heredado) return { texto: heredado, pgc: false }
+  const boe = definicionHeredada(c.templateCode, serieCodigo)
+  return boe ? { texto: boe, pgc: true } : null
+}
+
 /**
  * Las filas de la tabla. Con búsqueda, se busca en TODOS los grupos (no se
  * esconde nada por estar en otro grupo) y salen las cuentas que encajan con
@@ -98,23 +140,18 @@ export function filasPlan(e: EntradaVista): FilaPlan[] {
   const serie = e.serie.filter((s) => s.code.length > 1 && (buscando || e.grupo === null || s.groupCode === e.grupo))
   const usadaCuenta = (c: CuentaPlan) => c.kind === 'own' || (enlacesDe.get(c.id)?.length ?? 0) > 0
   const serieCodigo = new Map(e.serie.map((s) => [s.code, s]))
-  const deTercero = (c: CuentaPlan) => (enlacesDe.get(c.id) ?? []).some((l) => l.role === 'principal' && ['supplier', 'customer', 'bank_account'].includes(l.entity))
-  const plainDe = (c: CuentaPlan): string | null => {
-    if (c.plainName) return c.plainName
-    const propio = e.plainDe?.get(c.id)
-    if (propio) return propio
-    if (c.kind === 'own' && deTercero(c)) return null // ya dice «1 proveedor»
-    return plainHeredado(c.templateCode, serieCodigo)
+  const filaCuenta = (c: CuentaPlan, tipo: 'cuenta' | 'subcuenta'): FilaPlan => {
+    const q = queSeApunta(c, e, serieCodigo)
+    return {
+      clave: c.id, tipo, numero: c.code, titulo: c.name, plain: q?.texto ?? null, plainPgc: q?.pgc ?? false, lleva: loQueLleva(enlacesDe.get(c.id) ?? []),
+      origen: c.source === 'ai_accepted' || c.kind === 'own' ? 'tuya' : 'serie', usada: usadaCuenta(c), cuentaId: c.id, estado: c.status,
+    }
   }
-  const filaCuenta = (c: CuentaPlan, tipo: 'cuenta' | 'subcuenta'): FilaPlan => ({
-    clave: c.id, tipo, numero: c.code, titulo: c.name, plain: plainDe(c), lleva: loQueLleva(enlacesDe.get(c.id) ?? []),
-    origen: c.source === 'ai_accepted' || c.kind === 'own' ? 'tuya' : 'serie', usada: usadaCuenta(c), cuentaId: c.id, estado: c.status,
-  })
 
   const salida: FilaPlan[] = []
   for (const s of serie) {
     if (!s.isLeaf) {
-      salida.push({ clave: `s:${s.code}`, tipo: s.code.length === 2 ? 'subgrupo' : 'cabecera', numero: s.code, titulo: s.name, plain: s.plainName,
+      salida.push({ clave: `s:${s.code}`, tipo: s.code.length === 2 ? 'subgrupo' : 'cabecera', numero: s.code, titulo: s.name, plain: s.plainName, plainPgc: false,
         lleva: null, origen: null, usada: false, cuentaId: null, estado: null })
       continue
     }
