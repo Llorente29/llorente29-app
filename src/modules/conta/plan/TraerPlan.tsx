@@ -375,6 +375,8 @@ export function TraerPlan({ p, empezarDeCero, alTraer }: { p: DatosPlan; empezar
     setImportId(id); setRevision(r)
     // Nada que revisar: directo al 3 (encargo §5).
     setPaso(contar(filas).revisar === 0 ? 3 : 2)
+    // El plan vuelve a leerse con la importación ya guardada: si la pantalla se monta de nuevo, sigue aquí.
+    plan.recargar()
   }
 
   if (paso === 1 || !revision) return <><Resultado hecho={h.hecho} fallo={h.fallo} /><PasoFichero p={p} empezarDeCero={empezarDeCero} seguir={empezar} /></>

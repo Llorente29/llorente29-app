@@ -4,12 +4,14 @@
 // dispositivo: se leen aquí y solo se guardan las filas leídas (encargo §4.1 y
 // respuesta 1.4: nada de mandar el fichero a un modelo).
 //
-//   · Excel (.xlsx, .xls) y CSV (.csv, .txt) → filas de texto (xlsx, import
-//     dinámico para no cargarlo en el resto de Folvy).
-//   · PDF de Cegid Diez → lectorDiez.ts (pdfjs-dist, determinista).
+//   · Excel (.xlsx, .xls) y CSV (.csv, .txt) → filas de texto (xlsx, la misma
+//     librería con la que Folvy ya lee y escribe Excel en otras pantallas).
+//   · PDF de Cegid Diez → su lector (pdfjs-dist, determinista) llega cuando se vea
+//     la forma de los tres PDF (respuesta 1.4); hasta entonces se pide el Excel.
 //
 // La asignación de columnas y el resto son del núcleo (importarPlan.ts).
 
+import * as XLSX from 'xlsx'
 import { partirCsv } from '@/modules/conta/lib/importarPlan'
 
 export interface FicheroAbierto {
@@ -37,7 +39,6 @@ export async function abrir(f: File): Promise<FicheroAbierto> {
     return { nombre: f.name, clase: 'tabla', bytes, filas: partirCsv(texto) }
   }
   if (ext === 'xlsx' || ext === 'xls') {
-    const XLSX = await import('xlsx')
     const wb = XLSX.read(bytes, { type: 'array' })
     for (const hoja of wb.SheetNames) {
       const filas = (XLSX.utils.sheet_to_json(wb.Sheets[hoja], { header: 1, raw: false, defval: '', blankrows: false }) as unknown[][])

@@ -71,6 +71,8 @@ const fila = (page: Page, code: string) => page.getByRole('table', { name: 'Cuen
 test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Trae y deshace: solo en un tamaño (ver la cabecera)')
   const s = await entrarComo(page, CUENTA_A.email)
+  // Si la pantalla se cae, que el log lo diga (el informe de Playwright no siempre se puede bajar).
+  page.on('pageerror', (e) => console.log(`[error de la página] ${e.message}`))
   await borrarRestos(s)
   let id: string | null = null
   try {
@@ -95,7 +97,9 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 
     // Sin decidir lo dudoso, no se sigue.
-    await expect(page.getByRole('button', { name: 'Siguiente: traer el plan →' })).toBeDisabled()
+    const siguiente = page.getByRole('button', { name: 'Siguiente: traer el plan →' })
+    if (!(await siguiente.count())) console.log(`[sin «Siguiente»] ${page.url()}\n${(await page.locator('body').innerText()).slice(0, 3000)}`)
+    await expect(siguiente).toBeDisabled()
     // «Decide tú»: 111 a la 47510015, ninguno a la 47510019; lo demás, cuenta suya sin ficha o solo cliente.
     await fila(page, '47510015').getByRole('button', { name: '111' }).click()
     await fila(page, '47510019').getByRole('button', { name: 'Ninguno' }).click()
