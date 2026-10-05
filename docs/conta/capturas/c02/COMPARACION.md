@@ -17,6 +17,7 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
 | Cuenta B (Canarias, IGIC) | `plan-b-canarias.png` | — |
 | Ficha › Contabilidad (N7) | `ficha-contabilidad-ordenador.png` | `ficha-contabilidad-movil.png` |
 | Ficha › Ver extracto (vacío hasta el C04) | `ficha-extracto-ordenador.png` | `ficha-extracto-movil.png` |
+| Ficha › Cocina: «Local habitual» (respuesta 3) | `ficha-cocina-local-habitual.png` | — |
 
 ## Igual que la maqueta
 
@@ -34,7 +35,7 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
 
 **Móvil.** Lista por grupos con el buscador arriba; cada cuenta abre su pantalla con «atrás»; «+ Añadir subcuenta» como acción principal.
 
-**Ficha (N7).** Dos tarjetas: **Sus cuentas** (Su cuenta · Sus facturas se apuntan en · IVA que te cobra · Retención · Le pagas desde) y **Saldo y movimientos** (Saldo con él · Este año · Último apunte · Va al 347 este año · Registro sanitario) con «Ver extracto».
+**Ficha (N7).** La pestaña es solo N7 (respuesta 3): dos tarjetas a todo el ancho, **Sus cuentas** (Su cuenta · Sus facturas se apuntan en · IVA que te cobra · Retención · Le pagas desde) y **Saldo y movimientos** (Saldo con él · Este año · Último apunte · Va al 347 este año · Registro sanitario) con «Ver extracto». Sin formulario encima: la e2e comprueba que no hay ni un desplegable ni un campo fuera de las tarjetas y que «Sus facturas se apuntan en» sale una sola vez.
 
 ## Diferencias, una a una
 
@@ -48,6 +49,19 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
 8. **Ficha (N7): lo que solo aplica a algunas empresas sale debajo de Sus cuentas** (tipo de identificador, tipo de operación con su modelo, y prorrata, recargo y criterio de caja solo si la empresa está en ellos), cada uno con su fuente en pequeño (respuesta 2). La maqueta no los dibuja.
 9. **Ficha (N7): el IVA no se cambia desde la ficha.** La cuenta de cada tipo de IVA es de la empresa, no del proveedor: la línea lleva «En el plan» en vez de un desplegable. Lo que sí es suyo (su cuenta, sus facturas, desde dónde le pagas, sus suplidos) se cambia ahí mismo, con buscador, y dice qué ha cambiado (regla 8).
 
+## Respuesta 3 (05/10)
+
+- **Ficha › Contabilidad, solo N7** (`ficha-contabilidad-*.png`). Se quita el formulario de arriba:
+  - «Sus facturas se apuntan en» se cambia desde su tarjeta: «Cambiar» abre el buscador con dos grupos, «Por su tipo de gasto» y «Una cuenta solo para él». Elegir un tipo guarda el tipo de gasto del proveedor y dice adónde van ahora («Sus facturas van ahora a 60000000 · Compras de mercaderías, por su tipo de gasto «…».»). Debajo pone «por su tipo de gasto».
+  - El registro sanitario se edita en Datos fiscales; aquí solo se enseña, en Saldo y movimientos.
+  - Al pie de Sus cuentas, un enlace discreto: «Qué tipos de gasto usa tu negocio», que lleva a Ajustes › Tablas generales.
+  - En la cuenta B la pestaña sigue plegada, y lo de dentro no se ve con el bloque cerrado (lo comprueba la e2e).
+- **«Local habitual», al bloque de Cocina** (`ficha-cocina-local-habitual.png`): encima de «Artículos que le compras», en la ficha general. En B (sin Cocina) no existe, y la e2e lo comprueba con Carnes Sur. Guardar dice cuál ha quedado («Local habitual: X.»).
+- **«Qué se apunta aquí» en las cuentas de apunte** (`plan-ordenador.png`). Si la cuenta no tiene texto propio, hereda el de su cuenta madre: la 40000000 dice «Lo que debes a quienes te venden género…», como la 400. Las subcuentas de terceros siguen con «1 proveedor». Las del IVA llevan el ejemplo de la tabla de impuestos del C00, no un texto escrito en el código: «Hostelería, alimentos, transporte» (10 %) y «Casi todo lo que compras» (21 %).
+  - **Hueco, sin inventar textos:** la serie trae «qué se apunta aquí» en 58 cuentas. Con la herencia, 79 de las 615 hojas tienen texto; en el grupo 4, 17 de 73. El resto sale solo con su título del BOE (por ejemplo, el 403 «Proveedores, empresas del grupo»). La prueba unitaria mide esa cobertura, no la da por hecha.
+- **La 40000000 decía «4 proveedores» que ya no existían.** Eran proveedores que la e2e de propuestas crea y borra: el enlace no tiene clave ajena y sobrevivía a su dueño (5 huérfanos en staging). La 0187 quita el enlace al borrar el proveedor, el banco, el tipo de gasto, el tipo de IVA o la retención, y limpia los que ya había. En esta captura, la 40000000 ya no lleva nada. La e2e de propuestas lo comprueba: antes de borrar, el enlace se ve con la misma sesión; después, no.
+- **En la captura de página entera, la franja «BUILD LOCAL» tapa los títulos de las dos tarjetas.** Es la franja de entorno (`FranjaEntorno`, `sticky`), que sale en todo lo que no es producción, también en la vista previa («PREVIEW»). La captura de página entera la deja a la altura de la ventana; en uso real se queda arriba del todo. En producción no existe.
+
 ## Corregido al compararlas
 
 - **La columna CUENTA era estrecha** (unos 200 px a 1440: los títulos se partían en tres líneas). Ahora NÚMERO 110, LO QUE LLEVAS 140, ORIGEN 96: CUENTA gana unos 100 px.
@@ -58,6 +72,6 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
   - En el ordenador salió el esqueleto de carga en lugar de las dos tarjetas: la captura de página entera cambia el tamaño de la ventana y la pieza se volvía a montar sin datos. Ahora conserva lo último leído mientras vuelve a pedirlo, y la e2e comprueba las tarjetas justo antes de capturar.
   - El IVA salía como «IVA soportado 21 % 21 %», con el tipo repetido. Ahora sale una vez, ordenado por código («47200010 · IVA soportado 10 % y 47200021 · IVA soportado 21 %»). La prueba unitaria compara el texto entero y la e2e comprueba que no se repite.
   - En el móvil, la etiqueta quedaba aplastada a la izquierda («IVA / que / te / cobra»). Ahora va encima y la cuenta debajo, a todo el ancho.
-- **Ficha (N7), segunda captura:** las dos tarjetas iban dentro de la columna de 640 px del formulario (unos 310 px cada una). Ahora van a todo el ancho, como en N7, y los campos de arriba siguen a 640. El extracto abierto no salía en la captura de página entera, porque al volver a montarse la pieza se cerraba. Ahora recuerda si estaba abierto, y tiene su propia captura de elemento.
+- **Ficha (N7), segunda captura:** las dos tarjetas iban dentro de la columna de 640 px del formulario (unos 310 px cada una). Ahora van a todo el ancho, como en N7 (y desde la respuesta 3 ya no hay campos arriba). El extracto abierto no salía en la captura de página entera, porque al volver a montarse la pieza se cerraba. Ahora recuerda si estaba abierto, y tiene su propia captura de elemento.
 - **Propuesta (tarea 5), primera captura:** con un solo proveedor, el porqué decía «Así cada uno tiene su extracto. Van al 400 porque te venden mercancía». Ahora va en singular, con prueba.
 
