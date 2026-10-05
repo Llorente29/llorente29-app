@@ -1,9 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02 · Respuesta 4: la 0115, reserva del BOE de «qué se apunta
-# aquí» (primera frase de la definición de la quinta parte, por código; la
-# herencia se resuelve al enseñar). Y su prueba.
-# Anterior: 37319503205 (0187 y su prueba, en verde).
-supabase/migrations/20261007T0115_c02_pgc_definicion.sql
-supabase/staging/sql/20261007_c02_prueba_definicion.sql
+# 05/10/2026 · C02 · Respuesta 5: la 0189, cambiar el nombre de una subcuenta
+# propia desde su Mayor (con registro). Y su prueba.
+# Anterior: 37330048573 (0115 y su prueba, en verde).
+supabase/migrations/20261007T0189_c02_renombrar_subcuenta.sql
+supabase/staging/sql/20261007_c02_prueba_renombrar.sql
