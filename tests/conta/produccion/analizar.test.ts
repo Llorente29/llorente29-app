@@ -10,9 +10,11 @@
 //   · La eliminación del C01b (0140), ya aplicada (columnas fuera y copia en
 //     su tabla, medido el 05/10): copia fija en tanda-c01b-elimina-20261004.txt,
 //     con su vuelta atrás en vuelta-atras-c01b-elimina-20261004.txt.
+//   · La tanda 1 del C02, ya aplicada (real 37350280770): copia fija en
+//     tanda-c02-1-20261005.txt, con su vuelta atrás en vuelta-atras-c02-1-20261005.txt.
 //   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): la
-//     tanda 1 del C02, con lo que existía en producción el 05/10. Al reescribir
-//     el manifiesto para otra tanda, esta parte se reescribe con él.
+//     eliminación del C02 (0170). Al reescribir el manifiesto para otra tanda,
+//     esta parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -190,8 +192,8 @@ describe('la eliminación del C01b (0140), ya aplicada', () => {
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): la tanda 1 del C02', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda 1 del C02, ya aplicada', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c02-1-20261005.txt'
   const viva = leerTanda(MANIFIESTO)
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c02-tanda1-20261005.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
@@ -215,8 +217,29 @@ describe('la tanda de AHORA (manifiesto vivo): la tanda 1 del C02', () => {
   })
 
   it('su vuelta atrás es la de las doce, al revés', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c02-1-20261005.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): la eliminación del C02 (0170)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c02-0170-20261005.json'))
+
+  it('es solo la 0170, sola', () => {
+    expect(viva).toEqual(['supabase/migrations/20261007T0170_c02_elimina.sql'])
+  })
+
+  it('PARA, y solo por borrar supplier.ledger_account_code', () => {
+    expect(decidir(p.porFichero[viva[0]], p.existe).para).toEqual(['borra · columna · `public.supplier` · drop column ledger_account_code'])
+  })
+
+  it('está nombrada para «autorizo» en la cabecera, y su vuelta atrás devuelve la columna', () => {
+    expect(readFileSync(MANIFIESTO, 'utf8')).toMatch(/^#\s+20261007T0170_c02_elimina\.sql\s*$/m)
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261007T0170_c02_elimina.down.sql'])
+    expect(readFileSync(atras[0], 'utf8')).toContain('add column if not exists ledger_account_code text')
   })
 })
 

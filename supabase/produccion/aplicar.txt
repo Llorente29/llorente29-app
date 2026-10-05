@@ -6,46 +6,23 @@
 # verde del mismo commit, en REAL (un fichero por transacción, para al primer
 # fallo).
 #
-# C02 · Plan contable, TANDA 1 (respuesta 6). Desde la rama conta/c02-plan-contable,
-# ANTES de fusionar el PR #147. Todo nuevo del C02, fuera del camino del pedido:
-# el workflow cuenta 0 nombres de su lista (CAMINO_TABLAS / CAMINO_FUNCIONES).
+# C02 · TANDA 2, la de ELIMINACIÓN. Va después del real de la tanda 1
+# (37350280770, 05/10, sobre b37d78a8) y de la fusión del front que ya no lee la
+# columna (#147, cd14a5af, Vercel READY en producción el 05/10). PARA a
+# propósito y va en el campo «autorizo», nombre entero:
 #
-# UNO PARA y va en el campo «autorizo», nombre entero:
+#   20261007T0170_c02_elimina.sql
 #
-#   20261007T0130_c02_proveedor_400_410.sql
-#
-# Para por dos «update» sobre expense_category, que ya existe. Solo rellenan
-# las dos columnas que la propia 0130 acaba de añadir (supplier_account_leaf y
-# supplier_account_ref), vacías hasta ese momento: no cambian ningún dato que
-# ya estuviera. Medido en producción el 05/10 (solo lectura; catálogo global,
-# tabla entera): 12 tipos de gasto, los 12 de serie; 3 van a la 4000 (60x) y
-# 9 a la 4100 (62x); 0 sin regla, así que su guarda pasa.
-#
-# El resto solo añade sobre algo existente (analizado el 05/10 con lo que
-# existe hoy: ai_suggestion, company_tax_profile, expense_category,
-# official_source, supplier, tax_rate, treasury_account, withholding_rate; ni una
-# función del C02):
-#   · 0110 inserta las tres fuentes del BOE en official_source;
-#   · 0120 cambia el CHECK de company_tax_profile (6 a 12 dígitos; el único
-#     perfil tiene 8) y 0150 le pone un disparador; 0180 amplía el CHECK de
-#     ai_suggestion ('modelo', 'plan');
-#   · 0187 pone un disparador AFTER DELETE en supplier, treasury_account,
-#     expense_category, tax_rate y withholding_rate.
-# Cierres: los «add constraint», «add column» y «create trigger» toman un cierre
-# un instante sobre esas tablas, ninguna del camino del pedido. Avisos para una
-# persona: los «execute» dinámicos de 0120, 0140, 0150 y 0185 son permisos
-# (RLS, grant select / execute), legibles en el fichero.
-#
+# Borra supplier.ledger_account_code. Antes copia los valores en
+# c02_columnas_eliminadas, y su guarda para si alguna función o vista de public
+# la nombra.
+# Medido en producción el 05/10, después de la fusión (solo lectura, tabla
+# entera): 0 de 42 proveedores la tienen rellena (la copia quedará vacía);
+# 0 funciones, 0 vistas, 0 políticas y 0 de 56 crons la nombran; la fusión no
+# tocó supabase/functions (0 ficheros).
+# Cierre: el «drop column» toma ACCESS EXCLUSIVE sobre supplier un instante.
+# supplier no está en la lista del camino del pedido del workflow; quien la lee
+# es compras (albaranes) y el recálculo nocturno (medido el 04/10 para la 0140
+# del C01b, sobre la misma tabla).
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261007T0100_c02_pgc_account.sql
-supabase/migrations/20261007T0110_c02_pgc_serie.sql
-supabase/migrations/20261007T0115_c02_pgc_definicion.sql
-supabase/migrations/20261007T0120_c02_plan_empresa.sql
-supabase/migrations/20261007T0130_c02_proveedor_400_410.sql
-supabase/migrations/20261007T0140_c02_duplicadas_cerrar_palabras.sql
-supabase/migrations/20261007T0150_c02_deshacer_cambio_plan.sql
-supabase/migrations/20261007T0160_c02_cuentas_del_proveedor.sql
-supabase/migrations/20261007T0180_c02_propuestas_plan.sql
-supabase/migrations/20261007T0185_c02_lectura.sql
-supabase/migrations/20261007T0187_c02_enlaces_sin_dueno.sql
-supabase/migrations/20261007T0189_c02_renombrar_subcuenta.sql
+supabase/migrations/20261007T0170_c02_elimina.sql
