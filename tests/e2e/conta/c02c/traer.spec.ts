@@ -88,7 +88,24 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
   let id: string | null = null
   try {
     id = await crearEmpresa(s, `Traer e2e ${Date.now()}`)
+    // Vigía (06/10): la revisión volvía al paso 1 en algún momento y la captura
+    // salió del paso 1. Escribe en el log, con su hora, cada vez que aparece o
+    // se va un paso del asistente, y los eventos de foco, visibilidad y tamaño.
+    await page.addInitScript(() => {
+      const t0 = performance.now()
+      const ms = () => Math.round(performance.now() - t0)
+      const paso = () => document.querySelector('#traer-titulo')?.textContent ?? (document.querySelector('.cx-traer') ? 'cx-traer sin título' : 'nada')
+      let ultimo = ''
+      const mirar = (porque: string) => {
+        const ahora = `${paso()}${document.querySelector('[aria-label="Cuentas que se traen"]') ? ' · con tabla' : ''}`
+        if (ahora !== ultimo) { console.warn(`[vigía ${ms()} ms] ${porque}: ${ultimo || '—'} → ${ahora}`); ultimo = ahora }
+      }
+      new MutationObserver(() => mirar('cambia el DOM')).observe(document, { childList: true, subtree: true })
+      for (const ev of ['focus', 'blur', 'resize', 'pageshow', 'pagehide']) window.addEventListener(ev, () => console.warn(`[vigía ${ms()} ms] ${ev} ${window.innerWidth}×${window.innerHeight}`))
+      document.addEventListener('visibilitychange', () => console.warn(`[vigía ${ms()} ms] visibilidad ${document.visibilityState}`))
+    })
     await abrirPlan(page, id)
+    await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/paso1-ordenador.png`, fullPage: true })
     await hastaLaRevision(page, PDF)
@@ -104,10 +121,13 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     await page.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
     await expect(fila(page, '47510015')).toContainText('hay 2 iguales: 47510015 y 47510019')
     await page.evaluate(() => document.fonts.ready)
+    console.log('[antes de la captura de la revisión]')
     await page.screenshot({ path: `${DIR}/revisar-ordenador.png`, fullPage: true })
-    console.log(`[tras la captura] tabla: ${await page.getByRole('table', { name: 'Cuentas que se traen' }).count()}`)
+    console.log('[después de la captura de la revisión]')
+    // La captura tiene que ser de la revisión: si el asistente se ha ido al paso 1, aquí se para.
+    await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toHaveCount(0)
     expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
-    console.log(`[tras medir] tabla: ${await page.getByRole('table', { name: 'Cuentas que se traen' }).count()}`)
+    await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toHaveCount(0)
 
     // Sin decidir lo dudoso, no se sigue.
     const siguiente = page.getByRole('button', { name: 'Siguiente: traer el plan →' })
