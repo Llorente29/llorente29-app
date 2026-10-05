@@ -69,7 +69,8 @@ function Mayor({ n, p }: { n: NodoPlan; p: DatosPlan }) {
     propia && c.status !== 'cerrada' && (
       <button key="r" type="button" className="cx-boton-sec" aria-expanded={renombrando} onClick={() => { setNombre(c.name); setRenombrando((v) => !v) }}>Cambiar nombre</button>
     ),
-    propia && c.status !== 'cerrada' && (
+    // Con algo enlazado no se deja ocultar (lo dice la base): el botón no se enseña para fallar.
+    propia && c.status !== 'cerrada' && !n.lleva && (
       <button key="o" type="button" className="cx-boton-sec" disabled={h.guardando}
         onClick={() => void h.hacer(async () => { await ocultarCuenta(c.id, c.status === 'activa', null) },
           c.status === 'activa' ? `${c.code} oculta: no sale en listas ni en sugerencias.` : `${c.code} vuelve a verse.`)}>

@@ -147,14 +147,19 @@ test('cuenta A: pinchar en una cuenta lleva a su Mayor; en una con hijas, abre e
   await expect(mayor.locator('.cx-dato').filter({ hasText: 'Saldo' })).toContainText('Sin apuntes todavía')
   await expect(mayor.locator('.cx-dato').filter({ hasText: 'Ejercicio' })).toContainText(/\d{4}/)
   await expect(page.getByRole('region', { name: 'Extracto' }).getByText('Aún no hay apuntes en esta cuenta.')).toBeVisible()
-  // De serie no hay nada que editar; de proveedor, su ficha (y vuelta al Mayor desde «Su cuenta»).
-  await expect(mayor.getByRole('button', { name: 'Cambiar nombre' })).toHaveCount(0)
+  // Es una subcuenta tuya (la creó el plan para él): se le cambia el nombre; con enlaces no se oculta.
+  await expect(mayor.getByRole('button', { name: 'Cambiar nombre' })).toBeVisible()
+  await expect(mayor.getByRole('button', { name: 'Ocultar' })).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/mayor-ordenador.png`, fullPage: true })
   await mayor.getByRole('link', { name: /^Ficha del proveedor/ }).click()
   await expect(page).toHaveURL(/\/kitchen\/proveedores\/[^/]+\/contabilidad$/)
   await page.getByRole('region', { name: 'Sus cuentas' }).getByRole('link', { name: /^Mayor de la cuenta 40000002/ }).click()
   await expect(page).toHaveURL(/\/conta\/plan\/40000002$/)
+  // Una de serie: nada que editar, y lo dice.
+  await page.goto('/conta/plan/62900000')
+  await expect(mayor.getByText('Es de serie: su título es el oficial y no se cambia.')).toBeVisible()
+  await expect(mayor.getByRole('button', { name: 'Cambiar nombre' })).toHaveCount(0)
   await mayor.getByRole('link', { name: '‹ Plan contable' }).click()
   await expect(page).toHaveURL(/\/conta\/ajustes\/plan$/)
 
