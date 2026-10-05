@@ -19,6 +19,8 @@ export interface FichaProveedor {
   id: string
   accountId: string
   name: string
+  /** C02c: la creó «traer el plan» de otro programa (ese programa, para «Traída de Diez · por completar»); null si no. */
+  traidaDe: string | null
   legalName: string | null
   taxId: string | null
   taxIdType: TaxIdType | null

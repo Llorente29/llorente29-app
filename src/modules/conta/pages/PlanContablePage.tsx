@@ -30,6 +30,9 @@ import { activarPlan, anadirSubcuenta, deshacerSubcuenta, ocultarCuenta, ponerPa
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
 import { PropuestasPlan } from '@/modules/conta/plan/PropuestasPlan'
 import { propuestasDelPlan } from '@/modules/conta/lib/propuestasPlan'
+import { nombreCorto } from '@/modules/conta/lib/importarPlan'
+import { TraerPlan } from '@/modules/conta/plan/TraerPlan'
+import { DeshacerTraido } from '@/modules/conta/plan/DeshacerTraido'
 
 const GRUPOS: Record<number, string> = {
   1: 'Financiación básica', 2: 'Inmovilizado', 3: 'Existencias', 4: 'Acreedores y deudores', 5: 'Cuentas financieras',
@@ -210,8 +213,10 @@ function MenuCuenta({ n, c, p, abrirPanel, ocultar }: {
 
 // ── El árbol ────────────────────────────────────────────────────────────────
 
-function Origen({ n }: { n: NodoPlan }) {
+/** de: el programa del que se trajo el plan («Diez»), para las cuentas traídas (C02c). */
+function Origen({ n, de }: { n: NodoPlan; de: string | null }) {
   if (!n.origen) return null
+  if (n.origen === 'traida') return <Chip tono="azul">{de ? `Tuya · de ${de}` : 'Tuya · traída'}</Chip>
   return n.origen === 'tuya' ? <Chip tono="azul">Tuya</Chip> : n.origen === 'propuesta' ? <Chip tono="ia">Propuesta</Chip> : <Chip tono="ia">De serie</Chip>
 }
 
@@ -295,7 +300,7 @@ function Arbol({ p, filas, abierto, alternar, buscando, panel, abrirPanel, ocult
                 {n.plain && <span className="cx-plan-plain">{n.plain}{n.plainPgc && <Pgc />}</span>}
               </span>
               <span role="gridcell" className="cx-rejilla-apoyo">{n.lleva ?? ''}</span>
-              <span role="gridcell"><Origen n={n} /></span>
+              <span role="gridcell"><Origen n={n} de={p.importacion ? nombreCorto(p.importacion.programa) : null} /></span>
               <span role="gridcell" className="cx-plan-accion">
                 {esRama(n)
                   ? <Link to={rutaMayor(n.numero)} className="cx-enlace" tabIndex={-1} aria-label={`Sumas y saldos de ${n.numero} · ${n.titulo}`}>Abrir</Link>
@@ -377,6 +382,9 @@ function Contenido() {
   const [orden, setOrden] = useState<'usadas' | 'todas'>('usadas')
   const [panel, setPanel] = useState<{ id: string; modo: Modo } | null>(null)
   const [anadiendo, setAnadiendo] = useState(false)
+  // C02c: «No, empiezo de cero» (la activación normal) en vez de traer el plan; y lo que se ha traído o deshecho, en una frase.
+  const [deCero, setDeCero] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
   const accion = useHacer(plan.recargar)
   const p = plan.datos
   const { tocados, poner } = useAbiertos(`conta.plan.abiertos.${quien.userId ?? 'anon'}.${quien.companyId}`)
@@ -421,7 +429,21 @@ function Contenido() {
       {botones}
     </div>
   )
-  if (!p.activo) return <>{cabeza}<Activar p={p} /><Pie p={p} /></>
+  const avisoTraer = aviso && <Resultado hecho={aviso} fallo={null} />
+  if (!p.activo) {
+    return (
+      <>
+        {cabeza}
+        {avisoTraer}
+        {deCero
+          ? <><button type="button" className="cx-enlace cx-traer-volver" onClick={() => setDeCero(false)}>‹ Vengo de otro programa</button><Activar p={p} /></>
+          : <TraerPlan p={p} empezarDeCero={() => setDeCero(true)} alTraer={(f) => { setAviso(f); setDeCero(false) }} />}
+        <Pie p={p} />
+      </>
+    )
+  }
+  const deshacer = (r: { que?: string }) => (r.que === 'importado' && p.importacion
+    ? <DeshacerTraido importacion={p.importacion} alDeshacer={(f) => { setAviso(f); plan.recargar() }} /> : null)
 
   const porGrupo = cuentasPorGrupo(p.cuentas)
   const grupos = [...porGrupo.keys()].sort()
@@ -432,6 +454,7 @@ function Contenido() {
   return (
     <>
       {cabeza}
+      {avisoTraer}
       {movil && !nodoMovil && <p className="cx-ayuda" style={{ margin: 0 }}>{lineaDelPlan(p)}</p>}
       {!nodoMovil && <PropuestasPlan propuestas={propuestas} companyId={quien.companyId} quien={null} alCambiar={plan.recargar} />}
       {anadiendo && <AnadirSubcuenta p={p} cerrar={() => setAnadiendo(false)} />}
@@ -461,7 +484,7 @@ function Contenido() {
           ? <ListaMovil filas={filasMovil} buscando={buscando} nivel={rutaNivel} />
           : <Arbol p={p} filas={filas} abierto={abierto} alternar={alternar} buscando={buscando} panel={panel} abrirPanel={setPanel} ocultar={ocultar} />}
       </section>
-      {!nodoMovil && <RegistroPlan registro={p.registro.slice(0, 10)} titulo="Historial de cambios" movil={movil} />}
+      {!nodoMovil && <RegistroPlan registro={p.registro.slice(0, 10)} titulo="Historial de cambios" movil={movil} accion={deshacer} />}
       {!nodoMovil && <Pie p={p} />}
     </>
   )

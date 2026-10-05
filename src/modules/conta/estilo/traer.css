@@ -1,0 +1,73 @@
+/* src/modules/conta/estilo/traer.css
+ *
+ * C02c · «Traer tu plan de otro programa» (maqueta N8Importar). Solo tokens de
+ * tokens.css: ningún color escrito aquí.
+ */
+
+.cx-traer { display: flex; flex-direction: column; gap: 14px; }
+.cx-traer-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.cx-traer-volver { align-self: flex-start; font-size: 13px; font-weight: 600; padding: 0; background: none; border: none; cursor: pointer; }
+
+/* Los tres pasos, arriba a la derecha (✓ hecho · número azul el actual · gris lo que falta). */
+.cx-traer-pasos { list-style: none; margin: 0; padding: 0; display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+.cx-traer-paso { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--cx-apoyo); }
+.cx-traer-paso-actual { font-weight: 600; color: var(--cx-texto); }
+.cx-traer-paso-hecho { color: var(--cx-texto); }
+.cx-traer-bola { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--cx-blanco); background: var(--cx-borde-campo); }
+.cx-traer-paso-actual .cx-traer-bola { background: var(--cx-azul); }
+.cx-traer-paso-hecho .cx-traer-bola { background: var(--cx-verde-oscuro); }
+
+/* Paso 1: de qué programa vienes, y soltar el fichero. */
+.cx-traer-programas { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.cx-traer-programa { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 16px 18px; border-radius: 16px; border: 1px solid var(--cx-linea); background: var(--cx-blanco); cursor: pointer; font: inherit; color: var(--cx-texto); min-height: 72px; }
+.cx-traer-programa:hover, .cx-traer-programa:focus-visible { border-color: var(--cx-azul); outline: none; }
+.cx-traer-cero { background: var(--cx-fondo); }
+.cx-traer-soltar { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 18px; border: 2px dashed var(--cx-borde-campo); border-radius: 16px; text-align: center; cursor: pointer; }
+.cx-traer-soltar-sobre, .cx-traer-soltar:focus-within { border-color: var(--cx-azul); background: var(--cx-azul-suave); }
+.cx-traer-asignar { display: flex; gap: 12px; flex-wrap: wrap; border: 1px solid var(--cx-linea); border-radius: 16px; padding: 12px 14px; margin: 0; }
+.cx-traer-asignar legend { padding: 0 4px; }
+.cx-traer-columna { flex: 1 1 180px; }
+.cx-traer-frase { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Paso 2: las cuatro cifras. */
+.cx-traer-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.cx-traer-cifra { display: flex; flex-direction: column; gap: 5px; padding: 16px 18px; border: 1px solid var(--cx-linea); border-radius: 24px; background: var(--cx-blanco); }
+.cx-traer-numero { font-size: 24px; letter-spacing: -0.8px; }
+.cx-traer-nota { font-size: 13px; font-weight: 500; color: var(--cx-apoyo); }
+.cx-traer-nota-verde { color: var(--cx-verde-oscuro); }
+.cx-traer-nota-ambar { color: var(--cx-ambar); }
+.cx-traer-nota-azul { color: var(--cx-azul); }
+
+/* Paso 2: la tabla (NÚMERO · EN DIEZ · → · EN FOLVY · CONFIANZA · acciones). */
+.cx-traer-tabla { display: flex; flex-direction: column; }
+.cx-traer-fila { display: grid; grid-template-columns: 130px minmax(0, 1fr) 40px minmax(0, 1fr) 120px 170px; gap: 10px; align-items: center; padding: 12px; border-top: 1px solid var(--cx-linea); }
+.cx-traer-titulos { border-top: none; padding-top: 4px; padding-bottom: 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; color: var(--cx-apoyo); }
+.cx-traer-fila-decide { background: var(--cx-ambar-suave); border-radius: 12px; }
+.cx-traer-flecha { color: var(--cx-apoyo); text-align: center; }
+.cx-traer-acciones { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.cx-traer-acciones .cx-enlace { background: none; border: none; padding: 0; font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.cx-traer-fila-cambiar { grid-column: 1 / -1; }
+.cx-traer-cambiar { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--cx-linea); border-radius: 12px; background: var(--cx-blanco); }
+.cx-traer-cambiar .cx-traer-acciones { justify-content: flex-start; }
+.cx-traer-fichas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+.cx-traer-fichas .cx-enlace { background: none; border: none; padding: 4px 0; font: inherit; cursor: pointer; text-align: left; }
+.cx-registro-accion { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+@media (max-width: 1100px) {
+  .cx-traer-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Móvil: una tarjeta por fila (código y confianza arriba; de dónde → a dónde; acciones abajo). */
+@media (max-width: 767px) {
+  .cx-traer-pasos { gap: 10px; }
+  .cx-traer-paso:not(.cx-traer-paso-actual) { font-size: 0; gap: 0; }
+  .cx-traer-fila-movil { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; border: 1px solid var(--cx-linea); border-radius: 16px; margin-top: 8px; }
+  /* Hijos en móvil: 1 código · 2 en Diez · 3 en Folvy · 4 confianza · 5 acciones · 6 «Cambiar». */
+  .cx-traer-fila-movil > :nth-child(1) { order: 0; }
+  .cx-traer-fila-movil > :nth-child(4) { order: 1; justify-self: end; }
+  .cx-traer-fila-movil > :nth-child(2) { order: 2; grid-column: 1 / -1; }
+  .cx-traer-fila-movil > :nth-child(3) { order: 3; grid-column: 1 / -1; }
+  .cx-traer-fila-movil > :nth-child(5) { order: 4; grid-column: 1 / -1; }
+  .cx-traer-fila-movil > :nth-child(6) { order: 5; }
+  .cx-traer-fila-movil .cx-traer-acciones { justify-content: flex-start; }
+  .cx-registro-accion { margin-left: 0; align-items: flex-start; }
+}

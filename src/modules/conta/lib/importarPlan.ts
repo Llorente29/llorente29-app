@@ -39,6 +39,8 @@ export const PROGRAMAS: readonly ProgramaDeOrigen[] = [
 ]
 
 export const programa = (id: Programa): ProgramaDeOrigen => PROGRAMAS.find((p) => p.id === id)!
+/** Cómo se le llama en una frase corta («su número de Diez»). */
+export const nombreCorto = (id: Programa): string => (id === 'diez' ? 'Diez' : programa(id).nombre)
 
 /** Una cuenta tal como viene del fichero. */
 export interface CuentaLeida {

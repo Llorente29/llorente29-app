@@ -31,11 +31,15 @@ export interface CuentaSeriePlan {
 }
 export interface CuentaPlan {
   id: string; code: string; templateCode: string; name: string; plainName: string | null; keywords: string[]
-  kind: 'template' | 'own'; status: EstadoCuenta; isCommon: boolean; source: 'serie' | 'manual' | 'ai_accepted'
+  kind: 'template' | 'own'; status: EstadoCuenta; isCommon: boolean; source: 'serie' | 'manual' | 'ai_accepted' | 'migrated'
 }
 export interface EnlacePlan { companyAccountId: string; entity: Entidad; entityId: string; role: Papel }
 
-export type Origen = 'serie' | 'tuya' | 'propuesta'
+/** «traida»: tuya, venida de otro programa con su número (C02c). */
+export type Origen = 'serie' | 'tuya' | 'propuesta' | 'traida'
+
+/** El origen de una cuenta de la empresa. */
+export const origenDe = (c: Pick<CuentaPlan, 'source' | 'kind'>): Origen => (c.source === 'migrated' ? 'traida' : c.source === 'ai_accepted' || c.kind === 'own' ? 'tuya' : 'serie')
 export interface FilaPlan {
   clave: string
   tipo: 'subgrupo' | 'cabecera' | 'cuenta' | 'subcuenta'
@@ -144,7 +148,7 @@ export function filasPlan(e: EntradaVista): FilaPlan[] {
     const q = queSeApunta(c, e, serieCodigo)
     return {
       clave: c.id, tipo, numero: c.code, titulo: c.name, plain: q?.texto ?? null, plainPgc: q?.pgc ?? false, lleva: loQueLleva(enlacesDe.get(c.id) ?? []),
-      origen: c.source === 'ai_accepted' || c.kind === 'own' ? 'tuya' : 'serie', usada: usadaCuenta(c), cuentaId: c.id, estado: c.status,
+      origen: origenDe(c), usada: usadaCuenta(c), cuentaId: c.id, estado: c.status,
     }
   }
 

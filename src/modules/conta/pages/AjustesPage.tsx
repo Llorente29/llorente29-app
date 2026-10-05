@@ -11,6 +11,7 @@
 // El bloque verde de la IA es una SUGERENCIA (§6.2 del C00): solo si se puede
 // fundamentar con datos de la propia cuenta.
 
+import { useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { ENTRADA_DE_APARTADO, entradaAjustes, rutaAjustes } from '@/config/navegacion'
 import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
@@ -21,6 +22,8 @@ import { Actividades, EjercicioMeses, Socios } from '@/modules/conta/empresa/Apa
 import { RegistroIA, Sugerencias } from '@/modules/conta/ia/PiezasIA'
 import { ParaPresentar } from '@/modules/conta/empresa/ApartadoPresentar'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
+import { DeshacerTraido } from '@/modules/conta/plan/DeshacerTraido'
+import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 
 function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
@@ -34,6 +37,8 @@ function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
 
 function Entrada({ id }: { id: string }) {
   const { datos, plan, quien, movil, hoy } = useAjustes()
+  // C02c: lo que ha hecho «Deshacer entero» del plan traído, en una frase (el botón desaparece al recargar).
+  const [aviso, setAviso] = useState<string | null>(null)
   const e = entradaAjustes(id)!
   const d = datos.datos
   const titulo = id === 'ejercicio' && d ? (() => { const ej = ejercicioActual(d.ejercicios, hoy); return ej ? `Ejercicio ${ej.code}` : 'Ejercicio' })() : e.etiqueta
@@ -76,7 +81,9 @@ function Entrada({ id }: { id: string }) {
         <>
           {cabeza}
           <RegistroIA registro={d.ia.registro} alCambiar={datos.recargar} movil={movil} />
-          <RegistroPlan registro={plan.datos?.registro ?? []} />
+          {aviso && <Resultado hecho={aviso} fallo={null} />}
+          <RegistroPlan registro={plan.datos?.registro ?? []} accion={(r) => (r.que === 'importado' && plan.datos?.importacion
+            ? <DeshacerTraido importacion={plan.datos.importacion} alDeshacer={(f) => { setAviso(f); plan.recargar() }} /> : null)} />
         </>
       )
     default: return <Navigate to={rutaAjustes()} replace />
