@@ -10,6 +10,7 @@
 --   3. Todo o nada: si una operación falla (código ocupado), no queda ninguna.
 --      Un código de otra hoja o de otra longitud, no.
 --   4. Ocultar: una enlazada no (guarda de la 0120); una libre sí, con registro.
+--      La libre se elige en la base (del 6, activa, sin enlaces).
 --   5. company_chart_activate nombra el IVA con el tipo («7,5 %», no «75 %»).
 --   6. B no contesta propuestas de A.
 --   7. Vuelta atrás.
@@ -30,11 +31,18 @@ do $$
 declare
   emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
   prov constant text := 'c02c0180-0000-4000-8000-000000000001';
-  r jsonb; v text; n int; fallo text;
+  r jsonb; v text; n int; fallo text; libre text;
 begin
   if not exists (select 1 from public.company_account where company_id = emp) then
     perform public.company_chart_activate(emp, false, 'prueba 0180');
   end if;
+  -- Una cuenta del 6 activa y SIN enlaces, elegida aquí (la 62900000 la enlaza
+  -- un tipo de gasto; la 68100000 la oculta y enseña la e2e, que corre a la vez).
+  select a.code into libre from public.company_account a
+   where a.company_id = emp and a.kind = 'template' and a.status = 'activa' and a.code like '6%' and a.code <> '68100000'
+     and not exists (select 1 from public.company_account_link l where l.company_account_id = a.id)
+   order by a.code desc limit 1;
+  if libre is null then raise exception 'PRUEBA C02 0180: no hay una cuenta del 6 libre para probar'; end if;
 
   -- 1
   r := public.company_plan_propuesta_responder(emp, 'prueba:proveedores:' || prov, 'Tienes 1 proveedor nuevo que no tiene subcuenta. ¿Le creo la suya en el 400?',
@@ -51,15 +59,15 @@ begin
     raise exception 'PRUEBA C02 0180: la respuesta no está guardada';
   end if;
   begin
-    perform public.company_plan_propuesta_responder(emp, 'prueba:proveedores:' || prov, 't', 'p', 'alta', true, '[{"op":"ocultar","code":"62900000"}]', 'prueba');
+    perform public.company_plan_propuesta_responder(emp, 'prueba:proveedores:' || prov, 't', 'p', 'alta', true, jsonb_build_array(jsonb_build_object('op', 'ocultar', 'code', libre)), 'prueba');
     raise exception 'PRUEBA C02 0180: se ha contestado dos veces';
   exception when check_violation then fallo := sqlerrm; end;
 
   -- 2
   select count(*) into n from public.company_account where company_id = emp;
-  r := public.company_plan_propuesta_responder(emp, 'prueba:rechazada', '¿La oculto?', 'Sin uso.', 'media', false, '[{"op":"ocultar","code":"62900000"}]', 'prueba');
+  r := public.company_plan_propuesta_responder(emp, 'prueba:rechazada', '¿La oculto?', 'Sin uso.', 'media', false, jsonb_build_array(jsonb_build_object('op', 'ocultar', 'code', libre)), 'prueba');
   if (select count(*) from public.company_account where company_id = emp) <> n
-     or (select status from public.company_account where company_id = emp and code = '62900000') <> 'activa'
+     or (select status from public.company_account where company_id = emp and code = libre) <> 'activa'
      or not exists (select 1 from public.ai_suggestion where company_id = emp and reason_key = 'prueba:rechazada' and status = 'rejected') then
     raise exception 'PRUEBA C02 0180: rechazar ha hecho algo o no se ha guardado';
   end if;
@@ -91,12 +99,12 @@ begin
     if sqlerrm like 'PRUEBA%' then raise; end if;
     fallo := sqlerrm;
   end;
-  r := public.company_plan_propuesta_responder(emp, 'prueba:ocultar-libre', '¿La oculto?', 'Sin uso.', 'alta', true, '[{"op":"ocultar","code":"62900000"}]', 'prueba');
-  if (select status from public.company_account where company_id = emp and code = '62900000') <> 'oculta'
-     or not exists (select 1 from public.company_account_log where company_id = emp and code = '62900000' and que = 'oculta' and source = 'ai_accepted') then
+  r := public.company_plan_propuesta_responder(emp, 'prueba:ocultar-libre', '¿La oculto?', 'Sin uso.', 'alta', true, jsonb_build_array(jsonb_build_object('op', 'ocultar', 'code', libre)), 'prueba');
+  if (select status from public.company_account where company_id = emp and code = libre) <> 'oculta'
+     or not exists (select 1 from public.company_account_log where company_id = emp and code = libre and que = 'oculta' and source = 'ai_accepted') then
     raise exception 'PRUEBA C02 0180: no ha ocultado la libre o no está en el registro';
   end if;
-  raise notice 'PRUEBA C02 0180 · 1-4 en verde';
+  raise notice 'PRUEBA C02 0180 · 1-4 en verde (cuenta libre: %)', libre;
 end $$;
 reset role;
 

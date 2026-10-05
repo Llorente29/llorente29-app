@@ -1,10 +1,8 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02, tarea 5: la 0180 (contestar las propuestas de la IA sobre
-# el plan, todo o nada, con origen IA aceptada y registro; y el nombre del IVA
-# con el tipo, no con el sufijo) y su prueba con los JWT de A y B, que
-# termina en ROLLBACK después de probar la vuelta atrás.
-# Anterior: 37274185317 (0170, eliminación de supplier.ledger_account_code, en verde).
-supabase/migrations/20261007T0180_c02_propuestas_plan.sql
+# 05/10/2026 · C02, tarea 5 · Segunda vuelta de la prueba de la 0180. La 0180
+# ya está aplicada (37285094645, fichero [1] en verde); la prueba falló porque
+# ocultaba la 62900000, que la enlaza un tipo de gasto: la guarda de la 0120
+# hizo lo que debía. Ahora la cuenta libre se elige en la base.
 supabase/staging/sql/20261007_c02_prueba_propuestas.sql
