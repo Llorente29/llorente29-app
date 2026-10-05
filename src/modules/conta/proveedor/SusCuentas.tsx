@@ -20,13 +20,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { Chip, Dato, ErrorConReintento, Tarjeta, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
-import { rutaPlan, rutaTablasGenerales } from '@/config/navegacion'
+import { rutaMayor, rutaPlan, rutaTablasGenerales } from '@/config/navegacion'
 import { cuentaEnLaFicha } from '@/modules/conta/lib/opcionesFicha'
 import { porUso } from '@/modules/conta/lib/masUsados'
 import { encaja } from '@/modules/conta/lib/planVista'
-import { euros, eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { euros, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { ExtractoCuenta } from '@/modules/conta/plan/ExtractoCuenta'
 import {
-  cuentasDelProveedor, extracto, saldosPorMes, textoSaldo, vaAl347,
+  cuentasDelProveedor, extracto, textoSaldo, vaAl347,
   type Apunte, type LineaCuenta,
 } from '@/modules/conta/lib/cuentasProveedor'
 import {
@@ -80,7 +81,8 @@ function FilaCuenta({ l, cambiar, quitar, tipos, elegirTipo, idCambiar }: {
   const deTipo = useMemo(() => (tipos ?? []).filter((t) => encaja(busca, { code: t.code, name: t.titulo, plainName: null })), [tipos, busca])
   const total = opciones.length + deTipo.length
   const valor = l.cuentas.length
-    ? <>{l.cuentas.map((c, i) => <span key={c.id}>{i > 0 && <span className="cx-dato-vacio"> y </span>}{c.titulo}</span>)}</>
+    // Pinchar en una cuenta lleva a su Mayor (respuesta 5), como en Diez, Holded o QuickBooks.
+    ? <>{l.cuentas.map((c, i) => <span key={c.id}>{i > 0 && <span className="cx-dato-vacio"> y </span>}<Link to={rutaMayor(c.code)} className="cxp-cuenta-mayor" aria-label={`Mayor de la cuenta ${c.titulo}`}>{c.titulo}</Link></span>)}</>
     : null
   return (
     <div className="cxp-cuenta">
@@ -134,57 +136,14 @@ function FilaCuenta({ l, cambiar, quitar, tipos, elegirTipo, idCambiar }: {
 
 function Extracto({ ejercicios, alCerrar }: { ejercicios: DatosCuentasProveedor['ejercicios']; alCerrar: () => void }) {
   const { rutaApartado } = useFicha()
-  const hoy = hoyEnMadrid()
-  const [vista, setVista] = useState<'apuntes' | 'meses'>('apuntes')
-  const deHoy = ejercicios.find((e) => e.inicio <= hoy && e.fin >= hoy) ?? ejercicios[0] ?? null
-  const [code, setCode] = useState(deHoy?.code ?? '')
-  const ej = ejercicios.find((e) => e.code === code) ?? deHoy
-  const rango = ej ?? { code: hoy.slice(0, 4), inicio: `${hoy.slice(0, 4)}-01-01`, fin: `${hoy.slice(0, 4)}-12-31` }
-  const delEjercicio = APUNTES.filter((a) => a.fecha >= rango.inicio && a.fecha <= rango.fin)
-  const anteriores = APUNTES.filter((a) => a.fecha < rango.inicio)
-  const apertura = extracto(anteriores).at(-1)?.saldo ?? 0
-  const filas = extracto(delEjercicio, apertura)
-  const meses = saldosPorMes(APUNTES, rango)
   return (
-    <Tarjeta titulo="Extracto" accion={<button type="button" className="cx-enlace" onClick={alCerrar}>Cerrar</button>}>
-      <div className="cx-chips cxp-extracto-barra">
-        <button type="button" className="cx-pildora" aria-pressed={vista === 'apuntes'} onClick={() => setVista('apuntes')}>Apunte a apunte</button>
-        <button type="button" className="cx-pildora" aria-pressed={vista === 'meses'} onClick={() => setVista('meses')}>Saldos por mes</button>
-        {ejercicios.length > 1 && (
-          <select className="cx-input" aria-label="Ejercicio" value={rango.code} onChange={(e) => setCode(e.target.value)} style={{ width: 'auto' }}>
-            {ejercicios.map((e) => <option key={e.code} value={e.code}>Ejercicio {e.code}</option>)}
-          </select>
-        )}
-      </div>
-      {APUNTES.length === 0 ? (
-        <Vacio titulo="Aún no hay apuntes con este proveedor."
-          explicacion={`Los asientos de sus facturas y de sus pagos llegan con la contabilidad de facturas recibidas. Cuando los haya, aquí verás cada apunte con su saldo y, por meses, el debe, el haber y el saldo del ejercicio ${rango.code}, con su apertura y su cierre.`} />
-      ) : vista === 'apuntes' ? (
-        <table className="cxp-extracto">
-          <thead><tr><th>Fecha</th><th>Documento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo</th></tr></thead>
-          <tbody>
-            <tr><td colSpan={5}>Apertura</td><td>{eurosExactos(apertura)}</td></tr>
-            {filas.map((a, i) => (
-              <tr key={`${a.documento}-${i}`}>
-                <td>{fechaLarga(a.fecha)}</td><td>{a.enlace ? <Link to={rutaApartado('facturas')} aria-label={`${a.enlace.tipo === 'pago' ? 'Ver el pago' : 'Ver la factura'} ${a.documento}`}>{a.documento}</Link> : a.documento}</td><td>{a.concepto}</td>
-                <td>{a.debe ? eurosExactos(a.debe) : ''}</td><td>{a.haber ? eurosExactos(a.haber) : ''}</td><td>{eurosExactos(a.saldo)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <table className="cxp-extracto">
-          <thead><tr><th>Mes</th><th>Debe</th><th>Haber</th><th>Saldo</th><th>Acumulado</th></tr></thead>
-          <tbody>
-            <tr><td>Apertura</td><td /><td /><td /><td>{eurosExactos(meses.apertura)}</td></tr>
-            {meses.meses.map((m) => (
-              <tr key={m.mes}><td>{m.mes}</td><td>{eurosExactos(m.debe)}</td><td>{eurosExactos(m.haber)}</td><td>{eurosExactos(m.saldo)}</td><td>{eurosExactos(m.acumulado)}</td></tr>
-            ))}
-            <tr><td>Total del año</td><td>{eurosExactos(meses.debe)}</td><td>{eurosExactos(meses.haber)}</td><td /><td>Cierre {eurosExactos(meses.cierre)}</td></tr>
-          </tbody>
-        </table>
-      )}
-    </Tarjeta>
+    <ExtractoCuenta ejercicios={ejercicios} apuntes={APUNTES}
+      accion={<button type="button" className="cx-enlace" onClick={alCerrar}>Cerrar</button>}
+      vacio={(ej) => ({
+        titulo: 'Aún no hay apuntes con este proveedor.',
+        explicacion: `Los asientos de sus facturas y de sus pagos llegan con la contabilidad de facturas recibidas. Cuando los haya, aquí verás cada apunte con su saldo y, por meses, el debe, el haber y el saldo del ejercicio ${ej}, con su apertura y su cierre.`,
+      })}
+      documento={(a) => (a.enlace ? <Link to={rutaApartado('facturas')} aria-label={`${a.enlace.tipo === 'pago' ? 'Ver el pago' : 'Ver la factura'} ${a.documento}`}>{a.documento}</Link> : a.documento)} />
   )
 }
 

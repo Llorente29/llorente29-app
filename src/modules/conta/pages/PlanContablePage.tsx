@@ -13,17 +13,20 @@
 // Sin plan activado: se activa aquí, eligiendo subcuenta por proveedor o
 // cuenta común, y la pantalla dice lo que ha creado (regla 8).
 
-import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { rutaPlan, rutaPlanCuenta, rutaPlanSitio } from '@/config/navegacion'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { rutaFichaProveedor, rutaMayor, rutaPlan, rutaPlanSitio, rutaTablasGenerales } from '@/config/navegacion'
 import { Chip, ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/MarcoAjustes'
 import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
 import { CampoLista, CampoTexto, Resultado } from '@/modules/conta/empresa/campos'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
-import { cuentasPorGrupo, encaja, filasPlan, lineaDelPlan, queSeApunta, type CuentaPlan, type FilaPlan } from '@/modules/conta/lib/planVista'
+import { cuentasPorGrupo, encaja, lineaDelPlan, type CuentaPlan } from '@/modules/conta/lib/planVista'
+import {
+  abiertosPorDefecto, arbolPlan, duenoDeCuenta, ejemplosDeIva, estaAbierto, filasBuscadas, filasVisibles, resumenNodo, textoRuta, tieneHijos, type NodoPlan,
+} from '@/modules/conta/lib/planArbol'
 import { limpiarPalabras, siguienteLibre, type Entidad } from '@/modules/conta/lib/planEmpresa'
-import { activarPlan, anadirSubcuenta, deshacerSubcuenta, ocultarCuenta, ponerPalabras, type DatosPlan } from '@/modules/conta/services/planService'
+import { activarPlan, anadirSubcuenta, deshacerSubcuenta, ocultarCuenta, ponerPalabras, renombrarCuenta, type DatosPlan } from '@/modules/conta/services/planService'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
 import { PropuestasPlan } from '@/modules/conta/plan/PropuestasPlan'
 import { propuestasDelPlan } from '@/modules/conta/lib/propuestasPlan'
@@ -31,9 +34,6 @@ import { propuestasDelPlan } from '@/modules/conta/lib/propuestasPlan'
 const GRUPOS: Record<number, string> = {
   1: 'Financiación básica', 2: 'Inmovilizado', 3: 'Existencias', 4: 'Acreedores y deudores', 5: 'Cuentas financieras',
   6: 'Compras y gastos', 7: 'Ventas e ingresos', 8: 'Gastos imputados al patrimonio neto', 9: 'Ingresos imputados al patrimonio neto',
-}
-const NOMBRE_ENTIDAD: Record<Entidad, string> = {
-  supplier: 'Proveedor', customer: 'Cliente', bank_account: 'Banco', expense_category: 'Tipo de gasto', tax_rate: 'Tipo de IVA', withholding_rate: 'Retención',
 }
 
 
@@ -126,95 +126,215 @@ function AnadirSubcuenta({ p, cerrar }: { p: DatosPlan; cerrar: () => void }) {
   )
 }
 
-// ── Una cuenta abierta ──────────────────────────────────────────────────────
+// ── Una cuenta, desde su «···» ──────────────────────────────────────────────
 
 /** Marca de la reserva del BOE (respuesta 4): la definición del PGC, no un texto escrito para hostelería. */
 function Pgc() {
   return <> <span className="cx-plan-pgc" title="Definición del Plan General de Contabilidad (BOE, quinta parte)">(PGC)</span></>
 }
 
-function CuentaAbierta({ c, p, plainDe }: { c: CuentaPlan; p: DatosPlan; plainDe: ReadonlyMap<string, string> }) {
+type Modo = 'nombre' | 'palabras'
+
+/** Lo que se edita desde el «···» de una fila: el nombre (si es tuya) o sus palabras clave. Debajo de la fila. */
+function PanelCuenta({ c, modo, cerrar }: { c: CuentaPlan; modo: Modo; cerrar: () => void }) {
   const { plan } = useAjustes()
   const h = useHacer(plan.recargar)
   const [palabras, setPalabras] = useState(c.keywords.join(', '))
-  const enlaces = p.enlaces.filter((l) => l.companyAccountId === c.id)
-  const nombreDe = (entity: Entidad, id: string) =>
-    entity === 'supplier' ? p.proveedores.find((x) => x.id === id)?.name ?? id : entity === 'bank_account' ? p.bancos.find((x) => x.id === id)?.name ?? id : id
-  const historial = p.registro.filter((r) => r.code === c.code)
-  const q = queSeApunta(c, { serie: p.serie, enlaces: p.enlaces, plainDe })
+  const [nombre, setNombre] = useState(c.name)
   return (
     <div className="cx-tablas-detalle">
-      {q && <p className="cx-ayuda" style={{ margin: 0 }}>Qué se apunta aquí: {q.texto}{q.pgc && <Pgc />}</p>}
-      <div className="cx-seccion-titulo">Enlaces</div>
-      {enlaces.length === 0 ? <p className="cx-vacio">Nada apunta a esta cuenta.</p> : (
-        <ul className="cx-registro" aria-label={`Lo que apunta a ${c.code}`}>
-          {enlaces.map((l) => <li key={`${l.entity}:${l.entityId}:${l.role}`}><span className="cx-fila-titulo">{NOMBRE_ENTIDAD[l.entity]} · {nombreDe(l.entity, l.entityId)}{l.role !== 'principal' ? ` (${l.role})` : ''}</span></li>)}
-        </ul>
+      {modo === 'nombre' ? (
+        <form className="cx-formulario" aria-label={`Cambiar el nombre de ${c.code}`} onSubmit={(e) => {
+          e.preventDefault()
+          let queda = ''
+          void h.hacer(async () => { queda = await renombrarCuenta(c.id, nombre, null) }, () => `${c.code} se llama ahora ${queda}. Queda en el historial del plan.`)
+        }}>
+          <CampoTexto etiqueta="Nombre" valor={nombre} cambiar={setNombre} deshabilitado={h.guardando} />
+          <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>
+            <button type="submit" className="cx-boton-sec" disabled={h.guardando}>Guardar el nombre</button>
+            <button type="button" className="cx-enlace" onClick={cerrar}>Cerrar</button>
+          </div>
+        </form>
+      ) : (
+        <form className="cx-formulario" aria-label={`Palabras clave de ${c.code}`} onSubmit={(e) => {
+          e.preventDefault()
+          const v = limpiarPalabras(palabras.split(','))
+          void h.hacer(async () => { await ponerPalabras(c.id, v, null) }, v.length ? `Palabras clave de ${c.code}: ${v.join(', ')}.` : `${c.code} ya no tiene palabras clave.`)
+        }}>
+          <CampoTexto etiqueta="Palabras clave (separadas por comas): para que el buscador la encuentre con tus palabras" valor={palabras} cambiar={setPalabras} deshabilitado={h.guardando} />
+          <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>
+            <button type="submit" className="cx-boton-sec" disabled={h.guardando}>Guardar palabras</button>
+            <button type="button" className="cx-enlace" onClick={cerrar}>Cerrar</button>
+          </div>
+        </form>
       )}
-      <form className="cx-formulario" aria-label={`Palabras clave de ${c.code}`} onSubmit={(e) => {
-        e.preventDefault()
-        const v = limpiarPalabras(palabras.split(','))
-        void h.hacer(async () => { await ponerPalabras(c.id, v, null) }, v.length ? `Palabras clave de ${c.code}: ${v.join(', ')}.` : `${c.code} ya no tiene palabras clave.`)
-      }}>
-        <CampoTexto etiqueta="Palabras clave (separadas por comas): para que el buscador la encuentre con tus palabras" valor={palabras} cambiar={setPalabras} deshabilitado={h.guardando} />
-        <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>
-          <button type="submit" className="cx-boton-sec" disabled={h.guardando}>Guardar palabras</button>
-          {c.status !== 'cerrada' && (
-            <button type="button" className="cx-boton-sec" disabled={h.guardando}
-              onClick={() => void h.hacer(async () => { await ocultarCuenta(c.id, c.status === 'activa', null) },
-                c.status === 'activa' ? `${c.code} oculta: no sale en listas ni en sugerencias.` : `${c.code} vuelve a verse.`)}>
-              {c.status === 'activa' ? 'Ocultar' : 'Volver a enseñar'}
-            </button>
-          )}
-        </div>
-      </form>
-      {c.kind === 'template' && <p className="cx-ayuda" style={{ margin: 0 }}>Es de serie: su título es el oficial y no se cambia; se puede ocultar y darle palabras clave.</p>}
-      {historial.length > 0 && <RegistroPlan registro={historial} titulo={`Historial de ${c.code}`} />}
       <Resultado hecho={h.hecho} fallo={h.fallo} />
     </div>
   )
 }
 
-// ── La tabla ────────────────────────────────────────────────────────────────
-
-function Origen({ f }: { f: FilaPlan }) {
-  if (!f.origen) return null
-  return f.origen === 'tuya' ? <Chip tono="azul">Tuya</Chip> : f.origen === 'propuesta' ? <Chip tono="ia">Propuesta</Chip> : <Chip tono="ia">De serie</Chip>
+/** «···» de una cuenta: el Mayor, la ficha de su dueño, cambiar nombre, palabras clave y ocultar. */
+function MenuCuenta({ n, c, p, abrirPanel, ocultar }: {
+  n: NodoPlan; c: CuentaPlan; p: DatosPlan; abrirPanel: (m: Modo) => void; ocultar: () => void
+}) {
+  const [abierto, setAbierto] = useState(false)
+  const caja = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!abierto) return
+    const fuera = (e: MouseEvent) => { if (!caja.current?.contains(e.target as Node)) setAbierto(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false) }
+    document.addEventListener('mousedown', fuera)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', esc) }
+  }, [abierto])
+  const dueno = duenoDeCuenta(c, p.enlaces)
+  const elige = (f: () => void) => () => { setAbierto(false); f() }
+  return (
+    <div className="cx-plan-mas" ref={caja}>
+      <button type="button" className="cx-boton-sec cx-mas" aria-haspopup="menu" aria-expanded={abierto} tabIndex={-1}
+        aria-label={`Más de ${n.numero} · ${n.titulo}`} onClick={() => setAbierto((v) => !v)}>···</button>
+      {abierto && (
+        <div className="cxp-menu" role="menu" aria-label={`Acciones de ${n.numero}`}>
+          <Link role="menuitem" to={rutaMayor(n.numero)}>Ver el Mayor</Link>
+          {dueno?.tipo === 'proveedor' && <Link role="menuitem" to={rutaFichaProveedor(dueno.id, 'contabilidad')}>Ficha del proveedor</Link>}
+          {dueno?.tipo === 'banco' && <Link role="menuitem" to={rutaTablasGenerales('bancos-y-cajas')}>Banco</Link>}
+          {c.kind === 'own' && c.status !== 'cerrada' && <button type="button" role="menuitem" onClick={elige(() => abrirPanel('nombre'))}>Cambiar nombre</button>}
+          <button type="button" role="menuitem" onClick={elige(() => abrirPanel('palabras'))}>Palabras clave</button>
+          {c.status !== 'cerrada' && <button type="button" role="menuitem" onClick={elige(ocultar)}>{c.status === 'activa' ? 'Ocultar' : 'Volver a enseñar'}</button>}
+        </div>
+      )}
+    </div>
+  )
 }
 
-function Tabla({ p, filas, abierta, abrir, plainDe }: { p: DatosPlan; filas: FilaPlan[]; abierta: string | null; abrir: (id: string | null) => void; plainDe: ReadonlyMap<string, string> }) {
+// ── El árbol ────────────────────────────────────────────────────────────────
+
+function Origen({ n }: { n: NodoPlan }) {
+  if (!n.origen) return null
+  return n.origen === 'tuya' ? <Chip tono="azul">Tuya</Chip> : n.origen === 'propuesta' ? <Chip tono="ia">Propuesta</Chip> : <Chip tono="ia">De serie</Chip>
+}
+
+const esRama = (n: NodoPlan) => !n.cuentaId
+
+/**
+ * El plan como árbol (respuesta 5), con las columnas de siempre. Las ramas
+ * (grupo, subgrupo, cuenta del cuadro) se abren y se cierran pinchando en la
+ * fila, y su «Abrir» lleva a Sumas y saldos. Las cuentas de apunte y las
+ * subcuentas son un enlace a su Mayor, toda la fila; su ▸ despliega las
+ * subcuentas. Teclado como un árbol: ↑ ↓ para moverse, → abre o baja, ← cierra
+ * o sube, Intro abre la fila. `buscando`: lista plana, con la ruta encima.
+ */
+function Arbol({ p, filas, abierto, alternar, buscando, panel, abrirPanel, ocultar }: {
+  p: DatosPlan; filas: NodoPlan[]; abierto: (clave: string) => boolean; alternar: (clave: string, abrir?: boolean) => void
+  buscando: boolean; panel: { id: string; modo: Modo } | null; abrirPanel: (p: { id: string; modo: Modo } | null) => void; ocultar: (c: CuentaPlan) => void
+}) {
+  const navigate = useNavigate()
+  const [foco, setFoco] = useState<string | null>(null)
+  const filasRef = useRef(new Map<string, HTMLDivElement>())
+  const actual = filas.find((f) => f.clave === foco) ?? filas[0] ?? null
   if (filas.length === 0) return <p className="cx-vacio">Ninguna cuenta encaja con lo que buscas.</p>
+  const ir = (clave: string | null | undefined) => {
+    if (!clave) return
+    setFoco(clave)
+    filasRef.current.get(clave)?.focus()
+  }
+  const activar = (n: NodoPlan) => (esRama(n) ? alternar(n.clave) : navigate(rutaMayor(n.numero)))
+  const teclado = (e: React.KeyboardEvent, n: NodoPlan) => {
+    const i = filas.findIndex((f) => f.clave === n.clave)
+    const conHijos = !buscando && tieneHijos(n)
+    switch (e.key) {
+      case 'ArrowDown': ir(filas[i + 1]?.clave); break
+      case 'ArrowUp': ir(filas[i - 1]?.clave); break
+      case 'Home': ir(filas[0]?.clave); break
+      case 'End': ir(filas.at(-1)?.clave); break
+      case 'ArrowRight':
+        if (conHijos && !abierto(n.clave)) alternar(n.clave, true)
+        else if (conHijos) ir(filas[i + 1]?.clave)
+        break
+      case 'ArrowLeft':
+        if (conHijos && abierto(n.clave)) alternar(n.clave, false)
+        else if (!buscando && n.padre && filas.some((f) => f.clave === n.padre)) ir(n.padre)
+        break
+      case 'Enter': activar(n); break
+      default: return
+    }
+    e.preventDefault()
+  }
   return (
-    <div className="cx-rejilla cx-plan-rejilla" role="table" aria-label="Plan contable">
+    <div className="cx-rejilla cx-plan-rejilla" role="treegrid" aria-label="Plan contable">
       <div className="cx-rejilla-cabeza cx-plan-columnas" role="row">
         <span role="columnheader">NÚMERO</span><span role="columnheader">CUENTA · qué se apunta aquí</span>
         <span role="columnheader">LO QUE LLEVAS</span><span role="columnheader">ORIGEN</span><span role="columnheader"><span className="cx-oculto">Acción</span></span>
       </div>
-      {filas.map((f) => {
-        if (f.tipo === 'subgrupo') return <h3 key={f.clave} className="cx-tablas-grupo" role="row"><span role="cell">{f.numero} · {f.titulo}</span></h3>
-        const c = f.cuentaId ? p.cuentas.find((x) => x.id === f.cuentaId)! : null
-        const abiertaEsta = c !== null && abierta === c.id
+      {filas.map((n) => {
+        const conHijos = !buscando && tieneHijos(n)
+        const abierta = conHijos && abierto(n.clave)
+        const c = n.cuentaId ? p.cuentas.find((x) => x.id === n.cuentaId) ?? null : null
+        const resumen = conHijos && !abierta ? resumenNodo(n) : null
+        const nivel = buscando ? 1 : n.nivel
         return (
-          <div key={f.clave} className={`cx-plan-fila${f.tipo === 'subcuenta' ? ' cx-plan-sub' : ''}${c && !f.usada ? ' cx-plan-sin-uso' : ''}${abiertaEsta ? ' cx-plan-abierta' : ''}${f.estado === 'oculta' ? ' cx-plan-oculta' : ''}`}>
-            <div className="cx-rejilla-fila cx-plan-columnas" role="row">
-              <span role="cell" className="cx-cifra cx-plan-numero">{f.numero}</span>
-              <span role="cell" className="cx-plan-cuenta">
-                <span className={f.tipo === 'cabecera' ? 'cx-plan-titulo-cabecera' : 'cx-plan-titulo'}>{f.titulo}{f.estado === 'oculta' ? ' · oculta' : ''}</span>
-                {f.plain && <span className="cx-plan-plain">{f.plain}{f.plainPgc && <Pgc />}</span>}
+          <div key={n.clave} className={`cx-plan-fila cx-plan-${n.tipo}${c && !n.usada ? ' cx-plan-sin-uso' : ''}${n.estado === 'oculta' ? ' cx-plan-oculta' : ''}${panel?.id === n.clave ? ' cx-plan-abierta' : ''}`}>
+            <div className="cx-rejilla-fila cx-plan-columnas cx-plan-nodo" role="row" aria-level={nivel} aria-expanded={conHijos ? abierta : undefined}
+              tabIndex={actual?.clave === n.clave ? 0 : -1} ref={(el) => { if (el) filasRef.current.set(n.clave, el); else filasRef.current.delete(n.clave) }}
+              style={{ ['--nivel' as string]: nivel - 1 }} data-numero={n.numero}
+              onFocus={() => setFoco(n.clave)} onKeyDown={(e) => { if (e.target === e.currentTarget) teclado(e, n) }}
+              onClick={(e) => { if ((e.target as HTMLElement).closest('a, button, input, form')) return; activar(n) }}>
+              <span role="gridcell" className="cx-cifra cx-plan-numero">
+                {conHijos ? (
+                  <button type="button" className="cx-plan-flecha" tabIndex={-1} aria-label={`${abierta ? 'Cerrar' : 'Abrir'} ${n.numero} · ${n.titulo}`}
+                    onClick={() => alternar(n.clave)}>{abierta ? '▾' : '▸'}</button>
+                ) : <span className="cx-plan-flecha" aria-hidden="true" />}
+                {n.numero}
               </span>
-              <span role="cell" className="cx-rejilla-apoyo">{f.lleva ?? ''}</span>
-              <span role="cell"><Origen f={f} /></span>
-              <span role="cell">
-                {c && (
-                  <button type="button" className="cx-enlace" aria-expanded={abiertaEsta} aria-label={`${abiertaEsta ? 'Cerrar' : 'Abrir'} ${f.numero} · ${f.titulo}`}
-                    onClick={() => abrir(abiertaEsta ? null : c.id)}>{abiertaEsta ? 'Cerrar' : 'Abrir'}</button>
-                )}
+              <span role="gridcell" className="cx-plan-cuenta">
+                {buscando && n.ruta.length > 0 && <span className="cx-plan-ruta">{textoRuta(n)}</span>}
+                {esRama(n)
+                  ? <span className={n.tipo === 'cuenta' ? 'cx-plan-titulo' : 'cx-plan-titulo-cabecera'}>{n.titulo}{resumen && <span className="cx-plan-resumen"> · {resumen}</span>}</span>
+                  : <Link to={rutaMayor(n.numero)} className="cx-plan-titulo cx-plan-enlace" tabIndex={-1}>{n.titulo}{n.estado === 'oculta' ? ' · oculta' : ''}{resumen && <span className="cx-plan-resumen"> · {resumen}</span>}</Link>}
+                {n.plain && <span className="cx-plan-plain">{n.plain}{n.plainPgc && <Pgc />}</span>}
+              </span>
+              <span role="gridcell" className="cx-rejilla-apoyo">{n.lleva ?? ''}</span>
+              <span role="gridcell"><Origen n={n} /></span>
+              <span role="gridcell" className="cx-plan-accion">
+                {esRama(n)
+                  ? <Link to={rutaMayor(n.numero)} className="cx-enlace" tabIndex={-1} aria-label={`Sumas y saldos de ${n.numero} · ${n.titulo}`}>Abrir</Link>
+                  : c && <MenuCuenta n={n} c={c} p={p} abrirPanel={(m) => abrirPanel({ id: n.clave, modo: m })} ocultar={() => ocultar(c)} />}
               </span>
             </div>
-            {abiertaEsta && c && <CuentaAbierta c={c} p={p} plainDe={plainDe} />}
+            {panel?.id === n.clave && c && <PanelCuenta key={panel.modo} c={c} modo={panel.modo} cerrar={() => abrirPanel(null)} />}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * Móvil (respuesta 5): cada nivel es una pantalla. La fila de una rama abre el
+ * siguiente nivel (con «atrás» al de arriba); la de una cuenta abre su Mayor,
+ * y si tiene subcuentas, «N subcuentas tuyas ›» las enseña. Buscar aplana.
+ */
+function ListaMovil({ filas, buscando, nivel }: { filas: NodoPlan[]; buscando: boolean; nivel: (n: NodoPlan) => string }) {
+  if (filas.length === 0) return <p className="cx-vacio">Ninguna cuenta encaja con lo que buscas.</p>
+  return (
+    <div className="cx-lista" aria-label="Plan contable">
+      {filas.map((n) => (
+        <div key={n.clave} className={`cx-plan-movil-fila${!n.usada ? ' cx-plan-sin-uso' : ''}`}>
+          <Link to={esRama(n) ? nivel(n) : rutaMayor(n.numero)} className="cx-lista-fila">
+            <span className="cx-lista-fila-texto">
+              {buscando && n.ruta.length > 0 && <span className="cx-plan-ruta">{textoRuta(n)}</span>}
+              <span className="cx-lista-fila-titulo"><span className="cx-cifra">{n.numero}</span> · {n.titulo}</span>
+              {esRama(n)
+                ? resumenNodo(n) && <span className="cx-lista-fila-apoyo">{resumenNodo(n)}</span>
+                : (n.plain || n.lleva) && <span className="cx-lista-fila-apoyo">{[n.lleva, n.plain].filter(Boolean).join(' · ')}{n.plain && n.plainPgc && <Pgc />}</span>}
+            </span>
+            <span className="cx-flecha" aria-hidden="true">›</span>
+          </Link>
+          {!esRama(n) && !buscando && n.subcuentas > 0 && (
+            <Link to={nivel(n)} className="cx-enlace cx-plan-movil-subs">{resumenNodo(n)} ›</Link>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -228,25 +348,45 @@ function Pie({ p }: { p: DatosPlan }) {
   )
 }
 
+/**
+ * Lo abierto y cerrado se recuerda por persona y empresa mientras dura la
+ * sesión del navegador (sessionStorage), no en la base. Sin almacenamiento
+ * (navegación privada, bloqueado), funciona igual y olvida al recargar.
+ */
+const leerAbiertos = (clave: string): Map<string, boolean> => {
+  try { return new Map(Object.entries(JSON.parse(sessionStorage.getItem(clave) ?? '{}') as Record<string, boolean>)) } catch { return new Map() }
+}
+function useAbiertos(clave: string) {
+  const [estado, setEstado] = useState(() => ({ clave, tocados: leerAbiertos(clave) }))
+  // Otra empresa u otra persona: se lee lo suyo (ajuste durante el render, sin efecto).
+  if (estado.clave !== clave) setEstado({ clave, tocados: leerAbiertos(clave) })
+  const poner = (k: string, v: boolean) => setEstado((e) => {
+    const tocados = new Map(e.tocados).set(k, v)
+    try { sessionStorage.setItem(e.clave, JSON.stringify(Object.fromEntries(tocados))) } catch { /* sin almacenamiento: se olvida al recargar */ }
+    return { clave: e.clave, tocados }
+  })
+  return { tocados: estado.tocados, poner }
+}
+
 function Contenido() {
   const { plan, movil, quien, hoy } = useAjustes()
-  const { codigo } = useParams()
-  const [grupo, setGrupo] = useState<number | null>(4)
+  const [params] = useSearchParams()
+  const [grupo, setGrupo] = useState<string>('4')
   const [busqueda, setBusqueda] = useState('')
   const [orden, setOrden] = useState<'usadas' | 'todas'>('usadas')
-  const [abierta, setAbierta] = useState<string | null>(null)
+  const [panel, setPanel] = useState<{ id: string; modo: Modo } | null>(null)
   const [anadiendo, setAnadiendo] = useState(false)
+  const accion = useHacer(plan.recargar)
   const p = plan.datos
-  // «Qué se apunta aquí» de cada subcuenta de IVA: el ejemplo de su tipo en la tabla del C00 (respuesta 3).
-  const plainDe = useMemo(() => {
-    const m = new Map<string, string>()
-    if (!p) return m
-    const ejemplo = new Map(p.paraPropuestas.tiposIva.filter((t) => t.example).map((t) => [t.id, t.example!]))
-    const propias = new Set(p.cuentas.filter((c) => c.kind === 'own').map((c) => c.id))
-    for (const l of p.enlaces) if (l.entity === 'tax_rate' && propias.has(l.companyAccountId) && ejemplo.has(l.entityId)) m.set(l.companyAccountId, ejemplo.get(l.entityId)!)
-    return m
-  }, [p])
-  const filas = useMemo(() => (p ? filasPlan({ serie: p.serie, cuentas: p.cuentas, enlaces: p.enlaces, grupo, busqueda, orden, plainDe }) : []), [p, grupo, busqueda, orden, plainDe])
+  const { tocados, poner } = useAbiertos(`conta.plan.abiertos.${quien.userId ?? 'anon'}.${quien.companyId}`)
+  const arbol = useMemo(() => (p ? arbolPlan({
+    serie: p.serie, cuentas: p.cuentas, enlaces: p.enlaces, plainDe: ejemplosDeIva(p.cuentas, p.enlaces, p.paraPropuestas.tiposIva),
+  }) : null), [p])
+  const porDefecto = useMemo(() => (arbol ? abiertosPorDefecto(arbol, grupo, orden) : new Set<string>()), [arbol, grupo, orden])
+  const abierto = (k: string) => estaAbierto(k, tocados, porDefecto)
+  const alternar = (k: string, abrir?: boolean) => poner(k, abrir ?? !abierto(k))
+  const buscando = busqueda.trim() !== ''
+  const filas = !arbol ? [] : buscando ? filasBuscadas(arbol, p!.cuentas, p!.serie, busqueda) : filasVisibles(arbol, grupo, abierto, orden)
   // Lo que propone la IA (tarea 5). Los apuntes llegan con el C04: sin ellos no hay «sin uso».
   const propuestas = useMemo(() => (p && p.activo ? propuestasDelPlan({
     digitos: p.digitos, serie: p.serie, cuentas: p.cuentas, enlaces: p.enlaces,
@@ -254,20 +394,16 @@ function Contenido() {
     ultimoApunte: new Map(), hoy, contestadas: new Set(p.paraPropuestas.contestadas),
   }) : []), [p, hoy])
 
-  const cabezaMovil = (derecha?: ReactNode) => <CabeceraEntradaMovil titulo="Plan contable" derecha={derecha} />
+  // Móvil: el nivel que se está mirando (?n=400) y el de arriba, para «atrás».
+  const nivelMovil = params.get('n')
+  const nodoMovil = arbol && nivelMovil ? (arbol.nodos.get(nivelMovil) ?? arbol.porCodigo.get(nivelMovil) ?? null) : null
+  const rutaNivel = (n: NodoPlan) => `${rutaPlan()}?n=${encodeURIComponent(n.numero)}`
+  const arriba = nodoMovil?.padre && arbol?.nodos.get(nodoMovil.padre)
+  const cabezaMovil = (derecha?: ReactNode) => nodoMovil
+    ? <CabeceraEntradaMovil titulo={`${nodoMovil.numero} · ${nodoMovil.titulo}`} antetitulo="Plan contable" atras={arriba && arriba.tipo !== 'grupo' ? rutaNivel(arriba) : rutaPlan()} />
+    : <CabeceraEntradaMovil titulo="Plan contable" derecha={derecha} />
   if (plan.cargando) return <>{movil && cabezaMovil()}<TarjetaCargando /></>
-  if (plan.error || !p) return <>{movil && cabezaMovil()}<ErrorConReintento mensaje={plan.error ?? 'No se ha podido leer.'} reintentar={plan.recargar} /></>
-
-  // Móvil: una cuenta en su pantalla.
-  if (movil && codigo) {
-    const c = p.cuentas.find((x) => x.code === codigo)
-    return (
-      <>
-        <CabeceraEntradaMovil titulo={c ? `${c.code} · ${c.name}` : codigo} antetitulo="Plan contable" atras={rutaPlan()} />
-        {c ? <section className="cx-tarjeta"><CuentaAbierta c={c} p={p} plainDe={plainDe} /></section> : <p className="cx-vacio">Esa cuenta no está en tu plan.</p>}
-      </>
-    )
-  }
+  if (plan.error || !p || !arbol) return <>{movil && cabezaMovil()}<ErrorConReintento mensaje={plan.error ?? 'No se ha podido leer.'} reintentar={plan.recargar} /></>
 
   const botones = p.activo && (
     <div className="cx-plan-botones">
@@ -288,47 +424,44 @@ function Contenido() {
 
   const porGrupo = cuentasPorGrupo(p.cuentas)
   const grupos = [...porGrupo.keys()].sort()
+  const ocultar = (c: CuentaPlan) => void accion.hacer(async () => { await ocultarCuenta(c.id, c.status === 'activa', null) },
+    c.status === 'activa' ? `${c.code} oculta: no sale en listas ni en sugerencias.` : `${c.code} vuelve a verse.`)
+  // En el móvil, con un nivel abierto, se ven sus hijas; sin él, las del grupo elegido.
+  const filasMovil = buscando ? filas : (nodoMovil ? nodoMovil.hijos : arbol.nodos.get(grupo)?.hijos ?? []).map((k) => arbol.nodos.get(k)!)
   return (
     <>
       {cabeza}
-      {movil && <p className="cx-ayuda" style={{ margin: 0 }}>{lineaDelPlan(p)}</p>}
-      <PropuestasPlan propuestas={propuestas} companyId={quien.companyId} quien={null} alCambiar={plan.recargar} />
+      {movil && !nodoMovil && <p className="cx-ayuda" style={{ margin: 0 }}>{lineaDelPlan(p)}</p>}
+      {!nodoMovil && <PropuestasPlan propuestas={propuestas} companyId={quien.companyId} quien={null} alCambiar={plan.recargar} />}
       {anadiendo && <AnadirSubcuenta p={p} cerrar={() => setAnadiendo(false)} />}
       <section className="cx-tarjeta cx-plan" aria-label="Cuentas">
         <div className="cx-tablas-barra">
           <input className="cx-input cx-buscar" type="search" aria-label="Buscar una cuenta" placeholder="Busca: «alquiler», «472», «Glovo»"
             value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-          <div className="cx-tablas-filtros" role="group" aria-label="Orden">
-            <button type="button" className="cx-pildora" aria-pressed={orden === 'usadas'} onClick={() => setOrden('usadas')}>Las que usas</button>
-            <button type="button" className="cx-pildora" aria-pressed={orden === 'todas'} onClick={() => setOrden('todas')}>Todas</button>
-          </div>
+          {!(movil && nodoMovil) && (
+            <div className="cx-tablas-filtros" role="group" aria-label="Orden">
+              <button type="button" className="cx-pildora" aria-pressed={orden === 'usadas'} onClick={() => setOrden('usadas')}>Las que usas</button>
+              <button type="button" className="cx-pildora" aria-pressed={orden === 'todas'} onClick={() => setOrden('todas')}>Todas</button>
+            </div>
+          )}
         </div>
-        <div className="cx-tablas-filtros" role="group" aria-label="Grupo del plan">
-          {grupos.map((g) => (
-            <button key={g} type="button" className="cx-pildora" aria-pressed={grupo === g && !busqueda} onClick={() => { setGrupo(g); setBusqueda('') }}>
-              {g} · {GRUPOS[g]} <span className="cx-tablas-cuenta">{porGrupo.get(g)}</span>
-            </button>
-          ))}
-        </div>
-        {busqueda && <p className="cx-ayuda" style={{ margin: 0 }}>Buscando en todo el plan.</p>}
-        {movil ? (
-          <div className="cx-lista" aria-label="Plan contable">
-            {filas.map((f) => f.cuentaId ? (
-              <Link key={f.clave} to={rutaPlanCuenta(f.numero)} className={`cx-lista-fila${f.tipo === 'subcuenta' ? ' cx-plan-sub' : ''}${!f.usada ? ' cx-plan-sin-uso' : ''}`}>
-                <span className="cx-lista-fila-texto">
-                  <span className="cx-lista-fila-titulo"><span className="cx-cifra">{f.numero}</span> · {f.titulo}</span>
-                  {(f.plain || f.lleva) && <span className="cx-lista-fila-apoyo">{[f.lleva, f.plain].filter(Boolean).join(' · ')}{f.plain && f.plainPgc && <Pgc />}</span>}
-                </span>
-                <span className="cx-flecha" aria-hidden="true">›</span>
-              </Link>
-            ) : (
-              <div key={f.clave} className="cx-lista-fila cx-plan-cabecera-movil"><span className="cx-cifra">{f.numero}</span> · {f.titulo}</div>
+        {!(movil && nodoMovil) && (
+          <div className="cx-tablas-filtros" role="group" aria-label="Grupo del plan">
+            {grupos.map((g) => (
+              <button key={g} type="button" className="cx-pildora" aria-pressed={grupo === String(g) && !buscando} onClick={() => { setGrupo(String(g)); setBusqueda('') }}>
+                {g} · {GRUPOS[g]} <span className="cx-tablas-cuenta">{porGrupo.get(g)}</span>
+              </button>
             ))}
           </div>
-        ) : <Tabla p={p} filas={filas} abierta={abierta} abrir={setAbierta} plainDe={plainDe} />}
+        )}
+        {buscando && <p className="cx-ayuda" style={{ margin: 0 }}>Buscando en todo el plan.</p>}
+        <Resultado hecho={accion.hecho} fallo={accion.fallo} />
+        {movil
+          ? <ListaMovil filas={filasMovil} buscando={buscando} nivel={rutaNivel} />
+          : <Arbol p={p} filas={filas} abierto={abierto} alternar={alternar} buscando={buscando} panel={panel} abrirPanel={setPanel} ocultar={ocultar} />}
       </section>
-      <RegistroPlan registro={p.registro.slice(0, 10)} titulo="Historial de cambios" movil={movil} />
-      <Pie p={p} />
+      {!nodoMovil && <RegistroPlan registro={p.registro.slice(0, 10)} titulo="Historial de cambios" movil={movil} />}
+      {!nodoMovil && <Pie p={p} />}
     </>
   )
 }

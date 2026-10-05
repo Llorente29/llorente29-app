@@ -234,6 +234,9 @@
 .cxp-cuenta { display: flex; flex-direction: column; }
 .cxp-cuenta .cx-dato-valor { flex-wrap: wrap; justify-content: flex-end; }
 .cxp-cuenta-nota { margin: -6px 0 6px; text-align: right; font-size: 12px; }
+/* La cuenta lleva a su Mayor (respuesta 5): se lee como dato, se nota que es enlace al pasar. */
+.cxp-cuenta-mayor { color: inherit; text-decoration: underline; text-decoration-color: var(--cx-linea); text-underline-offset: 3px; }
+.cxp-cuenta-mayor:hover, .cxp-cuenta-mayor:focus-visible { color: var(--cx-azul); text-decoration-color: currentColor; }
 .cxp-cuenta-elegir { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 12px; }
 .cxp-extracto-barra { align-items: center; padding-bottom: 10px; }
 .cxp-extracto { width: 100%; border-collapse: collapse; font-size: 14px; }

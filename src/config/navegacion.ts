@@ -152,8 +152,13 @@ export const CONTA = {
     plan: 'ajustes/plan',
     /** Ajustes › Plan contable › Qué va a cada sitio. */
     planSitio: 'ajustes/plan/que-va-a-cada-sitio',
-    /** Ajustes › Plan contable › una cuenta (en el móvil, su pantalla). */
+    /** La dirección vieja de una cuenta del plan: redirige a su Mayor (respuesta 5). */
     planCuenta: 'ajustes/plan/cuenta/:codigo',
+    /**
+     * Una cuenta del plan (respuesta 5): el Mayor si es de apunte o subcuenta
+     * (40000002), «Sumas y saldos» de ese nivel si tiene hijas (400, 4).
+     */
+    mayor: 'plan/:codigo',
   },
 } as const
 
@@ -276,7 +281,7 @@ export const rutaAltaEmpresa = (): string => rutaConta(CONTA.rutas.alta)
 export const rutaAjustes = (entrada?: string): string => (entrada ? rutaConta(CONTA.rutas.ajustesEntrada, { entrada }) : rutaConta(CONTA.rutas.empresa))
 export const rutaPlan = (): string => rutaConta(CONTA.rutas.plan)
 export const rutaPlanSitio = (): string => rutaConta(CONTA.rutas.planSitio)
-export const rutaPlanCuenta = (codigo: string): string => rutaConta(CONTA.rutas.planCuenta, { codigo })
+export const rutaMayor = (codigo: string): string => rutaConta(CONTA.rutas.mayor, { codigo })
 
 /**
  * ¿Qué entrada del menú está activa para esta dirección? La de prefijo más

@@ -130,3 +130,7 @@ export const cambiarEnlace = (companyId: string, entity: Entidad, entityId: stri
 /** «Deshacer» justo después de añadir una subcuenta (sin enlaces ni historial; 20261007T0150). */
 export const deshacerSubcuenta = (id: string, quien: string | null) =>
   rpc<void>('company_account_undo_add', { p_id: id, p_quien_nombre: quien })
+
+/** Cambiar el nombre de una subcuenta tuya (0189): las de serie y las cerradas, no. Devuelve el nombre que queda. */
+export const renombrarCuenta = (id: string, nombre: string, quien: string | null) =>
+  rpc<string>('company_account_rename', { p_id: id, p_nombre: nombre, p_quien_nombre: quien })

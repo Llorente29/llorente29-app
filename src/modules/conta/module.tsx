@@ -17,6 +17,8 @@ import { MarcoConta } from '@/modules/conta/marco/MarcoConta'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
+import MayorPage from '@/modules/conta/pages/MayorPage'
+import AlMayor from '@/modules/conta/plan/AlMayor'
 import QueVaACadaSitioPage from '@/modules/conta/pages/QueVaACadaSitioPage'
 import TablasGeneralesPage from '@/modules/conta/pages/TablasGeneralesPage'
 import AltaPage from '@/modules/conta/pages/AltaPage'
@@ -44,7 +46,9 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.tabla, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.plan, element: enMarco(<PlanContablePage />, '¿Dónde va el alquiler?') },
     { path: CONTA.rutas.planSitio, element: enMarco(<QueVaACadaSitioPage />, '¿Dónde va el alquiler?') },
-    { path: CONTA.rutas.planCuenta, element: enMarco(<PlanContablePage />, '¿Dónde va el alquiler?') },
+    { path: CONTA.rutas.planCuenta, element: <AlMayor /> },
+    // Una cuenta del plan (respuesta 5): su Mayor, o «Sumas y saldos» si tiene hijas.
+    { path: CONTA.rutas.mayor, element: enMarco(<MayorPage />, '¿Cuánto debo a mis proveedores?') },
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },
