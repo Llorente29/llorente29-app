@@ -1,0 +1,8 @@
+Maqueta C02c (Estilo nuevo, 1440). N8Importar: paso 2 del asistente
+«Traer tu plan de otro programa» (revisión).
+
+Datos de ejemplo inventados salvo nombres de plataformas. Al copiarla al
+repositorio (público) se han cambiado por inventados un tercero real, su NIF
+y el final de un IBAN que venían en la maqueta original. Por eso el PNG de la
+maqueta no se sube: lleva esos datos pintados y no se puede corregir. La
+referencia es el HTML.
