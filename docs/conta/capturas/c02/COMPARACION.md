@@ -13,6 +13,9 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
 | Ajustes: el índice (N6) | `ajustes-ordenador.png` | (el índice es la lista: `plan-movil.png` arranca desde él) |
 | Plan contable (N5 dentro de N6), grupo 4 | `plan-ordenador.png` | `plan-movil.png`, una cuenta abierta: `plan-movil-cuenta.png` |
 | Qué va a cada sitio | `que-va-a-cada-sitio.png` | — |
+| Plan en árbol (respuesta 5): la 400 cerrada | `plan-ordenador-400-cerrada.png` | Un nivel por pantalla: `plan-movil-400.png` |
+| Plan en árbol: buscar aplana, con la ruta | `plan-ordenador-busqueda.png` | — |
+| Mayor de la cuenta (respuesta 5) | `mayor-ordenador.png` | `plan-movil-cuenta.png` |
 | Propuesta de la IA (tarea 5) | `propuesta-ordenador.png` | — |
 | Cuenta B (Canarias, IGIC) | `plan-b-canarias.png` | — |
 | Ficha › Contabilidad (N7) | `ficha-contabilidad-ordenador.png` | `ficha-contabilidad-movil.png` |
@@ -71,6 +74,39 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
   - las subcuentas de terceros siguen con «1 proveedor».
 - **Medido con la serie real:** en pymes, ninguna de las 615 cuentas de apunte sale solo con el título. En el grupo 4, 17 llevan texto de Folvy y 56 la definición del BOE. En el plan general se quedan sin texto las 42 de los grupos 8 y 9, porque allí el BOE solo describe el movimiento.
 - **Lo que no cambia:** `plain_name`. La definición está en su propia columna (`pgc_account.boe_definition`, la 0115, generada desde el BOE por `plan.mjs`) y la herencia se resuelve al enseñar. Cuando lleguen los textos de hostelería (C02b), sustituyen a la reserva sin migración.
+
+## Respuesta 5 (05/10): el plan en árbol y el Mayor
+
+Contraste: Holded, Diez, Sage 50 y Contasol enseñan el plan como un árbol
+plegable, y en todos la cuenta abre su Mayor (en QuickBooks, el «register»).
+Pennylane, Odoo, QuickBooks y Xero usan una lista plana, porque sus planes
+son cortos o porque la gente busca en vez de leer.
+
+- **El árbol** (`plan-ordenador.png`): grupo › subgrupo › cuenta › cuenta de apunte › subcuentas, con ▸/▾ y sangría.
+  - **Al entrar,** el grupo elegido sale abierto hasta el nivel de cuenta, con «Las que usas» abierto también lo que tiene subcuentas o enlaces: 400 › 40000000 › las cuatro de proveedores, 410, 472.
+  - **La fila cerrada dice lo que lleva:** «403 · Proveedores, empresas del grupo · 5 cuentas» (`plan-ordenador-400-cerrada.png`).
+  - **La 40000000 no se ve con la 400 cerrada,** y lo comprueba la e2e.
+  - **Teclado:** ↑ ↓ para moverse, → abre o baja, ← cierra o sube, e Intro. Cada fila lleva su `aria-expanded`.
+  - **Lo abierto se recuerda** por persona y empresa mientras dura la sesión del navegador, no en la base.
+- **Buscar aplana** (`plan-ordenador-busqueda.png`): solo lo que casa, con su ruta encima en pequeño («6 › 62»). Al borrar la búsqueda, el árbol vuelve como estaba.
+  - La 62100000 sale con «6 › 62», no con «6 › 62 › 621», porque en el plan de pymes la 621 es hoja: su cuenta de apunte cuelga del subgrupo.
+- **Pinchar:**
+  - **Una cuenta de apunte o subcuenta** abre su Mayor. Toda la fila es el enlace, y el «···» guarda lo demás: Ver el Mayor, Ficha del proveedor o Banco, Cambiar nombre si es tuya, Palabras clave, Ocultar.
+  - **Una cuenta con hijas** se abre o se cierra, y su «Abrir» lleva a «Sumas y saldos» de ese nivel: una fila por hija, vacía hasta el C04 con el mismo mensaje que el extracto.
+- **El Mayor** (`mayor-ordenador.png`), en `/conta/plan/<código>`.
+  - **Cabecera:** el código y el nombre, «qué se apunta aquí», el saldo («Sin apuntes todavía»), el ejercicio y lo que lleva.
+  - **Enlaces según de quién es la cuenta:** la 40000002 lleva «Ficha del proveedor · Hermanos Ruiz» y «Cambiar nombre».
+    - Es una subcuenta creada por la empresa, así que se puede renombrar (0189, con registro).
+    - No lleva «Ocultar» porque tiene un enlace, y la base no la dejaría ocultar.
+  - **Una de serie** dice que su título es el oficial y no se cambia.
+  - **Debajo, el extracto en sus dos vistas,** con la misma pieza que la ficha del proveedor.
+  - **Lo que aún no tiene pantalla no se enlaza:** cliente llega con el C03, e Impuestos › IVA cuando exista.
+- **Desde la ficha del proveedor,** cada cuenta de «Sus cuentas» abre su Mayor («Su cuenta 40000002»). La e2e hace la vuelta completa: Mayor → ficha → Mayor.
+- **Móvil** (`plan-movil.png`, `plan-movil-400.png`, `plan-movil-cuenta.png`):
+  - cada nivel es una pantalla, con «atrás» al de arriba;
+  - la fila de una cuenta abre su Mayor, y «4 subcuentas tuyas ›» enseña las suyas;
+  - buscar también aplana.
+- **La dirección vieja** `ajustes/plan/cuenta/<código>` lleva al Mayor.
 
 ## Corregido al compararlas
 
