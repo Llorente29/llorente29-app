@@ -19,9 +19,11 @@ export default function Contabilidad() {
   const { datos } = useFicha()
   if (!datos.conta) {
     return (
-      <details className="cxp-plegable cxp-cuentas">
+      // La clase va DENTRO: con ella (display:flex) en el propio <details>, la
+      // e2e del 05/10 encontró su contenido maquetado con el bloque cerrado (cuenta B).
+      <details className="cxp-plegable">
         <summary><span className="cx-tarjeta-titulo">Contabilidad</span><span className="cx-ayuda">Tu cuenta no lleva la contabilidad en Folvy</span></summary>
-        <SusCuentas />
+        <div className="cxp-cuentas"><SusCuentas /></div>
       </details>
     )
   }

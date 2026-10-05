@@ -228,7 +228,7 @@
 
 /* ── C02 · Sus cuentas y el extracto (maqueta N7FichaConta) ───────────── */
 /* La pestaña es solo N7: las dos tarjetas a todo el ancho (respuesta 3). */
-.cxp-edicion-cuerpo:has(> .cxp-cuentas) { max-width: none; }
+.cxp-edicion-cuerpo:has(.cxp-cuentas) { max-width: none; }
 .cxp-cuentas { display: flex; flex-direction: column; gap: 14px; }
 .cxp-cuentas-pie { margin: 8px 0 0; font-size: 13px; }
 .cxp-cuenta { display: flex; flex-direction: column; }
