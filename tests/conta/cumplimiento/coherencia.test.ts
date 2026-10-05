@@ -135,11 +135,10 @@ describe('lo que está mal falla en rojo, con el caso y su norma', () => {
     ] }))
     expect(r.map((x: { tipo: string }) => x.tipo)).toEqual(['iae_cnae', 'iae_cnae'])
   })
-  it('una cuenta de apunte más corta que la de la empresa, en los datos y en una pantalla', () => {
-    const r = revisarCoherencia(bd({ cuentas_apunte: [{ account_id: 'x', name: 'Hermanos Ruiz', ledger_account_code: '4000001', account_digits: 8 }] }),
+  it('una cuenta de apunte más corta que la de la empresa en una pantalla (en los datos lo mira el agente «Plan contable»)', () => {
+    const r = revisarCoherencia(bd({}),
       { ficheros: [{ ruta: 'src/modules/conta/apartados/Nueva.tsx', texto: "<span>{cuentaPgc('472')}</span>" }] })
     expect(r.map((x: { detalle: string }) => x.detalle)).toEqual([
-      'Su cuenta 4000001 tiene 7 dígitos y la empresa usa 8.',
       'Enseña una cuenta con el código corto del plan (cuentaPgc) donde va la cuenta de apunte completa.',
     ])
   })

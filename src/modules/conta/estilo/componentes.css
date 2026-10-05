@@ -658,7 +658,9 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
 .cx-plan-cabeza { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .cx-plan-botones { display: flex; gap: 10px; flex-wrap: wrap; }
 .cx-plan { display: flex; flex-direction: column; gap: 12px; }
-.cx-plan-columnas { grid-template-columns: 130px minmax(0, 1fr) 180px 110px 70px; column-gap: 12px; }
+.cx-plan-columnas { grid-template-columns: 110px minmax(0, 1fr) 140px 96px 56px; column-gap: 12px; }
+/* El buscador ocupa lo que dejan los dos botones: que no se corte su ejemplo. */
+.cx-plan .cx-tablas-barra .cx-buscar { flex: 1 1 280px; width: auto; max-width: none; }
 .cx-plan-numero { font-weight: 600; }
 .cx-plan-cuenta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .cx-plan-titulo { font-weight: 600; }

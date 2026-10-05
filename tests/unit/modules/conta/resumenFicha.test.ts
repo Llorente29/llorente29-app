@@ -16,7 +16,7 @@ const ficha: FichaProveedor = {
   vatRegime: 'general', usualTaxRateIds: ['t10', 't21'], irpfWithholdingPct: null, expenseCategoryId: 'cat-600',
   defaultLocationId: null, paymentMethod: 'transfer', paymentTermsDays: 30, paymentFixedDays: [],
   iban: 'ES9121000418450200051332', ibanVerifiedAt: '2026-10-01T10:00:00Z', bankName: null,
-  ledgerAccountCode: null, healthRegistryNo: 'RGSEAA', isActive: true, notes: null,
+  healthRegistryNo: 'RGSEAA', isActive: true, notes: null,
   website: null, tags: [], bic: null, sepaMandateRef: null, sepaMandateDate: null, currency: 'EUR',
   earlyPaymentDiscountPct: null, ivaIncluidoEnLinea: false, invoicingFrequency: null, archivedAt: null, createdAt: null, createdByName: null,
 }

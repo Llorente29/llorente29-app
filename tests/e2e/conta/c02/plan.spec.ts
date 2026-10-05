@@ -107,6 +107,10 @@ test('cuenta A: el índice de Ajustes (N6), con «aún no» donde aún no hay pa
   for (const g of ['Empresa', 'Contabilidad', 'Acceso y avisos']) await expect(indice.getByRole('heading', { name: g })).toBeVisible()
   await expect(indice.getByRole('link', { name: /^Certificados y accesos\s*Aún no$/ })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('Aún no.')).toBeVisible()
+  // Con sus líneas de resumen ya cargadas (como N6), no el esqueleto.
+  await expect(indice.getByRole('link', { name: /^Plan contable\s*Pymes · 8 dígitos · \d+ cuentas$/ })).toBeVisible()
+  await expect(indice.getByRole('link', { name: /^Ejercicio\s*\d{4} · / })).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/ajustes-ordenador.png`, fullPage: true })
 })
 

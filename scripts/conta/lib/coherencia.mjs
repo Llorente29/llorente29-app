@@ -214,14 +214,10 @@ export function revisarCoherencia(bd, extra = {}) {
     else h('ambar', 'iva_proveedor', donde, `Su IVA habitual (${v.code}) no vale hoy: vigente del ${v.valid_from} al ${v.valid_to ?? '—'}.`, null)
   }
 
-  // 6. Cuentas de apunte más cortas que la longitud de la empresa: en los datos…
-  for (const c of bd.cuentas_apunte ?? []) {
-    const largo = String(c.ledger_account_code ?? '').length
-    if (largo > 0 && largo < Number(c.account_digits)) {
-      h('rojo', 'cuenta_corta', `Proveedor ${c.name} (cuenta ${String(c.account_id).slice(0, 8)})`, `Su cuenta ${c.ledger_account_code} tiene ${largo} dígitos y la empresa usa ${c.account_digits}.`, NORMA_CUENTAS)
-    }
-  }
-  // …y en las pantallas.
+  // 6. Cuentas de apunte más cortas que la longitud de la empresa. En los datos
+  // lo mira desde el C02 el agente «Plan contable» (todas las cuentas de
+  // company_account con la longitud de su empresa); supplier.ledger_account_code
+  // ya no lo lee nadie y se elimina en su tanda. Aquí queda lo de las pantallas.
   for (const ruta of pantallasConCuentaCorta(extra.ficheros ?? [])) {
     h('rojo', 'cuenta_corta', ruta, 'Enseña una cuenta con el código corto del plan (cuentaPgc) donde va la cuenta de apunte completa.', NORMA_CUENTAS)
   }

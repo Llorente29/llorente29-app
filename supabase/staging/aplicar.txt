@@ -1,9 +1,10 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · C02, tarea 6: la 0160 (papeles propios del proveedor: gasto,
-# pago y suplidos) y su prueba con los JWT de A y B, que termina en ROLLBACK
-# después de probar la vuelta atrás.
-# Anterior: 37244600070 (limpieza de las dos «Restaurante», en verde).
-supabase/migrations/20261007T0160_c02_cuentas_del_proveedor.sql
-supabase/staging/sql/20261007_c02_prueba_proveedor.sql
+# 05/10/2026 · C02 · Eliminación de supplier.ledger_account_code (0170, su
+# propia tanda; en producción irá con `autorizo`). Nadie la lee ya: ni el
+# código (este mismo commit), ni la base, ni lo desplegado. Y su prueba, que
+# comprueba la vuelta atrás dentro de un ROLLBACK.
+# Anterior: 37269410510 (0160 y su prueba, en verde).
+supabase/migrations/20261007T0170_c02_elimina.sql
+supabase/staging/sql/20261007_c02_prueba_elimina.sql

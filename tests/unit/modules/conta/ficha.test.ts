@@ -12,7 +12,7 @@ const vacia: FichaProveedor = {
   fiscalStreet: null, fiscalPostalCode: null, fiscalCity: null, fiscalProvince: null,
   vatRegime: null, usualTaxRateIds: [], irpfWithholdingPct: null, expenseCategoryId: null,
   defaultLocationId: null, paymentMethod: null, paymentTermsDays: null, paymentFixedDays: [],
-  iban: null, ibanVerifiedAt: null, bankName: null, ledgerAccountCode: null,
+  iban: null, ibanVerifiedAt: null, bankName: null,
   healthRegistryNo: null, isActive: true, notes: null,
   website: null, tags: [], bic: null, sepaMandateRef: null, sepaMandateDate: null,
   currency: 'EUR', earlyPaymentDiscountPct: null,

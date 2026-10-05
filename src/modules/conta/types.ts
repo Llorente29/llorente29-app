@@ -46,7 +46,6 @@ export interface FichaProveedor {
   ibanChangedAt: string | null
   ibanChangedByName: string | null
   bankName: string | null
-  ledgerAccountCode: string | null
   healthRegistryNo: string | null
   isActive: boolean
   notes: string | null

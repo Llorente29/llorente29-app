@@ -207,3 +207,15 @@ describe('regla 40: lo que el registro y el servicio nombran entre comillas exis
     expect(codigoPropio('¡Ñandú! 10 %', 'x')).toBe('propio_nandu_10_x')
   })
 })
+
+describe('C02, tarea 6 · Tablas lee las cuentas reales del plan', () => {
+  const impuestos = definicion('impuestos')!
+  const iva21 = filasDe('tax_rate').find((f) => f.code === 'iva_general')!
+  const valor = (etiqueta: string, ctx: ContextoUso) => impuestos.detalle.find((x) => x.etiqueta === etiqueta)!.valor(iva21, ctx)
+  it('sin plan, la pista con la longitud de la empresa; con plan, la 472/477 enlazada', () => {
+    expect(valor('IVA que pagas', sinProveedores)).toBe('47200000 · Hacienda Pública, IVA soportado')
+    const conPlan = { ...sinProveedores, cuentasDelPlan: { [`${iva21.id}:soportado`]: '47200021 · IVA soportado 21 %', [`${iva21.id}:repercutido`]: '47700021 · IVA repercutido 21 %' } }
+    expect(valor('IVA que pagas', conPlan)).toBe('47200021 · IVA soportado 21 %')
+    expect(valor('IVA que cobras', conPlan)).toBe('47700021 · IVA repercutido 21 %')
+  })
+})

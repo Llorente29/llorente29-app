@@ -74,7 +74,6 @@ export function filaAFicha(r: Fila): FichaProveedor {
     ibanChangedAt: str(r.iban_changed_at),
     ibanChangedByName: str(r.iban_changed_by_name),
     bankName: str(r.bank_name),
-    ledgerAccountCode: str(r.ledger_account_code),
     healthRegistryNo: str(r.health_registry_no),
     isActive: r.is_active !== false,
     notes: str(r.notes),
