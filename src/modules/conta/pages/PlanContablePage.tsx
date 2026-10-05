@@ -25,6 +25,8 @@ import { cuentasPorGrupo, encaja, filasPlan, lineaDelPlan, type CuentaPlan, type
 import { limpiarPalabras, siguienteLibre, type Entidad } from '@/modules/conta/lib/planEmpresa'
 import { activarPlan, anadirSubcuenta, deshacerSubcuenta, ocultarCuenta, ponerPalabras, type DatosPlan } from '@/modules/conta/services/planService'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
+import { PropuestasPlan } from '@/modules/conta/plan/PropuestasPlan'
+import { propuestasDelPlan } from '@/modules/conta/lib/propuestasPlan'
 
 const GRUPOS: Record<number, string> = {
   1: 'Financiación básica', 2: 'Inmovilizado', 3: 'Existencias', 4: 'Acreedores y deudores', 5: 'Cuentas financieras',
@@ -221,7 +223,7 @@ function Pie({ p }: { p: DatosPlan }) {
 }
 
 function Contenido() {
-  const { plan, movil } = useAjustes()
+  const { plan, movil, quien, hoy } = useAjustes()
   const { codigo } = useParams()
   const [grupo, setGrupo] = useState<number | null>(4)
   const [busqueda, setBusqueda] = useState('')
@@ -230,6 +232,12 @@ function Contenido() {
   const [anadiendo, setAnadiendo] = useState(false)
   const p = plan.datos
   const filas = useMemo(() => (p ? filasPlan({ serie: p.serie, cuentas: p.cuentas, enlaces: p.enlaces, grupo, busqueda, orden }) : []), [p, grupo, busqueda, orden])
+  // Lo que propone la IA (tarea 5). Los apuntes llegan con el C04: sin ellos no hay «sin uso».
+  const propuestas = useMemo(() => (p && p.activo ? propuestasDelPlan({
+    digitos: p.digitos, serie: p.serie, cuentas: p.cuentas, enlaces: p.enlaces,
+    proveedores: p.paraPropuestas.proveedores, bancos: p.bancos, gastos: p.paraPropuestas.gastos, tiposIva: p.paraPropuestas.tiposIva,
+    ultimoApunte: new Map(), hoy, contestadas: new Set(p.paraPropuestas.contestadas),
+  }) : []), [p, hoy])
 
   const cabezaMovil = (derecha?: ReactNode) => <CabeceraEntradaMovil titulo="Plan contable" derecha={derecha} />
   if (plan.cargando) return <>{movil && cabezaMovil()}<TarjetaCargando /></>
@@ -269,6 +277,7 @@ function Contenido() {
     <>
       {cabeza}
       {movil && <p className="cx-ayuda" style={{ margin: 0 }}>{lineaDelPlan(p)}</p>}
+      <PropuestasPlan propuestas={propuestas} companyId={quien.companyId} quien={null} alCambiar={plan.recargar} />
       {anadiendo && <AnadirSubcuenta p={p} cerrar={() => setAnadiendo(false)} />}
       <section className="cx-tarjeta cx-plan" aria-label="Cuentas">
         <div className="cx-tablas-barra">

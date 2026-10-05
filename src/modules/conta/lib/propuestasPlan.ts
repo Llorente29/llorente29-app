@@ -273,3 +273,16 @@ export function propuestasDelPlan(e: EntradaPropuestas): Propuesta[] {
 export function repartirPropuestas(ps: readonly Propuesta[]): { tarjetas: Propuesta[]; revisar: Propuesta[] } {
   return { tarjetas: ps.filter((p) => p.confianza !== 'baja'), revisar: ps.filter((p) => p.confianza === 'baja') }
 }
+
+/** «Hecho: 2 subcuentas creadas y 1 oculta. Está en el historial del plan.» */
+export function fraseHecha(ops: readonly OpPlan[]): string {
+  const crear = ops.filter((o) => o.op === 'crear').length
+  const enlazar = ops.filter((o) => o.op === 'enlazar').length
+  const ocultar = ops.filter((o) => o.op === 'ocultar').length
+  const partes = [
+    crear ? `${crear} ${crear === 1 ? 'subcuenta creada' : 'subcuentas creadas'}` : null,
+    enlazar && !crear ? `${enlazar} ${enlazar === 1 ? 'enlace cambiado' : 'enlaces cambiados'}` : null,
+    ocultar ? `${ocultar} ${ocultar === 1 ? 'cuenta oculta' : 'cuentas ocultas'}` : null,
+  ].filter(Boolean)
+  return `Hecho: ${partes.join(' y ')}. Está en el historial del plan.`
+}

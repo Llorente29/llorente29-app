@@ -9,11 +9,15 @@
 // company_account, company_account_link, company_account_log,
 // company_tax_profile, supplier, treasury_account; funciones
 // company_chart_activate, company_account_add, company_account_set_hidden,
-// company_account_set_keywords, company_account_link_set.
+// company_account_set_keywords, company_account_link_set. Y para las
+// propuestas de la IA (tarea 5, 0180; comprobados el 05/10 en staging):
+// expense_category (pgc_account_hint, supplier_account_leaf), tax_rate,
+// ai_suggestion; función company_plan_propuesta_responder.
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import type { CuentaPlan, CuentaSeriePlan, EnlacePlan } from '@/modules/conta/lib/planVista'
-import type { Entidad, Papel } from '@/modules/conta/lib/planEmpresa'
+import type { Entidad, HojaProveedor, Papel } from '@/modules/conta/lib/planEmpresa'
+import type { OpPlan, Propuesta, ProveedorPropuesta } from '@/modules/conta/lib/propuestasPlan'
 
 type Fila = Record<string, unknown>
 
@@ -29,6 +33,13 @@ export interface DatosPlan {
   registro: EntradaRegistroPlan[]
   proveedores: { id: string; name: string }[]
   bancos: { id: string; name: string }[]
+  /** Lo que necesita el núcleo de las propuestas de la IA (propuestasPlan.ts). */
+  paraPropuestas: {
+    proveedores: ProveedorPropuesta[]
+    gastos: { id: string; name: string; pgcHint: string | null }[]
+    tiposIva: { id: string; name: string; rate: number }[]
+    contestadas: string[]
+  }
 }
 
 async function leer<T>(q: PromiseLike<{ data: unknown; error: { message: string } | null }>, que: string): Promise<T[]> {
@@ -38,17 +49,26 @@ async function leer<T>(q: PromiseLike<{ data: unknown; error: { message: string 
 }
 
 export async function cargarPlan(accountId: string, companyId: string): Promise<DatosPlan> {
-  const [perfil] = await leer<Fila>(tabla('company_tax_profile').select('chart_kind, account_digits').eq('account_id', accountId).eq('company_id', companyId), 'el detalle contable')
+  const [perfil] = await leer<Fila>(tabla('company_tax_profile').select('chart_kind, account_digits, tax_territory').eq('account_id', accountId).eq('company_id', companyId), 'el detalle contable')
   const plan = perfil?.chart_kind === 'normal' ? 'general' : 'pymes'
   const digitos = Number(perfil?.account_digits ?? 8)
-  const [serie, cuentas, enlaces, registro, proveedores, bancos] = await Promise.all([
+  const hoy = new Date().toISOString().slice(0, 10)
+  const sistema = perfil?.tax_territory === 'canarias' ? 'igic' : 'iva'
+  const [serie, cuentas, enlaces, registro, proveedores, bancos, gastos, tipos, contestadas] = await Promise.all([
     leer<Fila>(tabla('pgc_account').select('code, name, plain_name, group_code, parent_code, is_leaf').eq('plan', plan).is('valid_to', null).order('code'), 'el cuadro de cuentas'),
     leer<Fila>(tabla('company_account').select('id, code, template_code, name, plain_name, keywords, kind, status, is_common, source').eq('account_id', accountId).eq('company_id', companyId).order('code'), 'las cuentas de la empresa'),
     leer<Fila>(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
     leer<Fila>(tabla('company_account_log').select('id, que, code, detalle, done_at, done_by_name, source').eq('account_id', accountId).eq('company_id', companyId).order('done_at', { ascending: false }).limit(50), 'el historial del plan'),
-    leer<Fila>(tabla('supplier').select('id, name').eq('account_id', accountId).is('archived_at', null).order('name'), 'los proveedores'),
+    leer<Fila>(tabla('supplier').select('id, name, expense_category_id, vat_regime, country_code').eq('account_id', accountId).is('archived_at', null).order('name'), 'los proveedores'),
     leer<Fila>(tabla('treasury_account').select('id, name').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'bank').eq('is_active', true).order('name'), 'los bancos'),
+    leer<Fila>(tabla('expense_category').select('id, name, pgc_account_hint, supplier_account_leaf, company_id').or(`is_system.eq.true,account_id.eq.${accountId}`), 'los tipos de gasto'),
+    leer<Fila>(tabla('tax_rate').select('id, name, rate, company_id').eq('tax_system', sistema).eq('treatment', 'taxed')
+      .or(`is_system.eq.true,account_id.eq.${accountId}`).or(`valid_to.is.null,valid_to.gte.${hoy}`), 'los tipos de IVA'),
+    leer<Fila>(tabla('ai_suggestion').select('reason_key').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'plan'), 'las propuestas contestadas'),
   ])
+  // Las filas propias de la cuenta valen para toda la cuenta o para ESTA empresa.
+  const deEsta = (f: Fila) => f.company_id === null || f.company_id === undefined || f.company_id === companyId
+  const gastoDe = new Map(gastos.filter(deEsta).map((g) => [String(g.id), g]))
   return {
     plan, digitos, activo: cuentas.length > 0,
     serie: serie.map((s) => ({ code: String(s.code), name: String(s.name), plainName: (s.plain_name as string) ?? null, groupCode: Number(s.group_code), parentCode: (s.parent_code as string) ?? null, isLeaf: s.is_leaf === true })),
@@ -61,8 +81,31 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
     registro: registro.map((r) => ({ id: String(r.id), que: String(r.que), code: (r.code as string) ?? null, detalle: String(r.detalle), doneAt: String(r.done_at), doneByName: (r.done_by_name as string) ?? null, source: String(r.source) })),
     proveedores: proveedores.map((p) => ({ id: String(p.id), name: String(p.name) })),
     bancos: bancos.map((b) => ({ id: String(b.id), name: String(b.name) })),
+    paraPropuestas: {
+      proveedores: proveedores.map((p) => {
+        const g = p.expense_category_id ? gastoDe.get(String(p.expense_category_id)) : undefined
+        return {
+          id: String(p.id), name: String(p.name), gastoPista: (g?.pgc_account_hint as string) ?? null,
+          marca: (g?.supplier_account_leaf as HojaProveedor | null) ?? null, vatRegime: (p.vat_regime as string) ?? null, countryCode: (p.country_code as string) ?? 'ES',
+        }
+      }),
+      gastos: [...gastoDe.values()].map((g) => ({ id: String(g.id), name: String(g.name), pgcHint: (g.pgc_account_hint as string) ?? null })),
+      tiposIva: tipos.filter(deEsta).map((t) => ({ id: String(t.id), name: String(t.name), rate: Number(t.rate) })),
+      contestadas: contestadas.map((c) => String(c.reason_key)),
+    },
   }
 }
+
+/**
+ * Contesta una propuesta de la IA (0180): se guarda la respuesta y, si es sí,
+ * se hacen sus operaciones todas o ninguna, con origen «IA aceptada».
+ * `ops` es la respuesta elegida: las del sí o las de la alternativa.
+ */
+export const responderPropuesta = (companyId: string, p: Propuesta, acepta: boolean, ops: OpPlan[], quien: string | null) =>
+  rpc<{ id: string; aceptada: boolean; hechas: number }>('company_plan_propuesta_responder', {
+    p_company: companyId, p_clave: p.clave, p_titulo: p.titulo, p_porque: p.porque, p_confianza: p.confianza,
+    p_acepta: acepta, p_ops: acepta ? ops : p.ops, p_quien_nombre: quien,
+  })
 
 export interface ResultadoActivar { plan: string; digitos: number; cuentas: number; subcuentas: number; enlaces: number; avisos: string[] }
 

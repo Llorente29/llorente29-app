@@ -659,6 +659,9 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
 .cx-plan-botones { display: flex; gap: 10px; flex-wrap: wrap; }
 .cx-plan { display: flex; flex-direction: column; gap: 12px; }
 .cx-plan-columnas { grid-template-columns: 110px minmax(0, 1fr) 140px 96px 56px; column-gap: 12px; }
+/* Las propuestas de la IA sobre el plan (tarea 5) y su bandeja de revisión. */
+.cx-plan-propuestas { display: flex; flex-direction: column; gap: 10px; }
+.cx-plan-revisar summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 /* El buscador ocupa lo que dejan los dos botones: que no se corte su ejemplo. */
 .cx-plan .cx-tablas-barra .cx-buscar { flex: 1 1 280px; width: auto; max-width: none; }
 .cx-plan-numero { font-weight: 600; }

@@ -139,3 +139,12 @@ describe('IVA, sin uso, 400/410, UE e ISP', () => {
     }
   })
 })
+
+describe('lo que dice la pantalla al contestar (regla 8)', () => {
+  it('cuenta lo que ha hecho', async () => {
+    const { fraseHecha } = await import('@/modules/conta/lib/propuestasPlan')
+    expect(fraseHecha([{ op: 'crear', hoja: '4000', nombre: 'a' }, { op: 'crear', hoja: '4000', nombre: 'b' }])).toBe('Hecho: 2 subcuentas creadas. Está en el historial del plan.')
+    expect(fraseHecha([{ op: 'crear', hoja: '4100', nombre: 'a' }, { op: 'ocultar', code: '40000001' }])).toBe('Hecho: 1 subcuenta creada y 1 cuenta oculta. Está en el historial del plan.')
+    expect(fraseHecha([{ op: 'enlazar', entity: 'expense_category', entity_id: 'g', role: 'principal', code: '62500000' }])).toBe('Hecho: 1 enlace cambiado. Está en el historial del plan.')
+  })
+})
