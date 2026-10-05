@@ -57,6 +57,10 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
         const st = getComputedStyle(el)
         const c = caja(el)
         if (c.w === 0 || c.h === 0 || st.visibility === 'hidden' || st.display === 'none') return
+        // 05/10: lo de dentro de un <details> CERRADO no se ve, pero Chromium le da
+        // caja (medido en Chromium 141: 390×18 y checkVisibility() = false). Lo que
+        // no se ve no puede estar tapado; lo visible y tapado sigue fallando.
+        if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ visibilityProperty: true })) return
         const x = (a: typeof c, b: typeof c) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
         if (obst.some((o) => x(c, o))) out.push((el.textContent ?? el.tagName).trim().slice(0, 40) || el.tagName)
       })
