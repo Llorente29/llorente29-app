@@ -29,6 +29,7 @@ Julio. El PR no se fusiona sin «fusiona».
 | `20261007T0160_c02_cuentas_del_proveedor` | Papeles del proveedor: gasto, pago, suplidos | 1 |
 | `20261007T0180_c02_propuestas_plan` | Contestar las propuestas; el IVA nombrado por su tipo | 1 |
 | `20261007T0185_c02_lectura` | SELECT a `conta_lectura` (si existe) sobre las cuatro tablas del plan: los agentes leen desde el primer día | 1 |
+| `20261007T0187_c02_enlaces_sin_dueno` | Al borrar un proveedor, banco, tipo de gasto, tipo de IVA o retención, sus enlaces del plan se quitan (con registro); limpia los huérfanos | 1 |
 | `20261007T0170_c02_elimina` | **Borra** `supplier.ledger_account_code` (copia antes) | **2, con `autorizo`**, después de que el front que ya no la lee esté en producción (Vercel READY) |
 
 Medido en producción, en solo lectura, el 05/10:
