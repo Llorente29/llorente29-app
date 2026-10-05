@@ -5,7 +5,7 @@
 # (0100), la activación normal espera (0110), lectura de los agentes (0120) y
 # su prueba con la fixture inventada (con ROLLBACK).
 # Anterior: la 0189 del C02 y su prueba.
-supabase/migrations/20261008T0100_c02c_traer_plan.sql
-supabase/migrations/20261008T0110_c02c_activar_espera.sql
-supabase/migrations/20261008T0120_c02c_lectura.sql
+# 37377481112: 0100, 0110 y 0120 entraron; la prueba falló (alias «x» en
+# company_chart_import_apply). La 0100, corregida, se vuelve a aplicar.
+supabase/staging/sql/20261008_c02c_reaplicar_0100.sql
 supabase/staging/sql/20261008_c02c_prueba_traer.sql

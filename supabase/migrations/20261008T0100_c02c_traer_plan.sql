@@ -212,8 +212,8 @@ begin
 
   -- 4c · Las propias del fichero, con su código exacto (§4.2).
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source, created_by, created_by_name, name_source, import_id)
-  select v_cuenta, imp.company_id, v_plan, x ->> 'code', x ->> 'hoja', trim(x ->> 'nombre'), 'own', 'migrated', v_quien, v_nombre, nullif(trim(x ->> 'nombre_origen'), ''), imp.id
-    from jsonb_array_elements(p_plan -> 'cuentas') x;
+  select v_cuenta, imp.company_id, v_plan, j ->> 'code', j ->> 'hoja', trim(j ->> 'nombre'), 'own', 'migrated', v_quien, v_nombre, nullif(trim(j ->> 'nombre_origen'), ''), imp.id
+    from jsonb_array_elements(p_plan -> 'cuentas') j;
   get diagnostics n_propias = row_count;
 
   -- 4d · Las fichas de proveedor nuevas («Traída de … · por completar»): solo para cuentas propias de 40x/41x del fichero.
