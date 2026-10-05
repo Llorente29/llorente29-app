@@ -6,7 +6,8 @@
 // tarjeta verde con su porqué y su confianza → «Prefiero una cuenta común»
 // (enlaza con la 40000000, que ya existe: no crea nada que se quede en
 // staging) → la pantalla dice lo que ha hecho, y la propuesta no vuelve.
-// Al terminar se borra el proveedor de prueba.
+// Al terminar se borra el proveedor de prueba, y con él su enlace al plan
+// (0187: la captura del 05/10 contaba en la 40000000 proveedores ya borrados).
 
 import { test, expect } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
@@ -41,7 +42,14 @@ test('cuenta A: un proveedor nuevo sin subcuenta, la propuesta con su porqué, y
     // Y su ficha dice que su cuenta es la común.
     await page.goto(`/kitchen/proveedores/${id}/contabilidad`)
     await expect(page.getByRole('region', { name: 'Sus cuentas' }).locator('.cx-dato').filter({ hasText: 'Su cuenta' })).toContainText('40000000')
+    // El enlace se ve por la API con esta sesión: así el «ninguno» de abajo mide algo.
+    const antes = await rest<unknown[]>(s, 'GET', `company_account_link?select=id&entity=eq.supplier&entity_id=eq.${id}`)
+    expect(antes.datos).toHaveLength(1)
   } finally {
     await borrarProveedor(s, id)
   }
+  // Fuera del finally: si la prueba ya ha fallado, que se vea ese fallo y no este.
+  const enlaces = await rest<unknown[]>(s, 'GET', `company_account_link?select=id&entity=eq.supplier&entity_id=eq.${id}`)
+  expect(enlaces.status).toBe(200)
+  expect(enlaces.datos).toEqual([])
 })
