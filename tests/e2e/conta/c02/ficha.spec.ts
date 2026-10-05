@@ -65,6 +65,8 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   await ext.getByRole('button', { name: 'Saldos por mes' }).click()
   await expect(ext.getByRole('button', { name: 'Saldos por mes' })).toHaveAttribute('aria-pressed', 'true')
   // El extracto, en su propia captura (de elemento: no cambia el tamaño de la ventana).
+  // Arriba de la ventana: pegado abajo lo tapa la barra flotante, que en uso real no tapa nada.
+  await ext.evaluate((e) => e.scrollIntoView({ block: 'start' }))
   await ext.screenshot({ path: `${DIR}/ficha-extracto-${lado(page)}.png` })
 
   // Las dos tarjetas siguen ahí antes de la captura (no el esqueleto).
