@@ -13,6 +13,7 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
 | Ajustes: el índice (N6) | `ajustes-ordenador.png` | (el índice es la lista: `plan-movil.png` arranca desde él) |
 | Plan contable (N5 dentro de N6), grupo 4 | `plan-ordenador.png` | `plan-movil.png`, una cuenta abierta: `plan-movil-cuenta.png` |
 | Qué va a cada sitio | `que-va-a-cada-sitio.png` | — |
+| Propuesta de la IA (tarea 5) | `propuesta-ordenador.png` | — |
 | Cuenta B (Canarias, IGIC) | `plan-b-canarias.png` | — |
 | Ficha › Contabilidad (N7) | `ficha-contabilidad-ordenador.png` | `ficha-contabilidad-movil.png` |
 | Ficha › Ver extracto (vacío hasta el C04) | `ficha-extracto-ordenador.png` | `ficha-extracto-movil.png` |
@@ -40,7 +41,7 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
 1. **La cifra del índice es la real, no la de la maqueta (D2).** La maqueta dice «Pymes · 8 dígitos · 309 cuentas»; la captura dice las que tiene de verdad la empresa (627 en A: 615 hojas del cuadro de pymes más sus subcuentas).
 2. **El menú de la izquierda es el del marco de Ajustes del C00**, no el menú completo del módulo: «Ajustes» y «Volver a Folvy». La maqueta N6 dibuja el menú entero (Inicio, Por hacer, Documentos…), que son pantallas que aún no existen; enseñarlas sería prometer lo que no hay.
 3. **Los grupos van en píldoras sobre la tabla**, no en una columna propia a la izquierda como en N5. Dentro del marco de N6 ya hay un índice a la izquierda: un segundo índice al lado dejaba la tabla en la mitad del ancho. «Qué va a cada sitio» va arriba, como botón, y el historial al pie de la pantalla.
-4. **No hay tarjeta verde de la IA en la captura**: la propuesta («Compras a 3 proveedores nuevos que no tienen subcuenta…») sale solo cuando hay algo que proponer (tarea 5). En staging todos los proveedores de A tienen ya su subcuenta.
+4. **La tarjeta verde de la IA sale solo cuando hay algo que proponer.** En `plan-ordenador.png` no hay ninguna, porque todos los proveedores de A ya tienen su subcuenta. `propuesta-ordenador.png` la enseña con un proveedor nuevo creado por la e2e: el texto, el porqué con el código («→ 40000005») y las tres respuestas, como en N5. Lleva además la **confianza** («Confianza alta»), que N5 no dibuja y el encargo pide (§4). Las de confianza baja no salen como tarjeta: van plegadas en «Para revisar», con su número.
 5. **«LO QUE LLEVAS» dice cuántos terceros o tipos lleva** («1 proveedor», «1 tipo de IVA»), no el importe del año: los importes salen de los asientos, que llegan con el C04.
 6. **La lista es la de verdad, entera.** La maqueta enseña siete filas; el grupo 4 del plan de pymes tiene más de cien cuentas, y todas salen (regla 7: «Las que usas» ordena, no esconde). Por eso las capturas son largas.
 7. **Ficha (N7): sin apuntes todavía.** «Saldo con él» y «Último apunte» dicen «Sin apuntes todavía» en vez de 1.283,15 € y «24 sep · F-2026-0915»: son cifras de la contabilidad (C04), no de las facturas. «Este año» y «Va al 347» sí se calculan ya, con las facturas recibidas sin las repetidas. «Ver extracto» abre el extracto con sus dos vistas y un estado vacío que lo explica.
@@ -58,4 +59,5 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
   - El IVA salía como «IVA soportado 21 % 21 %», con el tipo repetido. Ahora sale una vez, ordenado por código («47200010 · IVA soportado 10 % y 47200021 · IVA soportado 21 %»). La prueba unitaria compara el texto entero y la e2e comprueba que no se repite.
   - En el móvil, la etiqueta quedaba aplastada a la izquierda («IVA / que / te / cobra»). Ahora va encima y la cuenta debajo, a todo el ancho.
 - **Ficha (N7), segunda captura:** las dos tarjetas iban dentro de la columna de 640 px del formulario (unos 310 px cada una). Ahora van a todo el ancho, como en N7, y los campos de arriba siguen a 640. El extracto abierto no salía en la captura de página entera, porque al volver a montarse la pieza se cerraba. Ahora recuerda si estaba abierto, y tiene su propia captura de elemento.
+- **Propuesta (tarea 5), primera captura:** con un solo proveedor, el porqué decía «Así cada uno tiene su extracto. Van al 400 porque te venden mercancía». Ahora va en singular, con prueba.
 

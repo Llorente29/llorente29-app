@@ -69,7 +69,8 @@ describe('terceros sin subcuenta (alta)', () => {
       'Tienes 1 proveedor nuevo que no tiene subcuenta. ¿Le creo la suya en el 410?',
       'Tienes un banco sin subcuenta. ¿Le creo la suya en el 572?',
     ])
-    expect(ps[0].porque).toBe('Gestoría Prueba → 41000002. Así cada uno tiene su extracto. Van al 410 porque te prestan servicios, por su tipo de gasto.')
+    // Uno solo, en singular (la captura del 05/10 decía «Van al 400 porque te venden»).
+    expect(ps[0].porque).toBe('Gestoría Prueba → 41000002. Así tiene su extracto. Va al 410 porque te presta servicios, por su tipo de gasto.')
     expect(ps[1].porque).toBe('Caja Dos → 57200002. Así cada banco tiene su extracto y se puede conciliar.')
   })
 })

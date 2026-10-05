@@ -123,7 +123,9 @@ export function propuestasDelPlan(e: EntradaPropuestas): Propuesta[] {
       clave: `proveedores:${hoja}:${suyos.slice(0, n).map((p) => p.id).sort().join(',')}`,
       tipo: 'proveedores', confianza: 'alta',
       titulo: `${n === 1 ? 'Tienes 1 proveedor nuevo que no tiene' : `Tienes ${n} proveedores nuevos que no tienen`} subcuenta. ¿${n === 1 ? 'Le' : 'Les'} creo la suya en el ${hoja.slice(0, 3)}?`,
-      porque: `${lista(pares)}. Así cada uno tiene su extracto. ${hoja === '4000' ? 'Van al 400 porque te venden mercancía' : 'Van al 410 porque te prestan servicios'}, por su tipo de gasto.`,
+      porque: n === 1
+        ? `${pares[0]}. Así tiene su extracto. ${hoja === '4000' ? 'Va al 400 porque te vende mercancía' : 'Va al 410 porque te presta servicios'}, por su tipo de gasto.`
+        : `${lista(pares)}. Así cada uno tiene su extracto. ${hoja === '4000' ? 'Van al 400 porque te venden mercancía' : 'Van al 410 porque te prestan servicios'}, por su tipo de gasto.`,
       si: n === 1 ? 'Sí, créala' : 'Sí, créalas', no: 'Ahora no', ops,
       alternativa: comun?.isCommon && comun.status === 'activa'
         ? { texto: 'Prefiero una cuenta común', ops: suyos.slice(0, n).map((p) => ({ op: 'enlazar', entity: 'supplier', entity_id: p.id, role: 'principal', code: comun.code })) }
