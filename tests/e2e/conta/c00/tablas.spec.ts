@@ -86,8 +86,11 @@ test('cuenta A: impuestos como en la maqueta, con el IVA reducido abierto', asyn
     await page.getByRole('button', { name: 'Abrir IVA reducido' }).click()
   }
   // Cuentas de apunte con la longitud de la empresa: A lleva 8 dígitos (respuesta 3, punto 3).
-  await expect(page.getByText('47200000 · Hacienda Pública, IVA soportado')).toBeVisible()
-  await expect(page.getByText('47700000 · Hacienda Pública, IVA repercutido')).toBeVisible()
+  // Desde el C02 (tarea 6), con el plan activado sale la cuenta REAL del tipo
+  // (la 47200010 del 10 %); sin plan, la pista. La e2e del C02 deja el plan de
+  // A activado, pero en un staging limpio esta prueba corre antes: valen las dos.
+  await expect(page.getByText(/^(47200000 · Hacienda Pública, IVA soportado|47200010 · IVA soportado 10 %)$/)).toBeVisible()
+  await expect(page.getByText(/^(47700000 · Hacienda Pública, IVA repercutido|47700010 · IVA repercutido 10 %)$/)).toBeVisible()
   await expect(page.getByText('Modelo 303')).toBeVisible()
   await expect(page.getByText(/Comprobado en la fuente oficial el/)).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
