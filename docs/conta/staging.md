@@ -366,3 +366,27 @@ Para que Julio pruebe el C00 con su usuario (tarea 9 del encargo).
    cuentas y huellas con esta tabla.
 3. Si producción ha cambiado entre medias, las huellas lo dirán. Se apunta la
    fecha de la copia.
+
+## Vista previa del C02 y la guarda (05/10)
+
+- **Lo que pasó:** la vista previa de `conta/c02-plan-contable` iba contra
+  **producción**. La rama no tenía sus dos variables de vista previa y Vercel
+  cogió las generales. Julio vio sus locales reales, sin Conta y sin franja.
+  Yo la había dado por lista porque Vercel decía «success». Es la tercera vez,
+  después del C00 y del R02.
+- **Arreglo:** las dos variables (`VITE_SUPABASE_URL` y
+  `VITE_SUPABASE_ANON_KEY` de staging-conta), solo «Preview» y solo la rama
+  `conta/c02-plan-contable`, creadas el 05/10. Valen los despliegues que
+  empiezan después.
+- **Para que no vuelva a pasar: `build/guardaVistaPrevia.ts`.** En Vercel, el
+  build de una vista previa de una rama `conta/**` o `reparto-**` **falla** si
+  la URL o la clave anónima no son de staging-conta. Así el despliegue sale en
+  rojo en el PR y no hay vista previa que dar por buena.
+  - Está en el build porque es el único sitio que ve a la vez la rama y la base.
+    `antes-de-subir.sh` no ve Vercel; sí pasa sus pruebas
+    (`tests/unit/build/guardaVistaPrevia.test.ts`).
+  - Cuando compila, el log del despliegue dice contra qué base lo hizo
+    («[guarda de la vista previa] … se construye contra staging-conta»).
+  - **Rama nueva `conta/**` o `reparto-**`:** primero las dos variables en
+    Vercel y después el primer push. Si no, el primer despliegue sale en rojo,
+    que es lo que tiene que pasar.
