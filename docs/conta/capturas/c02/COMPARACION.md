@@ -62,6 +62,16 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
 - **La 40000000 decía «4 proveedores» que ya no existían.** Eran proveedores que la e2e de propuestas crea y borra: el enlace no tiene clave ajena y sobrevivía a su dueño (5 huérfanos en staging). La 0187 quita el enlace al borrar el proveedor, el banco, el tipo de gasto, el tipo de IVA o la retención, y limpia los que ya había. En esta captura, la 40000000 ya no lleva nada. La e2e de propuestas lo comprueba: antes de borrar, el enlace se ve con la misma sesión; después, no.
 - **En la captura de página entera, la franja «BUILD LOCAL» tapa los títulos de las dos tarjetas.** Es la franja de entorno (`FranjaEntorno`, `sticky`), que sale en todo lo que no es producción, también en la vista previa («PREVIEW»). La captura de página entera la deja a la altura de la ventana; en uso real se queda arriba del todo. En producción no existe.
 
+## Respuesta 4 (05/10)
+
+- **La reserva del BOE en «qué se apunta aquí»** (`plan-ordenador.png`, `plan-movil.png`). Si una cuenta de apunte no tiene texto propio ni heredado, enseña la primera frase de la definición de la quinta parte del BOE, la del código más cercano hacia arriba que la tenga. Va en el mismo sitio y con la misma letra, y un «(PGC)» pequeño al final la distingue de los textos de Folvy:
+  - la 40100000 lleva la suya: «Deudas con proveedores, formalizadas en efectos de giro aceptados.»;
+  - las 40300000, 40310000 y 40340000 llevan la de la 403, porque las dos últimas no tienen definición propia;
+  - la 40000000 sigue con el texto de Folvy, sin marca;
+  - las subcuentas de terceros siguen con «1 proveedor».
+- **Medido con la serie real:** en pymes, ninguna de las 615 cuentas de apunte sale solo con el título. En el grupo 4, 17 llevan texto de Folvy y 56 la definición del BOE. En el plan general se quedan sin texto las 42 de los grupos 8 y 9, porque allí el BOE solo describe el movimiento.
+- **Lo que no cambia:** `plain_name`. La definición está en su propia columna (`pgc_account.boe_definition`, la 0115, generada desde el BOE por `plan.mjs`) y la herencia se resuelve al enseñar. Cuando lleguen los textos de hostelería (C02b), sustituyen a la reserva sin migración.
+
 ## Corregido al compararlas
 
 - **La columna CUENTA era estrecha** (unos 200 px a 1440: los títulos se partían en tres líneas). Ahora NÚMERO 110, LO QUE LLEVAS 140, ORIGEN 96: CUENTA gana unos 100 px.
