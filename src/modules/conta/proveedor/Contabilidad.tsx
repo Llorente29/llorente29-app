@@ -1,11 +1,13 @@
 // src/modules/conta/proveedor/Contabilidad.tsx
 //
-// Pestaña «Contabilidad» (nunca «gestor»): en qué se apuntan sus facturas
-// (tipo de gasto con el CÓDIGO COMPLETO de su cuenta, «60000000 · Compras de
-// mercaderías»), el local habitual y el registro sanitario (también en Datos
-// fiscales, respuesta 1, decisión 1). «Su cuenta» solo con el interruptor
-// `conta`; sin él (cuenta B) el bloque sale PLEGADO y todo lo demás de la
-// ficha funciona igual (encargo §7).
+// Pestaña «Contabilidad» (nunca «gestor»): su tipo de gasto (con el CÓDIGO
+// COMPLETO de su cuenta, «60000000 · Compras de mercaderías»), el local
+// habitual y el registro sanitario (también en Datos fiscales, respuesta 1,
+// decisión 1). Debajo, desde el C02 (tarea 6, maqueta N7FichaConta), sus
+// cuentas del plan y su saldo: SusCuentas.tsx, que lee los enlaces del plan
+// (company_account_link) y ya no supplier.ledger_account_code. Solo con el
+// interruptor `conta`; sin él (cuenta B) el bloque sale PLEGADO y todo lo
+// demás de la ficha funciona igual (encargo §7 del C01).
 //
 // Los tipos de gasto son los de serie que la empresa no ha ocultado, con los
 // más usados en la cuenta primero; el ya elegido sale siempre aunque esté
@@ -16,7 +18,7 @@ import { Link } from 'react-router-dom'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { Campo, SeGuarda } from '@/modules/conta/proveedor/piezas'
 import { useGuardarAlSalir } from '@/modules/conta/proveedor/useGuardarAlSalir'
-import { Dato } from '@/modules/conta/ui/piezas'
+import { SusCuentas } from '@/modules/conta/proveedor/SusCuentas'
 import { cuentaEnLaFicha } from '@/modules/conta/lib/opcionesFicha'
 import { porUso } from '@/modules/conta/lib/masUsados'
 import { ocultarTipoGasto } from '@/modules/conta/services/fichaTablasService'
@@ -116,14 +118,12 @@ function Formulario() {
         {(p) => <input {...p} className="cx-input" value={rgseaa} placeholder="10.00000/M" onChange={(e) => setRgseaa(e.target.value)}
           onBlur={() => void g.guardar({ healthRegistryNo: rgseaa.trim() || null }, 'registro sanitario')} />}
       </Campo>
-      {datos.conta && (
-        <div><Dato etiqueta="Su cuenta" vacio="Se asigna al activar el plan contable">{f.ledgerAccountCode}</Dato></div>
-      )}
       <SeGuarda texto={g.texto} ocupado={g.ocupado} />
       <button type="button" className="cx-enlace" aria-expanded={verLista} onClick={() => setVerLista((v) => !v)} style={{ alignSelf: 'flex-start' }}>
         {verLista ? 'Cerrar la lista de tipos de gasto' : 'Elegir qué tipos de gasto usa tu negocio'}
       </button>
       {contenido}
+      {datos.conta && <SusCuentas />}
     </div>
   )
 }

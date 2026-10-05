@@ -63,3 +63,10 @@ export function validarFormatoVatEu(entrada: string): ResultadoVatEu {
     ? { ok: true, pais, numero, normalizado: pais + numero }
     : { ok: false, motivo: `No tiene la forma de un NIF-IVA de ${pais}: revisa los números.` }
 }
+
+/**
+ * Los Estados miembros por su código de país ISO (la misma fuente de VIES):
+ * Grecia es GR fuera del IVA, y XI (Irlanda del Norte, solo mercancías) no es
+ * un país. Para decir «Compra en la UE» de un proveedor (C02, tarea 6).
+ */
+export const ESTADOS_UE: readonly string[] = PAISES_VIES.filter((p) => p !== 'XI').map((p) => (p === 'EL' ? 'GR' : p))

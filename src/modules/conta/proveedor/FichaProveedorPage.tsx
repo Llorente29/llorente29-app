@@ -22,6 +22,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { migasProveedores, rutaFichaProveedor, rutaListaProveedores, rutaSubirFacturaProveedor } from '@/config/navegacion'
 import { useFichaProveedor } from '@/modules/conta/hooks/useFichaProveedor'
 import { FichaContext, useFicha, type ContextoFicha } from '@/modules/conta/proveedor/contexto'
+import { cuentasDelResumen } from '@/modules/conta/services/cuentasProveedorService'
 import {
   Dialogo, EsqueletoFicha, IconoCamara, IconoTelefono, Migas, PildoraNif, TextoNif,
 } from '@/modules/conta/proveedor/piezas'
@@ -378,6 +379,18 @@ function Edicion({ ap, secciones }: { ap: Apartado; secciones: SeccionDeFicha[] 
 // Móvil (M4)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** C02 §5b: su cuenta y la de sus facturas para la línea «Contabilidad». Si no se puede leer, la línea sigue como antes. */
+function useCuentasDelResumen(accountId: string | null, companyId: string | null, supplierId: string, gastoId: string | null) {
+  const [c, setC] = useState<{ suCuenta: string | null; facturas: string | null } | null>(null)
+  useEffect(() => {
+    if (!accountId || !companyId) return
+    let vivo = true
+    cuentasDelResumen(accountId, companyId, supplierId, gastoId).then((r) => { if (vivo) setC(r) }).catch(() => { if (vivo) setC(null) })
+    return () => { vivo = false }
+  }, [accountId, companyId, supplierId, gastoId])
+  return c
+}
+
 function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
   const { datos, completitud, cifras, repetidas, rutaApartado } = useFicha()
   const f = datos.ficha
@@ -385,7 +398,8 @@ function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
   const tipo = datos.tiposGasto.find((t) => t.id === f.expenseCategoryId) ?? null
   const ultima = datos.facturas.find((x) => !repetidas.has(x.id)) ?? null
   const pago = etiquetaPago(f, datos.opciones)
-  const base = { ficha: f, contactos: datos.contactos, faltan: completitud?.faltan ?? [], tipoGasto: tipo, ultimaFactura: ultima, numDocumentos: datos.documentos.length, opciones: datos.opciones }
+  const cuentas = useCuentasDelResumen(datos.conta ? f.accountId : null, datos.opciones.empresa?.id ?? null, f.id, f.expenseCategoryId)
+  const base = { ficha: f, contactos: datos.contactos, faltan: completitud?.faltan ?? [], tipoGasto: tipo, ultimaFactura: ultima, numDocumentos: datos.documentos.length, opciones: datos.opciones, cuentas }
   const apartados = APARTADOS_MOVIL.filter((a) => a !== 'articulos' || secciones.length > 0)
 
   return (

@@ -49,6 +49,12 @@ describe('resumen de cada apartado (lista del móvil)', () => {
     expect(lineaApartado('documentos', d)).toEqual({ detalle: 'Falta el certificado del banco', falta: true })
     expect(lineaApartado('facturas', d)).toEqual({ detalle: 'Última: 24/09 · 1.283,15 €', falta: false })
   })
+  it('con el plan activado, Contabilidad dice su cuenta y la de sus facturas (C02 §5b)', () => {
+    expect(lineaApartado('contabilidad', { ...datos(), cuentas: { suCuenta: '40000012', facturas: '60000000' } }))
+      .toEqual({ detalle: 'Su cuenta 40000012 · facturas a 60000000', falta: false })
+    expect(lineaApartado('contabilidad', { ...datos(), cuentas: { suCuenta: null, facturas: null } }))
+      .toEqual({ detalle: 'Sin cuenta · Comida y bebida', falta: false })
+  })
   it('sin facturas no dice 0 €', () => {
     expect(lineaApartado('facturas', { ...datos(), ultimaFactura: null }).detalle).toBe('Aún no hay facturas suyas')
   })
