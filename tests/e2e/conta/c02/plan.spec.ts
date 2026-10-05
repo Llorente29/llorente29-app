@@ -125,10 +125,11 @@ test('cuenta A: el árbol, «qué se apunta aquí», buscar, añadir y deshacer,
   await page.getByRole('button', { name: /^Más de 68100000/ }).click()
   await page.getByRole('menuitem', { name: 'Volver a enseñar' }).click()
   await expect(page.getByRole('status').getByText('68100000 vuelve a verse.')).toBeVisible()
-  // Una enlazada no se deja ocultar: lo dice la base, y la pantalla lo enseña.
+  // Una enlazada no se puede ocultar (la base lo rechaza siempre): su «···» no ofrece «Ocultar» (respuesta 6).
   await page.getByRole('button', { name: /^Más de 62100000/ }).click()
-  await page.getByRole('menuitem', { name: 'Ocultar' }).click()
-  await expect(page.getByText(/Tiene un enlace activo: cambia antes ese enlace a otra cuenta\./)).toBeVisible()
+  await expect(page.getByRole('menu', { name: 'Acciones de 62100000' }).getByRole('menuitem', { name: 'Palabras clave' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Ocultar' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
 
   // El historial lo cuenta (el de esta vez es el primero: va de lo último a lo primero).
   await expect(page.getByRole('list', { name: 'Historial de cambios' }).getByText(/^Ocultada 68100000/).first()).toBeVisible()

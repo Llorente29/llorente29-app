@@ -200,7 +200,8 @@ function MenuCuenta({ n, c, p, abrirPanel, ocultar }: {
           {dueno?.tipo === 'banco' && <Link role="menuitem" to={rutaTablasGenerales('bancos-y-cajas')}>Banco</Link>}
           {c.kind === 'own' && c.status !== 'cerrada' && <button type="button" role="menuitem" onClick={elige(() => abrirPanel('nombre'))}>Cambiar nombre</button>}
           <button type="button" role="menuitem" onClick={elige(() => abrirPanel('palabras'))}>Palabras clave</button>
-          {c.status !== 'cerrada' && <button type="button" role="menuitem" onClick={elige(ocultar)}>{c.status === 'activa' ? 'Ocultar' : 'Volver a enseñar'}</button>}
+          {/* Con algo enlazado la base no la deja ocultar: el botón no se enseña para fallar (respuesta 6). */}
+          {c.status !== 'cerrada' && !n.lleva && <button type="button" role="menuitem" onClick={elige(ocultar)}>{c.status === 'activa' ? 'Ocultar' : 'Volver a enseñar'}</button>}
         </div>
       )}
     </div>
