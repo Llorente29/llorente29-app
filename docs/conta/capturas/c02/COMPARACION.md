@@ -52,3 +52,8 @@ e2e en la empresa de A (Taberna de Prueba Norte) y en la de B (Canarias).
 - **El buscador cortaba su ejemplo** («Busca: «alquiler», «472», ·»): ahora ocupa lo que dejan los botones.
 - **«Lo que ha hecho Folvy · Nada todavía»** con historial del plan debajo: ahora el resumen cuenta también los cambios del plan (no decir «nada» habiendo filas, regla 7).
 - **La captura de Ajustes salió sin las líneas de resumen** (se sacó antes de que cargaran): la e2e espera ahora a «Pymes · 8 dígitos · N cuentas» y al ejercicio antes de capturar.
+- **Ficha (N7), primera captura del 05/10:**
+  - En el ordenador salió el esqueleto de carga en lugar de las dos tarjetas: la captura de página entera cambia el tamaño de la ventana y la pieza se volvía a montar sin datos. Ahora conserva lo último leído mientras vuelve a pedirlo, y la e2e comprueba las tarjetas justo antes de capturar.
+  - El IVA salía como «IVA soportado 21 % 21 %», con el tipo repetido. Ahora sale una vez, ordenado por código («47200010 · IVA soportado 10 % y 47200021 · IVA soportado 21 %»). La prueba unitaria compara el texto entero y la e2e comprueba que no se repite.
+  - En el móvil, la etiqueta quedaba aplastada a la izquierda («IVA / que / te / cobra»). Ahora va encima y la cuenta debajo, a todo el ancho.
+

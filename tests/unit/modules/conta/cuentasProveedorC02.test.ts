@@ -58,7 +58,8 @@ describe('Sus cuentas (maqueta N7)', () => {
     const e = entrada()
     expect(linea(e, 'su_cuenta').cuentas.map((c) => c.titulo)).toEqual(['40000001 · Proveedores · Hermanos Ruiz'])
     expect(linea(e, 'facturas')).toMatchObject({ cuentas: [{ titulo: '60000000 · Compras de mercaderías' }], nota: 'por su tipo de gasto', propia: null })
-    expect(linea(e, 'iva').cuentas.map((c) => c.code)).toEqual(['47200010', '47200021'])
+    // El texto entero, no solo el código: el tipo no se repite (salió «21 % 21 %» en la captura del 05/10).
+    expect(linea(e, 'iva').cuentas.map((c) => c.titulo)).toEqual(['47200010 · IVA soportado 10 %', '47200021 · IVA soportado 21 %'])
     expect(linea(e, 'retencion')).toMatchObject({ cuentas: [], texto: 'No lleva · es una sociedad' })
     expect(linea(e, 'pago')).toMatchObject({ cuentas: [], texto: 'Sin decir' })
     expect(linea(e, 'suplidos')).toMatchObject({ cuentas: [], texto: 'No lleva' })

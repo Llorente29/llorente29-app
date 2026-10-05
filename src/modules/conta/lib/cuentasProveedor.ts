@@ -171,15 +171,16 @@ export function cuentasDelProveedor(e: EntradaCuentas): { lineas: LineaCuenta[];
   const ivas: CuentaVista[] = []
   let ivaIa = false
   for (const id of p.usualTaxRateIds) {
-    const t = e.tasas.find((x) => x.id === id)
     for (const papel of suyoTambien ? (['soportado', 'repercutido'] as const) : (['soportado'] as const)) {
       const l = enlace('tax_rate', id, papel)
       const c = cuentaDe(l)
       if (!c) continue
       ivaIa ||= l!.source === 'ai_accepted'
-      if (!ivas.some((x) => x.id === c.id)) ivas.push(vista(c, `${c.name}${t ? ` ${pct(t.rate)}` : ''}`))
+      // La subcuenta ya lleva el tipo en su nombre («IVA soportado 21 %»): no se repite.
+      if (!ivas.some((x) => x.id === c.id)) ivas.push(vista(c))
     }
   }
+  ivas.sort((a, b) => a.code.localeCompare(b.code))
   lineas.push({
     clave: 'iva', etiqueta: 'IVA que te cobra', cuentas: ivas,
     texto: p.usualTaxRateIds.length === 0 ? 'Sin decir: ponlo en Datos fiscales' : ivas.length === 0 ? 'Sus tipos de IVA aún no tienen cuenta' : null,

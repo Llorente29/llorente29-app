@@ -236,4 +236,10 @@
 .cxp-extracto th { text-align: left; color: var(--cx-apoyo); font-weight: 500; padding: 8px 6px; border-bottom: 1px solid var(--cx-linea); }
 .cxp-extracto td { padding: 8px 6px; border-bottom: 1px solid var(--cx-linea); font-variant-numeric: tabular-nums; }
 .cxp-extracto td:nth-child(n+4), .cxp-extracto th:nth-child(n+4) { text-align: right; }
-@media (max-width: 720px) { .cxp-extracto { display: block; overflow-x: auto; } }
+@media (max-width: 720px) {
+  .cxp-extracto { display: block; overflow-x: auto; }
+  /* En el móvil, la etiqueta arriba y la cuenta debajo, a todo el ancho. */
+  .cxp-cuenta .cx-dato { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .cxp-cuenta .cx-dato-valor { justify-content: flex-start; text-align: left; }
+  .cxp-cuenta-nota { text-align: left; margin-top: 0; }
+}

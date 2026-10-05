@@ -37,6 +37,10 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   // Su cuenta: una subcuenta del 400 o del 410, con la longitud de la empresa.
   await expect(cuentas.locator('.cx-dato').filter({ hasText: 'Su cuenta' })).toContainText(/4[01]0\d{5} · /)
   await expect(cuentas.getByText('Sus facturas se apuntan en')).toBeVisible()
+  // El IVA, con el tipo una sola vez («IVA soportado 21 %», no «21 % 21 %»).
+  const iva = cuentas.locator('.cx-dato').filter({ hasText: 'IVA que te cobra' })
+  await expect(iva).toContainText(/472\d{5} · IVA soportado/)
+  await expect(iva).not.toContainText(/%\s*\d+(,\d+)?\s*%/)
   await expect(cuentas.getByText('Tipo de operación')).toBeVisible()
   await expect(saldo.locator('.cx-dato').filter({ hasText: 'Saldo con él' })).toContainText('Sin apuntes todavía')
   await expect(saldo.locator('.cx-dato').filter({ hasText: 'Va al 347 este año' })).toContainText(/^Va al 347 este año(Sí|No|Tu empresa)/)
@@ -61,6 +65,8 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   await ext.getByRole('button', { name: 'Saldos por mes' }).click()
   await expect(ext.getByRole('button', { name: 'Saldos por mes' })).toHaveAttribute('aria-pressed', 'true')
 
+  // Las dos tarjetas siguen ahí antes de la captura (no el esqueleto).
+  await expect(cuentas.locator('.cx-dato').filter({ hasText: 'Su cuenta' })).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/ficha-contabilidad-${lado(page)}.png`, fullPage: true })
   const flotantes = lado(page) === 'movil' ? [BARRA_FOLVY_MOVIL] : FLOTANTES_CONTA

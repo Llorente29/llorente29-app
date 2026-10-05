@@ -34,18 +34,26 @@ const QUE_CAMBIA: Record<string, string> = {
   su_cuenta: 'Su cuenta es ahora', facturas: 'Sus facturas van ahora a', pago: 'Le pagas ahora desde', suplidos: 'Sus suplidos van ahora a',
 }
 
+/**
+ * Lo último leído por empresa: si la pieza se vuelve a montar (al cambiar el
+ * tamaño de la ventana, al volver a la pestaña), enseña lo que ya tenía
+ * mientras lo vuelve a pedir, en vez del esqueleto.
+ */
+const ULTIMO = new Map<string, DatosCuentasProveedor>()
+
 function useCuentas(accountId: string, companyId: string | null) {
-  const [datos, setDatos] = useState<DatosCuentasProveedor | null>(null)
+  const clave = `${accountId}:${companyId ?? ''}`
+  const [datos, setDatos] = useState<DatosCuentasProveedor | null>(() => ULTIMO.get(clave) ?? null)
   const [error, setError] = useState<string | null>(null)
   const [vuelta, setVuelta] = useState(0)
   useEffect(() => {
     if (!companyId) return
     let vivo = true
     cargarCuentasProveedor(accountId, companyId)
-      .then((d) => { if (vivo) { setDatos(d); setError(null) } })
+      .then((d) => { ULTIMO.set(clave, d); if (vivo) { setDatos(d); setError(null) } })
       .catch((e: unknown) => { if (vivo) setError(e instanceof Error ? e.message : 'No se han podido leer sus cuentas.') })
     return () => { vivo = false }
-  }, [accountId, companyId, vuelta])
+  }, [accountId, companyId, clave, vuelta])
   const recargar = useCallback(() => setVuelta((v) => v + 1), [])
   return { datos, error, recargar }
 }
