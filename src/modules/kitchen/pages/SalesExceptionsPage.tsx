@@ -35,7 +35,6 @@ import {
   resolveUnmapped,
   classifyUnmappedProduct,
   createDishFromUnmapped,
-  listCostlessSoldProducts,
   type ClassifyCandidate,
   type SalesReliability,
   type BlindGroup,
@@ -44,7 +43,6 @@ import {
   type MatchSuggestion,
   type ResolveAction,
   type ClassifyAction,
-  type CostlessProduct,
 } from '@/modules/kitchen/services/salesReliabilityService'
 import {
   listBrandsWithSales,
@@ -821,17 +819,8 @@ function IgnoreReasonModal({
 function GeneralExceptionsView({ accountId }: { accountId: string }) {
   const [signal, setSignal] = useState<SalesReliability | null>(null)
   const [groups, setGroups] = useState<BlindGroup[]>([])
-  const [costless, setCostless] = useState<CostlessProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // «Casado sin coste» va APARTE, con su propio error. El 02/09 se retiro de la
-  // base la RPC list_costless_sold_products (migracion 20260902204305) creyendo
-  // que no la usaba nadie; su guarda solo miraba funciones de Postgres y crons,
-  // no el front. Como las tres lecturas iban en un mismo Promise.all, el rechazo
-  // de esta tumbaba TAMBIEN la señal y los grupos: la pantalla entera se quedaba
-  // en un recuadro rojo. Una fuente que falla no puede llevarse por delante las
-  // que si responden — y lo que falla se dice, no se esconde (reglas 7 y 8).
-  const [costlessError, setCostlessError] = useState<string | null>(null)
 
   function reload() {
     setLoading(true)
@@ -840,9 +829,6 @@ function GeneralExceptionsView({ accountId }: { accountId: string }) {
       .then(([sig, grp]) => { setSignal(sig); setGroups(grp) })
       .catch((e) => setError(String(e.message ?? e)))
       .finally(() => setLoading(false))
-    listCostlessSoldProducts(accountId)
-      .then((cl) => { setCostless(cl); setCostlessError(null) })
-      .catch((e) => { setCostless([]); setCostlessError(String(e.message ?? e)) })
   }
 
   useEffect(() => {
@@ -853,9 +839,6 @@ function GeneralExceptionsView({ accountId }: { accountId: string }) {
       .then(([sig, grp]) => { if (!cancelled) { setSignal(sig); setGroups(grp) } })
       .catch((e) => { if (!cancelled) setError(String(e.message ?? e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
-    listCostlessSoldProducts(accountId)
-      .then((cl) => { if (!cancelled) { setCostless(cl); setCostlessError(null) } })
-      .catch((e) => { if (!cancelled) { setCostless([]); setCostlessError(String(e.message ?? e)) } })
     return () => { cancelled = true }
   }, [accountId])
 
@@ -879,39 +862,6 @@ function GeneralExceptionsView({ accountId }: { accountId: string }) {
         </div>
       )}
 
-      {costlessError && (
-        <div className="mt-8 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
-          <div className="font-medium">«Casado pero sin coste» no se puede mostrar.</div>
-          <div className="mt-1 text-xs text-amber-800">
-            El resto de esta pantalla es correcto. {costlessError}
-          </div>
-        </div>
-      )}
-
-      {costless.length > 0 && (
-        <div className="mt-8">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-orange-500" />
-            <span className="text-sm font-medium text-gray-900">
-              Casado pero sin coste · {costless.length}
-            </span>
-            <span className="text-xs text-gray-500">
-              {formatEur(costless.reduce((s, p) => s + p.importe, 0))} de food cost desconocido
-            </span>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            {costless.map((p, idx) => (
-              <CostlessRow
-                key={p.recipeItemId}
-                product={p}
-                accountId={accountId}
-                isLast={idx === costless.length - 1}
-                onResolved={reload}
-              />
-            ))}
-          </div>
-        </div>
-      )}
     </>
   )
 }
@@ -1348,147 +1298,6 @@ function BlindRow({
         onConfirm={confirmCreateDish}
         onCancel={() => setConfirmDishOpen(false)}
       />
-    </div>
-  )
-}
-
-function CostlessRow({
-  product, accountId, isLast, onResolved,
-}: {
-  product: CostlessProduct; accountId: string; isLast: boolean; onResolved: () => void
-}) {
-  const navigate = useNavigate()
-  const [busy, setBusy] = useState<'resale' | 'dish' | 'combo' | null>(null)
-  const [rowError, setRowError] = useState<string | null>(null)
-  const [msg, setMsg] = useState<string | null>(null)
-  const [targetCandidates, setTargetCandidates] = useState<ClassifyCandidate[] | null>(null)
-  const [targetAction, setTargetAction] = useState<ClassifyAction | null>(null)
-
-  function goToRecipe() {
-    navigate('/kitchen/recetas?recipe=' + product.recipeItemId)
-  }
-
-  function doClassify(action: ClassifyAction) {
-    if (busy) return
-    setBusy(action)
-    setRowError(null)
-    setTargetCandidates(null)
-    // Este producto YA tiene recipeItemId → lo pasamos como ancla (Puerta 1, sin adivinar).
-    classifyUnmappedProduct(accountId, product.productName, action, null, product.recipeItemId)
-      .then((res) => {
-        if (res.resultado === 'needs_target') {
-          setTargetCandidates(res.candidatos)
-          setTargetAction(action)
-          setBusy(null)
-        } else if (res.resultado === 'resale_linked') {
-          setMsg('Convertido a reventa. Queda pendiente de coste: lo rellenará la factura, o ponlo a mano en la ficha.')
-          setTimeout(onResolved, 1800)
-        } else if (res.resultado === 'is_dish') {
-          if (res.recipeItemId) {
-            navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
-          } else {
-            setMsg('Marcado como plato. Crea su escandallo en Recetas; al recompute, dejará de estar sin coste.')
-            setBusy(null)
-          }
-        } else if (res.resultado === 'is_combo') {
-          setMsg('Marcado como combo (pendiente del módulo de combos y modificadores).')
-          setBusy(null)
-        } else {
-          setMsg('Hecho.')
-          setBusy(null)
-        }
-      })
-      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
-  }
-
-  function doClassifyToTarget(recipeItemId: string) {
-    if (busy || !targetAction) return
-    setBusy('resale')
-    setRowError(null)
-    classifyUnmappedProduct(accountId, product.productName, targetAction, null, recipeItemId)
-      .then((res) => {
-        setTargetCandidates(null)
-        if (res.resultado === 'resale_linked') {
-          setMsg('Convertido a reventa. Pendiente de coste (lo rellena la factura).')
-          setTimeout(onResolved, 1800)
-        } else { setMsg('Hecho.'); setBusy(null) }
-      })
-      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
-  }
-
-  return (
-    <div className={`px-4 py-3 ${isLast ? '' : 'border-b border-gray-100'}`}>
-      <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-gray-900 text-sm">{product.productName}</div>
-          <div className="text-xs text-gray-500 mt-0.5 inline-flex items-center gap-1">
-            <ReceiptText className="w-3 h-3" />
-            {product.ventas} venta{product.ventas !== 1 ? 's' : ''}
-            {' · '}
-            {product.hasRecipeLines ? 'escandallo a medias' : 'sin escandallo'}
-          </div>
-        </div>
-        <div className="text-sm font-medium text-gray-900 shrink-0">{formatEur(product.importe)}</div>
-      </div>
-
-      <div className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 mt-2 ${
-        looksLikeResale(product.productName) ? 'bg-blue-50' : 'bg-gray-50'
-      }`}>
-        {looksLikeResale(product.productName)
-          ? <GlassWater className="w-3.5 h-3.5 text-blue-600" />
-          : <ChefHat className="w-3.5 h-3.5 text-gray-500" />}
-        <span className={`text-xs ${looksLikeResale(product.productName) ? 'text-blue-700' : 'text-gray-600'}`}>
-          {looksLikeResale(product.productName) ? '¿Es una bebida o artículo de reventa?' : '¿Es un plato? Crea su escandallo'}
-        </span>
-      </div>
-
-      {rowError && (
-        <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs mt-2">{rowError}</div>
-      )}
-
-      {targetCandidates && (
-        <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2 mt-2">
-          <p className="text-amber-800">No encontré el artículo de “{product.productName}”. ¿A cuál lo caso?</p>
-          {targetCandidates.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {targetCandidates.map((c) => (
-                <button key={c.recipeItemId} type="button" disabled={busy !== null}
-                  onClick={() => doClassifyToTarget(c.recipeItemId)}
-                  className="px-2.5 py-1 rounded-md bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors disabled:opacity-50">
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-amber-700">No hay artículos parecidos. Créalo o márcalo desde su ficha.</p>
-          )}
-          <button type="button" onClick={() => { setTargetCandidates(null); setTargetAction(null) }} className="text-amber-700 underline">Cancelar</button>
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2 mt-2">
-        <ActionButton
-          icon={<ChefHat className="w-3.5 h-3.5" />}
-          label={product.hasRecipeLines ? 'Completar escandallo' : 'Es un plato (crear escandallo)'}
-          onClick={goToRecipe}
-          disabled={busy !== null}
-        />
-        <ActionButton
-          icon={busy === 'resale' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GlassWater className="w-3.5 h-3.5" />}
-          label="Es reventa"
-          onClick={() => doClassify('resale')}
-          disabled={busy !== null}
-        />
-        <ActionButton
-          icon={<Package className="w-3.5 h-3.5" />}
-          label="Es un combo"
-          onClick={() => doClassify('combo')}
-          disabled={busy !== null}
-          subtle
-        />
-      </div>
-
-      {msg && <p className="text-xs text-green-700 mt-2">{msg}</p>}
     </div>
   )
 }
