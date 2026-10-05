@@ -108,3 +108,45 @@ export function revisarEmpresas(bd, serie) {
   }
   return out
 }
+
+// ── Planes traídos de otro programa (C02c §6) ───────────────────────────────
+
+/**
+ * Lo que trae otro programa no se toca ni deja rastro al deshacerse:
+ *   · toda cuenta traída (source 'migrated') conserva su código original: está
+ *     entre los códigos leídos del fichero de SU importación, y guarda el nombre
+ *     de allí (name_source);
+ *   · ningún tercero tiene dos enlaces con el mismo papel en una empresa;
+ *   · ningún enlace apunta a una cuenta que ya no existe;
+ *   · una importación deshecha no deja nada: ni cuentas ni fichas creadas.
+ * Rojo con el caso, y la cuenta (account_id) de la que es (regla 9).
+ */
+export function revisarImportaciones(bd) {
+  const out = []
+  const cuentas = bd.company_account ?? []
+  const enlaces = bd.company_account_link ?? []
+  const importaciones = new Map((bd.importaciones ?? []).map((i) => [i.id, i]))
+  const de = (accountId) => `cuenta ${String(accountId).slice(0, 8)}`
+  for (const c of cuentas.filter((x) => x.source === 'migrated')) {
+    const imp = importaciones.get(c.import_id)
+    if (!imp) { out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} dice venir de otro programa y no tiene importación.` }); continue }
+    if (imp.status !== 'traida') out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} sigue en el plan y su importación está ${imp.status}.` })
+    if (!(imp.codigos ?? []).includes(c.code)) out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} no es ninguno de los códigos que traía el fichero: el código original no se ha conservado.` })
+    if (!c.name_source) out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} no guarda el nombre que tenía en el otro programa.` })
+  }
+  const vistos = new Map()
+  const ids = new Set(cuentas.map((c) => c.id))
+  for (const l of enlaces) {
+    if (!ids.has(l.company_account_id)) out.push({ nivel: 'rojo', texto: `Enlace · empresa ${String(l.company_id).slice(0, 8)}: un ${l.entity} (${l.role}) apunta a una cuenta que ya no existe.` })
+    const k = `${l.company_id}:${l.entity}:${l.entity_id}:${l.role}`
+    if (vistos.has(k)) out.push({ nivel: 'rojo', texto: `Enlace · empresa ${String(l.company_id).slice(0, 8)}: el mismo ${l.entity} tiene dos enlaces con el papel ${l.role}.` })
+    vistos.set(k, true)
+  }
+  for (const imp of importaciones.values()) {
+    if (imp.status !== 'deshecha') continue
+    const quedanCuentas = cuentas.filter((c) => c.import_id === imp.id).length
+    const quedanFichas = (bd.proveedores_traidos ?? []).filter((s) => s.import_id === imp.id).length
+    if (quedanCuentas || quedanFichas) out.push({ nivel: 'rojo', texto: `Plan traído · ${de(imp.account_id)}: la importación ${String(imp.id).slice(0, 8)} está deshecha y deja ${quedanCuentas} cuentas y ${quedanFichas} fichas.` })
+  }
+  return out
+}
