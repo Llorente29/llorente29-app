@@ -1,8 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 05/10/2026 · Limpieza: dos actividades «Restaurante» que la e2e de «Tu
-# empresa» añadió de más la noche del 04/10 (contó con el esqueleto delante;
-# corregida en el mismo commit). Exactamente dos, o no se toca nada.
-# Anterior: 37244371668 (prueba del plan, en verde).
-supabase/staging/sql/20261005_e2e_quitar_actividades_repetidas.sql
+# 05/10/2026 · C02, tarea 6: la 0160 (papeles propios del proveedor: gasto,
+# pago y suplidos) y su prueba con los JWT de A y B, que termina en ROLLBACK
+# después de probar la vuelta atrás.
+# Anterior: 37244600070 (limpieza de las dos «Restaurante», en verde).
+supabase/migrations/20261007T0160_c02_cuentas_del_proveedor.sql
+supabase/staging/sql/20261007_c02_prueba_proveedor.sql

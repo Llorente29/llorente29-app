@@ -102,4 +102,20 @@ describe('agente «Plan contable» · empresas', () => {
       'Empresa · Taberna de Prueba (cuenta c01a0000): el tipo iva_reducido (10 %) no tiene cuenta de IVA repercutido.',
     ])
   })
+  it('los papeles propios de un proveedor (0160) a su grupo: facturas al 6 y pago al 57 o 43', () => {
+    const bd = bdDe()
+    bd.company_account_link.push(
+      { company_id: 'e1', company_account_id: '62900000', entity: 'supplier', entity_id: 'p1', role: 'suplidos' },
+      { company_id: 'e1', company_account_id: '57200000', entity: 'supplier', entity_id: 'p1', role: 'pago' },
+    )
+    expect(revisarEmpresas(bd, serie)).toEqual([])
+    bd.company_account_link.push(
+      { company_id: 'e1', company_account_id: '57200000', entity: 'supplier', entity_id: 'p1', role: 'gasto' },
+      { company_id: 'e1', company_account_id: '62900000', entity: 'supplier', entity_id: 'p1', role: 'pago' },
+    )
+    expect(textos_(revisarEmpresas(bd, serie))).toEqual([
+      'Empresa · Taberna de Prueba (cuenta c01a0000): las facturas de un proveedor van a 57200000, que no es de gastos (grupo 6).',
+      'Empresa · Taberna de Prueba (cuenta c01a0000): a un proveedor se le paga desde 62900000, que no es un banco o caja (57) ni lo que te debe (43).',
+    ])
+  })
 })

@@ -26,8 +26,12 @@ export const DIGITOS_POR_DEFECTO = 8
 export type Plan = 'pymes' | 'general'
 export type EstadoCuenta = 'activa' | 'oculta' | 'cerrada'
 export type Entidad = 'supplier' | 'customer' | 'bank_account' | 'expense_category' | 'tax_rate' | 'withholding_rate'
-/** Para un tipo de IVA, la cuenta del IVA que pagas (472) y la del que cobras (477). */
-export type Papel = 'principal' | 'soportado' | 'repercutido'
+/**
+ * Para un tipo de IVA, la cuenta del IVA que pagas (472) y la del que cobras (477).
+ * Para un proveedor (0160): su cuenta (principal) y, si los tiene propios, dónde
+ * van sus facturas (gasto), desde dónde se le paga (pago) y sus suplidos.
+ */
+export type Papel = 'principal' | 'soportado' | 'repercutido' | 'gasto' | 'pago' | 'suplidos'
 
 export interface HojaSerie { code: string; name: string; plainName: string | null }
 
@@ -272,7 +276,7 @@ export function coherencia(
     if (!c) { out.push({ code: l.code, regla: 'enlace_roto', texto: `Un ${l.entity} apunta a ${l.code}, que no existe.` }); continue }
     if (c.status === 'oculta') out.push({ code: c.code, regla: 'oculta_con_enlace', texto: `${c.code} (${c.name}) está oculta y tiene un enlace activo (${l.entity}).` })
     if (c.status === 'cerrada') out.push({ code: c.code, regla: 'cerrada_con_enlace', texto: `${c.code} (${c.name}) está cerrada y sigue enlazada (${l.entity}): no admite apuntes nuevos.` })
-    if (TERCEROS.includes(l.entity) && !c.isCommon) {
+    if (TERCEROS.includes(l.entity) && l.role === 'principal' && !c.isCommon) {
       const otro = terceroPorCuenta.get(l.code)
       if (otro && (otro.entity !== l.entity || otro.entityId !== l.entityId)) out.push({ code: c.code, regla: 'enlace_doble', texto: `${c.code} (${c.name}) es la subcuenta de dos terceros y no es la cuenta común.` })
       terceroPorCuenta.set(l.code, l)
@@ -345,7 +349,7 @@ export function fusionar(sobra: CuentaEmpresa, queda: CuentaEmpresa, enlaces: re
   if (sobra.kind === 'template') return { ok: false, motivo: `${sobra.code} es de serie: no se puede quitar. Fusiona al revés.` }
   if (queda.status !== 'activa') return { ok: false, motivo: `${queda.code} está ${queda.status}: elige una activa para quedarte.` }
   const mueve = enlaces.filter((l) => l.code === sobra.code).map((l) => ({ ...l, code: queda.code }))
-  const terceros = new Set([...enlaces.filter((l) => l.code === queda.code), ...mueve].filter((l) => TERCEROS.includes(l.entity)).map((l) => `${l.entity}:${l.entityId}`))
+  const terceros = new Set([...enlaces.filter((l) => l.code === queda.code), ...mueve].filter((l) => TERCEROS.includes(l.entity) && l.role === 'principal').map((l) => `${l.entity}:${l.entityId}`))
   if (terceros.size > 1 && !queda.isCommon) return { ok: false, motivo: `Las dos son subcuentas de terceros distintos: no son duplicadas.` }
   return bloqueada
     ? { ok: true, modo: 'fusionar', mueve, porque: `Ya hay asientos: ${sobra.code} pasa su historial a ${queda.code} y queda cerrada. Se puede deshacer durante 24 horas.` }

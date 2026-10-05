@@ -88,6 +88,8 @@ test('cuenta A: completar la empresa, cerrar y reabrir un mes, como en la maquet
   // Socios y cargos.
   await page.goto('/conta/ajustes/socios')
   const socios = await tarjeta(page, 'Socios y cargos')
+  // Cargada antes de contar: si no, cuenta 0 y vuelve a darla de alta.
+  await expect(socios.getByRole('button', { name: '+ Añadir' })).toBeVisible()
   if (await socios.getByRole('button', { name: 'Cambiar Marta Ruiz Sanz' }).count() === 0) {
     await socios.getByRole('button', { name: '+ Añadir' }).click()
     await socios.getByLabel('Nombre y apellidos').fill('Marta Ruiz Sanz')

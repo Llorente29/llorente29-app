@@ -65,6 +65,7 @@ export function informePlan(hallazgos, { donde, hoy, filas, resumen }) {
  *   · tiene TODAS las hojas de su plan;
  *   · todas sus cuentas tienen la longitud de la empresa;
  *   · todo enlace apunta a una cuenta suya que existe y está activa;
+ *   · los papeles propios de un proveedor van a su grupo (gasto y suplidos al 6, pago al 57 o 43);
  *   · hay 472 y 477 para cada tipo de IVA (o IGIC) vigente de su territorio.
  * Cada caso lleva la cuenta (account_id) de la que es (regla 9).
  */
@@ -91,6 +92,9 @@ export function revisarEmpresas(bd, serie) {
       const c = porId.get(l.company_account_id)
       if (!c) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: un ${l.entity} apunta a una cuenta que no es de la empresa.` })
       else if (c.status !== 'activa') out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: un ${l.entity} apunta a ${c.code}, que está ${c.status}.` })
+      // Los papeles propios de un proveedor (0160), a su grupo: misma regla que el disparador.
+      else if ((l.role === 'gasto' || l.role === 'suplidos') && !c.template_code.startsWith('6')) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: ${l.role === 'gasto' ? 'las facturas' : 'los suplidos'} de un proveedor van a ${c.code}, que no es de gastos (grupo 6).` })
+      else if (l.role === 'pago' && !/^(57|43)/.test(c.template_code)) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: a un proveedor se le paga desde ${c.code}, que no es un banco o caja (57) ni lo que te debe (43).` })
     }
     const sistema = e.tax_territory === 'canarias' ? 'igic' : 'iva'
     for (const t of (bd.tipos_vigentes ?? []).filter((x) => x.tax_system === sistema && (x.is_system || x.account_id === e.account_id))) {

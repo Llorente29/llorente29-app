@@ -204,7 +204,8 @@ begin
 end $$;
 reset role;
 
-\echo '>>> 6. Vuelta atrás (0150, 0140, 0130 y luego 0120)'
+\echo '>>> 6. Vuelta atrás (0160, 0150, 0140, 0130 y luego 0120)'
+\ir ../../vuelta-atras/20261007T0160_c02_cuentas_del_proveedor.down.sql
 \ir ../../vuelta-atras/20261007T0150_c02_deshacer_cambio_plan.down.sql
 \ir ../../vuelta-atras/20261007T0140_c02_duplicadas_cerrar_palabras.down.sql
 \ir ../../vuelta-atras/20261007T0130_c02_proveedor_400_410.down.sql
