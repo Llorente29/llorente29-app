@@ -9,4 +9,5 @@
 # company_chart_import_apply). La 0100, corregida, se vuelve a aplicar.
 # 37378020269: la 0100 se reaplicó bien; la prueba llegó al registro (48
 # cuentas enlazadas: las retenciones con modelo también cuentan). Solo la prueba.
+# 37378425939: 1 en verde; el 2 llamaba a una función interna. Solo la prueba.
 supabase/staging/sql/20261008_c02c_prueba_traer.sql

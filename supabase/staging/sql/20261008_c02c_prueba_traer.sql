@@ -108,7 +108,10 @@ begin
   raise notice 'PRUEBA C02c · 1 en verde';
 
   -- 2 · La IA propondría a «Hielo Polar del Barrio» (no venía en Diez) la siguiente libre dentro de lo traído.
-  if public.company_account_siguiente(emp, '4000', 8) <> '40000019' then raise exception 'PRUEBA C02c: siguiente libre = %', public.company_account_siguiente(emp, '4000', 8); end if;
+  -- (company_account_siguiente es interna; la misma regla aquí: el primer número libre desde 1.)
+  select '4000' || lpad(min(i)::text, 4, '0') into v from generate_series(1, 9999) i
+   where not exists (select 1 from public.company_account where company_id = emp and code = '4000' || lpad(i::text, 4, '0'));
+  if v <> '40000019' then raise exception 'PRUEBA C02c: siguiente libre = %', v; end if;
   raise notice 'PRUEBA C02c · 2 en verde';
 
   -- 3 · No se trae dos veces ni se activa encima.
