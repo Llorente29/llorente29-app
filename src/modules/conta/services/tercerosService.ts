@@ -291,12 +291,6 @@ async function cuentasDeTercero(accountId: string, companyId: string, partyId: s
   return { suyas, sinDueno, activo: cuentas.length > 0 }
 }
 
-/** Las 430 traídas de otro programa que no son de nadie (la revisión de la lista). */
-export async function cuentas430SinFicha(accountId: string, companyId: string): Promise<{ id: string; code: string; name: string }[]> {
-  const r = await cuentasDeTercero(accountId, companyId, '', null)
-  return r.sinDueno.filter((c) => c.traida)
-}
-
 // ── Escrituras ──────────────────────────────────────────────────────────────
 
 /** Alta o edición de un cliente. Si el NIF ya es de otro tercero, la base para con MISMO_NIF <id>. */

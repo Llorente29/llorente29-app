@@ -8,14 +8,15 @@
 // Un tercero que solo es proveedor abre su ficha de siempre (la del C01b, en
 // Cocina); con papel de cliente, plataforma o socio, la ficha N9/N10.
 //
-// Arriba, las dos revisiones que deja la importación: las cuentas de cliente
-// traídas de otro programa que no son de nadie (propone la ficha por nombre;
-// la persona confirma) y los acuerdos de cesión que aún no apuntan a su socio.
-// Nada se enlaza sin «Es este».
+// Arriba, las dos revisiones que deja la importación: las cuentas 430 traídas
+// de otro programa (TODAS, también las que quedaron como cuenta de pago de un
+// proveedor: un enlace de pago no es un papel; respuesta 3) con el papel que
+// propone Folvy, su porqué y su confianza; y los acuerdos de cesión que aún no
+// apuntan a su socio. Nada se escribe sin «Confirmar» fila a fila.
 // Regla 7 de CLAUDE.md: ningún filtro esconde filas que existen; los archivados
 // están en su filtro y lo dicen.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaFichaTercero, rutaMayor } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -33,9 +34,13 @@ import { parecido } from '@/modules/conta/lib/importarPlan'
 import { diaMesCorto, euros, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
 import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 import {
-  acuerdosSinSocio, anadirPapel, archivarTercero, cuentas430SinFicha, enlazarAcuerdo, enlazarCuentaCliente, guardarCliente,
+  acuerdosSinSocio, anadirPapel, archivarTercero, enlazarAcuerdo, guardarCliente,
   liquidacionesDeLaCuenta, liquidacionesSocioDe, listarFacturasDeLaCuenta, listarTercerosBase, terceroDelMismoNif, type TerceroLista,
 } from '@/modules/conta/services/tercerosService'
+import { cargarRevision430, confirmar430, type DatosRevision430 } from '@/modules/conta/services/revision430Service'
+import {
+  TIPO_430, elegida, hecha, proponer430, queHace, tarjetaPorRevisar, type Cuenta430, type Propuesta430, type Tercero430, type Tipo430,
+} from '@/modules/conta/lib/revision430'
 
 const PILDORA: Record<Papel, string> = {
   platform: 'Plataforma', brand_partner: 'Socio de marca', customer: 'Cliente', supplier: 'Proveedor',
@@ -93,8 +98,17 @@ export default function TercerosPage() {
   const [fallo, setFallo] = useState<string | null>(null)
   const [archivar, setArchivar] = useState<TerceroLista | null>(null)
   const { filas, error } = useTerceros(cargando ? null : accountId, vuelta)
+  const revision = useRevision430(cargando ? null : accountId, activa?.id ?? null, vuelta)
+  const [revisionAbierta, setRevisionAbierta] = useState(false)
+  const cajaRevision = useRef<HTMLElement>(null)
+  const pendientes430 = useMemo(() => (revision && filas ? revision.cuentas.filter((c) => !hecha(c, aTerceros430(filas, revision))).length : 0), [revision, filas])
+  const revisarAhora = () => {
+    setRevisionAbierta(true)
+    requestAnimationFrame(() => cajaRevision.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
   const visibles = useMemo(() => (filas ? filtrarTerceros(filas, filtro, busca) : []), [filas, filtro, busca])
   const cuantos = useMemo(() => (filas ? cuentaPorFiltro(filas) : null), [filas])
+  const tarjeta = filas ? tarjetaPorRevisar(filtro, visibles.length, busca, pendientes430, revision?.programa ?? null) : null
   const recargar = () => setVuelta((v) => v + 1)
 
   async function cambiarArchivo(t: TerceroLista, archivarlo: boolean) {
@@ -120,7 +134,10 @@ export default function TercerosPage() {
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
 
-      {accountId && filas && activa && <RevisionCuentas accountId={accountId} companyId={activa.id} terceros={filas} alCambiar={(t) => { setHecho(t); recargar() }} />}
+      {accountId && filas && activa && revision && revision.cuentas.length > 0 && (
+        <RevisionCuentas ref={cajaRevision} accountId={accountId} companyId={activa.id} terceros={filas} datos={revision}
+          abierta={revisionAbierta} setAbierta={setRevisionAbierta} alCambiar={(t) => { setHecho(t); recargar() }} />
+      )}
       {accountId && filas && <RevisionAcuerdos accountId={accountId} terceros={filas} alCambiar={(t) => { setHecho(t); recargar() }} />}
 
       <div className="cxp-lista-barra">
@@ -143,7 +160,13 @@ export default function TercerosPage() {
           {[0, 1, 2, 3, 4].map((i) => <Hueso key={i} alto={44} />)}
         </div>
       )}
-      {filas && visibles.length === 0 && (
+      {tarjeta && (
+        <div className="cx-tarjeta cxt-revision-aviso" role="status">
+          <span>{tarjeta}</span>
+          <button type="button" className="cx-boton" onClick={revisarAhora}>Revisar ahora</button>
+        </div>
+      )}
+      {filas && visibles.length === 0 && !tarjeta && (
         <div className="cx-tarjeta">
           {busca.trim()
             ? <Vacio titulo={`Nadie coincide con «${busca.trim()}».`} explicacion="Prueba con otra parte del nombre o con su NIF." />
@@ -308,55 +331,149 @@ function NuevoCliente({ accountId, terceros, alCerrar }: { accountId: string; te
   )
 }
 
+function useRevision430(accountId: string | null, companyId: string | null, vuelta: number): DatosRevision430 | null {
+  const [datos, setDatos] = useState<DatosRevision430 | null>(null)
+  useEffect(() => {
+    if (!accountId || !companyId) return
+    let vivo = true
+    cargarRevision430(accountId, companyId).then((d) => { if (vivo) setDatos(d) })
+      .catch(() => { if (vivo) setDatos({ cuentas: [], codigoDeProveedor: new Map(), canales: [], programa: null }) })
+    return () => { vivo = false }
+  }, [accountId, companyId, vuelta])
+  return datos
+}
+
+/** Los terceros como los ve la revisión: con su cuenta de proveedor, para decir cuál es. */
+function aTerceros430(terceros: readonly TerceroLista[], d: DatosRevision430): Tercero430[] {
+  return terceros.map((t) => ({
+    id: t.id, nombre: t.nombre, nif: t.nif, papeles: t.papeles, supplierId: t.supplierId, archivado: !!t.archivadoEn,
+    codigoProveedor: t.supplierId ? d.codigoDeProveedor.get(t.supplierId) ?? null : null,
+  }))
+}
+
 /**
- * La revisión de las cuentas de cliente traídas de otro programa sin ficha
- * (encargo §10: «Julio enlaza las 430 de Diez a sus fichas desde la revisión
- * que propondrá Folvy»). Propone por nombre; nada se enlaza sin «Es este».
+ * La revisión de las 430 traídas de otro programa (encargo §10 y respuesta 3):
+ * TODAS, con el papel que propone Folvy, su porqué y su confianza. Las hechas
+ * se quedan a la vista, al final, con lo que son (regla 7).
  */
-function RevisionCuentas({ accountId, companyId, terceros, alCambiar }: { accountId: string; companyId: string; terceros: TerceroLista[]; alCambiar: (t: string) => void }) {
+const RevisionCuentas = forwardRef<HTMLElement, {
+  accountId: string; companyId: string; terceros: TerceroLista[]; datos: DatosRevision430
+  abierta: boolean; setAbierta: (v: boolean) => void; alCambiar: (t: string) => void
+}>(function RevisionCuentas({ accountId, companyId, terceros, datos, abierta, setAbierta, alCambiar }, ref) {
   const { userName } = useCuentaConta()
-  const [cuentas, setCuentas] = useState<{ id: string; code: string; name: string }[] | null>(null)
-  const [abierta, setAbierta] = useState(false)
   const [ocupada, setOcupada] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
-  useEffect(() => {
-    let vivo = true
-    cuentas430SinFicha(accountId, companyId).then((c) => { if (vivo) setCuentas(c) }).catch(() => { if (vivo) setCuentas([]) })
-    return () => { vivo = false }
-  }, [accountId, companyId, terceros])
-  if (!cuentas || cuentas.length === 0) return null
-  const activos = terceros.filter((t) => !t.archivadoEn)
-  const nombreDe = (c: { name: string }) => c.name.replace(/^Clientes · /, '')
+  const t430 = useMemo(() => aTerceros430(terceros, datos), [terceros, datos])
+  const filas = datos.cuentas.map((c) => ({ c, hecha: hecha(c, t430) }))
+  const pendientes = filas.filter((f) => !f.hecha)
+  const de = datos.programa ? ` de ${datos.programa}` : ''
 
-  async function hacer(cuenta: { id: string; code: string; name: string }, partyId: string | null) {
-    setOcupada(cuenta.id); setFallo(null)
+  async function confirmar(c: Cuenta430, p: Propuesta430, archivar: boolean) {
+    setOcupada(c.id); setFallo(null)
     try {
-      let id = partyId
-      if (!id) id = (await guardarCliente(accountId, null, nombreDe(cuenta), null, {}, userName)).party_id
-      else if (!terceros.find((t) => t.id === id)?.papeles.includes('customer')) await anadirPapel(id, 'customer')
-      await enlazarCuentaCliente(companyId, id, cuenta.id, userName)
-      alCambiar(`${cuenta.code} enlazada a ${partyId ? terceros.find((t) => t.id === partyId)?.nombre : nombreDe(cuenta)} como su cuenta de cliente.`)
-    } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo enlazar.') }
+      alCambiar(await confirmar430({ accountId, companyId, quien: userName }, c, p, { archivar }))
+    } catch (e) {
+      const otro = terceroDelMismoNif(e)
+      setFallo(`${c.code}: ${otro ? 'ese NIF ya es de otro tercero; elige esa ficha con «Cambiar».' : e instanceof Error ? e.message : 'no se pudo confirmar.'}`)
+    }
     setOcupada(null)
   }
 
   return (
-    <section className="cx-tarjeta cxt-revision" aria-label="Cuentas de cliente sin ficha">
+    <section ref={ref} className="cx-tarjeta cxt-revision" aria-label="Cuentas de clientes traídas por revisar">
       <div className="cxt-revision-cabeza">
         <div>
-          <strong>{cuentas.length === 1 ? '1 cuenta de cliente traída sin ficha' : `${cuentas.length} cuentas de cliente traídas sin ficha`}</strong>
-          <div className="cx-ayuda">Vienen de tu programa anterior. Dime de quién es cada una: así su saldo y sus movimientos van a su ficha.</div>
+          <strong>{pendientes.length === 0
+            ? `Las ${filas.length} cuentas de clientes traídas${de} están revisadas`
+            : pendientes.length === 1 ? `1 cuenta de cliente traída${de} por revisar` : `${pendientes.length} cuentas de clientes traídas${de} por revisar`}</strong>
+          <div className="cx-ayuda">Para cada una te propongo qué es —plataforma, socio de marca, cliente o cuenta tuya— y por qué. Nada se guarda hasta que confirmas.</div>
         </div>
-        <button type="button" className="cx-boton-sec" aria-expanded={abierta} onClick={() => setAbierta((v) => !v)}>{abierta ? 'Cerrar' : 'Revisar'}</button>
+        <button type="button" className="cx-boton-sec" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>{abierta ? 'Cerrar' : 'Revisar'}</button>
       </div>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      {abierta && cuentas.map((c) => {
-        const propuesta = activos.find((t) => parecido(t.nombre, nombreDe(c)) === 'igual') ?? activos.find((t) => parecido(t.nombre, nombreDe(c)) === 'parecido') ?? null
-        return <FilaRevision key={c.id} titulo={<><Link to={rutaMayor(c.code)} className="cx-cifra">{c.code}</Link> · {c.name}</>}
-          propuesta={propuesta} terceros={activos} ocupada={ocupada === c.id}
-          alElegir={(id) => void hacer(c, id)} crearTexto="Crear cliente con este nombre" alCrear={() => void hacer(c, null)} />
-      })}
+      {abierta && [...pendientes, ...filas.filter((f) => f.hecha)].map(({ c, hecha: yaEsta }) => (
+        <FilaCuenta430 key={c.id} c={c} hecha={yaEsta} terceros={t430} datos={datos} ocupada={ocupada === c.id} alConfirmar={confirmar} />
+      ))}
     </section>
+  )
+})
+
+const CONFIANZA: Record<Propuesta430['confianza'], string> = { seguro: 'Seguro', probable: 'Probable' }
+
+function FilaCuenta430({ c, hecha: yaEsta, terceros, datos, ocupada, alConfirmar }: {
+  c: Cuenta430; hecha: boolean; terceros: Tercero430[]; datos: DatosRevision430; ocupada: boolean
+  alConfirmar: (c: Cuenta430, p: Propuesta430, archivar: boolean) => void
+}) {
+  const propuesta = useMemo(() => proponer430(c, terceros, datos.canales), [c, terceros, datos.canales])
+  const [eleccion, setEleccion] = useState<Propuesta430 | null>(null)
+  const [cambiando, setCambiando] = useState(false)
+  const [tipo, setTipo] = useState<Tipo430>(propuesta.tipo)
+  const [q, setQ] = useState('')
+  const [archivar, setArchivar] = useState(false)
+  const p = eleccion ?? propuesta
+  const titulo = <><Link to={rutaMayor(c.code)} className="cx-cifra">{c.code}</Link> · {c.name}{c.nif ? <span className="cx-ayuda"> · {c.nif}</span> : null}</>
+
+  if (yaEsta) {
+    const t = terceros.find((x) => x.id === c.clienteDe)
+    return (
+      <div className="cxt-revision-fila" data-cuenta={c.code}>
+        <span className="cxt-revision-titulo">{titulo}</span>
+        <span className="cxt-revision-propuesta">
+          <Chip tono="azul">Hecha</Chip>{' '}
+          {c.propia ? 'Cuenta tuya, sin ficha.' : <>Cuenta de cliente de <strong>{t?.nombre ?? 'su ficha'}</strong>{t ? ` · ${t.papeles.filter((x) => x !== 'supplier').map((x) => PILDORA[x]).join(', ')}` : ''}.</>}
+        </span>
+        <span />
+      </div>
+    )
+  }
+
+  const candidatos = filtrarTerceros(terceros.map((t) => ({ ...t, archivadoEn: t.archivado ? 'sí' : null, notaArchivado: null, papeles: [...t.papeles] })), 'todos', q).slice(0, 8)
+  return (
+    <div className="cxt-revision-fila" data-cuenta={c.code} role="group" aria-label={`Cuenta ${c.code}`}>
+      <span className="cxt-revision-titulo">{titulo}</span>
+      <span className="cxt-revision-propuesta">
+        <Chip tono="ia">{TIPO_430[p.tipo]}</Chip>{' '}
+        {p.tercero ? <>→ <strong>{p.tercero.nombre}</strong>{p.tercero.codigoProveedor ? ` (${p.tercero.codigoProveedor})` : ''} </> : p.tipo === 'cliente' ? <>→ <strong>ficha nueva</strong> </> : null}
+        <Chip tono={p.confianza === 'seguro' ? 'azul' : 'ambar'}>{CONFIANZA[p.confianza]}</Chip>
+        <span className="cxt-revision-porque">{p.porque}</span>
+        {p.tipo === 'socio' && (
+          <label className="cxt-revision-archivar">
+            <input type="checkbox" checked={archivar} onChange={(e) => setArchivar(e.target.checked)} /> Archivarlo: ya no trabajáis con él (histórico)
+          </label>
+        )}
+        <span className="cx-ayuda">Al confirmar: {queHace(c, p, archivar)}</span>
+      </span>
+      <span className="cxt-revision-acciones">
+        <button type="button" className="cx-boton" disabled={ocupada || (p.tipo !== 'propia' && p.tipo !== 'cliente' && !p.tercero)}
+          aria-label={`Confirmar ${c.code}`} onClick={() => alConfirmar(c, p, archivar)}>{ocupada ? 'Guardando…' : 'Confirmar'}</button>
+        <button type="button" className="cx-boton-sec" disabled={ocupada} aria-expanded={cambiando} onClick={() => { setCambiando((v) => !v); setTipo(p.tipo) }}>Cambiar</button>
+      </span>
+      {cambiando && (
+        <div className="cxt-revision-cambiar" role="group" aria-label={`Cambiar ${c.code}`}>
+          <div className="cx-tablas-filtros" role="radiogroup" aria-label="Qué es">
+            {(Object.keys(TIPO_430) as Tipo430[]).map((x) => (
+              <button key={x} type="button" className="cx-pildora" role="radio" aria-checked={tipo === x} onClick={() => {
+                setTipo(x)
+                if (x === 'propia') { setEleccion(elegida('propia', null, datos.canales)); setCambiando(false) }
+              }}>{TIPO_430[x]}</button>
+            ))}
+          </div>
+          {tipo !== 'propia' && (
+            <>
+              <input className="cx-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="¿De quién es? Busca por nombre o NIF" aria-label="Buscar su ficha" />
+              <div className="cxt-revision-lista">
+                {candidatos.map((t) => {
+                  const t430 = terceros.find((x) => x.id === t.id)!
+                  return <button key={t.id} type="button" className="cx-enlace" onClick={() => { setEleccion(elegida(tipo, t430, datos.canales)); setCambiando(false) }}>Es {t.nombre}{t.nif ? ` · ${t.nif}` : ''}</button>
+                })}
+                {tipo === 'cliente' && <button type="button" className="cx-enlace" onClick={() => { setEleccion(elegida('cliente', null, datos.canales)); setCambiando(false) }}>Ficha nueva con el nombre de la cuenta</button>}
+                {candidatos.length === 0 && <span className="cx-ayuda">Nadie se llama así.</span>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

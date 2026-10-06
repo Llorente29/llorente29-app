@@ -35,6 +35,11 @@
 .cxt-revision-acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .cxt-revision-cambiar { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
 .cxt-revision-lista { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+/* Respuesta 3: el porqué de cada propuesta, la casilla de archivar y la tarjeta de la lista vacía. */
+.cxt-revision-porque { display: block; margin-top: 4px; color: var(--cx-texto); }
+.cxt-revision-archivar { display: flex; gap: 6px; align-items: center; margin-top: 4px; color: var(--cx-texto); }
+.cxt-revision-propuesta .cx-ayuda { display: block; margin-top: 4px; }
+.cxt-revision-aviso { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-weight: 600; }
 
 /* ── Ficha: cabecera, pestañas y franja ───────────────────────────── */
 .cxt-pestanas { flex-wrap: wrap; }
