@@ -265,3 +265,38 @@
 4. **El IVA soportado en Diez va a una sola 472.** Folvy lleva la 472 por tipo (C00/C02); al traer, se reparte por el tipo de cada línea.
 5. **El banco no está en Diez.** La tesorería solo compensa terceros. El asiento de cobro o pago contra 572 nace aquí y se completa en Bancos.
 6. **Nómina:** un asiento resumen al mes con el IRPF separado (4750 en Diez, 4751 en el BOE). Es la forma que el módulo de personal rellenará.
+
+## Tercera respuesta de Julio (06/10): las tres plataformas igual, y el corte en el 30/09/2026
+
+**Corrección mía.**
+- En el apartado anterior separé Glovo de Uber y Just Eat por ser «comisionista». Era un error de lectura.
+- En el C03, `comisionista` significa justo lo contrario de lo que escribí: la plataforma «vende en NOMBRE del restaurante (el contrato de compra es entre el restaurante y el consumidor)» (`20261009T0180_c03_modelo_plataforma.sql:6`, RD 1065/2007 art. 34.3).
+- Es el modelo de las tres. En producción solo Glovo lo tiene puesto; Uber y Just Eat están sin decir (`null`). Se ponen igual desde la ficha (C03); no lo toco yo.
+
+**Decidido: las tres plataformas, un mismo tratamiento.**
+- La venta es de la empresa al consumidor. La plataforma intermedia y factura su comisión.
+- **Ventas:** factura simplificada de Folvy por pedido, con el NIF de la empresa y numeración correlativa.
+  - Lo permite RD 1619/2012 art. 4.2.e: restauración hasta 3.000 € IVA incluido.
+  - Cada una es su registro de facturación (Verifactu, F01).
+  - En el diario: **asiento resumen por día y local** con base y cuota por tipo (todas al 10 %) y el rango de facturas. Base legal: CCom 28.2 y RIVA 63.4, con los dos requisitos que pide: sin identificar al destinatario y dentro del mismo mes.
+  - Contrapartida: la 430 de la plataforma por lo que cobra ella.
+- **Liquidación de la plataforma:** su factura de comisión (623 + 472 al 21 %) a su 410 y otros cargos; la compensación 410 contra 430; el neto al banco.
+  - Es lo que hace Diez en tesorería, pero con el banco.
+- **Marcas cedidas:** fuera del diario día a día (camino B, decidido). Entran por la liquidación mensual del socio.
+
+**Decidido: el corte con Diez es el 30/09/2026.**
+- **C04b:** se trae **tal como está** todo lo de Diez hasta el 30/09/2026: los ejercicios 2023, 2024 y 2025 cerrados, y 2026 del 01/01 al 30/09. Con sus series, sus números y su 47200000 única. Nada se reinterpreta.
+- **Desde el 01/10/2026, Folvy:**
+  - ventas por resumen diario de facturas simplificadas;
+  - 472 y 477 por tipo;
+  - cada liquidación con su comisión y su cobro;
+  - banco asentado;
+  - local y marca en cada apunte.
+- **El primer IVA trimestral enteramente de Folvy es el 4T de 2026.**
+- **Consecuencia para el C04:** no hay que reconvertir nada de antes del corte.
+  - El ejercicio 2026 tendrá asientos `migrated` hasta el 30/09 y propios desde el 01/10.
+  - Los saldos del 30/09 son el punto de partida de los asientos de Folvy, así que no hace falta asiento de apertura a mitad de ejercicio.
+  - Se bloquean los meses de enero a septiembre de 2026 como «traídos».
+- **Pendiente para F01:** hoy Folvy no numera facturas simplificadas de plataforma. Hasta F01, el resumen del día guarda los pedidos y su huella, y el rango se rellena cuando F01 numere.
+  - Desde el 01/10 esto deja abierto el art. 63.4 en la parte de la numeración.
+  - **F01 sube de prioridad.** Va al PR.
