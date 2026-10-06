@@ -70,7 +70,7 @@ test('una 430 con enlace de pago y sin papel sale en la revisión y, al confirma
     id = await crearEmpresa(s)
     // Traer el plan por la API, como lo manda el asistente.
     const imp = await rest<string>(s, 'POST', 'rpc/company_chart_import_save', {
-      p_company: id, p_program: 'diez', p_file_names: TRAIDO.ficheros, p_sha: 'c03r3'.padEnd(64, '0'), p_review: TRAIDO.review, p_quien_nombre: 'e2e C03 R3',
+      p_company: id, p_program: 'diez', p_file_names: TRAIDO.ficheros, p_sha: 'c0330000'.padEnd(64, '0'), p_review: TRAIDO.review, p_quien_nombre: 'e2e C03 R3',
     })
     expect(imp.status, `guardar la importación: ${JSON.stringify(imp.datos)}`).toBe(200)
     const traer = await rest<{ cuentas: number }>(s, 'POST', 'rpc/company_chart_import_apply', { p_import: imp.datos, p_plan: TRAIDO.plan, p_quien_nombre: 'e2e C03 R3' })

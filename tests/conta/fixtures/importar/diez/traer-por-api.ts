@@ -50,7 +50,7 @@ const problemas = validar(filas)
 if (problemas.length) throw new Error(problemas.map((p) => p.texto).join('\n'))
 const plan = planTraer(filas, r.cuentas, lectura.terceros)
 // Lo que guarda el asistente (TraerPlan.tsx): las mismas claves que la importación de producción.
-const review = { version: 1, programa: 'diez', ficheros, huella: 'c03r3'.padEnd(64, '0'), lectura, filas }
+const review = { version: 1, programa: 'diez', ficheros, huella: 'c0330000'.padEnd(64, '0'), lectura, filas }
 
 const salida = join(raiz, 'tests/e2e/conta/c03/diez-traido.json')
 writeFileSync(salida, `${JSON.stringify({ ficheros, review, plan })}\n`)
