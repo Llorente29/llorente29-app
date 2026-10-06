@@ -86,16 +86,26 @@ test('una 430 con enlace de pago y sin papel sale en la revisión y, al confirma
     const papeles = async () => (await rest<{ role: string }[]>(s, 'GET', `party_role?select=role&party_id=eq.${glovo.party_id}`)).datos.map((r) => r.role).sort()
     expect(await papeles(), 'sin papel: solo proveedor').toEqual(['supplier'])
 
-    // «Plataformas» vacío: en vez de nada, la tarjeta que lleva a la revisión.
+    // «Plataformas»: GLOVOAPP no está. Si el filtro está vacío, la tarjeta lleva a la revisión;
+    // en la cuenta A de staging hay otras plataformas (la semilla del C03), y entonces la
+    // tarjeta no sale (no tapa filas) y se abre la revisión desde su botón.
     await abrir(page, id, '/conta/clientes-y-proveedores?ver=plataformas')
     await expect(page.getByRole('heading', { level: 1, name: 'Clientes y proveedores' })).toBeVisible()
-    const tarjeta = page.getByRole('status').filter({ hasText: /^Tienes 7 cuentas de clientes traídas de Diez por revisar/ })
-    await expect(tarjeta).toBeVisible()
     await expect(page.getByRole('link', { name: /GLOVOAPP SPAIN PLATFORM/ })).toHaveCount(0)
-    await tarjeta.getByRole('button', { name: 'Revisar ahora' }).click()
+    const filtroPlataformas = page.getByRole('button', { name: /^Plataformas · \d+$/ })
+    await expect(filtroPlataformas).toBeVisible()
+    const antes = Number((await filtroPlataformas.textContent())!.match(/(\d+)$/)![1])
+    const tarjeta = page.getByRole('status').filter({ hasText: /^Tienes 7 cuentas de clientes traídas de Diez por revisar/ })
+    const revision = page.getByRole('region', { name: 'Cuentas de clientes traídas por revisar' })
+    if (antes === 0) {
+      await expect(tarjeta).toBeVisible()
+      await tarjeta.getByRole('button', { name: 'Revisar ahora' }).click()
+    } else {
+      await expect(tarjeta).toHaveCount(0)
+      await revision.getByRole('button', { name: 'Revisar', exact: true }).click()
+    }
 
     // Las siete, también las tres que la importación dejó como cuenta de pago.
-    const revision = page.getByRole('region', { name: 'Cuentas de clientes traídas por revisar' })
     await expect(revision.getByText('7 cuentas de clientes traídas de Diez por revisar')).toBeVisible()
     for (const code of ['43000001', '43000002', '43000003', '43000004', '43000005', '43000006', '43000101']) {
       await expect(revision.getByRole('group', { name: `Cuenta ${code}` })).toBeVisible()
@@ -123,7 +133,7 @@ test('una 430 con enlace de pago y sin papel sale en la revisión y, al confirma
     expect(cliente.datos, 'la 43000001 es su cuenta de cliente').toHaveLength(1)
 
     // Y sale en «Plataformas».
-    await page.getByRole('button', { name: /^Plataformas · \d+$/ }).click()
+    await expect(filtroPlataformas).toHaveText(`Plataformas · ${antes + 1}`)
     await expect(page.getByRole('link', { name: /GLOVOAPP SPAIN PLATFORM/ })).toBeVisible()
   } finally {
     if (id) await limpiar(s, id)

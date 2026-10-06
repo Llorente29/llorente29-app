@@ -196,3 +196,15 @@ export function queHace(c: Cuenta430, p: Propuesta430, archivar = false): string
     case 'cliente': return p.tercero ? `${quien} pasa a ser cliente, con ${c.code} como su cuenta.` : `Ficha nueva de cliente «${quien}»${c.nif ? ` con NIF ${c.nif}` : ''} y ${c.code} como su cuenta.`
   }
 }
+
+/**
+ * La tarjeta de la lista: con «Clientes», «Plataformas» o «Socios» vacío y 430
+ * traídas sin revisar, en vez de «aún no hay nadie», lo que falta y a dónde ir.
+ * Con filas en el filtro no sale: la revisión ya está arriba (regla 7: la
+ * tarjeta no tapa filas).
+ */
+export function tarjetaPorRevisar(filtro: string, filasDelFiltro: number, busca: string, pendientes: number, programa: string | null): string | null {
+  if (filasDelFiltro > 0 || busca.trim() || pendientes === 0 || !['clientes', 'plataformas', 'socios'].includes(filtro)) return null
+  const de = programa ? ` de ${programa}` : ''
+  return pendientes === 1 ? `Tienes 1 cuenta de cliente traída${de} por revisar` : `Tienes ${pendientes} cuentas de clientes traídas${de} por revisar`
+}

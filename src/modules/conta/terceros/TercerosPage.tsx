@@ -39,7 +39,7 @@ import {
 } from '@/modules/conta/services/tercerosService'
 import { cargarRevision430, confirmar430, type DatosRevision430 } from '@/modules/conta/services/revision430Service'
 import {
-  TIPO_430, elegida, hecha, proponer430, queHace, type Cuenta430, type Propuesta430, type Tercero430, type Tipo430,
+  TIPO_430, elegida, hecha, proponer430, queHace, tarjetaPorRevisar, type Cuenta430, type Propuesta430, type Tercero430, type Tipo430,
 } from '@/modules/conta/lib/revision430'
 
 const PILDORA: Record<Papel, string> = {
@@ -108,6 +108,7 @@ export default function TercerosPage() {
   }
   const visibles = useMemo(() => (filas ? filtrarTerceros(filas, filtro, busca) : []), [filas, filtro, busca])
   const cuantos = useMemo(() => (filas ? cuentaPorFiltro(filas) : null), [filas])
+  const tarjeta = filas ? tarjetaPorRevisar(filtro, visibles.length, busca, pendientes430, revision?.programa ?? null) : null
   const recargar = () => setVuelta((v) => v + 1)
 
   async function cambiarArchivo(t: TerceroLista, archivarlo: boolean) {
@@ -159,13 +160,13 @@ export default function TercerosPage() {
           {[0, 1, 2, 3, 4].map((i) => <Hueso key={i} alto={44} />)}
         </div>
       )}
-      {filas && visibles.length === 0 && !busca.trim() && (filtro === 'clientes' || filtro === 'plataformas' || filtro === 'socios') && pendientes430 > 0 && (
+      {tarjeta && (
         <div className="cx-tarjeta cxt-revision-aviso" role="status">
-          <span>Tienes {pendientes430 === 1 ? '1 cuenta de cliente traída' : `${pendientes430} cuentas de clientes traídas`}{revision?.programa ? ` de ${revision.programa}` : ''} por revisar</span>
+          <span>{tarjeta}</span>
           <button type="button" className="cx-boton" onClick={revisarAhora}>Revisar ahora</button>
         </div>
       )}
-      {filas && visibles.length === 0 && !(!busca.trim() && (filtro === 'clientes' || filtro === 'plataformas' || filtro === 'socios') && pendientes430 > 0) && (
+      {filas && visibles.length === 0 && !tarjeta && (
         <div className="cx-tarjeta">
           {busca.trim()
             ? <Vacio titulo={`Nadie coincide con «${busca.trim()}».`} explicacion="Prueba con otra parte del nombre o con su NIF." />

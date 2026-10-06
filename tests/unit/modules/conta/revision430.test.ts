@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { elegida, hecha, plataformaDe, proponer430, queHace, type Cuenta430, type Tercero430 } from '@/modules/conta/lib/revision430'
+import { elegida, hecha, plataformaDe, proponer430, queHace, tarjetaPorRevisar, type Cuenta430, type Tercero430 } from '@/modules/conta/lib/revision430'
 
 const dir = join(__dirname, '../../../conta/fixtures/importar/diez')
 const csv = (f: string) => readFileSync(join(dir, f), 'utf8').trim().split('\n').slice(1).map((l) => l.split(';'))
@@ -109,5 +109,19 @@ describe('«Cambiar»', () => {
     const t = terceros.find((x) => x.codigoProveedor === '41000001')!
     expect(elegida('plataforma', t, canales)).toEqual({ tipo: 'plataforma', tercero: t, canal: canales[0], confianza: 'seguro', porque: 'Lo has elegido tú.' })
     expect(elegida('propia', t, canales).tercero).toBeNull()
+  })
+})
+
+describe('la tarjeta de la lista vacía', () => {
+  it('Clientes, Plataformas o Socios vacío y 430 por revisar: lo que falta y de dónde viene', () => {
+    expect(tarjetaPorRevisar('clientes', 0, '', 7, 'Diez')).toBe('Tienes 7 cuentas de clientes traídas de Diez por revisar')
+    expect(tarjetaPorRevisar('plataformas', 0, '', 1, 'Diez')).toBe('Tienes 1 cuenta de cliente traída de Diez por revisar')
+    expect(tarjetaPorRevisar('socios', 0, '', 2, null)).toBe('Tienes 2 cuentas de clientes traídas por revisar')
+  })
+  it('con filas, buscando, sin nada por revisar o en otro filtro: no sale', () => {
+    expect(tarjetaPorRevisar('plataformas', 1, '', 7, 'Diez')).toBeNull()
+    expect(tarjetaPorRevisar('clientes', 0, 'glovo', 7, 'Diez')).toBeNull()
+    expect(tarjetaPorRevisar('clientes', 0, '', 0, 'Diez')).toBeNull()
+    for (const f of ['todos', 'proveedores', 'archivados']) expect(tarjetaPorRevisar(f, 0, '', 7, 'Diez'), f).toBeNull()
   })
 })
