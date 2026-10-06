@@ -82,9 +82,19 @@ Folvy y su porqué, el chip de confianza y las acciones debajo. Si quedan
 cuentas por decidir, el aviso añade «Si te es más cómodo, guarda y decídelas
 en el ordenador.» Nada queda tapado por la barra inferior (lo mide la e2e).
 
-En `revisar-movil.png` la franja «NO ES PRODUCCIÓN» aparece a media página: es
-un elemento fijo y la captura de página entera lo pinta donde estaba la
-ventana. En la pantalla real va arriba.
+En `revisar-movil.png` la franja «NO ES PRODUCCIÓN» aparece a media página, y
+en `revisar-ordenador.png` la barra «Pregunta o pide algo»: son elementos
+fijos y la captura de página entera los pinta donde estaba la ventana. En la
+pantalla real van arriba y abajo; la e2e mide que no tapen nada al bajar del
+todo.
+
+## Corregido al ver las capturas
+
+- **EN FOLVY era tan estrecha como EN DIEZ** («Falta que digas qué es» en tres
+  líneas) y la columna de acciones se quedaba con el sitio. Ahora es la ancha
+  (1,6 veces EN DIEZ), como en N8; número, flecha y confianza, lo justo.
+- **La revisión se iba al paso 1 durante la captura** (ver arriba): era el
+  marco de Ajustes, y le pasaba a cualquiera que estrechara la ventana.
 
 ## Lo que la e2e comprueba además de pintar
 

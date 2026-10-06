@@ -40,7 +40,8 @@
 
 /* Paso 2: la tabla (NÚMERO · EN DIEZ · → · EN FOLVY · CONFIANZA · acciones). */
 .cx-traer-tabla { display: flex; flex-direction: column; }
-.cx-traer-fila { display: grid; grid-template-columns: 130px minmax(0, 1fr) 40px minmax(0, 1fr) 120px 170px; gap: 10px; align-items: center; padding: 12px; border-top: 1px solid var(--cx-linea); }
+/* EN FOLVY es la columna que explica (lo que queda y su porqué): la más ancha, como en N8. */
+.cx-traer-fila { display: grid; grid-template-columns: 92px minmax(0, 1fr) 16px minmax(0, 1.6fr) 96px 150px; gap: 10px; align-items: center; padding: 12px; border-top: 1px solid var(--cx-linea); }
 .cx-traer-titulos { border-top: none; padding-top: 4px; padding-bottom: 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; color: var(--cx-apoyo); }
 .cx-traer-fila-decide { background: var(--cx-ambar-suave); border-radius: 12px; }
 .cx-traer-flecha { color: var(--cx-apoyo); text-align: center; }
