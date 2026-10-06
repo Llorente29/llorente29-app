@@ -62,13 +62,21 @@ function textoBoe(xml) {
 }
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms))
+/**
+ * Tiempo límite de cada petición, cuerpo incluido. Sin él, una fuente que no
+ * contesta se come los 15 minutos del trabajo «Normativa al día» y las demás no
+ * se comprueban (06/10: la consulta SPARQL de la UE colgada tras la CNAE-2025).
+ * Con él, esa petición falla, se reintenta como un error de red y la fuente sale
+ * en el informe con su error.
+ */
+const LIMITE_MS = 60_000
 
 /** Pide una URL; si el servidor falla (5xx o red), reintenta dos veces. */
 async function pedir(url, opciones = {}) {
   let ultimo = { http: 0, cuerpo: '' }
   for (let intento = 0; intento < 3; intento++) {
     try {
-      const r = await fetch(url, { ...opciones, headers: { 'User-Agent': UA, ...(opciones.headers ?? {}) } })
+      const r = await fetch(url, { ...opciones, headers: { 'User-Agent': UA, ...(opciones.headers ?? {}) }, signal: AbortSignal.timeout(LIMITE_MS) })
       ultimo = { http: r.status, cuerpo: await r.text() }
       if (r.status < 500) return ultimo
     } catch (e) { ultimo = { http: 0, cuerpo: String(e) } }
@@ -120,7 +128,7 @@ async function descargarZip(f) {
   let http = 0
   for (let intento = 0; intento < 3; intento++) {
     try {
-      const r = await fetch(f.url, { headers: { 'User-Agent': UA } })
+      const r = await fetch(f.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(LIMITE_MS) })
       http = r.status
       if (r.status === 200) {
         const dir = await mkdtemp(join(tmpdir(), 'fuente-'))
