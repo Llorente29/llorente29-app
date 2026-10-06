@@ -6,43 +6,55 @@
 # verde del mismo commit, en REAL (un fichero por transacción, para al primer
 # fallo).
 #
-# C02c · Traer el plan de otro programa (Diez). Desde la rama
-# conta/c02c-traer-plan, ANTES de fusionar el PR #150. Las cuatro migraciones
-# del C02c; el interruptor de Foodint ya fue aparte (real 37432334442).
-# Fuera del camino del pedido: ninguna tabla ni función de CAMINO_TABLAS /
-# CAMINO_FUNCIONES.
+# C03 · Clientes, plataformas y socios de marca. Desde la rama
+# conta/c03-clientes, ANTES de fusionar el PR #152. Las siete migraciones del
+# C03 (0100–0160). Fuera del camino del pedido: el análisis nombra 9 tablas y
+# 17 funciones y ninguna está en CAMINO_TABLAS / CAMINO_FUNCIONES (medido con
+# analizar.mjs sobre lo que existe hoy en producción, en solo lectura).
 #
-# UNO PARA y va en el campo «autorizo», nombre entero:
+# TRES PARAN y van en el campo «autorizo», nombre entero, una por línea:
 #
-#   20261008T0110_c02c_activar_espera.sql
+#   20261009T0100_c03_terceros.sql
+#   20261009T0130_c03_periodos_propuestos.sql
+#   20261009T0160_c03_deshacer_importacion.sql
 #
-# Para porque reemplaza company_chart_activate(uuid,boolean,text), que ya
-# existe (la puso la tanda 1 del C02). Es copia LITERAL de la vigente (0180)
-# con una sola guarda más: se niega a activar con numeración automática si la
-# empresa tiene una importación en revisión. Misma firma: create or replace.
+# Por qué para cada una:
+#   · 0100 reemplaza company_account_misma_cuenta() (del C02, 0160): copia
+#     LITERAL más una guarda (una cuenta de cliente solo se enlaza a un tercero
+#     de la misma cuenta). Misma firma. Y pone un disparador AFTER en supplier
+#     que crea el tercero de cada proveedor nuevo; nunca falla (un error queda
+#     en aviso), no escribe en supplier.
+#   · 0130 escribe en channel_settlement SOLO las columnas nuevas
+#     proposed_period_* (el periodo propuesto por sus pedidos, «por
+#     confirmar»), y solo donde period_from es nulo y hay pedidos. Las
+#     columnas que leen Ventas y el vigía B59 no se tocan: lo prueba la
+#     huella de scripts/conta/c03_antes_despues.sql.
+#   · 0160 reemplaza company_chart_import_undo(uuid,text) (C02c, 0100): sin
+#     ella, con la 0100 dentro, «Deshacer entero» del plan traído se para
+#     siempre (party_role cuenta como uso). Misma firma.
+# El resto sigue: crean party, party_role, customer_fiscal y
+# brand_partner_contribution, añaden columnas nulas o con valor por defecto
+# a channel_settlement, licensed_settlement y brand_licensing_agreement, las
+# funciones nuevas y el SELECT de conta_lectura. La 0110 crea un tercero por
+# proveedor (Foodint y la plantilla Folvy Interno), con su papel.
 #
-# El resto sigue:
-#   · 0100 crea company_chart_import y sus funciones; sobre lo existente solo
-#     añade: amplía los CHECK de source ('migrated') y de que en company_account,
-#     _link y _log, y añade columnas nulas (name_source, import_id) a
-#     company_account y supplier;
-#   · 0120 da SELECT de company_chart_import a conta_lectura;
-#   · 0130 pone el disparador company_account_madre en company_account (las
-#     genéricas de Diez) y reemplaza company_chart_import_apply, que crea la
-#     propia 0100 en esta tanda.
-# Cierres: «add constraint», «add column» y «create trigger» toman un cierre un
-# instante sobre company_account*, y el «add column» sobre supplier. Ninguna
-# del camino del pedido.
+# ANTES y DESPUÉS, la misma consulta en solo lectura (regla 31):
+#   psql "$PROD_CONTA_RO_DB_URL" -X -A -F ' | ' -f scripts/conta/c03_antes_despues.sql
+# Antes (06/10, leída con el conector de solo lectura):
+#   Foodint      channel_settlement  247  35fb7777710baea284ac2f789a8097ca  149 sin periodo · 0 con periodo propuesto
+#   Foodint      licensed_settlement   3  8703520bafcfc3fc64d0760f5a3ef850
+#   Foodint      supplier             65  b4d0c58dd632f9764bee057f79598f26  sin C03
+#   Folvy Int.   supplier             23  3a1fd0210988c9c6dc1e803d803c0cc2  sin C03
+# Después tiene que dar las MISMAS filas y huellas; cambian solo «0 sin
+# tercero» y «149 sin periodo · 47 con periodo propuesto».
 #
-# Lo que existe en producción se ha DEDUCIDO de las tandas ya aplicadas, no
-# medido (el conector de solo lectura a producción da «Unauthorized»): la
-# medida de verdad es la del ensayo. Si el ensayo dijera otra cosa, el
-# workflow se niega con «autorizo» y no se aplica nada.
-#
-# Después: «fusiona» → Vercel READY → Ajustes › Plan contable › traer de Diez.
+# Después: «fusiona» → Vercel READY → Contabilidad › Clientes y proveedores.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261008T0100_c02c_traer_plan.sql
-supabase/migrations/20261008T0110_c02c_activar_espera.sql
-supabase/migrations/20261008T0120_c02c_lectura.sql
-supabase/migrations/20261008T0130_c02c_genericas.sql
+supabase/migrations/20261009T0100_c03_terceros.sql
+supabase/migrations/20261009T0110_c03_terceros_datos.sql
+supabase/migrations/20261009T0120_c03_liquidaciones.sql
+supabase/migrations/20261009T0130_c03_periodos_propuestos.sql
+supabase/migrations/20261009T0140_c03_funciones.sql
+supabase/migrations/20261009T0150_c03_lectura.sql
+supabase/migrations/20261009T0160_c03_deshacer_importacion.sql
