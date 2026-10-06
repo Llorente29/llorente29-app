@@ -5,7 +5,7 @@
 --   1. FOTO DE ANTES (staging aún sin el C04): huella de fiscal_year,
 --      fiscal_period_lock, supplier_invoice, channel_settlement,
 --      licensed_settlement y treasury_account; lo que devuelven las funciones
---      de Ventas; y el vigía B59 (en un punto de guardado, sin dejar rastro).
+--      de Ventas; y el conciliador de B59 (en un subbloque que se deshace).
 --   2. Entran 0100 → 0130. FOTO DE DESPUÉS con la MISMA vara (las columnas de
 --      antes): tiene que salir idéntica (regla 31).
 --   3. Las reglas, como el administrador de A (rol authenticated, con su RLS):
@@ -62,15 +62,20 @@ end $$;
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 insert into foto (que, antes) select 'ventas · ' || que, valor from pg_temp.lecturas_ventas();
 
--- El vigía B59 escribe avisos: se mide dentro de un subbloque que lo deshace.
-create temp table vigia (cuando text primary key, n integer) on commit drop;
-do $$ declare v int; begin
+-- El «vigía B59»: la función liquidacion_atrasada_watchdog ya no existe (ni en
+-- producción ni aquí); lo que queda vivo de B59 es el conciliador diario
+-- (cron channel-settlement-match-daily → channel_settlement_daily_recompute).
+-- Se ejecuta en un subbloque que acaba en excepción (lo que escriba se deshace)
+-- y se mide la huella de lo que deja: pedidos de liquidación y su casado.
+create temp table vigia (cuando text primary key, n text) on commit drop;
+do $$ declare h text; begin
   -- En un subbloque que acaba en excepción: lo que escriba el vigía se deshace.
   begin
-    v := public.liquidacion_atrasada_watchdog();
-    raise exception using errcode = 'P0001', message = 'deshacer:' || v;
+    perform public.channel_settlement_daily_recompute();
+    select md5(coalesce(string_agg(to_jsonb(o)::text, '|' order by o.id), '')) || ':' || count(*) into h from public.channel_settlement_order o;
+    raise exception using errcode = 'P0001', message = 'deshacer:' || h;
   exception when raise_exception then
-    if sqlerrm like 'deshacer:%' then insert into vigia values ('antes', split_part(sqlerrm, ':', 2)::int); else raise; end if;
+    if sqlerrm like 'deshacer:%' then insert into vigia values ('antes', substr(sqlerrm, 10)); else raise; end if;
   end;
 end $$;
 
@@ -90,17 +95,18 @@ update foto set despues = x.h from (
   union all select 'treasury_account', md5(coalesce(string_agg((to_jsonb(x) - array['location_id'])::text, '|' order by x.id), '')) from public.treasury_account x
 ) x where foto.que = x.que;
 update foto set despues = v.valor from pg_temp.lecturas_ventas() v where foto.que = 'ventas · ' || v.que;
-do $$ declare v int; begin
+do $$ declare h text; begin
   begin
-    v := public.liquidacion_atrasada_watchdog();
-    raise exception using errcode = 'P0001', message = 'deshacer:' || v;
+    perform public.channel_settlement_daily_recompute();
+    select md5(coalesce(string_agg(to_jsonb(o)::text, '|' order by o.id), '')) || ':' || count(*) into h from public.channel_settlement_order o;
+    raise exception using errcode = 'P0001', message = 'deshacer:' || h;
   exception when raise_exception then
-    if sqlerrm like 'deshacer:%' then insert into vigia values ('despues', split_part(sqlerrm, ':', 2)::int); else raise; end if;
+    if sqlerrm like 'deshacer:%' then insert into vigia values ('despues', substr(sqlerrm, 10)); else raise; end if;
   end;
 end $$;
 
 do $$
-declare r record; v_mal int := 0; v_a int; v_d int;
+declare r record; v_mal int := 0; v_a text; v_d text;
 begin
   for r in select * from foto order by que loop
     raise notice '% · antes % · después % · %', rpad(r.que, 40), r.antes, r.despues, case when r.antes = r.despues then 'igual' else 'DISTINTO' end;
@@ -108,7 +114,7 @@ begin
   end loop;
   select n into v_a from vigia where cuando = 'antes';
   select n into v_d from vigia where cuando = 'despues';
-  raise notice '% · antes % · después % · %', rpad('vigía B59 (avisos que encolaría)', 40), v_a, v_d, case when v_a = v_d then 'igual' else 'DISTINTO' end;
+  raise notice '% · antes % · después % · %', rpad('conciliador B59 (huella:pedidos)', 40), v_a, v_d, case when v_a = v_d then 'igual' else 'DISTINTO' end;
   if v_mal > 0 or v_a is distinct from v_d then raise exception 'PRUEBA C04 · 2: antes ≠ después.'; end if;
   raise notice 'PRUEBA C04 · 2 en verde: % huellas y el vigía, iguales antes y después.', (select count(*) from foto);
 end $$;
@@ -192,7 +198,9 @@ begin
   if (v_r->>'numero')::int <> 1 then raise exception 'PRUEBA C04 · 3d: la serie 4 empieza en 1, no en %.', v_r->>'numero'; end if;
 
   -- 3e. Lo validado no se toca ni se borra; sus apuntes tampoco.
-  begin update public.journal_entry set concept = 'otro' where id = e1; raise exception 'PRUEBA C04 · 3e: cambió un validado.';
+  -- Por la RLS, un validado ni siquiera se puede seleccionar para cambiarlo (0 filas).
+  begin update public.journal_entry set concept = 'otro' where id = e1;
+    if found then raise exception 'PRUEBA C04 · 3e: cambió un validado.'; end if;
   exception when insufficient_privilege then null; end;
   begin delete from public.journal_entry where id = e1;
     if found then raise exception 'PRUEBA C04 · 3e: borró un validado.'; end if;
