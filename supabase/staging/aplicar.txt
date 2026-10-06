@@ -1,21 +1,11 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · C03 · Tarea 2: terceros, papeles, liquidaciones de plataforma
-# ampliadas, cesión de marca por local, funciones y lectura. Después, la
-# prueba (vuelta atrás de las seis, foto de antes, se vuelven a aplicar, foto
-# de después con la misma vara, casos, B; ROLLBACK) y la semilla del C03 en la
-# cuenta A (plataforma, socio de marca con dos locales, cliente, archivado).
-# Segunda pasada: la primera (37459420809) aplicó las seis y la prueba cazó
-# que quitar el valor por defecto de licensed_settlement.formula rompía a quien
-# carga a la manera de antes. Las seis se pueden relanzar (if not exists /
-# create or replace); la 0120 ahora lo deja en 'anterior'.
-# Anterior: C02c respuesta 2, en verde en 37432935517.
-supabase/migrations/20261009T0100_c03_terceros.sql
-supabase/migrations/20261009T0110_c03_terceros_datos.sql
-supabase/migrations/20261009T0120_c03_liquidaciones.sql
-supabase/migrations/20261009T0130_c03_periodos_propuestos.sql
-supabase/migrations/20261009T0140_c03_funciones.sql
-supabase/migrations/20261009T0150_c03_lectura.sql
-supabase/staging/sql/20261009_c03_prueba_terceros.sql
-supabase/seeds/conta/seed_c03_staging.sql
+# 06/10/2026 · C03 · 0160: «Deshacer entero» del plan traído (C02c) no se
+# podía usar con el C03 dentro: party_role.supplier_id cuenta como «uso» de
+# cada ficha traída. Lo cazó el e2e del C02c (37461486783). Primero la prueba
+# (reproduce el fallo con el texto de antes y prueba el nuevo; ROLLBACK),
+# después la migración.
+# Anterior: C03 tarea 2, en verde en 37460246894.
+supabase/staging/sql/20261009_c03_prueba_deshacer_importacion.sql
+supabase/migrations/20261009T0160_c03_deshacer_importacion.sql
