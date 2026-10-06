@@ -135,13 +135,18 @@ export function MarcoAjustes({ entrada, children }: { entrada: string | null; ch
       </Ctx.Provider>
     )
   }
-  if (movil) return <Ctx.Provider value={valor}>{children}</Ctx.Provider>
+  // El contenido va SIEMPRE en el mismo sitio del árbol, en los dos tamaños: si
+  // cambiara de forma al cruzar los 768 px, React lo desmontaría y se perdería
+  // lo que hubiera a medias (06/10: la captura de página entera de Chromium
+  // deja la ventana a 1×1 un instante y el asistente del C02c volvía al paso 1;
+  // a una persona le pasaría al estrechar la ventana o girar la tableta). En el
+  // móvil los dos envoltorios no pintan nada (display: contents).
   return (
     <Ctx.Provider value={valor}>
       {cabecera}
-      <div className="cx-ajustes">
-        <Indice actual={actual} d={d} plan={plan.datos} hoy={hoy} lista={false} />
-        <div className="cx-ajustes-panel">{children}</div>
+      <div className={movil ? 'cx-ajustes-movil' : 'cx-ajustes'}>
+        {!movil && <Indice actual={actual} d={d} plan={plan.datos} hoy={hoy} lista={false} />}
+        <div className={movil ? 'cx-ajustes-movil' : 'cx-ajustes-panel'}>{children}</div>
       </div>
     </Ctx.Provider>
   )

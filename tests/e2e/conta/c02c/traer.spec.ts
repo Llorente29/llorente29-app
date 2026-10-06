@@ -98,7 +98,11 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
       let ultimo = ''
       const mirar = (porque: string) => {
         const ahora = `${paso()}${document.querySelector('[aria-label="Cuentas que se traen"]') ? ' · con tabla' : ''}`
-        if (ahora !== ultimo) { console.warn(`[vigía ${ms()} ms] ${porque}: ${ultimo || '—'} → ${ahora}`); ultimo = ahora }
+        if (ahora !== ultimo) {
+          console.warn(`[vigía ${ms()} ms] ${porque}: ${ultimo || '—'} → ${ahora}`)
+          ;((window as unknown as { __pasos?: string[] }).__pasos ??= []).push(ahora)
+          ultimo = ahora
+        }
       }
       new MutationObserver(() => mirar('cambia el DOM')).observe(document, { childList: true, subtree: true })
       for (const ev of ['focus', 'blur', 'resize', 'pageshow', 'pagehide']) window.addEventListener(ev, () => console.warn(`[vigía ${ms()} ms] ${ev} ${window.innerWidth}×${window.innerHeight}`))
@@ -121,13 +125,15 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     await page.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
     await expect(fila(page, '47510015')).toContainText('hay 2 iguales: 47510015 y 47510019')
     await page.evaluate(() => document.fonts.ready)
-    console.log('[antes de la captura de la revisión]')
+    // La captura tiene que ser de la revisión, y la revisión no se puede ir ni un instante:
+    // entre antes de la captura y después de medir, el vigía no apunta ningún cambio de paso
+    // (06/10: la captura deja la ventana a 1×1 y el marco de Ajustes desmontaba el asistente).
+    const pasos = () => page.evaluate(() => (window as unknown as { __pasos?: string[] }).__pasos?.length ?? 0)
+    const antes = await pasos()
     await page.screenshot({ path: `${DIR}/revisar-ordenador.png`, fullPage: true })
-    console.log('[después de la captura de la revisión]')
-    // La captura tiene que ser de la revisión: si el asistente se ha ido al paso 1, aquí se para.
-    await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toHaveCount(0)
     expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
-    await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toHaveCount(0)
+    expect(await page.evaluate((n) => (window as unknown as { __pasos?: string[] }).__pasos?.slice(n) ?? [], antes), 'el asistente no cambia de paso al hacer la captura').toEqual([])
+    await expect(page.getByRole('table', { name: 'Cuentas que se traen' })).toBeVisible()
 
     // Sin decidir lo dudoso, no se sigue.
     const siguiente = page.getByRole('button', { name: 'Siguiente: traer el plan →' })
