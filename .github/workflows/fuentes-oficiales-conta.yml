@@ -55,7 +55,9 @@ jobs:
             node -e '
               const r = require("./docs/conta/fuentes/registro.json");
               for (const [k, f] of Object.entries(r.fuentes))
-                console.log(`| ${k} | ${f.http} | ${f.contieneLoEsperado ? "sí" : "**NO**"} | ${(f.titulo||"").slice(0,70)} | \`${(f.sha256||"—").slice(0,12)}\` |`)
+                console.log(f.ultimoFallo
+                  ? `| ${k} | **falló hoy (HTTP ${f.ultimoFallo.http})**: se queda la copia anterior | ${f.contieneLoEsperado ? "sí" : "**NO**"} | ${(f.titulo||"").slice(0,70)} | \`${(f.sha256||"—").slice(0,12)}\` |`
+                  : `| ${k} | ${f.http} | ${f.contieneLoEsperado ? "sí" : "**NO**"} | ${(f.titulo||"").slice(0,70)} | \`${(f.sha256||"—").slice(0,12)}\` |`)
             '
           } >> "$GITHUB_STEP_SUMMARY"
 

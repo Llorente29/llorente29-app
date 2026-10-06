@@ -62,16 +62,29 @@ function textoBoe(xml) {
 }
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms))
+/**
+ * Tiempo límite de cada petición, cuerpo incluido. Sin él, una fuente que no
+ * contesta se come los 15 minutos del trabajo «Normativa al día» y las demás no
+ * se comprueban (06/10: la consulta SPARQL de la UE colgada tras la CNAE-2025).
+ * Con él, esa petición falla, se reintenta como un error de red y la fuente sale
+ * en el informe con su error.
+ */
+const LIMITE_MS = 60_000
 
-/** Pide una URL; si el servidor falla (5xx o red), reintenta dos veces. */
+/**
+ * Pide una URL; si el servidor falla (5xx o red), reintenta dos veces. Un fallo
+ * de red (o el tiempo límite) va en `error`, nunca en `cuerpo`: el texto del
+ * error no es la fuente, y con él dentro el registro guardaba su huella como si
+ * se hubiera descargado (06/10, la SPARQL de la UE: 54 bytes de «TimeoutError»).
+ */
 async function pedir(url, opciones = {}) {
-  let ultimo = { http: 0, cuerpo: '' }
+  let ultimo = { http: 0, cuerpo: '', error: null }
   for (let intento = 0; intento < 3; intento++) {
     try {
-      const r = await fetch(url, { ...opciones, headers: { 'User-Agent': UA, ...(opciones.headers ?? {}) } })
-      ultimo = { http: r.status, cuerpo: await r.text() }
+      const r = await fetch(url, { ...opciones, headers: { 'User-Agent': UA, ...(opciones.headers ?? {}) }, signal: AbortSignal.timeout(LIMITE_MS) })
+      ultimo = { http: r.status, cuerpo: await r.text(), error: null }
       if (r.status < 500) return ultimo
-    } catch (e) { ultimo = { http: 0, cuerpo: String(e) } }
+    } catch (e) { ultimo = { http: 0, cuerpo: '', error: String(e) } }
     await espera(3000 * (intento + 1))
   }
   return ultimo
@@ -120,7 +133,7 @@ async function descargarZip(f) {
   let http = 0
   for (let intento = 0; intento < 3; intento++) {
     try {
-      const r = await fetch(f.url, { headers: { 'User-Agent': UA } })
+      const r = await fetch(f.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(LIMITE_MS) })
       http = r.status
       if (r.status === 200) {
         const dir = await mkdtemp(join(tmpdir(), 'fuente-'))
@@ -162,7 +175,7 @@ async function descargarUna(f) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'text/csv' },
       body: new URLSearchParams({ query: f.consulta, format: 'text/csv' }).toString(),
     })
-    return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: 'csv' }
+    return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: 'csv', error: r.error }
   }
   const r = await pedir(f.url, { headers: { Accept: f.formato === 'json' ? 'application/json' : '*/*' } })
   // Listas paginadas (ISTAC: 1.000 por página): se siguen las páginas y se juntan.
@@ -185,7 +198,7 @@ async function descargarUna(f) {
       return { url: f.url, http: 200, titulo: f.nombre, actualizadoEnFuente: null, texto: JSON.stringify(junto, null, 1) + '\n', ext: 'json' }
     }
   }
-  return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: f.formato ?? 'txt' }
+  return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: f.formato ?? 'txt', error: r.error }
 }
 
 async function main() {
@@ -220,15 +233,22 @@ async function main() {
     // cambiarlos (C02, 04/10: una descarga idéntica rompía serie.mjs comprobar).
     const previa = previo.fuentes?.[f.clave]
     const mismo = ok && previa?.sha256 === huella && previa?.fecha
-    registro.fuentes[f.clave] = {
-      nombre: f.nombre, url: d.url, urlDatos: d.urlDatos ?? null, http: d.http, titulo: d.titulo,
-      actualizadoEnFuente: d.actualizadoEnFuente ?? null, fecha: mismo ? previa.fecha : fecha, comprobado: fecha, sha256: huella, bytes: d.texto.length,
-      contieneLoEsperado: contiene, fichero: ok ? fichero : null, error: d.error ?? null,
-      idBoe: d.id ?? null, nota: d.nota ?? null,
-    }
+    // Si hoy falla y había una copia buena, se queda esa copia (los valores de
+    // serie se cargan de ella: serie.mjs, plan.mjs) y el fallo se apunta aparte.
+    // Con el tiempo límite, una fuente caída es un fallo normal, no un cuelgue:
+    // sin esto, un mal día de la UE dejaba «eu-paises» sin fichero (06/10).
+    const conservar = !ok && previa?.fichero && previa?.sha256
+    registro.fuentes[f.clave] = conservar
+      ? { ...previa, ultimoFallo: { fecha, http: d.http, contieneLoEsperado: contiene, error: d.error ?? null } }
+      : {
+          nombre: f.nombre, url: d.url, urlDatos: d.urlDatos ?? null, http: d.http, titulo: d.titulo,
+          actualizadoEnFuente: d.actualizadoEnFuente ?? null, fecha: mismo ? previa.fecha : fecha, comprobado: fecha, sha256: huella, bytes: d.texto.length,
+          contieneLoEsperado: contiene, fichero: ok ? fichero : null, error: d.error ?? null,
+          idBoe: d.id ?? null, nota: d.nota ?? null,
+        }
     const antes = previo.fuentes?.[f.clave]?.sha256 ?? null
     if (ok && antes && antes !== huella) cambios.push(`- **${f.nombre}** (${d.url}): la huella pasa de \`${antes.slice(0, 12)}…\` a \`${huella.slice(0, 12)}…\`. Actualizada en la fuente: ${d.actualizadoEnFuente ?? 'no lo dice'}.`)
-    if (!ok) cambios.push(`- **${f.nombre}**: NO se ha podido comprobar (HTTP ${d.http}${contiene ? '' : ', no contiene «' + f.debeContener + '»'}${d.error ? ', ' + d.error : ''}).`)
+    if (!ok) cambios.push(`- **${f.nombre}**: NO se ha podido comprobar (HTTP ${d.http}${contiene ? '' : ', no contiene «' + f.debeContener + '»'}${d.error ? ', ' + d.error : ''})${conservar ? '; se queda la copia anterior' : ''}.`)
     if (modo === 'descargar' && ok) await writeFile(join(DIR, fichero), d.texto)
     console.log(`${ok ? 'OK ' : 'MAL'} ${f.clave.padEnd(18)} HTTP ${d.http} · ${d.texto.length} car. · ${d.titulo?.slice(0, 80) ?? ''}`)
   }
