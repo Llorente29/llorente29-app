@@ -32,7 +32,7 @@ import {
 import { accionPrincipal, franjaArchivado, ordenarPapeles, type Papel } from '@/modules/conta/lib/terceros'
 import { cifrasPlataforma, pieTeDebe } from '@/modules/conta/lib/liquidaciones'
 import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
-import { diaMes, euros, eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
+import { euros, eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
 import { anadirPapel, archivarTercero } from '@/modules/conta/services/tercerosService'
 
 const CADA: Record<string, string> = { weekly: 'Liquida cada semana', fortnightly: 'Liquida cada 15 días', monthly: 'Liquida cada mes' }
