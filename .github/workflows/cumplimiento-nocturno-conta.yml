@@ -42,7 +42,9 @@ on:
     branches: ['conta/**']
     paths:
       - 'scripts/conta/agente-datos-maestros.*'
+      - 'scripts/conta/agente-terceros.sql'
       - 'scripts/conta/lib/datosMaestros.mjs'
+      - 'scripts/conta/lib/terceros.mjs'
       - 'scripts/conta/normativa-aviso.mjs'
       - 'scripts/conta/agente-plan-contable.*'
       - 'scripts/conta/lib/agentePlan.mjs'
@@ -118,11 +120,17 @@ jobs:
           set -euo pipefail
           export PGAPPNAME="gha-cumplimiento-conta-${GITHUB_RUN_ID}"
           /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-datos-maestros.sql > /tmp/bd.json
+          # C03: los terceros, solo si la base ya los tiene (antes del C03, no).
+          if [ "$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.party') is not null")" = "t" ]; then
+            /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-terceros.sql > /tmp/terceros.json
+          else
+            echo null > /tmp/terceros.json
+          fi
 
       - name: Revisar contra la referencia
         id: revisar
         continue-on-error: true
-        run: node scripts/conta/agente-datos-maestros.mjs /tmp/bd.json /tmp/informe.md staging-conta
+        run: node scripts/conta/agente-datos-maestros.mjs /tmp/bd.json /tmp/informe.md staging-conta /tmp/terceros.json
 
       - name: Informe
         if: always()

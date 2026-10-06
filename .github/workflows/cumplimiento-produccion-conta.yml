@@ -107,11 +107,17 @@ jobs:
         run: |
           set -euo pipefail
           "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-datos-maestros.sql > /tmp/bd.json
+          # C03: los terceros, solo si la base ya los tiene (antes del C03, no).
+          if [ "$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.party') is not null")" = "t" ]; then
+            "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-terceros.sql > /tmp/terceros.json
+          else
+            echo null > /tmp/terceros.json
+          fi
 
       - name: Revisar contra la referencia
         id: revisar
         continue-on-error: true
-        run: node scripts/conta/agente-datos-maestros.mjs /tmp/bd.json /tmp/informe.md producción
+        run: node scripts/conta/agente-datos-maestros.mjs /tmp/bd.json /tmp/informe.md producción /tmp/terceros.json
 
       - name: Informe
         if: always()
