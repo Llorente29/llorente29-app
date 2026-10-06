@@ -145,24 +145,54 @@ test('socio de marca (N10): el mes por local y «Preparar liquidación»', async
   await capturar(page, 'socio')
 })
 
-test('socio de marca: preparar y confirmar la de un local', async ({ page }, info) => {
+// Los dos locales de la semilla (cuenta A).
+const LOCALES = [
+  { id: 'c01a0000-0000-4000-8000-0000000000a2', nombre: 'Norte Centro' },
+  { id: 'e0200000-0000-4000-8000-0000000000a3', nombre: 'Norte Mercado' },
+]
+
+test('socio de marca: preparar, lo que no se cierra dice por qué, y confirmar la de un local', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
   test.skip(!enOctubre(), 'La semilla del socio es de octubre de 2026')
   const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   const id = await partyDe(s, 'Marcas del Sur')
   const borrar = () => rest(s, 'DELETE', `licensed_settlement?account_id=eq.${CUENTA_A.id}&party_id=eq.${id}&period_from=eq.2026-10-01&formula=eq.compras_aportaciones_comision`)
+  // Lo que espera la prueba lo dice la BASE, no la semilla (regla 31): en
+  // staging hay más ventas que las de la semilla (06/10: una de Last.app sin
+  // base imponible en Norte Centro, de la semilla del R02), y entonces ese
+  // local no se cierra.
+  const calculo = await Promise.all(LOCALES.map(async (l) => {
+    const r = await rest<{ importe: number; faltan: { texto: string }[] }>(s, 'POST', 'rpc/brand_partner_settlement_compute',
+      { p_party: id, p_location: l.id, p_desde: '2026-10-01', p_hasta: '2026-10-31' })
+    expect(r.status, `la base calcula ${l.nombre}`).toBe(200)
+    return { ...l, importe: r.datos.importe, faltan: r.datos.faltan.map((f) => f.texto) }
+  }))
+  const cerrable = calculo.find((c) => c.faltan.length === 0)
+  expect(cerrable, `algún local se puede cerrar: ${JSON.stringify(calculo)}`).toBeTruthy()
+  const euros = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }).format(Math.abs(n)) + ' €'
   await borrar()
   try {
     await page.goto(`/conta/clientes-y-proveedores/${id}`)
     await page.getByRole('button', { name: 'Preparar liquidación de octubre' }).click()
-    const centro = page.getByRole('region', { name: 'Liquidación de Norte Centro' })
-    await expect(centro.getByText('4.090,00 € a su favor')).toBeVisible()
-    await expect(page.getByRole('region', { name: 'Liquidación de Norte Mercado' }).getByText('2.797,00 € a su favor')).toBeVisible()
-    await centro.getByRole('button', { name: 'Confirmar Norte Centro' }).click()
-    await expect(centro.getByText('Confirmada la de Norte Centro: 4.090,00 € a su favor.')).toBeVisible()
-    const r = await rest<{ status: string; amount: number }[]>(s, 'GET', `licensed_settlement?select=status,amount&account_id=eq.${CUENTA_A.id}&party_id=eq.${id}&period_from=eq.2026-10-01&formula=eq.compras_aportaciones_comision`)
-    expect(r.datos).toEqual([{ status: 'confirmada', amount: 4090 }])
+    for (const c of calculo) {
+      const zona = page.getByRole('region', { name: `Liquidación de ${c.nombre}` })
+      await expect(zona.getByText(`${euros(c.importe)} a su favor`)).toBeVisible()
+      const boton = zona.getByRole('button', { name: `Confirmar ${c.nombre}` })
+      if (c.faltan.length) {
+        // Regla 8 y la del encargo: no se cierra, y dice por qué con las palabras de la base.
+        const aviso = zona.getByRole('status').filter({ hasText: 'No se puede cerrar' })
+        for (const f of c.faltan) await expect(aviso).toContainText(f)
+        await expect(boton).toBeDisabled()
+      } else {
+        await expect(boton).toBeEnabled()
+      }
+    }
+    const zona = page.getByRole('region', { name: `Liquidación de ${cerrable!.nombre}` })
+    await zona.getByRole('button', { name: `Confirmar ${cerrable!.nombre}` }).click()
+    await expect(zona.getByText(`Confirmada la de ${cerrable!.nombre}: ${euros(cerrable!.importe)} a su favor.`)).toBeVisible()
+    const r = await rest<{ status: string; amount: number; location_id: string }[]>(s, 'GET', `licensed_settlement?select=status,amount,location_id&account_id=eq.${CUENTA_A.id}&party_id=eq.${id}&period_from=eq.2026-10-01&formula=eq.compras_aportaciones_comision`)
+    expect(r.datos).toEqual([{ status: 'confirmada', amount: cerrable!.importe, location_id: cerrable!.id }])
   } finally {
     const b = await borrar()
     expect(b.status, 'se borra la liquidación confirmada de prueba').toBeLessThan(300)

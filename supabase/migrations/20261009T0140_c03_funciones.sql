@@ -277,7 +277,7 @@ begin
     v_faltan := v_faltan || jsonb_build_object('fuente', 'ventas', 'texto', 'No hay ninguna venta de sus marcas en este local y periodo: las ventas no han llegado.');
   end if;
   if v_sin_base > 0 then
-    v_faltan := v_faltan || jsonb_build_object('fuente', 'ventas', 'texto', format('%s ventas de sus marcas sin base imponible.', v_sin_base));
+    v_faltan := v_faltan || jsonb_build_object('fuente', 'ventas', 'texto', case when v_sin_base = 1 then '1 venta de sus marcas sin base imponible.' else format('%s ventas de sus marcas sin base imponible.', v_sin_base) end);
   end if;
   v_pct := case when v_base > 0 then round(v_comision * 100 / v_base, 2)
                 else (select max((x->>'pct')::numeric) from jsonb_array_elements(v_marcas) x) end;
