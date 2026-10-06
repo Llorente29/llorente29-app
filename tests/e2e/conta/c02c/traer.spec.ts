@@ -139,9 +139,39 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     const siguiente = page.getByRole('button', { name: 'Siguiente: traer el plan →' })
     if (!(await siguiente.count())) console.log(`[sin «Siguiente»] ${page.url()}\n${(await page.locator('body').innerText()).slice(0, 3000)}`)
     await expect(siguiente).toBeDisabled()
-    // «Decide tú»: 111 a la 47510015, ninguno a la 47510019; lo demás, cuenta suya sin ficha o solo cliente.
-    await fila(page, '47510015').getByRole('button', { name: '111' }).click()
-    await fila(page, '47510019').getByRole('button', { name: 'Ninguno' }).click()
+    // Las 4751 (06/10, producción). Por su id: el aviso de una fila nombra a la otra.
+    const f4751 = (code: string) => page.locator(`#traer-fila-${code}`)
+    // Un título que no dice retenciones no se propone, aunque diga «local».
+    await expect(f4751('47510002')).toContainText('Decide tú')
+    await expect(f4751('47510002')).toContainText('el título no dice que sean retenciones: ¿qué va aquí?')
+    // «Cambiar» en una 4751 propuesta ofrece las tres salidas.
+    await f4751('47510001').getByRole('button', { name: 'Cambiar' }).click()
+    const cambiar = page.getByRole('group', { name: 'Cambiar 47510001' })
+    for (const o of ['111', '115', 'Ninguno: cuenta mía sin ficha']) await expect(cambiar.getByRole('button', { name: o, exact: true })).toBeVisible()
+    await cambiar.getByRole('button', { name: 'Cancelar' }).click()
+    // Como en producción: la 47510001 confirmada al 115 (sale de «Para revisar») y la 47510019 también al 115.
+    await f4751('47510001').getByRole('button', { name: 'Es este' }).click()
+    await expect(f4751('47510001')).toHaveCount(0)
+    await f4751('47510019').getByRole('button', { name: '115', exact: true }).click()
+    // El aviso nombra las dos y enlaza a cada una; las dos vuelven a «Para revisar» como «Decide tú».
+    const aviso = page.getByRole('status').filter({ hasText: '47510001 y 47510019 van los dos al modelo 115: elige uno.' })
+    await expect(aviso).toBeVisible()
+    await page.getByRole('button', { name: /^Todas · \d+$/ }).click()
+    await aviso.getByRole('button', { name: 'Ir a la 47510001' }).click()
+    await expect(page.getByRole('button', { name: /^Para revisar · \d+$/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(f4751('47510001')).toBeFocused()
+    for (const code of ['47510001', '47510019']) await expect(f4751(code)).toContainText('Decide tú')
+    await expect(page.getByRole('button', { name: 'Siguiente: traer el plan →' })).toBeDisabled()
+    await page.evaluate(() => document.fonts.ready)
+    await page.screenshot({ path: `${DIR}/revisar-4751-choque-ordenador.png`, fullPage: true })
+    // Se corrige desde «Cambiar»: la 47510001, a ninguno. El aviso se va.
+    await f4751('47510001').getByRole('button', { name: 'Cambiar' }).click()
+    await page.getByRole('group', { name: 'Cambiar 47510001' }).getByRole('button', { name: 'Ninguno: cuenta mía sin ficha' }).click()
+    await expect(aviso).toHaveCount(0)
+    await expect(f4751('47510001')).toHaveCount(0)
+
+    // «Decide tú»: 111 a la 47510015; lo demás (la 47510002 también), cuenta suya sin ficha o solo cliente.
+    await fila(page, '47510015').getByRole('button', { name: '111', exact: true }).click()
     for (let i = 0; i < 40; i++) {
       const dudosa = page.locator('.cx-traer-fila-decide').first()
       if (!(await dudosa.count())) break

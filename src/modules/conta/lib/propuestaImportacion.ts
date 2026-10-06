@@ -101,8 +101,33 @@ const SALIDAS_SIN_NIF = (nombre: string): Opcion[] => [
   { id: 'sin_ficha', texto: 'Cuenta mía sin ficha', decision: { tipo: 'sin_ficha', nota: 'cuenta' } },
 ]
 
-/** Pistas de modelo en el nombre de una 4751 («alquiler» → 115; «profesional», «trabajo» → 111). */
+/**
+ * Las salidas de una 4751, siempre las tres: en la propuesta y en «Cambiar»
+ * (06/10: con la propuesta «probable», «Cambiar» no enseñaba nada y no había
+ * forma de corregirla).
+ */
+export const OPCIONES_RETENCION: readonly Opcion[] = [
+  { id: '111', texto: '111', decision: { tipo: 'retencion', modelo: '111' } },
+  { id: '115', texto: '115', decision: { tipo: 'retencion', modelo: '115' } },
+  { id: 'ninguno', texto: 'Ninguno: cuenta mía sin ficha', decision: { tipo: 'retencion', modelo: null } },
+]
+
+/** Lo que se puede elegir en una fila. Una 4751 siempre ofrece las tres, también en una revisión guardada antes. */
+export function opcionesDe(f: FilaRevision): Opcion[] {
+  if (f.clase !== 'retencion') return f.opciones
+  return [...OPCIONES_RETENCION, ...f.opciones.filter((o) => !OPCIONES_RETENCION.some((r) => r.id === o.id))]
+}
+
+/** ¿El título dice que son retenciones? «RET.», «RETENCIONES», «IRPF». */
+export const diceRetenciones = (nombre: string): boolean => /\b(ret|retenc\w*|irpf)\b/.test(nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())
+
+/**
+ * Pistas de modelo en el nombre de una 4751 («alquiler» → 115; «profesional»,
+ * «trabajo» → 111), solo si el título dice que son retenciones: «acreedora por
+ * conceptos fiscales local …» no es «alquiler» aunque diga «local» (06/10).
+ */
 export function modeloPorNombre(nombre: string): Modelo | null {
+  if (!diceRetenciones(nombre)) return null
   const k = claveNombre(nombre)
   if (/alquil|arrend|local/.test(k)) return '115'
   if (/profesion|trabaj|nomin|personal/.test(k)) return '111'
@@ -156,24 +181,16 @@ export function proponer(e: EntradaPropuesta): FilaRevision[] {
     }
     if (clase === 'retencion') {
       const otros = otroIgual(c)
+      const opciones = [...OPCIONES_RETENCION]
       if (otros.length) {
-        filas.push({ ...base, decision: { tipo: 'pendiente' }, confianza: 'decide', porque: `hay ${otros.length + 1} iguales: ${[c.code, ...otros].sort().join(' y ')}. ¿Cuál es cuál?`,
-          opciones: [
-            { id: '111', texto: '111', decision: { tipo: 'retencion', modelo: '111' } },
-            { id: '115', texto: '115', decision: { tipo: 'retencion', modelo: '115' } },
-            { id: 'ninguno', texto: 'Ninguno', decision: { tipo: 'retencion', modelo: null } },
-          ] })
+        filas.push({ ...base, opciones, decision: { tipo: 'pendiente' }, confianza: 'decide', porque: `hay ${otros.length + 1} iguales: ${[c.code, ...otros].sort().join(' y ')}. ¿Cuál es cuál?` })
         continue
       }
       const m = modeloPorNombre(c.nombre)
       filas.push(m
-        ? { ...base, decision: { tipo: 'retencion', modelo: m }, confianza: 'probable', porque: m === '115' ? 'por el nombre, retenciones de alquileres (115)' : 'por el nombre, retenciones de trabajo y profesionales (111)' }
-        : { ...base, decision: { tipo: 'pendiente' }, confianza: 'decide', porque: '¿qué retenciones van aquí?',
-            opciones: [
-              { id: '111', texto: '111', decision: { tipo: 'retencion', modelo: '111' } },
-              { id: '115', texto: '115', decision: { tipo: 'retencion', modelo: '115' } },
-              { id: 'ninguno', texto: 'Ninguno', decision: { tipo: 'retencion', modelo: null } },
-            ] })
+        ? { ...base, opciones, decision: { tipo: 'retencion', modelo: m }, confianza: 'probable', porque: m === '115' ? 'por el nombre, retenciones de alquileres (115)' : 'por el nombre, retenciones de trabajo y profesionales (111)' }
+        : { ...base, opciones, decision: { tipo: 'pendiente' }, confianza: 'decide',
+            porque: diceRetenciones(c.nombre) ? '¿qué retenciones van aquí?' : 'el título no dice que sean retenciones: ¿qué va aquí?' })
       continue
     }
     if (clase === 'cliente') { filas.push(terceroCliente(base, c, nif, porNif, filas)); continue }
@@ -288,7 +305,7 @@ export interface Cifras { tal: number; revisar: number; cambian: number; nuevas:
 export function cifras(filas: readonly FilaRevision[]): Cifras {
   return {
     tal: filas.filter((f) => f.confianza === 'seguro' && !f.cambia && f.decision.tipo !== 'crear_proveedor').length,
-    revisar: filas.filter((f) => f.confianza !== 'seguro').length,
+    revisar: filas.filter(paraRevisar(filas)).length,
     cambian: filas.filter((f) => f.cambia).length,
     nuevas: filas.filter((f) => f.decision.tipo === 'crear_proveedor').length,
     todas: filas.length,
@@ -300,8 +317,9 @@ export type Filtro = 'revisar' | 'todas' | 'proveedores' | 'clientes' | 'bancos'
 
 export function filtrar(filas: readonly FilaRevision[], filtro: Filtro, q: string): FilaRevision[] {
   const k = claveNombre(q)
+  const revisar = paraRevisar(filas)
   return filas.filter((f) => {
-    if (filtro === 'revisar' && f.confianza === 'seguro') return false
+    if (filtro === 'revisar' && !revisar(f)) return false
     if (filtro === 'proveedores' && f.clase !== 'proveedor' && f.clase !== 'acreedor') return false
     if (filtro === 'clientes' && f.clase !== 'cliente') return false
     if (filtro === 'bancos' && f.clase !== 'banco') return false
@@ -316,7 +334,8 @@ export function decidir(filas: readonly FilaRevision[], code: string, decision: 
   return filas.map((f) => (f.code === code ? { ...f, decision, confianza: decision.tipo === 'pendiente' ? 'decide' : 'seguro', porque: porque ?? 'lo has decidido tú' } : f))
 }
 
-export interface Problema { code: string; texto: string }
+/** Un problema de la revisión; `codes`, las filas que lo causan (el aviso enlaza a cada una). */
+export interface Problema { code: string; texto: string; codes: string[] }
 
 /**
  * ¿Se puede traer? No mientras quede algo por decidir, ni si dos cuentas
@@ -328,18 +347,33 @@ export function validar(filas: readonly FilaRevision[]): Problema[] {
   const destinos = new Map<string, string>()
   const creadoras = new Set(filas.filter((f) => f.decision.tipo === 'crear_proveedor').map((f) => f.code))
   for (const f of filas) {
-    if (f.decision.tipo === 'pendiente') { out.push({ code: f.code, texto: `${f.code}: falta decir qué es.` }); continue }
+    if (f.decision.tipo === 'pendiente') { out.push({ code: f.code, texto: `${f.code}: falta decir qué es.`, codes: [f.code] }); continue }
     if (f.decision.tipo === 'enlazar_creada' && !creadoras.has(f.decision.codigoCreadora)) {
-      out.push({ code: f.code, texto: `${f.code} se enlazaba con la ficha que iba a crear el ${f.decision.codigoCreadora}, y ya no se crea.` })
+      out.push({ code: f.code, texto: `${f.code} se enlazaba con la ficha que iba a crear el ${f.decision.codigoCreadora}, y ya no se crea.`, codes: [f.code] })
     }
     const k = destino(f)
     if (!k) continue
     const otro = destinos.get(k)
     if (otro) {
-      out.push({ code: f.code, texto: f.decision.tipo === 'retencion' ? `${otro} y ${f.code} van los dos al modelo ${f.decision.modelo}: elige uno.` : `${otro} y ${f.code} acaban en la misma ficha con el mismo papel: elige una.` })
+      out.push({ code: f.code, codes: [otro, f.code], texto: f.decision.tipo === 'retencion' ? `${otro} y ${f.code} van los dos al modelo ${f.decision.modelo}: elige uno.` : `${otro} y ${f.code} acaban en la misma ficha con el mismo papel: elige una.` })
     } else destinos.set(k, f.code)
   }
   return out
+}
+
+/**
+ * Las filas que chocan con otra (dos al mismo modelo, dos a la misma ficha y
+ * papel): aunque cada una sea «Seguro» por su lado, juntas no se pueden traer.
+ * Se calcula al pintar, así que vale también para una revisión ya guardada.
+ */
+export function enConflicto(filas: readonly FilaRevision[]): Set<string> {
+  return new Set(validar(filas).filter((p) => p.codes.length > 1).flatMap((p) => p.codes))
+}
+
+/** «Para revisar»: lo que no es seguro y lo que choca con otra fila (06/10). */
+export function paraRevisar(filas: readonly FilaRevision[]): (f: FilaRevision) => boolean {
+  const choca = enConflicto(filas)
+  return (f) => f.confianza !== 'seguro' || choca.has(f.code)
 }
 
 /** Nombre que enseña Folvy para una cuenta traída (el código siempre es el del fichero). */

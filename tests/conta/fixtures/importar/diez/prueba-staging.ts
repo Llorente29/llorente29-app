@@ -42,9 +42,9 @@ const lectura = juntar('diez', [leer('plan.csv', false), leer('proveedores.csv',
 const r = resumir(lectura, { plan: 'pymes', digitos: 8 }, hojas, ramas)
 if (!r.ok) throw new Error(r.motivo ?? 'no')
 let filas = proponer({ cuentas: r.cuentas, terceros: lectura.terceros, proveedores, bancos, programa: 'Cegid Diez' })
-// Lo que decidiría la persona en «decide tú»: 47510015 → 111, 47510019 → ninguno, 43000006 → solo cliente, el resto → cuenta suya sin ficha.
+// Lo que decidiría la persona en «decide tú»: 47510015 → 111, 47510019 y 47510002 → ninguno, 43000006 → solo cliente, el resto → cuenta suya sin ficha.
 for (const f of filas.filter((x) => x.decision.tipo === 'pendiente')) {
-  const id = f.code === '47510015' ? '111' : f.code === '47510019' ? 'ninguno' : f.code === '43000006' ? 'cliente_c03' : 'sin_ficha'
+  const id = f.code === '47510015' ? '111' : f.code === '47510019' || f.code === '47510002' ? 'ninguno' : f.code === '43000006' ? 'cliente_c03' : 'sin_ficha'
   filas = decidir(filas, f.code, (f.opciones.find((o) => o.id === id) ?? f.opciones[0]).decision)
 }
 const problemas = validar(filas)
