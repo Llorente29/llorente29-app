@@ -71,15 +71,20 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms))
  */
 const LIMITE_MS = 60_000
 
-/** Pide una URL; si el servidor falla (5xx o red), reintenta dos veces. */
+/**
+ * Pide una URL; si el servidor falla (5xx o red), reintenta dos veces. Un fallo
+ * de red (o el tiempo límite) va en `error`, nunca en `cuerpo`: el texto del
+ * error no es la fuente, y con él dentro el registro guardaba su huella como si
+ * se hubiera descargado (06/10, la SPARQL de la UE: 54 bytes de «TimeoutError»).
+ */
 async function pedir(url, opciones = {}) {
-  let ultimo = { http: 0, cuerpo: '' }
+  let ultimo = { http: 0, cuerpo: '', error: null }
   for (let intento = 0; intento < 3; intento++) {
     try {
       const r = await fetch(url, { ...opciones, headers: { 'User-Agent': UA, ...(opciones.headers ?? {}) }, signal: AbortSignal.timeout(LIMITE_MS) })
-      ultimo = { http: r.status, cuerpo: await r.text() }
+      ultimo = { http: r.status, cuerpo: await r.text(), error: null }
       if (r.status < 500) return ultimo
-    } catch (e) { ultimo = { http: 0, cuerpo: String(e) } }
+    } catch (e) { ultimo = { http: 0, cuerpo: '', error: String(e) } }
     await espera(3000 * (intento + 1))
   }
   return ultimo
@@ -170,7 +175,7 @@ async function descargarUna(f) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'text/csv' },
       body: new URLSearchParams({ query: f.consulta, format: 'text/csv' }).toString(),
     })
-    return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: 'csv' }
+    return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: 'csv', error: r.error }
   }
   const r = await pedir(f.url, { headers: { Accept: f.formato === 'json' ? 'application/json' : '*/*' } })
   // Listas paginadas (ISTAC: 1.000 por página): se siguen las páginas y se juntan.
@@ -193,7 +198,7 @@ async function descargarUna(f) {
       return { url: f.url, http: 200, titulo: f.nombre, actualizadoEnFuente: null, texto: JSON.stringify(junto, null, 1) + '\n', ext: 'json' }
     }
   }
-  return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: f.formato ?? 'txt' }
+  return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: f.formato ?? 'txt', error: r.error }
 }
 
 async function main() {
