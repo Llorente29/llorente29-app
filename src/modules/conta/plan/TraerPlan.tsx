@@ -338,7 +338,7 @@ function PasoRevisar({ revision, fichas, nombreFichero, cambiar, guardar, tirar,
       <Resultado hecho={accion.hecho} fallo={accion.fallo} />
       <div className="cx-pie">
         <button type="button" className="cx-enlace" onClick={tirar} disabled={accion.guardando}>Tirar y empezar de nuevo</button>
-        <span style={{ flex: 1 }} />
+        <span className="cx-ayuda" style={{ flex: 1 }}>Nada se escribe hasta el paso 3. Luego podrás deshacerlo entero desde «Lo que ha hecho Folvy».</span>
         <button type="button" className="cx-boton-sec" onClick={guardar} disabled={accion.guardando}>Guardar y seguir luego</button>
         <button type="button" className="cx-boton" onClick={seguir} disabled={problemas.length > 0 || accion.guardando}>Siguiente: traer el plan →</button>
       </div>
