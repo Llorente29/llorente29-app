@@ -353,7 +353,7 @@ function PasoRevisar({ revision, fichas, nombreFichero, cambiar, guardar, tirar,
           {problemas.filter((x) => !/falta decir/.test(x.texto)).map((x) => (
             <div key={x.code}>
               {x.texto}{' '}
-              {x.codes.map((c) => <button key={c} type="button" className="cx-enlace" onClick={() => irA(c)} aria-label={`Ir a la ${c}`}>Ir a la {c}</button>)}
+              {x.codes.map((c, i) => <span key={c}>{i > 0 && ' · '}<button type="button" className="cx-enlace" onClick={() => irA(c)} aria-label={`Ir a la ${c}`}>Ir a la {c}</button></span>)}
             </div>
           ))}
           {movil && k.pendientes > 0 && <div>Si te es más cómodo, guarda y decídelas en el ordenador.</div>}
