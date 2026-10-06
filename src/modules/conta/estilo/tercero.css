@@ -1,0 +1,115 @@
+/* src/modules/conta/estilo/tercero.css
+ *
+ * C03 · Clientes y proveedores: la lista única de terceros y la ficha de
+ * cliente, plataforma (maqueta N9Cliente) y socio de marca (N10Socio). Se
+ * apoya en las piezas de la ficha de proveedor (proveedor.css) y solo usa
+ * tokens de tokens.css: ningún color escrito aquí.
+ */
+
+.cxt-pagina, .cxt-ficha { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxt-ficha .cxp-cabecera { position: relative; }
+.cxt-fallo-menu { position: absolute; right: 0; top: 64px; width: 360px; z-index: 20; }
+
+/* ── Lista ────────────────────────────────────────────────────────── */
+.cxp-tabla-cabeza.cxt-fila, .cxp-tabla-fila.cxt-fila {
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.8fr) 150px minmax(0, 1.2fr);
+}
+.cxt-papeles { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.cxt-debe { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+
+.cxt-revision { display: flex; flex-direction: column; gap: 8px; }
+.cxt-revision-cabeza { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.cxt-revision-fila {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) auto; gap: 12px; align-items: center;
+  padding: 10px 0; border-top: 1px solid var(--cx-linea);
+}
+.cxt-revision-titulo { font-weight: 600; overflow-wrap: anywhere; }
+.cxt-revision-propuesta { font-size: 14px; color: var(--cx-apoyo); overflow-wrap: anywhere; }
+.cxt-revision-acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.cxt-revision-cambiar { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+.cxt-revision-lista { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+
+/* ── Ficha: cabecera, pestañas y franja ───────────────────────────── */
+.cxt-pestanas { flex-wrap: wrap; }
+.cxt-franja { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+.cxt-tarjeta-cabeza { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 6px; }
+.cxt-tarjeta-cabeza .cx-tarjeta-titulo { margin: 0; }
+.cxt-verde { color: var(--cx-verde-oscuro); }
+.cxt-ambar { color: var(--cx-ambar); }
+
+/* Liquidaciones de la plataforma (N9): fecha · cuenta · neto · estado · acción. */
+.cxt-liq {
+  display: grid; grid-template-columns: 70px minmax(0, 1fr) 120px 120px 110px; gap: 12px; align-items: center;
+  padding: 12px 0; border-top: 1px solid var(--cx-linea);
+}
+.cxt-liq-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; border-top: none; padding: 4px 0; }
+.cxt-liq-fecha { font-family: var(--cx-letra-cifras); color: var(--cx-apoyo); font-size: 14px; }
+.cxt-liq-cuenta { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+.cxt-liq-explica { font-size: 13px; color: var(--cx-apoyo); }
+.cxt-liq-explica.cxt-ambar { color: var(--cx-ambar); }
+.cxt-liq-explica.cxt-verde { color: var(--cx-verde-oscuro); }
+.cxt-liq-neto { font-family: var(--cx-letra-cifras); font-weight: 600; text-align: right; white-space: nowrap; }
+.cxt-liq-acciones { text-align: right; }
+
+/* Líneas de cálculo (N10) y filas sencillas. */
+.cxt-linea {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 9px 0; border-top: 1px solid var(--cx-linea); font-size: 15px;
+}
+.cxt-linea > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.cxt-linea .cx-cifra { white-space: nowrap; font-weight: 600; }
+.cxt-linea-total { font-weight: 600; }
+.cxt-linea-local { font-size: 14px; color: var(--cx-apoyo); padding-left: 14px; }
+.cxt-locales { margin-top: 4px; }
+.cxt-anterior-derecha { display: flex; align-items: center; gap: 8px; }
+.cxt-cuenta { text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.cxt-sin-cuenta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.cxt-preparar { display: flex; flex-direction: column; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); padding: 12px 14px; }
+.cxt-preparar .cxt-linea:first-child { border-top: none; }
+
+/* «Lo que he aprendido de este cliente». */
+.cxt-aprendido { background: var(--cx-verde-suave); border-color: var(--cx-ia-borde); }
+.cxt-aprendido .cx-tarjeta-titulo { display: flex; align-items: center; gap: 10px; }
+.cxt-aprendido-fila {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--cx-ia-borde);
+}
+.cxt-aprendido-fila > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cxt-aprendido-fila .cx-ayuda { color: var(--cx-ia-apoyo); }
+.cx .cxt-aprendido a { color: var(--cx-verde-oscuro); font-size: 13px; flex-shrink: 0; }
+
+.cxt-contacto { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
+.cxt-contacto > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.cxt-contacto-inicial {
+  width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--cx-inicial-1); font-weight: 600; font-size: 13px; flex-shrink: 0;
+}
+
+/* Formularios de las pestañas. */
+.cxt-dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cxt-aportar { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+
+/* ── Móvil ────────────────────────────────────────────────────────── */
+.cx .cxt-accion-movil { height: 56px; font-size: 16px; border-radius: 16px; width: 100%; }
+.cxt-frase-ia { margin: 0; font-size: 14px; color: var(--cx-ia-apoyo); display: flex; gap: 8px; align-items: baseline; }
+
+@media (max-width: 1100px) {
+  .cxp-tabla-cabeza.cxt-fila, .cxp-tabla-fila.cxt-fila { grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) 150px; }
+  .cxp-tabla-cabeza.cxt-fila > :nth-child(4), .cxp-tabla-fila.cxt-fila > :nth-child(4) { display: none; }
+}
+@media (max-width: 767px) {
+  .cxp-tabla-fila.cxt-fila { grid-template-columns: minmax(0, 1fr) auto; }
+  .cxp-tabla-fila.cxt-fila > :nth-child(2) { display: flex; grid-column: 1 / -1; padding-left: 48px; }
+  .cxp-tabla-fila.cxt-fila > :nth-child(4) { display: none; }
+  .cxt-revision-fila { grid-template-columns: minmax(0, 1fr); }
+  .cxt-revision-acciones { justify-content: flex-start; }
+  .cxt-liq { grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: 'fecha cuenta neto' 'fecha estado accion'; row-gap: 6px; }
+  .cxt-liq-cabeza { display: none; }
+  .cxt-liq-fecha { grid-area: fecha; }
+  .cxt-liq-cuenta { grid-area: cuenta; }
+  .cxt-liq-neto { grid-area: neto; }
+  .cxt-liq > :nth-child(4) { grid-area: estado; }
+  .cxt-liq-acciones { grid-area: accion; }
+  .cxt-dos { grid-template-columns: minmax(0, 1fr); }
+  .cxt-fallo-menu { position: static; width: auto; }
+}

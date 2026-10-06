@@ -11,9 +11,11 @@ import { join } from 'node:path'
 import {
   accionPrincipal, cuentaPorFiltro, filtrarTerceros, franjaArchivado, mismoNif, nifNormal, ordenarPapeles, type Tercero,
 } from '@/modules/conta/lib/terceros'
-import { cuadre, estadoLiquidacion, periodo, teDebe, type LiquidacionPlataforma } from '@/modules/conta/lib/liquidaciones'
+import { cifrasPlataforma, cuadre, estadoLiquidacion, periodo, teDebe, type LiquidacionPlataforma } from '@/modules/conta/lib/liquidaciones'
 import { liquidarLocal, liquidarMes, mesDe, textoImporte, type CalculoLocal } from '@/modules/conta/lib/liquidacionSocio'
 import { aprendidoDeCliente } from '@/modules/conta/lib/aprendidoCliente'
+import { MENU_CONTA, entradaActiva, migasFichaTercero, rutaFichaTercero, rutaTerceros } from '@/config/navegacion'
+import { apartadosDe } from '@/modules/conta/terceros/contextoTercero'
 import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 import { FicheroNoReconocido, importe, leerLiquidaciones, queFichero } from '@/modules/conta/lib/lectorLiquidaciones'
 
@@ -126,6 +128,19 @@ describe('regla 2 · te debe y vencido', () => {
   it('las que no traen neto no suman, pero se cuentan', () => {
     const d = teDebe([{ ...liqs[3], neto: null }], HOY)
     expect(d).toMatchObject({ total: 0, sinNeto: 1, frase: null })
+  })
+})
+
+describe('las cuatro cifras de la plataforma (N9)', () => {
+  it('te debe, lo vendido y las comisiones del año, y la última liquidación (la última cobrada)', () => {
+    const c = cifrasPlataforma(liqs.map((l) => ({ ...l, pedidos: 300 })), HOY)
+    expect(c).toMatchObject({ vendidoEsteAnio: 40191, pedidosEsteAnio: 1200, comisionesEsteAnio: 8439.3, pctMedio: 21, hayLiquidaciones: true })
+    expect(c.teDebe.total).toBe(8905.5)
+    expect(c.ultima?.periodo).toBe('16–30 sept')
+    expect(c.ultima?.estado.explica).toBe('cuadra con el banco')
+  })
+  it('sin liquidaciones: nada que enseñar como cifra', () => {
+    expect(cifrasPlataforma([], HOY)).toMatchObject({ hayLiquidaciones: false, ultima: null, pctMedio: null, vendidoEsteAnio: 0 })
   })
 })
 
@@ -248,5 +263,25 @@ describe('el lector de los CSV de las plataformas («Subir liquidación»)', () 
     const muestra = JSON.parse(salida.slice(salida.indexOf('Muestra:') + 8, salida.indexOf('\n\nDRY RUN')).trim())
     const sinRaw = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([k]) => !['raw', 'account_id', 'currency', 'needs_review'].includes(k)))
     expect(sinRaw(muestra)).toEqual(sinRaw({ ...nuestras[0] }))
+  })
+})
+
+describe('C03 · direcciones y pestañas de la ficha', () => {
+  it('la lista, el filtro y la ficha salen de un sitio', () => {
+    expect(rutaTerceros()).toBe('/conta/clientes-y-proveedores')
+    expect(rutaTerceros('socios')).toBe('/conta/clientes-y-proveedores?ver=socios')
+    expect(rutaFichaTercero('p1')).toBe('/conta/clientes-y-proveedores/p1')
+    expect(rutaFichaTercero('p1', 'cobro')).toBe('/conta/clientes-y-proveedores/p1/cobro')
+    expect(migasFichaTercero('Plataforma Norte', { etiqueta: 'Plataformas', filtro: 'plataformas' }).map((m) => m.etiqueta))
+      .toEqual(['Clientes y proveedores', 'Plataformas', 'Plataforma Norte'])
+  })
+  it('dentro de la ficha, el menú marca «Clientes y proveedores»', () => {
+    expect(entradaActiva('/conta/clientes-y-proveedores/p1/cobro', MENU_CONTA.flat())).toBe('terceros')
+  })
+  it('«Liquidaciones» solo sale a plataformas y socios', () => {
+    expect(apartadosDe(['customer'])).not.toContain('liquidaciones')
+    expect(apartadosDe(['platform', 'supplier'])).toContain('liquidaciones')
+    expect(apartadosDe(['brand_partner'])).toContain('liquidaciones')
+    expect(apartadosDe(['customer'])).toEqual(['ficha', 'datos-fiscales', 'contactos', 'cobro', 'contabilidad', 'documentos', 'historial'])
   })
 })

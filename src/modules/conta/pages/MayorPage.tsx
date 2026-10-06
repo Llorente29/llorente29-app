@@ -19,7 +19,7 @@
 
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { rutaFichaProveedor, rutaMayor, rutaPlan, rutaTablasGenerales } from '@/config/navegacion'
+import { rutaFichaProveedor, rutaFichaTercero, rutaMayor, rutaPlan, rutaTablasGenerales } from '@/config/navegacion'
 import { Chip, Dato, ErrorConReintento, Tarjeta, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/MarcoAjustes'
 import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
@@ -60,6 +60,10 @@ function Mayor({ n, p }: { n: NodoPlan; p: DatosPlan }) {
       <Link key="p" to={rutaFichaProveedor(dueno.id, 'contabilidad')} className="cx-boton-sec">
         Ficha del proveedor{p.proveedores.find((x) => x.id === dueno.id) ? ` · ${p.proveedores.find((x) => x.id === dueno.id)!.name}` : ''}
       </Link>
+    ),
+    // C03: una cuenta de cliente es de un tercero (party): abre su ficha.
+    dueno?.tipo === 'cliente' && (
+      <Link key="c" to={rutaFichaTercero(dueno.id, 'contabilidad')} className="cx-boton-sec">Ficha del cliente</Link>
     ),
     dueno?.tipo === 'banco' && (
       <Link key="b" to={rutaTablasGenerales('bancos-y-cajas')} className="cx-boton-sec">

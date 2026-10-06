@@ -149,3 +149,33 @@ export function teDebe(liqs: readonly LiquidacionPlataforma[], hoy: string): TeD
     : `${partes.length} liquidaciones · la primera, ${partes[0].texto.replace(/^liquidación del /, 'del ')}`
   return { total, vencido, partes, frase, sinNeto }
 }
+
+export interface CifrasPlataforma {
+  teDebe: TeDebe
+  vendidoEsteAnio: number
+  pedidosEsteAnio: number
+  comisionesEsteAnio: number
+  /** Comisión / ventas del año, en %, redondeada a una cifra decimal. */
+  pctMedio: number | null
+  ultima: { liq: LiquidacionPlataforma; periodo: string; estado: Estado } | null
+  hayLiquidaciones: boolean
+}
+
+/** Las cuatro cifras de la ficha de una plataforma (maqueta N9), con el año de hoy (Madrid). */
+export function cifrasPlataforma(liqs: readonly LiquidacionPlataforma[], hoy: string): CifrasPlataforma {
+  const anio = hoy.slice(0, 4)
+  const delAnio = liqs.filter((l) => (l.hasta ?? l.propuestoHasta ?? l.fecha ?? '').startsWith(anio))
+  const vendido = r2(delAnio.reduce((s, l) => s + (l.ventas ?? 0), 0))
+  const comis = r2(delAnio.reduce((s, l) => s + abs(l.comision), 0))
+  const ordenadas = [...liqs].sort((a, b) => (b.hasta ?? b.propuestoHasta ?? b.fecha ?? '').localeCompare(a.hasta ?? a.propuestoHasta ?? a.fecha ?? ''))
+  const u = ordenadas.find((l) => l.cobradoEn) ?? ordenadas[0] ?? null
+  return {
+    teDebe: teDebe(liqs, hoy),
+    vendidoEsteAnio: vendido,
+    pedidosEsteAnio: delAnio.reduce((s, l) => s + (l.pedidos ?? 0), 0),
+    comisionesEsteAnio: comis,
+    pctMedio: vendido > 0 ? Math.round((comis / vendido) * 1000) / 10 : null,
+    ultima: u ? { liq: u, periodo: periodo(u).texto, estado: estadoLiquidacion(u, hoy) } : null,
+    hayLiquidaciones: liqs.length > 0,
+  }
+}

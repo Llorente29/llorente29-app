@@ -10,7 +10,14 @@
 //   propuestas (salvo en «Archivados»), conserva cuentas, movimientos e
 //   histórico, y se recupera con un clic.
 
+import { rutaFichaProveedor, rutaFichaTercero } from '@/config/navegacion'
+
 export type Papel = 'supplier' | 'customer' | 'platform' | 'brand_partner'
+
+/** A dónde lleva un tercero: la ficha de proveedor de siempre si solo es proveedor; si no, la suya (N9/N10). */
+export function rutaDeTercero(t: { id: string; papeles: readonly Papel[]; supplierId: string | null }): string {
+  return t.papeles.length === 1 && t.papeles[0] === 'supplier' && t.supplierId ? rutaFichaProveedor(t.supplierId) : rutaFichaTercero(t.id)
+}
 
 export interface Tercero {
   id: string

@@ -105,7 +105,7 @@ export const CITAS = {
 } as const
 
 /** El límite del 347, en céntimos (CITAS.limite347). */
-const LIMITE_347 = 300506
+export const LIMITE_347 = 300506
 
 const titulo = (c: CuentaPlan, nombre?: string) => `${c.code} · ${nombre ?? c.name}`
 const vista = (c: CuentaPlan, nombre?: string): CuentaVista => ({ id: c.id, code: c.code, titulo: titulo(c, nombre) })
