@@ -8,6 +8,13 @@
 
 .cxt-pagina, .cxt-ficha { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .cxt-ficha .cxp-cabecera { position: relative; }
+/* Las acciones, a la derecha del nombre como en N9/N10: las píldoras se
+   recolocan debajo del nombre en vez de empujar los botones a otra fila. */
+@media (min-width: 1101px) {
+  .cxt-ficha .cxp-cabecera { flex-wrap: nowrap; align-items: flex-start; }
+  .cxt-ficha .cxp-identidad { flex: 1 1 auto; min-width: 0; }
+  .cxt-ficha .cxp-acciones { flex: 0 0 auto; }
+}
 .cxt-fallo-menu { position: absolute; right: 0; top: 64px; width: 360px; z-index: 20; }
 
 /* ── Lista ────────────────────────────────────────────────────────── */
@@ -38,9 +45,9 @@
 .cxt-verde { color: var(--cx-verde-oscuro); }
 .cxt-ambar { color: var(--cx-ambar); }
 
-/* Liquidaciones de la plataforma (N9): fecha · cuenta · neto · estado · acción. */
+/* Liquidaciones de la plataforma (N9): fecha · cuenta (con su acción debajo) · neto · estado. */
 .cxt-liq {
-  display: grid; grid-template-columns: 70px minmax(0, 1fr) 120px 120px 110px; gap: 12px; align-items: center;
+  display: grid; grid-template-columns: 64px minmax(0, 1fr) 108px 116px; gap: 12px; align-items: center;
   padding: 12px 0; border-top: 1px solid var(--cx-linea);
 }
 .cxt-liq-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; border-top: none; padding: 4px 0; }
@@ -50,7 +57,7 @@
 .cxt-liq-explica.cxt-ambar { color: var(--cx-ambar); }
 .cxt-liq-explica.cxt-verde { color: var(--cx-verde-oscuro); }
 .cxt-liq-neto { font-family: var(--cx-letra-cifras); font-weight: 600; text-align: right; white-space: nowrap; }
-.cxt-liq-acciones { text-align: right; }
+.cxt-liq-acciones { font-size: 13px; }
 
 /* Líneas de cálculo (N10) y filas sencillas. */
 .cxt-linea {
@@ -64,6 +71,8 @@
 .cxt-locales { margin-top: 4px; }
 .cxt-anterior-derecha { display: flex; align-items: center; gap: 8px; }
 .cxt-cuenta { text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+/* La etiqueta de «Sus cuentas» no se parte («347» salía «34 / 7»). */
+.cxt-linea > .cx-ayuda:first-child { flex: 0 0 auto; white-space: nowrap; }
 .cxt-sin-cuenta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .cxt-preparar { display: flex; flex-direction: column; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); padding: 12px 14px; }
 .cxt-preparar .cxt-linea:first-child { border-top: none; }
@@ -103,13 +112,12 @@
   .cxp-tabla-fila.cxt-fila > :nth-child(4) { display: none; }
   .cxt-revision-fila { grid-template-columns: minmax(0, 1fr); }
   .cxt-revision-acciones { justify-content: flex-start; }
-  .cxt-liq { grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: 'fecha cuenta neto' 'fecha estado accion'; row-gap: 6px; }
+  .cxt-liq { grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: 'fecha cuenta neto' 'fecha cuenta estado'; row-gap: 6px; }
   .cxt-liq-cabeza { display: none; }
   .cxt-liq-fecha { grid-area: fecha; }
   .cxt-liq-cuenta { grid-area: cuenta; }
   .cxt-liq-neto { grid-area: neto; }
-  .cxt-liq > :nth-child(4) { grid-area: estado; }
-  .cxt-liq-acciones { grid-area: accion; }
+  .cxt-liq > :nth-child(4) { grid-area: estado; justify-self: end; }
   .cxt-dos { grid-template-columns: minmax(0, 1fr); }
   .cxt-fallo-menu { position: static; width: auto; }
 }

@@ -150,6 +150,18 @@ export function teDebe(liqs: readonly LiquidacionPlataforma[], hoy: string): TeD
   return { total, vencido, partes, frase, sinNeto }
 }
 
+/**
+ * El pie corto de «Te debe» (móvil). Lo vencido o con diferencia va primero:
+ * una fecha de llegada solo se dice de lo que aún está pendiente (capturas del
+ * 06/10: decía «llega el 5 sept» de una que llegó con 212,30 € de menos).
+ */
+export function pieTeDebe(t: TeDebe, hayLiquidaciones: boolean): string {
+  if (t.vencido > 0) return `${eurosExactos(t.vencido)} con retraso o diferencia`
+  const proxima = t.partes.find((p) => p.estado === 'pendiente' && p.fecha)
+  if (proxima?.fecha) return `llega el ${diaMes(proxima.fecha)}`
+  return hayLiquidaciones ? 'nada pendiente' : 'aún sin liquidaciones'
+}
+
 export interface CifrasPlataforma {
   teDebe: TeDebe
   vendidoEsteAnio: number

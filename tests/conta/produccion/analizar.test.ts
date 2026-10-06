@@ -258,8 +258,8 @@ describe('la tanda de AHORA (manifiesto vivo): el C03', () => {
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c03-20261006.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
 
-  it('son las siete del C03, en orden', () => {
-    expect(viva.map((f) => f.match(/T(\d{4})_/)![1])).toEqual(['0100', '0110', '0120', '0130', '0140', '0150', '0160'])
+  it('son las ocho del C03, en orden', () => {
+    expect(viva.map((f) => f.match(/T(\d{4})_/)![1])).toEqual(['0100', '0110', '0120', '0130', '0140', '0150', '0160', '0170'])
     expect(viva.every((f) => f.startsWith('supabase/migrations/20261009T01'))).toBe(true)
   })
   it('PARAN la 0100, la 0130 y la 0160, cada una por lo suyo', () => {
@@ -273,11 +273,14 @@ describe('la tanda de AHORA (manifiesto vivo): el C03', () => {
     expect(motivo('supabase/migrations/20261009T0130_c03_periodos_propuestos.sql')).toEqual([expect.stringMatching(/channel_settlement.*update/)])
     expect(motivo('supabase/migrations/20261009T0160_c03_deshacer_importacion.sql')).toEqual([expect.stringMatching(/company_chart_import_undo\(uuid,text\)/)])
   })
+  it('la 0170 solo añade: un disparador nuevo en supplier, sigue', () => {
+    expect(decidir(p.porFichero['supabase/migrations/20261009T0170_c03_borrar_proveedor.sql'], p.existe).para).toEqual([])
+  })
   it('las tres están nombradas para «autorizo» en la cabecera del manifiesto, y solo ellas', () => {
     const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
     expect(nombradas).toEqual(paran().map((f) => f.replace('supabase/migrations/', '')))
   })
-  it('su vuelta atrás es la de las siete, al revés', () => {
+  it('su vuelta atrás es la de las ocho, al revés', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
   })

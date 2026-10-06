@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import {
   accionPrincipal, cuentaPorFiltro, filtrarTerceros, franjaArchivado, mismoNif, nifNormal, ordenarPapeles, type Tercero,
 } from '@/modules/conta/lib/terceros'
-import { cifrasPlataforma, cuadre, estadoLiquidacion, periodo, teDebe, type LiquidacionPlataforma } from '@/modules/conta/lib/liquidaciones'
+import { cifrasPlataforma, cuadre, estadoLiquidacion, periodo, pieTeDebe, teDebe, type LiquidacionPlataforma } from '@/modules/conta/lib/liquidaciones'
 import { liquidarLocal, liquidarMes, mesDe, textoImporte, type CalculoLocal } from '@/modules/conta/lib/liquidacionSocio'
 import { aprendidoDeCliente } from '@/modules/conta/lib/aprendidoCliente'
 import { MENU_CONTA, entradaActiva, migasFichaTercero, rutaFichaTercero, rutaTerceros } from '@/config/navegacion'
@@ -124,6 +124,13 @@ describe('regla 2 · te debe y vencido', () => {
     expect(d.frase).toBe('2 liquidaciones · la primera, del 16–31 ago · faltan 212,30 € en el banco')
     const soloOct = teDebe(liqs.slice(1), HOY)
     expect(soloOct.frase).toBe('liquidación del 1–15 oct · llega el 20')
+  })
+  it('el pie corto (móvil): lo vencido o con diferencia antes que una fecha de llegada', () => {
+    // La captura del 06/10 decía «llega el 5 sept» de la de agosto, que llegó con 212,30 € de menos.
+    expect(pieTeDebe(teDebe(liqs, HOY), true)).toBe('212,30 € con retraso o diferencia')
+    expect(pieTeDebe(teDebe(liqs.slice(1), HOY), true)).toBe('llega el 20 oct')
+    expect(pieTeDebe(teDebe(liqs.slice(1, 3), HOY), true)).toBe('nada pendiente')
+    expect(pieTeDebe(teDebe([], HOY), false)).toBe('aún sin liquidaciones')
   })
   it('las que no traen neto no suman, pero se cuentan', () => {
     const d = teDebe([{ ...liqs[3], neto: null }], HOY)

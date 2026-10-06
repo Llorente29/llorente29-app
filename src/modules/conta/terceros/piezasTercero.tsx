@@ -52,7 +52,7 @@ export function TarjetaLiquidaciones({ todas = false }: { todas?: boolean }) {
       </div>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       <div className="cxt-liq cxt-liq-cabeza" aria-hidden="true">
-        <span>FECHA</span><span>PERIODO · ventas − comisiones = neto</span><span style={{ textAlign: 'right' }}>NETO</span><span /><span />
+        <span>FECHA</span><span>PERIODO · ventas − comisiones = neto</span><span style={{ textAlign: 'right' }}>NETO</span><span />
       </div>
       {liqs.map((l) => {
         const e = estadoLiquidacion(l, hoy)
@@ -74,18 +74,18 @@ export function TarjetaLiquidaciones({ todas = false }: { todas?: boolean }) {
                   catch (er) { setFallo(er instanceof Error ? er.message : 'No se pudo confirmar.') }
                 }}>Confirmar periodo</button></span>
               )}
+              <span className="cxt-liq-acciones">
+                {l.cobradoEn
+                  ? <button type="button" className="cx-enlace" onClick={async () => {
+                      setFallo(null)
+                      try { await quitarCobro(l.id); avisar(`Quitado el cobro de la liquidación del ${p.texto}: vuelve a estar pendiente.`); recargar() }
+                      catch (er) { setFallo(er instanceof Error ? er.message : 'No se pudo quitar.') }
+                    }}>Quitar cobro</button>
+                  : <button type="button" className="cx-enlace" onClick={() => setCobro(l.id)}>Apuntar cobro</button>}
+                </span>
             </span>
             <span className="cxt-liq-neto">{l.neto != null ? eurosExactos(l.neto) : '—'}</span>
             <span><Chip tono={TONO[e.tono]}>{e.etiqueta}</Chip></span>
-            <span className="cxt-liq-acciones">
-              {l.cobradoEn
-                ? <button type="button" className="cx-enlace" onClick={async () => {
-                    setFallo(null)
-                    try { await quitarCobro(l.id); avisar(`Quitado el cobro de la liquidación del ${p.texto}: vuelve a estar pendiente.`); recargar() }
-                    catch (er) { setFallo(er instanceof Error ? er.message : 'No se pudo quitar.') }
-                  }}>Quitar cobro</button>
-                : <button type="button" className="cx-enlace" onClick={() => setCobro(l.id)}>Apuntar cobro</button>}
-            </span>
           </div>
         )
       })}

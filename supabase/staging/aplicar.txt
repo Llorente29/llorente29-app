@@ -1,11 +1,11 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · C03 · tras el e2e 37466147270:
-#   · limpieza ÚNICA de las 41 fichas que dejó el e2e del C02c de las 12:21
-#     (no pudo deshacer antes de la 0160); con guardas, se queda hecha;
-#   · la 0140 otra vez (create or replace): «1 venta … sin base imponible»,
-#     en singular.
-# Anterior: 0160 y su prueba, en verde en 37466473994.
-supabase/staging/sql/20261009_c03_limpiar_restos_c02c.sql
-supabase/migrations/20261009T0140_c03_funciones.sql
+# 06/10/2026 · C03 · 0170: borrar un proveedor no deja su tercero huérfano.
+# Primero la prueba (reproduce el fallo sin la 0170 y prueba la nueva;
+# ROLLBACK), después la migración y la limpieza ÚNICA de los 51 terceros sin
+# papel que dejaron las e2e (45 en A, 6 en B), con guardas.
+# Anterior: limpieza C02c y 0140 otra vez, en verde en 37471541247.
+supabase/staging/sql/20261009_c03_prueba_borrar_proveedor.sql
+supabase/migrations/20261009T0170_c03_borrar_proveedor.sql
+supabase/staging/sql/20261009_c03_limpiar_terceros_huerfanos.sql

@@ -30,7 +30,7 @@ import {
   CobroTercero, ContabilidadTercero, ContactosTercero, DatosFiscalesTercero, DocumentosTercero, HistorialTercero, LiquidacionesTercero,
 } from '@/modules/conta/terceros/ApartadosTercero'
 import { accionPrincipal, franjaArchivado, ordenarPapeles, type Papel } from '@/modules/conta/lib/terceros'
-import { cifrasPlataforma } from '@/modules/conta/lib/liquidaciones'
+import { cifrasPlataforma, pieTeDebe } from '@/modules/conta/lib/liquidaciones'
 import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
 import { diaMes, euros, eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
 import { anadirPapel, archivarTercero } from '@/modules/conta/services/tercerosService'
@@ -448,7 +448,7 @@ function PortadaMovil({ aviso }: { aviso: string | null }) {
           <div className="cx-tarjeta cxp-cifra">
             <span className="cxp-cifra-et">Te debe</span>
             <span className="cxp-cifra-valor">{eurosExactos(c.teDebe.total)}</span>
-            <span className={`cxp-cifra-pie${c.teDebe.total ? ' cxp-cifra-pie-ambar' : ''}`}>{c.teDebe.partes[0]?.fecha ? `llega el ${diaMes(c.teDebe.partes[0].fecha)}` : c.hayLiquidaciones ? 'nada pendiente' : 'aún sin liquidaciones'}</span>
+            <span className={`cxp-cifra-pie${c.teDebe.total ? ' cxp-cifra-pie-ambar' : ''}`}>{pieTeDebe(c.teDebe, c.hayLiquidaciones)}</span>
           </div>
           <div className="cx-tarjeta cxp-cifra">
             <span className="cxp-cifra-et">Este año</span>
@@ -471,7 +471,12 @@ function PortadaMovil({ aviso }: { aviso: string | null }) {
           </div>
         </div>
       )}
-      {m && <div className="cx-tarjeta">{textoImporte(m)}: {m.lineas.map((l) => `${l.texto.replace(/^[−+] /, '')} ${eurosExactos(Math.abs(l.importe))}`).join(' · ')}</div>}
+      {m && (
+        <section className="cx-tarjeta" aria-label="Cómo se calcula">
+          {m.lineas.map((l) => <div key={l.texto} className="cxt-linea"><span>{l.texto}</span><span className="cx-cifra">{eurosExactos(Math.abs(l.importe))}</span></div>)}
+          <div className="cxt-linea cxt-linea-total"><span>= Liquidación</span><span className="cx-cifra">{textoImporte(m)}</span></div>
+        </section>
+      )}
       {!c && !m && (
         <div className="cx-tarjeta"><Vacio titulo="Las facturas llegan con Facturación." explicacion="Mientras, su ficha guarda sus datos fiscales, su cobro y su cuenta." /></div>
       )}

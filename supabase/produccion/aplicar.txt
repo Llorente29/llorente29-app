@@ -7,9 +7,9 @@
 # fallo).
 #
 # C03 · Clientes, plataformas y socios de marca. Desde la rama
-# conta/c03-clientes, ANTES de fusionar el PR #152. Las siete migraciones del
-# C03 (0100–0160). Fuera del camino del pedido: el análisis nombra 9 tablas y
-# 17 funciones y ninguna está en CAMINO_TABLAS / CAMINO_FUNCIONES (medido con
+# conta/c03-clientes, ANTES de fusionar el PR #152. Las ocho migraciones del
+# C03 (0100–0170). Fuera del camino del pedido: el análisis nombra 9 tablas y
+# 18 funciones y ninguna está en CAMINO_TABLAS / CAMINO_FUNCIONES (medido con
 # analizar.mjs sobre lo que existe hoy en producción, en solo lectura).
 #
 # TRES PARAN y van en el campo «autorizo», nombre entero, una por línea:
@@ -32,6 +32,9 @@
 #   · 0160 reemplaza company_chart_import_undo(uuid,text) (C02c, 0100): sin
 #     ella, con la 0100 dentro, «Deshacer entero» del plan traído se para
 #     siempre (party_role cuenta como uso). Misma firma.
+# La 0170 solo añade una función y un disparador BEFORE DELETE en supplier: al
+# borrar un proveedor, su tercero no se queda huérfano.
+#
 # El resto sigue: crean party, party_role, customer_fiscal y
 # brand_partner_contribution, añaden columnas nulas o con valor por defecto
 # a channel_settlement, licensed_settlement y brand_licensing_agreement, las
@@ -58,3 +61,4 @@ supabase/migrations/20261009T0130_c03_periodos_propuestos.sql
 supabase/migrations/20261009T0140_c03_funciones.sql
 supabase/migrations/20261009T0150_c03_lectura.sql
 supabase/migrations/20261009T0160_c03_deshacer_importacion.sql
+supabase/migrations/20261009T0170_c03_borrar_proveedor.sql
