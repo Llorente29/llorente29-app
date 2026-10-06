@@ -233,15 +233,22 @@ async function main() {
     // cambiarlos (C02, 04/10: una descarga idéntica rompía serie.mjs comprobar).
     const previa = previo.fuentes?.[f.clave]
     const mismo = ok && previa?.sha256 === huella && previa?.fecha
-    registro.fuentes[f.clave] = {
-      nombre: f.nombre, url: d.url, urlDatos: d.urlDatos ?? null, http: d.http, titulo: d.titulo,
-      actualizadoEnFuente: d.actualizadoEnFuente ?? null, fecha: mismo ? previa.fecha : fecha, comprobado: fecha, sha256: huella, bytes: d.texto.length,
-      contieneLoEsperado: contiene, fichero: ok ? fichero : null, error: d.error ?? null,
-      idBoe: d.id ?? null, nota: d.nota ?? null,
-    }
+    // Si hoy falla y había una copia buena, se queda esa copia (los valores de
+    // serie se cargan de ella: serie.mjs, plan.mjs) y el fallo se apunta aparte.
+    // Con el tiempo límite, una fuente caída es un fallo normal, no un cuelgue:
+    // sin esto, un mal día de la UE dejaba «eu-paises» sin fichero (06/10).
+    const conservar = !ok && previa?.fichero && previa?.sha256
+    registro.fuentes[f.clave] = conservar
+      ? { ...previa, ultimoFallo: { fecha, http: d.http, contieneLoEsperado: contiene, error: d.error ?? null } }
+      : {
+          nombre: f.nombre, url: d.url, urlDatos: d.urlDatos ?? null, http: d.http, titulo: d.titulo,
+          actualizadoEnFuente: d.actualizadoEnFuente ?? null, fecha: mismo ? previa.fecha : fecha, comprobado: fecha, sha256: huella, bytes: d.texto.length,
+          contieneLoEsperado: contiene, fichero: ok ? fichero : null, error: d.error ?? null,
+          idBoe: d.id ?? null, nota: d.nota ?? null,
+        }
     const antes = previo.fuentes?.[f.clave]?.sha256 ?? null
     if (ok && antes && antes !== huella) cambios.push(`- **${f.nombre}** (${d.url}): la huella pasa de \`${antes.slice(0, 12)}…\` a \`${huella.slice(0, 12)}…\`. Actualizada en la fuente: ${d.actualizadoEnFuente ?? 'no lo dice'}.`)
-    if (!ok) cambios.push(`- **${f.nombre}**: NO se ha podido comprobar (HTTP ${d.http}${contiene ? '' : ', no contiene «' + f.debeContener + '»'}${d.error ? ', ' + d.error : ''}).`)
+    if (!ok) cambios.push(`- **${f.nombre}**: NO se ha podido comprobar (HTTP ${d.http}${contiene ? '' : ', no contiene «' + f.debeContener + '»'}${d.error ? ', ' + d.error : ''})${conservar ? '; se queda la copia anterior' : ''}.`)
     if (modo === 'descargar' && ok) await writeFile(join(DIR, fichero), d.texto)
     console.log(`${ok ? 'OK ' : 'MAL'} ${f.clave.padEnd(18)} HTTP ${d.http} · ${d.texto.length} car. · ${d.titulo?.slice(0, 80) ?? ''}`)
   }
