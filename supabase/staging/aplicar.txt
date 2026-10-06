@@ -6,7 +6,7 @@
 # predefinidos; enlaces de factura y liquidaciones; validar, anular y cadena;
 # Mayor, sumas y saldos y resultado por local).
 # Primero la prueba (foto de antes, reglas, cuenta B, vuelta atrás que para y
-# que deshace, reaplicar; ROLLBACK), después las cuatro migraciones.
+# que deshace, reaplicar; ROLLBACK), después las cuatro migraciones. (2.ª pasada)
 supabase/staging/sql/20261010_c04_prueba_libro.sql
 supabase/migrations/20261010T0100_c04_libro.sql
 supabase/migrations/20261010T0110_c04_enlaces.sql
