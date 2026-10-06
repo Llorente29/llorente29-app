@@ -18,7 +18,7 @@
 // El núcleo (importarPlan.ts, propuestaImportacion.ts) decide; la base
 // (company_chart_import_apply) lo vuelve a comprobar todo y lo hace todo o nada.
 
-import { useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Chip } from '@/modules/conta/ui/piezas'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
@@ -28,7 +28,7 @@ import {
   type Columnas, type Lectura, type Programa, type ResumenLectura,
 } from '@/modules/conta/lib/importarPlan'
 import {
-  cifras as contar, decidir, filtrar, planTraer, proponer, resumenTraer, validar,
+  cifras as contar, decidir, filtrar, opcionesDe, planTraer, proponer, resumenTraer, validar,
   type Decision, type FichaBanco, type FichaProveedor, type FilaRevision, type Filtro,
 } from '@/modules/conta/lib/propuestaImportacion'
 import type { LecturaPdf } from '@/modules/conta/lib/lectorDiez'
@@ -246,7 +246,7 @@ function Cambiar({ f, fichas, poner, cerrar }: { f: FilaRevision; fichas: { prov
         </>
       )}
       <div className="cx-traer-acciones">
-        {f.opciones.map((o) => <button key={o.id} type="button" className="cx-boton-sec" onClick={() => poner(o.decision, 'lo has decidido tú')}>{o.texto}</button>)}
+        {opcionesDe(f).map((o) => <button key={o.id} type="button" className="cx-boton-sec" onClick={() => poner(o.decision, 'lo has decidido tú')}>{o.texto}</button>)}
         {(f.clase === 'proveedor' || f.clase === 'acreedor') && !f.opciones.some((o) => o.id === 'sin_ficha') && (
           <button type="button" className="cx-boton-sec" onClick={() => poner({ tipo: 'sin_ficha', nota: 'cuenta' }, 'lo has decidido tú')}>Cuenta mía sin ficha</button>
         )}
@@ -256,28 +256,31 @@ function Cambiar({ f, fichas, poner, cerrar }: { f: FilaRevision; fichas: { prov
   )
 }
 
-function FilaTabla({ f, filas, fichas, poner, movil }: {
+function FilaTabla({ f, filas, fichas, poner, movil, choque }: {
   f: FilaRevision; filas: readonly FilaRevision[]; fichas: { proveedores: FichaProveedor[]; bancos: FichaBanco[] }; movil: boolean
   poner: (code: string, d: Decision, porque: string) => void
+  /** El aviso de la fila si choca con otra («47510001 y 47510019 van los dos al modelo 115»). */
+  choque?: string
 }) {
   const [cambiando, setCambiando] = useState(false)
-  const c = CONFIANZA[f.confianza]
+  // Si choca con otra, vuelve a «Decide tú» aunque cada una por su lado fuese segura.
+  const c = CONFIANZA[choque ? 'decide' : f.confianza]
   const ponerAqui = (d: Decision, porque: string) => { poner(f.code, d, porque); setCambiando(false) }
   const acciones = (
     <span className="cx-traer-acciones">
       {f.confianza === 'probable' && <button type="button" className="cx-enlace" onClick={() => ponerAqui(f.decision, 'lo has confirmado tú')}>Es este</button>}
-      {f.confianza === 'decide' && f.opciones.slice(0, 3).map((o) => (
+      {(f.confianza === 'decide' || choque) && opcionesDe(f).slice(0, 3).map((o) => (
         <button key={o.id} type="button" className="cx-enlace" onClick={() => ponerAqui(o.decision, 'lo has decidido tú')}>{o.texto}</button>
       ))}
       {!f.cambia && <button type="button" className="cx-enlace" aria-expanded={cambiando} onClick={() => setCambiando((v) => !v)}>Cambiar</button>}
     </span>
   )
   return (
-    <div role="row" className={`cx-traer-fila${f.confianza === 'decide' ? ' cx-traer-fila-decide' : ''}${movil ? ' cx-traer-fila-movil' : ''}`}>
+    <div role="row" id={`traer-fila-${f.code}`} tabIndex={-1} className={`cx-traer-fila${f.confianza === 'decide' || choque ? ' cx-traer-fila-decide' : ''}${movil ? ' cx-traer-fila-movil' : ''}`}>
       <span role="cell" className="cx-cifra">{f.code}</span>
       <span role="cell" className="cx-fila-texto"><span className="cx-fila-titulo">{f.enOrigen}</span>{f.nif && <span className="cx-fila-apoyo">NIF {f.nif}</span>}</span>
       {!movil && <span role="cell" aria-hidden="true" className="cx-traer-flecha">→</span>}
-      <span role="cell" className="cx-fila-texto"><span className="cx-fila-titulo">{enFolvy(f, filas)}</span><span className="cx-fila-apoyo">{f.porque}</span></span>
+      <span role="cell" className="cx-fila-texto"><span className="cx-fila-titulo">{enFolvy(f, filas)}</span><span className="cx-fila-apoyo">{choque ?? f.porque}</span></span>
       <span role="cell"><Chip tono={c.tono}>{c.texto}</Chip></span>
       <span role="cell">{acciones}</span>
       {cambiando && <div className="cx-traer-fila-cambiar"><Cambiar f={f} fichas={fichas} poner={ponerAqui} cerrar={() => setCambiando(false)} /></div>}
@@ -296,6 +299,19 @@ function PasoRevisar({ revision, fichas, nombreFichero, cambiar, guardar, tirar,
   const [q, setQ] = useState('')
   const vistas = filtrar(filas, filtro, q)
   const problemas = validar(filas)
+  const choques = new Map(problemas.filter((x) => x.codes.length > 1).flatMap((x) => x.codes.map((c) => [c, x.texto] as const)))
+  // El aviso enlaza a cada fila: se ve en «Para revisar» y se lleva el foco.
+  const ir = useRef<string | null>(null)
+  const [salto, setSalto] = useState(0)
+  useEffect(() => {
+    const code = ir.current
+    if (!code) return
+    ir.current = null
+    const el = document.getElementById(`traer-fila-${code}`)
+    el?.scrollIntoView({ block: 'center' })
+    el?.focus()
+  }, [salto])
+  const irA = (code: string) => { ir.current = code; setFiltro('revisar'); setQ(''); setSalto((n) => n + 1) }
   const p = corto(revision.programa)
   const pildora = (id: Filtro, texto: string) => (
     <button type="button" className="cx-pildora" aria-pressed={filtro === id} onClick={() => setFiltro(id)}>{texto}</button>
@@ -328,13 +344,18 @@ function PasoRevisar({ revision, fichas, nombreFichero, cambiar, guardar, tirar,
             <span role="columnheader">EN FOLVY</span><span role="columnheader">CONFIANZA</span><span role="columnheader"><span className="cx-oculto">Acciones</span></span>
           </div>
         )}
-        {vistas.map((f) => <FilaTabla key={f.code} f={f} filas={filas} fichas={fichas} movil={movil} poner={(code, d, porque) => cambiar(decidir(filas, code, d, porque))} />)}
+        {vistas.map((f) => <FilaTabla key={f.code} f={f} filas={filas} fichas={fichas} movil={movil} choque={choques.get(f.code)} poner={(code, d, porque) => cambiar(decidir(filas, code, d, porque))} />)}
         {!vistas.length && <p className="cx-ayuda">{filtro === 'revisar' && !q ? 'No queda nada por revisar: todo entra con su número.' : 'Nada que enseñar con este filtro.'}</p>}
       </div>
       {problemas.length > 0 && (
         <div className="cx-aviso" role="status">
           {k.pendientes ? `Faltan ${k.pendientes} ${k.pendientes === 1 ? 'cuenta' : 'cuentas'} por decidir («Decide tú»).` : ''}
-          {problemas.filter((x) => !/falta decir/.test(x.texto)).slice(0, 3).map((x) => <div key={x.code}>{x.texto}</div>)}
+          {problemas.filter((x) => !/falta decir/.test(x.texto)).map((x) => (
+            <div key={x.code}>
+              {x.texto}{' '}
+              {x.codes.map((c) => <button key={c} type="button" className="cx-enlace" onClick={() => irA(c)} aria-label={`Ir a la ${c}`}>Ir a la {c}</button>)}
+            </div>
+          ))}
           {movil && k.pendientes > 0 && <div>Si te es más cómodo, guarda y decídelas en el ordenador.</div>}
         </div>
       )}

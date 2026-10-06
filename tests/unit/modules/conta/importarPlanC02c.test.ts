@@ -11,7 +11,7 @@ import {
   adivinarColumnas, claveNombre, genericaDe, hojaDe, ibanEnNombre, juntar, leerTabla, nifDeListado, parecido, partirCsv, resumir, type Lectura,
 } from '@/modules/conta/lib/importarPlan'
 import {
-  cifras, decidir, filtrar, planTraer, proponer, resumenTraer, validar, type FichaBanco, type FichaProveedor, type FilaRevision,
+  cifras, decidir, enConflicto, filtrar, modeloPorNombre, opcionesDe, planTraer, proponer, resumenTraer, validar, type FichaBanco, type FichaProveedor, type FilaRevision,
 } from '@/modules/conta/lib/propuestaImportacion'
 
 const dir = join(__dirname, '../../../conta/fixtures/importar/diez')
@@ -223,9 +223,43 @@ describe('propuesta de enlaces, con la fixture (los casos del encargo §3)', () 
       const f = fila(filas, code)
       expect(f.confianza).toBe('decide')
       expect(f.porque).toMatch(/hay 2 iguales: 47510015 y 47510019/)
-      expect(f.opciones.map((o) => o.texto)).toEqual(['111', '115', 'Ninguno'])
+      expect(f.opciones.map((o) => o.texto)).toEqual(['111', '115', 'Ninguno: cuenta mía sin ficha'])
     }
     expect(fila(filas, '47510001')).toMatchObject({ confianza: 'probable', decision: { tipo: 'retencion', modelo: '115' } })
+  })
+  // 06/10, producción: la 47510001 de Foodint («acreedora por conceptos fiscales local …») salió como 115 y no se podía cambiar.
+  it('una 4751 cuyo título no dice retenciones no se propone: decide tú, aunque diga «local»', () => {
+    expect(fila(filas, '47510002')).toMatchObject({ confianza: 'decide', decision: { tipo: 'pendiente' }, porque: 'el título no dice que sean retenciones: ¿qué va aquí?' })
+    expect(modeloPorNombre('H.P. ACREEDORA POR CONCEPTOS FISCALES LOCAL SUR')).toBeNull()
+    expect(modeloPorNombre('H.P. ACREEDORA RET. ALQUILER LOCAL NORTE')).toBe('115')
+    expect(modeloPorNombre('RETENCIONES PROFESIONALES')).toBe('111')
+    expect(modeloPorNombre('IRPF TRABAJO')).toBe('111')
+  })
+  it('toda 4751 ofrece 111, 115 y «Ninguno: cuenta mía sin ficha», también la «probable» y la de una revisión guardada sin opciones', () => {
+    const todas = ['111', '115', 'Ninguno: cuenta mía sin ficha']
+    for (const f of filas.filter((x) => x.clase === 'retencion')) expect(opcionesDe(f).map((o) => o.texto)).toEqual(todas)
+    // Como quedó guardada la de producción: «Seguro», 115 y sin opciones.
+    const guardada = { ...fila(filas, '47510001'), confianza: 'seguro' as const, opciones: [] }
+    expect(opcionesDe(guardada).map((o) => o.texto)).toEqual(todas)
+    expect(opcionesDe(fila(filas, '41000100')).length).toBe(fila(filas, '41000100').opciones.length)
+  })
+  it('dos 4751 al mismo modelo: las dos vuelven a «Para revisar» y el aviso nombra a las dos', () => {
+    let d = filas
+    for (const f of d.filter((x) => x.decision.tipo === 'pendiente')) d = decidir(d, f.code, (opcionesDe(f).find((o) => o.id === 'ninguno') ?? f.opciones.find((o) => o.id === 'sin_ficha') ?? f.opciones[0]).decision)
+    // Como en producción: la 47510001 confirmada (115, «Seguro») y la 47510019 también al 115.
+    d = decidir(d, '47510001', { tipo: 'retencion', modelo: '115' }, 'lo has confirmado tú')
+    d = decidir(d, '47510019', { tipo: 'retencion', modelo: '115' })
+    expect(fila(d, '47510001').confianza).toBe('seguro')
+    const choque = validar(d).find((p) => p.codes.length > 1)!
+    expect(choque).toMatchObject({ codes: ['47510001', '47510019'], texto: '47510001 y 47510019 van los dos al modelo 115: elige uno.' })
+    expect(enConflicto(d)).toEqual(new Set(['47510001', '47510019']))
+    const revisar = filtrar(d, 'revisar', '').map((f) => f.code)
+    expect(revisar).toEqual(expect.arrayContaining(['47510001', '47510019']))
+    expect(cifras(d).revisar).toBe(revisar.length)
+    // Con una a «Ninguno», el choque se va y las dos salen de «Para revisar».
+    const bien = decidir(d, '47510001', { tipo: 'retencion', modelo: null })
+    expect(enConflicto(bien).size).toBe(0)
+    expect(filtrar(bien, 'revisar', '').map((f) => f.code)).not.toContain('47510019')
   })
   it('gastos, socios y préstamos entran tal cual, sin ficha', () => {
     for (const code of ['60000001', '62300001', '17000001', '55100001', '55500001']) expect(fila(filas, code)).toMatchObject({ confianza: 'seguro', decision: { tipo: 'sin_ficha', nota: 'cuenta' } })
@@ -249,7 +283,7 @@ describe('propuesta de enlaces, con la fixture (los casos del encargo §3)', () 
     expect(validar(filas).length).toBe(cifras(filas).pendientes)
     let d = filas
     for (const f of filas.filter((x) => x.decision.tipo === 'pendiente')) {
-      const opcion = f.code === '47510015' ? f.opciones.find((o) => o.id === '111')! : f.code === '47510019' ? f.opciones.find((o) => o.id === 'ninguno')! : f.opciones.find((o) => o.id === 'sin_ficha') ?? f.opciones[0]
+      const opcion = f.code === '47510015' ? f.opciones.find((o) => o.id === '111')! : f.code === '47510019' || f.code === '47510002' ? f.opciones.find((o) => o.id === 'ninguno')! : f.opciones.find((o) => o.id === 'sin_ficha') ?? f.opciones[0]
       d = decidir(d, f.code, opcion.decision)
     }
     expect(validar(d)).toEqual([])
