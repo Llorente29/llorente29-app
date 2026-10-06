@@ -6,6 +6,10 @@
 # prueba (vuelta atrás de las seis, foto de antes, se vuelven a aplicar, foto
 # de después con la misma vara, casos, B; ROLLBACK) y la semilla del C03 en la
 # cuenta A (plataforma, socio de marca con dos locales, cliente, archivado).
+# Segunda pasada: la primera (37459420809) aplicó las seis y la prueba cazó
+# que quitar el valor por defecto de licensed_settlement.formula rompía a quien
+# carga a la manera de antes. Las seis se pueden relanzar (if not exists /
+# create or replace); la 0120 ahora lo deja en 'anterior'.
 # Anterior: C02c respuesta 2, en verde en 37432935517.
 supabase/migrations/20261009T0100_c03_terceros.sql
 supabase/migrations/20261009T0110_c03_terceros_datos.sql
