@@ -17,6 +17,12 @@
 --   · proveedores sin tercero (tiene que ser 0);
 --   · liquidaciones sin periodo con periodo propuesto (antes 0 o nada).
 --
+-- Corregida el 06/10 tras la tanda real: la lista de columnas nuevas decía
+-- 'collected_note' (la columna es collection_note) y le faltaba 'formula' en
+-- licensed_settlement, así que el después daba huellas distintas sin que
+-- nada hubiera cambiado. Quitar columnas que antes no existían no mueve la
+-- huella de antes: la medida corregida es la misma vara a los dos lados.
+--
 -- Uso (Julio, con la URL de solo lectura):
 --   psql "$PROD_CONTA_RO_DB_URL" -X -A -F ' | ' -f scripts/conta/c03_antes_despues.sql > c03-antes.txt
 --   … tanda real …
@@ -30,13 +36,13 @@ huellas as (
     from public.supplier s group by account_id
   union all
   select account_id, 'channel_settlement', count(*),
-         md5(string_agg((to_jsonb(c) - array['party_id', 'collected_on', 'collected_amount', 'collected_note', 'collected_by',
+         md5(string_agg((to_jsonb(c) - array['party_id', 'collected_on', 'collected_amount', 'collection_note', 'collected_by',
                          'collected_by_name', 'proposed_period_from', 'proposed_period_to', 'proposed_period_note',
                          'period_confirmed_at', 'period_confirmed_by'])::text, '|' order by c.id))
     from public.channel_settlement c group by account_id
   union all
   select account_id, 'licensed_settlement', count(*),
-         md5(string_agg((to_jsonb(l) - array['party_id', 'status', 'purchases_amount', 'contributions_amount', 'brand_sales_base',
+         md5(string_agg((to_jsonb(l) - array['formula', 'party_id', 'status', 'purchases_amount', 'contributions_amount', 'brand_sales_base',
                          'commission_pct', 'commission_amount', 'amount', 'detail', 'updated_at', 'created_by', 'created_by_name',
                          'confirmed_at', 'confirmed_by', 'confirmed_by_name'])::text, '|' order by l.id))
     from public.licensed_settlement l group by account_id
