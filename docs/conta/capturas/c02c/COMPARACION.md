@@ -34,10 +34,14 @@ crean, por completar»).
 **Filtros y tabla.** Píldoras «Para revisar · N», «Todas · N», Proveedores,
 Clientes, Bancos. Columnas NÚMERO (se conserva) · EN DIEZ · → · EN FOLVY ·
 CONFIANZA · acciones. Cada fila con el porqué debajo de lo que queda en Folvy
-(«mismo NIF B…», «mismo IBAN en Bancos», «sin NIF en el listado; mismo nombre
-que el 41000001», «hay 2 iguales: 47510015 y 47510019»), y la confianza en
-chip: Seguro (verde), Probable (azul), Decide tú (ámbar). Las filas «Decide
-tú» van con el fondo ámbar suave.
+(en las capturas: «sin NIF; nombre parecido», «también es proveedor: sin NIF
+en el fichero; mismo nombre que el 41000001; se enlazan los dos», «hay 2
+iguales: 47510015 y 47510019. ¿Cuál es cuál?», «ese IBAN no está en Bancos»),
+y la confianza en chip: Seguro (verde), Probable (azul), Decide tú (ámbar).
+Las filas «Decide tú» van con el fondo ámbar suave. Los casos «Seguro» por
+mismo NIF o mismo IBAN no salen en las capturas, porque la cuenta A de
+staging no tiene esas fichas; los cubren las pruebas unitarias
+(`importarPlanC02c.test.ts`) y la prueba SQL de staging.
 
 **Pie.** «Nada se escribe hasta el paso 3. Luego podrás deshacerlo entero desde
 «Lo que ha hecho Folvy».», «Guardar y seguir luego» y «Siguiente: traer el
