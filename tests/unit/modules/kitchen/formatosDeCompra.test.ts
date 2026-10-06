@@ -1,7 +1,7 @@
 // tests/unit/modules/kitchen/formatosDeCompra.test.ts
 //
 // Las reglas de los formatos de compra, probadas contra la POBLACIÓN REAL
-// (regla 31): los 165 enlaces vivos con denominación de proveedor de Foodint,
+// (regla 31): los 165 enlaces vivos con denominación de proveedor del primer cliente,
 // leídos de la base el 19/09/2026. Con ejemplos inventados esta prueba sería
 // un espejo de quien escribió la regla; con los nombres de verdad, lleva la
 // contraria — y de hecho la llevó: la primera versión de «No cuadra» sellaba
@@ -46,7 +46,7 @@ describe('«No cuadra» sobre la población real', () => {
 
   it('sella exactamente UNO: el único que no se explica de ninguna manera', () => {
     expect(sellados.map((e) => `${e.articulo} · ${e.proveedor}`)).toEqual([
-      'Aceite de Oliva Suave 0,4º · MAKRO DISTRIBUCION MAYORISTA SA',
+      'Aceite de Oliva Suave 0,4º · MAYORISTA ALFA SA',
     ])
   })
 
@@ -95,7 +95,7 @@ describe('«No cuadra» sobre la población real', () => {
     // «GUACAMOLE CONGELADO CAJA 8 BOLSAS DE 500 GR» guardado como un único
     // nodo de 4.000 g. 8 × 500 = 4.000: el número no miente.
     const e = ENLACES_REALES.find(
-      (x) => x.articulo === 'Guacamole' && x.proveedor === 'CLOUDTOWN, S.L.',
+      (x) => x.articulo === 'Guacamole' && x.proveedor === 'COCINAS CENTRALES DEL SUR, S.L.',
     )!
     expect(magnitudesDelTexto(e.texto, e.baseDim)).toEqual([500])
     expect(enterosDelTexto(e.texto)).toContain(8)
@@ -106,14 +106,14 @@ describe('«No cuadra» sobre la población real', () => {
     // «ALUBIA ROJA COCIDA EXTRA CAJA 6 UD DE 3 KG» → Caja 18.000 g, 6 × 3.000.
     // Ninguna magnitud vale 18.000; casa por el contenido de la pieza.
     const e = ENLACES_REALES.find(
-      (x) => x.articulo === 'Alubias rojas' && x.proveedor === 'CLOUDTOWN, S.L.',
+      (x) => x.articulo === 'Alubias rojas' && x.proveedor === 'COCINAS CENTRALES DEL SUR, S.L.',
     )!
     expect(elTextoNoCuadra({ texto: e.texto, baseDim: e.baseDim, formato: formatoDe(e) })).toBe(false)
   })
 
-  it('«1600gne» es gramos netos de Makro, y por eso no se sella', () => {
+  it('«1600gne» es gramos netos de Mayorista Alfa, y por eso no se sella', () => {
     const e = ENLACES_REALES.find(
-      (x) => x.articulo === 'Alubias rojas' && x.proveedor.startsWith('MAKRO'),
+      (x) => x.articulo === 'Alubias rojas' && x.proveedor.startsWith('MAYORISTA ALFA'),
     )!
     expect(magnitudesDelTexto(e.texto, e.baseDim)).toContain(1600)
     expect(elTextoNoCuadra({ texto: e.texto, baseDim: e.baseDim, formato: formatoDe(e) })).toBe(false)
@@ -176,15 +176,15 @@ describe('la frase y la cuenta', () => {
 
 describe('«Repetido»', () => {
   it('marca el artículo cuando el mismo proveedor aparece dos veces', () => {
-    // Aceite Alto Oleico: Cloudtown con referencia 510101002 y Cloudtown sin
+    // Aceite Alto Oleico: Cocinas Centrales con referencia 510101002 y Cocinas Centrales sin
     // referencia. No es descuido: learn_from_receipt guarda una fila por
     // referencia MÁS una con referencia nula.
     const repes = articulosConProveedorRepetido([
-      { recipeItemId: 'alto-oleico', supplierId: 'cloudtown' },
-      { recipeItemId: 'alto-oleico', supplierId: 'cloudtown' },
-      { recipeItemId: 'alto-oleico', supplierId: 'makro' },
-      { recipeItemId: 'alubias', supplierId: 'cloudtown' },
-      { recipeItemId: 'alubias', supplierId: 'makro' },
+      { recipeItemId: 'alto-oleico', supplierId: 'cocinas-centrales' },
+      { recipeItemId: 'alto-oleico', supplierId: 'cocinas-centrales' },
+      { recipeItemId: 'alto-oleico', supplierId: 'mayorista-alfa' },
+      { recipeItemId: 'alubias', supplierId: 'cocinas-centrales' },
+      { recipeItemId: 'alubias', supplierId: 'mayorista-alfa' },
     ])
     expect([...repes]).toEqual(['alto-oleico'])
   })
@@ -215,7 +215,7 @@ describe('el plural, que salía en la línea más leída de la ficha', () => {
     expect(plural('Lata', 1)).toBe('Lata')
   })
 
-  it('los 4 nombres vivos acabados en «s» de Foodint quedan intactos', () => {
+  it('los 4 nombres vivos acabados en «s» del primer cliente quedan intactos', () => {
     // Medido el 19/09: de 281 formatos vivos, 4 acaban en «s» y los cuatro son
     // de verdad plurales. Ninguno es una palabra singular acabada en «s».
     for (const n of ['bolsas', 'botes', 'Latas']) {
@@ -277,7 +277,7 @@ describe('«Se cuenta en …», con el caso real de Alubias rojas', () => {
 
 describe('C3 · lo que va a cambiar', () => {
   it('el precio de la caja no cambia; cambia cuánto trae, y por eso el gramo', () => {
-    // Alubias rojas, Cloudtown, con los números de la base: 28,84 € la caja de
+    // Alubias rojas, Cocinas Centrales, con los números de la base: 28,84 € la caja de
     // 18.000 g = 0,00160222… €/g. Si la caja pasara a 6 × 2.500 = 15.000 g,
     // la misma caja sale a 0,00192266… €/g.
     // El €/g se escribe como la división que lo produce: el literal con 20
