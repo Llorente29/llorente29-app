@@ -159,6 +159,12 @@ export const CONTA = {
      * (40000002), «Sumas y saldos» de ese nivel si tiene hijas (400, 4).
      */
     mayor: 'plan/:codigo',
+    /** Clientes y proveedores (C03): la lista única, con filtros por papel. */
+    terceros: 'clientes-y-proveedores',
+    /** La ficha de un tercero con papel de cliente, plataforma o socio (N9 / N10). */
+    tercero: 'clientes-y-proveedores/:partyId',
+    /** Un apartado de esa ficha: pestaña en ordenador, pantalla en el móvil. */
+    terceroApartado: 'clientes-y-proveedores/:partyId/:apartado',
   },
 } as const
 
@@ -179,9 +185,10 @@ export const MENU_CONTA: EntradaMenuConta[][] = [
   [
     { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: null },
     { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
-    // La lista y la ficha de proveedores del C01 viven hoy en Cocina. Se traen
-    // aquí cuando el C01 termine encima del C00 (pendiente en el PR #138).
-    { id: 'terceros', etiqueta: 'Clientes y proveedores', icono: 'personas', ruta: null },
+    // C03: la lista única de terceros. Un tercero que solo es proveedor abre su
+    // ficha de siempre (en Cocina); con papel de cliente, plataforma o socio,
+    // la ficha N9/N10 de aquí.
+    { id: 'terceros', etiqueta: 'Clientes y proveedores', icono: 'personas', ruta: CONTA.rutas.terceros },
     { id: 'pagos', etiqueta: 'Pagos y cobros', icono: 'pagos', ruta: null },
     { id: 'emitidas', etiqueta: 'Facturas que emites', icono: 'facturas', ruta: null },
   ],
@@ -282,6 +289,21 @@ export const rutaAjustes = (entrada?: string): string => (entrada ? rutaConta(CO
 export const rutaPlan = (): string => rutaConta(CONTA.rutas.plan)
 export const rutaPlanSitio = (): string => rutaConta(CONTA.rutas.planSitio)
 export const rutaMayor = (codigo: string): string => rutaConta(CONTA.rutas.mayor, { codigo })
+export const rutaTerceros = (filtro?: string): string => `${rutaConta(CONTA.rutas.terceros)}${filtro ? `?ver=${encodeURIComponent(filtro)}` : ''}`
+export const rutaFichaTercero = (partyId: string, apartado?: string): string =>
+  apartado ? rutaConta(CONTA.rutas.terceroApartado, { partyId, apartado }) : rutaConta(CONTA.rutas.tercero, { partyId })
+
+/**
+ * Migas de la ficha de un tercero: Clientes y proveedores › <su lista> › nombre.
+ * La lista intermedia, la de su papel principal (Plataformas, Socios de marca, Clientes).
+ */
+export function migasFichaTercero(nombre: string, lista: { etiqueta: string; filtro: string }): Miga[] {
+  return [
+    { etiqueta: 'Clientes y proveedores', ruta: rutaTerceros() },
+    { etiqueta: lista.etiqueta, ruta: rutaTerceros(lista.filtro) },
+    { etiqueta: nombre },
+  ]
+}
 
 /**
  * ¿Qué entrada del menú está activa para esta dirección? La de prefijo más

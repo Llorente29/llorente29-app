@@ -1,11 +1,10 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · C02c · Respuesta 2 (camino B): las genéricas de Diez entran con
-# su número. La 0130 (guarda company_account_madre + traer con genéricas) y la
-# prueba del C02c regenerada con la fixture de tres genéricas: trae, deshace,
-# el choque forzado (47500000 bajo la 475) para, y la vuelta atrás de la 0130,
-# 0120, 0110 y 0100 (ROLLBACK).
-# Anterior: la prueba del interruptor de Foodint, en verde en 37426652751.
-supabase/migrations/20261008T0130_c02c_genericas.sql
-supabase/staging/sql/20261008_c02c_prueba_traer.sql
+# 06/10/2026 · C03 · Respuesta 2 · 0180: cómo vende cada plataforma
+# (comisionista | revendedor | sin decir), que decide su 347 (RD 1065/2007,
+# art. 34.3). Primero la prueba (CHECK, vuelta atrás que para y que deshace,
+# reaplicar; ROLLBACK), después la migración.
+# Anterior: 0170 y limpieza de terceros huérfanos, en verde.
+supabase/staging/sql/20261009_c03_prueba_modelo_plataforma.sql
+supabase/migrations/20261009T0180_c03_modelo_plataforma.sql

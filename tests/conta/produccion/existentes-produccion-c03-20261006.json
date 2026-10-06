@@ -1,0 +1,1 @@
+{"tablas":["public.brand_licensing_agreement","public.channel_settlement","public.licensed_settlement","public.supplier"],"funciones":["public.company_account_misma_cuenta()","public.company_chart_import_undo(uuid,text)"]}

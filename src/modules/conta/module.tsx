@@ -22,6 +22,8 @@ import AlMayor from '@/modules/conta/plan/AlMayor'
 import QueVaACadaSitioPage from '@/modules/conta/pages/QueVaACadaSitioPage'
 import TablasGeneralesPage from '@/modules/conta/pages/TablasGeneralesPage'
 import AltaPage from '@/modules/conta/pages/AltaPage'
+import TercerosPage from '@/modules/conta/terceros/TercerosPage'
+import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 
 const enMarco = (pagina: ReactNode, ejemplo: string) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo}>{pagina}</MarcoConta></EmpresasProveedor>
@@ -49,6 +51,10 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.planCuenta, element: <AlMayor /> },
     // Una cuenta del plan (respuesta 5): su Mayor, o «Sumas y saldos» si tiene hijas.
     { path: CONTA.rutas.mayor, element: enMarco(<MayorPage />, '¿Cuánto debo a mis proveedores?') },
+    { path: CONTA.rutas.terceros, element: enMarco(<TercerosPage />, '¿Quién me debe dinero?') },
+    // El de la ficha lo pone ella según el papel (ejemploDeFicha); éste es el de mientras carga.
+    { path: CONTA.rutas.tercero, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
+    { path: CONTA.rutas.terceroApartado, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },

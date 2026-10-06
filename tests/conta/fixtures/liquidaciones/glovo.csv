@@ -1,0 +1,6 @@
+﻿numero;local;fecha;venta_neta;base_10;iva_10;comision_base;entrega;promo_producto;promo_flash;oferta_flash;tasa_acceso;glovo_prime;tarifa_recurrente;coste_incidencias;devol_incidencias;liquidacion;deuda_acumulada;canal_pago
+GL-0001;"Plataforma Norte; Centro";05/09/2026;8.905,00;8.095,45;809,55;1.870,00;0;0;0;0;0;0;0;0;0;7.035,00;0;transferencia
+GL-0002;Plataforma Norte Centro;20/09/2026;10.412,00;9.465,45;946,55;2.185,90;0;0;0;0;0;0;0;-25,50;0;8.200,60;0;transferencia
+GL-0003;Plataforma Norte Centro;05/10/2026;9870.00;8972.73;897.27;2072.60;0;0;0;0;0;0;0;0;0;7797.40;0;transferencia
+
+GL-0003;Plataforma Norte Centro;05/10/2026;9.870,00;8.972,73;897,27;2.072,60;0;0;0;0;0;0;0;0;0;7.797,40;0;transferencia
