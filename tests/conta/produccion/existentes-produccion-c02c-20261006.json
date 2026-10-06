@@ -1,0 +1,1 @@
+{"tablas":["public.company_account","public.company_account_link","public.company_account_log","public.supplier"],"funciones":["public.company_chart_activate(uuid,boolean,text)"]}

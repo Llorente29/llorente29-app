@@ -26,7 +26,7 @@ import { cuentasDelResumen } from '@/modules/conta/services/cuentasProveedorServ
 import {
   Dialogo, EsqueletoFicha, IconoCamara, IconoTelefono, Migas, PildoraNif, TextoNif,
 } from '@/modules/conta/proveedor/piezas'
-import { ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
+import { Chip, ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
 import { BarraPregunta } from '@/modules/conta/marco/BarraPregunta'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
 import type { ExtensionesProveedor, SeccionDeFicha } from '@/modules/conta/extensiones'
@@ -230,6 +230,7 @@ function BarraCompleta() {
     <section className="cx-tarjeta cxp-pct" aria-label={`Ficha al ${pct} %`}>
       <div className="cxp-pct-barra">
         <strong>Ficha al {pct} %</strong>
+        {datos.ficha.traidaDe && <Chip tono="ambar">Traída de {datos.ficha.traidaDe} · por completar</Chip>}
         <div className="cxp-pista" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Ficha completa">
           <span style={{ width: `${pct}%` }} />
         </div>

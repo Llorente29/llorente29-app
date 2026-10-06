@@ -124,3 +124,34 @@ describe('de quién es una cuenta (enlaces del Mayor)', () => {
     expect(duenoDeCuenta(comun, enl)).toBeNull()
   })
 })
+
+describe('respuesta 2 del C02c: las genéricas de Diez, bajo su cuenta con hijas', () => {
+  const traida = (code: string, templateCode: string, name: string): CuentaPlan => ({
+    id: `g${code}`, code, templateCode, name, plainName: null, keywords: [], kind: 'own', status: 'activa', isCommon: false, source: 'migrated',
+  })
+  const G = arbolPlan({
+    serie: SERIE, enlaces: ENLACES,
+    cuentas: [...CUENTAS, traida('16000000', '160', 'DEUDAS A LARGO PLAZO CON ENTIDADES DE CRÉDITO VINCULADAS'), traida('44500000', '44', 'DEUDORES DUDOSO COBRO'), traida('40000077', '4000', 'PROVEEDOR TRAÍDO')],
+  })
+  const g = (k: string) => G.nodos.get(k)!
+  it('cuelgan de la 160 y de la 44 (no del abuelo), como cuentas de apunte, marcadas «genérica»', () => {
+    expect(g('g16000000')).toMatchObject({ padre: '160', tipo: 'apunte', origen: 'generica', ruta: ['1', '16', '160'] })
+    expect(g('g44500000')).toMatchObject({ padre: '44', tipo: 'apunte', origen: 'generica', ruta: ['4', '44'] })
+    expect(g('160').hijos).toContain('g16000000')
+  })
+  it('una traída de una hoja sigue siendo «traída» (Tuya · de Diez), no genérica', () => {
+    expect(g('g40000077').origen).toBe('traida')
+  })
+  it('«qué se apunta aquí»: el de su cuenta madre (o, si no lo tiene, el primero subiendo por el cuadro)', () => {
+    const porCodigo = new Map(SERIE.map((s) => [s.code, s]))
+    const sube = (campo: 'plainName' | 'boeDefinition') => {
+      for (let k: string | null = '160'; k; k = porCodigo.get(k)?.parentCode ?? null) { const v = porCodigo.get(k)?.[campo]; if (v) return v }
+      return null
+    }
+    // Con texto de Folvy en la madre o más arriba, ese; si no, la definición del BOE, marcada (PGC).
+    const esperado = sube('plainName') ?? sube('boeDefinition')
+    expect(esperado).not.toBeNull()
+    expect(g('g16000000').plain).toBe(esperado)
+    expect(g('g16000000').plainPgc).toBe(sube('plainName') === null)
+  })
+})

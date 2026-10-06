@@ -20,8 +20,16 @@ select json_build_object(
     from public.company c join public.company_tax_profile p on p.company_id = c.id),
   'company_account', (select coalesce(json_agg(json_build_object(
       'id', a.id, 'account_id', a.account_id, 'company_id', a.company_id, 'plan', a.plan, 'code', a.code,
-      'template_code', a.template_code, 'kind', a.kind, 'status', a.status)), '[]')
+      'template_code', a.template_code, 'kind', a.kind, 'status', a.status,
+      'source', a.source, 'import_id', a.import_id, 'name_source', a.name_source)), '[]')
     from public.company_account a),
+  -- C02c: los planes traídos de otro programa, con los códigos que traía el fichero (los leídos).
+  'importaciones', (select coalesce(json_agg(json_build_object(
+      'id', i.id, 'account_id', i.account_id, 'company_id', i.company_id, 'status', i.status,
+      'codigos', (select coalesce(json_agg(c ->> 'code'), '[]') from jsonb_array_elements(coalesce(i.review -> 'lectura' -> 'cuentas', '[]'::jsonb)) c))), '[]')
+    from public.company_chart_import i),
+  'proveedores_traidos', (select coalesce(json_agg(json_build_object('id', s.id, 'account_id', s.account_id, 'import_id', s.import_id)), '[]')
+    from public.supplier s where s.import_id is not null),
   'company_account_link', (select coalesce(json_agg(json_build_object(
       'company_id', l.company_id, 'company_account_id', l.company_account_id, 'entity', l.entity, 'entity_id', l.entity_id, 'role', l.role)), '[]')
     from public.company_account_link l),

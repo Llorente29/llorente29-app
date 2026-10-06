@@ -31,11 +31,20 @@ export interface CuentaSeriePlan {
 }
 export interface CuentaPlan {
   id: string; code: string; templateCode: string; name: string; plainName: string | null; keywords: string[]
-  kind: 'template' | 'own'; status: EstadoCuenta; isCommon: boolean; source: 'serie' | 'manual' | 'ai_accepted'
+  kind: 'template' | 'own'; status: EstadoCuenta; isCommon: boolean; source: 'serie' | 'manual' | 'ai_accepted' | 'migrated'
 }
 export interface EnlacePlan { companyAccountId: string; entity: Entidad; entityId: string; role: Papel }
 
-export type Origen = 'serie' | 'tuya' | 'propuesta'
+/** «traida»: tuya, venida de otro programa con su número (C02c). */
+export type Origen = 'serie' | 'tuya' | 'propuesta' | 'traida' | 'generica'
+
+/**
+ * El origen de una cuenta de la empresa. «generica»: traída de otro programa y
+ * colgada de una cuenta del cuadro CON hijas (la 16000000 de Diez bajo la 160;
+ * respuesta 2 del C02c). `esHoja` dice si su template_code es hoja del cuadro.
+ */
+export const origenDe = (c: Pick<CuentaPlan, 'source' | 'kind'>, esHoja = true): Origen =>
+  (c.source === 'migrated' ? (esHoja ? 'traida' : 'generica') : c.source === 'ai_accepted' || c.kind === 'own' ? 'tuya' : 'serie')
 export interface FilaPlan {
   clave: string
   tipo: 'subgrupo' | 'cabecera' | 'cuenta' | 'subcuenta'
@@ -144,7 +153,7 @@ export function filasPlan(e: EntradaVista): FilaPlan[] {
     const q = queSeApunta(c, e, serieCodigo)
     return {
       clave: c.id, tipo, numero: c.code, titulo: c.name, plain: q?.texto ?? null, plainPgc: q?.pgc ?? false, lleva: loQueLleva(enlacesDe.get(c.id) ?? []),
-      origen: c.source === 'ai_accepted' || c.kind === 'own' ? 'tuya' : 'serie', usada: usadaCuenta(c), cuentaId: c.id, estado: c.status,
+      origen: origenDe(c, serieCodigo.get(c.templateCode)?.isLeaf ?? true), usada: usadaCuenta(c), cuentaId: c.id, estado: c.status,
     }
   }
 

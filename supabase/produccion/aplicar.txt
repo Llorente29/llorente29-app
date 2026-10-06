@@ -6,46 +6,43 @@
 # verde del mismo commit, en REAL (un fichero por transacción, para al primer
 # fallo).
 #
-# C02 · Plan contable, TANDA 1 (respuesta 6). Desde la rama conta/c02-plan-contable,
-# ANTES de fusionar el PR #147. Todo nuevo del C02, fuera del camino del pedido:
-# el workflow cuenta 0 nombres de su lista (CAMINO_TABLAS / CAMINO_FUNCIONES).
+# C02c · Traer el plan de otro programa (Diez). Desde la rama
+# conta/c02c-traer-plan, ANTES de fusionar el PR #150. Las cuatro migraciones
+# del C02c; el interruptor de Foodint ya fue aparte (real 37432334442).
+# Fuera del camino del pedido: ninguna tabla ni función de CAMINO_TABLAS /
+# CAMINO_FUNCIONES.
 #
 # UNO PARA y va en el campo «autorizo», nombre entero:
 #
-#   20261007T0130_c02_proveedor_400_410.sql
+#   20261008T0110_c02c_activar_espera.sql
 #
-# Para por dos «update» sobre expense_category, que ya existe. Solo rellenan
-# las dos columnas que la propia 0130 acaba de añadir (supplier_account_leaf y
-# supplier_account_ref), vacías hasta ese momento: no cambian ningún dato que
-# ya estuviera. Medido en producción el 05/10 (solo lectura; catálogo global,
-# tabla entera): 12 tipos de gasto, los 12 de serie; 3 van a la 4000 (60x) y
-# 9 a la 4100 (62x); 0 sin regla, así que su guarda pasa.
+# Para porque reemplaza company_chart_activate(uuid,boolean,text), que ya
+# existe (la puso la tanda 1 del C02). Es copia LITERAL de la vigente (0180)
+# con una sola guarda más: se niega a activar con numeración automática si la
+# empresa tiene una importación en revisión. Misma firma: create or replace.
 #
-# El resto solo añade sobre algo existente (analizado el 05/10 con lo que
-# existe hoy: ai_suggestion, company_tax_profile, expense_category,
-# official_source, supplier, tax_rate, treasury_account, withholding_rate; ni una
-# función del C02):
-#   · 0110 inserta las tres fuentes del BOE en official_source;
-#   · 0120 cambia el CHECK de company_tax_profile (6 a 12 dígitos; el único
-#     perfil tiene 8) y 0150 le pone un disparador; 0180 amplía el CHECK de
-#     ai_suggestion ('modelo', 'plan');
-#   · 0187 pone un disparador AFTER DELETE en supplier, treasury_account,
-#     expense_category, tax_rate y withholding_rate.
-# Cierres: los «add constraint», «add column» y «create trigger» toman un cierre
-# un instante sobre esas tablas, ninguna del camino del pedido. Avisos para una
-# persona: los «execute» dinámicos de 0120, 0140, 0150 y 0185 son permisos
-# (RLS, grant select / execute), legibles en el fichero.
+# El resto sigue:
+#   · 0100 crea company_chart_import y sus funciones; sobre lo existente solo
+#     añade: amplía los CHECK de source ('migrated') y de que en company_account,
+#     _link y _log, y añade columnas nulas (name_source, import_id) a
+#     company_account y supplier;
+#   · 0120 da SELECT de company_chart_import a conta_lectura;
+#   · 0130 pone el disparador company_account_madre en company_account (las
+#     genéricas de Diez) y reemplaza company_chart_import_apply, que crea la
+#     propia 0100 en esta tanda.
+# Cierres: «add constraint», «add column» y «create trigger» toman un cierre un
+# instante sobre company_account*, y el «add column» sobre supplier. Ninguna
+# del camino del pedido.
+#
+# Lo que existe en producción se ha DEDUCIDO de las tandas ya aplicadas, no
+# medido (el conector de solo lectura a producción da «Unauthorized»): la
+# medida de verdad es la del ensayo. Si el ensayo dijera otra cosa, el
+# workflow se niega con «autorizo» y no se aplica nada.
+#
+# Después: «fusiona» → Vercel READY → Ajustes › Plan contable › traer de Diez.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261007T0100_c02_pgc_account.sql
-supabase/migrations/20261007T0110_c02_pgc_serie.sql
-supabase/migrations/20261007T0115_c02_pgc_definicion.sql
-supabase/migrations/20261007T0120_c02_plan_empresa.sql
-supabase/migrations/20261007T0130_c02_proveedor_400_410.sql
-supabase/migrations/20261007T0140_c02_duplicadas_cerrar_palabras.sql
-supabase/migrations/20261007T0150_c02_deshacer_cambio_plan.sql
-supabase/migrations/20261007T0160_c02_cuentas_del_proveedor.sql
-supabase/migrations/20261007T0180_c02_propuestas_plan.sql
-supabase/migrations/20261007T0185_c02_lectura.sql
-supabase/migrations/20261007T0187_c02_enlaces_sin_dueno.sql
-supabase/migrations/20261007T0189_c02_renombrar_subcuenta.sql
+supabase/migrations/20261008T0100_c02c_traer_plan.sql
+supabase/migrations/20261008T0110_c02c_activar_espera.sql
+supabase/migrations/20261008T0120_c02c_lectura.sql
+supabase/migrations/20261008T0130_c02c_genericas.sql

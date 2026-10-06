@@ -18,6 +18,7 @@ import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import type { CuentaPlan, CuentaSeriePlan, EnlacePlan } from '@/modules/conta/lib/planVista'
 import type { Entidad, HojaProveedor, Papel } from '@/modules/conta/lib/planEmpresa'
 import type { OpPlan, Propuesta, ProveedorPropuesta } from '@/modules/conta/lib/propuestasPlan'
+import { importacionAbierta, type Importacion } from '@/modules/conta/services/importarService'
 
 type Fila = Record<string, unknown>
 
@@ -31,6 +32,8 @@ export interface DatosPlan {
   cuentas: CuentaPlan[]
   enlaces: EnlacePlan[]
   registro: EntradaRegistroPlan[]
+  /** C02c: el plan traído de otro programa (o a medio traer), si lo hay. */
+  importacion: Importacion | null
   proveedores: { id: string; name: string }[]
   bancos: { id: string; name: string }[]
   /** Lo que necesita el núcleo de las propuestas de la IA (propuestasPlan.ts). */
@@ -55,7 +58,7 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
   const digitos = Number(perfil?.account_digits ?? 8)
   const hoy = new Date().toISOString().slice(0, 10)
   const sistema = perfil?.tax_territory === 'canarias' ? 'igic' : 'iva'
-  const [serie, cuentas, enlaces, registro, proveedores, bancos, gastos, tipos, contestadas] = await Promise.all([
+  const [serie, cuentas, enlaces, registro, proveedores, bancos, gastos, tipos, contestadas, importacion] = await Promise.all([
     leer<Fila>(tabla('pgc_account').select('code, name, plain_name, boe_definition, group_code, parent_code, is_leaf').eq('plan', plan).is('valid_to', null).order('code'), 'el cuadro de cuentas'),
     leer<Fila>(tabla('company_account').select('id, code, template_code, name, plain_name, keywords, kind, status, is_common, source').eq('account_id', accountId).eq('company_id', companyId).order('code'), 'las cuentas de la empresa'),
     leer<Fila>(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
@@ -66,12 +69,13 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
     leer<Fila>(tabla('tax_rate').select('id, name, rate, example, company_id').eq('tax_system', sistema).eq('treatment', 'taxed')
       .or(`is_system.eq.true,account_id.eq.${accountId}`).or(`valid_to.is.null,valid_to.gte.${hoy}`), 'los tipos de IVA'),
     leer<Fila>(tabla('ai_suggestion').select('reason_key').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'plan'), 'las propuestas contestadas'),
+    importacionAbierta(accountId, companyId),
   ])
   // Las filas propias de la cuenta valen para toda la cuenta o para ESTA empresa.
   const deEsta = (f: Fila) => f.company_id === null || f.company_id === undefined || f.company_id === companyId
   const gastoDe = new Map(gastos.filter(deEsta).map((g) => [String(g.id), g]))
   return {
-    plan, digitos, activo: cuentas.length > 0,
+    plan, digitos, activo: cuentas.length > 0, importacion,
     serie: serie.map((s) => ({ code: String(s.code), name: String(s.name), plainName: (s.plain_name as string) ?? null, boeDefinition: (s.boe_definition as string) ?? null, groupCode: Number(s.group_code), parentCode: (s.parent_code as string) ?? null, isLeaf: s.is_leaf === true })),
     cuentas: cuentas.map((c) => ({
       id: String(c.id), code: String(c.code), templateCode: String(c.template_code), name: String(c.name), plainName: (c.plain_name as string) ?? null,

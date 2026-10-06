@@ -1,20 +1,12 @@
 # VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
 # modo «vuelta_atras», con las mismas guardas y la misma ventana.
 #
-# C02 · TANDA 1: deshace la tanda en orden inverso. Cada vuelta atrás está
-# probada en staging, dentro de la prueba de su migración, que termina en
-# rollback (supabase/staging/sql/20261007_c02_prueba_*.sql). Ojo: la de la 0120
-# quita las tablas del plan con lo que tengan; si Foodint ya ha activado su
-# plan, se pierde (las subcuentas, sus enlaces y su registro).
-supabase/vuelta-atras/20261007T0189_c02_renombrar_subcuenta.down.sql
-supabase/vuelta-atras/20261007T0187_c02_enlaces_sin_dueno.down.sql
-supabase/vuelta-atras/20261007T0185_c02_lectura.down.sql
-supabase/vuelta-atras/20261007T0180_c02_propuestas_plan.down.sql
-supabase/vuelta-atras/20261007T0160_c02_cuentas_del_proveedor.down.sql
-supabase/vuelta-atras/20261007T0150_c02_deshacer_cambio_plan.down.sql
-supabase/vuelta-atras/20261007T0140_c02_duplicadas_cerrar_palabras.down.sql
-supabase/vuelta-atras/20261007T0130_c02_proveedor_400_410.down.sql
-supabase/vuelta-atras/20261007T0120_c02_plan_empresa.down.sql
-supabase/vuelta-atras/20261007T0115_c02_pgc_definicion.down.sql
-supabase/vuelta-atras/20261007T0110_c02_pgc_serie.down.sql
-supabase/vuelta-atras/20261007T0100_c02_pgc_account.down.sql
+# C02c: deshace la tanda en orden inverso. Probada en staging dentro de
+# supabase/staging/sql/20261008_c02c_prueba_traer.sql (paso 8, rollback).
+# Ojo: las guardas de la 0130 y la 0100 PARAN si hay algo traído (cuentas
+# genéricas, una importación «traida»): primero se deshace la importación
+# desde la pantalla; la vuelta atrás no borra el plan de nadie a escondidas.
+supabase/vuelta-atras/20261008T0130_c02c_genericas.down.sql
+supabase/vuelta-atras/20261008T0120_c02c_lectura.down.sql
+supabase/vuelta-atras/20261008T0110_c02c_activar_espera.down.sql
+supabase/vuelta-atras/20261008T0100_c02c_traer_plan.down.sql

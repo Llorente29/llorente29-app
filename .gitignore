@@ -69,3 +69,8 @@ build-out.txt
 # Playwright (C01)
 playwright-report/
 test-results/
+
+# C02c: los PDF reales de otro programa (Diez) que se miran SOLO para conocer
+# su forma. Nunca al repositorio, ni a staging, ni a una fixture; se borran
+# cuando la fixture inventada está hecha.
+tmp/privado/

@@ -11,7 +11,7 @@ import correcciones from '../../../supabase/conta/pgc/correcciones.json'
 import serie from '../../../supabase/conta/pgc/serie.json'
 import ref from '../../../docs/conta/referencia/serie.json'
 import { activar } from '@/modules/conta/lib/planEmpresa'
-import { informePlan, revisarEmpresas, revisarSerieEnBase, revisarSerieEnTexto } from '../../../scripts/conta/lib/agentePlan.mjs'
+import { informePlan, motivoGenericaMala, revisarEmpresas, revisarImportaciones, revisarSerieEnBase, revisarSerieEnTexto } from '../../../scripts/conta/lib/agentePlan.mjs'
 
 const textos = {
   pymes: readFileSync('docs/conta/fuentes/textos/rd-1515-2007.txt', 'utf8'),
@@ -117,5 +117,69 @@ describe('agente «Plan contable» · empresas', () => {
       'Empresa · Taberna de Prueba (cuenta c01a0000): las facturas de un proveedor van a 57200000, que no es de gastos (grupo 6).',
       'Empresa · Taberna de Prueba (cuenta c01a0000): a un proveedor se le paga desde 62900000, que no es un banco o caja (57) ni lo que te debe (43).',
     ])
+  })
+})
+
+describe('agente «Plan contable» · planes traídos de otro programa (C02c §6)', () => {
+  const A = 'c01a0000-0000-4000-8000-00000000000a'
+  const base = () => ({
+    company_account: [
+      { id: 'k1', account_id: A, company_id: 'e1', code: '40000001', source: 'migrated', import_id: 'i1', name_source: 'DISTRIBUCIONES ALBA ORIENTE', status: 'activa', kind: 'own', template_code: '4000', plan: 'pymes' },
+      { id: 'k2', account_id: A, company_id: 'e1', code: '43000005', source: 'migrated', import_id: 'i1', name_source: 'NORTE SOCIOS, S.L.', status: 'activa', kind: 'own', template_code: '4300', plan: 'pymes' },
+    ],
+    company_account_link: [
+      { company_id: 'e1', company_account_id: 'k1', entity: 'supplier', entity_id: 's1', role: 'principal' },
+      { company_id: 'e1', company_account_id: 'k2', entity: 'supplier', entity_id: 's1', role: 'pago' },
+    ],
+    importaciones: [{ id: 'i1', account_id: A, company_id: 'e1', status: 'traida', codigos: ['40000001', '43000005', '47200000'] }],
+    proveedores_traidos: [{ id: 's1', account_id: A, import_id: 'i1' }],
+  })
+  it('en verde: código del fichero, nombre de origen, un tercero en dos papeles distintos', () => {
+    expect(revisarImportaciones(base())).toEqual([])
+  })
+  it('rojo: un código que el fichero no traía (no se conservó) y sin nombre de origen', () => {
+    const bd = base()
+    bd.company_account[0].code = '40000019'
+    bd.company_account[0].name_source = ''
+    expect(textos_(revisarImportaciones(bd))).toEqual([
+      'Plan traído · cuenta c01a0000: 40000019 no es ninguno de los códigos que traía el fichero: el código original no se ha conservado.',
+      'Plan traído · cuenta c01a0000: 40000019 no guarda el nombre que tenía en el otro programa.',
+    ])
+  })
+  it('rojo: el mismo tercero dos veces con el mismo papel, y un enlace a una cuenta que ya no existe', () => {
+    const bd = base()
+    bd.company_account_link[1].role = 'principal'
+    bd.company_account_link.push({ company_id: 'e1', company_account_id: 'k9', entity: 'bank_account', entity_id: 'b1', role: 'principal' })
+    expect(textos_(revisarImportaciones(bd))).toEqual([
+      'Enlace · empresa e1: el mismo supplier tiene dos enlaces con el papel principal.',
+      'Enlace · empresa e1: un bank_account (principal) apunta a una cuenta que ya no existe.',
+    ])
+  })
+  it('rojo: una importación deshecha que deja cuentas y fichas', () => {
+    const bd = base()
+    bd.importaciones[0].status = 'deshecha'
+    const t = textos_(revisarImportaciones(bd))
+    expect(t).toContain('Plan traído · cuenta c01a0000: la importación i1 está deshecha y deja 2 cuentas y 1 fichas.')
+    expect(t).toContain('Plan traído · cuenta c01a0000: 40000001 sigue en el plan y su importación está deshecha.')
+  })
+})
+
+describe('respuesta 2 del C02c: de una cuenta con hijas solo cuelgan las genéricas traídas', () => {
+  const vig = serie.cuentas.filter((c) => c.plan === 'pymes' && !(c as { valid_to?: string | null }).valid_to)
+  const hojas = new Set(vig.filter((c) => c.is_leaf).map((c) => c.code))
+  const ramas = new Set(vig.filter((c) => !c.is_leaf).map((c) => c.code))
+  const c = (code: string, template_code: string, source = 'migrated') => ({ code, template_code, source })
+  it('las genéricas de la fixture, bien', () => {
+    expect(motivoGenericaMala(c('16000000', '160'), hojas, ramas)).toBeNull()
+    expect(motivoGenericaMala(c('44500000', '44'), hojas, ramas)).toBeNull()
+    expect(motivoGenericaMala(c('79540000', '7954'), hojas, ramas)).toBeNull()
+  })
+  it('una manual o de serie colgada de una cuenta con hijas, rojo', () => {
+    expect(motivoGenericaMala(c('16000000', '160', 'manual'), hojas, ramas)).toMatch(/solo una cuenta traída/)
+  })
+  it('una traída que no es el relleno de nadie, o con la madre equivocada, rojo', () => {
+    expect(motivoGenericaMala(c('16012300', '160'), hojas, ramas)).toMatch(/no es el relleno/)
+    expect(motivoGenericaMala(c('16000000', '16'), hojas, ramas)).toMatch(/su madre sería la 160/)
+    expect(motivoGenericaMala(c('47500000', '475'), hojas, ramas)).toMatch(/la hoja 4750 rellenada da el mismo número/)
   })
 })

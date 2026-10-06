@@ -1,0 +1,46 @@
+{
+  "proveedores": [
+    {
+      "name": "Distribuciones Alba Oriente",
+      "nif": "B99000010"
+    },
+    {
+      "name": "Cárnicas Valle Alto",
+      "nif": "B99000028"
+    },
+    {
+      "name": "Norte Socios, S.L.",
+      "nif": "B99000036"
+    },
+    {
+      "name": "Panificadora Luna Nueva",
+      "nif": "B99000044"
+    },
+    {
+      "name": "Eléctrica Red Norte",
+      "nif": "B99000200"
+    },
+    {
+      "name": "Frutas Hermanos Soto",
+      "nif": null
+    },
+    {
+      "name": "Asesoría Cuentas Claras",
+      "nif": null
+    },
+    {
+      "name": "Bebidas Sol de Tarde",
+      "nif": null
+    },
+    {
+      "name": "Hielo Polar del Barrio",
+      "nif": "B99009508"
+    }
+  ],
+  "bancos": [
+    {
+      "name": "Banco Prueba",
+      "iban": "ES9199990001510200012345"
+    }
+  ]
+}

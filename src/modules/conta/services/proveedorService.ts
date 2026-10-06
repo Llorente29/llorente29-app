@@ -15,6 +15,7 @@ import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import { rpcSinTipar } from '@/lib/rpcSinTipar'
 import { tiposGastoOcultos } from '@/modules/conta/services/fichaTablasService'
 import type { Aprendido, CampoAprendido } from '@/modules/conta/lib/aprendizaje'
+import { nombreCorto, type Programa } from '@/modules/conta/lib/importarPlan'
 import { certificadoVale, type DecisionIban } from '@/modules/conta/lib/ibanFactura'
 import type {
   ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor, InvoicingFrequency,
@@ -48,6 +49,7 @@ export function filaAFicha(r: Fila): FichaProveedor {
     id: r.id as string,
     accountId: r.account_id as string,
     name: (r.name as string) ?? '',
+    traidaDe: r.import_id && r.importacion && typeof (r.importacion as Fila).program === 'string' ? nombreCorto((r.importacion as Fila).program as Programa) : r.import_id ? 'otro programa' : null,
     legalName: str(r.legal_name),
     taxId: str(r.tax_id),
     taxIdType: str(r.tax_id_type) as TaxIdType | null,
@@ -121,7 +123,8 @@ export function cambiosAFila(cambios: Partial<FichaProveedor>): Fila {
 
 export async function obtenerFicha(supplierId: string): Promise<FichaProveedor | null> {
   requireSupabase()
-  const { data, error } = await from('supplier').select('*').eq('id', supplierId).maybeSingle()
+  // importacion: la importación que la creó (C02c; company_chart_import por supplier.import_id, comprobado en staging el 06/10).
+  const { data, error } = await from('supplier').select('*, importacion:company_chart_import(program)').eq('id', supplierId).maybeSingle()
   if (error) throw new Error(`No se pudo abrir el proveedor: ${error.message}`)
   return data ? filaAFicha(data as Fila) : null
 }

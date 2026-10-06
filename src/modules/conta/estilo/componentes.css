@@ -647,6 +647,8 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
 .cx .cx-ajustes-enlace[aria-current='page'] .cx-ajustes-enlace-titulo { font-weight: 600; }
 .cx-ajustes-enlace-apoyo { font-size: 13px; color: var(--cx-apoyo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
 .cx-ajustes-panel { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+/* Móvil: los envoltorios del marco de Ajustes están (para que el contenido no se desmonte al cambiar de tamaño) pero no pintan. */
+.cx-ajustes-movil { display: contents; }
 .cx-ajustes-panel-cabeza { display: flex; flex-direction: column; gap: 4px; }
 .cx .cx-ajustes-panel-titulo { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.3px; }
 .cx-ajustes-lista { display: flex; flex-direction: column; gap: 12px; }
