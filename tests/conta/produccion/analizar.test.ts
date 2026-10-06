@@ -10,9 +10,13 @@
 //   · La eliminación del C01b (0140), ya aplicada (columnas fuera y copia en
 //     su tabla, medido el 05/10): copia fija en tanda-c01b-elimina-20261004.txt,
 //     con su vuelta atrás en vuelta-atras-c01b-elimina-20261004.txt.
-//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): la
-//     tanda 1 del C02, con lo que existía en producción el 05/10. Al reescribir
-//     el manifiesto para otra tanda, esta parte se reescribe con él.
+//   · La tanda 1 del C02, ya aplicada (en producción el 06/10 existen
+//     company_account y sus funciones): copia fija en tanda-c02-tanda1-20261005.txt,
+//     con su vuelta atrás en vuelta-atras-c02-tanda1-20261005.txt.
+//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): el
+//     interruptor «Folvy Conta» de Foodint, tanda propia, con lo que existía en
+//     producción el 06/10. Al reescribir el manifiesto para otra tanda, esta
+//     parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -190,8 +194,8 @@ describe('la eliminación del C01b (0140), ya aplicada', () => {
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): la tanda 1 del C02', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda 1 del C02 (ya aplicada), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c02-tanda1-20261005.txt'
   const viva = leerTanda(MANIFIESTO)
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c02-tanda1-20261005.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
@@ -215,8 +219,30 @@ describe('la tanda de AHORA (manifiesto vivo): la tanda 1 del C02', () => {
   })
 
   it('su vuelta atrás es la de las doce, al revés', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c02-tanda1-20261005.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): el interruptor de Foodint, sola', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // Lo que existe en producción, medido en solo lectura el 06/10/2026: feature_flags (0 filas) y accounts.
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-interruptor-20261006.json'))
+
+  it('es un solo fichero: el de datos del interruptor', () => {
+    expect(viva).toEqual(['supabase/migrations/20261006T1300_conta_interruptor_foodint_datos.sql'])
+  })
+  it('NO para: solo inserta en feature_flags', () => {
+    const r = decidir(p.porFichero[viva[0]], p.existe)
+    expect(r.para).toEqual([])
+    expect(p.porFichero[viva[0]].map((o: Op) => `${o.accion} · ${o.objeto}`)).toEqual(['inserta · public.feature_flags'])
+  })
+  it('por eso el manifiesto no nombra ningún fichero para «autorizo» (el workflow se niega si se autoriza uno que no para)', () => {
+    expect(readFileSync(MANIFIESTO, 'utf8').split('\n').some((l) => /^#\s+(\S+\.sql\s*)+$/.test(l))).toBe(false)
+  })
+  it('su vuelta atrás es la suya, sola', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual(['supabase/vuelta-atras/20261006T1300_conta_interruptor_foodint_datos.down.sql'])
   })
 })
 
