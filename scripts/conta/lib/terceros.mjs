@@ -10,8 +10,15 @@
 //      Una que no cuadra no se cuadra sola (regla 3 del encargo): se dice con
 //      su cifra. Ámbar: el fichero es así y lo revisa una persona.
 //   3. Ningún tercero con dos subcuentas para el mismo papel en una empresa.
-//   4. 347 de ventas: una plataforma que pasa de 3.005,06 € en el año entra en
-//      el 347 y necesita su NIF; excluida, con su motivo.
+//   4. 347 de una plataforma, según CÓMO vende (party_role.platform_model, lo
+//      dice su contrato; C03 respuesta 2). RD 1065/2007, art. 34.3:
+//      · revendedor (en nombre propio): entra como CLIENTE por las ventas; por
+//        encima de 3.005,06 € necesita su NIF.
+//      · comisionista (en nombre ajeno): entra como PROVEEDOR solo por su
+//        comisión; las ventas a consumidores no van (art. 33.2.a).
+//      · sin decir: no se asume ninguno. Si las ventas pasan del límite, se
+//        avisa en ámbar para que se diga en la ficha.
+//      Excluida, con su motivo.
 //
 // Las reglas son las de la app: el NIF, src/modules/conta/lib/nif.ts; el
 // cuadre, src/modules/conta/lib/liquidaciones.ts; el límite,
@@ -20,6 +27,9 @@
 
 const NORMA_NIF = 'RD 1065/2007, arts. 18–22 (NIF) y Orden EHA/451/2008 (carácter de control)'
 const NORMA_347 = 'RD 1065/2007, arts. 31–35: operaciones con terceros por encima de 3.005,06 € al año'
+const NORMA_347_REVENDEDOR = 'RD 1065/2007, art. 34.3, párrafo 2.º (en nombre propio: recibe y entrega por sí misma)'
+const NORMA_347_COMISIONISTA = 'RD 1065/2007, art. 34.3 (en nombre ajeno: solo su comisión) y art. 33.2.a (ventas con ticket, fuera)'
+const NORMA_347_MODELO = 'RD 1065/2007, art. 34.3: depende de si la plataforma actúa en nombre del restaurante o en el suyo'
 const NORMA_CUENTAS = 'RD 1514/2007: una subcuenta por tercero y papel'
 const NORMA_NETO = 'Encargo C03, regla 3: una liquidación que no cuadra se enseña con su diferencia, no se cuadra sola'
 
@@ -56,6 +66,19 @@ export function nifValido(entrada) {
 
 const centimos = (v) => Math.round(Number(v) * 100)
 const abs = (v) => Math.abs(Number(v ?? 0))
+
+/**
+ * La misma regla que alcance347Plataforma (src/modules/conta/lib/plataforma347.ts),
+ * en euros como ella. Comisionista: la comisión sin IVA ya pasa → entra; con el
+ * IVA general podría pasar → null («lo dirán sus facturas»); si no, no entra.
+ */
+export function alcance347Plataforma(modelo, ventas, comisiones) {
+  if (!modelo) return { como: 'sin_decir' }
+  if (modelo === 'revendedor') return { como: 'cliente', entra: centimos(ventas) > LIMITE_347, importe: Number(ventas) }
+  const base = centimos(abs(comisiones))
+  const entra = base > LIMITE_347 ? true : Math.round(base * 1.21) > LIMITE_347 ? null : false
+  return { como: 'proveedor', entra, importe: abs(comisiones) }
+}
 /** 300506 → «3.005,06 €» (es-ES no agrupa los miles con cuatro cifras: se hace a mano). */
 const euros = (c) => {
   const [e, d] = (Math.abs(c) / 100).toFixed(2).split('.')
@@ -77,7 +100,7 @@ export function descuadre(l) {
  * bd.terceros: { terceros: [{ account_id, id, name, tax_id, tax_id_type, archived }],
  *                cuentas: [{ account_id, company_id, entity, entity_id, role, codes: [] }],
  *                liquidaciones: [{ account_id, id, party_id, ref, gross_sales, commission, otros, net_payout, needs_review }],
- *                ventas_anio: [{ account_id, party_id, anio, ventas }],
+ *                ventas_anio: [{ account_id, party_id, anio, ventas, comisiones, modelo }],
  *                excluidos_347: [{ account_id, party_id, motivo }] }
  */
 export function revisarTerceros(t) {
@@ -123,18 +146,36 @@ export function revisarTerceros(t) {
       detalle: `Tiene ${c.codes.length} subcuentas como ${c.entity === 'customer' ? 'cliente' : 'proveedor'} en la misma empresa: ${c.codes.join(', ')}.`, norma: NORMA_CUENTAS })
   }
 
-  // 4 · 347 de ventas.
+  // 4 · 347 de una plataforma, según su modelo.
   const excluido = new Map((t.excluidos_347 ?? []).map((x) => [`${x.account_id}|${x.party_id}`, x.motivo]))
   for (const v of t.ventas_anio ?? []) {
-    const c = centimos(v.ventas)
-    if (c <= LIMITE_347) continue
+    const a = alcance347Plataforma(v.modelo ?? null, v.ventas ?? 0, v.comisiones ?? 0)
+    const ventas = centimos(v.ventas ?? 0)
+    // Lo que la acerca al 347: sin modelo, las ventas (el caso que obliga a preguntar).
+    const pasa = a.como === 'sin_decir' ? ventas > LIMITE_347 : a.entra !== false
+    if (!pasa) continue
     const k = `${v.account_id}|${v.party_id}`
+    const lugar = donde(v.party_id, v.account_id)
     if (excluido.has(k)) {
-      if (!excluido.get(k)) out.push({ nivel: 'rojo', tipo: 'excluido_sin_motivo', donde: donde(v.party_id, v.account_id), detalle: `Le ha vendido ${euros(c)} en ${v.anio} y está fuera del 347 sin motivo.`, norma: NORMA_347 })
+      if (!excluido.get(k)) out.push({ nivel: 'rojo', tipo: 'excluido_sin_motivo', donde: lugar, detalle: `Le ha vendido ${euros(ventas)} en ${v.anio} y está fuera del 347 sin motivo.`, norma: NORMA_347 })
       continue
     }
-    const x = nombre.get(v.party_id)
-    if (!x?.tax_id) out.push({ nivel: 'rojo', tipo: '347_sin_nif', donde: donde(v.party_id, v.account_id), detalle: `Le ha vendido ${euros(c)} en ${v.anio}: entra en el 347 de ventas y no tiene NIF.`, norma: NORMA_347 })
+    const sinNif = !nombre.get(v.party_id)?.tax_id
+    if (a.como === 'sin_decir') {
+      out.push({ nivel: 'ambar', tipo: '347_modelo_sin_decir', donde: lugar,
+        detalle: `Le ha vendido ${euros(ventas)} en ${v.anio} y su ficha no dice si es comisionista o revendedor: según su contrato, entra en el 347 como cliente (por las ventas) o como proveedor (solo por su comisión). No se asume ninguno.${sinNif ? ' Y no tiene NIF.' : ''}`,
+        norma: NORMA_347_MODELO })
+      continue
+    }
+    if (!sinNif) continue
+    if (a.como === 'cliente') {
+      out.push({ nivel: 'rojo', tipo: '347_sin_nif', donde: lugar, detalle: `Le ha vendido ${euros(ventas)} en ${v.anio}: como revendedora, entra en el 347 de ventas y no tiene NIF.`, norma: NORMA_347_REVENDEDOR })
+    } else {
+      const c = centimos(a.importe)
+      out.push(a.entra
+        ? { nivel: 'rojo', tipo: '347_proveedor_sin_nif', donde: lugar, detalle: `Le ha cobrado ${euros(c)} de comisiones (sin IVA) en ${v.anio}: como comisionista, entra en el 347 como proveedor y no tiene NIF.`, norma: NORMA_347_COMISIONISTA }
+        : { nivel: 'ambar', tipo: '347_proveedor_sin_nif', donde: lugar, detalle: `Le ha cobrado ${euros(c)} de comisiones sin IVA en ${v.anio}: con su IVA puede pasar de 3.005,06 € (lo dirán sus facturas) y no tiene NIF.`, norma: NORMA_347_COMISIONISTA })
+    }
   }
   return out
 }
@@ -145,13 +186,14 @@ export const TITULO_TERCEROS = {
   dos_subcuentas: 'Dos subcuentas para el mismo papel',
   excluido_sin_motivo: 'Fuera del 347 sin motivo',
   '347_sin_nif': 'En el 347 de ventas sin NIF',
+  '347_proveedor_sin_nif': 'En el 347 como proveedor sin NIF',
 }
 
 export function informeTerceros(hallazgos, { tercerosMirados, liquidacionesMiradas }) {
   const l = ['## Clientes, plataformas y socios de marca', '']
   l.push(`Revisados ${tercerosMirados} terceros y ${liquidacionesMiradas} liquidaciones de plataforma.`, '')
   if (hallazgos.length === 0) {
-    l.push('**Todo cuadra.** Cada NIF es válido y está en un solo tercero, cada liquidación cuadra (ventas − comisiones − otros = neto), nadie tiene dos subcuentas para el mismo papel y quien entra en el 347 de ventas tiene su NIF.', '')
+    l.push('**Todo cuadra.** Cada NIF es válido y está en un solo tercero, cada liquidación cuadra (ventas − comisiones − otros = neto), nadie tiene dos subcuentas para el mismo papel y quien entra en el 347 —como cliente si revende, como proveedor si cobra comisión— tiene su NIF.', '')
     return l.join('\n')
   }
   const rojos = hallazgos.filter((x) => x.nivel === 'rojo')

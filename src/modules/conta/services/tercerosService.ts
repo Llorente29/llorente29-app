@@ -9,6 +9,7 @@ import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import type { Papel, Tercero } from '@/modules/conta/lib/terceros'
 import type { LiquidacionPlataforma } from '@/modules/conta/lib/liquidaciones'
 import type { FilaLiquidacion } from '@/modules/conta/lib/lectorLiquidaciones'
+import type { ModeloPlataforma } from '@/modules/conta/lib/plataforma347'
 
 type Fila = Record<string, unknown>
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
@@ -38,12 +39,14 @@ export interface PapelGuardado {
   settlementEvery: 'weekly' | 'fortnightly' | 'monthly' | null
   commissionPct: number | null
   contributionKinds: string[] | null
+  /** Plataforma: cómo vende según su contrato (C03 R2). null = sin decir. */
+  platformModel: ModeloPlataforma | null
 }
 
 export async function listarTercerosBase(accountId: string): Promise<{ terceros: (Tercero & { supplierId: string | null })[]; papeles: Map<string, PapelGuardado[]> }> {
   const [parties, roles] = await Promise.all([
     leer(tabla('party').select('id, name, tax_id, archived_at, archived_note').eq('account_id', accountId).order('name'), 'los terceros'),
-    leer(tabla('party_role').select('party_id, role, supplier_id, channel_id, settlement_every, commission_pct, contribution_kinds').eq('account_id', accountId), 'sus papeles'),
+    leer(tabla('party_role').select('party_id, role, supplier_id, channel_id, settlement_every, commission_pct, contribution_kinds, platform_model').eq('account_id', accountId), 'sus papeles'),
   ])
   const papeles = new Map<string, PapelGuardado[]>()
   for (const r of roles) {
@@ -52,6 +55,7 @@ export async function listarTercerosBase(accountId: string): Promise<{ terceros:
       role: r.role as Papel, supplierId: str(r.supplier_id), channelId: str(r.channel_id),
       settlementEvery: str(r.settlement_every) as PapelGuardado['settlementEvery'], commissionPct: num(r.commission_pct),
       contributionKinds: (r.contribution_kinds as string[] | null) ?? null,
+      platformModel: str(r.platform_model) as ModeloPlataforma | null,
     }])
   }
   const terceros = parties.map((p) => {
@@ -308,6 +312,13 @@ export function terceroDelMismoNif(e: unknown): string | null {
 
 export const anadirPapel = (partyId: string, papel: 'customer' | 'platform' | 'brand_partner', config: Record<string, unknown> = {}) =>
   rpc<{ party_id: string; role: string; liquidaciones_enlazadas: number }>('party_add_role', { p_party: partyId, p_role: papel, p_config: config })
+
+/** Cómo vende la plataforma (comisionista o revendedor), o null para dejarlo sin decir. */
+export async function guardarModeloPlataforma(partyId: string, modelo: ModeloPlataforma | null): Promise<void> {
+  const { data, error } = await tabla('party_role').update({ platform_model: modelo }).eq('party_id', partyId).eq('role', 'platform').select('party_id')
+  if (error) throw new Error(mensaje('No se ha podido guardar cómo vende la plataforma', error))
+  if (!data?.length) throw new Error('Este tercero no tiene el papel de plataforma.')
+}
 
 export const archivarTercero = (partyId: string, archivar: boolean, nota?: string | null) =>
   rpc<{ party_id: string; archivado: boolean }>('party_set_archived', { p_party: partyId, p_archivar: archivar, p_nota: nota ?? null })

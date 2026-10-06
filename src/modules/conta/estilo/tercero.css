@@ -94,6 +94,12 @@
   background: var(--cx-inicial-1); font-weight: 600; font-size: 13px; flex-shrink: 0;
 }
 
+/* La línea «347» de una plataforma: el texto, la pregunta o «Cambiar», y la cita en pequeño. */
+.cxt-347 { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.cxt-347-pregunta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.cx .cxt-347 .cx-enlace { font-size: 13px; font-weight: 600; }
+.cxt-cita { font-size: 12px; font-weight: 400; color: var(--cx-apoyo); }
+
 /* Formularios de las pestañas. */
 .cxt-dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .cxt-aportar { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }

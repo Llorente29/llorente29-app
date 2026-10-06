@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import {
-  accionPrincipal, cuentaPorFiltro, filtrarTerceros, franjaArchivado, mismoNif, nifNormal, ordenarPapeles, type Tercero,
+  accionPrincipal, cuentaPorFiltro, ejemploDeFicha, filtrarTerceros, franjaArchivado, mismoNif, nifNormal, ordenarPapeles, type Tercero,
 } from '@/modules/conta/lib/terceros'
 import { cifrasPlataforma, cuadre, estadoLiquidacion, periodo, pieTeDebe, teDebe, type LiquidacionPlataforma } from '@/modules/conta/lib/liquidaciones'
 import { liquidarLocal, liquidarMes, mesDe, textoImporte, type CalculoLocal } from '@/modules/conta/lib/liquidacionSocio'
@@ -18,6 +18,7 @@ import { MENU_CONTA, entradaActiva, migasFichaTercero, rutaFichaTercero, rutaTer
 import { apartadosDe } from '@/modules/conta/terceros/contextoTercero'
 import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 import { FicheroNoReconocido, importe, leerLiquidaciones, queFichero } from '@/modules/conta/lib/lectorLiquidaciones'
+import { CITA_347, linea347Plataforma } from '@/modules/conta/lib/plataforma347'
 
 const dir = join(__dirname, '../../../conta/fixtures/liquidaciones')
 const fichero = (f: string) => readFileSync(join(dir, f), 'utf8')
@@ -290,5 +291,37 @@ describe('C03 · direcciones y pestañas de la ficha', () => {
     expect(apartadosDe(['platform', 'supplier'])).toContain('liquidaciones')
     expect(apartadosDe(['brand_partner'])).toContain('liquidaciones')
     expect(apartadosDe(['customer'])).toEqual(['ficha', 'datos-fiscales', 'contactos', 'cobro', 'contabilidad', 'documentos', 'historial'])
+  })
+})
+
+describe('la línea «347» de una plataforma (respuesta 2: según su contrato)', () => {
+  // Las cifras de la semilla: Plataforma Norte, 148.920 € de ventas y 31.273,20 € de comisiones en el año.
+  it('sin decir: no asume, pregunta', () => {
+    const l = linea347Plataforma(null, 148920, 31273.2)
+    expect(l).toEqual({ texto: 'Según su contrato: comisionista o revendedor. ¿Cuál es?', cita: CITA_347.sinDecir, pregunta: true })
+  })
+  it('revendedora: cliente, por las ventas; 3.005,06 € justos no entran', () => {
+    expect(linea347Plataforma('revendedor', 148920, 31273.2).texto).toMatch(/^Entra en el 347 de ventas como cliente: 148\.920,00 €/)
+    expect(linea347Plataforma('revendedor', 3005.06, 0).texto).toMatch(/^No llega al 347 de ventas/)
+    expect(linea347Plataforma('revendedor', 1, 0).cita).toContain('art. 34.3, párrafo 2.º')
+  })
+  it('comisionista: proveedor, solo por la comisión; las ventas no van', () => {
+    const l = linea347Plataforma('comisionista', 148920, 31273.2)
+    expect(l.texto).toMatch(/^Entra en el 347 como proveedor, por sus comisiones: 31\.273,20 € \+ IVA este año; tus ventas no$/)
+    expect(l.cita).toContain('art. 33.2.a')
+    expect(l.pregunta).toBe(false)
+    // 2.500 € + 21 % = 3.025 € > límite: puede, lo dirán sus facturas.
+    expect(linea347Plataforma('comisionista', 90000, 2500).texto).toMatch(/^Puede entrar en el 347 como proveedor/)
+    expect(linea347Plataforma('comisionista', 90000, 2483.52).texto).toMatch(/^No llega al 347 como proveedor/)
+    expect(linea347Plataforma('comisionista', 90000, -3005.07).texto).toMatch(/^Entra en el 347 como proveedor/)
+  })
+})
+
+describe('el ejemplo de la barra de la IA en cada ficha (respuesta 2)', () => {
+  it('plataforma, socio y cliente normal; con varios papeles manda el principal', () => {
+    expect(ejemploDeFicha(['platform', 'supplier', 'customer'])).toBe('¿Cuánto me debe la plataforma?')
+    expect(ejemploDeFicha(['brand_partner', 'supplier', 'customer'])).toBe('¿Qué le liquido este mes?')
+    expect(ejemploDeFicha(['customer'])).toBe('¿Cuánto me debe?')
+    expect(ejemploDeFicha(['customer', 'supplier'])).toBe('¿Cuánto me debe?')
   })
 })

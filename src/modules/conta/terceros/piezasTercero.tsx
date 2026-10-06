@@ -13,10 +13,10 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { calculosDelMes, papelesDe, useAprendido, useTercero } from '@/modules/conta/terceros/contextoTercero'
 import { cuadre, estadoLiquidacion, periodo, type Estado } from '@/modules/conta/lib/liquidaciones'
 import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
-import { diaMes, eurosExactos, euros, iniciales } from '@/modules/conta/lib/formato'
-import { LIMITE_347 } from '@/modules/conta/lib/cuentasProveedor'
+import { diaMes, eurosExactos, iniciales } from '@/modules/conta/lib/formato'
+import { MODELO_PLATAFORMA, linea347Plataforma, type ModeloPlataforma } from '@/modules/conta/lib/plataforma347'
 import { parecido } from '@/modules/conta/lib/importarPlan'
-import { apuntarCobro, confirmarPeriodo, crearCuentaCliente, enlazarCuentaCliente, quitarCobro } from '@/modules/conta/services/tercerosService'
+import { apuntarCobro, confirmarPeriodo, crearCuentaCliente, enlazarCuentaCliente, guardarModeloPlataforma, quitarCobro } from '@/modules/conta/services/tercerosService'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
 const TONO: Record<Estado['tono'], 'ia' | 'azul' | 'ambar' | 'neutro'> = { verde: 'ia', azul: 'azul', ambar: 'ambar', gris: 'neutro' }
@@ -257,14 +257,50 @@ export function ConQuienHablas() {
   )
 }
 
-/** Lo vendido en el año que cuenta para el 347 de ventas (plataformas: por sus liquidaciones). */
-function vendidoParaEl347(f: ReturnType<typeof useTercero>['ficha'], hoy: string): number {
+/** Lo vendido por la plataforma en el año y lo que cobró de comisión (sin IVA), por sus liquidaciones. */
+function delAnio(f: ReturnType<typeof useTercero>['ficha'], hoy: string): { ventas: number; comisiones: number } {
   const anio = hoy.slice(0, 4)
-  return f.liquidaciones.filter((l) => (l.hasta ?? l.fecha ?? '').startsWith(anio)).reduce((s, l) => s + (l.ventas ?? 0), 0)
+  const ls = f.liquidaciones.filter((l) => (l.hasta ?? l.fecha ?? '').startsWith(anio))
+  return { ventas: ls.reduce((s, l) => s + (l.ventas ?? 0), 0), comisiones: ls.reduce((s, l) => s + Math.abs(l.comision ?? 0), 0) }
+}
+
+/** La línea «347» de una plataforma: según cómo vende (su contrato); si no se ha dicho, lo pregunta. */
+function Linea347Plataforma() {
+  const { ficha, hoy, recargar, avisar } = useTercero()
+  const { rolPlataforma } = papelesDe(ficha)
+  const [fallo, setFallo] = useState<string | null>(null)
+  const [ocupado, setOcupado] = useState(false)
+  const modelo = rolPlataforma?.platformModel ?? null
+  const { ventas, comisiones } = delAnio(ficha, hoy)
+  const l = linea347Plataforma(modelo, ventas, comisiones)
+  async function decir(m: ModeloPlataforma | null) {
+    setOcupado(true); setFallo(null)
+    try {
+      await guardarModeloPlataforma(ficha.tercero.id, m)
+      const nueva = linea347Plataforma(m, ventas, comisiones)
+      avisar(m ? `${ficha.tercero.nombre}: ${MODELO_PLATAFORMA[m].corto.toLowerCase()}. ${nueva.texto}.` : `${ficha.tercero.nombre}: sin decir si es comisionista o revendedor.`)
+      recargar()
+    } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo guardar.') }
+    setOcupado(false)
+  }
+  return (
+    <span className="cxt-347">
+      <span>{l.texto}</span>
+      {l.pregunta && (
+        <span className="cxt-347-pregunta" role="group" aria-label="Cómo vende según su contrato">
+          <button type="button" className="cx-enlace" disabled={ocupado} onClick={() => void decir('comisionista')} title={MODELO_PLATAFORMA.comisionista.largo}>Vende en mi nombre (comisionista)</button>
+          <button type="button" className="cx-enlace" disabled={ocupado} onClick={() => void decir('revendedor')} title={MODELO_PLATAFORMA.revendedor.largo}>Me compra y revende</button>
+        </span>
+      )}
+      {!l.pregunta && <button type="button" className="cx-enlace cxt-347-cambiar" disabled={ocupado} onClick={() => void decir(null)}>Cambiar</button>}
+      <span className="cxt-cita">{l.cita}</span>
+      {fallo && <span className="cx-error" role="alert">{fallo}</span>}
+    </span>
+  )
 }
 
 export function SusCuentas({ completa = false }: { completa?: boolean }) {
-  const { ficha, hoy, companyId, recargar, avisar, rutaApartado } = useTercero()
+  const { ficha, companyId, recargar, avisar, rutaApartado } = useTercero()
   const { userName } = useCuentaConta()
   const { cliente, proveedor, socio } = papelesDe(ficha)
   const [fallo, setFallo] = useState<string | null>(null)
@@ -272,7 +308,6 @@ export function SusCuentas({ completa = false }: { completa?: boolean }) {
   const comoCliente = ficha.cuentas.find((c) => c.papel === 'cliente') ?? ficha.cuentas.find((c) => c.papel === 'pago') ?? null
   const comoProveedor = ficha.cuentas.find((c) => c.papel === 'proveedor') ?? null
   const propuesta = !comoCliente ? ficha.cuentas430SinDueno.find((c) => parecido(c.name.replace(/^Clientes · /, ''), ficha.tercero.nombre)) ?? null : null
-  const v347 = vendidoParaEl347(ficha, hoy)
   const fila = (et: string, valor: React.ReactNode) => <div className="cxt-linea"><span className="cx-ayuda">{et}</span><span className="cxt-cuenta">{valor}</span></div>
   const enlace = (c: { code: string; name: string }) => <Link to={rutaMayor(c.code)}>{c.code} · {c.name}</Link>
 
@@ -305,9 +340,10 @@ export function SusCuentas({ completa = false }: { completa?: boolean }) {
         {proveedor && fila('Como proveedor', comoProveedor ? enlace(comoProveedor) : 'Sin subcuenta de proveedor')}
         {(cliente || socio) && fila('Sus ventas van a', socio ? '70500000 · Prestaciones de servicios (comisión) · 70000000 · Ventas' : '70000000 · Ventas de mercaderías (705 si son servicios)')}
         {socio && fila('Sus marcas', ficha.acuerdos.length ? <span>{ficha.acuerdos.map((a) => a.marca).join(', ')} · ventas separadas <span className="cx-chip cx-chip-ia">IA</span></span> : 'Ningún acuerdo de cesión enlazado')}
-        {(cliente || socio) && fila('347', ficha.fiscal?.exclude347 ? `Excluido: ${ficha.fiscal.exclude347Reason}`
-          : papelesDe(ficha).plataforma ? (v347 * 100 > LIMITE_347 ? `Entra en el 347 de ventas por sus liquidaciones: ${euros(v347)} este año` : 'No llega al 347 de ventas este año')
-          : 'Se calcula con las facturas que emites (llegan con Facturación)')}
+        {papelesDe(ficha).plataforma
+          ? fila('347', ficha.fiscal?.exclude347 ? `Excluido: ${ficha.fiscal.exclude347Reason}` : <Linea347Plataforma />)
+          : (cliente || socio) && fila('347', ficha.fiscal?.exclude347 ? `Excluido: ${ficha.fiscal.exclude347Reason}`
+            : 'Se calcula con las facturas que emites (llegan con Facturación)')}
       </>}
     </section>
   )

@@ -258,8 +258,8 @@ describe('la tanda de AHORA (manifiesto vivo): el C03', () => {
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c03-20261006.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
 
-  it('son las ocho del C03, en orden', () => {
-    expect(viva.map((f) => f.match(/T(\d{4})_/)![1])).toEqual(['0100', '0110', '0120', '0130', '0140', '0150', '0160', '0170'])
+  it('son las nueve del C03, en orden', () => {
+    expect(viva.map((f) => f.match(/T(\d{4})_/)![1])).toEqual(['0100', '0110', '0120', '0130', '0140', '0150', '0160', '0170', '0180'])
     expect(viva.every((f) => f.startsWith('supabase/migrations/20261009T01'))).toBe(true)
   })
   it('PARAN la 0100, la 0130 y la 0160, cada una por lo suyo', () => {
@@ -276,11 +276,14 @@ describe('la tanda de AHORA (manifiesto vivo): el C03', () => {
   it('la 0170 solo añade: un disparador nuevo en supplier, sigue', () => {
     expect(decidir(p.porFichero['supabase/migrations/20261009T0170_c03_borrar_proveedor.sql'], p.existe).para).toEqual([])
   })
+  it('la 0180 solo añade una columna nula y su CHECK a party_role (tabla nueva de la tanda), sigue', () => {
+    expect(decidir(p.porFichero['supabase/migrations/20261009T0180_c03_modelo_plataforma.sql'], p.existe).para).toEqual([])
+  })
   it('las tres están nombradas para «autorizo» en la cabecera del manifiesto, y solo ellas', () => {
     const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
     expect(nombradas).toEqual(paran().map((f) => f.replace('supabase/migrations/', '')))
   })
-  it('su vuelta atrás es la de las ocho, al revés', () => {
+  it('su vuelta atrás es la de las nueve, al revés', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
   })

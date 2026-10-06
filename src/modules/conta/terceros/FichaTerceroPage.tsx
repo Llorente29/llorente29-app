@@ -29,7 +29,8 @@ import { NuevaFactura, PrepararLiquidacion, SubirLiquidacion } from '@/modules/c
 import {
   CobroTercero, ContabilidadTercero, ContactosTercero, DatosFiscalesTercero, DocumentosTercero, HistorialTercero, LiquidacionesTercero,
 } from '@/modules/conta/terceros/ApartadosTercero'
-import { accionPrincipal, franjaArchivado, ordenarPapeles, type Papel } from '@/modules/conta/lib/terceros'
+import { accionPrincipal, ejemploDeFicha, franjaArchivado, ordenarPapeles, type Papel } from '@/modules/conta/lib/terceros'
+import { useEjemploPregunta } from '@/modules/conta/marco/ejemploPregunta'
 import { cifrasPlataforma, pieTeDebe } from '@/modules/conta/lib/liquidaciones'
 import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
 import { euros, eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
@@ -64,6 +65,8 @@ function Ficha({ partyId }: { partyId: string }) {
   const ap: ApartadoTercero = esApartadoTercero(apartado) ? apartado : 'ficha'
   const hoy = hoyEnMadrid()
   const { recargar } = uso
+  // La barra de la IA, con el ejemplo de este tercero (respuesta 2).
+  useEjemploPregunta(uso.estado === 'lista' ? ejemploDeFicha(uso.ficha.papeles.map((p) => p.role)) : null)
 
   const ctx = useMemo<ContextoTercero | null>(() => uso.estado === 'lista' && accountId ? {
     ficha: uso.ficha, mesSocio: uso.mesSocio, accountId, companyId: activa?.id ?? null, hoy, movil, recargar,

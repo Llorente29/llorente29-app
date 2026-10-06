@@ -1,11 +1,10 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · C03 · 0170: borrar un proveedor no deja su tercero huérfano.
-# Primero la prueba (reproduce el fallo sin la 0170 y prueba la nueva;
-# ROLLBACK), después la migración y la limpieza ÚNICA de los 51 terceros sin
-# papel que dejaron las e2e (45 en A, 6 en B), con guardas.
-# Anterior: limpieza C02c y 0140 otra vez, en verde en 37471541247.
-supabase/staging/sql/20261009_c03_prueba_borrar_proveedor.sql
-supabase/migrations/20261009T0170_c03_borrar_proveedor.sql
-supabase/staging/sql/20261009_c03_limpiar_terceros_huerfanos.sql
+# 06/10/2026 · C03 · Respuesta 2 · 0180: cómo vende cada plataforma
+# (comisionista | revendedor | sin decir), que decide su 347 (RD 1065/2007,
+# art. 34.3). Primero la prueba (CHECK, vuelta atrás que para y que deshace,
+# reaplicar; ROLLBACK), después la migración.
+# Anterior: 0170 y limpieza de terceros huérfanos, en verde.
+supabase/staging/sql/20261009_c03_prueba_modelo_plataforma.sql
+supabase/migrations/20261009T0180_c03_modelo_plataforma.sql

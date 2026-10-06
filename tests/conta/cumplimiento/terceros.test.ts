@@ -9,10 +9,11 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { LIMITE_347 as LIMITE_AGENTE, descuadre, informeTerceros, nifValido, revisarTerceros } from '../../../scripts/conta/lib/terceros.mjs'
+import { LIMITE_347 as LIMITE_AGENTE, alcance347Plataforma as alcanceAgente, descuadre, informeTerceros, nifValido, revisarTerceros } from '../../../scripts/conta/lib/terceros.mjs'
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import { LIMITE_347 } from '@/modules/conta/lib/cuentasProveedor'
 import { cuadre } from '@/modules/conta/lib/liquidaciones'
+import { alcance347Plataforma } from '@/modules/conta/lib/plataforma347'
 import { leerLiquidaciones } from '@/modules/conta/lib/lectorLiquidaciones'
 
 const COSTES = ['delivery_transport', 'promo_product', 'promo_flash', 'offer_flash_credit', 'access_fee', 'prime_fee',
@@ -83,7 +84,7 @@ describe('revisarTerceros', () => {
     ],
     cuentas: [{ account_id: A, company_id: 'e', entity: 'customer', entity_id: 'p1', codes: ['43000001'] }],
     liquidaciones: [{ account_id: A, id: 'l1', party_id: 'p1', ref: 'X1', gross_sales: 100, commission: -21, otros: [], net_payout: 79, needs_review: false }],
-    ventas_anio: [{ account_id: A, party_id: 'p1', anio: 2026, ventas: 148920 }],
+    ventas_anio: [{ account_id: A, party_id: 'p1', anio: 2026, ventas: 148920, comisiones: 31273.2, modelo: 'revendedor' }],
     excluidos_347: [],
   }
   it('lo que está bien no dice nada (el NIF extranjero no se valida como español)', () => {
@@ -99,7 +100,8 @@ describe('revisarTerceros', () => {
         { account_id: A, id: 'p6', name: 'Plataforma sin NIF', tax_id: null, tax_id_type: null, archived: false }],
       cuentas: [{ account_id: A, company_id: 'e', entity: 'customer', entity_id: 'p1', codes: ['43000001', '43000009'] }],
       liquidaciones: [{ account_id: A, id: 'l2', party_id: 'p1', ref: 'SEED-0816', gross_sales: 8905, commission: 1870, otros: [], net_payout: 6822.7, needs_review: false }],
-      ventas_anio: [{ account_id: A, party_id: 'p6', anio: 2026, ventas: 3005.07 }, { account_id: A, party_id: 'p2', anio: 2026, ventas: 3005.06 }],
+      ventas_anio: [{ account_id: A, party_id: 'p6', anio: 2026, ventas: 3005.07, comisiones: 0, modelo: 'revendedor' },
+        { account_id: A, party_id: 'p2', anio: 2026, ventas: 3005.06, comisiones: 0, modelo: 'revendedor' }],
     }
     const h = revisarTerceros(mal)
     expect(h.map((x) => `${x.nivel} ${x.tipo}`).sort()).toEqual([
@@ -113,11 +115,41 @@ describe('revisarTerceros', () => {
   })
   it('excluido del 347: con motivo vale; sin motivo, falla', () => {
     const conVentas = { ...base, terceros: [...base.terceros, { account_id: A, id: 'p6', name: 'Sin NIF', tax_id: null, tax_id_type: null, archived: false }],
-      ventas_anio: [{ account_id: A, party_id: 'p6', anio: 2026, ventas: 5000 }] }
+      ventas_anio: [{ account_id: A, party_id: 'p6', anio: 2026, ventas: 5000, comisiones: 0, modelo: 'revendedor' }] }
     expect(revisarTerceros({ ...conVentas, excluidos_347: [{ account_id: A, party_id: 'p6', motivo: 'Operación con IVA intracomunitario' }] })).toEqual([])
     expect(revisarTerceros({ ...conVentas, excluidos_347: [{ account_id: A, party_id: 'p6', motivo: null }] }).map((x) => x.tipo)).toEqual(['excluido_sin_motivo'])
   })
+  it('el 347 según el modelo (RD 1065/2007, art. 34.3): comisionista, revendedor y sin decir', () => {
+    const sinNif = { account_id: A, id: 'p6', name: 'Plataforma sin NIF', tax_id: null, tax_id_type: null, archived: false }
+    const con = (v: Record<string, unknown>) => revisarTerceros({ ...base, terceros: [...base.terceros, sinNif],
+      ventas_anio: [{ account_id: A, party_id: 'p6', anio: 2026, ...v }] }).map((x) => `${x.nivel} ${x.tipo}`)
+    // Comisionista: las ventas, por grandes que sean, no la meten; su comisión sí.
+    expect(con({ ventas: 90000, comisiones: 2000, modelo: 'comisionista' })).toEqual([])
+    expect(con({ ventas: 90000, comisiones: 3005.07, modelo: 'comisionista' })).toEqual(['rojo 347_proveedor_sin_nif'])
+    // 2.500 € + 21 % = 3.025 €: puede pasar, lo dirán sus facturas → ámbar.
+    expect(con({ ventas: 90000, comisiones: 2500, modelo: 'comisionista' })).toEqual(['ambar 347_proveedor_sin_nif'])
+    // Revendedora: las ventas.
+    expect(con({ ventas: 90000, comisiones: 0, modelo: 'revendedor' })).toEqual(['rojo 347_sin_nif'])
+    // Sin decir: no se asume ninguno; ámbar, con o sin NIF.
+    expect(con({ ventas: 90000, comisiones: 20000, modelo: null })).toEqual(['ambar 347_modelo_sin_decir'])
+    expect(revisarTerceros({ ...base, ventas_anio: [{ ...base.ventas_anio[0], modelo: null }] }).map((x) => x.tipo)).toEqual(['347_modelo_sin_decir'])
+    expect(con({ ventas: 3005.06, comisiones: 900, modelo: null })).toEqual([])
+  })
   it('sin volcado de terceros (base sin C03), nada', () => {
     expect(revisarTerceros(null)).toEqual([])
+  })
+})
+
+describe('el 347 de una plataforma: el agente y la ficha dicen lo mismo', () => {
+  it('un barrido de modelos, ventas y comisiones alrededor del límite', () => {
+    const importes = [0, 1, 2483.52, 2483.53, 2483.54, 2500, 3005.05, 3005.06, 3005.07, 3500, 148920, -2600, -3005.07]
+    let n = 0
+    for (const modelo of [null, 'comisionista', 'revendedor'] as const) {
+      for (const ventas of importes) for (const comisiones of importes) {
+        expect(alcanceAgente(modelo, ventas, comisiones), `${modelo} ${ventas} ${comisiones}`).toEqual(alcance347Plataforma(modelo, ventas, comisiones))
+        n++
+      }
+    }
+    expect(n).toBe(3 * importes.length ** 2)
   })
 })

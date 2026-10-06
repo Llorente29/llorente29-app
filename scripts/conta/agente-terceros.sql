@@ -37,12 +37,18 @@ select json_build_object(
                                 c.prime_fee, c.recurring_fee, c.incidents_cost, c.incidents_refund, c.min_order_fee, c.other_cost))
       order by c.account_id, c.settlement_date), '[]')
     from public.channel_settlement c),
-  -- Lo vendido por cada plataforma, por año (fecha de la liquidación, o el final de su periodo).
-  'ventas_anio', (select coalesce(json_agg(json_build_object('account_id', v.account_id, 'party_id', v.party_id, 'anio', v.anio, 'ventas', v.ventas)), '[]')
-    from (select c.account_id, c.party_id, extract(year from coalesce(c.period_to, c.proposed_period_to, c.settlement_date))::int anio, sum(c.gross_sales) ventas
+  -- Lo vendido por cada plataforma y lo que cobró de comisión, por año (fecha
+  -- de la liquidación, o el final de su periodo), con su modelo: comisionista o
+  -- revendedor (party_role.platform_model; null = sin decir). El 347 depende
+  -- de eso (RD 1065/2007, art. 34.3).
+  'ventas_anio', (select coalesce(json_agg(json_build_object('account_id', v.account_id, 'party_id', v.party_id, 'anio', v.anio,
+      'ventas', v.ventas, 'comisiones', v.comisiones, 'modelo', r.platform_model)), '[]')
+    from (select c.account_id, c.party_id, extract(year from coalesce(c.period_to, c.proposed_period_to, c.settlement_date))::int anio,
+                 sum(c.gross_sales) ventas, sum(abs(coalesce(c.commission, 0))) comisiones
             from public.channel_settlement c
            where c.party_id is not null and coalesce(c.period_to, c.proposed_period_to, c.settlement_date) is not null
-           group by 1, 2, 3) v),
+           group by 1, 2, 3) v
+    left join public.party_role r on r.party_id = v.party_id and r.role = 'platform'),
   'excluidos_347', (select coalesce(json_agg(json_build_object('account_id', f.account_id, 'party_id', f.party_id, 'motivo', f.exclude_347_reason)), '[]')
     from public.customer_fiscal f where f.exclude_347)
 );

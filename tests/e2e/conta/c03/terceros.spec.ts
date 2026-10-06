@@ -34,6 +34,12 @@ async function capturar(page: Page, nombre: string) {
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 }
 
+/** El ejemplo de la barra de la IA (solo en ordenador; en el móvil no hay barra). */
+async function ejemploDeLaBarra(page: Page, ejemplo: string) {
+  if (lado(page) !== 'ordenador') return
+  await expect(page.getByPlaceholder(`Pregunta o pide algo. «${ejemplo}»`)).toBeVisible()
+}
+
 async function partyDe(s: Sesion, nombre: string): Promise<string> {
   const r = await rest<{ id: string }[]>(s, 'GET', `party?select=id&account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
   expect(r.datos?.length, `la semilla tiene a ${nombre} en la cuenta A`).toBe(1)
@@ -86,6 +92,7 @@ test('plataforma (N9): te debe, liquidaciones con diferencia y lo aprendido', as
     await expect(page.getByText('Con diferencia').first()).toBeVisible()
     await expect(page.getByLabel('Lo que he aprendido de este cliente')).toBeVisible()
     await expect(page.getByLabel('Sus cuentas')).toBeVisible()
+    await ejemploDeLaBarra(page, '¿Cuánto me debe la plataforma?')
   } else {
     await expect(page.getByRole('button', { name: 'Subir liquidación' })).toBeVisible()
     await expect(page.getByRole('link', { name: /Liquidaciones/ })).toBeVisible()
@@ -132,6 +139,7 @@ test('socio de marca (N10): el mes por local y «Preparar liquidación»', async
   await page.goto(`/conta/clientes-y-proveedores/${id}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Marcas del Sur' })).toBeVisible()
   await expect(page.getByRole('button', { name: /^Preparar liquidación de / })).toBeVisible()
+  await ejemploDeLaBarra(page, '¿Qué le liquido este mes?')
   if (enOctubre()) {
     // 6.420 − 1.180 + 1.647 = 6.887 € a su favor (4.090 en Norte Centro y 2.797 en Norte Mercado).
     await expect(page.getByText('6.887 €').first()).toBeVisible()
@@ -146,6 +154,38 @@ test('socio de marca (N10): el mes por local y «Preparar liquidación»', async
 })
 
 // Los dos locales de la semilla (cuenta A).
+test('plataforma: el 347 según su contrato (respuesta 2) — sin decir pregunta; dicho, lo aplica', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
+  const s = await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  const id = await partyDe(s, 'Plataforma Norte')
+  const modelo = async () => (await rest<{ platform_model: string | null }[]>(s, 'GET',
+    `party_role?select=platform_model&account_id=eq.${CUENTA_A.id}&party_id=eq.${id}&role=eq.platform`)).datos?.[0]?.platform_model
+  const sinDecir = () => rest(s, 'PATCH', `party_role?account_id=eq.${CUENTA_A.id}&party_id=eq.${id}&role=eq.platform`, { platform_model: null })
+  expect(await modelo(), 'la semilla no dice cómo vende Plataforma Norte').toBeNull()
+  try {
+    await page.goto(`/conta/clientes-y-proveedores/${id}`)
+    const cuentas = page.getByLabel('Sus cuentas')
+    // Sin fuente, no asume: lo pregunta, con la norma en pequeño.
+    await expect(cuentas.getByText('Según su contrato: comisionista o revendedor. ¿Cuál es?')).toBeVisible()
+    await expect(cuentas.getByText(/RD 1065\/2007, art\. 34\.3/)).toBeVisible()
+    await cuentas.getByRole('button', { name: 'Vende en mi nombre (comisionista)' }).click()
+    // Regla 8: lo confirma en pantalla, con lo que significa.
+    await expect(cuentas.getByText(/347 como proveedor.*tus ventas no/i)).toBeVisible()
+    await expect(cuentas.getByText(/art\. 33\.2\.a/)).toBeVisible()
+    await expect.poll(modelo).toBe('comisionista')
+    await cuentas.getByRole('button', { name: 'Cambiar' }).click()
+    await expect(cuentas.getByRole('button', { name: 'Me compra y revende' })).toBeVisible()
+    await expect.poll(modelo).toBeNull()
+    await cuentas.getByRole('button', { name: 'Me compra y revende' }).click()
+    await expect(cuentas.getByText(/347 de ventas/)).toBeVisible()
+    await expect.poll(modelo).toBe('revendedor')
+  } finally {
+    const b = await sinDecir()
+    expect(b.status, 'Plataforma Norte vuelve a «sin decir»').toBeLessThan(300)
+  }
+})
+
 const LOCALES = [
   { id: 'c01a0000-0000-4000-8000-0000000000a2', nombre: 'Norte Centro' },
   { id: 'e0200000-0000-4000-8000-0000000000a3', nombre: 'Norte Mercado' },
@@ -205,6 +245,7 @@ test('cliente normal: sin facturas, lo dice; archivar y recuperar', async ({ pag
   await page.goto(`/conta/clientes-y-proveedores/${CATERING}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Catering Eventos Norte' })).toBeVisible()
   await expect(page.getByText('Las facturas llegan con Facturación.')).toBeVisible()
+  await ejemploDeLaBarra(page, '¿Cuánto me debe?')
   await capturar(page, 'cliente')
   test.skip(info.project.name === 'movil', 'Archivar escribe en la base: solo en un tamaño')
   try {

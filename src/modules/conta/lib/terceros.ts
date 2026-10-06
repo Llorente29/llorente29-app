@@ -132,6 +132,16 @@ export function franjaArchivado(t: Pick<Tercero, 'archivadoEn' | 'notaArchivado'
   return t.notaArchivado ? `Archivado · ${t.notaArchivado}` : `Archivado desde el ${t.archivadoEn.slice(8, 10)}/${t.archivadoEn.slice(5, 7)}/${t.archivadoEn.slice(0, 4)}`
 }
 
+/**
+ * El ejemplo de la barra «Pregunta o pide algo» en la ficha, según su papel
+ * principal (C03, respuesta 2): plataforma, socio de marca o cliente normal.
+ */
+export function ejemploDeFicha(papeles: readonly Papel[]): string {
+  if (papeles.includes('platform')) return '¿Cuánto me debe la plataforma?'
+  if (papeles.includes('brand_partner')) return '¿Qué le liquido este mes?'
+  return '¿Cuánto me debe?'
+}
+
 /** La acción principal de la ficha según el papel (encargo §6). */
 export function accionPrincipal(papeles: readonly Papel[], mes: string): { id: 'subir_liquidacion' | 'preparar_liquidacion' | 'nueva_factura' | null; texto: string | null } {
   if (papeles.includes('platform')) return { id: 'subir_liquidacion', texto: 'Subir liquidación' }

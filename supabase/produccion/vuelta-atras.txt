@@ -5,10 +5,12 @@
 # staging dentro de supabase/staging/sql/20261009_c03_prueba_terceros.sql
 # (pasos 1 y 2: vuelta atrás, foto, se vuelven a aplicar, misma foto); la
 # 0160, en 20261009_c03_prueba_deshacer_importacion.sql; la 0170, en
-# 20261009_c03_prueba_borrar_proveedor.sql.
+# 20261009_c03_prueba_borrar_proveedor.sql; la 0180, en
+# 20261009_c03_prueba_modelo_plataforma.sql.
 # Ojo: las guardas PARAN si ya hay datos nuevos (un cliente dado de alta, una
 # liquidación del socio confirmada, una aportación, un cobro apuntado): la
 # vuelta atrás no borra el trabajo de nadie a escondidas.
+supabase/vuelta-atras/20261009T0180_c03_modelo_plataforma.down.sql
 supabase/vuelta-atras/20261009T0170_c03_borrar_proveedor.down.sql
 supabase/vuelta-atras/20261009T0160_c03_deshacer_importacion.down.sql
 supabase/vuelta-atras/20261009T0150_c03_lectura.down.sql

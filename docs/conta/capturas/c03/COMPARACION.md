@@ -130,3 +130,20 @@ de dar el PR por listo:
 5. **Móvil:** «Te debe · llega el 5 sept» hablaba de una liquidación que ya
    había llegado con 212,30 € de menos; ahora dice «212,30 € con retraso o
    diferencia». Y el cálculo del socio perdía los signos.
+
+## Respuesta 2 · El 347 de una plataforma y el ejemplo de la barra
+
+- **«347» en «Sus cuentas» de una plataforma.** Antes decía «entra en el 347 de
+  ventas» con lo vendido, que solo es cierto si la plataforma revende. Ahora
+  depende de cómo vende según su contrato (RD 1065/2007, art. 34.3), y la cita
+  sale debajo en pequeño:
+  - **sin decir** (la semilla, y lo que verá la captura de N9): «Según su
+    contrato: comisionista o revendedor. ¿Cuál es?», con dos botones: «Vende en
+    mi nombre (comisionista)» y «Me compra y revende». No se asume ninguno.
+  - **comisionista**: entra como **proveedor**, solo por su comisión; tus
+    ventas a consumidores con ticket no van (art. 33.2.a).
+  - **revendedora**: entra como **cliente**, por lo que le vendes.
+  La maqueta N9 no tiene esta línea partida; es una diferencia buscada.
+- **El ejemplo de la barra** «Pregunta o pide algo» va con el papel de la
+  ficha: plataforma «¿Cuánto me debe la plataforma?», socio «¿Qué le liquido
+  este mes?», cliente normal «¿Cuánto me debe?».

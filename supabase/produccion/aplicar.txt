@@ -7,8 +7,8 @@
 # fallo).
 #
 # C03 · Clientes, plataformas y socios de marca. Desde la rama
-# conta/c03-clientes, ANTES de fusionar el PR #152. Las ocho migraciones del
-# C03 (0100–0170). Fuera del camino del pedido: el análisis nombra 9 tablas y
+# conta/c03-clientes, ANTES de fusionar el PR #152. Las nueve migraciones del
+# C03 (0100–0180). Fuera del camino del pedido: el análisis nombra 9 tablas y
 # 18 funciones y ninguna está en CAMINO_TABLAS / CAMINO_FUNCIONES (medido con
 # analizar.mjs sobre lo que existe hoy en producción, en solo lectura).
 #
@@ -34,6 +34,10 @@
 #     siempre (party_role cuenta como uso). Misma firma.
 # La 0170 solo añade una función y un disparador BEFORE DELETE en supplier: al
 # borrar un proveedor, su tercero no se queda huérfano.
+# La 0180 (respuesta 2) añade a party_role, tabla nueva de la 0100, la columna
+# nula platform_model (comisionista | revendedor; nula = la ficha lo pregunta)
+# y su CHECK: el 347 de una plataforma depende de cómo vende (RD 1065/2007,
+# art. 34.3). No escribe ninguna fila.
 #
 # El resto sigue: crean party, party_role, customer_fiscal y
 # brand_partner_contribution, añaden columnas nulas o con valor por defecto
@@ -62,3 +66,4 @@ supabase/migrations/20261009T0140_c03_funciones.sql
 supabase/migrations/20261009T0150_c03_lectura.sql
 supabase/migrations/20261009T0160_c03_deshacer_importacion.sql
 supabase/migrations/20261009T0170_c03_borrar_proveedor.sql
+supabase/migrations/20261009T0180_c03_modelo_plataforma.sql
