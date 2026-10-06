@@ -102,13 +102,19 @@ function madrid(d: Date): string {
   return d.toLocaleString("es-ES", { timeZone: "Europe/Madrid", dateStyle: "full", timeStyle: "short" });
 }
 
-async function avisar(
-  sid: string,
-  n: number,
-  dispositivo: string,
-  navegador: string,
-  origen: string | null,
-): Promise<void> {
+interface DatosAviso {
+  sid: string;
+  n: number;
+  etiqueta: string | null;
+  ciudad: string | null;
+  pais: string | null;
+  red: string | null;
+  dispositivo: string;
+  navegador: string;
+  origen: string | null;
+}
+
+async function avisar(d: DatosAviso): Promise<void> {
   try {
     const resendKey = Deno.env.get("RESEND_API_KEY") ?? "";
     if (!resendKey) {
@@ -122,28 +128,38 @@ async function avisar(
       .gte("avisado_at", desde);
     if ((count ?? 0) >= MAX_CORREOS_DIA) return;
 
-    const text =
-      `Un dispositivo nuevo ha abierto el dosier.\n\n` +
-      `Cuándo: ${madrid(new Date())}\n` +
-      `Dispositivo: ${dispositivo} · ${navegador}\n` +
-      `Origen: ${origen ?? "enlace directo"}\n\n` +
-      `Panel: ${PANEL_URL}\n`;
+    const lugar = [d.ciudad, d.pais && d.pais !== "ES" ? d.pais : null, d.red]
+      .filter((x): x is string => !!x)
+      .join(" · ");
+    const dispositivoTxt = d.dispositivo === "movil" ? "móvil" : d.dispositivo;
+
+    const lineas = [
+      "Han abierto el dosier desde un dispositivo nuevo.",
+      "",
+      d.etiqueta ? `Enlace: ${d.etiqueta}` : null,
+      `Cuándo: ${madrid(new Date())}`,
+      lugar ? `Lugar: ${lugar}` : null,
+      `Dispositivo: ${dispositivoTxt} · ${d.navegador}`,
+      d.origen ? `Llegó desde: ${d.origen}` : null,
+      "",
+      `Panel: ${PANEL_URL}`,
+    ].filter((x): x is string => x !== null);
+    const text = lineas.join("\n") + "\n";
+
+    const asunto = d.etiqueta
+      ? `Dosier: lo ha abierto ${d.etiqueta}`
+      : `Dosier: lo ha abierto un dispositivo nuevo (n.º ${d.n})`;
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: FROM,
-        to: [TO],
-        subject: `Dosier: lo ha abierto un dispositivo nuevo (n.º ${n})`,
-        text,
-      }),
+      body: JSON.stringify({ from: FROM, to: [TO], subject: asunto, text }),
     });
     if (!res.ok) {
       console.error("dosier-track: Resend falló", res.status, await res.text());
       return;
     }
-    await supabase.from("dosier_visita").update({ avisado_at: new Date().toISOString() }).eq("sid", sid);
+    await supabase.from("dosier_visita").update({ avisado_at: new Date().toISOString() }).eq("sid", d.sid);
   } catch (e) {
     console.error("dosier-track: error al avisar", String(e));
   }
@@ -188,10 +204,13 @@ async function apuntar(req: Request): Promise<void> {
   const segundos = entero(b.secs, 0, 14400);
   const secciones = seccionesDe(b.secc);
   const ancho = entero(b.w, 0, 20000);
+  const ciudad = textoCorto(b.ciu, 80) || null;
+  const pais = textoCorto(b.pais, 2).toUpperCase() || null;
+  const red = textoCorto(b.red, 60) || null;
 
   const { data: existente, error: errSel } = await supabase
     .from("dosier_visita")
-    .select("sid, scroll_max, segundos, secciones, pdf")
+    .select("sid, scroll_max, segundos, secciones, pdf, ciudad, pais, red")
     .eq("sid", sid)
     .maybeSingle();
   if (errSel) throw errSel;
@@ -206,6 +225,10 @@ async function apuntar(req: Request): Promise<void> {
         segundos: Math.max(existente.segundos ?? 0, segundos ?? 0),
         secciones: union,
         pdf: existente.pdf || t === "pdf",
+        // Solo se rellena lo que esta a null; un valor ya guardado no se pisa.
+        ciudad: existente.ciudad ?? ciudad,
+        pais: existente.pais ?? pais,
+        red: existente.red ?? red,
         updated_at: new Date().toISOString(),
       })
       .eq("sid", sid);
@@ -223,6 +246,8 @@ async function apuntar(req: Request): Promise<void> {
   const dispositivo = dispositivoDe(ua);
   const navegador = navegadorDe(ua);
   const origen = hostDe(textoCorto(b.ref, 300));
+  // La etiqueta va al asunto del correo: fuera saltos de línea y tabuladores.
+  const etiqueta = textoCorto(b.src, 60).replace(/[\r\n\t]+/g, " ").trim() || null;
 
   const { error: errIns } = await supabase.from("dosier_visita").insert({
     sid,
@@ -231,7 +256,10 @@ async function apuntar(req: Request): Promise<void> {
     dispositivo,
     navegador,
     origen,
-    src: textoCorto(b.src, 60) || null,
+    src: etiqueta,
+    ciudad,
+    pais,
+    red,
     ancho,
     scroll_max: scroll ?? 0,
     segundos: segundos ?? 0,
@@ -246,7 +274,7 @@ async function apuntar(req: Request): Promise<void> {
   if (esNuevo) {
     const { data: hashes } = await supabase.from("dosier_visita").select("visitor_hash").limit(50000);
     const n = new Set((hashes ?? []).map((r: { visitor_hash: string }) => r.visitor_hash)).size;
-    await avisar(sid, n, dispositivo, navegador, origen);
+    await avisar({ sid, n, etiqueta, ciudad, pais, red, dispositivo, navegador, origen });
   }
 }
 
@@ -260,7 +288,7 @@ async function panel(req: Request): Promise<Response> {
 
   const { data, error } = await supabase
     .from("dosier_visita")
-    .select("created_at, visitor_hash, es_nuevo, dispositivo, navegador, origen, scroll_max, segundos, secciones, pdf")
+    .select("created_at, visitor_hash, es_nuevo, dispositivo, navegador, origen, src, ciudad, pais, red, scroll_max, segundos, secciones, pdf")
     .order("created_at", { ascending: false })
     .limit(50000);
   if (error) {
@@ -295,6 +323,10 @@ async function panel(req: Request): Promise<Response> {
       origen: f.origen ?? "directo",
       nuevo: f.es_nuevo,
       pdf: f.pdf,
+      etiqueta: f.src ?? null,
+      ciudad: f.ciudad ?? null,
+      pais: f.pais ?? null,
+      red: f.red ?? null,
     })),
   };
   return new Response(JSON.stringify(body), { status: 200, headers });
