@@ -1,13 +1,9 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · C02c · Traer el plan de otro programa: estructura y funciones
-# (0100), la activación normal espera (0110), lectura de los agentes (0120) y
-# su prueba con la fixture inventada (con ROLLBACK).
-# Anterior: la 0189 del C02 y su prueba.
-# 37377481112: 0100, 0110 y 0120 entraron; la prueba falló (alias «x» en
-# company_chart_import_apply). La 0100, corregida, se vuelve a aplicar.
-# 37378020269: la 0100 se reaplicó bien; la prueba llegó al registro (48
-# cuentas enlazadas: las retenciones con modelo también cuentan). Solo la prueba.
-# 37378425939: 1 en verde; el 2 llamaba a una función interna. Solo la prueba.
-supabase/staging/sql/20261008_c02c_prueba_traer.sql
+# 06/10/2026 · Conta · Interruptor de Foodint (tanda propia, antes del C02c):
+# la prueba crea una cuenta con el id de Foodint, aplica el fichero de
+# producción tal cual, lo vuelve a aplicar, y aplica su vuelta atrás. ROLLBACK:
+# no queda nada en staging.
+# Anterior: la prueba del C02c (traer el plan), en verde en 37378799574.
+supabase/staging/sql/20261006_conta_prueba_interruptor_foodint.sql

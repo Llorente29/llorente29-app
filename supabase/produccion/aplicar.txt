@@ -6,46 +6,19 @@
 # verde del mismo commit, en REAL (un fichero por transacción, para al primer
 # fallo).
 #
-# C02 · Plan contable, TANDA 1 (respuesta 6). Desde la rama conta/c02-plan-contable,
-# ANTES de fusionar el PR #147. Todo nuevo del C02, fuera del camino del pedido:
-# el workflow cuenta 0 nombres de su lista (CAMINO_TABLAS / CAMINO_FUNCIONES).
+# Conta · INTERRUPTOR DE FOODINT, tanda propia (06/10, antes del C02c). Desde la
+# rama conta/c02c-traer-plan. Un solo fichero: inserta la fila 'conta' de la
+# cuenta de Foodint en feature_flags, como la tiene la cuenta A en staging.
 #
-# UNO PARA y va en el campo «autorizo», nombre entero:
+# NO PARA: el analizador dice «sigue» (solo inserta en feature_flags, que
+# existe). El campo «autorizo» va VACÍO: si se nombra un fichero que no para,
+# el workflow se niega («no hace falta autorizarlo»).
+# Camino del pedido: feature_flags no está en CAMINO_TABLAS; se puede lanzar
+# con «fuera_de_ventana: si».
 #
-#   20261007T0130_c02_proveedor_400_410.sql
-#
-# Para por dos «update» sobre expense_category, que ya existe. Solo rellenan
-# las dos columnas que la propia 0130 acaba de añadir (supplier_account_leaf y
-# supplier_account_ref), vacías hasta ese momento: no cambian ningún dato que
-# ya estuviera. Medido en producción el 05/10 (solo lectura; catálogo global,
-# tabla entera): 12 tipos de gasto, los 12 de serie; 3 van a la 4000 (60x) y
-# 9 a la 4100 (62x); 0 sin regla, así que su guarda pasa.
-#
-# El resto solo añade sobre algo existente (analizado el 05/10 con lo que
-# existe hoy: ai_suggestion, company_tax_profile, expense_category,
-# official_source, supplier, tax_rate, treasury_account, withholding_rate; ni una
-# función del C02):
-#   · 0110 inserta las tres fuentes del BOE en official_source;
-#   · 0120 cambia el CHECK de company_tax_profile (6 a 12 dígitos; el único
-#     perfil tiene 8) y 0150 le pone un disparador; 0180 amplía el CHECK de
-#     ai_suggestion ('modelo', 'plan');
-#   · 0187 pone un disparador AFTER DELETE en supplier, treasury_account,
-#     expense_category, tax_rate y withholding_rate.
-# Cierres: los «add constraint», «add column» y «create trigger» toman un cierre
-# un instante sobre esas tablas, ninguna del camino del pedido. Avisos para una
-# persona: los «execute» dinámicos de 0120, 0140, 0150 y 0185 son permisos
-# (RLS, grant select / execute), legibles en el fichero.
+# Después: cerrar sesión y volver a entrar con un usuario admin de Foodint.
+# OJO: en Ajustes › Plan contable NO pulsar «Activar» hasta que esté el C02c
+# (traer el plan de Diez): con el plan activado, la importación ya no se deja.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261007T0100_c02_pgc_account.sql
-supabase/migrations/20261007T0110_c02_pgc_serie.sql
-supabase/migrations/20261007T0115_c02_pgc_definicion.sql
-supabase/migrations/20261007T0120_c02_plan_empresa.sql
-supabase/migrations/20261007T0130_c02_proveedor_400_410.sql
-supabase/migrations/20261007T0140_c02_duplicadas_cerrar_palabras.sql
-supabase/migrations/20261007T0150_c02_deshacer_cambio_plan.sql
-supabase/migrations/20261007T0160_c02_cuentas_del_proveedor.sql
-supabase/migrations/20261007T0180_c02_propuestas_plan.sql
-supabase/migrations/20261007T0185_c02_lectura.sql
-supabase/migrations/20261007T0187_c02_enlaces_sin_dueno.sql
-supabase/migrations/20261007T0189_c02_renombrar_subcuenta.sql
+supabase/migrations/20261006T1300_conta_interruptor_foodint_datos.sql
