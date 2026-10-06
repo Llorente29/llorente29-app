@@ -1,10 +1,14 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · C03 · Respuesta 2 · 0180: cómo vende cada plataforma
-# (comisionista | revendedor | sin decir), que decide su 347 (RD 1065/2007,
-# art. 34.3). Primero la prueba (CHECK, vuelta atrás que para y que deshace,
-# reaplicar; ROLLBACK), después la migración.
-# Anterior: 0170 y limpieza de terceros huérfanos, en verde.
-supabase/staging/sql/20261009_c03_prueba_modelo_plataforma.sql
-supabase/migrations/20261009T0180_c03_modelo_plataforma.sql
+# 06/10/2026 · C04 · Tarea 2: el libro diario (ejercicios traídos, bloqueos
+# por tipo, asiento, apunte, resumen de ventas del día, nóminas, reparto,
+# predefinidos; enlaces de factura y liquidaciones; validar, anular y cadena;
+# Mayor, sumas y saldos y resultado por local).
+# Primero la prueba (foto de antes, reglas, cuenta B, vuelta atrás que para y
+# que deshace, reaplicar; ROLLBACK), después las cuatro migraciones.
+supabase/staging/sql/20261010_c04_prueba_libro.sql
+supabase/migrations/20261010T0100_c04_libro.sql
+supabase/migrations/20261010T0110_c04_enlaces.sql
+supabase/migrations/20261010T0120_c04_funciones.sql
+supabase/migrations/20261010T0130_c04_lectura.sql
