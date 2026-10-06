@@ -202,3 +202,28 @@
 8. **D8 · Ejercicios:** amplío `fiscal_year.status` con `traido` y creo 2023–2025 vacíos para el C04b, sin traer nada. ¿Correcto?
 9. **D9 · Asiento de ventas del día de cedidas:** ¿en el mismo asiento que las propias (una línea a la cuenta de cada socio) o en uno aparte por socio? Propongo el mismo asiento: un día, un local, un canal, un cobro de la plataforma.
 10. **D10 · Diez:** una exportación de prueba del libro diario de un mes cerrado, en el formato que saque Diez, para dimensionar el C04b. No se sube al repositorio.
+
+## Respuesta de Julio (06/10/2026)
+
+1. **D1 · Todas las ventas son al 10 %.**
+   - La base de cada venta propia es `total / 1,10`, redondeada por ticket. El asiento lo marca «calculado».
+   - Donde la línea trae su tipo (Uber), sirve de testigo: si no es 10, el asiento queda en «Duda».
+2. **D2 · Pendiente.** Julio pide la explicación de los dos caminos antes de responder.
+3. **D3 · El ticket lo expide Folvy.**
+   - Hoy Folvy no numera ningún ticket de plataforma: esa pieza es de Facturación (F01, con Verifactu).
+   - Mientras tanto, el asiento resumen del día guarda la lista y la huella de los pedidos.
+   - El rango «inicial–final» del RIVA 63.4 se rellena cuando F01 numere. Va al PR como pendiente.
+4. **D4 · Hoy hay un solo socio activo, el socio 1.** Las marcas cedidas son suyas; el socio 2 es histórico.
+5. **D5 · Sí, se pide a la gestoría.**
+   - Las nóminas y los contratos los hará el módulo de personal.
+   - El asiento de nóminas se queda como entrada que ese módulo rellenará.
+6. **D6 · Las compras se registran desde octubre.**
+   - Excepción: **las compras al socio 1 van por su resumen mensual**, que hace de factura (la emite una vez al mes).
+   - Sus albaranes sirven para contrastar, no se asientan (regla 8).
+7. **D7 · Una cuenta de banco por local**, con el número que pone Julio en la pantalla.
+8. **D8 · Se crean los ejercicios 2023–2025.**
+   - Julio sube lo de Diez en dos tandas: hasta el 30/06/2025, y el resto.
+9. **D9 · Las ventas cedidas no se contabilizan día a día.**
+   - Se agrupan, y el socio manda una vez al mes el total, que Folvy compara con sus tickets.
+   - **No hay línea de cedidas en el asiento de ventas del día.** El asiento de cedidas nace de la liquidación mensual del socio (C03); los tickets de Last son el testigo.
+10. **D10 · Diez trabaja por series.** El libro diario solo no basta: hacen falta también los libros de facturas emitidas y recibidas y la tesorería (se ve en la respuesta).
