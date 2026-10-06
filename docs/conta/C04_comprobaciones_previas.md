@@ -227,3 +227,41 @@
    - Se agrupan, y el socio manda una vez al mes el total, que Folvy compara con sus tickets.
    - **No hay línea de cedidas en el asiento de ventas del día.** El asiento de cedidas nace de la liquidación mensual del socio (C03); los tickets de Last son el testigo.
 10. **D10 · Diez trabaja por series.** El libro diario solo no basta: hacen falta también los libros de facturas emitidas y recibidas y la tesorería (se ve en la respuesta).
+
+## D2 y D10 · Segunda respuesta de Julio y lo que enseñan las cinco series de Diez (06/10)
+
+**D2 · Decidido: camino B para las marcas cedidas.**
+- Las marcas propias las factura Folvy con el NIF de la empresa.
+- Las ventas de marcas cedidas son del socio, y su IVA también. La empresa declara solo el IVA de lo suyo.
+- **Lo confirma el dato:** cada pedido de Last trae en `raw_tab.bills[]`:
+  - la sociedad emisora (`company.name`, la del socio);
+  - el número de su factura (`number`);
+  - `taxPercentage` (10), `taxableBase` y `tax`.
+- Hoy ese número **no se guarda** en `sale`, solo en el bruto. Se guarda en la tarea 2, para casar con el resumen mensual del socio.
+
+**D10 · Las cinco series de Diez, un mes cerrado (junio de 2025).**
+- Leídas fuera del repositorio. Aquí van solo formas y recuentos, sin nombres.
+- Columnas de la exportación: `Serie.Número · Fecha · Asiento · Doble · Subcuenta · Nombre de la subcuenta · Concepto (documento-tercero) · Debe · Haber`.
+- Todos los asientos cuadran al céntimo en las cinco.
+
+| Serie | Asientos (junio) | Forma |
+|---|---:|---|
+| 1 · Facturas expedidas | 30 | 430 de la plataforma al Debe, 700 + 477 (10 %) al Haber, **una por documento de la plataforma**: Glovo por liquidación (22), Just Eat por documento (6) y Uber **una al mes**. Más una factura mensual al socio: 705 + 477 en tres tipos |
+| 2 · Facturas recibidas | 154 | 600/62x al Debe con **una línea de 472 por tipo** (hasta tres, todas en la misma 47200000), 400/410 al Haber; alquiler con 4751 |
+| 3 · Tesorería | 88 | **Solo compensaciones**: 410 de la plataforma contra su 430 (84), y 400 del socio contra su 430 (4). **Ni una 572**: el banco no se asienta |
+| 4 · General | 1 | Reparto del resultado (129 → 112/120/121) |
+| 9 · Automáticos | 2 | Nómina del mes en un asiento (640, 642, 4750 IRPF, 476 SS ×2, 465), y liquidación trimestral del IVA (477 y 472 → 4700) |
+
+**Lo que cambia para el C04 (tarea 2):**
+1. **La numeración de Diez va por serie y no sigue el orden de las fechas** (58 de 154 en recibidas). Se numera al grabar.
+   - Folvy numera al validar (regla 2).
+   - Lo traído conserva serie y número de Diez tal cual (`source_type='migrated'`, `diez_series`, `diez_number`).
+2. **Las series de Folvy** se alinean con las de Diez: 1 expedidas, 2 recibidas, 3 tesorería, 4 general, 9 automáticos (nóminas, liquidación del IVA, regularización y cierre).
+   - Así el C04b mete cada asiento en su serie sin traducir.
+3. **Las ventas propias, en Diez, salen del documento de la plataforma** (liquidación o autofactura), no del ticket del día.
+   - Con «el ticket lo expide Folvy» (D3), las de Uber y Just Eat pasan a resumen diario.
+   - **Glovo, que es comisionista** (C03: `platform_model='comisionista'`), documenta la venta con su propia factura por liquidación. Asentar además el resumen diario la duplicaría.
+   - El generador elige por modelo de plataforma: comisionista → venta desde la liquidación; en nombre ajeno → resumen diario de tickets. Es la regla 7, decidida por el modelo y no solo por lo ya asentado.
+4. **El IVA soportado en Diez va a una sola 472.** Folvy lleva la 472 por tipo (C00/C02); al traer, se reparte por el tipo de cada línea.
+5. **El banco no está en Diez.** La tesorería solo compensa terceros. El asiento de cobro o pago contra 572 nace aquí y se completa en Bancos.
+6. **Nómina:** un asiento resumen al mes con el IRPF separado (4750 en Diez, 4751 en el BOE). Es la forma que el módulo de personal rellenará.
