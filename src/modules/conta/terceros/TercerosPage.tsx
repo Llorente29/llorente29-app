@@ -16,7 +16,7 @@
 // están en su filtro y lo dicen.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaFichaTercero, rutaMayor } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
@@ -87,7 +87,9 @@ export default function TercerosPage() {
   const [busca, setBusca] = useState('')
   const [vuelta, setVuelta] = useState(0)
   const [nuevo, setNuevo] = useState(false)
-  const [hecho, setHecho] = useState<string | null>(null)
+  // Lo que viene hecho de la ficha (archivar): se dice aquí, con su contenido (regla 8).
+  const llegada = useLocation().state as { aviso?: string } | null
+  const [hecho, setHecho] = useState<string | null>(llegada?.aviso ?? null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [archivar, setArchivar] = useState<TerceroLista | null>(null)
   const { filas, error } = useTerceros(cargando ? null : accountId, vuelta)
