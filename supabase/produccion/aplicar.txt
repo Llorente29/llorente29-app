@@ -6,19 +6,43 @@
 # verde del mismo commit, en REAL (un fichero por transacción, para al primer
 # fallo).
 #
-# Conta · INTERRUPTOR DE FOODINT, tanda propia (06/10, antes del C02c). Desde la
-# rama conta/c02c-traer-plan. Un solo fichero: inserta la fila 'conta' de la
-# cuenta de Foodint en feature_flags, como la tiene la cuenta A en staging.
+# C02c · Traer el plan de otro programa (Diez). Desde la rama
+# conta/c02c-traer-plan, ANTES de fusionar el PR #150. Las cuatro migraciones
+# del C02c; el interruptor de Foodint ya fue aparte (real 37432334442).
+# Fuera del camino del pedido: ninguna tabla ni función de CAMINO_TABLAS /
+# CAMINO_FUNCIONES.
 #
-# NO PARA: el analizador dice «sigue» (solo inserta en feature_flags, que
-# existe). El campo «autorizo» va VACÍO: si se nombra un fichero que no para,
-# el workflow se niega («no hace falta autorizarlo»).
-# Camino del pedido: feature_flags no está en CAMINO_TABLAS; se puede lanzar
-# con «fuera_de_ventana: si».
+# UNO PARA y va en el campo «autorizo», nombre entero:
 #
-# Después: cerrar sesión y volver a entrar con un usuario admin de Foodint.
-# OJO: en Ajustes › Plan contable NO pulsar «Activar» hasta que esté el C02c
-# (traer el plan de Diez): con el plan activado, la importación ya no se deja.
+#   20261008T0110_c02c_activar_espera.sql
+#
+# Para porque reemplaza company_chart_activate(uuid,boolean,text), que ya
+# existe (la puso la tanda 1 del C02). Es copia LITERAL de la vigente (0180)
+# con una sola guarda más: se niega a activar con numeración automática si la
+# empresa tiene una importación en revisión. Misma firma: create or replace.
+#
+# El resto sigue:
+#   · 0100 crea company_chart_import y sus funciones; sobre lo existente solo
+#     añade: amplía los CHECK de source ('migrated') y de que en company_account,
+#     _link y _log, y añade columnas nulas (name_source, import_id) a
+#     company_account y supplier;
+#   · 0120 da SELECT de company_chart_import a conta_lectura;
+#   · 0130 pone el disparador company_account_madre en company_account (las
+#     genéricas de Diez) y reemplaza company_chart_import_apply, que crea la
+#     propia 0100 en esta tanda.
+# Cierres: «add constraint», «add column» y «create trigger» toman un cierre un
+# instante sobre company_account*, y el «add column» sobre supplier. Ninguna
+# del camino del pedido.
+#
+# Lo que existe en producción se ha DEDUCIDO de las tandas ya aplicadas, no
+# medido (el conector de solo lectura a producción da «Unauthorized»): la
+# medida de verdad es la del ensayo. Si el ensayo dijera otra cosa, el
+# workflow se niega con «autorizo» y no se aplica nada.
+#
+# Después: «fusiona» → Vercel READY → Ajustes › Plan contable › traer de Diez.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261006T1300_conta_interruptor_foodint_datos.sql
+supabase/migrations/20261008T0100_c02c_traer_plan.sql
+supabase/migrations/20261008T0110_c02c_activar_espera.sql
+supabase/migrations/20261008T0120_c02c_lectura.sql
+supabase/migrations/20261008T0130_c02c_genericas.sql

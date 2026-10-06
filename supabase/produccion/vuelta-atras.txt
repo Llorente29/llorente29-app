@@ -1,8 +1,12 @@
 # VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
 # modo «vuelta_atras», con las mismas guardas y la misma ventana.
 #
-# Conta · INTERRUPTOR DE FOODINT: quita la fila 'conta' (manual_grant) de la
-# cuenta de Foodint. Lo que haya hecho dentro del módulo no se borra; solo deja
-# de verse la pestaña. Probada en staging dentro de
-# supabase/staging/sql/20261006_conta_prueba_interruptor_foodint.sql (rollback).
-supabase/vuelta-atras/20261006T1300_conta_interruptor_foodint_datos.down.sql
+# C02c: deshace la tanda en orden inverso. Probada en staging dentro de
+# supabase/staging/sql/20261008_c02c_prueba_traer.sql (paso 8, rollback).
+# Ojo: las guardas de la 0130 y la 0100 PARAN si hay algo traído (cuentas
+# genéricas, una importación «traida»): primero se deshace la importación
+# desde la pantalla; la vuelta atrás no borra el plan de nadie a escondidas.
+supabase/vuelta-atras/20261008T0130_c02c_genericas.down.sql
+supabase/vuelta-atras/20261008T0120_c02c_lectura.down.sql
+supabase/vuelta-atras/20261008T0110_c02c_activar_espera.down.sql
+supabase/vuelta-atras/20261008T0100_c02c_traer_plan.down.sql

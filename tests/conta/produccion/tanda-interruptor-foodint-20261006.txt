@@ -1,0 +1,24 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml, solo a mano («confirmo:
+# produccion»), entre las 00:30 y las 12:15 de Madrid (fuera, solo con
+# «fuera_de_ventana: si» y si ningún fichero toca el camino del pedido),
+# primero en ENSAYO (todo en una transacción y rollback) y, con un ensayo en
+# verde del mismo commit, en REAL (un fichero por transacción, para al primer
+# fallo).
+#
+# Conta · INTERRUPTOR DE FOODINT, tanda propia (06/10, antes del C02c). Desde la
+# rama conta/c02c-traer-plan. Un solo fichero: inserta la fila 'conta' de la
+# cuenta de Foodint en feature_flags, como la tiene la cuenta A en staging.
+#
+# NO PARA: el analizador dice «sigue» (solo inserta en feature_flags, que
+# existe). El campo «autorizo» va VACÍO: si se nombra un fichero que no para,
+# el workflow se niega («no hace falta autorizarlo»).
+# Camino del pedido: feature_flags no está en CAMINO_TABLAS; se puede lanzar
+# con «fuera_de_ventana: si».
+#
+# Después: cerrar sesión y volver a entrar con un usuario admin de Foodint.
+# OJO: en Ajustes › Plan contable NO pulsar «Activar» hasta que esté el C02c
+# (traer el plan de Diez): con el plan activado, la importación ya no se deja.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261006T1300_conta_interruptor_foodint_datos.sql
