@@ -21,9 +21,13 @@ name: Cumplimiento nocturno de contabilidad
 # agente, le añaden un comentario en vez de abrir otra).
 #
 # CUÁNDO
-#   · Cada noche a las 01:40 UTC (03:40 en Madrid en verano). OJO: GitHub solo
-#     corre lo programado desde la rama principal; hasta que el C00 se fusione,
-#     no corre solo.
+#   · Cada noche a las 03:40 de Madrid, en verano y en invierno. GitHub solo
+#     entiende UTC, así que hay dos disparos (01:40 y 02:40 UTC) y el trabajo
+#     «hora» deja correr solo el que en Madrid son las 03:40: el de las 01:40
+#     con el horario de verano (+02:00) y el de las 02:40 con el de invierno
+#     (+01:00). Se mira el disparo que llegó (github.event.schedule), no la
+#     hora del reloj: un disparo que GitHub retrase veinte minutos sigue
+#     contando como suyo. Lo programado solo corre desde la rama principal.
 #   · A mano (workflow_dispatch).
 #   · Con un push a conta/** que cambie los propios agentes: así se ve el
 #     primer informe desde la rama. En ese caso NO abre avisos: solo informa.
@@ -36,7 +40,9 @@ name: Cumplimiento nocturno de contabilidad
 
 on:
   schedule:
+    # 03:40 de Madrid: uno vale en verano y el otro en invierno (ver «hora»).
     - cron: '40 1 * * *'
+    - cron: '40 2 * * *'
   workflow_dispatch:
   push:
     branches: ['conta/**']
@@ -64,8 +70,36 @@ permissions:
   issues: write
 
 jobs:
+  hora:
+    name: ¿Son las 03:40 en Madrid?
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      toca: ${{ steps.mirar.outputs.toca }}
+    steps:
+      - name: Mirar qué disparo ha llegado y qué horario rige en Madrid
+        id: mirar
+        env:
+          EVENTO: ${{ github.event_name }}
+          DISPARO: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          desfase=$(TZ=Europe/Madrid date +%z)
+          if [ "$EVENTO" != "schedule" ]; then
+            toca=true
+          else
+            case "$DISPARO|$desfase" in
+              "40 1 * * *|+0200" | "40 2 * * *|+0100") toca=true ;;
+              *) toca=false ;;
+            esac
+          fi
+          echo "Evento ${EVENTO}, disparo «${DISPARO:-ninguno}», Madrid en ${desfase}: corre = ${toca}."
+          echo "toca=${toca}" >> "$GITHUB_OUTPUT"
+
   datos-maestros:
     name: Datos maestros e impuestos
+    needs: hora
+    if: needs.hora.outputs.toca == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -158,6 +192,8 @@ jobs:
 
   normativa:
     name: Normativa al día
+    needs: hora
+    if: needs.hora.outputs.toca == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -200,6 +236,8 @@ jobs:
 
   plan-contable:
     name: Plan contable
+    needs: hora
+    if: needs.hora.outputs.toca == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
