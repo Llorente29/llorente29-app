@@ -1,0 +1,1 @@
+Maquetas C03 (Estilo nuevo, 1440). N9Cliente: ficha de cliente, caso plataforma de reparto. N10Socio: ficha de socio de marca con liquidacion mensual. Nombres y cifras inventados.
