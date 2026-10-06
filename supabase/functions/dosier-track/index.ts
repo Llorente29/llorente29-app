@@ -17,7 +17,7 @@ import { createClient } from "@supabase/supabase-js";
 const ORIGIN = "https://dosier.folvy.app";
 const PANEL_URL = `${ORIGIN}/panel`;
 const FROM = "Folvy <no-reply@folvy.app>";
-const TO = "hello@folvy.app";
+const TO = ["hello@folvy.app", "jgcolon@idasal.com"]; // un solo correo, dos destinatarios
 const MAX_FILAS_24H = 200;
 const MAX_CORREOS_DIA = 20;
 
@@ -153,7 +153,7 @@ async function avisar(d: DatosAviso): Promise<void> {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: FROM, to: [TO], subject: asunto, text }),
+      body: JSON.stringify({ from: FROM, to: TO, subject: asunto, text }),
     });
     if (!res.ok) {
       console.error("dosier-track: Resend falló", res.status, await res.text());
