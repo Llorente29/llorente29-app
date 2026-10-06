@@ -67,7 +67,7 @@ describe('los tres PDF de la fixture', () => {
     // Del CSV, solo las subcuentas: grupo, subgrupo y cuenta van en la columna de títulos del PDF.
     const csv = lecturaCsv('plan.csv').cuentas
     expect(pdf.map((c) => [c.code, c.nombre])).toEqual(csv.map((c) => [c.code, c.nombre]))
-    expect(pdf.length).toBe(711)
+    expect(pdf.length).toBe(714) // 711 + las tres genéricas (respuesta 2)
   })
 
   it('los terceros del PDF son los del CSV: mismo código, NIF y nombre', async () => {

@@ -44,6 +44,8 @@ export type Decision =
   | { tipo: 'retencion'; modelo: Modelo | null }
   /** Una cuenta de serie (sufijo 0000): se conserva el nombre oficial. */
   | { tipo: 'serie' }
+  /** La genérica de Diez de una cuenta con hijas (16000000 de la 160): entra con su número, bajo su cuenta, y no se propone para nada nuevo (respuesta 2). */
+  | { tipo: 'generica' }
   /** Falta que la persona diga qué es. */
   | { tipo: 'pendiente' }
 
@@ -129,6 +131,12 @@ export function proponer(e: EntradaPropuesta): FilaRevision[] {
     const base = { code: c.code, hoja: c.hoja, clase, enOrigen: c.nombreOrigen || c.nombre, nif, opciones: [] as Opcion[], cambia: false }
     if (c.clase === 'serie') {
       if (clase === 'iva') filas.push({ ...base, decision: { tipo: 'serie' }, confianza: 'seguro', cambia: true, porque: 'en Folvy el IVA va por tipo; el 303 suma igual' })
+      continue
+    }
+    if (c.clase === 'generica') {
+      // Ni proveedor ni cliente aunque cuelgue de la 44: es la cuenta «de la cuenta», no un tercero.
+      const deQue = c.relleno && c.relleno !== c.hoja ? `de la ${c.relleno}, que no está en el plan de pymes: va bajo la ${c.hoja}` : `de la ${c.hoja}, que aquí se desglosa en sus hijas`
+      filas.push({ ...base, clase: 'otra', decision: { tipo: 'generica' }, confianza: 'seguro', porque: `genérica ${deQue}; entra con su número y no se propone para nada nuevo` })
       continue
     }
     if (clase === 'proveedor' || clase === 'acreedor') { filas.push(terceroProveedor(base, c, nif, porNif, e)); continue }
@@ -351,6 +359,8 @@ export function nombreEnFolvy(f: FilaRevision, nombreLeido: string): string {
  */
 export interface PlanTraer {
   cuentas: { code: string; hoja: string; nombre: string; nombre_origen: string; nota: 'cuenta' | 'cliente_c03' | null }[]
+  /** Las genéricas de Diez: cuelgan de una cuenta CON hijas (madre), con su número (respuesta 2). */
+  genericas: { code: string; madre: string; nombre: string; nombre_origen: string }[]
   crear: { code: string; nombre: string; nif: string | null; direccion: string | null; cp: string | null; poblacion: string | null; provincia: string | null }[]
   enlaces: { code: string; entity: 'supplier' | 'bank_account'; entity_id: string | null; crea_code: string | null; role: 'principal' | 'pago' }[]
   retenciones: { code: string; modelo: Modelo }[]
@@ -360,9 +370,10 @@ export interface PlanTraer {
 export function planTraer(filas: readonly FilaRevision[], cuentas: readonly CuentaClasificada[], terceros: readonly TerceroLeido[]): PlanTraer {
   const porCodigo = new Map(filas.map((f) => [f.code, f]))
   const tercero = new Map(terceros.map((t) => [t.code, t]))
-  const out: PlanTraer = { cuentas: [], crear: [], enlaces: [], retenciones: [], nombres_serie: [] }
+  const out: PlanTraer = { cuentas: [], genericas: [], crear: [], enlaces: [], retenciones: [], nombres_serie: [] }
   for (const c of cuentas) {
     if (c.clase === 'serie') { out.nombres_serie.push({ code: c.code, nombre_origen: c.nombreOrigen || c.nombre }); continue }
+    if (c.clase === 'generica') { out.genericas.push({ code: c.code, madre: c.hoja, nombre: c.nombre, nombre_origen: c.nombreOrigen || c.nombre }); continue }
     const f = porCodigo.get(c.code)
     if (!f) continue
     const d = f.decision
@@ -382,12 +393,13 @@ export function planTraer(filas: readonly FilaRevision[], cuentas: readonly Cuen
 /** Cuántas cuentas traídas quedan enlazadas (a una ficha, a un banco o a un modelo de retenciones). La base cuenta lo mismo. */
 export const cuentasEnlazadas = (p: PlanTraer): number => new Set([...p.enlaces.map((l) => l.code), ...p.retenciones.map((r) => r.code)]).size
 
-/** «96 cuentas tuyas con su número de Diez · 79 enlazadas · 6 nuevas · el IVA pasa a ir por tipo». */
+/** «96 cuentas tuyas con su número de Diez · 42 genéricas de Diez · 79 enlazadas · 6 nuevas · el IVA pasa a ir por tipo». */
 export function resumenTraer(p: PlanTraer, programa: string, ivaCambia: boolean): string {
   // Enlazada = la cuenta traída va a algo de Folvy: una ficha, un banco o un modelo de retenciones.
   const enlazadas = cuentasEnlazadas(p)
   return [
     `${p.cuentas.length} cuentas tuyas con su número de ${programa}`,
+    p.genericas.length ? `${p.genericas.length} ${p.genericas.length === 1 ? 'genérica' : 'genéricas'} de ${programa}` : null,
     `${enlazadas} enlazadas`,
     p.crear.length ? `${p.crear.length} ${p.crear.length === 1 ? 'ficha nueva' : 'fichas nuevas'}` : null,
     ivaCambia ? 'el IVA pasa a ir por tipo' : null,

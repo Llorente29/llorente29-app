@@ -217,6 +217,8 @@ function MenuCuenta({ n, c, p, abrirPanel, ocultar }: {
 function Origen({ n, de }: { n: NodoPlan; de: string | null }) {
   if (!n.origen) return null
   if (n.origen === 'traida') return <Chip tono="azul">{de ? `Tuya · de ${de}` : 'Tuya · traída'}</Chip>
+  // Respuesta 2 del C02c: la genérica de Diez de una cuenta con hijas (16000000 bajo la 160).
+  if (n.origen === 'generica') return <Chip tono="azul">{de ? `De ${de} · genérica` : 'Traída · genérica'}</Chip>
   return n.origen === 'tuya' ? <Chip tono="azul">Tuya</Chip> : n.origen === 'propuesta' ? <Chip tono="ia">Propuesta</Chip> : <Chip tono="ia">De serie</Chip>
 }
 

@@ -20,6 +20,7 @@ const raiz = join(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 const dir = join(raiz, 'tests/conta/fixtures/importar/diez')
 const serie = JSON.parse(readFileSync(join(raiz, 'supabase/conta/pgc/serie.json'), 'utf8')) as { cuentas: { plan: string; code: string; is_leaf: boolean; valid_to: string | null }[] }
 const hojas = new Set(serie.cuentas.filter((c) => c.plan === 'pymes' && c.is_leaf && !c.valid_to).map((c) => c.code))
+const ramas = new Set(serie.cuentas.filter((c) => c.plan === 'pymes' && !c.is_leaf && !c.valid_to).map((c) => c.code))
 const folvy = JSON.parse(readFileSync(join(dir, 'folvy.json'), 'utf8')) as { proveedores: { name: string; nif: string | null }[]; bancos: { name: string; iban: string }[] }
 
 const uuid = (n: number) => `c02c0000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -38,7 +39,7 @@ function leer(f: string, conDireccion: boolean): Lectura {
   return { ...l, terceros: l.terceros.map((t) => ({ ...t, direccion: v(t.code, 'direccion'), cp: v(t.code, 'cp'), poblacion: v(t.code, 'poblacion'), provincia: v(t.code, 'provincia') })) }
 }
 const lectura = juntar('diez', [leer('plan.csv', false), leer('proveedores.csv', true), leer('clientes.csv', true)])
-const r = resumir(lectura, { plan: 'pymes', digitos: 8 }, hojas)
+const r = resumir(lectura, { plan: 'pymes', digitos: 8 }, hojas, ramas)
 if (!r.ok) throw new Error(r.motivo ?? 'no')
 let filas = proponer({ cuentas: r.cuentas, terceros: lectura.terceros, proveedores, bancos, programa: 'Cegid Diez' })
 // Lo que decidiría la persona en «decide tú»: 47510015 → 111, 47510019 → ninguno, 43000006 → solo cliente, el resto → cuenta suya sin ficha.
@@ -53,16 +54,17 @@ const k = cifras(filas)
 const enlazadas = cuentasEnlazadas(plan)
 const lit = (s: string) => `'${s.replace(/'/g, "''")}'`
 const planJson = JSON.stringify(plan)
+const traidas = plan.cuentas.length + plan.genericas.length
 
 const sql = `-- supabase/staging/sql/20261008_c02c_prueba_traer.sql
 --
 -- GENERADO por tests/conta/fixtures/importar/diez/prueba-staging.ts (no se edita a mano).
--- C02c · Prueba de la 0100/0110/0120 en staging-conta con la fixture INVENTADA
+-- C02c · Prueba de la 0100/0110/0120/0130 en staging-conta con la fixture INVENTADA
 -- (tests/conta/fixtures/importar/diez/), con el JWT de verdad de los
 -- administradores de A y de B (pasa por la RLS). Termina en ROLLBACK.
 --
 -- Lo que manda el asistente (planTraer, el mismo núcleo de la pantalla):
---   ${plan.cuentas.length} cuentas tuyas · ${plan.crear.length} fichas nuevas · ${plan.enlaces.length} enlaces a proveedores y bancos (${enlazadas} cuentas) · ${plan.retenciones.length} retenciones con modelo
+--   ${plan.cuentas.length} cuentas tuyas · ${plan.genericas.length} genéricas · ${plan.crear.length} fichas nuevas · ${plan.enlaces.length} enlaces a proveedores y bancos (${enlazadas} cuentas) · ${plan.retenciones.length} retenciones con modelo
 --   cifras de la revisión: ${k.tal} tal cual · ${k.revisar} para revisar · ${k.cambian} cambian · ${k.nuevas} nuevas
 --
 --   1. Traer: importar y activar en un paso. Código exacto, nombre de la ficha,
@@ -76,7 +78,12 @@ const sql = `-- supabase/staging/sql/20261008_c02c_prueba_traer.sql
 --   5. Deshacer se bloquea si una ficha nueva ya se ha usado (un pedido).
 --   6. Con una revisión a medias, «empiezo de cero» espera.
 --   7. B no ve ni toca la importación de A.
---   8. Vuelta atrás de la 0120, 0110 y 0100.
+--   9. Respuesta 2: las genéricas (16000000 bajo la 160, 44500000 bajo la 44,
+--      79540000 bajo la 7954) entran con su número (en el 1); y la guarda de la
+--      base para el CHOQUE forzado (47500000 colgada de la 475: la 4750
+--      rellenada da el mismo número), una manual bajo una cuenta con hijas y
+--      una traída que no es el relleno de nadie.
+--   8. Vuelta atrás de la 0130, 0120, 0110 y 0100.
 
 begin;
 
@@ -113,9 +120,14 @@ begin
   -- 1 · Traer.
   r := public.company_chart_import_apply(imp, plan, 'Prueba C02c');
   raise notice 'PRUEBA C02c · traer: %', r;
-  if (r->>'cuentas')::int <> ${plan.cuentas.length} then raise exception 'PRUEBA C02c: cuentas traídas = %', r->>'cuentas'; end if;
+  if (r->>'cuentas')::int <> ${traidas} then raise exception 'PRUEBA C02c: cuentas traídas = %', r->>'cuentas'; end if;
+  if (r->>'genericas')::int <> ${plan.genericas.length} then raise exception 'PRUEBA C02c: genéricas = %', r->>'genericas'; end if;
   if (r->>'fichas')::int <> ${plan.crear.length} then raise exception 'PRUEBA C02c: fichas nuevas = %', r->>'fichas'; end if;
-  if (select count(*) from public.company_account where company_id = emp and source = 'migrated') <> ${plan.cuentas.length} then raise exception 'PRUEBA C02c: migrated ≠ ${plan.cuentas.length}'; end if;
+  if (select count(*) from public.company_account where company_id = emp and source = 'migrated') <> ${traidas} then raise exception 'PRUEBA C02c: migrated ≠ ${traidas}'; end if;
+  -- Las genéricas: con su número, colgadas de su cuenta con hijas, traídas y con su nombre de Diez.
+  select string_agg(code || '<' || template_code || ':' || kind || ':' || source || ':' || (name_source is not null), ' ' order by code) into v
+    from public.company_account where company_id = emp and code in (${plan.genericas.map((g) => lit(g.code)).join(', ')});
+  if v is distinct from ${lit(plan.genericas.map((g) => `${g.code}<${g.madre}:own:migrated:true`).join(' '))} then raise exception 'PRUEBA C02c: genéricas = %', v; end if;
   if (select count(*) from public.company_account where company_id = emp and kind = 'template') <> ${hojas.size} then raise exception 'PRUEBA C02c: hojas de serie ≠ ${hojas.size}'; end if;
   -- Código exacto, nombre de la ficha, nombre de Diez aparte.
   select name || ' | ' || name_source into v from public.company_account where company_id = emp and code = '40000001';
@@ -152,7 +164,7 @@ begin
   if exists (select 1 from public.company_account_link l join public.company_account a on a.id = l.company_account_id where a.company_id = emp and a.code in ('43000004', '41000100')) then raise exception 'PRUEBA C02c: una cuenta sin ficha tiene enlace'; end if;
   -- Una entrada en «Lo que ha hecho Folvy».
   select detalle into v from public.company_account_log where company_id = emp and que = 'importado';
-  if v is distinct from 'Plan traído de Cegid Diez · ${plan.cuentas.length} cuentas · ${enlazadas} enlaces · ${plan.crear.length} fichas nuevas' then raise exception 'PRUEBA C02c: registro = %', v; end if;
+  if v is distinct from 'Plan traído de Cegid Diez · ${traidas} cuentas · ${plan.genericas.length} genéricas · ${enlazadas} enlaces · ${plan.crear.length} fichas nuevas' then raise exception 'PRUEBA C02c: registro = %', v; end if;
   raise notice 'PRUEBA C02c · 1 en verde';
 
   -- 2 · La IA propondría a «Hielo Polar del Barrio» (no venía en Diez) la siguiente libre dentro de lo traído.
@@ -216,15 +228,50 @@ begin
 end $$;
 reset role;
 
-\\echo '>>> 8. Vuelta atrás (0120, 0110 y 0100)'
-\\ir ../../vuelta-atras/20261008T0120_c02c_lectura.down.sql
-\\ir ../../vuelta-atras/20261008T0110_c02c_activar_espera.down.sql
--- La guarda de la vuelta atrás para si queda algo traído: lo de A se quita antes, a mano (dentro del ROLLBACK).
+\\echo '>>> 9. La guarda de la base: de una cuenta con hijas solo cuelgan las genéricas traídas'
+do $$
+declare
+  emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
+  fallo text;
+  alta constant text := 'insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source) values (%L, %L, %L, %L, %L, %L, %L, %L)';
+begin
+  -- Choque forzado: 47500000 como genérica de la 475; la hoja 4750 rellenada da el mismo número.
+  begin
+    execute format(alta, 'c01a0000-0000-4000-8000-00000000000a', emp, 'pymes', '47500000', '475', 'Choque forzado', 'own', 'migrated');
+    raise exception 'PRUEBA C02c: entra un choque';
+  exception when unique_violation then fallo := sqlerrm; end;
+  if fallo not like '47500000 sería la genérica de la 475, pero la 4750 rellenada da el mismo número%' then raise exception 'PRUEBA C02c: choque = %', fallo; end if;
+  -- Una manual (no traída) bajo una cuenta con hijas: no.
+  begin
+    execute format(alta, 'c01a0000-0000-4000-8000-00000000000a', emp, 'pymes', '16000001', '160', 'Manual bajo la 160', 'own', 'manual');
+    raise exception 'PRUEBA C02c: entra una manual bajo la 160';
+  exception when check_violation then fallo := sqlerrm; end;
+  if fallo not like '16000001 cuelga de la 160, que tiene hijas%solo una cuenta traída%' then raise exception 'PRUEBA C02c: manual = %', fallo; end if;
+  -- Una traída que no es el relleno de nadie: no.
+  begin
+    execute format(alta, 'c01a0000-0000-4000-8000-00000000000a', emp, 'pymes', '16012300', '160', 'Rara', 'own', 'migrated');
+    raise exception 'PRUEBA C02c: entra una traída que no es relleno';
+  exception when check_violation then fallo := sqlerrm; end;
+  if fallo not like '16012300 no es la genérica de la 160%' then raise exception 'PRUEBA C02c: no relleno = %', fallo; end if;
+  -- Y lo de siempre, igual: una subcuenta manual de una hoja entra.
+  execute format(alta, 'c01a0000-0000-4000-8000-00000000000a', emp, 'pymes', '62900077', '629', 'Manual de hoja', 'own', 'manual');
+  raise notice 'PRUEBA C02c · 9 en verde';
+end $$;
+
+\\echo '>>> 8. Vuelta atrás (0130, 0120, 0110 y 0100)'
+-- Las guardas de la vuelta atrás paran si queda algo traído: lo de A se quita antes, a mano (dentro del ROLLBACK).
 delete from public.purchase_order where supplier_id in (select id from public.supplier where import_id is not null);
 delete from public.company_account_link where company_id = '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
 delete from public.company_account where company_id = '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
 delete from public.supplier where import_id is not null;
 update public.company_chart_import set status = 'deshecha' where status = 'traida';
+\\ir ../../vuelta-atras/20261008T0130_c02c_genericas.down.sql
+do $$ begin
+  if exists (select 1 from pg_trigger where tgname = 'company_account_madre') then raise exception 'PRUEBA C02c: la vuelta atrás de la 0130 no quita la guarda'; end if;
+  if pg_get_functiondef('public.company_chart_import_apply(uuid, jsonb, text)'::regprocedure) like '%genericas%' then raise exception 'PRUEBA C02c: la vuelta atrás de la 0130 no devuelve la función de la 0100'; end if;
+end $$;
+\\ir ../../vuelta-atras/20261008T0120_c02c_lectura.down.sql
+\\ir ../../vuelta-atras/20261008T0110_c02c_activar_espera.down.sql
 \\ir ../../vuelta-atras/20261008T0100_c02c_traer_plan.down.sql
 do $$ begin
   if to_regclass('public.company_chart_import') is not null then raise exception 'PRUEBA C02c: la vuelta atrás no quita company_chart_import'; end if;

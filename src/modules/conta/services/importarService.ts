@@ -74,7 +74,8 @@ export const guardarImportacion = (companyId: string, programa: Programa, ficher
 
 export const tirarImportacion = (id: string) => rpc<void>('company_chart_import_discard', { p_import: id })
 
-export interface ResultadoTraer { importacion: string; serie: number; cuentas: number; fichas: number; enlaces: number; subcuentas: number; avisos: string[] }
+/** cuentas = las del programa con su número (propias + genéricas, 0130); genericas, aparte. */
+export interface ResultadoTraer { importacion: string; serie: number; cuentas: number; genericas?: number; fichas: number; enlaces: number; subcuentas: number; avisos: string[] }
 
 /** Traer el plan: importar y activar en un paso, en la base, todo o nada. */
 export const traerPlan = (id: string, plan: PlanTraer, quien: string | null) =>

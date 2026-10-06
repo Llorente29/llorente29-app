@@ -70,10 +70,33 @@ export function informePlan(hallazgos, { donde, hoy, filas, resumen }) {
  *   · hay 472 y 477 para cada tipo de IVA (o IGIC) vigente de su territorio.
  * Cada caso lleva la cuenta (account_id) de la que es (regla 9).
  */
+/**
+ * Respuesta 2 del C02c · ¿Por qué una cuenta cuelga de una cuenta CON hijas?
+ * Solo puede ser la genérica traída de otro programa (16000000 bajo la 160;
+ * 44500000 bajo la 44): devuelve null si cumple la regla y, si no, el motivo.
+ * Misma regla que genericaDe (src/modules/conta/lib/importarPlan.ts) y que el
+ * disparador de la 20261008T0130.
+ */
+export function motivoGenericaMala(c, hojas, ramas) {
+  if (c.source !== 'migrated') return `cuelga de la ${c.template_code}, que tiene hijas: solo una cuenta traída de otro programa puede (la genérica)`
+  if (!ramas.has(c.template_code)) return `dice colgar de la ${c.template_code}, que no es una cuenta del cuadro`
+  if (!c.code.startsWith(c.template_code)) return `no empieza por su cuenta madre ${c.template_code}`
+  // Mismo orden que el disparador: el choque antes, para que diga «no se sabe cuál es cuál».
+  const choque = [...hojas].find((h) => h.startsWith(c.template_code) && h.padEnd(c.code.length, '0') === c.code)
+  if (choque) return `la hoja ${choque} rellenada da el mismo número`
+  for (let n = Math.min(5, c.code.length - 1); n >= 1; n--) if (hojas.has(c.code.slice(0, n))) return `empieza por la hoja ${c.code.slice(0, n)}: es de ella, no de la ${c.template_code}`
+  for (let n = Math.min(5, c.code.length - 1); n > c.template_code.length; n--) if (ramas.has(c.code.slice(0, n))) return `su madre sería la ${c.code.slice(0, n)}, no la ${c.template_code}`
+  const sinCeros = c.code.replace(/0+$/, '')
+  const relleno = sinCeros.length <= c.template_code.length ? c.template_code : sinCeros
+  if (relleno !== c.template_code && relleno.length > 3) return `no es el relleno de la ${c.template_code} ni de una cuenta de 3 dígitos`
+  return null
+}
+
 export function revisarEmpresas(bd, serie) {
   const out = []
   const hojas = { pymes: new Set(), general: new Set() }
-  for (const c of serie.cuentas) if (c.is_leaf) hojas[c.plan].add(c.code)
+  const ramas = { pymes: new Set(), general: new Set() }
+  for (const c of serie.cuentas) if (!c.valid_to) (c.is_leaf ? hojas : ramas)[c.plan].add(c.code)
   const cuentas = bd.company_account ?? []
   const enlaces = bd.company_account_link ?? []
   for (const e of bd.empresas_plan ?? []) {
@@ -87,6 +110,11 @@ export function revisarEmpresas(bd, serie) {
     if (faltan.length) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: le faltan ${faltan.length} cuentas de serie de su plan (${faltan.slice(0, 8).join(', ')}${faltan.length > 8 ? '…' : ''}).` })
     const otroPlan = suyas.filter((c) => c.plan !== plan)
     if (otroPlan.length) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: ${otroPlan.length} cuentas son del plan ${otroPlan[0].plan} y la empresa usa el de ${plan}.` })
+    // Colgadas de una cuenta con hijas: solo las genéricas traídas, y con su regla (respuesta 2).
+    for (const c of suyas.filter((x) => x.kind === 'own' && !hojas[plan].has(x.template_code))) {
+      const m = motivoGenericaMala(c, hojas[plan], ramas[plan])
+      if (m) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: ${c.code} ${m}.` })
+    }
     const largas = suyas.filter((c) => c.code.length !== Number(e.account_digits))
     if (largas.length) out.push({ nivel: 'rojo', texto: `Empresa · ${yo}: ${largas.length} cuentas no tienen ${e.account_digits} dígitos (${largas.slice(0, 5).map((c) => c.code).join(', ')}).` })
     for (const l of enlaces.filter((x) => x.company_id === e.id)) {

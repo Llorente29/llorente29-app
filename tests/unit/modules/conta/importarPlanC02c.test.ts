@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import serie from '../../../../supabase/conta/pgc/serie.json'
 import {
-  adivinarColumnas, claveNombre, hojaDe, ibanEnNombre, juntar, leerTabla, nifDeListado, parecido, partirCsv, resumir, type Lectura,
+  adivinarColumnas, claveNombre, genericaDe, hojaDe, ibanEnNombre, juntar, leerTabla, nifDeListado, parecido, partirCsv, resumir, type Lectura,
 } from '@/modules/conta/lib/importarPlan'
 import {
   cifras, decidir, filtrar, planTraer, proponer, resumenTraer, validar, type FichaBanco, type FichaProveedor, type FilaRevision,
@@ -18,6 +18,9 @@ const dir = join(__dirname, '../../../conta/fixtures/importar/diez')
 const leerCsv = (f: string) => partirCsv(readFileSync(join(dir, f), 'utf8'))
 const hojasPymes = new Set((serie as { cuentas: { plan: string; code: string; is_leaf: boolean; valid_to: string | null }[] }).cuentas
   .filter((c) => c.plan === 'pymes' && c.is_leaf && !c.valid_to).map((c) => c.code))
+// Las cuentas del cuadro con hijas (respuesta 2: de ellas cuelgan las genéricas de Diez).
+const ramasPymes = new Set((serie as { cuentas: { plan: string; code: string; is_leaf: boolean; valid_to: string | null }[] }).cuentas
+  .filter((c) => c.plan === 'pymes' && !c.is_leaf && !c.valid_to).map((c) => c.code))
 const folvy = JSON.parse(readFileSync(join(dir, 'folvy.json'), 'utf8')) as { proveedores: { name: string; nif: string | null }[]; bancos: { name: string; iban: string }[] }
 const proveedores: FichaProveedor[] = folvy.proveedores.map((p, i) => ({ id: `p${i + 1}`, name: p.name, nif: p.nif }))
 const bancos: FichaBanco[] = folvy.bancos.map((b, i) => ({ id: `b${i + 1}`, name: b.name, iban: b.iban }))
@@ -110,15 +113,23 @@ describe('lectura de tabla (CSV/Excel) con asignación de columnas', () => {
 
 describe('resumen frente a la empresa: el código manda, la longitud no se toca', () => {
   const l = lecturaFixture()
-  it('«711 cuentas, 96 tuyas · plan de pymes · 8 dígitos, igual que aquí»', () => {
-    const r = resumir(l, { plan: 'pymes', digitos: 8 }, hojasPymes)
+  it('«714 cuentas, 96 tuyas y 3 genéricas · plan de pymes · 8 dígitos, igual que aquí»', () => {
+    const r = resumir(l, { plan: 'pymes', digitos: 8 }, hojasPymes, ramasPymes)
     expect(r.ok).toBe(true)
     expect(r.tuyas).toBe(96)
-    expect(r.total).toBe(hojasPymes.size + 96)
-    expect(r.frase).toBe(`${hojasPymes.size + 96} cuentas, 96 tuyas · plan de pymes · 8 dígitos, igual que aquí`)
+    expect(r.genericas).toBe(3)
+    expect(r.total).toBe(hojasPymes.size + 96 + 3)
+    expect(r.frase).toBe(`${hojasPymes.size + 99} cuentas, 96 tuyas y 3 genéricas · plan de pymes · 8 dígitos, igual que aquí`)
+  })
+  it('sin las cuentas con hijas del cuadro, las genéricas no encajan: para y dice cuáles, sin hablar del otro plan', () => {
+    const r = resumir(l, { plan: 'pymes', digitos: 8 }, hojasPymes)
+    expect(r.ok).toBe(false)
+    expect(r.fuera.map((c) => c.code)).toEqual(['16000000', '44500000', '79540000'])
+    expect(r.motivo).toMatch(/^3 cuentas no encajan en el plan de pymes \(16000000, 44500000, 79540000\): no son subcuenta de una cuenta sin hijas ni la genérica/)
+    expect(r.motivo).not.toMatch(/otro plan/)
   })
   it('sufijo 0000 que coincide con su hoja = de serie (no se duplica); 76201000 también, con hoja de 5 dígitos', () => {
-    const r = resumir(l, { plan: 'pymes', digitos: 8 }, hojasPymes)
+    const r = resumir(l, { plan: 'pymes', digitos: 8 }, hojasPymes, ramasPymes)
     const c = (code: string) => r.cuentas.find((x) => x.code === code)!
     expect(c('47200000')).toMatchObject({ hoja: '472', clase: 'serie' })
     expect(c('76201000')).toMatchObject({ hoja: '76201', clase: 'serie' })
@@ -127,32 +138,33 @@ describe('resumen frente a la empresa: el código manda, la longitud no se toca'
     expect(hojaDe('41000100', hojasPymes)).toBe('4100')
   })
   it('longitud distinta: para y lo dice; no se renumera nada', () => {
-    const r = resumir(l, { plan: 'pymes', digitos: 10 }, hojasPymes)
+    const r = resumir(l, { plan: 'pymes', digitos: 10 }, hojasPymes, ramasPymes)
     expect(r.ok).toBe(false)
     expect(r.motivo).toMatch(/tienen 8 dígitos y tu empresa en Folvy usa 10/)
   })
   it('longitudes mezcladas en el fichero: para', () => {
-    const r = resumir({ cuentas: [{ code: '40000001', nombre: 'A', nombreOrigen: 'A' }, { code: '4000000001', nombre: 'B', nombreOrigen: 'B' }, { code: '40000002', nombre: 'C', nombreOrigen: 'C' }] }, { plan: 'pymes', digitos: 8 }, hojasPymes)
+    const r = resumir({ cuentas: [{ code: '40000001', nombre: 'A', nombreOrigen: 'A' }, { code: '4000000001', nombre: 'B', nombreOrigen: 'B' }, { code: '40000002', nombre: 'C', nombreOrigen: 'C' }] }, { plan: 'pymes', digitos: 8 }, hojasPymes, ramasPymes)
     expect(r.ok).toBe(false)
     expect(r.motivo).toMatch(/mezcla longitudes/)
   })
   it('una cuenta que no cuelga de ninguna hoja del plan de la empresa: para con la lista', () => {
-    const r = resumir({ cuentas: [{ code: '40000001', nombre: 'A', nombreOrigen: 'A' }, { code: '80000001', nombre: 'GRUPO 8', nombreOrigen: 'GRUPO 8' }] }, { plan: 'pymes', digitos: 8 }, hojasPymes)
+    const r = resumir({ cuentas: [{ code: '40000001', nombre: 'A', nombreOrigen: 'A' }, { code: '80000001', nombre: 'GRUPO 8', nombreOrigen: 'GRUPO 8' }] }, { plan: 'pymes', digitos: 8 }, hojasPymes, ramasPymes)
     expect(r.ok).toBe(false)
     expect(r.fuera.map((c) => c.code)).toEqual(['80000001'])
   })
   it('un fichero sin subcuentas no es un plan', () => {
-    expect(resumir({ cuentas: [] }, { plan: 'pymes', digitos: 8 }, hojasPymes).motivo).toMatch(/no hay ninguna subcuenta/)
+    expect(resumir({ cuentas: [] }, { plan: 'pymes', digitos: 8 }, hojasPymes, ramasPymes).motivo).toMatch(/no hay ninguna subcuenta/)
   })
 })
 
 describe('propuesta de enlaces, con la fixture (los casos del encargo §3)', () => {
   const l = lecturaFixture()
-  const r = resumir(l, { plan: 'pymes', digitos: 8 }, hojasPymes)
+  const r = resumir(l, { plan: 'pymes', digitos: 8 }, hojasPymes, ramasPymes)
   const filas = proponer({ cuentas: r.cuentas, terceros: l.terceros, proveedores, bancos, programa: 'Cegid Diez' })
 
-  it('una fila por cuenta tuya (96) más las dos de serie que cambian (472/477)', () => {
-    expect(filas.filter((f) => !f.cambia)).toHaveLength(96)
+  it('una fila por cuenta tuya (96) y por genérica (3), más las dos de serie que cambian (472/477)', () => {
+    expect(filas.filter((f) => !f.cambia)).toHaveLength(99)
+    expect(filas.filter((f) => f.decision.tipo === 'generica').map((f) => f.code)).toEqual(['16000000', '44500000', '79540000'])
     expect(filas.filter((f) => f.cambia).map((f) => f.code)).toEqual(['47200000', '47700000'])
     expect(fila(filas, '47200000').porque).toMatch(/el IVA va por tipo; el 303 suma igual/)
   })
@@ -221,8 +233,8 @@ describe('propuesta de enlaces, con la fixture (los casos del encargo §3)', () 
   it('las cuatro cifras', () => {
     const k = cifras(filas)
     expect(k.cambian).toBe(2)
-    expect(k.todas).toBe(98)
-    expect(k.tal + k.revisar + k.cambian + k.nuevas).toBe(98)
+    expect(k.todas).toBe(101) // 96 tuyas + 3 genéricas + 472/477
+    expect(k.tal + k.revisar + k.cambian + k.nuevas).toBe(101)
     expect(k.pendientes).toBe(filas.filter((f) => f.decision.tipo === 'pendiente').length)
     expect(k.nuevas).toBe(filas.filter((f) => f.decision.tipo === 'crear_proveedor').length)
   })
@@ -270,6 +282,56 @@ describe('propuesta de enlaces, con la fixture (los casos del encargo §3)', () 
     expect(p.enlaces.find((x) => x.code === '43000001')).toEqual({ code: '43000001', entity: 'supplier', entity_id: null, crea_code: '41000001', role: 'pago' })
     expect(p.retenciones).toEqual(expect.arrayContaining([{ code: '47510015', modelo: '111' }, { code: '47510001', modelo: '115' }]))
     expect(p.nombres_serie.find((x) => x.code === '47200000')?.nombre_origen).toBe('HACIENDA PÚBLICA, IVA SOPORTADO')
-    expect(resumenTraer(p, 'Diez', true)).toMatch(/^96 cuentas tuyas con su número de Diez · \d+ enlazadas · \d+ fichas nuevas · el IVA pasa a ir por tipo$/)
+    expect(resumenTraer(p, 'Diez', true)).toMatch(/^96 cuentas tuyas con su número de Diez · 3 genéricas de Diez · \d+ enlazadas · \d+ fichas nuevas · el IVA pasa a ir por tipo$/)
+  })
+})
+
+describe('las genéricas de Diez (respuesta 2, camino B): entran con su número bajo su cuenta con hijas', () => {
+  it('16000000 es la genérica de la 160 (hojas 1603, 1604, 1605); 79540000, de la 7954', () => {
+    expect(genericaDe('16000000', hojasPymes, ramasPymes)).toEqual({ madre: '160', relleno: '160', choque: null })
+    expect(genericaDe('79540000', hojasPymes, ramasPymes)).toEqual({ madre: '7954', relleno: '7954', choque: null })
+  })
+  it('44500000: la 445 no está en el plan de pymes; va bajo la 44, su antecesora más cercana', () => {
+    expect(ramasPymes.has('445')).toBe(false)
+    expect(genericaDe('44500000', hojasPymes, ramasPymes)).toEqual({ madre: '44', relleno: '445', choque: null })
+  })
+  it('lo que cuelga de una hoja no es genérica (40000001, y 47500000 es la serie de la 4750)', () => {
+    expect(genericaDe('40000001', hojasPymes, ramasPymes)).toBeNull()
+    expect(genericaDe('47500000', hojasPymes, ramasPymes)).toBeNull()
+    expect(hojaDe('47500000', hojasPymes)).toBe('4750')
+  })
+  it('16012300 no es el relleno de nadie (subcuenta propia de una cuenta con hijas): no es genérica, para', () => {
+    expect(genericaDe('16012300', hojasPymes, ramasPymes)).toBeNull()
+    const r = resumir({ cuentas: [{ code: '40000001', nombre: 'A', nombreOrigen: 'A' }, { code: '16012300', nombre: 'RARA', nombreOrigen: 'RARA' }] }, { plan: 'pymes', digitos: 8 }, hojasPymes, ramasPymes)
+    expect(r.ok).toBe(false)
+    expect(r.fuera.map((c) => c.code)).toEqual(['16012300'])
+  })
+  it('choque: si una hoja hija de la madre, rellenada, da el mismo número, para y lo dice', () => {
+    // Leyendo un fichero no puede pasar (un código que empieza por una hoja es de ella, y hojaDe
+    // mira hasta 5 dígitos): se fuerza con una hoja inventada de 6. El de verdad lo prueba la base
+    // (disparador company_account_madre, en la prueba de staging).
+    const hojas = new Set([...hojasPymes, '160000'])
+    expect(genericaDe('16000000', hojas, ramasPymes)).toEqual({ madre: '160', relleno: '160', choque: '160000' })
+    const r = resumir({ cuentas: [{ code: '40000001', nombre: 'A', nombreOrigen: 'A' }, { code: '16000000', nombre: 'G', nombreOrigen: 'G' }] }, { plan: 'pymes', digitos: 8 }, hojas, ramasPymes)
+    expect(r.ok).toBe(false)
+    expect(r.choques).toEqual([{ code: '16000000', madre: '160', hoja: '160000' }])
+    expect(r.motivo).toMatch(/16000000 sería la genérica de la 160, pero la 160000 rellenada da el mismo número/)
+  })
+  it('en la revisión: seguras, con su porqué; ni proveedor ni cliente aunque cuelguen de la 44', () => {
+    const l = lecturaFixture()
+    const r = resumir(l, { plan: 'pymes', digitos: 8 }, hojasPymes, ramasPymes)
+    const filas = proponer({ cuentas: r.cuentas, terceros: l.terceros, proveedores, bancos, programa: 'Cegid Diez' })
+    expect(fila(filas, '16000000')).toMatchObject({ confianza: 'seguro', clase: 'otra', decision: { tipo: 'generica' }, hoja: '160' })
+    expect(fila(filas, '16000000').porque).toBe('genérica de la 160, que aquí se desglosa en sus hijas; entra con su número y no se propone para nada nuevo')
+    expect(fila(filas, '44500000').porque).toBe('genérica de la 445, que no está en el plan de pymes: va bajo la 44; entra con su número y no se propone para nada nuevo')
+    const plan = planTraer(filas, r.cuentas, l.terceros)
+    expect(plan.genericas).toEqual([
+      { code: '16000000', madre: '160', nombre: 'DEUDAS A LARGO PLAZO CON ENTIDADES DE CRÉDITO VINCULADAS', nombre_origen: 'DEUDAS A LARGO PLAZO CON ENTIDADES DE CRÉDITO VINCULADAS' },
+      { code: '44500000', madre: '44', nombre: 'DEUDORES DUDOSO COBRO', nombre_origen: 'DEUDORES DUDOSO COBRO' },
+      { code: '79540000', madre: '7954', nombre: 'EXCESO DE PROVISIÓN POR OPERACIONES COMERCIALES', nombre_origen: 'EXCESO DE PROVISIÓN POR OPERACIONES COMERCIALES' },
+    ])
+    expect(plan.cuentas.some((c) => ['16000000', '44500000', '79540000'].includes(c.code))).toBe(false)
+    expect(resumenTraer(plan, 'Diez', true)).toMatch(/^96 cuentas tuyas con su número de Diez · 3 genéricas de Diez · \d+ enlazadas/)
+    expect(cifras(filas).todas).toBe(101)
   })
 })

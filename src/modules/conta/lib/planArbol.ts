@@ -87,7 +87,7 @@ export function arbolPlan(e: EntradaArbol): ArbolPlan {
     return {
       clave: c.id, tipo, numero: c.code, titulo: c.name, nivel: 0, padre, hijos: [], ruta: [],
       plain: q?.texto ?? null, plainPgc: q?.pgc ?? false, lleva: loQueLleva(enl),
-      origen: origenDe(c),
+      origen: origenDe(c, serieCodigo.get(c.templateCode)?.isLeaf ?? true),
       usada: c.kind === 'own' || enl.length > 0, cuentaId: c.id, estado: c.status, apuntes: 0, subcuentas: 0,
     }
   }
@@ -95,7 +95,9 @@ export function arbolPlan(e: EntradaArbol): ArbolPlan {
   const porHoja = new Map<string, CuentaPlan[]>()
   for (const c of e.cuentas) porHoja.set(c.templateCode, [...(porHoja.get(c.templateCode) ?? []), c])
   for (const [hoja, cs] of porHoja) {
-    const rama = serieCodigo.get(hoja)?.parentCode ?? null
+    // Una genérica de otro programa cuelga de una cuenta CON hijas (la 160): va debajo de ella, no de su madre.
+    const s = serieCodigo.get(hoja)
+    const rama = s && !s.isLeaf ? s.code : s?.parentCode ?? null
     const plantilla = cs.find((c) => c.kind === 'template') ?? null
     if (plantilla) nodos.set(plantilla.id, nodoCuenta(plantilla, 'apunte', rama))
     for (const c of cs.filter((x) => x.kind === 'own')) nodos.set(c.id, nodoCuenta(c, plantilla ? 'subcuenta' : 'apunte', plantilla?.id ?? rama))

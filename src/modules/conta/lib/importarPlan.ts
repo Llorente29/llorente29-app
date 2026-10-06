@@ -138,11 +138,46 @@ export function hojaDe(code: string, hojas: ReadonlySet<string>): string | null 
   return null
 }
 
-export type Clase = 'serie' | 'propia'
+/**
+ * Respuesta 2 del C02c (camino B) · La «genérica» de Diez: Diez crea una
+ * subcuenta para cada cuenta del cuadro aunque el plan de pymes la desglose
+ * (16000000 para la 160, cuyas hojas son 1603, 1604 y 1605). Entra con su
+ * número, colgada de su cuenta con hijas.
+ *
+ *   · Su madre es la cuenta del cuadro más larga que es prefijo del código y
+ *     tiene hijas (160; 44 para la 44500000, porque la 445 no está; 7954).
+ *   · El código es el RELLENO de la madre (16000000 = 160 + ceros) o de una
+ *     cuenta de 3 dígitos que no está en el cuadro y empieza por ella
+ *     (44500000 = 445 + ceros). Nada más: 16012300 no es el relleno de nadie,
+ *     es una subcuenta propia colgada de una cuenta con hijas, y eso no lo
+ *     cubre la regla: para y se pregunta (va a `fuera`).
+ *   · Choque: si alguna hoja hija de la madre, rellenada, da el mismo código,
+ *     no se sabe cuál es cuál: para y se pregunta. Leyendo un fichero no puede
+ *     pasar (un código que empieza por una hoja es de esa hoja, hojaDe lo
+ *     coge antes), pero la base lo vuelve a mirar y lo prueba staging.
+ *
+ * null = no es genérica (es de una hoja, o no cuelga de nada del cuadro).
+ */
+export function genericaDe(code: string, hojas: ReadonlySet<string>, ramas: ReadonlySet<string>): { madre: string; relleno: string; choque: string | null } | null {
+  if (hojaDe(code, hojas)) return null
+  let madre: string | null = null
+  for (let n = Math.min(5, code.length - 1); n >= 1 && !madre; n--) if (ramas.has(code.slice(0, n))) madre = code.slice(0, n)
+  if (!madre) return null
+  const sinCeros = code.replace(/0+$/, '')
+  const relleno = sinCeros.length <= madre.length ? madre : sinCeros
+  if (relleno !== madre && (relleno.length > 3 || ramas.has(relleno) || hojas.has(relleno))) return null
+  const choque = [...hojas].find((h) => h.startsWith(madre!) && h.padEnd(code.length, '0') === code) ?? null
+  return { madre, relleno, choque }
+}
+
+export type Clase = 'serie' | 'propia' | 'generica'
 
 export interface CuentaClasificada extends CuentaLeida {
+  /** La hoja de la que cuelga; en una genérica, su cuenta madre CON hijas (160, 44, 7954). */
   hoja: string
   clase: Clase
+  /** Solo en las genéricas: la cuenta de la que es relleno (160; 445, aunque no esté en el cuadro). */
+  relleno?: string
 }
 
 export interface ResumenLectura {
@@ -152,10 +187,14 @@ export interface ResumenLectura {
   digitos: number | null
   total: number
   tuyas: number
+  /** Las genéricas de Diez que entran con su número (respuesta 2). */
+  genericas: number
   cuentas: CuentaClasificada[]
-  /** Las que no cuelgan de ninguna hoja del plan de la empresa. */
+  /** Las que no cuelgan de ninguna hoja del plan de la empresa ni son una genérica. */
   fuera: CuentaLeida[]
-  /** «743 cuentas, 96 tuyas · plan de pymes · 8 dígitos, igual que aquí». */
+  /** Genéricas cuyo código da también una hoja hija rellenada: no se sabe cuál es cuál. */
+  choques: { code: string; madre: string; hoja: string }[]
+  /** «743 cuentas, 96 tuyas y 42 genéricas · plan de pymes · 8 dígitos, igual que aquí». */
   frase: string
 }
 
@@ -169,9 +208,11 @@ const nombrePlan = (p: 'pymes' | 'general') => (p === 'pymes' ? 'plan de pymes' 
  */
 export function resumir(
   lectura: Pick<Lectura, 'cuentas'>, empresa: { plan: 'pymes' | 'general'; digitos: number }, hojas: ReadonlySet<string>,
+  /** Las cuentas del cuadro CON hijas (para las genéricas de Diez). Sin ellas, ninguna lo es. */
+  ramas: ReadonlySet<string> = new Set(),
 ): ResumenLectura {
   const sub = lectura.cuentas.filter((c) => /^\d{6,12}$/.test(c.code))
-  const vacio = (motivo: string): ResumenLectura => ({ ok: false, motivo, digitos: null, total: 0, tuyas: 0, cuentas: [], fuera: [], frase: motivo })
+  const vacio = (motivo: string): ResumenLectura => ({ ok: false, motivo, digitos: null, total: 0, tuyas: 0, genericas: 0, cuentas: [], fuera: [], choques: [], frase: motivo })
   if (sub.length === 0) return vacio('En el fichero no hay ninguna subcuenta (códigos de 6 a 12 dígitos).')
   const porLong = new Map<number, number>()
   for (const c of sub) porLong.set(c.code.length, (porLong.get(c.code.length) ?? 0) + 1)
@@ -186,24 +227,34 @@ export function resumir(
   const vistos = new Set<string>()
   const cuentas: CuentaClasificada[] = []
   const fuera: CuentaLeida[] = []
+  const choques: ResumenLectura['choques'] = []
   for (const c of sub) {
     if (vistos.has(c.code)) continue
     vistos.add(c.code)
     const hoja = hojaDe(c.code, hojas)
-    if (!hoja) { fuera.push(c); continue }
-    cuentas.push({ ...c, hoja, clase: c.code === hoja.padEnd(digitos, '0') ? 'serie' : 'propia' })
+    if (hoja) { cuentas.push({ ...c, hoja, clase: c.code === hoja.padEnd(digitos, '0') ? 'serie' : 'propia' }); continue }
+    const g = genericaDe(c.code, hojas, ramas)
+    if (!g) { fuera.push(c); continue }
+    if (g.choque) { choques.push({ code: c.code, madre: g.madre, hoja: g.choque }); continue }
+    cuentas.push({ ...c, hoja: g.madre, clase: 'generica', relleno: g.relleno })
   }
   cuentas.sort((a, b) => a.code.localeCompare(b.code))
   const tuyas = cuentas.filter((c) => c.clase === 'propia').length
-  if (fuera.length) {
-    return {
-      ok: false, digitos, total: cuentas.length + fuera.length, tuyas, cuentas, fuera,
-      motivo: `${fuera.length === 1 ? 'Una cuenta no cuelga' : `${fuera.length} cuentas no cuelgan`} de ninguna cuenta del ${nombrePlan(empresa.plan)} (${fuera.slice(0, 3).map((c) => c.code).join(', ')}${fuera.length > 3 ? '…' : ''}). ¿El programa usa el otro plan? Revisa el plan en Tus impuestos y detalle contable.`,
-      frase: '',
+  const genericas = cuentas.filter((c) => c.clase === 'generica').length
+  const lista = (xs: readonly { code: string }[]) => `${xs.slice(0, 3).map((c) => c.code).join(', ')}${xs.length > 3 ? '…' : ''}`
+  if (fuera.length || choques.length) {
+    const motivos: string[] = []
+    // Si NADA cuelga del cuadro, lo más probable es el otro plan; si son unas pocas, se dice cuáles y por qué.
+    if (fuera.length) {
+      motivos.push(cuentas.length === 0
+        ? `Ninguna cuenta cuelga del ${nombrePlan(empresa.plan)} (${lista(fuera)}). ¿El programa usa el otro plan? Revisa el plan en Tus impuestos y detalle contable.`
+        : `${fuera.length === 1 ? 'Una cuenta no encaja' : `${fuera.length} cuentas no encajan`} en el ${nombrePlan(empresa.plan)} (${lista(fuera)}): no son subcuenta de una cuenta sin hijas ni la genérica de una cuenta con hijas. No sé dónde ponerlas sin cambiarles el número: revisa el fichero o pregúntanos.`)
     }
+    for (const x of choques) motivos.push(`${x.code} sería la genérica de la ${x.madre}, pero la ${x.hoja} rellenada da el mismo número: no sé cuál es cuál.`)
+    return { ok: false, digitos, total: cuentas.length + fuera.length + choques.length, tuyas, genericas, cuentas, fuera, choques, motivo: motivos.join(' '), frase: '' }
   }
-  const frase = `${cuentas.length} cuentas, ${tuyas} tuyas · ${nombrePlan(empresa.plan)} · ${digitos} dígitos, igual que aquí`
-  return { ok: true, motivo: null, digitos, total: cuentas.length, tuyas, cuentas, fuera, frase }
+  const frase = `${cuentas.length} cuentas, ${tuyas} tuyas${genericas ? ` y ${genericas} ${genericas === 1 ? 'genérica' : 'genéricas'}` : ''} · ${nombrePlan(empresa.plan)} · ${digitos} dígitos, igual que aquí`
+  return { ok: true, motivo: null, digitos, total: cuentas.length, tuyas, genericas, cuentas, fuera, choques, frase }
 }
 
 // ── CSV / Excel genérico (código; nombre; nif) ───────────────────────────────

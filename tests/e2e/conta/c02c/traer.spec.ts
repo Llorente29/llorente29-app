@@ -70,7 +70,7 @@ async function hastaLaRevision(page: Page, ficheros: string[]) {
     await expect(page.getByText('«clientes.pdf»: clientes y deudores de Diez · 9 cuentas, 3 con NIF (el PDF dice 9: cuadra).')).toBeVisible()
     await expect(page.getByLabel('Código de la cuenta')).toHaveCount(0)
   }
-  await expect(page.getByRole('status').filter({ hasText: /cuentas, 96 tuyas · plan de pymes · 8 dígitos, igual que aquí/ })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: /cuentas, 96 tuyas y 3 genéricas · plan de pymes · 8 dígitos, igual que aquí/ })).toBeVisible()
   await page.getByRole('button', { name: 'Siguiente: revisar →' }).click()
   await expect(page.getByRole('table', { name: 'Cuentas que se traen' })).toBeVisible()
 }
@@ -117,7 +117,7 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     // Las cuatro cifras y lo que manda la regla (encargo §4, respuesta 1).
     await expect(page.getByText('Entran tal cual')).toBeVisible()
     await expect(page.getByText('472 y 477: aquí van por tipo de IVA; el 303 suma igual')).toBeVisible()
-    await page.getByRole('button', { name: /^Todas · 98$/ }).click()
+    await page.getByRole('button', { name: /^Todas · 101$/ }).click()
     await expect(fila(page, '41000001')).toContainText('GLOVOAPP SPAIN PLATFORM · ficha nueva, por completar')
     await expect(fila(page, '43000001')).toContainText('mismo nombre que el 41000001')
     await expect(fila(page, '43000005')).toContainText('Seguro')
@@ -149,18 +149,18 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
       await (await sinFicha.count() ? sinFicha : dudosa.getByRole('button', { name: 'Solo es cliente' })).click()
     }
     // Buscar: «Glovo».
-    await page.getByRole('button', { name: /^Todas · 98$/ }).click()
+    await page.getByRole('button', { name: /^Todas · 101$/ }).click()
     await page.getByRole('searchbox', { name: 'Buscar en la revisión' }).fill('Glovo')
     await expect(page.getByRole('table', { name: 'Cuentas que se traen' }).getByRole('row')).toHaveCount(5)
     await page.getByRole('searchbox', { name: 'Buscar en la revisión' }).fill('')
 
     // Paso 3: lo que va a pasar, en palabras; traer.
     await page.getByRole('button', { name: 'Siguiente: traer el plan →' }).click()
-    await expect(page.getByText(/^96 cuentas tuyas con su número de Diez · \d+ enlazadas · \d+ fichas nuevas · el IVA pasa a ir por tipo\.$/)).toBeVisible()
+    await expect(page.getByText(/^96 cuentas tuyas con su número de Diez · 3 genéricas de Diez · \d+ enlazadas · \d+ fichas nuevas · el IVA pasa a ir por tipo\.$/)).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/paso3-ordenador.png`, fullPage: true })
     await page.getByRole('button', { name: 'Traer el plan' }).click()
-    await expect(page.getByText(/^Plan traído de Cegid Diez: 96 cuentas con su número de Diez, \d+ fichas nuevas por completar y \d+ cuentas del BOE; el IVA ya va por tipo\./)).toBeVisible()
+    await expect(page.getByText(/^Plan traído de Cegid Diez: 99 cuentas con su número de Diez \(3 genéricas\), \d+ fichas nuevas por completar y \d+ cuentas del BOE; el IVA ya va por tipo\./)).toBeVisible()
 
     // El plan, abierto, con las de Diez marcadas.
     const buscar = page.getByRole('searchbox', { name: 'Buscar una cuenta' })
@@ -168,6 +168,11 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
     await buscar.fill('40000001')
     const arbol = page.getByRole('treegrid', { name: 'Plan contable' })
     await expect(arbol.locator('[role="row"][data-numero="40000001"]')).toContainText('Tuya · de Diez')
+    // Respuesta 2: la genérica de Diez, con su número, bajo su cuenta con hijas (160) y marcada.
+    await buscar.fill('16000000')
+    const generica = arbol.locator('[role="row"][data-numero="16000000"]')
+    await expect(generica).toContainText('De Diez · genérica')
+    // Que va bajo la 160 lo prueba planArbolC02.test.ts (aquí «160» saldría igual: es parte del número).
     await buscar.fill('47200021')
     await expect(arbol.locator('[role="row"][data-numero="47200021"]')).toBeVisible()
     await buscar.fill('')
@@ -176,10 +181,10 @@ test('ordenador: traer el plan de Diez, verlo con su número y deshacerlo entero
 
     // «Deshacer entero» en el historial: vuelve a «sin activar» y lo dice.
     const historial = page.getByRole('list', { name: 'Historial de cambios' })
-    await expect(historial.getByText(/^Plan traído de Cegid Diez · 96 cuentas · \d+ enlaces · \d+ fichas nuevas$/)).toBeVisible()
+    await expect(historial.getByText(/^Plan traído de Cegid Diez · 99 cuentas · 3 genéricas · \d+ enlaces · \d+ fichas nuevas$/)).toBeVisible()
     page.once('dialog', (d) => void d.accept())
     await historial.getByRole('button', { name: 'Deshacer entero' }).click()
-    const deshecho = page.getByText(/^Deshecho el plan traído: se han quitado \d+ cuentas \(las 96 de Diez y \d+ que puso Folvy\) y \d+ fichas nuevas\./)
+    const deshecho = page.getByText(/^Deshecho el plan traído: se han quitado \d+ cuentas \(las 99 de Diez y \d+ que puso Folvy\) y \d+ fichas nuevas\./)
     await deshecho.waitFor({ timeout: 15000 }).catch(async () => console.log(`[sin «Deshecho»]\n${(await page.locator('.cx-principal').innerText()).slice(0, 1500)}`))
     await expect(deshecho).toBeVisible()
     await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toBeVisible()

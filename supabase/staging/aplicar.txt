@@ -1,9 +1,11 @@
 # Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
 # propia transacción. Para la siguiente tanda se reescribe entero.
 #
-# 06/10/2026 · Conta · Interruptor de Foodint (tanda propia, antes del C02c):
-# la prueba crea una cuenta con el id de Foodint, aplica el fichero de
-# producción tal cual, lo vuelve a aplicar, y aplica su vuelta atrás. ROLLBACK:
-# no queda nada en staging.
-# Anterior: la prueba del C02c (traer el plan), en verde en 37378799574.
-supabase/staging/sql/20261006_conta_prueba_interruptor_foodint.sql
+# 06/10/2026 · C02c · Respuesta 2 (camino B): las genéricas de Diez entran con
+# su número. La 0130 (guarda company_account_madre + traer con genéricas) y la
+# prueba del C02c regenerada con la fixture de tres genéricas: trae, deshace,
+# el choque forzado (47500000 bajo la 475) para, y la vuelta atrás de la 0130,
+# 0120, 0110 y 0100 (ROLLBACK).
+# Anterior: la prueba del interruptor de Foodint, en verde en 37426652751.
+supabase/migrations/20261008T0130_c02c_genericas.sql
+supabase/staging/sql/20261008_c02c_prueba_traer.sql

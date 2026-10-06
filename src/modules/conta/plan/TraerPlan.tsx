@@ -112,6 +112,8 @@ function PasoFichero({ p, empezarDeCero, seguir }: {
   const [sobre, setSobre] = useState(false)
   const [siguiendo, setSiguiendo] = useState(false)
   const hojas = useMemo(() => new Set(p.serie.filter((s) => s.isLeaf).map((s) => s.code)), [p.serie])
+  // Las cuentas del cuadro con hijas: de ellas cuelgan las genéricas de Diez (respuesta 2).
+  const ramas = useMemo(() => new Set(p.serie.filter((s) => !s.isLeaf).map((s) => s.code)), [p.serie])
 
   const lectura = useMemo<Lectura | null>(() => {
     if (!programa || !tablas.length) return null
@@ -121,7 +123,7 @@ function PasoFichero({ p, empezarDeCero, seguir }: {
     const orden = [...tablas].sort((a, b) => Number(b.fichero.pdf?.listado === 'plan') - Number(a.fichero.pdf?.listado === 'plan'))
     return juntar(programa, orden.map((t) => t.fichero.pdf ? t.fichero.pdf.lectura : leerTabla(programa, t.fichero.filas, t.columnas!, t.cabecera)))
   }, [programa, tablas])
-  const resumen = useMemo(() => (lectura ? resumir(lectura, { plan: p.plan, digitos: p.digitos }, hojas) : null), [lectura, p.plan, p.digitos, hojas])
+  const resumen = useMemo(() => (lectura ? resumir(lectura, { plan: p.plan, digitos: p.digitos }, hojas, ramas) : null), [lectura, p.plan, p.digitos, hojas, ramas])
 
   async function cargar(lista: FileList | File[]) {
     const fs = [...lista]
@@ -214,6 +216,7 @@ function enFolvy(f: FilaRevision, filas: readonly FilaRevision[]): string {
     case 'sin_ficha': return d.nota === 'cliente_c03' ? 'Cliente · su ficha llega con los clientes' : 'Cuenta tuya, sin ficha'
     case 'retencion': return d.modelo ? `Retenciones del ${d.modelo}` : 'Cuenta tuya, sin modelo'
     case 'serie': return f.hoja === '472' ? 'IVA soportado, ahora por tipo' : 'IVA repercutido, ahora por tipo'
+    case 'generica': return `Genérica, bajo la ${f.hoja}`
     case 'pendiente': return 'Falta que digas qué es'
   }
 }
@@ -369,7 +372,9 @@ export function TraerPlan({ p, empezarDeCero, alTraer }: { p: DatosPlan; empezar
   }
   const [fichas, setFichas] = useState<{ proveedores: FichaProveedor[]; bancos: FichaBanco[] } | null>(null)
   const hojas = useMemo(() => new Set(p.serie.filter((s) => s.isLeaf).map((s) => s.code)), [p.serie])
-  const nombreFichero = (r: Revision) => `«${r.ficheros.join('», «')}» · ${resumir(r.lectura, { plan: p.plan, digitos: p.digitos }, hojas).frase}`
+  // Las cuentas del cuadro con hijas: de ellas cuelgan las genéricas de Diez (respuesta 2).
+  const ramas = useMemo(() => new Set(p.serie.filter((s) => !s.isLeaf).map((s) => s.code)), [p.serie])
+  const nombreFichero = (r: Revision) => `«${r.ficheros.join('», «')}» · ${resumir(r.lectura, { plan: p.plan, digitos: p.digitos }, hojas, ramas).frase}`
 
   async function verFichas() {
     if (fichas) return fichas
@@ -416,7 +421,7 @@ export function TraerPlan({ p, empezarDeCero, alTraer }: { p: DatosPlan; empezar
       }, 'Revisión guardada.')} />
   }
 
-  const r = resumir(revision.lectura, { plan: p.plan, digitos: p.digitos }, hojas)
+  const r = resumir(revision.lectura, { plan: p.plan, digitos: p.digitos }, hojas, ramas)
   const plan3 = planTraer(revision.filas, r.cuentas, revision.lectura.terceros)
   const ivaCambia = revision.filas.some((f) => f.cambia)
   const texto = resumenTraer(plan3, corto(revision.programa), ivaCambia)
@@ -443,7 +448,7 @@ export function TraerPlan({ p, empezarDeCero, alTraer }: { p: DatosPlan; empezar
             setTrayendo(true); setFalloTraer(null)
             traerPlan(importId!, plan3, null)
               .then((x) => {
-                alTraer(`Plan traído de ${datosPrograma(revision.programa).nombre}: ${x.cuentas} cuentas con su número de ${corto(revision.programa)}, ${x.fichas} ${x.fichas === 1 ? 'ficha nueva' : 'fichas nuevas'} por completar y ${x.serie} cuentas del BOE; el IVA ya va por tipo.${x.avisos.length ? ` Ojo: ${x.avisos.join(' ')}` : ''}`)
+                alTraer(`Plan traído de ${datosPrograma(revision.programa).nombre}: ${x.cuentas} cuentas con su número de ${corto(revision.programa)}${x.genericas ? ` (${x.genericas} ${x.genericas === 1 ? 'genérica' : 'genéricas'})` : ''}, ${x.fichas} ${x.fichas === 1 ? 'ficha nueva' : 'fichas nuevas'} por completar y ${x.serie} cuentas del BOE; el IVA ya va por tipo.${x.avisos.length ? ` Ojo: ${x.avisos.join(' ')}` : ''}`)
                 plan.recargar()
               })
               .catch((e) => setFalloTraer(e instanceof Error ? e.message : String(e)))

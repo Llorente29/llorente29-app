@@ -151,6 +151,17 @@ for (const c of pymes) {
   filas.push([c.is_leaf ? c.code.padEnd(D, '0') : c.code, c.name.toUpperCase()])
 }
 for (const t of tuyas) filas.push(t)
+// Respuesta 2 del C02c: tres GENÉRICAS, como las 42 del Diez real (la subcuenta
+// «de la cuenta» que el plan de pymes desglosa). Entran con su número bajo su
+// cuenta con hijas: 16000000 bajo la 160 (hojas 1603, 1604, 1605), 44500000
+// bajo la 44 (la 445 no está en el plan de pymes) y 79540000 bajo la 7954
+// (hojas 79544 y 79549). Los títulos son los del cuadro, en mayúsculas, como Diez.
+const genericas = [
+  ['16000000', 'DEUDAS A LARGO PLAZO CON ENTIDADES DE CRÉDITO VINCULADAS'],
+  ['44500000', 'DEUDORES DUDOSO COBRO'],
+  ['79540000', 'EXCESO DE PROVISIÓN POR OPERACIONES COMERCIALES'],
+]
+for (const g of genericas) filas.push(g)
 filas.sort((a, b) => (a[0].padEnd(D, ' ') < b[0].padEnd(D, ' ') ? -1 : a[0].padEnd(D, ' ') > b[0].padEnd(D, ' ') ? 1 : a[0].length - b[0].length))
 
 const csv = (cab, rows) => [cab.join(';'), ...rows.map((r) => r.map((x) => (/[;"]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x)).join(';'))].join('\n') + '\n'
@@ -200,4 +211,4 @@ escribirPdfDiez(join(aqui, 'proveedores.pdf'), {
   terceros: [cab('40000000'), ...provPdf.filter((x) => x.code.startsWith('400')), cab('41000000'), ...provPdf.filter((x) => x.code.startsWith('410'))],
 })
 escribirPdfDiez(join(aqui, 'clientes.pdf'), { tipo: 'clientes', terceros: [cab('43000000'), ...conDir(clientes, 60), cab('44000000')] })
-console.log(`plan.csv ${filas.length} filas (${tuyas.length} tuyas) · proveedores.csv ${proveedores.length} (${conNifTerceros} con NIF) · clientes.csv ${clientes.length} · folvy.json · plan.pdf, proveedores.pdf, clientes.pdf`)
+console.log(`plan.csv ${filas.length} filas (${tuyas.length} tuyas, ${genericas.length} genéricas) · proveedores.csv ${proveedores.length} (${conNifTerceros} con NIF) · clientes.csv ${clientes.length} · folvy.json · plan.pdf, proveedores.pdf, clientes.pdf`)
