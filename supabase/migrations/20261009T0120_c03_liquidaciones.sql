@@ -22,7 +22,8 @@
 --    comisión sobre las ventas de sus marcas en ese local. Las filas que ya
 --    hay (3, de junio, una por local, reales) quedan como «fórmula anterior»
 --    sin recalcular: el valor por defecto de la columna nueva las marca al
---    añadirla, sin un solo UPDATE.
+--    añadirla, sin un solo UPDATE (y marca igual lo que se cargue a la manera
+--    de antes).
 -- Vuelta atrás: supabase/vuelta-atras/20261009T0120_c03_liquidaciones.down.sql
 -- ============================================================================
 
@@ -98,8 +99,11 @@ alter table public.licensed_settlement
   add column if not exists confirmed_at         timestamptz,
   add column if not exists confirmed_by         uuid,
   add column if not exists confirmed_by_name    text;
--- Lo que se dé de alta a partir de ahora dice con qué fórmula va.
-alter table public.licensed_settlement alter column formula drop default;
+-- El valor por defecto se QUEDA en 'anterior': quien escriba a la manera de
+-- antes (la carga de CTB de junio no dice fórmula) sigue funcionando y su fila
+-- queda marcada como lo que es. Solo las funciones del C03 escriben la nueva.
+-- (Quitarlo rompía ese camino: lo cazó la prueba de staging, 06/10.)
+alter table public.licensed_settlement alter column formula set default 'anterior';
 alter table public.licensed_settlement
   drop constraint if exists licensed_settlement_formula_check,
   add constraint licensed_settlement_formula_check check (formula in ('anterior', 'compras_aportaciones_comision')),

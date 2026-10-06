@@ -12,7 +12,8 @@
 --   2. Se vuelven a aplicar (\ir) y FOTO DE DESPUÉS con la MISMA vara (las
 --      columnas de antes): tiene que salir idéntica (regla 31).
 --   3. Cada proveedor con su tercero; un NIF, un tercero; los periodos
---      propuestos donde hay pedidos y solo ahí; las de la cesión «anterior».
+--      propuestos donde hay pedidos y solo ahí; las de la cesión «anterior», y
+--      una carga nueva a la manera de antes sigue entrando (y queda «anterior»).
 --   4. El disparador de alta: proveedor nuevo con el NIF de un cliente → el
 --      mismo tercero; dos proveedores con el mismo NIF → el segundo, aparte.
 --   5. Como el administrador de A: alta de cliente con el NIF de un proveedor
@@ -153,6 +154,12 @@ begin
   end if;
   if exists (select 1 from public.licensed_settlement where formula <> 'anterior') then
     raise exception 'PRUEBA C03 · 3: las liquidaciones de la cesión de antes no quedan como «anterior».';
+  end if;
+  -- El camino de quien escribe a la manera de antes (la carga de CTB): sigue funcionando y queda «anterior».
+  insert into public.licensed_settlement (account_id, location_id, period_from, period_to, service_revenue, net_settlement, import_key)
+  values ('c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2', '2026-07-01', '2026-07-31', 1, 1, 'prueba-c03-ls3');
+  if (select formula from public.licensed_settlement where import_key = 'prueba-c03-ls3') <> 'anterior' then
+    raise exception 'PRUEBA C03 · 3: una carga a la manera de antes no queda como «anterior».';
   end if;
   raise notice 'PRUEBA C03 · 3 en verde';
 end $$;
