@@ -114,3 +114,7 @@ verify_jwt = false
 # (la RLS decide). Nunca la llama un cron ni una plataforma.
 [functions.conta-vies-check]
 verify_jwt = true
+
+
+[functions.dosier-track]
+verify_jwt = false
