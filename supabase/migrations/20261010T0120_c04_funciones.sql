@@ -186,7 +186,7 @@ begin
   insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, source_id,
                                     status, party_id, document_ref, document_date, reverses_entry_id, created_by, created_by_name)
   values (v_e.account_id, v_e.company_id, v_y, v_e.series, v_fecha,
-          format('Anula el %s/%s: %s', v_e.series, v_e.number, trim(p_motivo)), 'reversal', v_e.id,
+          format('Anula %s nº %s: %s', case v_e.series when 1 then 'Ventas' when 2 then 'Compras' when 3 then 'Banco' when 9 then 'Nóminas' else 'General' end, v_e.number, trim(p_motivo)), 'reversal', v_e.id,
           'borrador', v_e.party_id, v_e.document_ref, v_e.document_date, v_e.id, auth.uid(), v_quien)
   returning id into v_nuevo;
   insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept,

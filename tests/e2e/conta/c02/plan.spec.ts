@@ -145,9 +145,10 @@ test('cuenta A: pinchar en una cuenta lleva a su Mayor; en una con hijas, abre e
   await expect(page).toHaveURL(/\/conta\/plan\/40000002$/)
   const mayor = page.getByRole('region', { name: 'Mayor de la cuenta' })
   await expect(mayor.getByRole('heading', { name: '40000002 · Proveedores · Hermanos Ruiz' })).toBeVisible()
-  await expect(mayor.locator('.cx-dato').filter({ hasText: 'Saldo' })).toContainText('Sin apuntes todavía')
+  // C04: el Mayor lee del libro (la F-2026-0915 validada de seed_c04_staging.sql).
+  await expect(mayor.locator('.cx-dato').filter({ hasText: 'Saldo' })).toContainText('1.283,15 € acreedor')
   await expect(mayor.locator('.cx-dato').filter({ hasText: 'Ejercicio' })).toContainText(/\d{4}/)
-  await expect(page.getByRole('region', { name: 'Extracto' }).getByText('Aún no hay apuntes en esta cuenta.')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Extracto' }).getByText('F-2026-0915').first()).toBeVisible()
   // Es una subcuenta tuya (la creó el plan para él): se le cambia el nombre; con enlaces no se oculta.
   await expect(mayor.getByRole('button', { name: 'Cambiar nombre' })).toBeVisible()
   await expect(mayor.getByRole('button', { name: 'Ocultar' })).toHaveCount(0)
@@ -172,7 +173,7 @@ test('cuenta A: pinchar en una cuenta lleva a su Mayor; en una con hijas, abre e
   await expect(page).toHaveURL(/\/conta\/plan\/400$/)
   const sumas = page.getByRole('region', { name: 'Sumas y saldos' })
   await expect(sumas.getByRole('heading', { name: '400 · Proveedores' })).toBeVisible()
-  await expect(sumas.getByText('Aún no hay apuntes en este nivel.')).toBeVisible()
+  await expect(sumas.getByText('Aún no hay apuntes en este nivel.')).toHaveCount(0)
   await expect(sumas.getByRole('table', { name: 'Sumas y saldos de 400' }).getByRole('link', { name: /^40000000 · / })).toBeVisible()
 
   // Una subcuenta tuya: Cambiar nombre (y se deja como estaba).

@@ -1,1 +1,2 @@
-supabase/seeds/conta/seed_c04_staging.sql
+supabase/staging/sql/20261010_c04_limpiar_caja_b.sql
+supabase/migrations/20261010T0120_c04_funciones.sql
