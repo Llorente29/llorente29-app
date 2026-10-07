@@ -5,7 +5,7 @@
 -- quede en un diario que cuadra siempre, con su documento, su local y su marca.
 --
 --   · fiscal_year: de dónde viene (Folvy o traído de otro programa) y hasta
---     cuándo es traído. Corte de Foodint con Diez: 30/09/2026 (decidido 06/10).
+--     cuándo es traído. El corte es un dato de la empresa (conta_fijar_corte); 30/09/2026 es una suposición de trabajo.
 --   · fiscal_period_lock: por qué está cerrado un mes (a mano, impuesto
 --     presentado o traído). Un mes traído no se reabre.
 --   · journal_entry / journal_line: el asiento y sus apuntes. Las series se

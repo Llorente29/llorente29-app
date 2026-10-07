@@ -256,7 +256,7 @@
 1. **La numeración de Diez va por serie y no sigue el orden de las fechas** (58 de 154 en recibidas). Se numera al grabar.
    - Folvy numera al validar (regla 2).
    - Lo traído conserva serie y número de Diez tal cual (`source_type='migrated'`, `diez_series`, `diez_number`).
-2. **Las series de Folvy** se alinean con las de Diez: 1 expedidas, 2 recibidas, 3 tesorería, 4 general, 9 automáticos (nóminas, liquidación del IVA, regularización y cierre).
+2. **Las series de Folvy** se alinean con las de Diez por dentro: 1, 2, 3, 4 y 9. En pantalla siempre la palabra —Ventas · Compras · Banco · General · Nóminas— y el número solo en «Detalle contable» (respuesta 1). Las mismas cinco para una empresa que no venga de Diez. La liquidación del IVA, la regularización y el cierre van a General.
    - Así el C04b mete cada asiento en su serie sin traducir.
 3. **Las ventas propias, en Diez, salen del documento de la plataforma** (liquidación o autofactura), no del ticket del día.
    - Con «el ticket lo expide Folvy» (D3), las de Uber y Just Eat pasan a resumen diario.
@@ -284,7 +284,7 @@
   - Es lo que hace Diez en tesorería, pero con el banco.
 - **Marcas cedidas:** fuera del diario día a día (camino B, decidido). Entran por la liquidación mensual del socio.
 
-**Decidido: el corte con Diez es el 30/09/2026.**
+**El corte con Diez, 30/09/2026, es una suposición de trabajo** (corregido el 07/10 con la respuesta 1). No está escrito en el código: es un dato de la empresa (`fiscal_year.imported_until`, `origin`, `origin_program`) que pone `conta_fijar_corte(empresa, hasta, programa)` y que se puede cambiar mientras no haya ningún asiento traído; con el primero, el disparador `fiscal_year_corte_cambiable` lo congela. Probado en staging (run 76, pruebas 4 y 4b).
 - **C04b:** se trae **tal como está** todo lo de Diez hasta el 30/09/2026: los ejercicios 2023, 2024 y 2025 cerrados, y 2026 del 01/01 al 30/09. Con sus series, sus números y su 47200000 única. Nada se reinterpreta.
 - **Desde el 01/10/2026, Folvy:**
   - ventas por resumen diario de facturas simplificadas;
