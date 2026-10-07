@@ -107,3 +107,48 @@
 - **El plan sale montado de los datos del negocio**: una subcuenta por proveedor y por banco, la 472/477 de cada tipo de IVA y los enlaces de cada tipo de gasto y retención. El 400 o 410 se elige por lo que vende, como hace el asesor en Diez.
 - **La IA propone y no ejecuta.** Cada propuesta dice su porqué, con los códigos, y su confianza. Las dudosas no interrumpen: van a la bandeja «Para revisar». Lo contestado no vuelve, y lo hecho queda en «Lo que ha hecho Folvy».
 - **La ficha del proveedor enseña solo lo que aplica a la empresa**, cada dato con su fuente: prorrata, recargo y caja salen solo si los tienes. Diez enseña todas las casillas a todos.
+
+## Libro diario (C04, 07/10/2026)
+
+> Contraste con Holded, Cegid Diez, Pennylane y Digits/Puzzle según el encargo
+> y las maquetas N11/N12. Lo de cada producto es lectura del encargo y de la
+> exportación de Diez que subió Julio (series de junio de 2025); sus páginas de
+> ayuda no se pueden abrir desde aquí (el proxy las corta), y se dice.
+
+| Qué | Holded | Cegid Diez | Pennylane | Digits / Puzzle | Folvy (C04) |
+|---|---|---|---|---|---|
+| Series | Una numeración | Por series (1 expedidas, 2 recibidas, 3 tesorería, 4 general, 9 automáticos), número al grabar, sin orden de fechas | Diarios por tipo | Un libro | Las cinco de Diez por dentro (1, 2, 3, 4, 9), en pantalla por su palabra (Ventas · Compras · Banco · General · Nóminas); número **al validar**, sin huecos, por empresa, ejercicio y serie |
+| Lo que propone la máquina | Reglas de conciliación | No | Propuestas con confianza | Todo automático, con cola de revisión | Propuesto con Seguro / Probable / Duda, una frase de porqué y su cita; nunca se valida solo (salvo la opción de la empresa para los Seguros de ventas del día) |
+| Corregir lo validado | Se edita | Se edita | Se edita | Se edita | No se toca: se anula con un contraasiento enlazado (CCom art. 29.1) |
+| Integridad | — | — | — | — | Huella encadenada por asiento (LGT 29.2.j, RD 1007/2023); «Comprobar la cadena» en Detalle contable y el agente cada noche |
+| Local y marca | Etiquetas | Centros de coste | Analítica | Clases | Local (o «común», repartido por regla) y marca en cada apunte; resultado por local que suma el total |
+| Ventas de plataforma | Por factura | Por documento de la plataforma | Por factura | Por cobro | Resumen del día por local de las facturas simplificadas (RIVA 63.4), devoluciones el día que pasan; la liquidación solo comisión, cargos y cobro |
+| Mes cerrado | Bloqueo | Bloqueo de periodos | Clôture | Close | Bloqueo mes a mes; lo que llega tarde va al primer día abierto; «Pedir desbloqueo» con motivo |
+
+### Citas del C04, comprobadas contra su texto vigente
+
+Las de `src/modules/conta/lib/normas.ts` las vigila la prueba de cumplimiento
+(`tests/conta/cumplimiento/normas.test.ts`): el literal tiene que estar en el
+bloque vigente de su fuente. Las de la semilla de staging y del agente se
+comprobaron a mano el 07/10 en `docs/conta/fuentes/textos/`, versión vigente:
+
+| Cita | Dónde se usa | Versión vigente | Lo que dice |
+|---|---|---|---|
+| CCom art. 25.1 | normas · libroDiario | desde 1996-11-01 | Llevará necesariamente un libro de Inventarios y Cuentas anuales y otro Diario |
+| CCom art. 28.2 | normas · resumen del día | desde 2013-09-29 (Ley 14/2013, art. 48) | Anotación conjunta por periodos **no superiores al trimestre** |
+| CCom art. 29.1 | anulación con contraasiento | desde 1996-11-01 | Sin espacios en blanco, interpolaciones, tachaduras ni raspaduras; los errores se salvan a continuación |
+| LIVA art. 80.Dos | devoluciones de plataforma | desde 2023-01-01 | Si queda sin efecto total o parcialmente la operación, la base se modifica en la cuantía correspondiente |
+| LIVA art. 90.Uno | comisión y alquiler al 21 % | desde 2012-07-15 | El impuesto se exige al tipo del 21 por ciento |
+| LIVA art. 91.Uno.2.2.º | ventas al 10 % | hay una versión guardada desde 2026-12-01 (BOE-A-2026-20266) | Servicios de hostelería… los de restaurantes: sigue igual en esa versión |
+| RIVA art. 63.4 | resumen del día | desde 2023-07-01 | La anotación individualizada se puede sustituir por asientos resúmenes |
+| RD 1619/2012 art. 15.2 | rectificativa solo si hubo factura | — (normas) | Será obligatoria la expedición de una factura rectificativa |
+| PGC de Pymes, NRV 16.ª | marca cedida | — (normas) | Las cantidades recibidas por cuenta de terceros no forman parte de los ingresos. **En el PGC normal es la NRV 14.ª** (RD 1/2021): la semilla y el agente decían «PGC NRV 16.ª» a secas; corregido a «PGC de Pymes, NRV 16.ª» |
+| RD 439/2007 art. 100 | retención del alquiler | desde 2018-12-23 | Retención del 19 por ciento sobre el arrendamiento de inmuebles urbanos |
+| RD 439/2007 art. 108 | IRPF de la nómina al 111 | desde 2015-07-12 | Declaración trimestral de las cantidades retenidas |
+
+Fuentes nuevas en `docs/conta/fuentes/fuentes.json`, con su identificador
+comprobado en el BOE: Ley 58/2003 General Tributaria (BOE-A-2003-23186), RD
+1007/2023 (BOE-A-2023-24840), Ley 14/2013 (BOE-A-2013-10074) y la Resolución
+del ICAC de 10/02/2021 sobre ingresos (**BOE-A-2021-2155**; el identificador
+que tenía apuntado, 2021-2347, era otro). La descarga nocturna comprueba que
+cada una contiene su frase.

@@ -18,7 +18,7 @@
 --      regla 13). Un primer resumen de Norte Mercado sin pedidos, anulado.
 --   2. La liquidación de Plataforma Norte del 16–30/09 (cobrada el 05/10):
 --      comisión con IVA 21 %, cobro y lo de Milanesa Cedida al socio
---      (NRV 16.ª). Para revisar, Seguro.
+--      (PGC de Pymes, NRV 16.ª). Para revisar, Seguro.
 --   3. Dos facturas de proveedor: Hermanos Ruiz F-2026-0915 (validada) y el
 --      alquiler de octubre de Locales del Norte con retención del 19 %
 --      (modelo 115), para revisar.
@@ -90,7 +90,7 @@ begin
       'razones', jsonb_build_array(
         jsonb_build_object('decision', 'Un asiento por día y local', 'porque', 'resumen de 212 facturas simplificadas del día', 'cita', 'RIVA art. 63.4'),
         jsonb_build_object('decision', 'IVA al 10 % en tus ventas', 'porque', 'comida a domicilio = servicio de restauración', 'cita', 'Ley 37/1992 art. 91.Uno.2.2º'),
-        jsonb_build_object('decision', 'Milanesa Cedida no va a tus ventas', 'porque', 'sus 38 pedidos (412,30 €) son del socio: entran en su liquidación', 'cita', 'PGC NRV 16.ª'),
+        jsonb_build_object('decision', 'Milanesa Cedida no va a tus ventas', 'porque', 'sus 38 pedidos (412,30 €) son del socio: entran en su liquidación', 'cita', 'PGC de Pymes, NRV 16.ª'),
         jsonb_build_object('decision', 'Base calculada', 'porque', 'los pedidos de tus marcas llegan sin base ni cuota: la calculo y por eso es Probable'))),
     jsonb_build_array(
       jsonb_build_object('cuenta', '43000001', 'debe', 3214.60, 'local_id', l1, 'concepto', 'cobro por Glovo'),
@@ -116,7 +116,7 @@ begin
       'confianza', 'seguro', 'porque', 'los 5 tickets de tus marcas cuadran con lo cobrado, al céntimo.',
       'razones', jsonb_build_array(
         jsonb_build_object('decision', 'Un asiento por día y local', 'porque', 'resumen de 5 facturas simplificadas', 'cita', 'RIVA art. 63.4'),
-        jsonb_build_object('decision', 'Milanesa Cedida no va a tus ventas', 'porque', 'sus 2 pedidos son del socio', 'cita', 'PGC NRV 16.ª'))),
+        jsonb_build_object('decision', 'Milanesa Cedida no va a tus ventas', 'porque', 'sus 2 pedidos son del socio', 'cita', 'PGC de Pymes, NRV 16.ª'))),
     jsonb_build_array(
       jsonb_build_object('cuenta', '43000001', 'debe', 98.90, 'local_id', l1),
       jsonb_build_object('cuenta', '70000000', 'haber', 89.91, 'local_id', l1, 'marca_id', burger),
@@ -137,7 +137,7 @@ begin
       'porque', 'cuadra con el PDF: 9.870 € vendidos, 2.072,60 € de comisión con IVA y 7.797,40 € cobrados.',
       'razones', jsonb_build_array(
         jsonb_build_object('decision', 'Separé las ventas por marca', 'porque', 'de los 9.870 €, 7.535,52 € son de tus marcas y 2.334,48 € de Milanesa Cedida'),
-        jsonb_build_object('decision', 'Milanesa Cedida va al socio, no a tus ventas', 'porque', 'lo cobrado de una marca cedida es suyo: entra en su liquidación de octubre', 'cita', 'PGC NRV 16.ª'),
+        jsonb_build_object('decision', 'Milanesa Cedida va al socio, no a tus ventas', 'porque', 'lo cobrado de una marca cedida es suyo: entra en su liquidación de octubre', 'cita', 'PGC de Pymes, NRV 16.ª'),
         jsonb_build_object('decision', 'Comisión con IVA 21 % deducible', 'porque', 'la plataforma te factura la comisión como servicio', 'cita', 'Ley 37/1992 art. 90'))),
     jsonb_build_array(
       jsonb_build_object('cuenta', '62300000', 'debe', 1712.89, 'local_id', l1, 'concepto', 'comisión 21 % sobre ventas'),

@@ -300,6 +300,34 @@
       "dentro": "ES.txt",
       "licencia": "Creative Commons Attribution 4.0 (CC BY 4.0). Atribución: GeoNames, https://www.geonames.org/",
       "debeContener": "28051"
+    },
+    {
+      "clave": "ley-58-2003",
+      "nombre": "Ley 58/2003, General Tributaria",
+      "tipo": "boe",
+      "id": "BOE-A-2003-23186",
+      "debeContener": "General Tributaria"
+    },
+    {
+      "clave": "rd-1007-2023",
+      "nombre": "Real Decreto 1007/2023, Reglamento de los sistemas informáticos de facturación",
+      "tipo": "boe",
+      "id": "BOE-A-2023-24840",
+      "debeContener": "sistemas y programas informáticos o electrónicos que soporten los procesos de facturación"
+    },
+    {
+      "clave": "ley-14-2013",
+      "nombre": "Ley 14/2013, de apoyo a los emprendedores (legalización de libros, art. 18)",
+      "tipo": "boe",
+      "id": "BOE-A-2013-10074",
+      "debeContener": "apoyo a los emprendedores"
+    },
+    {
+      "clave": "res-icac-2021-ingresos",
+      "nombre": "Resolución del ICAC de 10 de febrero de 2021, reconocimiento de ingresos",
+      "tipo": "boe",
+      "id": "BOE-A-2021-2155",
+      "debeContener": "reconocimiento de ingresos"
     }
   ]
 }

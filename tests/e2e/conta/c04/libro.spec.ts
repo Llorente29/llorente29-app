@@ -90,7 +90,7 @@ test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable',
   await expect(page.getByText('Serie Banco')).toBeVisible()
   const porque = page.getByRole('region', { name: 'Por qué lo propongo así' })
   await expect(porque.getByText('Milanesa Cedida va al socio, no a tus ventas')).toBeVisible()
-  await expect(porque.getByText(/PGC NRV 16\.ª/)).toBeVisible()
+  await expect(porque.getByText(/NRV 16\.ª/)).toBeVisible()
   await expect(page.getByText('Cuadra', { exact: true })).toBeVisible()
   await expect(page.getByText('✓ 0,00 €')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Validar asiento' })).toBeEnabled()

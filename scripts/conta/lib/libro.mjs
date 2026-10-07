@@ -24,7 +24,7 @@ export const NORMAS = {
   cadena: 'LGT art. 29.2.j y RD 1007/2023: integridad e inalterabilidad de los registros',
   iva: 'RIVA arts. 63 y 64: cada apunte de IVA con su base, su tipo y su libro registro',
   ventas_dia: 'RIVA art. 63.4: el asiento resumen es la suma de sus facturas',
-  cedidas_70: 'PGC NRV 16.ª: lo cobrado por cuenta de un tercero no es ingreso propio',
+  cedidas_70: 'PGC de Pymes, NRV 16.ª (PGC normal, NRV 14.ª tras el RD 1/2021): lo cobrado por cuenta de terceros no es ingreso propio',
   socio_gasto: 'Encargo C04, regla 6: las compras a nombre del socio no son gasto tuyo',
   resultado: 'Encargo C04, regla 9: cada apunte de 6/7 con su local o «común», y lo común con su reparto',
   mes_cerrado: 'Encargo C04, regla 4: un mes cerrado no admite asientos',
