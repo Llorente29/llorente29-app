@@ -1,5 +1,2 @@
-supabase/staging/sql/20261010_c04_limpiar_caja_b.sql
-supabase/migrations/20261010T0120_c04_funciones.sql
 supabase/migrations/20261010T0130_c04_lectura.sql
-supabase/seeds/conta/seed_c04_staging.sql
-supabase/staging/sql/20261011_c04_prueba_agente.sql
+supabase/staging/sql/20261011_c04_prueba_reparto.sql

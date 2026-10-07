@@ -52,6 +52,10 @@ grant execute on function public.conta_sumas_saldos(uuid, date, date) to authent
 create or replace function public.conta_resultado_por_local(p_company uuid, p_desde date, p_hasta date, p_repartir boolean default false)
 returns table (location_id uuid, brand_id uuid, ingresos numeric, gastos numeric, resultado numeric, nota text)
 language plpgsql security invoker set search_path = public as $$
+-- Las columnas de salida (location_id, ingresos, gastos…) se llaman igual que
+-- las de _c04_res: dentro de las consultas manda la columna. Sin esto, la rama
+-- del reparto fallaba con 42702 «ingresos is ambiguous» (e2e 123, 07/10).
+#variable_conflict use_column
 declare v_suma numeric;
 begin
   create temp table if not exists _c04_res (location_id uuid, brand_id uuid, ingresos numeric, gastos numeric) on commit drop;

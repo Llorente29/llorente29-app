@@ -27,7 +27,7 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
 
   // Ajustes activo; las entradas sin pantalla no salen.
   await expect(page.getByRole('link', { name: 'Ajustes', exact: true })).toHaveAttribute('aria-current', 'page')
-  for (const sinPantalla of ['Documentos', 'Bancos', 'Libros', 'Por hacer']) {
+  for (const sinPantalla of ['Documentos', 'Bancos', 'Por hacer']) {
     await expect(page.getByRole('link', { name: sinPantalla, exact: true })).toHaveCount(0)
   }
   await expect(page.getByRole('link', { name: /^Tablas generales/ })).toBeVisible()

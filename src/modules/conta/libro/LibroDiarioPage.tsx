@@ -39,6 +39,8 @@ interface DatosLibro {
   cierres: CierreMes[]
   mes: string
   resultado: { total: number; porLocal: { nombre: string; resultado: number }[] } | null
+  /** Si el resultado no se ha podido calcular, por qué (la página sigue: es una cifra, no el libro). */
+  resultadoError: string | null
   cierre: FuenteCierre | null
 }
 
@@ -52,15 +54,16 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const [ejercicios, cierres, locales] = await Promise.all([leerEjercicios(accountId, companyId), leerCierres(accountId, companyId), localesDeLaCuenta(accountId)])
       const hoy = hoyEnMadrid()
       const ejercicio = ejercicios.find((e) => e.code === codigo) ?? ejercicios.find((e) => hoy >= e.inicio && hoy <= e.fin) ?? ejercicios[0] ?? null
-      if (!ejercicio) return { ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, cierre: null }
+      if (!ejercicio) return { ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null }
       const mes = hoy >= ejercicio.inicio && hoy <= ejercicio.fin ? mesDe(hoy) : mesDe(ejercicio.fin)
       const asientos = await leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin)
       const anterior = mesAnterior(mes)
+      let resultadoError: string | null = null
       const [resultado, cierre] = await Promise.all([
-        resultadoDelMes(companyId, mes, locales),
+        resultadoDelMes(companyId, mes, locales).catch((e: unknown) => { resultadoError = e instanceof Error ? e.message : String(e); return null }),
         anterior >= ejercicio.inicio ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
       ])
-      return { ejercicios, ejercicio, asientos, cierres, mes, resultado, cierre }
+      return { ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre }
     })().then((datos) => { if (vivo) setR({ clave, datos, error: null }) },
       (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
@@ -193,7 +196,7 @@ export default function LibroDiarioPage() {
               <strong className="cxd-cifra-valor">{c.mes.texto}</strong><span className={c.mes.cerrado ? 'cxt-ambar' : 'cxt-verde'}>{c.mes.apoyo}</span></div>
             <div className="cx-tarjeta cxd-cifra"><span className="cxd-cifra-etiqueta">Resultado de {nombreMes(datos.mes)}</span>
               <strong className="cxd-cifra-valor">{c.resultado === null ? '—' : `${c.resultado >= 0 ? '+' : ''}${euros(c.resultado)}`}</strong>
-              <span className="cx-ayuda">{c.apoyoResultado}</span></div>
+              <span className={datos.resultadoError ? 'cxt-ambar' : 'cx-ayuda'}>{datos.resultadoError ? `No se ha podido calcular: ${datos.resultadoError}` : c.apoyoResultado}</span></div>
           </div>
 
           {mesCerrado && (
