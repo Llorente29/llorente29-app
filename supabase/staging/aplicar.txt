@@ -1,4 +1,6 @@
-supabase/migrations/20261010T0110_c04_enlaces.sql
+# Respuesta 3 del C04, segunda vuelta (12/10). La 20261010T0110_c04_enlaces.sql
+# ya entró en la ejecución 81 (con el papel «liquidacion»); el rehacer falló
+# allí por el CHECK de los anulados y ahora borra con los disparadores apagados.
 supabase/staging/sql/20261012_c04_rehacer_libro.sql
 supabase/seeds/conta/seed_c04_staging.sql
 supabase/staging/sql/20261011_c04_prueba_agente.sql
