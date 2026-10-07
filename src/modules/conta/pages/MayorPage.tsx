@@ -13,11 +13,12 @@
 //   · Cuenta con hijas (400, 472, el grupo 4): «Sumas y saldos» de ese nivel,
 //     una fila por hija con debe, haber y saldo del ejercicio.
 //
-// Hasta el C04 no hay apuntes: el saldo, el extracto y las sumas lo dicen,
-// sin ceros que parezcan datos. Cliente (C03) e Impuestos › IVA aún no tienen
-// pantalla: su enlace no se enseña hasta que la tengan.
+// Los apuntes los pone el libro diario (C04): el Mayor lee los asientos
+// validados de la cuenta y las sumas y saldos de su nivel. Sin apuntes, el
+// saldo, el extracto y las sumas lo dicen, sin ceros que parezcan datos.
+// Impuestos › IVA aún no tiene pantalla: su enlace no se enseña hasta que la tenga.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { rutaFichaProveedor, rutaFichaTercero, rutaMayor, rutaPlan, rutaTablasGenerales } from '@/config/navegacion'
 import { Chip, Dato, ErrorConReintento, Tarjeta, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
@@ -30,10 +31,31 @@ import { arbolPlan, duenoDeCuenta, ejemplosDeIva, hijasDe, resumenNodo, type Nod
 import { ocultarCuenta, renombrarCuenta, type DatosPlan } from '@/modules/conta/services/planService'
 import { ExtractoCuenta } from '@/modules/conta/plan/ExtractoCuenta'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
-import type { Apunte } from '@/modules/conta/lib/cuentasProveedor'
+import { extracto, type Apunte } from '@/modules/conta/lib/cuentasProveedor'
+import { apuntesDeCuentas, sumasYSaldos, type SumaCuenta } from '@/modules/conta/services/libroService'
+import { eurosExactos } from '@/modules/conta/lib/formato'
 
-/** Los apuntes de la cuenta. Vacío hasta el C04, que es quien los crea. */
-const APUNTES: readonly Apunte[] = []
+/** Lo que se lee del libro, con su estado de carga. */
+function useDelLibro<T>(leer: (() => Promise<T>) | null, clave: string): { datos: T | null; error: string | null; recargar: () => void } {
+  const [r, setR] = useState<{ clave: string; datos: T | null; error: string | null }>({ clave: '', datos: null, error: null })
+  const [vuelta, setVuelta] = useState(0)
+  useEffect(() => {
+    if (!leer) return
+    let vivo = true
+    leer().then((datos) => { if (vivo) setR({ clave, datos, error: null }) },
+      (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `clave` resume lo que se lee
+  }, [clave, vuelta])
+  const vale = r.clave === clave
+  return { datos: vale ? r.datos : null, error: vale ? r.error : null, recargar: () => setVuelta((v) => v + 1) }
+}
+
+/** Saldo de una cuenta en el Mayor: deudor o acreedor, nunca un signo suelto. */
+function textoSaldoMayor(saldo: number): string {
+  if (Math.round(saldo * 100) === 0) return 'Saldada · 0,00 €'
+  return `${eurosExactos(Math.abs(saldo))} ${saldo > 0 ? 'deudor' : 'acreedor'}`
+}
 
 function Pgc() {
   return <> <span className="cx-plan-pgc" title="Definición del Plan General de Contabilidad (BOE, quinta parte)">(PGC)</span></>
@@ -46,7 +68,11 @@ function Volver() {
 // ── Mayor de una cuenta ─────────────────────────────────────────────────────
 
 function Mayor({ n, p }: { n: NodoPlan; p: DatosPlan }) {
-  const { plan, datos, hoy, movil } = useAjustes()
+  const { plan, datos, hoy, movil, quien } = useAjustes()
+  const libro = useDelLibro<Apunte[]>(n.cuentaId ? () => apuntesDeCuentas(quien.accountId, quien.companyId, [n.cuentaId!]) : null,
+    `${quien.accountId}:${quien.companyId}:${n.cuentaId}`)
+  const apuntes = libro.datos ?? []
+  const saldo = apuntes.length ? extracto(apuntes, 0, 'deudora').at(-1)!.saldo : null
   const h = useHacer(plan.recargar)
   const [renombrando, setRenombrando] = useState(false)
   const c = p.cuentas.find((x) => x.id === n.cuentaId)!
@@ -94,7 +120,7 @@ function Mayor({ n, p }: { n: NodoPlan; p: DatosPlan }) {
         )}
         {n.plain && <p className="cx-ayuda" style={{ margin: 0 }}>Qué se apunta aquí: {n.plain}{n.plainPgc && <Pgc />}</p>}
         <div className="cx-mayor-datos">
-          <Dato etiqueta="Saldo" vacio="Sin apuntes todavía" />
+          <Dato etiqueta="Saldo" vacio={libro.datos ? 'Sin apuntes todavía' : 'Leyendo…'}>{saldo === null ? null : textoSaldoMayor(saldo)}</Dato>
           <Dato etiqueta="Ejercicio" vacio="Sin abrir">{ej?.code}</Dato>
           <Dato etiqueta="Lo que lleva" vacio="Nada enlazado">{n.lleva}</Dato>
           <Dato etiqueta="Origen">{propia ? <Chip tono="azul">Tuya</Chip> : <Chip tono="ia">De serie</Chip>}</Dato>
@@ -117,11 +143,16 @@ function Mayor({ n, p }: { n: NodoPlan; p: DatosPlan }) {
         )}
         <Resultado hecho={h.hecho} fallo={h.fallo} />
       </section>
-      <ExtractoCuenta ejercicios={ejercicios} apuntes={APUNTES}
-        vacio={(e) => ({
-          titulo: 'Aún no hay apuntes en esta cuenta.',
-          explicacion: `Los asientos llegan con la contabilidad de facturas recibidas. Cuando los haya, aquí verás cada apunte con su saldo y, por meses, el debe, el haber y el saldo del ejercicio ${e}, con su apertura y su cierre.`,
-        })} />
+      {libro.error ? <ErrorConReintento mensaje={libro.error} reintentar={libro.recargar} /> : (
+        <ExtractoCuenta ejercicios={ejercicios} apuntes={apuntes} naturaleza="deudora"
+          vacio={(e) => ({
+            titulo: libro.datos ? 'Aún no hay apuntes en esta cuenta.' : 'Leyendo los apuntes…',
+            explicacion: `Cuando se valide un asiento que la use, aquí verás cada apunte con su saldo y, por meses, el debe, el haber y el saldo del ejercicio ${e}, con su apertura y su cierre.`,
+          })}
+          documento={(a) => (a.asiento
+            ? <span>{a.documento} <span className="cx-cifra">· {a.asiento.serie}/{a.asiento.numero}</span>{a.asiento.anulado && <> <Chip>Anulado</Chip></>}</span>
+            : a.documento)} />
+      )}
       <RegistroPlan registro={p.registro.filter((r) => r.code === c.code)} titulo={`Historial de ${c.code}`} movil={movil} />
     </>
   )
@@ -130,8 +161,17 @@ function Mayor({ n, p }: { n: NodoPlan; p: DatosPlan }) {
 // ── Sumas y saldos de un nivel ──────────────────────────────────────────────
 
 function SumasYSaldos({ n, hijas }: { n: NodoPlan; hijas: NodoPlan[] }) {
-  const { datos, hoy, movil } = useAjustes()
+  const { datos, hoy, movil, quien } = useAjustes()
   const ej = ejercicioActual(datos.datos?.ejercicios ?? [], hoy)
+  const desde = ej?.startsOn ?? `${hoy.slice(0, 4)}-01-01`
+  const hasta = ej?.endsOn ?? `${hoy.slice(0, 4)}-12-31`
+  const libro = useDelLibro<SumaCuenta[]>(() => sumasYSaldos(quien.companyId, desde, hasta), `${quien.companyId}:${desde}:${hasta}`)
+  // Cada hija suma las cuentas de apunte que cuelgan de ella (por su número).
+  const deHija = (x: NodoPlan) => {
+    const filas = (libro.datos ?? []).filter((s) => (x.cuentaId ? s.companyAccountId === x.cuentaId : s.code.startsWith(x.numero)))
+    return filas.length ? { debe: filas.reduce((t, s) => t + s.debe, 0), haber: filas.reduce((t, s) => t + s.haber, 0) } : null
+  }
+  const conApuntes = hijas.some((x) => deHija(x))
   return (
     <section className="cx-tarjeta cx-mayor" aria-label="Sumas y saldos">
       {!movil && (
@@ -142,17 +182,23 @@ function SumasYSaldos({ n, hijas }: { n: NodoPlan; hijas: NodoPlan[] }) {
         </div>
       )}
       <p className="cx-ayuda" style={{ margin: 0 }}>{[resumenNodo(n), ej ? `ejercicio ${ej.code}` : null].filter(Boolean).join(' · ')}</p>
-      <Vacio titulo="Aún no hay apuntes en este nivel."
-        explicacion={`Los asientos llegan con la contabilidad de facturas recibidas. Cuando los haya, aquí verás, por cada cuenta, el debe, el haber y el saldo del ejercicio${ej ? ` ${ej.code}` : ''}.`} />
+      {libro.error && <ErrorConReintento mensaje={libro.error} reintentar={libro.recargar} />}
+      {!libro.error && !conApuntes && (
+        <Vacio titulo={libro.datos ? 'Aún no hay apuntes en este nivel.' : 'Leyendo las sumas…'}
+          explicacion={`Cuando se valide un asiento que use alguna de sus cuentas, aquí verás, por cada cuenta, el debe, el haber y el saldo del ejercicio${ej ? ` ${ej.code}` : ''}.`} />
+      )}
       <table className="cxp-extracto cx-sumas" aria-label={`Sumas y saldos de ${n.numero}`}>
         <thead><tr><th>Cuenta</th><th>Debe</th><th>Haber</th><th>Saldo</th></tr></thead>
         <tbody>
-          {hijas.map((x) => (
-            <tr key={x.clave}>
-              <td><Link to={rutaMayor(x.numero)}><span className="cx-cifra">{x.numero}</span> · {x.titulo}</Link></td>
-              <td>—</td><td>—</td><td>—</td>
-            </tr>
-          ))}
+          {hijas.map((x) => {
+            const s = deHija(x)
+            return (
+              <tr key={x.clave}>
+                <td><Link to={rutaMayor(x.numero)}><span className="cx-cifra">{x.numero}</span> · {x.titulo}</Link></td>
+                <td>{s ? eurosExactos(s.debe) : '—'}</td><td>{s ? eurosExactos(s.haber) : '—'}</td><td>{s ? textoSaldoMayor(s.debe - s.haber) : '—'}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </section>

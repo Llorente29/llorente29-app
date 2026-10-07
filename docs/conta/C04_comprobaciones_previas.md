@@ -300,3 +300,27 @@
 - **Pendiente para F01:** hoy Folvy no numera facturas simplificadas de plataforma. Hasta F01, el resumen del día guarda los pedidos y su huella, y el rango se rellena cuando F01 numere.
   - Desde el 01/10 esto deja abierto el art. 63.4 en la parte de la numeración.
   - **F01 sube de prioridad.** Va al PR.
+
+## Tarea 2 · Lo que dijo Julio al empezarla (07/10): lo que deciden las plataformas
+
+Las plataformas deciden cancelaciones, devoluciones parciales y, en Glovo,
+cargos por espera del repartidor. El modelo de la tarea 2 les da sitio
+(`source_type` `sales_adjustment` y `channel_settlement`), y los generadores de
+la tarea 3 las tratan así. Literal comprobado:
+
+- **Cancelación antes de entregar.** No hay venta. El pedido no entra en el
+  resumen del día; si ya había entrado, el asiento del día aún no validado se
+  recalcula.
+- **Devolución total o parcial después de la venta.** Queda sin efecto la
+  operación o cambia el precio después de hecha: **LIVA art. 80.Dos** («la base
+  imponible se modificará en la cuantía correspondiente»).
+  - **RD 1619/2012 art. 15.2:** es obligatoria la factura rectificativa cuando
+    se dan las circunstancias del art. 80. La expide Folvy (F01).
+  - En el diario, un asiento `sales_adjustment`: menos venta (708 «Devoluciones
+    de ventas», o 700 al Debe) y menos IVA repercutido (477 al Debe, con la
+    misma base y tipo y libro de expedidas), contra la 430 de la plataforma.
+  - Fecha: la de la liquidación que la comunica.
+- **Cargo por espera del repartidor (Glovo) y demás cargos.** Son servicios
+  que la plataforma presta a la empresa y factura en su liquidación: gasto
+  (623/629) con su IVA soportado al 21 %, a su 410.
+  - Al no ser una devolución al cliente, no toca la venta ni el 477.
