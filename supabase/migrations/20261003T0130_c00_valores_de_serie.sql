@@ -20,7 +20,7 @@ insert into public.official_source (key, name, url, sha256, downloaded_at) value
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('istac-iae', 'ISTAC · Clasificación del IAE (CL_IAE)', 'https://datos.canarias.es/api/estadisticas/structural-resources/v1.0/codelists/ISTAC/CL_IAE/01.000/codes?limit=1000', '89ee34111d2629de19dd5e105e0bafa698555beafc4d3c7373f49336940ce450', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('ley-27-2014', 'Ley 27/2014, del Impuesto sobre Sociedades', 'https://www.boe.es/buscar/act.php?id=BOE-A-2014-12328', 'b4c361a501d09e5780f3da3c591e335b5a0d895f4efaded5fe529f411229fcf8', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('ley-3-2004', 'Ley 3/2004, de medidas de lucha contra la morosidad en las operaciones comerciales', 'https://www.boe.es/buscar/act.php?id=BOE-A-2004-21830', '0ab8de34f8d956eb1b4dadffefd150a780ee7ec26848f21083993a19811a9804', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
-insert into public.official_source (key, name, url, sha256, downloaded_at) values ('ley-37-1992', 'Ley 37/1992, del Impuesto sobre el Valor Añadido', 'https://www.boe.es/buscar/act.php?id=BOE-A-1992-28740', 'd122f6e01c791836f50f2e98b325013f5059fd1c57e9709a11df6da568be4fa2', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
+insert into public.official_source (key, name, url, sha256, downloaded_at) values ('ley-37-1992', 'Ley 37/1992, del Impuesto sobre el Valor Añadido', 'https://www.boe.es/buscar/act.php?id=BOE-A-1992-28740', '059240d661029dfdfe6caf802aab784015d8f8472f685552179755de1e09f265', '2026-10-07T08:15:26.067Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('ley-7-2012', 'Ley 7/2012, prevención y lucha contra el fraude fiscal (límite de pagos en efectivo)', 'https://www.boe.es/buscar/act.php?id=BOE-A-2012-13416', '4b8f6b20616b110eb1d933d164c5ec28c90c0aa3bb51081c24aa8e73e9a3da07', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('ley-canarias-4-2012', 'Ley 4/2012 de Canarias, de medidas administrativas y fiscales (tipos del IGIC)', 'https://www.boe.es/buscar/act.php?id=BOE-A-2012-9282', '9e6d2748e52a446637bedaf4860c3929860c93321dc98466b61b92fc1da4f858', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('orden-eha-451-2008', 'Orden EHA/451/2008, composición del NIF de las personas jurídicas y entidades sin personalidad', 'https://www.boe.es/buscar/act.php?id=BOE-A-2008-3580', 'f9744d9725b0c5b995d9a899126582edba02704b254439d7d252597970db8397', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
@@ -33,9 +33,9 @@ insert into public.official_source (key, name, url, sha256, downloaded_at) value
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('orden-modelo-347', 'Orden que aprueba el modelo 347', 'https://www.boe.es/buscar/act.php?id=BOE-A-2008-16973', '9ff7ea230162d845a9a2884463106f4fcb7eeea2c8c2c01206ea03fdc1f7cacd', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('orden-modelo-349', 'Orden que aprueba el modelo 349', 'https://www.boe.es/buscar/act.php?id=BOE-A-2010-5098', '930727844f1ecb7c375fa1d2954ab3a6da60fb178648b210814ea97d08ee22ba', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('orden-modelo-390', 'Orden que aprueba el modelo 390', 'https://www.boe.es/buscar/act.php?id=BOE-A-2009-18472', 'a53cda481b7fea0f751ca9acffd37e97f8fc49135ea8e38ef66ad4686c823c1a', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
-insert into public.official_source (key, name, url, sha256, downloaded_at) values ('rd-1065-2007', 'Real Decreto 1065/2007, Reglamento general de gestión e inspección tributaria', 'https://www.boe.es/buscar/act.php?id=BOE-A-2007-15984', '62ffc40da74a8f48dab4dbfb9db6215e89189d82dfd36bcc087ce35610dc7624', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
+insert into public.official_source (key, name, url, sha256, downloaded_at) values ('rd-1065-2007', 'Real Decreto 1065/2007, Reglamento general de gestión e inspección tributaria', 'https://www.boe.es/buscar/act.php?id=BOE-A-2007-15984', '9f4b4e551fac3be6432c8db3f2013125760d7cd80bba1ea65c67937f2f713a0d', '2026-10-07T08:15:26.067Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('rd-1514-2007', 'Real Decreto 1514/2007, Plan General de Contabilidad', 'https://www.boe.es/buscar/act.php?id=BOE-A-2007-19884', '6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
-insert into public.official_source (key, name, url, sha256, downloaded_at) values ('rd-439-2007', 'Real Decreto 439/2007, Reglamento del IRPF', 'https://www.boe.es/buscar/act.php?id=BOE-A-2007-6820', '3dfbf905e4fa6d30946efd14486426593f0d0069289f63b68f8efc736e90652b', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
+insert into public.official_source (key, name, url, sha256, downloaded_at) values ('rd-439-2007', 'Real Decreto 439/2007, Reglamento del IRPF', 'https://www.boe.es/buscar/act.php?id=BOE-A-2007-6820', 'c970238b464e942a649595637918ab33a4d91d2cd33414a41a67d2f80a963a65', '2026-10-07T08:15:26.067Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('rdl-19-2018', 'Real Decreto-ley 19/2018, de servicios de pago', 'https://www.boe.es/buscar/act.php?id=BOE-A-2018-16036', '77a5e49eed158dc33241082915e77a7b6499f4d6c1b0a7609189fa64af608024', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('rdl-4-2024', 'Real Decreto-ley 4/2024 (IVA del aceite de oliva y alimentos, 2024)', 'https://www.boe.es/buscar/act.php?id=BOE-A-2024-12944', 'dbc8553ba0105a0379b722fabe3676f6c0ef075fdcac923f83f89b3b7acc4667', '2026-10-03T19:03:31.840Z') on conflict (key) do nothing;
 
@@ -3115,21 +3115,21 @@ insert into public.legal_form (code, name, entity_kind, nif_letter, legal_ref, v
   ('nif_s', 'Órganos de la Administración del Estado y de las Comunidades Autónomas', 'other', 'S', 'Orden EHA/451/2008, art. 3', '2026-10-03', 'orden-eha-451-2008', 130),
   ('nif_u', 'Uniones Temporales de Empresas', 'company', 'U', 'Orden EHA/451/2008, art. 3', '2026-10-03', 'orden-eha-451-2008', 140),
   ('nif_v', 'Otros tipos no definidos en el resto de claves', 'other', 'V', 'Orden EHA/451/2008, art. 3', '2026-10-03', 'orden-eha-451-2008', 150),
-  ('persona_fisica', 'Persona física (autónomo)', 'self_employed', null, 'RD 1065/2007, art. 19 (NIF de las personas físicas)', '2026-10-03', 'rd-1065-2007', 5)
+  ('persona_fisica', 'Persona física (autónomo)', 'self_employed', null, 'RD 1065/2007, art. 19 (NIF de las personas físicas)', '2026-10-07', 'rd-1065-2007', 5)
 on conflict (code) do nothing;
 
 -- ── Regímenes de IVA y modelos ───────────────────────────────────────────────
 insert into public.vat_scheme (code, name, description, legal_ref, verified_at, source_key, sort_order) values
-  ('general', 'Régimen general', 'El que se aplica si no hay un régimen especial', 'Ley 37/1992, art. 120.Dos (los especiales son voluntarios, salvo tres)', '2026-10-03', 'ley-37-1992', 0),
-  ('simplificado', 'Régimen simplificado', null, 'Ley 37/1992, art. 120.Uno.1', '2026-10-03', 'ley-37-1992', 10),
-  ('agricultura', 'Agricultura, ganadería y pesca', null, 'Ley 37/1992, art. 120.Uno.2', '2026-10-03', 'ley-37-1992', 20),
-  ('bienes_usados', 'Bienes usados, arte y antigüedades', null, 'Ley 37/1992, art. 120.Uno.3', '2026-10-03', 'ley-37-1992', 30),
-  ('oro_inversion', 'Oro de inversión', null, 'Ley 37/1992, art. 120.Uno.4', '2026-10-03', 'ley-37-1992', 40),
-  ('agencias_viajes', 'Agencias de viajes', null, 'Ley 37/1992, art. 120.Uno.5', '2026-10-03', 'ley-37-1992', 50),
-  ('recargo_equivalencia', 'Recargo de equivalencia', null, 'Ley 37/1992, art. 120.Uno.6', '2026-10-03', 'ley-37-1992', 60),
-  ('ventas_distancia', 'Ventas a distancia (ventanilla única)', null, 'Ley 37/1992, art. 120.Uno.7', '2026-10-03', 'ley-37-1992', 70),
-  ('grupo_entidades', 'Grupo de entidades', null, 'Ley 37/1992, art. 120.Uno.8', '2026-10-03', 'ley-37-1992', 80),
-  ('criterio_caja', 'Criterio de caja', null, 'Ley 37/1992, art. 120.Uno.9', '2026-10-03', 'ley-37-1992', 90)
+  ('general', 'Régimen general', 'El que se aplica si no hay un régimen especial', 'Ley 37/1992, art. 120.Dos (los especiales son voluntarios, salvo tres)', '2026-10-07', 'ley-37-1992', 0),
+  ('simplificado', 'Régimen simplificado', null, 'Ley 37/1992, art. 120.Uno.1', '2026-10-07', 'ley-37-1992', 10),
+  ('agricultura', 'Agricultura, ganadería y pesca', null, 'Ley 37/1992, art. 120.Uno.2', '2026-10-07', 'ley-37-1992', 20),
+  ('bienes_usados', 'Bienes usados, arte y antigüedades', null, 'Ley 37/1992, art. 120.Uno.3', '2026-10-07', 'ley-37-1992', 30),
+  ('oro_inversion', 'Oro de inversión', null, 'Ley 37/1992, art. 120.Uno.4', '2026-10-07', 'ley-37-1992', 40),
+  ('agencias_viajes', 'Agencias de viajes', null, 'Ley 37/1992, art. 120.Uno.5', '2026-10-07', 'ley-37-1992', 50),
+  ('recargo_equivalencia', 'Recargo de equivalencia', null, 'Ley 37/1992, art. 120.Uno.6', '2026-10-07', 'ley-37-1992', 60),
+  ('ventas_distancia', 'Ventas a distancia (ventanilla única)', null, 'Ley 37/1992, art. 120.Uno.7', '2026-10-07', 'ley-37-1992', 70),
+  ('grupo_entidades', 'Grupo de entidades', null, 'Ley 37/1992, art. 120.Uno.8', '2026-10-07', 'ley-37-1992', 80),
+  ('criterio_caja', 'Criterio de caja', null, 'Ley 37/1992, art. 120.Uno.9', '2026-10-07', 'ley-37-1992', 90)
 on conflict (code) do nothing;
 insert into public.tax_form (code, name, description, legal_ref, verified_at, source_key) values
   ('303', 'IVA', null, 'Orden EHA/3786/2008, de 29 de diciembre, por la que se aprueban el modelo 303 Impuesto sobre el Valor Añadido, Autoliquidación, y el modelo 308 Impuesto sobre el Valor Añadido, solicitud de devolución: Recargo de equivalencia, artículo 30 bis del Reglamento del IVA y sujetos pasivos ocasionales y se modifican los Anexos I y II de la Orden EHA/3434/2007, de 23 de noviembre, por la que se aprueban los modelos 322 de autoliquidación mensual, modelo individual, y 353 de autoliquidación mensual, modelo agregado, así como otra normativa tributaria', '2026-10-03', 'orden-modelo-303'),
@@ -3147,13 +3147,13 @@ on conflict (code) do nothing;
 
 -- ── Impuestos ────────────────────────────────────────────────────────────────
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
-select true, 'iva_general', 'IVA general', 'Casi todo lo que compras', 'iva', 'peninsula_baleares', 'taxed', 21, 5.2, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 90.Uno; recargo: art. 161.1.º', '2026-10-03', 'ley-37-1992', 10
+select true, 'iva_general', 'IVA general', 'Casi todo lo que compras', 'iva', 'peninsula_baleares', 'taxed', 21, 5.2, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 90.Uno; recargo: art. 161.1.º', '2026-10-07', 'ley-37-1992', 10
 where not exists (select 1 from public.tax_rate where is_system and code = 'iva_general' and valid_from = '2012-09-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
-select true, 'iva_reducido', 'IVA reducido', 'Hostelería, alimentos, transporte', 'iva', 'peninsula_baleares', 'taxed', 10, 1.4, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 91.Uno; recargo: art. 161.2.º', '2026-10-03', 'ley-37-1992', 20
+select true, 'iva_reducido', 'IVA reducido', 'Hostelería, alimentos, transporte', 'iva', 'peninsula_baleares', 'taxed', 10, 1.4, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 91.Uno; recargo: art. 161.2.º', '2026-10-07', 'ley-37-1992', 20
 where not exists (select 1 from public.tax_rate where is_system and code = 'iva_reducido' and valid_from = '2012-09-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
-select true, 'iva_superreducido', 'IVA superreducido', 'Pan, leche, huevos, fruta, verdura, aceite de oliva', 'iva', 'peninsula_baleares', 'taxed', 4, 0.5, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 91.Dos; recargo: art. 161.3.º', '2026-10-03', 'ley-37-1992', 30
+select true, 'iva_superreducido', 'IVA superreducido', 'Pan, leche, huevos, fruta, verdura, aceite de oliva', 'iva', 'peninsula_baleares', 'taxed', 4, 0.5, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 91.Dos; recargo: art. 161.3.º', '2026-10-07', 'ley-37-1992', 30
 where not exists (select 1 from public.tax_rate where is_system and code = 'iva_superreducido' and valid_from = '2012-09-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
 select true, 'iva_basicos_4t2024', 'IVA alimentos básicos (oct.–dic. 2024)', 'Tipo temporal: pan, harinas, leche, quesos, huevos, frutas, verduras, hortalizas, legumbres, tubérculos, cereales y aceite de oliva', 'iva', 'peninsula_baleares', 'taxed', 2, 0.26, '2024-10-01', '2024-12-31', '472', '477', array['303']::text[], 'Real Decreto-ley 4/2024, art. 1.Dos.2', '2026-10-03', 'rdl-4-2024', 35
@@ -3162,13 +3162,13 @@ insert into public.tax_rate (is_system, code, name, example, tax_system, territo
 select true, 'iva_pasta_semillas_4t2024', 'IVA pasta y aceites de semillas (oct.–dic. 2024)', 'Tipo temporal: pastas alimenticias y aceites de semillas', 'iva', 'peninsula_baleares', 'taxed', 7.5, 1, '2024-10-01', '2024-12-31', '472', '477', array['303']::text[], 'Real Decreto-ley 4/2024, art. 1.Dos.1', '2026-10-03', 'rdl-4-2024', 36
 where not exists (select 1 from public.tax_rate where is_system and code = 'iva_pasta_semillas_4t2024' and valid_from = '2024-10-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
-select true, 'exento', 'Exento o 0 %', 'Seguros, alquileres de vivienda, sanidad, enseñanza', 'iva', 'peninsula_baleares', 'exempt', 0, null, '1993-01-01', null, null, null, array['303']::text[], 'Ley 37/1992, art. 20', '2026-10-03', 'ley-37-1992', 40
+select true, 'exento', 'Exento o 0 %', 'Seguros, alquileres de vivienda, sanidad, enseñanza', 'iva', 'peninsula_baleares', 'exempt', 0, null, '1993-01-01', null, null, null, array['303']::text[], 'Ley 37/1992, art. 20', '2026-10-07', 'ley-37-1992', 40
 where not exists (select 1 from public.tax_rate where is_system and code = 'exento' and valid_from = '1993-01-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
-select true, 'ue_compra', 'Compra en otro país de la UE', 'El IVA lo declaras tú', 'iva', 'peninsula_baleares', 'intra_eu', 21, null, '2012-09-01', null, '472', '477', array['303', '349']::text[], 'Ley 37/1992, art. 13.1.º (adquisiciones intracomunitarias) y art. 90', '2026-10-03', 'ley-37-1992', 50
+select true, 'ue_compra', 'Compra en otro país de la UE', 'El IVA lo declaras tú', 'iva', 'peninsula_baleares', 'intra_eu', 21, null, '2012-09-01', null, '472', '477', array['303', '349']::text[], 'Ley 37/1992, art. 13.1.º (adquisiciones intracomunitarias) y art. 90', '2026-10-07', 'ley-37-1992', 50
 where not exists (select 1 from public.tax_rate where is_system and code = 'ue_compra' and valid_from = '2012-09-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
-select true, 'isp', 'Inversión del sujeto pasivo', 'Obras, ciertos servicios de empresas de fuera: el IVA lo declaras tú', 'iva', 'peninsula_baleares', 'reverse_charge', 21, null, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 84.Uno.2.º y art. 90', '2026-10-03', 'ley-37-1992', 60
+select true, 'isp', 'Inversión del sujeto pasivo', 'Obras, ciertos servicios de empresas de fuera: el IVA lo declaras tú', 'iva', 'peninsula_baleares', 'reverse_charge', 21, null, '2012-09-01', null, '472', '477', array['303']::text[], 'Ley 37/1992, art. 84.Uno.2.º y art. 90', '2026-10-07', 'ley-37-1992', 60
 where not exists (select 1 from public.tax_rate where is_system and code = 'isp' and valid_from = '2012-09-01');
 insert into public.tax_rate (is_system, code, name, example, tax_system, territory, treatment, rate, surcharge_rate, valid_from, valid_to, pgc_input_hint, pgc_output_hint, declared_in, legal_ref, verified_at, source_key, sort_order)
 select true, 'igic_cero', 'IGIC tipo cero', 'Canarias', 'igic', 'canarias', 'taxed', 0, null, '2024-01-01', null, '472', '477', array[]::text[], 'Ley 4/2012 de Canarias, art. 51.1', '2026-10-03', 'ley-canarias-4-2012', 110
@@ -3194,19 +3194,19 @@ where not exists (select 1 from public.tax_rate where is_system and code = 'igic
 
 -- ── Retenciones ──────────────────────────────────────────────────────────────
 insert into public.withholding_rate (is_system, code, name, example, rate, model_190_key, model_190_subkey, filed_in, valid_from, valid_to, pgc_hint, legal_ref, verified_at, source_key, sort_order)
-select true, 'profesional', 'Profesionales', 'Asesor, abogado, arquitecto…', 15, null, null, '111', '2023-01-26', null, '4751', 'RD 439/2007, art. 95.1', '2026-10-03', 'rd-439-2007', 10
+select true, 'profesional', 'Profesionales', 'Asesor, abogado, arquitecto…', 15, null, null, '111', '2023-01-26', null, '4751', 'RD 439/2007, art. 95.1', '2026-10-07', 'rd-439-2007', 10
 where not exists (select 1 from public.withholding_rate where is_system and code = 'profesional' and valid_from = '2023-01-26');
 insert into public.withholding_rate (is_system, code, name, example, rate, model_190_key, model_190_subkey, filed_in, valid_from, valid_to, pgc_hint, legal_ref, verified_at, source_key, sort_order)
-select true, 'profesional_inicio', 'Profesionales que empiezan', 'Los tres primeros años de actividad', 7, null, null, '111', '2023-01-26', null, '4751', 'RD 439/2007, art. 95.1, párrafo segundo', '2026-10-03', 'rd-439-2007', 20
+select true, 'profesional_inicio', 'Profesionales que empiezan', 'Los tres primeros años de actividad', 7, null, null, '111', '2023-01-26', null, '4751', 'RD 439/2007, art. 95.1, párrafo segundo', '2026-10-07', 'rd-439-2007', 20
 where not exists (select 1 from public.withholding_rate where is_system and code = 'profesional_inicio' and valid_from = '2023-01-26');
 insert into public.withholding_rate (is_system, code, name, example, rate, model_190_key, model_190_subkey, filed_in, valid_from, valid_to, pgc_hint, legal_ref, verified_at, source_key, sort_order)
-select true, 'administradores', 'Administradores y consejeros', 'Lo que cobra un administrador por serlo', 35, null, null, '111', '2023-12-07', null, '4751', 'RD 439/2007, art. 80.1.3.º', '2026-10-03', 'rd-439-2007', 30
+select true, 'administradores', 'Administradores y consejeros', 'Lo que cobra un administrador por serlo', 35, null, null, '111', '2023-12-07', null, '4751', 'RD 439/2007, art. 80.1.3.º', '2026-10-07', 'rd-439-2007', 30
 where not exists (select 1 from public.withholding_rate where is_system and code = 'administradores' and valid_from = '2023-12-07');
 insert into public.withholding_rate (is_system, code, name, example, rate, model_190_key, model_190_subkey, filed_in, valid_from, valid_to, pgc_hint, legal_ref, verified_at, source_key, sort_order)
-select true, 'alquiler', 'Alquiler de local', 'La renta del local donde trabajas', 19, null, null, '115', '2018-12-23', null, '4751', 'RD 439/2007, art. 100', '2026-10-03', 'rd-439-2007', 40
+select true, 'alquiler', 'Alquiler de local', 'La renta del local donde trabajas', 19, null, null, '115', '2018-12-23', null, '4751', 'RD 439/2007, art. 100', '2026-10-07', 'rd-439-2007', 40
 where not exists (select 1 from public.withholding_rate where is_system and code = 'alquiler' and valid_from = '2018-12-23');
 insert into public.withholding_rate (is_system, code, name, example, rate, model_190_key, model_190_subkey, filed_in, valid_from, valid_to, pgc_hint, legal_ref, verified_at, source_key, sort_order)
-select true, 'capital', 'Intereses y dividendos', 'Lo que pagas a socios o prestamistas por su capital', 19, null, null, '123', '2018-12-23', null, '4751', 'RD 439/2007, art. 90.1', '2026-10-03', 'rd-439-2007', 50
+select true, 'capital', 'Intereses y dividendos', 'Lo que pagas a socios o prestamistas por su capital', 19, null, null, '123', '2018-12-23', null, '4751', 'RD 439/2007, art. 90.1', '2026-10-07', 'rd-439-2007', 50
 where not exists (select 1 from public.withholding_rate where is_system and code = 'capital' and valid_from = '2018-12-23');
 
 -- ── Formas y plazos de pago, textos de los apuntes ─────────────────────────
