@@ -316,7 +316,7 @@ export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidaci
     avisos.push(`${l.pedidos.total - l.pedidos.asentados} de ${l.pedidos.total} pedidos del periodo aún no están en un resumen del día: esta liquidación no los asienta (irían dos veces); revisa los días que faltan.`)
     confs.push('duda')
   } else {
-    razones.push({ decision: 'Sin ventas', porque: `los ${l.pedidos.total} pedidos del periodo ya están en sus resúmenes del día: aquí solo la comisión, los cargos y el cobro` })
+    razones.push({ decision: 'Sin ventas', porque: `${l.pedidos.total ? `los ${l.pedidos.total} pedidos del periodo ya están` : 'las ventas del periodo van'} en sus resúmenes del día: aquí solo la comisión, los cargos y el cobro` })
   }
   if (cent(l.devoluciones)) razones.push({ decision: `Devoluciones (${eurosExactos(l.devoluciones)}) fuera`, porque: 'van al resumen del día en que se producen, con su pedido', cita: cita('ivaModificacionBase') })
   if (l.neto !== null && cent(l.ventas - l.devoluciones - totalFactura) !== cent(l.neto)) {
