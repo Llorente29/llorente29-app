@@ -6,6 +6,9 @@ begin
     revoke select on table public.journal_entry, public.journal_line, public.journal_ledger, public.sales_day_summary,
                            public.payroll_summary, public.allocation_rule, public.entry_template, public.entry_template_line,
                         public.journal_correction, public.journal_dismissal from conta_lectura;
+    if to_regprocedure('public.journal_entry_canonico(uuid)') is not null then
+      revoke execute on function public.journal_entry_canonico(uuid) from conta_lectura;
+    end if;
   end if;
 end $$;
 drop function if exists public.conta_resultado_por_local(uuid, date, date, boolean);

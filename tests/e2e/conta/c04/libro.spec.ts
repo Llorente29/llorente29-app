@@ -54,14 +54,15 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   await expect(page.getByRole('button', { name: /^Para revisar: \d+\. Ver$/ })).toBeVisible()
   await expect(page.getByText(/^Resultado de /)).toBeVisible()
   // Estados: lo propuesto, lo hecho por Folvy, lo anulado.
-  await expect(page.getByRole('button', { name: /Ventas del día · Norte Centro/ }).getByText('Para revisar')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Ventas del día · Norte Mercado/ }).getByText('Hecho por Folvy')).toBeVisible()
+  const ventas = page.getByRole('button', { name: /Ventas del día · Norte Centro/ })
+  await expect(ventas.filter({ hasText: 'Para revisar' })).toHaveCount(1)
+  await expect(ventas.filter({ hasText: 'Hecho por Folvy' })).toHaveCount(1)
   await expect(page.getByRole('button', { name: /Publicidad en la plataforma · octubre/ }).getByText('Anulado')).toBeVisible()
   // La marca cedida, dicha.
   await expect(page.getByRole('button', { name: /Liquidación Plataforma Norte/ }).getByText('Milanesa Cedida · cedida')).toBeVisible()
   // Lo que he hecho yo, con Deshacer en lo que validó Folvy.
   const ia = page.getByRole('region', { name: 'Lo que he hecho yo' })
-  await expect(ia.getByText(/Asenté «Ventas del día · Norte Mercado»/)).toBeVisible()
+  await expect(ia.getByText(/Asenté «Ventas del día · Norte Centro»/)).toBeVisible()
   await expect(ia.getByRole('button', { name: 'Deshacer' }).first()).toBeVisible()
   // El cierre del mes anterior, con sus números.
   await expect(page.getByRole('region', { name: /^Cierre de / })).toBeVisible()
@@ -69,14 +70,14 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
 
   if (lado(page) === 'ordenador') {
     // La fila se despliega en sus apuntes.
-    await page.getByRole('button', { name: /Ventas del día · Norte Mercado/ }).click()
+    await ventas.filter({ hasText: 'Hecho por Folvy' }).click()
     await expect(page.getByRole('link', { name: '47700010' }).first()).toBeVisible()
     await expect(page.getByText('al Haber').first()).toBeVisible()
     await capturar(page, 'diario-abierto')
   }
   // Para revisar: solo lo que espera, sin esconder el resto (Todos sigue con todo).
   await page.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
-  await expect(page.getByRole('button', { name: /Ventas del día · Norte Mercado/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Ventas del día/ }).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Alquiler Norte Mercado · octubre/ })).toBeVisible()
 })
 

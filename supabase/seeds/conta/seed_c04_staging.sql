@@ -12,9 +12,10 @@
 -- escribe en journal_entry «por debajo».
 --
 -- Cuenta A (Taberna de Prueba Norte, dos locales, empresa 3b34403a…):
---   1. Un día de ventas (05/10) en los dos locales, con una marca cedida que
---      queda fuera: Norte Centro «Para revisar» (Probable: base calculada,
---      regla 13) y Norte Mercado «Hecho por Folvy» (validado solo).
+--   1. Ventas del día con una marca cedida que queda fuera: el 04/10 de Norte
+--      Centro con sus 5 pedidos propios de verdad, «Hecho por Folvy»
+--      (validado solo), y el 05/10 «Para revisar» (Probable: base calculada,
+--      regla 13). Un primer resumen de Norte Mercado sin pedidos, anulado.
 --   2. La liquidación de Plataforma Norte del 16–30/09 (cobrada el 05/10):
 --      comisión con IVA 21 %, cobro y lo de Milanesa Cedida al socio
 --      (NRV 16.ª). Para revisar, Seguro.
@@ -79,7 +80,6 @@ declare
   r111 uuid := (select id from public.withholding_rate where code = 'profesional');
   burger constant uuid := 'e0200000-0000-4000-8000-00000000a0b1';
   smash  constant uuid := 'e0200000-0000-4000-8000-00000000a0b3';
-  pita   constant uuid := 'e0200000-0000-4000-8000-00000000a0b2';
   milanesa constant uuid := 'e0200000-0000-4000-8000-00000000a0b5';
   r jsonb; v_id uuid;
 begin
@@ -101,17 +101,31 @@ begin
     jsonb_build_object('location_id', l1, 'sales_day', '2026-10-05', 'tickets_count', 212, 'total', 3214.60,
       'detail_hash', 'semilla-c04-norte-centro', 'base_calculated', true), 'Folvy');
 
-  -- 1 · Ventas del 05/10, Norte Mercado: validado por Folvy.
+  -- 1 · (07/10) La primera versión de esta semilla validó un resumen de Norte
+  -- Mercado del 05/10 con 96 tickets y NINGÚN pedido guardado: el agente
+  -- «Libro diario» lo marca, con razón. Lo validado no se borra: se anula.
+  select e.id into v_id from public.journal_entry e join public.sales_day_summary d on d.entry_id = e.id
+   where e.company_id = ea and e.status = 'validado' and d.location_id = l2 and d.sales_day = '2026-10-05' and cardinality(d.sale_ids) = 0;
+  if v_id is not null then
+    perform public.journal_entry_anular(v_id, 'Resumen de prueba sin sus pedidos: se rehace con los tickets de verdad', '2026-10-05', 'Ana Prueba');
+  end if;
+
+  -- 1 · Ventas del 04/10, Norte Centro: sus 5 pedidos propios cerrados (98,90 €), validado por Folvy.
   r := public.journal_entry_proponer(ea,
-    jsonb_build_object('series', 1, 'fecha', '2026-10-05', 'concepto', 'Ventas del día · Norte Mercado', 'source_type', 'sales_day',
-      'confianza', 'seguro', 'porque', 'los 96 tickets cuadran con lo cobrado por la plataforma, al céntimo.',
-      'razones', jsonb_build_array(jsonb_build_object('decision', 'Un asiento por día y local', 'porque', 'resumen de 96 facturas simplificadas', 'cita', 'RIVA art. 63.4'))),
+    jsonb_build_object('series', 1, 'fecha', '2026-10-04', 'concepto', 'Ventas del día · Norte Centro', 'source_type', 'sales_day',
+      'confianza', 'seguro', 'porque', 'los 5 tickets de tus marcas cuadran con lo cobrado, al céntimo.',
+      'razones', jsonb_build_array(
+        jsonb_build_object('decision', 'Un asiento por día y local', 'porque', 'resumen de 5 facturas simplificadas', 'cita', 'RIVA art. 63.4'),
+        jsonb_build_object('decision', 'Milanesa Cedida no va a tus ventas', 'porque', 'sus 2 pedidos son del socio', 'cita', 'PGC NRV 16.ª'))),
     jsonb_build_array(
-      jsonb_build_object('cuenta', '43000001', 'debe', 1100.00, 'local_id', l2),
-      jsonb_build_object('cuenta', '70000000', 'haber', 1000.00, 'local_id', l2, 'marca_id', pita),
-      jsonb_build_object('cuenta', '47700010', 'haber', 100.00, 'local_id', l2,
-        'iva', jsonb_build_object('tipo_id', iva10, 'base', 1000.00, 'libro', 'issued', 'facturas', 96))),
-    jsonb_build_object('location_id', l2, 'sales_day', '2026-10-05', 'tickets_count', 96, 'total', 1100.00, 'detail_hash', 'semilla-c04-norte-mercado'), 'Folvy');
+      jsonb_build_object('cuenta', '43000001', 'debe', 98.90, 'local_id', l1),
+      jsonb_build_object('cuenta', '70000000', 'haber', 89.91, 'local_id', l1, 'marca_id', burger),
+      jsonb_build_object('cuenta', '47700010', 'haber', 8.99, 'local_id', l1,
+        'iva', jsonb_build_object('tipo_id', iva10, 'base', 89.91, 'libro', 'issued', 'facturas', 5))),
+    jsonb_build_object('location_id', l1, 'sales_day', '2026-10-04', 'tickets_count', 5, 'total', 98.90, 'detail_hash', 'semilla-c04-norte-centro-0410',
+      'sale_ids', (select jsonb_agg(s.id) from public.sale s left join public.brand b on b.id = s.brand_id
+                    where s.account_id = 'c01a0000-0000-4000-8000-00000000000a' and s.location_id = l1 and s.status = 'closed'
+                      and coalesce(b.ownership_type, 'own') = 'own' and (s.sold_at at time zone 'Europe/Madrid')::date = '2026-10-04')), 'Folvy');
   if exists (select 1 from public.journal_entry where id = (r->>'id')::uuid and status = 'propuesto') then
     perform public.journal_entry_validar((r->>'id')::uuid, 'Folvy (validación automática de ventas)');
   end if;

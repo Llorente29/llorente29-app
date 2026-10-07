@@ -132,6 +132,42 @@ jobs:
           path: /tmp/informe.md
           if-no-files-found: warn
 
+      # C04 · Agente «Libro diario»: cuadre, numeración, cadena, IVA, ventas del
+      # día, cedidas, socio, resultado por local, meses cerrados y propuestas
+      # viejas. Solo lee; antes del C04 (sin journal_entry) no hay libro que mirar.
+      - name: Libro diario (solo lectura)
+        id: libro
+        continue-on-error: true
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ "$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.journal_entry') is not null")" = "t" ]; then
+            "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-libro.sql > /tmp/libro.json
+            node scripts/conta/agente-libro.mjs /tmp/libro.json /tmp/informe-libro.md producción
+          else
+            echo "## Agente «Libro diario» · producción: aún no hay libro diario (antes del C04)." > /tmp/informe-libro.md
+          fi
+
+      - name: Informe del libro
+        if: always()
+        run: |
+          if [ -f /tmp/informe-libro.md ]; then cat /tmp/informe-libro.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Guardar el informe del libro
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-libro-produccion-${{ github.run_id }}
+          path: /tmp/informe-libro.md
+          if-no-files-found: warn
+
+      - name: Resultado del libro
+        if: steps.libro.outcome == 'failure'
+        run: |
+          echo "::error::El libro diario tiene algo en rojo: ver el informe del resumen."
+          exit 1
+
       - name: Resultado
         if: steps.revisar.outcome == 'failure'
         run: |

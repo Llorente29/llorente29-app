@@ -13,7 +13,7 @@ begin
   end if;
   delete from public.treasury_account t
    where t.account_id = 'c01b0000-0000-4000-8000-00000000000b' and t.name = 'Caja del local (prueba)'
-     and not exists (select 1 from public.company_account_link l where l.entity = 'bank_account' and l.entity_id = t.id);
+     and not exists (select 1 from public.company_account_link l where l.entity = 'bank_account' and l.entity_id = t.id::text);
   get diagnostics n = row_count;
   raise notice 'Limpieza C04: % caja(s) de prueba sobrantes quitadas de la cuenta B.', n;
 end $$;
