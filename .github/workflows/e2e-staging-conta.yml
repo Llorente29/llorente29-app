@@ -22,7 +22,9 @@ name: Pruebas e2e en staging-conta
 # nada que la RLS no permita. No sirven para producción.
 #
 # CUÁNDO SE DISPARA
-# Un push a conta/** que toque la app, las pruebas o este workflow.
+# Un push a conta/** que toque la app, las pruebas o este workflow. Y a mano
+# (workflow_dispatch) desde la rama: cuando lo que cambia es staging —una
+# semilla rehecha por aplicar-staging-conta— y no el código (12/10, C04 R3).
 
 on:
   push:
@@ -34,6 +36,7 @@ on:
       - 'tests/e2e/**'
       - 'playwright.config.ts'
       - '.github/workflows/e2e-staging-conta.yml'
+  workflow_dispatch:
 
 concurrency:
   group: e2e-staging-conta-${{ github.ref }}
