@@ -7,8 +7,10 @@ M4 (C01b), como en los encargos anteriores.
 Capturas de staging-conta sacadas por la e2e `tests/e2e/conta/c04/libro.spec.ts`
 (ordenador 1440 × 900 y móvil 390 × 844, página entera) con la semilla
 INVENTADA `supabase/seeds/conta/seed_c04_staging.sql`, en la ejecución verde
-del commit `5a09dba` (el bot las subió en `9e041e9`). Se toman ANTES de escribir
-nada, para que salgan siempre iguales.
+133 del commit `0360cc87` (respuesta 3; el bot las sube en el commit siguiente).
+Staging se rehízo antes con `20261012_c04_rehacer_libro.sql` (aplicar 82): el
+libro de A y B se borra y la semilla lo vuelve a hacer con las funciones de la
+base. Se toman ANTES de escribir nada, para que salgan siempre iguales.
 
 | Pantalla | Ordenador | Móvil |
 |---|---|---|
@@ -41,6 +43,13 @@ porque la página estaba desplazada al hacerla.
 - Tabla FECHA · Nº · CONCEPTO · local · marca · de dónde sale · IMPORTE ·
   estado. Sin número mientras no se valida («—»). Chips de local (azul) y de
   marca (cedida en ámbar, propias en gris).
+- **El número lleva su serie** (respuesta 3): «General 3», «Nóminas 1»,
+  «Ventas 3». El número a secas se repetía en cada serie y no decía nada. El
+  contraasiento dice «Anula General nº 2: …», nunca «Anula el 4/2».
+- **Fila baja** (respuesta 3): el concepto ocupa hasta dos líneas enteras y,
+  debajo, en una sola, los chips de local y marca y «de dónde sale». La e2e
+  mide cada fila: ≤ 90 px en ordenador y ≤ 110 px en móvil (en móvil el número
+  va debajo de la fecha).
 - Estados: «Para revisar» (ámbar), «Hecho por Folvy» (verde), «Validado».
 - La fila se abre y enseña sus apuntes con «al Debe / al Haber»
   (`diario-abierto-ordenador.png`).
@@ -62,9 +71,10 @@ porque la página estaba desplazada al hacerla.
 4. **La tercera cifra dice «Abierto · ningún mes anterior cerrado»** y no
    «bloqueado hasta el día 5 · septiembre cerrado»: en la cuenta A de staging
    no hay ningún mes cerrado. La de B sí lo enseña (`diario-b-*`).
-5. **Los chips del concepto van uno debajo de otro**, no en línea: la columna
-   es más estrecha que en la maqueta porque el importe y el estado no se
-   recortan. El concepto largo se corta con «…» y entero está en el asiento.
+5. **Los chips van en una sola línea bajo el concepto**, seguidos de «de dónde
+   sale», y no en columnas propias: así la fila no crece. Si no caben, se corta
+   «de dónde sale» con «…» (entero en el `title` y en el asiento). El concepto
+   se corta a dos líneas, no a una.
 6. **«Abrir el asiento»** al pie de la fila abierta. La maqueta no lo pinta. Es
    el único camino por teclado al N12 desde la tabla.
 7. **«Lo que he hecho yo»: «Deshacer» solo donde hay algo que deshacer.** Un
@@ -90,6 +100,17 @@ varias líneas.
 - «Descartar» y «Validar asiento».
 - Apuntes con CUENTA · local · marca, DEBE y HABER, el código de la cuenta (que
   lleva a su Mayor) y «Cambiar» en cada línea.
+- **Las cuentas, por su nombre de uso** (respuesta 3): la subcuenta de la
+  empresa por el suyo («62300001 · Comisiones de plataformas») y la hoja de
+  serie por su «qué se apunta aquí». El título del BOE («Servicios de
+  profesionales independientes», «Acreedores por prestaciones de servicios
+  (euros)») sale solo en el Mayor y en «Detalle contable». El buscador de
+  «Cambiar» encuentra por los dos.
+- **Lo cobrado por cuenta del socio va a su cuenta de liquidación**
+  (respuesta 3): «41000003 · Liquidación pendiente con Marcas del Sur»,
+  2.334,48 € al Haber, y no a su 400 de proveedor. Medido en staging (empresa
+  A): Banco 7.797,40 · Comisiones de plataformas 1.712,89 · IVA 359,71 al
+  Debe; Plataforma Norte 7.535,52 · Liquidación pendiente 2.334,48 al Haber.
 - La línea de cuadre: «Cuadra · Debe 9.870,00 € · Haber 9.870,00 € · ✓ 0,00 €»
   y la frase de cómo se cambia una cuenta.
 - «Por qué lo propongo así», con fondo de la IA: cuadre con el PDF, ventas por
@@ -140,3 +161,13 @@ contable» van debajo.
 `extracto-proveedor-*`: «Saldo y movimientos» y el extracto leen del libro. El
 saldo es 1.283,15 € a tu cargo, con la F-2026-0915 validada; el número del
 documento lleva a su asiento. Antes del C04 decía «Aún no hay apuntes».
+
+## Sin captura
+
+- **«Sus cuentas» del socio**: fila «Lo que cobras por su cuenta», con su
+  cuenta de liquidación o, si no la tiene, «Crear su cuenta de liquidación».
+  La cuenta se crea sola al confirmar el papel de socio (ficha, lista y
+  revisión de las 430). Ninguna e2e abre todavía la ficha del socio:
+  esa fila está sin prueba de pantalla, y se dice.
+- **La marca cedida de la semilla** se llama ahora «Brasa Prestada»: nombre
+  inventado del todo.
