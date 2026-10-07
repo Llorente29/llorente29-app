@@ -6724,6 +6724,207 @@ Se modifican los apartados 1.9º, 18º.n) y ñ), 13º, 24º y 2 y se añade el 1
 Se modifica el apartado 1.13º, el segundo párrafo del apartado 2 y se suprime el aparatado 1.27 por el art. 13.1, 2 y 17.2 de la Ley 42/1994, de 30 de diciembre. Ref. BOE-A-1994-28968
 Se modifica el tecer párrafo del apartado 1.22º y se añade el segundo párrafo al 2, con efectos de 1 de enero de 1994, por el art. 75.1 y 2 de la Ley 21/1993, de 29 de diciembre. Ref. BOE-A-1993-31087
 Redactado el apartado 1. 6º.a), 18º.n) y 24º conforme a la correción de errores publicada en BOE núm. 33, de 8 de febrero de 1993. Ref. BOE-A-1993-3297
+### versión · vigente desde 2026-10-02 · BOE-A-2026-20526
+Artículo 20. Exenciones en operaciones interiores.
+Uno. Estarán exentas de este impuesto las siguientes operaciones:
+1.º Las prestaciones de servicios y las entregas de bienes accesorias a ellas que constituyan el servicio postal universal siempre que sean realizadas por el operador u operadores que se comprometen a prestar todo o parte del mismo.
+Esta exención no se aplicará a los servicios cuyas condiciones de prestación se negocien individualmente.
+2.º Las prestaciones de servicios de hospitalización o asistencia sanitaria y las demás relacionadas directamente con las mismas realizadas por entidades de Derecho público o por entidades o establecimientos privados en régimen de precios autorizados o comunicados.
+Se considerarán directamente relacionados con las de hospitalización y asistencia sanitaria las prestaciones de servicios de alimentación, alojamiento, quirófano, suministro de medicamentos y material sanitario y otros análogos prestados por clínicas, laboratorios, sanatorios y demás establecimientos de hospitalización y asistencia sanitaria.
+La exención no se extiende a las operaciones siguientes:
+a) La entrega de medicamentos para ser consumidos fuera de los establecimientos mencionados en el primer párrafo de este número.
+b) Los servicios de alimentación y alojamiento prestados a personas distintas de los destinatarios de los servicios de hospitalización y asistencia sanitaria y de sus acompañantes.
+c) Los servicios veterinarios.
+d) Los arrendamientos de bienes efectuados por las entidades a que se refiere el presente número.
+3.º La asistencia a personas físicas por profesionales médicos o sanitarios, cualquiera que sea la persona destinataria de dichos servicios.
+A efectos de este impuesto tendrán la condición de profesionales médicos o sanitarios los considerados como tales en el ordenamiento jurídico y los psicólogos, logopedas y ópticos, diplomados en centros oficiales o reconocidos por la Administración.
+La exención comprende las prestaciones de asistencia médica, quirúrgica y sanitaria, relativas al diagnóstico, prevención y tratamiento de enfermedades, incluso las de análisis clínicos y exploraciones radiológicas.
+4.º Las entregas de sangre, plasma sanguíneo y demás fluidos, tejidos y otros elementos del cuerpo humano efectuadas para fines médicos o de investigación o para su procesamiento con idénticos fines.
+5.º Las prestaciones de servicios realizadas en el ámbito de sus respectivas profesiones por estomatólogos, odontólogos, mecánicos dentistas y protésicos dentales, así como la entrega, reparación y colocación de prótesis dentales y ortopedias maxilares realizadas por los mismos, cualquiera que sea la persona a cuyo cargo se realicen dichas operaciones.
+6.º Los servicios prestados directamente a sus miembros por uniones, agrupaciones o entidades autónomas, incluidas las Agrupaciones de Interés Económico, constituidas exclusivamente por personas que ejerzan una actividad exenta o no sujeta al Impuesto que no origine el derecho a la deducción, cuando concurran las siguientes condiciones:
+a) Que tales servicios se utilicen directa y exclusivamente en dicha actividad y sean necesarios para el ejercicio de la misma.
+b) Que los miembros se limiten a reembolsar la parte que les corresponda en los gastos hechos en común.
+c) Que la actividad exenta ejercida sea distinta de las señaladas en los números 16.º, 17.º, 18.º, 19.º, 20.º, 22.º, 23.º, 26.º y 28.º del apartado Uno de este artículo.
+La exención también se aplicará cuando, cumplido el requisito previsto en la letra b) precedente, la prorrata de deducción no exceda del 10 por ciento y el servicio no se utilice directa y exclusivamente en las operaciones que originen el derecho a la deducción.
+La exención no alcanza a los servicios prestados por sociedades mercantiles.
+7.º Las entregas de bienes y prestaciones de servicios que, para el cumplimiento de sus fines específicos, realice la Seguridad Social, directamente o a través de sus entidades gestoras o colaboradoras.
+Sólo será aplicable esta exención en los casos en que quienes realicen tales operaciones no perciban contraprestación alguna de los adquirentes de los bienes o de los destinatarios de los servicios, distinta de las cotizaciones efectuadas a la Seguridad Social.
+La exención no se extiende a las entregas de medicamentos o de material sanitario realizadas por cuenta de la Seguridad Social.
+8.º Las prestaciones de servicios de asistencia social que se indican a continuación efectuadas por entidades de Derecho Público o entidades o establecimientos privados de carácter social:
+a) Protección de la infancia y de la juventud. Se considerarán actividades de protección de la infancia y de la juventud las de rehabilitación y formación de niños y jóvenes, la de asistencia a lactantes, la custodia y atención a niños, la realización de cursos, excursiones, campamentos o viajes infantiles y juveniles y otras análogas prestadas en favor de personas menores de veinticinco años de edad.
+b) Asistencia a la tercera edad.
+c) Educación especial y asistencia a personas con minusvalía.
+d) Asistencia a minorías étnicas.
+e) Asistencia a refugiados y asilados.
+f) Asistencia a transeúntes.
+g) Asistencia a personas con cargas familiares no compartidas.
+h) Acción social comunitaria y familiar.
+i) Asistencia a ex-reclusos.
+j) Reinserción social y prevención de la delincuencia.
+k) Asistencia a alcohólicos y toxicómanos.
+l) Cooperación para el desarrollo.
+La exención comprende la prestación de los servicios de alimentación, alojamiento o transporte accesorios de los anteriores prestados por dichos establecimientos o entidades, con medios propios o ajenos.
+9.º La educación de la infancia y de la juventud, la guarda y custodia de niños, incluida la atención a niños en los centros docentes en tiempo interlectivo durante el comedor escolar o en aulas en servicio de guardería fuera del horario escolar, la enseñanza escolar, universitaria y de postgraduados, la enseñanza de idiomas y la formación y reciclaje profesional, realizadas por Entidades de derecho público o entidades privadas autorizadas para el ejercicio de dichas actividades.
+La exención se extenderá a las prestaciones de servicios y entregas de bienes directamente relacionadas con los servicios enumerados en el párrafo anterior, efectuadas, con medios propios o ajenos, por las mismas empresas docentes o educativas que presten los mencionados servicios.
+La exención no comprenderá las siguientes operaciones:
+a) Los servicios relativos a la práctica del deporte, prestados por empresas distintas de los centros docentes.
+En ningún caso, se entenderán comprendidos en esta letra los servicios prestados por las Asociaciones de Padres de Alumnos vinculadas a los centros docentes.
+b) Las de alojamiento y alimentación prestadas por Colegios Mayores o Menores y residencias de estudiantes.
+c) Las efectuadas por escuelas de conductores de vehículos relativas a los permisos de conducción de vehículos terrestres de las clases A y B y a los títulos, licencias o permisos necesarios para la conducción de buques o aeronaves deportivos o de recreo.
+d) Las entregas de bienes efectuadas a título oneroso.
+10.º Las clases a título particular prestadas por personas físicas sobre materias incluidas en los planes de estudios de cualquiera de los niveles y grados del sistema educativo.
+No tendrán la consideración de clases prestadas a título particular, aquéllas para cuya realización sea necesario darse de alta en las tarifas de actividades empresariales o artísticas del Impuesto sobre Actividades Económicas.
+11.º Las cesiones de personal realizadas en el cumplimiento de sus fines, por entidades religiosas inscritas en el Registro correspondiente del Ministerio de Justicia, para el desarrollo de las siguientes actividades:
+a) Hospitalización, asistencia sanitaria y demás directamente relacionadas con las mismas.
+b) Las de asistencia social comprendidas en el número 8. de este apartado.
+c) Educación, enseñanza, formación y reciclaje profesional.
+12.º Las prestaciones de servicios y las entregas de bienes accesorias a las mismas efectuadas directamente a sus miembros por organismos o entidades legalmente reconocidos que no tengan finalidad lucrativa, cuyos objetivos sean de naturaleza política, sindical, religiosa, patriótica, filantrópica o cívica, realizadas para la consecución de sus finalidades específicas, siempre que no perciban de los beneficiarios de tales operaciones contraprestación alguna distinta de las cotizaciones fijadas en sus estatutos.
+Se entenderán incluidos en el párrafo anterior los Colegios profesionales, las Cámaras Oficiales, las Organizaciones patronales y las Federaciones que agrupen a los organismos o entidades a que se refiere este número.
+La aplicación de esta exención quedará condicionada a que no sea susceptible de producir distorsiones de competencia.
+13º. Los servicios prestados a personas físicas que practiquen el deporte o la educación física, cualquiera que sea la persona o entidad a cuyo cargo se realice la prestación, siempre que tales servicios estén directamente relacionados con dichas prácticas y sean prestados por las siguientes personas o entidades:
+a) Entidades de derecho público.
+b) Federaciones deportivas.
+c) Comité Olímpico Español.
+d) Comité Paralímpico Español.
+e) Entidades o establecimientos deportivos privados de carácter social.
+La exención no se extiende a los espectáculos deportivos.
+14.º Las prestaciones de servicios que a continuación se relacionan efectuadas por entidades de Derecho público o por entidades o establecimientos culturales privados de carácter social:
+a) Las propias de bibliotecas, archivos y centros de documentación.
+b) Las visitas a museos, galerías de arte, pinacotecas, monumentos, lugares históricos, jardines botánicos, parques zoológicos y parques naturales y otros espacios naturales protegidos de características similares.
+c) Las representaciones teatrales, musicales, coreográficas, audiovisuales y cinematográficas.
+d) La organización de exposiciones y manifestaciones similares.
+15.º El transporte de enfermos o heridos en ambulancias o vehículos especialmente adaptados para ello.
+16.º Las operaciones de seguro, reaseguro y capitalización.
+Asimismo, los servicios de mediación, incluyendo la captación de clientes, para la celebración del contrato entre las partes intervinientes en la realización de las anteriores operaciones, con independencia de la condición del empresario o profesional que los preste.
+Dentro de las operaciones de seguro se entenderán comprendidas las modalidades de previsión
+17.º Las entregas de sellos de Correos y efectos timbrados de curso legal en España por importe no superior a su valor facial.
+La exención no se extiende a los servicios de expedición de los referidos bienes prestados en nombre y por cuenta de terceros.
+18.º Las siguientes operaciones financieras:
+a) Los depósitos en efectivo en sus diversas formas, incluidos los depósitos en cuenta corriente y cuentas de ahorro, y las demás operaciones relacionadas con los mismos, incluidos los servicios de cobro o pago prestados por el depositario en favor del depositante.
+La exención no se extiende a los servicios de gestión de cobro de créditos, letras de cambio, recibos y otros documentos. Tampoco se extiende la exención a los servicios prestados al cedente en el marco de los contratos de "factoring", con excepción de los de anticipo de fondos que, en su caso, se puedan prestar en estos contratos.
+No se considerarán de gestión de cobro las operaciones de abono en cuenta de cheques o talones.
+b) La transmisión de depósitos en efectivo, incluso mediante certificados de depósito o títulos que cumplan análoga función.
+c) La concesión de créditos y préstamos en dinero, cualquiera que sea la forma en que se instrumente, incluso mediante efectos financieros o títulos de otra naturaleza.
+d) Las demás operaciones, incluida la gestión, relativas a préstamos o créditos efectuadas por quienes los concedieron en todo o en parte.
+La exención no alcanza a los servicios prestados a los demás prestamistas en los préstamos sindicados.
+En todo caso, estarán exentas las operaciones de permuta financiera.
+e) La transmisión de préstamos o créditos.
+f) La prestación de fianzas, avales, cauciones y demás garantías reales o personales, así como la emisión, aviso, confirmación y demás operaciones relativas a los créditos documentarios.
+La exención se extiende a la gestión de garantías de préstamos o créditos efectuadas por quienes concedieron los préstamos o créditos garantizados o las propias garantías, pero no a la realizada por terceros.
+g) La transmisión de garantías.
+h) Las operaciones relativas a transferencias, giros, cheques, libranzas, pagarés, letras de cambio, tarjetas de pago o de crédito y otras órdenes de pago.
+La exención se extiende a las operaciones siguientes:
+a') La compensación interbancaria de cheques y talones.
+b') La aceptación y la gestión de la aceptación.
+c') El protesto o declaración sustitutiva y la gestión del protesto.
+No se incluye en la exención el servicio de cobro de letras de cambio o demás documentos que se hayan recibido en gestión de cobro. Tampoco se incluyen en la exención los servicios prestados al cedente en el marco de los contratos de "factoring", con excepción de los de anticipo de fondos que, en su caso, se puedan prestar en estos contratos.
+i) La transmisión de los efectos y órdenes de pago a que se refiere la letra anterior, incluso la transmisión de efectos descontados.
+No se incluye en la exención la cesión de efectos en comisión de cobranza. Tampoco se incluyen en la exención los servicios prestados al cedente en el marco de los contratos de "factoring", con excepción de los de anticipo de fondos que, en su caso, se puedan prestar en estos contratos.
+j) Las operaciones de compra, venta o cambio y servicios análogos que tengan por objeto divisas, billetes de banco y monedas que sean medios legales de pago, a excepción de las monedas y billetes de colección y de las piezas de oro, plata y platino.
+A efectos de lo dispuesto en el párrafo anterior se considerarán de colección las monedas y los billetes que no sean normalmente utilizados para su función de medio legal de pago o tengan un interés numismático, con excepción de las monedas de colección entregadas por su emisor por un importe no superior a su valor facial que estarán exentas del impuesto.
+No se aplicará esta exención a las monedas de oro que tengan la consideración de oro de inversión de acuerdo con lo establecido en el número 2.º del artículo 140 de esta Ley.
+k) Los servicios y operaciones, exceptuados el depósito y la gestión, relativos a acciones, participaciones en sociedades, obligaciones y demás valores no mencionados en las letras anteriores de este número, con excepción de los siguientes:
+a') Los representativos de mercaderías.
+b') Aquellos cuya posesión asegure de hecho o de derecho la propiedad, el uso o el disfrute exclusivo de la totalidad o parte de un bien inmueble, que no tengan la naturaleza de acciones o participaciones en sociedades.
+c') Aquellos valores no admitidos a negociación en un mercado secundario oficial, realizadas en el mercado secundario, mediante cuya transmisión se hubiera pretendido eludir el pago del impuesto correspondiente a la transmisión de los inmuebles propiedad de las entidades a las que representen dichos valores, en los términos a que se refiere el artículo 108 de la Ley 24/1988, de 28 de julio, del Mercado de Valores.
+l) La transmisión de los valores a que se refiere la letra anterior y los servicios relacionados con ella, incluso por causa de su emisión o amortización, con las mismas excepciones.
+m) La mediación en las operaciones exentas descritas en las letras anteriores de este número y en las operaciones de igual naturaleza no realizadas en el ejercicio de actividades empresariales o profesionales.
+La exención se extiende a los servicios de mediación en la transmisión o en la colocación en el mercado, de depósitos, de préstamos en efectivo o de valores, realizados por cuenta de sus entidades emisoras, de los titulares de los mismos o de otros intermediarios, incluidos los casos en que medie el aseguramiento de dichas operaciones.
+n) La gestión y depósito de las Instituciones de Inversión Colectiva, de las Entidades de Capital-Riesgo gestionadas por sociedades gestoras autorizadas y registradas en los Registros especiales administrativos, de los Fondos de Pensiones, de Regulación del Mercado Hipotecario, de Titulización de Activos y Colectivos de Jubilación, constituidos de acuerdo con su legislación específica.
+ñ) (Suprimida)
+19.º Las loterías, apuestas y juegos organizados por la Sociedad Estatal Loterías y Apuestas del Estado y la Organización Nacional de Ciegos y por los organismos correspondientes de las Comunidades Autónomas, así como las actividades que constituyan los hechos imponibles de los tributos sobre el juego y combinaciones aleatorias.
+La exención no se extiende a los servicios de gestión y demás operaciones de carácter accesorio o complementario de las incluidas en el párrafo anterior que no constituyan el hecho imponible de los tributos sobre el juego, con excepción de los servicios de gestión del bingo.
+20.º Las entregas de terrenos rústicos y demás que no tengan la condición de edificables, incluidas las construcciones de cualquier naturaleza en ellos enclavadas, que sean indispensables para el desarrollo de una explotación agraria, y los destinados exclusivamente a parques y jardines públicos o a superficies viales de uso público.
+A estos efectos, se consideran edificables los terrenos calificados como solares por la Ley sobre el Régimen del Suelo y Ordenación Urbana y demás normas urbanística, así como los demás terrenos aptos para la edificación por haber sido ésta autorizada por la correspondiente licencia administrativa.
+La exención no se extiende a las entregas de los siguientes terrenos, aunque no tengan la condición de edificables:
+a) Las de terrenos urbanizados o en curso de urbanización, excepto los destinados exclusivamente a parques y jardines públicos o a superficies viales de uso público.
+b) Las de terrenos en los que se hallen enclavadas edificaciones en curso de construcción o terminadas cuando se transmitan conjuntamente con las mismas y las entregas de dichas edificaciones estén sujetas y no exentas al impuesto. No obstante, estarán exentas las entregas de terrenos no edificables en los que se hallen enclavadas construcciones de carácter agrario indispensables para su explotación y las de terrenos de la misma naturaleza en los que existan construcciones paralizadas, ruinosas o derruidas.
+21.º (Suprimida)
+22.ºA) Las segundas y ulteriores entregas de edificaciones, incluidos los terrenos en que se hallen enclavadas, cuando tengan lugar después de terminada su construcción o rehabilitación.
+A los efectos de lo dispuesto en esta Ley, se considerará primera entrega la realizada por el promotor que tenga por objeto una edificación cuya construcción o rehabilitación esté terminada. No obstante, no tendrá la consideración de primera entrega la realizada por el promotor después de la utilización ininterrumpida del inmueble por un plazo igual o superior a dos años por su propietario o por titulares de derechos reales de goce o disfrute o en virtud de contratos de arrendamiento sin opción de compra, salvo que el adquirente sea quien utilizó la edificación durante el referido plazo. No se computarán a estos efectos los períodos de utilización de edificaciones por los adquirentes de los mismos en los casos de resolución de las operaciones en cuya virtud se efectuaron las correspondientes transmisiones.
+Los terrenos en que se hallen enclavadas las edificaciones comprenderán aquéllos en los que se hayan realizado las obras de urbanización accesorias a las mismas. No obstante, tratándose de viviendas unifamiliares, los terrenos urbanizados de carácter accesorio no podrán exceder de 5.000 metros cuadrados.
+Las transmisiones no sujetas al Impuesto en virtud de lo establecido en el número 1.º del artículo 7 de esta Ley no tendrán, en su caso, la consideración de primera entrega a efectos de lo dispuesto en este número.
+La exención prevista en este número no se aplicará:
+a) A las entregas de edificaciones efectuadas en el ejercicio de la opción de compra inherente a un contrato de arrendamiento, por empresas dedicadas habitualmente a realizar operaciones de arrendamiento financiero. A estos efectos, el compromiso de ejercitar la opción de compra frente al arrendador se asimilará al ejercicio de la opción de compra.
+Los contratos de arrendamiento financiero a que se refiere el párrafo anterior tendrán una duración mínima de diez años.
+b) A las entregas de edificaciones para su rehabilitación por el adquirente, siempre que se cumplan los requisitos que reglamentariamente se establezcan.
+c) A las entregas de edificaciones que sean objeto de demolición con carácter previo a una nueva promoción urbanística.
+B) A los efectos de esta ley, son obras de rehabilitación de edificaciones las que reúnan los siguientes requisitos:
+1.º Que su objeto principal sea la reconstrucción de las mismas, entendiéndose cumplido este requisito cuando más del 50 por ciento del coste total del proyecto de rehabilitación se corresponda con obras de consolidación o tratamiento de elementos estructurales, fachadas o cubiertas o con obras análogas o conexas a las de rehabilitación.
+2.º Que el coste total de las obras a que se refiera el proyecto exceda del 25 por ciento del precio de adquisición de la edificación si se hubiese efectuado aquélla durante los dos años inmediatamente anteriores al inicio de las obras de rehabilitación o, en otro caso, del valor de mercado que tuviera la edificación o parte de la misma en el momento de dicho inicio. A estos efectos, se descontará del precio de adquisición o del valor de mercado de la edificación la parte proporcional correspondiente al suelo.
+Se considerarán obras análogas a las de rehabilitación las siguientes:
+a) Las de adecuación estructural que proporcionen a la edificación condiciones de seguridad constructiva, de forma que quede garantizada su estabilidad y resistencia mecánica.
+b) Las de refuerzo o adecuación de la cimentación así como las que afecten o consistan en el tratamiento de pilares o forjados.
+c) Las de ampliación de la superficie construida, sobre y bajo rasante.
+d) Las de reconstrucción de fachadas y patios interiores.
+e) Las de instalación de elementos elevadores, incluidos los destinados a salvar barreras arquitectónicas para su uso por discapacitados.
+Se considerarán obras conexas a las de rehabilitación las que se citan a continuación cuando su coste total sea inferior al derivado de las obras de consolidación o tratamiento de elementos estructurales, fachadas o cubiertas y, en su caso, de las obras análogas a éstas, siempre que estén vinculadas a ellas de forma indisociable y no consistan en el mero acabado u ornato de la edificación ni en el simple mantenimiento o pintura de la fachada:
+a) Las obras de albañilería, fontanería y carpintería.
+b) Las destinadas a la mejora y adecuación de cerramientos, instalaciones eléctricas, agua y climatización y protección contra incendios.
+c) Las obras de rehabilitación energética.
+Se considerarán obras de rehabilitación energética las destinadas a la mejora del comportamiento energético de las edificaciones reduciendo su demanda energética, al aumento del rendimiento de los sistemas e instalaciones térmicas o a la incorporación de equipos que utilicen fuentes de energía renovables.
+23.º Los arrendamientos que tengan la consideración de servicios con arreglo a lo dispuesto en el artículo 11 de esta Ley y la constitución y transmisión de derechos reales de goce y disfrute, que tengan por objeto los siguientes bienes:
+a) Terrenos, incluidas las construcciones inmobiliarias de carácter agrario utilizadas para la explotación de una finca rústica.
+Se exceptúan las construcciones inmobiliarias dedicadas a actividades de ganadería independiente de la explotación del suelo.
+b) Los edificios o partes de los mismos destinados exclusivamente a viviendas o a su posterior arrendamiento por entidades gestoras de programas públicos de apoyo a la vivienda o por sociedades acogidas al régimen especial de Entidades dedicadas al arrendamiento de viviendas establecido en el Impuesto sobre Sociedades. La exención se extenderá a los garajes y anexos accesorios a las viviendas y los muebles, arrendados conjuntamente con aquéllos.
+La exención no comprenderá:
+a´) Los arrendamientos de terrenos para estacionamientos de vehículos.
+b´) Los arrendamientos de terrenos para depósito o almacenaje de bienes, mercancías o productos, o para instalar en ellos elementos de una actividad empresarial.
+c´) Los arrendamientos de terrenos para exposiciones o para publicidad.
+d´) Los arrendamientos con opción de compra de terrenos o viviendas cuya entrega estuviese sujeta y no exenta al impuesto.
+e´) Los arrendamientos de apartamentos o viviendas amueblados cuando el arrendador se obligue a la prestación de alguno de los servicios complementarios propios de la industria hotelera, tales como los de restaurante, limpieza, lavado de ropa u otros análogos.
+f´) Los arrendamientos de edificios o parte de los mismos para ser subarrendados, con excepción de los realizados de acuerdo con lo dispuesto en la letra b) anterior.
+g´) Los arrendamientos de edificios o parte de los mismos asimilados a viviendas de acuerdo con lo dispuesto en la Ley de Arrendamientos Urbanos.
+h´) La constitución o transmisión de derechos reales de goce o disfrute sobre los bienes a que se refieren las letras a´), b´), c´), e´) y f´) anteriores.
+j´) La constitución o transmisión de derechos reales de superficie.
+24.º Las entregas de bienes que hayan sido utilizados por el transmitente en la realización de operaciones exentas del impuesto en virtud de lo establecido en este artículo, siempre que al sujeto pasivo no se le haya atribuido el derecho a efectuar la deducción total o parcial del impuesto soportado al realizar la adquisición, afectación o importación de dichos bienes o de sus elementos componentes.
+A efectos de lo dispuesto en el párrafo anterior, se considerará que al sujeto pasivo no se le ha atribuido el derecho a efectuar la deducción parcial de las cuotas soportadas cuando haya utilizado los bienes o servicios adquiridos exclusivamente en la realización de operaciones exentas que no originen el derecho a la deducción, aunque hubiese sido de aplicación la regla de prorrata.
+Lo dispuesto en este número no se aplicará:
+a) A las entregas de bienes de inversión que se realicen durante su período de regularización.
+b) Cuando resulten procedentes las exenciones establecidas en los números 20.º y 22.º anteriores.
+25.º Las entregas de bienes cuya adquisición, afectación o importación o la de sus elementos componentes hubiera determinado la exclusión total del derecho a deducir en favor del transmitente en virtud de lo dispuesto en los artículos 95 y 96 de esta Ley.
+26.º Los servicios profesionales, incluidos aquéllos cuya contraprestación consista en derechos de autor, prestados por artistas plásticos, escritores, colaboradores literarios, gráficos y fotográficos de periódicos y revistas, compositores musicales, autores de obras teatrales y de argumento, adaptación, guión y diálogos de las obras audiovisuales, traductores y adaptadores.
+27.º (Suprimido)
+28.º Las prestaciones de servicios y las entregas de bienes realizadas por los partidos políticos con motivo de manifestaciones destinadas a reportarles un apoyo financiero para el cumplimiento de su finalidad específica y organizadas en su exclusivo beneficio.
+Dos. Las exenciones relativas a los números 20.º y 22.º del apartado anterior podrán ser objeto de renuncia por el sujeto pasivo, en la forma y con los requisitos que se determinen reglamentariamente, cuando el adquirente sea un sujeto pasivo que actúe en el ejercicio de sus actividades empresariales o profesionales y se le atribuya el derecho a efectuar la deducción total o parcial del Impuesto soportado al realizar la adquisición o, cuando no cumpliéndose lo anterior, en función de su destino previsible, los bienes adquiridos vayan a ser utilizados, total o parcialmente, en la realización de operaciones, que originen el derecho a la deducción.
+Tres. A efectos de lo dispuesto en este artículo, se considerarán entidades o establecimientos de carácter social aquéllos en los que concurran los siguientes requisitos:
+1.º Carecer de finalidad lucrativa y dedicar, en su caso, los beneficios eventualmente obtenidos al desarrollo de actividades exentas de idéntica naturaleza.
+2.º Los cargos de presidente, patrono o representante legal deberán ser gratuitos y carecer de interés en los resultados económicos de la explotación por sí mismos o a través de persona interpuesta.
+3.º Los socios, comuneros o partícipes de las entidades o establecimientos y sus cónyuges o parientes consanguíneos, hasta el segundo grado inclusive, no podrán ser destinatarios principales de las operaciones exentas ni gozar de condiciones especiales en la prestación de los servicios.
+Este requisito no se aplicará cuando se trate de las prestaciones de servicios a que se refiere el apartado Uno, números 8.º y 13.º, de este artículo.
+Las entidades que cumplan los requisitos anteriores podrán solicitar de la Administración tributaria su calificación como entidades o establecimientos privados de carácter social en las condiciones, términos y requisitos que se determinen reglamentariamente. La eficacia de dicha calificación, que será vinculante para la Administración, quedará subordinada, en todo caso, a la subsistencia de las condiciones y requisitos que, según lo dispuesto en esta Ley, fundamentan la exención.
+Las exenciones correspondientes a los servicios prestados por entidades o establecimientos de carácter social que reúnan los requisitos anteriores se aplicarán con independencia de la obtención de la calificación a que se refiere el párrafo anterior, siempre que se cumplan las condiciones que resulten aplicables en cada caso.
+Se deja sin efecto la modificación del apartado 1.23º.e') por Resolución de 2 de octubre de 2026 que publica el Acuerdo del Congreso de los Diputados por el que se deroga el Real Decreto-ley 26/2026, de 29 de septiembre. Ref. BOE-A-2026-20526
+Se modifica, con efectos de 1 de diciembre de 2026, el apartado 1.23º.e') por el art. 7.1 del Real Decreto-ley 26/2026, de 29 de septiembre. Ref. BOE-A-2026-20266
+Se modifica el apartado 1.6º, con efectos de 1 de enero de 2019, por el art. 75 de la Ley 6/2018, de 3 de julio. Ref. BOE-A-2018-9268#ar-71
+Se modifica el apartado 1.18º.j) por el art. 59 de la Ley 3/2017, de 27 de junio. Ref. BOE-A-2017-7387
+Se modifica por el art. 1.7 de la Ley 28/2014, de 27 de noviembre. Ref. BOE-A-2014-12329.
+Se modifica el apartado 1.8 por el art. 74 de la Ley 22/2013, de 23 de diciembre. Ref. BOE-A-2013-13616.
+Se modifican los apartados 1 y 3 por el art. 68 y 69 de la Ley 17/2012, de 27 de diciembre. Ref. BOE-A-2012-15651.
+Se modifica el apartado 1.18º.k) por el art. 5.2 de la Ley 7/2012, de 29 de octubre. Ref. BOE-A-2012-13416.
+Redactado conforme a la corrección de errores publicada en BOE núm. 31, de 5 de febrero de 2013. Ref. BOE-A-2013-1182.
+Se modifica el apartado 1.19º por la disposición final 7.1 de la Ley 13/2011, de 27 de mayo. Ref. BOE-A-2011-9280.
+Se modifica el apartado 1.1º por el art. 79.2 de la Ley 39/2010, de 22 de diciembre. Ref. BOE-A-2010-19703.
+Se modifica el apartado 1.22º por el art. 2.2 del Real Decreto-Ley 6/2010, de 9 de abril. Ref. BOE-A-2010-5879.
+Téngase en cuenta para su aplicación la disposición transitoria 3.
+Se modifica el apartado 1.22º por el art. 5 del Real Decreto-Ley 2/2008, de 21 de abril. Ref. BOE-A-2008-6994.
+Téngase en cuenta para su aplicación la disposición transitoria única.
+Se añade el apartado 1.28º por la disposición adicional 3 de la Ley Orgánica 8/2007, de 4 de julio. Ref. BOE-A-2007-13022.
+Se modifica el apartado 1.16º por la disposición adicional 8 de la Ley 26/2006, de 17 de julio. Ref. BOE-A-2006-12916.
+Se modifica el apartado 2 por el art. único 1 de la Ley 3/2006, de 29 de marzo. Ref. BOE-A-2006-5691.
+Se modifica el apartado 1.23º b) por el art. 64 de la Ley 30/2005, de 29 de diciembre. Ref. BOE-A-2005-21525.
+Se modifica el apartado 1.1º por el art. 2.1 de la Ley 23/2005, de 18 de noviembre. Ref. BOE-A-2005-19004.
+Esta modificación surte efectos desde el 1 de enero de 2006, según establece la disposición final 3.
+Se modifica el apartado 1.18º y se suprime el 1.27º por el art. 7.1.2 y 7.3.1 de la Ley 62/2003, de 30 de diciembre. Ref. BOE-A-2003-23936.
+Se modifica el apartado 2 por el art. 4.4 de la Ley 53/2002, de 30 de diciembre. Ref. BOE-A-2002-25412.
+Se modifica el apartado 1.18º j) por el art. 6.3 de la Ley 55/1999, de 29 de diciembre. Ref. BOE-A-1999-24786.
+Se modifica el apartado 1.18º n) por la disposición adicional 2.1 de la Ley 1/1999, de 5 de enero. Ref. BOE-A-1999-214.
+Se modifica el apartado 1.13º por el art. 4.2 de la Ley 50/1998, de 30 de diciembre. Ref. BOE-A-1998-30155.
+Se añade la letra l) al apartado 1.8º por la disposición adicional 2 de la Ley 23/1998, de 7 de julio. Ref. BOE-A-1998-16303.
+Se modifican los apartados 1.9º, 18º.n) y ñ), 13º, 24º y 2 y se añade el 1.27º por el art. 6.2 a 6, 26.1 y la disposición adicional 29 de la Ley 66/1997, de 30 de diciembre. Ref. BOE-A-1997-28053
+Se modifica el apartado 1.13º, el segundo párrafo del apartado 2 y se suprime el aparatado 1.27 por el art. 13.1, 2 y 17.2 de la Ley 42/1994, de 30 de diciembre. Ref. BOE-A-1994-28968
+Se modifica el tecer párrafo del apartado 1.22º y se añade el segundo párrafo al 2, con efectos de 1 de enero de 1994, por el art. 75.1 y 2 de la Ley 21/1993, de 29 de diciembre. Ref. BOE-A-1993-31087
+Redactado el apartado 1. 6º.a), 18º.n) y 24º conforme a la correción de errores publicada en BOE núm. 33, de 8 de febrero de 1993. Ref. BOE-A-1993-3297
 
 ## [a2-2]
 ### versión · vigente desde 2021-07-01 · BOE-A-2021-6872
@@ -17553,6 +17754,145 @@ Lo dispuesto en este número 3.º no se aplicará a los servicios que resulten e
 Tres. Lo dispuesto en los apartados uno.1 y dos.1 de este artículo será también aplicable a las ejecuciones de obra que sean prestaciones de servicios, de acuerdo con lo previsto en el artículo 11 de esta Ley, y tengan como resultado inmediato la obtención de alguno de los bienes a cuya entrega resulte aplicable uno de los tipos reducidos previstos en dichos preceptos.
 El contenido del párrafo anterior no será de aplicación a las ejecuciones de obra que tengan por objeto la construcción o rehabilitación de viviendas de protección oficial de régimen especial o de promoción pública a que se refiere el apartado uno.3 de este artículo.
 Cuatro. Se aplicará el tipo del 0 por ciento a las entregas de bienes realizadas en concepto de donativos a las entidades sin fines lucrativos definidas de acuerdo con lo dispuesto en el artículo 2 de la Ley 49/2002, de 23 de diciembre, de régimen fiscal de las entidades sin fines lucrativos y de los incentivos fiscales al mecenazgo, siempre que se destinen por las mismas a los fines de interés general que desarrollen de acuerdo con lo dispuesto por el artículo 3, apartado 1.º, de dicha Ley.
+Se modifican, con efectos de 1 de diciembre de 2026, los apartados Uno.2.2º, Uno.2.10º y Dos.1.6º por el art. 7.2 a 4 del Real Decreto-ley 26/2026, de 29 de septiembre. Ref. BOE-A-2026-20266#a7
+Se modifica el apartado Dos.1.1º por la disposición final primera.2 de la Ley 7/2024, de 20 de diciembre. Ref. BOE-A-2024-26694#df
+Se modifica el apartado Dos.1.1º, con efectos desde el 1 de enero de 2025, por el art. 2 del Real Decreto-ley 4/2024, de 26 de junio. Ref. BOE-A-2024-12944#a2
+Se suprime la letra b) del apartado uno.1.6º y se añade el punto 7º al apartado 1.dos por el art. 78 de la Ley 31/2022, de 23 de diciembre. Ref. BOE-A-2022-22128#a7-10
+Se añade el apartado 4 por la disposición final 3.2 de la Ley 7/2022, de 8 de abril. Ref. BOE-A-2022-5809#df-3
+Se modifica el apartado Uno.1.1º por el art. 69 de la Ley 11/2020, de 30 de diciembre. Ref. BOE-A-2020-17339#a6-11
+Se modifica el apartado dos.1.2º por la disposición final 2 del Real Decreto-ley 15/2020, de 21 de abril. Ref. BOE-A-2020-4554#df-2
+Se añade el número 13º al apartado Uno.2, con efectos desde el 1 de enero de 2019, por el art. 2 del Real Decreto-ley 26/2018, de 28 de diciembre. Ref. BOE-A-2018-17990
+Se modifican los apartados 1.2.6º y 2.2.3º por el art. 78 de la Ley 6/2018, de 3 de julio. Ref. BOE-A-2018-9268#ar-72
+Se modifica el apartado 1.2.2º y 6º por el art. 60 de la Ley 3/2017, de 27 de junio. Ref. BOE-A-2017-7387
+Se modifican los apartados 1.1.5º, 6º y 8º y 2.2.1º por el art. 1.21 de la Ley 28/2014, de 27 de noviembre. Ref. BOE-A-2014-12329.
+Se añade el apartado 1.4 y 5 por el art. 9.1 del Real Decreto-ley 1/2014, de 24 de enero. Ref. BOE-A-2014-747.
+Se modifica, con efectos desde el 1 de septiembre de 2012, por el art. 23.3 del Real Decreto-ley 20/2012, de 13 de julio. Ref. BOE-A-2012-9364.
+Redactado conforme a la corrección de errores publicada en BOE núm. 172, de 19 de julio de 2012. Ref. BOE-A-2012-9654.
+Se añade el apartado 1.2.18º por la disposición final 3 de la Ley 4/2012, de 6 de julio. Ref. BOE-A-2012-9111.
+Téngase en cuenta que ya estaba añadido por el Real Decreto-ley 8/2012, de 16 de marzo.
+Se añade el apartado 1.2.18º por la disposición final 3 del Real Decreto-ley 8/2012, de 16 de marzo. Ref. BOE-A-2012-3811.
+Véase, sobre aplicación del tipo reducido del 4% del IVA a las entregas de bienes a que se refiere el apartado 1.1.7º, la disposición transitoria 4 del Real Decreto-Ley 9/2011, de 19 de agosto. Ref. BOE-A-2011-14021. con vigencia hasta el 31 de diciembre de 2011.
+Se modifica el apartado 2.2.3º por la disposición adicional 15 de la Ley 32/2010, de 5 de agosto. Ref. BOE-A-2010-12616.
+Se modifican los apartados 1.1.7º, 1.2.15ºy 9º y 2.2 por los arts.. 2.3 a 4 y 16.1 a 2 del Real Decreto-Ley 6/2010, de 9 de abril. Ref. BOE-A-2010-5879.
+La modificación del apartado 1.2.15º tendrá vigencia hasta el 31 de diciembre de 2012, según establece el art. 2.4.
+Se modifica el apartado 1 por el art. 79.2 de la Ley 26/2009, de 23 de diciembre. Ref. BOE-A-2009-20765.
+Se añade el apartado 1.2.17º y se modifica el apartao 2.2 por la disposición final 3.3 y 4 de la Ley 11/2009, de 26 de octubre. Ref. BOE-A-2009-17000.
+Téngase en cuenta para su aplicación la disposición final 12.c)
+Se modifican los apartados 2.1.4º y 2.2 por los arts. 1 y 2 de la Ley 6/2006, de 24 de abril. Ref. BOE-A-2006-7317.
+Se añade el apartado 1.2.16º por el art. 63 de la Ley 30/2005, de 29 de diciembre. Ref. BOE-A-2005-21525.
+Se modifica el apartado 2.1.6º por el art. 2.2 de la Ley 23/2005, de 18 de noviembre. Ref. BOE-A-2005-19004.
+Se modifica el apartado 2.1.6º por el art. 4 de la Ley 36/2003, de 11 de noviembre. Ref. BOE-A-2003-20695.
+Se modifica el apartado 2.1.6º por el art. 4 del Real Decreto-Ley 2/2003, de 25 de abril. Ref. BOE-A-2003-8589.
+Se modifica el apartado 1.6º y 1.3 por el art. 4.11 y 12 de la Ley 53/2002, de 30 de diciembre. Ref. BOE-A-2002-25412.
+Se modifica el apartado 1.2.1º y se suprime el 1.8º y 10º por el art. 5.7 y la disposición derogatoria única.3 de la Ley 24/2001, de 27 de diciembre. Ref. BOE-A-2001-24965.
+Se modifica el apartado 1.2.10º por el art. 5.3 de la Ley 14/2000, de 29 de diciembre. Ref. BOE-A-2000-24357.
+Se modifican los apartados 1.1 y 1.2 por el art. 71.1 a 7 de la Ley 54/1999, de 29 de diciembre Ref. BOE-A-1999-24785. y se añade un párrafo al apartado 1.2.3º por el art. 6.7 de la Ley 55/1999, de 29 de diciembre Ref. BOE-A-1999-24786
+Se añade el apartado 1.10º por el art. 3 del Real Decreto-Ley 15/1999, de 1 de octubre. Ref. BOE-A-1999-19686.
+Redactado conforme a la corrección de errores publicada en BOE núm. 242 de 9 de octubre de 1999. Ref. BOE-A-1999-20064.
+Se modifican los apartados 1.1.3º y 1.2.7º por el art. 4.4 y 5 de la Ley 50/1998, de 30 de diciembre. Ref. BOE-A-1998-30155.
+Se modifica el apartado 1.2.1º y 2.1.2º por el art. único.6 y 10de la Ley 9/1998, de 21 de abril. Ref. BOE-A-1998-9477.
+La modificación del apartado 2.1.2º será aplicable a partir del 1 de abril de 1998, según establece la disposición transitoria 5.
+Se modifica el apartado apartado 1.2.10º por la dispocición adicional 36 de la Ley 66/1997, de 30 de diciembre . Ref. BOE-A-1997-28053 y los apartados 1.1.5º, 1.1.7º, 1.2.7º, 2.1.1º a 3º y 6º por el art. 68 de la Ley 65/1997, de 30 de diciembre. Ref. BOE-A-1997-28052
+Se modifica el apartado 1.2.1º por el art. único.6 del Real Decreto-Ley 14/1997, de 29 de agosto. Ref. BOE-A-1997-19125
+Se suprime el apartado 1.2.8º por el art. 10 de la Ley 17/1997, de 3 de mayo. Ref. BOE-A-1997-9711
+Téngase en cuenta que el apartado ya estaba suprimido por el Real Decreto-Ley 1/1997, de 31 de enero
+Se suprime el apartado 1.2.8º por el art. 10 del Real Decreto-Ley 1/1997, de 31 de enero. Ref. BOE-A-1997-1954
+Redactado conforme a la correción de errores publicada en BOE núm. 37 de 12 de febrero de 1997. Ref. BOE-A-1997-3031
+Se modifica el apartado 2.1.1º.a) por el art. 10.6 de la Ley 13/1996, de 30 de diciembre. Ref. BOE-A-1996-29117
+Se añade el apartado 3 por el art. 28.14 del Real Decreto-Ley 12/1995, de 28 de diciembre. Ref. BOE-A-1995-27964
+Se modifica, con efectos desde el 1 de enero de 1995, por el art. 78.2 de la Ley 41/1994, de 30 de diciembre. Ref. BOE-A-1994-28967
+Se modifica el apartado 2.1.11º, 1.2.2º y se añade el apartado 1.1.8º, con efectos de 1 de enero de 1994, por el art. 75.3, 5 y 6 de la Ley 21/1993, de 29 de diciembre. Ref. BOE-A-1993-31087
+### versión · vigente desde 2026-10-02 · BOE-A-2026-20526
+Artículo 91. Tipos impositivos reducidos.
+Uno. Se aplicará el tipo del 10 por ciento a las operaciones siguientes:
+1. Las entregas, adquisiciones intracomunitarias o importaciones de los bienes que se indican a continuación:
+1.º Las sustancias o productos, cualquiera que sea su origen que, por sus características, aplicaciones, componentes, preparación y estado de conservación, sean susceptibles de ser habitual e idóneamente utilizados para la nutrición humana o animal, de acuerdo con lo establecido en el Código Alimentario y las disposiciones dictadas para su desarrollo.
+Se excluyen de lo dispuesto en el párrafo anterior:
+a) Las bebidas alcohólicas.
+Se entiende por bebida alcohólica todo líquido apto para el consumo humano por ingestión que contenga alcohol etílico.
+b) Las bebidas refrescantes, zumos y gaseosas con azúcares o edulcorantes añadidos.
+A los efectos de este número no tendrán la consideración de alimento el tabaco ni las sustancias no aptas para el consumo humano o animal en el mismo estado en que fuesen objeto de entrega, adquisición intracomunitaria o importación.
+2.º Los animales, vegetales y los demás productos susceptibles de ser utilizados habitual e idóneamente para la obtención de los productos a que se refiere el número anterior, directamente o mezclados con otros de origen distinto.
+Se comprenden en este número los animales destinados a su engorde antes de ser utilizados en el consumo humano o animal y los animales reproductores de los mismos o de aquellos otros a que se refiere el párrafo anterior.
+3.º Los siguientes bienes cuando por sus características objetivas, envasado, presentación y estado de conservación, sean susceptibles de ser utilizados directa, habitual e idóneamente en la realización de actividades agrícolas, forestales o ganaderas: semillas y materiales de origen exclusivamente animal o vegetal susceptibles de originar la reproducción de animales o vegetales; fertilizantes, residuos orgánicos, correctores y enmiendas, herbicidas, plaguicidas de uso fitosanitario o ganadero; los plásticos para cultivos en acolchado, en túnel o en invernadero y las bolsas de papel para la protección de las frutas antes de su recolección.
+4.º Las aguas aptas para la alimentación humana o animal o para el riego, incluso en estado sólido.
+5.º Los medicamentos de uso veterinario.
+6.º Los siguientes bienes:
+a) Los productos farmacéuticos comprendidos en el Capítulo 30 «Productos farmacéuticos» de la Nomenclatura Combinada, susceptibles de uso directo por el consumidor final, distintos de los incluidos en el número 5.º de este apartado uno.1 y de aquellos a los que les resulte de aplicación el tipo impositivo establecido en el número 3.º del apartado dos.1 de este artículo.
+b) (Suprimida)
+c) Los equipos médicos, aparatos y demás instrumental, relacionados en el apartado octavo del anexo de esta Ley, que por sus características objetivas, estén diseñados para aliviar o tratar deficiencias, para uso personal y exclusivo de personas que tengan deficiencias físicas, mentales, intelectuales o sensoriales, sin perjuicio de lo previsto en el apartado dos.1 de este artículo.
+No se incluyen en esta letra otros accesorios, recambios y piezas de repuesto de dichos bienes.
+7.º Los edificios o partes de los mismos aptos para su utilización como viviendas, incluidas las plazas de garaje, con un máximo de dos unidades, y anexos en ellos situados que se transmitan conjuntamente.
+En lo relativo a esta ley no tendrán la consideración de anexos a viviendas los locales de negocio, aunque se transmitan conjuntamente con los edificios o parte de los mismos destinados a viviendas.
+No se considerarán edificios aptos para su utilización como viviendas las edificaciones destinadas a su demolición a que se refiere el artículo 20, apartado uno, número 22.º, parte A), letra c) de esta ley.
+8.º Las flores, las plantas vivas de carácter ornamental, así como las semillas, bulbos, esquejes y otros productos de origen exclusivamente vegetal susceptibles de ser utilizados en su obtención.
+2. Las prestaciones de servicios siguientes:
+1.º Los transportes de viajeros y sus equipajes.
+2.º Los servicios de hostelería, acampamento y balneario, los de restaurantes y, en general, el suministro de comidas y bebidas para consumir en el acto, incluso si se confeccionan previo encargo del destinatario.
+3.º Las efectuadas en favor de titulares de explotaciones agrícolas, forestales o ganaderas, necesarias para el desarrollo de las mismas, que se indican a continuación: plantación, siembra, injertado, abonado, cultivo y recolección; embalaje y acondicionamiento de los productos, incluido su secado, limpieza, descascarado, troceado, ensilado, almacenamiento y desinfección de los productos; cría, guarda y engorde de animales; nivelación, explanación o abancalamiento de tierras de cultivo; asistencia técnica; la eliminación de plantas y animales dañinos y la fumigación de plantaciones y terrenos; drenaje; tala, entresaca, astillado y descortezado de árboles y limpieza de bosques; y servicios veterinarios.
+Lo dispuesto en el párrafo anterior no será aplicable en ningún caso a las cesiones de uso o disfrute o arrendamiento de bienes.
+Igualmente se aplicará este tipo impositivo a las prestaciones de servicios realizadas por las cooperativas agrarias a sus socios como consecuencia de su actividad cooperativizada y en cumplimiento de su objeto social, incluida la utilización por los socios de la maquinaria en común.
+4.º Los servicios de limpieza de vías públicas, parques y jardines públicos.
+5.º Los servicios de recogida, almacenamiento, transporte, valorización o eliminación de residuos, limpieza de alcantarillados públicos y desratización de los mismos y la recogida o tratamiento de las aguas residuales.
+Se comprenden en el párrafo anterior los servicios de cesión, instalación y mantenimiento de recipientes normalizados utilizados en la recogida de residuos.
+Se incluyen también en este número los servicios de recogida o tratamiento de vertidos en aguas interiores o marítimas.
+6.º La entrada a bibliotecas, archivos y centros de documentación, museos, galerías de arte, pinacotecas, salas cinematográficas, teatros, circos, festejos taurinos, conciertos, y a los demás espectáculos culturales en vivo.
+7.º Las prestaciones de servicios a que se refiere el número 8º del apartado uno del artículo 20 de esta ley cuando no estén exentas de acuerdo con dicho precepto ni les resulte de aplicación el tipo impositivo establecido en el número 3º del apartado dos.2 de este artículo.
+8.º Los espectáculos deportivos de carácter aficionado.
+9.º Las exposiciones y ferias de carácter comercial.
+10.º Las ejecuciones de obra de renovación y reparación realizadas en edificios o partes de los mismos destinados a viviendas, cuando se cumplan los siguientes requisitos:
+a) Que el destinatario sea persona física, no actúe como empresario o profesional y utilice la vivienda a que se refieren las obras para su uso particular.
+No obstante lo dispuesto en el párrafo anterior, también se comprenderán en este número las citadas ejecuciones de obra cuando su destinatario sea una comunidad de propietarios.
+b) Que la construcción o rehabilitación de la vivienda a que se refieren las obras haya concluido al menos dos años antes del inicio de estas últimas.
+c) Que la persona que realice las obras no aporte materiales para su ejecución o, en el caso de que los aporte, su coste no exceda del 40 por ciento de la base imponible de la operación.
+11.º Los arrendamientos con opción de compra de edificios o partes de los mismos destinados exclusivamente a viviendas, incluidas las plazas de garaje, con un máximo de dos unidades, y anexos en ellos situados que se arrienden conjuntamente.
+12.º La cesión de los derechos de aprovechamiento por turno de edificios, conjuntos inmobiliarios o sectores de ellos arquitectónicamente diferenciados cuando el inmueble tenga, al menos, diez alojamientos, de acuerdo con lo establecido en la normativa reguladora de estos servicios.
+13.º Los prestados por intérpretes, artistas, directores y técnicos, que sean personas físicas, a los productores de películas cinematográficas susceptibles de ser exhibidas en salas de espectáculos y a los organizadores de obras teatrales y musicales.
+3. Las siguientes operaciones:
+1.º Las ejecuciones de obras, con o sin aportación de materiales, consecuencia de contratos directamente formalizados entre el promotor y el contratista que tengan por objeto la construcción o rehabilitación de edificaciones o partes de las mismas destinadas principalmente a viviendas, incluidos los locales, anejos, garajes, instalaciones y servicios complementarios en ellos situados.
+Se considerarán destinadas principalmente a viviendas, las edificaciones en las que al menos el 50 por ciento de la superficie construida se destine a dicha utilización.
+2.º Las ventas con instalación de armarios de cocina y de baño y de armarios empotrados para las edificaciones a que se refiere el número 1º anterior, que sean realizadas como consecuencia de contratos directamente formalizados con el promotor de la construcción o rehabilitación de dichas edificaciones.
+3.º Las ejecuciones de obra, con o sin aportación de materiales, consecuencia de contratos directamente formalizados entre las Comunidades de Propietarios de las edificaciones o partes de las mismas a que se refiere el número 1º anterior y el contratista que tengan por objeto la construcción de garajes complementarios de dichas edificaciones, siempre que dichas ejecuciones de obra se realicen en terrenos o locales que sean elementos comunes de dichas Comunidades y el número de plazas de garaje a adjudicar a cada uno de los propietarios no exceda de dos unidades.
+4. Las importaciones de objetos de arte, antigüedades y objetos de colección, cualquiera que sea el importador de los mismos, y las entregas de objetos de arte realizadas por las siguientes personas:
+1.º Por sus autores o derechohabientes.
+2.º Por empresarios o profesionales distintos de los revendedores de objetos de arte a que se refiere el artículo 136 de esta Ley, cuando tengan derecho a deducir íntegramente el Impuesto soportado por repercusión directa o satisfecho en la adquisición o importación del mismo bien.
+5. Las adquisiciones intracomunitarias de objetos de arte cuando el proveedor de los mismos sea cualquiera de las personas a que se refieren los números 1.º y 2.º del número 4 precedente.
+Dos. Se aplicará el tipo del 4 por ciento a las operaciones siguientes:
+1. Las entregas, adquisiciones intracomunitarias o importaciones de los bienes que se indican a continuación:
+1.º Los siguientes productos:
+a) El pan común, así como la masa de pan común congelada y el pan común congelado destinados exclusivamente a la elaboración del pan común.
+b) Las harinas panificables.
+c) Los siguientes tipos de leche producida por cualquier especie animal: natural, certificada, pasterizada, concentrada, desnatada, esterilizada, UHT, evaporada, en polvo y fermentada.
+d) Los quesos.
+e) Los huevos.
+f) Las frutas, verduras, hortalizas, legumbres, tubérculos y cereales, que tengan la condición de productos naturales de acuerdo con el Código Alimentario y las disposiciones dictadas para su desarrollo.
+g) Los aceites de oliva.
+2.º Los libros, periódicos y revistas, incluso cuando tengan la consideración de servicios prestados por vía electrónica, que no contengan única o fundamentalmente publicidad y no consistan íntegra o predominantemente en contenidos de vídeo o música audible, así como los elementos complementarios que se entreguen conjuntamente con aquellos mediante precio único.
+Se comprenderán en este número las ejecuciones de obra que tengan como resultado inmediato la obtención de un libro, periódico o revista en pliego o en continuo, de un fotolito de dichos bienes o que consistan en la encuadernación de los mismos.
+A estos efectos tendrán la consideración de elementos complementarios las cintas magnetofónicas, discos, videocasetes y otros soportes sonoros o videomagnéticos similares que constituyan una unidad funcional con el libro, periódico o revista, perfeccionando o completando su contenido y que se vendan con ellos, con las siguientes excepciones:
+a) Los discos y cintas magnetofónicas que contengan exclusivamente obras musicales y cuyo valor de mercado sea superior al del libro, periódico o revista con el que se entreguen conjuntamente.
+b) Los videocasetes y otros soportes sonoros o videomagnéticos similares que contengan películas cinematográficas, programas o series de televisión de ficción o musicales y cuyo valor de mercado sea superior al del libro, periódico o revista con el que se entreguen conjuntamente.
+c) Los productos informáticos grabados por cualquier medio en los soportes indicados en las letras anteriores, cuando contengan principalmente programas o aplicaciones que se comercialicen de forma independiente en el mercado.
+Se entenderá que los libros, periódicos y revistas contienen fundamentalmente publicidad cuando más del 90 por ciento de los ingresos que proporcionen a su editor se obtengan por este concepto.
+Se considerarán comprendidos en este número las partituras, mapas y cuadernos de dibujo, excepto los artículos y aparatos electrónicos.
+3.º Los medicamentos de uso humano, así como las formas galénicas, fórmulas magistrales y preparados oficinales.
+4.º Los vehículos para personas con movilidad reducida a que se refiere el número 20 del Anexo I del Real Decreto Legislativo 339/1990, de 2 de marzo, por el que se aprueba el Texto Articulado de la Ley sobre Tráfico, Circulación de Vehículos a Motor y Seguridad Vial, en la redacción dada por el Anexo II A del Real Decreto 2822/1998, de 23 de diciembre, por el que se aprueba el Reglamento General de Vehículos, y las sillas de ruedas para uso exclusivo de personas con discapacidad.
+Los vehículos destinados a ser utilizados como autotaxis o autoturismos especiales para el transporte de personas con discapacidad en silla de ruedas, bien directamente o previa su adaptación, así como los vehículos a motor que, previa adaptación o no, deban transportar habitualmente a personas con discapacidad en silla de ruedas o con movilidad reducida, con independencia de quien sea el conductor de los mismos.
+La aplicación del tipo impositivo reducido a los vehículos comprendidos en el párrafo anterior requerirá el previo reconocimiento del derecho del adquirente, que deberá justificar el destino del vehículo.
+A efectos de este apartado dos, se considerarán personas con discapacidad aquellas con un grado de discapacidad igual o superior al 33 por ciento. El grado de discapacidad deberá acreditarse mediante certificación o resolución expedida por el Instituto de Mayores y Servicios Sociales o el órgano competente de la comunidad autónoma.
+5.º Las prótesis, ortesis e implantes internos para personas con discapacidad.
+6.º Las viviendas calificadas administrativamente como de protección oficial de régimen especial o de promoción pública, cuando las entregas se efectúen por sus promotores, incluidos los garajes y anexos situados en el mismo edificio que se transmitan conjuntamente. A estos efectos, el número de plazas de garaje no podrá exceder de dos unidades.
+Las viviendas que sean adquiridas por las entidades que apliquen el régimen especial previsto en el capítulo III del Título VII del Texto Refundido de la Ley del Impuesto sobre Sociedades aprobado por el Real Decreto Legislativo 4/2004, de 5 de marzo, siempre que a las rentas derivadas de su posterior arrendamiento les sea aplicable la bonificación establecida en el apartado 1 del artículo 54 de la citada Ley. A estos efectos, la entidad adquirente comunicará esta circunstancia al sujeto pasivo con anterioridad al devengo de la operación en la forma que se determine reglamentariamente.
+7.º) Las compresas, tampones, protegeslips, preservativos y otros anticonceptivos no medicinales.
+2. Las prestaciones de servicios siguientes:
+1.º Los servicios de reparación de los vehículos y de las sillas de ruedas comprendidos en el párrafo primero del número 4.º del apartado dos.1 de este artículo y los servicios de adaptación de los autotaxis y autoturismos para personas con discapacidad y de los vehículos a motor a los que se refiere el párrafo segundo del mismo precepto, independientemente de quién sea el conductor de los mismos.
+2.º Los arrendamientos con opción de compra de edificios o partes de los mismos destinados exclusivamente a viviendas calificadas administrativamente como de protección oficial de régimen especial o de promoción pública, incluidas las plazas de garaje, con un máximo de dos unidades, y anexos en ellos situados que se arrienden conjuntamente.
+3.º Los servicios de teleasistencia, ayuda a domicilio, centro de día y de noche y atención residencial, a que se refieren las letras b), c), d) y e) del apartado 1 del artículo 15 de la Ley 39/2006, de 14 de diciembre, de Promoción de la Autonomía Personal y Atención a las personas en situación de dependencia, siempre que se presten en plazas concertadas en centros o residencias o mediante precios derivados de un concurso administrativo adjudicado a las empresas prestadoras, o como consecuencia de una prestación económica vinculada a tales servicios que cubra más del 10 por ciento de su precio, en aplicación, en ambos casos, de lo dispuesto en la Ley.
+Lo dispuesto en este número 3.º no se aplicará a los servicios que resulten exentos por aplicación del número 8.º del apartado uno del artículo 20 de esta Ley.
+Tres. Lo dispuesto en los apartados uno.1 y dos.1 de este artículo será también aplicable a las ejecuciones de obra que sean prestaciones de servicios, de acuerdo con lo previsto en el artículo 11 de esta Ley, y tengan como resultado inmediato la obtención de alguno de los bienes a cuya entrega resulte aplicable uno de los tipos reducidos previstos en dichos preceptos.
+El contenido del párrafo anterior no será de aplicación a las ejecuciones de obra que tengan por objeto la construcción o rehabilitación de viviendas de protección oficial de régimen especial o de promoción pública a que se refiere el apartado uno.3 de este artículo.
+Cuatro. Se aplicará el tipo del 0 por ciento a las entregas de bienes realizadas en concepto de donativos a las entidades sin fines lucrativos definidas de acuerdo con lo dispuesto en el artículo 2 de la Ley 49/2002, de 23 de diciembre, de régimen fiscal de las entidades sin fines lucrativos y de los incentivos fiscales al mecenazgo, siempre que se destinen por las mismas a los fines de interés general que desarrollen de acuerdo con lo dispuesto por el artículo 3, apartado 1.º, de dicha Ley.
+Se deja sin efecto la modificación de los apartados Uno.2.2º, Uno.2.10º y Dos.1.6º por Resolución de 2 de octubre de 2026 que publica el Acuerdo del Congreso de los Diputados por el que se deroga el Real Decreto-ley 26/2026, de 29 de septiembre. Ref. BOE-A-2026-20526
 Se modifican, con efectos de 1 de diciembre de 2026, los apartados Uno.2.2º, Uno.2.10º y Dos.1.6º por el art. 7.2 a 4 del Real Decreto-ley 26/2026, de 29 de septiembre. Ref. BOE-A-2026-20266#a7
 Se modifica el apartado Dos.1.1º por la disposición final primera.2 de la Ley 7/2024, de 20 de diciembre. Ref. BOE-A-2024-26694#df
 Se modifica el apartado Dos.1.1º, con efectos desde el 1 de enero de 2025, por el art. 2 del Real Decreto-ley 4/2024, de 26 de junio. Ref. BOE-A-2024-12944#a2
