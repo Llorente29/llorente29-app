@@ -23,6 +23,7 @@ import { join } from 'node:path'
 import { revisar, informe, TABLAS_FILA_A_FILA } from './lib/datosMaestros.mjs'
 import { revisarCoherencia, informeCoherencia } from './lib/coherencia.mjs'
 import { revisarTerceros, informeTerceros } from './lib/terceros.mjs'
+import { anonimizar, informeAnonimo } from './lib/anonimo.mjs'
 
 /** Los ficheros de las pantallas del módulo, para ver qué cuentas enseñan (respuesta 3, punto 3). */
 function ficherosDe(dir) {
@@ -51,10 +52,15 @@ const coherencia = revisarCoherencia(bd, { ficheros: ficherosDe('src/modules/con
 const t = rutaTerceros ? JSON.parse(readFileSync(rutaTerceros, 'utf8') || 'null') : null
 const terceros = t ? revisarTerceros(t) : []
 const empresasMiradas = (bd.empresas ?? []).filter((e) => e.completa).length
-const texto = informe(hallazgos, { donde, hoy, referencia: String(ref.generado_desde).slice(0, 10), filasMiradas })
-  + '\n' + informeCoherencia(coherencia, { empresasMiradas })
-  + '\n' + (t ? informeTerceros(terceros, { tercerosMirados: t.terceros?.length ?? 0, liquidacionesMiradas: t.liquidaciones?.length ?? 0 })
-    : '## Clientes, plataformas y socios de marca\n\nEsta base aún no tiene los terceros del C03: no se miran.\n')
+// En producción (CONTA_ANONIMO=1, lo pone su workflow): sin nombres ni conceptos.
+const texto = process.env.CONTA_ANONIMO === '1'
+  ? informeAnonimo('Datos maestros, coherencia y terceros', [
+      ...anonimizar('datos maestros', hallazgos), ...anonimizar('coherencia', coherencia), ...anonimizar('terceros', terceros),
+    ], { donde, hoy, mirado: `Mirados: ${filasMiradas} filas de serie, ${empresasMiradas} empresas, ${t?.terceros?.length ?? 0} terceros y ${t?.liquidaciones?.length ?? 0} liquidaciones.` })
+  : informe(hallazgos, { donde, hoy, referencia: String(ref.generado_desde).slice(0, 10), filasMiradas })
+    + '\n' + informeCoherencia(coherencia, { empresasMiradas })
+    + '\n' + (t ? informeTerceros(terceros, { tercerosMirados: t.terceros?.length ?? 0, liquidacionesMiradas: t.liquidaciones?.length ?? 0 })
+      : '## Clientes, plataformas y socios de marca\n\nEsta base aún no tiene los terceros del C03: no se miran.\n')
 writeFileSync(rutaInforme, texto)
 console.log(texto)
 // Lo rojo abre aviso; lo ámbar sale en el informe y no interrumpe (regla 7).

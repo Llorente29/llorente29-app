@@ -1,33 +1,43 @@
 name: Cumplimiento de contabilidad contra PRODUCCIÓN (solo lectura)
 
-# QUÉ HACE (C00, respuestas 6 y 7 de Julio)
-# Los dos agentes de cumplimiento, contra PRODUCCIÓN y en SOLO LECTURA:
-#   · «Datos maestros e impuestos»: las filas de serie y la coherencia de cada
-#     empresa, con el mismo guion que el nocturno de staging.
+# QUÉ HACE (C00, respuestas 6 y 7; C04, respuesta 2 de Julio)
+# Los agentes de cumplimiento, contra PRODUCCIÓN y en SOLO LECTURA:
+#   · «Datos maestros e impuestos», con la coherencia de cada empresa y los
+#     terceros (C03): el mismo guion que el nocturno de staging.
+#   · «Libro diario» (C04): cuadre, numeración, cadena, IVA, ventas del día,
+#     cedidas, socio, resultado por local, meses cerrados y propuestas viejas.
+#   · «Plan contable» (C02): la serie de la base contra el BOE y cada empresa.
 #   · «Normativa al día»: las fuentes oficiales contra la última descarga (no
 #     toca ninguna base).
 #
-# EN ESTE MODO NO ESCRIBE NADA EN NINGÚN SITIO: ni en la base (usuario de solo
-# lectura y sesión read-only), ni incidencias en GitHub (este workflow no
-# tiene permiso para abrirlas), ni commits. El informe sale en el resumen de
-# la ejecución y como artefacto; de ahí va al PR.
+# QUÉ NO HACE: no escribe en la base (usuario conta_lectura, sesión read-only
+# y una guarda que FALLA si el rol puede escribir algo), ni commits. Lo rojo
+# abre o comenta un AVISO (una incidencia de GitHub): avisa, nunca actúa.
+# El resumen y los avisos van SIN conceptos ni nombres (CONTA_ANONIMO=1):
+# el repositorio es público; el detalle se mira en la app.
 #
-# CUÁNDO: solo a mano, con el botón «Run workflow» (workflow_dispatch),
-# eligiendo la rama conta/c00-empresa-y-tablas mientras el C00 no esté en
-# main. Ningún push lo lanza. Se lanza DESPUÉS de las migraciones y ANTES de
-# la fusión.
+# CUÁNDO (C04, respuesta 2): cada noche a las 03:40 de Madrid, con la misma
+# pareja de crons UTC y la misma guarda de horario de verano que el nocturno
+# de staging (PR #156): de los dos disparos, solo corre el que cae a las 03:40
+# en Madrid ese día. Y a mano, con «Run workflow», cuando se quiera.
 #
-# LO QUE JULIO HACE UNA VEZ
-#   1. Ejecuta scripts/conta/crear-usuario-lectura.sql en producción y le pone
-#      contraseña al rol conta_lectura.
-#   2. Crea el secreto PROD_CONTA_RO_DB_URL (Session pooler, usuario
+# LO QUE JULIO HIZO UNA VEZ (C00)
+#   1. scripts/conta/crear-usuario-lectura.sql en producción y contraseña al
+#      rol conta_lectura.
+#   2. El secreto PROD_CONTA_RO_DB_URL (Session pooler, usuario
 #      conta_lectura.xzmpnchlguibclvxyynt).
 #
 # GUARDAS: la URL es de producción y no de staging; el usuario es conta_lectura;
-# al otro lado está Foodint (tiene proveedores); la sesión es de solo lectura (se comprueba antes
-# de leer nada); y el usuario no tiene ningún permiso de escritura.
+# al otro lado está Foodint (tiene proveedores); la sesión es de solo lectura;
+# el usuario no tiene ningún privilegio de escritura sobre ninguna tabla de
+# public (ni directo ni heredado) ni atributos de superusuario. Se comprueba
+# antes de leer nada, en cada trabajo que toca la base.
 
 on:
+  schedule:
+    # 03:40 de Madrid: uno vale en verano y el otro en invierno (ver «hora»).
+    - cron: '40 1 * * *'
+    - cron: '40 2 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -36,10 +46,40 @@ concurrency:
 
 permissions:
   contents: read
+  # Solo para el aviso de lo rojo (una incidencia); nada más escribe.
+  issues: write
 
 jobs:
+  hora:
+    name: ¿Son las 03:40 en Madrid?
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      toca: ${{ steps.mirar.outputs.toca }}
+    steps:
+      - name: Mirar qué disparo ha llegado y qué horario rige en Madrid
+        id: mirar
+        env:
+          EVENTO: ${{ github.event_name }}
+          DISPARO: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          desfase=$(TZ=Europe/Madrid date +%z)
+          if [ "$EVENTO" != "schedule" ]; then
+            toca=true
+          else
+            case "$DISPARO|$desfase" in
+              "40 1 * * *|+0200" | "40 2 * * *|+0100") toca=true ;;
+              *) toca=false ;;
+            esac
+          fi
+          echo "Evento ${EVENTO}, disparo «${DISPARO:-ninguno}», Madrid en ${desfase}: corre = ${toca}."
+          echo "toca=${toca}" >> "$GITHUB_OUTPUT"
+
   datos-maestros:
     name: Datos maestros e impuestos · PRODUCCIÓN
+    needs: hora
+    if: needs.hora.outputs.toca == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -49,6 +89,7 @@ jobs:
       PSQL: /usr/lib/postgresql/17/bin/psql
       PGAPPNAME: gha-cumplimiento-produccion-${{ github.run_id }}
       PGOPTIONS: '-c default_transaction_read_only=on'
+      CONTA_ANONIMO: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -94,9 +135,13 @@ jobs:
                and current_setting('transaction_read_only') = 'on'
                and not exists (select 1 from information_schema.role_table_grants
                                 where grantee = current_user and privilege_type <> 'SELECT')
+               -- C04: tampoco heredado (roles, PUBLIC) ni por atributos del rol.
+               and not exists (select 1 from pg_tables t where t.schemaname = 'public'
+                                 and has_table_privilege(current_user, format('%I.%I', t.schemaname, t.tablename), 'INSERT,UPDATE,DELETE,TRUNCATE'))
+               and not (select rolsuper or rolcreaterole or rolcreatedb or rolbypassrls from pg_roles where rolname = current_user)
           " 2>&1) || { echo "::error::No se ha podido comprobar: $r"; exit 1; }
           if [ "$r" != "t" ]; then
-            echo "::error::Falla una guarda: o no está Foodint, o la sesión no es de solo lectura, o el usuario tiene algún permiso que no es SELECT."
+            echo "::error::Falla una guarda: o no está Foodint, o la sesión no es de solo lectura, o el usuario puede escribir algo (un permiso que no es SELECT, directo o heredado, o un atributo de superusuario). No se lee nada."
             exit 1
           fi
           echo "Producción (está Foodint), sesión de solo lectura, y el usuario solo tiene SELECT."
@@ -123,6 +168,19 @@ jobs:
         if: always()
         run: |
           if [ -f /tmp/informe.md ]; then cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Aviso
+        if: steps.revisar.outcome == 'failure' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · PRODUCCIÓN · Datos maestros, coherencia o terceros en rojo'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe.md)" "$enlace" > /tmp/aviso.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso.md; fi
 
       - name: Guardar el informe
         if: always()
@@ -154,6 +212,19 @@ jobs:
         run: |
           if [ -f /tmp/informe-libro.md ]; then cat /tmp/informe-libro.md >> "$GITHUB_STEP_SUMMARY"; fi
 
+      - name: Aviso del libro
+        if: steps.libro.outcome == 'failure' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · PRODUCCIÓN · Libro diario en rojo'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe-libro.md)" "$enlace" > /tmp/aviso-libro.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso-libro.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso-libro.md; fi
+
       - name: Guardar el informe del libro
         if: always()
         uses: actions/upload-artifact@v4
@@ -176,6 +247,8 @@ jobs:
 
   normativa:
     name: Normativa al día
+    needs: hora
+    if: needs.hora.outputs.toca == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -204,3 +277,106 @@ jobs:
         if: steps.informe.outcome == 'failure'
         run: |
           echo "::warning::Ha cambiado alguna fuente oficial, o no se ha podido comprobar: ver el informe."
+
+  plan-contable:
+    name: Plan contable · PRODUCCIÓN
+    needs: hora
+    if: needs.hora.outputs.toca == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROD_REF: xzmpnchlguibclvxyynt
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      PSQL: /usr/lib/postgresql/17/bin/psql
+      PGAPPNAME: gha-plan-contable-produccion-${{ github.run_id }}
+      PGOPTIONS: '-c default_transaction_read_only=on'
+      CONTA_ANONIMO: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guarda 1 y 2 · producción, y no con el usuario de escritura
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          usuario = (u.username or "").split(".")[0]
+          if usuario != "conta_lectura":
+              print(f"::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura. Abortado sin conectar.")
+              raise SystemExit(1)
+          PY
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "La URL es de producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 y 4 · Foodint al otro lado, sesión de solo lectura y el rol no puede escribir
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select (select count(*) from public.supplier where account_id = '$FOODINT') > 0
+               and current_setting('transaction_read_only') = 'on'
+               and not exists (select 1 from pg_tables t where t.schemaname = 'public'
+                                 and has_table_privilege(current_user, format('%I.%I', t.schemaname, t.tablename), 'INSERT,UPDATE,DELETE,TRUNCATE'))
+               and not (select rolsuper or rolcreaterole or rolcreatedb or rolbypassrls from pg_roles where rolname = current_user)
+          " 2>&1) || { echo "::error::No se ha podido comprobar: $r"; exit 1; }
+          if [ "$r" != "t" ]; then echo "::error::Falla una guarda: o no está Foodint, o la sesión no es de solo lectura, o el usuario puede escribir algo. No se lee nada."; exit 1; fi
+
+      - name: Volver a bajar el PGC del BOE (no se sube a ninguna parte)
+        env:
+          FUENTES_SOLO: rd-1514-2007,rd-1515-2007,rd-1-2021
+        run: node scripts/conta/fuentes.mjs descargar
+
+      - name: Volcar el plan (solo lectura)
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-plan-contable.sql > /tmp/bd-plan.json
+
+      - name: Revisar
+        id: revisar
+        continue-on-error: true
+        run: node scripts/conta/agente-plan-contable.mjs /tmp/bd-plan.json /tmp/informe-plan.md producción
+
+      - name: Informe
+        if: always()
+        run: |
+          if [ -f /tmp/informe-plan.md ]; then cat /tmp/informe-plan.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Aviso
+        if: steps.revisar.outcome == 'failure' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · PRODUCCIÓN · Plan contable en rojo'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe-plan.md)" "$enlace" > /tmp/aviso.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso.md; fi
+
+      - name: Resultado
+        if: steps.revisar.outcome == 'failure'
+        run: |
+          echo "::error::El plan contable de producción no cuadra con el BOE o con la base: ver el informe del resumen."
+          exit 1

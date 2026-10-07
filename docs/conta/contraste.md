@@ -142,7 +142,8 @@ comprobaron a mano el 07/10 en `docs/conta/fuentes/textos/`, versión vigente:
 | LIVA art. 91.Uno.2.2.º | ventas al 10 % | hay una versión guardada desde 2026-12-01 (BOE-A-2026-20266) | Servicios de hostelería… los de restaurantes: sigue igual en esa versión |
 | RIVA art. 63.4 | resumen del día | desde 2023-07-01 | La anotación individualizada se puede sustituir por asientos resúmenes |
 | RD 1619/2012 art. 15.2 | rectificativa solo si hubo factura | — (normas) | Será obligatoria la expedición de una factura rectificativa |
-| PGC de Pymes, NRV 16.ª | marca cedida | — (normas) | Las cantidades recibidas por cuenta de terceros no forman parte de los ingresos. **En el PGC normal es la NRV 14.ª** (RD 1/2021): la semilla y el agente decían «PGC NRV 16.ª» a secas; corregido a «PGC de Pymes, NRV 16.ª» |
+| PGC de Pymes (RD 1515/2007), NRV 16.ª — empresa con `chart_kind = 'pymes'` | marca cedida | — (normas) | «… así como las cantidades recibidas por cuenta de terceros, no formarán parte de los ingresos» |
+| PGC normal (RD 1514/2007), NRV 14.ª — empresa con `chart_kind = 'normal'` | marca cedida | redacción del RD 1/2021 | «No formarán parte de los ingresos … así como las cantidades recibidas por cuenta de terceros» |
 | RD 439/2007 art. 100 | retención del alquiler | desde 2018-12-23 | Retención del 19 por ciento sobre el arrendamiento de inmuebles urbanos |
 | RD 439/2007 art. 108 | IRPF de la nómina al 111 | desde 2015-07-12 | Declaración trimestral de las cantidades retenidas |
 
@@ -152,3 +153,5 @@ comprobado en el BOE: Ley 58/2003 General Tributaria (BOE-A-2003-23186), RD
 del ICAC de 10/02/2021 sobre ingresos (**BOE-A-2021-2155**; el identificador
 que tenía apuntado, 2021-2347, era otro). La descarga nocturna comprueba que
 cada una contiene su frase.
+
+La marca cedida se cita **según el plan de la empresa** (`company_tax_profile.chart_kind`): las dos normas dicen lo mismo con distinto número, y antes la semilla y el agente decían «PGC NRV 16.ª» a secas, que en el plan normal es otra norma. Hoy el núcleo (`NORMAS.ingresosPorCuentaDeTerceros`) cita la de pymes porque las dos empresas de prueba son de pymes; el agente nocturno da las dos en su norma. Comprobado en los textos guardados: `rd-1515-2007.txt` línea 1168 (16.ª) y `rd-1514-2007.txt` líneas 1797 y 1835 (14.ª, versión vigente).
