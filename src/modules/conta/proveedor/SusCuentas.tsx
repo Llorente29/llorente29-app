@@ -13,8 +13,10 @@
 //     mismo buscador. Su «Cambiar» lleva el id `campo-expenseCategoryId`:
 //     ahí llevan «Falta: tipo de gasto» y «Lo que he aprendido».
 //   · Cambiar dice qué ha pasado, con contenido (regla 8).
-//   · Los apuntes llegan con el C04: hasta entonces el saldo y el extracto lo
-//     dicen claro, sin ceros que parezcan datos.
+//   · Los apuntes los pone el libro diario (C04): el saldo, el último apunte y
+//     el extracto leen los validados de su cuenta (si es la común de
+//     proveedores, solo los suyos). Sin apuntes, lo dicen claro, sin ceros
+//     que parezcan datos.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -26,6 +28,8 @@ import { porUso } from '@/modules/conta/lib/masUsados'
 import { encaja } from '@/modules/conta/lib/planVista'
 import { euros, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { ExtractoCuenta } from '@/modules/conta/plan/ExtractoCuenta'
+import { apuntesDeCuentas, terceroDelProveedor } from '@/modules/conta/services/libroService'
+import { rutaAsiento } from '@/config/navegacion'
 import {
   cuentasDelProveedor, extracto, textoSaldo, vaAl347,
   type Apunte, type LineaCuenta,
@@ -34,8 +38,23 @@ import {
   cargarCuentasProveedor, cambiarCuentaProveedor, quitarCuentaProveedor, type DatosCuentasProveedor,
 } from '@/modules/conta/services/cuentasProveedorService'
 
-/** Los apuntes del proveedor. Vacío hasta el C04, que es quien los crea. */
-const APUNTES: readonly Apunte[] = []
+/** Los apuntes del proveedor en el libro (C04): los de su cuenta; si es la común, solo los suyos. */
+function useApuntes(accountId: string, companyId: string | null, cuenta: { id: string; comun: boolean } | null, supplierId: string) {
+  const [r, setR] = useState<{ clave: string; apuntes: Apunte[] }>({ clave: '', apuntes: [] })
+  const clave = `${accountId}:${companyId}:${cuenta?.id}:${supplierId}`
+  useEffect(() => {
+    if (!companyId || !cuenta) return
+    let vivo = true
+    ;(async () => {
+      const partyId = cuenta.comun ? await terceroDelProveedor(accountId, supplierId) : null
+      // Común y sin tercero: no hay forma de separar sus apuntes; mejor ninguno que los de otros.
+      if (cuenta.comun && !partyId) return []
+      return apuntesDeCuentas(accountId, companyId, [cuenta.id], partyId)
+    })().then((apuntes) => { if (vivo) setR({ clave, apuntes }) }, () => { if (vivo) setR({ clave, apuntes: [] }) })
+    return () => { vivo = false }
+  }, [accountId, companyId, cuenta, supplierId, clave])
+  return r.clave === clave ? r.apuntes : []
+}
 
 const QUE_CAMBIA: Record<string, string> = {
   su_cuenta: 'Su cuenta es ahora', facturas: 'Sus facturas van ahora a', pago: 'Le pagas ahora desde', suplidos: 'Sus suplidos van ahora a',
@@ -134,16 +153,18 @@ function FilaCuenta({ l, cambiar, quitar, tipos, elegirTipo, idCambiar }: {
   )
 }
 
-function Extracto({ ejercicios, alCerrar }: { ejercicios: DatosCuentasProveedor['ejercicios']; alCerrar: () => void }) {
+function Extracto({ ejercicios, apuntes, alCerrar }: { ejercicios: DatosCuentasProveedor['ejercicios']; apuntes: readonly Apunte[]; alCerrar: () => void }) {
   const { rutaApartado } = useFicha()
   return (
-    <ExtractoCuenta ejercicios={ejercicios} apuntes={APUNTES}
+    <ExtractoCuenta ejercicios={ejercicios} apuntes={apuntes}
       accion={<button type="button" className="cx-enlace" onClick={alCerrar}>Cerrar</button>}
       vacio={(ej) => ({
         titulo: 'Aún no hay apuntes con este proveedor.',
-        explicacion: `Los asientos de sus facturas y de sus pagos llegan con la contabilidad de facturas recibidas. Cuando los haya, aquí verás cada apunte con su saldo y, por meses, el debe, el haber y el saldo del ejercicio ${ej}, con su apertura y su cierre.`,
+        explicacion: `Sus facturas y sus pagos entran en el libro diario al validar sus asientos. Cuando los haya, aquí verás cada apunte con su saldo y, por meses, el debe, el haber y el saldo del ejercicio ${ej}, con su apertura y su cierre.`,
       })}
-      documento={(a) => (a.enlace ? <Link to={rutaApartado('facturas')} aria-label={`${a.enlace.tipo === 'pago' ? 'Ver el pago' : 'Ver la factura'} ${a.documento}`}>{a.documento}</Link> : a.documento)} />
+      documento={(a) => (a.enlace?.tipo === 'asiento'
+        ? <Link to={rutaAsiento(a.enlace.id)} aria-label={`Ver el asiento ${a.documento}`}>{a.documento}</Link>
+        : a.enlace ? <Link to={rutaApartado('facturas')} aria-label={`${a.enlace.tipo === 'pago' ? 'Ver el pago' : 'Ver la factura'} ${a.documento}`}>{a.documento}</Link> : a.documento)} />
   )
 }
 
@@ -152,6 +173,13 @@ export function SusCuentas() {
   const f = datos.ficha
   const empresaId = datos.opciones.empresa?.id ?? null
   const { datos: d, error, recargar } = useCuentas(f.accountId, empresaId)
+  const cuentaSuya = useMemo(() => {
+    if (!d?.activo) return null
+    const l = d.enlaces.find((x) => x.entity === 'supplier' && x.entityId === f.id && x.role === 'principal')
+    const c = l ? d.cuentas.find((x) => x.id === l.companyAccountId) : undefined
+    return c ? { id: c.id, comun: c.isCommon } : null
+  }, [d, f.id])
+  const apuntesLibro = useApuntes(f.accountId, empresaId, cuentaSuya, f.id)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   // Si la pieza se vuelve a montar, el extracto sigue como estaba (abierto o cerrado).
@@ -186,8 +214,8 @@ export function SusCuentas() {
   // Las repetidas no cuentan en ninguna cifra (C01b §4). Un abono llega con el total en negativo.
   const delAño = datos.facturas.filter((x) => !repetidas.has(x.id) && x.invoiceDate?.startsWith(`${año}-`) && x.grandTotal !== null)
   const r347 = vaAl347({ año, perfil: d.perfil, proveedor, facturas: delAño.map((x) => ({ fecha: x.invoiceDate!, total: x.grandTotal!, abono: x.grandTotal! < 0 })) })
-  const saldo = APUNTES.length ? textoSaldo(extracto(APUNTES).at(-1)!.saldo) : null
-  const ultimo = APUNTES.length ? [...APUNTES].sort((a, b) => a.fecha.localeCompare(b.fecha)).at(-1)! : null
+  const saldo = apuntesLibro.length ? textoSaldo(extracto(apuntesLibro).at(-1)!.saldo) : null
+  const ultimo = apuntesLibro.length ? [...apuntesLibro].sort((a, b) => a.fecha.localeCompare(b.fecha)).at(-1)! : null
 
   // Los tipos de gasto que se pueden elegir: los no ocultos (y el suyo aunque lo esté, regla 30), los más usados primero.
   const tipos: TipoElegible[] = porUso(
@@ -242,7 +270,7 @@ export function SusCuentas() {
           <Dato etiqueta="Registro sanitario" vacio="Sin poner">{f.healthRegistryNo && `RGSEAA ${f.healthRegistryNo}`}</Dato>
         </Tarjeta>
       </div>
-      {verExtracto && <Extracto ejercicios={d.ejercicios} alCerrar={() => setVerExtracto(false)} />}
+      {verExtracto && <Extracto ejercicios={d.ejercicios} apuntes={apuntesLibro} alCerrar={() => setVerExtracto(false)} />}
     </>
   )
 }

@@ -1,0 +1,117 @@
+/* src/modules/conta/estilo/diario.css
+ *
+ * C04 · Libros › Libro diario (maqueta N11Diario), un asiento (N12Asiento) y el
+ * asiento a mano. Solo tokens de tokens.css: ningún color escrito aquí. En el
+ * móvil, por niveles: la lista sin columnas y el asiento apilado.
+ */
+
+.cxd-pagina { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxd-cabecera { align-items: flex-start; }
+.cxd-acciones { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cxd-ejercicio select { height: 44px; font-weight: 600; }
+.cxd-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.cxd-der { text-align: right; }
+
+/* Las cuatro cifras */
+.cxd-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.cxd-cifra { display: flex; flex-direction: column; gap: 4px; text-align: left; font: inherit; color: inherit; }
+.cxd-cifra-boton { cursor: pointer; border: 1px solid var(--cx-linea); }
+.cxd-cifra-boton:hover { border-color: var(--cx-azul-borde); }
+.cxd-cifra-etiqueta { font-size: 14px; color: var(--cx-apoyo); }
+.cxd-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+.cxd-franja { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+
+/* Diario a la izquierda, IA y cierre a la derecha */
+.cxd-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 14px; align-items: start; }
+.cxd-lado { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxd-diario { padding: 10px 18px; }
+
+.cxd-tabla { display: flex; flex-direction: column; }
+.cxd-fila {
+  display: grid; grid-template-columns: 64px 64px minmax(0, 1fr) 130px 140px 16px; gap: 12px; align-items: center;
+  width: 100%; padding: 12px 0; background: none; border: none; border-top: 1px solid var(--cx-linea);
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.cxd-fila-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; text-transform: uppercase; border-top: none; cursor: default; }
+.cxd-fecha, .cxd-num { font-family: var(--cx-letra-cifras); color: var(--cx-apoyo); font-size: 14px; }
+.cxd-concepto { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cxd-concepto-titulo { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxd-concepto-apoyo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--cx-apoyo); min-width: 0; }
+.cxd-sale { overflow-wrap: anywhere; }
+.cxd-importe { font-family: var(--cx-letra-cifras); text-align: right; font-weight: 600; white-space: nowrap; }
+.cxd-flecha { color: var(--cx-apoyo); }
+.cxd-anulado .cxd-concepto-titulo, .cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cx-apoyo); }
+.cxd-chip-gris .cx-chip { background: var(--cx-neutro-suave); color: var(--cx-apoyo); }
+.cxd-codigo { font-family: var(--cx-letra-cifras); font-size: 13px; color: var(--cx-apoyo); }
+a.cxd-codigo:hover { color: var(--cx-azul); }
+
+.cxd-apuntes { padding: 0 0 12px 140px; display: flex; flex-direction: column; }
+.cxd-apunte { display: grid; grid-template-columns: minmax(0, 1fr) auto 130px 90px; gap: 12px; align-items: center; padding: 6px 0; }
+.cxd-apunte-cuenta { display: flex; flex-direction: column; min-width: 0; }
+.cxd-apunte-pie { padding-top: 6px; }
+
+/* Lo que he hecho yo · Por qué lo propongo así */
+.cxd-ia { background: var(--cx-verde-suave); border: 1px solid var(--cx-ia-borde); border-radius: var(--cx-radio-tarjeta); padding: 18px 22px; display: flex; flex-direction: column; gap: 4px; }
+.cxd-ia-titulo { margin: 0 0 6px; font-size: 18px; font-weight: 600; display: flex; gap: 10px; align-items: center; }
+.cxd-ia-fila { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cx-ia-borde); }
+.cxd-ia-fila > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxd-ia-hecho { font-weight: 600; color: var(--cx-texto); text-decoration: none; }
+a.cxd-ia-hecho:hover { text-decoration: underline; }
+.cxd-ia-apoyo { font-size: 13px; color: var(--cx-ia-apoyo); margin: 0; }
+
+/* Cierre del mes */
+.cxd-cierre { display: flex; flex-direction: column; gap: 10px; }
+.cxd-pasos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cxd-pasos li { padding: 9px 0; border-top: 1px solid var(--cx-linea); font-size: 15px; }
+.cxd-pasos li:first-child { border-top: none; }
+.cxd-paso-hecho span[aria-hidden] { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); font-size: 12px; margin-right: 8px; }
+.cxd-paso-falta { color: var(--cx-ambar); }
+.cxd-paso-falta span[aria-hidden] { display: inline-block; width: 20px; margin-right: 8px; text-align: center; }
+.cxd-sin-propuesta ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+
+/* N12 · el asiento */
+.cxd-asiento { display: flex; flex-direction: column; }
+.cxd-linea { display: grid; grid-template-columns: minmax(0, 1fr) 130px 130px 64px; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+.cxd-linea-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; border-top: none; padding: 4px 0; }
+.cxd-linea-cuenta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cxd-linea-nombre { font-size: 15px; }
+.cxd-cuadre { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 16px; align-items: center; padding: 14px 0 6px; border-top: 2px solid var(--cx-texto); }
+.cxd-buscar { display: flex; flex-direction: column; gap: 6px; padding: 0 0 12px; }
+.cxd-buscar-lista { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; }
+.cxd-buscar-opcion { width: 100%; text-align: left; background: none; border: none; padding: 8px 6px; font: inherit; cursor: pointer; border-radius: 8px; }
+.cxd-buscar-opcion:hover, .cxd-buscar-opcion:focus-visible { background: var(--cx-azul-suave); }
+.cxd-detalle-boton { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
+.cxd-detalle { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 12px 0 0; font-size: 14px; }
+.cxd-detalle dt { color: var(--cx-apoyo); }
+.cxd-detalle dd { margin: 0; overflow-wrap: anywhere; }
+.cxd-detalle-accion { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding-top: 6px; }
+
+/* Diálogos y asiento a mano */
+.cxd-campo { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+.cxd-dialogo-acciones { display: flex; justify-content: flex-end; gap: 10px; }
+.cxd-mano-cabeza { display: grid; grid-template-columns: 180px 180px minmax(0, 1fr); gap: 14px; }
+.cxd-mano-linea { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 120px 120px minmax(0, 1fr) 60px; gap: 10px; align-items: start; padding: 8px 0; }
+.cxd-mano-linea label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+@media (max-width: 1100px) {
+  .cxd-cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .cxd-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .cxd-acciones > * { flex: 1 1 auto; }
+  .cxd-cifra-valor { font-size: 22px; }
+  .cxd-diario { padding: 6px 14px; }
+  .cxd-fila { grid-template-columns: 52px minmax(0, 1fr) auto; grid-template-areas: 'fecha concepto importe' 'fecha concepto estado'; row-gap: 4px; }
+  .cxd-fila .cxd-fecha { grid-area: fecha; align-self: start; }
+  .cxd-fila .cxd-concepto { grid-area: concepto; }
+  .cxd-fila .cxd-importe { grid-area: importe; }
+  .cxd-fila > span:last-child { grid-area: estado; justify-self: end; }
+  .cxd-concepto-titulo { white-space: normal; }
+  .cxd-linea { grid-template-columns: minmax(0, 1fr) auto; }
+  .cxd-linea-cabeza { display: none; }
+  .cxd-linea > .cxd-importe:nth-of-type(2) { grid-column: 2; }
+  .cxd-cuadre { grid-template-columns: 1fr 1fr; }
+  .cxd-mano-cabeza { grid-template-columns: 1fr 1fr; }
+  .cxd-mano-cabeza .cxd-campo-ancho { grid-column: 1 / -1; }
+  .cxd-mano-linea { grid-template-columns: 1fr 1fr; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+}

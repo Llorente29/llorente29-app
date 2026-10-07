@@ -13,13 +13,18 @@ import type { Apunte } from '@/modules/conta/lib/cuentasProveedor'
 type Fila = Record<string, unknown>
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v))
 
-/** Los apuntes validados de unas cuentas de la empresa, en orden de fecha y número. */
-export async function apuntesDeCuentas(accountId: string, companyId: string, cuentas: readonly string[]): Promise<Apunte[]> {
+/**
+ * Los apuntes validados de unas cuentas de la empresa, en orden de fecha y
+ * número. Con `partyId`, solo los de ese tercero: es lo que separa a un
+ * proveedor de los demás cuando todos comparten la cuenta común (40000000).
+ */
+export async function apuntesDeCuentas(accountId: string, companyId: string, cuentas: readonly string[], partyId?: string | null): Promise<Apunte[]> {
   if (cuentas.length === 0) return []
-  const { data, error } = await tabla('journal_ledger')
+  let q = tabla('journal_ledger')
     .select('entry_id, series, number, entry_date, concept, document_ref, debit, credit, status, source_type, voided_by_entry_id')
     .eq('account_id', accountId).eq('company_id', companyId).in('company_account_id', [...cuentas])
-    .order('entry_date').order('series').order('number')
+  if (partyId) q = q.eq('party_id', partyId)
+  const { data, error } = await q.order('entry_date').order('series').order('number')
   if (error) throw new Error(mensaje('No se han podido leer los apuntes', error))
   return ((data ?? []) as Fila[]).map((f) => ({
     fecha: String(f.entry_date),
@@ -41,4 +46,12 @@ export async function sumasYSaldos(companyId: string, desde: string, hasta: stri
     companyAccountId: String(f.company_account_id), code: String(f.code), name: String(f.name),
     debe: num(f.debe), haber: num(f.haber), saldo: num(f.saldo),
   }))
+}
+
+/** El tercero (party) de un proveedor de Cocina, si lo tiene: party_role con su supplier_id. */
+export async function terceroDelProveedor(accountId: string, supplierId: string): Promise<string | null> {
+  const { data, error } = await tabla('party_role').select('party_id').eq('account_id', accountId).eq('supplier_id', supplierId).limit(1)
+  if (error) throw new Error(mensaje('No se ha podido leer el tercero del proveedor', error))
+  const f = ((data ?? []) as Fila[])[0]
+  return f ? String(f.party_id) : null
 }

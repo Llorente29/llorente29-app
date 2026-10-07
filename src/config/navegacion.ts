@@ -165,6 +165,12 @@ export const CONTA = {
     tercero: 'clientes-y-proveedores/:partyId',
     /** Un apartado de esa ficha: pestaña en ordenador, pantalla en el móvil. */
     terceroApartado: 'clientes-y-proveedores/:partyId/:apartado',
+    /** Libros › Libro diario (C04, maqueta N11Diario). */
+    libroDiario: 'libros/diario',
+    /** Un asiento a mano, nuevo (C04). */
+    nuevoAsiento: 'libros/diario/nuevo',
+    /** Un asiento del libro (C04, maqueta N12Asiento). */
+    asiento: 'libros/diario/:entryId',
   },
 } as const
 
@@ -195,7 +201,7 @@ export const MENU_CONTA: EntradaMenuConta[][] = [
   [
     { id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: null },
     { id: 'negocio', etiqueta: 'Cómo va tu negocio', icono: 'negocio', ruta: null },
-    { id: 'libros', etiqueta: 'Libros', icono: 'libros', ruta: null },
+    { id: 'libros', etiqueta: 'Libros', icono: 'libros', ruta: CONTA.rutas.libroDiario },
   ],
   [
     { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: CONTA.rutas.empresa },
@@ -290,6 +296,9 @@ export const rutaPlan = (): string => rutaConta(CONTA.rutas.plan)
 export const rutaPlanSitio = (): string => rutaConta(CONTA.rutas.planSitio)
 export const rutaMayor = (codigo: string): string => rutaConta(CONTA.rutas.mayor, { codigo })
 export const rutaTerceros = (filtro?: string): string => `${rutaConta(CONTA.rutas.terceros)}${filtro ? `?ver=${encodeURIComponent(filtro)}` : ''}`
+export const rutaLibroDiario = (filtro?: string): string => `${rutaConta(CONTA.rutas.libroDiario)}${filtro ? `?ver=${encodeURIComponent(filtro)}` : ''}`
+export const rutaAsiento = (entryId: string): string => rutaConta(CONTA.rutas.asiento, { entryId })
+export const rutaNuevoAsiento = (): string => rutaConta(CONTA.rutas.nuevoAsiento)
 export const rutaFichaTercero = (partyId: string, apartado?: string): string =>
   apartado ? rutaConta(CONTA.rutas.terceroApartado, { partyId, apartado }) : rutaConta(CONTA.rutas.tercero, { partyId })
 
