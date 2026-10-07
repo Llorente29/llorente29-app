@@ -24,6 +24,9 @@ import TablasGeneralesPage from '@/modules/conta/pages/TablasGeneralesPage'
 import AltaPage from '@/modules/conta/pages/AltaPage'
 import TercerosPage from '@/modules/conta/terceros/TercerosPage'
 import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
+import LibroDiarioPage from '@/modules/conta/libro/LibroDiarioPage'
+import AsientoPage from '@/modules/conta/libro/AsientoPage'
+import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
 
 const enMarco = (pagina: ReactNode, ejemplo: string) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo}>{pagina}</MarcoConta></EmpresasProveedor>
@@ -55,6 +58,10 @@ export const contaModule: ModuleDefinition = {
     // El de la ficha lo pone ella según el papel (ejemploDeFicha); éste es el de mientras carga.
     { path: CONTA.rutas.tercero, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
     { path: CONTA.rutas.terceroApartado, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
+    // C04 · Libros › Libro diario (N11), un asiento (N12) y el asiento a mano.
+    { path: CONTA.rutas.libroDiario, element: enMarco(<LibroDiarioPage />, '¿Cuánto gané en el Local Norte este mes?') },
+    { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?') },
+    { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?') },
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },

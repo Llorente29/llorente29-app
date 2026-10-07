@@ -49,6 +49,8 @@ on:
     paths:
       - 'scripts/conta/agente-datos-maestros.*'
       - 'scripts/conta/agente-terceros.sql'
+      - 'scripts/conta/agente-libro.*'
+      - 'scripts/conta/lib/libro.mjs'
       - 'scripts/conta/lib/datosMaestros.mjs'
       - 'scripts/conta/lib/terceros.mjs'
       - 'scripts/conta/normativa-aviso.mjs'
@@ -183,6 +185,48 @@ jobs:
           n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
           if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso.md
           else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso.md; fi
+
+      # C04 · Agente «Libro diario»: cuadre, numeración, cadena, IVA, ventas del
+      # día, cedidas, socio, resultado por local, meses cerrados y propuestas
+      # viejas. Solo lee; antes del C04 (sin journal_entry) no hay libro que mirar.
+      - name: Libro diario (solo lectura)
+        id: libro
+        continue-on-error: true
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+        run: |
+          set -euo pipefail
+          if [ "$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.journal_entry') is not null")" = "t" ]; then
+            /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-libro.sql > /tmp/libro.json
+            node scripts/conta/agente-libro.mjs /tmp/libro.json /tmp/informe-libro.md staging-conta
+          else
+            echo "## Agente «Libro diario» · staging-conta: aún no hay libro diario (antes del C04)." > /tmp/informe-libro.md
+          fi
+
+      - name: Informe del libro
+        if: always()
+        run: |
+          if [ -f /tmp/informe-libro.md ]; then cat /tmp/informe-libro.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Aviso del libro
+        if: steps.libro.outcome == 'failure' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · Libro diario: algo no cuadra en el libro'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe-libro.md)" "$enlace" > /tmp/aviso-libro.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso-libro.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso-libro.md; fi
+
+      - name: Resultado del libro
+        if: steps.libro.outcome == 'failure'
+        run: |
+          echo "::error::El libro diario tiene algo en rojo: ver el informe del resumen."
+          exit 1
 
       - name: Resultado
         if: steps.revisar.outcome == 'failure'

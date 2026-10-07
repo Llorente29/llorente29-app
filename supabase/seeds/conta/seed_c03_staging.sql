@@ -12,7 +12,7 @@
 --     (una pendiente, dos cobradas al céntimo y una CON DIFERENCIA: faltan
 --     212,30 € en el banco), como la maqueta N9.
 --   · Marcas del Sur: socio de marca (cesión). Proveedor de mercancía (400) y
---     cliente (430); sus marcas Milanesa Cedida y Wok Cedido al 9 %. Julio,
+--     cliente (430); sus marcas Brasa Prestada y Wok Cedido al 9 %. Julio,
 --     agosto y septiembre liquidados POR LOCAL; octubre con albaranes,
 --     aportaciones y ventas en los dos locales para «Preparar liquidación de
 --     octubre» (sale 6.887 €: 4.090 en Norte Centro y 2.797 en Norte Mercado).
@@ -27,7 +27,7 @@ declare
   l1       constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
   l2       constant uuid := 'e0200000-0000-4000-8000-0000000000a3';
   glovo    constant uuid := 'e0200000-0000-4000-8000-00000000a0c1';
-  milanesa constant uuid := 'e0200000-0000-4000-8000-00000000a0b5';
+  brasa constant uuid := 'e0200000-0000-4000-8000-00000000a0b5';
   banco    constant uuid := '3315cb3a-ad30-44ea-958b-253b1ae8811f';
   s_plat   constant uuid := 'c0300000-0000-4000-8000-000000000001';
   s_socio  constant uuid := 'c0300000-0000-4000-8000-000000000002';
@@ -119,7 +119,7 @@ begin
   insert into public.brand (id, account_id, name, slug, ownership_type, is_active)
   values (wok, a, 'Wok Cedido', 'wok-cedido', 'licensed', true) on conflict (id) do nothing;
   insert into public.brand_licensing_agreement (id, account_id, brand_id, owner_name, revenue_share_pct, reimburses_consumption, starts_on, party_id)
-  values ('c0300000-0000-4000-8000-000000000031', a, milanesa, 'Marcas del Sur', 9, true, '2026-01-01', p_socio),
+  values ('c0300000-0000-4000-8000-000000000031', a, brasa, 'Marcas del Sur', 9, true, '2026-01-01', p_socio),
          ('c0300000-0000-4000-8000-000000000032', a, wok,      'Marcas del Sur', 9, true, '2026-01-01', p_socio)
   on conflict do nothing;
 
@@ -143,9 +143,9 @@ begin
          ('c0300000-0000-4000-8000-000000000303', a, l2, s_socio, '2026-10-03', 'confirmado', 'manual', 'semilla C03')
   on conflict (id) do nothing;
   insert into public.goods_receipt_line (id, account_id, goods_receipt_id, product_name, qty_received, unit_cost, doc_qty, doc_amount, position)
-  values ('c0300000-0000-4000-8000-000000000311', a, 'c0300000-0000-4000-8000-000000000301', 'Masa de milanesa (caja)', 40, 50.00, 40, 2000.00, 1),
+  values ('c0300000-0000-4000-8000-000000000311', a, 'c0300000-0000-4000-8000-000000000301', 'Carbón de encina (saco)', 40, 50.00, 40, 2000.00, 1),
          ('c0300000-0000-4000-8000-000000000312', a, 'c0300000-0000-4000-8000-000000000302', 'Salsa wok (garrafa)',     30, 60.00, 30, 1800.00, 1),
-         ('c0300000-0000-4000-8000-000000000313', a, 'c0300000-0000-4000-8000-000000000303', 'Masa de milanesa (caja)', 30, 50.00, 30, 1500.00, 1),
+         ('c0300000-0000-4000-8000-000000000313', a, 'c0300000-0000-4000-8000-000000000303', 'Carbón de encina (saco)', 30, 50.00, 30, 1500.00, 1),
          ('c0300000-0000-4000-8000-000000000314', a, 'c0300000-0000-4000-8000-000000000303', 'Envases wok (paquete)',   28, 40.00, 28, 1120.00, 2)
   on conflict (id) do nothing;
 
@@ -159,12 +159,12 @@ begin
 
   -- Octubre: ventas cerradas de sus marcas, sin IVA (11.000 en Norte Centro, 7.300 en Norte Mercado).
   insert into public.sale (id, account_id, location_id, brand_id, channel_id, source, sold_at, total, tax, taxable_base, status, external_channel_text)
-  values ('c0300000-0000-4000-8000-000000000501', a, l1, milanesa, glovo, 'lastapp', '2026-10-02 13:30+02', 3850.00, 350.00, 3500.00, 'closed', 'Glovo'),
-         ('c0300000-0000-4000-8000-000000000502', a, l1, milanesa, glovo, 'lastapp', '2026-10-04 21:10+02', 2750.00, 250.00, 2500.00, 'closed', 'Glovo'),
+  values ('c0300000-0000-4000-8000-000000000501', a, l1, brasa, glovo, 'lastapp', '2026-10-02 13:30+02', 3850.00, 350.00, 3500.00, 'closed', 'Glovo'),
+         ('c0300000-0000-4000-8000-000000000502', a, l1, brasa, glovo, 'lastapp', '2026-10-04 21:10+02', 2750.00, 250.00, 2500.00, 'closed', 'Glovo'),
          ('c0300000-0000-4000-8000-000000000503', a, l1, wok,      glovo, 'lastapp', '2026-10-03 14:00+02', 3300.00, 300.00, 3000.00, 'closed', 'Glovo'),
          ('c0300000-0000-4000-8000-000000000504', a, l1, wok,      glovo, 'lastapp', '2026-10-05 20:45+02', 2200.00, 200.00, 2000.00, 'closed', 'Glovo'),
-         ('c0300000-0000-4000-8000-000000000505', a, l2, milanesa, glovo, 'lastapp', '2026-10-02 13:15+02', 2530.00, 230.00, 2300.00, 'closed', 'Glovo'),
-         ('c0300000-0000-4000-8000-000000000506', a, l2, milanesa, glovo, 'lastapp', '2026-10-05 21:30+02', 2200.00, 200.00, 2000.00, 'closed', 'Glovo'),
+         ('c0300000-0000-4000-8000-000000000505', a, l2, brasa, glovo, 'lastapp', '2026-10-02 13:15+02', 2530.00, 230.00, 2300.00, 'closed', 'Glovo'),
+         ('c0300000-0000-4000-8000-000000000506', a, l2, brasa, glovo, 'lastapp', '2026-10-05 21:30+02', 2200.00, 200.00, 2000.00, 'closed', 'Glovo'),
          ('c0300000-0000-4000-8000-000000000507', a, l2, wok,      glovo, 'lastapp', '2026-10-03 13:50+02', 1980.00, 180.00, 1800.00, 'closed', 'Glovo'),
          ('c0300000-0000-4000-8000-000000000508', a, l2, wok,      glovo, 'lastapp', '2026-10-04 20:20+02', 1320.00, 120.00, 1200.00, 'closed', 'Glovo')
   on conflict (id) do nothing;

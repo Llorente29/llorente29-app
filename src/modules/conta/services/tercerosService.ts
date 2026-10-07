@@ -211,7 +211,7 @@ export function filaAFiscal(r: Fila | null): DatosFiscalesCliente | null {
   }
 }
 
-export interface CuentaDeTercero { id: string; code: string; name: string; papel: 'cliente' | 'proveedor' | 'pago'; templateCode: string }
+export interface CuentaDeTercero { id: string; code: string; name: string; papel: 'cliente' | 'proveedor' | 'pago' | 'liquidacion'; templateCode: string }
 
 export interface FichaTercero {
   tercero: Tercero & { supplierId: string | null }
@@ -281,6 +281,7 @@ async function cuentasDeTercero(accountId: string, companyId: string, partyId: s
     if (!c) continue
     const base = { id: String(c.id), code: String(c.code), name: String(c.name), templateCode: String(c.template_code) }
     if (l.entity === 'customer' && l.entity_id === partyId && l.role === 'principal') suyas.push({ ...base, papel: 'cliente' })
+    else if (l.entity === 'customer' && l.entity_id === partyId && l.role === 'liquidacion') suyas.push({ ...base, papel: 'liquidacion' })
     else if (supplierId && l.entity === 'supplier' && l.entity_id === supplierId && l.role === 'principal') suyas.push({ ...base, papel: 'proveedor' })
     else if (supplierId && l.entity === 'supplier' && l.entity_id === supplierId && l.role === 'pago' && String(c.template_code).startsWith('43')) suyas.push({ ...base, papel: 'pago' })
   }
@@ -325,6 +326,31 @@ export const quitarCobro = (id: string) => rpc<void>('channel_settlement_uncolle
 export const confirmarPeriodo = (id: string) => rpc<{ id: string; desde: string; hasta: string }>('channel_settlement_confirm_period', { p_id: id })
 
 export const enlazarAcuerdo = (acuerdoId: string, partyId: string) => rpc<void>('brand_licensing_agreement_set_party', { p_agreement: acuerdoId, p_party: partyId })
+
+/**
+ * Respuesta 3, punto 4. La subcuenta de lo que la empresa cobra POR CUENTA del
+ * socio (sus ventas de una marca cedida): «Liquidación pendiente con <socio>»,
+ * bajo la 410, enlazada con el papel «liquidacion». No es su 400 (lo que le
+ * compras) ni su 430 (lo que le facturas). Se crea al confirmar el papel de
+ * socio; si ya la tiene, no hace nada. Sin plan activado, no hay dónde: null.
+ * La 419 se descartó: es de cuentas en participación (CCom 239) y aquí no se
+ * comparten resultados (docs/conta/contraste.md).
+ */
+export async function asegurarCuentaLiquidacion(companyId: string, partyId: string, nombre: string, quien: string | null): Promise<{ code: string; nueva: boolean } | null> {
+  const ya = await leer(tabla('company_account_link').select('company_account(code)').eq('company_id', companyId)
+    .eq('entity', 'customer').eq('entity_id', partyId).eq('role', 'liquidacion'), 'su cuenta de liquidación')
+  const code = (ya[0]?.company_account as { code?: string } | null)?.code
+  if (code) return { code, nueva: false }
+  const plan = await leer(tabla('company_account').select('id').eq('company_id', companyId).limit(1), 'el plan')
+  if (!plan.length) return null
+  const r = await rpc<{ id: string; code: string }>('company_account_add', {
+    p_company: companyId, p_hoja: '4100', p_nombre: `Liquidación pendiente con ${nombre}`,
+    p_plain_name: 'Lo que cobras por cuenta del socio (las ventas de sus marcas): se compensa en su liquidación mensual y el resto se le paga.',
+    p_entity: null, p_entity_id: null, p_quien_nombre: quien, p_source: 'manual',
+  })
+  await rpc<void>('company_account_link_set', { p_company: companyId, p_entity: 'customer', p_entity_id: partyId, p_role: 'liquidacion', p_account_id: r.id, p_quien_nombre: quien, p_source: 'manual' })
+  return { code: r.code, nueva: true }
+}
 
 /** Esta 430 es la suya: el enlace de cliente (company_account_link_set, el del C02). */
 export const enlazarCuentaCliente = (companyId: string, partyId: string, cuentaId: string, quien: string | null) =>

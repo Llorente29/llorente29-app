@@ -1,5 +1,5 @@
 {
- "generado_desde": "2026-10-03T19:03:31.840Z",
+ "generado_desde": "2026-10-07T08:15:26.067Z",
  "tablas": {
   "country": {
    "fuente": "eu-paises",
@@ -26,7 +26,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Dos (los especiales son voluntarios, salvo tres)",
      "sort_order": 0,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -42,7 +42,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.1",
      "sort_order": 10,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -58,7 +58,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.2",
      "sort_order": 20,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -74,7 +74,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.3",
      "sort_order": 30,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -90,7 +90,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.4",
      "sort_order": 40,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -106,7 +106,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.5",
      "sort_order": 50,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -122,7 +122,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.6",
      "sort_order": 60,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -138,7 +138,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.7",
      "sort_order": 70,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -154,7 +154,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.8",
      "sort_order": 80,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -170,7 +170,7 @@
      "legal_ref": "Ley 37/1992, art. 120.Uno.9",
      "sort_order": 90,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -477,7 +477,7 @@
       }
      ],
      "source_key": "rd-1065-2007",
-     "verified_at": "2026-10-03"
+     "verified_at": "2026-10-07"
     }
    ]
   },
@@ -502,7 +502,7 @@
      "legal_ref": "Ley 37/1992, art. 90.Uno; recargo: art. 161.1.º",
      "sort_order": 10,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -545,7 +545,7 @@
      "legal_ref": "Ley 37/1992, art. 91.Uno; recargo: art. 161.2.º",
      "sort_order": 20,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -589,7 +589,7 @@
      "legal_ref": "Ley 37/1992, art. 91.Dos; recargo: art. 161.3.º",
      "sort_order": 30,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -743,7 +743,7 @@
      "legal_ref": "Ley 37/1992, art. 20",
      "sort_order": 40,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -778,7 +778,7 @@
      "legal_ref": "Ley 37/1992, art. 13.1.º (adquisiciones intracomunitarias) y art. 90",
      "sort_order": 50,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -816,7 +816,7 @@
      "legal_ref": "Ley 37/1992, art. 84.Uno.2.º y art. 90",
      "sort_order": 60,
      "source_key": "ley-37-1992",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "ley-37-1992",
@@ -1083,7 +1083,7 @@
      },
      "desde_por": "rd-439-2007 [a95]: redacción vigente desde 2023-01-26 (BOE-A-2023-2023)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1112,7 +1112,7 @@
      },
      "desde_por": "rd-439-2007 [a95]: redacción vigente desde 2023-01-26 (BOE-A-2023-2023)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1141,7 +1141,7 @@
      },
      "desde_por": "rd-439-2007 [a80]: redacción vigente desde 2023-12-07 (BOE-A-2023-24841)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1170,7 +1170,7 @@
      },
      "desde_por": "rd-439-2007 [a100]: redacción vigente desde 2018-12-23 (BOE-A-2018-17601)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "rd-439-2007",
@@ -1199,7 +1199,7 @@
      },
      "desde_por": "rd-439-2007 [a90]: redacción vigente desde 2018-12-23 (BOE-A-2018-17601)",
      "source_key": "rd-439-2007",
-     "verified_at": "2026-10-03",
+     "verified_at": "2026-10-07",
      "pruebas": [
       {
        "fuente": "rd-439-2007",

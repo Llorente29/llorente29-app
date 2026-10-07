@@ -50,7 +50,8 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   await expect(page.getByText('Sus facturas se apuntan en', { exact: true })).toHaveCount(1)
   await expect(page.getByLabel('Local habitual')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Qué tipos de gasto usa tu negocio' })).toBeVisible()
-  await expect(saldo.locator('.cx-dato').filter({ hasText: 'Saldo con él' })).toContainText('Sin apuntes todavía')
+  // C04: el saldo sale del libro (la F-2026-0915 validada de la semilla seed_c04_staging.sql).
+  await expect(saldo.locator('.cx-dato').filter({ hasText: 'Saldo con él' })).toContainText('1.283,15 € a tu cargo')
   await expect(saldo.locator('.cx-dato').filter({ hasText: 'Va al 347 este año' })).toContainText(/^Va al 347 este año(Sí|No|Tu empresa)/)
 
   if (lado(page) === 'ordenador') {
@@ -66,10 +67,10 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
     await expect(cuentas.locator('.cx-dato').filter({ hasText: 'Le pagas desde' })).toContainText('Sin decir')
   }
 
-  // El extracto existe y dice claro que aún no hay apuntes (llegan con el C04).
+  // El extracto lee del libro (C04): su factura, con enlace a su asiento.
   await saldo.getByRole('button', { name: 'Ver extracto' }).click()
   const ext = page.getByRole('region', { name: 'Extracto' })
-  await expect(ext.getByText('Aún no hay apuntes con este proveedor.')).toBeVisible()
+  await expect(ext.getByRole('link', { name: 'Ver el asiento F-2026-0915' }).first()).toBeVisible()
   await ext.getByRole('button', { name: 'Saldos por mes' }).click()
   await expect(ext.getByRole('button', { name: 'Saldos por mes' })).toHaveAttribute('aria-pressed', 'true')
   // El extracto, en su propia captura (de elemento: no cambia el tamaño de la ventana).

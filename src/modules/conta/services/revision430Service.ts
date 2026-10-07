@@ -18,7 +18,7 @@
 // la tomó, sin migración nueva.
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
-import { anadirPapel, archivarTercero, enlazarCuentaCliente, guardarCliente } from '@/modules/conta/services/tercerosService'
+import { anadirPapel, archivarTercero, asegurarCuentaLiquidacion, enlazarCuentaCliente, guardarCliente } from '@/modules/conta/services/tercerosService'
 import type { Canal430, Cuenta430, Propuesta430 } from '@/modules/conta/lib/revision430'
 import { queHace } from '@/modules/conta/lib/revision430'
 import { validarNifEs } from '@/modules/conta/lib/nif'
@@ -132,6 +132,8 @@ export async function confirmar430(
   if (p.tipo === 'socio') {
     if (!tiene('brand_partner')) await anadirPapel(id, 'brand_partner')
     if (!tiene('customer')) await anadirPapel(id, 'customer')
+    // Un socio histórico que se archiva no cobra nada por su cuenta: sin cuenta de liquidación.
+    if (!opciones.archivar) await asegurarCuentaLiquidacion(ctx.companyId, id, nombre, ctx.quien)
   }
   if (p.tipo === 'cliente' && p.tercero && !tiene('customer')) await anadirPapel(id, 'customer')
   await enlazarCuentaCliente(ctx.companyId, id, c.id, ctx.quien)

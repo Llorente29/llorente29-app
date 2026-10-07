@@ -10,7 +10,7 @@ import ref from '../../../../docs/conta/referencia/serie.json'
 import { activar } from '@/modules/conta/lib/planEmpresa'
 import type { CuentaPlan, CuentaSeriePlan, EnlacePlan } from '@/modules/conta/lib/planVista'
 import {
-  abiertosPorDefecto, arbolPlan, duenoDeCuenta, estaAbierto, filasBuscadas, filasVisibles, hijasDe, resumenNodo, textoRuta,
+  abiertosPorDefecto, arbolPlan, cuentasDentro, duenoDeCuenta, estaAbierto, filasBuscadas, filasVisibles, hijasDe, resumenNodo, textoRuta,
 } from '@/modules/conta/lib/planArbol'
 
 type Fila = Record<string, unknown>
@@ -54,6 +54,18 @@ describe('el árbol', () => {
   })
   it('todas las cuentas de la empresa están en el árbol, una vez', () => {
     expect([...A.porCodigo.keys()].sort()).toEqual(CUENTAS.map((c) => c.code).sort())
+  })
+  // e2e 128: «Sumas y saldos» del 400 decía «Aún no hay apuntes» con la
+  // factura validada en la 40000002, porque la fila de la 40000000 solo
+  // sumaba su propia cuenta y las de los proveedores cuelgan de ella.
+  it('lo que suma cada fila de «Sumas y saldos»: la cuenta y las que cuelgan de ella', () => {
+    const subcuentas = CUENTAS.filter((c) => c.kind === 'own' && c.templateCode === '4000').map((c) => c.id)
+    expect(subcuentas.length).toBeGreaterThan(0)
+    expect([...cuentasDentro(A, '40000000')].sort()).toEqual(['40000000', ...subcuentas].sort())
+    expect([...cuentasDentro(A, '40000001')]).toEqual(['40000001'])
+    // Un nivel suma todo lo de debajo, aunque el número no empiece igual.
+    const del400 = CUENTAS.filter((c) => c.templateCode.startsWith('400')).map((c) => c.id).sort()
+    expect([...cuentasDentro(A, '400')].sort()).toEqual(del400)
   })
   it('las hijas de un nivel, para «Sumas y saldos»', () => {
     expect(hijasDe(A, '400').map((x) => x.numero)).toEqual(CUENTAS.filter((c) => c.kind === 'template' && c.templateCode.startsWith('400')).map((c) => c.code).sort())

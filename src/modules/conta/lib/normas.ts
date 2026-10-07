@@ -19,6 +19,43 @@ export interface Norma {
 }
 
 export const NORMAS = {
+  // ── C04 · Libro diario ──────────────────────────────────────────────────
+  libroDiario: {
+    cita: 'Código de Comercio, art. 25.1', fuente: 'codigo-comercio', bloque: 'art25',
+    literal: 'Llevará necesariamente, sin perjuicio de lo establecido en las Leyes o disposiciones especiales, un libro de Inventarios y Cuentas anuales y otro Diario',
+  },
+  libroAnotacionConjunta: {
+    cita: 'Código de Comercio, art. 28.2', fuente: 'codigo-comercio', bloque: 'art28',
+    literal: 'la anotación conjunta de los totales de las operaciones por períodos no superiores al trimestre',
+  },
+  libroSinTachaduras: {
+    cita: 'Código de Comercio, art. 29.1', fuente: 'codigo-comercio', bloque: 'art29',
+    literal: 'sin espacios en blanco, interpolaciones, tachaduras ni raspaduras',
+  },
+  ivaAsientoResumenExpedidas: {
+    cita: 'RD 1624/1992 (Reglamento del IVA), art. 63.4', fuente: 'rd-1624-1992', bloque: 'a63',
+    literal: 'se podrá sustituir por la de asientos resúmenes',
+  },
+  ivaModificacionBase: {
+    cita: 'Ley 37/1992, art. 80.Dos', fuente: 'ley-37-1992', bloque: 'a80',
+    literal: 'la base imponible se modificará en la cuantía correspondiente',
+  },
+  facturaRectificativa: {
+    cita: 'RD 1619/2012, art. 15.2', fuente: 'rd-1619-2012', bloque: 'a15',
+    literal: 'será obligatoria la expedición de una factura rectificativa',
+  },
+  facturaSimplificadaRestauracion: {
+    cita: 'RD 1619/2012, art. 4.2.e', fuente: 'rd-1619-2012', bloque: 'a4',
+    literal: 'Servicios de hostelería y restauración prestados por restaurantes',
+  },
+  ivaMediacionNombreAjeno: {
+    cita: 'Ley 37/1992, art. 11.Dos.15.º', fuente: 'ley-37-1992', bloque: 'a11',
+    literal: 'Las operaciones de mediación y las de agencia o comisión cuando el agente o comisionista actúe en nombre ajeno',
+  },
+  ingresosPorCuentaDeTerceros: {
+    cita: 'PGC de Pymes, NRV 16.ª', fuente: 'rd-1515-2007', bloque: 'A16',
+    literal: 'así como las cantidades recibidas por cuenta de terceros, no formarán parte de los ingresos',
+  },
   ivaTipoGeneral: {
     cita: 'Ley 37/1992, art. 90.Uno', fuente: 'ley-37-1992', bloque: 'a90',
     literal: 'El Impuesto se exigirá al tipo del 21 por ciento',

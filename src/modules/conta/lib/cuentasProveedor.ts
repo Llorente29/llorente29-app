@@ -274,7 +274,7 @@ export function vaAl347(o: { facturas: readonly FacturaAnual[]; año: number; pe
     : { va: false, texto: `No · ${euros(importe)} este año, el límite es 3.005,06 €`, fuente: CITAS.limite347.norma, importe }
 }
 
-// ── El extracto (los apuntes llegan con el C04) ─────────────────────────────
+// ── El extracto (los apuntes los pone el libro diario, C04) ─────────────────
 
 export interface Apunte {
   fecha: string
@@ -282,22 +282,27 @@ export interface Apunte {
   concepto: string
   debe: number
   haber: number
-  /** A qué lleva el apunte: la factura o el pago. */
-  enlace: { tipo: 'factura' | 'pago'; id: string } | null
+  /** A qué lleva el apunte: la factura, el pago o su asiento del libro (C04). */
+  enlace: { tipo: 'factura' | 'pago' | 'asiento'; id: string } | null
+  /** C04: el asiento del que sale (serie/número), y si está anulado. */
+  asiento?: { serie: number; numero: number; anulado: boolean }
 }
 export interface FilaExtracto extends Apunte { saldo: number }
 
 /**
  * Saldo de una cuenta de proveedor: su saldo natural es acreedor (haber −
- * debe). Positivo = lo que le debes, «a tu cargo».
+ * debe). Positivo = lo que le debes, «a tu cargo». El Mayor de cualquier
+ * cuenta (C04) lo pide deudor: debe − haber, positivo = saldo deudor.
  */
-const mueve = (a: Pick<Apunte, 'debe' | 'haber'>) => Math.round(a.haber * 100) - Math.round(a.debe * 100)
+export type Naturaleza = 'acreedora' | 'deudora'
+const mueve = (a: Pick<Apunte, 'debe' | 'haber'>, n: Naturaleza = 'acreedora') =>
+  (n === 'acreedora' ? 1 : -1) * (Math.round(a.haber * 100) - Math.round(a.debe * 100))
 const porFecha = (a: Apunte, b: Apunte) => a.fecha.localeCompare(b.fecha)
 
 /** Vista 1: apunte a apunte, con el saldo acumulado; empieza en la apertura. */
-export function extracto(apuntes: readonly Apunte[], apertura = 0): FilaExtracto[] {
+export function extracto(apuntes: readonly Apunte[], apertura = 0, naturaleza: Naturaleza = 'acreedora'): FilaExtracto[] {
   let s = Math.round(apertura * 100)
-  return [...apuntes].sort(porFecha).map((a) => { s += mueve(a); return { ...a, saldo: s / 100 } })
+  return [...apuntes].sort(porFecha).map((a) => { s += mueve(a, naturaleza); return { ...a, saldo: s / 100 } })
 }
 
 export interface MesSaldo { mes: string; debe: number; haber: number; saldo: number; acumulado: number }
@@ -308,9 +313,10 @@ export interface SaldosEjercicio { apertura: number; meses: MesSaldo[]; debe: nu
  * apertura, cierre y total del año. Lo anterior al inicio entra en la apertura;
  * lo posterior al fin, en ningún mes.
  */
-export function saldosPorMes(apuntes: readonly Apunte[], ejercicio: { inicio: string; fin: string }, apertura = 0): SaldosEjercicio {
+export function saldosPorMes(apuntes: readonly Apunte[], ejercicio: { inicio: string; fin: string }, apertura = 0, naturaleza: Naturaleza = 'acreedora'): SaldosEjercicio {
+  const signo = naturaleza === 'acreedora' ? 1 : -1
   let ab = Math.round(apertura * 100)
-  for (const a of apuntes) if (a.fecha < ejercicio.inicio) ab += mueve(a)
+  for (const a of apuntes) if (a.fecha < ejercicio.inicio) ab += mueve(a, naturaleza)
   const meses: MesSaldo[] = []
   let [y, mm] = ejercicio.inicio.slice(0, 7).split('-').map(Number)
   const ultimo = ejercicio.fin.slice(0, 7)
@@ -320,8 +326,8 @@ export function saldosPorMes(apuntes: readonly Apunte[], ejercicio: { inicio: st
     const del = apuntes.filter((a) => a.fecha.slice(0, 7) === mes && a.fecha >= ejercicio.inicio && a.fecha <= ejercicio.fin)
     const d = del.reduce((t, a) => t + Math.round(a.debe * 100), 0)
     const h = del.reduce((t, a) => t + Math.round(a.haber * 100), 0)
-    acumulado += h - d; debe += d; haber += h
-    meses.push({ mes, debe: d / 100, haber: h / 100, saldo: (h - d) / 100, acumulado: acumulado / 100 })
+    acumulado += signo * (h - d); debe += d; haber += h
+    meses.push({ mes, debe: d / 100, haber: h / 100, saldo: (signo * (h - d)) / 100, acumulado: acumulado / 100 })
     if (mes >= ultimo) break
     mm += 1; if (mm > 12) { mm = 1; y += 1 }
   }

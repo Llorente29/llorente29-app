@@ -161,8 +161,23 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   }, [marco, navigate])
 
   const decir = (de: Mensaje['de'], t: ReactNode, junto = false) => setMensajes((m) => [...m, { id: sigId.current++, de, texto: t, junto }])
-  /** Lo que la IA acaba de apuntar: se pinta en la misma burbuja que la pregunta siguiente. */
-  const apuntado = (f: Frase) => decir('folvy', pintar(f), true)
+  /**
+   * Lo que la IA acaba de apuntar: se pinta en la misma burbuja que la pregunta
+   * siguiente. Mientras se guarda una respuesta, se retiene y sale cuando TODO
+   * está guardado, también el paso: antes salía «Entendido» y el paso se
+   * escribía después, y cerrar la pestaña en ese hueco hacía repetir la
+   * pregunta al volver (e2e 129, regla 8: confirmar es haberlo guardado).
+   */
+  const pendientes = useRef<ReactNode[] | null>(null)
+  const apuntado = (f: Frase) => {
+    if (pendientes.current) pendientes.current.push(pintar(f))
+    else decir('folvy', pintar(f), true)
+  }
+  const soltarPendientes = () => {
+    const p = pendientes.current ?? []
+    pendientes.current = null
+    p.forEach((t) => decir('folvy', t, true))
+  }
 
   /**
    * Al contestar, la pregunta se queda en la conversación tal como se vio: con
@@ -180,8 +195,12 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   /** Hace algo y lo cuenta; si falla, lo dice en la conversación (regla 8). */
   async function paso_(accion: () => Promise<void>) {
     setOcupado(true)
-    try { await accion() } catch (e) { decir('folvy', <span className="cx-alta-fallo">No lo he podido guardar: {e instanceof Error ? e.message : String(e)}</span>) }
-    finally { setOcupado(false) }
+    pendientes.current = []
+    try { await accion(); soltarPendientes() } catch (e) {
+      // Lo que sí se guardó antes del fallo se dice; luego, el fallo.
+      soltarPendientes()
+      decir('folvy', <span className="cx-alta-fallo">No lo he podido guardar: {e instanceof Error ? e.message : String(e)}</span>)
+    } finally { pendientes.current = null; setOcupado(false) }
   }
 
   async function avanzar(siguiente: PasoAlta, id = companyId) {

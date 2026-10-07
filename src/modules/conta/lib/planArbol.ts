@@ -216,6 +216,24 @@ export const textoRuta = (n: NodoPlan): string => n.ruta.join(' › ')
 export const hijasDe = (a: ArbolPlan, clave: string): NodoPlan[] => (a.nodos.get(clave)?.hijos ?? []).map((h) => a.nodos.get(h)!)
 
 /**
+ * Las cuentas de la empresa que suma un nodo: la suya y todas las que cuelgan
+ * de él. Una cuenta de apunte con subcuentas (la 40000000 con las de cada
+ * proveedor) suma también las de debajo: sin esto, «Sumas y saldos» del 400
+ * decía «Aún no hay apuntes» con una factura validada en la 40000002 (e2e 128).
+ */
+export function cuentasDentro(a: ArbolPlan, clave: string): Set<string> {
+  const out = new Set<string>()
+  const baja = (k: string) => {
+    const n = a.nodos.get(k)
+    if (!n) return
+    if (n.cuentaId) out.add(n.cuentaId)
+    n.hijos.forEach(baja)
+  }
+  baja(clave)
+  return out
+}
+
+/**
  * De quién es una cuenta, para los enlaces de la cabecera de su Mayor
  * (respuesta 5): subcuenta de proveedor → «Ficha del proveedor»; de banco →
  * «Banco»; de cliente → «Ficha del cliente» (cuando exista, C03); de IVA →

@@ -48,6 +48,23 @@ describe('agente «Datos maestros e impuestos»', () => {
     expect(revisar(bd, ref, HOY).map((h) => h.tipo).sort()).toEqual(['distinto', 'distinto', 'sin_fecha', 'sin_norma'])
   })
 
+  // Real (staging, 07/10): la referencia se regeneró con las fuentes del 07/10
+  // y la base sigue con el 03/10 en 22 filas (la migración es `on conflict do
+  // nothing`). Los valores son los mismos: no es un fallo. Una base que dice
+  // haberse comprobado después que su fuente, sí.
+  it('la fecha de comprobación de la base, anterior a la de la fuente: nada; posterior: distinto', () => {
+    const bd = baseCorrecta()
+    const ref07 = structuredClone(ref) as typeof ref
+    for (const t of Object.keys(TABLAS_FILA_A_FILA)) {
+      for (const f of (ref07.tablas as Record<string, { filas: unknown }>)[t].filas as Fila[]) if ('verified_at' in f) f.verified_at = '2026-10-07'
+      for (const f of bd.tablas[t]) if ('verified_at' in f) f.verified_at = '2026-10-03'
+    }
+    expect(revisar(bd, ref07, HOY)).toEqual([])
+    fila(bd, 'tax_rate', 'iva_general').verified_at = '2026-10-09'
+    const h = revisar(bd, ref07, HOY)
+    expect(h.map((x) => x.detalle)).toEqual(['Impuestos · iva_general|2012-09-01 · verified_at: la base dice 2026-10-09 y la fuente, 2026-10-07.'])
+  })
+
   it('un porcentaje que no es el de la fuente', () => {
     const bd = baseCorrecta()
     fila(bd, 'withholding_rate', 'profesional').rate = 19

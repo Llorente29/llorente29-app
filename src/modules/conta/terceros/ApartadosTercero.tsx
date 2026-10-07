@@ -6,9 +6,13 @@
 // mismas reglas del núcleo); el cobro, espejo de «Pago»; la contabilidad, la
 // N7 con sus cuentas. Guardar dice qué se ha guardado (regla 8).
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { rutaFichaProveedor } from '@/config/navegacion'
+import { rutaAsiento, rutaFichaProveedor } from '@/config/navegacion'
+import { ExtractoCuenta, type EjercicioExtracto } from '@/modules/conta/plan/ExtractoCuenta'
+import { apuntesDeCuentas } from '@/modules/conta/services/libroService'
+import { leerEjercicios } from '@/modules/conta/services/diarioService'
+import type { Apunte } from '@/modules/conta/lib/cuentasProveedor'
 import { Campo, Pildoras } from '@/modules/conta/proveedor/piezas'
 import { Chip, Vacio } from '@/modules/conta/ui/piezas'
 import { useTercero, papelesDe } from '@/modules/conta/terceros/contextoTercero'
@@ -272,14 +276,47 @@ function Aportaciones() {
 
 // ── Contabilidad, contactos, documentos, historial ─────────────────────────
 
+/**
+ * Movimientos: el extracto de sus cuentas en el libro diario (C04). Son sus
+ * subcuentas (430 de la plataforma o del cliente, 4300 del socio), así que no
+ * hace falta filtrar por tercero. Naturaleza deudora: te debe lo que queda.
+ */
+function useMovimientos(accountId: string | null, companyId: string | null, cuentas: string[]) {
+  const [r, setR] = useState<{ clave: string; apuntes: Apunte[]; ejercicios: EjercicioExtracto[]; error: string | null } | null>(null)
+  const clave = `${accountId}:${companyId}:${cuentas.join(',')}`
+  useEffect(() => {
+    if (!accountId || !companyId) return
+    let vivo = true
+    Promise.all([apuntesDeCuentas(accountId, companyId, cuentas), leerEjercicios(accountId, companyId)])
+      .then(([apuntes, ejs]) => { if (vivo) setR({ clave, apuntes, ejercicios: ejs.map((e) => ({ code: e.code, inicio: e.inicio, fin: e.fin })), error: null }) },
+        (e: unknown) => { if (vivo) setR({ clave, apuntes: [], ejercicios: [], error: e instanceof Error ? e.message : String(e) }) })
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `clave` resume las cuentas
+  }, [accountId, companyId, clave])
+  return r?.clave === clave ? r : null
+}
+
 export function ContabilidadTercero() {
+  const { ficha, companyId } = useTercero()
+  const { accountId } = useCuentaConta()
+  // Su cuenta como cliente (y la de pago). La de liquidación tiene su propio Mayor: mezclarla aquí lo haría ilegible.
+  const cuentas = ficha.cuentas.filter((c) => c.papel === 'cliente' || c.papel === 'pago').map((c) => c.id)
+  const m = useMovimientos(accountId, companyId, cuentas)
   return (
     <div className="cx-formulario">
       <SusCuentas completa />
-      <section className="cx-tarjeta" aria-label="Movimientos">
-        <h2 className="cx-tarjeta-titulo">Movimientos</h2>
-        <Vacio titulo="Aún no hay apuntes." explicacion="Las liquidaciones y los cobros serán apuntes con el C04: entonces verás aquí el extracto de sus cuentas, y cada liquidación llevará a su apunte." />
-      </section>
+      {cuentas.length === 0 || !m ? (
+        <section className="cx-tarjeta" aria-label="Movimientos">
+          <h2 className="cx-tarjeta-titulo">Movimientos</h2>
+          {cuentas.length === 0
+            ? <Vacio titulo="Sin cuenta, no hay apuntes." explicacion="Cuando tenga su cuenta de cliente, aquí verás sus liquidaciones y sus cobros tal como están en el libro diario." />
+            : <p className="cx-ayuda">Leyendo el libro…</p>}
+        </section>
+      ) : m.error ? <div className="cx-error" role="alert">{m.error}</div> : (
+        <ExtractoCuenta titulo="Movimientos" ejercicios={m.ejercicios} apuntes={m.apuntes} naturaleza="deudora"
+          vacio={(ej) => ({ titulo: `Aún no hay apuntes suyos en ${ej}.`, explicacion: 'Sus liquidaciones y sus cobros entran en el libro diario al validar sus asientos; entonces salen aquí, cada uno con su saldo.' })}
+          documento={(a) => (a.enlace?.tipo === 'asiento' ? <Link to={rutaAsiento(a.enlace.id)} aria-label={`Ver el asiento ${a.documento}`}>{a.documento}</Link> : a.documento)} />
+      )}
     </div>
   )
 }

@@ -22,7 +22,7 @@
 //     medida de verdad es la del ensayo. Al reescribir el manifiesto para otra
 //     tanda, esta parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — módulo .mjs sin tipos
@@ -250,42 +250,44 @@ describe('el interruptor de Foodint (ya aplicado), tal cual', () => {
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el C03', () => {
+describe('la tanda de AHORA (manifiesto vivo): la 0130 del C00 y el C04', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
-  // MEDIDO en producción el 06/10 con el conector de solo lectura (to_regclass / pg_proc):
-  // de lo que nombra la tanda, existen estas cuatro tablas y dos funciones.
-  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c03-20261006.json'))
+  // MEDIDO en producción el 07/10 con el conector de solo lectura (to_regclass /
+  // to_regprocedure), con la consulta del workflow: de lo que nombra la tanda,
+  // existen 23 tablas y una función (conta_reabrir_mes, del C00).
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c04-20261007.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
 
-  it('son las nueve del C03, en orden', () => {
-    expect(viva.map((f) => f.match(/T(\d{4})_/)![1])).toEqual(['0100', '0110', '0120', '0130', '0140', '0150', '0160', '0170', '0180'])
-    expect(viva.every((f) => f.startsWith('supabase/migrations/20261009T01'))).toBe(true)
+  it('son la 0130 del C00 y las cuatro del C04, en orden', () => {
+    expect(viva).toEqual([
+      'supabase/migrations/20261003T0130_c00_valores_de_serie.sql',
+      'supabase/migrations/20261010T0100_c04_libro.sql',
+      'supabase/migrations/20261010T0110_c04_enlaces.sql',
+      'supabase/migrations/20261010T0120_c04_funciones.sql',
+      'supabase/migrations/20261010T0130_c04_lectura.sql',
+    ])
   })
-  it('PARAN la 0100, la 0130 y la 0160, cada una por lo suyo', () => {
+  it('PARAN la C00 0130 (UPDATE de expense_category) y la C04 0120 (reemplaza conta_reabrir_mes)', () => {
     expect(paran()).toEqual([
-      'supabase/migrations/20261009T0100_c03_terceros.sql',
-      'supabase/migrations/20261009T0130_c03_periodos_propuestos.sql',
-      'supabase/migrations/20261009T0160_c03_deshacer_importacion.sql',
+      'supabase/migrations/20261003T0130_c00_valores_de_serie.sql',
+      'supabase/migrations/20261010T0120_c04_funciones.sql',
     ])
     const motivo = (f: string) => decidir(p.porFichero[f], p.existe).para
-    expect(motivo('supabase/migrations/20261009T0100_c03_terceros.sql')).toEqual([expect.stringMatching(/company_account_misma_cuenta\(\)/)])
-    expect(motivo('supabase/migrations/20261009T0130_c03_periodos_propuestos.sql')).toEqual([expect.stringMatching(/channel_settlement.*update/)])
-    expect(motivo('supabase/migrations/20261009T0160_c03_deshacer_importacion.sql')).toEqual([expect.stringMatching(/company_chart_import_undo\(uuid,text\)/)])
+    expect(motivo('supabase/migrations/20261003T0130_c00_valores_de_serie.sql').every((l: string) => /expense_category.*update/.test(l))).toBe(true)
+    expect(motivo('supabase/migrations/20261010T0120_c04_funciones.sql')).toEqual([expect.stringMatching(/conta_reabrir_mes\(uuid,date,text\)/)])
   })
-  it('la 0170 solo añade: un disparador nuevo en supplier, sigue', () => {
-    expect(decidir(p.porFichero['supabase/migrations/20261009T0170_c03_borrar_proveedor.sql'], p.existe).para).toEqual([])
+  it('la 0110 del C04 (papel «liquidacion» en los CHECK de company_account_link) solo añade, sigue', () => {
+    expect(decidir(p.porFichero['supabase/migrations/20261010T0110_c04_enlaces.sql'], p.existe).para).toEqual([])
   })
-  it('la 0180 solo añade una columna nula y su CHECK a party_role (tabla nueva de la tanda), sigue', () => {
-    expect(decidir(p.porFichero['supabase/migrations/20261009T0180_c03_modelo_plataforma.sql'], p.existe).para).toEqual([])
-  })
-  it('las tres están nombradas para «autorizo» en la cabecera del manifiesto, y solo ellas', () => {
+  it('las dos están nombradas para «autorizo» en la cabecera del manifiesto, y solo ellas', () => {
     const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
     expect(nombradas).toEqual(paran().map((f) => f.replace('supabase/migrations/', '')))
   })
-  it('su vuelta atrás es la de las nueve, al revés', () => {
+  it('su vuelta atrás es la de las cuatro del C04, al revés (la 0130 del C00 no tiene)', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
-    expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+    expect(existsSync('supabase/vuelta-atras/20261003T0130_c00_valores_de_serie.down.sql')).toBe(false)
+    expect(atras).toEqual([...viva].filter((f) => f.includes('_c04_')).reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
   })
 })
 

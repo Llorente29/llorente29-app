@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PLANES } from './lib/planContable.mjs'
 import { informePlan, revisarEmpresas, revisarImportaciones, revisarSerieEnBase, revisarSerieEnTexto } from './lib/agentePlan.mjs'
+import { anonimizar, informeAnonimo } from './lib/anonimo.mjs'
 
 const [, , rutaBd, rutaInforme = 'informe-plan-contable.md', donde = 'staging-conta'] = process.argv
 if (!rutaBd) { console.error('Uso: node scripts/conta/agente-plan-contable.mjs <volcado.json> [informe.md] [dónde]'); process.exit(2) }
@@ -31,7 +32,10 @@ const textos = Object.fromEntries(Object.entries(PLANES).map(([plan, p]) => {
 const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 
 const hallazgos = [...revisarSerieEnTexto(textos, correcciones), ...revisarSerieEnBase(bd.pgc_account ?? [], serie), ...revisarEmpresas(bd, serie), ...revisarImportaciones(bd)]
-const texto = informePlan(hallazgos, { donde, hoy, filas: (bd.pgc_account ?? []).length, resumen: serie.resumen })
+// En producción (CONTA_ANONIMO=1, lo pone su workflow): sin nombres ni conceptos.
+const texto = process.env.CONTA_ANONIMO === '1'
+  ? informeAnonimo('Agente «Plan contable»', anonimizar('plan contable', hallazgos), { donde, hoy, mirado: `Filas leídas de pgc_account: ${(bd.pgc_account ?? []).length}.` })
+  : informePlan(hallazgos, { donde, hoy, filas: (bd.pgc_account ?? []).length, resumen: serie.resumen })
 writeFileSync(rutaInforme, texto)
 console.log(texto)
 process.exitCode = hallazgos.some((h) => h.nivel === 'rojo') ? 1 : 0

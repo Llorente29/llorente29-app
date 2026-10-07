@@ -174,6 +174,15 @@ describe('extracto (semilla: los apuntes llegan con el C04)', () => {
     const s = saldosPorMes([], { inicio: '2026-07-01', fin: '2027-06-30' })
     expect(s.meses.map((m) => m.mes)).toEqual(['2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06'])
   })
+  it('C04 · el Mayor pide el saldo deudor: el mismo extracto con el signo al revés', () => {
+    const del = A.filter((a) => a.fecha.startsWith('2026'))
+    const acreedor = extracto(del, 100).map((a) => a.saldo)
+    const deudor = extracto(del, -100, 'deudora').map((a) => a.saldo)
+    expect(deudor).toEqual(acreedor.map((s) => -s))
+    const s = saldosPorMes(A, { inicio: '2026-01-01', fin: '2026-12-31' }, 0, 'deudora')
+    expect(s).toMatchObject({ apertura: -100, debe: 605.5, haber: 1815.5, cierre: -1310 })
+    expect(s.meses[1]).toEqual({ mes: '2026-02', debe: 605.5, haber: 0, saldo: 605.5, acumulado: -100 })
+  })
   it('el saldo dice de qué lado está', () => {
     expect(textoSaldo(1283.15)).toEqual({ importe: '1.283,15 €', lado: 'a tu cargo' })
     expect(textoSaldo(-20)).toEqual({ importe: '20 €', lado: 'a su cargo' })

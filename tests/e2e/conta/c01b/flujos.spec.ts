@@ -64,6 +64,10 @@ test.describe('cuenta A', () => {
         // El CP trae la provincia y la población de la tabla de códigos postales.
         await expect(page.locator('#campo-fiscalProvince')).toHaveValue('Madrid')
         await expect(page.locator('#campo-fiscalCity')).not.toHaveValue('')
+        // Espera a su «Guardado» antes del campo siguiente, como la razón social:
+        // si no, los dos guardados van a la vez y el del CP, si acaba después,
+        // tapa el «Guardado: régimen de IVA.» (e2e 130; la ficha guarda bien los dos).
+        await expect(page.getByText('Guardado: código postal.')).toBeVisible()
         await page.locator('#campo-vatRegime').selectOption('general')
         await expect(page.getByText('Guardado: régimen de IVA.')).toBeVisible()
       }

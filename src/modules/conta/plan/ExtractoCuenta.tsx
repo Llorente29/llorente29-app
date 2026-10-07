@@ -6,17 +6,18 @@
 // (tarjeta «Saldo y movimientos» › Ver extracto) y el Mayor de cualquier cuenta
 // del plan (respuesta 5 del C02): la misma pieza en los dos sitios.
 //
-// Los apuntes llegan con el C04: hasta entonces sale el estado vacío, que lo
-// dice claro, sin ceros que parezcan datos.
+// Los apuntes los pone el libro diario (C04). Sin apuntes sale el estado vacío,
+// que lo dice claro, sin ceros que parezcan datos. El Mayor pide el saldo
+// deudor (debe − haber); la ficha del proveedor, el acreedor.
 
 import { useState, type ReactNode } from 'react'
 import { Tarjeta, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { extracto, saldosPorMes, type Apunte } from '@/modules/conta/lib/cuentasProveedor'
+import { extracto, saldosPorMes, type Apunte, type Naturaleza } from '@/modules/conta/lib/cuentasProveedor'
 
 export interface EjercicioExtracto { code: string; inicio: string; fin: string }
 
-export function ExtractoCuenta({ ejercicios, apuntes, vacio, documento, accion, titulo = 'Extracto' }: {
+export function ExtractoCuenta({ ejercicios, apuntes, vacio, documento, accion, titulo = 'Extracto', naturaleza = 'acreedora' }: {
   ejercicios: readonly EjercicioExtracto[]
   apuntes: readonly Apunte[]
   /** Qué se dice mientras no hay apuntes; recibe el ejercicio que se está mirando. */
@@ -25,6 +26,8 @@ export function ExtractoCuenta({ ejercicios, apuntes, vacio, documento, accion, 
   documento?: (a: Apunte) => ReactNode
   accion?: ReactNode
   titulo?: string
+  /** Signo del saldo: acreedora (haber − debe, la del proveedor) o deudora (debe − haber, la del Mayor). */
+  naturaleza?: Naturaleza
 }) {
   const hoy = hoyEnMadrid()
   const [vista, setVista] = useState<'apuntes' | 'meses'>('apuntes')
@@ -34,9 +37,9 @@ export function ExtractoCuenta({ ejercicios, apuntes, vacio, documento, accion, 
   const rango = ej ?? { code: hoy.slice(0, 4), inicio: `${hoy.slice(0, 4)}-01-01`, fin: `${hoy.slice(0, 4)}-12-31` }
   const delEjercicio = apuntes.filter((a) => a.fecha >= rango.inicio && a.fecha <= rango.fin)
   const anteriores = apuntes.filter((a) => a.fecha < rango.inicio)
-  const apertura = extracto(anteriores).at(-1)?.saldo ?? 0
-  const filas = extracto(delEjercicio, apertura)
-  const meses = saldosPorMes(apuntes, rango)
+  const apertura = extracto(anteriores, 0, naturaleza).at(-1)?.saldo ?? 0
+  const filas = extracto(delEjercicio, apertura, naturaleza)
+  const meses = saldosPorMes(apuntes, rango, 0, naturaleza)
   const v = vacio(rango.code)
   return (
     <Tarjeta titulo={titulo} accion={accion}>
