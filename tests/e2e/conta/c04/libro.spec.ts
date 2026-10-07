@@ -18,12 +18,17 @@ import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c04'
+const BARRA_FOLVY_MOVIL = 'nav[aria-label="Navegacion principal"]'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
-async function capturar(page: Page, nombre: string) {
+// `incrustado`: la pantalla es de Contabilidad pero vive dentro de otra (la
+// ficha del proveedor, en Cocina): su raíz es .cx-incrustado y en móvil la
+// tapa la barra de Folvy, no la de Contabilidad (como en c02/ficha.spec.ts).
+async function capturar(page: Page, nombre: string, incrustado = false) {
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
-  expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+  const flotantes = incrustado && lado(page) === 'movil' ? [BARRA_FOLVY_MOVIL] : FLOTANTES_CONTA
+  expect(await loQueTapan(page, incrustado ? '.cx-incrustado' : '.cx-principal', flotantes)).toEqual([])
 }
 
 function vigilar(page: Page) {
@@ -100,7 +105,8 @@ test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable',
   await page.goto('/conta/libros/diario')
   await abrirAsiento(page, 'Nóminas de septiembre · Norte Centro')
   await expect(page.getByRole('button', { name: 'Validar asiento' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Cambiar' })).toHaveCount(0)
+  // exact: en ordenador el menú lleva «Cambiar de empresa» (e2e 127).
+  await expect(page.getByRole('button', { name: 'Cambiar', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: /Detalle contable/ }).click()
   await expect(page.getByText('Nóminas · código 9')).toBeVisible()
   await page.getByRole('button', { name: 'Comprobar la cadena' }).click()
@@ -168,7 +174,7 @@ test('A · el extracto del proveedor lee del libro y lleva a su asiento', async 
   await page.getByRole('button', { name: 'Ver extracto' }).click()
   const enlace = page.getByRole('link', { name: 'Ver el asiento F-2026-0915' }).first()
   await expect(enlace).toBeVisible()
-  await capturar(page, 'extracto-proveedor')
+  await capturar(page, 'extracto-proveedor', true)
   await enlace.click()
   await expect(page.getByRole('heading', { level: 1, name: 'Factura Hermanos Ruiz · F-2026-0915' })).toBeVisible()
 })
