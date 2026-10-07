@@ -116,6 +116,13 @@ export function revisar(bd, ref, hoy) {
       if (!fb) { hallazgo(tabla, k, 'falta', `${def.nombre} · ${k}: está en la fuente oficial y no en la base.`); continue }
       for (const [campo, valor] of Object.entries(esperado(tabla, fr))) {
         if (!(campo in fb)) continue
+        // `verified_at` es CUÁNDO se comprobó la fila, no un valor de la norma.
+        // Regenerar la referencia con fuentes nuevas la adelanta y la base se
+        // queda con la suya (las migraciones de serie son `on conflict do
+        // nothing`): eso no es una diferencia si lo demás coincide. Sí lo es
+        // una base que dice haberse comprobado DESPUÉS que su fuente, o que
+        // no dice cuándo (staging 07/10: 22 filas, todas solo por la fecha).
+        if (campo === 'verified_at' && !vacio(fb[campo]) && !vacio(valor) && String(fb[campo]) <= String(valor)) continue
         if (!mismo(fb[campo], valor)) {
           hallazgo(tabla, k, 'distinto', `${def.nombre} · ${k} · ${campo}: la base dice ${texto(fb[campo])} y la fuente, ${texto(valor)}.`)
         }
