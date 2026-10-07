@@ -27,7 +27,7 @@ import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
 import { CampoTexto, Resultado } from '@/modules/conta/empresa/campos'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
-import { arbolPlan, duenoDeCuenta, ejemplosDeIva, hijasDe, resumenNodo, type NodoPlan } from '@/modules/conta/lib/planArbol'
+import { arbolPlan, cuentasDentro, duenoDeCuenta, ejemplosDeIva, hijasDe, resumenNodo, type NodoPlan } from '@/modules/conta/lib/planArbol'
 import { ocultarCuenta, renombrarCuenta, type DatosPlan } from '@/modules/conta/services/planService'
 import { ExtractoCuenta } from '@/modules/conta/plan/ExtractoCuenta'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
@@ -160,15 +160,17 @@ function Mayor({ n, p }: { n: NodoPlan; p: DatosPlan }) {
 
 // ── Sumas y saldos de un nivel ──────────────────────────────────────────────
 
-function SumasYSaldos({ n, hijas }: { n: NodoPlan; hijas: NodoPlan[] }) {
+function SumasYSaldos({ n, hijas, dentro }: { n: NodoPlan; hijas: NodoPlan[]; dentro: (x: NodoPlan) => Set<string> }) {
   const { datos, hoy, movil, quien } = useAjustes()
   const ej = ejercicioActual(datos.datos?.ejercicios ?? [], hoy)
   const desde = ej?.startsOn ?? `${hoy.slice(0, 4)}-01-01`
   const hasta = ej?.endsOn ?? `${hoy.slice(0, 4)}-12-31`
   const libro = useDelLibro<SumaCuenta[]>(() => sumasYSaldos(quien.companyId, desde, hasta), `${quien.companyId}:${desde}:${hasta}`)
-  // Cada hija suma las cuentas de apunte que cuelgan de ella (por su número).
+  // Cada hija suma su cuenta y todas las que cuelgan de ella (las subcuentas
+  // de la 40000000 van en la fila de la 40000000).
   const deHija = (x: NodoPlan) => {
-    const filas = (libro.datos ?? []).filter((s) => (x.cuentaId ? s.companyAccountId === x.cuentaId : s.code.startsWith(x.numero)))
+    const ids = dentro(x)
+    const filas = (libro.datos ?? []).filter((s) => ids.has(s.companyAccountId))
     return filas.length ? { debe: filas.reduce((t, s) => t + s.debe, 0), haber: filas.reduce((t, s) => t + s.haber, 0) } : null
   }
   const conApuntes = hijas.some((x) => deHija(x))
@@ -228,7 +230,7 @@ function Contenido() {
       </>
     )
   }
-  return <>{cabezaMovil}{n.cuentaId ? <Mayor n={n} p={p} /> : <SumasYSaldos n={n} hijas={hijasDe(arbol, n.clave)} />}</>
+  return <>{cabezaMovil}{n.cuentaId ? <Mayor n={n} p={p} /> : <SumasYSaldos n={n} hijas={hijasDe(arbol, n.clave)} dentro={(x) => cuentasDentro(arbol, x.clave)} />}</>
 }
 
 export default function MayorPage() {

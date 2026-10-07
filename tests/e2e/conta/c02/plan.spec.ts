@@ -173,8 +173,12 @@ test('cuenta A: pinchar en una cuenta lleva a su Mayor; en una con hijas, abre e
   await expect(page).toHaveURL(/\/conta\/plan\/400$/)
   const sumas = page.getByRole('region', { name: 'Sumas y saldos' })
   await expect(sumas.getByRole('heading', { name: '400 · Proveedores' })).toBeVisible()
+  // Primero la cifra (que ya ha leído el libro), luego que no diga «vacío»:
+  // al revés, el toHaveCount(0) pasaba mientras aún decía «Leyendo las sumas…»
+  // y tapaba que la 40000000 no sumaba sus subcuentas (e2e 128).
+  const fila400 = sumas.getByRole('table', { name: 'Sumas y saldos de 400' }).getByRole('row').filter({ has: page.getByRole('link', { name: /^40000000 · / }) })
+  await expect(fila400).toContainText('1.283,15')
   await expect(sumas.getByText('Aún no hay apuntes en este nivel.')).toHaveCount(0)
-  await expect(sumas.getByRole('table', { name: 'Sumas y saldos de 400' }).getByRole('link', { name: /^40000000 · / })).toBeVisible()
 
   // Una subcuenta tuya: Cambiar nombre (y se deja como estaba).
   await page.goto('/conta/ajustes/plan')
