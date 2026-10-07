@@ -7,7 +7,7 @@ M4 (C01b), como en los encargos anteriores.
 Capturas de staging-conta sacadas por la e2e `tests/e2e/conta/c04/libro.spec.ts`
 (ordenador 1440 × 900 y móvil 390 × 844, página entera) con la semilla
 INVENTADA `supabase/seeds/conta/seed_c04_staging.sql`, en la ejecución verde
-de la respuesta 3 (la 134, sobre `a99ef15`, las subió en `793b947`; la 133 murió
+de la respuesta 3 (la 135, sobre `a1d3e59`, las subió en `a3ce044`; la 133 murió
 instalando psql antes de la primera prueba).
 Staging se rehízo antes con `20261012_c04_rehacer_libro.sql` (aplicar 82): el
 libro de A y B se borra y la semilla lo vuelve a hacer con las funciones de la
@@ -88,7 +88,12 @@ porque la página estaba desplazada al hacerla.
    ni el «Ver» de la cabecera, y lleva una línea de la asesora que aquí no
    existe todavía.
 
-**Móvil** (`diario-movil.png`): una columna. Las cifras de dos en dos. La tabla
+**Móvil** (`diario-movil.png`): una columna. **Lo que no está bien todavía:**
+con dos chips (local y marca cedida) la línea de apoyo no cabe en 390 px y el
+segundo chip se corta en seco («Brasa |»), sin «…». El libro lo dice entero en
+el asiento, pero el chip cortado no debería verse; es un retoque de CSS pendiente
+de que Julio diga si prefiere que salte a dos líneas (fila más alta) o que el
+chip se abrevie. Las cifras de dos en dos. La tabla
 se convierte en filas con fecha, concepto, chips, importe y estado; la fila
 lleva al asiento. Debajo, «Lo que he hecho yo» y el cierre. Los filtros pasan a
 varias líneas.
