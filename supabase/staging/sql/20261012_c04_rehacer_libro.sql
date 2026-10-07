@@ -29,10 +29,10 @@ update public.brand set name = 'Brasa Prestada', slug = 'r02-brasa-prestada'
 update public.goods_receipt_line set product_name = 'Carbón de encina (saco)'
  where account_id = 'c01a0000-0000-4000-8000-00000000000a' and id in ('c0300000-0000-4000-8000-000000000311', 'c0300000-0000-4000-8000-000000000313');
 
-alter table public.journal_entry disable trigger user;
-alter table public.journal_line disable trigger user;
-
--- Lo que apunta a un asiento se suelta (la fila se queda).
+-- Un anulado y su contraasiento se apuntan el uno al otro (on delete restrict)
+-- y el CHECK journal_entry_anulado_completo no deja soltarlos: se borra con
+-- los disparadores (también los de las claves ajenas) apagados SOLO en esta
+-- transacción, y lo que la clave ajena soltaría sola se suelta a mano antes.
 update public.supplier_invoice set journal_entry_id = null, payment_entry_id = null
  where account_id in ('c01a0000-0000-4000-8000-00000000000a', 'c01b0000-0000-4000-8000-00000000000b')
    and (journal_entry_id is not null or payment_entry_id is not null);
@@ -40,18 +40,16 @@ update public.channel_settlement set journal_entry_id = null
  where account_id in ('c01a0000-0000-4000-8000-00000000000a', 'c01b0000-0000-4000-8000-00000000000b') and journal_entry_id is not null;
 update public.licensed_settlement set journal_entry_id = null
  where account_id in ('c01a0000-0000-4000-8000-00000000000a', 'c01b0000-0000-4000-8000-00000000000b') and journal_entry_id is not null;
-
--- El libro de las dos empresas de prueba.
+update public.payroll_summary set entry_id = null
+ where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6') and entry_id is not null;
 delete from public.journal_correction where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
 delete from public.journal_dismissal  where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
 delete from public.sales_day_summary  where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
-update public.journal_entry set reverses_entry_id = null, voided_by_entry_id = null
- where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
+
+set local session_replication_role = replica;
 delete from public.journal_line  where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
 delete from public.journal_entry where company_id in ('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6');
-
-alter table public.journal_entry enable trigger user;
-alter table public.journal_line enable trigger user;
+set local session_replication_role = origin;
 
 do $$
 declare v int;
