@@ -1,16 +1,1 @@
-# Tanda de staging-conta. Una ruta por línea, en orden; cada fichero en su
-# propia transacción. Para la siguiente tanda se reescribe entero.
-#
-# 07/10/2026 · C04 · Tarea 3 (respuesta 1 de Julio): las 0100–0130 cambian
-# antes de llegar a producción (series por palabra, sin la 0; corte como dato
-# con conta_fijar_corte; tax_documents y medio céntimo por factura; una
-# propuesta por documento; correcciones y descartes; proponer, descartar y lo
-# que leen los generadores). En staging no hay ningún asiento: se quitan con
-# su vuelta atrás, la prueba hace su foto de antes y las vuelve a poner, y se
-# aplican de nuevo.
-supabase/staging/sql/20261010_c04_quitar_version_anterior.sql
-supabase/staging/sql/20261010_c04_prueba_libro.sql
-supabase/migrations/20261010T0100_c04_libro.sql
-supabase/migrations/20261010T0110_c04_enlaces.sql
-supabase/migrations/20261010T0120_c04_funciones.sql
-supabase/migrations/20261010T0130_c04_lectura.sql
+supabase/seeds/conta/seed_c04_staging.sql
