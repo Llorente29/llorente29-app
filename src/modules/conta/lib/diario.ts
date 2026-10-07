@@ -19,7 +19,10 @@ export interface ApunteDiario {
   posicion: number
   cuentaId: string
   cuenta: string
+  /** El nombre de uso (respuesta 3): el de la subcuenta, o su «qué se apunta aquí». */
   nombreCuenta: string
+  /** El título oficial del PGC: solo en el Mayor y en «Detalle contable». */
+  tituloOficial: string | null
   debe: number
   haber: number
   concepto: string | null
@@ -143,12 +146,26 @@ export function estadoDe(a: AsientoDiario): { texto: string; tono: TonoEstado } 
   return { texto: 'Validado', tono: 'azul' }
 }
 
+/**
+ * Cómo se llama una cuenta en el libro y en el asiento (respuesta 3): una
+ * subcuenta de la empresa, por su nombre («Comisiones de plataformas»); una
+ * hoja de serie, por su «qué se apunta aquí» del C02 («Nóminas, en bruto»).
+ * El título del BOE va al Mayor y a «Detalle contable». Sin nada de eso, el
+ * título (nunca un literal de reserva: regla 30).
+ */
+export function nombreDeUso(c: { kind: string | null; name: string; plainName: string | null }): string {
+  if (c.kind === 'own' || !c.plainName?.trim()) return c.name
+  return c.plainName.trim().replace(/\.$/, '')
+}
+
 /** El importe del asiento: lo que suma su Debe. */
 export const importe = (a: Pick<AsientoDiario, 'apuntes'>): number => red2(a.apuntes.reduce((s, l) => s + l.debe, 0))
 
 /** El número que se enseña: serie por su palabra y número (el código, solo en Detalle contable). */
 export function numeroVisible(a: Pick<AsientoDiario, 'numero' | 'serie'>): string {
-  return a.numero === null ? '—' : a.numero.toLocaleString('es-ES')
+  // Cada serie numera aparte: «1» a secas sale repetido y no se puede seguir (respuesta 3).
+  // Con punto de miles también en cuatro cifras («1.287», como N11): es-ES no lo pone solo.
+  return a.numero === null ? '—' : `${NOMBRE_SERIE[a.serie]} ${String(a.numero).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
 }
 export const nombreSerie = (s: Serie): string => NOMBRE_SERIE[s]
 

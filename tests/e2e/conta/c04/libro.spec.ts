@@ -64,7 +64,22 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   await expect(ventas.filter({ hasText: 'Hecho por Folvy' })).toHaveCount(1)
   await expect(page.getByRole('button', { name: /Publicidad en la plataforma · octubre/ }).getByText('Anulado')).toBeVisible()
   // La marca cedida, dicha.
-  await expect(page.getByRole('button', { name: /Liquidación Plataforma Norte/ }).getByText('Milanesa Cedida · cedida')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Liquidación Plataforma Norte/ }).getByText('Brasa Prestada · cedida')).toBeVisible()
+  // Respuesta 3 · 1: el número con su serie, y el contraasiento la dice por su nombre.
+  const contra = page.getByRole('button', { name: /^.*Anula General nº 2: Estaba repetido/ })
+  await expect(contra).toBeVisible()
+  if (lado(page) === 'ordenador') {
+    await expect(contra.locator('.cxd-num')).toHaveText('General 3')
+    await expect(page.getByRole('button', { name: /Nóminas de septiembre/ }).locator('.cxd-num')).toHaveText('Nóminas 1')
+  } else {
+    await expect(contra.locator('.cxd-num-movil')).toHaveText('General 3')
+  }
+  await expect(page.getByText(/Anula el \d+\/\d+/)).toHaveCount(0)
+  // Respuesta 3 · 2: filas bajas (unos 70–80 px), el concepto entero en dos líneas.
+  for (const f of await page.locator('.cxd-fila:not(.cxd-fila-cabeza)').all()) {
+    const alto = (await f.boundingBox())!.height
+    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(lado(page) === 'ordenador' ? 90 : 110)
+  }
   // Lo que he hecho yo, con Deshacer en lo que validó Folvy.
   const ia = page.getByRole('region', { name: 'Lo que he hecho yo' })
   await expect(ia.getByText(/Asenté «Ventas del día · Norte Centro»/)).toBeVisible()
@@ -94,12 +109,23 @@ test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable',
   await expect(page.getByText('Propuesto por Folvy · Seguro')).toBeVisible()
   await expect(page.getByText('Serie Banco')).toBeVisible()
   const porque = page.getByRole('region', { name: 'Por qué lo propongo así' })
-  await expect(porque.getByText('Milanesa Cedida va al socio, no a tus ventas')).toBeVisible()
+  await expect(porque.getByText('Brasa Prestada va al socio, no a tus ventas')).toBeVisible()
   await expect(porque.getByText(/NRV 16\.ª/)).toBeVisible()
   await expect(page.getByText('Cuadra', { exact: true })).toBeVisible()
   await expect(page.getByText('✓ 0,00 €')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Validar asiento' })).toBeEnabled()
+  // Respuesta 3 · 3 y 4: cada cuenta por su nombre de uso; lo de la marca cedida,
+  // a la cuenta de liquidación del socio y no a su 400.
+  const apuntes = page.getByRole('region', { name: 'Apuntes' })
+  await expect(apuntes.getByText('Comisiones de plataformas', { exact: true })).toBeVisible()
+  await expect(apuntes.getByText('Liquidación pendiente con Marcas del Sur', { exact: true })).toBeVisible()
+  await expect(apuntes.getByText('Servicios de profesionales independientes')).toHaveCount(0)
+  await expect(apuntes.getByText('Proveedores · Marcas del Sur')).toHaveCount(0)
   await capturar(page, 'asiento')
+  // El título oficial, en Detalle contable.
+  await page.getByRole('button', { name: /Detalle contable/ }).click()
+  await expect(page.getByText('Servicios de profesionales independientes')).toBeVisible()
+  await expect(page.getByText('Acreedores por prestaciones de servicios (euros)')).toBeVisible()
 
   // Un validado: su número por serie y su huella, en Detalle contable.
   await page.goto('/conta/libros/diario')
@@ -126,16 +152,18 @@ test('A · cambiar una cuenta de una propuesta: lo dice y lo aprende; y se deja 
   vigilar(page)
   await page.goto('/conta/libros/diario?ver=revisar')
   await abrirAsiento(page, 'Alquiler Norte Mercado · octubre')
-  const fila = page.locator('.cxd-linea-envoltura', { hasText: 'Arrendamientos y cánones' })
+  // Respuesta 3: la línea se llama por su nombre de uso (el «qué se apunta aquí» de la 621), no por su título del BOE.
+  const fila = page.locator('.cxd-linea-envoltura', { hasText: 'El alquiler del local' })
   await fila.getByRole('button', { name: 'Cambiar' }).click()
   await page.getByLabel('Buscar cuenta por nombre o código').fill('otros servicios')
-  await page.getByRole('button', { name: /62900000 Otros servicios/ }).click()
-  await expect(page.getByRole('status').getByText(/Cambiada la 62100000 por la 62900000 \(Otros servicios\)\. La próxima del mismo origen la propondré así\./)).toBeVisible()
+  // Se busca también por el título oficial («otros servicios»), y sale con su nombre de uso.
+  await page.getByRole('button', { name: /62900000 Servicios que no van en otra/ }).click()
+  await expect(page.getByRole('status').getByText(/Cambiada la 62100000 por la 62900000 \(Servicios que no van en otra.*\)\. La próxima del mismo origen la propondré así\./)).toBeVisible()
   // Y vuelta a la suya (también queda aprendido: la última manda).
-  const otra = page.locator('.cxd-linea-envoltura', { hasText: 'Otros servicios' })
+  const otra = page.locator('.cxd-linea-envoltura', { hasText: 'Servicios que no van en otra' })
   await otra.getByRole('button', { name: 'Cambiar' }).click()
   await page.getByLabel('Buscar cuenta por nombre o código').fill('62100000')
-  await page.getByRole('button', { name: /62100000 Arrendamientos/ }).click()
+  await page.getByRole('button', { name: /62100000 El alquiler del local/ }).click()
   await expect(page.getByRole('status').getByText(/Cambiada la 62900000 por la 62100000/)).toBeVisible()
 })
 

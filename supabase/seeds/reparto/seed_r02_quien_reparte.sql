@@ -12,7 +12,7 @@
 --                       (3 seguidos: la sugerencia de la IA)
 --   · Smash de Prueba   propia, interruptor APAGADO
 --   · Lovers de Prueba  propia, interruptor APAGADO
---   · Milanesa Cedida   cedida (entra por Last)
+--   · Brasa Prestada   cedida (entra por Last)
 --   Herencia: las seis filas de Foodint (propia → own_delivery en Glovo, Uber y
 --   Just Eat; cedida → platform_delivery).
 --   Dos locales: Norte Centro (ya existe) y Norte Mercado (para «por local»).
@@ -51,7 +51,7 @@ insert into public.brand (id, account_id, name, slug, ownership_type, own_delive
   ('e0200000-0000-4000-8000-00000000a0b2', 'c01a0000-0000-4000-8000-00000000000a', 'Pita del Sur',     'r02-pita-del-sur',    'own',      null),
   ('e0200000-0000-4000-8000-00000000a0b3', 'c01a0000-0000-4000-8000-00000000000a', 'Smash de Prueba',  'r02-smash-de-prueba', 'own',      false),
   ('e0200000-0000-4000-8000-00000000a0b4', 'c01a0000-0000-4000-8000-00000000000a', 'Lovers de Prueba', 'r02-lovers-de-prueba','own',      false),
-  ('e0200000-0000-4000-8000-00000000a0b5', 'c01a0000-0000-4000-8000-00000000000a', 'Milanesa Cedida',  'r02-milanesa-cedida', 'licensed', null),
+  ('e0200000-0000-4000-8000-00000000a0b5', 'c01a0000-0000-4000-8000-00000000000a', 'Brasa Prestada',  'r02-brasa-prestada', 'licensed', null),
   ('e0200000-0000-4000-8000-00000000b0b1', 'c01b0000-0000-4000-8000-00000000000b', 'Kebab de Prueba',  'r02-kebab-de-prueba', 'own',      null),
   ('e0200000-0000-4000-8000-00000000b0b2', 'c01b0000-0000-4000-8000-00000000000b', 'Cedida Sur',       'r02-cedida-sur',      'licensed', null)
 on conflict (id) do nothing;
@@ -104,7 +104,7 @@ from (values
   ('e0200000-0000-4000-8000-0000000051a5', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
    'e0200000-0000-4000-8000-00000000a0b3', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', 75, 14.00, 'platform_delivery', null,
    'Glovo', '705', '{"service_type":"delivery","channel":"Glovo","status":"completed"}'),
-  -- Milanesa Cedida · Glovo · por Last
+  -- Brasa Prestada · Glovo · por Last
   ('e0200000-0000-4000-8000-0000000051a6', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
    'e0200000-0000-4000-8000-00000000a0b5', 'e0200000-0000-4000-8000-00000000a0c1', 'lastapp', 45, 16.30, 'platform_delivery', null,
    'Glovo', '101700000001', '{"pickupType":"delivery","source":"glovo"}'),

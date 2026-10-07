@@ -154,9 +154,9 @@ describe('las cuatro cifras de la plataforma (N9)', () => {
 
 // La semilla de staging (y la maqueta N10): dos locales, octubre.
 const norteCentro: CalculoLocal = { localId: 'l1', local: 'Norte Centro', compras: 3800, aportaciones: 700, faltan: [],
-  marcas: [{ marca: 'Milanesa Cedida', pct: 9, base: 6000 }, { marca: 'Wok Cedido', pct: 9, base: 5000 }], importeBase: 4090 }
+  marcas: [{ marca: 'Brasa Prestada', pct: 9, base: 6000 }, { marca: 'Wok Cedido', pct: 9, base: 5000 }], importeBase: 4090 }
 const norteMercado: CalculoLocal = { localId: 'l2', local: 'Norte Mercado', compras: 2620, aportaciones: 480, faltan: [],
-  marcas: [{ marca: 'Milanesa Cedida', pct: 9, base: 4300 }, { marca: 'Wok Cedido', pct: 9, base: 3000 }], importeBase: 2797 }
+  marcas: [{ marca: 'Brasa Prestada', pct: 9, base: 4300 }, { marca: 'Wok Cedido', pct: 9, base: 3000 }], importeBase: 2797 }
 
 describe('regla 4 · la liquidación del socio, por local y por periodo', () => {
   it('un local: compras − aportaciones + comisión, con sus tres líneas', () => {

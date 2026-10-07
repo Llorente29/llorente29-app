@@ -17,8 +17,11 @@
 --      (validado solo), y el 05/10 «Para revisar» (Probable: base calculada,
 --      regla 13). Un primer resumen de Norte Mercado sin pedidos, anulado.
 --   2. La liquidación de Plataforma Norte del 16–30/09 (cobrada el 05/10):
---      comisión con IVA 21 %, cobro y lo de Milanesa Cedida al socio
---      (PGC de Pymes, NRV 16.ª). Para revisar, Seguro.
+--      comisión con IVA 21 % a «Comisiones de plataformas» (62300001), cobro y
+--      lo de Brasa Prestada a la cuenta «Liquidación pendiente con Marcas del
+--      Sur» (bajo la 410), no a su 400 (PGC de Pymes, NRV 16.ª). Para revisar,
+--      Seguro. (Respuesta 3: la semilla se rehízo el 12/10 con
+--      supabase/staging/sql/20261012_c04_rehacer_libro.sql.)
 --   3. Dos facturas de proveedor: Hermanos Ruiz F-2026-0915 (validada) y el
 --      alquiler de octubre de Locales del Norte con retención del 19 %
 --      (modelo 115), para revisar.
@@ -80,9 +83,32 @@ declare
   r111 uuid := (select id from public.withholding_rate where code = 'profesional');
   burger constant uuid := 'e0200000-0000-4000-8000-00000000a0b1';
   smash  constant uuid := 'e0200000-0000-4000-8000-00000000a0b3';
-  milanesa constant uuid := 'e0200000-0000-4000-8000-00000000a0b5';
+  brasa constant uuid := 'e0200000-0000-4000-8000-00000000a0b5';
   r jsonb; v_id uuid;
+  v_socio uuid := (select party_id from public.party_role where supplier_id = 'c0300000-0000-4000-8000-000000000002');
+  c_comision text; c_liquidacion text;
 begin
+  -- Respuesta 3 · las cuentas como en el plan real: la comisión de la
+  -- plataforma no es «Servicios de profesionales independientes», es
+  -- «Comisiones de plataformas» (su subcuenta de la 623).
+  if not exists (select 1 from public.company_account where company_id = ea and template_code = '623' and kind = 'own' and name = 'Comisiones de plataformas') then
+    perform public.company_account_add(ea, '623', 'Comisiones de plataformas', 'Lo que te cobran las plataformas por cada pedido.', null, null, 'semilla C04', 'manual');
+  end if;
+  if not exists (select 1 from public.company_account where company_id = ea and template_code = '624' and kind = 'own' and name = 'Transporte de reparto') then
+    perform public.company_account_add(ea, '624', 'Transporte de reparto', 'Los repartos que pagas tú: repartidores propios o una empresa de reparto.', null, null, 'semilla C04', 'manual');
+  end if;
+  select code into c_comision from public.company_account where company_id = ea and template_code = '623' and kind = 'own' and name = 'Comisiones de plataformas';
+  -- Respuesta 3 · lo cobrado por cuenta del socio va a SU cuenta de liquidación
+  -- (bajo la 410), no a su 400: como al confirmar su papel en la ficha.
+  if v_socio is null then raise exception 'Semilla C04: falta el socio de la semilla del C03.'; end if;
+  if not exists (select 1 from public.company_account_link where company_id = ea and entity = 'customer' and entity_id = v_socio::text and role = 'liquidacion') then
+    r := public.company_account_add(ea, '4100', 'Liquidación pendiente con Marcas del Sur',
+      'Lo que cobras por cuenta del socio (las ventas de sus marcas): se compensa en su liquidación mensual y el resto se le paga.', null, null, 'semilla C04', 'manual');
+    perform public.company_account_link_set(ea, 'customer', v_socio::text, 'liquidacion', (r->>'id')::uuid, 'semilla C04', 'manual');
+  end if;
+  select a.code into c_liquidacion from public.company_account_link l join public.company_account a on a.id = l.company_account_id
+   where l.company_id = ea and l.entity = 'customer' and l.entity_id = v_socio::text and l.role = 'liquidacion';
+
   -- 1 · Ventas del 05/10, Norte Centro: para revisar (Probable, base calculada).
   r := public.journal_entry_proponer(ea,
     jsonb_build_object('series', 1, 'fecha', '2026-10-05', 'concepto', 'Ventas del día · Norte Centro', 'source_type', 'sales_day',
@@ -90,7 +116,7 @@ begin
       'razones', jsonb_build_array(
         jsonb_build_object('decision', 'Un asiento por día y local', 'porque', 'resumen de 212 facturas simplificadas del día', 'cita', 'RIVA art. 63.4'),
         jsonb_build_object('decision', 'IVA al 10 % en tus ventas', 'porque', 'comida a domicilio = servicio de restauración', 'cita', 'Ley 37/1992 art. 91.Uno.2.2º'),
-        jsonb_build_object('decision', 'Milanesa Cedida no va a tus ventas', 'porque', 'sus 38 pedidos (412,30 €) son del socio: entran en su liquidación', 'cita', 'PGC de Pymes, NRV 16.ª'),
+        jsonb_build_object('decision', 'Brasa Prestada no va a tus ventas', 'porque', 'sus 38 pedidos (412,30 €) son del socio: entran en su liquidación', 'cita', 'PGC de Pymes, NRV 16.ª'),
         jsonb_build_object('decision', 'Base calculada', 'porque', 'los pedidos de tus marcas llegan sin base ni cuota: la calculo y por eso es Probable'))),
     jsonb_build_array(
       jsonb_build_object('cuenta', '43000001', 'debe', 3214.60, 'local_id', l1, 'concepto', 'cobro por Glovo'),
@@ -116,7 +142,7 @@ begin
       'confianza', 'seguro', 'porque', 'los 5 tickets de tus marcas cuadran con lo cobrado, al céntimo.',
       'razones', jsonb_build_array(
         jsonb_build_object('decision', 'Un asiento por día y local', 'porque', 'resumen de 5 facturas simplificadas', 'cita', 'RIVA art. 63.4'),
-        jsonb_build_object('decision', 'Milanesa Cedida no va a tus ventas', 'porque', 'sus 2 pedidos son del socio', 'cita', 'PGC de Pymes, NRV 16.ª'))),
+        jsonb_build_object('decision', 'Brasa Prestada no va a tus ventas', 'porque', 'sus 2 pedidos son del socio', 'cita', 'PGC de Pymes, NRV 16.ª'))),
     jsonb_build_array(
       jsonb_build_object('cuenta', '43000001', 'debe', 98.90, 'local_id', l1),
       jsonb_build_object('cuenta', '70000000', 'haber', 89.91, 'local_id', l1, 'marca_id', burger),
@@ -136,16 +162,16 @@ begin
       'source_id', 'c0300000-0000-4000-8000-000000000103', 'documento', 'SEED-C03-0916', 'confianza', 'seguro',
       'porque', 'cuadra con el PDF: 9.870 € vendidos, 2.072,60 € de comisión con IVA y 7.797,40 € cobrados.',
       'razones', jsonb_build_array(
-        jsonb_build_object('decision', 'Separé las ventas por marca', 'porque', 'de los 9.870 €, 7.535,52 € son de tus marcas y 2.334,48 € de Milanesa Cedida'),
-        jsonb_build_object('decision', 'Milanesa Cedida va al socio, no a tus ventas', 'porque', 'lo cobrado de una marca cedida es suyo: entra en su liquidación de octubre', 'cita', 'PGC de Pymes, NRV 16.ª'),
+        jsonb_build_object('decision', 'Separé las ventas por marca', 'porque', 'de los 9.870 €, 7.535,52 € son de tus marcas y 2.334,48 € de Brasa Prestada'),
+        jsonb_build_object('decision', 'Brasa Prestada va al socio, no a tus ventas', 'porque', 'lo cobrado de una marca cedida es suyo: queda en su cuenta de liquidación hasta la de octubre', 'cita', 'PGC de Pymes, NRV 16.ª'),
         jsonb_build_object('decision', 'Comisión con IVA 21 % deducible', 'porque', 'la plataforma te factura la comisión como servicio', 'cita', 'Ley 37/1992 art. 90'))),
     jsonb_build_array(
-      jsonb_build_object('cuenta', '62300000', 'debe', 1712.89, 'local_id', l1, 'concepto', 'comisión 21 % sobre ventas'),
+      jsonb_build_object('cuenta', c_comision, 'debe', 1712.89, 'local_id', l1, 'concepto', 'comisión 21 % sobre ventas'),
       jsonb_build_object('cuenta', '47200021', 'debe', 359.71, 'local_id', l1,
         'iva', jsonb_build_object('tipo_id', iva21, 'base', 1712.89, 'libro', 'received', 'deducible', 'yes')),
       jsonb_build_object('cuenta', '57200001', 'debe', 7797.40, 'local_id', l1, 'concepto', 'cobro del 05/10'),
       jsonb_build_object('cuenta', '43000001', 'haber', 7535.52, 'local_id', l1, 'concepto', 'ventas de tus marcas, ya en los resúmenes del día'),
-      jsonb_build_object('cuenta', '40000005', 'haber', 2334.48, 'local_id', l1, 'marca_id', milanesa, 'concepto', 'ventas de Milanesa Cedida: del socio'))
+      jsonb_build_object('cuenta', c_liquidacion, 'haber', 2334.48, 'local_id', l1, 'marca_id', brasa, 'concepto', 'ventas de Brasa Prestada, cobradas por cuenta del socio'))
     , null, 'Folvy');
 
   -- 3 · Factura F-2026-0915 de Hermanos Ruiz: validada.

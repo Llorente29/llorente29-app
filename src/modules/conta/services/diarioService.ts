@@ -13,11 +13,12 @@
 // supplier_invoice, channel_settlement, licensed_settlement, payroll_summary,
 // conta_resultado_por_local, conta_dias_por_asentar, journal_entry_validar,
 // journal_entry_anular, journal_entry_descartar, journal_cadena_comprobar,
-// conta_cerrar_mes, conta_reabrir_mes.
+// conta_cerrar_mes, conta_reabrir_mes; pgc_account (code, name, plan) y
+// company_account.kind / plain_name / template_code / plan (12/10).
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import type { AsientoDiario, ApunteDiario, CierreMes, EstadoAsiento, FuenteCierre, LineaMano } from '@/modules/conta/lib/diario'
-import { finDeMes, importeMano } from '@/modules/conta/lib/diario'
+import { finDeMes, importeMano, nombreDeUso } from '@/modules/conta/lib/diario'
 import type { Confianza, OrigenAsiento, Razon, Serie } from '@/modules/conta/lib/libro'
 import { apuntarCorreccion } from '@/modules/conta/services/propuestasLibroService'
 
@@ -30,7 +31,7 @@ const CAMPOS_ASIENTO = [
   'id, series, number, entry_date, concept, source_type, source_id, status, confidence, reason, reasons, party_id, document_ref',
   'external_program, external_series, external_number, validated_at, validated_by_name, chain_seq, prev_hash, hash',
   'reverses_entry_id, voided_by_entry_id, voided_at, voided_by_name, void_reason, created_at, created_by_name',
-  'journal_line(position, company_account_id, debit, credit, concept, location_id, is_common, brand_id, document_ref, tax_rate_id, tax_base, vat_book, withholding_base, withholding_model, company_account(code, name), locations(name), brand(name, ownership_type), tax_rate(rate))',
+  'journal_line(position, company_account_id, debit, credit, concept, location_id, is_common, brand_id, document_ref, tax_rate_id, tax_base, vat_book, withholding_base, withholding_model, company_account(code, name, kind, plain_name, template_code, plan), locations(name), brand(name, ownership_type), tax_rate(rate))',
 ].join(', ')
 
 function aApunte(l: Fila): ApunteDiario {
@@ -39,7 +40,9 @@ function aApunte(l: Fila): ApunteDiario {
   const br = (l.brand ?? null) as Fila | null
   const tr = (l.tax_rate ?? null) as Fila | null
   return {
-    posicion: n(l.position), cuentaId: String(l.company_account_id), cuenta: String(ca.code ?? ''), nombreCuenta: String(ca.name ?? ''),
+    posicion: n(l.position), cuentaId: String(l.company_account_id), cuenta: String(ca.code ?? ''),
+    nombreCuenta: nombreDeUso({ kind: s(ca.kind), name: String(ca.name ?? ''), plainName: s(ca.plain_name) }),
+    tituloOficial: ca.kind === 'own' ? null : s(ca.name),
     debe: n(l.debit), haber: n(l.credit), concepto: s(l.concept), localId: s(l.location_id), local: lo ? s(lo.name) : null,
     comun: l.is_common === true, marcaId: s(l.brand_id), marca: br ? s(br.name) : null, cedida: br?.ownership_type === 'licensed',
     documento: s(l.document_ref),
@@ -74,7 +77,20 @@ export async function leerAsientos(accountId: string, companyId: string, desde: 
 export async function leerAsiento(accountId: string, entryId: string): Promise<AsientoDiario | null> {
   const { data, error } = await tabla('journal_entry').select(`${CAMPOS_ASIENTO}, company_id`).eq('account_id', accountId).eq('id', entryId).maybeSingle()
   if (error) throw new Error(mensaje('No se ha podido leer el asiento', error))
-  return data ? aAsiento(data as Fila) : null
+  if (!data) return null
+  const a = aAsiento(data as Fila)
+  // El título oficial de una subcuenta es el de su cuenta del PGC (catálogo global, sin account_id).
+  const lineas = ((data as Fila).journal_line ?? []) as Fila[]
+  const propias = lineas.map((l) => (l.company_account ?? {}) as Fila).filter((c) => c.kind === 'own')
+  const plan = s(propias[0]?.plan)
+  if (plan && propias.length) {
+    const { data: serie } = await tabla('pgc_account').select('code, name').eq('plan', plan).is('valid_to', null)
+      .in('code', [...new Set(propias.map((c) => String(c.template_code)))])
+    const titulo = new Map(((serie ?? []) as Fila[]).map((f) => [String(f.code), String(f.name)]))
+    const plantillaDe = new Map(lineas.map((l) => [String(l.company_account_id), String(((l.company_account ?? {}) as Fila).template_code ?? '')]))
+    for (const ap of a.apuntes) if (ap.tituloOficial === null) ap.tituloOficial = titulo.get(plantillaDe.get(ap.cuentaId) ?? '') ?? null
+  }
+  return a
 }
 
 export interface EjercicioLibro { id: string; code: string; inicio: string; fin: string; abierto: boolean; traidoHasta: string | null }
@@ -95,18 +111,18 @@ export async function leerCierres(accountId: string, companyId: string): Promise
   return ((data ?? []) as Fila[]).map((f) => ({ mes: String(f.month), tipo: (s(f.kind) ?? 'manual') as CierreMes['tipo'], quien: s(f.locked_by_name) }))
 }
 
-export interface CuentaPlan { id: string; code: string; nombre: string }
+export interface CuentaPlan { id: string; code: string; nombre: string; oficial: string }
 
 /** Las cuentas de apunte del plan (las que no tienen hijas), sin las cerradas: lo que se puede elegir. */
 export async function cuentasDeApunte(accountId: string, companyId: string): Promise<CuentaPlan[]> {
-  const { data, error } = await tabla('company_account').select('id, code, name, status')
+  const { data, error } = await tabla('company_account').select('id, code, name, kind, plain_name, status')
     .eq('account_id', accountId).eq('company_id', companyId)
   if (error) throw new Error(mensaje('No se ha podido leer el plan', error))
   const todas = (data ?? []) as Fila[]
   const codigos = todas.map((f) => String(f.code))
   return todas
     .filter((f) => f.status !== 'cerrada' && !codigos.some((c) => c.length > String(f.code).length && c.startsWith(String(f.code))))
-    .map((f) => ({ id: String(f.id), code: String(f.code), nombre: String(f.name) }))
+    .map((f) => ({ id: String(f.id), code: String(f.code), nombre: nombreDeUso({ kind: s(f.kind), name: String(f.name), plainName: s(f.plain_name) }), oficial: String(f.name) }))
     .sort((a, b) => a.code.localeCompare(b.code))
 }
 

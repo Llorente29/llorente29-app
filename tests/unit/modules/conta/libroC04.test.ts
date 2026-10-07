@@ -229,11 +229,26 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
   })
   it('liquidación del socio: compras, comisión 705 con IVA, sus ventas cobradas y la compensación', () => {
     const p = liquidacionSocio({ id: 'ls', fecha: '2026-10-31', socio: 'Socio de marca', terceroId: 's', localId: SUR, compras: [{ base: 1000, tipo: { id: 't10', porcentaje: 10 } }], comision: 300, ventasCobradas: 2000 }, {
-      proveedor: '40000002', cliente: '43000004', compras: '60000000', ingresosServicios: '70500000', iva21: { cuenta: '47700021', tipoId: 't21' }, ivaSoportado: c.ivaSoportado, pendienteSocio: '55200001',
+      proveedor: '40000002', cliente: '43000004', compras: '60000000', ingresosServicios: '70500000', iva21: { cuenta: '47700021', tipoId: 't21' }, ivaSoportado: c.ivaSoportado, pendienteSocio: '41000009',
     }).propuesta!
     expect(cuadre(p.lineas).cuadra).toBe(true)
     expect(p.lineas.find((l) => l.cuenta === '70500000')!.haber).toBe(300)
     expect(p.porque).toContain('le pagas 2.737,00 €')
+    // Respuesta 3, punto 4: lo cobrado por cuenta de él no pasa por su 400.
+    const saldo = (cta: string) => p.lineas.filter((l) => l.cuenta === cta).reduce((t, l) => t + l.haber - l.debe, 0)
+    expect(p.lineas.filter((l) => l.cuenta === '40000002').map((l) => [l.debe, l.haber])).toEqual([[0, 1100]])
+    // La comisión con IVA (363 €) se cobra de lo cobrado por cuenta de él; su 430 queda a cero.
+    expect(Math.round(saldo('43000004') * 100)).toBe(0)
+    expect(p.lineas.filter((l) => l.cuenta === '41000009').map((l) => [l.debe, l.haber])).toEqual([[363, 0]])
+  })
+  it('liquidación del socio sin ventas cobradas: la comisión se compensa con sus compras', () => {
+    const p = liquidacionSocio({ id: 'ls', fecha: '2026-10-31', socio: 'Socio de marca', terceroId: 's', localId: SUR, compras: [{ base: 1000, tipo: { id: 't10', porcentaje: 10 } }], comision: 300, ventasCobradas: 0 }, {
+      proveedor: '40000002', cliente: '43000004', compras: '60000000', ingresosServicios: '70500000', iva21: { cuenta: '47700021', tipoId: 't21' }, ivaSoportado: c.ivaSoportado, pendienteSocio: '41000009',
+    }).propuesta!
+    expect(cuadre(p.lineas).cuadra).toBe(true)
+    expect(p.lineas.some((l) => l.cuenta === '41000009')).toBe(false)
+    expect(p.lineas.filter((l) => l.cuenta === '40000002').map((l) => [l.debe, l.haber])).toEqual([[0, 1100], [363, 0]])
+    expect(p.porque).toContain('le pagas 737,00 €')
   })
 })
 

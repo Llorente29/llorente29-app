@@ -148,6 +148,6 @@ export default function NuevoAsientoPage() {
 function buscarCodigo(texto: string, cuentas: readonly CuentaPlan[]): string {
   const t = texto.trim().toLowerCase()
   if (!t || /^\d+$/.test(t)) return texto
-  const por = cuentas.filter((c) => c.nombre.toLowerCase().includes(t))
+  const por = cuentas.filter((c) => c.nombre.toLowerCase().includes(t) || c.oficial.toLowerCase().includes(t))
   return por.length === 1 ? por[0].code : texto
 }

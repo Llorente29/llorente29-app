@@ -34,7 +34,7 @@ import { useEjemploPregunta } from '@/modules/conta/marco/ejemploPregunta'
 import { cifrasPlataforma, pieTeDebe } from '@/modules/conta/lib/liquidaciones'
 import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
 import { euros, eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
-import { anadirPapel, archivarTercero } from '@/modules/conta/services/tercerosService'
+import { anadirPapel, archivarTercero, asegurarCuentaLiquidacion } from '@/modules/conta/services/tercerosService'
 
 const CADA: Record<string, string> = { weekly: 'Liquida cada semana', fortnightly: 'Liquida cada 15 días', monthly: 'Liquida cada mes' }
 
@@ -144,7 +144,8 @@ const PAPELES_QUE_SE_ANADEN: { papel: 'customer' | 'platform' | 'brand_partner';
 ]
 
 function MenuMas() {
-  const { ficha, recargar, avisar, rutaApartado } = useTercero()
+  const { ficha, recargar, avisar, rutaApartado, companyId } = useTercero()
+  const { userName } = useCuentaConta()
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [archivar, setArchivar] = useState(false)
@@ -164,9 +165,10 @@ function MenuMas() {
               setAbierto(false); setFallo(null)
               try {
                 const r = await anadirPapel(t.id, p.papel)
+                const cuenta = p.papel === 'brand_partner' && companyId ? await asegurarCuentaLiquidacion(companyId, t.id, t.nombre, userName) : null
                 avisar(p.papel === 'platform'
                   ? `${t.nombre} es ahora también plataforma. Dime su canal de venta en «Cobro» para enlazar sus liquidaciones${r.liquidaciones_enlazadas ? ` (ya van ${r.liquidaciones_enlazadas})` : ''}.`
-                  : `${t.nombre} tiene ahora también el papel de ${p.papel === 'customer' ? 'cliente' : 'socio de marca'}: un solo tercero, con todos sus papeles.`)
+                  : `${t.nombre} tiene ahora también el papel de ${p.papel === 'customer' ? 'cliente' : 'socio de marca'}: un solo tercero, con todos sus papeles.${cuenta?.nueva ? ` Lo que cobres por su cuenta irá a la ${cuenta.code} «Liquidación pendiente con ${t.nombre}».` : ''}`)
                 recargar()
                 if (p.papel !== 'customer') navigate(rutaApartado('cobro'))
               } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo añadir.') }

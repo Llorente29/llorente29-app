@@ -4,14 +4,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   cifras, deDondeSale, estadoDe, estadoMes, filtrar, filtrosVisibles, importe, loQueHeHechoYo, mesAnterior, finDeMes,
-  pasosCierre, pastillas, problemasMano, sePuedeCerrar, cuadreMano, type ApunteDiario, type AsientoDiario, type LineaMano,
+  nombreDeUso, numeroVisible, pasosCierre, pastillas, problemasMano, sePuedeCerrar, cuadreMano, type ApunteDiario, type AsientoDiario, type LineaMano,
 } from '@/modules/conta/lib/diario'
 
 const NORTE = 'loc-norte'; const SUR = 'loc-sur'
 
 function apunte(p: Partial<ApunteDiario>): ApunteDiario {
   return {
-    posicion: 1, cuentaId: 'c', cuenta: '57000000', nombreCuenta: 'Caja', debe: 0, haber: 0, concepto: null, localId: NORTE, local: 'Norte',
+    posicion: 1, cuentaId: 'c', cuenta: '57000000', nombreCuenta: 'Caja', tituloOficial: null, debe: 0, haber: 0, concepto: null, localId: NORTE, local: 'Norte',
     comun: false, marcaId: null, marca: null, cedida: false, documento: null, iva: null, retencion: null, ...p,
   }
 }
@@ -143,5 +143,34 @@ describe('asiento a mano', () => {
   })
   it('bien hecho: nada que decir', () => {
     expect(problemasMano('Alquiler', '2026-10-05', [l({ cuenta: '62100000', debe: '1000' }), l({ cuenta: '57200001', haber: '1000', localId: null, comun: true })], plan)).toEqual([])
+  })
+})
+
+// Respuesta 3, punto 1: cada serie numera aparte; «1» a secas sale repetido.
+describe('el número del asiento lleva su serie', () => {
+  it('palabra y número; sin número, la raya', () => {
+    expect(numeroVisible({ serie: 1, numero: 3 })).toBe('Ventas 3')
+    expect(numeroVisible({ serie: 2, numero: 1 })).toBe('Compras 1')
+    expect(numeroVisible({ serie: 4, numero: 2 })).toBe('General 2')
+    expect(numeroVisible({ serie: 9, numero: 1 })).toBe('Nóminas 1')
+    expect(numeroVisible({ serie: 3, numero: 1287 })).toBe('Banco 1.287')
+    expect(numeroVisible({ serie: 1, numero: null })).toBe('—')
+  })
+})
+
+// Respuesta 3, punto 3. Filas REALES del plan de la cuenta A en staging-conta
+// (company_account, 12/10), con su kind, name y plain_name tal cual.
+describe('la cuenta por su nombre de uso', () => {
+  const REALES = [
+    { code: '62300000', kind: 'template', name: 'Servicios de profesionales independientes', plainName: 'Asesoría, abogado, notario.', uso: 'Asesoría, abogado, notario' },
+    { code: '64000000', kind: 'template', name: 'Sueldos y salarios', plainName: 'Nóminas, en bruto.', uso: 'Nóminas, en bruto' },
+    { code: '40000002', kind: 'own', name: 'Proveedores · Hermanos Ruiz', plainName: null, uso: 'Proveedores · Hermanos Ruiz' },
+    { code: '47200021', kind: 'own', name: 'IVA soportado 21 %', plainName: null, uso: 'IVA soportado 21 %' },
+    // Hoja de serie sin «qué se apunta aquí»: su título, nunca un literal de reserva (regla 30).
+    { code: '52000000', kind: 'template', name: 'Préstamos a corto plazo de entidades de crédito', plainName: null, uso: 'Préstamos a corto plazo de entidades de crédito' },
+  ]
+  for (const c of REALES) it(`${c.code}: «${c.uso}»`, () => expect(nombreDeUso(c)).toBe(c.uso))
+  it('una subcuenta propia manda su nombre aunque tenga «qué se apunta aquí»', () => {
+    expect(nombreDeUso({ kind: 'own', name: 'Comisiones de plataformas', plainName: 'Lo que te cobran Glovo, Uber y Just Eat.' })).toBe('Comisiones de plataformas')
   })
 })

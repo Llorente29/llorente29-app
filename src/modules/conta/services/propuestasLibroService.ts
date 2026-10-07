@@ -233,7 +233,11 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   }
 
   // ── Liquidaciones de plataforma sin asiento (regla 7) ──
-  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, collected_on, collected_amount')
+  // Respuesta 3, punto 4: la liquidación de una marca cedida va a la cuenta de
+  // liquidación de SU socio (marca → acuerdo de cesión → socio → enlace «liquidacion»).
+  const acuerdos = await leer(tabla('brand_licensing_agreement').select('brand_id, party_id').eq('account_id', accountId), 'los acuerdos de cesión')
+  const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
+  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, collected_on, collected_amount')
     .eq('account_id', accountId).is('journal_entry_id', null).gte('settlement_date', desde).lte('settlement_date', hasta), 'las liquidaciones')
   for (const l of liqs) {
     const fecha = s(l.collected_on) ?? String(l.settlement_date)
@@ -261,7 +265,8 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       pedidos: { total: pendientes, asentados: 0 }, localId: s(l.location_id),
     }, {
       cliente430: c430, proveedor410: c410, comision: ctx.hoja('623') ?? '62300000', otrosCargos: ctx.hoja('629') ?? '62900000',
-      iva21: { cuenta: c472, tipoId: t21.id }, banco: ctx.bancoDeLocal(s(l.location_id)), pendienteSocio: null,
+      iva21: { cuenta: c472, tipoId: t21.id }, banco: ctx.bancoDeLocal(s(l.location_id)),
+      pendienteSocio: l.brand_id && socioDeMarca.has(String(l.brand_id)) ? ctx.enlace('customer', socioDeMarca.get(String(l.brand_id))!, 'liquidacion') : null,
     })
     if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
     await proponer(companyId, aplicarAprendizaje(res.propuesta, `channel_settlement:${s(l.channel_id)}`, ctx.correcciones), null, r, ctx, quien)

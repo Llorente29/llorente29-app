@@ -255,7 +255,7 @@ export interface CuentasLiquidacion {
   otrosCargos: string
   iva21: { cuenta: string; tipoId: string }
   banco: string | null
-  /** Cuenta pendiente con el socio (sus ventas que cobra la empresa). */
+  /** «Liquidación pendiente con <socio>» (bajo la 410, papel «liquidacion»): lo cobrado por cuenta de él. */
   pendienteSocio: string | null
 }
 
@@ -448,7 +448,7 @@ export interface EntradaSocio {
   compras: { base: number; tipo: { id: string; porcentaje: number } }[]
   /** La comisión que le facturas (base, al 21 %). */
   comision: number
-  /** Lo que de sus ventas cobraste tú (cuenta pendiente con él). */
+  /** Lo que de sus ventas cobraste tú: está en su cuenta de liquidación (410), no en su 400. */
   ventasCobradas: number
 }
 export interface CuentasSocio {
@@ -482,16 +482,22 @@ export function liquidacionSocio(s: EntradaSocio, c: CuentasSocio): { propuesta:
     lineas.push({ cuenta: c.ingresosServicios, debe: 0, haber: s.comision, localId: loc, comun: !loc, concepto: 'Comisión sobre sus ventas' })
     lineas.push({ cuenta: c.iva21.cuenta, debe: 0, haber: ivaCom, localId: loc, comun: !loc, iva: { tipoId: c.iva21.tipoId, tipo: 21, base: s.comision, libro: 'issued' } })
   }
-  // Compensación: lo que le debes (compras + sus ventas cobradas por ti) contra lo que te debe (tu comisión).
+  // Compensación (respuesta 3, punto 4): lo que te debe (tu comisión, en su 430)
+  // se cobra primero de lo que cobraste por cuenta de él (su cuenta de
+  // liquidación, bajo la 410) y, si no llega, de lo que le debes por compras
+  // (su 400). Lo cobrado por cuenta de él NUNCA pasa a su 400: esa es la de la
+  // mercancía, y mezclarlo deja su Mayor ilegible. Lo que quede en su cuenta de
+  // liquidación es lo que se le paga.
   const leDebes = compras + cent(s.ventasCobradas)
-  if (cent(s.ventasCobradas)) {
-    lineas.push({ cuenta: c.pendienteSocio, debe: s.ventasCobradas, haber: 0, localId: loc, comun: !loc, concepto: 'Sus ventas cobradas por ti' })
-    lineas.push({ cuenta: c.proveedor, debe: 0, haber: s.ventasCobradas, localId: loc, comun: !loc, terceroId: s.terceroId, concepto: 'Sus ventas, a su cuenta' })
+  const contraLiquidacion = Math.min(cent(s.ventasCobradas), factura)
+  if (contraLiquidacion > 0) {
+    lineas.push({ cuenta: c.pendienteSocio, debe: deCent(contraLiquidacion), haber: 0, localId: loc, comun: !loc, terceroId: s.terceroId, concepto: 'Compensación con lo cobrado por cuenta de él' })
+    lineas.push({ cuenta: c.cliente, debe: 0, haber: deCent(contraLiquidacion), localId: loc, comun: !loc, terceroId: s.terceroId, concepto: 'Compensación con lo cobrado por cuenta de él' })
   }
-  const compensa = Math.min(leDebes, factura)
-  if (compensa > 0) {
-    lineas.push({ cuenta: c.proveedor, debe: deCent(compensa), haber: 0, localId: loc, comun: !loc, terceroId: s.terceroId, concepto: 'Compensación' })
-    lineas.push({ cuenta: c.cliente, debe: 0, haber: deCent(compensa), localId: loc, comun: !loc, terceroId: s.terceroId, concepto: 'Compensación' })
+  const contraCompras = Math.min(compras, factura - contraLiquidacion)
+  if (contraCompras > 0) {
+    lineas.push({ cuenta: c.proveedor, debe: deCent(contraCompras), haber: 0, localId: loc, comun: !loc, terceroId: s.terceroId, concepto: 'Compensación con sus compras' })
+    lineas.push({ cuenta: c.cliente, debe: 0, haber: deCent(contraCompras), localId: loc, comun: !loc, terceroId: s.terceroId, concepto: 'Compensación con sus compras' })
   }
   if (lineas.length < 2) return { propuesta: null, sinPropuesta: 'La liquidación del socio está a cero.' }
   const neto = leDebes - factura
@@ -504,6 +510,7 @@ export function liquidacionSocio(s: EntradaSocio, c: CuentasSocio): { propuesta:
       razones: [
         { decision: 'Su resumen mensual es la factura de compra', porque: 'lo que te llega con albarán a su nombre sirve para contrastar, no se asienta' },
         { decision: 'Tu comisión, ingreso por servicios (705) con IVA 21 %', porque: 'es lo único tuyo de sus ventas', cita: cita('ivaMediacionNombreAjeno') },
+        ...(cent(s.ventasCobradas) ? [{ decision: 'Lo cobrado por cuenta de él, en su cuenta de liquidación', porque: 'no es tuyo ni es lo que le compras: se compensa con tu comisión y el resto se le paga', cita: cita('ingresosPorCuentaDeTerceros') }] : []),
       ],
       avisos, terceroId: s.terceroId,
     },

@@ -9,6 +9,12 @@
 --   · channel_settlement: el asiento de la liquidación de la plataforma.
 --   · licensed_settlement: el asiento de la liquidación del socio de marca.
 --   · treasury_account: de qué local es cada cuenta del banco (D7).
+--   · company_account_link: papel nuevo «liquidacion» (respuesta 3, punto 4):
+--     la subcuenta «Liquidación pendiente con <socio>» (bajo la 410) de un socio
+--     de marca, para lo que se cobra por cuenta de él. No es su 400 (lo que le
+--     compras) ni su 430 (lo que le facturas). Solo para un tercero
+--     (entity = 'customer', el party del socio). company_account_link no está
+--     en el camino del pedido: la leen y escriben solo pantallas de contabilidad.
 --
 -- `sale` NO se toca: está en el camino del pedido. El número de factura del
 -- socio que trae Last se lee del pedido original cuando hace falta.
@@ -42,3 +48,14 @@ create index if not exists idx_licensed_settlement_asiento on public.licensed_se
 
 alter table public.treasury_account add column if not exists location_id uuid references public.locations(id) on delete set null;
 comment on column public.treasury_account.location_id is 'C04. El local de esta cuenta (cada local cobra y paga por la suya). Vacío: de la empresa.';
+
+-- Respuesta 3, punto 4: la cuenta de lo cobrado por cuenta del socio.
+alter table public.company_account_link drop constraint if exists company_account_link_role_check;
+alter table public.company_account_link add constraint company_account_link_role_check
+  check (role in ('principal', 'soportado', 'repercutido', 'gasto', 'pago', 'suplidos', 'liquidacion'));
+alter table public.company_account_link drop constraint if exists company_account_link_papel_de_tercero;
+alter table public.company_account_link add constraint company_account_link_papel_de_tercero
+  check (role not in ('gasto', 'pago', 'suplidos', 'liquidacion') or entity in ('supplier', 'customer'));
+alter table public.company_account_link drop constraint if exists company_account_link_liquidacion_de_socio;
+alter table public.company_account_link add constraint company_account_link_liquidacion_de_socio
+  check (role <> 'liquidacion' or entity = 'customer');

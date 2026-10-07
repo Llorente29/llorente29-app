@@ -299,7 +299,8 @@ function useMovimientos(accountId: string | null, companyId: string | null, cuen
 export function ContabilidadTercero() {
   const { ficha, companyId } = useTercero()
   const { accountId } = useCuentaConta()
-  const cuentas = ficha.cuentas.filter((c) => c.papel !== 'proveedor').map((c) => c.id)
+  // Su cuenta como cliente (y la de pago). La de liquidación tiene su propio Mayor: mezclarla aquí lo haría ilegible.
+  const cuentas = ficha.cuentas.filter((c) => c.papel === 'cliente' || c.papel === 'pago').map((c) => c.id)
   const m = useMovimientos(accountId, companyId, cuentas)
   return (
     <div className="cx-formulario">

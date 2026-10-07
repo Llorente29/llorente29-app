@@ -213,7 +213,7 @@ export default function AsientoPage() {
 function BuscarCuenta({ cuentas, actual, alElegir, alCerrar }: { cuentas: CuentaPlan[]; actual: string; alElegir: (c: CuentaPlan) => void; alCerrar: () => void }) {
   const [busca, setBusca] = useState('')
   const t = busca.trim().toLowerCase()
-  const encontradas = (t ? cuentas.filter((c) => c.code.startsWith(t) || c.nombre.toLowerCase().includes(t)) : cuentas).filter((c) => c.code !== actual).slice(0, 12)
+  const encontradas = (t ? cuentas.filter((c) => c.code.startsWith(t) || c.nombre.toLowerCase().includes(t) || c.oficial.toLowerCase().includes(t)) : cuentas).filter((c) => c.code !== actual).slice(0, 12)
   return (
     <div className="cxd-buscar">
       <label className="cx-oculto" htmlFor={`buscar-${actual}`}>Buscar cuenta por nombre o código</label>
@@ -252,6 +252,10 @@ function DetalleContable({ a, companyId }: { a: AsientoDiario; companyId: string
       <dt>Huella</dt><dd className="cxd-codigo" title={a.huella ?? undefined}>{corta(a.huella)}</dd>
       <dt>Huella anterior</dt><dd className="cxd-codigo" title={a.huellaAnterior ?? undefined}>{a.cadena === 1 ? 'es el primero' : corta(a.huellaAnterior)}</dd>
       <dt>Origen</dt><dd>{a.origen}{a.origenId ? ` · ${a.origenId.slice(0, 8)}` : ''}</dd>
+      <dt>Cuentas (título del PGC)</dt>
+      <dd><ul className="cxd-detalle-cuentas">{[...new Map(a.apuntes.map((l) => [l.cuenta, l])).values()].map((l) => (
+        <li key={l.cuenta}><span className="cxd-codigo">{l.cuenta}</span> {l.tituloOficial ?? l.nombreCuenta}</li>
+      ))}</ul></dd>
       <dd className="cxd-detalle-accion">
         <button type="button" className="cx-boton-sec" onClick={comprobar} disabled={mirando}>{mirando ? 'Comprobando…' : 'Comprobar la cadena'}</button>
         {cadena && <span className="cx-ayuda" role="status">{cadena}</span>}

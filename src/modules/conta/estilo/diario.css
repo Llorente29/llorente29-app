@@ -28,16 +28,21 @@
 
 .cxd-tabla { display: flex; flex-direction: column; }
 .cxd-fila {
-  display: grid; grid-template-columns: 64px 64px minmax(0, 1fr) 130px 140px 16px; gap: 12px; align-items: center;
-  width: 100%; padding: 12px 0; background: none; border: none; border-top: 1px solid var(--cx-linea);
+  /* Respuesta 3: unos 70–80 px por fila. El concepto hasta dos líneas enteras;
+     debajo, en UNA línea, los chips y de dónde sale. */
+  display: grid; grid-template-columns: 50px 86px minmax(0, 1fr) 108px 122px 12px; gap: 10px; align-items: center;
+  width: 100%; padding: 9px 0; background: none; border: none; border-top: 1px solid var(--cx-linea);
   font: inherit; color: inherit; text-align: left; cursor: pointer;
 }
 .cxd-fila-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; text-transform: uppercase; border-top: none; cursor: default; }
 .cxd-fecha, .cxd-num { font-family: var(--cx-letra-cifras); color: var(--cx-apoyo); font-size: 14px; }
-.cxd-concepto { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.cxd-concepto-titulo { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cxd-concepto-apoyo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--cx-apoyo); min-width: 0; }
-.cxd-sale { overflow-wrap: anywhere; }
+.cxd-concepto { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cxd-concepto-titulo { font-size: 15px; line-height: 20px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.cxd-concepto-apoyo { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; font-size: 12px; color: var(--cx-apoyo); min-width: 0; overflow: hidden; }
+.cxd-concepto-apoyo .cx-chip { padding: 1px 8px; font-size: 12px; flex: none; }
+.cxd-sale { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxd-num { white-space: nowrap; }
+.cxd-num-movil { display: block; font-size: 12px; margin-top: 2px; white-space: nowrap; }
 .cxd-importe { font-family: var(--cx-letra-cifras); text-align: right; font-weight: 600; white-space: nowrap; }
 .cxd-flecha { color: var(--cx-apoyo); }
 .cxd-anulado .cxd-concepto-titulo, .cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cx-apoyo); }
@@ -101,12 +106,11 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
   .cxd-acciones > * { flex: 1 1 auto; }
   .cxd-cifra-valor { font-size: 22px; }
   .cxd-diario { padding: 6px 14px; }
-  .cxd-fila { grid-template-columns: 52px minmax(0, 1fr) auto; grid-template-areas: 'fecha concepto importe' 'fecha concepto estado'; row-gap: 4px; }
+  .cxd-fila { grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-areas: 'fecha concepto importe' 'fecha concepto estado'; row-gap: 4px; padding: 8px 0; }
   .cxd-fila .cxd-fecha { grid-area: fecha; align-self: start; }
   .cxd-fila .cxd-concepto { grid-area: concepto; }
   .cxd-fila .cxd-importe { grid-area: importe; }
   .cxd-fila > span:last-child { grid-area: estado; justify-self: end; }
-  .cxd-concepto-titulo { white-space: normal; }
   .cxd-linea { grid-template-columns: minmax(0, 1fr) auto; }
   .cxd-linea-cabeza { display: none; }
   .cxd-linea > .cxd-importe:nth-of-type(2) { grid-column: 2; }
@@ -115,3 +119,5 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
   .cxd-mano-cabeza .cxd-campo-ancho { grid-column: 1 / -1; }
   .cxd-mano-linea { grid-template-columns: 1fr 1fr; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
 }
+
+.cxd-detalle-cuentas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }

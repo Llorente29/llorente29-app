@@ -155,3 +155,21 @@ que tenía apuntado, 2021-2347, era otro). La descarga nocturna comprueba que
 cada una contiene su frase.
 
 La marca cedida se cita **según el plan de la empresa** (`company_tax_profile.chart_kind`): las dos normas dicen lo mismo con distinto número, y antes la semilla y el agente decían «PGC NRV 16.ª» a secas, que en el plan normal es otra norma. Hoy el núcleo (`NORMAS.ingresosPorCuentaDeTerceros`) cita la de pymes porque las dos empresas de prueba son de pymes; el agente nocturno da las dos en su norma. Comprobado en los textos guardados: `rd-1515-2007.txt` línea 1168 (16.ª) y `rd-1514-2007.txt` líneas 1797 y 1835 (14.ª, versión vigente).
+
+### Lo cobrado por cuenta del socio de marca: ¿419 o 410? (respuesta 3, 12/10/2026)
+
+Lo que la empresa cobra de las ventas de una marca cedida es del socio: no es
+ingreso (NRV 16.ª del PGC de Pymes, 14.ª del normal) y tampoco es lo que se le
+compra (su 400). Va a una subcuenta propia por socio, «Liquidación pendiente con
+<socio>», que su liquidación mensual compensa con su 430 y su 400. Dónde cuelga:
+
+| Cuenta | Lo que dice el BOE (RD 1515/2007, quinta parte; igual en el RD 1514/2007) | ¿Encaja? |
+|---|---|---|
+| **419** Acreedores por operaciones en común | «Deudas con partícipes en las operaciones reguladas por los artículos 239 a 243 del Código de Comercio y en otras operaciones en común de análogas características.» Se abona por las aportaciones recibidas como partícipe gestor o por el beneficio que deba atribuirse a los no gestores (6510). | **No.** El art. 239 CCom es la cuenta en participación: «contribuyendo para ellas con la parte del capital que convinieren, y haciéndose partícipes de sus resultados prósperos o adversos». Con la marca cedida no hay aportación ni reparto de resultados: la empresa vende en nombre ajeno (camino B, LIVA 11.Dos.15.º), cobra por cuenta del socio y lo suyo es solo la comisión (705). La 449 (el signo contrario) cae por lo mismo. |
+| **410** Acreedores por prestaciones de servicios | «Deudas con suministradores de servicios que no tienen la condición estricta de proveedores.» | **Sí**, la que queda: es una deuda con el socio que no es de mercancía (eso es su 400) y se salda en su liquidación. Es la que dijo Julio si la 419 no encajaba. |
+
+En el plan: hoja 4100, subcuenta «Liquidación pendiente con <socio>», enlazada
+al socio con el papel `liquidacion` (C04 · 0110). Se crea al confirmar el papel de
+socio (ficha, lista de terceros y revisión de las 430 de Diez) o desde «Sus
+cuentas» si ya lo era. Textos leídos en `docs/conta/fuentes/textos/rd-1515-2007.txt`
+(419: líneas 5244–5255; 410: 5226–5235) y `codigo-comercio.txt` (art. 239).

@@ -16,7 +16,7 @@ import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
 import { diaMes, eurosExactos, iniciales } from '@/modules/conta/lib/formato'
 import { MODELO_PLATAFORMA, linea347Plataforma, type ModeloPlataforma } from '@/modules/conta/lib/plataforma347'
 import { parecido } from '@/modules/conta/lib/importarPlan'
-import { apuntarCobro, confirmarPeriodo, crearCuentaCliente, enlazarCuentaCliente, guardarModeloPlataforma, quitarCobro } from '@/modules/conta/services/tercerosService'
+import { apuntarCobro, confirmarPeriodo, crearCuentaCliente, enlazarCuentaCliente, guardarModeloPlataforma, quitarCobro, asegurarCuentaLiquidacion } from '@/modules/conta/services/tercerosService'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
 const TONO: Record<Estado['tono'], 'ia' | 'azul' | 'ambar' | 'neutro'> = { verde: 'ia', azul: 'azul', ambar: 'ambar', gris: 'neutro' }
@@ -307,6 +307,7 @@ export function SusCuentas({ completa = false }: { completa?: boolean }) {
   const [ocupado, setOcupado] = useState(false)
   const comoCliente = ficha.cuentas.find((c) => c.papel === 'cliente') ?? ficha.cuentas.find((c) => c.papel === 'pago') ?? null
   const comoProveedor = ficha.cuentas.find((c) => c.papel === 'proveedor') ?? null
+  const deLiquidacion = ficha.cuentas.find((c) => c.papel === 'liquidacion') ?? null
   const propuesta = !comoCliente ? ficha.cuentas430SinDueno.find((c) => parecido(c.name.replace(/^Clientes · /, ''), ficha.tercero.nombre)) ?? null : null
   const fila = (et: string, valor: React.ReactNode) => <div className="cxt-linea"><span className="cx-ayuda">{et}</span><span className="cxt-cuenta">{valor}</span></div>
   const enlace = (c: { code: string; name: string }) => <Link to={rutaMayor(c.code)}>{c.code} · {c.name}</Link>
@@ -338,6 +339,14 @@ export function SusCuentas({ completa = false }: { completa?: boolean }) {
           </span>
         ))}
         {proveedor && fila('Como proveedor', comoProveedor ? enlace(comoProveedor) : 'Sin subcuenta de proveedor')}
+        {socio && fila('Lo que cobras por su cuenta', deLiquidacion ? enlace(deLiquidacion) : (
+          <span className="cxt-sin-cuenta">
+            <span>Sin cuenta de liquidación</span>
+            {companyId && <button type="button" className="cx-enlace" disabled={ocupado}
+              onClick={() => void hacer(async () => { const r = await asegurarCuentaLiquidacion(companyId, ficha.tercero.id, ficha.tercero.nombre, userName); if (r) avisar(`Creada su cuenta ${r.code} «Liquidación pendiente con ${ficha.tercero.nombre}», bajo la 410.`) }, 'Cuenta de liquidación creada.')}>
+              Crear su cuenta de liquidación</button>}
+          </span>
+        ))}
         {(cliente || socio) && fila('Sus ventas van a', socio ? '70500000 · Prestaciones de servicios (comisión) · 70000000 · Ventas' : '70000000 · Ventas de mercaderías (705 si son servicios)')}
         {socio && fila('Sus marcas', ficha.acuerdos.length ? <span>{ficha.acuerdos.map((a) => a.marca).join(', ')} · ventas separadas <span className="cx-chip cx-chip-ia">IA</span></span> : 'Ningún acuerdo de cesión enlazado')}
         {papelesDe(ficha).plataforma

@@ -265,13 +265,14 @@ function FilaAsiento({ a, abierto, movil, alAbrir }: { a: AsientoDiario; abierto
   return (
     <div className={`cxd-envoltura${anulado ? ' cxd-anulado' : ''}`}>
       <button type="button" className="cxd-fila" aria-expanded={movil ? undefined : abierto} onClick={alAbrir}>
-        <span className="cxd-fecha">{diaMesCorto(a.fecha)}</span>
-        {!movil && <span className="cxd-num" title={`Serie ${NOMBRE_SERIE[a.serie]}`}>{numeroVisible(a)}</span>}
+        {movil
+          ? <span className="cxd-fecha">{diaMesCorto(a.fecha)}<span className="cxd-num-movil">{numeroVisible(a)}</span></span>
+          : <><span className="cxd-fecha">{diaMesCorto(a.fecha)}</span><span className="cxd-num">{numeroVisible(a)}</span></>}
         <span className="cxd-concepto">
-          <span className="cxd-concepto-titulo">{a.concepto}</span>
+          <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
           <span className="cxd-concepto-apoyo">
             {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
-            <span className="cxd-sale">{NOMBRE_SERIE[a.serie]} · {deDondeSale(a)}</span>
+            <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
           </span>
         </span>
         <span className="cxd-importe">{eurosExactos(importe(a))}</span>

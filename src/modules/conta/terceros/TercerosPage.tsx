@@ -35,8 +35,7 @@ import { diaMesCorto, euros, hoyEnMadrid, iniciales } from '@/modules/conta/lib/
 import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 import {
   acuerdosSinSocio, anadirPapel, archivarTercero, enlazarAcuerdo, guardarCliente,
-  liquidacionesDeLaCuenta, liquidacionesSocioDe, listarFacturasDeLaCuenta, listarTercerosBase, terceroDelMismoNif, type TerceroLista,
-} from '@/modules/conta/services/tercerosService'
+  liquidacionesDeLaCuenta, liquidacionesSocioDe, listarFacturasDeLaCuenta, listarTercerosBase, terceroDelMismoNif, type TerceroLista, asegurarCuentaLiquidacion } from '@/modules/conta/services/tercerosService'
 import { cargarRevision430, confirmar430, type DatosRevision430 } from '@/modules/conta/services/revision430Service'
 import {
   TIPO_430, elegida, hecha, proponer430, queHace, tarjetaPorRevisar, type Cuenta430, type Propuesta430, type Tercero430, type Tipo430,
@@ -480,6 +479,7 @@ function FilaCuenta430({ c, hecha: yaEsta, terceros, datos, ocupada, alConfirmar
 /** Los acuerdos de cesión que aún apuntan a un nombre suelto: a qué socio van. */
 function RevisionAcuerdos({ accountId, terceros, alCambiar }: { accountId: string; terceros: TerceroLista[]; alCambiar: (t: string) => void }) {
   const { userName } = useCuentaConta()
+  const { activa } = useEmpresas()
   const [acuerdos, setAcuerdos] = useState<{ id: string; dueno: string; marca: string; pct: number }[] | null>(null)
   const [abierta, setAbierta] = useState(false)
   const [ocupada, setOcupada] = useState<string | null>(null)
@@ -499,7 +499,9 @@ function RevisionAcuerdos({ accountId, terceros, alCambiar }: { accountId: strin
       if (!id) id = (await guardarCliente(accountId, null, a.dueno, null, {}, userName)).party_id
       if (!terceros.find((t) => t.id === id)?.papeles.includes('brand_partner')) await anadirPapel(id, 'brand_partner')
       await enlazarAcuerdo(a.id, id)
-      alCambiar(`El acuerdo de ${a.marca} va a ${partyId ? terceros.find((t) => t.id === partyId)?.nombre : a.dueno}, socio de marca.`)
+      const nombre = (partyId ? terceros.find((t) => t.id === partyId)?.nombre : null) ?? a.dueno
+      const cuenta = activa ? await asegurarCuentaLiquidacion(activa.id, id, nombre, userName) : null
+      alCambiar(`El acuerdo de ${a.marca} va a ${nombre}, socio de marca.${cuenta?.nueva ? ` Lo que cobres por su cuenta irá a la ${cuenta.code} «Liquidación pendiente con ${nombre}».` : ''}`)
     } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo enlazar.') }
     setOcupada(null)
   }
