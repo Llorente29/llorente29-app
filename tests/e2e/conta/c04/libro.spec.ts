@@ -121,6 +121,15 @@ test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable',
   await expect(apuntes.getByText('Liquidación pendiente con Marcas del Sur', { exact: true })).toBeVisible()
   await expect(apuntes.getByText('Servicios de profesionales independientes')).toHaveCount(0)
   await expect(apuntes.getByText('Proveedores · Marcas del Sur')).toHaveCount(0)
+  // Cada código de cuenta se lee entero, también con el chip de la marca al lado
+  // (e2e 134: salía «410000» por «41000003»).
+  for (const codigo of await apuntes.locator('a.cxd-codigo').all()) {
+    const sobra = await codigo.evaluate((el) => {
+      const caja = el.closest('.cxd-concepto-apoyo')!.getBoundingClientRect()
+      return el.getBoundingClientRect().right - caja.right
+    })
+    expect(sobra, `${await codigo.textContent()} cortado`).toBeLessThanOrEqual(0.5)
+  }
   await capturar(page, 'asiento')
   // El título oficial, en Detalle contable.
   await page.getByRole('button', { name: /Detalle contable/ }).click()

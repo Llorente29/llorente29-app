@@ -48,6 +48,11 @@
 .cxd-anulado .cxd-concepto-titulo, .cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cx-apoyo); }
 .cxd-chip-gris .cx-chip { background: var(--cx-neutro-suave); color: var(--cx-apoyo); }
 .cxd-codigo { font-family: var(--cx-letra-cifras); font-size: 13px; color: var(--cx-apoyo); }
+/* En el asiento la línea de apoyo SÍ salta: con los dos chips (local y marca
+   cedida) el código no cabía y el contenedor lo recortaba, «410000» por
+   «41000003», que parece otra cuenta (captura de la e2e 134). La fila baja de
+   una sola línea es la del libro, no ésta. */
+.cxd-linea-cuenta .cxd-concepto-apoyo { flex-wrap: wrap; row-gap: 2px; }
 a.cxd-codigo:hover { color: var(--cx-azul); }
 
 .cxd-apuntes { padding: 0 0 12px 140px; display: flex; flex-direction: column; }

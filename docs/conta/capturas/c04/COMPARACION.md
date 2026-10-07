@@ -7,7 +7,8 @@ M4 (C01b), como en los encargos anteriores.
 Capturas de staging-conta sacadas por la e2e `tests/e2e/conta/c04/libro.spec.ts`
 (ordenador 1440 × 900 y móvil 390 × 844, página entera) con la semilla
 INVENTADA `supabase/seeds/conta/seed_c04_staging.sql`, en la ejecución verde
-133 del commit `0360cc87` (respuesta 3; el bot las sube en el commit siguiente).
+de la respuesta 3 (la 134, sobre `a99ef15`, las subió en `793b947`; la 133 murió
+instalando psql antes de la primera prueba).
 Staging se rehízo antes con `20261012_c04_rehacer_libro.sql` (aplicar 82): el
 libro de A y B se borra y la semilla lo vuelve a hacer con las funciones de la
 base. Se toman ANTES de escribir nada, para que salgan siempre iguales.
@@ -111,6 +112,12 @@ varias líneas.
   2.334,48 € al Haber, y no a su 400 de proveedor. Medido en staging (empresa
   A): Banco 7.797,40 · Comisiones de plataformas 1.712,89 · IVA 359,71 al
   Debe; Plataforma Norte 7.535,52 · Liquidación pendiente 2.334,48 al Haber.
+- **El código de cada cuenta, entero.** En la captura de la 134 la línea de la
+  liquidación llevaba dos chips (local y «Brasa Prestada · cedida») y el código
+  salía cortado: «410000» por «41000003». En el asiento la línea de apoyo ahora
+  salta a una segunda línea, y la e2e mide que ningún código se salga de su
+  caja (ensayada con la misma regla antes del cambio, +62 px fuera, y después,
+  dentro).
 - La línea de cuadre: «Cuadra · Debe 9.870,00 € · Haber 9.870,00 € · ✓ 0,00 €»
   y la frase de cómo se cambia una cuenta.
 - «Por qué lo propongo así», con fondo de la IA: cuadre con el PDF, ventas por
