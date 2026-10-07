@@ -8,6 +8,13 @@ begin
   end if;
 end $$;
 
+drop function if exists public.conta_dias_por_asentar(uuid, date, date);
+drop function if exists public.conta_devoluciones_del_dia(uuid, uuid, date);
+drop function if exists public.conta_pedidos_del_dia(uuid, uuid, date);
+drop function if exists public.conta_json_seguro(text);
+drop function if exists public.conta_fijar_corte(uuid, date, text);
+drop function if exists public.journal_entry_descartar(uuid, text, text);
+drop function if exists public.journal_entry_proponer(uuid, jsonb, jsonb, jsonb, text);
 drop trigger if exists trg_treasury_account_local on public.treasury_account;
 drop function if exists public.treasury_account_local_de_la_cuenta();
 drop function if exists public.journal_cadena_comprobar(uuid);

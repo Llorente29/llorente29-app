@@ -4,7 +4,8 @@ do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'conta_lectura') then
     revoke select on table public.journal_entry, public.journal_line, public.journal_ledger, public.sales_day_summary,
-                           public.payroll_summary, public.allocation_rule, public.entry_template, public.entry_template_line from conta_lectura;
+                           public.payroll_summary, public.allocation_rule, public.entry_template, public.entry_template_line,
+                        public.journal_correction, public.journal_dismissal from conta_lectura;
   end if;
 end $$;
 drop function if exists public.conta_resultado_por_local(uuid, date, date, boolean);

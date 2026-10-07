@@ -39,7 +39,8 @@ union all select 'fiscal_period_lock', md5(coalesce(string_agg(to_jsonb(x)::text
 union all select 'supplier_invoice', md5(coalesce(string_agg(to_jsonb(x)::text, '|' order by x.id), '')) from public.supplier_invoice x
 union all select 'channel_settlement', md5(coalesce(string_agg(to_jsonb(x)::text, '|' order by x.id), '')) from public.channel_settlement x
 union all select 'licensed_settlement', md5(coalesce(string_agg(to_jsonb(x)::text, '|' order by x.id), '')) from public.licensed_settlement x
-union all select 'treasury_account', md5(coalesce(string_agg(to_jsonb(x)::text, '|' order by x.id), '')) from public.treasury_account x;
+union all select 'treasury_account', md5(coalesce(string_agg(to_jsonb(x)::text, '|' order by x.id), '')) from public.treasury_account x
+union all select 'company_tax_profile', md5(coalesce(string_agg(to_jsonb(x)::text, '|' order by x.company_id), '')) from public.company_tax_profile x;
 
 create or replace function pg_temp.lecturas_ventas() returns table (que text, valor text) language plpgsql as $$
 declare
@@ -93,6 +94,7 @@ update foto set despues = x.h from (
   union all select 'channel_settlement', md5(coalesce(string_agg((to_jsonb(x) - array['journal_entry_id'])::text, '|' order by x.id), '')) from public.channel_settlement x
   union all select 'licensed_settlement', md5(coalesce(string_agg((to_jsonb(x) - array['journal_entry_id'])::text, '|' order by x.id), '')) from public.licensed_settlement x
   union all select 'treasury_account', md5(coalesce(string_agg((to_jsonb(x) - array['location_id'])::text, '|' order by x.id), '')) from public.treasury_account x
+  union all select 'company_tax_profile', md5(coalesce(string_agg((to_jsonb(x) - array['journal_autovalidate_sales_day'])::text, '|' order by x.company_id), '')) from public.company_tax_profile x
 ) x where foto.que = x.que;
 update foto set despues = v.valor from pg_temp.lecturas_ventas() v where foto.que = 'ventas · ' || v.que;
 do $$ declare h text; begin
@@ -257,22 +259,67 @@ begin
   -- 3j. Resultado por local: la suma de las filas es el resultado total (100 de ventas − 150 de gastos).
   select sum(resultado) into v_n from public.conta_resultado_por_local(emp, '2026-10-01', '2026-10-31');
   if v_n <> -50 then raise exception 'PRUEBA C04 · 3j: el resultado por local suma %, no −50.', v_n; end if;
+  -- 3k. Proponer: entra como «propuesto», una vez; descartada, no vuelve. Un resumen de 9 facturas admite 4 céntimos.
+  v_r := public.journal_entry_proponer(emp,
+    jsonb_build_object('series', 1, 'fecha', '2026-10-09', 'concepto', 'Ventas del día · Norte Centro', 'source_type', 'sales_day',
+                       'confianza', 'probable', 'porque', '9 tickets de tus marcas cuadran con lo que cobran las plataformas.', 'razones', '[]'::jsonb),
+    jsonb_build_array(
+      jsonb_build_object('cuenta', '57200001', 'debe', 110.04, 'haber', 0, 'local_id', loc),
+      jsonb_build_object('cuenta', '70000000', 'debe', 0, 'haber', 100, 'local_id', loc),
+      jsonb_build_object('cuenta', '47700021', 'debe', 0, 'haber', 10.04, 'local_id', loc,
+                         'iva', jsonb_build_object('tipo_id', v_iva21, 'base', 47.81, 'libro', 'issued', 'facturas', 9))),
+    jsonb_build_object('location_id', loc, 'sales_day', '2026-10-09', 'tickets_count', 9, 'total', 110.04, 'detail_hash', md5('prueba'),
+                       'sale_ids', '[]'::jsonb, 'base_calculated', true));
+  e2 := (v_r->>'id')::uuid;
+  if (v_r->>'existente')::boolean or (select status from public.journal_entry where id = e2) <> 'propuesto'
+     or (select count(*) from public.sales_day_summary where entry_id = e2) <> 1 then
+    raise exception 'PRUEBA C04 · 3k: la propuesta no entró bien: %', v_r;
+  end if;
+  -- 47,81 × 21 % = 10,04: cuadra con margen 0 aunque resuma 9; ahora una que necesita margen.
+  update public.journal_line set tax_base = 47.79 where entry_id = e2 and position = 3;   -- 47,79 × 21 % = 10,04 (10,0359)
+  update public.journal_line set tax_base = 47.75 where entry_id = e2 and position = 3;   -- 10,03: 1 céntimo, dentro de floor(9/2)
+  perform public.journal_entry_validar(e2);
+  v_r := public.journal_entry_proponer(emp,
+    jsonb_build_object('series', 1, 'fecha', '2026-10-09', 'concepto', 'Otra vez', 'source_type', 'sales_day', 'confianza', 'seguro', 'porque', 'x'),
+    '[]'::jsonb, jsonb_build_object('location_id', loc, 'sales_day', '2026-10-09', 'tickets_count', 9, 'total', 110.04, 'detail_hash', 'x'));
+  if not (v_r->>'existente')::boolean or (v_r->>'id')::uuid <> e2 then raise exception 'PRUEBA C04 · 3k: propuso dos veces el mismo día: %', v_r; end if;
+  -- Descartar: un borrador se va con su motivo y no vuelve.
+  v_r := public.journal_entry_proponer(emp,
+    jsonb_build_object('series', 1, 'fecha', '2026-10-10', 'concepto', 'Ventas del día · Norte Mercado', 'source_type', 'sales_day', 'confianza', 'duda', 'porque', 'Dudosa.'),
+    jsonb_build_array(jsonb_build_object('cuenta', '57200001', 'debe', 5, 'haber', 0, 'local_id', loc2), jsonb_build_object('cuenta', '70000000', 'debe', 0, 'haber', 5, 'local_id', loc2)),
+    jsonb_build_object('location_id', loc2, 'sales_day', '2026-10-10', 'tickets_count', 1, 'total', 5, 'detail_hash', 'y'));
+  perform public.journal_entry_descartar((v_r->>'id')::uuid, 'Día de pruebas, no hubo ventas');
+  v_r := public.journal_entry_proponer(emp,
+    jsonb_build_object('series', 1, 'fecha', '2026-10-10', 'concepto', 'Otra vez', 'source_type', 'sales_day', 'confianza', 'duda', 'porque', 'x'),
+    '[]'::jsonb, jsonb_build_object('location_id', loc2, 'sales_day', '2026-10-10', 'tickets_count', 1, 'total', 5, 'detail_hash', 'y'));
+  if not coalesce((v_r->>'descartada')::boolean, false) then raise exception 'PRUEBA C04 · 3k: volvió a proponer lo descartado: %', v_r; end if;
+  -- Los pedidos del día se leen sin error (staging puede no tener ventas ese día).
+  perform * from public.conta_pedidos_del_dia(emp, loc, '2026-10-09');
+  perform * from public.conta_devoluciones_del_dia(emp, loc, '2026-10-09');
+  perform * from public.conta_dias_por_asentar(emp, '2026-10-01', '2026-10-31');
+
   raise notice 'PRUEBA C04 · 3 en verde: valida, numera sin huecos, frena descuadre, IVA, local; anula; cadena, Mayor y resultado cuadran.';
 end $$;
 reset role;
 
 -- ── 4 · Lo traído: ejercicio mixto, meses cerrados como traídos ────────────
-\echo '>>> 4. Ejercicio traído hasta el 30/09'
+\echo '>>> 4. La fecha de corte, como dato: traído hasta el 30/09 (suposición de trabajo)'
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
 do $$
-declare emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; v_y uuid; m date;
+declare emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; v_r jsonb;
 begin
-  select id into v_y from public.fiscal_year where company_id = emp and code = '2026';
-  update public.fiscal_year set origin = 'mixed', origin_program = 'diez', imported_until = '2026-09-30' where id = v_y;
-  for m in select generate_series('2026-01-01'::date, '2026-09-01'::date, interval '1 month')::date loop
-    insert into public.fiscal_period_lock (account_id, company_id, fiscal_year_id, month, kind, locked_by_name)
-    values ('c01a0000-0000-4000-8000-00000000000a', emp, v_y, m, 'migrated', 'Prueba C04');
-  end loop;
+  v_r := public.conta_fijar_corte(emp, '2026-09-30', 'diez');
+  if (v_r->>'meses_cerrados')::int <> 9
+     or (select origin || '/' || imported_until from public.fiscal_year where company_id = emp and code = '2026') <> 'mixed/2026-09-30' then
+    raise exception 'PRUEBA C04 · 4: el corte no quedó: %', v_r;
+  end if;
+  -- Cambiable mientras no haya traído: al 31/08 y otra vez al 30/09.
+  v_r := public.conta_fijar_corte(emp, '2026-08-31', 'diez');
+  if (v_r->>'meses_cerrados')::int <> 8 then raise exception 'PRUEBA C04 · 4: al cambiar el corte quedaron % meses traídos.', v_r->>'meses_cerrados'; end if;
+  v_r := public.conta_fijar_corte(emp, '2026-09-30', 'diez');
 end $$;
+reset role;
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
@@ -304,11 +351,33 @@ begin
   exception when check_violation then
     if sqlerrm not like 'El mes 09/2026 es traído de otro programa: no se reabre.' then raise exception 'PRUEBA C04 · 4: mensaje «%».', sqlerrm; end if;
   end;
+  -- Con un asiento traído, la fecha de corte ya no se cambia (lo traído lo mete el C04b; aquí, a mano).
+  perform set_config('c04.y', v_y::text, false);
   raise notice 'PRUEBA C04 · 4 en verde: nada se cuela en lo traído, se propone el 01/10 y un mes traído no se reabre.';
 end $$;
 reset role;
 
 -- ── 5 · Cuenta B: no ve ni toca nada de A ──────────────────────────────────
+do $$
+declare emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
+begin
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, external_program, external_series, external_number)
+  values ('c01a0000-0000-4000-8000-00000000000a', emp, current_setting('c04.y')::uuid, 2, '2026-06-01', 'Traído de prueba', 'migrated', 'diez', '2', '394');
+end $$;
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+begin
+  begin
+    perform public.conta_fijar_corte('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '2026-08-31', 'diez');
+    raise exception 'PRUEBA C04 · 4b: cambió el corte con un asiento traído.';
+  exception when check_violation then
+    if sqlerrm <> 'Ya hay asientos traídos: la fecha de corte no se cambia.' then raise exception 'PRUEBA C04 · 4b: mensaje «%».', sqlerrm; end if;
+  end;
+  raise notice 'PRUEBA C04 · 4b en verde: con un asiento traído, la fecha de corte no se cambia.';
+end $$;
+reset role;
+
 \echo '>>> 5. Administrador de B'
 select set_config('request.jwt.claims', json_build_object('sub', 'c01b0000-0000-4000-8000-0000000000b1', 'role', 'authenticated')::text, true);
 set local role authenticated;

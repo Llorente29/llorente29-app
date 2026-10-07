@@ -8,10 +8,15 @@
 --     cuándo es traído. Corte de Foodint con Diez: 30/09/2026 (decidido 06/10).
 --   · fiscal_period_lock: por qué está cerrado un mes (a mano, impuesto
 --     presentado o traído). Un mes traído no se reabre.
---   · journal_entry / journal_line: el asiento y sus apuntes. Series como Diez
---     (1 expedidas, 2 recibidas, 3 tesorería, 4 general, 9 automáticos, 0
---     apertura y cierre) para que lo traído entre en su serie sin traducir.
---     El número se pone al validar (regla 2); lo traído conserva el suyo.
+--   · journal_entry / journal_line: el asiento y sus apuntes. Las series se
+--     guardan con el código de Diez (1, 2, 3, 4, 9) para que lo traído entre
+--     sin traducir; en pantalla se dicen por su palabra: Ventas, Compras,
+--     Banco, General, Nóminas (respuesta 1 de Julio). Apertura, cierre y
+--     liquidación del IVA van a General. El número se pone al validar
+--     (regla 2); lo traído conserva el suyo.
+--   · La fecha de corte con el programa anterior es un DATO de la empresa
+--     (fiscal_year.imported_until), cambiable mientras no haya asientos
+--     traídos; nada la quema en código ni en migración.
 --   · sales_day_summary: el resumen de ventas de un día y un local (CCom 28.2,
 --     RIVA 63.4) con su recuento, su rango de facturas y la huella del detalle.
 --   · payroll_summary: el resumen mensual de nóminas que hoy escribe la gestoría
@@ -63,7 +68,7 @@ create table if not exists public.journal_entry (
   account_id          uuid not null references public.accounts(id) on delete cascade,
   company_id          uuid not null references public.company(id) on delete cascade,
   fiscal_year_id      uuid not null references public.fiscal_year(id) on delete restrict,
-  series              smallint not null check (series in (0, 1, 2, 3, 4, 9)),
+  series              smallint not null check (series in (1, 2, 3, 4, 9)),
   number              integer check (number is null or number > 0),
   entry_date          date not null,
   concept             text not null check (length(trim(concept)) > 0),
@@ -115,7 +120,7 @@ create table if not exists public.journal_entry (
   constraint journal_entry_contraasiento check ((source_type = 'reversal') = (reverses_entry_id is not null))
 );
 comment on table public.journal_entry is
-  'C04. El asiento. Series como Diez: 1 facturas expedidas, 2 recibidas, 3 tesorería, 4 general, 9 automáticos (nóminas, IVA, regularización), 0 apertura y cierre. El número se pone al validar y no deja huecos; lo validado no se toca: se anula con un contraasiento enlazado.';
+  'C04. El asiento. Series con el código de Diez y su palabra en pantalla: 1 Ventas, 2 Compras, 3 Banco, 4 General (también apertura, cierre e IVA), 9 Nóminas. El número se pone al validar y no deja huecos; lo validado no se toca: se anula con un contraasiento enlazado.';
 comment on column public.journal_entry.source_type is
   'C04. De dónde sale: sales_day (resumen de ventas del día), sales_adjustment (cancelación o devolución que decide la plataforma), supplier_invoice, supplier_payment, channel_settlement, licensed_settlement, payroll, bank, vat_settlement, manual, template, reversal (contraasiento), opening, closing, migrated (traído).';
 comment on column public.journal_entry.chain_seq is 'C04. Orden de validación dentro de la empresa: la huella de cada asiento encadena con la del anterior en este orden.';
@@ -126,6 +131,9 @@ create unique index if not exists ux_journal_entry_anula on public.journal_entry
 create index if not exists idx_journal_entry_empresa_fecha on public.journal_entry (company_id, entry_date);
 create index if not exists idx_journal_entry_origen on public.journal_entry (source_type, source_id) where source_id is not null;
 create index if not exists idx_journal_entry_cuenta on public.journal_entry (account_id, status);
+-- Un documento, un asiento vivo: no se propone dos veces lo mismo (al anular, queda libre).
+create unique index if not exists ux_journal_entry_origen on public.journal_entry (company_id, source_type, source_id)
+  where source_id is not null and status in ('propuesto', 'borrador', 'validado') and source_type not in ('reversal', 'migrated');
 drop trigger if exists trg_journal_entry_misma_cuenta on public.journal_entry;
 create trigger trg_journal_entry_misma_cuenta before insert or update on public.journal_entry
   for each row execute function public.conta_misma_cuenta();
@@ -153,6 +161,9 @@ create table if not exists public.journal_line (
   tax_base            numeric(14, 2),
   vat_book            text check (vat_book is null or vat_book in ('issued', 'received', 'investment', 'not_subject')),
   vat_deductible      text check (vat_deductible is null or vat_deductible in ('yes', 'no', 'prorrata')),
+  -- Cuántas facturas resume el apunte de IVA (asiento resumen, RIVA 63.4): la
+  -- cuota se redondea por factura, así que admite medio céntimo por factura.
+  tax_documents       integer not null default 1 check (tax_documents > 0),
   -- Retenciones: tipo y modelo (111, 115, 123).
   withholding_rate_id uuid references public.withholding_rate(id) on delete restrict,
   withholding_base    numeric(14, 2),
@@ -300,6 +311,65 @@ drop trigger if exists trg_entry_template_line_misma_cuenta on public.entry_temp
 create trigger trg_entry_template_line_misma_cuenta before insert or update on public.entry_template_line
   for each row execute function public.conta_misma_cuenta();
 
+-- ── 7b · Lo aprendido de las correcciones y lo descartado (reglas 10 y 11) ──
+create table if not exists public.journal_correction (
+  id              uuid primary key default gen_random_uuid(),
+  account_id      uuid not null references public.accounts(id) on delete cascade,
+  company_id      uuid not null references public.company(id) on delete cascade,
+  origin_key      text not null check (length(trim(origin_key)) > 0),
+  proposed_code   text not null,
+  chosen_code     text not null,
+  entry_id        uuid references public.journal_entry(id) on delete set null,
+  created_at      timestamptz not null default now(),
+  created_by      uuid,
+  created_by_name text
+);
+comment on table public.journal_correction is
+  'C04. Regla 11: una cuenta que la persona cambió en una propuesta. La siguiente propuesta del mismo origen (origin_key: «channel_settlement:<canal>», «supplier_invoice:<proveedor>») lo hace igual y lo dice.';
+create index if not exists idx_journal_correction on public.journal_correction (company_id, origin_key, created_at desc);
+drop trigger if exists trg_journal_correction_misma_cuenta on public.journal_correction;
+create trigger trg_journal_correction_misma_cuenta before insert or update on public.journal_correction
+  for each row execute function public.conta_misma_cuenta();
+
+create table if not exists public.journal_dismissal (
+  id              uuid primary key default gen_random_uuid(),
+  account_id      uuid not null references public.accounts(id) on delete cascade,
+  company_id      uuid not null references public.company(id) on delete cascade,
+  source_type     text not null,
+  source_key      text not null,
+  reason          text not null check (length(trim(reason)) > 0),
+  created_at      timestamptz not null default now(),
+  created_by      uuid,
+  created_by_name text,
+  unique (company_id, source_type, source_key)
+);
+comment on table public.journal_dismissal is
+  'C04. Una propuesta descartada, con su motivo: Folvy no la vuelve a proponer (source_key: el id del documento, o «local:día» para las ventas del día).';
+drop trigger if exists trg_journal_dismissal_misma_cuenta on public.journal_dismissal;
+create trigger trg_journal_dismissal_misma_cuenta before insert or update on public.journal_dismissal
+  for each row execute function public.conta_misma_cuenta();
+
+-- ── 7c · La opción de la empresa: validar solos los Seguros de ventas ───────
+alter table public.company_tax_profile add column if not exists journal_autovalidate_sales_day boolean not null default false;
+comment on column public.company_tax_profile.journal_autovalidate_sales_day is
+  'C04. Regla 10: con esta opción (apagada por defecto), las propuestas «Seguro» de ventas del día se validan solas. Nada más se valida solo.';
+
+-- ── 7d · La fecha de corte es un dato: cambiable mientras no haya traído ────
+create or replace function public.fiscal_year_corte_cambiable()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if (new.origin, new.origin_program, new.imported_until) is distinct from (old.origin, old.origin_program, old.imported_until)
+     and exists (select 1 from public.journal_entry e where e.fiscal_year_id = old.id and e.source_type = 'migrated') then
+    raise exception 'El ejercicio % ya tiene asientos traídos: la fecha de corte no se cambia (se deshace lo traído y se vuelve a traer).', old.code
+      using errcode = '23514';
+  end if;
+  return new;
+end $$;
+revoke all on function public.fiscal_year_corte_cambiable() from public, anon, authenticated;
+drop trigger if exists trg_fiscal_year_corte_cambiable on public.fiscal_year;
+create trigger trg_fiscal_year_corte_cambiable before update of origin, origin_program, imported_until on public.fiscal_year
+  for each row execute function public.fiscal_year_corte_cambiable();
+
 -- ── 8 · Lo de un apunte es de su asiento y de su empresa ────────────────────
 create or replace function public.journal_line_coherente()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -399,11 +469,13 @@ alter table public.payroll_summary enable row level security;
 alter table public.allocation_rule enable row level security;
 alter table public.entry_template enable row level security;
 alter table public.entry_template_line enable row level security;
+alter table public.journal_correction enable row level security;
+alter table public.journal_dismissal enable row level security;
 do $$
 declare t text;
 begin
   foreach t in array array['journal_entry', 'journal_line', 'sales_day_summary', 'payroll_summary', 'allocation_rule',
-                           'entry_template', 'entry_template_line'] loop
+                           'entry_template', 'entry_template_line', 'journal_correction', 'journal_dismissal'] loop
     execute format('drop policy if exists %1$s_select on public.%1$s', t);
     execute format('create policy %1$s_select on public.%1$s for select using (belongs_to_account(account_id))', t);
     execute format('drop policy if exists %1$s_insert on public.%1$s', t);

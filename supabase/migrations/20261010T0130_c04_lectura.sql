@@ -107,6 +107,7 @@ begin
     return;
   end if;
   grant select on table public.journal_entry, public.journal_line, public.journal_ledger, public.sales_day_summary,
-                        public.payroll_summary, public.allocation_rule, public.entry_template, public.entry_template_line to conta_lectura;
+                        public.payroll_summary, public.allocation_rule, public.entry_template, public.entry_template_line,
+                        public.journal_correction, public.journal_dismissal to conta_lectura;
   raise notice 'C04 0130: conta_lectura puede leer el libro diario.';
 end $$;
