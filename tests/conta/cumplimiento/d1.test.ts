@@ -63,5 +63,8 @@ describe('D1 · el puente da lo mismo que vat_rate de producción', () => {
 describe('los valores de serie salen de las fuentes, sin retoques a mano', () => {
   it('scripts/conta/serie.mjs comprobar: migración y referencia idénticas a lo generado', () => {
     expect(() => execFileSync('node', ['scripts/conta/serie.mjs', 'comprobar'], { cwd: raiz, stdio: 'pipe' })).not.toThrow()
-  })
+  // Lanza un proceso de Node: sola tarda ~2 s, pero con las 160 pruebas a la vez
+  // pasó de los 5 s por defecto (12/10, antes-de-subir). El límite es para el
+  // proceso, no relaja lo que se comprueba.
+  }, 30_000)
 })
