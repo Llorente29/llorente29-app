@@ -45,6 +45,8 @@ async function limpiar(s: Sesion, id: string) {
         const roles = await rest<{ party_id: string }[]>(s, 'GET', `party_role?select=party_id&account_id=eq.${CUENTA_A.id}&supplier_id=in.(${ids.join(',')})`)
         const partes = [...new Set((roles.datos ?? []).map((r) => r.party_id))]
         if (partes.length) await rest(s, 'DELETE', `party_role?account_id=eq.${CUENTA_A.id}&party_id=in.(${partes.join(',')})&role=neq.supplier`)
+        // Lo que archivó la prueba (el socio histórico) se recupera: la ficha es de la cuenta A, no de la empresa.
+        for (const pid of partes) await rest(s, 'POST', 'rpc/party_set_archived', { p_party: pid, p_archivar: false, p_nota: null })
       }
     }
     const d = await rest(s, 'POST', i.status === 'traida' ? 'rpc/company_chart_import_undo' : 'rpc/company_chart_import_discard', { p_import: i.id })
@@ -135,6 +137,25 @@ test('una 430 con enlace de pago y sin papel sale en la revisión y, al confirma
     // Y sale en «Plataformas».
     await expect(filtroPlataformas).toHaveText(`Plataformas · ${antes + 1}`)
     await expect(page.getByRole('link', { name: /GLOVOAPP SPAIN PLATFORM/ })).toBeVisible()
+
+    // Respuesta 4 · 6: «Archivarlo (histórico)» archiva de verdad. Como en
+    // producción el 06/10: se marca la casilla del socio, se confirma ANTES
+    // otra fila (la lista se recarga) y luego el socio. Allí la ficha quedó
+    // activa: party_set_archived no llegó a correr (su updated_at no se movió).
+    const socio = revision.getByRole('group', { name: 'Cuenta 43000005' })
+    await socio.getByRole('checkbox', { name: /Archivarlo/ }).check()
+    await expect(socio).toContainText('queda archivado (histórico)')
+    await revision.getByRole('group', { name: 'Cuenta 43000101' }).getByRole('button', { name: 'Confirmar 43000101' }).click()
+    await expect(revision.getByText('5 cuentas de clientes traídas de Diez por revisar')).toBeVisible()
+    await expect(socio.getByRole('checkbox', { name: /Archivarlo/ }), 'la casilla sigue marcada después de recargar').toBeChecked()
+    await socio.getByRole('button', { name: 'Confirmar 43000005' }).click()
+    await expect(page.getByText(/pasa a ser socio de marca y cliente, con 43000005 como su cuenta de cliente; queda archivado \(histórico\)\./)).toBeVisible()
+    const enlace5 = await rest<{ entity_id: string }[]>(s, 'GET',
+      `company_account_link?select=entity_id,company_account!inner(code)&company_id=eq.${id}&entity=eq.customer&role=eq.principal&company_account.code=eq.43000005`)
+    expect(enlace5.datos, 'la 43000005 es la cuenta de cliente del socio').toHaveLength(1)
+    const ficha = await rest<{ archived_at: string | null; archived_note: string | null }[]>(s, 'GET', `party?select=archived_at,archived_note&id=eq.${enlace5.datos[0].entity_id}`)
+    expect(ficha.datos[0].archived_at, 'la ficha del socio queda archivada').not.toBeNull()
+    expect(ficha.datos[0].archived_note).toBe('Histórico: socio de marca traído de Diez')
   } finally {
     if (id) await limpiar(s, id)
   }
