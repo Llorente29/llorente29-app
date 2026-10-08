@@ -159,7 +159,13 @@ async function tick(): Promise<boolean> {
         if (!ip) throw new Error(`impresora ${printer?.name} sin IP`);
         const buffers: Uint8Array[] = [];
         if (payload && payload.mode === 'by_order' && payload.sale_id) {
-          const order = await rpc('order_for_print', { p_device_token: deviceToken, p_sale_id: payload.sale_id });
+          // TPV Sala (S1): un envío a cocina lleva fire_id y se pide SOLO ese
+          // envío. Sin fire_id, el pedido entero, como siempre. Con un servidor
+          // sin el parámetro, la llamada con fire_id fallaría: por eso solo se
+          // manda cuando el trabajo lo trae (y solo lo trae un servidor que lo tiene).
+          const order = await rpc('order_for_print', payload.fire_id
+            ? { p_device_token: deviceToken, p_sale_id: payload.sale_id, p_fire_id: payload.fire_id }
+            : { p_device_token: deviceToken, p_sale_id: payload.sale_id });
           if (!order) throw new Error(`pedido ${payload.sale_id} no encontrado`);
           if (doc_type === 'bag') {
             let fiscal: any = null;
