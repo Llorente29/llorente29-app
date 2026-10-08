@@ -10,7 +10,9 @@
 --
 -- Cambia SOLO eso: las dos condiciones de IVA y retención no se aplican a un
 -- asiento closing u opening ENLAZADO en fiscal_year_closing a su ejercicio y
--- con la marca del generador de cierre. Un closing suelto o manual sigue
+-- con la marca del generador de cierre, ni al CONTRAASIENTO de uno de ellos
+-- (reabrir el ejercicio los anula: sin esto, no se podría reabrir; lo cazó la
+-- prueba de staging, run 37855687360). Un closing suelto o manual sigue
 -- pasando la regla (probado en staging). Todo lo demás, igual: cuadre, fecha,
 -- ejercicio abierto, mes cerrado, la cuota = base × tipo cuando hay tipo, y el
 -- local o «común». Misma firma: reemplaza, no sobrecarga (regla 2).
@@ -71,16 +73,23 @@ begin
     -- opening, ENLAZADO en fiscal_year_closing a su ejercicio (la apertura, al
     -- cierre del ejercicio anterior) y con la marca del generador en reasons.
     -- Un closing suelto, o hecho a mano, sigue pasando la regla de IVA.
-    v_cierre := v_e.source_type in ('closing', 'opening')
-      and coalesce(v_e.reasons, '[]'::jsonb) @> '[{"decision": "cierre-del-ejercicio"}]'::jsonb
-      and exists (
-        select 1 from public.fiscal_year_closing c
-         where c.company_id = v_e.company_id
-           and ((v_e.source_type = 'closing' and c.fiscal_year_id = v_e.fiscal_year_id
-                 and v_e.id in (c.regularization_entry_id, c.closing_entry_id))
-             or (v_e.source_type = 'opening' and c.opening_entry_id = v_e.id
-                 and exists (select 1 from public.fiscal_year a
-                              where a.id = c.fiscal_year_id and a.ends_on + 1 = v_y.starts_on))));
+    -- El contraasiento de uno de esos asientos (reabrir el ejercicio los anula)
+    -- también: lleva los mismos apuntes al revés. La condición se mira sobre el
+    -- asiento ORIGINAL, que en ese momento sigue enlazado.
+    v_cierre := exists (
+      select 1 from public.journal_entry o
+        join public.fiscal_year oy on oy.id = o.fiscal_year_id
+       where o.id = case when v_e.source_type = 'reversal' then v_e.reverses_entry_id else v_e.id end
+         and o.source_type in ('closing', 'opening')
+         and coalesce(o.reasons, '[]'::jsonb) @> '[{"decision": "cierre-del-ejercicio"}]'::jsonb
+         and exists (
+           select 1 from public.fiscal_year_closing c
+            where c.company_id = o.company_id
+              and ((o.source_type = 'closing' and c.fiscal_year_id = o.fiscal_year_id
+                    and o.id in (c.regularization_entry_id, c.closing_entry_id))
+                or (o.source_type = 'opening' and c.opening_entry_id = o.id
+                    and exists (select 1 from public.fiscal_year a
+                                 where a.id = c.fiscal_year_id and a.ends_on + 1 = oy.starts_on)))));
 
     -- Regla 5: IVA coherente. La cuota es el importe del apunte y = base × tipo, al
     -- céntimo, redondeando por factura: un resumen de n facturas admite medio

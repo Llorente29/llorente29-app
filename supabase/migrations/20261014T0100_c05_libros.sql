@@ -361,10 +361,16 @@ begin
     values (v_e.account_id, v_e.company_id, p_entry, l.id, l.vat_book, v_tipo, v_num, v_hasta, greatest(coalesce(v_docs, 1), 1),
       coalesce(l.document_date, v_e.document_date, v_e.entry_date), v_fecha_op, v_recep, coalesce(l.party_id, v_e.party_id),
       v_nif, v_tipo_id, v_pais, v_nombre,
-      v_clave, v_calif, v_exenta, l.tax_base, l.rate,
+      -- La base lleva el signo de la cuota: en una rectificativa las dos van en
+      -- negativo (el validador del C04 compara en valor absoluto y deja la base
+      -- en positivo en el apunte).
+      v_clave, v_calif, v_exenta,
+      case when (case when l.vat_book = 'issued' then l.credit - l.debit else l.debit - l.credit end) < 0 then -abs(l.tax_base) else abs(l.tax_base) end,
+      l.rate,
       case when l.vat_book = 'issued' then l.credit - l.debit else l.debit - l.credit end,
       nullif(l.surcharge_rate, 0),
-      l.tax_base + case when l.vat_book = 'issued' then l.credit - l.debit else l.debit - l.credit end,
+      case when (case when l.vat_book = 'issued' then l.credit - l.debit else l.debit - l.credit end) < 0 then -abs(l.tax_base) else abs(l.tax_base) end
+        + case when l.vat_book = 'issued' then l.credit - l.debit else l.debit - l.credit end,
       case when l.vat_book in ('received', 'investment') and l.vat_deductible = 'yes' then l.debit - l.credit when l.vat_book in ('received', 'investment') then 0 end,
       v_isp, v_inv, v_ret_tipo, v_ret,
       case when v_iae is null then null else v_act_code end, case when v_iae is null then null else v_act_tipo end, v_iae,
