@@ -34,7 +34,8 @@ test('la cuenta B no ve ni toca los libros de A', async ({ browserName }, info) 
   for (const ruta of [
     `vat_book_entry?select=id&company_id=eq.${EMPRESA_A}`,
     `investment_good?select=id&company_id=eq.${EMPRESA_A}`,
-    `investment_good_regularization?select=id&company_id=eq.${EMPRESA_A}`,
+    // Sin company_id: la regularización cuelga del bien y de la cuenta (regla 40, medido en staging).
+    `investment_good_regularization?select=id&account_id=eq.${CUENTA_A.id}`,
     `fiscal_year_closing?select=fiscal_year_id&company_id=eq.${EMPRESA_A}`,
     `annual_accounts_choice?select=fiscal_year_id&company_id=eq.${EMPRESA_A}`,
     `annual_accounts_mapping?select=id&company_id=eq.${EMPRESA_A}`,

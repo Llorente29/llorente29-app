@@ -50,8 +50,9 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   await expect(page.getByText('Sus facturas se apuntan en', { exact: true })).toHaveCount(1)
   await expect(page.getByLabel('Local habitual')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Qué tipos de gasto usa tu negocio' })).toBeVisible()
-  // C04: el saldo sale del libro (la F-2026-0915 validada de la semilla seed_c04_staging.sql).
-  await expect(saldo.locator('.cx-dato').filter({ hasText: 'Saldo con él' })).toContainText('1.283,15 € a tu cargo')
+  // C04: el saldo sale del libro: la F-2026-0915 validada (seed_c04_staging.sql,
+  // 1.283,15) menos su rectificativa AB-2026-031 (seed_c05_staging.sql, 55,00).
+  await expect(saldo.locator('.cx-dato').filter({ hasText: 'Saldo con él' })).toContainText('1.228,15 € a tu cargo')
   await expect(saldo.locator('.cx-dato').filter({ hasText: 'Va al 347 este año' })).toContainText(/^Va al 347 este año(Sí|No|Tu empresa)/)
 
   if (lado(page) === 'ordenador') {
