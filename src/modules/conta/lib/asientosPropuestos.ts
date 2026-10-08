@@ -319,7 +319,8 @@ export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidaci
     razones.push({ decision: 'Sin ventas', porque: `${l.pedidos.total ? `los ${l.pedidos.total} pedidos del periodo ya están` : 'las ventas del periodo van'} en sus resúmenes del día: aquí solo la comisión, los cargos y el cobro` })
   }
   if (cent(l.devoluciones)) razones.push({ decision: `Devoluciones (${eurosExactos(l.devoluciones)}) fuera`, porque: 'van al resumen del día en que se producen, con su pedido', cita: cita('ivaModificacionBase') })
-  if (l.neto !== null && cent(l.ventas - l.devoluciones - totalFactura) !== cent(l.neto)) {
+  // 1 céntimo es el redondeo del IVA (Glovo lo calcula pedido a pedido: 36 de sus 96 liquidaciones).
+  if (l.neto !== null && Math.abs(cent(l.ventas - l.devoluciones - totalFactura) - cent(l.neto)) > 1) {
     avisos.push(`Ventas − devoluciones − factura = ${eurosExactos(red2(l.ventas - l.devoluciones - totalFactura))}, y la plataforma dice neto ${eurosExactos(l.neto)}: la comisión puede venir con el IVA dentro o falta un cargo.`)
     confs.push('duda')
   }
