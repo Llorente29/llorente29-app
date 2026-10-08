@@ -10,7 +10,7 @@
 
 select json_build_object(
   'terceros', (select coalesce(json_agg(json_build_object(
-      'account_id', p.account_id, 'id', p.id, 'name', p.name, 'tax_id', p.tax_id,
+      'account_id', p.account_id, 'id', p.id, 'name', p.name, 'tax_id', p.tax_id, 'supplier_tax_id', s.tax_id,
       'tax_id_type', coalesce(f.tax_id_type, s.tax_id_type), 'archived', p.archived_at is not null) order by p.account_id, p.name), '[]')
     from public.party p
     left join public.customer_fiscal f on f.party_id = p.id

@@ -65,6 +65,17 @@ export function nifValido(entrada) {
 }
 
 const centimos = (v) => Math.round(Number(v) * 100)
+
+/** Como party_nif de la base: mayúsculas, solo letras y números. */
+export const nifNormal = (v) => { const n = String(v ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase(); return n || null }
+
+/** El nombre para comparar: sin acentos, mayúsculas, puntuación ni forma jurídica (S.L., SLU, S.A., S.COOP…). */
+export function nombreNormal(v) {
+  const s = String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\b(s ?l ?u?|s ?a ?u?|s ?coop|sociedad limitada|sociedad anonima|slne)\b/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+  return s || null
+}
 const abs = (v) => Math.abs(Number(v ?? 0))
 
 /**
@@ -97,7 +108,7 @@ export function descuadre(l) {
 }
 
 /**
- * bd.terceros: { terceros: [{ account_id, id, name, tax_id, tax_id_type, archived }],
+ * bd.terceros: { terceros: [{ account_id, id, name, tax_id, supplier_tax_id, tax_id_type, archived }],
  *                cuentas: [{ account_id, company_id, entity, entity_id, role, codes: [] }],
  *                liquidaciones: [{ account_id, id, party_id, ref, gross_sales, commission, otros, net_payout, needs_review }],
  *                ventas_anio: [{ account_id, party_id, anio, ventas, comisiones, modelo }],
@@ -124,6 +135,53 @@ export function revisarTerceros(t) {
     if (xs.length < 2) continue
     const [cuenta, nif] = k.split('|')
     out.push({ nivel: 'rojo', tipo: 'nif_repetido', donde: `cuenta ${cuenta}`, detalle: `El NIF ${nif} está en ${xs.length} terceros: ${xs.map((x) => x.name).join(', ')}. Un NIF, un tercero.`, norma: NORMA_NIF })
+  }
+
+  // 1b · Un NIF, un tercero ACTIVO (respuesta 4 del C04). El NIF de la base
+  // es único por cuenta, así que 1 no salta nunca por sí solo: el duplicado
+  // real es el proveedor viejo de Cocina, cuyo NIF se quedó en su ficha de
+  // proveedor (el disparador no se lo da a un segundo tercero). Se compara el
+  // NIF EFECTIVO —el del tercero o, si no tiene, el de su ficha de proveedor—.
+  //   · dos activos con el mismo NIF: rojo (hay que fusionarlos);
+  //   · uno activo y otro archivado: ámbar (fusionarlos deja uno, con todo).
+  const efectivo = (x) => nifNormal(x.tax_id) ?? nifNormal(x.supplier_tax_id)
+  const porEfectivo = new Map()
+  for (const x of t.terceros ?? []) {
+    const n = efectivo(x)
+    if (!n) continue
+    const k = `${x.account_id}|${n}`
+    porEfectivo.set(k, [...(porEfectivo.get(k) ?? []), x])
+  }
+  for (const [k, xs] of porEfectivo) {
+    if (xs.length < 2) continue
+    const [cuenta, nif] = k.split('|')
+    const activos = xs.filter((x) => !x.archived)
+    if (activos.length === 0) continue
+    // Si todos lo llevan en el propio tercero, ya lo dice «nif_repetido» (1): no se cuenta dos veces.
+    if (xs.every((x) => nifNormal(x.tax_id) === nif)) continue
+    const lista = xs.map((x) => `${x.name}${x.archived ? ' (archivado)' : ''}`).join(', ')
+    if (activos.length > 1) {
+      out.push({ nivel: 'rojo', tipo: 'nif_dos_activos', donde: `cuenta ${cuenta}`, detalle: `El NIF ${nif} está en ${activos.length} terceros activos: ${lista}. Un NIF, un tercero activo: fusiónalos («Fusionar con…» en la ficha).`, norma: NORMA_NIF })
+    } else {
+      out.push({ nivel: 'ambar', tipo: 'nif_activo_y_archivado', donde: `cuenta ${cuenta}`, detalle: `El NIF ${nif} es de ${activos[0].name} y también de una ficha archivada: ${lista}. Fusiónalos para que su historial quede en una sola («Fusionar con…»).`, norma: NORMA_NIF })
+    }
+  }
+  // 1c · El mismo nombre (sin mayúsculas, acentos, puntuación ni forma jurídica)
+  // en un tercero activo y otro, sin NIF que los distinga: posible duplicado.
+  // Ámbar: dos nombres iguales pueden ser dos empresas; lo decide una persona.
+  const porNombre = new Map()
+  for (const x of t.terceros ?? []) {
+    const n = nombreNormal(x.name)
+    if (!n) continue
+    const k = `${x.account_id}|${n}`
+    porNombre.set(k, [...(porNombre.get(k) ?? []), x])
+  }
+  for (const [k, xs] of porNombre) {
+    if (xs.length < 2 || !xs.some((x) => !x.archived)) continue
+    const nifs = new Set(xs.map(efectivo).filter(Boolean))
+    if (nifs.size > 1) continue // NIF distintos: son dos, aunque se llamen igual
+    const [cuenta] = k.split('|')
+    out.push({ nivel: 'ambar', tipo: 'nombre_repetido', donde: `cuenta ${cuenta}`, detalle: `Mismo nombre en ${xs.length} terceros: ${xs.map((x) => `${x.name}${x.archived ? ' (archivado)' : ''}`).join(', ')}. Si son el mismo, fusiónalos («Fusionar con…»).`, norma: NORMA_NIF })
   }
 
   // 2 · Neto = ventas − comisiones − otros cargos.
@@ -183,6 +241,9 @@ export function revisarTerceros(t) {
 export const TITULO_TERCEROS = {
   nif_invalido: 'NIF que no es válido',
   nif_repetido: 'Un NIF en dos terceros',
+  nif_dos_activos: 'Un NIF en dos terceros activos',
+  nif_activo_y_archivado: 'Un NIF en un tercero activo y en otro archivado',
+  nombre_repetido: 'Mismo nombre en dos terceros',
   dos_subcuentas: 'Dos subcuentas para el mismo papel',
   excluido_sin_motivo: 'Fuera del 347 sin motivo',
   '347_sin_nif': 'En el 347 de ventas sin NIF',
