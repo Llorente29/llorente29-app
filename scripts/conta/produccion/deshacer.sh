@@ -8,7 +8,9 @@
 # todavía puesto puede romper más de lo que arregla. Lo que queda a medias va
 # al informe, fila a fila.
 #
-# Entorno: PSQL, DB_URL, INFORME. Sale con 0 si lo ha deshecho todo.
+# Entorno: PSQL, DB_URL, INFORME y, si los .down.sql no están en
+# supabase/vuelta-atras, VUELTA_ATRAS_DIR (el ensayo de staging, C04 R4).
+# Sale con 0 si lo ha deshecho todo.
 set -uo pipefail
 lista="${1:?falta la lista de aplicados}"
 mapfile -t ap < <(grep -v '^\s*$' "$lista")
@@ -17,7 +19,7 @@ tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
 fallo=0
 for ((i=${#ap[@]}-1; i>=0; i--)); do
   f="${ap[$i]}"
-  down="supabase/vuelta-atras/$(basename "$f" .sql).down.sql"
+  down="${VUELTA_ATRAS_DIR:-supabase/vuelta-atras}/$(basename "$f" .sql).down.sql"
   if [ "$fallo" -ne 0 ]; then echo "| $((i+1)) | \`$f\` | **queda aplicado** (la vuelta atrás paró antes) |" >> "$INFORME"; continue; fi
   if [ ! -f "$down" ]; then
     echo "| $((i+1)) | \`$f\` | **sin vuelta atrás: queda aplicado** |" >> "$INFORME"

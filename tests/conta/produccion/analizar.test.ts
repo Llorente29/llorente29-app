@@ -16,14 +16,16 @@
 //   · El interruptor «Folvy Conta» de Foodint, tanda propia, ya aplicado (real
 //     37432334442): copia fija en tanda-interruptor-foodint-20261006.txt, con su
 //     vuelta atrás en vuelta-atras-interruptor-foodint-20261006.txt.
-//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): el
-//     C02c (traer el plan de Diez). Lo existente está DEDUCIDO de las tandas ya
-//     aplicadas, no medido (el conector a producción da «Unauthorized»): la
-//     medida de verdad es la del ensayo. Al reescribir el manifiesto para otra
-//     tanda, esta parte se reescribe con él.
+//   · La del C04, ya aplicada (real 37697073290): copia fija en
+//     tanda-c04-20261007.txt, con su vuelta atrás en vuelta-atras-c04-20261007.txt.
+//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): C04 R4
+//     (historial, corte de Foodint, fusionar terceros), con lo existente medido
+//     en producción el 08/10. Al reescribir el manifiesto para otra tanda, esta
+//     parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — módulo .mjs sin tipos
 import { analizarFichero, clasificar, creadosPorLaTanda, decidir, sentencias } from '../../../scripts/conta/produccion/analizar.mjs'
@@ -250,8 +252,8 @@ describe('el interruptor de Foodint (ya aplicado), tal cual', () => {
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): la 0130 del C00 y el C04', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda del C04 (ya aplicada, real 37697073290), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c04-20261007.txt'
   const viva = leerTanda(MANIFIESTO)
   // MEDIDO en producción el 07/10 con el conector de solo lectura (to_regclass /
   // to_regprocedure), con la consulta del workflow: de lo que nombra la tanda,
@@ -285,9 +287,52 @@ describe('la tanda de AHORA (manifiesto vivo): la 0130 del C00 y el C04', () => 
     expect(nombradas).toEqual(paran().map((f) => f.replace('supabase/migrations/', '')))
   })
   it('su vuelta atrás es la de las cuatro del C04, al revés (la 0130 del C00 no tiene)', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c04-20261007.txt')
     expect(existsSync('supabase/vuelta-atras/20261003T0130_c00_valores_de_serie.down.sql')).toBe(false)
     expect(atras).toEqual([...viva].filter((f) => f.includes('_c04_')).reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): C04 R4 — historial, corte de Foodint y fusionar terceros', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // MEDIDO en producción el 08/10 con el conector de solo lectura (to_regclass /
+  // to_regprocedure): de lo que nombra la tanda existen las cinco tablas de
+  // antes; party_merge y sus dos funciones, no.
+  const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c04r-20261008.json'))
+  const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
+
+  it('el historial va primero; después el corte y la fusión', () => {
+    expect(viva).toEqual([
+      'supabase/migrations/20261012T0100_c04r_historial.sql',
+      'supabase/migrations/20261012T0110_c04r_corte_datos.sql',
+      'supabase/migrations/20261012T0120_c04r_fusionar_terceros.sql',
+    ])
+  })
+  it('PARA solo el corte: actualiza el ejercicio, quita y pone cierres y borra las propuestas', () => {
+    expect(paran()).toEqual(['supabase/migrations/20261012T0110_c04r_corte_datos.sql'])
+    const motivos = decidir(p.porFichero[paran()[0]], p.existe).para.join(' | ')
+    for (const t of ['fiscal_year', 'fiscal_period_lock', 'journal_entry']) expect(motivos).toContain(t)
+  })
+  it('el corte está nombrado para «autorizo» en la cabecera del manifiesto, y solo él', () => {
+    const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
+    expect(nombradas).toEqual(paran().map((f) => f.replace('supabase/migrations/', '')))
+  })
+  it('el historial da de alta 58 ficheros, cada uno con la huella de su fichero en el repositorio', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    const filas = [...sql.matchAll(/\('(\d{8}T\d{4}_[a-z0-9_]+)', '([0-9a-f]{32})', 'run \d+ · [0-9a-f]+'\)/g)]
+    // Dos veces cada una: la guarda (para si ya está con otra huella) y el alta.
+    expect(filas.length).toBe(116)
+    const unicas = new Map(filas.map((m) => [m[1], m[2]]))
+    expect(unicas.size).toBe(58)
+    for (const [v, md5] of unicas) {
+      const f = `supabase/migrations/${v}.sql`
+      expect(existsSync(f), f).toBe(true)
+      expect(createHash('md5').update(readFileSync(f)).digest('hex'), `huella de ${v}`).toBe(md5)
+    }
+  })
+  it('su vuelta atrás es la de las tres, al revés', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
   })
 })
 

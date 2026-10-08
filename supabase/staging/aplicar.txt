@@ -1,6 +1,7 @@
-# Respuesta 3 del C04, segunda vuelta (12/10). La 20261010T0110_c04_enlaces.sql
-# ya entró en la ejecución 81 (con el papel «liquidacion»); el rehacer falló
-# allí por el CHECK de los anulados y ahora borra con los disparadores apagados.
-supabase/staging/sql/20261012_c04_rehacer_libro.sql
-supabase/seeds/conta/seed_c04_staging.sql
-supabase/staging/sql/20261011_c04_prueba_agente.sql
+# C04 R4 (conta/c04-retoques). Primero la prueba de la fusión de terceros
+# (todo en una transacción que acaba en ROLLBACK: antes = después, fusionar,
+# deshacer, para con lo validado, B no puede, vuelta atrás de la migración) y,
+# si pasa, la migración de verdad para que la e2e de «Fusionar con…» tenga con
+# qué correr.
+supabase/staging/sql/20261012_c04r_prueba_fusionar.sql
+supabase/migrations/20261012T0120_c04r_fusionar_terceros.sql

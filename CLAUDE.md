@@ -80,61 +80,76 @@ Cada una costó un incidente real. La fecha es el día que se pagó.
    *(= regla 32 de la maestra.)*
    *(10/09, y lo pagó el servicio entero. Mi p8 dejó `avg_unit_cost` en NULL cuando no hay coste fiable —lo correcto, y lo pidió Julio— pero `recipe_item_location_stock.stock_value` era NOT NULL y se calcula `qty × avg`. Desde las 12:13 UTC, cualquier camino que recalculara stock abortaba con 23502 y se llevaba la transacción entera: 79 «Entregado al rider» por token, 33 cambios de estado, 10 mermas y 7 cierres de venta, todos rechazados. A las 22:00 había 12 pedidos «Listo» sin cerrar en Alcalá, el más antiguo de las 14:49. Mi ensayo de la p8 midió la media sobre 453 filas y no ejecutó ni una venta.)*
 
-### La banda de servicio, escrita para no tener que juzgarla
+### La banda de servicio: ya no es una hora, es lo que hace cada fichero
 
-> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Aquí se cita
-> para que exista en el repositorio, que es donde se lee.
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de
+> Julio (W01, 08/10), escrita aquí en la respuesta 4 del C04. Sustituye a la
+> franja de las 12:15–00:30, que queda abajo como historia.
 
-> **Publicar el FRONT ya no espera a ninguna hora** (13/09). Las tablets se
-> defienden solas: descargan cuando toca y aplican solo dentro de la ventana de
-> su local y con la cocina en calma. Medido el 13/09: los paquetes 291 y 292
-> cayeron con la cocina en servicio —50 ventas desde las 15:00 y pedidos
-> abiertos— y las tres tablets siguieron en el 290 que cogieron a las 12:06,
-> vivas y latiendo al minuto. Y el par que lo convierte en prueba: esas mismas
-> tres cogieron el 287, 288, 289 y 290 solas por la mañana. Recoge cuando puede
-> y espera cuando no.
->
-> **La banda queda solo en la BASE, y solo para lo que toca el camino del
-> pedido.**
+> **Publicar el FRONT no espera a ninguna hora** (13/09): las tablets se
+> defienden solas — descargan cuando toca y aplican solo dentro de la ventana
+> de su local y con la cocina en calma.
 
-**Entre las 12:15 y las 00:30 (reloj de la base, `now() at time zone 'Europe/Madrid'`)
-no se aplica ninguna migración**, salvo que se cumplan LAS TRES:
+**A la BASE se aplica a cualquier hora, con los negocios abiertos.** Lo que
+decide no es el reloj sino lo que hace cada fichero, y eso lo clasifica
+`scripts/conta/produccion/analizar.mjs` contra lo que existe en producción,
+no lo opina nadie:
 
-1. **No está en el camino del pedido.** Ni lo llama un disparador, ni un cron,
-   ni una función que sí lo esté. **Se CUENTA, no se supone**: `pg_proc`,
-   `cron.job` y `pg_trigger`, y el número va al parte.
-2. **No toma cierre exclusivo sobre una tabla que el pedido lee o escribe.** Un
-   `create or replace` de función, no lo toma. Un `CHECK` o un índice sobre una
-   tabla del camino, sí — y ésos esperan.
-3. **Se dice ANTES de aplicarlo**, con la medida delante.
+1. **Añadir** (tabla, columna que admite nulos, función o vista nuevas,
+   índice nuevo sobre una tabla pequeña o fuera del camino): **pasa siempre**.
+2. **Cambiar en caliente** (reemplazar una función con la misma firma, una
+   vista, un `CHECK` que solo amplía): pasa si el fichero lo **declara en su
+   cabecera** —`-- cambia: <objeto> · prueba: supabase/staging/sql/<f>.sql`— y
+   esa prueba de staging existe y nombra el objeto. Si el objeto está en el
+   camino del pedido, además con **`autorizo`**.
+3. **Destruir o mover** (borrar o renombrar, `update`/`delete` sobre lo que
+   existe, cambiar un tipo —también ampliarlo, de momento—, hacer obligatoria
+   una columna, índice sin `concurrently` en tabla grande o del camino): solo
+   con **`autorizo`**, el nombre entero del fichero. Borrar o renombrar va
+   **en dos pasos**: primero el front deja de leerlo y se publica
+   (`antes-de-subir.sh` lo mide contra `origin/main` y contra el commit), y en
+   otra tanda se quita de la base.
+4. **Después, siempre la comprobación**, sin excepción: D1, recuento, los
+   agentes antes y después con `conta_lectura`, y la **salud del pedido de
+   todas las cuentas** (las que tienen 3 o más pedidos en los 15 minutos de
+   antes, sumadas: tiene que haber al menos un cambio de estado en los 15 de
+   después). **Si falla, vuelta atrás automática** (`deshacer.sh`) de lo que
+   aplicó ese run, en orden inverso, y el parte lo dice.
 
-Si falla una, se espera a las 00:30. Y la duda va siempre a favor de esperar:
-la banda existe porque a las 13:00 hay gente cocinando.
+Y las dos de siempre, que no cambian: el **ensayo** (todo en una transacción
+que acaba en `rollback`, con el registro dentro) antes del real, y el
+**historial** —cada fichero aplicado queda en
+`supabase_migrations.schema_migrations` con su huella md5, en la misma
+transacción que el fichero—. Un fichero sin registrar cuyo contenido ya existe
+**para** («parece aplicado»): por eso el 08/10 se dieron de alta los 58
+aplicados antes del W01 (`20261012T0100_c04r_historial.sql`).
 
-*Por qué acaba a las 00:30 y no a las 23:45 (25/09):* había dos bandas escritas
-—ésta decía 23:45, el método del parte diario 00:30— y se zanjó con datos, 30
-días y todas las fuentes (26/08–24/09): el pedido más tardío entró a las
-**23:59**, **6 de 30 días** tuvieron alguno después de las 23:45 y **0 de 30**
-después de las 00:15. Con 23:45, uno de cada cinco días se aplicaba en servicio.
+*Detector automático:* si alguien escribe «espero a las 00:30» para aplicar
+algo, la pregunta es qué dice el analizador de ese fichero. Si dice «sigue»,
+no hay nada que esperar; si dice «autorizo», lo que falta es el nombre en el
+campo, no la noche. Y si alguien escribe «ya está aplicado» sin el registro en
+el historial con su huella, no está aplicado: está ejecutado.
 
-*Por qué está escrita así (13/09):* la versión anterior pedía que la migración
-«no escribiera» —`STABLE` o `IMMUTABLE`—, y eso no es lo que protege. Se vio al
-cerrar las tres puertas de `modifier_recipe_impact`: son `VOLATILE`, así que por
-la letra había que esperar a la noche, pero **no las llama nada vivo** (cero
-funciones, cero crons, cero disparadores, medido) y un `create or replace` de
-función no cierra ninguna tabla. Esperar habría dejado ocho horas más una puerta
-por la que se escribían decisiones que no descuentan nada. En cambio el `CHECK`
-sobre esa misma tabla sí espera, porque toma `ACCESS EXCLUSIVE` sobre algo que
-`_sale_line_raw_consumption` y `compute_sale_line_cost` leen en cada pedido.
-La banda protege **el camino por el que pasa un pedido vivo**, no la volatilidad
-declarada de una función. Las tres de arriba se miden, se pegan y no se opinan;
-la de antes obligaba a esperar por una etiqueta y a discutirlo cada día.
+*Lo que queda apuntado y no está hecho:* `create index concurrently` necesita
+ir fuera de transacción y el workflow aplica cada fichero dentro de una (se
+hará cuando haga falta el primero); y «ampliar el tipo de una columna» cuenta
+como destruir, más estricto de lo que pide la regla, hasta que un caso real
+diga cómo afinarlo.
 
-*Por qué la anterior (12/09), que también fue una corrección:* antes decía «nada
-que toque entrada de pedidos, consumo o stock», que es una regla en función del
-DAÑO y obliga a juzgar cada caso. Se aplicó una RPC de lectura a las 13:06
-midiendo que no tocaba nada de eso —era correcto— pero el criterio no era
-comprobable por otro.
+*Por qué se dejó la franja (W01, 08/10):* la franja protegía el camino del
+pedido esperando a que no hubiera pedidos, y obligaba a medir a mano tres
+cosas cada vez (`pg_proc`, `cron.job`, `pg_trigger`) para decidir si una
+excepción valía. Lo que protege de verdad es saber qué hace cada fichero y
+mirar, después de aplicarlo, que los pedidos siguen avanzando — y deshacer
+solo si no. La franja paró el C04 una noche por un `sales_day_summary` que no
+tocaba ningún pedido vivo.
+
+*La franja de antes, para que se entienda la historia (13/09–08/10):* entre
+las 12:15 y las 00:30 (reloj de la base) no se aplicaba nada salvo que no
+estuviera en el camino del pedido, no tomara cierre exclusivo sobre una tabla
+del camino y se dijera antes. Acababa a las 00:30 porque en 30 días (26/08–
+24/09) el pedido más tardío entró a las 23:59 y 0 de 30 días tuvieron alguno
+después de las 00:15.
 
 ### Una fusión está hecha cuando VERCEL dice READY en producción
 

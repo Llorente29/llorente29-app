@@ -290,10 +290,17 @@ jobs:
           if [ "$MODO" = "real" ]; then
             t0=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select now()")
             echo "T0=$t0" >> "$GITHUB_ENV"
-            "$PSQL" "$DB_URL" -X -A -t -F' ' -v ON_ERROR_STOP=1 -v cuenta="$FOODINT" -v t="$t0" -v minutos="$SALUD_MINUTOS" -f scripts/conta/produccion/salud-pedido.sql > /tmp/salud-antes.txt
-            entrados=$(cut -d' ' -f1 /tmp/salud-antes.txt)
+            # Todas las cuentas: una fila por cuenta con servicio (SALUD_MINIMO o más pedidos en la ventana).
+            "$PSQL" "$DB_URL" -X -A -t -F' ' -v ON_ERROR_STOP=1 -v t0="$t0" -v t="$t0" -v minutos="$SALUD_MINUTOS" -v minimo="$SALUD_MINIMO" -f scripts/conta/produccion/salud-pedido.sql > /tmp/salud-antes.txt
+            cuentas=$(grep -c . /tmp/salud-antes.txt || true)
+            entrados=$(awk '{s+=$2} END {print s+0}' /tmp/salud-antes.txt)
             echo "ENTRADOS_ANTES=$entrados" >> "$GITHUB_ENV"
-            echo "- Pedidos de Foodint en los $SALUD_MINUTOS minutos de antes: **$entrados**$([ "$entrados" -ge "$SALUD_MINIMO" ] && echo ' (hay servicio: después se mide si siguen avanzando)' || echo " (menos de $SALUD_MINIMO: sin servicio, la salud no se mide)")." >> "$INFORME"
+            echo "CUENTAS_CON_SERVICIO=$cuentas" >> "$GITHUB_ENV"
+            if [ "$cuentas" -gt 0 ]; then
+              echo "- Cuentas con servicio (≥ $SALUD_MINIMO pedidos en los $SALUD_MINUTOS minutos de antes): **$cuentas**, con **$entrados** pedidos entre todas (después se mide si siguen avanzando). Por cuenta: $(awk '{printf "%s%s… %s", (NR>1?"; ":""), substr($1,1,8), $2}' /tmp/salud-antes.txt)." >> "$INFORME"
+            else
+              echo "- Ninguna cuenta con $SALUD_MINIMO o más pedidos en los $SALUD_MINUTOS minutos de antes: sin servicio, la salud no se mide." >> "$INFORME"
+            fi
             # Los agentes de solo lectura, con conta_lectura.
             if [ -z "${RO_DB_URL:-}" ]; then echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL (los agentes de después)."; exit 1; fi
             python3 - <<'PY'
@@ -468,15 +475,17 @@ jobs:
             mal="$mal agentes-no-corren"; echo "- Los agentes no han podido correr después." >> "$INFORME"
           fi
           # 3. La salud del camino del pedido.
-          if [ "${ENTRADOS_ANTES:-0}" -ge "$SALUD_MINIMO" ]; then
+          if [ "${CUENTAS_CON_SERVICIO:-0}" -gt 0 ]; then
             hasta=$(( $(date -u -d "$T1" +%s) + SALUD_MINUTOS * 60 ))
             while [ "$(date -u +%s)" -lt "$hasta" ]; do sleep 30; done
-            "$PSQL" "$DB_URL" -X -A -t -F' ' -v ON_ERROR_STOP=1 -v cuenta="$FOODINT" -v t="$T1" -v minutos="$SALUD_MINUTOS" -f scripts/conta/produccion/salud-pedido.sql > /tmp/salud-despues.txt
-            movidos=$(cut -d' ' -f2 /tmp/salud-despues.txt)
-            echo "- Salud del pedido: $ENTRADOS_ANTES pedidos en los $SALUD_MINUTOS minutos de antes; **$movidos** cambios de estado en los $SALUD_MINUTOS de después." >> "$INFORME"
+            # Las mismas cuentas («entrados» se mide antes de T0) y sus cambios de estado desde el final del real.
+            "$PSQL" "$DB_URL" -X -A -t -F' ' -v ON_ERROR_STOP=1 -v t0="$T0" -v t="$T1" -v minutos="$SALUD_MINUTOS" -v minimo="$SALUD_MINIMO" -f scripts/conta/produccion/salud-pedido.sql > /tmp/salud-despues.txt
+            movidos=$(awk '{s+=$3} END {print s+0}' /tmp/salud-despues.txt)
+            quietas=$(awk '$3 == 0 {printf "%s%s…", (n++?", ":""), substr($1,1,8)}' /tmp/salud-despues.txt)
+            echo "- Salud del pedido, sumando las $CUENTAS_CON_SERVICIO cuentas con servicio: $ENTRADOS_ANTES pedidos en los $SALUD_MINUTOS minutos de antes; **$movidos** cambios de estado en los $SALUD_MINUTOS de después.$([ -n "$quietas" ] && echo " Sin ningún cambio: $quietas (se dice; la suma es la que decide).")" >> "$INFORME"
             [ "$movidos" -ge 1 ] || mal="$mal salud-del-pedido"
           else
-            echo "- Salud del pedido: sin servicio (${ENTRADOS_ANTES:-0} pedidos en los $SALUD_MINUTOS minutos de antes): no se mide." >> "$INFORME"
+            echo "- Salud del pedido: ninguna cuenta con servicio (≥ $SALUD_MINIMO pedidos en los $SALUD_MINUTOS minutos de antes): no se mide." >> "$INFORME"
           fi
           echo >> "$INFORME"
           if [ -z "$mal" ]; then echo "**Comprobación en verde.**" >> "$INFORME"; exit 0; fi
