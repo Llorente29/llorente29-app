@@ -97,7 +97,10 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
       return { chips, sale: s ? { texto: s.textContent ?? '', cortada: s.scrollHeight > s.clientHeight + 1, lineas: Math.round(s.clientHeight / 16) } : null }
     })
     for (const c of m.chips) expect(c.cortado, `chip «${c.texto}» cortado`).toBe(false)
-    if (m.sale) expect(m.sale.cortada, `«${m.sale.texto}» cortado en ${m.sale.lineas} línea(s)`).toBe(false)
+    // «No se corta con "…" cuando cabe en una segunda línea»: si se corta, es
+    // porque ya ocupa las dos (antes se cortaba en la primera). En el móvil un
+    // texto puede necesitar tres; entonces la segunda acaba en «…» y el entero va en el title.
+    if (m.sale?.cortada) expect(m.sale.lineas, `«${m.sale.texto}» cortado en ${m.sale.lineas} línea(s)`).toBeGreaterThanOrEqual(2)
   }
   // Lo que he hecho yo, con Deshacer en lo que validó Folvy.
   const ia = page.getByRole('region', { name: 'Lo que he hecho yo' })
