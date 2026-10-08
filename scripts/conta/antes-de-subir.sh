@@ -28,6 +28,7 @@ paso '2/6 · valores de serie idénticos a sus fuentes'
 node scripts/conta/serie.mjs comprobar
 node scripts/conta/codigos-postales.mjs comprobar
 node scripts/conta/plan.mjs comprobar
+node scripts/conta/cuentas-anuales.mjs comprobar
 
 paso '3/6 · unitarias y de cumplimiento'
 npx vitest run

@@ -1,6 +1,15 @@
-# C04 R5 (conta/c04-cierre) · La guarda 4 del nocturno de producción
-# (scripts/conta/produccion/guarda-lectura.sql): BYPASSRLS se admite (Julio,
-# 08/10); el rol sigue sin poder escribir. La prueba crea conta_lectura como en
-# producción y comprueba que la guarda pasa así, falla con un INSERT y falla
-# siendo miembro de un rol que escribe. Todo en una transacción con ROLLBACK.
-supabase/staging/sql/20261013_c04r5_prueba_guarda.sql
+# C05 · tarea 2 (conta/c05-libros-y-balances) · Libros y balances.
+#   1. 20261014T0100_c05_libros.sql — lo que se guarda (todo nuevo): modelos y
+#      mapeo de cuentas anuales, libro registro del IVA (vat_book_entry), bienes
+#      de inversión, cierre del ejercicio; y sus funciones.
+#   2. 20261014T0110_c05_modelos_serie.sql — la serie de los modelos, GENERADA
+#      desde el BOE (scripts/conta/cuentas-anuales.mjs).
+#   3. 20261014T0120_c05_cambia.sql — lo único que cambia algo que existe: el
+#      disparador del libro registro en journal_entry y conta_resultado_por_local
+#      sin la regularización. Con cabecera.
+#   4. La prueba de esos dos cambios por sus caminos (validar, anular,
+#      regularizar). ROLLBACK.
+supabase/migrations/20261014T0100_c05_libros.sql
+supabase/migrations/20261014T0110_c05_modelos_serie.sql
+supabase/migrations/20261014T0120_c05_cambia.sql
+supabase/staging/sql/20261014_c05_prueba_cambia.sql
