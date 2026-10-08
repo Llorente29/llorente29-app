@@ -179,3 +179,24 @@ está. Si la mesa va sin fotos, es un cambio corto.
   worker solo pide un envío si el trabajo de impresión lo trae, y la cabecera de mesa solo se pinta con mesa.
 - El ensayo de B usa zonas y mesas propias («ENSAYO Sala», E1…E10) para no chocar con la sala montada de
   verdad. Probado en local A → B → ensayo: 19 de 19; y la vuelta atrás B → A deja la base como estaba.
+
+## 8. Staging-conta (desde las 13:2x del 08/10) — se trabaja a dos velocidades
+
+Decisión de Julio: desarrollar y ensayar en `staging-conta` (sin banda); la demo, en producción con Folvy
+Interno; producción recibe lo ya probado en tandas.
+
+- Aplicado en staging por el conector: la nota de cocina del 08/10 (para igualarla a producción), la parte A
+  entera y la B salvo dos piezas. Semilla `supabase/seeds/tpv/seed_tpv_sala_staging.sql`: marca «Casa Lola»
+  en Norte Centro, tres productos con escandallo y una impresora.
+- **Lo que el conector no puede aplicar** (`delete`/`drop` piden una confirmación que no llega y se agota a
+  los 60 s): `supabase/staging/sql/20261008_tpv_sala_s1_lo_que_falta_en_staging.sql` — quitar línea sin
+  enviar y `order_for_print` con envío. Lo pega Julio en el editor SQL **de staging**.
+- **Primer ensayo con las funciones reales** (no simplificadas), revertido con un error final que lleva los
+  resultados: abrir, tres envíos, anular, sacar la cuenta, cobrar, mesa lista, Mostrador, rechazo de
+  `upsert_pos_sale`, `pos_open_sales`, `pos_floor`: todo verde. **Consumo real**: −2 cañas, −2 secretos,
+  −1 tarta (la anulada descuenta, como quedó decidido), 0 movimientos sin línea. Total 40,00 € (la tarta
+  anulada fuera).
+- Hallazgo del ensayo, en el ensayo y no en el código: daba por hecha UNA impresora; con dos salen el doble
+  de trabajos, que es lo correcto. Ahora cuenta por impresora y copia.
+- Pendiente en staging, tras pegar el fichero: `order_for_print` por envío y quitar línea sin enviar
+  (`claude/sql/20261008_tpv_sala_s1_ensayo_staging.sql`).

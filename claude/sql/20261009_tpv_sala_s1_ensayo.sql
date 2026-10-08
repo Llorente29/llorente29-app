@@ -45,7 +45,7 @@ declare
   c_user constant uuid := 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a';   -- Julio (admin de la cuenta)
   v_brand uuid; v_items uuid[]; v_zone uuid; v_terr uuid; v_t4 uuid; v_sale uuid; v_r jsonb;
   v_ids_e2 uuid[]; v_ids_fin uuid[]; v_fires uuid[]; v_n int; v_printer uuid; v_order jsonb;
-  v_reason uuid; v_line uuid; v_qs uuid; i int;
+  v_reason uuid; v_line uuid; v_qs uuid; i int; v_np int; v_nb int;
 begin
   perform set_config('request.jwt.claims', json_build_object('sub', c_user, 'role', 'authenticated')::text, true);
   perform set_config('request.jwt.claim.sub', c_user::text, true);
@@ -55,6 +55,10 @@ begin
   values (c_acc, c_loc, 'ENSAYO cocina', 'escpos_network', array['kitchen','bag'], '{"ip":"10.0.0.250"}', true)
   returning id into v_printer;
   insert into kds_device (account_id, location_id, label, token) values (c_acc, c_loc, 'ENSAYO sala', 'ensayo-sala-s1');
+  -- Cada trabajo sale una vez por impresora (y copia): se cuenta con las que haya en el local.
+  select coalesce(sum(greatest(1, coalesce(copies, 1))) filter (where 'kitchen' = any (doc_types)), 0),
+         coalesce(sum(greatest(1, coalesce(copies, 1))) filter (where 'bag' = any (doc_types)), 0)
+    into v_np, v_nb from printer where account_id = c_acc and location_id = c_loc and is_active;
 
   -- Marca y tres productos SIMPLES (sin modificadores ni combo) de esa marca
   select bla.brand_id into v_brand from brand_location_availability bla
@@ -94,8 +98,8 @@ begin
 
   select array_agg(id order by fire_number) into v_fires from sale_fire where sale_id = v_sale;
   select count(*) into v_n from print_job where sale_id = v_sale and doc_type = 'kitchen' and payload ? 'fire_id';
-  insert into ensayo values ('E2-4 tres envíos, tres tickets de cocina', array_length(v_fires,1) = 3 and v_n = 3,
-    'envíos ' || array_length(v_fires,1) || ' · trabajos de cocina ' || v_n);
+  insert into ensayo values ('E2-4 tres envíos, tres tickets de cocina (por impresora)', array_length(v_fires,1) = 3 and v_n = 3 * v_np,
+    'envíos ' || array_length(v_fires,1) || ' · trabajos de cocina ' || v_n || ' · impresoras de cocina ' || v_np);
 
   -- order_for_print(envío) EJECUTADA: devuelve solo las líneas de ese envío,
   -- con mesa, zona, comensales y número de envío; sin envío, la cuenta entera.
@@ -128,13 +132,13 @@ begin
   insert into ensayo select 'E6b anular enviada: sigue, a 0, con motivo, ANULADO encolado',
     (select voided_at is not null and line_total = 0 from sale_line where id = v_line)
       and exists (select 1 from sale_line_void where sale_line_id = v_line)
-      and (v_r->>'printJobs')::int = 1
+      and (v_r->>'printJobs')::int = v_np
       and exists (select 1 from print_job where sale_id = v_sale and payload->>'title' = 'Anulado'),
     'motivo «' || (v_r->>'printJobs') || ' trabajo» · ' || (select reason_label from sale_line_void where sale_line_id = v_line);
 
   -- E7 sacar la cuenta
   v_r := public.pos_table_request_bill(v_sale);
-  insert into ensayo select 'E7 sacar la cuenta', public._pos_table_state(s) = 'pide_cuenta' and (v_r->>'printJobs')::int = 1,
+  insert into ensayo select 'E7 sacar la cuenta', public._pos_table_state(s) = 'pide_cuenta' and (v_r->>'printJobs')::int = v_nb,
     public._pos_table_state(s) || ' · total ' || s.total from sale s where id = v_sale;
   -- E8 cobrar
   perform public.pos_table_charge(v_sale, 'card');
