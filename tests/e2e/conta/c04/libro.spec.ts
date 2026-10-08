@@ -79,10 +79,11 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   for (const f of await page.locator('.cxd-fila:not(.cxd-fila-cabeza)').all()) {
     const alto = (await f.boundingBox())!.height
     // Respuesta 4 prevalece sobre la altura de la 3 (70–80 px): los chips y «de
-    // dónde sale» saltan de línea en vez de cortarse, y en la columna real del
-    // concepto (~290 px en 1440, medido con el CSS del libro) una fila con dos
-    // chips largos llega a ~140 px. El tope solo caza un desbordamiento.
-    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(150)
+    // dónde sale» saltan de línea en vez de cortarse. Medido en la e2e: la fila
+    // más alta, 138 px en ordenador (columna del concepto ~290 px) y 152 en el
+    // móvil (el chip de la marca cedida parte su texto). Lo que se exige es que
+    // nada se corte (abajo); este tope solo caza un desbordamiento.
+    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(200)
   }
   // Respuesta 4 · 5: ningún chip cortado («Brasa |» en el móvil) y «de dónde
   // sale» sin «…» si cabe en dos líneas (en el ordenador se cortaba en una).
