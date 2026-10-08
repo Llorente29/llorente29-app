@@ -118,17 +118,24 @@ do $$ declare v_mal text; begin
 end $$;
 
 \echo '>>> 5. Con asientos validados, PARA'
+-- La semilla de A no tiene ningún apunte validado con tercero (medido: 0). Se le
+-- pone uno a la ficha que se va, con los disparadores apagados SOLO para esa
+-- línea (lo validado no se toca por las buenas: es su gracia), y todo acaba en
+-- el ROLLBACK de la prueba.
+set local session_replication_role = replica;
+update public.journal_line set party_id = (select se_va from fichas)
+ where id = (select l.id from public.journal_line l join public.journal_entry e on e.id = l.entry_id
+              where e.account_id = 'c01a0000-0000-4000-8000-00000000000a' and e.status = 'validado' order by l.id limit 1);
+set local session_replication_role = origin;
 do $$
-declare v_p uuid; v_otra uuid;
+declare v_n int;
 begin
-  -- El tercero de un asiento validado, en su cabecera o en uno de sus apuntes (la semilla del C04 lo pone en el apunte: 400/410/430).
-  select coalesce(e.party_id, l.party_id) into v_p from public.journal_entry e join public.journal_line l on l.entry_id = e.id
-   where e.account_id = 'c01a0000-0000-4000-8000-00000000000a' and e.status = 'validado' and coalesce(e.party_id, l.party_id) is not null limit 1;
-  if v_p is null then raise exception 'PRUEBA C04R4 fusionar · 5: la semilla de A no tiene un asiento validado con tercero (ni en la cabecera ni en un apunte); la prueba no podría fallar.'; end if;
-  v_otra := (select queda from fichas);
+  select count(*) into v_n from public.journal_line l join public.journal_entry e on e.id = l.entry_id
+   where l.party_id = (select se_va from fichas) and e.status = 'validado';
+  if v_n <> 1 then raise exception 'PRUEBA C04R4 fusionar · 5: no se ha podido preparar el apunte validado (%); la prueba no podría fallar.', v_n; end if;
   perform set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
   begin
-    perform public.party_merge_do(v_otra, v_p, 'prueba C04R4');
+    perform public.party_merge_do((select queda from fichas), (select se_va from fichas), 'prueba C04R4');
     raise exception 'PRUEBA C04R4 fusionar · 5: fusionó un tercero con asientos validados.';
   exception when sqlstate '23514' then
     if sqlerrm not like '%lo validado no cambia de tercero%' then raise exception 'PRUEBA C04R4 fusionar · 5: mensaje «%».', sqlerrm; end if;

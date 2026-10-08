@@ -1,4 +1,4 @@
-# Quinta vuelta: la 86 pasó los pasos 1–4 (antes = después, fusionar, deshacer) y paró en el 5 porque buscaba el tercero solo en la cabecera del asiento; ahora también en sus apuntes.
+# Sexta vuelta: la 87 confirmó que la semilla de A no tiene apuntes validados con tercero; la prueba se prepara uno (dentro del ROLLBACK) para el paso 5.
 # C04 R4 (conta/c04-retoques). Primero la prueba de la fusión de terceros
 # (todo en una transacción que acaba en ROLLBACK: antes = después, fusionar,
 # deshacer, para con lo validado, B no puede, vuelta atrás de la migración) y,
