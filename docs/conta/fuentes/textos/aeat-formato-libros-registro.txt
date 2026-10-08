@@ -1,0 +1,495 @@
+                Formatos de los Libros Registro de IVA e IRPF para
+
+              atender los requerimientos,
+              confeccionar los rendimientos de las actividades económicas en
+               estimación directa con Renta Web
+              cumplimentar los pagos fraccionados con el modelo 130
+              así como confeccionar la declaración-liquidación de IVA del Pre303
+
+                                       Gestión del IVA e IRPF
+                                     Especificaciones 2025-2026
+
+
+
+
+V.18.02.2026
+Agencia Tributaria                                                                                          Departamento Gestión Tributaria
+
+
+
+Índice de Contenidos
+1      INTRODUCCIÓN ................................................................................................................................... 3
+    1.1        ACCESO DIRECTO A NOVEDADES .......................................................................................................... 4
+2      FORMATO ELECTRÓNICO DE LOS LIBROS REGISTRO DE IVA E IRPF .................................................... 5
+3    DISEÑOS DE REGISTRO PARA LOS LIBROS REGISTRO DE IVA E IRPF PRESENTADOS EN FORMATO
+ELECTRÓNICO (XLSX) .................................................................................................................................... 7
+4      REQUISITOS ESPECÍFICOS PARA LA IMPORTACIÓN ............................................................................. 8
+    4.1        LIBROS REGISTRO DE IRPF MEDIANTE RENTA WEB ................................................................................. 8
+    4.2        LIBROS REGISTRO DE IVA MEDIANTE EL SERVICIO PRE303........................................................................ 9
+    4.3        LIBROS REGISTRO PARA LA CONFECCIÓN DEL MODELO 130 .................................................................... 11
+5      PLANTILLAS DE LIBROS REGISTRO ..................................................................................................... 13
+
+
+
+
+Página 2 de 13
+Agencia Tributaria                                             Departamento Gestión Tributaria
+
+
+
+1   INTRODUCCIÓN
+Este documento establece el formato electrónico para la presentación de los Libros
+Registro de Facturas Expedidas, de Facturas Recibidas, y de Bienes de Inversión del
+IVA, así como los Libros Registro de Ventas e Ingresos, de Compras y Gastos, y de
+Bienes de Inversión del IRPF, con los siguientes objetivos:
+
+   Homogeneizar el formato que puede ser requerido por las oficinas de gestión
+    tributaria para seguridad de los obligados tributarios, sus asesores y empresas de
+    desarrollo.
+   Agilizar la tramitación de las devoluciones objeto de comprobación.
+Adicionalmente se pretende reducir las cargas de los obligados tributarios mediante
+los servicios de asistencia que, mediante la importación de los Libros Registro, les
+permitan automatizar la confección de:
+
+   Los rendimientos de las actividades económicas de su declaración del IRPF que
+    cumplan determinados requisitos específicos (ver apartado 5).
+   Los Rendimiento del Capital Inmobiliario de los Bienes Inmuebles arrendados del
+    Apartado C de la declaración del IRPF de aquellos obligados al IVA que no
+    desarrollan actividad económica en el IRPF.
+   La declaración-liquidación del modelo 303 del IVA que cumplan determinados
+    requisitos específicos (ver apartado 6).
+   El Pago Fraccionado del IRPF del modelo 130 que cumplan determinados
+    requisitos específicos (ver apartado 7).
+Estas ampliaciones de los servicios aconsejan la llevanza conjunta y hace necesario la
+presentación de los libros registro SIN fraccionar por trimestre, lo que permitirá
+reutilizar los Libros Registro importados al presentar una declaración para la
+confección automática de las demás declaraciones, reduciendo aún más las cargas de
+los obligados y asegurando la coherencia entre declaraciones.
+
+Podrá encontrar toda la información relativa a los Libros Registro del IVA y del IRPF
+siguiendo las rutas de la sede electrónica a través de las siguientes secuencias de
+opciones:
+
+   IVA / Facturación y Registro / Libros Registro de IVA
+    https://sede.agenciatributaria.gob.es/Sede/iva/libros-registro.html
+   IVA / Pre303 Servicio de ayuda modelo 303 / Servicios específicos para no SII
+    (Importación de libros en soporte electrónico
+    https://sede.agenciatributaria.gob.es/Sede/iva/pre-303/nuevo-servicio-pre303-
+    importacion-libros-electronico.html
+   IRPF / Empresarios individuales y profesionales / Obligaciones formales, contables
+    y registrales dentro del Contenido Relacionado
+
+
+
+
+Página 3 de 13
+Agencia Tributaria                                               Departamento Gestión Tributaria
+
+
+         https://sede.agenciatributaria.gob.es/Sede/iva/libros-registro.html
+         Entre la que cabe resaltar el enlace “Accede a Preguntas frecuentes” que se
+         han planteado en relación con estos Libros Registro del IVA y del IRPF:
+         https://sede.agenciatributaria.gob.es/Sede/iva/facturacion-registro/preguntas-
+         frecuentes.html.
+
+      También está disponible el Servicio de validación de Libros de Registro para la
+      importación desde Renta WEB para el IRPF o desde el Pre303 para el IVA o
+      incluso desde el modelo 130, mediante un servlet que permite hacer pruebas:
+      Servicio de validación de ficheros de LLR (agenciatributaria.gob.es)
+
+1.1     Acceso directo a novedades
+NOVEDADES EN DISEÑO DE REGISTRO
+NOVEDADES EN REQUISITOS DE IMPORTACIÓN DE LIBROS REGISTRO DE IRPF MEDIANTE RENTA WEB
+NOVEDADES EN REQUISITOS DE IMPORTACIÓN DE LIBROS REGISTRO DE IVA MEDIANTE EL SERVICIO
+PRE303
+NOVEDADES EN REQUISITOS DE IMPORTACIÓN DE LIBROS REGISTRO PARA LA CONFECCIÓN DEL
+MODELO 130
+NOVEDADES EN PLANTILLAS
+
+
+
+
+Página 4 de 13
+Agencia Tributaria                                                     Departamento Gestión Tributaria
+
+
+
+    2 FORMATO ELECTRÓNICO DE LOS LIBROS REGISTRO DE
+        IVA E IRPF
+Cuando en el curso de un procedimiento de comprobación del IRPF o del IVA, en caso
+de contribuyentes que no están obligados1 a llevar sus Libros Registro del IVA a través
+de la Sede Electrónica de la Agencia Tributaria (SII), se le requieran para que los
+aporte electrónicamente, éste los podrá presentar en formato XLSX (Excel) conforme a
+los diseños de registro del apartado 3. Este mismo formato es el que se utiliza por los
+servicios de importación para facilitar la cumplimentación automática de las
+declaraciones de los modelos 100, 130 y 303.
+
+Los Libros Registro del IVA y del IRPF se presentarán en un fichero (uno para los del
+IVA y otro para los del IRPF). Pero el obligado tributario puede optar por la llevanza
+conjunta de los libros registro del IVA y del IRPF, así cuando se trate de libros
+unificados para ambos impuestos se presentarán en el mismo fichero.
+
+El nombre del fichero será formado por la concatenación de los siguientes campos y
+en el siguiente orden:
+
+1) Ejercicio
+2) NIF
+3) Tipo de Libros Registro que contiene el fichero, mediante uno de los siguientes
+   valores:
+   C: Todos los Libros Registro del IVA requerido en un solo fichero Excel (XLSX), en
+    cuyo caso en la posición del Tipo del Libro debe consignar una C, correspondiente
+    a la presentación de todos los libros del IVA, incluyendo las facturas expedidas en
+    una pestaña denominada EXPEDIDAS, las facturas recibidas en otra pestaña
+    denominada RECIBIDAS y, en su caso, los bienes de inversión en otra pestaña
+    denominada BIENES-INVERSIÓN.
+   D: Todos los Libros Registro del IRPF requerido en un solo fichero Excel (XLSX),
+    en cuyo caso en la posición del Tipo del Libro debe consignar una D,
+    correspondiente a la presentación de todos los libros del IRPF, incluyendo las
+    ventas e ingresos en una pestaña denominada INGRESOS, las compras y gastos
+    en otra pestaña denominada GASTOS y, en su caso, los bienes de inversión en
+    otra pestaña denominada BIENES-INVERSIÓN.
+   T: Todos los Libros Registro Unificados del IRPF e IVA requeridos en un solo
+    fichero Excel (XLSX), en cuyo caso en la posición del Tipo del Libro debe
+    consignar una T, correspondiente a la presentación conjunta de todos los libros de
+    ambos impuestos, incluyendo las ‘facturas expedidas’ y ‘ventas e ingresos’ en una
+    pestaña denominada EXPEDIDAS_INGRESOS, las ‘facturas recibidas’ y ‘compras
+    y gastos’ en otra pestaña denominada RECIBIDAS_GASTOS, y, en su caso, los
+    bienes de inversión en otra pestaña denominada BIENES-INVERSIÓN.
+
+    1
+      Las personas y entidades a que se refiere el artículo 62.6 del Reglamento del Impuesto sobre el
+    Valor Añadido (Real Decreto 1624/1992) estarán obligadas a la llevanza de sus libros registro del
+    IVA a través de la Sede electrónica de la Agencia Estatal de Administración Tributaria mediante el
+    suministro electrónico de los registros de facturación.
+
+
+
+Página 5 de 13
+Agencia Tributaria                                            Departamento Gestión Tributaria
+
+
+4) Nombre o Razón social
+El tipo de fichero deberá ser XLSX.
+
+Para atender el requerimiento se anexarán los ficheros a la contestación que se
+presente a través del Registro de la Agencia Tributaria. Al utilizar el Registro
+electrónico de su sede (https://sede.agenciatributaria.gob.es/Sede/registro-electronico-
+documentos-agencia-tributaria.html) debe elegir la opción “Contestar requerimientos o
+presentar documentación relacionada con un documento recibido de la AEAT”.
+
+
+
+
+Página 6 de 13
+Agencia Tributaria                                             Departamento Gestión Tributaria
+
+
+
+    3 DISEÑOS DE REGISTRO PARA LOS LIBROS REGISTRO DE
+       IVA E IRPF PRESENTADOS EN FORMATO ELECTRÓNICO
+       (XLSX)
+Se publicarán en la opción de Ayuda, bajo el nombre “Diseños de registro
+normalizados para los Libros Registro del IVA y de los IRPF presentados en formato
+XLS”, que encontrará en cualquiera de las rutas de la sede electrónica siguiendo una
+de las siguientes secuencias de opciones:
+
+   IVA / Facturación y Registro / Libros Registro de IVA
+           https://sede.agenciatributaria.gob.es/Sede/iva/libros-registro.html
+   IVA / Pre303 Servicio de ayuda modelo 303 / Servicios específicos para no SII
+    (Importación de libros en soporte electrónico
+           https://sede.agenciatributaria.gob.es/Sede/iva/pre-303/nuevo-servicio-
+           pre303-importacion-libros-electronico.html
+   IRPF / Empresarios individuales y profesionales / Obligaciones formales, contables
+    y registrales dentro del Contenido Relacionado
+           https://sede.agenciatributaria.gob.es/Sede/iva/libros-registro.html
+Novedades en diseño de registro
+
+En 2026 una primera novedad reside en el cambio en las plantillas de ayuda para la
+cumplimentación de los libros.
+La plantilla contiene sendas hojas de registro de los datos en libros de forma que sea
+más fácil para el contribuyente identificar las denominaciones y códigos de cada
+concepto afectado.
+Una segunda novedad consiste en la actualización del "Buscador de actividades y sus
+obligaciones tributarias" para que, desde el 1 de enero de 2026, incluya todas las
+correlaciones de los grupos y epígrafes con la CNAE-2025 aprobada por Real Decreto
+10/2025, de 14 de enero.
+Enlace de acceso al Buscador: Buscador de actividades económicas
+
+
+
+
+Página 7 de 13
+Agencia Tributaria                                            Departamento Gestión Tributaria
+
+
+
+4     REQUISITOS ESPECÍFICOS PARA LA IMPORTACIÓN
+
+4.1     Libros Registro de IRPF mediante Renta Web
+Para facilitar la confección de la declaración del IRPF desde el ejercicio 2020, en el
+apartado de rendimientos de actividades económicas en estimación directa, se permite
+que los contribuyentes puedan importar los datos consignados en los libros registro del
+Impuesto sobre la Renta de las Personas Físicas al único efecto de calcular las
+casillas de dicho apartado.
+
+De esta forma, los contribuyentes que realicen actividades económicas y estén
+obligados a llevar libros registro de acuerdo con lo dispuesto en el artículo 68 del
+Reglamento del impuesto, podrán trasladar el contenido del Libro registro de ventas e
+ingresos y del Libro registro de compras y gastos a su declaración, facilitando la
+cumplimentación de este apartado. Este traslado o importación quedará supeditado
+técnicamente a que el formato de los libros sea el formato tipo de libros registros aquí
+establecidos y publicados por la Agencia Tributaria en la Sede Electrónica
+
+Este servicio se presta mediante la funcionalidad “Importar Libros Registro”
+dentro de Renta WEB en el apartado de Rendimientos de Actividades Económicas en
+Estimación Directa.
+
+Y su funcionamiento consiste en reutilizar los libros registro que hubiera importado
+anteriormente (bien con el modelo 130 o el modelo 303) siempre que sean
+compatibles (mismo ejercicio fiscal y mismo impuesto o llevanza conjunta) o, en su
+defecto, en leer el fichero que contenga el Libro Registro Unificado de Facturas
+Expedidas del IVA y de Ventas e Ingresos del IRPF (LRVI) y el Libro Registro
+Unificado de Facturas Recibidas del IVA y de Compras y Gastos del IRPF (LRCG),
+que tendrá que seleccionar el usuario dentro de su equipo, para calcular el contenido
+de las casillas correspondientes a los Ingresos Íntegros y determinar los Gastos
+Fiscalmente Deducibles respectivamente partir de los asientos registrados en dichos
+libros.
+
+Es decir, esta funcionalidad permite confeccionar automáticamente el apartado D1 y
+las retenciones practicadas del apartado M de la declaración del IRPF correspondiente
+a los rendimientos de las actividades económicas en estimación directa a partir de la
+selección del fichero que contiene tanto el Libro registro de Facturas Expedidas,
+Ventas e Ingresos como el Libro registro de Facturas Recibidas, Compras y Gastos.
+
+
+Para hacer viable la importación de los libros registros es importante recordar los
+siguientes requisitos:
+
+     Sólo se podrán importar ficheros que estén en el formato Excel XLSX.
+     El tamaño del fichero no podrá superar los 4 MB.
+     Todos los Libros Registro del IRPF (el de Ventas e Ingresos y el de Compras y
+      Gastos) deberán estar en un solo fichero y cada libro deberá estar en una
+      hoja/pestaña distinta. Así el fichero Excel tendrá al menos 2 hojas/pestañas.
+
+
+
+Página 8 de 13
+Agencia Tributaria                                             Departamento Gestión Tributaria
+
+
+     Cada Libro contendrá los asientos de todas las actividades económicas que realice
+      el obligado tributario. Es decir, cada libro estará en una sola hoja/pestaña con
+      independencia de que desarrolle una o más actividades económicas.
+     Cada Hoja/Pestaña debe denominarse conforme a uno de los valores publicados
+      en el formato normalizado (LRVI: INGRESOS, EXPEDIDAS_INGRESOS; LRCG:
+      GASTOS, RECIBIDAS_GASTOS).
+
+
+Novedades en requisitos de importación de Libros Registro de IRPF mediante
+Renta Web
+
+En la siguiente tabla, se muestra cómo se hace el cálculo de las casillas que se
+cumplimentan consecuencia de la importación de libros registro del IRPF:
+
+
+
+ Traslado Libros a
+Casillas RW 25-26.xlsx
+
+
+
+
+Que tiene disponible en la opción de “Especificaciones del cálculo de las casillas que
+se cumplimentan a partir de la importación de los libros registro del IVA que utiliza el
+servicio Renta WEB”.
+
+4.2     Libros Registro de IVA mediante el servicio pre303
+Para facilitar la confección de las autoliquidaciones de IVA MODELO 303 desde el
+ejercicio 2022, mediante acceso al formulario a través del Pre303, se permite que los
+contribuyentes puedan importar los datos consignados en los libros registro del
+Impuesto sobre el Valor Añadido a los efectos de obtener la cumplimentación
+automática de las casillas correspondientes del modelo.
+
+De esta forma, los empresarios o profesionales que deben presentar el modelo 303 y
+estén obligados a llevar libros registro de acuerdo con lo dispuesto en el artículo 62 del
+Reglamento del impuesto, siempre que no estén obligados al SII ni voluntariamente
+lleven sus libros a través de la Sede Electrónica mediante del suministro inmediato de
+información (SII), podrán trasladar el contenido del Libro registro Facturas Expedidas y
+del Libro registro de Facturas Recibidas a su autoliquidación, facilitando por tanto la
+cumplimentación del citado modelo. Este traslado o importación quedará supeditado
+técnicamente a que el formato de los libros sea el formato tipo de libros registros aquí
+establecidos y publicados por la Agencia Tributaria en la Sede Electrónica.
+
+Se establece esta funcionalidad dentro del servicio de ayuda Pre303 “Importar
+Libros Registro” que consistirá en reutilizar los libros registro que hubiera importado
+anteriormente (con el modelo 130) siempre que sean compatibles (mismo ejercicio
+fiscal y llevanza conjunta) o, en su defecto, en leer el fichero que contenga el Libro
+Registro Unificado de Facturas Expedidas del IVA y de Ventas e Ingresos del IRPF
+(LRFE) y el Libro Registro Unificado de Facturas Recibidas del IVA y de Compras y
+Gastos del IRPF (LRFR), que tendrá que seleccionar el usuario dentro de su equipo,
+
+
+
+Página 9 de 13
+Agencia Tributaria                                              Departamento Gestión Tributaria
+
+
+para calcular el contenido de las casillas correspondientes del apartado liquidación e
+información adicional y en su caso del apartado volumen de operaciones para los
+contribuyentes exonerados de presentar el modelo 390, a partir de los datos
+registrados en dichos libros.
+
+Es decir, esta nueva funcionalidad junto con los datos cumplimentados hasta ahora
+con el Pre303 permitirá confeccionar automáticamente la totalidad el modelo 303 de
+cada periodo trimestral de liquidación.
+
+Para hacer viable la importación de los libros registros es importante recordar los
+siguientes requisitos:
+
+   Sólo se podrán importar ficheros que estén en el formato Excel XLSX.
+   El tamaño del fichero no podrá superar los 4 MB.
+   Todos los Libros Registro del IVA (Facturas Expedidas y Recibidas) deberán estar
+    en un solo fichero y cada libro deberá estar en una hoja/pestaña distinta. Así el
+    fichero Excel tendrá al menos 2 hojas/pestañas.
+   Cada Libro contendrá los datos de todas las actividades que realice el obligado
+    tributario. Es decir, cada libro estará en una sola hoja/pestaña con independencia
+    de que desarrolle una o más actividades económicas.
+   Cada Libro contendrá todos los asientos que realice el obligado tributario en el
+    período comprendido entre el primer día del año y el último día del trimestre. Es
+    decir, la presentación de los libros registro se realizará SIN fraccionar por trimestre
+   Cada Hoja/Pestaña debe denominarse conforme a uno de los valores publicados
+    en el formato normalizado (LRFE: EXPEDIDAS, EXPEDIDAS_INGRESOS; LRFR:
+    RECIBIDAS, RECIBIDAS_GASTOS).
+En la siguiente tabla, que se publica en la misma página que este documento, se
+muestra cómo se hace el cálculo de las casillas que se cumplimentan consecuencia de
+la importación de libros registro del IVA:
+
+
+Novedades en requisitos de importación de Libros Registro de IVA mediante el
+servicio pre303
+
+Que tiene disponible en la opción de “Especificaciones del cálculo de las casillas que
+se cumplimentan a partir de la importación de los libros registro del IVA que utiliza el
+servicio Pre303”.
+
+
+
+
+Traslado_Libros_a_C
+asillas_IVA 2026.xlsx
+
+
+
+
+Página 10 de 13
+Agencia Tributaria                                            Departamento Gestión Tributaria
+
+
+4.3     Libros Registro para la confección del modelo 130
+Como novedad, para facilitar la confección de los pagos fraccionados del IRPF
+MODELO 130 del 2023 se permitirá por primera vez que los contribuyentes puedan
+importar los datos consignados en los libros registro del IRPF a los efectos de obtener
+la cumplimentación automática de las casillas correspondientes del modelo 130.
+
+De esta forma, los contribuyentes que realicen actividades económicas y estén
+obligados a llevar libros registro de acuerdo con lo dispuesto en el artículo 68 del
+Reglamento del impuesto, podrán trasladar el contenido del Libro registro de ventas e
+ingresos y del Libro registro de compras y gastos para el cálculo de sus pagos
+fraccionados.
+
+Este traslado o importación quedará supeditado técnicamente a que el formato de los
+libros sea el formato tipo de libros registros aquí establecidos y publicados por la
+Agencia Tributaria en la Sede Electrónica.
+
+Este servicio se prestará mediante la funcionalidad “Importar Libros Registro”
+dentro del formulario del modelo 130.
+
+Y su funcionamiento consistirá en reutilizar los libros registro que hubiera importado
+anteriormente (con el modelo 303) siempre que sean compatibles (mismo ejercicio
+fiscal y llevanza conjunta) o, en su defecto, en leer el fichero que contenga el Libro
+Registro Unificado de Facturas Expedidas del IVA y de Ventas e Ingresos del IRPF
+(LRVI) y el Libro Registro Unificado de Facturas Recibidas del IVA y de Compras y
+Gastos del IRPF (LRCG), que tendrá que seleccionar el usuario dentro de su equipo,
+para calcular el contenido de las casillas correspondientes a los Ingresos Computables
+y determinar los Gastos Fiscalmente Deducibles respectivamente partir de los asientos
+registrados en dichos libros.
+
+ Es decir, esta funcionalidad permitirá confeccionar automáticamente el apartado “I.
+Actividades económicas en estimación directa, modalidad normal o simplificada,
+distinta de las agrícolas, ganaderas, forestales y pesqueras” del pago fraccionado del
+IRPF por actividades económicas en estimación directa a partir de la selección del
+fichero que contiene tanto el LRVI como el LRCG.
+
+Para hacer viable la importación de los libros registros es importante recordar los
+siguientes requisitos:
+
+     Sólo se podrán importar ficheros que estén en el formato Excel XLSX.
+     El tamaño del fichero no podrá superar los 4 MB.
+     Todos los Libros Registro del IRPF (el de Ventas e Ingresos y el de Compras y
+      Gastos) deberán estar en un solo fichero y cada libro deberá estar en una
+      hoja/pestaña distinta. Así el fichero Excel tendrá al menos 2 hojas/pestañas.
+     Cada Libro contendrá los asientos de todas las actividades económicas que realice
+      el obligado tributario. Es decir, cada libro estará en una sola hoja/pestaña con
+      independencia de que desarrolle una o más actividades económicas.
+
+
+
+
+Página 11 de 13
+Agencia Tributaria                                              Departamento Gestión Tributaria
+
+
+   Cada Libro contendrá todos los asientos que realice el obligado tributario en el
+    período comprendido entre el primer día del año y el último día del trimestre. Es
+    decir, la presentación de los libros registro se realizará SIN fraccionar por trimestre
+   Cada Hoja/Pestaña debe denominarse conforme a uno de los valores publicados
+    en el formato normalizado (LRVI: INGRESOS, EXPEDIDAS_INGRESOS; LRCG:
+    GASTOS, RECIBIDAS_GASTOS).
+Novedades en requisitos de importación de Libros Registro para la confección
+del modelo 130
+
+En la siguiente tabla, se muestra cómo se hace el cálculo de las casillas que se
+cumplimentan consecuencia de la importación de libros registro del IRPF:
+
+
+
+ Traslado Libros a
+Casillas M130 2026.xlsx
+
+
+
+
+Que tiene disponible en la opción de “Especificaciones del cálculo de las casillas que
+se cumplimentan a partir de la importación de los libros registro del IVA que utiliza el
+servicio de presentación del modelo 130”.
+
+
+
+
+Página 12 de 13
+Agencia Tributaria                                             Departamento Gestión Tributaria
+
+
+
+5   PLANTILLAS DE LIBROS REGISTRO
+Se han mejorado las plantillas existentes en la Sede electrónica para facilitar la
+cumplimentación de los libros.
+Novedades en plantillas
+
+Se han incluido 3 hojas para el registro de los datos en cada libro facilitando con
+desplegables la selección de los datos a incorporar y que luego de trasladan
+automáticamente al formato de libro que reúne los requisitos necesarios para la
+importación de libros en la cumplimentación de los modelos de IVA, IRPF y modelo
+130.
+
+
+
+
+PLANTILLA_LIBROS PLANTILLA_LIBROS_
+   v9.0_PJ.xlsx  UNIFICADOS v9.0.xlsx
+
+
+
+
+Página 13 de 13
+
