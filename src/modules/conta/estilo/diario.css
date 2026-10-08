@@ -50,6 +50,14 @@
    solos no caben en la línea, bajan ENTEROS (wrap) antes que cortarse; la e2e
    lo cazaría por la altura. */
 .cxd-fila .cxd-concepto-apoyo { column-gap: 0; }
+/* La línea de apoyo, debajo del concepto y hasta el final de la fila (también
+   bajo el importe y el estado): en la columna del concepto (~290 px a 1440) no
+   cabían tres chips —local, «Marcas propias» y la cedida— y el tercero bajaba
+   (102 px, e2e de la respuesta 5). El concepto y el importe van en la primera. */
+.cxd-fila:not(.cxd-fila-cabeza) { row-gap: 3px; }
+.cxd-fila .cxd-concepto { display: contents; }
+.cxd-fila .cxd-concepto-titulo { grid-column: 3; grid-row: 1; }
+.cxd-fila .cxd-concepto-apoyo { grid-column: 3 / -1; grid-row: 2; }
 .cxd-fila .cxd-concepto-apoyo .cx-chip { white-space: nowrap; max-width: none; overflow-wrap: normal; margin-right: 6px; }
 .cxd-fila .cxd-sale { display: block; flex: 1 1 0; white-space: nowrap; text-overflow: ellipsis; overflow-wrap: normal; }
 .cxd-num { white-space: nowrap; }
@@ -127,7 +135,6 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
      en la del concepto, con dos chips, «de dónde sale» se quedaba sin sitio. */
   .cxd-fila { grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-areas: 'fecha titulo importe' 'fecha titulo estado' 'apoyo apoyo apoyo'; row-gap: 4px; padding: 8px 0; }
   .cxd-fila .cxd-fecha { grid-area: fecha; align-self: start; }
-  .cxd-fila .cxd-concepto { display: contents; }
   .cxd-fila .cxd-concepto-titulo { grid-area: titulo; align-self: start; }
   .cxd-fila .cxd-concepto-apoyo { grid-area: apoyo; }
   .cxd-fila .cxd-concepto-apoyo .cx-chip { padding: 1px 6px; }
