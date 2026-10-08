@@ -78,7 +78,7 @@ export function filaALiquidacion(r: Fila): LiquidacionPlataforma & { partyId: st
     id: String(r.id), ref: str(r.settlement_ref), desde: str(r.period_from), hasta: str(r.period_to),
     propuestoDesde: str(r.proposed_period_from), propuestoHasta: str(r.proposed_period_to),
     fecha: str(r.settlement_date), pedidos: num(r.orders_count), ventas: num(r.gross_sales), comision: num(r.commission),
-    otros: COSTES.map((k) => num(r[k]) ?? 0).filter((x) => x !== 0), neto: num(r.net_payout),
+    otros: COSTES.map((k) => num(r[k]) ?? 0).filter((x) => x !== 0), neto: num(r.net_payout), deudaAnterior: num(r.accumulated_debt),
     cobradoEn: str(r.collected_on), cobrado: num(r.collected_amount),
     paraRevisar: r.needs_review === true, motivoRevisar: str(r.review_note),
     partyId: str(r.party_id), source: String(r.source ?? ''),
@@ -86,7 +86,7 @@ export function filaALiquidacion(r: Fila): LiquidacionPlataforma & { partyId: st
 }
 
 const COLUMNAS_LIQ = `id, party_id, source, settlement_ref, period_from, period_to, proposed_period_from, proposed_period_to, proposed_period_note,
-  settlement_date, orders_count, gross_sales, commission, ${COSTES.join(', ')}, net_payout, collected_on, collected_amount,
+  settlement_date, orders_count, gross_sales, commission, ${COSTES.join(', ')}, net_payout, accumulated_debt, collected_on, collected_amount,
   needs_review, review_note, location_id`
 
 export async function liquidacionesDeLaCuenta(accountId: string): Promise<ReturnType<typeof filaALiquidacion>[]> {

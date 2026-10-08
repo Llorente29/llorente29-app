@@ -109,13 +109,28 @@ export function parecido(a: string, b: string): Parecido {
 }
 
 /** NIF del listado: normalizado si es válido; null si no hay. Si no valida, se queda null y se avisa. */
+/**
+ * Los prefijos de un número de IVA extranjero: los de la UE (VIES; Grecia es EL
+ * e Irlanda del Norte XI) y los de fuera con los que más se factura.
+ */
+const PREFIJOS_IVA = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV',
+  'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'XI', 'GB', 'CH', 'NO'])
+
+/** ¿Es un número de IVA de otro país? Prefijo de país y, detrás, al menos una cifra. */
+export function esIvaExtranjero(n: string): boolean {
+  return /^[A-Z]{2}[A-Z0-9]{2,13}$/.test(n) && PREFIJOS_IVA.has(n.slice(0, 2)) && /\d/.test(n.slice(2))
+}
+
 export function nifDeListado(entrada: string | null | undefined): { nif: string | null; aviso: string | null } {
   const s = limpiar(entrada ?? '')
   if (!s) return { nif: null, aviso: null }
   const n = normalizarNif(s)
   const v = validarNifEs(n)
   // Un NIF extranjero (VAT de otro país) no pasa la validación española pero es un NIF: se guarda tal cual.
-  if (v.ok || /^[A-Z]{2}[A-Z0-9]{2,13}$/.test(n)) return { nif: n, aviso: null }
+  // Antes bastaba con dos letras delante: el nombre del proveedor en la columna del NIF de Diez
+  // («RAZON SOCIAL…», sin una cifra) pasaba por NIF extranjero y llegó así a tres fichas de
+  // proveedor de producción (08/10).
+  if (v.ok || esIvaExtranjero(n)) return { nif: n, aviso: null }
   return { nif: null, aviso: `«${s}» no es un NIF válido: no se usa para enlazar.` }
 }
 

@@ -17,21 +17,27 @@ select json_build_object(
     left join public.party_role r on r.party_id = p.id and r.role = 'supplier'
     left join public.supplier s on s.id = r.supplier_id),
   -- Subcuentas de cada tercero por papel y empresa: cliente (entity customer =
-  -- el tercero) y proveedor (entity supplier = su ficha de proveedor).
+  -- el tercero) y proveedor (entity supplier = su ficha de proveedor), y por el
+  -- papel del ENLACE: la principal (40x/41x/43x) no es la de gasto (6xx), la de
+  -- pago (57x/43x) ni la de suplidos. Sin separarlas, la 600 de un proveedor
+  -- contaba como «segunda subcuenta» (4 rojos falsos en producción, 08/10).
   'cuentas', (select coalesce(json_agg(json_build_object(
-      'account_id', x.account_id, 'company_id', x.company_id, 'entity', x.entity, 'entity_id', x.party_id, 'codes', x.codes)), '[]')
+      'account_id', x.account_id, 'company_id', x.company_id, 'entity', x.entity, 'entity_id', x.party_id, 'role', x.role, 'codes', x.codes)), '[]')
     from (
-      select l.account_id, l.company_id, l.entity, coalesce(r.party_id::text, l.entity_id) party_id,
+      select l.account_id, l.company_id, l.entity, coalesce(r.party_id::text, l.entity_id) party_id, l.role,
              array_agg(distinct a.code order by a.code) codes
         from public.company_account_link l
         join public.company_account a on a.id = l.company_account_id
         left join public.party_role r on l.entity = 'supplier' and r.supplier_id::text = l.entity_id
        where l.entity in ('customer', 'supplier')
-       group by 1, 2, 3, 4
+       group by 1, 2, 3, 4, 5
     ) x),
   'liquidaciones', (select coalesce(json_agg(json_build_object(
       'account_id', c.account_id, 'id', c.id, 'party_id', c.party_id, 'ref', c.settlement_ref,
       'gross_sales', c.gross_sales, 'commission', c.commission, 'net_payout', c.net_payout, 'needs_review', c.needs_review,
+      -- El origen decide la cuenta del neto (lib/liquidaciones): el CSV de Glovo trae la
+      -- comisión sin IVA y arrastra la deuda de la quincena anterior (accumulated_debt).
+      'source', c.source, 'accumulated_debt', c.accumulated_debt,
       -- Los mismos otros cargos que la app (tercerosService.ts, COSTES).
       'otros', json_build_array(c.delivery_transport, c.promo_product, c.promo_flash, c.offer_flash_credit, c.access_fee,
                                 c.prime_fee, c.recurring_fee, c.incidents_cost, c.incidents_refund, c.min_order_fee, c.other_cost))
