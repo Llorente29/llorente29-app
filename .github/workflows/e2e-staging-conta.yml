@@ -48,7 +48,9 @@ permissions:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 40: las 164 pruebas tardan unos 18 min y la preparación (fuentes y navegador)
+    # llegó a tardar 9,5 el 08/10 (run 37801003944, cortado en la 142 sin ningún fallo).
+    timeout-minutes: 40
     env:
       STAGING_REF: oseymswjlzplqoxrfjzi
       PROD_REF: xzmpnchlguibclvxyynt
