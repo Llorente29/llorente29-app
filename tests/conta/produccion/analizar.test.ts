@@ -293,7 +293,7 @@ describe('la tanda del C04 (ya aplicada, real 37697073290), tal cual', () => {
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): C04 R4 — historial, corte de Foodint y fusionar terceros', () => {
+describe('la tanda de AHORA (manifiesto vivo): C04 R4 — lectura de los agentes, historial, corte de Foodint y fusionar terceros', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // MEDIDO en producción el 08/10 con el conector de solo lectura (to_regclass /
@@ -302,8 +302,9 @@ describe('la tanda de AHORA (manifiesto vivo): C04 R4 — historial, corte de Fo
   const p = poblacion(viva, leerExistentes('tests/conta/produccion/existentes-produccion-c04r-20261008.json'))
   const paran = () => viva.filter((f) => decidir(p.porFichero[f], p.existe).para.length > 0)
 
-  it('el historial va primero; después el corte y la fusión', () => {
+  it('la lectura de los agentes va primero; después el historial, el corte y la fusión', () => {
     expect(viva).toEqual([
+      'supabase/migrations/20261012T0050_c04r_lectura.sql',
       'supabase/migrations/20261012T0100_c04r_historial.sql',
       'supabase/migrations/20261012T0110_c04r_corte_datos.sql',
       'supabase/migrations/20261012T0120_c04r_fusionar_terceros.sql',
@@ -319,7 +320,7 @@ describe('la tanda de AHORA (manifiesto vivo): C04 R4 — historial, corte de Fo
     expect(nombradas).toEqual(paran().map((f) => f.replace('supabase/migrations/', '')))
   })
   it('el historial da de alta 58 ficheros, cada uno con la huella de su fichero en el repositorio', () => {
-    const sql = readFileSync(viva[0], 'utf8')
+    const sql = readFileSync(viva[1], 'utf8')
     const filas = [...sql.matchAll(/\('(\d{8}T\d{4}_[a-z0-9_]+)', '([0-9a-f]{32})', 'run \d+ · [0-9a-f]+'\)/g)]
     // Dos veces cada una: la guarda (para si ya está con otra huella) y el alta.
     expect(filas.length).toBe(116)
@@ -331,7 +332,17 @@ describe('la tanda de AHORA (manifiesto vivo): C04 R4 — historial, corte de Fo
       expect(createHash('md5').update(readFileSync(f)).digest('hex'), `huella de ${v}`).toBe(md5)
     }
   })
-  it('su vuelta atrás es la de las tres, al revés', () => {
+  it('la lectura da a conta_lectura todo lo que nombran los agentes (sacado de sus SQL, no de memoria)', () => {
+    const agentes = ['datos-maestros', 'terceros', 'libro', 'plan-contable'].map((a) => readFileSync(`scripts/conta/agente-${a}.sql`, 'utf8')).join('\n')
+    const nombrados = new Set([...agentes.matchAll(/public\.([a-z_]+)/g)].map((m) => m[1]))
+    const lectura = readFileSync(viva[0], 'utf8')
+    const tablas = new Set([...lectura.match(/tablas constant text\[\] := array\[([\s\S]*?)\];/)![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]))
+    const funciones = new Set([...lectura.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
+    expect(nombrados.size).toBe(39)
+    expect([...nombrados].filter((n) => !tablas.has(n) && !funciones.has(n))).toEqual([])
+    expect([...tablas, ...funciones].filter((n) => !nombrados.has(n))).toEqual([])
+  })
+  it('su vuelta atrás es la de las cuatro, al revés', () => {
     expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
   })
 })

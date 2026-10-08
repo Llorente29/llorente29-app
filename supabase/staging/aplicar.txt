@@ -1,8 +1,7 @@
-# Sexta vuelta: la 87 confirmó que la semilla de A no tiene apuntes validados con tercero; la prueba se prepara uno (dentro del ROLLBACK) para el paso 5.
-# C04 R4 (conta/c04-retoques). Primero la prueba de la fusión de terceros
-# (todo en una transacción que acaba en ROLLBACK: antes = después, fusionar,
-# deshacer, para con lo validado, B no puede, vuelta atrás de la migración) y,
-# si pasa, la migración de verdad para que la e2e de «Fusionar con…» tenga con
-# qué correr.
-supabase/staging/sql/20261012_c04r_prueba_fusionar.sql
-supabase/migrations/20261012T0120_c04r_fusionar_terceros.sql
+# C04 R4 (conta/c04-retoques) · Séptima vuelta: la lectura de los agentes.
+# El primer ensayo en producción paró: conta_lectura no tenía SELECT sobre sale
+# (ni supplier_invoice, fiscal_period_lock y brand). La prueba crea el rol
+# como en producción, aplica 20261012T0050_c04r_lectura.sql, pasa los cuatro
+# agentes con ese rol, comprueba que sin SELECT sobre sale el del libro FALLA y
+# que el rol no escribe. Todo en una transacción que acaba en ROLLBACK.
+supabase/staging/sql/20261012_c04r_prueba_lectura.sql

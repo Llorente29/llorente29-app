@@ -7,6 +7,12 @@
 #
 # C04 R4 · Retoques (rama conta/c04-retoques). La primera tanda con el W01.
 #
+#   0. 20261012T0050_c04r_lectura.sql — SELECT para conta_lectura sobre lo que
+#      leen los agentes. El primer ensayo (08/10) paró en «Antes · agentes»:
+#      agente-libro.sql:144, permission denied for table sale. Medido en
+#      producción: le faltan sale, supplier_invoice, fiscal_period_lock y brand.
+#      Solo da permisos de lectura: «sigue». Va primero porque la comprobación
+#      de antes corre los agentes con ese rol.
 #   1. 20261012T0100_c04r_historial.sql — da de alta en el historial los 58
 #      ficheros que el workflow aplicó antes del W01 (11 ejecuciones REAL en
 #      verde, del C00 al C04), con la huella de main. 58 de 58 iguales a lo
@@ -27,6 +33,7 @@
 #   20261012T0110_c04r_corte_datos.sql
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261012T0050_c04r_lectura.sql
 supabase/migrations/20261012T0100_c04r_historial.sql
 supabase/migrations/20261012T0110_c04r_corte_datos.sql
 supabase/migrations/20261012T0120_c04r_fusionar_terceros.sql
