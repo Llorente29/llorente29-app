@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Loader2, Plus, Minus, Trash2, ArrowLeft,
-  Banknote, CreditCard, ClipboardList, Save, PackageCheck, ListChecks, MonitorOff,
+  Banknote, CreditCard, ClipboardList, Save, PackageCheck, MonitorOff,
   UtensilsCrossed, Clock, User, X,
 } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
@@ -38,6 +38,17 @@ import {
 import PosItemConfigModal, { type PosConfiguredLine } from '@/modules/pos/components/PosItemConfigModal'
 import PosLineNoteModal from '@/modules/pos/components/PosLineNoteModal'
 import type { OrderLine } from '@/modules/shop/services/dishConfigService'
+import FloorView from '@/modules/pos/components/FloorView'
+import OpenTableScreen from '@/modules/pos/components/OpenTableScreen'
+import TableHeaderBar from '@/modules/pos/components/TableHeaderBar'
+import PendingLineModal from '@/modules/pos/components/PendingLineModal'
+import TableAccountPanel, { type PendingPick } from '@/modules/pos/components/TableAccountPanel'
+import VoidLineModal from '@/modules/pos/components/VoidLineModal'
+import {
+  getFloor, openTable, getTableDetail, addPendingLines, setPendingQty, removePendingLine,
+  fireToKitchen, voidSentLine, requestBill, chargeTable, clearTable,
+  type Floor, type FloorTable, type TableDetail, type TableLine,
+} from '@/modules/pos/services/posTableService'
 import '@/modules/pos/theme/tpvTokens.css'
 
 interface CartLine {
@@ -114,7 +125,9 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
 
   const [openTickets, setOpenTickets] = useState<OpenPosTicket[]>([])
   const [pendingDelivery, setPendingDelivery] = useState<OpenPosTicket[]>([])
-  const [showTickets, setShowTickets] = useState(false)
+  // Cabecera del TPV: Vender · Sala · Cuentas (encargo Sala S1, 08/10).
+  const [view, setView] = useState<'vender' | 'sala' | 'cuentas'>('vender')
+  const showTickets = view === 'cuentas'
   const [payMethodPick, setPayMethodPick] = useState(false)
   // T1.d (11/08): tras Cobrar, el "Entregado" de esa venta se ofrece aquí
   // mismo, a un toque — sin obligar a abrir el panel "Cuentas" para
@@ -127,6 +140,18 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   const [mobileView, setMobileView] = useState<'catalog' | 'cart'>('catalog')
   const [cartSheetOpen, setCartSheetOpen] = useState(false)
 
+  // ── Sala (S1): mesas, comensales y envíos a cocina ──
+  // Con una mesa abierta (tableSaleId), el carrito de siempre hace de «lo que
+  // aún no he enviado» de esa mesa: mismos toques, misma ficha de producto.
+  const [floor, setFloor] = useState<Floor | null>(null)
+  const [tableSaleId, setTableSaleId] = useState<string | null>(null)
+  const [tableDetail, setTableDetail] = useState<TableDetail | null>(null)
+  const [openPick, setOpenPick] = useState<FloorTable | null>(null)
+  const [voidPick, setVoidPick] = useState<TableLine | null>(null)
+  const [pendingPick, setPendingPick] = useState<PendingPick | null>(null)
+  const [waiterName, setWaiterName] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
   // ── Nombre del local (Tarea B.1: cabecera con local + cuenta) ──
   useEffect(() => {
     if (!operativeLocationId || !isSupabaseEnabled || !supabase) { setLocationName(null); return }
@@ -136,6 +161,20 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
       .catch(() => { if (!cancelled) setLocationName(null) })
     return () => { cancelled = true }
   }, [operativeLocationId])
+
+  // ── Quién está en el TPV (cabecera: «Jueves · 20:42 · Marta», maqueta Sala) ──
+  useEffect(() => {
+    if (!activeAccountId || !isSupabaseEnabled || !supabase) return
+    let cancelled = false
+    const sb = supabase
+    Promise.resolve(sb.auth.getUser())
+      .then(({ data }) => data.user
+        ? sb.from('user_profiles').select('display_name').eq('user_id', data.user.id).eq('account_id', activeAccountId).maybeSingle()
+        : null)
+      .then(r => { if (!cancelled) setWaiterName((r?.data?.display_name as string | undefined)?.trim().split(' ')[0] ?? null) })
+      .catch(() => { if (!cancelled) setWaiterName(null) })
+    return () => { cancelled = true }
+  }, [activeAccountId])
 
   // ── Marcas del local ──
   useEffect(() => {
@@ -176,6 +215,32 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
     listChargedPendingDeliveryTickets(activeAccountId, operativeLocationId).then(setPendingDelivery).catch(() => setPendingDelivery([]))
   }
   useEffect(reloadTickets, [activeAccountId, operativeLocationId])
+
+  function reloadFloor() {
+    if (!activeAccountId || !operativeLocationId) return
+    getFloor(activeAccountId, operativeLocationId)
+      .then(setFloor)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Error cargando la sala.'))
+  }
+  async function reloadTable(id: string | null = tableSaleId) {
+    if (!id) return
+    try { setTableDetail(await getTableDetail(id)) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error cargando la mesa.') }
+  }
+  // La sala se refresca sola: otro camarero abre, envía o cobra desde otro
+  // dispositivo. El reloj de las mesas avanza cada 30 s.
+  useEffect(() => {
+    if (view !== 'sala') return
+    reloadFloor()
+    const t = window.setInterval(() => { reloadFloor(); setNow(Date.now()) }, 20000)
+    return () => window.clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, activeAccountId, operativeLocationId])
+  useEffect(() => {
+    if (!tableSaleId) return
+    const t = window.setInterval(() => { setNow(Date.now()); void reloadTable(tableSaleId) }, 30000)
+    return () => window.clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableSaleId])
 
   // Tarea B.3: "agotado → atenuado + etiqueta, NO desaparece" — ya no se
   // filtra por isAvailable (antes sí, se ocultaba directamente). Solo se
@@ -242,7 +307,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
       unitPrice: l.unitPrice, totalPrice: l.totalPrice, displayName: l.name, summary: l.summary ?? [],
     })))
     setChargedTicket(null)
-    setShowTickets(false)
+    setView('vender')
     setMobileView('catalog')
     setCartSheetOpen(false)
     setFlash(`Cuenta ${t.posShortCode ?? ''} recuperada.`)
@@ -308,6 +373,143 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
     }
   }
 
+  // ── Sala (S1) ──
+  function cartPayload(lines: CartLine[]): PosLinePayload[] {
+    return lines.map(l => ({ ...l.orderLine, kitchenNote: l.kitchenNote, unitPrice: l.unitPrice, totalPrice: l.totalPrice, summary: l.summary }))
+  }
+
+  // Cada acción de mesa confirma o falla EN PANTALLA, con contenido (regla 8).
+  async function tableAction(fn: () => Promise<void>) {
+    setSaving(true); setError(null); setFlash(null)
+    try { await fn() } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error en la mesa.') } finally { setSaving(false) }
+  }
+
+  function enterTable(saleId: string) {
+    if (!tableSaleId && cart.length > 0) {
+      const ok = window.confirm(`Hay ${cart.length} línea(s) de una venta rápida sin guardar. Si entras en la mesa se descartan. ¿Continuar?`)
+      if (!ok) return
+      setCart([])
+    }
+    setChargedTicket(null)
+    setTableSaleId(saleId)
+    setTableDetail(null)
+    setPayMethodPick(false)
+    setView('vender')
+    setMobileView('cart')
+    void reloadTable(saleId)
+  }
+
+  function tapTable(t: FloorTable) {
+    if (t.sale) enterTable(t.sale.id)
+    else setOpenPick(t)
+  }
+
+  function pickCovers(covers: number) {
+    const t = openPick
+    if (!t) return
+    if (!brandId) { setError('Elige una marca antes de abrir la mesa.'); return }
+    void tableAction(async () => {
+      const id = await openTable({ tableId: t.id, covers, brandId, deviceToken })
+      setOpenPick(null)
+      enterTable(id)
+      setMobileView('catalog')
+      setFlash(`Mesa ${t.name} abierta · ${covers} comensal${covers === 1 ? '' : 'es'}. Toca productos para tomar nota.`)
+    })
+  }
+
+  // Salir de la mesa no pierde nada: lo tocado y no enviado se guarda en la
+  // cuenta (visible desde cualquier dispositivo), SIN mandarlo a cocina.
+  function leaveTable() {
+    const id = tableSaleId
+    const name = tableDetail?.tableName ?? ''
+    const pending = cartPayload(cart)
+    void tableAction(async () => {
+      if (id && pending.length > 0) {
+        await addPendingLines(id, pending)
+        setFlash(`Mesa ${name}: ${pending.length} línea(s) guardadas en la cuenta, sin enviar a cocina.`)
+      }
+      setCart([])
+      setTableSaleId(null)
+      setTableDetail(null)
+      setView('sala')
+      reloadFloor()
+    })
+  }
+
+  function fireTable() {
+    const id = tableSaleId
+    if (!id) return
+    const name = tableDetail?.tableName ?? ''
+    void tableAction(async () => {
+      const r = await fireToKitchen(id, cartPayload(cart), deviceToken)
+      setCart([])
+      await reloadTable(id)
+      if (r.printJobs > 0) {
+        setFlash(`Mesa ${name} · envío ${r.fireNumber} a cocina: ${r.lineCount} línea(s), ${r.printJobs} ticket(s) a imprimir.`)
+      } else {
+        setError(`Mesa ${name} · envío ${r.fireNumber} apuntado, pero este local no tiene impresora de cocina activa: NO ha salido papel. Avisa a cocina de palabra.`)
+      }
+    })
+  }
+
+  function savedQty(line: TableLine, quantity: number) {
+    void tableAction(async () => { await setPendingQty(line.id, quantity); await reloadTable() })
+  }
+  function savedRemove(line: TableLine) {
+    void tableAction(async () => { await removePendingLine(line.id); await reloadTable(); setFlash(`Quitado ${line.name} (no se había enviado).`) })
+  }
+
+  function confirmVoid(reasonId: string, note: string | null) {
+    const line = voidPick
+    if (!line) return
+    const name = tableDetail?.tableName ?? ''
+    void tableAction(async () => {
+      const r = await voidSentLine({ lineId: line.id, reasonId, note, deviceToken })
+      setVoidPick(null)
+      await reloadTable()
+      if (r.printJobs > 0) setFlash(`Anulado ${line.name} · Mesa ${name}. Sale «ANULADO» en cocina.`)
+      else setError(`Anulado ${line.name} · Mesa ${name}, pero no hay impresora de cocina activa: NO ha salido el aviso. Díselo a cocina de palabra.`)
+    })
+  }
+
+  function billTable() {
+    const id = tableSaleId
+    if (!id) return
+    const name = tableDetail?.tableName ?? ''
+    void tableAction(async () => {
+      const r = await requestBill(id)
+      await reloadTable(id)
+      if (r.printJobs > 0) setFlash(`Cuenta de la mesa ${name} · ${eur(r.total)} · imprimiéndose.`)
+      else setError(`Mesa ${name} marcada «Pide la cuenta» (${eur(r.total)}), pero no hay impresora de tickets activa: NO ha salido papel.`)
+    })
+  }
+
+  function chargeTableNow(method: 'cash' | 'card') {
+    const id = tableSaleId
+    if (!id) return
+    const name = tableDetail?.tableName ?? ''
+    void tableAction(async () => {
+      const r = await chargeTable(id, method)
+      await reloadTable(id)
+      setFlash(`Cobrado · Mesa ${name} · ${eur(r.total)} en ${method === 'cash' ? 'efectivo' : 'tarjeta'}. Cuando esté recogida, «Mesa lista».`)
+    })
+  }
+
+  function clearTableNow() {
+    const id = tableSaleId
+    if (!id) return
+    const name = tableDetail?.tableName ?? ''
+    void tableAction(async () => {
+      await clearTable(id)
+      setCart([])
+      setTableSaleId(null)
+      setTableDetail(null)
+      setView('sala')
+      reloadFloor()
+      setFlash(`Mesa ${name} lista: queda libre.`)
+    })
+  }
+
   // ── Bloqueo de local ──
   if (locLoading) {
     return <div className="tpv-root min-h-screen flex items-center justify-center bg-tpv-bg"><Loader2 className="animate-spin text-tpv-txt-2" size={28} /></div>
@@ -337,6 +539,25 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   // presentaciones (aside fijo en tablet-horizontal/escritorio, sheet
   // desplegable en tablet-vertical, pantalla completa en móvil): mismo
   // contenido, solo cambia el contenedor que lo envuelve. ──
+  // Con una mesa abierta, el panel de la derecha es la cuenta de la mesa; si
+  // no, el carrito de la venta rápida de siempre (sin cambios).
+  function accountPanel(showCloseButton: boolean, onClose?: () => void) {
+    if (!tableSaleId) return cartPanelBody(showCloseButton, onClose)
+    return (
+      <TableAccountPanel
+        detail={tableDetail}
+        local={cart.map(l => ({ key: l.key, displayName: l.displayName, summary: l.summary, kitchenNote: l.kitchenNote, quantity: l.orderLine.quantity, totalPrice: l.totalPrice }))}
+        busy={saving}
+        onPickPending={setPendingPick}
+        onVoid={setVoidPick}
+        onFire={fireTable}
+        onRequestBill={billTable}
+        onCharge={chargeTableNow}
+        onClear={clearTableNow}
+      />
+    )
+  }
+
   function cartPanelBody(showCloseButton: boolean, onClose?: () => void) {
     return (
       <>
@@ -428,52 +649,64 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="tpv-root min-h-screen bg-tpv-bg text-tpv-txt flex flex-col overflow-hidden">
-      {/* Cabecera — Tarea B.1: local + cuenta a la izquierda (antes solo se
-          veía la marca, y Julio no sabía en qué cuenta estaba trabajando). */}
-      <header className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 bg-tpv-surface border-b border-tpv-line shrink-0">
+      {/* Cabecera — maqueta «Folvy TPV · Sala» (pantallas 1 y 3). Con una mesa
+          abierta, la cabecera es la de la mesa; si no, local + día · hora ·
+          quién, y Vender · Sala · Cuentas. Caja y Reservas llegan con sus
+          encargos: no se dejan botones que no hacen nada. */}
+      {tableSaleId && view === 'vender' ? (
+        <TableHeaderBar detail={tableDetail} tableName="" now={now} warnMinutes={floor?.warnMinutes ?? 90} onBack={leaveTable} />
+      ) : (
+      <header className="min-h-tpv-header flex items-center gap-2 sm:gap-4 px-3 sm:px-5 py-2 bg-tpv-surface border-b border-tpv-line shrink-0">
         <button onClick={onExit} className="w-10 h-10 rounded-full flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-surface-2 transition-base shrink-0" aria-label="Salir">
           <ArrowLeft size={20} />
         </button>
         <div className="flex flex-col leading-tight min-w-0 shrink-0 max-w-[36vw] sm:max-w-none">
           <b className="text-base sm:text-lg font-extrabold text-tpv-txt truncate">{locationName ?? '—'}</b>
-          <span className="text-[10px] sm:text-xs font-bold text-tpv-txt-2 uppercase tracking-wide truncate">
-            {activeAccount?.name ?? ''}{activeAccount?.isInternal ? ' · laboratorio' : ''}
+          <span className="text-[10px] sm:text-xs font-bold text-tpv-txt-2 uppercase tracking-[0.04em] truncate">
+            {new Date(now).toLocaleDateString('es-ES', { weekday: 'long' })} · {new Date(now).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+            {waiterName ? ` · ${waiterName}` : ''}{activeAccount?.isInternal ? ` · ${activeAccount.name} · laboratorio` : ''}
           </span>
         </div>
-        <select
-          value={brandId ?? ''} onChange={e => setBrandId(e.target.value)}
-          className="min-h-tap-small px-2.5 sm:px-3 text-sm font-bold border border-tpv-line rounded-tpv bg-tpv-surface-2 text-tpv-txt shrink-0 max-w-[30vw] sm:max-w-none"
-        >
-          {brands.length === 0 && <option value="">Sin marcas</option>}
-          {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
+        {view === 'vender' && (
+          <select
+            value={brandId ?? ''} onChange={e => setBrandId(e.target.value)}
+            className="min-h-tap-small px-2.5 sm:px-3 text-sm font-bold border border-tpv-line rounded-tpv bg-tpv-surface-2 text-tpv-txt shrink-0 max-w-[30vw] sm:max-w-none"
+          >
+            {brands.length === 0 && <option value="">Sin marcas</option>}
+            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        )}
         <div className="flex-1" />
         {!deviceToken && (
           <span
             title="Esta pantalla no está vinculada a un dispositivo Folvy — la venta se registra igual, sin trazabilidad de dispositivo. Vincular en Ajustes de pedidos → Dispositivos."
-            className="hidden md:inline-flex items-center gap-1.5 min-h-tap-small px-3 rounded-tpv border border-tpv-warn bg-tpv-warn/15 text-tpv-warn text-xs font-bold shrink-0"
+            className="hidden md:inline-flex items-center gap-1.5 min-h-tap-small px-3 rounded-tpv border border-tpv-warn bg-tpv-warn-tint text-tpv-warn-text text-xs font-bold shrink-0"
           >
             <MonitorOff size={14} /> Sin dispositivo
           </span>
         )}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <nav className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
-            onClick={() => setShowTickets(false)}
-            className={`inline-flex items-center gap-1.5 min-h-tap-small px-2.5 sm:px-3 rounded-tpv text-xs sm:text-sm font-bold border transition-base ${!showTickets ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
+            onClick={() => setView('vender')}
+            className={`h-tap-small px-3 sm:px-[18px] rounded-tpv border text-sm sm:text-tpv-tab font-bold transition-base ${view === 'vender' ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
           >
-            <UtensilsCrossed size={16} /> Vender
+            Vender
           </button>
           <button
-            onClick={() => { setShowTickets(true); reloadTickets() }}
-            className={`inline-flex items-center gap-1.5 min-h-tap-small px-2.5 sm:px-3 rounded-tpv text-xs sm:text-sm font-bold border transition-base ${showTickets ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
+            onClick={() => setView('sala')}
+            className={`h-tap-small px-3 sm:px-[18px] rounded-tpv border text-sm sm:text-tpv-tab font-bold transition-base ${view === 'sala' ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
           >
-            <ListChecks size={16} /> Cuentas
-            <span className="bg-tpv-note text-black text-xs font-extrabold rounded-full px-1.5">
-              {openTickets.length}{pendingDelivery.length > 0 ? `+${pendingDelivery.length}` : ''}
-            </span>
+            Sala
           </button>
-        </div>
+          <button
+            onClick={() => { setView('cuentas'); reloadTickets() }}
+            className={`h-tap-small px-3 sm:px-[18px] rounded-tpv border text-sm sm:text-tpv-tab font-bold transition-base ${showTickets ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
+          >
+            Cuentas <span className={showTickets ? 'text-white' : 'text-tpv-txt'}>{openTickets.length + pendingDelivery.length}</span>
+          </button>
+        </nav>
       </header>
+      )}
 
       {error && <div className="px-4 py-2 bg-tpv-danger text-white text-sm font-bold border-b border-tpv-line">{error}</div>}
       {flash && (
@@ -498,7 +731,13 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
         </div>
       )}
 
-      {showTickets ? (
+      {view === 'sala' ? (
+        floor ? (
+          <FloorView floor={floor} now={now} onTapTable={tapTable} />
+        ) : (
+          <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-tpv-txt-2" size={28} /></div>
+        )
+      ) : showTickets ? (
         /* ── Tarea C: Cuentas — tarjetas, no listado de texto ── */
         <div className="flex-1 overflow-y-auto p-4">
           <div className="flex gap-2 mb-3 overflow-x-auto">
@@ -647,30 +886,30 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
             <div className="hidden md:flex lg:hidden fixed inset-x-0 bottom-0 items-center justify-between gap-3 px-4 py-3 bg-tpv-surface border-t border-tpv-line">
               <div className="flex items-baseline gap-2">
                 <span className="text-xs font-bold text-tpv-txt-2">Total</span>
-                <b className="text-tpv-amount font-extrabold text-tpv-txt">{eur(cartTotal)}</b>
+                <b className="text-tpv-amount font-extrabold text-tpv-txt">{eur(cartTotal + (tableSaleId ? tableDetail?.total ?? 0 : 0))}</b>
               </div>
               <button onClick={() => setCartSheetOpen(true)} className="min-h-tap px-5 rounded-tpv bg-tpv-accent text-white text-sm font-extrabold">
-                Ver cuenta ({cartCount})
+                {tableDetail ? `Ver mesa ${tableDetail.tableName}` : `Ver cuenta (${cartCount})`}
               </button>
             </div>
           </div>
 
           {/* Escritorio/tablet horizontal (≥lg): cuenta siempre visible a la derecha */}
-          <aside className="hidden lg:flex lg:w-[390px] lg:shrink-0 lg:flex-col bg-tpv-surface border-l border-tpv-line">
-            {cartPanelBody(false)}
+          <aside className={`hidden lg:flex lg:shrink-0 lg:flex-col bg-tpv-surface ${tableSaleId ? 'lg:w-[400px] lg:my-4 lg:mr-5 rounded-2xl border border-tpv-line overflow-hidden' : 'lg:w-[390px] border-l border-tpv-line'}`}>
+            {accountPanel(false)}
           </aside>
 
           {/* Tablet vertical (md-lg): sheet desplegable de cuenta completa */}
           {cartSheetOpen && (
             <div className="hidden md:flex lg:hidden fixed inset-0 z-40 bg-tpv-surface flex-col">
-              {cartPanelBody(true, () => setCartSheetOpen(false))}
+              {accountPanel(true, () => setCartSheetOpen(false))}
             </div>
           )}
 
           {/* Móvil (<md): cuenta a pantalla completa cuando mobileView='cart' */}
           {mobileView === 'cart' && (
             <div className="md:hidden flex-1 flex flex-col overflow-hidden">
-              {cartPanelBody(false)}
+              {accountPanel(false)}
             </div>
           )}
 
@@ -686,10 +925,55 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
               onClick={() => setMobileView('cart')}
               className={`flex-1 min-h-tap rounded-tpv text-sm font-bold flex items-center justify-center gap-2 transition-base ${mobileView === 'cart' ? 'bg-tpv-accent text-white' : 'bg-tpv-surface-2 text-tpv-txt-2'}`}
             >
-              💳 Cuenta · {eur(cartTotal)}
+              💳 {tableDetail ? `Mesa ${tableDetail.tableName}` : 'Cuenta'} · {eur(cartTotal + (tableSaleId ? tableDetail?.total ?? 0 : 0))}
             </button>
           </div>
         </div>
+      )}
+
+      {openPick && (
+        <OpenTableScreen
+          tableName={openPick.name}
+          zoneName={floor?.zones.find(z => z.tables.some(t => t.id === openPick.id))?.name ?? ''}
+          seats={openPick.seats} busy={saving}
+          onPick={pickCovers} onClose={() => setOpenPick(null)}
+        />
+      )}
+
+      {pendingPick && (() => {
+        if (pendingPick.kind === 'saved') {
+          const l = pendingPick.line
+          return (
+            <PendingLineModal
+              name={l.name} quantity={l.quantity} note={l.kitchenNote} canEditNote={false} busy={saving}
+              onClose={() => setPendingPick(null)}
+              onRemove={() => { setPendingPick(null); savedRemove(l) }}
+              onSave={q => { setPendingPick(null); if (q !== l.quantity) savedQty(l, q) }}
+            />
+          )
+        }
+        const c = cart.find(x => x.key === pendingPick.key)
+        if (!c) return null
+        return (
+          <PendingLineModal
+            name={c.displayName} quantity={c.orderLine.quantity} note={c.kitchenNote} canEditNote busy={saving}
+            onClose={() => setPendingPick(null)}
+            onRemove={() => { setPendingPick(null); removeLine(c.key) }}
+            onSave={(q, note) => {
+              setPendingPick(null)
+              setCart(prev => prev.map(x => x.key === c.key
+                ? { ...x, kitchenNote: note, orderLine: { ...x.orderLine, quantity: q }, totalPrice: x.unitPrice * q }
+                : x))
+            }}
+          />
+        )
+      })()}
+
+      {voidPick && activeAccountId && (
+        <VoidLineModal
+          accountId={activeAccountId} lineName={voidPick.name} tableName={tableDetail?.tableName ?? ''} busy={saving}
+          onConfirm={confirmVoid} onClose={() => setVoidPick(null)}
+        />
       )}
 
       {configItem && activeAccountId && operativeLocationId && (

@@ -92,6 +92,12 @@ export default {
         'tpv-warn': 'var(--tpv-warn)',
         'tpv-danger': 'var(--tpv-danger)',
         'tpv-note': 'var(--tpv-note)',
+        // TPV Sala (S1): tintes y tintas de la maqueta (ver tpvTokens.css).
+        'tpv-accent-tint': 'var(--tpv-accent-tint)',
+        'tpv-warn-tint': 'var(--tpv-warn-tint)',
+        'tpv-warn-text': 'var(--tpv-warn-text)',
+        'tpv-ok-tint': 'var(--tpv-ok-tint)',
+        'tpv-ok-text': 'var(--tpv-ok-text)',
 
         // ── COCINA (§9 de Extras, 07/09): el estándar de la maqueta ──
         // Valores en src/modules/kitchen/estilo/cocinaTokens.css, escopados a
@@ -146,6 +152,10 @@ export default {
         'xl': '14px',
         // TPV (T1.f): --tpv-radius en tpvTokens.css.
         'tpv': 'var(--tpv-radius)',
+        // TPV Sala (S1): la tarjeta de mesa de la maqueta lleva 14 px.
+        'tpv-tile': '14px',
+        // y cada línea de la cuenta de la mesa, 10 px.
+        'tpv-line': '10px',
         // Cocina (§9.1 de Extras): 2-3 px. El radio es lo que más separa la
         // maqueta de la app de hoy, que va de 6 a 14.
         'cocina': 'var(--cocina-radio)',
@@ -178,6 +188,10 @@ export default {
         // categorías ≥82px (4.1 preámbulo), tile de producto ≥118px (4.1).
         'tpv-cat': '82px',
         'tpv-product': '118px',
+        // TPV Sala (S1): mesa en el móvil (maqueta, pantalla 6: filas de 132 px).
+        'tpv-table-sm': '132px',
+        // TPV Sala (S1): alto de la cabecera del TPV en la maqueta.
+        'tpv-header': '68px',
         // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, B.9 — pantallas
         // de OFICINA/escritorio (ratón, no tablet): control ≥44px (ya cubierto
         // por 'touch'), acción de cierre ≥56px. Sin token previo para 56px.
@@ -205,6 +219,16 @@ export default {
         'tpv-amount': ['27px', { lineHeight: '1.1', letterSpacing: '-0.02em' }],
         'tpv-code': ['30px', { lineHeight: '1', letterSpacing: '-0.02em' }],
         'tpv-total': ['38px', { lineHeight: '1', letterSpacing: '-0.03em' }],
+        // TPV Sala (S1, maqueta «Folvy TPV · Sala»): por rol.
+        'tpv-tab': ['15px', { lineHeight: '1.2' }],            // pestañas de cabecera, ocupación, estado de mesa
+        'tpv-zone': ['20px', { lineHeight: '1.2' }],           // nombre de zona, importe de mesa
+        'tpv-table-num': ['34px', { lineHeight: '1' }],        // número de mesa; «¿Cuántos son?»; total de la mesa
+        'tpv-covers-big': ['30px', { lineHeight: '1.15' }],    // «38 comensales»
+        'tpv-covers-pick': ['72px', { lineHeight: '1' }],      // los números de «¿Cuántos son?»
+        'tpv-table-num-sm': ['30px', { lineHeight: '1' }],     // número de mesa en el móvil
+        'tpv-tab-sm': ['13px', { lineHeight: '1.2' }],         // ocupación de zona en el móvil
+        'tpv-title': ['22px', { lineHeight: '1.2' }],          // «Mesa 7 · Sala» en la cabecera
+        'tpv-charge': ['26px', { lineHeight: '1.1' }],         // «Cobrar» / «Mesa lista» de la mesa
       },
     },
   },

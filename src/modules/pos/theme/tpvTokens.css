@@ -44,6 +44,17 @@
   --tpv-danger: #DC2626;  /* destructivo, agotado */
   --tpv-note: #EAB308;    /* nota de cocina, producto estrella */
 
+  /* TPV Sala (S1, 08/10) — maqueta «Folvy TPV · Sala». Tintes y tintas
+     derivados de los semánticos de arriba, con los valores EXACTOS de la
+     maqueta. Van aquí como tokens porque Tailwind NO aplica opacidad
+     (bg-tpv-warn/15) a un color definido como var(): esa clase no se
+     compila y el fondo sale sin pintar (medido en dist/ el 08/10). */
+  --tpv-accent-tint: rgba(37, 99, 235, 0.16);   /* fondo «reservada», «sin enviar» */
+  --tpv-warn-tint: rgba(245, 158, 11, 0.16);    /* fondo «pide la cuenta», tiempo excedido */
+  --tpv-warn-text: #FBBF24;                     /* texto ámbar sobre fondo oscuro */
+  --tpv-ok-tint: rgba(22, 163, 74, 0.14);       /* fondo «cobrada · recoger» */
+  --tpv-ok-text: #4ADE80;                       /* texto verde sobre fondo oscuro */
+
   /* Forma */
   --tpv-radius: 12px;
 

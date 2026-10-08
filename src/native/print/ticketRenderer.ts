@@ -37,6 +37,7 @@ function deliveryLabel(serviceType: any) {
   if (t.includes('pickup') || t.includes('collection') || t.includes('takeaway')) return 'RECOGIDA';
   if (t.includes('platform')) return 'REPARTO PLATAFORMA';
   if (t.includes('own')) return 'REPARTO PROPIO';
+  if (t.includes('dine_in')) return 'EN SALA';
   return serviceType ? serviceType.toUpperCase() : 'REPARTO';
 }
 function isDrinkOrDessert(family: any, name: any) {
@@ -187,7 +188,14 @@ export function renderBagTicket(order: any, fiscal?: any): TicketDoc {
 
 export function renderKitchenTicket(order: any): TicketDoc {
   const b: any[] = [];
-  b.push({ kind: 'invertBanner', text: pickupCode(order), size: 4 });
+  // TPV Sala (S1): una mesa lleva arriba mesa, zona, comensales y envío.
+  if (order.table_name) {
+    b.push({ kind: 'invertBanner', text: `MESA ${order.table_name}`, size: 4 });
+    b.push({ kind: 'text', text: `${(order.zone_name ?? '').toUpperCase()} · ${order.covers ?? '?'} COMENSALES`, align: 'center', bold: true, size: 2 });
+    b.push({ kind: 'text', text: order.fire_number ? `ENVIO ${order.fire_number}` : 'CUENTA COMPLETA', align: 'center', bold: true, size: 3 });
+  } else {
+    b.push({ kind: 'invertBanner', text: pickupCode(order), size: 4 });
+  }
   b.push({ kind: 'text', text: (order.brand ?? '').toUpperCase(), align: 'center', bold: true, size: 2 });
   const kref = platformRef(order);
   if (kref) b.push({ kind: 'text', text: kref, align: 'center', muted: true });

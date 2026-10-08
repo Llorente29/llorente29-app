@@ -10,6 +10,7 @@ import DispatchConfigSection from '@/modules/integrations/components/DispatchCon
 import DeliveryWatchdogSection from '@/modules/integrations/components/DeliveryWatchdogSection'
 import AvailabilityConfigSection from '@/modules/integrations/components/AvailabilityConfigSection'
 import PrintersSettingsPage from '@/modules/printing/components/PrintersSettingsPage'
+import DiningRoomSettings from '@/modules/pos/components/DiningRoomSettings'
 
 // DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
 // Re-exportar aquí para retrocompatibilidad con imports antiguos.
@@ -565,6 +566,11 @@ export function LocationsPage() {
                     {/* Impresoras del local (alta/edición/baja por RPC, sin SQL) */}
                     {activeAccountId && (
                       <PrintersSettingsPage accountId={activeAccountId} locationId={loc.id} />
+                    )}
+
+                    {/* Sala y mesas del TPV (zonas, mesas, umbral ámbar) */}
+                    {activeAccountId && (
+                      <DiningRoomSettings accountId={activeAccountId} locationId={loc.id} />
                     )}
                   </div>
                 )}
