@@ -363,6 +363,14 @@
       "tituloDebeContener": "cuentas anuales",
       "debeContener": "Registro Mercantil",
       "nota": "C05: modelos de depósito de cuentas individuales vigentes para lo que se presente desde el 01/06/2026 (BOE de 29/05/2026). La BOE-A-2026-11582, de la misma fecha, es la de consolidadas."
+    },
+    {
+      "clave": "rdl-1-2010-lsc",
+      "nombre": "Real Decreto Legislativo 1/2010, texto refundido de la Ley de Sociedades de Capital",
+      "tipo": "boe",
+      "id": "BOE-A-2010-10544",
+      "debeContener": "Sociedades de Capital",
+      "nota": "C05: arts. 257–258 (límites del balance, el ECPN y la PyG abreviados) y 363.1.e (disolución por pérdidas, solo como aviso)."
     }
   ]
 }
