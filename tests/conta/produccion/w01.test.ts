@@ -263,3 +263,24 @@ describe('W01 · el workflow de producción: sin franja, y las guardas de siempr
     expect(texto).toContain("echo 'rollback;'")
   })
 })
+
+describe('W01 · front compatible en los dos sentidos (antes-de-subir)', () => {
+  const correr = (m: string) => {
+    try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analizar.mjs', 'front-compatible', m], { encoding: 'utf8' }) } }
+    catch (e) { const x = e as { status: number; stdout: string }; return { rc: x.status, out: x.stdout } }
+  }
+  it('una tanda que borra supplier.name, que el front lee (publicado y en este commit), PARA y dice dónde', () => {
+    const r = correr('tests/conta/produccion/w01/manifiesto-front-leida.txt')
+    expect(r.rc).toBe(1)
+    expect(r.out).toMatch(/✗ public\.supplier\.name lo lee todavía el front de origin\/main \(publicado\): src\//)
+    expect(r.out).toMatch(/✗ public\.supplier\.name lo lee todavía el front de este commit: src\//)
+  })
+  it('sale.rider_seen_at no la lee el front directamente (va por RPC): pasa aquí; la base ya la para por sus funciones', () => {
+    const r = correr('tests/conta/produccion/w01/manifiesto-front-nadie.txt')
+    expect(r.rc).toBe(0)
+    expect(r.out).toContain('nadie lee public.sale.rider_seen_at')
+  })
+  it('la tanda viva no borra nada', () => {
+    expect(correr('supabase/produccion/aplicar.txt').out).toContain('no borra ni renombra nada')
+  })
+})

@@ -471,7 +471,18 @@ export function archivosFront(ref) {
   // «usado por el front» para siempre.
   const rutas = execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 << 20 }).split('\n')
     .filter((r) => /\.(tsx?|jsx?|mjs)$/.test(r) && r !== 'src/types/database.ts')
-  return rutas.map((ruta) => ({ ruta, texto: ref === 'WORKTREE' ? readFileSync(ruta, 'utf8') : execFileSync('git', ['show', `${ref}:${ruta}`], { encoding: 'utf8', maxBuffer: 64 << 20 }) }))
+  if (ref === 'WORKTREE') return rutas.map((ruta) => ({ ruta, texto: readFileSync(ruta, 'utf8') }))
+  // Un solo proceso para todo el front del commit: «<sha> blob <bytes>\n<contenido>\n» por fichero.
+  const buf = execFileSync('git', ['cat-file', '--batch'], { input: rutas.map((r) => `${ref}:${r}`).join('\n') + '\n', maxBuffer: 256 << 20 })
+  const out = []
+  let i = 0
+  for (const ruta of rutas) {
+    const fin = buf.indexOf(10, i)
+    const n = Number(buf.subarray(i, fin).toString().split(' ')[2])
+    out.push({ ruta, texto: buf.subarray(fin + 1, fin + 1 + n).toString('utf8') })
+    i = fin + 1 + n + 1
+  }
+  return out
 }
 
 // ── La consulta a producción (solo lee) ─────────────────────────────────────
@@ -641,6 +652,30 @@ if (modo === 'objetivos') {
   process.stdout.write(sqlRegistro(f, md5De(f), quien ?? 'aplicar-produccion-conta'))
 } else if (modo === 'baja') {
   process.stdout.write(sqlBaja(resto[0]))
+} else if (modo === 'front-compatible') {
+  // front-compatible [manifiesto]: lo que la tanda borra o renombra, ¿lo lee
+  // todavía el front publicado (origin/main) o el del commit que se sube? Sale
+  // con 1 si alguno lo lee: primero se quita del front, después de la base.
+  const manifiesto = resto[0] ?? 'supabase/produccion/aplicar.txt'
+  const ficheros = readFileSync(manifiesto, 'utf8').split('\n').map((x) => x.trim()).filter((x) => x && !x.startsWith('#'))
+  const vistos = new Map()
+  for (const f of ficheros) for (const o of analizarFichero(f)) { const d = destruido(o); if (d) vistos.set(d.clave, d) }
+  const destruidos = [...vistos.values()]
+  if (!destruidos.length) {
+    process.stdout.write(`Front compatible: la tanda de ${manifiesto} no borra ni renombra nada.\n`)
+  } else {
+    let mal = false
+    for (const ref of ['origin/main', 'WORKTREE']) {
+      const usos = usosEnFront(destruidos, archivosFront(ref))
+      for (const [clave, rutas] of Object.entries(usos)) {
+        mal = true
+        process.stdout.write(`✗ ${clave} lo lee todavía el front de ${ref === 'WORKTREE' ? 'este commit' : 'origin/main (publicado)'}: ${rutas.join(', ')}\n`)
+      }
+    }
+    if (mal) process.stdout.write('Primero se deja de leer en el front (y se publica), después se borra de la base: dos pasos.\n')
+    else process.stdout.write(`Front compatible: nadie lee ${destruidos.map((d) => d.clave).join(', ')} (origin/main ni este commit).\n`)
+    process.exitCode = mal ? 1 : 0
+  }
 } else if (modo === 'decidir') {
 
   const [fExistentes, ...ficheros] = resto
