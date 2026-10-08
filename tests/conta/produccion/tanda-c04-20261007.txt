@@ -1,0 +1,41 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml, solo a mano («confirmo:
+# produccion»), entre las 00:30 y las 12:15 de Madrid (fuera, solo con
+# «fuera_de_ventana: si» y si ningún fichero toca el camino del pedido),
+# primero en ENSAYO (todo en una transacción y rollback) y, con un ensayo en
+# verde del mismo commit, en REAL (un fichero por transacción, para al primer
+# fallo).
+#
+# C04 · Libro diario. Desde la rama conta/c04-libro-diario, ANTES de fusionar
+# el PR #160. La 0130 del C00 (valores de serie regenerados) y las cuatro del
+# C04 (0100–0130). Fuera del camino del pedido: el análisis nombra 39 tablas y
+# 21 funciones; ninguna en CAMINO_TABLAS / CAMINO_FUNCIONES.
+#
+# DOS PARAN y van en el campo «autorizo», nombre entero, una por línea:
+#
+#   20261003T0130_c00_valores_de_serie.sql
+#   20261010T0120_c04_funciones.sql
+#
+# Por qué para cada una (analizar.mjs con lo que existe hoy en producción,
+# leído en solo lectura el 07/10):
+#   · C00 0130: actualiza expense_category (los 12 códigos de sistema, nombre
+#     del PGC y su legal_ref) y vuelve a poner el CHECK expense_category_serie.
+#     Cada UPDATE lleva «where is_system and … and legal_ref is null». Medido
+#     en producción el 07/10: de esas 12 filas de sistema (account_id nulo),
+#     0 sin legal_ref → hoy no cambia ninguna fila. Los INSERT son de las
+#     tablas de serie.
+#   · C04 0120: reemplaza conta_reabrir_mes(uuid,date,text) (del C00, 0110),
+#     misma firma: copia más una guarda (un mes traído no se reabre). Y quita
+#     y vuelve a crear el disparador trg_treasury_account_local.
+# La 0110 del C04 lleva el papel «liquidacion» en los CHECK de
+# company_account_link (respuesta 3): solo amplía lo permitido; la tabla no es
+# del camino del pedido.
+#
+# Después: «fusiona» → Vercel READY → Contabilidad › Libros › Libro diario.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261003T0130_c00_valores_de_serie.sql
+supabase/migrations/20261010T0100_c04_libro.sql
+supabase/migrations/20261010T0110_c04_enlaces.sql
+supabase/migrations/20261010T0120_c04_funciones.sql
+supabase/migrations/20261010T0130_c04_lectura.sql

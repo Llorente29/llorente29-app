@@ -126,6 +126,19 @@ export function cuentaPorFiltro(lista: readonly Tercero[]): Record<FiltroTercero
   return out
 }
 
+/**
+ * Respuesta 4 del C04: los filtros de papel solo salen si la empresa tiene ese
+ * papel. Proveedores, Clientes y Archivados, siempre (una ferretería ve esos
+ * tres); Plataformas y Socios de marca, si algún tercero —también archivado—
+ * lo tiene, o si es el filtro abierto (un enlace no se queda sin su botón).
+ * No esconde filas (regla 7): un papel sin nadie no tiene filas que esconder.
+ */
+export function filtrosVisibles(lista: readonly Tercero[], actual: FiltroTerceros): { id: FiltroTerceros; texto: string }[] {
+  const tiene = (p: Papel) => lista.some((t) => t.papeles.includes(p))
+  return FILTROS_TERCEROS.filter((f) =>
+    f.id === actual || (f.id === 'plataformas' ? tiene('platform') : f.id === 'socios' ? tiene('brand_partner') : true))
+}
+
 /** La franja de un archivado: «Archivado · histórico de 2024». */
 export function franjaArchivado(t: Pick<Tercero, 'archivadoEn' | 'notaArchivado'>): string | null {
   if (!t.archivadoEn) return null

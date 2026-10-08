@@ -318,6 +318,23 @@ export async function guardarModeloPlataforma(partyId: string, modelo: ModeloPla
 export const archivarTercero = (partyId: string, archivar: boolean, nota?: string | null) =>
   rpc<{ party_id: string; archivado: boolean }>('party_set_archived', { p_party: partyId, p_archivar: archivar, p_nota: nota ?? null })
 
+// ── C04 R4 · Fusionar dos terceros (con rastro y deshacer) ──────────────────
+export interface Fusion { id: string; quedaId: string; seVaId: string; resumen: string; cuando: string; quien: string | null }
+
+/** Funde «seVa» en «queda»: lo que se puede mover pasa a la que queda; lo que choca se queda en la otra, archivada. */
+export const fusionarTerceros = (quedaId: string, seVaId: string, quien: string | null) =>
+  rpc<{ fusion: string; resumen: string; movidos: number }>('party_merge_do', { p_queda: quedaId, p_se_va: seVaId, p_quien_nombre: quien })
+
+export const deshacerFusion = (id: string, quien: string | null) =>
+  rpc<{ fusion: string; deshecha: boolean }>('party_merge_undo', { p_merge: id, p_quien_nombre: quien })
+
+/** Las fusiones vivas (sin deshacer) en las que está este tercero, como el que queda o el que se fue. */
+export async function fusionesDe(accountId: string, partyId: string): Promise<Fusion[]> {
+  const filas = await leer(tabla('party_merge').select('id, kept_party_id, gone_party_id, summary, done_at, done_by_name')
+    .eq('account_id', accountId).is('undone_at', null).or(`kept_party_id.eq.${partyId},gone_party_id.eq.${partyId}`).order('done_at', { ascending: false }), 'las fusiones')
+  return filas.map((f) => ({ id: String(f.id), quedaId: String(f.kept_party_id), seVaId: String(f.gone_party_id), resumen: String(f.summary), cuando: String(f.done_at), quien: f.done_by_name ? String(f.done_by_name) : null }))
+}
+
 export const apuntarCobro = (id: string, fecha: string, importe: number, nota: string | null, quien: string | null) =>
   rpc<{ id: string; neto: number | null; cobrado: number; diferencia: number | null }>('channel_settlement_collect', { p_id: id, p_fecha: fecha, p_importe: importe, p_nota: nota, p_quien_nombre: quien })
 

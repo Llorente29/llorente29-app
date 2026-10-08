@@ -11,7 +11,7 @@
 // Un tercero que solo es proveedor no viene aquí: abre su ficha del C01b.
 // Cada acción dice lo que ha pasado, con contenido (regla 8 de CLAUDE.md).
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { migasFichaTercero, rutaFichaProveedor, rutaFichaTercero, rutaTerceros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -29,12 +29,14 @@ import { NuevaFactura, PrepararLiquidacion, SubirLiquidacion } from '@/modules/c
 import {
   CobroTercero, ContabilidadTercero, ContactosTercero, DatosFiscalesTercero, DocumentosTercero, HistorialTercero, LiquidacionesTercero,
 } from '@/modules/conta/terceros/ApartadosTercero'
-import { accionPrincipal, ejemploDeFicha, franjaArchivado, ordenarPapeles, type Papel } from '@/modules/conta/lib/terceros'
+import { accionPrincipal, ejemploDeFicha, filtrarTerceros, franjaArchivado, ordenarPapeles, type Papel, type Tercero } from '@/modules/conta/lib/terceros'
 import { useEjemploPregunta } from '@/modules/conta/marco/ejemploPregunta'
 import { cifrasPlataforma, pieTeDebe } from '@/modules/conta/lib/liquidaciones'
 import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
 import { euros, eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
-import { anadirPapel, archivarTercero, asegurarCuentaLiquidacion } from '@/modules/conta/services/tercerosService'
+import {
+  anadirPapel, archivarTercero, asegurarCuentaLiquidacion, deshacerFusion, fusionarTerceros, fusionesDe, listarTercerosBase, type Fusion,
+} from '@/modules/conta/services/tercerosService'
 
 const CADA: Record<string, string> = { weekly: 'Liquida cada semana', fortnightly: 'Liquida cada 15 días', monthly: 'Liquida cada mes' }
 
@@ -137,6 +139,100 @@ function FranjaArchivado() {
   )
 }
 
+/**
+ * C04 R4 · «Fusionar con…»: el mismo cliente o proveedor dos veces. Se elige
+ * la otra ficha; ésta es la que queda. Lo que se puede mover pasa aquí; lo que
+ * choca (su ficha de proveedor de Cocina, sobre todo) se queda en la otra, que
+ * pasa a archivada con «Fusionado con …». Con rastro y «Deshacer».
+ */
+function DialogoFusionar({ alCerrar }: { alCerrar: () => void }) {
+  const { ficha, accountId, recargar, avisar } = useTercero()
+  const { userName } = useCuentaConta()
+  const t = ficha.tercero
+  const [todos, setTodos] = useState<Tercero[] | null>(null)
+  const [q, setQ] = useState(t.nombre.split(/[\s,.]+/)[0] ?? '')
+  const [otro, setOtro] = useState<Tercero | null>(null)
+  const [fallo, setFallo] = useState<string | null>(null)
+  const [haciendo, setHaciendo] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    listarTercerosBase(accountId).then((r) => { if (vivo) setTodos(r.terceros.filter((x) => x.id !== t.id)) }, (e: unknown) => { if (vivo) setFallo(e instanceof Error ? e.message : String(e)) })
+    return () => { vivo = false }
+  }, [accountId, t.id])
+  // Los archivados también: el duplicado de siempre es el proveedor viejo, archivado (regla 7: se buscan todos).
+  const candidatos = todos ? [...filtrarTerceros(todos, 'todos', q), ...filtrarTerceros(todos, 'archivados', q)].slice(0, 8) : []
+  return (
+    <Dialogo titulo={`Fusionar con ${t.nombre}`} alCerrar={alCerrar}>
+      <p style={{ margin: 0, fontSize: 15 }}>
+        Elige la otra ficha. <strong>{t.nombre}</strong> es la que queda: recibe sus papeles, cuentas, liquidaciones y propuestas del libro.
+        Lo que ya tiene (por ejemplo, su ficha de proveedor de Cocina con sus albaranes) se queda en la otra, que pasa a archivada. Se puede deshacer.
+      </p>
+      <div className="cx-campo">
+        <label htmlFor="fusionar-buscar">Buscar por nombre o NIF</label>
+        <input id="fusionar-buscar" className="cx-input" type="search" value={q} onChange={(e) => { setQ(e.target.value); setOtro(null) }} />
+      </div>
+      {!todos && !fallo && <p className="cx-ayuda">Buscando…</p>}
+      {todos && (
+        <ul className="cxt-fusionar-lista" role="listbox" aria-label="La otra ficha">
+          {candidatos.length === 0 && <li className="cx-ayuda">Ninguna ficha con «{q}».</li>}
+          {candidatos.map((x) => (
+            <li key={x.id}>
+              <button type="button" role="option" aria-selected={otro?.id === x.id} className="cx-pildora" onClick={() => setOtro(x)}>
+                {x.nombre}{x.nif ? ` · ${x.nif}` : ''}{x.archivadoEn ? ' · archivada' : ''}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {otro && <p className="cx-ayuda" style={{ margin: 0 }}>Se queda <strong>{t.nombre}</strong>; <strong>{otro.nombre}</strong> pasa a archivada con «Fusionado con {t.nombre}».</p>}
+      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      <div className="cx-pie">
+        <button type="button" className="cx-boton-sec" onClick={alCerrar} disabled={haciendo}>Cancelar</button>
+        <button type="button" className="cx-boton" disabled={!otro || haciendo} onClick={async () => {
+          if (!otro) return
+          setHaciendo(true); setFallo(null)
+          try {
+            const r = await fusionarTerceros(t.id, otro.id, userName)
+            avisar(`${r.resumen} Se puede deshacer arriba.`)
+            alCerrar(); recargar()
+          } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo fusionar.') }
+          setHaciendo(false)
+        }}>{haciendo ? 'Fusionando…' : 'Fusionar'}</button>
+      </div>
+    </Dialogo>
+  )
+}
+
+/** El rastro de las fusiones de esta ficha, con «Deshacer» (regla 8: lo hecho se ve). */
+function FranjaFusiones() {
+  const { ficha, accountId, recargar, avisar } = useTercero()
+  const { userName } = useCuentaConta()
+  const [fusiones, setFusiones] = useState<Fusion[]>([])
+  const [fallo, setFallo] = useState<string | null>(null)
+  const id = ficha.tercero.id
+  useEffect(() => {
+    let vivo = true
+    fusionesDe(accountId, id).then((f) => { if (vivo) setFusiones(f) }, () => { if (vivo) setFusiones([]) })
+    return () => { vivo = false }
+  }, [accountId, id, ficha])
+  if (!fusiones.length) return null
+  return (
+    <>
+      {fusiones.map((f) => (
+        <div key={f.id} className="cx-aviso cxt-franja" role="status" aria-label="Fusión">
+          <span>{f.resumen} <span className="cx-ayuda">({f.cuando.slice(8, 10)}/{f.cuando.slice(5, 7)}/{f.cuando.slice(0, 4)}{f.quien ? `, ${f.quien}` : ''})</span></span>
+          <button type="button" className="cx-boton-sec" onClick={async () => {
+            setFallo(null)
+            try { await deshacerFusion(f.id, userName); avisar('Fusión deshecha: las dos fichas vuelven a estar como antes.'); recargar() }
+            catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo deshacer.') }
+          }}>Deshacer</button>
+        </div>
+      ))}
+      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+    </>
+  )
+}
+
 const PAPELES_QUE_SE_ANADEN: { papel: 'customer' | 'platform' | 'brand_partner'; texto: string }[] = [
   { papel: 'customer', texto: 'Añadir papel de cliente' },
   { papel: 'platform', texto: 'Es también plataforma de reparto' },
@@ -149,6 +245,7 @@ function MenuMas() {
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [archivar, setArchivar] = useState(false)
+  const [fusionar, setFusionar] = useState(false)
   const [nota, setNota] = useState('')
   const [fallo, setFallo] = useState<string | null>(null)
   const t = ficha.tercero
@@ -181,8 +278,10 @@ function MenuMas() {
                 catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo recuperar.') }
               }}>Recuperar</button>
             : <button type="button" role="menuitem" onClick={() => { setAbierto(false); setArchivar(true) }}>Archivar</button>}
+          <button type="button" role="menuitem" onClick={() => { setAbierto(false); setFusionar(true) }}>Fusionar con…</button>
         </div>
       )}
+      {fusionar && <DialogoFusionar alCerrar={() => setFusionar(false)} />}
       {fallo && <div className="cx-error cxt-fallo-menu" role="alert">{fallo}</div>}
       {archivar && (
         <Dialogo titulo={`¿Archivar ${t.nombre}?`} alCerrar={() => setArchivar(false)}>
@@ -341,6 +440,7 @@ function Resumen({ aviso }: { aviso: string | null }) {
       <Cabecera />
       <Guardado texto={aviso} />
       <FranjaArchivado />
+      <FranjaFusiones />
       <Pestanas ap="ficha" />
       {plataforma && <CifrasPlataforma />}
       {!plataforma && socio && <CifrasSocio />}
@@ -391,6 +491,7 @@ function Edicion({ ap, aviso }: { ap: Exclude<ApartadoTercero, 'ficha'>; aviso: 
       <Cabecera />
       <Guardado texto={aviso} />
       <FranjaArchivado />
+      <FranjaFusiones />
       <Pestanas ap={ap} />
       <section className="cx-tarjeta" aria-label={NOMBRE_APARTADO_TERCERO[ap]}>
         <div className="cxp-edicion-cuerpo">{PANTALLA[ap]()}</div>
@@ -446,6 +547,7 @@ function PortadaMovil({ aviso }: { aviso: string | null }) {
       </div>
       <Guardado texto={aviso} />
       <FranjaArchivado />
+      <FranjaFusiones />
       {accion.id && <button type="button" className="cx-boton cxt-accion-movil" onClick={() => setVentana(accion.id)}>{accion.texto}</button>}
       <VentanaAccion ventana={ventana} cerrar={() => setVentana(null)} />
       {c && (

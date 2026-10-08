@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { LIMITE_347 as LIMITE_AGENTE, alcance347Plataforma as alcanceAgente, descuadre, informeTerceros, nifValido, revisarTerceros } from '../../../scripts/conta/lib/terceros.mjs'
+import { LIMITE_347 as LIMITE_AGENTE, alcance347Plataforma as alcanceAgente, descuadre, informeTerceros, nifValido, nombreNormal, revisarTerceros } from '../../../scripts/conta/lib/terceros.mjs'
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import { LIMITE_347 } from '@/modules/conta/lib/cuentasProveedor'
 import { cuadre } from '@/modules/conta/lib/liquidaciones'
@@ -134,6 +134,44 @@ describe('revisarTerceros', () => {
     expect(con({ ventas: 90000, comisiones: 20000, modelo: null })).toEqual(['ambar 347_modelo_sin_decir'])
     expect(revisarTerceros({ ...base, ventas_anio: [{ ...base.ventas_anio[0], modelo: null }] }).map((x) => x.tipo)).toEqual(['347_modelo_sin_decir'])
     expect(con({ ventas: 3005.06, comisiones: 900, modelo: null })).toEqual([])
+  })
+  // C04 R4 · Un NIF, un tercero activo, y el mismo nombre. La forma es la de
+  // producción el 08/10 (solo lectura, nombres cambiados: el repositorio es
+  // público): la ficha que trajo el programa anterior, activa y sin NIF, y el
+  // proveedor viejo de Cocina, archivado, con el nombre escrito de otra manera
+  // («, S.L.» frente a «, SL»). Y el NIF que solo está en la ficha de proveedor
+  // (el disparador no se lo da a un segundo tercero).
+  it('un NIF en dos activos: rojo; en un activo y un archivado: ámbar (también si solo lo tiene su ficha de proveedor)', () => {
+    const t = {
+      ...base,
+      terceros: [...base.terceros,
+        { account_id: A, id: 'd1', name: 'Distribuciones Uno, S.L.', tax_id: 'B91030031', supplier_tax_id: 'B91030031', tax_id_type: 'nif_es', archived: false },
+        { account_id: A, id: 'd2', name: 'DISTRIBUCIONES UNO (viejo)', tax_id: null, supplier_tax_id: 'B-91030031', tax_id_type: null, archived: false },
+        { account_id: A, id: 'd3', name: 'Envases Dos, S.A.', tax_id: 'B91030049', supplier_tax_id: null, tax_id_type: 'nif_es', archived: false },
+        { account_id: A, id: 'd4', name: 'ENVASES DOS antiguo', tax_id: null, supplier_tax_id: 'B91030049', tax_id_type: null, archived: true },
+        // Mismo NIF pero en OTRA cuenta (la plantilla comparte nombres y NIF con producción): no es duplicado (regla 9).
+        { account_id: 'plantilla', id: 'x1', name: 'Envases Dos, S.A.', tax_id: 'B91030049', supplier_tax_id: null, tax_id_type: null, archived: false }],
+    }
+    const h = revisarTerceros(t).map((x) => `${x.nivel} ${x.tipo}`).sort()
+    expect(h).toEqual(['ambar nif_activo_y_archivado', 'rojo nif_dos_activos'])
+  })
+  it('el mismo nombre sin NIF que los distinga: ámbar; con NIF distintos, nada', () => {
+    const t = {
+      ...base,
+      terceros: [...base.terceros,
+        { account_id: A, id: 'v1', name: 'MARCAS ASOCIADAS PARTNERS, S.L.', tax_id: null, supplier_tax_id: null, tax_id_type: null, archived: false },
+        { account_id: A, id: 'v2', name: 'MARCAS ASOCIADAS PARTNERS, SL', tax_id: null, supplier_tax_id: null, tax_id_type: null, archived: true },
+        { account_id: A, id: 'w1', name: 'Hermanos García, S.L.', tax_id: 'B91030056', supplier_tax_id: null, tax_id_type: null, archived: false },
+        { account_id: A, id: 'w2', name: 'HERMANOS GARCIA SL', tax_id: 'B91030064', supplier_tax_id: null, tax_id_type: null, archived: false },
+        // Dos archivados con el mismo nombre: ya no molestan a nadie.
+        { account_id: A, id: 'z1', name: 'Viejo, S.L.', tax_id: null, supplier_tax_id: null, tax_id_type: null, archived: true },
+        { account_id: A, id: 'z2', name: 'VIEJO SL', tax_id: null, supplier_tax_id: null, tax_id_type: null, archived: true }],
+    }
+    const h = revisarTerceros(t)
+    expect(h.map((x) => `${x.nivel} ${x.tipo}`)).toEqual(['ambar nombre_repetido'])
+    expect(h[0].detalle).toContain('MARCAS ASOCIADAS PARTNERS, SL (archivado)')
+    expect(nombreNormal('MARCAS ASOCIADAS PARTNERS, S.L.')).toBe(nombreNormal('Marcas Asociadas Partners SL'))
+    expect(nombreNormal('Lácteos Ñandú, S.A.U.')).toBe('lacteos nandu')
   })
   it('sin volcado de terceros (base sin C03), nada', () => {
     expect(revisarTerceros(null)).toEqual([])

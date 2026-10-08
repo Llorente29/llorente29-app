@@ -132,3 +132,7 @@
   .cxt-dos { grid-template-columns: minmax(0, 1fr); }
   .cxt-fallo-menu { position: static; width: auto; }
 }
+/* C04 R4 · «Fusionar con…»: la lista de fichas para elegir la otra. */
+.cxt-fusionar-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.cxt-fusionar-lista .cx-pildora { width: 100%; text-align: left; }
+.cxt-fusionar-lista .cx-pildora[aria-selected='true'] { border-color: var(--cx-azul-borde); background: var(--cx-azul-suave); color: var(--cx-azul); }

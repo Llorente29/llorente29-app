@@ -25,7 +25,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { Campo, Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
 import {
-  FILTROS_TERCEROS, cuentaPorFiltro, filtrarTerceros, mismoNif, ordenarPapeles, rutaDeTercero, type FiltroTerceros, type Papel,
+  FILTROS_TERCEROS, cuentaPorFiltro, filtrarTerceros, filtrosVisibles, mismoNif, ordenarPapeles, rutaDeTercero, type FiltroTerceros, type Papel,
 } from '@/modules/conta/lib/terceros'
 import { teDebe } from '@/modules/conta/lib/liquidaciones'
 import { calcularCifras } from '@/modules/conta/lib/cifras'
@@ -144,7 +144,7 @@ export default function TercerosPage() {
         <input id="buscar-tercero" className="cx-input cxp-buscar" type="search" value={busca} onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar por nombre o NIF" />
         <div className="cx-tablas-filtros" role="group" aria-label="Qué terceros ver">
-          {FILTROS_TERCEROS.map((f) => (
+          {filtrosVisibles(filas ?? [], filtro).map((f) => (
             <button key={f.id} type="button" className="cx-pildora" aria-pressed={filtro === f.id}
               onClick={() => setParams(f.id === 'todos' ? {} : { ver: f.id }, { replace: true })}>
               {f.texto}{cuantos ? ` · ${cuantos[f.id]}` : ''}

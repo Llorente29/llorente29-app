@@ -42,6 +42,18 @@ on:
     branches: ['conta/**', 'reparto-**']
     paths:
       - 'supabase/staging/aplicar.txt'
+  # C04 R4 · A mano, desde la rama: el modo «ensayo-de-vuelta-atras» aplica la
+  # tanda de ejemplo de supabase/staging/ensayo-vuelta-atras/ con su registro,
+  # FUERZA que la comprobación de después falle y deja que deshacer.sh —el de
+  # producción— la quite; en verde solo si staging queda exactamente como
+  # estaba (foto antes = foto después). «aplicar» hace lo mismo que el push.
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'aplicar (el manifiesto) o ensayo-de-vuelta-atras'
+        type: choice
+        options: ['aplicar', 'ensayo-de-vuelta-atras']
+        default: 'aplicar'
 
 # Dos tandas a la vez sobre la misma base se pisan. Se encolan.
 concurrency:
@@ -89,6 +101,7 @@ jobs:
 
       - name: Leer y validar el manifiesto
         id: manifiesto
+        if: inputs.modo != 'ensayo-de-vuelta-atras'
         run: |
           set -euo pipefail
           # Líneas sin comentarios ni blancos, en su orden.
@@ -142,6 +155,7 @@ jobs:
           echo "Al otro lado no hay ni Foodint ni Folvy Interno: es staging-conta."
 
       - name: Aplicar, fichero a fichero
+        if: inputs.modo != 'ensayo-de-vuelta-atras'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -186,3 +200,14 @@ jobs:
             fi
           done < /tmp/tanda.txt
           exit "$fallo"
+
+      - name: Ensayo de vuelta atrás (aplica, falla a propósito y deshace)
+        if: inputs.modo == 'ensayo-de-vuelta-atras'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -uo pipefail
+          export PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-staging-conta-ensayo-${GITHUB_RUN_ID}"
+          export INFORME="$GITHUB_STEP_SUMMARY"
+          bash scripts/conta/produccion/ensayo-vuelta-atras.sh

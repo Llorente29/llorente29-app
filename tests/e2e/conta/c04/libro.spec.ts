@@ -78,7 +78,29 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   // Respuesta 3 · 2: filas bajas (unos 70–80 px), el concepto entero en dos líneas.
   for (const f of await page.locator('.cxd-fila:not(.cxd-fila-cabeza)').all()) {
     const alto = (await f.boundingBox())!.height
-    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(lado(page) === 'ordenador' ? 90 : 110)
+    // Respuesta 4 prevalece sobre la altura de la 3 (70–80 px): los chips y «de
+    // dónde sale» saltan de línea en vez de cortarse. Medido en la e2e: la fila
+    // más alta, 138 px en ordenador (columna del concepto ~290 px) y 152 en el
+    // móvil (el chip de la marca cedida parte su texto). Lo que se exige es que
+    // nada se corte (abajo); este tope solo caza un desbordamiento.
+    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(200)
+  }
+  // Respuesta 4 · 5: ningún chip cortado («Brasa |» en el móvil) y «de dónde
+  // sale» sin «…» si cabe en dos líneas (en el ordenador se cortaba en una).
+  for (const apoyo of await page.locator('.cxd-fila .cxd-concepto-apoyo').all()) {
+    const m = await apoyo.evaluate((el) => {
+      const caja = el.getBoundingClientRect()
+      const chips = [...el.querySelectorAll('.cx-chip')].map((c) => ({
+        texto: c.textContent ?? '', cortado: c.scrollWidth > c.clientWidth + 0.5 || c.getBoundingClientRect().right > caja.right + 0.5,
+      }))
+      const s = el.querySelector('.cxd-sale') as HTMLElement | null
+      return { chips, sale: s ? { texto: s.textContent ?? '', cortada: s.scrollHeight > s.clientHeight + 1, lineas: Math.round(s.clientHeight / 16) } : null }
+    })
+    for (const c of m.chips) expect(c.cortado, `chip «${c.texto}» cortado`).toBe(false)
+    // «No se corta con "…" cuando cabe en una segunda línea»: si se corta, es
+    // porque ya ocupa las dos (antes se cortaba en la primera). En el móvil un
+    // texto puede necesitar tres; entonces la segunda acaba en «…» y el entero va en el title.
+    if (m.sale?.cortada) expect(m.sale.lineas, `«${m.sale.texto}» cortado en ${m.sale.lineas} línea(s)`).toBeGreaterThanOrEqual(2)
   }
   // Lo que he hecho yo, con Deshacer en lo que validó Folvy.
   const ia = page.getByRole('region', { name: 'Lo que he hecho yo' })
@@ -233,4 +255,18 @@ test('B · sin plataformas ni ventas, septiembre cerrado y un borrador que no se
   await expect(page.getByText(/septiembre está cerrado/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Validar asiento' })).toBeDisabled()
   await capturar(page, 'mes-cerrado-b')
+})
+
+test('A · Ajustes › Ejercicio: desde cuándo asienta Folvy (el corte con el programa anterior)', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  await page.goto('/conta/ajustes/ejercicio')
+  // Respuesta 4 · 1: el corte se ve siempre; se cambia mientras no haya asientos traídos.
+  const corte = page.getByTestId('corte-actual')
+  await expect(corte).toBeVisible()
+  await expect(corte).toHaveText(/^(Hasta el .+ lo trae .+; desde el .+ asienta Folvy\.|Sin fecha de corte: Folvy asienta el ejercicio entero\.)$/)
+  const fijo = await page.getByTestId('corte-fijo').count()
+  if (fijo) await expect(page.getByTestId('corte-fijo')).toContainText('Para moverla, primero se deshace lo traído')
+  else await expect(page.getByRole('button', { name: 'Cambiar' }).last()).toBeVisible()
+  await capturar(page, 'ajustes-corte')
 })

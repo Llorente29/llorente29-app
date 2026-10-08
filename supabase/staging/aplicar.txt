@@ -1,6 +1,8 @@
-# Respuesta 3 del C04, segunda vuelta (12/10). La 20261010T0110_c04_enlaces.sql
-# ya entró en la ejecución 81 (con el papel «liquidacion»); el rehacer falló
-# allí por el CHECK de los anulados y ahora borra con los disparadores apagados.
-supabase/staging/sql/20261012_c04_rehacer_libro.sql
-supabase/seeds/conta/seed_c04_staging.sql
-supabase/staging/sql/20261011_c04_prueba_agente.sql
+# Octava vuelta: la 7ª cazó «permission denied for schema extensions» (journal_huella → extensions.digest); se da el USAGE.
+# C04 R4 (conta/c04-retoques) · Séptima vuelta: la lectura de los agentes.
+# El primer ensayo en producción paró: conta_lectura no tenía SELECT sobre sale
+# (ni supplier_invoice, fiscal_period_lock y brand). La prueba crea el rol
+# como en producción, aplica 20261012T0050_c04r_lectura.sql, pasa los cuatro
+# agentes con ese rol, comprueba que sin SELECT sobre sale el del libro FALLA y
+# que el rol no escribe. Todo en una transacción que acaba en ROLLBACK.
+supabase/staging/sql/20261012_c04r_prueba_lectura.sql

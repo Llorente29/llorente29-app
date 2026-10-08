@@ -1,0 +1,12 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas y la misma ventana.
+#
+# C04: deshace la tanda del libro diario en orden inverso. Las guardas PARAN
+# si ya hay trabajo (un asiento en el libro, un enlace de liquidación de un
+# socio): la vuelta atrás no borra el trabajo de nadie a escondidas.
+# La 0130 del C00 (valores de serie) no tiene vuelta atrás propia: son las
+# tablas de serie, y hoy no cambia ninguna fila existente (ver aplicar.txt).
+supabase/vuelta-atras/20261010T0130_c04_lectura.down.sql
+supabase/vuelta-atras/20261010T0120_c04_funciones.down.sql
+supabase/vuelta-atras/20261010T0110_c04_enlaces.down.sql
+supabase/vuelta-atras/20261010T0100_c04_libro.down.sql

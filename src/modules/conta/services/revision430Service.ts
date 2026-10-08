@@ -137,6 +137,14 @@ export async function confirmar430(
   }
   if (p.tipo === 'cliente' && p.tercero && !tiene('customer')) await anadirPapel(id, 'customer')
   await enlazarCuentaCliente(ctx.companyId, id, c.id, ctx.quien)
-  if (p.tipo === 'socio' && opciones.archivar) await archivarTercero(id, true, 'Histórico: socio de marca traído de Diez')
+  if (p.tipo === 'socio' && opciones.archivar) {
+    await archivarTercero(id, true, 'Histórico: socio de marca traído de Diez')
+    // Respuesta 4: el 06/10 una ficha marcada «Archivarlo» quedó activa sin que
+    // nadie lo viera. Lo que se dice en pantalla sale de la base, no de la casilla.
+    const { data, error } = await tabla('party').select('archived_at').eq('id', id).eq('account_id', ctx.accountId).maybeSingle()
+    if (error || !(data as { archived_at: string | null } | null)?.archived_at) {
+      throw new Error(`${nombre} queda como socio de marca y cliente con ${c.code}, pero NO se ha podido archivar${error ? `: ${error.message}` : ''}. Archívalo desde «···» en su fila.`)
+    }
+  }
   return queHace(c, p, opciones.archivar)
 }
