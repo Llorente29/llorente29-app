@@ -390,3 +390,105 @@ Para que Julio pruebe el C00 con su usuario (tarea 9 del encargo).
   - **Rama nueva `conta/**` o `reparto-**`:** primero las dos variables en
     Vercel y después el primer push. Si no, el primer despliegue sale en rojo,
     que es lo que tiene que pasar.
+
+## Producción a cualquier hora (W01, 08/10)
+
+**Desde el W01 no hay franja.** La de 00:30–12:15 fue una prudencia del C00:
+el 07/10 paró la tanda del C04 con los negocios cerrados porque una tabla
+**nueva** (`sales_day_summary`) se llamaba como las del pedido. Julio: «según
+crezcamos no va a haber horas libres para nada». La forma de trabajar es la de
+un SaaS: cambios que no rompen lo que está en marcha, a cualquier hora. Lo que
+protege ya no es el reloj, sino **qué hace cada fichero contra lo que existe**.
+
+`aplicar-produccion-conta.yml`, en este orden:
+
+1. **Sin franja fija.** No hay guarda de horario ni campo `fuera_de_ventana`.
+   El informe sigue diciendo la hora de Madrid.
+2. **Ya aplicado no se reaplica.** El workflow lee el historial de producción
+   (`supabase_migrations.schema_migrations`, donde cada fichero aplicado por
+   el workflow queda con su versión y su huella md5). Un fichero ya registrado
+   con la **misma** huella se quita de la tanda y se dice; con huella
+   **distinta**, para (alguien ha cambiado un fichero ya aplicado). Un fichero
+   sin registrar que solo crea cosas que **ya existen** también para: parece
+   aplicado antes de que hubiera registro (el ensayo del C04 del 07/10 arrastró
+   la tanda entera del C03).
+3. **Cada sentencia se clasifica por lo que hace**, contra lo que existe en
+   producción (se pregunta a la base, en solo lectura):
+   - **Añadir**: crear tabla, vista o función; columna que admite vacío o con
+     valor por defecto; índice con `concurrently`, o sin él en una tabla nueva
+     o pequeña que no sea del camino del pedido; política RLS nueva; `insert
+     … on conflict do nothing`; permisos; comentarios. **Pasa siempre.**
+   - **Cambiar en caliente lo que existe**: reemplazar una función con la
+     misma firma (o `drop` + `create` para cambiarle la firma), quitar y
+     volver a poner una restricción (añadir un valor a un CHECK), un
+     disparador o una política, una restricción o un disparador **nuevos** en
+     una tabla que existe, reemplazar una vista, alterar una tabla. **Pasa**
+     si el fichero lo declara en su cabecera y la prueba de staging lo cubre:
+     ```sql
+     -- cambia: public.conta_reabrir_mes · prueba: supabase/staging/sql/20261011_c04_prueba_agente.sql
+     ```
+     (la prueba tiene que existir en `supabase/staging/sql/` y nombrar el
+     objeto: es lo que se puede comprobar sin ejecutarla). Si toca el **camino
+     del pedido**, además, `autorizo`. Sin cabecera, para y no se autoriza: se
+     arregla el fichero.
+   - **Destruir o mover**: borrar o renombrar tabla, columna, vista o función;
+     `update`/`delete`/`truncate` o `insert … on conflict do update` sobre una
+     tabla que existe; cambiar el tipo de una columna (también ampliarlo: hoy
+     no se distingue) o hacerla obligatoria; quitar una restricción, política o
+     disparador sin volver a ponerlo; índice sin `concurrently` en una tabla
+     grande (más de 100 000 filas estimadas) o del camino del pedido (`sale`
+     tiene 13 475: frena las escrituras mientras se construye). **Solo con
+     `autorizo`.** Borrar o renombrar exige además
+     **prueba de que nada lo usa** —vistas, funciones y disparadores de la base,
+     y el front del commit buscado en `src/`— y que la tanda **no expanda lo
+     mismo que contrae**: añadir lo nuevo y quitar lo viejo van en dos tandas
+     distintas («expandir y contraer»). El informe dice cuántas filas tiene la
+     tabla y qué bloqueo toma.
+   - **Crear una función con otra firma** de una que ya existe es una
+     sobrecarga (regla 2 de CLAUDE.md): para; se hace `drop` + `create`.
+4. **Camino del pedido** = tablas que **existen** y están en la lista de
+   siempre (`CAMINO_TABLAS`), las funciones de `CAMINO_FUNCIONES` y las que
+   disparan esas tablas o llama un cron. Una tabla que crea la propia tanda
+   no está en el camino del pedido, se llame como se llame.
+5. **Ensayo** como siempre: todo en una transacción, D1 y recuento dentro, y
+   ROLLBACK. Obligatorio antes del real, del mismo commit. Después, en otra
+   transacción que también se deshace, se ensaya la **vuelta atrás**: la tanda
+   y sus `*.down.sql` en orden inverso. El informe dice si la vuelta atrás
+   automática funcionaría.
+6. **Real**: un fichero por transacción, y en la misma transacción su registro
+   en el historial (`version` = el nombre del fichero sin `.sql`, porque los
+   prefijos de fecha se repiten en 33 ficheros antiguos; `statements` = una
+   línea con la huella md5). Para al primer fallo; la comprobación de después
+   corre igual sobre lo que sí entró.
+7. **Después, comprobación y vuelta atrás.** Tras el real: D1, recuento de
+   filas de serie, los agentes de solo lectura (datos maestros y libro
+   diario, antes y después: solo cuenta lo que se ha puesto en rojo con la
+   tanda) y la **salud del camino del pedido**: si en los 15 minutos de antes
+   entraron 3 o más pedidos de Foodint (hay servicio), en los 15 minutos de
+   después tiene que haber al menos un cambio de estado (aceptado, listo,
+   entregado al rider, entregado o cerrado). Medido sobre 30 días: con 3 o más
+   pedidos en 15 minutos, la ventana siguiente se queda sin ningún cambio de
+   estado 1 vez de 532; con la señal «no entra ningún pedido nuevo» habría
+   saltado el 7 % de las veces. Sin servicio, no se mide y se dice. Si algo
+   falla, el workflow aplica los `*.down.sql` de lo aplicado en orden inverso
+   (cada uno con el borrado de su registro) y avisa; si la vuelta atrás
+   tampoco pasa, para y avisa en rojo con lo que queda a medias.
+8. **Las guardas de siempre no cambian**: la URL es la de producción y no la
+   de staging, y al otro lado está Foodint, antes de cualquier conexión. Los
+   agentes de después usan `PROD_CONTA_RO_DB_URL` (usuario `conta_lectura`).
+
+**Ejemplo de lo que cambia, con la tanda real del C04** (prueba en
+`tests/conta/produccion/w01.test.ts`): la 0100 ya no para por el nombre de
+`sales_day_summary` (la crea ella), pero bloquea por otra cosa: pone CHECK y
+un disparador en `fiscal_year` y `fiscal_period_lock`, que ya existían, sin
+declararlo. Con la regla nueva, ese fichero lleva su cabecera `-- cambia:`
+con la prueba de staging que lo cubre.
+
+### Front compatible en los dos sentidos
+
+Mientras dura una transición, el front publicado y el nuevo tienen que
+funcionar con el esquema de antes y con el de después. Por eso lo que se borra
+se borra **después** de que ningún front lo lea: `scripts/conta/antes-de-subir.sh`
+busca en el `src/` de `origin/main` (lo publicado) y en el del commit que se
+sube los nombres que la tanda de producción borra o renombra, y para si
+alguno se usa todavía.
