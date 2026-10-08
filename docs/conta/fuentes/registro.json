@@ -1,5 +1,5 @@
 {
-  "descargado": "2026-10-08T20:40:49.573Z",
+  "descargado": "2026-10-08T20:43:24.868Z",
   "fuentes": {
     "ley-37-1992": {
       "nombre": "Ley 37/1992, del Impuesto sobre el Valor Añadido",
@@ -771,6 +771,23 @@
       "error": null,
       "idBoe": null,
       "nota": "enlace de https://sede.agenciatributaria.gob.es/Sede/iva/libros-registro.html"
+    },
+    "rdl-1-2010-lsc": {
+      "nombre": "Real Decreto Legislativo 1/2010, texto refundido de la Ley de Sociedades de Capital",
+      "url": "https://www.boe.es/buscar/act.php?id=BOE-A-2010-10544",
+      "urlDatos": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2010-10544/texto",
+      "http": 200,
+      "titulo": "Real Decreto Legislativo 1/2010, de 2 de julio, por el que se aprueba el texto refundido de la Ley de Sociedades de Capital.",
+      "actualizadoEnFuente": "20251219T123733Z",
+      "fecha": "2026-10-08T20:43:24.868Z",
+      "comprobado": "2026-10-08T20:43:24.868Z",
+      "sha256": "26ffde45a5778e71a70c43530ecfd35892c1518f614b276b9035adbcff13dae3",
+      "bytes": 942570,
+      "contieneLoEsperado": true,
+      "fichero": "textos/rdl-1-2010-lsc.txt",
+      "error": null,
+      "idBoe": "BOE-A-2010-10544",
+      "nota": null
     }
   }
 }
