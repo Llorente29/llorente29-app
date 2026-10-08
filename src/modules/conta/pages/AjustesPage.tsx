@@ -23,6 +23,7 @@ import { RegistroIA, Sugerencias } from '@/modules/conta/ia/PiezasIA'
 import { ParaPresentar } from '@/modules/conta/empresa/ApartadoPresentar'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
 import { DeshacerTraido } from '@/modules/conta/plan/DeshacerTraido'
+import { ApartadoCorte } from '@/modules/conta/empresa/ApartadoCorte'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 
@@ -75,7 +76,7 @@ function Entrada({ id }: { id: string }) {
         </>
       )
     case 'socios': return <>{cabeza}<Socios {...p} /></>
-    case 'ejercicio': return <>{cabeza}<EjercicioMeses {...p} /></>
+    case 'ejercicio': return <>{cabeza}<EjercicioMeses {...p} /><ApartadoCorte quien={quien} movil={movil} alCambiar={datos.recargar} /></>
     case 'folvy':
       return (
         <>

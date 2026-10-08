@@ -30,6 +30,8 @@ import {
   type EjercicioLibro,
 } from '@/modules/conta/services/diarioService'
 import { proponerPendientes, type ResultadoProponer } from '@/modules/conta/services/propuestasLibroService'
+import { fijarCorte, primeraVenta } from '@/modules/conta/services/corteService'
+import { corteDesdeRespuesta, rangoAProponer } from '@/modules/conta/lib/proponer'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 
 interface DatosLibro {
@@ -99,14 +101,20 @@ export default function LibroDiarioPage() {
     setParams(p, { replace: true })
   }
 
+  // Respuesta 4: el corte manda (nada ≤ imported_until), sin corte y con ventas
+  // de antes del ejercicio se pregunta primero, y cada vez un mes de ventas del
+  // más reciente hacia atrás, diciendo cuántos días quedan.
+  const [pregunta, setPregunta] = useState<{ porque: string; desde: string; programa: string; fallo: string | null } | null>(null)
+
   async function proponer() {
     if (!accountId || !activa || !datos?.ejercicio) return
     setFallo(null); setHecho(null); setProponiendo(true)
     try {
       const e = datos.ejercicio
-      const hoy = hoyEnMadrid()
-      const desde = e.traidoHasta && e.traidoHasta >= e.inicio ? siguienteDia(e.traidoHasta) : e.inicio
-      const hasta = hoy < e.fin ? hoy : e.fin
+      const rango = rangoAProponer(e, hoyEnMadrid(), { primeraVenta: await primeraVenta(accountId), asientosEnEjercicio: datos.asientos.length })
+      if (rango.tipo === 'nada') { setHecho(rango.porque); return }
+      if (rango.tipo === 'preguntar') { setPregunta({ porque: rango.porque, desde: '', programa: '', fallo: null }); return }
+      const { desde, hasta } = rango
       const r = await proponerPendientes(accountId, activa.id, desde, hasta, userName)
       setSinPropuesta(r.sinPropuesta)
       const partes = [`${r.propuestas} ${r.propuestas === 1 ? 'asiento propuesto' : 'asientos propuestos'}`]
@@ -114,10 +122,26 @@ export default function LibroDiarioPage() {
       if (r.yaEstaban) partes.push(`${r.yaEstaban} ya estaban`)
       if (r.descartadas) partes.push(`${r.descartadas} descartados antes, que no vuelvo a proponer`)
       if (r.sinPropuesta.length) partes.push(`${r.sinPropuesta.length} sin propuesta (debajo, por qué)`)
-      setHecho(`Repasado del ${diaMesCorto(desde)} al ${diaMesCorto(hasta)}: ${partes.join(' · ')}.`)
+      const ventas = r.mesVentas ? ` Ventas de ${nombreMes(r.mesVentas)}.` : ''
+      const quedan = r.quedanDias > 0
+        ? ` Quedan ${r.quedanDias.toLocaleString('es-ES')} ${r.quedanDias === 1 ? 'día' : 'días'} de ventas más antiguos por proponer: vuelve a pulsar.`
+        : ' No queda ningún día de ventas por proponer.'
+      setHecho(`Repasado del ${diaMesCorto(desde)} al ${diaMesCorto(hasta)}${e.traidoHasta ? ` (hasta el ${diaMesCorto(e.traidoHasta)} lo trae el programa anterior)` : ''}: ${partes.join(' · ')}.${ventas}${quedan}`)
       recargar()
     } catch (e) { setFallo(e instanceof Error ? e.message : 'No se ha podido proponer.') }
     finally { setProponiendo(false) }
+  }
+
+  async function contestar() {
+    if (!activa || !datos?.ejercicio || !pregunta) return
+    const r = corteDesdeRespuesta(datos.ejercicio, pregunta.desde, hoyEnMadrid())
+    if ('error' in r) { setPregunta({ ...pregunta, fallo: r.error }); return }
+    try {
+      await fijarCorte(activa.id, r.corte, pregunta.programa.trim() || 'el programa anterior')
+      setPregunta(null)
+      setHecho(r.corte ? `Guardado: Folvy asienta desde el ${diaMesCorto(pregunta.desde)}; lo de antes lo trae el programa anterior.` : 'Guardado: Folvy asienta el ejercicio entero.')
+      recargar()
+    } catch (e) { setPregunta({ ...pregunta, fallo: e instanceof Error ? e.message : 'No se ha podido guardar.' }) }
   }
 
   async function deshacer(id: string) {
@@ -158,6 +182,23 @@ export default function LibroDiarioPage() {
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      {pregunta && (
+        <section className="cx-tarjeta" aria-label="Desde qué día asienta Folvy">
+          <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">¿Desde qué día asienta Folvy?</h2></div>
+          <p className="cx-ayuda" style={{ marginTop: 0 }}>{pregunta.porque} Lo de antes de ese día no lo propongo: lo trae el programa anterior. Se puede cambiar en Ajustes › Ejercicio.</p>
+          <form className="cx-rejilla-2" onSubmit={(ev) => { ev.preventDefault(); void contestar() }}>
+            <label className="cx-campo"><span className="cx-etiqueta">Desde el día</span>
+              <input className="cx-input" type="date" value={pregunta.desde} onChange={(ev) => setPregunta({ ...pregunta, desde: ev.target.value, fallo: null })} /></label>
+            <label className="cx-campo"><span className="cx-etiqueta">Programa anterior</span>
+              <input className="cx-input" value={pregunta.programa} placeholder="Diez, A3, Sage…" onChange={(ev) => setPregunta({ ...pregunta, programa: ev.target.value })} /></label>
+            <div className="cx-pie">
+              <button type="button" className="cx-boton-sec" onClick={() => setPregunta(null)}>Ahora no</button>
+              <button type="submit" className="cx-boton">Guardar</button>
+            </div>
+          </form>
+          {pregunta.fallo && <div className="cx-error" role="alert">{pregunta.fallo}</div>}
+        </section>
+      )}
       {sinPropuesta.length > 0 && (
         <section className="cx-tarjeta cxd-sin-propuesta" aria-label="Lo que no he propuesto">
           <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">Lo que no he propuesto, y por qué</h2>
@@ -254,10 +295,6 @@ export default function LibroDiarioPage() {
 }
 
 const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
-function siguienteDia(f: string): string {
-  const d = new Date(`${f}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)
-  return d.toISOString().slice(0, 10)
-}
 
 function FilaAsiento({ a, abierto, movil, alAbrir }: { a: AsientoDiario; abierto: boolean; movil: boolean; alAbrir: () => void }) {
   const e = estadoDe(a)
