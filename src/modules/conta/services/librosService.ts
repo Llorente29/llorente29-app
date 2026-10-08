@@ -143,10 +143,11 @@ export async function elegirModelo(accountId: string, companyId: string, fiscalY
 }
 
 /** Propone los tres asientos del cierre (como cualquier propuesta) y los enlaza al ejercicio. */
-export async function prepararCierreEnBase(companyId: string, fiscalYearId: string, asientos: (AsientoCierre | null)[], quien: string | null): Promise<{ ids: (string | null)[] }> {
+export async function prepararCierreEnBase(companyId: string, fiscalYearId: string, asientos: (AsientoCierre | null)[], quien: string | null, regularizacionEnlazada: string | null = null): Promise<{ ids: (string | null)[] }> {
   const ids: (string | null)[] = []
-  for (const a of asientos) {
-    if (!a) { ids.push(null); continue }
+  for (const [i, a] of asientos.entries()) {
+    // Sin regularización nueva, se mantiene la ya enlazada (al reabrir se queda): enlazar con null la soltaría.
+    if (!a) { ids.push(i === 0 ? regularizacionEnlazada : null); continue }
     const r = await rpc<{ id: string }>('journal_entry_proponer', {
       p_company: companyId,
       p_entry: { fecha: a.fecha, source_type: a.sourceType, series: a.serie, concepto: a.concepto, confianza: 'seguro', porque: `Preparado por Folvy: ${a.tipo} del ejercicio (PGC, quinta parte, cuenta 129 y normas de cierre).`, razones: [] },

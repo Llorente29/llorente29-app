@@ -113,9 +113,11 @@ begin
     v_res := v_res + s.saldo;
   end loop;
   if jsonb_array_length(v_reg) = 0 then raise exception 'PRUEBA C05 · 4: la semilla no tiene gastos ni ingresos validados que regularizar.'; end if;
-  v_reg := v_reg || jsonb_build_array(jsonb_build_object('cuenta', '12900000', 'debe', greatest(-v_res, 0), 'haber', greatest(v_res, 0), 'comun', true));
+  v_reg := v_reg || jsonb_build_array(jsonb_build_object('cuenta', '12900000', 'debe', greatest(v_res, 0), 'haber', greatest(-v_res, 0), 'comun', true));
   r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Regularización 2026 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.'), v_reg, null, 'Prueba C05');
   v_ids[1] := (r->>'id')::uuid;
+  -- Enlazada antes de validarse (como en la pantalla): así cuenta como regularización y no como cierre.
+  perform public.conta_cierre_enlazar(v_fy, v_ids[1], null, null);
   perform public.journal_entry_validar(v_ids[1], 'Prueba C05');
 
   -- Tras regularizar: ninguna 6 ni 7 con saldo (con la regularización dentro).
@@ -184,6 +186,11 @@ begin
     raise exception 'PRUEBA C05 · 4g: el cierre o la apertura no han quedado anulados.';
   end if;
   if (select status from public.journal_entry where id = v_ids[1]) <> 'validado' then raise exception 'PRUEBA C05 · 4g: la regularización no debía tocarse.'; end if;
+  -- 4h. Tras reabrir, la regularización sigue contando como tal (la pantalla no regulariza dos veces).
+  select count(*) into v_n from (select code from public.conta_saldos_cuentas(v_co, '2026-01-01', '2026-12-31', false)
+   where coalesce(template_code, code) ~ '^[67]'
+   group by code having sum(inicial_debe + apertura_debe + periodo_debe + regularizacion_debe) <> sum(inicial_haber + apertura_haber + periodo_haber + regularizacion_haber)) x;
+  if v_n <> 0 then raise exception 'PRUEBA C05 · 4h: tras reabrir, % cuentas de 6 o 7 vuelven a tener saldo: la regularización ya no cuenta como tal.', v_n; end if;
   raise notice 'PRUEBA C05 · 4 en verde: resultado % a la 129; cierre con % apuntes; cerrar rechaza sin validar y con propuestas; cerrado no admite asientos (%); reabierto con 2 anulados.',
     -v_res, jsonb_array_length(v_cie), v_tarde;
 end $$;

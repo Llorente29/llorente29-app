@@ -167,8 +167,10 @@ export function CierreEjercicio() {
     const [saldos, c129] = await Promise.all([saldosCuentas(L.companyId, e.inicio, e.fin, true), cuenta129(L.accountId, L.companyId)])
     const lista: SaldoACerrar[] = saldos.map((s) => ({
       code: s.code, name: s.name, templateCode: s.templateCode, locationId: s.locationId, brandId: s.brandId,
-      // Antes de cerrar: todo lo del ejercicio salvo un cierre previo (si se reabrió, su contraasiento ya lo compensó).
-      debe: s.inicialDebe + s.aperturaDebe + s.periodoDebe, haber: s.inicialHaber + s.aperturaHaber + s.periodoHaber,
+      // Todo lo del ejercicio salvo el cierre. La regularización SÍ entra: si ya hay una validada (al reabrir se
+      // queda), las 6 y 7 están a cero y no se regulariza otra vez.
+      debe: s.inicialDebe + s.aperturaDebe + s.periodoDebe + s.regularizacionDebe,
+      haber: s.inicialHaber + s.aperturaHaber + s.periodoHaber + s.regularizacionHaber,
     }))
     return { lista, c129 }
   }, `${L.companyId}:${e.id}:${L.vuelta}`)
@@ -180,13 +182,17 @@ export function CierreEjercicio() {
     } catch (x) { return { ok: null, error: mensajeDe(x) } }
   }, [d.datos, e, siguiente])
 
+  // Una regularización ya enlazada se reutiliza; si aún quedan 6 o 7 con saldo, no se apila otra encima.
+  const regEnlazada = e.cierre?.regularizacion ?? null
+  const regDoble = !!(regEnlazada && plan?.ok?.regularizacion)
+
   async function preparar() {
-    if (!plan?.ok) return
+    if (!plan?.ok || regDoble) return
     setOcupado(true); setError(null); setHecho(null)
     try {
-      const { ids } = await prepararCierreEnBase(L.companyId, e.id, [plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura], L.quien)
-      const n = ids.filter(Boolean).length
-      setHecho(`Propuestos ${n} asientos (${[plan.ok.regularizacion && 'regularización', plan.ok.cierre && 'cierre', plan.ok.apertura && `apertura de ${siguiente!.code}`].filter(Boolean).join(', ')}). Resultado ${eurosExactos(plan.ok.resultado)} a la ${d.datos!.c129}. Valídalos en el libro diario y vuelve para cerrar.`)
+      await prepararCierreEnBase(L.companyId, e.id, [plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura], L.quien, regEnlazada)
+      const n = [plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura].filter(Boolean).length
+      setHecho(`Propuestos ${n} asientos (${[plan.ok.regularizacion && 'regularización', plan.ok.cierre && 'cierre', plan.ok.apertura && `apertura de ${siguiente!.code}`].filter(Boolean).join(', ')}). ${plan.ok.regularizacion ? `Resultado ${eurosExactos(plan.ok.resultado)} a la ${d.datos!.c129}.` : 'La regularización ya estaba hecha: se mantiene.'} Valídalos en el libro diario y vuelve para cerrar.`)
       L.recargar()
     } catch (x) { setError(mensajeDe(x)) } finally { setOcupado(false) }
   }
@@ -219,11 +225,14 @@ export function CierreEjercicio() {
           {plan?.ok && e.estado !== 'closed' && (
             <div className="cx-tarjeta">
               <h3 className="cxl-titulo">Lo que Folvy propone</h3>
-              <p>Resultado del ejercicio: <strong>{eurosExactos(plan.ok.resultado)}</strong> ({plan.ok.resultado >= 0 ? 'beneficio' : 'pérdida'}), a la {d.datos.c129}.</p>
+              {plan.ok.regularizacion
+                ? <p>Resultado del ejercicio: <strong>{eurosExactos(plan.ok.resultado)}</strong> ({plan.ok.resultado >= 0 ? 'beneficio' : 'pérdida'}), a la {d.datos.c129}.</p>
+                : <p>La regularización ya está validada: gastos e ingresos están a cero y el resultado está en la {d.datos.c129}.</p>}
+              {regDoble && <p className="cxl-sin-sitio" role="alert">Ya hay una regularización enlazada y aún quedan gastos o ingresos con saldo: o está sin validar (valídala en el libro diario) o hay apuntes posteriores (anúlala allí y prepara otra vez). No se apila una segunda.</p>}
               {[plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura].map((a) => a && <ResumenAsiento key={a.tipo} a={a} />)}
               {e.cierre?.estado === 'preparado' && <p className="cxl-apoyo">Ya están preparados. Prepararlos otra vez propone tres nuevos y enlaza esos: descarta antes los anteriores en el libro diario.</p>}
               <div className="cxl-herramientas">
-                <button type="button" className={e.cierre ? 'cx-boton-sec' : 'cx-boton'} onClick={() => void preparar()} disabled={ocupado}>{ocupado ? 'Un momento…' : e.cierre ? 'Preparar otra vez' : 'Preparar el cierre'}</button>
+                <button type="button" className={e.cierre ? 'cx-boton-sec' : 'cx-boton'} onClick={() => void preparar()} disabled={ocupado || regDoble}>{ocupado ? 'Un momento…' : e.cierre ? 'Preparar otra vez' : 'Preparar el cierre'}</button>
                 {e.cierre?.estado === 'preparado' && <button type="button" className="cx-boton" onClick={() => void cerrar()} disabled={ocupado}>Cerrar el ejercicio</button>}
               </div>
             </div>
