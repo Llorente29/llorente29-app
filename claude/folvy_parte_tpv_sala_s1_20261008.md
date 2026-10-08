@@ -30,8 +30,17 @@ Dos cosas que **no estaban en la sección 1** y cambian el diseño:
 
 ## 2. Lo construido
 
-**Base** — `supabase/migrations/20261009T0040_tpv_sala_s1_mesas_comensales_envios.sql`
-(vuelta atrás: `supabase/vuelta-atras/20261009T0040_…down.sql`). Lleva una guarda que **aborta dentro de la banda**.
+**Base — en dos partes** (separadas el 08/10 a las 13:1x, a petición de Julio, para montar la sala hoy):
+
+- **A** `20261008T1315_tpv_sala_s1a_zonas_y_mesas.sql` — `dining_zone`, `dining_table`, `dining_config`,
+  `void_reason` y su RLS. **Puede ir en banda**: tablas nuevas, nada vivo las nombra; las claves ajenas van a
+  `accounts` y `locations` (cierre SHARE ROW EXCLUSIVE: no bloquea lecturas); medido a las 13:06: 0 funciones
+  escriben en `locations`, 0 crons la nombran. No toca `sale` ni `sale_line`.
+- **B** `20261009T0040_tpv_sala_s1b_envios_y_cuentas_de_mesa.sql` — todo lo demás. **Fuera de banda**; aborta
+  dentro de ella y aborta si falta A.
+- Vueltas atrás de las dos en `supabase/vuelta-atras/`. La de A se niega si B sigue aplicada.
+
+Contenido:
 
 - Tablas: `dining_zone`, `dining_table`, `dining_config` (umbral ámbar), `sale_fire`, `void_reason`,
   `sale_line_void`. RLS: leer, la cuenta; escribir configuración, admin/encargado; envíos y anulaciones,
@@ -93,12 +102,13 @@ Dos cosas que **no estaban en la sección 1** y cambian el diseño:
 
 | Paso | Quién | Cuándo |
 |---|---|---|
-| Pegar la migración en el ensayo y ejecutarlo (transacción revertida) | Julio | **00:30–12:15** |
-| Aplicar la migración (sale ya la guarda de banda) | Julio | misma ventana, tras el ensayo en verde |
+| Aplicar la parte A | Julio | **ya** (puede ir en banda) |
+| Fusionar el front (PR), `npm run build` limpio, Vercel READY. Publica también paquete OTA | Julio | tras A |
+| Montar la sala del laboratorio desde oficina | Julio / administrativo | tras READY |
+| Pegar la parte B en el ensayo y ejecutarlo (transacción revertida) | Julio | **00:30–12:15** |
+| Aplicar la parte B | Julio | misma ventana, tras el ensayo en verde |
 | Regenerar `database.ts` y comprobar diferencias con los míos | Code | tras aplicar |
 | PR a `main`, `npm run build` limpio, Vercel READY | Code + Julio | tras aplicar |
-| Paquete OTA (printWorker + ticket) por el procedimiento de `PENDIENTE_UNICO_las_tablets_20260921.md` | Julio | tras READY |
-| Montar Sala (6) y Terraza (4) en Folvy Interno desde oficina | Julio / administrativo | tras READY |
 | Impresora de cocina en el local de laboratorio | Julio | antes de la prueba de los tres tickets |
 
 **Folvy Interno hoy no tiene ni impresoras ni tablets en ninguno de sus 3 locales** (medido). Sin una
@@ -157,3 +167,15 @@ está. Si la mesa va sin fotos, es un cambio corto.
 5. **La pantalla de cocina** enseña la cuenta, no separa rondas (S6). Lo anulado sigue apareciendo en ella.
 6. **Canal propio «Sala»** (`tpv-sala`, `dine_in`), hermano de «Mostrador», creado la primera vez que se abre
    una mesa en cada cuenta. Las ventas de mesa no se mezclan con las de mostrador en los informes por canal.
+
+## 7. Entre A y B (hoy, de la fusión a la noche)
+
+- La pestaña **Sala** del TPV da error («no existe pos_floor»): llega con B. Vender, Mostrador, Para llevar y
+  Cuentas no cambian.
+- En oficina, «Quitar mesa» mira si la mesa tiene la cuenta abierta con `sale.table_id`, que no existe hasta
+  B; el código trata ese error (42703) como «ninguna abierta», que es la verdad mientras no hay B. **No
+  verificado contra la API**: desde esta sesión el proxy no deja llegar a Supabase por HTTP.
+- La fusión a `main` publica un paquete OTA solo (`build-apk.yml` sube `bundle.json`). Es inocuo sin B: el
+  worker solo pide un envío si el trabajo de impresión lo trae, y la cabecera de mesa solo se pinta con mesa.
+- El ensayo de B usa zonas y mesas propias («ENSAYO Sala», E1…E10) para no chocar con la sala montada de
+  verdad. Probado en local A → B → ensayo: 19 de 19; y la vuelta atrás B → A deja la base como estaba.

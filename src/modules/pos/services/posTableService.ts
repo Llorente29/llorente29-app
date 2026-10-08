@@ -304,7 +304,10 @@ export async function retireTable(id: string): Promise<void> {
   requireSupabase()
   const { count, error: e1 } = await supabase!.from('sale').select('id', { count: 'exact', head: true })
     .eq('table_id', id).is('table_cleared_at', null).neq('status', 'cancelled')
-  if (e1) throw new Error(e1.message)
+  // 42703 = la columna sale.table_id aún no existe: la parte A de la
+  // migración (zonas y mesas) va antes que la B (cuentas de mesa). Sin la
+  // columna no puede haber ninguna cuenta abierta en esta mesa.
+  if (e1 && e1.code !== '42703') throw new Error(e1.message)
   if ((count ?? 0) > 0) throw new Error('La mesa tiene la cuenta abierta. Ciérrala antes de quitarla.')
   const { error } = await supabase!.from('dining_table').update({ is_active: false }).eq('id', id)
   if (error) throw new Error(error.message)

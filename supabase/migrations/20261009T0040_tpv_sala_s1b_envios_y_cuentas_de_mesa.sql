@@ -1,4 +1,7 @@
--- TPV · Sala · S1 — mesas, comensales y envíos a cocina.
+-- TPV · Sala · S1 · parte B — mesas, comensales y envíos a cocina.
+--
+-- REQUIERE la parte A (20261008T1315_tpv_sala_s1a_zonas_y_mesas.sql):
+-- dining_zone, dining_table, dining_config y void_reason ya existen.
 --
 -- ENCARGO: «TPV · Sala (mesas, comensales, envíos a cocina)», 08/10/2026.
 --
@@ -10,11 +13,8 @@
 --
 -- QUÉ HACE
 --   Datos
---     · dining_zone          zonas del local (sala / terraza / barra / reservado)
---     · dining_table         mesas (zona, nombre, sitios, sitio en la rejilla)
---     · dining_config        por local: umbral ámbar del tiempo de mesa
+--     · (parte A: dining_zone, dining_table, dining_config, void_reason)
 --     · sale_fire            un «Enviar a cocina» = una fila, numerada por cuenta
---     · void_reason          motivos de anulación, configurables por cuenta
 --     · sale_line_void       la anulación de una línea ya enviada (la línea sigue)
 --     · sale  + table_id, covers, served_by, served_by_name,
 --               bill_requested_at, table_cleared_at
@@ -62,7 +62,14 @@
 --   · El «ANULADO» va como documento ya compuesto (TicketDoc), que el worker
 --     imprime tal cual en cualquier versión de paquete.
 
--- ══ 0. La banda ═════════════════════════════════════════════════════════
+-- ══ 0. La banda, y que la parte A esté ═════════════════════════════════
+do $$
+begin
+  if to_regclass('public.dining_table') is null or to_regclass('public.void_reason') is null then
+    raise exception 'tpv_sala_s1b: falta la parte A (20261008T1315_tpv_sala_s1a_zonas_y_mesas.sql). Parar.';
+  end if;
+end $$;
+
 do $$
 declare v_h time := (now() at time zone 'Europe/Madrid')::time;
 begin
@@ -72,51 +79,6 @@ begin
 end $$;
 
 -- ══ 1. Tablas nuevas ════════════════════════════════════════════════════
-
-create table if not exists public.dining_zone (
-  id          uuid primary key default gen_random_uuid(),
-  account_id  uuid not null references public.accounts(id) on delete cascade,
-  location_id uuid not null references public.locations(id) on delete cascade,
-  name        text not null check (btrim(name) <> ''),
-  kind        text not null default 'sala'
-              check (kind in ('sala', 'terraza', 'barra', 'reservado')),
-  sort_order  integer not null default 0,
-  is_active   boolean not null default true,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
-);
-create unique index if not exists dining_zone_location_name_uq
-  on public.dining_zone (location_id, lower(btrim(name))) where is_active;
-create index if not exists dining_zone_location_idx on public.dining_zone (location_id, sort_order);
-
-create table if not exists public.dining_table (
-  id          uuid primary key default gen_random_uuid(),
-  account_id  uuid not null references public.accounts(id) on delete cascade,
-  location_id uuid not null references public.locations(id) on delete cascade,
-  zone_id     uuid not null references public.dining_zone(id) on delete restrict,
-  name        text not null check (btrim(name) <> ''),
-  seats       integer not null default 4 check (seats between 1 and 99),
-  -- Rejilla ordenada, no plano dibujado: posición = orden; ancho = cuántas
-  -- columnas ocupa (una mesa larga de 8 ocupa 2).
-  sort_order  integer not null default 0,
-  grid_width  integer not null default 1 check (grid_width between 1 and 4),
-  is_active   boolean not null default true,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
-);
--- El nombre de una mesa es único en el LOCAL, no en la zona: «la 4» tiene que
--- ser una sola cuando un camarero la nombra.
-create unique index if not exists dining_table_location_name_uq
-  on public.dining_table (location_id, lower(btrim(name))) where is_active;
-create index if not exists dining_table_zone_idx on public.dining_table (zone_id, sort_order);
-
-create table if not exists public.dining_config (
-  location_id        uuid primary key references public.locations(id) on delete cascade,
-  account_id         uuid not null references public.accounts(id) on delete cascade,
-  -- A partir de cuántos minutos abierta el tiempo de la mesa pasa a ámbar.
-  table_warn_minutes integer not null default 90 check (table_warn_minutes between 5 and 600),
-  updated_at         timestamptz not null default now()
-);
 
 create table if not exists public.sale_fire (
   id            uuid primary key default gen_random_uuid(),
@@ -131,17 +93,6 @@ create table if not exists public.sale_fire (
   unique (sale_id, fire_number)
 );
 create index if not exists sale_fire_sale_idx on public.sale_fire (sale_id);
-
-create table if not exists public.void_reason (
-  id         uuid primary key default gen_random_uuid(),
-  account_id uuid not null references public.accounts(id) on delete cascade,
-  label      text not null check (btrim(label) <> ''),
-  sort_order integer not null default 0,
-  is_active  boolean not null default true,
-  created_at timestamptz not null default now()
-);
-create unique index if not exists void_reason_account_label_uq
-  on public.void_reason (account_id, lower(btrim(label))) where is_active;
 
 create table if not exists public.sale_line_void (
   id                  uuid primary key default gen_random_uuid(),
@@ -191,69 +142,16 @@ alter table public.sale_line
 create index if not exists sale_line_fire_idx on public.sale_line (fire_id) where fire_id is not null;
 
 -- ══ 3. RLS ═══════════════════════════════════════════════════════════════
--- Lectura: cualquiera de la cuenta. Escritura de configuración (zonas, mesas,
--- umbral, motivos): admin o encargado. Los envíos y anulaciones solo se
--- escriben por las funciones (SECURITY DEFINER): ninguna política de escritura.
+-- Los envíos y anulaciones solo se escriben por las funciones (SECURITY
+-- DEFINER): lectura para la cuenta, ninguna política de escritura.
 
-alter table public.dining_zone    enable row level security;
-alter table public.dining_table   enable row level security;
-alter table public.dining_config  enable row level security;
 alter table public.sale_fire      enable row level security;
-alter table public.void_reason    enable row level security;
 alter table public.sale_line_void enable row level security;
-
-drop policy if exists dining_zone_select on public.dining_zone;
-create policy dining_zone_select on public.dining_zone for select using (belongs_to_account(account_id));
-drop policy if exists dining_zone_write on public.dining_zone;
-create policy dining_zone_write on public.dining_zone for all
-  using (current_user_is_admin_or_manager_of(account_id))
-  with check (current_user_is_admin_or_manager_of(account_id));
-
-drop policy if exists dining_table_select on public.dining_table;
-create policy dining_table_select on public.dining_table for select using (belongs_to_account(account_id));
-drop policy if exists dining_table_write on public.dining_table;
-create policy dining_table_write on public.dining_table for all
-  using (current_user_is_admin_or_manager_of(account_id))
-  with check (current_user_is_admin_or_manager_of(account_id));
-
-drop policy if exists dining_config_select on public.dining_config;
-create policy dining_config_select on public.dining_config for select using (belongs_to_account(account_id));
-drop policy if exists dining_config_write on public.dining_config;
-create policy dining_config_write on public.dining_config for all
-  using (current_user_is_admin_or_manager_of(account_id))
-  with check (current_user_is_admin_or_manager_of(account_id));
-
-drop policy if exists void_reason_select on public.void_reason;
-create policy void_reason_select on public.void_reason for select using (belongs_to_account(account_id));
-drop policy if exists void_reason_write on public.void_reason;
-create policy void_reason_write on public.void_reason for all
-  using (current_user_is_admin_or_manager_of(account_id))
-  with check (current_user_is_admin_or_manager_of(account_id));
 
 drop policy if exists sale_fire_select on public.sale_fire;
 create policy sale_fire_select on public.sale_fire for select using (belongs_to_account(account_id));
 drop policy if exists sale_line_void_select on public.sale_line_void;
 create policy sale_line_void_select on public.sale_line_void for select using (belongs_to_account(account_id));
-
--- La guarda de mesas: la zona y la mesa son del mismo local y cuenta.
-create or replace function public.tg_dining_table_same_location()
-returns trigger language plpgsql set search_path = public as $$
-declare v_z dining_zone;
-begin
-  select * into v_z from dining_zone where id = new.zone_id;
-  if v_z.id is null or v_z.location_id <> new.location_id or v_z.account_id <> new.account_id then
-    raise exception 'La zona no es de este local.';
-  end if;
-  new.updated_at := now();
-  return new;
-end $$;
-drop trigger if exists trg_dining_table_same_location on public.dining_table;
-create trigger trg_dining_table_same_location before insert or update on public.dining_table
-  for each row execute function public.tg_dining_table_same_location();
-
-drop trigger if exists set_dining_zone_updated_at on public.dining_zone;
-create trigger set_dining_zone_updated_at before update on public.dining_zone
-  for each row execute function public.set_updated_at();
 
 -- ══ 4. Ayudantes internos ═══════════════════════════════════════════════
 

@@ -1,7 +1,7 @@
--- VUELTA ATRÁS de 20261009T0040_tpv_sala_s1_mesas_comensales_envios.sql
+-- VUELTA ATRÁS de 20261009T0040_tpv_sala_s1b_envios_y_cuentas_de_mesa.sql (parte B).
+-- La parte A (zonas, mesas, umbral, motivos) tiene su propia vuelta atrás y no se toca aquí.
 --
--- ⚠️ Fuera de banda, como la ida. Borra los datos de sala (zonas, mesas,
---    envíos, anulaciones). Las ventas de mesa que existan quedan como ventas
+-- ⚠️ Fuera de banda, como la ida. Borra los envíos y las anulaciones. Las ventas de mesa que existan quedan como ventas
 --    normales del TPV, sin mesa; su service_type 'dine_in' se pasa a 'pickup'
 --    para que el CHECK de antes vuelva a valer (se cuentan y se dicen antes).
 
@@ -83,11 +83,6 @@ alter table public.sale
   drop column if exists served_by_name, drop column if exists bill_requested_at, drop column if exists table_cleared_at;
 
 drop table if exists public.sale_line_void;
-drop table if exists public.void_reason;
 drop table if exists public.sale_fire;
-drop table if exists public.dining_config;
-drop table if exists public.dining_table;
-drop table if exists public.dining_zone;
-drop function if exists public.tg_dining_table_same_location();
 
 notify pgrst, 'reload schema';

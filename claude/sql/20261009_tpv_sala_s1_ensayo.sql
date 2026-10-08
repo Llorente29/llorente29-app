@@ -6,13 +6,16 @@
 --
 -- Cómo: pegar ENTERO en el editor SQL (rol postgres). Antes, pegar entre las
 -- dos marcas de abajo el contenido íntegro de
---   supabase/migrations/20261009T0040_tpv_sala_s1_mesas_comensales_envios.sql
+--   supabase/migrations/20261009T0040_tpv_sala_s1b_envios_y_cuentas_de_mesa.sql
+-- (la parte A, 20261008T1315_tpv_sala_s1a_zonas_y_mesas.sql, ya aplicada)
 -- Cada paso EJECUTA las funciones (son plpgsql: compilar no valida). Si algo no
 -- es lo esperado, aborta con el número de paso. El último SELECT pega la tabla
 -- de resultados; ésa es la evidencia para el parte (regla 5).
 --
 -- Caminos que recorre (regla 10: no solo SELECT):
---   E1  abrir mesa 4 con 4 comensales (Folvy Interno, Alcalá laboratorio)
+--   E1  abrir mesa E4 con 4 comensales (Folvy Interno, Alcalá laboratorio). Zonas
+--       y mesas propias del ensayo («ENSAYO Sala», E1…E10): no chocan con la sala
+--       que se haya montado de verdad tras la parte A.
 --   E2  enviar 2 bebidas · E3 enviar 2 platos · E4 enviar 1 postre
 --       → 3 envíos, 3 trabajos de impresión de cocina con su fire_id, y
 --         order_for_print(envío) devuelve SOLO las líneas de ese envío
@@ -66,11 +69,11 @@ begin
   if coalesce(array_length(v_items, 1), 0) < 3 then raise exception 'E0: no hay 3 productos simples en la marca %', v_brand; end if;
 
   -- Oficina: Sala (6) y Terraza (4)
-  insert into dining_zone (account_id, location_id, name, kind, sort_order) values (c_acc, c_loc, 'Sala', 'sala', 1) returning id into v_zone;
-  insert into dining_zone (account_id, location_id, name, kind, sort_order) values (c_acc, c_loc, 'Terraza', 'terraza', 2) returning id into v_terr;
-  for i in 1..6 loop insert into dining_table (account_id, location_id, zone_id, name, seats, sort_order) values (c_acc, c_loc, v_zone, i::text, 4, i); end loop;
-  for i in 7..10 loop insert into dining_table (account_id, location_id, zone_id, name, seats, sort_order) values (c_acc, c_loc, v_terr, i::text, 2, i); end loop;
-  select id into v_t4 from dining_table where location_id = c_loc and name = '4';
+  insert into dining_zone (account_id, location_id, name, kind, sort_order) values (c_acc, c_loc, 'ENSAYO Sala', 'sala', 1) returning id into v_zone;
+  insert into dining_zone (account_id, location_id, name, kind, sort_order) values (c_acc, c_loc, 'ENSAYO Terraza', 'terraza', 2) returning id into v_terr;
+  for i in 1..6 loop insert into dining_table (account_id, location_id, zone_id, name, seats, sort_order) values (c_acc, c_loc, v_zone, 'E' || i, 4, i); end loop;
+  for i in 7..10 loop insert into dining_table (account_id, location_id, zone_id, name, seats, sort_order) values (c_acc, c_loc, v_terr, 'E' || i, 2, i); end loop;
+  select id into v_t4 from dining_table where location_id = c_loc and name = 'E4' and is_active;
 
   -- E1
   v_r := public.pos_table_open(v_t4, 4, v_brand, null);
@@ -100,7 +103,7 @@ begin
     v_order := public.order_for_print('ensayo-sala-s1', v_sale, v_fires[i]);
     insert into ensayo values ('E2-4 order_for_print envío ' || i,
       jsonb_array_length(v_order->'lineas') = 1 and (v_order->>'fire_number')::int = i
-        and v_order->>'table_name' = '4' and v_order->>'zone_name' = 'Sala' and (v_order->>'covers')::int = 4,
+        and v_order->>'table_name' = 'E4' and v_order->>'zone_name' = 'ENSAYO Sala' and (v_order->>'covers')::int = 4,
       (v_order->'lineas'->0->>'qty') || 'x ' || (v_order->'lineas'->0->>'name'));
   end loop;
   v_order := public.order_for_print('ensayo-sala-s1', v_sale);
@@ -163,7 +166,7 @@ begin
     (select count(*) || ' trabajos' from print_job where sale_id = v_qs);
 
   -- E12 upsert_pos_sale sobre una mesa
-  v_r := public.pos_table_open((select id from dining_table where location_id = c_loc and name = '7'), 2, v_brand, null);
+  v_r := public.pos_table_open((select id from dining_table where location_id = c_loc and name = 'E7' and is_active), 2, v_brand, null);
   begin
     perform public.upsert_pos_sale((v_r->>'saleId')::uuid, c_acc, c_loc, v_brand, 'counter',
       jsonb_build_array(jsonb_build_object('menuItemId', v_items[1], 'quantity', 1)), 'save', null, null);
@@ -175,7 +178,7 @@ begin
   insert into ensayo select 'E13 pos_open_sales no lista mesas',
     not exists (select 1 from jsonb_array_elements(public.pos_open_sales(c_acc, c_loc)) e where (e->>'id')::uuid = (v_r->>'saleId')::uuid), '';
   -- pos_floor ejecuta y ve la 7 abierta
-  insert into ensayo select 'pos_floor', jsonb_array_length(f->'zones') = 2, (f->'zones'->1->'tables'->0->'sale'->>'state')
+  insert into ensayo select 'pos_floor', jsonb_array_length(f->'zones') >= 2, (select z->'tables'->0->'sale'->>'state' from jsonb_array_elements(f->'zones') z where z->>'name' = 'ENSAYO Terraza')
     from (select public.pos_floor(c_acc, c_loc) f) x;
 end $$;
 
