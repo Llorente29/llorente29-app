@@ -8940,6 +8940,105 @@ export type Database = {
         }
         Relationships: []
       }
+      dining_config: {
+        Row: {
+          account_id: string
+          location_id: string
+          table_warn_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          location_id: string
+          table_warn_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          location_id?: string
+          table_warn_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      dining_table: {
+        Row: {
+          account_id: string
+          created_at: string
+          grid_width: number
+          id: string
+          is_active: boolean
+          location_id: string
+          name: string
+          seats: number
+          sort_order: number
+          updated_at: string
+          zone_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          grid_width?: number
+          id?: string
+          is_active?: boolean
+          location_id: string
+          name: string
+          seats?: number
+          sort_order?: number
+          updated_at?: string
+          zone_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          grid_width?: number
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          name?: string
+          seats?: number
+          sort_order?: number
+          updated_at?: string
+          zone_id?: string
+        }
+        Relationships: []
+      }
+      dining_zone: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          location_id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          location_id: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          location_id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dish_family_template: {
         Row: {
           code: string
@@ -17781,6 +17880,7 @@ export type Database = {
           account_id: string
           address_status: string
           archived_at: string | null
+          bill_requested_at: string | null
           brand_id: string | null
           cancel_reason: string | null
           cancelled_at: string | null
@@ -17789,6 +17889,7 @@ export type Database = {
           cash_session_id: string | null
           channel_id: string | null
           closed_at: string | null
+          covers: number | null
           created_at: string
           created_by: string | null
           created_by_name: string | null
@@ -17844,11 +17945,15 @@ export type Database = {
           rider_phone: string | null
           rider_seen_at: string | null
           rider_transport_type: string | null
+          served_by: string | null
+          served_by_name: string | null
           service_type: string | null
           sold_at: string
           source: string
           status: string
           stripe_payment_intent_id: string | null
+          table_cleared_at: string | null
+          table_id: string | null
           tax: number | null
           taxable_base: number | null
           total: number
@@ -17860,6 +17965,7 @@ export type Database = {
           account_id: string
           address_status?: string
           archived_at?: string | null
+          bill_requested_at?: string | null
           brand_id?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
@@ -17868,6 +17974,7 @@ export type Database = {
           cash_session_id?: string | null
           channel_id?: string | null
           closed_at?: string | null
+          covers?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -17923,11 +18030,15 @@ export type Database = {
           rider_phone?: string | null
           rider_seen_at?: string | null
           rider_transport_type?: string | null
+          served_by?: string | null
+          served_by_name?: string | null
           service_type?: string | null
           sold_at: string
           source?: string
           status?: string
           stripe_payment_intent_id?: string | null
+          table_cleared_at?: string | null
+          table_id?: string | null
           tax?: number | null
           taxable_base?: number | null
           total?: number
@@ -17939,6 +18050,7 @@ export type Database = {
           account_id?: string
           address_status?: string
           archived_at?: string | null
+          bill_requested_at?: string | null
           brand_id?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
@@ -17947,6 +18059,7 @@ export type Database = {
           cash_session_id?: string | null
           channel_id?: string | null
           closed_at?: string | null
+          covers?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -18002,11 +18115,15 @@ export type Database = {
           rider_phone?: string | null
           rider_seen_at?: string | null
           rider_transport_type?: string | null
+          served_by?: string | null
+          served_by_name?: string | null
           service_type?: string | null
           sold_at?: string
           source?: string
           status?: string
           stripe_payment_intent_id?: string | null
+          table_cleared_at?: string | null
+          table_id?: string | null
           tax?: number | null
           taxable_base?: number | null
           total?: number
@@ -18221,6 +18338,42 @@ export type Database = {
           },
         ]
       }
+      sale_fire: {
+        Row: {
+          account_id: string
+          device_id: string | null
+          fire_number: number
+          fired_at: string
+          fired_by: string | null
+          fired_by_name: string | null
+          id: string
+          location_id: string
+          sale_id: string
+        }
+        Insert: {
+          account_id: string
+          device_id?: string | null
+          fire_number: number
+          fired_at?: string
+          fired_by?: string | null
+          fired_by_name?: string | null
+          id?: string
+          location_id: string
+          sale_id: string
+        }
+        Update: {
+          account_id?: string
+          device_id?: string | null
+          fire_number?: number
+          fired_at?: string
+          fired_by?: string | null
+          fired_by_name?: string | null
+          id?: string
+          location_id?: string
+          sale_id?: string
+        }
+        Relationships: []
+      }
       sale_line: {
         Row: {
           account_id: string
@@ -18232,6 +18385,7 @@ export type Database = {
           external_brand_id: string | null
           external_product_id: string | null
           external_source: string | null
+          fire_id: string | null
           id: string
           ignore_reason: string | null
           ignored_at: string | null
@@ -18252,6 +18406,7 @@ export type Database = {
           unit_price: number | null
           unmapped_reason: string | null
           updated_at: string
+          voided_at: string | null
         }
         Insert: {
           account_id: string
@@ -18263,6 +18418,7 @@ export type Database = {
           external_brand_id?: string | null
           external_product_id?: string | null
           external_source?: string | null
+          fire_id?: string | null
           id?: string
           ignore_reason?: string | null
           ignored_at?: string | null
@@ -18283,6 +18439,7 @@ export type Database = {
           unit_price?: number | null
           unmapped_reason?: string | null
           updated_at?: string
+          voided_at?: string | null
         }
         Update: {
           account_id?: string
@@ -18294,6 +18451,7 @@ export type Database = {
           external_brand_id?: string | null
           external_product_id?: string | null
           external_source?: string | null
+          fire_id?: string | null
           id?: string
           ignore_reason?: string | null
           ignored_at?: string | null
@@ -18314,6 +18472,7 @@ export type Database = {
           unit_price?: number | null
           unmapped_reason?: string | null
           updated_at?: string
+          voided_at?: string | null
         }
         Relationships: [
           {
@@ -18490,6 +18649,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sale_line_void: {
+        Row: {
+          account_id: string
+          device_id: string | null
+          id: string
+          note: string | null
+          original_line_total: number
+          original_quantity: number
+          reason_id: string | null
+          reason_label: string
+          sale_id: string
+          sale_line_id: string
+          voided_at: string
+          voided_by: string | null
+          voided_by_name: string | null
+        }
+        Insert: {
+          account_id: string
+          device_id?: string | null
+          id?: string
+          note?: string | null
+          original_line_total: number
+          original_quantity: number
+          reason_id?: string | null
+          reason_label: string
+          sale_id: string
+          sale_line_id: string
+          voided_at?: string
+          voided_by?: string | null
+          voided_by_name?: string | null
+        }
+        Update: {
+          account_id?: string
+          device_id?: string | null
+          id?: string
+          note?: string | null
+          original_line_total?: number
+          original_quantity?: number
+          reason_id?: string | null
+          reason_label?: string
+          sale_id?: string
+          sale_line_id?: string
+          voided_at?: string
+          voided_by?: string | null
+          voided_by_name?: string | null
+        }
+        Relationships: []
       }
       sale_verification: {
         Row: {
@@ -22510,6 +22717,33 @@ export type Database = {
           },
         ]
       }
+      void_reason: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       weather_poll: {
         Row: {
           location_id: string
@@ -26237,7 +26471,7 @@ export type Database = {
         Returns: Json
       }
       order_for_print: {
-        Args: { p_device_token: string; p_sale_id: string }
+        Args: { p_device_token: string; p_fire_id?: string; p_sale_id: string }
         Returns: Json
       }
       orders_feed: { Args: { p_location_id: string }; Returns: Json }
@@ -26331,6 +26565,7 @@ export type Database = {
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
+      pos_floor: { Args: { p_account_id: string; p_location_id: string }; Returns: Json }
       pos_item_config: {
         Args: {
           p_account_id: string
@@ -26347,6 +26582,33 @@ export type Database = {
         Args: { p_account_id: string; p_hours?: number; p_location_id: string }
         Returns: Json
       }
+      pos_table_add_lines: { Args: { p_lines: Json; p_sale_id: string }; Returns: Json }
+      pos_table_charge: { Args: { p_payment_method: string; p_sale_id: string }; Returns: Json }
+      pos_table_clear: { Args: { p_sale_id: string }; Returns: Json }
+      pos_table_detail: { Args: { p_sale_id: string }; Returns: Json }
+      pos_table_fire: { Args: { p_device_token?: string; p_lines?: Json; p_sale_id: string }; Returns: Json }
+      pos_table_open: {
+        Args: {
+          p_brand_id: string
+          p_covers: number
+          p_device_token?: string
+          p_table_id: string
+        }
+        Returns: Json
+      }
+      pos_table_remove_pending_line: { Args: { p_line_id: string }; Returns: Json }
+      pos_table_request_bill: { Args: { p_sale_id: string }; Returns: Json }
+      pos_table_set_pending_qty: { Args: { p_line_id: string; p_quantity: number }; Returns: Json }
+      pos_table_void_line: {
+        Args: {
+          p_device_token?: string
+          p_line_id: string
+          p_note?: string
+          p_reason_id: string
+        }
+        Returns: Json
+      }
+      pos_void_reasons: { Args: { p_account_id: string }; Returns: Json }
       post_pending_receipt: {
         Args: { p_receipt_id: string }
         Returns: {

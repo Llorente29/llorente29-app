@@ -118,6 +118,7 @@ function deliveryLabel(st: any) {
   if (t.includes('pickup') || t.includes('collection') || t.includes('takeaway')) return 'Recogida'
   if (t.includes('own')) return 'Reparto propio'
   if (t.includes('platform')) return 'Reparto plataforma'
+  if (t.includes('dine_in')) return 'En sala'
   return st ? st : 'Reparto'
 }
 function isOwnDelivery(st: any) { return (st ?? '').toLowerCase().includes('own') }
@@ -553,31 +554,54 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
   // El número grande sale del CÓDIGO DE PASE (20/09, 13:10), no de un contador:
   // es lo que el repartidor pide. Y de `passCode`, nunca de `pos_short_code` a
   // secas — los dos campos discrepan en 1.887 de 1.887 pedidos de Glovo por Last.
-  const numeroDelDia = numeroGrande(pc)
-  let numSize = 132
-  ctx.font = fnt(numSize, true)
-  while (numSize > 60 && ctx.measureText(numeroDelDia).width > W * 0.52) {
-    numSize -= 4; ctx.font = fnt(numSize, true)
-  }
-  const yCab = y
-  ctx.fillStyle = INK; ctx.textAlign = 'left'
-  ctx.fillText(numeroDelDia, PAD, yCab - Math.round(numSize * 0.12))
-  ctx.textAlign = 'right'
-  ctx.font = fnt(24, true)
-  ctx.fillText((order.channel ?? deliveryLabel(order.service_type) ?? '').toString(), W - PAD, yCab + 6)
-  ctx.font = fnt(22, false); ctx.fillStyle = MUT
-  ctx.fillText(hhmmMadrid(order.entro_at), W - PAD, yCab + 38)
-  ctx.textAlign = 'left'; ctx.fillStyle = INK
-  y = yCab + Math.round(numSize * 0.80) + 10
+  // En una mesa, lo que se repite abajo es la mesa (mismo motivo: es lo primero
+  // que asoma por la boca de la impresora).
+  const numeroDelDia = order.table_name ? `MESA ${order.table_name}` : numeroGrande(pc)
 
-  wrapLeft((order.brand ?? '').toString(), 26, true)
-  y += 2
-  // Alineadas a la IZQUIERDA con la marca y el número: un ticket con tres
-  // ejes distintos obliga a buscar cada dato. La maqueta tiene un solo margen.
-  wrapLeft(deliveryLabel(order.service_type), 24, true)
-  if (order.customer_name) wrapLeft((order.customer_name || '').split(' ')[0], 24, true)
-  if (order.expected_time) wrapLeft('Recogida ' + fmtDate(order.expected_time), 22, false, PAD, MUT)
-  rule()
+  // ── CABECERA DE MESA · TPV Sala (S1, 08/10) ──
+  // Una mesa no tiene número del día ni repartidor: lo que cocina necesita
+  // leer desde lejos es QUÉ MESA, de qué zona, cuántos son y qué envío es.
+  // Sigue mandando «una sola cosa grande»: la mesa.
+  if (order.table_name) {
+    const mesa = `MESA ${order.table_name}`
+    let mesaSize = 110
+    ctx.font = fnt(mesaSize, true)
+    while (mesaSize > 56 && ctx.measureText(mesa).width > W - 2 * PAD) { mesaSize -= 4; ctx.font = fnt(mesaSize, true) }
+    ctx.fillStyle = INK; ctx.textAlign = 'left'
+    ctx.fillText(mesa, PAD, y - Math.round(mesaSize * 0.12))
+    y += Math.round(mesaSize * 0.80) + 10
+    wrapLeft(`${(order.zone_name ?? '').toString().toUpperCase()} · ${order.covers ?? '?'} COMENSALES`, 34, true)
+    y += 4
+    if (order.fire_number) band(`ENVÍO ${order.fire_number}${order.fired_at ? ' · ' + hhmmMadrid(order.fired_at) : ''}`, 40)
+    else band('CUENTA COMPLETA', 34)
+    if (order.served_by_name) wrapLeft(`Camarero: ${order.served_by_name}`, 22, false, PAD, MUT)
+    rule()
+  } else {
+    let numSize = 132
+    ctx.font = fnt(numSize, true)
+    while (numSize > 60 && ctx.measureText(numeroDelDia).width > W * 0.52) {
+      numSize -= 4; ctx.font = fnt(numSize, true)
+    }
+    const yCab = y
+    ctx.fillStyle = INK; ctx.textAlign = 'left'
+    ctx.fillText(numeroDelDia, PAD, yCab - Math.round(numSize * 0.12))
+    ctx.textAlign = 'right'
+    ctx.font = fnt(24, true)
+    ctx.fillText((order.channel ?? deliveryLabel(order.service_type) ?? '').toString(), W - PAD, yCab + 6)
+    ctx.font = fnt(22, false); ctx.fillStyle = MUT
+    ctx.fillText(hhmmMadrid(order.entro_at), W - PAD, yCab + 38)
+    ctx.textAlign = 'left'; ctx.fillStyle = INK
+    y = yCab + Math.round(numSize * 0.80) + 10
+
+    wrapLeft((order.brand ?? '').toString(), 26, true)
+    y += 2
+    // Alineadas a la IZQUIERDA con la marca y el número: un ticket con tres
+    // ejes distintos obliga a buscar cada dato. La maqueta tiene un solo margen.
+    wrapLeft(deliveryLabel(order.service_type), 24, true)
+    if (order.customer_name) wrapLeft((order.customer_name || '').split(' ')[0], 24, true)
+    if (order.expected_time) wrapLeft('Recogida ' + fmtDate(order.expected_time), 22, false, PAD, MUT)
+    rule()
+  }
 
   // Agrupar por familia; los platos SIN familia van al final SIN cabecera "Otros".
   const groups = new Map<string, any[]>()
