@@ -149,8 +149,35 @@ async function descargarZip(f) {
   return { url: f.url, http, titulo: f.nombre, texto: '', ext: f.formato ?? 'txt', error: `HTTP ${http}` }
 }
 
+/**
+ * Un PDF (la AEAT publica así el formato de los libros registro, C05). Se baja
+ * el binario y se guarda su texto con `pdftotext -layout` (poppler-utils; los
+ * workflows que llaman a este guion lo instalan si falta). La huella es la del
+ * texto, como en las demás.
+ */
+async function descargarPdf(f) {
+  let http = 0
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      const r = await fetch(f.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(LIMITE_MS) })
+      http = r.status
+      if (r.status === 200) {
+        const dir = await mkdtemp(join(tmpdir(), 'fuente-'))
+        const pdf = join(dir, 'f.pdf')
+        await writeFile(pdf, Buffer.from(await r.arrayBuffer()))
+        const texto = execFileSync('pdftotext', ['-layout', '-enc', 'UTF-8', pdf, '-'], { maxBuffer: 64 * 1024 * 1024 }).toString('utf8')
+        return { url: f.url, http, titulo: f.nombre, actualizadoEnFuente: r.headers.get('last-modified'), texto, ext: 'txt' }
+      }
+      if (r.status < 500) break
+    } catch (e) { if (intento === 2) return { url: f.url, http, titulo: f.nombre, texto: '', ext: 'txt', error: String(e) } }
+    await espera(3000 * (intento + 1))
+  }
+  return { url: f.url, http, titulo: f.nombre, texto: '', ext: 'txt', error: `HTTP ${http}` }
+}
+
 async function descargarUna(f) {
   if (f.tipo === 'zip') return descargarZip(f)
+  if (f.tipo === 'pdf') return descargarPdf(f)
   if (f.tipo === 'boe') {
     const probados = []
     if (f.id) {

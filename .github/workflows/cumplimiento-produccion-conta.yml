@@ -251,7 +251,9 @@ jobs:
         with:
           node-version: 22
       - name: Comparar las fuentes con la última descarga
-        run: node scripts/conta/fuentes.mjs comparar
+        run: |
+          command -v pdftotext > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils; }  # PDF de la AEAT (C05)
+          node scripts/conta/fuentes.mjs comparar
       - name: Separar lo nuevo de lo ya sabido
         id: informe
         continue-on-error: true

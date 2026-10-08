@@ -328,6 +328,32 @@
       "tipo": "boe",
       "id": "BOE-A-2021-2155",
       "debeContener": "reconocimiento de ingresos"
+    },
+    {
+      "clave": "aeat-formato-libros-registro",
+      "nombre": "AEAT · Formato electrónico común de los libros registro de IVA e IRPF",
+      "tipo": "pdf",
+      "url": "https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/IVA/Fact_registro/Libros_registro/Formato_Electronico_Comun_Libros_Registro_IVA_IRPF.pdf",
+      "debeContener": "Registro",
+      "nota": "C05: columnas de los libros registro de IVA en el formato que pide la AEAT en un requerimiento (expedidas, recibidas, bienes de inversión)."
+    },
+    {
+      "clave": "orden-jus-616-2022",
+      "nombre": "Orden JUS/616/2022, modelos de depósito de cuentas anuales individuales en el Registro Mercantil",
+      "tipo": "boe",
+      "buscar": "\"JUS/616/2022\"",
+      "tituloEmpiezaPor": "Orden JUS/616/2022",
+      "debeContener": "cuentas anuales",
+      "nota": "C05: última Orden JUS que aprueba los modelos de depósito de las cuentas individuales. Sus anexos se actualizan por resolución de la DGSJFP (ver res-dgsjfp-2026-cuentas)."
+    },
+    {
+      "clave": "res-dgsjfp-2026-cuentas",
+      "nombre": "Resolución de 19 de mayo de 2026 de la DGSJFP, modelos de presentación de las cuentas anuales en el Registro Mercantil",
+      "tipo": "boe",
+      "id": "BOE-A-2026-11580",
+      "tituloDebeContener": "cuentas anuales",
+      "debeContener": "Registro Mercantil",
+      "nota": "C05: comprobar que es la de cuentas individuales (la BOE-A-2026-11581, de la misma fecha, es la de consolidadas)."
     }
   ]
 }

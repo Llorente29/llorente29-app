@@ -42,7 +42,9 @@ jobs:
       - name: Descargar las fuentes
         id: descarga
         continue-on-error: true
-        run: node scripts/conta/fuentes.mjs descargar
+        run: |
+          command -v pdftotext > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils; }  # PDF de la AEAT (C05)
+          node scripts/conta/fuentes.mjs descargar
 
       - name: Resumen
         if: always()
