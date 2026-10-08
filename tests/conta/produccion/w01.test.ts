@@ -6,8 +6,11 @@
 // lectura el 08/10 sobre esos mismos ficheros. sale tiene 13 475 filas y está
 // en el camino del pedido; sales_day_summary también; rider_seen_at la leen
 // cuatro funciones vivas. Nada de eso está inventado.
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — módulo .mjs sin tipos
 import { archivosFront, cabecera, filtrarHistorial, informe, marcaHuella, sqlBaja, sqlRegistro, usosEnFront, versionDe } from '../../../scripts/conta/produccion/analizar.mjs'
@@ -174,5 +177,89 @@ describe('W01 · el front, por búsqueda en el repositorio', () => {
     const archivos = archivosFront('WORKTREE') as { ruta: string }[]
     expect(archivos.some((a) => a.ruta === 'src/types/database.ts')).toBe(false)
     expect(usosEnFront([d[1]], archivos)['public.orders_feed']?.length ?? 0).toBeGreaterThan(0)
+  })
+})
+
+describe('W01 · la vuelta atrás automática (deshacer.sh), con un psql falso que apunta lo que le piden', () => {
+  // El psql falso: escribe en $LOG los -f que recibe (una línea por llamada) y
+  // falla si alguno contiene $FALLA_EN. Así se ve el ORDEN y qué va en cada
+  // transacción, sin base de datos.
+  const correr = (aplicados: string[], fallaEn = '') => {
+    const dir = mkdtempSync(join(tmpdir(), 'w01-'))
+    const psql = join(dir, 'psql')
+    writeFileSync(psql, `#!/usr/bin/env bash
+fs=(); prev=""; for a in "$@"; do [ "$prev" = "-f" ] && fs+=("$a"); prev="$a"; done
+txt=""; for x in "\${fs[@]}"; do case "$x" in supabase/*) txt="$txt $x";; *) txt="$txt $(tr -d '\\n' < "$x")";; esac; done
+echo "-1:$([[ " $* " == *" -1 "* ]] && echo si || echo no)$txt" >> "$LOG"
+[ -n "$FALLA_EN" ] && [[ "$txt" == *"$FALLA_EN"* ]] && exit 3
+exit 0
+`, { mode: 0o755 })
+    const lista = join(dir, 'aplicados.txt'); writeFileSync(lista, aplicados.join('\n') + '\n')
+    const informe = join(dir, 'informe.md'); writeFileSync(informe, '')
+    const log = join(dir, 'log'); writeFileSync(log, '')
+    let rc = 0
+    try {
+      execFileSync('bash', ['scripts/conta/produccion/deshacer.sh', lista], { env: { ...process.env, PSQL: psql, DB_URL: 'postgres://falsa', INFORME: informe, LOG: log, FALLA_EN: fallaEn }, stdio: 'pipe' })
+    } catch (e) { rc = (e as { status: number }).status }
+    return { rc, llamadas: readFileSync(log, 'utf8').trim().split('\n').filter(Boolean), informe: readFileSync(informe, 'utf8') }
+  }
+  const C04 = ['20261010T0100_c04_libro', '20261010T0110_c04_enlaces', '20261010T0120_c04_funciones', '20261010T0130_c04_lectura'].map((n) => `supabase/migrations/${n}.sql`)
+
+  it('los .down.sql corren en ORDEN INVERSO, cada uno en una transacción con la baja de su registro', () => {
+    const r = correr(C04)
+    expect(r.rc).toBe(0)
+    expect(r.llamadas).toEqual([...C04].reverse().map((f) => {
+      const n = f.replace(/^.*\//, '').replace(/\.sql$/, '')
+      return `-1:si supabase/vuelta-atras/${n}.down.sql delete from supabase_migrations.schema_migrations where version = '${n}';`
+    }))
+    expect(r.informe).toContain('deshecho con `supabase/vuelta-atras/20261010T0100_c04_libro.down.sql`')
+  })
+  it('si una vuelta atrás falla, PARA ahí: no deshace las anteriores y lo dice en rojo', () => {
+    const r = correr(C04, '20261010T0120_c04_funciones.down')
+    expect(r.rc).toBe(1)
+    expect(r.llamadas).toHaveLength(2)
+    expect(r.informe).toContain('| 3 | `supabase/migrations/20261010T0120_c04_funciones.sql` | **la vuelta atrás FALLA: queda aplicado** |')
+    expect(r.informe).toContain('| 1 | `supabase/migrations/20261010T0100_c04_libro.sql` | **queda aplicado** (la vuelta atrás paró antes) |')
+  })
+  it('un fichero sin .down.sql (la 0130 del C00) para la vuelta atrás antes de tocar nada de lo anterior', () => {
+    const r = correr(['supabase/migrations/20261010T0100_c04_libro.sql', 'supabase/migrations/20261003T0130_c00_valores_de_serie.sql'])
+    expect(r.rc).toBe(1)
+    expect(r.llamadas).toEqual([])
+    expect(r.informe).toContain('**sin vuelta atrás: queda aplicado**')
+  })
+})
+
+describe('W01 · el workflow de producción: sin franja, y las guardas de siempre en su sitio', () => {
+  const texto = readFileSync('.github/workflows/aplicar-produccion-conta.yml', 'utf8')
+  const pasos = texto.split(/\n {6}- (?:name|uses): /).slice(1)
+  const indice = (re: RegExp) => pasos.findIndex((p) => re.test(p))
+  const conecta = (p: string) => /"\$PSQL" "\$(RO_)?DB_URL"|deshacer\.sh|agentes\.sh/.test(p)
+
+  it('ya no hay franja ni campo fuera_de_ventana', () => {
+    expect(texto).not.toMatch(/fuera_de_ventana|FUERA_PEDIDO|1215|00:30/)
+    expect(texto).toContain("sin franja: W01")
+  })
+  it('guardas 1 y 2: la URL no es la de staging y sí la de producción, ANTES de cualquier conexión', () => {
+    const g = indice(/^Guarda 1 y 2/)
+    expect(g).toBeGreaterThanOrEqual(0)
+    expect(pasos[g]).toContain('*"$STAGING_REF"*) echo "::error::La URL apunta a STAGING. Abortado sin conectar."; exit 1')
+    expect(pasos[g]).toContain('*"$PROD_REF"*) echo "La URL es de producción."')
+    expect(texto).toContain('PROD_REF: xzmpnchlguibclvxyynt')
+    expect(pasos.findIndex(conecta)).toBeGreaterThan(g)
+  })
+  it('guarda 3: al otro lado está Foodint, antes de leer el contexto o aplicar nada', () => {
+    const g = indice(/^Guarda 3 · al otro lado está Foodint/)
+    expect(pasos[g]).toContain(`select count(*) from public.accounts where id = '$FOODINT'`)
+    expect(texto).toContain('FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710')
+    const primeraLecturaDeVerdad = pasos.findIndex((p, i) => i !== g && conecta(p))
+    expect(primeraLecturaDeVerdad).toBeGreaterThan(g)
+  })
+  it('los agentes van con conta_lectura y la URL de producción', () => {
+    expect(texto).toContain('if (u.username or "").split(".")[0] != "conta_lectura":')
+  })
+  it('el real aplica cada fichero con su registro en la misma transacción, y la comprobación llama a la vuelta atrás', () => {
+    expect(texto).toContain('-1 -f "$f" -f /tmp/registro.sql')
+    expect(texto).toContain('bash scripts/conta/produccion/deshacer.sh /tmp/aplicados.txt')
+    expect(texto).toContain("echo 'rollback;'")
   })
 })

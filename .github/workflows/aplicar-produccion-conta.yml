@@ -1,57 +1,59 @@
 name: Aplicar SQL en PRODUCCIÓN (contabilidad)
 
-# QUÉ HACE (C00, respuestas 6 y 7 de Julio)
+# QUÉ HACE (C00, respuestas 6 y 7 de Julio; W01, 08/10: a cualquier hora)
 # Aplica en PRODUCCIÓN la tanda de supabase/produccion/aplicar.txt (o, en modo
-# «vuelta_atras», la de supabase/produccion/vuelta-atras.txt). Es la copia del
-# de staging con las guardas AL REVÉS, y además:
+# «vuelta_atras», la de supabase/produccion/vuelta-atras.txt).
 #
 #   · Solo a mano (workflow_dispatch). NUNCA por push. Pide escribir
 #     «produccion» en el campo `confirmo`.
-#   · Entre las 00:30 y las 12:15 de Madrid (la banda de servicio de
-#     CLAUDE.md) aplica sin más. FUERA de esa ventana (04/10, respuesta 2 del
-#     C01b) solo si se cumplen las dos:
-#       1. quien lo lanza escribe «si» en `fuera_de_ventana`, y
-#       2. NINGÚN fichero de la tanda toca el camino del pedido: ni una tabla
-#          ni una función de la lista CAMINO_TABLAS / CAMINO_FUNCIONES de abajo
-#          (ventas, pedidos, despacho, cocina, stock), ni una función que
-#          disparen esas tablas o que llame un cron (se pregunta a la base).
-#     Si falla una, no aplica nada. El informe deja escrito quién lo abrió,
-#     a qué hora y la medida. La ventana se vuelve a mirar antes de CADA fichero.
+#   · SIN FRANJA (W01). Se lanza a cualquier hora: lo que protege lo que está
+#     en marcha no es el reloj sino qué hace cada fichero (docs/conta/staging.md,
+#     «Producción a cualquier hora»). El informe dice la hora de Madrid.
 #   · Comprueba que la URL es la de producción y que al otro lado está Foodint.
-#   · Antes de nada, analiza la tanda (scripts/conta/produccion/analizar.mjs) y
-#     escribe en el informe qué crea o altera cada fichero. PARA si un fichero,
-#     sobre algo que ya existe en producción, borra o renombra una tabla,
-#     columna, vista o función, cambia datos (update/delete), reemplaza una
-#     función que no sea vat_rate_for, o vat_rate_for con otra firma. SIGUE, con
-#     informe, si solo añade.
-#   · PARAR A PROPÓSITO (04/10, R02): hay ficheros que paran porque tienen
-#     que parar — reemplazan funciones de Cocina, sanean pedidos, eliminan una
-#     columna — y que Julio decide aplicar. Para esos está el campo `autorizo`:
-#     se escribe el NOMBRE ENTERO de cada fichero (sin carpeta). Dos cerrojos,
-#     como la puerta de la prohibida (CLAUDE.md, regla 1): estar en el
-#     manifiesto Y estar escrito aquí. Solo levanta la parada de los ficheros
-#     nombrados; uno que para y no está escrito sigue parando la tanda entera,
-#     y un nombre escrito que no está en la tanda o que no para también la para
-#     (un dedo torpe no abre nada). El informe deja escrito qué se autorizó,
-#     quién y desde qué rama.
-#   · Modo «ensayo»: TODO en una transacción, D1 y recuento dentro, y ROLLBACK.
-#     No queda nada.
-#   · Modo «real»: solo si hay un ENSAYO EN VERDE DEL MISMO COMMIT. Un fichero
-#     por transacción; para al primer fallo y deja escrito qué ficheros
-#     quedaron aplicados. D1 antes y después del fichero que reemplaza
-#     vat_rate_for: si da alguna diferencia (salvo la decidida del 4T2024),
-#     para y no aplica lo siguiente. Al final, D1 y recuento de filas de serie.
-#   · lock_timeout de 5 s: si un fichero tiene que esperar un cierre (porque
-#     algo de Cocina está usando la tabla), falla en vez de quedarse en cola
-#     delante de los pedidos.
+#   · YA APLICADO NO SE REAPLICA. Lee el historial de producción
+#     (supabase_migrations.schema_migrations): un fichero registrado con la
+#     misma huella se quita de la tanda; con otra huella, PARA.
+#   · ANALIZA cada sentencia contra lo que existe (scripts/conta/produccion/
+#     analizar.mjs, una consulta de solo lectura):
+#       añade    → pasa siempre;
+#       cambia   → pasa declarado en la cabecera del fichero
+#                  («-- cambia: <objeto> · prueba: supabase/staging/sql/…») y con
+#                  esa prueba nombrándolo; en el camino del pedido, además
+#                  «autorizo»;
+#       destruye → solo con «autorizo»; borrar o renombrar, además, sin usos
+#                  (base y front) y en su propia tanda.
+#     Cada fichero sale «sigue», «AUTORIZO» o «BLOQUEA». Los AUTORIZO se abren
+#     escribiendo su NOMBRE ENTERO (sin carpeta) en `autorizo`: dos cerrojos,
+#     como la puerta de la prohibida (CLAUDE.md, regla 1). Un BLOQUEA no lo
+#     abre nada: se arregla el fichero. Un nombre escrito que no está en la
+#     tanda o que no lo necesita también para (un dedo torpe no abre nada).
+#   · CAMINO DEL PEDIDO = tablas que EXISTEN y están en CAMINO_TABLAS, las
+#     funciones de CAMINO_FUNCIONES y las que esas tablas disparan o llama un
+#     cron. Una tabla que crea la propia tanda no lo es, se llame como se llame.
+#   · Modo «ensayo»: TODO en una transacción (con el registro en el historial),
+#     D1 y recuento dentro, y ROLLBACK. Luego, en otra transacción que también
+#     se deshace, ensaya la vuelta atrás: la tanda y sus .down.sql al revés.
+#   · Modo «real»: solo con un ENSAYO EN VERDE DEL MISMO COMMIT. Un fichero por
+#     transacción, con su registro en el historial dentro de la misma. Para al
+#     primer fallo. D1 antes y después del fichero que reemplaza vat_rate_for.
+#   · DESPUÉS DEL REAL, COMPROBACIÓN: D1, recuento de filas de serie, los
+#     agentes de solo lectura (datos maestros y libro diario, antes y después:
+#     cuenta lo que se pone en rojo con la tanda) y la salud del camino del
+#     pedido (con 3 o más pedidos en los 15 minutos de antes, en los 15 de
+#     después tiene que haber algún cambio de estado). Si algo falla, aplica los
+#     .down.sql de lo aplicado en orden inverso (deshacer.sh) y avisa; si la
+#     vuelta atrás tampoco pasa, para en rojo con lo que queda a medias.
+#   · lock_timeout de 5 s: si un fichero tiene que esperar un cierre, falla en
+#     vez de quedarse en cola delante de los pedidos.
 #
 # LO QUE JULIO HACE UNA VEZ
-#   Settings → Secrets and variables → Actions → New repository secret
-#     PROD_CONTA_DB_URL   cadena de conexión de PRODUCCIÓN con permiso de
-#                         escritura (Connect → Session pooler). Solo la usa
-#                         este workflow.
-#   La URL no se imprime: usuario, contraseña y host se enmascaran antes de
-#   conectar, y psql nunca la recibe por la línea de órdenes que se ve.
+#   Settings → Secrets and variables → Actions:
+#     PROD_CONTA_DB_URL     producción con permiso de escritura (Session pooler).
+#                           Solo la usa este workflow.
+#     PROD_CONTA_RO_DB_URL  producción con el usuario conta_lectura (la misma de
+#                           los agentes nocturnos): para los agentes de después.
+#   Las URL no se imprimen: usuario, contraseña y host se enmascaran antes de
+#   conectar, y psql nunca las recibe por la línea de órdenes que se ve.
 #
 # OJO: GitHub solo deja lanzar un workflow_dispatch si el fichero del workflow
 # existe en la rama por defecto (main). Ver el informe del PR #138.
@@ -71,14 +73,8 @@ on:
         type: choice
         options: [ensayo, real, vuelta_atras]
         default: ensayo
-      fuera_de_ventana:
-        description: 'Fuera de 00:30–12:15 de Madrid: «si» para aplicar AUNQUE sea en servicio. Solo vale si ningún fichero toca el camino del pedido (ventas, pedidos, despacho, cocina, stock); si alguno lo toca, para igual.'
-        required: false
-        type: choice
-        options: ['no', 'si']
-        default: 'no'
       autorizo:
-        description: 'Solo si la tanda lleva ficheros que PARAN a propósito: el nombre ENTERO de cada uno, sin carpeta, separados por espacios (p. ej. 20261005T0120_r02_lectores_de_la_resolucion.sql). Vacío = ninguno.'
+        description: 'Solo para los ficheros que el análisis marca AUTORIZO: el nombre ENTERO de cada uno, sin carpeta, separados por espacios. Vacío = ninguno. Un BLOQUEA no se abre aquí.'
         required: false
         type: string
         default: ''
@@ -95,7 +91,8 @@ permissions:
 jobs:
   aplicar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 15 minutos de la lectura de salud del pedido, más la vuelta atrás si toca.
+    timeout-minutes: 60
     env:
       PROD_REF: xzmpnchlguibclvxyynt
       STAGING_REF: oseymswjlzplqoxrfjzi
@@ -105,15 +102,23 @@ jobs:
       PGAPPNAME: gha-produccion-conta-${{ github.run_id }}
       PGOPTIONS: -c lock_timeout=5s
       INFORME: /tmp/informe.md
-      FUERA_PEDIDO: ${{ inputs.fuera_de_ventana }}
+      # La salud del camino del pedido: con SALUD_MINIMO pedidos o más en los
+      # SALUD_MINUTOS de antes, en los SALUD_MINUTOS de después tiene que haber
+      # algún cambio de estado. Medido sobre 30 días (W01): con 3 o más en 15
+      # minutos, la ventana siguiente se queda sin ninguno 1 vez de 532.
+      SALUD_MINUTOS: '15'
+      SALUD_MINIMO: '3'
       # EL CAMINO DEL PEDIDO, lista explícita (expresiones sobre el nombre con
-      # esquema). Tablas y funciones de ventas, pedidos, despacho, cocina y
-      # stock. Si un fichero nombra una de éstas, fuera de la ventana PARA.
-      # Ampliarla es cambiar esta línea, a la vista en el PR.
+      # esquema). Solo cuenta lo que EXISTE en producción: una tabla que crea la
+      # tanda no está en el camino. Ampliarla es cambiar esta línea, a la vista.
       CAMINO_TABLAS: '^public\.(sale|sale_.*|sales_.*|order_.*|delivery_.*|dispatch_.*|courier.*|brand_delivery_policy|kds_.*|kitchen_.*|pase_.*|stock_.*|recipe_.*|modifier_.*)$'
       CAMINO_FUNCIONES: '^public\.(_?sale_.*|tg_sale.*|compute_sale.*|_?consum.*|resolve_(dispatch|delivery).*|dispatch.*|delivery.*|courier.*|orders_feed.*|kds_.*|kitchen_.*|pase_.*|_?stock_.*|recipe_.*|modifier_.*|hubrise.*|lastapp.*)(\(|$)'
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Confirmación y modo
         env:
@@ -128,25 +133,9 @@ jobs:
           {
             echo "# Producción · modo **$MODO**"
             echo
-            echo "Rama \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA}\` · lanzado por **${GITHUB_ACTOR}** · $(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M') de Madrid"
+            echo "Rama \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA}\` · lanzado por **${GITHUB_ACTOR}** · $(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M') de Madrid (sin franja: W01)"
             echo
           } > "$INFORME"
-
-      - name: Ventana · entre las 00:30 y las 12:15 de Madrid (fuera, solo con «si» y sin tocar el pedido)
-        run: |
-          set -euo pipefail
-          hm=$(TZ=Europe/Madrid date +%H%M)
-          if [ "$((10#$hm))" -ge 30 ] && [ "$((10#$hm))" -lt 1215 ]; then
-            echo "Son las ${hm:0:2}:${hm:2:2} en Madrid: dentro de la ventana."
-            exit 0
-          fi
-          if [ "$FUERA_PEDIDO" != "si" ]; then
-            echo "::error::Son las ${hm:0:2}:${hm:2:2} en Madrid: fuera de la ventana 00:30–12:15. No se conecta. (Si ningún fichero toca el camino del pedido, se puede lanzar con «fuera_de_ventana: si».)"
-            exit 1
-          fi
-          echo "FUERA_DE_VENTANA=1" >> "$GITHUB_ENV"
-          echo "Son las ${hm:0:2}:${hm:2:2} en Madrid: FUERA de la ventana, con «fuera_de_ventana: si». Se comprueba que ningún fichero toque el camino del pedido antes de aplicar nada."
-          { echo "**Fuera de la ventana** (${hm:0:2}:${hm:2:2} de Madrid): lo pidió **${GITHUB_ACTOR}** con «fuera_de_ventana: si»."; echo; } >> "$INFORME"
 
       - name: Guarda 1 y 2 · el secreto apunta a PRODUCCIÓN y no a staging
         env:
@@ -186,25 +175,6 @@ jobs:
           [ "$mal" -eq 0 ] || exit 1
           echo "Tanda ($M), $n ficheros:"; nl -ba /tmp/tanda.txt
 
-      - name: Fuera de la ventana · 1, lo que NOMBRA cada fichero (sin conectar)
-        if: env.FUERA_DE_VENTANA == '1'
-        run: |
-          set -euo pipefail
-          node scripts/conta/produccion/analizar.mjs objetivos $(cat /tmp/tanda.txt) > /tmp/objetivos-camino.json
-          node -e '
-            const o = require("/tmp/objetivos-camino.json")
-            const t = new RegExp(process.env.CAMINO_TABLAS), f = new RegExp(process.env.CAMINO_FUNCIONES)
-            const malas = [...o.tablas.filter((x) => t.test(x)), ...o.funciones.filter((x) => f.test(x))]
-            require("fs").writeFileSync("/tmp/camino-nombrados.txt", malas.join("\n"))
-            console.log(`Nombra ${o.tablas.length} tablas y ${o.funciones.length} funciones; del camino del pedido: ${malas.length}.`)
-          '
-          if [ -s /tmp/camino-nombrados.txt ]; then
-            echo "::error::Fuera de la ventana y la tanda toca el camino del pedido: $(tr '\n' ' ' < /tmp/camino-nombrados.txt). No se aplica nada: a las 00:30."
-            { echo "## Fuera de la ventana: **PARA**"; echo; echo "La tanda nombra del camino del pedido:"; echo; sed 's/^/- `/; s/$/`/' /tmp/camino-nombrados.txt; echo; } >> "$INFORME"
-            cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-
       - name: Instalar psql 17
         run: |
           set -euo pipefail
@@ -226,39 +196,6 @@ jobs:
           fi
           echo "Al otro lado está Foodint: es producción."
 
-      - name: Fuera de la ventana · 2, lo que DISPARAN o llaman las tablas del pedido (se pregunta a la base)
-        if: env.FUERA_DE_VENTANA == '1'
-        env:
-          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
-        run: |
-          set -euo pipefail
-          # Las funciones de la tanda (con firma) que son disparador de una
-          # tabla del camino, o que nombra un cron. Solo lee.
-          funcs=$(node -e 'console.log(require("/tmp/objetivos-camino.json").funciones.join("|"))')
-          cat > /tmp/camino-base.sql <<'SQL'
-          with f(n) as (select x from unnest(string_to_array(:'funcs', '|')) x where x <> '')
-          select f.n || ' (disparador de ' || t.tgrelid::regclass::text || ')'
-            from f join pg_trigger t on not t.tgisinternal and t.tgfoid = to_regprocedure(f.n)
-           where ('public.' || (select relname from pg_class c where c.oid = t.tgrelid)) ~ :'camino'
-          union
-          select f.n || ' (cron ' || j.jobname || ')'
-            from f join cron.job j on j.command ~* ('\m' || split_part(split_part(f.n, '(', 1), '.', 2) || '\M');
-          SQL
-          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v funcs="$funcs" -v camino="$CAMINO_TABLAS" -f /tmp/camino-base.sql > /tmp/camino-base.txt
-          tablas=$(node -e 'console.log(require("/tmp/objetivos-camino.json").tablas.length)')
-          funciones=$(node -e 'console.log(require("/tmp/objetivos-camino.json").funciones.length)')
-          if [ -s /tmp/camino-base.txt ]; then
-            echo "::error::Fuera de la ventana y hay funciones de la tanda en el camino del pedido: $(tr '\n' ' ' < /tmp/camino-base.txt). No se aplica nada."
-            { echo "## Fuera de la ventana: **PARA**"; echo; echo "Funciones de la tanda que dispara o llama el camino del pedido:"; echo; sed 's/^/- /' /tmp/camino-base.txt; echo; } >> "$INFORME"
-            cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          { echo "## Fuera de la ventana: medida"; echo
-            echo "- Nombra $tablas tablas y $funciones funciones; **0** en la lista del camino del pedido (\`CAMINO_TABLAS\`, \`CAMINO_FUNCIONES\`)."
-            echo "- De sus funciones, **0** son disparador de una tabla del camino o las llama un cron (pg_trigger, cron.job)."
-            echo; } >> "$INFORME"
-          echo "Fuera de la ventana, pero nada toca el camino del pedido: sigue."
-
       - name: Modo real · hace falta un ensayo en verde de este mismo commit
         if: inputs.modo == 'real'
         env:
@@ -274,70 +211,111 @@ jobs:
           echo "Hay $n ensayo(s) en verde de este commit."
           echo "Ensayo en verde de este mismo commit: sí ($n)." >> "$INFORME"; echo >> "$INFORME"
 
-      - name: Análisis · qué crea o altera cada fichero (y si alguno PARA)
+      - name: Contexto (solo lee) e historial · lo ya aplicado no se reaplica
         if: inputs.modo != 'vuelta_atras'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          A=scripts/conta/produccion/analizar.mjs
+          node "$A" objetivos $(cat /tmp/tanda.txt) > /tmp/objetivos.json
+          node "$A" destruidos $(cat /tmp/tanda.txt) > /tmp/destruidos.json
+          node "$A" sql-contexto /tmp/objetivos.json /tmp/destruidos.json $(cat /tmp/tanda.txt) > /tmp/contexto.sql
+          PGOPTIONS="$PGOPTIONS -c default_transaction_read_only=on" "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f /tmp/contexto.sql > /tmp/contexto.json
+          node "$A" historial /tmp/contexto.json $(cat /tmp/tanda.txt) > /tmp/historial.json
+          node -e '
+            const h = require("/tmp/historial.json"), fs = require("fs")
+            const l = ["## Historial", ""]
+            for (const f of h.yaAplicados) l.push(`- \`${f}\`: **ya aplicado** con la misma huella → se quita de la tanda.`)
+            for (const d of h.distintos) l.push(`- \`${d.f}\`: **registrado con OTRA huella** (registrada ${d.registrada ?? "ninguna"}, ahora ${d.actual}) → PARA.`)
+            if (!h.yaAplicados.length && !h.distintos.length) l.push("Ningún fichero de la tanda está en el historial.")
+            fs.appendFileSync(process.env.INFORME, l.join("\n") + "\n\n")
+            fs.writeFileSync("/tmp/tanda.txt", h.pendientes.map((x) => x + "\n").join(""))
+            if (h.distintos.length) { console.log(`::error::${h.distintos.length} fichero(s) ya aplicados con otra huella: alguien ha cambiado un fichero que ya está en producción. No se aplica nada.`); process.exit(1) }
+            console.log(`Pendientes: ${h.pendientes.length}; ya aplicados: ${h.yaAplicados.length}.`)
+          ' || { cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          if [ ! -s /tmp/tanda.txt ]; then
+            echo "Todo lo de la tanda ya está aplicado con la misma huella: no hay nada que aplicar." | tee -a "$INFORME"
+            echo "NADA=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Análisis · qué hace cada fichero (sigue, AUTORIZO o BLOQUEA)
+        if: inputs.modo != 'vuelta_atras' && env.NADA != '1'
+        env:
           AUTORIZO: ${{ inputs.autorizo }}
         run: |
           set -euo pipefail
-          node scripts/conta/produccion/analizar.mjs objetivos $(cat /tmp/tanda.txt) > /tmp/objetivos.json
-          # Qué de todo eso existe YA en producción (solo lee).
-          node -e '
-            const o = require("/tmp/objetivos.json");
-            const v = (xs) => xs.length ? xs.map((x) => `(${JSON.stringify(x).replace(/"/g, "\x27")})`).join(",") : "(null)";
-            console.log(`select json_build_object(
-              \x27tablas\x27, (select coalesce(json_agg(n), \x27[]\x27) from (values ${v(o.tablas)}) t(n) where n is not null and to_regclass(n) is not null),
-              \x27funciones\x27, (select coalesce(json_agg(n), \x27[]\x27) from (values ${v(o.funciones)}) t(n) where n is not null and to_regprocedure(n) is not null))`)
-          ' > /tmp/existentes.sql
-          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f /tmp/existentes.sql > /tmp/existentes.json
-          echo "Existentes en producción:"; cat /tmp/existentes.json
+          A=scripts/conta/produccion/analizar.mjs
+          # El front del commit que se aplica: lo que se borra no puede leerlo nadie.
+          node "$A" front WORKTREE /tmp/destruidos.json > /tmp/usos-front.json
           set +e
-          node scripts/conta/produccion/analizar.mjs decidir /tmp/existentes.json $(cat /tmp/tanda.txt) > /tmp/analisis.md
-          para=$?
+          node "$A" informe /tmp/contexto.json /tmp/usos-front.json $(cat /tmp/tanda.txt) > /tmp/analisis.md
           set -e
           grep -v '^VAT_RATE_FOR_EN:' /tmp/analisis.md >> "$INFORME"
-          sed -n 's/^VAT_RATE_FOR_EN: //p' /tmp/analisis.md > /tmp/vat_rate_for_en.txt
-          # Los que PARAN, sacados del propio análisis (una línea «### `fichero` — **PARA**» por cada uno).
-          sed -n 's/^### `\([^`]*\)` — \*\*PARA\*\*$/\1/p' /tmp/analisis.md > /tmp/paran.txt
+          sed -n 's/^VAT_RATE_FOR_EN: //p' /tmp/analisis.md | sed 's/(ninguno)//' > /tmp/vat_rate_for_en.txt
+          sed -n 's/^### `\([^`]*\)` — \*\*AUTORIZO\*\*$/\1/p' /tmp/analisis.md > /tmp/autorizables.txt
+          sed -n 's/^### `\([^`]*\)` — \*\*BLOQUEA\*\*$/\1/p' /tmp/analisis.md > /tmp/bloquean.txt
           # Lo autorizado: nombres enteros, sin carpeta, uno por línea.
           set -f; printf '%s\n' $AUTORIZO | sed '/^$/d' > /tmp/autorizo.txt; set +f
           mal=0
+          while IFS= read -r f; do echo "::error::BLOQUEA (no lo abre «autorizo»; se arregla el fichero): $(basename -- "$f")"; mal=1; done < /tmp/bloquean.txt
           while IFS= read -r n; do
             if [ "$n" != "$(basename -- "$n")" ]; then echo "::error::«$n»: va el nombre sin carpeta."; mal=1; continue; fi
-            if ! grep -qxF "supabase/migrations/$n" /tmp/tanda.txt; then echo "::error::Autorizas «$n», pero no está en la tanda."; mal=1; continue; fi
-            if ! grep -qxF "supabase/migrations/$n" /tmp/paran.txt; then echo "::error::Autorizas «$n», pero no PARA: no hace falta autorizarlo. Quítalo."; mal=1; fi
+            if ! grep -qxF "supabase/migrations/$n" /tmp/tanda.txt; then echo "::error::Autorizas «$n», pero no está en la tanda (o ya estaba aplicado)."; mal=1; continue; fi
+            if ! grep -qxF "supabase/migrations/$n" /tmp/autorizables.txt; then echo "::error::Autorizas «$n», pero no lo necesita: quítalo."; mal=1; fi
           done < /tmp/autorizo.txt
-          falta=0
           while IFS= read -r f; do
-            grep -qxF "$(basename -- "$f")" /tmp/autorizo.txt || { echo "::error::PARA y no está autorizado: $(basename -- "$f")"; falta=1; }
-          done < /tmp/paran.txt
-          if [ "$para" -ne 0 ] && [ ! -s /tmp/paran.txt ]; then
-            echo "::error::El análisis terminó mal sin decir qué fichero para. No se aplica nada."; mal=1
-          fi
-          if [ "$mal" -ne 0 ] || [ "$falta" -ne 0 ]; then
-            echo "::error::El análisis PARA: algún fichero borra, renombra o cambia datos de algo que ya existe, y no está autorizado en «autorizo» (o lo autorizado no cuadra). No se aplica nada. Ver el informe."
+            grep -qxF "$(basename -- "$f")" /tmp/autorizo.txt || { echo "::error::Necesita «autorizo» y no está escrito: $(basename -- "$f")"; mal=1; }
+          done < /tmp/autorizables.txt
+          if [ "$mal" -ne 0 ]; then
+            echo "::error::El análisis PARA. No se aplica nada. Ver el informe."
             cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          if [ -s /tmp/paran.txt ]; then
+          if [ -s /tmp/autorizables.txt ]; then
             { echo "## Autorizados a mano"; echo
-              echo "Estos ficheros PARAN y se aplican porque **${GITHUB_ACTOR}** los nombró enteros en «autorizo», desde la rama \`${GITHUB_REF_NAME}\`:"; echo
-              while IFS= read -r f; do echo "- \`$f\` (md5 \`$(md5sum "$f" | cut -d' ' -f1)\`)"; done < /tmp/paran.txt; echo; } >> "$INFORME"
-            echo "Autorizados a mano: $(tr '\n' ' ' < /tmp/paran.txt)"
+              echo "Estos ficheros necesitaban «autorizo» y se aplican porque **${GITHUB_ACTOR}** los nombró enteros, desde la rama \`${GITHUB_REF_NAME}\`:"; echo
+              while IFS= read -r f; do echo "- \`$f\` (md5 \`$(md5sum "$f" | cut -d' ' -f1)\`)"; done < /tmp/autorizables.txt; echo; } >> "$INFORME"
           fi
 
-      - name: Antes · D1 y recuento de filas de serie
+      - name: Antes · D1, salud del pedido y agentes
+        if: env.NADA != '1'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+          RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
           set -euo pipefail
           "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/d1.sql > /tmp/d1-antes.csv
-          echo "D1 antes: $(wc -l < /tmp/d1-antes.csv) pares categoría × día."
-          { echo "## Antes"; echo; echo "D1: $(wc -l < /tmp/d1-antes.csv) pares categoría × día leídos de \`vat_rate_for\`."; echo; } >> "$INFORME"
+          { echo "## Antes"; echo; echo "D1: $(wc -l < /tmp/d1-antes.csv) pares categoría × día leídos de \`vat_rate_for\`."; } >> "$INFORME"
+          if [ "$MODO" = "real" ]; then
+            t0=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select now()")
+            echo "T0=$t0" >> "$GITHUB_ENV"
+            "$PSQL" "$DB_URL" -X -A -t -F' ' -v ON_ERROR_STOP=1 -v cuenta="$FOODINT" -v t="$t0" -v minutos="$SALUD_MINUTOS" -f scripts/conta/produccion/salud-pedido.sql > /tmp/salud-antes.txt
+            entrados=$(cut -d' ' -f1 /tmp/salud-antes.txt)
+            echo "ENTRADOS_ANTES=$entrados" >> "$GITHUB_ENV"
+            echo "- Pedidos de Foodint en los $SALUD_MINUTOS minutos de antes: **$entrados**$([ "$entrados" -ge "$SALUD_MINIMO" ] && echo ' (hay servicio: después se mide si siguen avanzando)' || echo " (menos de $SALUD_MINIMO: sin servicio, la salud no se mide)")." >> "$INFORME"
+            # Los agentes de solo lectura, con conta_lectura.
+            if [ -z "${RO_DB_URL:-}" ]; then echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL (los agentes de después)."; exit 1; fi
+            python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["RO_DB_URL"])
+          for parte in (os.environ["RO_DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          if (u.username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura.")
+              raise SystemExit(1)
+          if os.environ["PROD_REF"] not in os.environ["RO_DB_URL"] or os.environ["STAGING_REF"] in os.environ["RO_DB_URL"]:
+              print("::error::PROD_CONTA_RO_DB_URL no es la de producción.")
+              raise SystemExit(1)
+          PY
+            bash scripts/conta/produccion/agentes.sh antes
+            echo "- Agentes antes: $(cat /tmp/agentes-antes.txt) (0 = en verde)." >> "$INFORME"
+          fi
+          echo >> "$INFORME"
 
-      - name: ENSAYO · todo en una transacción, y ROLLBACK
-        if: inputs.modo == 'ensayo'
+      - name: ENSAYO · todo en una transacción, con el registro en el historial, y ROLLBACK
+        if: inputs.modo == 'ensayo' && env.NADA != '1'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -348,8 +326,10 @@ jobs:
             i=0
             while IFS= read -r f; do
               i=$((i+1))
+              node scripts/conta/produccion/analizar.mjs registro "$f" "ensayo ${GITHUB_RUN_ID} · ${GITHUB_ACTOR}" > "/tmp/registro-$i.sql"
               echo "\\echo '>>> [$i] $f'"
               echo "\\i $f"
+              echo "\\i /tmp/registro-$i.sql"
             done < /tmp/tanda.txt
             echo "\\echo '>>> D1 y recuento, dentro de la transacción'"
             echo '\pset format csv'
@@ -378,31 +358,65 @@ jobs:
           node scripts/conta/produccion/d1-comparar.mjs /tmp/d1-antes.csv /tmp/d1-despues.csv > /tmp/d1.txt
           d1=$?
           set -e
-          { echo "## Ensayo: todo entra"; echo; echo "Los $(wc -l < /tmp/tanda.txt) ficheros, en una transacción, y **ROLLBACK**: en producción no ha quedado nada."; echo
+          { echo "## Ensayo: todo entra"; echo; echo "Los $(wc -l < /tmp/tanda.txt) ficheros, con su registro en el historial, en una transacción, y **ROLLBACK**: en producción no ha quedado nada."; echo
             echo "**D1 (antes ↔ con la tanda):** $(head -1 /tmp/d1.txt)"; tail -n +2 /tmp/d1.txt; echo
             echo "**Filas de serie con la tanda:**"; echo; echo '| Tabla | Filas |'; echo '|---|---|'
             sed -E 's/^([^,]*),(.*)$/| \1 | \2 |/' /tmp/recuento-despues.csv; echo; } >> "$INFORME"
           if [ "$d1" -ne 0 ]; then echo "::error::D1 da diferencias no decididas."; cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
 
-      - name: REAL · fichero a fichero, para al primer fallo
-        if: inputs.modo == 'real' || inputs.modo == 'vuelta_atras'
+      - name: ENSAYO · la vuelta atrás automática funcionaría (tanda y .down.sql al revés, y ROLLBACK)
+        if: inputs.modo == 'ensayo' && env.NADA != '1'
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          sin=""
+          {
+            echo '\set ON_ERROR_STOP 1'
+            echo 'begin;'
+            while IFS= read -r f; do echo "\\i $f"; done < /tmp/tanda.txt
+            tac /tmp/tanda.txt | while IFS= read -r f; do
+              d="supabase/vuelta-atras/$(basename "$f" .sql).down.sql"
+              if [ -f "$d" ]; then echo "\\echo '>>> deshace $f'"; echo "\\i $d"; else echo "\\echo '>>> SIN VUELTA ATRÁS: $f'"; fi
+            done
+            echo 'rollback;'
+          } > /tmp/ensayo-atras.sql
+          while IFS= read -r f; do [ -f "supabase/vuelta-atras/$(basename "$f" .sql).down.sql" ] || sin="$sin \`$f\`"; done < /tmp/tanda.txt
+          set +e
+          "$PSQL" "$DB_URL" -X -f /tmp/ensayo-atras.sql > /tmp/ensayo-atras.log 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ] && [ -z "$sin" ]; then
+            { echo "## Ensayo de la vuelta atrás: **funcionaría**"; echo; echo "La tanda y sus .down.sql en orden inverso, en una transacción, y ROLLBACK."; echo; } >> "$INFORME"
+          else
+            { echo "## Ensayo de la vuelta atrás: **NO estaría completa**"; echo
+              [ -n "$sin" ] && echo "- Sin \`.down.sql\`:$sin. Si la comprobación de después falla, eso y lo anterior quedarían aplicados."
+              [ "$rc" -ne 0 ] && { echo "- Falla en \`$(grep '^>>>' /tmp/ensayo-atras.log | tail -1)\`:"; echo; echo '```'; grep -E 'ERROR|DETAIL' /tmp/ensayo-atras.log | head -10; echo '```'; }
+              echo; } >> "$INFORME"
+            echo "::warning::La vuelta atrás automática no estaría completa: ver el informe."
+          fi
+
+      - name: REAL · fichero a fichero, cada uno con su registro, para al primer fallo
+        id: real
+        if: (inputs.modo == 'real' || inputs.modo == 'vuelta_atras') && env.NADA != '1'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -uo pipefail
           { echo "## Aplicación"; echo; echo '| # | Fichero | md5 | Resultado |'; echo '|---|---|---|---|'; } >> "$INFORME"
           vrf=" $(cat /tmp/vat_rate_for_en.txt 2>/dev/null || true) "
+          : > /tmp/aplicados.txt
           i=0; fallo=0
           while IFS= read -r f; do
             i=$((i+1)); md5=$(md5sum "$f" | cut -d' ' -f1)
             if [ "$fallo" -ne 0 ]; then echo "| $i | \`$f\` | \`$md5\` | no aplicado (paró antes) |" >> "$INFORME"; continue; fi
-            hm=$(TZ=Europe/Madrid date +%H%M)
-            if [ "${FUERA_DE_VENTANA:-0}" != "1" ] && { [ "$((10#$hm))" -lt 30 ] || [ "$((10#$hm))" -ge 1215 ]; }; then
-              echo "| $i | \`$f\` | \`$md5\` | **no aplicado: las ${hm:0:2}:${hm:2:2}, fuera de la ventana** |" >> "$INFORME"; fallo=1; continue
-            fi
+            # El historial va en la MISMA transacción que el fichero: o los dos o ninguno.
+            if [ "$MODO" = "vuelta_atras" ]; then node scripts/conta/produccion/analizar.mjs baja "$f" > /tmp/registro.sql
+            else node scripts/conta/produccion/analizar.mjs registro "$f" "real ${GITHUB_RUN_ID} · ${GITHUB_ACTOR}" > /tmp/registro.sql; fi
             echo "::group::[$i] $f (md5 $md5)"
-            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" 2>&1; then
+            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" -f /tmp/registro.sql 2>&1; then
               echo "::endgroup::"
+              echo "$f" >> /tmp/aplicados.txt
               echo "| $i | \`$f\` | \`$md5\` | **aplicado** $(TZ=Europe/Madrid date +%H:%M:%S) |" >> "$INFORME"
             else
               echo "::endgroup::"
@@ -421,10 +435,63 @@ jobs:
             esac
           done < /tmp/tanda.txt
           echo >> "$INFORME"
+          echo "T1=$("$PSQL" "$DB_URL" -X -A -t -c 'select now()')" >> "$GITHUB_ENV"
           exit "$fallo"
 
-      - name: Después · D1 y recuento de filas de serie
-        if: (inputs.modo == 'real' || inputs.modo == 'vuelta_atras') && always()
+      - name: Después · comprobación (D1, serie, agentes y salud del pedido); si falla, vuelta atrás automática
+        # Solo si el REAL llegó a correr (aunque fallara a medias): no tras un análisis que para.
+        if: always() && inputs.modo == 'real' && steps.real.outcome != 'skipped' && steps.real.outcome != ''
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+          RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -uo pipefail
+          [ -s /tmp/aplicados.txt ] || { echo "No se aplicó nada: no hay nada que comprobar."; exit 1; }
+          mal=""
+          # 1. D1 y recuento de filas de serie.
+          "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/d1.sql > /tmp/d1-despues.csv
+          node scripts/conta/produccion/d1-comparar.mjs /tmp/d1-antes.csv /tmp/d1-despues.csv > /tmp/d1.txt || mal="$mal D1"
+          { echo "## Después"; echo; echo "**D1 (antes ↔ después):** $(head -1 /tmp/d1.txt)"; tail -n +2 /tmp/d1.txt; echo; } >> "$INFORME"
+          if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/recuento-serie.sql > /tmp/recuento.csv 2>/tmp/recuento.err; then
+            { echo "**Filas de serie:**"; echo; echo '| Tabla | Filas |'; echo '|---|---|'; sed -E 's/^([^,]*),(.*)$/| \1 | \2 |/' /tmp/recuento.csv; echo; } >> "$INFORME"
+          else
+            mal="$mal recuento"; { echo "**Filas de serie:** no se han podido contar ($(head -1 /tmp/recuento.err))."; echo; } >> "$INFORME"
+          fi
+          # 2. Los agentes: cuenta lo que se pone en rojo con la tanda.
+          if bash scripts/conta/produccion/agentes.sh despues; then
+            read -r da la < <(sed -E 's/datos=([01]) libro=([01])/\1 \2/' /tmp/agentes-antes.txt)
+            read -r dd ld < <(sed -E 's/datos=([01]) libro=([01])/\1 \2/' /tmp/agentes-despues.txt)
+            [ "$dd" -gt "$da" ] && mal="$mal agente-datos-maestros"
+            [ "$ld" -gt "$la" ] && mal="$mal agente-libro"
+            echo "- Agentes: antes $(cat /tmp/agentes-antes.txt), después $(cat /tmp/agentes-despues.txt) (0 = en verde)." >> "$INFORME"
+          else
+            mal="$mal agentes-no-corren"; echo "- Los agentes no han podido correr después." >> "$INFORME"
+          fi
+          # 3. La salud del camino del pedido.
+          if [ "${ENTRADOS_ANTES:-0}" -ge "$SALUD_MINIMO" ]; then
+            hasta=$(( $(date -u -d "$T1" +%s) + SALUD_MINUTOS * 60 ))
+            while [ "$(date -u +%s)" -lt "$hasta" ]; do sleep 30; done
+            "$PSQL" "$DB_URL" -X -A -t -F' ' -v ON_ERROR_STOP=1 -v cuenta="$FOODINT" -v t="$T1" -v minutos="$SALUD_MINUTOS" -f scripts/conta/produccion/salud-pedido.sql > /tmp/salud-despues.txt
+            movidos=$(cut -d' ' -f2 /tmp/salud-despues.txt)
+            echo "- Salud del pedido: $ENTRADOS_ANTES pedidos en los $SALUD_MINUTOS minutos de antes; **$movidos** cambios de estado en los $SALUD_MINUTOS de después." >> "$INFORME"
+            [ "$movidos" -ge 1 ] || mal="$mal salud-del-pedido"
+          else
+            echo "- Salud del pedido: sin servicio (${ENTRADOS_ANTES:-0} pedidos en los $SALUD_MINUTOS minutos de antes): no se mide." >> "$INFORME"
+          fi
+          echo >> "$INFORME"
+          if [ -z "$mal" ]; then echo "**Comprobación en verde.**" >> "$INFORME"; exit 0; fi
+          # 4. Falla algo: vuelta atrás de lo que ha aplicado ESTE run, en orden inverso.
+          { echo "**Comprobación en ROJO:**$mal. Se deshace lo aplicado."; echo; } >> "$INFORME"
+          echo "::error::La comprobación de después falla:$mal. Vuelta atrás automática."
+          if bash scripts/conta/produccion/deshacer.sh /tmp/aplicados.txt; then
+            echo "::error::Vuelta atrás hecha: producción está como antes de la tanda. Ver el informe."
+          else
+            echo "::error::LA VUELTA ATRÁS NO SE HA COMPLETADO: hay cosas aplicadas a medias. Ver la tabla «Vuelta atrás automática» del informe."
+          fi
+          exit 1
+
+      - name: Después de la vuelta atrás · D1 y recuento
+        if: always() && inputs.modo == 'vuelta_atras' && steps.real.outcome != 'skipped' && steps.real.outcome != ''
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -432,11 +499,6 @@ jobs:
           "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/d1.sql > /tmp/d1-despues.csv
           node scripts/conta/produccion/d1-comparar.mjs /tmp/d1-antes.csv /tmp/d1-despues.csv > /tmp/d1.txt; d1=$?
           { echo "## Después"; echo; echo "**D1 (antes ↔ después):** $(head -1 /tmp/d1.txt)"; tail -n +2 /tmp/d1.txt; echo; } >> "$INFORME"
-          if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/recuento-serie.sql > /tmp/recuento.csv 2>/tmp/recuento.err; then
-            { echo "**Filas de serie:**"; echo; echo '| Tabla | Filas |'; echo '|---|---|'; sed -E 's/^([^,]*),(.*)$/| \1 | \2 |/' /tmp/recuento.csv; echo; } >> "$INFORME"
-          else
-            { echo "**Filas de serie:** no se han podido contar ($(head -1 /tmp/recuento.err))."; echo; } >> "$INFORME"
-          fi
           exit "$d1"
 
       - name: Informe
