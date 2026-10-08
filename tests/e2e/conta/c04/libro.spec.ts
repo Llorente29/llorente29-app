@@ -78,7 +78,22 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   // Respuesta 3 · 2: filas bajas (unos 70–80 px), el concepto entero en dos líneas.
   for (const f of await page.locator('.cxd-fila:not(.cxd-fila-cabeza)').all()) {
     const alto = (await f.boundingBox())!.height
-    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(lado(page) === 'ordenador' ? 90 : 110)
+    // Respuesta 4: en el móvil la línea de apoyo puede bajar una más (los chips saltan en vez de cortarse).
+    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(lado(page) === 'ordenador' ? 90 : 130)
+  }
+  // Respuesta 4 · 5: ningún chip cortado («Brasa |» en el móvil) y «de dónde
+  // sale» sin «…» si cabe en dos líneas (en el ordenador se cortaba en una).
+  for (const apoyo of await page.locator('.cxd-fila .cxd-concepto-apoyo').all()) {
+    const m = await apoyo.evaluate((el) => {
+      const caja = el.getBoundingClientRect()
+      const chips = [...el.querySelectorAll('.cx-chip')].map((c) => ({
+        texto: c.textContent ?? '', cortado: c.scrollWidth > c.clientWidth + 0.5 || c.getBoundingClientRect().right > caja.right + 0.5,
+      }))
+      const s = el.querySelector('.cxd-sale') as HTMLElement | null
+      return { chips, sale: s ? { texto: s.textContent ?? '', cortada: s.scrollHeight > s.clientHeight + 1, lineas: Math.round(s.clientHeight / 16) } : null }
+    })
+    for (const c of m.chips) expect(c.cortado, `chip «${c.texto}» cortado`).toBe(false)
+    if (m.sale) expect(m.sale.cortada, `«${m.sale.texto}» cortado en ${m.sale.lineas} línea(s)`).toBe(false)
   }
   // Lo que he hecho yo, con Deshacer en lo que validó Folvy.
   const ia = page.getByRole('region', { name: 'Lo que he hecho yo' })

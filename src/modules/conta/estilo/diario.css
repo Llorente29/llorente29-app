@@ -38,9 +38,14 @@
 .cxd-fecha, .cxd-num { font-family: var(--cx-letra-cifras); color: var(--cx-apoyo); font-size: 14px; }
 .cxd-concepto { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .cxd-concepto-titulo { font-size: 15px; line-height: 20px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
-.cxd-concepto-apoyo { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; font-size: 12px; color: var(--cx-apoyo); min-width: 0; overflow: hidden; }
-.cxd-concepto-apoyo .cx-chip { padding: 1px 8px; font-size: 12px; flex: none; }
-.cxd-sale { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Respuesta 4: la línea de apoyo SALTA en vez de recortar. Con dos chips en el
+   móvil el segundo se cortaba («Brasa |»); en el ordenador «de dónde sale» se
+   cortaba con «…» cabiendo en una segunda línea. Ahora los chips bajan enteros
+   y «de dónde sale» llega hasta dos líneas; solo lo que pasa de dos lleva «…»
+   (el texto entero, en el title). */
+.cxd-concepto-apoyo { display: flex; gap: 4px 6px; align-items: center; flex-wrap: wrap; font-size: 12px; line-height: 16px; color: var(--cx-apoyo); min-width: 0; }
+.cxd-concepto-apoyo .cx-chip { padding: 1px 8px; font-size: 12px; flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxd-sale { flex: 1 1 14ch; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .cxd-num { white-space: nowrap; }
 .cxd-num-movil { display: block; font-size: 12px; margin-top: 2px; white-space: nowrap; }
 .cxd-importe { font-family: var(--cx-letra-cifras); text-align: right; font-weight: 600; white-space: nowrap; }
