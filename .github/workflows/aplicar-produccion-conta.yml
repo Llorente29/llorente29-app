@@ -38,7 +38,10 @@ name: Aplicar SQL en PRODUCCIÓN (contabilidad)
 #     primer fallo. D1 antes y después del fichero que reemplaza vat_rate_for.
 #   · DESPUÉS DEL REAL, COMPROBACIÓN: D1, recuento de filas de serie, los
 #     agentes de solo lectura (datos maestros y libro diario, antes y después:
-#     cuenta lo que se pone en rojo con la tanda) y la salud del camino del
+#     cuenta lo que se pone en rojo con la tanda, solo entre los medibles en los
+#     dos lados; el «antes» es la foto de partida y un agente que aún no puede
+#     leer queda «no-medible» sin parar nada; el «después» tiene que poder
+#     medirse entero) y la salud del camino del
 #     pedido (con 3 o más pedidos en los 15 minutos de antes, en los 15 de
 #     después tiene que haber algún cambio de estado). Si algo falla, aplica los
 #     .down.sql de lo aplicado en orden inverso (deshacer.sh) y avisa; si la
@@ -316,8 +319,12 @@ jobs:
               print("::error::PROD_CONTA_RO_DB_URL no es la de producción.")
               raise SystemExit(1)
           PY
+            # La foto de partida, NO una guarda (C04 R4, 08/10): un agente que no puede
+            # leer antes de la tanda (la tanda le da el permiso) queda «no-medible» con
+            # su motivo y se sigue. D1 y la salud del pedido, arriba, sí son guardas.
             bash scripts/conta/produccion/agentes.sh antes
-            echo "- Agentes antes: $(cat /tmp/agentes-antes.txt) (0 = en verde)." >> "$INFORME"
+            { echo "- Agentes antes (foto de partida; «no-medible» no para):"
+              awk -F'\t' '{printf "  - %s: %s%s\n", $1, $2, ($3 != "" ? " — " $3 : "")}' /tmp/agentes-antes.txt; } >> "$INFORME"
           fi
           echo >> "$INFORME"
 
@@ -464,16 +471,12 @@ jobs:
           else
             mal="$mal recuento"; { echo "**Filas de serie:** no se han podido contar ($(head -1 /tmp/recuento.err))."; echo; } >> "$INFORME"
           fi
-          # 2. Los agentes: cuenta lo que se pone en rojo con la tanda.
-          if bash scripts/conta/produccion/agentes.sh despues; then
-            read -r da la < <(sed -E 's/datos=([01]) libro=([01])/\1 \2/' /tmp/agentes-antes.txt)
-            read -r dd ld < <(sed -E 's/datos=([01]) libro=([01])/\1 \2/' /tmp/agentes-despues.txt)
-            [ "$dd" -gt "$da" ] && mal="$mal agente-datos-maestros"
-            [ "$ld" -gt "$la" ] && mal="$mal agente-libro"
-            echo "- Agentes: antes $(cat /tmp/agentes-antes.txt), después $(cat /tmp/agentes-despues.txt) (0 = en verde)." >> "$INFORME"
-          else
-            mal="$mal agentes-no-corren"; echo "- Los agentes no han podido correr después." >> "$INFORME"
-          fi
+          # 2. Los agentes. El «después» es obligatorio: todos tienen que poder medirse
+          # (agentes.sh sale con 2 si no). Lo que cuenta es lo que se pone en rojo con
+          # la tanda, y solo entre agentes medibles en los dos lados (agentes-comparar.mjs).
+          bash scripts/conta/produccion/agentes.sh despues || mal="$mal agentes-no-corren-despues"
+          node scripts/conta/produccion/agentes-comparar.mjs /tmp/agentes-antes.txt /tmp/agentes-despues.txt > /tmp/agentes.md || mal="$mal agentes"
+          cat /tmp/agentes.md >> "$INFORME"
           # 3. La salud del camino del pedido.
           if [ "${CUENTAS_CON_SERVICIO:-0}" -gt 0 ]; then
             hasta=$(( $(date -u -d "$T1" +%s) + SALUD_MINUTOS * 60 ))
