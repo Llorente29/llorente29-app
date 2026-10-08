@@ -17,6 +17,12 @@
 --   6. El administrador de B no fusiona fichas de A (42501).
 --   7. Vuelta atrás de la migración: sale limpia y se vuelve a aplicar.
 -- ============================================================================
+-- Una sola instantánea para toda la prueba (REPEATABLE READ): la e2e de la
+-- cuenta A puede estar creando y borrando proveedores a la vez, y en READ
+-- COMMITTED la foto de después los veía (ejecución 85: «antes ≠ después en
+-- supplier» sin que la migración tocara supplier). Tiene que ser lo primero de
+-- la transacción que abre el workflow (-1).
+set transaction isolation level repeatable read;
 begin;
 
 \echo '>>> 1. Foto de antes'

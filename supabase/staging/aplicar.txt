@@ -1,4 +1,4 @@
-# Tercera vuelta: la 83 fallaba por un literal sin ::uuid y la 84 por el alias «r» de party_merge_do, que chocaba con la variable del bucle; corregidos los dos.
+# Cuarta vuelta: la 85 vio en la foto los proveedores que creaba a la vez la e2e de la cuenta A; la prueba va ahora en una sola instantánea (REPEATABLE READ).
 # C04 R4 (conta/c04-retoques). Primero la prueba de la fusión de terceros
 # (todo en una transacción que acaba en ROLLBACK: antes = después, fusionar,
 # deshacer, para con lo validado, B no puede, vuelta atrás de la migración) y,
