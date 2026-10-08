@@ -59,8 +59,8 @@ create temp table fichas on commit drop as
 select (select party_id from public.party_role where supplier_id = 'c04f0000-0000-4000-8000-0000000000d1') queda,
        (select party_id from public.party_role where supplier_id = 'c04f0000-0000-4000-8000-0000000000d2') se_va;
 insert into public.party_role (account_id, party_id, role)
-select 'c01a0000-0000-4000-8000-00000000000a', queda, 'customer' from fichas
-union all select 'c01a0000-0000-4000-8000-00000000000a', se_va, 'brand_partner' from fichas;
+select 'c01a0000-0000-4000-8000-00000000000a'::uuid, queda, 'customer' from fichas
+union all select 'c01a0000-0000-4000-8000-00000000000a'::uuid, se_va, 'brand_partner' from fichas;
 update public.party set tax_id = 'B99000017' where id = (select se_va from fichas);
 create temp table antes_fichas on commit drop as
 select p.id, to_jsonb(p) - 'updated_at' fila, (select jsonb_agg(r.role order by r.role) from public.party_role r where r.party_id = p.id) papeles

@@ -1,3 +1,4 @@
+# Segunda vuelta (ejecución 83): la prueba fallaba por un literal de cuenta sin ::uuid; corregido.
 # C04 R4 (conta/c04-retoques). Primero la prueba de la fusión de terceros
 # (todo en una transacción que acaba en ROLLBACK: antes = después, fusionar,
 # deshacer, para con lo validado, B no puede, vuelta atrás de la migración) y,
