@@ -5,5 +5,7 @@
 #      mapeo (cambiar, dejar fuera, estándar, ajeno no), modelo elegido, y el
 #      cierre entero (preparar, cerrar, rechazos, reabrir). ROLLBACK.
 # Las 0100, 0110 y 0120 ya están aplicadas (run 37846773199); la 0130, en el
-# run 37850982069 (la prueba de aquel run falló por la prueba: faltaba «porque»).
+# run 37850982069. La prueba falló dos veces por la propia prueba (faltaba
+# «porque»; la 129 con el signo cambiado) y destapó un fallo de la pantalla de
+# cierre (regularizar dos veces tras reabrir), arreglado en c7a790a.
 supabase/staging/sql/20261014_c05_prueba_libros.sql
