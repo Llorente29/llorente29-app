@@ -78,8 +78,11 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   // Respuesta 3 · 2: filas bajas (unos 70–80 px), el concepto entero en dos líneas.
   for (const f of await page.locator('.cxd-fila:not(.cxd-fila-cabeza)').all()) {
     const alto = (await f.boundingBox())!.height
-    // Respuesta 4: en el móvil la línea de apoyo puede bajar una más (los chips saltan en vez de cortarse).
-    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(lado(page) === 'ordenador' ? 90 : 130)
+    // Respuesta 4 prevalece sobre la altura de la 3 (70–80 px): los chips y «de
+    // dónde sale» saltan de línea en vez de cortarse, y en la columna real del
+    // concepto (~290 px en 1440, medido con el CSS del libro) una fila con dos
+    // chips largos llega a ~140 px. El tope solo caza un desbordamiento.
+    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(150)
   }
   // Respuesta 4 · 5: ningún chip cortado («Brasa |» en el móvil) y «de dónde
   // sale» sin «…» si cabe en dos líneas (en el ordenador se cortaba en una).
@@ -248,4 +251,18 @@ test('B · sin plataformas ni ventas, septiembre cerrado y un borrador que no se
   await expect(page.getByText(/septiembre está cerrado/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Validar asiento' })).toBeDisabled()
   await capturar(page, 'mes-cerrado-b')
+})
+
+test('A · Ajustes › Ejercicio: desde cuándo asienta Folvy (el corte con el programa anterior)', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  await page.goto('/conta/ajustes/ejercicio')
+  // Respuesta 4 · 1: el corte se ve siempre; se cambia mientras no haya asientos traídos.
+  const corte = page.getByTestId('corte-actual')
+  await expect(corte).toBeVisible()
+  await expect(corte).toHaveText(/^(Hasta el .+ lo trae .+; desde el .+ asienta Folvy\.|Sin fecha de corte: Folvy asienta el ejercicio entero\.)$/)
+  const fijo = await page.getByTestId('corte-fijo').count()
+  if (fijo) await expect(page.getByTestId('corte-fijo')).toContainText('Para moverla, primero se deshace lo traído')
+  else await expect(page.getByRole('button', { name: 'Cambiar' }).last()).toBeVisible()
+  await capturar(page, 'ajustes-corte')
 })

@@ -149,7 +149,10 @@ test('una 430 con enlace de pago y sin papel sale en la revisión y, al confirma
     await expect(revision.getByText('5 cuentas de clientes traídas de Diez por revisar')).toBeVisible()
     await expect(socio.getByRole('checkbox', { name: /Archivarlo/ }), 'la casilla sigue marcada después de recargar').toBeChecked()
     await socio.getByRole('button', { name: 'Confirmar 43000005' }).click()
-    await expect(page.getByText(/pasa a ser socio de marca y cliente, con 43000005 como su cuenta de cliente; queda archivado \(histórico\)\./)).toBeVisible()
+    // Se espera a que esté hecha (baja el contador), no al texto: «Al confirmar: …» ya lo decía antes de pulsar.
+    await expect(revision.getByText('4 cuentas de clientes traídas de Diez por revisar')).toBeVisible()
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    await expect(page.getByText(/^.+ pasa a ser socio de marca y cliente, con 43000005 como su cuenta de cliente; queda archivado \(histórico\)\.$/)).toBeVisible()
     const enlace5 = await rest<{ entity_id: string }[]>(s, 'GET',
       `company_account_link?select=entity_id,company_account!inner(code)&company_id=eq.${id}&entity=eq.customer&role=eq.principal&company_account.code=eq.43000005`)
     expect(enlace5.datos, 'la 43000005 es la cuenta de cliente del socio').toHaveLength(1)
