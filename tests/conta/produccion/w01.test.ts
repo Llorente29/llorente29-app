@@ -264,7 +264,9 @@ describe('W01 · el workflow de producción: sin franja, y las guardas de siempr
   })
 })
 
-describe('W01 · front compatible en los dos sentidos (antes-de-subir)', () => {
+// Cada caso lanza `node analizar.mjs front-compatible`, que lee el front de dos commits con git:
+// tarda ~0,9 s solo, pero con toda la batería en paralelo pasó de los 5 s por defecto (08/10).
+describe('W01 · front compatible en los dos sentidos (antes-de-subir)', { timeout: 30_000 }, () => {
   const correr = (m: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analizar.mjs', 'front-compatible', m], { encoding: 'utf8' }) } }
     catch (e) { const x = e as { status: number; stdout: string }; return { rc: x.status, out: x.stdout } }

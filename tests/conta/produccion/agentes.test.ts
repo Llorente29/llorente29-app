@@ -127,3 +127,22 @@ describe('el workflow: los agentes del «antes» no son guarda; D1 y la salud de
     expect(despues).not.toMatch(/datos=\(\[01\]\)/)
   })
 })
+
+// C04 R5 (Julio, 08/10): la guarda 4 del nocturno admite BYPASSRLS y sigue exigiendo
+// que el rol no escriba. Lo que hace la guarda contra una base lo prueba
+// supabase/staging/sql/20261013_c04r5_prueba_guarda.sql; aquí, que el nocturno la usa.
+describe('el nocturno de producción: la guarda 4 es guarda-lectura.sql, en los dos trabajos que leen', () => {
+  const texto = readFileSync('.github/workflows/cumplimiento-produccion-conta.yml', 'utf8')
+  const guarda = readFileSync('scripts/conta/produccion/guarda-lectura.sql', 'utf8').replace(/--.*$/gm, '')
+  it('los dos trabajos la corren y paran si dice algo', () => {
+    expect(texto.match(/-f scripts\/conta\/produccion\/guarda-lectura\.sql/g)).toHaveLength(2)
+    expect(texto.match(/if \[ -n "\$f" \]; then echo "::error::Falla la guarda 4/g)).toHaveLength(2)
+  })
+  it('nadie rechaza BYPASSRLS', () => {
+    expect(texto).not.toMatch(/rolbypassrls/)
+    expect(guarda).not.toMatch(/bypassrls/i)
+  })
+  it('y sigue mirando escritura, superusuario, createrole, createdb y roles que escriben', () => {
+    for (const s of ["'INSERT,UPDATE,DELETE,TRUNCATE'", 'rolsuper', 'rolcreaterole', 'rolcreatedb', "pg_has_role(yo.oid, r.oid, 'MEMBER')", "privilege_type <> 'SELECT'"]) expect(guarda).toContain(s)
+  })
+})

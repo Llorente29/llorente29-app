@@ -75,33 +75,44 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
     await expect(contra.locator('.cxd-num-movil')).toHaveText('General 3')
   }
   await expect(page.getByText(/Anula el \d+\/\d+/)).toHaveCount(0)
-  // Respuesta 3 · 2: filas bajas (unos 70–80 px), el concepto entero en dos líneas.
-  for (const f of await page.locator('.cxd-fila:not(.cxd-fila-cabeza)').all()) {
-    const alto = (await f.boundingBox())!.height
-    // Respuesta 4 prevalece sobre la altura de la 3 (70–80 px): los chips y «de
-    // dónde sale» saltan de línea en vez de cortarse. Medido en la e2e: la fila
-    // más alta, 138 px en ordenador (columna del concepto ~290 px) y 152 en el
-    // móvil (el chip de la marca cedida parte su texto). Lo que se exige es que
-    // nada se corte (abajo); este tope solo caza un desbordamiento.
-    expect(alto, `fila de ${alto} px`).toBeLessThanOrEqual(200)
-  }
-  // Respuesta 4 · 5: ningún chip cortado («Brasa |» en el móvil) y «de dónde
-  // sale» sin «…» si cabe en dos líneas (en el ordenador se cortaba en una).
-  for (const apoyo of await page.locator('.cxd-fila .cxd-concepto-apoyo').all()) {
-    const m = await apoyo.evaluate((el) => {
-      const caja = el.getBoundingClientRect()
-      const chips = [...el.querySelectorAll('.cx-chip')].map((c) => ({
-        texto: c.textContent ?? '', cortado: c.scrollWidth > c.clientWidth + 0.5 || c.getBoundingClientRect().right > caja.right + 0.5,
-      }))
-      const s = el.querySelector('.cxd-sale') as HTMLElement | null
-      return { chips, sale: s ? { texto: s.textContent ?? '', cortada: s.scrollHeight > s.clientHeight + 1, lineas: Math.round(s.clientHeight / 16) } : null }
+  // Respuesta 5 (decisión de Julio): ≤ 96 px por fila en el ordenador y ≤ 110 en
+  // el móvil; el concepto en dos líneas como mucho; los chips y «de dónde sale»
+  // en UNA línea, los chips enteros y «de dónde sale» con «…» en lo que quede; el
+  // texto entero, en el title. Se mide fila a fila, todas las del libro.
+  const tope = lado(page) === 'ordenador' ? 96 : 110
+  const filas = await page.locator('.cxd-fila:not(.cxd-fila-cabeza)').all()
+  expect(filas.length).toBeGreaterThan(5)
+  const altos: number[] = []
+  for (const f of filas) {
+    const m = await f.evaluate((fila) => {
+      const t = fila.querySelector('.cxd-concepto-titulo') as HTMLElement
+      const apoyo = fila.querySelector('.cxd-concepto-apoyo') as HTMLElement
+      const caja = apoyo.getBoundingClientRect()
+      const chips = [...apoyo.querySelectorAll('.cx-chip')].map((c) => {
+        const r = c.getBoundingClientRect()
+        return { texto: c.textContent ?? '', cortado: c.scrollWidth > c.clientWidth + 0.5 || r.right > caja.right + 0.5 || r.left < caja.left - 0.5, arriba: Math.round(r.top) }
+      })
+      const s = apoyo.querySelector('.cxd-sale') as HTMLElement | null
+      const alturaLinea = parseFloat(getComputedStyle(t).lineHeight)
+      return {
+        alto: fila.getBoundingClientRect().height,
+        concepto: t.textContent ?? '', titleConcepto: t.title, lineasConcepto: Math.round(t.getBoundingClientRect().height / alturaLinea),
+        chips, unaLinea: new Set(chips.map((c) => c.arriba)).size <= 1 && caja.height <= 22,
+        sale: s ? { texto: s.textContent ?? '', title: s.title, lineas: Math.round(s.getBoundingClientRect().height / 16) } : null,
+      }
     })
+    altos.push(Math.round(m.alto))
+    expect(m.alto, `fila «${m.concepto}» de ${m.alto} px (tope ${tope})`).toBeLessThanOrEqual(tope)
+    expect(m.lineasConcepto, `«${m.concepto}» en ${m.lineasConcepto} líneas`).toBeLessThanOrEqual(2)
+    expect(m.titleConcepto, 'el concepto entero, en el title').toBe(m.concepto)
     for (const c of m.chips) expect(c.cortado, `chip «${c.texto}» cortado`).toBe(false)
-    // «No se corta con "…" cuando cabe en una segunda línea»: si se corta, es
-    // porque ya ocupa las dos (antes se cortaba en la primera). En el móvil un
-    // texto puede necesitar tres; entonces la segunda acaba en «…» y el entero va en el title.
-    if (m.sale?.cortada) expect(m.sale.lineas, `«${m.sale.texto}» cortado en ${m.sale.lineas} línea(s)`).toBeGreaterThanOrEqual(2)
+    expect(m.unaLinea, `chips y «de dónde sale» de «${m.concepto}» en más de una línea`).toBe(true)
+    if (m.sale) {
+      expect(m.sale.lineas, `«${m.sale.texto}» en ${m.sale.lineas} líneas`).toBeLessThanOrEqual(1)
+      expect(m.sale.title, '«de dónde sale» entero, en el title').toBe(m.sale.texto)
+    }
   }
+  console.log(`[filas ${lado(page)}] alturas: máx ${Math.max(...altos)} px, mín ${Math.min(...altos)} px, ${altos.length} filas`)
   // Lo que he hecho yo, con Deshacer en lo que validó Folvy.
   const ia = page.getByRole('region', { name: 'Lo que he hecho yo' })
   await expect(ia.getByText(/Asenté «Ventas del día · Norte Centro»/)).toBeVisible()
