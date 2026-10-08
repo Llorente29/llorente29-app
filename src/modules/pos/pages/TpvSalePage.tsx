@@ -24,8 +24,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Loader2, Plus, Minus, Trash2, ArrowLeft,
-  Banknote, CreditCard, ClipboardList, Save, PackageCheck, ListChecks, MonitorOff,
-  UtensilsCrossed, Clock, User, X, LayoutGrid,
+  Banknote, CreditCard, ClipboardList, Save, PackageCheck, MonitorOff,
+  UtensilsCrossed, Clock, User, X,
 } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -39,8 +39,10 @@ import PosItemConfigModal, { type PosConfiguredLine } from '@/modules/pos/compon
 import PosLineNoteModal from '@/modules/pos/components/PosLineNoteModal'
 import type { OrderLine } from '@/modules/shop/services/dishConfigService'
 import FloorView from '@/modules/pos/components/FloorView'
-import OpenTableModal from '@/modules/pos/components/OpenTableModal'
-import TableAccountPanel from '@/modules/pos/components/TableAccountPanel'
+import OpenTableScreen from '@/modules/pos/components/OpenTableScreen'
+import TableHeaderBar from '@/modules/pos/components/TableHeaderBar'
+import PendingLineModal from '@/modules/pos/components/PendingLineModal'
+import TableAccountPanel, { type PendingPick } from '@/modules/pos/components/TableAccountPanel'
 import VoidLineModal from '@/modules/pos/components/VoidLineModal'
 import {
   getFloor, openTable, getTableDetail, addPendingLines, setPendingQty, removePendingLine,
@@ -146,6 +148,8 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   const [tableDetail, setTableDetail] = useState<TableDetail | null>(null)
   const [openPick, setOpenPick] = useState<FloorTable | null>(null)
   const [voidPick, setVoidPick] = useState<TableLine | null>(null)
+  const [pendingPick, setPendingPick] = useState<PendingPick | null>(null)
+  const [waiterName, setWaiterName] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   // ── Nombre del local (Tarea B.1: cabecera con local + cuenta) ──
@@ -157,6 +161,20 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
       .catch(() => { if (!cancelled) setLocationName(null) })
     return () => { cancelled = true }
   }, [operativeLocationId])
+
+  // ── Quién está en el TPV (cabecera: «Jueves · 20:42 · Marta», maqueta Sala) ──
+  useEffect(() => {
+    if (!activeAccountId || !isSupabaseEnabled || !supabase) return
+    let cancelled = false
+    const sb = supabase
+    Promise.resolve(sb.auth.getUser())
+      .then(({ data }) => data.user
+        ? sb.from('user_profiles').select('display_name').eq('user_id', data.user.id).eq('account_id', activeAccountId).maybeSingle()
+        : null)
+      .then(r => { if (!cancelled) setWaiterName((r?.data?.display_name as string | undefined)?.trim().split(' ')[0] ?? null) })
+      .catch(() => { if (!cancelled) setWaiterName(null) })
+    return () => { cancelled = true }
+  }, [activeAccountId])
 
   // ── Marcas del local ──
   useEffect(() => {
@@ -530,14 +548,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
         detail={tableDetail}
         local={cart.map(l => ({ key: l.key, displayName: l.displayName, summary: l.summary, kitchenNote: l.kitchenNote, quantity: l.orderLine.quantity, totalPrice: l.totalPrice }))}
         busy={saving}
-        now={now}
-        warnMinutes={floor?.warnMinutes ?? 90}
-        onClose={() => { if (showCloseButton && onClose) onClose(); leaveTable() }}
-        onLocalQty={changeQty}
-        onLocalRemove={removeLine}
-        onLocalNote={setNoteEditKey}
-        onSavedQty={savedQty}
-        onSavedRemove={savedRemove}
+        onPickPending={setPendingPick}
         onVoid={setVoidPick}
         onFire={fireTable}
         onRequestBill={billTable}
@@ -638,58 +649,64 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="tpv-root min-h-screen bg-tpv-bg text-tpv-txt flex flex-col overflow-hidden">
-      {/* Cabecera — Tarea B.1: local + cuenta a la izquierda (antes solo se
-          veía la marca, y Julio no sabía en qué cuenta estaba trabajando). */}
-      <header className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 bg-tpv-surface border-b border-tpv-line shrink-0">
+      {/* Cabecera — maqueta «Folvy TPV · Sala» (pantallas 1 y 3). Con una mesa
+          abierta, la cabecera es la de la mesa; si no, local + día · hora ·
+          quién, y Vender · Sala · Cuentas. Caja y Reservas llegan con sus
+          encargos: no se dejan botones que no hacen nada. */}
+      {tableSaleId && view === 'vender' ? (
+        <TableHeaderBar detail={tableDetail} tableName="" now={now} warnMinutes={floor?.warnMinutes ?? 90} onBack={leaveTable} />
+      ) : (
+      <header className="min-h-tpv-header flex items-center gap-2 sm:gap-4 px-3 sm:px-5 py-2 bg-tpv-surface border-b border-tpv-line shrink-0">
         <button onClick={onExit} className="w-10 h-10 rounded-full flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-surface-2 transition-base shrink-0" aria-label="Salir">
           <ArrowLeft size={20} />
         </button>
         <div className="flex flex-col leading-tight min-w-0 shrink-0 max-w-[36vw] sm:max-w-none">
           <b className="text-base sm:text-lg font-extrabold text-tpv-txt truncate">{locationName ?? '—'}</b>
-          <span className="text-[10px] sm:text-xs font-bold text-tpv-txt-2 uppercase tracking-wide truncate">
-            {activeAccount?.name ?? ''}{activeAccount?.isInternal ? ' · laboratorio' : ''}
+          <span className="text-[10px] sm:text-xs font-bold text-tpv-txt-2 uppercase tracking-[0.04em] truncate">
+            {new Date(now).toLocaleDateString('es-ES', { weekday: 'long' })} · {new Date(now).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+            {waiterName ? ` · ${waiterName}` : ''}{activeAccount?.isInternal ? ` · ${activeAccount.name} · laboratorio` : ''}
           </span>
         </div>
-        <select
-          value={brandId ?? ''} onChange={e => setBrandId(e.target.value)}
-          className="min-h-tap-small px-2.5 sm:px-3 text-sm font-bold border border-tpv-line rounded-tpv bg-tpv-surface-2 text-tpv-txt shrink-0 max-w-[30vw] sm:max-w-none"
-        >
-          {brands.length === 0 && <option value="">Sin marcas</option>}
-          {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
+        {view === 'vender' && (
+          <select
+            value={brandId ?? ''} onChange={e => setBrandId(e.target.value)}
+            className="min-h-tap-small px-2.5 sm:px-3 text-sm font-bold border border-tpv-line rounded-tpv bg-tpv-surface-2 text-tpv-txt shrink-0 max-w-[30vw] sm:max-w-none"
+          >
+            {brands.length === 0 && <option value="">Sin marcas</option>}
+            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        )}
         <div className="flex-1" />
         {!deviceToken && (
           <span
             title="Esta pantalla no está vinculada a un dispositivo Folvy — la venta se registra igual, sin trazabilidad de dispositivo. Vincular en Ajustes de pedidos → Dispositivos."
-            className="hidden md:inline-flex items-center gap-1.5 min-h-tap-small px-3 rounded-tpv border border-tpv-warn bg-tpv-warn/15 text-tpv-warn text-xs font-bold shrink-0"
+            className="hidden md:inline-flex items-center gap-1.5 min-h-tap-small px-3 rounded-tpv border border-tpv-warn bg-tpv-warn-tint text-tpv-warn-text text-xs font-bold shrink-0"
           >
             <MonitorOff size={14} /> Sin dispositivo
           </span>
         )}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <nav className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setView('vender')}
-            className={`inline-flex items-center gap-1.5 min-h-tap-small px-2.5 sm:px-3 rounded-tpv text-xs sm:text-sm font-bold border transition-base ${view === 'vender' ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
+            className={`h-tap-small px-3 sm:px-[18px] rounded-tpv border text-sm sm:text-tpv-tab font-bold transition-base ${view === 'vender' ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
           >
-            <UtensilsCrossed size={16} /> {tableDetail ? `Mesa ${tableDetail.tableName}` : 'Vender'}
+            Vender
           </button>
           <button
-            onClick={() => { if (tableSaleId) leaveTable(); else setView('sala') }}
-            className={`inline-flex items-center gap-1.5 min-h-tap-small px-2.5 sm:px-3 rounded-tpv text-xs sm:text-sm font-bold border transition-base ${view === 'sala' ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
+            onClick={() => setView('sala')}
+            className={`h-tap-small px-3 sm:px-[18px] rounded-tpv border text-sm sm:text-tpv-tab font-bold transition-base ${view === 'sala' ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
           >
-            <LayoutGrid size={16} /> Sala
+            Sala
           </button>
           <button
-            onClick={() => { if (tableSaleId) leaveTable(); setView('cuentas'); reloadTickets() }}
-            className={`inline-flex items-center gap-1.5 min-h-tap-small px-2.5 sm:px-3 rounded-tpv text-xs sm:text-sm font-bold border transition-base ${showTickets ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
+            onClick={() => { setView('cuentas'); reloadTickets() }}
+            className={`h-tap-small px-3 sm:px-[18px] rounded-tpv border text-sm sm:text-tpv-tab font-bold transition-base ${showTickets ? 'bg-tpv-accent border-tpv-accent text-white' : 'bg-tpv-surface-2 border-tpv-line text-tpv-txt-2'}`}
           >
-            <ListChecks size={16} /> Cuentas
-            <span className="bg-tpv-note text-black text-xs font-extrabold rounded-full px-1.5">
-              {openTickets.length}{pendingDelivery.length > 0 ? `+${pendingDelivery.length}` : ''}
-            </span>
+            Cuentas <span className={showTickets ? 'text-white' : 'text-tpv-txt'}>{openTickets.length + pendingDelivery.length}</span>
           </button>
-        </div>
+        </nav>
       </header>
+      )}
 
       {error && <div className="px-4 py-2 bg-tpv-danger text-white text-sm font-bold border-b border-tpv-line">{error}</div>}
       {flash && (
@@ -878,7 +895,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
           </div>
 
           {/* Escritorio/tablet horizontal (≥lg): cuenta siempre visible a la derecha */}
-          <aside className="hidden lg:flex lg:w-[390px] lg:shrink-0 lg:flex-col bg-tpv-surface border-l border-tpv-line">
+          <aside className={`hidden lg:flex lg:shrink-0 lg:flex-col bg-tpv-surface ${tableSaleId ? 'lg:w-[400px] lg:my-4 lg:mr-5 rounded-2xl border border-tpv-line overflow-hidden' : 'lg:w-[390px] border-l border-tpv-line'}`}>
             {accountPanel(false)}
           </aside>
 
@@ -915,11 +932,42 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
       )}
 
       {openPick && (
-        <OpenTableModal
-          tableName={openPick.name} seats={openPick.seats} busy={saving}
+        <OpenTableScreen
+          tableName={openPick.name}
+          zoneName={floor?.zones.find(z => z.tables.some(t => t.id === openPick.id))?.name ?? ''}
+          seats={openPick.seats} busy={saving}
           onPick={pickCovers} onClose={() => setOpenPick(null)}
         />
       )}
+
+      {pendingPick && (() => {
+        if (pendingPick.kind === 'saved') {
+          const l = pendingPick.line
+          return (
+            <PendingLineModal
+              name={l.name} quantity={l.quantity} note={l.kitchenNote} canEditNote={false} busy={saving}
+              onClose={() => setPendingPick(null)}
+              onRemove={() => { setPendingPick(null); savedRemove(l) }}
+              onSave={q => { setPendingPick(null); if (q !== l.quantity) savedQty(l, q) }}
+            />
+          )
+        }
+        const c = cart.find(x => x.key === pendingPick.key)
+        if (!c) return null
+        return (
+          <PendingLineModal
+            name={c.displayName} quantity={c.orderLine.quantity} note={c.kitchenNote} canEditNote busy={saving}
+            onClose={() => setPendingPick(null)}
+            onRemove={() => { setPendingPick(null); removeLine(c.key) }}
+            onSave={(q, note) => {
+              setPendingPick(null)
+              setCart(prev => prev.map(x => x.key === c.key
+                ? { ...x, kitchenNote: note, orderLine: { ...x.orderLine, quantity: q }, totalPrice: x.unitPrice * q }
+                : x))
+            }}
+          />
+        )
+      })()}
 
       {voidPick && activeAccountId && (
         <VoidLineModal

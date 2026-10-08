@@ -80,8 +80,9 @@ Dos cosas que **no estaban en la sección 1** y cambian el diseño:
   **Límite de esa prueba:** `_shop_reprice_line` y `generate_sale_consumption` eran simplificaciones; el
   consumo real solo lo prueba el ensayo de esta noche.
 - Lint, la misma vara a los dos lados: `origin/main` **1375 (1075 errores / 300 avisos)**, rama **1375 (1075 / 300)**.
-- Pruebas: `origin/main` 10 fallidas / 2515 bien; rama 10 fallidas / 2520 bien. **Las mismas 10** (capturas
-  de pantalla que necesitan navegador); las 5 nuevas (`tests/unit/pos/parseTableNames.test.ts`) en verde.
+- Pruebas: `origin/main` 10 fallidas / 2515 bien; rama 10 fallidas / 2520 bien. **Las mismas 10**: son
+  pruebas de captura que leen el CSS de `dist/`, y en las dos medidas no había `dist/`. Con el build hecho,
+  la rama da **2530 de 2530**. Las 5 nuevas (`tests/unit/pos/parseTableNames.test.ts`) en verde.
 - `npm run build` exacto, borrando `*.tsbuildinfo`: **verde**.
 - Regla 40: los nombres nuevos entre comillas (`dining_zone`, `dining_table`, `dining_config`, `pos_*`,
   `sale.table_id`/`table_cleared_at`) **no existen hoy en la base**: los crea la migración. Hasta aplicarla,
@@ -104,14 +105,48 @@ Dos cosas que **no estaban en la sección 1** y cambian el diseño:
 impresora y una tablet pareada en el local de prueba no puede salir ningún ticket: la pantalla lo dirá
 («NO ha salido papel»), pero la prueba de los tres tickets de §5 necesita las dos cosas.
 
-## 5. Bloqueado / decisiones para Julio
+## 5. La maqueta (segunda vuelta, 08/10)
 
-1. **La maqueta no está en el repositorio ni en Drive.** `claude/maqueta_tpv_sala/`,
-   `folvy_tpv_sistema_diseno_20260811.md`, `folvy_tpv_benchmark_y_plan_demo_20261008.md`,
-   `folvy_tpv_decisiones_arquitectura_20260811.md` y `PENDIENTE_UNICO_las_tablets_20260921.md`: ninguno
-   existe en git (ni en ninguna rama) ni en la carpeta de Drive que refleja `claude/`. **Lo construido sigue
-   el texto del encargo y los tokens de `tpvTokens.css`, NO la maqueta.** Hace falta subirla para ajustarlo y
-   hacer las capturas «al lado».
+Julio subió `Folvy TPV · Sala.html`. Guardada en `claude/maqueta_tpv_sala/` (el HTML tal cual y las seis
+pantallas en PNG, sacadas con Chromium sin red). Las pantallas de S1 (1, 2, 3) y la 6 rehechas a ella:
+
+- **Sala:** cabecera de 68 px con local y «día · hora · camarero»; Vender · Sala · Cuentas N sin iconos;
+  pestañas de zona de 76 px a tres columnas («6 de 13 ocupadas», la barra «3 cuentas»); rejilla a 5
+  columnas que llena el alto; tarjetas de 14 px de radio con borde de 2 px por estado (libre gris, ocupada
+  blanco, pide la cuenta ámbar con fondo tintado, cobrada verde con fondo tintado); «Ahora mismo» con el
+  total grande y el reparto por zona.
+- **Abrir mesa:** pantalla completa (no un diálogo): «Volver a la sala», «Mesa 7 · Sala · 4 sitios ·
+  libre», ocho números de 72 px y «Son más de 8».
+- **Mesa abierta:** cabecera «← Sala · Mesa 4 · Sala · 4 personas · la lleva Marta» con el tiempo en
+  ámbar desde el umbral; la cuenta en un panel de 400 px con filas compactas por envío («Envío 1 · ✓
+  Enviado a cocina · 20:05»), «Sin enviar» en azul, total con «por persona», «Enviar a cocina» y «Sacar la
+  cuenta» a 76 px y «Cobrar» a 96 px. Tocar una fila sin enviar abre su ficha (cantidad, nota, quitar);
+  tocar una enviada, la anulación.
+- **Móvil:** dos columnas; cada mesa un hueco.
+
+Capturas lado a lado (maqueta | construido con datos de prueba): `claude/capturas_tpv_sala_s1/`.
+Son del componente real con datos inventados, no de producción (la base aún no tiene la migración). En la
+del móvil la cabecera es un apaño del banco de pruebas: la cabecera y la barra inferior del móvil son S5.
+
+**Hallazgo de paso:** los tintes con opacidad que ya usaba el TPV (`bg-tpv-warn/15`, `bg-tpv-ok/25`,
+`bg-tpv-note/10`, `bg-tpv-danger/10`…) **no se compilan**: Tailwind no aplica opacidad a un color definido
+como `var()`, y en `dist/` no hay ni una de esas clases. Esos fondos salen sin pintar desde el 11/08. Para la
+Sala van como tokens (`--tpv-*-tint`, `--tpv-*-text`) con los valores exactos de la maqueta; los antiguos
+no se tocan aquí.
+
+**Lo que de la maqueta NO se construye en S1** (sin botones que no hacen nada): reservas (panel, «Apuntar
+una reserva», «¿Vienen con reserva?»), «Mover o juntar mesas» y «Cambiar de mesa» (S2), «Dividir la
+cuenta» y «Caja» (Caja), «Va de primero / segundo / postre» y «Marchar los segundos» (S3), «Más»,
+«Buscar», «Conectado» y la barra inferior del móvil (S5).
+
+**Diferencia que decide Julio:** la maqueta dibuja el catálogo de la mesa **sin fotos** (tarjeta con borde
+de color, nombre y precio). El encargo dice «la pantalla de venta actual», que lleva fotos desde el 12/08
+(decisión tuya: camareros con poca formación reconocen el plato por la foto). He dejado el catálogo como
+está. Si la mesa va sin fotos, es un cambio corto.
+
+## 6. Decisiones para Julio
+
+1. Las fotos del catálogo en la mesa (arriba).
 2. **Anular no devuelve el stock.** El plato puede estar hecho. Si se quiere devolver, es tocar
    `generate_sale_consumption` y va con su propio ensayo (regla 10).
 3. **«Sacar la cuenta» imprime el documento de bolsa** (`doc_type='bag'`), el mismo que el ticket de

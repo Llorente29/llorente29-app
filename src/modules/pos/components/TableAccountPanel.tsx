@@ -1,23 +1,23 @@
 // src/modules/pos/components/TableAccountPanel.tsx
 //
-// TPV · Sala (S1). La cuenta de una mesa abierta, en el sitio del carrito de
-// la venta rápida. Arriba la cabecera de la mesa; luego las líneas agrupadas
-// por envío con su hora; al final lo que aún no se ha enviado (lo guardado en
-// la cuenta y lo tocado en esta pantalla). Abajo: «Enviar a cocina», «Sacar la
-// cuenta» y, separado, «Cobrar».
+// TPV · Sala (S1) — maqueta «Folvy TPV · Sala», pantalla 3: la cuenta de una
+// mesa abierta, en el sitio del carrito de la venta rápida. Las líneas van
+// agrupadas por envío, con su hora; al final, lo que aún no se ha enviado.
+// Abajo: total (y por persona), «Enviar a cocina» y «Sacar la cuenta», y
+// «Cobrar» en su propia fila.
 //
-// Lo enviado no se toca: tocarlo abre la anulación. Lo no enviado se cambia o
-// se quita libremente.
+// Lo enviado no se toca: tocarlo abre la anulación. Lo no enviado se toca para
+// cambiar la cantidad, la nota o quitarlo. Los pases («Va de primero / de
+// segundo», «Marchar los segundos») son S3.
 
-import { useState } from 'react'
-import {
-  ArrowLeft, Users, Clock, Loader2, Minus, Plus, Trash2, Send, Receipt, Banknote, CreditCard, CheckCheck, Ban,
-} from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Loader2, Check, Clock, Ban, Banknote, CreditCard, CheckCheck } from 'lucide-react'
 import type { TableDetail, TableLine } from '@/modules/pos/services/posTableService'
-import { TABLE_STATE_LOOK, minutesSince, formatDuration, formatClock } from '@/modules/pos/lib/tableState'
+import { formatClock } from '@/modules/pos/lib/tableState'
 
 // eslint-disable-next-line no-restricted-syntax -- n es un importe ya numérico (RPC o carrito local), solo se formatea
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' €' }
+function qtyText(q: number): string { return Number.isInteger(q) ? String(q) : String(q).replace('.', ',') }
 
 export interface LocalPendingLine {
   key: string
@@ -28,18 +28,16 @@ export interface LocalPendingLine {
   totalPrice: number
 }
 
+// Una línea no enviada, venga de la cuenta (guardada) o de esta pantalla.
+export type PendingPick =
+  | { kind: 'saved'; line: TableLine }
+  | { kind: 'local'; key: string }
+
 interface Props {
   detail: TableDetail | null
   local: LocalPendingLine[]
   busy: boolean
-  now: number
-  warnMinutes: number
-  onClose: () => void
-  onLocalQty: (key: string, delta: number) => void
-  onLocalRemove: (key: string) => void
-  onLocalNote: (key: string) => void
-  onSavedQty: (line: TableLine, quantity: number) => void
-  onSavedRemove: (line: TableLine) => void
+  onPickPending: (p: PendingPick) => void
   onVoid: (line: TableLine) => void
   onFire: () => void
   onRequestBill: () => void
@@ -47,34 +45,33 @@ interface Props {
   onClear: () => void
 }
 
-function LineBody({ name, summary, note, qty, total, struck }: { name: string; summary: string[]; note: string | null; qty: number; total: number; struck?: boolean }) {
+function LineRow({ qty, name, total, summary, note, tone, struck, extra, disabled, onClick }: {
+  qty: number; name: string; total: number; summary: string[]; note: string | null
+  tone: 'sent' | 'pending'; struck?: boolean; extra?: ReactNode; disabled?: boolean; onClick: () => void
+}) {
   return (
-    <>
-      <div className="flex items-start justify-between gap-2">
-        <span className={`text-tpv-name font-bold flex-1 min-w-0 ${struck ? 'line-through text-tpv-txt-2' : 'text-tpv-txt'}`}>
-          {qty > 1 && <span className="mr-1">{qty}×</span>}{name}
-        </span>
-        <span className={`text-tpv-line-price font-extrabold shrink-0 ${struck ? 'line-through text-tpv-txt-2' : 'text-tpv-txt'}`}>{eur(total)}</span>
-      </div>
-      {summary.length > 0 && <p className="text-tpv-mod text-tpv-txt-2 mt-0.5 leading-snug">{summary.join(' · ')}</p>}
-      {note && (
-        <div className="mt-1.5 pl-2.5 border-l-4 border-tpv-note bg-tpv-note/10 rounded py-1">
-          <p className="text-xs font-extrabold uppercase text-tpv-note">{note}</p>
-        </div>
-      )}
-    </>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`w-full min-h-tap-small px-3 py-2 rounded-tpv-line border text-tpv-txt text-left flex justify-between items-center gap-2.5 disabled:cursor-default ${tone === 'pending' ? 'border-tpv-accent-text bg-tpv-accent-tint' : 'border-tpv-line bg-tpv-surface-2'}`}
+    >
+      <span className="min-w-0 flex flex-col">
+        <span className={`text-tpv-name font-bold ${struck ? 'line-through text-tpv-txt-2' : ''}`}>{qtyText(qty)} × {name}</span>
+        {summary.length > 0 && <span className="text-tpv-mod text-tpv-txt-2 leading-snug">{summary.join(' · ')}</span>}
+        {note && <span className="text-tpv-tab-sm font-extrabold uppercase text-tpv-note">{note}</span>}
+        {extra}
+      </span>
+      <b className={`text-tpv-name font-extrabold shrink-0 ${struck ? 'line-through text-tpv-txt-2' : ''}`}>{eur(total)}</b>
+    </button>
   )
 }
 
-function QtyControls({ qty, onMinus, onPlus, onRemove }: { qty: number; onMinus: () => void; onPlus: () => void; onRemove: () => void }) {
+function GroupHeader({ title, right, rightTone }: { title: string; right: ReactNode; rightTone: 'ok' | 'accent' }) {
   return (
-    <div className="flex items-center justify-between mt-2">
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={onMinus} aria-label="Uno menos" className="min-w-tap-small min-h-tap-small rounded-tpv border border-tpv-line flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-surface"><Minus size={16} /></button>
-        <span className="min-w-[1.6em] text-center text-base font-extrabold text-tpv-txt">{qty}</span>
-        <button type="button" onClick={onPlus} aria-label="Uno más" className="min-w-tap-small min-h-tap-small rounded-tpv border border-tpv-line flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-surface"><Plus size={16} /></button>
-      </div>
-      <button type="button" onClick={onRemove} aria-label="Quitar" className="min-w-tap-small min-h-tap-small rounded-tpv flex items-center justify-center text-tpv-txt-2 hover:text-tpv-danger hover:bg-tpv-danger/10 transition-base"><Trash2 size={18} /></button>
+    <div className="flex items-center justify-between gap-2 mt-2 first:mt-0">
+      <b className="text-tpv-tab font-extrabold tracking-[0.05em] uppercase text-tpv-txt-2">{title}</b>
+      <span className={`flex items-center gap-1.5 text-sm font-extrabold ${rightTone === 'ok' ? 'text-tpv-ok-text' : 'text-tpv-accent-text'}`}>{right}</span>
     </div>
   )
 }
@@ -87,144 +84,104 @@ export default function TableAccountPanel(p: Props) {
     return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-tpv-txt-2" /></div>
   }
 
-  const look = TABLE_STATE_LOOK[d.state]
-  const StateIcon = look.icon
-  const minutes = minutesSince(d.openedAt, p.now)
-  const late = d.state !== 'cobrada' && minutes >= p.warnMinutes
   const savedPending = d.lines.filter(l => !l.fireId)
   const pendingCount = savedPending.length + p.local.length
-  const localTotal = p.local.reduce((s, l) => s + l.totalPrice, 0)
-  const total = d.total + localTotal
+  const total = d.total + p.local.reduce((s, l) => s + l.totalPrice, 0)
   const paid = d.paidAt != null
   const hasSent = d.fires.length > 0
+  const perPerson = d.covers > 0 ? total / d.covers : null
 
   return (
     <>
-      {/* Cabecera de la mesa */}
-      <div className="px-4 py-3 border-b border-tpv-line shrink-0">
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={p.onClose} aria-label="Volver a la sala" className="w-12 h-12 rounded-full flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-surface-2 shrink-0"><ArrowLeft size={22} /></button>
-          <div className="flex-1 min-w-0">
-            <p className="text-tpv-amount font-extrabold text-tpv-txt leading-none truncate">Mesa {d.tableName}</p>
-            <p className="text-xs font-bold uppercase tracking-wide text-tpv-txt-2 truncate">{d.zoneName}{d.servedByName ? ` · ${d.servedByName}` : ''}</p>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-2">
+        {d.fires.map(f => (
+          <div key={f.id} className="flex flex-col gap-2">
+            <GroupHeader
+              title={`Envío ${f.number}`}
+              rightTone="ok"
+              right={<><Check size={16} strokeWidth={2.6} aria-hidden /> Enviado a cocina · {formatClock(f.firedAt)}</>}
+            />
+            {d.lines.filter(l => l.fireId === f.id).map(l => (
+              <LineRow
+                key={l.id}
+                tone="sent"
+                qty={l.quantity}
+                name={l.name}
+                total={l.voidedAt ? 0 : l.lineTotal}
+                summary={l.summary}
+                note={l.kitchenNote}
+                struck={!!l.voidedAt}
+                disabled={!!l.voidedAt || paid}
+                onClick={() => p.onVoid(l)}
+                extra={l.voidedAt ? (
+                  <span className="inline-flex items-center gap-1 text-tpv-tab-sm font-extrabold uppercase text-tpv-danger"><Ban size={13} aria-hidden /> Anulado{l.voidReason ? ` · ${l.voidReason}` : ''}</span>
+                ) : undefined}
+              />
+            ))}
           </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <span className="inline-flex items-center gap-1 text-sm font-bold text-tpv-txt"><Users size={15} aria-hidden /> {d.covers}</span>
-            <span className={`inline-flex items-center gap-1 text-sm font-bold ${late ? 'text-tpv-warn' : 'text-tpv-txt-2'}`}><Clock size={14} aria-hidden /> {formatDuration(minutes)}</span>
-          </div>
-        </div>
-        <span className={`mt-2 inline-flex items-center gap-1.5 rounded-tpv px-2 py-1 text-xs font-extrabold ${look.chip}`}>
-          <StateIcon size={14} aria-hidden /> {look.label}
-        </span>
-      </div>
-
-      {/* Líneas por envío */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 min-h-0">
-        {d.fires.map(f => {
-          const lines = d.lines.filter(l => l.fireId === f.id)
-          return (
-            <section key={f.id}>
-              <h3 className="text-xs font-extrabold uppercase tracking-wide text-tpv-txt-2 mb-1.5">
-                Envío {f.number} · {formatClock(f.firedAt)}{f.firedByName ? ` · ${f.firedByName}` : ''}
-              </h3>
-              <div className="space-y-2">
-                {lines.map(l => (
-                  <button
-                    key={l.id}
-                    type="button"
-                    disabled={!!l.voidedAt || paid}
-                    onClick={() => p.onVoid(l)}
-                    className="w-full text-left p-3 rounded-tpv border border-tpv-line bg-tpv-surface-2 disabled:cursor-default"
-                  >
-                    <LineBody name={l.name} summary={l.summary} note={l.kitchenNote} qty={l.quantity} total={l.voidedAt ? 0 : l.lineTotal} struck={!!l.voidedAt} />
-                    {l.voidedAt && (
-                      <p className="mt-1 inline-flex items-center gap-1 text-xs font-extrabold text-tpv-danger"><Ban size={13} aria-hidden /> Anulado{l.voidReason ? ` · ${l.voidReason}` : ''}</p>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )
-        })}
+        ))}
 
         {pendingCount > 0 && (
-          <section>
-            <h3 className="text-xs font-extrabold uppercase tracking-wide text-tpv-accent-text mb-1.5">Sin enviar · {pendingCount}</h3>
-            <div className="space-y-2">
-              {savedPending.map(l => (
-                <div key={l.id} className="p-3 rounded-tpv border border-tpv-accent bg-tpv-surface-2">
-                  <LineBody name={l.name} summary={l.summary} note={l.kitchenNote} qty={1} total={l.lineTotal} />
-                  <QtyControls qty={l.quantity}
-                    onMinus={() => l.quantity > 1 && p.onSavedQty(l, l.quantity - 1)}
-                    onPlus={() => p.onSavedQty(l, l.quantity + 1)}
-                    onRemove={() => p.onSavedRemove(l)} />
-                </div>
-              ))}
-              {p.local.map(l => (
-                <div key={l.key} className="p-3 rounded-tpv border border-tpv-accent bg-tpv-surface-2">
-                  <button type="button" onClick={() => p.onLocalNote(l.key)} className="w-full text-left">
-                    <LineBody name={l.displayName} summary={l.summary} note={l.kitchenNote} qty={1} total={l.totalPrice} />
-                    {!l.kitchenNote && <p className="text-xs text-tpv-txt-2 mt-1">+ Añadir nota de cocina</p>}
-                  </button>
-                  <QtyControls qty={l.quantity}
-                    onMinus={() => p.onLocalQty(l.key, -1)}
-                    onPlus={() => p.onLocalQty(l.key, 1)}
-                    onRemove={() => p.onLocalRemove(l.key)} />
-                </div>
-              ))}
-            </div>
-          </section>
+          <div className="flex flex-col gap-2">
+            <GroupHeader title="Sin enviar" rightTone="accent" right={<><Clock size={16} strokeWidth={2.6} aria-hidden /> Aún no está en cocina</>} />
+            {savedPending.map(l => (
+              <LineRow key={l.id} tone="pending" qty={l.quantity} name={l.name} total={l.lineTotal} summary={l.summary} note={l.kitchenNote}
+                onClick={() => p.onPickPending({ kind: 'saved', line: l })} />
+            ))}
+            {p.local.map(l => (
+              <LineRow key={l.key} tone="pending" qty={l.quantity} name={l.displayName} total={l.totalPrice} summary={l.summary} note={l.kitchenNote}
+                onClick={() => p.onPickPending({ kind: 'local', key: l.key })} />
+            ))}
+          </div>
         )}
 
         {!hasSent && pendingCount === 0 && (
-          <p className="text-sm text-tpv-txt-2 text-center py-10">Toca productos para tomar nota.</p>
+          <p className="text-base text-tpv-txt-2 text-center py-10">Toca productos para tomar nota.</p>
         )}
       </div>
 
-      {/* Total y acciones */}
-      <div className="px-4 py-3 border-t border-tpv-line space-y-2.5 shrink-0">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-tpv-txt-2">Total</span>
-          <b className="text-tpv-total font-extrabold text-tpv-txt">{eur(total)}</b>
+      <div className="shrink-0 px-4 pt-3.5 pb-4 border-t border-tpv-line flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-tpv-tab font-bold text-tpv-txt-2">Total{perPerson != null && total > 0 ? ` · ${eur(perPerson)} por persona` : ''}</span>
+          <b className="text-tpv-table-num font-extrabold">{eur(total)}</b>
         </div>
 
         {paid ? (
           <button type="button" onClick={p.onClear} disabled={p.busy}
-            className="w-full min-h-tap-critical rounded-tpv text-lg font-extrabold bg-tpv-ok text-white inline-flex items-center justify-center gap-2 disabled:opacity-50">
-            {p.busy ? <Loader2 className="animate-spin" size={20} /> : <CheckCheck size={20} />} Mesa lista
+            className="h-tap-critical rounded-tpv bg-tpv-ok text-white text-tpv-charge font-extrabold inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            {p.busy ? <Loader2 className="animate-spin" size={24} /> : <CheckCheck size={26} />} Mesa lista
           </button>
         ) : !payPick ? (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               <button type="button" onClick={p.onFire} disabled={p.busy || pendingCount === 0}
-                className="inline-flex items-center justify-center gap-1.5 min-h-tap rounded-tpv text-sm font-extrabold bg-tpv-accent text-white disabled:opacity-50 transition-base">
-                {p.busy ? <Loader2 className="animate-spin" size={17} /> : <Send size={17} />} Enviar a cocina{pendingCount > 0 ? ` · ${pendingCount}` : ''}
+                className="h-tap rounded-tpv border border-tpv-line-strong bg-tpv-surface-2 text-tpv-txt text-tpv-name font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50">
+                {p.busy && <Loader2 className="animate-spin" size={18} />} Enviar a cocina
               </button>
               <button type="button" onClick={p.onRequestBill} disabled={p.busy || !hasSent || pendingCount > 0}
-                className="inline-flex items-center justify-center gap-1.5 min-h-tap rounded-tpv text-sm font-bold border border-tpv-line bg-tpv-surface-2 text-tpv-txt disabled:opacity-50 transition-base">
-                <Receipt size={17} /> {d.billRequestedAt ? 'Otra vez la cuenta' : 'Sacar la cuenta'}
+                className="h-tap rounded-tpv border border-tpv-line-strong bg-tpv-surface-2 text-tpv-txt text-tpv-name font-bold disabled:opacity-50">
+                {d.billRequestedAt ? 'Otra vez la cuenta' : 'Sacar la cuenta'}
               </button>
             </div>
-            {/* Cobrar aislado: fila propia, sin vecino (sistema de diseño §3, anti-patrón 8). */}
             <button type="button" onClick={() => setPayPick(true)} disabled={p.busy || !hasSent || pendingCount > 0}
-              className="w-full min-h-tap-critical rounded-tpv text-lg font-extrabold bg-tpv-ok text-white hover:opacity-90 disabled:opacity-50 transition-base">
-              💶 COBRAR
+              className="h-tap-critical rounded-tpv bg-tpv-ok text-white text-tpv-charge font-extrabold disabled:opacity-50">
+              Cobrar
             </button>
             {pendingCount > 0 && hasSent && (
-              <p className="text-xs text-tpv-txt-2 text-center">Hay {pendingCount} sin enviar: envíalo o quítalo para sacar la cuenta o cobrar.</p>
+              <p className="text-sm text-tpv-txt-2 text-center">{pendingCount} sin enviar: envíalo o quítalo antes de cobrar.</p>
             )}
           </>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             <button type="button" onClick={() => { setPayPick(false); p.onCharge('cash') }} disabled={p.busy}
-              className="inline-flex items-center justify-center gap-1.5 min-h-tap-critical rounded-tpv text-base font-extrabold bg-tpv-ok text-white disabled:opacity-50">
-              <Banknote size={18} /> Efectivo
+              className="h-tap-critical rounded-tpv bg-tpv-ok text-white text-tpv-zone font-extrabold inline-flex items-center justify-center gap-2 disabled:opacity-50">
+              <Banknote size={22} /> Efectivo
             </button>
             <button type="button" onClick={() => { setPayPick(false); p.onCharge('card') }} disabled={p.busy}
-              className="inline-flex items-center justify-center gap-1.5 min-h-tap-critical rounded-tpv text-base font-extrabold bg-tpv-ok text-white disabled:opacity-50">
-              <CreditCard size={18} /> Tarjeta
+              className="h-tap-critical rounded-tpv bg-tpv-ok text-white text-tpv-zone font-extrabold inline-flex items-center justify-center gap-2 disabled:opacity-50">
+              <CreditCard size={22} /> Tarjeta
             </button>
-            <button type="button" onClick={() => setPayPick(false)} className="col-span-2 min-h-tap-small text-sm font-bold text-tpv-txt-2 underline">Cancelar cobro</button>
+            <button type="button" onClick={() => setPayPick(false)} className="col-span-2 h-tap-small text-base font-bold text-tpv-txt-2 underline">Cancelar cobro</button>
           </div>
         )}
       </div>
