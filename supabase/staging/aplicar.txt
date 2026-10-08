@@ -6,7 +6,11 @@
 #   3. 20261014T0140_c05_validar_cierre.sql (cambia: journal_entry_validar):
 #      el cierre y la apertura del generador, enlazados, sin la regla de IVA.
 #   4. La prueba de libros por sus caminos, con el closing suelto rechazado. ROLLBACK.
+#   5. 20261014T0150_c05_lectura.sql (en staging no hay conta_lectura: lo dice y no hace nada).
+#   6. La prueba del agente C05: rompe una cosa por comprobación y exige verla. ROLLBACK.
 supabase/staging/sql/20261014_c05_serie_r3.sql
 supabase/migrations/20261014T0110_c05_modelos_serie.sql
 supabase/migrations/20261014T0140_c05_validar_cierre.sql
 supabase/staging/sql/20261014_c05_prueba_libros.sql
+supabase/migrations/20261014T0150_c05_lectura.sql
+supabase/staging/sql/20261014_c05_prueba_agente.sql

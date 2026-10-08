@@ -194,14 +194,15 @@ begin
    group by code having sum(inicial_debe + apertura_debe + periodo_debe + regularizacion_debe + cierre_debe) <> sum(inicial_haber + apertura_haber + periodo_haber + regularizacion_haber + cierre_haber)) x;
   if v_n <> 0 then raise exception 'PRUEBA C05 · 4e: tras el cierre quedan % cuentas con saldo en 2026.', v_n; end if;
 
-  -- Un asiento con fecha en el ejercicio cerrado: no entra.
+  -- Un asiento con fecha en el ejercicio cerrado: se puede proponer, pero no validar (regla 4 del C04).
   begin
-    perform public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-11-15', 'source_type', 'manual', 'series', 4, 'concepto', 'Tarde (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05.'),
-      '[{"cuenta": "62900000", "debe": 10}, {"cuenta": "57200001", "haber": 10}]'::jsonb, null, 'Prueba C05');
+    r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-11-15', 'source_type', 'manual', 'series', 4, 'concepto', 'Tarde (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05.'),
+      '[{"cuenta": "62900000", "debe": 10, "comun": true}, {"cuenta": "57200001", "haber": 10, "comun": true}]'::jsonb, null, 'Prueba C05');
+    perform public.journal_entry_validar((r->>'id')::uuid, 'Prueba C05');
     v_tarde := null;
   exception when others then v_tarde := sqlerrm; end;
-  if v_tarde is null then raise exception 'PRUEBA C05 · 4f: ha entrado un asiento en el ejercicio cerrado.'; end if;
-  if v_tarde not like '%ejercicio%' then raise exception 'PRUEBA C05 · 4f: el asiento tardío falló por otra cosa: %', v_tarde; end if;
+  if v_tarde is null then raise exception 'PRUEBA C05 · 4f: se ha validado un asiento en el ejercicio cerrado.'; end if;
+  if v_tarde not like '%está cerrado%' then raise exception 'PRUEBA C05 · 4f: el asiento tardío falló por otra cosa: %', v_tarde; end if;
 
   -- Reabrir: sin motivo no; con motivo anula apertura y cierre.
   begin perform public.conta_cierre_reabrir(v_fy, ' '); v_falla := null;

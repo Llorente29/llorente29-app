@@ -50,6 +50,8 @@ on:
       - 'scripts/conta/agente-datos-maestros.*'
       - 'scripts/conta/agente-terceros.sql'
       - 'scripts/conta/agente-libro.*'
+      - 'scripts/conta/agente-libros.sql'
+      - 'scripts/conta/lib/libros.mjs'
       - 'scripts/conta/lib/libro.mjs'
       - 'scripts/conta/lib/datosMaestros.mjs'
       - 'scripts/conta/lib/terceros.mjs'
@@ -199,7 +201,13 @@ jobs:
           set -euo pipefail
           if [ "$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.journal_entry') is not null")" = "t" ]; then
             /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-libro.sql > /tmp/libro.json
-            node scripts/conta/agente-libro.mjs /tmp/libro.json /tmp/informe-libro.md staging-conta
+            # C05: libros y balances, solo si la base ya los tiene.
+            LIBROS=""
+            if [ "$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.vat_book_entry') is not null")" = "t" ]; then
+              /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-libros.sql > /tmp/libros.json
+              LIBROS=/tmp/libros.json
+            fi
+            node scripts/conta/agente-libro.mjs /tmp/libro.json /tmp/informe-libro.md staging-conta $LIBROS
           else
             echo "## Agente «Libro diario» · staging-conta: aún no hay libro diario (antes del C04)." > /tmp/informe-libro.md
           fi
