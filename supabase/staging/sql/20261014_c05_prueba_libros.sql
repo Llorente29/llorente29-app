@@ -114,7 +114,7 @@ begin
   end loop;
   if jsonb_array_length(v_reg) = 0 then raise exception 'PRUEBA C05 · 4: la semilla no tiene gastos ni ingresos validados que regularizar.'; end if;
   v_reg := v_reg || jsonb_build_array(jsonb_build_object('cuenta', '12900000', 'debe', greatest(-v_res, 0), 'haber', greatest(v_res, 0), 'comun', true));
-  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Regularización 2026 (prueba)', 'confianza', 'seguro'), v_reg, null, 'Prueba C05');
+  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Regularización 2026 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.'), v_reg, null, 'Prueba C05');
   v_ids[1] := (r->>'id')::uuid;
   perform public.journal_entry_validar(v_ids[1], 'Prueba C05');
 
@@ -132,9 +132,9 @@ begin
     v_cie := v_cie || jsonb_build_array(jsonb_build_object('cuenta', s.code, 'debe', greatest(-s.saldo, 0), 'haber', greatest(s.saldo, 0), 'comun', true));
     v_ape := v_ape || jsonb_build_array(jsonb_build_object('cuenta', s.code, 'debe', greatest(s.saldo, 0), 'haber', greatest(-s.saldo, 0), 'comun', true));
   end loop;
-  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Cierre 2026 (prueba)', 'confianza', 'seguro'), v_cie, null, 'Prueba C05');
+  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Cierre 2026 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.'), v_cie, null, 'Prueba C05');
   v_ids[2] := (r->>'id')::uuid;
-  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2027-01-01', 'source_type', 'opening', 'series', 4, 'concepto', 'Apertura 2027 (prueba)', 'confianza', 'seguro'), v_ape, null, 'Prueba C05');
+  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2027-01-01', 'source_type', 'opening', 'series', 4, 'concepto', 'Apertura 2027 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.'), v_ape, null, 'Prueba C05');
   v_ids[3] := (r->>'id')::uuid;
 
   r := public.conta_cierre_enlazar(v_fy, v_ids[1], v_ids[2], v_ids[3]);
@@ -166,11 +166,12 @@ begin
 
   -- Un asiento con fecha en el ejercicio cerrado: no entra.
   begin
-    perform public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-11-15', 'source_type', 'manual', 'series', 4, 'concepto', 'Tarde (prueba)'),
+    perform public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-11-15', 'source_type', 'manual', 'series', 4, 'concepto', 'Tarde (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05.'),
       '[{"cuenta": "62900000", "debe": 10}, {"cuenta": "57200001", "haber": 10}]'::jsonb, null, 'Prueba C05');
     v_tarde := null;
   exception when others then v_tarde := sqlerrm; end;
   if v_tarde is null then raise exception 'PRUEBA C05 · 4f: ha entrado un asiento en el ejercicio cerrado.'; end if;
+  if v_tarde not like '%ejercicio%' then raise exception 'PRUEBA C05 · 4f: el asiento tardío falló por otra cosa: %', v_tarde; end if;
 
   -- Reabrir: sin motivo no; con motivo anula apertura y cierre.
   begin perform public.conta_cierre_reabrir(v_fy, ' '); v_falla := null;

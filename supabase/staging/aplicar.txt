@@ -4,6 +4,6 @@
 #   2. La prueba de las funciones nuevas por sus caminos: saldos que cuadran,
 #      mapeo (cambiar, dejar fuera, estándar, ajeno no), modelo elegido, y el
 #      cierre entero (preparar, cerrar, rechazos, reabrir). ROLLBACK.
-# Las 0100, 0110 y 0120 ya están aplicadas (run 37846773199).
-supabase/migrations/20261014T0130_c05_modelo_elegido.sql
+# Las 0100, 0110 y 0120 ya están aplicadas (run 37846773199); la 0130, en el
+# run 37850982069 (la prueba de aquel run falló por la prueba: faltaba «porque»).
 supabase/staging/sql/20261014_c05_prueba_libros.sql
