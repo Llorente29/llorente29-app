@@ -144,8 +144,8 @@ begin
   end if;
 
   -- 6 · La que se va, archivada con su nota (y su ficha de proveedor de Cocina, si la tiene y estaba viva).
-  select coalesce(array_agg(s.id), '{}') into v_prov from party_role r join supplier s on s.id = r.supplier_id
-   where r.party_id = p_se_va and s.archived_at is null;
+  select coalesce(array_agg(s.id), '{}') into v_prov from party_role pr join supplier s on s.id = pr.supplier_id
+   where pr.party_id = p_se_va and s.archived_at is null;
   update supplier set archived_at = now() where id = any(v_prov);
   update party set archived_at = coalesce(archived_at, now()), archived_note = format('Fusionado con %s', v_a.name) where id = p_se_va;
 

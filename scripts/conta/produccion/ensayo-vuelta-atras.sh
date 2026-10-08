@@ -18,7 +18,7 @@ tanda=("$DIR/20990101T0100_ensayo_tabla.sql" "$DIR/20990101T0110_ensayo_funcion.
 foto() {
   "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
     select md5(concat_ws('#',
-      (select string_agg(c.relname || ':' || c.relkind, ',' order by c.relname) from pg_class c where c.relnamespace = 'public'::regnamespace),
+      (select string_agg(c.relname || ':' || c.relkind::text, ',' order by c.relname) from pg_class c where c.relnamespace = 'public'::regnamespace),
       (select string_agg(p.oid::regprocedure::text || ':' || md5(p.prosrc), ',' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace),
       (select string_agg(version || ':' || coalesce(array_to_string(statements, ''), ''), ',' order by version) from supabase_migrations.schema_migrations)))"
 }
