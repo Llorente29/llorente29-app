@@ -13,6 +13,14 @@
 // positivo aunque es un coste). Aquí los costes se toman en valor absoluto.
 // Y no todos traen el neto: Just Eat y Uber Eats solo traen ventas; entonces
 // no se inventa, se dice «el fichero no trae el neto».
+//
+// El CSV de Glovo hace otra cuenta (medido en producción el 08/10, 96 de 96
+// liquidaciones): neto = ventas − comisión × 1,21 + deuda acumulada. Su
+// comisión viene SIN el IVA que Glovo factura; arrastra a la quincena
+// siguiente lo que quedó en negativo (deuda_acumulada); y el resto de sus
+// columnas (entrega, tasa de acceso, promociones…) es un desglose que no se
+// resta aparte. Con la cuenta general salían las 96 «con diferencia». El
+// IVA lo redondea Glovo pedido a pedido: 36 de las 96 quedan a 1 céntimo.
 
 import { diaMes, eurosExactos } from './formato'
 
@@ -32,6 +40,10 @@ export interface LiquidacionPlataforma {
   /** Todos los demás cargos (transporte, promociones, cuotas, incidencias…), con su signo de origen. */
   otros: number[]
   neto: number | null
+  /** Origen de la fila (channel_settlement.source): decide la cuenta del neto. */
+  source?: string | null
+  /** Lo que arrastra de la liquidación anterior (Glovo: deuda_acumulada, negativa). */
+  deudaAnterior?: number | null
   cobradoEn: string | null
   cobrado: number | null
   paraRevisar: boolean
@@ -54,8 +66,26 @@ export interface Cuadre {
   frase: string
 }
 
+/** El origen del CSV de Glovo (lectorLiquidaciones, SOURCE.glovo). */
+export const ORIGEN_GLOVO = 'import_csv_glovo'
+/** Glovo factura su comisión con IVA al 21 %. */
+const IVA_COMISION = 0.21
+
 /** Regla 3: la cuenta de la liquidación, tal como viene. */
-export function cuadre(l: Pick<LiquidacionPlataforma, 'ventas' | 'comision' | 'otros' | 'neto'>): Cuadre {
+export function cuadre(l: Pick<LiquidacionPlataforma, 'ventas' | 'comision' | 'otros' | 'neto' | 'source' | 'deudaAnterior'>): Cuadre {
+  if (l.source === ORIGEN_GLOVO) {
+    // Su factura (comisión + IVA) es el único cargo; la deuda de la quincena anterior se arrastra.
+    const comisiones = r2(abs(l.comision) * (1 + IVA_COMISION))
+    const deuda = r2(l.deudaAnterior ?? 0)
+    const calculado = l.ventas == null ? null : r2(l.ventas - comisiones + deuda)
+    let descuadre = calculado == null || l.neto == null ? null : r2(l.neto - calculado)
+    // Glovo redondea el IVA pedido a pedido: 1 céntimo no es una diferencia.
+    if (descuadre != null && Math.abs(descuadre) <= 0.01) descuadre = 0
+    const partes = [l.ventas == null ? '¿ventas?' : eurosExactos(l.ventas), `${eurosExactos(comisiones)} de comisión con IVA`]
+    if (deuda) partes.push(`${eurosExactos(Math.abs(deuda))} de deuda anterior`)
+    const frase = `${partes.join(' − ')} = ${l.neto == null ? 'sin neto en el fichero' : eurosExactos(l.neto)}`
+    return { ventas: l.ventas, comisiones, otrosCargos: 0, calculado, neto: l.neto, descuadre, frase }
+  }
   const comisiones = r2(abs(l.comision))
   const otrosCargos = r2(l.otros.reduce((s, x) => s + abs(x), 0))
   const calculado = l.ventas == null ? null : r2(l.ventas - comisiones - otrosCargos)

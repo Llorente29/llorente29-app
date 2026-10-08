@@ -17,6 +17,7 @@ import {
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
 import { tandaDeDias } from '@/modules/conta/lib/proponer'
+import { ORIGEN_GLOVO } from '@/modules/conta/lib/liquidaciones'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -249,7 +250,7 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   // liquidación de SU socio (marca → acuerdo de cesión → socio → enlace «liquidacion»).
   const acuerdos = await leer(tabla('brand_licensing_agreement').select('brand_id, party_id').eq('account_id', accountId), 'los acuerdos de cesión')
   const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
-  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, collected_on, collected_amount')
+  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount')
     .eq('account_id', accountId).is('journal_entry_id', null).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones')
   for (const l of liqs) {
     const fecha = s(l.collected_on) ?? String(l.settlement_date)
@@ -261,7 +262,11 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     const t21 = ctx.tipos.find((x) => x.code === 'iva_general')
     const c472 = t21 ? ctx.enlace('tax_rate', t21.id, 'soportado') : null
     if (!c430 || !c410 || !c472 || !t21) { r.sinPropuesta.push({ que, porque: 'Falta su 430, su 410 o la 472 del 21 %: revisa su ficha (Plataformas).' }); continue }
-    const cargos: CargoPlataforma[] = ([
+    // El CSV de Glovo (lib/liquidaciones, 96 de 96 en producción): su factura es la
+    // comisión + IVA y nada más; entrega, tasas, promociones e incidencias son un
+    // desglose que no se cobra aparte, y el neto arrastra la deuda anterior.
+    const glovo = l.source === ORIGEN_GLOVO
+    const cargos: CargoPlataforma[] = glovo ? [] : ([
       ['Transporte', l.delivery_transport], ['Promociones a tu cargo', l.promo_product], ['Promoción flash', l.promo_flash], ['Cuota de acceso', l.access_fee],
       ['Cuota prime', l.prime_fee], ['Cuota recurrente', l.recurring_fee], ['Incidencias (espera del repartidor y otras)', l.incidents_cost],
       ['Pedido mínimo', l.min_order_fee], ['Otros cargos', l.other_cost],
@@ -271,7 +276,8 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     const res = liquidacionPlataforma({
       id: String(l.id), fecha: String(l.settlement_date), ref: s(l.settlement_ref), plataforma: canal?.nombre ?? 'la plataforma',
       flujo: l.flow_type === 'licensed' ? 'licensed' : 'own', ventas: n(l.gross_sales), comision: Math.abs(n(l.commission)), cargos,
-      devoluciones: Math.abs(n(l.incidents_refund)), neto: l.net_payout === null ? null : n(l.net_payout),
+      devoluciones: glovo ? 0 : Math.abs(n(l.incidents_refund)),
+      neto: l.net_payout === null ? null : glovo ? n(l.net_payout) - n(l.accumulated_debt) : n(l.net_payout),
       cobrado: l.collected_on ? { fecha: String(l.collected_on), importe: n(l.collected_amount) } : null,
       // Lo que se sabe sin recorrer pedido a pedido: cuántos del periodo FALTAN en un resumen del día.
       pedidos: { total: pendientes, asentados: 0 }, localId: s(l.location_id),

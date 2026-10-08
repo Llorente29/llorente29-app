@@ -97,11 +97,19 @@ const euros = (c) => {
 }
 
 /**
- * El mismo cuadre que cuadre() de la app: costes en valor absoluto (los
- * ficheros traen signos distintos), en céntimos. null si falta ventas o neto.
+ * El mismo cuadre que cuadre() de la app (src/modules/conta/lib/liquidaciones.ts):
+ * costes en valor absoluto (los ficheros traen signos distintos), en céntimos.
+ * null si falta ventas o neto. El CSV de Glovo hace otra cuenta (96 de 96 en
+ * producción, 08/10): neto = ventas − comisión × 1,21 + deuda acumulada, y el
+ * céntimo del redondeo del IVA pedido a pedido no es diferencia.
  */
 export function descuadre(l) {
   if (l.gross_sales == null || l.net_payout == null) return null
+  if (l.source === 'import_csv_glovo') {
+    const calculado = centimos(l.gross_sales) - Math.round(centimos(abs(l.commission)) * 1.21) + centimos(l.accumulated_debt ?? 0)
+    const d = centimos(l.net_payout) - calculado
+    return Math.abs(d) <= 1 ? 0 : d
+  }
   const otros = (l.otros ?? []).reduce((s, x) => s + centimos(abs(x)), 0)
   const calculado = centimos(l.gross_sales) - centimos(abs(l.commission)) - otros
   return centimos(l.net_payout) - calculado
@@ -110,7 +118,7 @@ export function descuadre(l) {
 /**
  * bd.terceros: { terceros: [{ account_id, id, name, tax_id, supplier_tax_id, tax_id_type, archived }],
  *                cuentas: [{ account_id, company_id, entity, entity_id, role, codes: [] }],
- *                liquidaciones: [{ account_id, id, party_id, ref, gross_sales, commission, otros, net_payout, needs_review }],
+ *                liquidaciones: [{ account_id, id, party_id, ref, gross_sales, commission, otros, net_payout, needs_review, source, accumulated_debt }],
  *                ventas_anio: [{ account_id, party_id, anio, ventas, comisiones, modelo }],
  *                excluidos_347: [{ account_id, party_id, motivo }] }
  */
@@ -197,8 +205,11 @@ export function revisarTerceros(t) {
       detalle: `${ls.length === 1 ? '1 liquidación no cuadra' : `${ls.length} liquidaciones no cuadran`} (ventas − comisiones − otros ≠ neto). ${ej}${ls.length > 3 ? '…' : '.'} Se enseñan «con diferencia».`, norma: NORMA_NETO })
   }
 
-  // 3 · Dos subcuentas para el mismo tercero y papel.
+  // 3 · Dos subcuentas para el mismo tercero y papel. Solo la PRINCIPAL: la
+  // de gasto (6xx), la de pago (57x/43x) y la de suplidos son otros enlaces del
+  // mismo tercero, no una segunda subcuenta (4 rojos falsos en producción, 08/10).
   for (const c of t.cuentas ?? []) {
+    if (c.role != null && c.role !== 'principal') continue
     if ((c.codes ?? []).length < 2) continue
     out.push({ nivel: 'rojo', tipo: 'dos_subcuentas', donde: donde(c.entity_id, c.account_id),
       detalle: `Tiene ${c.codes.length} subcuentas como ${c.entity === 'customer' ? 'cliente' : 'proveedor'} en la misma empresa: ${c.codes.join(', ')}.`, norma: NORMA_CUENTAS })
