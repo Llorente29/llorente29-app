@@ -272,11 +272,33 @@ de la PyG.** Salen 10 «distintos»; mirados uno a uno contra el BOE:
 | *551, *5525 | activo B.V por signo | B.V si es deudor; C.III.3 si es acreedor | **Iguales en lo que se ve.** La transcripción solo recoge el lado del activo; Folvy añade el del pasivo, que es el que dice el BOE. |
 | 544 | III.3 Otros deudores (y dentro del rango «540–549» de B.V) | III.3 Otros deudores | **Iguales.** El BOE la pone en «Otros deudores» (modelo abreviado: «44, 460, 470, 471, 472, 544»). El rango 540–549 de B.V es una abreviatura de la transcripción. |
 | 707 | dentro del rango «700–709» | — | **No es diferencia:** la 707 no existe en el cuadro de cuentas. |
-| 2935 | A.V Inversiones financieras a largo plazo | A.IV Grupo y asociadas (como toda la 293) | **Diez, en el fondo.** El modelo del BOE escribe «(293)» entera en A.IV, pero desde 2021 la 293 incluye el deterioro de participaciones en «otras partes vinculadas y otras empresas» (2935, 2936), que no son grupo ni asociadas. Folvy sigue la letra del modelo. **Propuesta:** llevar 2935 y 2936 a A.V como colocación de serie con su nota. No lo cambio sin el OK de Julio porque es apartarse del texto del modelo. |
-| 510 | C.III.3 Otras deudas a corto plazo | C.III.1 Entidades de crédito (colocada por defecto, con «Completar») | **Folvy, pero hay que mirarlo.** El BOE no nombra la 510 en el modelo, solo sus hijas. Según su definición, la 510 es «Deudas a corto plazo con entidades de crédito vinculadas»: 5103 y 5104 van a grupo y asociadas, y 5105 va a entidades de crédito. Folvy la deja con la 5105 y avisa de que está colocada por defecto. Diez la manda a «otras deudas». |
+| 2935 | A.V Inversiones financieras a largo plazo | **Ahora también A.V** (respuesta 3) | **Diez.** La 2935 corrige la 2405 (otras partes vinculadas), y una correctora va en la línea de la cuenta que corrige. El modelo del BOE escribe «(293)» entera en grupo y asociadas. El plan general vigente ya no tiene la 2935, pero una empresa traída de Diez sí. Lo mismo para la 5935 a corto plazo; la 2945 y la 2955 ya estaban bien. |
+| 510 | C.III.3 Otras deudas a corto plazo | **Ahora también «Otras deudas a corto plazo»**, colocada por defecto y con «Completar» (respuesta 3) | **Diez.** Una deuda de 3 cifras con partes vinculadas va a la línea «otras» de su grupo. Al completarla, 5103 y 5104 van a grupo y asociadas y 5105 a entidades de crédito. La misma regla mueve la 160, la 162 y la 512 (12 filas en los tres modelos, medidas). |
 
-**Resultado:** de 316 prefijos, 2 diferencias reales (2935 y 510), y en ninguna
-de las dos se apartan las cuentas que Foodint usa hoy.
+**Resultado:** de 316 prefijos salían 2 diferencias reales (2935 y 510). Las dos
+se resuelven como Diez (respuesta 3), así que ya no queda ninguna.
+
+### Regla: una correctora va en la línea de la cuenta que corrige
+
+Amortizaciones, deterioros y desembolsos pendientes (28x, 29x, 249x, 39x, 490,
+539x, 59x) restan **en la misma línea** que su cuenta corregida, aunque el
+modelo del BOE las agrupe por subgrupo. La prueba
+`tests/unit/modules/conta/correctorasC05.test.ts` lo comprueba en los tres
+modelos con 59 parejas «correctora → corregida». La tabla sale de las
+definiciones del cuadro de cuentas, no del generador.
+
+### Regla: una deuda de 3 cifras con partes vinculadas va a «otras»
+
+Las cuentas de 3 cifras que el modelo reparte entre grupo y asociadas (…3, …4)
+y otras partes vinculadas (…5), cuando son deudas (160, 162, 510, 512), van a la
+línea «Otras deudas…» u «Otros pasivos financieros» de su grupo. Van marcadas
+«colocada por defecto» y con «Completar».
+
+La regla se probó primero en general, a toda cuenta de 3 cifras, y daba
+disparates: 103/104 (capital no exigido) a deudas, 630 (impuesto sobre
+beneficios) a otros ingresos, y la 552 perdía la colocación por signo. Por eso
+se queda en las deudas con partes vinculadas. El resto sigue con su hija «otras»
+(la que acaba en 5).
 
 ### La numeración de la PyG: Diez no es el BOE
 

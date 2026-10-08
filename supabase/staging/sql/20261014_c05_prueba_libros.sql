@@ -28,6 +28,22 @@ values ('c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8ca
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
+\echo '>>> 0. La serie de la respuesta 3: 510 a «otras deudas», 2935 con la 2405'
+do $$
+declare v text; n int;
+begin
+  select string_agg(line_code, ',') , count(*) into v, n from public.annual_accounts_mapping
+   where company_id is null and model = 'abreviado' and statement = 'balance' and account_prefix = '510';
+  if n <> 1 or v <> 'PNP.C.III.3' then raise exception 'PRUEBA C05 · 0: la 510 del abreviado está en % (% filas); espero una, en PNP.C.III.3.', v, n; end if;
+  select string_agg(line_code, ',') into v from public.annual_accounts_mapping
+   where company_id is null and model = 'abreviado' and statement = 'balance' and account_prefix = '2935';
+  if v is distinct from 'ACT.A.V' then raise exception 'PRUEBA C05 · 0: la 2935 del abreviado está en «%»; espero ACT.A.V, con la 2405.', v; end if;
+  select count(*) into n from (select model, account_prefix, coalesce(by_balance, '') from public.annual_accounts_mapping
+   where company_id is null and statement = 'balance' group by 1, 2, 3 having count(distinct line_code) > 1) x;
+  if n <> 0 then raise exception 'PRUEBA C05 · 0: % cuentas de serie con dos líneas a la vez.', n; end if;
+  raise notice 'PRUEBA C05 · 0 en verde: 510 en «Otras deudas a corto plazo», 2935 en V, ninguna cuenta con dos líneas.';
+end $$;
+
 \echo '>>> 1. Saldos del ejercicio: lo validado cuadra'
 do $$
 declare d numeric; h numeric; n int;
@@ -114,7 +130,7 @@ begin
   end loop;
   if jsonb_array_length(v_reg) = 0 then raise exception 'PRUEBA C05 · 4: la semilla no tiene gastos ni ingresos validados que regularizar.'; end if;
   v_reg := v_reg || jsonb_build_array(jsonb_build_object('cuenta', '12900000', 'debe', greatest(v_res, 0), 'haber', greatest(-v_res, 0), 'comun', true));
-  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Regularización 2026 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.'), v_reg, null, 'Prueba C05');
+  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Regularización 2026 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.', 'razones', '[{"decision": "cierre-del-ejercicio", "porque": "Prueba C05"}]'::jsonb), v_reg, null, 'Prueba C05');
   v_ids[1] := (r->>'id')::uuid;
   -- Enlazada antes de validarse (como en la pantalla): así cuenta como regularización y no como cierre.
   perform public.conta_cierre_enlazar(v_fy, v_ids[1], null, null);
@@ -134,10 +150,22 @@ begin
     v_cie := v_cie || jsonb_build_array(jsonb_build_object('cuenta', s.code, 'debe', greatest(-s.saldo, 0), 'haber', greatest(s.saldo, 0), 'comun', true));
     v_ape := v_ape || jsonb_build_array(jsonb_build_object('cuenta', s.code, 'debe', greatest(s.saldo, 0), 'haber', greatest(-s.saldo, 0), 'comun', true));
   end loop;
-  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Cierre 2026 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.'), v_cie, null, 'Prueba C05');
+  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Cierre 2026 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.', 'razones', '[{"decision": "cierre-del-ejercicio", "porque": "Prueba C05"}]'::jsonb), v_cie, null, 'Prueba C05');
   v_ids[2] := (r->>'id')::uuid;
-  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2027-01-01', 'source_type', 'opening', 'series', 4, 'concepto', 'Apertura 2027 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.'), v_ape, null, 'Prueba C05');
+  r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2027-01-01', 'source_type', 'opening', 'series', 4, 'concepto', 'Apertura 2027 (prueba)', 'confianza', 'seguro', 'porque', 'Prueba C05: cierre por sus caminos.', 'razones', '[{"decision": "cierre-del-ejercicio", "porque": "Prueba C05"}]'::jsonb), v_ape, null, 'Prueba C05');
   v_ids[3] := (r->>'id')::uuid;
+
+  -- 4a2. Un closing SUELTO (con la marca, pero sin enlazar) con la 477 y la 4751: el validador lo rechaza (0140).
+  begin
+    r := public.journal_entry_proponer(v_co, jsonb_build_object('fecha', '2026-12-31', 'source_type', 'closing', 'series', 4, 'concepto', 'Cierre suelto (prueba)',
+      'confianza', 'seguro', 'porque', 'Prueba C05.', 'razones', '[{"decision": "cierre-del-ejercicio", "porque": "Prueba C05"}]'::jsonb), v_cie, null, 'Prueba C05');
+    perform public.journal_entry_validar((r->>'id')::uuid, 'Prueba C05');
+    v_falla := null;
+  exception when others then v_falla := sqlerrm; end;
+  if v_falla is null or v_falla not like '%apunte de IVA lleva base%' then
+    raise exception 'PRUEBA C05 · 4a2: un cierre suelto sin enlazar con la 477 dio «%» (espero el rechazo de la regla de IVA).', coalesce(v_falla, 'validado');
+  end if;
+  raise notice 'PRUEBA C05 · 4a2 en verde: closing suelto rechazado (%).', left(v_falla, 90);
 
   r := public.conta_cierre_enlazar(v_fy, v_ids[1], v_ids[2], v_ids[3]);
   select status into v_estado from public.fiscal_year_closing where fiscal_year_id = v_fy;

@@ -150,7 +150,9 @@ export async function prepararCierreEnBase(companyId: string, fiscalYearId: stri
     if (!a) { ids.push(i === 0 ? regularizacionEnlazada : null); continue }
     const r = await rpc<{ id: string }>('journal_entry_proponer', {
       p_company: companyId,
-      p_entry: { fecha: a.fecha, source_type: a.sourceType, series: a.serie, concepto: a.concepto, confianza: 'seguro', porque: `Preparado por Folvy: ${a.tipo} del ejercicio (PGC, quinta parte, cuenta 129 y normas de cierre).`, razones: [] },
+      p_entry: { fecha: a.fecha, source_type: a.sourceType, series: a.serie, concepto: a.concepto, confianza: 'seguro', porque: `Preparado por Folvy: ${a.tipo} del ejercicio (PGC, quinta parte, cuenta 129 y normas de cierre).`,
+        // La marca del generador: con ella y el enlace del ejercicio, el validador no le pide IVA a las 472/477/4751 que deja a cero (0140).
+        razones: [{ decision: 'cierre-del-ejercicio', porque: `Asiento de ${a.tipo} calculado por Folvy con los saldos del ejercicio.` }] },
       p_lines: a.apuntes.map((p) => ({ cuenta: p.cuenta, debe: p.debe || undefined, haber: p.haber || undefined, concepto: p.concepto, local_id: p.localId ?? '', marca_id: p.marcaId ?? '', comun: p.comun })),
       p_summary: null, p_quien_nombre: quien,
     })

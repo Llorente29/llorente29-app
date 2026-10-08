@@ -1,11 +1,12 @@
-# C05 · tarea 4 (conta/c05-libros-y-balances) · Libros y balances: pantallas.
-#   1. 20261014T0130_c05_modelo_elegido.sql — el modelo de cuentas anuales que
-#      elige cada empresa por ejercicio (todo nuevo, solo añade).
-#   2. La prueba de las funciones nuevas por sus caminos: saldos que cuadran,
-#      mapeo (cambiar, dejar fuera, estándar, ajeno no), modelo elegido, y el
-#      cierre entero (preparar, cerrar, rechazos, reabrir). ROLLBACK.
-# Las 0100, 0110 y 0120 ya están aplicadas (run 37846773199); la 0130, en el
-# run 37850982069. La prueba falló dos veces por la propia prueba (faltaba
-# «porque»; la 129 con el signo cambiado) y destapó un fallo de la pantalla de
-# cierre (regularizar dos veces tras reabrir), arreglado en c7a790a.
+# C05 · respuesta 3 (conta/c05-libros-y-balances).
+#   1. Staging: quita las 12 filas de serie de 160/162/510/512 que cambian de
+#      línea (la 0110 inserta «si no está» y no las movería).
+#   2. 20261014T0110_c05_modelos_serie.sql otra vez, regenerada: 160/162/510/512
+#      a la línea «otras» de su grupo y 2935/5935 con la cuenta que corrigen.
+#   3. 20261014T0140_c05_validar_cierre.sql (cambia: journal_entry_validar):
+#      el cierre y la apertura del generador, enlazados, sin la regla de IVA.
+#   4. La prueba de libros por sus caminos, con el closing suelto rechazado. ROLLBACK.
+supabase/staging/sql/20261014_c05_serie_r3.sql
+supabase/migrations/20261014T0110_c05_modelos_serie.sql
+supabase/migrations/20261014T0140_c05_validar_cierre.sql
 supabase/staging/sql/20261014_c05_prueba_libros.sql

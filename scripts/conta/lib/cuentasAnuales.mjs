@@ -101,6 +101,9 @@ function porDefecto(modelo) {
   return r
 }
 
+/** Correctoras que el texto del modelo deja en otra línea que su cuenta corregida: [correctora, corregida]. */
+const CORRECTORAS = [['2935', '2405'], ['2945', '2415'], ['2955', '2425'], ['5935', '5305'], ['5945', '5315'], ['5955', '5325']]
+
 /** El código de línea al que va el resultado del ejercicio en cada modelo. */
 const LINEA_RESULTADO = { normal: 'PNP.A.A1.VII', abreviado: 'PNP.A.A1.VII', pymes: 'PNP.A.A1.VII' }
 
@@ -178,6 +181,28 @@ export function construirModelo(modelo, estados, hojas, meta) {
     }
   }
 
+  // Una correctora va en la línea de la cuenta que corrige (respuesta 3 del
+  // C05). El modelo escribe «(293)» y «(593)» enteras en grupo y asociadas,
+  // pero la 2935/5935 corrigen la 2405/5305 (otras partes vinculadas), que van
+  // a las inversiones financieras. El plan general vigente ya no tiene la
+  // 2935, pero una empresa traída de Diez sí. tests/unit/modules/conta/
+  // correctorasC05.test.ts lo comprueba con TODAS las correctoras del cuadro.
+  const lineaDe = (code) => {
+    const ms = mapeo.filter((m) => m.statement === 'balance' && m.origin !== 'resultado' && code.startsWith(m.account_prefix))
+    const max = Math.max(0, ...ms.map((m) => m.account_prefix.length))
+    return ms.filter((m) => m.account_prefix.length === max)
+  }
+  for (const [correctora, corregida] of CORRECTORAS) {
+    const destino = lineaDe(corregida)
+    if (!destino.length) continue
+    const ahora = lineaDe(correctora)
+    if (ahora.length === destino.length && ahora.every((m, i) => m.line_code === destino[i].line_code)) continue
+    for (const d of destino) {
+      mapeo.push({ model: modelo, statement: 'balance', line_code: d.line_code, account_prefix: correctora, sign: 'resta', by_balance: d.by_balance, origin: 'boe', any_sign: false,
+        note: `Correctora de la ${corregida}: va en su misma línea (el modelo pone la ${correctora.slice(0, 3)} entera en grupo y asociadas). Respuesta 3 del C05.`, legal_ref: meta.citaModelo('balance') })
+    }
+  }
+
   // Cuentas que el modelo reparte a un nivel más fino (160 → 1603/1604/1605):
   // van a la línea de su hija «otras» (la que acaba en 5), o a la primera.
   // Se aplica a las hojas del cuadro Y a sus padres de 3 cifras, porque una
@@ -190,6 +215,26 @@ export function construirModelo(modelo, estados, hojas, meta) {
     if (yaColocada(code, estado)) continue
     const hijas = mapeo.filter((m) => m.statement === estado && m.account_prefix.startsWith(code) && m.account_prefix.length > code.length && m.origin !== 'resultado')
     if (!hijas.length) continue
+    // Respuesta 3 (510): una deuda de 3 cifras con partes vinculadas, cuyas
+    // hijas se reparten entre grupo y asociadas (…3, …4) y otras partes
+    // vinculadas (…5), va a la línea «otras» de su grupo: la «Otras deudas…» u
+    // «Otros pasivos financieros» hermana de la línea de su hija …5 (510 →
+    // «Otras deudas a corto plazo», no con la 5105 a entidades de crédito).
+    // Solo deudas: a 103/104 (capital no exigido), 240 (participaciones) o
+    // 630 (impuesto) la regla general los mandaría a sitios absurdos (medido).
+    const finales = new Set(hijas.map((m) => m.account_prefix.slice(-1)))
+    const hija5 = hijas.find((m) => m.account_prefix.length === 4 && m.account_prefix.endsWith('5'))
+    const ladoDe = (c) => lineas.find((l) => l.statement === estado && l.code === c)?.side
+    if (estado === 'balance' && hija5 && finales.has('3') && finales.has('4') && hijas.every((m) => ladoDe(m.line_code) === 'pn_pasivo')) {
+      const padre = lineas.find((l) => l.statement === estado && l.code === hija5.line_code)?.parent_code
+      const otraLinea = lineas.find((l) => l.statement === estado && !l.is_total && l.parent_code === padre && /^(\d+\.\s*)?Otr[ao]s (deudas|pasivos)/i.test(l.text))?.code
+      if (otraLinea) {
+        mapeo.push({ model: modelo, statement: estado, line_code: otraLinea, account_prefix: code, sign: 'suma', by_balance: null, origin: 'defecto', any_sign: false,
+          note: `El modelo no nombra la ${code}: va a la línea «otras» de su grupo. Completar: ${code}3 y ${code}4 van a grupo y asociadas; ${hija5.account_prefix} a su línea.`,
+          legal_ref: meta.citaModelo(estado) })
+        continue
+      }
+    }
     const otras = hijas.filter((m) => m.account_prefix.endsWith('5'))
     const elegidas = otras.length ? otras : [hijas.sort((a, b) => a.account_prefix.localeCompare(b.account_prefix))[0]]
     const hija = elegidas[0].account_prefix

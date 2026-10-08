@@ -66,8 +66,9 @@ describe('Respuestas 1 y 2 · dónde van las cuentas que el modelo no nombra', (
     expect(m.lineCode).toBe('ACT.B.II.3')
     expect(m.origin).toBe('defecto')
   })
-  it('160 a secas va con su hija «otras» (1605: deudas con entidades de crédito), por defecto', () => {
-    expect(colocar('160', -10, bal)).toMatchObject({ lineCode: 'PNP.B.II.1', origin: 'defecto' })
+  it('160 a secas va a la línea «otras» de su grupo (respuesta 3: como la 510), por defecto', () => {
+    expect(colocar('160', -10, bal)).toMatchObject({ lineCode: 'PNP.B.II.3', origin: 'defecto' })
+    expect(colocar('1605', -10, bal)?.lineCode).toBe('PNP.B.II.1')
   })
   it('678 y 778 van a «Otros resultados», partida a crear de la norma 6.ª.6 del PGC de pymes', () => {
     const pyg = mapeoDe('pymes', 'pyg')
