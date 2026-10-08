@@ -1,8 +1,6 @@
-# Octava vuelta: la 7ª cazó «permission denied for schema extensions» (journal_huella → extensions.digest); se da el USAGE.
-# C04 R4 (conta/c04-retoques) · Séptima vuelta: la lectura de los agentes.
-# El primer ensayo en producción paró: conta_lectura no tenía SELECT sobre sale
-# (ni supplier_invoice, fiscal_period_lock y brand). La prueba crea el rol
-# como en producción, aplica 20261012T0050_c04r_lectura.sql, pasa los cuatro
-# agentes con ese rol, comprueba que sin SELECT sobre sale el del libro FALLA y
-# que el rol no escribe. Todo en una transacción que acaba en ROLLBACK.
-supabase/staging/sql/20261012_c04r_prueba_lectura.sql
+# C04 R5 (conta/c04-cierre) · La guarda 4 del nocturno de producción
+# (scripts/conta/produccion/guarda-lectura.sql): BYPASSRLS se admite (Julio,
+# 08/10); el rol sigue sin poder escribir. La prueba crea conta_lectura como en
+# producción y comprueba que la guarda pasa así, falla con un INSERT y falla
+# siendo miembro de un rol que escribe. Todo en una transacción con ROLLBACK.
+supabase/staging/sql/20261013_c04r5_prueba_guarda.sql

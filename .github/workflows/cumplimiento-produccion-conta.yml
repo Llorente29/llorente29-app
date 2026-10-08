@@ -129,21 +129,15 @@ jobs:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
           set -euo pipefail
+          # 3 · Foodint al otro lado (por sus proveedores: conta_lectura no lee accounts) y sesión de solo lectura.
           r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
-            -- Foodint, por sus proveedores: conta_lectura no lee accounts (no está en lo que leen los agentes).
             select (select count(*) from public.supplier where account_id = '$FOODINT') > 0
                and current_setting('transaction_read_only') = 'on'
-               and not exists (select 1 from information_schema.role_table_grants
-                                where grantee = current_user and privilege_type <> 'SELECT')
-               -- C04: tampoco heredado (roles, PUBLIC) ni por atributos del rol.
-               and not exists (select 1 from pg_tables t where t.schemaname = 'public'
-                                 and has_table_privilege(current_user, format('%I.%I', t.schemaname, t.tablename), 'INSERT,UPDATE,DELETE,TRUNCATE'))
-               and not (select rolsuper or rolcreaterole or rolcreatedb or rolbypassrls from pg_roles where rolname = current_user)
           " 2>&1) || { echo "::error::No se ha podido comprobar: $r"; exit 1; }
-          if [ "$r" != "t" ]; then
-            echo "::error::Falla una guarda: o no está Foodint, o la sesión no es de solo lectura, o el usuario puede escribir algo (un permiso que no es SELECT, directo o heredado, o un atributo de superusuario). No se lee nada."
-            exit 1
-          fi
+          if [ "$r" != "t" ]; then echo "::error::Falla la guarda 3: o no está Foodint, o la sesión no es de solo lectura. No se lee nada."; exit 1; fi
+          # 4 · El rol no puede escribir (BYPASSRLS sí se admite: C04 R5). Vacío = bien.
+          f=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/produccion/guarda-lectura.sql 2>&1) || { echo "::error::No se ha podido comprobar: $f"; exit 1; }
+          if [ -n "$f" ]; then echo "::error::Falla la guarda 4, el usuario podría escribir: $f. No se lee nada."; exit 1; fi
           echo "Producción (está Foodint), sesión de solo lectura, y el usuario solo tiene SELECT."
 
       - name: Volcar las filas de serie (solo lectura)
@@ -331,14 +325,15 @@ jobs:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
           set -euo pipefail
+          # 3 · Foodint al otro lado (por sus proveedores: conta_lectura no lee accounts) y sesión de solo lectura.
           r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
             select (select count(*) from public.supplier where account_id = '$FOODINT') > 0
                and current_setting('transaction_read_only') = 'on'
-               and not exists (select 1 from pg_tables t where t.schemaname = 'public'
-                                 and has_table_privilege(current_user, format('%I.%I', t.schemaname, t.tablename), 'INSERT,UPDATE,DELETE,TRUNCATE'))
-               and not (select rolsuper or rolcreaterole or rolcreatedb or rolbypassrls from pg_roles where rolname = current_user)
           " 2>&1) || { echo "::error::No se ha podido comprobar: $r"; exit 1; }
-          if [ "$r" != "t" ]; then echo "::error::Falla una guarda: o no está Foodint, o la sesión no es de solo lectura, o el usuario puede escribir algo. No se lee nada."; exit 1; fi
+          if [ "$r" != "t" ]; then echo "::error::Falla la guarda 3: o no está Foodint, o la sesión no es de solo lectura. No se lee nada."; exit 1; fi
+          # 4 · El rol no puede escribir (BYPASSRLS sí se admite: C04 R5). Vacío = bien.
+          f=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/produccion/guarda-lectura.sql 2>&1) || { echo "::error::No se ha podido comprobar: $f"; exit 1; }
+          if [ -n "$f" ]; then echo "::error::Falla la guarda 4, el usuario podría escribir: $f. No se lee nada."; exit 1; fi
 
       - name: Volver a bajar el PGC del BOE (no se sube a ninguna parte)
         env:
