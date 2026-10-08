@@ -54,6 +54,8 @@ export interface AnotacionLibro {
   activityIae: string | null
   correctsRef: string | null
   sourceType: string
+  /** El documento de origen (la factura del proveedor, el resumen del día…). */
+  sourceId?: string | null
   voidedAt: string | null
 }
 
@@ -150,6 +152,31 @@ export function filaRecibidas(a: AnotacionLibro): Celda[] {
     a.total, a.taxBase, a.taxRate, a.taxAmount, a.deductibleAmount, a.surchargeRate, a.surchargeAmount,
     null, null, null, null,
     a.withholdingRate, a.withholdingAmount, null, null, null, a.entryId,
+  ]
+}
+
+/** Un bien de inversión, como lo lee el libro. */
+export interface BienLibro {
+  id: string; descripcion: string; tipo: 'mueble' | 'inmueble'; inicioUso: string | null; alta: string
+  valor: number; base: number; tipoIva: number | null; cuota: number; deducible: number; baja: string | null; causaBaja?: string | null
+}
+
+/**
+ * Un bien en las 40 columnas de BIENES-INVERSIÓN. «Periodo» es «4T» o «0A»
+ * (validación 1 del diseño): el libro de bienes es anual. «Tipo de Bien»
+ * (validación 2): inmueble → 12 (edificaciones y construcciones); mueble → 29
+ * (otro inmovilizado material) mientras la ficha no diga la categoría.
+ */
+export function filaBienes(b: BienLibro, ejercicio: number): Celda[] {
+  const cuotaDeducible = Math.round(b.cuota * b.deducible) / 100
+  return [
+    ejercicio, '4T', null, null, null,
+    b.tipo === 'inmueble' ? '12' : '29', b.id, b.descripcion, fechaAeat(b.inicioUso ?? b.alta),
+    b.valor, null, null, null, null, null, null, null,
+    fechaAeat(b.alta), null, null, null, null, null, null, null, null,
+    b.base, b.tipoIva, b.deducible, cuotaDeducible, null, null, null,
+    fechaAeat(b.baja), b.baja ? (b.causaBaja ?? '99') : null,
+    null, null, null, null, b.id,
   ]
 }
 

@@ -16,8 +16,9 @@ import {
 import { filasQueNoSuman, sumasYSaldos, totales, OPCIONES_POR_DEFECTO, type SaldoPartido } from '@/modules/conta/lib/sumasSaldos'
 import {
   COLUMNAS_BIENES, COLUMNAS_EXPEDIDAS, COLUMNAS_RECIBIDAS, agruparPorNif, cuadreConDiario, etiquetaTipo, faltaParaCompletar,
-  filaExpedidas, filaRecibidas, filtrar, nombreFichero, trimestre, type AnotacionLibro,
+  filaBienes, filaExpedidas, filaRecibidas, filtrar, nombreFichero, trimestre, type AnotacionLibro,
 } from '@/modules/conta/lib/libroRegistro'
+import { extracto, resumir, type ApunteMayor } from '@/modules/conta/lib/extractos'
 import { apertura, aplicar, cierre, prepararCierre, regularizacion, sumas, type SaldoACerrar } from '@/modules/conta/lib/cierre'
 
 type Ref = {
@@ -339,5 +340,77 @@ describe('Regla 7 · regularización, cierre y apertura', () => {
   })
   it('apertura sin cierre: nada', () => {
     expect(apertura({ tipo: 'cierre', fecha: '', concepto: '', sourceType: 'closing', serie: 4, apuntes: [] }, '2027-01-01', '2027').apuntes).toEqual([])
+  })
+})
+
+// ── Tarea 4: diario resumido, extracto del mayor y hoja de bienes ───────────
+
+const ap = (entryId: string, fecha: string, cuenta: string, debe: number, haber: number, localId: string | null = null): ApunteMayor =>
+  ({ entryId, fecha, cuenta, nombreCuenta: `Cuenta ${cuenta}`, debe, haber, localId, marcaId: null, comun: localId === null })
+
+describe('diario resumido', () => {
+  const ms = [
+    ap('a', '2026-01-01', '57200001', 1000, 0), ap('a', '2026-01-01', '10000000', 0, 1000),
+    ap('b', '2026-01-15', '62100000', 300.1, 0), ap('b', '2026-01-15', '57200001', 0, 300.1),
+    ap('c', '2026-02-03', '70000000', 0, 0.3), ap('c', '2026-02-03', '57200001', 0.1, 0), ap('c', '2026-02-03', '57200002', 0.2, 0),
+  ]
+  it('un mes por fila de cuenta, y cada mes cuadra al céntimo', () => {
+    const r = resumir(ms, null)
+    expect(r.map((m) => m.mes)).toEqual(['2026-01', '2026-02'])
+    expect(r[0].asientos).toBe(2)
+    expect(r[0].filas.find((f) => f.cuenta === '57200001')).toMatchObject({ debe: 1000, haber: 300.1 })
+    for (const m of r) expect(Math.round(m.debe * 100)).toBe(Math.round(m.haber * 100))
+    // 0,1 + 0,2 en coma flotante es 0,30000000000000004: se suma en céntimos.
+    expect(r[1].debe).toBe(0.3)
+  })
+  it('por nivel junta las subcuentas', () => {
+    const r = resumir(ms, 3)
+    expect(r[1].filas.map((f) => f.cuenta)).toEqual(['572', '700'])
+    expect(r[1].filas[0].debe).toBe(0.3)
+  })
+})
+
+describe('extracto del mayor', () => {
+  const ms = [
+    ap('ap', '2026-01-01', '57200001', 500, 0, null),
+    ap('x', '2026-02-10', '57200001', 0, 120, 'L1'),
+    ap('y', '2026-03-05', '57200001', 80, 0, 'L2'),
+    ap('z', '2026-03-20', '57200001', 0, 30, 'L1'),
+  ]
+  it('saldo inicial con la apertura, y arrastre fila a fila', () => {
+    const x = extracto(ms, { desde: '2026-03-01', hasta: '2026-03-31' })
+    expect(x.inicial).toBe(380)
+    expect(x.filas.map((f) => f.saldo)).toEqual([460, 430])
+    expect(x).toMatchObject({ debe: 80, haber: 30, final: 430 })
+  })
+  it('con filtro de local, el saldo inicial también se filtra', () => {
+    const x = extracto(ms, { desde: '2026-03-01', hasta: '2026-03-31', localId: 'L1' })
+    expect(x.inicial).toBe(-120)
+    expect(x.filas.map((f) => f.saldo)).toEqual([-150])
+  })
+  it('solo lo común', () => {
+    const x = extracto(ms, { desde: '2026-01-01', hasta: '2026-12-31', localId: null, soloComun: true })
+    expect(x.filas).toHaveLength(1)
+    expect(x.final).toBe(500)
+  })
+})
+
+describe('hoja BIENES-INVERSIÓN', () => {
+  const b = { id: 'b1', descripcion: 'Horno', tipo: 'mueble' as const, alta: '2026-03-02', inicioUso: '2026-03-10', valor: 12100, base: 10000, tipoIva: 21, cuota: 2100, deducible: 100, baja: null }
+  it('40 columnas, como el diseño', () => {
+    expect(COLUMNAS_BIENES).toHaveLength(40)
+    expect(filaBienes(b, 2026)).toHaveLength(COLUMNAS_BIENES.length)
+  })
+  it('cada dato en su columna (por nombre, no por posición a ojo)', () => {
+    const f = filaBienes(b, 2026)
+    const en = (col: string) => f[COLUMNAS_BIENES.indexOf(col as (typeof COLUMNAS_BIENES)[number])]
+    expect(en('Autoliquidación · Periodo')).toBe('4T')
+    expect(en('Tipo de Bien')).toBe('29')
+    expect(en('Fecha Inicio Utilización')).toBe('10/03/2026')
+    expect(en('Valor Adquisición')).toBe(12100)
+    expect(en('Año de Inicio Utilización · Base Imponible')).toBe(10000)
+    expect(en('Año de Inicio Utilización · Cuota Deducible')).toBe(2100)
+    expect(en('Baja del Bien · Causa')).toBeNull()
+    expect(filaBienes({ ...b, tipo: 'inmueble', baja: '2027-01-01' }, 2027)[COLUMNAS_BIENES.indexOf('Baja del Bien · Causa')]).toBe('99')
   })
 })

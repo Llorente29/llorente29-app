@@ -171,6 +171,14 @@ export const CONTA = {
     nuevoAsiento: 'libros/diario/nuevo',
     /** Un asiento del libro (C04, maqueta N12Asiento). */
     asiento: 'libros/diario/:entryId',
+    /** Libros en tres niveles (C05, maqueta N13cLibros): el índice. */
+    libros: 'libros',
+    /** El diario resumido (C05): ruta propia, para no chocar con un asiento. */
+    diarioResumido: 'libros/diario/resumido',
+    /** Un área de Libros y su primera acción (C05). */
+    librosArea: 'libros/:area',
+    /** Una acción de un área de Libros (C05): balance, sumas y saldos, libro registro… */
+    librosAccion: 'libros/:area/:accion',
   },
 } as const
 
@@ -201,7 +209,7 @@ export const MENU_CONTA: EntradaMenuConta[][] = [
   [
     { id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: null },
     { id: 'negocio', etiqueta: 'Cómo va tu negocio', icono: 'negocio', ruta: null },
-    { id: 'libros', etiqueta: 'Libros', icono: 'libros', ruta: CONTA.rutas.libroDiario },
+    { id: 'libros', etiqueta: 'Libros', icono: 'libros', ruta: CONTA.rutas.libros },
   ],
   [
     { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: CONTA.rutas.empresa },
@@ -299,6 +307,15 @@ export const rutaTerceros = (filtro?: string): string => `${rutaConta(CONTA.ruta
 export const rutaLibroDiario = (filtro?: string): string => `${rutaConta(CONTA.rutas.libroDiario)}${filtro ? `?ver=${encodeURIComponent(filtro)}` : ''}`
 export const rutaAsiento = (entryId: string): string => rutaConta(CONTA.rutas.asiento, { entryId })
 export const rutaNuevoAsiento = (): string => rutaConta(CONTA.rutas.nuevoAsiento)
+/**
+ * Libros (C05). El libro diario conserva su ruta del C04 y el diario resumido
+ * tiene la suya (libros/diario/<algo> es un asiento).
+ */
+export const rutaLibros = (area?: string, accion?: string): string => {
+  if (!area) return rutaConta(CONTA.rutas.libros)
+  if (area === 'diario') return accion === 'diario-resumido' ? rutaConta(CONTA.rutas.diarioResumido) : rutaConta(CONTA.rutas.libroDiario)
+  return accion ? rutaConta(CONTA.rutas.librosAccion, { area, accion }) : rutaConta(CONTA.rutas.librosArea, { area })
+}
 export const rutaFichaTercero = (partyId: string, apartado?: string): string =>
   apartado ? rutaConta(CONTA.rutas.terceroApartado, { partyId, apartado }) : rutaConta(CONTA.rutas.tercero, { partyId })
 

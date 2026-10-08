@@ -48,7 +48,7 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   await page.goto('/conta/libros/diario')
   await expect(page.getByRole('heading', { level: 1, name: 'Libro diario' })).toBeVisible()
   // Desde el menú: «Libros» ya tiene su pantalla.
-  if (lado(page) === 'ordenador') await expect(page.getByRole('link', { name: 'Libros' })).toBeVisible()
+  if (lado(page) === 'ordenador') await expect(page.getByRole('link', { name: 'Libros', exact: true }).first()).toBeVisible()
   // Filtros: solo los orígenes que hay, con cuántos.
   for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Plataformas · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {
     await expect(page.getByRole('button', { name: f })).toBeVisible()
