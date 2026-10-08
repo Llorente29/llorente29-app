@@ -22,8 +22,9 @@
    795), 20 son partidas que el PGC manda *crear* cuando hay saldo o que se
    cancelan al cierre (473), y 678/778 van a «Otros resultados». Regla 2 obliga a decidirlo antes de migrar (§5.3).
 5. **Los límites del modelo abreviado son LSC arts. 257–258, no CCom.** La LSC
-   (bajada) dice 4 M / 8 M / 50 para el balance; el art. 2 del RD 1515/2007
-   consolidado sigue en 2,85 M / 5,7 M / 50. Decisión de Julio (§6).
+   (bajada) dice 4 M / 8 M / 50 para el balance, y el art. 2 del RD 1515/2007
+   consolidado, en su versión vigente (RD 602/2016), dice lo mismo: **un solo
+   umbral** (§6, corregido en la respuesta 1).
 
 ## 1. `conta_sumas_saldos` y `conta_resultado_por_local`, hoy
 
@@ -309,6 +310,34 @@ las capturas o la exportación de esa pantalla para el modelo de pymes (que es e
 de Foodint). Lo único que ya se puede decir con el encargo delante: Diez usa
 cuentas con asterisco para el signo, igual que las cinco «por signo» de §5.1.
 
+### 5.5 Respuesta 1 · ¿tiene el modelo de pymes la línea 13 «Otros resultados»? **No.**
+
+Texto consolidado del RD 1515/2007, bloque `[iimodelosdecuentasanuales]`,
+versión vigente desde 18/12/2016 (BOE-A-2016-11954, RD 602/2016): la cuenta de
+pérdidas y ganancias de pymes tiene las partidas **1 a 11**, «A) Resultado de
+explotación», **12 a 16**, «B) Resultado financiero», «C) Resultado antes de
+impuestos», **17** «Impuestos sobre beneficios» y «D) Resultado del ejercicio».
+No hay «Diferencia negativa en combinaciones de negocios» (el PGC de pymes no
+regula combinaciones de negocios: preámbulo, líneas 322 y 346 del texto) ni
+«Otros resultados»; la 774 no está en el cuadro de pymes.
+
+«Otros resultados» existe en pymes **solo como partida a crear**: tercera parte,
+I. Normas de elaboración de las cuentas anuales, **6.ª Cuenta de pérdidas y
+ganancias, apartado 6** (bloque `[inormasdeelaboracion-2]`, versión vigente
+desde 31/01/2021, BOE-A-2021-1350):
+
+> «En caso de que la empresa presente ingresos o gastos de carácter excepcional
+> y cuantía significativa, como por ejemplo los producidos por inundaciones,
+> incendios, multas o sanciones, se creará una partida con la denominación
+> "Otros resultados", formando parte del resultado de explotación e informará
+> de ello detalladamente en la memoria.»
+
+Lo mismo pasa con la PyG abreviada del RD 1514/2007 (versión de 2008): partidas
+1–17 sin 12 «Diferencia negativa» ni 13 «Otros resultados». La numeración de
+Diez (12 diferencia negativa, 13 otros resultados, 14–18 financieros e
+impuesto) es la del **modelo de depósito del Registro Mercantil**, no la del
+texto del PGC.
+
 ## 6. Normas: lo que hay que corregir en las citas del encargo
 
 - **«CCom arts. 257–258»**: el Código de Comercio no tiene esos artículos sobre
@@ -322,16 +351,17 @@ cuentas con asterisco para el signo, igual que las cinco «por signo» de §5.1.
   |---|---|---|---|
   | LSC art. 257.1, balance y ECPN abreviados (desde 17/06/2016, Ley 22/2015) | ≤ 4.000.000 € | ≤ 8.000.000 € | ≤ 50 |
   | LSC art. 258.1, PyG abreviada (desde 01/09/2010) | ≤ 11.400.000 € | ≤ 22.800.000 € | ≤ 250 |
-  | RD 1515/2007 art. 2.1, PGC de pymes (texto consolidado, versión de 2008) | ≤ 2.850.000 € | ≤ 5.700.000 € | ≤ 50 |
+  | RD 1515/2007 art. 2.1, PGC de pymes (versión vigente desde 18/12/2016, RD 602/2016 art. 2.1) | ≤ 4.000.000 € | ≤ 8.000.000 € | ≤ 50 |
 
-  **El art. 2 del RD 1515/2007 no se ha actualizado en el BOE** y sus cifras son
-  las del art. 175 del TRLSA de 1989 al que se remitía; la LSC subió las del
-  abreviado en 2013 y 2016. Que el ámbito de pymes siga a la LSC lo dice la
-  doctrina, no el texto que tengo bajado. **Decisión de Julio** (o de su gestor):
-  ¿Folvy propone pymes con los límites literales del art. 2 o con los de la LSC
-  257? Propongo citar los dos en la frase de la regla 4 y, si una empresa queda
-  entre ambos, decirlo en vez de decidir. Foodint (plantilla 6) cumple cualquiera
-  de las dos con su tamaño; el activo y la cifra los traerá el C04b.
+  **Corrección (respuesta 1, 08/10).** El informe de la tarea 1 decía que el
+  art. 2 del RD 1515/2007 seguía en 2,85 M / 5,7 M / 50: leí a mano la versión de
+  2008 del bloque `[a2]` y no la última. El texto consolidado tiene dos
+  versiones y la vigente (desde 18/12/2016, «Se modifican los apartados 1 y 2
+  por el art. 2.1 del Real Decreto 602/2016») dice **4 M / 8 M / 50, igual que
+  la LSC 257.1**. Hay un solo umbral para balance abreviado y pymes; el aviso de
+  «entre ambos» sobra. La PyG abreviada va por el art. 258.1 LSC. El extractor
+  (`modelos-pgc.mjs`) ya tomaba siempre la última versión; el error fue mío al
+  leer, no del guion.
 - **LSC art. 363.1.e** (bajado): «por pérdidas que dejen reducido el patrimonio
   neto a una cantidad inferior a la mitad del capital social…». Solo aviso.
 - El resto de citas (CCom 25, 27, 28, 30; Ley 14/2013 art. 18; RIVA 62–70, 63.4,
