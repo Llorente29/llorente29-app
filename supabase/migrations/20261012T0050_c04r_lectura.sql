@@ -15,6 +15,11 @@
 --   · 37 tablas: 33 ya con SELECT; FALTAN 4, todas del agente del libro:
 --     sale, supplier_invoice, fiscal_period_lock y brand.
 --   · 2 funciones: journal_entry_canonico y journal_huella, las dos ya con EXECUTE.
+--   · Y lo que hay DENTRO de una función que no es security definer:
+--     journal_huella llama a extensions.digest (pgcrypto), y conta_lectura no
+--     tenía USAGE sobre el esquema extensions (EXECUTE sobre digest sí). Lo
+--     cazó la prueba de staging, no la lista: «permission denied for schema
+--     extensions» en el agente del libro. Se da el USAGE (no da ninguna tabla).
 -- Aquí se dan las 37 y las 2 (lo que ya tiene no cambia: GRANT es idempotente)
 -- para que el fichero diga entero qué lee el rol, y la prueba de staging
 -- (supabase/staging/sql/20261012_c04r_prueba_lectura.sql) pasa cada agente
@@ -49,6 +54,7 @@ begin
     return;
   end if;
   grant usage on schema public to conta_lectura;
+  grant usage on schema extensions to conta_lectura;
   foreach t in array tablas loop
     if to_regclass('public.' || t) is null then
       faltan := faltan || ' ' || t;
@@ -62,5 +68,5 @@ begin
   if faltan <> '' then
     raise exception 'conta_lectura: no existen%; los agentes las leen y fallarían. PARA.', faltan;
   end if;
-  raise notice 'conta_lectura lee las % tablas y las 2 funciones de los agentes.', n;
+  raise notice 'conta_lectura lee las % tablas, las 2 funciones de los agentes y el esquema extensions.', n;
 end $$;

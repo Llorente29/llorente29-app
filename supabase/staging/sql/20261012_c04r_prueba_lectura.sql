@@ -10,6 +10,8 @@
 --      scripts/conta/ (los lee psql al vuelo): ninguno da «permission denied».
 --   3. Que la prueba puede fallar (regla 31): se quita SELECT sobre sale —lo
 --      que faltaba en producción— y el agente del libro TIENE que dar 42501.
+--      Y lo mismo con el USAGE sobre extensions (journal_huella llama a
+--      extensions.digest): sin él, el del libro también falla.
 --   4. El rol no puede escribir: un insert como conta_lectura falla.
 -- ============================================================================
 set transaction isolation level repeatable read;
@@ -71,6 +73,19 @@ do $$ begin
   end;
 end $$;
 grant select on table public.sale to conta_lectura;
+
+\echo '>>> 3b. Sin USAGE sobre extensions, el agente del libro tiene que fallar'
+revoke usage on schema extensions from conta_lectura;
+do $$ begin
+  begin
+    perform pg_temp.pasar_agentes('conta_lectura');
+    raise exception 'PRUEBA C04R4 lectura · 3b: sin USAGE sobre extensions los agentes pasaron: la prueba no puede fallar.';
+  exception when insufficient_privilege then
+    if sqlerrm not like '%«libro»%extensions%' then raise exception 'PRUEBA C04R4 lectura · 3b: falló otra cosa: %', sqlerrm; end if;
+    raise notice 'PRUEBA C04R4 lectura · 3b: falla como debe — %', sqlerrm;
+  end;
+end $$;
+grant usage on schema extensions to conta_lectura;
 
 \echo '>>> 4. Y no escribe'
 do $$ begin

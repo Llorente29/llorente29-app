@@ -1,3 +1,4 @@
+# Octava vuelta: la 7ª cazó «permission denied for schema extensions» (journal_huella → extensions.digest); se da el USAGE.
 # C04 R4 (conta/c04-retoques) · Séptima vuelta: la lectura de los agentes.
 # El primer ensayo en producción paró: conta_lectura no tenía SELECT sobre sale
 # (ni supplier_invoice, fiscal_period_lock y brand). La prueba crea el rol
