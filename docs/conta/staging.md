@@ -415,24 +415,30 @@ protege ya no es el reloj, sino **qué hace cada fichero contra lo que existe**.
 3. **Cada sentencia se clasifica por lo que hace**, contra lo que existe en
    producción (se pregunta a la base, en solo lectura):
    - **Añadir**: crear tabla, vista o función; columna que admite vacío o con
-     valor por defecto; índice (con `concurrently`, o en una tabla pequeña o
-     nueva); política RLS; disparador nuevo; `insert … on conflict do
-     nothing`; permisos; comentarios. **Pasa siempre.**
+     valor por defecto; índice con `concurrently`, o sin él en una tabla nueva
+     o pequeña que no sea del camino del pedido; política RLS nueva; `insert
+     … on conflict do nothing`; permisos; comentarios. **Pasa siempre.**
    - **Cambiar en caliente lo que existe**: reemplazar una función con la
-     misma firma, quitar y volver a poner una restricción (añadir un valor a
-     un CHECK), un disparador o una política, reemplazar una vista. **Pasa**
+     misma firma (o `drop` + `create` para cambiarle la firma), quitar y
+     volver a poner una restricción (añadir un valor a un CHECK), un
+     disparador o una política, una restricción o un disparador **nuevos** en
+     una tabla que existe, reemplazar una vista, alterar una tabla. **Pasa**
      si el fichero lo declara en su cabecera y la prueba de staging lo cubre:
      ```sql
      -- cambia: public.conta_reabrir_mes · prueba: supabase/staging/sql/20261011_c04_prueba_agente.sql
      ```
-     (la prueba tiene que existir y nombrar el objeto). Si toca el **camino
+     (la prueba tiene que existir en `supabase/staging/sql/` y nombrar el
+     objeto: es lo que se puede comprobar sin ejecutarla). Si toca el **camino
      del pedido**, además, `autorizo`. Sin cabecera, para y no se autoriza: se
      arregla el fichero.
    - **Destruir o mover**: borrar o renombrar tabla, columna, vista o función;
      `update`/`delete`/`truncate` o `insert … on conflict do update` sobre una
-     tabla que existe; cambiar el tipo de una columna o hacerla obligatoria;
-     índice sin `concurrently` en una tabla grande (más de 100 000 filas
-     estimadas). **Solo con `autorizo`.** Borrar o renombrar exige además
+     tabla que existe; cambiar el tipo de una columna (también ampliarlo: hoy
+     no se distingue) o hacerla obligatoria; quitar una restricción, política o
+     disparador sin volver a ponerlo; índice sin `concurrently` en una tabla
+     grande (más de 100 000 filas estimadas) o del camino del pedido (`sale`
+     tiene 13 475: frena las escrituras mientras se construye). **Solo con
+     `autorizo`.** Borrar o renombrar exige además
      **prueba de que nada lo usa** —vistas, funciones y disparadores de la base,
      y el front del commit buscado en `src/`— y que la tanda **no expanda lo
      mismo que contrae**: añadir lo nuevo y quitar lo viejo van en dos tandas
@@ -450,7 +456,10 @@ protege ya no es el reloj, sino **qué hace cada fichero contra lo que existe**.
    y sus `*.down.sql` en orden inverso. El informe dice si la vuelta atrás
    automática funcionaría.
 6. **Real**: un fichero por transacción, y en la misma transacción su registro
-   en el historial. Para al primer fallo.
+   en el historial (`version` = el nombre del fichero sin `.sql`, porque los
+   prefijos de fecha se repiten en 33 ficheros antiguos; `statements` = una
+   línea con la huella md5). Para al primer fallo; la comprobación de después
+   corre igual sobre lo que sí entró.
 7. **Después, comprobación y vuelta atrás.** Tras el real: D1, recuento de
    filas de serie, los agentes de solo lectura (datos maestros y libro
    diario, antes y después: solo cuenta lo que se ha puesto en rojo con la
@@ -465,7 +474,15 @@ protege ya no es el reloj, sino **qué hace cada fichero contra lo que existe**.
    (cada uno con el borrado de su registro) y avisa; si la vuelta atrás
    tampoco pasa, para y avisa en rojo con lo que queda a medias.
 8. **Las guardas de siempre no cambian**: la URL es la de producción y no la
-   de staging, y al otro lado está Foodint.
+   de staging, y al otro lado está Foodint, antes de cualquier conexión. Los
+   agentes de después usan `PROD_CONTA_RO_DB_URL` (usuario `conta_lectura`).
+
+**Ejemplo de lo que cambia, con la tanda real del C04** (prueba en
+`tests/conta/produccion/w01.test.ts`): la 0100 ya no para por el nombre de
+`sales_day_summary` (la crea ella), pero bloquea por otra cosa: pone CHECK y
+un disparador en `fiscal_year` y `fiscal_period_lock`, que ya existían, sin
+declararlo. Con la regla nueva, ese fichero lleva su cabecera `-- cambia:`
+con la prueba de staging que lo cubre.
 
 ### Front compatible en los dos sentidos
 
