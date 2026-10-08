@@ -52,10 +52,11 @@ function TableTile({ table, warnMinutes, now, onTap }: { table: FloorTable; warn
   )
 }
 
-export default function FloorView({ floor, now, onTapTable }: {
+export default function FloorView({ floor, now, onTapTable, onStartMove }: {
   floor: Floor
   now: number
   onTapTable: (table: FloorTable) => void
+  onStartMove?: () => void
 }) {
   const [zoneId, setZoneId] = useState<string | null>(null)
   const zone = floor.zones.find(z => z.id === zoneId) ?? floor.zones[0] ?? null
@@ -124,6 +125,13 @@ export default function FloorView({ floor, now, onTapTable }: {
           <b className="text-tpv-covers-big font-extrabold">{totalCovers} comensal{totalCovers === 1 ? '' : 'es'}</b>
           <span className="text-base text-tpv-txt-2">{byZone || 'Ninguna mesa abierta'}</span>
         </div>
+        <div className="flex-grow" />
+        {onStartMove && occupancy.some(o => o.busy > 0) && (
+          <button type="button" onClick={onStartMove}
+            className="h-tap rounded-tpv border border-tpv-line-strong bg-tpv-surface-2 text-tpv-txt text-lg font-bold">
+            Mover o juntar mesas
+          </button>
+        )}
       </aside>
     </main>
   )

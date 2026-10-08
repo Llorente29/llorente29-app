@@ -97,7 +97,7 @@ export default function TableAccountPanel(p: Props) {
         {d.fires.map(f => (
           <div key={f.id} className="flex flex-col gap-2">
             <GroupHeader
-              title={`Envío ${f.number}`}
+              title={`Envío ${f.number}${f.originTableName ? ` · de la ${f.originTableName}` : ''}`}
               rightTone="ok"
               right={<><Check size={16} strokeWidth={2.6} aria-hidden /> Enviado a cocina · {formatClock(f.firedAt)}</>}
             />
