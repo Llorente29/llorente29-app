@@ -1,4 +1,4 @@
-# Cuarta vuelta: la 85 vio en la foto los proveedores que creaba a la vez la e2e de la cuenta A; la prueba va ahora en una sola instantánea (REPEATABLE READ).
+# Quinta vuelta: la 86 pasó los pasos 1–4 (antes = después, fusionar, deshacer) y paró en el 5 porque buscaba el tercero solo en la cabecera del asiento; ahora también en sus apuntes.
 # C04 R4 (conta/c04-retoques). Primero la prueba de la fusión de terceros
 # (todo en una transacción que acaba en ROLLBACK: antes = después, fusionar,
 # deshacer, para con lo validado, B no puede, vuelta atrás de la migración) y,

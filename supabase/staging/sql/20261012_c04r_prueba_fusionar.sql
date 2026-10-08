@@ -121,9 +121,10 @@ end $$;
 do $$
 declare v_p uuid; v_otra uuid;
 begin
-  select e.party_id into v_p from public.journal_entry e
-   where e.account_id = 'c01a0000-0000-4000-8000-00000000000a' and e.status = 'validado' and e.party_id is not null limit 1;
-  if v_p is null then raise exception 'PRUEBA C04R4 fusionar · 5: la semilla de A no tiene un asiento validado con tercero; la prueba no podría fallar.'; end if;
+  -- El tercero de un asiento validado, en su cabecera o en uno de sus apuntes (la semilla del C04 lo pone en el apunte: 400/410/430).
+  select coalesce(e.party_id, l.party_id) into v_p from public.journal_entry e join public.journal_line l on l.entry_id = e.id
+   where e.account_id = 'c01a0000-0000-4000-8000-00000000000a' and e.status = 'validado' and coalesce(e.party_id, l.party_id) is not null limit 1;
+  if v_p is null then raise exception 'PRUEBA C04R4 fusionar · 5: la semilla de A no tiene un asiento validado con tercero (ni en la cabecera ni en un apunte); la prueba no podría fallar.'; end if;
   v_otra := (select queda from fichas);
   perform set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
   begin
