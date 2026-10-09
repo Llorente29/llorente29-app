@@ -152,6 +152,14 @@ describe('reglas 6 y 13 · el resumen de ventas del día', () => {
     expect(conNc.resumen.canceladosFuera).toBe(sinNc.resumen.canceladosFuera)
     expect(sinNc.resumen.noConfirmados).toEqual({ pedidos: 0, total: 0, ids: [] })
   })
+  it('un día de UN ticket con la base calculada se propone (20,40 € → 18,55 + 1,85), y uno al 21 % sigue sin pasar', () => {
+    // Antes la tolerancia era floor(n/2) céntimos: 0 con un ticket, y 18,55 × 10 % = 1,855 → 1,86 no es 1,85.
+    const uno = ventasDelDia(dia([pedido({ id: 'g234', total: 20.4 })]))
+    expect(uno.propuesta!.lineas.map((l) => [l.debe, l.haber])).toEqual([[20.4, 0], [0, 18.55], [0, 1.85]])
+    const al21 = ventasDelDia(dia([pedido({ id: 'g21', total: 24.2, base: 20, cuota: 4.2 })]))
+    expect(al21.propuesta).toBeNull()
+    expect(al21.sinPropuesta).toContain('hay pedidos con otro tipo')
+  })
   it('solo cedidas ese día: no hay asiento de ventas', () => {
     expect(ventasDelDia(dia([PEDIDOS_NORTE[4]])).sinPropuesta).toBe('Ese día solo hubo ventas de marcas cedidas: van en la liquidación del socio.')
   })

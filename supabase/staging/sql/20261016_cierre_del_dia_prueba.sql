@@ -47,6 +47,12 @@
 --      (conta_propuestos_antes_del_cierre) y su mismo borrado: el asiento de
 --      HOY se va, su resumen se queda sin asiento y SIN descarte (el día se
 --      volverá a proponer); el del 05/10 propuesto el 07/10 se queda.
+--  12. La liquidación manda (la 0150): una liquidación de Glovo casada con el
+--      no confirmado del 06/10 (la forma del 234 de producción, 20,40 €) lo
+--      saca en conta_no_confirmados_pagados como usuario de A, y B no lo ve;
+--      una casada a 0 € no cuenta. Propuesto aparte (sales_adjustment, por
+--      journal_entry_proponer como A) deja de salir; descartado
+--      (journal_entry_descartar) tampoco vuelve, y el descarte lo recuerda.
 
 begin;
 do $$ begin
@@ -561,6 +567,77 @@ begin
     raise exception 'PRUEBA cierre · 11: ha quedado un descarte: el día no se volvería a proponer.';
   end if;
   raise notice 'PRUEBA cierre · 11: el asiento de hoy, retirado (su resumen se queda sin asiento y sin descarte); el del 05/10 propuesto el 07/10, se queda.';
+end $$;
+
+-- ── 12 · La liquidación manda ──────────────────────────────────────────────
+do $$
+declare
+  v_e    uuid := current_setting('prueba.empresa')::uuid;
+  v_acc  constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
+  v_234  constant uuid := 'cd000000-0000-4000-8000-000000000015';   -- 06/10, Glovo, 20,40, esperando recogida
+  v_otro constant uuid := 'cd000000-0000-4000-8000-000000000017';   -- 07/10, casada a 0 €: no es un pago
+  v_liq  constant uuid := 'cd000000-0000-4000-8000-000000000701';
+begin
+  if (select unconfirmed_at from public.sale where id = v_234) is null then
+    raise exception 'PRUEBA cierre · 12: el pedido del 06/10 no quedó como no confirmado en el paso 3.';
+  end if;
+  insert into public.channel_settlement (id, account_id, channel_id, settlement_ref, settlement_date, period_from, period_to, flow_type, import_key, gross_sales)
+  values (v_liq, v_acc, 'e0200000-0000-4000-8000-00000000a0c1', 'G-PRUEBA-1014', '2026-10-14', '2026-10-06', '2026-10-12', 'own', 'prueba-cierre-1014', 20.4);
+  insert into public.channel_settlement_order (account_id, channel_id, settlement_id, settlement_ref, platform_order_code, sale_id, order_date, products, matched, match_status, import_key)
+  values (v_acc, 'e0200000-0000-4000-8000-00000000a0c1', v_liq, 'G-PRUEBA-1014', 'P915', v_234, '2026-10-06', 20.4, true, 'casada', 'prueba-cierre-1014-915'),
+         (v_acc, 'e0200000-0000-4000-8000-00000000a0c1', v_liq, 'G-PRUEBA-1014', 'P917', v_otro, '2026-10-07', 0, true, 'casada', 'prueba-cierre-1014-917');
+end $$;
+
+select set_config('request.jwt.claims', json_build_object('sub', 'c01b0000-0000-4000-8000-0000000000b1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+select set_config('prueba.pagados_b', (select count(*)::text from public.conta_no_confirmados_pagados(current_setting('prueba.empresa')::uuid)), true);
+reset role;
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+select set_config('prueba.pagados_a', (select coalesce(json_agg(json_build_object('sale', sale_id, 'dia', dia, 'pagado', pagado, 'ref', settlement_ref))::text, '[]')
+                                         from public.conta_no_confirmados_pagados(current_setting('prueba.empresa')::uuid)), true);
+reset role;
+
+do $$
+declare
+  v_e    uuid := current_setting('prueba.empresa')::uuid;
+  v_234  constant uuid := 'cd000000-0000-4000-8000-000000000015';
+  v_a    jsonb := current_setting('prueba.pagados_a')::jsonb;
+  v_c1 text; v_c2 text; v_r jsonb; v_n int;
+begin
+  if jsonb_array_length(v_a) <> 1 or (v_a->0->>'sale')::uuid <> v_234 or v_a->0->>'dia' <> '2026-10-06' or (v_a->0->>'pagado')::numeric <> 20.4 then
+    raise exception 'PRUEBA cierre · 12: A tenía que ver solo el del 06/10, pagado 20,40 (ve %).', v_a;
+  end if;
+  if current_setting('prueba.pagados_b')::int <> 0 then
+    raise exception 'PRUEBA cierre · 12: B ve % pagados de A.', current_setting('prueba.pagados_b');
+  end if;
+
+  -- Propuesto aparte, como lo hace «Proponer lo pendiente» (con la sesión de A).
+  select min(code), max(code) into v_c1, v_c2 from (select code from public.company_account
+     where company_id = v_e and kind = 'own' and code !~ '^47' order by code limit 2) x;
+  v_r := public.journal_entry_proponer(v_e,
+    jsonb_build_object('series', 1, 'fecha', '2026-10-06', 'concepto', 'Venta del 6 de octubre pagada después · Glovo · pedido P915',
+                       'source_type', 'sales_adjustment', 'source_id', v_234, 'confianza', 'probable',
+                       'porque', 'Glovo ha pagado el pedido P915, que se cerró sin confirmar el 6 de octubre', 'razones', '[]'::jsonb),
+    jsonb_build_array(jsonb_build_object('cuenta', v_c1, 'debe', 20.4, 'haber', 0), jsonb_build_object('cuenta', v_c2, 'debe', 0, 'haber', 20.4)),
+    null, 'Prueba');
+  select count(*) into v_n from public.conta_no_confirmados_pagados(v_e);
+  if v_n <> 0 then raise exception 'PRUEBA cierre · 12: con su propuesta viva, sigue saliendo.'; end if;
+  -- Proponer otra vez no duplica.
+  if not (public.journal_entry_proponer(v_e,
+            jsonb_build_object('series', 1, 'fecha', '2026-10-06', 'concepto', 'x', 'source_type', 'sales_adjustment', 'source_id', v_234,
+                               'confianza', 'probable', 'porque', 'x', 'razones', '[]'::jsonb), '[]'::jsonb, null, 'Prueba')->>'existente')::boolean then
+    raise exception 'PRUEBA cierre · 12: proponerlo dos veces ha creado otro asiento.';
+  end if;
+
+  -- Descartado: no vuelve, y el descarte lo recuerda.
+  perform public.journal_entry_descartar((v_r->>'id')::uuid, 'Glovo lo pagó por error y lo va a reclamar', 'Prueba');
+  select count(*) into v_n from public.conta_no_confirmados_pagados(v_e);
+  if v_n <> 0 then raise exception 'PRUEBA cierre · 12: descartado, ha vuelto a salir.'; end if;
+  if not exists (select 1 from public.journal_dismissal where company_id = v_e and source_type = 'sales_adjustment' and source_key = v_234::text) then
+    raise exception 'PRUEBA cierre · 12: el descarte no ha quedado apuntado.';
+  end if;
+  raise notice 'PRUEBA cierre · 12: A ve el del 06/10 pagado (20,40, %), B no ve nada; el casado a 0 € no cuenta; propuesto aparte deja de salir y no se duplica; descartado no vuelve.', v_a->0->>'ref';
 end $$;
 
 rollback;

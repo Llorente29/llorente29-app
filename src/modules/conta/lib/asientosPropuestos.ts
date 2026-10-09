@@ -199,7 +199,12 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
   if (cent(cobrado) !== cent(total)) {
     return { propuesta: null, sinPropuesta: `El cobro (${eurosExactos(cobrado)}) no es el total de los tickets (${eurosExactos(total)}): no se propone.`, resumen }
   }
-  if (filas.length && Math.abs(cent(cuota) - cent(cuotaIva(base, tipo))) > Math.floor(filas.length / 2)) {
+  // Tolerancia del redondeo: con la base calculada, cada ticket se aparta de
+  // base × tipo hasta 1,1 × medio céntimo (0,55), y el redondeo del total otro
+  // medio. Con floor(n/2), un día de UN ticket de 20,40 € (base 18,55, cuota
+  // 1,85; 18,55 × 10 % = 1,855 → 1,86) no se proponía (cierre del día, T4).
+  // Un pedido al 21 % se aparta euros, no céntimos: sigue sin pasar.
+  if (filas.length && Math.abs(cent(cuota) - cent(cuotaIva(base, tipo))) > Math.floor(0.55 * filas.length + 0.5)) {
     return { propuesta: null, sinPropuesta: `La cuota de los tickets (${eurosExactos(cuota)}) se aleja de la base × ${tipo} % más de medio céntimo por ticket: hay pedidos con otro tipo.`, resumen }
   }
 
@@ -619,4 +624,56 @@ export function cuentaDeBoe(codigo: string, ctx: { tipo?: number; ivaPorTipo: (p
     return { cuenta: ctx.subcuentaDelTercero, porque: `La ${codigo} es la común; este tercero tiene la suya, la ${ctx.subcuentaDelTercero}.` }
   }
   return null
+}
+
+// ── Cierre del día · la liquidación manda (T4) ─────────────────────────────
+//
+// Un pedido que se cerró como no confirmado al cierre del día y que luego una
+// liquidación de la plataforma PAGA: es venta de su día. Se propone APARTE,
+// como lo que decidió la plataforma (sales_adjustment, origen = la venta), con
+// las mismas líneas que tendría en el asiento del día (las de ventasDelDia con
+// ese único pedido). El asiento del día no se toca, esté propuesto o validado:
+// el pedido no está en él, y así no puede contarse dos veces. Se acepta
+// validándolo y se descarta como cualquier propuesta (el descarte lo recuerda).
+
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+/** «2026-10-06» → «6 de octubre». */
+export const diaYMes = (iso: string): string => `${Number(iso.slice(8, 10))} de ${MESES[Number(iso.slice(5, 7)) - 1]}`
+
+export interface NoConfirmadoPagado {
+  /** El pedido, como lo da conta_pedidos_del_dia (su estado se ignora: la plataforma lo ha pagado). */
+  pedido: PedidoDia
+  /** Su día (sold_at en Madrid). */
+  dia: string
+  /** La liquidación que lo paga. */
+  liquidacion: { ref: string | null; fecha: string | null }
+  /** El día ya tiene su asiento de ventas validado. */
+  diaValidado: boolean
+}
+
+export function noConfirmadoPagado(
+  x: NoConfirmadoPagado,
+  e: Omit<EntradaVentasDia, 'pedidos' | 'devoluciones' | 'fecha'>,
+): { propuesta: Propuesta | null; sinPropuesta: string | null } {
+  const canal = e.nombreCanal(x.pedido.canalId)
+  const codigo = x.pedido.codigo ?? 'sin código'
+  const res = ventasDelDia({ ...e, fecha: x.dia, pedidos: [{ ...x.pedido, estado: 'closed', marcaPropia: true }], devoluciones: [] })
+  if (!res.propuesta) return { propuesta: null, sinPropuesta: res.sinPropuesta }
+  const porque = `${canal} ha pagado el pedido ${codigo}, que se cerró sin confirmar el ${diaYMes(x.dia)}`
+  const liq = x.liquidacion.ref ? `la liquidación ${x.liquidacion.ref}${x.liquidacion.fecha ? ` del ${diaYMes(x.liquidacion.fecha)}` : ''}` : 'su liquidación'
+  return {
+    sinPropuesta: null,
+    propuesta: {
+      ...res.propuesta,
+      concepto: `Venta del ${diaYMes(x.dia)} pagada después · ${canal} · pedido ${codigo}`,
+      origen: { tipo: 'sales_adjustment', id: x.pedido.id },
+      documento: x.pedido.codigo,
+      porque,
+      razones: [
+        { decision: 'Es venta de su día', porque: `al cierre del día seguía abierto y se cerró como no confirmado; ${liq} lo paga, y la liquidación de la plataforma tiene la última palabra` },
+        { decision: x.diaValidado ? 'Va aparte del asiento del día, que está validado y no se toca' : 'Va aparte del asiento del día', porque: 'ese pedido no está en el asiento del día, así que no puede contarse dos veces' },
+        ...res.propuesta.razones.filter((r) => !/^\d+ tickets? de tus marcas/.test(r.decision)),
+      ],
+    },
+  }
 }

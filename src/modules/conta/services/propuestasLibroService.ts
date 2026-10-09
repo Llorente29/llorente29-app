@@ -12,7 +12,7 @@
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, liquidacionPlataforma, facturaProveedor, nomina, liquidacionSocio, aplicarAprendizaje,
+  ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, nomina, liquidacionSocio, aplicarAprendizaje,
   type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
@@ -202,6 +202,39 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       by_brand: res.resumen.porMarca.map((m) => ({ brand_id: m.marcaId, base: m.base })),
       detail_hash: detalle, sale_ids: res.resumen.pedidoIds, base_calculated: res.resumen.baseCalculada,
     }, r, ctx, quien)
+  }
+
+  // ── Cierre del día · la liquidación manda (T4) ──
+  // Un pedido cerrado como no confirmado que una liquidación paga: venta de su
+  // día, aparte (sales_adjustment, origen = la venta). Sin rango: el pago llega
+  // después; solo lo que caiga en un día abierto.
+  if (ctx.tipoVentas && iva477 && ventas) {
+    const cobroPorCanal: Record<string, string> = {}
+    for (const [id, c] of ctx.canales) { const cta = c.partyId ? ctx.enlace('customer', c.partyId, 'principal') : null; if (cta) cobroPorCanal[id] = cta }
+    const pagados = ((await rpc('conta_no_confirmados_pagados', { p_company: companyId })) as Fila[] | null) ?? []
+    for (const x of pagados) {
+      const dia = String(x.dia); const localId = s(x.location_id)
+      const que = `Pedido ${s(x.codigo) ?? 'sin código'} del ${dia.split('-').reverse().join('/')}, pagado después`
+      if (!abierto(dia) || !localId) continue
+      // Base, cuota y tipos del pedido, como los da el día.
+      const delDia = ((await rpc('conta_pedidos_del_dia', { p_company: companyId, p_location: localId, p_dia: dia })) as Fila[] | null) ?? []
+      const p = delDia.find((f) => String(f.id) === String(x.sale_id))
+      if (!p) { r.sinPropuesta.push({ que, porque: 'No encuentro el pedido en su día: puede que ya no esté activo.' }); continue }
+      const res = noConfirmadoPagado({
+        pedido: {
+          id: String(p.id), codigo: s(p.codigo), canalId: s(p.canal_id), marcaId: s(p.marca_id), marcaPropia: p.propia !== false,
+          estado: 'unconfirmed', total: n(p.total), base: p.base === null ? null : n(p.base), cuota: p.cuota === null ? null : n(p.cuota),
+          tiposEnLineas: Array.isArray(p.tipos) ? (p.tipos as unknown[]).map(Number) : [],
+        },
+        dia, liquidacion: { ref: s(x.settlement_ref), fecha: s(x.settlement_date) }, diaValidado: x.dia_validado === true,
+      }, {
+        localId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(localId) ?? 'local',
+        nombreCanal: (id) => (id ? ctx.canales.get(id)?.nombre ?? 'un canal' : 'sin canal'),
+        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477 },
+      })
+      if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? 'Sin propuesta.' }); continue }
+      await proponer(companyId, res.propuesta, null, r, ctx, quien)
+    }
   }
 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──

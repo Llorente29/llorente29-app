@@ -26,5 +26,8 @@
 #   lee), para que la prueba ensaye lo mismo que se aplica; se vuelve a
 #   aplicar aquí (idempotente: en staging no retira nada) y la prueba gana el
 #   paso 11, retirar lo propuesto antes del cierre sin dejar descarte.
-supabase/migrations/20261016T0130_cierre_del_dia_retirar.sql
+#   Run 110 (98f9f56): la 0130 otra vez y la prueba EN VERDE, once pasos.
+#   Ahora: la 0150 (la liquidación manda: conta_no_confirmados_pagados) y la
+#   prueba con el paso 12.
+supabase/migrations/20261016T0150_cierre_del_dia_liquidacion.sql
 supabase/staging/sql/20261016_cierre_del_dia_prueba.sql
