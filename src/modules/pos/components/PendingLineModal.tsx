@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { Minus, Plus, Trash2, X } from 'lucide-react'
 import KitchenNoteField from './KitchenNoteField'
 
-export default function PendingLineModal({ name, quantity, note, canEditNote, busy, onSave, onRemove, onClose }: {
+export default function PendingLineModal({ name, quantity, note, canEditNote, busy, onSave, onRemove, onClose, onMoveToTable }: {
   name: string
   quantity: number
   note: string | null
@@ -19,6 +19,9 @@ export default function PendingLineModal({ name, quantity, note, canEditNote, bu
   onSave: (quantity: number, note: string | null) => void
   onRemove: () => void
   onClose: () => void
+  // S2: solo para líneas ya guardadas en la cuenta (las de esta pantalla aún
+  // no existen en el servidor: se quitan y se vuelven a tocar en la otra mesa).
+  onMoveToTable?: () => void
 }) {
   const [q, setQ] = useState(quantity)
   const [n, setN] = useState(note ?? '')
@@ -54,6 +57,12 @@ export default function PendingLineModal({ name, quantity, note, canEditNote, bu
             Hecho
           </button>
         </div>
+        {onMoveToTable && (
+          <button type="button" onClick={onMoveToTable} disabled={busy}
+            className="w-full h-tap-small rounded-tpv border border-tpv-line-strong bg-tpv-surface-2 text-tpv-txt text-base font-bold disabled:opacity-50">
+            Llevar a otra mesa
+          </button>
+        )}
       </div>
     </div>
   )

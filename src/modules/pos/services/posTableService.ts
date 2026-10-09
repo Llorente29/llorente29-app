@@ -93,6 +93,8 @@ export interface TableFire {
   number: number
   firedAt: string
   firedByName: string | null
+  // S2: el envío llegó de otra mesa (juntar o llevar líneas).
+  originTableName?: string | null
 }
 
 export interface TableLine {
@@ -213,6 +215,39 @@ export async function chargeTable(saleId: string, paymentMethod: 'cash' | 'card'
 export async function clearTable(saleId: string): Promise<{ cancelled: boolean }> {
   const d = await rpc<{ cancelled?: boolean }>('pos_table_clear', { p_sale_id: saleId })
   return { cancelled: Boolean(d?.cancelled) }
+}
+
+// ── S2: cambiar de mesa, juntar, llevar líneas ──────────────────────────
+
+export interface MoveResult {
+  kind: 'move' | 'merge'
+  saleId: string
+  tableName: string
+  covers: number
+  total: number
+  printJobs: number
+}
+
+// Destino libre: la cuenta pasa entera. Ocupado: se juntan en la del destino.
+export async function moveTable(saleId: string, toTableId: string, deviceToken: string | null): Promise<MoveResult> {
+  const d = await rpc<MoveResult>('pos_table_move', { p_sale_id: saleId, p_to_table_id: toTableId, p_device_token: deviceToken })
+  return { ...d, covers: Number(d.covers ?? 0), total: Number(d.total ?? 0), printJobs: Number(d.printJobs ?? 0) }
+}
+
+export interface MoveLinesResult {
+  saleId: string
+  tableName: string
+  moved: number
+  amount: number
+  printJobs: number
+}
+
+// A una mesa libre hay que decir cuántos son (se abre con las líneas).
+export async function moveLines(lineIds: string[], toTableId: string, covers: number | null, deviceToken: string | null): Promise<MoveLinesResult> {
+  const d = await rpc<MoveLinesResult>('pos_table_move_lines', {
+    p_line_ids: lineIds, p_to_table_id: toTableId, p_covers: covers, p_device_token: deviceToken,
+  })
+  return { ...d, moved: Number(d.moved ?? 0), amount: Number(d.amount ?? 0), printJobs: Number(d.printJobs ?? 0) }
 }
 
 // ── Oficina: zonas y mesas del local ────────────────────────────────────

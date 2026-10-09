@@ -135,6 +135,12 @@ begin
       and (v_r->>'printJobs')::int = v_np
       and exists (select 1 from print_job where sale_id = v_sale and payload->>'title' = 'Anulado'),
     'motivo «' || (v_r->>'printJobs') || ' trabajo» · ' || (select reason_label from sale_line_void where sale_line_id = v_line);
+  -- Reimprimir un envío cuyas líneas están todas anuladas: `lineas` llega null
+  -- (jsonb_agg de nada), no []. El render del ticket hace `order.lineas || []`.
+  v_order := public.order_for_print('ensayo-sala-s1', v_sale, v_fires[3]);
+  insert into ensayo values ('E6c reimprimir el envío 3 ya no trae la anulada',
+    jsonb_typeof(v_order->'lineas') <> 'array' or jsonb_array_length(v_order->'lineas') = 0,
+    'lineas = ' || coalesce(v_order->>'lineas', 'null'));
 
   -- E7 sacar la cuenta
   v_r := public.pos_table_request_bill(v_sale);
@@ -168,6 +174,8 @@ begin
       and not exists (select 1 from sale_line where sale_id = v_qs and fire_id is not null)
       and (select service_type = 'pickup' and table_id is null from sale where id = v_qs),
     (select count(*) || ' trabajos' from print_job where sale_id = v_qs);
+  v_order := public.order_for_print('ensayo-sala-s1', v_qs);
+  insert into ensayo values ('E11b ticket de Mostrador sin datos de mesa', not (v_order ? 'table_name') and jsonb_array_length(v_order->'lineas') = 1, '');
 
   -- E12 upsert_pos_sale sobre una mesa
   v_r := public.pos_table_open((select id from dining_table where location_id = c_loc and name = 'E7' and is_active), 2, v_brand, null);

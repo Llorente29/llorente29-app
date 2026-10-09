@@ -54,6 +54,7 @@
   --tpv-warn-text: #FBBF24;                     /* texto ámbar sobre fondo oscuro */
   --tpv-ok-tint: rgba(22, 163, 74, 0.14);       /* fondo «cobrada · recoger» */
   --tpv-ok-text: #4ADE80;                       /* texto verde sobre fondo oscuro */
+  --tpv-accent-soft: #93C5FD;                   /* texto azul claro: «Sale de aquí» (S2) */
 
   /* Forma */
   --tpv-radius: 12px;
