@@ -1,6 +1,14 @@
-# C05 · tarea 5, tras el e2e 153 (conta/c05-libros-y-balances).
-#   La prueba de libros otra vez, con el paso 5 nuevo: el expedidor del libro
-#   registro sale del tercero del asiento (NIF y nombre). Las semillas proponen
-#   sin tercero y la captura de recibidas lo enseñaba «—»; ese camino no lo
-#   probaba nada. Todo en una transacción con ROLLBACK: no cambia staging.
-supabase/staging/sql/20261014_c05_prueba_libros.sql
+# Políticas de lectura de contabilidad, una vez por consulta
+# (conta/politicas-una-vez). El libro diario no cargaba en producción:
+# conta_dias_por_asentar pasaba del límite de 8 s porque las políticas de
+# SELECT llamaban a belongs_to_account fila a fila.
+#   1. Las 48 políticas de SELECT de las tablas de C00 a C05, menos
+#      sales_day_summary, a «account_id = any ((select current_user_account_ids()))».
+#   2. La de sales_day_summary (aparte: el analizador la pone en el camino del
+#      pedido y pide «autorizo»).
+#   3. La prueba: 1.100 ventas, 50 resúmenes y 120 descartes; < 1 s con las
+#      nuevas, lo que ve cada uno (A, B y un superadmin) en las 49 tablas, y
+#      que con las VIEJAS no pase. Todo en una transacción con ROLLBACK.
+supabase/migrations/20261015T0100_politicas_una_vez.sql
+supabase/migrations/20261015T0110_politicas_una_vez_resumen.sql
+supabase/staging/sql/20261015_politicas_prueba.sql
