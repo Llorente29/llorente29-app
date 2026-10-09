@@ -404,7 +404,7 @@ begin
   perform public.save_count_line('cd000000-0000-4000-8000-000000000402',
           jsonb_build_array(jsonb_build_object('method', 'peso', 'qty',
             (select greatest(x.qty_on_hand, 0) from public.recipe_item_location_stock x where x.recipe_item_id = v_crudo and x.location_id = v_loc))),
-          null, 'c01a0000-0000-4000-8000-0000000000a1', null);
+          null, null, null);   -- sin «quién contó», como la pantalla cuando no lo sabe
   perform public.close_inventory_count(v_rec);
   select * into v_r from public.apply_inventory_count(v_rec, 'c01a0000-0000-4000-8000-0000000000a1', 'Prueba', false);
   if (select status from public.inventory_count where id = v_rec) <> 'aprobado' then
