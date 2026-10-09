@@ -1,0 +1,39 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C04 R4 · Retoques (rama conta/c04-retoques). La primera tanda con el W01.
+#
+#   0. 20261012T0050_c04r_lectura.sql — SELECT para conta_lectura sobre lo que
+#      leen los agentes. El primer ensayo (08/10) paró en «Antes · agentes»:
+#      agente-libro.sql:144, permission denied for table sale. Medido en
+#      producción: le faltan sale, supplier_invoice, fiscal_period_lock y brand.
+#      Solo da permisos de lectura: «sigue». Va primero porque la comprobación
+#      de antes corre los agentes con ese rol.
+#   1. 20261012T0100_c04r_historial.sql — da de alta en el historial los 58
+#      ficheros que el workflow aplicó antes del W01 (11 ejecuciones REAL en
+#      verde, del C00 al C04), con la huella de main. 58 de 58 iguales a lo
+#      aplicado (la 0130 del C00 con la versión que reaplicó el C04). Solo
+#      inserta en supabase_migrations.schema_migrations: el analizador dice
+#      «sigue». Medido el 08/10: 0 de esas 58 registradas.
+#   2. 20261012T0110_c04r_corte_datos.sql — el corte de Foodint con Diez
+#      (30/09/2026): ejercicio 2026 mixto, enero–septiembre cerrados como
+#      traídos y las 120 propuestas de junio–agosto descartadas «anteriores al
+#      corte». PARA si hay algo que no sea una propuesta hasta el corte.
+#      ACTUALIZA Y BORRA filas que existen: va en «autorizo».
+#   3. 20261012T0120_c04r_fusionar_terceros.sql — «Fusionar con…»: una tabla
+#      (party_merge, el rastro) y dos funciones nuevas. Solo añade («sigue»).
+#      Va aquí porque el front de este PR la llama: sin ella, el botón falla.
+#
+# UNA PARA y va en el campo «autorizo»:
+#
+#   20261012T0110_c04r_corte_datos.sql
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261012T0050_c04r_lectura.sql
+supabase/migrations/20261012T0100_c04r_historial.sql
+supabase/migrations/20261012T0110_c04r_corte_datos.sql
+supabase/migrations/20261012T0120_c04r_fusionar_terceros.sql

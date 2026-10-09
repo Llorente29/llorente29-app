@@ -1,0 +1,1 @@
+{"tablas":["public.journal_entry"],"funciones":["public.conta_resultado_por_local(uuid,date,date,boolean)","public.journal_entry_validar(uuid,text)"],"filas":{"public.journal_entry":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
