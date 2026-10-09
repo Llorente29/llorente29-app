@@ -131,9 +131,10 @@ forma.
 
 ## Lo que las capturas enseñaron y ya está arreglado
 
-Mirarlas una a una sacó cinco fallos de pantalla. Los cinco están arreglados en
-el commit siguiente a estas capturas. La e2e vigila los dos primeros, y la
-próxima ejecución sube capturas nuevas.
+Mirar las de la 153 una a una sacó cinco fallos de pantalla. Se arreglaron en
+`686e7b7`, y la **e2e 154** (verde: las capturas de esta carpeta son ya las
+suyas, subidas en `e88b552`) los enseña arreglados. La e2e vigila los dos
+primeros.
 
 1. **«1 anotaciones.»** en expedidas. Ahora «1 anotación.» (y en los avisos de
    exportar). La e2e de expedidas lo mira con una expresión que falla con «1
@@ -151,3 +152,10 @@ próxima ejecución sube capturas nuevas.
 5. **En el mapeo, «700cambiardejar fuera»**: la píldora es `inline-flex` y se
    comía los espacios entre el código y sus botones. Ahora van separados, y la
    píldora no corta con «…» las que llevan «· tuyo» y tres botones.
+
+**Lo que deja el arreglo 3, y queda apuntado.** En «Libros registro de IVA» la
+barra se pasa por poco: ahora «Tuyos» baja solo a una segunda fila y deja un
+hueco a la izquierda (`expedidas-ordenador.png`). Es mejor que antes, que
+cortaba «Ctrl K» fuera de la vista, pero no es bonito. Se arregla apretando el
+relleno de las acciones o llevando «Tuyos» a la fila de las áreas. No lo he
+hecho sin que Julio lo vea.

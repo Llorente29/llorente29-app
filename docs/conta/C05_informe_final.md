@@ -71,6 +71,14 @@ PRUEBA agente C05 · 1 en verde: 17 cuentas con saldo, 3 anotaciones del libro r
 PRUEBA agente C05 · 3 en verde: ve las siete (cuadre 2, sin sitio 1, fuera 1, otros resultados 1, pyg 1, libro 1, cerrado 1).
 ```
 
+Y el paso 5, añadido después (run 37863100931, verde):
+
+```
+PRUEBA C05 · 5 en verde: el expedidor sale del tercero (NIF B91000026, «Bebidas Sol»).
+```
+
+(Un tercero inventado de la semilla del C01.)
+
 La prueba del cierre destapó **tres fallos de verdad**; los tres están arreglados y probados:
 1. **No se podía cerrar.** El validador del C04 exigía IVA a los apuntes de 472/477/4751 del cierre y de la apertura. Lo arregla la 0140 (respuesta 3).
 2. **No se podía reabrir.** El contraasiento del cierre chocaba con la misma regla. La 0140 también lo cubre, mirando el asiento original enlazado.
@@ -99,7 +107,8 @@ Y la semilla destapó un cuarto: en el libro registro, una rectificativa salía 
     - la barra de acciones de Cuentas anuales no cabía a 1440;
     - subtítulos a 32 px;
     - en el mapeo, «700cambiardejar fuera».
-  - La e2e vigila los dos primeros. La e2e siguiente sube capturas nuevas.
+  - La e2e vigila los dos primeros. **e2e 154 en verde** (sobre `686e7b7`): las capturas nuevas los enseñan arreglados.
+  - Queda uno pequeño, apuntado en `COMPARACION.md`: en Libros registro de IVA, «Tuyos» baja solo a una segunda fila.
 - Prueba de staging, paso 5 nuevo: el expedidor del libro registro sale del tercero del asiento (NIF y nombre). No lo probaba nada; las semillas proponen sin tercero.
 
 ## Lo que cambió algo que ya existía (aviso, según la respuesta 3)
