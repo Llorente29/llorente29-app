@@ -108,7 +108,7 @@ Y la semilla destapó un cuarto: en el libro registro, una rectificativa salía 
     - subtítulos a 32 px;
     - en el mapeo, «700cambiardejar fuera».
   - La e2e vigila los dos primeros. **e2e 154 en verde** (sobre `686e7b7`): las capturas nuevas los enseñan arreglados.
-  - Queda uno pequeño, apuntado en `COMPARACION.md`: en Libros registro de IVA, «Tuyos» baja solo a una segunda fila.
+  - En la 154 quedaba uno: en Libros registro de IVA, «Tuyos» bajaba sola a una segunda fila. Cerrado tras el visto bueno: «Tuyos» ya no puede bajar sola y la barra cabe en una fila, como en N13c (detalle y medida en `COMPARACION.md`).
 - Prueba de staging, paso 5 nuevo: el expedidor del libro registro sale del tercero del asiento (NIF y nombre). No lo probaba nada; las semillas proponen sin tercero.
 
 ## Lo que cambió algo que ya existía (aviso, según la respuesta 3)
@@ -137,7 +137,9 @@ Y la semilla destapó un cuarto: en el libro registro, una rectificativa salía 
 
 ## Para producción (lo lanza Julio)
 
-1. Tanda de `aplicar-produccion-conta.yml` con los seis ficheros, en el orden de la tabla.
+1. Tanda de `aplicar-produccion-conta.yml` con los seis ficheros, en el orden de la tabla. **Preparada** en esta rama:
+   - `supabase/produccion/aplicar.txt` y `vuelta-atras.txt`, este con los `.down.sql` al revés.
+   - Analizador pasado en local contra el contexto de producción, leído en solo lectura: los seis «sigue», ninguno pide `autorizo`.
    - La 0120 y la 0140 son «cambia»: pasan con su cabecera y su prueba de staging.
    - Ninguna toca el camino del pedido, así que no piden `autorizo`. Lo que diga el analizador en el ensayo manda.
 2. Fusión de #169 y Vercel READY en producción.

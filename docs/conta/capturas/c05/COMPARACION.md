@@ -153,9 +153,19 @@ primeros.
    comía los espacios entre el código y sus botones. Ahora van separados, y la
    píldora no corta con «…» las que llevan «· tuyo» y tres botones.
 
-**Lo que deja el arreglo 3, y queda apuntado.** En «Libros registro de IVA» la
-barra se pasa por poco: ahora «Tuyos» baja solo a una segunda fila y deja un
-hueco a la izquierda (`expedidas-ordenador.png`). Es mejor que antes, que
-cortaba «Ctrl K» fuera de la vista, pero no es bonito. Se arregla apretando el
-relleno de las acciones o llevando «Tuyos» a la fila de las áreas. No lo he
-hecho sin que Julio lo vea.
+**Lo que dejó el arreglo 3, y cómo se cerró.** En la e2e 154, en «Libros
+registro de IVA» la barra se pasaba por poco y «Tuyos» bajaba sola a una
+segunda fila, dejando un hueco. Ya está como en N13c:
+- **«Tuyos» va fuera del contenedor de los grupos.** Se queda siempre arriba a
+  la derecha: cuando algo no cabe, bajan los grupos (Cuentas anuales), nunca
+  «Tuyos» sola.
+- **Las acciones tienen 8 px de relleno lateral, no 12.** Libros registro de
+  IVA cabe en una fila a 1440.
+
+Medido antes de subir con una página que monta la barra con los CSS reales,
+Geist y las acciones de `navegacion.ts`, a 1110 px:
+- con 12 px, Libros registro de IVA sale en 2 filas;
+- con 8 px, en 1;
+- Cuentas anuales, en 2 con «Tuyos» arriba.
+
+La e2e lo vigila con las posiciones de los grupos.

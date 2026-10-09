@@ -190,12 +190,15 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
           <>
             {movil && <Link to={rutaLibros()} className="cx-enlace">‹ Libros</Link>}
             <nav className="cxl-barra" aria-label={`Acciones de ${area.nombre}`}>
-              {area.grupos.map((g) => (
-                <div key={g.etiqueta} className="cxl-grupo" role="group" aria-label={g.etiqueta}>
-                  <div className="cxl-grupo-acciones">{g.acciones.map(barraAccion)}</div>
-                  <span className="cxl-grupo-etiqueta">{g.etiqueta}</span>
-                </div>
-              ))}
+              {/* Los grupos pueden partir en filas; «Tuyos» se queda arriba a la derecha (N13c). */}
+              <div className="cxl-barra-grupos">
+                {area.grupos.map((g) => (
+                  <div key={g.etiqueta} className="cxl-grupo" role="group" aria-label={g.etiqueta}>
+                    <div className="cxl-grupo-acciones">{g.acciones.map(barraAccion)}</div>
+                    <span className="cxl-grupo-etiqueta">{g.etiqueta}</span>
+                  </div>
+                ))}
+              </div>
               <div className="cxl-tuyos" role="group" aria-label="Tuyos">
                 <div className="cxl-grupo-acciones">
                   <button type="button" className="cxl-accion" aria-pressed={favoritos.includes(accion.id)}

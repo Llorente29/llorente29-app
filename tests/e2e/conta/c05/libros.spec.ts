@@ -52,6 +52,16 @@ test('Libros en tres niveles: áreas, acciones con su estado y el buscador', asy
     await expect(barra.getByRole('group', { name: 'Facturas' })).toBeVisible()
     await expect(barra.getByRole('group', { name: 'Otros libros' })).toBeVisible()
     await expect(barra.getByRole('group', { name: 'Salidas' })).toBeVisible()
+    // Una sola fila, como N13c: «Tuyos» a la derecha de «Salidas», no debajo
+    // (e2e 154: bajaba sola a una segunda fila).
+    const arriba = async (g: string) => Math.round((await barra.getByRole('group', { name: g, exact: true }).boundingBox())!.y)
+    expect([await arriba('Otros libros'), await arriba('Salidas'), await arriba('Tuyos')]).toEqual(Array(3).fill(await arriba('Facturas')))
+    // Donde no cabe en una (Cuentas anuales), bajan los grupos y «Tuyos» se queda arriba.
+    await page.getByRole('navigation', { name: 'Áreas de Libros' }).getByRole('link', { name: 'Cuentas anuales y Registro', exact: true }).click()
+    const barraAnuales = page.getByRole('navigation', { name: 'Acciones de Cuentas anuales y Registro' })
+    const yAnuales = async (g: string) => Math.round((await barraAnuales.getByRole('group', { name: g, exact: true }).boundingBox())!.y)
+    expect(await yAnuales('Tuyos')).toBe(await yAnuales('Cuentas anuales'))
+    await areas.getByRole('link', { name: 'Libros registro de IVA', exact: true }).click()
     // El buscador: Ctrl K, «requerimiento» lleva al formato AEAT.
     await page.keyboard.press('Control+k')
     const dialogo = page.getByRole('dialog', { name: 'Buscar en Libros' })

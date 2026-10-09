@@ -24,17 +24,18 @@
 /* Nivel 3 · barra de acciones agrupadas, con «Tuyos» a la derecha */
 .cxl-barra {
   display: flex; align-items: stretch; gap: 0; background: var(--cx-blanco); border: 1px solid var(--cx-linea);
-  border-radius: var(--cx-radio-tarjeta); padding: 10px 14px 8px;
-  /* Parte en filas en vez de desplazar: un desplazamiento lateral sin barra
-     visible escondía «Depósito de cuentas» y «Tuyos» a 1440 (e2e 153). */
-  flex-wrap: wrap; row-gap: 10px;
+  border-radius: var(--cx-radio-tarjeta); padding: 10px 10px 8px;
 }
-.cxl-grupo { display: flex; flex-direction: column; gap: 6px; padding: 0 12px; border-right: 1px solid var(--cx-linea); }
+/* Los grupos parten en filas en vez de desplazar (un desplazamiento lateral
+   sin barra visible escondía «Depósito de cuentas» a 1440, e2e 153). «Tuyos»
+   va fuera de este contenedor: no baja nunca sola a otra fila (e2e 154). */
+.cxl-barra-grupos { display: flex; flex-wrap: wrap; row-gap: 10px; flex: 1 1 auto; min-width: 0; }
+.cxl-grupo { display: flex; flex-direction: column; gap: 6px; padding: 0 8px; border-right: 1px solid var(--cx-linea); }
 .cxl-grupo:last-of-type { border-right: none; }
 .cxl-grupo-acciones { display: flex; gap: 4px; flex-wrap: wrap; }
-.cxl-grupo-etiqueta { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--cx-apoyo); padding: 0 12px; }
+.cxl-grupo-etiqueta { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--cx-apoyo); padding: 0 8px; }
 .cxl-accion {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border-radius: var(--cx-radio-boton);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px; border-radius: var(--cx-radio-boton);
   font: inherit; color: var(--cx-texto); text-decoration: none; background: none; border: none; cursor: pointer; white-space: nowrap; min-height: 44px;
 }
 .cxl-accion:hover { background: var(--cx-fondo); }
@@ -46,7 +47,7 @@
 .cxl-punto-verde { background: var(--cx-ia); }
 .cxl-punto-ambar { background: var(--cx-ambar); }
 .cxl-punto-rojo { background: var(--cx-rojo); }
-.cxl-tuyos { margin-left: auto; display: flex; flex-direction: column; gap: 6px; padding-left: 12px; border-left: 1px solid var(--cx-linea); }
+.cxl-tuyos { margin-left: auto; flex: none; display: flex; flex-direction: column; gap: 6px; padding-left: 8px; border-left: 1px solid var(--cx-linea); }
 .cxl-tuyos .cxl-grupo-acciones { justify-content: flex-end; }
 
 /* Buscar (Ctrl K) */
@@ -128,6 +129,7 @@
   .cxl-areas { flex-direction: column; border-bottom: none; gap: 8px; }
   .cxl-area { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); background: var(--cx-blanco); padding: 14px 16px; margin: 0; }
   .cxl-barra { flex-direction: column; padding: 8px; }
+  .cxl-barra-grupos { flex-direction: column; }
   .cxl-grupo { border-right: none; border-bottom: 1px solid var(--cx-linea); padding: 8px 0; }
   .cxl-grupo-acciones { flex-direction: column; }
   .cxl-accion { width: 100%; }
