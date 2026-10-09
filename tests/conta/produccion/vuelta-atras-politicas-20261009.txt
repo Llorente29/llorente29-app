@@ -1,0 +1,10 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas.
+#
+# Políticas de lectura de contabilidad, una vez por consulta: los dos
+# .down.sql en orden inverso al de aplicar.txt. Devuelven las 49 políticas a
+# belongs_to_account(account_id) con su texto y su rol de antes, y PARAN si no
+# quedan exactamente como se midieron el 09/10. No tocan datos. Ojo: con
+# ellas el libro diario vuelve a pasar del límite de 8 s.
+supabase/vuelta-atras/20261015T0110_politicas_una_vez_resumen.down.sql
+supabase/vuelta-atras/20261015T0100_politicas_una_vez.down.sql
