@@ -35,6 +35,28 @@ create table if not exists public._retirado_cierre_del_dia (
 alter table public._retirado_cierre_del_dia enable row level security;
 revoke all on table public._retirado_cierre_del_dia from anon, authenticated;
 
+-- La selección, en una función de solo lectura: la usan esta migración y la
+-- prueba de staging (20261016_cierre_del_dia_prueba.sql), para que lo que se
+-- prueba sea lo que se aplica. El borrado se queda aquí, a la vista.
+create or replace function public.conta_propuestos_antes_del_cierre(p_company uuid default null)
+returns table (entry_id uuid, company_id uuid, location_id uuid, sales_day date, created_at timestamptz, status text, number int)
+language sql stable
+set search_path = public
+as $$
+  select e.id, e.company_id, d.location_id, d.sales_day, e.created_at, e.status, e.number
+    from public.journal_entry e
+    join public.sales_day_summary d on d.entry_id = e.id
+    left join public.company_tax_profile t on t.company_id = e.company_id
+   where e.source_type = 'sales_day'
+     and e.status = 'propuesto'
+     and (p_company is null or e.company_id = p_company)
+     -- Propuesto antes de la hora de cierre de su día (6:00 de Madrid del día siguiente).
+     and e.created_at < (((d.sales_day + 1)::timestamp + coalesce(t.sales_day_close_time, time '06:00')) at time zone 'Europe/Madrid')
+$$;
+comment on function public.conta_propuestos_antes_del_cierre(uuid) is
+  'Cierre del día: los asientos de ventas del día propuestos antes de que su día llegara a la hora de cierre. Solo lee.';
+revoke execute on function public.conta_propuestos_antes_del_cierre(uuid) from public, anon, authenticated;
+
 do $$
 declare
   v_n   int;
@@ -42,14 +64,8 @@ declare
   v_ids text;
 begin
   create temp table _a_retirar on commit drop as
-  select e.id, e.company_id, d.location_id, d.sales_day, e.created_at, e.status, e.number
-    from public.journal_entry e
-    join public.sales_day_summary d on d.entry_id = e.id
-    left join public.company_tax_profile t on t.company_id = e.company_id
-   where e.source_type = 'sales_day'
-     and e.status = 'propuesto'
-     -- Propuesto antes de la hora de cierre de su día (6:00 de Madrid del día siguiente).
-     and e.created_at < (((d.sales_day + 1)::timestamp + coalesce(t.sales_day_close_time, time '06:00')) at time zone 'Europe/Madrid');
+  select x.entry_id as id, x.company_id, x.location_id, x.sales_day, x.created_at, x.status, x.number
+    from public.conta_propuestos_antes_del_cierre() x;
 
   select count(*), count(*) filter (where status <> 'propuesto' or number is not null), string_agg(id::text || ' (' || sales_day || ')', ', ' order by sales_day)
     into v_n, v_mal, v_ids from _a_retirar;

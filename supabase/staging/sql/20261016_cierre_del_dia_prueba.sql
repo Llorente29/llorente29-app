@@ -43,6 +43,10 @@
 --   9. El cambio de hora de octubre y de marzo, con las mismas horas que
 --      tests/unit/modules/conta/cierreDelDia.test.ts.
 --  10. El libro diario de un mes: conta_dias_por_asentar < 1 s.
+--  11. Retirar lo propuesto antes del cierre (la 0130), con su misma selección
+--      (conta_propuestos_antes_del_cierre) y su mismo borrado: el asiento de
+--      HOY se va, su resumen se queda sin asiento y SIN descarte (el día se
+--      volverá a proponer); el del 05/10 propuesto el 07/10 se queda.
 
 begin;
 do $$ begin
@@ -516,6 +520,47 @@ do $$ begin
     raise exception 'PRUEBA cierre · 10: conta_dias_por_asentar de octubre tarda % ms.', current_setting('prueba.ms');
   end if;
   raise notice 'PRUEBA cierre · 10: conta_dias_por_asentar de octubre, % ms (% días).', current_setting('prueba.ms'), current_setting('prueba.mes');
+end $$;
+
+-- ── 11 · Retirar lo propuesto antes del cierre ─────────────────────────────
+do $$
+declare
+  v_e    uuid := current_setting('prueba.empresa')::uuid;
+  v_acc  constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
+  v_loc  constant uuid := 'e0200000-0000-4000-8000-0000000000a3';   -- Norte Mercado
+  v_hoy  date := (now() at time zone 'Europe/Madrid')::date;
+  v_fy   uuid;
+  v_hoy_e uuid := 'cd000000-0000-4000-8000-000000000601';
+  v_ok_e  uuid := 'cd000000-0000-4000-8000-000000000602';
+  v_n int;
+begin
+  select id into v_fy from public.fiscal_year where company_id = v_e and v_hoy between starts_on and ends_on;
+  if v_fy is null then raise exception 'PRUEBA cierre · 11: la empresa A no tiene ejercicio de hoy.'; end if;
+  delete from public.sales_day_summary where company_id = v_e and location_id = v_loc and sales_day in (v_hoy, date '2026-10-05');
+  insert into public.journal_entry (id, account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, confidence, reason, reasons, created_at)
+  values (v_hoy_e, v_acc, v_e, v_fy, 1, v_hoy, 'Ventas de hoy (prueba)', 'sales_day', 'propuesto', 'seguro', 'prueba', '[]', now()),
+         (v_ok_e,  v_acc, v_e, v_fy, 1, date '2026-10-05', 'Ventas del 05/10 (prueba)', 'sales_day', 'propuesto', 'seguro', 'prueba', '[]', '2026-10-07 10:00+00');
+  insert into public.sales_day_summary (account_id, company_id, location_id, sales_day, tickets_count, total, detail_hash, entry_id)
+  values (v_acc, v_e, v_loc, v_hoy, 1, 10, 'prueba-hoy', v_hoy_e),
+         (v_acc, v_e, v_loc, date '2026-10-05', 1, 10, 'prueba-05', v_ok_e);
+
+  -- Lo mismo que hace la 0130.
+  delete from public.journal_entry e using public.conta_propuestos_antes_del_cierre(v_e) x where e.id = x.entry_id;
+
+  if exists (select 1 from public.journal_entry where id = v_hoy_e) then
+    raise exception 'PRUEBA cierre · 11: el asiento de hoy, propuesto antes de su cierre, no se ha retirado.';
+  end if;
+  if not exists (select 1 from public.journal_entry where id = v_ok_e) then
+    raise exception 'PRUEBA cierre · 11: se ha retirado el del 05/10, que se propuso después de su cierre.';
+  end if;
+  select count(*) into v_n from public.sales_day_summary where company_id = v_e and location_id = v_loc and sales_day = v_hoy and entry_id is null;
+  if v_n <> 1 then
+    raise exception 'PRUEBA cierre · 11: el resumen de hoy tenía que quedarse, sin asiento (hay %).', v_n;
+  end if;
+  if exists (select 1 from public.journal_dismissal where company_id = v_e and source_type = 'sales_day' and source_key = v_loc || ':' || v_hoy) then
+    raise exception 'PRUEBA cierre · 11: ha quedado un descarte: el día no se volvería a proponer.';
+  end if;
+  raise notice 'PRUEBA cierre · 11: el asiento de hoy, retirado (su resumen se queda sin asiento y sin descarte); el del 05/10 propuesto el 07/10, se queda.';
 end $$;
 
 rollback;

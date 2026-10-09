@@ -2,4 +2,4 @@
 -- No se devuelve el asiento retirado: era una propuesta de un día a medias, y
 -- el proponedor la hará entera cuando el día cierre. La copia se queda en
 -- _retirado_cierre_del_dia (no se borra aquí: es lo único que dice qué había).
-select 1;
+drop function if exists public.conta_propuestos_antes_del_cierre(uuid);

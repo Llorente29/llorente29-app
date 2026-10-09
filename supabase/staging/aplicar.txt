@@ -21,4 +21,10 @@
 #   lo que no, la frontera de las 6:00, A y B, regenerar, los cuatro caminos
 #   de la regla 10, la versión ROTA a propósito, los cambios de hora y < 1 s.
 #   Todo en una transacción con ROLLBACK.
+#   Run 109 (be7f318): prueba EN VERDE, los diez pasos.
+#   Ahora: la 0130 saca su selección a conta_propuestos_antes_del_cierre (solo
+#   lee), para que la prueba ensaye lo mismo que se aplica; se vuelve a
+#   aplicar aquí (idempotente: en staging no retira nada) y la prueba gana el
+#   paso 11, retirar lo propuesto antes del cierre sin dejar descarte.
+supabase/migrations/20261016T0130_cierre_del_dia_retirar.sql
 supabase/staging/sql/20261016_cierre_del_dia_prueba.sql
