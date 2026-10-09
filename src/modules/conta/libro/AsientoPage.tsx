@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { rutaAsiento, rutaLibroDiario, rutaMayor } from '@/config/navegacion'
+import { NoConfirmadosDelDia } from '@/modules/conta/libro/NoConfirmados'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
@@ -158,6 +159,7 @@ export default function AsientoPage() {
               <span className={c.cuadra ? 'cxt-verde' : 'cxt-ambar'}>{c.cuadra ? '✓ 0,00 €' : c.texto}</span>
             </div>
           )}
+          {a.origen === 'sales_day' && a.origenId && accountId && activa && <NoConfirmadosDelDia accountId={accountId} companyId={activa.id} resumenId={a.origenId} />}
           {editable && <p className="cx-ayuda">Cambia cualquier cuenta: se busca por nombre («comisiones») o por código. Un asiento nunca se guarda descuadrado.</p>}
         </section>
 

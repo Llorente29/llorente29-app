@@ -120,12 +120,15 @@ function aJson(p: Propuesta) {
   }
 }
 
+/** Un pedido del que habla un «no lo he propuesto», para «Ver los N pedidos». */
+export interface PedidoParaVer { codigo: string | null; canal: string; marca: string; total: number; estado: string }
+
 export interface ResultadoProponer {
   propuestas: number
   yaEstaban: number
   descartadas: number
   /** Lo que no se ha propuesto, con por qué (se enseña: regla 8, nada callado). */
-  sinPropuesta: { que: string; porque: string }[]
+  sinPropuesta: { que: string; porque: string; pedidos?: PedidoParaVer[] }[]
   validadasSolas: number
   /** El mes de ventas repasado esta vez (del más reciente hacia atrás). */
   mesVentas: string | null
@@ -193,7 +196,13 @@ export async function proponerPendientes(accountId: string, companyId: string, d
         conFactura: false,
       })),
     })
-    if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? 'Sin propuesta.' }); continue }
+    if (!res.propuesta) {
+      r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? 'Sin propuesta.', pedidos: res.pedidosDelPorque?.map((p) => ({
+        codigo: p.codigo, canal: p.canalId ? ctx.canales.get(p.canalId)?.nombre ?? 'un canal' : 'sin canal',
+        marca: p.marcaId ? ctx.marcas.get(p.marcaId)?.nombre ?? 'una marca' : 'sin marca', total: p.total, estado: p.estado,
+      })) })
+      continue
+    }
     const detalle = await huella(res.resumen.pedidoIds.join('|') + '#' + String(Math.round(res.resumen.total * 100)))
     await proponer(companyId, res.propuesta, {
       location_id: localId, sales_day: dia, tickets_count: res.resumen.tickets, total: res.resumen.total,

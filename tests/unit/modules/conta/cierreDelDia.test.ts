@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diaCerrado, enLaZona, horaParaLeer, normalizarHora, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
+import { comoAcabo, lineaNoConfirmados, textoDiaEnCurso, diaCerrado, enLaZona, horaParaLeer, normalizarHora, OTRO_ESTADO, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 
 // Los instantes van en UTC (como `sold_at` y `created_at` en la base). La
 // pared es Madrid: UTC+2 en verano, UTC+1 en invierno.
@@ -60,5 +60,46 @@ describe('qué días están cerrados a una hora dada', () => {
     expect(normalizarHora('25:00')).toBe('06:00')
     expect(horaParaLeer('06:00:00')).toBe('6:00')
     expect(horaParaLeer('05:30')).toBe('5:30')
+  })
+})
+
+describe('cómo acabó un pedido no confirmado, en palabras', () => {
+  // La población: TODAS las parejas (order_status, delivery_state) de Foodint
+  // en producción el 09/10 (19), la de staging (in_preparation) y los estados
+  // que maneja el código (ready, picked_up, on_the_way, awaiting_shipment…).
+  const PRODUCCION: [string | null, string | null][] = [
+    ['completed', null], ['completed', 'delivered'], [null, null], ['completed', 'canceled'], ['cancelled', null],
+    ['awaiting_collection', null], ['delivery_failed', 'failed'], ['accepted', null], ['cancelled', 'delivered'],
+    ['cancelled', 'failed'], ['cancelled', 'canceled'], ['completed', 'finish'], ['rejected', null], ['completed', 'in_delivery'],
+    ['delivery_failed', 'canceled'], ['completed', 'matched'], ['completed', 'failed'], ['delivery_failed', null], ['accepted', 'matched'],
+  ]
+  const OTROS = ['in_preparation', 'ready', 'picked_up', 'on_the_way', 'awaiting_shipment', 'in_delivery', 'new', 'received']
+
+  it('ninguno de la población real cae en la frase de reserva, y ninguno sale en inglés', () => {
+    const frases = [...PRODUCCION.map(([o, d]) => comoAcabo(o, d)), ...OTROS.map((o) => comoAcabo(o, null))]
+    expect(frases.filter((f) => f === OTRO_ESTADO)).toEqual([])
+    expect(frases.filter((f) => /_|\b(delivery|cancell?ed|awaiting|failed|rejected|completed|accepted|received|ready)\b/i.test(f))).toEqual([])
+  })
+
+  it('los 20 del atraso de producción: las tres frases del encargo', () => {
+    expect(comoAcabo('awaiting_collection', null)).toBe('Esperando recogida')
+    expect(comoAcabo('delivery_failed', 'failed')).toBe('Entrega fallida')
+    expect(comoAcabo('cancelled', 'delivered')).toBe('Cancelado')
+    expect(comoAcabo('rejected', null)).toBe('Rechazado')
+  })
+
+  it('un estado que no existe hoy sí cae en la reserva (y la prueba lo distingue)', () => {
+    expect(comoAcabo('teleported', null)).toBe(OTRO_ESTADO)
+  })
+})
+
+describe('las frases de la pantalla', () => {
+  it('la línea bajo las cifras del asiento (los tres del 02/10 de Alcalá)', () => {
+    expect(lineaNoConfirmados(3, 71.7)).toBe('3 pedidos no confirmados · 71,70 € · no están en estas ventas')
+    expect(lineaNoConfirmados(1, 20.4)).toBe('1 pedido no confirmado · 20,40 € · no está en estas ventas')
+  })
+  it('el día en curso, con la hora de la empresa', () => {
+    expect(textoDiaEnCurso('06:00:00')).toBe('Hoy se cierra mañana a las 6:00. Sus ventas se proponen entonces.')
+    expect(textoDiaEnCurso('05:30')).toBe('Hoy se cierra mañana a las 5:30. Sus ventas se proponen entonces.')
   })
 })

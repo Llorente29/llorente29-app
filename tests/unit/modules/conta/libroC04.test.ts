@@ -137,6 +137,8 @@ describe('reglas 6 y 13 · el resumen de ventas del día', () => {
   })
   it('pedidos abiertos o una plataforma sin 430: no se propone, y dice por qué', () => {
     expect(ventasDelDia(dia([...PEDIDOS_NORTE, pedido({ id: 'o1', total: 9, estado: 'open' })])).sinPropuesta).toContain('El cierre del día aún no ha pasado por este día: 1 pedido de tus marcas sigue abierto')
+    // Y lleva sus pedidos, para «Ver el pedido».
+    expect(ventasDelDia(dia([...PEDIDOS_NORTE, pedido({ id: 'o1', total: 9, estado: 'open' })])).pedidosDelPorque?.map((p) => p.id)).toEqual(['o1'])
     expect(ventasDelDia(dia(PEDIDOS_NORTE, { cuentas: { ...cuentasVentas, cobroPorCanal: { [GLOVO]: '43000001' } } })).sinPropuesta).toContain('Uber Eats, Just Eat')
   })
   it('los no confirmados del cierre del día no son venta, pero se cuentan aparte (el 02/10 de Alcalá: 3 · 71,70 €)', () => {

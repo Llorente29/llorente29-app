@@ -11,6 +11,8 @@
 // marzo no mueve el cierre: a las 6:00 de Madrid es a las 6:00 de Madrid,
 // sea UTC+2 o UTC+1.
 
+import { eurosExactos } from './formato'
+
 export const HORA_DE_CIERRE_DE_SERIE = '06:00'
 
 const unDia = (iso: string, n: number): string => {
@@ -54,4 +56,39 @@ export function diaCerrado(dia: string, instante: Date, horaCierre: string, zona
 export function horaParaLeer(horaCierre: string): string {
   const h = normalizarHora(horaCierre)
   return `${Number(h.slice(0, 2))}:${h.slice(3)}`
+}
+
+/** La frase de reserva: SOLO para un estado que la plataforma invente mañana (regla 30). */
+export const OTRO_ESTADO = 'Otro estado de la plataforma'
+
+/**
+ * Cómo acabó un pedido no confirmado, en palabras (sin estados en inglés):
+ * «Esperando recogida», «Entrega fallida», «Cancelado»… Manda lo que dice el
+ * reparto si falló; si no, el estado del pedido.
+ */
+export function comoAcabo(orderStatus: string | null | undefined, deliveryState: string | null | undefined): string {
+  const o = (orderStatus ?? '').toLowerCase()
+  const d = (deliveryState ?? '').toLowerCase()
+  if (o === 'delivery_failed' || d === 'failed') return 'Entrega fallida'
+  if (o === 'rejected') return 'Rechazado'
+  if (o === 'cancelled' || o === 'canceled') return 'Cancelado'
+  if (o === 'awaiting_collection') return 'Esperando recogida'
+  if (o === 'awaiting_shipment') return 'Esperando al repartidor'
+  if (['in_delivery', 'picked_up', 'on_the_way'].includes(o) || ['in_delivery', 'matched'].includes(d)) return 'En reparto'
+  if (o === 'ready') return 'Listo en cocina'
+  if (o === 'in_preparation') return 'En preparación'
+  if (o === 'accepted') return 'Aceptado, sin más noticias'
+  if (o === 'new' || o === 'received' || o === '') return 'Recibido, sin más noticias'
+  if (o === 'completed') return 'Completado'
+  return OTRO_ESTADO
+}
+
+/** «3 pedidos no confirmados · 71,70 € · no están en estas ventas». */
+export function lineaNoConfirmados(pedidos: number, total: number): string {
+  return `${pedidos} ${pedidos === 1 ? 'pedido no confirmado' : 'pedidos no confirmados'} · ${eurosExactos(total)} · ${pedidos === 1 ? 'no está' : 'no están'} en estas ventas`
+}
+
+/** Lo que se dice del día en curso: información, no un aviso. */
+export function textoDiaEnCurso(horaCierre: string): string {
+  return `Hoy se cierra mañana a las ${horaParaLeer(horaCierre)}. Sus ventas se proponen entonces.`
 }

@@ -93,6 +93,8 @@ export interface ResultadoVentasDia {
   propuesta: Propuesta | null
   /** Por qué no se propone, si no se propone. */
   sinPropuesta: string | null
+  /** Los pedidos de los que habla ese porqué, para «Ver los N pedidos». */
+  pedidosDelPorque?: PedidoDia[]
   resumen: {
     tickets: number
     total: number
@@ -158,11 +160,12 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
     // Solo se proponen días cerrados, y el cierre del día pasa cada hora a los
     // 7 minutos: esto solo puede verse en ese rato, o si el cierre ha fallado
     // (y entonces el agente del Libro diario está en rojo).
-    return { propuesta: null, sinPropuesta: `El cierre del día aún no ha pasado por este día: ${abiertos.length} pedido${abiertos.length === 1 ? '' : 's'} de tus marcas ${abiertos.length === 1 ? 'sigue abierto' : 'siguen abiertos'}. Pasa cada hora a los 7 minutos; vuelve a proponer después.`, resumen }
+    return { propuesta: null, sinPropuesta: `El cierre del día aún no ha pasado por este día: ${abiertos.length} pedido${abiertos.length === 1 ? '' : 's'} de tus marcas ${abiertos.length === 1 ? 'sigue abierto' : 'siguen abiertos'}. Pasa cada hora a los 7 minutos; vuelve a proponer después.`, resumen, pedidosDelPorque: abiertos }
   }
   const sinCuenta = [...porCanalMap.keys(), ...devs.map((d) => d.d.canalId)].filter((c) => !c || !e.cuentas.cobroPorCanal[c])
   if (sinCuenta.length) {
-    return { propuesta: null, sinPropuesta: `No sé a qué cuenta va lo que cobra ${[...new Set(sinCuenta.map(e.nombreCanal))].join(', ')}: enlaza su 430 en su ficha (Clientes y proveedores › Plataformas).`, resumen }
+    return { propuesta: null, sinPropuesta: `No sé a qué cuenta va lo que cobra ${[...new Set(sinCuenta.map(e.nombreCanal))].join(', ')}: enlaza su 430 en su ficha (Clientes y proveedores › Plataformas).`, resumen,
+      pedidosDelPorque: filas.map((f) => f.p).filter((p) => !p.canalId || !e.cuentas.cobroPorCanal[p.canalId]) }
   }
 
   const lineas: LineaAsiento[] = []
@@ -205,7 +208,8 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
   // 1,85; 18,55 × 10 % = 1,855 → 1,86) no se proponía (cierre del día, T4).
   // Un pedido al 21 % se aparta euros, no céntimos: sigue sin pasar.
   if (filas.length && Math.abs(cent(cuota) - cent(cuotaIva(base, tipo))) > Math.floor(0.55 * filas.length + 0.5)) {
-    return { propuesta: null, sinPropuesta: `La cuota de los tickets (${eurosExactos(cuota)}) se aleja de la base × ${tipo} % más de medio céntimo por ticket: hay pedidos con otro tipo.`, resumen }
+    return { propuesta: null, sinPropuesta: `La cuota de los tickets (${eurosExactos(cuota)}) se aleja de la base × ${tipo} % más de medio céntimo por ticket: hay pedidos con otro tipo.`, resumen,
+      pedidosDelPorque: filas.filter((f) => f.p.tiposEnLineas.some((t) => t !== tipo) || Math.abs(cent(f.cuota) - cent(cuotaIva(f.base, tipo))) > 1).map((f) => f.p) }
   }
 
   razones.unshift(
