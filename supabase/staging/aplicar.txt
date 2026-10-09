@@ -15,6 +15,8 @@
 #   sin las migraciones (su guarda pararía: ya no están como antes).
 #   Run 107 (02a7ea0): paró en save_count_line: «quien contó» tiene que estar
 #   en la plantilla del local. Va sin él, como la pantalla cuando no lo sabe.
+#   Run 108 (52cd3d3): paró en apply_inventory_count: «faltan motivos». Va con
+#   el motivo puesto en la revisión.
 #   La prueba: la forma de los 20 de producción, el cierre, lo que se toca y
 #   lo que no, la frontera de las 6:00, A y B, regenerar, los cuatro caminos
 #   de la regla 10, la versión ROTA a propósito, los cambios de hora y < 1 s.
