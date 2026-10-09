@@ -1,15 +1,35 @@
-# Políticas de lectura de contabilidad, una vez por consulta
-# (conta/politicas-una-vez).
-#   Run 103 (7919d61): las dos migraciones APLICADAS en staging (0100: 48
-#   políticas; 0110: sales_day_summary; su comprobación de después en verde).
-#   No se repiten: su guarda pararía, porque ya no están como antes.
-#   La prueba falló en la siembra (42804: en un «union all» los literales se
-#   quedan en text) y se revirtió entera. Va otra vez con «::uuid».
-#   Run 104 (bbb5197): prueba EN VERDE (nuevas 222,5 ms, viejas 48.054,9 ms,
-#   35 días las dos). Pero su explain era de la consulta con constantes, no
-#   del plan genérico que corre la función (la vieja: 88 ms en el explain y
-#   48 s en la llamada). Va otra vez con el explain del plan genérico.
-#   La prueba: 1.100 ventas, 50 resúmenes y 120 descartes; < 1 s con las
-#   nuevas, lo que ve cada uno (A, B y un superadmin) en las 49 tablas, y que
-#   con las VIEJAS no pase. Todo en una transacción con ROLLBACK.
-supabase/staging/sql/20261015_politicas_prueba.sql
+# El día se cierra a las 6:00, y lo que sigue abierto no es venta
+# (conta/cierre-del-dia, encargo del 09/10).
+#   0100: sale.unconfirmed_at, la hora de cierre por empresa, el rastro y las
+#         funciones del cierre (conta_cerrar_dias, conta_por_cerrar, …) y el
+#         procedimiento horario.
+#   0110: el stock no vuelve (disparador de consumo + una línea del motor).
+#   0120: no se propone un día sin cerrar; «unconfirmed» en los pedidos del día.
+#   0130: se retiran los asientos propuestos antes de que su día cerrara.
+#   0140: el cron de cada hora (a los :07). En staging también: es la prueba
+#         del procedimiento con COMMIT por empresa, que no se puede llamar
+#         dentro de la transacción de la prueba.
+#   Run 106 (b698cc1): las CINCO migraciones APLICADAS en staging. La prueba,
+#   pasos 1 a 6 en verde; paró en 7d: un recuento solo se escribe por
+#   save_count_line (la puerta del 10/09). Va otra vez por la puerta, y ya
+#   sin las migraciones (su guarda pararía: ya no están como antes).
+#   Run 107 (02a7ea0): paró en save_count_line: «quien contó» tiene que estar
+#   en la plantilla del local. Va sin él, como la pantalla cuando no lo sabe.
+#   Run 108 (52cd3d3): paró en apply_inventory_count: «faltan motivos». Va con
+#   el motivo puesto en la revisión.
+#   La prueba: la forma de los 20 de producción, el cierre, lo que se toca y
+#   lo que no, la frontera de las 6:00, A y B, regenerar, los cuatro caminos
+#   de la regla 10, la versión ROTA a propósito, los cambios de hora y < 1 s.
+#   Todo en una transacción con ROLLBACK.
+#   Run 109 (be7f318): prueba EN VERDE, los diez pasos.
+#   Ahora: la 0130 saca su selección a conta_propuestos_antes_del_cierre (solo
+#   lee), para que la prueba ensaye lo mismo que se aplica; se vuelve a
+#   aplicar aquí (idempotente: en staging no retira nada) y la prueba gana el
+#   paso 11, retirar lo propuesto antes del cierre sin dejar descarte.
+#   Run 111 (66a2c08): la 0150 y la prueba EN VERDE, doce pasos.
+#   Ahora: la semilla del e2e de pantallas (dos no confirmados más el 04/10 en
+#   Norte Centro, junto al que cerró el cron de verdad: 3 · 66,80 €).
+#   Y la 0160 (execute de conta_cerrado_hasta para conta_lectura; en staging
+#   el rol no existe: solo avisa).
+supabase/seeds/conta/seed_cierre_staging.sql
+supabase/migrations/20261016T0160_cierre_del_dia_lectura.sql

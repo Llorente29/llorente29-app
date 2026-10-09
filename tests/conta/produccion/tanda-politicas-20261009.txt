@@ -1,0 +1,29 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# Políticas de lectura de contabilidad, una vez por consulta (rama
+# conta/politicas-una-vez). El libro diario no carga en producción:
+# conta_dias_por_asentar pasa del límite de 8 s porque las políticas de SELECT
+# llaman a belongs_to_account fila a fila.
+#
+#   1. 20261015T0100_politicas_una_vez.sql — las 48 políticas de SELECT de las
+#      tablas de C00 a C05 (menos sales_day_summary) a
+#      «account_id = any ((select current_user_account_ids())::uuid[])».
+#      CAMBIA, declarado en su cabecera con su prueba de staging
+#      (20261015_politicas_prueba.sql). Ninguna en el camino del pedido.
+#   2. 20261015T0110_politicas_una_vez_resumen.sql — la de sales_day_summary,
+#      igual. CAMBIA, y el analizador la pone en el camino del pedido por el
+#      nombre (CAMINO_TABLAS «sales_.*»): pide «autorizo» con su nombre:
+#   20261015T0110_politicas_una_vez_resumen.sql
+#
+# Analizador pasado en local el 09/10 contra el contexto de producción (leído
+# en solo lectura): 0100 «sigue», 0110 «autorizo». Ninguna está en el
+# historial. Lo que diga el ensayo del workflow manda.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261015T0100_politicas_una_vez.sql
+supabase/migrations/20261015T0110_politicas_una_vez_resumen.sql

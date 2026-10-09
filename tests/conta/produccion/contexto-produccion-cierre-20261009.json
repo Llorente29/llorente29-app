@@ -1,0 +1,9 @@
+{
+ "tablas": ["public.company_tax_profile", "public.journal_entry", "public.sale"],
+ "funciones": ["public.conta_dias_por_asentar(uuid,date,date)", "public.conta_pedidos_del_dia(uuid,uuid,date)", "public.tg_sale_consumption_on_complete()"],
+ "filas": {"public.company_tax_profile": 0, "public.journal_entry": 0, "public.sale": 17682},
+ "otras": {},
+ "camino": {"tablas": ["public.sale"], "funciones": ["public.tg_sale_consumption_on_complete()"]},
+ "usos": {},
+ "registro": []
+}

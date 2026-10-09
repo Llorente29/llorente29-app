@@ -7,7 +7,7 @@
 // Rojo: lo que la base no debería haber dejado pasar nunca (descuadre, hueco,
 // cadena rota, IVA mal, venta cedida en el 70, compra del socio como gasto,
 // 6/7 sin local, asiento validado en un mes ya cerrado, resumen del día que no
-// es sus tickets). Ámbar: lo que espera a una persona (propuestas de más de
+// es sus tickets, pedido propio abierto en un día ya cerrado). Ámbar: lo que espera a una persona (propuestas de más de
 // 7 días, lo común sin su reparto al 100 %).
 //
 // Sin conceptos ni nombres (el informe va a un repositorio público): serie por
@@ -29,6 +29,7 @@ export const NORMAS = {
   resultado: 'Encargo C04, regla 9: cada apunte de 6/7 con su local o «común», y lo común con su reparto',
   mes_cerrado: 'Encargo C04, regla 4: un mes cerrado no admite asientos',
   propuestas: 'Encargo C04, agente: una propuesta no espera más de 7 días sin que nadie la mire',
+  cierre_dia: 'Encargo del 09/10 (cierre del día): un día se cierra a su hora y lo que sigue abierto se cierra como no confirmado',
 }
 
 /** @returns {{ nivel: 'rojo'|'ambar', tipo: string, donde: string, detalle: string, norma: string }[]} */
@@ -44,6 +45,7 @@ export function revisarLibro(bd) {
   for (const x of bd.socio_gasto ?? []) h('rojo', 'socio_gasto', x, `${asiento(x)}: ${x.importe} € del socio de marca como gasto en la ${x.cuenta}`)
   for (const x of bd.resultado ?? []) h(x.numero == null ? 'ambar' : 'rojo', 'resultado', x, x.numero == null ? x.motivo : `${asiento(x)}, cuenta ${x.cuenta}: ${x.motivo}`)
   for (const x of bd.mes_cerrado ?? []) h('rojo', 'mes_cerrado', x, `${asiento(x)} del ${x.fecha}, validado después de cerrar su mes`)
+  for (const x of bd.cierre_dia ?? []) h('rojo', 'cierre_dia', x, `${x.pedidos} ${x.pedidos === 1 ? 'pedido' : 'pedidos'} de tus marcas (${x.importe} €) ${x.pedidos === 1 ? 'sigue abierto' : 'siguen abiertos'} en días ya cerrados; el más antiguo, del ${x.dia}, lleva ${x.horas} h desde que acabó: el cierre del día no ha pasado o ha fallado`)
   for (const x of bd.propuestas ?? []) h('ambar', 'propuestas', x, `${SERIE[x.serie] ?? x.serie} del ${x.fecha} (${x.origen}) lleva ${x.dias} días sin validar ni descartar`)
   return out
 }
@@ -58,7 +60,7 @@ export function informeLibro(hallazgos, { donde: dondeCorre, hoy, contado }) {
     '',
     `Mirados: ${c.asientos ?? 0} asientos (${c.validados ?? 0} validados, ${c.anulados ?? 0} anulados) con ${c.apuntes ?? 0} apuntes en ${c.empresas ?? 0} empresas; ${c.propuestos ?? 0} propuestas o borradores esperando.`,
     '',
-    rojos.length === 0 ? '**En verde**: cuadre, numeración, cadena, IVA, ventas del día, marcas cedidas, compras del socio, resultado por local y meses cerrados.' : `**${rojos.length} en rojo.**`,
+    rojos.length === 0 ? '**En verde**: cuadre, numeración, cadena, IVA, ventas del día, marcas cedidas, compras del socio, resultado por local, meses cerrados y cierre del día.' : `**${rojos.length} en rojo.**`,
   ]
   const grupo = (titulo, xs) => {
     if (!xs.length) return

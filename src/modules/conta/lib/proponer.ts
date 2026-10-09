@@ -31,9 +31,13 @@ export const diaSiguiente = (iso: string) => unDia(iso, 1)
 export const diaAnterior = (iso: string) => unDia(iso, -1)
 const fecha = (iso: string) => iso.split('-').reverse().join('/')
 
-/** Entre qué fechas se propone, o si antes hay que preguntar. */
-export function rangoAProponer(e: EjercicioParaProponer, hoy: string, o: { primeraVenta: string | null; asientosEnEjercicio: number }): Rango {
-  const hasta = hoy < e.fin ? hoy : e.fin
+/**
+ * Entre qué fechas se propone, o si antes hay que preguntar. El límite es el
+ * ÚLTIMO DÍA CERRADO (cierreDelDia.ts, ultimoDiaCerrado), no hoy: un día no se
+ * propone antes de su hora de cierre (encargo del 09/10, regla 2).
+ */
+export function rangoAProponer(e: EjercicioParaProponer, ultimoCerrado: string, o: { primeraVenta: string | null; asientosEnEjercicio: number }): Rango {
+  const hasta = ultimoCerrado < e.fin ? ultimoCerrado : e.fin
   if (e.traidoHasta) {
     const desde = diaSiguiente(e.traidoHasta)
     if (desde > hasta) return { tipo: 'nada', porque: `Hasta el ${fecha(e.traidoHasta)} lo trae el programa anterior: aún no hay días de Folvy en este ejercicio.` }

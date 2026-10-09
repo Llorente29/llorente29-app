@@ -26,15 +26,18 @@ import {
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
 import {
-  anular, cerrarMes, fuenteCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, reabrirMes, resultadoDelMes,
+  anular, cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, reabrirMes, resultadoDelMes,
   type EjercicioLibro,
 } from '@/modules/conta/services/diarioService'
 import { proponerPendientes, type ResultadoProponer } from '@/modules/conta/services/propuestasLibroService'
 import { fijarCorte, primeraVenta } from '@/modules/conta/services/corteService'
 import { corteDesdeRespuesta, rangoAProponer } from '@/modules/conta/lib/proponer'
+import { textoDiaEnCurso, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 
 interface DatosLibro {
+  /** La hora de cierre del día de la empresa («06:00»). */
+  horaCierre: string
   ejercicios: EjercicioLibro[]
   ejercicio: EjercicioLibro | null
   asientos: AsientoDiario[]
@@ -53,10 +56,10 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
     if (!accountId || !companyId) return
     let vivo = true
     ;(async () => {
-      const [ejercicios, cierres, locales] = await Promise.all([leerEjercicios(accountId, companyId), leerCierres(accountId, companyId), localesDeLaCuenta(accountId)])
+      const [ejercicios, cierres, locales, horaCierre] = await Promise.all([leerEjercicios(accountId, companyId), leerCierres(accountId, companyId), localesDeLaCuenta(accountId), horaDeCierre(accountId, companyId)])
       const hoy = hoyEnMadrid()
       const ejercicio = ejercicios.find((e) => e.code === codigo) ?? ejercicios.find((e) => hoy >= e.inicio && hoy <= e.fin) ?? ejercicios[0] ?? null
-      if (!ejercicio) return { ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null }
+      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null }
       const mes = hoy >= ejercicio.inicio && hoy <= ejercicio.fin ? mesDe(hoy) : mesDe(ejercicio.fin)
       const asientos = await leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin)
       const anterior = mesAnterior(mes)
@@ -65,7 +68,7 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
         resultadoDelMes(companyId, mes, locales).catch((e: unknown) => { resultadoError = e instanceof Error ? e.message : String(e); return null }),
         anterior >= ejercicio.inicio ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
       ])
-      return { ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre }
+      return { horaCierre, ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre }
     })().then((datos) => { if (vivo) setR({ clave, datos, error: null }) },
       (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
@@ -111,7 +114,10 @@ export default function LibroDiarioPage() {
     setFallo(null); setHecho(null); setProponiendo(true)
     try {
       const e = datos.ejercicio
-      const rango = rangoAProponer(e, hoyEnMadrid(), { primeraVenta: await primeraVenta(accountId), asientosEnEjercicio: datos.asientos.length })
+      // Hasta el último día CERRADO, no hasta hoy: un día no se propone antes
+      // de su hora de cierre (las 6:00 de serie, ajuste de la empresa).
+      const cerrado = ultimoDiaCerrado(new Date(), datos.horaCierre)
+      const rango = rangoAProponer(e, cerrado, { primeraVenta: await primeraVenta(accountId), asientosEnEjercicio: datos.asientos.length })
       if (rango.tipo === 'nada') { setHecho(rango.porque); return }
       if (rango.tipo === 'preguntar') { setPregunta({ porque: rango.porque, desde: '', programa: '', fallo: null }); return }
       const { desde, hasta } = rango
@@ -182,6 +188,10 @@ export default function LibroDiarioPage() {
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      {datos?.ejercicio && hoyEnMadrid() >= datos.ejercicio.inicio && hoyEnMadrid() <= datos.ejercicio.fin && (
+        // Información, no un aviso: el día en curso no se propone hasta su cierre.
+        <p className="cx-ayuda cxd-dia-en-curso" role="note">{textoDiaEnCurso(datos.horaCierre)}</p>
+      )}
       {pregunta && (
         <section className="cx-tarjeta" aria-label="Desde qué día asienta Folvy">
           <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">¿Desde qué día asienta Folvy?</h2></div>
@@ -203,7 +213,7 @@ export default function LibroDiarioPage() {
         <section className="cx-tarjeta cxd-sin-propuesta" aria-label="Lo que no he propuesto">
           <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">Lo que no he propuesto, y por qué</h2>
             <button type="button" className="cx-enlace" onClick={() => setSinPropuesta([])}>Entendido</button></div>
-          <ul>{sinPropuesta.map((x, i) => <li key={i}><strong>{x.que}</strong> · {x.porque}</li>)}</ul>
+          <ul>{sinPropuesta.map((x, i) => <SinPropuesta key={i} x={x} />)}</ul>
         </section>
       )}
 
@@ -394,5 +404,22 @@ function PedirDesbloqueo({ mes, companyId, alCerrar, alHacer }: { mes: string; c
         <button type="button" className="cx-boton" onClick={pedir} disabled={ocupado || !motivo.trim()}>{ocupado ? 'Reabriendo…' : 'Desbloquear'}</button>
       </div>
     </Dialogo>
+  )
+}
+
+/** Una línea de «Lo que no he propuesto»; si habla de pedidos, «Ver los N pedidos». */
+function SinPropuesta({ x }: { x: ResultadoProponer['sinPropuesta'][number] }) {
+  const [ver, setVer] = useState(false)
+  const n = x.pedidos?.length ?? 0
+  return (
+    <li>
+      <strong>{x.que}</strong> · {x.porque}
+      {n > 0 && <> <button type="button" className="cx-enlace" aria-expanded={ver} onClick={() => setVer((v) => !v)}>{ver ? 'Ocultar' : n === 1 ? 'Ver el pedido' : `Ver los ${n} pedidos`}</button></>}
+      {ver && x.pedidos && (
+        <ul className="cxd-sin-pedidos">
+          {x.pedidos.map((p, j) => <li key={j}>{p.codigo ?? 'sin código'} · {p.marca} · {p.canal} · {eurosExactos(p.total)}</li>)}
+        </ul>
+      )}
+    </li>
   )
 }

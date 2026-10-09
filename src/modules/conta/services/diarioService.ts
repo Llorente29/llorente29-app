@@ -21,6 +21,7 @@ import type { AsientoDiario, ApunteDiario, CierreMes, EstadoAsiento, FuenteCierr
 import { finDeMes, importeMano, nombreDeUso } from '@/modules/conta/lib/diario'
 import type { Confianza, OrigenAsiento, Razon, Serie } from '@/modules/conta/lib/libro'
 import { apuntarCorreccion } from '@/modules/conta/services/propuestasLibroService'
+import { normalizarHora } from '@/modules/conta/lib/cierreDelDia'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -124,6 +125,50 @@ export async function cuentasDeApunte(accountId: string, companyId: string): Pro
     .filter((f) => f.status !== 'cerrada' && !codigos.some((c) => c.length > String(f.code).length && c.startsWith(String(f.code))))
     .map((f) => ({ id: String(f.id), code: String(f.code), nombre: nombreDeUso({ kind: s(f.kind), name: String(f.name), plainName: s(f.plain_name) }), oficial: String(f.name) }))
     .sort((a, b) => a.code.localeCompare(b.code))
+}
+
+/** La hora de cierre del día de la empresa («06:00»); sin fila o vacía, la de serie. */
+export async function horaDeCierre(accountId: string, companyId: string): Promise<string> {
+  const { data, error } = await tabla('company_tax_profile').select('sales_day_close_time').eq('account_id', accountId).eq('company_id', companyId).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer la hora de cierre del día', error))
+  return normalizarHora(s((data as Fila | null)?.sales_day_close_time))
+}
+
+/** Cambia la hora de cierre del día. Falla si no ha cambiado ninguna fila (regla 8: nada callado). */
+export async function guardarHoraDeCierre(accountId: string, companyId: string, hora: string): Promise<string> {
+  const h = normalizarHora(hora)
+  if (h !== hora.slice(0, 5)) throw new Error('Escribe una hora entre 0:00 y 23:59.')
+  const { data, error } = await tabla('company_tax_profile').update({ sales_day_close_time: `${h}:00` })
+    .eq('account_id', accountId).eq('company_id', companyId).select('sales_day_close_time')
+  if (error) throw new Error(mensaje('No se ha podido guardar la hora de cierre del día', error))
+  if (!data || (data as Fila[]).length !== 1) throw new Error('No se ha guardado: la empresa no tiene su perfil fiscal (Tu empresa › Impuestos), o no tienes permiso para cambiarlo.')
+  return normalizarHora(s((data as Fila[])[0].sales_day_close_time))
+}
+
+/** Un pedido cerrado como no confirmado, para la lista del asiento de ventas del día. */
+export interface NoConfirmado {
+  id: string; soldAt: string; marca: string | null; canal: string | null; codigo: string | null; total: number
+  orderStatus: string | null; deliveryState: string | null
+  /** Si la plataforma lo pagó después y ya tiene su propio asiento (propuesto, borrador o validado). */
+  asientoAparte: string | null
+}
+
+/** Los no confirmados del día y local de un asiento de ventas del día (origen = su resumen). */
+export async function noConfirmadosDelResumen(accountId: string, companyId: string, resumenId: string): Promise<NoConfirmado[]> {
+  const { data: r, error } = await tabla('sales_day_summary').select('location_id, sales_day').eq('account_id', accountId).eq('company_id', companyId).eq('id', resumenId).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer el resumen del día', error))
+  if (!r) return []
+  const dia = String((r as Fila).sales_day)
+  const filas = ((await rpc('conta_no_confirmados', { p_company: companyId, p_desde: dia, p_hasta: dia, p_location: String((r as Fila).location_id) })) ?? []) as Fila[]
+  if (!filas.length) return []
+  const { data: aparte, error: e2 } = await tabla('journal_entry').select('id, source_id').eq('account_id', accountId).eq('company_id', companyId)
+    .eq('source_type', 'sales_adjustment').in('status', ['propuesto', 'borrador', 'validado']).in('source_id', filas.map((f) => String(f.id)))
+  if (e2) throw new Error(mensaje('No se han podido leer los asientos aparte', e2))
+  const deVenta = new Map(((aparte ?? []) as Fila[]).map((x) => [String(x.source_id), String(x.id)]))
+  return filas.map((f) => ({
+    id: String(f.id), soldAt: String(f.sold_at), marca: s(f.marca), canal: s(f.canal), codigo: s(f.codigo), total: n(f.total),
+    orderStatus: s(f.order_status), deliveryState: s(f.delivery_state), asientoAparte: deVenta.get(String(f.id)) ?? null,
+  }))
 }
 
 export interface LocalEmpresa { id: string; nombre: string }

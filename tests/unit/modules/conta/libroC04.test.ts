@@ -136,8 +136,31 @@ describe('reglas 6 y 13 · el resumen de ventas del día', () => {
     expect(soloLineas.propuesta!.avisos[0]).toContain('tipo distinto del 10 %')
   })
   it('pedidos abiertos o una plataforma sin 430: no se propone, y dice por qué', () => {
-    expect(ventasDelDia(dia([...PEDIDOS_NORTE, pedido({ id: 'o1', total: 9, estado: 'open' })])).sinPropuesta).toContain('sin cerrar')
+    expect(ventasDelDia(dia([...PEDIDOS_NORTE, pedido({ id: 'o1', total: 9, estado: 'open' })])).sinPropuesta).toContain('El cierre del día aún no ha pasado por este día: 1 pedido de tus marcas sigue abierto')
+    // Y lleva sus pedidos, para «Ver el pedido».
+    expect(ventasDelDia(dia([...PEDIDOS_NORTE, pedido({ id: 'o1', total: 9, estado: 'open' })])).pedidosDelPorque?.map((p) => p.id)).toEqual(['o1'])
     expect(ventasDelDia(dia(PEDIDOS_NORTE, { cuentas: { ...cuentasVentas, cobroPorCanal: { [GLOVO]: '43000001' } } })).sinPropuesta).toContain('Uber Eats, Just Eat')
+  })
+  it('los no confirmados del cierre del día no son venta, pero se cuentan aparte (el 02/10 de Alcalá: 3 · 71,70 €)', () => {
+    // Los tres importes reales del 02/10 en Alcalá que cerraría el atraso (PR #171).
+    const nc = [21.9, 22.4, 27.4].map((total, i) => pedido({ id: `nc${i}`, total, estado: 'unconfirmed' }))
+    const conNc = ventasDelDia(dia([...PEDIDOS_NORTE, ...nc]))
+    const sinNc = ventasDelDia(dia(PEDIDOS_NORTE))
+    expect(conNc.resumen.noConfirmados).toEqual({ pedidos: 3, total: 71.7, ids: ['nc0', 'nc1', 'nc2'] })
+    // Las mismas ventas, la misma propuesta y los mismos tickets que sin ellos.
+    expect(conNc.resumen.total).toBe(sinNc.resumen.total)
+    expect(conNc.resumen.tickets).toBe(sinNc.resumen.tickets)
+    expect(conNc.propuesta!.lineas).toEqual(sinNc.propuesta!.lineas)
+    expect(conNc.resumen.canceladosFuera).toBe(sinNc.resumen.canceladosFuera)
+    expect(sinNc.resumen.noConfirmados).toEqual({ pedidos: 0, total: 0, ids: [] })
+  })
+  it('un día de UN ticket con la base calculada se propone (20,40 € → 18,55 + 1,85), y uno al 21 % sigue sin pasar', () => {
+    // Antes la tolerancia era floor(n/2) céntimos: 0 con un ticket, y 18,55 × 10 % = 1,855 → 1,86 no es 1,85.
+    const uno = ventasDelDia(dia([pedido({ id: 'g234', total: 20.4 })]))
+    expect(uno.propuesta!.lineas.map((l) => [l.debe, l.haber])).toEqual([[20.4, 0], [0, 18.55], [0, 1.85]])
+    const al21 = ventasDelDia(dia([pedido({ id: 'g21', total: 24.2, base: 20, cuota: 4.2 })]))
+    expect(al21.propuesta).toBeNull()
+    expect(al21.sinPropuesta).toContain('hay pedidos con otro tipo')
   })
   it('solo cedidas ese día: no hay asiento de ventas', () => {
     expect(ventasDelDia(dia([PEDIDOS_NORTE[4]])).sinPropuesta).toBe('Ese día solo hubo ventas de marcas cedidas: van en la liquidación del socio.')
