@@ -88,7 +88,19 @@ Y la semilla destapó un cuarto: en el libro registro, una rectificativa salía 
   - el zip, comprobado con `unzip`.
 - Cada prueba nueva se rompió a propósito al menos una vez para ver que falla (la del zip, la de las correctoras, la tolerancia de la serie).
 - Agente: el juez puro con el volcado real de staging. Además, la prueba de staging que rompe una cosa por comprobación.
-- e2e A/B, ordenador y móvil: `tests/e2e/conta/c05/libros.spec.ts` y `rls.spec.ts`. El resultado y las capturas, en `docs/conta/capturas/c05/COMPARACION.md`.
+- e2e A/B, ordenador y móvil: `tests/e2e/conta/c05/libros.spec.ts` (10 pruebas) y `rls.spec.ts` (B no ve ni toca nada de A: 7 tablas, 2 altas, 5 funciones y los saldos).
+  - **e2e 153 en verde** (sobre `09426b8`): 135 pasan, 51 se saltan (las de un solo tamaño de pantalla y las que solo tienen sentido una vez), 0 fallan. Las capturas, comparadas con N13c, N14 y N15 una a una, en `docs/conta/capturas/c05/COMPARACION.md`.
+  - **La 152 salió en rojo** por tres pruebas, las tres mías:
+    1. `c02/ficha` y `c02/plan` esperaban 1.283,15 € de Hermanos Ruiz. La rectificativa de la semilla C05 (−55 €) lo deja en 1.228,15 €: medido en staging; se cambió la cifra esperada.
+    2. `c05/rls` filtraba `investment_good_regularization` por `company_id`, que no existe en esa tabla (cuelga de la cuenta). Regla 40: el nombre iba dentro de una cadena; el resto de nombres del fichero se comprobó contra staging.
+  - **Las capturas de la 153 enseñaron cinco fallos de pantalla**, arreglados después (detalle en `COMPARACION.md`):
+    - «1 anotaciones.»;
+    - la PyG por local escondía el local sin apuntes (regla 7);
+    - la barra de acciones de Cuentas anuales no cabía a 1440;
+    - subtítulos a 32 px;
+    - en el mapeo, «700cambiardejar fuera».
+  - La e2e vigila los dos primeros. La e2e siguiente sube capturas nuevas.
+- Prueba de staging, paso 5 nuevo: el expedidor del libro registro sale del tercero del asiento (NIF y nombre). No lo probaba nada; las semillas proponen sin tercero.
 
 ## Lo que cambió algo que ya existía (aviso, según la respuesta 3)
 
@@ -97,6 +109,7 @@ Y la semilla destapó un cuarto: en el libro registro, una rectificativa salía 
 - `scripts/conta/serie.mjs`: tolera que solo cambie la **procedencia** de una fuente (huella y fechas) sin regenerar la migración del C00, que ya está aplicada en producción con su huella. Hacía falta tras el #168: `main` también fallaba ese paso. Un valor distinto sigue fallando.
 - Los workflows nocturnos (staging y producción) corren la parte C05 del agente solo si la base la tiene.
 - `e2e-staging-conta.yml` pasa a `cancel-in-progress: false` (respuesta 3). La regla queda en `CLAUDE.md`.
+- `c02/ficha.spec.ts` y `c02/plan.spec.ts`: la cifra esperada de Hermanos Ruiz pasa a 1.228,15 € por la rectificativa de la semilla C05.
 - La 0100 y la 0110 se tocaron después de aplicarse en staging. **No están en producción**, así que allí entran ya buenas; en staging se volvieron a pasar.
 
 ## Decisiones de la respuesta 3, hechas

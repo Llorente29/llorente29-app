@@ -81,7 +81,11 @@ test('Pérdidas y ganancias por local: las columnas suman el total', async ({ pa
   await page.goto('/conta/libros/balances/pyg')
   await expect(page.getByRole('heading', { name: 'Pérdidas y ganancias' })).toBeVisible()
   await page.getByRole('button', { name: 'Por local' }).click()
-  await expect(page.getByRole('table', { name: 'Pérdidas y ganancias por local' })).toBeVisible()
+  const tabla = page.getByRole('table', { name: 'Pérdidas y ganancias por local' })
+  await expect(tabla).toBeVisible()
+  // Los dos locales de A y «Común», aunque Norte Mercado no tenga apuntes
+  // (regla 7: sale a cero; la captura del e2e 153 no lo enseñaba).
+  for (const c of ['Norte Centro', 'Norte Mercado', 'Común']) await expect(tabla.getByRole('columnheader', { name: c, exact: true })).toBeVisible()
   await expect(page.getByText('Las columnas suman el total al céntimo.')).toBeVisible()
   await capturar(page, 'pyg-por-local')
 })
@@ -102,6 +106,8 @@ test('Expedidas: el resumen de tiques es F4 con su rango, y el libro cuadra con 
   await expect(page.getByRole('heading', { name: 'Facturas expedidas' })).toBeVisible()
   await expect(page.getByText('F4 · resumen · art. 63.4 · T1-000101–T1-000105 · 5 tiques')).toBeVisible()
   await expect(page.getByRole('group', { name: 'Cifras del libro' })).toContainText('✓ Cuadra')
+  // «1 anotación.», no «1 anotaciones.» (lo enseñó la captura del e2e 153).
+  await expect(page.getByText(/^(1 anotación|(?:0|[2-9]|\d{2,}) anotaciones)\.$/)).toBeVisible()
   await capturar(page, 'expedidas')
 })
 

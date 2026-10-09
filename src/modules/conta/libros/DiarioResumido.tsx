@@ -62,7 +62,7 @@ export function DiarioResumido() {
         return (
           <div key={m.mes} className="cx-tarjeta" style={{ overflowX: 'auto' }}>
             <table className="cxl-tabla" aria-label={`Diario resumido de ${nombreMes(m.mes)}`}>
-              <caption className="cxl-titulo">{nombreMes(m.mes)} · {m.asientos} {m.asientos === 1 ? 'asiento' : 'asientos'}</caption>
+              <caption className="cxl-subtitulo">{nombreMes(m.mes)} · {m.asientos} {m.asientos === 1 ? 'asiento' : 'asientos'}</caption>
               <thead><tr><th>Cuenta</th><th>Nombre</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th></tr></thead>
               <tbody>
                 {m.filas.map((f) => (

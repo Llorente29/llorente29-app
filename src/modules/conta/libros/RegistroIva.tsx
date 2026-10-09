@@ -40,6 +40,7 @@ const TITULO: Record<Vista, string> = { issued: 'Facturas expedidas', received: 
 const LIBROS: Record<Vista, Libro[]> = { issued: ['issued'], received: ['received', 'investment'], intracomunitarias: ['issued', 'received', 'investment'] }
 const TIPOS: TipoFactura[] = ['F1', 'F2', 'F3', 'F4', 'R1', 'R2', 'R3', 'R4', 'R5']
 const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
+const anotaciones = (n: number) => `${n} ${n === 1 ? 'anotación' : 'anotaciones'}`
 const esIntra = (a: AnotacionLibro) => a.operationKey === '09' || a.exemptCause === 'E5'
 
 /** Los periodos del ejercicio: sus cuatro trimestres y el año entero. */
@@ -88,7 +89,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
     const filas: FilaTabla[] = vistas.filas.map((a) => [ddmm(a.issueDate), etiquetaTipo(a), [a.series, a.number].filter(Boolean).join('-') + (a.numberTo ? `–${a.numberTo}` : ''), a.counterpartTaxId, a.counterpartName, a.taxBase, a.taxRate, a.taxAmount, a.total, a.voidedAt ? 'sí' : ''])
     const nombre = `${TITULO[libro]} ${p.nombre}`
     const ok = como === 'pdf' ? pdfTabla(`${nombre}.pdf`, TITULO[libro], `${p.nombre} · ${ddmm(p.desde)} a ${ddmm(p.hasta)}${hayFiltro ? ' · filtrado' : ''}`, cab, filas) : excelTabla(`${nombre}.xlsx`, TITULO[libro], cab, filas)
-    setHecho(ok ? `Bajado: ${nombre}.${como === 'pdf' ? 'pdf' : 'xlsx'}, ${filas.length} anotaciones${hayFiltro ? ` de ${vistas.total} (con los filtros puestos)` : ''}.` : 'No había nada que bajar con estos filtros.')
+    setHecho(ok ? `Bajado: ${nombre}.${como === 'pdf' ? 'pdf' : 'xlsx'}, ${anotaciones(filas.length)}${hayFiltro ? ` de ${vistas.total} (con los filtros puestos)` : ''}.` : 'No había nada que bajar con estos filtros.')
   }
 
   if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
@@ -142,7 +143,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
       {vistas && !vistas.total && <div className="cx-tarjeta"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion="El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas." /></div>}
       {vistas && vistas.total > 0 && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <p className="cxl-apoyo" role="status">{hayFiltro ? `${vistas.filas.length} de ${vistas.total} anotaciones con los filtros puestos.` : `${vistas.total} anotaciones.`}</p>
+          <p className="cxl-apoyo" role="status">{hayFiltro ? `${vistas.filas.length} de ${anotaciones(vistas.total)} con los filtros puestos.` : `${anotaciones(vistas.total)}.`}</p>
           {porNif ? <TablaPorNif filas={vistas.filas} /> : (
             <table className="cxl-tabla" aria-label={TITULO[libro]}>
               <thead><tr><th>Fecha</th><th>Factura</th><th>{libro === 'issued' ? 'Destinatario' : 'Expedidor'}</th><th className="cxl-der">Base</th><th className="cxl-der">% IVA</th><th className="cxl-der">Cuota</th><th className="cxl-der">Total</th><th /></tr></thead>
@@ -253,7 +254,7 @@ export function FormatoAeat() {
     const bienes = d.datos.bienes.map((b) => filaBienes(b, anio))
     const ok = excelAeat(nombre, exp, rec, bienes, COLUMNAS_BIENES)
     const vivas = (xs: AnotacionLibro[]) => xs.filter((a) => !a.voidedAt).length
-    setHecho(ok ? `Bajado: ${nombre} · EXPEDIDAS ${vivas(exp)}, RECIBIDAS ${vivas(rec)}${bienes.length ? `, BIENES-INVERSIÓN ${bienes.length}` : ''}; del ${ddmm(L.ejercicio.inicio)} al ${ddmm(p.hasta)}.${porCompletar ? ` Ojo: ${porCompletar} anotaciones aún por completar.` : ''}` : 'No había nada que bajar: no hay anotaciones en ese periodo.')
+    setHecho(ok ? `Bajado: ${nombre} · EXPEDIDAS ${vivas(exp)}, RECIBIDAS ${vivas(rec)}${bienes.length ? `, BIENES-INVERSIÓN ${bienes.length}` : ''}; del ${ddmm(L.ejercicio.inicio)} al ${ddmm(p.hasta)}.${porCompletar ? ` Ojo: ${anotaciones(porCompletar)} aún por completar.` : ''}` : 'No había nada que bajar: no hay anotaciones en ese periodo.')
   }
 
   async function bajarZip() {
@@ -306,14 +307,14 @@ export function FormatoAeat() {
       {d.datos && (
         <>
           <div className="cx-tarjeta">
-            <h3 className="cxl-titulo">Excel del requerimiento</h3>
+            <h3 className="cxl-subtitulo">Excel del requerimiento</h3>
             <p>Un fichero con las hojas EXPEDIDAS, RECIBIDAS{d.datos.bienes.length ? ' y BIENES-INVERSIÓN' : ''}, con las columnas y las dos filas de cabecera del diseño de la AEAT, acumulado del {ddmm(L.ejercicio.inicio)} al {ddmm(p.hasta)}.</p>
             <p className="cxl-apoyo">Nombre: {d.datos.fiscal.nif ? nombreFichero(anio, d.datos.fiscal.nif, d.datos.fiscal.razon) : '— (falta el NIF de la empresa)'}. {exp.filter((a) => !a.voidedAt).length} expedidas, {rec.filter((a) => !a.voidedAt).length} recibidas, {d.datos.bienes.length} bienes. Las anuladas no van: se compensan con su contraasiento.</p>
-            {porCompletar > 0 && <p className="cxl-sin-sitio">{porCompletar} anotaciones por completar: el fichero sale igual, pero esas filas tienen huecos. <Link to={rutaLibros('registro', 'recibidas')}>Completarlas</Link></p>}
+            {porCompletar > 0 && <p className="cxl-sin-sitio">{anotaciones(porCompletar)} por completar: el fichero sale igual, pero esas filas tienen huecos. <Link to={rutaLibros('registro', 'recibidas')}>Completarlas</Link></p>}
             <button type="button" className="cx-boton" onClick={bajarExcel}>Bajar el Excel</button>
           </div>
           <div className="cx-tarjeta">
-            <h3 className="cxl-titulo">Documentos (zip)</h3>
+            <h3 className="cxl-subtitulo">Documentos (zip)</h3>
             <p>Las facturas recibidas del periodo que tienen su documento guardado en Folvy, con un índice de las que no.</p>
             <button type="button" className="cx-boton-sec" onClick={() => void bajarZip()} disabled={!!ocupado}>Bajar el zip</button>
           </div>

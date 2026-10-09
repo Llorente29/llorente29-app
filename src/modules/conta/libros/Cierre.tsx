@@ -224,7 +224,7 @@ export function CierreEjercicio() {
           {plan?.error && <p className="cxl-sin-sitio" role="alert">{plan.error}</p>}
           {plan?.ok && e.estado !== 'closed' && (
             <div className="cx-tarjeta">
-              <h3 className="cxl-titulo">Lo que Folvy propone</h3>
+              <h3 className="cxl-subtitulo">Lo que Folvy propone</h3>
               {plan.ok.regularizacion
                 ? <p>Resultado del ejercicio: <strong>{eurosExactos(plan.ok.resultado)}</strong> ({plan.ok.resultado >= 0 ? 'beneficio' : 'pérdida'}), a la {d.datos.c129}.</p>
                 : <p>La regularización ya está validada: gastos e ingresos están a cero y el resultado está en la {d.datos.c129}.</p>}

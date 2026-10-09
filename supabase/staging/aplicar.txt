@@ -1,22 +1,6 @@
-# C05 · respuesta 3 y tarea 5 (conta/c05-libros-y-balances).
-#   1. Staging: quita las 12 filas de serie de 160/162/510/512 que cambian de
-#      línea (la 0110 inserta «si no está» y no las movería).
-#   2. 0100 otra vez (idempotente): conta_vat_book_desde_asiento da a la base
-#      el signo de la cuota (una rectificativa, las dos en negativo).
-#   3. 0110 otra vez, regenerada: 160/162/510/512 a la línea «otras» de su
-#      grupo y 2935/5935 con la cuenta que corrigen.
-#   4. 0140 (cambia: journal_entry_validar): el cierre y la apertura del
-#      generador, enlazados, sin la regla de IVA.
-#   5. Semilla del C05: 2025 traído, un bien de inversión, el rango de tiques,
-#      una rectificativa y un cambio de mapeo propio. Todo inventado.
-#   6. La prueba de libros por sus caminos, con el closing suelto rechazado. ROLLBACK.
-#   7. 0150 (en staging no hay conta_lectura: lo dice y no hace nada).
-#   8. La prueba del agente C05: rompe una cosa por comprobación y exige verla. ROLLBACK.
-supabase/staging/sql/20261014_c05_serie_r3.sql
-supabase/migrations/20261014T0100_c05_libros.sql
-supabase/migrations/20261014T0110_c05_modelos_serie.sql
-supabase/migrations/20261014T0140_c05_validar_cierre.sql
-supabase/seeds/conta/seed_c05_staging.sql
+# C05 · tarea 5, tras el e2e 153 (conta/c05-libros-y-balances).
+#   La prueba de libros otra vez, con el paso 5 nuevo: el expedidor del libro
+#   registro sale del tercero del asiento (NIF y nombre). Las semillas proponen
+#   sin tercero y la captura de recibidas lo enseñaba «—»; ese camino no lo
+#   probaba nada. Todo en una transacción con ROLLBACK: no cambia staging.
 supabase/staging/sql/20261014_c05_prueba_libros.sql
-supabase/migrations/20261014T0150_c05_lectura.sql
-supabase/staging/sql/20261014_c05_prueba_agente.sql

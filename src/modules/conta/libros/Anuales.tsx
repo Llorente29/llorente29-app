@@ -100,7 +100,7 @@ export function CuentasAnuales() {
             <p className="cxl-pie">LSC art. 257.1 (balance y ECPN abreviados, y RD 1515/2007 art. 2.1 para pymes) y art. 258.1 (PyG abreviada). Hace falta cumplir dos de los tres límites dos ejercicios seguidos; en el primero, basta ese. Las cifras son las de hoy: al cierre se recalculan. {L.ejercicio.plantillaMedia === 0 && <>La plantilla media está a 0: ponla en <Link to={rutaLibros('cierre', 'ejercicios')}>Ejercicios</Link>.</>}</p>
           </div>
           <div className="cx-tarjeta">
-            <h3 className="cxl-titulo">Modelo de {L.ejercicio.code}{elegido ? `: ${NOMBRE_MODELO[elegido].toLowerCase()}` : ' (sin elegir: se usa el propuesto)'}</h3>
+            <h3 className="cxl-subtitulo">Modelo de {L.ejercicio.code}{elegido ? `: ${NOMBRE_MODELO[elegido].toLowerCase()}` : ' (sin elegir: se usa el propuesto)'}</h3>
             {L.ejercicio.modelo?.quien && <p className="cxl-apoyo">Lo eligió {L.ejercicio.modelo.quien}.</p>}
             <div className="cxl-segmento" role="group" aria-label="Elegir el modelo">
               {(['pymes', 'abreviado', 'normal'] as Modelo[]).filter((m) => d.datos!.plan === 'pymes' || m !== 'pymes').map((m) => (
@@ -113,7 +113,7 @@ export function CuentasAnuales() {
             {error && <p className="cxl-sin-sitio" role="alert">{error}</p>}
           </div>
           <div className="cx-tarjeta">
-            <h3 className="cxl-titulo">Los estados</h3>
+            <h3 className="cxl-subtitulo">Los estados</h3>
             <ul>
               <li><Link to={rutaLibros('balances', 'balance')}>Balance de situación</Link></li>
               <li><Link to={rutaLibros('balances', 'pyg')}>Pérdidas y ganancias</Link>{prop.pygAbreviada && prop.modelo === 'normal' ? ' (puede ser abreviada)' : ''}</li>
@@ -185,7 +185,7 @@ export function Mapeo() {
 
       {verHistorial && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <h3 className="cxl-titulo">Historial</h3>
+          <h3 className="cxl-subtitulo">Historial</h3>
           {h.error && <ErrorConReintento mensaje={h.error} reintentar={h.recargar} />}
           {!h.datos && !h.error && <Hueso alto={32} />}
           {h.datos && !h.datos.length && <p className="cxl-pie">Sin cambios: todo está como el estándar.</p>}
@@ -202,7 +202,7 @@ export function Mapeo() {
       {!calc && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2].map((i) => <Hueso key={i} alto={36} />)}</div>}
       {calc && (calc.r.sinSitio.length > 0 || calc.r.porDefecto.length > 0) && (
         <div className="cx-tarjeta">
-          <h3 className="cxl-titulo">Por revisar</h3>
+          <h3 className="cxl-subtitulo">Por revisar</h3>
           <ul className="cxl-lista-estado">
             {calc.r.sinSitio.map((s) => (
               <li key={s.code}><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /> <Link to={rutaMayor(s.code)}>{s.code} {s.name}</Link> · {eurosExactos(s.saldo)} · <strong>sin sitio en el modelo</strong>
@@ -217,7 +217,7 @@ export function Mapeo() {
       )}
       {calc && calc.fuera.length > 0 && (
         <div className="cx-tarjeta">
-          <h3 className="cxl-titulo">Fuera del modelo (por decisión tuya)</h3>
+          <h3 className="cxl-subtitulo">Fuera del modelo (por decisión tuya)</h3>
           <ul>{calc.fuera.map((m) => <li key={`${m.prefix}${m.byBalance ?? ''}`}>{m.prefix}{m.byBalance ? ` (saldo ${m.byBalance})` : ''}{m.note ? ` · ${m.note}` : ''} <button type="button" className="cx-enlace" onClick={() => void alEstandar(m.prefix)}>Volver al estándar</button></li>)}</ul>
           <p className="cxl-pie">Una cuenta fuera con saldo deja de salir en los estados: el agente lo vigila cada noche.</p>
         </div>
@@ -235,7 +235,7 @@ export function Mapeo() {
                     <td>{ms.map((m) => {
                       const propio = calc.propios.has(`${m.prefix}|${m.byBalance ?? ''}`)
                       return (
-                        <span key={`${m.prefix}${m.byBalance ?? ''}`} className="cx-pildora" style={{ marginRight: 4 }}>
+                        <span key={`${m.prefix}${m.byBalance ?? ''}`} className="cx-pildora cxl-mapeo-cuenta">
                           {m.sign === 'resta' ? '−' : ''}{m.prefix}{m.byBalance ? (m.byBalance === 'deudor' ? ' (D)' : ' (H)') : ''}{propio ? ' · tuyo' : m.origin === 'defecto' ? ' · por defecto' : ''}
                           {' '}<button type="button" className="cx-enlace" aria-label={`Cambiar la ${m.prefix} de línea`} onClick={() => setAccion({ tipo: 'cambiar', prefijo: m.prefix, porSigno: m.byBalance, desde: l.code })}>cambiar</button>
                           {' '}<button type="button" className="cx-enlace" aria-label={`Dejar fuera la ${m.prefix}`} onClick={() => setAccion({ tipo: 'fuera', prefijo: m.prefix, porSigno: m.byBalance, desde: l.code })}>dejar fuera</button>

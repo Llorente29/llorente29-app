@@ -133,7 +133,7 @@ export function Retenciones() {
             <thead><tr><th>Modelo</th><th>Trimestre</th><th className="cxl-der">Apuntes</th><th className="cxl-der">Base</th><th className="cxl-der">Retenido</th></tr></thead>
             <tbody>{grupos.map((g) => <tr key={`${g.modelo}${g.t}`}><td>{g.modelo}</td><td>{g.t}</td><td className="cxl-der">{g.apuntes}</td><td className="cxl-der">{eurosExactos(g.base)}</td><td className="cxl-der">{eurosExactos(g.importe)}</td></tr>)}</tbody>
           </table>
-          <h3 className="cxl-titulo">Apuntes</h3>
+          <h3 className="cxl-subtitulo">Apuntes</h3>
           <table className="cxl-tabla" aria-label="Apuntes con retención">
             <thead><tr><th>Fecha</th><th>Modelo</th><th>Concepto</th><th className="cxl-der">Base</th><th className="cxl-der">Retenido</th></tr></thead>
             <tbody>{d.datos!.map((r, i) => <tr key={`${r.entryId}${i}`}><td><Link to={rutaAsiento(r.entryId)}>{ddmm(r.fecha)}</Link></td><td>{r.modelo}</td>
@@ -165,7 +165,7 @@ export function Suplidos() {
         const x = extracto(d.datos!.ms.filter((m) => m.cuenta === cu.code), { desde: L.ejercicio.inicio, hasta: L.ejercicio.fin })
         return (
           <div key={cu.code} className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-            <h3 className="cxl-titulo">{cu.code} · {cu.name} <Link to={`${rutaLibros('mayor', 'libro-mayor')}?cuenta=${cu.code}`} className="cx-enlace">Mayor</Link></h3>
+            <h3 className="cxl-subtitulo">{cu.code} · {cu.name} <Link to={`${rutaLibros('mayor', 'libro-mayor')}?cuenta=${cu.code}`} className="cx-enlace">Mayor</Link></h3>
             {!x.filas.length ? <p className="cxl-pie">Sin movimientos en {L.ejercicio.code}.</p> : (
               <table className="cxl-tabla" aria-label={`Suplidos en la ${cu.code}`}>
                 <thead><tr><th>Fecha</th><th>Concepto</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th><th className="cxl-der">Saldo</th></tr></thead>

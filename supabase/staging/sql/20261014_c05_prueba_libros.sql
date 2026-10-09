@@ -224,4 +224,41 @@ begin
     -v_res, jsonb_array_length(v_cie), v_tarde;
 end $$;
 
+\echo '>>> 5. Libro registro: el expedidor sale del tercero del asiento (NIF y nombre)'
+-- El camino real (propuestasLibroService.aJson) manda el tercero en el asiento
+-- (party_id); el disparador del 0100 saca de ahí NIF y nombre. Las semillas
+-- del C04 y del C05 proponen sin tercero, así que en la pantalla salen «—» y
+-- «Falta NIF del expedidor»: aquí se prueba el camino con tercero.
+do $$
+declare
+  v_co constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
+  l1 constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
+  iva21 uuid := (select id from public.tax_rate where code = 'iva_general' and is_system and valid_to is null limit 1);
+  v_p record; r jsonb; v record; n int;
+begin
+  -- Un tercero de A con NIF (regla 9: por cuenta, no por nombre).
+  select id, tax_id, name into v_p from public.party
+   where account_id = 'c01a0000-0000-4000-8000-00000000000a' and tax_id is not null order by name limit 1;
+  if v_p.id is null then raise exception 'PRUEBA C05 · 5: la semilla no tiene ningún tercero de A con NIF.'; end if;
+  if iva21 is null then raise exception 'PRUEBA C05 · 5: no encuentro el IVA general de serie.'; end if;
+  r := public.journal_entry_proponer(v_co,
+    jsonb_build_object('series', 2, 'fecha', '2026-10-03', 'concepto', 'Factura con tercero (prueba)', 'source_type', 'manual',
+      'documento', 'P-C05-5', 'confianza', 'seguro', 'porque', 'Prueba C05: el expedidor sale del tercero.', 'razones', '[]'::jsonb,
+      'party_id', v_p.id),
+    jsonb_build_array(
+      jsonb_build_object('cuenta', '60000000', 'debe', 100.00, 'local_id', l1),
+      jsonb_build_object('cuenta', '47200010', 'debe', 21.00, 'local_id', l1,
+        'iva', jsonb_build_object('tipo_id', iva21, 'base', 100.00, 'libro', 'received', 'deducible', 'yes')),
+      jsonb_build_object('cuenta', '40000002', 'haber', 121.00, 'local_id', l1)), null, 'Prueba C05');
+  perform public.journal_entry_validar((r->>'id')::uuid, 'Prueba C05');
+  select count(*) into n from public.vat_book_entry where entry_id = (r->>'id')::uuid and voided_at is null;
+  if n <> 1 then raise exception 'PRUEBA C05 · 5: el asiento validado deja % anotaciones en el libro registro (espero 1).', n; end if;
+  select * into v from public.vat_book_entry where entry_id = (r->>'id')::uuid and voided_at is null;
+  if v.party_id is distinct from v_p.id or v.counterpart_tax_id is distinct from v_p.tax_id or v.counterpart_name is null then
+    raise exception 'PRUEBA C05 · 5: el libro registro no lleva el tercero: party %, NIF «%», nombre «%» (espero %, «%»).',
+      v.party_id, v.counterpart_tax_id, v.counterpart_name, v_p.id, v_p.tax_id;
+  end if;
+  raise notice 'PRUEBA C05 · 5 en verde: el expedidor sale del tercero (NIF %, «%»).', v.counterpart_tax_id, v.counterpart_name;
+end $$;
+
 rollback;

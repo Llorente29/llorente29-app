@@ -10,6 +10,8 @@
 .cxl-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .cxl-ante { font-size: 15px; color: var(--cx-apoyo); }
 .cxl-titulo { font-size: 32px; font-weight: 700; letter-spacing: -0.8px; margin: 0; }
+/* Subtítulo dentro de una tarjeta: no compite con el título de la página (captura del e2e 153). */
+.cxl-subtitulo { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; margin: 0 0 8px; text-align: left; }
 
 /* Nivel 2 · pestañas de área */
 .cxl-areas { display: flex; gap: 4px; border-bottom: 1px solid var(--cx-linea); overflow-x: auto; }
@@ -22,11 +24,14 @@
 /* Nivel 3 · barra de acciones agrupadas, con «Tuyos» a la derecha */
 .cxl-barra {
   display: flex; align-items: stretch; gap: 0; background: var(--cx-blanco); border: 1px solid var(--cx-linea);
-  border-radius: var(--cx-radio-tarjeta); padding: 10px 14px 8px; overflow-x: auto;
+  border-radius: var(--cx-radio-tarjeta); padding: 10px 14px 8px;
+  /* Parte en filas en vez de desplazar: un desplazamiento lateral sin barra
+     visible escondía «Depósito de cuentas» y «Tuyos» a 1440 (e2e 153). */
+  flex-wrap: wrap; row-gap: 10px;
 }
 .cxl-grupo { display: flex; flex-direction: column; gap: 6px; padding: 0 12px; border-right: 1px solid var(--cx-linea); }
 .cxl-grupo:last-of-type { border-right: none; }
-.cxl-grupo-acciones { display: flex; gap: 4px; }
+.cxl-grupo-acciones { display: flex; gap: 4px; flex-wrap: wrap; }
 .cxl-grupo-etiqueta { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--cx-apoyo); padding: 0 12px; }
 .cxl-accion {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border-radius: var(--cx-radio-boton);
@@ -135,3 +140,8 @@
   .cxl-tabla td { border-top: none; padding: 0; }
   .cxl-tabla .cxl-movil-oculta { display: none; }
 }
+
+/* Mapeo: cada cuenta con «cambiar · dejar fuera · estándar» separados. La
+   píldora es inline-flex y se comía los espacios («700cambiardejar fuera»,
+   captura del e2e 153). */
+.cx-pildora.cxl-mapeo-cuenta { gap: 10px; margin: 0 6px 6px 0; max-width: none; overflow: visible; }

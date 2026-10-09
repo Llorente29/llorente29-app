@@ -279,13 +279,16 @@ function PorLocal({ saldos, lineas, mapeo, total, repartido }: {
   const L = useLibros()
   const grupos = new Map<string | null, SaldoCuenta[]>()
   for (const s of saldos) { const k = s.locationId; grupos.set(k, [...(grupos.get(k) ?? []), aSaldoCuenta(s, 'pyg')]) }
-  const columnas = [...grupos.keys()].sort((a, b) => (a === null ? 1 : b === null ? -1 : 0))
-  const res = new Map(columnas.map((k) => [k, calcularEstado('pyg', lineas, mapeo, grupos.get(k)!)]))
+  // Todos los locales de la empresa, aunque no tengan apuntes (regla 7: un
+  // local a cero sale a cero, no desaparece), los que traigan los saldos y no
+  // estén en la lista, y «Común» al final.
+  const columnas: (string | null)[] = [...L.locales.map((x) => x.id), ...[...grupos.keys()].filter((k): k is string => k !== null && !L.locales.some((x) => x.id === k)), null]
+  const res = new Map(columnas.map((k) => [k, calcularEstado('pyg', lineas, mapeo, grupos.get(k) ?? [])]))
   const nombre = (k: string | null) => (k === null ? 'Común' : L.locales.find((x) => x.id === k)?.nombre ?? 'Local sin nombre')
   const visibles = total.lineas.filter((l) => !l.oculta && (l.isTotal || l.level <= 2))
   const sumaLocales = (code: string) => Math.round(columnas.reduce((a, k) => a + Math.round((res.get(k)!.lineas.find((x) => x.code === code)?.importe ?? 0) * 100), 0)) / 100
   const cuadra = visibles.every((l) => Math.round(sumaLocales(l.code) * 100) === Math.round(l.importe * 100))
-  if (!columnas.length) return <div className="cx-tarjeta"><Vacio titulo="Aún no hay resultado en este periodo." explicacion="Cuando haya ventas y gastos asentados, sale aquí por local." /></div>
+  if (!saldos.length) return <div className="cx-tarjeta"><Vacio titulo="Aún no hay resultado en este periodo." explicacion="Cuando haya ventas y gastos asentados, sale aquí por local." /></div>
   return (
     <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
       <table className="cxl-tabla" aria-label="Pérdidas y ganancias por local">

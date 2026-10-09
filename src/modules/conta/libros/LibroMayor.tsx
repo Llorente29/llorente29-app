@@ -96,7 +96,7 @@ export function LibroMayor() {
       {cuenta && !x && !d.error && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2].map((i) => <Hueso key={i} alto={32} />)}</div>}
       {cuenta && x && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <h3 className="cxl-titulo">{cuenta} · {nombreCuenta} {cuenta.length >= 4 && <Link to={rutaMayor(cuenta)} className="cx-enlace">Ficha de la cuenta</Link>}</h3>
+          <h3 className="cxl-subtitulo">{cuenta} · {nombreCuenta} {cuenta.length >= 4 && <Link to={rutaMayor(cuenta)} className="cx-enlace">Ficha de la cuenta</Link>}</h3>
           {filtrosTexto && <p className="cxl-apoyo">Filtrado: {filtrosTexto}. El saldo inicial está filtrado igual.</p>}
           <table className="cxl-tabla" aria-label={`Mayor de la ${cuenta}`}>
             <thead><tr><th>Fecha</th><th>Asiento</th>{cuenta.length < 4 && <th>Cuenta</th>}<th>Concepto</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th><th className="cxl-der">Saldo</th></tr></thead>
