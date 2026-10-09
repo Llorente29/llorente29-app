@@ -106,29 +106,29 @@ select 'c01a0000-0000-4000-8000-00000000000a', case when (i / 30) % 2 = 0 then '
 set local session_replication_role = origin;
 
 insert into public.sales_day_summary (account_id, company_id, location_id, sales_day, entry_id, tickets_count, total, detail_hash)
-select 'c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'c01a0000-0000-4000-8000-0000000000a2', date '2026-11-01' + d, '8024e31c-9b9f-48ea-bf8b-8bfb938f1826', 1, 22, 'prueba-politicas'
+select 'c01a0000-0000-4000-8000-00000000000a'::uuid, '3b34403a-a7d6-4a48-a8d7-737e8cababdc'::uuid, 'c01a0000-0000-4000-8000-0000000000a2'::uuid, date '2026-11-01' + d, '8024e31c-9b9f-48ea-bf8b-8bfb938f1826'::uuid, 1, 22, 'prueba-politicas'
   from generate_series(0, 9) d
 union all
-select 'c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', case when d < 20 then 'c01a0000-0000-4000-8000-0000000000a2'::uuid else 'e0200000-0000-4000-8000-0000000000a3'::uuid end, date '2026-07-01' + (d % 20), null, 1, 22, 'prueba-politicas'
+select 'c01a0000-0000-4000-8000-00000000000a'::uuid, '3b34403a-a7d6-4a48-a8d7-737e8cababdc'::uuid, case when d < 20 then 'c01a0000-0000-4000-8000-0000000000a2'::uuid else 'e0200000-0000-4000-8000-0000000000a3'::uuid end, date '2026-07-01' + (d % 20), null, 1, 22, 'prueba-politicas'
   from generate_series(0, 39) d
 union all
-select 'c01b0000-0000-4000-8000-00000000000b', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6', 'c01b0000-0000-4000-8000-0000000000b2', date '2026-11-01' + d, null, 1, 22, 'prueba-politicas'
+select 'c01b0000-0000-4000-8000-00000000000b'::uuid, '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6'::uuid, 'c01b0000-0000-4000-8000-0000000000b2'::uuid, date '2026-11-01' + d, null, 1, 22, 'prueba-politicas'
   from generate_series(0, 4) d;
 
 insert into public.journal_dismissal (account_id, company_id, source_type, source_key, reason)
-select 'c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'sales_day', 'e0200000-0000-4000-8000-0000000000a3:' || (date '2026-11-16' + d), 'Prueba de políticas'
+select 'c01a0000-0000-4000-8000-00000000000a'::uuid, '3b34403a-a7d6-4a48-a8d7-737e8cababdc'::uuid, 'sales_day', 'e0200000-0000-4000-8000-0000000000a3:' || (date '2026-11-16' + d), 'Prueba de políticas'
   from generate_series(0, 14) d
 union all
-select 'c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'sales_day', l || ':' || (date '2026-06-01' + d), 'Prueba de políticas'
+select 'c01a0000-0000-4000-8000-00000000000a'::uuid, '3b34403a-a7d6-4a48-a8d7-737e8cababdc'::uuid, 'sales_day', l || ':' || (date '2026-06-01' + d), 'Prueba de políticas'
   from (values ('c01a0000-0000-4000-8000-0000000000a2'), ('e0200000-0000-4000-8000-0000000000a3')) v(l), generate_series(0, 29) d
 union all
-select 'c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'sales_day', 'c01a0000-0000-4000-8000-0000000000a2:' || (date '2026-08-01' + d), 'Prueba de políticas'
+select 'c01a0000-0000-4000-8000-00000000000a'::uuid, '3b34403a-a7d6-4a48-a8d7-737e8cababdc'::uuid, 'sales_day', 'c01a0000-0000-4000-8000-0000000000a2:' || (date '2026-08-01' + d), 'Prueba de políticas'
   from generate_series(0, 29) d
 union all
-select 'c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'sales_day', 'e0200000-0000-4000-8000-0000000000a3:' || (date '2026-08-01' + d), 'Prueba de políticas'
+select 'c01a0000-0000-4000-8000-00000000000a'::uuid, '3b34403a-a7d6-4a48-a8d7-737e8cababdc'::uuid, 'sales_day', 'e0200000-0000-4000-8000-0000000000a3:' || (date '2026-08-01' + d), 'Prueba de políticas'
   from generate_series(0, 14) d
 union all
-select 'c01b0000-0000-4000-8000-00000000000b', '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6', 'sales_day', 'c01b0000-0000-4000-8000-0000000000b2:' || (date '2026-11-01' + d), 'Prueba de políticas'
+select 'c01b0000-0000-4000-8000-00000000000b'::uuid, '7e35fa0e-65aa-4a96-86e6-de9a2317c0f6'::uuid, 'sales_day', 'c01b0000-0000-4000-8000-0000000000b2:' || (date '2026-11-01' + d), 'Prueba de políticas'
   from generate_series(0, 4) d;
 analyze public.sale, public.sales_day_summary, public.journal_dismissal;
 

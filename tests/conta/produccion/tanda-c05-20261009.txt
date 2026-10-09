@@ -1,0 +1,40 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C05 · Libros y balances (rama conta/c05-libros-y-balances, PR #169). Visto
+# bueno de Julio, incluida la 0140 con el contraasiento de la reapertura.
+# Orden del informe final (docs/conta/C05_informe_final.md):
+#
+#   1. 20261014T0100_c05_libros.sql — tablas nuevas (modelos y mapeo, libro
+#      registro, bienes de inversión, cierre) y sus funciones. Añade.
+#   2. 20261014T0110_c05_modelos_serie.sql — la serie de los tres modelos,
+#      generada desde el BOE. Añade.
+#   3. 20261014T0120_c05_cambia.sql — el disparador del libro registro en
+#      journal_entry y conta_resultado_por_local sin la regularización.
+#      CAMBIA, declarado en su cabecera con su prueba de staging
+#      (20261014_c05_prueba_cambia.sql). journal_entry tiene 0 filas.
+#   4. 20261014T0130_c05_modelo_elegido.sql — el modelo que elige cada
+#      empresa por ejercicio. Añade.
+#   5. 20261014T0140_c05_validar_cierre.sql — journal_entry_validar: el
+#      cierre y la apertura del generador, enlazados, y su contraasiento, sin
+#      la regla de IVA. CAMBIA, misma firma, declarado con su prueba de staging
+#      (20261014_c05_prueba_libros.sql).
+#   6. 20261014T0150_c05_lectura.sql — SELECT para conta_lectura sobre las 9
+#      tablas que lee la parte C05 del agente. Añade.
+#
+# Analizador pasado en local el 09/10 contra el contexto de producción (leído
+# en solo lectura): los seis dicen «sigue». Ninguno toca el camino del pedido,
+# ninguno está en el historial y NINGUNO pide «autorizo». Lo que diga el
+# ensayo del workflow manda.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261014T0100_c05_libros.sql
+supabase/migrations/20261014T0110_c05_modelos_serie.sql
+supabase/migrations/20261014T0120_c05_cambia.sql
+supabase/migrations/20261014T0130_c05_modelo_elegido.sql
+supabase/migrations/20261014T0140_c05_validar_cierre.sql
+supabase/migrations/20261014T0150_c05_lectura.sql

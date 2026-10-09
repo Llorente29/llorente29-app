@@ -1,0 +1,20 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas.
+#
+# C05 · Libros y balances: los seis .down.sql en orden inverso al de
+# aplicar.txt.
+#   - 0150 quita a conta_lectura solo las 5 tablas que le dio por primera vez.
+#   - 0140 devuelve journal_entry_validar al texto del C04 tal cual (md5 del
+#     cuerpo a391885c46395faad3b6421a5615be31, el de producción hoy).
+#   - 0130 PARA si alguna empresa ya eligió modelo.
+#   - 0120 quita el disparador y devuelve conta_resultado_por_local a la del
+#     C04.
+#   - 0110 quita solo la serie; PARA antes si hay mapeo propio.
+#   - 0100 quita funciones y tablas; PARA si se perdería algo (un mapeo propio,
+#     un bien de inversión o un cierre preparado).
+supabase/vuelta-atras/20261014T0150_c05_lectura.down.sql
+supabase/vuelta-atras/20261014T0140_c05_validar_cierre.down.sql
+supabase/vuelta-atras/20261014T0130_c05_modelo_elegido.down.sql
+supabase/vuelta-atras/20261014T0120_c05_cambia.down.sql
+supabase/vuelta-atras/20261014T0110_c05_modelos_serie.down.sql
+supabase/vuelta-atras/20261014T0100_c05_libros.down.sql
