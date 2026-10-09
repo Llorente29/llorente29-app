@@ -14,9 +14,11 @@
 -- que usan belongs_to_account; lista de pg_policies, igual en producción y en
 -- staging el 09/10: tests/conta/produccion/politicas-c00-c05-produccion-
 -- 20261009.json) pasan a
---     account_id = any ((select public.current_user_account_ids()))
+--     account_id = any ((select public.current_user_account_ids())::uuid[])
 -- El «(select …)» la convierte en un InitPlan: se calcula UNA vez por
--- consulta, no una por fila.
+-- consulta, no una por fila. El «::uuid[]» no sobra: sin él, «= any
+-- (select …)» se lee como «= ANY (subconsulta)» y compara uuid con uuid[]
+-- (42883; lo cazó el primer run de staging, 09/10).
 --
 -- Mismo resultado sobre los datos reales: belongs_to_account(p) es
 -- «p = any(current_user_account_ids()) or current_user_is_admin()», y para un
@@ -61,7 +63,7 @@ begin
 end $$;
 
 drop policy if exists sales_day_summary_select on public.sales_day_summary;
-create policy sales_day_summary_select on public.sales_day_summary as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy sales_day_summary_select on public.sales_day_summary as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 
 -- Comprobación: con la forma nueva y ninguna con belongs_to_account.
 do $$

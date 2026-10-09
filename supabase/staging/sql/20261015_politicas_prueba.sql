@@ -92,7 +92,7 @@ begin
   select count(*) into n from _politicas x join pg_policies p on p.schemaname = 'public' and p.tablename = x.t and p.policyname = x.p
    where p.cmd = 'SELECT' and p.qual like '%SELECT current_user_account_ids()%' and p.qual not like '%belongs_to_account%';
   if n <> 49 then raise exception 'PRUEBA políticas · 0: % de 49 con la forma nueva.', n; end if;
-  raise notice 'PRUEBA políticas · 0 en verde: las 49 con account_id = any ((select current_user_account_ids())).';
+  raise notice 'PRUEBA políticas · 0 en verde: las 49 con account_id = any ((select current_user_account_ids())::uuid[]).';
 end $$;
 
 \echo '>>> 1. Siembra (noviembre de 2026, empresa A; y un poco de B)'

@@ -61,9 +61,11 @@
 -- que usan belongs_to_account; lista de pg_policies, igual en producción y en
 -- staging el 09/10: tests/conta/produccion/politicas-c00-c05-produccion-
 -- 20261009.json) pasan a
---     account_id = any ((select public.current_user_account_ids()))
+--     account_id = any ((select public.current_user_account_ids())::uuid[])
 -- El «(select …)» la convierte en un InitPlan: se calcula UNA vez por
--- consulta, no una por fila.
+-- consulta, no una por fila. El «::uuid[]» no sobra: sin él, «= any
+-- (select …)» se lee como «= ANY (subconsulta)» y compara uuid con uuid[]
+-- (42883; lo cazó el primer run de staging, 09/10).
 --
 -- Mismo resultado sobre los datos reales: belongs_to_account(p) es
 -- «p = any(current_user_account_ids()) or current_user_is_admin()», y para un
@@ -149,101 +151,101 @@ begin
 end $$;
 
 drop policy if exists ai_action_log_select on public.ai_action_log;
-create policy ai_action_log_select on public.ai_action_log as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy ai_action_log_select on public.ai_action_log as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists ai_data_origin_select on public.ai_data_origin;
-create policy ai_data_origin_select on public.ai_data_origin as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy ai_data_origin_select on public.ai_data_origin as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists ai_suggestion_select on public.ai_suggestion;
-create policy ai_suggestion_select on public.ai_suggestion as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy ai_suggestion_select on public.ai_suggestion as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists allocation_rule_select on public.allocation_rule;
-create policy allocation_rule_select on public.allocation_rule as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy allocation_rule_select on public.allocation_rule as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists annual_accounts_choice_select on public.annual_accounts_choice;
-create policy annual_accounts_choice_select on public.annual_accounts_choice as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy annual_accounts_choice_select on public.annual_accounts_choice as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists annual_accounts_mapping_select on public.annual_accounts_mapping;
-create policy annual_accounts_mapping_select on public.annual_accounts_mapping as permissive for select to authenticated using (account_id is null or account_id = any ((select public.current_user_account_ids())));
+create policy annual_accounts_mapping_select on public.annual_accounts_mapping as permissive for select to authenticated using (account_id is null or account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists annual_accounts_mapping_change_select on public.annual_accounts_mapping_change;
-create policy annual_accounts_mapping_change_select on public.annual_accounts_mapping_change as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy annual_accounts_mapping_change_select on public.annual_accounts_mapping_change as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists brand_partner_contribution_select on public.brand_partner_contribution;
-create policy brand_partner_contribution_select on public.brand_partner_contribution as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy brand_partner_contribution_select on public.brand_partner_contribution as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_select on public.company;
-create policy company_select on public.company as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_select on public.company as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_account_select on public.company_account;
-create policy company_account_select on public.company_account as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_account_select on public.company_account as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_account_link_select on public.company_account_link;
-create policy company_account_link_select on public.company_account_link as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_account_link_select on public.company_account_link as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_account_log_select on public.company_account_log;
-create policy company_account_log_select on public.company_account_log as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_account_log_select on public.company_account_log as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_activity_select on public.company_activity;
-create policy company_activity_select on public.company_activity as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_activity_select on public.company_activity as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_chart_import_select on public.company_chart_import;
-create policy company_chart_import_select on public.company_chart_import as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_chart_import_select on public.company_chart_import as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_doubt_select on public.company_doubt;
-create policy company_doubt_select on public.company_doubt as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_doubt_select on public.company_doubt as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_relation_select on public.company_relation;
-create policy company_relation_select on public.company_relation as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_relation_select on public.company_relation as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists company_tax_profile_select on public.company_tax_profile;
-create policy company_tax_profile_select on public.company_tax_profile as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy company_tax_profile_select on public.company_tax_profile as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists customer_fiscal_select on public.customer_fiscal;
-create policy customer_fiscal_select on public.customer_fiscal as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy customer_fiscal_select on public.customer_fiscal as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists entry_template_select on public.entry_template;
-create policy entry_template_select on public.entry_template as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy entry_template_select on public.entry_template as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists entry_template_line_select on public.entry_template_line;
-create policy entry_template_line_select on public.entry_template_line as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy entry_template_line_select on public.entry_template_line as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists entry_text_select on public.entry_text;
-create policy entry_text_select on public.entry_text as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())));
+create policy entry_text_select on public.entry_text as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists expense_category_select on public.expense_category;
-create policy expense_category_select on public.expense_category as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())));
+create policy expense_category_select on public.expense_category as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists fiscal_period_lock_select on public.fiscal_period_lock;
-create policy fiscal_period_lock_select on public.fiscal_period_lock as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy fiscal_period_lock_select on public.fiscal_period_lock as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists fiscal_year_select on public.fiscal_year;
-create policy fiscal_year_select on public.fiscal_year as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy fiscal_year_select on public.fiscal_year as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists fiscal_year_closing_select on public.fiscal_year_closing;
-create policy fiscal_year_closing_select on public.fiscal_year_closing as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy fiscal_year_closing_select on public.fiscal_year_closing as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists general_row_setting_select on public.general_row_setting;
-create policy general_row_setting_select on public.general_row_setting as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy general_row_setting_select on public.general_row_setting as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists investment_good_select on public.investment_good;
-create policy investment_good_select on public.investment_good as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy investment_good_select on public.investment_good as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists investment_good_regularization_select on public.investment_good_regularization;
-create policy investment_good_regularization_select on public.investment_good_regularization as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy investment_good_regularization_select on public.investment_good_regularization as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists invoice_series_select on public.invoice_series;
-create policy invoice_series_select on public.invoice_series as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy invoice_series_select on public.invoice_series as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists journal_correction_select on public.journal_correction;
-create policy journal_correction_select on public.journal_correction as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy journal_correction_select on public.journal_correction as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists journal_dismissal_select on public.journal_dismissal;
-create policy journal_dismissal_select on public.journal_dismissal as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy journal_dismissal_select on public.journal_dismissal as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists journal_entry_select on public.journal_entry;
-create policy journal_entry_select on public.journal_entry as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy journal_entry_select on public.journal_entry as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists journal_line_select on public.journal_line;
-create policy journal_line_select on public.journal_line as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy journal_line_select on public.journal_line as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists party_select on public.party;
-create policy party_select on public.party as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy party_select on public.party as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists party_merge_select on public.party_merge;
-create policy party_merge_select on public.party_merge as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy party_merge_select on public.party_merge as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists party_role_select on public.party_role;
-create policy party_role_select on public.party_role as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy party_role_select on public.party_role as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists payment_method_select on public.payment_method;
-create policy payment_method_select on public.payment_method as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())));
+create policy payment_method_select on public.payment_method as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists payment_term_select on public.payment_term;
-create policy payment_term_select on public.payment_term as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())));
+create policy payment_term_select on public.payment_term as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists payroll_summary_select on public.payroll_summary;
-create policy payroll_summary_select on public.payroll_summary as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy payroll_summary_select on public.payroll_summary as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists supplier_contact_select on public.supplier_contact;
-create policy supplier_contact_select on public.supplier_contact as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy supplier_contact_select on public.supplier_contact as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists sipl_select on public.supplier_invoice_payment_log;
-create policy sipl_select on public.supplier_invoice_payment_log as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy sipl_select on public.supplier_invoice_payment_log as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists supplier_learning_select on public.supplier_learning;
-create policy supplier_learning_select on public.supplier_learning as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy supplier_learning_select on public.supplier_learning as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists supplier_learning_log_select on public.supplier_learning_log;
-create policy supplier_learning_log_select on public.supplier_learning_log as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy supplier_learning_log_select on public.supplier_learning_log as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists supplier_proposal_select on public.supplier_proposal;
-create policy supplier_proposal_select on public.supplier_proposal as permissive for select to public using (account_id = any ((select public.current_user_account_ids())));
+create policy supplier_proposal_select on public.supplier_proposal as permissive for select to public using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists tax_rate_select on public.tax_rate;
-create policy tax_rate_select on public.tax_rate as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())));
+create policy tax_rate_select on public.tax_rate as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists treasury_account_select on public.treasury_account;
-create policy treasury_account_select on public.treasury_account as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy treasury_account_select on public.treasury_account as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists vat_book_entry_select on public.vat_book_entry;
-create policy vat_book_entry_select on public.vat_book_entry as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())));
+create policy vat_book_entry_select on public.vat_book_entry as permissive for select to authenticated using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 drop policy if exists withholding_rate_select on public.withholding_rate;
-create policy withholding_rate_select on public.withholding_rate as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())));
+create policy withholding_rate_select on public.withholding_rate as permissive for select to authenticated using (is_system or account_id = any ((select public.current_user_account_ids())::uuid[]));
 
 -- Comprobación: las 48 con la forma nueva y ninguna con belongs_to_account.
 do $$
