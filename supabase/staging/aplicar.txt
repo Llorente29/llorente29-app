@@ -9,6 +9,8 @@
 #   3. La prueba: 1.100 ventas, 50 resúmenes y 120 descartes; < 1 s con las
 #      nuevas, lo que ve cada uno (A, B y un superadmin) en las 49 tablas, y
 #      que con las VIEJAS no pase. Todo en una transacción con ROLLBACK.
+#   Run 102 (8ff23a0): 42883 uuid = uuid[] en la 0100, revertida entera; va
+#   otra vez con «::uuid[]» (2aa078f).
 supabase/migrations/20261015T0100_politicas_una_vez.sql
 supabase/migrations/20261015T0110_politicas_una_vez_resumen.sql
 supabase/staging/sql/20261015_politicas_prueba.sql

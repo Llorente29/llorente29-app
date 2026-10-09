@@ -12,7 +12,7 @@
 // la estructura del C01 aplicada.
 
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
-import { rpcSinTipar } from '@/lib/rpcSinTipar'
+import { mensaje, rpc } from '@/modules/conta/services/bd'
 import { tiposGastoOcultos } from '@/modules/conta/services/fichaTablasService'
 import type { Aprendido, CampoAprendido } from '@/modules/conta/lib/aprendizaje'
 import { nombreCorto, type Programa } from '@/modules/conta/lib/importarPlan'
@@ -125,7 +125,7 @@ export async function obtenerFicha(supplierId: string): Promise<FichaProveedor |
   requireSupabase()
   // importacion: la importación que la creó (C02c; company_chart_import por supplier.import_id, comprobado en staging el 06/10).
   const { data, error } = await from('supplier').select('*, importacion:company_chart_import(program)').eq('id', supplierId).maybeSingle()
-  if (error) throw new Error(`No se pudo abrir el proveedor: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo abrir el proveedor', error))
   return data ? filaAFicha(data as Fila) : null
 }
 
@@ -140,7 +140,7 @@ export async function guardarFicha(supplierId: string, cambios: Partial<FichaPro
   const { data, error } = await from('supplier').update(fila).eq('id', supplierId).select('*').single()
   if (error) {
     if (error.code === '23505') throw new Error('Ese NIF ya lo tiene otro proveedor de tu cuenta.')
-    throw new Error(`No se pudo guardar: ${error.message}`)
+    throw new Error(mensaje('No se pudo guardar', error))
   }
   return filaAFicha(data as Fila)
 }
@@ -163,7 +163,7 @@ export async function listarProveedores(accountId: string, { archivados = false 
   const q = from('supplier').select('*').eq('account_id', accountId)
   const { data, error } = await (archivados ? q.not('archived_at', 'is', null) : q.is('archived_at', null))
     .order('name', { ascending: true })
-  if (error) throw new Error(`No se pudo cargar la lista de proveedores: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo cargar la lista de proveedores', error))
   return ((data as Fila[] | null) ?? []).map(filaAFicha)
 }
 
@@ -198,7 +198,7 @@ export async function crearProveedor(n: NuevoProveedor): Promise<FichaProveedor>
     .single()
   if (error) {
     if (error.code === '23505') throw new Error('Ese NIF ya lo tiene otro proveedor de tu cuenta.')
-    throw new Error(`No se pudo crear el proveedor: ${error.message}`)
+    throw new Error(mensaje('No se pudo crear el proveedor', error))
   }
   return filaAFicha(data as Fila)
 }
@@ -227,7 +227,7 @@ export async function listarContactos(supplierId: string): Promise<ContactoProve
     .eq('supplier_id', supplierId)
     .order('is_primary', { ascending: false })
     .order('created_at', { ascending: true })
-  if (error) throw new Error(`No se pudieron cargar los contactos: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar los contactos', error))
   return ((data as Fila[] | null) ?? []).map(filaAContacto)
 }
 
@@ -235,7 +235,7 @@ export async function listarContactos(supplierId: string): Promise<ContactoProve
 export async function listarContactosDeLaCuenta(accountId: string): Promise<ContactoProveedor[]> {
   requireSupabase()
   const { data, error } = await from('supplier_contact').select('*').eq('account_id', accountId)
-  if (error) throw new Error(`No se pudieron cargar los contactos: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar los contactos', error))
   return ((data as Fila[] | null) ?? []).map(filaAContacto)
 }
 
@@ -264,7 +264,7 @@ export async function crearContacto(
     })
     .select('*')
     .single()
-  if (error) throw new Error(`No se pudo guardar el contacto: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo guardar el contacto', error))
   return filaAContacto(data as Fila)
 }
 
@@ -275,7 +275,7 @@ export async function actualizarContacto(id: string, d: DatosContacto): Promise<
     .eq('id', id)
     .select('*')
     .single()
-  if (error) throw new Error(`No se pudo guardar el contacto: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo guardar el contacto', error))
   return filaAContacto(data as Fila)
 }
 
@@ -284,20 +284,20 @@ async function quitarPrincipal(supplierId: string): Promise<void> {
     .update({ is_primary: false })
     .eq('supplier_id', supplierId)
     .eq('is_primary', true)
-  if (error) throw new Error(`No se pudo cambiar el contacto principal: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo cambiar el contacto principal', error))
 }
 
 export async function hacerPrincipal(supplierId: string, contactoId: string): Promise<void> {
   requireSupabase()
   await quitarPrincipal(supplierId)
   const { error } = await from('supplier_contact').update({ is_primary: true }).eq('id', contactoId)
-  if (error) throw new Error(`No se pudo cambiar el contacto principal: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo cambiar el contacto principal', error))
 }
 
 export async function borrarContacto(id: string): Promise<void> {
   requireSupabase()
   const { error } = await from('supplier_contact').delete().eq('id', id)
-  if (error) throw new Error(`No se pudo borrar el contacto: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo borrar el contacto', error))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -322,7 +322,7 @@ export async function listarPropuestas(supplierId: string): Promise<Propuesta[]>
     .eq('supplier_id', supplierId)
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
-  if (error) throw new Error(`No se pudieron cargar las propuestas: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar las propuestas', error))
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
     field: r.field as CampoPropuesta,
@@ -334,7 +334,7 @@ export async function listarPropuestas(supplierId: string): Promise<Propuesta[]>
 
 /** Busca en las lecturas automáticas datos que la ficha no tenga. Nunca escribe en la ficha. */
 export async function refrescarPropuestas(supplierId: string): Promise<number> {
-  return rpcSinTipar<number>('refresh_supplier_proposals', { p_supplier_id: supplierId })
+  return rpc<number>('refresh_supplier_proposals', { p_supplier_id: supplierId })
 }
 
 /**
@@ -352,7 +352,7 @@ export async function decidirPropuesta(
   const { error } = await from('supplier_proposal')
     .update({ status: decision, decided_at: new Date().toISOString(), decided_by: actor.id, decided_by_name: actor.name })
     .eq('id', propuestaId)
-  if (error) throw new Error(`No se pudo apuntar la decisión: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo apuntar la decisión', error))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -381,7 +381,7 @@ export async function listarTiposGasto(accountId: string, companyId: string | nu
   requireSupabase()
   const { data, error } = await from('expense_category').select('id, code, name, example, pgc_account_hint')
     .eq('is_active', true).eq('is_system', true).order('sort_order')
-  if (error) throw new Error(`No se pudieron cargar los tipos de gasto: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar los tipos de gasto', error))
   const filas = (data as Fila[] | null) ?? []
   const ocultos = await tiposGastoOcultos(accountId, companyId)
   return filas.map((r) => ({
@@ -396,7 +396,7 @@ export async function listarLocales(accountId: string): Promise<Local[]> {
   requireSupabase()
   const { data, error } = await from('locations')
     .select('id, name').eq('account_id', accountId).eq('active', true).order('name')
-  if (error) throw new Error(`No se pudieron cargar los locales: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar los locales', error))
   return ((data as Fila[] | null) ?? []).map((r) => ({ id: r.id as string, name: r.name as string }))
 }
 
@@ -428,7 +428,7 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
     .eq('supplier_id', supplierId)
     .neq('status', 'anulada')
     .order('invoice_date', { ascending: false, nullsFirst: false })
-  if (error) throw new Error(`No se pudieron cargar sus facturas: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar sus facturas', error))
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
     createdAt: r.created_at as string,
@@ -460,7 +460,7 @@ export async function listarFacturasDeLaCuenta(accountId: string): Promise<(Fact
     .select('id, supplier_id, status, invoice_number, invoice_date, grand_total, due_date, paid_at, created_at, not_duplicate_confirmed_at')
     .eq('account_id', accountId)
     .neq('status', 'anulada')
-  if (error) throw new Error(`No se pudieron cargar las facturas: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar las facturas', error))
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
     supplierId: str(r.supplier_id),
@@ -476,15 +476,15 @@ export async function listarFacturasDeLaCuenta(accountId: string): Promise<(Fact
 }
 
 export async function marcarPagada(invoiceId: string, fecha: string, forma: PaymentMethod | null): Promise<void> {
-  await rpcSinTipar<null>('mark_supplier_invoice_paid', { p_invoice_id: invoiceId, p_paid_at: fecha, p_method: forma })
+  await rpc<null>('mark_supplier_invoice_paid', { p_invoice_id: invoiceId, p_paid_at: fecha, p_method: forma })
 }
 
 export async function deshacerPago(invoiceId: string): Promise<void> {
-  await rpcSinTipar<null>('unmark_supplier_invoice_paid', { p_invoice_id: invoiceId })
+  await rpc<null>('unmark_supplier_invoice_paid', { p_invoice_id: invoiceId })
 }
 
 export async function cambiarVencimiento(invoiceId: string, fecha: string | null): Promise<void> {
-  await rpcSinTipar<null>('set_supplier_invoice_due_date', { p_invoice_id: invoiceId, p_due_date: fecha })
+  await rpc<null>('set_supplier_invoice_due_date', { p_invoice_id: invoiceId, p_due_date: fecha })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -507,7 +507,7 @@ export async function listarDocumentos(accountId: string, supplierId: string): P
     .eq('account_id', accountId)
     .eq('supplier_id', supplierId)
     .order('created_at', { ascending: false })
-  if (error) throw new Error(`No se pudieron cargar sus documentos: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar sus documentos', error))
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string, docFamily: r.doc_family as string, title: r.title as string,
     expiresAt: str(r.expires_at), status: r.status as string, createdAt: r.created_at as string,
@@ -530,7 +530,7 @@ export async function proveedoresConCertificadoBanco(accountId: string): Promise
     .select('supplier_id, status, created_at')
     .eq('account_id', accountId)
     .eq('doc_family', 'bank_ownership_certificate')
-  if (error) throw new Error(`No se pudieron cargar los documentos: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudieron cargar los documentos', error))
   const ultimo = new Map<string, string>()
   for (const r of (data as Fila[] | null) ?? []) {
     if (r.status === 'superseded' || r.status === 'expired' || !r.supplier_id) continue
@@ -572,7 +572,7 @@ export async function listarHistorial(
       : Promise.resolve({ data: [], error: null }),
   ])
   for (const r of [contactos, propuestas, pagos]) {
-    if (r.error) throw new Error(`No se pudo cargar el historial: ${r.error.message}`)
+    if (r.error) throw new Error(mensaje('No se pudo cargar el historial', r.error))
   }
   const num_ = new Map(facturas.map((f) => [f.id, f.invoiceNumber ?? f.code ?? 'sin número']))
   const CAMPO: Record<string, string> = { tax_id: 'el NIF', legal_name: 'la razón social', fiscal_address: 'la dirección fiscal' }
@@ -672,7 +672,7 @@ export async function ivaDeLasFacturas(invoiceIds: string[]): Promise<Map<string
   const out = new Map<string, number[]>()
   if (invoiceIds.length === 0) return out
   const { data, error } = await from('supplier_invoice_line').select('supplier_invoice_id, vat_pct').in('supplier_invoice_id', invoiceIds)
-  if (error) throw new Error(`No se pudo leer el IVA de sus facturas: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo leer el IVA de sus facturas', error))
   for (const r of (data as Fila[] | null) ?? []) {
     const v = num(r.vat_pct)
     if (v === null) continue
@@ -696,7 +696,7 @@ export interface AprendidoGuardado {
 export async function listarAprendido(supplierId: string): Promise<AprendidoGuardado[]> {
   requireSupabase()
   const { data, error } = await from('supplier_learning').select('campo, valor, etiqueta, porque, veces, desde, hasta, a_mano').eq('supplier_id', supplierId)
-  if (error) throw new Error(`No se pudo leer lo aprendido: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo leer lo aprendido', error))
   return ((data as Fila[] | null) ?? []).map((r) => ({
     campo: r.campo as CampoAprendido, valor: r.valor as string, etiqueta: r.etiqueta as string, porque: r.porque as string,
     veces: Number(r.veces ?? 0), desde: str(r.desde), hasta: str(r.hasta), aMano: r.a_mano === true,
@@ -705,7 +705,7 @@ export async function listarAprendido(supplierId: string): Promise<AprendidoGuar
 
 /** Guarda lo que decide el núcleo; devuelve cuántas cosas apuntó en «Lo que ha hecho Folvy». */
 export async function sincronizarAprendido(supplierId: string, items: Aprendido[]): Promise<number> {
-  return rpcSinTipar<number>('supplier_learning_sync', {
+  return rpc<number>('supplier_learning_sync', {
     p_supplier_id: supplierId,
     p_items: items.filter((a) => !a.aMano).map((a) => ({ campo: a.campo, valor: a.valor, etiqueta: a.etiqueta, porque: a.porque, veces: a.veces, desde: a.desde, hasta: a.hasta })),
   })
@@ -713,16 +713,16 @@ export async function sincronizarAprendido(supplierId: string, items: Aprendido[
 
 /** «Cambiar»: fija a mano (o, con valor null, lo devuelve a Folvy). */
 export async function fijarAprendido(supplierId: string, campo: CampoAprendido, valor: string | null, etiqueta: string | null, quien: string | null): Promise<void> {
-  await rpcSinTipar<null>('supplier_learning_fix', { p_supplier_id: supplierId, p_campo: campo, p_valor: valor, p_etiqueta: etiqueta, p_quien_nombre: quien })
+  await rpc<null>('supplier_learning_fix', { p_supplier_id: supplierId, p_campo: campo, p_valor: valor, p_etiqueta: etiqueta, p_quien_nombre: quien })
 }
 
 export async function noEsRepetida(invoiceId: string, quien: string | null): Promise<void> {
-  await rpcSinTipar<null>('supplier_invoice_not_duplicate', { p_invoice_id: invoiceId, p_quien_nombre: quien })
+  await rpc<null>('supplier_invoice_not_duplicate', { p_invoice_id: invoiceId, p_quien_nombre: quien })
 }
 
 /** IBAN distinto en una factura: «Es el nuevo IBAN» (pasa a la ficha) o «No es suyo». */
 export async function decidirIban(invoiceId: string, decision: DecisionIban, quien: string | null): Promise<void> {
-  await rpcSinTipar<null>('supplier_invoice_iban_decide', { p_invoice_id: invoiceId, p_decision: decision, p_quien_nombre: quien })
+  await rpc<null>('supplier_invoice_iban_decide', { p_invoice_id: invoiceId, p_decision: decision, p_quien_nombre: quien })
 }
 
 export interface HechoPorFolvy {
@@ -738,7 +738,7 @@ export async function listarHechoPorFolvy(supplierId: string): Promise<HechoPorF
   requireSupabase()
   const { data, error } = await from('supplier_learning_log').select('campo, que, etiqueta, porque, hecho_at, hecho_por_nombre')
     .eq('supplier_id', supplierId).order('hecho_at', { ascending: false }).limit(50)
-  if (error) throw new Error(`No se pudo leer lo que ha hecho Folvy: ${error.message}`)
+  if (error) throw new Error(mensaje('No se pudo leer lo que ha hecho Folvy', error))
   return ((data as Fila[] | null) ?? []).map((r) => ({
     campo: r.campo as CampoAprendido, que: r.que as HechoPorFolvy['que'], etiqueta: str(r.etiqueta),
     porque: r.porque as string, cuando: r.hecho_at as string, quien: str(r.hecho_por_nombre),
