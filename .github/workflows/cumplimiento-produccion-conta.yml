@@ -196,7 +196,13 @@ jobs:
           set -euo pipefail
           if [ "$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.journal_entry') is not null")" = "t" ]; then
             "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-libro.sql > /tmp/libro.json
-            node scripts/conta/agente-libro.mjs /tmp/libro.json /tmp/informe-libro.md producción
+            # C05: libros y balances, solo si la base ya los tiene.
+            LIBROS=""
+            if [ "$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.vat_book_entry') is not null")" = "t" ]; then
+              "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-libros.sql > /tmp/libros.json
+              LIBROS=/tmp/libros.json
+            fi
+            node scripts/conta/agente-libro.mjs /tmp/libro.json /tmp/informe-libro.md producción $LIBROS
           else
             echo "## Agente «Libro diario» · producción: aún no hay libro diario (antes del C04)." > /tmp/informe-libro.md
           fi
@@ -251,7 +257,9 @@ jobs:
         with:
           node-version: 22
       - name: Comparar las fuentes con la última descarga
-        run: node scripts/conta/fuentes.mjs comparar
+        run: |
+          command -v pdftotext > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils; }  # PDF de la AEAT (C05)
+          node scripts/conta/fuentes.mjs comparar
       - name: Separar lo nuevo de lo ya sabido
         id: informe
         continue-on-error: true

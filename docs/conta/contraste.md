@@ -173,3 +173,168 @@ al socio con el papel `liquidacion` (C04 · 0110). Se crea al confirmar el papel
 socio (ficha, lista de terceros y revisión de las 430 de Diez) o desde «Sus
 cuentas» si ya lo era. Textos leídos en `docs/conta/fuentes/textos/rd-1515-2007.txt`
 (419: líneas 5244–5255; 410: 5226–5235) y `codigo-comercio.txt` (art. 239).
+
+## Libros y balances (C05, 08/10/2026)
+
+### Configuración de Cegid Diez, transcrita por Julio (respuesta 1, d)
+
+Transcrita de las capturas de Julio, sin cifras de la empresa. El asterisco
+marca las cuentas que van a una línea u otra según el signo del saldo (en Folvy,
+`annual_accounts_mapping.by_balance`).
+
+**Balance abreviado · línea ← cuentas**
+
+| Línea | Cuentas en Diez |
+|---|---|
+| A.I Inmovilizado intangible | 20, 280, 290 |
+| A.II Inmovilizado material | 21, 281, 291, 23 |
+| A.III Inversiones inmobiliarias | 22, 282, 292 |
+| A.IV Grupo y asociadas a largo plazo | 2403, 2404, 2413, 2414, 2423, 2424, 2493, 2494, 2933, 2934, 2943, 2944, 2953, 2954 |
+| A.V Inversiones financieras a largo plazo | 2405, 2415, 2425, 2495, 250–255, 257–259, 26, 2945, 2955, 297, 298, 2935… |
+| A.VI Activos por impuesto diferido | 474 |
+| B.I Mantenidos para la venta | 580–584, 599 |
+| B.II Existencias | 30–36, 39, 407 |
+| B.III.1 Clientes | 430–437, 490, 493 |
+| B.III.2 Socios por desembolsos exigidos | 5580 |
+| B.III.3 Otros deudores | 44, 460, 470, 471, 472, 544, 473 |
+| B.IV Grupo y asociadas a corto plazo | 5303, 5304, 5313, 5314… y *5523, *5524 |
+| B.V Inversiones financieras a corto plazo | 5305, 5315…, 540–549, *551, *5525… |
+| B.VI Periodificaciones | 480, 567 |
+| B.VII Efectivo | 57 |
+| A-1.I.1 Capital | 100, 101, 102 |
+| A-1.I.2 Capital no exigido | 1030, 1040 |
+| A-1.II Prima de emisión | 110 |
+| A-1.III Reservas | 112–115, 119 |
+| A-1.IV Acciones propias | 108, 109 |
+| A-1.V Resultados de ejercicios anteriores | 120, 121 |
+| A-1.VI Otras aportaciones de socios | 118 |
+| A-1.VII Resultado del ejercicio | 129, 6, 7 |
+| A-1.VIII Dividendo a cuenta | 557 |
+| A-1.IX Otros instrumentos de patrimonio | 111 |
+| A-2 Ajustes por cambios de valor | 133, 1340, 1341, 137 |
+| A-3 Subvenciones | 130, 131, 132 |
+| B.I Provisiones a largo plazo | 14 |
+| B.II.1 Entidades de crédito a largo plazo | 1605, 170 |
+| B.II.2 Arrendamiento financiero a largo plazo | 1625, 174 |
+| B.II.3 Otras deudas a largo plazo | 1615, 1635, 171–173, 175–180, 1851, 189 |
+| B.III Grupo y asociadas a largo plazo | 1603, 1604, 1613, 1614, 1623, 1624, 1633, 1634 |
+| B.IV Pasivos por impuesto diferido | 479 |
+| B.V Periodificaciones a largo plazo | 181 |
+| Deuda con características especiales a largo plazo | 15 |
+| C.I Vinculados a activos no corrientes | 585–589 |
+| C.II Provisiones a corto plazo | 499, 529 |
+| C.III.1 Entidades de crédito a corto plazo | 5105, 520, 527 |
+| C.III.2 Arrendamiento financiero a corto plazo | 5125, 524 |
+| C.III.3 Otras deudas a corto plazo | 1034, 1044, 190, 192, 194, 500, 501, 505, 506, 509, 510, 5115, 5135, 5145, 521–523, 525, 526… |
+| C.IV Grupo y asociadas a corto plazo | 5103, 5104, 5113, 5114, 5123, 5124, 5133, 5134, 5143, 5144, *5523, *5524, 5563, 5564 |
+| C.V.1 Proveedores | 400, 401, 403–406 |
+| C.V.2 Otros acreedores | 41, 438, 465, 466, 475, 476, 477 |
+| C.VI Periodificaciones a corto plazo | 485, 568 |
+| Deuda con características especiales a corto plazo | 502, 507 |
+
+**PyG abreviada · línea ← cuentas (numeración de Diez)**
+
+| Diez | Línea | Cuentas |
+|---|---|---|
+| 1 | Cifra de negocios | 700–709 |
+| 2 | Variación de existencias | 6930, 71, 7930 |
+| 3 | Trabajos para el activo | 73 |
+| 4 | Aprovisionamientos | 600–602, 606–609, 61, 6931–6933, 7931–7933 |
+| 5 | Otros ingresos de explotación | 740, 747, 75 |
+| 6 | Gastos de personal | 64, 7950, 7957 |
+| 7 | Otros gastos de explotación | 62, 631, 634, 636, 639, 65, 694, 695, 794, 7954 |
+| 8 | Amortización | 68 |
+| 9 | Imputación de subvenciones | 746 |
+| 10 | Excesos de provisiones | 7951, 7952, 7955, 7956 |
+| 11 | Deterioro y enajenación del inmovilizado | 670–672, 690–692, 770–772, 790–792 |
+| 12 | Diferencia negativa en combinaciones de negocios | 774 |
+| 13 | Otros resultados | 678, 778 |
+| 14.b | Otros ingresos financieros | 760–762, 767, 769 |
+| 14 | Gastos financieros | 660–662, 664, 665, 669 |
+| 15 | Valor razonable | 663, 763 |
+| 16 | Diferencias de cambio | 668, 768 |
+| 17 | Deterioro de instrumentos financieros | 666, 667, 673, 675, 696–699, 766, 773, 775, 796–799 |
+| 18 | Impuesto sobre beneficios | 6300, 6301, 633, 638 |
+
+El ECPN y el estado de ingresos y gastos reconocidos no se transcribieron: salen
+del PGC (grupos 8 y 9 contra la 129), como pidió Julio.
+
+### Diferencias con el mapeo de Folvy (del texto consolidado del BOE)
+
+Medido con un guion, no a ojo: cada prefijo de la transcripción se busca en el
+mapeo del modelo abreviado de `supabase/conta/pgc/cuentas-anuales.json` (el
+prefijo más largo manda, como en la pantalla). **217 prefijos del balance y 99
+de la PyG.** Salen 10 «distintos»; mirados uno a uno contra el BOE:
+
+| Cuenta | Diez | Folvy | Quién tiene razón y por qué |
+|---|---|---|---|
+| *5523, *5524 | activo B.IV y pasivo C.IV, por signo | lo mismo, por signo | **Iguales.** El guion las marca porque aparecen en dos líneas; en Folvy también van por signo. |
+| *551, *5525 | activo B.V por signo | B.V si es deudor; C.III.3 si es acreedor | **Iguales en lo que se ve.** La transcripción solo recoge el lado del activo; Folvy añade el del pasivo, que es el que dice el BOE. |
+| 544 | III.3 Otros deudores (y dentro del rango «540–549» de B.V) | III.3 Otros deudores | **Iguales.** El BOE la pone en «Otros deudores» (modelo abreviado: «44, 460, 470, 471, 472, 544»). El rango 540–549 de B.V es una abreviatura de la transcripción. |
+| 707 | dentro del rango «700–709» | — | **No es diferencia:** la 707 no existe en el cuadro de cuentas. |
+| 2935 | A.V Inversiones financieras a largo plazo | **Ahora también A.V** (respuesta 3) | **Diez.** La 2935 corrige la 2405 (otras partes vinculadas), y una correctora va en la línea de la cuenta que corrige. El modelo del BOE escribe «(293)» entera en grupo y asociadas. El plan general vigente ya no tiene la 2935, pero una empresa traída de Diez sí. Lo mismo para la 5935 a corto plazo; la 2945 y la 2955 ya estaban bien. |
+| 510 | C.III.3 Otras deudas a corto plazo | **Ahora también «Otras deudas a corto plazo»**, colocada por defecto y con «Completar» (respuesta 3) | **Diez.** Una deuda de 3 cifras con partes vinculadas va a la línea «otras» de su grupo. Al completarla, 5103 y 5104 van a grupo y asociadas y 5105 a entidades de crédito. La misma regla mueve la 160, la 162 y la 512 (12 filas en los tres modelos, medidas). |
+
+**Resultado:** de 316 prefijos salían 2 diferencias reales (2935 y 510). Las dos
+se resuelven como Diez (respuesta 3), así que ya no queda ninguna.
+
+### Regla: una correctora va en la línea de la cuenta que corrige
+
+Amortizaciones, deterioros y desembolsos pendientes (28x, 29x, 249x, 39x, 490,
+539x, 59x) restan **en la misma línea** que su cuenta corregida, aunque el
+modelo del BOE las agrupe por subgrupo. La prueba
+`tests/unit/modules/conta/correctorasC05.test.ts` lo comprueba en los tres
+modelos con 59 parejas «correctora → corregida». La tabla sale de las
+definiciones del cuadro de cuentas, no del generador.
+
+### Regla: una deuda de 3 cifras con partes vinculadas va a «otras»
+
+Las cuentas de 3 cifras que el modelo reparte entre grupo y asociadas (…3, …4)
+y otras partes vinculadas (…5), cuando son deudas (160, 162, 510, 512), van a la
+línea «Otras deudas…» u «Otros pasivos financieros» de su grupo. Van marcadas
+«colocada por defecto» y con «Completar».
+
+La regla se probó primero en general, a toda cuenta de 3 cifras, y daba
+disparates: 103/104 (capital no exigido) a deudas, 630 (impuesto sobre
+beneficios) a otros ingresos, y la 552 perdía la colocación por signo. Por eso
+se queda en las deudas con partes vinculadas. El resto sigue con su hija «otras»
+(la que acaba en 5).
+
+### La numeración de la PyG: Diez no es el BOE
+
+Diez numera «12. Diferencia negativa», «13. Otros resultados», «14.b Otros
+ingresos financieros»… El texto consolidado de la PyG abreviada (y la de pymes)
+no tiene esas líneas numeradas. «Diferencia negativa de combinaciones de
+negocio» y «Otros resultados» son partidas que las normas de elaboración
+(normal y abreviado: norma 7.ª.6 y 7.ª.9; pymes: norma 6.ª.6) mandan **añadir**
+cuando hay importe. Folvy sigue el texto del PGC:
+
+- «Otros resultados» es una partida «a crear». Solo aparece si tiene saldo, dentro de «A) Resultado de explotación», justo después de la línea 11. Cita la norma 6.ª.6 (pymes) o la 7.ª.9 (abreviado y normal).
+- Las líneas del BOE mantienen su número: 12 es «Ingresos financieros», no «Diferencia negativa».
+
+**Sospecha, no comprobada:** la numeración de Diez sale del modelo de depósito
+del Registro Mercantil (Orden JUS/616/2022), que numera las casillas a su
+manera. El cruce línea a línea con las casillas va en el C05b.
+
+### 774 en pymes
+
+El modelo de pymes no tiene «Diferencia negativa de combinaciones de negocio».
+Si la 774 tiene saldo en una empresa de pymes, sale en rojo «sin sitio en el
+modelo» (regla 2) y la IA explica por qué. Nunca se esconde en otra línea.
+
+### Corrección del encargo
+
+El encargo decía «arts. 257–258 CCom»: son de la **Ley de Sociedades de
+Capital** (RDL 1/2010). Límites vigentes del abreviado y de pymes: 4 M de
+activo, 8 M de cifra de negocios y 50 personas (LSC 257.1; RD 1515/2007 art.
+2.1 en su versión vigente, que coincide). Para la PyG abreviada: 11,4 M, 22,8 M
+y 250 personas (LSC 258.1). Hay un solo umbral, y el aviso «entre ambos» se ha
+quitado.
+
+### Opciones de los listados de Diez y dónde están en Folvy
+
+| Diez | Folvy |
+|---|---|
+| Sumas y saldos: las siete opciones, rango de subcuentas, fecha y salida | Libros › Mayor y saldos › Sumas y saldos: las siete casillas, «desde»/«hasta» cuenta, la fecha y PDF o Excel. **El correo no está:** queda apuntado. |
+| Listado de facturación | Dentro de Expedidas y Recibidas, como filtros: subcuenta, NIF, «importe superior a», tipo de factura, «agrupar por NIF» y «solo las del 347». Con filtros puestos, la cabecera dice «N de M» (regla 7). |
+| Libro de requerimientos | Libros registro › Formato AEAT: el Excel con las hojas y columnas del diseño de la AEAT (acumulado del 1 de enero al final del trimestre) y el zip con los documentos de las recibidas. Dentro va `indice.txt` con las que no tienen documento o no se pudieron bajar. |

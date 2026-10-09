@@ -262,6 +262,24 @@ no había deriva: había dos commits sin fusionar. La pasada de las 03:20 no
 habría retirado nada y se habría ido a buscar una retirada que no podía
 existir. Salió al ir a desplegar el cinturón y comparar los dos lados.)*
 
+### Un e2e en marcha no se cancela
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> C05, respuesta 3 (08/10).
+
+Un e2e que está corriendo termina siempre. Lo garantiza el workflow, no la
+disciplina de quien empuja: `e2e-staging-conta.yml` tiene
+`cancel-in-progress: false`, así que un push nuevo espera en cola y empieza
+cuando acaba el anterior.
+
+*Detector automático:* si un workflow que tarda minutos tiene
+`cancel-in-progress: true`, cualquier push lo puede matar a medias, y el
+informe del cancelado no dice nada de lo que había probado.
+
+*(08/10. Empujé un arreglo del cierre que tocaba `src` mientras corría el e2e
+148. El 149 lo canceló. El 149 llevaba lo mismo y algo más, pero el 148 ya no
+dijo nada: perdió su resultado.)*
+
 ### Numeradas por la secuencia maestra
 
 > Estas dos citan el número de `folvy_deudas_abiertas.md`, que es **la única

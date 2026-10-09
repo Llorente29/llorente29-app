@@ -1,0 +1,9083 @@
+{
+ "fuente": {
+  "rd-1514-2007": {
+   "sha256": "6a98b9120f42dab49f1e4afe1bc43bcc72d1969822aa9750729f33c992ca690d",
+   "fichero": "docs/conta/fuentes/textos/rd-1514-2007.txt"
+  },
+  "rd-1515-2007": {
+   "sha256": "65bc455a85c6f0ec53e26ae93cfa86411e1e2e8fe0dd86905fd8dcc88f63461c",
+   "fichero": "docs/conta/fuentes/textos/rd-1515-2007.txt"
+  }
+ },
+ "modelos": {
+  "normal": {
+   "balance": {
+    "vigente": "vigente desde 2021-01-31 · BOE-A-2021-1350",
+    "lineas": [
+     {
+      "codigo": "ACT.A",
+      "nivel": 1,
+      "texto": "A) ACTIVO NO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I",
+      "nivel": 2,
+      "texto": "I. Inmovilizado intangible.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I.1",
+      "nivel": 3,
+      "texto": "1. Desarrollo.",
+      "cuentas": [
+       {
+        "cuenta": "201",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2801",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2901",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I.2",
+      "nivel": 3,
+      "texto": "2. Concesiones.",
+      "cuentas": [
+       {
+        "cuenta": "202",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2802",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2902",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I.3",
+      "nivel": 3,
+      "texto": "3. Patentes, licencias, marcas y similares.",
+      "cuentas": [
+       {
+        "cuenta": "203",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2803",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2903",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I.4",
+      "nivel": 3,
+      "texto": "4. Fondo de comercio.",
+      "cuentas": [
+       {
+        "cuenta": "204",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2804",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I.5",
+      "nivel": 3,
+      "texto": "5. Aplicaciones informáticas.",
+      "cuentas": [
+       {
+        "cuenta": "206",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2806",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2906",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I.6",
+      "nivel": 3,
+      "texto": "6. Otro inmovilizado intangible.",
+      "cuentas": [
+       {
+        "cuenta": "205",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "209",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2805",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2905",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.II",
+      "nivel": 2,
+      "texto": "II. Inmovilizado material.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.II.1",
+      "nivel": 3,
+      "texto": "1. Terrenos y construcciones.",
+      "cuentas": [
+       {
+        "cuenta": "210",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "211",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2811",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2910",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2911",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.II.2",
+      "nivel": 3,
+      "texto": "2. Instalaciones técnicas, y otro inmovilizado material.",
+      "cuentas": [
+       {
+        "cuenta": "212",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "213",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "214",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "215",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "216",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "217",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "218",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "219",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2812",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2813",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2814",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2815",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2816",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2817",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2818",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2819",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2912",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2913",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2914",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2915",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2916",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2917",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2918",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2919",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.II.3",
+      "nivel": 3,
+      "texto": "3. Inmovilizado en curso y anticipos.",
+      "cuentas": [
+       {
+        "cuenta": "23",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.III",
+      "nivel": 2,
+      "texto": "III. Inversiones inmobiliarias.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.III.1",
+      "nivel": 3,
+      "texto": "1. Terrenos.",
+      "cuentas": [
+       {
+        "cuenta": "220",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2920",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.III.2",
+      "nivel": 3,
+      "texto": "2. Construcciones.",
+      "cuentas": [
+       {
+        "cuenta": "221",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "282",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2921",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.IV",
+      "nivel": 2,
+      "texto": "IV. Inversiones en empresas del grupo y asociadas a largo plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.IV.1",
+      "nivel": 3,
+      "texto": "1. Instrumentos de patrimonio.",
+      "cuentas": [
+       {
+        "cuenta": "2403",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2404",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2493",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2494",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "293",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.IV.2",
+      "nivel": 3,
+      "texto": "2. Créditos a empresas.",
+      "cuentas": [
+       {
+        "cuenta": "2423",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2424",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2953",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2954",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.IV.3",
+      "nivel": 3,
+      "texto": "3. Valores representativos de deuda.",
+      "cuentas": [
+       {
+        "cuenta": "2413",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2414",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2943",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2944",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.IV.4",
+      "nivel": 3,
+      "texto": "4. Derivados.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.IV.5",
+      "nivel": 3,
+      "texto": "5. Otros activos financieros.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.V",
+      "nivel": 2,
+      "texto": "V. Inversiones financieras a largo plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.V.1",
+      "nivel": 3,
+      "texto": "1. Instrumentos de patrimonio.",
+      "cuentas": [
+       {
+        "cuenta": "2405",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2495",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "250",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "259",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.V.2",
+      "nivel": 3,
+      "texto": "2. Créditos a terceros",
+      "cuentas": [
+       {
+        "cuenta": "2425",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "252",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "253",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "254",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2955",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "298",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.V.3",
+      "nivel": 3,
+      "texto": "3. Valores representativos de deuda",
+      "cuentas": [
+       {
+        "cuenta": "2415",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "251",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2945",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "297",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.V.4",
+      "nivel": 3,
+      "texto": "4. Derivados.",
+      "cuentas": [
+       {
+        "cuenta": "255",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.V.5",
+      "nivel": 3,
+      "texto": "5. Otros activos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "258",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "26",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.VI",
+      "nivel": 2,
+      "texto": "VI. Activos por impuesto diferido.",
+      "cuentas": [
+       {
+        "cuenta": "474",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B",
+      "nivel": 1,
+      "texto": "B) ACTIVO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.I",
+      "nivel": 2,
+      "texto": "I. Activos no corrientes mantenidos para la venta.",
+      "cuentas": [
+       {
+        "cuenta": "580",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "581",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "582",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "583",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "584",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "599",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II",
+      "nivel": 2,
+      "texto": "II. Existencias.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.1",
+      "nivel": 3,
+      "texto": "1. Comerciales.",
+      "cuentas": [
+       {
+        "cuenta": "30",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "390",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.2",
+      "nivel": 3,
+      "texto": "2. Materias primas y otros aprovisionamientos.",
+      "cuentas": [
+       {
+        "cuenta": "31",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "32",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "391",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "392",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.3",
+      "nivel": 3,
+      "texto": "3. Productos en curso.",
+      "cuentas": [
+       {
+        "cuenta": "33",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "34",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "393",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "394",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.4",
+      "nivel": 3,
+      "texto": "4. Productos terminados.",
+      "cuentas": [
+       {
+        "cuenta": "35",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "395",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.5",
+      "nivel": 3,
+      "texto": "5. Subproductos, residuos y materiales recuperados.",
+      "cuentas": [
+       {
+        "cuenta": "36",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "396",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.6",
+      "nivel": 3,
+      "texto": "6. Anticipos a proveedores",
+      "cuentas": [
+       {
+        "cuenta": "407",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III",
+      "nivel": 2,
+      "texto": "III. Deudores comerciales y otras cuentas a cobrar.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.1",
+      "nivel": 3,
+      "texto": "1. Clientes por ventas y prestaciones de servicios.",
+      "cuentas": [
+       {
+        "cuenta": "430",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "431",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "432",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "435",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "436",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "437",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "490",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "4935",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.2",
+      "nivel": 3,
+      "texto": "2. Clientes, empresas del grupo y asociadas.",
+      "cuentas": [
+       {
+        "cuenta": "433",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "434",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "4933",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "4934",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.3",
+      "nivel": 3,
+      "texto": "3. Deudores varios.",
+      "cuentas": [
+       {
+        "cuenta": "44",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.4",
+      "nivel": 3,
+      "texto": "4. Personal.",
+      "cuentas": [
+       {
+        "cuenta": "460",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "544",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.5",
+      "nivel": 3,
+      "texto": "5. Activos por impuesto corriente.",
+      "cuentas": [
+       {
+        "cuenta": "4709",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.6",
+      "nivel": 3,
+      "texto": "6. Otros créditos con las Administraciones Públicas.",
+      "cuentas": [
+       {
+        "cuenta": "4700",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "4708",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "471",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "472",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.7",
+      "nivel": 3,
+      "texto": "7. Accionistas (socios) por desembolsos exigidos",
+      "cuentas": [
+       {
+        "cuenta": "5580",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.IV",
+      "nivel": 2,
+      "texto": "IV. Inversiones en empresas del grupo y asociadas a corto plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.IV.1",
+      "nivel": 3,
+      "texto": "1. Instrumentos de patrimonio.",
+      "cuentas": [
+       {
+        "cuenta": "5303",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5304",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5393",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5394",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "593",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.IV.2",
+      "nivel": 3,
+      "texto": "2. Créditos a empresas.",
+      "cuentas": [
+       {
+        "cuenta": "5323",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5324",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5343",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5344",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5953",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5954",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.IV.3",
+      "nivel": 3,
+      "texto": "3. Valores representativos de deuda.",
+      "cuentas": [
+       {
+        "cuenta": "5313",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5314",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5333",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5334",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5943",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5944",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.IV.4",
+      "nivel": 3,
+      "texto": "4. Derivados.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.IV.5",
+      "nivel": 3,
+      "texto": "5. Otros activos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "5353",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5354",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5524",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.V",
+      "nivel": 2,
+      "texto": "V. Inversiones financieras a corto plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.V.1",
+      "nivel": 3,
+      "texto": "1. Instrumentos de patrimonio.",
+      "cuentas": [
+       {
+        "cuenta": "5305",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "540",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5395",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "549",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.V.2",
+      "nivel": 3,
+      "texto": "2. Créditos a empresas",
+      "cuentas": [
+       {
+        "cuenta": "5325",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5345",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "542",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "543",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "547",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5955",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "598",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.V.3",
+      "nivel": 3,
+      "texto": "3. Valores representativos de deuda.",
+      "cuentas": [
+       {
+        "cuenta": "5315",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5335",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "541",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "546",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5945",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "597",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.V.4",
+      "nivel": 3,
+      "texto": "4. Derivados.",
+      "cuentas": [
+       {
+        "cuenta": "5590",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5593",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.V.5",
+      "nivel": 3,
+      "texto": "5. Otros activos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "5355",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "545",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "548",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "551",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "565",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "566",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.VI",
+      "nivel": 2,
+      "texto": "VI. Periodificaciones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "480",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "567",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.VII",
+      "nivel": 2,
+      "texto": "VII. Efectivo y otros activos líquidos equivalentes.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.VII.1",
+      "nivel": 3,
+      "texto": "1. Tesorería.",
+      "cuentas": [
+       {
+        "cuenta": "570",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "571",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "572",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "573",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "574",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "575",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.VII.2",
+      "nivel": 3,
+      "texto": "2. Otros activos líquidos equivalentes.",
+      "cuentas": [
+       {
+        "cuenta": "576",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "=ACT.TOTAL",
+      "nivel": 1,
+      "texto": "TOTAL ACTIVO (A + B)",
+      "cuentas": [],
+      "total": true,
+      "lado": "activo"
+     },
+     {
+      "codigo": "PNP.A",
+      "nivel": 1,
+      "texto": "A) PATRIMONIO NETO",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1",
+      "nivel": 2,
+      "texto": "A-1) Fondos propios.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I",
+      "nivel": 3,
+      "texto": "I. Capital.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I.1",
+      "nivel": 4,
+      "texto": "1. Capital escriturado.",
+      "cuentas": [
+       {
+        "cuenta": "100",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "101",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "102",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I.2",
+      "nivel": 4,
+      "texto": "2. (Capital no exigido).",
+      "cuentas": [
+       {
+        "cuenta": "1030",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1040",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.II",
+      "nivel": 3,
+      "texto": "II. Prima de emisión.",
+      "cuentas": [
+       {
+        "cuenta": "110",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.III",
+      "nivel": 3,
+      "texto": "III. Reservas.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.III.1",
+      "nivel": 4,
+      "texto": "1. Legal y estatutarias.",
+      "cuentas": [
+       {
+        "cuenta": "112",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1141",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.III.2",
+      "nivel": 4,
+      "texto": "2. Otras reservas.",
+      "cuentas": [
+       {
+        "cuenta": "113",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1140",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1142",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1143",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1144",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "115",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "119",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.IV",
+      "nivel": 3,
+      "texto": "IV. (Acciones y participaciones en patrimonio propias).",
+      "cuentas": [
+       {
+        "cuenta": "108",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "109",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.V",
+      "nivel": 3,
+      "texto": "V. Resultados de ejercicios anteriores.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.V.1",
+      "nivel": 4,
+      "texto": "1. Remanente.",
+      "cuentas": [
+       {
+        "cuenta": "120",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.V.2",
+      "nivel": 4,
+      "texto": "2. (Resultados negativos de ejercicios anteriores).",
+      "cuentas": [
+       {
+        "cuenta": "121",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VI",
+      "nivel": 3,
+      "texto": "VI. Otras aportaciones de socios.",
+      "cuentas": [
+       {
+        "cuenta": "118",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VII",
+      "nivel": 3,
+      "texto": "VII. Resultado del ejercicio.",
+      "cuentas": [
+       {
+        "cuenta": "129",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VIII",
+      "nivel": 3,
+      "texto": "VIII. (Dividendo a cuenta).",
+      "cuentas": [
+       {
+        "cuenta": "557",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.IX",
+      "nivel": 3,
+      "texto": "IX. Otros instrumentos de patrimonio neto.",
+      "cuentas": [
+       {
+        "cuenta": "111",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A2",
+      "nivel": 2,
+      "texto": "A-2) Ajustes por cambios de valor.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A2.I",
+      "nivel": 3,
+      "texto": "I. Activos financieros a valor razonable con cambios en el patrimonio neto.",
+      "cuentas": [
+       {
+        "cuenta": "133",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A2.II",
+      "nivel": 3,
+      "texto": "II. Operaciones de cobertura.",
+      "cuentas": [
+       {
+        "cuenta": "1340",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A2.III",
+      "nivel": 3,
+      "texto": "III. Otros.",
+      "cuentas": [
+       {
+        "cuenta": "137",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A3",
+      "nivel": 2,
+      "texto": "A-3) Subvenciones, donaciones y legados recibidos.",
+      "cuentas": [
+       {
+        "cuenta": "130",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "131",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "132",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B",
+      "nivel": 1,
+      "texto": "B) PASIVO NO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.I",
+      "nivel": 2,
+      "texto": "I. Provisiones a largo plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.I.1",
+      "nivel": 3,
+      "texto": "1. Obligaciones por prestaciones a largo plazo al personal.",
+      "cuentas": [
+       {
+        "cuenta": "140",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.I.2",
+      "nivel": 3,
+      "texto": "2. Actuaciones medioambientales.",
+      "cuentas": [
+       {
+        "cuenta": "145",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.I.3",
+      "nivel": 3,
+      "texto": "3. Provisiones por reestructuración.",
+      "cuentas": [
+       {
+        "cuenta": "146",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.I.4",
+      "nivel": 3,
+      "texto": "4. Otras provisiones.",
+      "cuentas": [
+       {
+        "cuenta": "141",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "142",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "143",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "147",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II",
+      "nivel": 2,
+      "texto": "II. Deudas a largo plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.1",
+      "nivel": 3,
+      "texto": "1. Obligaciones y otros valores negociables.",
+      "cuentas": [
+       {
+        "cuenta": "177",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "178",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "179",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.2",
+      "nivel": 3,
+      "texto": "2. Deudas con entidades de crédito.",
+      "cuentas": [
+       {
+        "cuenta": "1605",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "170",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.3",
+      "nivel": 3,
+      "texto": "3. Acreedores por arrendamiento financiero.",
+      "cuentas": [
+       {
+        "cuenta": "1625",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "174",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.4",
+      "nivel": 3,
+      "texto": "4. Derivados.",
+      "cuentas": [
+       {
+        "cuenta": "176",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.5",
+      "nivel": 3,
+      "texto": "5. Otros pasivos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "1615",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1635",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "171",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "172",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "173",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "175",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "180",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "185",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "189",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.III",
+      "nivel": 2,
+      "texto": "III. Deudas con empresas del grupo y asociadas a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "1603",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1604",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1613",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1614",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1623",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1624",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1633",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1634",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.IV",
+      "nivel": 2,
+      "texto": "IV. Pasivos por impuesto diferido.",
+      "cuentas": [
+       {
+        "cuenta": "479",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.V",
+      "nivel": 2,
+      "texto": "V. Periodificaciones a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "181",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C",
+      "nivel": 1,
+      "texto": "C) PASIVO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.I",
+      "nivel": 2,
+      "texto": "I. Pasivos vinculados con activos no corrientes mantenidos para la venta.",
+      "cuentas": [
+       {
+        "cuenta": "585",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "586",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "587",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "588",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "589",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.II",
+      "nivel": 2,
+      "texto": "II. Provisiones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "499",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "529",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III",
+      "nivel": 2,
+      "texto": "III. Deudas a corto plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III.1",
+      "nivel": 3,
+      "texto": "1. Obligaciones y otros valores negociables.",
+      "cuentas": [
+       {
+        "cuenta": "500",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "501",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "505",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "506",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III.2",
+      "nivel": 3,
+      "texto": "2. Deudas con entidades de crédito.",
+      "cuentas": [
+       {
+        "cuenta": "5105",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "520",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "527",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III.3",
+      "nivel": 3,
+      "texto": "3. Acreedores por arrendamiento financiero.",
+      "cuentas": [
+       {
+        "cuenta": "5125",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "524",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III.4",
+      "nivel": 3,
+      "texto": "4. Derivados.",
+      "cuentas": [
+       {
+        "cuenta": "5595",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5598",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III.5",
+      "nivel": 3,
+      "texto": "5. Otros pasivos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "1034",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1044",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "190",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "192",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "194",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "509",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5115",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5135",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5145",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "521",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "522",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "526",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "528",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "551",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "555",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5565",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5566",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "560",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "561",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "569",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.IV",
+      "nivel": 2,
+      "texto": "IV. Deudas con empresas del grupo y asociadas a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "5103",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5104",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5113",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5114",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5123",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5124",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5133",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5134",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5143",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5144",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5524",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5563",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5564",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V",
+      "nivel": 2,
+      "texto": "V. Acreedores comerciales y otras cuentas a pagar.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.1",
+      "nivel": 3,
+      "texto": "1. Proveedores",
+      "cuentas": [
+       {
+        "cuenta": "400",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "401",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "405",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "406",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.2",
+      "nivel": 3,
+      "texto": "2. Proveedores, empresas del grupo y asociadas.",
+      "cuentas": [
+       {
+        "cuenta": "403",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "404",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.3",
+      "nivel": 3,
+      "texto": "3. Acreedores varios.",
+      "cuentas": [
+       {
+        "cuenta": "41",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.4",
+      "nivel": 3,
+      "texto": "4. Personal (remuneraciones pendientes de pago).",
+      "cuentas": [
+       {
+        "cuenta": "465",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "466",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.5",
+      "nivel": 3,
+      "texto": "5. Pasivos por impuesto corriente.",
+      "cuentas": [
+       {
+        "cuenta": "4752",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.6",
+      "nivel": 3,
+      "texto": "6. Otras deudas con las Administraciones Públicas.",
+      "cuentas": [
+       {
+        "cuenta": "4750",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "4751",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "4758",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "476",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "477",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.7",
+      "nivel": 3,
+      "texto": "7. Anticipos de clientes.",
+      "cuentas": [
+       {
+        "cuenta": "438",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.VI",
+      "nivel": 2,
+      "texto": "VI. Periodificaciones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "485",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "568",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "=PNP.TOTAL",
+      "nivel": 1,
+      "texto": "TOTAL PATRIMONIO NETO Y PASIVO (A + B + C)",
+      "cuentas": [],
+      "total": true,
+      "lado": "pn_pasivo"
+     }
+    ]
+   },
+   "pyg": {
+    "vigente": "vigente desde 2021-01-31 · BOE-A-2021-1350",
+    "lineas": [
+     {
+      "codigo": "A",
+      "nivel": 1,
+      "texto": "A) OPERACIONES CONTINUADAS",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "1",
+      "nivel": 2,
+      "texto": "1. Importe neto de la cifra de negocios.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "1.a",
+      "nivel": 3,
+      "texto": "a) Ventas.",
+      "cuentas": [
+       {
+        "cuenta": "700",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "701",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "702",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "703",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "704",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "706",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "708",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "709",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "1.b",
+      "nivel": 3,
+      "texto": "b) Prestaciones de servicios.",
+      "cuentas": [
+       {
+        "cuenta": "705",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "2",
+      "nivel": 2,
+      "texto": "2. Variación de existencias de productos terminados y en curso de fabricación.",
+      "cuentas": [
+       {
+        "cuenta": "6930",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "71",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "7930",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "3",
+      "nivel": 2,
+      "texto": "3. Trabajos realizados por la empresa para su activo.",
+      "cuentas": [
+       {
+        "cuenta": "73",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "4",
+      "nivel": 2,
+      "texto": "4. Aprovisionamientos.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "4.a",
+      "nivel": 3,
+      "texto": "a) Consumo de mercaderías.",
+      "cuentas": [
+       {
+        "cuenta": "600",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6060",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6080",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6090",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "610",
+        "signo": "suma",
+        "dosSignos": true
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "4.b",
+      "nivel": 3,
+      "texto": "b) Consumo de materias primas y otras materias consumibles.",
+      "cuentas": [
+       {
+        "cuenta": "601",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "602",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6061",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6062",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6081",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6082",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6091",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6092",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "611",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "612",
+        "signo": "suma",
+        "dosSignos": true
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "4.c",
+      "nivel": 3,
+      "texto": "c) Trabajos realizados por otras empresas.",
+      "cuentas": [
+       {
+        "cuenta": "607",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "4.d",
+      "nivel": 3,
+      "texto": "d) Deterioro de mercaderías, materias primas y otros aprovisionamientos.",
+      "cuentas": [
+       {
+        "cuenta": "6931",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6932",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6933",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7931",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7932",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7933",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "5",
+      "nivel": 2,
+      "texto": "5. Otros ingresos de explotación.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "5.a",
+      "nivel": 3,
+      "texto": "a) Ingresos accesorios y otros de gestión corriente.",
+      "cuentas": [
+       {
+        "cuenta": "75",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "5.b",
+      "nivel": 3,
+      "texto": "b) Subvenciones de explotación incorporadas al resultado del ejercicio.",
+      "cuentas": [
+       {
+        "cuenta": "740",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "747",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "6",
+      "nivel": 2,
+      "texto": "6. Gastos de personal.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "6.a",
+      "nivel": 3,
+      "texto": "a) Sueldos, salarios y asimilados.",
+      "cuentas": [
+       {
+        "cuenta": "640",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "641",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6450",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "6.b",
+      "nivel": 3,
+      "texto": "b) Cargas sociales.",
+      "cuentas": [
+       {
+        "cuenta": "642",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "643",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "649",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "6.c",
+      "nivel": 3,
+      "texto": "c) Provisiones.",
+      "cuentas": [
+       {
+        "cuenta": "644",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6457",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7950",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7957",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "7",
+      "nivel": 2,
+      "texto": "7. Otros gastos de explotación.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "7.a",
+      "nivel": 3,
+      "texto": "a) Servicios exteriores.",
+      "cuentas": [
+       {
+        "cuenta": "62",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "7.b",
+      "nivel": 3,
+      "texto": "b) Tributos.",
+      "cuentas": [
+       {
+        "cuenta": "631",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "634",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "636",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "639",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "7.c",
+      "nivel": 3,
+      "texto": "c) Pérdidas, deterioro y variación de provisiones por operaciones comerciales.",
+      "cuentas": [
+       {
+        "cuenta": "650",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "694",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "695",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "794",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7954",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "7.d",
+      "nivel": 3,
+      "texto": "d) Otros gastos de gestión corriente",
+      "cuentas": [
+       {
+        "cuenta": "651",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "659",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "8",
+      "nivel": 2,
+      "texto": "8. Amortización del inmovilizado.",
+      "cuentas": [
+       {
+        "cuenta": "68",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "9",
+      "nivel": 2,
+      "texto": "9. Imputación de subvenciones de inmovilizado no financiero y otras.",
+      "cuentas": [
+       {
+        "cuenta": "746",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "10",
+      "nivel": 2,
+      "texto": "10. Excesos de provisiones.",
+      "cuentas": [
+       {
+        "cuenta": "7951",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7952",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7955",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7956",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "11",
+      "nivel": 2,
+      "texto": "11. Deterioro y resultado por enajenaciones del inmovilizado.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "11.a",
+      "nivel": 3,
+      "texto": "a) Deterioros y pérdidas.",
+      "cuentas": [
+       {
+        "cuenta": "690",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "691",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "692",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "790",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "791",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "792",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "11.b",
+      "nivel": 3,
+      "texto": "b) Resultados por enajenaciones y otras.",
+      "cuentas": [
+       {
+        "cuenta": "670",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "671",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "672",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "770",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "771",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "772",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=A.1",
+      "nivel": 1,
+      "texto": "A.1) RESULTADO DE EXPLOTACIÓN (1+2+3+4+5+6+7+8+9+10+11)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "12",
+      "nivel": 2,
+      "texto": "12. Ingresos financieros.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "12.a",
+      "nivel": 3,
+      "texto": "a) De participaciones en instrumentos de patrimonio.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "12.a.a1",
+      "nivel": 4,
+      "texto": "a1) En empresas del grupo y asociadas.",
+      "cuentas": [
+       {
+        "cuenta": "7600",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7601",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "12.a.a2",
+      "nivel": 4,
+      "texto": "a2) En terceros.",
+      "cuentas": [
+       {
+        "cuenta": "7602",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7603",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "12.b",
+      "nivel": 3,
+      "texto": "b) De valores negociables y otros instrumentos financieros.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "12.b.b1",
+      "nivel": 4,
+      "texto": "b1) De empresas del grupo y asociadas.",
+      "cuentas": [
+       {
+        "cuenta": "7610",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7611",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "76200",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "76201",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "76210",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "76211",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "12.b.b2",
+      "nivel": 4,
+      "texto": "b2) De terceros.",
+      "cuentas": [
+       {
+        "cuenta": "7612",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7613",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "76202",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "76203",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "76212",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "76213",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "767",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "769",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "13",
+      "nivel": 2,
+      "texto": "13. Gastos financieros.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "13.a",
+      "nivel": 3,
+      "texto": "a) Por deudas con empresas del grupo y asociadas.",
+      "cuentas": [
+       {
+        "cuenta": "6610",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6611",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6615",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6616",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6620",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6621",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6640",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6641",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6650",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6651",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6654",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6655",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "13.b",
+      "nivel": 3,
+      "texto": "b) Por deudas con terceros.",
+      "cuentas": [
+       {
+        "cuenta": "6612",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6613",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6617",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6618",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6622",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6623",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6624",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6642",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6643",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6652",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6653",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6656",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6657",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "669",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "13.c",
+      "nivel": 3,
+      "texto": "c) Por actualización de provisiones",
+      "cuentas": [
+       {
+        "cuenta": "660",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "14",
+      "nivel": 2,
+      "texto": "14. Variación de valor razonable en instrumentos financieros.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "14.a",
+      "nivel": 3,
+      "texto": "a) Valor razonable con cambios en pérdidas y ganancias.",
+      "cuentas": [
+       {
+        "cuenta": "6630",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6631",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6633",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7630",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7631",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7633",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "14.b",
+      "nivel": 3,
+      "texto": "b) Transferencia de ajustes de valor razonable con cambios en el patrimonio neto.",
+      "cuentas": [
+       {
+        "cuenta": "6632",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7632",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "15",
+      "nivel": 2,
+      "texto": "15. Diferencias de cambio.",
+      "cuentas": [
+       {
+        "cuenta": "668",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "768",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "16",
+      "nivel": 2,
+      "texto": "16. Deterioro y resultado por enajenaciones de instrumentos financieros.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "16.a",
+      "nivel": 3,
+      "texto": "a) Deterioros y pérdidas.",
+      "cuentas": [
+       {
+        "cuenta": "696",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "697",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "698",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "699",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "796",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "797",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "798",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "799",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "16.b",
+      "nivel": 3,
+      "texto": "b) Resultados por enajenaciones y otras.",
+      "cuentas": [
+       {
+        "cuenta": "666",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "667",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "673",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "675",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "766",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "773",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "775",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=A.2",
+      "nivel": 1,
+      "texto": "A.2) RESULTADO FINANCIERO (12+13+14+15+16)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "=A.3",
+      "nivel": 1,
+      "texto": "A.3) RESULTADO ANTES DE IMPUESTOS (A.1+A.2)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "17",
+      "nivel": 2,
+      "texto": "17. Impuestos sobre beneficios.",
+      "cuentas": [
+       {
+        "cuenta": "6300",
+        "signo": "resta",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "6301",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "633",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "638",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=A.4",
+      "nivel": 1,
+      "texto": "A.4) RESULTADO DEL EJERCICIO PROCEDENTE DE OPERACIONES CONTINUADAS (A.3+17)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "B",
+      "nivel": 1,
+      "texto": "B) OPERACIONES INTERRUMPIDAS",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "18",
+      "nivel": 2,
+      "texto": "18. Resultado del ejercicio procedente de operaciones interrumpidas neto de impuestos.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=A.5",
+      "nivel": 1,
+      "texto": "A.5) RESULTADO DEL EJERCICIO (A.4+18)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     }
+    ]
+   },
+   "igrpn": {
+    "vigente": "vigente desde 2021-01-31 · BOE-A-2021-1350",
+    "lineas": [
+     {
+      "codigo": "A",
+      "nivel": 1,
+      "texto": "A) Resultado de la cuenta de pérdidas y ganancias Ingresos y gastos imputados directamente al patrimonio neto",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "I",
+      "nivel": 2,
+      "texto": "I. Por valoración instrumentos financieros.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "I.1",
+      "nivel": 3,
+      "texto": "1. Activos financieros a valor razonable con cambios en el patrimonio neto.",
+      "cuentas": [
+       {
+        "cuenta": "800",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "89",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "900",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "991",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "992",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "I.2",
+      "nivel": 3,
+      "texto": "2. Otros ingresos/gastos.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "II",
+      "nivel": 2,
+      "texto": "II. Por coberturas de flujos de efectivo.",
+      "cuentas": [
+       {
+        "cuenta": "810",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "910",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "III",
+      "nivel": 2,
+      "texto": "III. Subvenciones, donaciones y legados recibidos.",
+      "cuentas": [
+       {
+        "cuenta": "94",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "IV",
+      "nivel": 2,
+      "texto": "IV. Por ganancias y pérdidas actuariales y otros ajustes.",
+      "cuentas": [
+       {
+        "cuenta": "85",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "95",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "V",
+      "nivel": 2,
+      "texto": "V. Efecto impositivo.",
+      "cuentas": [
+       {
+        "cuenta": "8300",
+        "signo": "resta",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "8301",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "833",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "834",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "835",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "838",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=B",
+      "nivel": 1,
+      "texto": "B) Total ingresos y gastos imputados directamente en el patrimonio neto (1+11+111 +IV+V)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "VI",
+      "nivel": 2,
+      "texto": "VI. Por valoración de instrumentos financieros.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "VI.1",
+      "nivel": 3,
+      "texto": "1. Activos financieros a valor razonable con cambios en el patrimonio neto.",
+      "cuentas": [
+       {
+        "cuenta": "802",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "902",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "993",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "994",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "VI.2",
+      "nivel": 3,
+      "texto": "2. Otros ingresos/gastos.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "VII",
+      "nivel": 2,
+      "texto": "VII. Por coberturas de flujos de efectivo.",
+      "cuentas": [
+       {
+        "cuenta": "812",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "912",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "VIII",
+      "nivel": 2,
+      "texto": "VIII. Subvenciones, donaciones y legados recibidos.",
+      "cuentas": [
+       {
+        "cuenta": "84",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "IX",
+      "nivel": 2,
+      "texto": "IX. Efecto impositivo.",
+      "cuentas": [
+       {
+        "cuenta": "8301",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "836",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "837",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=C",
+      "nivel": 1,
+      "texto": "C) Total transferencias a la cuenta de pérdidas y ganancias (VI+VII+VIII+IX)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "=TOTAL",
+      "nivel": 1,
+      "texto": "TOTAL DE INGRESOS Y GASTOS RECONOCIDOS (A + B + C)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     }
+    ]
+   },
+   "ecpn_total": {
+    "lineas": [],
+    "nota": "Matriz sin columna de cuentas en el PGC: se calcula de los movimientos del grupo 1 y la 129."
+   }
+  },
+  "abreviado": {
+   "balance": {
+    "vigente": "vigente desde 2010-09-25 · BOE-A-2010-14621",
+    "lineas": [
+     {
+      "codigo": "ACT.A",
+      "nivel": 1,
+      "texto": "A) ACTIVO NO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I",
+      "nivel": 2,
+      "texto": "I. Inmovilizado intangible.",
+      "cuentas": [
+       {
+        "cuenta": "20",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "280",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "290",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.II",
+      "nivel": 2,
+      "texto": "II. Inmovilizado material.",
+      "cuentas": [
+       {
+        "cuenta": "21",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "281",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "291",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "23",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.III",
+      "nivel": 2,
+      "texto": "III. Inversiones inmobiliarias.",
+      "cuentas": [
+       {
+        "cuenta": "22",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "282",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "292",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.IV",
+      "nivel": 2,
+      "texto": "IV. Inversiones en empresas del grupo y asociadas a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "2403",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2404",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2413",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2414",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2423",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2424",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2493",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2494",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "293",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2943",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2944",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2953",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2954",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.V",
+      "nivel": 2,
+      "texto": "V. Inversiones financieras a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "2405",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2415",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2425",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2495",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "250",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "251",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "252",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "253",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "254",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "255",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "257",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "258",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "259",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "26",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2945",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2955",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "297",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "298",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.VI",
+      "nivel": 2,
+      "texto": "VI. Activos por Impuesto diferido.",
+      "cuentas": [
+       {
+        "cuenta": "474",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B",
+      "nivel": 1,
+      "texto": "B) ACTIVO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.I",
+      "nivel": 2,
+      "texto": "I. Activos no corrientes mantenidos para la venta.",
+      "cuentas": [
+       {
+        "cuenta": "580",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "581",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "582",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "583",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "584",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "599",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II",
+      "nivel": 2,
+      "texto": "II. Existencias.",
+      "cuentas": [
+       {
+        "cuenta": "30",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "31",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "32",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "33",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "34",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "35",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "36",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "39",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "407",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III",
+      "nivel": 2,
+      "texto": "III. Deudores comerciales y otras cuentas a cobrar.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.1",
+      "nivel": 3,
+      "texto": "1. Clientes por ventas y prestaciones de servicios.",
+      "cuentas": [
+       {
+        "cuenta": "430",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "431",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "432",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "433",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "434",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "435",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "436",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "437",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "490",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "493",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.2",
+      "nivel": 3,
+      "texto": "2. Accionistas (socios) por desembolsos exigidos.",
+      "cuentas": [
+       {
+        "cuenta": "5580",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III.3",
+      "nivel": 3,
+      "texto": "3. Otros deudores.",
+      "cuentas": [
+       {
+        "cuenta": "44",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "460",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "470",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "471",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "472",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "544",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.IV",
+      "nivel": 2,
+      "texto": "IV. Inversiones en empresas del grupo y asociadas a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "5303",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5304",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5313",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5314",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5323",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5324",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5333",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5334",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5343",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5344",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5353",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5354",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5393",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5394",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5524",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "593",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5943",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5944",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5953",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5954",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.V",
+      "nivel": 2,
+      "texto": "V. Inversiones financieras a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "5305",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5315",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5325",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5335",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5345",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5355",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5395",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "540",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "541",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "542",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "543",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "545",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "546",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "547",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "548",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "549",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "551",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5590",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5593",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "565",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "566",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5945",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5955",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "597",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "598",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.VI",
+      "nivel": 2,
+      "texto": "VI. Periodificaciones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "480",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "567",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.VII",
+      "nivel": 2,
+      "texto": "VII. Efectivo y otros activos líquidos equivalentes.",
+      "cuentas": [
+       {
+        "cuenta": "57",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "=ACT.TOTAL",
+      "nivel": 1,
+      "texto": "TOTAL ACTIVO (A + B)",
+      "cuentas": [],
+      "total": true,
+      "lado": "activo"
+     },
+     {
+      "codigo": "PNP.A",
+      "nivel": 1,
+      "texto": "A) PATRIMONIO NETO",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1",
+      "nivel": 2,
+      "texto": "A-1) Fondos propios.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I",
+      "nivel": 3,
+      "texto": "I. Capital.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I.1",
+      "nivel": 4,
+      "texto": "1. Capital escriturado.",
+      "cuentas": [
+       {
+        "cuenta": "100",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "101",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "102",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I.2",
+      "nivel": 4,
+      "texto": "2. (Capital no exigido).",
+      "cuentas": [
+       {
+        "cuenta": "1030",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1040",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.II",
+      "nivel": 3,
+      "texto": "II. Prima de emisión.",
+      "cuentas": [
+       {
+        "cuenta": "110",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.III",
+      "nivel": 3,
+      "texto": "III. Reservas.",
+      "cuentas": [
+       {
+        "cuenta": "112",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "113",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "114",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "115",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "119",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.IV",
+      "nivel": 3,
+      "texto": "IV. (Acciones y participaciones en patrimonio propias).",
+      "cuentas": [
+       {
+        "cuenta": "108",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "109",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.V",
+      "nivel": 3,
+      "texto": "V. Resultados de ejercicios anteriores.",
+      "cuentas": [
+       {
+        "cuenta": "120",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "121",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VI",
+      "nivel": 3,
+      "texto": "VI. Otras aportaciones de socios.",
+      "cuentas": [
+       {
+        "cuenta": "118",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VII",
+      "nivel": 3,
+      "texto": "VII. Resultado del ejercicio.",
+      "cuentas": [
+       {
+        "cuenta": "129",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VIII",
+      "nivel": 3,
+      "texto": "VIII. (Dividendo a cuenta).",
+      "cuentas": [
+       {
+        "cuenta": "557",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.IX",
+      "nivel": 3,
+      "texto": "IX. Otros instrumentos de patrimonio neto.",
+      "cuentas": [
+       {
+        "cuenta": "111",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A2",
+      "nivel": 2,
+      "texto": "A-2) Ajustes por cambios de valor.",
+      "cuentas": [
+       {
+        "cuenta": "133",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1340",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "137",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A3",
+      "nivel": 2,
+      "texto": "A-3) Subvenciones, donaciones y legados recibidos.",
+      "cuentas": [
+       {
+        "cuenta": "130",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "131",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "132",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B",
+      "nivel": 1,
+      "texto": "B) PASIVO NO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.I",
+      "nivel": 2,
+      "texto": "I. Provisiones a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "14",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II",
+      "nivel": 2,
+      "texto": "II. Deudas a largo plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.1",
+      "nivel": 3,
+      "texto": "1. Deudas con entidades de crédito.",
+      "cuentas": [
+       {
+        "cuenta": "1605",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "170",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.2",
+      "nivel": 3,
+      "texto": "2. Acreedores por arrendamiento financiero",
+      "cuentas": [
+       {
+        "cuenta": "1625",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "174",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.3",
+      "nivel": 3,
+      "texto": "3. Otras deudas a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "1615",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1635",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "171",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "172",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "173",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "175",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "176",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "177",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "178",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "179",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "180",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "185",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "189",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.III",
+      "nivel": 2,
+      "texto": "III. Deudas con empresas del grupo y asociadas a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "1603",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1604",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1613",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1614",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1623",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1624",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1633",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1634",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.IV",
+      "nivel": 2,
+      "texto": "IV. Pasivos por impuesto diferido.",
+      "cuentas": [
+       {
+        "cuenta": "479",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.V",
+      "nivel": 2,
+      "texto": "V. Periodificaciones a largo plazo",
+      "cuentas": [
+       {
+        "cuenta": "181",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C",
+      "nivel": 1,
+      "texto": "C) PASIVO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.I",
+      "nivel": 2,
+      "texto": "I. Pasivos vinculados con activos no corrientes mantenidos para la venta.",
+      "cuentas": [
+       {
+        "cuenta": "585",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "586",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "587",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "588",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "589",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.II",
+      "nivel": 2,
+      "texto": "II. Provisiones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "499",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "529",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III",
+      "nivel": 2,
+      "texto": "III. Deudas a corto plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III.1",
+      "nivel": 3,
+      "texto": "1. Deudas con entidades de crédito.",
+      "cuentas": [
+       {
+        "cuenta": "5105",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "520",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "527",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III.2",
+      "nivel": 3,
+      "texto": "2. Acreedores por arrendamiento financiero.",
+      "cuentas": [
+       {
+        "cuenta": "5125",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "524",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III.3",
+      "nivel": 3,
+      "texto": "3. Otras deudas a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "1034",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1044",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "190",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "192",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "194",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "500",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "501",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "505",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "506",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "509",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5115",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5135",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5145",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "521",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "522",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "526",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "528",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "551",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "555",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5565",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5566",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5595",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5598",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "560",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "561",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "569",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.IV",
+      "nivel": 2,
+      "texto": "IV. Deudas con empresas del grupo y asociadas a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "5103",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5104",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5113",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5114",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5123",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5124",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5133",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5134",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5143",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5144",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5524",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5563",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5564",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V",
+      "nivel": 2,
+      "texto": "V. Acreedores comerciales y otras cuentas a pagar.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.1",
+      "nivel": 3,
+      "texto": "1. Proveedores.",
+      "cuentas": [
+       {
+        "cuenta": "400",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "401",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "403",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "404",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "405",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "406",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V.2",
+      "nivel": 3,
+      "texto": "2. Otros acreedores.",
+      "cuentas": [
+       {
+        "cuenta": "41",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "438",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "465",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "466",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "475",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "476",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "477",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.VI",
+      "nivel": 2,
+      "texto": "VI. Periodificaciones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "485",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "568",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "=PNP.TOTAL",
+      "nivel": 1,
+      "texto": "TOTAL PATRIMONIO NETO Y PASIVO (A + B + C)",
+      "cuentas": [],
+      "total": true,
+      "lado": "pn_pasivo"
+     }
+    ]
+   },
+   "pyg": {
+    "vigente": "vigente desde 2008-01-01 · BOE-A-2007-19884",
+    "lineas": [
+     {
+      "codigo": "1",
+      "nivel": 2,
+      "texto": "1. Importe neto de la cifra de negocios.",
+      "cuentas": [
+       {
+        "cuenta": "700",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "701",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "702",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "703",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "704",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "705",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "706",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "708",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "709",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "2",
+      "nivel": 2,
+      "texto": "2. Variación de existencias de productos terminados y en curso de fabricación.",
+      "cuentas": [
+       {
+        "cuenta": "6930",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "71",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "7930",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "3",
+      "nivel": 2,
+      "texto": "3. Trabajos realizados por la empresa para su activo.",
+      "cuentas": [
+       {
+        "cuenta": "73",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "4",
+      "nivel": 2,
+      "texto": "4. Aprovisionamientos.",
+      "cuentas": [
+       {
+        "cuenta": "600",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "601",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "602",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "606",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "607",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "608",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "609",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "61",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "6931",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6932",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6933",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7931",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7932",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7933",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "5",
+      "nivel": 2,
+      "texto": "5. Otros ingresos de explotación.",
+      "cuentas": [
+       {
+        "cuenta": "740",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "747",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "75",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "6",
+      "nivel": 2,
+      "texto": "6. Gastos de personal.",
+      "cuentas": [
+       {
+        "cuenta": "64",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7950",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7957",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "7",
+      "nivel": 2,
+      "texto": "7. Otros gastos de explotación.",
+      "cuentas": [
+       {
+        "cuenta": "62",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "631",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "634",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "636",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "639",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "65",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "694",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "695",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "794",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7954",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "8",
+      "nivel": 2,
+      "texto": "8. Amortización del inmovilizado.",
+      "cuentas": [
+       {
+        "cuenta": "68",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "9",
+      "nivel": 2,
+      "texto": "9. Imputación de subvenciones de inmovilizado no financiero y otras.",
+      "cuentas": [
+       {
+        "cuenta": "746",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "10",
+      "nivel": 2,
+      "texto": "10. Excesos de provisiones.",
+      "cuentas": [
+       {
+        "cuenta": "7951",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7952",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7955",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7956",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "11",
+      "nivel": 2,
+      "texto": "11. Deterioro y resultado por enajenaciones del inmovilizado.",
+      "cuentas": [
+       {
+        "cuenta": "670",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "671",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "672",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "690",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "691",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "692",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "770",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "771",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "772",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "790",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "791",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "792",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=A",
+      "nivel": 1,
+      "texto": "A) RESULTADO DE EXPLOTACIÓN (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "12",
+      "nivel": 2,
+      "texto": "12. Ingresos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "760",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "761",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "762",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "767",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "769",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "13",
+      "nivel": 2,
+      "texto": "13. Gastos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "660",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "661",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "662",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "664",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "665",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "669",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "14",
+      "nivel": 2,
+      "texto": "14. Variación de valor razonable en instrumentos financiero.",
+      "cuentas": [
+       {
+        "cuenta": "663",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "763",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "15",
+      "nivel": 2,
+      "texto": "15. Diferencias de cambio.",
+      "cuentas": [
+       {
+        "cuenta": "668",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "768",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "16",
+      "nivel": 2,
+      "texto": "16. Deterioro y resultado por enajenaciones de instrumentos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "666",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "667",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "673",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "675",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "696",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "697",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "698",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "699",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "766",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "773",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "775",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "796",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "797",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "798",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "799",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=B",
+      "nivel": 1,
+      "texto": "B) RESULTADO FINANCIERO (12 + 13 + 14 + 15 + 16)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "=C",
+      "nivel": 1,
+      "texto": "C) RESULTADO ANTES DE IMPUESTOS (A + B)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "17",
+      "nivel": 2,
+      "texto": "17. Impuestos sobre beneficios.",
+      "cuentas": [
+       {
+        "cuenta": "6300",
+        "signo": "resta",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "6301",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "633",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "638",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=D",
+      "nivel": 1,
+      "texto": "D) RESULTADO DEL EJERCICIO (C + 17)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     }
+    ]
+   },
+   "igrpn": {
+    "vigente": "vigente desde 2008-01-01 · BOE-A-2007-19884",
+    "lineas": [
+     {
+      "codigo": "A",
+      "nivel": 1,
+      "texto": "A) Resultado de la cuenta de perdidas y ganancias Ingresos y gastos imputados directamente al patrimonio neto.",
+      "cuentas": [],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "I",
+      "nivel": 2,
+      "texto": "I. Por valoración de instrumentos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "800",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "89",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "900",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "991",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "992",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "II",
+      "nivel": 2,
+      "texto": "II. Por coberturas de flujos de efectivo.",
+      "cuentas": [
+       {
+        "cuenta": "810",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "910",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "III",
+      "nivel": 2,
+      "texto": "III. Subvenciones, donaciones y legados recibidos.",
+      "cuentas": [
+       {
+        "cuenta": "94",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "IV",
+      "nivel": 2,
+      "texto": "IV. Por ganancias y pérdidas actuariales y otros ajustes.",
+      "cuentas": [
+       {
+        "cuenta": "85",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "95",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "V",
+      "nivel": 2,
+      "texto": "V. Efecto impositivo.",
+      "cuentas": [
+       {
+        "cuenta": "8300",
+        "signo": "resta",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "8301",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "833",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "834",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "835",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "838",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=B",
+      "nivel": 1,
+      "texto": "B) Total Ingresos y gastos imputados directamente al patrimonio neto (I+II+III+IV+V).",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "VI",
+      "nivel": 2,
+      "texto": "VI. Por valoración de instrumentos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "802",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "902",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "993",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "994",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "VII",
+      "nivel": 2,
+      "texto": "VII. Por coberturas de flujos de efectivo.",
+      "cuentas": [
+       {
+        "cuenta": "812",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "912",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "VIII",
+      "nivel": 2,
+      "texto": "VIII. Subvenciones, donaciones y legados recibidos.",
+      "cuentas": [
+       {
+        "cuenta": "84",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "IX",
+      "nivel": 2,
+      "texto": "IX. Efecto impositivo.",
+      "cuentas": [
+       {
+        "cuenta": "8301",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "836",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "837",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=C",
+      "nivel": 1,
+      "texto": "C) Total transferencias a la cuenta de pérdidas y ganancias (VI+VII+VIII+IX).",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "=TOTAL",
+      "nivel": 1,
+      "texto": "TOTAL DE INGRESOS Y GASTOS RECONOCIDOS (A + B + C).",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     }
+    ]
+   },
+   "ecpn_total": {
+    "lineas": [],
+    "nota": "Matriz sin columna de cuentas en el PGC: se calcula de los movimientos del grupo 1 y la 129."
+   }
+  },
+  "pymes": {
+   "balance": {
+    "vigente": "vigente desde 2016-12-18 · BOE-A-2016-11954",
+    "lineas": [
+     {
+      "codigo": "ACT.A",
+      "nivel": 1,
+      "texto": "A) ACTIVO NO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.I",
+      "nivel": 2,
+      "texto": "I. Inmovilizado intangible.",
+      "cuentas": [
+       {
+        "cuenta": "20",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "280",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "290",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.II",
+      "nivel": 2,
+      "texto": "II. Inmovilizado material.",
+      "cuentas": [
+       {
+        "cuenta": "21",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "281",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "291",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "23",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.III",
+      "nivel": 2,
+      "texto": "III. Inversiones inmobiliarias.",
+      "cuentas": [
+       {
+        "cuenta": "22",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "282",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "292",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.IV",
+      "nivel": 2,
+      "texto": "IV. Inversiones en empresas del grupo y asociadas a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "2403",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2404",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2413",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2414",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2423",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2424",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2493",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2494",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2933",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2934",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2943",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2944",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2953",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2954",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.V",
+      "nivel": 2,
+      "texto": "V. Inversiones financieras a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "2405",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2415",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2425",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2495",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "250",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "251",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "252",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "253",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "254",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "255",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "258",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "259",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "26",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2935",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2945",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "2955",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "296",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "297",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "298",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.A.VI",
+      "nivel": 2,
+      "texto": "VI. Activos por Impuesto diferido.",
+      "cuentas": [
+       {
+        "cuenta": "474",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B",
+      "nivel": 1,
+      "texto": "B) ACTIVO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.I",
+      "nivel": 2,
+      "texto": "I. Existencias.",
+      "cuentas": [
+       {
+        "cuenta": "30",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "31",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "32",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "33",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "34",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "35",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "36",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "39",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "407",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II",
+      "nivel": 2,
+      "texto": "II. Deudores comerciales y otras cuentas a cobrar.",
+      "cuentas": [],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.1",
+      "nivel": 3,
+      "texto": "1. Clientes por ventas y prestaciones de servicios.",
+      "cuentas": [
+       {
+        "cuenta": "430",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "431",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "432",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "433",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "434",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "435",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "436",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "437",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "490",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "493",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.2",
+      "nivel": 3,
+      "texto": "2. Accionistas (socios) por desembolsos exigidos.",
+      "cuentas": [
+       {
+        "cuenta": "5580",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.II.3",
+      "nivel": 3,
+      "texto": "3. Otros deudores.",
+      "cuentas": [
+       {
+        "cuenta": "44",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "460",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "470",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "471",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "472",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "544",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.III",
+      "nivel": 2,
+      "texto": "III. Inversiones en empresas del grupo y asociadas a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "5303",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5304",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5313",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5314",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5323",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5324",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5333",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5334",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5343",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5344",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5353",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5354",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5393",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5394",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5524",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5933",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5934",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5943",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5944",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5953",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5954",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.IV",
+      "nivel": 2,
+      "texto": "IV. Inversiones financieras a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "5305",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5315",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5325",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5335",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5345",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5355",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5395",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "540",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "541",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "542",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "543",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "545",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "546",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "547",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "548",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "549",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "551",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5590",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "565",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "566",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5935",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5945",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5955",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "596",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "597",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "598",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.V",
+      "nivel": 2,
+      "texto": "V. Periodificaciones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "480",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "567",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "ACT.B.VI",
+      "nivel": 2,
+      "texto": "VI. Efectivo y otros activos líquidos equivalentes.",
+      "cuentas": [
+       {
+        "cuenta": "57",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "activo"
+     },
+     {
+      "codigo": "=ACT.TOTAL",
+      "nivel": 1,
+      "texto": "TOTAL ACTIVO (A + B).",
+      "cuentas": [],
+      "total": true,
+      "lado": "activo"
+     },
+     {
+      "codigo": "PNP.A",
+      "nivel": 1,
+      "texto": "A) PATRIMONIO NETO",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1",
+      "nivel": 2,
+      "texto": "A-1) Fondos propios.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I",
+      "nivel": 3,
+      "texto": "I. Capital.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I.1",
+      "nivel": 4,
+      "texto": "1. Capital escriturado.",
+      "cuentas": [
+       {
+        "cuenta": "100",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "101",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "102",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.I.2",
+      "nivel": 4,
+      "texto": "2. (Capital no exigido).",
+      "cuentas": [
+       {
+        "cuenta": "1030",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1040",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.II",
+      "nivel": 3,
+      "texto": "II. Prima de emisión.",
+      "cuentas": [
+       {
+        "cuenta": "110",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.III",
+      "nivel": 3,
+      "texto": "III. Reservas.",
+      "cuentas": [
+       {
+        "cuenta": "112",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "113",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "114",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "119",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.IV",
+      "nivel": 3,
+      "texto": "IV. (Acciones y participaciones en patrimonio propias).",
+      "cuentas": [
+       {
+        "cuenta": "108",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "109",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.V",
+      "nivel": 3,
+      "texto": "V. Resultados de ejercicios anteriores.",
+      "cuentas": [
+       {
+        "cuenta": "120",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "121",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VI",
+      "nivel": 3,
+      "texto": "VI. Otras aportaciones de socios.",
+      "cuentas": [
+       {
+        "cuenta": "118",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VII",
+      "nivel": 3,
+      "texto": "VII. Resultado del ejercicio.",
+      "cuentas": [
+       {
+        "cuenta": "129",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A1.VIII",
+      "nivel": 3,
+      "texto": "VIII. (Dividendo a cuenta).",
+      "cuentas": [
+       {
+        "cuenta": "557",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.A.A2",
+      "nivel": 2,
+      "texto": "A-2) Subvenciones, donaciones y legados recibidos.",
+      "cuentas": [
+       {
+        "cuenta": "130",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "131",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "132",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B",
+      "nivel": 1,
+      "texto": "B) PASIVO NO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.I",
+      "nivel": 2,
+      "texto": "I. Provisiones a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "14",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II",
+      "nivel": 2,
+      "texto": "II. Deudas a largo plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.1",
+      "nivel": 3,
+      "texto": "1. Deudas con entidades de crédito.",
+      "cuentas": [
+       {
+        "cuenta": "1605",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "170",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.2",
+      "nivel": 3,
+      "texto": "2. Acreedores por arrendamiento financiero",
+      "cuentas": [
+       {
+        "cuenta": "1625",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "174",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.II.3",
+      "nivel": 3,
+      "texto": "3. Otras deudas a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "1615",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1635",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "171",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "172",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "173",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "175",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "176",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "177",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "179",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "180",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "185",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.III",
+      "nivel": 2,
+      "texto": "III. Deudas con empresas del grupo y asociadas a largo plazo.",
+      "cuentas": [
+       {
+        "cuenta": "1603",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1604",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1613",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1614",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1623",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1624",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1633",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1634",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.IV",
+      "nivel": 2,
+      "texto": "IV. Pasivos por impuesto diferido",
+      "cuentas": [
+       {
+        "cuenta": "479",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.B.V",
+      "nivel": 2,
+      "texto": "V. Periodificaciones a largo plazo",
+      "cuentas": [
+       {
+        "cuenta": "181",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C",
+      "nivel": 1,
+      "texto": "C) PASIVO CORRIENTE",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.I",
+      "nivel": 2,
+      "texto": "I. Provisiones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "499",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "529",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.II",
+      "nivel": 2,
+      "texto": "II. Deudas a corto plazo.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.II.1",
+      "nivel": 3,
+      "texto": "1. Deudas con entidades de crédito.",
+      "cuentas": [
+       {
+        "cuenta": "5105",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "520",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "527",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.II.2",
+      "nivel": 3,
+      "texto": "2. Acreedores por arrendamiento financiero",
+      "cuentas": [
+       {
+        "cuenta": "5125",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "524",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.II.3",
+      "nivel": 3,
+      "texto": "3. Otras deudas a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "1034",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "1044",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "190",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "192",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "194",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "500",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "505",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "506",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "509",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5115",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5135",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5145",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "521",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "522",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "526",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "528",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "551",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5525",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "555",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5565",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5566",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5595",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "560",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "561",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.III",
+      "nivel": 2,
+      "texto": "III. Deudas con empresas del grupo y asociadas a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "5103",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5104",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5113",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5114",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5123",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5124",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5133",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5134",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5143",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5144",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5523",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5524",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5563",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "5564",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.IV",
+      "nivel": 2,
+      "texto": "IV. Acreedores comerciales y otras cuentas a pagar.",
+      "cuentas": [],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.IV.1",
+      "nivel": 3,
+      "texto": "1. Proveedores.",
+      "cuentas": [
+       {
+        "cuenta": "400",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "401",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "403",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "404",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "405",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "406",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.IV.2",
+      "nivel": 3,
+      "texto": "2. Otros acreedores.",
+      "cuentas": [
+       {
+        "cuenta": "41",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "438",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "465",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "475",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "476",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "477",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "PNP.C.V",
+      "nivel": 2,
+      "texto": "V. Periodificaciones a corto plazo.",
+      "cuentas": [
+       {
+        "cuenta": "485",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "568",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": "pn_pasivo"
+     },
+     {
+      "codigo": "=PNP.TOTAL",
+      "nivel": 1,
+      "texto": "TOTAL PATRIMONIO NETO Y PASIVO (A + B + C)",
+      "cuentas": [],
+      "total": true,
+      "lado": "pn_pasivo"
+     }
+    ]
+   },
+   "pyg": {
+    "vigente": "vigente desde 2016-12-18 · BOE-A-2016-11954",
+    "lineas": [
+     {
+      "codigo": "1",
+      "nivel": 2,
+      "texto": "1. Importe neto de la cifra de negocios.",
+      "cuentas": [
+       {
+        "cuenta": "700",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "701",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "702",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "703",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "704",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "705",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "706",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "708",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "709",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "2",
+      "nivel": 2,
+      "texto": "2. Variación de existencias de productos terminados y en curso de fabricación.",
+      "cuentas": [
+       {
+        "cuenta": "6930",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "71",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "7930",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "3",
+      "nivel": 2,
+      "texto": "3. Trabajos realizados por la empresa para su activo.",
+      "cuentas": [
+       {
+        "cuenta": "73",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "4",
+      "nivel": 2,
+      "texto": "4. Aprovisionamientos.",
+      "cuentas": [
+       {
+        "cuenta": "600",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "601",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "602",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "606",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "607",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "608",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "609",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "61",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "6931",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6932",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "6933",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7931",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7932",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7933",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "5",
+      "nivel": 2,
+      "texto": "5. Otros ingresos de explotación.",
+      "cuentas": [
+       {
+        "cuenta": "740",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "747",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "75",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "6",
+      "nivel": 2,
+      "texto": "6. Gastos de personal.",
+      "cuentas": [
+       {
+        "cuenta": "64",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "7",
+      "nivel": 2,
+      "texto": "7. Otros gastos de explotación.",
+      "cuentas": [
+       {
+        "cuenta": "62",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "631",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "634",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "636",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "639",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "65",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "694",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "695",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "794",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7954",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "8",
+      "nivel": 2,
+      "texto": "8. Amortización del inmovilizado.",
+      "cuentas": [
+       {
+        "cuenta": "68",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "9",
+      "nivel": 2,
+      "texto": "9. Imputación de subvenciones de inmovilizado no financiero y otras.",
+      "cuentas": [
+       {
+        "cuenta": "746",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "10",
+      "nivel": 2,
+      "texto": "10. Excesos de provisiones.",
+      "cuentas": [
+       {
+        "cuenta": "7951",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7952",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "7955",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "11",
+      "nivel": 2,
+      "texto": "11. Deterioro y resultado por enajenaciones del inmovilizado.",
+      "cuentas": [
+       {
+        "cuenta": "670",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "671",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "672",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "690",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "691",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "692",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "770",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "771",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "772",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "790",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "791",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "792",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=A",
+      "nivel": 1,
+      "texto": "A) RESULTADO DE EXPLOTACIÓN (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "12",
+      "nivel": 2,
+      "texto": "12. Ingresos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "760",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "761",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "762",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "769",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "13",
+      "nivel": 2,
+      "texto": "13. Gastos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "660",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "661",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "662",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "664",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "665",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "669",
+        "signo": "resta",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "14",
+      "nivel": 2,
+      "texto": "14. Variación de valor razonable en instrumentos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "663",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "763",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "15",
+      "nivel": 2,
+      "texto": "15. Diferencias de cambio.",
+      "cuentas": [
+       {
+        "cuenta": "668",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "768",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "16",
+      "nivel": 2,
+      "texto": "16. Deterioro y resultado por enajenaciones de instrumentos financieros.",
+      "cuentas": [
+       {
+        "cuenta": "666",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "667",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "673",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "675",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "696",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "697",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "698",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "699",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "766",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "773",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "775",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "796",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "797",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "798",
+        "signo": "suma",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "799",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=B",
+      "nivel": 1,
+      "texto": "B) RESULTADO FINANCIERO (12 + 13 + 14 + 15 + 16)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "=C",
+      "nivel": 1,
+      "texto": "C) RESULTADO ANTES DE IMPUESTOS (A + B)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     },
+     {
+      "codigo": "17",
+      "nivel": 2,
+      "texto": "17. Impuestos sobre beneficios.",
+      "cuentas": [
+       {
+        "cuenta": "6300",
+        "signo": "resta",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "6301",
+        "signo": "suma",
+        "dosSignos": true
+       },
+       {
+        "cuenta": "633",
+        "signo": "resta",
+        "dosSignos": false
+       },
+       {
+        "cuenta": "638",
+        "signo": "suma",
+        "dosSignos": false
+       }
+      ],
+      "total": false,
+      "lado": null
+     },
+     {
+      "codigo": "=D",
+      "nivel": 1,
+      "texto": "D) RESULTADO DEL EJERCICIO (C + 17)",
+      "cuentas": [],
+      "total": true,
+      "lado": null
+     }
+    ]
+   },
+   "ecpn": {
+    "lineas": [],
+    "nota": "Matriz sin columna de cuentas en el PGC: se calcula de los movimientos del grupo 1 y la 129."
+   }
+  }
+ }
+}

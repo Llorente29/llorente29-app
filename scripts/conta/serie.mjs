@@ -328,8 +328,33 @@ const salidaRef = JSON.stringify(ref, null, 1) + '\n'
 if (modo === 'comprobar') {
   const igual = (ruta, contenido) => existsSync(ruta) && readFileSync(ruta, 'utf8') === contenido
   const malos = [[MIGRACION, salidaSql], [join(REF, 'serie.json'), salidaRef]].filter(([r, c]) => !igual(r, c)).map(([r]) => r)
-  if (malos.length) { console.error(`Difiere de lo que sale de las fuentes: ${malos.join(', ')}`); process.exit(1) }
-  console.log('Valores de serie: idénticos a lo que sale de las fuentes.')
+  if (malos.length) {
+    // La migración de serie ya está aplicada en producción y registrada con su
+    // huella (W01): no se regenera porque una fuente traiga texto nuevo si lo
+    // único que cambia es la PROCEDENCIA (huella de la fuente y fechas de
+    // descarga o comprobación de una fuente cuya huella ha cambiado). Las
+    // pruebas literales de arriba ya han pasado contra el texto nuevo, así que
+    // los valores siguen saliendo de él. Cualquier otra diferencia falla.
+    const enFichero = new Map([...(existsSync(MIGRACION) ? readFileSync(MIGRACION, 'utf8') : '').matchAll(/values \('([^']+)', '[^']*', '[^']*', '([0-9a-f]{64})'/g)].map((m) => [m[1], m[2]]))
+    const nuevas = Object.entries(registro.fuentes).filter(([k, f]) => fuentesUsadas.has(k) && f.sha256 && enFichero.has(k) && enFichero.get(k) !== f.sha256)
+    const permitidos = new Set(nuevas.flatMap(([, f]) => [f.sha256, f.fecha, f.comprobado, dia(f.fecha), dia(f.comprobado)].filter(Boolean)))
+    const token = /([0-9a-f]{64}|\d{4}-\d{2}-\d{2}(?:T[\d:.]+Z)?)/
+    const soloProcedencia = (ruta, nuevo) => {
+      if (!existsSync(ruta)) return false
+      const a = readFileSync(ruta, 'utf8').split('\n'); const b = nuevo.split('\n')
+      if (a.length !== b.length) return false
+      return a.every((la, i) => {
+        if (la === b[i]) return true
+        const ta = la.split(token); const tb = b[i].split(token)
+        return ta.length === tb.length && ta.every((x, j) => x === tb[j] || (j % 2 === 1 && permitidos.has(tb[j])))
+      })
+    }
+    if (nuevas.length && malos.every((r) => soloProcedencia(r, r === MIGRACION ? salidaSql : salidaRef))) {
+      console.log(`Valores de serie: idénticos. Solo cambia la procedencia de ${nuevas.map(([k]) => k).join(', ')} (texto nuevo de la fuente; las pruebas literales pasan contra él). La migración aplicada no se regenera.`)
+    } else {
+      console.error(`Difiere de lo que sale de las fuentes: ${malos.join(', ')}`); process.exit(1)
+    }
+  } else console.log('Valores de serie: idénticos a lo que sale de las fuentes.')
 } else {
   writeFileSync(MIGRACION, salidaSql)
   writeFileSync(join(REF, 'serie.json'), salidaRef)

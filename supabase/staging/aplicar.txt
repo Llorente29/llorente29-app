@@ -1,6 +1,6 @@
-# C04 R5 (conta/c04-cierre) · La guarda 4 del nocturno de producción
-# (scripts/conta/produccion/guarda-lectura.sql): BYPASSRLS se admite (Julio,
-# 08/10); el rol sigue sin poder escribir. La prueba crea conta_lectura como en
-# producción y comprueba que la guarda pasa así, falla con un INSERT y falla
-# siendo miembro de un rol que escribe. Todo en una transacción con ROLLBACK.
-supabase/staging/sql/20261013_c04r5_prueba_guarda.sql
+# C05 · tarea 5, tras el e2e 153 (conta/c05-libros-y-balances).
+#   La prueba de libros otra vez, con el paso 5 nuevo: el expedidor del libro
+#   registro sale del tercero del asiento (NIF y nombre). Las semillas proponen
+#   sin tercero y la captura de recibidas lo enseñaba «—»; ese camino no lo
+#   probaba nada. Todo en una transacción con ROLLBACK: no cambia staging.
+supabase/staging/sql/20261014_c05_prueba_libros.sql

@@ -38,9 +38,12 @@ on:
       - '.github/workflows/e2e-staging-conta.yml'
   workflow_dispatch:
 
+# Un push nuevo ESPERA en cola: no cancela el e2e que está corriendo (C05,
+# respuesta 3). GitHub deja como mucho uno en espera por rama: si llegan dos,
+# el de en medio se descarta y corre el último, que lleva todo lo anterior.
 concurrency:
   group: e2e-staging-conta-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write

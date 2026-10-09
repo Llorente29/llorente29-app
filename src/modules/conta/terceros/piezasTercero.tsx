@@ -90,7 +90,7 @@ export function TarjetaLiquidaciones({ todas = false }: { todas?: boolean }) {
         )
       })}
       <p className="cx-ayuda" style={{ margin: '10px 0 0' }}>
-        Cada liquidación será sus apuntes con el C04: ventas a tu 700, comisiones a tu 623 con su IVA y el neto a su cuenta
+        Cada liquidación se asienta en el libro diario: ventas a tu 700, comisiones a tu 623 con su IVA y el neto a su cuenta
         {enCuenta ? <> <Link to={rutaMayor(enCuenta.code)}>{enCuenta.code}</Link></> : ' de cliente (aún sin cuenta)'}. «Subir liquidación» lee el fichero de la plataforma.
       </p>
       {cobro && <ApuntarCobro id={cobro} alCerrar={() => setCobro(null)} alHecho={(t) => { setCobro(null); avisar(t); recargar() }} quien={userName} />}

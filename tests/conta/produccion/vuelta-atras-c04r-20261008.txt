@@ -1,0 +1,12 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas.
+#
+# C04 R4: en orden inverso. La de la fusión PARA si hay fusiones sin deshacer
+# (se deshacen antes); la del corte PARA si ya hay asientos traídos y no vuelve
+# a crear las propuestas descartadas (salen solas con «Proponer lo pendiente»);
+# la del historial quita solo las filas que dio de alta; la de lectura quita a
+# conta_lectura solo las cuatro tablas que le dio por primera vez.
+supabase/vuelta-atras/20261012T0120_c04r_fusionar_terceros.down.sql
+supabase/vuelta-atras/20261012T0110_c04r_corte_datos.down.sql
+supabase/vuelta-atras/20261012T0100_c04r_historial.down.sql
+supabase/vuelta-atras/20261012T0050_c04r_lectura.down.sql

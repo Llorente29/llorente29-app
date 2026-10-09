@@ -10,8 +10,9 @@ name: Fuentes oficiales de contabilidad
 # Corre aquí porque desde el contenedor de trabajo esas webs no se alcanzan.
 #
 # CUÁNDO: un push a conta/** que cambie la lista (fuentes.json) o el guion, o
-# a mano. El agente nocturno «Normativa al día» (tarea 8) usa el mismo guion en
-# modo «comparar», que no cambia nada: solo avisa.
+# a mano (con «solo», únicamente las fuentes que se nombren). El agente
+# nocturno «Normativa al día» (tarea 8) usa el mismo guion en modo
+# «comparar», que no cambia nada: solo avisa.
 
 on:
   push:
@@ -21,6 +22,11 @@ on:
       - 'scripts/conta/fuentes.mjs'
       - '.github/workflows/fuentes-oficiales-conta.yml'
   workflow_dispatch:
+    inputs:
+      solo:
+        description: 'Solo estas fuentes (claves de fuentes.json, separadas por comas). Vacío = todas.'
+        required: false
+        default: ''
 
 concurrency:
   group: fuentes-oficiales-conta-${{ github.ref }}
@@ -42,7 +48,14 @@ jobs:
       - name: Descargar las fuentes
         id: descarga
         continue-on-error: true
-        run: node scripts/conta/fuentes.mjs descargar
+        # C05: bajar solo las fuentes nuevas sin arrastrar textos del BOE que
+        # han cambiado y que mueven valores de serie ya aplicados (esos los
+        # trae «Normativa al día», que avisa y no cambia nada).
+        env:
+          FUENTES_SOLO: ${{ inputs.solo }}
+        run: |
+          command -v pdftotext > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils; }  # PDF de la AEAT (C05)
+          node scripts/conta/fuentes.mjs descargar
 
       - name: Resumen
         if: always()

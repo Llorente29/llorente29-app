@@ -24,7 +24,7 @@ import TablasGeneralesPage from '@/modules/conta/pages/TablasGeneralesPage'
 import AltaPage from '@/modules/conta/pages/AltaPage'
 import TercerosPage from '@/modules/conta/terceros/TercerosPage'
 import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
-import LibroDiarioPage from '@/modules/conta/libro/LibroDiarioPage'
+import LibrosPage from '@/modules/conta/libros/LibrosPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
 
@@ -59,7 +59,12 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.tercero, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
     { path: CONTA.rutas.terceroApartado, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
     // C04 · Libros › Libro diario (N11), un asiento (N12) y el asiento a mano.
-    { path: CONTA.rutas.libroDiario, element: enMarco(<LibroDiarioPage />, '¿Cuánto gané en el Local Norte este mes?') },
+    // C05 · Libros en tres niveles (N13c): el diario del C04 vive dentro, en su ruta de siempre.
+    { path: CONTA.rutas.libros, element: enMarco(<LibrosPage />, '¿Qué facturas no deducen IVA?') },
+    { path: CONTA.rutas.libroDiario, element: enMarco(<LibrosPage area="diario" accion="libro-diario" />, '¿Cuánto gané en el Local Norte este mes?') },
+    { path: CONTA.rutas.diarioResumido, element: enMarco(<LibrosPage area="diario" accion="diario-resumido" />, '¿Cuánto gasté en septiembre?') },
+    { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
+    { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?') },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?') },
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },

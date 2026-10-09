@@ -328,6 +328,49 @@
       "tipo": "boe",
       "id": "BOE-A-2021-2155",
       "debeContener": "reconocimiento de ingresos"
+    },
+    {
+      "clave": "aeat-formato-libros-registro",
+      "nombre": "AEAT · Formato electrónico común de los libros registro de IVA e IRPF",
+      "tipo": "pdf",
+      "url": "https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/IVA/Fact_registro/Libros_registro/Formato_Electronico_Comun_Libros_Registro_IVA_IRPF.pdf",
+      "debeContener": "Registro",
+      "nota": "C05: columnas de los libros registro de IVA en el formato que pide la AEAT en un requerimiento (expedidas, recibidas, bienes de inversión)."
+    },
+    {
+      "clave": "aeat-disenos-libros-registro",
+      "nombre": "AEAT · Diseños de registro normalizados de los libros registro del IVA y del IRPF (XLSX)",
+      "tipo": "enlace",
+      "pagina": "https://sede.agenciatributaria.gob.es/Sede/iva/libros-registro.html",
+      "textoEnlace": "Diseños de registro normalizados para los Libros Registro del IVA y del IRPF",
+      "debeContener": "NIF",
+      "nota": "C05: las columnas exactas de cada libro (expedidas, recibidas, bienes de inversión). El PDF aeat-formato-libros-registro dice dónde se publican; este es el fichero."
+    },
+    {
+      "clave": "orden-jus-616-2022",
+      "nombre": "Orden JUS/616/2022, modelos de depósito de cuentas anuales individuales en el Registro Mercantil",
+      "tipo": "boe",
+      "tituloEmpiezaPor": "Orden JUS/616/2022",
+      "debeContener": "cuentas anuales",
+      "nota": "C05: última Orden JUS que aprueba los modelos de depósito de las cuentas individuales (BOE de 04/07/2022). Sus modelos los actualiza cada año una resolución de la DGSJFP (res-dgsjfp-2026-cuentas).",
+      "id": "BOE-A-2022-10975"
+    },
+    {
+      "clave": "res-dgsjfp-2026-cuentas",
+      "nombre": "Resolución de 19 de mayo de 2026 de la DGSJFP, modelos de presentación de las cuentas anuales en el Registro Mercantil",
+      "tipo": "boe",
+      "id": "BOE-A-2026-11581",
+      "tituloDebeContener": "cuentas anuales",
+      "debeContener": "Registro Mercantil",
+      "nota": "C05: modelos de depósito de cuentas individuales vigentes para lo que se presente desde el 01/06/2026 (BOE de 29/05/2026). La BOE-A-2026-11582, de la misma fecha, es la de consolidadas."
+    },
+    {
+      "clave": "rdl-1-2010-lsc",
+      "nombre": "Real Decreto Legislativo 1/2010, texto refundido de la Ley de Sociedades de Capital",
+      "tipo": "boe",
+      "id": "BOE-A-2010-10544",
+      "debeContener": "Sociedades de Capital",
+      "nota": "C05: arts. 257–258 (límites del balance, el ECPN y la PyG abreviados) y 363.1.e (disolución por pérdidas, solo como aviso)."
     }
   ]
 }

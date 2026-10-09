@@ -145,8 +145,9 @@ test('cuenta A: pinchar en una cuenta lleva a su Mayor; en una con hijas, abre e
   await expect(page).toHaveURL(/\/conta\/plan\/40000002$/)
   const mayor = page.getByRole('region', { name: 'Mayor de la cuenta' })
   await expect(mayor.getByRole('heading', { name: '40000002 · Proveedores · Hermanos Ruiz' })).toBeVisible()
-  // C04: el Mayor lee del libro (la F-2026-0915 validada de seed_c04_staging.sql).
-  await expect(mayor.locator('.cx-dato').filter({ hasText: 'Saldo' })).toContainText('1.283,15 € acreedor')
+  // C04: el Mayor lee del libro: la F-2026-0915 validada (seed_c04_staging.sql,
+  // 1.283,15) menos su rectificativa AB-2026-031 (seed_c05_staging.sql, 55,00).
+  await expect(mayor.locator('.cx-dato').filter({ hasText: 'Saldo' })).toContainText('1.228,15 € acreedor')
   await expect(mayor.locator('.cx-dato').filter({ hasText: 'Ejercicio' })).toContainText(/\d{4}/)
   await expect(page.getByRole('region', { name: 'Extracto' }).getByText('F-2026-0915').first()).toBeVisible()
   // Es una subcuenta tuya (la creó el plan para él): se le cambia el nombre; con enlaces no se oculta.
@@ -177,7 +178,8 @@ test('cuenta A: pinchar en una cuenta lleva a su Mayor; en una con hijas, abre e
   // al revés, el toHaveCount(0) pasaba mientras aún decía «Leyendo las sumas…»
   // y tapaba que la 40000000 no sumaba sus subcuentas (e2e 128).
   const fila400 = sumas.getByRole('table', { name: 'Sumas y saldos de 400' }).getByRole('row').filter({ has: page.getByRole('link', { name: /^40000000 · / }) })
-  await expect(fila400).toContainText('1.283,15')
+  // Debe 55,00 (la rectificativa del C05), Haber 1.283,15 y saldo 1.228,15: se mira el saldo.
+  await expect(fila400).toContainText('1.228,15')
   await expect(sumas.getByText('Aún no hay apuntes en este nivel.')).toHaveCount(0)
 
   // Una subcuenta tuya: Cambiar nombre (y se deja como estaba).

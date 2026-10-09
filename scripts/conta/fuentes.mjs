@@ -149,8 +149,97 @@ async function descargarZip(f) {
   return { url: f.url, http, titulo: f.nombre, texto: '', ext: f.formato ?? 'txt', error: `HTTP ${http}` }
 }
 
+/**
+ * Un PDF (la AEAT publica así el formato de los libros registro, C05). Se baja
+ * el binario y se guarda su texto con `pdftotext -layout` (poppler-utils; los
+ * workflows que llaman a este guion lo instalan si falta). La huella es la del
+ * texto, como en las demás.
+ */
+async function descargarPdf(f) {
+  let http = 0
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      const r = await fetch(f.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(LIMITE_MS) })
+      http = r.status
+      if (r.status === 200) {
+        const dir = await mkdtemp(join(tmpdir(), 'fuente-'))
+        const pdf = join(dir, 'f.pdf')
+        await writeFile(pdf, Buffer.from(await r.arrayBuffer()))
+        const texto = execFileSync('pdftotext', ['-layout', '-enc', 'UTF-8', pdf, '-'], { maxBuffer: 64 * 1024 * 1024 }).toString('utf8')
+        return { url: f.url, http, titulo: f.nombre, actualizadoEnFuente: r.headers.get('last-modified'), texto, ext: 'txt' }
+      }
+      if (r.status < 500) break
+    } catch (e) { if (intento === 2) return { url: f.url, http, titulo: f.nombre, texto: '', ext: 'txt', error: String(e) } }
+    await espera(3000 * (intento + 1))
+  }
+  return { url: f.url, http, titulo: f.nombre, texto: '', ext: 'txt', error: `HTTP ${http}` }
+}
+
+/** Las celdas de un .xlsx como texto: «## Hoja: <nombre>» y una fila por línea, celdas separadas por tabuladores. Sin dependencias: `unzip`. */
+export function xlsxATexto(fichero) {
+  const leer = (dentro) => { try { return execFileSync('unzip', ['-p', fichero, dentro], { maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8') } catch { return '' } }
+  const compartidas = [...leer('xl/sharedStrings.xml').matchAll(/<si>([\s\S]*?)<\/si>/g)]
+    .map((m) => entidades([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join('')))
+  const rels = Object.fromEntries([...leer('xl/_rels/workbook.xml.rels').matchAll(/<Relationship\b[^>]*>/g)]
+    .map((m) => [(m[0].match(/Id="([^"]+)"/) ?? [])[1], (m[0].match(/Target="([^"]+)"/) ?? [])[1]]))
+  const salida = []
+  for (const h of leer('xl/workbook.xml').matchAll(/<sheet\b[^>]*>/g)) {
+    const nombre = entidades((h[0].match(/name="([^"]+)"/) ?? [])[1] ?? '')
+    const destino = rels[(h[0].match(/r:id="([^"]+)"/) ?? [])[1]] ?? ''
+    const xml = leer(`xl/${destino.replace(/^\/?xl\//, '')}`)
+    salida.push('', `## Hoja: ${nombre}`)
+    for (const fila of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+      const celdas = []
+      for (const c of fila[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const ref = (c[1].match(/r="([A-Z]+)\d+"/) ?? [])[1] ?? ''
+        const col = [...ref].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1
+        const tipo = (c[1].match(/t="([^"]+)"/) ?? [])[1]
+        const v = ((c[2] ?? '').match(/<v>([\s\S]*?)<\/v>/) ?? [])[1]
+        const texto = tipo === 's' ? compartidas[Number(v)] ?? '' : tipo === 'inlineStr' ? entidades([...(c[2] ?? '').matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join('')) : entidades(v ?? '')
+        if (col >= 0) celdas[col] = texto.replace(/\s+/g, ' ').trim()
+      }
+      const linea = Array.from(celdas, (x) => x ?? '').join('\t').replace(/\t+$/, '')
+      if (linea) salida.push(linea)
+    }
+  }
+  return salida.join('\n').trim() + '\n'
+}
+
+/**
+ * Un fichero que solo se conoce por el texto de su enlace en una página oficial
+ * (la AEAT cambia el nombre del fichero con cada versión, la página no): se
+ * baja la página, se busca el enlace cuyo texto contiene `textoEnlace` y se baja
+ * lo que apunta. Si es un .xlsx, se guarda su texto (xlsxATexto).
+ */
+async function descargarEnlace(f) {
+  const pagina = await pedir(f.pagina, { headers: { Accept: 'text/html' } })
+  if (pagina.http !== 200) return { url: f.pagina, http: pagina.http, titulo: f.nombre, texto: '', ext: 'txt', error: pagina.error ?? `la página contesta HTTP ${pagina.http}` }
+  const enlaces = [...pagina.cuerpo.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => ({ href: entidades(m[1]), texto: sinEtiquetas(m[2]) }))
+  const e = enlaces.find((x) => x.texto.includes(f.textoEnlace))
+  if (!e) return { url: f.pagina, http: 404, titulo: f.nombre, texto: '', ext: 'txt', error: `no hay ningún enlace con «${f.textoEnlace}» en la página (${enlaces.length} enlaces)` }
+  const url = new URL(e.href, f.pagina).toString()
+  let http = 0
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(LIMITE_MS) })
+      http = r.status
+      if (r.status === 200) {
+        const dir = await mkdtemp(join(tmpdir(), 'fuente-'))
+        const fichero = join(dir, 'f.xlsx')
+        await writeFile(fichero, Buffer.from(await r.arrayBuffer()))
+        return { url, http, titulo: `${f.nombre} · «${e.texto}»`, actualizadoEnFuente: r.headers.get('last-modified'), texto: xlsxATexto(fichero), ext: 'txt', nota: `enlace de ${f.pagina}` }
+      }
+      if (r.status < 500) break
+    } catch (err) { if (intento === 2) return { url, http, titulo: f.nombre, texto: '', ext: 'txt', error: String(err) } }
+    await espera(3000 * (intento + 1))
+  }
+  return { url, http, titulo: f.nombre, texto: '', ext: 'txt', error: `HTTP ${http}` }
+}
+
 async function descargarUna(f) {
+  if (f.tipo === 'enlace') return descargarEnlace(f)
   if (f.tipo === 'zip') return descargarZip(f)
+  if (f.tipo === 'pdf') return descargarPdf(f)
   if (f.tipo === 'boe') {
     const probados = []
     if (f.id) {

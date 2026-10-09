@@ -5,35 +5,36 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C04 R4 · Retoques (rama conta/c04-retoques). La primera tanda con el W01.
+# C05 · Libros y balances (rama conta/c05-libros-y-balances, PR #169). Visto
+# bueno de Julio, incluida la 0140 con el contraasiento de la reapertura.
+# Orden del informe final (docs/conta/C05_informe_final.md):
 #
-#   0. 20261012T0050_c04r_lectura.sql — SELECT para conta_lectura sobre lo que
-#      leen los agentes. El primer ensayo (08/10) paró en «Antes · agentes»:
-#      agente-libro.sql:144, permission denied for table sale. Medido en
-#      producción: le faltan sale, supplier_invoice, fiscal_period_lock y brand.
-#      Solo da permisos de lectura: «sigue». Va primero porque la comprobación
-#      de antes corre los agentes con ese rol.
-#   1. 20261012T0100_c04r_historial.sql — da de alta en el historial los 58
-#      ficheros que el workflow aplicó antes del W01 (11 ejecuciones REAL en
-#      verde, del C00 al C04), con la huella de main. 58 de 58 iguales a lo
-#      aplicado (la 0130 del C00 con la versión que reaplicó el C04). Solo
-#      inserta en supabase_migrations.schema_migrations: el analizador dice
-#      «sigue». Medido el 08/10: 0 de esas 58 registradas.
-#   2. 20261012T0110_c04r_corte_datos.sql — el corte de Foodint con Diez
-#      (30/09/2026): ejercicio 2026 mixto, enero–septiembre cerrados como
-#      traídos y las 120 propuestas de junio–agosto descartadas «anteriores al
-#      corte». PARA si hay algo que no sea una propuesta hasta el corte.
-#      ACTUALIZA Y BORRA filas que existen: va en «autorizo».
-#   3. 20261012T0120_c04r_fusionar_terceros.sql — «Fusionar con…»: una tabla
-#      (party_merge, el rastro) y dos funciones nuevas. Solo añade («sigue»).
-#      Va aquí porque el front de este PR la llama: sin ella, el botón falla.
+#   1. 20261014T0100_c05_libros.sql — tablas nuevas (modelos y mapeo, libro
+#      registro, bienes de inversión, cierre) y sus funciones. Añade.
+#   2. 20261014T0110_c05_modelos_serie.sql — la serie de los tres modelos,
+#      generada desde el BOE. Añade.
+#   3. 20261014T0120_c05_cambia.sql — el disparador del libro registro en
+#      journal_entry y conta_resultado_por_local sin la regularización.
+#      CAMBIA, declarado en su cabecera con su prueba de staging
+#      (20261014_c05_prueba_cambia.sql). journal_entry tiene 0 filas.
+#   4. 20261014T0130_c05_modelo_elegido.sql — el modelo que elige cada
+#      empresa por ejercicio. Añade.
+#   5. 20261014T0140_c05_validar_cierre.sql — journal_entry_validar: el
+#      cierre y la apertura del generador, enlazados, y su contraasiento, sin
+#      la regla de IVA. CAMBIA, misma firma, declarado con su prueba de staging
+#      (20261014_c05_prueba_libros.sql).
+#   6. 20261014T0150_c05_lectura.sql — SELECT para conta_lectura sobre las 9
+#      tablas que lee la parte C05 del agente. Añade.
 #
-# UNA PARA y va en el campo «autorizo»:
-#
-#   20261012T0110_c04r_corte_datos.sql
+# Analizador pasado en local el 09/10 contra el contexto de producción (leído
+# en solo lectura): los seis dicen «sigue». Ninguno toca el camino del pedido,
+# ninguno está en el historial y NINGUNO pide «autorizo». Lo que diga el
+# ensayo del workflow manda.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261012T0050_c04r_lectura.sql
-supabase/migrations/20261012T0100_c04r_historial.sql
-supabase/migrations/20261012T0110_c04r_corte_datos.sql
-supabase/migrations/20261012T0120_c04r_fusionar_terceros.sql
+supabase/migrations/20261014T0100_c05_libros.sql
+supabase/migrations/20261014T0110_c05_modelos_serie.sql
+supabase/migrations/20261014T0120_c05_cambia.sql
+supabase/migrations/20261014T0130_c05_modelo_elegido.sql
+supabase/migrations/20261014T0140_c05_validar_cierre.sql
+supabase/migrations/20261014T0150_c05_lectura.sql

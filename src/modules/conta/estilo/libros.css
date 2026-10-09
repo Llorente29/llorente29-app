@@ -1,0 +1,151 @@
+/* src/modules/conta/estilo/libros.css
+ *
+ * C05 · Libros en tres niveles (N13cLibros), balance y PyG (N14Balance) y
+ * libro registro (N15Registro). Solo tokens de tokens.css: ningún color
+ * escrito aquí. En el móvil, por niveles: las áreas como lista, sus acciones
+ * como lista debajo, y el contenido a pantalla entera.
+ */
+
+.cxl-pagina { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cxl-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.cxl-ante { font-size: 15px; color: var(--cx-apoyo); }
+.cxl-titulo { font-size: 32px; font-weight: 700; letter-spacing: -0.8px; margin: 0; }
+/* Subtítulo dentro de una tarjeta: no compite con el título de la página (captura del e2e 153). */
+.cxl-subtitulo { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; margin: 0 0 8px; text-align: left; }
+
+/* Nivel 2 · pestañas de área */
+.cxl-areas { display: flex; gap: 4px; border-bottom: 1px solid var(--cx-linea); overflow-x: auto; }
+.cxl-area {
+  padding: 10px 16px 12px; font: inherit; font-size: 16px; color: var(--cx-texto); text-decoration: none; white-space: nowrap;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.cxl-area[aria-current='page'] { color: var(--cx-azul); font-weight: 600; border-bottom-color: var(--cx-azul); }
+
+/* Nivel 3 · barra de acciones agrupadas, con «Tuyos» a la derecha */
+.cxl-barra {
+  display: flex; align-items: stretch; gap: 0; background: var(--cx-blanco); border: 1px solid var(--cx-linea);
+  border-radius: var(--cx-radio-tarjeta); padding: 10px 10px 8px;
+}
+/* Los grupos parten en filas en vez de desplazar (un desplazamiento lateral
+   sin barra visible escondía «Depósito de cuentas» a 1440, e2e 153). «Tuyos»
+   va fuera de este contenedor: no baja nunca sola a otra fila (e2e 154). */
+.cxl-barra-grupos { display: flex; flex-wrap: wrap; row-gap: 10px; flex: 1 1 auto; min-width: 0; }
+.cxl-grupo { display: flex; flex-direction: column; gap: 6px; padding: 0 8px; border-right: 1px solid var(--cx-linea); }
+.cxl-grupo:last-of-type { border-right: none; }
+.cxl-grupo-acciones { display: flex; gap: 4px; flex-wrap: wrap; }
+.cxl-grupo-etiqueta { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--cx-apoyo); padding: 0 8px; }
+.cxl-accion {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px; border-radius: var(--cx-radio-boton);
+  font: inherit; color: var(--cx-texto); text-decoration: none; background: none; border: none; cursor: pointer; white-space: nowrap; min-height: 44px;
+}
+.cxl-accion:hover { background: var(--cx-fondo); }
+.cxl-accion[aria-current='page'] { background: var(--cx-azul-suave); color: var(--cx-azul); font-weight: 600; }
+.cxl-accion-nombre { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
+.cxl-accion-dato { font-size: 13px; color: var(--cx-apoyo); font-weight: 400; }
+.cxl-accion-gris .cxl-accion-nombre, .cxl-accion-gris .cxl-accion-dato { color: var(--cx-apoyo); }
+.cxl-punto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--cx-borde-campo); }
+.cxl-punto-verde { background: var(--cx-ia); }
+.cxl-punto-ambar { background: var(--cx-ambar); }
+.cxl-punto-rojo { background: var(--cx-rojo); }
+.cxl-tuyos { margin-left: auto; flex: none; display: flex; flex-direction: column; gap: 6px; padding-left: 8px; border-left: 1px solid var(--cx-linea); }
+.cxl-tuyos .cxl-grupo-acciones { justify-content: flex-end; }
+
+/* Buscar (Ctrl K) */
+.cxl-buscar-lista { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 50vh; overflow: auto; }
+.cxl-buscar-lista a { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--cx-radio-boton); color: var(--cx-texto); text-decoration: none; }
+.cxl-buscar-lista a:hover, .cxl-buscar-lista a:focus { background: var(--cx-azul-suave); }
+
+/* Cabecera de cada acción */
+.cxl-seccion { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.cxl-seccion h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.6px; margin: 2px 0 0; }
+.cxl-herramientas { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cxl-segmento { display: inline-flex; border: 1px solid var(--cx-borde-campo); border-radius: var(--cx-radio-boton); overflow: hidden; background: var(--cx-blanco); }
+.cxl-segmento button { height: 44px; padding: 0 16px; font: inherit; font-weight: 600; border: none; border-right: 1px solid var(--cx-linea); background: none; color: var(--cx-texto); cursor: pointer; }
+.cxl-segmento button:last-child { border-right: none; }
+.cxl-segmento button[aria-pressed='true'] { background: var(--cx-azul-suave); color: var(--cx-azul); }
+.cxl-opciones { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.cxl-opciones label { display: inline-flex; gap: 6px; align-items: center; font-size: 15px; min-height: 44px; }
+
+/* Cuatro cifras */
+.cxl-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.cxl-cifra { display: flex; flex-direction: column; gap: 4px; }
+.cxl-cifra-etiqueta { font-size: 14px; color: var(--cx-apoyo); }
+.cxl-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 24px; font-weight: 600; letter-spacing: -0.5px; }
+
+/* Barra de la IA */
+.cxl-ia {
+  /* El título y una columna por nota, las que haya: una sola nota («El modelo
+     que te toca», una PyG con una nota) ocupa todo el ancho; tres se reparten. */
+  display: grid; grid-template-columns: 220px; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 18px; padding: 16px 20px;
+  background: var(--cx-verde-suave); border: 1px solid var(--cx-ia-borde); border-radius: var(--cx-radio-tarjeta); color: var(--cx-ia-apoyo); font-size: 14px;
+}
+.cxl-ia-titulo { font-weight: 700; color: var(--cx-texto); font-size: 17px; display: flex; gap: 8px; align-items: baseline; }
+.cxl-ia strong { color: var(--cx-texto); }
+
+/* Estados (balance, PyG) */
+.cxl-estados { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.cxl-estado h3 { font-size: 18px; margin: 0 0 8px; }
+.cxl-fila-estado { display: grid; grid-template-columns: minmax(0, 1fr) 28px 120px 120px; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--cx-linea); }
+.cxl-fila-estado.cxl-sin-anterior { grid-template-columns: minmax(0, 1fr) 28px 120px; }
+.cxl-fila-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; border-top: none; }
+.cxl-n1 { font-weight: 700; }
+.cxl-n2 { padding-left: 14px; font-weight: 600; }
+.cxl-n3 { padding-left: 28px; }
+.cxl-n4, .cxl-n5, .cxl-n6 { padding-left: 42px; color: var(--cx-apoyo); }
+.cxl-total { font-weight: 700; text-transform: uppercase; }
+.cxl-cifra-celda { text-align: right; font-family: var(--cx-letra-cifras); }
+.cxl-anterior { color: var(--cx-apoyo); }
+.cxl-mas { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--cx-azul-borde); background: var(--cx-azul-suave); color: var(--cx-azul); font-weight: 700; cursor: pointer; }
+.cxl-cuenta { display: grid; grid-template-columns: minmax(0, 1fr) 28px 120px 120px; gap: 8px; padding: 6px 0 6px 56px; font-size: 14px; }
+.cxl-cuenta.cxl-sin-anterior { grid-template-columns: minmax(0, 1fr) 28px 120px; }
+.cxl-anomalo { color: var(--cx-ambar); }
+.cxl-defecto { color: var(--cx-ambar); font-size: 12px; }
+.cxl-cuadra { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 2px solid var(--cx-linea); font-weight: 700; margin-top: 6px; }
+.cxl-cuadra-si { color: var(--cx-verde-oscuro); font-family: var(--cx-letra-cifras); }
+.cxl-cuadra-no { color: var(--cx-rojo); font-family: var(--cx-letra-cifras); }
+.cxl-sin-sitio { background: var(--cx-rojo-suave); color: var(--cx-rojo); border-radius: var(--cx-radio-caja); padding: 12px 14px; }
+
+/* Tablas de libros (registro, mayor, sumas y saldos) */
+.cxl-tabla { width: 100%; border-collapse: collapse; font-size: 15px; }
+.cxl-tabla th { text-align: left; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; padding: 8px 8px; }
+.cxl-tabla td { padding: 10px 8px; border-top: 1px solid var(--cx-linea); vertical-align: top; }
+.cxl-tabla .cxl-der { text-align: right; font-family: var(--cx-letra-cifras); white-space: nowrap; }
+.cxl-tabla .cxl-mono { font-family: var(--cx-letra-cifras); white-space: nowrap; }
+.cxl-tabla tfoot td { font-weight: 700; border-top: 2px solid var(--cx-linea); }
+.cxl-apoyo { display: block; font-size: 13px; color: var(--cx-apoyo); }
+.cxl-ambar-celda { color: var(--cx-ambar); }
+.cxl-anulada td { color: var(--cx-apoyo); text-decoration: line-through; }
+.cxl-pie { font-size: 14px; color: var(--cx-apoyo); margin-top: 10px; }
+.cxl-c05b { border: 1px dashed var(--cx-borde-campo); }
+.cxl-lista-estado { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.cxl-lista-estado li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
+
+@media (max-width: 1100px) {
+  .cxl-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cxl-ia { grid-template-columns: 1fr; grid-auto-flow: row; }
+  .cxl-estados { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 767px) {
+  .cxl-titulo { font-size: 26px; }
+  .cxl-areas { flex-direction: column; border-bottom: none; gap: 8px; }
+  .cxl-area { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); background: var(--cx-blanco); padding: 14px 16px; margin: 0; }
+  .cxl-barra { flex-direction: column; padding: 8px; }
+  .cxl-barra-grupos { flex-direction: column; }
+  .cxl-grupo { border-right: none; border-bottom: 1px solid var(--cx-linea); padding: 8px 0; }
+  .cxl-grupo-acciones { flex-direction: column; }
+  .cxl-accion { width: 100%; }
+  .cxl-tuyos { margin-left: 0; padding-left: 0; border-left: none; }
+  .cxl-cifras { grid-template-columns: 1fr 1fr; }
+  .cxl-fila-estado, .cxl-cuenta { grid-template-columns: minmax(0, 1fr) 28px 110px; }
+  .cxl-fila-estado .cxl-anterior, .cxl-cuenta .cxl-anterior { display: none; }
+  .cxl-tabla thead { display: none; }
+  .cxl-tabla tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
+  .cxl-tabla td { border-top: none; padding: 0; }
+  .cxl-tabla .cxl-movil-oculta { display: none; }
+}
+
+/* Mapeo: cada cuenta con «cambiar · dejar fuera · estándar» separados. La
+   píldora es inline-flex y se comía los espacios («700cambiardejar fuera»,
+   captura del e2e 153). */
+.cx-pildora.cxl-mapeo-cuenta { gap: 10px; margin: 0 6px 6px 0; max-width: none; overflow: visible; }
