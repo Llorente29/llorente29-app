@@ -344,9 +344,11 @@ describe('la tanda del C04 R4 (ya aplicada: las cuatro en el historial de produc
     const agentes = ['datos-maestros', 'terceros', 'libro', 'plan-contable'].map((a) => readFileSync(`scripts/conta/agente-${a}.sql`, 'utf8')).join('\n')
     const nombrados = new Set([...agentes.matchAll(/public\.([a-z_]+)/g)].map((m) => m[1]))
     const lectura = readFileSync(viva[0], 'utf8')
+    // Y lo que añadió después el cierre del día (conta_cerrado_hasta, comprobación cierre_dia).
+    const cierre = readFileSync('supabase/migrations/20261016T0160_cierre_del_dia_lectura.sql', 'utf8')
     const tablas = new Set([...lectura.match(/tablas constant text\[\] := array\[([\s\S]*?)\];/)![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]))
-    const funciones = new Set([...lectura.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
-    expect(nombrados.size).toBe(39)
+    const funciones = new Set([...`${lectura}\n${cierre}`.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
+    expect(nombrados.size).toBe(40)
     expect([...nombrados].filter((n) => !tablas.has(n) && !funciones.has(n))).toEqual([])
     expect([...tablas, ...funciones].filter((n) => !nombrados.has(n))).toEqual([])
   })

@@ -29,4 +29,7 @@
 #   Run 111 (66a2c08): la 0150 y la prueba EN VERDE, doce pasos.
 #   Ahora: la semilla del e2e de pantallas (dos no confirmados más el 04/10 en
 #   Norte Centro, junto al que cerró el cron de verdad: 3 · 66,80 €).
+#   Y la 0160 (execute de conta_cerrado_hasta para conta_lectura; en staging
+#   el rol no existe: solo avisa).
 supabase/seeds/conta/seed_cierre_staging.sql
+supabase/migrations/20261016T0160_cierre_del_dia_lectura.sql

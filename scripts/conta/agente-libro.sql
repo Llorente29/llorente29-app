@@ -21,6 +21,11 @@
 --   8. resultado     · ningún 6/7 sin local ni «común»; lo común con su regla de reparto al 100 %.
 --   9. mes_cerrado   · ningún asiento validado en un mes cerrado después de cerrarlo.
 --  10. propuestas    · lo propuesto hace más de 7 días (aviso, no error).
+--  11. cierre_dia    · ningún pedido de marca propia sigue abierto en un día ya
+--                      cerrado (encargo del 09/10): si lo hay, el cierre del día
+--                      no ha pasado o ha fallado; con el día de serie a las 6:00,
+--                      ese día lleva más de 30 h sin cerrar. Por empresa: cuántos,
+--                      el día más antiguo y las horas desde que acabó ese día.
 
 with libro as (
   select e.* from public.journal_entry e where e.status in ('validado', 'anulado')
@@ -136,6 +141,17 @@ select json_build_object(
     from libro e
     join public.fiscal_period_lock k on k.company_id = e.company_id and k.month = date_trunc('month', e.entry_date)::date
    where e.source_type not in ('migrated') and e.validated_at > k.locked_at and (k.reopened_at is null or e.validated_at < k.reopened_at)),
+
+  'cierre_dia', (select coalesce(json_agg(json_build_object('account_id', x.account_id, 'company_id', x.company_id,
+      'pedidos', x.pedidos, 'importe', x.importe, 'dia', x.dia,
+      'horas', round(extract(epoch from now() - ((x.dia + 1)::timestamp at time zone 'Europe/Madrid')) / 3600))), '[]')
+    from (select c.account_id, c.id company_id, count(*) pedidos, sum(s.total) importe, min((s.sold_at at time zone 'Europe/Madrid')::date) dia
+            from public.company c
+            join public.sale s on s.account_id = c.account_id
+            left join public.brand b on b.id = s.brand_id
+           where s.status = 'open' and s.is_active and coalesce(b.ownership_type, 'own') = 'own'
+             and s.sold_at < public.conta_cerrado_hasta(c.id)
+           group by 1, 2) x),
 
   'propuestas', (select coalesce(json_agg(json_build_object('account_id', e.account_id, 'company_id', e.company_id, 'fecha', e.entry_date,
       'serie', e.series, 'origen', e.source_type, 'dias', current_date - e.created_at::date)), '[]')
