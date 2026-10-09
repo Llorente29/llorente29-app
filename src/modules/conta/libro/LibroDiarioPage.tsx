@@ -26,12 +26,13 @@ import {
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
 import {
-  anular, cerrarMes, fuenteCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, reabrirMes, resultadoDelMes,
+  anular, cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, reabrirMes, resultadoDelMes,
   type EjercicioLibro,
 } from '@/modules/conta/services/diarioService'
 import { proponerPendientes, type ResultadoProponer } from '@/modules/conta/services/propuestasLibroService'
 import { fijarCorte, primeraVenta } from '@/modules/conta/services/corteService'
 import { corteDesdeRespuesta, rangoAProponer } from '@/modules/conta/lib/proponer'
+import { ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 
 interface DatosLibro {
@@ -111,7 +112,10 @@ export default function LibroDiarioPage() {
     setFallo(null); setHecho(null); setProponiendo(true)
     try {
       const e = datos.ejercicio
-      const rango = rangoAProponer(e, hoyEnMadrid(), { primeraVenta: await primeraVenta(accountId), asientosEnEjercicio: datos.asientos.length })
+      // Hasta el último día CERRADO, no hasta hoy: un día no se propone antes
+      // de su hora de cierre (las 6:00 de serie, ajuste de la empresa).
+      const cerrado = ultimoDiaCerrado(new Date(), await horaDeCierre(accountId, activa.id))
+      const rango = rangoAProponer(e, cerrado, { primeraVenta: await primeraVenta(accountId), asientosEnEjercicio: datos.asientos.length })
       if (rango.tipo === 'nada') { setHecho(rango.porque); return }
       if (rango.tipo === 'preguntar') { setPregunta({ porque: rango.porque, desde: '', programa: '', fallo: null }); return }
       const { desde, hasta } = rango

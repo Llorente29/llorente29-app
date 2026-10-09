@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { rangoAProponer, corteDesdeRespuesta, tandaDeDias, diaSiguiente, diaAnterior } from '@/modules/conta/lib/proponer'
+import { ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 
 const E2026 = { inicio: '2026-01-01', fin: '2026-12-31', traidoHasta: null as string | null }
 const HOY = '2026-10-08'
@@ -94,3 +95,16 @@ describe('orden: del mes más reciente hacia atrás', () => {
     expect(tandaDeDias([])).toEqual({ ahora: [], mes: null, quedanDias: 0 })
   })
 })
+
+describe('cierre del día: se propone hasta el último día CERRADO, no hasta hoy', () => {
+  it('el 09/10 a las 17:15 de Madrid (el asiento b4eb11ca) el rango acaba el 08/10', () => {
+    const cerrado = ultimoDiaCerrado(new Date('2026-10-09T15:15:56Z'), '06:00')
+    const r = rangoAProponer(E2026, cerrado, { primeraVenta: '2026-06-12', asientosEnEjercicio: 0 })
+    expect(r).toEqual({ tipo: 'rango', desde: '2026-01-01', hasta: '2026-10-08' })
+  })
+  it('a las 5:59 del 09/10 el 08/10 aún no se propone', () => {
+    const r = rangoAProponer(E2026, ultimoDiaCerrado(new Date('2026-10-09T03:59:00Z'), '06:00'), { primeraVenta: '2026-06-12', asientosEnEjercicio: 0 })
+    expect(r.tipo === 'rango' && r.hasta).toBe('2026-10-07')
+  })
+})
+

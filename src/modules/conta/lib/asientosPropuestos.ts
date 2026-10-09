@@ -44,7 +44,8 @@ export interface PedidoDia {
   marcaId: string | null
   /** La marca es de la empresa (no cedida). */
   marcaPropia: boolean
-  estado: 'closed' | 'cancelled' | 'open'
+  /** «unconfirmed»: cerrado por el cierre del día como no confirmado por la plataforma (no es venta). */
+  estado: 'closed' | 'cancelled' | 'open' | 'unconfirmed'
   total: number
   /** Lo que trae el pedido; null si no lo trae (HubRise de Glovo y Just Eat). */
   base: number | null
@@ -100,6 +101,8 @@ export interface ResultadoVentasDia {
     baseCalculada: boolean
     cedidasFuera: { pedidos: number; total: number }
     canceladosFuera: number
+    /** Cerrados al cierre del día sin confirmar: no están en estas ventas, pero se enseñan. */
+    noConfirmados: { pedidos: number; total: number; ids: string[] }
     devoluciones: { pedidos: number; total: number }
     porCanal: { canalId: string | null; total: number }[]
     porMarca: { marcaId: string | null; base: number }[]
@@ -112,6 +115,7 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
   const cedidas = e.pedidos.filter((p) => !p.marcaPropia && p.estado === 'closed')
   const cancelados = e.pedidos.filter((p) => p.estado === 'cancelled')
   const abiertos = e.pedidos.filter((p) => p.estado === 'open' && p.marcaPropia)
+  const noConfirmados = e.pedidos.filter((p) => p.estado === 'unconfirmed')
   const propios = e.pedidos.filter((p) => p.marcaPropia && p.estado === 'closed')
   const razones: Razon[] = []
   const avisos: string[] = []
@@ -140,6 +144,7 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
     tickets: filas.length, total, base, cuota, baseCalculada: calculada,
     cedidasFuera: { pedidos: cedidas.length, total: sum(cedidas.map((c) => c.total)) },
     canceladosFuera: cancelados.length,
+    noConfirmados: { pedidos: noConfirmados.length, total: sum(noConfirmados.map((p) => p.total)), ids: noConfirmados.map((p) => p.id).sort() },
     devoluciones: { pedidos: devs.length, total: sum(devs.map((d) => d.d.importe)) },
     porCanal: [...porCanalMap].map(([canalId, c]) => ({ canalId, total: deCent(c) })),
     porMarca: [...porMarcaMap].map(([marcaId, c]) => ({ marcaId, base: deCent(c) })),
@@ -150,7 +155,10 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
     return { propuesta: null, sinPropuesta: cedidas.length ? 'Ese día solo hubo ventas de marcas cedidas: van en la liquidación del socio.' : 'Ese día no hubo ventas de tus marcas.', resumen }
   }
   if (abiertos.length) {
-    return { propuesta: null, sinPropuesta: `Hay ${abiertos.length} pedido${abiertos.length === 1 ? '' : 's'} de tus marcas sin cerrar ese día: el resumen espera a que se cierren (el total tiene que ser el de los tickets).`, resumen }
+    // Solo se proponen días cerrados, y el cierre del día pasa cada hora a los
+    // 7 minutos: esto solo puede verse en ese rato, o si el cierre ha fallado
+    // (y entonces el agente del Libro diario está en rojo).
+    return { propuesta: null, sinPropuesta: `El cierre del día aún no ha pasado por este día: ${abiertos.length} pedido${abiertos.length === 1 ? '' : 's'} de tus marcas ${abiertos.length === 1 ? 'sigue abierto' : 'siguen abiertos'}. Pasa cada hora a los 7 minutos; vuelve a proponer después.`, resumen }
   }
   const sinCuenta = [...porCanalMap.keys(), ...devs.map((d) => d.d.canalId)].filter((c) => !c || !e.cuentas.cobroPorCanal[c])
   if (sinCuenta.length) {

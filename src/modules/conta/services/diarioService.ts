@@ -21,6 +21,7 @@ import type { AsientoDiario, ApunteDiario, CierreMes, EstadoAsiento, FuenteCierr
 import { finDeMes, importeMano, nombreDeUso } from '@/modules/conta/lib/diario'
 import type { Confianza, OrigenAsiento, Razon, Serie } from '@/modules/conta/lib/libro'
 import { apuntarCorreccion } from '@/modules/conta/services/propuestasLibroService'
+import { normalizarHora } from '@/modules/conta/lib/cierreDelDia'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -124,6 +125,13 @@ export async function cuentasDeApunte(accountId: string, companyId: string): Pro
     .filter((f) => f.status !== 'cerrada' && !codigos.some((c) => c.length > String(f.code).length && c.startsWith(String(f.code))))
     .map((f) => ({ id: String(f.id), code: String(f.code), nombre: nombreDeUso({ kind: s(f.kind), name: String(f.name), plainName: s(f.plain_name) }), oficial: String(f.name) }))
     .sort((a, b) => a.code.localeCompare(b.code))
+}
+
+/** La hora de cierre del día de la empresa («06:00»); sin fila o vacía, la de serie. */
+export async function horaDeCierre(accountId: string, companyId: string): Promise<string> {
+  const { data, error } = await tabla('company_tax_profile').select('sales_day_close_time').eq('account_id', accountId).eq('company_id', companyId).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer la hora de cierre del día', error))
+  return normalizarHora(s((data as Fila | null)?.sales_day_close_time))
 }
 
 export interface LocalEmpresa { id: string; nombre: string }
