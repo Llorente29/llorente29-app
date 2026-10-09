@@ -5,6 +5,10 @@
 #   No se repiten: su guarda pararía, porque ya no están como antes.
 #   La prueba falló en la siembra (42804: en un «union all» los literales se
 #   quedan en text) y se revirtió entera. Va otra vez con «::uuid».
+#   Run 104 (bbb5197): prueba EN VERDE (nuevas 222,5 ms, viejas 48.054,9 ms,
+#   35 días las dos). Pero su explain era de la consulta con constantes, no
+#   del plan genérico que corre la función (la vieja: 88 ms en el explain y
+#   48 s en la llamada). Va otra vez con el explain del plan genérico.
 #   La prueba: 1.100 ventas, 50 resúmenes y 120 descartes; < 1 s con las
 #   nuevas, lo que ve cada uno (A, B y un superadmin) en las 49 tablas, y que
 #   con las VIEJAS no pase. Todo en una transacción con ROLLBACK.

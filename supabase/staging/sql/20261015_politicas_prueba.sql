@@ -29,7 +29,7 @@ do $$ begin
     raise exception 'PRUEBA políticas: esta base tiene cuentas de producción. No se toca nada.';
   end if;
 end $$;
-set local statement_timeout = '120s';
+set local statement_timeout = '300s';  -- la fase vieja tarda ~48 s por ejecución, y son dos
 
 -- Las 49, con su texto de antes y la parte que no es de cuenta (is_system o
 -- account_id is null), igual que tests/conta/produccion/politicas-c00-c05-produccion-20261009.json.
@@ -164,19 +164,23 @@ do $$
 declare
   q text; t0 timestamptz; ms numeric; n int; h text; j text; linea text; ok boolean;
 begin
-  -- La consulta de la función con sus parámetros puestos: el plan de dentro,
-  -- no el «Function Scan» de fuera.
-  select regexp_replace(replace(replace(replace(p.prosrc,
-           'p_company', '''3b34403a-a7d6-4a48-a8d7-737e8cababdc''::uuid'), 'p_desde', '''2026-11-01''::date'), 'p_hasta', '''2026-11-30''::date'), ';\s*$', '')
+  -- El explain, del MISMO plan que corre la función: no se despliega en línea
+  -- y planifica con parámetros (plan genérico). Con los parámetros puestos
+  -- como constantes, la vieja daba 88 ms en el explain y 48 s en la llamada
+  -- (run 104): un «antes» que no es el que corre.
+  select regexp_replace(replace(replace(replace(p.prosrc, 'p_company', '$1'), 'p_desde', '$2'), 'p_hasta', '$3'), ';\s*$', '')
     into q from pg_proc p where p.oid = 'public.conta_dias_por_asentar(uuid, date, date)'::regprocedure;
-  perform count(*) from public.conta_dias_por_asentar('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '2026-11-01', '2026-11-30');  -- en caliente
+  execute 'prepare _politicas_nueva(uuid, date, date) as ' || q;
+  perform set_config('plan_cache_mode', 'force_generic_plan', true);
+  -- La medida que cuenta: la llamada de verdad, como la hace la pantalla.
   t0 := clock_timestamp();
   select count(*), md5(string_agg(x::text, ',' order by x::text)) into n, h
     from public.conta_dias_por_asentar('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '2026-11-01', '2026-11-30') x;
   ms := round((extract(epoch from clock_timestamp() - t0) * 1000)::numeric, 1);
-  execute 'explain (analyze, buffers, verbose, format json) ' || q into j;
-  raise notice '--- explain (analyze, buffers), fase nueva ---';
-  for linea in execute 'explain (analyze, buffers) ' || q loop raise notice '%', linea; end loop;
+  execute 'explain (verbose, format json) execute _politicas_nueva(''3b34403a-a7d6-4a48-a8d7-737e8cababdc'', ''2026-11-01'', ''2026-11-30'')' into j;
+  raise notice '--- explain (analyze, buffers), fase nueva, plan genérico (el de la función) ---';
+  for linea in execute 'explain (analyze, buffers) execute _politicas_nueva(''3b34403a-a7d6-4a48-a8d7-737e8cababdc'', ''2026-11-01'', ''2026-11-30'')' loop raise notice '%', linea; end loop;
+  execute 'deallocate _politicas_nueva';
   ok := ms < 1000 and j like '%InitPlan%' and j like '%current_user_account_ids%' and j not like '%belongs_to_account%';
   perform set_config('prueba.nueva', json_build_object('ms', ms, 'dias', n, 'huella', h, 'ok', ok,
     'initplan', j like '%InitPlan%', 'belongs', j like '%belongs_to_account%')::text, true);
@@ -265,19 +269,23 @@ do $$
 declare
   q text; t0 timestamptz; ms numeric; n int; h text; j text; linea text; ok boolean;
 begin
-  -- La consulta de la función con sus parámetros puestos: el plan de dentro,
-  -- no el «Function Scan» de fuera.
-  select regexp_replace(replace(replace(replace(p.prosrc,
-           'p_company', '''3b34403a-a7d6-4a48-a8d7-737e8cababdc''::uuid'), 'p_desde', '''2026-11-01''::date'), 'p_hasta', '''2026-11-30''::date'), ';\s*$', '')
+  -- El explain, del MISMO plan que corre la función: no se despliega en línea
+  -- y planifica con parámetros (plan genérico). Con los parámetros puestos
+  -- como constantes, la vieja daba 88 ms en el explain y 48 s en la llamada
+  -- (run 104): un «antes» que no es el que corre.
+  select regexp_replace(replace(replace(replace(p.prosrc, 'p_company', '$1'), 'p_desde', '$2'), 'p_hasta', '$3'), ';\s*$', '')
     into q from pg_proc p where p.oid = 'public.conta_dias_por_asentar(uuid, date, date)'::regprocedure;
-  perform count(*) from public.conta_dias_por_asentar('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '2026-11-01', '2026-11-30');  -- en caliente
+  execute 'prepare _politicas_vieja(uuid, date, date) as ' || q;
+  perform set_config('plan_cache_mode', 'force_generic_plan', true);
+  -- La medida que cuenta: la llamada de verdad, como la hace la pantalla.
   t0 := clock_timestamp();
   select count(*), md5(string_agg(x::text, ',' order by x::text)) into n, h
     from public.conta_dias_por_asentar('3b34403a-a7d6-4a48-a8d7-737e8cababdc', '2026-11-01', '2026-11-30') x;
   ms := round((extract(epoch from clock_timestamp() - t0) * 1000)::numeric, 1);
-  execute 'explain (analyze, buffers, verbose, format json) ' || q into j;
-  raise notice '--- explain (analyze, buffers), fase vieja ---';
-  for linea in execute 'explain (analyze, buffers) ' || q loop raise notice '%', linea; end loop;
+  execute 'explain (verbose, format json) execute _politicas_vieja(''3b34403a-a7d6-4a48-a8d7-737e8cababdc'', ''2026-11-01'', ''2026-11-30'')' into j;
+  raise notice '--- explain (analyze, buffers), fase vieja, plan genérico (el de la función) ---';
+  for linea in execute 'explain (analyze, buffers) execute _politicas_vieja(''3b34403a-a7d6-4a48-a8d7-737e8cababdc'', ''2026-11-01'', ''2026-11-30'')' loop raise notice '%', linea; end loop;
+  execute 'deallocate _politicas_vieja';
   ok := ms < 1000 and j like '%InitPlan%' and j like '%current_user_account_ids%' and j not like '%belongs_to_account%';
   perform set_config('prueba.vieja', json_build_object('ms', ms, 'dias', n, 'huella', h, 'ok', ok,
     'initplan', j like '%InitPlan%', 'belongs', j like '%belongs_to_account%')::text, true);
