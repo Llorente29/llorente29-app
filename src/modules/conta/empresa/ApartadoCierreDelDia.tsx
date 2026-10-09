@@ -43,8 +43,10 @@ export function ApartadoCierreDelDia({ quien, movil }: { quien: Quien; movil: bo
     <TarjetaApartado titulo="Hora de cierre del día" movil={movil}
       accion={!editando ? <button type="button" className="cx-enlace" onClick={() => { setNueva(hora); setEditando(true); h.limpiar() }}>Cambiar</button> : undefined}>
       {!editando && (
-        <p style={{ margin: 0 }} data-testid="hora-cierre">
-          <strong>{horaParaLeer(hora)}</strong>{hora === HORA_DE_CIERRE_DE_SERIE ? ' (la de serie)' : ''}
+        <p style={{ margin: 0 }}>
+          {/* En el móvil la tarjeta no pinta su título: que el valor no se quede sin decir qué es. */}
+          {movil && 'Hora de cierre del día: '}
+          <span data-testid="hora-cierre"><strong>{horaParaLeer(hora)}</strong>{hora === HORA_DE_CIERRE_DE_SERIE ? ' (la de serie)' : ''}</span>
         </p>
       )}
       <p className="cx-ayuda">A esa hora se dan por terminadas las ventas del día anterior. Un pedido que siga abierto se cierra como no confirmado.</p>

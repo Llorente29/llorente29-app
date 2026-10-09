@@ -58,7 +58,9 @@ test('A · el libro dice cuándo se cierra hoy, como información', async ({ pag
 test('A · Ajustes › Ejercicio: «Hora de cierre del día», y cambiarla confirma en pantalla', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/ajustes/ejercicio')
-  await expect(page.getByText('Hora de cierre del día', { exact: true }).first()).toBeVisible()
+  // En el ordenador la tarjeta lleva su título; en el móvil, su nombre y la etiqueta delante del valor.
+  await expect(page.getByRole('region', { name: 'Hora de cierre del día' })).toBeVisible()
+  if (lado(page) === 'movil') await expect(page.getByText('Hora de cierre del día: 6:00 (la de serie)')).toBeVisible()
   await expect(page.getByTestId('hora-cierre')).toHaveText('6:00 (la de serie)')
   await expect(page.getByText('A esa hora se dan por terminadas las ventas del día anterior. Un pedido que siga abierto se cierra como no confirmado.')).toBeVisible()
   await capturar(page, 'ajustes-hora-cierre')
