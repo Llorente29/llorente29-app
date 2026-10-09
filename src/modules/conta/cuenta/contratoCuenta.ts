@@ -20,6 +20,7 @@
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import { supabase } from '@/lib/supabase'
+import { mensaje } from '@/modules/conta/services/bd'
 
 export interface CuentaConta {
   accountId: string | null
@@ -78,6 +79,6 @@ export async function leerDatosDeLaCuenta(accountId: string): Promise<DatosDeLaC
     .select('name, legal_name, cif, billing_address')
     .eq('id', accountId)
     .maybeSingle()
-  if (error) throw new Error(`No se han podido leer los datos de la cuenta: ${error.message}`)
+  if (error) throw new Error(mensaje('No se han podido leer los datos de la cuenta', error))
   return leerFilaDeCuenta(data as Record<string, unknown> | null)
 }

@@ -143,7 +143,7 @@ export async function confirmar430(
     // nadie lo viera. Lo que se dice en pantalla sale de la base, no de la casilla.
     const { data, error } = await tabla('party').select('archived_at').eq('id', id).eq('account_id', ctx.accountId).maybeSingle()
     if (error || !(data as { archived_at: string | null } | null)?.archived_at) {
-      throw new Error(`${nombre} queda como socio de marca y cliente con ${c.code}, pero NO se ha podido archivar${error ? `: ${error.message}` : ''}. Archívalo desde «···» en su fila.`)
+      throw new Error(`${error ? mensaje(`${nombre} queda como socio de marca y cliente con ${c.code}, pero NO se ha podido archivar`, error) : `${nombre} queda como socio de marca y cliente con ${c.code}, pero NO se ha podido archivar`}. Archívalo desde «···» en su fila.`)
     }
   }
   return queHace(c, p, opciones.archivar)

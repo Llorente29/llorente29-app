@@ -22,10 +22,14 @@
 //     aplicada: las cuatro en el historial de producción con la huella del
 //     repositorio (medido el 09/10). Copia fija en tanda-c04r-20261008.txt, con
 //     su vuelta atrás en vuelta-atras-c04r-20261008.txt.
-//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): C05
-//     (libros y balances), con el contexto de producción leído en solo lectura
-//     el 09/10 y la regla del W01 (`informe`, la misma del ensayo). Al reescribir
-//     el manifiesto para otra tanda, esta parte se reescribe con él.
+//   · La del C05 (libros y balances), ya aplicada: los seis en el historial de
+//     producción con la huella del repositorio (medido el 09/10). Copia fija en
+//     tanda-c05-20261009.txt, con su vuelta atrás en vuelta-atras-c05-20261009.txt.
+//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): las
+//     políticas de lectura de contabilidad una vez por consulta, con el
+//     contexto de producción leído en solo lectura el 09/10 y la regla del W01
+//     (`informe`, la misma del ensayo). Al reescribir el manifiesto para otra
+//     tanda, esta parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -351,8 +355,8 @@ describe('la tanda del C04 R4 (ya aplicada: las cuatro en el historial de produc
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): C05 — libros y balances', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda del C05 — libros y balances (ya aplicada: los seis en el historial de producción con su huella), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c05-20261009.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow (sqlContexto)
   // sobre estos seis ficheros, lanzada en solo lectura en producción el 09/10:
@@ -385,6 +389,48 @@ describe('la tanda de AHORA (manifiesto vivo): C05 — libros y balances', () =>
     expect(nombradas).toEqual([])
   })
   it('su vuelta atrás son sus seis .down.sql, al revés, y existen', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c05-20261009.txt')
+    expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+    for (const f of atras) expect(existsSync(f), f).toBe(true)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): las políticas de lectura de contabilidad, una vez por consulta', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow (sqlContexto)
+  // sobre estos dos ficheros, lanzada en solo lectura en producción el 09/10:
+  // existen las 49 tablas; sales_day_summary está en el camino del pedido (por
+  // el nombre, «sales_.*»); nada en el historial.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-politicas-20261009.json', 'utf8'))
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const bloque = (f: string) => r.markdown.split('### ').find((b) => b.startsWith(`\`${f}\``))!
+  const medidas = JSON.parse(readFileSync('tests/conta/produccion/politicas-c00-c05-produccion-20261009.json', 'utf8')) as { t: string; p: string }[]
+  const PRUEBA = 'supabase/staging/sql/20261015_politicas_prueba.sql'
+
+  it('las dos, la de las 48 primero y la de sales_day_summary después', () => {
+    expect(viva).toEqual(['supabase/migrations/20261015T0100_politicas_una_vez.sql', 'supabase/migrations/20261015T0110_politicas_una_vez_resumen.sql'])
+  })
+  it('entre las dos cambian EXACTAMENTE las 49 políticas medidas en producción, cada una una vez', () => {
+    const cambiadas = viva.flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/^create policy (\S+) on public\.(\S+) as permissive for select/gm)].map((m) => `${m[2]}.${m[1]}`))
+    expect(cambiadas.length).toBe(49)
+    expect([...cambiadas].sort()).toEqual(medidas.map((x) => `${x.t}.${x.p}`).sort())
+  })
+  it('la de las 48 sigue sola; la de sales_day_summary pide «autorizo» por el camino del pedido', () => {
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue', [viva[1]]: 'autorizo' })
+    expect(bloque(viva[1])).toContain('camino del pedido: autorizo')
+  })
+  it('cada política la declara su cabecera, con la prueba de staging, que existe y nombra las 49 tablas', () => {
+    expect((bloque(viva[0]).match(/declarado, prueba/g) ?? []).length).toBe(48 * 2)
+    const prueba = readFileSync(PRUEBA, 'utf8')
+    for (const { t } of medidas) expect(prueba, t).toMatch(new RegExp(`\\b${t}\\b`))
+  })
+  it('la cabecera del manifiesto nombra para «autorizo» solo la de sales_day_summary', () => {
+    const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
+    expect(nombradas).toEqual(['20261015T0110_politicas_una_vez_resumen.sql'])
+  })
+  it('su vuelta atrás son sus dos .down.sql, al revés, y existen', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     for (const f of atras) expect(existsSync(f), f).toBe(true)
