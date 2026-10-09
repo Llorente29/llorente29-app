@@ -393,15 +393,22 @@ begin
   end if;
   insert into _caminos values ('apuntar una merma', 'merma ' || v_r.waste_id || ', ' || coalesce(round(v_r.cost_eur, 2)::text, '—') || ' €');
 
-  -- d) Aprobar un recuento: lo contado igual a lo que dice el sistema.
+  -- d) Aprobar un recuento, por la puerta de la pantalla: se abre, se cuenta
+  --    con save_count_line (lo mismo que dice el sistema), se cierra con
+  --    close_inventory_count y se aprueba con apply_inventory_count.
   insert into public.inventory_count (id, account_id, location_id, status, kind)
-  values (v_rec, v_acc, v_loc, 'en_revision', 'full');
-  insert into public.inventory_count_line (account_id, inventory_count_id, recipe_item_id, system_qty, counted_qty, within_tolerance)
-  select v_acc, v_rec, v_crudo, coalesce(r.qty_on_hand, 0), coalesce(r.qty_on_hand, 0), true
-    from (select (select x.qty_on_hand from public.recipe_item_location_stock x where x.recipe_item_id = v_crudo and x.location_id = v_loc) qty_on_hand) r;
+  values (v_rec, v_acc, v_loc, 'contando', 'full');
+  insert into public.inventory_count_line (id, account_id, inventory_count_id, recipe_item_id, system_qty)
+  values ('cd000000-0000-4000-8000-000000000402', v_acc, v_rec, v_crudo,
+          (select x.qty_on_hand from public.recipe_item_location_stock x where x.recipe_item_id = v_crudo and x.location_id = v_loc));
+  perform public.save_count_line('cd000000-0000-4000-8000-000000000402',
+          jsonb_build_array(jsonb_build_object('method', 'peso', 'qty',
+            (select greatest(x.qty_on_hand, 0) from public.recipe_item_location_stock x where x.recipe_item_id = v_crudo and x.location_id = v_loc))),
+          null, 'c01a0000-0000-4000-8000-0000000000a1', null);
+  perform public.close_inventory_count(v_rec);
   select * into v_r from public.apply_inventory_count(v_rec, 'c01a0000-0000-4000-8000-0000000000a1', 'Prueba', false);
   if (select status from public.inventory_count where id = v_rec) <> 'aprobado' then
-    raise exception 'PRUEBA cierre · 7d: el recuento no ha quedado aprobado.';
+    raise exception 'PRUEBA cierre · 7d: el recuento no ha quedado aprobado (está %).', (select status from public.inventory_count where id = v_rec);
   end if;
   insert into _caminos values ('aprobar un recuento', v_r.adjustments || ' ajuste(s), ' || v_r.items_recomputed || ' artículo(s) recalculados');
 end $$;

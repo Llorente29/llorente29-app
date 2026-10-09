@@ -9,13 +9,12 @@
 #   0140: el cron de cada hora (a los :07). En staging también: es la prueba
 #         del procedimiento con COMMIT por empresa, que no se puede llamar
 #         dentro de la transacción de la prueba.
+#   Run 106 (b698cc1): las CINCO migraciones APLICADAS en staging. La prueba,
+#   pasos 1 a 6 en verde; paró en 7d: un recuento solo se escribe por
+#   save_count_line (la puerta del 10/09). Va otra vez por la puerta, y ya
+#   sin las migraciones (su guarda pararía: ya no están como antes).
 #   La prueba: la forma de los 20 de producción, el cierre, lo que se toca y
 #   lo que no, la frontera de las 6:00, A y B, regenerar, los cuatro caminos
 #   de la regla 10, la versión ROTA a propósito, los cambios de hora y < 1 s.
 #   Todo en una transacción con ROLLBACK.
-supabase/migrations/20261016T0100_cierre_del_dia.sql
-supabase/migrations/20261016T0110_cierre_del_dia_consumo.sql
-supabase/migrations/20261016T0120_cierre_del_dia_proponer.sql
-supabase/migrations/20261016T0130_cierre_del_dia_retirar.sql
-supabase/migrations/20261016T0140_cierre_del_dia_cron.sql
 supabase/staging/sql/20261016_cierre_del_dia_prueba.sql
