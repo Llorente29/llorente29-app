@@ -265,7 +265,7 @@ function terceroCliente(base: Base, c: CuentaClasificada, nif: string | null, po
   // Con NIF es un tercero de verdad: cliente, hasta que el C03 traiga su ficha.
   // Sin NIF puede ser un cliente o una cuenta tuya («Glovo Ventas»): lo dice la persona.
   return nif
-    ? { ...base, decision: { tipo: 'sin_ficha', nota: 'cliente_c03' }, confianza: 'seguro', porque: 'solo es cliente: entra con su número; su ficha llega con el C03', opciones: [sinFicha] }
+    ? { ...base, decision: { tipo: 'sin_ficha', nota: 'cliente_c03' }, confianza: 'seguro', porque: 'solo es cliente: entra con su número; su ficha se completa en Clientes y proveedores', opciones: [sinFicha] }
     : { ...base, decision: { tipo: 'pendiente' }, confianza: 'decide', porque: 'sin NIF y no es ninguno de tus proveedores: ¿es un cliente o una cuenta tuya?', opciones: [soloCliente, sinFicha] }
 }
 

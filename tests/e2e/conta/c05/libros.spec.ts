@@ -161,8 +161,16 @@ test('Cuentas anuales: el modelo que toca, con sus cifras y su cita', async ({ p
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros/anuales/cuentas-anuales')
-  await expect(page.getByRole('region', { name: 'Qué modelo te toca' })).toContainText('LSC art. 257.1')
+  const toca = page.getByRole('region', { name: 'Qué modelo te toca' })
+  await expect(toca).toContainText('LSC art. 257.1')
+  // El texto ocupa el ancho del recuadro, no una columna de cuatro (antes, 259 de 1094 px).
+  const caja = (await toca.boundingBox())!
+  const texto = (await toca.locator(':scope > div').nth(1).boundingBox())!
+  expect(texto.width).toBeGreaterThan(caja.width * 0.6)
   await expect(page.getByRole('table', { name: 'Cifras con las que se decide' })).toBeVisible()
+  // Ningún código de encargo a la vista: lo que aún no está dice «Próximamente».
+  await expect(page.locator('body')).not.toContainText(/\bC0\d[a-z]?\b/)
+  await expect(page.getByText('Memoria: próximamente.')).toBeVisible()
   await capturar(page, 'cuentas-anuales')
 })
 

@@ -74,7 +74,9 @@
 
 /* Barra de la IA */
 .cxl-ia {
-  display: grid; grid-template-columns: 220px repeat(3, minmax(0, 1fr)); gap: 18px; padding: 16px 20px;
+  /* El título y una columna por nota, las que haya: una sola nota («El modelo
+     que te toca», una PyG con una nota) ocupa todo el ancho; tres se reparten. */
+  display: grid; grid-template-columns: 220px; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 18px; padding: 16px 20px;
   background: var(--cx-verde-suave); border: 1px solid var(--cx-ia-borde); border-radius: var(--cx-radio-tarjeta); color: var(--cx-ia-apoyo); font-size: 14px;
 }
 .cxl-ia-titulo { font-weight: 700; color: var(--cx-texto); font-size: 17px; display: flex; gap: 8px; align-items: baseline; }
@@ -120,7 +122,7 @@
 
 @media (max-width: 1100px) {
   .cxl-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cxl-ia { grid-template-columns: 1fr; }
+  .cxl-ia { grid-template-columns: 1fr; grid-auto-flow: row; }
   .cxl-estados { grid-template-columns: 1fr; }
 }
 

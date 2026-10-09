@@ -93,9 +93,9 @@ function estados(r: ResumenLibros | null, nombreTrimestre: string, ctx: Pick<Con
   e['balances-excel'] = { texto: 'balance y PyG', tono: 'gris' }
   e['cuentas-anuales'] = ej.modelo ? { texto: `modelo ${ej.modelo.elegido}`, tono: 'verde' } : { texto: 'elegir modelo', tono: 'ambar' }
   e.mapeo = { texto: 'de serie (PGC)', tono: 'gris' }
-  e.memoria = { texto: 'C05b', tono: 'gris' }
-  e.legalizacion = { texto: 'C05b', tono: 'gris' }
-  e.deposito = { texto: 'C05b', tono: 'gris' }
+  e.memoria = { texto: 'Próximamente', tono: 'gris' }
+  e.legalizacion = { texto: 'Próximamente', tono: 'gris' }
+  e.deposito = { texto: 'Próximamente', tono: 'gris' }
   e.ejercicios = { texto: `${ctx.ejercicios.length} ${ctx.ejercicios.length === 1 ? 'ejercicio' : 'ejercicios'}`, tono: 'gris' }
   e['cerrar-mes'] = { texto: 'mes a mes', tono: 'gris' }
   e['cierre-ejercicio'] = ej.origen === 'migrated' ? { texto: 'traído', tono: 'gris' }

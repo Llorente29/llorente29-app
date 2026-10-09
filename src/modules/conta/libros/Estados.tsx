@@ -247,7 +247,7 @@ function BarraIa({ calc, estado, modelo, plantilla }: {
     else if (capital > 0 && pn < capital / 2) notas.push({ titulo: 'Patrimonio neto por debajo de la mitad del capital.', texto: 'Es causa de disolución si sigue así al cierre (LSC art. 363.1.e), salvo que se aumente o reduzca el capital. Solo es un aviso.' })
   }
   const otrosRes = calc.pyg.lineas.find((l) => l.code === 'OR')
-  if (otrosRes && otrosRes.cuentas.length) notas.push({ titulo: 'Hay «Otros resultados».', texto: 'La memoria tiene que explicarlos (norma de elaboración de la PyG). Queda apuntado para la memoria (C05b).' })
+  if (otrosRes && otrosRes.cuentas.length) notas.push({ titulo: 'Hay «Otros resultados».', texto: 'La memoria tiene que explicarlos (norma de elaboración de la PyG). Queda apuntado para la memoria.' })
   if (calc.actual.sinSitio.length) notas.push({ titulo: `${calc.actual.sinSitio.length} ${calc.actual.sinSitio.length === 1 ? 'cuenta' : 'cuentas'} sin sitio en el modelo.`, texto: 'Salen en rojo debajo, con su saldo. Sin línea no se puede presentar.', enlace: { a: rutaLibros('anuales', 'mapeo'), texto: 'Colocar' } })
   const defecto = calc.actual.porDefecto.length
   if (defecto) notas.push({ titulo: `${defecto} ${defecto === 1 ? 'cuenta colocada' : 'cuentas colocadas'} por defecto.`, texto: 'El modelo no las nombra: van con su hermana más parecida. Revísalas.', enlace: { a: rutaLibros('anuales', 'mapeo'), texto: 'Completar' } })

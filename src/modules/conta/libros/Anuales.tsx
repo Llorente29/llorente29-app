@@ -119,7 +119,7 @@ export function CuentasAnuales() {
               <li><Link to={rutaLibros('balances', 'pyg')}>Pérdidas y ganancias</Link>{prop.pygAbreviada && prop.modelo === 'normal' ? ' (puede ser abreviada)' : ''}</li>
               <li><Link to={rutaLibros('balances', 'ecpn')}>Cambios en el patrimonio neto</Link></li>
               <li><Link to={rutaLibros('anuales', 'mapeo')}>Qué cuentas alimentan cada línea</Link></li>
-              <li>Memoria: en el C05b.</li>
+              <li>Memoria: próximamente.</li>
             </ul>
           </div>
         </>
@@ -313,7 +313,7 @@ export function PendienteC05b({ que }: { que: keyof typeof C05B }) {
   return (
     <section className="cxl-pagina" aria-label={x.titulo}>
       <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cuentas anuales y Registro' }]} /><h2>{x.titulo}</h2></div></div>
-      <div className="cx-tarjeta cxl-c05b"><Vacio titulo="Llega en la siguiente entrega (C05b)." explicacion={`${x.texto} Mientras tanto, el balance y la PyG ya salen en PDF y Excel desde Balances.`} accion={<Link to={rutaLibros('balances', 'balance')} className="cx-boton-sec">Ir a Balances</Link>} /></div>
+      <div className="cx-tarjeta cxl-c05b"><Vacio titulo="Próximamente." explicacion={`${x.texto} Mientras tanto, el balance y la PyG ya salen en PDF y Excel desde Balances.`} accion={<Link to={rutaLibros('balances', 'balance')} className="cx-boton-sec">Ir a Balances</Link>} /></div>
     </section>
   )
 }

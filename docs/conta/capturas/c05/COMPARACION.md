@@ -169,3 +169,25 @@ Geist y las acciones de `navegacion.ts`, a 1110 px:
 - Cuentas anuales, en 2 con «Tuyos» arriba.
 
 La e2e lo vigila con las posiciones de los grupos.
+
+## Antes de fusionar (pedido de Julio tras la e2e 155)
+
+1. **Ningún código de encargo a la vista.** «C05b» (barra de Cuentas anuales
+   y Registro, «Los estados», las tres pantallas de memoria, legalización y
+   depósito, y la nota de «Otros resultados») dice ahora «Próximamente». De
+   paso, dos más del módulo que veía el usuario:
+   - «sus apuntes con el C04» en la plataforma → «se asienta en el libro
+     diario»;
+   - «su ficha llega con el C03» al traer el plan → «su ficha se completa en
+     Clientes y proveedores». El C03 ya existe, así que además estaba desfasado.
+   - El fixture `tests/e2e/conta/c03/diez-traido.json` se regeneró con su
+     script; solo cambia esa frase.
+   - La e2e de Cuentas anuales mira que la página no tenga ningún `C0x`.
+2. **«El modelo que te toca» ocupa el ancho del recuadro.** La barra de la IA
+   era una rejilla fija de título más tres columnas: un texto solo ocupaba una.
+   Ahora hay una columna por nota, las que haya. Medido con los CSS reales a
+   1110 px:
+   - una nota pasa de 259 a 814 px;
+   - tres siguen en 259 cada una;
+   - el móvil no cambia.
+   Arregla también «Lo que veo» de la PyG cuando trae una sola nota.
