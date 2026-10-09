@@ -42,6 +42,13 @@ Encargo de Julio del 09/10. Rama `conta/cierre-del-dia`, PR #171.
 - la hora de cierre en Ajustes, cambiada y devuelta;
 - RLS: B no ve nada de A.
 
+Verde en la ejecución **164** (sobre `2ae0219`), las cuatro en los dos tamaños.
+La 163 se quedó en rojo por una: en el móvil, la tarjeta de Ajustes no decía de
+qué era la hora («6:00 (la de serie)» a secas). Ahora dice «Hora de cierre del
+día: 6:00 (la de serie)». Capturas en `docs/conta/capturas/cierre/` (las subió
+el e2e en `813ecee`), comparadas una a una con el encargo en su
+`COMPARACION.md`.
+
 **Agente «Libro diario»**: pone en rojo cualquier pedido de marca propia que siga abierto en un día ya cerrado. Lo da por empresa: cuántos, el día más antiguo y las horas desde que acabó.
 
 ## Lo que decidí yo y hay que mirar
