@@ -73,8 +73,8 @@ begin
   insert into article_supplier (account_id, recipe_item_id, supplier_id, supplier_code, is_preferred) values (c_cuenta, c_a3, v_g, 'Z3', true);
 
   insert into supplier_learning (account_id, supplier_id, campo, valor, etiqueta, porque)
-  values (c_cuenta, v_q, 'iva', '10', 'IVA', 'prueba'), (c_cuenta, v_g, 'iva', '21', 'IVA', 'prueba'),
-         (c_cuenta, v_g, 'forma_pago', 'transfer', 'Forma de pago', 'prueba');
+  values (c_cuenta, v_q, 'tax_rates', '10', 'IVA', 'prueba'), (c_cuenta, v_g, 'tax_rates', '21', 'IVA', 'prueba'),
+         (c_cuenta, v_g, 'payment', 'transfer', 'Forma de pago', 'prueba');
   insert into supplier_contact (account_id, supplier_id, name, is_primary)
   values (c_cuenta, v_q, 'Ana', true), (c_cuenta, v_g, 'Luis', true), (c_cuenta, v_g, 'Marta', false);
 

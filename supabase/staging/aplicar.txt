@@ -13,4 +13,8 @@
 #   alta un artículo de proveedor recalcula su coste y mira quién lo hace.
 #   Ahora siembra como el administrador de A, prueba las puertas sin usuario
 #   y gana el paso 8 (con usuario, la puerta une y deshace).
+#   Run 114 (099ee2f): paró al sembrar lo aprendido: 'iva' y 'forma_pago' no
+#   son campos admitidos (supplier_learning_campo_check: expense_category,
+#   tax_rates, withholding, payment, iban). Ahora 'tax_rates' en las dos
+#   (choca) y 'payment' solo en G.
 supabase/staging/sql/20261017_compras_fusion_prueba.sql
