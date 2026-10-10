@@ -36,7 +36,7 @@ export class FicheroNoValido extends Error {}
 // El build «legacy» de pdfjs: el normal pide un navegador muy reciente, y quien
 // trae su plan puede venir de un ordenador de oficina con años.
 let cargado: Promise<PdfJs> | null = null
-function pdfjs(): Promise<PdfJs> {
+export function pdfjs(): Promise<PdfJs> {
   cargado ??= Promise.all([
     import('pdfjs-dist/legacy/build/pdf.mjs'),
     import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'),

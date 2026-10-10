@@ -370,10 +370,18 @@ export interface EntradaFactura {
   terceroId: string | null
   /** El proveedor es el socio de marca: lo suyo va por su liquidación. */
   esSocio: boolean
+  /** Compras (10/10), §2.6: sin NIF en la ficha no se propone (el IVA no se deduce). */
+  tieneNif: boolean
   localId: string | null
   lineas: readonly LineaFactura[]
   total: number
   retencion: { tipoId: string; porcentaje: number; base: number; importe: number; modelo: '111' | '115' | '123' } | null
+  /**
+   * Compras (repaso, 10/10): «Apuntarla sin descontar el IVA». La factura no va
+   * a nombre de la empresa: su IVA es más gasto, no va a la 472 ni al libro de
+   * recibidas como deducible (supplier_invoice.vat_non_deductible).
+   */
+  ivaNoDeducible?: boolean
 }
 export interface CuentasFactura {
   proveedor: string
@@ -383,15 +391,49 @@ export interface CuentasFactura {
 
 export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propuesta: Propuesta | null; sinPropuesta: string | null } {
   if (f.esSocio) return { propuesta: null, sinPropuesta: `${f.proveedor} es tu socio de marca: lo que te vende a su nombre no es gasto tuyo, va en su liquidación mensual.` }
+  // Compras (10/10), §2.6: lo que falta en la ficha se dice, no se tapa. Una
+  // factura sin NIF o sin tipo de gasto NO cae a una cuenta genérica.
+  if (!f.tieneNif && !f.ivaNoDeducible) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.` }
+  if (f.lineas.some((l) => !l.cuentaGasto)) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el tipo de gasto: ponlo en su ficha y la factura se propone.` }
   const razones: Razon[] = []
   const avisos: string[] = []
   const confs: Confianza[] = []
   const loc = f.localId
   const lineas: LineaAsiento[] = []
   const gastos = new Map<string, number>()
-  for (const l of f.lineas) {
-    if (!l.cuentaGasto) { avisos.push('Hay líneas sin cuenta de gasto: dile su tipo de gasto al proveedor.'); confs.push('duda'); continue }
-    gastos.set(l.cuentaGasto, (gastos.get(l.cuentaGasto) ?? 0) + cent(l.base))
+  for (const l of f.lineas) gastos.set(l.cuentaGasto!, (gastos.get(l.cuentaGasto!) ?? 0) + cent(l.base))
+  if (f.ivaNoDeducible) {
+    // La cuota, por cuenta de gasto y tipo, se suma a su gasto: no hay 472.
+    const porCuentaTipo = new Map<string, { cuenta: string; pct: number; base: number }>()
+    for (const l of f.lineas) {
+      const pct = l.tipo?.porcentaje ?? 0
+      const k = `${l.cuentaGasto}|${pct}`
+      const x = porCuentaTipo.get(k) ?? { cuenta: l.cuentaGasto!, pct, base: 0 }
+      x.base += cent(l.base)
+      porCuentaTipo.set(k, x)
+    }
+    let ivaNd = 0
+    for (const x of porCuentaTipo.values()) {
+      if (!x.pct) continue
+      const cuota = cent(cuotaIva(deCent(x.base), x.pct))
+      ivaNd += cuota
+      gastos.set(x.cuenta, (gastos.get(x.cuenta) ?? 0) + cuota)
+    }
+    for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
+    const totalNd = f.lineas.reduce((t, l) => t + cent(l.base), 0) + ivaNd
+    lineas.push({ cuenta: c.proveedor, debe: 0, haber: deCent(totalNd), localId: loc, comun: !loc, documento: f.numero, terceroId: f.terceroId })
+    if (totalNd !== cent(f.total)) { avisos.push(`Base + IVA = ${eurosExactos(deCent(totalNd))}, y la factura dice ${eurosExactos(f.total)}.`); confs.push('duda') }
+    razones.push({ decision: 'IVA como más gasto', porque: 'la factura no va a nombre de tu empresa: su IVA no se descuenta, no va a la 472 ni al libro de recibidas como deducible' })
+    if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+    return {
+      sinPropuesta: null,
+      propuesta: {
+        serie: 2, fecha: f.fecha, concepto: `Factura ${f.proveedor}${f.numero ? ` · ${f.numero}` : ''} (sin descontar el IVA)`, origen: { tipo: 'supplier_invoice', id: f.id },
+        lineas, confianza: peor('seguro', ...confs),
+        porque: 'Gasto con su IVA dentro y el total a su cuenta: la factura no va a nombre de tu empresa.',
+        razones, avisos, terceroId: f.terceroId, documento: f.numero,
+      },
+    }
   }
   for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
   const porTipo = new Map<number, { id: string; base: number }>()
@@ -433,6 +475,67 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
       porque: `Gasto por su tipo, IVA por tipo${f.retencion ? ', retención' : ''} y el total a su cuenta.`,
       razones, avisos, terceroId: f.terceroId, documento: f.numero,
     },
+  }
+}
+
+// ── Compras (10/10), §2.4: lo recibido sin factura al cierre del mes ──────
+// UN asiento por proveedor y local el último día del mes (gasto contra
+// «proveedores, facturas pendientes de recibir», 4009) y su contrario el día
+// 1 del siguiente. Dice de qué recepciones sale. Sin tipo de gasto no cae a
+// una cuenta genérica (§2.6): no se propone.
+
+export interface EntradaFinDeMes {
+  /** purchase_accrual.id: el origen de los dos asientos. */
+  id: string
+  /** Primer día del mes, AAAA-MM-01. */
+  mes: string
+  proveedor: string
+  terceroId: string | null
+  localId: string | null
+  nombreLocal: string | null
+  base: number
+  recepciones: readonly { codigo: string | null; fecha: string; base: number | null }[]
+  /** Recepciones sin importe: no están en la base, y se dice. */
+  sinBase: number
+}
+
+const MESES_FIN = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`
+
+export function finDeMesCompras(e: EntradaFinDeMes, c: { gasto: string | null; pendiente: string | null }):
+  { propuestas: Propuesta[]; sinPropuesta: string | null } {
+  const nombreMes = MESES_FIN[Number(e.mes.slice(5, 7)) - 1]
+  if (!c.gasto) return { propuestas: [], sinPropuesta: `A ${e.proveedor} le falta el tipo de gasto: ponlo en su ficha y lo recibido sin factura de ${nombreMes} se propone.` }
+  if (!c.pendiente) return { propuestas: [], sinPropuesta: 'Falta en tu plan la cuenta de facturas pendientes de recibir (4009).' }
+  if (cent(e.base) <= 0) return { propuestas: [], sinPropuesta: `Lo recibido sin factura de ${e.proveedor} en ${nombreMes} no trae importe: no hay nada que apuntar.` }
+  const [a, m] = [Number(e.mes.slice(0, 4)), Number(e.mes.slice(5, 7))]
+  const fin = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10)
+  const uno = new Date(Date.UTC(a, m, 1)).toISOString().slice(0, 10)
+  const base = deCent(cent(e.base))
+  const loc = e.localId
+  const deDonde = e.recepciones.map((r) => `${r.codigo ?? 'sin código'} (${ddmm(r.fecha)}${r.base === null ? ', sin importe' : `, ${eurosExactos(r.base)}`})`).join(', ')
+  const razones: Razon[] = [
+    { decision: `${e.recepciones.length} recepción(es) sin factura a ${ddmm(fin)}`, porque: deDonde },
+    { decision: 'Gasto contra facturas pendientes de recibir', porque: 'el género ya es tuyo aunque la factura llegue después; el día 1 se da la vuelta y el gasto lo pone la factura' },
+  ]
+  const avisos = e.sinBase > 0 ? [`${e.sinBase} recepción(es) sin importe no están en la cifra.`] : []
+  const confianza: Confianza = e.sinBase > 0 ? 'duda' : 'seguro'
+  const donde = e.nombreLocal ? ` · ${e.nombreLocal}` : ''
+  const mk = (fecha: string, tipo: 'purchase_accrual' | 'purchase_accrual_reversal', concepto: string, alReves: boolean): Propuesta => ({
+    serie: 2, fecha, concepto, origen: { tipo, id: e.id },
+    lineas: [
+      { cuenta: c.gasto!, debe: alReves ? 0 : base, haber: alReves ? base : 0, localId: loc, comun: !loc },
+      { cuenta: c.pendiente!, debe: alReves ? base : 0, haber: alReves ? 0 : base, localId: loc, comun: !loc, terceroId: e.terceroId },
+    ],
+    confianza, porque: alReves ? `Da la vuelta al del ${ddmm(fin)}: el gasto lo pone su factura.` : `Lo recibido de ${e.proveedor} en ${nombreMes} sin factura todavía.`,
+    razones, avisos, terceroId: e.terceroId,
+  })
+  return {
+    sinPropuesta: null,
+    propuestas: [
+      mk(fin, 'purchase_accrual', `Recibido sin factura · ${e.proveedor}${donde} · ${nombreMes}`, false),
+      mk(uno, 'purchase_accrual_reversal', `Contrario del recibido sin factura · ${e.proveedor}${donde} · ${nombreMes}`, true),
+    ],
   }
 }
 
@@ -536,6 +639,181 @@ export function liquidacionSocio(s: EntradaSocio, c: CuentasSocio): { propuesta:
 }
 
 // ── Nómina ──────────────────────────────────────────────────────────────────
+
+// ── Compras (10/10), §2.5: la liquidación mensual, desde sus documentos ────
+// Tres asientos, con los dos documentos con valor fiscal que manda cada mes:
+//   · su factura → compra, con sus tipos de IVA, a su cuenta de proveedor
+//     (origen supplier_invoice: la factura queda registrada como recibida);
+//   · la factura que le haces (la extiende él en tu nombre) → ingreso, con su
+//     IVA, a su cuenta de cliente, y al libro de expedidas con SU número;
+//   · la compensación de una con otra (origen supplier_payment de su factura:
+//     se la «pagas» con lo que te debe). Lo que queda en su cuenta de cliente
+//     es lo que te paga por el banco.
+// Ni sus ventas ni el género que manda pasan por tu dinero: no se apunta nada
+// «cobrado por cuenta de él». Lo que el lector no sabe qué es, para (bloqueos).
+
+export interface FacturaLiquidacion {
+  numero: string
+  fecha: string
+  lineas: readonly { concepto: string; base: number; tipo: number }[]
+  /** El total que dice el documento: manda (es lo que se paga). */
+  total: number
+}
+export interface EntradaLiquidacionMensual {
+  /** licensed_settlement.id */
+  id: string
+  /** supplier_invoice.id de su factura, registrada al guardar la liquidación. */
+  facturaRecibidaId: string
+  socio: string
+  terceroId: string | null
+  localId: string | null
+  /** La que le haces: tú le facturas. */
+  emitida: FacturaLiquidacion
+  /** La suya: él te factura. */
+  recibida: FacturaLiquidacion
+  /** El saldo que dice la transacción (null si no vino). */
+  saldo: number | null
+  /** Lo que el lector no ha podido dar por bueno. */
+  bloqueos: readonly string[]
+}
+export interface CuentasLiquidacionMensual {
+  cliente: string | null
+  proveedor: string | null
+  compras: string | null
+  ingresoServicios: string | null
+  ingresoMercaderias: string | null
+  ivaRepercutido: (porcentaje: number) => { cuenta: string; tipoId: string } | null
+  ivaSoportado: (porcentaje: number) => { cuenta: string; tipoId: string } | null
+  /** Donde va el céntimo que un documento redondea en su total: 669 si pagas o cobras de más, 769 si de menos. */
+  redondeoGasto: string | null
+  redondeoIngreso: string | null
+}
+
+/**
+ * Las cuotas por tipo, EXACTAS (base del tipo × tipo, al céntimo: regla 5 del
+ * libro, y la del papel), y lo que el documento redondea en su total aparte.
+ * Hay documentos que calculan el total con el IVA sin redondear por tipo: su
+ * total difiere en un céntimo de la suma de sus líneas. Ese céntimo no se
+ * esconde en una cuota: va a su línea de redondeo y se dice. Más de 1 céntimo
+ * por tipo no es redondeo: null.
+ */
+export function cuotasYRedondeo(lineas: readonly { base: number; tipo: number }[], total: number):
+  { porTipo: { tipo: number; base: number; cuota: number }[]; redondeo: number } | null {
+  const porTipo = new Map<number, number>()
+  for (const l of lineas) porTipo.set(l.tipo, (porTipo.get(l.tipo) ?? 0) + cent(l.base))
+  const filas = [...porTipo].sort((a, b) => a[0] - b[0]).map(([tipo, b]) => ({ tipo, base: deCent(b), cuota: cuotaIva(deCent(b), tipo) }))
+  const suma = filas.reduce((t, f) => t + cent(f.base) + cent(f.cuota), 0)
+  const redondeo = cent(total) - suma
+  if (Math.abs(redondeo) > filas.length) return null
+  return { porTipo: filas, redondeo: deCent(redondeo) }
+}
+
+const esMercaderia = (c: string) => /mercader/i.test(c)
+const esServicio = (c: string) => /servicio|fee|comisi|reparto|delivery|env[ií]o/i.test(c)
+
+export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiquidacionMensual):
+  { propuestas: Propuesta[]; sinPropuesta: string | null } {
+  const no = (porque: string) => ({ propuestas: [] as Propuesta[], sinPropuesta: porque })
+  if (e.bloqueos.length) return no(e.bloqueos.join(' '))
+  if (!c.proveedor) return no(`${e.socio} no tiene su cuenta de proveedor (Contabilidad de su ficha).`)
+  if (!c.cliente) return no(`${e.socio} no tiene su cuenta de cliente: es a quien le facturas.`)
+  if (!c.compras) return no(`A ${e.socio} le falta el tipo de gasto: ponlo en su ficha y su factura se propone.`)
+  const raras = e.emitida.lineas.filter((l) => !esMercaderia(l.concepto) && !esServicio(l.concepto))
+  if (raras.length) return no(`En la factura que le haces, Folvy no sabe si «${raras[0].concepto}» es un servicio o una venta de mercaderías: dímelo.`)
+  if (e.emitida.lineas.some((l) => esServicio(l.concepto)) && !c.ingresoServicios) return no('Falta en tu plan la cuenta de ingresos por servicios (705).')
+  if (e.emitida.lineas.some((l) => esMercaderia(l.concepto)) && !c.ingresoMercaderias) return no('Falta en tu plan la cuenta de ventas de mercaderías (700).')
+  const cuotasR = cuotasYRedondeo(e.recibida.lineas, e.recibida.total)
+  const cuotasE = cuotasYRedondeo(e.emitida.lineas, e.emitida.total)
+  if (!cuotasR) return no(`Su factura ${e.recibida.numero} no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.`)
+  if (!cuotasE) return no(`La factura que le haces ${e.emitida.numero} no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.`)
+  const saldo = deCent(cent(e.emitida.total) - cent(e.recibida.total))
+  if (e.saldo !== null && cent(e.saldo) !== cent(saldo)) return no(`La transacción dice ${eurosExactos(e.saldo)} de saldo y las dos facturas dan ${eurosExactos(saldo)}.`)
+  const loc = e.localId
+  const comun = !loc
+
+  // El céntimo que un documento redondea en su total, a su línea (o, si el
+  // plan no tiene 669/769, a la línea principal), y dicho.
+  const redondeo = (r: number, debeSiPositivo: boolean, que: string, total: number, principal: LineaAsiento, lineas: LineaAsiento[], avisos: string[]) => {
+    if (!cent(r)) return
+    const calculado = eurosExactos(deCent(cent(total) - cent(r)))
+    const aGasto = debeSiPositivo ? r > 0 : r < 0
+    const cta = aGasto ? c.redondeoGasto : c.redondeoIngreso
+    const imp = deCent(Math.abs(cent(r)))
+    if (cta) {
+      lineas.push({ cuenta: cta, debe: (debeSiPositivo ? r > 0 : r < 0) ? imp : 0, haber: (debeSiPositivo ? r > 0 : r < 0) ? 0 : imp, localId: loc, comun, concepto: `Redondeo del total de ${que}` })
+      avisos.push(`${que[0].toUpperCase()}${que.slice(1)} dice ${eurosExactos(total)}; base y cuota de cada tipo dan ${calculado}. Las cuotas van como en el papel y el ${imp === 0.01 ? 'céntimo' : 'redondeo'}, a «redondeos».`)
+    } else {
+      const lado = principal.debe ? 'debe' : 'haber'
+      principal[lado] = deCent(cent(principal[lado]) + (lado === 'debe' ? 1 : -1) * cent(r) * (debeSiPositivo ? 1 : -1))
+      avisos.push(`${que[0].toUpperCase()}${que.slice(1)} dice ${eurosExactos(total)} y base y cuota dan ${calculado}: el redondeo va a la línea principal (no hay 669/769 en tu plan).`)
+    }
+  }
+
+  // 1 · Su factura: la compra.
+  const avisosR: string[] = []
+  const lineasR: LineaAsiento[] = [{ cuenta: c.compras, debe: deCent(cent(e.recibida.lineas.reduce((t, l) => t + l.base, 0))), haber: 0, localId: loc, comun, documento: e.recibida.numero }]
+  for (const t of cuotasR.porTipo) {
+    if (t.tipo === 0) continue
+    const cta = c.ivaSoportado(t.tipo)
+    if (!cta) return no(`No hay 472 del ${t.tipo} % en tu plan.`)
+    lineasR.push({ cuenta: cta.cuenta, debe: t.cuota, haber: 0, localId: loc, comun, documento: e.recibida.numero, iva: { tipoId: cta.tipoId, tipo: t.tipo, base: t.base, libro: 'received', deducible: 'yes' } })
+  }
+  lineasR.push({ cuenta: c.proveedor, debe: 0, haber: e.recibida.total, localId: loc, comun, documento: e.recibida.numero, terceroId: e.terceroId })
+  // Pagas su total: si es más que lo calculado, la diferencia es gasto (debe); si es menos, ingreso (haber).
+  redondeo(cuotasR.redondeo, true, `su factura ${e.recibida.numero}`, e.recibida.total, lineasR[0], lineasR, avisosR)
+  const compra: Propuesta = {
+    serie: 2, fecha: e.recibida.fecha, concepto: `Factura ${e.socio} · ${e.recibida.numero}`, origen: { tipo: 'supplier_invoice', id: e.facturaRecibidaId },
+    lineas: lineasR, confianza: cuotasR.redondeo ? 'probable' : 'seguro',
+    porque: 'Lo que te factura cada mes: compra, con su IVA por tipo, a su cuenta de proveedor.',
+    razones: [{ decision: 'Su factura de la liquidación del mes', porque: 'no factura las entregas: sus albaranes no se apuntan uno a uno' }],
+    avisos: avisosR, terceroId: e.terceroId, documento: e.recibida.numero,
+  }
+
+  // 2 · La que le haces: el ingreso, a su cuenta de cliente y al libro de expedidas.
+  const servicios = e.emitida.lineas.filter((l) => esServicio(l.concepto)).reduce((t, l) => t + cent(l.base), 0)
+  const mercaderias = e.emitida.lineas.filter((l) => esMercaderia(l.concepto)).reduce((t, l) => t + cent(l.base), 0)
+  const lineasE: LineaAsiento[] = [{ cuenta: c.cliente, debe: e.emitida.total, haber: 0, localId: loc, comun, documento: e.emitida.numero, terceroId: e.terceroId }]
+  if (servicios) lineasE.push({ cuenta: c.ingresoServicios!, debe: 0, haber: deCent(servicios), localId: loc, comun, documento: e.emitida.numero, concepto: 'Servicios por sus ventas' })
+  if (mercaderias) lineasE.push({ cuenta: c.ingresoMercaderias!, debe: 0, haber: deCent(mercaderias), localId: loc, comun, documento: e.emitida.numero, concepto: 'Género que le pones tú' })
+  for (const t of cuotasE.porTipo) {
+    if (t.tipo === 0) continue
+    const cta = c.ivaRepercutido(t.tipo)
+    if (!cta) return no(`No hay 477 del ${t.tipo} % en tu plan.`)
+    lineasE.push({ cuenta: cta.cuenta, debe: 0, haber: t.cuota, localId: loc, comun, documento: e.emitida.numero, iva: { tipoId: cta.tipoId, tipo: t.tipo, base: t.base, libro: 'issued' } })
+  }
+  const avisosE: string[] = []
+  // Cobras su total: si es menos que lo calculado, la diferencia es gasto (debe); si es más, ingreso (haber).
+  redondeo(cuotasE.redondeo, false, `la factura que le haces ${e.emitida.numero}`, e.emitida.total, lineasE[1] ?? lineasE[0], lineasE, avisosE)
+  const ingreso: Propuesta = {
+    serie: 4, fecha: e.emitida.fecha, concepto: `Le facturas a ${e.socio} · ${e.emitida.numero}`, origen: { tipo: 'licensed_settlement', id: e.id },
+    lineas: lineasE, confianza: cuotasE.redondeo ? 'probable' : 'seguro',
+    porque: 'La factura que le haces (la extiende él en tu nombre): ingreso con su IVA, a su cuenta de cliente, con su número en el libro de expedidas.',
+    razones: [
+      { decision: 'Servicios a la 705, el género que pones tú a la 700', porque: 'cada línea por lo que es' },
+      { decision: `Nº ${e.emitida.numero} en el libro de expedidas`, porque: 'es una factura tuya aunque la haya extendido él' },
+    ],
+    avisos: avisosE,
+    terceroId: e.terceroId, documento: e.emitida.numero,
+  }
+
+  // 3 · La compensación: su factura se paga con lo que te debe.
+  const menor = Math.min(cent(e.emitida.total), cent(e.recibida.total))
+  const compensa: Propuesta = {
+    serie: 4, fecha: e.emitida.fecha > e.recibida.fecha ? e.emitida.fecha : e.recibida.fecha,
+    concepto: `Compensación con ${e.socio} · ${e.emitida.numero} y ${e.recibida.numero}`, origen: { tipo: 'supplier_payment', id: e.facturaRecibidaId },
+    lineas: [
+      { cuenta: c.proveedor, debe: deCent(menor), haber: 0, localId: loc, comun, documento: e.recibida.numero, terceroId: e.terceroId },
+      { cuenta: c.cliente, debe: 0, haber: deCent(menor), localId: loc, comun, documento: e.emitida.numero, terceroId: e.terceroId },
+    ],
+    confianza: 'seguro',
+    porque: saldo >= 0
+      ? `Su factura se paga con lo que te debe. Te paga ${eurosExactos(saldo)}: es lo que queda en su cuenta de cliente, y llega por el banco.`
+      : `Lo que le facturas se descuenta de su factura. Le pagas ${eurosExactos(-saldo)}: es lo que queda en su cuenta de proveedor.`,
+    razones: [{ decision: 'Una factura contra otra', porque: 'así lo liquida: se paga la diferencia' }],
+    avisos: [], terceroId: e.terceroId,
+  }
+  return { propuestas: [compra, ingreso, compensa], sinPropuesta: null }
+}
 
 export interface EntradaNomina {
   id: string

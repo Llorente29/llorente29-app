@@ -1,35 +1,139 @@
-# El día se cierra a las 6:00, y lo que sigue abierto no es venta
-# (conta/cierre-del-dia, encargo del 09/10).
-#   0100: sale.unconfirmed_at, la hora de cierre por empresa, el rastro y las
-#         funciones del cierre (conta_cerrar_dias, conta_por_cerrar, …) y el
-#         procedimiento horario.
-#   0110: el stock no vuelve (disparador de consumo + una línea del motor).
-#   0120: no se propone un día sin cerrar; «unconfirmed» en los pedidos del día.
-#   0130: se retiran los asientos propuestos antes de que su día cerrara.
-#   0140: el cron de cada hora (a los :07). En staging también: es la prueba
-#         del procedimiento con COMMIT por empresa, que no se puede llamar
-#         dentro de la transacción de la prueba.
-#   Run 106 (b698cc1): las CINCO migraciones APLICADAS en staging. La prueba,
-#   pasos 1 a 6 en verde; paró en 7d: un recuento solo se escribe por
-#   save_count_line (la puerta del 10/09). Va otra vez por la puerta, y ya
-#   sin las migraciones (su guarda pararía: ya no están como antes).
-#   Run 107 (02a7ea0): paró en save_count_line: «quien contó» tiene que estar
-#   en la plantilla del local. Va sin él, como la pantalla cuando no lo sabe.
-#   Run 108 (52cd3d3): paró en apply_inventory_count: «faltan motivos». Va con
-#   el motivo puesto en la revisión.
-#   La prueba: la forma de los 20 de producción, el cierre, lo que se toca y
-#   lo que no, la frontera de las 6:00, A y B, regenerar, los cuatro caminos
-#   de la regla 10, la versión ROTA a propósito, los cambios de hora y < 1 s.
+# Compras (conta/compras, encargo del 10/10).
+#   0100: unir dos fichas de proveedor, herramienta general
+#         (_supplier_merge / supplier_merge_do / _undo); la de terceros
+#         partida en «qué hace» (_party_merge) y «quién puede» (party_merge_do),
+#         sin cambiar lo que hace.
+#   0110: el socio de marca, una sola ficha (solo Foodint, por id: en staging
+#         no encuentra las fichas y no hace nada; se aplica para ensayarlo).
+#   La prueba: la población con la forma de producción, los choques, la
+#   puerta sin usuario, el mismo recuento antes, después y al deshacer.
 #   Todo en una transacción con ROLLBACK.
-#   Run 109 (be7f318): prueba EN VERDE, los diez pasos.
-#   Ahora: la 0130 saca su selección a conta_propuestos_antes_del_cierre (solo
-#   lee), para que la prueba ensaye lo mismo que se aplica; se vuelve a
-#   aplicar aquí (idempotente: en staging no retira nada) y la prueba gana el
-#   paso 11, retirar lo propuesto antes del cierre sin dejar descarte.
-#   Run 111 (66a2c08): la 0150 y la prueba EN VERDE, doce pasos.
-#   Ahora: la semilla del e2e de pantallas (dos no confirmados más el 04/10 en
-#   Norte Centro, junto al que cerró el cron de verdad: 3 · 66,80 €).
-#   Y la 0160 (execute de conta_cerrado_hasta para conta_lectura; en staging
-#   el rol no existe: solo avisa).
-supabase/seeds/conta/seed_cierre_staging.sql
-supabase/migrations/20261016T0160_cierre_del_dia_lectura.sql
+#   Run 113 (8a7f277): la 0100 y la 0110 APLICADAS (la 0110 no encuentra
+#   las fichas del socio: no hace nada). La prueba paró al sembrar: dar de
+#   alta un artículo de proveedor recalcula su coste y mira quién lo hace.
+#   Ahora siembra como el administrador de A, prueba las puertas sin usuario
+#   y gana el paso 8 (con usuario, la puerta une y deshace).
+#   Run 114 (099ee2f): paró al sembrar lo aprendido: 'iva' y 'forma_pago' no
+#   son campos admitidos (supplier_learning_campo_check: expense_category,
+#   tax_rates, withholding, payment, iban). Ahora 'tax_rates' en las dos
+#   (choca) y 'payment' solo en G.
+#   Run 115 (372865a): paró al sembrar los enlaces: el papel 'pago' solo va a
+#   una 57 o una 43 (company_account_misma_cuenta). Ahora 'principal' en la
+#   41 común en las dos (choca) y 'suplidos' a la 600 solo en G.
+#   Run 116 (08e8f66): sembró, unió y el recuento salió el esperado (los 4
+#   choques en la que se va); paró al contar terceros vivos: el alias «r»
+#   chocaba con la variable «r» del bloque. Ahora «pr».
+#   Run 117 (914cc45): la prueba de la fusión, EN VERDE (8 pasos).
+#
+#   0120: cómo te factura cada proveedor (invoicing_mode) y por dónde va cada
+#         recepción según su papel (goods_receipt_path), con lo recordado
+#         (purchase_bill_to), el disparador al confirmar y la fusión que
+#         mueve lo de compras. 0130: los datos de Foodint (en staging no
+#         encuentra las fichas y no hace nada).
+#   La prueba: normalización contra las variantes reales, los caminos, la
+#   pregunta y su respuesta recordada, la ficha, las puertas, la fusión, los
+#   cuatro caminos de la regla 10 y la decisión rota que no tumba la recepción.
+#   Run 118 (4ebb238): 0120 y 0130 APLICADAS; la prueba del camino, EN VERDE
+#   a la primera (10 pasos).
+#
+#   0140: la factura sale del papel (desde la recepción, o subida en Compras)
+#         y la aprobación la impone la base. La prueba: una sola factura con
+#         su base y su IVA, el mismo papel dos veces, sin importes, albarán y
+#         liquidación sin factura, contestar crea, el corte, sin recepción,
+#         aprobar por la API (encargado no / administrador sí) y crearla rota
+#         sin tumbar la recepción.
+#   Run 119 (d1a897d): 0140 APLICADA; la prueba de la factura, EN VERDE a la
+#   primera (9 pasos).
+#
+#   0150: lo que espera factura, casar la factura con sus albaranes (con la
+#         diferencia) y lo recibido sin factura a fin de mes, con dos orígenes
+#         nuevos de asiento. La prueba: la forma de D (albarán y factura al mes
+#         por local), §7.3 y §7.4, y las puertas.
+#   Run 121 (f4c5ca3): 0150 APLICADA; su prueba, EN VERDE a la primera.
+#   Las frases decían «155 €» y «150.00 €»: compras_euros («1.234,50 €») en la
+#   0140 y la 0150, que se vuelven a aplicar (las dos son idempotentes) con
+#   sus dos pruebas, que ahora comprueban la frase entera.
+#   Run 122 (87cb78c): re-aplicadas y en verde, con la frase entera.
+#
+#   0160: la liquidación mensual desde sus documentos (licensed_settlement,
+#         fórmula «documentos»): guardar, contraste, lo casado por producto y
+#         confirmar. La prueba lleva SEPTIEMBRE AL CÉNTIMO: la lectura real de
+#         los cinco PDF (nombres y NIF cambiados) y los tres asientos de
+#         liquidacionMensual(), propuestos y validados, con el libro registro.
+#   Run 123 (951021f): 0160 aplicada; la prueba pasó 0–3 y PARÓ al validar:
+#   el libro (regla 5) no deja una cuota que no sea base × tipo, y yo había
+#   metido el céntimo de redondeo de su factura en el IVA del 21 %. Ahora las
+#   cuotas van como en el papel y el céntimo, a redondeos (769). Y el
+#   contraste de ventas toma las cedidas sin acuerdo cuando el socio no tiene
+#   ninguno (Foodint no tiene acuerdos de cesión), y lo dice. Se vuelve a
+#   aplicar la 0160 (idempotente).
+supabase/migrations/20261017T0160_compras_liquidacion_mensual.sql
+supabase/staging/sql/20261017_compras_liquidacion_prueba.sql
+#   Run 124: la 0160 re-aplicada y su prueba EN VERDE: septiembre al céntimo,
+#   los tres asientos validados con el libro registro.
+#
+#   0170: lo que leen las pantallas de Compras (qué tienes que mirar, las
+#         liquidaciones del mes, cerrar una pregunta, los últimos papeles de
+#         un proveedor y la frase al confirmar en el local). La prueba: cuatro
+#         recepciones con sus caminos, cerrar y que no vuelva al redecidir,
+#         sin camino y las puertas de la cuenta B.
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/staging/sql/20261017_compras_pantallas_prueba.sql
+#   Run 125 (95f0be9): 0170 aplicada; la prueba pasó 0 y PARÓ en 1: «sin
+#   camino» comparaba con min(created_at) de goods_receipt_path, que no tiene
+#   esa columna, y la subconsulta la buscó fuera (ambigua). Regla 40 en mi
+#   propio fichero. Se quita esa condición: sin camino es TODA recepción
+#   confirmada desde el corte que no lo tiene, sin recortar (regla 7). Se
+#   vuelve a aplicar la 0170 (idempotente) con su prueba.
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/staging/sql/20261017_compras_pantallas_prueba.sql
+#   Run 126 (7517ff2): la 0170 y su prueba EN VERDE (0–7).
+#   La 0170 gana compras_camino_rehacer (lo que se hace con una «sin camino»
+#   desde la pantalla); la prueba lo ensaya en el paso 6 (vuelve su camino y
+#   no se crea otra factura del mismo papel) y en las puertas (6 de 6).
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/staging/sql/20261017_compras_pantallas_prueba.sql
+#   Run 127 (107f7e4): 0170 con compras_camino_rehacer, EN VERDE.
+#   La 0170 gana compras_liquidacion_productos (para «Decirle cuál es cuál»:
+#   compara con compras_nombre_norm, la misma vara que el contraste, en vez
+#   de rehacerla en el cliente). La prueba gana el paso 5b: llega una
+#   liquidación, la fila la enseña con su saldo, y un producto casado con
+#   otra forma de escribirlo sale casado.
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/staging/sql/20261017_compras_pantallas_prueba.sql
+#   Run 128 (1019dee): 0170 con compras_liquidacion_productos y el paso 5b,
+#   EN VERDE.
+#
+#   Semilla de compras para las pantallas y sus capturas (cuenta A, todo
+#   inventado, idempotente): dos preguntas, lo que espera factura, y las
+#   liquidaciones de septiembre (una llegada, otra no) y octubre.
+supabase/seeds/conta/seed_compras_staging.sql
+#   Run 129 (46db6e4): la semilla de compras, sembrada (11 caminos, 2
+#   preguntas, la liquidación AF-P9). E2e 169 en verde con sus capturas.
+#
+#   0180: octubre de Foodint (solo por id). Aquí no hay esa cuenta: dice que
+#         no hace nada y crea solo su tabla de lo rellenado (vacía). Se aplica
+#         para ensayar que el fichero corre entero.
+#   La 0120 y la 0140 ganan en su cabecera los «cambia:» que pide el
+#   analizador de producción (los disparadores sobre goods_receipt y
+#   supplier_invoice); el SQL no cambia, no se reaplican.
+supabase/migrations/20261017T0180_compras_octubre_foodint.sql
+#   Run 130 (2073f7b): la 0180 aplicada; aquí no hay Foodint: solo su tabla,
+#   vacía.
+#
+#   0190: el repaso de Julio (10/10). «Contado» y los demás nombres genéricos
+#         no preguntan de quién son: avisan de que así no se descuenta el IVA;
+#         «Apuntarla sin descontar el IVA» (compras_sin_iva y la marca
+#         vat_non_deductible); los albaranes de una liquidación.
+#   La prueba: los genéricos, apuntar sin IVA (una sola factura, la pregunta
+#   cerrada, no dos veces), los albaranes y las puertas.
+#   Semilla del repaso: «Contado» decidido otra vez y tres albaranes del
+#   socio a nombre de su local (una sola pregunta para los tres).
+#   Run 131 (b47deff4): la 0190 entró, pero su prueba paró en el paso 1: el
+#   papel a nombre de «CONTADO.» acababa en «error» porque el CHECK de la 0120
+#   sobre bill_to_how no admitía «generico». La 0190 amplía ese CHECK (y su
+#   vuelta atrás lo devuelve). Se reaplica: es idempotente. El local del
+#   socio pasa a llamarse «Aurora Cocina Centro» en la semilla.
+supabase/migrations/20261017T0190_compras_repaso.sql
+supabase/staging/sql/20261017_compras_repaso_prueba.sql
+supabase/seeds/conta/seed_compras_repaso_staging.sql

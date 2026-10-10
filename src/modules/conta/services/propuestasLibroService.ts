@@ -12,7 +12,7 @@
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, nomina, liquidacionSocio, aplicarAprendizaje,
+  ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
   type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
@@ -248,8 +248,10 @@ export async function proponerPendientes(accountId: string, companyId: string, d
 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   const [facturas, socios] = await Promise.all([
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, supplier(name, expense_category_id), supplier_invoice_line(line_amount, vat_pct)')
-      .eq('account_id', accountId).eq('status', 'aprobada').is('journal_entry_id', null).gte('invoice_date', desde).lte('invoice_date', hasta).order('invoice_date', { ascending: false }), 'las facturas'),
+    // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
+    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, supplier(name, tax_id, expense_category_id), supplier_invoice_line(line_amount, vat_pct)')
+      .eq('account_id', accountId).eq('status', 'aprobada').is('journal_entry_id', null).or(`company_id.is.null,company_id.eq.${companyId}`)
+      .gte('invoice_date', desde).lte('invoice_date', hasta).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
   ])
   const socioPorProveedor = new Set<string>()
@@ -258,7 +260,11 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   const esSocio = new Set(socios.filter((x) => x.role === 'brand_partner').map((x) => String(x.party_id)))
   for (const [sup, party] of partyPorProveedor) if (esSocio.has(party)) socioPorProveedor.add(sup)
   const ret = await leer(tabla('withholding_rate').select('id, rate, filed_in'), 'las retenciones')
+  // Compras (10/10): la factura de una liquidación mensual la propone su liquidación, no aquí.
+  const deLiquidacion = new Set((await leer(tabla('licensed_settlement').select('received_invoice_id').eq('account_id', accountId)
+    .not('received_invoice_id', 'is', null), 'las facturas de las liquidaciones')).map((x) => String(x.received_invoice_id)))
   for (const f of facturas) {
+    if (deLiquidacion.has(String(f.id))) continue
     const sup = String(f.supplier_id); const prov = (f.supplier ?? {}) as Fila
     const fecha = String(f.invoice_date)
     if (!abierto(fecha)) continue
@@ -269,12 +275,13 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     const rr = ret.find((x) => String(x.id) === s(f.withholding_rate_id))
     const res = facturaProveedor({
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
-      esSocio: socioPorProveedor.has(sup), localId: s(f.location_id), total: n(f.grand_total),
+      esSocio: socioPorProveedor.has(sup), tieneNif: !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
       lineas: ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
         const t = ctx.tipos.find((x) => x.rate === n(l.vat_pct) && x.code.startsWith('iva_')) ?? null
         return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: gasto }
       }),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: n(f.withholding_amount), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
+      ivaNoDeducible: f.vat_non_deductible === true,
     }, {
       proveedor: cuentaProv, retencion: ctx.hoja('4751') ?? '47510000',
       ivaSoportado: (pct) => { const t = ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_')); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
@@ -285,6 +292,71 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       l.retencion = { ...l.retencion!, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + x.debe, 0) }
     }
     await proponer(companyId, aplicarAprendizaje(res.propuesta, `supplier_invoice:${sup}`, ctx.correcciones), null, r, ctx, quien)
+  }
+
+  // ── Compras (10/10), §2.5: la liquidación mensual, desde sus documentos ──
+  // Las confirmadas de esta empresa. Sus asientos van con la fecha de sus
+  // facturas (días después del mes): se leen las de los dos meses de antes.
+  {
+    const desdeLiq = new Date(`${desde.slice(0, 7)}-01T00:00:00Z`); desdeLiq.setUTCMonth(desdeLiq.getUTCMonth() - 2)
+    const liqs = await leer(tabla('licensed_settlement').select('id, party_id, supplier_id, location_id, settlement_ref, received_invoice_id, detail, party(name), supplier(name, expense_category_id)')
+      .eq('account_id', accountId).eq('company_id', companyId).eq('formula', 'documentos').eq('status', 'confirmada')
+      .gte('period_to', desdeLiq.toISOString().slice(0, 10)).lte('period_from', hasta), 'las liquidaciones mensuales')
+    const tipoIva = (pct: number) => ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_'))
+    for (const l of liqs) {
+      const d = (l.detail ?? {}) as Fila
+      const em = (d.emitida ?? {}) as Fila; const rc = (d.recibida ?? {}) as Fila
+      const party = String(l.party_id); const sup = String(l.supplier_id); const prov = (l.supplier ?? {}) as Fila
+      const socio = s(((l.party ?? {}) as Fila).name) ?? s(prov.name) ?? 'el socio'
+      const que = `Liquidación de ${socio} · ${s(l.settlement_ref) ?? ''} · ${ctx.locales.get(String(l.location_id)) ?? 'local'}`
+      const lineas = (x: Fila) => ((x.lineas ?? []) as Fila[]).map((y) => ({ concepto: String(y.concepto), base: n(y.base), tipo: n(y.tipo) }))
+      const res = liquidacionMensual({
+        id: String(l.id), facturaRecibidaId: String(l.received_invoice_id), socio, terceroId: party, localId: s(l.location_id),
+        emitida: { numero: String(em.numero), fecha: String(em.fecha), lineas: lineas(em), total: n(em.total) },
+        recibida: { numero: String(rc.numero), fecha: String(rc.fecha), lineas: lineas(rc), total: n(rc.total) },
+        saldo: d.transaccion && (d.transaccion as Fila).saldo ? n(((d.transaccion as Fila).saldo as Fila).importe) : null,
+        bloqueos: ((d.bloqueos ?? []) as unknown[]).map(String),
+      }, {
+        cliente: ctx.enlace('customer', party, 'principal'), proveedor: ctx.enlace('supplier', sup, 'principal'),
+        compras: ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null),
+        ingresoServicios: ctx.hoja('705'), ingresoMercaderias: ctx.hoja('700'), redondeoGasto: ctx.hoja('669'), redondeoIngreso: ctx.hoja('769'),
+        ivaRepercutido: (pct) => { const t = tipoIva(pct); const c = t ? ctx.enlace('tax_rate', t.id, 'repercutido') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
+        ivaSoportado: (pct) => { const t = tipoIva(pct); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
+      })
+      if (res.sinPropuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta }); continue }
+      for (const p of res.propuestas) if (abierto(p.fecha)) await proponer(companyId, p, null, r, ctx, quien)
+    }
+  }
+
+  // ── Compras (10/10), §2.4: lo recibido sin factura al cierre de cada mes ──
+  // Solo meses ya acabados (su último día, pasado) dentro de desde–hasta y
+  // abiertos. compras_fin_de_mes guarda de qué recepciones sale cada uno; su
+  // id es el origen del asiento y de su contrario, que se proponen una vez.
+  {
+    const hoy = new Date().toISOString().slice(0, 10)
+    const meses: string[] = []
+    for (let d = new Date(`${desde.slice(0, 7)}-01T00:00:00Z`); d.toISOString().slice(0, 10) <= hasta; d.setUTCMonth(d.getUTCMonth() + 1)) {
+      const fin = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
+      if (fin < hoy && fin <= hasta && abierto(fin)) meses.push(d.toISOString().slice(0, 10))
+    }
+    if (meses.length > 0) {
+      const provs = new Map((await leer(tabla('supplier').select('id, name, expense_category_id').eq('account_id', accountId), 'los proveedores')).map((x) => [String(x.id), x]))
+      for (const mes of meses) {
+        const filas = ((await rpc('compras_fin_de_mes', { p_empresa: companyId, p_mes: mes })) as Fila[] | null) ?? []
+        for (const a of filas) {
+          const sup = String(a.supplier_id); const prov = provs.get(sup) ?? {}
+          const gasto = ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null)
+          const res = finDeMesCompras({
+            id: String(a.id), mes, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
+            localId: s(a.location_id), nombreLocal: a.location_id ? ctx.locales.get(String(a.location_id)) ?? null : null, base: n(a.base),
+            recepciones: ((a.receipts ?? []) as Fila[]).map((x) => ({ codigo: s(x.code), fecha: String(x.fecha), base: x.base === null || x.base === undefined ? null : n(x.base) })),
+            sinBase: n(a.without_base),
+          }, { gasto, pendiente: ctx.hoja('4009') })
+          if (res.sinPropuesta) { r.sinPropuesta.push({ que: `Recibido sin factura · ${s(prov.name) ?? 'proveedor'} · ${mes.slice(5, 7)}/${mes.slice(0, 4)}`, porque: res.sinPropuesta }); continue }
+          for (const p of res.propuestas) if (abierto(p.fecha)) await proponer(companyId, p, null, r, ctx, quien)
+        }
+      }
+    }
   }
 
   // ── Liquidaciones de plataforma sin asiento (regla 7) ──

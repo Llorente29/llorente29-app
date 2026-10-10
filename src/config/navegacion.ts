@@ -179,6 +179,12 @@ export const CONTA = {
     librosArea: 'libros/:area',
     /** Una acción de un área de Libros (C05): balance, sumas y saldos, libro registro… */
     librosAccion: 'libros/:area/:accion',
+    /** Compras (encargo de compras, N18): lo que hay que mirar, lo que espera factura, las liquidaciones. */
+    compras: 'compras',
+    /** Subir los documentos de una liquidación mensual (N19). */
+    liquidacionNueva: 'compras/liquidacion/nueva',
+    /** Una liquidación mensual y su contraste (N19). */
+    liquidacion: 'compras/liquidacion/:liqId',
   },
 } as const
 
@@ -197,6 +203,8 @@ export const MENU_CONTA: EntradaMenuConta[][] = [
     { id: 'por-hacer', etiqueta: 'Por hacer', icono: 'porHacer', ruta: null },
   ],
   [
+    // Compras (N18): delante de Bancos, como en la maqueta.
+    { id: 'compras', etiqueta: 'Compras', icono: 'facturas', ruta: CONTA.rutas.compras },
     { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: null },
     { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
     // C03: la lista única de terceros. Un tercero que solo es proveedor abre su
@@ -315,6 +323,14 @@ export const rutaLibros = (area?: string, accion?: string): string => {
   if (!area) return rutaConta(CONTA.rutas.libros)
   if (area === 'diario') return accion === 'diario-resumido' ? rutaConta(CONTA.rutas.diarioResumido) : rutaConta(CONTA.rutas.libroDiario)
   return accion ? rutaConta(CONTA.rutas.librosAccion, { area, accion }) : rutaConta(CONTA.rutas.librosArea, { area })
+}
+export const rutaCompras = (): string => rutaConta(CONTA.rutas.compras)
+export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
+/** Subir los documentos de la liquidación de un proveedor, en un local y un mes ('YYYY-MM-01'). */
+export const rutaLiquidacionNueva = (proveedor: string, local: string | null, mes: string): string => {
+  const q = new URLSearchParams({ proveedor, mes })
+  if (local) q.set('local', local)
+  return `${rutaConta(CONTA.rutas.liquidacionNueva)}?${q.toString()}`
 }
 export const rutaFichaTercero = (partyId: string, apartado?: string): string =>
   apartado ? rutaConta(CONTA.rutas.terceroApartado, { partyId, apartado }) : rutaConta(CONTA.rutas.tercero, { partyId })
