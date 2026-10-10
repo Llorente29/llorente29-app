@@ -44,4 +44,10 @@
 #         sin tumbar la recepción.
 #   Run 119 (d1a897d): 0140 APLICADA; la prueba de la factura, EN VERDE a la
 #   primera (9 pasos).
-supabase/staging/sql/20261017_compras_factura_prueba.sql
+#
+#   0150: lo que espera factura, casar la factura con sus albaranes (con la
+#         diferencia) y lo recibido sin factura a fin de mes, con dos orígenes
+#         nuevos de asiento. La prueba: la forma de D (albarán y factura al mes
+#         por local), §7.3 y §7.4, y las puertas.
+supabase/migrations/20261017T0150_compras_pendiente_y_fin_de_mes.sql
+supabase/staging/sql/20261017_compras_fin_de_mes_prueba.sql
