@@ -248,8 +248,10 @@ export async function proponerPendientes(accountId: string, companyId: string, d
 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   const [facturas, socios] = await Promise.all([
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, supplier(name, expense_category_id), supplier_invoice_line(line_amount, vat_pct)')
-      .eq('account_id', accountId).eq('status', 'aprobada').is('journal_entry_id', null).gte('invoice_date', desde).lte('invoice_date', hasta).order('invoice_date', { ascending: false }), 'las facturas'),
+    // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
+    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, supplier(name, tax_id, expense_category_id), supplier_invoice_line(line_amount, vat_pct)')
+      .eq('account_id', accountId).eq('status', 'aprobada').is('journal_entry_id', null).or(`company_id.is.null,company_id.eq.${companyId}`)
+      .gte('invoice_date', desde).lte('invoice_date', hasta).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
   ])
   const socioPorProveedor = new Set<string>()
@@ -269,7 +271,7 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     const rr = ret.find((x) => String(x.id) === s(f.withholding_rate_id))
     const res = facturaProveedor({
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
-      esSocio: socioPorProveedor.has(sup), localId: s(f.location_id), total: n(f.grand_total),
+      esSocio: socioPorProveedor.has(sup), tieneNif: !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
       lineas: ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
         const t = ctx.tipos.find((x) => x.rate === n(l.vat_pct) && x.code.startsWith('iva_')) ?? null
         return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: gasto }

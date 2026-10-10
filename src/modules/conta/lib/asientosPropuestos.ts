@@ -370,6 +370,8 @@ export interface EntradaFactura {
   terceroId: string | null
   /** El proveedor es el socio de marca: lo suyo va por su liquidación. */
   esSocio: boolean
+  /** Compras (10/10), §2.6: sin NIF en la ficha no se propone (el IVA no se deduce). */
+  tieneNif: boolean
   localId: string | null
   lineas: readonly LineaFactura[]
   total: number
@@ -383,16 +385,17 @@ export interface CuentasFactura {
 
 export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propuesta: Propuesta | null; sinPropuesta: string | null } {
   if (f.esSocio) return { propuesta: null, sinPropuesta: `${f.proveedor} es tu socio de marca: lo que te vende a su nombre no es gasto tuyo, va en su liquidación mensual.` }
+  // Compras (10/10), §2.6: lo que falta en la ficha se dice, no se tapa. Una
+  // factura sin NIF o sin tipo de gasto NO cae a una cuenta genérica.
+  if (!f.tieneNif) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.` }
+  if (f.lineas.some((l) => !l.cuentaGasto)) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el tipo de gasto: ponlo en su ficha y la factura se propone.` }
   const razones: Razon[] = []
   const avisos: string[] = []
   const confs: Confianza[] = []
   const loc = f.localId
   const lineas: LineaAsiento[] = []
   const gastos = new Map<string, number>()
-  for (const l of f.lineas) {
-    if (!l.cuentaGasto) { avisos.push('Hay líneas sin cuenta de gasto: dile su tipo de gasto al proveedor.'); confs.push('duda'); continue }
-    gastos.set(l.cuentaGasto, (gastos.get(l.cuentaGasto) ?? 0) + cent(l.base))
-  }
+  for (const l of f.lineas) gastos.set(l.cuentaGasto!, (gastos.get(l.cuentaGasto!) ?? 0) + cent(l.base))
   for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
   const porTipo = new Map<number, { id: string; base: number }>()
   for (const l of f.lineas) {

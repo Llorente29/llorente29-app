@@ -233,7 +233,7 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
   const c = { proveedor: '41000006', retencion: '47510000', ivaSoportado: (p: number) => ({ 4: { cuenta: '47200004', tipoId: 't4' }, 10: { cuenta: '47200010', tipoId: 't10' }, 21: { cuenta: '47200021', tipoId: 't21' } } as Record<number, { cuenta: string; tipoId: string }>)[p] ?? null }
   it('gasto por su cuenta, IVA por tipo, retención y lo que queda a pagar', () => {
     const p = facturaProveedor({
-      id: 'f1', numero: 'F-12', fecha: '2026-10-02', proveedor: 'Asesoría de prueba', terceroId: 't', esSocio: false, localId: NORTE,
+      id: 'f1', numero: 'F-12', fecha: '2026-10-02', proveedor: 'Asesoría de prueba', terceroId: 't', esSocio: false, tieneNif: true, localId: NORTE,
       lineas: [{ base: 180, tipo: { id: 't21', porcentaje: 21 }, cuentaGasto: '62300000' }], total: 217.8,
       retencion: { tipoId: 'r15', porcentaje: 15, base: 180, importe: 27, modelo: '111' },
     }, c).propuesta!
@@ -242,9 +242,23 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
     expect(p.confianza).toBe('seguro')
   })
   it('lo comprado a nombre del socio no es gasto: no se propone', () => {
-    const r = facturaProveedor({ id: 'f2', numero: null, fecha: '2026-10-02', proveedor: 'Socio de marca', terceroId: null, esSocio: true, localId: SUR, lineas: [], total: 100, retencion: null }, c)
+    const r = facturaProveedor({ id: 'f2', numero: null, fecha: '2026-10-02', proveedor: 'Socio de marca', terceroId: null, esSocio: true, tieneNif: true, localId: SUR, lineas: [], total: 100, retencion: null }, c)
     expect(r.propuesta).toBeNull()
     expect(r.sinPropuesta).toContain('no es gasto tuyo')
+  })
+  // Compras (10/10), aceptación 7: sin NIF o sin tipo de gasto no se propone,
+  // y la frase dice qué falta. Antes, sin tipo de gasto se proponía «en duda».
+  it('sin NIF no se propone, y dice qué falta', () => {
+    const r = facturaProveedor({ id: 'f3', numero: 'B-1', fecha: '2026-10-07', proveedor: 'Distribuciones de prueba', terceroId: null, esSocio: false, tieneNif: false, localId: NORTE,
+      lineas: [{ base: 100, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }], total: 110, retencion: null }, c)
+    expect(r.propuesta).toBeNull()
+    expect(r.sinPropuesta).toBe('A Distribuciones de prueba le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.')
+  })
+  it('sin tipo de gasto no cae a una cuenta genérica: no se propone', () => {
+    const r = facturaProveedor({ id: 'f4', numero: 'B-2', fecha: '2026-10-07', proveedor: 'Distribuciones de prueba', terceroId: null, esSocio: false, tieneNif: true, localId: NORTE,
+      lineas: [{ base: 60, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }, { base: 40, tipo: { id: 't4', porcentaje: 4 }, cuentaGasto: null }], total: 107.6, retencion: null }, c)
+    expect(r.propuesta).toBeNull()
+    expect(r.sinPropuesta).toContain('le falta el tipo de gasto')
   })
   it('el pago sale del banco del local; sin banco, lo pide', () => {
     expect(pagoFactura({ facturaId: 'f1', fecha: '2026-10-10', proveedor: 'X', numero: 'F-12', importe: 190.8, localId: NORTE, terceroId: null }, { proveedor: '41000006', banco: '57200001' }).propuesta!.lineas.map((l) => l.cuenta)).toEqual(['41000006', '57200001'])

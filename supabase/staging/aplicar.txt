@@ -42,5 +42,6 @@
 #         liquidación sin factura, contestar crea, el corte, sin recepción,
 #         aprobar por la API (encargado no / administrador sí) y crearla rota
 #         sin tumbar la recepción.
-supabase/migrations/20261017T0140_compras_factura_desde_el_papel.sql
+#   Run 119 (d1a897d): 0140 APLICADA; la prueba de la factura, EN VERDE a la
+#   primera (9 pasos).
 supabase/staging/sql/20261017_compras_factura_prueba.sql
