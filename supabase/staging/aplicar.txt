@@ -20,4 +20,7 @@
 #   Run 115 (372865a): paró al sembrar los enlaces: el papel 'pago' solo va a
 #   una 57 o una 43 (company_account_misma_cuenta). Ahora 'principal' en la
 #   41 común en las dos (choca) y 'suplidos' a la 600 solo en G.
+#   Run 116 (08e8f66): sembró, unió y el recuento salió el esperado (los 4
+#   choques en la que se va); paró al contar terceros vivos: el alias «r»
+#   chocaba con la variable «r» del bloque. Ahora «pr».
 supabase/staging/sql/20261017_compras_fusion_prueba.sql

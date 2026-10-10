@@ -147,8 +147,8 @@ begin
   if v_q.tax_id is distinct from 'B00000001' then raise exception 'FALLO 4c: cambió el NIF de la que queda'; end if;
   if v_g.archived_at is null then raise exception 'FALLO 4c: la que se va sigue viva'; end if;
   -- 4d · Un solo tercero vivo para las dos.
-  select count(*) into v_vivos from party p join party_role r on r.party_id = p.id
-   where r.supplier_id in ('f0510000-0000-4000-8000-000000000001', 'f0510000-0000-4000-8000-000000000002') and p.archived_at is null;
+  select count(*) into v_vivos from party p join party_role pr on pr.party_id = p.id
+   where pr.supplier_id in ('f0510000-0000-4000-8000-000000000001', 'f0510000-0000-4000-8000-000000000002') and p.archived_at is null;
   if v_vivos <> 1 then raise exception 'FALLO 4d: % terceros vivos', v_vivos; end if;
   if (select count(*) from supplier_merge where gone_supplier_id = 'f0510000-0000-4000-8000-000000000002' and party_merge_id is not null) <> 1 then
     raise exception 'FALLO 4d: el rastro no apunta la fusión de terceros';
@@ -181,8 +181,8 @@ begin
   select * into v_g from supplier where id = 'f0510000-0000-4000-8000-000000000002';
   if v_q.notify_group is not null or v_q.payment_terms_days is not null then raise exception 'FALLO 6: la que queda conserva lo rellenado'; end if;
   if v_g.archived_at is not null then raise exception 'FALLO 6: la que se fue sigue archivada'; end if;
-  select count(*) into v_vivos from party p join party_role r on r.party_id = p.id
-   where r.supplier_id in ('f0510000-0000-4000-8000-000000000001', 'f0510000-0000-4000-8000-000000000002') and p.archived_at is null;
+  select count(*) into v_vivos from party p join party_role pr on pr.party_id = p.id
+   where pr.supplier_id in ('f0510000-0000-4000-8000-000000000001', 'f0510000-0000-4000-8000-000000000002') and p.archived_at is null;
   if v_vivos <> 2 then raise exception 'FALLO 6: % terceros vivos (tienen que ser 2)', v_vivos; end if;
   raise notice '6 · deshecho: el mismo recuento que antes, ficha sin rellenar, dos terceros vivos (bien)';
 
