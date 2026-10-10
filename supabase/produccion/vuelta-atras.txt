@@ -7,6 +7,7 @@
 #     anulan sus asientos y su factura);
 #   · la 0110 deshace la unión de las fichas del socio con supplier_merge_undo:
 #     todo vuelve a la ficha de la que vino.
+supabase/vuelta-atras/20261017T0190_compras_repaso.down.sql
 supabase/vuelta-atras/20261017T0180_compras_octubre_foodint.down.sql
 supabase/vuelta-atras/20261017T0170_compras_pantallas.down.sql
 supabase/vuelta-atras/20261017T0160_compras_liquidacion_mensual.down.sql

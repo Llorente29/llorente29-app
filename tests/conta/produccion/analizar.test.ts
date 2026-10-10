@@ -486,20 +486,22 @@ describe('la tanda de AHORA (manifiesto vivo): las compras', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow (sqlContexto)
-  // sobre estos nueve ficheros, lanzada en solo lectura en producción el 10/10:
-  // existen goods_receipt, journal_entry, licensed_settlement, supplier y
-  // supplier_invoice, y party_merge_do / _undo; nada en el camino del pedido;
-  // nada en el historial.
+  // sobre los nueve primeros ficheros, lanzada en solo lectura en producción
+  // el 10/10: existen goods_receipt, journal_entry, licensed_settlement,
+  // supplier y supplier_invoice, y party_merge_do / _undo; nada en el camino
+  // del pedido; nada en el historial. La 0190 (el repaso) no nombra nada más
+  // que exista: sus funciones, goods_receipt_path y la columna nueva no
+  // estaban en producción (medido el 10/10, solo lectura).
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-compras-20261010.json', 'utf8'))
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
   const bloque = (f: string) => r.markdown.split('### ').find((b) => b.startsWith(`\`${f}\``))!
 
-  it('las nueve, en su orden', () => {
+  it('las diez, en su orden', () => {
     expect(viva.map((f) => f.replace(/^.*\/20261017T/, '').replace(/\.sql$/, ''))).toEqual([
       '0100_compras_fusion_proveedores', '0110_compras_socio_una_ficha', '0120_compras_forma_de_facturar',
       '0130_compras_forma_de_facturar_datos', '0140_compras_factura_desde_el_papel', '0150_compras_pendiente_y_fin_de_mes',
-      '0160_compras_liquidacion_mensual', '0170_compras_pantallas', '0180_compras_octubre_foodint'])
+      '0160_compras_liquidacion_mensual', '0170_compras_pantallas', '0180_compras_octubre_foodint', '0190_compras_repaso'])
   })
   it('pide «autorizo» la 0130 (cambia datos de tres fichas); el resto sigue', () => {
     expect(r.ficheros).toEqual(Object.fromEntries(viva.map((f) => [f, /T0130_/.test(f) ? 'autorizo' : 'sigue'])))
@@ -521,7 +523,13 @@ describe('la tanda de AHORA (manifiesto vivo): las compras', () => {
     const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
     expect(nombradas).toEqual(['20261017T0130_compras_forma_de_facturar_datos.sql'])
   })
-  it('su vuelta atrás son sus nueve .down.sql, al revés, y existen', () => {
+  it('la 0190 declara el cambio de _compras_destinatario con su prueba, que lo nombra', () => {
+    const f = viva[9]
+    expect(readFileSync(f, 'utf8')).toMatch(/-- cambia: public\._compras_destinatario · prueba: supabase\/staging\/sql\/20261017_compras_repaso_prueba\.sql/)
+    expect(readFileSync('supabase/staging/sql/20261017_compras_repaso_prueba.sql', 'utf8')).toMatch(/_compras_destinatario|compras_nombre_generico/)
+    expect(r.ficheros[f]).toBe('sigue')
+  })
+  it('su vuelta atrás son sus diez .down.sql, al revés, y existen', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     for (const f of atras) expect(existsSync(f), f).toBe(true)

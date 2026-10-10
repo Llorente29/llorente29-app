@@ -31,12 +31,20 @@
 #      DATOS por una función (mismo punto ciego que la 0110). Se espera:
 #      14 del socio (1 a su liquidación y 13 preguntas de dos nombres), 1
 #      pregunta de papel contra ficha y 3 facturas en revisión.
+#  10. 0190 — el repaso de las pantallas (10/10): «Contado», «Varios»… no
+#      preguntan de quién son, avisan del IVA (_compras_destinatario, misma
+#      firma, declarado con su prueba; el CHECK de bill_to_how admite
+#      «generico»); «Apuntarla sin descontar el IVA» (compras_sin_iva y la
+#      columna supplier_invoice.vat_non_deductible, que nace a false); los
+#      albaranes de una liquidación. Añade. Va después de la 0180 y no la
+#      cambia: de los 18 papeles de octubre de Foodint ninguno va a un nombre
+#      genérico (medido en solo lectura el 10/10).
 #
 # Necesita «autorizo», con su nombre entero:
 #   20261017T0130_compras_forma_de_facturar_datos.sql
 #
 # Analizador pasado en local el 10/10 contra el contexto de producción (leído
-# en solo lectura): la 0130 «autorizo»; las otras ocho «sigue». Ninguna está
+# en solo lectura): la 0130 «autorizo»; las otras nueve «sigue». Ninguna está
 # en el historial. Lo que diga el ensayo del workflow manda; el aviso de la
 # 0180 en el ensayo dice cuántas recepciones y facturas salen de verdad.
 #
@@ -50,3 +58,4 @@ supabase/migrations/20261017T0150_compras_pendiente_y_fin_de_mes.sql
 supabase/migrations/20261017T0160_compras_liquidacion_mensual.sql
 supabase/migrations/20261017T0170_compras_pantallas.sql
 supabase/migrations/20261017T0180_compras_octubre_foodint.sql
+supabase/migrations/20261017T0190_compras_repaso.sql
