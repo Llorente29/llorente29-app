@@ -1,0 +1,82 @@
+/* Compras (encargo «Contabilidad: las compras», maquetas N18–N21). */
+
+.cxc { display: flex; flex-direction: column; gap: 18px; }
+.cxc-entra { margin: 0; font-size: 15px; color: var(--cx-apoyo); }
+.cxc-cuenta { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 8px;
+  border-radius: 999px; background: var(--cx-ambar-suave); color: var(--cx-ambar); font-size: 13px; font-weight: 700; margin-left: 8px; }
+.cxc-cuenta-cero { background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+
+/* Qué tienes que mirar: una fila por cosa, con sus botones. */
+.cxc-mirar { display: flex; flex-direction: column; }
+.cxc-cosa { display: flex; gap: 16px; align-items: flex-start; padding: 16px 0; border-top: 1px solid var(--cx-linea); }
+.cxc-cosa:first-child { border-top: none; padding-top: 4px; }
+.cxc-cosa-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cxc-cosa-frase { font-size: 15px; font-weight: 600; color: var(--cx-texto); }
+.cxc-cosa-apoyo { font-size: 14px; color: var(--cx-apoyo); }
+.cxc-cosa-porque { font-size: 13px; color: var(--cx-apoyo); }
+.cxc-cosa-acciones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 46%; }
+.cxc-cosa-acciones .cx-boton, .cxc-cosa-acciones .cx-boton-sec { height: 40px; font-size: 14px; }
+
+/* Qué está esperando factura */
+.cxc-tabla { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.5fr); }
+.cxc-tabla > * { padding: 10px 12px; border-top: 1px solid var(--cx-linea); font-size: 14px; }
+.cxc-tabla > .cxc-tabla-cabeza { border-top: none; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; }
+.cxc-tabla .cx-cifra { text-align: right; }
+.cxc-tarde { color: var(--cx-ambar); font-weight: 600; }
+.cxc-soltar { margin-top: 14px; border: 2px dashed var(--cx-borde-campo); border-radius: var(--cx-radio-caja); padding: 18px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--cx-apoyo); font-size: 14px; }
+.cxc-soltar-encima { border-color: var(--cx-azul); background: var(--cx-azul-suave); color: var(--cx-azul); }
+
+/* Liquidaciones del mes */
+.cxc-liq { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--cx-linea); }
+.cxc-liq:first-child { border-top: none; }
+.cxc-liq-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cxc-liq-titulo { font-weight: 600; font-size: 15px; }
+.cxc-liq-saldo { font-family: var(--cx-letra-cifras); font-weight: 600; white-space: nowrap; }
+.cxc-pie-mes { font-size: 14px; color: var(--cx-apoyo); }
+
+/* Cómo te factura (N20) */
+.cxc-dice { margin: 0 0 10px; font-size: 15px; }
+.cxc-dice-choca { background: var(--cx-ambar-suave); color: var(--cx-ambar); padding: 10px 12px; border-radius: var(--cx-radio-caja); }
+.cxc-formas { display: flex; flex-direction: column; gap: 10px; }
+.cxc-forma { border: 1px solid var(--cx-borde-campo); border-radius: var(--cx-radio-caja); background: var(--cx-blanco); }
+.cxc-forma-activa { border: 2px solid var(--cx-azul); background: var(--cx-azul-suave); }
+.cxc-forma-boton { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 14px 16px; cursor: pointer; min-height: 44px; }
+.cxc-forma-boton:focus-visible { outline: 3px solid var(--cx-azul); outline-offset: 2px; border-radius: var(--cx-radio-caja); }
+.cxc-forma-titulo { font-weight: 600; font-size: 15px; color: var(--cx-texto); }
+.cxc-forma-explica { font-size: 14px; color: var(--cx-apoyo); }
+.cxc-forma-mas { padding: 0 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Subir una factura y casarla */
+.cxc-pasos { display: flex; flex-direction: column; gap: 12px; }
+.cxc-candidata { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cx-linea); font-size: 14px; }
+.cxc-candidata:first-child { border-top: none; }
+.cxc-candidata input { width: 20px; height: 20px; }
+.cxc-candidata-texto { flex: 1; }
+
+/* La liquidación (N19) */
+.cxc-tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.cxc-tres-cifra { font-family: var(--cx-letra-cifras); font-size: 24px; font-weight: 600; }
+.cxc-contraste { display: flex; gap: 14px; padding: 14px 0; border-top: 1px solid var(--cx-linea); }
+.cxc-contraste:first-of-type { border-top: none; }
+.cxc-marca { flex: none; width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+.cxc-marca-bien { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxc-marca-casi { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxc-marca-no { background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+.cxc-lineas { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; font-size: 14px; }
+.cxc-lineas .cx-cifra { text-align: right; }
+.cxc-lineas-total { font-weight: 700; border-top: 1px solid var(--cx-linea); padding-top: 6px; }
+.cxc-producto { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--cx-linea); font-size: 14px; }
+.cxc-producto-nombre { flex: 1; min-width: 0; }
+
+@media (max-width: 767px) {
+  .cxc-cosa { flex-direction: column; gap: 10px; }
+  .cxc-cosa-acciones { max-width: none; justify-content: stretch; }
+  .cxc-cosa-acciones > * { flex: 1 1 100%; height: 46px; }
+  .cxc-tabla { grid-template-columns: minmax(0, 1fr) auto; }
+  .cxc-tabla > .cxc-tabla-cabeza { display: none; }
+  .cxc-tabla > .cxc-solo-ancho { display: none; }
+  .cxc-soltar { flex-direction: column; align-items: stretch; }
+  .cxc-liq { flex-direction: column; align-items: stretch; }
+  .cxc-tres { grid-template-columns: minmax(0, 1fr); }
+}

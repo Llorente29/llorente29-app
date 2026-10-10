@@ -27,6 +27,8 @@ import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 import LibrosPage from '@/modules/conta/libros/LibrosPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
+import ComprasPage from '@/modules/conta/compras/ComprasPage'
+import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 
 const enMarco = (pagina: ReactNode, ejemplo: string) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo}>{pagina}</MarcoConta></EmpresasProveedor>
@@ -65,6 +67,10 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.diarioResumido, element: enMarco(<LibrosPage area="diario" accion="diario-resumido" />, '¿Cuánto gasté en septiembre?') },
     { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
     { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
+    // Compras (encargo de compras, N18 y N19).
+    { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
+    { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
+    { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?') },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?') },
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },

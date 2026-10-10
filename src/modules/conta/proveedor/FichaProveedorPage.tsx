@@ -43,6 +43,8 @@ import { Notas } from '@/modules/conta/proveedor/Notas'
 import DatosFiscales from '@/modules/conta/proveedor/DatosFiscales'
 import Contactos from '@/modules/conta/proveedor/Contactos'
 import Pago from '@/modules/conta/proveedor/Pago'
+import UnirFichas from '@/modules/conta/proveedor/UnirFichas'
+import { deshacerUnion } from '@/modules/conta/services/comprasService'
 import Contabilidad from '@/modules/conta/proveedor/Contabilidad'
 import Documentos from '@/modules/conta/proveedor/Documentos'
 import Historial from '@/modules/conta/proveedor/Historial'
@@ -167,12 +169,14 @@ function Cabecera() {
   )
 }
 
-/** «···»: Archivar o Recuperar (respuesta 1, decisión 1). */
+/** «···»: Archivar o Recuperar (respuesta 1, decisión 1), y unir con otra ficha (compras). */
 function MenuMas() {
-  const { datos, guardar } = useFicha()
+  const { datos, guardar, recargar } = useFicha()
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [archivar, setArchivar] = useState(false)
+  const [unir, setUnir] = useState(false)
+  const [union, setUnion] = useState<string | null>(null)
   const [aviso, avisar] = useAvisoGuardado()
   const [fallo, setFallo] = useState<string | null>(null)
   const f = datos.ficha
@@ -195,7 +199,17 @@ function MenuMas() {
           ) : (
             <button type="button" role="menuitem" onClick={() => { setAbierto(false); setArchivar(true) }}>Archivar proveedor</button>
           )}
+          {!archivado && <button type="button" role="menuitem" onClick={() => { setAbierto(false); setUnir(true) }}>Unir con otra ficha</button>}
+          {union && <button type="button" role="menuitem" onClick={async () => {
+            setAbierto(false); setFallo(null)
+            try { await deshacerUnion(union); setUnion(null); avisar('Unión deshecha: cada ficha vuelve a tener lo suyo.'); await recargar() }
+            catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo deshacer.') }
+          }}>Deshacer la unión</button>}
         </div>
+      )}
+      {unir && (
+        <UnirFichas accountId={f.accountId} queda={f.id} nombre={f.name} nif={f.taxId} alCerrar={() => setUnir(false)}
+          alUnir={(r) => { setUnir(false); setUnion(r.fusion); avisar(`${r.resumen} Si te has equivocado, «···» › Deshacer la unión.`); void recargar() }} />
       )}
       <div style={{ position: 'absolute', right: 0, top: 52, width: 360, zIndex: 20 }}>
         <Guardado texto={aviso} />

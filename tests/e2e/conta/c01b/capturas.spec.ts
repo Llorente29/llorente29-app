@@ -113,12 +113,12 @@ test('dirección «por confirmar» (Mercados del Norte): el reparto propuesto co
   await capturar(page, 'direccion-por-confirmar')
 })
 
-test('pestaña Pago (cuenta A): forma y plazo en píldoras, y «Cómo factura»', async ({ page }) => {
+test('pestaña Pago (cuenta A): forma y plazo en píldoras, y «Cómo te factura»', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto(`/kitchen/proveedores/${HERMANOS_RUIZ}/pago`)
   await expect(page.getByRole('group', { name: 'Forma de pago' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Plazo' })).toBeVisible()
-  await expect(page.getByText('Cómo factura')).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Cómo te factura', exact: true })).toBeVisible()
   await capturar(page, 'pago')
 })
 

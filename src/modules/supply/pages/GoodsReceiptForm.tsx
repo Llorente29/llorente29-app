@@ -54,6 +54,7 @@ import {
   deleteGoodsReceiptLinesByReceipt,
   createGoodsReceiptLine,
   confirmReceipt,
+  fraseDelCamino,
   voidReceipt,
   listOrderLineReceived,
   qtyInBaseFromFormat,
@@ -2046,10 +2047,13 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         catch (e) { console.error('persist: corregida OK pero no se pudo anular la original', e); voidNote = ' · OJO: anula la anterior a mano' }
       }
 
+      // Compras (N21): qué pasa con el papel. Si no se sabe, no se dice nada.
+      const camino = await fraseDelCamino(receipt.id)
+
       const parts = [`${res.postedLines} línea(s) al almacén`]
       if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear (revisar)`)
       if (res.recalculatedItems > 0) parts.push(`coste actualizado en ${res.recalculatedItems} ingrediente(s)`)
-      onSaved(`Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}${learnNote}${voidNote}.`)
+      onSaved(`Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}${learnNote}${voidNote}.${camino ? ` ${camino}` : ''}`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la recepción.')
       setSaving(false)
