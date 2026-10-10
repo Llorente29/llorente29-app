@@ -118,3 +118,17 @@ supabase/seeds/conta/seed_compras_staging.sql
 #   analizador de producción (los disparadores sobre goods_receipt y
 #   supplier_invoice); el SQL no cambia, no se reaplican.
 supabase/migrations/20261017T0180_compras_octubre_foodint.sql
+#   Run 130 (2073f7b): la 0180 aplicada; aquí no hay Foodint: solo su tabla,
+#   vacía.
+#
+#   0190: el repaso de Julio (10/10). «Contado» y los demás nombres genéricos
+#         no preguntan de quién son: avisan de que así no se descuenta el IVA;
+#         «Apuntarla sin descontar el IVA» (compras_sin_iva y la marca
+#         vat_non_deductible); los albaranes de una liquidación.
+#   La prueba: los genéricos, apuntar sin IVA (una sola factura, la pregunta
+#   cerrada, no dos veces), los albaranes y las puertas.
+#   Semilla del repaso: «Contado» decidido otra vez y tres albaranes del
+#   socio a nombre de su local (una sola pregunta para los tres).
+supabase/migrations/20261017T0190_compras_repaso.sql
+supabase/staging/sql/20261017_compras_repaso_prueba.sql
+supabase/seeds/conta/seed_compras_repaso_staging.sql
