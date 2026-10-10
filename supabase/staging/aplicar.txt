@@ -69,3 +69,13 @@
 #   aplicar la 0160 (idempotente).
 supabase/migrations/20261017T0160_compras_liquidacion_mensual.sql
 supabase/staging/sql/20261017_compras_liquidacion_prueba.sql
+#   Run 124: la 0160 re-aplicada y su prueba EN VERDE: septiembre al céntimo,
+#   los tres asientos validados con el libro registro.
+#
+#   0170: lo que leen las pantallas de Compras (qué tienes que mirar, las
+#         liquidaciones del mes, cerrar una pregunta, los últimos papeles de
+#         un proveedor y la frase al confirmar en el local). La prueba: cuatro
+#         recepciones con sus caminos, cerrar y que no vuelva al redecidir,
+#         sin camino y las puertas de la cuenta B.
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/staging/sql/20261017_compras_pantallas_prueba.sql
