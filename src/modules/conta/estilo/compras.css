@@ -61,6 +61,7 @@
 .cxc-tres-cifra { font-family: var(--cx-letra-cifras); font-size: 24px; font-weight: 600; }
 .cxc-contraste { display: flex; gap: 14px; padding: 14px 0; border-top: 1px solid var(--cx-linea); }
 .cxc-contraste:first-of-type { border-top: none; }
+.cxc-contraste > .cxc-cosa-texto { flex: 1; min-width: 0; }
 .cxc-marca { flex: none; width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
 .cxc-marca-bien { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
 .cxc-marca-casi { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
@@ -105,6 +106,11 @@
   .cxc-esperando > .cxc-cuando.cxc-tarde { color: var(--cx-ambar); }
   /* Las ventas por plataforma conservan sus columnas: más estrechas. */
   .cxc-tabla > * { padding: 8px 6px; }
+  /* Dentro de un veredicto, la tabla sale de la sangría de la marca y las
+     cifras toman su ancho (e2e 171: «Diferencia» se salía por la derecha). */
+  .cxc-contraste .cxc-tabla { margin-left: -46px; grid-template-columns: minmax(0, 1fr) auto auto auto !important; }
+  .cxc-contraste .cxc-tabla > * { padding: 8px 4px; font-size: 12px; }
+  .cxc-contraste .cxc-tabla > .cx-cifra { white-space: nowrap; }
   .cxc-soltar { flex-direction: column; align-items: stretch; }
   .cxc-liq { flex-direction: column; align-items: stretch; }
   .cxc-tres { grid-template-columns: minmax(0, 1fr); }

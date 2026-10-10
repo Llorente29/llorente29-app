@@ -20,6 +20,7 @@ import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/compras'
 const VERDURAS = 'c0c00000-0000-4000-8000-000000000001'
+const BODEGA = 'c0c00000-0000-4000-8000-000000000002'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // La captura de página entera con `fullPage` pinta las piezas fijas (la
@@ -108,7 +109,14 @@ test('La liquidación de septiembre y su contraste (N19)', async ({ page }) => {
   // Tres veredictos con su umbral: compras coincide; las ventas de Folvy no están en staging.
   await expect(page.getByText('Lo que dice que te mandó coincide con lo que recibiste.')).toBeVisible()
   await expect(page.getByText('Sus ventas no las puedo comprobar.')).toBeVisible()
-  await expect(page.getByRole('table', { name: 'Ventas por plataforma' })).toBeVisible()
+  const ventas = page.getByRole('table', { name: 'Ventas por plataforma' })
+  await expect(ventas).toBeVisible()
+  // Ninguna celda se sale de su tabla (e2e 171: en el móvil «Diferencia» se cortaba por la derecha).
+  const salen = await ventas.evaluate((t) => {
+    const r = t.getBoundingClientRect()
+    return Array.from(t.children).filter((c) => c.getBoundingClientRect().right > r.right + 1 || c.scrollWidth > c.clientWidth + 1).map((c) => c.textContent)
+  })
+  expect(salen).toEqual([])
   // Los albaranes que cuenta el contraste, con su papel.
   await page.getByRole('button', { name: 'Ver los 2 albaranes' }).click()
   await expect(page.locator('.cxc-albaranes').getByRole('button', { name: 'Ver el papel' })).toHaveCount(2)
@@ -126,6 +134,18 @@ test('Cómo te factura, en la ficha (N20)', async ({ page }) => {
   await expect(grupo.getByRole('radio')).toHaveCount(3)
   await expect(grupo.getByText('Su última entrega vino con albarán.')).toBeVisible()
   await capturar(page, 'como-te-factura', 'ficha')
+})
+
+test('Cómo te factura, con la forma ya elegida en su ficha (N20)', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  await page.goto(`/kitchen/proveedores/${BODEGA}/pago`)
+  const grupo = page.getByRole('group', { name: 'Cómo te factura', exact: true })
+  await expect(grupo).toBeVisible()
+  // Se ve cuál está elegida: la suya, marcada y con su etiqueta.
+  await expect(grupo.getByRole('radio', { name: /Con cada entrega/ })).toBeChecked()
+  await expect(grupo.getByText('La de su ficha')).toBeVisible()
+  await capturar(page, 'como-te-factura-elegida', 'ficha')
 })
 
 test('«Abrir su ficha» desde Compras cae en «Cómo te factura»', async ({ page }) => {

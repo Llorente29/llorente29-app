@@ -531,7 +531,9 @@ export function veredictoProductos(p: ContrasteProductos, total: number): Veredi
   if (p.sin_casar > 0) {
     return {
       estado: 'no_se_puede', titulo: 'El género que dice que gastaste todavía no lo puedo comprobar producto a producto.',
-      detalle: `Reconozco ${p.casados + p.no_nuestros} de sus ${total} productos. Los otros ${p.sin_casar} los llama de otra manera. Dime una vez cuál es cuál y lo recuerdo para todos los meses.`,
+      detalle: `${p.casados + p.no_nuestros === 0
+        ? `Todavía no reconozco ninguno de sus ${total} productos: ${total === 1 ? 'lo llama' : 'los llama'} de otra manera.`
+        : `Reconozco ${p.casados + p.no_nuestros} de sus ${total} productos; ${p.sin_casar === 1 ? 'el otro lo llama' : `los otros ${p.sin_casar} los llama`} de otra manera.`} Dime una vez cuál es cuál y lo recuerdo para todos los meses.`,
     }
   }
   if (p.no_coinciden.length === 0) return { estado: 'coincide', titulo: 'El género coincide producto a producto.', detalle: `Los ${total} productos de su inventario están casados y cuadran con lo recibido.` }

@@ -228,6 +228,11 @@ describe('Repaso · los tres veredictos de la liquidación', () => {
     expect(veredictoProductos(base, 3).estado).toBe('no_se_puede')
     expect(veredictoProductos({ ...base, casados: 3, sin_casar: 0, sin_casar_con_compras: 0 }, 3).estado).toBe('coincide')
   })
+  it('producto a producto: la frase no dice «Reconozco 0» (la captura del e2e 171)', () => {
+    const base = { casados: 0, no_nuestros: 0, sin_casar: 3, sin_casar_con_compras: 2, no_coinciden: [] }
+    expect(veredictoProductos(base, 3).detalle).toBe('Todavía no reconozco ninguno de sus 3 productos: los llama de otra manera. Dime una vez cuál es cuál y lo recuerdo para todos los meses.')
+    expect(veredictoProductos({ ...base, casados: 2, sin_casar: 1 }, 3).detalle).toMatch(/^Reconozco 2 de sus 3 productos; el otro lo llama de otra manera\./)
+  })
   it('los cinco documentos: si falta uno, cuál y qué no se comprueba', () => {
     const d = documentosLeidos({ emitida: {}, recibida: {}, transaccion: {}, ventas: null, inventario: {} })
     expect(d.filter((x) => !x.llegado).map((x) => `${x.nombre}: ${x.sinEl}`)).toEqual(['Ventas: sin ellas no compruebo tu servicio'])
