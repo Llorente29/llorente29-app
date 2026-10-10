@@ -60,5 +60,12 @@
 #         confirmar. La prueba lleva SEPTIEMBRE AL CÉNTIMO: la lectura real de
 #         los cinco PDF (nombres y NIF cambiados) y los tres asientos de
 #         liquidacionMensual(), propuestos y validados, con el libro registro.
+#   Run 123 (951021f): 0160 aplicada; la prueba pasó 0–3 y PARÓ al validar:
+#   el libro (regla 5) no deja una cuota que no sea base × tipo, y yo había
+#   metido el céntimo de redondeo de su factura en el IVA del 21 %. Ahora las
+#   cuotas van como en el papel y el céntimo, a redondeos (769). Y el
+#   contraste de ventas toma las cedidas sin acuerdo cuando el socio no tiene
+#   ninguno (Foodint no tiene acuerdos de cesión), y lo dice. Se vuelve a
+#   aplicar la 0160 (idempotente).
 supabase/migrations/20261017T0160_compras_liquidacion_mensual.sql
 supabase/staging/sql/20261017_compras_liquidacion_prueba.sql

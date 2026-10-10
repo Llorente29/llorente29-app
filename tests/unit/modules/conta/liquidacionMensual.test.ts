@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { filasDe, leerLiquidacion, reconocer, type DocumentoLiquidacion } from '@/modules/conta/lib/lectorLiquidacionMensual'
-import { cuotasQueCuadran, liquidacionMensual, type CuentasLiquidacionMensual } from '@/modules/conta/lib/asientosPropuestos'
+import { cuotasYRedondeo, liquidacionMensual, type CuentasLiquidacionMensual } from '@/modules/conta/lib/asientosPropuestos'
 import { cuadre } from '@/modules/conta/lib/libro'
 import type { Celda, PaginaPdf } from '@/modules/conta/lib/lectorDiez'
 
@@ -157,6 +157,7 @@ describe('aceptación 5 · septiembre, al céntimo', () => {
   const lectura = leerLiquidacion([AF, FV, transaccion()], EMPRESA)
   const c: CuentasLiquidacionMensual = {
     cliente: '43000009', proveedor: '40000009', compras: '60000000', ingresoServicios: '70500000', ingresoMercaderias: '70000000',
+    redondeoGasto: '66900000', redondeoIngreso: '76900000',
     ivaRepercutido: (p) => (p === 10 ? { cuenta: '47700010', tipoId: 'r10' } : null),
     ivaSoportado: (p) => ({ 4: { cuenta: '47200004', tipoId: 's4' }, 10: { cuenta: '47200010', tipoId: 's10' }, 21: { cuenta: '47200021', tipoId: 's21' } } as Record<number, { cuenta: string; tipoId: string }>)[p] ?? null,
   }
@@ -170,13 +171,22 @@ describe('aceptación 5 · septiembre, al céntimo', () => {
   const [compra, ingreso, compensa] = r.propuestas
   const filas = (p: typeof compra) => p.lineas.map((l) => [l.cuenta, l.debe, l.haber])
 
-  it('compra: 3.587,15 de base al 4, 10 y 21 %, total 3.987,81 a su 400', () => {
+  // Su factura dice 3.987,81 y sus tres líneas suman 3.987,82: calcula el total
+  // con el IVA sin redondear por tipo. La regla 5 del libro (la cuota es base
+  // × tipo) no se rompe: las cuotas van como en el papel y el céntimo, aparte.
+  it('compra: 3.587,15 de base al 4, 10 y 21 %, cuotas como en el papel, total 3.987,81 a su 400', () => {
     expect(r.sinPropuesta).toBeNull()
-    expect(filas(compra)).toEqual([['60000000', 3587.15, 0], ['47200004', 31.11, 0], ['47200010', 200.39, 0], ['47200021', 169.16, 0], ['40000009', 0, 3987.81]])
+    expect(filas(compra)).toEqual([['60000000', 3587.15, 0], ['47200004', 31.11, 0], ['47200010', 200.39, 0], ['47200021', 169.17, 0], ['40000009', 0, 3987.81], ['76900000', 0, 0.01]])
     expect(compra.lineas.filter((l) => l.iva).map((l) => [l.iva!.tipo, l.iva!.base, l.iva!.libro])).toEqual([[4, 777.69, 'received'], [10, 2003.91, 'received'], [21, 805.55, 'received']])
     expect(cuadre(compra.lineas).cuadra).toBe(true)
     expect(compra.origen).toEqual({ tipo: 'supplier_invoice', id: 'fv' })
-    expect(compra.avisos[0]).toContain('el céntimo va al IVA')
+    expect(compra.avisos[0]).toBe('Su factura FV-02927 dice 3.987,81 €; base y cuota de cada tipo dan 3.987,82 €. Las cuotas van como en el papel y el céntimo, a «redondeos».')
+  })
+  it('sin 669/769 en el plan, el céntimo va a la línea del gasto, y se dice', () => {
+    const sin = liquidacionMensual(e, { ...c, redondeoGasto: null, redondeoIngreso: null }).propuestas[0]
+    expect(filas(sin)).toEqual([['60000000', 3587.14, 0], ['47200004', 31.11, 0], ['47200010', 200.39, 0], ['47200021', 169.17, 0], ['40000009', 0, 3987.81]])
+    expect(cuadre(sin.lineas).cuadra).toBe(true)
+    expect(sin.avisos[0]).toContain('no hay 669/769 en tu plan')
   })
   it('ingreso: 8.666,95 de base + 866,70 de IVA = 9.533,65, al libro de expedidas con el nº AF-02927', () => {
     expect(filas(ingreso)).toEqual([['43000009', 9533.65, 0], ['70500000', 0, 6928.21], ['70000000', 0, 1738.74], ['47700010', 0, 866.7]])
@@ -206,11 +216,11 @@ describe('aceptación 5 · septiembre, al céntimo', () => {
   })
 })
 
-describe('cuotasQueCuadran', () => {
+describe('cuotasYRedondeo', () => {
   it('sin redondeo distinto, la cuota de cada tipo tal cual', () => {
-    expect(cuotasQueCuadran([{ base: 8666.95, tipo: 10 }], 9533.65)).toEqual({ porTipo: [{ tipo: 10, base: 8666.95, cuota: 866.7 }], ajuste: 0 })
+    expect(cuotasYRedondeo([{ base: 8666.95, tipo: 10 }], 9533.65)).toEqual({ porTipo: [{ tipo: 10, base: 8666.95, cuota: 866.7 }], redondeo: 0 })
   })
   it('más de un céntimo por tipo no es redondeo', () => {
-    expect(cuotasQueCuadran([{ base: 100, tipo: 21 }], 121.05)).toBeNull()
+    expect(cuotasYRedondeo([{ base: 100, tipo: 21 }], 121.05)).toBeNull()
   })
 })

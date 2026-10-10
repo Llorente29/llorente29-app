@@ -645,34 +645,28 @@ export interface CuentasLiquidacionMensual {
   ingresoMercaderias: string | null
   ivaRepercutido: (porcentaje: number) => { cuenta: string; tipoId: string } | null
   ivaSoportado: (porcentaje: number) => { cuenta: string; tipoId: string } | null
+  /** Donde va el céntimo que un documento redondea en su total: 669 si pagas o cobras de más, 769 si de menos. */
+  redondeoGasto: string | null
+  redondeoIngreso: string | null
 }
 
 /**
- * Las cuotas por tipo (base del tipo × tipo, al céntimo) que suman EXACTAMENTE
- * el total del documento. Si el documento redondea su total de otra forma
- * (1 céntimo por tipo como mucho), el céntimo va al tipo que más subió (o
- * menos bajó) al redondear, y se dice. Más que eso no es redondeo: null.
+ * Las cuotas por tipo, EXACTAS (base del tipo × tipo, al céntimo: regla 5 del
+ * libro, y la del papel), y lo que el documento redondea en su total aparte.
+ * Hay documentos que calculan el total con el IVA sin redondear por tipo: su
+ * total difiere en un céntimo de la suma de sus líneas. Ese céntimo no se
+ * esconde en una cuota: va a su línea de redondeo y se dice. Más de 1 céntimo
+ * por tipo no es redondeo: null.
  */
-export function cuotasQueCuadran(lineas: readonly { base: number; tipo: number }[], total: number):
-  { porTipo: { tipo: number; base: number; cuota: number }[]; ajuste: number } | null {
+export function cuotasYRedondeo(lineas: readonly { base: number; tipo: number }[], total: number):
+  { porTipo: { tipo: number; base: number; cuota: number }[]; redondeo: number } | null {
   const porTipo = new Map<number, number>()
   for (const l of lineas) porTipo.set(l.tipo, (porTipo.get(l.tipo) ?? 0) + cent(l.base))
-  const filas = [...porTipo].sort((a, b) => a[0] - b[0]).map(([tipo, b]) => {
-    const exacta = (b * tipo) / 100 // en céntimos, sin redondear
-    const cuota = cent(cuotaIva(deCent(b), tipo))
-    return { tipo, base: b, cuota, exceso: cuota - exacta }
-  })
-  const suma = filas.reduce((t, f) => t + f.base + f.cuota, 0)
-  let dif = cent(total) - suma
-  if (Math.abs(dif) > filas.length) return null
-  const ajuste = dif
-  const orden = [...filas].sort((a, b) => (dif < 0 ? b.exceso - a.exceso : a.exceso - b.exceso))
-  for (const f of orden) {
-    if (dif === 0) break
-    const paso = Math.sign(dif)
-    f.cuota += paso; dif -= paso
-  }
-  return { porTipo: filas.map((f) => ({ tipo: f.tipo, base: deCent(f.base), cuota: deCent(f.cuota) })), ajuste: deCent(ajuste) }
+  const filas = [...porTipo].sort((a, b) => a[0] - b[0]).map(([tipo, b]) => ({ tipo, base: deCent(b), cuota: cuotaIva(deCent(b), tipo) }))
+  const suma = filas.reduce((t, f) => t + cent(f.base) + cent(f.cuota), 0)
+  const redondeo = cent(total) - suma
+  if (Math.abs(redondeo) > filas.length) return null
+  return { porTipo: filas, redondeo: deCent(redondeo) }
 }
 
 const esMercaderia = (c: string) => /mercader/i.test(c)
@@ -689,8 +683,8 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
   if (raras.length) return no(`En la factura que le haces, Folvy no sabe si «${raras[0].concepto}» es un servicio o una venta de mercaderías: dímelo.`)
   if (e.emitida.lineas.some((l) => esServicio(l.concepto)) && !c.ingresoServicios) return no('Falta en tu plan la cuenta de ingresos por servicios (705).')
   if (e.emitida.lineas.some((l) => esMercaderia(l.concepto)) && !c.ingresoMercaderias) return no('Falta en tu plan la cuenta de ventas de mercaderías (700).')
-  const cuotasR = cuotasQueCuadran(e.recibida.lineas, e.recibida.total)
-  const cuotasE = cuotasQueCuadran(e.emitida.lineas, e.emitida.total)
+  const cuotasR = cuotasYRedondeo(e.recibida.lineas, e.recibida.total)
+  const cuotasE = cuotasYRedondeo(e.emitida.lineas, e.emitida.total)
   if (!cuotasR) return no(`Su factura ${e.recibida.numero} no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.`)
   if (!cuotasE) return no(`La factura que le haces ${e.emitida.numero} no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.`)
   const saldo = deCent(cent(e.emitida.total) - cent(e.recibida.total))
@@ -698,8 +692,26 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
   const loc = e.localId
   const comun = !loc
 
+  // El céntimo que un documento redondea en su total, a su línea (o, si el
+  // plan no tiene 669/769, a la línea principal), y dicho.
+  const redondeo = (r: number, debeSiPositivo: boolean, que: string, total: number, principal: LineaAsiento, lineas: LineaAsiento[], avisos: string[]) => {
+    if (!cent(r)) return
+    const calculado = eurosExactos(deCent(cent(total) - cent(r)))
+    const aGasto = debeSiPositivo ? r > 0 : r < 0
+    const cta = aGasto ? c.redondeoGasto : c.redondeoIngreso
+    const imp = deCent(Math.abs(cent(r)))
+    if (cta) {
+      lineas.push({ cuenta: cta, debe: (debeSiPositivo ? r > 0 : r < 0) ? imp : 0, haber: (debeSiPositivo ? r > 0 : r < 0) ? 0 : imp, localId: loc, comun, concepto: `Redondeo del total de ${que}` })
+      avisos.push(`${que[0].toUpperCase()}${que.slice(1)} dice ${eurosExactos(total)}; base y cuota de cada tipo dan ${calculado}. Las cuotas van como en el papel y el ${imp === 0.01 ? 'céntimo' : 'redondeo'}, a «redondeos».`)
+    } else {
+      const lado = principal.debe ? 'debe' : 'haber'
+      principal[lado] = deCent(cent(principal[lado]) + (lado === 'debe' ? 1 : -1) * cent(r) * (debeSiPositivo ? 1 : -1))
+      avisos.push(`${que[0].toUpperCase()}${que.slice(1)} dice ${eurosExactos(total)} y base y cuota dan ${calculado}: el redondeo va a la línea principal (no hay 669/769 en tu plan).`)
+    }
+  }
+
   // 1 · Su factura: la compra.
-  const avisosR: string[] = cuotasR.ajuste ? [`Su factura dice ${eurosExactos(e.recibida.total)}; con la cuota de cada tipo redondeada saldría ${eurosExactos(deCent(cent(e.recibida.total) - cent(cuotasR.ajuste)))}. Manda su total: el céntimo va al IVA.`] : []
+  const avisosR: string[] = []
   const lineasR: LineaAsiento[] = [{ cuenta: c.compras, debe: deCent(cent(e.recibida.lineas.reduce((t, l) => t + l.base, 0))), haber: 0, localId: loc, comun, documento: e.recibida.numero }]
   for (const t of cuotasR.porTipo) {
     if (t.tipo === 0) continue
@@ -708,9 +720,11 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
     lineasR.push({ cuenta: cta.cuenta, debe: t.cuota, haber: 0, localId: loc, comun, documento: e.recibida.numero, iva: { tipoId: cta.tipoId, tipo: t.tipo, base: t.base, libro: 'received', deducible: 'yes' } })
   }
   lineasR.push({ cuenta: c.proveedor, debe: 0, haber: e.recibida.total, localId: loc, comun, documento: e.recibida.numero, terceroId: e.terceroId })
+  // Pagas su total: si es más que lo calculado, la diferencia es gasto (debe); si es menos, ingreso (haber).
+  redondeo(cuotasR.redondeo, true, `su factura ${e.recibida.numero}`, e.recibida.total, lineasR[0], lineasR, avisosR)
   const compra: Propuesta = {
     serie: 2, fecha: e.recibida.fecha, concepto: `Factura ${e.socio} · ${e.recibida.numero}`, origen: { tipo: 'supplier_invoice', id: e.facturaRecibidaId },
-    lineas: lineasR, confianza: cuotasR.ajuste ? 'probable' : 'seguro',
+    lineas: lineasR, confianza: cuotasR.redondeo ? 'probable' : 'seguro',
     porque: 'Lo que te factura cada mes: compra, con su IVA por tipo, a su cuenta de proveedor.',
     razones: [{ decision: 'Su factura de la liquidación del mes', porque: 'no factura las entregas: sus albaranes no se apuntan uno a uno' }],
     avisos: avisosR, terceroId: e.terceroId, documento: e.recibida.numero,
@@ -728,15 +742,18 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
     if (!cta) return no(`No hay 477 del ${t.tipo} % en tu plan.`)
     lineasE.push({ cuenta: cta.cuenta, debe: 0, haber: t.cuota, localId: loc, comun, documento: e.emitida.numero, iva: { tipoId: cta.tipoId, tipo: t.tipo, base: t.base, libro: 'issued' } })
   }
+  const avisosE: string[] = []
+  // Cobras su total: si es menos que lo calculado, la diferencia es gasto (debe); si es más, ingreso (haber).
+  redondeo(cuotasE.redondeo, false, `la factura que le haces ${e.emitida.numero}`, e.emitida.total, lineasE[1] ?? lineasE[0], lineasE, avisosE)
   const ingreso: Propuesta = {
     serie: 4, fecha: e.emitida.fecha, concepto: `Le facturas a ${e.socio} · ${e.emitida.numero}`, origen: { tipo: 'licensed_settlement', id: e.id },
-    lineas: lineasE, confianza: cuotasE.ajuste ? 'probable' : 'seguro',
+    lineas: lineasE, confianza: cuotasE.redondeo ? 'probable' : 'seguro',
     porque: 'La factura que le haces (la extiende él en tu nombre): ingreso con su IVA, a su cuenta de cliente, con su número en el libro de expedidas.',
     razones: [
       { decision: 'Servicios a la 705, el género que pones tú a la 700', porque: 'cada línea por lo que es' },
       { decision: `Nº ${e.emitida.numero} en el libro de expedidas`, porque: 'es una factura tuya aunque la haya extendido él' },
     ],
-    avisos: cuotasE.ajuste ? [`La factura que le haces dice ${eurosExactos(e.emitida.total)}; el céntimo de redondeo va al IVA.`] : [],
+    avisos: avisosE,
     terceroId: e.terceroId, documento: e.emitida.numero,
   }
 

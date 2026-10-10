@@ -318,7 +318,7 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       }, {
         cliente: ctx.enlace('customer', party, 'principal'), proveedor: ctx.enlace('supplier', sup, 'principal'),
         compras: ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null),
-        ingresoServicios: ctx.hoja('705'), ingresoMercaderias: ctx.hoja('700'),
+        ingresoServicios: ctx.hoja('705'), ingresoMercaderias: ctx.hoja('700'), redondeoGasto: ctx.hoja('669'), redondeoIngreso: ctx.hoja('769'),
         ivaRepercutido: (pct) => { const t = tipoIva(pct); const c = t ? ctx.enlace('tax_rate', t.id, 'repercutido') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
         ivaSoportado: (pct) => { const t = tipoIva(pct); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
       })

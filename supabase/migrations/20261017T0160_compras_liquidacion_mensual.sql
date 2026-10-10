@@ -171,7 +171,7 @@ grant execute on function public.compras_liquidacion_guardar(uuid, uuid, uuid, j
 create or replace function public._compras_liquidacion_contraste(p_liq uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare
-  l licensed_settlement; v_compras jsonb; v_ventas jsonb; v_productos jsonb; v_doc_compras numeric;
+  l licensed_settlement; v_compras jsonb; v_ventas jsonb; v_productos jsonb; v_doc_compras numeric; v_origen_marcas text;
 begin
   select * into l from licensed_settlement where id = p_liq;
   if l.id is null then raise exception 'Esa liquidación no existe.' using errcode = 'P0002'; end if;
@@ -192,12 +192,23 @@ begin
     'diferencia', case when v_doc_compras is null then null else round((v_compras->>'folvy')::numeric - v_doc_compras, 2) end);
 
   -- Ventas: pedidos cerrados de sus marcas en ese local y mes (fecha de Madrid), por plataforma.
-  with folvy as (
+  -- Sus marcas: las de sus acuerdos de cesión; si no tiene ninguno (Foodint,
+  -- 10/10: ningún acuerdo en la cuenta), las cedidas que no son de nadie, y se dice.
+  v_origen_marcas := case when exists (select 1 from brand_licensing_agreement a where a.party_id = l.party_id) then 'acuerdo'
+                          when exists (select 1 from brand b where b.account_id = l.account_id and b.ownership_type = 'licensed'
+                                         and not exists (select 1 from brand_licensing_agreement a where a.brand_id = b.id)) then 'cedidas_sin_acuerdo'
+                          else 'ninguna' end;
+  with marcas as (
+    select a.brand_id id from brand_licensing_agreement a where a.party_id = l.party_id and v_origen_marcas = 'acuerdo'
+    union
+    select b.id from brand b where v_origen_marcas = 'cedidas_sin_acuerdo' and b.account_id = l.account_id and b.ownership_type = 'licensed'
+       and not exists (select 1 from brand_licensing_agreement a where a.brand_id = b.id)),
+  folvy as (
     select lower(regexp_replace(public.unaccent(c.name), '[^a-zA-Z]', '', 'g')) plat, c.name nombre, sum(s.taxable_base) base, count(*) pedidos
       from sale s join sales_channel c on c.id = s.channel_id
      where s.account_id = l.account_id and s.location_id = l.location_id and s.status = 'closed' and coalesce(s.is_active, true)
        and (s.sold_at at time zone 'Europe/Madrid')::date between l.period_from and l.period_to
-       and s.brand_id in (select a.brand_id from brand_licensing_agreement a where a.party_id = l.party_id)
+       and s.brand_id in (select m.id from marcas m)
      group by 1, 2),
   doc as (
     select lower(regexp_replace(public.unaccent(x->>'plataforma'), '[^a-zA-Z]', '', 'g')) plat, x->>'plataforma' nombre,
@@ -238,7 +249,12 @@ begin
                            or abs(coalesce(r.qty, 0) - c.compras * c.factor) > greatest(0.01 * c.compras * c.factor, 0.001))), '[]'::jsonb))
     into v_productos from casado c left join recibido r on r.recipe_item_id = c.recipe_item_id;
 
-  return jsonb_build_object('liquidacion', l.id, 'compras', v_compras, 'ventas', v_ventas, 'productos', v_productos);
+  return jsonb_build_object('liquidacion', l.id, 'compras', v_compras, 'ventas', v_ventas, 'productos', v_productos,
+    'marcas', v_origen_marcas,
+    'marcas_frase', case v_origen_marcas
+      when 'acuerdo' then 'Sus marcas, por sus acuerdos de cesión.'
+      when 'cedidas_sin_acuerdo' then 'No tiene acuerdos de cesión: se toman las marcas cedidas que no son de nadie. Ponle sus acuerdos en su ficha.'
+      else 'No hay marcas cedidas: no hay ventas suyas que contrastar.' end);
 end $$;
 revoke all on function public._compras_liquidacion_contraste(uuid) from public, anon, authenticated;
 
