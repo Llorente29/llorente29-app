@@ -93,3 +93,11 @@ supabase/staging/sql/20261017_compras_pantallas_prueba.sql
 #   no se crea otra factura del mismo papel) y en las puertas (6 de 6).
 supabase/migrations/20261017T0170_compras_pantallas.sql
 supabase/staging/sql/20261017_compras_pantallas_prueba.sql
+#   Run 127 (107f7e4): 0170 con compras_camino_rehacer, EN VERDE.
+#   La 0170 gana compras_liquidacion_productos (para «Decirle cuál es cuál»:
+#   compara con compras_nombre_norm, la misma vara que el contraste, en vez
+#   de rehacerla en el cliente). La prueba gana el paso 5b: llega una
+#   liquidación, la fila la enseña con su saldo, y un producto casado con
+#   otra forma de escribirlo sale casado.
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/staging/sql/20261017_compras_pantallas_prueba.sql

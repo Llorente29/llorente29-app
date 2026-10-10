@@ -22,6 +22,8 @@
 --   4. La frase al confirmar: r1 albarán, r3 factura, r4 la del socio.
 --   5. Liquidaciones de octubre: P3 en Norte Centro, 1 recepción, 40,00, sin
 --      liquidación todavía.
+--   5b. Llega su liquidación: la fila la enseña con su saldo; sus productos,
+--      lo sin casar primero, y lo casado con otra forma de escribirlo.
 --   6. Sin camino: si a una recepción se le pierde el camino, sale; rehacerlo
 --      se lo devuelve sin crear otra factura de su papel.
 --   7. Puertas: desde la cuenta B no se ve ni se cierra nada.
@@ -159,6 +161,37 @@ begin
   raise notice '5 · octubre: % · % recepción · %', f->>'proveedor_nombre', f->>'recepciones', f->>'base';
 end $$;
 
+-- ── 5b · Su liquidación llega: la fila la enseña, y sus productos ──────────
+do $$
+declare v_liq uuid; v jsonb; f jsonb; v_p text;
+begin
+  v_liq := public.compras_liquidacion_guardar('3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'c0f00000-0000-4000-8000-000000000003', 'c01a0000-0000-4000-8000-0000000000a2',
+    jsonb_build_object(
+      'emitida', jsonb_build_object('numero', 'AF-P8', 'fecha', '2026-10-31', 'total', 110,
+                   'lineas', jsonb_build_array(jsonb_build_object('concepto', 'Servicio', 'base', 100, 'tipo', 10, 'total', 110))),
+      'recibida', jsonb_build_object('numero', 'FV-P8', 'fecha', '2026-10-31', 'total', 44,
+                   'lineas', jsonb_build_array(jsonb_build_object('concepto', 'Género', 'base', 40, 'tipo', 10, 'total', 44))),
+      'periodo', jsonb_build_object('desde', '2026-10-01', 'hasta', '2026-10-31'),
+      'inventario', jsonb_build_object('productos', jsonb_build_array(
+        jsonb_build_object('nombre', 'Patata Ocho kg', 'compras', 5, 'unidad', 'kg', 'precio', 1),
+        jsonb_build_object('nombre', 'Salsa Rara Ocho', 'compras', 2, 'unidad', 'ud', 'precio', 3))),
+      'bloqueos', '[]'::jsonb));
+  v := public.compras_liquidaciones('c01a0000-0000-4000-8000-00000000000a', date '2026-10-01');
+  select r into f from jsonb_array_elements(v->'filas') r where r->>'proveedor' = 'c0f00000-0000-4000-8000-000000000003';
+  if (f->>'liquidacion')::uuid is distinct from v_liq or f->>'estado' <> 'borrador' or (f->>'saldo')::numeric <> 66 or f->>'referencia' <> 'AF-P8' then
+    raise exception 'PRUEBA pantallas · 5b: la fila con su liquidación dice %.', f;
+  end if;
+  -- Se casa con otra forma de escribirlo: la misma vara que el contraste.
+  perform public.compras_liquidacion_casar_producto('c0f00000-0000-4000-8000-000000000003', 'PATATA  ocho, kg', '7e000000-0000-4000-8000-000000000a01', false);
+  select string_agg(format('%s:%s', x->>'nombre', coalesce(x->>'articulo_nombre', case when (x->>'no_es_nuestro')::boolean then 'no es nuestro' else '-' end)), ' · ' order by ord)
+    into v_p from jsonb_array_elements(public.compras_liquidacion_productos(v_liq)) with ordinality t(x, ord);
+  if v_p not like 'Salsa Rara Ocho:- · Patata Ocho kg:%' or v_p like '%Patata Ocho kg:-%' then
+    raise exception 'PRUEBA pantallas · 5b: los productos dicen «%».', v_p;
+  end if;
+  perform set_config('prueba.liq', v_liq::text, true);
+  raise notice '5b · llega su liquidación AF-P8: saldo % (te paga); productos, lo sin casar primero: %', f->>'saldo', v_p;
+end $$;
+
 -- ── 6 · Sin camino ─────────────────────────────────────────────────────────
 do $$
 declare m jsonb; v jsonb; n int;
@@ -191,8 +224,9 @@ begin
   begin perform public.compras_camino_de('c0f00000-0000-4000-8000-000000000101'); exception when sqlstate '42501' then n := n + 1; end;
   begin perform public.compras_cerrar_pregunta('c0f00000-0000-4000-8000-000000000101', null); exception when sqlstate '42501' then n := n + 1; end;
   begin perform public.compras_camino_rehacer('c0f00000-0000-4000-8000-000000000101'); exception when sqlstate '42501' then n := n + 1; end;
-  if n <> 6 then raise exception 'PRUEBA pantallas · 7: desde la cuenta B solo se paran % de 6.', n; end if;
-  raise notice '7 · puertas: la cuenta B no ve, no cierra y no rehace nada (6 de 6)';
+  begin perform public.compras_liquidacion_productos(current_setting('prueba.liq')::uuid); exception when sqlstate '42501' then n := n + 1; end;
+  if n <> 7 then raise exception 'PRUEBA pantallas · 7: desde la cuenta B solo se paran % de 7.', n; end if;
+  raise notice '7 · puertas: la cuenta B no ve, no cierra y no rehace nada (7 de 7)';
 end $$;
 
 rollback;

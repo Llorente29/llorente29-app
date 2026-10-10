@@ -19,6 +19,7 @@
 --     («Sus 5 últimas entregas vinieron con albarán»), para la ficha.
 -- 5 · compras_camino_de(recepción): la frase al confirmar en el local.
 -- 6 · compras_camino_rehacer(recepción): volver a decidirlo (las «sin camino»).
+-- 7 · compras_liquidacion_productos(liquidación): sus productos y lo casado.
 --
 -- No toca stock ni coste. Vuelta atrás:
 -- supabase/vuelta-atras/20261017T0170_compras_pantallas.down.sql
@@ -177,3 +178,26 @@ begin
 end $$;
 revoke all on function public.compras_camino_rehacer(uuid) from public, anon;
 grant execute on function public.compras_camino_rehacer(uuid) to authenticated;
+
+-- ── 7 · Los productos de una liquidación y lo que está casado ──────────────
+-- Para «Decirle cuál es cuál» (N19): cada producto de su inventario con el
+-- artículo que se le dijo, o que no es nuestro, o nada. El nombre se compara
+-- normalizado con compras_nombre_norm, la misma vara que el contraste.
+create or replace function public.compras_liquidacion_productos(p_liq uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare l licensed_settlement; v jsonb;
+begin
+  select * into l from licensed_settlement where id = p_liq;
+  if l.id is null then raise exception 'Esa liquidación no existe.' using errcode = 'P0002'; end if;
+  if not (select belongs_to_account(l.account_id)) then raise exception 'Esa liquidación no es de tu cuenta.' using errcode = '42501'; end if;
+  select coalesce(jsonb_agg(jsonb_build_object('nombre', x->>'nombre', 'compras', (x->>'compras')::numeric, 'unidad', x->>'unidad',
+           'articulo', m.recipe_item_id, 'articulo_nombre', r.name, 'no_es_nuestro', coalesce(m.not_ours, false))
+           order by (m.recipe_item_id is not null or coalesce(m.not_ours, false)), x->>'nombre'), '[]'::jsonb) into v
+    from jsonb_array_elements(coalesce(l.detail->'inventario'->'productos', '[]'::jsonb)) x
+    left join settlement_product_match m on m.account_id = l.account_id and m.supplier_id = l.supplier_id
+                                        and m.name_norm = public.compras_nombre_norm(x->>'nombre')
+    left join recipe_item r on r.id = m.recipe_item_id and r.account_id = l.account_id;
+  return v;
+end $$;
+revoke all on function public.compras_liquidacion_productos(uuid) from public, anon;
+grant execute on function public.compras_liquidacion_productos(uuid) to authenticated;
