@@ -53,7 +53,12 @@
 #   Las frases decían «155 €» y «150.00 €»: compras_euros («1.234,50 €») en la
 #   0140 y la 0150, que se vuelven a aplicar (las dos son idempotentes) con
 #   sus dos pruebas, que ahora comprueban la frase entera.
-supabase/migrations/20261017T0140_compras_factura_desde_el_papel.sql
-supabase/migrations/20261017T0150_compras_pendiente_y_fin_de_mes.sql
-supabase/staging/sql/20261017_compras_factura_prueba.sql
-supabase/staging/sql/20261017_compras_fin_de_mes_prueba.sql
+#   Run 122 (87cb78c): re-aplicadas y en verde, con la frase entera.
+#
+#   0160: la liquidación mensual desde sus documentos (licensed_settlement,
+#         fórmula «documentos»): guardar, contraste, lo casado por producto y
+#         confirmar. La prueba lleva SEPTIEMBRE AL CÉNTIMO: la lectura real de
+#         los cinco PDF (nombres y NIF cambiados) y los tres asientos de
+#         liquidacionMensual(), propuestos y validados, con el libro registro.
+supabase/migrations/20261017T0160_compras_liquidacion_mensual.sql
+supabase/staging/sql/20261017_compras_liquidacion_prueba.sql

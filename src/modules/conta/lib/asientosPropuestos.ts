@@ -601,6 +601,164 @@ export function liquidacionSocio(s: EntradaSocio, c: CuentasSocio): { propuesta:
 
 // ── Nómina ──────────────────────────────────────────────────────────────────
 
+// ── Compras (10/10), §2.5: la liquidación mensual, desde sus documentos ────
+// Tres asientos, con los dos documentos con valor fiscal que manda cada mes:
+//   · su factura → compra, con sus tipos de IVA, a su cuenta de proveedor
+//     (origen supplier_invoice: la factura queda registrada como recibida);
+//   · la factura que le haces (la extiende él en tu nombre) → ingreso, con su
+//     IVA, a su cuenta de cliente, y al libro de expedidas con SU número;
+//   · la compensación de una con otra (origen supplier_payment de su factura:
+//     se la «pagas» con lo que te debe). Lo que queda en su cuenta de cliente
+//     es lo que te paga por el banco.
+// Ni sus ventas ni el género que manda pasan por tu dinero: no se apunta nada
+// «cobrado por cuenta de él». Lo que el lector no sabe qué es, para (bloqueos).
+
+export interface FacturaLiquidacion {
+  numero: string
+  fecha: string
+  lineas: readonly { concepto: string; base: number; tipo: number }[]
+  /** El total que dice el documento: manda (es lo que se paga). */
+  total: number
+}
+export interface EntradaLiquidacionMensual {
+  /** licensed_settlement.id */
+  id: string
+  /** supplier_invoice.id de su factura, registrada al guardar la liquidación. */
+  facturaRecibidaId: string
+  socio: string
+  terceroId: string | null
+  localId: string | null
+  /** La que le haces: tú le facturas. */
+  emitida: FacturaLiquidacion
+  /** La suya: él te factura. */
+  recibida: FacturaLiquidacion
+  /** El saldo que dice la transacción (null si no vino). */
+  saldo: number | null
+  /** Lo que el lector no ha podido dar por bueno. */
+  bloqueos: readonly string[]
+}
+export interface CuentasLiquidacionMensual {
+  cliente: string | null
+  proveedor: string | null
+  compras: string | null
+  ingresoServicios: string | null
+  ingresoMercaderias: string | null
+  ivaRepercutido: (porcentaje: number) => { cuenta: string; tipoId: string } | null
+  ivaSoportado: (porcentaje: number) => { cuenta: string; tipoId: string } | null
+}
+
+/**
+ * Las cuotas por tipo (base del tipo × tipo, al céntimo) que suman EXACTAMENTE
+ * el total del documento. Si el documento redondea su total de otra forma
+ * (1 céntimo por tipo como mucho), el céntimo va al tipo que más subió (o
+ * menos bajó) al redondear, y se dice. Más que eso no es redondeo: null.
+ */
+export function cuotasQueCuadran(lineas: readonly { base: number; tipo: number }[], total: number):
+  { porTipo: { tipo: number; base: number; cuota: number }[]; ajuste: number } | null {
+  const porTipo = new Map<number, number>()
+  for (const l of lineas) porTipo.set(l.tipo, (porTipo.get(l.tipo) ?? 0) + cent(l.base))
+  const filas = [...porTipo].sort((a, b) => a[0] - b[0]).map(([tipo, b]) => {
+    const exacta = (b * tipo) / 100 // en céntimos, sin redondear
+    const cuota = cent(cuotaIva(deCent(b), tipo))
+    return { tipo, base: b, cuota, exceso: cuota - exacta }
+  })
+  const suma = filas.reduce((t, f) => t + f.base + f.cuota, 0)
+  let dif = cent(total) - suma
+  if (Math.abs(dif) > filas.length) return null
+  const ajuste = dif
+  const orden = [...filas].sort((a, b) => (dif < 0 ? b.exceso - a.exceso : a.exceso - b.exceso))
+  for (const f of orden) {
+    if (dif === 0) break
+    const paso = Math.sign(dif)
+    f.cuota += paso; dif -= paso
+  }
+  return { porTipo: filas.map((f) => ({ tipo: f.tipo, base: deCent(f.base), cuota: deCent(f.cuota) })), ajuste: deCent(ajuste) }
+}
+
+const esMercaderia = (c: string) => /mercader/i.test(c)
+const esServicio = (c: string) => /servicio|fee|comisi|reparto|delivery|env[ií]o/i.test(c)
+
+export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiquidacionMensual):
+  { propuestas: Propuesta[]; sinPropuesta: string | null } {
+  const no = (porque: string) => ({ propuestas: [] as Propuesta[], sinPropuesta: porque })
+  if (e.bloqueos.length) return no(e.bloqueos.join(' '))
+  if (!c.proveedor) return no(`${e.socio} no tiene su cuenta de proveedor (Contabilidad de su ficha).`)
+  if (!c.cliente) return no(`${e.socio} no tiene su cuenta de cliente: es a quien le facturas.`)
+  if (!c.compras) return no(`A ${e.socio} le falta el tipo de gasto: ponlo en su ficha y su factura se propone.`)
+  const raras = e.emitida.lineas.filter((l) => !esMercaderia(l.concepto) && !esServicio(l.concepto))
+  if (raras.length) return no(`En la factura que le haces, Folvy no sabe si «${raras[0].concepto}» es un servicio o una venta de mercaderías: dímelo.`)
+  if (e.emitida.lineas.some((l) => esServicio(l.concepto)) && !c.ingresoServicios) return no('Falta en tu plan la cuenta de ingresos por servicios (705).')
+  if (e.emitida.lineas.some((l) => esMercaderia(l.concepto)) && !c.ingresoMercaderias) return no('Falta en tu plan la cuenta de ventas de mercaderías (700).')
+  const cuotasR = cuotasQueCuadran(e.recibida.lineas, e.recibida.total)
+  const cuotasE = cuotasQueCuadran(e.emitida.lineas, e.emitida.total)
+  if (!cuotasR) return no(`Su factura ${e.recibida.numero} no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.`)
+  if (!cuotasE) return no(`La factura que le haces ${e.emitida.numero} no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.`)
+  const saldo = deCent(cent(e.emitida.total) - cent(e.recibida.total))
+  if (e.saldo !== null && cent(e.saldo) !== cent(saldo)) return no(`La transacción dice ${eurosExactos(e.saldo)} de saldo y las dos facturas dan ${eurosExactos(saldo)}.`)
+  const loc = e.localId
+  const comun = !loc
+
+  // 1 · Su factura: la compra.
+  const avisosR: string[] = cuotasR.ajuste ? [`Su factura dice ${eurosExactos(e.recibida.total)}; con la cuota de cada tipo redondeada saldría ${eurosExactos(deCent(cent(e.recibida.total) - cent(cuotasR.ajuste)))}. Manda su total: el céntimo va al IVA.`] : []
+  const lineasR: LineaAsiento[] = [{ cuenta: c.compras, debe: deCent(cent(e.recibida.lineas.reduce((t, l) => t + l.base, 0))), haber: 0, localId: loc, comun, documento: e.recibida.numero }]
+  for (const t of cuotasR.porTipo) {
+    if (t.tipo === 0) continue
+    const cta = c.ivaSoportado(t.tipo)
+    if (!cta) return no(`No hay 472 del ${t.tipo} % en tu plan.`)
+    lineasR.push({ cuenta: cta.cuenta, debe: t.cuota, haber: 0, localId: loc, comun, documento: e.recibida.numero, iva: { tipoId: cta.tipoId, tipo: t.tipo, base: t.base, libro: 'received', deducible: 'yes' } })
+  }
+  lineasR.push({ cuenta: c.proveedor, debe: 0, haber: e.recibida.total, localId: loc, comun, documento: e.recibida.numero, terceroId: e.terceroId })
+  const compra: Propuesta = {
+    serie: 2, fecha: e.recibida.fecha, concepto: `Factura ${e.socio} · ${e.recibida.numero}`, origen: { tipo: 'supplier_invoice', id: e.facturaRecibidaId },
+    lineas: lineasR, confianza: cuotasR.ajuste ? 'probable' : 'seguro',
+    porque: 'Lo que te factura cada mes: compra, con su IVA por tipo, a su cuenta de proveedor.',
+    razones: [{ decision: 'Su factura de la liquidación del mes', porque: 'no factura las entregas: sus albaranes no se apuntan uno a uno' }],
+    avisos: avisosR, terceroId: e.terceroId, documento: e.recibida.numero,
+  }
+
+  // 2 · La que le haces: el ingreso, a su cuenta de cliente y al libro de expedidas.
+  const servicios = e.emitida.lineas.filter((l) => esServicio(l.concepto)).reduce((t, l) => t + cent(l.base), 0)
+  const mercaderias = e.emitida.lineas.filter((l) => esMercaderia(l.concepto)).reduce((t, l) => t + cent(l.base), 0)
+  const lineasE: LineaAsiento[] = [{ cuenta: c.cliente, debe: e.emitida.total, haber: 0, localId: loc, comun, documento: e.emitida.numero, terceroId: e.terceroId }]
+  if (servicios) lineasE.push({ cuenta: c.ingresoServicios!, debe: 0, haber: deCent(servicios), localId: loc, comun, documento: e.emitida.numero, concepto: 'Servicios por sus ventas' })
+  if (mercaderias) lineasE.push({ cuenta: c.ingresoMercaderias!, debe: 0, haber: deCent(mercaderias), localId: loc, comun, documento: e.emitida.numero, concepto: 'Género que le pones tú' })
+  for (const t of cuotasE.porTipo) {
+    if (t.tipo === 0) continue
+    const cta = c.ivaRepercutido(t.tipo)
+    if (!cta) return no(`No hay 477 del ${t.tipo} % en tu plan.`)
+    lineasE.push({ cuenta: cta.cuenta, debe: 0, haber: t.cuota, localId: loc, comun, documento: e.emitida.numero, iva: { tipoId: cta.tipoId, tipo: t.tipo, base: t.base, libro: 'issued' } })
+  }
+  const ingreso: Propuesta = {
+    serie: 4, fecha: e.emitida.fecha, concepto: `Le facturas a ${e.socio} · ${e.emitida.numero}`, origen: { tipo: 'licensed_settlement', id: e.id },
+    lineas: lineasE, confianza: cuotasE.ajuste ? 'probable' : 'seguro',
+    porque: 'La factura que le haces (la extiende él en tu nombre): ingreso con su IVA, a su cuenta de cliente, con su número en el libro de expedidas.',
+    razones: [
+      { decision: 'Servicios a la 705, el género que pones tú a la 700', porque: 'cada línea por lo que es' },
+      { decision: `Nº ${e.emitida.numero} en el libro de expedidas`, porque: 'es una factura tuya aunque la haya extendido él' },
+    ],
+    avisos: cuotasE.ajuste ? [`La factura que le haces dice ${eurosExactos(e.emitida.total)}; el céntimo de redondeo va al IVA.`] : [],
+    terceroId: e.terceroId, documento: e.emitida.numero,
+  }
+
+  // 3 · La compensación: su factura se paga con lo que te debe.
+  const menor = Math.min(cent(e.emitida.total), cent(e.recibida.total))
+  const compensa: Propuesta = {
+    serie: 4, fecha: e.emitida.fecha > e.recibida.fecha ? e.emitida.fecha : e.recibida.fecha,
+    concepto: `Compensación con ${e.socio} · ${e.emitida.numero} y ${e.recibida.numero}`, origen: { tipo: 'supplier_payment', id: e.facturaRecibidaId },
+    lineas: [
+      { cuenta: c.proveedor, debe: deCent(menor), haber: 0, localId: loc, comun, documento: e.recibida.numero, terceroId: e.terceroId },
+      { cuenta: c.cliente, debe: 0, haber: deCent(menor), localId: loc, comun, documento: e.emitida.numero, terceroId: e.terceroId },
+    ],
+    confianza: 'seguro',
+    porque: saldo >= 0
+      ? `Su factura se paga con lo que te debe. Te paga ${eurosExactos(saldo)}: es lo que queda en su cuenta de cliente, y llega por el banco.`
+      : `Lo que le facturas se descuenta de su factura. Le pagas ${eurosExactos(-saldo)}: es lo que queda en su cuenta de proveedor.`,
+    razones: [{ decision: 'Una factura contra otra', porque: 'así lo liquida: se paga la diferencia' }],
+    avisos: [], terceroId: e.terceroId,
+  }
+  return { propuestas: [compra, ingreso, compensa], sinPropuesta: null }
+}
+
 export interface EntradaNomina {
   id: string
   mes: string

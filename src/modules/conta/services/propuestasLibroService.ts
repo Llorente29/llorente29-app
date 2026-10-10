@@ -12,7 +12,7 @@
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, nomina, liquidacionSocio, aplicarAprendizaje,
+  ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
   type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
@@ -260,7 +260,11 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   const esSocio = new Set(socios.filter((x) => x.role === 'brand_partner').map((x) => String(x.party_id)))
   for (const [sup, party] of partyPorProveedor) if (esSocio.has(party)) socioPorProveedor.add(sup)
   const ret = await leer(tabla('withholding_rate').select('id, rate, filed_in'), 'las retenciones')
+  // Compras (10/10): la factura de una liquidación mensual la propone su liquidación, no aquí.
+  const deLiquidacion = new Set((await leer(tabla('licensed_settlement').select('received_invoice_id').eq('account_id', accountId)
+    .not('received_invoice_id', 'is', null), 'las facturas de las liquidaciones')).map((x) => String(x.received_invoice_id)))
   for (const f of facturas) {
+    if (deLiquidacion.has(String(f.id))) continue
     const sup = String(f.supplier_id); const prov = (f.supplier ?? {}) as Fila
     const fecha = String(f.invoice_date)
     if (!abierto(fecha)) continue
@@ -287,6 +291,40 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       l.retencion = { ...l.retencion!, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + x.debe, 0) }
     }
     await proponer(companyId, aplicarAprendizaje(res.propuesta, `supplier_invoice:${sup}`, ctx.correcciones), null, r, ctx, quien)
+  }
+
+  // ── Compras (10/10), §2.5: la liquidación mensual, desde sus documentos ──
+  // Las confirmadas de esta empresa. Sus asientos van con la fecha de sus
+  // facturas (días después del mes): se leen las de los dos meses de antes.
+  {
+    const desdeLiq = new Date(`${desde.slice(0, 7)}-01T00:00:00Z`); desdeLiq.setUTCMonth(desdeLiq.getUTCMonth() - 2)
+    const liqs = await leer(tabla('licensed_settlement').select('id, party_id, supplier_id, location_id, settlement_ref, received_invoice_id, detail, party(name), supplier(name, expense_category_id)')
+      .eq('account_id', accountId).eq('company_id', companyId).eq('formula', 'documentos').eq('status', 'confirmada')
+      .gte('period_to', desdeLiq.toISOString().slice(0, 10)).lte('period_from', hasta), 'las liquidaciones mensuales')
+    const tipoIva = (pct: number) => ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_'))
+    for (const l of liqs) {
+      const d = (l.detail ?? {}) as Fila
+      const em = (d.emitida ?? {}) as Fila; const rc = (d.recibida ?? {}) as Fila
+      const party = String(l.party_id); const sup = String(l.supplier_id); const prov = (l.supplier ?? {}) as Fila
+      const socio = s(((l.party ?? {}) as Fila).name) ?? s(prov.name) ?? 'el socio'
+      const que = `Liquidación de ${socio} · ${s(l.settlement_ref) ?? ''} · ${ctx.locales.get(String(l.location_id)) ?? 'local'}`
+      const lineas = (x: Fila) => ((x.lineas ?? []) as Fila[]).map((y) => ({ concepto: String(y.concepto), base: n(y.base), tipo: n(y.tipo) }))
+      const res = liquidacionMensual({
+        id: String(l.id), facturaRecibidaId: String(l.received_invoice_id), socio, terceroId: party, localId: s(l.location_id),
+        emitida: { numero: String(em.numero), fecha: String(em.fecha), lineas: lineas(em), total: n(em.total) },
+        recibida: { numero: String(rc.numero), fecha: String(rc.fecha), lineas: lineas(rc), total: n(rc.total) },
+        saldo: d.transaccion && (d.transaccion as Fila).saldo ? n(((d.transaccion as Fila).saldo as Fila).importe) : null,
+        bloqueos: ((d.bloqueos ?? []) as unknown[]).map(String),
+      }, {
+        cliente: ctx.enlace('customer', party, 'principal'), proveedor: ctx.enlace('supplier', sup, 'principal'),
+        compras: ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null),
+        ingresoServicios: ctx.hoja('705'), ingresoMercaderias: ctx.hoja('700'),
+        ivaRepercutido: (pct) => { const t = tipoIva(pct); const c = t ? ctx.enlace('tax_rate', t.id, 'repercutido') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
+        ivaSoportado: (pct) => { const t = tipoIva(pct); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
+      })
+      if (res.sinPropuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta }); continue }
+      for (const p of res.propuestas) if (abierto(p.fecha)) await proponer(companyId, p, null, r, ctx, quien)
+    }
   }
 
   // ── Compras (10/10), §2.4: lo recibido sin factura al cierre de cada mes ──
