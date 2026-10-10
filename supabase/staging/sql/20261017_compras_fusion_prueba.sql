@@ -28,6 +28,8 @@
 --   7. La de terceros sigue igual: party_merge_do y party_merge_undo sin
 --      usuario PARAN (42501 y «esa fusión no existe»); el deshacer de la de
 --      terceros (_party_merge_undo) ya lo ha ensayado el paso 6.
+--   8. Con usuario: el administrador de A une y deshace por la puerta
+--      (supplier_merge_do / supplier_merge_undo).
 
 begin;
 
@@ -44,7 +46,9 @@ declare
   v_g uuid := 'f0510000-0000-4000-8000-000000000002';  -- la que se va
   v_rec uuid[] := '{}'; v_r uuid; i int;
 begin
-  -- 1 · Siembra
+  -- 1 · Siembra, como el administrador de A: dar de alta un artículo de
+  --     proveedor recalcula su coste, y eso mira quién lo hace.
+  perform set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
   insert into supplier (id, account_id, name, tax_id, created_by_name)
   values (v_q, c_cuenta, 'Distribuciones Prueba Unión, S.L.', 'B00000001', 'prueba');
   insert into supplier (id, account_id, name, notify_group, payment_terms_days, created_by_name)
@@ -79,6 +83,8 @@ begin
          (c_cuenta, c_empresa, c_cuenta_41, 'supplier', v_g::text, 'pago', 'manual'),
          (c_cuenta, c_empresa, c_cuenta_41, 'supplier', v_g::text, 'suplidos', 'manual');
   raise notice '1 · sembradas dos fichas: % (queda) y % (se va)', v_q, v_g;
+  -- Sin usuario desde aquí: las puertas se prueban así.
+  perform set_config('request.jwt.claims', '', true);
 end $$;
 
 -- El recuento que se usa antes, después y al deshacer: lo mismo, con la misma consulta.
@@ -163,7 +169,7 @@ select pg_temp.contar('deshecho');
 select tabla, ficha, n from _recuento where momento = 'deshecho' order by 1, 2;
 
 do $$
-declare v_dif int; v_q supplier; v_g supplier; v_vivos int;
+declare v_dif int; v_q supplier; v_g supplier; v_vivos int; v_res jsonb;
 begin
   select count(*) into v_dif from (
     (select tabla, ficha, n from _recuento where momento = 'antes' except select tabla, ficha, n from _recuento where momento = 'deshecho')
@@ -191,6 +197,15 @@ begin
     raise exception 'FALLO 7: party_merge_undo deshizo algo que no existe';
   exception when sqlstate 'P0002' then raise notice '7 · party_merge_undo de algo que no existe: para (bien)';
   end;
+
+  -- 8 · Con usuario: el administrador de A sí puede unir por la puerta, y deshacer.
+  perform set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+  v_res := public.supplier_merge_do('f0510000-0000-4000-8000-000000000001', 'f0510000-0000-4000-8000-000000000002', 'prueba');
+  if (select archived_at from supplier where id = 'f0510000-0000-4000-8000-000000000002') is null then raise exception 'FALLO 8: la puerta con permiso no unió'; end if;
+  perform public.supplier_merge_undo((v_res->>'fusion')::uuid, 'prueba');
+  if (select archived_at from supplier where id = 'f0510000-0000-4000-8000-000000000002') is not null then raise exception 'FALLO 8: la puerta con permiso no deshizo'; end if;
+  perform set_config('request.jwt.claims', '', true);
+  raise notice '8 · el administrador de A une y deshace por la puerta (bien)';
 end $$;
 
 rollback;

@@ -8,6 +8,9 @@
 #   La prueba: la población con la forma de producción, los choques, la
 #   puerta sin usuario, el mismo recuento antes, después y al deshacer.
 #   Todo en una transacción con ROLLBACK.
-supabase/migrations/20261017T0100_compras_fusion_proveedores.sql
-supabase/migrations/20261017T0110_compras_socio_una_ficha.sql
+#   Run 113 (8a7f277): la 0100 y la 0110 APLICADAS (la 0110 no encuentra
+#   las fichas del socio: no hace nada). La prueba paró al sembrar: dar de
+#   alta un artículo de proveedor recalcula su coste y mira quién lo hace.
+#   Ahora siembra como el administrador de A, prueba las puertas sin usuario
+#   y gana el paso 8 (con usuario, la puerta une y deshace).
 supabase/staging/sql/20261017_compras_fusion_prueba.sql
