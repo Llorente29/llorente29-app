@@ -83,6 +83,10 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   if (lado(page) === 'ordenador') {
     const filas = await page.locator('.cxc-mirar > .cxc-cosa').count()
     await expect(page.locator('.cx-menu-item', { hasText: 'Compras' }).locator('.cx-menu-cuenta')).toHaveText(String(filas))
+    // El número no cambia el nombre del enlace: va como su descripción (e2e 172).
+    const enlace = page.getByRole('link', { name: 'Compras', exact: true })
+    await expect(enlace).toBeVisible()
+    await expect(enlace).toHaveAccessibleDescription(`${filas} por mirar`)
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()

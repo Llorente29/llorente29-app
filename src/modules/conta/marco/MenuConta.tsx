@@ -91,10 +91,14 @@ export function MenuConta() {
         <div key={grupo[0].id} style={{ display: 'contents' }}>
           {i > 0 && <div className="cx-menu-separador" aria-hidden="true" />}
           {grupo.map((e) => (
-            <Link key={e.id} to={rutaConta(e.ruta)} className="cx-menu-item" aria-current={activa === e.id ? 'page' : undefined}>
+            // El número no cambia el nombre del enlace («Libros» sigue siendo «Libros»): va como su
+            // descripción. Con aria-label dentro, el nombre pasaba a «Libros 3 por mirar» (e2e 172).
+            <Link key={e.id} to={rutaConta(e.ruta)} className="cx-menu-item" aria-current={activa === e.id ? 'page' : undefined}
+              aria-describedby={(cuentas[e.id] ?? 0) > 0 ? `cx-menu-cuenta-${e.id}` : undefined}>
               <Icono nombre={e.icono} />
               <span className="cx-menu-item-texto">{e.etiqueta}</span>
-              {(cuentas[e.id] ?? 0) > 0 && <span className="cx-insignia cx-menu-cuenta" aria-label={`${cuentas[e.id]} por mirar`}>{cuentas[e.id]}</span>}
+              {(cuentas[e.id] ?? 0) > 0 && <span className="cx-insignia cx-menu-cuenta" aria-hidden="true">{cuentas[e.id]}</span>}
+              {(cuentas[e.id] ?? 0) > 0 && <span id={`cx-menu-cuenta-${e.id}`} hidden>{cuentas[e.id]} por mirar</span>}
             </Link>
           ))}
         </div>

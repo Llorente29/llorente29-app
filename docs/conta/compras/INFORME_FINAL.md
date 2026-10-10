@@ -40,7 +40,7 @@ está en `T1_comprobaciones.md`. Proveedores por letra o por su papel, sin nombr
 
 ## La tanda de producción
 
-`supabase/produccion/aplicar.txt`: de la 0100 a la 0180, con `vuelta-atras.txt`. Analizador pasado en
+`supabase/produccion/aplicar.txt`: de la 0100 a la 0190, con `vuelta-atras.txt`. Analizador pasado en
 local contra el contexto real de producción (leído en solo lectura, guardado en
 `tests/conta/produccion/contexto-produccion-compras-20261010.json`):
 
@@ -55,6 +55,7 @@ local contra el contexto real de producción (leído en solo lectura, guardado e
 | 0160 liquidación mensual | sigue | Añade |
 | 0170 lo que leen las pantallas | sigue | Añade |
 | 0180 octubre de Foodint | sigue* | Da camino a las 18 de octubre y crea sus 3 facturas |
+| 0190 el repaso | sigue | Añade: «Contado» y demás nombres genéricos avisan del IVA; apuntar sin descontar el IVA; los albaranes de una liquidación. Declara `_compras_destinatario` con su prueba |
 
 \* La 0110 y la 0180 **mueven datos llamando a una función**, y el analizador no lee dentro de una
 llamada: las da por «sigue». Está dicho en el manifiesto. La 0110 la aprobaste en la T1; la 0180 se
@@ -62,6 +63,9 @@ puede deshacer sola (apunta lo que crea).
 
 El analizador paraba la 0120 y la 0140 (disparadores nuevos sobre tablas que ya existen, sin declarar):
 ganaron su `-- cambia:` con la prueba de staging que nombra la tabla.
+
+La 0190 va después de la 0180 y no la cambia: de los 18 papeles de octubre de Foodint ninguno va a un
+nombre genérico (medido en solo lectura el 10/10). Nada de lo que crea existe hoy en producción.
 
 ## Lo que te toca
 
@@ -78,9 +82,12 @@ ganaron su `-- cambia:` con la prueba de staging que nombra la tabla.
 
 ## Diferencias con las maquetas
 
-Una a una en `docs/conta/capturas/compras/COMPARACION.md`. Las que cambian lo que se puede hacer:
-«Apuntarla sin descontar el IVA» no está; el número del menú tampoco (va en la cabecera de «Qué tienes
-que mirar»); «Ver el papel» no está en las filas; las pestañas de la liquidación son secciones.
+Una a una en `docs/conta/capturas/compras/COMPARACION.md`. Tras el repaso del 10/10 vuelve todo lo que
+cambiaba lo que se puede hacer: «Ver el papel», «Ver los N albaranes», «Apuntarla sin descontar el IVA»,
+el número del menú, los cinco documentos leídos. Queda aceptado el céntimo a redondeos, y quedan
+pendientes de que los aceptes (o digas cómo) siete que no cambian lo que se puede hacer: el menú sin
+«Ventas», las pestañas de la liquidación como secciones, los números de la semilla, «sin IVA» en N20,
+dónde va «Cómo te factura», la frase de N21 dentro del mensaje y el texto del botón «Es un albarán».
 
 ## Lo que costó y queda escrito
 
@@ -91,3 +98,12 @@ que mirar»); «Ver el papel» no está en las filas; las pestañas de la liquid
 - Las pruebas de las pantallas, escritas contra lo que devolvió la base y los textos aprobados, cazaron
   «S.L..» y «albaránes» antes de salir.
 - El build exacto cazó dos errores de tipos que el lint no veía.
+- Run 131: la prueba de la 0190 paró en el paso 1. El papel a nombre de «CONTADO.» acababa en «error»
+  porque el CHECK de `bill_to_how` de la 0120 no admitía el valor nuevo «generico». La 0190 amplía el
+  CHECK y su vuelta atrás lo devuelve.
+- e2e 171: la captura del móvil enseñó las ventas por plataforma saliéndose de su caja; ahora el e2e mide
+  que ninguna celda se salga.
+- e2e 172: el número del menú iba con `aria-label` dentro del enlace y le cambiaba el nombre («Libros 3
+  por mirar»); la prueba del libro diario, que busca «Libros», dejó de encontrarlo. Dependía de si el
+  número llegaba antes o después de mirar (en el 171 pasó). Ahora el número es la descripción del enlace,
+  no su nombre, y el e2e de compras lo comprueba.
