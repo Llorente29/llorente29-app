@@ -33,6 +33,14 @@
 #   La prueba: normalización contra las variantes reales, los caminos, la
 #   pregunta y su respuesta recordada, la ficha, las puertas, la fusión, los
 #   cuatro caminos de la regla 10 y la decisión rota que no tumba la recepción.
-supabase/migrations/20261017T0120_compras_forma_de_facturar.sql
-supabase/migrations/20261017T0130_compras_forma_de_facturar_datos.sql
-supabase/staging/sql/20261017_compras_camino_prueba.sql
+#   Run 118 (4ebb238): 0120 y 0130 APLICADAS; la prueba del camino, EN VERDE
+#   a la primera (10 pasos).
+#
+#   0140: la factura sale del papel (desde la recepción, o subida en Compras)
+#         y la aprobación la impone la base. La prueba: una sola factura con
+#         su base y su IVA, el mismo papel dos veces, sin importes, albarán y
+#         liquidación sin factura, contestar crea, el corte, sin recepción,
+#         aprobar por la API (encargado no / administrador sí) y crearla rota
+#         sin tumbar la recepción.
+supabase/migrations/20261017T0140_compras_factura_desde_el_papel.sql
+supabase/staging/sql/20261017_compras_factura_prueba.sql
