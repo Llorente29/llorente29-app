@@ -23,6 +23,17 @@
 //     ve. El front, cuando ya sabe el artículo y su unidad base, calcula el
 //     qty_in_base y el humano confirma (anti-invención: si no cuadra, needs_review).
 //
+// Compras (10/10) — el NIF del DESTINATARIO (bill_to_tax_id), campo nuevo. Los
+// demás campos no cambian. Sirve para decidir con seguridad si un papel va a
+// nombre de la empresa, del proveedor que liquida o de otro (goods_receipt_path).
+// El NIF del EMISOR (supplier_tax_id) nunca se aplica solo a la ficha: se ofrece.
+//
+// MEDIR (10/10): con { account_id, medir_sesiones: [ids] } no guarda nada.
+// Relee los ficheros de esas sesiones DOS VECES en la misma llamada, con el
+// prompt de antes y con el de ahora, y devuelve campo a campo qué cambia. La
+// misma vara a los dos lados (regla 31): mismo modelo, mismo día, mismas fotos.
+// Lo lanza el workflow «Medir el NIF del destinatario (ocr-albaran)».
+//
 // Auth: usuario autenticado (JWT, respeta RLS) o llamada interna (x-internal-key).
 // Patrón calcado de extract-recipe. Deploy NORMAL (no es webhook externo).
 
@@ -38,8 +49,11 @@ const BASE_TOLERANCE = 0.01;
 
 interface OcrRequest {
   account_id: string;
-  file_paths: string[];   // rutas dentro de receipt-uploads/{account_id}/...
+  file_paths?: string[];       // rutas dentro de receipt-uploads/{account_id}/...
+  medir_sesiones?: string[];   // MEDIR: ids de goods_receipt_ai_session a releer (máx. MEDIR_MAX)
 }
+
+const MEDIR_MAX = 40;
 
 interface ParsedDoc {
   document: {
@@ -54,6 +68,7 @@ interface ParsedDoc {
     doc_type: 'albaran' | 'factura' | 'albaran_factura' | null;
     ship_to: string | null;
     bill_to_name: string | null;
+    bill_to_tax_id?: string | null;   // Compras (10/10): NIF del destinatario. Solo con el prompt de ahora.
     handwritten: boolean;
     tax_base_total: number | null;    // base imponible total
     tax_total: number | null;         // IVA total
@@ -87,7 +102,9 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-function buildPrompt(): string {
+// conNifDestinatario = false es el prompt de ANTES del 10/10, tal cual: solo
+// lo usa MEDIR, para comparar con la misma vara.
+function buildPrompt(conNifDestinatario = true): string {
   return (
     `Eres un asistente experto en albaranes y facturas de proveedores de hostelería en España.\n` +
     `Te paso una o varias imágenes (o PDF) que pueden ser PÁGINAS de un mismo documento, en cualquier orden.\n` +
@@ -106,6 +123,9 @@ function buildPrompt(): string {
     `    "doc_type": "<albaran|factura|albaran_factura|null>",\n` +
     `    "ship_to": "<domicilio/local de ENTREGA tal cual aparece, o null>",\n` +
     `    "bill_to_name": "<a quién se FACTURA: razón social del cliente, o null>",\n` +
+    (conNifDestinatario
+      ? `    "bill_to_tax_id": "<CIF/NIF del CLIENTE a quien se factura, tal cual aparece, o null>",\n`
+      : '') +
     `    "handwritten": <true si el documento está escrito A MANO, si no false>,\n` +
     `    "tax_base_total": <base imponible total (suma de bases, SIN IVA) o null>,\n` +
     `    "tax_total": <importe total de IVA o null>,\n` +
@@ -138,6 +158,10 @@ function buildPrompt(): string {
     `  bruto y descuento, calcula/usa el neto; pon el % en "discount_pct".\n` +
     `- "raw_text" es SOLO el nombre del artículo (sin el código de proveedor, que va en supplier_code).\n` +
     `- Distingue PROVEEDOR (emite) de CLIENTE (recibe/factura): supplier_* es siempre el proveedor.\n` +
+    (conNifDestinatario
+      ? `- "bill_to_tax_id" es el NIF del CLIENTE, no el del proveedor. Si en el papel solo ves un NIF\n` +
+        `  y no sabes con seguridad de cuál de los dos es, déjalo en null en el sitio dudoso.\n`
+      : '') +
     `- Captura lote y caducidad por línea si aparecen (suelen ir debajo o al lado de la línea).\n` +
     `- FORMATO de compra (format_name/pack_size/pack_unit): describe la UNIDAD EN LA QUE SE COMPRA\n` +
     `  y FACTURA la línea (la misma a la que se refieren "quantity" y "unit_price_net").\n` +
@@ -220,6 +244,117 @@ function validate(parsed: ParsedDoc): {
   };
 }
 
+// deno-lint-ignore no-explicit-any
+type Sb = any;
+
+async function bloquesDe(sb: Sb, paths: string[]): Promise<{ blocks: unknown[]; files: { path: string; bucket: string }[] } | { error: string }> {
+  const blocks: unknown[] = [];
+  const files: { path: string; bucket: string }[] = [];
+  for (const path of paths) {
+    const { data: file, error: dlErr } = await sb.storage.from(BUCKET).download(path);
+    if (dlErr || !file) return { error: `No se pudo leer ${path}: ${dlErr?.message ?? 'desconocido'}` };
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+    const b64 = btoa(binary);
+    const mime = file.type || 'image/jpeg';
+    // PDF como document, imagen como image (la API de visión acepta ambos).
+    if (mime === 'application/pdf') {
+      blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } });
+    } else {
+      blocks.push({ type: 'image', source: { type: 'base64', media_type: mime, data: b64 } });
+    }
+    files.push({ path, bucket: BUCKET });
+  }
+  return { blocks, files };
+}
+
+async function leerConIa(anthropicKey: string, model: string, blocks: unknown[], prompt: string):
+  Promise<{ parsed: ParsedDoc | null; raw: unknown } | { error: string; status: number }> {
+  const aiResp = await fetch(ANTHROPIC_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'x-api-key': anthropicKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 8192,
+      messages: [{ role: 'user', content: [...blocks, { type: 'text', text: prompt }] }],
+    }),
+  });
+  if (!aiResp.ok) {
+    const errTxt = await aiResp.text();
+    console.error('[ocr-albaran] IA HTTP', aiResp.status, errTxt);
+    return { error: errTxt.slice(0, 500), status: aiResp.status };
+  }
+  const raw = await aiResp.json();
+  // deno-lint-ignore no-explicit-any
+  const textOut = ((raw as any).content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+  return { parsed: extractJson(textOut), raw };
+}
+
+// MEDIR: lo que se compara entre el prompt de antes y el de ahora. Ni nombres
+// ni NIF salen de aquí: solo si coinciden (el informe va a un repositorio
+// público). Del NIF del destinatario se dice si se leyó y a quién corresponde.
+function huella(p: ParsedDoc | null) {
+  const d = p?.document;
+  const lineas = p?.lines ?? [];
+  const suma = lineas.reduce((a, l) => a + (typeof l.line_amount === 'number' ? l.line_amount : 0), 0);
+  return {
+    doc_type: d?.doc_type ?? null,
+    doc_number: d?.doc_number ?? null,
+    doc_date: d?.doc_date ?? null,
+    supplier_tax_id: (d?.supplier_tax_id ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null,
+    bill_to_name: (d?.bill_to_name ?? '').trim().toUpperCase() || null,
+    tax_base_total: d?.tax_base_total ?? null,
+    tax_total: d?.tax_total ?? null,
+    grand_total: d?.grand_total ?? null,
+    lineas: lineas.length,
+    suma_lineas: Number(suma.toFixed(2)),
+    tipos_iva: [...new Set(lineas.map(l => l.vat_pct).filter(v => v != null))].sort().join(','),
+  };
+}
+
+async function medir(sb: Sb, anthropicKey: string, model: string, accountId: string, ids: string[]): Promise<Response> {
+  if (ids.length > MEDIR_MAX) return jsonResponse(400, { error: `Como mucho ${MEDIR_MAX} sesiones por llamada` });
+  const { data: sesiones, error } = await sb.from('goods_receipt_ai_session')
+    .select('id, input_files').eq('account_id', accountId).in('id', ids);
+  if (error) return jsonResponse(500, { error: error.message });
+  const { data: empresas } = await sb.from('company').select('tax_id').eq('account_id', accountId);
+  const { data: proveedores } = await sb.from('supplier').select('tax_id, invoicing_mode').eq('account_id', accountId).is('archived_at', null);
+  const norm = (x: string | null | undefined) => (x ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^ES(?=[A-Z0-9]{9}$)/, '');
+  const nifEmpresas = new Set(((empresas ?? []) as { tax_id: string | null }[]).map(e => norm(e.tax_id)).filter(Boolean));
+  const nifProveedores = new Map(((proveedores ?? []) as { tax_id: string | null; invoicing_mode: string | null }[])
+    .filter(p => p.tax_id).map(p => [norm(p.tax_id), p.invoicing_mode]));
+
+  const resultados = [];
+  for (const s of (sesiones ?? []) as { id: string; input_files: { path: string }[] | null }[]) {
+    const paths = (s.input_files ?? []).map(f => f.path);
+    if (paths.length === 0) { resultados.push({ sesion: s.id, error: 'sin ficheros' }); continue; }
+    const b = await bloquesDe(sb, paths);
+    if ('error' in b) { resultados.push({ sesion: s.id, error: b.error }); continue; }
+    const antes = await leerConIa(anthropicKey, model, b.blocks, buildPrompt(false));
+    const ahora = await leerConIa(anthropicKey, model, b.blocks, buildPrompt(true));
+    if ('error' in antes || 'error' in ahora) { resultados.push({ sesion: s.id, error: 'la IA no contestó' }); continue; }
+    const ha = huella(antes.parsed);
+    const hn = huella(ahora.parsed);
+    const distintos = (Object.keys(ha) as (keyof typeof ha)[]).filter(k => JSON.stringify(ha[k]) !== JSON.stringify(hn[k]));
+    const nif = norm(ahora.parsed?.document?.bill_to_tax_id ?? null);
+    resultados.push({
+      sesion: s.id,
+      campos_distintos: distintos,
+      nif_destinatario: !nif ? 'no leído'
+        : nifEmpresas.has(nif) ? 'es el de una empresa de la cuenta'
+        : nifProveedores.has(nif) ? `es el de un proveedor (${nifProveedores.get(nif) ?? 'sin forma'})`
+        : nif === hn.supplier_tax_id ? 'es el del emisor (mal leído)'
+        : 'no es de nadie conocido',
+    });
+  }
+  return jsonResponse(200, { model, medidas: resultados });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' });
@@ -240,66 +375,33 @@ Deno.serve(async (req) => {
   let body: OcrRequest;
   try { body = await req.json(); } catch { return jsonResponse(400, { error: 'Body JSON inválido' }); }
 
-  const { account_id, file_paths } = body;
+  const { account_id, file_paths, medir_sesiones } = body;
   if (!account_id) return jsonResponse(400, { error: 'Falta account_id' });
-  if (!file_paths || file_paths.length === 0) return jsonResponse(400, { error: 'Faltan file_paths' });
 
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!anthropicKey) return jsonResponse(500, { error: 'Servicio de IA no configurado' });
   const model = Deno.env.get('VISION_MODEL') ?? DEFAULT_VISION_MODEL;
 
-  // ── 1) Leer fichero(s) de Storage como base64 ──
-  const contentBlocks: unknown[] = [];
-  const inputFiles: { path: string; bucket: string }[] = [];
-  for (const path of file_paths) {
-    const { data: file, error: dlErr } = await sb.storage.from(BUCKET).download(path);
-    if (dlErr || !file) {
-      return jsonResponse(400, { error: `No se pudo leer ${path}: ${dlErr?.message ?? 'desconocido'}` });
-    }
-    const buf = new Uint8Array(await file.arrayBuffer());
-    let binary = '';
-    for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
-    const b64 = btoa(binary);
-    const mime = file.type || 'image/jpeg';
-    // PDF como document, imagen como image (la API de visión acepta ambos).
-    if (mime === 'application/pdf') {
-      contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } });
-    } else {
-      contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: mime, data: b64 } });
-    }
-    inputFiles.push({ path, bucket: BUCKET });
+  if (medir_sesiones && medir_sesiones.length > 0) {
+    return await medir(sb, anthropicKey, model, account_id, medir_sesiones);
   }
+  if (!file_paths || file_paths.length === 0) return jsonResponse(400, { error: 'Faltan file_paths' });
+
+  // ── 1) Leer fichero(s) de Storage como base64 ──
+  const b = await bloquesDe(sb, file_paths);
+  if ('error' in b) return jsonResponse(400, { error: b.error });
+  const contentBlocks = b.blocks;
+  const inputFiles = b.files;
 
   // ── 2) Llamar a Opus visión ──
   const t0 = Date.now();
   let parsed: ParsedDoc | null = null;
   let rawResponse: unknown = null;
   try {
-    const aiResp = await fetch(ANTHROPIC_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 8192,
-        messages: [{
-          role: 'user',
-          content: [...contentBlocks, { type: 'text', text: buildPrompt() }],
-        }],
-      }),
-    });
-    if (!aiResp.ok) {
-      const errTxt = await aiResp.text();
-      console.error('[ocr-albaran] IA HTTP', aiResp.status, errTxt);
-      return jsonResponse(502, { error: 'Error del servicio de IA', detail: errTxt.slice(0, 500) });
-    }
-    rawResponse = await aiResp.json();
-    const textOut = ((rawResponse as any).content ?? [])
-      .filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-    parsed = extractJson(textOut);
+    const r = await leerConIa(anthropicKey, model, contentBlocks, buildPrompt());
+    if ('error' in r) return jsonResponse(502, { error: 'Error del servicio de IA', detail: r.error });
+    parsed = r.parsed;
+    rawResponse = r.raw;
   } catch (e) {
     console.error('[ocr-albaran] error IA:', String(e));
     return jsonResponse(502, { error: 'Fallo llamando a la IA' });
