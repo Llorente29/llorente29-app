@@ -17,4 +17,7 @@
 #   son campos admitidos (supplier_learning_campo_check: expense_category,
 #   tax_rates, withholding, payment, iban). Ahora 'tax_rates' en las dos
 #   (choca) y 'payment' solo en G.
+#   Run 115 (372865a): paró al sembrar los enlaces: el papel 'pago' solo va a
+#   una 57 o una 43 (company_account_misma_cuenta). Ahora 'principal' en la
+#   41 común en las dos (choca) y 'suplidos' a la 600 solo en G.
 supabase/staging/sql/20261017_compras_fusion_prueba.sql

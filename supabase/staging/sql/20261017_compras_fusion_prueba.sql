@@ -42,6 +42,7 @@ declare
   c_a2 constant uuid := '7e000000-0000-4000-8000-000000000a02';
   c_a3 constant uuid := '7e000000-0000-4000-8000-000000000a03';
   c_cuenta_41 constant uuid := '03c9ed1c-f6cf-4942-b113-435d5360fae2';  -- 41000000, común
+  c_cuenta_600 constant uuid := '4fcffcdf-690f-43df-9f77-8588a7488d3a';  -- 60000000
   v_q uuid := 'f0510000-0000-4000-8000-000000000001';  -- la que queda
   v_g uuid := 'f0510000-0000-4000-8000-000000000002';  -- la que se va
   v_rec uuid[] := '{}'; v_r uuid; i int;
@@ -79,9 +80,9 @@ begin
   values (c_cuenta, v_q, 'Ana', true), (c_cuenta, v_g, 'Luis', true), (c_cuenta, v_g, 'Marta', false);
 
   insert into company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
-  values (c_cuenta, c_empresa, c_cuenta_41, 'supplier', v_q::text, 'pago', 'manual'),
-         (c_cuenta, c_empresa, c_cuenta_41, 'supplier', v_g::text, 'pago', 'manual'),
-         (c_cuenta, c_empresa, c_cuenta_41, 'supplier', v_g::text, 'suplidos', 'manual');
+  values (c_cuenta, c_empresa, c_cuenta_41, 'supplier', v_q::text, 'principal', 'manual'),
+         (c_cuenta, c_empresa, c_cuenta_41, 'supplier', v_g::text, 'principal', 'manual'),
+         (c_cuenta, c_empresa, c_cuenta_600, 'supplier', v_g::text, 'suplidos', 'manual');
   raise notice '1 · sembradas dos fichas: % (queda) y % (se va)', v_q, v_g;
   -- Sin usuario desde aquí: las puertas se prueban así.
   perform set_config('request.jwt.claims', '', true);
