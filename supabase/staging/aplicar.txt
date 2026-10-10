@@ -79,3 +79,11 @@ supabase/staging/sql/20261017_compras_liquidacion_prueba.sql
 #         sin camino y las puertas de la cuenta B.
 supabase/migrations/20261017T0170_compras_pantallas.sql
 supabase/staging/sql/20261017_compras_pantallas_prueba.sql
+#   Run 125 (95f0be9): 0170 aplicada; la prueba pasó 0 y PARÓ en 1: «sin
+#   camino» comparaba con min(created_at) de goods_receipt_path, que no tiene
+#   esa columna, y la subconsulta la buscó fuera (ambigua). Regla 40 en mi
+#   propio fichero. Se quita esa condición: sin camino es TODA recepción
+#   confirmada desde el corte que no lo tiene, sin recortar (regla 7). Se
+#   vuelve a aplicar la 0170 (idempotente) con su prueba.
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/staging/sql/20261017_compras_pantallas_prueba.sql

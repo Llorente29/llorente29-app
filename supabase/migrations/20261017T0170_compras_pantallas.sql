@@ -75,7 +75,6 @@ begin
     into v_sin_camino
     from goods_receipt g left join supplier s on s.id = g.supplier_id left join locations l on l.id = g.location_id
    where g.account_id = p_cuenta and g.status = 'confirmado' and g.receipt_date >= v_desde
-     and coalesce(g.received_at, g.created_at) >= (select min(created_at) from goods_receipt_path where account_id = p_cuenta)
      and not exists (select 1 from goods_receipt_path p where p.goods_receipt_id = g.id);
 
   -- Las fichas de los proveedores con compras abiertas (factura o pendiente) o que liquidan.
