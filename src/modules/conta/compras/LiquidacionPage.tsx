@@ -85,7 +85,7 @@ function NuevaLiquidacion() {
   const titulo = `${nombres.proveedor ?? 'Liquidación'}${mes ? ` · ${mesLargo(mes)}` : ''}`
   return (
     <div className="cxc">
-      <Link className="cx-atras" to={rutaCompras()}>‹ Compras</Link>
+      <Link className="cx-enlace cx-mayor-volver" to={rutaCompras()}>‹ Compras</Link>
       <Cabecera antetitulo={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}`} titulo={titulo} />
       <Tarjeta titulo="Sus documentos">
         <p style={{ marginTop: 0 }}>Suelta los cinco PDF que te manda: tu factura, la suya, la cuenta, las ventas y el inventario. Los leo aquí, en tu navegador.</p>
@@ -202,7 +202,7 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
     return () => { vivo = false }
   }, [liqId, vuelta])
 
-  if (error) return <div className="cxc"><Link className="cx-atras" to={rutaCompras()}>‹ Compras</Link><ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
+  if (error) return <div className="cxc"><Link className="cx-enlace cx-mayor-volver" to={rutaCompras()}>‹ Compras</Link><ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
   if (!liq || !contraste) return <div className="cxc"><TarjetaCargando /><TarjetaCargando /></div>
 
   const lec = liq.detail
@@ -210,7 +210,7 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
   const bloqueos = lec.bloqueos ?? []
   return (
     <div className="cxc">
-      <Link className="cx-atras" to={rutaCompras()}>‹ Compras</Link>
+      <Link className="cx-enlace cx-mayor-volver" to={rutaCompras()}>‹ Compras</Link>
       <Cabecera antetitulo={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}${liq.settlement_ref ? ` · referencia ${liq.settlement_ref}` : ''}`}
         titulo={`${nombres.proveedor ?? 'Liquidación'} · ${mesLargo(liq.period_from)}`} />
       <Guardado texto={aviso} />

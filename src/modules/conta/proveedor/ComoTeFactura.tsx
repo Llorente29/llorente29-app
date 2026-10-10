@@ -56,7 +56,7 @@ export default function ComoTeFactura() {
         {dicen ?? 'Todavía no hay papeles suyos leídos.'}{' '}
         {guardada.modo
           ? <>Aquí pone que {guardada.modo === 'monthly_settlement' ? 'liquida cada mes' : `factura ${tituloForma(guardada.modo)?.toLowerCase()}`}.{choca ? ' Si no es así, cámbialo y dejaré de preguntártelo.' : ''}</>
-          : <>Su ficha no dice cómo factura{papeles?.[0] ? `; su último papel fue ${papelConArticulo(papeles[0])}` : ''}.</>}
+          : <>Su ficha no dice cómo factura{!dicen && papeles?.[0] ? `; su último papel fue ${papelConArticulo(papeles[0])}` : ''}.</>}
       </p>
       <div className="cxc-formas" role="radiogroup" aria-label={`Cómo te factura ${nombre}`}>
         {FORMAS.map((f) => {

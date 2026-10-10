@@ -73,9 +73,13 @@
   .cxc-cosa { flex-direction: column; gap: 10px; }
   .cxc-cosa-acciones { max-width: none; justify-content: stretch; }
   .cxc-cosa-acciones > * { flex: 1 1 100%; height: 46px; }
-  .cxc-tabla { grid-template-columns: minmax(0, 1fr) auto; }
-  .cxc-tabla > .cxc-tabla-cabeza { display: none; }
-  .cxc-tabla > .cxc-solo-ancho { display: none; }
+  /* Lo que espera factura: proveedor e importe en una línea, cuándo llega debajo. */
+  .cxc-esperando { grid-template-columns: minmax(0, 1fr) auto; }
+  .cxc-esperando > .cxc-tabla-cabeza, .cxc-esperando > .cxc-solo-ancho { display: none; }
+  .cxc-esperando > .cxc-cuando { grid-column: 1 / -1; border-top: none; padding-top: 0; color: var(--cx-apoyo); }
+  .cxc-esperando > .cxc-cuando.cxc-tarde { color: var(--cx-ambar); }
+  /* Las ventas por plataforma conservan sus columnas: más estrechas. */
+  .cxc-tabla > * { padding: 8px 6px; }
   .cxc-soltar { flex-direction: column; align-items: stretch; }
   .cxc-liq { flex-direction: column; align-items: stretch; }
   .cxc-tres { grid-template-columns: minmax(0, 1fr); }

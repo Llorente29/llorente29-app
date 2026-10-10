@@ -68,7 +68,7 @@ export default function ComprasPage() {
 
   const cabecera = (
     <Cabecera antetitulo="Contabilidad" titulo="Compras" derecha={<>
-      <span className="cxc-pie-mes" style={{ textTransform: 'capitalize' }}>{mesLargo(hoy)}</span>
+      <span className="cxc-pie-mes">{mesLargo(hoy).replace(/^./, (c) => c.toUpperCase())}</span>
       <button type="button" className="cx-boton" onClick={() => setSubir({})} disabled={!accountId}>Subir una factura</button>
     </>} />
   )
@@ -276,7 +276,7 @@ function Esperando({ filas, hoy, soltar }: { filas: EsperandoFactura[]; hoy: str
       {filas.length === 0
         ? <p style={{ margin: 0, color: 'var(--cx-apoyo)' }}>Nada espera factura.</p>
         : (
-          <div className="cxc-tabla" role="table" aria-label="Qué está esperando factura">
+          <div className="cxc-tabla cxc-esperando" role="table" aria-label="Qué está esperando factura">
             <span className="cxc-tabla-cabeza" role="columnheader">Proveedor</span>
             <span className="cxc-tabla-cabeza" role="columnheader">Local</span>
             <span className="cxc-tabla-cabeza" role="columnheader">Albaranes</span>
@@ -289,7 +289,7 @@ function Esperando({ filas, hoy, soltar }: { filas: EsperandoFactura[]; hoy: str
                 <span key={`${e.supplier_id}-${e.location_id}-l`} role="cell" className="cxc-solo-ancho">{e.location_name ?? 'Sin local'}</span>,
                 <span key={`${e.supplier_id}-${e.location_id}-a`} role="cell" className="cxc-solo-ancho">{albaranesDesde(e)}</span>,
                 <span key={`${e.supplier_id}-${e.location_id}-i`} role="cell" className="cx-cifra">{importeEsperando(e)}</span>,
-                <span key={`${e.supplier_id}-${e.location_id}-c`} role="cell" className={tarde ? 'cxc-tarde' : undefined} style={{ gridColumn: 'auto' }}>
+                <span key={`${e.supplier_id}-${e.location_id}-c`} role="cell" className={tarde ? 'cxc-cuando cxc-tarde' : 'cxc-cuando'}>
                   {cuandoLlega(e, hoy)}
                 </span>,
               ]
