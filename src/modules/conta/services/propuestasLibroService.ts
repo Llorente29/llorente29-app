@@ -249,7 +249,7 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   const [facturas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, supplier(name, tax_id, expense_category_id), supplier_invoice_line(line_amount, vat_pct)')
+    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, supplier(name, tax_id, expense_category_id), supplier_invoice_line(line_amount, vat_pct)')
       .eq('account_id', accountId).eq('status', 'aprobada').is('journal_entry_id', null).or(`company_id.is.null,company_id.eq.${companyId}`)
       .gte('invoice_date', desde).lte('invoice_date', hasta).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
@@ -281,6 +281,7 @@ export async function proponerPendientes(accountId: string, companyId: string, d
         return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: gasto }
       }),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: n(f.withholding_amount), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
+      ivaNoDeducible: f.vat_non_deductible === true,
     }, {
       proveedor: cuentaProv, retencion: ctx.hoja('4751') ?? '47510000',
       ivaSoportado: (pct) => { const t = ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_')); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },

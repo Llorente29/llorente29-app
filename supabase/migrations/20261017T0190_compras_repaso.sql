@@ -9,7 +9,8 @@
 -- 1 · Un papel a nombre de «Contado», «Varios», «Cliente»… no pregunta de
 --     quién es: es un aviso de que así no se descuenta el IVA. El nombre
 --     genérico se trata como «no es nuestro» (camino a_nombre_de_otro).
---     _compras_destinatario, misma firma; solo añade ese caso al final.
+--     _compras_destinatario, misma firma; solo añade ese caso al final, y
+--     el CHECK de goods_receipt_path.bill_to_how admite «generico».
 -- 2 · «Apuntarla sin descontar el IVA»: supplier_invoice.vat_non_deductible y
 --     compras_sin_iva(recepción, empresa), que registra la factura de su papel
 --     con esa marca y cierra la pregunta. El asiento lo propone el libro con
@@ -30,6 +31,11 @@ returns boolean language sql immutable parallel safe set search_path = public as
     'particular', 'particulares', 'consumidor final', 'publico', 'cliente final', 'mostrador', 'cliente mostrador')
 $$;
 grant execute on function public.compras_nombre_generico(text) to authenticated;
+
+-- El cómo del destinatario admite «generico» (el CHECK de la 0120 solo amplía).
+alter table public.goods_receipt_path drop constraint if exists goods_receipt_path_how_check;
+alter table public.goods_receipt_path add constraint goods_receipt_path_how_check
+  check (bill_to_how in ('nif', 'recordado', 'nombre', 'ficha', 'sin_dato', 'desconocido', 'generico'));
 
 create or replace function public._compras_destinatario(p_cuenta uuid, p_nombre text, p_nif text)
 returns table (kind text, company_id uuid, supplier_id uuid, how text)

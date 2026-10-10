@@ -6,7 +6,7 @@
 --   · El papel a nombre de «Contado» de la semilla se decide otra vez: con la
 --     0190 ya no pregunta de quién es; avisa de que así no se descuenta el IVA.
 --   · Tres albaranes del socio a nombre de uno de sus locales («Aurora Cocina
---     Norte Prueba»): una sola pregunta para los tres.
+--     Centro»): una sola pregunta para los tres.
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 
 create function pg_temp.recibe(p_id uuid, p_dia date, p_base numeric) returns void language plpgsql as $$
@@ -16,7 +16,7 @@ begin
   insert into goods_receipt_ai_session (account_id, kind, parsed_result, status)
   values ('c01a0000-0000-4000-8000-00000000000a', 'photo',
           jsonb_build_object('document', jsonb_build_object('doc_type', 'albaran', 'doc_number', 'AU-' || right(p_id::text, 2), 'doc_date', p_dia,
-                               'bill_to_name', 'Aurora Cocina Norte Prueba', 'tax_base_total', p_base),
+                               'bill_to_name', 'Aurora Cocina Centro', 'tax_base_total', p_base),
                              'lines', jsonb_build_array(jsonb_build_object('raw_text', 'Género', 'line_amount', p_base, 'vat_pct', 10))), 'pending_review')
   returning id into v_s;
   insert into goods_receipt (id, account_id, location_id, supplier_id, status, receipt_date, ai_session_id, created_by_name)

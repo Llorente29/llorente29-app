@@ -129,6 +129,11 @@ supabase/migrations/20261017T0180_compras_octubre_foodint.sql
 #   cerrada, no dos veces), los albaranes y las puertas.
 #   Semilla del repaso: «Contado» decidido otra vez y tres albaranes del
 #   socio a nombre de su local (una sola pregunta para los tres).
+#   Run 131 (b47deff4): la 0190 entró, pero su prueba paró en el paso 1: el
+#   papel a nombre de «CONTADO.» acababa en «error» porque el CHECK de la 0120
+#   sobre bill_to_how no admitía «generico». La 0190 amplía ese CHECK (y su
+#   vuelta atrás lo devuelve). Se reaplica: es idempotente. El local del
+#   socio pasa a llamarse «Aurora Cocina Centro» en la semilla.
 supabase/migrations/20261017T0190_compras_repaso.sql
 supabase/staging/sql/20261017_compras_repaso_prueba.sql
 supabase/seeds/conta/seed_compras_repaso_staging.sql

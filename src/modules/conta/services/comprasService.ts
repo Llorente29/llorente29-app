@@ -92,3 +92,16 @@ export function unirFichas(queda: string, seVa: string): Promise<{ fusion: strin
 export function deshacerUnion(fusion: string): Promise<{ fusion: string; deshecha: boolean }> {
   return rpc('supplier_merge_undo', { p_merge: fusion })
 }
+
+/** «Apuntarla sin descontar el IVA» (0190): registra la factura de su papel con el IVA como más gasto. */
+export function sinIva(recepcion: string, empresa: string): Promise<{ factura: string; repetida: boolean; frase: string }> {
+  return rpc('compras_sin_iva', { p_recepcion: recepcion, p_empresa: empresa })
+}
+
+export interface AlbaranLiquidacion { recepcion: string; codigo: string | null; fecha: string; base: number | null }
+
+/** Los albaranes que cuenta el contraste de compras de una liquidación (0190). */
+export async function albaranesDeLiquidacion(liq: string): Promise<AlbaranLiquidacion[]> {
+  const v = await rpc<AlbaranLiquidacion[] | null>('compras_liquidacion_recepciones', { p_liq: liq })
+  return (v ?? []).map((x) => ({ ...x, base: x.base == null ? null : Number(x.base) }))
+}

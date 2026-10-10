@@ -126,12 +126,17 @@ function IrAlCampo() {
   const { hash, pathname } = useLocation()
   useEffect(() => {
     if (!hash.startsWith('#campo-')) return
-    const t = window.setTimeout(() => {
+    // Algunos apartados se pintan al cargar sus datos («Cómo te factura»): se
+    // busca el campo cada 100 ms, como mucho 2 s.
+    let intentos = 0
+    let t = 0
+    const buscar = () => {
       const el = document.getElementById(decodeURIComponent(hash.slice(1)))
-      if (!el) return
+      if (!el) { if (++intentos < 20) t = window.setTimeout(buscar, 100); return }
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       el.focus({ preventScroll: true })
-    }, 60)
+    }
+    t = window.setTimeout(buscar, 60)
     return () => window.clearTimeout(t)
   }, [hash, pathname])
   return null

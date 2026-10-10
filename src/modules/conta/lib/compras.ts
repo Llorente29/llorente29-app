@@ -314,3 +314,241 @@ export function fraseSaldo(saldo: number | null): string | null {
   if (Math.abs(saldo) < 0.005) return 'Quedáis en paz'
   return saldo > 0 ? `Te paga ${eurosExactos(saldo)}` : `Le pagas ${eurosExactos(-saldo)}`
 }
+
+// ── Repaso (10/10): una fila por decisión, no por papel ────────────────────
+//
+// «Qué tienes que mirar» se agrupa por lo que hay que decidir: un nombre que
+// no se sabe de quién es (una vez para todos sus papeles), una ficha a la que
+// le falta algo (todo junto), el mismo papel contra la misma ficha… Agrupar
+// no esconde (regla 7): cada fila lleva sus papeles y la pantalla los enseña.
+
+/** Normaliza como lo hace la base para comparar (sin tildes, minúsculas, sin forma social). */
+export function normaNombre(t: string | null | undefined): string {
+  return (t ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/^\s*\d+\s*-\s*/, ' ').replace(/[^a-z0-9]+/g, ' ')
+    .replace(/(\s(s l u|s l l|s l|s a u|s a|sl|slu|sll|sa|sau|s coop|sociedad limitada|sociedad anonima|unipersonal))+\s*$/, ' ')
+    .replace(/\s+/g, ' ').trim()
+}
+
+const PALABRAS_VACIAS = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y', 'e', 'en', 'food', 'foods', 'grupo', 'group', 'sl', 'sa'])
+const palabras = (t: string) => normaNombre(t).split(' ').filter((p) => p.length >= 4 && !PALABRAS_VACIAS.has(p))
+
+export interface Propuesta { tipo: 'empresa' | 'proveedor'; id: string; nombre: string; porque: string }
+
+/**
+ * Como mucho dos propuestas para «¿de quién es este nombre?», las más
+ * probables y con su porqué. Sin ninguna pista, ninguna: mejor «Es de otro…»
+ * que un botón por cada empresa y proveedor.
+ */
+export function propuestasDeNombre(nombre: string, candidatos: readonly Candidato[], quienLoTrae: readonly string[]): Propuesta[] {
+  const mias = new Set(palabras(nombre))
+  const puntuadas = candidatos.map((c) => {
+    const comunes = palabras(c.nombre).filter((p) => mias.has(p))
+    const trae = c.tipo === 'proveedor' && quienLoTrae.includes(c.id)
+    const porques: string[] = []
+    if (comunes.length) porques.push(`comparte «${comunes.join(' ')}»`)
+    if (trae) porques.push('es quien trae el género')
+    return { c, puntos: comunes.length * 3 + (trae ? 2 : 0), porque: porques.join(' y ') }
+  }).filter((x) => x.puntos > 0)
+  puntuadas.sort((a, b) => b.puntos - a.puntos || a.c.nombre.localeCompare(b.c.nombre, 'es'))
+  const vistas = new Set<string>()
+  const r: Propuesta[] = []
+  for (const x of puntuadas) {
+    if (vistas.has(x.c.id)) continue
+    vistas.add(x.c.id)
+    r.push({ tipo: x.c.tipo, id: x.c.id, nombre: x.c.nombre, porque: x.porque.replace(/^./, (l) => l.toUpperCase()) })
+    if (r.length === 2) break
+  }
+  return r
+}
+
+export type FilaAMirar =
+  | { tipo: 'nombre'; clave: string; nombre: string; papeles: RecepcionAMirar[]; candidatos: Candidato[] }
+  | { tipo: 'liquida'; clave: string; proveedor: string; proveedor_nombre: string; papeles: RecepcionAMirar[] }
+  | { tipo: 'sin_iva'; clave: string; nombre: string; papeles: RecepcionAMirar[] }
+  | { tipo: 'papel_ficha'; clave: string; proveedor: string; proveedor_nombre: string; papel: string | null; ficha: FormaFacturar | null; sugerida: FormaFacturar | null; papeles: RecepcionAMirar[] }
+  | { tipo: 'ficha'; clave: string; proveedor: string; proveedor_nombre: string; falta: FaltaFicha[]; sugerida: FormaFacturar | null; papeles: RecepcionAMirar[] }
+  | { tipo: 'otra'; clave: string; pregunta: Pregunta; proveedor: string | null; proveedor_nombre: string | null; papeles: RecepcionAMirar[] }
+  | { tipo: 'sin_camino'; clave: string; recepciones: SinCamino[] }
+
+function empuja<T extends { papeles: RecepcionAMirar[] }>(m: Map<string, T>, k: string, crea: () => T, r: RecepcionAMirar) {
+  const f = m.get(k) ?? crea()
+  f.papeles.push(r)
+  m.set(k, f)
+}
+
+/** Agrupa lo que devuelve compras_mirar en filas de decisión, en un orden estable. */
+export function agruparAMirar(m: Mirar): FilaAMirar[] {
+  const nombres = new Map<string, Extract<FilaAMirar, { tipo: 'nombre' }>>()
+  const liquida = new Map<string, Extract<FilaAMirar, { tipo: 'liquida' }>>()
+  const sinIva = new Map<string, Extract<FilaAMirar, { tipo: 'sin_iva' }>>()
+  const papelFicha = new Map<string, Extract<FilaAMirar, { tipo: 'papel_ficha' }>>()
+  const fichas = new Map<string, Extract<FilaAMirar, { tipo: 'ficha' }>>()
+  const otras = new Map<string, Extract<FilaAMirar, { tipo: 'otra' }>>()
+  for (const f of m.fichas) fichas.set(f.proveedor, { tipo: 'ficha', clave: `ficha-${f.proveedor}`, proveedor: f.proveedor, proveedor_nombre: f.proveedor_nombre, falta: [...f.falta], sugerida: null, papeles: [] })
+  const recepciones = [...m.recepciones].sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.codigo ?? '').localeCompare(b.codigo ?? ''))
+  for (const r of recepciones) {
+    const d = r.detalle ?? {}
+    if (r.pregunta === 'a_nombre_de' && d.proveedor) {
+      empuja(liquida, d.proveedor, () => ({ tipo: 'liquida' as const, clave: `liquida-${d.proveedor}`, proveedor: d.proveedor!, proveedor_nombre: d.proveedor_nombre ?? 'ese proveedor', papeles: [] }), r)
+    } else if (r.pregunta === 'a_nombre_de' && r.a_nombre_de) {
+      const k = normaNombre(r.a_nombre_de)
+      empuja(nombres, k, () => ({ tipo: 'nombre' as const, clave: `nombre-${k}`, nombre: r.a_nombre_de!, papeles: [], candidatos: d.candidatos ?? [] }), r)
+    } else if (r.pregunta === 'a_nombre_de_otro') {
+      const k = normaNombre(r.a_nombre_de)
+      empuja(sinIva, k, () => ({ tipo: 'sin_iva' as const, clave: `iva-${k}`, nombre: r.a_nombre_de ?? 'otro', papeles: [] }), r)
+    } else if (r.pregunta === 'ficha_sin_forma' && r.proveedor) {
+      const f = fichas.get(r.proveedor) ?? { tipo: 'ficha' as const, clave: `ficha-${r.proveedor}`, proveedor: r.proveedor, proveedor_nombre: r.proveedor_nombre ?? 'Este proveedor', falta: [{ falta: 'forma_facturar' as const, ultimo_papel: r.papel }], sugerida: null, papeles: [] }
+      if (!f.falta.some((x) => x.falta === 'forma_facturar')) f.falta.push({ falta: 'forma_facturar', ultimo_papel: r.papel })
+      f.sugerida ??= d.sugerida ?? null
+      f.papeles.push(r)
+      fichas.set(r.proveedor, f)
+    } else if (r.pregunta === 'papel_y_ficha' && r.proveedor) {
+      const papel = d.papel ?? r.papel
+      const k = `${r.proveedor}-${papel}`
+      empuja(papelFicha, k, () => ({ tipo: 'papel_ficha' as const, clave: `pf-${k}`, proveedor: r.proveedor!, proveedor_nombre: r.proveedor_nombre ?? 'Este proveedor', papel, ficha: d.ficha ?? null, sugerida: d.sugerida ?? null, papeles: [] }), r)
+    } else {
+      const k = `${r.pregunta}-${r.proveedor ?? r.recepcion}`
+      empuja(otras, k, () => ({ tipo: 'otra' as const, clave: `otra-${k}`, pregunta: r.pregunta, proveedor: r.proveedor, proveedor_nombre: r.proveedor_nombre, papeles: [] }), r)
+    }
+  }
+  const porNombre = <T extends { papeles: RecepcionAMirar[] }>(xs: Iterable<T>, n: (x: T) => string) => [...xs].sort((a, b) => b.papeles.length - a.papeles.length || n(a).localeCompare(n(b), 'es'))
+  const filas: FilaAMirar[] = [
+    ...porNombre(nombres.values(), (x) => x.nombre),
+    ...porNombre(liquida.values(), (x) => x.proveedor_nombre),
+    ...porNombre(sinIva.values(), (x) => x.nombre),
+    ...porNombre(papelFicha.values(), (x) => x.proveedor_nombre),
+    ...porNombre(otras.values(), (x) => x.proveedor_nombre ?? ''),
+    ...[...fichas.values()].filter((f) => f.falta.length > 0).sort((a, b) => b.papeles.length - a.papeles.length || a.proveedor_nombre.localeCompare(b.proveedor_nombre, 'es')),
+  ]
+  if (m.sin_camino.length) filas.push({ tipo: 'sin_camino', clave: 'sin-camino', recepciones: [...m.sin_camino].sort((a, b) => a.fecha.localeCompare(b.fecha)) })
+  return filas
+}
+
+/** «el NIF», «el tipo de gasto» y «cómo te factura», unidos como se dice. */
+export function listaFaltas(falta: readonly FaltaFicha[]): string {
+  const t = falta.map((f) => (f.falta === 'nif' ? 'el NIF' : f.falta === 'tipo_gasto' ? 'el tipo de gasto' : 'cómo te factura'))
+  return t.length <= 1 ? (t[0] ?? '') : `${t.slice(0, -1).join(', ')} y ${t[t.length - 1]}`
+}
+
+/** «A Verduras del Huerto le faltan el NIF, el tipo de gasto y cómo te factura.» */
+export function fraseFicha(prov: string, falta: readonly FaltaFicha[]): string {
+  return `A ${prov} le ${falta.length === 1 ? 'falta' : 'faltan'} ${listaFaltas(falta)}.`
+}
+
+/** Lo que dice debajo la fila de una ficha: por qué importa cada cosa que falta, en una frase. */
+export function porQueFicha(falta: readonly FaltaFicha[]): string {
+  const t: string[] = []
+  const nif = falta.find((f) => f.falta === 'nif')
+  if (nif && nif.falta === 'nif') t.push(nif.ofrece ? `Sin NIF no puedo contabilizar sus facturas; ${nif.veces && nif.veces > 1 ? `en ${nif.veces} de sus papeles` : 'en su último papel'} pone ${nif.ofrece}${nif.otros_distintos > 0 ? ' (y hay otro distinto)' : ''}: compruébalo antes de aceptarlo` : 'Sin NIF no puedo contabilizar sus facturas, y ninguno de sus papeles lo trae')
+  if (falta.some((f) => f.falta === 'tipo_gasto')) t.push('sin tipo de gasto no sé a qué cuenta van')
+  const forma = falta.find((f) => f.falta === 'forma_facturar')
+  if (forma && forma.falta === 'forma_facturar') t.push(`sin saber cómo factura no sé si esperar su factura${forma.ultimo_papel ? ` (su último papel fue ${papelConArticulo(forma.ultimo_papel)})` : ''}`)
+  return conPunto(t.join('; ').replace(/^./, (l) => l.toUpperCase()))
+}
+
+/** «del 2 al 9 de octubre» / «del 30 de septiembre al 2 de octubre» / «del 5 de octubre». */
+export function rangoFechas(fechas: readonly string[]): string {
+  if (!fechas.length) return ''
+  const s = [...fechas].sort()
+  const [a, b] = [s[0], s[s.length - 1]]
+  const [, ma, da] = a.split('-').map(Number)
+  const [, mb, db] = b.split('-').map(Number)
+  if (a === b) return `del ${da} de ${MES[ma - 1]}`
+  return ma === mb ? `del ${da} al ${db} de ${MES[mb - 1]}` : `del ${da} de ${MES[ma - 1]} al ${db} de ${MES[mb - 1]}`
+}
+
+export function totalPapeles(papeles: readonly { base: number | null }[]): { total: number; sinImporte: number } {
+  return { total: Math.round(papeles.reduce((s, p) => s + (p.base ?? 0), 0) * 100) / 100, sinImporte: papeles.filter((p) => p.base == null).length }
+}
+
+// ── La liquidación: tres veredictos, con su umbral escrito ─────────────────
+//
+// Coincide · se parece (cuánto y dónde) · no lo puedo comprobar (por qué y qué
+// hace falta). Coincide = la diferencia no pasa de 2 € ni del 0,1 % de lo que
+// dice él (lo que sea mayor): el redondeo de una cuenta larga, nada más.
+
+export const UMBRAL_COINCIDE = { euros: 2, proporcion: 0.001 }
+
+export function coincide(diferencia: number, referencia: number): boolean {
+  return Math.abs(diferencia) <= Math.max(UMBRAL_COINCIDE.euros, Math.abs(referencia) * UMBRAL_COINCIDE.proporcion)
+}
+
+export type EstadoVeredicto = 'coincide' | 'se_parece' | 'no_se_puede'
+export interface Veredicto { estado: EstadoVeredicto; titulo: string; detalle: string }
+
+export interface ContrasteCompras { folvy: number; recepciones: number; sin_base: number; documento: number | null; diferencia: number | null }
+export interface ContrasteVenta { plataforma: string; documento: number | null; folvy: number | null; pedidos: number | null; diferencia: number }
+export interface ContrasteProductos {
+  casados: number; no_nuestros: number; sin_casar: number; sin_casar_con_compras: number
+  no_coinciden: { nombre: string; documento: number; unidad: string; folvy: number | null; comparable: boolean }[]
+}
+
+const mas = (d: number) => (d > 0 ? 'más' : 'menos')
+
+export function veredictoCompras(c: ContrasteCompras): Veredicto {
+  const recibido = `En el local se recibieron ${c.recepciones} ${c.recepciones === 1 ? 'albarán' : 'albaranes'} por ${eurosExactos(c.folvy)}${c.sin_base ? ` (y ${c.sin_base} sin importe)` : ''}.`
+  if (c.documento == null) {
+    return { estado: 'no_se_puede', titulo: 'Lo que dice que te mandó no lo puedo comprobar.', detalle: `Falta su inventario: es el que dice lo que te mandó. ${recibido}` }
+  }
+  const dif = Math.round((c.folvy - c.documento) * 100) / 100
+  if (coincide(dif, c.documento) && c.sin_base === 0) {
+    return { estado: 'coincide', titulo: 'Lo que dice que te mandó coincide con lo que recibiste.', detalle: `Él dice ${eurosExactos(c.documento)}. ${recibido} Diferencia: ${eurosExactos(Math.abs(dif))}.` }
+  }
+  return {
+    estado: 'se_parece', titulo: 'Lo que dice que te mandó no es lo que recibiste.',
+    detalle: `Él dice ${eurosExactos(c.documento)}. ${recibido} En el local consta ${eurosExactos(Math.abs(dif))} ${mas(dif)}${c.sin_base ? '; las que no tienen importe no cuentan' : ''}.`,
+  }
+}
+
+export function veredictoVentas(v: readonly ContrasteVenta[], marcas: string): Veredicto {
+  const conFolvy = v.filter((x) => x.folvy != null)
+  if (marcas === 'ninguna' || conFolvy.length === 0) {
+    return {
+      estado: 'no_se_puede', titulo: 'Sus ventas no las puedo comprobar.',
+      detalle: marcas === 'ninguna'
+        ? 'Folvy no sabe qué marcas son suyas: hace falta ponerle sus acuerdos de cesión en su ficha.'
+        : 'Folvy no tiene ventas de sus marcas en este local y este mes: hacen falta los pedidos cerrados de sus marcas (o sus acuerdos de cesión, si son otras).',
+    }
+  }
+  const sinDoc = v.filter((x) => x.documento == null)
+  const distintas = v.filter((x) => x.documento != null && !coincide(x.diferencia, x.documento))
+  if (!sinDoc.length && !distintas.length) {
+    return { estado: 'coincide', titulo: 'Sus ventas y las que tiene Folvy coinciden.', detalle: 'De estas ventas sale tu servicio.' }
+  }
+  const total = Math.round(v.reduce((s, x) => s + x.diferencia, 0) * 100) / 100
+  const partes = [...distintas].sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
+    .map((x) => `${x.plataforma}, ${eurosExactos(Math.abs(x.diferencia))} ${mas(x.diferencia)}`)
+  for (const x of sinDoc) partes.push(`${x.plataforma}, que él no trae`)
+  return {
+    estado: 'se_parece', titulo: 'Sus ventas y las que tiene Folvy se parecen, pero no son iguales.',
+    detalle: `Folvy cuenta ${eurosExactos(Math.abs(total))} ${mas(total)} que él, sin IVA: ${partes.join('; ')}. De estas ventas sale tu servicio; para saber quién tiene razón pedido a pedido hace falta el detalle de cada plataforma.`,
+  }
+}
+
+export function veredictoProductos(p: ContrasteProductos, total: number): Veredicto {
+  if (total === 0) return { estado: 'no_se_puede', titulo: 'El género producto a producto no lo puedo comprobar.', detalle: 'Su inventario no trae productos.' }
+  if (p.sin_casar > 0) {
+    return {
+      estado: 'no_se_puede', titulo: 'El género que dice que gastaste todavía no lo puedo comprobar producto a producto.',
+      detalle: `Reconozco ${p.casados + p.no_nuestros} de sus ${total} productos. Los otros ${p.sin_casar} los llama de otra manera. Dime una vez cuál es cuál y lo recuerdo para todos los meses.`,
+    }
+  }
+  if (p.no_coinciden.length === 0) return { estado: 'coincide', titulo: 'El género coincide producto a producto.', detalle: `Los ${total} productos de su inventario están casados y cuadran con lo recibido.` }
+  return {
+    estado: 'se_parece', titulo: `En ${p.no_coinciden.length} ${p.no_coinciden.length === 1 ? 'producto' : 'productos'} lo que dice no es lo que recibiste.`,
+    detalle: p.no_coinciden.map((x) => `${x.nombre}: él dice ${String(x.documento).replace('.', ',')} ${x.unidad}; ${x.comparable ? `aquí ${String(x.folvy ?? 0).replace('.', ',')} ${x.unidad}` : 'aquí se cuenta en otra unidad'}`).join('. ') + '.',
+  }
+}
+
+/** Los cinco documentos de una liquidación: cuáles han llegado y qué no se comprueba sin cada uno. */
+export function documentosLeidos(l: { emitida?: unknown; recibida?: unknown; transaccion?: unknown; ventas?: unknown; inventario?: unknown }):
+  { nombre: string; llegado: boolean; sinEl: string }[] {
+  return [
+    { nombre: 'Tu factura', llegado: !!l.emitida, sinEl: 'sin ella no hay liquidación que apuntar' },
+    { nombre: 'Su factura', llegado: !!l.recibida, sinEl: 'sin ella no se apunta lo que te vende' },
+    { nombre: 'La cuenta', llegado: !!l.transaccion, sinEl: 'sin ella no compruebo el saldo' },
+    { nombre: 'Ventas', llegado: !!l.ventas, sinEl: 'sin ellas no compruebo tu servicio' },
+    { nombre: 'Inventario', llegado: !!l.inventario, sinEl: 'sin él no compruebo el género, ni en total ni producto a producto' },
+  ]
+}

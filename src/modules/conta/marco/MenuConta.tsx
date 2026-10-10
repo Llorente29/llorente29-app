@@ -18,6 +18,7 @@ import {
 import { Icono } from '@/modules/conta/ui/Icono'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { BotonIAMovil } from '@/modules/conta/marco/BarraPregunta'
+import { useCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { iniciales } from '@/modules/conta/lib/formato'
 
 export function CabeceraEmpresa() {
@@ -82,6 +83,7 @@ export function MenuConta() {
   const todas = MENU_CONTA.flat()
   const activa = entradaActiva(pathname, todas)
   const grupos = MENU_CONTA.map(entradasVisibles).filter((g) => g.length > 0)
+  const cuentas = useCuentasMenu()
   return (
     <nav className="cx-menu" aria-label="Menú de contabilidad">
       <CabeceraEmpresa />
@@ -92,6 +94,7 @@ export function MenuConta() {
             <Link key={e.id} to={rutaConta(e.ruta)} className="cx-menu-item" aria-current={activa === e.id ? 'page' : undefined}>
               <Icono nombre={e.icono} />
               <span className="cx-menu-item-texto">{e.etiqueta}</span>
+              {(cuentas[e.id] ?? 0) > 0 && <span className="cx-insignia cx-menu-cuenta" aria-label={`${cuentas[e.id]} por mirar`}>{cuentas[e.id]}</span>}
             </Link>
           ))}
         </div>

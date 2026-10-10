@@ -254,6 +254,21 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
     expect(r.propuesta).toBeNull()
     expect(r.sinPropuesta).toBe('A Distribuciones de prueba le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.')
   })
+  // Compras (repaso, 10/10): «Apuntarla sin descontar el IVA». El papel de la
+  // semilla a nombre de «Contado»: 102,54 de base al 10 %, 112,79 de total.
+  it('sin descontar el IVA: la cuota es más gasto, sin 472, y no pide NIF', () => {
+    const p = facturaProveedor({ id: 'f5', numero: 'BR-77', fecha: '2026-09-25', proveedor: 'Bodega de prueba', terceroId: null, esSocio: false, tieneNif: false, localId: NORTE,
+      lineas: [{ base: 102.54, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }], total: 112.79, retencion: null, ivaNoDeducible: true }, c).propuesta!
+    expect(p.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 112.79, 0], ['41000006', 0, 112.79]])
+    expect(p.lineas.some((l) => l.iva)).toBe(false)
+    expect(problemas(p.lineas, esIva, esRet)).toEqual([])
+    expect(p.avisos).toEqual([])
+    expect(p.concepto).toContain('sin descontar el IVA')
+    // La misma factura, deducible: su IVA va a la 472 y al libro.
+    const d = facturaProveedor({ id: 'f5', numero: 'BR-77', fecha: '2026-09-25', proveedor: 'Bodega de prueba', terceroId: null, esSocio: false, tieneNif: true, localId: NORTE,
+      lineas: [{ base: 102.54, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }], total: 112.79, retencion: null }, c).propuesta!
+    expect(d.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 102.54, 0], ['47200010', 10.25, 0], ['41000006', 0, 112.79]])
+  })
   it('sin tipo de gasto no cae a una cuenta genérica: no se propone', () => {
     const r = facturaProveedor({ id: 'f4', numero: 'B-2', fecha: '2026-10-07', proveedor: 'Distribuciones de prueba', terceroId: null, esSocio: false, tieneNif: true, localId: NORTE,
       lineas: [{ base: 60, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }, { base: 40, tipo: { id: 't4', porcentaje: 4 }, cuentaGasto: null }], total: 107.6, retencion: null }, c)

@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { tabla } from '@/modules/conta/services/bd'
 import { cambiarFormaFacturar, ultimosPapeles } from '@/modules/conta/services/comprasService'
-import { FORMAS, chocaConLaFicha, fraseUltimosPapeles, papelConArticulo, tituloForma, type FormaFacturar } from '@/modules/conta/lib/compras'
+import { FORMAS, chocaConLaFicha, fraseUltimosPapeles, tituloForma, type FormaFacturar } from '@/modules/conta/lib/compras'
 import { Guardado } from '@/modules/conta/ui/piezas'
 
 interface Costumbre { modo: FormaFacturar | null; porLocal: boolean | null; frecuencia: string | null }
@@ -46,18 +46,29 @@ export default function ComoTeFactura() {
   const cambiado = elegida.modo !== guardada.modo || (elegida.modo === 'delivery_note_then_invoice'
     && (elegida.porLocal !== guardada.porLocal || elegida.frecuencia !== guardada.frecuencia))
   const dicen = papeles ? fraseUltimosPapeles(papeles) : null
+  // Lo que sugieren sus papeles: la mayoría factura → con cada entrega; si no, albarán y factura después.
+  const sugerida: FormaFacturar | null = papeles?.length
+    ? (papeles.filter((p) => p === 'factura' || p === 'albaran_factura').length > papeles.length / 2 ? 'per_delivery' : 'delivery_note_then_invoice')
+    : null
   const choca = papeles ? chocaConLaFicha(papeles, guardada.modo) : false
   const nombre = datos.ficha.name
 
   return (
-    <fieldset className="cx-fieldset cxc-como" aria-describedby="cxc-como-dice">
+    <fieldset className="cx-fieldset cxc-como" aria-describedby="cxc-como-dice" id="campo-como-te-factura" tabIndex={-1}>
       <legend className="cx-tarjeta-titulo" style={{ fontSize: 16, marginBottom: 6 }}>Cómo te factura</legend>
-      <p id="cxc-como-dice" className={choca ? 'cxc-dice cxc-dice-choca' : 'cxc-dice'}>
-        {dicen ?? 'Todavía no hay papeles suyos leídos.'}{' '}
-        {guardada.modo
-          ? <>Aquí pone que {guardada.modo === 'monthly_settlement' ? 'liquida cada mes' : `factura ${tituloForma(guardada.modo)?.toLowerCase()}`}.{choca ? ' Si no es así, cámbialo y dejaré de preguntártelo.' : ''}</>
-          : <>Su ficha no dice cómo factura{!dicen && papeles?.[0] ? `; su último papel fue ${papelConArticulo(papeles[0])}` : ''}.</>}
-      </p>
+      {(choca || (!guardada.modo && papeles?.length)) ? (
+        <div id="cxc-como-dice" className="cx-aviso cxc-dice-choca" role="note">
+          {dicen}{' '}
+          {guardada.modo
+            ? <>Aquí pone que {guardada.modo === 'monthly_settlement' ? 'liquida cada mes' : `factura ${tituloForma(guardada.modo)?.toLowerCase()}`}. Si no es así, cámbialo y dejaré de preguntártelo.</>
+            : <>Su ficha no dice cómo factura{sugerida ? <>: lo normal con esos papeles es «{tituloForma(sugerida)}»</> : null}.</>}
+        </div>
+      ) : (
+        <p id="cxc-como-dice" className="cxc-dice">
+          {dicen ?? 'Todavía no hay papeles suyos leídos.'}{' '}
+          {guardada.modo ? <>Aquí pone que {guardada.modo === 'monthly_settlement' ? 'liquida cada mes' : `factura ${tituloForma(guardada.modo)?.toLowerCase()}`}.</> : <>Su ficha no dice cómo factura.</>}
+        </p>
+      )}
       <div className="cxc-formas" role="radiogroup" aria-label={`Cómo te factura ${nombre}`}>
         {FORMAS.map((f) => {
           const activa = elegida.modo === f.valor
@@ -65,7 +76,7 @@ export default function ComoTeFactura() {
             <div key={f.valor} className={activa ? 'cxc-forma cxc-forma-activa' : 'cxc-forma'}>
               <button type="button" role="radio" aria-checked={activa} className="cxc-forma-boton"
                 onClick={() => setElegida({ ...elegida, modo: f.valor })}>
-                <span className="cxc-forma-titulo">{f.titulo}</span>
+                <span className="cxc-forma-titulo"><span className={activa ? 'cxc-radio cxc-radio-si' : 'cxc-radio'} aria-hidden="true" />{f.titulo}{activa && guardada.modo === f.valor ? <span className="cx-chip cx-chip-azul" style={{ marginLeft: 8 }}>La de su ficha</span> : null}</span>
                 <span className="cxc-forma-explica">{f.explicacion}</span>
               </button>
               {activa && f.valor === 'delivery_note_then_invoice' && (

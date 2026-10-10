@@ -376,6 +376,12 @@ export interface EntradaFactura {
   lineas: readonly LineaFactura[]
   total: number
   retencion: { tipoId: string; porcentaje: number; base: number; importe: number; modelo: '111' | '115' | '123' } | null
+  /**
+   * Compras (repaso, 10/10): «Apuntarla sin descontar el IVA». La factura no va
+   * a nombre de la empresa: su IVA es más gasto, no va a la 472 ni al libro de
+   * recibidas como deducible (supplier_invoice.vat_non_deductible).
+   */
+  ivaNoDeducible?: boolean
 }
 export interface CuentasFactura {
   proveedor: string
@@ -387,7 +393,7 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
   if (f.esSocio) return { propuesta: null, sinPropuesta: `${f.proveedor} es tu socio de marca: lo que te vende a su nombre no es gasto tuyo, va en su liquidación mensual.` }
   // Compras (10/10), §2.6: lo que falta en la ficha se dice, no se tapa. Una
   // factura sin NIF o sin tipo de gasto NO cae a una cuenta genérica.
-  if (!f.tieneNif) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.` }
+  if (!f.tieneNif && !f.ivaNoDeducible) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.` }
   if (f.lineas.some((l) => !l.cuentaGasto)) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el tipo de gasto: ponlo en su ficha y la factura se propone.` }
   const razones: Razon[] = []
   const avisos: string[] = []
@@ -396,6 +402,39 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
   const lineas: LineaAsiento[] = []
   const gastos = new Map<string, number>()
   for (const l of f.lineas) gastos.set(l.cuentaGasto!, (gastos.get(l.cuentaGasto!) ?? 0) + cent(l.base))
+  if (f.ivaNoDeducible) {
+    // La cuota, por cuenta de gasto y tipo, se suma a su gasto: no hay 472.
+    const porCuentaTipo = new Map<string, { cuenta: string; pct: number; base: number }>()
+    for (const l of f.lineas) {
+      const pct = l.tipo?.porcentaje ?? 0
+      const k = `${l.cuentaGasto}|${pct}`
+      const x = porCuentaTipo.get(k) ?? { cuenta: l.cuentaGasto!, pct, base: 0 }
+      x.base += cent(l.base)
+      porCuentaTipo.set(k, x)
+    }
+    let ivaNd = 0
+    for (const x of porCuentaTipo.values()) {
+      if (!x.pct) continue
+      const cuota = cent(cuotaIva(deCent(x.base), x.pct))
+      ivaNd += cuota
+      gastos.set(x.cuenta, (gastos.get(x.cuenta) ?? 0) + cuota)
+    }
+    for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
+    const totalNd = f.lineas.reduce((t, l) => t + cent(l.base), 0) + ivaNd
+    lineas.push({ cuenta: c.proveedor, debe: 0, haber: deCent(totalNd), localId: loc, comun: !loc, documento: f.numero, terceroId: f.terceroId })
+    if (totalNd !== cent(f.total)) { avisos.push(`Base + IVA = ${eurosExactos(deCent(totalNd))}, y la factura dice ${eurosExactos(f.total)}.`); confs.push('duda') }
+    razones.push({ decision: 'IVA como más gasto', porque: 'la factura no va a nombre de tu empresa: su IVA no se descuenta, no va a la 472 ni al libro de recibidas como deducible' })
+    if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+    return {
+      sinPropuesta: null,
+      propuesta: {
+        serie: 2, fecha: f.fecha, concepto: `Factura ${f.proveedor}${f.numero ? ` · ${f.numero}` : ''} (sin descontar el IVA)`, origen: { tipo: 'supplier_invoice', id: f.id },
+        lineas, confianza: peor('seguro', ...confs),
+        porque: 'Gasto con su IVA dentro y el total a su cuenta: la factura no va a nombre de tu empresa.',
+        razones, avisos, terceroId: f.terceroId, documento: f.numero,
+      },
+    }
+  }
   for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
   const porTipo = new Map<number, { id: string; base: number }>()
   for (const l of f.lineas) {

@@ -129,3 +129,107 @@ describe('Cómo te factura (N20)', () => {
     expect(chocaConLaFicha(['albaran'], null)).toBe(false)
   })
 })
+
+// ── Repaso (10/10) ──────────────────────────────────────────────────────────
+import {
+  agruparAMirar, coincide, documentosLeidos, fraseFicha, porQueFicha, propuestasDeNombre, rangoFechas,
+  veredictoCompras, veredictoProductos, veredictoVentas, type Candidato,
+} from '@/modules/conta/lib/compras'
+
+// La forma de octubre en Foodint (nombres cambiados): el socio trae el género
+// a nombre de dos locales suyos; uno de ellos escrito de dos maneras (con y
+// sin el código de cliente delante).
+const SOCIO = 'socio-1'
+const CANDIDATOS: Candidato[] = [
+  { tipo: 'empresa', id: 'emp-1', nombre: 'Taberna Norte, S.L.', orden: '1' },
+  { tipo: 'proveedor', id: SOCIO, nombre: 'AURORA BRANDS, S.L.', orden: '0' },
+  { tipo: 'proveedor', id: 'prov-x', nombre: 'Pepeoto Lopez, s.l.', orden: '1' },
+]
+const papel = (i: number, nombre: string, fecha: string): RecepcionAMirar => ({
+  ...R102, recepcion: `r-${i}`, codigo: `ALB-${String(i).padStart(5, '0')}`, fecha, proveedor: SOCIO, proveedor_nombre: 'AURORA BRANDS, S.L.',
+  a_nombre_de: nombre, base: 100 + i, detalle: { nombre, candidatos: CANDIDATOS },
+})
+
+describe('Repaso · una fila por decisión', () => {
+  const horno = Array.from({ length: 9 }, (_, i) => papel(i, 'AURORA EL HORNO BOUTIQUE', `2026-10-0${1 + (i % 9)}`))
+  const carab = [papel(20, 'AURORA CARABANCH', '2026-10-01'), papel(21, '047319- AURORA CARABANCH', '2026-10-01'),
+                 papel(22, 'AURORA CARABANCH', '2026-10-07'), papel(23, 'AURORA CARABANCH', '2026-10-07')]
+  const m: Mirar = {
+    recepciones: [...horno, ...carab, R101],
+    sin_camino: [],
+    fichas: [{ tipo: 'ficha', proveedor: R101.proveedor!, proveedor_nombre: 'Verduras Prueba Ocho, S.L.', falta: [{ falta: 'nif', ofrece: 'B12345674', veces: 1, otros_distintos: 0 }, { falta: 'tipo_gasto' }, { falta: 'forma_facturar', ultimo_papel: 'albaran' }] }],
+  }
+  const filas = agruparAMirar(m)
+  it('13 papeles a nombre de dos locales son dos filas; la ficha incompleta, una con todo junto', () => {
+    expect(filas.map((f) => [f.tipo, 'papeles' in f ? f.papeles.length : 0])).toEqual([['nombre', 9], ['nombre', 4], ['ficha', 1]])
+    const ficha = filas[2]
+    expect(ficha.tipo === 'ficha' && fraseFicha(ficha.proveedor_nombre, ficha.falta)).toBe('A Verduras Prueba Ocho, S.L. le faltan el NIF, el tipo de gasto y cómo te factura.')
+    expect(ficha.tipo === 'ficha' && ficha.sugerida).toBe('delivery_note_then_invoice')
+  })
+  it('agrupar no esconde: todos los papeles están en alguna fila', () => {
+    const n = filas.reduce((s, f) => s + ('papeles' in f ? f.papeles.length : 0), 0)
+    expect(n).toBe(m.recepciones.length)
+  })
+  it('el rango de fechas de la fila', () => {
+    expect(rangoFechas(horno.map((h) => h.fecha))).toBe('del 1 al 9 de octubre')
+    expect(rangoFechas(['2026-09-30', '2026-10-02'])).toBe('del 30 de septiembre al 2 de octubre')
+  })
+  it('lo que falta, dicho con su porqué', () => {
+    expect(porQueFicha([{ falta: 'nif', ofrece: 'B12345674', veces: 1, otros_distintos: 0 }, { falta: 'tipo_gasto' }]))
+      .toBe('Sin NIF no puedo contabilizar sus facturas; en su último papel pone B12345674: compruébalo antes de aceptarlo; sin tipo de gasto no sé a qué cuenta van.')
+  })
+})
+
+describe('Repaso · a nombre de quién: como mucho dos propuestas, con su porqué', () => {
+  it('el local del socio: el socio, porque comparte el nombre y es quien trae el género; ni la empresa ni un tercero cualquiera', () => {
+    const p = propuestasDeNombre('AURORA EL HORNO BOUTIQUE', CANDIDATOS, [SOCIO])
+    expect(p).toEqual([{ tipo: 'proveedor', id: SOCIO, nombre: 'AURORA BRANDS, S.L.', porque: 'Comparte «aurora» y es quien trae el género' }])
+  })
+  it('sin ninguna pista, ninguna propuesta (y la pantalla ofrece «Es de otro…»)', () => {
+    expect(propuestasDeNombre('Bar Desconocido Ocho', CANDIDATOS, [])).toEqual([])
+  })
+  it('nunca más de dos', () => {
+    const muchos: Candidato[] = ['Aurora Uno', 'Aurora Dos', 'Aurora Tres'].map((n, i) => ({ tipo: 'proveedor', id: `a${i}`, nombre: n, orden: '0' }))
+    expect(propuestasDeNombre('Aurora Centro', muchos, [])).toHaveLength(2)
+  })
+})
+
+describe('Repaso · los tres veredictos de la liquidación', () => {
+  it('el umbral: 2 € o el 0,1 %, lo que sea mayor', () => {
+    expect(coincide(1.12, 11393.44)).toBe(true)
+    expect(coincide(12, 11393.44)).toBe(false)
+    expect(coincide(1.99, 100)).toBe(true)
+    expect(coincide(2.01, 100)).toBe(false)
+  })
+  it('compras de septiembre (T5, producción): coincide', () => {
+    const v = veredictoCompras({ folvy: 11394.56, recepciones: 26, sin_base: 0, documento: 11393.44, diferencia: 1.12 })
+    expect(v.estado).toBe('coincide')
+    expect(v.detalle).toBe('Él dice 11.393,44 €. En el local se recibieron 26 albaranes por 11.394,56 €. Diferencia: 1,12 €.')
+  })
+  it('compras sin su inventario: no se puede, y dice qué falta', () => {
+    expect(veredictoCompras({ folvy: 450, recepciones: 2, sin_base: 0, documento: null, diferencia: null }).estado).toBe('no_se_puede')
+  })
+  it('ventas de septiembre (maqueta N19): se parece, cuánto y dónde', () => {
+    const v = veredictoVentas([
+      { plataforma: 'Glovo', documento: 19497.01, folvy: 19402.62, pedidos: 1016, diferencia: -94.39 },
+      { plataforma: 'Uber Eats', documento: 8282.10, folvy: 8462.48, pedidos: 397, diferencia: 180.38 },
+      { plataforma: 'Just Eat', documento: 679.54, folvy: 725.82, pedidos: 28, diferencia: 46.28 },
+    ], 'cedidas_sin_acuerdo')
+    expect(v.estado).toBe('se_parece')
+    expect(v.detalle).toContain('Folvy cuenta 132,27 € más que él, sin IVA: Uber Eats, 180,38 € más; Glovo, 94,39 € menos; Just Eat, 46,28 € más.')
+  })
+  it('ventas que Folvy no tiene (la captura: 4.000 € contra nada): no se puede, no «se parece»', () => {
+    const v = veredictoVentas([{ plataforma: 'Glovo', documento: 4000, folvy: null, pedidos: null, diferencia: -4000 }], 'ninguna')
+    expect(v.estado).toBe('no_se_puede')
+    expect(v.detalle).toContain('acuerdos de cesión')
+  })
+  it('producto a producto: sin casar no se puede; casado y cuadrado, coincide', () => {
+    const base = { casados: 0, no_nuestros: 0, sin_casar: 3, sin_casar_con_compras: 2, no_coinciden: [] }
+    expect(veredictoProductos(base, 3).estado).toBe('no_se_puede')
+    expect(veredictoProductos({ ...base, casados: 3, sin_casar: 0, sin_casar_con_compras: 0 }, 3).estado).toBe('coincide')
+  })
+  it('los cinco documentos: si falta uno, cuál y qué no se comprueba', () => {
+    const d = documentosLeidos({ emitida: {}, recibida: {}, transaccion: {}, ventas: null, inventario: {} })
+    expect(d.filter((x) => !x.llegado).map((x) => `${x.nombre}: ${x.sinEl}`)).toEqual(['Ventas: sin ellas no compruebo tu servicio'])
+  })
+})

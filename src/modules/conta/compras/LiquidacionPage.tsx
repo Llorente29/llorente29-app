@@ -12,7 +12,7 @@
 //
 // Lo que no cuadra o no se sabe qué es, para (bloqueos) y se dice.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaCompras, rutaLibroDiario, rutaLiquidacion } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -20,7 +20,12 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Cabecera, ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import { fraseSaldo, mesLargo } from '@/modules/conta/lib/compras'
+import {
+  diaConNombre, documentosLeidos, fraseSaldo, mesLargo, veredictoCompras, veredictoProductos, veredictoVentas,
+  type EstadoVeredicto, type Veredicto,
+} from '@/modules/conta/lib/compras'
+import { albaranesDeLiquidacion, type AlbaranLiquidacion } from '@/modules/conta/services/comprasService'
+import { VerPapel } from '@/modules/conta/compras/VerPapel'
 import { celdasPdf } from '@/modules/conta/lib/celdasPdf'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
 import { leerLiquidacion, type FacturaLeida, type LiquidacionLeida } from '@/modules/conta/lib/lectorLiquidacionMensual'
@@ -99,7 +104,9 @@ function NuevaLiquidacion() {
       </Tarjeta>
       {lectura && (
         <>
-          <Leido lectura={lectura} saldo={lectura.transaccion?.saldo?.importe ?? null} />
+          <TresCifras lectura={lectura} saldo={lectura.transaccion?.saldo?.importe ?? null} />
+          <Documentos lectura={lectura} />
+          <Facturas lectura={lectura} />
           {lectura.noReconocidos.length > 0 && <p className="cx-aviso">No sé qué son: {lectura.noReconocidos.join(', ')}. No los he usado.</p>}
           {lectura.avisos.map((a) => <p key={a} className="cx-ayuda" style={{ margin: 0 }}>{a}</p>)}
           {lectura.bloqueos.length > 0 && (
@@ -125,27 +132,46 @@ function NuevaLiquidacion() {
   )
 }
 
-/** Las tres cifras de arriba y las dos facturas línea a línea. */
-function Leido({ lectura, saldo }: { lectura: LiquidacionLeida; saldo: number | null }) {
+/** Las tres cifras de arriba (N19). */
+function TresCifras({ lectura, saldo }: { lectura: LiquidacionLeida; saldo: number | null }) {
   const e = lectura.emitida
   const r = lectura.recibida
   const s = saldo ?? (e?.total != null && r?.total != null ? Math.round((e.total - r.total) * 100) / 100 : null)
   return (
-    <>
-      <div className="cxc-tres">
-        <Tarjeta><span className="cx-etiqueta">Tú le facturas</span><div className="cxc-tres-cifra">{e?.total != null ? eurosExactos(e.total) : '—'}</div>
-          <span className="cx-ayuda">Tu servicio por sus ventas y el género que pusiste tú. La extiende él en tu nombre.</span></Tarjeta>
-        <Tarjeta><span className="cx-etiqueta">Él te factura</span><div className="cxc-tres-cifra">{r?.total != null ? eurosExactos(r.total) : '—'}</div>
-          <span className="cx-ayuda">El género suyo que queda en tu local a fin de mes.</span></Tarjeta>
-        <Tarjeta><span className="cx-etiqueta">{s == null ? 'La diferencia' : fraseSaldo(s)?.replace(/ [\d.,]+ €$/, '')}</span>
-          <div className="cxc-tres-cifra">{s == null ? '—' : eurosExactos(Math.abs(s))}</div>
-          <span className="cx-ayuda">La diferencia.{lectura.transaccion?.saldo ? ' Coincide con la cuenta que te manda.' : ''}</span></Tarjeta>
+    <div className="cxc-tres">
+      <Tarjeta><span className="cx-etiqueta">Tú le facturas</span><div className="cxc-tres-cifra">{e?.total != null ? eurosExactos(e.total) : '—'}</div>
+        <span className="cx-ayuda">Tu servicio por sus ventas y el género que pusiste tú. La extiende él en tu nombre.</span></Tarjeta>
+      <Tarjeta><span className="cx-etiqueta">Él te factura</span><div className="cxc-tres-cifra">{r?.total != null ? eurosExactos(r.total) : '—'}</div>
+        <span className="cx-ayuda">El género suyo que queda en tu local a fin de mes.</span></Tarjeta>
+      <Tarjeta><span className="cx-etiqueta">{s == null ? 'La diferencia' : fraseSaldo(s)?.replace(/ [\d.,]+ €$/, '')}</span>
+        <div className="cxc-tres-cifra">{s == null ? '—' : eurosExactos(Math.abs(s))}</div>
+        <span className="cx-ayuda">La diferencia.{lectura.transaccion?.saldo ? ' Coincide con la cuenta que te manda.' : ''}</span></Tarjeta>
+    </div>
+  )
+}
+
+/** Los cinco documentos leídos: cuáles han llegado y, si falta uno, qué no se comprueba sin él. */
+function Documentos({ lectura }: { lectura: LiquidacionLeida }) {
+  const docs = documentosLeidos(lectura)
+  const faltan = docs.filter((d) => !d.llegado)
+  return (
+    <section className="cxc-docs" aria-label="Los cinco documentos">
+      <span className="cx-etiqueta">{faltan.length === 0 ? 'Los cinco documentos, leídos' : `Leídos ${docs.length - faltan.length} de 5`}</span>
+      <div className="cx-chips">
+        {docs.map((d) => <span key={d.nombre} className={d.llegado ? 'cx-chip cx-chip-ia' : 'cx-chip cx-chip-ambar'}>{d.llegado ? '✓' : 'Falta'} {d.nombre}</span>)}
       </div>
-      <div className="cx-rejilla-2-1" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
-        {e && <Factura titulo="Lo que le facturas" f={e} />}
-        {r && <Factura titulo="Lo que te factura" f={r} />}
-      </div>
-    </>
+      {faltan.map((d) => <p key={d.nombre} className="cx-aviso" style={{ margin: 0 }}>Falta {d.nombre.toLowerCase()}: {d.sinEl}.</p>)}
+    </section>
+  )
+}
+
+/** Las dos facturas, línea a línea. */
+function Facturas({ lectura }: { lectura: LiquidacionLeida }) {
+  return (
+    <div className="cxc-dos">
+      {lectura.emitida && <Factura titulo="Lo que le facturas" f={lectura.emitida} />}
+      {lectura.recibida && <Factura titulo="Lo que te factura" f={lectura.recibida} />}
+    </div>
   )
 }
 
@@ -214,14 +240,17 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
       <Cabecera antetitulo={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}${liq.settlement_ref ? ` · referencia ${liq.settlement_ref}` : ''}`}
         titulo={`${nombres.proveedor ?? 'Liquidación'} · ${mesLargo(liq.period_from)}`} />
       <Guardado texto={aviso} />
-      <Leido lectura={lec} saldo={liq.net_settlement == null ? null : Number(liq.net_settlement)} />
+      <TresCifras lectura={lec} saldo={liq.net_settlement == null ? null : Number(liq.net_settlement)} />
+      <Documentos lectura={lec} />
 
       <Tarjeta titulo="¿Es verdad lo que dice?">
         <p className="cx-ayuda" style={{ marginTop: 0 }}>Lo he comparado con lo que sabe Folvy.</p>
-        <Compras c={contraste.compras} />
-        <Ventas v={contraste.ventas} frase={contraste.marcas_frase} />
+        <Compras c={contraste.compras} liqId={liqId} />
+        <Ventas v={contraste.ventas} marcas={contraste.marcas} />
         <Productos p={contraste.productos} total={productos.length} abrir={() => setCasar(true)} />
       </Tarjeta>
+
+      <Facturas lectura={lec} />
 
       <Tarjeta titulo="Lo que voy a apuntar">
         <p style={{ marginTop: 0 }}>
@@ -258,76 +287,78 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
   )
 }
 
-function Marca({ tono, children }: { tono: 'bien' | 'casi' | 'no'; children: string }) {
-  return <span className={`cxc-marca cxc-marca-${tono}`} aria-hidden="true">{children}</span>
-}
+const MARCA: Record<EstadoVeredicto, [string, string]> = { coincide: ['bien', '✓'], se_parece: ['casi', '≈'], no_se_puede: ['no', '?'] }
 
-function Compras({ c }: { c: Contraste['compras'] }) {
-  const dif = c.diferencia
-  const bien = dif != null && Math.abs(dif) <= Math.max(5, Math.abs(c.folvy) * 0.005)
+/** Un veredicto del contraste: coincide · se parece · no lo puedo comprobar. */
+function BloqueContraste({ v, children }: { v: Veredicto; children?: ReactNode }) {
+  const [tono, signo] = MARCA[v.estado]
   return (
-    <div className="cxc-contraste">
-      <Marca tono={dif == null ? 'no' : bien ? 'bien' : 'casi'}>{dif == null ? '?' : bien ? '✓' : '≈'}</Marca>
-      <div className="cxc-cosa-texto">
-        <span className="cxc-cosa-frase">{dif == null ? 'Su inventario no dice lo que te mandó: no lo puedo comparar.'
-          : bien ? 'Lo que dice que te mandó coincide con lo que recibiste.' : 'Lo que dice que te mandó no coincide con lo que recibiste.'}</span>
-        <span className="cxc-cosa-apoyo">
-          {c.documento != null ? `Él dice ${eurosExactos(c.documento)}. ` : ''}
-          En el local se recibieron {c.recepciones} albaranes por {eurosExactos(c.folvy)}{c.sin_base > 0 ? ` (y ${c.sin_base} sin importe)` : ''}.
-          {dif != null ? ` Diferencia: ${eurosExactos(Math.abs(dif))}.` : ''}
-        </span>
+    <div className="cxc-contraste" data-estado={v.estado}>
+      <span className={`cxc-marca cxc-marca-${tono}`} aria-hidden="true">{signo}</span>
+      <div className="cxc-cosa-texto" style={{ gap: 8 }}>
+        <span className="cxc-cosa-frase">{v.titulo}</span>
+        <span className="cxc-cosa-apoyo">{v.detalle}</span>
+        {children}
       </div>
     </div>
   )
 }
 
-function Ventas({ v, frase }: { v: Contraste['ventas']; frase: string }) {
-  const total = v.reduce((s, x) => s + x.diferencia, 0)
+function Compras({ c, liqId }: { c: Contraste['compras']; liqId: string }) {
+  const [abiertos, setAbiertos] = useState(false)
+  const [albaranes, setAlbaranes] = useState<AlbaranLiquidacion[] | null>(null)
+  const [fallo, setFallo] = useState<string | null>(null)
   return (
-    <div className="cxc-contraste">
-      <Marca tono={v.length === 0 ? 'no' : Math.abs(total) < 1 ? 'bien' : 'casi'}>{v.length === 0 ? '?' : Math.abs(total) < 1 ? '✓' : '≈'}</Marca>
-      <div className="cxc-cosa-texto" style={{ gap: 8 }}>
-        <span className="cxc-cosa-frase">{v.length === 0 ? 'No hay ventas que comparar.'
-          : Math.abs(total) < 1 ? 'Sus ventas y las que tiene Folvy coinciden.' : 'Sus ventas y las que tiene Folvy se parecen, pero no son iguales.'}</span>
-        <span className="cxc-cosa-apoyo">
-          De estas ventas sale tu servicio.{Math.abs(total) >= 1 ? ` Folvy cuenta ${eurosExactos(Math.abs(total))} ${total > 0 ? 'más' : 'menos'} que él, sin IVA. Para saber quién tiene razón pedido a pedido hace falta el detalle de cada plataforma.` : ''} {frase}
-        </span>
-        {v.length > 0 && (
-          <div className="cxc-tabla" style={{ gridTemplateColumns: 'minmax(0,1.4fr) repeat(3, minmax(0,1fr))' }} role="table" aria-label="Ventas por plataforma">
-            <span className="cxc-tabla-cabeza" role="columnheader">Plataforma</span>
-            <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Él dice</span>
-            <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Folvy tiene</span>
-            <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Diferencia</span>
-            {v.flatMap((x) => [
-              <span key={`${x.plataforma}-p`} role="cell">{x.plataforma}</span>,
-              <span key={`${x.plataforma}-d`} role="cell" className="cx-cifra">{x.documento == null ? '—' : eurosExactos(x.documento)}</span>,
-              <span key={`${x.plataforma}-f`} role="cell" className="cx-cifra">{x.folvy == null ? '—' : eurosExactos(x.folvy)}</span>,
-              <span key={`${x.plataforma}-x`} role="cell" className="cx-cifra">{x.diferencia > 0 ? '+' : x.diferencia < 0 ? '−' : ''}{eurosExactos(Math.abs(x.diferencia))}</span>,
-            ])}
-          </div>
-        )}
-      </div>
-    </div>
+    <BloqueContraste v={veredictoCompras(c)}>
+      {c.recepciones > 0 && (
+        <div>
+          <button type="button" className="cx-boton-sec" aria-expanded={abiertos} onClick={() => {
+            setAbiertos(!abiertos)
+            if (!albaranes) albaranesDeLiquidacion(liqId).then(setAlbaranes, (e: unknown) => setFallo(e instanceof Error ? e.message : String(e)))
+          }}>{abiertos ? 'Ocultar los albaranes' : `Ver los ${c.recepciones} albaranes`}</button>
+        </div>
+      )}
+      {abiertos && fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      {abiertos && albaranes && (
+        <ul className="cxc-albaranes">
+          {albaranes.map((a) => (
+            <li key={a.recepcion}>
+              <span>{diaConNombre(a.fecha)} · {a.base == null ? 'sin importe' : eurosExactos(a.base)} <span className="cxc-cosa-codigo">{a.codigo}</span></span>
+              <VerPapel recepcion={a.recepcion} titulo={`Albarán · ${diaConNombre(a.fecha)}`} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </BloqueContraste>
+  )
+}
+
+function Ventas({ v, marcas }: { v: Contraste['ventas']; marcas: string }) {
+  return (
+    <BloqueContraste v={veredictoVentas(v, marcas)}>
+      {v.length > 0 && (
+        <div className="cxc-tabla" style={{ gridTemplateColumns: 'minmax(0,1.4fr) repeat(3, minmax(0,1fr))' }} role="table" aria-label="Ventas por plataforma">
+          <span className="cxc-tabla-cabeza" role="columnheader">Plataforma</span>
+          <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Él dice</span>
+          <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Folvy tiene</span>
+          <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Diferencia</span>
+          {v.flatMap((x) => [
+            <span key={`${x.plataforma}-p`} role="cell">{x.plataforma}</span>,
+            <span key={`${x.plataforma}-d`} role="cell" className="cx-cifra">{x.documento == null ? '—' : eurosExactos(x.documento)}</span>,
+            <span key={`${x.plataforma}-f`} role="cell" className="cx-cifra">{x.folvy == null ? '—' : eurosExactos(x.folvy)}</span>,
+            <span key={`${x.plataforma}-x`} role="cell" className="cx-cifra">{x.folvy == null || x.documento == null ? '—' : `${x.diferencia > 0 ? '+' : x.diferencia < 0 ? '−' : ''}${eurosExactos(Math.abs(x.diferencia))}`}</span>,
+          ])}
+        </div>
+      )}
+    </BloqueContraste>
   )
 }
 
 function Productos({ p, total, abrir }: { p: Contraste['productos']; total: number; abrir: () => void }) {
-  const reconocidos = p.casados + p.no_nuestros
-  const todo = p.sin_casar === 0
   return (
-    <div className="cxc-contraste">
-      <Marca tono={todo && p.no_coinciden.length === 0 ? 'bien' : todo ? 'casi' : 'no'}>{todo && p.no_coinciden.length === 0 ? '✓' : todo ? '≈' : '?'}</Marca>
-      <div className="cxc-cosa-texto" style={{ gap: 8 }}>
-        <span className="cxc-cosa-frase">{todo
-          ? (p.no_coinciden.length === 0 ? 'El género que dice que te mandó coincide producto a producto.' : `En ${p.no_coinciden.length} producto${p.no_coinciden.length === 1 ? '' : 's'} lo que dice no coincide con lo que recibiste.`)
-          : 'El género que dice que gastaste todavía no lo puedo comprobar producto a producto.'}</span>
-        {!todo && <span className="cxc-cosa-apoyo">Reconozco {reconocidos} de sus {total} productos. Los otros {p.sin_casar} los llama de otra manera. Dime una vez cuál es cuál y lo recuerdo para todos los meses.</span>}
-        {p.no_coinciden.map((x) => (
-          <span key={x.nombre} className="cxc-cosa-apoyo">{x.nombre}: él dice {String(x.documento).replace('.', ',')} {x.unidad}; {x.comparable ? `aquí se recibieron ${String(x.folvy ?? 0).replace('.', ',')} ${x.unidad}` : 'aquí se cuenta en otra unidad'}.</span>
-        ))}
-        {!todo && <div><button type="button" className="cx-boton-sec" onClick={abrir}>Decirle cuál es cuál</button></div>}
-      </div>
-    </div>
+    <BloqueContraste v={veredictoProductos(p, total)}>
+      {p.sin_casar > 0 && <div><button type="button" className="cx-boton-sec" onClick={abrir}>Decirle cuál es cuál</button></div>}
+    </BloqueContraste>
   )
 }
 

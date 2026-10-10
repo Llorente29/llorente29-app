@@ -2,7 +2,8 @@
 -- Vuelta atrás de Compras · 10 · el repaso. PARA si alguna factura se apuntó
 -- sin descontar el IVA (quitar la marca cambiaría su asiento): antes se
 -- deshace a mano. Si no, quita las dos funciones nuevas, la columna y devuelve
--- _compras_destinatario como lo dejó la 0120 (sin el caso de los genéricos).
+-- _compras_destinatario y el CHECK de bill_to_how como los dejó la 0120
+-- (sin el caso de los genéricos; los que lo usaban pasan a «desconocido»).
 -- ============================================================================
 do $$
 begin
@@ -49,3 +50,9 @@ begin
 end $$;
 revoke all on function public._compras_destinatario(uuid, text, text) from public, anon, authenticated;
 drop function if exists public.compras_nombre_generico(text);
+
+-- Los caminos de nombre genérico vuelven a decidirse con el destinatario de la 0120.
+update public.goods_receipt_path set bill_to_how = 'desconocido' where bill_to_how = 'generico';
+alter table public.goods_receipt_path drop constraint if exists goods_receipt_path_how_check;
+alter table public.goods_receipt_path add constraint goods_receipt_path_how_check
+  check (bill_to_how in ('nif', 'recordado', 'nombre', 'ficha', 'sin_dato', 'desconocido'));
