@@ -1,35 +1,13 @@
-# El día se cierra a las 6:00, y lo que sigue abierto no es venta
-# (conta/cierre-del-dia, encargo del 09/10).
-#   0100: sale.unconfirmed_at, la hora de cierre por empresa, el rastro y las
-#         funciones del cierre (conta_cerrar_dias, conta_por_cerrar, …) y el
-#         procedimiento horario.
-#   0110: el stock no vuelve (disparador de consumo + una línea del motor).
-#   0120: no se propone un día sin cerrar; «unconfirmed» en los pedidos del día.
-#   0130: se retiran los asientos propuestos antes de que su día cerrara.
-#   0140: el cron de cada hora (a los :07). En staging también: es la prueba
-#         del procedimiento con COMMIT por empresa, que no se puede llamar
-#         dentro de la transacción de la prueba.
-#   Run 106 (b698cc1): las CINCO migraciones APLICADAS en staging. La prueba,
-#   pasos 1 a 6 en verde; paró en 7d: un recuento solo se escribe por
-#   save_count_line (la puerta del 10/09). Va otra vez por la puerta, y ya
-#   sin las migraciones (su guarda pararía: ya no están como antes).
-#   Run 107 (02a7ea0): paró en save_count_line: «quien contó» tiene que estar
-#   en la plantilla del local. Va sin él, como la pantalla cuando no lo sabe.
-#   Run 108 (52cd3d3): paró en apply_inventory_count: «faltan motivos». Va con
-#   el motivo puesto en la revisión.
-#   La prueba: la forma de los 20 de producción, el cierre, lo que se toca y
-#   lo que no, la frontera de las 6:00, A y B, regenerar, los cuatro caminos
-#   de la regla 10, la versión ROTA a propósito, los cambios de hora y < 1 s.
+# Compras (conta/compras, encargo del 10/10).
+#   0100: unir dos fichas de proveedor, herramienta general
+#         (_supplier_merge / supplier_merge_do / _undo); la de terceros
+#         partida en «qué hace» (_party_merge) y «quién puede» (party_merge_do),
+#         sin cambiar lo que hace.
+#   0110: el socio de marca, una sola ficha (solo Foodint, por id: en staging
+#         no encuentra las fichas y no hace nada; se aplica para ensayarlo).
+#   La prueba: la población con la forma de producción, los choques, la
+#   puerta sin usuario, el mismo recuento antes, después y al deshacer.
 #   Todo en una transacción con ROLLBACK.
-#   Run 109 (be7f318): prueba EN VERDE, los diez pasos.
-#   Ahora: la 0130 saca su selección a conta_propuestos_antes_del_cierre (solo
-#   lee), para que la prueba ensaye lo mismo que se aplica; se vuelve a
-#   aplicar aquí (idempotente: en staging no retira nada) y la prueba gana el
-#   paso 11, retirar lo propuesto antes del cierre sin dejar descarte.
-#   Run 111 (66a2c08): la 0150 y la prueba EN VERDE, doce pasos.
-#   Ahora: la semilla del e2e de pantallas (dos no confirmados más el 04/10 en
-#   Norte Centro, junto al que cerró el cron de verdad: 3 · 66,80 €).
-#   Y la 0160 (execute de conta_cerrado_hasta para conta_lectura; en staging
-#   el rol no existe: solo avisa).
-supabase/seeds/conta/seed_cierre_staging.sql
-supabase/migrations/20261016T0160_cierre_del_dia_lectura.sql
+supabase/migrations/20261017T0100_compras_fusion_proveedores.sql
+supabase/migrations/20261017T0110_compras_socio_una_ficha.sql
+supabase/staging/sql/20261017_compras_fusion_prueba.sql
