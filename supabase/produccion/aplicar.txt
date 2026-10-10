@@ -5,41 +5,48 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# El día se cierra a las 6:00, y lo que sigue abierto no es venta (rama
-# conta/cierre-del-dia, PR #171). Encargo de Julio del 09/10.
+# Contabilidad: las compras (rama conta/compras, PR #173). Encargo de Julio
+# del 10/10. La tanda anterior (el cierre del día, 20261016T01xx) ya está en
+# el historial de producción con sus siete ficheros.
 #
-#   1. 0100 — sale.unconfirmed_at, la hora de cierre por empresa (6:00), el
-#      rastro (sales_day_close_log) y las funciones del cierre; el
-#      procedimiento horario con COMMIT por empresa. Añade.
-#   2. 0110 — el stock no vuelve: tg_sale_consumption_on_complete no anula un
-#      no confirmado, y en generate_sale_consumption cambia UNA línea (v_void)
-#      sobre el texto vivo, con guarda de md5 y copia. CAMBIA, en el camino
-#      del pedido: «autorizo».
-#   3. 0120 — conta_dias_por_asentar solo devuelve días cerrados y
-#      conta_pedidos_del_dia dice «unconfirmed». CAMBIA, declarado, con su
-#      prueba de staging. Fuera del camino.
-#   4. 0130 — retira los asientos de ventas propuestos antes de que su día
-#      cerrara (en producción, uno: b4eb11ca, Carabanchel, 09/10). Sin
-#      descarte. Borra datos: «autorizo».
-#   5. 0140 — el cron, a los :07 de cada hora. Su primera pasada cierra el
-#      atraso: 20 pedidos, 500,79 € (la lista, en el PR).
-#   6. 0150 — conta_no_confirmados_pagados (la liquidación manda). Añade.
-#   7. 0160 — execute de conta_cerrado_hasta para conta_lectura (agente). Añade.
+#   1. 0100 — unir dos fichas de proveedor (supplier_merge_do / _undo) y la de
+#      terceros partida en «qué hace» y «quién puede». Añade.
+#   2. 0110 — las cinco fichas del socio de marca en una sola (8d53a379…), por
+#      id. MUEVE DATOS por la función de la 0100: el analizador la da por
+#      «sigue» porque no lee dentro de una llamada a función. Julio la aprobó
+#      en la T1 («fusiona las 5 en 8d53a379»).
+#   3. 0120 — la forma de facturar, lo recordado de a nombre de quién va cada
+#      papel, el camino de cada recepción y su disparador al confirmar.
+#      Declara los cambios (_supplier_merge, el disparador sobre goods_receipt)
+#      con su prueba de staging.
+#   4. 0130 — la forma de facturar de tres fichas de Foodint, por id.
+#      Cambia datos: «autorizo».
+#   5. 0140 — la factura desde el papel y la aprobación en la base (disparador
+#      sobre supplier_invoice, declarado con su prueba).
+#   6. 0150 — lo que espera factura, casar y el fin de mes. Añade.
+#   7. 0160 — la liquidación mensual desde sus documentos. Añade.
+#   8. 0170 — lo que leen las pantallas. Añade.
+#   9. 0180 — octubre de Foodint: el camino de las 18 recepciones ya
+#      confirmadas, por la función de la 0120, apuntando lo que crea. CREA
+#      DATOS por una función (mismo punto ciego que la 0110). Se espera:
+#      14 del socio (1 a su liquidación y 13 preguntas de dos nombres), 1
+#      pregunta de papel contra ficha y 3 facturas en revisión.
 #
-# Necesitan «autorizo», con su nombre entero:
-#   20261016T0110_cierre_del_dia_consumo.sql 20261016T0130_cierre_del_dia_retirar.sql
+# Necesita «autorizo», con su nombre entero:
+#   20261017T0130_compras_forma_de_facturar_datos.sql
 #
-# Analizador pasado en local el 09/10 contra el contexto de producción (leído
-# en solo lectura): 0110 y 0130 «autorizo»; las otras cinco «sigue». Ninguna
-# está en el historial. Avisos para una persona: el execute dinámico de la
-# 0110 (la línea de generate_sale_consumption) y el grant dentro del DO de la
-# 0160. Lo que diga el ensayo del workflow manda.
+# Analizador pasado en local el 10/10 contra el contexto de producción (leído
+# en solo lectura): la 0130 «autorizo»; las otras ocho «sigue». Ninguna está
+# en el historial. Lo que diga el ensayo del workflow manda; el aviso de la
+# 0180 en el ensayo dice cuántas recepciones y facturas salen de verdad.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261016T0100_cierre_del_dia.sql
-supabase/migrations/20261016T0110_cierre_del_dia_consumo.sql
-supabase/migrations/20261016T0120_cierre_del_dia_proponer.sql
-supabase/migrations/20261016T0130_cierre_del_dia_retirar.sql
-supabase/migrations/20261016T0140_cierre_del_dia_cron.sql
-supabase/migrations/20261016T0150_cierre_del_dia_liquidacion.sql
-supabase/migrations/20261016T0160_cierre_del_dia_lectura.sql
+supabase/migrations/20261017T0100_compras_fusion_proveedores.sql
+supabase/migrations/20261017T0110_compras_socio_una_ficha.sql
+supabase/migrations/20261017T0120_compras_forma_de_facturar.sql
+supabase/migrations/20261017T0130_compras_forma_de_facturar_datos.sql
+supabase/migrations/20261017T0140_compras_factura_desde_el_papel.sql
+supabase/migrations/20261017T0150_compras_pendiente_y_fin_de_mes.sql
+supabase/migrations/20261017T0160_compras_liquidacion_mensual.sql
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/migrations/20261017T0180_compras_octubre_foodint.sql

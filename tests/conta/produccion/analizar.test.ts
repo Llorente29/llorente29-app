@@ -439,8 +439,8 @@ describe('la tanda de las políticas de lectura (copia del manifiesto, aplicada 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el día se cierra a las 6:00', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda del cierre del día (09/10, ya en el historial de producción)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-cierre-20261009.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow (sqlContexto)
   // sobre estos siete ficheros, lanzada en solo lectura en producción el 09/10:
@@ -476,6 +476,52 @@ describe('la tanda de AHORA (manifiesto vivo): el día se cierra a las 6:00', ()
     expect(nombradas).toEqual(['20261016T0110_cierre_del_dia_consumo.sql 20261016T0130_cierre_del_dia_retirar.sql'])
   })
   it('su vuelta atrás son sus siete .down.sql, al revés, y existen', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-cierre-20261009.txt')
+    expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+    for (const f of atras) expect(existsSync(f), f).toBe(true)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): las compras', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow (sqlContexto)
+  // sobre estos nueve ficheros, lanzada en solo lectura en producción el 10/10:
+  // existen goods_receipt, journal_entry, licensed_settlement, supplier y
+  // supplier_invoice, y party_merge_do / _undo; nada en el camino del pedido;
+  // nada en el historial.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-compras-20261010.json', 'utf8'))
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const bloque = (f: string) => r.markdown.split('### ').find((b) => b.startsWith(`\`${f}\``))!
+
+  it('las nueve, en su orden', () => {
+    expect(viva.map((f) => f.replace(/^.*\/20261017T/, '').replace(/\.sql$/, ''))).toEqual([
+      '0100_compras_fusion_proveedores', '0110_compras_socio_una_ficha', '0120_compras_forma_de_facturar',
+      '0130_compras_forma_de_facturar_datos', '0140_compras_factura_desde_el_papel', '0150_compras_pendiente_y_fin_de_mes',
+      '0160_compras_liquidacion_mensual', '0170_compras_pantallas', '0180_compras_octubre_foodint'])
+  })
+  it('pide «autorizo» la 0130 (cambia datos de tres fichas); el resto sigue', () => {
+    expect(r.ficheros).toEqual(Object.fromEntries(viva.map((f) => [f, /T0130_/.test(f) ? 'autorizo' : 'sigue'])))
+    expect(bloque(viva[3])).toContain('update')
+  })
+  it('los disparadores nuevos sobre tablas que ya existen los declara su cabecera, con su prueba, que nombra la tabla', () => {
+    for (const [i, tabla, prueba] of [[2, 'goods_receipt', 'supabase/staging/sql/20261017_compras_camino_prueba.sql'],
+                                      [4, 'supplier_invoice', 'supabase/staging/sql/20261017_compras_factura_prueba.sql']] as const) {
+      expect((bloque(viva[i]).match(/declarado, prueba/g) ?? []).length, tabla).toBeGreaterThan(0)
+      expect(readFileSync(prueba, 'utf8'), tabla).toMatch(new RegExp(`\\b${tabla}\\b`))
+    }
+  })
+  it('el manifiesto dice que la 0110 y la 0180 mueven datos por una función, que el analizador no lee', () => {
+    const m = readFileSync(MANIFIESTO, 'utf8')
+    expect(m).toMatch(/0110[\s\S]*no lee dentro de una llamada a función/)
+    expect(m).toMatch(/0180[\s\S]*CREA\s+#?\s*DATOS por una función/)
+  })
+  it('la cabecera del manifiesto nombra para «autorizo» exactamente la 0130', () => {
+    const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
+    expect(nombradas).toEqual(['20261017T0130_compras_forma_de_facturar_datos.sql'])
+  })
+  it('su vuelta atrás son sus nueve .down.sql, al revés, y existen', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     for (const f of atras) expect(existsSync(f), f).toBe(true)

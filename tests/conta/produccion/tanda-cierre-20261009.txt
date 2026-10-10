@@ -1,0 +1,45 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# El día se cierra a las 6:00, y lo que sigue abierto no es venta (rama
+# conta/cierre-del-dia, PR #171). Encargo de Julio del 09/10.
+#
+#   1. 0100 — sale.unconfirmed_at, la hora de cierre por empresa (6:00), el
+#      rastro (sales_day_close_log) y las funciones del cierre; el
+#      procedimiento horario con COMMIT por empresa. Añade.
+#   2. 0110 — el stock no vuelve: tg_sale_consumption_on_complete no anula un
+#      no confirmado, y en generate_sale_consumption cambia UNA línea (v_void)
+#      sobre el texto vivo, con guarda de md5 y copia. CAMBIA, en el camino
+#      del pedido: «autorizo».
+#   3. 0120 — conta_dias_por_asentar solo devuelve días cerrados y
+#      conta_pedidos_del_dia dice «unconfirmed». CAMBIA, declarado, con su
+#      prueba de staging. Fuera del camino.
+#   4. 0130 — retira los asientos de ventas propuestos antes de que su día
+#      cerrara (en producción, uno: b4eb11ca, Carabanchel, 09/10). Sin
+#      descarte. Borra datos: «autorizo».
+#   5. 0140 — el cron, a los :07 de cada hora. Su primera pasada cierra el
+#      atraso: 20 pedidos, 500,79 € (la lista, en el PR).
+#   6. 0150 — conta_no_confirmados_pagados (la liquidación manda). Añade.
+#   7. 0160 — execute de conta_cerrado_hasta para conta_lectura (agente). Añade.
+#
+# Necesitan «autorizo», con su nombre entero:
+#   20261016T0110_cierre_del_dia_consumo.sql 20261016T0130_cierre_del_dia_retirar.sql
+#
+# Analizador pasado en local el 09/10 contra el contexto de producción (leído
+# en solo lectura): 0110 y 0130 «autorizo»; las otras cinco «sigue». Ninguna
+# está en el historial. Avisos para una persona: el execute dinámico de la
+# 0110 (la línea de generate_sale_consumption) y el grant dentro del DO de la
+# 0160. Lo que diga el ensayo del workflow manda.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261016T0100_cierre_del_dia.sql
+supabase/migrations/20261016T0110_cierre_del_dia_consumo.sql
+supabase/migrations/20261016T0120_cierre_del_dia_proponer.sql
+supabase/migrations/20261016T0130_cierre_del_dia_retirar.sql
+supabase/migrations/20261016T0140_cierre_del_dia_cron.sql
+supabase/migrations/20261016T0150_cierre_del_dia_liquidacion.sql
+supabase/migrations/20261016T0160_cierre_del_dia_lectura.sql

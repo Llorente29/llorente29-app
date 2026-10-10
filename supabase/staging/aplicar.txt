@@ -108,3 +108,13 @@ supabase/staging/sql/20261017_compras_pantallas_prueba.sql
 #   inventado, idempotente): dos preguntas, lo que espera factura, y las
 #   liquidaciones de septiembre (una llegada, otra no) y octubre.
 supabase/seeds/conta/seed_compras_staging.sql
+#   Run 129 (46db6e4): la semilla de compras, sembrada (11 caminos, 2
+#   preguntas, la liquidación AF-P9). E2e 169 en verde con sus capturas.
+#
+#   0180: octubre de Foodint (solo por id). Aquí no hay esa cuenta: dice que
+#         no hace nada y crea solo su tabla de lo rellenado (vacía). Se aplica
+#         para ensayar que el fichero corre entero.
+#   La 0120 y la 0140 ganan en su cabecera los «cambia:» que pide el
+#   analizador de producción (los disparadores sobre goods_receipt y
+#   supplier_invoice); el SQL no cambia, no se reaplican.
+supabase/migrations/20261017T0180_compras_octubre_foodint.sql

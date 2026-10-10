@@ -2,6 +2,7 @@
 -- Compras · 5 · LA FACTURA SALE DEL PAPEL, Y LA APROBACIÓN LA IMPONE LA BASE
 -- ----------------------------------------------------------------------------
 -- cambia: public.goods_receipt_path · prueba: supabase/staging/sql/20261017_compras_factura_prueba.sql
+-- cambia: public.supplier_invoice · prueba: supabase/staging/sql/20261017_compras_factura_prueba.sql
 --
 -- Encargo «Contabilidad: las compras», §2.3 y §4.3 (10/10).
 --

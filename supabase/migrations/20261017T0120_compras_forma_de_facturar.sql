@@ -3,6 +3,7 @@
 -- ----------------------------------------------------------------------------
 -- cambia: public._supplier_merge · prueba: supabase/staging/sql/20261017_compras_camino_prueba.sql
 -- cambia: public._supplier_merge_undo · prueba: supabase/staging/sql/20261017_compras_camino_prueba.sql
+-- cambia: public.goods_receipt · prueba: supabase/staging/sql/20261017_compras_camino_prueba.sql
 --
 -- Encargo «Contabilidad: las compras», §2.1, §2.2 y §2.6 (10/10).
 --
