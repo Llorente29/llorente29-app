@@ -12,7 +12,7 @@
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, nomina, liquidacionSocio, aplicarAprendizaje,
+  ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, nomina, liquidacionSocio, aplicarAprendizaje,
   type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
@@ -287,6 +287,37 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       l.retencion = { ...l.retencion!, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + x.debe, 0) }
     }
     await proponer(companyId, aplicarAprendizaje(res.propuesta, `supplier_invoice:${sup}`, ctx.correcciones), null, r, ctx, quien)
+  }
+
+  // ── Compras (10/10), §2.4: lo recibido sin factura al cierre de cada mes ──
+  // Solo meses ya acabados (su último día, pasado) dentro de desde–hasta y
+  // abiertos. compras_fin_de_mes guarda de qué recepciones sale cada uno; su
+  // id es el origen del asiento y de su contrario, que se proponen una vez.
+  {
+    const hoy = new Date().toISOString().slice(0, 10)
+    const meses: string[] = []
+    for (let d = new Date(`${desde.slice(0, 7)}-01T00:00:00Z`); d.toISOString().slice(0, 10) <= hasta; d.setUTCMonth(d.getUTCMonth() + 1)) {
+      const fin = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
+      if (fin < hoy && fin <= hasta && abierto(fin)) meses.push(d.toISOString().slice(0, 10))
+    }
+    if (meses.length > 0) {
+      const provs = new Map((await leer(tabla('supplier').select('id, name, expense_category_id').eq('account_id', accountId), 'los proveedores')).map((x) => [String(x.id), x]))
+      for (const mes of meses) {
+        const filas = ((await rpc('compras_fin_de_mes', { p_empresa: companyId, p_mes: mes })) as Fila[] | null) ?? []
+        for (const a of filas) {
+          const sup = String(a.supplier_id); const prov = provs.get(sup) ?? {}
+          const gasto = ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null)
+          const res = finDeMesCompras({
+            id: String(a.id), mes, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
+            localId: s(a.location_id), nombreLocal: a.location_id ? ctx.locales.get(String(a.location_id)) ?? null : null, base: n(a.base),
+            recepciones: ((a.receipts ?? []) as Fila[]).map((x) => ({ codigo: s(x.code), fecha: String(x.fecha), base: x.base === null || x.base === undefined ? null : n(x.base) })),
+            sinBase: n(a.without_base),
+          }, { gasto, pendiente: ctx.hoja('4009') })
+          if (res.sinPropuesta) { r.sinPropuesta.push({ que: `Recibido sin factura · ${s(prov.name) ?? 'proveedor'} · ${mes.slice(5, 7)}/${mes.slice(0, 4)}`, porque: res.sinPropuesta }); continue }
+          for (const p of res.propuestas) if (abierto(p.fecha)) await proponer(companyId, p, null, r, ctx, quien)
+        }
+      }
+    }
   }
 
   // ── Liquidaciones de plataforma sin asiento (regla 7) ──

@@ -49,5 +49,11 @@
 #         diferencia) y lo recibido sin factura a fin de mes, con dos orígenes
 #         nuevos de asiento. La prueba: la forma de D (albarán y factura al mes
 #         por local), §7.3 y §7.4, y las puertas.
+#   Run 121 (f4c5ca3): 0150 APLICADA; su prueba, EN VERDE a la primera.
+#   Las frases decían «155 €» y «150.00 €»: compras_euros («1.234,50 €») en la
+#   0140 y la 0150, que se vuelven a aplicar (las dos son idempotentes) con
+#   sus dos pruebas, que ahora comprueban la frase entera.
+supabase/migrations/20261017T0140_compras_factura_desde_el_papel.sql
 supabase/migrations/20261017T0150_compras_pendiente_y_fin_de_mes.sql
+supabase/staging/sql/20261017_compras_factura_prueba.sql
 supabase/staging/sql/20261017_compras_fin_de_mes_prueba.sql

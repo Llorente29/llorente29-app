@@ -144,9 +144,10 @@ begin
    where id = p_factura;
   return jsonb_build_object('factura', p_factura, 'casadas', v_n, 'base_factura', v_base_factura, 'base_recepciones', v_suma,
     'diferencia', v_dif, 'sin_base', v_sin_base,
-    'frase', case when abs(v_dif) <= 0.02 and v_sin_base = 0 then format('Casa con %s recepción(es): la base es la misma (%s €).', v_n, v_base_factura)
-                  else format('Casada con %s recepción(es). La factura dice %s € de base y las recepciones %s €: %s € de diferencia%s.',
-                              v_n, v_base_factura, v_suma, v_dif, case when v_sin_base > 0 then format(' (y %s sin importe)', v_sin_base) else '' end) end);
+    'frase', case when abs(v_dif) <= 0.02 and v_sin_base = 0 then format('Casa con %s recepción(es): la base es la misma (%s).', v_n, public.compras_euros(v_base_factura))
+                  else format('Casada con %s recepción(es). La factura dice %s de base y las recepciones %s: %s de diferencia%s.',
+                              v_n, public.compras_euros(v_base_factura), public.compras_euros(v_suma), public.compras_euros(v_dif),
+                              case when v_sin_base > 0 then format(' (y %s sin importe)', v_sin_base) else '' end) end);
 end $$;
 revoke all on function public._compras_casar(uuid, uuid[]) from public, anon, authenticated;
 

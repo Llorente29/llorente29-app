@@ -191,6 +191,9 @@ begin
   v_ses := pg_temp.sesion('factura', 'LUZ-10', 'Taberna de Prueba Norte, S.L.', '[{"raw_text": "Energía", "line_amount": 200, "vat_pct": 21}]'::jsonb, 200, 42, 242);
   v := public.compras_factura_desde_papel(v_ses, 'c0d00000-0000-4000-8000-000000000001', 'c01a0000-0000-4000-8000-0000000000a2', '3b34403a-a7d6-4a48-a8d7-737e8cababdc');
   v2 := public.compras_factura_desde_papel(v_ses, 'c0d00000-0000-4000-8000-000000000001', 'c01a0000-0000-4000-8000-0000000000a2', '3b34403a-a7d6-4a48-a8d7-737e8cababdc');
+  if public.compras_euros(1234.5) <> '1.234,50 €' or public.compras_euros(-5) <> '-5,00 €' or v->>'motivo' <> 'Factura LUZ-10 creada desde el papel: 200,00 € de base, 42,00 € de IVA.' then
+    raise exception 'PRUEBA factura · 7: los euros no se leen bien: «%» / «%» / «%».', public.compras_euros(1234.5), public.compras_euros(-5), v->>'motivo';
+  end if;
   if not (v->>'creada')::boolean or not (v2->>'repetida')::boolean or v->>'factura' <> v2->>'factura'
      or exists (select 1 from supplier_invoice_receipt where supplier_invoice_id = (v->>'factura')::uuid) then
     raise exception 'PRUEBA factura · 7: la factura sin recepción no es UNA y sin recepciones (% / %).', v, v2;

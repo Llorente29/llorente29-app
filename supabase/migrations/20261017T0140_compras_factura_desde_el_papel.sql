@@ -58,7 +58,16 @@ alter table public.goods_receipt_path add constraint goods_receipt_path_question
   check (question in ('a_nombre_de', 'papel_y_ficha', 'ficha_sin_forma', 'sin_papel', 'a_nombre_de_otro', 'error',
                       'factura_sin_importes', 'factura_repetida'));
 
--- ── 2 · El constructor: una factura desde un papel leído ───────────────────
+-- ── 2 · Los euros, como se leen («1.234,50 €») ────────────────────────────
+-- Las frases que la base escribe para la pantalla («Factura … creada: 200,00 €
+-- de base») no pueden decir «200 €» o «42.00 €».
+create or replace function public.compras_euros(p numeric)
+returns text language sql immutable parallel safe as $$
+  select case when p is null then '—' else translate(to_char(round(p, 2), 'FM999G999G999G990D00'), ',.', '.,') || ' €' end
+$$;
+grant execute on function public.compras_euros(numeric) to authenticated;
+
+-- ── 3 · El constructor: una factura desde un papel leído ───────────────────
 -- Devuelve {factura, creada, repetida, sin_importes, motivo}. No escribe nada
 -- si sin_importes. Si repetida, devuelve la que ya había.
 create or replace function public._compras_factura_desde_papel(
@@ -136,7 +145,7 @@ begin
     insert into supplier_invoice_receipt (supplier_invoice_id, goods_receipt_id) values (v_id, p_recepcion) on conflict do nothing;
   end if;
   return jsonb_build_object('factura', v_id, 'creada', true, 'repetida', false,
-    'motivo', format('Factura %s creada desde el papel: %s € de base, %s € de IVA.', coalesce(v_num, 'sin número'), v_base, v_cuota));
+    'motivo', format('Factura %s creada desde el papel: %s de base, %s de IVA.', coalesce(v_num, 'sin número'), public.compras_euros(v_base), public.compras_euros(v_cuota)));
 end $$;
 revoke all on function public._compras_factura_desde_papel(uuid, uuid, uuid, uuid, uuid, uuid, text) from public, anon, authenticated;
 
@@ -159,7 +168,7 @@ end $$;
 revoke all on function public.compras_factura_desde_papel(uuid, uuid, uuid, uuid) from public, anon;
 grant execute on function public.compras_factura_desde_papel(uuid, uuid, uuid, uuid) to authenticated;
 
--- ── 3 · Desde la recepción: el disparador del camino ───────────────────────
+-- ── 4 · Desde la recepción: el disparador del camino ───────────────────────
 -- AFTER INSERT OR UPDATE en goods_receipt_path: si el camino es «factura» y
 -- todavía no tiene factura, la crea (o enlaza) y deja la fila consumida.
 -- AFTER y no BEFORE: con «insert … on conflict do update» (lo que hace
@@ -210,7 +219,7 @@ drop trigger if exists trg_goods_receipt_path_factura on public.goods_receipt_pa
 create trigger trg_goods_receipt_path_factura after insert or update on public.goods_receipt_path
   for each row execute function public.tg_goods_receipt_path_factura();
 
--- ── 4 · La aprobación, en la base ──────────────────────────────────────────
+-- ── 5 · La aprobación, en la base ──────────────────────────────────────────
 -- Las mismas reglas que invoice_required_role (la primera activa que
 -- encaja por importe, proveedor y local, por prioridad; sin regla, encargado),
 -- calculadas sobre la fila que se va a guardar.

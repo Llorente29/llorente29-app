@@ -26,6 +26,7 @@ drop trigger if exists trg_goods_receipt_path_factura on public.goods_receipt_pa
 drop function if exists public.tg_goods_receipt_path_factura();
 drop function if exists public.compras_factura_desde_papel(uuid, uuid, uuid, uuid);
 drop function if exists public._compras_factura_desde_papel(uuid, uuid, uuid, uuid, uuid, uuid, text);
+drop function if exists public.compras_euros(numeric);
 
 update public.goods_receipt_path set question = null, question_detail = null
  where question in ('factura_sin_importes', 'factura_repetida');

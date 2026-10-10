@@ -439,6 +439,67 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
   }
 }
 
+// ── Compras (10/10), §2.4: lo recibido sin factura al cierre del mes ──────
+// UN asiento por proveedor y local el último día del mes (gasto contra
+// «proveedores, facturas pendientes de recibir», 4009) y su contrario el día
+// 1 del siguiente. Dice de qué recepciones sale. Sin tipo de gasto no cae a
+// una cuenta genérica (§2.6): no se propone.
+
+export interface EntradaFinDeMes {
+  /** purchase_accrual.id: el origen de los dos asientos. */
+  id: string
+  /** Primer día del mes, AAAA-MM-01. */
+  mes: string
+  proveedor: string
+  terceroId: string | null
+  localId: string | null
+  nombreLocal: string | null
+  base: number
+  recepciones: readonly { codigo: string | null; fecha: string; base: number | null }[]
+  /** Recepciones sin importe: no están en la base, y se dice. */
+  sinBase: number
+}
+
+const MESES_FIN = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`
+
+export function finDeMesCompras(e: EntradaFinDeMes, c: { gasto: string | null; pendiente: string | null }):
+  { propuestas: Propuesta[]; sinPropuesta: string | null } {
+  const nombreMes = MESES_FIN[Number(e.mes.slice(5, 7)) - 1]
+  if (!c.gasto) return { propuestas: [], sinPropuesta: `A ${e.proveedor} le falta el tipo de gasto: ponlo en su ficha y lo recibido sin factura de ${nombreMes} se propone.` }
+  if (!c.pendiente) return { propuestas: [], sinPropuesta: 'Falta en tu plan la cuenta de facturas pendientes de recibir (4009).' }
+  if (cent(e.base) <= 0) return { propuestas: [], sinPropuesta: `Lo recibido sin factura de ${e.proveedor} en ${nombreMes} no trae importe: no hay nada que apuntar.` }
+  const [a, m] = [Number(e.mes.slice(0, 4)), Number(e.mes.slice(5, 7))]
+  const fin = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10)
+  const uno = new Date(Date.UTC(a, m, 1)).toISOString().slice(0, 10)
+  const base = deCent(cent(e.base))
+  const loc = e.localId
+  const deDonde = e.recepciones.map((r) => `${r.codigo ?? 'sin código'} (${ddmm(r.fecha)}${r.base === null ? ', sin importe' : `, ${eurosExactos(r.base)}`})`).join(', ')
+  const razones: Razon[] = [
+    { decision: `${e.recepciones.length} recepción(es) sin factura a ${ddmm(fin)}`, porque: deDonde },
+    { decision: 'Gasto contra facturas pendientes de recibir', porque: 'el género ya es tuyo aunque la factura llegue después; el día 1 se da la vuelta y el gasto lo pone la factura' },
+  ]
+  const avisos = e.sinBase > 0 ? [`${e.sinBase} recepción(es) sin importe no están en la cifra.`] : []
+  const confianza: Confianza = e.sinBase > 0 ? 'duda' : 'seguro'
+  const donde = e.nombreLocal ? ` · ${e.nombreLocal}` : ''
+  const mk = (fecha: string, tipo: 'purchase_accrual' | 'purchase_accrual_reversal', concepto: string, alReves: boolean): Propuesta => ({
+    serie: 2, fecha, concepto, origen: { tipo, id: e.id },
+    lineas: [
+      { cuenta: c.gasto!, debe: alReves ? 0 : base, haber: alReves ? base : 0, localId: loc, comun: !loc },
+      { cuenta: c.pendiente!, debe: alReves ? base : 0, haber: alReves ? 0 : base, localId: loc, comun: !loc, terceroId: e.terceroId },
+    ],
+    confianza, porque: alReves ? `Da la vuelta al del ${ddmm(fin)}: el gasto lo pone su factura.` : `Lo recibido de ${e.proveedor} en ${nombreMes} sin factura todavía.`,
+    razones, avisos, terceroId: e.terceroId,
+  })
+  return {
+    sinPropuesta: null,
+    propuestas: [
+      mk(fin, 'purchase_accrual', `Recibido sin factura · ${e.proveedor}${donde} · ${nombreMes}`, false),
+      mk(uno, 'purchase_accrual_reversal', `Contrario del recibido sin factura · ${e.proveedor}${donde} · ${nombreMes}`, true),
+    ],
+  }
+}
+
 export function pagoFactura(p: { facturaId: string; fecha: string; proveedor: string; numero: string | null; importe: number; localId: string | null; terceroId: string | null },
   c: { proveedor: string; banco: string | null }): { propuesta: Propuesta | null; sinPropuesta: string | null } {
   if (!c.banco) return { propuesta: null, sinPropuesta: 'Falta la cuenta del banco del local: ponla en Tablas › Bancos.' }

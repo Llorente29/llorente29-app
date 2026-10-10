@@ -103,7 +103,8 @@ begin
   if v_c <> '101+,102+,103-,104+' then raise exception 'PRUEBA fin de mes · 3: candidatas «%» (esperaba 101+,102+,103-,104+).', v_c; end if;
   v := public.compras_casar((v_f->>'factura')::uuid, array['c0e00000-0000-4000-8000-000000000101', 'c0e00000-0000-4000-8000-000000000102']::uuid[]);
   select * into f from supplier_invoice where id = (v_f->>'factura')::uuid;
-  if (v->>'diferencia')::numeric <> 5.00 or f.match_status <> 'con_diferencias' or (v->>'casadas')::int <> 2 then
+  if (v->>'diferencia')::numeric <> 5.00 or f.match_status <> 'con_diferencias' or (v->>'casadas')::int <> 2
+     or v->>'frase' <> 'Casada con 2 recepción(es). La factura dice 155,00 € de base y las recepciones 150,00 €: 5,00 € de diferencia.' then
     raise exception 'PRUEBA fin de mes · 3: casar no enseña la diferencia (%).', v;
   end if;
   if exists (select 1 from public.compras_esperando_factura('c01a0000-0000-4000-8000-00000000000a') where supplier_id = 'c0e00000-0000-4000-8000-000000000001' and receipts <> 1) then
