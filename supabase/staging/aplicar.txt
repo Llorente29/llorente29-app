@@ -23,4 +23,16 @@
 #   Run 116 (08e8f66): sembró, unió y el recuento salió el esperado (los 4
 #   choques en la que se va); paró al contar terceros vivos: el alias «r»
 #   chocaba con la variable «r» del bloque. Ahora «pr».
-supabase/staging/sql/20261017_compras_fusion_prueba.sql
+#   Run 117 (914cc45): la prueba de la fusión, EN VERDE (8 pasos).
+#
+#   0120: cómo te factura cada proveedor (invoicing_mode) y por dónde va cada
+#         recepción según su papel (goods_receipt_path), con lo recordado
+#         (purchase_bill_to), el disparador al confirmar y la fusión que
+#         mueve lo de compras. 0130: los datos de Foodint (en staging no
+#         encuentra las fichas y no hace nada).
+#   La prueba: normalización contra las variantes reales, los caminos, la
+#   pregunta y su respuesta recordada, la ficha, las puertas, la fusión, los
+#   cuatro caminos de la regla 10 y la decisión rota que no tumba la recepción.
+supabase/migrations/20261017T0120_compras_forma_de_facturar.sql
+supabase/migrations/20261017T0130_compras_forma_de_facturar_datos.sql
+supabase/staging/sql/20261017_compras_camino_prueba.sql
