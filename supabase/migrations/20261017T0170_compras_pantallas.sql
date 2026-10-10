@@ -18,6 +18,7 @@
 -- 4 · compras_ultimos_papeles(proveedor): lo que dicen sus últimos papeles
 --     («Sus 5 últimas entregas vinieron con albarán»), para la ficha.
 -- 5 · compras_camino_de(recepción): la frase al confirmar en el local.
+-- 6 · compras_camino_rehacer(recepción): volver a decidirlo (las «sin camino»).
 --
 -- No toca stock ni coste. Vuelta atrás:
 -- supabase/vuelta-atras/20261017T0170_compras_pantallas.down.sql
@@ -159,3 +160,20 @@ begin
 end $$;
 revoke all on function public.compras_camino_de(uuid) from public, anon;
 grant execute on function public.compras_camino_de(uuid) to authenticated;
+
+-- ── 6 · Volver a decidir el camino de una recepción ────────────────────────
+-- Para las que salen «sin camino» en Compras (apuntarlo falló del todo) o si
+-- alguien quiere que se mire otra vez. Devuelve la frase, como al confirmar.
+create or replace function public.compras_camino_rehacer(p_recepcion uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_cuenta uuid; v_estado text;
+begin
+  select account_id, status into v_cuenta, v_estado from goods_receipt where id = p_recepcion;
+  if v_cuenta is null then raise exception 'Esa recepción no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_cuenta) then raise exception 'No puedes decidir esto en esta cuenta.' using errcode = '42501'; end if;
+  if v_estado <> 'confirmado' then raise exception 'La recepción no está confirmada.' using errcode = '22023'; end if;
+  perform public._compras_camino_guarda(p_recepcion);
+  return public.compras_camino_de(p_recepcion);
+end $$;
+revoke all on function public.compras_camino_rehacer(uuid) from public, anon;
+grant execute on function public.compras_camino_rehacer(uuid) to authenticated;

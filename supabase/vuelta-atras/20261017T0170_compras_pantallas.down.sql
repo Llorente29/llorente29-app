@@ -4,6 +4,7 @@
 -- qué preguntas había cerrado alguien («dejarlo así») y su nota; al volver a
 -- aplicar, esas preguntas vuelven a salir en «Qué tienes que mirar».
 -- ============================================================================
+drop function if exists public.compras_camino_rehacer(uuid);
 drop function if exists public.compras_camino_de(uuid);
 drop function if exists public.compras_ultimos_papeles(uuid, int);
 drop function if exists public.compras_liquidaciones(uuid, date);

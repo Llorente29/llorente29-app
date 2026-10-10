@@ -22,7 +22,8 @@
 --   4. La frase al confirmar: r1 albarán, r3 factura, r4 la del socio.
 --   5. Liquidaciones de octubre: P3 en Norte Centro, 1 recepción, 40,00, sin
 --      liquidación todavía.
---   6. Sin camino: si a una recepción se le pierde el camino, sale.
+--   6. Sin camino: si a una recepción se le pierde el camino, sale; rehacerlo
+--      se lo devuelve sin crear otra factura de su papel.
 --   7. Puertas: desde la cuenta B no se ve ni se cierra nada.
 -- ============================================================================
 
@@ -160,14 +161,23 @@ end $$;
 
 -- ── 6 · Sin camino ─────────────────────────────────────────────────────────
 do $$
-declare m jsonb;
+declare m jsonb; v jsonb; n int;
 begin
   delete from goods_receipt_path where goods_receipt_id = 'c0f00000-0000-4000-8000-000000000103';
   m := public.compras_mirar('c01a0000-0000-4000-8000-00000000000a');
   if not exists (select 1 from jsonb_array_elements(m->'sin_camino') r where r->>'recepcion' = 'c0f00000-0000-4000-8000-000000000103') then
     raise exception 'PRUEBA pantallas · 6: la recepción sin camino no sale (%).', m->'sin_camino';
   end if;
-  raise notice '6 · sin camino: % fila(s), r3 entre ellas', jsonb_array_length(m->'sin_camino');
+  n := jsonb_array_length(m->'sin_camino');
+  v := public.compras_camino_rehacer('c0f00000-0000-4000-8000-000000000103');
+  m := public.compras_mirar('c01a0000-0000-4000-8000-00000000000a');
+  if v->>'camino' <> 'factura' or exists (select 1 from jsonb_array_elements(m->'sin_camino') r where r->>'recepcion' = 'c0f00000-0000-4000-8000-000000000103') then
+    raise exception 'PRUEBA pantallas · 6: rehacer no le devuelve el camino (%).', v;
+  end if;
+  if (select count(*) from supplier_invoice where ai_session_id = (select ai_session_id from goods_receipt where id = 'c0f00000-0000-4000-8000-000000000103')) <> 1 then
+    raise exception 'PRUEBA pantallas · 6: rehacer ha creado otra factura del mismo papel.';
+  end if;
+  raise notice '6 · sin camino: % fila(s) con r3; rehecho: «%», y sigue habiendo una sola factura de su papel', n, v->>'frase';
 end $$;
 
 -- ── 7 · Puertas ────────────────────────────────────────────────────────────
@@ -180,8 +190,9 @@ begin
   begin perform public.compras_ultimos_papeles('c0f00000-0000-4000-8000-000000000001'); exception when sqlstate '42501' then n := n + 1; end;
   begin perform public.compras_camino_de('c0f00000-0000-4000-8000-000000000101'); exception when sqlstate '42501' then n := n + 1; end;
   begin perform public.compras_cerrar_pregunta('c0f00000-0000-4000-8000-000000000101', null); exception when sqlstate '42501' then n := n + 1; end;
-  if n <> 5 then raise exception 'PRUEBA pantallas · 7: desde la cuenta B solo se paran % de 5.', n; end if;
-  raise notice '7 · puertas: la cuenta B no ve ni cierra nada (5 de 5)';
+  begin perform public.compras_camino_rehacer('c0f00000-0000-4000-8000-000000000101'); exception when sqlstate '42501' then n := n + 1; end;
+  if n <> 6 then raise exception 'PRUEBA pantallas · 7: desde la cuenta B solo se paran % de 6.', n; end if;
+  raise notice '7 · puertas: la cuenta B no ve, no cierra y no rehace nada (6 de 6)';
 end $$;
 
 rollback;

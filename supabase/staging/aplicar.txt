@@ -87,3 +87,9 @@ supabase/staging/sql/20261017_compras_pantallas_prueba.sql
 #   vuelve a aplicar la 0170 (idempotente) con su prueba.
 supabase/migrations/20261017T0170_compras_pantallas.sql
 supabase/staging/sql/20261017_compras_pantallas_prueba.sql
+#   Run 126 (7517ff2): la 0170 y su prueba EN VERDE (0–7).
+#   La 0170 gana compras_camino_rehacer (lo que se hace con una «sin camino»
+#   desde la pantalla); la prueba lo ensaya en el paso 6 (vuelve su camino y
+#   no se crea otra factura del mismo papel) y en las puertas (6 de 6).
+supabase/migrations/20261017T0170_compras_pantallas.sql
+supabase/staging/sql/20261017_compras_pantallas_prueba.sql
