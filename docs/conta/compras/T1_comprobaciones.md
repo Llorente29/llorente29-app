@@ -209,15 +209,22 @@ Esto lo hace una función nueva, `supplier_merge_do / _undo`, con su rastro, por
 
 **Por nombre no basta.** El casado se hace una vez, a mano, y se recuerda. El sitio natural es `article_supplier`, que es por proveedor. Mientras tanto, el contraste por totales funciona desde el primer día.
 
-**Ventas de las marcas del socio, septiembre, mismo local.** Folvy sí las tiene: entraron por Last, 1.441 pedidos. Pero no coinciden con el detalle del socio:
+**Ventas de las marcas del socio, septiembre, mismo local.** Folvy sí las tiene: entraron por Last, 1.441 pedidos cerrados. **El detalle del socio va sin IVA**, así que se compara con la base de Folvy (`taxable_base`):
 
-| Plataforma | Folvy (total de los pedidos) | Detalle del socio (ventas) | Detalle del socio (tras devoluciones) |
-|---|---:|---:|---:|
-| Glovo | 21.209,86 € | 19.497,01 € | 18.694,62 € |
-| Uber | 9.101,78 € | 8.282,10 € | 8.052,50 € |
-| Just Eat | 747,50 € | 679,54 € | 679,54 € |
+| Plataforma | Folvy, base | Socio, «Ventas» | Diferencia | Socio, «Total» (tras dev./cancel.) |
+|---|---:|---:|---:|---:|
+| Glovo | 19.281,93 € | 19.497,01 € | −215,08 € | 18.694,62 € |
+| Uber | 8.274,37 € | 8.282,10 € | −7,73 € | 8.052,50 € |
+| Just Eat | 679,54 € | 679,54 € | 0,00 € | 679,54 € |
+| **Total** | **28.235,84 €** | **28.458,65 €** | **−222,81 €** | **27.426,66 €** |
 
-Folvy da entre un 9 y un 10 % más. Lo más probable es que el total de Last lleve envío y cargos, como pasa con HubRise. Medido en el PR #172: el total con el que Folvy propone las ventas incluye los cargos de envío. Sin el detalle de la plataforma no se puede afinar. **Propongo que el contraste de ventas quede fuera de este encargo** y se haga cuando esté el detalle de pedidos de las plataformas (pregunta 3).
+- Just Eat cuadra al céntimo y Uber por 7,73 €.
+- **Lo que hay que comparar es «Ventas»**, porque Folvy no sabe de devoluciones ni cancelaciones de la plataforma. El servicio del 25 % y del 35 % se calcula sobre el «Total».
+- Los 215,08 € de Glovo, pedido a pedido, solo se explican con el detalle de la plataforma.
+
+**Qué pedidos entran: los cerrados.** Julio midió el total entre 1,10 de **todos** los pedidos de Last: Glovo 19.402,62 €, Uber 8.462,48 € y Just Eat 725,82 €. Esa medida incluye 120,93 €, 188,14 € y 46,27 € de pedidos cancelados o abiertos. Just Eat decide cuál vale: el socio no tiene devoluciones ahí, y su cifra (679,54 €) es la de los **cerrados** de Folvy (679,55 € entre 1,10). Los cancelados no están en su cuenta. El contraste se hace con los pedidos cerrados.
+
+*Corregido el 10/10.* En la primera versión comparé los totales de Folvy, con IVA, con las cifras del socio, que van sin IVA, y concluí que Folvy daba entre un 9 y un 10 % más. Era al revés: las dos fuentes casi cuadran. Las cifras de ejemplo de la maqueta de la liquidación (19.402,62 €, +132,27 €) no salen de los datos y se sustituyen por estas.
 
 ## 8. Octubre, recepción a recepción
 
@@ -248,10 +255,17 @@ ALB-00190 la emite un distribuidor distinto (NIF propio) a nombre del socio: es 
 
 ---
 
-## Lo que pregunto
+## Lo que ya contestan las maquetas (10/10)
+
+Las maquetas están en `docs/conta/maquetas/compras/`: `Main`, `FichaProveedor`, `Recepcion` y `Liquidacion`. Contestan tres de las cinco preguntas:
+
+- **Carabanchel (pregunta 2):** la liquidación es **por proveedor y local**. La maqueta enseña la de «Local Sur · septiembre» como «todavía no ha llegado», con sus 5 albaranes por 2.977,74 €.
+- **El contraste de ventas (pregunta 3):** **entra en este encargo**, con su veredicto «se parecen, pero no son iguales» y la tabla por plataforma. La tabla va con las cifras medidas en §7, no con las de ejemplo.
+- **La forma de facturar (pregunta 5):** tres opciones. En la segunda, «una vez al mes» y «una por cada local». Va en un campo nuevo, como proponía.
+
+También lo confirman: el NIF leído se **ofrece**, nunca se aplica solo («Compruébalo antes de aceptarlo»), y la pregunta de §2.2 va a «Qué tienes que mirar», no al local.
+
+## Lo que sigue abierto
 
 1. **Las otras tres fichas del socio** (sub-marca, distribuidor y envases): no tienen recepciones, pero sí 10 y 13 artículos. ¿Se unen las cinco en una, o solo las dos del encargo?
-2. **Carabanchel.** Hay 5 albaranes de S en septiembre (2.977,74 € de base) y 4 en octubre, pero la liquidación que me has pasado es solo de Florencio Llorente. ¿S manda otra liquidación para Carabanchel, o lo de Carabanchel va en la misma? Lo pregunto porque cambia si la liquidación es «por proveedor y local» o «por proveedor».
-3. **El contraste de ventas**, ¿fuera de este encargo hasta que esté el detalle de las plataformas? Folvy da entre un 9 y un 10 % más que el socio, y sin ese detalle no se puede explicar.
-4. **El NIF del destinatario.** Para decidir con seguridad «a nombre de la empresa», propongo que el lector de recepciones lea también el NIF del destinatario. Es un cambio en la función `ocr-albaran`: va a producción con su commit y su despliegue (regla 1). ¿Lo hago dentro de este encargo? Si no, Folvy decide por el nombre y pregunta cuando dude.
-5. **La forma de facturar en un campo nuevo** (`invoicing_mode`), conservando `invoicing_frequency` para la segunda forma. ¿Vale?
+2. **El NIF del destinatario.** ¿Hago que el lector de recepciones lo lea? Es un cambio en la función `ocr-albaran`, que se despliega y se commitea a la vez (regla 1). Si no, Folvy decide «a nombre de la empresa» por el nombre y por el de sus locales, y pregunta cuando dude.

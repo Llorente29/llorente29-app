@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ficha del proveedor · cómo te factura</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5BFF}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #2F5BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 920px; height: 760px; box-sizing: border-box; background: #F5F7FA; color: #0E1A2B; font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif; padding: 28px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; color: #5B6678">Clientes y proveedores › Hostelería Amaro</span><h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.8px">Cómo te factura</h1></div>
+
+<section style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 30px rgba(14,26,43,0.05)">
+
+<div style="display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; background: #FFF4DF; border: 1px solid #F1D49B">
+<span style="font-size: 15px; line-height: 1.45; color: #5A3600"><strong style="font-weight: 600">Sus 5 últimas entregas vinieron con albarán, sin IVA.</strong> Aquí pone que factura con cada entrega. Si no es así, cámbialo y dejaré de preguntártelo.</span>
+</div>
+
+<label style="display: flex; gap: 14px; align-items: flex-start; padding: 16px; border: 1px solid #E6EAF0; border-radius: 16px; min-height: 44px">
+<input type="radio" name="forma" style="width: 22px; height: 22px; margin: 2px 0 0; accent-color: #1F45D6; flex-shrink: 0">
+<span style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 17px; font-weight: 600">Con cada entrega</span><span style="font-size: 15px; color: #5B6678">El papel que trae con el género ya es la factura. Se contabiliza sola al recibirlo. También vale para quien no entrega género: el alquiler, la luz, la gestoría.</span></span>
+</label>
+
+<label style="display: flex; gap: 14px; align-items: flex-start; padding: 16px; border: 2px solid #1F45D6; border-radius: 16px; background: #F4F7FF; min-height: 44px">
+<input type="radio" name="forma" checked style="width: 22px; height: 22px; margin: 2px 0 0; accent-color: #1F45D6; flex-shrink: 0">
+<span style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1"><span style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 17px; font-weight: 600">Entrega con albarán y factura después</span><span style="font-size: 15px; color: #5B6678">Lo recibido queda esperando factura. Cuando llega, la junto con sus albaranes y te digo si cuadra.</span></span>
+<span style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap"><span style="font-size: 15px">Suele mandar la factura</span>
+<button type="button" style="height: 44px; padding: 0 14px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 15px; font-weight: 600; color: #0E1A2B">una vez al mes</button>
+<button type="button" style="height: 44px; padding: 0 14px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 15px; font-weight: 600; color: #0E1A2B">una por cada local</button></span></span>
+</label>
+
+<label style="display: flex; gap: 14px; align-items: flex-start; padding: 16px; border: 1px solid #E6EAF0; border-radius: 16px; min-height: 44px">
+<input type="radio" name="forma" style="width: 22px; height: 22px; margin: 2px 0 0; accent-color: #1F45D6; flex-shrink: 0">
+<span style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 17px; font-weight: 600">Liquidación mensual</span><span style="font-size: 15px; color: #5B6678">No factura cada entrega. Cada mes te manda su factura y la tuya, y se paga la diferencia. Lo que recibes sirve para comprobar que su cuenta es verdad.</span></span>
+</label>
+
+<div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px">
+<button type="button" style="height: 46px; padding: 0 18px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 15px; font-weight: 600; color: #0E1A2B">Dejarlo como estaba</button>
+<button type="button" style="height: 46px; padding: 0 22px; border: 0; border-radius: 12px; background: #1F45D6; font: inherit; font-size: 15px; font-weight: 600; color: #FFFFFF">Guardar</button>
+</div>
+</section>
+<span style="font-size: 14px; color: #5B6678; padding: 0 6px">Esto es la costumbre. Si un día trae otro tipo de papel, lo veré y te lo preguntaré en Compras.</span>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":920,"height":760}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
