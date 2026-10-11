@@ -217,7 +217,7 @@ resumen as (
         coalesce((select string_agg(id::text, '|' order by id::text collate "C") from fila2), '') || '#' || tot.c_total::bigint::text, 'UTF8')), 'hex'),
     'sale_ids', coalesce((select jsonb_agg(id order by id::text collate "C") from fila2), '[]'),
     'base_calculated', coalesce(tot.calculada, false)) as j
-  from tot, tipo
+  from tot left join tipo on true   -- sin tipo de ventas no hay propuesta, pero sí respuesta (abajo)
 )
 select case
   when (select id from tipo) is null or cta.iva477 is null or cta.ventas is null then
@@ -403,7 +403,9 @@ begin
       v_entry := null; v_porque := null;
       begin
         v_p := public.conta_propuesta_ventas_dia(p_company, d.location_id, d.dia);
-        if v_p ? 'sin_propuesta' then
+        if v_p is null then
+          raise exception 'la propuesta del día ha salido vacía (ni asiento ni porqué)';
+        elsif v_p ? 'sin_propuesta' then
           v_res := 'sin_propuesta'; v_porque := v_p->>'sin_propuesta';
         else
           v_r := public._journal_entry_proponer(p_company, v_p->'entrada', v_p->'lineas', v_p->'resumen', p_quien, null);

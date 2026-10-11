@@ -10,6 +10,11 @@
 #   La prueba: las ramas a mano (traída, calculada, cedida, cancelado, sin
 #   430, abierto, a medias, descartado), otra pasada, el botón, las puertas y
 #   el procedimiento. Todo en una transacción con ROLLBACK.
+#   Run 134 (da265da): la 0100 APLICADA; la 0110 paró y se revirtió entera:
+#   en la empresa de B (sin IVA de ventas) la propuesta salía NULL —el
+#   resumen se cruzaba con un tipo vacío— y la pasada fallaba con «No hay
+#   ejercicio para el <NULL>». Ahora dice «Falta el IVA…», una propuesta vacía
+#   es un fallo con su mensaje, y la prueba lo mira (paso 7).
 #   Después de aplicar: a los :07 el cron de staging pasa por el procedimiento
 #   nuevo; se mira cron.job_run_details y sales_day_proposal_log.
 supabase/migrations/20261018T0100_cierre_proponer_solo.sql

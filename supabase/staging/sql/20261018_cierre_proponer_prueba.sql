@@ -34,6 +34,9 @@
 --   5. Las puertas: sin usuario nadie llama a _journal_entry_proponer,
 --      conta_proponer_dias ni conta_propuesta_ventas_dia, y B no lee el
 --      registro de A.
+--   7. Una empresa sin el IVA de sus ventas (la de la cuenta B en staging): la
+--      propuesta dice «Falta el IVA…», no sale vacía. (Run 134: salía NULL y
+--      la pasada fallaba con «No hay ejercicio para el <NULL>».)
 --   6. El procedimiento horario propone después de cerrar (en su cuerpo: un
 --      procedimiento con COMMIT no se puede llamar dentro de esta transacción;
 --      su pasada de verdad se mira en staging a los :07 después de aplicar).
@@ -241,6 +244,22 @@ begin
     raise exception 'PRUEBA proponer · 6: el cron del cierre del día no está.';
   end if;
   raise notice 'PRUEBA proponer · 6: el procedimiento horario cierra y después propone; el cron sigue a los :07.';
+end $$;
+
+-- ── 7 · Sin el IVA de sus ventas ───────────────────────────────────────────
+do $$
+declare v_e uuid; v_p jsonb;
+begin
+  select c.id into v_e from public.company c left join public.company_tax_profile t on t.company_id = c.id
+   where c.account_id = 'c01b0000-0000-4000-8000-00000000000b' and t.sales_tax_rate_code is null order by c.created_at limit 1;
+  if v_e is null then
+    raise exception 'PRUEBA proponer · 7: no encuentro en staging la empresa de B sin IVA de ventas; la prueba no mediría nada.';
+  end if;
+  v_p := public.conta_propuesta_ventas_dia(v_e, 'c01b0000-0000-4000-8000-0000000000b2', '2026-10-04');
+  if v_p is null or v_p->>'sin_propuesta' is distinct from 'Falta el IVA de tus ventas (Tu empresa) o su 477, o la 700 en el plan.' then
+    raise exception 'PRUEBA proponer · 7: sin IVA de ventas, la propuesta tenía que decir por qué (dice %).', v_p;
+  end if;
+  raise notice 'PRUEBA proponer · 7: sin IVA de ventas, dice «%».', v_p->>'sin_propuesta';
 end $$;
 
 rollback;
