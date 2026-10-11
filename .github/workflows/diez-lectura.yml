@@ -61,3 +61,31 @@ jobs:
           path: |
             swagger-apicon.json
             swagger.md
+
+  lectura:
+    # A mano (cuando el workflow esté en main) o al empujar a la rama del
+    # encargo un commit cuyo mensaje lleve «[lectura]».
+    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[lectura]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Enmascarar el secreto
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA. No se lee nada."; exit 1; }
+          jq -e 'type == "object"' <<<"$DIEZ_LECTURA" > /dev/null || { echo "::error::DIEZ_LECTURA no es un JSON con forma de objeto."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+          echo "Claves del secreto: $(jq -r 'keys | join(", ")' <<<"$DIEZ_LECTURA")"
+      - name: Contar lo que hay en Diez (solo GET)
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          node scripts/conta/diez/lectura.mjs 202301 202609 | tee lectura.md
+          cat lectura.md >> "$GITHUB_STEP_SUMMARY"

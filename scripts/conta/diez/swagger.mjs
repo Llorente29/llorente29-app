@@ -64,11 +64,14 @@ for (const [ruta, metodos] of Object.entries(doc.paths ?? {})) {
       for (const [mt, x] of Object.entries(c)) params.push(`cuerpo ${mt} ${tipo(x.schema)}`)
     }
     const resp = Object.entries(op.responses ?? {}).map(([k, x]) => `${k}${x.schema ? ' ' + tipo(x.schema) : ''}${v3 && x.content ? ' ' + Object.values(x.content).map((y) => tipo(y.schema)).join('/') : ''}`)
-    ops.push({ m: m.toUpperCase(), ruta, recurso: ruta.split('/')[2] ?? ruta, params, resp, tags: op.tags ?? [] })
+    ops.push({ m: m.toUpperCase(), ruta, recurso: ruta.split('/')[2] ?? ruta, params, resp, tags: op.tags ?? [], texto: [op.summary, op.description].filter(Boolean).join(' · ') })
   }
 }
 l.push(`Versión: ${v3 ? 'OpenAPI ' + doc.openapi : 'Swagger ' + doc.swagger} · título: ${doc.info?.title ?? '—'} · versión de la API: ${doc.info?.version ?? '—'} · leído de \`${de}\``, '')
 l.push(`**${ops.length} operaciones**; por método: ${Object.entries(ops.reduce((a, o) => ((a[o.m] = (a[o.m] ?? 0) + 1), a), {})).map(([k, n]) => `${k} ${n}`).join(' · ')}`, '')
+l.push(`Operaciones con texto explicativo (summary o description): ${ops.filter((o) => o.texto).length} de ${ops.length}`, '')
+for (const o of ops.filter((x) => x.texto)) l.push(`- ${o.m} \`${o.ruta}\`: ${o.texto.replace(/\s+/g, ' ').slice(0, 300)}`)
+if (ops.some((o) => o.texto)) l.push('')
 l.push(`Seguridad declarada: \`${JSON.stringify(doc.securityDefinitions ?? doc.components?.securitySchemes ?? {})}\``, '')
 
 l.push('### Operaciones', '', '| Método | Ruta | Parámetros (* obligatorio) | Respuestas |', '|---|---|---|---|')
@@ -77,7 +80,7 @@ for (const o of ops.sort((a, b) => a.ruta.localeCompare(b.ruta) || a.m.localeCom
 }
 
 // Los modelos que importan y todo lo que nombran.
-const interes = /apunte|asiento|detalle|factura|subcuenta|saldo|serie|ejercicio|empresa|analit|vencim|token|cliente|proveedor|adjunto|document/i
+const interes = /apunte|asiento|detalle|factura|subcuenta|saldo|serie|ejercicio|empresa|analit|vencim|token|auth|cliente|proveedor|adjunto|document|grupo|reparto|actividad/i
 const pendientes = Object.keys(defs).filter((k) => interes.test(k))
 const hechos = new Set()
 l.push('', '### Modelos', '')
