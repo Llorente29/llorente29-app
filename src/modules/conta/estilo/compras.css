@@ -108,6 +108,14 @@
 .cxc-doc { height: 32px; padding: 0 12px; border-radius: 999px; background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; }
 .cxc-doc-falta { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
 .cxc-docs-pie { font-size: 13px; color: var(--cx-apoyo); width: 100%; text-align: right; }
+/* En ordenador, título a la izquierda y los cinco documentos a la derecha,
+   como la maqueta: el título se parte en dos líneas antes que bajar las píldoras
+   (e2e 175: con un nombre largo bajaban debajo, a la izquierda). */
+@media (min-width: 768px) {
+  .cxc-liq-cabecera { flex-wrap: nowrap; }
+  .cxc-liq-cabecera > .cx-cabecera-titulos { flex: 1 1 auto; min-width: 0; }
+  .cxc-liq-cabecera > .cxc-docs { flex: 0 1 520px; }
+}
 .cxc-volver { align-self: flex-start; font-size: 14px; font-weight: 600; text-decoration: none; }
 .cxc-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 

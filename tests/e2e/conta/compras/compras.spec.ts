@@ -123,6 +123,13 @@ test('La liquidación de septiembre y su contraste (N19)', async ({ page }) => {
   const docs = page.getByRole('region', { name: 'Los cinco documentos' })
   await expect(docs.locator('.cxc-doc')).toHaveText(['Tu factura', 'Su factura', 'La cuenta', 'Ventas', 'Inventario'])
   await expect(docs.getByText('Los cinco documentos, leídos')).toBeVisible()
+  // En ordenador, a la derecha del título y en su misma fila, como la maqueta (e2e 175: bajaban debajo).
+  if (lado(page) === 'ordenador') {
+    const titulo = await page.getByRole('heading', { level: 1 }).boundingBox()
+    const caja = await docs.boundingBox()
+    expect(caja!.x).toBeGreaterThan(titulo!.x + 200)
+    expect(caja!.y).toBeLessThan(titulo!.y + titulo!.height)
+  }
   // Tres veredictos con su umbral: compras coincide; las ventas de Folvy no están en staging.
   await expect(page.getByText('Lo que dice que te mandó coincide con lo que recibiste.')).toBeVisible()
   await expect(page.getByText('Sus ventas no las puedo comprobar.')).toBeVisible()
