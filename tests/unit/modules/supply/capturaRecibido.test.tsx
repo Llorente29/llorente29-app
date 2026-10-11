@@ -31,6 +31,9 @@ describe('«Recibido» (N21)', () => {
     expect(html).toContain('Verduras del Huerto Prueba, S.L. ·\u00A01\u00A0producto')
     expect(html).toMatch(/210,10\s€/)
     expect(html).toContain('Recibir otro')
+    // El botón principal es el azul del estilo nuevo, no el negro de Cocina (respuesta 2, 11/10).
+    expect(html).toMatch(/class="[^"]*bg-\[#2F5BFF\][^"]*">Recibir otro</)
+    expect(html).not.toContain('bg-accent')
     expect(html).toContain('Volver')
   })
   it('sin frase, sin tarjeta: la recepción no depende de ella', () => {

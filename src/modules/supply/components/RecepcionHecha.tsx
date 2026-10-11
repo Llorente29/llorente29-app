@@ -10,6 +10,10 @@
 // depende de ella. Lo que haya que revisar (líneas sin postear, que la mire la
 // oficina) va debajo en pequeño: un aviso no se calla porque la pantalla sea
 // de éxito (regla 8).
+//
+// El botón principal es el azul del estilo nuevo (#2F5BFF, `--cx-azul` en
+// conta), no el `accent` negro de Cocina: decisión de Julio, respuesta 2 del
+// repaso (11/10). Va escrito aquí porque supply no carga los tokens de conta.
 
 import { Check, FileText } from 'lucide-react'
 import { partirFrase } from '@/modules/supply/lib/fraseRecepcion'
@@ -59,7 +63,7 @@ export default function RecepcionHecha({ datos, local, onRecibirOtro, onVolver }
       <div className="flex-1" />
       {onRecibirOtro && (
         <button type="button" onClick={onRecibirOtro}
-          className="h-14 rounded-2xl bg-accent text-white text-[17px] font-semibold">Recibir otro</button>
+          className="h-14 rounded-2xl bg-[#2F5BFF] text-white text-[17px] font-semibold focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-[#2F5BFF]">Recibir otro</button>
       )}
       <button type="button" onClick={onVolver}
         className="h-[52px] rounded-2xl border border-border-default bg-card text-base font-semibold text-text-primary">Volver</button>

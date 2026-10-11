@@ -84,6 +84,13 @@ Como la maqueta, y lo comprueba el e2e (N21, su prueba de captura):
   aviso). Y el apoyo como la maqueta: «Recepción del lunes 5 de octubre · Norte Centro · 191,00 €», y en la
   de «Contado», «Así no puedes descontar su IVA.» debajo de la frase.
 
+## Lo que arregló la respuesta 2 (11/10)
+
+- **N21 · el botón principal en azul**: «Recibir otro» va en el azul del estilo nuevo, `#2F5BFF`, con el
+  contorno de foco del mismo azul que pone la maqueta. Estaba negro (el `accent` de Cocina). Captura nueva:
+  `recibido-movil.png`. Nota: el fichero de la maqueta pinta ese botón con `#1F45D6`, un azul más oscuro;
+  he puesto `#2F5BFF` porque es el que dijo Julio y el botón principal del estilo (`--cx-azul`).
+
 ## Lo que sigue distinto de la maqueta
 
 Aceptado por Julio:
@@ -92,17 +99,11 @@ Aceptado por Julio:
    por líneas, y el libro no admite una cuota que no sea base × tipo. Aceptado el 10/10.
 2. **N19 · los números**: los de la captura son los de la semilla, y en staging las ventas salen «no las
    puedo comprobar». Es de los datos, no del diseño. Aceptado el 11/10 (respuesta 1).
-
-Para que Julio lo vea (razón de uso que la maqueta no dibuja; no lo he cambiado por mi cuenta):
-
-3. **«Ventas» lleva a una pantalla que dice «Aún no.»** La maqueta pone la entrada y no dibuja su pantalla.
-   Las otras dos maneras eran peores: llevar directamente al libro diario (la entrada diría «Ventas» y
-   abriría otra cosa) o no pintarla (lo que había, y no es la maqueta). Captura: `ventas-*.png`.
+3. **«Ventas» lleva a una pantalla que dice «Aún no.»**, con el enlace a los asientos de ventas del libro
+   diario. La pantalla de Ventas queda como trabajo propio. Aceptado el 11/10 (respuesta 2).
 4. **La pestaña Pago de la ficha guarda una línea** «Cómo te factura: «Con cada entrega». Cambiarlo», con
-   el enlace a su pantalla. Sin ella, desde la ficha no se llegaría a «Cómo te factura».
-5. **N21 · el botón principal es negro, no azul**: la recepción vive en Cocina y usa su color de botón
-   principal; el azul es el del módulo de contabilidad. Captura: `recibido-movil.png`.
-6. **Las filas de «Qué tienes que mirar» que la maqueta no dibuja** siguen el mismo patrón que las que sí:
-   si el papel es una factura y la ficha dice albarán, el botón dice «Es una factura: solo esta vez».
-7. **N20 · «Sus importes»** (si el importe de cada línea lleva el IVA dentro) se queda en la pestaña Pago
-   de la ficha: no es parte de la maqueta de «Cómo te factura», y es de cómo se lee cada línea.
+   el enlace a su pantalla. Aceptado el 11/10 (respuesta 2).
+5. **Las filas de «Qué tienes que mirar» que la maqueta no dibuja**: si el papel es una factura y la ficha
+   dice albarán, el botón dice «Es una factura: solo esta vez». Aceptado el 11/10 (respuesta 2).
+6. **N20 · «Sus importes»** (si el importe de cada línea lleva el IVA dentro) se queda en la pestaña Pago
+   de la ficha. Aceptado el 11/10 (respuesta 2).
