@@ -22,7 +22,9 @@
 // los inputs visibles y el control APPCC de recepción llegan en su frente. Así
 // no se rehace la tabla cuando se enchufen.
 //
-// Tras confirmar, VUELVE SOLO (onSaved con mensaje); aviso como toast en lista.
+// Tras confirmar, la pantalla «Recibido» (Compras · N21, RecepcionHecha) con
+// qué pasa con el papel; «Volver» hace lo de siempre (onSaved con mensaje,
+// aviso como toast en lista). Guardar como borrador vuelve solo, como antes.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle, Box, ArrowRight, Truck } from 'lucide-react'
@@ -30,6 +32,7 @@ import { useApp } from '@/context/AppContext'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import ReceiptPhotoViewer from '@/modules/supply/components/ReceiptPhotoViewer'
+import RecepcionHecha, { type RecepcionHechaDatos } from '@/modules/supply/components/RecepcionHecha'
 import { listSuppliers, createPurchaseFormat, ensurePackTree } from '@/modules/kitchen/services/purchaseFormatService'
 import { rescaleLastPriceToFormat, unitPriceFromBase, pickDisplayUnit } from '@/modules/kitchen/lib/unitConversion'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
@@ -54,6 +57,7 @@ import {
   deleteGoodsReceiptLinesByReceipt,
   createGoodsReceiptLine,
   confirmReceipt,
+  fraseDelCamino,
   voidReceipt,
   listOrderLineReceived,
   qtyInBaseFromFormat,
@@ -206,6 +210,8 @@ interface GoodsReceiptFormProps {
   focusSearch?: string | null
   onBack: () => void
   onSaved: (message?: string) => void
+  /** «Recibir otro» en la pantalla «Recibido» (N21). Sin él, solo «Volver». */
+  onRecibirOtro?: () => void
 }
 
 interface DraftLine {
@@ -617,7 +623,8 @@ function significantWords(s: string): Set<string> {
   return new Set([...wordSet(s)].filter(w => !MATCH_STOPWORDS.has(w)).map(stem))
 }
 
-export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, confirmPolicy = 'always', initialSupplierId, focusSearch, onBack, onSaved }: GoodsReceiptFormProps) {
+export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, confirmPolicy = 'always', initialSupplierId, focusSearch, onBack, onSaved, onRecibirOtro }: GoodsReceiptFormProps) {
+  const [hecha, setHecha] = useState<RecepcionHechaDatos | null>(null)
   const { userProfile, authUserId } = useApp()
   const op = useOperativeLocation()
   const againstOrder = !!order
@@ -2046,10 +2053,26 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         catch (e) { console.error('persist: corregida OK pero no se pudo anular la original', e); voidNote = ' · OJO: anula la anterior a mano' }
       }
 
+      // Compras (N21): qué pasa con el papel. Si no se sabe, no se dice nada.
+      const camino = await fraseDelCamino(receipt.id)
+
       const parts = [`${res.postedLines} línea(s) al almacén`]
       if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear (revisar)`)
       if (res.recalculatedItems > 0) parts.push(`coste actualizado en ${res.recalculatedItems} ingrediente(s)`)
-      onSaved(`Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}${learnNote}${voidNote}.`)
+      const importes = filled.map((l) => l.lineAmount ?? ((parseNum(l.qty) ?? 0) * (parseNum(l.unitCost) ?? NaN)))
+        .filter((x): x is number => x != null && Number.isFinite(x))
+      const avisos: string[] = []
+      if (res.skippedLines > 0) avisos.push(`${res.skippedLines} ${res.skippedLines === 1 ? 'línea no ha entrado' : 'líneas no han entrado'} al almacén: hay que revisarlas.`)
+      if (voidNote.includes('OJO')) avisos.push('La recepción anterior no se pudo anular: anúlala a mano.')
+      setSaving(false)
+      setHecha({
+        proveedor: supplierName === '—' ? null : supplierName,
+        productos: filled.length,
+        total: importes.length ? Math.round(importes.reduce((a, b) => a + b, 0) * 100) / 100 : null,
+        frase: camino,
+        aviso: avisos.length ? avisos.join(' ') : null,
+        mensaje: `Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}${learnNote}${voidNote}.${camino ? ` ${camino}` : ''}`,
+      })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la recepción.')
       setSaving(false)
@@ -2069,6 +2092,11 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       : fromOcr
         ? 'Esto leyó la IA del albarán. Revisa proveedor, local, cantidades y el formato de cada línea; al confirmar, entra al almacén con su coste.'
         : 'Cuenta lo que ha llegado y escríbelo. Al confirmar, entra al almacén.'
+
+  if (hecha) {
+    return <RecepcionHecha datos={hecha} local={locationName === '—' ? null : locationName}
+      onRecibirOtro={onRecibirOtro} onVolver={() => onSaved(hecha.mensaje)} />
+  }
 
   return (
     <div className="space-y-4">

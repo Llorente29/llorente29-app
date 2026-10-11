@@ -12,7 +12,7 @@ import {
   resultadoPorLocal, validaSola, NOMBRE_SERIE, type LineaAsiento, type CalendarioEmpresa,
 } from '@/modules/conta/lib/libro'
 import {
-  ventasDelDia, liquidacionPlataforma, facturaProveedor, pagoFactura, liquidacionSocio, nomina, aplicarAprendizaje, cuentaDeBoe,
+  ventasDelDia, liquidacionPlataforma, facturaProveedor, finDeMesCompras, pagoFactura, liquidacionSocio, nomina, aplicarAprendizaje, cuentaDeBoe,
   type PedidoDia, type EntradaVentasDia, type CuentasLiquidacion, type EntradaLiquidacion,
 } from '@/modules/conta/lib/asientosPropuestos'
 
@@ -233,7 +233,7 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
   const c = { proveedor: '41000006', retencion: '47510000', ivaSoportado: (p: number) => ({ 4: { cuenta: '47200004', tipoId: 't4' }, 10: { cuenta: '47200010', tipoId: 't10' }, 21: { cuenta: '47200021', tipoId: 't21' } } as Record<number, { cuenta: string; tipoId: string }>)[p] ?? null }
   it('gasto por su cuenta, IVA por tipo, retención y lo que queda a pagar', () => {
     const p = facturaProveedor({
-      id: 'f1', numero: 'F-12', fecha: '2026-10-02', proveedor: 'Asesoría de prueba', terceroId: 't', esSocio: false, localId: NORTE,
+      id: 'f1', numero: 'F-12', fecha: '2026-10-02', proveedor: 'Asesoría de prueba', terceroId: 't', esSocio: false, tieneNif: true, localId: NORTE,
       lineas: [{ base: 180, tipo: { id: 't21', porcentaje: 21 }, cuentaGasto: '62300000' }], total: 217.8,
       retencion: { tipoId: 'r15', porcentaje: 15, base: 180, importe: 27, modelo: '111' },
     }, c).propuesta!
@@ -242,9 +242,38 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
     expect(p.confianza).toBe('seguro')
   })
   it('lo comprado a nombre del socio no es gasto: no se propone', () => {
-    const r = facturaProveedor({ id: 'f2', numero: null, fecha: '2026-10-02', proveedor: 'Socio de marca', terceroId: null, esSocio: true, localId: SUR, lineas: [], total: 100, retencion: null }, c)
+    const r = facturaProveedor({ id: 'f2', numero: null, fecha: '2026-10-02', proveedor: 'Socio de marca', terceroId: null, esSocio: true, tieneNif: true, localId: SUR, lineas: [], total: 100, retencion: null }, c)
     expect(r.propuesta).toBeNull()
     expect(r.sinPropuesta).toContain('no es gasto tuyo')
+  })
+  // Compras (10/10), aceptación 7: sin NIF o sin tipo de gasto no se propone,
+  // y la frase dice qué falta. Antes, sin tipo de gasto se proponía «en duda».
+  it('sin NIF no se propone, y dice qué falta', () => {
+    const r = facturaProveedor({ id: 'f3', numero: 'B-1', fecha: '2026-10-07', proveedor: 'Distribuciones de prueba', terceroId: null, esSocio: false, tieneNif: false, localId: NORTE,
+      lineas: [{ base: 100, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }], total: 110, retencion: null }, c)
+    expect(r.propuesta).toBeNull()
+    expect(r.sinPropuesta).toBe('A Distribuciones de prueba le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.')
+  })
+  // Compras (repaso, 10/10): «Apuntarla sin descontar el IVA». El papel de la
+  // semilla a nombre de «Contado»: 102,54 de base al 10 %, 112,79 de total.
+  it('sin descontar el IVA: la cuota es más gasto, sin 472, y no pide NIF', () => {
+    const p = facturaProveedor({ id: 'f5', numero: 'BR-77', fecha: '2026-09-25', proveedor: 'Bodega de prueba', terceroId: null, esSocio: false, tieneNif: false, localId: NORTE,
+      lineas: [{ base: 102.54, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }], total: 112.79, retencion: null, ivaNoDeducible: true }, c).propuesta!
+    expect(p.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 112.79, 0], ['41000006', 0, 112.79]])
+    expect(p.lineas.some((l) => l.iva)).toBe(false)
+    expect(problemas(p.lineas, esIva, esRet)).toEqual([])
+    expect(p.avisos).toEqual([])
+    expect(p.concepto).toContain('sin descontar el IVA')
+    // La misma factura, deducible: su IVA va a la 472 y al libro.
+    const d = facturaProveedor({ id: 'f5', numero: 'BR-77', fecha: '2026-09-25', proveedor: 'Bodega de prueba', terceroId: null, esSocio: false, tieneNif: true, localId: NORTE,
+      lineas: [{ base: 102.54, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }], total: 112.79, retencion: null }, c).propuesta!
+    expect(d.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 102.54, 0], ['47200010', 10.25, 0], ['41000006', 0, 112.79]])
+  })
+  it('sin tipo de gasto no cae a una cuenta genérica: no se propone', () => {
+    const r = facturaProveedor({ id: 'f4', numero: 'B-2', fecha: '2026-10-07', proveedor: 'Distribuciones de prueba', terceroId: null, esSocio: false, tieneNif: true, localId: NORTE,
+      lineas: [{ base: 60, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }, { base: 40, tipo: { id: 't4', porcentaje: 4 }, cuentaGasto: null }], total: 107.6, retencion: null }, c)
+    expect(r.propuesta).toBeNull()
+    expect(r.sinPropuesta).toContain('le falta el tipo de gasto')
   })
   it('el pago sale del banco del local; sin banco, lo pide', () => {
     expect(pagoFactura({ facturaId: 'f1', fecha: '2026-10-10', proveedor: 'X', numero: 'F-12', importe: 190.8, localId: NORTE, terceroId: null }, { proveedor: '41000006', banco: '57200001' }).propuesta!.lineas.map((l) => l.cuenta)).toEqual(['41000006', '57200001'])
@@ -272,6 +301,40 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
     expect(p.lineas.some((l) => l.cuenta === '41000009')).toBe(false)
     expect(p.lineas.filter((l) => l.cuenta === '40000002').map((l) => [l.debe, l.haber])).toEqual([[0, 1100], [363, 0]])
     expect(p.porque).toContain('le pagas 737,00 €')
+  })
+})
+
+// Compras (10/10), §2.4 y aceptación 4: lo recibido sin factura al cierre.
+// La forma es la de D en Foodint: albaranes de un local, factura al mes.
+describe('compras · lo recibido sin factura a fin de mes', () => {
+  const e = {
+    id: 'acc1', mes: '2026-10-01', proveedor: 'Carnes de prueba', terceroId: 'p1', localId: NORTE, nombreLocal: 'Norte',
+    base: 150, recepciones: [{ codigo: 'ALB-1', fecha: '2026-10-05', base: 100 }, { codigo: 'ALB-2', fecha: '2026-10-20', base: 50 }], sinBase: 0,
+  }
+  it('un asiento el último día y su contrario el día 1, con el mismo origen', () => {
+    const r = finDeMesCompras(e, { gasto: '60000000', pendiente: '40090000' })
+    expect(r.sinPropuesta).toBeNull()
+    const [fin, uno] = r.propuestas
+    expect([fin.fecha, fin.origen, uno.fecha, uno.origen]).toEqual(['2026-10-31', { tipo: 'purchase_accrual', id: 'acc1' }, '2026-11-01', { tipo: 'purchase_accrual_reversal', id: 'acc1' }])
+    expect(fin.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 150, 0], ['40090000', 0, 150]])
+    expect(uno.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 0, 150], ['40090000', 150, 0]])
+    expect(cuadre(fin.lineas).cuadra && cuadre(uno.lineas).cuadra).toBe(true)
+    expect(fin.razones[0].porque).toBe('ALB-1 (05/10, 100,00 €), ALB-2 (20/10, 50,00 €)')
+    expect(fin.concepto).toBe('Recibido sin factura · Carnes de prueba · Norte · octubre')
+    expect(fin.confianza).toBe('seguro')
+  })
+  it('el último día de febrero de un bisiesto', () => {
+    expect(finDeMesCompras({ ...e, mes: '2028-02-01' }, { gasto: '60000000', pendiente: '40090000' }).propuestas.map((p) => p.fecha)).toEqual(['2028-02-29', '2028-03-01'])
+  })
+  it('una recepción sin importe: se dice, y la confianza baja', () => {
+    const r = finDeMesCompras({ ...e, recepciones: [...e.recepciones, { codigo: 'ALB-3', fecha: '2026-10-28', base: null }], sinBase: 1 }, { gasto: '60000000', pendiente: '40090000' })
+    expect(r.propuestas[0].confianza).toBe('duda')
+    expect(r.propuestas[0].avisos).toEqual(['1 recepción(es) sin importe no están en la cifra.'])
+  })
+  it('sin tipo de gasto no cae a una cuenta genérica: no se propone', () => {
+    const r = finDeMesCompras(e, { gasto: null, pendiente: '40090000' })
+    expect(r.propuestas).toEqual([])
+    expect(r.sinPropuesta).toContain('le falta el tipo de gasto')
   })
 })
 

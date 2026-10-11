@@ -73,7 +73,7 @@ export type FiltroDiario = 'todos' | 'revisar' | 'ventas' | 'compras' | 'platafo
 
 const ORIGENES: Record<Exclude<FiltroDiario, 'todos' | 'revisar' | 'anulados'>, readonly OrigenAsiento[]> = {
   ventas: ['sales_day', 'sales_adjustment'],
-  compras: ['supplier_invoice', 'supplier_payment'],
+  compras: ['supplier_invoice', 'supplier_payment', 'purchase_accrual', 'purchase_accrual_reversal'],
   plataformas: ['channel_settlement'],
   socios: ['licensed_settlement'],
   banco: ['bank'],
@@ -198,6 +198,7 @@ const ORIGEN_TEXTO: Record<OrigenAsiento, string> = {
   supplier_payment: 'Pago a proveedor', channel_settlement: 'Liquidación de la plataforma', licensed_settlement: 'Liquidación del socio de marca',
   payroll: 'Resumen de nóminas', bank: 'Movimiento del banco', vat_settlement: 'Liquidación del IVA', manual: 'A mano', template: 'Predefinido',
   reversal: 'Contraasiento', opening: 'Apertura', closing: 'Cierre', migrated: 'Traído',
+  purchase_accrual: 'Recibido sin factura a fin de mes', purchase_accrual_reversal: 'Contrario del recibido sin factura',
 }
 
 /** De dónde sale, en palabras. */

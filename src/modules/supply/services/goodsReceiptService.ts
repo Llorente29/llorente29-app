@@ -18,6 +18,7 @@
 //     cascadeFromItem propaga RAW→platos (reusa la maquinaria de Kitchen, no la
 //     duplica) → menu_item_economics refleja el nuevo margen por marca/canal.
 
+import { rpcSinTipar } from '@/lib/rpcSinTipar'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { cascadeFromItem } from '@/modules/kitchen/services/costCascadeService'
 import { createRecipeItem, updateRecipeItem, recomputeRecipeItem } from '@/modules/kitchen/services/recipeItemService'
@@ -1375,6 +1376,22 @@ export async function getReceiptFileUrl(path: string | null | undefined): Promis
     return null
   }
   return data?.signedUrl ?? null
+}
+
+/**
+ * Compras (N21): lo que pasa con el papel de una recepción ya confirmada, en
+ * una frase para quien recibe («Este papel es un albarán. La oficina esperará
+ * la factura.»). Si la base aún no sabe decirlo, null: la confirmación no
+ * depende de esto.
+ */
+export async function fraseDelCamino(receiptId: string): Promise<string | null> {
+  try {
+    const r = await rpcSinTipar<{ camino: string; frase: string } | null>('compras_camino_de', { p_recepcion: receiptId })
+    return r?.frase ?? null
+  } catch (e) {
+    console.error('fraseDelCamino: no se pudo leer el camino de la recepción', e)
+    return null
+  }
 }
 
 /**

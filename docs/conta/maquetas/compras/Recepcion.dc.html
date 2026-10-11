@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>En el local, al confirmar la recepción</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5BFF}
+button:focus-visible,a:focus-visible{outline:3px solid #2F5BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F5F7FA; color: #0E1A2B; font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif; padding: 24px 18px; display: flex; flex-direction: column; gap: 16px">
+<span style="font-size: 14px; color: #5B6678">Recepción · Local Centro</span>
+
+<div style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 28px 22px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; box-shadow: 0 8px 30px rgba(14,26,43,0.05)">
+<span style="width: 64px; height: 64px; border-radius: 999px; background: #DDF7EC; display: flex; align-items: center; justify-content: center"><svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="#0B5A3F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10l4 4 8-8"/></svg></span>
+<h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.5px">Recibido</h1>
+<span style="font-size: 16px; color: #334155; line-height: 1.45">Panadería Sol · 6 productos<br>95,95 €</span>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 18px; padding: 16px 18px; display: flex; gap: 12px; align-items: flex-start">
+<svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#1F45D6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px"><path d="M5 2h7l3 3v13H5z"/><path d="M8 9h4M8 13h4"/></svg>
+<span style="font-size: 15px; line-height: 1.45; color: #334155"><strong style="font-weight: 600; color: #0E1A2B">Este papel es una factura.</strong> Ya ha pasado a la oficina. No tienes que hacer nada más.</span>
+</div>
+
+<div style="background: #FFFFFF; border: 1px dashed #C9D0DC; border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6678">Las otras dos frases posibles</span>
+<span style="font-size: 15px; line-height: 1.45; color: #334155"><strong style="font-weight: 600; color: #0E1A2B">Este papel es un albarán.</strong> La oficina esperará la factura.</span>
+<span style="font-size: 15px; line-height: 1.45; color: #334155"><strong style="font-weight: 600; color: #0E1A2B">Este género es de Distribuciones Aurora.</strong> Entra en la cuenta del mes.</span>
+</div>
+
+<div style="flex-grow: 1"></div>
+<button type="button" style="height: 56px; border: 0; border-radius: 16px; background: #1F45D6; font: inherit; font-size: 17px; font-weight: 600; color: #FFFFFF">Recibir otro</button>
+<button type="button" style="height: 52px; border: 1px solid #C9D0DC; border-radius: 16px; background: #FFFFFF; font: inherit; font-size: 16px; font-weight: 600; color: #0E1A2B">Volver</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

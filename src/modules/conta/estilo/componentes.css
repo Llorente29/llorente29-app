@@ -72,6 +72,7 @@
   font-family: var(--cx-letra-cifras); font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
   background: var(--cx-ia); color: var(--cx-texto);
 }
+.cx-menu-cuenta { margin-left: auto; background: var(--cx-ambar-suave); color: var(--cx-ambar); }
 .cx-menu-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .cx-menu-empresas {
   margin: 0 4px 10px; padding: 6px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja);
@@ -619,7 +620,8 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
 /* ── Móvil ─────────────────────────────────────────────────────────── */
 @media (max-width: 767px) {
   .cx-marco { flex-direction: column; padding: 18px 16px calc(108px + env(safe-area-inset-bottom, 0px)); gap: 12px; }
-  .cx-principal { padding: 0; gap: 12px; }
+  /* La barra de abajo flota sobre el contenido: la última fila necesita su hueco (repaso de compras, 10/10). */
+  .cx-principal { padding: 0 0 112px; gap: 12px; }
   .cx-titulo { font-size: 28px; letter-spacing: -1px; }
   .cx-rejilla-3, .cx-rejilla-2-1, .cx-formulario-fila { grid-template-columns: minmax(0, 1fr); }
   .cx-tarjeta { border-radius: var(--cx-radio-bloque); padding: 16px; }

@@ -15,6 +15,7 @@
 //
 // USADO HOY POR:
 //   · employee_clock_status(p_employee_id)  — tarjeta «En cocina ahora»
+//   · compras_camino_de(p_recepcion)        — la frase al confirmar una recepción (compras, N21)
 //
 // Cuando se regenere el fichero de tipos: quitar la llamada de arriba, borrar
 // este fichero, y el compilador señalará solo lo que falte.

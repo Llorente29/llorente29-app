@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>La liquidación del mes y su contraste</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5BFF}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #2F5BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1330px; box-sizing: border-box; overflow: hidden; position: relative; background: #F5F7FA; color: #0E1A2B; font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif">
+<div style="position: relative; display: flex; height: 100%; padding: 18px; box-sizing: border-box; gap: 18px">
+
+<nav aria-label="Menú" style="width: 262px; flex-shrink: 0; background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 18px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 8px 30px rgba(14,26,43,0.05)">
+<a href="#" style="display: flex; align-items: center; gap: 12px; padding: 6px 10px 16px; text-decoration: none; color: #0E1A2B"><span style="width: 40px; height: 40px; border-radius: 13px; background: #2F5BFF; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; flex-shrink: 0">T</span><span style="display: flex; flex-direction: column"><span style="font-size: 15px; font-weight: 600">Taberna de Prueba Norte</span><span style="font-size: 13px; color: #5B6678">Cambiar de empresa</span></span></a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Inicio</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Por hacer</a>
+<div style="height: 1px; background: #E6EAF0; margin: 8px 10px"></div>
+<a href="Main.dc.html" aria-current="page" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; background: #EAF0FF; color: #1F45D6; font-weight: 600">Compras</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Ventas</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Bancos</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Clientes y proveedores</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Pagos y cobros</a>
+<div style="height: 1px; background: #E6EAF0; margin: 8px 10px"></div>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Impuestos</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Libros</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Ajustes</a>
+</nav>
+
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 10px 8px 0 4px">
+
+<header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 2px"><a href="Main.dc.html" style="font-size: 14px; color: #1F45D6; text-decoration: none; font-weight: 600">‹ Compras</a><h1 style="margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -1.1px">Distribuciones Aurora · septiembre de 2026</h1><span style="font-size: 15px; color: #5B6678">Liquidación del mes · Local Centro · referencia 02927</span></div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 520px">
+<span style="height: 32px; padding: 0 12px; border-radius: 999px; background: #DDF7EC; color: #0B5A3F; font-size: 13px; font-weight: 600; display: flex; align-items: center">Tu factura</span>
+<span style="height: 32px; padding: 0 12px; border-radius: 999px; background: #DDF7EC; color: #0B5A3F; font-size: 13px; font-weight: 600; display: flex; align-items: center">Su factura</span>
+<span style="height: 32px; padding: 0 12px; border-radius: 999px; background: #DDF7EC; color: #0B5A3F; font-size: 13px; font-weight: 600; display: flex; align-items: center">La cuenta</span>
+<span style="height: 32px; padding: 0 12px; border-radius: 999px; background: #DDF7EC; color: #0B5A3F; font-size: 13px; font-weight: 600; display: flex; align-items: center">Ventas</span>
+<span style="height: 32px; padding: 0 12px; border-radius: 999px; background: #DDF7EC; color: #0B5A3F; font-size: 13px; font-weight: 600; display: flex; align-items: center">Inventario</span>
+<span style="font-size: 13px; color: #5B6678; width: 100%; text-align: right">Los cinco documentos, leídos</span>
+</div>
+</header>
+
+<section aria-label="La cuenta" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 22px 24px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 15px; color: #5B6678">Tú le facturas</span><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 34px; font-weight: 600; letter-spacing: -1px">9.533,65 €</span><span style="font-size: 14px; color: #5B6678">Tu servicio por sus ventas y el género que pusiste tú. La extiende él en tu nombre.</span></div>
+<div style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 22px 24px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 15px; color: #5B6678">Él te factura</span><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 34px; font-weight: 600; letter-spacing: -1px">3.987,81 €</span><span style="font-size: 14px; color: #5B6678">El género suyo que queda en tu local a fin de mes.</span></div>
+<div style="background: #0E1A2B; border-radius: 24px; padding: 22px 24px; display: flex; flex-direction: column; gap: 6px; color: #FFFFFF"><span style="font-size: 15px; color: #C7D2E3">Te paga</span><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 34px; font-weight: 600; letter-spacing: -1px; color: #2EE6A8">5.545,84 €</span><span style="font-size: 14px; color: #C7D2E3">La diferencia. Coincide con la cuenta que te manda.</span></div>
+</section>
+
+<section aria-labelledby="c0" style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 22px 24px; box-shadow: 0 8px 30px rgba(14,26,43,0.05); display: flex; flex-direction: column; gap: 4px">
+<h2 id="c0" style="margin: 0 0 8px; font-size: 20px; font-weight: 600; letter-spacing: -0.3px">¿Es verdad lo que dice? Lo he comparado con lo que sabe Folvy</h2>
+
+<div style="display: flex; gap: 16px; align-items: center; padding: 16px 0; border-top: 1px solid #E6EAF0">
+<span style="width: 36px; height: 36px; border-radius: 999px; background: #DDF7EC; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#0B5A3F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10l4 4 8-8"/></svg></span>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 17px; font-weight: 600">Lo que dice que te mandó coincide con lo que recibiste.</span><span style="font-size: 14px; color: #5B6678">Él dice 11.393,44 €. En el local se recibieron 26 albaranes por 11.394,56 €. Diferencia: 1,12 €.</span></div>
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600; color: #0E1A2B; flex-shrink: 0">Ver los 26 albaranes</button>
+</div>
+
+<div style="display: flex; gap: 16px; align-items: flex-start; padding: 16px 0; border-top: 1px solid #E6EAF0">
+<span style="width: 36px; height: 36px; border-radius: 999px; background: #FFE9C7; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px; font-weight: 700; color: #6B3D00" aria-hidden="true">≈</span>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 17px; font-weight: 600">Sus ventas y las que tiene Folvy se parecen, pero no son iguales.</span><span style="font-size: 14px; color: #5B6678">De estas ventas sale tu servicio. Folvy cuenta 132,27 € más que él, sin IVA. Para saber quién tiene razón pedido a pedido hace falta el detalle de cada plataforma.</span></div>
+<div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 10px; font-size: 14px; max-width: 720px">
+<span style="color: #5B6678">Plataforma</span><span style="color: #5B6678; text-align: right">Él dice</span><span style="color: #5B6678; text-align: right">Folvy tiene</span><span style="color: #5B6678; text-align: right">Diferencia</span>
+<span style="font-weight: 600">Glovo</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">19.497,01 €</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">19.402,62 €</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">−94,39 €</span>
+<span style="font-weight: 600">Uber Eats</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">8.282,10 €</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">8.462,48 €</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">+180,38 €</span>
+<span style="font-weight: 600">Just Eat</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">679,54 €</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">725,82 €</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace">+46,28 €</span>
+</div>
+</div>
+</div>
+
+<div style="display: flex; gap: 16px; align-items: center; padding: 16px 0 4px; border-top: 1px solid #E6EAF0">
+<span style="width: 36px; height: 36px; border-radius: 999px; background: #EAF0FF; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px; font-weight: 700; color: #1F45D6" aria-hidden="true">?</span>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 17px; font-weight: 600">El género que dice que gastaste todavía no lo puedo comprobar producto a producto.</span><span style="font-size: 14px; color: #5B6678">Reconozco 27 de sus 122 productos. Los otros 95 los llama de otra manera. Dime una vez cuál es cuál y lo recuerdo para todos los meses.</span></div>
+<button type="button" style="height: 44px; padding: 0 16px; border: 0; border-radius: 12px; background: #1F45D6; font: inherit; font-size: 14px; font-weight: 600; color: #FFFFFF; flex-shrink: 0">Decirle cuál es cuál</button>
+</div>
+</section>
+
+<section aria-label="Detalle de las dos facturas" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><h2 style="margin: 0; font-size: 17px; font-weight: 600">Lo que le facturas</h2><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 12px; color: #5B6678">AF-02927</span></div>
+<div style="display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; font-size: 15px">
+<span>Tu servicio por sus ventas (25 %)</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right">6.746,87 €</span>
+<span>Tu servicio cuando repartes tú (35 %)</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right">153,71 €</span>
+<span>El envío cuando repartes tú</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right">27,63 €</span>
+<span>Género que pusiste tú</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right">1.738,74 €</span>
+<span style="color: #5B6678">IVA al 10 %</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right; color: #5B6678">866,70 €</span>
+<span style="font-weight: 600; padding-top: 8px; border-top: 1px solid #E6EAF0">Total</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right; font-weight: 600; padding-top: 8px; border-top: 1px solid #E6EAF0">9.533,65 €</span>
+</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><h2 style="margin: 0; font-size: 17px; font-weight: 600">Lo que te factura</h2><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 12px; color: #5B6678">FV-02927</span></div>
+<div style="display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; font-size: 15px">
+<span>Género que queda en el local, al 4 %</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right">777,69 €</span>
+<span>Género que queda en el local, al 10 %</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right">2.003,91 €</span>
+<span>Género que queda en el local, al 21 %</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right">805,55 €</span>
+<span style="color: #5B6678">IVA</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right; color: #5B6678">400,66 €</span>
+<span style="font-weight: 600; padding-top: 8px; border-top: 1px solid #E6EAF0">Total</span><span style="font-family: 'Geist Mono', Menlo, monospace; text-align: right; font-weight: 600; padding-top: 8px; border-top: 1px solid #E6EAF0">3.987,81 €</span>
+</div>
+<span style="font-size: 14px; color: #0B6B4A; font-weight: 600">Cuadra con su inventario: los productos que sobran suman 3.587,15 €.</span>
+</div>
+</section>
+
+<section aria-labelledby="a0" style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 20px 24px; display: flex; gap: 24px; align-items: center">
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px">
+<h2 id="a0" style="margin: 0; font-size: 17px; font-weight: 600">Lo que voy a apuntar</h2>
+<span style="font-size: 15px; line-height: 1.5; color: #334155">Su factura, como compra de género. Tu factura, como venta, en tu libro de facturas emitidas con el número que trae. Una se descuenta de la otra y quedan <strong style="font-weight: 600; color: #0E1A2B">5.545,84 € por cobrar</strong>, que se cerrarán cuando lleguen al banco. Los 26 albaranes no se apuntan aparte.</span>
+</div>
+<button type="button" style="height: 48px; padding: 0 18px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 15px; font-weight: 600; color: #0E1A2B; flex-shrink: 0">Ver los asientos</button>
+<button type="button" style="height: 48px; padding: 0 22px; border: 0; border-radius: 12px; background: #1F45D6; font: inherit; font-size: 15px; font-weight: 600; color: #FFFFFF; flex-shrink: 0">Contabilizar</button>
+</section>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1330}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

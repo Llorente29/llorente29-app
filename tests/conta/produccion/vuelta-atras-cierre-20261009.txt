@@ -1,0 +1,18 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas.
+#
+# El día se cierra a las 6:00: los siete .down.sql en orden inverso al de
+# aplicar.txt. Ojo:
+#   · la 0100 PARA si ya se ha cerrado algún pedido como no confirmado (se
+#     perdería por qué se cerró): primero se decide qué hacer con ellos;
+#   · la 0110 devuelve el disparador y el motor de antes (md5 medidos): un no
+#     confirmado que se reprocese después perdería su consumo;
+#   · la 0130 no devuelve el asiento retirado (la copia queda en
+#     _retirado_cierre_del_dia): se propondrá entero cuando su día cierre.
+supabase/vuelta-atras/20261016T0160_cierre_del_dia_lectura.down.sql
+supabase/vuelta-atras/20261016T0150_cierre_del_dia_liquidacion.down.sql
+supabase/vuelta-atras/20261016T0140_cierre_del_dia_cron.down.sql
+supabase/vuelta-atras/20261016T0130_cierre_del_dia_retirar.down.sql
+supabase/vuelta-atras/20261016T0120_cierre_del_dia_proponer.down.sql
+supabase/vuelta-atras/20261016T0110_cierre_del_dia_consumo.down.sql
+supabase/vuelta-atras/20261016T0100_cierre_del_dia.down.sql

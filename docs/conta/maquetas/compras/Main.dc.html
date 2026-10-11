@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Compras · lo que hay que mirar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5BFF}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #2F5BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1250px; box-sizing: border-box; overflow: hidden; position: relative; background: #F5F7FA; color: #0E1A2B; font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif">
+<div style="position: relative; display: flex; height: 100%; padding: 18px; box-sizing: border-box; gap: 18px">
+
+<nav aria-label="Menú" style="width: 262px; flex-shrink: 0; background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 18px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 8px 30px rgba(14,26,43,0.05)">
+<a href="#" style="display: flex; align-items: center; gap: 12px; padding: 6px 10px 16px; text-decoration: none; color: #0E1A2B"><span style="width: 40px; height: 40px; border-radius: 13px; background: #2F5BFF; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; flex-shrink: 0">T</span><span style="display: flex; flex-direction: column"><span style="font-size: 15px; font-weight: 600">Taberna de Prueba Norte</span><span style="font-size: 13px; color: #5B6678">Cambiar de empresa</span></span></a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Inicio</a>
+<a href="#" style="display: flex; align-items: center; justify-content: space-between; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B"><span>Por hacer</span><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #2EE6A8; color: #0E1A2B">3</span></a>
+<div style="height: 1px; background: #E6EAF0; margin: 8px 10px"></div>
+<a href="#" aria-current="page" style="display: flex; align-items: center; justify-content: space-between; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; background: #EAF0FF; color: #1F45D6; font-weight: 600"><span>Compras</span><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #1F45D6; color: #FFFFFF">3</span></a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Ventas</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Bancos</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Clientes y proveedores</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Pagos y cobros</a>
+<div style="height: 1px; background: #E6EAF0; margin: 8px 10px"></div>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Impuestos</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Libros</a>
+<a href="#" style="display: flex; align-items: center; padding: 0 12px; height: 44px; border-radius: 12px; text-decoration: none; font-size: 15px; color: #0E1A2B">Ajustes</a>
+</nav>
+
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: 10px 8px 0 4px">
+
+<header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; color: #5B6678">Contabilidad</span><h1 style="margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -1.1px">Compras</h1></div>
+<div style="display: flex; gap: 10px; align-items: center">
+<button type="button" style="height: 44px; padding: 0 14px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600; color: #0E1A2B">Octubre de 2026</button>
+<button type="button" style="height: 44px; padding: 0 18px; border: 0; border-radius: 12px; background: #1F45D6; font: inherit; font-size: 15px; font-weight: 600; color: #FFFFFF">Subir una factura</button>
+</div>
+</header>
+
+<p style="margin: 0; font-size: 17px; line-height: 1.5; color: #334155; max-width: 860px">Lo que llega con el género ya entra solo desde el local. Aquí sólo ves lo que necesita que alguien decida.</p>
+
+<section aria-labelledby="t1" style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 22px 24px; box-shadow: 0 8px 30px rgba(14,26,43,0.05); display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; gap: 12px"><h2 id="t1" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.3px">Qué tienes que mirar</h2><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #FFE9C7; color: #6B3D00">3</span></div>
+
+<div style="display: flex; gap: 16px; align-items: center; padding: 16px 18px; border: 1px solid #E6EAF0; border-radius: 16px; background: #FBFCFE">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 16px; font-weight: 600; line-height: 1.4">Hostelería Amaro ha entregado con albarán, y en su ficha pone que factura con cada entrega.</span><span style="font-size: 14px; color: #5B6678">Recepción del lunes 5 de octubre · Local Centro · 191,00 €</span></div>
+<button type="button" style="height: 44px; padding: 0 16px; border: 0; border-radius: 12px; background: #1F45D6; font: inherit; font-size: 14px; font-weight: 600; color: #FFFFFF; flex-shrink: 0">Es un albarán: esperar su factura</button>
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600; color: #0E1A2B; flex-shrink: 0">Ver el papel</button>
+</div>
+
+<div style="display: flex; gap: 16px; align-items: center; padding: 16px 18px; border: 1px solid #E6EAF0; border-radius: 16px; background: #FBFCFE">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 16px; font-weight: 600; line-height: 1.4">A Carnes del Valle le falta el NIF. Sin él no puedo contabilizar sus facturas.</span><span style="font-size: 14px; color: #5B6678">En su último papel pone B-12345678. Compruébalo antes de aceptarlo.</span></div>
+<button type="button" style="height: 44px; padding: 0 16px; border: 0; border-radius: 12px; background: #1F45D6; font: inherit; font-size: 14px; font-weight: 600; color: #FFFFFF; flex-shrink: 0">Usar ese NIF</button>
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600; color: #0E1A2B; flex-shrink: 0">Abrir su ficha</button>
+</div>
+
+<div style="display: flex; gap: 16px; align-items: center; padding: 16px 18px; border: 1px solid #E6EAF0; border-radius: 16px; background: #FBFCFE">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 16px; font-weight: 600; line-height: 1.4">Una factura de Bodegas Ribera viene a nombre de «Contado», no de tu empresa.</span><span style="font-size: 14px; color: #5B6678">Así no puedes descontar su IVA. Recepción del 25 de septiembre · Local Centro · 102,54 €</span></div>
+<button type="button" style="height: 44px; padding: 0 16px; border: 0; border-radius: 12px; background: #1F45D6; font: inherit; font-size: 14px; font-weight: 600; color: #FFFFFF; flex-shrink: 0">Pedir que la rehagan</button>
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600; color: #0E1A2B; flex-shrink: 0">Apuntarla sin descontar el IVA</button>
+</div>
+</section>
+
+<section aria-labelledby="t2" style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 22px 24px; box-shadow: 0 8px 30px rgba(14,26,43,0.05); display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><h2 id="t2" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.3px">Qué está esperando factura</h2><span style="font-size: 14px; color: #5B6678">Género recibido con albarán. Se apunta cuando llega la factura.</span></div>
+
+<div style="display: grid; grid-template-columns: 2.2fr 1.3fr 1fr 1fr 1.9fr; gap: 12px; padding: 0 6px; font-size: 13px; color: #5B6678"><span>Proveedor</span><span>Local</span><span>Albaranes</span><span style="text-align: right">Importe</span><span style="text-align: right">Cuándo llega</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 1.3fr 1fr 1fr 1.9fr; gap: 12px; align-items: center; padding: 14px 6px; border-top: 1px solid #E6EAF0; font-size: 15px"><span style="font-weight: 600">Carnes del Valle</span><span>Local Centro</span><span>3 desde el 4 de sept.</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace; font-weight: 600">911,38 €</span><span style="text-align: right; color: #5B6678">Una al mes por local</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 1.3fr 1fr 1fr 1.9fr; gap: 12px; align-items: center; padding: 14px 6px; border-top: 1px solid #E6EAF0; font-size: 15px"><span style="font-weight: 600">Carnes del Valle</span><span>Local Sur</span><span>1 del 18 de sept.</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace; font-weight: 600">189,50 €</span><span style="text-align: right; color: #5B6678">Una al mes por local</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 1.3fr 1fr 1fr 1.9fr; gap: 12px; align-items: center; padding: 14px 6px; border-top: 1px solid #E6EAF0; font-size: 15px"><span style="font-weight: 600">Olivares Gourmet</span><span>Local Centro</span><span>2 desde el 2 de sept.</span><span style="text-align: right; font-family: 'Geist Mono', Menlo, monospace; font-weight: 600">379,48 €</span><span style="text-align: right; color: #8A4B00; font-weight: 600">Lleva 38 días sin facturar</span></div>
+
+<div style="margin-top: 4px; border: 2px dashed #B8C4DA; border-radius: 16px; padding: 20px; display: flex; align-items: center; justify-content: center; gap: 14px; background: #F7F9FD">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1F45D6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+<span style="font-size: 16px; color: #0E1A2B"><strong style="font-weight: 600">Arrastra aquí la factura cuando llegue.</strong> Yo busco a qué albaranes corresponde y te digo si cuadra.</span>
+</div>
+</section>
+
+<section aria-labelledby="t3" style="background: #FFFFFF; border: 1px solid #E6EAF0; border-radius: 24px; padding: 22px 24px; box-shadow: 0 8px 30px rgba(14,26,43,0.05); display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><h2 id="t3" style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.3px">Liquidaciones del mes</h2><span style="font-size: 14px; color: #5B6678">Proveedores que no facturan cada entrega: liquidan una vez al mes, local por local.</span></div>
+
+<div style="display: flex; gap: 16px; align-items: center; padding: 16px 6px; border-top: 1px solid #E6EAF0">
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16px; font-weight: 600">Distribuciones Aurora · Local Centro · septiembre</span><span style="font-size: 14px; color: #0B6B4A; font-weight: 600">Ha llegado y cuadra con lo que recibiste.</span></div>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px"><span style="font-size: 13px; color: #5B6678">Te paga</span><span style="font-family: 'Geist Mono', Menlo, monospace; font-size: 20px; font-weight: 600">5.545,84 €</span></div>
+<a href="Liquidacion.dc.html" style="height: 44px; padding: 0 18px; border-radius: 12px; background: #1F45D6; font-size: 14px; font-weight: 600; color: #FFFFFF; text-decoration: none; display: flex; align-items: center; flex-shrink: 0">Abrir</a>
+</div>
+
+<div style="display: flex; gap: 16px; align-items: center; padding: 16px 6px; border-top: 1px solid #E6EAF0">
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16px; font-weight: 600">Distribuciones Aurora · Local Sur · septiembre</span><span style="font-size: 14px; color: #8A4B00; font-weight: 600">Todavía no ha llegado. Recibiste 5 albaranes suyos por 2.977,74 €.</span></div>
+<button type="button" style="height: 44px; padding: 0 18px; border: 1px solid #C9D0DC; border-radius: 12px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600; color: #0E1A2B; flex-shrink: 0">Subir sus documentos</button>
+</div>
+
+<div style="display: flex; gap: 16px; align-items: center; padding: 16px 6px; border-top: 1px solid #E6EAF0">
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16px; font-weight: 600">Distribuciones Aurora · octubre</span><span style="font-size: 14px; color: #5B6678">Aún no toca: llega a primeros de noviembre. Llevas recibidos 15 albaranes por 9.898,17 €.</span></div>
+</div>
+</section>
+
+<a href="#" style="font-size: 15px; color: #334155; text-decoration: none; padding: 0 6px">17 facturas de octubre ya están contabilizadas. <span style="color: #1F45D6; font-weight: 600">Verlas</span></a>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1250}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

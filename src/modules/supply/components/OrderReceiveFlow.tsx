@@ -163,6 +163,10 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
     })
   }, [orders, search, supplierNameById])
 
+  // «Recibir otro» (N21): directo al escáner, sin pasar por el aterrizaje.
+  function recibirOtro() {
+    setPicked(null); setOcr(null); setReloadTick(t => t + 1); setStep('scan')
+  }
   function backToLanding() {
     setStep('landing'); setPicked(null); setOcr(null); setReloadTick(t => t + 1)
   }
@@ -184,6 +188,7 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
         confirmPolicy={confirmPolicy}
         onBack={backFromFlow}
         onSaved={(msg) => { backToLanding(); onSaved(msg) }}
+        onRecibirOtro={recibirOtro}
       />
     )
   }
@@ -215,6 +220,7 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
         ocrPrefill={ocr}
         onBack={backFromFlow}
         onDone={(msg) => { backToLanding(); onSaved(msg) }}
+        onRecibirOtro={recibirOtro}
       />
     )
   }
@@ -231,6 +237,7 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
         ocrPrefill={ocr}
         onBack={backFromFlow}
         onSaved={(msg) => { backToLanding(); onSaved(msg) }}
+        onRecibirOtro={recibirOtro}
       />
     )
   }
