@@ -6,7 +6,9 @@
 --   · El papel a nombre de «Contado» de la semilla se decide otra vez: con la
 --     0190 ya no pregunta de quién es; avisa de que así no se descuenta el IVA.
 --   · Tres albaranes del socio a nombre de uno de sus locales («Aurora Cocina
---     Centro»): una sola pregunta para los tres.
+--     Centro»): una sola pregunta para los tres. Sin IVA (cuota 0 y total igual
+--     a la base), como los albaranes de un socio: es el caso de la maqueta N20
+--     («Sus … últimas entregas vinieron con albarán, sin IVA»).
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 
 create function pg_temp.recibe(p_id uuid, p_dia date, p_base numeric) returns void language plpgsql as $$
@@ -16,7 +18,7 @@ begin
   insert into goods_receipt_ai_session (account_id, kind, parsed_result, status)
   values ('c01a0000-0000-4000-8000-00000000000a', 'photo',
           jsonb_build_object('document', jsonb_build_object('doc_type', 'albaran', 'doc_number', 'AU-' || right(p_id::text, 2), 'doc_date', p_dia,
-                               'bill_to_name', 'Aurora Cocina Centro', 'tax_base_total', p_base),
+                               'bill_to_name', 'Aurora Cocina Centro', 'tax_base_total', p_base, 'tax_total', 0, 'grand_total', p_base),
                              'lines', jsonb_build_array(jsonb_build_object('raw_text', 'Género', 'line_amount', p_base, 'vat_pct', 10))), 'pending_review')
   returning id into v_s;
   insert into goods_receipt (id, account_id, location_id, supplier_id, status, receipt_date, ai_session_id, created_by_name)
@@ -41,6 +43,12 @@ begin
   perform pg_temp.recibe('c0c00000-0000-4000-8000-000000000401', date '2026-10-02', 84.20);
   perform pg_temp.recibe('c0c00000-0000-4000-8000-000000000402', date '2026-10-06', 132.75);
   perform pg_temp.recibe('c0c00000-0000-4000-8000-000000000403', date '2026-10-09', 61.10);
+  -- Los de una pasada anterior, sin cuota ni total: se les pone (11/10).
+  update goods_receipt_ai_session a
+     set parsed_result = jsonb_set(jsonb_set(a.parsed_result, '{document,tax_total}', '0'::jsonb), '{document,grand_total}', a.parsed_result->'document'->'tax_base_total')
+    from goods_receipt g
+   where g.ai_session_id = a.id and g.id in ('c0c00000-0000-4000-8000-000000000401', 'c0c00000-0000-4000-8000-000000000402', 'c0c00000-0000-4000-8000-000000000403')
+     and a.parsed_result->'document'->'tax_total' is null;
   raise notice 'Semilla repaso: «Contado» → %; a nombre del local del socio: % pregunta(s).',
     (select path || '/' || coalesce(question, '-') from goods_receipt_path where goods_receipt_id = 'c0c00000-0000-4000-8000-000000000102'),
     (select count(*) from goods_receipt_path where goods_receipt_id::text like 'c0c00000-%-0000000004__' and question = 'a_nombre_de');

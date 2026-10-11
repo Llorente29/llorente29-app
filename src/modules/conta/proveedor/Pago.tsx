@@ -3,15 +3,16 @@
 // Pestaña «Pago» (en el móvil, «Cómo le pagas»). Forma y plazo en PÍLDORAS de
 // las tablas del C00 (nunca texto libre; los más usados, primero), días fijos,
 // IBAN comprobado al momento (ISO 13616, módulo 97), BIC, banco, mandato SEPA
-// (solo con domiciliación), moneda y pronto pago. «Cómo te factura» (compras,
-// N20: con cada entrega, albarán y factura después o liquidación mensual, que
-// manda también cada cuánto factura) y si trae el IVA dentro de cada línea.
+// (solo con domiciliación), moneda y pronto pago. «Cómo te factura» en una
+// línea con el enlace a su pantalla (compras, N20, que vive en «Clientes y
+// proveedores › <proveedor> › Cómo te factura») y si trae el IVA dentro de
+// cada línea.
 //
 // Un plazo de más de 60 días se guarda, pero avisa (Ley 3/2004, art. 4.3).
 
 import { useState } from 'react'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
-import ComoTeFactura from '@/modules/conta/proveedor/ComoTeFactura'
+import { ResumenComoTeFactura } from '@/modules/conta/proveedor/ComoTeFactura'
 import { Campo, Pildoras, SeGuarda, type OpcionPildora } from '@/modules/conta/proveedor/piezas'
 import { useGuardarAlSalir } from '@/modules/conta/proveedor/useGuardarAlSalir'
 import { formatearIban, normalizarIban, validarIban } from '@/modules/conta/lib/iban'
@@ -125,7 +126,7 @@ export default function Pago() {
         </Campo>
       </div>
 
-      <ComoTeFactura />
+      <ResumenComoTeFactura proveedor={f.id} />
       <fieldset className="cx-fieldset">
         <legend className="cx-tarjeta-titulo" style={{ fontSize: 16, marginBottom: 6 }}>Sus importes</legend>
         <Pildoras campo="ivaIncluidoEnLinea" etiqueta="¿El importe de cada línea lleva el IVA dentro?"

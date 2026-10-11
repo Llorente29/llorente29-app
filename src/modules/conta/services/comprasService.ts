@@ -5,8 +5,9 @@
 // deciden y comprueban permisos; aquí solo se llaman y se traducen.
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
+import { ivaDelPapel } from '@/modules/conta/lib/compras'
 import type {
-  EsperandoFactura, FilaLiquidacion, FormaFacturar, Mirar,
+  EsperandoFactura, FilaLiquidacion, FormaFacturar, Mirar, PapelLeido,
 } from '@/modules/conta/lib/compras'
 
 export async function cargarMirar(accountId: string): Promise<Mirar> {
@@ -62,8 +63,28 @@ export function cambiarFormaFacturar(proveedor: string, modo: FormaFacturar, por
   return rpc('compras_forma_facturar', { p_proveedor: proveedor, p_modo: modo, p_por_local: porLocal, p_frecuencia: frecuencia })
 }
 
-export function ultimosPapeles(proveedor: string, cuantos = 5): Promise<string[]> {
-  return rpc<string[] | null>('compras_ultimos_papeles', { p_proveedor: proveedor, p_cuantos: cuantos }).then((v) => v ?? [])
+/**
+ * Sus últimos papeles leídos (N20): de qué tipo eran y si traían IVA, de lo
+ * leído en cada uno (`ivaDelPapel`). La misma selección que
+ * compras_ultimos_papeles (0170): sus recepciones no anuladas con papel leído
+ * y tipo, de la más reciente hacia atrás. Se lee aquí, y no por esa función,
+ * para sacar tipo e IVA del mismo documento.
+ */
+export async function ultimosPapeles(proveedor: string, cuantos = 5): Promise<PapelLeido[]> {
+  const { data, error } = await tabla('goods_receipt').select('ai_session_id, receipt_date, created_at')
+    .eq('supplier_id', proveedor).neq('status', 'anulado').not('ai_session_id', 'is', null)
+    .order('receipt_date', { ascending: false }).order('created_at', { ascending: false }).limit(cuantos * 3)
+  if (error) throw new Error(`No se pudieron leer sus últimos papeles: ${error.message}`)
+  const ids = ((data ?? []) as { ai_session_id: string }[]).map((r) => r.ai_session_id)
+  if (!ids.length) return []
+  const { data: ses, error: e2 } = await tabla('goods_receipt_ai_session').select('id, parsed_result').in('id', ids)
+  if (e2) throw new Error(`No se pudieron leer sus últimos papeles: ${e2.message}`)
+  const porId = new Map(((ses ?? []) as { id: string; parsed_result: { document?: Record<string, unknown> } | null }[])
+    .map((x) => [x.id, x.parsed_result?.document ?? null]))
+  return ids.map((id) => porId.get(id) ?? null)
+    .filter((d): d is Record<string, unknown> => !!d && typeof d.doc_type === 'string')
+    .slice(0, cuantos)
+    .map((d) => ({ tipo: d.doc_type as string, iva: ivaDelPapel(d) }))
 }
 
 export interface ResultadoFactura { factura: string | null; creada: boolean; repetida?: boolean; sin_importes?: boolean; motivo: string }

@@ -29,6 +29,8 @@ import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
 import ComprasPage from '@/modules/conta/compras/ComprasPage'
 import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
+import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
+import VentasPage from '@/modules/conta/ventas/VentasPage'
 
 const enMarco = (pagina: ReactNode, ejemplo: string) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo}>{pagina}</MarcoConta></EmpresasProveedor>
@@ -58,6 +60,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.mayor, element: enMarco(<MayorPage />, '¿Cuánto debo a mis proveedores?') },
     { path: CONTA.rutas.terceros, element: enMarco(<TercerosPage />, '¿Quién me debe dinero?') },
     // El de la ficha lo pone ella según el papel (ejemploDeFicha); éste es el de mientras carga.
+    { path: CONTA.rutas.comoTeFactura, element: enMarco(<ComoTeFacturaPage />, '¿Cuándo me manda la factura?') },
     { path: CONTA.rutas.tercero, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
     { path: CONTA.rutas.terceroApartado, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
     // C04 · Libros › Libro diario (N11), un asiento (N12) y el asiento a mano.
@@ -69,6 +72,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
     // Compras (encargo de compras, N18 y N19).
     { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
+    { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?') },

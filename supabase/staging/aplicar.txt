@@ -134,6 +134,9 @@ supabase/migrations/20261017T0180_compras_octubre_foodint.sql
 #   sobre bill_to_how no admitía «generico». La 0190 amplía ese CHECK (y su
 #   vuelta atrás lo devuelve). Se reaplica: es idempotente. El local del
 #   socio pasa a llamarse «Aurora Cocina Centro» en la semilla.
+#   Respuesta 1 del repaso (11/10): los tres albaranes del socio de la semilla
+#   del repaso llevan cuota 0 y total igual a la base («sin IVA», N20). La
+#   semilla se lo pone a los que ya estaban. La base no cambia.
 supabase/migrations/20261017T0190_compras_repaso.sql
 supabase/staging/sql/20261017_compras_repaso_prueba.sql
 supabase/seeds/conta/seed_compras_repaso_staging.sql

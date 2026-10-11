@@ -12,7 +12,11 @@
 //
 // Repaso del 10/10: una fila por decisión, «Ver el papel», el contador del
 // menú, los cinco documentos y los tres veredictos de la liquidación, y
-// «Abrir su ficha» cayendo en «Cómo te factura».
+// «Abrir su ficha» cayendo en «Cómo te factura». Respuesta 1 (11/10): como
+// las maquetas — «Ventas» en el menú, los cinco documentos en la cabecera de
+// la liquidación, «Cómo te factura» en su pantalla y con si traían IVA. La
+// pantalla «Recibido» (N21) se captura en capturaRecibido.test.tsx: este e2e
+// no escribe, y «Recibido» solo sale tras recibir de verdad.
 
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
@@ -21,6 +25,7 @@ import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 const DIR = 'docs/conta/capturas/compras'
 const VERDURAS = 'c0c00000-0000-4000-8000-000000000001'
 const BODEGA = 'c0c00000-0000-4000-8000-000000000002'
+const AURORA = 'c0c00000-0000-4000-8000-000000000004'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // La captura de página entera con `fullPage` pinta las piezas fijas (la
@@ -58,7 +63,9 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await expect(ficha.getByRole('button', { name: 'Ver el papel' })).toBeVisible()
   // «Contado» no pregunta de quién es: avisa del IVA, con sus dos salidas.
   const contado = page.locator('.cxc-cosa', { hasText: 'a nombre de «Contado», no de tu empresa' })
-  await expect(contado.getByText('Una factura de Bodega Prueba Ribera, S.L. viene a nombre de «Contado», no de tu empresa. Así no puedes descontar su IVA.')).toBeVisible()
+  // Como la maqueta N18: la frase, y debajo «Así no puedes descontar su IVA. Recepción del …».
+  await expect(contado.getByText('Una factura de Bodega Prueba Ribera, S.L. viene a nombre de «Contado», no de tu empresa.', { exact: true })).toBeVisible()
+  await expect(contado.getByText(/^Así no puedes descontar su IVA\. Recepción del \w+ 25 de septiembre · Norte Centro · 102,54\s€$/)).toBeVisible()
   await expect(contado.getByRole('button', { name: 'Pedir que la rehagan' })).toBeVisible()
   await expect(contado.getByRole('button', { name: 'Apuntarla sin descontar el IVA' })).toBeVisible()
   // Tres papeles a nombre del mismo local: UNA pregunta, con una propuesta y su porqué.
@@ -87,6 +94,10 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
     const enlace = page.getByRole('link', { name: 'Compras', exact: true })
     await expect(enlace).toBeVisible()
     await expect(enlace).toHaveAccessibleDescription(`${filas} por mirar`)
+    // «Ventas» en el menú, detrás de Compras, como la maqueta (respuesta 1 del repaso).
+    const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+    const nombres = await menu.locator('.cx-menu-item-texto').allTextContents()
+    expect(nombres.indexOf('Ventas')).toBe(nombres.indexOf('Compras') + 1)
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()
@@ -108,8 +119,10 @@ test('La liquidación de septiembre y su contraste (N19)', async ({ page }) => {
   await page.goto('/conta/compras')
   await page.getByText('Ha llegado: falta mirarla y confirmarla.').locator('xpath=ancestor::div[contains(@class,"cxc-liq")]').getByRole('link', { name: 'Abrir' }).click()
   await expect(page.getByRole('heading', { level: 1, name: /Distribuciones Prueba Aurora, S\.L\. · septiembre de 2026/ })).toBeVisible()
-  // Los cinco documentos, leídos, arriba.
-  await expect(page.getByText('Los cinco documentos, leídos')).toBeVisible()
+  // Los cinco documentos, leídos, en la cabecera como la maqueta: una píldora por documento.
+  const docs = page.getByRole('region', { name: 'Los cinco documentos' })
+  await expect(docs.locator('.cxc-doc')).toHaveText(['Tu factura', 'Su factura', 'La cuenta', 'Ventas', 'Inventario'])
+  await expect(docs.getByText('Los cinco documentos, leídos')).toBeVisible()
   // Tres veredictos con su umbral: compras coincide; las ventas de Folvy no están en staging.
   await expect(page.getByText('Lo que dice que te mandó coincide con lo que recibiste.')).toBeVisible()
   await expect(page.getByText('Sus ventas no las puedo comprobar.')).toBeVisible()
@@ -129,38 +142,52 @@ test('La liquidación de septiembre y su contraste (N19)', async ({ page }) => {
   await capturar(page, 'liquidacion')
 })
 
-test('Cómo te factura, en la ficha (N20)', async ({ page }) => {
+test('Cómo te factura, en su pantalla (N20): lo que dicen sus papeles, con el IVA', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
-  await page.goto(`/kitchen/proveedores/${VERDURAS}/pago`)
-  const grupo = page.getByRole('group', { name: 'Cómo te factura', exact: true })
-  await expect(grupo).toBeVisible()
+  await page.goto(`/conta/clientes-y-proveedores/proveedor/${VERDURAS}/como-te-factura`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Cómo te factura' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('link', { name: 'Verduras del Huerto Prueba, S.L.' })).toBeVisible()
+  const grupo = page.getByRole('radiogroup', { name: 'Cómo te factura' })
   await expect(grupo.getByRole('radio')).toHaveCount(3)
-  await expect(grupo.getByText('Su última entrega vino con albarán.')).toBeVisible()
-  await capturar(page, 'como-te-factura', 'ficha')
+  // Su ficha no dice cómo factura y su papel sí: lo avisa, con si traía IVA.
+  await expect(page.locator('.cxc-dice-choca strong')).toHaveText('Su última entrega vino con albarán, con IVA.')
+  await capturar(page, 'como-te-factura')
 })
 
-test('Cómo te factura, con la forma ya elegida en su ficha (N20)', async ({ page }) => {
+test('Cómo te factura, con la forma ya elegida y albaranes sin IVA (N20)', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  await page.goto(`/conta/clientes-y-proveedores/proveedor/${AURORA}/como-te-factura`)
+  const grupo = page.getByRole('radiogroup', { name: 'Cómo te factura' })
+  // Se ve cuál está elegida: la suya, marcada y con su etiqueta.
+  await expect(grupo.getByRole('radio', { name: /Liquidación mensual/ })).toBeChecked()
+  await expect(grupo.getByText('La de su ficha')).toBeVisible()
+  // Los tres albaranes del repaso, con cuota 0: «sin IVA», como la maqueta.
+  await expect(page.locator('#cxc-como-dice strong')).toHaveText('Sus 3 últimas entregas vinieron con albarán, sin IVA.')
+  await capturar(page, 'como-te-factura-elegida')
+})
+
+test('La ficha lleva a «Cómo te factura»; «Abrir su ficha» desde Compras cae ahí', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto(`/kitchen/proveedores/${BODEGA}/pago`)
-  const grupo = page.getByRole('group', { name: 'Cómo te factura', exact: true })
-  await expect(grupo).toBeVisible()
-  // Se ve cuál está elegida: la suya, marcada y con su etiqueta.
-  await expect(grupo.getByRole('radio', { name: /Con cada entrega/ })).toBeChecked()
-  await expect(grupo.getByText('La de su ficha')).toBeVisible()
-  await capturar(page, 'como-te-factura-elegida', 'ficha')
-})
-
-test('«Abrir su ficha» desde Compras cae en «Cómo te factura»', async ({ page }) => {
-  await entrarComo(page, CUENTA_A.email)
-  vigilar(page)
+  await expect(page.getByText('«Con cada entrega».')).toBeVisible()
+  await page.getByRole('link', { name: 'Cambiarlo' }).click()
+  await expect(page).toHaveURL(new RegExp(`/conta/clientes-y-proveedores/proveedor/${BODEGA}/como-te-factura$`))
   await page.goto('/conta/compras')
   const ficha = page.locator('.cxc-cosa', { hasText: /^A Verduras del Huerto Prueba, S\.L\. le faltan/ })
   await ficha.getByRole('link', { name: 'Abrir su ficha' }).click()
-  await expect(page).toHaveURL(new RegExp(`/kitchen/proveedores/${VERDURAS}/pago#campo-como-te-factura$`))
-  const grupo = page.getByRole('group', { name: 'Cómo te factura', exact: true })
-  await expect(grupo).toBeInViewport()
-  // La ficha no dice cómo factura y su papel sí: lo avisa.
-  await expect(grupo.locator('.cx-aviso')).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`/conta/clientes-y-proveedores/proveedor/${VERDURAS}/como-te-factura$`))
+  await expect(page.getByRole('heading', { level: 1, name: 'Cómo te factura' })).toBeVisible()
+})
+
+test('Ventas, en el menú: dice que aún no y dónde están hoy las ventas', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  await page.goto('/conta/ventas')
+  await expect(page.getByRole('heading', { level: 1, name: 'Ventas' })).toBeVisible()
+  await expect(page.getByText('Aún no.')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Ver los asientos de ventas' })).toHaveAttribute('href', /\/conta\/libros\/diario\?ver=ventas$/)
+  await capturar(page, 'ventas')
 })

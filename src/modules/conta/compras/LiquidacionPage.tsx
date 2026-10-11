@@ -17,7 +17,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { rutaCompras, rutaLibroDiario, rutaLiquidacion } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
-import { Cabecera, ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
+import { ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import {
@@ -90,8 +90,7 @@ function NuevaLiquidacion() {
   const titulo = `${nombres.proveedor ?? 'Liquidación'}${mes ? ` · ${mesLargo(mes)}` : ''}`
   return (
     <div className="cxc">
-      <Link className="cx-enlace cx-mayor-volver" to={rutaCompras()}>‹ Compras</Link>
-      <Cabecera antetitulo={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}`} titulo={titulo} />
+      <CabeceraLiquidacion titulo={titulo} sub={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}`} lectura={lectura} />
       <Tarjeta titulo="Sus documentos">
         <p style={{ marginTop: 0 }}>Suelta los cinco PDF que te manda: tu factura, la suya, la cuenta, las ventas y el inventario. Los leo aquí, en tu navegador.</p>
         <label className="cx-campo">
@@ -105,7 +104,6 @@ function NuevaLiquidacion() {
       {lectura && (
         <>
           <TresCifras lectura={lectura} saldo={lectura.transaccion?.saldo?.importe ?? null} />
-          <Documentos lectura={lectura} />
           <Facturas lectura={lectura} />
           {lectura.noReconocidos.length > 0 && <p className="cx-aviso">No sé qué son: {lectura.noReconocidos.join(', ')}. No los he usado.</p>}
           {lectura.avisos.map((a) => <p key={a} className="cx-ayuda" style={{ margin: 0 }}>{a}</p>)}
@@ -143,25 +141,40 @@ function TresCifras({ lectura, saldo }: { lectura: LiquidacionLeida; saldo: numb
         <span className="cx-ayuda">Tu servicio por sus ventas y el género que pusiste tú. La extiende él en tu nombre.</span></Tarjeta>
       <Tarjeta><span className="cx-etiqueta">Él te factura</span><div className="cxc-tres-cifra">{r?.total != null ? eurosExactos(r.total) : '—'}</div>
         <span className="cx-ayuda">El género suyo que queda en tu local a fin de mes.</span></Tarjeta>
-      <Tarjeta><span className="cx-etiqueta">{s == null ? 'La diferencia' : fraseSaldo(s)?.replace(/ [\d.,]+ €$/, '')}</span>
+      <div className="cxc-tres-saldo"><span className="cx-etiqueta">{s == null ? 'La diferencia' : fraseSaldo(s)?.replace(/ [\d.,]+ €$/, '')}</span>
         <div className="cxc-tres-cifra">{s == null ? '—' : eurosExactos(Math.abs(s))}</div>
-        <span className="cx-ayuda">La diferencia.{lectura.transaccion?.saldo ? ' Coincide con la cuenta que te manda.' : ''}</span></Tarjeta>
+        <span className="cx-ayuda">La diferencia.{lectura.transaccion?.saldo ? ' Coincide con la cuenta que te manda.' : ''}</span></div>
     </div>
   )
 }
 
-/** Los cinco documentos leídos: cuáles han llegado y, si falta uno, qué no se comprueba sin él. */
-function Documentos({ lectura }: { lectura: LiquidacionLeida }) {
-  const docs = documentosLeidos(lectura)
+/**
+ * La cabecera de la liquidación (N19): «‹ Compras», el título y debajo el mes,
+ * el local y la referencia; a la derecha, los cinco documentos leídos como en
+ * la maqueta (una píldora verde por documento y «Los cinco documentos,
+ * leídos» debajo). Si falta alguno, su píldora va en ámbar y debajo de la
+ * cabecera se dice qué no se puede comprobar sin él.
+ */
+function CabeceraLiquidacion({ titulo, sub, lectura }: { titulo: string; sub: string; lectura: LiquidacionLeida | null }) {
+  const docs = lectura ? documentosLeidos(lectura) : []
   const faltan = docs.filter((d) => !d.llegado)
   return (
-    <section className="cxc-docs" aria-label="Los cinco documentos">
-      <span className="cx-etiqueta">{faltan.length === 0 ? 'Los cinco documentos, leídos' : `Leídos ${docs.length - faltan.length} de 5`}</span>
-      <div className="cx-chips">
-        {docs.map((d) => <span key={d.nombre} className={d.llegado ? 'cx-chip cx-chip-ia' : 'cx-chip cx-chip-ambar'}>{d.llegado ? '✓' : 'Falta'} {d.nombre}</span>)}
-      </div>
+    <>
+      <header className="cx-cabecera cxc-liq-cabecera">
+        <div className="cx-cabecera-titulos">
+          <Link className="cx-enlace cxc-volver" to={rutaCompras()}>‹ Compras</Link>
+          <h1 className="cx-titulo">{titulo}</h1>
+          <span className="cx-antetitulo">{sub}</span>
+        </div>
+        {lectura && (
+          <section className="cxc-docs" aria-label="Los cinco documentos">
+            {docs.map((d) => <span key={d.nombre} className={d.llegado ? 'cxc-doc' : 'cxc-doc cxc-doc-falta'}>{d.llegado ? d.nombre : `Falta ${d.nombre.toLowerCase()}`}</span>)}
+            <span className="cxc-docs-pie">{faltan.length === 0 ? 'Los cinco documentos, leídos' : `Leídos ${docs.length - faltan.length} de 5`}</span>
+          </section>
+        )}
+      </header>
       {faltan.map((d) => <p key={d.nombre} className="cx-aviso" style={{ margin: 0 }}>Falta {d.nombre.toLowerCase()}: {d.sinEl}.</p>)}
-    </section>
+    </>
   )
 }
 
@@ -236,12 +249,10 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
   const bloqueos = lec.bloqueos ?? []
   return (
     <div className="cxc">
-      <Link className="cx-enlace cx-mayor-volver" to={rutaCompras()}>‹ Compras</Link>
-      <Cabecera antetitulo={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}${liq.settlement_ref ? ` · referencia ${liq.settlement_ref}` : ''}`}
-        titulo={`${nombres.proveedor ?? 'Liquidación'} · ${mesLargo(liq.period_from)}`} />
+      <CabeceraLiquidacion titulo={`${nombres.proveedor ?? 'Liquidación'} · ${mesLargo(liq.period_from)}`}
+        sub={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}${liq.settlement_ref ? ` · referencia ${liq.settlement_ref}` : ''}`} lectura={lec} />
       <Guardado texto={aviso} />
       <TresCifras lectura={lec} saldo={liq.net_settlement == null ? null : Number(liq.net_settlement)} />
-      <Documentos lectura={lec} />
 
       <Tarjeta titulo="¿Es verdad lo que dice?">
         <p className="cx-ayuda" style={{ marginTop: 0 }}>Lo he comparado con lo que sabe Folvy.</p>

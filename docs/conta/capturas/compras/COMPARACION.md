@@ -9,9 +9,10 @@ maquetas: `docs/conta/maquetas/compras/{Main,Liquidacion,FichaProveedor,Recepcio
 | Compras | N18 `Main` | `compras-ordenador.png`, `compras-movil.png` |
 | Subir una factura (no dibujada) | — | `subir-factura-ordenador.png`, `subir-factura-movil.png` |
 | La liquidación y su contraste | N19 `Liquidacion` | `liquidacion-ordenador.png`, `liquidacion-movil.png` |
-| Cómo te factura (ficha, sin forma: el aviso) | N20 `FichaProveedor` | `como-te-factura-ordenador.png`, `como-te-factura-movil.png` |
-| Cómo te factura (ficha, con su forma elegida) | N20 `FichaProveedor` | `como-te-factura-elegida-ordenador.png`, `como-te-factura-elegida-movil.png` |
-| La frase al recibir | N21 `Recepcion` | sin captura: va en el mensaje de «Recepción … confirmada» |
+| Cómo te factura (su pantalla, sin forma: el aviso) | N20 `FichaProveedor` | `como-te-factura-ordenador.png`, `como-te-factura-movil.png` |
+| Cómo te factura (con su forma elegida y albaranes sin IVA) | N20 `FichaProveedor` | `como-te-factura-elegida-ordenador.png`, `como-te-factura-elegida-movil.png` |
+| Recibido (la frase al recibir) | N21 `Recepcion` | `recibido-movil.png` (la pieza real con el CSS del build: `tests/unit/modules/supply/capturaRecibido.test.tsx`) |
+| Ventas (en el menú; su pantalla, aún no) | menú de N18 | `ventas-ordenador.png`, `ventas-movil.png` |
 
 ## Lo que arregló el repaso de Julio (10/10)
 
@@ -54,30 +55,54 @@ Ya no son diferencias; lo comprueba el e2e:
 - **La barra «Pregunta o pide algo»** ya no tapa la última fila en el móvil: el contenido deja su sitio
   debajo (y la medida `loQueTapan` del e2e lo exige).
 
+## Lo que arregló la respuesta 1 de Julio (11/10)
+
+Como la maqueta, y lo comprueba el e2e (N21, su prueba de captura):
+
+- **Menú con «Ventas»**, detrás de Compras. Su pantalla todavía no existe (llega con el detalle de las
+  plataformas): dice «Aún no.» y lleva a los asientos de ventas del libro diario, que es donde están hoy,
+  como las entradas de Ajustes que aún no tienen pantalla.
+- **La liquidación**: en la maqueta «Tu factura · Su factura · La cuenta · Ventas · Inventario» no son
+  pestañas —lo dije mal en la versión anterior de este fichero— sino cinco píldoras verdes en la cabecera,
+  arriba a la derecha, con «Los cinco documentos, leídos» debajo. Así van ahora; si falta uno, su píldora
+  va en ámbar y debajo se dice qué no se puede comprobar sin él. «‹ Compras» encima del título y el mes,
+  el local y la referencia debajo, y la tarjeta «Te paga» oscura, como la maqueta.
+- **«Cómo te factura» en su pantalla**: «Clientes y proveedores › <proveedor>» y el título, una tarjeta
+  con el aviso, las tres formas (con «Suele mandar la factura: una vez al mes · una por cada local» dentro
+  de la segunda), «Dejarlo como estaba» y «Guardar» a la derecha, y la nota debajo, fuera. Llegan ahí
+  «Abrir su ficha» desde Compras y, desde la ficha, la pestaña Pago.
+- **«sin IVA»**: lo que dicen sus últimos papeles dice también si traían IVA («Sus 3 últimas entregas
+  vinieron con albarán, sin IVA.»). Se mira lo leído de cada papel: la cuota, y si no hay, total contra
+  base. Lo que no se sabe se dice («y no sé si traía IVA»), no se adivina. Medido en producción (solo
+  lectura) sobre los 182 papeles leídos de Foodint: 167 con IVA, 2 sin IVA, 13 sin saberlo.
+- **N21 como la maqueta**: después de recibir, la pantalla «Recibido» —de quién, cuántos productos y por
+  cuánto— con la frase en su tarjeta, la primera oración en negrita, y «Recibir otro» y «Volver». Antes la
+  frase iba al final del mensaje de confirmación, y en el asistente del móvil (el camino de quien recibe)
+  no salía. Si la base no sabe decirla, no hay tarjeta; lo que haya que revisar se dice debajo.
+- **El botón exacto**: «Es un albarán: esperar su factura» y «Ver el papel», como la maqueta; fuera el
+  «Cambiar su ficha a…» que añadí (la costumbre se cambia en «Cómo te factura», que es lo que pide su
+  aviso). Y el apoyo como la maqueta: «Recepción del lunes 5 de octubre · Norte Centro · 191,00 €», y en la
+  de «Contado», «Así no puedes descontar su IVA.» debajo de la frase.
+
 ## Lo que sigue distinto de la maqueta
 
 Aceptado por Julio:
 
 1. **N19 · el IVA de su factura**: 400,67 € más 0,01 € de redondeo, no 400,66 €. Es como va en el papel
-   por líneas, y el libro no admite una cuota que no sea base × tipo. Aceptado el 10/10 («el céntimo
-   está bien», y en el repaso: «lo del céntimo a redondeos queda como está»).
+   por líneas, y el libro no admite una cuota que no sea base × tipo. Aceptado el 10/10.
+2. **N19 · los números**: los de la captura son los de la semilla, y en staging las ventas salen «no las
+   puedo comprobar». Es de los datos, no del diseño. Aceptado el 11/10 (respuesta 1).
 
-Pendiente de que Julio lo acepte (o diga cómo lo quiere):
+Para que Julio lo vea (razón de uso que la maqueta no dibuja; no lo he cambiado por mi cuenta):
 
-2. **Menú.** La maqueta pinta «Ventas» y no pinta «Documentos», «Facturas que emites» ni «Cómo va tu
-   negocio». Se queda el menú del C00 y se añade solo «Compras», delante de Bancos como en la maqueta.
-   «Ventas» no existe todavía (sale cuando tenga pantalla).
-3. **N19 · las pestañas** «Tu factura · Su factura · La cuenta · Ventas · Inventario»: no están. Lo leído
-   va en el orden de la maqueta y los cinco documentos se ven arriba, cada uno con lo que se comprueba
-   con él; el inventario se ve producto a producto en «Decirle cuál es cuál».
-4. **N19 · los números**: los de la captura son los de la semilla. Los reales de septiembre, medidos en
-   producción en solo lectura, están en el informe de la T5. Las ventas de staging no existen, así que la
-   captura enseña el veredicto «Sus ventas no las puedo comprobar», no el «coinciden» de la maqueta.
-5. **N20 · «sin IVA»** en «Sus 5 últimas entregas vinieron con albarán, sin IVA»: no se dice. Lo que se
-   lee del papel es su tipo (albarán o factura), no si trae IVA.
-6. **N20 · dónde va.** En la pestaña «Pago» de la ficha, en lugar de las píldoras «Cada cuánto te
-   factura» (la forma de facturar ya decide cada cuánto).
-7. **N21 · la frase** va dentro del mensaje que ya sale al confirmar una recepción, no en una pantalla
-   aparte. Si la base no sabe decirla, no se dice nada: la confirmación no depende de ella.
-8. **«Es un albarán: esperar su factura»** es el texto cuando el papel es un albarán y la ficha dice
-   otra cosa; si es una factura, «Solo esta vez». El otro botón cambia la ficha a lo que sugiere el papel.
+3. **«Ventas» lleva a una pantalla que dice «Aún no.»** La maqueta pone la entrada y no dibuja su pantalla.
+   Las otras dos maneras eran peores: llevar directamente al libro diario (la entrada diría «Ventas» y
+   abriría otra cosa) o no pintarla (lo que había, y no es la maqueta). Captura: `ventas-*.png`.
+4. **La pestaña Pago de la ficha guarda una línea** «Cómo te factura: «Con cada entrega». Cambiarlo», con
+   el enlace a su pantalla. Sin ella, desde la ficha no se llegaría a «Cómo te factura».
+5. **N21 · el botón principal es negro, no azul**: la recepción vive en Cocina y usa su color de botón
+   principal; el azul es el del módulo de contabilidad. Captura: `recibido-movil.png`.
+6. **Las filas de «Qué tienes que mirar» que la maqueta no dibuja** siguen el mismo patrón que las que sí:
+   si el papel es una factura y la ficha dice albarán, el botón dice «Es una factura: solo esta vez».
+7. **N20 · «Sus importes»** (si el importe de cada línea lleva el IVA dentro) se queda en la pestaña Pago
+   de la ficha: no es parte de la maqueta de «Cómo te factura», y es de cómo se lee cada línea.

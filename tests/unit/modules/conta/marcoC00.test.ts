@@ -21,14 +21,15 @@ describe('navegación del módulo de contabilidad', () => {
   })
   it('las entradas sin pantalla no se pintan', () => {
     const visibles = MENU_CONTA.flat().filter((e) => e.ruta !== null).map((e) => e.id)
-    // C03: «Clientes y proveedores» ya tiene su pantalla; C04: «Libros» (el libro diario); compras: «Compras».
-    expect(visibles).toEqual(['compras', 'terceros', 'libros', 'ajustes'])
+    // C03: «Clientes y proveedores» ya tiene su pantalla; C04: «Libros» (el libro diario); compras: «Compras»;
+    // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no).
+    expect(visibles).toEqual(['compras', 'ventas', 'terceros', 'libros', 'ajustes'])
     expect(entradasVisibles(PESTANAS_AJUSTES).map((e) => e.id)).toEqual(['empresa', 'tablas'])
     expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['ajustes'])
   })
   it('el menú está entero, en el orden de la maqueta', () => {
     expect(MENU_CONTA.flat().map((e) => e.etiqueta)).toEqual([
-      'Inicio', 'Por hacer', 'Compras', 'Documentos', 'Bancos', 'Clientes y proveedores', 'Pagos y cobros',
+      'Inicio', 'Por hacer', 'Compras', 'Ventas', 'Documentos', 'Bancos', 'Clientes y proveedores', 'Pagos y cobros',
       'Facturas que emites', 'Impuestos', 'Cómo va tu negocio', 'Libros', 'Ajustes',
     ])
   })

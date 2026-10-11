@@ -99,26 +99,66 @@ export function papelConArticulo(tipo: string | null | undefined): string {
 
 // ── Lo que dicen sus últimos papeles (N20) ──────────────────────────────────
 
-/** «Sus 5 últimas entregas vinieron con albarán» / «De sus 4 últimas, 3 con albarán y 1 con factura». */
-export function fraseUltimosPapeles(papeles: string[]): string | null {
+/**
+ * ¿Trae IVA el papel? (N20, respuesta 1 del repaso: «sin IVA» decide si hay
+ * IVA que descontar). Se mira lo leído del documento, en este orden:
+ *   · la cuota (`tax_total`): mayor que cero → con IVA; cero → sin IVA;
+ *   · si no hay cuota, total contra base: distintos → con IVA; iguales → sin IVA;
+ *   · si no hay ni cuota ni las dos cifras → null: no se sabe, y se dice.
+ * Medido en producción (Foodint, 11/10, solo lectura) sobre los 182 papeles
+ * leídos: 167 con IVA, 2 sin IVA, 13 sin saberlo.
+ */
+export type IvaDelPapel = 'con' | 'sin' | null
+export function ivaDelPapel(doc: { tax_total?: unknown; grand_total?: unknown; tax_base_total?: unknown } | null | undefined): IvaDelPapel {
+  if (!doc) return null
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  const cuota = num(doc.tax_total)
+  if (cuota != null) return cuota > 0.005 ? 'con' : 'sin'
+  const total = num(doc.grand_total)
+  const base = num(doc.tax_base_total)
+  if (total == null || base == null) return null
+  return Math.abs(total - base) > 0.01 ? 'con' : 'sin'
+}
+
+/** Un papel de sus últimas entregas: su tipo y si traía IVA. */
+export interface PapelLeido { tipo: string; iva: IvaDelPapel }
+
+/** «Sus 5 últimas entregas vinieron con albarán, sin IVA.» / «De sus 4 últimas, 3 con albarán y 1 con factura, con IVA.» */
+/** «, sin IVA» · «, con IVA» · «; 3 con IVA y 2 sin IVA» · «, y no sé si traían IVA». */
+function fraseIva(iva: readonly IvaDelPapel[]): string {
+  const n = iva.length
+  const c = iva.filter((x) => x === 'con').length
+  const s = iva.filter((x) => x === 'sin').length
+  const u = n - c - s
+  if (u === n) return n === 1 ? ', y no sé si traía IVA' : ', y no sé si traían IVA'
+  const t = c === 0 ? ', sin IVA' : s === 0 ? ', con IVA' : `; ${c} con IVA y ${s} sin IVA`
+  return u === 0 ? t : `${t} (de ${u === 1 ? 'otra' : `otras ${u}`} no sé si ${u === 1 ? 'lo traía' : 'lo traían'})`
+}
+
+export function fraseUltimosPapeles(papeles: readonly (string | PapelLeido)[]): string | null {
   if (papeles.length === 0) return null
+  const tipos = papeles.map((p) => (typeof p === 'string' ? p : p.tipo))
+  const conIva = papeles.every((p) => typeof p !== 'string')
   const cuenta = new Map<string, number>()
-  for (const p of papeles) {
+  for (const p of tipos) {
     const k = p === 'albaran_factura' ? 'factura' : p
     cuenta.set(k, (cuenta.get(k) ?? 0) + 1)
   }
   const con = (k: string) => (k === 'factura' ? 'factura' : k === 'albaran' ? 'albarán' : k === 'ticket' ? 'ticket' : 'otro papel')
-  const n = papeles.length
+  const n = tipos.length
+  let frase: string
   if (cuenta.size === 1) {
     const [k] = [...cuenta.keys()]
-    return n === 1 ? `Su última entrega vino con ${con(k)}.` : `Sus ${n} últimas entregas vinieron con ${con(k)}.`
+    frase = n === 1 ? `Su última entrega vino con ${con(k)}` : `Sus ${n} últimas entregas vinieron con ${con(k)}`
+  } else {
+    const partes = [...cuenta.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} con ${con(k)}`)
+    frase = `De sus ${n} últimas entregas, ${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`
   }
-  const partes = [...cuenta.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} con ${con(k)}`)
-  return `De sus ${n} últimas entregas, ${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}.`
+  return `${frase}${conIva ? fraseIva((papeles as PapelLeido[]).map((p) => p.iva)) : ''}.`
 }
 
-/** ¿Lo que dicen los papeles choca con lo que pone la ficha? */
-export function chocaConLaFicha(papeles: string[], modo: FormaFacturar | null): boolean {
+export function chocaConLaFicha(entrada: readonly (string | PapelLeido)[], modo: FormaFacturar | null): boolean {
+  const papeles = entrada.map((p) => (typeof p === 'string' ? p : p.tipo))
   if (!modo || papeles.length === 0 || modo === 'monthly_settlement') return false
   const facturas = papeles.filter((p) => p === 'factura' || p === 'albaran_factura').length
   return modo === 'per_delivery' ? facturas < papeles.length / 2 : facturas > papeles.length / 2

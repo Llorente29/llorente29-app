@@ -165,6 +165,8 @@ export const CONTA = {
     tercero: 'clientes-y-proveedores/:partyId',
     /** Un apartado de esa ficha: pestaña en ordenador, pantalla en el móvil. */
     terceroApartado: 'clientes-y-proveedores/:partyId/:apartado',
+    /** «Cómo te factura» de un proveedor, en su pantalla (maqueta N20; respuesta 1 del repaso de compras). */
+    comoTeFactura: 'clientes-y-proveedores/proveedor/:supplierId/como-te-factura',
     /** Libros › Libro diario (C04, maqueta N11Diario). */
     libroDiario: 'libros/diario',
     /** Un asiento a mano, nuevo (C04). */
@@ -181,6 +183,8 @@ export const CONTA = {
     librosAccion: 'libros/:area/:accion',
     /** Compras (encargo de compras, N18): lo que hay que mirar, lo que espera factura, las liquidaciones. */
     compras: 'compras',
+    /** Ventas (en el menú como la maqueta; su pantalla, con el detalle de las plataformas). */
+    ventas: 'ventas',
     /** Subir los documentos de una liquidación mensual (N19). */
     liquidacionNueva: 'compras/liquidacion/nueva',
     /** Una liquidación mensual y su contraste (N19). */
@@ -205,6 +209,8 @@ export const MENU_CONTA: EntradaMenuConta[][] = [
   [
     // Compras (N18): delante de Bancos, como en la maqueta.
     { id: 'compras', etiqueta: 'Compras', icono: 'facturas', ruta: CONTA.rutas.compras },
+    // Ventas: detrás de Compras, como la maqueta (respuesta 1 del repaso de compras).
+    { id: 'ventas', etiqueta: 'Ventas', icono: 'negocio', ruta: CONTA.rutas.ventas },
     { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: null },
     { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
     // C03: la lista única de terceros. Un tercero que solo es proveedor abre su
@@ -332,6 +338,7 @@ export const rutaLiquidacionNueva = (proveedor: string, local: string | null, me
   if (local) q.set('local', local)
   return `${rutaConta(CONTA.rutas.liquidacionNueva)}?${q.toString()}`
 }
+export const rutaComoTeFactura = (supplierId: string): string => rutaConta(CONTA.rutas.comoTeFactura, { supplierId })
 export const rutaFichaTercero = (partyId: string, apartado?: string): string =>
   apartado ? rutaConta(CONTA.rutas.terceroApartado, { partyId, apartado }) : rutaConta(CONTA.rutas.tercero, { partyId })
 

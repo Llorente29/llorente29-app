@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { rutaFichaProveedor } from '@/config/navegacion'
+import { rutaComoTeFactura, rutaFichaProveedor } from '@/config/navegacion'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
@@ -44,7 +44,8 @@ function resumen(ps: readonly RecepcionAMirar[], conQuien = true): string {
   const t: string[] = []
   const qs = quienes(ps)
   if (conQuien && qs.length) t.push(qs.length === 1 ? (ps.length === 1 ? qs[0] : `Los trae ${qs[0]}`) : `De ${qs.length} proveedores`)
-  t.push(ps.length === 1 ? diaConNombre(ps[0].fecha) : rangoFechas(ps.map((p) => p.fecha)))
+  // Uno solo: «Recepción del lunes 5 de octubre», como la maqueta N18.
+  t.push(ps.length === 1 ? `Recepción del ${diaConNombre(ps[0].fecha)}` : rangoFechas(ps.map((p) => p.fecha)))
   const locales = [...new Set(ps.map((p) => p.local_nombre).filter(Boolean))]
   if (locales.length === 1) t.push(locales[0]!); else if (locales.length > 1) t.push(`${locales.length} locales`)
   const { total, sinImporte } = totalPapeles(ps)
@@ -172,8 +173,8 @@ function FilaSinIva({ f, empresaId, hecho }: { f: Extract<FilaAMirar, { tipo: 's
   return (
     <>
       <Fila ps={f.papeles} fallo={fallo}
-        frase={<>{cosa}{qs.length === 1 ? ` de ${qs[0]}` : ''} {n === 1 ? 'viene' : 'vienen'} a nombre de «{f.nombre}», no de tu empresa. Así no puedes descontar su IVA.</>}
-        apoyo={resumen(f.papeles, qs.length !== 1)}
+        frase={<>{cosa}{qs.length === 1 ? ` de ${qs[0]}` : ''} {n === 1 ? 'viene' : 'vienen'} a nombre de «{f.nombre}», no de tu empresa.</>}
+        apoyo={`Así no puedes descontar su IVA. ${resumen(f.papeles, qs.length !== 1)}`}
         acciones={<>
           <button type="button" className="cx-boton-sec" disabled={ocupado} onClick={() => void hacer(async () => {
             await cerrarTodas(f.papeles, 'Pedida a nombre de la empresa.')
@@ -219,15 +220,13 @@ function FilaPapelFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'papel_fi
         ? <>{f.proveedor_nombre} ha entregado{veces} con {papelSolo(f.papel)} a nombre de tu empresa, y en su ficha pone que liquida cada mes.</>
         : <>{f.proveedor_nombre} ha entregado{veces} con {papelSolo(f.papel)}, y en su ficha pone que factura {tituloDe(f.ficha).toLowerCase()}.</>}
       apoyo={resumen(f.papeles, false)}
+      // Como la maqueta N18: un botón, con su texto exacto, y «Ver el papel».
+      // Cambiar la costumbre se hace en «Cómo te factura» (su aviso lo pide).
       acciones={<>
         <button type="button" className="cx-boton-sec" disabled={ocupado} onClick={() => void hacer(async () => {
           await cerrarTodas(f.papeles, esAlbaran ? 'Esta vez fue albarán: se espera su factura.' : 'Esta vez trajo factura.')
           return esAlbaran ? `Apuntado: ${n === 1 ? 'la recepción' : `las ${n} recepciones`} de ${f.proveedor_nombre} ${n === 1 ? 'espera' : 'esperan'} su factura. Su ficha sigue igual.` : `Apuntado: esta vez ${f.proveedor_nombre} trajo factura. Su ficha sigue igual.`
-        })}>{esAlbaran ? 'Es un albarán: esperar su factura' : 'Solo esta vez'}</button>
-        {f.sugerida && <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void hacer(async () => {
-          const x = await cambiarFormaFacturar(f.proveedor, f.sugerida!, null, null)
-          return `Guardado en la ficha de ${f.proveedor_nombre}: «${tituloDe(f.sugerida)}».${vuelta(x.recepciones)}`
-        })}>Cambiar su ficha a «{tituloDe(f.sugerida)}»</button>}
+        })}>{esAlbaran ? 'Es un albarán: esperar su factura' : 'Es una factura: solo esta vez'}</button>
       </>} />
   )
 }
@@ -245,7 +244,7 @@ function FilaLiquida({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'liquida' }>
           const x = await cambiarFormaFacturar(f.proveedor, 'monthly_settlement', null, null)
           return `Guardado en la ficha de ${f.proveedor_nombre}: «Liquidación mensual».${vuelta(x.recepciones)}`
         })}>Sí, liquida cada mes</button>
-        <Link className="cx-boton-sec" to={`${rutaFichaProveedor(f.proveedor, 'pago')}#campo-como-te-factura`}>Abrir su ficha</Link>
+        <Link className="cx-boton-sec" to={rutaComoTeFactura(f.proveedor)}>Abrir su ficha</Link>
       </>} />
   )
 }
@@ -258,7 +257,7 @@ function FilaFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'ficha' }>; he
   const nifF = falta('nif')
   const nif = nifF && nifF.falta === 'nif' && nifF.ofrece ? validarNifEs(nifF.ofrece) : null
   const forma = !!falta('forma_facturar')
-  const destino = forma ? `${rutaFichaProveedor(f.proveedor, 'pago')}#campo-como-te-factura`
+  const destino = forma ? rutaComoTeFactura(f.proveedor)
     : falta('tipo_gasto') ? `${rutaFichaProveedor(f.proveedor, 'contabilidad')}#campo-expenseCategoryId`
     : `${rutaFichaProveedor(f.proveedor, 'datos-fiscales')}#campo-taxId`
   const orden = [...FORMAS].sort((a, b) => (a.valor === f.sugerida ? -1 : b.valor === f.sugerida ? 1 : 0))

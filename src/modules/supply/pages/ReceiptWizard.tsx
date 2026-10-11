@@ -51,12 +51,14 @@ import { listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatServ
 import { deriveFormatQty, type QtySource } from '@/modules/supply/lib/receiptQty'
 import type { PurchaseFormat } from '@/types/kitchen'
 import ReceiptPhotoViewer from '@/modules/supply/components/ReceiptPhotoViewer'
+import RecepcionHecha, { type RecepcionHechaDatos } from '@/modules/supply/components/RecepcionHecha'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
 import type { OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 import {
   createGoodsReceipt,
   createGoodsReceiptLine,
   receiveGoodsReceipt,
+  fraseDelCamino,
   matchReceiptLine,
   getItemBaseUnit,
   getSupplierFormatPrices,
@@ -73,6 +75,8 @@ interface ReceiptWizardProps {
   ocrPrefill: OcrPrefill
   onBack: () => void
   onDone: (message?: string) => void
+  /** «Recibir otro» en la pantalla «Recibido» (N21). Sin él, solo «Volver». */
+  onRecibirOtro?: () => void
 }
 
 
@@ -283,7 +287,8 @@ function blankLine(): WizardLine {
   }
 }
 
-export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBack, onDone }: ReceiptWizardProps) {
+export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBack, onDone, onRecibirOtro }: ReceiptWizardProps) {
+  const [hecha, setHecha] = useState<RecepcionHechaDatos | null>(null)
   const { authUserId, userProfile } = useApp()
   const effectiveLocationId = ocrPrefill.locationId || locationId || ''
 
@@ -624,19 +629,32 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
       // anulados sin entrar nunca al stock, 2.875,42 €.
       const hold = ocrPrefill.aiNeedsReview
       const res = await receiveGoodsReceipt(receipt.id, hold)
+      // Compras (N21): qué pasa con el papel, en su tarjeta de «Recibido».
+      const frase = await fraseDelCamino(receipt.id)
+      const avisos: string[] = []
+      let mensaje: string
       if (hold) {
         const partes = [`${res.postedLines} línea(s) al almacén`]
         if (res.skippedLines > 0) partes.push(`${res.skippedLines} sin artículo asignado`)
-        onDone(
-          `Recepción ${receipt.code ?? ''} recibida: ${partes.join(' · ')}. ` +
-          `Queda marcada para que oficina la repase.`,
-        )
+        mensaje = `Recepción ${receipt.code ?? ''} recibida: ${partes.join(' · ')}. Queda marcada para que oficina la repase.`
+        avisos.push('Queda marcada para que la oficina la repase.')
       } else {
         const parts = [`${res.postedLines} línea(s) al almacén`]
         if (flagCount > 0) parts.push(`${flagCount} para que lo mire oficina`)
         if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear`)
-        onDone(`Recepción ${receipt.code ?? ''} recibida: ${parts.join(' · ')}.`)
+        mensaje = `Recepción ${receipt.code ?? ''} recibida: ${parts.join(' · ')}.`
+        if (flagCount > 0) avisos.push(`${flagCount === 1 ? 'Una línea queda' : `${flagCount} líneas quedan`} para que la mire la oficina.`)
       }
+      if (res.skippedLines > 0) avisos.push(`${res.skippedLines} ${res.skippedLines === 1 ? 'línea no ha entrado' : 'líneas no han entrado'} al almacén.`)
+      setSaving(false)
+      setHecha({
+        proveedor: ocrPrefill.proposedSupplierName ?? null,
+        productos: lines.length,
+        total: docTotal ?? (anyTotal ? Math.round(totalCounted * 100) / 100 : null),
+        frase,
+        aviso: avisos.length ? avisos.join(' ') : null,
+        mensaje,
+      })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo recibir la mercancía.')
       setSaving(false)
@@ -655,6 +673,14 @@ export default function ReceiptWizard({ accountId, locationId, ocrPrefill, onBac
   function goPrev() {
     if (screenIndex === 0) { onBack(); return }
     setScreenIndex(i => Math.max(0, i - 1))
+  }
+
+  if (hecha) {
+    return (
+      <div className="min-h-screen bg-page flex flex-col">
+        <RecepcionHecha datos={hecha} onRecibirOtro={onRecibirOtro} onVolver={() => onDone(hecha.mensaje)} />
+      </div>
+    )
   }
 
   return (

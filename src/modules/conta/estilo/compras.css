@@ -47,7 +47,19 @@
 .cxc-radio { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--cx-borde-campo); background: var(--cx-blanco); }
 .cxc-radio-si { border-color: var(--cx-azul); box-shadow: inset 0 0 0 4px var(--cx-blanco); background: var(--cx-azul); }
 .cxc-forma-explica { font-size: 14px; color: var(--cx-apoyo); }
-.cxc-forma-mas { padding: 0 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+.cxc-forma-mas { padding: 0 16px 14px 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 15px; }
+.cxc-forma-op { height: 44px; }
+.cxc-forma-op-si { border-color: var(--cx-azul); background: var(--cx-azul-suave); color: var(--cx-azul-oscuro, var(--cx-azul)); }
+.cxc-forma-titulo { font-size: 17px; }
+.cxc-forma-explica { padding-left: 28px; font-size: 15px; }
+
+/* «Cómo te factura» en su pantalla (N20): una tarjeta, la nota debajo, fuera. */
+.cxc-como-pagina { max-width: 920px; }
+.cxc-como { display: flex; flex-direction: column; gap: 12px; }
+.cxc-como .cxc-dice-choca { color: var(--cx-ambar-oscuro, var(--cx-ambar)); font-size: 15px; line-height: 1.45; padding: 14px 16px; border-radius: 14px; }
+.cxc-como .cxc-dice-choca strong, .cxc-como .cxc-dice strong { font-weight: 600; }
+.cxc-como-nota { margin: 0; padding: 0 6px; font-size: 14px; }
+.cxc-como-resumen { display: flex; flex-direction: column; gap: 6px; }
 
 /* Subir una factura y casarla */
 .cxc-pasos { display: flex; flex-direction: column; gap: 12px; }
@@ -58,7 +70,10 @@
 
 /* La liquidación (N19) */
 .cxc-tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.cxc-tres-cifra { font-family: var(--cx-letra-cifras); font-size: 24px; font-weight: 600; }
+.cxc-tres-cifra { font-family: var(--cx-letra-cifras); font-size: 34px; font-weight: 600; letter-spacing: -1px; }
+/* «Te paga» / «Le pagas»: la tarjeta oscura de la maqueta N19. */
+.cxc-tres-saldo { background: var(--cx-texto); color: var(--cx-blanco); border-radius: var(--cx-radio-tarjeta); padding: 20px 22px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.cxc-tres-saldo .cx-etiqueta, .cxc-tres-saldo .cx-ayuda { color: #C7D2E3; }
 .cxc-contraste { display: flex; gap: 14px; padding: 14px 0; border-top: 1px solid var(--cx-linea); }
 .cxc-contraste:first-of-type { border-top: none; }
 .cxc-contraste > .cxc-cosa-texto { flex: 1; min-width: 0; }
@@ -89,7 +104,11 @@
 .cxc-papel { display: flex; flex-direction: column; gap: 10px; max-height: 70vh; overflow-y: auto; }
 .cxc-papel-img { width: 100%; height: auto; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); }
 .cxc-papel-pdf { width: 100%; height: 65vh; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); }
-.cxc-docs { display: flex; flex-direction: column; gap: 8px; }
+.cxc-docs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 520px; }
+.cxc-doc { height: 32px; padding: 0 12px; border-radius: 999px; background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; }
+.cxc-doc-falta { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxc-docs-pie { font-size: 13px; color: var(--cx-apoyo); width: 100%; text-align: right; }
+.cxc-volver { align-self: flex-start; font-size: 14px; font-weight: 600; text-decoration: none; }
 .cxc-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 
 @media (max-width: 767px) {
@@ -114,4 +133,7 @@
   .cxc-soltar { flex-direction: column; align-items: stretch; }
   .cxc-liq { flex-direction: column; align-items: stretch; }
   .cxc-tres { grid-template-columns: minmax(0, 1fr); }
+  .cxc-tres-cifra { font-size: 28px; }
+  .cxc-docs { justify-content: flex-start; max-width: none; }
+  .cxc-docs-pie { text-align: left; }
 }

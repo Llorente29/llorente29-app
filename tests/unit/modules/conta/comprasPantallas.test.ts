@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   albaranesDesde, chocaConLaFicha, cuandoLlega, cuantasAMirar, diaConNombre, estadoLiquidacion, fraseDeFalta, fraseDePregunta,
-  fraseLiquidacion, fraseSaldo, fraseUltimosPapeles, importeEsperando, lineaRecepcion, mesAnterior, mesSiguiente, ordenarAMirar,
+  fraseLiquidacion, fraseSaldo, fraseUltimosPapeles, importeEsperando, ivaDelPapel, lineaRecepcion, mesAnterior, mesSiguiente, ordenarAMirar,
   type FilaLiquidacion, type Mirar, type RecepcionAMirar,
 } from '@/modules/conta/lib/compras'
 
@@ -111,6 +111,40 @@ describe('Liquidaciones del mes (N18)', () => {
   it('los meses de alrededor, también en enero y diciembre', () => {
     expect(mesAnterior('2026-01-15')).toBe('2025-12-01')
     expect(mesSiguiente('2026-12-03')).toBe('2027-01-01')
+  })
+})
+
+// «sin IVA» (respuesta 1 del repaso, 11/10). Las formas son las que tiene
+// `parsed_result.document` en producción (Foodint, solo lectura, 182 papeles):
+// cuota > 0 (167 con el total ≠ base), cuota 0 y total = base (1), sin cuota
+// con total = base (1), sin cuota con total ≠ base (9), sin cuota ni cifras (13).
+describe('Cómo te factura (N20): si traían IVA', () => {
+  it('ivaDelPapel sobre las cinco formas de la población real', () => {
+    expect(ivaDelPapel({ tax_total: 10.25, grand_total: 112.79, tax_base_total: 102.54 })).toBe('con')
+    expect(ivaDelPapel({ tax_total: 0, grand_total: 191, tax_base_total: 191 })).toBe('sin')
+    expect(ivaDelPapel({ tax_total: null, grand_total: 191, tax_base_total: 191 })).toBe('sin')
+    expect(ivaDelPapel({ tax_total: null, grand_total: 210.1, tax_base_total: 191 })).toBe('con')
+    expect(ivaDelPapel({ tax_total: null, grand_total: null, tax_base_total: null })).toBeNull()
+    expect(ivaDelPapel(null)).toBeNull()
+  })
+  it('la frase de la maqueta: «Sus 5 últimas entregas vinieron con albarán, sin IVA.»', () => {
+    const sin = { tipo: 'albaran', iva: 'sin' as const }
+    expect(fraseUltimosPapeles([sin, sin, sin, sin, sin])).toBe('Sus 5 últimas entregas vinieron con albarán, sin IVA.')
+    expect(fraseUltimosPapeles([{ tipo: 'albaran', iva: 'con' }])).toBe('Su última entrega vino con albarán, con IVA.')
+    expect(fraseUltimosPapeles([{ tipo: 'albaran', iva: 'con' }, { tipo: 'albaran', iva: 'con' }, { tipo: 'factura', iva: 'sin' }]))
+      .toBe('De sus 3 últimas entregas, 2 con albarán y 1 con factura; 2 con IVA y 1 sin IVA.')
+  })
+  it('lo que no se sabe se dice, no se adivina', () => {
+    expect(fraseUltimosPapeles([{ tipo: 'albaran', iva: null }])).toBe('Su última entrega vino con albarán, y no sé si traía IVA.')
+    expect(fraseUltimosPapeles([{ tipo: 'albaran', iva: 'sin' }, { tipo: 'albaran', iva: null }]))
+      .toBe('Sus 2 últimas entregas vinieron con albarán, sin IVA (de otra no sé si lo traía).')
+    expect(fraseUltimosPapeles([{ tipo: 'albaran', iva: 'con' }, { tipo: 'albaran', iva: null }, { tipo: 'albaran', iva: null }]))
+      .toBe('Sus 3 últimas entregas vinieron con albarán, con IVA (de otras 2 no sé si lo traían).')
+  })
+  it('choca con la ficha igual con o sin el IVA', () => {
+    const alb = { tipo: 'albaran', iva: 'sin' as const }
+    expect(chocaConLaFicha([alb, alb, alb], 'per_delivery')).toBe(true)
+    expect(chocaConLaFicha([alb, alb, alb], 'delivery_note_then_invoice')).toBe(false)
   })
 })
 
