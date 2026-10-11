@@ -1,0 +1,1 @@
+{"tablas":["public.sales_day_summary"],"funciones":["public.journal_entry_proponer(uuid,jsonb,jsonb,jsonb,text)"],"filas":{"public.sales_day_summary":120},"otras":{},"camino":{"tablas":["public.sales_day_summary"],"funciones":[]},"usos":{},"registro":[]}

@@ -44,11 +44,12 @@ describe('agente «Libro diario»', () => {
       mes_cerrado: [{ ...A, serie: 4, numero: 1, fecha: '2026-10-06' }],
       propuestas: [{ ...A, serie: 1, fecha: '2026-10-05', origen: 'sales_day', dias: 8 }],
       cierre_dia: [{ ...A, pedidos: 20, importe: 500.79, dia: '2026-08-23', horas: 1122 }],
+      dia_sin_asiento: [{ ...A, local: 'c01a0000-0000-4000-8000-0000000000a2', dia: '2026-10-07', pedidos: 25, horas: 86, resumen: false }],
     }
     const h = revisarLibro(una)
     expect(h.map((x) => `${x.tipo}:${x.nivel}`)).toEqual([
       'cuadre:rojo', 'huecos:rojo', 'cadena:rojo', 'iva:rojo', 'ventas_dia:rojo', 'cedidas_70:rojo', 'socio_gasto:rojo',
-      'resultado:rojo', 'resultado:ambar', 'mes_cerrado:rojo', 'cierre_dia:rojo', 'propuestas:ambar',
+      'resultado:rojo', 'resultado:ambar', 'mes_cerrado:rojo', 'cierre_dia:rojo', 'dia_sin_asiento:rojo', 'propuestas:ambar',
     ])
     expect(h.every((x) => x.norma === NORMAS[x.tipo as keyof typeof NORMAS])).toBe(true)
     // La serie por su palabra (respuesta 1); sin conceptos ni nombres (repositorio público).
@@ -56,6 +57,8 @@ describe('agente «Libro diario»', () => {
     expect(h[1].detalle).toBe('falta General nº 1 en el ejercicio e1')
     expect(informeLibro(h, { donde: 'staging-conta', hoy: '2026-10-07', contado: real.contado })).toContain('### Ámbar (espera a una persona)')
     // El atraso de producción del 09/10, tal cual lo vería el agente antes de la primera pasada.
+    // El hueco de producción del 11/10 (el 07/10 de Alcalá, 25 pedidos), medido en producción el 11/10 a las 17:3x UTC.
+    expect(h.find((x) => x.tipo === 'dia_sin_asiento')!.detalle).toBe('2026-10-07 local c01a0000: 25 pedidos de tus marcas, sin resumen ni asiento, 86 h después de su cierre: el cierre del día no lo ha propuesto (el porqué, en el Libro diario)')
     expect(h.find((x) => x.tipo === 'cierre_dia')!.detalle).toBe('20 pedidos de tus marcas (500.79 €) siguen abiertos en días ya cerrados; el más antiguo, del 2026-08-23, lleva 1122 h desde que acabó: el cierre del día no ha pasado o ha fallado')
   })
 })
