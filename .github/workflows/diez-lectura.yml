@@ -1,0 +1,63 @@
+name: Diez · lectura (C04b, solo lectura)
+
+# QUÉ HACE (C04b, tarea 1, 11/10)
+# Antes de traer nada de Diez se mide qué hay y qué forma tiene. El contenedor
+# de desarrollo no tiene salida a apicon.diezsoftware.com; el runner de GitHub
+# sí, así que la lectura se hace aquí.
+#
+# Dos modos:
+#   · swagger — lee el Swagger PÚBLICO de apiCON. Sin credenciales: no toca
+#     ningún dato de nadie. Corre solo al empujar cambios del lector a la rama
+#     del encargo, y a mano.
+#   · lectura — entra con el secreto DIEZ_LECTURA (lo crea Julio; nunca va al
+#     chat, al repositorio ni a los registros) y SOLO cuenta: ejercicios,
+#     asientos por ejercicio y serie, si los apuntes llevan analítica, facturas
+#     y adjuntos, la forma de las sumas y saldos, los límites y la paginación.
+#     Nada de importes, nombres, NIF ni conceptos: el repositorio es público y
+#     este resumen también. Solo peticiones GET (y POST /token para entrar).
+#
+# QUÉ NO HACE: escribir en Diez. Ninguna ruta de escritura sale de aquí.
+
+on:
+  push:
+    branches: ['conta/c04b-diez']
+    paths:
+      - 'scripts/conta/diez/**'
+      - '.github/workflows/diez-lectura.yml'
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'swagger (público, sin credenciales) o lectura (con el secreto DIEZ_LECTURA, solo recuentos)'
+        required: true
+        default: 'swagger'
+        type: choice
+        options: ['swagger', 'lectura']
+
+concurrency:
+  group: diez-lectura
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  swagger:
+    if: github.event_name == 'push' || inputs.modo == 'swagger'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Leer el Swagger público
+        run: |
+          set -euo pipefail
+          node scripts/conta/diez/swagger.mjs https://apicon.diezsoftware.com swagger-apicon.json | tee swagger.md
+          cat swagger.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swagger-apicon
+          path: |
+            swagger-apicon.json
+            swagger.md
