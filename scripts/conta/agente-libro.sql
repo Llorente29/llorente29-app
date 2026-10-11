@@ -26,6 +26,15 @@
 --                      no ha pasado o ha fallado; con el día de serie a las 6:00,
 --                      ese día lleva más de 30 h sin cerrar. Por empresa: cuántos,
 --                      el día más antiguo y las horas desde que acabó ese día.
+--  12. dia_sin_asiento · ningún día cerrado se queda sin su resumen y su
+--                      asiento propuesto más de 24 h después de su hora de
+--                      cierre (encargo del 11/10: del 09/10 al 11/10 no se
+--                      propuso nada y nadie lo vio). Solo días de un ejercicio
+--                      abierto, después del corte, de un mes sin cerrar, sin
+--                      descartar y de una empresa con su plan (con su 700).
+--                      Por día y local: horas desde el cierre y si al menos
+--                      hay resumen. El porqué de cada uno está en
+--                      sales_day_proposal_log y en el Libro diario.
 
 with libro as (
   select e.* from public.journal_entry e where e.status in ('validado', 'anulado')
@@ -152,6 +161,33 @@ select json_build_object(
            where s.status = 'open' and s.is_active and coalesce(b.ownership_type, 'own') = 'own'
              and s.sold_at < public.conta_cerrado_hasta(c.id)
            group by 1, 2) x),
+
+  'dia_sin_asiento', (select coalesce(json_agg(json_build_object('account_id', x.account_id, 'company_id', x.company_id, 'local', x.location_id,
+      'dia', x.dia, 'pedidos', x.pedidos, 'horas', x.horas, 'resumen', x.resumen) order by x.dia, x.location_id), '[]')
+    from (select c.account_id, c.id company_id, s.location_id, (s.sold_at at time zone 'Europe/Madrid')::date dia, count(*) pedidos,
+                 round(extract(epoch from now() - ((((s.sold_at at time zone 'Europe/Madrid')::date + 1)::timestamp + coalesce(t.sales_day_close_time, time '06:00')) at time zone 'Europe/Madrid')) / 3600) horas,
+                 exists (select 1 from public.sales_day_summary d where d.company_id = c.id and d.location_id = s.location_id
+                            and d.sales_day = (s.sold_at at time zone 'Europe/Madrid')::date) resumen
+            from public.company c
+            left join public.company_tax_profile t on t.company_id = c.id
+            join public.sale s on s.account_id = c.account_id
+            left join public.brand b on b.id = s.brand_id
+            join public.fiscal_year f on f.company_id = c.id and f.status = 'open'
+                 and (s.sold_at at time zone 'Europe/Madrid')::date between f.starts_on and f.ends_on
+                 and (f.imported_until is null or (s.sold_at at time zone 'Europe/Madrid')::date > f.imported_until)
+           where s.is_active and s.status = 'closed' and coalesce(b.ownership_type, 'own') = 'own' and s.location_id is not null
+             and s.sold_at > now() - interval '120 days'
+             and exists (select 1 from public.company_account a where a.company_id = c.id and a.kind = 'template' and a.template_code = '700')
+             -- Cerrado hace más de 24 h: el día D se cierra a la hora de cierre del día D + 1.
+             and now() > ((((s.sold_at at time zone 'Europe/Madrid')::date + 1)::timestamp + coalesce(t.sales_day_close_time, time '06:00')) at time zone 'Europe/Madrid') + interval '24 hours'
+             and not exists (select 1 from public.fiscal_period_lock k where k.company_id = c.id and k.reopened_at is null
+                                and k.month = date_trunc('month', (s.sold_at at time zone 'Europe/Madrid')::date)::date)
+             and not exists (select 1 from public.sales_day_summary d join public.journal_entry e on e.id = d.entry_id
+                              where d.company_id = c.id and d.location_id = s.location_id and d.sales_day = (s.sold_at at time zone 'Europe/Madrid')::date
+                                and e.status in ('propuesto', 'borrador', 'validado'))
+             and not exists (select 1 from public.journal_dismissal x where x.company_id = c.id and x.source_type = 'sales_day'
+                              and x.source_key = s.location_id || ':' || (s.sold_at at time zone 'Europe/Madrid')::date)
+           group by 1, 2, 3, 4, 6, 7) x),
 
   'propuestas', (select coalesce(json_agg(json_build_object('account_id', e.account_id, 'company_id', e.company_id, 'fecha', e.entry_date,
       'serie', e.series, 'origen', e.source_type, 'dias', current_date - e.created_at::date)), '[]')
