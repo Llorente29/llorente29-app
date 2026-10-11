@@ -118,7 +118,9 @@ test('pestaña Pago (cuenta A): forma y plazo en píldoras, y «Cómo te factura
   await page.goto(`/kitchen/proveedores/${HERMANOS_RUIZ}/pago`)
   await expect(page.getByRole('group', { name: 'Forma de pago' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Plazo' })).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Cómo te factura', exact: true })).toBeVisible()
+  // «Cómo te factura» vive en su pantalla (maqueta N20, respuesta 1 del repaso de compras):
+  // aquí, una línea con lo que dice su ficha y el enlace.
+  await expect(page.locator('.cxc-como-resumen').getByRole('link', { name: /^(Cambiarlo|Decirlo)$/ })).toHaveAttribute('href', new RegExp(`/conta/clientes-y-proveedores/proveedor/${HERMANOS_RUIZ}/como-te-factura$`))
   await capturar(page, 'pago')
 })
 
