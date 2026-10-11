@@ -64,8 +64,8 @@ jobs:
 
   lectura:
     # A mano (cuando el workflow esté en main) o al empujar a la rama del
-    # encargo un commit cuyo mensaje lleve «[lectura]».
-    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[lectura]'))
+    # encargo un commit cuyo mensaje EMPIECE por «[lectura]» (no basta con nombrarlo).
+    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura]'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
