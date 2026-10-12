@@ -1,16 +1,12 @@
-# C04b · T3 — Un documento puede respaldar varios asientos (Julio, 12/10)
-# (conta/c04b-diez). Glovo emite UN documento que Diez registra como expedida
-# y como recibida (2023-4T, T2 §8.1): el índice único por (empresa, sha256)
-# lo impedía.
-#   ensayo: el 0130 y su prueba en una transacción con ROLLBACK. Si falla,
+# C04b · T3 — Cada línea traída de Diez que iba en negativo lo dice
+# (Julio, 12/10, matiz 2). Libros la marca «En Diez iba en negativo» para
+# contrastar el diario línea a línea con el de Diez.
+#   ensayo: el 0140 y su prueba en una transacción con ROLLBACK. Si falla,
 #           no se aplica lo de abajo.
-#   0130:   fichero NUEVO (la 0110 está en el historial con su huella):
-#           external_document_sha_entry_uq (empresa, sha256, asiento) con
-#           nulls not distinct en lugar de external_document_sha_uq; el estado
-#           «no_requiere» (asiento sin PDF propio, con porqué).
-#   La prueba: un fichero respalda dos asientos; no dos veces al mismo; sin
-#   asiento, una vez; un asiento, un documento vivo; no_requiere con asiento,
-#   sin fichero y con porqué; los estados de antes siguen valiendo.
-supabase/staging/sql/20261019_diez_documento_compartido_ensayo.sql
-supabase/migrations/20261019T0130_diez_documento_compartido.sql
-supabase/staging/sql/20261019_diez_documento_compartido_prueba.sql
+#   0140:   journal_line.external_negative_side (texto, admite nulos; null,
+#           'debe' o 'haber'), con su CHECK.
+#   La prueba: la columna existe; debe/haber/null entran y lo demás no; ninguna
+#   línea la tiene puesta.
+supabase/staging/sql/20261019_diez_linea_negativa_ensayo.sql
+supabase/migrations/20261019T0140_diez_linea_negativa.sql
+supabase/staging/sql/20261019_diez_linea_negativa_prueba.sql
