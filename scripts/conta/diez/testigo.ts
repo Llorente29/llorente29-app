@@ -65,8 +65,14 @@ const sumar = (s: Suma, ej: string, tipo: string, cuenta: string, valores: numbe
 }
 
 md('## Diez · el testigo de la regla 1 (sumas por subcuenta, cifradas)', '', `Meses ${DESDE}–${HASTA} · base C0008 · solo GET`, '')
+// Si el listado paginado repite un asiento, otro se ha quedado fuera aunque el
+// total cuadre (lo que pasa con Drive): se cuenta por mes y se dice.
+const repetidos: Record<string, number> = {}
 for (const mes of meses()) {
   const apuntes: Apunte[] = await c.apuntesDelMes(mes)
+  const claves = apuntes.map((a) => `${a.Ejercicio}|${a.Serie}|${a.Documento}`)
+  const rep = claves.length - new Set(claves).size
+  if (rep) repetidos[mes] = rep
   for (const a of apuntes) {
     const ej = String(a.Ejercicio), tipo = String(a.TipoAsiento ?? '—')
     const cuenta = (((n[ej] ??= {})[tipo] ??= { asientos: 0, rechazos: 0, negativos: 0 }))
@@ -100,6 +106,7 @@ for (const ej of Object.keys(n).sort()) for (const tipo of Object.keys(n[ej]).so
   const x = n[ej][tipo], [f0, f1] = fechas[ej][tipo]
   md(`| ${ej} | ${tipo} | ${x.asientos} | ${x.rechazos} | ${x.negativos} | ${f0.slice(0, 4)}-${f0.slice(4, 6)}-${f0.slice(6)} | ${f1.slice(0, 4)}-${f1.slice(4, 6)}-${f1.slice(6)} |`)
 }
+md('', '### Asientos repetidos en el listado paginado', '', ...(Object.keys(repetidos).length ? Object.entries(repetidos).map(([m, k]) => `- ${m}: ${k} repetido${k === 1 ? '' : 's'} (y otros tantos que faltan)`) : ['- ninguno: cada asiento, una vez']))
 md('', '### Por qué rechazaría convertirAsiento', '', ...(Object.keys(motivos).length ? Object.entries(motivos).sort((a, b) => b[1] - a[1]).map(([m, k]) => `- ${k} × ${m}`) : ['- ninguno']), '')
 
 // Cifrado: las sumas por subcuenta.
