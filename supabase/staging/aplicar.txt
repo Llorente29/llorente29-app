@@ -1,12 +1,13 @@
-# C04b · T3 — Cada línea traída de Diez que iba en negativo lo dice
-# (Julio, 12/10, matiz 2). Libros la marca «En Diez iba en negativo» para
-# contrastar el diario línea a línea con el de Diez.
-#   ensayo: el 0140 y su prueba en una transacción con ROLLBACK. Si falla,
+# C04b · T3 — El escritor del histórico de Diez (respuestas 1 y 3).
+#   ensayo: el 0150 y su prueba en una transacción con ROLLBACK. Si falla,
 #           no se aplica lo de abajo.
-#   0140:   journal_line.external_negative_side (texto, admite nulos; null,
-#           'debe' o 'haber'), con su CHECK.
-#   La prueba: la columna existe; debe/haber/null entran y lo demás no; ninguna
-#   línea la tiene puesta.
-supabase/staging/sql/20261019_diez_linea_negativa_ensayo.sql
-supabase/migrations/20261019T0140_diez_linea_negativa.sql
-supabase/staging/sql/20261019_diez_linea_negativa_prueba.sql
+#   0150:   conta_diez_ejercicio (ejercicio traído), conta_diez_subcuentas
+#           (las que faltan, de su hoja), conta_diez_importar (migrated,
+#           validado, número de Diez, cadena de huellas, idempotente, un
+#           asiento por subtransacción) y conta_diez_cerrar_ejercicio. Solo
+#           service_role.
+#   La prueba: permisos; ejercicio una vez; subcuentas; 2 traídos y 4
+#   rechazados con motivo; cómo quedan; la cadena; traer dos veces; cerrar.
+supabase/staging/sql/20261019_diez_importar_ensayo.sql
+supabase/migrations/20261019T0150_diez_importar.sql
+supabase/staging/sql/20261019_diez_importar_prueba.sql
