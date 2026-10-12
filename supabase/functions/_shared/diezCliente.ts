@@ -15,6 +15,8 @@
 //   · Escribir es una lista cerrada (apuntes/add y facturas/add) y hace falta
 //     pedirlo: `escribir: true`. En C0008 además `escribirEnReal: true`
 //     (regla 4 del encargo: primero el entorno de pruebas).
+//   · Ningún envío lleva un grupo vetado de la analítica (JDH, José del
+//     Hierro: no es un local abierto). Ver GRUPOS_VETADOS.
 //
 // El TOKEN dura 14 días. Se guarda fuera (Vault, por connector_token_save) y
 // se renueva cuando le quedan menos de 2 días. Renovar es UN intento: si falla,
@@ -32,6 +34,24 @@ export const BASES_PROHIBIDAS = ['C0001'] as const
 export const BASE_REAL = 'C0008'
 export const BASE_PRUEBAS = 'C0009'
 export const BASES_CONOCIDAS = [BASE_REAL, BASE_PRUEBAS] as const
+// Grupos de la analítica (Local en la pantalla de Diez) que NINGÚN envío puede
+// llevar (Julio, 12/10): José del Hierro (JDH) no es un local abierto ni tiene
+// ventas. La C0009 es copia de la C0008 y lleva el mismo freno. BAR NO está
+// aquí: es Carabanchel al leer (Scandal Burger, Glovo no cambió la dirección),
+// y al enviar Carabanchel va siempre con CAM (diezAnalitica.ts).
+export const GRUPOS_VETADOS: Record<string, readonly string[]> = { C0008: ['JDH'], C0009: ['JDH'] }
+
+/** Todos los valores de `Grupo` que aparezcan en un cuerpo, a cualquier profundidad. */
+export function gruposEn(x: unknown, fuera: string[] = []): string[] {
+  if (Array.isArray(x)) for (const y of x) gruposEn(y, fuera)
+  else if (x && typeof x === 'object') {
+    for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+      if (k.toLowerCase() === 'grupo' && v != null && typeof v !== 'object') fuera.push(String(v).trim().toUpperCase())
+      else gruposEn(v, fuera)
+    }
+  }
+  return fuera
+}
 export const TAM_PAGINA = 200
 export const MARGEN_RENOVAR_MS = 2 * 24 * 3600 * 1000
 export const MAX_INTENTOS = 3 // regla 5 del encargo
@@ -154,6 +174,8 @@ export class ClienteDiez {
       if (ESCRITURAS[camino] !== metodo) throw new FrenoDiez(`${metodo} ${camino} no está en la lista de escrituras`)
       if (!this.cfg.escribir) throw new FrenoDiez(`escribir en Diez no está pedido (${camino})`)
       if (this.nombreBd === BASE_REAL && !this.cfg.escribirEnReal) throw new FrenoDiez(`escribir en ${BASE_REAL} exige escribirEnReal; primero ${BASE_PRUEBAS}`)
+      const vetados = gruposEn(cuerpo).filter((g) => (GRUPOS_VETADOS[this.nombreBd] ?? []).includes(g))
+      if (vetados.length) throw new FrenoDiez(`el grupo ${[...new Set(vetados)].join(', ')} de la analítica no se envía nunca (no es un local abierto)`)
     }
     if (!camino.startsWith('/api/') && !esEntrar) throw new FrenoDiez(`ruta ${camino} fuera de /api`)
     const cab: Record<string, string> = { accept: 'application/json' }

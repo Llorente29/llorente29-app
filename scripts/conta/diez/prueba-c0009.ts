@@ -92,7 +92,9 @@ try {
   const apuntes = apuntesMolde.length
     ? apuntesMolde.map((a, i) => ({ Linea: i + 1, Cuenta: a.Cuenta, Concepto: 'PRUEBA FOLVY', Fecha: FECHA, Importe: Math.round((Number(a.Importe) / baseMolde) * base * 100) / 100 }))
     : [{ Linea: 1, Cuenta: gasto, Concepto: 'PRUEBA FOLVY', Fecha: FECHA, Importe: base }]
-  const g = grupos.find((x) => !x.NoActivo) ?? grupos[0]
+  // Run 1 usó BAR (el primero del catálogo). Julio, 12/10: Carabanchel va
+  // siempre con CAM y JDH no se envía nunca (el cliente lo frena).
+  const g = grupos.find((x) => x.Codigo === 'CAM') ?? grupos.find((x) => !x.NoActivo && x.Codigo !== 'JDH' && x.Codigo !== 'BAR')
   const s = subs.find((x) => x.Grupo === g?.Codigo) ?? subs[0]
   const n = n3.find((x) => !x.NoActivo) ?? n3[0]
   const analitica = g ? [{ Subcuenta: gasto, Grupo: g.Codigo, Subgrupo: s ? String(s.Subgrupo) : undefined, Nivel3: n?.Codigo, Descripcion: 'PRUEBA FOLVY', Fecha: FECHA, ImporteDebe: base, ImporteHaber: 0 }] : []

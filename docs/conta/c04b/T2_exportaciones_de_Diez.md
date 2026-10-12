@@ -316,3 +316,32 @@ alta en Diez; si no, salen sin marca.
 - **Comparar por local:** solo para lo que envía Folvy desde el 01/10. El
   histórico de Diez no tiene analítica (0 de 606 recibidas en julio en la
   C0009, y 0 en las muestras de la C0008, run 9).
+
+### 6.5 Lo que contestó Julio (12/10) y cómo ha quedado
+
+- **La prueba vale.** `FOLVY-PRUEBA-0001` sale en el libro de recibidas y en
+  el 303 del 4T de la C0009, con Local, Marca y Plataforma rellenos en
+  pantalla. `facturas/add` con `Analitica[]` es la forma de enviar.
+- **Locales.** La correspondencia no es simétrica: una tabla para leer y otra
+  para enviar.
+
+  | Grupo de Diez | Al leer | Al enviar |
+  |---|---|---|
+  | `CAM` Camichi 4 | Carabanchel | **Carabanchel va siempre con CAM** |
+  | `BAR` Juan Antonio Bardem | **Carabanchel** | nunca (solo vale al leer) |
+  | `FLO` Florencio Llorente | Alcalá | Alcalá |
+  | `CAN` Cañaveral | Plaza Castilla | Plaza Castilla |
+  | `JDH` José del Hierro | fuera: no es un local abierto ni tiene ventas | **nunca: freno en el cliente** |
+
+  - BAR es la marca Scandal Burger, que se prepara y se recibe en Camichi 4.
+    La dirección de Bardem solo sale porque Glovo no la cambió.
+  - Scandal Burger se dice en el subgrupo, como las demás marcas.
+- **Dónde vive:**
+  - el freno de JDH está en el cliente (`GRUPOS_VETADOS` en `diezCliente.ts`).
+    Una factura con `Grupo: JDH` en cualquier fila de la analítica no sale, y
+    no llega a hacerse ninguna petición de escritura;
+  - las dos tablas están en `diezAnalitica.ts`, con una revisión que no deja
+    enviar con BAR ni con JDH;
+  - las pruebas, en `tests/conta/diez/analitica.test.ts`.
+- **Marcas:** la tabla de §6.3 sigue sin confirmar. Mientras tanto, las
+  facturas salen sin marca y lo dicen.
