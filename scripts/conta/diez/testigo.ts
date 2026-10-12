@@ -31,6 +31,9 @@ import { limpiar } from './publicable.mjs'
 
 const DESDE = process.env.TESTIGO_DESDE || '202310'
 const HASTA = process.env.TESTIGO_HASTA || '202609'
+// Ejercicios que se vuelven a pedir ENTEROS (filtro por Ejercicio, no por
+// Fecha) para ver si hay asientos que el recorrido por meses no alcanza.
+const ENTEROS = (process.env.TESTIGO_ENTEROS || '2026').split(',').filter(Boolean)
 
 const l: string[] = []
 const md = (...x: string[]) => l.push(...x)
@@ -55,7 +58,7 @@ const meses = (): string[] => {
 
 // [ejercicio][tipo][cuenta] = [debe, haber] o [debe, haber, negativos]
 type Suma = Record<string, Record<string, Record<string, number[]>>>
-const diez: Suma = {}, folvy: Suma = {}, rechazado: Suma = {}
+const diez: Suma = {}, folvy: Suma = {}, rechazado: Suma = {}, fuera: Suma = {}
 const fechas: Record<string, Record<string, [string, string]>> = {}
 const n: Record<string, Record<string, { asientos: number; rechazos: number; negativos: number }>> = {}
 const motivos: Record<string, number> = {}
@@ -68,9 +71,12 @@ md('## Diez · el testigo de la regla 1 (sumas por subcuenta, cifradas)', '', `M
 // Si el listado paginado repite un asiento, otro se ha quedado fuera aunque el
 // total cuadre (lo que pasa con Drive): se cuenta por mes y se dice.
 const repetidos: Record<string, number> = {}
+const claveDe = (a: Apunte) => `${a.Ejercicio}|${a.Serie}|${a.Documento}`
+const leidas = new Set<string>()
 for (const mes of meses()) {
   const apuntes: Apunte[] = await c.apuntesDelMes(mes)
-  const claves = apuntes.map((a) => `${a.Ejercicio}|${a.Serie}|${a.Documento}`)
+  const claves = apuntes.map(claveDe)
+  claves.forEach((k) => leidas.add(k))
   const rep = claves.length - new Set(claves).size
   if (rep) repetidos[mes] = rep
   for (const a of apuntes) {
@@ -100,6 +106,22 @@ for (const mes of meses()) {
   }
 }
 
+// El ejercicio entero contra lo leído mes a mes: lo que sobra en un lado o en
+// el otro se cuenta en claro (tipo y fecha) y sus sumas van cifradas en `fuera`.
+const fueraDeMeses: string[] = []
+const soloEnMeses: Record<string, number> = {}
+for (const ej of ENTEROS) {
+  const enteros: Apunte[] = await c.todas<Apunte>(`/api/apuntes?$filter=${encodeURIComponent(`Ejercicio eq '${ej}'`)}`)
+  const delEjercicio = new Set(enteros.map(claveDe))
+  soloEnMeses[ej] = [...leidas].filter((k) => k.startsWith(`${ej}|`) && !delEjercicio.has(k)).length
+  for (const a of enteros) {
+    if (leidas.has(claveDe(a))) continue
+    fueraDeMeses.push(`${ej} · tipo ${a.TipoAsiento ?? '—'} · fecha ${a.Fecha ? `${String(a.Fecha).slice(0, 4)}-${String(a.Fecha).slice(4, 6)}-${String(a.Fecha).slice(6)}` : '(sin fecha)'} · ${(a.Detalles ?? []).length} líneas`)
+    for (const d of a.Detalles ?? []) sumar(fuera, ej, String(a.TipoAsiento ?? '—'), String(d.Cuenta ?? '').trim(), [cent(d.Debe), cent(d.Haber)])
+  }
+  md(`Ejercicio ${ej} pedido entero: ${enteros.length} asientos.`)
+}
+
 // En claro: solo recuentos.
 md('### Asientos por ejercicio y TipoAsiento', '', '| Ejercicio | Tipo | Asientos | Rechazados | Líneas con negativo | Primera fecha | Última fecha |', '|---|---|---:|---:|---:|---|---|')
 for (const ej of Object.keys(n).sort()) for (const tipo of Object.keys(n[ej]).sort()) {
@@ -107,10 +129,12 @@ for (const ej of Object.keys(n).sort()) for (const tipo of Object.keys(n[ej]).so
   md(`| ${ej} | ${tipo} | ${x.asientos} | ${x.rechazos} | ${x.negativos} | ${f0.slice(0, 4)}-${f0.slice(4, 6)}-${f0.slice(6)} | ${f1.slice(0, 4)}-${f1.slice(4, 6)}-${f1.slice(6)} |`)
 }
 md('', '### Asientos repetidos en el listado paginado', '', ...(Object.keys(repetidos).length ? Object.entries(repetidos).map(([m, k]) => `- ${m}: ${k} repetido${k === 1 ? '' : 's'} (y otros tantos que faltan)`) : ['- ninguno: cada asiento, una vez']))
+md('', `### Asientos del ejercicio entero que el recorrido por meses (${DESDE}–${HASTA}) no trae`, '', ...(fueraDeMeses.length ? fueraDeMeses.map((x) => `- ${x}`) : ['- ninguno']))
+md('', '### Asientos leídos por meses que el ejercicio entero no trae', '', ...Object.entries(soloEnMeses).map(([ej, k]) => `- ${ej}: ${k}`))
 md('', '### Por qué rechazaría convertirAsiento', '', ...(Object.keys(motivos).length ? Object.entries(motivos).sort((a, b) => b[1] - a[1]).map(([m, k]) => `- ${k} × ${m}`) : ['- ninguno']), '')
 
 // Cifrado: las sumas por subcuenta.
-const claro = gzipSync(Buffer.from(JSON.stringify({ desde: DESDE, hasta: HASTA, diez, folvy, rechazado, fechas })))
+const claro = gzipSync(Buffer.from(JSON.stringify({ desde: DESDE, hasta: HASTA, diez, folvy, rechazado, fechas, fuera })))
 const clave = randomBytes(32), iv = randomBytes(12)
 const cif = createCipheriv('aes-256-gcm', clave, iv)
 const datos = Buffer.concat([cif.update(claro), cif.final()])

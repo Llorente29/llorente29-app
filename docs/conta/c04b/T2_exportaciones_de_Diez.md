@@ -734,3 +734,60 @@ Detalles:
 - **El testigo no viaja al runner.** La comparación se hace fuera, con
   `diezTestigo.ts`.
 
+
+### 10.4 Primera pasada (run 21, 12/10): 2023, 2024 y 2025 cuadran al céntimo
+
+**Qué es cada TipoAsiento.** Se ha medido, no supuesto:
+
+| Tipo | Qué es | Cuándo |
+|---|---|---|
+| 0 | asientos generales | todo el año |
+| 1 | facturas expedidas | todo el año; mismo número que el libro de expedidas |
+| 2 | facturas recibidas | todo el año; mismo número que el libro de recibidas |
+| 3 | **apertura** | uno al año, el 1 de enero (2024, 2025 y 2026) |
+| 4 | **regularización** | uno al año, el 31 de diciembre (2023, 2024 y 2025) |
+| 5 | **cierre** | uno al año, el 31 de diciembre (2023, 2024 y 2025) |
+| 13 | dos asientos el 31/12/2024 | entran en la suma |
+
+**La comparación**, con lo que guardaría Folvy contra el testigo:
+
+| Ejercicio | Sin excluir nada | Sin los tipos 4 y 5 |
+|---|---:|---:|
+| 2023 | 15 de 46 | **45 de 45, al céntimo** |
+| 2024 | 23 de 82 | **82 de 82** (77 iguales y 5 iguales con negativos) |
+| 2025 | 22 de 102 | **102 de 102** (94 y 8) |
+| 2026 | 144 de 150 | — (2026 no tiene ni regularización ni cierre) |
+
+- **La exclusión correcta es la misma en los tres años cerrados:** fuera la
+  regularización (4) y el cierre (5); dentro la apertura (3). Es justo lo que
+  dice el testigo, y queda medido.
+- **Los negativos que Folvy pasa de lado explican exactamente** la
+  diferencia de sumas en esas subcuentas (5 en 2024, 8 en 2025 y 12 en
+  2026). El saldo, igual.
+- **`convertirAsiento` rechazaría 4 asientos** de 2023 por tener 0 o 1 línea
+  con importe. No mueven ningún saldo: 2023 cuadra igual.
+
+**2026: 144 de 150.**
+
+- Las 6 subcuentas que difieren **suman cero entre sí**.
+- **No es la conversión:** en las seis, el saldo de Folvy es idéntico al de
+  Diez tal cual por la API.
+- **La diferencia está entre la API y el Excel.** A la API le falta, frente
+  al Excel, el equivalente a tres asientos completos:
+  - dos facturas recibidas, de dos proveedores, cada una con su base y su
+    IVA;
+  - un apunte entre una subcuenta de compras y una cuenta corriente con un
+    socio.
+- **Explicaciones posibles:**
+  - alguien tocó Diez entre la exportación del Excel y la lectura (unos 20
+    minutos después);
+  - el listado paginado de la API, sin orden fijo, repitió unos asientos y
+    se saltó otros con el total intacto, como pasó con Drive (§9.5).
+- **Medido en la pasada 22: no es la paginación.** Ningún mes repite un
+  asiento; cada clave sale una vez. Los recuentos por tipo son los mismos.
+- **También se descarta el filtro de fechas:** el mes va de `aaaamm01` a su
+  último día, en enteros, sin hora que lo recorte.
+- **Lo siguiente (pasada 23):** pedir 2026 **entero por Ejercicio**, no por
+  Fecha, y cruzarlo con lo leído mes a mes. Si hay asientos con el ejercicio
+  2026 y una fecha fuera de enero–septiembre (o sin fecha), salen ahí con su
+  tipo y su fecha, y sus sumas cifradas aparte.
