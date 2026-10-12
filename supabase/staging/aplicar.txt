@@ -1,4 +1,6 @@
 # C04b · Respuesta 4 — El día se cierra a las 2:00 (Julio, 12/10).
+# (2.ª pasada: la 1.ª, run 142, paró en el ensayo en la parte 4 de la prueba —la
+# propuesta inventada no llevaba confianza ni porqué—; no se aplicó nada.)
 #   ensayo: la 0170, la 0175 y su prueba en una transacción con ROLLBACK. Si
 #           falla, no se aplica lo de abajo.
 #   0170:   hora de serie 2:00 (solo el DEFAULT); conta_ultimo_dia_cerrado y
