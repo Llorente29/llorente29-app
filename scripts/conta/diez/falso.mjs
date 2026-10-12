@@ -84,6 +84,8 @@ export async function arrancarDiezFalso(opciones = {}) {
       estado.tokens.set(tok, nb)
       return responder(res, 200, { access_token: tok, token_type: 'bearer', expires_in: 1209599, DataBaseName: estado.fallos.abreOtraBase ?? nb })
     }
+    // El Swagger es público en el Diez de verdad: contesta sin credenciales.
+    if (req.method === 'GET' && ruta === '/swagger/docs/v1') return responder(res, 200, { swagger: '2.0', paths: {} })
     if (!bd) return responder(res, 401, { Message: 'Authorization has been denied for this request.' })
     if (estado.fallos.veces429 > 0) { estado.fallos.veces429--; res.setHeader('retry-after', '0'); return responder(res, 429, { Message: 'Too many requests' }) }
     const b = estado.bases[bd]

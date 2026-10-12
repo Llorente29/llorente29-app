@@ -87,11 +87,13 @@ jobs:
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
           # «[lectura:corta]» al principio del mensaje: solo documentos, saldos
           # y subcuentas nuevas (unos minutos), sin recorrer el histórico.
+          # «[lectura:expedidas]»: las expedidas de 2023-4T por cuenta y
+          # concepto, en forma (sin números ni nombres).
           MENSAJE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           MODO=larga
-          case "$MENSAJE" in "[lectura:corta]"*) MODO=corta ;; esac
+          case "$MENSAJE" in "[lectura:corta]"*) MODO=corta ;; "[lectura:expedidas]"*) MODO=expedidas ;; esac
           echo "Modo: $MODO"
           node scripts/conta/diez/lectura.mjs 202301 202609 "$MODO" | tee lectura.md
           cat lectura.md >> "$GITHUB_STEP_SUMMARY"

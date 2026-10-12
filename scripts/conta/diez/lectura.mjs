@@ -353,6 +353,52 @@ if (process.argv[4] === 'corta') {
   process.exit(0)
 }
 
+// ── Lectura de EXPEDIDAS (12/10): qué son las de 2023-4T sin documento ────
+// Por cuenta y concepto, solo recuentos. El número de factura y el concepto
+// salen como FORMA (letras → A, cifras → 9), nunca tal cual; el concepto solo
+// en los grupos grandes (≥ 50), donde no puede señalar a un tercero.
+if (process.argv[4] === 'expedidas') {
+  const ini = Number(process.env.EXP_DESDE || 20231001), fin = Number(process.env.EXP_HASTA || 20231231)
+  const iso = (n) => `${String(n).slice(0, 4)}-${String(n).slice(4, 6)}-${String(n).slice(6)}`
+  md(`### Expedidas de ${iso(ini)} a ${iso(fin)}: por cuenta y concepto`, '')
+  const fac = await todas(`/api/facturas?$filter=${encodeURIComponent(`Fecha ge ${ini} and Fecha le ${fin}`)}`)
+  const exp = fac.filas.filter((f) => String(f.Serie) === '1')
+  const apu = await todas(`/api/apuntes?$filter=${encodeURIComponent(`Fecha ge ${ini} and Fecha le ${fin}`)}`)
+  const asi = new Map(apu.filas.filter((a) => String(a.Serie) === '1').map((a) => [`${a.Ejercicio}|${a.Documento}`, a]))
+  md(`- Facturas leídas ${fac.filas.length} de ${fac.total ?? '—'}${fac.error ? ` · ${fac.error}` : ''}; de serie 1: **${exp.length}**`,
+    `- Asientos de serie 1 en las mismas fechas: ${asi.size}${apu.error ? ` · ${apu.error}` : ''}`, '')
+  // Un número de pedido (letras y cifras mezcladas, sin separadores) es «X (largo)»;
+  // lo demás, cada tramo de letras → A y de cifras → 9, con el largo total.
+  const formaNum = (s) => { const x = String(s ?? '').trim(); if (!x) return '(vacío)'; return /^[A-Z0-9]+$/i.test(x) && /\d/.test(x) && /[A-Z]/i.test(x) ? `X (${x.length})` : `${x.replace(/[A-ZÁÉÍÓÚÑ]+/gi, 'A').replace(/\d+/g, '9')} (${x.length})` }
+  const formaDe = (s) => String(s ?? '').trim().replace(/[A-ZÁÉÍÓÚÑ]/g, 'A').replace(/[a-záéíóúñ]/g, 'a').replace(/\d/g, '9')
+  const ctaPub = (c) => { const x = String(c ?? ''); return /^4[0134]/.test(x) ? `${x.slice(0, 3)}…` : x }
+  const g = new Map()
+  for (const f of exp) {
+    const a = asi.get(`${f.Ejercicio}|${f.Documento}`)
+    const ctas = a ? [...new Set((a.Detalles ?? []).map((d) => ctaPub(d.Cuenta)))].sort().join(' · ') : '(sin asiento)'
+    const k = `${formaNum(f.NumeroFactura)}|${ctaPub(f.CuentaCliente)}|${ctas}`
+    const o = g.get(k) ?? { n: 0, docs: [], meses: new Set(), lineas: 0, conceptos: new Map(), cif: 0, tipos: new Set() }
+    o.n++; o.docs.push(Number(f.Documento)); o.meses.add(String(f.Fecha).slice(0, 6)); o.lineas += a?.Detalles?.length ?? 0
+    if (f.CifCliente) o.cif++
+    o.tipos.add(String(f.TipoFactura ?? f.TipoAsiento ?? ''))
+    const num = String(f.NumeroFactura ?? '').trim()
+    const c = formaDe((num ? String(a?.Descripcion ?? a?.Detalles?.[0]?.Descripcion ?? '').split(num).join('#') : String(a?.Descripcion ?? a?.Detalles?.[0]?.Descripcion ?? '')))
+    o.conceptos.set(c, (o.conceptos.get(c) ?? 0) + 1)
+    g.set(k, o)
+  }
+  const rango = (v) => { v.sort((x, y) => x - y); return v.length ? `${v[0]}–${v.at(-1)}` : '—' }
+  tabla(['Asientos', 'Forma del nº', 'Cuenta cliente', 'Cuentas del asiento', 'Documentos', 'Meses', 'Líneas/asiento', 'Con CIF', 'Concepto (forma; # = el nº; solo ≥ 50)'],
+    [...g.entries()].sort((x, y) => y[1].n - x[1].n).map(([k, o]) => {
+      const [fn, cc, ct] = k.split('|')
+      const con = o.n >= 50 ? [...o.conceptos.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([c, n]) => `\`${limpiar(c).slice(0, 60)}\` ×${n}`).join('<br>') : '(grupo pequeño)'
+      return [o.n, `\`${fn}\``, `\`${cc}\``, `\`${ct}\``, rango(o.docs), [...o.meses].sort().join(' '), (o.lineas / o.n).toFixed(1), o.cif, con]
+    }))
+  const sinFactura = [...asi.values()].filter((a) => !exp.some((f) => `${f.Ejercicio}|${f.Documento}` === `${a.Ejercicio}|${a.Documento}`))
+  md(`- Asientos de serie 1 sin factura en esas fechas: ${sinFactura.length}`, '', `Peticiones: ${metrica.peticiones} · ${Math.round(metrica.bytes / 1024)} KB.`)
+  soltar()
+  process.exit(0)
+}
+
 // ── 3. Catálogos ─────────────────────────────────────────────────────────────
 md('### Catálogos (cuántos)', '')
 const catalogos = [
