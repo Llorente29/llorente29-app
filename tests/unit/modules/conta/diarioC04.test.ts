@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cifras, deDondeSale, estadoDe, estadoMes, filtrar, filtrosVisibles, importe, loQueHeHechoYo, mesAnterior, finDeMes,
-  nombreDeUso, numeroVisible, pasosCierre, pastillas, problemasMano, sePuedeCerrar, cuadreMano, type ApunteDiario, type AsientoDiario, type LineaMano,
+  marcaNegativoDiez, nombreDeUso, numeroVisible, pasosCierre, pastillas, problemasMano, sePuedeCerrar, cuadreMano, type ApunteDiario, type AsientoDiario, type LineaMano,
 } from '@/modules/conta/lib/diario'
 
 const NORTE = 'loc-norte'; const SUR = 'loc-sur'
@@ -12,7 +12,7 @@ const NORTE = 'loc-norte'; const SUR = 'loc-sur'
 function apunte(p: Partial<ApunteDiario>): ApunteDiario {
   return {
     posicion: 1, cuentaId: 'c', cuenta: '57000000', nombreCuenta: 'Caja', tituloOficial: null, debe: 0, haber: 0, concepto: null, localId: NORTE, local: 'Norte',
-    comun: false, marcaId: null, marca: null, cedida: false, documento: null, iva: null, retencion: null, ...p,
+    comun: false, marcaId: null, marca: null, cedida: false, documento: null, iva: null, retencion: null, negativoEnDiez: null, ...p,
   }
 }
 function asiento(p: Partial<AsientoDiario>): AsientoDiario {
@@ -25,6 +25,14 @@ function asiento(p: Partial<AsientoDiario>): AsientoDiario {
     ...p,
   }
 }
+
+describe('marca «En Diez iba en negativo» (matiz 2)', () => {
+  it('solo en las líneas pasadas de lado, con el lado de Diez', () => {
+    expect(marcaNegativoDiez(apunte({ debe: 1025, negativoEnDiez: 'haber' }))).toBe('En Diez iba en negativo (en el haber)')
+    expect(marcaNegativoDiez(apunte({ haber: 500, negativoEnDiez: 'debe' }))).toBe('En Diez iba en negativo (en el debe)')
+    expect(marcaNegativoDiez(apunte({ debe: 110 }))).toBeNull()
+  })
+})
 
 describe('filtros por origen', () => {
   const libro = [

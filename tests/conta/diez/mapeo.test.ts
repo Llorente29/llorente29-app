@@ -61,6 +61,31 @@ describe('convertirAsiento', () => {
     expect([a.debe, a.haber]).toEqual([5300, 5300])
   })
 
+  it('cada línea pasada de lado dice en qué lado de Diez iba en negativo; las demás, nada', async () => {
+    const a = await ok(base({ Detalles: [
+      { Linea: 1, Cuenta: '62900000', Debe: 50, Haber: 0 },
+      { Linea: 2, Cuenta: '70800000', Debe: 0, Haber: -10.25 }, // abono en negativo: pasa al debe
+      { Linea: 3, Cuenta: '62900002', Debe: -5, Haber: 0 }, // pasa al haber
+      { Linea: 4, Cuenta: '57000000', Debe: 0, Haber: 57.25 },
+      { Linea: 5, Cuenta: '55100001', Debe: 2, Haber: -3 }, // 2 propios + 3 del negativo, al debe
+      { Linea: 6, Cuenta: '55100002', Debe: -4, Haber: -1 }, // los dos negativos: dos líneas, cada una con su lado
+    ] }))
+    const m = a.lineas.map((l) => [l.cuenta, l.debe, l.haber, l.negativoEnDiez])
+    expect(m).toEqual([
+      ['62900000', 5000, 0, null],
+      ['70800000', 1025, 0, 'haber'],
+      ['62900002', 0, 500, 'debe'],
+      ['57000000', 0, 5725, null],
+      ['55100001', 500, 0, 'haber'],
+      ['55100002', 100, 0, 'haber'],
+      ['55100002', 0, 400, 'debe'],
+    ])
+    expect(a.ajustes.negativos).toBe(5)
+    // La marca no entra en la huella: lo que se compara con Diez son cuenta, debe y haber.
+    const sin = await ok(base({ Detalles: [{ Cuenta: '62900000', Debe: 10 }, { Cuenta: '57000000', Haber: 10 }] }))
+    expect(sin.lineas.every((l) => l.negativoEnDiez === null)).toBe(true)
+  })
+
   it.each([
     [{ Serie: '7' }, /serie 7/],
     [{ Serie: 'FOLVY' }, /serie FOLVY/],

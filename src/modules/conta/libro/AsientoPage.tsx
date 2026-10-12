@@ -20,7 +20,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
-import { deDondeSale, estadoDe, estadoMes, mesDe, nombreMes, pastillas, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
+import { deDondeSale, estadoDe, estadoMes, marcaNegativoDiez, mesDe, nombreMes, pastillas, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
 import {
   anular, cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
@@ -138,6 +138,7 @@ export default function AsientoPage() {
                   <span className="cxd-linea-nombre">{l.nombreCuenta}</span>
                   <span className="cxd-concepto-apoyo">
                     {pastillas({ apuntes: [l] }).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+                    {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
                     <Link to={rutaMayor(l.cuenta)} className="cxd-codigo">{l.cuenta}</Link>
                     {l.concepto && <span className="cxd-sale">· {l.concepto}</span>}
                     {l.iva && <span className="cxd-sale">· IVA {l.iva.tipo ?? ''} % sobre {eurosExactos(l.iva.base)}</span>}

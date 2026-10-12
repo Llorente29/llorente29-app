@@ -791,3 +791,35 @@ Detalles:
   Fecha, y cruzarlo con lo leído mes a mes. Si hay asientos con el ejercicio
   2026 y una fecha fuera de enero–septiembre (o sin fecha), salen ahí con su
   tipo y su fecha, y sus sumas cifradas aparte.
+
+### 10.5 Los tres matices de Julio (12/10) y el zip
+
+**El zip `sumas-y-saldos.zip`** trae los mismos cuatro Excel de la carpeta
+(mismo tamaño y misma hora). Leídos con `leerTestigo` directamente del
+`.xlsx` y comparados con lo transcrito del texto del conector: **45, 82, 102 y
+150 subcuentas, 0 diferencias de debe o haber, TOTALES idénticos, ningún
+problema**. La comparación de §10.4 se hizo, pues, contra el Excel de verdad.
+
+1. **La vara es el ejercicio entero con su apertura, sin regularización ni
+   cierre.** Es la que ya se usa: dentro el tipo 3, fuera el 4 y el 5.
+2. **Negativos.** El saldo, al céntimo y sin excepción. Debe y haber al
+   céntimo, salvo donde hubo negativos: ahí la diferencia tiene que ser
+   **exactamente** lo pasado de lado (`igual_con_negativos`; si no, es
+   `sumas_distintas`). Además, **cada línea pasada de lado lo dice**:
+   `convertirAsiento` deja en `negativoEnDiez` en qué lado de Diez iba el
+   negativo; se guarda en `journal_line.external_negative_side`
+   (`20261019T0140`, aplicada en staging, run 138) y Libros la marca
+   «En Diez iba en negativo (en el debe/haber)» en el asiento y en el
+   desplegable del diario.
+3. **Debe igual a haber, o vacía, es saldo cero, no subcuenta que falta.**
+   Estado nuevo `saldo_cero` en `compararTestigo`: un lado no la trae y el
+   otro la tiene con saldo cero → cuadra. Con saldo, faltar sigue siendo
+   faltar (`solo_testigo` / `solo_folvy`). Medido con la misma vara sobre la
+   pasada 21: **no cambia ningún resultado** (45/45, 82/82, 102/102; 2026
+   144/150). Solo cambia, en 2023 sin excluir nada, una subcuenta que pasa de
+   `solo_folvy` a `saldo_cero`.
+
+**Ojo al publicar:** el front lee `external_negative_side` dentro de un
+`.select()` (regla 40). En producción la columna aún no existe: la 0140 tiene
+que estar aplicada en producción **antes** de fusionar, o el libro diario no
+cargará.

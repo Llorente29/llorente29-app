@@ -35,6 +35,14 @@ export interface ApunteDiario {
   documento: string | null
   iva: { tipoId: string; base: number; libro: string; tipo: number | null } | null
   retencion: { base: number; modelo: string } | null
+  /** Traída de Diez con importe NEGATIVO: en qué lado iba allí. Folvy la lleva
+   *  en positivo al otro lado; Libros lo dice para contrastar línea a línea. */
+  negativoEnDiez: 'debe' | 'haber' | null
+}
+
+/** La marca de una línea que en Diez iba en negativo, o null. */
+export function marcaNegativoDiez(l: Pick<ApunteDiario, 'negativoEnDiez'>): string | null {
+  return l.negativoEnDiez ? `En Diez iba en negativo (en el ${l.negativoEnDiez})` : null
 }
 
 export interface AsientoDiario {

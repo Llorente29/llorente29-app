@@ -74,7 +74,7 @@ describe('compararTestigo', () => {
   })
 
   it('cada diferencia con su estado', () => {
-    const r = compararTestigo(T, F({ '10000000': [0, 300001], '43000001': [160050, 110000], '70800000': [2479, 0, 0], '99999999': [100, 100] }))
+    const r = compararTestigo(T, F({ '10000000': [0, 300001], '43000001': [160050, 110000], '70800000': [2479, 0, 0], '99999999': [100, 0] }))
     const e = Object.fromEntries(r.filas.map((x) => [x.cuenta, x.estado]))
     expect(e).toEqual({
       '10000000': 'saldo_distinto',
@@ -85,5 +85,20 @@ describe('compararTestigo', () => {
       '99999999': 'solo_folvy',
     })
     expect(r.cuadra).toBe(false)
+  })
+
+  it('matiz 3: debe igual a haber o vacía es saldo cero, no subcuenta que falta', () => {
+    const t = leerTestigo([...CAB, fila('55100001', '28.00', '28.00', null, null), fila('52100000', null, null, null, null), fila('10000000', null, '1.00', null, '1.00'), [null, null, 'TOTALES:', 28, 29, 0, 1]]).cuentas
+    const r = compararTestigo(t, F({ '10000000': [0, 100], '47200000': [3545, 3545] }))
+    const e = Object.fromEntries(r.filas.map((x) => [x.cuenta, x.estado]))
+    expect(e).toEqual({
+      '10000000': 'igual',
+      '47200000': 'saldo_cero', // en Folvy con debe = haber, y el Excel no la trae
+      '52100000': 'igual', // vacía en el Excel y sin nada en Folvy
+      '55100001': 'saldo_cero', // en el Excel con debe = haber, y Folvy no la trae
+    })
+    expect(r.cuadra).toBe(true)
+    // Con saldo, faltar sí es faltar.
+    expect(compararTestigo(t, F({ '10000000': [0, 100], '47200000': [3545, 0] })).filas.find((x) => x.cuenta === '47200000')!.estado).toBe('solo_folvy')
   })
 })

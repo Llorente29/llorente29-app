@@ -19,6 +19,11 @@
 // Folvy haya pasado un negativo al otro lado (convertirAsiento, «negativos»):
 // ahí las dos sumas crecen lo mismo, y esa diferencia tiene que ser
 // exactamente lo movido. Lo demás es una diferencia y se dice.
+//
+// Matiz 3 (Julio, 12/10): una subcuenta con debe igual a haber, o vacía,
+// cuenta como SALDO CERO, no como subcuenta que falta. Si un lado no la trae
+// y el otro la tiene con saldo cero, es «saldo_cero» y cuadra; si el otro la
+// tiene con saldo, falta de verdad (solo_testigo / solo_folvy).
 
 export type CuentaTestigo = { debe: number; haber: number; saldo: number } // céntimos; saldo = debe − haber
 export type Testigo = { cuentas: Map<string, CuentaTestigo>; totales: { debe: number; haber: number; deudor: number; acreedor: number } | null; problemas: string[] }
@@ -84,7 +89,8 @@ export type EstadoCuenta =
   | 'igual_con_negativos' // saldo igual; debe y haber crecen exactamente lo movido
   | 'saldo_distinto'
   | 'sumas_distintas' // saldo igual, pero debe/haber difieren sin que lo explique lo movido
-  | 'solo_testigo' // con importe en Diez y sin nada en Folvy
+  | 'saldo_cero' // un lado no la trae y el otro la tiene con saldo cero (matiz 3)
+  | 'solo_testigo' // con saldo en Diez y sin nada en Folvy
   | 'solo_folvy'
 
 export type ComparacionCuenta = { cuenta: string; estado: EstadoCuenta; testigo: CuentaTestigo | null; folvy: CuentaFolvy | null }
@@ -98,8 +104,8 @@ export function compararTestigo(testigo: Map<string, CuentaTestigo>, folvy: Map<
     const vacioF = !f || (f.debe === 0 && f.haber === 0)
     let estado: EstadoCuenta
     if (vacioT && vacioF) estado = 'igual'
-    else if (vacioF) estado = 'solo_testigo'
-    else if (vacioT) estado = 'solo_folvy'
+    else if (vacioF) estado = t!.saldo === 0 ? 'saldo_cero' : 'solo_testigo'
+    else if (vacioT) estado = f!.debe === f!.haber ? 'saldo_cero' : 'solo_folvy'
     else if (f!.debe - f!.haber !== t!.saldo) estado = 'saldo_distinto'
     else if (f!.debe === t!.debe && f!.haber === t!.haber) estado = 'igual'
     else if (f!.debe - t!.debe === f!.negativos && f!.haber - t!.haber === f!.negativos) estado = 'igual_con_negativos'
@@ -107,6 +113,6 @@ export function compararTestigo(testigo: Map<string, CuentaTestigo>, folvy: Map<
     return { cuenta, estado, testigo: t, folvy: f }
   })
   const resumen = filas.reduce((r, x) => { r[x.estado] = (r[x.estado] ?? 0) + 1; return r }, {} as Partial<Record<EstadoCuenta, number>>)
-  const cuadra = filas.every((x) => x.estado === 'igual' || x.estado === 'igual_con_negativos')
+  const cuadra = filas.every((x) => x.estado === 'igual' || x.estado === 'igual_con_negativos' || x.estado === 'saldo_cero')
   return { filas, resumen, cuadra }
 }

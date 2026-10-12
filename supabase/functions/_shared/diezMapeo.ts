@@ -31,6 +31,9 @@ export type LineaFolvy = {
   concepto: string | null
   contrapartida: string | null
   justificante: string | null
+  /** Si en Diez este importe iba en NEGATIVO, en qué lado estaba: Folvy lo
+   *  muestra («En Diez iba en negativo») para contrastar el diario línea a línea. */
+  negativoEnDiez: 'debe' | 'haber' | null
 }
 export type AsientoFolvy = {
   ejercicio: string
@@ -105,15 +108,22 @@ export async function convertirAsiento(a: Apunte): Promise<{ ok: AsientoFolvy } 
   for (const d of detalles) {
     const cuenta = String(d.Cuenta ?? '').trim()
     if (!/^\d{3,12}$/.test(cuenta)) return no(`línea ${d.Linea ?? '?'}: cuenta no válida`)
-    let debe = cent(d.Debe), haber = cent(d.Haber)
-    if (debe < 0) { haber += -debe; debe = 0; ajustes.negativos++ }
-    if (haber < 0) { debe += -haber; haber = 0; ajustes.negativos++ }
+    const debeDiez = cent(d.Debe), haberDiez = cent(d.Haber)
+    // Lo que acaba en cada lado de Folvy y de qué lado de Diez sale.
+    const alDebe = Math.max(debeDiez, 0) + Math.max(-haberDiez, 0)
+    const alHaber = Math.max(haberDiez, 0) + Math.max(-debeDiez, 0)
+    if (debeDiez < 0) ajustes.negativos++
+    if (haberDiez < 0) ajustes.negativos++
     const comun = { cuenta, concepto: texto(d.Descripcion), contrapartida: texto(d.Contrapartida), justificante: texto(d.Justificante) }
-    if (debe === 0 && haber === 0) { ajustes.lineasACero++; continue }
-    if (debe > 0 && haber > 0) {
+    // Un lado de Folvy lleva la marca si algo de lo suyo era un negativo del otro.
+    const marcaDebe = haberDiez < 0 ? 'haber' as const : null
+    const marcaHaber = debeDiez < 0 ? 'debe' as const : null
+    if (alDebe === 0 && alHaber === 0) { ajustes.lineasACero++; continue }
+    if (alDebe > 0 && alHaber > 0) {
       ajustes.partidas++
-      lineas.push({ posicion: 0, ...comun, debe, haber: 0 }, { posicion: 0, ...comun, debe: 0, haber })
-    } else lineas.push({ posicion: 0, ...comun, debe, haber })
+      lineas.push({ posicion: 0, ...comun, debe: alDebe, haber: 0, negativoEnDiez: marcaDebe }, { posicion: 0, ...comun, debe: 0, haber: alHaber, negativoEnDiez: marcaHaber })
+    } else if (alDebe > 0) lineas.push({ posicion: 0, ...comun, debe: alDebe, haber: 0, negativoEnDiez: marcaDebe })
+    else lineas.push({ posicion: 0, ...comun, debe: 0, haber: alHaber, negativoEnDiez: marcaHaber })
   }
   if (lineas.length < 2) return no(`${lineas.length} línea${lineas.length === 1 ? '' : 's'} con importe`)
   lineas.forEach((l, i) => (l.posicion = i + 1))

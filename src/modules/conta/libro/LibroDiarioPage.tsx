@@ -21,7 +21,7 @@ import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  cifras, deDondeSale, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, mesAnterior, mesDe, nombreMes, numeroVisible,
+  cifras, deDondeSale, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, marcaNegativoDiez, mesAnterior, mesDe, nombreMes, numeroVisible,
   pasosCierre, pastillas, sePuedeCerrar, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
@@ -334,7 +334,10 @@ function FilaAsiento({ a, abierto, movil, alAbrir }: { a: AsientoDiario; abierto
                 <span>{l.nombreCuenta}{l.local ? ` · ${l.local}` : l.comun ? ' · común' : ''}</span>
                 <Link to={rutaMayor(l.cuenta)} className="cxd-codigo">{l.cuenta}</Link>
               </span>
-              <span>{l.marca && <Chip tono={l.cedida ? 'ambar' : 'neutro'}>{l.cedida ? `${l.marca} · cedida` : l.marca}</Chip>}</span>
+              <span>
+                {l.marca && <Chip tono={l.cedida ? 'ambar' : 'neutro'}>{l.cedida ? `${l.marca} · cedida` : l.marca}</Chip>}
+                {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
+              </span>
               <span className="cxd-importe">{eurosExactos(l.debe || l.haber)}</span>
               <span className="cx-ayuda">{l.debe ? 'al Debe' : 'al Haber'}</span>
             </div>
