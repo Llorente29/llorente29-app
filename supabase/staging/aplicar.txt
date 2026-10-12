@@ -1,14 +1,14 @@
-# C04b · T3 — El escritor del histórico de Diez (respuestas 1 y 3).
-#   ensayo: el 0150 y su prueba en una transacción con ROLLBACK. Si falla,
+# C04b · T3 — La numeración de un ejercicio mixto sigue a lo traído (Julio,
+# 12/10): no depende de que nadie se acuerde, es una regla en la base.
+#   ensayo: el 0160 y su prueba en una transacción con ROLLBACK. Si falla,
 #           no se aplica lo de abajo.
-#   0150:   conta_diez_ejercicio (ejercicio traído), conta_diez_subcuentas
-#           (las que faltan, de su hoja), conta_diez_importar (migrated,
-#           validado, número de Diez, cadena de huellas, idempotente, un
-#           asiento por subtransacción) y conta_diez_cerrar_ejercicio. Solo
-#           service_role.
-#   La prueba (2.º intento: la cadena se rehace a mano, la función del
-#   agente pide usuario): permisos; ejercicio una vez; subcuentas; 2 traídos y 4
-#   rechazados con motivo; cómo quedan; la cadena; traer dos veces; cerrar.
-supabase/staging/sql/20261019_diez_importar_ensayo.sql
-supabase/migrations/20261019T0150_diez_importar.sql
-supabase/staging/sql/20261019_diez_importar_prueba.sql
+#   0160:   fiscal_year.history_imported_at; journal_entry_validar para con
+#           «Primero hay que traer el histórico de Diez de 2026» mientras no
+#           esté (el resto, byte a byte igual: md5 medido); conta_diez_
+#           historico_traido; conta_diez_importar guarda el tipo de Diez.
+#   La prueba: bloqueado sin histórico; lo traído entra con su tipo; marcar;
+#   el primero de Folvy sale con el 3 (detrás del 2 de Diez); un ejercicio de
+#   Folvy, igual que antes; marcar uno de Folvy, no.
+supabase/staging/sql/20261019_diez_numeracion_ensayo.sql
+supabase/migrations/20261019T0160_diez_numeracion.sql
+supabase/staging/sql/20261019_diez_numeracion_prueba.sql
