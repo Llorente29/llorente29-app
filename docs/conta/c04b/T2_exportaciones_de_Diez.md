@@ -370,7 +370,7 @@ solo recuentos.
   nombres reales**.
 - **14 nombres de recibidas salen dos veces** en Drive, con el mismo tamaño en
   las dos copias. Se quedará uno, comparando la huella sha256 al subirlo (la
-  tabla de documentos ya exige sha único).
+  tabla de documentos ya exige sha único; corregido en §8.1).
 - **Ningún PDF pasa de 10 MB.** El mayor pesa 652 KB, ninguno pesa 0 bytes y
   todos son `application/pdf`.
 - **Las 17 recibidas sin código de documento** (§5.2) siguen sin PDF. Quedan
@@ -429,3 +429,61 @@ Excel dentro.
 - **Comprobado contra las 18 marcas reales de Folvy:** cada una tiene
   subgrupo o un porqué para ir sin él. Ninguna queda sin decidir (prueba en
   `analitica.test.ts`).
+
+## 8. 2023, cuarto trimestre (12/10, medido en el Drive de Julio)
+
+Carpeta `2023-4T/` con `recibidas/`, `expedidas/` y sus dos Excel. Es el
+primer trimestre del libro: van del 31/10 al 31/12 de 2023. Aquí solo hay
+recuentos. Los Excel llevan en el nombre los datos de la empresa y se quedan
+fuera del repositorio.
+
+| | Filas del Excel | Con código de documento | PDF | Enlazados | Código sin PDF | PDF sin código |
+|---|---:|---:|---:|---:|---:|---:|
+| Recibidas (serie 2) | 158 | 67 | 67 | **67** | 0 | 0 |
+| Expedidas (serie 1) | 576 | 23 | 23 | **23** | 0 | 0 |
+
+- **Las 158 recibidas** son las mismas que la API contaba en serie 2 de 2023.
+- **Las 91 recibidas sin código** son, sobre todo, facturas de plataforma con
+  numeración `ES-…`. En Diez no tienen documento, así que quedan «pendiente de
+  documento», cada una con su porqué.
+- **Las expedidas casi no tienen documento:** 553 de 576 no lo tienen, que
+  es lo normal en ventas registradas por resumen. Las 23 que sí lo tienen son
+  los documentos 1–18 y 774–778.
+- **Ningún PDF pasa de 10 MB.** El mayor pesa 579 KB.
+- **Cabeceras HTTP:** en este trimestre no se ha bajado ninguna muestra
+  entera. Se cuentan al importar, igual que en septiembre (§7).
+
+### 8.1 El mismo PDF respalda más de un asiento
+
+Glovo emite **un solo documento** que Diez registra dos veces:
+
+- como **expedida**, por la venta;
+- y como **recibida**, por la comisión y los riders.
+
+Dentro de las recibidas, además, el apunte de la plataforma y el de «riders»
+comparten a veces la misma factura.
+
+- **Medido:**
+  - los 18 documentos expedidos 1–18 tienen cada uno el mismo tamaño exacto
+    que una o dos recibidas (de la 4 a la 26). Son 18 grupos con 43 asientos;
+  - hay un grupo más, solo de recibidas, con tres asientos (139, 140 y 142).
+  - En total, 90 ficheros y **63 contenidos distintos** por tamaño.
+- **Comprobado byte a byte en un par:** la expedida 2023/1/9 y la recibida
+  2023/2/14 tienen el mismo sha256. El resto se ha comparado por tamaño
+  exacto. El importador lo confirma con la huella de cada fichero.
+
+**Consecuencia para el modelo.** El índice `external_document_sha_uq`, que
+es único por (empresa, sha256), **impide enlazar el mismo fichero a dos
+asientos**. Por eso la frase de §7 «la tabla ya exige sha único» deja de ser
+una garantía y pasa a ser un error del diseño.
+
+Propuesta, pendiente de confirmar:
+- el fichero se guarda **una vez**, en una ruta de Storage derivada de su
+  sha256;
+- cada asiento tiene **su propia fila** en `external_document`, apuntando a
+  ese mismo `storage_path`;
+- la unicidad pasa a ser (empresa, sha256, asiento): el mismo fichero no se
+  enlaza dos veces **al mismo asiento**, pero sí a varios.
+
+Los 14 nombres repetidos de septiembre (§7) se siguen resolviendo igual:
+mismo nombre y misma huella, una sola fila.
