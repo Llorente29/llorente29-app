@@ -102,6 +102,17 @@ describe('importarHistorico', () => {
     expect(resumenParte(p)).toBe('3 asientos traídos de 5 leídos en 2 meses · 1 que no se pueden convertir · 1 posteriores al corte (entran por el día a día) · 1 subcuentas nuevas traídas de Diez')
   })
 
+  it('un asiento con todo a cero queda fuera «sin importe en Diez», no es un rechazo y deja el parte limpio', async () => {
+    const B = base()
+    const datos = { '202409': [...DIEZ['202409'], ap('2024', '4', 9, 20240920, [['57000000', 0, 0], ['55100000', 0, 0]])] }
+    const p = await importarHistorico({ ...CFG, hasta: '202409', lector: lector(datos), rpc: B.rpc })
+    expect(p.sinImporte).toEqual([{ clave: '2024/4/9', motivo: 'sin importe en Diez' }])
+    expect(p.rechazadosAlConvertir).toEqual([])
+    expect(p.traidos).toBe(3)
+    expect(parteLimpio(p)).toBe(true)
+    expect(resumenParte(p)).toContain('1 fuera, sin importe en Diez')
+  })
+
   it('el negativo de Diez viaja con su marca a la base', async () => {
     const B = base()
     await importarHistorico({ ...CFG, corte: '2024-12-31', lector: lector(), rpc: B.rpc })

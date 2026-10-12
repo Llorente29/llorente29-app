@@ -107,6 +107,22 @@ jobs:
           cd /tmp/carga
           "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=ensayo \
             -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
+      - name: Paso 3 · un rechazo de verdad pone la tanda en ROJO, aun en real, y no deja nada
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -uo pipefail
+          cd /tmp/carga
+          # Un asiento que mueve saldo y no entra (Julio, 12/10: eso es un rechazo; lo que está todo a cero, no).
+          echo '"2023","2023/4/99","1 línea con importe"' >> rechazos.csv
+          if "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=real \
+               -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" > /tmp/rojo.txt 2>&1; then
+            cat /tmp/rojo.txt; echo "::error::Con un rechazo, la tanda NO salió en rojo."; exit 1
+          fi
+          cat /tmp/rojo.txt
+          grep -q 'REAL en rojo: deshecho' /tmp/rojo.txt && grep -q 'antes 0 · después 0' /tmp/rojo.txt \
+            || { echo "::error::En rojo, pero sin la prueba de que no se escribió nada."; exit 1; }
+          { echo; echo "**Paso 3:** con un rechazo de verdad, en rojo y sin escribir nada (antes 0 · después 0)."; } >> /tmp/informe.md
       - name: Informe
         if: always()
         run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'

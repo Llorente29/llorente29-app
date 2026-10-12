@@ -93,6 +93,7 @@ for (const mes of meses()) {
       if (m) movido[cta] = (movido[cta] ?? 0) + m
     }
     const conv = await convertirAsiento(a)
+    if ('sinImporte' in conv) { motivos['sin importe en Diez (fuera, no es rechazo)'] = (motivos['sin importe en Diez (fuera, no es rechazo)'] ?? 0) + 1; continue }
     if ('rechazo' in conv) {
       cuenta.rechazos++
       const motivo = String(conv.rechazo.motivo).replace(/\d/g, '9')

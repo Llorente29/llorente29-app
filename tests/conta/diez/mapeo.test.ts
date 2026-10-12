@@ -91,6 +91,15 @@ describe('convertirAsiento', () => {
     expect(sin.lineas.every((l) => l.negativoEnDiez === null)).toBe(true)
   })
 
+  it('todo a cero en Diez no es un rechazo: queda fuera «sin importe en Diez»; una sola línea con importe, sí lo es', async () => {
+    const cero = await convertirAsiento(base({ Detalles: [{ Cuenta: '57000000', Debe: 0, Haber: 0 }, { Cuenta: '55100000', Debe: 0, Haber: 0 }] }))
+    expect(cero).toEqual({ sinImporte: { clave: '2025/2/1043', motivo: 'sin importe en Diez' } })
+    const vacio = await convertirAsiento(base({ Detalles: [] }))
+    expect('sinImporte' in vacio).toBe(true)
+    const una = await convertirAsiento(base({ Detalles: [{ Cuenta: '57000000', Debe: 3, Haber: 0 }, { Cuenta: '55100000', Debe: 0, Haber: 0 }] }))
+    expect(una).toEqual({ rechazo: { clave: '2025/2/1043', motivo: '1 línea con importe' } })
+  })
+
   it.each([
     [{ Serie: '7' }, /serie 7/],
     [{ Serie: 'FOLVY' }, /serie FOLVY/],

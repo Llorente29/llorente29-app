@@ -19,7 +19,7 @@
 
 import type { Apunte } from './diezCliente.ts'
 import { pendienteDeDocumento, type OrigenDocumento } from './diezDocumentos.ts'
-import { claveDiez, convertirAsiento, type AsientoFolvy, type Rechazo } from './diezMapeo.ts'
+import { claveDiez, convertirAsiento, type AsientoFolvy, type Rechazo, type SinImporte } from './diezMapeo.ts'
 
 export interface LectorDiez {
   apuntesDelMes(aaaamm: string): Promise<Apunte[]>
@@ -43,7 +43,8 @@ export type ConfigImportacion = {
 export type ParteImportacion = {
   meses: number
   leidos: number
-  rechazadosAlConvertir: Rechazo[]
+  rechazadosAlConvertir: Rechazo[] // mueven saldo y no entran: bloquean
+  sinImporte: SinImporte[] // todo a cero en Diez: fuera, con su motivo, sin bloquear
   fueraDelCorte: string[]
   ejercicios: { codigo: string; id?: string; problema?: string }[]
   subcuentas: { nuevas: number; estaban: number; rechazadas: { code: string; motivo: string }[] }
@@ -87,6 +88,7 @@ export type Preparado = {
   leidos: number
   asientos: AsientoFolvy[] // en el orden de la cadena
   rechazadosAlConvertir: Rechazo[]
+  sinImporte: SinImporte[]
   fueraDelCorte: string[]
   subcuentas: { code: string; nombre: string }[] // las que usan, con el nombre de Diez
 }
@@ -99,7 +101,7 @@ export type Preparado = {
 export async function prepararHistorico(cfg: Pick<ConfigImportacion, 'lector' | 'desde' | 'hasta' | 'corte' | 'avisar'>): Promise<Preparado> {
   const avisar = cfg.avisar ?? (() => {})
   if (!/^\d{4}-\d{2}-\d{2}$/.test(cfg.corte)) throw new Error(`Corte no válido: ${cfg.corte}`)
-  const p: Preparado = { meses: 0, leidos: 0, asientos: [], rechazadosAlConvertir: [], fueraDelCorte: [], subcuentas: [] }
+  const p: Preparado = { meses: 0, leidos: 0, asientos: [], rechazadosAlConvertir: [], sinImporte: [], fueraDelCorte: [], subcuentas: [] }
   const vistas = new Set<string>()
   for (const mes of mesesEntre(cfg.desde, cfg.hasta)) {
     const apuntes = await cfg.lector.apuntesDelMes(mes)
@@ -112,6 +114,7 @@ export async function prepararHistorico(cfg: Pick<ConfigImportacion, 'lector' | 
       vistas.add(clave)
       const c = await convertirAsiento(a)
       if ('rechazo' in c) { p.rechazadosAlConvertir.push(c.rechazo); continue }
+      if ('sinImporte' in c) { p.sinImporte.push(c.sinImporte); continue }
       if (c.ok.fecha > cfg.corte) { p.fueraDelCorte.push(clave); continue }
       p.asientos.push(c.ok)
     }
@@ -143,7 +146,7 @@ export async function importarHistorico(cfg: ConfigImportacion): Promise<ParteIm
   const avisar = cfg.avisar ?? (() => {})
   const prep = await prepararHistorico(cfg)
   const parte: ParteImportacion = {
-    meses: prep.meses, leidos: prep.leidos, rechazadosAlConvertir: prep.rechazadosAlConvertir, fueraDelCorte: prep.fueraDelCorte,
+    meses: prep.meses, leidos: prep.leidos, rechazadosAlConvertir: prep.rechazadosAlConvertir, sinImporte: prep.sinImporte, fueraDelCorte: prep.fueraDelCorte,
     ejercicios: [], subcuentas: { nuevas: 0, estaban: 0, rechazadas: [] }, traidos: 0, yaEstaban: 0, distintos: [], rechazados: [],
   }
 
@@ -183,6 +186,7 @@ export function resumenParte(p: ParteImportacion): string {
     p.distintos.length ? `${p.distintos.length} cambiados en Diez después de traerlos (no se pisan)` : '',
     p.rechazados.length ? `${p.rechazados.length} rechazados por la base` : '',
     p.rechazadosAlConvertir.length ? `${p.rechazadosAlConvertir.length} que no se pueden convertir` : '',
+    p.sinImporte.length ? `${p.sinImporte.length} fuera, sin importe en Diez` : '',
     p.fueraDelCorte.length ? `${p.fueraDelCorte.length} posteriores al corte (entran por el día a día)` : '',
     p.subcuentas.nuevas ? `${p.subcuentas.nuevas} subcuentas nuevas traídas de Diez` : '',
     p.ejercicios.some((e) => e.problema) ? `ejercicios con problema: ${p.ejercicios.filter((e) => e.problema).map((e) => e.codigo).join(', ')}` : '',

@@ -5,7 +5,9 @@
 //   · asientos.csv   — orden, ejercicio, documento esperado y el asiento (JSON)
 //                      en el orden de la cadena (fecha, serie, número);
 //   · subcuentas.csv — las que usan los asientos, con el nombre de Diez;
-//   · testigo.csv    — ejercicio, hasta, subcuentas y huella del testigo.
+//   · testigo.csv    — ejercicio, hasta, subcuentas y huella del testigo;
+//   · rechazos.csv   — los que no se pueden convertir y mueven saldo (ROJO);
+//   · sin-importe.csv — los que en Diez tienen todo a cero (fuera, sin bloquear).
 // Y escribe en claro, para el informe, SOLO recuentos y claves (los motivos,
 // sin importes). El paso 2 (importar.sql) lo escribe en la base dentro de UNA
 // transacción.
@@ -85,6 +87,10 @@ mkdirSync(CARGA, { recursive: true })
 writeFileSync(`${CARGA}/asientos.csv`, p.asientos.map((a, i) => csv([i + 1, a.ejercicio, documentoEsperado(a, nombres) ?? '', JSON.stringify(paraLaBase(a))])).join('\n') + '\n')
 writeFileSync(`${CARGA}/subcuentas.csv`, p.subcuentas.map((s) => csv([JSON.stringify(s)])).join('\n') + '\n')
 writeFileSync(`${CARGA}/testigo.csv`, testigo.map((t) => csv([t.ejercicio, t.hasta, t.cuentas, t.huella])).join('\n') + '\n')
+// Lo que no entra: los rechazos (mueven saldo: ponen la tanda en ROJO) y lo que
+// en Diez no tiene importe (fuera, con su motivo, sin bloquear). Sin importes.
+writeFileSync(`${CARGA}/rechazos.csv`, p.rechazadosAlConvertir.map((r) => csv([r.clave.split('/')[0], r.clave, sinImportes(r.motivo)])).join('\n') + (p.rechazadosAlConvertir.length ? '\n' : ''))
+writeFileSync(`${CARGA}/sin-importe.csv`, p.sinImporte.map((r) => csv([r.clave.split('/')[0], r.clave])).join('\n') + (p.sinImporte.length ? '\n' : ''))
 
 const motivos = new Map<string, string[]>()
 for (const r of p.rechazadosAlConvertir) { const m = sinImportes(r.motivo); motivos.set(m, [...(motivos.get(m) ?? []), r.clave]) }
@@ -95,7 +101,8 @@ console.log([
   `- Asientos leídos: ${p.leidos}`,
   `- Preparados para escribir: ${p.asientos.length}`,
   `- Posteriores al corte (entran por el día a día): ${p.fueraDelCorte.length}${p.fueraDelCorte.length ? ` — ${p.fueraDelCorte.join(', ')}` : ''}`,
-  `- No se pueden convertir: ${p.rechazadosAlConvertir.length}`,
+  `- Fuera, sin importe en Diez (todas las líneas a cero; no es un rechazo): ${p.sinImporte.length}${p.sinImporte.length ? ` — ${p.sinImporte.map((r) => r.clave).join(', ')}` : ''}`,
+  `- Rechazados al convertir (mueven saldo y no entran: la tanda sale en ROJO): ${p.rechazadosAlConvertir.length}`,
   ...[...motivos.entries()].map(([m, ks]) => `  - ${ks.length} × ${m}: ${ks.join(', ')}`),
   `- Subcuentas que usan: ${p.subcuentas.length}`,
   `- Testigo: ${testigo.map((t) => `${t.ejercicio} (${t.cuentas} subcuentas, hasta ${t.hasta})`).join(' · ')}`,

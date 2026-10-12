@@ -53,6 +53,10 @@ export type AsientoFolvy = {
   ajustes: { lineasACero: number; negativos: number; partidas: number }
 }
 export type Rechazo = { clave: string; motivo: string }
+/** Un asiento de Diez con TODAS las líneas a cero (o sin líneas): no mueve
+ *  ningún saldo, así que no es un rechazo (Julio, 12/10). Queda fuera con
+ *  este motivo y no impide cerrar el ejercicio. */
+export type SinImporte = { clave: string; motivo: 'sin importe en Diez' }
 
 export const cent = (n: unknown): number => {
   const x = Number(n ?? 0)
@@ -95,7 +99,7 @@ export function huellaDe(a: { ejercicio: string; serie: number; numero: number; 
 }
 
 /** Un asiento de Diez en la forma de Folvy, o el porqué de que no se pueda. */
-export async function convertirAsiento(a: Apunte): Promise<{ ok: AsientoFolvy } | { rechazo: Rechazo }> {
+export async function convertirAsiento(a: Apunte): Promise<{ ok: AsientoFolvy } | { rechazo: Rechazo } | { sinImporte: SinImporte }> {
   const clave = claveDiez(a)
   const no = (motivo: string) => ({ rechazo: { clave, motivo } })
   const serie = Number(a.Serie)
@@ -130,7 +134,9 @@ export async function convertirAsiento(a: Apunte): Promise<{ ok: AsientoFolvy } 
     } else if (alDebe > 0) lineas.push({ posicion: 0, ...comun, debe: alDebe, haber: 0, negativoEnDiez: marcaDebe, movido: movDebe })
     else lineas.push({ posicion: 0, ...comun, debe: 0, haber: alHaber, negativoEnDiez: marcaHaber, movido: movHaber })
   }
-  if (lineas.length < 2) return no(`${lineas.length} línea${lineas.length === 1 ? '' : 's'} con importe`)
+  // Todo a cero: no mueve saldo, no es un rechazo. Una sola línea con importe sí lo es (descuadra).
+  if (lineas.length === 0) return { sinImporte: { clave, motivo: 'sin importe en Diez' } }
+  if (lineas.length < 2) return no(`${lineas.length} línea con importe`)
   lineas.forEach((l, i) => (l.posicion = i + 1))
   const debe = lineas.reduce((s, l) => s + l.debe, 0)
   const haber = lineas.reduce((s, l) => s + l.haber, 0)

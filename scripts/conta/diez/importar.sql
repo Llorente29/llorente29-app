@@ -38,12 +38,16 @@ select set_config('diez.empresa', :'empresa', true), set_config('diez.modo', :'m
 create temp table carga_asiento (orden int, ejercicio text, documento text, doc jsonb) on commit drop;
 create temp table carga_subcuenta (doc jsonb) on commit drop;
 create temp table carga_testigo (ejercicio text, hasta date, cuentas int, huella text) on commit drop;
+create temp table carga_rechazo (ejercicio text, clave text, motivo text) on commit drop;
+create temp table carga_sin_importe (ejercicio text, clave text) on commit drop;
 create temp table informe (n serial, linea text) on commit drop;
 create temp table detalle (ejercicio text, cuenta text, debe bigint, haber bigint) on commit drop;
 
 \copy carga_asiento from 'asientos.csv' with (format csv)
 \copy carga_subcuenta from 'subcuentas.csv' with (format csv)
 \copy carga_testigo from 'testigo.csv' with (format csv)
+\copy carga_rechazo from 'rechazos.csv' with (format csv)
+\copy carga_sin_importe from 'sin-importe.csv' with (format csv)
 
 do $$
 declare
@@ -84,6 +88,13 @@ begin
              || format('- Subcuentas: %s nuevas traídas de Diez · %s ya estaban · %s rechazadas%s',
                        v_sub ->> 'nuevas', v_sub ->> 'estaban', jsonb_array_length(v_sub -> 'rechazadas'),
                        coalesce(' (' || (select string_agg(e ->> 'code' || ': ' || (e ->> 'motivo'), '; ') from jsonb_array_elements(v_sub -> 'rechazadas') e) || ')', ''));
+  inf := inf || format('- Rechazados al convertir (mueven saldo y no entran): %s', (select count(*) from carga_rechazo));
+  for x in select clave, motivo from carga_rechazo order by 1 loop
+    inf := inf || format('  - rechazado al convertir %s: %s', x.clave, x.motivo);
+  end loop;
+  inf := inf || format('- Fuera, sin importe en Diez (todas las líneas a cero; no es un rechazo y no impide cerrar): %s%s',
+                       (select count(*) from carga_sin_importe),
+                       coalesce(' — ' || (select string_agg(clave, ', ' order by clave) from carga_sin_importe), ''));
   for x in select e ->> 'clave' as clave, regexp_replace(e ->> 'motivo', '-?\d[\d.]*[.,]\d{2}\M', '[importe]', 'g') as motivo
              from jsonb_array_elements(rech) e order by 1 loop
     inf := inf || format('  - rechazado %s: %s', x.clave, x.motivo);
@@ -129,6 +140,7 @@ begin
 
   -- 3 · Verde: todo cuadra y nada pendiente de explicar. Entonces se cierra y se marca.
   v_verde := v_todos and jsonb_array_length(rech) = 0 and jsonb_array_length(dist) = 0
+             and not exists (select 1 from carga_rechazo)
              and jsonb_array_length(v_sub -> 'rechazadas') = 0;
   inf := inf || ''::text;
   if v_verde then
