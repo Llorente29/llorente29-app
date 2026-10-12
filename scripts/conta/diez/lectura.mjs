@@ -28,11 +28,22 @@ const BASE0 = String(cred.base_url || 'https://apicon.diezsoftware.com').replace
 // falso de las pruebas, en esta misma máquina.
 const LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(BASE0)
 const BASE = LOCAL ? BASE0 : BASE0.replace(/^http:\/\//i, 'https://')
-// Lo que pide /token según la colección de Cegid (12/10): sin nombre_bd, y
-// cod_empresa como texto. Lo demás que traiga el secreto no se manda.
-const CAMPOS_TOKEN = ['grant_type', 'client_id', 'client_secret', 'username', 'password', 'cod_empresa']
-const cuerpoToken = Object.fromEntries(CAMPOS_TOKEN.filter((k) => cred[k] !== undefined && cred[k] !== null).map((k) => [k, String(cred[k])]))
-const sobran = Object.keys(cred).filter((k) => k !== 'base_url' && !CAMPOS_TOKEN.includes(k))
+// /token (12/10, de la sesión en la que la API funciona): la base de datos va
+// unida al usuario y no se manda nombre_bd. Dos intentos, en este orden, y
+// se para en el primero que entra; si fallan los dos, no se insiste:
+//   1. sin cod_empresa;
+//   2. con cod_empresa como número sin ceros delante.
+const BASICOS = ['grant_type', 'client_id', 'client_secret', 'username', 'password']
+const cuerpoBase = Object.fromEntries(BASICOS.filter((k) => cred[k] !== undefined && cred[k] !== null).map((k) => [k, String(cred[k])]))
+const codNumero = /^\d+$/.test(String(cred.cod_empresa ?? '').trim()) ? String(Number(String(cred.cod_empresa).trim())) : null
+const INTENTOS = [
+  { nombre: '1 · sin cod_empresa', cuerpo: cuerpoBase },
+  codNumero ? { nombre: '2 · con cod_empresa como número sin ceros', cuerpo: { ...cuerpoBase, cod_empresa: codNumero } } : null,
+]
+const sobran = Object.keys(cred).filter((k) => k !== 'base_url' && !BASICOS.includes(k) && k !== 'cod_empresa')
+// Lo que ya se sabe de Foodint en Diez (C02c, 06/10: el plan leído del PDF de
+// Diez, en producción, company_chart_import): para comprobar que se lee lo suyo.
+const REFERENCIA = { cuentas: 743, terceros: 45, ejercicios: ['2023', '2024', '2025', '2026'] }
 const DESDE = process.argv[2] || '202301'
 const HASTA = process.argv[3] || '202609'
 const MUESTRA = Number(process.env.MUESTRA_POR_EJERCICIO || 25)
@@ -120,23 +131,22 @@ try {
   process.stdout.write(l.join('\n') + '\n')
   process.exit(1)
 }
-md(`- Campos mandados a \`/token\`: ${Object.keys(cuerpoToken).join(', ')}${sobran.length ? ` · del secreto NO se mandan: ${sobran.join(', ')}` : ''}`)
-let comoEntra = null
-for (const tipo of ['application/x-www-form-urlencoded', 'application/json']) {
-  const r = await llamar('POST', '/token', { cuerpo: cuerpoToken, tipoCuerpo: tipo })
-  md(`- \`POST /token\` con ${tipo} → ${r.status}; la respuesta trae: ${claves(r.json)}`)
-  // El código OAuth (invalid_grant, invalid_client…) y su texto: dicen por qué
-  // no entra, sin datos (las cifras salen como 9 y los valores del secreto
-  // están enmascarados por el workflow).
+if (sobran.length) md(`- Del secreto no se manda nunca: ${sobran.join(', ')}`)
+let comoEntra = null, dataBase = null
+for (const intento of INTENTOS) {
+  if (!intento) { md('- Intento 2: `cod_empresa` no es un número; no se hace.'); continue }
+  const r = await llamar('POST', '/token', { cuerpo: intento.cuerpo, tipoCuerpo: 'application/x-www-form-urlencoded' })
+  md(`- Intento ${intento.nombre} (formulario; campos: ${Object.keys(intento.cuerpo).join(', ')}) → ${r.status}; la respuesta trae: ${claves(r.json)}`)
+  // El código OAuth y su texto dicen por qué no entra, sin datos (cifras como 9;
+  // los valores del secreto los enmascara el workflow).
   if (r.status !== 200 && r.json) md(`  - error: \`${sinDatos(r.json.error)}\` · ${sinDatos(r.json.error_description)}`)
   const t = r.json && Object.entries(r.json).find(([k, v]) => /access_?token|^token$/i.test(k) && typeof v === 'string')
-  // Si Diez entendió la petición y la rechaza con un error OAuth, el otro
-  // formato no va a cambiar nada: no se insiste con las credenciales.
-  if (r.status !== 200 && r.json?.error) break
   if (r.status === 200 && t) {
     token = t[1]
-    comoEntra = tipo
-    md(`- Caduca a los: ${r.json.expires_in ?? r.json.expiresIn ?? '—'} s · tipo: ${r.json.token_type ?? '—'}`)
+    comoEntra = intento.nombre
+    // DataBaseName es un nombre, no una clave (Julio, 12/10): se apunta.
+    dataBase = r.json.DataBaseName ?? null
+    md(`- **Entra con el intento ${intento.nombre}.** DataBaseName: \`${dataBase ?? '—'}\` · caduca a los ${r.json.expires_in ?? '—'} s · tipo: ${r.json.token_type ?? '—'}`)
     break
   }
 }
@@ -254,6 +264,29 @@ if (sc.length) {
   for (const s of sc) { cuenta(largo, String(s.Codigo ?? '').length); cuenta(grupo, String(s.Codigo ?? '?')[0]); cuenta(tipo, s.TipoSubcuenta ?? '—') }
   md(`Subcuentas: ${sc.length} · longitud del código: ${JSON.stringify(largo)} · por grupo (primer dígito): ${JSON.stringify(grupo)} · por TipoSubcuenta: ${JSON.stringify(tipo)} · con NIF: ${sc.filter((s) => lleno(s.NIF)).length}`, '')
 }
+
+// ── ¿Es Foodint? Contraste con lo que ya se sabe (C02c) ─────────────────────
+md('### ¿Es la contabilidad de Foodint?', '')
+const ejercicios = [], porAno = []
+for (let y = 2019; y <= 2027; y++) {
+  const r = await get(`/api/apuntes?$filter=${encodeURIComponent(`Ejercicio eq '${y}'`)}&${q({ $top: 1 })}`)
+  const n = paginada(r.json) ? r.json.ResultadosTotales : items(r.json)?.length
+  if (r.status === 200 && n > 0) ejercicios.push(String(y))
+  porAno.push(n)
+  md(`- Ejercicio ${y}: ${r.status}; ${n == null ? sinDatos(r.json) : `${n} asientos`}`)
+}
+// Si todos los años dan lo mismo, el $filter no se está aplicando y la lista
+// de ejercicios no vale.
+if (ejercicios.length > 1 && new Set(porAno.filter((n) => n > 0)).size === 1) {
+  md('', '**Todos los años dan el mismo número: el `$filter` por ejercicio no se aplica.** La lista de ejercicios de abajo no vale.')
+}
+const nSub = cat['/api/subcuentas'].filas.length
+const sub8 = cat['/api/subcuentas'].filas.filter((x) => String(x.Codigo ?? '').length === 8).length
+md('', `| Qué | En Diez (ahora) | Conocido (C02c, 06/10) |`, '|---|---|---|',
+  `| Subcuentas | ${nSub} (de 8 cifras: ${sub8}) | ${REFERENCIA.cuentas} del plan + ${REFERENCIA.terceros} terceros |`,
+  `| Clientes + proveedores | ${cat['/api/clientes'].filas.length} + ${cat['/api/proveedores'].filas.length} | ${REFERENCIA.terceros} |`,
+  `| Ejercicios con asientos | ${ejercicios.join(', ') || '—'} | ${REFERENCIA.ejercicios.join(', ')} (el encargo) |`, '',
+  `DataBaseName: \`${dataBase ?? '—'}\`. Si las cifras no se parecen, **no es la empresa**: no se sigue con lo que se lea.`, '')
 
 // ── 4. Resumen de apuntes que da Diez ────────────────────────────────────────
 md('### Lo que dice Diez de sí mismo (`/api/apuntes/resumen`)', '')
@@ -427,5 +460,5 @@ md('### Límites y volumen de esta lectura', '',
   `- Cabeceras de límite vistas: ${[...metrica.limites].join(' · ') || 'ninguna'}`, '')
 tabla(['Ruta', 'Peticiones', 'KB', 'ms medio', 'ms máximo'], Object.entries(metrica.porRuta).sort((a, b) => b[1].bytes - a[1].bytes)
   .map(([k, v]) => [`\`${k}\``, v.n, Math.round(v.bytes / 1024), Math.round(v.ms / v.n), v.maxMs]))
-md(`Entró con: ${comoEntra}.`)
+md(`Entró con el intento ${comoEntra}.`)
 process.stdout.write(l.join('\n') + '\n')
