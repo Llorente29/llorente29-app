@@ -634,7 +634,23 @@ documento (otro tipo de IVA, por ejemplo) no se cuentan como «sin documento».
 | 2026 | Recibidas | 551 | **368 de riders** (facturas de repartidores, de enero a marzo) · 138 Uber Eats (Portier, de enero a abril) · 45 de otros proveedores |
 | 2026 | Expedidas | 99 | **90 de Uber Eats diarias** (`UBER-<fecha>`, una por día de enero a marzo) · 9 de un cliente B2B |
 
-Sobre la regla de §8.2 (resumen del día = «no requiere documento»):
+**Decidido por Julio (12/10):**
+- **Las 90 de Uber Eats diarias de 2026 sí tienen documento**, en el portal
+  de Uber Eats.
+- **Las 368 de riders** tienen el suyo en el portal de la empresa de riders.
+- Las dos quedan «pendiente de documento» con su origen, y **no frenan la
+  traída del histórico**. Lo mismo vale para los casos de Uber Eats o de
+  riders de cualquier otro año.
+- Está hecho en `pendienteDeDocumento()` (`diezDocumentos.ts`):
+  - Uber Eats o Portier → `portal_uber_eats`;
+  - Glovo (también «RIDERS GLOVO») → `portal_glovo`;
+  - Just Eat → `portal_just_eat`;
+  - riders → `portal_riders`;
+  - el resto → `subida_manual`.
+
+  Las cuatro de portal las traerá E04.
+
+Lo que se pensó antes de la decisión, sobre la regla de §8.2 (resumen del día = «no requiere documento»):
 
 - **Las 90 de Uber Eats de 2026 son una por día**, con número
   `UBER-<fecha>`. Tienen la forma de un resumen de ventas del día. Se
@@ -656,3 +672,65 @@ página. Así salen los 2.302, sin repetidos.
 El importador **no puede fiarse de un listado paginado**. Cuenta lo que trae
 contra los códigos del Excel, y si falta algo lo busca por su nombre antes de
 dar nada por perdido.
+
+
+## 10. El testigo: sumas y saldos de Diez (12/10)
+
+Son cuatro Excel de la C0008: 2023, 2024, 2025 y 2026 hasta el 30/09. Están a
+nivel de subcuenta, sin regularización, sin cierre y sin saldos a cero.
+Aquí solo va su forma; los importes y los nombres se quedan fuera del
+repositorio.
+
+### 10.1 La forma (igual en los cuatro)
+
+- **Una fila por subcuenta** de 8 dígitos, sin filas de grupo ni subtotales.
+- **Columnas:** Subcuenta · nombre · (vacía) · Debe · Haber · Deudor ·
+  Acreedor, bajo la cabecera «Datos acumulados».
+- **Al final, una fila `TOTALES:`.** En los cuatro, Debe = Haber y Deudor =
+  Acreedor.
+- **La apertura va sumada dentro de Debe y Haber;** no tiene columna propia.
+  En 2024–2026 la 129 sale con debe = haber: es el reparto del resultado
+  anterior, no una regularización.
+- **También salen las subcuentas con debe = haber** (saldo en blanco), y
+  alguna con todo en blanco.
+- **Diez admite importes negativos.** En 2026 hay un haber negativo con saldo
+  deudor.
+
+`leerTestigo()` (`diezTestigo.ts`) lo lee por los nombres de la cabecera, no
+por la posición. Comprueba cada fila (deudor − acreedor = debe − haber) y la
+fila TOTALES contra la suma de todas.
+
+### 10.2 Cómo se compara (`compararTestigo`)
+
+- **Folvy suma con la misma vara que el testigo:** todo el ejercicio, con su
+  asiento de apertura y sin los de regularización y cierre.
+- **El saldo de cada subcuenta, al céntimo y sin excepción.**
+- **Debe y haber, también al céntimo.** La única salvedad es lo que Folvy
+  pasó de lado por ser negativo (`convertirAsiento`): ahí las dos sumas
+  crecen exactamente lo movido, y el estado es `igual_con_negativos`.
+- **Cualquier otra cosa es una diferencia**, con su estado: `saldo_distinto`,
+  `sumas_distintas`, `solo_testigo` o `solo_folvy`.
+
+### 10.3 Lo que sabe Folvy antes de importar: la lectura `[lectura:testigo]`
+
+El libro de Folvy todavía no tiene el histórico: la tanda de producción va al
+cerrar la tarea 3. Para no esperar, se mide **lo que guardaría el importador**:
+
+1. `testigo.ts` lee en el runner todos los apuntes de 2023-10 a 2026-09.
+2. Los pasa por el mismo `convertirAsiento` que usará el importador.
+3. Suma por ejercicio, **TipoAsiento** y subcuenta tres cosas: lo que dice
+   Diez, lo que guardaría Folvy (con lo movido por negativo) y lo que se
+   rechazaría.
+
+Detalles:
+
+- **Por TipoAsiento:** Diez marca así apertura, regularización y cierre (de 0
+  a 5), y cuál es cuál no se supone. Se elige la exclusión que hace cuadrar
+  al testigo, y se dice.
+- **El registro del runner es público.** En claro solo salen recuentos; las
+  sumas por subcuenta salen **cifradas** con la clave pública
+  `scripts/conta/diez/testigo-clave-publica.pem` (RSA-OAEP + AES-256-GCM). La
+  clave privada no está ni en el repositorio ni en el runner.
+- **El testigo no viaja al runner.** La comparación se hace fuera, con
+  `diezTestigo.ts`.
+

@@ -89,11 +89,22 @@ jobs:
           # y subcuentas nuevas (unos minutos), sin recorrer el histórico.
           # «[lectura:expedidas]»: las expedidas de 2023-4T por cuenta y
           # concepto, en forma (sin números ni nombres).
+          # «[lectura:testigo]»: todos los apuntes por ejercicio, TipoAsiento y
+          # subcuenta, como los guardaría Folvy, para compararlos con el testigo
+          # de sumas y saldos. Las sumas, cifradas; en claro, recuentos.
           MENSAJE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           MODO=larga
-          case "$MENSAJE" in "[lectura:corta]"*) MODO=corta ;; "[lectura:expedidas]"*) MODO=expedidas ;; esac
+          case "$MENSAJE" in "[lectura:corta]"*) MODO=corta ;; "[lectura:expedidas]"*) MODO=expedidas ;; "[lectura:testigo]"*) MODO=testigo ;; esac
           echo "Modo: $MODO"
-          node scripts/conta/diez/lectura.mjs 202301 202609 "$MODO" | tee lectura.md
+          if [ "$MODO" = testigo ]; then
+            # Las sumas por subcuenta salen CIFRADAS con scripts/conta/diez/testigo-clave-publica.pem;
+            # en claro solo hay recuentos. Ver la cabecera de testigo.ts.
+            npx --yes tsx@4.19.2 scripts/conta/diez/testigo.ts > testigo.txt
+            sed '/-----TESTIGO CIFRADO-----/,$d' testigo.txt | tee lectura.md
+            cat testigo.txt | sed -n '/-----TESTIGO CIFRADO-----/,$p'
+          else
+            node scripts/conta/diez/lectura.mjs 202301 202609 "$MODO" | tee lectura.md
+          fi
           cat lectura.md >> "$GITHUB_STEP_SUMMARY"

@@ -153,3 +153,31 @@ export function cruzar(ficheros: string[], codigosExcel: string[]): CruceDocumen
   const sinCodigo = [...porClave.entries()].filter(([t]) => !usadas.has(t)).map(([, f]) => f)
   return { enlazados, sinFichero, sinCodigo, nombreRaro, repetidos }
 }
+
+// ── Lo que no trae documento: de dónde vendrá (Julio, 12/10, T2 §9.4) ─────────
+// Nada de esto bloquea la traída del histórico: el asiento entra, y su
+// documento queda «pendiente» con el origen que lo traerá. Vale para
+// cualquier año (si al importar aparecen más casos de Uber Eats o de riders,
+// se les aplica lo mismo).
+export type OrigenDocumento = 'portal_uber_eats' | 'portal_glovo' | 'portal_just_eat' | 'portal_riders' | 'subida_manual'
+
+const ORIGENES: { re: RegExp; origen: OrigenDocumento; texto: string }[] = [
+  { re: /\b(UBER|PORTIER)\b/, origen: 'portal_uber_eats', texto: 'portal de Uber Eats' },
+  // «RIDERS GLOVO» es Glovo (el servicio de reparto de Glovo), no los riders propios.
+  { re: /\bGLOVO/, origen: 'portal_glovo', texto: 'portal de Glovo' },
+  { re: /\bJUST ?EAT\b|\bTAKEAWAY\b/, origen: 'portal_just_eat', texto: 'portal de Just Eat' },
+  { re: /^RIDERS?$/, origen: 'portal_riders', texto: 'portal de riders' },
+]
+
+/**
+ * El documento que falta de un asiento traído de Diez: siempre «pendiente»,
+ * con su origen. Los de las plataformas y los de riders los traerá la
+ * descarga desde los portales (E04); el resto, la subida a mano.
+ */
+export function pendienteDeDocumento(tercero: string | null | undefined): { status: 'pendiente_diez'; origen: OrigenDocumento; motivo: string } {
+  const t = String(tercero ?? '').trim().toUpperCase()
+  const o = ORIGENES.find((x) => x.re.test(t))
+  return o
+    ? { status: 'pendiente_diez', origen: o.origen, motivo: `pendiente de documento · origen: ${o.texto} (descarga automática, E04)` }
+    : { status: 'pendiente_diez', origen: 'subida_manual', motivo: 'pendiente de documento · origen: subida a mano' }
+}

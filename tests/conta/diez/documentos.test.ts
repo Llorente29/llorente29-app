@@ -3,7 +3,7 @@
 // con la forma medida; ningún PDF real.
 
 import { describe, expect, it } from 'vitest'
-import { claveDeCodigoExcel, claveDeFichero, cruzar, limpiarDocumento, limpiarPdf } from '../../../supabase/functions/_shared/diezDocumentos'
+import { claveDeCodigoExcel, claveDeFichero, cruzar, limpiarDocumento, limpiarPdf, pendienteDeDocumento } from '../../../supabase/functions/_shared/diezDocumentos'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const PDF_MIN = '%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n'
@@ -99,5 +99,25 @@ describe('limpiarDocumento', () => {
     [new Uint8Array([0x50, 0x4b, 0x03, 0x04]), 'jpg', 'se llama .jpg y no es una imagen JPEG'],
   ] as [Uint8Array, 'xlsx' | 'jpg', string][])('lo que no es lo que dice ser va a revisar con su porqué (%#)', (b, ext, motivo) => {
     expect(limpiarDocumento(b, ext)).toEqual({ ok: false, motivo })
+  })
+})
+
+// Julio, 12/10: lo que no trae documento entra igual, «pendiente», con su origen.
+// Los terceros, con la forma en que salen en los Excel de Diez.
+describe('pendienteDeDocumento', () => {
+  it.each([
+    ['UBER EATS', 'portal_uber_eats'], ['PORTIER EATS SPAIN, S.L.', 'portal_uber_eats'],
+    ['RIDERS', 'portal_riders'], ['riders ', 'portal_riders'],
+    ['GLOVO', 'portal_glovo'], ['GLOVOAPP SPAIN PLATFORM', 'portal_glovo'], ['RIDERS GLOVO', 'portal_glovo'],
+    ['JUST EAT', 'portal_just_eat'], ['JUST EAT, S.L.', 'portal_just_eat'],
+    ['PROVEEDOR INVENTADO, S.L.', 'subida_manual'], [null, 'subida_manual'],
+  ] as [string | null, string][])('%j → %s', (tercero, origen) => {
+    const r = pendienteDeDocumento(tercero)
+    expect(r.status).toBe('pendiente_diez')
+    expect(r.origen).toBe(origen)
+  })
+  it('el motivo dice de dónde vendrá', () => {
+    expect(pendienteDeDocumento('UBER EATS').motivo).toBe('pendiente de documento · origen: portal de Uber Eats (descarga automática, E04)')
+    expect(pendienteDeDocumento('RIDERS').motivo).toBe('pendiente de documento · origen: portal de riders (descarga automática, E04)')
   })
 })
