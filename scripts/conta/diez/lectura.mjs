@@ -191,7 +191,17 @@ md(`- \`$top=3\` → ${t3.status}; ${forma(t3.json)}${n3 === 3 ? ' ← **se apli
   `- \`$top=3&$skip=3\` → ${t3s.status}; ${forma(t3s.json)}; primer elemento distinto del de \`$top=3\`: ${saltaBien ? '**sí**' : 'no'}`,
   `- \`$orderby=Codigo desc\` → ${t3o.status}; primer elemento distinto: ${ordenaBien ? '**sí**' : 'no'}`,
   `- \`$select=Codigo\` → ${t3sel.status}; campos del primer elemento: ${claves(items(t3sel.json)?.[0])}`)
-const odata = n3 === 3 && saltaBien
+// ¿$skip cuenta elementos o páginas? (run 8: $top=3&$skip=3 contestó
+// «página 4», y $skip=200 con 781 devolvió la primera otra vez). Se mide:
+// con $top=5, el primero de $top=2&$skip=2 es el 3.º si cuenta elementos y
+// el 5.º si cuenta páginas.
+const t5 = await get(`/api/subcuentas?${q({ $top: 5 })}`)
+const t2s = await get(`/api/subcuentas?${q({ $top: 2, $skip: 2 })}`)
+const l5 = items(t5.json) ?? []
+const prim = huella(items(t2s.json)?.[0])
+const skipCuenta = l5.length === 5 && prim === huella(l5[4]) ? 'paginas' : l5.length >= 3 && prim === huella(l5[2]) ? 'elementos' : null
+md(`- \`$skip\` cuenta: **${skipCuenta ?? 'no se sabe'}** (el primero de \`$top=2&$skip=2\` es el ${skipCuenta === 'paginas' ? '5.º' : skipCuenta === 'elementos' ? '3.º' : '¿?'} de \`$top=5\`; PaginaActual ${t2s.json?.PaginaActual ?? '—'})`)
+const odata = n3 === 3 && skipCuenta !== null
 let TOP = null
 if (odata) {
   // Diez puede cortar la página por debajo de lo pedido (run 7: pide 1000,
@@ -226,7 +236,7 @@ if (!odata) {
     }
   }
 }
-md('', odata ? `Paginación: **OData**, \`$top=${TOP}\` y \`$skip\`.` : `Paginación: OData **no** se aplica · página: **${paramPagina ?? 'no encontrada'}** · tamaño: **${paramTam ?? 'no encontrado'}**`, '')
+md('', odata ? `Paginación: **OData**, \`$top=${TOP}\` y \`$skip\` en ${skipCuenta}.` : `Paginación: OData **no** se aplica · página: **${paramPagina ?? 'no encontrada'}** · tamaño: **${paramTam ?? 'no encontrado'}**`, '')
 
 const TAM = paramTam ? Math.min(tamMax || 500, 1000) : null
 async function todas(ruta) {
@@ -234,7 +244,7 @@ async function todas(ruta) {
   const filas = []
   let pag = 1, total = null, estado = null, paginas = 0, anterior = null
   for (;;) {
-    const qq = odata ? q({ $top: TOP, $skip: (pag - 1) * TOP }) : [paramPagina && `${paramPagina}=${pag}`, TAM && `${paramTam}=${TAM}`].filter(Boolean).join('&')
+    const qq = odata ? q({ $top: TOP, $skip: skipCuenta === 'paginas' ? pag - 1 : (pag - 1) * TOP }) : [paramPagina && `${paramPagina}=${pag}`, TAM && `${paramTam}=${TAM}`].filter(Boolean).join('&')
     const r = await get(ruta + (qq ? sep + qq : ''))
     estado = r.status
     const d = items(r.json)
