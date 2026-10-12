@@ -913,3 +913,49 @@ de una página).
 - **Los 4 asientos de 2023 que `convertirAsiento` no admite** (0 o 1 línea con
   importe) no mueven ningún saldo: el testigo de 2023 cuadra sin ellos. Salen
   en el parte como «que no se pueden convertir».
+
+### 11.1 La numeración de 2026 y la tanda del histórico (Julio, 12/10)
+
+**La numeración es una regla en la base (`20261019T0160`).** En un ejercicio
+mixto o traído, mientras el histórico no esté marcado como traído,
+`journal_entry_validar` no valida nada de Folvy: «Primero hay que traer el
+histórico de Diez de 2026». Con el histórico dentro, el número es max + 1
+de la serie: Folvy sigue detrás del último número traído. El resto de la
+función es byte a byte la vigente (md5 medido en staging y producción). Los
+22 propuestos de octubre de Foodint no se tocan: se validan después. Prueba
+en staging (run 141): bloqueado sin histórico; el primero de Folvy sale con
+el 3, detrás del 2 de Diez; un ejercicio de Folvy, igual que antes.
+
+**La tanda (`diez-importar.yml`).** Los datos reales nunca pasan por staging.
+
+1. Lee de Diez (solo GET) y prepara la carga (`importar-preparar.ts`).
+2. En **una** transacción (`importar.sql`): escribe; mide lo escrito contra
+   los cuatro Excel por **huella** (`testigo-huellas.json`: debe y haber de
+   cada subcuenta al céntimo, sin un importe en el repositorio); si cuadra
+   y nada se rechaza, cierra 2023–2025 y marca el histórico; da el informe
+   (recuentos, rechazos con motivo, documentos esperados por origen, líneas
+   «En Diez iba en negativo», el testigo).
+3. **Ensayo**: rollback, y cuenta antes y después que no queda nada.
+   **Real**: solo con un ensayo en verde del mismo commit y la palabra
+   «historico-diez»; aun así, si no cuadra, rollback y en rojo.
+4. Las sumas por subcuenta salen **cifradas** (llevan importes).
+
+Las huellas de los Excel son iguales a las de lo leído de Diez en la pasada
+21 en los cuatro años. Probado en un Postgres local con la 0150 y la 0160
+reales (ensayo, rojo en ensayo y en real, real, real repetido; cadena entera)
+y en staging con el Diez simulado (run 2 de `diez-importar`: en verde, 0
+antes y 0 después).
+
+**Los documentos no entran en esta tanda.** El informe dice cuántas facturas
+esperan uno y de dónde vendrá (portal de cada plataforma o Drive); el
+enlace de los ficheros es la tanda de documentos.
+
+**Orden en producción:**
+
+1. Tanda de base por `aplicar-produccion-conta.yml`: las migraciones de Diez
+   `20261019T0100` a `T0160` (ensayo, luego real).
+2. Fusión a `main` y Vercel READY: el diario ya lee `external_negative_side`
+   (0140), que tiene que estar antes.
+3. `diez-importar.yml`: ensayo; con el ensayo en verde, el real desde el
+   mismo commit.
+4. Validar los 22 de octubre: salen con su número detrás del último de Diez.
