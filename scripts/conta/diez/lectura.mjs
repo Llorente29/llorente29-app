@@ -69,7 +69,8 @@ async function llamar(metodo, ruta, { cuerpo, tipoCuerpo, crudo } = {}) {
   for (let intento = 1; intento <= 4; intento++) {
     await espera(PAUSA_MS)
     const t0 = Date.now()
-    const r = await fetch(BASE + ruta, { method: metodo, headers: cab, body, redirect: 'manual' })
+    // Ninguna petición espera más de 90 s (run 10: una se quedó colgada).
+    const r = await fetch(BASE + ruta, { method: metodo, headers: cab, body, redirect: 'manual', signal: AbortSignal.timeout(90_000) })
     // Una redirección podría llevar a http: no se sigue ninguna.
     if (r.status >= 300 && r.status < 400) throw new Error(`Freno: ${metodo} ${ruta.split('?')[0]} redirige (${r.status}); no se sigue`)
     const buf = Buffer.from(await r.arrayBuffer())
@@ -245,7 +246,8 @@ const TAM = paramTam ? Math.min(tamMax || 500, 1000) : null
 async function todas(ruta) {
   const sep = ruta.includes('?') ? '&' : '?'
   const filas = []
-  let pag = 1, total = null, estado = null, paginas = 0, anterior = null
+  let pag = 1, total = null, estado = null, paginas = 0
+  const vistas = new Set()
   for (;;) {
     const qq = odata ? q({ $top: TOP, $skip: skipCuenta === 'paginas' ? pag - 1 : (pag - 1) * TOP }) : [paramPagina && `${paramPagina}=${pag}`, TAM && `${paramTam}=${TAM}`].filter(Boolean).join('&')
     const r = await get(ruta + (qq ? sep + qq : ''))
@@ -256,9 +258,11 @@ async function todas(ruta) {
     if (paginada(r.json)) total = r.json.ResultadosTotales
     // Si una página empieza igual que la anterior, $skip no se aplica en este
     // recurso: se para en vez de repetir la misma página hasta el límite.
+    // Y si empieza igual que CUALQUIERA de las ya leídas (Diez vuelve a la
+    // primera al pasarse del final), también.
     const primero = huella(d[0])
-    if (paginas > 1 && d.length && primero === anterior) return { filas, total, estado, paginas, error: 'la página se repite: $skip no se aplica aquí' }
-    anterior = primero
+    if (paginas > 1 && d.length && vistas.has(primero)) return { filas, total, estado, paginas, error: 'la página se repite: $skip no se aplica aquí' }
+    vistas.add(primero)
     filas.push(...d)
     if (d.length === 0 || paginas > 2000) break
     // Se para cuando ya se tiene el total que dice Diez, o cuando la página
@@ -325,7 +329,7 @@ if (process.argv[4] === 'corta') {
   if (una1) md(`- \`/api/facturas/factura/{ej}/{serie}/{doc}\` → ${una1.status}; campos con pinta de documento: ${Object.keys(una1.json ?? {}).filter((k) => /doc|arch|fich|file|adjun|imagen|pdf|ruta|url/i.test(k)).join(', ') || 'ninguno'}`)
   for (const f of tres) {
     for (const acc of ['*/*', 'application/pdf', 'application/octet-stream', 'application/json']) {
-      const r = await fetch(`${BASE}/api/facturas/getfile/${encodeURIComponent(f.Ejercicio)}/${encodeURIComponent(f.Serie)}/${f.Documento}`, { headers: { accept: acc, authorization: `Bearer ${token}` }, redirect: 'manual' })
+      const r = await fetch(`${BASE}/api/facturas/getfile/${encodeURIComponent(f.Ejercicio)}/${encodeURIComponent(f.Serie)}/${f.Documento}`, { headers: { accept: acc, authorization: `Bearer ${token}` }, redirect: 'manual', signal: AbortSignal.timeout(90_000) })
       const buf = Buffer.from(await r.arrayBuffer())
       let msg = ''
       if (r.status !== 200) { try { const j = JSON.parse(buf.toString('utf8')); msg = sinDatos(j.ExceptionMessage ?? j.Message ?? j) } catch { msg = sinDatos(buf.toString('utf8').slice(0, 120)) } }
