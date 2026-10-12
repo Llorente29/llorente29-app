@@ -110,8 +110,13 @@ begin
   if v_n <> 2 then raise exception 'PRUEBA importar · 5: % fotos para comparar, y son 2.', v_n; end if;
 
   -- 6 · La cadena
-  if exists (select 1 from public.journal_cadena_comprobar(c) k
-              join public.journal_entry e on e.id = k.entry_id where e.import_run_id = v_run and not k.ok) then
+  -- (journal_cadena_comprobar pide un usuario de la cuenta; aquí se rehace a mano
+  --  lo mismo: la huella de cada traído y su enganche con el anterior.)
+  if exists (select 1 from public.journal_entry e
+               left join public.journal_entry p on p.company_id = e.company_id and p.chain_seq = e.chain_seq - 1
+              where e.company_id = c and e.import_run_id = v_run
+                and (e.hash <> public.journal_huella(e.prev_hash, public.journal_entry_canonico(e.id))
+                     or e.prev_hash is distinct from p.hash)) then
     raise exception 'PRUEBA importar · 6: la cadena de huellas de lo traído no es buena.';
   end if;
 

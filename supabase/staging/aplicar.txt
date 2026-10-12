@@ -6,7 +6,8 @@
 #           validado, número de Diez, cadena de huellas, idempotente, un
 #           asiento por subtransacción) y conta_diez_cerrar_ejercicio. Solo
 #           service_role.
-#   La prueba: permisos; ejercicio una vez; subcuentas; 2 traídos y 4
+#   La prueba (2.º intento: la cadena se rehace a mano, la función del
+#   agente pide usuario): permisos; ejercicio una vez; subcuentas; 2 traídos y 4
 #   rechazados con motivo; cómo quedan; la cadena; traer dos veces; cerrar.
 supabase/staging/sql/20261019_diez_importar_ensayo.sql
 supabase/migrations/20261019T0150_diez_importar.sql
