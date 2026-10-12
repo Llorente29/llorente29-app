@@ -28,19 +28,16 @@ const BASE0 = String(cred.base_url || 'https://apicon.diezsoftware.com').replace
 // falso de las pruebas, en esta misma máquina.
 const LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(BASE0)
 const BASE = LOCAL ? BASE0 : BASE0.replace(/^http:\/\//i, 'https://')
-// /token (12/10, de la sesión en la que la API funciona): la base de datos va
-// unida al usuario y no se manda nombre_bd. Dos intentos, en este orden, y
-// se para en el primero que entra; si fallan los dos, no se insiste:
-//   1. sin cod_empresa;
-//   2. con cod_empresa como número sin ceros delante.
-const BASICOS = ['grant_type', 'client_id', 'client_secret', 'username', 'password']
-const cuerpoBase = Object.fromEntries(BASICOS.filter((k) => cred[k] !== undefined && cred[k] !== null).map((k) => [k, String(cred[k])]))
-const codNumero = /^\d+$/.test(String(cred.cod_empresa ?? '').trim()) ? String(Number(String(cred.cod_empresa).trim())) : null
-const INTENTOS = [
-  { nombre: '1 · sin cod_empresa', cuerpo: cuerpoBase },
-  codNumero ? { nombre: '2 · con cod_empresa como número sin ceros', cuerpo: { ...cuerpoBase, cod_empresa: codNumero } } : null,
-]
-const sobran = Object.keys(cred).filter((k) => k !== 'base_url' && !BASICOS.includes(k) && k !== 'cod_empresa')
+// /token (12/10, Julio): en Diez cada empresa es una base de datos, y se
+// nombra con nombre_bd. Llorente29 es C0008. Un solo intento, en formulario:
+// grant_type, client_id, client_secret, username, password y nombre_bd.
+// cod_empresa no se manda. Si falla, para.
+const CAMPOS = ['grant_type', 'client_id', 'client_secret', 'username', 'password', 'nombre_bd']
+const cuerpoToken = Object.fromEntries(CAMPOS.filter((k) => cred[k] !== undefined && cred[k] !== null).map((k) => [k, String(cred[k])]))
+const sobran = Object.keys(cred).filter((k) => k !== 'base_url' && !CAMPOS.includes(k))
+// La base que se espera leer, y la que nunca se toca (la personal de Julio).
+const BD_ESPERADA = 'C0008'
+const BD_PROHIBIDAS = ['C0001']
 // Lo que ya se sabe de Foodint en Diez (C02c, 06/10: el plan leído del PDF de
 // Diez, en producción, company_chart_import): para comprobar que se lee lo suyo.
 const REFERENCIA = { cuentas: 743, terceros: 45, ejercicios: ['2023', '2024', '2025', '2026'] }
@@ -133,21 +130,30 @@ try {
 }
 if (sobran.length) md(`- Del secreto no se manda nunca: ${sobran.join(', ')}`)
 let comoEntra = null, dataBase = null
-for (const intento of INTENTOS) {
-  if (!intento) { md('- Intento 2: `cod_empresa` no es un número; no se hace.'); continue }
-  const r = await llamar('POST', '/token', { cuerpo: intento.cuerpo, tipoCuerpo: 'application/x-www-form-urlencoded' })
-  md(`- Intento ${intento.nombre} (formulario; campos: ${Object.keys(intento.cuerpo).join(', ')}) → ${r.status}; la respuesta trae: ${claves(r.json)}`)
+if (BD_PROHIBIDAS.includes(String(cred.nombre_bd ?? '').trim().toUpperCase())) {
+  md(`**El secreto apunta a ${String(cred.nombre_bd).trim()}, que nunca se toca. No se entra.**`)
+  process.stdout.write(l.join('\n') + '\n')
+  process.exit(1)
+}
+{
+  const r = await llamar('POST', '/token', { cuerpo: cuerpoToken, tipoCuerpo: 'application/x-www-form-urlencoded' })
+  md(`- Un intento (formulario; campos: ${Object.keys(cuerpoToken).join(', ')}) → ${r.status}; la respuesta trae: ${claves(r.json)}`)
   // El código OAuth y su texto dicen por qué no entra, sin datos (cifras como 9;
   // los valores del secreto los enmascara el workflow).
   if (r.status !== 200 && r.json) md(`  - error: \`${sinDatos(r.json.error)}\` · ${sinDatos(r.json.error_description)}`)
   const t = r.json && Object.entries(r.json).find(([k, v]) => /access_?token|^token$/i.test(k) && typeof v === 'string')
   if (r.status === 200 && t) {
-    token = t[1]
-    comoEntra = intento.nombre
-    // DataBaseName es un nombre, no una clave (Julio, 12/10): se apunta.
+    // DataBaseName es un nombre, no una clave (Julio, 12/10): se apunta, y si
+    // no es la base esperada no se lee nada.
     dataBase = r.json.DataBaseName ?? null
-    md(`- **Entra con el intento ${intento.nombre}.** DataBaseName: \`${dataBase ?? '—'}\` · caduca a los ${r.json.expires_in ?? '—'} s · tipo: ${r.json.token_type ?? '—'}`)
-    break
+    md(`- DataBaseName: \`${dataBase ?? '—'}\` (se espera \`${BD_ESPERADA}\`) · caduca a los ${r.json.expires_in ?? '—'} s · tipo: ${r.json.token_type ?? '—'}`)
+    if (String(dataBase ?? '').toUpperCase() !== BD_ESPERADA) {
+      md(`**Entra, pero en otra base (${dataBase ?? 'sin nombre'}): no se lee nada.**`)
+      process.stdout.write(l.join('\n') + '\n')
+      process.exit(1)
+    }
+    token = t[1]
+    comoEntra = 'formulario con nombre_bd'
   }
 }
 md('')
@@ -460,5 +466,5 @@ md('### Límites y volumen de esta lectura', '',
   `- Cabeceras de límite vistas: ${[...metrica.limites].join(' · ') || 'ninguna'}`, '')
 tabla(['Ruta', 'Peticiones', 'KB', 'ms medio', 'ms máximo'], Object.entries(metrica.porRuta).sort((a, b) => b[1].bytes - a[1].bytes)
   .map(([k, v]) => [`\`${k}\``, v.n, Math.round(v.bytes / 1024), Math.round(v.ms / v.n), v.maxMs]))
-md(`Entró con el intento ${comoEntra}.`)
+md(`Entró con: ${comoEntra}.`)
 process.stdout.write(l.join('\n') + '\n')
