@@ -1,0 +1,205 @@
+# .github/workflows/diez-importar.yml
+#
+# C04b · T3 · La tanda del histórico de Diez (Julio, 12/10).
+#
+#   · Los datos reales NUNCA van a staging (regla de Julio).
+#   · En producción, primero el ENSAYO: todo en una transacción que se deshace
+#     al final. Mide contra los cuatro Excel de sumas y saldos (por huella,
+#     testigo-huellas.json), da el informe (recuentos, rechazos con su motivo,
+#     documentos esperados y la marca de negativos) y no deja nada escrito: lo
+#     comprueba contando antes y después.
+#   · El REAL solo se lanza con un ensayo EN VERDE del MISMO commit, como el
+#     resto de tandas; y aun así, si no cuadra, se deshace y sale en rojo.
+#
+# Al empujar a la rama del encargo (scripts del importador), un ensayo
+# SIMULADO en staging: el Diez de mentira con datos inventados
+# (importar-simulado.mjs) y la empresa de la cuenta A de pruebas. Prueba el
+# camino entero sin un dato real.
+#
+# Secretos: PROD_CONTA_DB_URL y DIEZ_LECTURA (producción), STAGING_CONTA_DB_URL
+# (simulado). Ninguno llega a la línea de órdenes que se ve.
+
+name: 'Diez · tanda del histórico (C04b)'
+run-name: "Diez · histórico · ${{ github.event_name == 'workflow_dispatch' && inputs.modo || 'simulado en staging' }}"
+
+on:
+  push:
+    branches: ['conta/c04b-diez']
+    paths:
+      - 'scripts/conta/diez/importar*'
+      - 'scripts/conta/diez/testigo-huellas.json'
+      - 'supabase/functions/_shared/diezImportar.ts'
+      - 'supabase/functions/_shared/diezMapeo.ts'
+      - '.github/workflows/diez-importar.yml'
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'ensayo (se deshace) o real (solo con un ensayo en verde del mismo commit)'
+        required: true
+        default: ensayo
+        type: choice
+        options: [ensayo, real]
+      confirmo:
+        description: 'Escribe «produccion»'
+        required: true
+        type: string
+      autorizo:
+        description: 'Solo para el real: escribe «historico-diez»'
+        required: false
+        type: string
+
+# Una tanda a la vez, y una en marcha no se cancela.
+concurrency:
+  group: diez-importar
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PROD_REF: xzmpnchlguibclvxyynt
+  STAGING_REF: oseymswjlzplqoxrfjzi
+  PSQL: /usr/lib/postgresql/17/bin/psql
+  PGAPPNAME: gha-diez-historico-${{ github.run_id }}
+
+jobs:
+  simulado:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EMPRESA: 3b34403a-a7d6-4a48-a8d7-737e8cababdc # cuenta A de pruebas
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Guarda · el secreto apunta a STAGING
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta STAGING_CONTA_DB_URL."; exit 1; }
+          python3 -c 'import os,urllib.parse as u; p=u.urlsplit(os.environ["DB_URL"]); [print(f"::add-mask::{x}") for x in (os.environ["DB_URL"], p.password, p.username, p.hostname) if x]'
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "Staging." ;; *) echo "::error::La URL no es de staging."; exit 1 ;; esac
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Paso 1 · leer y preparar (Diez de mentira, datos inventados)
+        env:
+          DIEZ_FUENTE: simulado
+          CARGA: /tmp/carga
+          DIEZ_DESDE: '202310'
+          DIEZ_HASTA: '202412'
+          DIEZ_CORTE: '2024-12-30'
+        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee /tmp/informe.md
+      - name: Paso 2 · escribir, medir y deshacer (ensayo)
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=ensayo -v carga=/tmp/carga -v detalle=/tmp/detalle.csv \
+            -f scripts/conta/diez/importar.sql | tee -a /tmp/informe.md
+      - name: Informe
+        if: always()
+        run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'
+
+  produccion:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      EMPRESA: 658728c0-fcd7-46ef-a860-d4e5e6eb21d9 # Foodint (Llorente29), la C0008 de Diez
+      MODO: ${{ inputs.modo }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirmación, modo y autorización
+        env:
+          CONFIRMO: ${{ inputs.confirmo }}
+          AUTORIZO: ${{ inputs.autorizo }}
+        run: |
+          set -euo pipefail
+          [ "$CONFIRMO" = "produccion" ] || { echo "::error::Hay que escribir «produccion» en «confirmo». No se hace nada."; exit 1; }
+          case "$MODO" in ensayo) ;; real) [ "$AUTORIZO" = "historico-diez" ] || { echo "::error::El real lleva «historico-diez» en «autorizo». No se hace nada."; exit 1; } ;; *) echo "::error::Modo desconocido."; exit 1 ;; esac
+          echo "# Diez · tanda del histórico · **$MODO**" > /tmp/informe.md
+          echo "" >> /tmp/informe.md
+          echo "Commit \`${GITHUB_SHA}\` · lanzado por **${GITHUB_ACTOR}** · $(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M') de Madrid" >> /tmp/informe.md
+          echo "" >> /tmp/informe.md
+      - name: El real, solo con un ensayo en verde del mismo commit
+        if: inputs.modo == 'real'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow diez-importar.yml --commit "$GITHUB_SHA" --status success --limit 50 \
+                --json displayTitle --jq '[.[] | select(.displayTitle == "Diez · histórico · ensayo")] | length')
+          if [ "$n" -lt 1 ]; then
+            echo "::error::No hay un ensayo en verde de este commit (${GITHUB_SHA}). Primero el ensayo; el real, después y desde el mismo commit."
+            exit 1
+          fi
+          echo "Hay $n ensayo(s) en verde de este commit." | tee -a /tmp/informe.md
+      - name: Guardas · el secreto apunta a PRODUCCIÓN y no a staging
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta PROD_CONTA_DB_URL."; exit 1; }
+          python3 -c 'import os,urllib.parse as u; p=u.urlsplit(os.environ["DB_URL"]); [print(f"::add-mask::{x}") for x in (os.environ["DB_URL"], p.password, p.username, p.hostname) if x]'
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "Producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+      - name: Enmascarar el secreto de Diez
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Guarda · al otro lado está Foodint y su 2026 es mixto de Diez
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.company c join public.fiscal_year f on f.company_id = c.id where c.id = '$EMPRESA' and c.account_id = '$FOODINT' and f.code = '2026' and f.origin = 'mixed' and f.origin_program = 'diez' and f.imported_until = '2026-09-30'")
+          [ "$r" = "1" ] || { echo "::error::Al otro lado no está la empresa de Foodint con su 2026 mixto de Diez. Abortado sin escribir nada."; exit 1; }
+          echo "Foodint, con su 2026 mixto de Diez hasta el 30/09."
+      - name: Paso 1 · leer de Diez y preparar (solo GET)
+        env:
+          DIEZ_FUENTE: real
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          CARGA: /tmp/carga
+          DIEZ_DESDE: '202310'
+          DIEZ_HASTA: '202609'
+          DIEZ_CORTE: '2026-09-30'
+        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee -a /tmp/informe.md
+      - name: Paso 2 · escribir, medir contra el testigo y decidir (una transacción)
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo="$MODO" -v carga=/tmp/carga -v detalle=/tmp/detalle.csv \
+            -f scripts/conta/diez/importar.sql | tee -a /tmp/informe.md
+      - name: Sumas por subcuenta, CIFRADAS (llevan importes)
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -f /tmp/detalle.csv ] && npx --yes tsx@4.19.2 scripts/conta/diez/cifrar.ts /tmp/detalle.csv 'DETALLE CIFRADO' || echo "Sin detalle."
+      - name: Informe
+        if: always()
+        run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'

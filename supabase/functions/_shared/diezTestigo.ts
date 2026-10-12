@@ -116,3 +116,25 @@ export function compararTestigo(testigo: Map<string, CuentaTestigo>, folvy: Map<
   const cuadra = filas.every((x) => x.estado === 'igual' || x.estado === 'igual_con_negativos' || x.estado === 'saldo_cero')
   return { filas, resumen, cuadra }
 }
+
+/**
+ * La forma canónica de unas sumas por subcuenta, para comparar por HUELLA sin
+ * enseñar los importes (el repositorio es público): una línea
+ * «código:debe:haber» en céntimos por subcuenta, ordenadas por código, sin
+ * las que tienen debe y haber a cero (matiz 3: una vacía no es una que falta).
+ * La base la calcula igual con lo escrito (scripts/conta/diez/importar.sql),
+ * rehaciendo lo de Diez con «movido»: si las dos huellas coinciden, cuadra
+ * cuenta a cuenta y al céntimo, debe y haber.
+ */
+export function canonicoTestigo(cuentas: Map<string, { debe: number; haber: number }>): string {
+  return [...cuentas.entries()]
+    .filter(([, c]) => c.debe !== 0 || c.haber !== 0)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([code, c]) => `${code}:${c.debe}:${c.haber}`)
+    .join('\n')
+}
+
+export async function huellaTestigo(cuentas: Map<string, { debe: number; haber: number }>): Promise<string> {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicoTestigo(cuentas)))
+  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
+}

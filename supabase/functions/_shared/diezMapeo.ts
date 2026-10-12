@@ -34,6 +34,10 @@ export type LineaFolvy = {
   /** Si en Diez este importe iba en NEGATIVO, en qué lado estaba: Folvy lo
    *  muestra («En Diez iba en negativo») para contrastar el diario línea a línea. */
   negativoEnDiez: 'debe' | 'haber' | null
+  /** Céntimos de esta línea que en Diez eran un negativo del otro lado (0 si
+   *  ninguno). Con él se rehace lo de Diez exacto: debe − movido y haber −
+   *  movido; así se mide el diario contra el testigo al céntimo. */
+  movido: number
 }
 export type AsientoFolvy = {
   ejercicio: string
@@ -118,12 +122,13 @@ export async function convertirAsiento(a: Apunte): Promise<{ ok: AsientoFolvy } 
     // Un lado de Folvy lleva la marca si algo de lo suyo era un negativo del otro.
     const marcaDebe = haberDiez < 0 ? 'haber' as const : null
     const marcaHaber = debeDiez < 0 ? 'debe' as const : null
+    const movDebe = Math.max(-haberDiez, 0), movHaber = Math.max(-debeDiez, 0)
     if (alDebe === 0 && alHaber === 0) { ajustes.lineasACero++; continue }
     if (alDebe > 0 && alHaber > 0) {
       ajustes.partidas++
-      lineas.push({ posicion: 0, ...comun, debe: alDebe, haber: 0, negativoEnDiez: marcaDebe }, { posicion: 0, ...comun, debe: 0, haber: alHaber, negativoEnDiez: marcaHaber })
-    } else if (alDebe > 0) lineas.push({ posicion: 0, ...comun, debe: alDebe, haber: 0, negativoEnDiez: marcaDebe })
-    else lineas.push({ posicion: 0, ...comun, debe: 0, haber: alHaber, negativoEnDiez: marcaHaber })
+      lineas.push({ posicion: 0, ...comun, debe: alDebe, haber: 0, negativoEnDiez: marcaDebe, movido: movDebe }, { posicion: 0, ...comun, debe: 0, haber: alHaber, negativoEnDiez: marcaHaber, movido: movHaber })
+    } else if (alDebe > 0) lineas.push({ posicion: 0, ...comun, debe: alDebe, haber: 0, negativoEnDiez: marcaDebe, movido: movDebe })
+    else lineas.push({ posicion: 0, ...comun, debe: 0, haber: alHaber, negativoEnDiez: marcaHaber, movido: movHaber })
   }
   if (lineas.length < 2) return no(`${lineas.length} línea${lineas.length === 1 ? '' : 's'} con importe`)
   lineas.forEach((l, i) => (l.posicion = i + 1))

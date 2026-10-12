@@ -18,6 +18,7 @@
 //     motivo (regla 8).
 
 import type { Apunte } from './diezCliente.ts'
+import { pendienteDeDocumento, type OrigenDocumento } from './diezDocumentos.ts'
 import { claveDiez, convertirAsiento, type AsientoFolvy, type Rechazo } from './diezMapeo.ts'
 
 export interface LectorDiez {
@@ -81,36 +82,73 @@ export const paraLaBase = (a: AsientoFolvy) => ({
 type RespuestaImportar = { traidos: number; yaEstaban: number; distintos: { clave: string; id: string }[]; rechazados: { clave: string; motivo: string }[] }
 type RespuestaSubcuentas = { nuevas: number; estaban: number; rechazadas: { code: string; motivo: string }[] }
 
-export async function importarHistorico(cfg: ConfigImportacion): Promise<ParteImportacion> {
+export type Preparado = {
+  meses: number
+  leidos: number
+  asientos: AsientoFolvy[] // en el orden de la cadena
+  rechazadosAlConvertir: Rechazo[]
+  fueraDelCorte: string[]
+  subcuentas: { code: string; nombre: string }[] // las que usan, con el nombre de Diez
+}
+
+/**
+ * Leer y convertir, sin escribir nada: lo comparten las dos formas de escribir
+ * (rpc en las pruebas, psql en la tanda de producción). Si Diez diera dos
+ * veces la misma clave, para.
+ */
+export async function prepararHistorico(cfg: Pick<ConfigImportacion, 'lector' | 'desde' | 'hasta' | 'corte' | 'avisar'>): Promise<Preparado> {
   const avisar = cfg.avisar ?? (() => {})
   if (!/^\d{4}-\d{2}-\d{2}$/.test(cfg.corte)) throw new Error(`Corte no válido: ${cfg.corte}`)
-  const parte: ParteImportacion = {
-    meses: 0, leidos: 0, rechazadosAlConvertir: [], fueraDelCorte: [], ejercicios: [],
-    subcuentas: { nuevas: 0, estaban: 0, rechazadas: [] }, traidos: 0, yaEstaban: 0, distintos: [], rechazados: [],
-  }
-
-  // 1. Leer y convertir, mes a mes.
-  const asientos: AsientoFolvy[] = []
+  const p: Preparado = { meses: 0, leidos: 0, asientos: [], rechazadosAlConvertir: [], fueraDelCorte: [], subcuentas: [] }
   const vistas = new Set<string>()
   for (const mes of mesesEntre(cfg.desde, cfg.hasta)) {
     const apuntes = await cfg.lector.apuntesDelMes(mes)
-    parte.meses++
-    parte.leidos += apuntes.length
+    p.meses++
+    p.leidos += apuntes.length
     for (const a of apuntes) {
       const clave = claveDiez(a)
       // El listado puede repetir (no se ha visto, pero no se supone): una clave, una vez.
       if (vistas.has(clave)) throw new Error(`Diez ha dado dos veces el asiento ${clave} en ${mes}: se para sin escribir nada`)
       vistas.add(clave)
       const c = await convertirAsiento(a)
-      if ('rechazo' in c) { parte.rechazadosAlConvertir.push(c.rechazo); continue }
-      if (c.ok.fecha > cfg.corte) { parte.fueraDelCorte.push(clave); continue }
-      asientos.push(c.ok)
+      if ('rechazo' in c) { p.rechazadosAlConvertir.push(c.rechazo); continue }
+      if (c.ok.fecha > cfg.corte) { p.fueraDelCorte.push(clave); continue }
+      p.asientos.push(c.ok)
     }
     avisar(`${mes}: ${apuntes.length} asientos leídos`)
   }
+  p.asientos = ordenarAsientos(p.asientos)
+  const usadas = [...new Set(p.asientos.flatMap((a) => a.lineas.map((l) => l.cuenta)))].sort()
+  if (usadas.length) {
+    const nombres = new Map((await cfg.lector.subcuentas()).map((s) => [String(s.Codigo ?? '').trim(), String(s.Descripcion ?? '').trim()]))
+    p.subcuentas = usadas.map((code) => ({ code, nombre: nombres.get(code) ?? '' }))
+  }
+  return p
+}
 
-  // 2. Los ejercicios traídos (uno de Folvy no se toca: la base lo rechaza y aquí se dice).
-  for (const codigo of [...new Set(asientos.map((a) => a.ejercicio))].sort()) {
+/**
+ * El documento que espera un asiento traído: solo las facturas (series 1 y 2)
+ * llevan uno. Su origen sale del tercero (la subcuenta 40/41/43 del asiento,
+ * con el nombre de Diez), con la misma regla que pendienteDeDocumento: los
+ * de plataformas y riders, por su portal (E04); el resto, de las carpetas de
+ * Drive (la tanda de documentos).
+ */
+export function documentoEsperado(a: AsientoFolvy, nombres: Map<string, string>): OrigenDocumento | null {
+  if (a.serie !== 1 && a.serie !== 2) return null
+  const tercero = a.lineas.find((l) => /^4[013]/.test(l.cuenta))
+  return pendienteDeDocumento(tercero ? nombres.get(tercero.cuenta) ?? '' : '').origen
+}
+
+export async function importarHistorico(cfg: ConfigImportacion): Promise<ParteImportacion> {
+  const avisar = cfg.avisar ?? (() => {})
+  const prep = await prepararHistorico(cfg)
+  const parte: ParteImportacion = {
+    meses: prep.meses, leidos: prep.leidos, rechazadosAlConvertir: prep.rechazadosAlConvertir, fueraDelCorte: prep.fueraDelCorte,
+    ejercicios: [], subcuentas: { nuevas: 0, estaban: 0, rechazadas: [] }, traidos: 0, yaEstaban: 0, distintos: [], rechazados: [],
+  }
+
+  // Los ejercicios traídos (uno de Folvy no se toca: la base lo rechaza y aquí se dice).
+  for (const codigo of [...new Set(prep.asientos.map((a) => a.ejercicio))].sort()) {
     try {
       const id = await cfg.rpc('conta_diez_ejercicio', { p_company: cfg.empresa, p_code: codigo, p_starts: `${codigo}-01-01`, p_ends: `${codigo}-12-31` })
       parte.ejercicios.push({ codigo, id: String(id) })
@@ -119,20 +157,14 @@ export async function importarHistorico(cfg: ConfigImportacion): Promise<ParteIm
     }
   }
 
-  // 3. Las subcuentas que usan los asientos y el plan no tiene, con el nombre que les da Diez.
-  const usadas = [...new Set(asientos.flatMap((a) => a.lineas.map((l) => l.cuenta)))].sort()
-  if (usadas.length) {
-    const nombres = new Map((await cfg.lector.subcuentas()).map((s) => [String(s.Codigo ?? '').trim(), String(s.Descripcion ?? '').trim()]))
-    const r = (await cfg.rpc('conta_diez_subcuentas', {
-      p_company: cfg.empresa, p_run: cfg.lectura,
-      p_cuentas: usadas.map((code) => ({ code, nombre: nombres.get(code) ?? '' })),
-    })) as RespuestaSubcuentas
+  // Las subcuentas que usan los asientos y el plan no tiene, con el nombre que les da Diez.
+  if (prep.subcuentas.length) {
+    const r = (await cfg.rpc('conta_diez_subcuentas', { p_company: cfg.empresa, p_run: cfg.lectura, p_cuentas: prep.subcuentas })) as RespuestaSubcuentas
     parte.subcuentas = { nuevas: r.nuevas, estaban: r.estaban, rechazadas: r.rechazadas ?? [] }
   }
 
-  // 4. Escribir, en el orden de la cadena y por tandas.
-  const tam = cfg.tandas ?? 200
-  for (const tanda of enTandas(ordenarAsientos(asientos), tam)) {
+  // Escribir, en el orden de la cadena y por tandas.
+  for (const tanda of enTandas(prep.asientos, cfg.tandas ?? 200)) {
     const r = (await cfg.rpc('conta_diez_importar', { p_company: cfg.empresa, p_run: cfg.lectura, p_asientos: tanda.map(paraLaBase) })) as RespuestaImportar
     parte.traidos += r.traidos
     parte.yaEstaban += r.yaEstaban

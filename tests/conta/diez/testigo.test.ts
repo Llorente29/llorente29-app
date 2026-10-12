@@ -4,7 +4,7 @@
 // todo en blanco y la fila TOTALES.
 
 import { describe, expect, it } from 'vitest'
-import { centimosDe, compararTestigo, leerTestigo, type CuentaFolvy } from '../../../supabase/functions/_shared/diezTestigo'
+import { canonicoTestigo, centimosDe, compararTestigo, huellaTestigo, leerTestigo, type CuentaFolvy } from '../../../supabase/functions/_shared/diezTestigo'
 
 const CAB = [
   ['Datos Balance de sumas y saldos', null, null, null, null, null, null],
@@ -100,5 +100,18 @@ describe('compararTestigo', () => {
     expect(r.cuadra).toBe(true)
     // Con saldo, faltar sí es faltar.
     expect(compararTestigo(t, F({ '10000000': [0, 100], '47200000': [3545, 0] })).filas.find((x) => x.cuenta === '47200000')!.estado).toBe('solo_folvy')
+  })
+})
+
+describe('huella del testigo', () => {
+  it('una línea por subcuenta con importe, ordenadas, en céntimos; las vacías no cuentan', async () => {
+    const t = leerTestigo(EXCEL).cuentas
+    expect(canonicoTestigo(t)).toBe('10000000:0:300000\n43000001:150050:100000\n57200001:252429:0\n70800000:0:-2479')
+    const otraVez = new Map([...t.entries()].reverse())
+    expect(await huellaTestigo(otraVez)).toBe(await huellaTestigo(t)) // el orden de entrada no importa
+    const unCentimo = new Map(t); unCentimo.set('57200001', { debe: 252430, haber: 0, saldo: 252430 })
+    expect(await huellaTestigo(unCentimo)).not.toBe(await huellaTestigo(t))
+    // Igual que la de la base: sha256 en hexadecimal de esa misma cadena.
+    expect(await huellaTestigo(t)).toMatch(/^[0-9a-f]{64}$/)
   })
 })

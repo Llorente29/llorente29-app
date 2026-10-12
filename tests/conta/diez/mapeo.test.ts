@@ -81,6 +81,11 @@ describe('convertirAsiento', () => {
       ['55100002', 0, 400, 'debe'],
     ])
     expect(a.ajustes.negativos).toBe(5)
+    // Lo de Diez se rehace exacto con «movido»: debe − movido y haber − movido, línea a línea y por cuenta.
+    expect(a.lineas.map((l) => [l.cuenta, l.debe - l.movido, l.haber - l.movido])).toEqual([
+      ['62900000', 5000, 0], ['70800000', 0, -1025], ['62900002', -500, 0], ['57000000', 0, 5725],
+      ['55100001', 200, -300], ['55100002', 0, -100], ['55100002', -400, 0],
+    ])
     // La marca no entra en la huella: lo que se compara con Diez son cuenta, debe y haber.
     const sin = await ok(base({ Detalles: [{ Cuenta: '62900000', Debe: 10 }, { Cuenta: '57000000', Haber: 10 }] }))
     expect(sin.lineas.every((l) => l.negativoEnDiez === null)).toBe(true)
