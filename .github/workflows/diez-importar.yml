@@ -104,8 +104,9 @@ jobs:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
           set -euo pipefail
-          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=ensayo -v carga=/tmp/carga -v detalle=/tmp/detalle.csv \
-            -f scripts/conta/diez/importar.sql | tee -a /tmp/informe.md
+          cd /tmp/carga
+          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=ensayo \
+            -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
       - name: Informe
         if: always()
         run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'
@@ -193,13 +194,14 @@ jobs:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -euo pipefail
-          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo="$MODO" -v carga=/tmp/carga -v detalle=/tmp/detalle.csv \
-            -f scripts/conta/diez/importar.sql | tee -a /tmp/informe.md
+          cd /tmp/carga
+          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo="$MODO" \
+            -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
       - name: Sumas por subcuenta, CIFRADAS (llevan importes)
         if: always()
         run: |
           set -euo pipefail
-          [ -f /tmp/detalle.csv ] && npx --yes tsx@4.19.2 scripts/conta/diez/cifrar.ts /tmp/detalle.csv 'DETALLE CIFRADO' || echo "Sin detalle."
+          [ -f /tmp/carga/detalle.csv ] && npx --yes tsx@4.19.2 scripts/conta/diez/cifrar.ts /tmp/carga/detalle.csv 'DETALLE CIFRADO' || echo "Sin detalle."
       - name: Informe
         if: always()
         run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'

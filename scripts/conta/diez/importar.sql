@@ -17,9 +17,11 @@
 --   5. ENSAYO o simulado: rollback, y comprueba que no queda nada escrito.
 --      REAL: commit solo si está en verde; si no, rollback y en rojo.
 --
--- Variables de psql: empresa (uuid), modo (ensayo | real), carga (carpeta del
--- paso 1), detalle (fichero donde dejar las sumas por subcuenta, que el
--- workflow CIFRA antes de enseñarlas: llevan importes).
+-- Variables de psql: empresa (uuid) y modo (ensayo | real). Se ejecuta DESDE
+-- la carpeta de la carga del paso 1 (\copy no sustituye variables en el
+-- nombre del fichero): lee asientos.csv, subcuentas.csv y testigo.csv y deja
+-- detalle.csv, las sumas por subcuenta, que el workflow CIFRA antes de
+-- enseñarlas (llevan importes).
 
 \set ON_ERROR_STOP on
 \pset footer off
@@ -31,7 +33,7 @@ select count(*) as antes_lecturas from public.import_run where company_id = :'em
 begin;
 set local statement_timeout = 0;
 set local lock_timeout = '5s';
-select set_config('diez.empresa', :'empresa', true), set_config('diez.modo', :'modo', true);
+select set_config('diez.empresa', :'empresa', true), set_config('diez.modo', :'modo', true) \g /dev/null
 
 create temp table carga_asiento (orden int, ejercicio text, documento text, doc jsonb) on commit drop;
 create temp table carga_subcuenta (doc jsonb) on commit drop;
@@ -39,12 +41,9 @@ create temp table carga_testigo (ejercicio text, hasta date, cuentas int, huella
 create temp table informe (n serial, linea text) on commit drop;
 create temp table detalle (ejercicio text, cuenta text, debe bigint, haber bigint) on commit drop;
 
-\set f_asientos :carga '/asientos.csv'
-\set f_subcuentas :carga '/subcuentas.csv'
-\set f_testigo :carga '/testigo.csv'
-\copy carga_asiento from :'f_asientos' with (format csv)
-\copy carga_subcuenta from :'f_subcuentas' with (format csv)
-\copy carga_testigo from :'f_testigo' with (format csv)
+\copy carga_asiento from 'asientos.csv' with (format csv)
+\copy carga_subcuenta from 'subcuentas.csv' with (format csv)
+\copy carga_testigo from 'testigo.csv' with (format csv)
 
 do $$
 declare
@@ -121,8 +120,9 @@ begin
               where e.company_id = c and f.code = ej.ejercicio and e.external_program = 'diez' and e.series = s) n from unnest(array[1, 2, 3, 4, 9]) s) q),
       (select count(*) from public.journal_line jl join public.journal_entry e on e.id = jl.entry_id join public.fiscal_year f on f.id = e.fiscal_year_id
         where e.company_id = c and f.code = ej.ejercicio and e.external_program = 'diez' and jl.external_negative_side is not null),
-      coalesce((select string_agg(documento || ' ' || n, ' · ' order by documento) from (select documento, count(*) n from carga_asiento
-                 where ejercicio = ej.ejercicio and documento <> '' group by 1) d), 'ninguna'),
+      coalesce((select string_agg(n || ' por ' || case documento when 'portal_uber_eats' then 'el portal de Uber Eats' when 'portal_glovo' then 'el portal de Glovo'
+                 when 'portal_just_eat' then 'el portal de Just Eat' when 'portal_riders' then 'el portal de riders' else 'Drive (subida a mano)' end, ' · ' order by documento)
+                 from (select documento, count(*) n from carga_asiento where ejercicio = ej.ejercicio and documento <> '' group by 1) d), 'ninguna'),
       case when v_cuadra then format('**cuadra** al céntimo (%s subcuentas)', v_n)
            else format('**NO cuadra**: Folvy %s subcuentas, testigo %s', v_n, ej.cuentas) end);
   end loop;
@@ -130,11 +130,13 @@ begin
   -- 3 · Verde: todo cuadra y nada pendiente de explicar. Entonces se cierra y se marca.
   v_verde := v_todos and jsonb_array_length(rech) = 0 and jsonb_array_length(dist) = 0
              and jsonb_array_length(v_sub -> 'rechazadas') = 0;
+  inf := inf || ''::text;
   if v_verde then
     for ej in select t2.ejercicio, f.origin from carga_testigo t2 join public.fiscal_year f on f.company_id = c and f.code = t2.ejercicio order by 1 loop
       if ej.origin = 'migrated' then
         r := public.conta_diez_cerrar_ejercicio(c, ej.ejercicio);
-        inf := inf || format('- %s: ejercicio cerrado (%s asientos traídos).', ej.ejercicio, r ->> 'asientos');
+        inf := inf || case when (r ->> 'yaCerrado')::boolean then format('- %s: ya estaba cerrado.', ej.ejercicio)
+                           else format('- %s: ejercicio cerrado (%s asientos traídos).', ej.ejercicio, r ->> 'asientos') end;
       end if;
       r := public.conta_diez_historico_traido(c, ej.ejercicio);
       inf := inf || format('- %s: histórico marcado como traído; Folvy numera detrás de %s.', ej.ejercicio, r -> 'ultimoPorSerie');
@@ -155,7 +157,7 @@ end $$;
 \pset tuples_only on
 \pset format unaligned
 select linea from informe order by n;
-\copy (select ejercicio, cuenta, debe, haber from detalle order by 1, 2) to :'detalle' with (format csv)
+\copy (select ejercicio, cuenta, debe, haber from detalle order by 1, 2) to 'detalle.csv' with (format csv)
 
 select current_setting('diez.verde') = 'si' as verde, :'modo' = 'real' as real \gset
 \if :real
