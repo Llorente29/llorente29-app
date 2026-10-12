@@ -65,7 +65,7 @@ jobs:
   lectura:
     # A mano (cuando el workflow esté en main) o al empujar a la rama del
     # encargo un commit cuyo mensaje EMPIECE por «[lectura]» (no basta con nombrarlo).
-    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura]'))
+    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -85,7 +85,13 @@ jobs:
       - name: Contar lo que hay en Diez (solo GET)
         env:
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          # «[lectura:corta]» al principio del mensaje: solo documentos, saldos
+          # y subcuentas nuevas (unos minutos), sin recorrer el histórico.
+          MENSAJE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          node scripts/conta/diez/lectura.mjs 202301 202609 | tee lectura.md
+          MODO=larga
+          case "$MENSAJE" in "[lectura:corta]"*) MODO=corta ;; esac
+          echo "Modo: $MODO"
+          node scripts/conta/diez/lectura.mjs 202301 202609 "$MODO" | tee lectura.md
           cat lectura.md >> "$GITHUB_STEP_SUMMARY"

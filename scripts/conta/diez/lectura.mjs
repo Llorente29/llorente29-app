@@ -99,6 +99,9 @@ const claves = (o) => (o && typeof o === 'object' ? Object.keys(o).join(', ') : 
 const paginada = (j) => j && typeof j === 'object' && Array.isArray(j.Datos)
 const lleno = (v) => v !== null && v !== undefined && String(v).trim() !== ''
 const cent = (n) => Math.round(Number(n || 0) * 100)
+// En una empresa «Estándar/Sociedades» /api/clientes y /api/proveedores no
+// existen (run 7): los terceros son subcuentas de 40, 41, 43 y 44.
+const esTercero = (c) => /^(40|41|43|44)/.test(String(c ?? ''))
 const cuenta = (obj, k, n = 1) => { obj[k] = (obj[k] ?? 0) + n }
 const tabla = (cabeza, filas) => { md(`| ${cabeza.join(' | ')} |`, `|${cabeza.map(() => '---').join('|')}|`, ...filas.map((f) => `| ${f.join(' | ')} |`), '') }
 const meses = () => {
@@ -266,6 +269,75 @@ async function todas(ruta) {
   return { filas, total: total ?? filas.length, estado, paginas }
 }
 
+// ── Lectura CORTA (respuesta 2, 12/10): documentos, saldos y las 38 ───────
+// Se para aquí: no recorre el histórico.
+if (process.argv[4] === 'corta') {
+  // a) ¿Hay saldos en las subcuentas? Los NOMBRES de los campos, no los valores.
+  md('### ¿Traen saldos las subcuentas?', '')
+  const subs = (await todas('/api/subcuentas')).filas
+  const camposLista = [...new Set(subs.flatMap((x) => Object.keys(x)))]
+  md(`- \`/api/subcuentas\` (${subs.length}): campos ${camposLista.map((c) => `\`${c}\``).join(', ')}`)
+  const unaCod = subs.find((x) => /^57/.test(String(x.Codigo)))?.Codigo ?? subs[0]?.Codigo
+  const una = await get(`/api/subcuentas/subcuenta/${encodeURIComponent(unaCod)}`)
+  md(`- \`/api/subcuentas/subcuenta/{código}\` → ${una.status}; campos ${claves(una.json)}`)
+  const conSaldo = camposLista.filter((c) => /saldo|debe|haber|importe|acumul/i.test(c))
+  md(`- Campos con pinta de saldo: ${conSaldo.length ? conSaldo.map((c) => `\`${c}\``).join(', ') : '**ninguno**'}`, '')
+
+  // b) ¿Qué es getSumasYsaldos? Sus filas de 2025 contra los apuntes de 2025,
+  // cuenta a cuenta (solo cuántas cuadran, sin importes).
+  md('### getSumasYsaldos 2025 contra los apuntes de 2025', '')
+  const sys = await todas('/api/subcuentas/getSumasYsaldos/2025/20250101/20251231')
+  md(`- getSumasYsaldos: ${sys.filas.length} de ${sys.total ?? '—'} filas en ${sys.paginas} páginas${sys.error ? ` · ${sys.error}` : ''}; campos ${[...new Set(sys.filas.flatMap((x) => Object.keys(x)))].join(', ')}`)
+  const docsSys = new Set(sys.filas.map((x) => `${x.Ejercicio}|${x.Serie}|${x.Documento}`))
+  const apu = await todas(`/api/apuntes?$filter=${encodeURIComponent("Ejercicio eq '2025'")}`)
+  const lin = apu.filas.flatMap((a) => (a.Detalles ?? []).map((d) => ({ ...d, Ejercicio: a.Ejercicio, Serie: a.Serie, Documento: a.Documento })))
+  md(`- Apuntes 2025: ${apu.filas.length} de ${apu.total ?? '—'} asientos, ${lin.length} líneas${apu.error ? ` · ${apu.error}` : ''}`)
+  const porCta = (filas, campo) => filas.reduce((m, x) => { const k = String(x[campo] ?? ''); const v = (m[k] ??= { d: 0, h: 0, n: 0 }); v.d += cent(x.Debe); v.h += cent(x.Haber); v.n++; return m }, {})
+  const a = porCta(lin, 'Cuenta'), b = porCta(sys.filas, 'Subcuenta')
+  const ctas = new Set([...Object.keys(a), ...Object.keys(b)])
+  let iguales = 0, soloA = 0, soloB = 0, distintas = 0, mismasFilas = 0
+  for (const c of ctas) {
+    if (!a[c]) { soloB++; continue }
+    if (!b[c]) { soloA++; continue }
+    if (a[c].d === b[c].d && a[c].h === b[c].h) iguales++; else distintas++
+    if (a[c].n === b[c].n) mismasFilas++
+  }
+  const docsLin = new Set(lin.map((x) => `${x.Ejercicio}|${x.Serie}|${x.Documento}`))
+  md(`- Cuentas: ${ctas.size} · iguales al céntimo (debe y haber): **${iguales}** · distintas: ${distintas} · solo en apuntes: ${soloA} · solo en getSumasYsaldos: ${soloB} · con el mismo número de filas: ${mismasFilas}`,
+    `- Asientos distintos en getSumasYsaldos: ${docsSys.size} (de ${docsLin.size} en los apuntes); todos ellos están en los apuntes: ${[...docsSys].every((k) => docsLin.has(k)) ? 'sí' : 'no'}`, '')
+
+  // c) Las subcuentas que no estaban en el plan del C02c (743 códigos).
+  md('### Subcuentas de Diez que no estaban en el plan del C02c', '')
+  const { readFileSync } = await import('node:fs')
+  const c02c = new Set(readFileSync(new URL('./referencia/c02c-codigos.txt', import.meta.url), 'utf8').split(/\s+/).filter(Boolean))
+  const nuevas = subs.filter((x) => !c02c.has(String(x.Codigo))).sort((x, y) => String(x.Codigo).localeCompare(String(y.Codigo)))
+  const faltan = [...c02c].filter((c) => !subs.some((x) => String(x.Codigo) === c))
+  md(`${nuevas.length} nuevas en Diez · ${faltan.length} del C02c que Diez ya no tiene${faltan.length ? `: ${faltan.slice(0, 60).join(', ')}${faltan.length > 60 ? ' …' : ''}` : ''}.`, '')
+  // El nombre sale solo si es plan de la empresa; las de terceros (40/41/43/44)
+  // llevan el nombre de un proveedor o cliente: solo el código.
+  tabla(['Grupo', 'Código', 'Nombre'], nuevas.map((x) => [String(x.Codigo)[0], `\`${x.Codigo}\``, esTercero(x.Codigo) ? '*(tercero: no se publica)*' : String(x.Descripcion ?? '').replace(/\|/g, '/')]))
+
+  // d) getfile: segunda oportunidad, con otras cabeceras y viendo el error.
+  md('### getfile (lectura 1 de las 2 permitidas)', '')
+  const unMes = await todas(`/api/facturas?$filter=${encodeURIComponent('Fecha ge 20260901 and Fecha le 20260930')}`)
+  const tres = unMes.filas.slice(0, 3)
+  const una1 = tres[0] ? await get(`/api/facturas/factura/${encodeURIComponent(tres[0].Ejercicio)}/${encodeURIComponent(tres[0].Serie)}/${tres[0].Documento}`) : null
+  if (una1) md(`- \`/api/facturas/factura/{ej}/{serie}/{doc}\` → ${una1.status}; campos con pinta de documento: ${Object.keys(una1.json ?? {}).filter((k) => /doc|arch|fich|file|adjun|imagen|pdf|ruta|url/i.test(k)).join(', ') || 'ninguno'}`)
+  for (const f of tres) {
+    for (const acc of ['*/*', 'application/pdf', 'application/octet-stream', 'application/json']) {
+      const r = await fetch(`${BASE}/api/facturas/getfile/${encodeURIComponent(f.Ejercicio)}/${encodeURIComponent(f.Serie)}/${f.Documento}`, { headers: { accept: acc, authorization: `Bearer ${token}` }, redirect: 'manual' })
+      const buf = Buffer.from(await r.arrayBuffer())
+      let msg = ''
+      if (r.status !== 200) { try { const j = JSON.parse(buf.toString('utf8')); msg = sinDatos(j.ExceptionMessage ?? j.Message ?? j) } catch { msg = sinDatos(buf.toString('utf8').slice(0, 120)) } }
+      md(`- factura ${tres.indexOf(f) + 1} · accept \`${acc}\` → ${r.status} · ${r.headers.get('content-type') ?? '—'} · ${buf.length} B${msg ? ` · ${msg}` : ''}`)
+      await espera(PAUSA_MS)
+    }
+  }
+  md('', `Peticiones: ${metrica.peticiones} · ${Math.round(metrica.bytes / 1024)} KB.`)
+  process.stdout.write(l.join('\n') + '\n')
+  process.exit(0)
+}
+
 // ── 3. Catálogos ─────────────────────────────────────────────────────────────
 md('### Catálogos (cuántos)', '')
 const catalogos = [
@@ -308,9 +380,6 @@ if (ejercicios.length > 1 && new Set(porAno.filter((n) => n > 0)).size === 1) {
   md('', '**Todos los años dan el mismo número: el `$filter` por ejercicio no se aplica.** La lista de ejercicios de abajo no vale.')
 }
 const nSub = cat['/api/subcuentas'].filas.length
-// En una empresa «Estándar/Sociedades» /api/clientes y /api/proveedores no
-// existen (run 7): los terceros son subcuentas de 40, 41, 43 y 44.
-const esTercero = (c) => /^(40|41|43|44)/.test(String(c ?? ''))
 const nTerceros = cat['/api/subcuentas'].filas.filter((x) => esTercero(x.Codigo)).length
 const sub8 = cat['/api/subcuentas'].filas.filter((x) => String(x.Codigo ?? '').length === 8).length
 md('', `| Qué | En Diez (ahora) | Conocido (C02c, 06/10) |`, '|---|---|---|',
