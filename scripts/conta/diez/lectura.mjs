@@ -23,8 +23,16 @@ if (!cred || typeof cred !== 'object') {
   console.log('**Falta el secreto DIEZ_LECTURA** (o no es un JSON). No se lee nada.')
   process.exit(1)
 }
-const BASE = String(cred.base_url || 'https://apicon.diezsoftware.com').replace(/\/$/, '')
-delete cred.base_url
+const BASE0 = String(cred.base_url || 'https://apicon.diezsoftware.com').replace(/\/$/, '')
+// Siempre https, aunque la colección diga http. La única excepción es el Diez
+// falso de las pruebas, en esta misma máquina.
+const LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(BASE0)
+const BASE = LOCAL ? BASE0 : BASE0.replace(/^http:\/\//i, 'https://')
+// Lo que pide /token según la colección de Cegid (12/10): sin nombre_bd, y
+// cod_empresa como texto. Lo demás que traiga el secreto no se manda.
+const CAMPOS_TOKEN = ['grant_type', 'client_id', 'client_secret', 'username', 'password', 'cod_empresa']
+const cuerpoToken = Object.fromEntries(CAMPOS_TOKEN.filter((k) => cred[k] !== undefined && cred[k] !== null).map((k) => [k, String(cred[k])]))
+const sobran = Object.keys(cred).filter((k) => k !== 'base_url' && !CAMPOS_TOKEN.includes(k))
 const DESDE = process.argv[2] || '202301'
 const HASTA = process.argv[3] || '202609'
 const MUESTRA = Number(process.env.MUESTRA_POR_EJERCICIO || 25)
@@ -40,6 +48,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms))
 async function llamar(metodo, ruta, { cuerpo, tipoCuerpo, crudo } = {}) {
   const esEntrar = metodo === 'POST' && ruta === '/token'
   if (metodo !== 'GET' && !esEntrar) throw new Error(`Freno: ${metodo} ${ruta} no es lectura`)
+  if (!BASE.startsWith('https://') && !LOCAL) throw new Error('Freno: sin https no sale nada')
   const cab = { accept: 'application/json' }
   if (token && !esEntrar) cab.authorization = `Bearer ${token}`
   let body
@@ -50,7 +59,9 @@ async function llamar(metodo, ruta, { cuerpo, tipoCuerpo, crudo } = {}) {
   for (let intento = 1; intento <= 4; intento++) {
     await espera(PAUSA_MS)
     const t0 = Date.now()
-    const r = await fetch(BASE + ruta, { method: metodo, headers: cab, body })
+    const r = await fetch(BASE + ruta, { method: metodo, headers: cab, body, redirect: 'manual' })
+    // Una redirección podría llevar a http: no se sigue ninguna.
+    if (r.status >= 300 && r.status < 400) throw new Error(`Freno: ${metodo} ${ruta.split('?')[0]} redirige (${r.status}); no se sigue`)
     const buf = Buffer.from(await r.arrayBuffer())
     const ms = Date.now() - t0
     metrica.peticiones++; metrica.bytes += buf.length; metrica.ms += ms
@@ -98,9 +109,21 @@ const fechaComo = (formato, yyyymmdd) => {
 // ── 1. Entrar ────────────────────────────────────────────────────────────────
 md('## Diez · lectura (solo recuentos)', '', `Base: \`${BASE}\` · meses: ${DESDE}–${HASTA}`, '')
 md('### Entrar', '')
+// Antes de mandar ninguna credencial: ¿contesta Diez por https? (sin datos)
+try {
+  if (!BASE.startsWith('https://') && !LOCAL) throw new Error(`la base no es https: ${BASE.split('/')[0]}`)
+  const r = await fetch(BASE + '/swagger/docs/v1', { redirect: 'manual' })
+  md(`- https: \`GET /swagger/docs/v1\` → ${r.status} (sin credenciales)`)
+  if (r.status !== 200) throw new Error(`contesta ${r.status}`)
+} catch (e) {
+  md(`**Diez no responde por https (${e.message}). Paro aquí: no se manda nada sin cifrar.**`)
+  process.stdout.write(l.join('\n') + '\n')
+  process.exit(1)
+}
+md(`- Campos mandados a \`/token\`: ${Object.keys(cuerpoToken).join(', ')}${sobran.length ? ` · del secreto NO se mandan: ${sobran.join(', ')}` : ''}`)
 let comoEntra = null
 for (const tipo of ['application/x-www-form-urlencoded', 'application/json']) {
-  const r = await llamar('POST', '/token', { cuerpo: cred, tipoCuerpo: tipo })
+  const r = await llamar('POST', '/token', { cuerpo: cuerpoToken, tipoCuerpo: tipo })
   md(`- \`POST /token\` con ${tipo} → ${r.status}; la respuesta trae: ${claves(r.json)}`)
   const t = r.json && Object.entries(r.json).find(([k, v]) => /access_?token|^token$/i.test(k) && typeof v === 'string')
   if (r.status === 200 && t) {
@@ -122,49 +145,81 @@ const par = await get('/api/parametros')
 md(`- \`GET /api/parametros\` → ${par.status}; TipoContabilidad ${par.json?.TipoContabilidad ?? '—'} · DigitosPlanContable ${par.json?.DigitosPlanContable ?? '—'}`, '')
 
 // ── 2. Paginación ────────────────────────────────────────────────────────────
+// La colección de Cegid trae OData ($filter, $top, $skip, $orderby, $select).
+// Se mide si de verdad se aplica antes de fiarse; si no, se prueba a ciegas.
 md('### Paginación', '')
+const items = (j) => (Array.isArray(j) ? j : paginada(j) ? j.Datos : null)
+const forma = (j) => (paginada(j) ? `total ${j.ResultadosTotales} · página ${j.PaginaActual} · por página ${j.ElementosPorPagina} · en página ${j.ElementosEnPagina ?? j.Datos.length}`
+  : Array.isArray(j) ? `lista de ${j.length}` : `ni lista ni paginada (${claves(j)})`)
+const huella = (x) => JSON.stringify(x ?? null)
 const base = await get('/api/subcuentas')
-const forma = (j) => (paginada(j) ? `total ${j.ResultadosTotales} · página ${j.PaginaActual} · por página ${j.ElementosPorPagina} · en página ${j.ElementosEnPagina ?? j.Datos.length}` : `no paginada (${claves(j)})`)
 md(`- Sin parámetros, \`/api/subcuentas\` → ${base.status}; ${forma(base.json)}`)
-let paramPagina = null, paramTam = null
-for (const p of ['pagina', 'page', 'numeroPagina', 'paginaActual', 'numPagina', 'pageNumber']) {
-  const r = await get(`/api/subcuentas?${p}=2`)
-  const cambia = paginada(r.json) && r.json.PaginaActual === 2
-  md(`- \`?${p}=2\` → ${r.status}; ${forma(r.json)}${cambia ? ' ← **sirve**' : ''}`)
-  if (cambia && !paramPagina) paramPagina = p
+const q = (o) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
+const t3 = await get(`/api/subcuentas?${q({ $top: 3 })}`)
+const t3s = await get(`/api/subcuentas?${q({ $top: 3, $skip: 3 })}`)
+const t3o = await get(`/api/subcuentas?${q({ $top: 3, $orderby: 'Codigo desc' })}`)
+const t3sel = await get(`/api/subcuentas?${q({ $top: 3, $select: 'Codigo' })}`)
+const n3 = items(t3.json)?.length
+const saltaBien = items(t3s.json)?.length > 0 && huella(items(t3s.json)?.[0]) !== huella(items(t3.json)?.[0])
+const ordenaBien = items(t3o.json)?.length > 0 && huella(items(t3o.json)?.[0]) !== huella(items(t3.json)?.[0])
+md(`- \`$top=3\` → ${t3.status}; ${forma(t3.json)}${n3 === 3 ? ' ← **se aplica**' : ''}`,
+  `- \`$top=3&$skip=3\` → ${t3s.status}; ${forma(t3s.json)}; primer elemento distinto del de \`$top=3\`: ${saltaBien ? '**sí**' : 'no'}`,
+  `- \`$orderby=Codigo desc\` → ${t3o.status}; primer elemento distinto: ${ordenaBien ? '**sí**' : 'no'}`,
+  `- \`$select=Codigo\` → ${t3sel.status}; campos del primer elemento: ${claves(items(t3sel.json)?.[0])}`)
+const odata = n3 === 3 && saltaBien
+let TOP = null
+if (odata) {
+  for (const n of [500, 1000, 5000]) {
+    const r = await get(`/api/subcuentas?${q({ $top: n })}`)
+    const k = items(r.json)?.length
+    md(`- \`$top=${n}\` → ${r.status}; devuelve ${k ?? '—'}`)
+    if (r.status === 200 && k != null) TOP = n
+  }
+  TOP = Math.min(TOP || 500, 1000)
 }
-for (const p of ['elementosPorPagina', 'pageSize', 'tamanoPagina', 'registrosPorPagina', 'porPagina', 'limit']) {
-  const r = await get(`/api/subcuentas?${p}=500`)
-  const cambia = paginada(r.json) && paginada(base.json) && r.json.ElementosPorPagina !== base.json.ElementosPorPagina
-  md(`- \`?${p}=500\` → ${r.status}; ${forma(r.json)}${cambia ? ' ← **sirve**' : ''}`)
-  if (cambia && !paramTam) paramTam = p
-}
-let tamMax = null
-if (paramTam) {
-  for (const n of [1000, 5000, 10000]) {
-    const r = await get(`/api/subcuentas?${paramTam}=${n}`)
-    md(`- \`?${paramTam}=${n}\` → ${r.status}; ${forma(r.json)}`)
-    if (paginada(r.json)) tamMax = r.json.ElementosPorPagina
+let paramPagina = null, paramTam = null, tamMax = null
+if (!odata) {
+  for (const p of ['pagina', 'page', 'numeroPagina', 'paginaActual', 'numPagina', 'pageNumber']) {
+    const r = await get(`/api/subcuentas?${p}=2`)
+    const cambia = paginada(r.json) && r.json.PaginaActual === 2
+    md(`- \`?${p}=2\` → ${r.status}; ${forma(r.json)}${cambia ? ' ← **sirve**' : ''}`)
+    if (cambia && !paramPagina) paramPagina = p
+  }
+  for (const p of ['elementosPorPagina', 'pageSize', 'tamanoPagina', 'registrosPorPagina', 'porPagina', 'limit']) {
+    const r = await get(`/api/subcuentas?${p}=500`)
+    const cambia = paginada(r.json) && paginada(base.json) && r.json.ElementosPorPagina !== base.json.ElementosPorPagina
+    md(`- \`?${p}=500\` → ${r.status}; ${forma(r.json)}${cambia ? ' ← **sirve**' : ''}`)
+    if (cambia && !paramTam) paramTam = p
+  }
+  if (paramTam) {
+    for (const n of [1000, 5000]) {
+      const r = await get(`/api/subcuentas?${paramTam}=${n}`)
+      md(`- \`?${paramTam}=${n}\` → ${r.status}; ${forma(r.json)}`)
+      if (paginada(r.json)) tamMax = r.json.ElementosPorPagina
+    }
   }
 }
-md('', `Página: **${paramPagina ?? 'no encontrada'}** · tamaño: **${paramTam ?? 'no encontrado'}**${tamMax ? ` (pide hasta ${tamMax})` : ''}`, '')
+md('', odata ? `Paginación: **OData**, \`$top=${TOP}\` y \`$skip\`.` : `Paginación: OData **no** se aplica · página: **${paramPagina ?? 'no encontrada'}** · tamaño: **${paramTam ?? 'no encontrado'}**`, '')
 
 const TAM = paramTam ? Math.min(tamMax || 500, 1000) : null
-async function todas(ruta, sep = '?') {
+async function todas(ruta) {
+  const sep = ruta.includes('?') ? '&' : '?'
   const filas = []
   let pag = 1, total = null, estado = null, paginas = 0
   for (;;) {
-    const q = [paramPagina && `${paramPagina}=${pag}`, TAM && `${paramTam}=${TAM}`].filter(Boolean).join('&')
-    const r = await get(ruta + (q ? sep + q : ''))
+    const qq = odata ? q({ $top: TOP, $skip: (pag - 1) * TOP }) : [paramPagina && `${paramPagina}=${pag}`, TAM && `${paramTam}=${TAM}`].filter(Boolean).join('&')
+    const r = await get(ruta + (qq ? sep + qq : ''))
     estado = r.status
-    if (r.status !== 200 || !paginada(r.json)) return { filas, total, estado, paginas, error: r.status !== 200 ? sinDatos(r.json) : `no paginada (${claves(r.json)})` }
+    const d = items(r.json)
+    if (r.status !== 200 || !d) return { filas, total, estado, paginas, error: r.status !== 200 ? sinDatos(r.json) : `forma inesperada (${claves(r.json)})` }
     paginas++
-    total = r.json.ResultadosTotales
-    filas.push(...r.json.Datos)
-    if (!paramPagina || r.json.Datos.length === 0 || filas.length >= total || paginas > 2000) break
+    if (paginada(r.json)) total = r.json.ResultadosTotales
+    filas.push(...d)
+    if (d.length === 0 || paginas > 2000) break
+    if (odata ? d.length < TOP : (!paramPagina || (total != null && filas.length >= total))) break
     pag++
   }
-  return { filas, total, estado, paginas }
+  return { filas, total: total ?? filas.length, estado, paginas }
 }
 
 // ── 3. Catálogos ─────────────────────────────────────────────────────────────
@@ -207,26 +262,40 @@ if (res.status === 200 && Array.isArray(res.json)) {
 } else md(`→ ${res.status}; ${sinDatos(res.json)}`, '')
 
 // ── 5. Asientos, mes a mes ──────────────────────────────────────────────────
-md('### Asientos (`/api/apuntes/all`, mes a mes)', '')
-// Formato de fecha: el Swagger dice «string» y no dice cuál.
+md('### Asientos, mes a mes', '')
+// Cómo pedir un mes: $filter por Fecha (OData) o /all con fechas (el Swagger
+// dice «string» y no dice el formato). Se elige lo que devuelve asientos y
+// todos dentro del mes.
 const m0 = meses().find((x) => x.y === 2025 && x.m === 1) ?? meses()[0]
+const dentro = (d, mm) => d.length > 0 && d.every((x) => String(x.Fecha ?? '').slice(0, 6) === mm.ini.slice(0, 6))
 let formatoFecha = null
+const filtro = (mm) => `$filter=${encodeURIComponent(`Fecha ge ${mm.ini} and Fecha le ${mm.fin}`)}`
+const conFiltro = await get(`/api/apuntes?${filtro(m0)}&${q({ $top: 50 })}`)
+const porFiltro = conFiltro.status === 200 && dentro(items(conFiltro.json) ?? [], m0)
+md(`- \`/api/apuntes?$filter=Fecha ge ${m0.ini} and Fecha le ${m0.fin}\` → ${conFiltro.status}; ${forma(conFiltro.json)}; todos dentro del mes: ${porFiltro ? '**sí**' : 'no'}`)
+const conEj = await get(`/api/apuntes?$filter=${encodeURIComponent("Ejercicio eq '2025'")}&${q({ $top: 50 })}`)
+md(`- \`$filter=Ejercicio eq '2025'\` → ${conEj.status}; ${forma(conEj.json)}; todos de 2025: ${(items(conEj.json) ?? []).length && (items(conEj.json) ?? []).every((x) => String(x.Ejercicio) === '2025') ? 'sí' : 'no'}`)
 for (const f of ['compacta', 'iso', 'es']) {
   const r = await get(`/api/apuntes/all?fechaDesde=${encodeURIComponent(fechaComo(f, m0.ini))}&fechaHasta=${encodeURIComponent(fechaComo(f, m0.fin))}`)
-  md(`- fechas ${f} (${fechaComo(f, '20250131')}) → ${r.status}; ${forma(r.json)}`)
-  if (!formatoFecha && r.status === 200 && paginada(r.json) && r.json.ResultadosTotales > 0) formatoFecha = f
+  const ok = r.status === 200 && dentro(items(r.json) ?? [], m0)
+  md(`- \`/api/apuntes/all\`, fechas ${f} (${fechaComo(f, m0.fin)}) → ${r.status}; ${forma(r.json)}; todos dentro del mes: ${ok ? 'sí' : 'no'}`)
+  if (!formatoFecha && ok) formatoFecha = f
 }
 const sinFechas = await get('/api/apuntes')
-md(`- \`/api/apuntes\` sin fechas → ${sinFechas.status}; ${forma(sinFechas.json)}`, '')
+md(`- \`/api/apuntes\` sin nada → ${sinFechas.status}; ${forma(sinFechas.json)}`, '')
+const pedirMes = porFiltro || formatoFecha
+const rutaMes = (recurso, mm) => (porFiltro ? `/api/${recurso}?${filtro(mm)}`
+  : `/api/${recurso}/all?fechaDesde=${encodeURIComponent(fechaComo(formatoFecha, mm.ini))}&fechaHasta=${encodeURIComponent(fechaComo(formatoFecha, mm.fin))}`)
+md(`Cada mes se pide con: **${porFiltro ? '$filter por Fecha' : formatoFecha ? `/all con fechas ${formatoFecha}` : 'nada que funcione'}**.`, '')
 
 const ej = {}
 const detalle = { lineas: 0, conAnalitica: 0, lineasConTercero: 0, lineasConJustificante: 0, lineasConContrapartida: 0, maxDescAsiento: 0, maxDescLinea: 0, descuadrados: 0, fueraDeMes: 0, sinDetalles: 0, repetidos: 0, tipoAsiento: {}, formatoFecha: {}, camposAnalitica: {} }
 const vistos = new Set()
 const porMes = []
 const muestraAsientos = {}
-if (formatoFecha) {
+if (pedirMes) {
   for (const mm of meses()) {
-    const r = await todas(`/api/apuntes/all?fechaDesde=${encodeURIComponent(fechaComo(formatoFecha, mm.ini))}&fechaHasta=${encodeURIComponent(fechaComo(formatoFecha, mm.fin))}`, '&')
+    const r = await todas(rutaMes('apuntes', mm))
     porMes.push([`${mm.y}-${String(mm.m).padStart(2, '0')}`, r.estado, r.total ?? '—', r.filas.length, r.paginas, r.error ?? ''])
     for (const a of r.filas) {
       const k = `${a.Ejercicio}|${a.Serie}|${a.Documento}`
@@ -267,7 +336,7 @@ if (formatoFecha) {
     `- Líneas con Tercero: ${detalle.lineasConTercero} · con Justificante: ${detalle.lineasConJustificante} · con Contrapartida: ${detalle.lineasConContrapartida} (de ${detalle.lineas})`,
     `- Largo máximo de la descripción: asiento ${detalle.maxDescAsiento} · línea ${detalle.maxDescLinea}`,
     `- Analítica en el listado: ${detalle.conAnalitica} asientos; campos rellenos: ${JSON.stringify(detalle.camposAnalitica)}`, '')
-} else md('**No se ha encontrado un formato de fecha que devuelva asientos.** Sin recuento mes a mes.', '')
+} else md('**No se ha encontrado cómo pedir un mes de asientos.** Sin recuento mes a mes.', '')
 
 // Analítica por asiento, en una muestra (el listado puede no traerla).
 md('### Analítica por asiento (muestra)', '')
@@ -289,14 +358,14 @@ if (filasAn.length) tabla(['Ejercicio', 'Muestra', 'HTTP', 'Con analítica', 'Ca
 else md('Sin muestra (no hubo asientos).', '')
 
 // ── 6. Facturas y adjuntos ──────────────────────────────────────────────────
-md('### Facturas (`/api/facturas/all`, mes a mes) y adjuntos (muestra)', '')
+md('### Facturas, mes a mes, y adjuntos (muestra)', '')
 const fe = {}
 const ff = { tipoFactura: {}, tipoAsiento: {}, simplificadas: 0, conVencimientos: 0, conAnalitica: 0, conApuntes: 0 }
 const muestraFact = {}
-if (formatoFecha) {
+if (pedirMes) {
   const filas = []
   for (const mm of meses()) {
-    const r = await todas(`/api/facturas/all?fechaDesde=${encodeURIComponent(fechaComo(formatoFecha, mm.ini))}&fechaHasta=${encodeURIComponent(fechaComo(formatoFecha, mm.fin))}`, '&')
+    const r = await todas(rutaMes('facturas', mm))
     filas.push([`${mm.y}-${String(mm.m).padStart(2, '0')}`, r.estado, r.total ?? '—', r.filas.length, r.error ?? ''])
     for (const f of r.filas) {
       const e = (fe[f.Ejercicio] ??= { facturas: 0, series: {} })
