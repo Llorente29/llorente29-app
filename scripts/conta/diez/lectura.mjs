@@ -125,7 +125,14 @@ let comoEntra = null
 for (const tipo of ['application/x-www-form-urlencoded', 'application/json']) {
   const r = await llamar('POST', '/token', { cuerpo: cuerpoToken, tipoCuerpo: tipo })
   md(`- \`POST /token\` con ${tipo} → ${r.status}; la respuesta trae: ${claves(r.json)}`)
+  // El código OAuth (invalid_grant, invalid_client…) y su texto: dicen por qué
+  // no entra, sin datos (las cifras salen como 9 y los valores del secreto
+  // están enmascarados por el workflow).
+  if (r.status !== 200 && r.json) md(`  - error: \`${sinDatos(r.json.error)}\` · ${sinDatos(r.json.error_description)}`)
   const t = r.json && Object.entries(r.json).find(([k, v]) => /access_?token|^token$/i.test(k) && typeof v === 'string')
+  // Si Diez entendió la petición y la rechaza con un error OAuth, el otro
+  // formato no va a cambiar nada: no se insiste con las credenciales.
+  if (r.status !== 200 && r.json?.error) break
   if (r.status === 200 && t) {
     token = t[1]
     comoEntra = tipo
