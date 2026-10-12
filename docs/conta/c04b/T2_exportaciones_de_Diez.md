@@ -823,3 +823,51 @@ problema**. La comparación de §10.4 se hizo, pues, contra el Excel de verdad.
 `.select()` (regla 40). En producción la columna aún no existe: la 0140 tiene
 que estar aplicada en producción **antes** de fusionar, o el libro diario no
 cargará.
+
+### 10.6 2026 cuadra: el primer SS_2026 llegaba hasta el 31/12
+
+El SS_2026 de las 17:20 se exportó **hasta el 31/12**, no hasta el 30/09, y
+metía asientos de octubre. Julio lo volvió a exportar con fecha final
+30/09/2026 (18:34, el mismo día). Con el nuevo, transcrito del texto del
+conector y validado fila a fila y contra TOTALES (150 subcuentas, ningún
+problema), y con las sumas de la pasada 21 tal cual:
+
+| Ejercicio | Sin excluir nada |
+|---|---:|
+| 2026 | **150 de 150, al céntimo** (134 iguales y 16 iguales con negativos) |
+
+Los cuatro ejercicios cuadran, pues, cuenta a cuenta y al céntimo con la
+misma vara: el ejercicio entero con su apertura, sin regularización ni
+cierre.
+
+**Lo que llevaba de más el primer SS_2026** (los dos ficheros restados, sin
+pasar por Folvy): las seis subcuentas de §10.4 y nada más, que suman cero.
+Son tres asientos de octubre, identificados por Julio en Diez y medidos aquí
+(importes en el scratchpad, no en el repositorio):
+
+- dos facturas recibidas de octubre, cada una de un proveedor, cuya base e
+  IVA van a compras y a IVA soportado; una es la recibida 2.2522 y la otra
+  es de un segundo proveedor (subcuenta 400-06): su haber es exactamente lo
+  que el bloque de compras + IVA tiene de más sobre la primera;
+- el asiento 4.3155: compras super contra la cuenta corriente con el socio.
+
+Ninguno de los tres entra: son de octubre. Las dos explicaciones de §10.4
+(la paginación y un cambio en Diez) quedan descartadas.
+
+**La pasada 23 lo confirma desde la API.** Pidiendo 2026 entero por
+`Ejercicio eq '2026'`, Diez trae exactamente 4 asientos más que el recorrido
+de enero a septiembre, todos de octubre, y ninguno al revés:
+
+| Tipo | Fecha | Líneas |
+|---|---|---:|
+| 0 (general) | 2026-10-05 | 2 |
+| 2 (recibida) | 2026-10-06 | 3 |
+| 2 (recibida) | 2026-10-07 | 4 |
+| 2 (recibida) | 2026-10-09 | 3 |
+
+El de 05/10 es el 4.3155 y el de 07/10 la 2.2522. La factura del segundo
+proveedor es una de las dos recibidas de 3 líneas (proveedor, compras, IVA).
+La cuarta no estaba en el primer SS_2026: o se contabilizó después de
+exportarlo, o es la otra recibida de ese mismo día. Para el importador, la
+regla queda medida: **el histórico se trae por Fecha, hasta el 30/09**, y
+octubre entra por la lectura diaria.
