@@ -103,6 +103,18 @@ const cent = (n) => Math.round(Number(n || 0) * 100)
 // En una empresa «Estándar/Sociedades» /api/clientes y /api/proveedores no
 // existen (run 7): los terceros son subcuentas de 40, 41, 43 y 44.
 const esTercero = (c) => /^(40|41|43|44)/.test(String(c ?? ''))
+// El nombre de una subcuenta solo sale si es plan de la empresa, y aun así sin
+// nada que parezca un IBAN o un NIF (run 10: dos cuentas de banco llevaban el
+// IBAN en el nombre y salieron en el registro, que es público). Terceros (40,
+// 41, 43, 44) y bancos (57): solo el código.
+const IBAN = /\b[A-Z]{2}\d{2}(?:[ ]?[0-9A-Z]{4}){2,7}(?:[ ]?[0-9A-Z]{1,3})?\b/g
+const NIF = /\b(?:[0-9XYZ]\d{7}[A-Z]|[A-HJ-NP-SUVW]\d{7}[0-9A-J])\b/g
+const nombrePublicable = (codigo, nombre) => {
+  const c = String(codigo ?? '')
+  if (esTercero(c)) return '*(tercero: no se publica)*'
+  if (/^57/.test(c)) return '*(cuenta de banco: no se publica)*'
+  return String(nombre ?? '').replace(IBAN, '[IBAN]').replace(NIF, '[NIF]').replace(/\|/g, '/')
+}
 const cuenta = (obj, k, n = 1) => { obj[k] = (obj[k] ?? 0) + n }
 const tabla = (cabeza, filas) => { md(`| ${cabeza.join(' | ')} |`, `|${cabeza.map(() => '---').join('|')}|`, ...filas.map((f) => `| ${f.join(' | ')} |`), '') }
 const meses = () => {
@@ -319,7 +331,7 @@ if (process.argv[4] === 'corta') {
   md(`${nuevas.length} nuevas en Diez · ${faltan.length} del C02c que Diez ya no tiene${faltan.length ? `: ${faltan.slice(0, 60).join(', ')}${faltan.length > 60 ? ' …' : ''}` : ''}.`, '')
   // El nombre sale solo si es plan de la empresa; las de terceros (40/41/43/44)
   // llevan el nombre de un proveedor o cliente: solo el código.
-  tabla(['Grupo', 'Código', 'Nombre'], nuevas.map((x) => [String(x.Codigo)[0], `\`${x.Codigo}\``, esTercero(x.Codigo) ? '*(tercero: no se publica)*' : String(x.Descripcion ?? '').replace(/\|/g, '/')]))
+  tabla(['Grupo', 'Código', 'Nombre'], nuevas.map((x) => [String(x.Codigo)[0], `\`${x.Codigo}\``, nombrePublicable(x.Codigo, x.Descripcion)]))
 
   // d) getfile: segunda oportunidad, con otras cabeceras y viendo el error.
   md('### getfile (lectura 1 de las 2 permitidas)', '')
