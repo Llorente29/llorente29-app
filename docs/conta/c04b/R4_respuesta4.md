@@ -65,25 +65,62 @@ La forma (1.187 filas):
 - Coste: una petición por asiento, unos 0,36 s más la pausa: los ~7.200
   asientos de 2026 son algo menos de una hora; los 14.933, unas dos.
 
-**Lo que dice**: en Diez la analítica es **de 2026** (en la muestra, de
-septiembre), y con local de verdad solo en una parte de las ventas. Lo de
-antes no tiene nada que traer. Falta saber **desde qué mes** de 2026 existe y
-**qué asientos** llevan local: va una segunda lectura, por mes y serie, de
-enero, marzo, mayo, julio y agosto de 2026.
+**2.ª lectura, mes a mes en 2026** (3.792 asientos, 0 errores):
 
-**El testigo que hay que pedir a Julio**: el **sumas y saldos de 2026 por
-centro** (grupo de analítica) para FLO, CAM, CAN y BAR, hasta el 30/09, con
-los mismos filtros que el SS_2026 (apertura sí, regularización y cierre no).
-Con eso se comprueba al céntimo lo que se traiga por local.
+| Mes | Serie 1 (ventas): con analítica · con local · con marca | Serie 2 (recibidas): con analítica · con local | Serie 4: con local |
+|---|---|---|---|
+| 2026-01 | 0 de 62 | 0 de 171 | 0 de 291 |
+| 2026-03 | 0 de 70 | 0 de 370 | 1 de 394 |
+| 2026-05 | 0 de 74 | 0 de 197 | 4 de 382 |
+| 2026-07 | 282 de 282 · 102 · 99 | 312 de 324 · 11 | 5 de 349 |
+| 2026-08 | 273 de 273 · 71 · 68 | 243 de 253 · 10 | 10 de 298 |
+| 2026-09 | 248 de 248 · — · — | 822 de 855 · — | 9 de 315 |
 
-### La propuesta para guardarla (a falta de la segunda lectura)
+(Septiembre es de la 1.ª lectura, que no separaba local y marca por serie.)
+
+**Lo que dice:**
+
+- **La analítica de Diez empieza en julio de 2026**, el mismo mes en que
+  cambia la forma de asentar las ventas (§2). Antes, nada: ni en 2023–2025 ni
+  en enero–mayo de 2026, salvo 5 asientos sueltos de la serie 4.
+- **Ventas (serie 1)**: todas llevan fila de analítica, pero **el local solo
+  viene en los de Uber y Just Eat** (102 de 282 en julio, 71 de 273 en
+  agosto), con su marca y plataforma. **Los de Glovo no lo llevan** (5 filas
+  con GLV en toda la muestra): su local y su marca están solo en el concepto
+  («GLOVO Meraki Pita FLO 27/09»).
+- **Recibidas (serie 2)**: casi todas con fila de analítica, pero **vacía**
+  (Subgrupo 0, sin grupo): con local, 11 de 324 y 10 de 253. Las compras no
+  están repartidas por local en Diez.
+- Repartos de una subcuenta entre varios locales: **2 de 1.440**. Cobertura
+  al céntimo: 1.427; cortas: 13.
+
+**El testigo que hay que pedir a Julio**: el **sumas y saldos por centro**
+(grupo de analítica) **de julio a septiembre de 2026**, para FLO, CAM, CAN y
+BAR, con los mismos filtros que el SS_2026 (apertura sí, regularización y
+cierre no). Antes de julio no hay nada que comprobar.
+
+### La propuesta para guardarla (con lo medido)
+
+**Qué se trae**: la analítica de Diez de **julio a septiembre de 2026**
+(unos 3.200 asientos; media hora de lectura). Lo de antes no tiene.
+
+**De dónde sale el local, y se dice**:
+
+1. **De la analítica de Diez** (Uber y Just Eat, y las pocas compras que la
+   llevan): origen «Diez · analítica».
+2. **Del concepto del asiento de Diez** (Glovo: «GLOVO <marca> <FLO|CAM|CAN|BAR> dd/mm»):
+   origen «Diez · concepto». **Esto pide el visto bueno de Julio**: es un
+   dato de Diez, pero no es su analítica.
+3. **Nada**: «Sin local». Es lo de antes de julio y casi todas las compras.
+
+Cómo se guarda:
 
 Un **reparto analítico aparte**, fuera de la huella:
 
 - tabla nueva `journal_line_analytic`: una fila por línea traída y por trozo
   del reparto, con local, marca, plataforma, los códigos de Diez tal cual
   (grupo, subgrupo, nivel 3) y el importe del trozo en céntimos;
-- origen «Diez» e `import_run` de la lectura;
+- su origen («Diez · analítica» o «Diez · concepto») y el `import_run` de la lectura;
 - RLS por cuenta, como el resto del libro;
 - **no entra en `journal_entry_canonico`**: la cadena no se mueve;
 - la traducción de códigos, con `diezAnalitica.ts` (CAM y BAR → Carabanchel,
