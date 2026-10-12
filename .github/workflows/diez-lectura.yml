@@ -99,10 +99,12 @@ jobs:
         run: |
           set -euo pipefail
           MODO=larga
-          case "$MENSAJE" in "[lectura:corta]"*) MODO=corta ;; "[lectura:expedidas]"*) MODO=expedidas ;; "[lectura:testigo]"*) MODO=testigo ;; "[lectura:analitica]"*) MODO=analitica ;; esac
+          case "$MENSAJE" in "[lectura:corta]"*) MODO=corta ;; "[lectura:expedidas]"*) MODO=expedidas ;; "[lectura:testigo]"*) MODO=testigo ;; "[lectura:analitica"*) MODO=analitica ;; esac
           echo "Modo: $MODO"
           if [ "$MODO" = analitica ]; then
-            npx --yes tsx@4.19.2 scripts/conta/diez/analitica.ts | tee lectura.md
+            # «[lectura:analitica:202601,202603]» elige los meses; sin ellos, la muestra de serie.
+            M=$(printf '%s' "$MENSAJE" | sed -n '1s/^\[lectura:analitica:\([0-9,]*\)\].*/\1/p')
+            ANALITICA_MESES="$M" npx --yes tsx@4.19.2 scripts/conta/diez/analitica.ts | tee lectura.md
           elif [ "$MODO" = testigo ]; then
             # Las sumas por subcuenta salen CIFRADAS con scripts/conta/diez/testigo-clave-publica.pem;
             # en claro solo hay recuentos. Ver la cabecera de testigo.ts.

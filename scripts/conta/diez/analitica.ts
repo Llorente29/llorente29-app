@@ -65,7 +65,7 @@ md('### Catálogos', '')
 tabla(['Catálogo', 'Cuántos', 'Códigos'], Object.entries(cat).map(([k, v]) => [k, v.n, v.codigos || '—']))
 
 // 2 · Asiento a asiento --------------------------------------------------------------------
-type Fila = { asientos: number; con: number; filas: number; errores: number }
+type Fila = { asientos: number; con: number; conLocal: number; conMarca: number; filas: number; errores: number }
 const porSerie: Record<string, Fila> = {}
 const campos: Record<string, number> = {}
 const tipoImporte: Record<string, number> = {}
@@ -79,8 +79,8 @@ const tiempos: number[] = []
 for (const mes of MESES) {
   const apuntes: Apunte[] = await c.apuntesDelMes(mes)
   for (const a of apuntes) {
-    const k = `${a.Ejercicio} · serie ${a.Serie}`
-    const f = (porSerie[k] ??= { asientos: 0, con: 0, filas: 0, errores: 0 })
+    const k = `${mes} · serie ${a.Serie}`
+    const f = (porSerie[k] ??= { asientos: 0, con: 0, conLocal: 0, conMarca: 0, filas: 0, errores: 0 })
     f.asientos++
     let an: AnaliticaDiez[]
     const t0 = Date.now()
@@ -97,6 +97,8 @@ for (const mes of MESES) {
     for (const [s] of importe) if (!filas.some((x) => String(x.Subcuenta ?? '') === s)) cuenta(pgcSin, grupoPgc(s))
     if (!filas.length) continue
     f.con++; f.filas += filas.length
+    if (filas.some((x) => lleno(x.Grupo))) f.conLocal++
+    if (filas.some((x) => lleno(x.Subgrupo) && String(x.Subgrupo) !== '0')) f.conMarca++
     const porSub = new Map<string, { suma: number; claves: Set<string> }>()
     for (const x of filas) {
       for (const cpo of ['Subcuenta', 'Grupo', 'Subgrupo', 'Nivel3', 'TablaReparto', 'CuentaCliente', 'Descripcion', 'Fecha']) if (lleno((x as Record<string, unknown>)[cpo])) cuenta(campos, cpo)
@@ -123,9 +125,9 @@ for (const mes of MESES) {
   }
 }
 
-md('### Por ejercicio y serie', '')
-tabla(['Ejercicio · serie', 'Asientos', 'Con analítica', 'Filas de analítica', 'Errores al pedirla'],
-  Object.entries(porSerie).sort().map(([k, v]) => [k, v.asientos, v.con, v.filas, v.errores]))
+md('### Por mes y serie', '')
+tabla(['Mes · serie', 'Asientos', 'Con analítica', 'Con local (Grupo)', 'Con marca (Subgrupo ≠ 0)', 'Filas de analítica', 'Errores al pedirla'],
+  Object.entries(porSerie).sort().map(([k, v]) => [k, v.asientos, v.con, v.conLocal, v.conMarca, v.filas, v.errores]))
 const todos = Object.values(porSerie).reduce((s, v) => ({ a: s.a + v.asientos, c: s.c + v.con }), { a: 0, c: 0 })
 md(`**${todos.c} de ${todos.a}** asientos de la muestra tienen analítica.`, '')
 const orden = (o: Record<string, number>) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—'

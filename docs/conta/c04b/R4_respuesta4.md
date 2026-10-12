@@ -33,20 +33,50 @@ repositorio es público. Los importes de la comprobación están en el chat.
 canónico de los 14.933 asientos, y con él su huella y la de todos los que
 vienen detrás: **la cadena entera se rompería**. No se toca.
 
-### Lo que hay medido, y lo que falta
+### Lo que hay medido (lectura `[lectura:analitica]`, 12/10)
 
-- T1 contó **0 de 14.937** asientos con analítica, pero **en el listado** de
-  apuntes. En la C0009 (T2 §6) se vio que la analítica guardada **solo sale
-  por `analitica/asiento/{ej}/{serie}/{doc}`**, asiento a asiento.
-- El catálogo de Diez tiene 5 grupos, 12 subgrupos y 3 de nivel 3 (T1).
-- Para saber qué hay, va la lectura `[lectura:analitica]`
-  (`scripts/conta/diez/analitica.ts`). Pide la analítica de cada asiento de
-  cuatro meses de muestra y cuenta cuántos la tienen, en qué subcuentas y con
-  qué códigos. Mide también si el reparto cubre el importe de cada subcuenta,
-  si una subcuenta se reparte entre varios locales y lo que costaría traerla
-  entera. Solo GET, solo recuentos.
+T1 contó 0 asientos con analítica **en el listado**; la analítica solo sale por
+`analitica/asiento/{ej}/{serie}/{doc}`. Pedida asiento a asiento en cuatro
+meses (2.617 asientos, 0 errores, solo GET):
 
-### La propuesta para guardarla (a falta de la medida)
+| Mes | Asientos | Con analítica |
+|---|---:|---:|
+| 2023-11 | 479 | 0 |
+| 2024-06 | 244 | 0 |
+| 2025-06 | 476 | 0 |
+| 2026-09 | 1.418 | 1.079 |
+
+En septiembre de 2026, por serie: **ventas (1) 248 de 248**, recibidas (2)
+822 de 855, serie 4 9 de 315.
+
+La forma (1.187 filas):
+
+- **El local (Grupo) solo viene en 179 filas**: FLO 122 · CAM 49 · CAN 6 · BAR 2.
+  Las demás traen `Subgrupo 0` sin grupo: hay fila de analítica, pero no dice
+  ni local ni marca.
+- Marca (Subgrupo distinto de 0) en 149 filas; plataforma (Nivel3) en 149: UBR 131 · JUS 14 · GLV 4.
+- Va en subcuentas de los grupos 6 (840) y 7 (347). Nunca en 4, 5 ni 1–2.
+- **Nunca se reparte**: cada subcuenta lleva un solo local/marca/plataforma
+  (0 de 1.187 repartidas). 1.174 cubren su importe al céntimo, 13 se quedan
+  cortas.
+- Catálogos: grupos BAR, CAM, CAN, FLO, JDH; nivel 3 GLV, JUS, UBR; 0 tablas de
+  reparto. Los 12 subgrupos no traen el campo `Codigo` en el catálogo (sale
+  «?»): sus códigos se leen en las filas (0–11).
+- Coste: una petición por asiento, unos 0,36 s más la pausa: los ~7.200
+  asientos de 2026 son algo menos de una hora; los 14.933, unas dos.
+
+**Lo que dice**: en Diez la analítica es **de 2026** (en la muestra, de
+septiembre), y con local de verdad solo en una parte de las ventas. Lo de
+antes no tiene nada que traer. Falta saber **desde qué mes** de 2026 existe y
+**qué asientos** llevan local: va una segunda lectura, por mes y serie, de
+enero, marzo, mayo, julio y agosto de 2026.
+
+**El testigo que hay que pedir a Julio**: el **sumas y saldos de 2026 por
+centro** (grupo de analítica) para FLO, CAM, CAN y BAR, hasta el 30/09, con
+los mismos filtros que el SS_2026 (apertura sí, regularización y cierre no).
+Con eso se comprueba al céntimo lo que se traiga por local.
+
+### La propuesta para guardarla (a falta de la segunda lectura)
 
 Un **reparto analítico aparte**, fuera de la huella:
 
