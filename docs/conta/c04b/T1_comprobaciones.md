@@ -189,10 +189,27 @@ Propuesta:
   Desde el run 5, si Diez contesta con un error OAuth no se repite, para no
   sumar intentos fallidos contra tu usuario.
 
-**Lo que hace falta (Julio):** mirar en Diez el código exacto de la empresa de
-Foodint y si el usuario de la API la tiene dada. Después, corregir
-`cod_empresa` en el secreto `DIEZ_LECTURA`. Con eso, un push que empiece por
-`[lectura]` vuelve a lanzarla.
+**Run 6 (12/10): los dos intentos que pidió Julio.** Un solo intento de cada,
+en este orden, en formulario, y sin insistir:
+
+| Intento | Campos | Resultado |
+|---|---|---|
+| 1 · sin `cod_empresa` | grant_type, client_id, client_secret, username, password | **400** · «Error 9 - **Debe indicar un nombre o identificador de base de datos de acceso.**» |
+| 2 · con `cod_empresa` como número sin ceros | lo mismo + cod_empresa | **no se hizo**: el valor de `cod_empresa` del secreto no es solo cifras, así que no hay «número sin ceros» que mandar. El valor no se ha tocado |
+
+**Lo que dicen los tres intentos juntos** (runs 4–6):
+
+- Sin `cod_empresa`, Diez pide la base de datos. **No la saca del usuario.**
+- Con `cod_empresa`, ya no la pide: pasa a decir «No tiene acceso a la
+  empresa indicada». Es decir, el valor de `cod_empresa` **se está tomando
+  como identificador de la base de datos**, o al menos llena ese hueco.
+- La sesión que funciona recibe `DataBaseName` en la respuesta. Ese nombre es
+  lo que `/token` parece esperar en `nombre_bd` (el campo que el Swagger
+  declara y la colección no trae).
+
+**Parado aquí, como pidió Julio.** Va a Cegid: ¿qué campo lleva el nombre de
+la base de datos (`nombre_bd` con el `DataBaseName` de la sesión que
+funciona), y cuál es el `cod_empresa` de Foodint para este usuario?
 
 ### Lo que contará cuando entre
 
