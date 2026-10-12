@@ -91,11 +91,17 @@ export async function arrancarDiezFalso(opciones = {}) {
     if (req.method === 'GET') {
       const listados = { '/api/apuntes': 'apuntes', '/api/facturas': 'facturas', '/api/subcuentas': 'subcuentas', '/api/series': 'series', '/api/analitica/operationGroups': 'grupos', '/api/analitica/operationSubGroups': 'subgrupos', '/api/analitica/nivel3s': 'nivel3' }
       if (listados[ruta]) return responder(res, 200, paginar(filtrar(b[listados[ruta]], url.searchParams.get('$filter')), url))
-      const m = /^\/api\/(apuntes\/asiento|facturas\/factura)\/([^/]+)\/([^/]+)\/(\d+)$/.exec(ruta)
+      const m = /^\/api\/(apuntes\/asiento|facturas\/factura|analitica\/asiento)\/([^/]+)\/([^/]+)\/(\d+)$/.exec(ruta)
       if (m) {
-        const [, , ej, se, doc] = m.map(decodeURIComponent)
+        const [, que, ej, se, doc] = m.map(decodeURIComponent)
         const x = [...b.facturas, ...b.apuntes].find((a) => String(a.Ejercicio) === ej && String(a.Serie) === se && Number(a.Documento) === Number(doc))
-        return x ? responder(res, 200, x) : responder(res, 404, { Message: 'No se ha encontrado el asiento' })
+        if (!x) return responder(res, 404, { Message: 'No se ha encontrado el asiento' })
+        // Como el de verdad (run 2 de la prueba en C0009, 12/10): la analítica
+        // de una factura NO vuelve en facturas/factura; vuelve, como lista, en
+        // analitica/asiento.
+        if (que === 'analitica/asiento') return responder(res, 200, (x.Analitica ?? []).map((a) => ({ TablaReparto: null, CuentaCliente: null, TipoImporte: 0, ImporteHaber: 0, ...a })))
+        const { Analitica: _sinAnalitica, ...sin } = x
+        return responder(res, 200, { ...sin, Analitica: [] })
       }
       return responder(res, 404, { Message: 'No HTTP resource was found' })
     }

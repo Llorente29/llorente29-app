@@ -175,3 +175,18 @@ describe('escribir (en C0009)', () => {
     expect(await c.buscarFactura('2', 'A-9999', 'B00000000', 20260915)).toEqual([])
   })
 })
+
+describe('analítica (medido en C0009 el 12/10)', () => {
+  it('se envía con la factura, no vuelve en facturas/factura y sí en analitica/asiento', async () => {
+    const { c } = await montar(undefined, { escribir: true })
+    const r = await c.enviarFactura({
+      Ejercicio: '2026', Serie: '2', TipoAsiento: 2, CuentaCliente: '40000001', FechaFactura: 20261012, NumeroFactura: 'P-1', CifCliente: 'B00000000',
+      BaseImponible1: 1, PorcentajeIVA1: 10, CuotaIVA1: 0.1, TotalFactura: 1.1,
+      Analitica: [{ Subcuenta: '60000000', Grupo: 'G1', Subgrupo: '1', Nivel3: 'P1', ImporteDebe: 1, ImporteHaber: 0 }],
+    })
+    const leida = await c.get<{ Analitica: unknown[] }>(`/api/facturas/factura/2026/2/${r.Documento}`)
+    expect(leida.Analitica).toEqual([])
+    const an = await c.analiticaDe('2026', '2', Number(r.Documento))
+    expect(an.map((a) => [a.Grupo, a.Subgrupo, a.Nivel3, a.ImporteDebe])).toEqual([['G1', '1', 'P1', 1]])
+  })
+})

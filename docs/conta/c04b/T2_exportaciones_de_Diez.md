@@ -226,3 +226,93 @@ documento», cada una con su porqué.
 - las mismas dos carpetas, con los PDF dentro y el Excel al lado;
 - primero se repite septiembre con los PDF, para comprobar que se enlazan los
   838 + 248.
+
+## 6. La analítica de Diez al enviar facturas (Local, Marca, Plataforma)
+
+Julio (12/10): en la pantalla de Diez, la factura recibida tiene Local, Marca y
+Plataforma en la contrapartida. Hoy nadie los rellena. Folvy sabe local y
+marca: si la API los admite, se rellenan al enviar, y la comparación puede ir
+también por local.
+
+### 6.1 Medido con una factura de prueba en la C0009
+
+Workflow `diez-prueba-c0009.yml`, runs 1 y 2. Una factura recibida de 1,00 €
+de base, número `FOLVY-PRUEBA-0001`, con la forma de una recibida real de la
+propia C0009.
+
+| Qué | Resultado |
+|---|---|
+| `facturas/add` con `Analitica[]` | **200**, documento 3174 de la serie 2 (ejercicio 2026) |
+| La lee `facturas/factura` | base, cuota, total y número iguales; Diez generó **3 líneas de asiento** (600, 472, 400). **`Analitica`: vacía** |
+| La lee `analitica/asiento/2026/2/3174` | **1 fila: Grupo `BAR`, Subgrupo `1`, Nivel3 `GLV`**, subcuenta 600…, debe 1,00, TipoImporte 0. **Es la que se mandó** |
+| En el listado de facturas de octubre | sí |
+| Segunda pasada (run 2) | la encontró por serie + número + NIF y **no envió otra** |
+
+**Conclusión:**
+- La API **admite la analítica** al dar de alta la factura y la guarda.
+- Solo se lee por `analitica/asiento`: `facturas/factura` no la devuelve.
+  Para comparar por local hay que pedir la analítica de cada factura enviada.
+  Son unas 1.100 peticiones al mes; sin 429 medidos, cabe en la pasada
+  nocturna.
+- Queda en el cliente (`analiticaDe`) y en el Diez simulado, que se comporta
+  igual.
+
+**Falta que lo mire Julio en la pantalla de Diez (C0009):**
+1. que la factura `FOLVY-PRUEBA-0001` salga en el libro de recibidas y en el
+   303 del 4T;
+2. que en la contrapartida se vean Local, Marca y Plataforma rellenos.
+
+### 6.2 Qué es cada nivel (catálogo de la C0009, copia de la C0008)
+
+| Nivel de la API | En la pantalla | Cuántos | Códigos |
+|---|---|---|---|
+| Grupo | **Local** | 5 | `BAR`, `CAM`, `CAN`, `FLO`, `JDH` (con nombre de calle) |
+| Subgrupo | **Marca** | 12 | `1`–`12`; no cuelgan de ningún grupo |
+| Nivel3 | **Plataforma** | 3 | `GLV` Glovo, `JUS` Just Eat, `UBR` Uber Eats |
+
+### 6.3 La correspondencia con Folvy: no sale por nombre, se confirma
+
+**Locales.**
+- Diez tiene **5 grupos con nombre de calle**: Juan Antonio Bardem, Camichi 4,
+  Cañaveral, Florencio Llorente y José del Hierro.
+- Folvy tiene **3 locales**: Foodint Alcalá, Foodint Carabanchel y Foodint
+  Plaza Castilla.
+- No hay forma de casarlos sin adivinar. **Julio dice cuál es cuál**, y si
+  dos de los cinco son locales cerrados o de otra empresa.
+
+**Marcas: 12 en Diez y 18 en Folvy.**
+
+| Diez | Folvy (propuesta, a confirmar) |
+|---|---|
+| 1 Milanesa House | Milanesa House *(Folvy tiene también «Milanesa Haus»: ¿cuál?)* |
+| 2 Meraki Pita | Meraki Pita |
+| 3 Scandal Burger | Scandal Burgers |
+| 4 Smash Brothers | Smash Brothers Burgers |
+| 5 Mila's Sandwiches | Mila's Sandwiches |
+| 6 Bendito Burrito | Bendito Burrito |
+| 7 The Urban Kebab | The Urban Kebab |
+| 8 Dirty Burger | Dirty Burger |
+| 9 French Tacos Club | — *(no está en Folvy)* |
+| 10 Vooger | — *(no está en Folvy)* |
+| 11 Lovers Burger | Lovers Burgers |
+| 12 NKD Burger | — *(no está en Folvy)* |
+
+Hay 9 marcas de Folvy sin subgrupo en Diez: Ay Mamita Bowls, Big Mike´s
+Burger Joint, Birria Burrito, Chivuos, Deep Pizza, Dos Coyotes, Koreans do it
+better, Lobbers y Milanesa Haus. Para enviarlas con marca, alguien las da de
+alta en Diez; si no, salen sin marca.
+
+**Plataformas:** GLV, JUS y UBR casan con los canales de Folvy sin duda.
+
+### 6.4 Cómo lo usará Folvy al enviar (propuesta)
+
+- **Una tabla de correspondencia por empresa** (Diez ↔ local, marca, canal).
+  Una fila sin confirmar no se usa.
+- **Al enviar una factura con línea de local y marca:** se manda su analítica.
+  - Si el local o la marca no tienen correspondencia confirmada, se envía la
+    factura igualmente, sin esa dimensión, y queda contada: «enviada sin
+    marca: no tiene subgrupo en Diez».
+  - La analítica es optativa en Diez y **no se retiene una factura por ella**.
+- **Comparar por local:** solo para lo que envía Folvy desde el 01/10. El
+  histórico de Diez no tiene analítica (0 de 606 recibidas en julio en la
+  C0009, y 0 en las muestras de la C0008, run 9).

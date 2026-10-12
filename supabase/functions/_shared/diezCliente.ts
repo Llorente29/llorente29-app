@@ -101,6 +101,10 @@ export type FacturaData = Record<string, unknown> & {
   Ejercicio: string; Serie: string; Documento?: number; TipoAsiento: number
   CuentaCliente: string; FechaFactura: number; NumeroFactura?: string; CifCliente?: string
 }
+export type AnaliticaDiez = {
+  Subcuenta?: string; Grupo?: string; Subgrupo?: string; Nivel3?: string; TablaReparto?: string | null
+  Descripcion?: string; Fecha?: number; TipoImporte?: number; ImporteDebe?: number; ImporteHaber?: number
+}
 type Paginada<T> = { Datos: T[]; ResultadosTotales?: number; PaginaActual?: number; ElementosPorPagina?: number }
 
 // Las únicas rutas que se pueden escribir, y con qué método.
@@ -264,6 +268,16 @@ export class ClienteDiez {
     if (r.status === 404 || r.json == null) return null
     if (r.status !== 200) throw new ErrorDiez(`GET asiento → ${r.status}`, r.status, r.json)
     return r.json as Factura
+  }
+
+  /**
+   * La analítica de un asiento (Grupo = local, Subgrupo = marca, Nivel3 =
+   * plataforma en la pantalla de Diez). Medido en la C0009 el 12/10:
+   * facturas/factura NO la devuelve aunque esté guardada; solo esta ruta.
+   */
+  async analiticaDe(ejercicio: string, serie: string, documento: number): Promise<AnaliticaDiez[]> {
+    const j = await this.get<unknown>(`/api/analitica/asiento/${encodeURIComponent(ejercicio)}/${encodeURIComponent(serie)}/${documento}`)
+    return (Array.isArray(j) ? j : j && typeof j === 'object' ? [j] : []) as AnaliticaDiez[]
   }
 
   /**
