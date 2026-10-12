@@ -477,7 +477,7 @@ es único por (empresa, sha256), **impide enlazar el mismo fichero a dos
 asientos**. Por eso la frase de §7 «la tabla ya exige sha único» deja de ser
 una garantía y pasa a ser un error del diseño.
 
-Propuesta, pendiente de confirmar:
+Confirmado por Julio el 12/10 (va en `20261019T0130_diez_documento_compartido.sql`):
 - el fichero se guarda **una vez**, en una ruta de Storage derivada de su
   sha256;
 - cada asiento tiene **su propia fila** en `external_document`, apuntando a
@@ -487,3 +487,67 @@ Propuesta, pendiente de confirmar:
 
 Los 14 nombres repetidos de septiembre (§7) se siguen resolviendo igual:
 mismo nombre y misma huella, una sola fila.
+
+Es un fichero nuevo, con su cabecera `cambia:`. La 0110 ya está en el
+historial de staging con su huella, así que no se reescribe. Se acompaña de
+la prueba `20261019_diez_documento_compartido_prueba.sql` y de un ensayo que
+la precede en el manifiesto.
+
+### 8.2 Las 553 expedidas sin documento: qué son (12/10)
+
+Julio pidió medirlas por cuenta y concepto antes de marcarlas. La regla que
+dio:
+- si son resúmenes de ventas del día (tiques), quedan como «no requiere
+  documento»;
+- si no, quedan como pendientes.
+
+Medido con el Excel y con el API. Para el API se usó la lectura
+`[lectura:expedidas]` (run 19), que devuelve solo formas y recuentos.
+
+**Lo que dice el Excel de las 553:**
+
+| Filas | Destinatario | Qué son |
+|---:|---|---|
+| 542 | Uber Eats | **Una factura por pedido**, tipo F1, al 10 %. El número es el código del pedido de Uber (5 caracteres). Se registran en lote el último día de cada mes: 93 en octubre, 329 en noviembre y 120 en diciembre. |
+| 11 | Un cliente B2B | **No faltan:** son las líneas adicionales de sus 3 facturas, y esas 3 sí tienen PDF (el Excel da una fila por línea). |
+
+**Lo que dice el API, por cuenta y concepto** (serie 1, del 01/10 al
+31/12/2023: 568 facturas):
+
+| Facturas | Forma del nº | Cuentas del asiento | Concepto | Qué son |
+|---:|---|---|---|---|
+| 525 | 5 caracteres (`X`, `9` o `A`) | 430 · 477 · 700 | `<código>-UBER EATS` | los pedidos de Uber |
+| 36 | 16 caracteres | 430 · 477 · 700 | — | los documentos 1–18 de Glovo, dos facturas por asiento; todos con PDF |
+| 5 | `A-9` (8) y otras | 430 · 477 · **705** | — | facturas a clientes B2B, con CIF; todas con PDF (docs 774–778) |
+| 2 | 5 caracteres | solo 430 | — | dos registros del mismo documento con una línea: se revisan al importar |
+
+Además hay **126 asientos de serie 1 sin factura** en esas fechas. No
+están en el libro de expedidas, así que no generan fila de documento.
+
+**Conclusión: ninguna de las 553 es un resumen de ventas del día.**
+- **Uber Eats (542):** son facturas reales por pedido. Su PDF existe, pero
+  vive en el portal de Uber, no en Diez. Por la regla de Julio no son «no
+  requiere»: quedan **«pendiente de documento»**, con el porqué «factura
+  por pedido emitida en el portal de Uber», a la espera del robot de
+  portales (E04).
+- **Cliente B2B (11):** no falta nada.
+
+El importador cuenta por factura, no por fila del Excel, y por eso hay que
+casar sus cifras con estas:
+- Excel 576 filas ↔ API 568 facturas;
+- Uber 542 filas ↔ 525 facturas (+2 por revisar). La diferencia de 15 se
+  explicará al importar, factura a factura.
+
+### 8.3 Los que quedan pendientes, y quién los traerá
+
+| | Cuántos (2023-4T) | Estado | Quién los trae |
+|---|---:|---|---|
+| Recibidas de plataforma (`ES-…`) | 91 | `pendiente_diez`, con porqué | robot de portales (E04), cuando llegue |
+| Expedidas de Uber Eats por pedido | 542 filas (≈ 525 facturas) | `pendiente_diez`, con porqué | robot de portales (E04), cuando llegue |
+| Resúmenes de ventas del día | 0 en el libro | `no_requiere` (estado nuevo de la 0130) | no llevan PDF propio |
+
+**No es una alarma:** son documentos que existen en los portales de las
+plataformas, no papeles perdidos. Cuando haya pantalla, los enseñará todos, pero
+separados de los que de verdad faltan y con quién los trae (regla 7: ordenar y
+etiquetar, no esconder).
+

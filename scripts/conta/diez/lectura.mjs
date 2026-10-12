@@ -391,7 +391,7 @@ if (process.argv[4] === 'expedidas') {
     [...g.entries()].sort((x, y) => y[1].n - x[1].n).map(([k, o]) => {
       const [fn, cc, ct] = k.split('|')
       const con = o.n >= 50 ? [...o.conceptos.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([c, n]) => `\`${limpiar(c).slice(0, 60)}\` ×${n}`).join('<br>') : '(grupo pequeño)'
-      return [o.n, `\`${fn}\``, `\`${cc}\``, `\`${ct}\``, rango(o.docs), [...o.meses].sort().join(' '), (o.lineas / o.n).toFixed(1), o.cif, con]
+      return [o.n, `\`${fn}\``, `\`${cc}\``, `\`${ct}\``, rango(o.docs), [...o.meses].sort().join(' · '), (o.lineas / o.n).toFixed(1), o.cif, con]
     }))
   const sinFactura = [...asi.values()].filter((a) => !exp.some((f) => `${f.Ejercicio}|${f.Documento}` === `${a.Ejercicio}|${a.Documento}`))
   md(`- Asientos de serie 1 sin factura en esas fechas: ${sinFactura.length}`, '', `Peticiones: ${metrica.peticiones} · ${Math.round(metrica.bytes / 1024)} KB.`)

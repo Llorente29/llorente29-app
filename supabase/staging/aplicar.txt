@@ -1,23 +1,16 @@
-# C04b · T2 — Traer de Diez y llevar los dos en paralelo: el modelo
-# (conta/c04b-diez, respuestas 1 y 2 de Julio del 12/10).
-#   0100: account_connector por EMPRESA (company_id, scope company, estado
-#         down, token en Vault con token_ref y su caducidad), el conector
-#         «diez» en el catálogo y connector_token_save / _read /
-#         connector_mark_down solo para service_role. Lo de hoy no cambia:
-#         los CHECK se amplían, no se estrechan.
-#   0110: import_run; la referencia externa entera en journal_entry
-#         (ejercicio, huella, lectura) con su índice ÚNICO por empresa,
-#         programa, ejercicio, serie y número; contrapartida y justificante
-#         en journal_line; external_send (3 intentos), external_entry_snapshot,
-#         external_compare_day (por día), external_document (zip del libro de
-#         requerimientos o API; revisar sin adivinar; pendiente de Diez) y
-#         external_balance_witness (el testigo de la regla 1). RLS: lee la
-#         cuenta, escribe el servidor.
-#   0120: lo que leerá el agente «Con Diez» (en staging el rol no existe).
-#   La prueba: lo de hoy igual, por empresa, el token, el índice único, los
-#   envíos, los documentos, el testigo, la comparación y RLS A/B. Todo en una
-#   transacción con ROLLBACK.
-supabase/migrations/20261019T0100_diez_conexion.sql
-supabase/migrations/20261019T0110_diez_libro.sql
-supabase/migrations/20261019T0120_diez_lectura.sql
-supabase/staging/sql/20261019_diez_modelo_prueba.sql
+# C04b · T3 — Un documento puede respaldar varios asientos (Julio, 12/10)
+# (conta/c04b-diez). Glovo emite UN documento que Diez registra como expedida
+# y como recibida (2023-4T, T2 §8.1): el índice único por (empresa, sha256)
+# lo impedía.
+#   ensayo: el 0130 y su prueba en una transacción con ROLLBACK. Si falla,
+#           no se aplica lo de abajo.
+#   0130:   fichero NUEVO (la 0110 está en el historial con su huella):
+#           external_document_sha_entry_uq (empresa, sha256, asiento) con
+#           nulls not distinct en lugar de external_document_sha_uq; el estado
+#           «no_requiere» (asiento sin PDF propio, con porqué).
+#   La prueba: un fichero respalda dos asientos; no dos veces al mismo; sin
+#   asiento, una vez; un asiento, un documento vivo; no_requiere con asiento,
+#   sin fichero y con porqué; los estados de antes siguen valiendo.
+supabase/staging/sql/20261019_diez_documento_compartido_ensayo.sql
+supabase/migrations/20261019T0130_diez_documento_compartido.sql
+supabase/staging/sql/20261019_diez_documento_compartido_prueba.sql
