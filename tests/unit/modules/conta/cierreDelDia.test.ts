@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { comoAcabo, lineaNoConfirmados, textoDiaEnCurso, diaCerrado, enLaZona, horaParaLeer, normalizarHora, OTRO_ESTADO, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
+import { comoAcabo, HORA_DE_CIERRE_DE_SERIE, lineaNoConfirmados, textoDiaEnCurso, diaCerrado, enLaZona, horaParaLeer, normalizarHora, OTRO_ESTADO, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 
 // Los instantes van en UTC (como `sold_at` y `created_at` en la base). La
 // pared es Madrid: UTC+2 en verano, UTC+1 en invierno.
@@ -46,6 +46,32 @@ describe('qué días están cerrados a una hora dada', () => {
     expect(ultimoDiaCerrado(t('2026-03-29T04:00:00Z'), '06:00')).toBe('2026-03-28')
   })
 
+  // Julio, 12/10: el día se cierra a las 2:00 del día siguiente. Los mismos
+  // instantes que la prueba de staging de la 0170 (conta_ultimo_dia_cerrado):
+  // las dos tienen que dar lo mismo.
+  it('a las 2:00 de serie: ayer no está cerrado hasta las 2:00 de hoy', () => {
+    expect(HORA_DE_CIERRE_DE_SERIE).toBe('02:00')
+    expect(ultimoDiaCerrado(t('2026-10-09T15:15:56Z'), HORA_DE_CIERRE_DE_SERIE)).toBe('2026-10-08') // 17:15
+    expect(ultimoDiaCerrado(t('2026-10-08T23:59:00Z'), '02:00')).toBe('2026-10-07') // 1:59 del 09/10
+    expect(ultimoDiaCerrado(t('2026-10-09T00:00:00Z'), '02:00')).toBe('2026-10-08') // 2:00 en punto
+  })
+
+  it('a las 2:00, la noche del 25/10 en que las 2:00 pasan dos veces', () => {
+    expect(ultimoDiaCerrado(t('2026-10-24T23:59:00Z'), '02:00')).toBe('2026-10-23') // 1:59 de verano
+    expect(ultimoDiaCerrado(t('2026-10-25T00:00:00Z'), '02:00')).toBe('2026-10-24') // 2:00, primera vuelta
+    expect(ultimoDiaCerrado(t('2026-10-25T00:59:00Z'), '02:00')).toBe('2026-10-24') // 2:59, primera vuelta
+    expect(ultimoDiaCerrado(t('2026-10-25T01:00:00Z'), '02:00')).toBe('2026-10-24') // 2:00, segunda: sigue cerrado
+    expect(ultimoDiaCerrado(t('2026-10-26T00:59:00Z'), '02:00')).toBe('2026-10-24') // 1:59 de invierno
+    expect(ultimoDiaCerrado(t('2026-10-26T01:00:00Z'), '02:00')).toBe('2026-10-25')
+  })
+
+  it('a las 2:00, la noche del 29/03 en que las 2:00 no existen', () => {
+    expect(ultimoDiaCerrado(t('2026-03-28T00:59:00Z'), '02:00')).toBe('2026-03-26') // 1:59 de invierno
+    expect(ultimoDiaCerrado(t('2026-03-28T01:00:00Z'), '02:00')).toBe('2026-03-27')
+    expect(ultimoDiaCerrado(t('2026-03-29T00:59:00Z'), '02:00')).toBe('2026-03-27') // 1:59; luego, las 3:00
+    expect(ultimoDiaCerrado(t('2026-03-29T01:00:00Z'), '02:00')).toBe('2026-03-28') // 3:00 de verano: cerrado
+  })
+
   it('un día cerrado lo sigue estando; el de hoy nunca lo está', () => {
     const ahora = t('2026-10-09T15:00:00Z')
     expect(diaCerrado('2026-08-23', ahora, '06:00')).toBe(true)
@@ -56,8 +82,9 @@ describe('qué días están cerrados a una hora dada', () => {
   it('la hora que viene de la base («06:00:00») y la que se enseña («6:00»)', () => {
     expect(normalizarHora('06:00:00')).toBe('06:00')
     expect(normalizarHora('6:30')).toBe('06:30')
-    expect(normalizarHora(null)).toBe('06:00')
-    expect(normalizarHora('25:00')).toBe('06:00')
+    // Sin hora, o una que no se entiende: la de serie, que desde el 12/10 es las 2:00.
+    expect(normalizarHora(null)).toBe('02:00')
+    expect(normalizarHora('25:00')).toBe('02:00')
     expect(horaParaLeer('06:00:00')).toBe('6:00')
     expect(horaParaLeer('05:30')).toBe('5:30')
   })

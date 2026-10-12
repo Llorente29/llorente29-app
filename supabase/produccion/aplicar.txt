@@ -5,29 +5,19 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C04b · Diez — el modelo y el escritor del histórico (rama conta/c04b-diez).
-# Se lanza DESDE LA RAMA, sin fusionar (Julio, 12/10). La tanda anterior
-# (cierre del día, 20261018T01xx) ya está en el historial de producción.
+# C04b · Respuesta 4 — el día se cierra a las 2:00 (Julio, 12/10). Desde la
+# rama conta/c04b-diez, sin fusionar. La tanda anterior (Diez, 0100–0160) ya
+# está en el historial de producción con su huella (comprobado el 12/10).
 #
-#   1. 0100 — la conexión con Diez por empresa (credenciales en Vault).
-#   2. 0110 — el libro: lecturas, envíos, fotos para comparar, documentos,
-#      testigo; clave de Diez en journal_entry y journal_line.
-#   3. 0120 — conta_lectura lee lo nuevo.
-#   4. 0130 — un documento puede respaldar varios asientos (Glovo).
-#   5. 0140 — journal_line.external_negative_side («En Diez iba en negativo»).
-#   6. 0150 — el escritor del histórico (cuatro funciones, solo service_role).
-#   7. 0160 — en un ejercicio mixto, Folvy numera detrás de lo traído; hasta
-#      traer el histórico, no se valida nada en 2026. Cambia en caliente
-#      journal_entry_validar (declarado, con su prueba de staging).
-#
-# Análisis contra producción, medido el 12/10 con la consulta de solo lectura
-# del workflow: los siete «sigue». NO necesita «autorizo».
+#   1. 0170 — la hora de serie pasa a 2:00 (solo el DEFAULT); el cierre y
+#      «propuesto antes del cierre» preguntan lo mismo, también la noche del
+#      25/10 en que las 2:00 pasan dos veces. Cambia en caliente tres
+#      funciones, declaradas con su prueba de staging.
+#   2. 0175 — Foodint, de las 6:00 a las 2:00 (su hora está guardada en su
+#      ficha fiscal; la de serie no la mueve). Cambia una fila: AUTORIZO,
+#      con el nombre entero:
+#        20261019T0175_cierre_a_las_dos_foodint.sql
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261019T0100_diez_conexion.sql
-supabase/migrations/20261019T0110_diez_libro.sql
-supabase/migrations/20261019T0120_diez_lectura.sql
-supabase/migrations/20261019T0130_diez_documento_compartido.sql
-supabase/migrations/20261019T0140_diez_linea_negativa.sql
-supabase/migrations/20261019T0150_diez_importar.sql
-supabase/migrations/20261019T0160_diez_numeracion.sql
+supabase/migrations/20261019T0170_cierre_a_las_dos.sql
+supabase/migrations/20261019T0175_cierre_a_las_dos_foodint.sql

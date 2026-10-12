@@ -1,14 +1,19 @@
-# C04b · T3 — La numeración de un ejercicio mixto sigue a lo traído (Julio,
-# 12/10): no depende de que nadie se acuerde, es una regla en la base.
-#   ensayo: el 0160 y su prueba en una transacción con ROLLBACK. Si falla,
-#           no se aplica lo de abajo.
-#   0160:   fiscal_year.history_imported_at; journal_entry_validar para con
-#           «Primero hay que traer el histórico de Diez de 2026» mientras no
-#           esté (el resto, byte a byte igual: md5 medido); conta_diez_
-#           historico_traido; conta_diez_importar guarda el tipo de Diez.
-#   La prueba: bloqueado sin histórico; lo traído entra con su tipo; marcar;
-#   el primero de Folvy sale con el 3 (detrás del 2 de Diez); un ejercicio de
-#   Folvy, igual que antes; marcar uno de Folvy, no.
-supabase/staging/sql/20261019_diez_numeracion_ensayo.sql
-supabase/migrations/20261019T0160_diez_numeracion.sql
-supabase/staging/sql/20261019_diez_numeracion_prueba.sql
+# C04b · Respuesta 4 — El día se cierra a las 2:00 (Julio, 12/10).
+#   ensayo: la 0170, la 0175 y su prueba en una transacción con ROLLBACK. Si
+#           falla, no se aplica lo de abajo.
+#   0170:   hora de serie 2:00 (solo el DEFAULT); conta_ultimo_dia_cerrado y
+#           conta_cerrar_dias con 2:00 cuando la empresa no tiene hora (el
+#           resto, copiado de lo vigente: md5 medido en staging y producción);
+#           conta_propuestos_antes_del_cierre pregunta lo mismo que el cierre
+#           (la noche del 25/10 las 2:00 pasan dos veces).
+#   0175:   Foodint de 6:00 a 2:00. En staging no hay Foodint: no hace nada y
+#           lo dice.
+#   La prueba: serie 2:00; 13 instantes de octubre y marzo; un pedido de las
+#   23:00 abierto a la 1:59 y cerrado a las 2:07 con «(2:00)»; «propuesto
+#   antes del cierre» igual que el cierre en la hora repetida; la hora de cada
+#   empresa manda.
+supabase/staging/sql/20261019_cierre_a_las_dos_ensayo.sql
+supabase/migrations/20261019T0170_cierre_a_las_dos.sql
+supabase/migrations/20261019T0175_cierre_a_las_dos_foodint.sql
+supabase/staging/sql/20261019_cierre_a_las_dos_prueba.sql
+supabase/staging/sql/20261019_cierre_a_las_dos_semilla.sql

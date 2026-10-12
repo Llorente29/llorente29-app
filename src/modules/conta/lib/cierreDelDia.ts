@@ -1,19 +1,19 @@
 // src/modules/conta/lib/cierreDelDia.ts
 //
 // El cierre del día (encargo del 09/10): cada día se da por terminado a una
-// hora fija de la madrugada siguiente —las 6:00 de serie, ajuste de cada
+// hora fija de la madrugada siguiente —las 2:00 de serie (Julio, 12/10; antes, las 6:00), ajuste de cada
 // empresa—, en la zona de la cuenta. Antes de esa hora no se propone el
 // asiento de ventas del día. El día de cada pedido sigue siendo el día
 // natural de `sold_at` en esa zona: lo que cambia es cuándo se cierra.
 //
 // La misma cuenta que hace la base (`conta_ultimo_dia_cerrado`): la hora de
 // la pared en la zona de la cuenta. Así el cambio de hora de octubre y de
-// marzo no mueve el cierre: a las 6:00 de Madrid es a las 6:00 de Madrid,
+// marzo no mueve el cierre: a las 2:00 de Madrid es a las 2:00 de Madrid,
 // sea UTC+2 o UTC+1.
 
 import { eurosExactos } from './formato'
 
-export const HORA_DE_CIERRE_DE_SERIE = '06:00'
+export const HORA_DE_CIERRE_DE_SERIE = '02:00'
 
 const unDia = (iso: string, n: number): string => {
   const d = new Date(`${iso}T12:00:00Z`)
@@ -30,7 +30,7 @@ export function enLaZona(instante: Date, zona: string): { dia: string; hora: str
   return { dia: `${v('year')}-${v('month')}-${v('day')}`, hora: `${v('hour')}:${v('minute')}` }
 }
 
-/** «06:00:00» o «6:00» → «06:00». Lo que no se entienda, a la hora de serie. */
+/** «06:00:00» o «6:00» → «06:00». Lo que no se entienda, a la hora de serie (2:00). */
 export function normalizarHora(hora: string | null | undefined): string {
   const m = /^(\d{1,2}):(\d{2})/.exec(hora ?? '')
   if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return HORA_DE_CIERRE_DE_SERIE

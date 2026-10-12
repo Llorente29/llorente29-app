@@ -115,7 +115,7 @@ export default function LibroDiarioPage() {
     try {
       const e = datos.ejercicio
       // Hasta el último día CERRADO, no hasta hoy: un día no se propone antes
-      // de su hora de cierre (las 6:00 de serie, ajuste de la empresa).
+      // de su hora de cierre (las 2:00 de serie, ajuste de la empresa).
       const cerrado = ultimoDiaCerrado(new Date(), datos.horaCierre)
       const rango = rangoAProponer(e, cerrado, { primeraVenta: await primeraVenta(accountId), asientosEnEjercicio: datos.asientos.length })
       if (rango.tipo === 'nada') { setHecho(rango.porque); return }

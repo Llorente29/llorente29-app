@@ -1,0 +1,18 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas.
+#
+# C04b · Diez: los siete .down.sql en orden inverso al de aplicar.txt.
+#   · la 0160 devuelve journal_entry_validar y conta_diez_importar a como
+#     estaban y quita history_imported_at;
+#   · la 0150 quita las funciones del escritor; lo ya traído se queda (no se
+#     borra libro);
+#   · de la 0140 a la 0100, el modelo de Diez. Si ya se trajo el histórico,
+#     NO se vuelve atrás por aquí sin hablarlo: las columnas nuevas de
+#     journal_entry y journal_line llevan datos.
+supabase/vuelta-atras/20261019T0160_diez_numeracion.down.sql
+supabase/vuelta-atras/20261019T0150_diez_importar.down.sql
+supabase/vuelta-atras/20261019T0140_diez_linea_negativa.down.sql
+supabase/vuelta-atras/20261019T0130_diez_documento_compartido.down.sql
+supabase/vuelta-atras/20261019T0120_diez_lectura.down.sql
+supabase/vuelta-atras/20261019T0110_diez_libro.down.sql
+supabase/vuelta-atras/20261019T0100_diez_conexion.down.sql
