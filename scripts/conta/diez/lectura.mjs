@@ -44,6 +44,8 @@ const REFERENCIA = { cuentas: 743, terceros: 45, ejercicios: ['2023', '2024', '2
 const DESDE = process.argv[2] || '202301'
 const HASTA = process.argv[3] || '202609'
 const MUESTRA = Number(process.env.MUESTRA_POR_EJERCICIO || 25)
+// Adjuntos: en el run 7 los 98 de la muestra dieron 500; basta con pocos.
+const MUESTRA_ADJ = Number(process.env.MUESTRA_ADJUNTOS || 5)
 const PAUSA_MS = 120
 
 const l = []
@@ -192,13 +194,15 @@ md(`- \`$top=3\` → ${t3.status}; ${forma(t3.json)}${n3 === 3 ? ' ← **se apli
 const odata = n3 === 3 && saltaBien
 let TOP = null
 if (odata) {
+  // Diez puede cortar la página por debajo de lo pedido (run 7: pide 1000,
+  // devuelve 200). La página que vale es la que DEVUELVE, no la que se pide.
   for (const n of [500, 1000, 5000]) {
     const r = await get(`/api/subcuentas?${q({ $top: n })}`)
     const k = items(r.json)?.length
     md(`- \`$top=${n}\` → ${r.status}; devuelve ${k ?? '—'}`)
-    if (r.status === 200 && k != null) TOP = n
+    if (r.status === 200 && k != null) TOP = Math.max(TOP ?? 0, k)
   }
-  TOP = Math.min(TOP || 500, 1000)
+  TOP = Math.min(TOP || 200, 1000)
 }
 let paramPagina = null, paramTam = null, tamMax = null
 if (!odata) {
@@ -228,7 +232,7 @@ const TAM = paramTam ? Math.min(tamMax || 500, 1000) : null
 async function todas(ruta) {
   const sep = ruta.includes('?') ? '&' : '?'
   const filas = []
-  let pag = 1, total = null, estado = null, paginas = 0
+  let pag = 1, total = null, estado = null, paginas = 0, anterior = null
   for (;;) {
     const qq = odata ? q({ $top: TOP, $skip: (pag - 1) * TOP }) : [paramPagina && `${paramPagina}=${pag}`, TAM && `${paramTam}=${TAM}`].filter(Boolean).join('&')
     const r = await get(ruta + (qq ? sep + qq : ''))
@@ -237,9 +241,16 @@ async function todas(ruta) {
     if (r.status !== 200 || !d) return { filas, total, estado, paginas, error: r.status !== 200 ? sinDatos(r.json) : `forma inesperada (${claves(r.json)})` }
     paginas++
     if (paginada(r.json)) total = r.json.ResultadosTotales
+    // Si una página empieza igual que la anterior, $skip no se aplica en este
+    // recurso: se para en vez de repetir la misma página hasta el límite.
+    const primero = huella(d[0])
+    if (paginas > 1 && d.length && primero === anterior) return { filas, total, estado, paginas, error: 'la página se repite: $skip no se aplica aquí' }
+    anterior = primero
     filas.push(...d)
     if (d.length === 0 || paginas > 2000) break
-    if (odata ? d.length < TOP : (!paramPagina || (total != null && filas.length >= total))) break
+    // Se para cuando ya se tiene el total que dice Diez, o cuando la página
+    // viene corta (sin total), nunca antes.
+    if (total != null ? filas.length >= total : (odata ? d.length < TOP : !paramPagina)) break
     pag++
   }
   return { filas, total: total ?? filas.length, estado, paginas }
@@ -287,9 +298,15 @@ if (ejercicios.length > 1 && new Set(porAno.filter((n) => n > 0)).size === 1) {
   md('', '**Todos los años dan el mismo número: el `$filter` por ejercicio no se aplica.** La lista de ejercicios de abajo no vale.')
 }
 const nSub = cat['/api/subcuentas'].filas.length
+// En una empresa «Estándar/Sociedades» /api/clientes y /api/proveedores no
+// existen (run 7): los terceros son subcuentas de 40, 41, 43 y 44.
+const esTercero = (c) => /^(40|41|43|44)/.test(String(c ?? ''))
+const nTerceros = cat['/api/subcuentas'].filas.filter((x) => esTercero(x.Codigo)).length
 const sub8 = cat['/api/subcuentas'].filas.filter((x) => String(x.Codigo ?? '').length === 8).length
 md('', `| Qué | En Diez (ahora) | Conocido (C02c, 06/10) |`, '|---|---|---|',
-  `| Subcuentas | ${nSub} (de 8 cifras: ${sub8}) | ${REFERENCIA.cuentas} del plan + ${REFERENCIA.terceros} terceros |`,
+  `| Subcuentas | ${nSub} leídas de ${cat['/api/subcuentas'].total ?? '—'} (de 8 cifras: ${sub8}) | ${REFERENCIA.cuentas} del plan + ${REFERENCIA.terceros} terceros |`,
+  `| … de ellas de 40, 41, 43 o 44 (terceros) | ${nTerceros} | ${REFERENCIA.terceros} |`,
+  `| … el resto | ${nSub - nTerceros} | ${REFERENCIA.cuentas} |`,
   `| Clientes + proveedores | ${cat['/api/clientes'].filas.length} + ${cat['/api/proveedores'].filas.length} | ${REFERENCIA.terceros} |`,
   `| Ejercicios con asientos | ${ejercicios.join(', ') || '—'} | ${REFERENCIA.ejercicios.join(', ')} (el encargo) |`, '',
   `DataBaseName: \`${dataBase ?? '—'}\`. Si las cifras no se parecen, **no es la empresa**: no se sigue con lo que se lea.`, '')
@@ -431,7 +448,8 @@ if (pedirMes) {
     `- Simplificadas: ${ff.simplificadas} · con vencimientos: ${ff.conVencimientos} · con analítica: ${ff.conAnalitica} · con apuntes/detalle: ${ff.conApuntes}`, '')
 }
 const filasAdj = []
-for (const [e, lista] of Object.entries(muestraFact).sort()) {
+for (const [e, lista0] of Object.entries(muestraFact).sort()) {
+  const lista = lista0.slice(0, MUESTRA_ADJ)
   let con = 0, bytes = 0
   const estados = {}, tipos = {}
   for (const f of lista) {
