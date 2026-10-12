@@ -18,6 +18,8 @@
 //
 //   DIEZ_LECTURA='{"username":…}' node scripts/conta/diez/lectura.mjs [desde AAAAMM] [hasta AAAAMM]
 
+import { esTercero, limpiar, nombrePublicable } from './publicable.mjs'
+
 const cred = JSON.parse(process.env.DIEZ_LECTURA || 'null')
 if (!cred || typeof cred !== 'object') {
   console.log('**Falta el secreto DIEZ_LECTURA** (o no es un JSON). No se lee nada.')
@@ -50,6 +52,8 @@ const PAUSA_MS = 120
 
 const l = []
 const md = (...x) => l.push(...x)
+// Todo lo que sale pasa otra vez por limpiar(): el registro es público.
+const soltar = () => process.stdout.write(limpiar(l.join('\n')) + '\n')
 const metrica = { peticiones: 0, bytes: 0, ms: 0, porRuta: {}, limites: new Set(), esperas429: 0 }
 let token = null
 const espera = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -101,20 +105,10 @@ const paginada = (j) => j && typeof j === 'object' && Array.isArray(j.Datos)
 const lleno = (v) => v !== null && v !== undefined && String(v).trim() !== ''
 const cent = (n) => Math.round(Number(n || 0) * 100)
 // En una empresa «Estándar/Sociedades» /api/clientes y /api/proveedores no
-// existen (run 7): los terceros son subcuentas de 40, 41, 43 y 44.
-const esTercero = (c) => /^(40|41|43|44)/.test(String(c ?? ''))
-// El nombre de una subcuenta solo sale si es plan de la empresa, y aun así sin
-// nada que parezca un IBAN o un NIF (run 10: dos cuentas de banco llevaban el
-// IBAN en el nombre y salieron en el registro, que es público). Terceros (40,
-// 41, 43, 44) y bancos (57): solo el código.
-const IBAN = /\b[A-Z]{2}\d{2}(?:[ ]?[0-9A-Z]{4}){2,7}(?:[ ]?[0-9A-Z]{1,3})?\b/g
-const NIF = /\b(?:[0-9XYZ]\d{7}[A-Z]|[A-HJ-NP-SUVW]\d{7}[0-9A-J])\b/g
-const nombrePublicable = (codigo, nombre) => {
-  const c = String(codigo ?? '')
-  if (esTercero(c)) return '*(tercero: no se publica)*'
-  if (/^57/.test(c)) return '*(cuenta de banco: no se publica)*'
-  return String(nombre ?? '').replace(IBAN, '[IBAN]').replace(NIF, '[NIF]').replace(/\|/g, '/')
-}
+// existen (run 7): los terceros son subcuentas de 40, 41, 43 y 44. Qué nombre
+// puede salir y cómo se tapa lo que parezca un dato de alguien (run 10: dos
+// cuentas de banco llevaban el IBAN en el nombre): publicable.mjs, con su
+// prueba contra todos los formatos.
 const cuenta = (obj, k, n = 1) => { obj[k] = (obj[k] ?? 0) + n }
 const tabla = (cabeza, filas) => { md(`| ${cabeza.join(' | ')} |`, `|${cabeza.map(() => '---').join('|')}|`, ...filas.map((f) => `| ${f.join(' | ')} |`), '') }
 const meses = () => {
@@ -143,14 +137,14 @@ try {
   if (r.status !== 200) throw new Error(`contesta ${r.status}`)
 } catch (e) {
   md(`**Diez no responde por https (${e.message}). Paro aquí: no se manda nada sin cifrar.**`)
-  process.stdout.write(l.join('\n') + '\n')
+  soltar()
   process.exit(1)
 }
 if (sobran.length) md(`- Del secreto no se manda nunca: ${sobran.join(', ')}`)
 let comoEntra = null, dataBase = null
 if (BD_PROHIBIDAS.includes(String(cred.nombre_bd ?? '').trim().toUpperCase())) {
   md(`**El secreto apunta a ${String(cred.nombre_bd).trim()}, que nunca se toca. No se entra.**`)
-  process.stdout.write(l.join('\n') + '\n')
+  soltar()
   process.exit(1)
 }
 {
@@ -167,7 +161,7 @@ if (BD_PROHIBIDAS.includes(String(cred.nombre_bd ?? '').trim().toUpperCase())) {
     md(`- DataBaseName: \`${dataBase ?? '—'}\` (se espera \`${BD_ESPERADA}\`) · caduca a los ${r.json.expires_in ?? '—'} s · tipo: ${r.json.token_type ?? '—'}`)
     if (String(dataBase ?? '').toUpperCase() !== BD_ESPERADA) {
       md(`**Entra, pero en otra base (${dataBase ?? 'sin nombre'}): no se lee nada.**`)
-      process.stdout.write(l.join('\n') + '\n')
+      soltar()
       process.exit(1)
     }
     token = t[1]
@@ -177,7 +171,7 @@ if (BD_PROHIBIDAS.includes(String(cred.nombre_bd ?? '').trim().toUpperCase())) {
 md('')
 if (!token) {
   md('**No se ha podido entrar.** Nada más que contar.')
-  process.stdout.write(l.join('\n') + '\n')
+  soltar()
   process.exit(1)
 }
 const yo = await get('/token')
@@ -332,6 +326,11 @@ if (process.argv[4] === 'corta') {
   // El nombre sale solo si es plan de la empresa; las de terceros (40/41/43/44)
   // llevan el nombre de un proveedor o cliente: solo el código.
   tabla(['Grupo', 'Código', 'Nombre'], nuevas.map((x) => [String(x.Codigo)[0], `\`${x.Codigo}\``, nombrePublicable(x.Codigo, x.Descripcion)]))
+  // Contra la población real: cuántos nombres de TODAS las subcuentas ha tenido
+  // que tapar el filtro, y de qué. Solo el recuento.
+  const tapados = { IBAN: 0, NIF: 0, 'NÚMERO': 0, IMPORTE: 0 }
+  for (const x of subs) { const r = limpiar(x.Descripcion); for (const k of Object.keys(tapados)) if (r.includes(`[${k}]`)) tapados[k]++ }
+  md(`Filtro sobre los ${subs.length} nombres de subcuenta (antes de quitar terceros y bancos): ${Object.entries(tapados).map(([k, v]) => `${k} ${v}`).join(' · ')}.`, '')
 
   // d) getfile: segunda oportunidad, con otras cabeceras y viendo el error.
   md('### getfile (lectura 1 de las 2 permitidas)', '')
@@ -350,7 +349,7 @@ if (process.argv[4] === 'corta') {
     }
   }
   md('', `Peticiones: ${metrica.peticiones} · ${Math.round(metrica.bytes / 1024)} KB.`)
-  process.stdout.write(l.join('\n') + '\n')
+  soltar()
   process.exit(0)
 }
 
@@ -580,4 +579,4 @@ md('### Límites y volumen de esta lectura', '',
 tabla(['Ruta', 'Peticiones', 'KB', 'ms medio', 'ms máximo'], Object.entries(metrica.porRuta).sort((a, b) => b[1].bytes - a[1].bytes)
   .map(([k, v]) => [`\`${k}\``, v.n, Math.round(v.bytes / 1024), Math.round(v.ms / v.n), v.maxMs]))
 md(`Entró con: ${comoEntra}.`)
-process.stdout.write(l.join('\n') + '\n')
+soltar()
