@@ -871,3 +871,45 @@ La cuarta no estaba en el primer SS_2026: o se contabilizó después de
 exportarlo, o es la otra recibida de ese mismo día. Para el importador, la
 regla queda medida: **el histórico se trae por Fecha, hasta el 30/09**, y
 octubre entra por la lectura diaria.
+
+## 11. El importador del histórico (T3)
+
+**En la base (`20261019T0150`, aplicada en staging, run 140).** Cuatro
+funciones nuevas, solo `service_role`:
+
+| Función | Qué hace |
+|---|---|
+| `conta_diez_ejercicio` | crea (o devuelve) el ejercicio traído: `migrated`, `diez`, abierto hasta terminar. Uno de Folvy no se toca |
+| `conta_diez_subcuentas` | da de alta las subcuentas que usa Diez y el plan no tiene, colgando de su hoja del PGC con el nombre de Diez |
+| `conta_diez_importar` | escribe los asientos ya convertidos: `migrated`, **validados con el número de Diez**, su clave, la marca de negativo por línea, la foto para comparar y la cadena de huellas. Idempotente; un asiento por subtransacción |
+| `conta_diez_cerrar_ejercicio` | cierra el ejercicio traído entero (respuesta 3) |
+
+Lo que rechaza, con su motivo y sin tumbar a los demás: serie ajena,
+ejercicio que no existe o es de Folvy, fecha fuera del ejercicio, posterior al
+corte, ejercicio cerrado, número ya usado por un asiento de Folvy, subcuenta
+que falta. Un asiento ya traído no se duplica; si cambió en Diez, sale como
+«distinto» y no se pisa.
+
+**El orquestador (`_shared/diezImportar.ts`).** Lee mes a mes con el
+`ClienteDiez`, convierte con `convertirAsiento` y, en este orden:
+
+1. aparta lo que no se convierte y lo posterior al corte;
+2. crea los ejercicios;
+3. da de alta las subcuentas;
+4. escribe en tandas de 200, en el orden de la cadena (fecha, serie, número).
+
+Si Diez diera dos veces la misma clave, para **sin escribir nada**. El parte
+dice todo en palabras (`resumenParte`). Pruebas: 11, una de ellas con el
+`ClienteDiez` de verdad contra el Diez simulado (250 asientos en un mes, más
+de una página).
+
+**Lo que hay que saber antes de traer el de verdad:**
+
+- **Que nadie valide un asiento de octubre de 2026 antes de traer el
+  histórico.** Medido en producción el 12/10: Foodint tiene 22 asientos
+  propuestos de octubre, serie 1, **sin número**. Si uno se valida antes,
+  coge el 1 de la serie 1 de 2026 y choca con el 2026/1/1 de Diez: la base lo
+  rechazaría con su motivo, pero habría que anularlo y rehacerlo.
+- **Los 4 asientos de 2023 que `convertirAsiento` no admite** (0 o 1 línea con
+  importe) no mueven ningún saldo: el testigo de 2023 cuadra sin ellos. Salen
+  en el parte como «que no se pueden convertir».
