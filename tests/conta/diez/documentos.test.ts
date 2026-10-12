@@ -3,22 +3,33 @@
 // con la forma medida; ningún PDF real.
 
 import { describe, expect, it } from 'vitest'
-import { claveDeCodigoExcel, claveDeFichero, cruzar, limpiarPdf } from '../../../supabase/functions/_shared/diezDocumentos'
+import { claveDeCodigoExcel, claveDeFichero, cruzar, limpiarDocumento, limpiarPdf } from '../../../supabase/functions/_shared/diezDocumentos'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const PDF_MIN = '%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n'
 
 describe('la clave del asiento', () => {
   it('del nombre del PDF', () => {
-    expect(claveDeFichero('C0008_F2026_2_3172.PDF')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '2', documento: 3172 })
-    expect(claveDeFichero('C0008_F2026_1_1119.pdf')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '1', documento: 1119 })
+    expect(claveDeFichero('C0008_F2026_2_3172.PDF')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '2', documento: 3172, extension: 'pdf' })
+    expect(claveDeFichero('C0008_F2026_1_1119.pdf')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '1', documento: 1119, extension: 'pdf' })
     expect(claveDeFichero('factura.pdf')).toBeNull()
     expect(claveDeFichero('C0008_F2026_2_3172.PDF.zip')).toBeNull()
   })
   it('del código del Excel', () => {
-    expect(claveDeCodigoExcel('C0008_CON_202_RECIBIDA_2026_2_3172.pdf')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '2', documento: 3172, libro: 'recibida' })
+    expect(claveDeCodigoExcel('C0008_CON_202_RECIBIDA_2026_2_3172.pdf')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '2', documento: 3172, libro: 'recibida', extension: 'pdf' })
     expect(claveDeCodigoExcel('C0008_CON_201_EXPEDIDA_2026_1_1119.pdf')).toMatchObject({ serie: '1', documento: 1119, libro: 'expedida' })
     expect(claveDeCodigoExcel('')).toBeNull()
+  })
+  // 2024–2026 (T2 §9): resúmenes de Uber Eats en .XLSX y una recibida en .JPG,
+  // con la misma clave y la misma extensión en el Excel.
+  it('no todo es PDF: .XLSX y .JPG dan la misma clave, con su extensión', () => {
+    expect(claveDeFichero('C0008_F2024_1_53.XLSX')).toEqual({ base: 'C0008', ejercicio: '2024', serie: '1', documento: 53, extension: 'xlsx' })
+    expect(claveDeFichero('C0008_F2024_2_571.JPG')).toMatchObject({ documento: 571, extension: 'jpg' })
+    expect(claveDeCodigoExcel('C0008_CON_201_EXPEDIDA_2024_1_53.XLSX')).toMatchObject({ documento: 53, libro: 'expedida', extension: 'xlsx' })
+    expect(claveDeFichero('C0008_F2024_1_53.docx')).toBeNull()
+    const r = cruzar(['C0008_F2024_1_53.XLSX', 'C0008_F2024_2_571.JPG'], ['C0008_CON_201_EXPEDIDA_2024_1_53.XLSX', 'C0008_CON_202_RECIBIDA_2024_2_571.JPG'])
+    expect(r.enlazados.map((e) => e.clave)).toEqual(['C0008/2024/1/53', 'C0008/2024/2/571'])
+    expect(r.nombreRaro).toEqual([])
   })
 })
 
@@ -68,5 +79,25 @@ describe('limpiarPdf', () => {
     const r = limpiarPdf(b)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.motivo).toMatch(motivo)
+  })
+})
+
+describe('limpiarDocumento', () => {
+  const ZIP = [0x50, 0x4b, 0x03, 0x04, 0x14, 0x00], JPG = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]
+  it('un PDF pasa por limpiarPdf (y le quita las cabeceras)', () => {
+    const cab = `content-length: ${enc(PDF_MIN).length}\ncontent-type: application/pdf\n`
+    expect(limpiarDocumento(enc(cab + PDF_MIN), 'pdf')).toMatchObject({ ok: true, tipo: 'pdf', cabeceraQuitada: true })
+  })
+  it('un .xlsx y un .jpg se comprueban por su firma y no se tocan', () => {
+    const x = new Uint8Array(ZIP), j = new Uint8Array(JPG)
+    expect(limpiarDocumento(x, 'xlsx')).toEqual({ ok: true, bytes: x, tipo: 'xlsx', cabeceraQuitada: false })
+    expect(limpiarDocumento(j, 'jpg')).toMatchObject({ ok: true, tipo: 'jpg' })
+  })
+  it.each([
+    [new Uint8Array(), 'xlsx', 'fichero vacío'],
+    [enc(PDF_MIN), 'xlsx', 'se llama .xlsx y no es una hoja .xlsx (zip)'],
+    [new Uint8Array([0x50, 0x4b, 0x03, 0x04]), 'jpg', 'se llama .jpg y no es una imagen JPEG'],
+  ] as [Uint8Array, 'xlsx' | 'jpg', string][])('lo que no es lo que dice ser va a revisar con su porqué (%#)', (b, ext, motivo) => {
+    expect(limpiarDocumento(b, ext)).toEqual({ ok: false, motivo })
   })
 })

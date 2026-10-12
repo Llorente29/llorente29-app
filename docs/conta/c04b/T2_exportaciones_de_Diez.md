@@ -551,3 +551,108 @@ plataformas, no papeles perdidos. Cuando haya pantalla, los enseñará todos, pe
 separados de los que de verdad faltan y con quién los trae (regla 7: ordenar y
 etiquetar, no esconder).
 
+
+## 9. Los años completos 2024, 2025 y 2026 hasta el 30/09 (12/10, medido en el Drive de Julio)
+
+Se midieron tres carpetas (`2024`, `2025` y `2026`), cada una con
+`recibidas/` y `expedidas/` y su Excel, y se cruzaron por la clave igual que
+2023-4T. Aquí solo hay recuentos: los Excel llevan en el nombre los datos de
+la empresa y se quedan fuera del repositorio.
+
+### 9.1 El cuadro
+
+| Año | Libro | Filas del Excel | Códigos | Ficheros | **Enlazados** | Código sin fichero | Fichero sin código |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 2024 | Recibidas | 1.146 | 667 | 667 | **667** | 0 | 0 |
+| 2024 | Expedidas | 236 | 195 | 195 | **195** | 0 | 0 |
+| 2025 | Recibidas | 1.740 | 1.245 | 1.245 | **1.245** | 0 | 0 |
+| 2025 | Expedidas | 297 | 261 | 261 | **261** | 0 | 0 |
+| 2026 | Recibidas | 3.204 | 2.301 | 2.301 | **2.301** | 0 | 0 |
+| 2026 | Expedidas | 1.234 | 1.135 | 1.135 | **1.135** | 0 | 0 |
+
+- **Todo enlaza** por la clave (ejercicio, serie, documento), sin adivinar y
+  sin nombres raros. Ningún fichero pasa de 10 MB; el mayor pesa 2,4 MB.
+- **Septiembre de 2026 está repetido dentro de 2026:** las 838 recibidas y las
+  248 expedidas de §7 vuelven a salir con la misma clave. El importador las
+  reconoce por la clave y no las duplica.
+- **El Excel de expedidas de 2024** se leyó en pantalla, porque el conector
+  no lo dejó como fichero. Sus 195 códigos son los documentos 1–196 salvo el
+  141.
+
+### 9.2 No todo es PDF
+
+| | PDF | XLSX | JPG |
+|---|---:|---:|---:|
+| 2024 recibidas | 662 | 4 | 1 |
+| 2024 expedidas | 187 | 8 | — |
+| 2025 expedidas | 260 | 1 | — |
+
+- Los `.XLSX` de expedidas de 2024 son los **resúmenes mensuales de Uber
+  Eats**. En 2023 Uber era una factura por pedido; en 2024 pasa a ser un
+  asiento al mes con su hoja.
+- El Excel nombra cada documento con su misma extensión, y la clave no
+  depende de ella.
+- `diezDocumentos.ts` las acepta ahora (`claveDeFichero`, `claveDeCodigoExcel`
+  y `limpiarDocumento`). Lo que no es PDF se comprueba por su firma y no se
+  toca; lo que no es lo que dice ser va a «revisar».
+
+### 9.3 Documentos compartidos entre la expedida y la recibida
+
+Es el patrón de 2023-4T (§8.1): **Glovo emite un documento que Diez registra
+como expedida y como recibida.**
+
+| Año | Parejas expedida ↔ recibida con el mismo tamaño exacto | Grupos mixtos de más de dos |
+|---|---:|---:|
+| 2024 | 170 | 4 (12 asientos) |
+| 2025 | 231 | 3 (11 asientos) |
+| 2026 | 213 | 17 (64 asientos) |
+
+- **Comprobado por contenido** en una pareja de cada año (2024/1/120 ↔
+  2024/2/587, 2025/1/113 ↔ 2025/2/434 y 2026/1/166 ↔ 2026/2/535): es la misma
+  factura de Glovo, mismo número y mismo texto.
+- **El mismo tamaño solo es una pista.** Se vio en dos sitios:
+  - en los grupos de solo recibidas, como uno de 45 recibidas de 28.812 B en
+    2024: son albaranes-factura distintos del mismo proveedor;
+  - en los grupos de solo expedidas de 2026, como uno de 44 expedidas de
+    2.494 B: son resúmenes diarios de Glovo de tiendas y días distintos.
+
+  **Esos no se cuentan como compartidos.**
+- **La cifra exacta la dará la huella sha256** al importar. El modelo ya lo
+  admite: un fichero, una fila por cada asiento que lo usa (§8.1, la 0130).
+
+### 9.4 Lo que no lleva documento, por año
+
+Se cuentan facturas, no filas. Las líneas de más de una factura que sí tiene
+documento (otro tipo de IVA, por ejemplo) no se cuentan como «sin documento».
+
+| Año | Libro | Sin documento | Reparto |
+|---|---|---:|---|
+| 2024 | Recibidas | 111 | 102 Uber Eats (Portier, nº `ES-…`, de enero a abril) · 9 de otros proveedores |
+| 2024 | Expedidas | 1 | el resumen de Uber Eats del 3T de 2024 (un asiento sin código) |
+| 2025 | Recibidas | 36 | 12 Glovo (julio) · 2 Uber Eats (Portier) · 21 de otros proveedores · 1 registrada como «facturas por localizar» |
+| 2025 | Expedidas | 18 | 13 Glovo (01/07/2025) · 5 de clientes B2B |
+| 2026 | Recibidas | 551 | **368 de riders** (facturas de repartidores, de enero a marzo) · 138 Uber Eats (Portier, de enero a abril) · 45 de otros proveedores |
+| 2026 | Expedidas | 99 | **90 de Uber Eats diarias** (`UBER-<fecha>`, una por día de enero a marzo) · 9 de un cliente B2B |
+
+Sobre la regla de §8.2 (resumen del día = «no requiere documento»):
+
+- **Las 90 de Uber Eats de 2026 son una por día**, con número
+  `UBER-<fecha>`. Tienen la forma de un resumen de ventas del día. Se
+  proponen como `no_requiere`, pendiente de que Julio lo confirme.
+- **El resto queda «pendiente de documento»**, con su porqué y con quién lo
+  trae:
+  - Uber Eats (Portier), Glovo y Just Eat: el robot de portales (E04);
+  - riders, proveedores y clientes: subida a mano o el buzón de facturas.
+
+### 9.5 Una trampa del conector de Drive
+
+Al listar una carpeta de más de 1.000 ficheros, las páginas de la búsqueda
+**repiten unos ficheros y se saltan otros**. En 2026 recibidas salieron 157
+repetidos y faltaron 184, aunque los 184 sí existían.
+
+Se arregló listando por tramos de hora de creación, cada uno en una sola
+página. Así salen los 2.302, sin repetidos.
+
+El importador **no puede fiarse de un listado paginado**. Cuenta lo que trae
+contra los códigos del Excel, y si falta algo lo busca por su nombre antes de
+dar nada por perdido.

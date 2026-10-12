@@ -13,26 +13,65 @@
 //     PDF (content-length, date, etag, content-type…). Se quitan, comprobando
 //     que content-length cuadra con lo que queda y que acaba en %%EOF; si no
 //     cuadra, el documento va a «revisar» con el porqué, no se arregla a ojo.
+//
+// Medido con los años completos 2024–2026 (12/10, T2 §9): no todo es PDF.
+// Con la misma clave llegan .XLSX (los resúmenes de Uber Eats de 2024 y algún
+// otro) y un .JPG, y el Excel los nombra con su misma extensión. La clave no
+// depende de la extensión; el contenido se comprueba según la que traiga.
 
 export type ClaveDiez = { base: string; ejercicio: string; serie: string; documento: number }
 
-const RE_FICHERO = /^(C\d{4})_F(\d{4})_(\d{1,5})_(\d+)\.pdf$/i
-const RE_EXCEL = /^(C\d{4})_CON_(\d{3})_(RECIBIDA|EXPEDIDA)_(\d{4})_(\d{1,5})_(\d+)\.pdf$/i
+/** Las extensiones que exporta Diez como documento de un asiento. */
+export const EXTENSIONES = ['pdf', 'xlsx', 'xls', 'jpg', 'jpeg', 'png'] as const
+export type Extension = (typeof EXTENSIONES)[number]
+
+const EXT = `(${EXTENSIONES.join('|')})`
+const RE_FICHERO = new RegExp(`^(C\\d{4})_F(\\d{4})_(\\d{1,5})_(\\d+)\\.${EXT}$`, 'i')
+const RE_EXCEL = new RegExp(`^(C\\d{4})_CON_(\\d{3})_(RECIBIDA|EXPEDIDA)_(\\d{4})_(\\d{1,5})_(\\d+)\\.${EXT}$`, 'i')
 
 /** La clave del asiento a partir del nombre del PDF, o null si no tiene esa forma. */
-export function claveDeFichero(nombre: string): ClaveDiez | null {
+export function claveDeFichero(nombre: string): (ClaveDiez & { extension: Extension }) | null {
   const m = RE_FICHERO.exec(String(nombre ?? '').trim())
-  return m ? { base: m[1].toUpperCase(), ejercicio: m[2], serie: m[3], documento: Number(m[4]) } : null
+  return m ? { base: m[1].toUpperCase(), ejercicio: m[2], serie: m[3], documento: Number(m[4]), extension: m[5].toLowerCase() as Extension } : null
 }
 
 /** La clave del asiento a partir del código «Registro gestión documental» del Excel. */
-export function claveDeCodigoExcel(codigo: string): (ClaveDiez & { libro: 'recibida' | 'expedida' }) | null {
+export function claveDeCodigoExcel(codigo: string): (ClaveDiez & { libro: 'recibida' | 'expedida'; extension: Extension }) | null {
   const m = RE_EXCEL.exec(String(codigo ?? '').trim())
   if (!m) return null
-  return { base: m[1].toUpperCase(), ejercicio: m[4], serie: m[5], documento: Number(m[6]), libro: m[3].toUpperCase() === 'RECIBIDA' ? 'recibida' : 'expedida' }
+  return { base: m[1].toUpperCase(), ejercicio: m[4], serie: m[5], documento: Number(m[6]), libro: m[3].toUpperCase() === 'RECIBIDA' ? 'recibida' : 'expedida', extension: m[7].toLowerCase() as Extension }
 }
 
 export const textoClave = (k: ClaveDiez) => `${k.base}/${k.ejercicio}/${k.serie}/${k.documento}`
+
+export type DocumentoLimpio =
+  | { ok: true; bytes: Uint8Array; tipo: 'pdf' | 'xlsx' | 'xls' | 'jpg' | 'png'; cabeceraQuitada: boolean }
+  | { ok: false; motivo: string }
+
+const empiezaPor = (b: Uint8Array, p: number[]) => b.length >= p.length && p.every((x, i) => b[i] === x)
+
+/**
+ * El documento listo para guardar, según su extensión. Un PDF pasa por
+ * limpiarPdf; el resto se comprueba por su firma (los primeros bytes) y no se
+ * toca. Lo que no es lo que dice ser va a «revisar» con su porqué.
+ */
+export function limpiarDocumento(bytes: Uint8Array, extension: Extension): DocumentoLimpio {
+  if (extension === 'pdf') {
+    const r = limpiarPdf(bytes)
+    return r.ok ? { ok: true, bytes: r.pdf, tipo: 'pdf', cabeceraQuitada: r.cabeceraQuitada } : r
+  }
+  if (bytes.length === 0) return { ok: false, motivo: 'fichero vacío' }
+  const firmas: Record<Exclude<Extension, 'pdf'>, { tipo: 'xlsx' | 'xls' | 'jpg' | 'png'; firma: number[]; nombre: string }> = {
+    xlsx: { tipo: 'xlsx', firma: [0x50, 0x4b, 0x03, 0x04], nombre: 'una hoja .xlsx (zip)' },
+    xls: { tipo: 'xls', firma: [0xd0, 0xcf, 0x11, 0xe0], nombre: 'una hoja .xls' },
+    jpg: { tipo: 'jpg', firma: [0xff, 0xd8, 0xff], nombre: 'una imagen JPEG' },
+    jpeg: { tipo: 'jpg', firma: [0xff, 0xd8, 0xff], nombre: 'una imagen JPEG' },
+    png: { tipo: 'png', firma: [0x89, 0x50, 0x4e, 0x47], nombre: 'una imagen PNG' },
+  }
+  const f = firmas[extension]
+  if (!empiezaPor(bytes, f.firma)) return { ok: false, motivo: `se llama .${extension} y no es ${f.nombre}` }
+  return { ok: true, bytes, tipo: f.tipo, cabeceraQuitada: false }
+}
 
 export type PdfLimpio =
   | { ok: true; pdf: Uint8Array; cabeceraQuitada: boolean; cabeceras: string[] }
