@@ -94,8 +94,8 @@ begin
       ('2026-10-25 00:30:00+00', false),   -- 2:30 de la PRIMERA vuelta: ya cerrado
       ('2026-10-25 01:30:00+00', false)    -- 2:30 de la segunda
     ) as t(creado, antes) loop
-    insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, created_at)
-    values (v_acc, v_e, v_y, 1, v_d, 'Ventas inventadas', 'sales_day', 'propuesto', c.creado::timestamptz) returning id into v_ent;
+    insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, confidence, reason, created_at)
+    values (v_acc, v_e, v_y, 1, v_d, 'Ventas inventadas', 'sales_day', 'propuesto', 'seguro', 'Prueba del cierre a las 2:00', c.creado::timestamptz) returning id into v_ent;
     insert into public.sales_day_summary (account_id, company_id, location_id, sales_day, entry_id, tickets_count, total, detail_hash)
     values (v_acc, v_e, v_loc, v_d, v_ent, 0, 0, 'prueba');
     if exists (select 1 from public.conta_propuestos_antes_del_cierre(v_e) x where x.entry_id = v_ent) <> c.antes then
