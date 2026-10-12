@@ -345,3 +345,55 @@ alta en Diez; si no, salen sin marca.
   - las pruebas, en `tests/conta/diez/analitica.test.ts`.
 - **Marcas:** la tabla de §6.3 sigue sin confirmar. Mientras tanto, las
   facturas salen sin marca y lo dicen.
+
+## 7. Septiembre de 2026 con los PDF (12/10, medido en el Drive de Julio)
+
+Carpeta `septiembre2026/` (recibidas y expedidas, cada una con su Excel). Los
+nombres y tamaños se leyeron de Drive; los Excel se bajaron y son idénticos a
+los del primer zip (mismo md5). Nada de esto entra en el repositorio: aquí
+solo recuentos.
+
+**Los documentos enlazan todos, por la clave, sin adivinar:**
+
+| | PDF | Códigos en el Excel | Enlazados | Código sin PDF | PDF sin código |
+|---|---:|---:|---:|---:|---:|
+| Recibidas (serie 2) | 852 (838 nombres distintos) | 838 | **838** | 0 | 0 |
+| Expedidas (serie 1) | 248 | 248 | **248** | 0 | 0 |
+
+- **Cómo se nombran:**
+  - cada PDF se llama `C0008_F<ejercicio>_<serie>_<documento>.PDF`;
+  - el Excel lo nombra `C0008_CON_<libro>_<RECIBIDA|EXPEDIDA>_<ejercicio>_<serie>_<documento>.pdf`;
+  - los dos dan la clave del asiento de Diez.
+  
+  Lo hace `diezDocumentos.ts` (`claveDeFichero`, `claveDeCodigoExcel`,
+  `cruzar`). El cruce de arriba está hecho **con ese módulo sobre los 1.100
+  nombres reales**.
+- **14 nombres de recibidas salen dos veces** en Drive, con el mismo tamaño en
+  las dos copias. Se quedará uno, comparando la huella sha256 al subirlo (la
+  tabla de documentos ya exige sha único).
+- **Ningún PDF pasa de 10 MB.** El mayor pesa 652 KB, ninguno pesa 0 bytes y
+  todos son `application/pdf`.
+- **Las 17 recibidas sin código de documento** (§5.2) siguen sin PDF. Quedan
+  «pendiente de documento», cada una con su porqué.
+
+**Un hallazgo: algunos ficheros traen delante las cabeceras HTTP de la
+descarga.**
+- Muestra bajada entera: 6 PDF de todo el rango de tamaños (de 1.976 B a
+  652 KB, de los dos libros).
+  - Cinco empiezan por `%PDF` y acaban en `%%EOF`.
+  - **Uno, la recibida 2026/2/3172, empieza por `content-length`,
+    `accept-ranges`, `date`, `last-modified`, `etag` y `content-type:
+    application/pdf`**, y después el PDF.
+- **Cómo se trata:** `limpiarPdf()` las quita solo si:
+  - todo lo que hay delante son cabeceras;
+  - `content-length` cuadra con lo que queda;
+  - el PDF acaba en `%%EOF`.
+  
+  Si algo no cuadra, el documento va a «revisar» con el porqué. Nunca se
+  arregla a ojo.
+- **Cuántos son de verdad no se sabe hasta subirlos todos:** el conector de
+  Drive solo da tamaños. El importador lo cuenta y el informe lo dice.
+
+**Para los trimestres:** el formato vale tal cual. Se pueden pedir en la
+misma forma: una carpeta por trimestre, con `recibidas/` y `expedidas/` y su
+Excel dentro.
