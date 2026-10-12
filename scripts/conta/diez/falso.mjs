@@ -30,7 +30,7 @@ export async function arrancarDiezFalso(opciones = {}) {
   const cred = opciones.credenciales ?? { client_id: 'cli', client_secret: 'sec', username: 'usu', password: 'pas' }
   const bases = {}
   for (const [bd, b] of Object.entries(opciones.bases ?? {})) {
-    bases[bd] = { apuntes: [...(b.apuntes ?? [])], facturas: [...(b.facturas ?? [])], subcuentas: [...(b.subcuentas ?? [])], series: [...(b.series ?? [])] }
+    bases[bd] = { apuntes: [...(b.apuntes ?? [])], facturas: [...(b.facturas ?? [])], subcuentas: [...(b.subcuentas ?? [])], series: [...(b.series ?? [])], grupos: [...(b.grupos ?? [])], subgrupos: [...(b.subgrupos ?? [])], nivel3: [...(b.nivel3 ?? [])] }
   }
   // Lo que se puede tocar desde la prueba.
   const estado = {
@@ -89,7 +89,7 @@ export async function arrancarDiezFalso(opciones = {}) {
     const b = estado.bases[bd]
 
     if (req.method === 'GET') {
-      const listados = { '/api/apuntes': 'apuntes', '/api/facturas': 'facturas', '/api/subcuentas': 'subcuentas', '/api/series': 'series' }
+      const listados = { '/api/apuntes': 'apuntes', '/api/facturas': 'facturas', '/api/subcuentas': 'subcuentas', '/api/series': 'series', '/api/analitica/operationGroups': 'grupos', '/api/analitica/operationSubGroups': 'subgrupos', '/api/analitica/nivel3s': 'nivel3' }
       if (listados[ruta]) return responder(res, 200, paginar(filtrar(b[listados[ruta]], url.searchParams.get('$filter')), url))
       const m = /^\/api\/(apuntes\/asiento|facturas\/factura)\/([^/]+)\/([^/]+)\/(\d+)$/.exec(ruta)
       if (m) {

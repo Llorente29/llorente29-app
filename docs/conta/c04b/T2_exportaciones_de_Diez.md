@@ -155,3 +155,74 @@ Los cuatro van al mismo sitio que el zip, y por lo mismo: nombres de terceros.
 - **Subcuentas de Diez que no estaban en el plan del C02c: 42 nuevas y 4 que
   Diez ya no tiene** (781 − 743 = 38 de diferencia neta). La lista está en el
   PR, con los nombres de terceros y de cuentas de banco sin publicar.
+
+## 5. El zip real: `septiembre2026.zip` (12/10, medido fuera del repositorio)
+
+Julio exportó de Diez el libro de requerimientos de septiembre de 2026
+(recibidas y expedidas), «con descarga de documentos», y su Excel. Se ha
+medido la FORMA, sin sacar ningún valor: aquí solo recuentos.
+
+**Qué trae: 4 entradas, 141.797 bytes.**
+
+| Entrada | Qué es |
+|---|---|
+| `recibidas/` | carpeta |
+| `recibidas/recibidas.xlsx` | hoja `RECIBIDAS_GASTOS`, 40 columnas, 867 filas de factura |
+| `expedidas/` | carpeta |
+| `expedidas/expedidas.xlsx` | hoja `EXPEDIDAS_INGRESOS`, 34 columnas, 248 filas de factura |
+
+**Ningún PDF.** Las carpetas solo tienen el Excel. → Lo que falta: §5.3.
+
+### 5.1 Los Excel casan con la API al documento
+
+- Recibidas: 867 filas son **855 facturas**. Las 12 de más son la misma
+  factura con un segundo tipo de IVA: el libro pone una fila por tipo.
+- Expedidas: **248 facturas**, una fila cada una.
+- **855 + 248 = 1.103**, las mismas que dice la API para septiembre de 2026
+  (run 9: «2026-09 · 1103»).
+- Fechas de recepción de las recibidas: del 01/09 al 30/09. Fechas de
+  expedición: del 13/01 al 30/09 (facturas atrasadas que entran en septiembre).
+- Las fechas vienen como número de serie de Excel; el lector las convierte.
+
+### 5.2 La clave del documento ya viene en el Excel, exacta
+
+La última columna, **«Registro gestión documental»**, tiene un código de 7
+piezas separadas por `_`. Es la misma forma en las 838 + 248 filas:
+
+| Pieza | Recibidas | Expedidas | Qué es |
+|---|---|---|---|
+| 1 | `C0008` | `C0008` | la base de datos |
+| 2 | `CON` | `CON` | contabilidad |
+| 3 | `202` | `201` | el libro (recibidas / expedidas) |
+| 4 | `RECIBIDA` | `EXPEDIDA` | — |
+| 5 | `2026` | `2026` | el ejercicio |
+| 6 | `2` | `1` | la serie de Diez |
+| 7 | `<n>.pdf` (838 distintos) | `<n>.pdf` (248 distintos) | el número de documento del asiento |
+
+- **Es la clave del asiento de Diez**: ejercicio, serie y documento.
+- Confirma de paso lo que la API no decía: **serie 2 = recibidas** y **serie
+  1 = expedidas**.
+- **Enlazar es exacto, sin casar por nombre ni por NIF**: el PDF se busca por
+  ese código, y el código dice a qué asiento pertenece.
+- El Excel solo hace falta para eso y para las facturas sin código.
+
+**Facturas sin código de documento:** 17 recibidas, 0 expedidas. Esas son
+las que, si Julio confirma que no tienen PDF en Diez, quedan «pendiente de
+documento», cada una con su porqué.
+
+### 5.3 Lo que falta antes de pedir el resto de meses
+
+1. **Los PDF.**
+   - La «descarga de documentos» no los ha metido en el zip. O Diez los dejó
+     en otra carpeta del ordenador, o la opción no se marcó.
+   - Lo que hace falta: la carpeta con los ficheros tal como los nombra Diez.
+     Si los nombra como el código de la última columna, se enlazan solos.
+2. **Nada más del Excel.** Trae lo necesario: el código del documento, la
+   serie, el número de factura y el NIF del expedidor o destinatario (para las
+   17 sin código), las fechas y la base, el tipo, la cuota y el total.
+
+**Propuesta para el resto de meses:**
+- un zip por trimestre;
+- las mismas dos carpetas, con los PDF dentro y el Excel al lado;
+- primero se repite septiembre con los PDF, para comprobar que se enlazan los
+  838 + 248.

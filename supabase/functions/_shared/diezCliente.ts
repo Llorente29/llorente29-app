@@ -73,7 +73,9 @@ export class ConexionCaida extends Error {
   constructor(m: string) { super(m); this.name = 'ConexionCaida' }
 }
 export class ErrorDiez extends Error {
-  constructor(m: string, readonly status: number, readonly cuerpo: unknown) { super(m); this.name = 'ErrorDiez' }
+  readonly status: number
+  readonly cuerpo: unknown
+  constructor(m: string, status: number, cuerpo: unknown) { super(m); this.name = 'ErrorDiez'; this.status = status; this.cuerpo = cuerpo }
 }
 
 // ── Lo que devuelve y recibe Diez (Swagger, run 13) ──────────────────────────
@@ -124,7 +126,10 @@ export class ClienteDiez {
   /** Métrica de la sesión (para el registro de la lectura: solo recuentos). */
   readonly metrica = { peticiones: 0, reintentos429: 0 }
 
-  constructor(private readonly cfg: ConfigDiez) {
+  private readonly cfg: ConfigDiez
+
+  constructor(cfg: ConfigDiez) {
+    this.cfg = cfg
     const bd = String(cfg.nombreBd ?? '').trim().toUpperCase()
     if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) throw new FrenoDiez(`la base ${bd} no se toca nunca`)
     if (!(BASES_CONOCIDAS as readonly string[]).includes(bd)) throw new FrenoDiez(`base ${bd || '(vacía)'} desconocida; solo ${BASES_CONOCIDAS.join(' y ')}`)

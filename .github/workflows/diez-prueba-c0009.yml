@@ -1,0 +1,50 @@
+name: Diez · factura de prueba en C0009 (C04b)
+
+# QUÉ HACE (C04b, tarea 3, 12/10)
+# Envía UNA factura recibida de prueba (1,00 € de base) a la C0009 —la copia de
+# pruebas de Diez, nunca la C0008 ni la C0001— con la analítica de Diez
+# (Grupo, Subgrupo y Nivel3: Local, Marca y Plataforma en su pantalla), y la
+# lee de vuelta para ver si Diez la guarda igual.
+#   · La base C0009 la fija el script, no el secreto.
+#   · Si ya está (serie + número FOLVY-PRUEBA-0001 + NIF), no envía otra.
+#   · Salida sin NIF, sin nombres de terceros y sin IBAN (publicable.mjs).
+#
+# Cuándo corre: a mano, o al empujar a conta/c04b-diez un commit cuyo mensaje
+# EMPIEZA por «[prueba-c0009]». Nada más la dispara.
+
+on:
+  push:
+    branches: ['conta/c04b-diez']
+  workflow_dispatch:
+
+concurrency:
+  group: diez-lectura
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prueba:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[prueba-c0009]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enmascarar el secreto
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+      - name: Factura de prueba en C0009
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          npx --yes tsx@4.19.2 scripts/conta/diez/prueba-c0009.ts | tee prueba.md
+          cat prueba.md >> "$GITHUB_STEP_SUMMARY"
