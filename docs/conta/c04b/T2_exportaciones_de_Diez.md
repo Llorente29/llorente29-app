@@ -397,3 +397,35 @@ descarga.**
 **Para los trimestres:** el formato vale tal cual. Se pueden pedir en la
 misma forma: una carpeta por trimestre, con `recibidas/` y `expedidas/` y su
 Excel dentro.
+
+### 6.6 Marcas: la tabla confirmada (Julio, 12/10)
+
+| Subgrupo de Diez | Al leer | Al enviar |
+|---|---|---|
+| 1 Milanesa House | Milanesa House | Milanesa House → 1 |
+| 2 Meraki Pita | Meraki Pita | → 2 |
+| 3 Scandal Burger | Scandal Burgers | → 3 |
+| 4 Smash Brothers | Smash Brothers Burgers | → 4 |
+| 5 Mila's Sandwiches | Mila's Sandwiches | → 5 |
+| 6 Bendito Burrito | Bendito Burrito | → 6 |
+| 7 The Urban Kebab | The Urban Kebab | → 7 |
+| 8 Dirty Burger | Dirty Burger | → 8 |
+| 9 «French Tacos Club» | **Lovers Burgers** | **nunca: freno en el cliente** |
+| 10 Vooger | se conserva «Vooger» (sin marca en Folvy) | — |
+| 11 Lovers Burger | Lovers Burgers | **Lovers Burgers → 11, siempre** |
+| 12 NKD Burger | se conserva «NKD Burger» (sin uso desde hace años) | — |
+
+- **El 9 es Lovers Burgers.** Es la misma tienda de Glovo, en Florencio
+  Llorente 29 (Alcalá): se le cambió el nombre y la dirección para
+  aprovecharla, pero Glovo no actualizó los datos. Los subgrupos 9 y 11 se
+  unifican: al leer, los dos son Lovers Burgers; al enviar, siempre el 11.
+  Freno en el cliente (`SUBGRUPOS_VETADOS`), con su prueba, como el de JDH.
+- **Sin subgrupo, a propósito:**
+  - Milanesa Haus, Ay Mamita Bowls, Big Mike´s Burger Joint, Birria Burrito,
+    Chivuos, Deep Pizza, Dos Coyotes y Koreans do it better son **cedidas**:
+    van por la liquidación con el socio, nunca como venta, y si algo suyo
+    llega a Diez va sin marca, diciendo por qué;
+  - Lobbers ya no existe y no se usa.
+- **Comprobado contra las 18 marcas reales de Folvy:** cada una tiene
+  subgrupo o un porqué para ir sin él. Ninguna queda sin decidir (prueba en
+  `analitica.test.ts`).

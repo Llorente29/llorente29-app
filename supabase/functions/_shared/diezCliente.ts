@@ -16,7 +16,8 @@
 //     pedirlo: `escribir: true`. En C0008 además `escribirEnReal: true`
 //     (regla 4 del encargo: primero el entorno de pruebas).
 //   · Ningún envío lleva un grupo vetado de la analítica (JDH, José del
-//     Hierro: no es un local abierto). Ver GRUPOS_VETADOS.
+//     Hierro: no es un local abierto), ni un subgrupo vetado (el 9: Lovers
+//     Burgers va siempre con el 11). Ver GRUPOS_VETADOS y SUBGRUPOS_VETADOS.
 //
 // El TOKEN dura 14 días. Se guarda fuera (Vault, por connector_token_save) y
 // se renueva cuando le quedan menos de 2 días. Renovar es UN intento: si falla,
@@ -40,18 +41,26 @@ export const BASES_CONOCIDAS = [BASE_REAL, BASE_PRUEBAS] as const
 // aquí: es Carabanchel al leer (Scandal Burger, Glovo no cambió la dirección),
 // y al enviar Carabanchel va siempre con CAM (diezAnalitica.ts).
 export const GRUPOS_VETADOS: Record<string, readonly string[]> = { C0008: ['JDH'], C0009: ['JDH'] }
+// Subgrupos (Marca en la pantalla de Diez) que NINGÚN envío puede llevar
+// (Julio, 12/10): el 9 («French Tacos Club» en Diez) es Lovers Burgers, la
+// misma tienda de Glovo que el 11; se unifican y al enviar va SIEMPRE el 11.
+export const SUBGRUPOS_VETADOS: Record<string, readonly string[]> = { C0008: ['9'], C0009: ['9'] }
 
-/** Todos los valores de `Grupo` que aparezcan en un cuerpo, a cualquier profundidad. */
-export function gruposEn(x: unknown, fuera: string[] = []): string[] {
-  if (Array.isArray(x)) for (const y of x) gruposEn(y, fuera)
+/** Todos los valores del campo `clave` (sin mayúsculas) que aparezcan en un cuerpo, a cualquier profundidad. */
+function valoresEn(x: unknown, clave: string, fuera: string[]): string[] {
+  if (Array.isArray(x)) for (const y of x) valoresEn(y, clave, fuera)
   else if (x && typeof x === 'object') {
     for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
-      if (k.toLowerCase() === 'grupo' && v != null && typeof v !== 'object') fuera.push(String(v).trim().toUpperCase())
-      else gruposEn(v, fuera)
+      if (k.toLowerCase() === clave && v != null && typeof v !== 'object') fuera.push(String(v).trim().toUpperCase())
+      else valoresEn(v, clave, fuera)
     }
   }
   return fuera
 }
+/** Todos los valores de `Grupo` que aparezcan en un cuerpo, a cualquier profundidad. */
+export const gruposEn = (x: unknown): string[] => valoresEn(x, 'grupo', [])
+/** Todos los valores de `Subgrupo` que aparezcan en un cuerpo, a cualquier profundidad. */
+export const subgruposEn = (x: unknown): string[] => valoresEn(x, 'subgrupo', []).map((v) => v.replace(/^0+(?=\d)/, ''))
 export const TAM_PAGINA = 200
 export const MARGEN_RENOVAR_MS = 2 * 24 * 3600 * 1000
 export const MAX_INTENTOS = 3 // regla 5 del encargo
@@ -176,6 +185,8 @@ export class ClienteDiez {
       if (this.nombreBd === BASE_REAL && !this.cfg.escribirEnReal) throw new FrenoDiez(`escribir en ${BASE_REAL} exige escribirEnReal; primero ${BASE_PRUEBAS}`)
       const vetados = gruposEn(cuerpo).filter((g) => (GRUPOS_VETADOS[this.nombreBd] ?? []).includes(g))
       if (vetados.length) throw new FrenoDiez(`el grupo ${[...new Set(vetados)].join(', ')} de la analítica no se envía nunca (no es un local abierto)`)
+      const subVetados = subgruposEn(cuerpo).filter((g) => (SUBGRUPOS_VETADOS[this.nombreBd] ?? []).includes(g))
+      if (subVetados.length) throw new FrenoDiez(`el subgrupo ${[...new Set(subVetados)].join(', ')} de la analítica no se envía nunca (Lovers Burgers va siempre con el 11)`)
     }
     if (!camino.startsWith('/api/') && !esEntrar) throw new FrenoDiez(`ruta ${camino} fuera de /api`)
     const cab: Record<string, string> = { accept: 'application/json' }
