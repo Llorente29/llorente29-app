@@ -169,107 +169,144 @@ Propuesta:
 - Si el ejemplo tiene algo que el Swagger no declara (un campo, un formato de
   fecha), lo necesito: **pégalo sin los valores**.
 
-## 2. Lo que hay en el Diez de Foodint (bloqueado: «No tiene acceso a la empresa indicada»)
+## 2. Lo que hay en el Diez de Llorente29 (C0008), medido
 
-**Lo que pasó (12/10, runs 4 y 5).** Medido en los runs, no supuesto:
+**Run 9** (`diez-lectura.yml`, 12/10, 06:30–06:52 UTC). Solo GET, solo
+recuentos. Los runs 4 a 8 se quedaron por el camino, y cada uno dejó algo:
+- **runs 4–6:** la base de datos va en `nombre_bd`;
+- **run 7:** Diez corta las páginas en 200;
+- **run 8:** `$skip` cuenta páginas, no elementos.
 
-- **https: sí.** `GET /swagger/docs/v1` → 200 por https antes de mandar
-  ninguna credencial. Nada salió sin cifrar. Ninguna redirección se siguió.
-- **El secreto tiene estas claves:** `client_id`, `client_secret`,
-  `cod_empresa`, `grant_type`, `password` y `username`. Son las seis de la
-  colección. `nombre_bd` ni está ni se manda.
-- **`POST /token` → 400** con `error: "Error"` y `error_description:
-  "Error 9 - No tiene acceso a la empresa indicada."`. El número sale como 9
-  porque el lector cambia todas las cifras.
-  - Diez entiende la petición, y la queja **no es de usuario ni de
-    contraseña**: es de la empresa.
-  - O `cod_empresa` no es el código de Foodint tal como lo espera Diez (¿con
-    ceros delante?), o el usuario de la API no tiene acceso a esa empresa.
-- **No se ha insistido.** El run 4 probó dos formatos (formulario y JSON).
-  Desde el run 5, si Diez contesta con un error OAuth no se repite, para no
-  sumar intentos fallidos contra tu usuario.
+### Entrar
 
-**Run 6 (12/10): los dos intentos que pidió Julio.** Un solo intento de cada,
-en este orden, en formulario, y sin insistir:
+- **Un solo intento**, en formulario, con grant_type, client_id,
+  client_secret, username, password y `nombre_bd`. `cod_empresa` no se manda.
+  → **200**.
+- **DataBaseName = C0008.** En el registro sale `***` porque es el mismo
+  valor que el secreto y GitHub lo enmascara. El lector **solo sigue leyendo
+  si es C0008**: con otro nombre entra y no lee nada, y con C0001 ni siquiera
+  pide el token. Esos tres casos están probados contra el Diez falso.
+- El token dura **14 días** (`expires_in` 1.209.599 s).
+- La respuesta trae también `Name` y `UserName`, que son datos personales:
+  solo se imprimen sus nombres de campo.
+- `TipoContabilidad` 1 · **`DigitosPlanContable` 8**, como el C02c.
 
-| Intento | Campos | Resultado |
-|---|---|---|
-| 1 · sin `cod_empresa` | grant_type, client_id, client_secret, username, password | **400** · «Error 9 - **Debe indicar un nombre o identificador de base de datos de acceso.**» |
-| 2 · con `cod_empresa` como número sin ceros | lo mismo + cod_empresa | **no se hizo**: el valor de `cod_empresa` del secreto no es solo cifras, así que no hay «número sin ceros» que mandar. El valor no se ha tocado |
+### ¿Es Llorente29? Sí
 
-**Lo que dicen los tres intentos juntos** (runs 4–6):
+| | Diez hoy (C0008) | C02c, plan leído el 06/10 |
+|---|---:|---:|
+| Subcuentas de 8 cifras | **781** | 743 |
+| grupo 1 | 76 | 76 |
+| grupo 2 | 105 | 101 |
+| grupo 3 | 30 | 30 |
+| grupo 4 | 148 | 140 |
+| grupo 5 | 140 | 139 |
+| grupo 6 | 149 | 147 |
+| grupo 7 | 133 | 110 |
+| de ellas 40/41/43/44 (terceros) | 118 | 109 |
+| Ejercicios con asientos | 2023, 2024, 2025, 2026 | 2023–2026 (el encargo) |
 
-- Sin `cod_empresa`, Diez pide la base de datos. **No la saca del usuario.**
-- Con `cod_empresa`, ya no la pide: pasa a decir «No tiene acceso a la
-  empresa indicada». Es decir, el valor de `cod_empresa` **se está tomando
-  como identificador de la base de datos**, o al menos llena ese hueco.
-- La sesión que funciona recibe `DataBaseName` en la respuesta. Ese nombre es
-  lo que `/token` parece esperar en `nombre_bd` (el campo que el Swagger
-  declara y la colección no trae).
+- Los grupos 1 y 3 son idénticos y el resto crece poco.
+- Diez tiene **38 subcuentas más** que el PDF del C02c, 23 de ellas en el
+  grupo 7. O son altas posteriores o el PDF no las sacaba. Se verán cuenta a
+  cuenta al importar.
+- En Folvy, Foodint tiene hoy **751** cuentas de 8 cifras (110 de terceros),
+  filtradas por cuenta.
+- **En una sociedad no existen `/api/clientes` ni `/api/proveedores`.** Diez
+  responde «endpoint de Estimaciones/Autónomos para una empresa
+  Estándar/Sociedades», y lo mismo con actividades y grupos de gastos e
+  ingresos. Los terceros son subcuentas: 56 de las 781 llevan NIF.
 
-**Parado aquí, como pidió Julio.** Va a Cegid: ¿qué campo lleva el nombre de
-la base de datos (`nombre_bd` con el `DataBaseName` de la sesión que
-funciona), y cuál es el `cod_empresa` de Foodint para este usuario?
+### Cómo se lee
 
-### Lo que contará cuando entre
+- **Páginas de 200 como máximo**, aunque se pida más con `$top`.
+- **`$skip` cuenta páginas, no elementos.** Con `$top=2&$skip=2` llega el 5.º,
+  y Diez dice «página 3».
+  - Con `$skip` en elementos se pedía una página que no existe.
+  - **Diez devuelve entonces la primera otra vez, sin avisar.** El lector
+    ahora lo detecta y para.
+- `$filter` funciona: `Fecha ge … and Fecha le …` devuelve todo dentro del
+  mes, y `Ejercicio eq '2025'` todo de 2025.
+- `$orderby` y `$select` también funcionan.
+- `/api/apuntes/all` acepta fechas en formato `AAAAMMDD`, y no ISO ni
+  `dd/mm/aaaa` (400).
+- **Límites:** ningún 429 y ninguna cabecera de límite en 341 peticiones.
 
-El modo `lectura` (`scripts/conta/diez/lectura.mjs`) cuenta lo siguiente, y
-**solo cuenta**:
+### Asientos, completos
 
-- **Paginación**: primero OData. Mide que `$top` corta, que `$skip` salta,
-  que `$orderby` ordena y que `$select` elige campos, y el `$top` mayor que
-  acepta. Si OData no se aplica, prueba 6 nombres de página y 6 de tamaño.
-- **Cada mes** se pide con `$filter=Fecha ge … and Fecha le …`, comprobando
-  que todo lo devuelto cae en el mes. Si no, con `/all` y fechas.
-- **Catálogos**: series (solo los códigos), subcuentas (por longitud, por
-  grupo y por tipo), clientes, proveedores, vencimientos, actividades y los
-  cuatro catálogos de analítica. Solo cuántos.
-- **El resumen que da Diez** por ejercicio y tipo de introducción.
-- **Asientos, mes a mes de 2023-01 a 2026-09**: por ejercicio y serie, líneas,
-  tipo de asiento, descuadrados al céntimo, fechas fuera del mes pedido,
-  repetidos entre meses, líneas con tercero, justificante o contrapartida, el
-  largo máximo de las descripciones y la analítica que trae el listado.
-- **Analítica por asiento**, en una muestra de hasta 25 por ejercicio,
-  preguntando a `/api/analitica/asiento/…`.
-- **Facturas, mes a mes**: por ejercicio y serie, `TipoFactura`,
-  simplificadas, con vencimientos y con analítica. **Adjuntos** en una muestra
-  de hasta 25 por ejercicio: cuántos tienen fichero, tamaño medio y tipo. Se
-  descargan para medirlos y no se guardan.
-- **Sumas y saldos** con 7 valores de `periodo` sobre 2025: forma, si las filas
-  son cuentas o líneas, y si cuadran.
-- **Límites**: peticiones, KB, tiempos por ruta, respuestas 429 y cabeceras de
-  límite.
+Leídos **14.937 de 14.937** (enero 2023 – septiembre 2026). Cada mes cuadra
+con el total que da Diez. 2026 tiene 4 más en su ejercicio, que son de
+octubre.
 
-**Lo que nunca sale**: importes, nombres, NIF, conceptos, códigos de terceros,
-el token o los datos de quien entra. Los mensajes de error se imprimen con las
-cifras cambiadas por 9.
+| Ejercicio | Asientos | Líneas | Por serie |
+|---|---:|---:|---|
+| 2023 (desde octubre) | 929 | 2.794 | 1: 568 · 2: 158 · 3: 153 · 4: 45 · 9: 5 |
+| 2024 | 2.563 | 6.474 | 1: 196 · 2: 778 · 3: 1.544 · 4: 8 · 9: 37 |
+| 2025 | 4.222 | 10.704 | 1: 279 · 2: 1.281 · 3: 725 · 4: 1.926 · 9: 11 |
+| 2026 (ene–sep) | 7.223 | 19.483 | 1: 1.234 · 2: 2.852 · 4: 3.134 · 9: 3 |
+| **Total** | **14.937** | **39.455** | |
 
-**El freno**: la función que habla con Diez lanza ante cualquier método que no
-sea GET, salvo `POST /token`. Está probado contra un Diez falso local: 51 peticiones, 50 GET y 1 `POST /token`.
+- **La contabilidad empieza en octubre de 2023**: de enero a septiembre de
+  2023 hay 0 asientos.
+- **Descuadrados al céntimo: 0** de 14.937. Hay 1 asiento sin líneas.
+- **Series: 1, 2, 3, 4 y 9**, todas numéricas. Son las mismas cinco que
+  Folvy tiene en su CHECK.
+- Por tipo de asiento: 0 → 7.580 · 1 → 2.277 · 2 → 5.069 · otros 11.
+- En las líneas:
+  - con tercero: 0;
+  - con justificante: 0;
+  - **con contrapartida: 38.894 de 39.455** (98,6 %).
+- **La descripción más larga tiene 68 caracteres**, en el asiento y en la
+  línea. Es el margen para la referencia de Folvy de la opción B.
+- `/api/apuntes/resumen` **cuenta líneas, no asientos**. Su «Número» sumado
+  por ejercicio da exactamente las líneas de arriba: 2.794 · 6.474 · 19.483.
 
-### Cómo se crea el secreto (Julio, en GitHub; nunca en el chat)
+### Facturas, completas
 
-1. GitHub → `Llorente29/llorente29-app` → **Settings › Secrets and variables ›
-   Actions › New repository secret**.
-2. Nombre: **`DIEZ_LECTURA`**.
-3. Valor: un JSON en una sola línea con **los nombres exactos que pide
-   apiCON**. Los valores son los tuyos; aquí van `…`:
-   ```json
-   {"grant_type":"password","client_id":"…","client_secret":"…","username":"…","password":"…","cod_empresa":"…"}
-   ```
-   `cod_empresa` es la empresa **real** de Foodint, como texto y tal como lo
-   escribe Diez, con los ceros delante si los lleva (colección de Cegid,
-   12/10). Es solo lectura y la empresa de pruebas no se usa aquí.
-4. Avisa con «secreto creado» y yo lanzo la lectura empujando un commit que
-   empieza por `[lectura]`. El workflow **enmascara cada valor** antes de
-   correr, y lo único que escribe del secreto son **los nombres de sus
-   claves**.
+**7.346 leídas de 7.346.** Las facturas son **los asientos de las series 1 y
+2**: cuadran serie a serie con la tabla de arriba.
 
-*Cuando el workflow esté en `main` también se podrá lanzar a mano
-(`workflow_dispatch` exige que el fichero esté en la rama por defecto). Para la
-tarea 1 no hace falta.*
+| Ejercicio | Facturas | Serie 1 | Serie 2 |
+|---|---:|---:|---:|
+| 2023 | 726 | 568 | 158 |
+| 2024 | 974 | 196 | 778 |
+| 2025 | 1.560 | 279 | 1.281 |
+| 2026 (ene–sep) | 4.086 | 1.234 | 2.852 |
 
----
+- `TipoFactura`: 1 → 7.330 · 6 → 10 · 7 → 6.
+- `TipoAsiento`: 1 → 2.277 · 2 → 5.069. Es la misma partición que la serie;
+  1 parece «emitida» y 2 «recibida», sin confirmar.
+- Simplificadas: 0 · con vencimientos: 0 · con analítica: 0.
+
+### Analítica: definida, pero sin uso
+
+- El catálogo tiene 5 grupos, 12 subgrupos, 3 de nivel 3 y 0 tablas de
+  reparto.
+- **0 de 14.937 asientos** la llevan en el listado.
+- **0 de 100** en la muestra pedida asiento a asiento (25 por ejercicio).
+- **0 de 7.346** facturas.
+
+→ **Regla 6: se compara por día**, porque Diez no tiene la venta por local.
+
+### Adjuntos: no se pueden contar
+
+`GET /api/facturas/getfile/{ej}/{serie}/{doc}` → **500 en 20 de 20** (5 por
+ejercicio). En el run 7 dio 500 en 98 de 98. Puede que no haya adjuntos o que
+la ruta falle; un 500 no distingue entre las dos cosas. **Pregunta para
+Cegid.**
+
+### Sumas y saldos: no son saldos
+
+`getSumasYsaldos/{periodo}/20250101/20251231`:
+- Con `periodo` 0, 1, 2, 3, 12 o 13 → 0 filas.
+- **Con `periodo` 2025** (es decir, el ejercicio) → 1.776 filas.
+- **Todas llevan `Documento` y `Linea`**: son líneas de asiento, no un saldo
+  por cuenta, tal como hacía temer el modelo del Swagger.
+
+La regla 1 dice «cuadrar al céntimo contra getSumasYsaldos». Con esta forma,
+**el cuadre se hace con los saldos que Folvy calcule de los 39.455 apuntes
+leídos**, y getSumasYsaldos se queda como segunda vara si Cegid explica qué
+devuelve. → **Pregunta 7.**
 
 ## 3. Inventario: qué tiene cada uno que el otro no
 
@@ -318,17 +355,19 @@ tarea 1 no hace falta.*
 
 ---
 
-## 4. Volúmenes (espera al secreto)
+## 4. Volúmenes, medidos
 
-Los da la lectura: asientos y líneas por ejercicio, facturas, adjuntos (con el
-tamaño medio de la muestra), KB por página y tiempo por petición. Con eso:
+| | Cuántos | Datos bajados | Tiempo de Diez |
+|---|---:|---:|---|
+| Asientos (con líneas) | 14.937 · 39.455 líneas | 13,9 MB en 116 peticiones | 5,4 s de media por página de 200 |
+| Facturas (con apuntes) | 7.346 | 24,7 MB en 66 peticiones | 8,9 s de media por página |
+| Subcuentas | 781 | 0,6 MB | 0,4 s |
 
-- **Tamaño del histórico** = líneas × bytes por línea, y facturas × tamaño
-  medio de adjunto, si se traen los adjuntos.
-- **Tiempo de una importación entera** = páginas × tiempo medio, con el
-  límite de peticiones que se observe.
-
----
+- **Traer el histórico entero, octubre 2023 – septiembre 2026, es ~22
+  minutos y ~39 MB por lectura.**
+- **La importación cabe en un solo workflow.** Un mes al día son entre 1 y 8
+  páginas (el mayor, septiembre de 2026, tiene 1.418 asientos).
+- **Adjuntos:** sin medir (ver §2).
 
 ## 5. Preguntas para Julio
 
@@ -340,7 +379,18 @@ Abiertas:
 5. **Serie de las facturas.** `DetalleFactura.Serie` admite 4 caracteres
    (§1b). ¿Las facturas de Folvy van a las series de factura que ya usa
    Foodint en Diez, y `FOLVY` queda solo para asientos?
-6. **`cod_empresa`.** Diez dice «No tiene acceso a la empresa indicada» (§2).
+6. ~~`cod_empresa`~~ Resuelta el 12/10: en Diez cada empresa es una base de
+   datos y se nombra con `nombre_bd` (Llorente29 = C0008, pruebas = C0009,
+   C0001 nunca se toca).
+7. **Sumas y saldos y adjuntos.** `getSumasYsaldos` devuelve líneas, no
+   saldos, y `getfile` da 500 en 20 de 20. Propongo:
+   - cuadrar contra los saldos que calcule Folvy de los apuntes leídos;
+   - preguntar a Cegid qué devuelven las dos rutas.
+
+   Mientras, la regla 1 se mide así.
+8. **Las series de Diez son 1, 2, 3, 4 y 9, todas numéricas.** Que admita
+   `FOLVY` solo lo dirá el asiento de prueba en C0009. Si no lo admite, `8`
+   está libre en C0008, porque no aparece en ningún asiento.
 
 Las cuatro de antes, por si hace falta releerlas
 
