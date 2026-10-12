@@ -117,14 +117,93 @@ fuera del Diez simulado.
 
 ---
 
-## 2. Lo que hay en el Diez de Foodint (espera al secreto)
+## 1b. Lo que preguntó la respuesta 1 (12/10), contestado desde el Swagger
+
+**¿Admite letras la serie?** En el Swagger, sí. **¿Cabe `FOLVY`?** En el
+asiento, sí; en las líneas de factura, no. Así está en el run 4:
+
+| Modelo | `Serie` | Largo máximo |
+|---|---|---|
+| `Serie` (el catálogo, `Codigo`) | string | **5** |
+| `Apunte`, `ApunteSimplificado`, `DetalleApunte` | string | sin declarar |
+| `Factura`, `VencimientoFactura` | string | **5** |
+| `FacturaData` (lo que se manda en `facturas/add`) | string | sin declarar |
+| **`DetalleFactura`** | string | **4** |
+
+- El tipo es texto en todos, así que el `8` no hace falta por el tipo.
+- `FOLVY` cabe en el catálogo y en el asiento.
+- **Las líneas de una factura (`DetalleFactura`) admiten 4 caracteres.**
+- Que el Swagger diga «texto» no prueba que Diez acepte letras al grabar. Lo
+  dicen dos cosas:
+  - la lista de series reales, que saca la lectura;
+  - el asiento único de prueba en la empresa de pruebas.
+
+**Qué pasa con las facturas.** Si las facturas que envía Folvy también van a
+la serie `FOLVY`, sus líneas no caben, y Diez la cortaría o daría error.
+Propuesta:
+- `FOLVY` para los asientos;
+- las facturas en las series de factura que ya use Foodint en Diez, que
+  saldrán en la lectura.
+
+→ **Pregunta 5.**
+
+**`facturas/add` frente a `facturas/addNuevoSistemaSII`.**
+- Las dos reciben **el mismo cuerpo** (`FacturaData`) y devuelven `Factura`.
+- El Swagger no dice nada más de ninguna de las dos (0 textos).
+- La diferencia está en el servidor de Diez y no se puede leer.
+- Por el nombre, la segunda es la de las empresas en el SII (el Suministro
+  Inmediato de Información). **Para una empresa que no está en el SII
+  corresponde `facturas/add`.** Es una deducción por el nombre, no una medida.
+- Se confirma con **una sola factura** en la empresa de pruebas: tiene que
+  aparecer en el libro de IVA de Diez y en el 303 del trimestre. Si no
+  aparece, paro y lo digo.
+
+**La colección de Postman de Cegid no está en el repositorio ni la tengo.**
+- La he buscado en el correo y en Drive, sin resultado.
+- Lo que uso de ella es lo que dice la respuesta 1:
+  - OData (`$filter`, `$top`, `$skip`, `$orderby`, `$select`);
+  - `/token` sin `nombre_bd` y con `cod_empresa` como texto;
+  - https siempre.
+- El ejemplo de `PostFactura` coincide en forma con `FacturaData` del
+  Swagger, que lleva `Apuntes[]`, `Vencimientos[]` y `Analitica[]`.
+- Si el ejemplo tiene algo que el Swagger no declara (un campo, un formato de
+  fecha), lo necesito: **pégalo sin los valores**.
+
+## 2. Lo que hay en el Diez de Foodint (bloqueado: «No tiene acceso a la empresa indicada»)
+
+**Lo que pasó (12/10, runs 4 y 5).** Medido en los runs, no supuesto:
+
+- **https: sí.** `GET /swagger/docs/v1` → 200 por https antes de mandar
+  ninguna credencial. Nada salió sin cifrar. Ninguna redirección se siguió.
+- **El secreto tiene estas claves:** `client_id`, `client_secret`,
+  `cod_empresa`, `grant_type`, `password` y `username`. Son las seis de la
+  colección. `nombre_bd` ni está ni se manda.
+- **`POST /token` → 400** con `error: "Error"` y `error_description:
+  "Error 9 - No tiene acceso a la empresa indicada."`. El número sale como 9
+  porque el lector cambia todas las cifras.
+  - Diez entiende la petición, y la queja **no es de usuario ni de
+    contraseña**: es de la empresa.
+  - O `cod_empresa` no es el código de Foodint tal como lo espera Diez (¿con
+    ceros delante?), o el usuario de la API no tiene acceso a esa empresa.
+- **No se ha insistido.** El run 4 probó dos formatos (formulario y JSON).
+  Desde el run 5, si Diez contesta con un error OAuth no se repite, para no
+  sumar intentos fallidos contra tu usuario.
+
+**Lo que hace falta (Julio):** mirar en Diez el código exacto de la empresa de
+Foodint y si el usuario de la API la tiene dada. Después, corregir
+`cod_empresa` en el secreto `DIEZ_LECTURA`. Con eso, un push que empiece por
+`[lectura]` vuelve a lanzarla.
+
+### Lo que contará cuando entre
 
 El modo `lectura` (`scripts/conta/diez/lectura.mjs`) cuenta lo siguiente, y
 **solo cuenta**:
 
-- **Paginación**: prueba 6 nombres de parámetro de página y 6 de tamaño, y
-  apunta cuál cambia `PaginaActual` o `ElementosPorPagina`. También el tamaño
-  máximo que acepta.
+- **Paginación**: primero OData. Mide que `$top` corta, que `$skip` salta,
+  que `$orderby` ordena y que `$select` elige campos, y el `$top` mayor que
+  acepta. Si OData no se aplica, prueba 6 nombres de página y 6 de tamaño.
+- **Cada mes** se pide con `$filter=Fecha ge … and Fecha le …`, comprobando
+  que todo lo devuelto cae en el mes. Si no, con `/all` y fechas.
 - **Catálogos**: series (solo los códigos), subcuentas (por longitud, por
   grupo y por tipo), clientes, proveedores, vencimientos, actividades y los
   cuatro catálogos de analítica. Solo cuántos.
@@ -159,10 +238,11 @@ sea GET, salvo `POST /token`. Está probado contra un Diez falso local: 51 petic
 3. Valor: un JSON en una sola línea con **los nombres exactos que pide
    apiCON**. Los valores son los tuyos; aquí van `…`:
    ```json
-   {"grant_type":"password","client_id":"…","client_secret":"…","username":"…","password":"…","nombre_bd":"…","cod_empresa":0}
+   {"grant_type":"password","client_id":"…","client_secret":"…","username":"…","password":"…","cod_empresa":"…"}
    ```
-   `cod_empresa` es la empresa **real** de Foodint, sin comillas porque es un
-   número. Es solo lectura y la empresa de pruebas no se usa aquí.
+   `cod_empresa` es la empresa **real** de Foodint, como texto y tal como lo
+   escribe Diez, con los ceros delante si los lleva (colección de Cegid,
+   12/10). Es solo lectura y la empresa de pruebas no se usa aquí.
 4. Avisa con «secreto creado» y yo lanzo la lectura empujando un commit que
    empieza por `[lectura]`. El workflow **enmascara cada valor** antes de
    correr, y lo único que escribe del secreto son **los nombres de sus
@@ -234,6 +314,18 @@ tamaño medio de la muestra), KB por página y tiempo por petición. Con eso:
 ---
 
 ## 5. Preguntas para Julio
+
+**Contestadas en la respuesta 1:** 1 (serie `FOLVY` si admite letras), 2
+(facturas por `facturas/add`), 3 (2023–2025 cerrados, con apertura,
+regularización y cierre de Diez) y 4 (vencimientos, remesas y punteo, fuera).
+Abiertas:
+
+5. **Serie de las facturas.** `DetalleFactura.Serie` admite 4 caracteres
+   (§1b). ¿Las facturas de Folvy van a las series de factura que ya usa
+   Foodint en Diez, y `FOLVY` queda solo para asientos?
+6. **`cod_empresa`.** Diez dice «No tiene acceso a la empresa indicada» (§2).
+
+Las cuatro de antes, por si hace falta releerlas
 
 1. **Serie propia en Diez para lo que envía Folvy** (opción A de §1). ¿La
    creas tú en la empresa de pruebas, y con qué código (máximo 5)? Con un solo
