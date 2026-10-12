@@ -135,10 +135,16 @@ try {
     md(`- \`facturas/factura\`: base ${eur(f.BaseImponible1)} · cuota ${eur(f.CuotaIVA1)} · total ${eur(f.TotalFactura)} · NumeroFactura igual: ${f.NumeroFactura === NUMERO ? 'sí' : 'no'} · Apuntes ${(f.Apuntes as unknown[] | undefined)?.length ?? 0} · Detalles ${(f.Detalles as unknown[] | undefined)?.length ?? 0}`,
       `- Analitica devuelta: ${an.length} · ${an.map((a) => `Grupo \`${a.Grupo ?? '—'}\` Subgrupo \`${a.Subgrupo ?? '—'}\` Nivel3 \`${a.Nivel3 ?? '—'}\` subcuenta ${String(a.Subcuenta ?? '').slice(0, 3)}… importe ${eur(a.ImporteDebe ?? 0)}`).join(' · ') || 'ninguna'}`)
     const igual = an.length === analitica.length && analitica.every((x, i) => String(an[i]?.Grupo ?? '') === String(x.Grupo ?? '') && String(an[i]?.Subgrupo ?? '') === String(x.Subgrupo ?? '') && String(an[i]?.Nivel3 ?? '') === String(x.Nivel3 ?? ''))
-    md(`- **La analítica vuelve igual que se mandó: ${analitica.length ? (igual ? 'sí' : 'no') : 'no se mandó'}**`)
+    md(`- **Por \`facturas/factura\`, la analítica vuelve igual que se mandó: ${analitica.length ? (igual ? 'sí' : 'no') : 'no se mandó'}**`)
+    // Run 1 (12/10): facturas/factura no devuelve la analítica, pero
+    // analitica/asiento contesta una lista. Lo que dice cuenta más.
     try {
       const a2 = await c.get<unknown>(`/api/analitica/asiento/2026/${encodeURIComponent(fd.Serie)}/${doc}`)
-      md(`- \`analitica/asiento\`: ${sinDatos(a2 && typeof a2 === 'object' ? Object.keys(a2) : a2)}`)
+      const filas = (Array.isArray(a2) ? a2 : a2 && typeof a2 === 'object' ? [a2] : []) as Record<string, unknown>[]
+      md(`- \`analitica/asiento\`: ${filas.length} fila(s)`,
+        ...filas.map((a, i) => `  - ${i + 1}: Grupo \`${a.Grupo ?? '—'}\` · Subgrupo \`${a.Subgrupo ?? '—'}\` · Nivel3 \`${a.Nivel3 ?? '—'}\` · TablaReparto \`${a.TablaReparto ?? '—'}\` · TipoImporte ${a.TipoImporte ?? '—'} · subcuenta ${String(a.Subcuenta ?? '').slice(0, 3)}… · debe ${eur(a.ImporteDebe)} · haber ${eur(a.ImporteHaber)} · campos: ${Object.keys(a).join(', ')}`))
+      const igual2 = filas.length === analitica.length && analitica.every((x, i) => String(filas[i]?.Grupo ?? '') === String(x.Grupo ?? '') && String(filas[i]?.Subgrupo ?? '') === String(x.Subgrupo ?? '') && String(filas[i]?.Nivel3 ?? '') === String(x.Nivel3 ?? ''))
+      md(`- **Por \`analitica/asiento\`, la analítica es la que se mandó: ${igual2 ? 'sí' : 'no'}**`)
     } catch (e) { md(`- \`analitica/asiento\`: ${(e as Error).message}`) }
     const oct = await c.facturasDelMes('202610')
     md(`- En el listado de facturas de octubre (libro de IVA): ${oct.some((x) => Number(x.Documento) === doc && String(x.Serie) === fd.Serie) ? 'sí' : 'no'}`,
