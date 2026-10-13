@@ -7,7 +7,10 @@ name: D01 · Lectura con el modelo (facturas inventadas)
 # «factura», y compara lo leído con lo esperado campo a campo
 # (scripts/conta/d01/leer-con-modelo.ts).
 #
-#   · Solo a mano (workflow_dispatch): no se dispara en ningún push.
+#   · Solo a mano: workflow_dispatch (cuando esté en main) o, mientras viva
+#     solo en la rama del D01, un commit cuyo mensaje EMPIECE por
+#     «[leer-con-modelo]» (GitHub no deja lanzar a mano un workflow que aún no
+#     está en la rama por defecto). Cualquier otro push se salta.
 #   · La clave es el secreto ANTHROPIC_API_KEY, que crea Julio en GitHub; nunca
 #     pasa por el chat ni por el repositorio.
 #   · La salida pasa por scripts/conta/salida-segura.mjs: solo aciertos y
@@ -15,6 +18,8 @@ name: D01 · Lectura con el modelo (facturas inventadas)
 #   · No lee producción ni Diez, ni escribe en ninguna base.
 
 on:
+  push:
+    branches: ['conta/d01-recibidas']
   workflow_dispatch:
     inputs:
       facturas:
@@ -35,6 +40,7 @@ permissions:
 
 jobs:
   leer:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[leer-con-modelo]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
