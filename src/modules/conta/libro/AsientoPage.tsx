@@ -30,7 +30,7 @@ import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
 import { estadoDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
 import { guardarDocumento, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
 
-interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null }
+interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
 
 export default function AsientoPage() {
   const { entryId = '' } = useParams()
@@ -45,10 +45,14 @@ export default function AsientoPage() {
     let vivo = true
     Promise.all([leerAsiento(accountId, entryId), cuentasDeApunte(accountId, activa.id), leerCierres(accountId, activa.id)])
       // R15 · Si es de ventas de una plataforma: su documento y su envío a Diez.
-      .then(async ([asiento, cuentas, cierres]) => ({
-        asiento, cuentas, cierres,
-        conDiez: asiento?.origen === 'sales_day' ? (await leerConDiez(accountId, activa.id, [asiento.id])).get(asiento.id) ?? null : null,
-      }))
+      .then(async ([asiento, cuentas, cierres]) => {
+        // Si no se puede leer (p. ej. la base aún sin la 0100 del R15), el asiento se ve igual y se dice por qué falta «Con Diez».
+        let conDiezError: string | null = null
+        const conDiez = asiento?.origen === 'sales_day'
+          ? (await leerConDiez(accountId, activa.id, [asiento.id]).catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() })).get(asiento.id) ?? null
+          : null
+        return { asiento, cuentas, cierres, conDiez, conDiezError }
+      })
       .then((d) => { if (vivo) setR({ clave, datos: d, error: null }) },
         (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
@@ -133,6 +137,7 @@ export default function AsientoPage() {
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      {datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
       {editable && mes.cerrado && (
         <div className="cx-tarjeta cxd-franja" role="status">
           <span><strong>{nombreMes(mesDe(a.fecha))} está {mes.texto.toLowerCase()}</strong> · {mes.apoyo}. No se valida con esa fecha: desbloquéalo desde el libro o descártalo y lo vuelvo a proponer en el primer día abierto.</span>
