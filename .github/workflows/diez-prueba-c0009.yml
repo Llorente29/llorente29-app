@@ -57,7 +57,7 @@ jobs:
           [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
           jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
       - name: R13 · el asiento de Folvy, leído en producción con conta_lectura (solo lectura)
-        if: startsWith(github.event.head_commit.message, '[prueba-c0009:emitida]')
+        if: startsWith(github.event.head_commit.message, '[prueba-c0009:emitida]') || startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]')
         env:
           RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -80,6 +80,12 @@ jobs:
           # El asiento, anclado por su id, su empresa y su cuenta (regla 9).
           PGOPTIONS='-c default_transaction_read_only=on' psql "$RO_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
             select json_build_object('id', e.id, 'estado', e.status, 'fecha', d.sales_day::text, 'location_id', d.location_id, 'channel_id', d.channel_id,
+              -- R14: la empresa y los pedidos del resumen, para el PDF del día.
+              'empresa', (select json_build_object('nombre', c.legal_name, 'nif', c.tax_id) from public.company c where c.id = e.company_id and c.account_id = e.account_id),
+              'pedidos', (select json_agg(json_build_object('hora', to_char(s.sold_at at time zone 'Europe/Madrid', 'HH24:MI'), 'codigo', coalesce(s.platform_order_code, left(s.id::text, 8)),
+                                                            'marca', b2.name, 'total', s.total, 'base', s.taxable_base, 'cuota', s.tax) order by s.sold_at)
+                            from public.sale s left join public.brand b2 on b2.id = s.brand_id and b2.account_id = s.account_id
+                           where s.id = any(d.sale_ids) and s.account_id = e.account_id),
               'lineas', (select json_agg(json_build_object('cuenta', a.code, 'debe', l.debit, 'haber', l.credit, 'marca', b.name, 'tipoIva', t.rate) order by l.position)
                            from public.journal_line l join public.company_account a on a.id = l.company_account_id and a.company_id = e.company_id
                            left join public.brand b on b.id = l.brand_id and b.account_id = e.account_id
@@ -105,6 +111,8 @@ jobs:
             '[prueba-c0009:emitida]'*) S=scripts/conta/diez/prueba-c0009-emitida.ts ;;
             # R14: qué dice el Swagger PÚBLICO de los adjuntos (sin credenciales).
             '[prueba-c0009:adjunto-swagger]'*) S=scripts/conta/diez/adjuntos-swagger.mjs ;;
+            # R14: el PDF del día adjunto a la UBR-FLO-20261001 de la C0009 (facturas/upload) y leído de vuelta.
+            '[prueba-c0009:adjunto]'*) S=scripts/conta/diez/prueba-c0009-adjunto.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac

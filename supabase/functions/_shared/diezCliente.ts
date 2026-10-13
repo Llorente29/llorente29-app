@@ -139,7 +139,8 @@ type Paginada<T> = { Datos: T[]; ResultadosTotales?: number; PaginaActual?: numb
 // Las únicas rutas que se pueden escribir, y con qué método.
 // C04b R5: y el alta de una subcuenta que Diez no tiene (con el mismo código y
 // nombre que en Folvy), antes de enviar el asiento que la usa.
-const ESCRITURAS: Record<string, 'POST'> = { '/api/apuntes/add': 'POST', '/api/facturas/add': 'POST', '/api/subcuentas/add': 'POST' }
+// C04b R14: y el documento (PDF) de una factura ya dada de alta (facturas/upload, DatosDocumento).
+const ESCRITURAS: Record<string, 'POST'> = { '/api/apuntes/add': 'POST', '/api/facturas/add': 'POST', '/api/subcuentas/add': 'POST', '/api/facturas/upload': 'POST' }
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const esLocal = (b: string) => /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(b)
@@ -338,6 +339,18 @@ export class ClienteDiez {
     const r = await this.llamar('POST', '/api/subcuentas/add', sc)
     if (r.status !== 200) throw new ErrorDiez(`subcuentas/add → ${r.status}`, r.status, r.json)
     return r.json
+  }
+  /**
+   * C04b R14 · Adjunta un documento (el PDF) a una factura que ya está en Diez:
+   * POST /api/facturas/upload con DatosDocumento (Archivo en base64). Devuelve
+   * el código y el cuerpo tal cual, sin lanzar: quien llama decide.
+   */
+  async adjuntarDocumentoFactura(d: { Ejercicio: string; Serie: string; Documento: number; NombreArchivo: string; Archivo: string }): Promise<{ status: number; json: unknown }> {
+    return this.llamar('POST', '/api/facturas/upload', d)
+  }
+  /** C04b R14 · El documento de una factura (getfile): el código y el cuerpo tal cual. */
+  async documentoDeFactura(ejercicio: string, serie: string, documento: number): Promise<{ status: number; json: unknown }> {
+    return this.llamar('GET', `/api/facturas/getfile/${encodeURIComponent(ejercicio)}/${encodeURIComponent(serie)}/${documento}`)
   }
   async enviarFactura(fd: FacturaData): Promise<Factura> {
     const r = await this.llamar('POST', '/api/facturas/add', fd)
