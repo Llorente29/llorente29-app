@@ -1,0 +1,73 @@
+/* src/marca/entrar.css
+ *
+ * La entrada con marca (maqueta N18 «Entrar», C06). Estilo nuevo: Geist, tinta
+ * #0E1A2B (nunca negro), el azul de acción #2F5BFF y la menta #E3FBF2. Todo
+ * cuelga de `.mx-entrar`: fuera de aquí no existe.
+ */
+
+.mx-entrar {
+  --mx-tinta: #0E1A2B;
+  --mx-apoyo: #5B6678;
+  --mx-azul: #2F5BFF;
+  --mx-borde: #C9D0DC;
+  --mx-menta: #E3FBF2;
+  --mx-menta-borde: #B9EFD8;
+  --mx-verde: #0B7A55;
+  --mx-verde-texto: #1F4B3C;
+  --mx-ambar-suave: #FFF1DC;
+  --mx-ambar: #8A4B00;
+  min-height: 100vh;
+  display: flex;
+  background: #FFFFFF;
+  color: var(--mx-tinta);
+  font-family: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
+}
+.mx-entrar *, .mx-entrar *::before, .mx-entrar *::after { box-sizing: border-box; }
+.mx-entrar a { color: var(--mx-azul); }
+.mx-entrar button:focus-visible, .mx-entrar a:focus-visible, .mx-entrar input:focus-visible { outline: 3px solid var(--mx-azul); outline-offset: 2px; }
+
+.mx-izquierda {
+  flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 32px; padding: 56px 64px;
+  background: radial-gradient(700px 500px at 10% 110%, #EAF0FF 0%, rgba(234, 240, 255, 0) 70%);
+}
+.mx-formulario { display: flex; flex-direction: column; gap: 22px; max-width: 420px; width: 100%; }
+.mx-titulos { display: flex; flex-direction: column; gap: 6px; }
+.mx-titulo { margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -1.2px; line-height: 1.15; }
+.mx-subtitulo { font-size: 16px; color: var(--mx-apoyo); }
+.mx-campo { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+.mx-input {
+  height: 48px; border: 1px solid var(--mx-borde); border-radius: 12px; padding: 0 14px;
+  font-family: inherit; font-size: 16px; color: var(--mx-tinta); background: #FFFFFF; font-weight: 400;
+}
+.mx-boton {
+  height: 48px; padding: 0 16px; border-radius: 12px; border: none; background: var(--mx-azul); color: #FFFFFF;
+  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.mx-boton:disabled { opacity: 0.55; cursor: default; }
+.mx-boton-sec {
+  height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--mx-borde); background: #FFFFFF; color: var(--mx-tinta);
+  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.mx-nota { font-size: 14px; color: var(--mx-apoyo); }
+.mx-enlace { font-weight: 600; background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: var(--mx-azul); text-decoration: underline; cursor: pointer; }
+.mx-pie { font-size: 13px; color: var(--mx-apoyo); }
+.mx-pie a { color: var(--mx-apoyo); }
+.mx-fallo { background: var(--mx-ambar-suave); color: var(--mx-ambar); border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+.mx-hecho { background: var(--mx-menta); color: var(--mx-verde); border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+
+.mx-derecha {
+  width: 560px; flex-shrink: 0; background: var(--mx-menta); border-left: 1px solid var(--mx-menta-borde);
+  display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: 56px;
+}
+.mx-antetitulo { font-size: 13px; font-weight: 700; letter-spacing: 0.8px; color: var(--mx-verde); }
+.mx-lema { font-size: 26px; font-weight: 600; letter-spacing: -0.8px; line-height: 1.25; }
+.mx-frases { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 16px; color: var(--mx-verde-texto); }
+
+/* Móvil: una columna; lo de dentro debajo, más corto. */
+@media (max-width: 900px) {
+  .mx-entrar { flex-direction: column; }
+  .mx-izquierda { padding: 32px 20px 28px; gap: 28px; }
+  .mx-titulo { font-size: 30px; }
+  .mx-derecha { width: auto; border-left: none; border-top: 1px solid var(--mx-menta-borde); padding: 28px 20px 36px; }
+  .mx-lema { font-size: 22px; }
+}

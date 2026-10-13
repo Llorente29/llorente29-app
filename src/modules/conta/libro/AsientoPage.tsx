@@ -26,6 +26,7 @@ import {
   anular, cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
 } from '@/modules/conta/services/diarioService'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
+import { MARCA } from '../cuenta/marca'
 
 interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[] }
 
@@ -95,7 +96,7 @@ export default function AsientoPage() {
           <h1 className="cxp-nombre">{a.concepto}</h1>
           <div className="cxd-chips">
             {a.estado === 'propuesto' && a.confianza
-              ? <Chip tono={a.confianza === 'seguro' ? 'ia' : 'ambar'}>Propuesto por Folvy · {NOMBRE_CONFIANZA[a.confianza]}</Chip>
+              ? <Chip tono={a.confianza === 'seguro' ? 'ia' : 'ambar'}>{MARCA.id === 'folvy' ? 'Propuesto por Folvy' : 'Propuesto automáticamente'} · {NOMBRE_CONFIANZA[a.confianza]}</Chip>
               : <TonoChip tono={e.tono}>{e.texto}</TonoChip>}
             <Chip>Serie {NOMBRE_SERIE[a.serie]}</Chip>
             <Chip>Fecha {fechaLarga(a.fecha)}</Chip>

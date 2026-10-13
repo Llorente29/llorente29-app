@@ -22,6 +22,7 @@ import { prepararCierre, sumas, type AsientoCierre, type SaldoACerrar } from '@/
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { cerrarMes, leerCierres, reabrirMes } from '@/modules/conta/services/diarioService'
 import { cerrarEjercicio, cuenta129, prepararCierreEnBase, reabrirEjercicio, saldosCuentas, type EjercicioLibros } from '@/modules/conta/services/librosService'
+import { MARCA } from '../cuenta/marca'
 
 const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -60,7 +61,7 @@ export function Ejercicios() {
             )
           })}</tbody>
         </table>
-        <p className="cxl-pie">Un ejercicio traído de otro programa se enseña tal cual, con su cierre de allí: Folvy no lo recalcula ni lo reabre.</p>
+        <p className="cxl-pie">Un ejercicio traído de otro programa se enseña tal cual, con su cierre de allí: {MARCA.nombre} no lo recalcula ni lo reabre.</p>
       </div>
     </section>
   )
@@ -207,7 +208,7 @@ export function CierreEjercicio() {
       <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cierre' }]} /><h2>Cierre del ejercicio {e.code}</h2></div></div>
       <Guardado texto={hecho} />
       {error && <p className="cxl-sin-sitio" role="alert">{error}</p>}
-      {traido && <div className="cx-tarjeta"><Vacio titulo={`El ejercicio ${e.code} es traído.`} explicacion="Se enseña tal cual vino, con su cierre de allí. Folvy no lo recalcula ni lo reabre." /></div>}
+      {traido && <div className="cx-tarjeta"><Vacio titulo={`El ejercicio ${e.code} es traído.`} explicacion={`Se enseña tal cual vino, con su cierre de allí. ${MARCA.nombre} no lo recalcula ni lo reabre.`} /></div>}
       {!traido && d.error && <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />}
       {!traido && !d.datos && !d.error && <div className="cx-tarjeta" aria-busy="true">{[0, 1].map((i) => <Hueso key={i} alto={48} />)}</div>}
       {!traido && d.datos && (
@@ -224,7 +225,7 @@ export function CierreEjercicio() {
           {plan?.error && <p className="cxl-sin-sitio" role="alert">{plan.error}</p>}
           {plan?.ok && e.estado !== 'closed' && (
             <div className="cx-tarjeta">
-              <h3 className="cxl-subtitulo">Lo que Folvy propone</h3>
+              <h3 className="cxl-subtitulo">Lo que {MARCA.nombre} propone</h3>
               {plan.ok.regularizacion
                 ? <p>Resultado del ejercicio: <strong>{eurosExactos(plan.ok.resultado)}</strong> ({plan.ok.resultado >= 0 ? 'beneficio' : 'pérdida'}), a la {d.datos.c129}.</p>
                 : <p>La regularización ya está validada: gastos e ingresos están a cero y el resultado está en la {d.datos.c129}.</p>}

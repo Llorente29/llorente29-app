@@ -14,6 +14,9 @@
 //   - LogoSquare: tile cuadrado con el anillo, para avatares / app icons /
 //     sidebars compactas.
 
+import { CON_MARCA } from '../marca/marca'
+import { LogoMarca } from '../marca/PiezasMarca'
+
 const GREEN = '#1F9D6B'   // punto de margen (constante en ambas variantes)
 const INK = '#15171A'     // tinta (fondos claros)
 
@@ -30,7 +33,11 @@ const SIZES = {
   xl: 'h-24',
 }
 
+// C06: con una marca propia (dominio o ?marca= fuera de producción), su logo.
+const LADO_MARCA = { sm: 28, md: 36, lg: 44, xl: 56 }
+
 export default function Logo({ size = 'md', variant = 'light', className = '' }: LogoProps) {
+  if (CON_MARCA) return <LogoMarca lado={LADO_MARCA[size]} className={className.replace(/\[&>img\]:h-\d+/g, '')} />
   const heightClass = SIZES[size]
   const ink = variant === 'dark' ? '#FFFFFF' : INK
 

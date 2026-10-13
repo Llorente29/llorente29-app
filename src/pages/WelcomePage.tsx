@@ -52,6 +52,8 @@ import {
   PASSWORD_REGEX,
   validatePassword,
 } from '../lib/passwordPolicy'
+import { MARCA } from '../marca/marca'
+import { PieEntrada } from '../marca/PiezasMarca'
 
 type FormState = 'idle' | 'submitting' | 'error'
 
@@ -371,14 +373,14 @@ export default function WelcomePage() {
               />
               <span>
                 Acepto los{' '}
-                <a href="#" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
+                <a href={MARCA.avisoLegal ?? '#'} className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
                   Términos y Condiciones
                 </a>
                 {' '}y la{' '}
-                <a href="#" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
+                <a href={MARCA.privacidad ?? '#'} className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
                   Política de Privacidad
                 </a>
-                {' '}de Folvy.
+                {' '}de {MARCA.nombre}.
               </span>
             </label>
 
@@ -405,9 +407,7 @@ export default function WelcomePage() {
         </div>
 
         {/* Pie */}
-        <p className="text-center text-xs text-text-secondary mt-4">
-          Folvy · Restauración Profesional
-        </p>
+        <PieEntrada />
       </div>
     </div>
   )

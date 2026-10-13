@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Microfono } from '@/modules/conta/ui/Icono'
 import { DURACION_MUY_PRONTO_MS, TEXTO_MUY_PRONTO } from '@/modules/conta/marco/muyPronto'
+import { MARCA } from '../cuenta/marca'
 
 function useMuyPronto() {
   const [visible, setVisible] = useState(false)
@@ -44,12 +45,12 @@ export function BarraPregunta({ ejemplo }: { ejemplo: string }) {
   }, [])
 
   return (
-    <form className="cx-pregunta" role="search" aria-label="Barra de Folvy"
+    <form className="cx-pregunta" role="search" aria-label={`Barra de ${MARCA.nombre}`}
       onSubmit={(e) => { e.preventDefault(); avisar() }}>
       <Aviso visible={visible} />
       <div className="cx-pregunta-barra">
         <span className="cx-pregunta-punto" aria-hidden="true" />
-        <label htmlFor="cx-pregunta" className="cx-oculto">Pregunta a Folvy</label>
+        <label htmlFor="cx-pregunta" className="cx-oculto">Pregunta a {MARCA.nombre}</label>
         <input id="cx-pregunta" ref={entrada} type="text" className="cx-pregunta-input"
           placeholder={`Pregunta o pide algo. «${ejemplo}»`} autoComplete="off" />
         <span className="cx-tecla" aria-hidden="true">Ctrl K</span>
@@ -67,7 +68,7 @@ export function BotonIAMovil() {
   return (
     <>
       <Aviso visible={visible} />
-      <button type="button" className="cx-barra-ia" aria-label="Preguntar a Folvy" onClick={avisar}
+      <button type="button" className="cx-barra-ia" aria-label={`Preguntar a ${MARCA.nombre}`} onClick={avisar}
         style={{ color: 'var(--cx-blanco)' }}>
         <Microfono />
       </button>

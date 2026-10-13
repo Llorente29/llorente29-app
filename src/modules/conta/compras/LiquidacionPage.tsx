@@ -30,6 +30,7 @@ import { celdasPdf } from '@/modules/conta/lib/celdasPdf'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
 import { leerLiquidacion, type FacturaLeida, type LiquidacionLeida } from '@/modules/conta/lib/lectorLiquidacionMensual'
 import { rpc, tabla } from '@/modules/conta/services/bd'
+import { MARCA as PRODUCTO } from '../cuenta/marca'
 
 interface Liq {
   id: string; status: string; settlement_ref: string | null; period_from: string; period_to: string
@@ -120,7 +121,7 @@ function NuevaLiquidacion() {
                 setGuardando(true); setFallo(null)
                 try {
                   const id = await rpc<string>('compras_liquidacion_guardar', { p_empresa: activa.id, p_proveedor: proveedor, p_local: local, p_lectura: lectura })
-                  navigate(rutaLiquidacion(id), { state: { aviso: `Guardada la liquidación ${lectura.emitida?.numero ?? ''}: ahora la comparo con lo que sabe Folvy.` } })
+                  navigate(rutaLiquidacion(id), { state: { aviso: `Guardada la liquidación ${lectura.emitida?.numero ?? ''}: ahora la comparo con lo que sabe ${PRODUCTO.nombre}.` } })
                 } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo guardar.') } finally { setGuardando(false) }
               }}>{guardando ? 'Guardando…' : 'Guardar y comparar'}</button>
           </div>
@@ -255,7 +256,7 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
       <TresCifras lectura={lec} saldo={liq.net_settlement == null ? null : Number(liq.net_settlement)} />
 
       <Tarjeta titulo="¿Es verdad lo que dice?">
-        <p className="cx-ayuda" style={{ marginTop: 0 }}>Lo he comparado con lo que sabe Folvy.</p>
+        <p className="cx-ayuda" style={{ marginTop: 0 }}>Lo he comparado con lo que sabe {PRODUCTO.nombre}.</p>
         <Compras c={contraste.compras} liqId={liqId} />
         <Ventas v={contraste.ventas} marcas={contraste.marcas} />
         <Productos p={contraste.productos} total={productos.length} abrir={() => setCasar(true)} />
@@ -351,7 +352,7 @@ function Ventas({ v, marcas }: { v: Contraste['ventas']; marcas: string }) {
         <div className="cxc-tabla" style={{ gridTemplateColumns: 'minmax(0,1.4fr) repeat(3, minmax(0,1fr))' }} role="table" aria-label="Ventas por plataforma">
           <span className="cxc-tabla-cabeza" role="columnheader">Plataforma</span>
           <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Él dice</span>
-          <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Folvy tiene</span>
+          <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">{PRODUCTO.nombre} tiene</span>
           <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Diferencia</span>
           {v.flatMap((x) => [
             <span key={`${x.plataforma}-p`} role="cell">{x.plataforma}</span>,

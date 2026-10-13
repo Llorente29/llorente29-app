@@ -37,6 +37,7 @@ import { euros, eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib
 import {
   anadirPapel, archivarTercero, asegurarCuentaLiquidacion, deshacerFusion, fusionarTerceros, fusionesDe, listarTercerosBase, type Fusion,
 } from '@/modules/conta/services/tercerosService'
+import { MARCA } from '../cuenta/marca'
 
 const CADA: Record<string, string> = { weekly: 'Liquida cada semana', fortnightly: 'Liquida cada 15 días', monthly: 'Liquida cada mes' }
 
@@ -468,7 +469,7 @@ function FacturasVacias() {
     <section className="cx-tarjeta" aria-label="Facturas">
       <h2 className="cx-tarjeta-titulo">Facturas</h2>
       <Vacio titulo="Las facturas llegan con Facturación."
-        explicacion="Folvy aún no emite facturas (encargo F01, con su numeración y Verifactu). Mientras, su ficha guarda los datos fiscales, el cobro y su cuenta para cuando llegue."
+        explicacion={`${MARCA.nombre} aún no emite facturas (encargo F01, con su numeración y Verifactu). Mientras, su ficha guarda los datos fiscales, el cobro y su cuenta para cuando llegue.`}
         accion={<button type="button" className="cx-boton-sec" onClick={() => setVentana('nueva_factura')}>Pedir factura</button>} />
       <VentanaAccion ventana={ventana} cerrar={() => setVentana(null)} />
     </section>

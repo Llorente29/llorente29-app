@@ -45,6 +45,8 @@ import {
   PASSWORD_REGEX,
   validatePassword,
 } from '../lib/passwordPolicy'
+import { PieEntrada } from '../marca/PiezasMarca'
+import { supabase } from '../lib/supabase'
 
 type FormState = 'idle' | 'submitting' | 'error'
 
@@ -66,7 +68,9 @@ export default function ResetPasswordConfirmPage() {
   const [initialHasCode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     const params = new URLSearchParams(window.location.search)
-    return params.has('code') || params.has('error')
+    // C06: el correo de contraseña con marca trae ?token_hash= (generateLink
+    // de conta-contrasena), no ?code=: se canjea abajo con verifyOtp.
+    return params.has('code') || params.has('error') || params.has('token_hash')
   })
 
   // Flag de "estamos esperando que termine el procesamiento PKCE".
@@ -76,6 +80,21 @@ export default function ResetPasswordConfirmPage() {
   const [passwordRepeat, setPasswordRepeat] = useState('')
   const [formState, setFormState] = useState<FormState>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // C06: ?token_hash=…&type=recovery (correo con marca): canjearlo una vez al
+  // montar, como hace WelcomePage. Sin token_hash no hace nada.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tokenHash = params.get('token_hash')
+    if (!tokenHash || !supabase) return
+    let cancelado = false
+    void supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error }) => {
+      if (cancelado) return
+      if (error) { console.error('[ResetPasswordConfirm] verifyOtp falló:', error); setWaitingForPkce(false) }
+      else window.history.replaceState({}, '', window.location.pathname)
+    })
+    return () => { cancelado = true }
+  }, [])
 
   // Timeout de espera PKCE: si tras 3s sigue sin haber sesión y aún
   // estamos esperando, declarar inválido el flow.
@@ -148,9 +167,7 @@ export default function ResetPasswordConfirmPage() {
               </div>
             </div>
           </div>
-          <p className="text-center text-xs text-text-secondary mt-4">
-            Folvy · Restauración Profesional
-          </p>
+          <PieEntrada />
         </div>
       </div>
     )
@@ -319,9 +336,7 @@ export default function ResetPasswordConfirmPage() {
         </div>
 
         {/* Pie */}
-        <p className="text-center text-xs text-text-secondary mt-4">
-          Folvy · Restauración Profesional
-        </p>
+        <PieEntrada />
       </div>
     </div>
   )

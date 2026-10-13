@@ -33,6 +33,7 @@ import { propuestasDelPlan } from '@/modules/conta/lib/propuestasPlan'
 import { nombreCorto } from '@/modules/conta/lib/importarPlan'
 import { TraerPlan } from '@/modules/conta/plan/TraerPlan'
 import { DeshacerTraido } from '@/modules/conta/plan/DeshacerTraido'
+import { MARCA } from '../cuenta/marca'
 
 const GRUPOS: Record<number, string> = {
   1: 'Financiación básica', 2: 'Inmovilizado', 3: 'Existencias', 4: 'Acreedores y deudores', 5: 'Cuentas financieras',
@@ -51,7 +52,7 @@ function Activar({ p }: { p: DatosPlan }) {
     <section className="cx-tarjeta cx-apartado" aria-labelledby="activar-titulo">
       <h2 id="activar-titulo" className="cx-tarjeta-titulo">Activar el plan contable</h2>
       <p className="cx-ayuda">
-        Folvy copia las cuentas del plan de {p.plan === 'pymes' ? 'pymes' : 'general'} (las del BOE, con su título oficial) con {p.digitos} dígitos,
+        {MARCA.nombre} copia las cuentas del plan de {p.plan === 'pymes' ? 'pymes' : 'general'} (las del BOE, con su título oficial) con {p.digitos} dígitos,
         y crea las subcuentas que ya se pueden crear: las del IVA por cada tipo, una por cada banco y una por cada proveedor
         ({p.proveedores.length} {p.proveedores.length === 1 ? 'proveedor' : 'proveedores'}, {p.bancos.length} {p.bancos.length === 1 ? 'banco' : 'bancos'}).
         Los que te venden mercancía van a 400 y los que te prestan servicios, a 410.

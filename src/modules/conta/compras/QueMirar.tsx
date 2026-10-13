@@ -22,6 +22,7 @@ import {
 } from '@/modules/conta/services/comprasService'
 import { guardarFicha, listarProveedores } from '@/modules/conta/services/proveedorService'
 import { VerPapel } from '@/modules/conta/compras/VerPapel'
+import { MARCA } from '../cuenta/marca'
 
 type Hecho = (frase: string) => void
 
@@ -309,7 +310,7 @@ function FilaOtra({ f, hecho, subir }: { f: Extract<FilaAMirar, { tipo: 'otra' }
     frase = `${n === 1 ? 'La factura' : `${n} facturas`} de ${prov} ya ${n === 1 ? 'estaba registrada' : 'estaban registradas'}: se ${n === 1 ? 'ha' : 'han'} enlazado a la que había, sin crear otra.`
     porque = 'Mira que de verdad es la misma; si lo es, déjalo así.'
   } else {
-    frase = `Folvy no pudo decidir qué hacer con ${n === 1 ? 'una recepción' : `${n} recepciones`} de ${prov}.`
+    frase = `${MARCA.nombre} no pudo decidir qué hacer con ${n === 1 ? 'una recepción' : `${n} recepciones`} de ${prov}.`
     porque = p0.error ? `El error: ${p0.error}` : undefined
     principal = <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void hacer(async () => {
       let ok = 0
@@ -337,7 +338,7 @@ function FilaSinCamino({ rs, hecho }: { rs: readonly SinCamino[]; hecho: Hecho }
   return (
     <div className="cxc-cosa">
       <div className="cxc-cosa-texto">
-        <span className="cxc-cosa-frase">{n === 1 ? 'Una recepción se confirmó' : `${n} recepciones se confirmaron`} antes de que Folvy mirara cada papel: no sé si {n === 1 ? 'espera' : 'esperan'} factura, si ya la {n === 1 ? 'trajo' : 'trajeron'} o si {n === 1 ? 'es' : 'son'} del socio.</span>
+        <span className="cxc-cosa-frase">{n === 1 ? 'Una recepción se confirmó' : `${n} recepciones se confirmaron`} antes de que {MARCA.nombre} mirara cada papel: no sé si {n === 1 ? 'espera' : 'esperan'} factura, si ya la {n === 1 ? 'trajo' : 'trajeron'} o si {n === 1 ? 'es' : 'son'} del socio.</span>
         <span className="cxc-cosa-apoyo">{[provs.length === 1 ? provs[0] : `${provs.length} proveedores`, rangoFechas(rs.map((r) => r.fecha))].join(' · ')}</span>
         <span className="cxc-cosa-porque">Leo su papel y su ficha, y cada una va a su sitio; lo que no se pueda decidir solo, vuelve aquí como pregunta.</span>
         <details className="cxc-papeles">

@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { nombreCorto } from '@/modules/conta/lib/importarPlan'
 import { deshacerImportacion, type Importacion } from '@/modules/conta/services/importarService'
+import { MARCA } from '../cuenta/marca'
 
 /** alDeshacer: lo que se ha hecho, en una frase; quien lo contiene lo enseña (este botón desaparece al recargar). */
 export function DeshacerTraido({ importacion, alDeshacer }: { importacion: Importacion; alDeshacer: (frase: string) => void }) {
@@ -24,7 +25,7 @@ export function DeshacerTraido({ importacion, alDeshacer }: { importacion: Impor
           .then((x) => {
             // x.cuentas son TODAS las que se quitan (las del programa, y las del BOE y de tus bancos que puso Folvy al traerlo).
             const suyas = importacion.resultado?.cuentas
-            const de = suyas !== undefined ? ` (las ${suyas} de ${nombreCorto(importacion.programa)} y ${x.cuentas - suyas} que puso Folvy)` : ''
+            const de = suyas !== undefined ? ` (las ${suyas} de ${nombreCorto(importacion.programa)} y ${x.cuentas - suyas} que puso ${MARCA.nombre})` : ''
             alDeshacer(`Deshecho el plan traído: se han quitado ${x.cuentas} cuentas${de} y ${x.fichas} ${x.fichas === 1 ? 'ficha nueva' : 'fichas nuevas'}. El plan está sin activar: puedes volver a traerlo.`)
           })
           .catch((e) => setFallo(e instanceof Error ? e.message : String(e)))

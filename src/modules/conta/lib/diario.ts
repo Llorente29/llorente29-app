@@ -11,6 +11,8 @@
 // también lo anulado, y cada filtro dice cuántos tiene.
 
 import { euros } from '@/modules/conta/lib/formato'
+import { CON_MARCA } from '../cuenta/marca'
+import { esFirmaAutomatica } from './autor'
 import { NOMBRE_SERIE, cuadre, red2, type Confianza, type OrigenAsiento, type Razon, type Serie } from '@/modules/conta/lib/libro'
 
 export type EstadoAsiento = 'propuesto' | 'borrador' | 'validado' | 'anulado'
@@ -54,6 +56,8 @@ export interface AsientoDiario {
   creadoPor: string | null
   creadoEn: string
   validadoPor: string | null
+  /** Lo validó un escritor automático (no una persona): ver lib/autor.ts. */
+  validadoAutomatico?: boolean
   validadoEn: string | null
   anuladoPor: string | null
   anuladoEn: string | null
@@ -133,8 +137,17 @@ export function filtrar(asientos: readonly AsientoDiario[], f: FiltroDiario): As
 
 export type TonoEstado = 'ambar' | 'verde' | 'azul' | 'neutro' | 'gris'
 
-/** ¿Lo validó Folvy solo? (la opción de la empresa para los Seguros de ventas del día) */
-export const hechoPorFolvy = (a: Pick<AsientoDiario, 'validadoPor'>): boolean => (a.validadoPor ?? '').startsWith('Folvy')
+/**
+ * ¿Lo validó lo automático, sin una persona? (la opción de la empresa para los
+ * Seguros de ventas del día). Mira el CAMPO; si una fila llega sin él (las de
+ * antes del C06 en las pruebas), lo saca de la firma guardada (lib/autor.ts).
+ */
+export const hechoAutomatico = (a: Pick<AsientoDiario, 'validadoPor' | 'validadoAutomatico'>): boolean =>
+  a.validadoAutomatico ?? esFirmaAutomatica(a.validadoPor)
+
+/** Cómo se dice lo automático: «Hecho por Folvy»; con una marca propia, «Automático». */
+const HECHO_AUTOMATICO = CON_MARCA ? 'Automático' : 'Hecho por Folvy'
+const PROPUESTOS_AUTOMATICOS = CON_MARCA ? 'propuestos automáticamente' : 'propuestos por Folvy'
 
 export function estadoDe(a: AsientoDiario): { texto: string; tono: TonoEstado } {
   if (a.estado === 'propuesto') return { texto: 'Para revisar', tono: 'ambar' }
@@ -142,7 +155,7 @@ export function estadoDe(a: AsientoDiario): { texto: string; tono: TonoEstado } 
   if (a.estado === 'anulado') return { texto: 'Anulado', tono: 'gris' }
   if (a.origen === 'reversal') return { texto: 'Contraasiento', tono: 'gris' }
   if (a.origen === 'migrated') return { texto: 'Traído', tono: 'neutro' }
-  if (hechoPorFolvy(a)) return { texto: 'Hecho por Folvy', tono: 'verde' }
+  if (hechoAutomatico(a)) return { texto: HECHO_AUTOMATICO, tono: 'verde' }
   return { texto: 'Validado', tono: 'azul' }
 }
 
@@ -261,7 +274,7 @@ export function cifras(asientos: readonly AsientoDiario[], mes: string, cierres:
   resultado: { total: number; porLocal: { nombre: string; resultado: number }[] } | null): Cifras {
   const delMes = asientos.filter((a) => mesDe(a.fecha) === mes && (a.estado === 'validado' || a.estado === 'anulado'))
   const revisar = asientos.filter((a) => a.estado === 'propuesto' || a.estado === 'borrador')
-  const propuestosFolvy = revisar.filter((a) => a.estado === 'propuesto').length
+  const propuestosAuto = revisar.filter((a) => a.estado === 'propuesto').length
   const porOrigen = new Map<string, number>()
   for (const a of delMes) porOrigen.set(a.origen, (porOrigen.get(a.origen) ?? 0) + 1)
   const partes: string[] = []
@@ -277,8 +290,8 @@ export function cifras(asientos: readonly AsientoDiario[], mes: string, cierres:
     asientosMes: delMes.length,
     apoyoAsientos: delMes.length === 0 ? 'aún no hay ninguno en el libro' : partes.length ? partes.join(' · ') : 'en el libro',
     revisar: revisar.length,
-    apoyoRevisar: revisar.length === 0 ? 'nada esperando' : propuestosFolvy === revisar.length ? 'propuestos por Folvy'
-      : `${propuestosFolvy} propuestos por Folvy · ${revisar.length - propuestosFolvy} borradores`,
+    apoyoRevisar: revisar.length === 0 ? 'nada esperando' : propuestosAuto === revisar.length ? PROPUESTOS_AUTOMATICOS
+      : `${propuestosAuto} ${PROPUESTOS_AUTOMATICOS} · ${revisar.length - propuestosAuto} borradores`,
     mes: estadoMes(mes, cierres),
     resultado: resultado ? red2(resultado.total) : null,
     apoyoResultado: !resultado ? 'sin datos' : resultado.porLocal.length === 0 ? 'aún sin ingresos ni gastos'
@@ -293,7 +306,7 @@ export interface HechoYo { asientoId: string; titulo: string; apoyo: string; des
 /** Lo que hizo Folvy: lo que validó solo (con Deshacer, que lo anula) y lo que dejó para revisar (con su porqué). */
 export function loQueHeHechoYo(asientos: readonly AsientoDiario[], max = 5): HechoYo[] {
   const hechos = asientos
-    .filter((a) => (a.estado === 'validado' && hechoPorFolvy(a) && a.origen !== 'reversal') || a.estado === 'propuesto')
+    .filter((a) => (a.estado === 'validado' && hechoAutomatico(a) && a.origen !== 'reversal') || a.estado === 'propuesto')
     .sort((x, y) => (y.validadoEn ?? y.creadoEn).localeCompare(x.validadoEn ?? x.creadoEn))
   return hechos.slice(0, max).map((a) => a.estado === 'validado'
     ? { asientoId: a.id, titulo: `Asenté «${a.concepto}»`, apoyo: a.porque ?? 'Seguro: cuadraba con sus pedidos.', deshacer: true }

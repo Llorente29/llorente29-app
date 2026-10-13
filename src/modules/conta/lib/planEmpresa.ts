@@ -19,6 +19,7 @@
 //   D5 · 430: solo la hoja común (43000000) hasta el C03.
 
 import { DIGITOS_MAXIMOS, DIGITOS_MINIMOS } from '@/modules/conta/lib/pgc'
+import { MARCA } from '../cuenta/marca'
 
 export { DIGITOS_MAXIMOS, DIGITOS_MINIMOS }
 export const DIGITOS_POR_DEFECTO = 8
@@ -302,7 +303,7 @@ export type CambioDePlan =
   | { ok: true; anadir: string[]; elegir: { cuenta: CuentaEmpresa; equivalencia: Equivalencia }[]; aviso: string }
   | { ok: false; bloquean: CuentaEmpresa[]; motivo: string }
 
-export const AVISO_TAMANO = 'Si la empresa puede usar el plan de pymes depende de su tamaño: lo decidís la empresa y su asesor; Folvy no lo decide.'
+export const AVISO_TAMANO = `Si la empresa puede usar el plan de pymes depende de su tamaño: lo decidís la empresa y su asesor; ${MARCA.nombre} no lo decide.`
 
 /**
  * Cambio de plan (D4):

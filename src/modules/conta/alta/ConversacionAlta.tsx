@@ -68,6 +68,7 @@ import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
 import { ivaDeVentas, type ActividadParaIva } from '@/modules/conta/lib/ivaVentas'
 import { codigoIae, ejercicioActual, type DatosEmpresa } from '@/modules/conta/empresa/datosEmpresa'
 import { Buscador } from '@/modules/conta/empresa/ApartadosActividad'
+import { MARCA, CON_MARCA } from '../cuenta/marca'
 
 export type MarcoAlta = 'pantalla' | 'ventana'
 
@@ -615,7 +616,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   return (
     <div className={`cx cx-alta${movil ? ' cx-alta-movil' : ''}`}>
       <header className="cx-alta-cabeza">
-        <span className="cx-alta-logo">folvy</span>
+        <span className="cx-alta-logo">{CON_MARCA ? MARCA.nombre : 'folvy'}</span>
         <div className="cx-alta-cabeza-derecha">
           {movil ? (
             <button type="button" className="cx-alta-cuantos" aria-haspopup="dialog" aria-expanded={hoja}

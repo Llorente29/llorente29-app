@@ -13,12 +13,18 @@
 //      PROPONERLOS en el alta (D2). La empresa es la fuente nueva: si la
 //      persona los cambia, `accounts` no se toca.
 //
+//   4. Si la cuenta es SOLO de contabilidad (C06) → `accounts.product_brand`,
+//      leída de la cuenta que ya carga la plataforma (useFeatureGate). Una
+//      cuenta así no tiene a dónde «volver»: no hay resto de la aplicación.
+//      La marca con que se enseña la pantalla va aparte, en cuenta/marca.ts.
+//
 // Nada de Cocina (recetas, artículos, albaranes, ventas) entra en el módulo
 // por aquí ni por ningún otro sitio. Si mañana se vende solo, se reimplementa
 // este fichero y nada más.
 
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
+import { useFeatureGate } from '@/platform/feature-gate/useFeatureGate'
 import { supabase } from '@/lib/supabase'
 import { mensaje } from '@/modules/conta/services/bd'
 
@@ -30,17 +36,26 @@ export interface CuentaConta {
   userName: string | null
   /** ¿Es administrador de la cuenta? Socios y cargos solo los ve un administrador. */
   esAdmin: boolean
+  /** ¿La cuenta es solo de contabilidad (C06)? Sin Cocina y sin «Volver a…». */
+  soloContabilidad: boolean
+}
+
+/** ¿Es una cuenta solo de contabilidad? La marca la tienen solo las que se dieron de alta así (C06). Pura. */
+export function esCuentaSoloContabilidad(fila: { product_brand?: unknown } | null | undefined): boolean {
+  return typeof fila?.product_brand === 'string' && fila.product_brand !== ''
 }
 
 export function useCuentaConta(): CuentaConta {
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const { authUserId, userProfile } = useApp()
+  const { account } = useFeatureGate()
   return {
     accountId: activeAccountId,
     cargando: accountsLoading,
     userId: authUserId,
     userName: userProfile?.displayName ?? null,
     esAdmin: userProfile?.role === 'admin',
+    soloContabilidad: esCuentaSoloContabilidad(account),
   }
 }
 

@@ -118,3 +118,17 @@ verify_jwt = true
 
 [functions.dosier-track]
 verify_jwt = false
+
+# (13/10) C06 · Contabilidad sola. conta-crear-cuenta: el alta desde el panel de
+# plataforma; su frontera es el JWT de quien la llama, que además tiene que
+# estar ACTIVO en platform_admins (se mira dentro): verify_jwt = true.
+[functions.conta-crear-cuenta]
+verify_jwt = true
+
+# (13/10) C06 · conta-contrasena: «He olvidado la contraseña» desde la entrada
+# de una marca. verify_jwt = FALSE, deliberado: quien la llama no tiene sesión
+# (ha olvidado la contraseña). Su frontera: responde siempre lo mismo, solo
+# manda a personas activas de una cuenta de ESA marca y como mucho uno por
+# minuto (public.conta_contrasena_de_marca, solo service_role).
+[functions.conta-contrasena]
+verify_jwt = false

@@ -9,6 +9,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useApp } from '../context/AppContext'
 import { signOut } from '../services/authService'
+import { MARCA } from '../marca/marca'
 
 const GRACE_PERIOD_DAYS = 7
 
@@ -41,7 +42,7 @@ export default function AccountStatusGate({ children }: { children: ReactNode })
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center max-w-md px-6">
-          <p className="text-2xl font-display font-medium mb-2 text-accent">Folvy</p>
+          <p className="text-2xl font-display font-medium mb-2 text-accent">{MARCA.nombre}</p>
           <p className="text-sm text-text-secondary">
             Esta cuenta no está activa. Cerrando sesión…
           </p>

@@ -19,9 +19,10 @@ import { normalizarNif, tipoEntidadPorNif } from '@/modules/conta/lib/nif'
 import { normalizarIban } from '@/modules/conta/lib/iban'
 import type { Encontrado, Grupo } from '@/modules/conta/alta/actividades'
 import type { PasoAlta } from '@/modules/conta/alta/guion'
+import { MARCA } from '../cuenta/marca'
 
 type Fila = Record<string, unknown>
-const DE_LA_CUENTA = 'De los datos de tu cuenta en Folvy; lo confirmaste en el alta.'
+const DE_LA_CUENTA = `De los datos de tu cuenta en ${MARCA.nombre}; lo confirmaste en el alta.`
 
 export async function crearEmpresa(accountId: string, userId: string | null, nif: string | null): Promise<string> {
   const n = nif ? normalizarNif(nif) : null

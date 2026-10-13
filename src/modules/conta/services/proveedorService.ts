@@ -21,6 +21,8 @@ import type {
   ContactRole, ContactoProveedor, EntityKind, FacturaParaCifras, FichaProveedor, InvoicingFrequency,
   PaymentMethod, TaxIdCheckStatus, TaxIdType, VatRegime,
 } from '@/modules/conta/types'
+import { MARCA } from '../cuenta/marca'
+import { autorVisible } from '@/modules/conta/lib/autor'
 
 type Fila = Record<string, unknown>
 
@@ -90,7 +92,7 @@ export function filaAFicha(r: Fila): FichaProveedor {
     invoicingFrequency: str(r.invoicing_frequency) as InvoicingFrequency | null,
     archivedAt: str(r.archived_at),
     createdAt: str(r.created_at),
-    createdByName: str(r.created_by_name),
+    createdByName: autorVisible(str(r.created_by_name)),
   }
 }
 
@@ -738,7 +740,7 @@ export async function listarHechoPorFolvy(supplierId: string): Promise<HechoPorF
   requireSupabase()
   const { data, error } = await from('supplier_learning_log').select('campo, que, etiqueta, porque, hecho_at, hecho_por_nombre')
     .eq('supplier_id', supplierId).order('hecho_at', { ascending: false }).limit(50)
-  if (error) throw new Error(mensaje('No se pudo leer lo que ha hecho Folvy', error))
+  if (error) throw new Error(mensaje(`No se pudo leer lo que ha hecho ${MARCA.nombre}`, error))
   return ((data as Fila[] | null) ?? []).map((r) => ({
     campo: r.campo as CampoAprendido, que: r.que as HechoPorFolvy['que'], etiqueta: str(r.etiqueta),
     porque: r.porque as string, cuando: r.hecho_at as string, quien: str(r.hecho_por_nombre),

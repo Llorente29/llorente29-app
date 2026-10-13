@@ -100,18 +100,22 @@ jobs:
           with c as (
             update auth.users set encrypted_password = extensions.crypt(:'clave', extensions.gen_salt('bf'))
              where id in ('c01a0000-0000-4000-8000-0000000000a1', 'c01b0000-0000-4000-8000-0000000000b1',
-                          'c01a0000-0000-4000-8000-0000000000a6', 'c01c0000-0000-4000-8000-0000000000c1')
+                          'c01a0000-0000-4000-8000-0000000000a6', 'c01c0000-0000-4000-8000-0000000000c1',
+                          'c0600000-0000-4000-8000-0000000000a1', 'c0600000-0000-4000-8000-0000000000b1')
                and email in ('a.admin@prueba.folvy.test', 'b.admin@prueba.folvy.test', 'a.encargado@prueba.folvy.test',
-                             'c.admin@prueba.folvy.test')
+                             'c.admin@prueba.folvy.test', 'sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test')
             returning 1)
           select count(*) from c;
           SQL
           )
           # Los dos administradores (C01), el encargado de A (C00, tarea 8: RLS de
-          # socios) y el administrador de C, sin empresa (C00, respuesta 3: el alta a pantalla completa).
-          if [ "$(echo "$n" | tr -d '[:space:]')" != "4" ]; then echo "::error::Esperaba 4 usuarios de prueba y he tocado $n."; exit 1; fi
+          # socios), el administrador de C, sin empresa (C00, respuesta 3: el alta a pantalla completa),
+          # y los dos del frente C06 (contabilidad sola: el recorrido y el alta con la marca). Los del
+          # C06 solo existen cuando su semilla está aplicada: hasta entonces se tocan 4.
+          n=$(echo "$n" | tr -d '[:space:]')
+          if [ "$n" != "4" ] && [ "$n" != "6" ]; then echo "::error::Esperaba 4 (o 6, con la semilla del C06) usuarios de prueba y he tocado $n."; exit 1; fi
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
-          echo "Contraseña de un solo uso puesta a los 4 usuarios de prueba."
+          echo "Contraseña de un solo uso puesta a los $n usuarios de prueba."
           # R02: el escenario de reparto, igual en cada ejecución (pedidos vivos de
           # hoy, celdas como las dejó la migración, sin respuestas a Folvy).
           if [ -f supabase/seeds/reparto/seed_r02_e2e.sql ]; then

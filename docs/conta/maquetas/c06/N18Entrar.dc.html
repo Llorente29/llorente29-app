@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>«Marca» · Entrar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5BFF}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #2F5BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; overflow: hidden; position: relative; background: #F5F7FA; color: #0E1A2B; font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif">
+<div style="position: absolute; inset: 0; background: radial-gradient(900px 500px at 85% -10%, #E3FBF2 0%, rgba(227,251,242,0) 70%), radial-gradient(700px 500px at 10% 110%, #EAF0FF 0%, rgba(234,240,255,0) 70%)"></div>
+<div style="display: flex; min-height: 900px; background: #FFFFFF; font-family: Geist, Inter, system-ui, sans-serif; color: #0E1A2B"><div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 56px 64px">
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 44px; height: 44px; border-radius: 14px; background: #2F5BFF; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700">M</span><span style="font-size: 22px; font-weight: 700; letter-spacing: -0.6px">«Marca»</span></div>
+<div style="display: flex; flex-direction: column; gap: 22px; max-width: 420px">
+<div style="display: flex; flex-direction: column; gap: 6px"><h1 style="margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -1.2px">Entra en tu contabilidad</h1><span style="font-size: 16px; color: #5B6678">Te ha invitado tu asesor o tu empresa. Entra con tu correo.</span></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600">Correo<input type="email" value="ana@empresa-ejemplo.es" style="height: 48px; border: 1px solid #C9D0DC; border-radius: 12px; padding: 0 14px; font-family: inherit; font-size: 16px; color: #0E1A2B"></label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600">Contraseña<input type="password" value="••••••••••" style="height: 48px; border: 1px solid #C9D0DC; border-radius: 12px; padding: 0 14px; font-family: inherit; font-size: 16px; color: #0E1A2B"></label>
+<button type="button" style="height: 48px; padding: 0 16px; border-radius: 12px; border: none; background: #2F5BFF; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap">Entrar</button>
+<span style="font-size: 14px; color: #5B6678">¿Primera vez? Abre el enlace de la invitación que te llegó por correo. <a href="#" style="font-weight: 600">He olvidado la contraseña</a></span></div>
+<span style="font-size: 13px; color: #5B6678">«Marca» · contabilidad.«marca».es · Aviso legal · Privacidad</span></div><div style="width: 560px; background: #E3FBF2; display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: 56px; border-left: 1px solid #B9EFD8">
+<span style="font-size: 13px; font-weight: 700; letter-spacing: 0.8px; color: #0B7A55">LO QUE TE ESPERA DENTRO</span>
+<span style="font-size: 26px; font-weight: 600; letter-spacing: -0.8px; line-height: 1.25">Tu contabilidad al día, sin saber de cuentas.</span>
+<ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 16px; color: #1F4B3C"><li>Subes una factura y se apunta sola.</li><li>El banco se casa solo; tú confirmas lo dudoso.</li><li>El IVA de cada trimestre, listo para presentar.</li><li>Trae tu contabilidad de Cegid Diez, Holded, Sage o A3.</li></ul></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

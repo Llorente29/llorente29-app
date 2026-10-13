@@ -23,6 +23,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-
 import { Building2, ChevronDown } from 'lucide-react'
 import AdminHomePage from './pages/AdminHomePage'
 import NuevaCuentaPage from './pages/NuevaCuentaPage'
+import NuevaCuentaContaPage from './pages/NuevaCuentaContaPage'
 import CuentasListPage from './pages/CuentasListPage'
 import CuentaDetallePage from './pages/CuentaDetallePage'
 import FolvyMapPage from './pages/FolvyMapPage'
@@ -57,7 +58,7 @@ function useActiveAccountId(): string | null {
   const location = useLocation()
   const m = location.pathname.match(/^\/_admin\/cuentas\/([^/]+)/)
   const id = m?.[1] ?? null
-  return id && id !== 'nueva' ? id : null
+  return id && id !== 'nueva' && id !== 'nueva-contabilidad' ? id : null
 }
 
 export default function AdminShell() {
@@ -210,6 +211,8 @@ export default function AdminShell() {
           <Route path="/_admin/inicio" element={<AdminHomePage />} />
           <Route path="/_admin/cuentas" element={<CuentasListPage />} />
           <Route path="/_admin/cuentas/nueva" element={<NuevaCuentaPage />} />
+          {/* C06 · Alta de una cuenta solo de contabilidad (sin Cocina). */}
+          <Route path="/_admin/cuentas/nueva-contabilidad" element={<NuevaCuentaContaPage />} />
           <Route path="/_admin/cuentas/:accountId" element={<CuentaDetallePage />} />
           <Route path="/_admin/auditoria" element={<AuditoriaPage />} />
           <Route path="/_admin/staff" element={<StaffPage />} />

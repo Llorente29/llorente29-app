@@ -14,6 +14,7 @@
 
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { SusCuentas } from '@/modules/conta/proveedor/SusCuentas'
+import { MARCA } from '../cuenta/marca'
 
 export default function Contabilidad() {
   const { datos } = useFicha()
@@ -22,7 +23,7 @@ export default function Contabilidad() {
       // La clase va DENTRO: con ella (display:flex) en el propio <details>, la
       // e2e del 05/10 encontró su contenido maquetado con el bloque cerrado (cuenta B).
       <details className="cxp-plegable">
-        <summary><span className="cx-tarjeta-titulo">Contabilidad</span><span className="cx-ayuda">Tu cuenta no lleva la contabilidad en Folvy</span></summary>
+        <summary><span className="cx-tarjeta-titulo">Contabilidad</span><span className="cx-ayuda">Tu cuenta no lleva la contabilidad en {MARCA.nombre}</span></summary>
         <div className="cxp-cuentas"><SusCuentas /></div>
       </details>
     )

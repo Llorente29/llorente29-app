@@ -23,6 +23,7 @@
 //   · Lo seguro viene marcado; solo «decide tú» sin contestar bloquea el paso 3.
 
 import { claveNombre, ibanEnNombre, parecido, type CuentaClasificada, type TerceroLeido } from '@/modules/conta/lib/importarPlan'
+import { MARCA } from '../cuenta/marca'
 
 export type Confianza = 'seguro' | 'probable' | 'decide'
 
@@ -155,7 +156,7 @@ export function proponer(e: EntradaPropuesta): FilaRevision[] {
     const nif = t?.nif ?? null
     const base = { code: c.code, hoja: c.hoja, clase, enOrigen: c.nombreOrigen || c.nombre, nif, opciones: [] as Opcion[], cambia: false }
     if (c.clase === 'serie') {
-      if (clase === 'iva') filas.push({ ...base, decision: { tipo: 'serie' }, confianza: 'seguro', cambia: true, porque: 'en Folvy el IVA va por tipo; el 303 suma igual' })
+      if (clase === 'iva') filas.push({ ...base, decision: { tipo: 'serie' }, confianza: 'seguro', cambia: true, porque: `en ${MARCA.nombre} el IVA va por tipo; el 303 suma igual` })
       continue
     }
     if (c.clase === 'generica') {
