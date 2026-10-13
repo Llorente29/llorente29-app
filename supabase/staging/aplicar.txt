@@ -25,4 +25,15 @@
 # (tests/e2e/conta/b01/motor.spec.ts): tres bancos «B01» de A, Suministros
 # B01 del Norte con dos facturas y una liquidación sin cobrar. Nombres B01,
 # ids fijos, «on conflict do nothing»: no toca nada de lo que miran las otras e2e.
-supabase/seeds/conta/seed_b01_staging.sql
+# Semilla aplicada (run del 13/10).
+# Ahora (respuesta 3, punto 1): las tarjetas de débito.
+#   0110 vuelve (misma firma): bank_casar pone en las líneas el local de la
+#   tarjeta que pagó («local_id» del destino) en vez del de la cuenta.
+#   0140: bank_card, bank_account_iban, card_id y el ticket en bank_movement,
+#   el bucket privado banco-tickets y sus funciones. Todo nuevo.
+#   Las dos pruebas como el administrador de A, con ROLLBACK: la de bancos otra
+#   vez (que el cambio de bank_casar no rompe sus 13 pasos) y la de tarjetas.
+supabase/migrations/20261101T0110_b01_funciones.sql
+supabase/migrations/20261101T0140_b01_tarjetas.sql
+supabase/staging/sql/20261101_b01_bancos_prueba.sql
+supabase/staging/sql/20261101_b01_tarjetas_prueba.sql

@@ -70,6 +70,8 @@ export interface Contrato {
   cuadro: { fecha: string; cuotaCent: number; capitalCent: number; interesesCent: number }[] | null
   cuentaCapital: string | null; cuentaIntereses: string | null; cuentaGasto: string | null
 }
+/** Una tarjeta de débito de la empresa (respuesta 3): de qué cuenta, sus 4 últimos, quién la lleva y su local. */
+export interface Tarjeta { id: string; cuentaId: string; ultimos4: string; titular: string; localId: string | null }
 export interface Regla { id: string; palabras: string; contiene: string; signo: 1 | -1 | null; cuenta: string; terceroId: string | null }
 /** Lo confirmado antes (por la persona, o traído del libro de Diez) por contraparte. */
 export interface Aprendido { contraparte: string; cuenta: string; terceroId: string | null; veces: number }
@@ -98,6 +100,8 @@ export interface Contexto {
   cuentas476: string
   /** La caja (570), para los ingresos de efectivo. */
   cuentaCaja?: string | null
+  /** Las tarjetas de débito dadas de alta (respuesta 3). */
+  tarjetas?: Tarjeta[]
 }
 
 /** El destino tal y como lo recibe bank_casar (20261101T0110). */
@@ -128,6 +132,8 @@ export interface Decision {
   contraparte: string | null
   /** El otro lado de un traspaso: lo casa la decisión de este movimiento; no se hace nada aparte. */
   otroLadoDe: string | null
+  /** La tarjeta que pagó, si es un pago con tarjeta dada de alta. */
+  tarjetaId: string | null
 }
 
 const euros = (c: number) => c / 100
@@ -167,7 +173,7 @@ interface Gastado { facturas: Map<string, number>; liquidaciones: Set<string>; m
 const nuevoGastado = (): Gastado => ({ facturas: new Map(), liquidaciones: new Set(), movimientos: new Set(), asientos: new Set(), saldos: new Map(), pendiente430: new Map() })
 
 function base(m: Movimiento): Omit<Decision, 'confianza' | 'que' | 'porque' | 'destino'> {
-  return { movimientoId: m.id, falta: null, antesDelCorteSinPareja: false, pideTicket: false, reglaId: null, contraparte: contraparte(m.concepto), otroLadoDe: null }
+  return { movimientoId: m.id, falta: null, antesDelCorteSinPareja: false, pideTicket: false, reglaId: null, contraparte: contraparte(m.concepto), otroLadoDe: null, tarjetaId: null }
 }
 
 /** Una decisión para un movimiento, sin gastar nada (para el que se mira suelto). */
@@ -196,7 +202,41 @@ export function conciliar(movs: readonly Movimiento[], ctx: Contexto): Decision[
   return movs.map((m) => porId.get(m.id)!).filter(Boolean)
 }
 
+/** ¿Es un pago con tarjeta? (concepto común 12 de la AEB, o lo dice el concepto) */
+export const esTarjeta = (m: Pick<Movimiento, 'conceptoComun' | 'concepto'>) => m.conceptoComun === '12' || /\bTARJ(ETA)?\b|COMPRA TARJ/i.test(m.concepto)
+
+/**
+ * Los últimos 4 dígitos de la tarjeta que trae el concepto: primero los que van
+ * detrás de una máscara («****1234», «XXXX 1234»); si no, cada grupo suelto de
+ * cuatro cifras, en orden. El motor se queda con el que sea de una tarjeta
+ * dada de alta en esa cuenta.
+ */
+export function digitosTarjeta(texto: string): string[] {
+  const enmascarados = [...texto.matchAll(/[*xX•·]{2,}\s*(\d{4})\b/g)].map((x) => x[1])
+  const sueltos = [...texto.matchAll(/(?:^|[^\d])(\d{4})(?=$|[^\d])/g)].map((x) => x[1])
+  return [...new Set([...enmascarados, ...sueltos])]
+}
+
 function decidirCon(m: Movimiento, ctx: Contexto, g: Gastado): Decision {
+  // Respuesta 3: el pago con una tarjeta de débito dada de alta sabe quién la lleva y de qué local es.
+  if (!esTarjeta(m) || m.importeCent > 0 || m.antesDelCorte) return decidirSin(m, ctx, g)
+  const delBanco = (ctx.tarjetas ?? []).filter((t) => t.cuentaId === m.cuentaId)
+  const digitos = digitosTarjeta(`${m.concepto} ${m.referencias.join(' ')}`)
+  const t = delBanco.find((x) => digitos.includes(x.ultimos4))
+  if (!t) {
+    if (!digitos.length || !delBanco.length) return decidirSin(m, ctx, g)
+    // Hay tarjetas en esta cuenta y esta no es ninguna: ¿de quién es?
+    const d = decidirSin(m, ctx, g)
+    const ultimos = digitos.find((x) => !/^(19|20)\d\d$/.test(x)) ?? digitos[0]
+    return { ...d, confianza: 'duda', falta: 'de quién es la tarjeta', que: `Tarjeta acabada en ${ultimos}`,
+      porque: `Por aclarar: tarjeta acabada en ${ultimos}, ¿de quién es? Dala de alta en Cuentas y extractos y sabré a quién pedirle el ticket.` }
+  }
+  const d = decidirSin(m, ctx, g, t)
+  const destino = d.destino && d.destino.tipo !== 'asiento' && d.destino.tipo !== 'traspaso' && t.localId ? { ...d.destino, local_id: t.localId } : d.destino
+  return { ...d, tarjetaId: t.id, destino }
+}
+
+function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Decision {
   const b = base(m)
   const imp = m.importeCent
   const entra = imp > 0
@@ -429,13 +469,13 @@ function decidirCon(m: Movimiento, ctx: Contexto, g: Gastado): Decision {
   }
 
   // ── 10 · Lo aprendido por contraparte (y la tarjeta) ─────────────────────
-  const tarjeta = m.conceptoComun === '12' || /TARJETA/i.test(m.concepto)
+  const tarjeta = esTarjeta(m)
   const cp = b.contraparte
   const visto = cp ? ctx.aprendido.filter((a) => a.contraparte === cp).sort((x, y) => y.veces - x.veces) : []
   if (visto.length && visto[0].veces >= 2 && (visto.length === 1 || visto[0].veces > visto[1].veces)) {
     const a = visto[0]
     return { ...b, confianza: 'probable', pideTicket: tarjeta && !entra, que: `${nombreCuenta(ctx, a.cuenta)}${tarjeta && !entra ? ' · ¿ticket?' : ''}`,
-      porque: `Las ${a.veces} anteriores de este ${tarjeta ? 'comercio' : 'concepto'} fueron ${nombreCuenta(ctx, a.cuenta)}.${tarjeta && !entra ? ' Falta el ticket.' : ''}`,
+      porque: `Las ${a.veces} anteriores de este ${tarjeta ? 'comercio' : 'concepto'} fueron ${nombreCuenta(ctx, a.cuenta)}.${tarjeta && !entra ? (tj ? ` Tarjeta de ${tj.titular} (···${tj.ultimos4}): pídele el ticket.` : ' Falta el ticket.') : ''}`,
       destino: { tipo: 'cuenta', tercero_id: a.terceroId, concepto: limpiarConcepto(m.concepto), lineas: [{ cuenta: a.cuenta, importe: euros(abs(imp)) }] } }
   }
 
@@ -455,7 +495,9 @@ function decidirCon(m: Movimiento, ctx: Contexto, g: Gastado): Decision {
   }
   if (tarjeta && !entra) {
     return { ...b, confianza: 'duda', pideTicket: true, que: 'Pago con tarjeta · ¿ticket?', falta: 'el ticket',
-      porque: `Pago con tarjeta${cp ? ` en ${cp}` : ''} que aún no conozco: sube la foto del ticket y lo aprendo.`, destino: null }
+      porque: tj
+        ? `Pago con la tarjeta de ${tj.titular} (···${tj.ultimos4})${cp ? ` en ${cp}` : ''} que aún no conozco: pídele el ticket a ${tj.titular} y lo aprendo.`
+        : `Pago con tarjeta${cp ? ` en ${cp}` : ''} que aún no conozco: sube la foto del ticket y lo aprendo.`, destino: null }
   }
   if (entra && /\bEFECTIVO\b|INGRESO EN CAJERO|\bCAJA\b/i.test(m.concepto) && ctx.cuentaCaja) {
     return { ...b, confianza: 'probable', que: `Ingreso de efectivo · ${nombreCuenta(ctx, ctx.cuentaCaja)}`,

@@ -41,18 +41,44 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
+      # B01 (respuesta 3, punto 2): en un push solo se bajan las fuentes NUEVAS o
+      # TOCADAS en ese push (su entrada de fuentes.json cambia). Una fuente ya
+      # registrada que ha cambiado en origen (los códigos postales, 13/10) NO se
+      # sobrescribe en la rama: la avisa «Normativa al día» (modo «comparar») y
+      # se decide aparte. Si el push no toca ninguna, no se baja nada.
+      - name: Qué fuentes bajar
+        id: cuales
+        env:
+          SOLO_A_MANO: ${{ inputs.solo }}
+          ANTES: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "push" ]; then echo "solo=${SOLO_A_MANO}" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ -z "${ANTES:-}" ] || ! git cat-file -e "${ANTES}:docs/conta/fuentes/fuentes.json" 2>/dev/null; then
+            git show "${ANTES:-HEAD~1}:docs/conta/fuentes/fuentes.json" > /tmp/antes.json 2>/dev/null || echo '{"fuentes":[]}' > /tmp/antes.json
+          else
+            git show "${ANTES}:docs/conta/fuentes/fuentes.json" > /tmp/antes.json
+          fi
+          solo=$(node scripts/conta/fuentes.mjs tocadas /tmp/antes.json)
+          echo "Fuentes nuevas o tocadas en este push: ${solo:-ninguna}"
+          echo "solo=${solo}" >> "$GITHUB_OUTPUT"
+          [ -n "$solo" ] && echo "bajar=si" >> "$GITHUB_OUTPUT" || echo "bajar=no" >> "$GITHUB_OUTPUT"
+
       - name: Descargar las fuentes
         id: descarga
+        if: github.event_name != 'push' || steps.cuales.outputs.bajar == 'si'
         continue-on-error: true
         # C05: bajar solo las fuentes nuevas sin arrastrar textos del BOE que
         # han cambiado y que mueven valores de serie ya aplicados (esos los
         # trae «Normativa al día», que avisa y no cambia nada).
         env:
-          FUENTES_SOLO: ${{ inputs.solo }}
+          FUENTES_SOLO: ${{ steps.cuales.outputs.solo }}
         run: |
           command -v pdftotext > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils; }  # PDF de la AEAT (C05)
           node scripts/conta/fuentes.mjs descargar

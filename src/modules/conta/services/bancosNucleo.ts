@@ -54,11 +54,16 @@ export function leerYCuadrar(a: ExtractoAbierto, banco?: BancoCsv): { extracto: 
   return { extracto, cuadre, resumen: resumenLectura(extracto, cuadre) }
 }
 
-export interface BancoFolvy { id: string; nombre: string; iban: string | null; kind: string; cuenta: string | null; localId: string | null; ibanRevision: { iban_propuesto: string; motivo: string } | null }
+export interface BancoFolvy {
+  id: string; nombre: string; iban: string | null; kind: string; cuenta: string | null; localId: string | null
+  ibanRevision: { iban_propuesto: string; motivo: string } | null
+  /** Otros IBAN que la persona dijo que van a esta cuenta (respuesta 3): la subida empareja sola. */
+  ibanes: string[]
+}
 
-/** Cada cuenta del fichero con su banco de Folvy por IBAN; null si no hay (se propone darlo de alta). */
+/** Cada cuenta del fichero con su banco de Folvy por IBAN (el suyo o uno recordado); null si no hay (se pregunta). */
 export function emparejar(e: ExtractoLeido, bancos: readonly BancoFolvy[]): (string | null)[] {
-  return e.cuentas.map((c) => (c.iban ? bancos.find((b) => b.iban === c.iban)?.id ?? null : null))
+  return e.cuentas.map((c) => (c.iban ? bancos.find((b) => b.iban === c.iban || b.ibanes.includes(c.iban!))?.id ?? null : null))
 }
 
 export interface ResultadoImportar { banco: string; repetido: boolean; mensaje: string | null; nuevos: number; repetidos: number; posiblesRepetidos: number; continuidad: string; hueco: number | null }
@@ -98,13 +103,15 @@ export function crearBancos(bd: Bd) {
   }
 
   async function bancosDeLaEmpresa(accountId: string, companyId: string): Promise<BancoFolvy[]> {
-    const [ts, enlaces] = await Promise.all([
+    const [ts, enlaces, recordados] = await Promise.all([
       leer(tabla('treasury_account').select('id, name, iban, kind, location_id, is_active, iban_review').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los bancos'),
       leer(tabla('company_account_link').select('entity_id, company_account:company_account_id(code)').eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'bank_account').eq('role', 'principal'), 'las cuentas de los bancos'),
+      leer(tabla('bank_account_iban').select('treasury_account_id, iban').eq('account_id', accountId).eq('company_id', companyId), 'los IBAN recordados'),
     ])
     const cuentaDe = new Map(enlaces.map((e) => [String(e.entity_id), s((e.company_account as Fila | null)?.code)]))
     return ts.map((t) => ({ id: String(t.id), nombre: String(t.name), iban: s(t.iban), kind: String(t.kind), cuenta: cuentaDe.get(String(t.id)) ?? null,
-      localId: s(t.location_id), ibanRevision: (t.iban_review as BancoFolvy['ibanRevision']) ?? null }))
+      localId: s(t.location_id), ibanRevision: (t.iban_review as BancoFolvy['ibanRevision']) ?? null,
+      ibanes: recordados.filter((r) => String(r.treasury_account_id) === String(t.id)).map((r) => String(r.iban)) }))
   }
 
   /** Importa cada cuenta del extracto en el banco que se le ha asignado. Lo que no cuadre no llega aquí (y la base lo vuelve a comprobar). */
@@ -136,7 +143,7 @@ export function crearBancos(bd: Bd) {
 
   async function cargarContexto(accountId: string, companyId: string, hoy: string): Promise<{ ctx: Contexto; movimientos: Movimiento[] }> {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
-    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores] = await Promise.all([
+    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
       leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status')
         .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
@@ -154,6 +161,7 @@ export function crearBancos(bd: Bd) {
       leer(tabla('recurring_contract').select('*').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los contratos'),
       leer(tabla('bank_rule').select('id, words, condition, target').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'activa'), 'las reglas'),
       leer(tabla('supplier').select('id, name, legal_name').eq('account_id', accountId).eq('is_active', true), 'los proveedores'),
+      leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las tarjetas'),
     ])
     const codigo = new Map(cuentas.map((c) => [String(c.id), String(c.code)]))
     const nombres: Record<string, string> = {}
@@ -238,6 +246,7 @@ export function crearBancos(bd: Bd) {
       nombres,
       cuentas626: hoja('626') ?? '62600000',
       cuentaCaja: hoja('570') ?? null,
+      tarjetas: tarjetas.map((t) => ({ id: String(t.id), cuentaId: String(t.treasury_account_id), ultimos4: String(t.last4), titular: String(t.holder_name), localId: s(t.location_id) })),
       cuentas476: nombre476,
     }
     return { ctx, movimientos }
@@ -251,8 +260,9 @@ export function crearBancos(bd: Bd) {
     for (const d of decisiones) {
       // El otro lado de un traspaso lo casa la decisión de su pareja: no se propone aparte.
       if (hechos.has(d.movimientoId) || d.otroLadoDe) continue
-      const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte }
+      const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte, tarjetaId: d.tarjetaId }
       try {
+        if (d.tarjetaId) await rpc('bank_tarjeta_del_movimiento', { p_movement: d.movimientoId, p_card: d.tarjetaId })
         if (d.confianza === 'seguro' && d.destino) {
           await rpc('bank_casar', { p_movement: d.movimientoId, p_destino: d.destino, p_confianza: 'seguro', p_porque: d.porque, p_razones: [], p_por: 'folvy', p_regla: d.reglaId })
           if (d.destino.tipo === 'traspaso') hechos.add(d.destino.otro_movimiento_id)

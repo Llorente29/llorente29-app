@@ -297,6 +297,7 @@ grant execute on function public.bank_proponer(uuid, text, text, text, jsonb) to
 --   liquidacion      {liquidacion_id, cuenta_cliente}
 --   traspaso         {otro_movimiento_id}
 --   cuenta | anticipo | contrato | factura_emitida   {lineas:[{cuenta, importe, tercero_id?, concepto?}], contrato_id?}
+-- Cualquiera puede llevar local_id (el de la tarjeta que pagó): va a las líneas.
 -- Las líneas van al lado contrario del banco y suman el importe del movimiento.
 create or replace function public.bank_casar(p_movement uuid, p_destino jsonb, p_confianza text, p_porque text, p_razones jsonb,
                                              p_por text, p_regla uuid)
@@ -328,7 +329,8 @@ begin
   v_572 := public._bank_cuenta_572(v_t.id);
   v_aj := public._bank_ajustes(v_m.company_id);
   v_abs := abs(v_m.amount); v_entra := v_m.amount > 0;
-  v_local := v_t.location_id; v_comun := v_local is null;
+  -- El local: el de la tarjeta que pagó, si el destino lo trae; si no, el de la cuenta.
+  v_local := coalesce(nullif(p_destino->>'local_id', '')::uuid, v_t.location_id); v_comun := v_local is null;
   v_concepto := coalesce(nullif(trim(p_destino->>'concepto'), ''), nullif(v_m.clean_concept, ''), 'Movimiento del banco');
 
   if v_tipo = 'asiento' then

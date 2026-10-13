@@ -320,3 +320,53 @@ describe('P2 · un pago por dos caminos, un asiento (el lado del libro)', () => 
     expect(q.lineas.filter((l) => l.cuenta === '57200001')).toHaveLength(1)
   })
 })
+
+describe('P3 · el cobro y el pago en la serie de tesorería de la empresa (respuesta 3)', () => {
+  it('«Pago a…» y la liquidación van a la serie que diga la empresa; sin decirlo, la 3 de siempre', async () => {
+    const { liquidacionPlataforma, pagoFactura } = await import('@/modules/conta/lib/asientosPropuestos')
+    const c = { cliente430: '43000001', proveedor410: '41000002', comision: '62300000', otrosCargos: '62900000', iva21: { cuenta: '47200021', tipoId: 't21' }, banco: '57200001', pendienteSocio: null }
+    const l = { id: 'liq1', fecha: '2026-10-08', ref: '1–7 oct', plataforma: 'Plataforma Norte', flujo: 'own' as const, ventas: 4120.4, comision: 585.31, cargos: [],
+      devoluciones: 0, neto: 3412.18, cobrado: { fecha: '2026-10-09', importe: 3412.18 }, pedidos: { total: 0, asentados: 0 }, localId: null }
+    expect(liquidacionPlataforma(l, c).propuesta!.serie).toBe(3)
+    expect(liquidacionPlataforma(l, { ...c, serieTesoreria: 4 }).propuesta!.serie).toBe(4)
+    const f = { facturaId: 'f1', fecha: '2026-10-09', proveedor: 'Mayorista Alfa', numero: 'A-1', importe: 100, localId: null, terceroId: null }
+    expect(pagoFactura(f, { proveedor: '40000001', banco: '57200001' }).propuesta!.serie).toBe(3)
+    expect(pagoFactura(f, { proveedor: '40000001', banco: '57200001', serieTesoreria: 4 }).propuesta!.serie).toBe(4)
+  })
+})
+
+describe('Tarjetas de débito (respuesta 3): qué tarjeta pagó y a quién pedirle el ticket', () => {
+  const tarjetas = [
+    { id: 'tj-ana', cuentaId: NORTE, ultimos4: '4821', titular: 'Ana', localId: 'loc-norte' },
+    { id: 'tj-luis', cuentaId: NORTE, ultimos4: '0937', titular: 'Luis', localId: null },
+  ]
+  const aprendido = [{ contraparte: 'MERCADO CENTRAL', cuenta: '60000000', terceroId: null, veces: 6 }]
+
+  it('dos tarjetas en la misma cuenta: cada pago a su titular, con el local de la tarjeta', () => {
+    const a = decidir(mov({ importeCent: -8_640, concepto: 'COMPRA TARJ. ****4821 MERCADO CENTRAL', conceptoComun: '12' }), ctx({ tarjetas, aprendido }))
+    expect(a).toMatchObject({ tarjetaId: 'tj-ana', confianza: 'probable', pideTicket: true, destino: { local_id: 'loc-norte' } })
+    expect(a.porque).toBe('Las 6 anteriores de este comercio fueron Comida y bebida · 60000000. Tarjeta de Ana (···4821): pídele el ticket.')
+    const l = decidir(mov({ importeCent: -2_000, concepto: 'PAGO CON TARJETA 0937 GASOLINERA SUR', conceptoComun: '12' }), ctx({ tarjetas }))
+    expect(l).toMatchObject({ tarjetaId: 'tj-luis', confianza: 'duda', que: 'Pago con tarjeta · ¿ticket?' })
+    expect(l.porque).toBe('Pago con la tarjeta de Luis (···0937) en GASOLINERA SUR que aún no conozco: pídele el ticket a Luis y lo aprendo.')
+  })
+
+  it('una tarjeta no dada de alta: «Por aclarar: tarjeta acabada en 1234, ¿de quién es?»', () => {
+    const d = decidir(mov({ importeCent: -1_500, concepto: 'COMPRA TARJ. ****1234 FERRETERIA', conceptoComun: '12' }), ctx({ tarjetas }))
+    expect(d).toMatchObject({ confianza: 'duda', tarjetaId: null, que: 'Tarjeta acabada en 1234', falta: 'de quién es la tarjeta' })
+    expect(d.porque.startsWith('Por aclarar: tarjeta acabada en 1234, ¿de quién es?')).toBe(true)
+  })
+
+  it('la tarjeta de otra cuenta no vale; sin tarjetas dadas de alta, como antes', () => {
+    const otra = decidir(mov({ importeCent: -1_500, concepto: 'COMPRA TARJ. ****4821 FERRETERIA', conceptoComun: '12', cuentaId: SUR }), ctx({ tarjetas }))
+    expect(otra.tarjetaId).toBeNull()
+    const sin = decidir(mov({ importeCent: -1_500, concepto: 'COMPRA TARJ. ****1234 FERRETERIA', conceptoComun: '12' }), ctx())
+    expect(sin.que).toBe('Pago con tarjeta · ¿ticket?')
+  })
+
+  it('los dígitos: enmascarados primero, y nunca el número entero', async () => {
+    const { digitosTarjeta } = await import('@/modules/conta/lib/conciliacion')
+    expect(digitosTarjeta('COMPRA TARJ. XXXX XXXX XXXX 4821 MERCADO 0937')).toEqual(['4821', '0937'])
+    expect(digitosTarjeta('PAGO 12/10 1234')).toEqual(['1234'])
+  })
+})

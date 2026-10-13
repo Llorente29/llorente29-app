@@ -13,7 +13,7 @@
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
   ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
-  type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion,
+  type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion, type SerieTesoreria,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
 import { tandaDeDias } from '@/modules/conta/lib/proponer'
@@ -43,10 +43,12 @@ export interface ContextoLibro {
   bancoDeLocal: (localId: string | null) => string | null
   correcciones: Correccion[]
   validarSegurosDeVentas: boolean
+  /** B01 (P3): la serie de tesorería de la empresa (bank_settings; 3 si no hay ajuste). */
+  serieTesoreria: SerieTesoreria
 }
 
 export async function cargarContexto(accountId: string, companyId: string): Promise<ContextoLibro> {
-  const [cuentas, enlaces, tipos, perfil, ejercicios, cerrados, canales, roles, marcas, locales, bancos, correcciones] = await Promise.all([
+  const [cuentas, enlaces, tipos, perfil, ejercicios, cerrados, canales, roles, marcas, locales, bancos, correcciones, ajustesBanco] = await Promise.all([
     leer(tabla('company_account').select('id, code, template_code, kind, status').eq('account_id', accountId).eq('company_id', companyId), 'las cuentas'),
     leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
     leer(tabla('tax_rate').select('id, code, rate, tax_system, treatment, valid_to').or(`is_system.eq.true,account_id.eq.${accountId}`), 'los tipos de IVA'),
@@ -59,6 +61,7 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
     leer(tabla('locations').select('id, name').eq('account_id', accountId), 'los locales'),
     leer(tabla('treasury_account').select('id, location_id, kind, is_active').eq('account_id', accountId).eq('company_id', companyId), 'los bancos'),
     leer(tabla('journal_correction').select('origin_key, proposed_code, chosen_code, created_by_name, created_at').eq('account_id', accountId).eq('company_id', companyId), 'lo aprendido'),
+    leer(tabla('bank_settings').select('treasury_series').eq('account_id', accountId).eq('company_id', companyId), 'los ajustes del banco'),
   ])
   const porId = new Map(cuentas.map((c) => [String(c.id), c]))
   const hojas = new Map<string, string>()
@@ -100,6 +103,7 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
     bancoDeLocal,
     correcciones: correcciones.map((c) => ({ clave: String(c.origin_key), propuesta: String(c.proposed_code), elegida: String(c.chosen_code), quien: s(c.created_by_name), cuando: String(c.created_at) })),
     validarSegurosDeVentas: perfil[0]?.journal_autovalidate_sales_day === true,
+    serieTesoreria: Number(ajustesBanco[0]?.treasury_series) === 4 ? 4 : 3,
   }
 }
 
@@ -405,6 +409,7 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       cliente430: c430, proveedor410: c410, comision: ctx.hoja('623') ?? '62300000', otrosCargos: ctx.hoja('629') ?? '62900000',
       iva21: { cuenta: c472, tipoId: t21.id }, banco: ctx.bancoDeLocal(s(l.location_id)),
       pendienteSocio: l.brand_id && socioDeMarca.has(String(l.brand_id)) ? ctx.enlace('customer', socioDeMarca.get(String(l.brand_id))!, 'liquidacion') : null,
+      serieTesoreria: ctx.serieTesoreria,
     })
     if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
     await proponer(companyId, aplicarAprendizaje(res.propuesta, `channel_settlement:${s(l.channel_id)}`, ctx.correcciones), null, r, ctx, quien)
