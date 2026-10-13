@@ -369,6 +369,8 @@ jobs:
                -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" > /tmp/salida.txt 2>&1; then
             cat /tmp/salida.txt >> /tmp/informe.md
             grep -E 'ERROR|error|CONTEXT' /tmp/salida.txt | head -5 | sed 's/^/::error::/'
+            # Lo que explica un rojo (datos inventados: se puede enseñar).
+            grep -E 'NO cuadra|rechaz|distint|Sin testigo|Subcuentas|ya estaban' /tmp/salida.txt | head -8 | sed 's/^/::warning::/'
             exit 1
           fi
           tee -a /tmp/informe.md < /tmp/salida.txt
