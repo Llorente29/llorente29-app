@@ -5,7 +5,7 @@ fusionado). **Todo lo de aquí se ha hecho leyendo.** En producción solo se ha
 consultado, siempre con la cuenta por delante (regla 9). No hay importes: el
 repositorio es público.
 
-Las maquetas están en `docs/conta/maquetas/d01/` (N19 Documentos y N20 Revisar).
+Las maquetas están en `docs/conta/maquetas/d01/` (N22 Documentos y N23 Revisar; se llamaban N19 y N20, renombradas por la respuesta D01_1, punto 1).
 
 ## 0 · Antes de nada: tres cosas que chocan
 
