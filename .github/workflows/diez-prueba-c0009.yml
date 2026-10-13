@@ -26,10 +26,14 @@ name: Diez · factura de prueba en C0009 (C04b)
 # Folvy (Uber · Alcalá del 01/10, visto bueno de Julio): lee el asiento en
 # producción con conta_lectura (solo lectura), lo busca antes en Diez (si ya
 # está, no envía otra) y lo lee de vuelta (scripts/conta/diez/prueba-c0009-emitida.ts).
+#
+# D01 (13/10): también corre en conta/d01-recibidas. Con
+# «[prueba-c0009:recibida-molde]», SOLO LEE cómo guarda Diez en la C0009 las
+# facturas recibidas de la serie 2 (scripts/conta/diez/prueba-c0009-recibida-molde.ts).
 
 on:
   push:
-    branches: ['conta/c04b-diez']
+    branches: ['conta/c04b-diez', 'conta/d01-recibidas']
   workflow_dispatch:
 
 concurrency:
@@ -111,6 +115,8 @@ jobs:
             '[prueba-c0009:subcuentas]'*) S=scripts/conta/diez/prueba-c0009-subcuentas.ts ;;
             # R13: la factura emitida de molde, solo lectura (escribir: false).
             '[prueba-c0009:emitida-molde]'*) S=scripts/conta/diez/prueba-c0009-emitida-molde.ts ;;
+            # D01: la recibida de molde (serie 2), solo lectura (escribir: false).
+            '[prueba-c0009:recibida-molde]'*) S=scripts/conta/diez/prueba-c0009-recibida-molde.ts ;;
             # R13: la primera venta de Folvy en Diez (C0009), del volcado del paso anterior.
             '[prueba-c0009:emitida]'*) S=scripts/conta/diez/prueba-c0009-emitida.ts ;;
             # R14: qué dice el Swagger PÚBLICO de los adjuntos (sin credenciales).
