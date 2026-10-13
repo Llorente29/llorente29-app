@@ -5,7 +5,8 @@
 -- C0009 solo con GET; nada de lo que lee se escribe en staging.
 --
 --   «Comercio de Prueba Diez, S.L.» · cuenta solo de contabilidad (marca de
---   pruebas), otra actividad, sin usuarios: nadie entra en ella.
+--   pruebas), otra actividad, sin usuarios: nadie entra en ella. Con su plan
+--   elegido (pymes, 8 dígitos), como queda una empresa tras el alta.
 --
 -- La base la pone Folvy por la puerta de verdad (conta_diez_base_poner). Se
 -- puede volver a aplicar: lo que ya está se deja.
@@ -27,6 +28,12 @@ begin
   if not exists (select 1 from public.company where id = v_empresa) then
     insert into public.company (id, account_id, legal_name, tax_id, tax_id_type, entity_kind, setup_step)
     values (v_empresa, v_cuenta, 'Comercio de Prueba Diez, S.L.', 'B12345674', 'nif_es', 'company', 'hecho');
+  end if;
+  -- Lo que una empresa de verdad tiene tras el alta y el importador necesita:
+  -- su plan elegido (pymes, 8 dígitos, como Diez).
+  if not exists (select 1 from public.company_tax_profile where company_id = v_empresa) then
+    insert into public.company_tax_profile (company_id, account_id, chart_kind, account_digits, tax_forms)
+    values (v_empresa, v_cuenta, 'pymes', 8, array['303', '390']);
   end if;
   r := public.conta_diez_base_poner(v_empresa, 'C0009', 'Prueba del traer de Diez generalizado (C06): la copia de pruebas, solo lectura.', 'Folvy (semilla C06)');
   raise notice 'Semilla C06 Diez OK: % con la base % (%).', v_empresa, r ->> 'base', case when (r ->> 'cambia')::boolean then 'nueva' else 'ya estaba' end;
