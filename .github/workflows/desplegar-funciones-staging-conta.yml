@@ -94,27 +94,30 @@ jobs:
           { echo; echo "| función | fichero | md5 rama | md5 desplegado |"; echo "|---|---|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
           MAL=0
           for f in $FUNCIONES; do
-            rm -rf /tmp/bajada && mkdir -p /tmp/bajada/supabase && cd /tmp/bajada
-            supabase functions download "$f" --project-ref "$REF" > /tmp/bajada.log 2>&1 || { cat /tmp/bajada.log; echo "::error::No se pudo leer de vuelta $f."; exit 1; }
-            find /tmp/bajada -type f | sed 's/^/  bajado: /' | head -20
+            # Una carpeta nueva por función: nada de la anterior se confunde con ésta.
+            BAJADA=$(mktemp -d) && mkdir -p "$BAJADA/supabase" && cd "$BAJADA"
+            supabase functions download "$f" --project-ref "$REF" > "$BAJADA.log" 2>&1 || { cat "$BAJADA.log"; echo "::error::No se pudo leer de vuelta $f."; exit 1; }
+            find "$BAJADA" -type f | sed 's/^/  bajado: /' | head -20
             cd "$GITHUB_WORKSPACE"
             for local in supabase/functions/$f/*.ts; do
               nombre=$(basename "$local")
               # El CLI deja lo bajado donde le parece (supabase/functions/…, functions/…):
               # se busca por nombre dentro de la carpeta de la función, esté donde esté.
-              bajado=$(find /tmp/bajada -type f -name "$nombre" -path "*/functions/$f/*" 2>/dev/null | head -1)
+              bajado=$(find "$BAJADA" -type f -name "$nombre" -path "*/$f/*" 2>/dev/null | head -1)
               a=$(md5sum "$local" | cut -c1-32)
               b=$([ -n "$bajado" ] && md5sum "$bajado" | cut -c1-32 || echo "—")
               echo "| \`$f\` | $nombre | $a | $b |" >> "$GITHUB_STEP_SUMMARY"
-              if [ "$a" != "$b" ] && [ -n "$bajado" ]; then
-                # ¿Solo saltos de línea? Se dice aparte: no es una diferencia de código.
-                a2=$(tr -d '\r\n' < "$local" | md5sum | cut -c1-32); b2=$(tr -d '\r\n' < "$bajado" | md5sum | cut -c1-32)
-                if [ "$a2" = "$b2" ]; then echo "::warning::$f/$nombre: igual salvo saltos de línea ($(wc -l < "$local") / $(wc -l < "$bajado") líneas)."; continue; fi
-                echo "::error::$f/$nombre desplegado no es el de la rama: $(diff "$local" "$bajado" | head -c 400 | tr '\n' ' ')"; MAL=1
+              if [ -z "$bajado" ]; then
+                echo "::error::$f/$nombre: no se ha podido leer de vuelta (bajado: $(find "$BAJADA" -type f | tr '\n' ' ' | cut -c1-300))."; MAL=1
               elif [ "$a" != "$b" ]; then
-                echo "::error::$f/$nombre: no se ha podido leer de vuelta (bajado: $(find /tmp/bajada -type f | tr '\n' ' ' | cut -c1-300))."; MAL=1
+                # El CLI devuelve el código re-formateado (espacios, saltos, «(req)=>{»):
+                # se compara sin NINGÚN espacio en blanco. Si así coincide, es el mismo
+                # código; si no, es otro y se para.
+                a2=$(tr -d '[:space:]' < "$local" | md5sum | cut -c1-32); b2=$(tr -d '[:space:]' < "$bajado" | md5sum | cut -c1-32)
+                if [ "$a2" = "$b2" ]; then echo "::notice::$f/$nombre: mismo código salvo el formato (sin espacios: $a2)."; continue; fi
+                echo "::error::$f/$nombre desplegado no es el de la rama: $(diff -w "$local" "$bajado" | head -c 400 | tr '\n' ' ')"; MAL=1
               fi
             done
-            echo "::notice::$f desplegada en staging-conta; md5 de sus ficheros comparados con la rama."
+            echo "::notice::$f desplegada en staging-conta; sus ficheros comparados con la rama."
           done
           [ "$MAL" = "0" ] || exit 1
