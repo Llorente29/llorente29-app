@@ -9,6 +9,9 @@
 #   Run 166: la 0100 ENTRÓ; la prueba paró en «permission_sets does not exist»
 #   (staging-conta no la tiene). La función la usa solo si existe, y la 0100
 #   se puede volver a aplicar (quita y pone su restricción). Va otra vez entera.
+#   Run 167: 1, 3 y 4 en verde (la cuenta sola: feature_flags=1 y
+#   user_profiles=1, nada más); paró en la 2 porque la prueba creaba la cuenta
+#   «de siempre» con el sub del cliente puesto. Ahora sin identidad.
 supabase/migrations/20261111T0100_c06_cuenta_sola.sql
 supabase/staging/sql/20261111_c06_cuenta_sola_prueba.sql
 supabase/seeds/conta/seed_c06_staging.sql

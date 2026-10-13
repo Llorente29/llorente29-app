@@ -126,6 +126,9 @@ begin
 end $$;
 
 -- ── 2 · Antes = después: una cuenta como las de siempre sigue sembrándose ───
+-- Sin identidad de usuario, como la crean create_account_tx y las semillas
+-- (run 167: con el sub del cliente puesto, adopt_mandatory_courses la rechaza).
+select set_config('request.jwt.claims', '', true);
 do $$
 declare
   v_normal uuid; r record; n bigint; v_con text[];
