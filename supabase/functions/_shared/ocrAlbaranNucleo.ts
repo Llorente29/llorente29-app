@@ -9,6 +9,10 @@
 //
 // Sin dependencias de Deno ni de Node.
 
+// El modelo de visión por defecto (VISION_MODEL lo cambia en la función). Aquí
+// desde el D01 R2 para que la prueba de lectura con el modelo use el MISMO.
+export const MODELO_VISION = 'claude-opus-4-8';
+
 // Descuadre máximo aceptado entre Σlíneas y la base imponible declarada (1%).
 export const BASE_TOLERANCE = 0.01;
 

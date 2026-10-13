@@ -1,0 +1,54 @@
+name: D01 · Lectura con el modelo (facturas inventadas)
+
+# QUÉ HACE (D01 R2 punto 2, 13/10)
+# Lee con el modelo de verdad las facturas INVENTADAS de
+# tests/conta/d01/facturas-inventadas/ —los ocho formatos, una foto torcida,
+# una borrosa y un PDF escaneado sin texto— igual que ocr-albaran en modo
+# «factura», y compara lo leído con lo esperado campo a campo
+# (scripts/conta/d01/leer-con-modelo.ts).
+#
+#   · Solo a mano (workflow_dispatch): no se dispara en ningún push.
+#   · La clave es el secreto ANTHROPIC_API_KEY, que crea Julio en GitHub; nunca
+#     pasa por el chat ni por el repositorio.
+#   · La salida pasa por scripts/conta/salida-segura.mjs: solo aciertos y
+#     fallos por campo (1/0) y recuentos. Ni lo leído ni lo esperado.
+#   · No lee producción ni Diez, ni escribe en ninguna base.
+
+on:
+  workflow_dispatch:
+    inputs:
+      facturas:
+        description: 'Solo estas (ids separados por espacios, p. ej. «f01-mercancia f11-escaneada»). Vacío: las once.'
+        required: false
+        default: ''
+      modelo:
+        description: 'Otro modelo que el de ocr-albaran (vacío: el mismo, MODELO_VISION).'
+        required: false
+        default: ''
+
+concurrency:
+  group: leer-con-modelo-d01
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  leer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Leer y comparar campo a campo
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VISION_MODEL: ${{ inputs.modelo }}
+          FACTURAS: ${{ inputs.facturas }}
+        run: |
+          set -euo pipefail
+          echo "## Lectura con el modelo · facturas inventadas" >> "$GITHUB_STEP_SUMMARY"
+          # shellcheck disable=SC2086
+          npx --yes tsx@4.19.2 scripts/conta/d01/leer-con-modelo.ts $FACTURAS 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"

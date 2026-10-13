@@ -46,12 +46,13 @@
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
-import { buildPrompt, extractJson, validate, type ParsedDoc } from '../_shared/ocrAlbaranNucleo.ts';
+import { MODELO_VISION, buildPrompt, extractJson, validate, type ParsedDoc } from '../_shared/ocrAlbaranNucleo.ts';
 import { leerFactura, PROMPT_FACTURA, type LecturaModelo } from '../_shared/lecturaFactura.ts';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
-const DEFAULT_VISION_MODEL = 'claude-opus-4-8';
+// D01 R2: el modelo vive en el núcleo, para que la prueba de lectura use el mismo.
+const DEFAULT_VISION_MODEL = MODELO_VISION;
 const BUCKET = 'receipt-uploads';
 
 interface OcrRequest {
