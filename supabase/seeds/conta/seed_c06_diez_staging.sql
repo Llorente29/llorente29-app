@@ -29,6 +29,8 @@ begin
     insert into public.company (id, account_id, legal_name, tax_id, tax_id_type, entity_kind, setup_step)
     values (v_empresa, v_cuenta, 'Comercio de Prueba Diez, S.L.', 'B12345674', 'nif_es', 'company', 'hecho');
   end if;
+  -- El alta, terminada (respuesta 3: el paso 1 de los cuatro antes de traer de Diez).
+  update public.company set setup_completed_at = now() where id = v_empresa and setup_completed_at is null;
   -- Lo que una empresa de verdad tiene tras el alta y el importador necesita:
   -- su plan elegido (pymes, 8 dígitos, como Diez).
   if not exists (select 1 from public.company_tax_profile where company_id = v_empresa) then

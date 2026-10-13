@@ -88,6 +88,11 @@ begin
              || format('- Subcuentas: %s nuevas traídas de Diez · %s ya estaban · %s rechazadas%s',
                        v_sub ->> 'nuevas', v_sub ->> 'estaban', jsonb_array_length(v_sub -> 'rechazadas'),
                        coalesce(' (' || (select string_agg(e ->> 'code' || ': ' || (e ->> 'motivo'), '; ') from jsonb_array_elements(v_sub -> 'rechazadas') e) || ')', ''));
+  -- C06: las que Diez trae sin nombre entran con el de su cuenta del plan y esperan uno.
+  if jsonb_array_length(coalesce(v_sub -> 'sinNombre', '[]'::jsonb)) > 0 then
+    inf := inf || format('- Subcuentas sin nombre en Diez (entran con el de su cuenta del plan y quedan «pónselo»): %s — %s',
+                         jsonb_array_length(v_sub -> 'sinNombre'), (select string_agg(x, ', ' order by x) from jsonb_array_elements_text(v_sub -> 'sinNombre') x));
+  end if;
   inf := inf || format('- Rechazados al convertir (mueven saldo y no entran): %s', (select count(*) from carga_rechazo));
   for x in select clave, motivo from carga_rechazo order by 1 loop
     inf := inf || format('  - rechazado al convertir %s: %s', x.clave, x.motivo);

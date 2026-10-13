@@ -39,11 +39,22 @@ create table if not exists public.conta_diez_base (
   puesto_por  text not null,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
+  -- Lo último usado al traer su histórico (respuesta 3: el workflow los rellena
+  -- solos; quien lanza solo cambia lo que quiera). Los recuerda cada tanda en
+  -- verde (conta_diez_base_recordar) y el corte, «preparar».
+  ultimo_desde text check (ultimo_desde ~ '^[0-9]{6}$'),
+  ultimo_hasta text check (ultimo_hasta ~ '^[0-9]{6}$'),
+  ultimo_corte date,
   constraint conta_diez_base_formato check (nombre_bd ~ '^C[0-9]{4}$'),
   constraint conta_diez_base_c0001 check (nombre_bd <> 'C0001'),
   constraint conta_diez_base_motivo check (btrim(motivo) <> '' and btrim(puesto_por) <> ''),
   constraint conta_diez_base_una_empresa unique (nombre_bd)
 );
+
+-- Staging tuvo la tabla antes de estas tres columnas: se añaden si faltan.
+alter table public.conta_diez_base add column if not exists ultimo_desde text check (ultimo_desde ~ '^[0-9]{6}$');
+alter table public.conta_diez_base add column if not exists ultimo_hasta text check (ultimo_hasta ~ '^[0-9]{6}$');
+alter table public.conta_diez_base add column if not exists ultimo_corte date;
 
 comment on table public.conta_diez_base is
   'C06 · La base de Diez (nombre_bd) de cada empresa. La escribe solo Folvy (conta_diez_base_poner, service_role). C0001, nunca.';
@@ -184,6 +195,8 @@ begin
   if not exists (select 1 from public.conta_diez_base where company_id = p_company) then
     raise exception 'La empresa no tiene base de Diez registrada (conta_diez_base_poner, primero).';
   end if;
+  -- El corte, como lo último usado (si algo de abajo falla, se deshace con todo).
+  update public.conta_diez_base set ultimo_corte = p_corte where company_id = p_company;
   select * into v_y from public.fiscal_year where company_id = p_company and code = v_code;
   if v_y.id is not null then
     if v_y.origin = 'mixed' and v_y.origin_program = 'diez' and v_y.imported_until = p_corte then
@@ -211,9 +224,26 @@ $$;
 revoke all on function public.conta_diez_preparar_corte(uuid, date, text) from public, anon, authenticated;
 grant execute on function public.conta_diez_preparar_corte(uuid, date, text) to service_role;
 
+-- Lo último usado: tras una tanda en verde (ensayo o real), el workflow lo
+-- guarda para que la siguiente salga rellena. No es un dato contable.
+create or replace function public.conta_diez_base_recordar(p_company uuid, p_desde text, p_hasta text, p_corte date)
+returns void
+language sql
+security definer
+set search_path = public, pg_temp
+as $$
+  update public.conta_diez_base set ultimo_desde = p_desde, ultimo_hasta = p_hasta, ultimo_corte = p_corte
+   where company_id = p_company;
+$$;
+
+revoke all on function public.conta_diez_base_recordar(uuid, text, text, date) from public, anon, authenticated;
+grant execute on function public.conta_diez_base_recordar(uuid, text, text, date) to service_role;
+
 -- Foodint (Llorente29): su base de siempre. En staging no existe: no hace nada.
-insert into public.conta_diez_base (company_id, account_id, nombre_bd, motivo, puesto_por)
-select c.id, c.account_id, 'C0008', 'La base de siempre de esta empresa (C04b); se registra al generalizar el traer de Diez (C06).', 'Folvy (C06)'
+-- Con lo último usado: lo que el workflow llevaba escrito para ella (C04b).
+insert into public.conta_diez_base (company_id, account_id, nombre_bd, motivo, puesto_por, ultimo_desde, ultimo_hasta, ultimo_corte)
+select c.id, c.account_id, 'C0008', 'La base de siempre de esta empresa (C04b); se registra al generalizar el traer de Diez (C06).', 'Folvy (C06)',
+       '202310', '202609', date '2026-09-30'
   from public.company c
  where c.id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9'
 on conflict (company_id) do nothing;

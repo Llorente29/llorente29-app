@@ -62,20 +62,20 @@ on:
         type: choice
         options: [preparar, ensayo, real, simulado-staging, lectura-staging]
       empresa:
-        description: 'Id de la empresa (company.id). Su base de Diez sale de conta_diez_base.'
-        required: true
+        description: 'Id de la empresa (company.id). Vacío: la única con base de Diez registrada (hoy, Foodint).'
+        required: false
         type: string
       desde:
-        description: 'Primer mes a leer (AAAAMM). No en «preparar».'
+        description: 'Primer mes a leer (AAAAMM). Vacío: lo último usado con esa empresa.'
         required: false
         type: string
       hasta:
-        description: 'Último mes a leer (AAAAMM). No en «preparar».'
+        description: 'Último mes a leer (AAAAMM). Vacío: lo último usado con esa empresa.'
         required: false
         type: string
       corte:
-        description: 'Fecha de corte (AAAA-MM-DD): el imported_until de su ejercicio mixto de Diez'
-        required: true
+        description: 'Fecha de corte (AAAA-MM-DD). Vacío: lo último usado con esa empresa. En «preparar», obligatoria.'
+        required: false
         type: string
       secreto:
         description: 'Vacío = DIEZ_LECTURA. Si la empresa tiene su acceso: el sufijo de DIEZ_LECTURA_<sufijo>'
@@ -181,11 +181,13 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && (inputs.modo == 'ensayo' || inputs.modo == 'real')
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # Lo escrito a mano (puede venir vacío). EMPRESA y DIEZ_DESDE/HASTA/CORTE
+    # los pone el paso «Empresa y lo último usado», ya resueltos.
     env:
-      EMPRESA: ${{ inputs.empresa }}
-      DIEZ_DESDE: ${{ inputs.desde }}
-      DIEZ_HASTA: ${{ inputs.hasta }}
-      DIEZ_CORTE: ${{ inputs.corte }}
+      IN_EMPRESA: ${{ inputs.empresa }}
+      IN_DESDE: ${{ inputs.desde }}
+      IN_HASTA: ${{ inputs.hasta }}
+      IN_CORTE: ${{ inputs.corte }}
       SECRETO: ${{ inputs.secreto }}
       MODO: ${{ inputs.modo }}
     steps:
@@ -201,9 +203,12 @@ jobs:
           set -euo pipefail
           [ "$CONFIRMO" = "produccion" ] || { echo "::error::Hay que escribir «produccion» en «confirmo». No se hace nada."; exit 1; }
           case "$MODO" in ensayo|real) ;; *) echo "::error::Modo desconocido."; exit 1 ;; esac
-          # Las entradas, con su forma (van a SQL y a la línea de órdenes).
-          [[ "$EMPRESA" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "::error::«empresa» tiene que ser un id (uuid)."; exit 1; }
-          [[ "$DIEZ_DESDE" =~ ^[0-9]{6}$ && "$DIEZ_HASTA" =~ ^[0-9]{6}$ && "$DIEZ_CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Fechas: desde y hasta AAAAMM, corte AAAA-MM-DD."; exit 1; }
+          # Las entradas, con su forma (van a SQL y a la línea de órdenes). Vacías
+          # valen: salen de lo último usado (respuesta 3: sin más fricción que antes).
+          [ -z "$IN_EMPRESA" ] || [[ "$IN_EMPRESA" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "::error::«empresa» tiene que ser un id (uuid) o nada."; exit 1; }
+          [ -z "$IN_DESDE" ] || [[ "$IN_DESDE" =~ ^[0-9]{6}$ ]] || { echo "::error::«desde» es AAAAMM o nada."; exit 1; }
+          [ -z "$IN_HASTA" ] || [[ "$IN_HASTA" =~ ^[0-9]{6}$ ]] || { echo "::error::«hasta» es AAAAMM o nada."; exit 1; }
+          [ -z "$IN_CORTE" ] || [[ "$IN_CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::«corte» es AAAA-MM-DD o nada."; exit 1; }
           [ -z "$SECRETO" ] || [[ "$SECRETO" =~ ^[A-Z0-9_]+$ ]] || { echo "::error::«secreto» solo lleva mayúsculas, cifras y _."; exit 1; }
           echo "AUTORIZO_DADO=$AUTORIZO" >> "$GITHUB_ENV"
           echo "# Diez · tanda del histórico · **$MODO**" > /tmp/informe.md
@@ -217,7 +222,7 @@ jobs:
         run: |
           set -euo pipefail
           n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow diez-importar.yml --commit "$GITHUB_SHA" --status success --limit 50 \
-                --json displayTitle --jq "[.[] | select(.displayTitle == \"Diez · histórico · ensayo · ${EMPRESA}\")] | length")
+                --json displayTitle --jq "[.[] | select(.displayTitle == \"Diez · histórico · ensayo · ${IN_EMPRESA}\")] | length")
           if [ "$n" -lt 1 ]; then
             echo "::error::No hay un ensayo en verde de este commit (${GITHUB_SHA}) para esta empresa. Primero el ensayo; el real, después y desde el mismo commit."
             exit 1
@@ -246,11 +251,40 @@ jobs:
           sudo apt-get install -y -qq postgresql-common >/dev/null
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
-      - name: Guarda · la empresa, su base registrada y su ejercicio mixto de Diez hasta el corte
+      - name: Empresa y lo último usado (lo que no se escribe sale de la base)
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -euo pipefail
+          # Sin empresa: la única con base de Diez registrada. Si hay más de una,
+          # hay que decir cuál (no se elige por nadie).
+          r=$("$PSQL" "$DB_URL" -X -A -t -F '|' -v ON_ERROR_STOP=1 -v empresa="$IN_EMPRESA" <<'SQL'
+          select b.company_id, coalesce(b.ultimo_desde, ''), coalesce(b.ultimo_hasta, ''), coalesce(b.ultimo_corte::text, ''), c.legal_name
+            from public.conta_diez_base b join public.company c on c.id = b.company_id
+           where case when :'empresa' = '' then true else b.company_id = nullif(:'empresa', '')::uuid end;
+          SQL
+          )
+          n=$(printf '%s\n' "$r" | grep -c . || true)
+          if [ -z "$IN_EMPRESA" ] && [ "$n" != "1" ]; then echo "::error::Hay $n empresas con base de Diez registrada: escribe cuál en «empresa»."; exit 1; fi
+          [ "$n" = "1" ] || { echo "::error::Esa empresa no tiene base de Diez registrada (modo «preparar», primero)."; exit 1; }
+          IFS='|' read -r e d h c nombre <<<"$r"
+          DESDE=${IN_DESDE:-$d}; HASTA=${IN_HASTA:-$h}; CORTE=${IN_CORTE:-$c}
+          [[ "$DESDE" =~ ^[0-9]{6}$ && "$HASTA" =~ ^[0-9]{6}$ && "$CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Faltan fechas y no hay nada usado antes con esta empresa: escribe desde, hasta y corte."; exit 1; }
+          { echo "EMPRESA=$e"; echo "DIEZ_DESDE=$DESDE"; echo "DIEZ_HASTA=$HASTA"; echo "DIEZ_CORTE=$CORTE"; } >> "$GITHUB_ENV"
+          origen() { [ -n "$1" ] && echo "escrito" || echo "lo último usado"; }
+          { echo "Empresa **$nombre** (\`$e\`) · desde **$DESDE** ($(origen "$IN_DESDE")) · hasta **$HASTA** ($(origen "$IN_HASTA")) · corte **$CORTE** ($(origen "$IN_CORTE"))."; echo; } | tee -a /tmp/informe.md
+      - name: Guarda · la empresa, su base registrada, sus pasos y su ejercicio mixto de Diez hasta el corte
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          # Los pasos de antes (respuesta 3): datos, plan y banco. Si falta uno, se dice cuál.
+          # (Las variables :'x' de psql solo se sustituyen en lo que entra por la entrada, no con -c.)
+          falta=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" <<'SQL'
+          select coalesce(public.conta_diez_listo(:'empresa'::uuid) ->> 'falta', 'nada');
+          SQL
+          )
+          case "$falta" in diez|nada) ;; *) echo "::error::Antes de traer de Diez falta un paso de la empresa: «$falta» (datos → plan → banco). Abortado sin escribir nada."; exit 1 ;; esac
           # La base NO la dice quien lanza: es la que Folvy registró para la
           # empresa (conta_diez_base). Y el ejercicio del corte, mixto de Diez.
           r=$("$PSQL" "$DB_URL" -X -A -t -F '|' -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v corte="$DIEZ_CORTE" <<'SQL'
@@ -287,6 +321,16 @@ jobs:
           cd /tmp/carga
           "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo="$MODO" \
             -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
+      - name: Recordar lo usado (para que la siguiente salga rellena)
+        if: success()
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          "$PSQL" "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v desde="$DIEZ_DESDE" -v hasta="$DIEZ_HASTA" -v corte="$DIEZ_CORTE" <<'SQL'
+          select public.conta_diez_base_recordar(:'empresa'::uuid, :'desde', :'hasta', :'corte'::date);
+          SQL
+          echo "Queda como lo último usado: desde $DIEZ_DESDE, hasta $DIEZ_HASTA, corte $DIEZ_CORTE." | tee -a /tmp/informe.md
       - name: Sumas por subcuenta, CIFRADAS (llevan importes)
         if: always()
         run: |
@@ -347,6 +391,11 @@ jobs:
           SQL
           )
           [ -n "$BD" ] || { echo "::error::La empresa no tiene base de Diez registrada en conta_diez_base. No se lee nada."; exit 1; }
+          falta=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" <<'SQL'
+          select coalesce(public.conta_diez_listo(:'empresa'::uuid) ->> 'falta', 'nada');
+          SQL
+          )
+          case "$falta" in diez|nada) ;; *) echo "::error::Antes de traer de Diez falta un paso de la empresa: «$falta» (datos → plan → banco). No se lee nada."; exit 1 ;; esac
           # En staging solo se lee la copia de pruebas: lo real nunca va a staging.
           if [ "$MODO" = "lectura-staging" ] && [ "$BD" != "C0009" ]; then echo "::error::En staging solo se lee la C0009; esta empresa tiene la $BD."; exit 1; fi
           echo "DIEZ_BD=$BD" >> "$GITHUB_ENV"

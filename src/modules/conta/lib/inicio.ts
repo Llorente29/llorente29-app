@@ -135,15 +135,19 @@ export function frasePago(fecha: string | null, hoy: string, diaMes: (iso: strin
 }
 
 /** Lo que tiene que decir la persona: las sugerencias, los papeles de compras y los asientos por revisar. */
-export interface Duda { id: string; inicial: string; titulo: string; apoyo: string; tipo: 'sugerencia' | 'compras' | 'revisar' }
+export interface Duda { id: string; inicial: string; titulo: string; apoyo: string; tipo: 'sugerencia' | 'compras' | 'revisar' | 'sinNombre' }
 
-export function dudas(sugerencias: readonly { id: string; title: string; why: string }[], comprasPorMirar: number, asientosPorRevisar: number): Duda[] {
+export function dudas(sugerencias: readonly { id: string; title: string; why: string }[], comprasPorMirar: number, asientosPorRevisar: number, sinNombre = 0): Duda[] {
   const out: Duda[] = sugerencias.map((s) => ({ id: s.id, inicial: 'IA', titulo: s.title, apoyo: s.why, tipo: 'sugerencia' }))
   if (comprasPorMirar > 0) {
     out.push({ id: 'compras', inicial: 'C', tipo: 'compras', titulo: `${comprasPorMirar} ${comprasPorMirar === 1 ? 'papel de compras por mirar' : 'papeles de compras por mirar'}`, apoyo: 'No sé qué hacer con ellos sin ti.' })
   }
   if (asientosPorRevisar > 0) {
     out.push({ id: 'revisar', inicial: 'L', tipo: 'revisar', titulo: `${asientosPorRevisar} ${asientosPorRevisar === 1 ? 'asiento propuesto' : 'asientos propuestos'} para revisar`, apoyo: 'Los he preparado yo; los validas tú.' })
+  }
+  // C06, respuesta 3: lo que llegó de Diez sin nombre no se inventa: se pide.
+  if (sinNombre > 0) {
+    out.push({ id: 'sin-nombre', inicial: 'P', tipo: 'sinNombre', titulo: `${sinNombre} ${sinNombre === 1 ? 'subcuenta' : 'subcuentas'} sin nombre en Diez · pónselo`, apoyo: 'Llegaron de Diez sin nombre: llevan el de su cuenta del plan hasta que les pongas el suyo.' })
   }
   return out
 }

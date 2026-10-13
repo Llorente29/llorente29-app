@@ -29,6 +29,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu, refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { cargarIa, responderSugerencia } from '@/modules/conta/services/iaService'
 import { hechoAlAceptar, type Sugerencia } from '@/modules/conta/ia/tipos'
+import { subcuentasSinNombre } from '@/modules/conta/services/pasosDiezService'
 import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
 import { diaMes, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
@@ -36,6 +37,9 @@ import {
 } from '@/modules/conta/lib/inicio'
 import { mesAnterior, nombreMes, type CierreMes, type PasoCierre } from '@/modules/conta/lib/diario'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
+import { PasosDiez } from '@/modules/conta/diez/PasosDiez'
+import { usePasosDiez } from '@/modules/conta/diez/usePasosDiez'
+import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { leerCierres } from '@/modules/conta/services/diarioService'
 
 type Carga<T> = { estado: 'cargando' } | { estado: 'listo'; v: T } | { estado: 'fallo'; texto: string }
@@ -79,9 +83,10 @@ export default function InicioPage() {
           <Link to={rutaAltaEmpresa()} className="cx-boton">Seguir</Link>
         </div>
       )}
+      <Diez accountId={accountId} companyId={activa.id} quien={userName} />
       <Cifras accountId={accountId} companyId={activa.id} mes={mes} hoy={hoy} />
       <div className="cxi-cuerpo">
-        <Dudas companyId={activa.id} />
+        <Dudas accountId={accountId} companyId={activa.id} />
         <div className="cxi-columna">
           <HechoYo companyId={activa.id} hoy={hoy} />
           <Cierre accountId={accountId} companyId={activa.id} mes={mesAnterior(mesActual)} />
@@ -89,6 +94,22 @@ export default function InicioPage() {
       </div>
     </>
   )
+}
+
+// ── Traer de Diez (C06, respuesta 3) ─────────────────────────────────────────
+
+/**
+ * Los cuatro pasos antes de traer de Diez, mientras falte alguno. En el
+ * producto vendido solo, siempre (el cliente viene de Diez); con Folvy, solo si
+ * la empresa ya tiene su base de Diez registrada. Hecho todo, no se enseña.
+ */
+function Diez({ accountId, companyId, quien }: { accountId: string; companyId: string; quien: string | null }) {
+  const solo = useProductoSolo()
+  const [e, recargar] = usePasosDiez(accountId, companyId)
+  if (e === null || e === 'fallo') return null
+  const base = e.listo.pasos.find((p) => p.paso === 'diez')?.base ?? null
+  if (e.listo.falta === null || (!solo && !base)) return null
+  return <PasosDiez accountId={accountId} companyId={companyId} quien={quien} estado={e} recargar={recargar} />
 }
 
 // ── Cabecera ────────────────────────────────────────────────────────────────
@@ -182,14 +203,15 @@ function Cifra({ etiqueta, valor, apoyo, tono, barras: bs, ruta, ia = false }: {
 
 // ── «Solo necesito que me digas esto» ──────────────────────────────────────
 
-function Dudas({ companyId }: { companyId: string }) {
+function Dudas({ accountId, companyId }: { accountId: string; companyId: string }) {
   const cuentas = useCuentasMenu()
+  const [sinNombre] = useCarga<number>(() => subcuentasSinNombre(accountId, companyId), `${accountId}|${companyId}`)
   const [ia, recargar] = useCarga<Sugerencia[]>(() => cargarIa(companyId).then((r) => r.sugerencias), companyId)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const sugerencias = ia.estado === 'listo' ? ia.v : []
-  const lista = dudas(sugerencias, cuentas.compras ?? 0, cuentas.libros ?? 0)
+  const lista = dudas(sugerencias, cuentas.compras ?? 0, cuentas.libros ?? 0, sinNombre.estado === 'listo' ? sinNombre.v : 0)
 
   async function responder(s: Sugerencia, acepta: boolean) {
     setOcupado(true); setHecho(null); setFallo(null)
@@ -218,6 +240,8 @@ function Dudas({ companyId }: { companyId: string }) {
             <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void responder(s, true)}>Sí, hazlo</button>
             <button type="button" className="cx-boton-sec" disabled={ocupado} onClick={() => void responder(s, false)}>No, gracias</button>
           </>
+        } else if (d.tipo === 'sinNombre') {
+          acciones = <Link className="cx-boton" to={rutaAjustes('plan')}>Ponerles nombre</Link>
         } else if (d.tipo === 'compras') {
           acciones = <Link className="cx-boton" to={rutaCompras()}>Mirarlos</Link>
         } else {
