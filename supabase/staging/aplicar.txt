@@ -6,6 +6,9 @@
 #   Cocina contando TODAS las tablas con account_id; las de siempre siguen
 #   sembrándose; puertas; «otra actividad»; como el cliente; la contraseña).
 #   La semilla: dos cuentas del frente C dadas de alta con la función de verdad.
+#   Run 166: la 0100 ENTRÓ; la prueba paró en «permission_sets does not exist»
+#   (staging-conta no la tiene). La función la usa solo si existe, y la 0100
+#   se puede volver a aplicar (quita y pone su restricción). Va otra vez entera.
 supabase/migrations/20261111T0100_c06_cuenta_sola.sql
 supabase/staging/sql/20261111_c06_cuenta_sola_prueba.sql
 supabase/seeds/conta/seed_c06_staging.sql

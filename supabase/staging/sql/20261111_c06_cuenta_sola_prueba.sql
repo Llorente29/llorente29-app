@@ -84,7 +84,7 @@ create temp table c06_filas (tabla text, filas bigint) on commit drop;
 do $$
 declare
   v_cuenta uuid := current_setting('prueba.cuenta')::uuid;
-  r record; n bigint; v_con text[];
+  r record; n bigint; v_con text[]; v_n bigint;
 begin
   for r in select c.table_name from information_schema.columns c join information_schema.tables t using (table_schema, table_name)
            where c.table_schema = 'public' and c.column_name = 'account_id' and t.table_type = 'BASE TABLE' order by 1 loop
@@ -105,11 +105,18 @@ begin
     and source = 'manual_grant' and granted_by = 'c0600000-0000-4000-8000-0000000000f1' and grant_reason = 'Prueba de staging del C06';
   if not found then raise exception 'PRUEBA C06 · 3: el interruptor conta no dice quién ni por qué.'; end if;
 
-  perform 1 from public.user_profiles p join public.permission_set_assignments a on a.user_profile_id = p.id
-    join public.permission_sets s on s.id = a.permission_set_id and s.name = 'gerente_total'
+  perform 1 from public.user_profiles p
    where p.account_id = v_cuenta and p.user_id = 'c0600000-0000-4000-8000-0000000000f2' and p.role = 'admin' and p.active
      and p.welcome_completed_at is null;
   if not found then raise exception 'PRUEBA C06 · 1: el cliente no es administrador de su cuenta, o no tiene que pasar por la bienvenida.'; end if;
+  -- El conjunto de permisos solo se puede mirar donde existe (producción); staging-conta no tiene permission_sets.
+  if to_regclass('public.permission_sets') is not null then
+    execute $q$select count(*) from public.user_profiles p join public.permission_set_assignments a on a.user_profile_id = p.id
+      join public.permission_sets s on s.id = a.permission_set_id and s.name = 'gerente_total' where p.account_id = $1$q$ into v_n using v_cuenta;
+    if v_n <> 1 then raise exception 'PRUEBA C06 · 1: el administrador no tiene su conjunto de permisos gerente_total.'; end if;
+  else
+    raise notice 'C06 · 1: esta base no tiene permission_sets: el conjunto de permisos no se puede mirar aquí.';
+  end if;
 
   perform 1 from public.platform_audit_log l join public.platform_admins pa on pa.id = l.platform_admin_id
    where l.target_account_id = v_cuenta and l.event_type = 'account_created' and pa.user_id = 'c0600000-0000-4000-8000-0000000000f1'
@@ -132,14 +139,14 @@ begin
   end loop;
   select array_agg(tabla || '=' || filas order by tabla) into v_con from c06_filas;
   raise notice 'C06 · 2: una cuenta de siempre recibe filas en: %', v_con;
-  -- La siembra de gestoría es directa: una fila. Y entre las seis siembran en
-  -- varias tablas más: si una cuenta de siempre se quedara en blanco, los
-  -- disparadores habrían dejado de sembrar.
-  if not exists (select 1 from c06_filas where tabla = 'account_gestoria_config' and filas = 1) then
-    raise exception 'PRUEBA C06 · 2: una cuenta de siempre ya no recibe su configuración de gestoría.';
-  end if;
-  if (select count(*) from c06_filas) < 4 then
-    raise exception 'PRUEBA C06 · 2: una cuenta de siempre recibe filas en muy pocas tablas (%): ¿han dejado de sembrar los disparadores?', v_con;
+  -- Medido en staging el 13/10 (cuenta C, solo lectura): una cuenta de siempre
+  -- recibe staff_role, account_gestoria_config y vacation_settings. APPCC,
+  -- familias de ingredientes y cursos no siembran nada aquí (staging no tiene
+  -- sus datos de origen); en producción, sí. Se miran las tres que se pueden medir.
+  if not exists (select 1 from c06_filas where tabla = 'account_gestoria_config' and filas = 1)
+     or not exists (select 1 from c06_filas where tabla = 'staff_role' and filas > 0)
+     or not exists (select 1 from c06_filas where tabla = 'vacation_settings' and filas > 0) then
+    raise exception 'PRUEBA C06 · 2: una cuenta de siempre ya no se siembra como antes: %', v_con;
   end if;
   raise notice 'C06 · 2: las cuentas de siempre se siembran como antes. OK';
 end $$;

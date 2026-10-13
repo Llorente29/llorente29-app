@@ -43,6 +43,7 @@
 
 -- ── 1 · La marca de una cuenta solo de contabilidad ─────────────────────────
 alter table public.accounts add column if not exists product_brand text;
+alter table public.accounts drop constraint if exists accounts_product_brand_formato;
 alter table public.accounts add constraint accounts_product_brand_formato
   check (product_brand is null or product_brand ~ '^[a-z][a-z0-9_]{1,40}$');
 comment on column public.accounts.product_brand is
@@ -138,7 +139,7 @@ language plpgsql security definer set search_path = public
 as $$
 declare
   v_admin_plataforma uuid;
-  v_gerente_total    uuid;
+  v_gerente_total    uuid := null;
   v_cuenta           uuid;
   v_perfil           uuid;
 begin
@@ -152,9 +153,16 @@ begin
     raise exception 'Solo un administrador activo de la plataforma da de alta cuentas (usuario %).', p_creada_por using errcode = '42501';
   end if;
 
-  select id into v_gerente_total from permission_sets
-   where name = 'gerente_total' and is_system = true and account_id is null limit 1;
-  if v_gerente_total is null then raise exception 'No existe el conjunto de permisos global gerente_total.'; end if;
+  -- El conjunto de permisos de siempre (gerente_total), como create_account_tx.
+  -- staging-conta no tiene permission_sets (su esquema es solo el de
+  -- contabilidad): allí la cuenta nace sin él y lo dice; en producción es obligatorio.
+  if to_regclass('public.permission_sets') is not null then
+    execute $q$select id from public.permission_sets where name = 'gerente_total' and is_system = true and account_id is null limit 1$q$
+      into v_gerente_total;
+    if v_gerente_total is null then raise exception 'No existe el conjunto de permisos global gerente_total.'; end if;
+  else
+    raise notice 'Esta base no tiene permission_sets (staging-conta): el administrador queda sin conjunto de permisos.';
+  end if;
 
   -- product_brand va en el INSERT: los disparadores de siembra la ven y no siembran.
   insert into accounts (name, slug, status, country, created_by, business_type, product_brand)
@@ -164,8 +172,10 @@ begin
   insert into user_profiles (user_id, account_id, role, active, display_name)
   values (p_admin_user_id, v_cuenta, 'admin', true, nullif(trim(p_admin_nombre), ''))
   returning id into v_perfil;
-  insert into permission_set_assignments (user_profile_id, permission_set_id, assigned_by)
-  values (v_perfil, v_gerente_total, p_creada_por);
+  if v_gerente_total is not null then
+    execute $q$insert into public.permission_set_assignments (user_profile_id, permission_set_id, assigned_by) values ($1, $2, $3)$q$
+      using v_perfil, v_gerente_total, p_creada_por;
+  end if;
 
   insert into feature_flags (account_id, feature_key, enabled, source, granted_by, grant_reason)
   values (v_cuenta, 'conta', true, 'manual_grant', p_creada_por, trim(p_motivo));
