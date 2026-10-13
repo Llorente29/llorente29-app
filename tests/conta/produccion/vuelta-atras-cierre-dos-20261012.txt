@@ -1,0 +1,10 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas.
+#
+# C04b · Respuesta 4 — el cierre a las 2:00: los dos .down.sql en orden
+# inverso al de aplicar.txt.
+#   · la 0175 devuelve Foodint a las 6:00, solo si sigue a las 2:00;
+#   · la 0170 devuelve la hora de serie a las 6:00 y las tres funciones a
+#     como estaban (copiadas de lo vigente el 12/10).
+supabase/vuelta-atras/20261019T0175_cierre_a_las_dos_foodint.down.sql
+supabase/vuelta-atras/20261019T0170_cierre_a_las_dos.down.sql

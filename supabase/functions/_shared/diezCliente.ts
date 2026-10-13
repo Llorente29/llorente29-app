@@ -137,7 +137,9 @@ export type AnaliticaDiez = {
 type Paginada<T> = { Datos: T[]; ResultadosTotales?: number; PaginaActual?: number; ElementosPorPagina?: number }
 
 // Las únicas rutas que se pueden escribir, y con qué método.
-const ESCRITURAS: Record<string, 'POST'> = { '/api/apuntes/add': 'POST', '/api/facturas/add': 'POST' }
+// C04b R5: y el alta de una subcuenta que Diez no tiene (con el mismo código y
+// nombre que en Folvy), antes de enviar el asiento que la usa.
+const ESCRITURAS: Record<string, 'POST'> = { '/api/apuntes/add': 'POST', '/api/facturas/add': 'POST', '/api/subcuentas/add': 'POST' }
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const esLocal = (b: string) => /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(b)
@@ -330,6 +332,12 @@ export class ClienteDiez {
     const r = await this.llamar('POST', '/api/apuntes/add', a)
     if (r.status !== 200) throw new ErrorDiez(`apuntes/add → ${r.status}`, r.status, r.json)
     return r.json as Apunte
+  }
+  /** Alta de una subcuenta (SubCuentaCompleta: Codigo y Descripcion, las dos obligatorias). */
+  async crearSubcuenta(sc: { Codigo: string; Descripcion: string }): Promise<unknown> {
+    const r = await this.llamar('POST', '/api/subcuentas/add', sc)
+    if (r.status !== 200) throw new ErrorDiez(`subcuentas/add → ${r.status}`, r.status, r.json)
+    return r.json
   }
   async enviarFactura(fd: FacturaData): Promise<Factura> {
     const r = await this.llamar('POST', '/api/facturas/add', fd)

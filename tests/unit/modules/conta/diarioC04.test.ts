@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cifras, deDondeSale, estadoDe, estadoMes, filtrar, filtrosVisibles, importe, loQueHeHechoYo, mesAnterior, finDeMes,
-  marcaNegativoDiez, nombreDeUso, numeroVisible, pasosCierre, pastillas, problemasMano, sePuedeCerrar, cuadreMano, type ApunteDiario, type AsientoDiario, type LineaMano,
+  marcaNegativoDiez, nombreDeUso, numeroVisible, pasosCierre, pastillas, pastillasDeLinea, problemasMano, sePuedeCerrar, cuadreMano, type ApunteDiario, type AsientoDiario, type LineaMano,
 } from '@/modules/conta/lib/diario'
 
 const NORTE = 'loc-norte'; const SUR = 'loc-sur'
@@ -72,6 +72,12 @@ describe('estado, importe y pastillas', () => {
     const dos = asiento({ apuntes: [apunte({ debe: 1 }), apunte({ localId: SUR, local: 'Sur', haber: 1, marcaId: 'm2', marca: 'Marca A', cedida: true })] })
     expect(pastillas(dos)).toEqual([{ texto: '2 locales', tono: 'azul' }, { texto: 'Marca A · cedida', tono: 'ambar' }])
     expect(pastillas(asiento({ apuntes: [apunte({ localId: null, local: null, comun: true, debe: 1 })] }))).toEqual([{ texto: 'Común', tono: 'azul' }])
+  })
+  it('C04b R5: en cada línea, la marca con su nombre junto a la subcuenta; la cedida, dicha', () => {
+    expect(pastillasDeLinea(apunte({ cuenta: '70000002', marcaId: 'm1', marca: 'Meraki Pita' }))).toEqual([{ texto: 'Norte', tono: 'azul' }, { texto: 'Meraki Pita', tono: 'neutro' }])
+    expect(pastillasDeLinea(apunte({ marcaId: 'm2', marca: 'Milanesa Haus', cedida: true }))).toEqual([{ texto: 'Norte', tono: 'azul' }, { texto: 'Milanesa Haus · cedida', tono: 'ambar' }])
+    expect(pastillasDeLinea(apunte({ localId: null, local: null, comun: true }))).toEqual([{ texto: 'Común', tono: 'azul' }])
+    expect(pastillasDeLinea(apunte({ cuenta: '47700010' }))).toEqual([{ texto: 'Norte', tono: 'azul' }])
   })
   it('de dónde sale, en palabras', () => {
     expect(deDondeSale(asiento({ origen: 'manual', creadoPor: 'Ana' }))).toBe('A mano · Ana')

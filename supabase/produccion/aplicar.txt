@@ -5,19 +5,31 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C04b · Respuesta 4 — el día se cierra a las 2:00 (Julio, 12/10). Desde la
-# rama conta/c04b-diez, sin fusionar. La tanda anterior (Diez, 0100–0160) ya
-# está en el historial de producción con su huella (comprobado el 12/10).
+# C04b · Respuesta 5 — la regla de ventas definitiva (Julio, 13/10). La tanda
+# anterior (0170 y 0175, el cierre a las 2:00) ya está en el historial de
+# producción con su huella (run real 38352237907, comprobado el 13/10).
 #
-#   1. 0170 — la hora de serie pasa a 2:00 (solo el DEFAULT); el cierre y
-#      «propuesto antes del cierre» preguntan lo mismo, también la noche del
-#      25/10 en que las 2:00 pasan dos veces. Cambia en caliente tres
-#      funciones, declaradas con su prueba de staging.
-#   2. 0175 — Foodint, de las 6:00 a las 2:00 (su hora está guardada en su
-#      ficha fiscal; la de serie no la mueve). Cambia una fila: AUTORIZO,
-#      con el nombre entero:
-#        20261019T0175_cierre_a_las_dos_foodint.sql
+#   1. 0100 — la regla por empresa (conta_ventas_canal, conta_ventas_marca),
+#      la unidad en el resumen y la propuesta por unidad: Uber y Just Eat, una
+#      por plataforma, local y día; Glovo, por marca. Cambia en caliente
+#      cuatro funciones del proponedor, declaradas con su prueba de staging.
+#   2. 0110 — el índice único del resumen, por unidad (quita el de un resumen
+#      por día). AUTORIZO, con el nombre entero:
+#        20261020T0110_ventas_por_plataforma_indice.sql
+#   3. 0120 — Foodint: Glovo por marca; cada marca a su 7000000x y su
+#      7080000x; las tres 708 que faltaban (70800003, 70800007, 70800008).
+#      Solo inserta.
+#   4. 0130 — se retiran los propuestos del día entero de octubre (24 el
+#      13/10) para que el cierre del día los proponga por unidad en su pasada
+#      siguiente. Borra: AUTORIZO, con el nombre entero:
+#        20261020T0130_ventas_por_plataforma_rehacer.sql
+#
+# Análisis contra producción, medido el 13/10 con la consulta de solo lectura
+# del workflow: 0100 y 0120 «sigue»; 0110 y 0130 «autorizo».
+# NO se lanza hasta que Julio haya visto los dos asientos de muestra (R5).
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261019T0170_cierre_a_las_dos.sql
-supabase/migrations/20261019T0175_cierre_a_las_dos_foodint.sql
+supabase/migrations/20261020T0100_ventas_por_plataforma.sql
+supabase/migrations/20261020T0110_ventas_por_plataforma_indice.sql
+supabase/migrations/20261020T0120_ventas_por_plataforma_foodint.sql
+supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql

@@ -84,9 +84,24 @@ function cuerpoDo(s) {
 
 /** Firma normalizada de un create function: public.f(uuid,date). */
 function firma(s) {
-  const m = s.match(new RegExp(`^create\\s+(?:or\\s+replace\\s+)?function\\s+${ID}\\s*\\(([^)]*)\\)`, 'i'))
+  const m = s.match(new RegExp(`^create\\s+(?:or\\s+replace\\s+)?function\\s+${ID}\\s*\\(`, 'i'))
   if (!m) return null
-  const args = m[2].split(',').map((a) => a.trim()).filter(Boolean).map((a) => {
+  // Los argumentos hasta el paréntesis que cierra, saltando comillas y
+  // paréntesis anidados: un valor por defecto como 'Folvy (cierre del día)' o
+  // numeric(5,2) no corta la firma (C04b R5: la leía como otra función y
+  // avisaba de una sobrecarga que no existía).
+  const trozos = []; let cur = ''; let prof = 0; let i = m[0].length; let cerrado = false
+  for (; i < s.length; i++) {
+    const c = s[i]
+    if (c === "'") { const j = s.indexOf("'", i + 1); const fin = j < 0 ? s.length : j; cur += s.slice(i, fin + 1); i = fin; continue }
+    if (c === '(') prof++
+    else if (c === ')') { if (prof === 0) { cerrado = true; break } prof-- }
+    else if (c === ',' && prof === 0) { trozos.push(cur); cur = ''; continue }
+    cur += c
+  }
+  if (!cerrado) return null
+  trozos.push(cur)
+  const args = trozos.map((a) => a.trim()).filter(Boolean).map((a) => {
     const sinDefecto = a.replace(/\s+default\s+[\s\S]*$/i, '').replace(/\s*=\s*[\s\S]*$/, '')
     const partes = sinDefecto.split(/\s+/).filter((p) => !/^(in|out|inout|variadic)$/i.test(p))
     // «p_id uuid» → uuid; «uuid» → uuid

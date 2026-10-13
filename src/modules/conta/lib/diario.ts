@@ -201,6 +201,19 @@ export function pastillas(a: Pick<AsientoDiario, 'apuntes'>): { texto: string; t
   return r
 }
 
+/**
+ * C04b R5 · Las pastillas de UNA línea del asiento: su local (o «Común») y su
+ * marca con su NOMBRE, propia o cedida, para que la marca se lea junto a la
+ * subcuenta (7000000x, 7080000x) sin tener que traducir códigos.
+ */
+export function pastillasDeLinea(l: Pick<ApunteDiario, 'comun' | 'localId' | 'local' | 'marcaId' | 'marca' | 'cedida'>): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
+  const r: { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] = []
+  if (l.comun) r.push({ texto: 'Común', tono: 'azul' })
+  else if (l.localId) r.push({ texto: l.local ?? 'local', tono: 'azul' })
+  if (l.marcaId) r.push(l.cedida ? { texto: `${l.marca ?? 'marca'} · cedida`, tono: 'ambar' } : { texto: l.marca ?? 'marca propia', tono: 'neutro' })
+  return r
+}
+
 const ORIGEN_TEXTO: Record<OrigenAsiento, string> = {
   sales_day: 'Resumen de ventas del día', sales_adjustment: 'Lo que decidió la plataforma', supplier_invoice: 'Factura de proveedor',
   supplier_payment: 'Pago a proveedor', channel_settlement: 'Liquidación de la plataforma', licensed_settlement: 'Liquidación del socio de marca',

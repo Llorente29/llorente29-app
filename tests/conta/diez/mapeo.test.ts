@@ -4,7 +4,7 @@
 // líneas, Tercero y Justificante vacíos).
 
 import { describe, expect, it } from 'vitest'
-import { compararDia, convertirAsiento, fechaIso, huellaDe, type AsientoFolvy } from '../../../supabase/functions/_shared/diezMapeo'
+import { compararDia, compararDiaPorCuentas, convertirAsiento, fechaIso, huellaDe, type AsientoFolvy } from '../../../supabase/functions/_shared/diezMapeo'
 import type { Apunte } from '../../../supabase/functions/_shared/diezCliente'
 
 const base = (o: Partial<Apunte> = {}): Apunte => ({
@@ -170,4 +170,35 @@ describe('compararDia', () => {
 describe('fechaIso', () => {
   it.each([[20240229, '2024-02-29'], ['20231001', '2023-10-01']])('%s', (x, y) => expect(fechaIso(x)).toBe(y))
   it.each([20230229, 2023101, 'abc', null])('%s no', (x) => expect(() => fechaIso(x)).toThrow())
+})
+
+describe('compararDiaPorCuentas (C04b R5): el total y cada cliente, sin contar como diferencia un cambio decidido', () => {
+  // Un día de Glovo de una marca: Diez lo llevaba a 70000000 y 47700000; Folvy, desde octubre, a 70000002 y 47700010.
+  const diezGlovo = [{ cuenta: '43000001', debe: 3340, haber: 0 }, { cuenta: '70000000', debe: 0, haber: 3036 }, { cuenta: '47700000', debe: 0, haber: 304 }]
+  const folvyGlovo = [{ cuenta: '43000001', debe: 3340, haber: 0 }, { cuenta: '70000002', debe: 0, haber: 3036 }, { cuenta: '47700010', debe: 0, haber: 304 }]
+  it('desde octubre, otra subcuenta con el mismo total es un cambio decidido, y se dice', () => {
+    const c = compararDiaPorCuentas('2026-10-05', folvyGlovo, diezGlovo)
+    expect(c.estado).toBe('igual')
+    expect(c.diferencias).toEqual([])
+    expect(c.cambiosDecididos.map((x) => [x.familia, x.soloFolvy, x.soloDiez])).toEqual([
+      ['ventas', ['70000002'], ['70000000']], ['IVA repercutido', ['47700010'], ['47700000']]])
+  })
+  it('antes de octubre, lo mismo es diferencia cuenta a cuenta', () => {
+    const c = compararDiaPorCuentas('2026-09-27', folvyGlovo, diezGlovo)
+    expect(c.estado).toBe('distinto')
+    expect(c.diferencias).toEqual([{ tipo: 'cuenta', cuenta: '47700000' }, { tipo: 'cuenta', cuenta: '47700010' }, { tipo: 'cuenta', cuenta: '70000000' }, { tipo: 'cuenta', cuenta: '70000002' }])
+  })
+  it('lo que cobra un cliente distinto sí es diferencia, aunque el día cuadre en total', () => {
+    const f = [{ cuenta: '43000001', debe: 1000, haber: 0 }, { cuenta: '43000002', debe: 500, haber: 0 }, { cuenta: '70000002', debe: 0, haber: 1500 }]
+    const d = [{ cuenta: '43000001', debe: 1500, haber: 0 }, { cuenta: '70000002', debe: 0, haber: 1500 }]
+    const c = compararDiaPorCuentas('2026-10-05', f, d)
+    expect(c.diferencias).toEqual([{ tipo: 'cliente', cuenta: '43000001' }, { tipo: 'cliente', cuenta: '43000002' }])
+    expect(c.clientes).toEqual([{ cuenta: '43000001', folvy: 1000, diez: 1500 }, { cuenta: '43000002', folvy: 500, diez: 0 }])
+  })
+  it('una familia que no cuadra en total es diferencia, y el total del día también', () => {
+    const f = [{ cuenta: '43000002', debe: 1590, haber: 0 }, { cuenta: '70000002', debe: 0, haber: 1445 }, { cuenta: '47700010', debe: 0, haber: 145 }]
+    const d = [{ cuenta: '43000002', debe: 1590, haber: 0 }, { cuenta: '70000002', debe: 0, haber: 1500 }, { cuenta: '47700000', debe: 0, haber: 90 }]
+    const c = compararDiaPorCuentas('2026-10-05', f, d)
+    expect(c.diferencias).toEqual([{ tipo: 'familia', familia: 'ventas' }, { tipo: 'familia', familia: 'IVA repercutido' }])
+  })
 })

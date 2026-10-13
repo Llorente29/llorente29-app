@@ -1,21 +1,21 @@
-# C04b · Respuesta 4 — El día se cierra a las 2:00 (Julio, 12/10).
-# (2.ª pasada: la 1.ª, run 142, paró en el ensayo en la parte 4 de la prueba —la
-# propuesta inventada no llevaba confianza ni porqué—; no se aplicó nada.)
-#   ensayo: la 0170, la 0175 y su prueba en una transacción con ROLLBACK. Si
-#           falla, no se aplica lo de abajo.
-#   0170:   hora de serie 2:00 (solo el DEFAULT); conta_ultimo_dia_cerrado y
-#           conta_cerrar_dias con 2:00 cuando la empresa no tiene hora (el
-#           resto, copiado de lo vigente: md5 medido en staging y producción);
-#           conta_propuestos_antes_del_cierre pregunta lo mismo que el cierre
-#           (la noche del 25/10 las 2:00 pasan dos veces).
-#   0175:   Foodint de 6:00 a 2:00. En staging no hay Foodint: no hace nada y
-#           lo dice.
-#   La prueba: serie 2:00; 13 instantes de octubre y marzo; un pedido de las
-#   23:00 abierto a la 1:59 y cerrado a las 2:07 con «(2:00)»; «propuesto
-#   antes del cierre» igual que el cierre en la hora repetida; la hora de cada
-#   empresa manda.
-supabase/staging/sql/20261019_cierre_a_las_dos_ensayo.sql
-supabase/migrations/20261019T0170_cierre_a_las_dos.sql
-supabase/migrations/20261019T0175_cierre_a_las_dos_foodint.sql
-supabase/staging/sql/20261019_cierre_a_las_dos_prueba.sql
-supabase/staging/sql/20261019_cierre_a_las_dos_semilla.sql
+# C04b · Respuesta 5 — La regla de ventas definitiva (Julio, 13/10).
+#   ensayo: la 0100, 0110, 0120, 0130 y su prueba en una transacción con
+#           ROLLBACK. Si falla, no se aplica lo de abajo.
+#   0100:   conta_ventas_canal y conta_ventas_marca (la regla por empresa),
+#           unit_key en el resumen, la propuesta por unidad (Uber y Just Eat,
+#           una por plataforma; Glovo, por marca), y las cuatro funciones del
+#           proponedor copiadas de lo vigente con la unidad (md5 medido en
+#           producción el 13/10).
+#   0110:   el índice único del resumen, por unidad («autorizo»).
+#   0120:   Foodint. En staging no hay Foodint: no hace nada y lo dice.
+#   0130:   rehacer los propuestos del día entero de quien use la regla
+#           («autorizo»). En staging, ninguno.
+#   La prueba: sin regla, como antes; con regla, Glovo · Casa Lola por marca a
+#   su 7000000x, Uber sin 430 dicho, nada dos veces, el front de antes negado
+#   con su porqué y el descarte de una unidad.
+supabase/staging/sql/20261020_ventas_por_plataforma_ensayo.sql
+supabase/migrations/20261020T0100_ventas_por_plataforma.sql
+supabase/migrations/20261020T0110_ventas_por_plataforma_indice.sql
+supabase/migrations/20261020T0120_ventas_por_plataforma_foodint.sql
+supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql
+supabase/staging/sql/20261020_ventas_por_plataforma_prueba.sql

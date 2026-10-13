@@ -182,3 +182,65 @@ export function compararDia(dia: string, folvy: ResumenAsiento[], diez: ResumenA
   const estado = diferencias.length === 0 ? 'igual' : folvy.length === 0 ? 'solo_diez' : diez.length === 0 ? 'solo_folvy' : 'distinto'
   return { dia, estado, folvy: suma(folvy), diez: suma(diez), diferencias }
 }
+
+// ── Comparar un día por cuentas (C04b R5) ───────────────────────────────────
+// Desde octubre de 2026 Folvy asienta las ventas con la regla de Julio (13/10)
+// y Diez, en su histórico, de otra forma: Glovo a 70000000 y el IVA a
+// 47700000. Eso es un CAMBIO DECIDIDO, no una diferencia. Así que se compara:
+//   · el total del día (debe y haber);
+//   · cada cuenta de cliente (430), por su saldo del día;
+//   · las ventas (700), los reembolsos (708) y el IVA repercutido (477), cada
+//     familia por su TOTAL: si el total cuadra y solo cambia la subcuenta, se
+//     dice como cambio decidido; si el total no cuadra, es una diferencia;
+//   · todo lo demás, cuenta a cuenta.
+// Antes de `desde` no hay cambio decidido: todo se compara cuenta a cuenta.
+export type ApunteComparable = { cuenta: string; debe: number; haber: number } // céntimos
+
+export interface CambioDecidido { familia: string; prefijo: string; desde: string; que: string }
+export const CAMBIOS_DECIDIDOS: readonly CambioDecidido[] = [
+  { familia: 'ventas', prefijo: '700', desde: '2026-10-01', que: 'las ventas van a la subcuenta de cada marca (7000000x), también las de Glovo' },
+  { familia: 'reembolsos', prefijo: '708', desde: '2026-10-01', que: 'los reembolsos al cliente van a la subcuenta de cada marca (7080000x)' },
+  { familia: 'IVA repercutido', prefijo: '477', desde: '2026-10-01', que: 'el IVA de las ventas va a la 477 del tipo (47700010)' },
+]
+
+export type DiferenciaCuenta = { cuenta: string; folvy: number; diez: number } // saldo debe − haber, céntimos
+export interface ComparacionPorCuentas {
+  dia: string
+  estado: 'igual' | 'distinto'
+  total: { folvy: { debe: number; haber: number }; diez: { debe: number; haber: number } }
+  /** Cada 430 que aparece en cualquiera de los dos lados, con su saldo del día. */
+  clientes: DiferenciaCuenta[]
+  /** Lo que no cuadra: total, una 430, el total de una familia o una cuenta suelta. */
+  diferencias: ({ tipo: 'total' } | { tipo: 'cliente'; cuenta: string } | { tipo: 'familia'; familia: string } | { tipo: 'cuenta'; cuenta: string })[]
+  /** Familias que cuadran en total con otras subcuentas que Diez: se dice, no es diferencia. */
+  cambiosDecididos: { familia: string; que: string; soloFolvy: string[]; soloDiez: string[] }[]
+}
+
+export function compararDiaPorCuentas(dia: string, folvy: readonly ApunteComparable[], diez: readonly ApunteComparable[], cambios: readonly CambioDecidido[] = CAMBIOS_DECIDIDOS): ComparacionPorCuentas {
+  const saldos = (xs: readonly ApunteComparable[]) => {
+    const m = new Map<string, number>()
+    for (const x of xs) m.set(x.cuenta, (m.get(x.cuenta) ?? 0) + x.debe - x.haber)
+    return m
+  }
+  const suma = (xs: readonly ApunteComparable[]) => ({ debe: xs.reduce((s, x) => s + x.debe, 0), haber: xs.reduce((s, x) => s + x.haber, 0) })
+  const F = saldos(folvy), D = saldos(diez)
+  const cuentas = [...new Set([...F.keys(), ...D.keys()])].sort()
+  const vigentes = cambios.filter((c) => dia >= c.desde)
+  const familiaDe = (c: string) => vigentes.find((x) => c.startsWith(x.prefijo))
+  const diferencias: ComparacionPorCuentas['diferencias'] = []
+  const total = { folvy: suma(folvy), diez: suma(diez) }
+  if (total.folvy.debe !== total.diez.debe || total.folvy.haber !== total.diez.haber) diferencias.push({ tipo: 'total' })
+  const clientes = cuentas.filter((c) => c.startsWith('430')).map((c) => ({ cuenta: c, folvy: F.get(c) ?? 0, diez: D.get(c) ?? 0 }))
+  for (const c of clientes) if (c.folvy !== c.diez) diferencias.push({ tipo: 'cliente', cuenta: c.cuenta })
+  const cambiosDecididos: ComparacionPorCuentas['cambiosDecididos'] = []
+  for (const f of vigentes) {
+    const de = cuentas.filter((c) => c.startsWith(f.prefijo))
+    if (!de.length) continue
+    const tF = de.reduce((s, c) => s + (F.get(c) ?? 0), 0), tD = de.reduce((s, c) => s + (D.get(c) ?? 0), 0)
+    if (tF !== tD) { diferencias.push({ tipo: 'familia', familia: f.familia }); continue }
+    const distintas = de.filter((c) => (F.get(c) ?? 0) !== (D.get(c) ?? 0))
+    if (distintas.length) cambiosDecididos.push({ familia: f.familia, que: f.que, soloFolvy: distintas.filter((c) => (F.get(c) ?? 0) !== 0 && !(D.get(c))), soloDiez: distintas.filter((c) => (D.get(c) ?? 0) !== 0 && !(F.get(c))) })
+  }
+  for (const c of cuentas) if (!c.startsWith('430') && !familiaDe(c) && (F.get(c) ?? 0) !== (D.get(c) ?? 0)) diferencias.push({ tipo: 'cuenta', cuenta: c })
+  return { dia, estado: diferencias.length ? 'distinto' : 'igual', total, clientes, diferencias, cambiosDecididos }
+}

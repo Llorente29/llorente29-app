@@ -609,8 +609,9 @@ describe('la tanda de Diez (ya aplicada: las siete en el historial de producció
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el día se cierra a las 2:00', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda del cierre a las 2:00 (ya aplicada: run real 38352237907, en el historial de producción, comprobado el 13/10), tal cual', () => {
+  // Copia del manifiesto con el que se aplicó (desde la rama, el 13/10).
+  const MANIFIESTO = 'tests/conta/produccion/tanda-cierre-dos-20261012.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow (sqlContexto)
   // sobre los dos ficheros, lanzada en solo lectura en producción el 12/10:
@@ -643,6 +644,47 @@ describe('la tanda de AHORA (manifiesto vivo): el día se cierra a las 2:00', ()
     expect(sql).toMatch(/v_hora is distinct from time '06:00'/)
   })
   it('su vuelta atrás son sus dos .down.sql, al revés, y existen', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-cierre-dos-20261012.txt')
+    expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
+    for (const f of atras) expect(existsSync(f), f).toBe(true)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): la regla de ventas por plataforma (C04b R5)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow (sqlContexto,
+  // con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow) sobre los cuatro
+  // ficheros, lanzada en solo lectura en producción el 13/10: existen
+  // company_account, journal_entry y sales_day_summary (del camino del pedido:
+  // sales_.*) y las cuatro funciones que cambian; nada en el historial.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-ventas-plataforma-20261013.json', 'utf8'))
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('las cuatro, en su orden', () => {
+    expect(viva.map((f) => f.replace(/^.*\/20261020T/, '').replace(/\.sql$/, ''))).toEqual([
+      '0100_ventas_por_plataforma', '0110_ventas_por_plataforma_indice', '0120_ventas_por_plataforma_foodint', '0130_ventas_por_plataforma_rehacer'])
+  })
+  it('0100 y 0120 siguen; 0110 y 0130 piden «autorizo», y la cabecera las nombra', () => {
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue', [viva[1]]: 'autorizo', [viva[2]]: 'sigue', [viva[3]]: 'autorizo' })
+    const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
+    expect(nombradas).toEqual(['20261020T0110_ventas_por_plataforma_indice.sql', '20261020T0130_ventas_por_plataforma_rehacer.sql'])
+  })
+  it('la 0100 declara cada función que cambia, y la prueba de staging las nombra', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    const prueba = readFileSync('supabase/staging/sql/20261020_ventas_por_plataforma_prueba.sql', 'utf8')
+    for (const o of ['conta_dias_por_asentar', '_journal_entry_proponer', 'conta_proponer_dias', 'journal_entry_descartar']) {
+      expect(sql).toMatch(new RegExp(`-- cambia: public\\.${o} · prueba: supabase/staging/sql/20261020_ventas_por_plataforma_prueba\\.sql`))
+      expect(prueba).toContain(o)
+    }
+  })
+  it('la 0120 está anclada por id y cuenta (regla 9)', () => {
+    const sql = readFileSync(viva[2], 'utf8')
+    expect(sql).toContain("'658728c0-fcd7-46ef-a860-d4e5e6eb21d9'")
+    expect(sql).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás son sus cuatro .down.sql, al revés, y existen', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     for (const f of atras) expect(existsSync(f), f).toBe(true)
@@ -684,6 +726,16 @@ describe('lo que tiene que parar', () => {
     expect(sup('create or replace function public.vat_rate_for(p uuid, d date, x int) returns int language sql as $$ select 1 $$').para).toHaveLength(0)
     // Otra firma = otra función: no existe, así que es nueva (y crearía una sobrecarga: regla 2). Se ve en el informe.
     expect(sup('create or replace function public.vat_rate_for(p uuid, d date) returns int language sql as $$ select 1 $$').tocaVatRateFor).toBe(true)
+  })
+  it('C04b R5: la firma no se corta en un paréntesis de un valor por defecto ni de un tipo', () => {
+    const f = (x: string) => clasificar(x).find((o: { tipo: string }) => o.tipo === 'funcion')?.objeto
+    expect(f("create or replace function public.conta_proponer_dias(p_company uuid, p_ahora timestamptz default now(), p_quien text default 'Folvy (cierre del día)') returns jsonb language sql as $$ select null $$"))
+      .toBe('public.conta_proponer_dias(uuid,timestamptz,text)')
+    expect(f("create function public.g(a numeric(5,2), b text default 'x, y') returns int language sql as $$ select 1 $$")).toBe('public.g(numeric(5,2),text)')
+    expect(f('create function public.h() returns int language sql as $$ select 1 $$')).toBe('public.h()')
+    // La 0100 del C04b R5 reemplaza conta_proponer_dias con su firma entera, no crea otra.
+    expect(analizarFichero('supabase/migrations/20261020T0100_ventas_por_plataforma.sql').map((o: { objeto: string }) => o.objeto))
+      .toContain('public.conta_proponer_dias(uuid,timestamptz,text)')
   })
   it('una columna obligatoria sin valor por defecto, o un cambio de tipo', () => {
     expect(sup('alter table public.supplier add column x text not null').para).toHaveLength(1)
