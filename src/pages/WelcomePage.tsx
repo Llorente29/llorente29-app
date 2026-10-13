@@ -52,7 +52,7 @@ import {
   PASSWORD_REGEX,
   validatePassword,
 } from '../lib/passwordPolicy'
-import { MARCA } from '../marca/marca'
+import { CON_MARCA, MARCA } from '../marca/marca'
 import { PieEntrada } from '../marca/PiezasMarca'
 
 type FormState = 'idle' | 'submitting' | 'error'
@@ -286,7 +286,8 @@ export default function WelcomePage() {
         {/* Cabecera */}
         <div className="text-center mb-8">
           <Logo size="xl" variant="light" className="mb-2" />
-          <p className="text-sm text-text-secondary mt-1">App del equipo</p>
+          {/* C06: «App del equipo» es la de cocina; con una marca propia, su producto. */}
+          <p className="text-sm text-text-secondary mt-1">{CON_MARCA ? 'Tu contabilidad' : 'App del equipo'}</p>
         </div>
 
         {/* Tarjeta */}
