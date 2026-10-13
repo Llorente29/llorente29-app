@@ -22,10 +22,10 @@ describe('navegación del módulo de contabilidad', () => {
   it('las entradas sin pantalla no se pintan', () => {
     const visibles = MENU_CONTA.flat().filter((e) => e.ruta !== null).map((e) => e.id)
     // C03: «Clientes y proveedores» ya tiene su pantalla; C04: «Libros» (el libro diario); compras: «Compras»;
-    // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no).
-    expect(visibles).toEqual(['compras', 'ventas', 'terceros', 'libros', 'ajustes'])
+    // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no); B01: «Bancos».
+    expect(visibles).toEqual(['compras', 'ventas', 'bancos', 'terceros', 'libros', 'ajustes'])
     expect(entradasVisibles(PESTANAS_AJUSTES).map((e) => e.id)).toEqual(['empresa', 'tablas'])
-    expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['ajustes'])
+    expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['bancos', 'ajustes'])
   })
   it('el menú está entero, en el orden de la maqueta', () => {
     expect(MENU_CONTA.flat().map((e) => e.etiqueta)).toEqual([

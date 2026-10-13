@@ -37,6 +37,11 @@ on:
       - 'playwright.config.ts'
       - '.github/workflows/e2e-staging-conta.yml'
   workflow_dispatch:
+    inputs:
+      ruta:
+        description: 'Solo estas pruebas (p. ej. tests/e2e/conta/b01). Vacío: todas.'
+        required: false
+        default: ''
 
 # Un push nuevo ESPERA en cola: no cancela el e2e que está corriendo (C05,
 # respuesta 3). GitHub deja como mucho uno en espera por rama: si llegan dos,
@@ -134,7 +139,19 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Pruebas (ordenador y móvil)
-        run: npx playwright test
+        env:
+          RUTA: ${{ github.event.inputs.ruta || '' }}
+        run: |
+          set -euo pipefail
+          # A mano se pueden pedir solo las de un frente (B01: sus capturas no
+          # esperan a que pasen las de los demás). Solo rutas de tests/e2e.
+          if [ -n "$RUTA" ]; then
+            case "$RUTA" in tests/e2e/*) ;; *) echo "::error::La ruta tiene que estar en tests/e2e: $RUTA"; exit 1 ;; esac
+            case "$RUTA" in *..*) echo "::error::Ruta no permitida: $RUTA"; exit 1 ;; esac
+            npx playwright test "$RUTA"
+          else
+            npx playwright test
+          fi
 
       - name: Informe de Playwright
         if: always()

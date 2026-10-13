@@ -1,0 +1,137 @@
+/* src/modules/conta/estilo/bancos.css
+ *
+ * B01 · Bancos (N17Bancos) y sus cinco pantallas sin maqueta. Las pestañas y
+ * la barra son las de Libros (libros.css, .cxl-*); aquí, lo propio: la banda
+ * de la IA, las cinco cifras, la tabla con el punto de confianza, la zona de
+ * soltar el extracto y el móvil por apartados (M4). Solo tokens de tokens.css.
+ */
+
+.cxb-pagina { position: relative; }
+.cxb-mes { min-width: 180px; font-weight: 600; }
+.cxb-seccion, .cxb-movimientos { display: flex; flex-direction: column; gap: 14px; }
+
+/* La banda de la IA (N17): punto verde, frase en negrita y su apoyo; botón a la derecha. */
+.cxb-banda {
+  display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: var(--cx-verde-suave);
+  border: 1px solid var(--cx-ia-borde); border-radius: var(--cx-radio-bloque); color: var(--cx-ia-apoyo); font-size: 14px;
+}
+.cxb-banda-ambar { background: var(--cx-ambar-suave); border-color: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxb-banda-texto { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.cxb-banda-texto strong { color: var(--cx-texto); font-size: 15px; }
+.cxb-banda .cx-boton-sec { flex: none; }
+
+/* Las cinco cifras */
+.cxb-cifras { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.cxb-cifras-tres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cxb-cifra {
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; background: var(--cx-blanco);
+  border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); min-width: 0;
+}
+.cxb-cifra-etiqueta { font-size: 13px; color: var(--cx-apoyo); }
+.cxb-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 22px; font-weight: 600; letter-spacing: -0.8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxb-cifra-pie { font-size: 13px; color: var(--cx-apoyo); font-weight: 500; }
+.cxb-verde { color: var(--cx-verde-oscuro); }
+.cxb-ambar { color: var(--cx-ambar); }
+
+/* La tabla: fecha · lo que dice el banco · importe · punto · lo que Folvy cree · botones */
+.cxb-tabla { padding: 8px 18px 14px; }
+.cxb-fila {
+  display: grid; grid-template-columns: 74px minmax(0, 1.1fr) 120px 24px minmax(0, 1.5fr) auto; gap: 12px; align-items: center;
+  padding: 11px 0; border-top: 1px solid var(--cx-linea);
+}
+.cxb-cabeza { border-top: none; font-size: 12px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--cx-apoyo); padding: 8px 0; }
+.cxb-fila-ambar { background: var(--cx-ambar-fila); }
+.cxb-fecha { font-family: var(--cx-letra-cifras); font-size: 13px; color: var(--cx-apoyo); }
+.cxb-banco { font-size: 14px; line-height: 1.3; }
+.cxb-tarjeta { color: var(--cx-apoyo); font-size: 13px; }
+.cxb-importe, .cxb-der { font-family: var(--cx-letra-cifras); font-size: 14px; font-weight: 600; text-align: right; white-space: nowrap; }
+.cxb-cabeza .cxb-der { font-family: inherit; font-size: 12px; font-weight: 700; }
+.cxb-entra { color: var(--cx-verde-oscuro); }
+.cxb-punto-celda { display: flex; justify-content: center; }
+.cxb-punto { width: 10px; height: 10px; border-radius: 50%; background: var(--cx-borde-campo); display: inline-block; }
+.cxb-punto-verde { background: var(--cx-ia); }
+.cxb-punto-ambar { background: var(--cx-ambar-punto); }
+.cxb-folvy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxb-folvy strong { font-size: 14px; }
+.cxb-folvy span { font-size: 13px; color: var(--cx-apoyo); }
+.cxb-botones { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.cxb-botones .cx-boton, .cxb-botones .cx-boton-sec { min-height: 34px; height: 34px; padding: 0 14px; white-space: nowrap; }
+.cxb-pie { display: flex; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--cx-linea); font-size: 13px; color: var(--cx-apoyo); flex-wrap: wrap; }
+.cxb-enlace-boton { background: none; border: none; cursor: pointer; font: inherit; font-weight: 600; text-decoration: underline; }
+.cxb-vacio { padding: 18px 0; color: var(--cx-apoyo); border-top: 1px solid var(--cx-linea); margin: 0; }
+
+/* Listas de Reglas, Cuentas, Hecho por Folvy */
+.cxb-lista { display: flex; flex-direction: column; }
+.cxb-lista-fila { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+.cxb-lista-fila:first-of-type { border-top: none; }
+.cxb-lista-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxb-apagada .cxb-lista-texto strong { color: var(--cx-apoyo); }
+.cxb-banco-tarjeta { display: flex; flex-direction: column; gap: 12px; }
+.cxb-subbloque { border-top: 1px solid var(--cx-linea); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.cxb-subbloque h4, .cxb-cierre h4 { margin: 4px 0 0; font-size: 15px; }
+.cxb-local { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--cx-apoyo); min-width: 200px; }
+.cxb-revisa { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cxb-tarjeta-nueva { display: grid; grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.cxb-check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.cxb-cuentas { max-height: 260px; }
+.cxb-cuentas a.cxb-elegida { background: var(--cx-azul-suave); color: var(--cx-azul); font-weight: 600; }
+.cxb-igual { color: var(--cx-verde-oscuro); font-weight: 700; }
+.cxb-cierre { display: flex; flex-direction: column; gap: 10px; }
+.cxb-frase-verde { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); border-radius: var(--cx-radio-caja); padding: 12px 14px; margin: 0; font-size: 14px; font-weight: 500; }
+
+/* Subir extracto: la zona, y el velo de soltar en cualquier pantalla de Bancos */
+.cxb-zona {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 20px; text-align: center; cursor: pointer;
+  border: 2px dashed var(--cx-ia-borde-fuerte); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); color: var(--cx-apoyo);
+}
+.cxb-zona strong { color: var(--cx-texto); font-size: 17px; }
+.cxb-soltar {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: var(--cx-velo-app);
+  pointer-events: none;
+}
+.cxb-soltar-caja {
+  display: flex; flex-direction: column; gap: 6px; max-width: 460px; padding: 28px 32px; text-align: center; background: var(--cx-blanco);
+  border: 2px dashed var(--cx-ia); border-radius: var(--cx-radio-tarjeta); box-shadow: var(--cx-sombra-flotante); color: var(--cx-apoyo);
+}
+.cxb-soltar-caja strong { font-size: 20px; color: var(--cx-texto); }
+.cxb-cuenta-fichero .cxb-local { min-width: 240px; }
+
+/* Móvil (M4): portada con píldoras, dos cifras, frase verde y apartados de 56 px */
+.cxb-portada { display: flex; flex-direction: column; gap: 14px; }
+.cxb-pildoras { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.cxb-pildora-banco { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; min-height: 40px; }
+.cxb-pildora-banco[aria-pressed='true'] { background: var(--cx-azul-suave); color: var(--cx-azul); border-color: var(--cx-azul-borde); }
+.cxb-botones-grandes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cxb-botones-grandes > * { min-height: 52px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.cxb-cifras-movil { grid-template-columns: 1fr 1fr; }
+.cxb-apartados { list-style: none; margin: 0; padding: 0; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); overflow: hidden; }
+.cxb-apartado { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; border-top: 1px solid var(--cx-linea); color: var(--cx-texto); text-decoration: none; }
+.cxb-apartados li:first-child .cxb-apartado { border-top: none; }
+.cxb-apartado-texto { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.cxb-apartado-titulo { font-size: 16px; font-weight: 600; }
+.cxb-apartado-resumen { font-size: 13px; color: var(--cx-apoyo); }
+.cxb-apartado-resumen.cxb-ambar { color: var(--cx-ambar); }
+
+@media (max-width: 1100px) {
+  .cxb-cifras { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cxb-tarjeta-nueva { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 767px) {
+  .cxb-cifras, .cxb-cifras-tres { grid-template-columns: 1fr 1fr; }
+  .cxb-banda { flex-direction: column; align-items: flex-start; }
+  .cxb-tabla { padding: 4px 12px 12px; }
+  .cxb-cabeza { display: none; }
+  /* Una tarjeta por movimiento: fecha e importe arriba, lo que dice el banco, y Folvy con sus botones. */
+  .cxb-fila { grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-areas: 'punto fecha importe' 'banco banco banco' 'folvy folvy folvy' 'botones botones botones'; gap: 6px 10px; padding: 14px 4px; }
+  .cxb-fecha { grid-area: fecha; }
+  .cxb-banco { grid-area: banco; font-weight: 500; }
+  .cxb-importe { grid-area: importe; }
+  .cxb-punto-celda { grid-area: punto; justify-content: flex-start; }
+  .cxb-folvy { grid-area: folvy; }
+  .cxb-botones { grid-area: botones; justify-content: stretch; }
+  .cxb-botones .cx-boton, .cxb-botones .cx-boton-sec { flex: 1 1 0; height: 44px; min-height: 44px; }
+  .cxb-lista-fila { flex-direction: column; align-items: stretch; }
+  .cxb-tarjeta-nueva { grid-template-columns: 1fr; }
+  .cxb-local { min-width: 0; }
+}

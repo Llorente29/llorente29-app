@@ -1,0 +1,207 @@
+// src/modules/conta/services/bancosPantallas.ts
+//
+// B01 · Lo que leen y escriben las pantallas de Bancos (tarea 5). Las
+// decisiones del motor y las guardas viven en la base y en bancosNucleo;
+// aquí solo se lee lo que se pinta y se llama a la función que toca.
+//
+// Nombres de tabla y de función entre comillas (regla 40): comprobados contra
+// las migraciones 20261101T0100–0140 de este frente.
+
+import { supabase } from '@/lib/supabase'
+import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
+import { bancos, type BancoFolvy } from '@/modules/conta/services/bancosService'
+import { reglasNuevas } from '@/modules/conta/lib/conciliacion'
+import { limitesMes, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
+
+type Fila = Record<string, unknown>
+const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
+const cent = (v: unknown) => Math.round(Number(v ?? 0) * 100)
+
+async function leer(q: PromiseLike<{ data: unknown; error: { message: string } | null }>, que: string): Promise<Fila[]> {
+  const { data, error } = await q
+  if (error) throw new Error(mensaje(`No se ha podido leer ${que}`, error as Parameters<typeof mensaje>[1]))
+  return (data ?? []) as Fila[]
+}
+
+export interface Tarjeta { id: string; cuentaId: string; ultimos4: string; titular: string; localId: string | null }
+export interface Extracto {
+  id: string; cuentaId: string; fichero: string | null; formato: string; desde: string; hasta: string; saldoFinalCent: number | null
+  movimientos: number; nuevos: number; repetidos: number; cuadra: boolean | null; sinComprobar: string | null; continuidad: string; huecoCent: number | null
+  subido: string; quien: string | null
+}
+export interface BancoVista extends BancoFolvy {
+  cuentaNombre: string | null
+  tarjetas: Tarjeta[]
+  ultimoExtracto: Extracto | null
+}
+export interface DatosBancos {
+  bancos: BancoVista[]
+  extractos: Extracto[]
+  locales: { id: string; nombre: string }[]
+  nombres: Record<string, string>
+  primerMovimiento: string | null
+  /** Por banco: los movimientos que piden una decisión (para confirmar + por aclarar). */
+  dudas: Record<string, number>
+  reglas: { activas: number; nuevas: number }
+}
+
+/** Lo de arriba de todas las pestañas: los bancos, sus tarjetas y extractos, los locales y el plan. */
+export async function leerDatosBancos(accountId: string, companyId: string): Promise<DatosBancos> {
+  const [bs, tarjetas, extractos, locales, cuentas, primero, dudas, reglas] = await Promise.all([
+    bancos.bancosDeLaEmpresa(accountId, companyId),
+    leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).order('created_at', { ascending: true }), 'las tarjetas'),
+    leer(tabla('bank_statement').select('id, treasury_account_id, file_name, format, period_from, period_to, closing_balance, movements_count, new_count, repeated_count, balanced, unchecked_reason, continuity, continuity_gap, imported_at, imported_by_name')
+      .eq('account_id', accountId).eq('company_id', companyId).order('period_to', { ascending: false }).limit(200), 'los extractos'),
+    leer(tabla('locations').select('id, name').eq('account_id', accountId).order('name'), 'los locales'),
+    leer(tabla('company_account').select('code, name, plain_name').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
+    leer(tabla('bank_movement').select('op_date').eq('account_id', accountId).eq('company_id', companyId).order('op_date', { ascending: true }).limit(1), 'el primer movimiento'),
+    leer(tabla('bank_movement').select('treasury_account_id').eq('account_id', accountId).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido']), 'las dudas'),
+    leer(tabla('bank_rule').select('status').eq('account_id', accountId).eq('company_id', companyId), 'las reglas'),
+  ])
+  const nombres: Record<string, string> = {}
+  for (const c of cuentas) nombres[String(c.code)] = String(c.plain_name ?? c.name).trim().replace(/[.\s]+$/, '')
+  const ext: Extracto[] = extractos.map((e) => ({
+    id: String(e.id), cuentaId: String(e.treasury_account_id), fichero: s(e.file_name), formato: String(e.format), desde: String(e.period_from), hasta: String(e.period_to),
+    saldoFinalCent: e.closing_balance === null ? null : cent(e.closing_balance), movimientos: Number(e.movements_count), nuevos: Number(e.new_count), repetidos: Number(e.repeated_count),
+    cuadra: e.balanced === null ? null : !!e.balanced, sinComprobar: s(e.unchecked_reason), continuidad: String(e.continuity), huecoCent: e.continuity_gap === null ? null : cent(e.continuity_gap),
+    subido: String(e.imported_at), quien: s(e.imported_by_name),
+  }))
+  const tjs: Tarjeta[] = tarjetas.map((t) => ({ id: String(t.id), cuentaId: String(t.treasury_account_id), ultimos4: String(t.last4), titular: String(t.holder_name), localId: s(t.location_id) }))
+  const porBanco: Record<string, number> = {}
+  for (const d of dudas) porBanco[String(d.treasury_account_id)] = (porBanco[String(d.treasury_account_id)] ?? 0) + 1
+  return {
+    bancos: bs.filter((b) => b.kind === 'bank').map((b) => ({
+      ...b, cuentaNombre: b.cuenta ? nombres[b.cuenta] ?? null : null,
+      tarjetas: tjs.filter((t) => t.cuentaId === b.id),
+      ultimoExtracto: ext.find((e) => e.cuentaId === b.id) ?? null,
+    })),
+    extractos: ext,
+    locales: locales.map((l) => ({ id: String(l.id), nombre: String(l.name) })),
+    nombres,
+    primerMovimiento: primero[0] ? String(primero[0].op_date) : null,
+    dudas: porBanco,
+    reglas: { activas: reglas.filter((r) => r.status === 'activa').length, nuevas: reglas.filter((r) => r.status === 'propuesta').length },
+  }
+}
+
+/** Los movimientos de un banco en un mes, con su casado vivo o su propuesta. */
+export async function leerMovimientos(accountId: string, bancoId: string, mes: string): Promise<MovimientoBanco[]> {
+  const { desde, hasta } = limitesMes(mes)
+  const filas = await leer(tabla('bank_movement')
+    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept))')
+    .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
+    .order('op_date', { ascending: false }).order('created_at', { ascending: false }), 'los movimientos')
+  return filas.map((m) => {
+    const vivo = ((m.bank_match as Fila[] | null) ?? []).find((x) => x.status === 'vivo') ?? null
+    const tarjeta = m.bank_card as Fila | null
+    return {
+      id: String(m.id), cuentaId: String(m.treasury_account_id), fecha: String(m.op_date), importeCent: cent(m.amount),
+      conceptoBanco: String(m.bank_concept ?? ''), conceptoLimpio: String(m.clean_concept || m.bank_concept || ''),
+      estado: m.status as MovimientoBanco['estado'], confianza: (s(m.confidence) as MovimientoBanco['confianza']) ?? null, porque: s(m.reason),
+      propuesta: (m.proposal as PropuestaGuardada | null) ?? null,
+      casado: vivo ? {
+        id: String(vivo.id), tipo: String(vivo.kind), porque: String(vivo.reason), porQuien: vivo.by_who === 'folvy' ? 'folvy' : 'persona',
+        asientoId: s(vivo.journal_entry_id), asientoConcepto: s((vivo.journal_entry as Fila | null)?.concept),
+      } : null,
+      tarjeta: tarjeta ? { ultimos4: String(tarjeta.last4), titular: String(tarjeta.holder_name) } : null,
+      ticket: s(m.receipt_path), motivoIgnorado: s(m.ignored_reason),
+    }
+  })
+}
+
+/** El saldo de cada cuenta 572 de los bancos a una fecha (lo que dice contabilidad). */
+export async function saldosContables(companyId: string, hasta: string, codigos: string[]): Promise<Record<string, number>> {
+  if (!codigos.length) return {}
+  const filas = await rpc<Fila[]>('bank_saldos_cuentas', { p_company: companyId, p_hasta: hasta, p_prefijos: codigos })
+  const out: Record<string, number> = {}
+  for (const f of filas ?? []) if (codigos.includes(String(f.cuenta))) out[String(f.cuenta)] = cent(f.saldo)
+  return out
+}
+
+/** Los asientos con un banco y sin movimiento que los case, en un mes (lo que está en contabilidad y no en el banco). */
+export async function asientosSinMovimiento(companyId: string, mes: string): Promise<{ id: string; cuentaId: string; fecha: string; importeCent: number; concepto: string }[]> {
+  const { desde, hasta } = limitesMes(mes)
+  const filas = await rpc<Fila[]>('bank_asientos_sin_movimiento', { p_company: companyId, p_desde: desde, p_hasta: hasta })
+  return (filas ?? []).map((a) => ({ id: String(a.entry_id), cuentaId: String(a.treasury_account_id), fecha: String(a.fecha), importeCent: cent(a.importe), concepto: String(a.concepto) }))
+}
+
+export interface Regla { id: string; palabras: string; contiene: string; cuenta: string; origen: 'persona' | 'folvy'; estado: 'propuesta' | 'activa' | 'apagada' | 'rechazada'; veces: number; ultimaVez: string | null }
+
+export async function leerReglas(accountId: string, companyId: string): Promise<Regla[]> {
+  const filas = await leer(tabla('bank_rule').select('id, words, condition, target, origin, status, confirmations, last_used_at').eq('account_id', accountId).eq('company_id', companyId)
+    .order('created_at', { ascending: false }), 'las reglas')
+  return filas.map((r) => ({ id: String(r.id), palabras: String(r.words), contiene: String((r.condition as Fila).contiene ?? ''), cuenta: String((r.target as Fila).cuenta ?? ''),
+    origen: r.origin === 'folvy' ? 'folvy' : 'persona', estado: r.status as Regla['estado'], veces: Number(r.confirmations ?? 0), ultimaVez: s(r.last_used_at) }))
+}
+
+/** Las reglas que Folvy propone por lo aprendido (aún sin guardar). */
+export async function reglasPropuestas(accountId: string, companyId: string, hoy: string): Promise<{ palabras: string; contiene: string; cuenta: string; terceroId: string | null }[]> {
+  const { ctx } = await bancos.cargarContexto(accountId, companyId, hoy)
+  return reglasNuevas(ctx)
+}
+
+/**
+ * Guarda una regla encendida. La que propone Folvy nace «propuesta» y la
+ * persona la acepta (la base no deja que Folvy encienda una sola): dos pasos,
+ * los dos en el registro de la regla.
+ */
+export async function guardarRegla(companyId: string, r: { id?: string | null; palabras: string; contiene: string; cuenta: string; signo?: 1 | -1 | null; origen: 'persona' | 'folvy' }): Promise<string> {
+  const id = await rpc<string>('bank_regla_guardar', {
+    p_company: companyId, p_id: r.id ?? null, p_palabras: r.palabras, p_condicion: { contiene: r.contiene, ...(r.signo ? { signo: r.signo } : {}) },
+    p_destino: { cuenta: r.cuenta }, p_origen: r.origen, p_estado: r.origen === 'folvy' && !r.id ? 'propuesta' : 'activa',
+  })
+  if (r.origen === 'folvy' && !r.id) await rpc<void>('bank_regla_estado', { p_id: id, p_estado: 'activa' })
+  return id
+}
+
+export const cambiarEstadoRegla = (id: string, estado: 'activa' | 'apagada' | 'rechazada') => rpc<void>('bank_regla_estado', { p_id: id, p_estado: estado })
+
+export interface Hecho { id: string; fecha: string; accion: string; resumen: string; movimientoId: string | null; casadoId: string | null; casadoVivo: boolean; porQuien: 'folvy' | 'persona'; quien: string | null }
+
+/** «Lo que ha hecho Folvy» en un mes: todo lo que hizo solo, con su porqué, y Deshacer si sigue vivo. */
+export async function leerHechos(accountId: string, companyId: string, mes: string): Promise<Hecho[]> {
+  const { desde, hasta } = limitesMes(mes)
+  const filas = await leer(tabla('bank_activity_log').select('id, created_at, action, summary, movement_id, match_id, by_who, created_by_name, bank_match(status)')
+    .eq('account_id', accountId).eq('company_id', companyId).gte('created_at', `${desde}T00:00:00Z`).lte('created_at', `${hasta}T23:59:59Z`)
+    .order('created_at', { ascending: false }).limit(500), 'lo que ha hecho Folvy')
+  return filas.map((h) => ({ id: String(h.id), fecha: String(h.created_at), accion: String(h.action), resumen: String(h.summary), movimientoId: s(h.movement_id), casadoId: s(h.match_id),
+    casadoVivo: (h.bank_match as Fila | null)?.status === 'vivo', porQuien: h.by_who === 'folvy' ? 'folvy' : 'persona', quien: s(h.created_by_name) }))
+}
+
+export interface FacturaPendiente { id: string; numero: string | null; fecha: string; pendienteCent: number; proveedor: string; terceroId: string | null; cuentaTercero: string | null }
+
+export async function facturasPendientes(companyId: string): Promise<FacturaPendiente[]> {
+  const filas = await rpc<Fila[]>('bank_facturas_recibidas_pendientes', { p_company: companyId })
+  return (filas ?? []).map((f) => ({ id: String(f.id), numero: s(f.numero), fecha: String(f.fecha ?? ''), pendienteCent: cent(f.total) - cent(f.pagado), proveedor: String(f.proveedor ?? ''),
+    terceroId: s(f.tercero_id), cuentaTercero: s(f.cuenta_tercero) })).filter((f) => f.pendienteCent > 0)
+}
+
+// ── Lo que hace la persona ─────────────────────────────────────────────────
+
+export const guardarTarjeta = (bancoId: string, t: { id?: string | null; ultimos4: string; titular: string; localId: string | null; comun: boolean }) =>
+  rpc<string>('bank_tarjeta_guardar', { p_treasury: bancoId, p_id: t.id ?? null, p_last4: t.ultimos4, p_titular: t.titular, p_local: t.localId, p_comun: t.comun })
+export const bajaTarjeta = (id: string) => rpc<void>('bank_tarjeta_baja', { p_id: id })
+export const recordarIban = (bancoId: string, iban: string) => rpc<void>('bank_iban_recordar', { p_treasury: bancoId, p_iban: iban })
+export const corregirIban = (bancoId: string, iban: string) => rpc<void>('bank_cuenta_iban_corregir', { p_treasury: bancoId, p_iban: iban })
+export const localDeCuenta = (bancoId: string, localId: string | null, comun: boolean) => rpc<void>('bank_cuenta_local', { p_treasury: bancoId, p_local: localId, p_comun: comun })
+export const ignorar = (movimientoId: string, motivo: string) => rpc<void>('bank_ignorar', { p_movement: movimientoId, p_motivo: motivo })
+
+export async function cuentasPorDarDeAlta(companyId: string): Promise<{ codigo: string; nombre: string; ibanEnNombre: string | null }[]> {
+  const filas = await rpc<Fila[]>('bank_cuentas_por_dar_de_alta', { p_company: companyId })
+  return (filas ?? []).map((f) => ({ codigo: String(f.code), nombre: String(f.name), ibanEnNombre: s(f.iban_en_nombre) }))
+}
+
+export const altaCuenta = (companyId: string, c: { nombre: string; iban: string; codigo: string; localId: string | null; comun: boolean }) =>
+  rpc<string>('bank_cuenta_alta', { p_company: companyId, p_kind: 'bank', p_nombre: c.nombre, p_iban: c.iban, p_cuenta_contable: c.codigo, p_local: c.localId, p_comun: c.comun })
+
+/** La foto del ticket: al bucket privado, en la carpeta del movimiento, y apuntada en él. */
+export async function subirTicket(accountId: string, movimientoId: string, f: File): Promise<void> {
+  if (!supabase) throw new Error('No hay conexión con la base de datos.')
+  const bytes = await f.arrayBuffer()
+  const huella = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('')
+  const ext = (f.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+  const ruta = `${accountId}/${movimientoId}/${huella}.${ext}`
+  const { error } = await supabase.storage.from('banco-tickets').upload(ruta, f, { upsert: true, contentType: f.type || undefined })
+  if (error) throw new Error(`No se ha podido subir la foto: ${error.message}`)
+  await rpc<void>('bank_ticket_guardar', { p_movement: movimientoId, p_ruta: ruta })
+}

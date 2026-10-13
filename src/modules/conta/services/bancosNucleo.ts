@@ -114,8 +114,12 @@ export function crearBancos(bd: Bd) {
       ibanes: recordados.filter((r) => String(r.treasury_account_id) === String(t.id)).map((r) => String(r.iban)) }))
   }
 
-  /** Importa cada cuenta del extracto en el banco que se le ha asignado. Lo que no cuadre no llega aquí (y la base lo vuelve a comprobar). */
-  async function importar(a: ExtractoAbierto, e: ExtractoLeido, cuadre: Cuadre, asignacion: readonly (string | null)[], fuente: 'fichero' | 'correo' = 'fichero'): Promise<ResultadoImportar[]> {
+  /**
+   * Importa cada cuenta del extracto en el banco que se le ha asignado. Lo que no cuadre no llega aquí (y la base lo vuelve a comprobar).
+   * `recordados`: los IBAN que la persona ya dijo que van a cada banco (bank_account_iban); con ellos no se pide «Revisa esta cuenta».
+   */
+  async function importar(a: ExtractoAbierto, e: ExtractoLeido, cuadre: Cuadre, asignacion: readonly (string | null)[], fuente: 'fichero' | 'correo' = 'fichero',
+    recordados: Readonly<Record<string, readonly string[]>> = {}): Promise<ResultadoImportar[]> {
     if (!cuadre.ok) throw new Error(`No cuadra: ${cuadre.motivos.join(' ')}`)
     const out: ResultadoImportar[] = []
     for (const [i, c] of e.cuentas.entries()) {
@@ -133,7 +137,8 @@ export function crearBancos(bd: Bd) {
         p_treasury: banco, p_fuente: fuente, p_formato: e.formato, p_fichero: a.nombre, p_sha256: a.sha256,
         p_desde: c.desde ?? c.movimientos[0]?.fecha, p_hasta: c.hasta ?? c.movimientos.at(-1)?.fecha,
         p_saldo_inicial: sinSaldo ? null : c.saldoInicialCent! / 100, p_saldo_final: sinSaldo ? null : c.saldoFinalCent! / 100,
-        p_sin_comprobar: sinSaldo ? (cuadre.sinComprobar[0] ?? 'El fichero no trae saldos.') : null, p_iban_fichero: c.iban, p_movs: movs,
+        p_sin_comprobar: sinSaldo ? (cuadre.sinComprobar[0] ?? 'El fichero no trae saldos.') : null,
+        p_iban_fichero: c.iban && (recordados[banco] ?? []).includes(c.iban) ? null : c.iban, p_movs: movs,
       })
       out.push({ banco, repetido: !!r.repetido, mensaje: s(r.mensaje), nuevos: n(r.nuevos), repetidos: n(r.repetidos), posiblesRepetidos: n(r.posibles_repetidos),
         continuidad: String(r.continuidad ?? ''), hueco: r.hueco === null || r.hueco === undefined ? null : n(r.hueco) })

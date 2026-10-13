@@ -387,11 +387,37 @@ menor y diferencia por comisiones; se puede anular; los extractos quedan
 conciliación automática por saldos y manual (marcar movimiento y apunte →
 CONCILIAR). Propuestas por fecha + importe; sin aprendizaje a la vista.
 
+**Sage 50 y Sage 200** (Sage España; añadidos por la respuesta 3; [Sage 50 ·
+importar N43](https://communityhub.sage.com/es/sage-50/f/discusion-general/256497/extracto-bancario-descargado-desde-la-norma-43),
+[Sage 200 · error al subir N43](https://communityhub.sage.com/es/sage-200/f/contabilidad-y-finanzas/252619/error-al-subir-n43),
+[Sage 200 · contabilización N43](https://communityhub.sage.com/es/sage-200/f/contabilidad-y-finanzas/251502/contabilizacion-conciliacion-manual-norma-43),
+[página comercial](https://www.sage.com/es-es/soluciones-de-pago-integradas/software-de-conciliacion-bancaria/)).
+Igual que con los dos de arriba: sage.com, grupo.sage.es y communityhub.sage.com
+no resuelven desde el contenedor (13/10); esto es lo que el buscador devuelve
+de esas páginas, no lectura entera.
+- **Sage 50:** Contabilidad › Conciliación bancaria › Importar Norma 43; el
+  fichero «debe ser estrictamente un fichero de texto con estructura Norma 43»
+  (desde Excel, la comunidad recomienda convertirlo antes). Un complemento de
+  «Comunicación Bancaria» (de pago, en el material de formación de 2021-22)
+  trae los movimientos directamente y concilia automática o manualmente, con
+  asientos automáticos. La página comercial anuncia conexión automática con los
+  bancos, importación de ficheros y **reglas bancarias**.
+- **Sage 200:** importa N43, concilia automática o manualmente y contabiliza lo
+  pendiente; los criterios se configuran a mano («configuración de criterios de
+  conciliación, relaciones entre conceptos y mantenimiento de guías norma 43»).
+  Antes de importar exige continuidad: la fecha final de la cuenta, el día
+  anterior al inicio del fichero, y su saldo final igual al inicial de la
+  cabecera. Hay «Bank Feeds» (conexión directa). En la comunidad se describe
+  un fallo al contabilizar varios movimientos a la vez: quedan «conciliados»
+  sin aparecer en el banco y hay que romper la conciliación.
+- Ninguno de los dos publica un porcentaje de conciliación automática; no se ha
+  encontrado aprendizaje por contraparte ni porqué por movimiento.
+
 ### Pieza a pieza: qué tienen, qué cogemos, dónde estamos un escalón por encima
 
 | Pieza | Lo mejor de fuera | Qué cogemos | Escalón por encima | ¿Lo estamos? |
 |---|---|---|---|---|
-| Entrada | Banco conectado (Holded, Pennylane, Xero, Contasol, a3); C43/Excel (Diez, Contasol, a3) | N43 multicuenta y Excel/CSV de 11 bancos + tarjeta, un modelo para todas las fuentes | **Cuadre** del extracto con los registros 11 y 33 antes de importar, y **huella** por movimiento: lo mismo dos veces no cambia nada y lo dice. Ninguno de los consultados dice que rechace un extracto que no cuadra | Sí en fichero. **No en conexión directa**: decisión de Julio (extra de pago, después); queda la interfaz con proveedor simulado. Hueco declarado, no de diseño |
+| Entrada | Banco conectado (Holded, Pennylane, Xero, Contasol, a3, Sage); C43/Excel (Diez, Contasol, a3, Sage 50 y 200) | N43 multicuenta y Excel/CSV de 11 bancos + tarjeta, un modelo para todas las fuentes | **Cuadre** del extracto con los registros 11 y 33 antes de importar, y **huella** por movimiento: lo mismo dos veces no cambia nada y lo dice. Ninguno de los consultados dice que rechace un extracto que no cuadra | Sí en fichero. **No en conexión directa**: decisión de Julio (extra de pago, después); queda la interfaz con proveedor simulado. Hueco declarado, no de diseño |
 | Propuesta | Fecha + importe con margen (Contasol 15 días, a3); importe exacto (Holded); confianza (Puzzle, Digits) | Margen de fechas, varias facturas en un pago, pagos en partes | **Confianza graduada con porqué en una frase**, y **seguro solo con regla escrita y probada**; los demás o puntean por importe sin decir por qué, o lo dicen sin graduar | Sí |
 | Lo automático | Xero autoconcilia lo seguro y deja deshacer | «Lo que ha hecho Folvy» con deshacer | Lo seguro **no valida el asiento** salvo que la empresa lo active; todo lo hecho solo queda con su porqué y su registro, y el agente lo revisa cada noche | Sí |
 | Aprender | Pennylane aprende y propone reglas; Holded y Contasol, reglas a mano | Regla por contraparte tras 2–3 confirmaciones | Reglas **en palabras**, propuestas por Folvy («Regla nueva, ¿la guardo?»), que se apagan, con su registro | Sí |
@@ -402,10 +428,51 @@ CONCILIAR). Propuestas por fecha + importe; sin aprendizaje a la vista.
 | Lenguaje | Holded habla de facturas y movimientos | Lo mismo | Nunca «subcuenta» ni un código a secas: «Comida y bebida · 60000000» | Sí |
 
 **Dónde no estamos por encima, y por qué no se para:** la conexión directa con el
-banco. La tienen Holded, Pennylane, Xero, Contasol y a3; Folvy empieza con
+banco. La tienen Holded, Pennylane, Xero, Contasol, a3 y Sage; Folvy empieza con
 fichero porque Julio lo decidió (sin pagar a un agregador ahora). Lo que este
 encargo deja es la interfaz del agregador con su contrato y un proveedor
 simulado, para enchufar uno de verdad (o cambiarlo) sin rehacer nada.
+
+### Veredicto pieza a pieza (respuesta 3, punto 2)
+
+Contra Diez, Holded, Pennylane, Puzzle, ContaSOL, a3innuva y Sage 50/200. «Por
+encima» solo donde ninguno de los consultados lo hace; «igual» donde alguno ya
+lo hace como nosotros.
+
+| Pieza | Lo que tienen | Lo que tenemos | Veredicto |
+|---|---|---|---|
+| Traer el extracto por fichero | N43 (Diez, ContaSOL, a3, Sage 50/200), Excel (ContaSOL, a3, Holded) | N43 multicuenta, Excel/CSV de 11 bancos | Igual |
+| Traer el extracto sin fichero | Conexión directa (Holded, Pennylane, ContaSOL, a3innuva, Sage) | Interfaz del agregador con proveedor simulado; nada real | **Por debajo** |
+| Comprobar el extracto antes de entrar | Sage 200 exige continuidad de fecha y saldo | Cuadre 11/22/33, saldo fila a fila, continuidad con el anterior, huella | Por encima (el cuadre del fichero; la continuidad, igual que Sage 200) |
+| Nada dos veces | — (Sage 200: «el registro ya existe» al repetir) | Huella por movimiento y por fichero; el mismo pago por dos caminos, un asiento | Por encima |
+| Proponer | Fecha + importe (ContaSOL 15 días, a3, Sage, Holded); IA con confianza (Pennylane, Puzzle) | Confianza en tres grados con el porqué en una frase | Igual que Pennylane/Puzzle; por encima del resto |
+| Hacer solo lo seguro y deshacer | Xero/Puzzle autoconcilian; deshacer en a3 | Lo seguro solo con regla escrita; «Lo que ha hecho Folvy» con Deshacer que anula con contraasiento | Igual |
+| Aprender y reglas | Pennylane aprende y propone reglas; Holded, ContaSOL y Sage, reglas a mano | Aprende por contraparte y propone la regla en palabras | Igual que Pennylane; por encima del resto |
+| Cruzar con facturas | Holded, Pennylane, a3 (vencimientos), Sage | Recibidas y emitidas, en partes y varias en un pago | Igual |
+| Plataformas, préstamos, TGSS, 407 | Diez pone la 430 a mano | El neto de la liquidación cuadrado con ventas − comisión; capital e intereses; 476; 407 | Por encima |
+| Tarjetas | Pennylane pide el justificante | Tarjeta por sus 4 últimos dígitos, su titular y su local; «pídele el ticket a…» y foto desde el móvil | Igual que Pennylane en el ticket; por encima en saber a quién pedírselo |
+| Cierre del mes | Diez, a3: saldo y estado | Saldo del banco = 572, o la diferencia movimiento a movimiento | Por encima |
+| Lenguaje | Holded: facturas y movimientos | Nombre · código, sin «subcuenta» | Igual que Holded |
+| Porcentaje automático | Nadie de los consultados publica cifra | 74,9 % medido sobre lo de Foodint en 2026 | Sin comparación: no hay con qué |
+
+**Lo que está por debajo, dicho:** la conexión directa con el banco. Holded,
+a3innuva y Sage la tienen (y Pennylane y ContaSOL); nosotros subimos el Norma
+43, por decisión de no pagar todavía un agregador. Propuesta para que la
+subida cueste un solo gesto:
+1. **Soltar el fichero en cualquier pantalla de Bancos** (Movimientos, Reglas,
+   Cuentas y extractos, Cierre): toda la página es zona de soltar, no hay que
+   ir a «Subir extracto».
+2. **Un fichero, varias cuentas:** un N43 trae cada cuenta en su 11…33; cada
+   una va a su banco de Folvy en la misma subida, y el resumen dice qué entró en
+   cuál («Norte: 41 movimientos · Sur: 12 · Mercado: ya estaba»).
+3. **El IBAN se recuerda:** la primera vez que llega un IBAN que no es el de la
+   cuenta, se pregunta a cuál va; desde entonces se empareja solo
+   (`bank_account_iban`).
+4. **Por correo (con E01):** reenviar el extracto que manda el banco a la
+   dirección de la empresa en Folvy y que entre igual que soltado; el contrato
+   (`extractosDeCorreo`) ya está, la puerta se enseña cuando exista el buzón.
+5. Y el agregador, enchufable sin tocar el motor (`ProveedorAgregador`), cuando
+   Julio decida pagarlo.
 
 ### Norma citada (de las copias de `docs/conta/fuentes/textos/`)
 
