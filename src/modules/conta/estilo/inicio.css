@@ -113,22 +113,23 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
   .cxi-mes { flex: 1; }
 }
 
-/* C06, respuesta 3 · Traer de Diez en cuatro pasos */
+/* C06, respuesta 3 · Traer de Diez en cuatro pasos. Clases propias (cxi-diez-*):
+   .cxi-paso es de «Cerrar el mes» y no se comparte. */
 .cxi-diez { margin-bottom: 14px; }
-.cxi-pasos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.cxi-paso { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
-.cxi-paso:first-child { border-top: none; }
-.cxi-paso-numero {
+.cxi-diez-pasos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cxi-diez-paso { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+.cxi-diez-paso:first-child { border-top: none; }
+.cxi-diez-paso-numero {
   width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   font-family: var(--cx-letra-cifras); font-weight: 600; font-size: 15px; background: var(--cx-linea); color: var(--cx-apoyo);
 }
-.cxi-paso-hecho .cxi-paso-numero { background: var(--cx-verde-oscuro); color: var(--cx-blanco); }
-.cxi-paso-falta .cxi-paso-numero { background: var(--cx-azul); color: var(--cx-blanco); }
-.cxi-paso-texto { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.cxi-paso-titulo { font-size: 15px; font-weight: 600; color: var(--cx-texto); }
-.cxi-paso-espera .cxi-paso-titulo { color: var(--cx-apoyo); }
-.cxi-paso-apoyo { font-size: 13px; color: var(--cx-apoyo); line-height: 1.4; }
+.cxi-diez-paso-hecho .cxi-diez-paso-numero { background: var(--cx-verde-oscuro); color: var(--cx-blanco); }
+.cxi-diez-paso-falta .cxi-diez-paso-numero { background: var(--cx-azul); color: var(--cx-blanco); }
+.cxi-diez-paso-texto { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.cxi-diez-paso-titulo { font-size: 15px; font-weight: 600; color: var(--cx-texto); }
+.cxi-diez-paso-espera .cxi-diez-paso-titulo { color: var(--cx-apoyo); }
+.cxi-diez-paso-apoyo { font-size: 13px; color: var(--cx-apoyo); line-height: 1.4; }
 @media (max-width: 767px) {
-  .cxi-paso { flex-wrap: wrap; }
-  .cxi-paso .cx-boton { margin-left: 46px; }
+  .cxi-diez-paso { flex-wrap: wrap; }
+  .cxi-diez-paso .cx-boton { margin-left: 46px; }
 }

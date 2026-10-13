@@ -251,10 +251,10 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
 
   // La tarjeta «Traer tu contabilidad de Diez», en su orden: lo que falte, con su botón.
   const tarjeta = page.getByRole('region', { name: 'Traer tu contabilidad de Diez' })
-  const paso = (n: number) => tarjeta.locator('.cxi-paso').nth(n - 1)
+  const paso = (n: number) => tarjeta.locator('.cxi-diez-paso').nth(n - 1)
   await page.goto('/conta/inicio')
   await expect(tarjeta).toBeVisible({ timeout: 20_000 })
-  await expect(paso(1)).toHaveClass(/cxi-paso-hecho/)
+  await expect(paso(1)).toHaveClass(/cxi-diez-paso-hecho/)
   await sinFolvy(page, 'el Inicio recién dado de alta')
   await capturar(page, 'inicio-pasos-alta')
   if (await paso(2).getByRole('link', { name: 'Activar el plan' }).count()) {
@@ -265,7 +265,7 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
     await sinFolvy(page, 'el plan activado')
     await page.goto('/conta/inicio')
   }
-  await expect(paso(2)).toHaveClass(/cxi-paso-hecho/, { timeout: 20_000 })
+  await expect(paso(2)).toHaveClass(/cxi-diez-paso-hecho/, { timeout: 20_000 })
   // El banco del alta: si su 572 no está en el plan, la tarjeta lo dice y la crea.
   const crear = paso(3).getByRole('button', { name: 'Crear su cuenta en el plan' })
   if (await crear.count()) {
@@ -274,10 +274,10 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
     await expect(tarjeta.getByRole('status')).toHaveText(/^Hecho: la cuenta 572\d{5} de tu banco, en el plan\.$/)
   }
   await expect(paso(3).getByRole('link', { name: 'Poner tu banco' }), 'el IBAN del alta da de alta el banco').toHaveCount(0)
-  await expect(paso(3)).toHaveClass(/cxi-paso-hecho/, { timeout: 20_000 })
+  await expect(paso(3)).toHaveClass(/cxi-diez-paso-hecho/, { timeout: 20_000 })
 
   // ── 4 · Traer de Diez desde la C0009 ──────────────────────────────────────
-  await expect(paso(4)).toHaveClass(/cxi-paso-falta/)
+  await expect(paso(4)).toHaveClass(/cxi-diez-paso-falta/)
   await expect(paso(4)).toContainText('Lo hace Contabilidad por ti: en cuanto registre tu base de Diez, la trae.')
   // Folvy registra su base (en staging, la función de la semilla del recorrido).
   const base = await fetch(`${STAGING_URL}/rest/v1/rpc/e2e_c06_recorrido_base`, {
@@ -290,7 +290,7 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
   expect(listo.datos.falta, 'con datos, plan y banco, solo falta traer de Diez').toBe('diez')
   await page.reload()
   await expect(paso(4)).toContainText('Tu base de Diez (C0009) está registrada: Contabilidad trae tu contabilidad y te avisa.')
-  await expect(tarjeta.locator('.cxi-paso-hecho')).toHaveCount(3)
+  await expect(tarjeta.locator('.cxi-diez-paso-hecho')).toHaveCount(3)
   await sinFolvy(page, 'el Inicio con la base registrada')
   await capturar(page, 'inicio-pasos-diez')
   // La lectura de la C0009 (solo GET) la hace diez-importar «lectura-staging»

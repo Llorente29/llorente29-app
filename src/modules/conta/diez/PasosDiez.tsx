@@ -47,13 +47,13 @@ export function PasosDiez({ accountId, companyId, quien, estado, recargar }: {
         <h2 id="cxi-diez-titulo" className="cxi-seccion-titulo">Traer tu contabilidad de Diez</h2>
         <span className="cxi-seccion-apoyo">{resumenPasos(pasos)}</span>
       </div>
-      <ol className="cxi-pasos">
+      <ol className="cxi-diez-pasos">
         {pasos.map((p) => (
-          <li key={p.clave} className={`cxi-paso cxi-paso-${p.estado}`} aria-current={p.estado === 'falta' ? 'step' : undefined}>
-            <span className="cxi-paso-numero" aria-hidden="true">{p.estado === 'hecho' ? '✓' : p.numero}</span>
-            <span className="cxi-paso-texto">
-              <span className="cxi-paso-titulo">{p.titulo}</span>
-              <span className="cxi-paso-apoyo">{p.texto}</span>
+          <li key={p.clave} className={`cxi-diez-paso cxi-diez-paso-${p.estado}`} aria-current={p.estado === 'falta' ? 'step' : undefined}>
+            <span className="cxi-diez-paso-numero" aria-hidden="true">{p.estado === 'hecho' ? '✓' : p.numero}</span>
+            <span className="cxi-diez-paso-texto">
+              <span className="cxi-diez-paso-titulo">{p.titulo}</span>
+              <span className="cxi-diez-paso-apoyo">{p.texto}</span>
             </span>
             {boton(p)}
           </li>
