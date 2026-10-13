@@ -35,6 +35,13 @@ begin
     insert into public.company_tax_profile (company_id, account_id, chart_kind, account_digits, tax_forms)
     values (v_empresa, v_cuenta, 'pymes', 8, array['303', '390']);
   end if;
+  -- Y su cuenta de banco, como la deja el alta («Bancos · Cuenta principal»):
+  -- los datos del Diez simulado la traen SIN nombre, y el importador no
+  -- inventa nombres (la rechaza si no la encuentra ya en el plan).
+  if not exists (select 1 from public.company_account where company_id = v_empresa and code = '57200001') then
+    insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
+    values (v_cuenta, v_empresa, 'pymes', '57200001', '572', 'Bancos · Cuenta principal', 'own', 'serie');
+  end if;
   r := public.conta_diez_base_poner(v_empresa, 'C0009', 'Prueba del traer de Diez generalizado (C06): la copia de pruebas, solo lectura.', 'Folvy (semilla C06)');
   raise notice 'Semilla C06 Diez OK: % con la base % (%).', v_empresa, r ->> 'base', case when (r ->> 'cambia')::boolean then 'nueva' else 'ya estaba' end;
 end $$;

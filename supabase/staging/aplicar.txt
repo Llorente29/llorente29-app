@@ -1,4 +1,5 @@
 # C06 · Tarea 5 — la semilla de la empresa del frente C, otra vez: ahora con su
-# plan elegido (company_tax_profile), que el importador necesita (el simulado
-# 38454584082 salió en rojo sin él). Se puede volver a aplicar.
+# cuenta de banco (57200001), como la deja el alta. El simulado 38455581640
+# la rechazaba: el Diez de mentira la trae sin nombre y no se inventan nombres.
+# Se puede volver a aplicar.
 supabase/seeds/conta/seed_c06_diez_staging.sql
