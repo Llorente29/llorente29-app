@@ -213,6 +213,19 @@ a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
      - «Sus facturas se apuntan en», con su origen;
      - la extensión de Cocina, solo si se usa.
   4. `diez-lectura` y los `sqlerrm` de `importar.sql` sacan texto (sección 1).
+  5. **El cerrojo de las e2e (rama `conta/e2e-usuarios-por-frente`) no ve
+     nunca que lo ha cogido.** Esto bloquea todas las e2e en cuanto se
+     fusione.
+     - **Qué pasa:** con `-A -t`, psql devuelve `cogido` seguido de
+       `UPDATE 1`, y la comparación espera solo `cogido`. El primer run
+       renueva su propio cerrojo cada 30 s; los demás esperan.
+     - **Lo que costó:** los runs 206 y 207 se quedaron una hora en ese paso,
+       desde las 19:47.
+     - **Medido** con el mismo comando contra un Postgres local:
+       `r=[cogido⏎UPDATE 1]`, «NO LO VE COGIDO», y la fila tiene el run como
+       dueño.
+     - **Arreglo de un carácter:** `psql -q` en esa llamada, o
+       `grep -qx cogido`. No lo toco: es tu rama.
 - **Las e2e del cierre que esperaban las 6:00 ya esperan las 2:00 en main**
   (1f8638c7). A B le basta traerse main.
 - **El solape de e2e.**
