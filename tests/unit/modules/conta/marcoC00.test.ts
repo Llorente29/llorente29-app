@@ -22,8 +22,9 @@ describe('navegación del módulo de contabilidad', () => {
   it('las entradas sin pantalla no se pintan', () => {
     const visibles = MENU_CONTA.flat().filter((e) => e.ruta !== null).map((e) => e.id)
     // C03: «Clientes y proveedores» ya tiene su pantalla; C04: «Libros» (el libro diario); compras: «Compras»;
-    // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no).
-    expect(visibles).toEqual(['compras', 'ventas', 'terceros', 'libros', 'ajustes'])
+    // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no);
+    // D01: «Documentos» (N22, las facturas recibidas).
+    expect(visibles).toEqual(['compras', 'ventas', 'documentos', 'terceros', 'libros', 'ajustes'])
     expect(entradasVisibles(PESTANAS_AJUSTES).map((e) => e.id)).toEqual(['empresa', 'tablas'])
     expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['ajustes'])
   })

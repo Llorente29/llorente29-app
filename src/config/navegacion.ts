@@ -189,6 +189,10 @@ export const CONTA = {
     liquidacionNueva: 'compras/liquidacion/nueva',
     /** Una liquidación mensual y su contraste (N19). */
     liquidacion: 'compras/liquidacion/:liqId',
+    /** D01 · Documentos › Facturas recibidas (N22). */
+    documentos: 'documentos',
+    /** D01 · Revisar una factura recibida (N23). */
+    revisarFactura: 'documentos/recibidas/:invoiceId',
   },
 } as const
 
@@ -211,7 +215,7 @@ export const MENU_CONTA: EntradaMenuConta[][] = [
     { id: 'compras', etiqueta: 'Compras', icono: 'facturas', ruta: CONTA.rutas.compras },
     // Ventas: detrás de Compras, como la maqueta (respuesta 1 del repaso de compras).
     { id: 'ventas', etiqueta: 'Ventas', icono: 'negocio', ruta: CONTA.rutas.ventas },
-    { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: null },
+    { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: CONTA.rutas.documentos },
     { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
     // C03: la lista única de terceros. Un tercero que solo es proveedor abre su
     // ficha de siempre (en Cocina); con papel de cliente, plataforma o socio,
@@ -331,6 +335,16 @@ export const rutaLibros = (area?: string, accion?: string): string => {
   return accion ? rutaConta(CONTA.rutas.librosAccion, { area, accion }) : rutaConta(CONTA.rutas.librosArea, { area })
 }
 export const rutaCompras = (): string => rutaConta(CONTA.rutas.compras)
+/** D01 · N22, con su filtro (para-mirar, por-aclarar, apuntadas, todas) y su mes ('YYYY-MM'). */
+export const rutaDocumentos = (ver?: string, mes?: string): string => {
+  const q = new URLSearchParams()
+  if (ver) q.set('ver', ver)
+  if (mes) q.set('mes', mes)
+  const t = q.toString()
+  return `${rutaConta(CONTA.rutas.documentos)}${t ? `?${t}` : ''}`
+}
+/** D01 · N23. */
+export const rutaRevisarFactura = (invoiceId: string): string => rutaConta(CONTA.rutas.revisarFactura, { invoiceId })
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
 /** Subir los documentos de la liquidación de un proveedor, en un local y un mes ('YYYY-MM-01'). */
 export const rutaLiquidacionNueva = (proveedor: string, local: string | null, mes: string): string => {

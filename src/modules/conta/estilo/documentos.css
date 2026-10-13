@@ -1,0 +1,100 @@
+/* src/modules/conta/estilo/documentos.css
+ *
+ * D01 · Documentos › Facturas recibidas (N22) y Revisar factura (N23). Los tres
+ * niveles son los de Libros (libros.css: .cxl-*); aquí solo lo propio. Solo
+ * tokens de tokens.css: ningún color escrito aquí. En el móvil, «Para mirar»
+ * en tarjetas y «Está bien · apuntar» abajo, al alcance del pulgar.
+ */
+
+/* N22 · cabecera de la lista */
+.cxd-seccion { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.cxd-seccion h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.6px; margin: 2px 0 0; }
+.cxd-herramientas { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* Las cinco cifras */
+.cxd-cifras { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.cxd-cifra {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; font: inherit; color: var(--cx-texto); cursor: pointer;
+  background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque); padding: 14px 16px; min-width: 0;
+}
+.cxd-cifra:hover { border-color: var(--cx-azul-borde); }
+.cxd-cifra[aria-pressed='true'] { border-color: var(--cx-azul); }
+.cxd-cifra-etiqueta { font-size: 14px; color: var(--cx-apoyo); }
+.cxd-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 24px; font-weight: 600; letter-spacing: -0.5px; }
+.cxd-cifra-apoyo { font-size: 14px; color: var(--cx-apoyo); overflow-wrap: anywhere; }
+.cxd-cifra-ia .cxd-cifra-apoyo { color: var(--cx-verde-oscuro); }
+
+/* La tabla de facturas */
+.cxd-tabla { width: 100%; border-collapse: collapse; font-size: 15px; }
+.cxd-tabla th { text-align: left; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; padding: 8px; }
+.cxd-tabla td { padding: 12px 8px; border-top: 1px solid var(--cx-linea); vertical-align: middle; }
+.cxd-tabla .cxd-der { text-align: right; font-family: var(--cx-letra-cifras); white-space: nowrap; }
+.cxd-tabla .cxd-mono { font-family: var(--cx-letra-cifras); white-space: nowrap; color: var(--cx-apoyo); }
+.cxd-fila-mirar td { background: var(--cx-ambar-suave); }
+.cxd-fila-mirar td:first-child { border-radius: var(--cx-radio-caja) 0 0 var(--cx-radio-caja); }
+.cxd-fila-mirar td:last-child { border-radius: 0 var(--cx-radio-caja) var(--cx-radio-caja) 0; }
+.cxd-quien { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.cxd-quien-texto { display: flex; flex-direction: column; min-width: 0; }
+.cxd-nombre { font-weight: 600; }
+.cxd-apoyo { font-size: 13px; color: var(--cx-apoyo); }
+.cxd-entendido { display: flex; flex-direction: column; gap: 2px; max-width: 360px; }
+.cxd-entendido-titulo { font-weight: 600; }
+.cxd-sin { background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+.cxd-pie { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--cx-apoyo); padding-top: 12px; }
+.cxd-vacio { padding: 24px 8px; color: var(--cx-apoyo); }
+
+/* Lo que ha pasado al subir o al apuntar (regla 8) */
+.cxd-hecho { display: flex; flex-direction: column; gap: 4px; }
+.cxd-hecho li { list-style: none; }
+.cxd-hecho ul { margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cxd-mal { color: var(--cx-rojo); }
+
+/* N23 · dos columnas: el papel a la izquierda, lo leído a la derecha */
+.cxd-revisar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.cxd-papel { display: flex; flex-direction: column; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); overflow: hidden; }
+.cxd-papel-cabeza { display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px; font-size: 13px; color: var(--cx-apoyo); border-bottom: 1px solid var(--cx-linea); }
+.cxd-papel-hoja { background: var(--cx-fondo); padding: 18px; display: flex; justify-content: center; min-height: 640px; }
+.cxd-papel-hoja iframe, .cxd-papel-hoja object { width: 100%; min-height: 640px; border: none; background: var(--cx-blanco); }
+.cxd-papel-hoja img { max-width: 100%; height: auto; align-self: flex-start; box-shadow: var(--cx-sombra-menu); }
+.cxd-lado { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxd-bloque { background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); padding: 16px 18px; }
+.cxd-bloque h2 { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--cx-apoyo); margin: 0 0 6px; }
+.cxd-leido { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; }
+.cxd-leido > div { padding: 9px 0; border-top: 1px solid var(--cx-linea); }
+.cxd-leido > div:nth-child(-n+2) { border-top: none; }
+.cxd-leido-valor { text-align: right; font-weight: 600; }
+.cxd-leido-valor .cxd-apoyo { display: block; font-weight: 400; }
+.cxd-aviso { color: var(--cx-ambar); }
+.cxd-apunte { display: grid; grid-template-columns: minmax(0, 1fr) 110px 110px; gap: 4px 10px; font-size: 15px; }
+.cxd-apunte .cxd-der { text-align: right; font-family: var(--cx-letra-cifras); }
+.cxd-acciones { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.cxd-navegar { display: flex; gap: 10px; }
+
+@media (max-width: 1100px) {
+  .cxd-cifras { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Móvil: tarjetas, cifras de dos en dos, y lo que se pulsa abajo */
+@media (max-width: 767px) {
+  .cxd-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cxd-seccion h2 { font-size: 24px; }
+  .cxd-tarjetas { display: flex; flex-direction: column; gap: 10px; }
+  .cxd-tarjeta {
+    display: flex; flex-direction: column; gap: 8px; background: var(--cx-blanco); border: 1px solid var(--cx-linea);
+    border-radius: var(--cx-radio-bloque); padding: 14px 16px;
+  }
+  .cxd-tarjeta.cxd-fila-mirar { background: var(--cx-ambar-suave); }
+  .cxd-tarjeta-cabeza { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .cxd-tarjeta .cx-boton, .cxd-tarjeta .cx-boton-sec { width: 100%; height: 46px; font-size: 15px; }
+  .cxd-revisar { grid-template-columns: minmax(0, 1fr); }
+  .cxd-papel-hoja, .cxd-papel-hoja iframe, .cxd-papel-hoja object { min-height: 360px; }
+  .cxd-apunte { grid-template-columns: minmax(0, 1fr) 84px 84px; font-size: 14px; }
+  /* Bajo el pulgar: la barra de abajo, fija, con el botón grande. */
+  .cxd-pulgar {
+    position: sticky; bottom: 0; z-index: 2; display: flex; gap: 10px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--cx-fondo);
+  }
+  .cxd-pulgar > * { flex: 1; height: 52px; font-size: 16px; }
+  .cxd-subir-movil { display: flex; gap: 10px; }
+  .cxd-subir-movil > * { flex: 1; height: 52px; font-size: 16px; }
+}

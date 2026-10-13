@@ -1,8 +1,5 @@
-# D01 · Tarea 6 — N23 y «Pedírselas» (sesión A; solo añade).
-# La 0200 a la 0280 ya están en staging (la 0270 y la 0280, run 38447549381).
-#   ensayo: la 0290 y su prueba en una transacción con ROLLBACK.
-#   0290:   conta_factura_para_revisar (N23) y conta_factura_pedir (la
-#           petición confirmada por la persona; no envía nada).
-supabase/staging/sql/20261021_d01_revisar_ensayo.sql
-supabase/migrations/20261021T0290_d01_revisar_y_pedir.sql
-supabase/staging/sql/20261021_d01_revisar_prueba.sql
+# D01 · Tarea 6 — la semilla de las capturas de N22 y N23 (sesión A; solo añade).
+# La 0200 a la 0290 ya están en staging (la 0290, run 38450004318).
+#   semilla: dos proveedores y tres facturas de octubre, inventadas, en la
+#            cuenta A (ids d0100000-…; si ya está, no hace nada).
+supabase/seeds/conta/seed_d01_staging.sql
