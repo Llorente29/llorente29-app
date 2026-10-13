@@ -666,13 +666,13 @@ describe('la tanda de AHORA (manifiesto vivo): la regla de ventas por plataforma
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
-  it('las cinco, en su orden', () => {
+  it('las seis, en su orden', () => {
     expect(viva.map((f) => f.replace(/^.*\/20261020T/, '').replace(/\.sql$/, ''))).toEqual([
-      '0100_ventas_por_plataforma', '0110_ventas_por_plataforma_indice', '0120_ventas_por_plataforma_foodint', '0130_ventas_por_plataforma_rehacer',
+      '0100_ventas_por_plataforma', '0105_ventas_por_plataforma_permiso', '0110_ventas_por_plataforma_indice', '0120_ventas_por_plataforma_foodint', '0130_ventas_por_plataforma_rehacer',
       '0140_libro_lectura_registro'])
   })
-  it('0100, 0120 y 0140 siguen; 0110 y 0130 piden «autorizo», y la cabecera las nombra', () => {
-    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue', [viva[1]]: 'autorizo', [viva[2]]: 'sigue', [viva[3]]: 'autorizo', [viva[4]]: 'sigue' })
+  it('0100, 0105, 0120 y 0140 siguen; 0110 y 0130 piden «autorizo», y la cabecera las nombra', () => {
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue', [viva[1]]: 'sigue', [viva[2]]: 'autorizo', [viva[3]]: 'sigue', [viva[4]]: 'autorizo', [viva[5]]: 'sigue' })
     const nombradas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => /^#\s+(\S+\.sql\s*)+$/.test(l)).map((l) => l.replace(/^#\s+/, '').trim())
     expect(nombradas).toEqual(['20261020T0110_ventas_por_plataforma_indice.sql', '20261020T0130_ventas_por_plataforma_rehacer.sql'])
   })
@@ -685,11 +685,11 @@ describe('la tanda de AHORA (manifiesto vivo): la regla de ventas por plataforma
     }
   })
   it('la 0120 está anclada por id y cuenta (regla 9)', () => {
-    const sql = readFileSync(viva[2], 'utf8')
+    const sql = readFileSync(viva[3], 'utf8')
     expect(sql).toContain("'658728c0-fcd7-46ef-a860-d4e5e6eb21d9'")
     expect(sql).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
-  it('su vuelta atrás son sus cinco .down.sql, al revés, y existen', () => {
+  it('su vuelta atrás son sus seis .down.sql, al revés, y existen', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     for (const f of atras) expect(existsSync(f), f).toBe(true)

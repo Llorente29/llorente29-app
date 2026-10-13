@@ -1,24 +1,12 @@
-# C04b · Respuesta 5 — La regla de ventas definitiva (Julio, 13/10).
-#   ensayo: la 0100, 0110, 0120, 0130 y su prueba en una transacción con
-#           ROLLBACK. Si falla, no se aplica lo de abajo.
-#   0100:   conta_ventas_canal y conta_ventas_marca (la regla por empresa),
-#           unit_key en el resumen, la propuesta por unidad (Uber y Just Eat,
-#           una por plataforma; Glovo, por marca), y las cuatro funciones del
-#           proponedor copiadas de lo vigente con la unidad (md5 medido en
-#           producción el 13/10).
-#   0110:   el índice único del resumen, por unidad («autorizo»).
-#   0120:   Foodint. En staging no hay Foodint: no hace nada y lo dice.
-#   0130:   rehacer los propuestos del día entero de quien use la regla
-#           («autorizo»). En staging, ninguno.
-#   0140:   conta_lectura lee el registro del cierre del día. En staging no hay
-#           conta_lectura: no hace nada y lo dice.
-#   La prueba: sin regla, como antes; con regla, Glovo · Casa Lola por marca a
-#   su 7000000x, Uber sin 430 dicho, nada dos veces, el front de antes negado
-#   con su porqué y el descarte de una unidad.
-supabase/staging/sql/20261020_ventas_por_plataforma_ensayo.sql
-supabase/migrations/20261020T0100_ventas_por_plataforma.sql
-supabase/migrations/20261020T0110_ventas_por_plataforma_indice.sql
-supabase/migrations/20261020T0120_ventas_por_plataforma_foodint.sql
-supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql
+# C04b · Respuesta 6 — El Libro diario, como usuario, pregunta la unidad.
+# (La 0100–0140 ya está aplicada en staging: run 144, 13/10. El e2e 180 cazó
+# que el Libro diario no abría: conta_unidad_ventas sin permiso para
+# authenticated.)
+#   ensayo: la 0105 y la prueba (con la parte 6, como usuario) en una
+#           transacción con ROLLBACK. Si falla, no se aplica lo de abajo.
+#   0105:   conta_unidad_ventas de quien llama (security invoker) y con
+#           permiso para authenticated.
+#   La prueba, otra vez entera: sus seis partes.
+supabase/staging/sql/20261020_ventas_por_plataforma_permiso_ensayo.sql
+supabase/migrations/20261020T0105_ventas_por_plataforma_permiso.sql
 supabase/staging/sql/20261020_ventas_por_plataforma_prueba.sql
-supabase/migrations/20261020T0140_libro_lectura_registro.sql

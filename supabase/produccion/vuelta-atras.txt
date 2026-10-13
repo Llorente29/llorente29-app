@@ -6,4 +6,5 @@ supabase/vuelta-atras/20261020T0140_libro_lectura_registro.down.sql
 supabase/vuelta-atras/20261020T0130_ventas_por_plataforma_rehacer.down.sql
 supabase/vuelta-atras/20261020T0120_ventas_por_plataforma_foodint.down.sql
 supabase/vuelta-atras/20261020T0110_ventas_por_plataforma_indice.down.sql
+supabase/vuelta-atras/20261020T0105_ventas_por_plataforma_permiso.down.sql
 supabase/vuelta-atras/20261020T0100_ventas_por_plataforma.down.sql

@@ -191,4 +191,19 @@ begin
   raise notice 'PRUEBA ventas por plataforma · 5: el descarte es de la unidad.';
 end $$;
 
+-- ── 6 · Como usuario, el Libro pregunta qué días faltan (0105) ───────────────
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+declare v_e uuid := current_setting('prueba.empresa')::uuid; v_n int; v_u text;
+begin
+  select count(*) into v_n from public.conta_dias_por_asentar(v_e, date '2026-09-01', date '2026-09-30');
+  v_u := public.conta_unidad_ventas(v_e, 'e0200000-0000-4000-8000-00000000a0c1', '7e000000-0000-4000-8000-000000000b01');
+  if v_u <> 'e0200000-0000-4000-8000-00000000a0c1:7e000000-0000-4000-8000-000000000b01' then
+    raise exception 'PRUEBA ventas por plataforma · 6: como usuario, la unidad de Glovo · Casa Lola no es canal:marca: %', v_u;
+  end if;
+  raise notice 'PRUEBA ventas por plataforma · 6: como usuario, conta_dias_por_asentar contesta (% días) y la unidad es canal:marca.', v_n;
+end $$;
+reset role;
+
 rollback;

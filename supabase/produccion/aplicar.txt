@@ -13,6 +13,8 @@
 #      la unidad en el resumen y la propuesta por unidad: Uber y Just Eat, una
 #      por plataforma, local y día; Glovo, por marca. Cambia en caliente
 #      cuatro funciones del proponedor, declaradas con su prueba de staging.
+#   1b. 0105 — conta_unidad_ventas de quien llama y con permiso para
+#      authenticated: sin ella el Libro diario no abre (e2e 180 de staging).
 #   2. 0110 — el índice único del resumen, por unidad (quita el de un resumen
 #      por día). AUTORIZO, con el nombre entero:
 #        20261020T0110_ventas_por_plataforma_indice.sql
@@ -28,11 +30,12 @@
 #      de la empresa B de staging). Solo un permiso.
 #
 # Análisis contra producción, medido el 13/10 con la consulta de solo lectura
-# del workflow: 0100, 0120 y 0140 «sigue»; 0110 y 0130 «autorizo».
+# del workflow: 0100, 0105, 0120 y 0140 «sigue»; 0110 y 0130 «autorizo».
 # NO se lanza hasta que Julio haya visto los dos asientos de muestra (R5).
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
 supabase/migrations/20261020T0100_ventas_por_plataforma.sql
+supabase/migrations/20261020T0105_ventas_por_plataforma_permiso.sql
 supabase/migrations/20261020T0110_ventas_por_plataforma_indice.sql
 supabase/migrations/20261020T0120_ventas_por_plataforma_foodint.sql
 supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql
