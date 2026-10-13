@@ -1,14 +1,5 @@
-# C06 · Respuesta 3 — Foodint sin fricción, los pasos antes de traer de Diez y
-# la subcuenta que llega sin nombre.
-#   0200, otra vez: lo último usado de cada empresa (ultimo_desde/hasta/corte,
-#         se añaden si faltan) y conta_diez_base_recordar. Se puede repetir.
-#   Su prueba (los 7 pasos de antes).
-#   0300: conta_diez_listo (datos → plan → banco → Diez), name_pending y su
-#         disparador, y conta_diez_subcuentas que deja entrar la subcuenta sin
-#         nombre marcada. Su prueba, en una transacción con ROLLBACK.
-#   La semilla de la empresa del frente C: con el alta terminada.
-supabase/migrations/20261111T0200_c06_diez_base.sql
-supabase/staging/sql/20261111_c06_diez_base_prueba.sql
-supabase/migrations/20261111T0300_c06_traer_listo.sql
-supabase/staging/sql/20261111_c06_traer_listo_prueba.sql
-supabase/seeds/conta/seed_c06_diez_staging.sql
+# C06 · Tarea 6 — el recorrido entero de la cuenta del frente C.
+#   La semilla del recorrido: e2e_c06_recorrido_base (SOLO staging, no es una
+#   migración): el administrador de plataforma de prueba registra la C0009 para
+#   la empresa de una cuenta «Recorrido de Prueba C06 …», y a nadie más.
+supabase/seeds/conta/seed_c06_recorrido_staging.sql
