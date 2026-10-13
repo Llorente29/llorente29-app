@@ -17,6 +17,12 @@
 -- 13/10 la versión anterior retiraba y esperaba al cierre de los :07, y la
 -- comprobación de después vio el hueco (22 días×local sin asiento).
 --
+-- LO QUE NO SE PUEDE REHACER NO SE RETIRA: un resumen del día entero sin sus
+-- pedidos (sale_ids vacío) no tiene de dónde sacar las unidades; retirarlo
+-- sería borrar sin reponer. Se queda como está y el aviso lo dice. (Staging,
+-- 13/10: la semilla del C04 tiene uno así, 212 tickets sin lista, y la 0130
+-- paró con «0 unidades, 0 pedidos por asentar». En producción, 0 de los 24.)
+--
 -- SIN descarte, a propósito (como la 0130 del cierre del día): un descarte
 -- deja el día fuera para siempre. Sin duplicar: lo retirado ya no está, y la
 -- clave de cada unidad es única (0110).
@@ -56,6 +62,7 @@ as $$
    where e.source_type = 'sales_day'
      and e.status = 'propuesto'
      and d.unit_key is null
+     and cardinality(d.sale_ids) > 0
      and (p_company is null or e.company_id = p_company)
      and exists (select 1 from public.conta_ventas_canal v where v.company_id = e.company_id)
 $$;
@@ -82,6 +89,15 @@ begin
     raise exception 'Rehacer las ventas por plataforma: % no son «propuesto» sin número; no se toca nada.', v_mal;
   end if;
   raise notice 'Rehacer las ventas por plataforma: % asiento(s) del día entero: %', v_n, coalesce(v_ids, 'ninguno');
+  select string_agg(format('%s %s (%s tickets)', d.sales_day, d.location_id, d.tickets_count), ', ' order by d.sales_day, d.location_id)
+    into v_falta
+    from public.journal_entry e join public.sales_day_summary d on d.entry_id = e.id
+   where e.source_type = 'sales_day' and e.status = 'propuesto' and d.unit_key is null and cardinality(d.sale_ids) = 0
+     and exists (select 1 from public.conta_ventas_canal v where v.company_id = e.company_id);
+  if v_falta is not null then
+    raise notice 'Rehacer las ventas por plataforma: NO se retiran, porque su resumen no tiene sus pedidos y no se pueden rehacer: %', v_falta;
+    v_falta := null;
+  end if;
   if v_n = 0 then return; end if;
 
   -- El cobro de cada local×día, ANTES: las 430 del asiento del día entero.
