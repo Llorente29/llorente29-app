@@ -181,4 +181,14 @@ anterior está en el historial y queda copiada en
 
 ## 6 · Resultados
 
-(se rellena con la e2e)
+- **Unitarias de Diez:** 259 de 259. Entre ellas, las 19 del envío y las 6 de
+  los estados.
+- **Staging, base:** runs 154, 155 y 156, en verde.
+- **e2e:**
+  - La 183 falló **en móvil**: los botones del pie del diálogo quedaban bajo la
+    barra inferior de Contabilidad. Le pasaba a todos los diálogos en el móvil,
+    y está arreglado en el diálogo común.
+  - La e2e de `1fd69aed` (run 38400777499) está **en verde entera**, ordenador
+    y móvil.
+  - Capturas en `docs/conta/capturas/c04b/`.
+- **Antes de subir:** en verde en cada push. El paso 8 dice: `20261021T0100_conta_documentos.sql: sigue`.
