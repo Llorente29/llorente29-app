@@ -254,8 +254,55 @@ a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
 
 ## 9 · Resultados medidos
 
-Se rellena con los runs: staging de la 0290, la semilla, la e2e con sus
-capturas y la lectura con el modelo.
+- **0290 en staging: verde** (run 38450004318). Antes, tres fallos que cazaron
+  los runs:
+  - una asignación dentro de un `if`, que plpgsql no admite;
+  - un origen de registro que el CHECK no admite (el bug de la sección 3);
+  - los datos de la prueba escritos como usuario, sin permiso sobre el IVA
+    por tipo.
+- **La comprobación local antes de reintentar:** el mismo chequeo de sintaxis
+  contra un Postgres 16 local. El fichero viejo da 1 error y el nuevo 0, con
+  la misma vara.
+- **La semilla en staging** (run 38454739496) dice: «Semilla D01 · cuenta A: 2
+  proveedores y 3 facturas de octubre».
+- **Unitarias:** 3166 de 3166.
+- **Lint de lo tocado:** 0 con el cambio y 0 en HEAD.
+- **`antes-de-subir`:** todo en verde, con el paso 8, antes de cada push.
+- **e2e 214** (38473042812): 164 en verde, 53 saltadas y 1 fallo **mío**. La
+  e2e compartida del C00 esperaba «Documentos» sin enlace, y ahora tiene
+  pantalla. Arreglado (6809f2e5), la misma línea que cambió B para Bancos.
+  **Las cuatro pruebas de D01 pasan en ordenador y en móvil.**
+- **e2e 215** (38476695805): 163 en verde, 53 saltadas y 2 fallos (ordenador y
+  móvil), **que no son de este cambio**. Es
+  `c04/libro.spec.ts:118`, «Lo que he hecho yo» sin «Asenté «Ventas del día ·
+  Norte Centro»»:
+  - **La causa, medida en staging leyendo:** la semilla de B
+    (`seed_b01_staging.sql`, aplicada a las 22:18 UTC por el run 38476832698)
+    deja **tres aperturas a 30/09 como propuesto** en la cuenta A.
+  - «Lo que he hecho yo» enseña las 5 más recientes. El asiento que validó
+    Folvy pasa al octavo puesto.
+  - En la 214 (antes de esa semilla) pasaba.
+  - **Desde ahora falla igual en todas las ramas.**
+  - **Ni la semilla de B ni esa prueba son mías:** la prueba es de otra
+    sesión (C04/C05). No toco ninguna de las dos.
+  - **Arreglos posibles, a decidir por B o por quien lleve el C04:**
+    - que la semilla de B ponga sus aperturas en una empresa propia o las deje
+      validadas;
+    - o que la prueba busque el asiento de Folvy sin depender de que esté entre
+      los cinco últimos.
+- **Las capturas no han subido.** El paso que las sube a la rama solo corre
+  con todo en verde, y la 215 no lo está por ese fallo ajeno. Los artefactos
+  del run tampoco se pueden bajar desde aquí: el proxy del entorno da 403 a
+  `blob.core.windows.net`.
+- **La lectura con el modelo** (run 38458409769): **0 de 12 leídas**.
+  - Las 12 dan HTTP 400 `error_saldo_o_limite`: **la cuenta de la API no
+    tiene saldo o ha llegado a su límite**.
+  - **Arreglados dos fallos míos** que cazó este run (5576405a):
+    - salía verde sin leer nada;
+    - una factura sin leer contaba como aciertos los campos vacíos.
+- **El BOE** (run 38455114901): la búsqueda «"EHA/962/2007"» no devuelve nada
+  (HTTP 200 vacío). No sé su identificador con seguridad y no me lo invento:
+  **pégame los artículos**, como dice R2.
 
 ## 10 · Lo que paro antes de la 7
 
