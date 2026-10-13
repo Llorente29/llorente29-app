@@ -54,6 +54,8 @@ async function sinFolvy(page: Page, donde: string) {
 }
 
 async function capturar(page: Page, nombre: string, contenedor: string | null = '.cx-principal') {
+  // Una captura con esqueletos no enseña la pantalla: se espera a que cargue.
+  await expect(page.locator('.cx-hueso')).toHaveCount(0, { timeout: 20_000 })
   await page.evaluate(() => document.fonts.ready)
   // Con la marca, en ordenador no hay nada flotando (sin barra de la IA): no hay
   // nada que pueda tapar. En el móvil, la barra inferior sí, y se mide.

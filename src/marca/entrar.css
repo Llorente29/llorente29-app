@@ -61,7 +61,8 @@
 }
 .mx-antetitulo { font-size: 13px; font-weight: 700; letter-spacing: 0.8px; color: var(--mx-verde); }
 .mx-lema { font-size: 26px; font-weight: 600; letter-spacing: -0.8px; line-height: 1.25; }
-.mx-frases { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 16px; color: var(--mx-verde-texto); }
+.mx-frases { margin: 0; padding-left: 18px; list-style: disc outside; display: flex; flex-direction: column; gap: 10px; font-size: 16px; color: var(--mx-verde-texto); }
+.mx-frases li { display: list-item; }
 
 /* Móvil: una columna; lo de dentro debajo, más corto. */
 @media (max-width: 900px) {

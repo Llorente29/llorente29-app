@@ -30,13 +30,14 @@
 .cxi-cifra {
   background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque);
   padding: 18px 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; min-width: 0;
-  text-decoration: none; color: inherit;
+  text-decoration: none; color: var(--cx-texto);
 }
+.cx a.cxi-cifra { color: var(--cx-texto); }
 a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
 .cxi-cifra-texto { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .cxi-cifra-etiqueta { font-size: 14px; color: var(--cx-apoyo); white-space: nowrap; }
-.cxi-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 26px; font-weight: 600; letter-spacing: -1px; white-space: nowrap; }
-.cxi-cifra-apoyo { font-size: 13px; font-weight: 500; color: var(--cx-apoyo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxi-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 26px; font-weight: 600; letter-spacing: -1px; white-space: nowrap; color: var(--cx-texto); }
+.cxi-cifra-apoyo { font-size: 13px; font-weight: 500; color: var(--cx-apoyo); line-height: 1.35; overflow-wrap: anywhere; }
 .cxi-cifra-apoyo-verde { color: var(--cx-verde-oscuro); }
 .cxi-cifra-apoyo-ambar { color: var(--cx-ambar); }
 .cxi-barras { display: flex; align-items: flex-end; gap: 4px; height: 40px; flex-shrink: 0; }
