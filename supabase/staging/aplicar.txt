@@ -1,13 +1,8 @@
-# D01 R2 · Lo que queda de la tarea 5 (sesión A; solo añade).
-# La 0200 a la 0260 ya están en staging (la 0260, run 38443203154).
-#   ensayo: la 0270 y su prueba en una transacción con ROLLBACK.
-#   0270:   conta_recibida_envio, lo que el envío a Diez lee de una recibida.
-#   Su prueba, y la del R15 (el envío de ventas no cambia).
-supabase/staging/sql/20261021_d01_recibida_envio_ensayo.sql
-supabase/migrations/20261021T0270_d01_recibida_envio.sql
-supabase/staging/sql/20261021_d01_recibida_envio_prueba.sql
-supabase/staging/sql/20261021_conta_documentos_prueba.sql
-#   0280:   conta_documentos_recibidos, lo que enseña N22 (con su ensayo y su prueba).
-supabase/staging/sql/20261021_d01_documentos_ensayo.sql
-supabase/migrations/20261021T0280_d01_documentos.sql
-supabase/staging/sql/20261021_d01_documentos_prueba.sql
+# D01 · Tarea 6 — N23 y «Pedírselas» (sesión A; solo añade).
+# La 0200 a la 0280 ya están en staging (la 0270 y la 0280, run 38447549381).
+#   ensayo: la 0290 y su prueba en una transacción con ROLLBACK.
+#   0290:   conta_factura_para_revisar (N23) y conta_factura_pedir (la
+#           petición confirmada por la persona; no envía nada).
+supabase/staging/sql/20261021_d01_revisar_ensayo.sql
+supabase/migrations/20261021T0290_d01_revisar_y_pedir.sql
+supabase/staging/sql/20261021_d01_revisar_prueba.sql
