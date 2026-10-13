@@ -1,0 +1,254 @@
+# D01 · Facturas recibidas · Tarea 6 (parada antes de la 7)
+
+Respuesta 2, entera. Lo que se ha hecho, lo que **no** se ha hecho y por qué,
+y lo que os pregunto a Julio y a C. Nada aplicado en producción: en
+producción solo se ha leído, con recuentos.
+
+## 1 · La regla de salida de los workflows (R2 punto 1)
+
+**Regla desde hoy:** un workflow que lea producción o Diez saca en su salida
+solo recuentos y huellas.
+
+- **La puerta:** `scripts/conta/salida-segura.mjs` (y `lib/salidaSegura.mjs`).
+  Deja pasar solo `@@ clave valor`, con el valor un entero o una huella
+  hexadecimal; lo demás lo retiene y lo cuenta.
+- **La comprobación, paso 9 de `antes-de-subir.sh`:**
+  `scripts/conta/workflows-salida.mjs`. Revisa los workflows nuevos o tocados
+  contra `origin/main`. Si leen producción o Diez, todo lo que corre un script
+  o una consulta va a un fichero o pasa por la puerta. Un `echo` con
+  variables al registro falla, y `cat` al resumen también: así salió el
+  run 60.
+- **La deuda que ya había**, escrita en `workflows-salida-deuda.json`, solo
+  puede bajar.
+
+### Auditoría de los workflows (también de las otras ramas)
+
+| Workflow | Qué podía sacar | Cómo queda |
+|---|---|---|
+| `aplicar-produccion-conta.yml` | DETAIL/NOTICE de psql con valores de filas | `client_min_messages=warning` y `VERBOSITY=sqlstate` en el ensayo, el ensayo de vuelta atrás y el real; el filtro ya no saca NOTICE/DETAIL/CONTEXT (compartido, dicho) |
+| `scripts/conta/produccion/deshacer.sh` | lo mismo al deshacer | `-q` y `VERBOSITY=sqlstate` (compartido, dicho) |
+| `cumplimiento-produccion-conta.yml` (agente «Libro diario») | importes, números de asiento y conceptos en el resumen y en los avisos | con `CONTA_ANONIMO=1`, informe anónimo como los otros dos agentes (`agente-libro.mjs`, compartido, dicho) |
+| `diez-importar.yml` | el texto de un error de psql (valores) | `VERBOSITY=sqlstate` en la conexión a producción. Los `raise notice … sqlerrm` de `importar.sql` son de C: no los toco, se lo digo |
+| `diez-lectura.yml` | `lectura.mjs` imprime nombres | **de C, sin tocar**: se lo digo |
+| `diez-prueba-c0009.yml` | el texto de las facturas (run 60) | por la puerta; los scripts de prueba ya solo sacan `@@` |
+| `medir-ocr.yml` | códigos de recepción | riesgo bajo; en la deuda escrita |
+| `leer-con-modelo-d01.yml` (nuevo) | — | no lee producción ni Diez; aun así solo saca aciertos por campo |
+
+**En otras ramas**, sin fusionar, quedan copias viejas:
+
+- 13 ramas con el agente «Libro diario» sin anonimizar;
+- unas 60 con el `aplicar-produccion` de antes.
+
+No se ejecutan solas (el de producción es manual). **Recomiendo borrar las
+ramas ya fusionadas**; lo decides tú.
+
+## 2 · La lectura con el modelo (R2 punto 2)
+
+- **Las facturas inventadas:** las 8 clases, una foto torcida, una borrosa, un
+  PDF escaneado sin texto y una de control
+  (`tests/conta/d01/facturas-inventadas`).
+- **La comparación:** campo a campo, con la misma vara a los dos lados
+  (`compararLectura.mjs`).
+- **El lanzamiento:** solo a mano, `leer-con-modelo-d01.yml`.
+- **La clave:** `ANTHROPIC_API_KEY`, que no pasa por el chat ni por el
+  repositorio.
+
+**Resultado, honesto:** véase la sección 9.
+
+## 3 · Los cambios aceptados (R2 punto 3)
+
+- **Repetidas con el total** (0230 → 0260, la regla entera del C01b):
+  - repetida = número y total;
+  - posible = misma fecha y total (no cero) con otro número;
+  - el mismo número con otro total no es nada.
+- **Medido en producción antes de la tanda, solo leyendo:** solo Foodint tiene
+  facturas, 6 vivas. **Bloquean 0, avisan 0.** Se vuelve a medir antes de la
+  tanda.
+- **El origen de lo aprendido** (0250): «aprendido de Diez» o «aprendido de tus
+  facturas»; si las dos, el de la más reciente.
+  - En N23 (0290), la cuenta de la ficha dice de dónde sale. Si se puso
+    aceptando lo aprendido, el origen sale de la historia, no de una etiqueta
+    guardada una vez.
+- **La 472 única de Diez:** la comparación suma los tipos.
+
+**Un fallo que salió aquí, dicho:**
+
+- La 0210 deja `aprendido_diez` en `company_account_link.source`, pero
+  `company_account_log` no lo admite. Confirmar lo aprendido con esa etiqueta
+  habría fallado siempre.
+- La pantalla confirma con `ai_accepted` (una propuesta aceptada por la
+  persona), y el origen sale de la historia.
+- `aprendido_diez` queda admitido y sin usar. El comentario de la 0240 que lo
+  nombra no lo cambio: está aplicada en staging y su huella cambiaría.
+
+## 4 · La tarea 5 que quedaba
+
+Commit a43d2048, en staging:
+
+- **La recibida va a Diez serie 2** con el freno del documento: sin PDF no
+  sale, y si Diez no admite documentos, «No ha llegado a Diez: Diez no guarda
+  documentos todavía».
+- **«Apuntar solo lo seguro»:** solo la lectura «seguro», con la propuesta
+  segura y sin avisos.
+- **La foto, como PDF** (`fotoAPdf.ts`).
+
+## 5 · N22 y N23
+
+**Rutas:**
+
+- `/conta/documentos` (N22), con `?ver=` y `?mes=`;
+- `/conta/documentos/recibidas/:id` (N23), con el mismo filtro y mes, para
+  «1 de 5», Anterior y Siguiente.
+
+**Lo que es fiel a la maqueta:**
+
+- **Los tres niveles de Libros:** menú, pestaña y la barra «Traer · Esperadas
+  · Leídas».
+- **La banda de la IA en una frase**, con el texto de la maqueta medido en una
+  prueba (`documentosPantalla.test.ts`).
+- **Las cinco cifras.**
+- **La lista:** cada fila con su porqué y un solo botón; «Decirlo yo» en azul
+  cuando no reconozco el emisor.
+- **N23:**
+  - el papel a la izquierda;
+  - «Lo que he leído», con «Sus facturas se apuntan en» y su origen;
+  - «Cómo se apunta»: la propuesta **de verdad**, la misma función que la
+    tanda (`verPropuestaFactura`), sin escribir;
+  - «Está bien · apuntar» en azul.
+- **Las cuentas, siempre nombre · código.**
+
+**«Está bien · apuntar»** hace, por este orden:
+
+1. aprueba como en Compras;
+2. propone como la tanda (`proponerFactura`: el bloque de facturas sacado tal
+   cual a una función; comparado contra el anterior, solo cambian la consulta
+   de una factura y que diga por qué no apunta una con fecha cerrada);
+3. valida;
+4. guarda su PDF;
+5. la manda a Diez.
+
+Donde se pare, lo dice.
+
+**Donde la maqueta pide lo que no existe, paro y lo digo, sin cambiarlo:**
+
+1. **«Por recepción · N sin factura»** (Esperadas). No se puede contar por
+   empresa: `locations` no tiene a qué empresa pertenece cada local. No sale.
+   **Pregunta a Julio:** ¿un local es siempre de una sola empresa? Si sí, hace
+   falta esa relación.
+2. **«Tuyos» (favoritos y Ctrl K):** no existen en Documentos. No sale.
+3. **Las pestañas «Facturas emitidas» y «Otros documentos»:** no tienen
+   pantalla aquí (Ventas dice «aún no»). Solo sale «Facturas recibidas».
+4. **«con deshacer»** bajo «Apuntadas solas»: el deshacer de lo apuntado solo
+   no está hecho. Pone «las ves en Apuntadas».
+5. **La comparación de precios con el pedido** («2 suben un 4 %»): no está
+   hecha. La banda dice lo que la lectura sabe; la fila «Precios» no sale.
+6. **«Decirlo yo»:** en la maqueta está en «Para mirar». En el estado de la
+   base, sin emisor es «por aclarar», y ahí sale.
+7. **«Esperadas»** solo existen desde el día 15 (la regla de la 0200). Hoy es
+   13: la banda no dice «Faltan…», y no lo he fingido.
+
+**Lo que no funciona no se enseña:**
+
+- «Por correo» sale solo con el correo de la empresa encendido.
+- «De Cocina» sale solo si la empresa recibe la mercancía y la cuenta no es
+  solo de contabilidad.
+
+**Un hueco cerrado:** subir otra vez un fichero cuya lectura falló **lo vuelve
+a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
+
+**«Pedírselas»:**
+
+1. pregunta «¿A quién se la pido?», con el contacto de Facturación si lo hay;
+2. la persona confirma;
+3. la petición queda guardada como confirmada (0290) y se abre **su** correo
+   con el mensaje (mailto). No sale nada solo.
+
+## 6 · Móvil
+
+- **Subir:** «Hacer foto» con la cámara (`capture="environment"`) y «Subir
+  PDF».
+- **«Para mirar»:** en tarjetas.
+- **«Está bien · apuntar»:** abajo, fijo, bajo el pulgar. La e2e comprueba que
+  está en la mitad de abajo sin desplazarse.
+
+## 7 · Las dos cuentas
+
+- **A, con Cocina:** la semilla `seed_d01_staging.sql` (todo inventado, ids
+  fijos, cuenta A).
+- **Frente C, sin Cocina:** la misma cuenta con `?marca=contabilidad`, como
+  dice R2. La e2e mira el contenido de Documentos: ni «Cocina» ni «Folvy», en
+  el texto ni en las etiquetas.
+  - **Lo que decide «solo»:** `documentos/producto.ts`, un **puente** hasta
+    que entre la C06. Lee `accounts.product_brand` (llega con la fila de la
+    cuenta que ya carga la plataforma) y `?marca=` fuera de producción, con la
+    misma clave de sesión que C.
+  - **El día que se fusione la C06** se cambia por `useProductoSolo()` y
+    `MARCA.nombre`, y se borra.
+  - **Vendido solo,** la pantalla habla en primera persona («Lo que he
+    entendido», «Lo que he hecho yo»). Las cifras dicen «recepciones» y la
+    fila «llegó por su recepción».
+- **El marco (menú, barra de abajo) es de la C06**, y en esta rama aún dice
+  Folvy. La e2e no lo mira; eso lo mide C.
+- **No he sembrado nada en la cuenta de la C06:** es de C y cuenta sus filas.
+
+**«Recibe la mercancía»** (R2 punto 4):
+
+- Sin fila en `company_purchase_setting` es «no». Una cuenta de la C06 no
+  tiene fila, y N22 lo oculta en solo.
+- **Falta, para la 7:** que `conta_recibe_mercancia` devuelva «no» siempre que
+  la cuenta tenga marca. Eso necesita la columna `product_brand` de C, que no
+  está en main.
+- **No hay pantalla del interruptor** en ninguna parte: ¿va en Ajustes, y es
+  mía o de C?
+
+## 8 · Coordinación
+
+- **Para C:**
+  1. **¿Qué fichero es la ruta de la ficha del proveedor?** No la toco.
+  2. **El contenido que es mío ya está en la base:** 0290 devuelve el contacto
+     de «Facturación» y «Sus facturas se apuntan en» con su origen. N23 lo
+     enseña.
+  3. **Lo que entra en tu ficha cuando me digas dónde:**
+     - el contacto de «Facturación»;
+     - «Sus facturas se apuntan en», con su origen;
+     - la extensión de Cocina, solo si se usa.
+  4. `diez-lectura` y los `sqlerrm` de `importar.sql` sacan texto (sección 1).
+- **Las e2e del cierre que esperaban las 6:00 ya esperan las 2:00 en main**
+  (1f8638c7). A B le basta traerse main.
+- **El solape de e2e.**
+  - **El de hoy, ya contado:** mi push de las 18:00 lanzó la 197, que pisó la
+    195 y la 198 de C. Pasó.
+  - **Desde entonces, sin lanzarlas:** empujo con `[skip ci]`, aplico staging
+    a mano y espero a que no haya ninguna e2e en marcha (comprobado por la
+    API) antes de lanzar la mía.
+  - **Cuando entre la rama de usuarios por frente,** me traigo main.
+
+**Compartido, pequeño, dicho:**
+
+- `src/config/navegacion.ts`: la ruta y la línea de «Documentos» en el menú.
+  **Choca con la C06**, que toca el mismo bloque; se resuelve a mano.
+- `tests/unit/modules/conta/marcoC00.test.ts`: «documentos» visible. **Choca
+  con la C06**, que cambia la misma línea.
+- `src/modules/conta/module.tsx`: dos rutas.
+- `src/modules/conta/estilo/index.ts`: una línea.
+- `propuestasLibroService.ts`: el bloque de facturas sacado a una función.
+- `aplicar-produccion-conta.yml`, `deshacer.sh`, `diez-importar.yml`,
+  `agente-libro.mjs` y `diez-prueba-c0009.yml`: sección 1.
+- `_shared/ocrAlbaranNucleo.ts`: `MODELO_VISION` vive ahí y `ocr-albaran` lo
+  usa.
+- Supply: el aviso de repetida, `rpcSinTipar` y la e2e del C01b, que espera
+  409.
+
+## 9 · Resultados medidos
+
+Se rellena con los runs: staging de la 0290, la semilla, la e2e con sus
+capturas y la lectura con el modelo.
+
+## 10 · Lo que paro antes de la 7
+
+- **Producción:** nada. La tanda (0200 a 0290) va en la 7, con la fusión, en
+  este orden: base, funciones, front, con el paso 8. Antes se vuelve a medir
+  cuántas facturas chocarían.
+- **Pregunta de negocio a Julio:** en una empresa solo de contabilidad, ¿las
+  facturas «seguro» se apuntan sin pasar por la aprobación de Compras?
+- **El run 60:** si no lo has borrado aún, bórralo desde GitHub.
