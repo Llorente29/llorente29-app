@@ -28,12 +28,18 @@ returns jsonb language plpgsql stable security definer set search_path = public 
 declare
   v_i public.supplier_invoice;
   v_company uuid;
+  v_apr jsonb;
 begin
   select * into v_i from public.supplier_invoice where id = p_invoice;
   if v_i.id is null or not public.belongs_to_account(v_i.account_id) then
     raise exception 'Esa factura no está.' using errcode = 'P0002';
   end if;
   v_company := coalesce(v_i.company_id, (select id from public.company where account_id = v_i.account_id order by created_at limit 1));
+  -- Lo aprendido de sus facturas anteriores (0250): de ahí sale el origen de
+  -- verdad, «aprendido de Diez» o «aprendido de tus facturas» (la más reciente).
+  if v_i.supplier_id is not null and v_company is not null then
+    v_apr := public.conta_gasto_aprendido(v_company, v_i.supplier_id);
+  end if;
   return jsonb_build_object(
     'id', v_i.id, 'account_id', v_i.account_id, 'company_id', v_company, 'estado', v_i.status,
     'numero', v_i.invoice_number, 'fecha', v_i.invoice_date, 'vence', v_i.due_date, 'clase', v_i.doc_kind,
@@ -48,16 +54,18 @@ begin
         'id', s.id, 'nombre', s.name, 'razon', s.legal_name, 'nif', s.tax_id,
         'subcuenta', (select a.code from public.company_account_link k join public.company_account a on a.id = k.company_account_id
                        where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'principal' limit 1),
-        -- «Sus facturas se apuntan en», con su origen dicho para una persona: la
-        -- cuenta de su ficha si la tiene; si no, la aprendida de sus facturas
-        -- anteriores («aprendido de Diez» o «aprendido de tus facturas», 0250).
+        -- «Sus facturas se apuntan en», con su origen dicho para una persona.
+        -- Con cuenta en la ficha: si se puso aceptando lo aprendido y sigue
+        -- siendo lo aprendido, el origen es el de la historia (Diez o tus
+        -- facturas); si la eligió una persona, «elegida en su ficha». Sin
+        -- cuenta en la ficha, lo aprendido tal cual.
         'gasto', coalesce(
           (select jsonb_build_object('cuenta', a.code, 'nombre', a.name,
-                    'origen', case k.source when 'manual' then 'elegida en su ficha' when 'ai_accepted' then 'propuesta aceptada en su ficha' else 'de su ficha' end)
+                    'origen', case when k.source in ('ai_accepted', 'aprendido_diez') and v_apr->>'cuenta' = a.code then v_apr->>'origen'
+                                   when k.source = 'manual' then 'elegida en su ficha' else 'de su ficha' end)
              from public.company_account_link k join public.company_account a on a.id = k.company_account_id
             where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'gasto' limit 1),
-          (select case when g->>'cuenta' is not null then jsonb_build_object('cuenta', g->>'cuenta', 'nombre', g->>'nombre', 'origen', g->>'origen') end
-             from public.conta_gasto_aprendido(v_company, s.id) g)),
+          case when v_apr->>'cuenta' is not null then jsonb_build_object('cuenta', v_apr->>'cuenta', 'nombre', v_apr->>'nombre', 'origen', v_apr->>'origen') end),
         'facturacion', (select jsonb_build_object('nombre', c.name, 'email', c.email) from public.supplier_contact c
                          where c.supplier_id = s.id and c.account_id = s.account_id and c.role = 'billing' and c.email is not null order by c.created_at limit 1))
       from public.supplier s where s.id = v_i.supplier_id and s.account_id = v_i.account_id),
@@ -126,12 +134,15 @@ end $$;
 set local statement_timeout = '300s';
 
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
-set local role authenticated;
+-- Los datos de la prueba, con la identidad del administrador de A pero como
+-- dueño: el IVA por tipo de una factura solo lo escriben las funciones (la
+-- persona no tiene INSERT en supplier_invoice_tax). Lo que se PRUEBA va después,
+-- como usuario.
 do $$
 declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v_e   constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
-  v_p uuid; v_sub text; v_i uuid; r jsonb; v_id uuid;
+  v_p uuid; v_sub text; v_i uuid;
 begin
   insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name)
   values (v_acc, 'Revisar Prueba D01', 'Revisar Prueba D01, S.L.', 'B00000077', true, 'Prueba D01') returning id into v_p;
@@ -143,7 +154,18 @@ begin
   insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount) values (v_acc, v_i, 10, 100, 10);
   perform set_config('prueba.i', v_i::text, true);
   perform set_config('prueba.p', v_p::text, true);
+  perform set_config('prueba.sub', v_sub, true);
+end $$;
 
+set local role authenticated;
+do $$
+declare
+  v_e   constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
+  v_p uuid := current_setting('prueba.p')::uuid;
+  v_i uuid := current_setting('prueba.i')::uuid;
+  v_sub text := current_setting('prueba.sub');
+  r jsonb; v_id uuid;
+begin
   -- 1
   r := public.conta_factura_para_revisar(v_i);
   if r->>'numero' <> 'PD01-R-1' or r->>'confianza' <> 'seguro' or jsonb_array_length(r->'tipos') <> 1 or (r->'tipos'->0->>'base')::numeric <> 100

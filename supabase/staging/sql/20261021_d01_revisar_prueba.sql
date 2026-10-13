@@ -19,12 +19,15 @@ end $$;
 set local statement_timeout = '300s';
 
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
-set local role authenticated;
+-- Los datos de la prueba, con la identidad del administrador de A pero como
+-- dueño: el IVA por tipo de una factura solo lo escriben las funciones (la
+-- persona no tiene INSERT en supplier_invoice_tax). Lo que se PRUEBA va después,
+-- como usuario.
 do $$
 declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v_e   constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
-  v_p uuid; v_sub text; v_i uuid; r jsonb; v_id uuid;
+  v_p uuid; v_sub text; v_i uuid;
 begin
   insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name)
   values (v_acc, 'Revisar Prueba D01', 'Revisar Prueba D01, S.L.', 'B00000077', true, 'Prueba D01') returning id into v_p;
@@ -36,7 +39,18 @@ begin
   insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount) values (v_acc, v_i, 10, 100, 10);
   perform set_config('prueba.i', v_i::text, true);
   perform set_config('prueba.p', v_p::text, true);
+  perform set_config('prueba.sub', v_sub, true);
+end $$;
 
+set local role authenticated;
+do $$
+declare
+  v_e   constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
+  v_p uuid := current_setting('prueba.p')::uuid;
+  v_i uuid := current_setting('prueba.i')::uuid;
+  v_sub text := current_setting('prueba.sub');
+  r jsonb; v_id uuid;
+begin
   -- 1
   r := public.conta_factura_para_revisar(v_i);
   if r->>'numero' <> 'PD01-R-1' or r->>'confianza' <> 'seguro' or jsonb_array_length(r->'tipos') <> 1 or (r->'tipos'->0->>'base')::numeric <> 100

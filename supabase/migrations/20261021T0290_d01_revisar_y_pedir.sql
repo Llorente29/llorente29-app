@@ -22,12 +22,18 @@ returns jsonb language plpgsql stable security definer set search_path = public 
 declare
   v_i public.supplier_invoice;
   v_company uuid;
+  v_apr jsonb;
 begin
   select * into v_i from public.supplier_invoice where id = p_invoice;
   if v_i.id is null or not public.belongs_to_account(v_i.account_id) then
     raise exception 'Esa factura no está.' using errcode = 'P0002';
   end if;
   v_company := coalesce(v_i.company_id, (select id from public.company where account_id = v_i.account_id order by created_at limit 1));
+  -- Lo aprendido de sus facturas anteriores (0250): de ahí sale el origen de
+  -- verdad, «aprendido de Diez» o «aprendido de tus facturas» (la más reciente).
+  if v_i.supplier_id is not null and v_company is not null then
+    v_apr := public.conta_gasto_aprendido(v_company, v_i.supplier_id);
+  end if;
   return jsonb_build_object(
     'id', v_i.id, 'account_id', v_i.account_id, 'company_id', v_company, 'estado', v_i.status,
     'numero', v_i.invoice_number, 'fecha', v_i.invoice_date, 'vence', v_i.due_date, 'clase', v_i.doc_kind,
@@ -42,16 +48,18 @@ begin
         'id', s.id, 'nombre', s.name, 'razon', s.legal_name, 'nif', s.tax_id,
         'subcuenta', (select a.code from public.company_account_link k join public.company_account a on a.id = k.company_account_id
                        where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'principal' limit 1),
-        -- «Sus facturas se apuntan en», con su origen dicho para una persona: la
-        -- cuenta de su ficha si la tiene; si no, la aprendida de sus facturas
-        -- anteriores («aprendido de Diez» o «aprendido de tus facturas», 0250).
+        -- «Sus facturas se apuntan en», con su origen dicho para una persona.
+        -- Con cuenta en la ficha: si se puso aceptando lo aprendido y sigue
+        -- siendo lo aprendido, el origen es el de la historia (Diez o tus
+        -- facturas); si la eligió una persona, «elegida en su ficha». Sin
+        -- cuenta en la ficha, lo aprendido tal cual.
         'gasto', coalesce(
           (select jsonb_build_object('cuenta', a.code, 'nombre', a.name,
-                    'origen', case k.source when 'manual' then 'elegida en su ficha' when 'ai_accepted' then 'propuesta aceptada en su ficha' else 'de su ficha' end)
+                    'origen', case when k.source in ('ai_accepted', 'aprendido_diez') and v_apr->>'cuenta' = a.code then v_apr->>'origen'
+                                   when k.source = 'manual' then 'elegida en su ficha' else 'de su ficha' end)
              from public.company_account_link k join public.company_account a on a.id = k.company_account_id
             where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'gasto' limit 1),
-          (select case when g->>'cuenta' is not null then jsonb_build_object('cuenta', g->>'cuenta', 'nombre', g->>'nombre', 'origen', g->>'origen') end
-             from public.conta_gasto_aprendido(v_company, s.id) g)),
+          case when v_apr->>'cuenta' is not null then jsonb_build_object('cuenta', v_apr->>'cuenta', 'nombre', v_apr->>'nombre', 'origen', v_apr->>'origen') end),
         'facturacion', (select jsonb_build_object('nombre', c.name, 'email', c.email) from public.supplier_contact c
                          where c.supplier_id = s.id and c.account_id = s.account_id and c.role = 'billing' and c.email is not null order by c.created_at limit 1))
       from public.supplier s where s.id = v_i.supplier_id and s.account_id = v_i.account_id),
