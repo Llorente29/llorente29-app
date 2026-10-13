@@ -99,7 +99,7 @@
 /* Móvil (M4): portada con píldoras, dos cifras, frase verde y apartados de 56 px */
 .cxb-portada { display: flex; flex-direction: column; gap: 14px; }
 .cxb-pildoras { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
-.cxb-pildora-banco { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; min-height: 40px; }
+.cxb-pildora-banco { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; min-height: 40px; flex: none; max-width: none; overflow: visible; }
 .cxb-pildora-banco[aria-pressed='true'] { background: var(--cx-azul-suave); color: var(--cx-azul); border-color: var(--cx-azul-borde); }
 .cxb-botones-grandes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cxb-botones-grandes > * { min-height: 52px; display: flex; align-items: center; justify-content: center; text-decoration: none; }

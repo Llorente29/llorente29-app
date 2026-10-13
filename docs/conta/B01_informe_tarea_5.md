@@ -14,7 +14,7 @@ cuenta de A en staging, comparadas con la maqueta.» Todo con datos inventados.
 | Fuentes solo las tocadas (punto 3.2) | `fuentes-oficiales-conta.yml`, `fuentes.mjs` (compartidos) | Hecho |
 | Contraste con Sage y veredicto (punto 2) | `docs/conta/contraste.md` | Hecho; ver §4 |
 | Pantallas N17 y las cinco sin maqueta, móvil M4 | `src/modules/conta/bancos/` | Hecho; capturas en §5 |
-| Pruebas | `bancosVistaB01.test.ts` (16), `conciliacionB01.test.ts` (42), `bancosB01.test.ts` (39); e2e `tests/e2e/conta/b01/pantallas.spec.ts` | Unitarias en verde (2.860 del repositorio); e2e en §5 |
+| Pruebas | `bancosVistaB01.test.ts` (16), `conciliacionB01.test.ts` (42), `bancosB01.test.ts` (39); e2e `tests/e2e/conta/b01/pantallas.spec.ts` | Unitarias en verde; e2e de B01 en verde (§5) |
 
 ## 2. Tarjetas de débito
 
@@ -67,8 +67,9 @@ cuenta de A en staging, comparadas con la maqueta.» Todo con datos inventados.
    paré. Cancelé la mía (run 38442647403) a los 80 segundos, sin ninguna prueba
    ejecutada, pero **ya había cambiado la contraseña de los usuarios de prueba**,
    así que el run de C06 pudo fallar por mí desde ese minuto. Si falló, hay que
-   repetirlo. Desde entonces, la comprobación va en un paso aparte y el push
-   solo sale si devuelve vacío.
+   repetirlo. **Falló** (run 38442480331) y C06 lo repitió a las 18:04 en verde
+   (run 38443794029). Desde entonces, la comprobación va en un paso aparte y el
+   push solo sale si devuelve vacío.
 5. `tsconfig.node.json` y P2: aceptados, sin cambios.
 
 Otros ficheros compartidos tocados en esta tanda (todos pequeños):
@@ -162,7 +163,44 @@ tarjeta (dentro de los 134 del grupo 6xx): pasan de «falta el ticket» a
 
 ### Capturas y comparación con N17
 
-(Se completa con el run de las capturas.)
+En `docs/conta/capturas/b01/pantallas/`, sacadas por la e2e
+`tests/e2e/conta/b01/pantallas.spec.ts` en staging-conta, cuenta A, con la
+sesión del administrador de A (run 38463737425 sobre `a7eb3c9`, **verde**:
+el motor y las dos pantallas, ordenador y móvil). Datos: el Norma 43 inventado
+de los tres bancos B01 y la tarjeta ···0937 de «Ana Prueba»; al acabar la
+prueba lo deshace todo y comprueba que A tiene los mismos asientos.
+
+| Captura | Qué enseña | Frente a N17 |
+|---|---|---|
+| `movimientos-ordenador.png` | Banco B01 · Norte, octubre: «He casado yo 3 de 8…», cinco cifras, la tabla con verde / ámbar / gris | Misma estructura, mismo orden de columnas, mismos botones por estado. Las diferencias, abajo |
+| `por-aclarar-ordenador.png` | El segmento «Por aclarar» | — (N17 dibuja «Todo») |
+| `tarjeta-desconocida-ordenador.png` | Banco B01 · Mercado: «Por aclarar: tarjeta acabada en 1234, ¿de quién es?» con «Dar de alta la tarjeta» | Sin maqueta (respuesta 3) |
+| `subir-leido-ordenador.png` / `subir-hecho-ordenador.png` | El Norma 43 **soltado sobre Reglas**: «He leído 3 cuentas, 15 movimientos…», cada cuenta con su banco por IBAN, «Subir las 3 cuentas», y lo que pasó | Sin maqueta |
+| `reglas-ordenador.png` | Reglas (0 en A), «Regla nueva» | Sin maqueta |
+| `cuentas-ordenador.png` | Los cuatro bancos de A con «nombre · código», IBAN, local, la tarjeta ···0937 de Ana con «Dar de baja», el alta de tarjeta y los extractos | Sin maqueta |
+| `cierre-ordenador.png` | Cierre de octubre por banco | Sin maqueta |
+| `hecho-por-folvy-ordenador.png` | El registro del mes con Deshacer | Sin maqueta |
+| `portada-movil.png` | M4: bancos en píldoras, «Subir extracto» / «Confirmar 2», dos cifras, frase verde, apartados de 56 px | Patrón M4 |
+| `para-confirmar-movil.png` / `por-aclarar-movil.png` | La tabla apilada en tarjetas, botones a lo ancho | Patrón M4 |
+
+**Lo que se ve en las capturas y hay que leer bien:**
+- **«Saldo en contabilidad 1.413,30 € · difiere 42.824,50 €»** en Norte, y lo
+  mismo en el cierre: es verdad, no un fallo de la pantalla. Los bancos B01 de
+  staging no tienen asiento de apertura: el saldo inicial del extracto (45.000 €)
+  nunca entró en contabilidad. El cierre lo dice: «no se explica solo con los
+  movimientos sin casar». Con Foodint, el saldo traído de Diez sí está.
+- **«Cuenta principal · 57200001»** es el banco que la cuenta A ya tenía
+  (de otras semillas): sale en la barra con «sin extracto» y, en el cierre, con
+  sus asientos «en contabilidad y no en el banco». No es mío y no lo toco.
+- La barra «Pregunta o pide algo» sale encima de una fila en las capturas de
+  página entera: está fija abajo de la ventana, como en el resto del módulo, y
+  la captura entera la pinta donde estaba la ventana.
+
+**Arreglado después de verlas** (va en el commit siguiente; las capturas son
+de antes): las píldoras de los bancos del móvil salían cortadas («Cuenta pri»);
+«Hecho por Folvy · 51 este mes» contaba también lo deshecho por las propias
+pruebas (ahora cuenta lo que sigue vivo); y la captura de Reglas se tomó
+mientras decía «Mirando lo que se repite…» (la prueba ahora espera).
 
 ### Diferencias con la maqueta, una a una
 
@@ -179,9 +217,26 @@ tarjeta (dentro de los 134 del grupo 6xx): pasan de «falta el ticket» a
    nada.
 5. **El selector del mes** es un desplegable del estilo del módulo (como el del
    ejercicio en Libros), no el botón «Octubre 2026 ▾» de la maqueta.
-6. **Las migas** dicen el nombre del banco de Folvy y los 4 últimos del IBAN
+6. **Con cuatro bancos, AUTOMÁTICO baja a una segunda fila de la barra.** La
+   maqueta tiene tres bancos y cabe en una. Partir en filas es lo que se decidió
+   en Libros para no esconder ninguna acción (e2e 153); desplazar en horizontal
+   escondía la última. Si Julio prefiere una sola fila, la propuesta es que TUS
+   BANCOS enseñe el nombre corto (sin «Banco») y, a partir de cinco, «y N más».
+7. **Las migas** dicen el nombre del banco de Folvy y los 4 últimos del IBAN
    («Banco B01 · Norte · ES·· ···· 0011»), como la maqueta pero con el nombre que
    tiene la cuenta.
+
+### Lo que cazó la e2e (y no habría cazado ninguna prueba unitaria)
+
+1. **El «Casado: …» de un botón no llegaba a verse** (regla 8). El casado se
+   hacía —en staging, «casado · persona» a las 18:25:25— pero al recargar, la
+   página volvía al esqueleto y desmontaba la pestaña con su aviso. Ahora la
+   página conserva lo leído mientras vuelve a leer (`useLeerConservando`).
+2. **Una tarjeta no dada de alta no preguntaba de quién era** si su cuenta no
+   tenía ninguna otra. Mi regla («solo si hay tarjetas en la cuenta») era
+   justo lo contrario de lo que pidió Julio. Ahora pregunta siempre que el
+   concepto trae los dígitos de una tarjeta desconocida (un año no cuenta), y si
+   ya sabía a qué va el pago, lo sigue proponiendo y además pregunta.
 
 ## 6. Lo que queda para la tarea 6
 

@@ -74,7 +74,8 @@ export default function BancosPage() {
   const bancos = datos.datos?.bancos ?? []
   const banco = bancos.find((b) => b.id === query.get('banco')) ?? bancos[0] ?? null
   const hechos = useLeerConservando(accountId && activa ? () => leerHechos(accountId, activa.id, mes) : null, ambito, `${mes}:${vuelta}`)
-  const casadosSolos = (hechos.datos ?? []).filter((h) => h.porQuien === 'folvy' && h.accion === 'casado').length
+  // Lo casado solo que sigue vivo: lo deshecho ya no es «hecho por Folvy».
+  const casadosSolos = (hechos.datos ?? []).filter((h) => h.porQuien === 'folvy' && h.accion === 'casado' && h.casadoVivo).length
 
   const usuario = userName ?? 'yo'
   const [favoritos, setFavoritos] = useState<VistaBancos[]>(() => leerFavoritos(usuario, almacen()))

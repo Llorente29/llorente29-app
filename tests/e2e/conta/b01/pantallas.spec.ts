@@ -98,6 +98,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await pestanas.getByRole('link', { name: 'Reglas' }).click()
       await expect(page.getByRole('heading', { name: 'Reglas', level: 2 })).toBeVisible()
       await expect(page.getByRole('form', { name: 'Regla nueva' })).toBeVisible()
+      await expect(page.getByText('Mirando lo que se repite…')).toHaveCount(0, { timeout: 30_000 })
       await capturar(page, 'reglas')
 
       // El gesto único: soltar el Norma 43 en una pantalla de Bancos que no es «Subir».
