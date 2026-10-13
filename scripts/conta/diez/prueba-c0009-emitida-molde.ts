@@ -94,6 +94,27 @@ try {
     `- Números repetidos dentro del mes: ${numeros.length - new Set(numeros).size}`,
     `- ¿El número de factura es el Documento? ${uber.every((f) => String(f.NumeroFactura) === String(f.Documento)) ? 'sí, en todas' : uber.some((f) => String(f.NumeroFactura) === String(f.Documento)) ? 'en algunas' : 'no'}`,
     `- Con analítica: ${uber.filter((f) => Array.isArray(f.Analitica) && (f.Analitica as unknown[]).length).length} de ${uber.length}`, '')
+
+  // Segunda lectura (R13): las dudas antes de montar la factura de Folvy.
+  const loc = (f: Factura) => (/ (FLO|CAM|CAN|BAR) /.exec(String(f.Descripcion ?? '')) ?? [])[1] ?? '?'
+  const docs = uber.map((f) => `${f.Ejercicio}/${f.Serie}/${f.Documento}`)
+  const clave = (f: Factura) => `${f.Serie}|${f.NumeroFactura}`
+  const porClave = new Map<string, Factura[]>()
+  for (const f of uber) porClave.set(clave(f), [...(porClave.get(clave(f)) ?? []), f])
+  const dobles = [...porClave.values()].filter((x) => x.length > 1)
+  const mismaHuella = dobles.filter((x) => new Set(x.map((f) => JSON.stringify({ ...f, Documento: 0 }))).size === 1).length
+  const n2 = (x: unknown) => Math.round(Number(x) * 100)
+  const sumaApuntes = (f: Factura) => ((f.Apuntes as { Importe?: number }[] | undefined) ?? []).reduce((t, a) => t + n2(a.Importe), 0)
+  const nombres = new Set(uber.map((f) => String(f.NombreCliente ?? '')))
+  md('### Las dudas, medidas', '',
+    `- **Número = «UBR-<local>-<FechaFactura>»**: ${uber.filter((f) => String(f.NumeroFactura) === `UBR-${loc(f)}-${f.FechaFactura}`).length} de ${uber.length}`,
+    `- **Descripción = «UBER EATS <local> <dd/mm de FechaFactura>»**: ${uber.filter((f) => String(f.Descripcion) === `UBER EATS ${loc(f)} ${String(f.FechaFactura).slice(6, 8)}/${String(f.FechaFactura).slice(4, 6)}`).length} de ${uber.length}`,
+    `- **Los repetidos**: Documentos distintos ${new Set(docs).size} de ${uber.length}; números con más de una factura ${dobles.length} (de ${dobles.map((x) => x.length).join('/') || '—'}); de ellos, iguales en todo salvo el Documento: ${mismaHuella}. Documentos de una pareja: ${dobles.slice(0, 3).map((x) => x.map((f) => patron(f.Documento)).join('+')).join(' · ') || '—'}`,
+    `- **Suma de los Apuntes = BaseImponible1**: ${uber.filter((f) => sumaApuntes(f) === n2(f.BaseImponible1)).length} de ${uber.length} · **TotalGastosIngresos = BaseImponible1**: ${uber.filter((f) => n2(f.TotalGastosIngresos) === n2(f.BaseImponible1)).length} · **= TotalFactura**: ${uber.filter((f) => n2(f.TotalGastosIngresos) === n2(f.TotalFactura)).length}`,
+    `- **FechaIntroduccionFactura = FechaFactura**: ${uber.filter((f) => f.FechaIntroduccionFactura === f.FechaFactura).length} de ${uber.length}; si no, días después (mín–máx): ${(() => { const d = uber.filter((f) => f.FechaIntroduccionFactura !== f.FechaFactura).map((f) => (Date.UTC(+String(f.FechaIntroduccionFactura).slice(0, 4), +String(f.FechaIntroduccionFactura).slice(4, 6) - 1, +String(f.FechaIntroduccionFactura).slice(6, 8)) - Date.UTC(+String(f.FechaFactura).slice(0, 4), +String(f.FechaFactura).slice(4, 6) - 1, +String(f.FechaFactura).slice(6, 8))) / 864e5); return d.length ? `${Math.min(...d)}–${Math.max(...d)}` : '—' })()}`,
+    `- **NombreCliente**: ${nombres.size} distinto(s) en las ${uber.length}, de ${[...nombres].map((x) => x.length).join('/')} letras`,
+    `- **Apuntes con reembolso (importe negativo)**: ${uber.filter((f) => ((f.Apuntes as { Importe?: number }[] | undefined) ?? []).some((a) => Number(a.Importe) < 0)).length} de ${uber.length}; su cuenta empieza por: ${[...new Set(uber.flatMap((f) => ((f.Apuntes as { Importe?: number; Cuenta?: string }[] | undefined) ?? []).filter((a) => Number(a.Importe) < 0).map((a) => String(a.Cuenta).slice(0, 3))))].join(', ') || '—'}`,
+    `- **Las líneas del asiento que hace Diez (Detalles)**, por grupo de cuenta y lado: ${[...new Set(uber.flatMap((f) => ((f.Detalles as Record<string, unknown>[] | undefined) ?? []).map((d) => `${String(d.Cuenta ?? '').slice(0, 3)}${Number(d.Debe) ? 'D' : ''}${Number(d.Haber) ? 'H' : ''}${Number(d.Debe) < 0 || Number(d.Haber) < 0 ? '(negativo)' : ''}`)))].join(' · ')}`, '')
 } catch (e) {
   md('', `**Parado:** ${(e as Error).message}`)
   soltar()
