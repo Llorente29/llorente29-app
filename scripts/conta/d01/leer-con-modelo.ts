@@ -73,7 +73,8 @@ for (const f of lista) {
     di(`${clave(f.id)}.red`, 0)
   }
   const esperada = leerFactura(ideal(f) as LecturaModelo, { hoy: HOY })
-  const r = compararLectura(lectura, esperada) as Record<string, number>
+  // Sin lectura no hay aciertos: «vacío contra vacío» no es haber leído nada.
+  const r = lectura ? compararLectura(lectura, esperada) as Record<string, number> : Object.fromEntries(CAMPOS.map((k: string) => [k, 0]))
   di(`${clave(f.id)}.leida`, !!lectura)
   if (lectura) leidas++
   confLeida[lectura?.confianza ?? 'ninguna']++
@@ -87,3 +88,5 @@ di('facturas', lista.length)
 di('leidas', leidas)
 for (const k of CAMPOS as string[]) di(`aciertos.${k}`, aciertos[k])
 for (const [k, v] of Object.entries(confLeida)) di(`confianza_leida.${k}`, v)
+// El color del run dice la verdad: si alguna no se ha podido leer, falla.
+if (leidas < lista.length) { di('sin_leer', lista.length - leidas); process.exitCode = 1 }
