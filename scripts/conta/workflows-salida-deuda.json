@@ -1,0 +1,12 @@
+{
+  "nota": "D01 R2 (13/10). Lo que estos workflows ya escribían en el registro y el resumen antes de la regla, contado por scripts/conta/workflows-salida.mjs. No es un permiso: es la deuda escrita. Si se toca uno, su número solo puede BAJAR (la lista falla si sube) y, al llegar a 0, se quita de aquí. Lo que se ha arreglado ya y lo que queda, en docs/conta/d01/T6_informe.md §1.",
+  "deuda": {
+    ".github/workflows/aplicar-produccion-conta.yml": 46,
+    ".github/workflows/build-apk.yml": 9,
+    ".github/workflows/cumplimiento-produccion-conta.yml": 14,
+    ".github/workflows/deploy-edge-functions.yml": 23,
+    ".github/workflows/diez-importar.yml": 8,
+    ".github/workflows/diez-lectura.yml": 8,
+    ".github/workflows/medir-ocr-destinatario.yml": 8
+  }
+}

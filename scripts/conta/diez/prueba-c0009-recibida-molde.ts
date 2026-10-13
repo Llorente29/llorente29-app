@@ -11,30 +11,24 @@
 // Frenos:
 //   · la base es C0009, escrita aquí; el cliente se crea con escribir: false,
 //     así que no puede escribir nada aunque se quisiera;
-//   · la salida pasa por limpiar() y además: de los números solo sale el
-//     PATRÓN (cada cifra un 9); de la descripción y del nombre, NADA de su
-//     texto (llevan el nombre del proveedor, y hay personas), solo su forma;
-//     del NIF solo si está, y de los importes solo el signo y si cuadran.
+//   · la salida es solo «@@ clave número» (D01 R2): recuentos y sí/no como
+//     1/0. Ni textos, ni nombres, ni NIF, ni importes, ni números de factura;
+//     y el workflow la pasa además por scripts/conta/salida-segura.mjs. (El
+//     13/10 la primera versión sacó el texto de cinco descripciones, con
+//     nombres: se borraron sus registros.)
 //
 //   DIEZ_LECTURA='{…}' npx tsx scripts/conta/diez/prueba-c0009-recibida-molde.ts
 
 import { ClienteDiez, type AlmacenToken, type Factura } from '../../../supabase/functions/_shared/diezCliente.ts'
-// @ts-expect-error módulo .mjs sin tipos
-import { limpiar } from './publicable.mjs'
 
 const BD = 'C0009'
-const l: string[] = []
-const md = (...x: string[]) => l.push(...x)
-const soltar = () => process.stdout.write(limpiar(l.join('\n')) + '\n')
-// Las letras de un número de factura pueden ser el nombre del proveedor: van como A.
-const patron = (x: unknown) => (x == null || x === '' ? '—' : `\`${String(x).replace(/\d/g, '9').replace(/\p{L}/gu, 'A')}\``)
-const tipo = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? `lista(${v.length})` : typeof v)
-const SEGUROS = new Set(['Ejercicio', 'Serie', 'TipoAsiento', 'TipoFactura', 'ClaveTipoFactura', 'ClaveRegimenIva1', 'ClaveRegimenIva2', 'ClaveRegimenIva3',
-  'PorcentajeIVA1', 'PorcentajeIVA2', 'PorcentajeIVA3', 'PorcentajeRecargo1', 'PorcentajeRecargo2', 'PorcentajeRecargo3', 'PorcentajeRetencion',
-  'CuentaRetencion', 'ClaveRetencion', 'Simplificada', 'Rectificativa', 'TipoRectificativa', 'Criterio', 'CriterioCaja', 'Exenta', 'Pais', 'TipoOperacion', 'Moneda'])
+const di = (k: string, v: number | boolean) => console.log(`@@ ${k} ${typeof v === 'boolean' ? Number(v) : Math.trunc(v)}`)
+const seccion = (k: string) => console.log(`@@ # ${k}`)
 const n2 = (x: unknown) => Math.round(Number(x ?? 0) * 100)
 const conValor = (v: unknown) => v != null && v !== '' && v !== 0 && v !== false && !(Array.isArray(v) && !v.length)
 const grupo = (cuenta: unknown) => String(cuenta ?? '').slice(0, 3)
+/** Una clave a partir de un código del programa (nunca de un texto): solo cifras y letras ASCII. */
+const k = (x: unknown) => String(x ?? 'nulo').toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20) || 'vacio'
 
 const cred = JSON.parse(process.env.DIEZ_LECTURA || 'null')
 if (!cred) { console.log('Falta el secreto DIEZ_LECTURA.'); process.exit(1) }
@@ -46,12 +40,8 @@ const c = new ClienteDiez({
   almacen, escribir: false, pausaMs: 150,
 })
 
-md(`## Diez · la factura recibida de molde en ${BD} (solo lectura)`, '')
 try {
   await c.asegurarToken()
-  md(`- Entrar en ${BD}: sí. El cliente no puede escribir (escribir: false).`, '')
-
-  // Tres meses de la serie 2, para tener variedad (la copia puede no llegar a septiembre).
   const meses: string[] = []
   let rec: Factura[] = []
   for (const m of ['202609', '202608', '202607', '202606', '202605', '202604']) {
@@ -59,82 +49,58 @@ try {
     if (del.length) { meses.push(m); rec = rec.concat(del) }
     if (meses.length === 3) break
   }
-  if (!rec.length) throw new Error(`no hay facturas de la serie 2 en ${BD} (mirados 202609 a 202604)`)
-  const porCuenta = new Map<string, number>()
-  for (const f of rec) porCuenta.set(grupo(f.CuentaCliente), (porCuenta.get(grupo(f.CuentaCliente)) ?? 0) + 1)
-  md('### Dónde', '', `- Meses ${meses.join(', ')}: **${rec.length}** facturas de la serie 2.`,
-    `- Por grupo de la cuenta del tercero: ${[...porCuenta].map(([k, n]) => `${k} ${n}`).join(' · ')}`,
-    `- La prueba del C04b (FOLVY-PRUEBA-0001) está entre ellas: ${rec.some((f) => String(f.NumeroFactura) === 'FOLVY-PRUEBA-0001') ? 'sí' : 'no (es de octubre)'}`, '')
+  seccion('donde')
+  di('meses', meses.length)
+  di('recibidas', rec.length)
+  if (!rec.length) throw new Error('sin recibidas')
+  for (const g of [...new Set(rec.map((f) => grupo(f.CuentaCliente)))].sort()) di(`tercero.grupo_${k(g)}`, rec.filter((f) => grupo(f.CuentaCliente) === g).length)
 
-  // Los campos.
+  // Los campos: cuántas lo traen con valor. De los que son códigos del
+  // programa (tipos, claves, porcentajes), cuántas llevan cada valor.
+  seccion('campos_con_valor')
   const claves = [...new Set(rec.flatMap((f) => Object.keys(f)))].sort()
-  md('### Los campos de sus facturas', '', '| Campo | Tipo | Con valor | Valores (si se pueden publicar) |', '|---|---|---:|---|',
-    ...claves.map((k) => {
-      const vs = rec.map((f) => (f as Record<string, unknown>)[k])
-      const valores = SEGUROS.has(k) ? [...new Set(vs.map((v) => JSON.stringify(v ?? null)))].slice(0, 8).join(' · ') : ''
-      return `| ${k} | ${[...new Set(vs.map(tipo))].join('/')} | ${vs.filter(conValor).length} de ${rec.length} | ${valores} |`
-    }), '')
-
-  // Las cifras: varios tipos, recargo, retención, cuadre.
-  const ntipos = (f: Factura) => [1, 2, 3].filter((i) => n2(f[`BaseImponible${i}`]) !== 0).length
-  const cuadra = (f: Factura) => {
-    const s = [1, 2, 3].reduce((t, i) => t + n2(f[`BaseImponible${i}`]) + n2(f[`CuotaIVA${i}`]) + n2(f[`CuotaRecargo${i}`]), 0) - Math.abs(n2(f.ImporteRetencion ?? f.CuotaRetencion))
-    return Math.abs(s - n2(f.TotalFactura)) <= 1
+  for (const cl of claves) di(`campo.${k(cl)}`, rec.filter((f) => conValor((f as Record<string, unknown>)[cl])).length)
+  seccion('codigos')
+  for (const cl of ['TipoAsiento', 'TipoFactura', 'TipoRectificativa', 'TipoRetencion', 'PorcentajeIVA1', 'PorcentajeIVA2', 'PorcentajeIVA3', 'PorcentajeRetencion']) {
+    for (const v of [...new Set(rec.map((f) => (f as Record<string, unknown>)[cl]))].filter((v) => typeof v === 'number')) {
+      di(`${k(cl)}.${k(v)}`, rec.filter((f) => (f as Record<string, unknown>)[cl] === v).length)
+    }
   }
-  md('### Las cifras (solo recuentos)', '',
-    `- Con 1 / 2 / 3 tipos de IVA: ${[1, 2, 3].map((k) => rec.filter((f) => ntipos(f) === k).length).join(' / ')} · sin base: ${rec.filter((f) => ntipos(f) === 0).length}`,
-    `- Con recargo (algún CuotaRecargo): ${rec.filter((f) => [1, 2, 3].some((i) => n2(f[`CuotaRecargo${i}`]) !== 0)).length}`,
-    `- Con retención (ImporteRetencion o CuotaRetencion): ${rec.filter((f) => n2(f.ImporteRetencion ?? f.CuotaRetencion) !== 0).length}`,
-    `- Total negativo (abonos): ${rec.filter((f) => n2(f.TotalFactura) < 0).length}`,
-    `- **Bases + cuotas + recargos − retención = TotalFactura**: ${rec.filter(cuadra).length} de ${rec.length}`,
-    `- Pares tipo de IVA: ${[...new Set(rec.map((f) => [1, 2, 3].filter((i) => n2(f[`BaseImponible${i}`]) !== 0).map((i) => f[`PorcentajeIVA${i}`]).join('+')))].join(' · ')}`, '')
 
-  // Las cuentas del asiento.
+  const ntipos = (f: Factura) => [1, 2, 3].filter((i) => n2(f[`BaseImponible${i}`]) !== 0).length
+  const cuadra = (f: Factura) => Math.abs([1, 2, 3].reduce((t, i) => t + n2(f[`BaseImponible${i}`]) + n2(f[`CuotaIVA${i}`]) + n2(f[`CuotaRecargo${i}`]), 0) - Math.abs(n2(f.ImporteRetencion ?? f.CuotaRetencion)) - n2(f.TotalFactura)) <= 1
+  seccion('cifras')
+  for (const t of [0, 1, 2, 3]) di(`con_tipos_${t}`, rec.filter((f) => ntipos(f) === t).length)
+  di('con_recargo', rec.filter((f) => [1, 2, 3].some((i) => n2(f[`CuotaRecargo${i}`]) !== 0)).length)
+  di('con_retencion', rec.filter((f) => n2(f.ImporteRetencion ?? f.CuotaRetencion) !== 0).length)
+  di('total_negativo', rec.filter((f) => n2(f.TotalFactura) < 0).length)
+  di('cuadran', rec.filter(cuadra).length)
+
   const ap = (f: Factura) => (f.Apuntes as Record<string, unknown>[] | undefined) ?? []
   const de = (f: Factura) => (f.Detalles as Record<string, unknown>[] | undefined) ?? []
-  const lado = (d: Record<string, unknown>) => `${grupo(d.Cuenta)}${Number(d.Debe) ? 'D' : ''}${Number(d.Haber) ? 'H' : ''}`
-  const formas = new Map<string, number>()
-  for (const f of rec) { const k = de(f).map(lado).sort().join(' '); formas.set(k, (formas.get(k) ?? 0) + 1) }
-  const cuentas472 = [...new Set(rec.flatMap((f) => de(f).map((d) => String(d.Cuenta ?? '')).filter((x) => x.startsWith('472'))))]
-  const cuentasRet = [...new Set(rec.flatMap((f) => de(f).map((d) => String(d.Cuenta ?? '')).filter((x) => x.startsWith('475'))))]
-  const gastos = [...new Set(rec.flatMap((f) => ap(f).map((a) => grupo(a.Cuenta))))]
-  md('### Las cuentas', '',
-    `- Apuntes (lo que se manda): por factura ${[...new Set(rec.map((f) => ap(f).length))].join('/')}; grupos de cuenta ${gastos.join(', ')}; suma de Apuntes = suma de bases: ${rec.filter((f) => ap(f).reduce((t, a) => t + n2(a.Importe), 0) === [1, 2, 3].reduce((t, i) => t + n2(f[`BaseImponible${i}`]), 0)).length} de ${rec.length}`,
-    `- Campos de un Apunte: ${[...new Set(rec.flatMap((f) => ap(f).flatMap((a) => Object.keys(a))))].join(', ') || '—'}`,
-    `- Cuentas de IVA soportado (472…) en el asiento: ${cuentas472.join(', ') || 'ninguna'}`,
-    `- Cuentas de retención (475…): ${cuentasRet.join(', ') || 'ninguna'}`,
-    `- Formas del asiento de Diez (Detalles, grupo y lado): ${[...formas].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, n]) => `\`${k}\` ${n}`).join(' · ')}`, '')
+  seccion('cuentas')
+  di('apuntes_suman_las_bases', rec.filter((f) => ap(f).reduce((t, a) => t + n2(a.Importe), 0) === [1, 2, 3].reduce((t, i) => t + n2(f[`BaseImponible${i}`]), 0)).length)
+  for (const g of [...new Set(rec.flatMap((f) => ap(f).map((a) => grupo(a.Cuenta))))].sort()) di(`apunte.grupo_${k(g)}`, rec.filter((f) => ap(f).some((a) => grupo(a.Cuenta) === g)).length)
+  const c472 = [...new Set(rec.flatMap((f) => de(f).map((d) => String(d.Cuenta ?? '')).filter((x) => x.startsWith('472'))))]
+  di('cuentas_472_distintas', c472.length)
+  di('la_472_es_la_generica', c472.length === 1 && c472[0] === '47200000')
 
-  // Números, fechas, NIF.
-  const nums = rec.map((f) => String(f.NumeroFactura ?? ''))
+  seccion('numeros_y_fechas')
+  di('mismo_numero_y_cuenta_dos_veces', rec.length - new Set(rec.map((f) => `${f.CuentaCliente}|${f.NumeroFactura}`)).size)
   const dias = rec.map((f) => {
     const a = String(f.FechaFactura ?? ''), b = String(f.Fecha ?? '')
     if (a.length !== 8 || b.length !== 8) return null
     return (Date.UTC(+b.slice(0, 4), +b.slice(4, 6) - 1, +b.slice(6, 8)) - Date.UTC(+a.slice(0, 4), +a.slice(4, 6) - 1, +a.slice(6, 8))) / 864e5
   }).filter((x): x is number => x != null)
-  md('### Números, fechas y tercero', '',
-    `- Patrones del número (los 8 más frecuentes): ${[...nums.reduce((m, n) => { const k = n.replace(/\d/g, '9').replace(/\p{L}/gu, 'A'); return m.set(k, (m.get(k) ?? 0) + 1) }, new Map<string, number>())].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([p, n]) => `${patron(p)} ${n}`).join(' · ')}`,
-    `- Mismo NumeroFactura y misma cuenta dos veces: ${rec.length - new Set(rec.map((f) => `${f.CuentaCliente}|${f.NumeroFactura}`)).size}`,
-    `- Fecha (del asiento) − FechaFactura, en días: igual ${dias.filter((d) => d === 0).length}; después ${dias.filter((d) => d > 0).length} (máx ${Math.max(0, ...dias)}); antes ${dias.filter((d) => d < 0).length}`,
-    `- FechaIntroduccionFactura con valor: ${rec.filter((f) => conValor(f.FechaIntroduccionFactura)).length}`,
-    `- CifCliente con valor: ${rec.filter((f) => conValor(f.CifCliente)).length} · NombreCliente: ${rec.filter((f) => conValor(f.NombreCliente)).length}`,
-    // Sin texto de la descripción: lleva el nombre del proveedor, y hay personas
-    // (13/10: el primer run lo sacó y se borraron sus registros). Solo su forma.
-    `- Descripción = «<NumeroFactura>-<NombreCliente>»: ${rec.filter((f) => String(f.Descripcion ?? '') === `${f.NumeroFactura}-${f.NombreCliente}`).length} de ${rec.length} · empieza por «<NumeroFactura>-»: ${rec.filter((f) => String(f.Descripcion ?? '').startsWith(`${f.NumeroFactura}-`)).length} · acaba en «-<NombreCliente>»: ${rec.filter((f) => String(f.Descripcion ?? '').endsWith(`-${f.NombreCliente}`)).length}`,
-    `- Con analítica: ${rec.filter((f) => Array.isArray(f.Analitica) && (f.Analitica as unknown[]).length).length} de ${rec.length}`, '')
-
-  // Una de molde: la primera con dos tipos, si la hay; si no, la primera.
-  const molde = rec.find((f) => ntipos(f) >= 2 && de(f).length) ?? rec.find((f) => de(f).length) ?? rec[0]
-  md('### Una de molde', '',
-    `- Serie ${molde.Serie} · TipoAsiento ${molde.TipoAsiento} · TipoFactura ${molde.TipoFactura ?? '—'} · ClaveTipoFactura ${molde.ClaveTipoFactura ?? '—'} · ClaveRegimenIva1 ${molde.ClaveRegimenIva1 ?? '—'} · tipos ${ntipos(molde)}`,
-    `- NumeroFactura ${patron(molde.NumeroFactura)} · Descripcion: ${String(molde.Descripcion ?? '').length} letras · cuenta del tercero ${grupo(molde.CuentaCliente)}…`,
-    `- Apuntes: ${ap(molde).map((a) => `${String(a.Cuenta ?? '—')} (${Math.sign(Number(a.Importe))})`).join(' · ') || 'ninguno'}`,
-    `- Detalles (grupo y lado): ${de(molde).map(lado).join(' · ') || 'ninguno'}`,
-    `- Campos con valor: ${Object.entries(molde).filter(([, v]) => conValor(v)).map(([k]) => k).join(', ')}`, '')
-} catch (e) {
-  md('', `**Parado:** ${(e as Error).message}`)
-  soltar()
+  di('fecha_igual_a_la_factura', dias.filter((d) => d === 0).length)
+  di('fecha_posterior', dias.filter((d) => d > 0).length)
+  di('fecha_anterior', dias.filter((d) => d < 0).length)
+  di('descripcion_es_numero_guion_nombre', rec.filter((f) => String(f.Descripcion ?? '') === `${f.NumeroFactura}-${f.NombreCliente}`).length)
+  di('descripcion_empieza_por_el_numero', rec.filter((f) => String(f.Descripcion ?? '').startsWith(`${f.NumeroFactura}-`)).length)
+  di('con_analitica', rec.filter((f) => Array.isArray(f.Analitica) && (f.Analitica as unknown[]).length).length)
+} catch {
+  di('parado', true)
   process.exit(1)
 }
-md('', `Peticiones: ${c.metrica.peticiones} · 429: ${c.metrica.reintentos429}`)
-soltar()
+di('peticiones', c.metrica.peticiones)
+di('reintentos_429', c.metrica.reintentos429)

@@ -211,7 +211,9 @@ jobs:
         run: |
           set -euo pipefail
           cd /tmp/carga
-          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo="$MODO" \
+          # D01 R2: de un error, solo fichero, línea y código (sin el DETAIL ni la
+          # línea del \copy con su JSON: el registro y el resumen son públicos).
+          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -v empresa="$EMPRESA" -v modo="$MODO" \
             -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
       - name: Sumas por subcuenta, CIFRADAS (llevan importes)
         if: always()

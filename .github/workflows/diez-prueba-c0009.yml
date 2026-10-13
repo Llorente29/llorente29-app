@@ -27,6 +27,9 @@ name: Diez · factura de prueba en C0009 (C04b)
 # producción con conta_lectura (solo lectura), lo busca antes en Diez (si ya
 # está, no envía otra) y lo lee de vuelta (scripts/conta/diez/prueba-c0009-emitida.ts).
 #
+# D01 R2 (13/10): la salida pasa entera por scripts/conta/salida-segura.mjs: solo
+# recuentos y huellas (el run 60 sacó nombres por la descripción).
+#
 # D01 (13/10): también corre en conta/d01-recibidas. Con
 # «[prueba-c0009:recibida-molde]», SOLO LEE cómo guarda Diez en la C0009 las
 # facturas recibidas de la serie 2 (scripts/conta/diez/prueba-c0009-recibida-molde.ts).
@@ -131,5 +134,7 @@ jobs:
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac
-          npx --yes tsx@4.19.2 "$S" | tee prueba.md
-          cat prueba.md >> "$GITHUB_STEP_SUMMARY"
+          # D01 R2 (13/10): todo por la puerta de salida, que solo deja pasar
+          # «@@ clave número|huella». Lo de los scripts anteriores al D01, que
+          # escribían Markdown con texto, ya no sale: se cuentan sus líneas.
+          npx --yes tsx@4.19.2 "$S" 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
