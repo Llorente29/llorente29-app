@@ -47,7 +47,7 @@ paso '6/7 · npm run build exacto y en limpio'
 find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete
 npm run build
 
-paso '7/7 · SQL: el fichero entero y como usuario (C04b R7)'
+paso '7/7 · SQL: el fichero entero y como usuario (C04b R7); la tanda cuenta y no deja huecos (R9)'
 node scripts/conta/antes-de-subir-sql.mjs
 
 printf '\nTodo en verde: se puede subir.\n'

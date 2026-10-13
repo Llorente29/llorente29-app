@@ -672,7 +672,7 @@ if (modo === 'objetivos') {
   // todavía el front publicado (origin/main) o el del commit que se sube? Sale
   // con 1 si alguno lo lee: primero se quita del front, después de la base.
   const manifiesto = resto[0] ?? 'supabase/produccion/aplicar.txt'
-  const ficheros = readFileSync(manifiesto, 'utf8').split('\n').map((x) => x.trim()).filter((x) => x && !x.startsWith('#'))
+  const ficheros = readFileSync(manifiesto, 'utf8').split('\n').map((x) => x.trim()).filter((x) => x && !x.startsWith('#') && !x.startsWith('cuenta:'))
   const vistos = new Map()
   for (const f of ficheros) for (const o of analizarFichero(f)) { const d = destruido(o); if (d) vistos.set(d.clave, d) }
   const destruidos = [...vistos.values()]

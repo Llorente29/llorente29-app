@@ -6,7 +6,7 @@
 // lectura el 08/10 sobre esos mismos ficheros. sale tiene 13 475 filas y está
 // en el camino del pedido; sales_day_summary también; rider_seen_at la leen
 // cuatro funciones vivas. Nada de eso está inventado.
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -184,11 +184,14 @@ describe('W01 · la vuelta atrás automática (deshacer.sh), con un psql falso q
   // El psql falso: escribe en $LOG los -f que recibe (una línea por llamada) y
   // falla si alguno contiene $FALLA_EN. Así se ve el ORDEN y qué va en cada
   // transacción, sin base de datos.
-  const correr = (aplicados: string[], fallaEn = '') => {
+  // R9: una cuenta (scripts/conta/produccion/cuentas/*) no se apunta en $LOG:
+  // el psql falso devuelve $CUENTA_SALIDA, lo que «medirían» las cuentas tras deshacer.
+  const correr = (aplicados: string[], fallaEn = '', cuentas?: { antes: string; despues: string }) => {
     const dir = mkdtempSync(join(tmpdir(), 'w01-'))
     const psql = join(dir, 'psql')
     writeFileSync(psql, `#!/usr/bin/env bash
 fs=(); prev=""; for a in "$@"; do [ "$prev" = "-f" ] && fs+=("$a"); prev="$a"; done
+case "\${fs[0]:-}" in scripts/conta/produccion/cuentas/*) printf '%s\\n' "$CUENTA_SALIDA"; exit 0;; esac
 txt=""; for x in "\${fs[@]}"; do case "$x" in supabase/*) txt="$txt $x";; *) txt="$txt $(tr -d '\\n' < "$x")";; esac; done
 echo "-1:$([[ " $* " == *" -1 "* ]] && echo si || echo no)$txt" >> "$LOG"
 [ -n "$FALLA_EN" ] && [[ "$txt" == *"$FALLA_EN"* ]] && exit 3
@@ -197,22 +200,49 @@ exit 0
     const lista = join(dir, 'aplicados.txt'); writeFileSync(lista, aplicados.join('\n') + '\n')
     const informe = join(dir, 'informe.md'); writeFileSync(informe, '')
     const log = join(dir, 'log'); writeFileSync(log, '')
+    const extra: Record<string, string> = {}
+    if (cuentas) {
+      extra.CUENTAS = join(dir, 'cuentas.txt'); writeFileSync(extra.CUENTAS, 'scripts/conta/produccion/cuentas/ventas-del-dia.sql\n')
+      extra.CUENTAS_ANTES = join(dir, 'cuentas-antes.csv'); writeFileSync(extra.CUENTAS_ANTES, cuentas.antes)
+      extra.CUENTA_SALIDA = cuentas.despues
+      extra.CUENTAS_DESPUES = join(dir, 'cuentas-tras.csv')
+    }
     let rc = 0
     try {
-      execFileSync('bash', ['scripts/conta/produccion/deshacer.sh', lista], { env: { ...process.env, PSQL: psql, DB_URL: 'postgres://falsa', INFORME: informe, LOG: log, FALLA_EN: fallaEn }, stdio: 'pipe' })
+      execFileSync('bash', ['scripts/conta/produccion/deshacer.sh', lista], { env: { ...process.env, PSQL: psql, DB_URL: 'postgres://falsa', INFORME: informe, LOG: log, FALLA_EN: fallaEn, ...extra }, stdio: 'pipe' })
     } catch (e) { rc = (e as { status: number }).status }
     return { rc, llamadas: readFileSync(log, 'utf8').trim().split('\n').filter(Boolean), informe: readFileSync(informe, 'utf8') }
   }
   const C04 = ['20261010T0100_c04_libro', '20261010T0110_c04_enlaces', '20261010T0120_c04_funciones', '20261010T0130_c04_lectura'].map((n) => `supabase/migrations/${n}.sql`)
 
+  // Las cuentas, como las da ventas-del-dia.sql (sin el nombre del fichero: lo pone cuentas.sh).
+  const ANTES = 'asientos de ventas · propuesto,24\nresúmenes del día · día entero,24\n'
+  const CON_ANTES = ANTES.split('\n').filter(Boolean).map((l) => `ventas-del-dia,${l}`).join('\n') + '\n'
+
   it('los .down.sql corren en ORDEN INVERSO, cada uno en una transacción con la baja de su registro', () => {
-    const r = correr(C04)
+    const r = correr(C04, '', { antes: CON_ANTES, despues: ANTES.trim() })
     expect(r.rc).toBe(0)
     expect(r.llamadas).toEqual([...C04].reverse().map((f) => {
       const n = f.replace(/^.*\//, '').replace(/\.sql$/, '')
       return `-1:si supabase/vuelta-atras/${n}.down.sql delete from supabase_migrations.schema_migrations where version = '${n}';`
     }))
     expect(r.informe).toContain('deshecho con `supabase/vuelta-atras/20261010T0100_c04_libro.down.sql`')
+    expect(r.informe).toContain('**Sí: las cuentas salen iguales que antes de la tanda.**')
+  })
+  // R9 (13/10): los seis .down.sql salieron bien y los 24 asientos no volvieron;
+  // el informe dijo «como antes» sin contar nada.
+  it('deshecho sin error pero las cuentas NO salen iguales: sale con 3 y dice cuánto falta', () => {
+    const r = correr(C04, '', { antes: CON_ANTES, despues: 'asientos de ventas · propuesto,0\nresúmenes del día · día entero,0' })
+    expect(r.rc).toBe(3)
+    expect(r.informe).toContain('| ventas-del-dia · asientos de ventas · propuesto | 24 | 0 | **-24** (faltan 24) |')
+    expect(r.informe).toContain('**NO: deshecho sin error, pero las cuentas no salen iguales**')
+    expect(r.informe).not.toContain('**Sí:')
+  })
+  it('sin lo que cuenta la tanda, no dice que está como antes: sale con 3', () => {
+    const r = correr(C04)
+    expect(r.rc).toBe(3)
+    expect(r.llamadas).toHaveLength(4)
+    expect(r.informe).toContain('**No se puede decir**')
   })
   it('si una vuelta atrás falla, PARA ahí: no deshace las anteriores y lo dice en rojo', () => {
     const r = correr(C04, '20261010T0120_c04_funciones.down')
@@ -262,6 +292,28 @@ describe('W01 · el workflow de producción: sin franja, y las guardas de siempr
     expect(texto).toContain('bash scripts/conta/produccion/deshacer.sh /tmp/aplicados.txt')
     expect(texto).toContain("echo 'rollback;'")
   })
+  it('R9: «está como antes» solo cuando deshacer.sh lo ha contado (sale con 0), con las cuentas del «antes»', () => {
+    const d = pasos[indice(/^Después · comprobación/)]
+    expect(d).toContain('CUENTAS_ANTES: /tmp/cuentas-antes.csv')
+    expect(d).toMatch(/case "\$rc" in\n\s+0\) echo "::error::Vuelta atrás hecha y contada: producción está como antes/)
+    expect(d).not.toMatch(/if bash scripts\/conta\/produccion\/deshacer\.sh[^\n]*; then\n[^\n]*como antes/)
+    expect(pasos[indice(/^Antes · D1/)]).toContain('bash scripts/conta/produccion/cuentas.sh /tmp/cuentas.txt /tmp/cuentas-antes.csv')
+  })
+  it('R9: «D1 y recuento» corre también cuando un real se deshace solo', () => {
+    const p = pasos[indice(/^Después de la vuelta atrás/)]
+    expect(p).toContain("(inputs.modo == 'vuelta_atras' || (inputs.modo == 'real' && steps.despues.outcome == 'failure'))")
+    expect(p).toContain('recuento-serie.sql')
+  })
+  it('R9: el ensayo de la vuelta atrás cuenta dentro de su transacción y PARA si no sale igual', () => {
+    const p = pasos[indice(/^ENSAYO · la vuelta atrás automática/)]
+    expect(p).toContain('/tmp/cuentas-ensayo-atras.csv')
+    expect(p).toContain('NO deja los datos como estaban')
+    expect(p).toMatch(/así no se lanza el real\."\n\s+cat "\$INFORME" >> "\$GITHUB_STEP_SUMMARY"\n\s+exit 1/)
+  })
+  it('R9: el manifiesto se lee con manifiesto.sh, y en la tanda de aplicar las cuentas son obligatorias', () => {
+    expect(texto).toContain('bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG"')
+    expect(texto).toMatch(/M=supabase\/produccion\/aplicar\.txt; PAT='[^']+'; OBLIG=si/)
+  })
 })
 
 // Cada caso lanza `node analizar.mjs front-compatible`, que lee el front de dos commits con git:
@@ -284,5 +336,50 @@ describe('W01 · front compatible en los dos sentidos (antes-de-subir)', { timeo
   })
   it('la tanda viva no borra nada', () => {
     expect(correr('supabase/produccion/aplicar.txt').out).toContain('no borra ni renombra nada')
+  })
+})
+
+describe('R9 · el manifiesto declara qué cuenta (manifiesto.sh)', () => {
+  const correr = (texto: string, oblig = 'si') => {
+    const dir = mkdtempSync(join(tmpdir(), 'r9-'))
+    const m = join(dir, 'm.txt'); writeFileSync(m, texto)
+    try {
+      const out = execFileSync('bash', ['scripts/conta/produccion/manifiesto.sh', m, join(dir, 't.txt'), join(dir, 'c.txt'), '^supabase/migrations/[A-Za-z0-9_./-]+\\.sql$', oblig], { encoding: 'utf8', stdio: 'pipe' })
+      return { rc: 0, out, tanda: readFileSync(join(dir, 't.txt'), 'utf8'), cuentas: readFileSync(join(dir, 'c.txt'), 'utf8') }
+    } catch (e) { const x = e as { status: number; stdout: string }; return { rc: x.status, out: x.stdout, tanda: '', cuentas: '' } }
+  }
+  const F = 'supabase/migrations/20261020T0140_libro_lectura_registro.sql'
+  it('separa los ficheros de las cuentas', () => {
+    const r = correr(`# tanda\n${F}\ncuenta: scripts/conta/produccion/cuentas/ventas-del-dia.sql\n`)
+    expect(r.rc).toBe(0)
+    expect(r.tanda).toBe(`${F}\n`)
+    expect(r.cuentas).toBe('scripts/conta/produccion/cuentas/ventas-del-dia.sql\n')
+  })
+  it('sin cuentas, la tanda de aplicar PARA; la de vuelta atrás, no', () => {
+    expect(correr(`${F}\n`).rc).toBe(1)
+    expect(correr(`${F}\n`).out).toContain('no declara qué cuenta')
+    expect(correr(`${F}\n`, 'no').rc).toBe(0)
+  })
+  it('una cuenta fuera de su carpeta, o que no existe, PARA', () => {
+    expect(correr(`${F}\ncuenta: scripts/conta/agente-libro.sql\n`).rc).toBe(1)
+    expect(correr(`${F}\ncuenta: scripts/conta/produccion/cuentas/no-existe.sql\n`).rc).toBe(1)
+  })
+})
+
+describe('R9 · la tanda de producción en staging (real-con-fallo y real)', () => {
+  const lineas = (f: string) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+  it('es la de producción, en el mismo orden, con la 0125 de staging antes de la 0130 y las mismas cuentas', () => {
+    const prod = lineas('supabase/produccion/aplicar.txt')
+    const stg = lineas('supabase/staging/tanda-de-produccion.txt')
+    expect(stg.filter((l) => !l.includes('/staging/'))).toEqual([...prod.filter((l) => !l.startsWith('cuenta:')), ...prod.filter((l) => l.startsWith('cuenta:'))])
+    const i = stg.indexOf('supabase/staging/sql/20261020T0125_ventas_por_plataforma_regla_a.sql')
+    expect(stg[i + 1]).toBe('supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql')
+    expect(existsSync('supabase/staging/vuelta-atras/20261020T0125_ventas_por_plataforma_regla_a.down.sql')).toBe(true)
+  })
+  it('el script mira que no es producción antes de deshacer nada, y en real-con-fallo solo sale en verde si deshacer.sh sale con 0', () => {
+    const sh = readFileSync('scripts/conta/produccion/real-en-staging.sh', 'utf8')
+    expect(sh.indexOf("'51ad1792-6629-4ef7-833a-b57b09a86710'")).toBeLessThan(sh.indexOf('vuelta-atras.txt | while'))
+    expect(sh).toContain('bash scripts/conta/produccion/deshacer.sh "$T/aplicados.txt"; rc=$?')
+    expect(sh).toContain('[ "$rc" -eq 0 ] || ok=0')
   })
 })

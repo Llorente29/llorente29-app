@@ -40,7 +40,8 @@ import { analizarFichero, clasificar, creadosPorLaTanda, decidir, informe, sente
 
 type Op = { accion: string; tipo: string; objeto: string; detalle: string }
 type Existentes = { tablas: string[]; funciones: string[] }
-const leerTanda = (f: string) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+// Las líneas «cuenta:» declaran qué se cuenta antes y después (R9): no son ficheros de la tanda.
+const leerTanda = (f: string) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('cuenta:'))
 const leerExistentes = (f: string) => JSON.parse(readFileSync(f, 'utf8')) as Existentes
 function poblacion(tanda: string[], ex: Existentes) {
   const porFichero: Record<string, Op[]> = Object.fromEntries(tanda.map((f) => [f, analizarFichero(f)]))
@@ -688,6 +689,18 @@ describe('la tanda de AHORA (manifiesto vivo): la regla de ventas por plataforma
     const sql = readFileSync(viva[3], 'utf8')
     expect(sql).toContain("'658728c0-fcd7-46ef-a860-d4e5e6eb21d9'")
     expect(sql).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('declara qué cuenta antes y después (R9): las ventas del día, y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/ventas-del-dia.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('la 0130 retira, propone y comprueba en la misma transacción (R9: sin hueco)', () => {
+    const sql = readFileSync(viva[4], 'utf8')
+    const i = (t: string) => sql.indexOf(t)
+    expect(i('delete from public.journal_entry e using _a_rehacer')).toBeGreaterThan(0)
+    expect(i('public.conta_proponer_dias(v_emp.company_id, now())')).toBeGreaterThan(i('delete from public.journal_entry e using _a_rehacer'))
+    expect(i("no todos los días retirados quedan asentados por unidad con el mismo cobro")).toBeGreaterThan(i('public.conta_proponer_dias(v_emp.company_id, now())'))
   })
   it('su vuelta atrás son sus seis .down.sql, al revés, y existen', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')

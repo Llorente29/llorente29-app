@@ -1,0 +1,17 @@
+# R9 (Julio, 13/10) · LA TANDA DE PRODUCCIÓN, EN STAGING: un real que falla a
+# propósito después de aplicar (se ve la vuelta atrás entera y su recuento) y,
+# después, el real normal. Lo corre scripts/conta/produccion/real-en-staging.sh
+# desde aplicar-staging-conta.yml (modos «real-con-fallo» y «real»).
+#
+# Es supabase/produccion/aplicar.txt, los mismos ficheros en el mismo orden,
+# con UNA línea más: la 0125 de staging (la regla de la empresa A), que hace
+# aquí lo que la 0120 hace con Foodint. La prueba
+# tests/conta/produccion/w01.test.ts comprueba que no se separan.
+supabase/migrations/20261020T0100_ventas_por_plataforma.sql
+supabase/migrations/20261020T0105_ventas_por_plataforma_permiso.sql
+supabase/migrations/20261020T0110_ventas_por_plataforma_indice.sql
+supabase/migrations/20261020T0120_ventas_por_plataforma_foodint.sql
+supabase/staging/sql/20261020T0125_ventas_por_plataforma_regla_a.sql
+supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql
+supabase/migrations/20261020T0140_libro_lectura_registro.sql
+cuenta: scripts/conta/produccion/cuentas/ventas-del-dia.sql

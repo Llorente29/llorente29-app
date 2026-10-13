@@ -8,19 +8,25 @@
 -- _retirado_ventas_por_plataforma. Ni validados ni borradores: esos no se
 -- tocan nunca, y si alguno de los elegidos no es «propuesto» sin número, PARA.
 --
+-- SIN HUECO (R9, Julio, 13/10): en la MISMA transacción se retira, se
+-- propone por unidad (conta_proponer_dias, la del cierre del día) y se
+-- comprueba. Cada local×día retirado tiene que quedar con sus asientos por
+-- unidad (ningún pedido suyo por asentar) y con el MISMO cobro (las 430, debe
+-- menos haber) que el asiento retirado, al céntimo. Si uno no, RAISE: no se
+-- aplica nada, ni la retirada. Ningún otro proceso tapa nada más tarde: el
+-- 13/10 la versión anterior retiraba y esperaba al cierre de los :07, y la
+-- comprobación de después vio el hueco (22 días×local sin asiento).
+--
 -- SIN descarte, a propósito (como la 0130 del cierre del día): un descarte
--- deja el día fuera para siempre. Aquí el día se vuelve a proponer, por
--- unidad, en la siguiente pasada del cierre del día (cada hora, a los 7
--- minutos): mismos días, mismos locales y mismos pedidos, un asiento por
--- plataforma (Glovo, por marca). Sin duplicar: lo retirado ya no está, y la
+-- deja el día fuera para siempre. Sin duplicar: lo retirado ya no está, y la
 -- clave de cada unidad es única (0110).
 --
--- En producción el 13/10 son 24 (del 01/10 al 12/10, Alcalá y Carabanchel;
--- el informe R5 decía 22 y el cierre propuso dos más el 12/10). La migración
--- no los nombra: los encuentra por la regla, y el parte dice cuántos fueron.
+-- En producción el 13/10 son 24 (del 01/10 al 12/10, Alcalá y Carabanchel).
+-- La migración no los nombra: los encuentra por la regla, y el parte dice
+-- cuántos fueron, cuántos asientos por unidad salen y el cobro de cada día.
 -- Borra datos: pide «autorizo».
 -- Vuelta atrás: supabase/vuelta-atras/20261020T0130_ventas_por_plataforma_rehacer.down.sql
--- (no devuelve los asientos de antes: con la regla nueva se proponen por unidad).
+-- (devuelve los asientos de antes desde la copia, sin esperar al cierre).
 -- ============================================================================
 
 create table if not exists public._retirado_ventas_por_plataforma (
@@ -59,9 +65,12 @@ revoke execute on function public.conta_propuestos_dia_entero(uuid) from public,
 
 do $$
 declare
-  v_n   int;
-  v_mal int;
-  v_ids text;
+  v_n     int;
+  v_mal   int;
+  v_ids   text;
+  v_emp   record;
+  v_p     jsonb;
+  v_falta text;
 begin
   create temp table _a_rehacer on commit drop as
   select x.entry_id as id, x.summary_id, x.company_id, x.location_id, x.sales_day, x.created_at, x.status, x.number
@@ -73,6 +82,16 @@ begin
     raise exception 'Rehacer las ventas por plataforma: % no son «propuesto» sin número; no se toca nada.', v_mal;
   end if;
   raise notice 'Rehacer las ventas por plataforma: % asiento(s) del día entero: %', v_n, coalesce(v_ids, 'ninguno');
+  if v_n = 0 then return; end if;
+
+  -- El cobro de cada local×día, ANTES: las 430 del asiento del día entero.
+  create temp table _cobro_antes on commit drop as
+  select r.company_id, r.location_id, r.sales_day,
+         coalesce(sum(l.debit - l.credit) filter (where a.code like '430%'), 0) as cobro
+    from _a_rehacer r
+    left join public.journal_line l on l.entry_id = r.id
+    left join public.company_account a on a.id = l.company_account_id
+   group by 1, 2, 3;
 
   insert into public._retirado_ventas_por_plataforma (entry_id, company_id, location_id, sales_day, created_at, asiento, resumen, lineas)
   select r.id, r.company_id, r.location_id, r.sales_day, r.created_at,
@@ -89,4 +108,42 @@ begin
      or exists (select 1 from public.sales_day_summary d join _a_rehacer r on r.summary_id = d.id) then
     raise exception 'Rehacer las ventas por plataforma: alguno sigue ahí.';
   end if;
+
+  -- Proponer por unidad, AHORA: lo mismo que haría el cierre del día a los :07.
+  for v_emp in select distinct company_id from _a_rehacer order by 1 loop
+    v_p := public.conta_proponer_dias(v_emp.company_id, now());
+    raise notice 'Rehacer las ventas por plataforma: empresa %, propuesta por unidad: %', v_emp.company_id, v_p - 'company_id';
+  end loop;
+
+  -- Comprobar cada local×día retirado: sus unidades, ningún pedido por asentar
+  -- y el mismo cobro, al céntimo.
+  with despues as (
+    select c.company_id, c.location_id, c.sales_day, c.cobro as antes,
+           (select count(*) from public.sales_day_summary d join public.journal_entry j on j.id = d.entry_id
+             where d.company_id = c.company_id and d.location_id = c.location_id and d.sales_day = c.sales_day
+               and d.unit_key is not null and j.status in ('propuesto', 'borrador', 'validado')) as unidades,
+           (select coalesce(sum(l.debit - l.credit), 0)
+              from public.sales_day_summary d join public.journal_entry j on j.id = d.entry_id
+              join public.journal_line l on l.entry_id = j.id join public.company_account a on a.id = l.company_account_id
+             where d.company_id = c.company_id and d.location_id = c.location_id and d.sales_day = c.sales_day
+               and d.unit_key is not null and j.status in ('propuesto', 'borrador', 'validado') and a.code like '430%') as cobro,
+           (select x.pedidos from public.conta_dias_por_asentar(c.company_id, c.sales_day, c.sales_day) x where x.location_id = c.location_id) as por_asentar,
+           (select g.reason from public.sales_day_proposal_log g
+             where g.company_id = c.company_id and g.location_id = c.location_id and g.sales_day = c.sales_day) as porque
+      from _cobro_antes c
+  )
+  select string_agg(format('%s %s: %s unidad(es), cobro %s antes y %s ahora, %s pedido(s) por asentar%s',
+                           sales_day, location_id, unidades, antes, cobro, coalesce(por_asentar, 0),
+                           coalesce(' — ' || porque, '')), ' · ' order by sales_day, location_id)
+    into v_falta
+    from despues
+   where unidades = 0 or cobro <> antes or coalesce(por_asentar, 0) > 0;
+  if v_falta is not null then
+    raise exception 'Rehacer las ventas por plataforma: no todos los días retirados quedan asentados por unidad con el mismo cobro; no se aplica nada. %', v_falta;
+  end if;
+  select string_agg(format('%s %s: %s unidad(es)', c.sales_day, c.location_id,
+                           (select count(*) from public.sales_day_summary d where d.company_id = c.company_id and d.location_id = c.location_id and d.sales_day = c.sales_day and d.unit_key is not null)),
+                    ' · ' order by c.sales_day, c.location_id)
+    into v_ids from _cobro_antes c;
+  raise notice 'Rehacer las ventas por plataforma: los % día(s) retirados, asentados por unidad con el mismo cobro: %', v_n, v_ids;
 end $$;

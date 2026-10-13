@@ -47,12 +47,18 @@ on:
   # FUERZA que la comprobación de después falle y deja que deshacer.sh —el de
   # producción— la quite; en verde solo si staging queda exactamente como
   # estaba (foto antes = foto después). «aplicar» hace lo mismo que el push.
+  # R9 (13/10) · «real-con-fallo» y «real»: LA TANDA DE PRODUCCIÓN
+  # (supabase/staging/tanda-de-produccion.txt) con las piezas del real de
+  # producción (scripts/conta/produccion/real-en-staging.sh). real-con-fallo
+  # aplica, fuerza en rojo la comprobación de después y deja que deshacer.sh
+  # la quite y la CUENTE: en verde solo si staging queda como antes. real la
+  # aplica y la deja puesta.
   workflow_dispatch:
     inputs:
       modo:
-        description: 'aplicar (el manifiesto) o ensayo-de-vuelta-atras'
+        description: 'aplicar (el manifiesto), ensayo-de-vuelta-atras, real-con-fallo o real (la tanda de producción)'
         type: choice
-        options: ['aplicar', 'ensayo-de-vuelta-atras']
+        options: ['aplicar', 'ensayo-de-vuelta-atras', 'real-con-fallo', 'real']
         default: 'aplicar'
 
 # Dos tandas a la vez sobre la misma base se pisan. Se encolan.
@@ -101,7 +107,7 @@ jobs:
 
       - name: Leer y validar el manifiesto
         id: manifiesto
-        if: inputs.modo != 'ensayo-de-vuelta-atras'
+        if: inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
         run: |
           set -euo pipefail
           # Líneas sin comentarios ni blancos, en su orden.
@@ -155,7 +161,7 @@ jobs:
           echo "Al otro lado no hay ni Foodint ni Folvy Interno: es staging-conta."
 
       - name: Aplicar, fichero a fichero
-        if: inputs.modo != 'ensayo-de-vuelta-atras'
+        if: inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -211,3 +217,15 @@ jobs:
           export PGAPPNAME="gha-staging-conta-ensayo-${GITHUB_RUN_ID}"
           export INFORME="$GITHUB_STEP_SUMMARY"
           bash scripts/conta/produccion/ensayo-vuelta-atras.sh
+
+      - name: La tanda de producción en staging (real-con-fallo o real)
+        if: inputs.modo == 'real-con-fallo' || inputs.modo == 'real'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          MODO: ${{ inputs.modo }}
+        run: |
+          set -uo pipefail
+          export PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-staging-conta-${MODO}-${GITHUB_RUN_ID}"
+          export INFORME="$GITHUB_STEP_SUMMARY"
+          bash scripts/conta/produccion/real-en-staging.sh "$MODO"
