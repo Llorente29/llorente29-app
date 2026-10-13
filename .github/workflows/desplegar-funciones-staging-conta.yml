@@ -106,7 +106,14 @@ jobs:
               a=$(md5sum "$local" | cut -c1-32)
               b=$([ -n "$bajado" ] && md5sum "$bajado" | cut -c1-32 || echo "—")
               echo "| \`$f\` | $nombre | $a | $b |" >> "$GITHUB_STEP_SUMMARY"
-              [ "$a" = "$b" ] || { echo "::error::$f/$nombre desplegado no es el de la rama ($a ≠ $b; comparado con ${bajado:-nada}; bajado: $(find /tmp/bajada -type f | tr '\n' ' ' | cut -c1-300))."; MAL=1; }
+              if [ "$a" != "$b" ] && [ -n "$bajado" ]; then
+                # ¿Solo saltos de línea? Se dice aparte: no es una diferencia de código.
+                a2=$(tr -d '\r\n' < "$local" | md5sum | cut -c1-32); b2=$(tr -d '\r\n' < "$bajado" | md5sum | cut -c1-32)
+                if [ "$a2" = "$b2" ]; then echo "::warning::$f/$nombre: igual salvo saltos de línea ($(wc -l < "$local") / $(wc -l < "$bajado") líneas)."; continue; fi
+                echo "::error::$f/$nombre desplegado no es el de la rama: $(diff "$local" "$bajado" | head -c 400 | tr '\n' ' ')"; MAL=1
+              elif [ "$a" != "$b" ]; then
+                echo "::error::$f/$nombre: no se ha podido leer de vuelta (bajado: $(find /tmp/bajada -type f | tr '\n' ' ' | cut -c1-300))."; MAL=1
+              fi
             done
             echo "::notice::$f desplegada en staging-conta; md5 de sus ficheros comparados con la rama."
           done
