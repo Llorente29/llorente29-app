@@ -366,6 +366,11 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
   const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount')
     .eq('account_id', accountId).is('journal_entry_id', null).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones')
+  // B01 (respuesta 1, P2): el cobro que ya ha casado Bancos lo asienta Bancos;
+  // aquí solo la comisión y los cargos, para que el cobro no salga dos veces.
+  const cobradasPorBanco = new Set((await leer(tabla('bank_match_item').select('channel_settlement_id, bank_match!inner(status)')
+    .eq('account_id', accountId).not('channel_settlement_id', 'is', null).eq('bank_match.status', 'vivo'), 'los cobros casados en Bancos'))
+    .map((x) => String(x.channel_settlement_id)))
   for (const l of liqs) {
     const fecha = s(l.collected_on) ?? String(l.settlement_date)
     if (!abierto(fecha)) continue
@@ -392,7 +397,8 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       flujo: l.flow_type === 'licensed' ? 'licensed' : 'own', ventas: n(l.gross_sales), comision: Math.abs(n(l.commission)), cargos,
       devoluciones: glovo ? 0 : Math.abs(n(l.incidents_refund)),
       neto: l.net_payout === null ? null : glovo ? n(l.net_payout) - n(l.accumulated_debt) : n(l.net_payout),
-      cobrado: l.collected_on ? { fecha: String(l.collected_on), importe: n(l.collected_amount) } : null,
+      cobrado: l.collected_on && !cobradasPorBanco.has(String(l.id)) ? { fecha: String(l.collected_on), importe: n(l.collected_amount) } : null,
+      cobroEnBancos: cobradasPorBanco.has(String(l.id)),
       // Lo que se sabe sin recorrer pedido a pedido: cuántos del periodo FALTAN en un resumen del día.
       pedidos: { total: pendientes, asentados: 0 }, localId: s(l.location_id),
     }, {

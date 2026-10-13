@@ -280,3 +280,18 @@ describe('Piezas', () => {
     expect(resumenMes(ds, '2026-10').frase).toBe('He casado yo 142 de 158 movimientos de octubre. Te quedan 11 por confirmar y 5 por aclarar.')
   })
 })
+
+describe('P2 · un pago por dos caminos, un asiento (el lado del libro)', () => {
+  it('la liquidación cuyo cobro ya casó Bancos no vuelve a llevar el cobro', async () => {
+    const { liquidacionPlataforma } = await import('@/modules/conta/lib/asientosPropuestos')
+    const c = { cliente430: '43000001', proveedor410: '41000002', comision: '62300000', otrosCargos: '62900000', iva21: { cuenta: '47200021', tipoId: 't21' }, banco: '57200001', pendienteSocio: null }
+    const base = { id: 'liq1', fecha: '2026-10-08', ref: '1–7 oct', plataforma: 'Plataforma Norte', flujo: 'own' as const, ventas: 4120.4, comision: 585.31, cargos: [],
+      devoluciones: 0, neto: 3412.18, cobrado: null, cobroEnBancos: true, pedidos: { total: 0, asentados: 0 }, localId: null }
+    const p = liquidacionPlataforma(base, c).propuesta!
+    expect(p.lineas.some((l) => l.cuenta === '57200001')).toBe(false)
+    expect(p.razones.map((r) => r.decision)).toContain('Cobro en Bancos')
+    // Sin Bancos y con «cobrada» a mano, el cobro sigue yendo en la liquidación (como hoy).
+    const q = liquidacionPlataforma({ ...base, cobroEnBancos: false, cobrado: { fecha: '2026-10-09', importe: 3412.18 } }, c).propuesta!
+    expect(q.lineas.filter((l) => l.cuenta === '57200001')).toHaveLength(1)
+  })
+})

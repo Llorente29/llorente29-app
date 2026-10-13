@@ -20,7 +20,9 @@
 #   lo ha decidido): bien parado. La prueba ahora lo comprueba y paga L-412.
 #   La prueba: 13 pasos como el administrador de A (y la RLS como B), todo en
 #   una transacción con ROLLBACK.
-supabase/migrations/20261101T0100_b01_bancos.sql
-supabase/migrations/20261101T0110_b01_funciones.sql
-supabase/migrations/20261101T0130_b01_lectura.sql
-supabase/staging/sql/20261101_b01_bancos_prueba.sql
+# Run 165: VERDE, 13 de 13.
+# Ahora: la semilla del frente B para la demostración del motor
+# (tests/e2e/conta/b01/motor.spec.ts): tres bancos «B01» de A, Suministros
+# B01 del Norte con dos facturas y una liquidación sin cobrar. Nombres B01,
+# ids fijos, «on conflict do nothing»: no toca nada de lo que miran las otras e2e.
+supabase/seeds/conta/seed_b01_staging.sql

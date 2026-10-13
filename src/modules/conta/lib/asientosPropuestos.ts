@@ -261,6 +261,8 @@ export interface EntradaLiquidacion {
   devoluciones: number
   neto: number | null
   cobrado: { fecha: string; importe: number } | null
+  /** B01 (P2): el cobro ya lo ha casado Bancos con su asiento; aquí no va. */
+  cobroEnBancos?: boolean
   /** De los pedidos del periodo, cuántos están ya en un resumen del día validado o propuesto. */
   pedidos: { total: number; asentados: number }
   localId: string | null
@@ -325,7 +327,9 @@ export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidaci
     lineas.push({ cuenta: c.banco, debe: l.cobrado.importe, haber: 0, localId: loc, comun, concepto: 'Cobro al banco' })
     lineas.push({ cuenta: c.cliente430, debe: 0, haber: l.cobrado.importe, localId: loc, comun, concepto: 'Cobro de la liquidación' })
   } else {
-    razones.push({ decision: 'Cobro aún no', porque: 'cuando llegue al banco se casa con esta liquidación (Bancos)' })
+    razones.push(l.cobroEnBancos
+      ? { decision: 'Cobro en Bancos', porque: 'el movimiento del banco ya está casado con esta liquidación y lleva su propio asiento' }
+      : { decision: 'Cobro aún no', porque: 'cuando llegue al banco se casa con esta liquidación (Bancos)' })
   }
 
   // Regla 7: las ventas ya van por los resúmenes del día; aquí nunca.
