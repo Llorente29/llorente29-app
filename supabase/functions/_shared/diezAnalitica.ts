@@ -119,7 +119,8 @@ export const CORRESPONDENCIA_LLORENTE29: Correspondencia = {
     'Koreans do it better - Fried Chicken': 'marca cedida: va por la liquidación con el socio',
     'Lobbers': 'ya no existe y no se usa',
   },
-  canalAlEnviar: { glovo: 'GLV', justeat: 'JUS', just_eat: 'JUS', ubereats: 'UBR' },
+  // R13: en Folvy el canal de Uber se llama «uber» (sales_channel.slug); es UBR.
+  canalAlEnviar: { glovo: 'GLV', justeat: 'JUS', just_eat: 'JUS', ubereats: 'UBR', uber: 'UBR' },
 }
 
 /**
