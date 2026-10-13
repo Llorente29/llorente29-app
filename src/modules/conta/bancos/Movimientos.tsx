@@ -18,11 +18,11 @@ import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import {
-  TEXTO_BOTON, cierreBanco, filaDe, limitesMes, nombreMes, resumenFilas, tarjetaPorAclarar, ultimosIban, type Boton, type Fila, type MovimientoBanco,
+  TEXTO_BOTON, cierreBanco, filaDe, limitesMes, migasBanco, nombreMes, resumenFilas, tarjetaPorAclarar, type Boton, type Fila, type MovimientoBanco,
 } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import { bancos as nucleo } from '@/modules/conta/services/bancosService'
-import { guardarRegla, ignorar, leerMovimientos, saldosContables, subirTicket, type FacturaPendiente } from '@/modules/conta/services/bancosPantallas'
+import { guardarRegla, ignorar, leerMovimientos, saldosContables, subirTicket, ultimaPasada, type FacturaPendiente } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
@@ -49,11 +49,12 @@ export function Movimientos() {
   const { hasta } = limitesMes(mes)
   const corte = hasta < ctx.hoy ? hasta : ctx.hoy
   const lectura = useLeer(banco ? async () => {
-    const [movs, saldos] = await Promise.all([
+    const [movs, saldos, pasada] = await Promise.all([
       leerMovimientos(accountId, banco.id, mes),
       saldosContables(companyId, corte, banco.cuenta ? [banco.cuenta] : []),
+      ultimaPasada(accountId, companyId),
     ])
-    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null }
+    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, pasada }
   } : null, `${banco?.id}:${mes}:${vuelta}`)
 
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
@@ -150,12 +151,11 @@ export function Movimientos() {
     hecho(`Casado: ${concepto} (${quien(m)}). La factura queda pagada.`)
   }
 
-  const u = ultimosIban(banco.iban)
   return (
     <section className="cxb-movimientos" aria-labelledby="cxb-mov-titulo">
       <div className="cxl-seccion">
         <div>
-          <nav className="cxp-migas" aria-label="Estás en"><span>Bancos</span><span aria-hidden="true">›</span><span aria-current="page">{banco.nombre}{u ? ` · ES·· ···· ${u}` : ''}</span></nav>
+          <nav className="cxp-migas" aria-label="Estás en"><span>Bancos</span><span aria-hidden="true">›</span><span aria-current="page">{migasBanco(banco).replace(/^Bancos › /, '')}</span></nav>
           <h2 id="cxb-mov-titulo">Movimientos</h2>
         </div>
         <div className="cxl-herramientas">
@@ -177,6 +177,11 @@ export function Movimientos() {
         <span className="cx-ia-punto" aria-hidden="true" />
         <div className="cxb-banda-texto">
           <strong>{r.frase}</strong>
+          {lectura.datos.pasada && (
+            <span className="cxb-pasada" data-testid="pasada-agente">
+              Mi última pasada, {cuandoPasada(lectura.datos.pasada.cuando, ctx.hoy)} ({lectura.datos.pasada.disparo === 'extracto' ? 'al subir un extracto' : 'la del día'}): {lectura.datos.pasada.resumen}
+            </span>
+          )}
           <span>Lo casado solo está en «Lo que ha hecho Folvy», con el porqué y para deshacer. Nada pasa a contabilidad sin que esté seguro o lo confirmes tú.</span>
         </div>
         <Link to={`${rutaBancos('hecho')}?banco=${banco.id}&mes=${mes}`} className="cx-boton-sec">Ver lo que he hecho</Link>
@@ -237,7 +242,7 @@ export function Movimientos() {
               </span>
               <span role="cell" className="cxb-botones">
                 {f.botones.map((b) => (
-                  <button key={b} type="button" className={b === 'decirlo-yo' ? 'cx-boton' : 'cx-boton-sec'} disabled={!!ocupado} onClick={() => pulsar(f, b)}>
+                  <button key={b} type="button" className={b === f.principal ? 'cx-boton' : 'cx-boton-sec'} disabled={!!ocupado} onClick={() => pulsar(f, b)}>
                     {ocupado === m.id && (b === 'si' || b === 'deshacer' || b === 'si-sin-ticket' || b === 'subir-foto') ? '…' : TEXTO_BOTON[b]}
                   </button>
                 ))}
@@ -262,4 +267,12 @@ export function Movimientos() {
       {dialogo?.que === 'factura' && <DialogoFactura m={dialogo.m} alCerrar={() => setDialogo(null)} alElegir={elegirFactura(dialogo.m)} />}
     </section>
   )
+}
+
+/** «hoy a las 09:12» o «el 12/10 a las 23:40», en hora de Madrid. */
+function cuandoPasada(iso: string, hoy: string): string {
+  const d = new Date(iso)
+  const dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(d)
+  const hora = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
+  return dia === hoy ? `hoy a las ${hora}` : `el ${dia.slice(8, 10)}/${dia.slice(5, 7)} a las ${hora}`
 }

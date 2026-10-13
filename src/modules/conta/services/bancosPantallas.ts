@@ -9,7 +9,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
-import { bancos, type BancoFolvy } from '@/modules/conta/services/bancosService'
+import { bancos, type BancoFolvy, type ResultadoConciliar } from '@/modules/conta/services/bancosService'
 import { reglasNuevas } from '@/modules/conta/lib/conciliacion'
 import { limitesMes, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
 
@@ -205,3 +205,60 @@ export async function subirTicket(accountId: string, movimientoId: string, f: Fi
   if (error) throw new Error(`No se ha podido subir la foto: ${error.message}`)
   await rpc<void>('bank_ticket_guardar', { p_movement: movimientoId, p_ruta: ruta })
 }
+
+// ── Respuesta 4 y tarea 6 ───────────────────────────────────────────────────
+
+export const guardarAlias = (bancoId: string, alias: string) => rpc<void>('bank_cuenta_alias', { p_treasury: bancoId, p_alias: alias })
+
+export interface EstadoMes {
+  bancoId: string; mes: string; hasta: string; cuenta: string | null
+  saldoBancoCent: number | null; extractoHasta: string | null; saldoLibroCent: number; diferenciaCent: number | null
+  sueltos: number; sueltosCent: number
+  cierre: { id: string; aSabiendas: boolean; por: string | null; el: string; motivo: string | null } | null
+}
+
+/** El estado del mes de cada banco (la base lo calcula: el mismo que comprueba el cierre). */
+export async function mesesEstado(companyId: string, mes: string): Promise<EstadoMes[]> {
+  const filas = await rpc<Fila[]>('bank_meses_estado', { p_company: companyId, p_mes: `${mes}-01` })
+  return (filas ?? []).map((f) => {
+    const e = f.estado as Fila
+    return {
+      bancoId: String(f.treasury_account_id), mes: String(e.mes), hasta: String(e.hasta), cuenta: s(e.cuenta),
+      saldoBancoCent: e.saldo_banco === null ? null : cent(e.saldo_banco), extractoHasta: s(e.extracto_hasta), saldoLibroCent: cent(e.saldo_libro),
+      diferenciaCent: e.diferencia === null ? null : cent(e.diferencia), sueltos: Number(e.sueltos ?? 0), sueltosCent: cent(e.sueltos_importe),
+      cierre: f.cierre_id ? { id: String(f.cierre_id), aSabiendas: !!f.cerrado_a_sabiendas, por: s(f.cerrado_por), el: String(f.cerrado_el), motivo: s(f.motivo) } : null,
+    }
+  })
+}
+
+export const cerrarMes = (bancoId: string, mes: string, aSabiendas: boolean, motivo: string | null) =>
+  rpc<Fila>('bank_mes_cerrar', { p_treasury: bancoId, p_mes: `${mes}-01`, p_a_sabiendas: aSabiendas, p_motivo: motivo })
+export const reabrirMes = (cierreId: string, motivo: string) => rpc<void>('bank_mes_reabrir', { p_cierre: cierreId, p_motivo: motivo })
+
+export interface Pasada { id: string; disparo: 'extracto' | 'diario'; cuando: string; resumen: string; casados: number; propuestos: number; porAclarar: number }
+
+/** La última pasada del agente «Conciliación» de la empresa: su resumen es la banda verde. */
+export async function ultimaPasada(accountId: string, companyId: string): Promise<Pasada | null> {
+  const filas = await leer(tabla('bank_agent_run').select('id, trigger, ran_at, summary, matched, proposed, to_clarify')
+    .eq('account_id', accountId).eq('company_id', companyId).order('ran_at', { ascending: false }).limit(1), 'la última pasada del agente')
+  const p = filas[0]
+  return p ? { id: String(p.id), disparo: p.trigger === 'diario' ? 'diario' : 'extracto', cuando: String(p.ran_at), resumen: String(p.summary),
+    casados: Number(p.matched), propuestos: Number(p.proposed), porAclarar: Number(p.to_clarify) } : null
+}
+
+/**
+ * El agente «Conciliación» (respuesta 4, tarea 6.1): el motor sobre lo pendiente
+ * —con las mismas guardas de siempre: nada se valida fuera de «validar solo lo
+ * seguro»— y su pasada registrada con el resumen. Corre después de cada
+ * extracto y, si hoy no ha corrido, la primera vez que alguien abre Bancos.
+ */
+export async function pasarAgente(accountId: string, companyId: string, hoy: string, disparo: 'extracto' | 'diario'): Promise<{ resultado: ResultadoConciliar; resumen: string }> {
+  const resultado = await bancos.conciliarPendientes(accountId, companyId, hoy)
+  const id = await rpc<string>('bank_agente_registrar', { p_company: companyId, p_disparo: disparo, p_resultado: {
+    casados: resultado.casadosSolos, propuestos: resultado.propuestos, por_aclarar: resultado.porAclarar, antes_corte: resultado.antesDelCorte,
+    fallos: resultado.fallos.length, fallos_detalle: resultado.fallos.slice(0, 20) } })
+  const filas = await leer(tabla('bank_agent_run').select('summary').eq('id', id).limit(1), 'el resumen de la pasada')
+  return { resultado, resumen: String(filas[0]?.summary ?? '') }
+}
+
+export const agenteTocaHoy = (companyId: string) => rpc<boolean>('bank_agente_toca_hoy', { p_company: companyId })

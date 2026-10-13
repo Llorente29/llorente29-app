@@ -17,7 +17,7 @@ import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { ibanLegible, nombreConCodigo } from '@/modules/conta/lib/bancosVista'
 import {
-  altaCuenta, bajaTarjeta, corregirIban, cuentasPorDarDeAlta, guardarTarjeta, localDeCuenta, type BancoVista, type Extracto,
+  altaCuenta, bajaTarjeta, corregirIban, guardarAlias, cuentasPorDarDeAlta, guardarTarjeta, localDeCuenta, type BancoVista, type Extracto,
 } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
@@ -70,16 +70,23 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
   const { datos } = useBancos()
   const nombreLocal = (id: string | null) => (id ? datos.locales.find((l) => l.id === id)?.nombre ?? 'un local' : 'Común')
   const [local, setLocal] = useState(b.localId ?? COMUN)
+  const [alias, setAlias] = useState(b.alias ?? '')
   const [nueva, setNueva] = useState({ ultimos4: prellenar ?? '', titular: '', local: '' })
   useEffect(() => { if (prellenar) document.getElementById(`tarjeta-${b.id}`)?.scrollIntoView({ block: 'center' }) }, [prellenar, b.id])
 
   return (
     <article className="cx-tarjeta cxb-banco-tarjeta" aria-label={b.nombre}>
-      <div className="cx-tarjeta-cabeza">
+      <div className="cx-tarjeta-cabeza cxb-banco-cabeza">
         <div>
           <h3 className="cxl-subtitulo">{nombreConCodigo(b.nombre, b.cuenta)}</h3>
           <span className="cx-ayuda cx-cifra">{ibanLegible(b.iban)}</span>
         </div>
+        <label className="cxb-local">
+          <span>Nombre corto en la barra</span>
+          <input className="cx-input" value={alias} maxLength={24} placeholder={b.nombre} aria-label={`Nombre corto de ${b.nombre}`}
+            onChange={(e) => setAlias(e.target.value)}
+            onBlur={() => { if (alias.trim() !== (b.alias ?? '')) hacer(async () => { await guardarAlias(b.id, alias); return alias.trim() ? `${b.nombre} sale en la barra como «${alias.trim()}».` : `${b.nombre} sale en la barra con su nombre entero.` }) }} />
+        </label>
         <label className="cxb-local">
           <span>Local</span>
           <select className="cx-input" value={local} onChange={(e) => {

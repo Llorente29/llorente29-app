@@ -53,6 +53,8 @@ on:
       - 'scripts/conta/agente-libros.sql'
       - 'scripts/conta/lib/libros.mjs'
       - 'scripts/conta/lib/libro.mjs'
+      - 'scripts/conta/agente-conciliacion.*'
+      - 'scripts/conta/lib/conciliacion.mjs'
       - 'scripts/conta/lib/datosMaestros.mjs'
       - 'scripts/conta/lib/terceros.mjs'
       - 'scripts/conta/normativa-aviso.mjs'
@@ -234,6 +236,49 @@ jobs:
         if: steps.libro.outcome == 'failure'
         run: |
           echo "::error::El libro diario tiene algo en rojo: ver el informe del resumen."
+          exit 1
+
+      # B01 · Agente «Conciliación» (cada noche, solo lectura): nada casado dos
+      # veces, ningún asiento de banco sin movimiento, meses cerrados que siguen
+      # cuadrando, reglas con su registro, extractos que cuadran, permisos del
+      # agregador vivos y la pasada del agente. Antes del B01 (sin bank_movement), nada.
+      - name: Conciliación (solo lectura)
+        id: conciliacion
+        continue-on-error: true
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+        run: |
+          set -euo pipefail
+          if [ "$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.bank_agent_run') is not null")" = "t" ]; then
+            /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-conciliacion.sql > /tmp/conciliacion.json
+            node scripts/conta/agente-conciliacion.mjs /tmp/conciliacion.json /tmp/informe-conciliacion.md staging-conta
+          else
+            echo "## Agente «Conciliación» · staging-conta: aún no hay bancos (antes del B01)." > /tmp/informe-conciliacion.md
+          fi
+
+      - name: Informe de la conciliación
+        if: always()
+        run: |
+          if [ -f /tmp/informe-conciliacion.md ]; then cat /tmp/informe-conciliacion.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Aviso de la conciliación
+        if: steps.conciliacion.outcome == 'failure' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · Conciliación: algo no cuadra en los bancos'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe-conciliacion.md)" "$enlace" > /tmp/aviso-conciliacion.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso-conciliacion.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso-conciliacion.md; fi
+
+      - name: Resultado de la conciliación
+        if: steps.conciliacion.outcome == 'failure'
+        run: |
+          echo "::error::La conciliación tiene algo en rojo: ver el informe del resumen."
           exit 1
 
       - name: Resultado

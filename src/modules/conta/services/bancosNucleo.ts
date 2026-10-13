@@ -56,6 +56,8 @@ export function leerYCuadrar(a: ExtractoAbierto, banco?: BancoCsv): { extracto: 
 
 export interface BancoFolvy {
   id: string; nombre: string; iban: string | null; kind: string; cuenta: string | null; localId: string | null
+  /** El nombre corto en la barra (respuesta 4); null = el nombre entero. */
+  alias: string | null
   ibanRevision: { iban_propuesto: string; motivo: string } | null
   /** Otros IBAN que la persona dijo que van a esta cuenta (respuesta 3): la subida empareja sola. */
   ibanes: string[]
@@ -104,12 +106,12 @@ export function crearBancos(bd: Bd) {
 
   async function bancosDeLaEmpresa(accountId: string, companyId: string): Promise<BancoFolvy[]> {
     const [ts, enlaces, recordados] = await Promise.all([
-      leer(tabla('treasury_account').select('id, name, iban, kind, location_id, is_active, iban_review').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los bancos'),
+      leer(tabla('treasury_account').select('id, name, short_name, iban, kind, location_id, is_active, iban_review').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los bancos'),
       leer(tabla('company_account_link').select('entity_id, company_account:company_account_id(code)').eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'bank_account').eq('role', 'principal'), 'las cuentas de los bancos'),
       leer(tabla('bank_account_iban').select('treasury_account_id, iban').eq('account_id', accountId).eq('company_id', companyId), 'los IBAN recordados'),
     ])
     const cuentaDe = new Map(enlaces.map((e) => [String(e.entity_id), s((e.company_account as Fila | null)?.code)]))
-    return ts.map((t) => ({ id: String(t.id), nombre: String(t.name), iban: s(t.iban), kind: String(t.kind), cuenta: cuentaDe.get(String(t.id)) ?? null,
+    return ts.map((t) => ({ id: String(t.id), nombre: String(t.name), alias: s(t.short_name), iban: s(t.iban), kind: String(t.kind), cuenta: cuentaDe.get(String(t.id)) ?? null,
       localId: s(t.location_id), ibanRevision: (t.iban_review as BancoFolvy['ibanRevision']) ?? null,
       ibanes: recordados.filter((r) => String(r.treasury_account_id) === String(t.id)).map((r) => String(r.iban)) }))
   }
@@ -118,7 +120,7 @@ export function crearBancos(bd: Bd) {
    * Importa cada cuenta del extracto en el banco que se le ha asignado. Lo que no cuadre no llega aquí (y la base lo vuelve a comprobar).
    * `recordados`: los IBAN que la persona ya dijo que van a cada banco (bank_account_iban); con ellos no se pide «Revisa esta cuenta».
    */
-  async function importar(a: ExtractoAbierto, e: ExtractoLeido, cuadre: Cuadre, asignacion: readonly (string | null)[], fuente: 'fichero' | 'correo' = 'fichero',
+  async function importar(a: ExtractoAbierto, e: ExtractoLeido, cuadre: Cuadre, asignacion: readonly (string | null)[], fuente: 'fichero' | 'correo' | `agregador:${string}` = 'fichero',
     recordados: Readonly<Record<string, readonly string[]>> = {}): Promise<ResultadoImportar[]> {
     if (!cuadre.ok) throw new Error(`No cuadra: ${cuadre.motivos.join(' ')}`)
     const out: ResultadoImportar[] = []

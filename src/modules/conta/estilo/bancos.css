@@ -69,6 +69,7 @@
 .cxb-banco-tarjeta { display: flex; flex-direction: column; gap: 12px; }
 .cxb-subbloque { border-top: 1px solid var(--cx-linea); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .cxb-subbloque h4, .cxb-cierre h4 { margin: 4px 0 0; font-size: 15px; }
+.cxb-banco-cabeza { gap: 12px; flex-wrap: wrap; }
 .cxb-local { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--cx-apoyo); min-width: 200px; }
 .cxb-revisa { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .cxb-tarjeta-nueva { display: grid; grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
@@ -112,6 +113,14 @@
 .cxb-apartado-resumen { font-size: 13px; color: var(--cx-apoyo); }
 .cxb-apartado-resumen.cxb-ambar { color: var(--cx-ambar); }
 
+/* Respuesta 4: la barra de Bancos va en UNA fila (los bancos que no caben, a «y N más»). */
+@media (min-width: 768px) {
+  .cxb-pagina .cxl-barra-grupos { flex-wrap: nowrap; }
+  .cxb-pagina .cxl-grupo-acciones { flex-wrap: nowrap; }
+  .cxb-pagina .cxl-accion { padding: 8px 6px; }
+}
+.cxb-pasada { color: var(--cx-ia-apoyo); }
+
 @media (max-width: 1100px) {
   .cxb-cifras { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .cxb-tarjeta-nueva { grid-template-columns: 1fr 1fr; }
@@ -135,3 +144,4 @@
   .cxb-tarjeta-nueva { grid-template-columns: 1fr; }
   .cxb-local { min-width: 0; }
 }
+.cxb-cerrado { display: inline-flex; gap: 8px; align-items: center; }

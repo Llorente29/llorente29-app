@@ -239,6 +239,45 @@ jobs:
           echo "::error::El libro diario tiene algo en rojo: ver el informe del resumen."
           exit 1
 
+      # B01 · Agente «Conciliación» (solo lectura, rol conta_lectura: 20261101T0160).
+      - name: Conciliación (solo lectura)
+        id: conciliacion
+        continue-on-error: true
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ "$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regclass('public.bank_agent_run') is not null")" = "t" ]; then
+            "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-conciliacion.sql > /tmp/conciliacion.json
+            node scripts/conta/agente-conciliacion.mjs /tmp/conciliacion.json /tmp/informe-conciliacion.md producción
+          else
+            echo "## Agente «Conciliación» · producción: aún no hay bancos (antes del B01)." > /tmp/informe-conciliacion.md
+          fi
+
+      - name: Informe de la conciliación
+        if: always()
+        run: |
+          if [ -f /tmp/informe-conciliacion.md ]; then cat /tmp/informe-conciliacion.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Aviso de la conciliación
+        if: steps.conciliacion.outcome == 'failure' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Conta · PRODUCCIÓN · Conciliación en rojo'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n\nEjecución: %s\n' "$(cat /tmp/informe-conciliacion.md)" "$enlace" > /tmp/aviso-conciliacion.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso-conciliacion.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso-conciliacion.md; fi
+
+      - name: Resultado de la conciliación
+        if: steps.conciliacion.outcome == 'failure'
+        run: |
+          echo "::error::La conciliación tiene algo en rojo: ver el informe del resumen."
+          exit 1
+
       - name: Resultado
         if: steps.revisar.outcome == 'failure'
         run: |

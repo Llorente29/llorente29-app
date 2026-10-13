@@ -33,8 +33,8 @@ import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
 
-const enMarco = (pagina: ReactNode, ejemplo: string) => (
-  <EmpresasProveedor><MarcoConta ejemplo={ejemplo}>{pagina}</MarcoConta></EmpresasProveedor>
+const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = false) => (
+  <EmpresasProveedor><MarcoConta ejemplo={ejemplo} sinPregunta={sinPregunta}>{pagina}</MarcoConta></EmpresasProveedor>
 )
 
 export const contaModule: ModuleDefinition = {
@@ -72,8 +72,9 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
     { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
     // B01 · Bancos en tres niveles (N17): Movimientos, Reglas, Cuentas y extractos, Cierre del mes.
-    { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?') },
-    { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?') },
+    // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
+    { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
+    { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     // Compras (encargo de compras, N18 y N19).
     { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },

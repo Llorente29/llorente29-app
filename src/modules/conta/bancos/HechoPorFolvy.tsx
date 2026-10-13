@@ -19,6 +19,7 @@ import { useBancos } from '@/modules/conta/bancos/contexto'
 const ACCION: Record<string, string> = {
   importado: 'Extracto subido', casado: 'Casado', enlazado: 'Enlazado', propuesto: 'Propuesto', por_aclarar: 'Por aclarar',
   validado: 'Validado', deshecho: 'Deshecho', ignorado: 'Apartado', regla: 'Regla',
+  cierre: 'Cierre del mes', reabierto: 'Mes reabierto', agente: 'Pasada del agente',
 }
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
 

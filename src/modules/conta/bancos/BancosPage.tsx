@@ -9,14 +9,20 @@
 // El gesto único (respuesta 3, punto 2): un extracto se puede SOLTAR en
 // cualquier pantalla de Bancos; abre «Subir extracto» con él.
 //
-// Lo que no funciona no se enseña (respuesta 3, punto 4): ni «Por correo» en
-// la barra, ni tarjetas de crédito. «Conectar» sale en gris con «pronto»,
-// como en la maqueta, y no se puede pulsar.
+// Lo que no funciona no se enseña (respuestas 3 y 4): ni «Por correo», ni
+// «Conectar» (llega con el contrato del agregador), ni tarjetas de crédito, ni
+// la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
+//
+// Respuesta 4: la barra va en UNA fila, con el nombre corto de cada banco; a
+// partir de cinco, tres a la vista (el de más dudas siempre) y «y N más».
+//
+// El agente «Conciliación» (tarea 6): si hoy aún no ha pasado, la primera vez
+// que alguien abre Bancos hace la pasada del día (con las guardas de siempre).
 //
 // En el móvil (patrón M4): la portada con dos cifras, la frase verde y los
 // apartados de 56 px; cada apartado abre su pantalla con «‹ Bancos».
 
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaBancos } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -26,8 +32,9 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
-import { estadoBanco, mesesElegibles, nombreMes, ultimosIban } from '@/modules/conta/lib/bancosVista'
-import { leerDatosBancos, leerHechos } from '@/modules/conta/services/bancosPantallas'
+import { bancosEnBarra, estadoBanco, mesesElegibles, nombreCorto, nombreMes, ultimosIban } from '@/modules/conta/lib/bancosVista'
+import { agenteTocaHoy, leerDatosBancos, leerHechos, pasarAgente } from '@/modules/conta/services/bancosPantallas'
+import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { BancosCtx, type ContextoBancos } from '@/modules/conta/bancos/contexto'
 import {
   NOMBRE_VISTA, PESTANAS_BANCOS, alternarFavorito, buscarEnBancos, leerFavoritos, pestanaDe, resolverVista, type VistaBancos,
@@ -76,6 +83,23 @@ export default function BancosPage() {
   const hechos = useLeerConservando(accountId && activa ? () => leerHechos(accountId, activa.id, mes) : null, ambito, `${mes}:${vuelta}`)
   // Lo casado solo que sigue vivo: lo deshecho ya no es «hecho por Folvy».
   const casadosSolos = (hechos.datos ?? []).filter((h) => h.porQuien === 'folvy' && h.accion === 'casado' && h.casadoVivo).length
+
+  // La pasada del día del agente: una vez por empresa y visita, si hoy no ha corrido.
+  const pasadaHecha = useRef<string | null>(null)
+  const [pasando, setPasando] = useState(false)
+  useEffect(() => {
+    if (!accountId || !activa || pasadaHecha.current === activa.id) return
+    pasadaHecha.current = activa.id
+    let vivo = true
+    agenteTocaHoy(activa.id).then(async (toca) => {
+      if (!toca || !vivo) return
+      setPasando(true)
+      try { await pasarAgente(accountId, activa.id, hoy, 'diario'); refrescarCuentasMenu() } catch (e) { console.error('[bancos] la pasada del día no se ha podido hacer', e) }
+      if (vivo) { setPasando(false); setVuelta((v) => v + 1) }
+    }, (e: unknown) => console.error('[bancos] no sé si toca la pasada del día', e))
+    return () => { vivo = false }
+  }, [accountId, activa, hoy])
+  const [masBancos, setMasBancos] = useState(false)
 
   const usuario = userName ?? 'yo'
   const [favoritos, setFavoritos] = useState<VistaBancos[]>(() => leerFavoritos(usuario, almacen()))
@@ -149,16 +173,30 @@ export default function BancosPage() {
                 <div className="cxl-barra-grupos">
                   <div className="cxl-grupo" role="group" aria-label="Tus bancos">
                     <div className="cxl-grupo-acciones">
-                      {bancos.map((b) => {
-                        const e = estadoBanco(dudasMes(b.id), !!b.ultimoExtracto)
-                        const u = ultimosIban(b.iban)
+                      {(() => {
+                        const { visibles, resto } = bancosEnBarra(bancos, ctx.datos.dudas, banco?.id ?? null)
                         return (
-                          <button key={b.id} type="button" className="cxl-accion" aria-current={b.id === banco?.id ? 'page' : undefined} onClick={() => ctx.elegirBanco(b.id)}>
-                            <span className="cxl-accion-nombre">{b.nombre} <span className={`cxl-punto cxl-punto-${e.tono}`} aria-hidden="true" /></span>
-                            <span className="cxl-accion-dato">{u ? `··· ${u} · ` : ''}{e.texto}</span>
-                          </button>
+                          <>
+                            {visibles.map((b) => {
+                              const e = estadoBanco(dudasMes(b.id), !!b.ultimoExtracto)
+                              const u = ultimosIban(b.iban)
+                              return (
+                                <button key={b.id} type="button" className="cxl-accion" aria-current={b.id === banco?.id ? 'page' : undefined} onClick={() => ctx.elegirBanco(b.id)}
+                                  title={b.nombre}>
+                                  <span className="cxl-accion-nombre">{nombreCorto(b)} <span className={`cxl-punto cxl-punto-${e.tono}`} aria-hidden="true" /></span>
+                                  <span className="cxl-accion-dato">{u ? `···${u} · ` : ''}{e.texto}</span>
+                                </button>
+                              )
+                            })}
+                            {resto.length > 0 && (
+                              <button type="button" className="cxl-accion" onClick={() => setMasBancos(true)}>
+                                <span className="cxl-accion-nombre">y {resto.length} más <span className={`cxl-punto${resto.some((b) => dudasMes(b.id) > 0) ? ' cxl-punto-ambar' : ''}`} aria-hidden="true" /></span>
+                                <span className="cxl-accion-dato">{resto.reduce((t, b) => t + dudasMes(b.id), 0)} dudas</span>
+                              </button>
+                            )}
+                          </>
                         )
-                      })}
+                      })()}
                       {bancos.length === 0 && <Link to={conQuery(rutaBancos('cuentas'))} className="cxl-accion"><span className="cxl-accion-nombre">Dar de alta un banco</span><span className="cxl-accion-dato">en Cuentas y extractos</span></Link>}
                     </div>
                     <span className="cxl-grupo-etiqueta">Tus bancos</span>
@@ -169,10 +207,6 @@ export default function BancosPage() {
                         <span className="cxl-accion-nombre">Subir extracto <span className="cxl-punto cxl-punto-verde" aria-hidden="true" /></span>
                         <span className="cxl-accion-dato">Norma 43 · Excel</span>
                       </Link>
-                      <span className="cxl-accion cxl-accion-gris" aria-disabled="true" title="La conexión directa con el banco llega más adelante">
-                        <span className="cxl-accion-nombre">Conectar <span className="cxl-punto" aria-hidden="true" /></span>
-                        <span className="cxl-accion-dato">pronto</span>
-                      </span>
                     </div>
                     <span className="cxl-grupo-etiqueta">Traer movimientos</span>
                   </div>
@@ -224,6 +258,20 @@ export default function BancosPage() {
             </div>
           </div>
         )}
+        {masBancos && (
+          <Dialogo titulo="Tus bancos" alCerrar={() => setMasBancos(false)}>
+            <ul className="cxl-buscar-lista">
+              {bancos.map((b) => {
+                const e = estadoBanco(dudasMes(b.id), !!b.ultimoExtracto)
+                return (
+                  <li key={b.id}><a href="#" onClick={(ev) => { ev.preventDefault(); ctx.elegirBanco(b.id); setMasBancos(false) }}>
+                    <span><span className={`cxl-punto cxl-punto-${e.tono}`} aria-hidden="true" /> {b.nombre}</span><span className="cx-ayuda">{e.texto}</span></a></li>
+                )
+              })}
+            </ul>
+          </Dialogo>
+        )}
+        {pasando && <div className="cx-ayuda" role="status">Haciendo la pasada del día: miro los movimientos pendientes…</div>}
         {buscando && <Buscar alCerrar={() => setBuscando(false)} alElegir={(v) => { setBuscando(false); navegar(conQuery(rutaBancos(v === 'movimientos' ? undefined : v))) }} />}
       </div>
     </BancosCtx.Provider>

@@ -11,7 +11,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { rutaBancos } from '@/config/navegacion'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { useLeer } from '@/modules/conta/libros/contexto'
-import { estadoBanco, filaDe, resumenFilas, ultimosIban } from '@/modules/conta/lib/bancosVista'
+import { estadoBanco, filaDe, nombreCorto, resumenFilas, ultimosIban } from '@/modules/conta/lib/bancosVista'
 import { leerMovimientos } from '@/modules/conta/services/bancosPantallas'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 
@@ -52,7 +52,7 @@ export function PortadaMovil({ casadosSolos }: { casadosSolos: number }) {
           const u = ultimosIban(b.iban)
           return (
             <button key={b.id} type="button" className="cx-pildora cxb-pildora-banco" aria-pressed={b.id === banco.id} onClick={() => elegirBanco(b.id)}>
-              <span className={`cxl-punto cxl-punto-${e.tono}`} aria-hidden="true" /> {b.nombre}{u ? ` ···${u}` : ''}
+              <span className={`cxl-punto cxl-punto-${e.tono}`} aria-hidden="true" /> {nombreCorto(b)}{u ? ` ···${u}` : ''}
             </button>
           )
         })}

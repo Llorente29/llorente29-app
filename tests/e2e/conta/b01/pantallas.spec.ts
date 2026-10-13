@@ -23,6 +23,13 @@ const NORTE = BANCOS_B01[0]
 const MERCADO = BANCOS_B01[2]
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
+/** Una pieza sola (la banda del agente), para verla de cerca. */
+async function capturarPieza(page: Page, selector: string, nombre: string) {
+  await page.evaluate(() => document.fonts.ready)
+  mkdirSync(DIR, { recursive: true })
+  await page.locator(selector).first().screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png` })
+}
+
 async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
@@ -48,6 +55,9 @@ async function preparar() {
   await base.bd.rpc('bank_tarjeta_guardar', { p_treasury: NORTE, p_id: null, p_last4: '0937', p_titular: 'Ana Prueba', p_local: null, p_comun: true })
   const r = await bancos.conciliarPendientes(CUENTA_A.id, EMPRESA_A, '2026-10-13')
   expect(r.fallos).toEqual([])
+  // Como «Subir extracto»: la pasada del agente queda registrada con su resumen (la banda la enseña).
+  await base.bd.rpc('bank_agente_registrar', { p_company: EMPRESA_A, p_disparo: 'extracto',
+    p_resultado: { casados: r.casadosSolos, propuestos: r.propuestos, por_aclarar: r.porAclarar, antes_corte: r.antesDelCorte, fallos: 0 } })
   return { ...base, asientosAntes }
 }
 
@@ -67,7 +77,12 @@ test.describe('B01 · Bancos, las pantallas', () => {
       const barra = page.getByRole('navigation', { name: 'Acciones de Bancos' })
       for (const g of ['Tus bancos', 'Traer movimientos', 'Automático', 'Tuyos']) await expect(barra.getByRole('group', { name: g })).toBeVisible()
       await expect(barra.getByText('Subir extracto')).toBeVisible()
-      await expect(barra.getByText('Conectar')).toBeVisible()
+      // Respuesta 4: la barra en UNA fila, con los nombres cortos; ni «Conectar» ni la barra de «Muy pronto».
+      const filas = await Promise.all(['Tus bancos', 'Traer movimientos', 'Automático', 'Tuyos'].map(async (g) => Math.round((await barra.getByRole('group', { name: g }).boundingBox())!.y)))
+      expect(new Set(filas).size).toBe(1)
+      await expect(barra.getByRole('button', { name: /^B01 Norte/ })).toBeVisible()
+      await expect(page.getByText('Conectar')).toHaveCount(0)
+      await expect(page.locator('.cx-pregunta')).toHaveCount(0)
       // Lo que no funciona no se enseña (respuesta 3, punto 4).
       await expect(page.getByText('Por correo')).toHaveCount(0)
       await expect(page.getByText(/crédito/i)).toHaveCount(0)
@@ -77,7 +92,16 @@ test.describe('B01 · Bancos, las pantallas', () => {
       for (const c of ['Saldo en el banco', 'Saldo en contabilidad', 'Casado solo', 'Para confirmar', 'Por aclarar']) await expect(page.locator('.cxb-cifra-etiqueta', { hasText: c })).toBeVisible()
       await expect(page.getByText('· tarjeta de Ana Prueba (···0937)')).toBeVisible()
       await expect(page.getByText(/Tarjeta de Ana \(···0937\)|pídele el ticket a Ana/).first()).toBeVisible()
+      // Las migas, sin caracteres raros; un solo botón principal por fila; y la banda del agente.
+      await expect(page.getByRole('navigation', { name: 'Estás en' })).toHaveText(/^Bancos›Banco B01 · Norte · ···0011$/)
+      await expect(page.locator('.cxb-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
+      await expect(page.locator('.cxb-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
+      await expect(page.locator('.cxb-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
+      await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
+      // Con la apertura de la semilla, la diferencia es exactamente lo que queda sin casar.
+      await expect(page.locator('.cxb-cifra', { hasText: 'Saldo en contabilidad' })).toContainText('difiere 2.175,50 €')
       await capturar(page, 'movimientos')
+      await capturarPieza(page, '.cxb-banda', 'banda-agente')
 
       // «Sí» confirma con contenido, y «Deshacer» lo devuelve (regla 8).
       const comision = page.locator('.cxb-fila', { hasText: 'Comision mantenimiento' })
@@ -89,7 +113,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // Por aclarar, y la tarjeta que nadie ha dado de alta (respuesta 3).
       await page.getByRole('button', { name: 'Por aclarar', exact: true }).click()
       await capturar(page, 'por-aclarar')
-      await barra.getByRole('button', { name: /Banco B01 · Mercado/ }).click()
+      await barra.getByRole('button', { name: /^B01 Mercado/ }).click()
       await expect(page.getByText(/Por aclarar: tarjeta acabada en 1234, ¿de quién es\?/)).toBeVisible()
       await expect(page.locator('.cxb-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()
       await capturar(page, 'tarjeta-desconocida')
@@ -131,6 +155,8 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // Cierre del mes y «Lo que ha hecho Folvy».
       await page.goto(`/conta/bancos/cierre?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { name: 'Cierre de octubre', level: 2 })).toBeVisible()
+      await expect(page.getByText('Octubre aún no ha terminado: se cierra a partir del día 1 del mes siguiente.')).toBeVisible()
+      await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
       await capturar(page, 'cierre')
       await page.goto(`/conta/bancos/hecho?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { name: 'Lo que ha hecho Folvy', level: 2 })).toBeVisible()
@@ -165,6 +191,13 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.getByRole('button', { name: 'Por aclarar', exact: true }).click()
       await expect(page.getByText('· tarjeta de Ana Prueba (···0937)')).toBeVisible()
       await capturar(page, 'por-aclarar')
+
+      // Respuesta 4, punto 2.6: Movimientos entero en el móvil, para verlo al lado del de ordenador.
+      await page.getByRole('button', { name: 'Todo', exact: true }).click()
+      await expect(page.getByTestId('pasada-agente')).toBeVisible()
+      await expect(page.locator('.cx-barra-ia')).toHaveCount(0)
+      await capturar(page, 'movimientos')
+      await capturarPieza(page, '.cxb-banda', 'banda-agente')
     } finally {
       await base.deshacerTodo('Limpieza después de las pantallas B01 (móvil)')
       expect(await base.contarAsientosA()).toBe(base.asientosAntes)

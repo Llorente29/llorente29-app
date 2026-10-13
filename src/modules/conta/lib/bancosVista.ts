@@ -53,6 +53,12 @@ export interface Fila {
   titulo: string
   porque: string
   botones: Boton[]
+  /**
+   * El único botón principal (azul) de la fila (respuesta 4, 2.3): en ámbar
+   * «Sí» (o «Subir foto» si falta el ticket); en gris «Decirlo yo»; en verde,
+   * ninguno: «Ver» y «Deshacer» van en secundario.
+   */
+  principal: Boton | null
   grupo: 'casado' | 'confirmar' | 'aclarar' | 'otro'
 }
 
@@ -62,6 +68,13 @@ const quitarCasadoSolo = (s: string) => s.replace(/^casado solo\s*[:·]\s*/i, ''
 
 /** Una fila de la tabla de Movimientos (N17). */
 export function filaDe(m: MovimientoBanco): Fila {
+  const f = filaSinPrincipal(m)
+  const principal: Boton | null = f.tono === 'ambar' ? (['si', 'subir-foto'] as Boton[]).find((b) => f.botones.includes(b)) ?? null
+    : f.tono === 'gris' && f.botones.includes('decirlo-yo') ? 'decirlo-yo' : null
+  return { ...f, principal }
+}
+
+function filaSinPrincipal(m: MovimientoBanco): Omit<Fila, 'principal'> {
   if (m.estado === 'casado' && m.casado) {
     const porque = quitarCasadoSolo(m.casado.porque)
     const titulo = m.casado.asientoConcepto ?? m.propuesta?.que ?? 'Casado'
@@ -158,6 +171,30 @@ export function ultimosIban(iban: string | null): string | null {
 /** «ES0201829101320000000011» → «ES02 0182 9101 3200 0000 0011». */
 export function ibanLegible(iban: string | null): string {
   return (iban ?? '').replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim()
+}
+
+/** El nombre de un banco en la barra: su alias (respuesta 4) o, si no tiene, el nombre entero. */
+export function nombreCorto(b: { nombre: string; alias?: string | null }): string {
+  return b.alias?.trim() || b.nombre
+}
+
+/** Las migas de Movimientos: «Bancos › Banco B01 · Norte · ···0011». */
+export function migasBanco(b: { nombre: string; iban: string | null }): string {
+  const u = ultimosIban(b.iban)
+  return `Bancos › ${b.nombre}${u ? ` · ···${u}` : ''}`
+}
+
+/**
+ * Qué bancos caben en la barra (respuesta 4, 1): todos en una fila hasta
+ * cuatro; desde cinco, tres a la vista y el resto en «y N más». A la vista van
+ * siempre el que tiene más dudas y el elegido; los demás, en su orden.
+ */
+export function bancosEnBarra<T extends { id: string }>(bancos: readonly T[], dudas: Readonly<Record<string, number>>, elegido: string | null): { visibles: T[]; resto: T[] } {
+  if (bancos.length < 5) return { visibles: [...bancos], resto: [] }
+  const masDudas = [...bancos].sort((a, b) => (dudas[b.id] ?? 0) - (dudas[a.id] ?? 0))[0]
+  const fijos = new Set([masDudas.id, ...(elegido && bancos.some((b) => b.id === elegido) ? [elegido] : [])])
+  for (const b of bancos) { if (fijos.size >= 3) break; fijos.add(b.id) }
+  return { visibles: bancos.filter((b) => fijos.has(b.id)), resto: bancos.filter((b) => !fijos.has(b.id)) }
 }
 
 /** «Banco B01 · Norte» con su 572 → «Banco B01 · Norte · 57200911». Siempre nombre · código. */

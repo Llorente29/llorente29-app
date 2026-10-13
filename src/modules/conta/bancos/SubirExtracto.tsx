@@ -16,7 +16,7 @@ import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { ibanLegible } from '@/modules/conta/lib/bancosVista'
 import type { Cuadre, ExtractoLeido } from '@/modules/conta/lib/extractoBanco'
 import { abrirExtracto, bancos as nucleo, emparejar, leerYCuadrar, type ExtractoAbierto, type ResultadoConciliar, type ResultadoImportar } from '@/modules/conta/services/bancosService'
-import { recordarIban } from '@/modules/conta/services/bancosPantallas'
+import { pasarAgente, recordarIban } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 
@@ -71,7 +71,8 @@ export function SubirExtracto() {
       const importados = await nucleo.importar(p.a, p.e, p.cuadre, asig, 'fichero', recordados)
       let conciliado: ResultadoConciliar | null = null
       let avisoConciliar: string | null = null
-      try { conciliado = await nucleo.conciliarPendientes(accountId, companyId, hoy) } catch (e) { avisoConciliar = e instanceof Error ? e.message : String(e) }
+      // El agente «Conciliación» pasa después de cada extracto, y la pasada queda registrada con su resumen (tarea 6).
+      try { conciliado = (await pasarAgente(accountId, companyId, hoy, 'extracto')).resultado } catch (e) { avisoConciliar = e instanceof Error ? e.message : String(e) }
       setPaso({ que: 'hecho', nombre: p.a.nombre, importados, conciliado, avisoConciliar })
       refrescarCuentasMenu(); recargar()
     } catch (e) {
