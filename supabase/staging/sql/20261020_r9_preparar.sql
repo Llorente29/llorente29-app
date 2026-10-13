@@ -36,6 +36,18 @@ begin
   end if;
   v := public.conta_proponer_dias(v_e, now());
   raise notice 'Preparar staging (R9): el cierre del día de antes: %', v - 'company_id';
+  -- Diagnóstico, solo lee: de cada día entero propuesto de A, qué queda de sus pedidos.
+  raise notice 'Preparar staging (R9): días enteros propuestos de A: %', (
+    select string_agg(format('%s %s: %s pedidos en el resumen (%s), de ellos existen %s, cerrados y activos %s, propios %s; pedidos cerrados de A ese día y local hoy: %s; quien %s, creado %s',
+             d.sales_day, d.location_id, d.tickets_count, cardinality(d.sale_ids),
+             (select count(*) from public.sale s where s.id = any(d.sale_ids)),
+             (select count(*) from public.sale s where s.id = any(d.sale_ids) and s.is_active and s.status = 'closed'),
+             (select count(*) from public.sale s left join public.brand b on b.id = s.brand_id where s.id = any(d.sale_ids) and coalesce(b.ownership_type, 'own') = 'own'),
+             (select count(*) from public.sale s where s.account_id = v_acc and s.location_id = d.location_id and s.is_active and s.status = 'closed'
+                 and (s.sold_at at time zone 'Europe/Madrid')::date = d.sales_day),
+             e.created_by_name, e.created_at), ' · ' order by d.sales_day)
+      from public.sales_day_summary d join public.journal_entry e on e.id = d.entry_id
+     where d.company_id = v_e and e.status = 'propuesto');
   raise notice 'Preparar staging (R9): la empresa A tiene % asiento(s) de ventas del día entero propuestos (los 24 y 25/09: %).',
     (select count(*) from public.journal_entry e join public.sales_day_summary d on d.entry_id = e.id where e.company_id = v_e and e.status = 'propuesto'),
     (select count(*) from public.sales_day_summary d where d.company_id = v_e and d.sales_day in ('2026-09-24', '2026-09-25'));
