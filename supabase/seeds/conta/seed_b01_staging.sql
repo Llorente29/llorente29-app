@@ -13,6 +13,10 @@
 --     dos facturas aprobadas: B01-0477 (498,88) y B01-0478 (600,00).
 --   · Una liquidación del canal de A (en staging se llama «Glovo») del 01 al 07/10,
 --     neto 3.412,18, sin cobrar.
+--   · Respuesta 4: el nombre corto de cada banco («B01 Norte»…) y su ASIENTO DE
+--     APERTURA a 30/09 (propuesto, origen «opening»): el saldo inicial del
+--     extracto inventado (45.000,00 · 8.000,00 · 2.500,00). Sin él, contabilidad
+--     empezaba en cero y la pantalla decía «difiere» sin que nada difiriera.
 
 do $$
 declare
@@ -80,5 +84,25 @@ begin
           212, 4120.40, 708.22, 3412.18, 'semilla_b01', 'semilla_b01:0107', false, 'own', 'Semilla B01')
   on conflict (id) do nothing;
 
-  raise notice 'Semilla B01: tres bancos (57200911–13), Suministros B01 del Norte con B01-0477 y B01-0478, y la liquidación B01-LIQ-0107 (3.412,18).';
+  -- Respuesta 4: nombre corto (la columna es de la 0150) y asiento de apertura de cada banco.
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'treasury_account' and column_name = 'short_name') then
+    update public.treasury_account set short_name = x.corto
+      from (values ('b0100000-0000-4000-8000-0000000000b1'::uuid, 'B01 Norte'), ('b0100000-0000-4000-8000-0000000000b2'::uuid, 'B01 Sur'),
+                   ('b0100000-0000-4000-8000-0000000000b3'::uuid, 'B01 Mercado')) as x(id, corto)
+     where treasury_account.id = x.id and treasury_account.short_name is null;
+  end if;
+  for r in select * from (values
+      ('b0100000-0000-4000-8000-0000000000b1'::uuid, 'Banco B01 Norte', '57200911', 45000.00),
+      ('b0100000-0000-4000-8000-0000000000b2'::uuid, 'Banco B01 Sur', '57200912', 8000.00),
+      ('b0100000-0000-4000-8000-0000000000b3'::uuid, 'Banco B01 Mercado', '57200913', 2500.00)) as t(id, nombre, codigo, saldo) loop
+    -- _journal_entry_proponer desduplica por (origen, id): volver a sembrar no repite el asiento.
+    perform public._journal_entry_proponer(a_empresa,
+      jsonb_build_object('fecha', '2026-09-30', 'series', 3, 'concepto', 'Saldo inicial del banco · ' || r.nombre,
+        'source_type', 'opening', 'source_id', r.id, 'confianza', 'seguro', 'porque', 'Semilla B01: el saldo del extracto inventado el 30/09.'),
+      jsonb_build_array(jsonb_build_object('cuenta', r.codigo, 'debe', r.saldo, 'haber', 0, 'comun', true),
+                        jsonb_build_object('cuenta', '10000000', 'debe', 0, 'haber', r.saldo, 'comun', true)),
+      '{}', 'Semilla B01', null);
+  end loop;
+
+  raise notice 'Semilla B01: tres bancos (57200911–13), Suministros B01 del Norte con B01-0477 y B01-0478, y la liquidación B01-LIQ-0107 (3.412,18); nombre corto y apertura a 30/09.';
 end $$;

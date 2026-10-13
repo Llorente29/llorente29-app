@@ -227,6 +227,16 @@ begin
 
   for v_m in select * from jsonb_array_elements(coalesce(p_movs, '[]'::jsonb)) loop
     v_pos := v_pos + 1;
+    -- Respuesta 4: el mismo movimiento por el agregador y por Norma 43 es EL MISMO.
+    -- Las dos fuentes no traen las mismas referencias (la huella entera difiere),
+    -- pero sí el día, el importe y el orden en el día (la huella suave): entre
+    -- una fuente y otra, eso basta. Entre dos ficheros, sigue siendo «¿es el mismo?».
+    if exists (select 1 from public.bank_movement b join public.bank_statement s on s.id = b.statement_id
+                where b.treasury_account_id = p_treasury and b.soft_fingerprint = v_m->>'huella_suave' and b.fingerprint <> v_m->>'huella'
+                  and s.source <> p_fuente and (s.source like 'agregador:%' or p_fuente like 'agregador:%')) then
+      v_rep := v_rep + 1;
+      continue;
+    end if;
     v_estado := case when exists (select 1 from public.bank_movement b where b.treasury_account_id = p_treasury
                                     and b.soft_fingerprint = v_m->>'huella_suave' and b.fingerprint <> v_m->>'huella')
                      then 'posible_repetido' else 'pendiente' end;
@@ -432,6 +442,13 @@ begin
   values (v_cuenta, v_m.company_id, v_m.id, v_tipo, v_entry, v_creado, v_m.amount, p_confianza, p_porque, p_por, p_regla, auth.uid(),
           case when p_por = 'folvy' then 'Folvy' else public.conta_nombre_actor() end)
   returning id into v_match;
+
+  -- Respuesta 4: la persona casa con otra cosa lo que proponía una regla → una
+  -- corrección para esa regla; a la segunda se apaga sola y lo dice (0150).
+  if p_por = 'persona' and nullif(v_m.proposal->>'reglaId', '') is not null
+     and (p_regla is null or p_regla::text <> v_m.proposal->>'reglaId') then
+    perform public._bank_regla_corregida((v_m.proposal->>'reglaId')::uuid, v_m.id);
+  end if;
 
   -- A qué y por cuánto, y lo que cambia fuera del banco.
   if v_tipo = 'factura_recibida' then

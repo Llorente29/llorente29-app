@@ -1,4 +1,19 @@
-# e2e por frente (C06, respuesta 2): los dobles de los cuatro usuarios de prueba
-# para A, B y C, y la cuenta C sin empresa de cada frente. Se puede volver a
-# aplicar: lo que ya está se deja. Al final, su comprobación (4 por frente).
-supabase/seeds/conta/seed_e2e_frentes_staging.sql
+# B01 · respuesta 4 y tarea 6 (conta/b01-bancos, 13/10). Frente B, prefijo
+# 20261101T. Antes de aplicar se miró el historial de staging: la última de B
+# es la 0140 (tarjetas); nada de A ni de C se toca.
+#   0110 vuelve (mismas firmas): bank_casar cuenta la corrección de una regla
+#   (a la segunda la apaga, 0150) y bank_importar reconoce el mismo movimiento
+#   por el agregador y por Norma 43.
+#   0150: alias del banco, correcciones de la regla, cierre del mes, pasadas
+#   del agente y conexiones del agregador; amplía el CHECK de «Lo que ha hecho
+#   Folvy» (cierre, reabierto, agente). Todo nuevo salvo ese CHECK.
+#   La semilla B01 otra vez: alias y asiento de apertura a 30/09 de los tres
+#   bancos (sin él, contabilidad empezaba en cero y decía «difiere»).
+#   Las tres pruebas como el administrador de A, con ROLLBACK: bancos (13),
+#   tarjetas (7) y la nueva de la respuesta 4 y la tarea 6 (7).
+supabase/migrations/20261101T0110_b01_funciones.sql
+supabase/migrations/20261101T0150_b01_cierre_agente.sql
+supabase/seeds/conta/seed_b01_staging.sql
+supabase/staging/sql/20261101_b01_bancos_prueba.sql
+supabase/staging/sql/20261101_b01_tarjetas_prueba.sql
+supabase/staging/sql/20261101_b01_cierre_agente_prueba.sql
