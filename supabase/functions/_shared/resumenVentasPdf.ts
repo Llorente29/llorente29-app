@@ -28,7 +28,13 @@ export type DatosResumenVentas = {
   plataforma: string
   /** AAAA-MM-DD */
   fecha: string
-  numeroFactura: string
+  /**
+   * El número de la factura de Diez. null = la plataforma aún no tiene su
+   * factura medida en Diez (R15: Glovo, Just Eat): el PDF lleva el asiento.
+   */
+  numeroFactura: string | null
+  /** El asiento de Folvy («Ventas nº 1.287»); obligatorio si no hay factura. */
+  asiento?: string
   /** Cuándo se genera (se escribe en hora de Madrid). */
   generado: Date
   /** IVA de las ventas, en %. */
@@ -94,6 +100,12 @@ export function resumenVentasPdf(JsPDF: JsPdfCtor, d: DatosResumenVentas): Uint8
   const mal = comprobarResumen(d)
   if (mal.length) throw new Error(`El resumen de ventas no cuadra con su factura: ${mal.join('; ')}`)
 
+  if (d.numeroFactura == null && !d.asiento) throw new Error('El resumen de ventas lleva el número de su factura o el de su asiento: no tiene ninguno.')
+  // A qué documento acompaña: la factura de Diez o, si aún no la hay, el asiento.
+  const ref = d.numeroFactura != null
+    ? { etiqueta: 'Factura', valor: d.numeroFactura, de: `de la factura ${d.numeroFactura}`, el: `La factura ${d.numeroFactura}`, cuadra: 'con la factura' }
+    : { etiqueta: 'Asiento', valor: d.asiento!, de: `del asiento ${d.asiento}`, el: `El asiento ${d.asiento}`, cuadra: 'con el asiento' }
+
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   const W = 210, H = 297, M = 16, ANCHO = W - 2 * M
   const color = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2])
@@ -110,7 +122,7 @@ export function resumenVentasPdf(JsPDF: JsPdfCtor, d: DatosResumenVentas): Uint8
     if (!primera) {
       letra('bold', 9); doc.setTextColor(255, 255, 255)
       doc.text(`Resumen de ventas · ${d.plataforma} · ${d.local} · ${fechaLarga(d.fecha)}`, M, 9)
-      letra('normal', 9); doc.text(`Factura ${d.numeroFactura}`, W - M, 9, { align: 'right' })
+      letra('normal', 9); doc.text(`${ref.etiqueta} ${ref.valor}`, W - M, 9, { align: 'right' })
       y = 26
       return
     }
@@ -118,9 +130,9 @@ export function resumenVentasPdf(JsPDF: JsPdfCtor, d: DatosResumenVentas): Uint8
     letra('bold', 18); doc.setTextColor(255, 255, 255); doc.text(`${d.plataforma} · ${d.local}`, M, 21)
     letra('normal', 11); doc.setTextColor(201, 208, 220); doc.text(fechaLarga(d.fecha), M, 28)
     letra('normal', 8.5); doc.text(`${d.empresa.nombre} · NIF ${d.empresa.nif}`, M, 35)
-    // A la derecha, la factura.
-    letra('normal', 8); doc.setTextColor(201, 208, 220); doc.text('Factura', W - M, 12, { align: 'right' })
-    letra('bold', 12); doc.setTextColor(255, 255, 255); doc.text(d.numeroFactura, W - M, 19, { align: 'right' })
+    // A la derecha, la factura (o el asiento).
+    letra('normal', 8); doc.setTextColor(201, 208, 220); doc.text(ref.etiqueta, W - M, 12, { align: 'right' })
+    letra('bold', 12); doc.setTextColor(255, 255, 255); doc.text(ref.valor, W - M, 19, { align: 'right' })
     letra('normal', 8); doc.setTextColor(201, 208, 220); doc.text(`Generado por Folvy el ${generado}`, W - M, 35, { align: 'right' })
     y = 50
   }
@@ -205,8 +217,8 @@ export function resumenVentasPdf(JsPDF: JsPdfCtor, d: DatosResumenVentas): Uint8
       { negativo: true, total: ['', '', 'Suma de los reembolsos', euros(-sumaDe(d.reembolsos, 'base')), euros(-sumaDe(d.reembolsos, 'cuota')), euros(-sumaDe(d.reembolsos, 'total'))] })
   }
 
-  // Por marca: exactamente las líneas de la factura.
-  titulo('Por marca', `son las líneas de la factura ${d.numeroFactura}`)
+  // Por marca: exactamente las líneas de la factura (o las del asiento).
+  titulo('Por marca', `son las líneas ${ref.de}`)
   const nPed = (m: string) => d.pedidos.filter((p) => p.marca === m).length
   tabla([{ t: 'Marca', w: 82 }, { t: 'Subcuenta', w: 34 }, { t: 'Pedidos', w: 24, der: true }, { t: 'Base', w: 38, der: true }],
     [...d.lineasFactura].sort((a, b) => a.cuenta.localeCompare(b.cuenta)).map((l) => [l.marca + (l.importe < 0 ? ' (reembolsos)' : ''), l.cuenta, l.importe < 0 ? '' : String(nPed(l.marca)), euros(l.importe)]),
@@ -229,9 +241,9 @@ export function resumenVentasPdf(JsPDF: JsPdfCtor, d: DatosResumenVentas): Uint8
   relleno(MENTA); doc.circle(bx + 85, y + 2.2, 1.6, 'F')
   y += 6
   letra('normal', 8); color(GRIS)
-  doc.text('Cuadra con la factura y con el cobro, al céntimo.', bx + 5, y + 3)
+  doc.text(`Cuadra ${ref.cuadra} y con el cobro, al céntimo.`, bx + 5, y + 3)
   // A la izquierda, en palabras, qué es.
-  const izq = doc.splitTextToSize(`Las ventas de tus marcas en ${d.plataforma} en ${d.local} el ${fechaLarga(d.fecha).toLowerCase()}, una a una y sumadas, tal como Folvy las ha registrado. La factura ${d.numeroFactura} recoge estas mismas cifras.`, bx - M - 16)
+  const izq = doc.splitTextToSize(`Las ventas de tus marcas en ${d.plataforma} en ${d.local} el ${fechaLarga(d.fecha).toLowerCase()}, una a una y sumadas, tal como Folvy las ha registrado. ${ref.el} recoge estas mismas cifras.`, bx - M - 16)
   letra('normal', 9); color(GRIS); doc.text(izq, M, y - 30)
 
   pie()

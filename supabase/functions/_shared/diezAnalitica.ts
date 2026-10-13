@@ -200,3 +200,14 @@ export function marcaAlLeer(subgrupo: string | number | null | undefined, c: Cor
   if (!s) return { sinMarca: 'sin analítica' }
   return c.subgrupoAlLeer[s] ?? { sinMarca: `subgrupo ${s} sin correspondencia` }
 }
+
+/**
+ * R15 · La correspondencia con Diez de cada EMPRESA, anclada por su id (regla
+ * 9: nunca por nombre). Una empresa que no está aquí no tiene Diez: su asiento
+ * de ventas lleva su PDF igual, con el número del asiento, y no se envía.
+ */
+export const CORRESPONDENCIA_POR_EMPRESA: Record<string, Correspondencia> = {
+  '658728c0-fcd7-46ef-a860-d4e5e6eb21d9': CORRESPONDENCIA_LLORENTE29, // Llorente29 (Foodint), C0008
+}
+export const correspondenciaDeEmpresa = (companyId: string | null | undefined): Correspondencia | null =>
+  (companyId ? CORRESPONDENCIA_POR_EMPRESA[companyId] : undefined) ?? null

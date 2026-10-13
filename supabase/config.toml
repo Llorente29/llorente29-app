@@ -115,6 +115,14 @@ verify_jwt = false
 [functions.conta-vies-check]
 verify_jwt = true
 
+# (13/10) conta-diez-enviar · C04b R15. «Validar y enviar a Diez» desde el
+# Libro: envía un asiento de ventas ya validado, con su PDF. verify_jwt = true:
+# la llama el Libro con la sesión de quien pulsa; lee el asiento con ESE JWT y
+# solo escribe external_send con la clave de servicio. En C0008 no escribe
+# (el cliente de Diez sin escribirEnReal) y C0001 está vetada.
+[functions.conta-diez-enviar]
+verify_jwt = true
+
 
 [functions.dosier-track]
 verify_jwt = false

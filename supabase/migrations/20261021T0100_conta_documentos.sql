@@ -100,7 +100,8 @@ begin
     raise exception 'Ese asiento no es de las ventas de una plataforma: no lleva resumen de ventas.' using errcode = '22023';
   end if;
   return jsonb_build_object(
-    'id', v_e.id, 'estado', v_e.status, 'serie', v_e.series, 'numero', v_e.number,
+    'id', v_e.id, 'account_id', v_e.account_id, 'company_id', v_e.company_id,
+    'estado', v_e.status, 'serie', v_e.series, 'numero', v_e.number,
     'fecha', v_d.sales_day, 'validado_en', v_e.validated_at,
     'empresa', (select jsonb_build_object('nombre', c.legal_name, 'nif', c.tax_id)
                   from public.company c where c.id = v_e.company_id and c.account_id = v_e.account_id),

@@ -34,6 +34,9 @@ import { fijarCorte, primeraVenta } from '@/modules/conta/services/corteService'
 import { corteDesdeRespuesta, rangoAProponer } from '@/modules/conta/lib/proponer'
 import { textoDiaEnCurso, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
+import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
+import { cobroDe, estadoDiez, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
+import { leerConDiez } from '@/modules/conta/services/conDiezService'
 
 interface DatosLibro {
   /** La hora de cierre del día de la empresa («06:00»). */
@@ -47,6 +50,10 @@ interface DatosLibro {
   /** Si el resultado no se ha podido calcular, por qué (la página sigue: es una cifra, no el libro). */
   resultadoError: string | null
   cierre: FuenteCierre | null
+  /** R15 · Los asientos de ventas de una plataforma, con su documento y su envío a Diez. */
+  conDiez: Map<string, ConDiez>
+  /** Si no se ha podido leer, por qué (el libro sigue: es el estado con Diez, no el libro). */
+  conDiezError: string | null
 }
 
 function useLibro(accountId: string | null, companyId: string | null, codigo: string | null, vuelta: number) {
@@ -59,16 +66,19 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const [ejercicios, cierres, locales, horaCierre] = await Promise.all([leerEjercicios(accountId, companyId), leerCierres(accountId, companyId), localesDeLaCuenta(accountId), horaDeCierre(accountId, companyId)])
       const hoy = hoyEnMadrid()
       const ejercicio = ejercicios.find((e) => e.code === codigo) ?? ejercicios.find((e) => hoy >= e.inicio && hoy <= e.fin) ?? ejercicios[0] ?? null
-      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null }
+      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null, conDiez: new Map<string, ConDiez>(), conDiezError: null }
       const mes = hoy >= ejercicio.inicio && hoy <= ejercicio.fin ? mesDe(hoy) : mesDe(ejercicio.fin)
       const asientos = await leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin)
       const anterior = mesAnterior(mes)
       let resultadoError: string | null = null
-      const [resultado, cierre] = await Promise.all([
+      let conDiezError: string | null = null
+      const [resultado, cierre, conDiez] = await Promise.all([
         resultadoDelMes(companyId, mes, locales).catch((e: unknown) => { resultadoError = e instanceof Error ? e.message : String(e); return null }),
         anterior >= ejercicio.inicio ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
+        leerConDiez(accountId, companyId, asientos.filter((a) => a.origen === 'sales_day').map((a) => a.id))
+          .catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() }),
       ])
-      return { horaCierre, ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre }
+      return { horaCierre, ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre, conDiez, conDiezError }
     })().then((datos) => { if (vivo) setR({ clave, datos, error: null }) },
       (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
@@ -91,6 +101,7 @@ export default function LibroDiarioPage() {
   const [proponiendo, setProponiendo] = useState(false)
   const [sinPropuesta, setSinPropuesta] = useState<ResultadoProponer['sinPropuesta']>([])
   const [desbloqueo, setDesbloqueo] = useState(false)
+  const [enviarDiez, setEnviarDiez] = useState(false)
 
   const visibles = useMemo(() => (datos ? filtrosVisibles(datos.asientos) : []), [datos])
   const pedido = params.get('ver') as FiltroDiario | null
@@ -98,6 +109,17 @@ export default function LibroDiarioPage() {
   const lista = useMemo(() => (datos ? filtrar(datos.asientos, filtro) : []), [datos, filtro])
   const c = datos ? cifras(datos.asientos, datos.mes, datos.cierres, datos.resultado) : null
   const hechos = datos ? loQueHeHechoYo(datos.asientos) : []
+  // R15 · Con Diez: el estado de cada asiento de ventas de una plataforma, y lo
+  // que se puede validar y enviar (lo propuesto, y lo validado que no ha llegado).
+  const diezDe = (a: AsientoDiario): EstadoDiez | undefined => { const d = datos?.conDiez.get(a.id); return d ? estadoDiez(a, d) : undefined }
+  const candidatosDiez: CandidatoDiez[] = datos
+    ? datos.asientos.flatMap((a) => {
+      const e = diezDe(a)
+      if (!e || !(a.estado === 'propuesto' || (a.estado === 'validado' && e.reintentar))) return []
+      return [{ id: a.id, concepto: a.concepto, fecha: a.fecha, estado: a.estado, cobro: cobroDe(a.apuntes), estadoDiez: e }]
+    }).sort((x, y) => x.fecha.localeCompare(y.fecha) || x.concepto.localeCompare(y.concepto))
+    : []
+  const propuestosDiez = candidatosDiez.filter((c) => c.estado === 'propuesto').length
   const cambiarFiltro = (f: FiltroDiario) => {
     const p = new URLSearchParams(params)
     if (f === 'todos') p.delete('ver'); else p.set('ver', f)
@@ -183,11 +205,17 @@ export default function LibroDiarioPage() {
           <button type="button" className="cx-boton-sec" onClick={proponer} disabled={proponiendo || !datos?.ejercicio}>
             {proponiendo ? 'Repasando…' : 'Proponer lo pendiente'}
           </button>
+          {candidatosDiez.length > 0 && (
+            <button type="button" className="cx-boton-sec" onClick={() => setEnviarDiez(true)}>
+              Validar y enviar a Diez{propuestosDiez ? ` · ${propuestosDiez}` : ''}
+            </button>
+          )}
           <button type="button" className="cx-boton" onClick={() => navegar(rutaNuevoAsiento())} disabled={!datos?.ejercicio}>+ Nuevo asiento</button>
         </div>
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      {datos?.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo están con Diez las ventas por plataforma: {datos.conDiezError}</p>}
       {datos?.ejercicio && hoyEnMadrid() >= datos.ejercicio.inicio && hoyEnMadrid() <= datos.ejercicio.fin && (
         // Información, no un aviso: el día en curso no se propone hasta su cierre.
         <p className="cx-ayuda cxd-dia-en-curso" role="note">{textoDiaEnCurso(datos.horaCierre)}</p>
@@ -271,7 +299,7 @@ export default function LibroDiarioPage() {
                     </div>
                   )}
                   {lista.map((a) => (
-                    <FilaAsiento key={a.id} a={a} abierto={abierto === a.id} movil={movil}
+                    <FilaAsiento key={a.id} a={a} diez={diezDe(a)} abierto={abierto === a.id} movil={movil}
                       alAbrir={() => (movil ? navegar(rutaAsiento(a.id)) : setAbierto(abierto === a.id ? null : a.id))} />
                   ))}
                 </div>
@@ -296,6 +324,10 @@ export default function LibroDiarioPage() {
           </div>
         </>
       )}
+      {enviarDiez && (
+        <EnviarADiezDialogo candidatos={candidatosDiez} quien={userName} alCerrar={() => { setEnviarDiez(false); recargar() }}
+          alTerminar={(t) => setHecho(`Validar y enviar a Diez: ${t}`)} />
+      )}
       {desbloqueo && datos && activa && (
         <PedirDesbloqueo mes={datos.mes} companyId={activa.id} alCerrar={() => setDesbloqueo(false)}
           alHacer={(t) => { setDesbloqueo(false); setHecho(t); recargar() }} />
@@ -306,7 +338,7 @@ export default function LibroDiarioPage() {
 
 const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
-function FilaAsiento({ a, abierto, movil, alAbrir }: { a: AsientoDiario; abierto: boolean; movil: boolean; alAbrir: () => void }) {
+function FilaAsiento({ a, diez, abierto, movil, alAbrir }: { a: AsientoDiario; diez?: EstadoDiez; abierto: boolean; movil: boolean; alAbrir: () => void }) {
   const e = estadoDe(a)
   const anulado = a.estado === 'anulado'
   return (
@@ -319,6 +351,7 @@ function FilaAsiento({ a, abierto, movil, alAbrir }: { a: AsientoDiario; abierto
           <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
           <span className="cxd-concepto-apoyo">
             {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+            {diez && a.estado !== 'propuesto' && <ChipDiez e={diez} />}
             <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
           </span>
         </span>
