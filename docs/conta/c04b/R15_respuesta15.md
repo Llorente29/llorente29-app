@@ -139,56 +139,160 @@ desechable sembrado en cada e2e, en una cuenta que no use la tanda.
 ## 5 · Producción: la tanda, lista para Julio
 
 `supabase/produccion/aplicar.txt` tiene **solo la `20261021T0100`**. La tanda
-anterior está en el historial y queda copiada en
+anterior (0100–0140) ya está en el historial, y su copia queda en
 `tests/conta/produccion/tanda-ventas-plataforma-20261013.txt`.
 
-- **Analizador con el contexto REAL** (paso 8), medido en producción el 13/10
-  a las 12:29 UTC, en solo lectura: **«sigue»**, sin «autorizo».
-  - La primera versión BLOQUEABA. Quitaba y volvía a poner dos políticas de
-    `storage.objects`, que tiene ficheros de otros buckets, y eso es cambiarlas
-    en caliente.
-  - Ahora las dos políticas, que son nuevas, se crean solo si no están, sin
-    quitar nada.
-- **Lo que cuenta** (`scripts/conta/produccion/cuentas/documentos.sql`),
-  tomado en producción antes de la tanda:
+**Paso 8: el analizador contra el contexto REAL.** La medida se tomó en
+producción, en solo lectura, el **13/10 a las 12:29:26 UTC**, con la consulta
+de contexto del workflow para este fichero y su md5. Salida tal cual:
 
-  | Medida | Antes |
-  |---|---|
-  | bucket conta-documentos | 0 |
-  | ficheros | 0 |
-  | políticas | 0 |
-  | tabla journal_entry_document | no |
-  | documentos | sin tabla |
-  | funciones | 0 |
-  | columnas document_* | 0 |
-  | envíos | 0 |
-  | asientos de ventas | propuesto 50 |
+```
+Análisis de la tanda viva contra el contexto de producción medido 2026-10-13T12:29Z (md5 de los 1 ficheros: los medidos).
+  20261021T0100_conta_documentos.sql: sigue
+  autorizo: (ninguno)
 
-  Si el real se deshace solo, tiene que volver exactamente a esto.
-- **Vuelta atrás:** `supabase/vuelta-atras/20261021T0100_conta_documentos.down.sql`.
-  PARA si ya hay algún documento guardado o algún fichero en el bucket.
+### `supabase/migrations/20261021T0100_conta_documentos.sql` — sigue
+- Crea (nuevo): tabla `public.journal_entry_document`, indice `public.journal_entry_document`, politica `public.journal_entry_document`
+- Altera algo existente (solo añade):
+  - inserta · tabla · `storage.buckets` · insert
+  - crea · politica · `storage.objects` · conta_documentos_select
+  - crea · politica · `storage.objects` · conta_documentos_insert
+  - añade · columna · `public.external_send` · document_id / document_status / document_error / document_attached_at
+  - comenta · comentario · `public.external_send`
+```
+
+El contexto medido: existen `external_send` (0 filas), `storage.buckets` y
+`storage.objects` (1.307 ficheros de otros buckets). No existe ninguna de las
+dos funciones. El historial no tiene nada de este fichero. Nada está en el
+camino del pedido.
+
+**La primera versión BLOQUEABA**, y el paso 8 la paró antes de dar datos.
+Quitaba y volvía a poner dos políticas de `storage.objects`, y eso es
+cambiarlas en caliente sobre una tabla con ficheros. Ahora las dos, que son
+nuevas, se crean solo si no están, sin quitar nada. Una prueba lo deja fijo
+(`analizar.test.ts`: «no quita ni vuelve a poner ninguna política de
+storage.objects»).
+
+**Lo que cuenta la tanda antes y después**
+(`scripts/conta/produccion/cuentas/documentos.sql`). Tomado en producción
+antes de la tanda:
+
+| Medida | Antes |
+|---|---|
+| bucket conta-documentos | 0 |
+| ficheros | 0 |
+| políticas | 0 |
+| tabla journal_entry_document | no |
+| documentos | sin tabla |
+| funciones | 0 |
+| columnas document_* | 0 |
+| envíos | 0 |
+| asientos de ventas | propuesto 50 |
+
+Si el real se deshace solo, tiene que volver exactamente a esto.
+
+**Vuelta atrás:** `supabase/vuelta-atras/20261021T0100_conta_documentos.down.sql`.
+PARA si ya hay algún documento guardado o algún fichero en el bucket.
 
 **Lo que hace Julio:** `aplicar-produccion-conta`, primero **ensayo** y luego
-**real**, con el mismo commit de esta rama. No hace falta «autorizo».
-
-**Ojo, lo que NO publica esta tanda:** el front y la función
-`conta-diez-enviar`.
-- Salen al fusionar a `main`: Vercel publica el front y el workflow despliega
-  la función. Hasta entonces, en producción no se ve ningún botón nuevo.
-- La fusión es otra decisión, y la base tiene que ir **antes**: si no, el Libro
-  pediría `journal_entry_document` y `conta_resumen_ventas`, que no existirían
-  (regla 40).
+**real**, con el último commit de `conta/c04b-diez`. No lleva «autorizo».
 
 ## 6 · Resultados
 
 - **Unitarias de Diez:** 259 de 259. Entre ellas, las 19 del envío y las 6 de
   los estados.
-- **Staging, base:** runs 154, 155 y 156, en verde.
+- **Staging, base:** runs 154, 155 y 156 de `aplicar-staging-conta`, en verde.
+  En cada uno, ensayo con ROLLBACK, real y prueba.
 - **e2e:**
-  - La 183 falló **en móvil**: los botones del pie del diálogo quedaban bajo la
-    barra inferior de Contabilidad. Le pasaba a todos los diálogos en el móvil,
-    y está arreglado en el diálogo común.
-  - La e2e de `1fd69aed` (run 38400777499) está **en verde entera**, ordenador
-    y móvil.
+  - **183** (`019f7648`) y **184** (`5be693ec`): en rojo, las dos por lo mismo
+    y solo en móvil. Los botones del pie del diálogo («Cancelar», «Validar y
+    enviar 2 a Diez») quedaban bajo la barra inferior de Contabilidad.
+  - Le pasaba a todos los diálogos en el móvil. Está arreglado en el diálogo
+    común (`proveedor.css`: el pie deja sitio a la barra).
+  - **185** (`1fd69aed`, run 38400777499): **en verde entera**, ordenador y
+    móvil.
   - Capturas en `docs/conta/capturas/c04b/`.
-- **Antes de subir:** en verde en cada push. El paso 8 dice: `20261021T0100_conta_documentos.sql: sigue`.
+- **Antes de subir:** la lista entera, en verde antes de cada push.
+
+## 7 · Qué hace falta para que «Validar y enviar a Diez» funcione en la app
+
+**Las piezas, y cómo se publica cada una:**
+
+| Pieza | Cómo sale a producción | Hoy |
+|---|---|---|
+| Base (bucket, tabla, funciones, columnas) | La tanda del §5, la lanza Julio | Lista. En producción, nada |
+| Edge function `conta-diez-enviar` | Al fusionar a `main` (`deploy-edge-functions.yml` despliega las carpetas que cambian: solo esta) | Commiteada. Sin desplegar |
+| Front (Libro diario y asiento) | Al fusionar a `main`: Vercel, y vale cuando diga READY | Commiteado. Sin publicar |
+
+**El orden, si Julio decide fusionar:**
+1. **La base primero.** Ensayo y real de la tanda del §5, y su comprobación de
+   después. Sin la base, el Libro pediría `journal_entry_document` y
+   `conta_resumen_ventas`, que no existirían (regla 40). La página no se rompe,
+   porque lo aguanta y lo dice, pero no habría nada que enseñar.
+2. **Después, la fusión de `conta/c04b-diez` a `main`.** Despliega la función
+   y publica el front a la vez: no se pueden separar sin partir la rama. Si
+   salen juntas, la función sin front no la llama nadie. El front sin función
+   diría «No ha llegado a Diez: el envío a Diez aún no está publicado en este
+   entorno».
+3. **Comprobar lo publicado,** no el color del run:
+   - Vercel READY en producción;
+   - la función desplegada con su md5 igual al del fichero;
+   - un GET a la función que conteste 405 (arranca sin escribir nada).
+
+**Lo que lleva la fusión, dicho entero.** No es solo la R15:
+- son 83 commits de todo el C04b (R5 a R15);
+- 16 migraciones, todas ya aplicadas en producción y en su historial;
+- 13 ficheros de `src`;
+- el `_shared` de Diez.
+
+Medido el 13/10:
+- `main` lleva 2 commits que la rama no tiene: el workflow `diez-importar.yml`
+  (#177);
+- la fusión no da conflictos (`git merge-tree`);
+- no toca `App.tsx`, ni `AppContext.tsx`, ni `database.ts`, ni `src/config`.
+
+**Lo que queda apagado aunque se fusione, y por qué:**
+- **No hay conexión de Diez en producción** (`account_connector` sin Diez,
+  medido el 13/10). El envío contesta «No ha llegado a Diez: la conexión con
+  Diez no está configurada para esta empresa» y no habla con Diez. Sí deja una
+  fila en `external_send` (pendiente, 0 intentos, con ese motivo), que es lo
+  que pinta el Libro.
+- **C0008 cerrado en el código.** Aunque se diera de alta la conexión, en
+  C0008 se para antes de abrir el cliente. Abrirlo exige un cambio de código y
+  el «autorizo» de Julio.
+- **Hasta que Cegid active los documentos:** con una conexión que sí pudiera
+  escribir (hoy, solo C0009), el servidor pregunta antes si Diez guarda
+  documentos. Si contesta el 500 del R14, no se da de alta la factura.
+- **Lo que SÍ funciona al fusionar:**
+  - validar un asiento de ventas de una plataforma guarda su PDF en Folvy;
+  - «Ver documento»;
+  - los estados en palabras;
+  - el diálogo con cuántos y cuánto.
+
+Es decir, R15 entero, y Diez sigue a cero. **El freno «sin documento no se
+envía» se queda tal cual.**
+
+## 8 · Trabajo en paralelo: lo compartido que he tocado
+
+Desde hoy hay tres sesiones (A esta, B bancos y C contabilidad sola). Esto es
+lo que he tocado que puede afectar a las otras:
+- **Migraciones:** solo `20261021T0100`, con el prefijo de A. Solo añade. En
+  staging no ha quedado ninguna semilla mía: la prueba va dentro de un ROLLBACK
+  y sus ventas se llaman `R15-…`.
+- **`supabase/config.toml`:** una entrada nueva, `[functions.conta-diez-enviar]`
+  con `verify_jwt = true`.
+- **`src/modules/conta/estilo/proveedor.css`:** el diálogo común, en el móvil,
+  deja sitio a la barra inferior (§6). Afecta a todos los diálogos de
+  Contabilidad en el móvil, para bien.
+- **`tests/conta/produccion/analizar.test.ts` y `w01.test.ts`:** la tanda de
+  ventas por plataforma pasa a su copia congelada, y hay pruebas nuevas para la
+  tanda viva. No he tocado `antes-de-subir.sh`, ni el analizador, ni ningún
+  workflow, ni `database.ts`, ni el menú.
+- **El importador de Diez:** no lo he tocado (`diezImportar.ts` igual). En
+  `_shared/diezAnalitica.ts` he **añadido** `correspondenciaDeEmpresa`, la
+  correspondencia por id de empresa, con solo Foodint, que el importador no
+  usa. `CORRESPONDENCIA_LLORENTE29` sigue igual, así que lo de Foodint da
+  exactamente lo mismo. Para C: si generaliza el importador por empresa, ese
+  mapa es el sitio natural para la segunda.
+- **`_shared/resumenVentasPdf.ts`:** `numeroFactura` admite `null` (con
+  `asiento`). Los que lo llamaban siguen igual.
