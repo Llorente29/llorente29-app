@@ -16,6 +16,11 @@ name: Diez · factura de prueba en C0009 (C04b)
 # en la C0009 las subcuentas que Diez no tiene (47700010 y las tres 708 nuevas),
 # con el mismo código y nombre que en Folvy, y las lee de vuelta
 # (scripts/conta/diez/prueba-c0009-subcuentas.ts).
+#
+# C04b R13: con «[prueba-c0009:emitida-molde]», SOLO LEE: cómo guarda Diez en la
+# C0009 una factura emitida de Uber de la serie 1, el molde de lo que enviará
+# Folvy (scripts/conta/diez/prueba-c0009-emitida-molde.ts). Una etiqueta
+# «[prueba-c0009:…]» desconocida para sin hacer nada.
 
 on:
   push:
@@ -31,7 +36,7 @@ permissions:
 
 jobs:
   prueba:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[prueba-c0009]') || startsWith(github.event.head_commit.message, '[prueba-c0009:subcuentas]')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[prueba-c0009]') || startsWith(github.event.head_commit.message, '[prueba-c0009:')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -54,6 +59,9 @@ jobs:
           set -euo pipefail
           case "$MENSAJE" in
             '[prueba-c0009:subcuentas]'*) S=scripts/conta/diez/prueba-c0009-subcuentas.ts ;;
+            # R13: la factura emitida de molde, solo lectura (escribir: false).
+            '[prueba-c0009:emitida-molde]'*) S=scripts/conta/diez/prueba-c0009-emitida-molde.ts ;;
+            '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac
           npx --yes tsx@4.19.2 "$S" | tee prueba.md
