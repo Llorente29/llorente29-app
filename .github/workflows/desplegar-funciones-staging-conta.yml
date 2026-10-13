@@ -95,11 +95,14 @@ jobs:
           MAL=0
           for f in $FUNCIONES; do
             rm -rf /tmp/bajada && mkdir -p /tmp/bajada && cd /tmp/bajada
-            supabase functions download "$f" --project-ref "$REF" >/dev/null 2>&1 || { echo "::error::No se pudo leer de vuelta $f."; exit 1; }
+            supabase functions download "$f" --project-ref "$REF" > /tmp/bajada.log 2>&1 || { cat /tmp/bajada.log; echo "::error::No se pudo leer de vuelta $f."; exit 1; }
+            find /tmp/bajada -type f | sed 's/^/  bajado: /' | head -20
             cd "$GITHUB_WORKSPACE"
             for local in supabase/functions/$f/*.ts; do
               nombre=$(basename "$local")
-              bajado=$(find /tmp/bajada -path "*functions/$f/$nombre" | head -1)
+              # El CLI deja lo bajado donde le parece (supabase/functions/…, functions/…):
+              # se busca por nombre dentro de la carpeta de la función, esté donde esté.
+              bajado=$(find /tmp/bajada "$HOME" -type f -name "$nombre" -path "*/$f/*" -newer "$GITHUB_WORKSPACE/supabase/staging/funciones.txt" 2>/dev/null | head -1)
               a=$(md5sum "$local" | cut -c1-32)
               b=$([ -n "$bajado" ] && md5sum "$bajado" | cut -c1-32 || echo "—")
               echo "| \`$f\` | $nombre | $a | $b |" >> "$GITHUB_STEP_SUMMARY"
