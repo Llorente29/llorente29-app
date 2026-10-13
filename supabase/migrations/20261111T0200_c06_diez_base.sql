@@ -119,7 +119,8 @@ drop trigger if exists conta_diez_base_guarda on public.conta_diez_base;
 create trigger conta_diez_base_guarda before insert or update on public.conta_diez_base
   for each row execute function public.conta_diez_base_guarda();
 drop trigger if exists conta_diez_base_apuntar on public.conta_diez_base;
-create trigger conta_diez_base_apuntar after insert or update or delete on public.conta_diez_base
+-- Solo cuando cambia la BASE: lo último usado (ultimo_*) no es un cambio que apuntar.
+create trigger conta_diez_base_apuntar after insert or update of nombre_bd or delete on public.conta_diez_base
   for each row execute function public.conta_diez_base_apuntar();
 
 -- Leer: los miembros de la cuenta. Escribir: nadie desde la app.

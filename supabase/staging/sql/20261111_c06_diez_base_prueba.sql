@@ -141,6 +141,12 @@ begin
   end if;
   r := public.conta_diez_preparar_corte('c0600000-0000-4000-8000-0000000000e2', date '2025-06-30', 'Folvy (prueba)');
   if (r ->> 'cambia')::boolean then raise exception '7: repetirlo cambió algo (%).', r; end if;
+  if (select count(*) from public.conta_diez_base_registro where company_id = 'c0600000-0000-4000-8000-0000000000e2') <> 2 then
+    raise exception '7: recordar el corte ha apuntado un cambio de base en el registro.';
+  end if;
+  if (select ultimo_corte from public.conta_diez_base where company_id = 'c0600000-0000-4000-8000-0000000000e2') <> date '2025-06-30' then
+    raise exception '7: el corte preparado no queda como lo último usado.';
+  end if;
   insert into public.fiscal_year (account_id, company_id, code, starts_on, ends_on, status, origin)
   values ('c0600000-0000-4000-8000-0000000000e5', 'c0600000-0000-4000-8000-0000000000e6', '2026', date '2026-01-01', date '2026-12-31', 'open', 'folvy');
   r := public.conta_diez_preparar_corte('c0600000-0000-4000-8000-0000000000e6', date '2026-03-31', 'Folvy (prueba)');
