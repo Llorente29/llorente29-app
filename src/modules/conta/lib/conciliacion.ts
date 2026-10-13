@@ -224,12 +224,16 @@ function decidirCon(m: Movimiento, ctx: Contexto, g: Gastado): Decision {
   const digitos = digitosTarjeta(`${m.concepto} ${m.referencias.join(' ')}`)
   const t = delBanco.find((x) => digitos.includes(x.ultimos4))
   if (!t) {
-    if (!digitos.length || !delBanco.length) return decidirSin(m, ctx, g)
-    // Hay tarjetas en esta cuenta y esta no es ninguna: ¿de quién es?
+    // Una tarjeta que no está dada de alta pregunta SIEMPRE de quién es, tenga o
+    // no la cuenta otras (respuesta 3; la e2e del 13/10 lo cazó en una cuenta sin
+    // ninguna). Un año suelto no es una tarjeta.
+    const ultimos = digitos.find((x) => !/^(19|20)\d\d$/.test(x))
+    if (!ultimos) return decidirSin(m, ctx, g)
     const d = decidirSin(m, ctx, g)
-    const ultimos = digitos.find((x) => !/^(19|20)\d\d$/.test(x)) ?? digitos[0]
-    return { ...d, confianza: 'duda', falta: 'de quién es la tarjeta', que: `Tarjeta acabada en ${ultimos}`,
-      porque: `Por aclarar: tarjeta acabada en ${ultimos}, ¿de quién es? Dala de alta en Cuentas y extractos y sabré a quién pedirle el ticket.` }
+    const pregunta = `tarjeta acabada en ${ultimos}, ¿de quién es? Dala de alta en Cuentas y extractos y sabré a quién pedirle el ticket.`
+    // Si ya sabía a qué va (lo aprendido, una regla), lo sigue proponiendo y además pregunta de quién es.
+    if (d.confianza !== 'duda') return { ...d, porque: `${d.porque} Y la ${pregunta}` }
+    return { ...d, confianza: 'duda', falta: 'de quién es la tarjeta', que: `Tarjeta acabada en ${ultimos}`, porque: `Por aclarar: ${pregunta}` }
   }
   const d = decidirSin(m, ctx, g, t)
   const destino = d.destino && d.destino.tipo !== 'asiento' && d.destino.tipo !== 'traspaso' && t.localId ? { ...d.destino, local_id: t.localId } : d.destino
