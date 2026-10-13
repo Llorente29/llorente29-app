@@ -35,9 +35,9 @@ do $$
 declare emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; v_prev jsonb;
 begin
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, keywords, kind, status, is_common, source, created_by_name)
-  select account_id, company_id, plan, x.code, template_code, x.name, x.name, keywords, kind, status, is_common, source, 'prueba B01'
-    from public.company_account, (values ('57200902', 'Bancos · Cuenta Norte (prueba B)'), ('57200903', 'Bancos · Cuenta Sur (prueba B)')) as x(code, name)
-   where company_id = emp and code = '57200001';
+  select ca.account_id, ca.company_id, ca.plan, x.code, ca.template_code, x.name, x.name, ca.keywords, ca.kind, ca.status, ca.is_common, ca.source, 'prueba B01'
+    from public.company_account ca, (values ('57200902', 'Bancos · Cuenta Norte (prueba B)'), ('57200903', 'Bancos · Cuenta Sur (prueba B)')) as x(code, name)
+   where ca.company_id = emp and ca.code = '57200001';
   if (select count(*) from public.company_account where company_id = emp and code in ('57200902', '57200903')) <> 2 then
     raise exception 'PRUEBA B01 · 0: no se sembraron las dos cuentas 572.';
   end if;

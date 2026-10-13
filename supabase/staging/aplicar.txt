@@ -6,9 +6,9 @@
 #   0100: las tablas, con su lectura por cuenta (RLS).
 #   0110: las funciones (importar, casar, deshacer, reglas…).
 #   0120: los ajustes de Foodint: aquí no está, no hace nada y lo dice.
+#   Run 157 (24d011f): las tres APLICADAS; la prueba falló en su siembra
+#   («code» ambiguo, error de la prueba, no de la base) y se revirtió.
+#   Ahora solo la prueba.
 #   La prueba: 13 pasos como el administrador de A (y la RLS como B), todo en
 #   una transacción con ROLLBACK.
-supabase/migrations/20261101T0100_b01_bancos.sql
-supabase/migrations/20261101T0110_b01_funciones.sql
-supabase/migrations/20261101T0120_b01_foodint.sql
 supabase/staging/sql/20261101_b01_bancos_prueba.sql
