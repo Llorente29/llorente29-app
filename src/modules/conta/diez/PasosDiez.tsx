@@ -37,7 +37,7 @@ export function PasosDiez({ accountId, companyId, quien, estado, recargar }: {
     const b = p.boton
     if (!b) return null
     if (b.tipo === 'subcuentaBanco') return <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void crearSubcuenta()}>{b.texto}</button>
-    const a = b.a === 'alta' ? rutaAltaEmpresa() : b.a === 'plan' ? rutaAjustes('plan') : rutaTablasGenerales('bancos-y-cajas')
+    const a = b.a === 'alta' ? rutaAltaEmpresa() : b.a === 'plan' ? `${rutaAjustes('plan')}?empezar=de-cero` : rutaTablasGenerales('bancos-y-cajas')
     return <Link className="cx-boton" to={a}>{b.texto}</Link>
   }
 

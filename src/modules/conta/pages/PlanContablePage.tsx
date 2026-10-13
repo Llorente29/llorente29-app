@@ -386,7 +386,9 @@ function Contenido() {
   const [panel, setPanel] = useState<{ id: string; modo: Modo } | null>(null)
   const [anadiendo, setAnadiendo] = useState(false)
   // C02c: «No, empiezo de cero» (la activación normal) en vez de traer el plan; y lo que se ha traído o deshecho, en una frase.
-  const [deCero, setDeCero] = useState(false)
+  // C06: «Traer tu contabilidad de Diez» llega con ?empezar=de-cero: lo de Diez lo
+  // trae la marca en su paso; aquí solo se activa el plan del BOE.
+  const [deCero, setDeCero] = useState(() => params.get('empezar') === 'de-cero')
   const [aviso, setAviso] = useState<string | null>(null)
   const accion = useHacer(plan.recargar)
   const p = plan.datos

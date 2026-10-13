@@ -68,7 +68,7 @@ export function pasosDiez(l: ListoDiez, marca: string, bancosSinSubcuenta: numbe
       return { ...base, estado: 'falta' as const, texto: 'Falta terminar el alta: el nombre, el NIF y lo poco que te pregunto.', boton: { tipo: 'ir', texto: 'Terminar el alta', a: 'alta' } }
     }
     if (clave === 'plan') {
-      return { ...base, estado: 'falta' as const, texto: 'Falta activar tu plan contable: es la lista de cuentas donde se apunta todo.', boton: { tipo: 'ir', texto: 'Activar el plan', a: 'plan' } }
+      return { ...base, estado: 'falta' as const, texto: 'Falta activar tu plan contable: es la lista de cuentas donde se apunta todo. Tus subcuentas de Diez llegan después, con el paso 4.', boton: { tipo: 'ir', texto: 'Activar el plan', a: 'plan' } }
     }
     return bancosSinSubcuenta > 0
       ? { ...base, estado: 'falta' as const, texto: `Tu banco está dado de alta, pero aún no tiene su cuenta en el plan (la 572).`, boton: { tipo: 'subcuentaBanco', texto: 'Crear su cuenta en el plan' } }

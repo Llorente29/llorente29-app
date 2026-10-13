@@ -166,10 +166,15 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
   await page.getByRole('button', { name: 'Activar cuenta' }).click()
   const tras = await Promise.race([
     page.waitForURL(/\/conta\//, { timeout: 30_000 }).then(() => 'dentro' as const),
-    page.getByText(/^Activación completada/).waitFor({ timeout: 30_000 }).then(() => 'aviso' as const),
+    page.getByText(/^Activación (completada|guardada)|no se pudo abrir tu cuenta/).first().waitFor({ timeout: 30_000 }).then(() => 'aviso' as const),
   ]).catch(() => 'nada' as const)
-  expect(tras, 'tras «Activar cuenta», o abre su contabilidad o dice qué ha pasado').not.toBe('nada')
-  if (tras === 'aviso') apuntar(`Bienvenida: contraseña puesta; check-account-status no abre la cuenta en staging (sin hook): «${(await page.getByText(/^Activación completada/).textContent())?.trim()}».`)
+  if (tras === 'nada') {
+    // Lo que se ve, para saber qué pasó (los informes de Playwright no siempre se pueden bajar).
+    const visto = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 500)
+    throw new Error(`Tras «Activar cuenta», ni abre su contabilidad ni dice qué ha pasado. URL ${page.url()} · «${visto}»`)
+  }
+  if (tras === 'dentro') apuntar(`Bienvenida: «Activar cuenta» abre su contabilidad (${page.url().replace(baseURL!, '')}).`)
+  if (tras === 'aviso') apuntar(`Bienvenida: contraseña puesta; check-account-status no abre la cuenta en staging (sin hook): «${(await page.getByText(/^Activación (completada|guardada)|no se pudo abrir tu cuenta/).first().textContent())?.trim()}».`)
   await sinFolvy(page, 'la bienvenida hecha')
   // Su contraseña es la que puso: se comprueba en la base, no en la pantalla.
   const suya = await fetch(`${STAGING_URL}/auth/v1/token?grant_type=password`, {
@@ -197,7 +202,11 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
     page.waitForURL(/\/conta\/(inicio|alta)/, { timeout: 30_000 }).then(() => 'dentro' as const),
     page.getByRole('alert').waitFor({ timeout: 30_000 }).then(() => 'aviso' as const),
   ]).catch(() => 'nada' as const)
-  expect(entrada, 'al pulsar «Entrar», o entra o dice por qué no').not.toBe('nada')
+  if (entrada === 'nada') {
+    const visto = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 500)
+    throw new Error(`Al pulsar «Entrar», ni entra ni dice por qué no. URL ${page.url()} · «${visto}»`)
+  }
+  apuntar(entrada === 'dentro' ? 'Entrada N18: entra y abre su contabilidad (check-account-status contesta en staging).' : 'Entrada N18: aviso (ver arriba).')
   let s: Sesion
   if (entrada === 'aviso') {
     const aviso = (await page.getByRole('alert').textContent())?.trim() ?? ''
@@ -260,6 +269,8 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
   if (await paso(2).getByRole('link', { name: 'Activar el plan' }).count()) {
     apuntar('Tras el alta, el plan aún no estaba activado: se activa desde el botón de la tarjeta.')
     await paso(2).getByRole('link', { name: 'Activar el plan' }).click()
+    // Llega directo a activar (no a «¿Vienes de otro programa?»: lo de Diez llega en el paso 4).
+    await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Activar el plan' }).click()
     await expect(page.getByText(/^Plan activado: /)).toBeVisible({ timeout: 30_000 })
     await sinFolvy(page, 'el plan activado')
