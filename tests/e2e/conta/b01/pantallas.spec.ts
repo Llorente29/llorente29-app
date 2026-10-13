@@ -34,7 +34,10 @@ async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
-  expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+  // Nada flotante tapa contenido (respuesta 4). En el ordenador Bancos no tiene
+  // ninguna pieza flotante (sin la barra de «Muy pronto»): se comprueba que no esté.
+  if (await page.locator(FLOTANTES_CONTA.join(', ')).count() === 0) expect(lado(page)).toBe('ordenador')
+  else expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 }
 
 function vigilar(page: Page) {

@@ -232,12 +232,6 @@ jobs:
           if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso-libro.md
           else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso-libro.md; fi
 
-      - name: Resultado del libro
-        if: steps.libro.outcome == 'failure'
-        run: |
-          echo "::error::El libro diario tiene algo en rojo: ver el informe del resumen."
-          exit 1
-
       # B01 · Agente «Conciliación» (cada noche, solo lectura): nada casado dos
       # veces, ningún asiento de banco sin movimiento, meses cerrados que siguen
       # cuadrando, reglas con su registro, extractos que cuadran, permisos del
@@ -279,6 +273,12 @@ jobs:
         if: steps.conciliacion.outcome == 'failure'
         run: |
           echo "::error::La conciliación tiene algo en rojo: ver el informe del resumen."
+          exit 1
+
+      - name: Resultado del libro
+        if: steps.libro.outcome == 'failure'
+        run: |
+          echo "::error::El libro diario tiene algo en rojo: ver el informe del resumen."
           exit 1
 
       - name: Resultado

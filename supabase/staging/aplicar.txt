@@ -1,7 +1,7 @@
-# B01 · respuesta 4 y tarea 6 (conta/b01-bancos, 13/10). Frente B.
-# Aplicadas antes (run 38476832698, verde): 0110 y 0150, la semilla B01 con su
-# apertura, y las tres pruebas (bancos 13 de 13, tarjetas 7 de 7, respuesta 4
-# y tarea 6 7 de 7).
-# Ahora: 0160, lo que lee el agente «Conciliación» de cada noche. En staging no
-# existe conta_lectura: no hace nada y lo dice (en producción da los SELECT).
-supabase/migrations/20261101T0160_b01_lectura_agente.sql
+# B01 · arreglo (13/10, 23:00): la semilla B01 otra vez, para que sus tres
+# asientos de apertura lleven la fecha de creación del 30/09. Recién creados
+# desplazaban «Asenté «Ventas del día · Norte Centro»» de «Lo que he hecho yo»
+# (las 5 últimas) y rompían la e2e del libro diario del C04 (en esta rama y en
+# conta/d01-recibidas, run 38476695805). Solo toca esas tres filas, que son
+# de la semilla B01; propuestas y sin huella encadenada.
+supabase/seeds/conta/seed_b01_staging.sql

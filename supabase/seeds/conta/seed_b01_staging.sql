@@ -103,6 +103,13 @@ begin
                         jsonb_build_object('cuenta', '10000000', 'debe', 0, 'haber', r.saldo, 'comun', true)),
       '{}', 'Semilla B01', null);
   end loop;
+  -- Con la fecha de creación de su día (30/09), no la de hoy: «Lo que he hecho yo»
+  -- del libro diario enseña las 5 últimas cosas, y tres aperturas recién creadas
+  -- desplazaban lo que miran las e2e del C04 (lo cazó su e2e el 13/10, por mí).
+  update public.journal_entry set created_at = timestamptz '2026-09-30 08:00:00+02'
+   where company_id = a_empresa and source_type = 'opening' and status = 'propuesto'
+     and source_id in ('b0100000-0000-4000-8000-0000000000b1', 'b0100000-0000-4000-8000-0000000000b2', 'b0100000-0000-4000-8000-0000000000b3')
+     and created_at > timestamptz '2026-09-30 08:00:00+02';
 
   raise notice 'Semilla B01: tres bancos (57200911–13), Suministros B01 del Norte con B01-0477 y B01-0478, y la liquidación B01-LIQ-0107 (3.412,18); nombre corto y apertura a 30/09.';
 end $$;

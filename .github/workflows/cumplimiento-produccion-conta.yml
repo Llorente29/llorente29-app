@@ -233,12 +233,6 @@ jobs:
           path: /tmp/informe-libro.md
           if-no-files-found: warn
 
-      - name: Resultado del libro
-        if: steps.libro.outcome == 'failure'
-        run: |
-          echo "::error::El libro diario tiene algo en rojo: ver el informe del resumen."
-          exit 1
-
       # B01 · Agente «Conciliación» (solo lectura, rol conta_lectura: 20261101T0160).
       - name: Conciliación (solo lectura)
         id: conciliacion
@@ -276,6 +270,12 @@ jobs:
         if: steps.conciliacion.outcome == 'failure'
         run: |
           echo "::error::La conciliación tiene algo en rojo: ver el informe del resumen."
+          exit 1
+
+      - name: Resultado del libro
+        if: steps.libro.outcome == 'failure'
+        run: |
+          echo "::error::El libro diario tiene algo en rojo: ver el informe del resumen."
           exit 1
 
       - name: Resultado
