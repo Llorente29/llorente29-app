@@ -5,7 +5,7 @@
 -- unit_key nulo) que siguen «propuesto», en las empresas que usan la regla
 -- por plataforma (Foodint desde la 0120), se retiran: se borra el asiento (sus
 -- líneas van con él) y su resumen, y queda copia de los dos en
--- _retirado_ventas_por_plataforma. Ni validados ni borradores: esos no se
+-- _copia_ventas_dia_entero. Ni validados ni borradores: esos no se
 -- tocan nunca, y si alguno de los elegidos no es «propuesto» sin número, PARA.
 --
 -- SIN HUECO (R9, Julio, 13/10): en la MISMA transacción se retira, se
@@ -30,12 +30,19 @@
 -- En producción el 13/10 son 24 (del 01/10 al 12/10, Alcalá y Carabanchel).
 -- La migración no los nombra: los encuentra por la regla, y el parte dice
 -- cuántos fueron, cuántos asientos por unidad salen y el cobro de cada día.
+-- LA COPIA VA EN UNA TABLA PROPIA, _copia_ventas_dia_entero (R11, 13/10). La
+-- de la primera versión, _retirado_ventas_por_plataforma, existe ya en
+-- producción: la creó el real de las 07:52 y su vuelta atrás la dejó, a
+-- propósito, con los 24 retirados de entonces. Esta 0130 no la toca: es el
+-- rastro de aquel real. Con la misma tabla, todo lo que creaba este fichero ya
+-- existía sin historial y el analizador lo paraba («parece aplicado»), con
+-- razón.
 -- Borra datos: pide «autorizo».
 -- Vuelta atrás: supabase/vuelta-atras/20261020T0130_ventas_por_plataforma_rehacer.down.sql
 -- (devuelve los asientos de antes desde la copia, sin esperar al cierre).
 -- ============================================================================
 
-create table if not exists public._retirado_ventas_por_plataforma (
+create table if not exists public._copia_ventas_dia_entero (
   entry_id     uuid primary key,
   company_id   uuid not null,
   location_id  uuid,
@@ -46,8 +53,8 @@ create table if not exists public._retirado_ventas_por_plataforma (
   lineas       jsonb not null,
   retirado_at  timestamptz not null default now()
 );
-alter table public._retirado_ventas_por_plataforma enable row level security;
-revoke all on table public._retirado_ventas_por_plataforma from anon, authenticated;
+alter table public._copia_ventas_dia_entero enable row level security;
+revoke all on table public._copia_ventas_dia_entero from anon, authenticated;
 
 -- La selección, en una función de solo lectura: la usan esta migración y la
 -- prueba de staging, para que lo que se prueba sea lo que se aplica.
@@ -109,7 +116,7 @@ begin
     left join public.company_account a on a.id = l.company_account_id
    group by 1, 2, 3;
 
-  insert into public._retirado_ventas_por_plataforma (entry_id, company_id, location_id, sales_day, created_at, asiento, resumen, lineas)
+  insert into public._copia_ventas_dia_entero (entry_id, company_id, location_id, sales_day, created_at, asiento, resumen, lineas)
   select r.id, r.company_id, r.location_id, r.sales_day, r.created_at,
          (select to_jsonb(e) from public.journal_entry e where e.id = r.id),
          (select to_jsonb(d) from public.sales_day_summary d where d.id = r.summary_id),

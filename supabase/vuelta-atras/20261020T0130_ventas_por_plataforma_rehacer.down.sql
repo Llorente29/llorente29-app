@@ -1,5 +1,5 @@
 -- Vuelta atrás de 20261020T0130. DEVUELVE los asientos del día entero desde su
--- copia (_retirado_ventas_por_plataforma), sin esperar al cierre del día
+-- copia (_copia_ventas_dia_entero), sin esperar al cierre del día
 -- (R9, Julio, 13/10: «que no dependa del cierre»):
 --   1. Retira los PROPUESTOS por unidad (ni validados ni borradores: si hay
 --      alguno, PARA) para que la vuelta atrás de la 0120 y la 0110 puedan
@@ -24,14 +24,14 @@ begin
   delete from public.journal_entry e using public.sales_day_summary d where d.entry_id = e.id and d.unit_key is not null;
   delete from public.sales_day_summary where unit_key is not null;
 
-  if to_regclass('public._retirado_ventas_por_plataforma') is null then
+  if to_regclass('public._copia_ventas_dia_entero') is null then
     raise notice 'Vuelta atrás de la 0130: no hay copia de retirados; no hay nada que devolver.';
     return;
   end if;
 
   create temp table _a_devolver on commit drop as
   select distinct on (x.company_id, x.location_id, x.sales_day) x.*
-    from public._retirado_ventas_por_plataforma x
+    from public._copia_ventas_dia_entero x
    order by x.company_id, x.location_id, x.sales_day, x.retirado_at desc;
   delete from _a_devolver r
    where exists (select 1 from public.journal_entry e where e.id = r.entry_id)

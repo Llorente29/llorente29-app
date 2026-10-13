@@ -383,3 +383,23 @@ describe('R9 · la tanda de producción en staging (real-con-fallo y real)', () 
     expect(sh).toContain('[ "$rc" -eq 0 ] || ok=0')
   })
 })
+
+describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
+  const correr = (fixture?: string) => {
+    try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
+    catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
+  }
+  it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
+    const r = correr()
+    expect(r.rc).toBe(0)
+    expect(r.out).toContain('autorizo: 20261020T0110_ventas_por_plataforma_indice.sql 20261020T0130_ventas_por_plataforma_rehacer.sql')
+  })
+  it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
+    const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+    m.tanda['supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql'] = '00000000000000000000000000000000'
+    const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
+    const r = correr(f)
+    expect(r.rc).toBe(1)
+    expect(r.out).toContain('20261020T0130_ventas_por_plataforma_rehacer.sql ha cambiado desde la medida')
+  })
+})

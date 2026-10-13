@@ -30,8 +30,32 @@ que cambia desde este commit:
 | 2 | `20261020T0105_ventas_por_plataforma_permiso.sql` | `conta_unidad_ventas` de quien llama y con permiso para authenticated (sin ella, el Libro diario no abre) | sigue |
 | 3 | `20261020T0110_ventas_por_plataforma_indice.sql` | el índice único del resumen, por unidad | **AUTORIZO** |
 | 4 | `20261020T0120_ventas_por_plataforma_foodint.sql` | Foodint: todas las plataformas por local, también Glovo (R10); las 18 subcuentas de marca; 70800003, 70800007 y 70800008 | sigue |
-| 5 | `20261020T0130_ventas_por_plataforma_rehacer.sql` | retira los asientos del día entero propuestos (24 el 13/10), con copia, los propone por unidad y comprueba cada día (sus unidades y el mismo cobro, al céntimo), todo en la misma transacción | **AUTORIZO** |
+| 5 | `20261020T0130_ventas_por_plataforma_rehacer.sql` | retira los asientos del día entero propuestos (24 el 13/10), con copia en `_copia_ventas_dia_entero`, los propone por unidad y comprueba cada día (sus unidades y el mismo cobro, al céntimo), todo en la misma transacción | **AUTORIZO** |
 | 6 | `20261020T0140_libro_lectura_registro.sql` | `conta_lectura` lee el registro del cierre del día (el agente) | sigue |
+
+## El análisis, contra el contexto REAL de producción (R11)
+
+Medido el 13/10 a las 09:43 UTC, en solo lectura, con la consulta de contexto
+del workflow, para estos mismos ficheros (sus md5 en
+`tests/conta/produccion/contexto-produccion-tanda-viva.json`). Lo saca
+`node scripts/conta/produccion/analisis-tanda-viva.mjs --informe`, paso 8 de
+antes de subir:
+
+```
+Análisis de la tanda viva contra el contexto de producción medido 2026-10-13T09:43Z (md5 de los 6 ficheros: los medidos).
+  20261020T0100_ventas_por_plataforma.sql: sigue
+  20261020T0105_ventas_por_plataforma_permiso.sql: sigue
+  20261020T0110_ventas_por_plataforma_indice.sql: AUTORIZO
+  20261020T0120_ventas_por_plataforma_foodint.sql: sigue
+  20261020T0130_ventas_por_plataforma_rehacer.sql: AUTORIZO
+  20261020T0140_libro_lectura_registro.sql: sigue
+  autorizo: 20261020T0110_ventas_por_plataforma_indice.sql 20261020T0130_ventas_por_plataforma_rehacer.sql
+```
+
+El ensayo #57 (fe7f0883) lo paró este análisis: su 0130 creaba solo
+`_retirado_ventas_por_plataforma`, que ya existía (la dejó el real de las
+07:52), y la regla «parece aplicado» bloquea. Ahora la copia va en
+`_copia_ventas_dia_entero`, nueva; la de las 07:52 se queda como rastro.
 
 ## Lanzamiento 1 · ENSAYO
 
@@ -111,7 +135,7 @@ El Libro de producción es todavía el de antes:
 ## Comprobación (Claude, solo leyendo), después del real
 
 - los asientos del día entero retirados, con su copia en
-  `_retirado_ventas_por_plataforma`;
+  `_copia_ventas_dia_entero`;
 - los propuestos por unidad: cuántos, que ninguno descuadra y que el cobro de
   cada día es el de antes, al céntimo;
 - que la pasada de las 02:07 propone las unidades del día sin duplicar.

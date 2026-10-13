@@ -663,7 +663,11 @@ describe('la tanda de AHORA (manifiesto vivo): la regla de ventas por plataforma
   // (las dos del camino del pedido: sales_.*) y las cuatro funciones que
   // cambian; nada en el historial. (sales_day_proposal_log, añadida a mano
   // con lo medido al sumar la 0140: existe y tiene 13 filas.)
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-ventas-plataforma-20261013.json', 'utf8'))
+  // R11: el contexto REAL medido para estos mismos ficheros (con sus md5), no
+  // el del 13/10 de la R7. El de la R7 no tenía la copia que dejó el real de
+  // las 07:52, y con él la 0130 de fe7f0883 salía «autorizo»; con el real,
+  // BLOQUEA (abajo).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -701,6 +705,16 @@ describe('la tanda de AHORA (manifiesto vivo): la regla de ventas por plataforma
     expect(i('delete from public.journal_entry e using _a_rehacer')).toBeGreaterThan(0)
     expect(i('public.conta_proponer_dias(v_emp.company_id, now())')).toBeGreaterThan(i('delete from public.journal_entry e using _a_rehacer'))
     expect(i("no todos los días retirados quedan asentados por unidad con el mismo cobro")).toBeGreaterThan(i('public.conta_proponer_dias(v_emp.company_id, now())'))
+  })
+  it('R11: la 0130 de fe7f0883 contra el contexto del ensayo #57 BLOQUEA por «parece aplicado» (su copia ya existía)', () => {
+    const vieja = 'tests/conta/produccion/r11/20261020T0130_ventas_por_plataforma_rehacer.sql'
+    const ctx57 = JSON.parse(readFileSync('tests/conta/produccion/r11/contexto-produccion-ensayo57.json', 'utf8'))
+    const r57 = informe([vieja], ctx57, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+    expect(r57.ficheros[vieja]).toBe('bloquea')
+    expect(r57.markdown).toContain('todo lo que crea ya existe en producción, y no está en el historial')
+    // La de ahora, contra ese mismo contexto: su copia es nueva, y pide «autorizo» por los delete.
+    const r = informe([viva[4]], ctx57, {}, leer) as { ficheros: Record<string, string> }
+    expect(r.ficheros[viva[4]]).toBe('autorizo')
   })
   it('su vuelta atrás son sus seis .down.sql, al revés, y existen', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
