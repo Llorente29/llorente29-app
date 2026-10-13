@@ -204,14 +204,31 @@ a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
 ## 8 · Coordinación
 
 - **Para C:**
-  1. **¿Qué fichero es la ruta de la ficha del proveedor?** No la toco.
-  2. **El contenido que es mío ya está en la base:** 0290 devuelve el contacto
-     de «Facturación» y «Sus facturas se apuntan en» con su origen. N23 lo
-     enseña.
-  3. **Lo que entra en tu ficha cuando me digas dónde:**
-     - el contacto de «Facturación»;
-     - «Sus facturas se apuntan en», con su origen;
-     - la extensión de Cocina, solo si se usa.
+  1. **La ficha del proveedor (R3 punto 5).**
+     - **La ruta es tuya** (`module.tsx` y `navegacion.ts`): para la ficha no
+       los he tocado. Lo de esos dos ficheros es solo la ruta y la línea del
+       menú de «Documentos», ya dichas desde la R2.
+     - **Lo mío va en la ficha:**
+       - «Sus facturas se apuntan en» dice de dónde sale. Si se aceptó lo
+         aprendido, «aprendido de Diez» o «aprendido de tus facturas». Sin
+         nada puesto, lo aprendido como propuesta «sin confirmar».
+       - Sale en la pestaña Contabilidad (`SusCuentas` → `cuentasProveedor.ts`,
+         con dos pruebas nuevas) y en la línea del móvil
+         (`FichaProveedorPage.tsx`).
+       - El papel `billing` se llama «Facturación» (`types.ts`). El contacto
+         que guarda «Pedírselas» salía en «Con quién hablas» sin nombre de
+         papel.
+     - **Lo que espera a la C06, que aún no está en main ni tiene PR:**
+       - `useCuentaConta().soloContabilidad` y `direccionDeFacturas` de
+         `marcas.ts` no existen en esta rama.
+       - Mientras, «solo contabilidad» sale de mi puente
+         (`documentos/producto.ts`, la misma columna `product_brand` que lee
+         C). Al fusionar la C06 se cambia en una línea por lo tuyo.
+       - **El correo de entrada no se enseña** hasta que exista
+         `direccionDeFacturas`: no lo calculo por otro lado, porque dos
+         fuentes de la misma dirección acaban diciendo cosas distintas.
+     - **La extensión de Cocina:** la ficha ya solo la pinta si Cocina la
+       monta. No he cambiado nada ahí.
   4. `diez-lectura` y los `sqlerrm` de `importar.sql` sacan texto (sección 1).
   5. **El cerrojo de las e2e (rama `conta/e2e-usuarios-por-frente`) no ve
      nunca que lo ha cogido.** Esto bloquea todas las e2e en cuanto se
@@ -234,7 +251,9 @@ a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
   - **Desde entonces, sin lanzarlas:** empujo con `[skip ci]`, aplico staging
     a mano y espero a que no haya ninguna e2e en marcha (comprobado por la
     API) antes de lanzar la mía.
-  - **Cuando entre la rama de usuarios por frente,** me traigo main.
+  - **Cuando entre la rama de usuarios por frente,** me traigo main. **Hecho
+    (R3):** main con el #179 está en esta rama (f8891167). La rama
+    `conta/d01-*` es el frente A, con sus usuarios y el cerrojo.
 
 **Compartido, pequeño, dicho:**
 
@@ -251,6 +270,17 @@ a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
   usa.
 - Supply: el aviso de repetida, `rpcSinTipar` y la e2e del C01b, que espera
   409.
+  - **Es la R3 punto 3**, ya en esta rama desde ce6e8624 y en verde en las
+    e2e 214 y 215.
+  - En las ramas que no la traen falla, porque staging ya tiene la regla de la
+    0230/0260. Se arregla al traerse main después de esta fusión.
+- `tests/e2e/conta/c00/marco.spec.ts` (R3 punto 4): sin «Documentos» en la
+  lista de lo que no tiene pantalla. Al juntarla con B queda `['Por hacer']`.
+- `tests/e2e/conta/c04/libro.spec.ts` (R3 punto 2): «Lo que he hecho yo»
+  crea su propio asiento y lo busca por lo que es (sección 9).
+- La ficha del proveedor: `types.ts`, `cuentasProveedor.ts`, `SusCuentas.tsx`,
+  `cuentasProveedorService.ts` y `FichaProveedorPage.tsx`. Arriba, en «Para
+  C».
 
 ## 9 · Resultados medidos
 
