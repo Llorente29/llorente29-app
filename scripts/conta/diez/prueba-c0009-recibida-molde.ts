@@ -11,9 +11,10 @@
 // Frenos:
 //   · la base es C0009, escrita aquí; el cliente se crea con escribir: false,
 //     así que no puede escribir nada aunque se quisiera;
-//   · la salida pasa por limpiar() y además: de números y descripciones solo
-//     sale el PATRÓN (cada cifra un 9), del NIF y del nombre solo si están, y
-//     de los importes solo el signo y si cuadran.
+//   · la salida pasa por limpiar() y además: de los números solo sale el
+//     PATRÓN (cada cifra un 9); de la descripción y del nombre, NADA de su
+//     texto (llevan el nombre del proveedor, y hay personas), solo su forma;
+//     del NIF solo si está, y de los importes solo el signo y si cuadran.
 //
 //   DIEZ_LECTURA='{…}' npx tsx scripts/conta/diez/prueba-c0009-recibida-molde.ts
 
@@ -25,7 +26,8 @@ const BD = 'C0009'
 const l: string[] = []
 const md = (...x: string[]) => l.push(...x)
 const soltar = () => process.stdout.write(limpiar(l.join('\n')) + '\n')
-const patron = (x: unknown) => (x == null || x === '' ? '—' : `\`${String(x).replace(/\d/g, '9')}\``)
+// Las letras de un número de factura pueden ser el nombre del proveedor: van como A.
+const patron = (x: unknown) => (x == null || x === '' ? '—' : `\`${String(x).replace(/\d/g, '9').replace(/\p{L}/gu, 'A')}\``)
 const tipo = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? `lista(${v.length})` : typeof v)
 const SEGUROS = new Set(['Ejercicio', 'Serie', 'TipoAsiento', 'TipoFactura', 'ClaveTipoFactura', 'ClaveRegimenIva1', 'ClaveRegimenIva2', 'ClaveRegimenIva3',
   'PorcentajeIVA1', 'PorcentajeIVA2', 'PorcentajeIVA3', 'PorcentajeRecargo1', 'PorcentajeRecargo2', 'PorcentajeRecargo3', 'PorcentajeRetencion',
@@ -111,19 +113,21 @@ try {
     return (Date.UTC(+b.slice(0, 4), +b.slice(4, 6) - 1, +b.slice(6, 8)) - Date.UTC(+a.slice(0, 4), +a.slice(4, 6) - 1, +a.slice(6, 8))) / 864e5
   }).filter((x): x is number => x != null)
   md('### Números, fechas y tercero', '',
-    `- Patrones del número (los 8 más frecuentes): ${[...nums.reduce((m, n) => m.set(n.replace(/\d/g, '9'), (m.get(n.replace(/\d/g, '9')) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([p, n]) => `${patron(p)} ${n}`).join(' · ')}`,
+    `- Patrones del número (los 8 más frecuentes): ${[...nums.reduce((m, n) => { const k = n.replace(/\d/g, '9').replace(/\p{L}/gu, 'A'); return m.set(k, (m.get(k) ?? 0) + 1) }, new Map<string, number>())].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([p, n]) => `${patron(p)} ${n}`).join(' · ')}`,
     `- Mismo NumeroFactura y misma cuenta dos veces: ${rec.length - new Set(rec.map((f) => `${f.CuentaCliente}|${f.NumeroFactura}`)).size}`,
     `- Fecha (del asiento) − FechaFactura, en días: igual ${dias.filter((d) => d === 0).length}; después ${dias.filter((d) => d > 0).length} (máx ${Math.max(0, ...dias)}); antes ${dias.filter((d) => d < 0).length}`,
     `- FechaIntroduccionFactura con valor: ${rec.filter((f) => conValor(f.FechaIntroduccionFactura)).length}`,
     `- CifCliente con valor: ${rec.filter((f) => conValor(f.CifCliente)).length} · NombreCliente: ${rec.filter((f) => conValor(f.NombreCliente)).length}`,
-    `- Descripción, patrones (5): ${[...new Set(rec.map((f) => String(f.Descripcion ?? '').replace(/\d/g, '9').slice(0, 40)))].slice(0, 5).map(patron).join(' · ')}`,
+    // Sin texto de la descripción: lleva el nombre del proveedor, y hay personas
+    // (13/10: el primer run lo sacó y se borraron sus registros). Solo su forma.
+    `- Descripción = «<NumeroFactura>-<NombreCliente>»: ${rec.filter((f) => String(f.Descripcion ?? '') === `${f.NumeroFactura}-${f.NombreCliente}`).length} de ${rec.length} · empieza por «<NumeroFactura>-»: ${rec.filter((f) => String(f.Descripcion ?? '').startsWith(`${f.NumeroFactura}-`)).length} · acaba en «-<NombreCliente>»: ${rec.filter((f) => String(f.Descripcion ?? '').endsWith(`-${f.NombreCliente}`)).length}`,
     `- Con analítica: ${rec.filter((f) => Array.isArray(f.Analitica) && (f.Analitica as unknown[]).length).length} de ${rec.length}`, '')
 
   // Una de molde: la primera con dos tipos, si la hay; si no, la primera.
   const molde = rec.find((f) => ntipos(f) >= 2 && de(f).length) ?? rec.find((f) => de(f).length) ?? rec[0]
   md('### Una de molde', '',
     `- Serie ${molde.Serie} · TipoAsiento ${molde.TipoAsiento} · TipoFactura ${molde.TipoFactura ?? '—'} · ClaveTipoFactura ${molde.ClaveTipoFactura ?? '—'} · ClaveRegimenIva1 ${molde.ClaveRegimenIva1 ?? '—'} · tipos ${ntipos(molde)}`,
-    `- NumeroFactura ${patron(molde.NumeroFactura)} · Descripcion ${patron(molde.Descripcion)} · cuenta del tercero ${grupo(molde.CuentaCliente)}…`,
+    `- NumeroFactura ${patron(molde.NumeroFactura)} · Descripcion: ${String(molde.Descripcion ?? '').length} letras · cuenta del tercero ${grupo(molde.CuentaCliente)}…`,
     `- Apuntes: ${ap(molde).map((a) => `${String(a.Cuenta ?? '—')} (${Math.sign(Number(a.Importe))})`).join(' · ') || 'ninguno'}`,
     `- Detalles (grupo y lado): ${de(molde).map(lado).join(' · ') || 'ninguno'}`,
     `- Campos con valor: ${Object.entries(molde).filter(([, v]) => conValor(v)).map(([k]) => k).join(', ')}`, '')
