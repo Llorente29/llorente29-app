@@ -2,7 +2,8 @@
 --
 -- SOLO STAGING. Prueba de 20261021T0200 (la base de Facturas recibidas) y de
 -- 20261021T0210 (los tres CHECK que se amplían: public.supplier_contact,
--- public.company_account_link, public.journal_entry_document). Todo en una
+-- public.company_account_link, public.journal_entry_document; y la regla de
+-- repetidas en public.supplier_invoice, como disparador). Todo en una
 -- transacción con ROLLBACK. Como administrador de A y como el de B (RLS A/B).
 --
 --   1. El ajuste «Recibe la mercancía con Folvy»: sembrado para la empresa de
@@ -89,7 +90,10 @@ begin
   if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 · 3: misma fecha y total con otro número no es «posible» (%).', v_res; end if;
   select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01/0003', '2026-10-31', 110);
   if v_n <> 0 then raise exception 'PRUEBA D01 · 3: el mismo total otro día sale como repetida.'; end if;
-  raise notice 'PRUEBA D01 · 3: con «No es repetida» sí entra; la función dice repetida, posible y nada, como el núcleo.';
+  -- Las que ya estaban repetidas (staging tiene las del C01b) no se tocan: se listan, y se pueden editar.
+  select count(*) into v_n from public.supplier_invoice_repetidas_que_hay(v_acc);
+  update public.supplier_invoice set notes = coalesce(notes, '') where id in (select unnest(ids) from public.supplier_invoice_repetidas_que_hay(v_acc));
+  raise notice 'PRUEBA D01 · 3: con «No es repetida» sí entra; la función dice repetida, posible y nada, como el núcleo; las % repetida(s) de antes siguen ahí y se pueden editar.', v_n;
 
   -- 4 · la función para B
   if pg_get_function_result('public.banco_facturas_recibidas_pendientes(uuid,date)'::regprocedure) <> 'TABLE(invoice_id uuid, supplier_id uuid, supplier_name text, supplier_tax_id text, invoice_number text, invoice_date date, due_date date, total numeric, pending numeric, read_iban text, journal_entry_id uuid, status text)' then

@@ -9,9 +9,7 @@ begin;
 -- D01 · Facturas recibidas, para cualquier empresa · LA BASE (tarea 3)
 -- ----------------------------------------------------------------------------
 -- Todo lo de este fichero AÑADE: tablas nuevas, columnas que admiten nulos,
--- funciones nuevas, un índice único sobre una tabla pequeña (supplier_invoice:
--- 6 filas en producción el 13/10, cero repetidas) y filas en una tabla que
--- nace aquí. No cambia ni borra nada que exista. Las tres ampliaciones de un
+-- funciones nuevas, y filas en una tabla que nace aquí. No cambia ni borra nada que exista. Las tres ampliaciones de un
 -- CHECK que hacen falta van aparte, declaradas, en la 0210.
 --
 -- NO es una tabla paralela de facturas (encargo D01, punto 1): la factura sigue
@@ -34,11 +32,10 @@ begin;
 --   4. supplier_invoice: cómo llegó (arrival_channel), la clave del número
 --      (number_key, la misma regla que el núcleo de lectura), la confianza, la
 --      lectura entera, el recargo y su llegada (inbox_id).
---      Y la REGLA ÚNICA de repetidas en la base (R1, punto 9): un índice único
---      por cuenta, proveedor y clave del número, salvo las anuladas y las que
---      una persona confirmó «No es repetida». Medido antes en producción: 0
---      grupos repetidos por número y 0 por fecha y total, en las 6 facturas
---      vivas (toda la tabla).
+--      La REGLA ÚNICA de repetidas en la base (R1, punto 9) va en la 0210, como
+--      disparador: impide las nuevas sin tocar las que ya hubiera. Medido en
+--      producción: 0 grupos repetidos por número y 0 por fecha y total, en las
+--      6 facturas vivas (toda la tabla).
 --   5. supplier_invoice_tax: bases, cuotas y recargo por tipo de IVA (hoy solo
 --      había IVA por línea).
 --   6. supplier_invoice_repetida(): la regla para TODOS los caminos (Compras,
@@ -242,12 +239,9 @@ alter table public.supplier_invoice add column if not exists inbox_id uuid refer
 comment on column public.supplier_invoice.number_key is 'D01 · La clave del número para las repetidas: mayúsculas y solo letras y números («s/n» y «0» no son número). La misma regla que _shared/lecturaFactura.ts.';
 comment on column public.supplier_invoice.reading is 'D01 · La lectura comprobada (lecturaFactura): lo leído, cada comprobación con su frase, la confianza y su porqué.';
 
--- La regla única de repetidas, en la base: no entran dos facturas vivas del
--- mismo proveedor con la misma clave de número, salvo que una persona haya
--- dicho «No es repetida» (not_duplicate_confirmed_at).
-create unique index if not exists supplier_invoice_numero_uq
-  on public.supplier_invoice (account_id, supplier_id, number_key)
-  where number_key is not null and supplier_id is not null and status <> 'anulada' and not_duplicate_confirmed_at is null;
+-- La regla única de repetidas va como disparador en la 0210: un índice único
+-- no se puede poner donde ya hay repetidas (staging las tiene a propósito, las
+-- del «¿Repetida?» del C01b), y las que haya no se borran (R1, punto 9).
 
 -- 5. Bases y cuotas por tipo -----------------------------------------------------
 create table if not exists public.supplier_invoice_tax (
@@ -536,6 +530,7 @@ $verif$;
 -- cambia: public.supplier_contact · prueba: supabase/staging/sql/20261021_d01_base_prueba.sql
 -- cambia: public.company_account_link · prueba: supabase/staging/sql/20261021_d01_base_prueba.sql
 -- cambia: public.journal_entry_document · prueba: supabase/staging/sql/20261021_d01_base_prueba.sql
+-- cambia: public.supplier_invoice · prueba: supabase/staging/sql/20261021_d01_base_prueba.sql
 --
 --   1. supplier_contact.role + 'billing' («Facturación»): a quién se le pide la
 --      factura que no llega (R1, punto 5).
@@ -545,6 +540,16 @@ $verif$;
 --      recibida, enlazado a su asiento en conta-documentos (R1, punto 4). La
 --      prueba comprueba que 'resumen_ventas' sigue valiendo igual, y la del
 --      R15 (20261021_conta_documentos_prueba.sql) vuelve a pasar después.
+--
+--   4. supplier_invoice: la REGLA ÚNICA de repetidas en la base (R1, punto 9),
+--      como disparador: una factura NUEVA (o a la que se le cambia el número o
+--      el proveedor) no entra si ya hay otra viva del mismo proveedor con la
+--      misma clave de número, salvo que una persona haya dicho «No es
+--      repetida». Las que YA estuvieran repetidas no se tocan ni se borran: se
+--      listan con supplier_invoice_repetidas_que_hay() y se decide (staging
+--      tiene dos a propósito, las del «¿Repetida?» del C01b; producción, 0,
+--      medido el 13/10). No va como índice único porque el índice no se puede
+--      crear donde ya hay repetidas sin borrarlas.
 --
 -- Cada CHECK se quita y se vuelve a poner en la MISMA transacción, con los
 -- valores de antes y uno más. Las tres tablas son pequeñas.
@@ -563,11 +568,49 @@ alter table public.journal_entry_document drop constraint if exists journal_entr
 alter table public.journal_entry_document add constraint journal_entry_document_kind_check
   check (kind = any (array['resumen_ventas', 'factura_recibida']));
 
+-- 4. La regla única de repetidas ---------------------------------------------------
+create or replace function public.tg_supplier_invoice_no_repetida()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_otra public.supplier_invoice;
+begin
+  if new.status = 'anulada' or new.not_duplicate_confirmed_at is not null or new.supplier_id is null or new.number_key is null then return new; end if;
+  -- En un cambio, solo si cambia lo que decide (el número, el proveedor o que deje de estar anulada).
+  if tg_op = 'UPDATE' and new.number_key is not distinct from old.number_key and new.supplier_id is not distinct from old.supplier_id
+     and not (old.status = 'anulada' and new.status <> 'anulada') then return new; end if;
+  select * into v_otra from public.supplier_invoice i
+   where i.account_id = new.account_id and i.supplier_id = new.supplier_id and i.number_key = new.number_key
+     and i.id <> new.id and i.status <> 'anulada' and i.not_duplicate_confirmed_at is null
+   order by i.created_at limit 1;
+  if v_otra.id is not null then
+    raise exception 'Repetida: ya está la factura % de este proveedor (%). No entra dos veces; si no es la misma, márcala «No es repetida».',
+      v_otra.invoice_number, coalesce(v_otra.code, v_otra.id::text) using errcode = '23505';
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_supplier_invoice_no_repetida on public.supplier_invoice;
+create trigger trg_supplier_invoice_no_repetida
+  before insert or update of invoice_number, supplier_id, status, not_duplicate_confirmed_at on public.supplier_invoice
+  for each row execute function public.tg_supplier_invoice_no_repetida();
+
+-- Las que ya estaban repetidas: se listan para decidir, no se tocan.
+create or replace function public.supplier_invoice_repetidas_que_hay(p_account uuid)
+returns table (supplier_id uuid, number_key text, facturas integer, ids uuid[])
+language sql stable security definer set search_path = public as $$
+  select i.supplier_id, i.number_key, count(*)::int, array_agg(i.id order by i.created_at)
+    from public.supplier_invoice i
+   where i.account_id = p_account and (public.belongs_to_account(p_account) or coalesce(auth.role(), '') = 'service_role')
+     and i.number_key is not null and i.supplier_id is not null and i.status <> 'anulada' and i.not_duplicate_confirmed_at is null
+   group by 1, 2 having count(*) > 1
+$$;
+revoke all on function public.supplier_invoice_repetidas_que_hay(uuid) from public, anon;
+grant execute on function public.supplier_invoice_repetidas_que_hay(uuid) to authenticated, service_role;
+
 -- supabase/staging/sql/20261021_d01_base_prueba.sql
 --
 -- SOLO STAGING. Prueba de 20261021T0200 (la base de Facturas recibidas) y de
 -- 20261021T0210 (los tres CHECK que se amplían: public.supplier_contact,
--- public.company_account_link, public.journal_entry_document). Todo en una
+-- public.company_account_link, public.journal_entry_document; y la regla de
+-- repetidas en public.supplier_invoice, como disparador). Todo en una
 -- transacción con ROLLBACK. Como administrador de A y como el de B (RLS A/B).
 --
 --   1. El ajuste «Recibe la mercancía con Folvy»: sembrado para la empresa de
@@ -653,7 +696,10 @@ begin
   if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 · 3: misma fecha y total con otro número no es «posible» (%).', v_res; end if;
   select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01/0003', '2026-10-31', 110);
   if v_n <> 0 then raise exception 'PRUEBA D01 · 3: el mismo total otro día sale como repetida.'; end if;
-  raise notice 'PRUEBA D01 · 3: con «No es repetida» sí entra; la función dice repetida, posible y nada, como el núcleo.';
+  -- Las que ya estaban repetidas (staging tiene las del C01b) no se tocan: se listan, y se pueden editar.
+  select count(*) into v_n from public.supplier_invoice_repetidas_que_hay(v_acc);
+  update public.supplier_invoice set notes = coalesce(notes, '') where id in (select unnest(ids) from public.supplier_invoice_repetidas_que_hay(v_acc));
+  raise notice 'PRUEBA D01 · 3: con «No es repetida» sí entra; la función dice repetida, posible y nada, como el núcleo; las % repetida(s) de antes siguen ahí y se pueden editar.', v_n;
 
   -- 4 · la función para B
   if pg_get_function_result('public.banco_facturas_recibidas_pendientes(uuid,date)'::regprocedure) <> 'TABLE(invoice_id uuid, supplier_id uuid, supplier_name text, supplier_tax_id text, invoice_number text, invoice_date date, due_date date, total numeric, pending numeric, read_iban text, journal_entry_id uuid, status text)' then

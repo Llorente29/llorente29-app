@@ -2,9 +2,7 @@
 -- D01 · Facturas recibidas, para cualquier empresa · LA BASE (tarea 3)
 -- ----------------------------------------------------------------------------
 -- Todo lo de este fichero AÑADE: tablas nuevas, columnas que admiten nulos,
--- funciones nuevas, un índice único sobre una tabla pequeña (supplier_invoice:
--- 6 filas en producción el 13/10, cero repetidas) y filas en una tabla que
--- nace aquí. No cambia ni borra nada que exista. Las tres ampliaciones de un
+-- funciones nuevas, y filas en una tabla que nace aquí. No cambia ni borra nada que exista. Las tres ampliaciones de un
 -- CHECK que hacen falta van aparte, declaradas, en la 0210.
 --
 -- NO es una tabla paralela de facturas (encargo D01, punto 1): la factura sigue
@@ -27,11 +25,10 @@
 --   4. supplier_invoice: cómo llegó (arrival_channel), la clave del número
 --      (number_key, la misma regla que el núcleo de lectura), la confianza, la
 --      lectura entera, el recargo y su llegada (inbox_id).
---      Y la REGLA ÚNICA de repetidas en la base (R1, punto 9): un índice único
---      por cuenta, proveedor y clave del número, salvo las anuladas y las que
---      una persona confirmó «No es repetida». Medido antes en producción: 0
---      grupos repetidos por número y 0 por fecha y total, en las 6 facturas
---      vivas (toda la tabla).
+--      La REGLA ÚNICA de repetidas en la base (R1, punto 9) va en la 0210, como
+--      disparador: impide las nuevas sin tocar las que ya hubiera. Medido en
+--      producción: 0 grupos repetidos por número y 0 por fecha y total, en las
+--      6 facturas vivas (toda la tabla).
 --   5. supplier_invoice_tax: bases, cuotas y recargo por tipo de IVA (hoy solo
 --      había IVA por línea).
 --   6. supplier_invoice_repetida(): la regla para TODOS los caminos (Compras,
@@ -235,12 +232,9 @@ alter table public.supplier_invoice add column if not exists inbox_id uuid refer
 comment on column public.supplier_invoice.number_key is 'D01 · La clave del número para las repetidas: mayúsculas y solo letras y números («s/n» y «0» no son número). La misma regla que _shared/lecturaFactura.ts.';
 comment on column public.supplier_invoice.reading is 'D01 · La lectura comprobada (lecturaFactura): lo leído, cada comprobación con su frase, la confianza y su porqué.';
 
--- La regla única de repetidas, en la base: no entran dos facturas vivas del
--- mismo proveedor con la misma clave de número, salvo que una persona haya
--- dicho «No es repetida» (not_duplicate_confirmed_at).
-create unique index if not exists supplier_invoice_numero_uq
-  on public.supplier_invoice (account_id, supplier_id, number_key)
-  where number_key is not null and supplier_id is not null and status <> 'anulada' and not_duplicate_confirmed_at is null;
+-- La regla única de repetidas va como disparador en la 0210: un índice único
+-- no se puede poner donde ya hay repetidas (staging las tiene a propósito, las
+-- del «¿Repetida?» del C01b), y las que haya no se borran (R1, punto 9).
 
 -- 5. Bases y cuotas por tipo -----------------------------------------------------
 create table if not exists public.supplier_invoice_tax (

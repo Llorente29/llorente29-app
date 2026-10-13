@@ -31,7 +31,6 @@ drop table if exists public.document_activity;
 drop table if exists public.supplier_invoice_request;
 drop table if exists public.supplier_expected_invoice;
 drop table if exists public.supplier_invoice_tax;
-drop index if exists public.supplier_invoice_numero_uq;
 alter table public.supplier_invoice drop column if exists inbox_id;
 alter table public.supplier_invoice drop column if exists surcharge_total;
 alter table public.supplier_invoice drop column if exists reading;

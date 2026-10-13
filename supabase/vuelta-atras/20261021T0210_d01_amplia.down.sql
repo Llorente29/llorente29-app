@@ -13,6 +13,9 @@ begin
     raise exception 'Vuelta atrás D01 0210: hay documentos de facturas recibidas; no se quita nada.';
   end if;
 end $$;
+drop function if exists public.supplier_invoice_repetidas_que_hay(uuid);
+drop trigger if exists trg_supplier_invoice_no_repetida on public.supplier_invoice;
+drop function if exists public.tg_supplier_invoice_no_repetida();
 alter table public.journal_entry_document drop constraint if exists journal_entry_document_kind_check;
 alter table public.journal_entry_document add constraint journal_entry_document_kind_check check (kind = 'resumen_ventas');
 alter table public.company_account_link drop constraint if exists company_account_link_source_check;

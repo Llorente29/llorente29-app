@@ -1,4 +1,5 @@
 # D01 · Tarea 3 — la base de Facturas recibidas (sesión A; solo añade).
+# (2.ª vuelta: la regla de repetidas va como disparador; el índice único no se podía crear sin borrar las repetidas del C01b de staging.)
 #   ensayo: la 0200 y la 0210 y su prueba en una transacción con ROLLBACK. Si
 #           falla, no se aplica lo de abajo.
 #   0200:   bandeja de llegadas, dirección por empresa, ajuste «Recibe la
