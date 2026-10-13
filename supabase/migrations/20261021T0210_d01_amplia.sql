@@ -46,14 +46,19 @@ alter table public.journal_entry_document add constraint journal_entry_document_
 -- 4. La regla única de repetidas ---------------------------------------------------
 create or replace function public.tg_supplier_invoice_no_repetida()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare v_otra public.supplier_invoice;
+declare
+  v_otra public.supplier_invoice;
+  -- En un disparador BEFORE la columna generada number_key todavía no está
+  -- calculada (llega nula): se calcula aquí con la misma expresión.
+  v_k text := nullif(case when upper(regexp_replace(coalesce(new.invoice_number, ''), '[^A-Za-z0-9]', '', 'g')) ~ '^(SN|SINNUMERO|SINNUM|0+)$' then ''
+                          else upper(regexp_replace(coalesce(new.invoice_number, ''), '[^A-Za-z0-9]', '', 'g')) end, '');
 begin
-  if new.status = 'anulada' or new.not_duplicate_confirmed_at is not null or new.supplier_id is null or new.number_key is null then return new; end if;
+  if new.status = 'anulada' or new.not_duplicate_confirmed_at is not null or new.supplier_id is null or v_k is null then return new; end if;
   -- En un cambio, solo si cambia lo que decide (el número, el proveedor o que deje de estar anulada).
-  if tg_op = 'UPDATE' and new.number_key is not distinct from old.number_key and new.supplier_id is not distinct from old.supplier_id
+  if tg_op = 'UPDATE' and v_k is not distinct from old.number_key and new.supplier_id is not distinct from old.supplier_id
      and not (old.status = 'anulada' and new.status <> 'anulada') then return new; end if;
   select * into v_otra from public.supplier_invoice i
-   where i.account_id = new.account_id and i.supplier_id = new.supplier_id and i.number_key = new.number_key
+   where i.account_id = new.account_id and i.supplier_id = new.supplier_id and i.number_key = v_k
      and i.id <> new.id and i.status <> 'anulada' and i.not_duplicate_confirmed_at is null
    order by i.created_at limit 1;
   if v_otra.id is not null then
