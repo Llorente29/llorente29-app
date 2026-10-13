@@ -43,7 +43,12 @@ const GRUPOS: Record<number, string> = {
 
 // ── Activar ─────────────────────────────────────────────────────────────────
 
-function Activar({ p }: { p: DatosPlan }) {
+/**
+ * C06 (regla 8): al activarse, la página pasa a la del plan activo y esta tarjeta
+ * desaparece con su «Plan activado: …». Por eso el resultado se le pasa también a
+ * la página (`alActivar`), que lo enseña arriba en la del plan activo.
+ */
+function Activar({ p, alActivar }: { p: DatosPlan; alActivar: (texto: string) => void }) {
   const { quien, plan } = useAjustes()
   const [comun, setComun] = useState(false)
   const h = useHacer(plan.recargar)
@@ -64,6 +69,7 @@ function Activar({ p }: { p: DatosPlan }) {
           onClick={() => void h.hacer(async () => {
             const r = await activarPlan(quien.companyId, comun, null)
             resultado.current = `Plan activado: ${r.cuentas} cuentas de serie, ${r.subcuentas} subcuentas y ${r.enlaces} enlaces.${r.avisos.length ? ` Ojo: ${r.avisos.join(' ')}` : ''}`
+            alActivar(resultado.current)
           }, () => resultado.current)}>
           {h.guardando ? 'Activando…' : 'Activar el plan'}
         </button>
@@ -441,7 +447,7 @@ function Contenido() {
         {cabeza}
         {avisoTraer}
         {deCero
-          ? <><button type="button" className="cx-enlace cx-traer-volver" onClick={() => setDeCero(false)}>‹ Vengo de otro programa</button><Activar p={p} /></>
+          ? <><button type="button" className="cx-enlace cx-traer-volver" onClick={() => setDeCero(false)}>‹ Vengo de otro programa</button><Activar p={p} alActivar={setAviso} /></>
           : <TraerPlan p={p} empezarDeCero={() => setDeCero(true)} alTraer={(f) => { setAviso(f); setDeCero(false) }} />}
         <Pie p={p} />
       </>

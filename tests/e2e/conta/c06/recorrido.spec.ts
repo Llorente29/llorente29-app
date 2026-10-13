@@ -22,19 +22,16 @@
 //
 // Y en TODAS las pantallas: ni una vez «Folvy», y ni un error de la página.
 //
-// Lo que staging no tiene y producción sí —el custom_access_token_hook— hace
-// que check-account-status no pueda contestar: tras «Activar cuenta» y tras
-// «Entrar» la app se queda con su aviso en vez de abrir el Inicio. La prueba
-// lo MIDE y lo deja escrito (anotación y consola); no lo esconde ni lo da por
-// bueno: entonces entra con la sesión de esa misma contraseña, como las demás
-// e2e (sesion.ts), y sigue.
+// «Activar cuenta» y «Entrar» tienen que abrir su contabilidad, sin atajos: la
+// prueba no inyecta la sesión (como sesion.ts) en ningún momento del camino
+// del cliente. Si una de las dos se queda en un aviso, falla y dice qué se ve.
 //
 // Cada ejecución crea una cuenta «Recorrido de Prueba C06 …» por tamaño. Su
 // empresa la quita supabase/seeds/conta/e2e_limpieza.sql a los 30 minutos.
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { CLAVE_STORAGE, STAGING_URL, anonKey, pedirSesion, type Sesion } from '../sesion'
+import { STAGING_URL, anonKey, pedirSesion, type Sesion } from '../sesion'
 import { cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { MARCAS } from '../../../../supabase/functions/_shared/marcas'
@@ -98,17 +95,6 @@ function ibanInventado(): string {
   return `ES${String(98 - r).padStart(2, '0')}${bban}`
 }
 
-/** La sesión con SU contraseña (la que puso en la bienvenida), en el navegador. */
-async function sesionCon(page: Page, email: string, clave: string): Promise<Sesion> {
-  const r = await fetch(`${STAGING_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST', headers: { apikey: anonKey(), 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: clave }),
-  })
-  expect(r.status, `entra con la contraseña que puso en la bienvenida (${email})`).toBe(200)
-  const s = await r.json() as Sesion
-  await page.evaluate(([k, v]) => { window.localStorage.setItem(k, v) }, [CLAVE_STORAGE, JSON.stringify(s)] as const)
-  return s
-}
-
 const log = (page: Page) => page.getByRole('log', { name: 'Conversación del alta' })
 async function decir(page: Page, texto: string) {
   const entrada = page.getByRole('textbox', { name: 'Tu respuesta' })
@@ -168,13 +154,12 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
     page.waitForURL(/\/conta\//, { timeout: 30_000 }).then(() => 'dentro' as const),
     page.getByText(/^Activación (completada|guardada)|no se pudo abrir tu cuenta/).first().waitFor({ timeout: 30_000 }).then(() => 'aviso' as const),
   ]).catch(() => 'nada' as const)
-  if (tras === 'nada') {
+  if (tras !== 'dentro') {
     // Lo que se ve, para saber qué pasó (los informes de Playwright no siempre se pueden bajar).
     const visto = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 500)
-    throw new Error(`Tras «Activar cuenta», ni abre su contabilidad ni dice qué ha pasado. URL ${page.url()} · «${visto}»`)
+    throw new Error(`Tras «Activar cuenta», no abre su contabilidad. URL ${page.url()} · «${visto}»`)
   }
-  if (tras === 'dentro') apuntar(`Bienvenida: «Activar cuenta» abre su contabilidad (${page.url().replace(baseURL!, '')}).`)
-  if (tras === 'aviso') apuntar(`Bienvenida: contraseña puesta; check-account-status no abre la cuenta en staging (sin hook): «${(await page.getByText(/^Activación (completada|guardada)|no se pudo abrir tu cuenta/).first().textContent())?.trim()}».`)
+  apuntar(`Bienvenida: «Activar cuenta» abre su contabilidad (${page.url().replace(baseURL!, '')}).`)
   await sinFolvy(page, 'la bienvenida hecha')
   // Su contraseña es la que puso: se comprueba en la base, no en la pantalla.
   const suya = await fetch(`${STAGING_URL}/auth/v1/token?grant_type=password`, {
@@ -202,23 +187,12 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
     page.waitForURL(/\/conta\/(inicio|alta)/, { timeout: 30_000 }).then(() => 'dentro' as const),
     page.getByRole('alert').waitFor({ timeout: 30_000 }).then(() => 'aviso' as const),
   ]).catch(() => 'nada' as const)
-  if (entrada === 'nada') {
+  if (entrada !== 'dentro') {
     const visto = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 500)
-    throw new Error(`Al pulsar «Entrar», ni entra ni dice por qué no. URL ${page.url()} · «${visto}»`)
+    throw new Error(`Al pulsar «Entrar», no entra. URL ${page.url()} · «${visto}»`)
   }
-  apuntar(entrada === 'dentro' ? 'Entrada N18: entra y abre su contabilidad (check-account-status contesta en staging).' : 'Entrada N18: aviso (ver arriba).')
-  let s: Sesion
-  if (entrada === 'aviso') {
-    const aviso = (await page.getByRole('alert').textContent())?.trim() ?? ''
-    // Una contraseña mal puesta no es lo de staging: eso sí es un fallo.
-    expect(aviso).not.toMatch(/contraseña|correo/i)
-    apuntar(`Entrada N18: la contraseña es buena, pero check-account-status no contesta en staging (sin hook): «${aviso}». Sigue con la sesión de esa contraseña.`)
-    await sinFolvy(page, 'el aviso de la entrada')
-    s = await sesionCon(page, correo, clave)
-    await page.goto('/conta/inicio')
-  } else {
-    s = await pedirSesionDe(correo, clave)
-  }
+  apuntar('Entrada N18: entra con su correo y su contraseña y abre su contabilidad.')
+  const s = await pedirSesionDe(correo, clave)
 
   // ── 3 · El alta con su plan y su banco ────────────────────────────────────
   // Sin empresa, el Inicio lleva al alta: es donde aterriza la primera vez.
@@ -272,7 +246,7 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
     // Llega directo a activar (no a «¿Vienes de otro programa?»: lo de Diez llega en el paso 4).
     await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Activar el plan' }).click()
-    await expect(page.getByText(/^Plan activado: /)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/^Plan activado: /).first()).toBeVisible({ timeout: 30_000 })
     await sinFolvy(page, 'el plan activado')
     await page.goto('/conta/inicio')
   }
