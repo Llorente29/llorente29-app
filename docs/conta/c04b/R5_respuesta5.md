@@ -122,6 +122,7 @@ del repositorio).
 | 0110 | el índice único por unidad | **autorizo** |
 | 0120 | Foodint: Glovo por marca, las 18 subcuentas de marca, las tres 708 nuevas | sigue |
 | 0130 | retira los 24 del día entero (copia en `_retirado_ventas_por_plataforma`) | **autorizo** |
+| 0140 | `conta_lectura` lee el registro del cierre del día (el agente, §8) | sigue |
 
 Después, el cierre del día (a los :07) propone los 105. La vuelta atrás
 devuelve las cuatro funciones byte a byte (md5 medido) y el índice de antes.
@@ -243,5 +244,17 @@ que el de Ventas**, no uno nuevo.
 - **El orden de publicar**: la base antes que el front. El front nuevo lee
   `conta_ventas_canal` y `conta_ventas_marca`; publicado antes que la 0100,
   el Libro no podría leer su contexto.
-- El agente en rojo de la empresa B de pruebas: en un commit aparte, después
-  de esto.
+- **El agente en rojo de la empresa B de pruebas** (commit aparte). El rojo es
+  `dia_sin_asiento`: un pedido del 04/10 de la empresa B de staging, sin
+  resumen ni asiento 186 h después de su cierre (run 52 del cumplimiento
+  nocturno, 12/10). **Desde esta sesión no se puede leer staging** (solo
+  producción), así que el porqué no está medido. Lo más probable: la empresa B
+  no tiene el IVA de sus ventas (la prueba del cierre del día la usa así a
+  propósito) y el cierre apunta «Falta el IVA…» cada hora. Lo que se ha
+  arreglado es que **el aviso lo diga él mismo**: lleva lo que apuntó el cierre
+  la última vez (`sales_day_proposal_log`: sin propuesta y por qué, fallo…).
+  `conta_lectura` lo puede leer con la 0140 (solo un permiso); hasta entonces
+  el agente sigue corriendo como antes (lo comprueba antes de leerlo). El
+  rojo **no se ha quitado**: con el porqué a la vista, la siguiente noche dirá
+  si es la empresa B sin IVA (y entonces se le da su IVA en staging) o otra
+  cosa.
