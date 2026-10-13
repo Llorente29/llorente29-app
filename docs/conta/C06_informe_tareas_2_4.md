@@ -203,7 +203,7 @@ producción.
 
 ## Pruebas
 
-- **Unitarias:** 2.802 en verde. Nuevas:
+- **Unitarias:** 2.802 en verde (las 769 del módulo, repasadas tras los arreglos de las capturas). Nuevas:
   - `marcaC06.test.ts` (14): marca, autor, errores y la guarda de «Folvy».
   - `correoC06.test.ts` (10): antes = después del correo, invitación,
     contraseña y pedido del alta.
@@ -223,7 +223,7 @@ producción.
     libros, balance, PyG, libro registro, fichas, compras y ajustes;
   - la cuenta sola sin marca.
   - En cada pantalla: ni «Folvy» en el texto, el título o las etiquetas, ni
-    errores de la página. Resultado: ver «Estado de las e2e».
+    errores de la página. Resultado: 10 de 10, ver «Estado de las e2e».
 
 ## Choques con A y B (importante)
 
@@ -246,7 +246,60 @@ producción.
 
 ## Estado de las e2e
 
-(Se completa al terminar la ejecución sin otras ramas a la vez.)
+- **Run 38446768862** (`workflow_dispatch`, rama `conta/c06-sola`, commit
+  `5e8425e`): **success, 10 passed** (5 pruebas × ordenador y móvil), en 1,8
+  minutos. Capturas commiteadas por el workflow en `46549ba`.
+- **Lo lancé solo:** esperé a que acabara la e2e de A (`conta/d01-recibidas`,
+  run 38443201914) y no había ninguna otra en marcha.
+  - El run anterior (38443794029, también 10 de 10) **sí** lo lancé mientras
+    corría la de A, aunque había dicho que esperaría. No pisó a nadie: solo
+    toca los dos usuarios `@c06-prueba.test` (lo siguiente). Lo digo porque no
+    era lo acordado.
+- **Cambio en un fichero compartido, `e2e-staging-conta.yml`:** una entrada
+  manual `pruebas` (una carpeta o fichero de `tests/e2e/`; validada, sin `..`).
+  - Vacía, **todo igual que antes**: todas las pruebas y los 4 o 6 usuarios.
+  - Con `tests/e2e/conta/c06`, la contraseña de un solo uso se pone **solo** a
+    los dos usuarios del C06 y se salta la semilla de reparto. Así una e2e del
+    C06 no le cambia la contraseña a mitad a la de A o B. Es lo que hizo
+    fallar mis runs 189, 38435306955 y 38442480331.
+  - La contraseña sigue siendo al azar en cada ejecución: no se ha aflojado
+    ningún freno (pregunta 1).
+
+### Las capturas (`docs/conta/capturas/c06/`, cuenta del frente C con `?marca=contabilidad`)
+
+Todas en ordenador (1440) y móvil, con la cuenta «Empresa de Prueba Sola,
+S.L.» (Marta Inventada, semilla `seed_c06_staging.sql`).
+
+| Qué | Ficheros | Contra la maqueta |
+|---|---|---|
+| Entrada N18 | `n18-entrar-*`, `n18-contrasena-*` | Igual de estructura: logo, «Entra en tu contabilidad», correo, contraseña, «He olvidado la contraseña» en la misma pantalla con su confirmación, y la columna menta con las cuatro frases. Pie «Contabilidad · Aviso legal · Privacidad» sin enlaces (hueco legal). |
+| Correo de invitación N19 | `docs/conta/maquetas/c06/N19Invitacion.png`, `-movil.png` | Su maqueta, generada con la plantilla real de `send-email/marca.ts`. No sale un correo de verdad en staging (la marca no tiene remitente): la función lo dice y el panel enseña el enlace. |
+| Alta | `alta-*` | La conversación del alta con el logo de la marca. |
+| Inicio y menú | `inicio-*` | «Estilo nuevo · Inicio»: saludo, mes y «+ Añadir», las cuatro tarjetas con barritas, «Solo necesito que me digas esto», «Lo que he hecho yo desde ayer» y «Cerrar septiembre». Menú: Inicio, Compras, Clientes y proveedores, Libros y Ajustes; sin Ventas, sin «Volver a Folvy» y sin la barra de la IA. |
+| Recorrido | `plan-*`, `libro-*`, `balance-*`, `fichas-*` | Plan, libro diario, balance y fichas. |
+
+- **Sin «Folvy»:** la e2e lo comprueba en cada pantalla del recorrido (texto,
+  título de la pestaña y etiquetas `aria`/`title`/`alt`), no solo en las
+  capturadas. Cero apariciones y cero errores de la página.
+- **Lo que arreglé al ver las primeras capturas** (commit `48d588a`): las viñetas de N18 no salían (un reset global las quitaba); las
+  cifras del Inicio salían en azul (heredaban el color de enlace de `.cx a`);
+  los apoyos de las tarjetas se cortaban con «…» y ahora saltan de línea; y
+  la captura del libro salía en esqueletos, ahora espera a que cargue.
+- **Lo que las capturas enseñan y hay que leer bien:**
+  - Las cifras son **0 €** porque la cuenta del frente C no tiene asientos: es
+    una cuenta recién creada. El Inicio con datos lo prueban las unitarias, no
+    las capturas.
+  - El libro dice «Aún no hay ningún ejercicio»: la empresa del recorrido no
+    tiene ejercicio abierto al pasar por ahí. Es el estado vacío de verdad,
+    no un fallo.
+  - **Hueco en el móvil, sin arreglar:** la barra de abajo es `BARRA_CONTA`
+    (Inicio, Por hacer, Bancos y Ajustes). Por hacer y Bancos aún no tienen
+    ruta, así que en el producto solo quedan **Inicio y Ajustes**. Compras,
+    Clientes y proveedores y Libros no tienen botón en el móvil: se llega
+    desde el Inicio («+ Añadir», «Ir al libro diario») y desde Ajustes, pero
+    no directamente. Con Folvy pasa igual hoy (más «Folvy» y la IA). Cuando B
+    ponga la ruta de Bancos aparece sola; para lo demás hace falta decidir qué
+    cabe en la barra (pregunta 5).
 
 ## Para el dominio de verdad (informe final; nada de esto está hecho)
 
@@ -283,6 +336,8 @@ Cuando la marca tenga nombre y dominio (la OEPM y la EUIPO las compruebas tú):
    - Es aflojar un freno: solo con tu autorización.
    - La alternativa es un grupo de concurrencia común, pero GitHub tira las
      ejecuciones intermedias en espera de otras ramas.
+   - Mientras tanto, las del C06 ya no pisan a nadie (entrada `pruebas`, ver
+     «Estado de las e2e»), pero A y B se siguen pisando entre sí.
 2. **Las cuatro frases de N18** prometen cosas que hoy no hacen ni el producto
    ni la marca de pruebas: «el banco se casa solo» (frente B), «el IVA de cada
    trimestre listo para presentar» (Impuestos) y «Holded, Sage o A3» (solo
@@ -292,3 +347,7 @@ Cuando la marca tenga nombre y dominio (la OEPM y la EUIPO las compruebas tú):
 3. **«Confirmación»:** hoy no se manda ningún correo de confirmación (ver la
    tarea 3). ¿Quieres un aviso de «contraseña cambiada» con la marca?
 4. **El correo de invitación (N19):** ¿lo fijo así?
+5. **La barra de abajo del móvil, en el producto solo:** hoy solo Inicio y
+   Ajustes. ¿Añado un «Más» que abra el menú entero (Compras, Clientes y
+   proveedores, Libros), o esperamos a Por hacer y Bancos y lo resuelve la
+   maqueta?
