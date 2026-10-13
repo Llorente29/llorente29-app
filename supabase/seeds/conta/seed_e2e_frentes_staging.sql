@@ -143,3 +143,28 @@ begin
   end loop;
   raise notice 'Comprobación OK: 3 frentes × 4 usuarios, cada C en su cuenta.';
 end $$;
+
+-- ============================================================================
+-- EL CERROJO DE LAS E2E (e2e.cerrojo). Medido el 13/10 (runs 38450475183 y
+-- 38450479082, frentes A y B a la vez, enteras): con usuarios propios ya no se
+-- pisan las contraseñas, pero las cuentas A y B son las MISMAS para los tres
+-- frentes y el escenario de reparto se vuelve a sembrar al empezar cada run.
+-- Dos a la vez se rompen los datos la una a la otra: 8 y 4 fallos (uno de
+-- ellos, c01b/flujos «marcar pagada», ya fallaba antes también sola: run
+-- 38439583361).
+--
+-- El cerrojo: una fila. Una ejecución lo coge antes de tocar los datos
+-- compartidos (la siembra del reparto y las pruebas) y lo suelta al acabar,
+-- pase lo que pase. La otra espera DENTRO de su job, sin la cola de GitHub (que
+-- guarda una sola ejecución pendiente por grupo y cancela la anterior). Si una
+-- ejecución muere sin soltarlo, caduca solo a los 50 minutos.
+-- ============================================================================
+create schema if not exists e2e;
+revoke all on schema e2e from public, anon, authenticated;
+create table if not exists e2e.cerrojo (
+  id     int primary key check (id = 1),
+  quien  text,
+  desde  timestamptz,
+  hasta  timestamptz
+);
+insert into e2e.cerrojo (id) values (1) on conflict (id) do nothing;

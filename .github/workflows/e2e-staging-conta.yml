@@ -23,7 +23,14 @@ name: Pruebas e2e en staging-conta
 # línea por frente); sin frente, los cuatro de siempre, como antes. La
 # contraseña sigue siendo de un solo uso: no se ha aflojado ningún freno.
 # Al empezar, e2e_limpieza.sql quita lo que dejaron runs cortados (más de 30
-# minutos: nada que esté usando otra ejecución en marcha). Se pone con el mismo y único secreto del
+# minutos: nada que esté usando otra ejecución en marcha).
+#
+# Y EL CERROJO: medido el mismo día, los usuarios propios no bastan. Las
+# cuentas A y B y el escenario de reparto son de todos, y dos ejecuciones
+# enteras a la vez se rompen los datos. Cada una prepara a la vez (dependencias,
+# build, navegador), pero lo que toca staging va de una en una: coge
+# e2e.cerrojo, y la otra espera dentro de su job (no en la cola de GitHub).
+# Ver el paso «Cerrojo». Se pone con el mismo y único secreto del
 # otro workflow, STAGING_CONTA_DB_URL, y con las mismas tres guardas: la URL es
 # de staging-conta, no es de producción, y al otro lado no hay ni Foodint ni
 # Folvy Interno. La UPDATE solo toca esos cuatro usuarios, por id y por email.
@@ -80,7 +87,9 @@ jobs:
     runs-on: ubuntu-latest
     # 40: las 164 pruebas tardan unos 18 min y la preparación (fuentes y navegador)
     # llegó a tardar 9,5 el 08/10 (run 37801003944, cortado en la 142 sin ningún fallo).
-    timeout-minutes: 40
+    # 100: las pruebas tardan unos 20-25 min, la preparación hasta 10, y con
+    # el cerrojo (abajo) se puede esperar hasta 60 a que acabe otra.
+    timeout-minutes: 100
     env:
       STAGING_REF: oseymswjlzplqoxrfjzi
       PROD_REF: xzmpnchlguibclvxyynt
@@ -136,6 +145,50 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias
+        run: npm ci
+
+      - name: Build contra staging-conta
+        run: npm run build
+
+      - name: Navegador de Playwright
+        run: npx playwright install --with-deps chromium
+
+      # EL CERROJO (C06, respuesta 2). Las cuentas A y B y el escenario de
+      # reparto son de todos los frentes: medido el 13/10, dos ejecuciones a la
+      # vez se rompen los datos la una a la otra aunque cada una entre con sus
+      # usuarios. Así que lo que toca datos compartidos (la siembra del reparto
+      # y las pruebas) va de una en una: se coge el cerrojo de staging
+      # (e2e.cerrojo), y la otra ESPERA dentro de su job —no en la cola de
+      # GitHub, que cancela las pendientes—. Se suelta al acabar, pase lo que
+      # pase; si una ejecución muere sin soltarlo, caduca a los 50 minutos.
+      - name: Cerrojo · esperar a que no haya otra e2e en staging y cogerlo
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          YO="run ${GITHUB_RUN_ID} · ${GITHUB_REF_NAME} · frente ${E2E_FRENTE:-ninguno}"
+          echo "CERROJO_YO=$YO" >> "$GITHUB_ENV"
+          for i in $(seq 1 120); do
+            r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v yo="$YO" <<'SQL'
+          update e2e.cerrojo set quien = :'yo', desde = now(), hasta = now() + interval '50 minutes'
+           where id = 1 and (quien is null or hasta < now() or quien = :'yo')
+          returning 'cogido';
+          SQL
+            )
+            if [ "$(echo "$r" | tr -d '[:space:]')" = "cogido" ]; then echo "Cerrojo cogido ($YO) tras $(( (i - 1) / 2 )) min de espera."; exit 0; fi
+            otro=$("$PSQL" "$DB_URL" -X -A -t -c "select quien || ' · desde ' || to_char(desde at time zone 'Europe/Madrid', 'HH24:MI') || ' · caduca ' || to_char(hasta at time zone 'Europe/Madrid', 'HH24:MI') from e2e.cerrojo where id = 1")
+            echo "Espera: el cerrojo lo tiene ${otro}."
+            sleep 30
+          done
+          echo "::error::Una hora esperando el cerrojo de las e2e. No se lanza nada."; exit 1
+
       - name: Guarda 3 y contraseña de un solo uso para los usuarios de prueba
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -181,29 +234,36 @@ jobs:
           echo "Contraseña de un solo uso puesta a los $n usuarios del frente ${E2E_FRENTE:-de siempre}."
           # Lo que dejaron runs cortados (más de 30 minutos), de cualquier frente.
           "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -q -f supabase/seeds/conta/e2e_limpieza.sql
-          # R02: el escenario de reparto, igual en cada ejecución (pedidos vivos de
-          # hoy, celdas como las dejó la migración, sin respuestas a Folvy).
-          if [ -f supabase/seeds/reparto/seed_r02_e2e.sql ]; then
-            "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -q -f supabase/seeds/reparto/seed_r02_e2e.sql
-            echo "Escenario del R02 preparado."
+
+      # R02: el escenario de reparto, igual en cada ejecución (pedidos vivos de
+      # hoy, celdas como las dejó la migración, sin respuestas a Folvy). Dentro
+      # del cerrojo: volver a sembrarlo a mitad de otra ejecución la rompe.
+      - name: Escenario del R02
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PRUEBAS:-}" ] || [[ "$PRUEBAS" == tests/e2e/reparto* ]]; then
+            if [ -f supabase/seeds/reparto/seed_r02_e2e.sql ]; then
+              /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -q -f supabase/seeds/reparto/seed_r02_e2e.sql
+              echo "Escenario del R02 preparado."
+            fi
+          else
+            echo "Sin pruebas de reparto en esta ejecución: el escenario no se toca."
           fi
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Dependencias
-        run: npm ci
-
-      - name: Build contra staging-conta
-        run: npm run build
-
-      - name: Navegador de Playwright
-        run: npx playwright install --with-deps chromium
 
       - name: Pruebas (ordenador y móvil)
         run: npx playwright test ${PRUEBAS:-}
+
+      - name: Cerrojo · soltarlo (pase lo que pase)
+        if: always()
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          [ -n "${CERROJO_YO:-}" ] || { echo "Este run no llegó a pedir el cerrojo."; exit 0; }
+          /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v yo="$CERROJO_YO" <<'SQL'
+          update e2e.cerrojo set quien = null, desde = null, hasta = null where id = 1 and quien = :'yo' returning 'soltado';
+          SQL
 
       - name: Informe de Playwright
         if: always()
