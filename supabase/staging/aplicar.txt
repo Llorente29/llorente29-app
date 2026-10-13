@@ -1,4 +1,5 @@
 # D01 · Tarea 4 — las entradas: correo, subida y la factura que sale de lo leído
+# (2.ª vuelta: un usuario ni siquiera puede leer el registro de correos —permission denied—, y la prueba lo espera así.)
 # (sesión A; solo añade). La 0200 y la 0210 ya están en staging (run 38428274587).
 #   ensayo: la 0220 y su prueba en una transacción con ROLLBACK.
 #   0220:   registro de correos, destino, llegada, subida, factura desde la

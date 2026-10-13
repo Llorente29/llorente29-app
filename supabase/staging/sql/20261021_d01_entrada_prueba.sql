@@ -132,7 +132,10 @@ begin
     perform public.conta_entrada_llegada('{}'::jsonb);
     raise exception 'PRUEBA D01 entrada · 7: un usuario puede llamar a lo del servidor.';
   exception when insufficient_privilege then null; end;
-  if exists (select 1 from public.inbound_email_log) then raise exception 'PRUEBA D01 entrada · 7: un usuario lee el registro de correos.'; end if;
+  begin
+    perform 1 from public.inbound_email_log limit 1;
+    raise exception 'PRUEBA D01 entrada · 7: un usuario lee el registro de correos.';
+  exception when insufficient_privilege then null; end;
   raise notice 'PRUEBA D01 entrada · 7: subir sin fichero no; con fichero sí, y dos veces la misma, una; lo del servidor y su registro, no para un usuario.';
 end $$;
 reset role;
