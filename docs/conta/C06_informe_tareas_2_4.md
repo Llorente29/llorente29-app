@@ -248,6 +248,31 @@ producción.
 
 (Se completa al terminar la ejecución sin otras ramas a la vez.)
 
+## Para el dominio de verdad (informe final; nada de esto está hecho)
+
+Cuando la marca tenga nombre y dominio (la OEPM y la EUIPO las compruebas tú):
+
+1. **`marcas.ts`:** en la marca, `dominios` (p. ej. `app.<dominio>`),
+   `direccionVisible`, `remitente` (`<Nombre> <no-reply@<dominio>>`),
+   `responderA`, `logoCorreo` y las URLs de `avisoLegal` y `privacidad`
+   (textos tuyos). Con eso, en producción, el dominio elige la marca solo y
+   `?marca=` sigue sin hacer nada.
+2. **Vercel:** añadir el dominio al mismo proyecto (`folvy-app`) y su registro
+   DNS. Es el mismo despliegue: la marca la decide el `host`.
+3. **Resend:** dar de alta el dominio de envío y sus registros (SPF, DKIM y
+   DMARC). Hasta que esté verificado, `send-email` **no manda** con esa marca y
+   lo dice: nunca sale desde la dirección de Folvy.
+4. **Supabase Auth:** añadir `https://app.<dominio>/**` a las URLs de
+   redirección permitidas. Sin eso, el enlace de la invitación y el de la
+   contraseña vuelven a la URL del sitio, que es Folvy.
+5. **`index.html`:** el título, el icono y `apple-mobile-web-app-title` son
+   estáticos y dicen «Folvy». `aplicarMarcaAlDocumento` los cambia antes de
+   pintar, así que el usuario no los ve; pero un buscador o la vista previa de
+   un enlace (WhatsApp, correo) leen el HTML sin ejecutar nada y dirán
+   «Folvy». Con el dominio real, se arregla con una reescritura de Vercel por
+   host a un `index` de la marca, o sirviendo esas metas desde una función.
+   Hoy no se ve en ningún sitio: la marca no tiene dominio.
+
 ## Preguntas
 
 1. **Las e2e se pisan entre ramas.**
