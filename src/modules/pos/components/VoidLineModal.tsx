@@ -8,13 +8,15 @@ import { useEffect, useState } from 'react'
 import { Loader2, X, Ban } from 'lucide-react'
 import { listVoidReasons, type VoidReason } from '@/modules/pos/services/posTableService'
 
-export default function VoidLineModal({ accountId, lineName, tableName, busy, onConfirm, onClose }: {
+export default function VoidLineModal({ accountId, lineName, tableName, busy, onConfirm, onClose, onMoveToTable }: {
   accountId: string
   lineName: string
   tableName: string
   busy: boolean
   onConfirm: (reasonId: string, note: string | null) => void
   onClose: () => void
+  // S2: llevar la línea (ya enviada) a otra mesa en vez de anularla.
+  onMoveToTable?: () => void
 }) {
   const [reasons, setReasons] = useState<VoidReason[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -71,6 +73,12 @@ export default function VoidLineModal({ accountId, lineName, tableName, busy, on
         >
           {busy ? <Loader2 size={18} className="animate-spin" /> : <Ban size={18} />} {reasonId ? 'Anular y avisar a cocina' : 'Elige un motivo'}
         </button>
+        {onMoveToTable && (
+          <button type="button" onClick={onMoveToTable} disabled={busy}
+            className="w-full h-tap-small rounded-tpv border border-tpv-line-strong bg-tpv-surface-2 text-tpv-txt text-base font-bold disabled:opacity-50">
+            No la anules: llévala a otra mesa
+          </button>
+        )}
       </div>
     </div>
   )

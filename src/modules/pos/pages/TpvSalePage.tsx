@@ -40,13 +40,14 @@ import PosLineNoteModal from '@/modules/pos/components/PosLineNoteModal'
 import type { OrderLine } from '@/modules/shop/services/dishConfigService'
 import FloorView from '@/modules/pos/components/FloorView'
 import OpenTableScreen from '@/modules/pos/components/OpenTableScreen'
+import MoveTableScreen, { type MoveIntent } from '@/modules/pos/components/MoveTableScreen'
 import TableHeaderBar from '@/modules/pos/components/TableHeaderBar'
 import PendingLineModal from '@/modules/pos/components/PendingLineModal'
 import TableAccountPanel, { type PendingPick } from '@/modules/pos/components/TableAccountPanel'
 import VoidLineModal from '@/modules/pos/components/VoidLineModal'
 import {
   getFloor, openTable, getTableDetail, addPendingLines, setPendingQty, removePendingLine,
-  fireToKitchen, voidSentLine, requestBill, chargeTable, clearTable,
+  fireToKitchen, voidSentLine, requestBill, chargeTable, clearTable, moveTable, moveLines,
   type Floor, type FloorTable, type TableDetail, type TableLine,
 } from '@/modules/pos/services/posTableService'
 import '@/modules/pos/theme/tpvTokens.css'
@@ -149,6 +150,13 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   const [openPick, setOpenPick] = useState<FloorTable | null>(null)
   const [voidPick, setVoidPick] = useState<TableLine | null>(null)
   const [pendingPick, setPendingPick] = useState<PendingPick | null>(null)
+  // S2 · mover y juntar. moveIntent abre la pantalla de la maqueta 4; la
+  // cuenta que se mueve (o de la que salen las líneas) va aparte.
+  const [moveIntent, setMoveIntent] = useState<MoveIntent | null>(null)
+  const [moveSaleId, setMoveSaleId] = useState<string | null>(null)
+  const [moveLineIds, setMoveLineIds] = useState<string[]>([])
+  // Llevar líneas a una mesa LIBRE: primero «¿Cuántos son?».
+  const [moveCoversFor, setMoveCoversFor] = useState<FloorTable | null>(null)
   const [waiterName, setWaiterName] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
@@ -495,6 +503,89 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
     })
   }
 
+  // ── S2 · mover y juntar ──
+  async function freshFloor(): Promise<Floor | null> {
+    if (!activeAccountId || !operativeLocationId) return null
+    const f = await getFloor(activeAccountId, operativeLocationId)
+    setFloor(f)
+    return f
+  }
+
+  function startMoveFromFloor() {
+    setMoveSaleId(null); setMoveLineIds([])
+    setMoveIntent({ kind: 'pick' })
+  }
+
+  function startMoveTable() {
+    const d = tableDetail
+    if (!d) return
+    void tableAction(async () => {
+      if (cart.length > 0) { await addPendingLines(d.saleId, cartPayload(cart)); setCart([]) }
+      await freshFloor()
+      const fresh = await getTableDetail(d.saleId)
+      setTableDetail(fresh)
+      setMoveSaleId(d.saleId); setMoveLineIds([])
+      setMoveIntent({ kind: 'table', tableId: fresh.tableId, tableName: fresh.tableName, covers: fresh.covers, total: fresh.total })
+    })
+  }
+
+  function startMoveLine(line: TableLine) {
+    const d = tableDetail
+    if (!d) return
+    void tableAction(async () => {
+      await freshFloor()
+      setMoveSaleId(d.saleId); setMoveLineIds([line.id])
+      setMoveIntent({ kind: 'lines', tableId: d.tableId, tableName: d.tableName, label: `${line.quantity > 1 ? `${line.quantity} × ` : ''}${line.name}` })
+    })
+  }
+
+  function cancelMove() {
+    setMoveIntent(null); setMoveSaleId(null); setMoveLineIds([]); setMoveCoversFor(null)
+  }
+
+  function pickMoveTarget(t: FloorTable) {
+    const intent = moveIntent
+    if (!intent) return
+    if (intent.kind === 'pick') {
+      // Elegida la que se cambia: ahora, a dónde va.
+      if (!t.sale) return
+      setMoveSaleId(t.sale.id)
+      setMoveIntent({ kind: 'table', tableId: t.id, tableName: t.name, covers: t.sale.covers, total: t.sale.total })
+      return
+    }
+    const fromId = moveSaleId
+    if (!fromId) return
+    if (intent.kind === 'table') {
+      void tableAction(async () => {
+        const r = await moveTable(fromId, t.id, deviceToken)
+        cancelMove()
+        const aviso = r.printJobs > 0 ? ` Aviso a cocina: ${r.printJobs} ticket(s).` : ''
+        if (r.kind === 'merge') {
+          setFlash(`Mesa ${intent.tableName} juntada con la ${r.tableName}: una cuenta, ${r.covers} personas, ${eur(r.total)}.${aviso}`)
+        } else {
+          setFlash(`Mesa ${intent.tableName} pasa a la ${r.tableName}: ${r.covers} personas, ${eur(r.total)}.${aviso}`)
+        }
+        if (tableSaleId) { setTableSaleId(r.saleId); await reloadTable(r.saleId) } else { await freshFloor() }
+      })
+      return
+    }
+    // Líneas: a una ocupada, directo; a una libre, primero cuántos son.
+    if (!t.sale) { setMoveCoversFor(t); return }
+    void doMoveLines(t, null)
+  }
+
+  function doMoveLines(t: FloorTable, covers: number | null) {
+    const intent = moveIntent
+    const ids = moveLineIds
+    const label = intent?.kind === 'lines' ? intent.label : 'Las líneas'
+    return tableAction(async () => {
+      const r = await moveLines(ids, t.id, covers, deviceToken)
+      cancelMove()
+      setFlash(`${label} → mesa ${r.tableName} (${eur(r.amount)}).${r.printJobs > 0 ? ` Aviso a cocina: ${r.printJobs} ticket(s).` : ''}`)
+      await reloadTable()
+    })
+  }
+
   function clearTableNow() {
     const id = tableSaleId
     if (!id) return
@@ -654,7 +745,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
           quién, y Vender · Sala · Cuentas. Caja y Reservas llegan con sus
           encargos: no se dejan botones que no hacen nada. */}
       {tableSaleId && view === 'vender' ? (
-        <TableHeaderBar detail={tableDetail} tableName="" now={now} warnMinutes={floor?.warnMinutes ?? 90} onBack={leaveTable} />
+        <TableHeaderBar detail={tableDetail} tableName="" now={now} warnMinutes={floor?.warnMinutes ?? 90} onBack={leaveTable} onMove={startMoveTable} />
       ) : (
       <header className="min-h-tpv-header flex items-center gap-2 sm:gap-4 px-3 sm:px-5 py-2 bg-tpv-surface border-b border-tpv-line shrink-0">
         <button onClick={onExit} className="w-10 h-10 rounded-full flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-surface-2 transition-base shrink-0" aria-label="Salir">
@@ -733,7 +824,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
 
       {view === 'sala' ? (
         floor ? (
-          <FloorView floor={floor} now={now} onTapTable={tapTable} />
+          <FloorView floor={floor} now={now} onTapTable={tapTable} onStartMove={startMoveFromFloor} />
         ) : (
           <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-tpv-txt-2" size={28} /></div>
         )
@@ -931,6 +1022,20 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
         </div>
       )}
 
+      {moveIntent && floor && !moveCoversFor && (
+        <MoveTableScreen floor={floor} intent={moveIntent} busy={saving} onPick={pickMoveTarget} onCancel={cancelMove} />
+      )}
+
+      {moveCoversFor && (
+        <OpenTableScreen
+          tableName={moveCoversFor.name}
+          zoneName={floor?.zones.find(z => z.tables.some(t => t.id === moveCoversFor.id))?.name ?? ''}
+          seats={moveCoversFor.seats} busy={saving}
+          onPick={c => void doMoveLines(moveCoversFor, c)}
+          onClose={() => setMoveCoversFor(null)}
+        />
+      )}
+
       {openPick && (
         <OpenTableScreen
           tableName={openPick.name}
@@ -948,6 +1053,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
               name={l.name} quantity={l.quantity} note={l.kitchenNote} canEditNote={false} busy={saving}
               onClose={() => setPendingPick(null)}
               onRemove={() => { setPendingPick(null); savedRemove(l) }}
+              onMoveToTable={() => { setPendingPick(null); startMoveLine(l) }}
               onSave={q => { setPendingPick(null); if (q !== l.quantity) savedQty(l, q) }}
             />
           )
@@ -973,6 +1079,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
         <VoidLineModal
           accountId={activeAccountId} lineName={voidPick.name} tableName={tableDetail?.tableName ?? ''} busy={saving}
           onConfirm={confirmVoid} onClose={() => setVoidPick(null)}
+          onMoveToTable={() => { const l = voidPick; setVoidPick(null); startMoveLine(l) }}
         />
       )}
 

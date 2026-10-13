@@ -4,19 +4,20 @@
 // mesa abierta. «← Sala», «Mesa 4», «Sala · 4 personas · la lleva Marta» y el
 // tiempo, que pasa a ámbar desde el umbral del local.
 //
-// «Cambiar de mesa» (S2), «Dividir la cuenta» (Caja) y «Más» van en sus
-// encargos: no se dejan botones que no hacen nada.
+// «Cambiar de mesa» llega con S2. «Dividir la cuenta» (Caja) y «Más» van en
+// sus encargos: no se dejan botones que no hacen nada.
 
 import { ArrowLeft, Clock } from 'lucide-react'
 import type { TableDetail } from '@/modules/pos/services/posTableService'
 import { minutesSince, formatDuration } from '@/modules/pos/lib/tableState'
 
-export default function TableHeaderBar({ detail, tableName, now, warnMinutes, onBack }: {
+export default function TableHeaderBar({ detail, tableName, now, warnMinutes, onBack, onMove }: {
   detail: TableDetail | null
   tableName: string
   now: number
   warnMinutes: number
   onBack: () => void
+  onMove?: () => void
 }) {
   const minutes = detail ? minutesSince(detail.openedAt, now) : 0
   const late = detail != null && !detail.paidAt && minutes >= warnMinutes
@@ -36,6 +37,13 @@ export default function TableHeaderBar({ detail, tableName, now, warnMinutes, on
         <span className={`h-10 px-3 rounded-tpv-line border inline-flex items-center gap-1.5 text-tpv-tab font-extrabold ${late ? 'border-tpv-warn bg-tpv-warn-tint text-tpv-warn-text' : 'border-tpv-line-strong bg-tpv-surface-2 text-tpv-txt-2'}`}>
           <Clock size={16} strokeWidth={2.4} aria-hidden /> {formatDuration(minutes)}
         </span>
+      )}
+      <div className="flex-grow" />
+      {detail && !detail.paidAt && onMove && (
+        <button type="button" onClick={onMove}
+          className="h-tap-small px-4 rounded-tpv border border-tpv-line-strong bg-tpv-surface-2 text-tpv-txt text-tpv-tab font-bold">
+          Cambiar de mesa
+        </button>
       )}
     </header>
   )
