@@ -29,7 +29,7 @@ begin
   insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name)
   values (v_acc, 'Revisar Prueba D01', 'Revisar Prueba D01, S.L.', 'B00000077', true, 'Prueba D01') returning id into v_p;
   v_sub := public.company_account_add(v_e, '4000', 'Revisar Prueba D01', null, 'supplier', v_p::text, 'Prueba D01')->>'code';
-  perform public.company_account_link_set(v_e, 'supplier', v_p::text, 'gasto', (select id from public.company_account where company_id = v_e and code = '60000000'), 'Prueba D01', 'aprendido_diez');
+  perform public.company_account_link_set(v_e, 'supplier', v_p::text, 'gasto', (select id from public.company_account where company_id = v_e and code = '60000000'), 'Prueba D01', 'manual');
   insert into public.supplier_invoice (account_id, supplier_id, company_id, invoice_number, invoice_date, status, source, grand_total, tax_base_total, tax_total, created_by_name, arrival_channel, reading_confidence, reading)
   values (v_acc, v_p, v_e, 'PD01-R-1', '2026-10-11', 'en_revision', 'ocr', 110, 100, 10, 'Prueba D01', 'correo', 'seguro', '{"porque":["Todo cuadra y trae lo que pide la norma."],"comprobaciones":[]}')
   returning id into v_i;
@@ -40,7 +40,7 @@ begin
   -- 1
   r := public.conta_factura_para_revisar(v_i);
   if r->>'numero' <> 'PD01-R-1' or r->>'confianza' <> 'seguro' or jsonb_array_length(r->'tipos') <> 1 or (r->'tipos'->0->>'base')::numeric <> 100
-     or r->'proveedor'->>'subcuenta' <> v_sub or r->'proveedor'->'gasto'->>'cuenta' <> '60000000' or r->'proveedor'->'gasto'->>'origen' <> 'aprendido_diez'
+     or r->'proveedor'->>'subcuenta' <> v_sub or r->'proveedor'->'gasto'->>'cuenta' <> '60000000' or r->'proveedor'->'gasto'->>'origen' <> 'elegida en su ficha'
      or r->'lectura'->'porque'->>0 is null or r->'asiento' <> 'null'::jsonb then
     raise exception 'PRUEBA D01 revisar · 1: %', r;
   end if;

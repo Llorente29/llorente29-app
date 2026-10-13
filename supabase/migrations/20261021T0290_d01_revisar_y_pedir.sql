@@ -42,9 +42,16 @@ begin
         'id', s.id, 'nombre', s.name, 'razon', s.legal_name, 'nif', s.tax_id,
         'subcuenta', (select a.code from public.company_account_link k join public.company_account a on a.id = k.company_account_id
                        where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'principal' limit 1),
-        'gasto', (select jsonb_build_object('cuenta', a.code, 'nombre', a.name, 'origen', k.source)
-                    from public.company_account_link k join public.company_account a on a.id = k.company_account_id
-                   where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'gasto' limit 1),
+        -- «Sus facturas se apuntan en», con su origen dicho para una persona: la
+        -- cuenta de su ficha si la tiene; si no, la aprendida de sus facturas
+        -- anteriores («aprendido de Diez» o «aprendido de tus facturas», 0250).
+        'gasto', coalesce(
+          (select jsonb_build_object('cuenta', a.code, 'nombre', a.name,
+                    'origen', case k.source when 'manual' then 'elegida en su ficha' when 'ai_accepted' then 'propuesta aceptada en su ficha' else 'de su ficha' end)
+             from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+            where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'gasto' limit 1),
+          (select case when g->>'cuenta' is not null then jsonb_build_object('cuenta', g->>'cuenta', 'nombre', g->>'nombre', 'origen', g->>'origen') end
+             from public.conta_gasto_aprendido(v_company, s.id) g)),
         'facturacion', (select jsonb_build_object('nombre', c.name, 'email', c.email) from public.supplier_contact c
                          where c.supplier_id = s.id and c.account_id = s.account_id and c.role = 'billing' and c.email is not null order by c.created_at limit 1))
       from public.supplier s where s.id = v_i.supplier_id and s.account_id = v_i.account_id),

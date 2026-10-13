@@ -48,9 +48,16 @@ begin
         'id', s.id, 'nombre', s.name, 'razon', s.legal_name, 'nif', s.tax_id,
         'subcuenta', (select a.code from public.company_account_link k join public.company_account a on a.id = k.company_account_id
                        where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'principal' limit 1),
-        'gasto', (select jsonb_build_object('cuenta', a.code, 'nombre', a.name, 'origen', k.source)
-                    from public.company_account_link k join public.company_account a on a.id = k.company_account_id
-                   where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'gasto' limit 1),
+        -- «Sus facturas se apuntan en», con su origen dicho para una persona: la
+        -- cuenta de su ficha si la tiene; si no, la aprendida de sus facturas
+        -- anteriores («aprendido de Diez» o «aprendido de tus facturas», 0250).
+        'gasto', coalesce(
+          (select jsonb_build_object('cuenta', a.code, 'nombre', a.name,
+                    'origen', case k.source when 'manual' then 'elegida en su ficha' when 'ai_accepted' then 'propuesta aceptada en su ficha' else 'de su ficha' end)
+             from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+            where k.company_id = v_company and k.entity = 'supplier' and k.entity_id = s.id::text and k.role = 'gasto' limit 1),
+          (select case when g->>'cuenta' is not null then jsonb_build_object('cuenta', g->>'cuenta', 'nombre', g->>'nombre', 'origen', g->>'origen') end
+             from public.conta_gasto_aprendido(v_company, s.id) g)),
         'facturacion', (select jsonb_build_object('nombre', c.name, 'email', c.email) from public.supplier_contact c
                          where c.supplier_id = s.id and c.account_id = s.account_id and c.role = 'billing' and c.email is not null order by c.created_at limit 1))
       from public.supplier s where s.id = v_i.supplier_id and s.account_id = v_i.account_id),
@@ -111,8 +118,6 @@ comment on function public.conta_factura_pedir(uuid, uuid, date, text, text, boo
   'D01 · «Pedírselas»: guarda la petición CONFIRMADA por la persona (una por proveedor y mes) y, si lo pide, la dirección como contacto de Facturación. No envía: el correo lo manda la persona mientras no haya dominio.';
 revoke all on function public.conta_factura_pedir(uuid, uuid, date, text, text, boolean, text, text, text) from public, anon;
 grant execute on function public.conta_factura_pedir(uuid, uuid, date, text, text, boolean, text, text, text) to authenticated;
-
--- ── La prueba ──
 do $$ begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'PRUEBA D01 revisar: esta base tiene cuentas de producción. No se toca nada.';
@@ -131,7 +136,7 @@ begin
   insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name)
   values (v_acc, 'Revisar Prueba D01', 'Revisar Prueba D01, S.L.', 'B00000077', true, 'Prueba D01') returning id into v_p;
   v_sub := public.company_account_add(v_e, '4000', 'Revisar Prueba D01', null, 'supplier', v_p::text, 'Prueba D01')->>'code';
-  perform public.company_account_link_set(v_e, 'supplier', v_p::text, 'gasto', (select id from public.company_account where company_id = v_e and code = '60000000'), 'Prueba D01', 'aprendido_diez');
+  perform public.company_account_link_set(v_e, 'supplier', v_p::text, 'gasto', (select id from public.company_account where company_id = v_e and code = '60000000'), 'Prueba D01', 'manual');
   insert into public.supplier_invoice (account_id, supplier_id, company_id, invoice_number, invoice_date, status, source, grand_total, tax_base_total, tax_total, created_by_name, arrival_channel, reading_confidence, reading)
   values (v_acc, v_p, v_e, 'PD01-R-1', '2026-10-11', 'en_revision', 'ocr', 110, 100, 10, 'Prueba D01', 'correo', 'seguro', '{"porque":["Todo cuadra y trae lo que pide la norma."],"comprobaciones":[]}')
   returning id into v_i;
@@ -142,7 +147,7 @@ begin
   -- 1
   r := public.conta_factura_para_revisar(v_i);
   if r->>'numero' <> 'PD01-R-1' or r->>'confianza' <> 'seguro' or jsonb_array_length(r->'tipos') <> 1 or (r->'tipos'->0->>'base')::numeric <> 100
-     or r->'proveedor'->>'subcuenta' <> v_sub or r->'proveedor'->'gasto'->>'cuenta' <> '60000000' or r->'proveedor'->'gasto'->>'origen' <> 'aprendido_diez'
+     or r->'proveedor'->>'subcuenta' <> v_sub or r->'proveedor'->'gasto'->>'cuenta' <> '60000000' or r->'proveedor'->'gasto'->>'origen' <> 'elegida en su ficha'
      or r->'lectura'->'porque'->>0 is null or r->'asiento' <> 'null'::jsonb then
     raise exception 'PRUEBA D01 revisar · 1: %', r;
   end if;
