@@ -32,6 +32,7 @@
 import { BASE_REAL, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
 import { facturaDeVentas } from './diezFactura.ts'
+import { facturaRecibida, type FacturaRecibida } from './diezRecibida.ts'
 import { resumenDeAsiento, type ResumenBD } from './resumenDeAsiento.ts'
 
 /** Una fila de public.external_send (lo que este núcleo lee y escribe). */
@@ -107,11 +108,77 @@ function noLlega(motivo: string, reintentar = true): ResultadoEnvio {
   return { estado: 'no_llega', motivo, reintentar, texto: `No ha llegado a Diez: ${motivo}.` }
 }
 
+/** Lo que todo envío necesita del asiento, sea de ventas o de una factura recibida. */
+type Base = { id: string; account_id: string; company_id: string; estado: string; fecha: string; documento: { id: string; ruta: string; nombre: string; sha256: string } | null }
+/**
+ * Cómo se hace la factura de Diez de un asiento:
+ *   · preparar(): sin hablar con Diez, la serie, el número y la cuenta (para
+ *     no enviarla dos veces) y el mes donde buscarla; o por qué no se sabe;
+ *   · construir(delMes): la factura que se manda, con lo que haga falta de
+ *     Diez (el nombre del cliente de la 430, en ventas); o por qué no.
+ */
+type Plan = {
+  preparar(): { serie: string; numero: string; cuenta: string; mes: string } | { motivo: string; reintentar: boolean }
+  construir(delMes: Factura[]): { fd: FacturaData } | { motivo: string; reintentar: boolean }
+}
+
 export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promise<ResultadoEnvio> {
   const r = await p.resumen(entryId)
+  const corr = p.correspondencia(r.company_id)
+  const plan: Plan = {
+    preparar: () => {
+      const listo = resumenDeAsiento(r, { correspondencia: corr, generado: p.ahora(), hoy: hoyMadrid(p.ahora()) })
+      if (!listo.factura) return { motivo: listo.sinFactura ?? 'esta factura no se sabe mandar', reintentar: false }
+      const f = listo.factura.factura
+      return { serie: f.Serie, numero: String(f.NumeroFactura), cuenta: f.CuentaCliente, mes: String(f.FechaFactura).slice(0, 6) }
+    },
+    construir: (delMes) => {
+      const f0 = (plan.preparar() as { serie: string; numero: string; cuenta: string })
+      const nombres = [...new Set(delMes.filter((f) => String(f.CuentaCliente) === f0.cuenta).map((f) => String(f.NombreCliente ?? '')).filter(Boolean))]
+      const ya = delMes.some((f) => String(f.Serie) === f0.serie && String(f.NumeroFactura) === f0.numero && String(f.CuentaCliente) === f0.cuenta)
+      if (!ya && nombres.length !== 1) return { motivo: `el nombre del cliente de la ${f0.cuenta} no es uno solo en Diez (${nombres.length}): no se inventa`, reintentar: false }
+      return { fd: facturaDeVentas({ fecha: r.fecha, local: r.local!.nombre, canal: r.canal!.slug, lineas: r.lineas.map((l) => ({ cuenta: l.cuenta, debe: Number(l.debe), haber: Number(l.haber), marca: l.marca, tipoIva: l.tipoIva })) },
+        { correspondencia: corr!, nombreCliente: nombres[0] ?? '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura }
+    },
+  }
+  return enviar(r, plan, p)
+}
+
+/**
+ * D01 · Tarea 5 · Una FACTURA RECIBIDA validada, a la serie 2 de Diez, con su
+ * PDF. Los mismos frenos que las ventas, en el mismo orden (enviar(), abajo):
+ * solo lo validado, sin documento no se envía, ni C0001 ni C0008, «Diez no
+ * guarda documentos todavía», nunca dos veces y el documento leído de vuelta.
+ * La factura, la de _shared/diezRecibida.ts (medida en la C0009); lo que no se
+ * ha medido (retención, recargo, abonos) no se manda y dice por qué.
+ */
+export async function enviarRecibidaADiez(entryId: string, p: PuertoEnvio & { recibida(entryId: string): Promise<RecibidaBD> }): Promise<ResultadoEnvio> {
+  const r = await p.recibida(entryId)
+  let hecha: FacturaRecibida | null = null
+  let porque: string | null = null
+  try {
+    hecha = facturaRecibida({ fecha: r.fecha, fechaFactura: r.factura.fecha, numero: r.factura.numero ?? '', proveedor: r.proveedor, lineas: r.lineas }, { hoy: hoyMadrid(p.ahora()) })
+  } catch (x) { porque = x instanceof Error ? x.message : String(x) }
+  const plan: Plan = {
+    preparar: () => hecha
+      ? { serie: '2', numero: String(hecha.factura.NumeroFactura), cuenta: hecha.factura.CuentaCliente, mes: String(hecha.factura.FechaFactura).slice(0, 6) }
+      : { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false },
+    construir: () => (hecha ? { fd: hecha.factura } : { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false }),
+  }
+  return enviar(r, plan, p)
+}
+
+/** Lo que conta_recibida_envio devuelve de un asiento de factura recibida. */
+export type RecibidaBD = Base & {
+  factura: { numero: string | null; fecha: string }
+  proveedor: { nombre: string; nif: string | null }
+  lineas: { cuenta: string; debe: number; haber: number; tipoIva: number | null; baseIva: number | null }[]
+}
+
+async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnvio> {
   if (r.estado !== 'validado') return noLlega(`el asiento está ${r.estado}: solo se envía lo validado`, false)
 
-  let previo = await p.envio(entryId)
+  let previo = await p.envio(r.id)
   if (previo && (previo.status === 'enviado' || previo.status === 'enlazado') && previo.document_status === 'adjunto') {
     return { estado: 'en_diez', serie: String(previo.ext_series), documento: Number(previo.ext_number), enlazada: previo.status === 'enlazado', texto: `Ya estaba en Diez: ${previo.ext_series}/${previo.ext_number}, con su documento.` }
   }
@@ -133,9 +200,8 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
   if (!r.documento) return apuntar('falta el documento', { document_status: 'pendiente', document_error: 'Folvy aún no ha guardado el PDF de este asiento' })
 
   // 1 · La factura (con su patrón medido).
-  const corr = p.correspondencia(r.company_id)
-  const listo = resumenDeAsiento(r, { correspondencia: corr, generado: p.ahora(), hoy: hoyMadrid(p.ahora()) })
-  if (!listo.factura) return apuntar(listo.sinFactura ?? 'esta factura no se sabe mandar', {}, false)
+  const plano = plan.preparar()
+  if ('motivo' in plano) return apuntar(plano.motivo, {}, plano.reintentar)
 
   // 3 · La conexión: ni C0001 ni C0008.
   const con = await p.conexion(r.company_id)
@@ -151,8 +217,7 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
 
   const diez = await p.cliente(con)
   const ej = r.fecha.slice(0, 4)
-  const fd0 = listo.factura.factura
-  const delMes = await diez.facturasDelMes(String(fd0.FechaFactura).slice(0, 6))
+  const delMes = await diez.facturasDelMes(plano.mes)
 
   // 4 · ¿Guarda Diez documentos? Se pregunta por una factura que ya tiene.
   const muestra = delMes.find((f) => f.Documento != null)
@@ -166,13 +231,12 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
   let documento = Number(previo?.ext_number ?? 0)
   let enlazada = previo?.status === 'enlazado'
   if (!(previo && (previo.status === 'enviado' || previo.status === 'enlazado'))) {
-    const ya = [...new Map(delMes.filter((f) => String(f.Serie) === fd0.Serie && String(f.NumeroFactura) === fd0.NumeroFactura && String(f.CuentaCliente) === fd0.CuentaCliente)
+    const ya = [...new Map(delMes.filter((f) => String(f.Serie) === plano.serie && String(f.NumeroFactura) === plano.numero && String(f.CuentaCliente) === plano.cuenta)
       .map((f) => [String(f.Documento), f])).values()]
-    if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${fd0.NumeroFactura} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
-    const nombres = [...new Set(delMes.filter((f) => String(f.CuentaCliente) === fd0.CuentaCliente).map((f) => String(f.NombreCliente ?? '')).filter(Boolean))]
-    if (ya.length === 0 && nombres.length !== 1) return apuntar(`el nombre del cliente de la ${fd0.CuentaCliente} no es uno solo en Diez (${nombres.length}): no se inventa`, { account_connector_id: con.id }, false)
-    const fd = facturaDeVentas({ fecha: r.fecha, local: r.local!.nombre, canal: r.canal!.slug, lineas: r.lineas.map((l) => ({ cuenta: l.cuenta, debe: Number(l.debe), haber: Number(l.haber), marca: l.marca, tipoIva: l.tipoIva })) },
-      { correspondencia: corr!, nombreCliente: nombres[0] ?? '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura
+    if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${plano.numero} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
+    const hecha = plan.construir(delMes)
+    if ('motivo' in hecha) return apuntar(hecha.motivo, { account_connector_id: con.id }, hecha.reintentar)
+    const fd = hecha.fd
     const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(fd)))
     const comun = { entry_id: r.id, account_id: r.account_id, company_id: r.company_id, account_connector_id: con.id, kind: 'factura' as const, ext_invoice_number: String(fd.NumeroFactura), payload_hash: hash, document_id: r.documento.id }
     if (ya.length === 1) {

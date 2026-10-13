@@ -1,11 +1,9 @@
-# D01 R2 punto 3 — la regla de repetidas, entera la del C01b (sesión A; cambia una función con su misma firma).
-# La 0200 a la 0250 ya están en staging (la 0250, run 38441602839).
-#   ensayo: la 0260 y su prueba en una transacción con ROLLBACK.
-#   0260:   supplier_invoice_repetida: el mismo número con otro total, o sin
-#           total, no es nada; posible solo por fecha y total (no 0).
-#   Su prueba, la de la base y la de las entradas, con la 0260 puesta.
-supabase/staging/sql/20261021_d01_repetidas_c01b_ensayo.sql
-supabase/migrations/20261021T0260_d01_repetidas_c01b.sql
-supabase/staging/sql/20261021_d01_repetidas_prueba.sql
-supabase/staging/sql/20261021_d01_base_prueba.sql
-supabase/staging/sql/20261021_d01_entrada_prueba.sql
+# D01 R2 · Lo que queda de la tarea 5 (sesión A; solo añade).
+# La 0200 a la 0260 ya están en staging (la 0260, run 38443203154).
+#   ensayo: la 0270 y su prueba en una transacción con ROLLBACK.
+#   0270:   conta_recibida_envio, lo que el envío a Diez lee de una recibida.
+#   Su prueba, y la del R15 (el envío de ventas no cambia).
+supabase/staging/sql/20261021_d01_recibida_envio_ensayo.sql
+supabase/migrations/20261021T0270_d01_recibida_envio.sql
+supabase/staging/sql/20261021_d01_recibida_envio_prueba.sql
+supabase/staging/sql/20261021_conta_documentos_prueba.sql

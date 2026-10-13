@@ -1,7 +1,8 @@
 // supabase/functions/conta-diez-enviar/index.ts
 //
 // C04b · R15 · «Validar y enviar a Diez»: envía a Diez un asiento de ventas ya
-// VALIDADO, con su documento. Lo llama el Libro, con la sesión de quien pulsa,
+// VALIDADO, con su documento. D01: también una factura recibida, a la serie 2
+// (enviarRecibidaADiez), con los mismos frenos. Lo llama el Libro, con la sesión de quien pulsa,
 // después de validar y de guardar el PDF.
 //
 // Todo lo que decide está en _shared/diezEnviar.ts (probado freno a freno en
@@ -23,7 +24,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { ClienteDiez, type AlmacenToken } from "../_shared/diezCliente.ts";
 import { correspondenciaDeEmpresa } from "../_shared/diezAnalitica.ts";
-import { enviarAsientoADiez, type ConexionDiez, type EnvioFila, type PuertoEnvio } from "../_shared/diezEnviar.ts";
+import { enviarAsientoADiez, enviarRecibidaADiez, type ConexionDiez, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
 import type { ResumenBD } from "../_shared/resumenDeAsiento.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -48,16 +49,22 @@ Deno.serve(async (req) => {
   try { const b = await req.json() as { entry_id?: unknown }; entryId = typeof b.entry_id === "string" ? b.entry_id : ""; } catch { /* vacío */ }
   if (!/^[0-9a-f-]{36}$/i.test(entryId)) return json({ error: "falta entry_id" }, 400);
 
-  // El asiento, con los permisos de quien llama.
-  const { data: resumen, error: e1 } = await sb.rpc("conta_resumen_ventas", { p_entry: entryId });
+  // El asiento, con los permisos de quien llama. D01: una factura recibida se
+  // lee con conta_recibida_envio y va a la serie 2; lo demás, como siempre.
+  const { data: cab } = await sb.from("journal_entry").select("source_type").eq("id", entryId).maybeSingle();
+  const esRecibida = (cab as { source_type?: string } | null)?.source_type === "supplier_invoice";
+  const { data: leido, error: e1 } = await sb.rpc(esRecibida ? "conta_recibida_envio" : "conta_resumen_ventas", { p_entry: entryId });
   if (e1) return json({ estado: "no_llega", motivo: e1.message, reintentar: false, texto: `No ha llegado a Diez: ${e1.message}` }, e1.code === "P0002" ? 404 : 400);
-  const r = resumen as ResumenBD;
+  const r = leido as ResumenBD;
+  const rec = leido as unknown as RecibidaBD;
   const { data: puede } = await sb.rpc("current_user_is_admin_or_manager_of", { p_account_id: r.account_id });
   if (puede !== true) return json({ error: "Solo un administrador o un encargado de la cuenta envía a Diez." }, 403);
 
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
-  const puerto: PuertoEnvio = {
+  const puerto: PuertoEnvio & { recibida(id: string): Promise<RecibidaBD> } = {
     resumen: async () => r,
+    // Los números de la base llegan como texto o número: se pasan a número.
+    recibida: async () => ({ ...rec, lineas: (rec.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), tipoIva: l.tipoIva == null ? null : Number(l.tipoIva), baseIva: l.baseIva == null ? null : Number(l.baseIva) })) }),
     envio: async (id) => {
       const { data, error } = await srv.from("external_send").select("*").eq("entry_id", id).eq("account_id", r.account_id).neq("status", "rechazado").maybeSingle();
       if (error) throw new Error(`no se ha podido leer el envío: ${error.message}`);
@@ -114,7 +121,7 @@ Deno.serve(async (req) => {
   };
 
   try {
-    return json(await enviarAsientoADiez(entryId, puerto));
+    return json(await (esRecibida ? enviarRecibidaADiez(entryId, puerto) : enviarAsientoADiez(entryId, puerto)));
   } catch (x) {
     const motivo = x instanceof Error ? x.message : String(x);
     return json({ estado: "no_llega", motivo, reintentar: true, texto: `No ha llegado a Diez: ${motivo}.` }, 500);
