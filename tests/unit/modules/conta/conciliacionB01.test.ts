@@ -13,9 +13,9 @@ function ctx(p: Partial<Contexto> = {}): Contexto {
     cuentas: [{ id: NORTE, nombre: 'Cuenta Norte', cuenta: '57200001' }, { id: SUR, nombre: 'Cuenta Sur', cuenta: '57200002' }],
     sinCasar: [], facturas: [], saldosTraidos: [], proveedores: [], clientes: [], liquidaciones: [], plataformas: [],
     nominas: [], impuestos: [], contratos: [], reglas: [], aprendido: [], asientos: [],
-    nombres: { '62800000': 'Luz y agua', '60000000': 'Comida y bebida', '62600000': 'Comisiones del banco', '47600000': 'Seguridad Social a pagar',
+    nombres: { '57000000': 'Caja.', '62800000': 'Luz y agua', '60000000': 'Comida y bebida', '62600000': 'Comisiones del banco', '47600000': 'Seguridad Social a pagar',
       '40700000': 'Anticipos a proveedores', '17000000': 'Préstamo a largo plazo', '66200000': 'Intereses del préstamo' },
-    cuentas626: '62600000', cuentas476: '47600000',
+    cuentas626: '62600000', cuentas476: '47600000', cuentaCaja: '57000000',
     ...p,
   }
 }
@@ -157,10 +157,10 @@ describe('Probable: una línea con el porqué', () => {
   it('reglas y lo aprendido por contraparte; la tarjeta pide el ticket', () => {
     const regla = { id: 'r1', palabras: 'Cuando el concepto tenga «PLENITUDE» → Luz y agua · 62800000', contiene: 'PLENITUDE', signo: -1 as const, cuenta: '62800000', terceroId: null }
     const d = decidir(mov({ importeCent: -12_345, concepto: 'RECIBO PLENITUDE ENERGIA' }), ctx({ reglas: [regla] }))
-    expect(d).toMatchObject({ confianza: 'probable', reglaId: 'r1', que: 'Luz y agua', porque: `Regla: ${regla.palabras}.` })
+    expect(d).toMatchObject({ confianza: 'probable', reglaId: 'r1', que: 'Luz y agua · 62800000', porque: `Regla: ${regla.palabras}.` })
     const t = decidir(mov({ importeCent: -8_640, concepto: 'PAGO CON TARJETA MERCADO CENTRAL 0937', conceptoComun: '12' }),
       ctx({ aprendido: [{ contraparte: 'MERCADO CENTRAL', cuenta: '60000000', terceroId: null, veces: 6 }] }))
-    expect(t).toMatchObject({ confianza: 'probable', pideTicket: true, que: 'Comida y bebida · ¿ticket?' })
+    expect(t).toMatchObject({ confianza: 'probable', pideTicket: true, que: 'Comida y bebida · 60000000 · ¿ticket?' })
     expect(t.porque).toBe('Las 6 anteriores de este comercio fueron Comida y bebida · 60000000. Falta el ticket.')
   })
 
@@ -196,6 +196,31 @@ describe('Por aclarar: dice qué falta', () => {
 
   it('un pago a Hacienda sin modelo pendiente pregunta modelo y periodo', () => {
     expect(decidir(mov({ importeCent: -90_000, concepto: 'ADEUDO AEAT MODELO 303' }), ctx()).falta).toBe('el modelo y el periodo')
+  })
+})
+
+describe('Lo que enseñó la demostración de staging (run 190)', () => {
+  it('el otro lado de un traspaso lleva su pareja y no se propone aparte', () => {
+    const entra = mov({ importeCent: 150_000, concepto: 'TRASPASO DE CUENTA NORTE', fecha: '2026-10-06', cuentaId: SUR })
+    const sale = mov({ importeCent: -150_000, concepto: 'TRASPASO A CUENTA SUR', fecha: '2026-10-06' })
+    const ds = conciliar([sale, entra], ctx({ sinCasar: [sale, entra] }))
+    const conDestino = ds.filter((d) => d.destino?.tipo === 'traspaso')
+    const pareja = ds.filter((d) => d.otroLadoDe)
+    expect(conDestino).toHaveLength(1)
+    expect(pareja).toHaveLength(1)
+    expect(pareja[0].otroLadoDe).toBe(conDestino[0].movimientoId)
+  })
+  it('el nombre de la cuenta sin el punto final («Caja. · 57000000» no)', () => {
+    expect(nombreCuenta(ctx(), '57000000')).toBe('Caja · 57000000')
+  })
+  it('tarjeta sin historial: pide el ticket, no una factura', () => {
+    const d = decidir(mov({ importeCent: -8_640, concepto: 'PAGO CON TARJETA MERCADO CENTRAL 0937', conceptoComun: '12' }), ctx())
+    expect(d).toMatchObject({ confianza: 'duda', pideTicket: true, que: 'Pago con tarjeta · ¿ticket?', falta: 'el ticket' })
+    expect(d.porque).toBe('Pago con tarjeta en MERCADO CENTRAL que aún no conozco: sube la foto del ticket y lo aprendo.')
+  })
+  it('ingreso de efectivo: probable desde la caja (570)', () => {
+    const d = decidir(mov({ importeCent: 200_000, concepto: 'INGRESO EFECTIVO', conceptoComun: '02' }), ctx())
+    expect(d).toMatchObject({ confianza: 'probable', que: 'Ingreso de efectivo · Caja · 57000000', destino: { lineas: [{ cuenta: '57000000', importe: 2000 }] } })
   })
 })
 

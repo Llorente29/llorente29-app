@@ -237,6 +237,7 @@ export function crearBancos(bd: Bd) {
         concepto: String(a.concepto), origen: a.origen as AsientoLibre['origen'] })),
       nombres,
       cuentas626: hoja('626') ?? '62600000',
+      cuentaCaja: hoja('570') ?? null,
       cuentas476: nombre476,
     }
     return { ctx, movimientos }
@@ -248,7 +249,8 @@ export function crearBancos(bd: Bd) {
     const r: ResultadoConciliar = { casadosSolos: 0, propuestos: 0, porAclarar: 0, antesDelCorte: 0, fallos: [], decisiones }
     const hechos = new Set<string>()
     for (const d of decisiones) {
-      if (hechos.has(d.movimientoId)) continue
+      // El otro lado de un traspaso lo casa la decisión de su pareja: no se propone aparte.
+      if (hechos.has(d.movimientoId) || d.otroLadoDe) continue
       const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte }
       try {
         if (d.confianza === 'seguro' && d.destino) {

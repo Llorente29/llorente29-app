@@ -16,7 +16,7 @@
    165), con `ROLLBACK`.
 3. **El motor** solo da por seguros los cuatro casos del encargo, y solo con un
    candidato único. Todo lo demás lo propone con su porqué o lo deja «por
-   aclarar» diciendo qué falta. Nada se casa dos veces. Tiene 33 pruebas.
+   aclarar» diciendo qué falta. Nada se casa dos veces. Tiene 37 pruebas.
 4. **El banco paga y cobra por los caminos de siempre**:
    `mark_supplier_invoice_paid` y `channel_settlement_collect`. El freno del
    IBAN de la factura (C01b) también para al banco, y la prueba lo comprueba.
@@ -150,7 +150,45 @@ administrador de A y usa **el mismo código que usará la pantalla**:
 5. **Lo deshace todo**: asientos de A antes = después, con el mismo recuento a
    los dos lados.
 
-El resultado del run y la captura van en el mensaje de la parada.
+**Resultado: run 190 (commit `9528ec7`), la demostración PASÓ.** La captura
+está en `docs/conta/capturas/b01/motor-ordenador.png` y la tabla con cada porqué
+en `motor.md`. El workflow no las subió solo porque fallaron otras 6 pruebas
+ajenas a B01 (abajo). Las he hecho con lo que la demostración dejó escrito en
+staging (`bank_activity_log`), con el porqué **literal** que se escribió y el
+mismo HTML que la prueba.
+
+```
+He casado yo 4 de 14 movimientos de octubre. Te quedan 4 por confirmar y 6 por aclarar.
+casado solo:  B01-0477 por su referencia · el traspaso Norte→Sur (los dos lados) · el cobro de su liquidación (3.412,18)
+para confirmar: dos comisiones (626) · pago en parte de B01-0478 (quedan 350,00) · pago en parte de F-2026-0915 (quedan 1.063,15)
+por aclarar:  TGSS sin nómina (propone 476) · 1.278,17 sin dueño · dos tarjetas · un recibo de teléfono · un ingreso de efectivo
+asientos de la empresa A antes = después de deshacer
+```
+
+**Lo que enseñó, ya corregido (37 pruebas del motor):**
+- El lado Norte del traspaso quedó apuntado un momento como «por aclarar» antes
+  de que el lado Sur casara los dos. El estado final era bueno, pero «Lo que ha
+  hecho Folvy» enseñaría una línea de más. Ahora el otro lado lleva
+  `otroLadoDe` y no se propone aparte.
+- El nombre de la cuenta arrastraba el punto final del plan («…datáfono. ·
+  62600000»). Ya no.
+- La tarjeta sin historial decía «no hay factura»: ahora pide el ticket. Y un
+  ingreso de efectivo sale como probable desde la caja (570).
+
+**Las 6 que fallan en ese run no son de B01.** La línea base, mi primer run
+(tarea 2, sin nada mío en staging), ya fallaba en 5:
+- `cierre/cierre.spec.ts:48` y `:58` (×2): staging cierra ahora a las **2:00** y
+  la prueba espera las 6:00. Es la migración `20261019T0170_cierre_a_las_dos`
+  del frente A, aplicada en staging.
+- `c01b/flujos.spec.ts:161` (×2): al crear su factura de prueba, la base dice
+  «Repetida: ya está la factura E2E-001 de este proveedor». Hay facturas
+  `E2E-001` / `e2e-001` sobrantes en staging de runs cortados, y la sesión
+  `conta/d01-recibidas` está cambiando la regla de repetidas.
+- El run 188 llegó a 43 fallos, casi todos del móvil: varias sesiones lanzaron
+  e2e a la vez (C a las 16:19, D01 a las 16:39). El grupo de concurrencia es
+  **por rama** y cada run pone una contraseña nueva a los mismos cuatro usuarios
+  de prueba, así que se pisan. Propuesta: un grupo de concurrencia común para
+  las e2e de staging. Es un workflow compartido y no lo he tocado.
 
 ## 5. La población real (regla 31), solo recuentos
 
