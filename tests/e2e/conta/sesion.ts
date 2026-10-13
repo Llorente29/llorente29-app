@@ -12,18 +12,48 @@
 //
 // La contraseña llega por la variable CLAVE_PRUEBAS, que el workflow genera
 // al azar en cada ejecución y no se imprime. Nunca está en el repositorio.
+//
+// USUARIOS POR FRENTE (C06, respuesta 2): cada frente (A, B y C) tiene sus
+// propios dobles de los cuatro usuarios de prueba (seed_e2e_frentes_staging.sql),
+// y su e2e solo cambia la contraseña de los suyos: dos frentes a la vez ya no se
+// pisan. El frente lo pone el workflow en E2E_FRENTE, sacado de la rama. Sin
+// frente, los de siempre. Las cuentas A y B son las mismas para todos; la C (la
+// que vive sin empresa) es una por frente, porque el alta borra todas las suyas.
 
 import type { Page } from '@playwright/test'
 
 export const STAGING_URL = 'https://oseymswjlzplqoxrfjzi.supabase.co'
 export const CLAVE_STORAGE = 'sb-oseymswjlzplqoxrfjzi-auth-token'
 
-export const CUENTA_A = { id: 'c01a0000-0000-4000-8000-00000000000a', email: 'a.admin@prueba.folvy.test' }
-export const CUENTA_B = { id: 'c01b0000-0000-4000-8000-00000000000b', email: 'b.admin@prueba.folvy.test' }
+/** El frente de esta ejecución ('a', 'b' o 'c'), o null: los usuarios de siempre. */
+export const FRENTE = frenteDe(process.env.E2E_FRENTE)
+
+export function frenteDe(valor: string | undefined): 'a' | 'b' | 'c' | null {
+  const v = (valor ?? '').trim().toLowerCase()
+  if (v === '') return null
+  if (v === 'a' || v === 'b' || v === 'c') return v
+  throw new Error(`E2E_FRENTE tiene que ser a, b, c o nada; es «${valor}».`)
+}
+
+/** El correo del usuario de prueba para el frente: a.admin@… → a.admin.frente-b@…; sin frente, el de siempre. */
+export function correoDelFrente(correo: string, frente: 'a' | 'b' | 'c' | null = FRENTE): string {
+  if (!frente) return correo
+  const [local, dominio] = correo.split('@')
+  return `${local}.frente-${frente}@${dominio}`
+}
+
+export const CUENTA_A = { id: 'c01a0000-0000-4000-8000-00000000000a', email: correoDelFrente('a.admin@prueba.folvy.test') }
+export const CUENTA_B = { id: 'c01b0000-0000-4000-8000-00000000000b', email: correoDelFrente('b.admin@prueba.folvy.test') }
 /** El encargado de A (rol manager, no administrador): semilla seed_c00_encargado_prueba.sql. */
-export const ENCARGADO_A = { id: 'c01a0000-0000-4000-8000-0000000000a6', email: 'a.encargado@prueba.folvy.test' }
-/** Una cuenta SIN empresa, para el alta a pantalla completa (N1bAlta): semilla seed_c00_cuenta_c_sin_empresa.sql. */
-export const CUENTA_C = { id: 'c01c0000-0000-4000-8000-00000000000c', email: 'c.admin@prueba.folvy.test' }
+export const ENCARGADO_A = { id: 'c01a0000-0000-4000-8000-0000000000a6', email: correoDelFrente('a.encargado@prueba.folvy.test') }
+/**
+ * Una cuenta SIN empresa, para el alta a pantalla completa (N1bAlta): semilla
+ * seed_c00_cuenta_c_sin_empresa.sql; con frente, la C de ese frente.
+ */
+export const CUENTA_C = {
+  id: FRENTE ? `e2e0000${FRENTE}-0000-4000-8000-00000000000c` : 'c01c0000-0000-4000-8000-00000000000c',
+  email: correoDelFrente('c.admin@prueba.folvy.test'),
+}
 export const HERMANOS_RUIZ = 'c01a0000-0000-4000-8000-0000000000a3'
 export const CARNES_SUR = 'c01b0000-0000-4000-8000-0000000000b3'
 
