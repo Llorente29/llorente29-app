@@ -166,7 +166,8 @@ begin
     perform public.conta_factura_pedir(v_e, v_p, '2026-10-01', 'no es un correo', null, false, 'x', 'y', 'Prueba D01');
     raise exception 'PRUEBA D01 revisar · 2: ha aceptado una dirección mal escrita.';
   exception when sqlstate '22023' then null; end;
-  if (r := public.conta_factura_para_revisar(v_i)) is null or r->'proveedor'->'facturacion'->>'email' <> 'facturas@proveedor-prueba.test' then
+  r := public.conta_factura_para_revisar(v_i);
+  if r is null or r->'proveedor'->'facturacion'->>'email' <> 'facturas@proveedor-prueba.test' then
     raise exception 'PRUEBA D01 revisar · 2: la ficha no trae el contacto de Facturación: %', r->'proveedor';
   end if;
   raise notice 'PRUEBA D01 revisar · 2: confirmada por quien la pide (no «enviada»), contacto de Facturación guardado, una por mes, y una dirección mal escrita no.';
