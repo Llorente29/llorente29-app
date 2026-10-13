@@ -1,0 +1,123 @@
+// Los documentos exportados de Diez: clave por nombre, cruce con el Excel y PDF
+// con cabeceras HTTP delante (medido en septiembre de 2026). Datos inventados
+// con la forma medida; ningún PDF real.
+
+import { describe, expect, it } from 'vitest'
+import { claveDeCodigoExcel, claveDeFichero, cruzar, limpiarDocumento, limpiarPdf, pendienteDeDocumento } from '../../../supabase/functions/_shared/diezDocumentos'
+
+const enc = (s: string) => new TextEncoder().encode(s)
+const PDF_MIN = '%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n'
+
+describe('la clave del asiento', () => {
+  it('del nombre del PDF', () => {
+    expect(claveDeFichero('C0008_F2026_2_3172.PDF')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '2', documento: 3172, extension: 'pdf' })
+    expect(claveDeFichero('C0008_F2026_1_1119.pdf')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '1', documento: 1119, extension: 'pdf' })
+    expect(claveDeFichero('factura.pdf')).toBeNull()
+    expect(claveDeFichero('C0008_F2026_2_3172.PDF.zip')).toBeNull()
+  })
+  it('del código del Excel', () => {
+    expect(claveDeCodigoExcel('C0008_CON_202_RECIBIDA_2026_2_3172.pdf')).toEqual({ base: 'C0008', ejercicio: '2026', serie: '2', documento: 3172, libro: 'recibida', extension: 'pdf' })
+    expect(claveDeCodigoExcel('C0008_CON_201_EXPEDIDA_2026_1_1119.pdf')).toMatchObject({ serie: '1', documento: 1119, libro: 'expedida' })
+    expect(claveDeCodigoExcel('')).toBeNull()
+  })
+  // 2024–2026 (T2 §9): resúmenes de Uber Eats en .XLSX y una recibida en .JPG,
+  // con la misma clave y la misma extensión en el Excel.
+  it('no todo es PDF: .XLSX y .JPG dan la misma clave, con su extensión', () => {
+    expect(claveDeFichero('C0008_F2024_1_53.XLSX')).toEqual({ base: 'C0008', ejercicio: '2024', serie: '1', documento: 53, extension: 'xlsx' })
+    expect(claveDeFichero('C0008_F2024_2_571.JPG')).toMatchObject({ documento: 571, extension: 'jpg' })
+    expect(claveDeCodigoExcel('C0008_CON_201_EXPEDIDA_2024_1_53.XLSX')).toMatchObject({ documento: 53, libro: 'expedida', extension: 'xlsx' })
+    expect(claveDeFichero('C0008_F2024_1_53.docx')).toBeNull()
+    const r = cruzar(['C0008_F2024_1_53.XLSX', 'C0008_F2024_2_571.JPG'], ['C0008_CON_201_EXPEDIDA_2024_1_53.XLSX', 'C0008_CON_202_RECIBIDA_2024_2_571.JPG'])
+    expect(r.enlazados.map((e) => e.clave)).toEqual(['C0008/2024/1/53', 'C0008/2024/2/571'])
+    expect(r.nombreRaro).toEqual([])
+  })
+})
+
+describe('cruzar ficheros y Excel', () => {
+  it('por la clave, y dice lo que sobra y lo que falta', () => {
+    const r = cruzar(
+      ['C0008_F2026_2_10.PDF', 'C0008_F2026_2_11.PDF', 'C0008_F2026_2_11.PDF', 'C0008_F2026_2_99.PDF', 'otro.pdf'],
+      ['C0008_CON_202_RECIBIDA_2026_2_10.pdf', 'C0008_CON_202_RECIBIDA_2026_2_11.pdf', 'C0008_CON_202_RECIBIDA_2026_2_12.pdf'],
+    )
+    expect(r.enlazados.map((e) => e.clave)).toEqual(['C0008/2026/2/10', 'C0008/2026/2/11'])
+    expect(r.sinFichero).toEqual(['C0008_CON_202_RECIBIDA_2026_2_12.pdf'])
+    expect(r.sinCodigo).toEqual(['C0008_F2026_2_99.PDF'])
+    expect(r.nombreRaro).toEqual(['otro.pdf'])
+    expect(r.repetidos).toEqual(['C0008_F2026_2_11.PDF'])
+  })
+  it('el mismo documento en otra serie o ejercicio no casa', () => {
+    const r = cruzar(['C0008_F2026_1_10.PDF', 'C0008_F2025_2_10.PDF'], ['C0008_CON_202_RECIBIDA_2026_2_10.pdf'])
+    expect(r.enlazados).toEqual([])
+  })
+})
+
+describe('limpiarPdf', () => {
+  it('un PDF normal pasa tal cual', () => {
+    const r = limpiarPdf(enc(PDF_MIN))
+    expect(r).toMatchObject({ ok: true, cabeceraQuitada: false })
+  })
+
+  it('con las cabeceras HTTP delante (como la recibida 2026/2/3172): se quitan y cuadra content-length', () => {
+    const cab = `content-length: ${enc(PDF_MIN).length}\naccept-ranges: bytes\ndate: Fri, 02 Oct 2026 09:10:56 GMT\nlast-modified: Wed, 30 Sep 2026 09:07:26 GMT\netag: "c4ff6d75"\ncontent-type: application/pdf\n`
+    const r = limpiarPdf(enc(cab + PDF_MIN))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.cabeceraQuitada).toBe(true)
+      expect(new TextDecoder().decode(r.pdf)).toBe(PDF_MIN)
+      expect(r.cabeceras).toEqual(['content-length', 'accept-ranges', 'date', 'last-modified', 'etag', 'content-type'])
+    }
+  })
+
+  it.each([
+    [new Uint8Array(), 'fichero vacío'],
+    [enc('hola'), /no es un PDF/],
+    [enc('%PDF-1.4\n1 0 obj\n'), /no acaba en %%EOF/],
+    [enc(`content-length: 5\n${PDF_MIN}`), /dicen 5 bytes/],
+    [enc(`content-type: text/html\n${PDF_MIN}`), /text\/html/],
+    [enc(`<html>error</html>\n${PDF_MIN}`), /no son cabeceras HTTP/],
+  ] as [Uint8Array, string | RegExp][])('rechaza con su porqué (%#)', (b, motivo) => {
+    const r = limpiarPdf(b)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.motivo).toMatch(motivo)
+  })
+})
+
+describe('limpiarDocumento', () => {
+  const ZIP = [0x50, 0x4b, 0x03, 0x04, 0x14, 0x00], JPG = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]
+  it('un PDF pasa por limpiarPdf (y le quita las cabeceras)', () => {
+    const cab = `content-length: ${enc(PDF_MIN).length}\ncontent-type: application/pdf\n`
+    expect(limpiarDocumento(enc(cab + PDF_MIN), 'pdf')).toMatchObject({ ok: true, tipo: 'pdf', cabeceraQuitada: true })
+  })
+  it('un .xlsx y un .jpg se comprueban por su firma y no se tocan', () => {
+    const x = new Uint8Array(ZIP), j = new Uint8Array(JPG)
+    expect(limpiarDocumento(x, 'xlsx')).toEqual({ ok: true, bytes: x, tipo: 'xlsx', cabeceraQuitada: false })
+    expect(limpiarDocumento(j, 'jpg')).toMatchObject({ ok: true, tipo: 'jpg' })
+  })
+  it.each([
+    [new Uint8Array(), 'xlsx', 'fichero vacío'],
+    [enc(PDF_MIN), 'xlsx', 'se llama .xlsx y no es una hoja .xlsx (zip)'],
+    [new Uint8Array([0x50, 0x4b, 0x03, 0x04]), 'jpg', 'se llama .jpg y no es una imagen JPEG'],
+  ] as [Uint8Array, 'xlsx' | 'jpg', string][])('lo que no es lo que dice ser va a revisar con su porqué (%#)', (b, ext, motivo) => {
+    expect(limpiarDocumento(b, ext)).toEqual({ ok: false, motivo })
+  })
+})
+
+// Julio, 12/10: lo que no trae documento entra igual, «pendiente», con su origen.
+// Los terceros, con la forma en que salen en los Excel de Diez.
+describe('pendienteDeDocumento', () => {
+  it.each([
+    ['UBER EATS', 'portal_uber_eats'], ['PORTIER EATS SPAIN, S.L.', 'portal_uber_eats'],
+    ['RIDERS', 'portal_riders'], ['riders ', 'portal_riders'],
+    ['GLOVO', 'portal_glovo'], ['GLOVOAPP SPAIN PLATFORM', 'portal_glovo'], ['RIDERS GLOVO', 'portal_glovo'],
+    ['JUST EAT', 'portal_just_eat'], ['JUST EAT, S.L.', 'portal_just_eat'],
+    ['PROVEEDOR INVENTADO, S.L.', 'subida_manual'], [null, 'subida_manual'],
+  ] as [string | null, string][])('%j → %s', (tercero, origen) => {
+    const r = pendienteDeDocumento(tercero)
+    expect(r.status).toBe('pendiente_diez')
+    expect(r.origen).toBe(origen)
+  })
+  it('el motivo dice de dónde vendrá', () => {
+    expect(pendienteDeDocumento('UBER EATS').motivo).toBe('pendiente de documento · origen: portal de Uber Eats (descarga automática, E04)')
+    expect(pendienteDeDocumento('RIDERS').motivo).toBe('pendiente de documento · origen: portal de riders (descarga automática, E04)')
+  })
+})

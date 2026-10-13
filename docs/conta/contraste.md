@@ -490,3 +490,23 @@ subida cueste un solo gesto:
   - el 24 «sin valor contable, únicamente figurará cuando la moneda origen de la operación no sea coincidente con el tipo de moneda de la cuenta»;
   - conceptos comunes (anexo 2): los diecinueve, del «01 TALONES - REINTEGROS» al «99 VARIOS».
 - **Directiva (UE) 2015/2366 (PSD2):** EUR-Lex contesta 202 (página intermedia) también desde Actions; no hay copia y se quitó de la lista. Lo que este encargo necesita de ella está en su trasposición española, el RDL 19/2018, citado arriba.
+
+## Anexo · La API de Diez (apiCON), medida (C04b, 12/10/2026)
+
+Lo que el Swagger no dice y se ha medido contra el Diez de Llorente29 (base
+C0008), en solo lectura. El detalle está en `docs/conta/c04b/T1_comprobaciones.md`.
+
+| Qué | Lo medido | Run |
+|---|---|---|
+| Entrar | `POST /token` en formulario con grant_type, client_id, client_secret, username, password y **`nombre_bd`** (cada empresa es una base de datos). Sin `nombre_bd` contesta «Debe indicar un nombre o identificador de base de datos». `cod_empresa` no hace falta | 6, 7 |
+| Token | Dura **14 días** (`expires_in` 1.209.599 s). La respuesta trae `Name` y `UserName`, que son datos personales | 7 |
+| Página | **200 como máximo**, aunque se pida más con `$top` | 7 |
+| `$skip` | **Cuenta páginas, no elementos**: `$top=2&$skip=2` da el 5.º | 9 |
+| Pasarse del final | **Devuelve la primera página otra vez, sin avisar.** El lector para si una página repite cualquiera de las ya leídas | 8 |
+| `$filter`, `$orderby`, `$select` | Funcionan. Por fecha: `Fecha ge AAAAMMDD and Fecha le AAAAMMDD`; por ejercicio: `Ejercicio eq 'AAAA'` | 7, 9 |
+| `/api/apuntes/resumen` | **Su «Número» cuenta LÍNEAS, no asientos.** Sumado por ejercicio da exactamente las líneas leídas: 2.794 · 6.474 · 19.483 | 9 |
+| `/api/clientes`, `/api/proveedores` | No existen en una empresa «Estándar/Sociedades»: los terceros son subcuentas de 40, 41, 43 y 44 | 7 |
+| Saldos | Ni `/api/subcuentas` ni la subcuenta suelta traen saldo, debe o haber | 10 |
+| `getSumasYsaldos/{periodo}/…` | `periodo` es el ejercicio. Devuelve **líneas de asiento**, y en 2025 solo de 22 de las 102 cuentas con movimiento (1.776 líneas de 1.735 asientos). Iguales al céntimo a esas mismas líneas leídas: **no es un testigo independiente** | 10 |
+| `getfile` | **500 en todas** las facturas probadas (20 en el run 8; 3 facturas × 4 `accept` en el run 10): «The specified container does not exist.» El almacén de documentos de esta base no existe en el servidor de Diez. Va a Cegid | 8, 10 |
+| Límites | Ningún 429 ni cabecera de límite en 341 peticiones (~22 min, ~39 MB) | 9 |

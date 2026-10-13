@@ -31,12 +31,17 @@ const DIR = 'docs/conta/capturas/c00'
 const escapar = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 async function borrarEmpresas(s: Sesion, cuenta: string, todas: boolean) {
-  // En A, toda empresa SIN TERMINAR es de estas pruebas (la de la semilla está
-  // terminada); no se filtra por el nombre, porque una prueba rota a mitad
-  // puede haber guardado cualquier cosa en él. En C, todas: vive sin ninguna.
-  const filtro = todas ? '' : '&setup_completed_at=is.null'
+  // En A, toda empresa SIN TERMINAR que haya empezado ESTE usuario es de estas
+  // pruebas (la de la semilla está terminada); no se filtra por el nombre,
+  // porque una prueba rota a mitad puede haber guardado cualquier cosa en él.
+  // Solo las de este usuario: A es compartida por los tres frentes y otro
+  // frente puede estar dando de alta la suya ahora mismo (C06, respuesta 2).
+  // Lo que dejó un run cortado lo quita e2e_limpieza.sql al empezar. En C,
+  // todas: vive sin ninguna, y cada frente tiene la suya.
+  const mias = todas ? '' : `&created_by=eq.${s.user.id}`
+  const filtro = todas ? '' : `&setup_completed_at=is.null${mias}`
   const r = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${cuenta}${filtro}`)
-  const r2 = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${cuenta}&legal_name=like.Alta%20e2e*`)
+  const r2 = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${cuenta}&legal_name=like.Alta%20e2e*${mias}`)
   const ids = new Set([...(r.datos ?? []), ...(r2.datos ?? [])].map((c) => c.id))
   for (const id of ids) {
     // La RLS puede «borrar» cero filas sin dar error: se cuenta lo borrado.
@@ -49,7 +54,7 @@ async function borrarEmpresas(s: Sesion, cuenta: string, todas: boolean) {
 /** Un alta a medias, ya en «Tus cuentas» (4 de 6), preparada por la API. */
 async function altaAMedias(s: Sesion, cuenta: string, nombre: string): Promise<string> {
   const r = await rest<{ id: string }[]>(s, 'POST', 'company', {
-    account_id: cuenta, legal_name: nombre, tax_id: cifInventado(), tax_id_type: 'nif_es', entity_kind: 'company',
+    account_id: cuenta, legal_name: nombre, tax_id: cifInventado(), tax_id_type: 'nif_es', entity_kind: 'company', created_by: s.user.id,
     fiscal_street: 'Calle del Ensayo', fiscal_number: '7', fiscal_postal_code: '28001', fiscal_city: 'Madrid', fiscal_province: 'Madrid',
     setup_step: 'cuentas',
   })

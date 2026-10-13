@@ -1,0 +1,7 @@
+{
+  "_que_es": "Huellas del testigo de la regla 1 (los Excel de sumas y saldos de Diez de la C0008, exportados por Julio el 12/10; el de 2026, hasta el 30/09). sha256 de canonicoTestigo (diezTestigo.ts): «código:debe:haber» en céntimos por subcuenta, sin las vacías. Ni un importe: solo cuántas subcuentas y la huella. Calculadas fuera del repositorio con los Excel; iguales a las de lo leído de Diez en la pasada 21 sin regularización ni cierre (T2 §10.6).",
+  "2023": { "hasta": "2023-12-31", "cuentas": 45, "huella": "39ef68fff836512aea5ef79658e60c7be7ebcb7b9e4ef3cc5d8681816b7a5252" },
+  "2024": { "hasta": "2024-12-31", "cuentas": 82, "huella": "fee1259ba5220f21937d8215f6fbae84a3c673a85680e16b66eded251949c53d" },
+  "2025": { "hasta": "2025-12-31", "cuentas": 102, "huella": "6e35beb31f2afbd482da72347018124d522e5fdf2a46eeae2942ed2d6db17084" },
+  "2026": { "hasta": "2026-09-30", "cuentas": 149, "huella": "ca36f0afdbded06734035cb60716c8dc4de298f657be4c7ca182d94bb5433201" }
+}

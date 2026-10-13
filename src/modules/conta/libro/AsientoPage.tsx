@@ -20,14 +20,17 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
-import { deDondeSale, estadoDe, estadoMes, mesDe, nombreMes, pastillas, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
+import { deDondeSale, estadoDe, estadoMes, marcaNegativoDiez, mesDe, nombreMes, pastillasDeLinea, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
 import {
   anular, cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
 } from '@/modules/conta/services/diarioService'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
+import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
+import { estadoDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
+import { guardarDocumento, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
 
-interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[] }
+interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
 
 export default function AsientoPage() {
   const { entryId = '' } = useParams()
@@ -41,7 +44,16 @@ export default function AsientoPage() {
     if (cargando || !accountId || !activa) return
     let vivo = true
     Promise.all([leerAsiento(accountId, entryId), cuentasDeApunte(accountId, activa.id), leerCierres(accountId, activa.id)])
-      .then(([asiento, cuentas, cierres]) => { if (vivo) setR({ clave, datos: { asiento, cuentas, cierres }, error: null }) },
+      // R15 · Si es de ventas de una plataforma: su documento y su envío a Diez.
+      .then(async ([asiento, cuentas, cierres]) => {
+        // Si no se puede leer (p. ej. la base aún sin la 0100 del R15), el asiento se ve igual y se dice por qué falta «Con Diez».
+        let conDiezError: string | null = null
+        const conDiez = asiento?.origen === 'sales_day'
+          ? (await leerConDiez(accountId, activa.id, [asiento.id]).catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() })).get(asiento.id) ?? null
+          : null
+        return { asiento, cuentas, cierres, conDiez, conDiezError }
+      })
+      .then((d) => { if (vivo) setR({ clave, datos: d, error: null }) },
         (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
   }, [accountId, activa, cargando, entryId, clave])
@@ -65,6 +77,15 @@ export default function AsientoPage() {
   if (!a) return <div className="cx-tarjeta"><Vacio titulo="Ese asiento no está." explicacion="Puede que se descartara, o que sea de otra cuenta." accion={<Link to={rutaLibroDiario()} className="cx-enlace">Volver al libro</Link>} /></div>
 
   const editable = a.estado === 'propuesto' || a.estado === 'borrador'
+  const diez = datos.conDiez ? estadoDiez(a, datos.conDiez) : null
+
+  async function hacerValidarYEnviar() {
+    if (!a) return
+    setOcupado(true); setFallo(null); setHecho(null)
+    try { const [p] = await validarYEnviar([a], userName); (p.enDiez ? setHecho : setFallo)(p.texto); recargar() }
+    catch (x) { setFallo(x instanceof Error ? x.message : 'No se ha podido.') }
+    finally { setOcupado(false) }
+  }
   const e = estadoDe(a)
   const mes = estadoMes(mesDe(a.fecha), datos.cierres)
 
@@ -73,7 +94,12 @@ export default function AsientoPage() {
     setOcupado(true); setFallo(null); setHecho(null)
     try {
       const v = await validar(a.id, userName)
-      setHecho(`Validado: ${NOMBRE_SERIE[v.serie as 1]} nº ${v.numero.toLocaleString('es-ES')}, encadenado con su huella. Ya está en el Mayor y no se toca: si hiciera falta, se anula.`)
+      const dicho = `Validado: ${NOMBRE_SERIE[v.serie as 1]} nº ${v.numero.toLocaleString('es-ES')}, encadenado con su huella. Ya está en el Mayor y no se toca: si hiciera falta, se anula.`
+      // R15 · Las ventas de una plataforma guardan su documento al validarse.
+      if (datos?.conDiez) {
+        try { await guardarDocumento(a.id, userName); setHecho(`${dicho} Su «Resumen de ventas» queda guardado en Folvy; aún no se ha enviado a Diez.`) }
+        catch (x) { setHecho(dicho); setFallo(`El documento no se ha guardado: ${x instanceof Error ? x.message : String(x)}. Sin él no se envía a Diez; pulsa «Reintentar» en «Con Diez».`) }
+      } else setHecho(dicho)
       recargar()
     } catch (x) { setFallo(x instanceof Error ? x.message : 'No se ha validado.') }
     finally { setOcupado(false) }
@@ -104,12 +130,14 @@ export default function AsientoPage() {
         </div>
         <div className="cxd-acciones">
           {editable && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('descartar')} disabled={ocupado}>Descartar</button>}
-          {editable && <button type="button" className="cx-boton" onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando…' : 'Validar asiento'}</button>}
+          {editable && <button type="button" className={datos.conDiez ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando…' : 'Validar asiento'}</button>}
+          {editable && datos.conDiez && <button type="button" className="cx-boton" onClick={hacerValidarYEnviar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando y enviando…' : 'Validar y enviar a Diez'}</button>}
           {a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
         </div>
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      {datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
       {editable && mes.cerrado && (
         <div className="cx-tarjeta cxd-franja" role="status">
           <span><strong>{nombreMes(mesDe(a.fecha))} está {mes.texto.toLowerCase()}</strong> · {mes.apoyo}. No se valida con esa fecha: desbloquéalo desde el libro o descártalo y lo vuelvo a proponer en el primer día abierto.</span>
@@ -137,7 +165,8 @@ export default function AsientoPage() {
                 <span className="cxd-linea-cuenta">
                   <span className="cxd-linea-nombre">{l.nombreCuenta}</span>
                   <span className="cxd-concepto-apoyo">
-                    {pastillas({ apuntes: [l] }).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+                    {pastillasDeLinea(l).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+                    {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
                     <Link to={rutaMayor(l.cuenta)} className="cxd-codigo">{l.cuenta}</Link>
                     {l.concepto && <span className="cxd-sale">· {l.concepto}</span>}
                     {l.iva && <span className="cxd-sale">· IVA {l.iva.tipo ?? ''} % sobre {eurosExactos(l.iva.base)}</span>}
@@ -177,6 +206,10 @@ export default function AsientoPage() {
               {editable && <p className="cxd-ia-apoyo">Si me corriges, aprendo para la siguiente del mismo origen.</p>}
             </section>
           ) : null}
+          {datos.conDiez && diez && (
+            <TarjetaDiez a={a} d={datos.conDiez} e={diez} quien={userName}
+              alHacer={(t) => { setFallo(null); setHecho(t); recargar() }} alFallar={(t) => { setHecho(null); setFallo(t) }} />
+          )}
           <section className="cx-tarjeta" aria-label="Documento">
             <h2 className="cx-tarjeta-titulo">Documento</h2>
             <p>{a.documento ?? 'Sin documento propio'}</p>

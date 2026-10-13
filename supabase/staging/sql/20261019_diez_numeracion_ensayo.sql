@@ -1,0 +1,385 @@
+-- supabase/staging/sql/20261019_diez_numeracion_ensayo.sql
+--
+-- SOLO STAGING. El ENSAYO de 20261019T0160 antes del real: el fichero entero y
+-- su prueba (20261019_diez_numeracion_prueba.sql) dentro de UNA transacción
+-- que acaba en ROLLBACK. Va primero en el manifiesto: si falla, el real no se
+-- aplica. Generado copiando los dos ficheros tal cual.
+
+begin;
+
+-- C04b · T3 · La numeración de un ejercicio mixto sigue a lo traído (Julio, 12/10).
+--
+-- cambia: public.journal_entry_validar · prueba: supabase/staging/sql/20261019_diez_numeracion_prueba.sql
+-- cambia: public.conta_diez_importar · prueba: supabase/staging/sql/20261019_diez_numeracion_prueba.sql
+--
+-- POR QUÉ: 2026 es mixto (traído de Diez hasta el 30/09, de Folvy después).
+-- journal_entry_validar numera con max + 1 por serie y ejercicio, así que con
+-- el histórico dentro Folvy sigue DETRÁS del último número traído. Sin él, el
+-- primero que se validara cogería el 1 y chocaría con el 1 de Diez. Que no
+-- pase no puede depender de que alguien se acuerde: es una regla en la base.
+--
+-- LO QUE CAMBIA:
+--   1. fiscal_year.history_imported_at (nueva, admite nulos): cuándo quedó
+--      traído el histórico del ejercicio.
+--   2. journal_entry_validar: en un ejercicio mixto o traído de un programa,
+--      mientras el histórico no esté traído, no se valida nada de Folvy:
+--      «Primero hay que traer el histórico de Diez de 2026». Lo demás, igual
+--      que estaba (copiado de la versión vigente, 20261014T0140).
+--   3. conta_diez_historico_traido: lo marca, cuando la traída real cuadra con
+--      el testigo. Solo service_role.
+--   4. conta_diez_importar: guarda el TipoAsiento de Diez en reasons
+--      (tipo_diez), para medir contra el testigo sin la regularización ni el
+--      cierre (T2 §10). Lo demás, igual que en la 0150.
+--
+-- Los 22 asientos propuestos de octubre de Foodint no se tocan: se validarán
+-- después, ya con su número detrás del último de Diez.
+
+-- 1 ----------------------------------------------------------------------------------
+alter table public.fiscal_year add column if not exists history_imported_at timestamptz;
+comment on column public.fiscal_year.history_imported_at is
+  'Cuándo quedó traído el histórico de un ejercicio mixto o traído. Hasta entonces no se valida nada de Folvy en él (Folvy numera detrás de lo traído).';
+
+-- 2 ----------------------------------------------------------------------------------
+create or replace function public.journal_entry_validar(p_entry uuid, p_quien_nombre text default null::text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $function$
+declare
+  v_e public.journal_entry; v_y public.fiscal_year;
+  v_debe numeric; v_haber numeric; v_n int; v_numero int; v_seq bigint; v_prev text; v_hash text;
+  v_mal text; v_cierre boolean;
+begin
+  select * into v_e from public.journal_entry where id = p_entry for update;
+  if v_e.id is null then raise exception 'Ese asiento no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_e.account_id) then
+    raise exception 'Solo un administrador o un encargado de la cuenta valida asientos.' using errcode = '42501';
+  end if;
+  if v_e.status not in ('propuesto', 'borrador') then
+    raise exception 'El asiento ya está %.', v_e.status using errcode = '23514';
+  end if;
+
+  -- Regla 1: cuadra, al céntimo.
+  select count(*), coalesce(sum(debit), 0), coalesce(sum(credit), 0) into v_n, v_debe, v_haber
+    from public.journal_line where entry_id = p_entry;
+  if v_n < 2 then raise exception 'Un asiento lleva al menos dos apuntes.' using errcode = '23514'; end if;
+  if v_debe <> v_haber then
+    raise exception 'No cuadra: Debe % y Haber %, diferencia %.', v_debe, v_haber, v_debe - v_haber using errcode = '23514';
+  end if;
+
+  -- Regla 4: fecha en su ejercicio, abierto, fuera de lo traído, mes abierto.
+  select * into v_y from public.fiscal_year where id = v_e.fiscal_year_id;
+  if v_e.entry_date not between v_y.starts_on and v_y.ends_on then
+    raise exception 'La fecha % no es del ejercicio %.', to_char(v_e.entry_date, 'DD/MM/YYYY'), v_y.code using errcode = '23514';
+  end if;
+  if v_e.source_type <> 'migrated' then
+    if v_y.status <> 'open' then
+      raise exception 'El ejercicio % está cerrado.', v_y.code using errcode = '23514';
+    end if;
+    -- C04b (12/10): en un ejercicio con parte traída, Folvy numera DETRÁS del
+    -- último número traído en cada serie (el número es max + 1, abajo). Para
+    -- eso el histórico tiene que estar dentro antes de validar nada: si no,
+    -- el primero de Folvy cogería el 1 y chocaría con el 1 del programa.
+    if v_y.origin in ('mixed', 'migrated') and v_y.origin_program is not null and v_y.history_imported_at is null then
+      raise exception 'Primero hay que traer el histórico de % de %.',
+        case lower(v_y.origin_program) when 'diez' then 'Diez' else v_y.origin_program end, v_y.code using errcode = '23514';
+    end if;
+    if v_y.imported_until is not null and v_e.entry_date <= v_y.imported_until then
+      raise exception 'Hasta el % el ejercicio % es traído de %: la fecha abierta más cercana es el %.',
+        to_char(v_y.imported_until, 'DD/MM/YYYY'), v_y.code, v_y.origin_program,
+        to_char(public.conta_primer_dia_abierto(v_e.company_id, v_y.imported_until + 1), 'DD/MM/YYYY') using errcode = '23514';
+    end if;
+    if public.conta_mes_cerrado(v_e.company_id, v_e.entry_date) then
+      raise exception 'El mes de % está cerrado: la fecha abierta más cercana es el %.',
+        to_char(v_e.entry_date, 'MM/YYYY'),
+        coalesce(to_char(public.conta_primer_dia_abierto(v_e.company_id, v_e.entry_date), 'DD/MM/YYYY'), 'ninguna') using errcode = '23514';
+    end if;
+
+    -- C05 (respuesta 3): un asiento de cierre o de apertura deja a cero (o
+    -- repone) las cuentas de IVA y de retenciones; no es una factura ni entra
+    -- en el libro registro. Solo él se libra de las dos reglas de IVA y
+    -- retención, y solo si lo hizo el generador de cierre: origen closing u
+    -- opening, ENLAZADO en fiscal_year_closing a su ejercicio (la apertura, al
+    -- cierre del ejercicio anterior) y con la marca del generador en reasons.
+    -- Un closing suelto, o hecho a mano, sigue pasando la regla de IVA.
+    -- El contraasiento de uno de esos asientos (reabrir el ejercicio los anula)
+    -- también: lleva los mismos apuntes al revés. La condición se mira sobre el
+    -- asiento ORIGINAL, que en ese momento sigue enlazado.
+    v_cierre := exists (
+      select 1 from public.journal_entry o
+        join public.fiscal_year oy on oy.id = o.fiscal_year_id
+       where o.id = case when v_e.source_type = 'reversal' then v_e.reverses_entry_id else v_e.id end
+         and o.source_type in ('closing', 'opening')
+         and coalesce(o.reasons, '[]'::jsonb) @> '[{"decision": "cierre-del-ejercicio"}]'::jsonb
+         and exists (
+           select 1 from public.fiscal_year_closing c
+            where c.company_id = o.company_id
+              and ((o.source_type = 'closing' and c.fiscal_year_id = o.fiscal_year_id
+                    and o.id in (c.regularization_entry_id, c.closing_entry_id))
+                or (o.source_type = 'opening' and c.opening_entry_id = o.id
+                    and exists (select 1 from public.fiscal_year a
+                                 where a.id = c.fiscal_year_id and a.ends_on + 1 = oy.starts_on)))));
+
+    -- Regla 5: IVA coherente. La cuota es el importe del apunte y = base × tipo, al
+    -- céntimo, redondeando por factura: un resumen de n facturas admite medio
+    -- céntimo por factura (floor(n/2) céntimos); una sola factura, ninguno.
+    select string_agg(format('apunte %s (%s): %s', l.position, a.code, m.motivo), '; ' order by l.position) into v_mal
+      from public.journal_line l
+      join public.company_account a on a.id = l.company_account_id
+      left join public.tax_rate t on t.id = l.tax_rate_id
+      cross join lateral (select case
+        when (a.template_code like '472%' or a.template_code like '477%') and l.tax_rate_id is null and not v_cierre
+          then 'un apunte de IVA lleva base, tipo y libro registro'
+        when l.tax_rate_id is not null
+             and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > floor(l.tax_documents / 2.0) / 100
+          then format('la cuota %s no es la base %s × %s %% = %s', l.debit + l.credit, l.tax_base, t.rate, round(l.tax_base * t.rate / 100, 2))
+        when a.template_code like '4751%' and l.withholding_rate_id is null and not v_cierre
+          then 'una retención lleva su tipo, su base y su modelo'
+        when not l.is_common and l.location_id is null
+          then 'falta el local (o marcarlo como común)'
+        end as motivo) m
+     where l.entry_id = p_entry and m.motivo is not null;
+    if v_mal is not null then raise exception 'No se valida: %.', v_mal using errcode = '23514'; end if;
+  end if;
+
+  -- Regla 2: número siguiente de su serie en el ejercicio, sin huecos. Huella encadenada.
+  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || v_e.company_id, 0));
+  select coalesce(max(number), 0) + 1 into v_numero from public.journal_entry
+   where company_id = v_e.company_id and fiscal_year_id = v_e.fiscal_year_id and series = v_e.series and number is not null;
+  select chain_seq, hash into v_seq, v_prev from public.journal_entry
+   where company_id = v_e.company_id and chain_seq is not null order by chain_seq desc limit 1;
+  v_seq := coalesce(v_seq, 0) + 1;
+
+  update public.journal_entry set number = v_numero, status = 'validado', validated_at = now(), validated_by = auth.uid(),
+         validated_by_name = coalesce(p_quien_nombre, public.conta_nombre_actor()), chain_seq = v_seq, prev_hash = v_prev,
+         hash = 'pendiente'
+   where id = p_entry;
+  v_hash := public.journal_huella(v_prev, public.journal_entry_canonico(p_entry));
+  -- La huella se escribe en la misma transacción: el disparador deja pasar este
+  -- cambio porque el asiento acaba de validarse (journal_entry_inalterable, 0100).
+  perform set_config('folvy.journal_huella', p_entry::text, true);
+  update public.journal_entry set hash = v_hash where id = p_entry;
+  perform set_config('folvy.journal_huella', '', true);
+  return jsonb_build_object('id', p_entry, 'serie', v_e.series, 'numero', v_numero, 'huella', v_hash);
+end $function$;
+
+-- 3 ----------------------------------------------------------------------------------
+create or replace function public.conta_diez_historico_traido(p_company uuid, p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_y public.fiscal_year; v_n int; v_max jsonb;
+begin
+  select * into v_y from public.fiscal_year where company_id = p_company and code = p_code for update;
+  if v_y.id is null then raise exception 'El ejercicio % no existe.', p_code using errcode = 'P0002'; end if;
+  if v_y.origin not in ('mixed', 'migrated') or v_y.origin_program is distinct from 'diez' then
+    raise exception 'El ejercicio % no tiene nada traído de Diez.', p_code using errcode = '23514';
+  end if;
+  select count(*) into v_n from public.journal_entry where fiscal_year_id = v_y.id and external_program = 'diez' and status = 'validado';
+  if v_n = 0 then raise exception 'El ejercicio % no tiene nada traído: no se marca.', p_code using errcode = '23514'; end if;
+  if v_y.history_imported_at is null then
+    update public.fiscal_year set history_imported_at = now() where id = v_y.id;
+  end if;
+  select jsonb_object_agg(series::text, n) into v_max
+    from (select series, max(number) n from public.journal_entry where fiscal_year_id = v_y.id and number is not null group by series) s;
+  return jsonb_build_object('ejercicio', p_code, 'traidos', v_n, 'ultimoPorSerie', v_max);
+end $$;
+comment on function public.conta_diez_historico_traido(uuid, text) is
+  'C04b: marca traído el histórico de Diez de un ejercicio. Desde ahí Folvy valida y numera detrás del último número traído de cada serie.';
+revoke all on function public.conta_diez_historico_traido(uuid, text) from public, anon, authenticated;
+grant execute on function public.conta_diez_historico_traido(uuid, text) to service_role;
+
+-- 4 ----------------------------------------------------------------------------------
+create or replace function public.conta_diez_importar(p_company uuid, p_run uuid, p_asientos jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_cuenta uuid; a jsonb; l jsonb; v_y public.fiscal_year; v_e public.journal_entry;
+  v_clave text; v_serie int; v_numero int; v_fecha date; v_ej text; v_huella text;
+  v_id uuid; v_ca uuid; v_faltan text[]; v_debe numeric; v_haber numeric; v_n int;
+  v_seq bigint; v_prev text; v_hash text; v_concepto text;
+  n_traidos int := 0; n_estaban int := 0; distintos jsonb := '[]'::jsonb; rechazos jsonb := '[]'::jsonb;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'Esa empresa no existe.' using errcode = 'P0002'; end if;
+  if not exists (select 1 from public.import_run r where r.id = p_run and r.company_id = p_company and r.status = 'en_curso'
+                 and r.kind in ('historico', 'al_dia')) then
+    raise exception 'Esa lectura no es de esta empresa, no trae asientos o ya terminó.' using errcode = '23514';
+  end if;
+  if jsonb_typeof(p_asientos) <> 'array' then raise exception 'Falta la lista de asientos.' using errcode = '22023'; end if;
+
+  for a in select * from jsonb_array_elements(p_asientos) loop
+    v_ej := a ->> 'ejercicio'; v_serie := (a ->> 'serie')::int; v_numero := (a ->> 'numero')::int;
+    v_fecha := (a ->> 'fecha')::date; v_huella := a ->> 'huella';
+    v_clave := format('%s/%s/%s', v_ej, v_serie, v_numero);
+    begin
+      -- Ya traído: igual o distinto, nunca dos veces.
+      select * into v_e from public.journal_entry
+       where company_id = p_company and external_program = 'diez' and external_year = v_ej
+         and external_series = v_serie::text and external_number = v_numero::text;
+      if v_e.id is not null then
+        if v_e.external_hash = v_huella then n_estaban := n_estaban + 1;
+        else distintos := distintos || jsonb_build_object('clave', v_clave, 'id', v_e.id); end if;
+        continue;
+      end if;
+
+      if v_serie not in (1, 2, 3, 4, 9) then raise exception 'la serie % no es de Folvy', v_serie using errcode = '22023'; end if;
+      select * into v_y from public.fiscal_year where company_id = p_company and code = v_ej;
+      if v_y.id is null then raise exception 'el ejercicio % no existe en Folvy', v_ej using errcode = '22023'; end if;
+      if v_y.origin = 'folvy' then raise exception 'el ejercicio % es de Folvy, no traído', v_ej using errcode = '22023'; end if;
+      if v_fecha not between v_y.starts_on and v_y.ends_on then
+        raise exception 'la fecha % no es del ejercicio %', v_fecha, v_ej using errcode = '22023';
+      end if;
+      if v_y.imported_until is not null and v_fecha > v_y.imported_until then
+        raise exception 'el % es posterior al corte de lo traído (%)', v_fecha, v_y.imported_until using errcode = '22023';
+      end if;
+      if v_y.status <> 'open' then
+        raise exception 'el ejercicio % está cerrado: se trae antes de cerrarlo', v_ej using errcode = '22023';
+      end if;
+      if exists (select 1 from public.journal_entry where company_id = p_company and fiscal_year_id = v_y.id
+                  and series = v_serie and number = v_numero) then
+        raise exception 'el número %/% de % ya lo tiene un asiento de Folvy', v_serie, v_numero, v_ej using errcode = '23505';
+      end if;
+      select array_agg(distinct x ->> 'cuenta') into v_faltan from jsonb_array_elements(a -> 'lineas') x
+       where not exists (select 1 from public.company_account c where c.company_id = p_company and c.code = x ->> 'cuenta');
+      if v_faltan is not null then
+        raise exception 'faltan en el plan las subcuentas %', array_to_string(v_faltan, ', ') using errcode = '22023';
+      end if;
+
+      v_concepto := coalesce(nullif(trim(a ->> 'concepto'), ''), format('Asiento %s/%s traído de Diez', v_serie, v_numero));
+      insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status,
+                                        reasons, external_program, external_year, external_series, external_number, external_hash,
+                                        import_run_id, created_by_name)
+      values (v_cuenta, p_company, v_y.id, v_serie, v_fecha, v_concepto, 'migrated', 'borrador',
+              jsonb_build_array(jsonb_build_object('decision', 'traido-de-diez',
+                'porque', format('Asiento %s de Diez (tipo %s)', v_clave, coalesce(a ->> 'tipoAsiento', '—')),
+                'tipo_diez', case when a ->> 'tipoAsiento' ~ '^[0-9]+$' then (a ->> 'tipoAsiento')::int end)),
+              'diez', v_ej, v_serie::text, v_numero::text, v_huella, p_run, 'Diez (traído)')
+      returning id into v_id;
+
+      for l in select * from jsonb_array_elements(a -> 'lineas') loop
+        select id into v_ca from public.company_account where company_id = p_company and code = l ->> 'cuenta';
+        insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept,
+                                         external_counterpart, external_voucher, external_negative_side)
+        values (v_cuenta, p_company, v_id, (l ->> 'posicion')::smallint, v_ca, (l ->> 'debe')::numeric / 100, (l ->> 'haber')::numeric / 100,
+                nullif(l ->> 'concepto', ''), nullif(l ->> 'contrapartida', ''), nullif(l ->> 'justificante', ''), l ->> 'negativoEnDiez');
+      end loop;
+
+      -- Regla 1, otra vez en la base: dos líneas al menos, y cuadra al céntimo.
+      select count(*), coalesce(sum(debit), 0), coalesce(sum(credit), 0) into v_n, v_debe, v_haber from public.journal_line where entry_id = v_id;
+      if v_n < 2 then raise exception 'tiene % línea(s)', v_n using errcode = '23514'; end if;
+      if v_debe <> v_haber then raise exception 'no cuadra: debe % y haber %', v_debe, v_haber using errcode = '23514'; end if;
+
+      -- Validado con el número de Diez y encadenado, como journal_entry_validar.
+      perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || p_company, 0));
+      select chain_seq, hash into v_seq, v_prev from public.journal_entry
+       where company_id = p_company and chain_seq is not null order by chain_seq desc limit 1;
+      v_seq := coalesce(v_seq, 0) + 1;
+      update public.journal_entry set number = v_numero, status = 'validado', validated_at = now(), validated_by = null,
+             validated_by_name = 'Diez (traído)', chain_seq = v_seq, prev_hash = v_prev, hash = 'pendiente'
+       where id = v_id;
+      v_hash := public.journal_huella(v_prev, public.journal_entry_canonico(v_id));
+      perform set_config('folvy.journal_huella', v_id::text, true);
+      update public.journal_entry set hash = v_hash where id = v_id;
+      perform set_config('folvy.journal_huella', '', true);
+
+      -- Cómo estaba en Diez al leerlo: lo que compara el día a día.
+      insert into public.external_entry_snapshot (account_id, company_id, program, ext_year, ext_series, ext_number, entry_date, lines,
+                                                  total_debit, total_credit, hash, import_run_id)
+      values (v_cuenta, p_company, 'diez', v_ej, v_serie::text, v_numero, v_fecha, a -> 'lineas', v_debe, v_haber, v_huella, p_run)
+      on conflict (company_id, program, ext_year, ext_series, ext_number)
+      do update set entry_date = excluded.entry_date, lines = excluded.lines, total_debit = excluded.total_debit,
+                    total_credit = excluded.total_credit, hash = excluded.hash, import_run_id = excluded.import_run_id, read_at = now();
+      n_traidos := n_traidos + 1;
+    exception when others then
+      rechazos := rechazos || jsonb_build_object('clave', v_clave, 'motivo', sqlerrm);
+    end;
+  end loop;
+  return jsonb_build_object('traidos', n_traidos, 'yaEstaban', n_estaban, 'distintos', distintos, 'rechazados', rechazos);
+end $$;
+
+
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+
+do $$
+declare
+  c constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
+  a constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
+  v_y uuid; v_run uuid; e1 uuid; e2 uuid; r jsonb; v_ok boolean; v_msg text; v_y26 uuid;
+  caja uuid; socio uuid;
+  diez jsonb := jsonb_build_array(
+    jsonb_build_object('ejercicio', '2027', 'serie', 4, 'numero', 1, 'fecha', '2027-01-01', 'concepto', 'Apertura inventada', 'tipoAsiento', 3, 'huella', 'h1',
+      'lineas', jsonb_build_array(jsonb_build_object('posicion', 1, 'cuenta', '57000000', 'debe', 500, 'haber', 0),
+                                  jsonb_build_object('posicion', 2, 'cuenta', '55100000', 'debe', 0, 'haber', 500))),
+    jsonb_build_object('ejercicio', '2027', 'serie', 4, 'numero', 2, 'fecha', '2027-02-01', 'concepto', 'General inventado', 'tipoAsiento', 0, 'huella', 'h2',
+      'lineas', jsonb_build_array(jsonb_build_object('posicion', 1, 'cuenta', '57000000', 'debe', 100, 'haber', 0),
+                                  jsonb_build_object('posicion', 2, 'cuenta', '55100000', 'debe', 0, 'haber', 100))));
+begin
+  select id into caja from public.company_account where company_id = c and code = '57000000';
+  select id into socio from public.company_account where company_id = c and code = '55100000';
+  insert into public.fiscal_year (account_id, company_id, code, starts_on, ends_on, status, origin, origin_program, imported_until)
+  values (a, c, '2027', '2027-01-01', '2027-12-31', 'open', 'mixed', 'diez', '2027-03-31') returning id into v_y;
+
+  -- Un asiento de Folvy de mayo, en borrador.
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
+  values (a, c, v_y, 4, '2027-05-04', 'Folvy inventado', 'manual') returning id into e1;
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, is_common)
+  values (a, c, e1, 1, caja, 7, 0, true), (a, c, e1, 2, socio, 0, 7, true);
+
+  -- 1 · Bloqueado mientras no esté el histórico
+  v_ok := false;
+  begin perform public.journal_entry_validar(e1);
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  if not v_ok or v_msg <> 'Primero hay que traer el histórico de Diez de 2027.' then
+    raise exception 'PRUEBA numeración · 1: no se paró, o el mensaje no es el que se ve: %.', v_msg;
+  end if;
+  if (select status from public.journal_entry where id = e1) <> 'borrador' then
+    raise exception 'PRUEBA numeración · 1: el asiento cambió aunque no se validó.';
+  end if;
+
+  -- 2 · Traer el histórico (sigue entrando: es migrated) con su tipo
+  insert into public.import_run (account_id, company_id, program, kind) values (a, c, 'diez', 'historico') returning id into v_run;
+  r := public.conta_diez_importar(c, v_run, diez);
+  if (r ->> 'traidos')::int <> 2 then raise exception 'PRUEBA numeración · 2: %.', r; end if;
+  if not exists (select 1 from public.journal_entry where fiscal_year_id = v_y and external_number = '1'
+                 and reasons @> '[{"decision": "traido-de-diez", "tipo_diez": 3}]'::jsonb) then
+    raise exception 'PRUEBA numeración · 2: lo traído no guarda su tipo de Diez.';
+  end if;
+
+  -- 3 · Marcar el histórico
+  r := public.conta_diez_historico_traido(c, '2027');
+  if (r ->> 'traidos')::int <> 2 or (r -> 'ultimoPorSerie' ->> '4')::int <> 2
+     or (select history_imported_at from public.fiscal_year where id = v_y) is null then
+    raise exception 'PRUEBA numeración · 3: %.', r;
+  end if;
+
+  -- 4 · Ahora sí, y detrás del último traído
+  r := public.journal_entry_validar(e1);
+  if (r ->> 'numero')::int <> 3 then
+    raise exception 'PRUEBA numeración · 4: el primero de Folvy sacó el % y tenía que ser el 3 (detrás del 2 de Diez).', r ->> 'numero';
+  end if;
+
+  -- 5 · Un ejercicio de Folvy, igual que antes (2026 de la empresa A es de Folvy)
+  select id into v_y26 from public.fiscal_year where company_id = c and code = '2026' and origin = 'folvy';
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
+  values (a, c, v_y26, 4, '2026-12-30', 'Folvy inventado 2026', 'manual') returning id into e2;
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, is_common)
+  values (a, c, e2, 1, caja, 3, 0, true), (a, c, e2, 2, socio, 0, 3, true);
+  r := public.journal_entry_validar(e2);
+  if r ->> 'numero' is null then raise exception 'PRUEBA numeración · 5: un ejercicio de Folvy dejó de validar.'; end if;
+
+  -- 6 · Marcar un ejercicio de Folvy, no
+  v_ok := false;
+  begin perform public.conta_diez_historico_traido(c, '2026'); exception when check_violation then v_ok := true; end;
+  if not v_ok then raise exception 'PRUEBA numeración · 6: marcó traído un ejercicio de Folvy.'; end if;
+
+  raise notice 'PRUEBA numeración: 6 de 6 bien.';
+end $$;
+
+rollback;

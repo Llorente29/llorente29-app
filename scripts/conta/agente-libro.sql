@@ -23,8 +23,8 @@
 --  10. propuestas    · lo propuesto hace más de 7 días (aviso, no error).
 --  11. cierre_dia    · ningún pedido de marca propia sigue abierto en un día ya
 --                      cerrado (encargo del 09/10): si lo hay, el cierre del día
---                      no ha pasado o ha fallado; con el día de serie a las 6:00,
---                      ese día lleva más de 30 h sin cerrar. Por empresa: cuántos,
+--                      no ha pasado o ha fallado; con el día de serie a las 2:00,
+--                      ese día lleva más de 26 h sin cerrar. Por empresa: cuántos,
 --                      el día más antiguo y las horas desde que acabó ese día.
 --  12. dia_sin_asiento · ningún día cerrado se queda sin su resumen y su
 --                      asiento propuesto más de 24 h después de su hora de
@@ -35,6 +35,11 @@
 --                      Por día y local: horas desde el cierre y si al menos
 --                      hay resumen. El porqué de cada uno está en
 --                      sales_day_proposal_log y en el Libro diario.
+
+-- El registro del cierre del día se lee solo si este rol puede (conta_lectura
+-- lo recibe en 20261020T0140): así el agente sigue corriendo antes de esa tanda.
+select to_regclass('public.sales_day_proposal_log') is not null
+   and has_table_privilege('public.sales_day_proposal_log', 'select') as lee_registro \gset
 
 with libro as (
   select e.* from public.journal_entry e where e.status in ('validado', 'anulado')
@@ -48,6 +53,7 @@ cadena as (
          public.journal_huella(e.prev_hash, public.journal_entry_canonico(e.id)) as esperada
     from libro e where e.chain_seq is not null
 )
+
 select json_build_object(
   'contado', (select json_build_object(
       'asientos', count(*),
@@ -163,9 +169,16 @@ select json_build_object(
            group by 1, 2) x),
 
   'dia_sin_asiento', (select coalesce(json_agg(json_build_object('account_id', x.account_id, 'company_id', x.company_id, 'local', x.location_id,
-      'dia', x.dia, 'pedidos', x.pedidos, 'horas', x.horas, 'resumen', x.resumen) order by x.dia, x.location_id), '[]')
+      'dia', x.dia, 'pedidos', x.pedidos, 'horas', x.horas, 'resumen', x.resumen
+\if :lee_registro
+      -- Lo que apuntó el cierre del día la última vez (sales_day_proposal_log):
+      -- el porqué viaja con el aviso, no hay que ir a buscarlo.
+      , 'resultado', (select g.result from public.sales_day_proposal_log g where g.company_id = x.company_id and g.location_id = x.location_id and g.sales_day = x.dia),
+      'porque', (select g.reason from public.sales_day_proposal_log g where g.company_id = x.company_id and g.location_id = x.location_id and g.sales_day = x.dia)
+\endif
+      ) order by x.dia, x.location_id), '[]')
     from (select c.account_id, c.id company_id, s.location_id, (s.sold_at at time zone 'Europe/Madrid')::date dia, count(*) pedidos,
-                 round(extract(epoch from now() - ((((s.sold_at at time zone 'Europe/Madrid')::date + 1)::timestamp + coalesce(t.sales_day_close_time, time '06:00')) at time zone 'Europe/Madrid')) / 3600) horas,
+                 round(extract(epoch from now() - ((((s.sold_at at time zone 'Europe/Madrid')::date + 1)::timestamp + coalesce(t.sales_day_close_time, time '02:00')) at time zone 'Europe/Madrid')) / 3600) horas,
                  exists (select 1 from public.sales_day_summary d where d.company_id = c.id and d.location_id = s.location_id
                             and d.sales_day = (s.sold_at at time zone 'Europe/Madrid')::date) resumen
             from public.company c

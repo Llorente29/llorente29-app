@@ -12,7 +12,7 @@
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
+  ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
   type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion, type SerieTesoreria,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
@@ -45,10 +45,12 @@ export interface ContextoLibro {
   validarSegurosDeVentas: boolean
   /** B01 (P3): la serie de tesorería de la empresa (bank_settings; 3 si no hay ajuste). */
   serieTesoreria: SerieTesoreria
+  /** C04b R5: la regla de ventas por plataforma de la empresa (conta_ventas_canal). Null = la regla de antes, un asiento por día y local. */
+  ventasPorPlataforma: { porMarca: Set<string>; ventasPorMarca: Record<string, string>; devolucionesPorMarca: Record<string, string> } | null
 }
 
 export async function cargarContexto(accountId: string, companyId: string): Promise<ContextoLibro> {
-  const [cuentas, enlaces, tipos, perfil, ejercicios, cerrados, canales, roles, marcas, locales, bancos, correcciones, ajustesBanco] = await Promise.all([
+  const [cuentas, enlaces, tipos, perfil, ejercicios, cerrados, canales, roles, marcas, locales, bancos, correcciones, reglaCanal, reglaMarca, ajustesBanco] = await Promise.all([
     leer(tabla('company_account').select('id, code, template_code, kind, status').eq('account_id', accountId).eq('company_id', companyId), 'las cuentas'),
     leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
     leer(tabla('tax_rate').select('id, code, rate, tax_system, treatment, valid_to').or(`is_system.eq.true,account_id.eq.${accountId}`), 'los tipos de IVA'),
@@ -61,6 +63,9 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
     leer(tabla('locations').select('id, name').eq('account_id', accountId), 'los locales'),
     leer(tabla('treasury_account').select('id, location_id, kind, is_active').eq('account_id', accountId).eq('company_id', companyId), 'los bancos'),
     leer(tabla('journal_correction').select('origin_key, proposed_code, chosen_code, created_by_name, created_at').eq('account_id', accountId).eq('company_id', companyId), 'lo aprendido'),
+    // C04b R5 (20261020T0100): la regla de ventas por plataforma.
+    leer(tabla('conta_ventas_canal').select('channel_id, por_marca').eq('account_id', accountId).eq('company_id', companyId), 'la regla de ventas por canal'),
+    leer(tabla('conta_ventas_marca').select('brand_id, papel, company_account_id').eq('account_id', accountId).eq('company_id', companyId), 'las subcuentas de cada marca'),
     leer(tabla('bank_settings').select('treasury_series').eq('account_id', accountId).eq('company_id', companyId), 'los ajustes del banco'),
   ])
   const porId = new Map(cuentas.map((c) => [String(c.id), c]))
@@ -104,6 +109,13 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
     correcciones: correcciones.map((c) => ({ clave: String(c.origin_key), propuesta: String(c.proposed_code), elegida: String(c.chosen_code), quien: s(c.created_by_name), cuando: String(c.created_at) })),
     validarSegurosDeVentas: perfil[0]?.journal_autovalidate_sales_day === true,
     serieTesoreria: Number(ajustesBanco[0]?.treasury_series) === 4 ? 4 : 3,
+    ventasPorPlataforma: reglaCanal.length === 0 ? null : {
+      porMarca: new Set(reglaCanal.filter((r) => r.por_marca === true).map((r) => String(r.channel_id))),
+      ventasPorMarca: Object.fromEntries(reglaMarca.filter((m) => m.papel === 'ventas' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
+        .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.brand_id), String(c.code)]] : [] })),
+      devolucionesPorMarca: Object.fromEntries(reglaMarca.filter((m) => m.papel === 'devoluciones' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
+        .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.brand_id), String(c.code)]] : [] })),
+    },
   }
 }
 
@@ -185,36 +197,47 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     ])
     const cobroPorCanal: Record<string, string> = {}
     for (const [id, c] of ctx.canales) { const cta = c.partyId ? ctx.enlace('customer', c.partyId, 'principal') : null; if (cta) cobroPorCanal[id] = cta }
-    const res = ventasDelDia({
-      fecha: dia, localId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(localId) ?? 'local',
-      nombreCanal: (id) => (id ? ctx.canales.get(id)?.nombre ?? 'un canal' : 'sin canal'),
-      cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477 },
-      pedidos: (pedidos ?? []).map((p): PedidoDia => ({
-        id: String(p.id), codigo: s(p.codigo), canalId: s(p.canal_id), marcaId: s(p.marca_id), marcaPropia: p.propia !== false,
-        estado: (String(p.estado) as PedidoDia['estado']), total: n(p.total), base: p.base === null ? null : n(p.base), cuota: p.cuota === null ? null : n(p.cuota),
-        tiposEnLineas: Array.isArray(p.tipos) ? (p.tipos as unknown[]).map(Number) : [],
-      })),
-      devoluciones: (devs ?? []).map((x): DevolucionDia => ({
-        pedidoId: s(x.pedido_id), codigo: s(x.codigo), canalId: s(x.canal_id), marcaId: s(x.marca_id), marcaPropia: x.propia !== false, importe: n(x.importe),
-        // Hasta F01 Folvy no emite facturas de plataforma: ninguna devolución pide rectificativa todavía.
-        conFactura: false,
-      })),
-    })
-    if (!res.propuesta) {
-      r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? 'Sin propuesta.', pedidos: res.pedidosDelPorque?.map((p) => ({
-        codigo: p.codigo, canal: p.canalId ? ctx.canales.get(p.canalId)?.nombre ?? 'un canal' : 'sin canal',
-        marca: p.marcaId ? ctx.marcas.get(p.marcaId)?.nombre ?? 'una marca' : 'sin marca', total: p.total, estado: p.estado,
-      })) })
-      continue
+    const losPedidos = (pedidos ?? []).map((p): PedidoDia => ({
+      id: String(p.id), codigo: s(p.codigo), canalId: s(p.canal_id), marcaId: s(p.marca_id), marcaPropia: p.propia !== false,
+      estado: (String(p.estado) as PedidoDia['estado']), total: n(p.total), base: p.base === null ? null : n(p.base), cuota: p.cuota === null ? null : n(p.cuota),
+      tiposEnLineas: Array.isArray(p.tipos) ? (p.tipos as unknown[]).map(Number) : [],
+    }))
+    const lasDevoluciones = (devs ?? []).map((x): DevolucionDia => ({
+      pedidoId: s(x.pedido_id), codigo: s(x.codigo), canalId: s(x.canal_id), marcaId: s(x.marca_id), marcaPropia: x.propia !== false, importe: n(x.importe),
+      // Hasta F01 Folvy no emite facturas de plataforma: ninguna devolución pide rectificativa todavía.
+      conFactura: false,
+    }))
+    const nombreCanal = (id: string | null) => (id ? ctx.canales.get(id)?.nombre ?? 'un canal' : 'sin canal')
+    const regla = ctx.ventasPorPlataforma
+    // C04b R5: con la regla por plataforma, un asiento por unidad (Uber y Just
+    // Eat, uno; Glovo, uno por marca), igual que el cierre del día. Sin ella,
+    // la regla de antes: el día y el local enteros.
+    const unidades: (UnidadVentas | undefined)[] = regla ? unidadesDelDia(losPedidos, lasDevoluciones, (c) => !!c && regla.porMarca.has(c)) : [undefined]
+    for (const unidad of unidades) {
+      const queUnidad = unidad ? `${que} · ${nombreCanal(unidad.canalId)}${unidad.marcaId ? ` · ${ctx.marcas.get(unidad.marcaId)?.nombre ?? 'una marca'}` : ''}` : que
+      const res = ventasDelDia({
+        fecha: dia, localId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(localId) ?? 'local',
+        nombreCanal, nombreMarca: (id) => (id ? ctx.marcas.get(id)?.nombre ?? 'una marca' : 'sin marca'), unidad,
+        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477, ventasPorMarca: regla?.ventasPorMarca, devolucionesPorMarca: regla?.devolucionesPorMarca },
+        pedidos: losPedidos, devoluciones: lasDevoluciones,
+      })
+      if (!res.propuesta) {
+        r.sinPropuesta.push({ que: queUnidad, porque: res.sinPropuesta ?? 'Sin propuesta.', pedidos: res.pedidosDelPorque?.map((p) => ({
+          codigo: p.codigo, canal: p.canalId ? ctx.canales.get(p.canalId)?.nombre ?? 'un canal' : 'sin canal',
+          marca: p.marcaId ? ctx.marcas.get(p.marcaId)?.nombre ?? 'una marca' : 'sin marca', total: p.total, estado: p.estado,
+        })) })
+        continue
+      }
+      const detalle = await huella(res.resumen.pedidoIds.join('|') + '#' + String(Math.round(res.resumen.total * 100)))
+      await proponer(companyId, res.propuesta, {
+        location_id: localId, sales_day: dia, tickets_count: res.resumen.tickets, total: res.resumen.total,
+        ...(unidad ? { unit_key: unidad.clave, channel_id: unidad.canalId, brand_id: unidad.marcaId } : {}),
+        by_rate: [{ tax_rate_id: ctx.tipoVentas.id, rate: ctx.tipoVentas.porcentaje, base: res.resumen.base, cuota: res.resumen.cuota, calculated: res.resumen.baseCalculada }],
+        by_channel: res.resumen.porCanal.map((c) => ({ channel_id: c.canalId, total: c.total })),
+        by_brand: res.resumen.porMarca.map((m) => ({ brand_id: m.marcaId, base: m.base })),
+        detail_hash: detalle, sale_ids: res.resumen.pedidoIds, base_calculated: res.resumen.baseCalculada,
+      }, r, ctx, quien)
     }
-    const detalle = await huella(res.resumen.pedidoIds.join('|') + '#' + String(Math.round(res.resumen.total * 100)))
-    await proponer(companyId, res.propuesta, {
-      location_id: localId, sales_day: dia, tickets_count: res.resumen.tickets, total: res.resumen.total,
-      by_rate: [{ tax_rate_id: ctx.tipoVentas.id, rate: ctx.tipoVentas.porcentaje, base: res.resumen.base, cuota: res.resumen.cuota, calculated: res.resumen.baseCalculada }],
-      by_channel: res.resumen.porCanal.map((c) => ({ channel_id: c.canalId, total: c.total })),
-      by_brand: res.resumen.porMarca.map((m) => ({ brand_id: m.marcaId, base: m.base })),
-      detail_hash: detalle, sale_ids: res.resumen.pedidoIds, base_calculated: res.resumen.baseCalculada,
-    }, r, ctx, quien)
   }
 
   // ── Cierre del día · la liquidación manda (T4) ──

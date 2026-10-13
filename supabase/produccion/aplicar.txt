@@ -5,24 +5,25 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# Cierre del día · 2 — el cierre también propone (rama conta/cierre-proponer).
-# Encargo de Julio del 11/10. La tanda anterior (compras, 20261017T01xx) ya
-# está en el historial de producción con sus diez ficheros.
+# C04b · Respuesta 15 — el documento de cada asiento de ventas, en Folvy.
+# La tanda anterior (la regla de ventas por plataforma, 0100–0140) ya está en
+# el historial de producción con su huella (real 38380236640, 13/10); su copia
+# queda en tests/conta/produccion/tanda-ventas-plataforma-20261013.txt.
 #
-#   1. 0100 — la propuesta de ventas del día en la base y el procedimiento
-#      horario proponiendo después de cerrar. Añade, y declara los dos cambios
-#      en caliente (journal_entry_proponer, misma firma; el procedimiento
-#      conta_cierre_del_dia_todas) con su prueba de staging. Ninguno está en
-#      el camino del pedido.
-#   2. 0110 — los días que faltan (02, 06–10/10) y el 09/10 de Carabanchel
-#      entero en lugar del resumen a medias. Borra una fila: «autorizo».
-#   3. 0120 — conta_lectura lee journal_dismissal, explícito (el agente nuevo
-#      lo nombra; ya lo leía). En staging no hace nada.
+#   1. 20261021T0100 — todo NUEVO: el bucket privado conta-documentos (solo
+#      PDF), journal_entry_document (el PDF de un asiento validado, uno por
+#      asiento, no se cambia), conta_resumen_ventas, conta_documento_guardar
+#      y cuatro columnas que admiten nulos en external_send (document_*).
+#      Ningún dato cambia; nada del camino del pedido.
 #
-# Necesita «autorizo», con su nombre entero:
-#   20261018T0110_cierre_proponer_dias_datos.sql
+# Análisis contra producción, medido el 13/10 con la consulta de solo lectura
+# del workflow: «sigue». Sin «autorizo».
 #
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
-supabase/migrations/20261018T0100_cierre_proponer_solo.sql
-supabase/migrations/20261018T0110_cierre_proponer_dias_datos.sql
-supabase/migrations/20261018T0120_cierre_proponer_lectura.sql
+# Lo que cuenta antes y después (R9): el bucket, sus ficheros y políticas, la
+# tabla y sus filas, las funciones, las columnas, los envíos y los asientos de
+# ventas por estado. Si el real se deshace solo, tiene que volver a lo de antes.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt. PARA si ya hay algún
+# documento guardado o algún fichero en el bucket.
+cuenta: scripts/conta/produccion/cuentas/documentos.sql
+supabase/migrations/20261021T0100_conta_documentos.sql

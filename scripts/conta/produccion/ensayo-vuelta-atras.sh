@@ -11,6 +11,10 @@
 # después, tomada igual a los dos lados (regla 31). En verde solo si la foto es
 # idéntica y no queda ni rastro de la tanda.
 #
+# R9 · Y con las cuentas, como la vuelta atrás de producción: la de ventas del
+# día (la tanda de ejemplo no la toca, así que tiene que salir igual), tomada
+# antes de aplicar y comparada por deshacer.sh después de deshacer.
+#
 # Entorno: PSQL, DB_URL, INFORME. Sale con 0 si staging queda como estaba.
 set -uo pipefail
 DIR=supabase/staging/ensayo-vuelta-atras
@@ -24,6 +28,9 @@ foto() {
 }
 { echo "## Ensayo de vuelta atrás (staging-conta)"; echo; } >> "$INFORME"
 antes=$(foto) || { echo "::error::No se ha podido tomar la foto de antes."; exit 1; }
+export CUENTAS=/tmp/cuentas-ensayo.txt CUENTAS_ANTES=/tmp/cuentas-ensayo-antes.csv
+echo scripts/conta/produccion/cuentas/ventas-del-dia.sql > "$CUENTAS"
+bash scripts/conta/produccion/cuentas.sh "$CUENTAS" "$CUENTAS_ANTES" || { echo "::error::No se han podido tomar las cuentas de antes."; exit 1; }
 echo "- Foto de antes: \`$antes\` (tablas y funciones de \`public\` e historial de migraciones)." >> "$INFORME"
 if "$PSQL" "$DB_URL" -X -A -t -c "select to_regclass('public.ensayo_vuelta_atras')" | grep -q ensayo; then
   echo "::error::staging ya tiene la tabla del ensayo (de una ejecución anterior que no acabó). No se ensaya sobre restos."; exit 1

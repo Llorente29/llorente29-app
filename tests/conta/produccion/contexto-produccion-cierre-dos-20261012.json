@@ -1,0 +1,1 @@
+{"tablas":["public.company_tax_profile"],"funciones":["public.conta_cerrar_dias(uuid,timestamp with time zone)","public.conta_propuestos_antes_del_cierre(uuid)","public.conta_ultimo_dia_cerrado(uuid,timestamp with time zone)"],"filas":{"public.company_tax_profile":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
