@@ -165,8 +165,11 @@ tarjeta (dentro de los 134 del grupo 6xx): pasan de «falta el ticket» a
 
 En `docs/conta/capturas/b01/pantallas/`, sacadas por la e2e
 `tests/e2e/conta/b01/pantallas.spec.ts` en staging-conta, cuenta A, con la
-sesión del administrador de A (run 38463737425 sobre `a7eb3c9`, **verde**:
-el motor y las dos pantallas, ordenador y móvil). Datos: el Norma 43 inventado
+sesión del administrador de A (run 38472608856 sobre `cb50576`, **verde**:
+el motor y las dos pantallas, ordenador y móvil; la primera tanda, run
+38463737425 sobre `a7eb3c9`, también verde). En la e2e completa de `cb50576`
+(run 38469583429) solo fallan los 6 ajenos de siempre: cierre a las 2:00 (A) y
+E2E-001 (C). Datos: el Norma 43 inventado
 de los tres bancos B01 y la tarjeta ···0937 de «Ana Prueba»; al acabar la
 prueba lo deshace todo y comprueba que A tiene los mismos asientos.
 
@@ -196,8 +199,8 @@ prueba lo deshace todo y comprueba que A tiene los mismos asientos.
   página entera: está fija abajo de la ventana, como en el resto del módulo, y
   la captura entera la pinta donde estaba la ventana.
 
-**Arreglado después de verlas** (va en el commit siguiente; las capturas son
-de antes): las píldoras de los bancos del móvil salían cortadas («Cuenta pri»);
+**Arreglado después de la primera tanda** (las capturas de ahora ya lo
+llevan): las píldoras de los bancos del móvil salían cortadas («Cuenta pri»);
 «Hecho por Folvy · 51 este mes» contaba también lo deshecho por las propias
 pruebas (ahora cuenta lo que sigue vivo); y la captura de Reglas se tomó
 mientras decía «Mirando lo que se repite…» (la prueba ahora espera).
