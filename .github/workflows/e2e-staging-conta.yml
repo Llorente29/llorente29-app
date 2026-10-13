@@ -172,23 +172,10 @@ jobs:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
           set -euo pipefail
-          PSQL=/usr/lib/postgresql/17/bin/psql
           YO="run ${GITHUB_RUN_ID} · ${GITHUB_REF_NAME} · frente ${E2E_FRENTE:-ninguno}"
           echo "CERROJO_YO=$YO" >> "$GITHUB_ENV"
-          for i in $(seq 1 120); do
-            # -q: sin la etiqueta «UPDATE 1», que psql imprime aun con -t.
-            r=$("$PSQL" "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -v yo="$YO" <<'SQL'
-          update e2e.cerrojo set quien = :'yo', desde = now(), hasta = now() + interval '50 minutes'
-           where id = 1 and (quien is null or hasta < now() or quien = :'yo')
-          returning 'cogido';
-          SQL
-            )
-            if printf '%s\n' "$r" | grep -qx 'cogido'; then echo "Cerrojo cogido ($YO) tras $(( (i - 1) / 2 )) min de espera."; exit 0; fi
-            otro=$("$PSQL" "$DB_URL" -X -A -t -c "select quien || ' · desde ' || to_char(desde at time zone 'Europe/Madrid', 'HH24:MI') || ' · caduca ' || to_char(hasta at time zone 'Europe/Madrid', 'HH24:MI') from e2e.cerrojo where id = 1")
-            echo "Espera: el cerrojo lo tiene ${otro}."
-            sleep 30
-          done
-          echo "::error::Una hora esperando el cerrojo de las e2e. No se lanza nada."; exit 1
+          # Como mucho 120 intentos cada 30 s (una hora). Lo cogido caduca a los 50 min.
+          CERROJO_YO="$YO" scripts/e2e/cerrojo.sh coger
 
       - name: Guarda 3 y contraseña de un solo uso para los usuarios de prueba
         env:
@@ -256,15 +243,16 @@ jobs:
       - name: Pruebas (ordenador y móvil)
         run: npx playwright test ${PRUEBAS:-}
 
+      # Pase lo que pase: también si las pruebas fallan o el run se cancela
+      # (always() corre en los dos casos; medido el 13/10 cancelando 38457342932,
+      # que lo tenía: quedó libre). Si ni esto llega a correr, caduca solo.
       - name: Cerrojo · soltarlo (pase lo que pase)
         if: always()
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
           [ -n "${CERROJO_YO:-}" ] || { echo "Este run no llegó a pedir el cerrojo."; exit 0; }
-          /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -q -A -t -v yo="$CERROJO_YO" <<'SQL'
-          update e2e.cerrojo set quien = null, desde = null, hasta = null where id = 1 and quien = :'yo' returning 'soltado';
-          SQL
+          scripts/e2e/cerrojo.sh soltar
 
       - name: Informe de Playwright
         if: always()
