@@ -101,7 +101,8 @@ const txt = (x: unknown): string | null => (typeof x === 'string' && x.trim() !=
 export function claveNumero(n: string | null | undefined): string | null {
   const k = (n ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
   // «s/n», «sin número», «0» no son número: no sirven para buscar repetidas.
-  return k === '' || /^(SN|SINNUMERO|SINNUM|0+)$/.test(k) ? null : k
+  // («sin número» con tilde se queda en SINNMERO: la Ú no es [A-Z0-9].)
+  return k === '' || /^(SN|SINNUMERO|SINNMERO|SINNUM|0+)$/.test(k) ? null : k
 }
 
 /** El NIF como se compara: mayúsculas, sin espacios ni guiones, sin el «ES» delante. */
@@ -242,9 +243,15 @@ export type FacturaExistente = { id: string; proveedorId: string | null; nif: st
 export type Repetida = { nivel: 'repetida' | 'posible'; con: string; texto: string }
 
 /**
- * La regla de repetidas (Julio, R1 del D01), la misma que la base:
- *   · repetida: el mismo proveedor y la misma clave de número;
- *   · posible: el mismo proveedor, la misma fecha y el mismo total, con otro número.
+ * La regla de repetidas (Julio, R1 del D01), la misma que la base (0230):
+ *   · repetida: el mismo proveedor, la misma clave de número Y el mismo total;
+ *   · posible: el mismo proveedor y la misma clave con OTRO total (o sin total
+ *     que comparar), o la misma fecha y el mismo total con otro número.
+ * Por qué el total también, como en el C01b (lib/repetidas.ts): en los 179
+ * albaranes reales de Foodint un proveedor pone «01» en dos albaranes distintos,
+ * de fecha e importe distintos. Solo con el número, el segundo no habría podido
+ * entrar. Casar dos facturas distintas es peor que preguntar por una: lo que
+ * duda va a «posible», que pregunta y no bloquea.
  * El proveedor es el mismo si coincide su id o, si aún no tiene ficha, su NIF.
  */
 export function buscarRepetida(n: { proveedorId: string | null; nif: string | null; numero: string | null; fecha: string | null; total: number | null }, existentes: readonly FacturaExistente[]): Repetida | null {
@@ -252,8 +259,11 @@ export function buscarRepetida(n: { proveedorId: string | null; nif: string | nu
   const nif = normalizarNif(n.nif)
   const mismo = (x: FacturaExistente) => (n.proveedorId && x.proveedorId === n.proveedorId) || (!!nif && normalizarNif(x.nif) === nif)
   const vivas = existentes.filter((x) => !x.anulada && mismo(x))
-  const r = k ? vivas.find((x) => claveNumero(x.numero) === k) : undefined
-  if (r) return { nivel: 'repetida', con: r.id, texto: `Ya está: el mismo proveedor y el mismo número (${r.numero}). No la apunto dos veces.` }
+  const mismoNumero = k ? vivas.filter((x) => claveNumero(x.numero) === k) : []
+  const r = n.total != null ? mismoNumero.find((x) => x.total != null && c(x.total) === c(n.total!)) : undefined
+  if (r) return { nivel: 'repetida', con: r.id, texto: `Ya está: el mismo proveedor, el mismo número (${r.numero}) y el mismo total. No la apunto dos veces.` }
+  const o = mismoNumero[0]
+  if (o) return { nivel: 'posible', con: o.id, texto: `¿Repetida? El mismo proveedor y el mismo número (${o.numero}), ${n.total == null || o.total == null ? 'sin un total que comparar' : 'con otro total'}.` }
   const p = n.fecha && n.total != null ? vivas.find((x) => x.fecha === n.fecha && x.total != null && c(x.total) === c(n.total!)) : undefined
   if (p) return { nivel: 'posible', con: p.id, texto: `¿Repetida? El mismo proveedor, la misma fecha y el mismo total que la ${p.numero ?? 'sin número'}, con otro número.` }
   return null

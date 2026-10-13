@@ -10,6 +10,7 @@
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import type { OcrDocument, OcrLine } from '@/modules/supply/services/goodsReceiptService'
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
+import { rpcSinTipar } from '@/lib/rpcSinTipar'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -370,24 +371,38 @@ export async function resolveInvoiceHeader(
   }
 }
 
-/** ¿Ya existe una factura del mismo proveedor con el mismo nº (no anulada)? (anti-duplicado) */
-export interface DuplicateInvoiceHit { id: string; code: string | null; status: SupplierInvoiceStatus }
+/**
+ * ¿Ya está esta factura? La REGLA ÚNICA de repetidas, la de la base (D01:
+ * supplier_invoice_repetida, la misma que aplica el disparador al guardar):
+ *   · «repetida»: mismo proveedor, mismo número (sin espacios, barras ni
+ *     guiones) y mismo total — al guardarla, la base no la deja entrar;
+ *   · «posible»: el mismo número con otro total, o la misma fecha y el mismo
+ *     total con otro número — se pregunta, y se puede crear.
+ */
+export interface DuplicateInvoiceHit { id: string; code: string | null; status: SupplierInvoiceStatus; nivel: 'repetida' | 'posible'; invoiceNumber: string | null }
 export async function findDuplicateInvoice(
   accountId: string, supplierId: string | null, invoiceNumber: string | null,
+  invoiceDate: string | null = null, grandTotal: number | null = null,
 ): Promise<DuplicateInvoiceHit | null> {
-  if (!supplierId || !invoiceNumber || invoiceNumber.trim() === '') return null
+  if (!supplierId) return null
   requireSupabase()
-  const { data, error } = await from('supplier_invoice')
-    .select('id, code, status')
-    .eq('account_id', accountId)
-    .eq('supplier_id', supplierId)
-    .eq('invoice_number', invoiceNumber.trim())
-    .neq('status', 'anulada')
-    .limit(1)
-  if (error) { console.error('[supplierInvoiceService] findDuplicateInvoice', error); return null }
-  const rows = (data as Row[] | null) ?? []
-  if (rows.length === 0) return null
-  return { id: rows[0].id as string, code: (rows[0].code as string | null) ?? null, status: rows[0].status as SupplierInvoiceStatus }
+  let filas: Row[]
+  try {
+    filas = await rpcSinTipar<Row[]>('supplier_invoice_repetida', {
+      p_account: accountId, p_supplier: supplierId, p_nif: null, p_numero: invoiceNumber,
+      p_fecha: invoiceDate, p_total: grandTotal,
+    }) ?? []
+  } catch (error) { console.error('[supplierInvoiceService] findDuplicateInvoice', error); return null }
+  const hit = filas[0]
+  if (!hit) return null
+  const { data: inv } = await from('supplier_invoice').select('code, status').eq('id', hit.invoice_id as string).maybeSingle()
+  return {
+    id: hit.invoice_id as string,
+    code: ((inv as Row | null)?.code as string | null) ?? null,
+    status: ((inv as Row | null)?.status as SupplierInvoiceStatus) ?? 'borrador',
+    nivel: hit.nivel === 'repetida' ? 'repetida' : 'posible',
+    invoiceNumber: (hit.invoice_number as string | null) ?? null,
+  }
 }
 
 /** Prefill OCR para el alta de factura (lo consume SupplierInvoicesPage). */

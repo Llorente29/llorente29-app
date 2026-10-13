@@ -5,6 +5,7 @@
 // intracomunitaria sin IVA, mal sumada, sin NIF, antigua y a más de 60 días.
 // Ningún nombre ni NIF es de nadie: el repositorio es público.
 import { describe, expect, it } from 'vitest'
+import datosAlbaranes from '../../unit/modules/conta/datos/albaranes-fecha-importe-foodint-20261004.json'
 import { buscarRepetida, claveNumero, leerFactura, normalizarNif, type LecturaModelo } from '../../../supabase/functions/_shared/lecturaFactura'
 
 const HOY = '2026-10-13'
@@ -121,10 +122,27 @@ describe('repetidas: una sola regla', () => {
     { id: 'b', proveedorId: 'p1', nif: 'A00000001', numero: 'F-2026/0999', fecha: '2026-10-01', total: 50 },
     { id: 'z', proveedorId: 'p1', nif: 'A00000001', numero: 'F-2026/2000', fecha: '2026-10-12', total: 70, anulada: true },
   ]
-  it('el mismo proveedor y el mismo número normalizado → repetida, venga por donde venga', () => {
+  it('el mismo proveedor, el mismo número normalizado y el mismo total → repetida, venga por donde venga', () => {
     expect(buscarRepetida({ proveedorId: 'p1', nif: null, numero: 'f2026/1022', fecha: '2026-10-11', total: 1411.47 }, existentes)).toMatchObject({ nivel: 'repetida', con: 'a' })
     // sin ficha todavía: por el NIF
-    expect(buscarRepetida({ proveedorId: null, nif: 'ES-A00000001', numero: 'F20261022', fecha: null, total: null }, existentes)).toMatchObject({ nivel: 'repetida', con: 'a' })
+    expect(buscarRepetida({ proveedorId: null, nif: 'ES-A00000001', numero: 'F20261022', fecha: null, total: 1411.47 }, existentes)).toMatchObject({ nivel: 'repetida', con: 'a' })
+  })
+  it('el mismo número con otro total, o sin total leído → posible: pregunta, no bloquea', () => {
+    expect(buscarRepetida({ proveedorId: 'p1', nif: null, numero: 'F-2026-1022', fecha: '2026-10-20', total: 99 }, existentes)).toMatchObject({ nivel: 'posible', con: 'a' })
+    expect(buscarRepetida({ proveedorId: null, nif: 'ES-A00000001', numero: 'F20261022', fecha: null, total: null }, existentes)).toMatchObject({ nivel: 'posible', con: 'a' })
+  })
+  it('población real: el proveedor que pone «01» en dos albaranes distintos no se queda con el segundo fuera', () => {
+    // datos/albaranes-fecha-importe-foodint-20261004.json: el único número repetido
+    // entre los albaranes vivos es «01», del proveedor 4, con fecha e importe distintos.
+    const filas = (datosAlbaranes as { filas: { p: number; n: string | null; f: string; i: number; anulado: boolean }[] }).filas.filter((x) => !x.anulado)
+    const existentes: { id: string; proveedorId: string; nif: null; numero: string | null; fecha: string; total: number }[] = []
+    const repetidas: string[] = []
+    filas.forEach((x, j) => {
+      const r = buscarRepetida({ proveedorId: String(x.p), nif: null, numero: x.n, fecha: x.f, total: x.i }, existentes)
+      if (r?.nivel === 'repetida') repetidas.push(`${x.p}|${x.n}`)
+      existentes.push({ id: String(j), proveedorId: String(x.p), nif: null, numero: x.n, fecha: x.f, total: x.i })
+    })
+    expect(repetidas).toEqual([])
   })
   it('otro número, misma fecha y mismo total → posible', () => {
     expect(buscarRepetida({ proveedorId: 'p1', nif: null, numero: 'F-2026/1023', fecha: '2026-10-01', total: 50 }, existentes)).toMatchObject({ nivel: 'posible', con: 'b' })

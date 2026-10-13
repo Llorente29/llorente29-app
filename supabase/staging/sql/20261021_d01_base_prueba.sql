@@ -10,9 +10,10 @@
 --      A, lo cambia su administrador; el de B no puede.
 --   2. La dirección de facturas: facturas-<empresa>@entrada.folvy.app, nace
 --      apagada, no lleva el NIF y la segunda vez devuelve la misma.
---   3. La regla única de repetidas: el mismo número normalizado del mismo
---      proveedor no entra dos veces; con «No es repetida», sí. La función dice
---      repetida y posible igual que el núcleo de lectura.
+--   3. La regla única de repetidas (con la 0230): el mismo número normalizado
+--      y el mismo total del mismo proveedor no entra dos veces; con otro total
+--      o con «No es repetida», sí. La función dice repetida y posible igual que
+--      el núcleo de lectura.
 --   4. La función para B: devuelve la factura pendiente con su contrato
 --      (nombres, tipos y orden de las columnas, fijados aquí).
 --   5. Los tres CHECK: 'billing', 'aprendido_diez' y 'factura_recibida' valen;
@@ -77,15 +78,21 @@ begin
   -- 3 · repetidas
   insert into public.supplier_invoice (account_id, supplier_id, company_id, invoice_number, invoice_date, status, source, grand_total, tax_base_total, tax_total, created_by_name)
   values (v_acc, v_prov, v_e, 'D01/0001-A', '2026-09-30', 'en_revision', 'manual', 110, 100, 10, 'Prueba D01') returning id into v_i1;
+  -- Desde la 0230, repetida es número Y total (como el C01b): con el mismo total no entra…
   begin
     insert into public.supplier_invoice (account_id, supplier_id, company_id, invoice_number, invoice_date, status, source, grand_total, created_by_name)
-    values (v_acc, v_prov, v_e, 'd01 0001 a', '2026-10-01', 'en_revision', 'manual', 999, 'Prueba D01');
+    values (v_acc, v_prov, v_e, 'd01 0001 a', '2026-10-01', 'en_revision', 'manual', 110, 'Prueba D01');
     raise exception 'PRUEBA D01 · 3: ha entrado la misma factura con el número escrito de otra forma.';
-  exception when unique_violation then raise notice 'PRUEBA D01 · 3: «d01 0001 a» no entra: es «D01/0001-A» del mismo proveedor.'; end;
+  exception when unique_violation then raise notice 'PRUEBA D01 · 3: «d01 0001 a» por 110 no entra: es «D01/0001-A» del mismo proveedor.'; end;
+  -- …con otro total sí entra (es «posible», pregunta), y con «No es repetida», también con el mismo total.
+  insert into public.supplier_invoice (account_id, supplier_id, company_id, invoice_number, invoice_date, status, source, grand_total, created_by_name)
+  values (v_acc, v_prov, v_e, 'd01 0001 a', '2026-10-01', 'en_revision', 'manual', 999, 'Prueba D01') returning id into v_i2;
   insert into public.supplier_invoice (account_id, supplier_id, company_id, invoice_number, invoice_date, status, source, grand_total, created_by_name, not_duplicate_confirmed_at, not_duplicate_confirmed_by_name)
-  values (v_acc, v_prov, v_e, 'd01 0001 a', '2026-10-01', 'en_revision', 'manual', 999, 'Prueba D01', now(), 'Prueba D01') returning id into v_i2;
-  select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01-0001/A', null, null);
+  values (v_acc, v_prov, v_e, 'd01 0001 a', '2026-10-01', 'en_revision', 'manual', 110, 'Prueba D01', now(), 'Prueba D01');
+  select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01-0001/A', '2026-10-05', 110);
   if v_res is distinct from 'repetida' then raise exception 'PRUEBA D01 · 3: la función no dice repetida (%).', v_res; end if;
+  select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01-0001/A', null, null);
+  if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 · 3: el mismo número sin total no es «posible» (%).', v_res; end if;
   select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01/0002', '2026-09-30', 110);
   if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 · 3: misma fecha y total con otro número no es «posible» (%).', v_res; end if;
   select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01/0003', '2026-10-31', 110);

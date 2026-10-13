@@ -1,10 +1,12 @@
-# D01 · Tarea 4 — las entradas: correo, subida y la factura que sale de lo leído
-# (2.ª vuelta: un usuario ni siquiera puede leer el registro de correos —permission denied—, y la prueba lo espera así.)
-# (sesión A; solo añade). La 0200 y la 0210 ya están en staging (run 38428274587).
-#   ensayo: la 0220 y su prueba en una transacción con ROLLBACK.
-#   0220:   registro de correos, destino, llegada, subida, factura desde la
-#           lectura y alta del proveedor leído.
-#   La prueba otra vez, ya con la 0220 puesta.
-supabase/staging/sql/20261021_d01_entrada_ensayo.sql
-supabase/migrations/20261021T0220_d01_entrada.sql
+# D01 · Tarea 4 — la regla única de repetidas, con el total (sesión A).
+# La 0200, la 0210 y la 0220 ya están en staging (runs 38428274587 y 38429935867).
+#   ensayo: la 0230 y su prueba en una transacción con ROLLBACK.
+#   0230:   repetida = mismo proveedor, mismo número Y mismo total (como el C01b);
+#           el mismo número con otro total es «posible» y no bloquea.
+#   Su prueba, la de la base (la parte 3 ya con el total) y la de las entradas,
+#   otra vez con la 0230 puesta.
+supabase/staging/sql/20261021_d01_repetidas_ensayo.sql
+supabase/migrations/20261021T0230_d01_repetidas_con_total.sql
+supabase/staging/sql/20261021_d01_repetidas_prueba.sql
+supabase/staging/sql/20261021_d01_base_prueba.sql
 supabase/staging/sql/20261021_d01_entrada_prueba.sql

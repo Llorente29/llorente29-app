@@ -87,7 +87,7 @@ export default function InvoiceScanPanel({ accountId, onBack, onCreateInvoice }:
     try {
       const header = await resolveInvoiceHeader(accountId, result.document)
       const ocr = buildInvoiceOcrPrefill(result.sessionId, result.filePaths[0] ?? null, header, result.lines)
-      const dup = await findDuplicateInvoice(accountId, header.supplierId || null, header.invoiceNumber)
+      const dup = await findDuplicateInvoice(accountId, header.supplierId || null, header.invoiceNumber, header.invoiceDate, header.grandTotal)
       if (dup) { setPendingOcr(ocr); setDupHit(dup); setCreating(false); return }
       onCreateInvoice(ocr)
     } catch (err: unknown) {
@@ -236,17 +236,21 @@ export default function InvoiceScanPanel({ accountId, onBack, onCreateInvoice }:
             <div className="flex items-start gap-2">
               <AlertTriangle size={18} className="text-warning mt-0.5 shrink-0" />
               <div>
-                <h3 className="text-base font-medium text-text-primary">Puede que ya hayas registrado esta factura</h3>
+                <h3 className="text-base font-medium text-text-primary">{dupHit.nivel === 'repetida' ? 'Esta factura ya está registrada' : 'Puede que ya hayas registrado esta factura'}</h3>
                 <p className="text-sm text-text-secondary mt-1">
-                  Ya existe una factura {dupHit.code ? <strong>{dupHit.code}</strong> : null} de este proveedor con el nº <strong>{result?.document.doc_number}</strong> ({dupHit.status}). Si la creas otra vez, quedará duplicada.
+                  {dupHit.nivel === 'repetida'
+                    ? <>Ya está la factura {dupHit.code ? <strong>{dupHit.code}</strong> : null} de este proveedor con el nº <strong>{dupHit.invoiceNumber}</strong> y el mismo total ({dupHit.status}). No entra dos veces. Si no es la misma, márcala «No es repetida» en la ficha del proveedor.</>
+                    : <>Hay una factura {dupHit.code ? <strong>{dupHit.code}</strong> : null} de este proveedor parecida (nº <strong>{dupHit.invoiceNumber ?? 'sin número'}</strong>, {dupHit.status}): el mismo número con otro total, o la misma fecha y el mismo total. Si la creas, quedará marcada para revisar.</>}
                 </p>
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-1">
               <button type="button" onClick={() => { setDupHit(null); setPendingOcr(null) }}
                 className="px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page transition-base">Cancelar</button>
-              <button type="button" onClick={() => { if (pendingOcr) onCreateInvoice(pendingOcr); setDupHit(null); setPendingOcr(null) }}
-                className="px-3 py-2 rounded-md text-sm font-medium bg-warning text-text-on-accent hover:opacity-90 transition-base">Crear de todos modos</button>
+              {dupHit.nivel === 'posible' && (
+                <button type="button" onClick={() => { if (pendingOcr) onCreateInvoice(pendingOcr); setDupHit(null); setPendingOcr(null) }}
+                  className="px-3 py-2 rounded-md text-sm font-medium bg-warning text-text-on-accent hover:opacity-90 transition-base">Crear de todos modos</button>
+              )}
             </div>
           </div>
         </div>
