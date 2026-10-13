@@ -54,7 +54,7 @@ begin
   if r ->> 'falta' <> 'plan' then raise exception '1: con el alta, esperaba «plan» y falta %.', r ->> 'falta'; end if;
   insert into public.company_tax_profile (company_id, account_id, chart_kind, account_digits) values (c, 'c0600000-0000-4000-8000-0000000000f6', 'pymes', 8);
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
-  values ('c0600000-0000-4000-8000-0000000000f6', c, 'pymes', '43000000', '430', 'Clientes', 'template', 'serie');
+  values ('c0600000-0000-4000-8000-0000000000f6', c, 'pymes', '62900000', '629', 'Otros servicios', 'template', 'serie');
   r := public.conta_diez_listo(c);
   if r ->> 'falta' <> 'banco' then raise exception '1: con el plan, esperaba «banco» y falta %.', r ->> 'falta'; end if;
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
@@ -76,7 +76,7 @@ begin
   r := public.conta_diez_subcuentas(c, v_run, jsonb_build_array(
     jsonb_build_object('code', '57200002', 'nombre', null),
     jsonb_build_object('code', '57200003', 'nombre', 'Banco de la prueba'),
-    jsonb_build_object('code', '43000000', 'nombre', 'Clientes'),
+    jsonb_build_object('code', '62900000', 'nombre', 'Otros servicios'),
     jsonb_build_object('code', '1234', 'nombre', 'Corta'),
     jsonb_build_object('code', '99900001', 'nombre', 'De nada')));
   if (r -> 'sinNombre') <> '["57200002"]'::jsonb then raise exception '2: «sinNombre» debería ser [57200002] y es %.', r -> 'sinNombre'; end if;
