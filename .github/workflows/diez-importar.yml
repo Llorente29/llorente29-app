@@ -348,7 +348,9 @@ jobs:
           set -euo pipefail
           [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
           jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
-          npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee -a /tmp/informe.md
+          npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee /tmp/lectura.md | tee -a /tmp/informe.md
+          # Solo los RECUENTOS, también como aviso del run (sin claves ni motivos).
+          grep -E '^(Base |- Meses leídos|- Asientos leídos|- Preparados|- Subcuentas que usan)' /tmp/lectura.md | sed 's/^/::notice::/'
           # Lo leído no sale del runner: ni a staging ni al informe (solo recuentos).
           rm -rf /tmp/carga
       - name: Simulado · leer y preparar (Diez de mentira, datos inventados)
