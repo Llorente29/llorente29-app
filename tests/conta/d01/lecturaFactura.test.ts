@@ -127,11 +127,16 @@ describe('repetidas: una sola regla', () => {
     // sin ficha todavía: por el NIF
     expect(buscarRepetida({ proveedorId: null, nif: 'ES-A00000001', numero: 'F20261022', fecha: null, total: 1411.47 }, existentes)).toMatchObject({ nivel: 'repetida', con: 'a' })
   })
-  it('el mismo número con otro total, o sin total leído → posible: pregunta, no bloquea', () => {
-    expect(buscarRepetida({ proveedorId: 'p1', nif: null, numero: 'F-2026-1022', fecha: '2026-10-20', total: 99 }, existentes)).toMatchObject({ nivel: 'posible', con: 'a' })
-    expect(buscarRepetida({ proveedorId: null, nif: 'ES-A00000001', numero: 'F20261022', fecha: null, total: null }, existentes)).toMatchObject({ nivel: 'posible', con: 'a' })
+  it('el mismo número con otro total, o sin total leído, no es nada (C01b: así no pregunta por el «01» de cada mes)', () => {
+    expect(buscarRepetida({ proveedorId: 'p1', nif: null, numero: 'F-2026-1022', fecha: '2026-10-20', total: 99 }, existentes)).toBeNull()
+    expect(buscarRepetida({ proveedorId: null, nif: 'ES-A00000001', numero: 'F20261022', fecha: null, total: null }, existentes)).toBeNull()
   })
-  it('población real: el proveedor que pone «01» en dos albaranes distintos no se queda con el segundo fuera', () => {
+  it('sin número ninguna de las dos, misma fecha y total: posible; con total 0, nada', () => {
+    const sin = [{ id: 's', proveedorId: 'p9', nif: null, numero: 's/n', fecha: '2026-10-03', total: 40 }, { id: 'c', proveedorId: 'p9', nif: null, numero: '0', fecha: '2026-10-04', total: 0 }]
+    expect(buscarRepetida({ proveedorId: 'p9', nif: null, numero: null, fecha: '2026-10-03', total: 40 }, sin)).toMatchObject({ nivel: 'posible', con: 's' })
+    expect(buscarRepetida({ proveedorId: 'p9', nif: null, numero: 'SN', fecha: '2026-10-04', total: 0 }, sin)).toBeNull()
+  })
+  it('población real: ni repetidas ni posibles en los albaranes de verdad (como midió el C01b); el «01» repetido no pregunta', () => {
     // datos/albaranes-fecha-importe-foodint-20261004.json: el único número repetido
     // entre los albaranes vivos es «01», del proveedor 4, con fecha e importe distintos.
     const filas = (datosAlbaranes as { filas: { p: number; n: string | null; f: string; i: number; anulado: boolean }[] }).filas.filter((x) => !x.anulado)
@@ -139,7 +144,7 @@ describe('repetidas: una sola regla', () => {
     const repetidas: string[] = []
     filas.forEach((x, j) => {
       const r = buscarRepetida({ proveedorId: String(x.p), nif: null, numero: x.n, fecha: x.f, total: x.i }, existentes)
-      if (r?.nivel === 'repetida') repetidas.push(`${x.p}|${x.n}`)
+      if (r) repetidas.push(`${r.nivel}:${x.p}|${x.n}`)
       existentes.push({ id: String(j), proveedorId: String(x.p), nif: null, numero: x.n, fecha: x.f, total: x.i })
     })
     expect(repetidas).toEqual([])

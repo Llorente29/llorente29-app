@@ -1,7 +1,7 @@
 -- supabase/staging/sql/20261021_d01_repetidas_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261021T0230 (la regla única de repetidas, con el
--- total): public.supplier_invoice (su disparador), public.tg_supplier_invoice_no_repetida,
+-- SOLO STAGING. Prueba de 20261021T0230 y 20261021T0260 (la regla única de
+-- repetidas, con el total, la del C01b): public.supplier_invoice (su disparador), public.tg_supplier_invoice_no_repetida,
 -- public.supplier_invoice_repetida y public.supplier_invoice_repetidas_que_hay.
 -- Todo en una transacción con ROLLBACK, como administrador de A y de B.
 --
@@ -11,8 +11,8 @@
 --      facturas de fecha e importe distintos — las dos entran.
 --   3. El mismo número y el mismo total no entra (ni al crearla, ni al
 --      cambiarle el total para que coincida); con «No es repetida», sí.
---   4. La función: repetida, posible por número con otro total o sin total,
---      posible por fecha y total, y nada.
+--   4. La función (0260, la regla del C01b): repetida; posible por fecha y
+--      total; y nada con el mismo número y otro total, sin total o con total 0.
 --   5. Las que ya había: se listan por número Y total.
 --   6. B no pregunta por A.
 
@@ -70,15 +70,19 @@ begin
   -- 4 · la función
   select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, '01', '2026-10-01', 87.15);
   if v_res is distinct from 'repetida' then raise exception 'PRUEBA D01 repetidas · 4: el mismo número y total no es repetida (%).', v_res; end if;
-  select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, '01', '2026-10-01', 5);
-  if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 repetidas · 4: el mismo número con otro total no es posible (%).', v_res; end if;
-  select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, '01', null, null);
-  if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 repetidas · 4: el mismo número sin total no es posible (%).', v_res; end if;
+  -- Desde la 0260 (la del C01b): el mismo número con otro total, o sin total, no es nada.
+  select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, '01', '2026-10-01', 5);
+  if v_n <> 0 then raise exception 'PRUEBA D01 repetidas · 4: el mismo número con otro total sale como algo.'; end if;
+  select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, '01', null, null);
+  if v_n <> 0 then raise exception 'PRUEBA D01 repetidas · 4: el mismo número sin total sale como algo.'; end if;
+  -- Un total 0 no casa nada.
+  select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, 'X-79', '2026-09-25', 0);
+  if v_n <> 0 then raise exception 'PRUEBA D01 repetidas · 4: un total 0 casa algo.'; end if;
   select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, 'X-77', '2026-09-11', 87.15);
   if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 repetidas · 4: misma fecha y total con otro número no es posible (%).', v_res; end if;
   select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, 'X-78', '2026-12-11', 87.15);
   if v_n <> 0 then raise exception 'PRUEBA D01 repetidas · 4: otro número, otra fecha, sale algo.'; end if;
-  raise notice 'PRUEBA D01 repetidas · 4: repetida, posible por número (otro total / sin total), posible por fecha y total, y nada.';
+  raise notice 'PRUEBA D01 repetidas · 4: repetida; posible por fecha y total; y nada con el mismo número y otro total, sin total o con total 0 (la regla del C01b).';
 
   -- 5 · las que ya había
   select count(*) into v_n from public.supplier_invoice_repetidas_que_hay(v_acc) where v_a = any (ids) or v_b = any (ids);

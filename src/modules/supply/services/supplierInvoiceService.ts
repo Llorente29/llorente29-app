@@ -376,8 +376,9 @@ export async function resolveInvoiceHeader(
  * supplier_invoice_repetida, la misma que aplica el disparador al guardar):
  *   · «repetida»: mismo proveedor, mismo número (sin espacios, barras ni
  *     guiones) y mismo total — al guardarla, la base no la deja entrar;
- *   · «posible»: el mismo número con otro total, o la misma fecha y el mismo
- *     total con otro número — se pregunta, y se puede crear.
+ *   · «posible»: la misma fecha y el mismo total con otro número — se
+ *     pregunta, y se puede crear. El mismo número con otro total no es nada
+ *     (la regla del C01b).
  */
 export interface DuplicateInvoiceHit { id: string; code: string | null; status: SupplierInvoiceStatus; nivel: 'repetida' | 'posible'; invoiceNumber: string | null }
 export async function findDuplicateInvoice(

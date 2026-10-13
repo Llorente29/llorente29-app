@@ -1,10 +1,11 @@
-# D01 R2 punto 3 — el origen de lo aprendido (sesión A; cambia una función con su misma firma).
-# La 0200 a la 0240 ya están en staging (la 0240, run 38435239940).
-#   ensayo: la 0250 y su prueba en una transacción con ROLLBACK.
-#   0250:   conta_gasto_aprendido dice «aprendido de Diez» o «aprendido de tus
-#           facturas», el de la más reciente.
-#   Su prueba, y la de la 0240 (sigue pasando).
-supabase/staging/sql/20261021_d01_aprendido_ensayo.sql
-supabase/migrations/20261021T0250_d01_aprendido_origen.sql
-supabase/staging/sql/20261021_d01_aprendido_prueba.sql
-supabase/staging/sql/20261021_d01_asiento_prueba.sql
+# D01 R2 punto 3 — la regla de repetidas, entera la del C01b (sesión A; cambia una función con su misma firma).
+# La 0200 a la 0250 ya están en staging (la 0250, run 38441602839).
+#   ensayo: la 0260 y su prueba en una transacción con ROLLBACK.
+#   0260:   supplier_invoice_repetida: el mismo número con otro total, o sin
+#           total, no es nada; posible solo por fecha y total (no 0).
+#   Su prueba, la de la base y la de las entradas, con la 0260 puesta.
+supabase/staging/sql/20261021_d01_repetidas_c01b_ensayo.sql
+supabase/migrations/20261021T0260_d01_repetidas_c01b.sql
+supabase/staging/sql/20261021_d01_repetidas_prueba.sql
+supabase/staging/sql/20261021_d01_base_prueba.sql
+supabase/staging/sql/20261021_d01_entrada_prueba.sql

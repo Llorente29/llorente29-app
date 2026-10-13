@@ -158,7 +158,7 @@ test.describe('cuenta A', () => {
     }
   })
 
-  test('marcar pagada baja «Le debes» y el próximo pago, y Deshacer lo devuelve; la repetida no cuenta', async ({ page }) => {
+  test('marcar pagada baja «Le debes» y el próximo pago, y Deshacer lo devuelve; la repetida ni entra', async ({ page }) => {
     const s = await entrarComo(page, CUENTA_A.email)
     const id = await crearPorApi(s, CUENTA_A.id, { payment_method: 'transfer', payment_terms_days: 30 })
     try {
@@ -168,17 +168,20 @@ test.describe('cuenta A', () => {
       })
       const f1 = await rest<{ id: string }[]>(s, 'POST', 'supplier_invoice', factura('E2E-001', 'aprobada'))
       expect(f1.status, JSON.stringify(f1.datos)).toBe(201)
-      const f2 = await rest<{ id: string }[]>(s, 'POST', 'supplier_invoice', factura('e2e-001 ', 'aprobada'))
-      expect(f2.status, JSON.stringify(f2.datos)).toBe(201)
+      // D01 (0210/0230): la regla única de repetidas vive en la base. La misma
+      // factura escrita de otra forma, con el mismo total, no entra: la base la
+      // para con su porqué, y la persona no tiene que verla dos veces.
+      const f2 = await rest<{ message?: string }>(s, 'POST', 'supplier_invoice', factura('e2e-001 ', 'aprobada'))
+      expect(f2.status).toBe(409)
+      expect(JSON.stringify(f2.datos)).toMatch(/Repetida: ya está la factura E2E-001 de este proveedor/)
 
       const leDebes = page.locator('.cxp-cifra').filter({ hasText: 'Le debes' })
       await page.goto(ficha(id))
-      // La repetida no cuenta: 121 €, no 242.
       await expect(leDebes).toContainText('121')
       await expect(leDebes).not.toContainText('242')
 
       await page.goto(ficha(id, 'facturas'))
-      await expect(page.getByText('¿Repetida?')).toBeVisible()
+      await expect(page.getByText('¿Repetida?')).toHaveCount(0)
       await page.getByRole('button', { name: 'Ver la factura E2E-001', exact: true }).click()
       await page.getByRole('button', { name: 'Marcar como pagada' }).click()
       await expect(page.getByText(/Factura E2E-001 marcada como pagada el .*Ya no le debes esos 121,00 €\./)).toBeVisible()
@@ -191,14 +194,7 @@ test.describe('cuenta A', () => {
       await page.getByRole('button', { name: 'Ver la factura E2E-001', exact: true }).click()
       await page.getByRole('button', { name: 'Deshacer el pago' }).click()
       await expect(page.getByText(/vuelve a estar por pagar/)).toBeVisible()
-
-      // «No es repetida»: entonces sí cuenta.
-      await page.getByRole('button', { name: /Ver la factura e2e-001/ }).click()
-      await page.getByRole('button', { name: 'No es repetida: apuntarla' }).click()
-      await expect(page.getByText(/apuntada: no es repetida/)).toBeVisible()
-      await expect(page.getByText('¿Repetida?')).toHaveCount(0)
-      await page.goto(ficha(id))
-      await expect(leDebes).toContainText('242')
+      // «No es repetida» se prueba en la de abajo (la posible), que sí entra.
     } finally {
       await borrarProveedor(s, id)
     }

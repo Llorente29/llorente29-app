@@ -240,7 +240,7 @@ export default function InvoiceScanPanel({ accountId, onBack, onCreateInvoice }:
                 <p className="text-sm text-text-secondary mt-1">
                   {dupHit.nivel === 'repetida'
                     ? <>Ya está la factura {dupHit.code ? <strong>{dupHit.code}</strong> : null} de este proveedor con el nº <strong>{dupHit.invoiceNumber}</strong> y el mismo total ({dupHit.status}). No entra dos veces. Si no es la misma, márcala «No es repetida» en la ficha del proveedor.</>
-                    : <>Hay una factura {dupHit.code ? <strong>{dupHit.code}</strong> : null} de este proveedor parecida (nº <strong>{dupHit.invoiceNumber ?? 'sin número'}</strong>, {dupHit.status}): el mismo número con otro total, o la misma fecha y el mismo total. Si la creas, quedará marcada para revisar.</>}
+                    : <>Hay una factura {dupHit.code ? <strong>{dupHit.code}</strong> : null} de este proveedor con la misma fecha y el mismo total y otro número (nº <strong>{dupHit.invoiceNumber ?? 'sin número'}</strong>, {dupHit.status}): puede ser la misma con el número mal leído. Si la creas, quedará marcada para revisar.</>}
                 </p>
               </div>
             </div>

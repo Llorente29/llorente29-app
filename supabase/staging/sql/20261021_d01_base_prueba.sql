@@ -91,8 +91,9 @@ begin
   values (v_acc, v_prov, v_e, 'd01 0001 a', '2026-10-01', 'en_revision', 'manual', 110, 'Prueba D01', now(), 'Prueba D01');
   select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01-0001/A', '2026-10-05', 110);
   if v_res is distinct from 'repetida' then raise exception 'PRUEBA D01 · 3: la función no dice repetida (%).', v_res; end if;
-  select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01-0001/A', null, null);
-  if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 · 3: el mismo número sin total no es «posible» (%).', v_res; end if;
+  -- Desde la 0260 (la del C01b), el mismo número sin total no es nada.
+  select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01-0001/A', null, null);
+  if v_n <> 0 then raise exception 'PRUEBA D01 · 3: el mismo número sin total sale como algo.'; end if;
   select nivel into v_res from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01/0002', '2026-09-30', 110);
   if v_res is distinct from 'posible' then raise exception 'PRUEBA D01 · 3: misma fecha y total con otro número no es «posible» (%).', v_res; end if;
   select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_prov, null, 'D01/0003', '2026-10-31', 110);
