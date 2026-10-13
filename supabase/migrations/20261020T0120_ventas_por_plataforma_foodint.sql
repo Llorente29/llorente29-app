@@ -2,7 +2,13 @@
 -- C04b · Respuesta 5 · DATOS: la regla de ventas de Foodint
 -- ----------------------------------------------------------------------------
 -- Lo que decidió Julio el 13/10, escrito para Foodint (Llorente29 Food, S.L.):
---   · Glovo, por marca; Uber y Just Eat, uno por plataforma (conta_ventas_canal).
+--   · Todas las plataformas igual, también Glovo (Julio, R10, 14/10): un
+--     asiento por plataforma, local y día, con una línea de venta por marca
+--     (7000000x), su reembolso (7080000x) y el IVA (47700010). La marca va en
+--     la subcuenta y la plataforma en la 430: el resultado por marca y
+--     plataforma sale de las líneas, no del número de asientos. Glovo deja de
+--     ir por marca (por_marca = false, como Uber y Just Eat); la columna se
+--     queda para quien la necesite.
 --   · Cada marca propia, a su 7000000x y su 7080000x (conta_ventas_marca),
 --     las que trajo Diez el 12/10.
 --   · Las tres marcas propias sin subcuenta de reembolsos en el plan (Scandal
@@ -36,7 +42,7 @@ begin
 
   create temp table _canal (id uuid, nombre text, por_marca boolean) on commit drop;
   insert into _canal values
-    ('f98fcf5b-7ee3-4995-9a29-e755d2bd29f3', 'Glovo',   true),
+    ('f98fcf5b-7ee3-4995-9a29-e755d2bd29f3', 'Glovo',   false),
     ('16ed2c7e-294b-4652-9a80-e5d3a241d2be', 'Uber',    false),
     ('60c822c8-e768-4290-8463-74e947564bcd', 'JustEat', false);
 

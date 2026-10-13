@@ -195,6 +195,26 @@ describe('compararDiaPorCuentas (C04b R5): el total y cada cliente, sin contar c
     expect(c.diferencias).toEqual([{ tipo: 'cliente', cuenta: '43000001' }, { tipo: 'cliente', cuenta: '43000002' }])
     expect(c.clientes).toEqual([{ cuenta: '43000001', folvy: 1000, diez: 1500 }, { cuenta: '43000002', folvy: 500, diez: 0 }])
   })
+  // R10 (Julio, 14/10): Diez lleva Glovo en un asiento por marca; Folvy, en uno por plataforma, local y día,
+  // con una línea por marca. Se suma por cuenta: no es diferencia.
+  it('el Glovo de Diez (un asiento por marca) contra el asiento de Folvy (uno, con una línea por marca): igual', () => {
+    const diezPorMarca = [
+      { cuenta: '43000001', debe: 2200, haber: 0 }, { cuenta: '70000001', debe: 0, haber: 2000 }, { cuenta: '47700010', debe: 0, haber: 200 },
+      { cuenta: '43000001', debe: 1100, haber: 0 }, { cuenta: '70000002', debe: 0, haber: 1000 }, { cuenta: '47700010', debe: 0, haber: 100 },
+      // un reembolso de la marca 1, en su propio asiento de Diez: 430 al haber
+      { cuenta: '70800001', debe: 500, haber: 0 }, { cuenta: '47700010', debe: 50, haber: 0 }, { cuenta: '43000001', debe: 0, haber: 550 }]
+    const folvyUno = [
+      { cuenta: '43000001', debe: 3300, haber: 0 }, { cuenta: '70000001', debe: 0, haber: 2000 }, { cuenta: '70000002', debe: 0, haber: 1000 },
+      { cuenta: '47700010', debe: 0, haber: 300 }, { cuenta: '70800001', debe: 500, haber: 0 }, { cuenta: '47700010', debe: 50, haber: 0 }, { cuenta: '43000001', debe: 0, haber: 550 }]
+    const c = compararDiaPorCuentas('2026-10-05', folvyUno, diezPorMarca)
+    expect(c.estado).toBe('igual')
+    expect(c.diferencias).toEqual([])
+    expect(c.cambiosDecididos).toEqual([])
+    expect(c.clientes).toEqual([{ cuenta: '43000001', folvy: 2750, diez: 2750 }])
+    // Y con la 430 neta en una sola línea, también: el total es por saldo, no por línea.
+    const folvyNeto = [{ cuenta: '43000001', debe: 2750, haber: 0 }, ...folvyUno.filter((x) => !x.cuenta.startsWith('430'))]
+    expect(compararDiaPorCuentas('2026-10-05', folvyNeto, diezPorMarca).diferencias).toEqual([])
+  })
   it('una familia que no cuadra en total es diferencia, y el total del día también', () => {
     const f = [{ cuenta: '43000002', debe: 1590, haber: 0 }, { cuenta: '70000002', debe: 0, haber: 1445 }, { cuenta: '47700010', debe: 0, haber: 145 }]
     const d = [{ cuenta: '43000002', debe: 1590, haber: 0 }, { cuenta: '70000002', debe: 0, haber: 1500 }, { cuenta: '47700000', debe: 0, haber: 90 }]

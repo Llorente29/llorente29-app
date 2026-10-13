@@ -187,7 +187,12 @@ export function compararDia(dia: string, folvy: ResumenAsiento[], diez: ResumenA
 // Desde octubre de 2026 Folvy asienta las ventas con la regla de Julio (13/10)
 // y Diez, en su histórico, de otra forma: Glovo a 70000000 y el IVA a
 // 47700000. Eso es un CAMBIO DECIDIDO, no una diferencia. Así que se compara:
-//   · el total del día (debe y haber);
+//   · el total del día, por SALDO de cuenta (R10, Julio, 14/10): la suma de
+//     los saldos deudores y la de los acreedores. Así no depende de cuántos
+//     asientos ni cuántas líneas lleve cada lado: el Glovo de Diez (un asiento
+//     por marca) y el de Folvy (uno por plataforma, local y día, con una línea
+//     por marca) se suman por cuenta y se comparan. Diez no trae el local en
+//     sus líneas: se compara el día, con los dos locales juntos;
 //   · cada cuenta de cliente (430), por su saldo del día;
 //   · las ventas (700), los reembolsos (708) y el IVA repercutido (477), cada
 //     familia por su TOTAL: si el total cuadra y solo cambia la subcuenta, se
@@ -222,13 +227,13 @@ export function compararDiaPorCuentas(dia: string, folvy: readonly ApunteCompara
     for (const x of xs) m.set(x.cuenta, (m.get(x.cuenta) ?? 0) + x.debe - x.haber)
     return m
   }
-  const suma = (xs: readonly ApunteComparable[]) => ({ debe: xs.reduce((s, x) => s + x.debe, 0), haber: xs.reduce((s, x) => s + x.haber, 0) })
   const F = saldos(folvy), D = saldos(diez)
+  const suma = (m: Map<string, number>) => { let debe = 0, haber = 0; for (const v of m.values()) if (v > 0) debe += v; else haber -= v; return { debe, haber } }
   const cuentas = [...new Set([...F.keys(), ...D.keys()])].sort()
   const vigentes = cambios.filter((c) => dia >= c.desde)
   const familiaDe = (c: string) => vigentes.find((x) => c.startsWith(x.prefijo))
   const diferencias: ComparacionPorCuentas['diferencias'] = []
-  const total = { folvy: suma(folvy), diez: suma(diez) }
+  const total = { folvy: suma(F), diez: suma(D) }
   if (total.folvy.debe !== total.diez.debe || total.folvy.haber !== total.diez.haber) diferencias.push({ tipo: 'total' })
   const clientes = cuentas.filter((c) => c.startsWith('430')).map((c) => ({ cuenta: c, folvy: F.get(c) ?? 0, diez: D.get(c) ?? 0 }))
   for (const c of clientes) if (c.folvy !== c.diez) diferencias.push({ tipo: 'cliente', cuenta: c.cuenta })

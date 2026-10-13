@@ -440,7 +440,7 @@ begin
     -- Lo dice (regla 8) en vez de dejar un asiento al lado de los de cada
     -- plataforma: así el front de antes no puede duplicar.
     if v_unidad is null and exists (select 1 from public.conta_ventas_canal v where v.company_id = p_company) then
-      raise exception 'Las ventas se asientan ahora por plataforma (y Glovo por marca), y las propone el cierre del día cada hora. Recarga la página.' using errcode = '23514';
+      raise exception 'Las ventas se asientan ahora por plataforma, local y día, y las propone el cierre del día cada hora. Recarga la página.' using errcode = '23514';
     end if;
   else
     v_clave := v_origen::text;

@@ -2,8 +2,8 @@
 -- SOLO STAGING · R9 (13/10) · la regla de ventas para la empresa A
 -- ----------------------------------------------------------------------------
 -- Lo que la 0120 hace con Foodint en producción, aquí con la empresa A de
--- staging (que no tiene Foodint, así que la 0120 no hace nada): Glovo por
--- marca y Uber por plataforma; Casa Lola, a 70000001. Va en la tanda de
+-- staging (que no tiene Foodint, así que la 0120 no hace nada): todas las
+-- plataformas por local, también Glovo (R10); Casa Lola, a 70000001. Va en la tanda de
 -- staging (supabase/staging/tanda-de-produccion.txt) entre la 0120 y la 0130,
 -- para que la 0130 tenga asientos del día entero que retirar: sin regla, no
 -- retira nada, y la prueba no podría fallar.
@@ -31,8 +31,8 @@ begin
   on conflict (company_id, code) do nothing;
   select id into v_cta from public.company_account where company_id = v_e and code = '70000001';
   insert into public.conta_ventas_canal (company_id, account_id, channel_id, por_marca, created_by_name) values
-    (v_e, v_acc, v_glovo, true, v_quien), (v_e, v_acc, v_uber, false, v_quien);
+    (v_e, v_acc, v_glovo, false, v_quien), (v_e, v_acc, v_uber, false, v_quien);
   insert into public.conta_ventas_marca (company_id, account_id, brand_id, papel, company_account_id, created_by_name)
   values (v_e, v_acc, v_marca, 'ventas', v_cta, v_quien);
-  raise notice 'Regla de la empresa A (staging): Glovo por marca, Uber por plataforma; Casa Lola a 70000001.';
+  raise notice 'Regla de la empresa A (staging): todas las plataformas por local; Casa Lola a 70000001.';
 end $$;

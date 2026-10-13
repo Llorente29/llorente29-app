@@ -11,14 +11,15 @@
 #
 #   1. 0100 — la regla por empresa (conta_ventas_canal, conta_ventas_marca),
 #      la unidad en el resumen y la propuesta por unidad: Uber y Just Eat, una
-#      por plataforma, local y día; Glovo, por marca. Cambia en caliente
+#      por plataforma, local y día, también Glovo (R10). Cambia en caliente
 #      cuatro funciones del proponedor, declaradas con su prueba de staging.
 #   1b. 0105 — conta_unidad_ventas de quien llama y con permiso para
 #      authenticated: sin ella el Libro diario no abre (e2e 180 de staging).
 #   2. 0110 — el índice único del resumen, por unidad (quita el de un resumen
 #      por día). AUTORIZO, con el nombre entero:
 #        20261020T0110_ventas_por_plataforma_indice.sql
-#   3. 0120 — Foodint: Glovo por marca; cada marca a su 7000000x y su
+#   3. 0120 — Foodint: todas las plataformas por local (R10: también Glovo);
+#      cada marca a su 7000000x y su
 #      7080000x; las tres 708 que faltaban (70800003, 70800007, 70800008).
 #      Solo inserta.
 #   4. 0130 — se retiran los propuestos del día entero de octubre (24 el

@@ -14,7 +14,9 @@
 //
 //   npx tsx scripts/conta/paridad-ventas-plataforma.ts /ruta/fuera/del/repo/datos.json
 //
-// Medido el 13/10: 105 de 105 unidades de Foodint (01–12/10) iguales.
+// Medido el 13/10: 105 de 105 unidades de Foodint (01–12/10) iguales, con Glovo
+// por marca (R5). R10 (Julio, 14/10): todas las plataformas por local, también
+// Glovo; ningún canal va por marca (CANALES_POR_MARCA vacío).
 import { readFileSync } from 'node:fs'
 import { ventasDelDia, unidadesDelDia, type PedidoDia, type DevolucionDia } from '../../src/modules/conta/lib/asientosPropuestos'
 
@@ -22,6 +24,8 @@ const raw = readFileSync(process.argv[2], 'utf8')
 const datos = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
 const d = datos.d ?? datos
 const GLOVO = 'f98fcf5b-7ee3-4995-9a29-e755d2bd29f3'
+// La regla de Foodint de la 0120: qué canales van por marca. R10: ninguno.
+const CANALES_POR_MARCA = new Set<string>()
 const CODIGOS: [string, string, string][] = [
   ['501ffd59-19e1-4d75-81dd-70c5a1a2b1de', '70000001', '70800001'], ['cc89c6eb-afb8-4308-884e-9aac83986b22', '70000002', '70800002'],
   ['2b160122-c763-4ca5-8fd5-b74d06c910c5', '70000003', '70800003'], ['43d305cd-6b48-4a8d-b292-7d3aa09e9657', '70000004', '70800004'],
@@ -58,7 +62,7 @@ const difs: string[] = []
 for (const [k, pedidos] of porDia) {
   const [loc, dia] = k.split('|')
   const devs = devPorDia.get(k) ?? []
-  const us = unidadesDelDia(pedidos, devs, (c) => c === GLOVO)
+  const us = unidadesDelDia(pedidos, devs, (c) => c !== null && CANALES_POR_MARCA.has(c))
   const sqls = sqlPorDia.get(k) ?? []
   if (us.map((u) => u.clave).join(',') !== sqls.map((u) => u.clave).join(',')) { distintas += 1; difs.push(`${dia} ${loc}: unidades ${us.map((u) => u.clave)} ≠ ${sqls.map((u) => u.clave)}`); continue }
   for (const [i, u] of us.entries()) {
