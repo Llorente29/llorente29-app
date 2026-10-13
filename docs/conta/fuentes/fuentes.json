@@ -376,7 +376,7 @@
       "clave": "orden-eha-962-2007",
       "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01)",
       "tipo": "boe",
-      "buscar": "\"digitalización certificada\"",
+      "buscar": "\"EHA/962/2007\"",
       "tituloDebeContener": "EHA/962/2007",
       "debeContener": "digitalización certificada",
       "tituloEmpiezaPor": "Orden EHA/962/2007"
