@@ -15,7 +15,8 @@ name: Desplegar funciones en staging-conta
 #     config.toml, manda lo declarado; si no, se conserva el que tiene viva en
 #     staging; si es nueva y no está declarada, para.
 #   · Después lee de vuelta lo desplegado y compara el md5 de cada fichero con
-#     el de la rama (regla 1: lo desplegado se comprueba, no se da por bueno con
+#     el de la rama —el CLI lo devuelve transpilado: los dos lados pasan por
+#     esbuild antes— (regla 1: lo desplegado se comprueba, no se da por bueno con
 #     el color del run).
 #
 # CUÁNDO: un push a conta/** que cambie supabase/staging/funciones.txt.
@@ -89,6 +90,7 @@ jobs:
       - name: Comprobar lo desplegado (md5 de cada fichero contra la rama)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
           { echo; echo "| función | fichero | md5 rama | md5 desplegado |"; echo "|---|---|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
@@ -110,12 +112,15 @@ jobs:
               if [ -z "$bajado" ]; then
                 echo "::error::$f/$nombre: no se ha podido leer de vuelta (bajado: $(find "$BAJADA" -type f | tr '\n' ' ' | cut -c1-300))."; MAL=1
               elif [ "$a" != "$b" ]; then
-                # El CLI devuelve el código re-formateado (espacios, saltos, «(req)=>{»):
-                # se compara sin NINGÚN espacio en blanco. Si así coincide, es el mismo
-                # código; si no, es otro y se para.
-                a2=$(tr -d '[:space:]' < "$local" | md5sum | cut -c1-32); b2=$(tr -d '[:space:]' < "$bajado" | md5sum | cut -c1-32)
-                if [ "$a2" = "$b2" ]; then echo "::notice::$f/$nombre: mismo código salvo el formato (sin espacios: $a2)."; continue; fi
-                echo "::error::$f/$nombre desplegado no es el de la rama: $(diff -w "$local" "$bajado" | head -c 400 | tr '\n' ' ')"; MAL=1
+                # El CLI devuelve el código YA TRANSPILADO (sin tipos, re-formateado:
+                # medido en el run 38478844313). Se pasan los DOS lados por el mismo
+                # esbuild (quita tipos y comentarios, une comillas y formato) y se
+                # comparan sin espacios. Si así coincide, es el mismo código.
+                a2=$(npx --yes esbuild@0.28.0 --loader=ts --log-level=error < "$local" | tr -d '[:space:]' | md5sum | cut -c1-32)
+                b2=$(npx --yes esbuild@0.28.0 --loader=ts --log-level=error < "$bajado" | tr -d '[:space:]' | md5sum | cut -c1-32)
+                if [ "$a2" = "$b2" ]; then echo "::notice::$f/$nombre: mismo código una vez transpilado ($a2)."; echo "| \`$f\` | $nombre (transpilado) | $a2 | $b2 |" >> "$GITHUB_STEP_SUMMARY"; continue; fi
+                diff <(npx --yes esbuild@0.28.0 --loader=ts --log-level=error < "$local") <(npx --yes esbuild@0.28.0 --loader=ts --log-level=error < "$bajado") | head -c 600 > /tmp/dif.txt || true
+                echo "::error::$f/$nombre desplegado no es el de la rama (transpilados los dos): $(tr '\n' ' ' < /tmp/dif.txt)"; MAL=1
               fi
             done
             echo "::notice::$f desplegada en staging-conta; sus ficheros comparados con la rama."

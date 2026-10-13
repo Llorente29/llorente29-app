@@ -5,7 +5,7 @@
 # C06 · tarea 6 (el recorrido entero de la cuenta del frente C): la invitación
 # de verdad. conta-crear-cuenta es nueva; send-email ya estaba (v63) y, sin
 # marca, envía lo mismo que antes (correoC06.test.ts).
-# 2.ª a 5.ª vuelta: la comprobación (rutas de lo bajado, una carpeta por función
-# y el formato que el CLI le cambia al código).
+# 2.ª a 6.ª vuelta: la comprobación (rutas de lo bajado, una carpeta por función,
+# y el CLI devuelve el código transpilado: se comparan los dos lados por esbuild).
 conta-crear-cuenta
 send-email
