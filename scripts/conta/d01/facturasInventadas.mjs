@@ -28,7 +28,13 @@ const tipos = (lineas, recargos = {}) => {
 }
 const linea = (texto, cantidad, precio, iva) => ({ texto, cantidad, precio, importe: r2(cantidad * precio), iva })
 
-/** Las once. `papel`: 'pdf' (con texto), 'torcida', 'borrosa' o 'escaneada'. */
+/**
+ * Las once, y un control. `papel`: 'pdf' (con texto), 'torcida', 'borrosa',
+ * 'escaneada' (PDF que es solo una imagen, hecho con jsPDF, como lo haría la
+ * conversión foto → PDF) o 'escaneada-chromium' (la misma hoja, solo imagen,
+ * impresa por Chromium): si la API rechaza una y no la otra, el fallo es del
+ * PDF, no de la lectura.
+ */
 export const FACTURAS = [
   {
     id: 'f01-mercancia', formato: 'Mercancía a un tipo', papel: 'pdf',
@@ -96,6 +102,12 @@ export const FACTURAS = [
     numero: 'CZ-50211', fecha: '2026-10-06', vencimiento: '2026-11-05', clase: 'completa',
     lineas: [linea('Ternera para guisar (kg)', 12, 11.9, 10), linea('Pollo entero (ud)', 10, 6.25, 10)],
   },
+  {
+    id: 'f12-escaneada-control', formato: 'Control: la misma escaneada, impresa por Chromium', papel: 'escaneada-chromium',
+    emisor: { nombre: 'Carnes Zeta, S.A.', nif: 'A00000008', direccion: 'Matadero Ficticio 2, 28000 Madrid' },
+    numero: 'CZ-50211', fecha: '2026-10-06', vencimiento: '2026-11-05', clase: 'completa',
+    lineas: [linea('Ternera para guisar (kg)', 12, 11.9, 10), linea('Pollo entero (ud)', 10, 6.25, 10)],
+  },
 ]
 
 /** Las cifras de una factura, calculadas una vez. */
@@ -145,8 +157,8 @@ export function html(f) {
   const ret = f.retencionPct ? `<tr><td>Retención IRPF ${f.retencionPct} %</td><td class="n">−${eur(c.retencion)}</td></tr>` : ''
   const ticket = f.ticket
   return `<!doctype html><html><head><meta charset="utf-8"><style>
-    body{margin:0;background:${f.papel === 'pdf' || f.papel === 'escaneada' ? '#fff' : '#6b5d4f'};font-family:${ticket ? '"DejaVu Sans Mono",monospace' : 'Helvetica,Arial,sans-serif'};color:#1d1d1f}
-    .hoja{background:#fff;width:${ticket ? '320px' : '760px'};margin:${f.papel === 'pdf' || f.papel === 'escaneada' ? '0' : '60px auto'};padding:${ticket ? '18px' : '44px 48px'};box-sizing:border-box;font-size:${ticket ? '12px' : '13px'}}
+    body{margin:0;background:${f.papel === 'pdf' || f.papel.startsWith('escaneada') ? '#fff' : '#6b5d4f'};font-family:${ticket ? '"DejaVu Sans Mono",monospace' : 'Helvetica,Arial,sans-serif'};color:#1d1d1f}
+    .hoja{background:#fff;width:${ticket ? '320px' : '760px'};margin:${f.papel === 'pdf' || f.papel.startsWith('escaneada') ? '0' : '60px auto'};padding:${ticket ? '18px' : '44px 48px'};box-sizing:border-box;font-size:${ticket ? '12px' : '13px'}}
     .cab{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
     h1{font-size:${ticket ? '14px' : '22px'};letter-spacing:.06em;margin:0 0 6px}
     .emisor b{font-size:${ticket ? '13px' : '16px'}} .gris{color:#555}
@@ -156,7 +168,7 @@ export function html(f) {
     .pie{margin-top:26px;font-size:11px;color:#555}
     ${f.papel === 'torcida' ? '.hoja{transform:perspective(1400px) rotateX(6deg) rotate(-4.5deg);box-shadow:0 18px 40px rgba(0,0,0,.45)}' : ''}
     ${f.papel === 'borrosa' ? '.hoja{filter:blur(1.3px) contrast(.9) brightness(1.04);transform:rotate(1.2deg);box-shadow:0 10px 30px rgba(0,0,0,.4)}' : ''}
-    ${f.papel === 'escaneada' ? '.hoja{filter:grayscale(1) contrast(1.15);transform:rotate(-.6deg)}' : ''}
+    ${f.papel.startsWith('escaneada') ? '.hoja{filter:grayscale(1) contrast(1.15);transform:rotate(-.6deg)}' : ''}
   </style></head><body><div class="hoja">
     <div class="cab">
       <div class="emisor"><b>${esc(f.emisor.nombre)}</b><br><span class="gris">${de ? 'USt-IdNr.' : 'NIF'}: ${esc(f.emisor.nif)}<br>${esc(f.emisor.direccion)}</span></div>

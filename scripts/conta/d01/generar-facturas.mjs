@@ -34,6 +34,14 @@ for (const f of FACTURAS) {
     writeFileSync(`${DIR}/${f.id}.pdf`, Buffer.from(doc.output('arraybuffer')))
     await pagina.setViewportSize({ width: 900, height: 1200 })
     hechas.push(`${f.id}.pdf`)
+  } else if (f.papel === 'escaneada-chromium') {
+    // La misma hoja fotografiada y vuelta a imprimir como una página que solo es la imagen.
+    await pagina.setViewportSize({ width: 794, height: 1123 })
+    const jpg = await pagina.screenshot({ type: 'jpeg', quality: 70, fullPage: false })
+    await pagina.setContent(`<!doctype html><html><body style="margin:0"><img style="width:210mm;height:297mm;display:block" src="data:image/jpeg;base64,${jpg.toString('base64')}"></body></html>`, { waitUntil: 'load' })
+    writeFileSync(`${DIR}/${f.id}.pdf`, await pagina.pdf({ format: 'A4', printBackground: true, margin: { top: 0, bottom: 0, left: 0, right: 0 } }))
+    await pagina.setViewportSize({ width: 900, height: 1200 })
+    hechas.push(`${f.id}.pdf`)
   } else {
     writeFileSync(`${DIR}/${f.id}.jpg`, await pagina.screenshot({ type: 'jpeg', quality: 72, fullPage: true }))
     hechas.push(`${f.id}.jpg`)

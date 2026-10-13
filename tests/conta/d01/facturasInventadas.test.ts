@@ -13,9 +13,9 @@ type F = { id: string; papel: string; numero: string; emisor: { nif: string } }
 const leer = (f: F) => leerFactura(ideal(f) as LecturaModelo, { hoy: HOY })
 
 describe('las facturas inventadas', () => {
-  it('once: los ocho formatos, una torcida, una borrosa y una escaneada, y cada una tiene su fichero', () => {
-    expect(FACTURAS.length).toBe(11)
-    expect((FACTURAS as F[]).map((f) => f.papel).filter((p) => p !== 'pdf')).toEqual(['torcida', 'borrosa', 'escaneada'])
+  it('once y un control: los ocho formatos, una torcida, una borrosa, una escaneada y la escaneada impresa por Chromium, y cada una tiene su fichero', () => {
+    expect(FACTURAS.length).toBe(12)
+    expect((FACTURAS as F[]).map((f) => f.papel).filter((p) => p !== 'pdf')).toEqual(['torcida', 'borrosa', 'escaneada', 'escaneada-chromium'])
     for (const f of FACTURAS as F[]) expect(existsSync(`tests/conta/d01/facturas-inventadas/${f.id}.${f.papel === 'torcida' || f.papel === 'borrosa' ? 'jpg' : 'pdf'}`)).toBe(true)
   })
   it('el papel dice lo que espera la prueba: número, NIF y total están escritos en él', () => {

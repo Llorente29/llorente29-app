@@ -57,6 +57,12 @@ for (const f of lista) {
       body: JSON.stringify({ model: MODELO, max_tokens: 8192, messages: [{ role: 'user', content: [bloque, { type: 'text', text: prompt }] }] }),
     })
     di(`${clave(f.id)}.http`, r.status)
+    if (!r.ok) {
+      // El porqué, como código (no su texto): la respuesta de la API dice qué no le gustó.
+      const t = (await r.text()).toLowerCase()
+      di(`${clave(f.id)}.error_${/pdf/.test(t) ? 'pdf' : /image/.test(t) ? 'imagen' : /too large|size|exceed/.test(t) ? 'tamano' : /model/.test(t) ? 'modelo' : 'otro'}`, 1)
+      di(`${clave(f.id)}.error_${/password|encrypt/.test(t) ? 'cifrado' : /pages?/.test(t) ? 'paginas' : /parse|process|invalid|corrupt/.test(t) ? 'no_se_procesa' : 'sin_detalle'}`, 1)
+    }
     if (r.ok) {
       const j = await r.json() as { content?: { type: string; text?: string }[] }
       const parsed = extractJson((j.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join(''))
