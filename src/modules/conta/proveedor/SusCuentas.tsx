@@ -35,7 +35,7 @@ import {
   type Apunte, type LineaCuenta,
 } from '@/modules/conta/lib/cuentasProveedor'
 import {
-  cargarCuentasProveedor, cambiarCuentaProveedor, quitarCuentaProveedor, type DatosCuentasProveedor,
+  cargarCuentasProveedor, cambiarCuentaProveedor, gastoAprendido, quitarCuentaProveedor, type DatosCuentasProveedor,
 } from '@/modules/conta/services/cuentasProveedorService'
 
 /** Los apuntes del proveedor en el libro (C04): los de su cuenta; si es la común, solo los suyos. */
@@ -180,6 +180,15 @@ export function SusCuentas() {
     return c ? { id: c.id, comun: c.isCommon } : null
   }, [d, f.id])
   const apuntesLibro = useApuntes(f.accountId, empresaId, cuentaSuya, f.id)
+  // D01: de dónde sale «Sus facturas se apuntan en» (Diez o tus facturas).
+  const [aprendido, setAprendido] = useState<{ clave: string; v: { cuenta: string; origen: string } | null }>({ clave: '', v: null })
+  const claveAprendido = `${empresaId}:${f.id}`
+  useEffect(() => {
+    if (!empresaId) return
+    let vivo = true
+    void gastoAprendido(empresaId, f.id).then((v) => { if (vivo) setAprendido({ clave: claveAprendido, v }) })
+    return () => { vivo = false }
+  }, [empresaId, f.id, claveAprendido])
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   // Si la pieza se vuelve a montar, el extracto sigue como estaba (abierto o cerrado).
@@ -209,7 +218,7 @@ export function SusCuentas() {
     id: f.id, name: f.name, entityKind: f.entityKind, taxIdType: f.taxIdType, countryCode: f.countryCode, vatRegime: f.vatRegime,
     usualTaxRateIds: f.usualTaxRateIds, irpfWithholdingPct: f.irpfWithholdingPct, expenseCategoryId: f.expenseCategoryId,
   }
-  const { lineas, datos: extra } = cuentasDelProveedor({ ...d, proveedor })
+  const { lineas, datos: extra } = cuentasDelProveedor({ ...d, proveedor, aprendido: aprendido.clave === claveAprendido ? aprendido.v : null })
   const año = Number(hoyEnMadrid().slice(0, 4))
   // Las repetidas no cuentan en ninguna cifra (C01b §4). Un abono llega con el total en negativo.
   const delAño = datos.facturas.filter((x) => !repetidas.has(x.id) && x.invoiceDate?.startsWith(`${año}-`) && x.grandTotal !== null)

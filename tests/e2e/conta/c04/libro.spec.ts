@@ -15,6 +15,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo } from '../sesion'
+import { rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c04'
@@ -113,10 +114,9 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
     }
   }
   console.log(`[filas ${lado(page)}] alturas: máx ${Math.max(...altos)} px, mín ${Math.min(...altos)} px, ${altos.length} filas`)
-  // Lo que he hecho yo, con Deshacer en lo que validó Folvy.
-  const ia = page.getByRole('region', { name: 'Lo que he hecho yo' })
-  await expect(ia.getByText(/Asenté «Ventas del día · Norte Centro»/)).toBeVisible()
-  await expect(ia.getByRole('button', { name: 'Deshacer' }).first()).toBeVisible()
+  // «Lo que he hecho yo» está; lo que dice se prueba aparte, con su propio
+  // asiento (abajo): aquí enseña los cinco últimos de una cuenta compartida.
+  await expect(page.getByRole('region', { name: 'Lo que he hecho yo' })).toBeVisible()
   // El cierre del mes anterior, con sus números.
   await expect(page.getByRole('region', { name: /^Cierre de / })).toBeVisible()
   await capturar(page, 'diario')
@@ -132,6 +132,44 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   await page.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
   await expect(page.getByRole('button', { name: /Ventas del día/ }).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Alquiler Norte Mercado · octubre/ })).toBeVisible()
+})
+
+// D01 R3 (14/10): «Lo que he hecho yo» se prueba con un asiento que crea la
+// propia prueba y busca por lo que es, no por estar entre los cinco últimos
+// de la cuenta A, que es compartida (la semilla de otro frente lo desplazó el
+// 13/10). Un asiento validado deja número para siempre: se escribe en UN
+// tamaño, y se deshace con su propio «Deshacer» (anulado con su contraasiento,
+// a cero en el libro). Si la prueba se corta antes, lo anula al acabar.
+test('A · «Lo que he hecho yo»: lo que valida Folvy sale con su Deshacer, y deshacerlo lo anula', async ({ page }) => {
+  test.skip(lado(page) === 'movil', 'Escribe en el libro de la cuenta A: una vez, en el ordenador.')
+  const s = await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  const EMPRESA_A = '3b34403a-a7d6-4a48-a8d7-737e8cababdc'
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
+  const concepto = `Ventas del día · Prueba e2e ${Date.now().toString(36)}`
+  const p = await rest<{ id: string }>(s, 'POST', 'rpc/journal_entry_proponer', {
+    p_company: EMPRESA_A,
+    p_entry: { series: 4, fecha: hoy, concepto, source_type: 'manual', confianza: 'seguro', porque: 'Asiento de la prueba e2e del libro (se deshace al acabar).' },
+    p_lines: [{ cuenta: '57000000', debe: 1, haber: 0 }, { cuenta: '70000000', debe: 0, haber: 1 }],
+    p_quien_nombre: 'Prueba e2e',
+  })
+  expect(p.status, JSON.stringify(p.datos)).toBe(200)
+  const id = p.datos.id
+  try {
+    const v = await rest(s, 'POST', 'rpc/journal_entry_validar', { p_entry: id, p_quien_nombre: 'Folvy (validación automática de ventas)' })
+    expect(v.status, JSON.stringify(v.datos)).toBe(200)
+    await page.goto('/conta/libros/diario')
+    const ia = page.getByRole('region', { name: 'Lo que he hecho yo' })
+    const fila = ia.locator('.cxd-ia-fila', { hasText: `Asenté «${concepto}»` })
+    await expect(fila).toHaveCount(1)
+    await fila.getByRole('button', { name: 'Deshacer' }).click()
+    // Lo dice (regla 8): anulado con su contraasiento; y deja de salir.
+    await expect(page.getByText(new RegExp(`Deshecho: «${concepto}» queda anulado con el contraasiento`))).toBeVisible()
+    await expect(ia.locator('.cxd-ia-fila', { hasText: concepto })).toHaveCount(0)
+  } finally {
+    // Si se cortó antes de «Deshacer», se anula aquí (si ya está anulado, la base lo dice y no pasa nada).
+    await rest(s, 'POST', 'rpc/journal_entry_anular', { p_entry: id, p_motivo: 'Limpieza de la prueba e2e del libro', p_fecha: null, p_quien_nombre: 'Prueba e2e' })
+  }
 })
 
 test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable', async ({ page }) => {

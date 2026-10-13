@@ -9,7 +9,7 @@ export type VatRegime =
   | 'general' | 'recargo_equivalencia' | 'intracomunitario' | 'exento'
   | 'inversion_sujeto_pasivo' | 'extranjero'
 export type PaymentMethod = 'transfer' | 'direct_debit' | 'card' | 'cash'
-export type ContactRole = 'orders' | 'sales' | 'admin' | 'delivery' | 'other'
+export type ContactRole = 'orders' | 'sales' | 'admin' | 'billing' | 'delivery' | 'other'
 /** Cada cuánto factura (C01b; columna supplier.invoicing_frequency). */
 export type InvoicingFrequency = 'per_delivery' | 'weekly' | 'fortnightly' | 'monthly' | 'other'
 /** Estado de la comprobación del NIF. 'pending' = VIES no contestó y se reintentará. */
@@ -98,6 +98,8 @@ export const ROLE_LABEL: Record<ContactRole, string> = {
   orders: 'Pedidos',
   sales: 'Comercial',
   admin: 'Administración',
+  // D01: el contacto al que se piden las facturas («Pedírselas»), 0210.
+  billing: 'Facturación',
   delivery: 'Reparto',
   other: 'Otro',
 }

@@ -77,6 +77,30 @@ describe('Sus cuentas (maqueta N7)', () => {
     expect(linea(e, 'facturas')).toMatchObject({ cuentas: [{ code: '62900000' }], nota: null, ia: true, propia: '62900000' })
   })
 
+  it('D01 · aceptada de lo aprendido: dice de dónde sale de verdad (Diez o tus facturas)', () => {
+    const e = entrada({
+      enlaces: [...ENLACES, { companyAccountId: '62900000', entity: 'supplier', entityId: 'p1', role: 'gasto', source: 'ai_accepted' }],
+      aprendido: { cuenta: '62900000', origen: 'aprendido de Diez' },
+    })
+    expect(linea(e, 'facturas')).toMatchObject({ cuentas: [{ code: '62900000' }], nota: 'aprendido de Diez', ia: true })
+    // Elegida a mano, el origen no se dice como aprendido aunque coincida.
+    const m = entrada({
+      enlaces: [...ENLACES, { companyAccountId: '62900000', entity: 'supplier', entityId: 'p1', role: 'gasto', source: 'manual' }],
+      aprendido: { cuenta: '62900000', origen: 'aprendido de Diez' },
+    })
+    expect(linea(m, 'facturas')).toMatchObject({ nota: null, ia: false })
+  })
+
+  it('D01 · sin nada puesto: lo aprendido sale como propuesta, sin confirmar; lo puesto manda', () => {
+    const sinTipo = entrada({ proveedor: { ...PROV, expenseCategoryId: null }, aprendido: { cuenta: '62900000', origen: 'aprendido de tus facturas' } })
+    expect(linea(sinTipo, 'facturas')).toMatchObject({ cuentas: [{ code: '62900000' }], texto: null, nota: 'aprendido de tus facturas · sin confirmar', ia: true, propia: null })
+    // Con su tipo de gasto puesto, manda el tipo (es lo que usa la propuesta del asiento).
+    expect(linea(entrada({ aprendido: { cuenta: '62900000', origen: 'aprendido de Diez' } }), 'facturas')).toMatchObject({ cuentas: [{ code: '60000000' }], nota: 'por su tipo de gasto' })
+    // Lo aprendido que no está en el plan no se enseña.
+    expect(linea(entrada({ proveedor: { ...PROV, expenseCategoryId: null }, aprendido: { cuenta: '99999999', origen: 'aprendido de Diez' } }), 'facturas'))
+      .toMatchObject({ cuentas: [], texto: 'Sin tipo de gasto: elige su cuenta' })
+  })
+
   it('le pagas desde su banco, con el IBAN corto; solo ofrece bancos', () => {
     const e = entrada({ enlaces: [...ENLACES, { companyAccountId: '57200001', entity: 'supplier', entityId: 'p1', role: 'pago', source: 'manual' }] })
     expect(linea(e, 'pago').cuentas[0].titulo).toBe('57200001 · Banco Prueba · ES91 ···· 1332')
