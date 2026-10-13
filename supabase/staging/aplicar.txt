@@ -1,4 +1,5 @@
 # D01 · Tarea 5 — el asiento de la factura recibida (sesión A; solo añade).
+# (2.ª vuelta: la subcuenta del proveedor se da de alta en la hoja 4000, no en la 400.)
 # La 0200 a la 0230 ya están en staging (la 0230, run 38432287604).
 #   ensayo: la 0240 y su prueba en una transacción con ROLLBACK.
 #   0240:   conta_gasto_aprendido (lo aprendido de Diez, con su porqué) y

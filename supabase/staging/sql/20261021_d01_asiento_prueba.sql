@@ -33,7 +33,7 @@ declare
 begin
   insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name)
   values (v_acc, 'Aprende Prueba D01', 'Aprende Prueba D01, S.L.', 'B00000033', true, 'Prueba D01') returning id into v_p;
-  r := public.company_account_add(v_e, '400', 'Aprende Prueba D01', null, 'supplier', v_p::text, 'Prueba D01');
+  r := public.company_account_add(v_e, '4000', 'Aprende Prueba D01', null, 'supplier', v_p::text, 'Prueba D01');
   v_sub := r->>'code';
   perform set_config('prueba.p', v_p::text, true);
 
