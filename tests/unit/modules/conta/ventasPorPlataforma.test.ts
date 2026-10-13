@@ -149,3 +149,32 @@ describe('C04b R5 · sin unidad, la regla de antes, igual', () => {
     expect(p.lineas.filter((l) => l.cuenta.startsWith('700')).every((l) => l.cuenta === '70000000')).toBe(true)
   })
 })
+
+describe('C04b R6 · «Milanesa House» (propia) y «Milanesa Haus» (cedida): se separan por la marca, no por el nombre', () => {
+  // Los dos nombres reales de Foodint: casi iguales, de dueños distintos.
+  const HOUSE = 'marca-milanesa-house', HAUS = 'marca-milanesa-haus'
+  const nombres: Record<string, string> = { [HOUSE]: 'Milanesa House', [HAUS]: 'Milanesa Haus' }
+  const ped = [
+    pedido({ id: 'h1', total: 19.5, marcaId: HOUSE }),
+    pedido({ id: 'z1', total: 21.4, marcaId: HAUS, marcaPropia: false }),
+    pedido({ id: 'h2', total: 11, canalId: GLOVO, marcaId: HOUSE }),
+    pedido({ id: 'z2', total: 13.2, canalId: GLOVO, marcaId: HAUS, marcaPropia: false }),
+  ]
+  const cuentasMila = { ...cuentas, ventasPorMarca: { ...cuentas.ventasPorMarca, [HOUSE]: '70000001' } }
+  const e = (u: ReturnType<typeof unidadesDelDia>[number]) => ventasDelDia(entrada({ pedidos: ped, unidad: u, cuentas: cuentasMila, nombreMarca: (id) => nombres[id ?? ''] ?? 'una marca' }))
+  it('la cedida no abre unidad en Glovo, aunque se llame casi igual', () => {
+    expect(unidadesDelDia(ped, [], porMarca).map((u) => u.clave)).toEqual([UBER, `${GLOVO}:${HOUSE}`])
+  })
+  it('en Uber, solo la propia va a 70000001; la cedida queda fuera, dicha', () => {
+    const r = e(unidadesDelDia(ped, [], porMarca)[0])
+    expect(r.resumen.pedidoIds).toEqual(['h1'])
+    expect(r.propuesta!.lineas.filter((l) => l.cuenta.startsWith('700')).map((l) => [l.cuenta, l.marcaId, l.concepto])).toEqual([['70000001', HOUSE, 'Ventas Milanesa House']])
+    expect(r.resumen.cedidasFuera).toEqual({ pedidos: 1, total: 21.4 })
+  })
+  it('en Glovo, el asiento de Milanesa House no lleva el pedido de Milanesa Haus', () => {
+    const r = e(unidadesDelDia(ped, [], porMarca)[1])
+    expect(r.propuesta!.concepto).toBe('Ventas Glovo · Milanesa House · Local Norte')
+    expect(r.resumen.pedidoIds).toEqual(['h2'])
+    expect(r.propuesta!.lineas.some((l) => l.marcaId === HAUS)).toBe(false)
+  })
+})
