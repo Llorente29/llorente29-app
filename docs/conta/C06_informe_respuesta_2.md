@@ -6,7 +6,7 @@ producción.
 
 ## 1 · E2e que se pisan: el PR a `main`
 
-**PR:** (enlace en «Estado de las e2e», al final).
+**PR:** [Llorente29/llorente29-app#179](https://github.com/Llorente29/llorente29-app/pull/179), solo con esto.
 
 Lo que pediste, y lo que hizo falta además porque **no bastaba**:
 
@@ -45,6 +45,23 @@ espera **dentro de su job**, no en la cola de GitHub (que cancela las
 pendientes); se suelta al acabar pase lo que pase, y caduca solo a los 50
 minutos si un run muere sin soltarlo. Copiar A y B por frente (toda la siembra
 del C00 al C05, con sus ids fijos en las pruebas) era otro encargo.
+
+**El fallo del cerrojo que encontró A** era mío: con `psql -A -t`, el `UPDATE …
+RETURNING` imprime «cogido» y detrás «UPDATE 1»; la comparación entera nunca
+casaba y el run renovaba el cerrojo cada 30 s durante una hora (mis runs
+38457338675 y 38457342932, que cancelé en ese paso, sin ninguna prueba
+empezada). Arreglado con `psql -q` y la línea exacta, sacado a
+`scripts/e2e/cerrojo.sh` y con su prueba (`tests/unit/e2e/cerrojo.test.ts`):
+un `psql` falso que contesta lo mismo que el de verdad; con la comparación de
+antes la prueba falla, con la de ahora pasa. Probado también: el tiempo máximo
+(caduca a los 50 min; se espera como mucho una hora), que solo se suelta lo
+propio, y que se suelta al fallar o cancelar (`always()`; medido al cancelar
+38457342932: la fila quedó libre).
+
+**Medido después, con el arreglo** (runs 38464265005 y 38464268465, frentes A y
+B lanzados a la vez, enteras): van una detrás de otra por el cerrojo y **pasan
+157 en cada una**; fallan solo las 2 de `c01b/flujos` (lo de abajo). Las 10
+que fallaban por los datos compartidos, ahora pasan.
 
 **No es de este PR, y va dicho:** `c01b/flujos` «marcar pagada…» falla en
 cualquier ejecución, también sola (run 38439583361 de B, 17:33): el 409 dice
