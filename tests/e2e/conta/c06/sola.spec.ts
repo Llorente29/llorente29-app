@@ -107,10 +107,13 @@ test('N18 · la entrada con la marca: logo, «Entra en tu contabilidad», las cu
   await expect(page.getByLabel('Correo')).toBeVisible()
   await expect(page.getByLabel('Contraseña')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible()
-  for (const f of ['Subes una factura y se apunta sola.', 'El banco se casa solo; tú confirmas lo dudoso.',
-    'El IVA de cada trimestre, listo para presentar.', 'Trae tu contabilidad de Cegid Diez, Holded, Sage o A3.']) {
+  // Las cuatro frases ciertas hoy (C06, respuesta 2), y ninguna de las que
+  // prometen lo que aún no existe.
+  for (const f of ['Tus libros —diario, balance y resultados— en un solo sitio.', 'El IVA del trimestre a la vista, con su libro registro.',
+    'Cada mes se cierra con sus pasos, y lo cerrado no se toca.', 'Lo que hago yo, lo ves y lo puedes deshacer.']) {
     await expect(page.getByText(f)).toBeVisible()
   }
+  for (const f of [/se apunta sola/, /banco se casa/, /listo para presentar/, /Holded|Sage|A3/]) await expect(page.getByText(f)).toHaveCount(0)
   await expect(page.getByRole('img', { name: 'Contabilidad' })).toBeVisible()
   await expect(page.getByText('Aviso legal')).toBeVisible()
   expect(await page.title()).toBe('Contabilidad')
@@ -197,6 +200,21 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   await sinFolvy(page, 'el Inicio')
   await capturar(page, 'inicio')
 
+  // C06, respuesta 2: en el móvil, «Más» abre el menú entero con lo que
+  // funciona (la barra solo tiene sitio para Inicio y Ajustes hoy).
+  if (lado(page) === 'movil') {
+    const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+    await barra.getByRole('button', { name: 'Más' }).click()
+    const hoja = page.getByRole('dialog', { name: 'Menú' })
+    await expect(hoja.locator('.cx-menu-item-texto')).toHaveText(['Inicio', 'Compras', 'Clientes y proveedores', 'Libros', 'Ajustes'])
+    await sinFolvy(page, 'el menú «Más»')
+    await page.evaluate(() => document.fonts.ready)
+    await page.screenshot({ path: `${DIR}/mas-movil.png` })
+    await hoja.getByRole('link', { name: 'Libros' }).click()
+    await expect(page).toHaveURL(/\/conta\/libros/)
+    await expect(hoja).toHaveCount(0)
+  }
+
   // Plan contable: activarlo la primera vez; las siguientes ya está.
   await page.goto('/conta/ajustes/plan')
   const activar = page.getByRole('button', { name: 'Activar el plan' })
@@ -244,4 +262,19 @@ test('sin marca, la cuenta sola también aterriza en su Inicio y nunca ve hostel
   await page.goto('/?marca=folvy')
   await expect(page).toHaveURL(/\/conta\/inicio$/)
   await expect(page.locator('.cxi-titulo')).toBeVisible()
+})
+
+test('lo que lee un enlace compartido: el index de la marca no dice «Folvy» y el de siempre no cambia', async ({ request }) => {
+  // Lo que Vercel sirve con ?marca=contabilidad fuera de producción (y por el
+  // dominio de la marca cuando lo tenga): dist/marcas/contabilidad/index.html.
+  // vite preview no aplica las reglas de vercel.json; se pide el fichero.
+  const marca = await (await request.get('/marcas/contabilidad/index.html')).text()
+  expect(marca).not.toMatch(/folvy/i)
+  expect(marca).toContain('<title>Contabilidad</title>')
+  expect(marca).toContain('<meta property="og:title" content="Contabilidad" />')
+  expect(marca).toContain('<meta property="og:image" content="/marcas/contabilidad/vista-previa.png" />')
+  expect((await request.get('/marcas/contabilidad/vista-previa.png')).headers()['content-type']).toBe('image/png')
+  const siempre = await (await request.get('/index.html')).text()
+  expect(siempre).toContain('<title>Folvy</title>')
+  expect(siempre).not.toContain('og:')
 })

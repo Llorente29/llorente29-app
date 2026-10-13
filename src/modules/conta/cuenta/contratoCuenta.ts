@@ -36,7 +36,15 @@ export interface CuentaConta {
   userName: string | null
   /** ¿Es administrador de la cuenta? Socios y cargos solo los ve un administrador. */
   esAdmin: boolean
-  /** ¿La cuenta es solo de contabilidad (C06)? Sin Cocina y sin «Volver a…». */
+  /**
+   * ¿La cuenta es solo de contabilidad (C06)? Sin Cocina y sin «Volver a…».
+   * ES EL CAMPO QUE LEEN LOS DEMÁS FRENTES (Julio, C06 respuesta 2). Ejemplo, el
+   * frente A: con `soloContabilidad`, el ajuste «Recibe la mercancía con Folvy»
+   * vale siempre «no» y no se enseña. Lo dice la CUENTA (accounts.product_brand
+   * no nulo), no la pantalla: para decidir cómo se ve, useProductoSolo(), que
+   * además cuenta la marca forzada con ?marca= en staging. En SQL, lo mismo:
+   * `accounts.product_brand is not null`.
+   */
   soloContabilidad: boolean
 }
 

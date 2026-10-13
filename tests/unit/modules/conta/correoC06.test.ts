@@ -5,7 +5,7 @@
 // el remitente y el cuerpo que se envía a Resend son los mismos que antes.
 
 import { MARCAS } from '../../../../supabase/functions/_shared/marcas'
-import { REMITENTE_FOLVY, contrasena, cuerpoResend, invitacion, remitenteDe } from '../../../../supabase/functions/send-email/marca'
+import { PLANTILLAS_MARCA, REMITENTE_FOLVY, contrasena, contrasenaCambiada, cuerpoResend, invitacion, remitenteDe } from '../../../../supabase/functions/send-email/marca'
 import { baseDelEnlace, leerPedido, slugDe } from '../../../../supabase/functions/conta-crear-cuenta/pedido'
 
 describe('send-email: sin marca, lo de siempre', () => {
@@ -81,5 +81,34 @@ describe('conta-crear-cuenta: el pedido', () => {
     expect(baseDelEnlace(MARCAS.contabilidad, true, 'https://vista.example')).toMatchObject({ ok: false })
     expect(baseDelEnlace(MARCAS.contabilidad, false, 'https://vista.example')).toEqual({ ok: true, base: 'https://vista.example' })
     expect(baseDelEnlace(MARCAS.contabilidad, false, null)).toMatchObject({ ok: false })
+  })
+})
+
+describe('send-email: aviso de «contraseña cambiada» con la marca (C06, respuesta 2)', () => {
+  const c = contrasenaCambiada(MARCAS.contabilidad, { cuando: '13 de octubre de 2026, 21:05', entrar: 'https://vista.example/login?marca=contabilidad' })
+
+  it('dice qué pasó y cuándo, con la marca y sin «Folvy»', () => {
+    expect(c.subject).toBe('Contabilidad · Tu contraseña ha cambiado')
+    expect(c.text).toContain('se ha cambiado el 13 de octubre de 2026, 21:05.')
+    for (const t of [c.subject, c.html, c.text]) expect(t).not.toMatch(/folvy/i)
+  })
+
+  it('si no fue la persona, le dice qué hacer y dónde', () => {
+    expect(c.text).toContain('Si no has sido tú')
+    expect(c.html).toContain('href="https://vista.example/login?marca=contabilidad"')
+  })
+
+  it('sin enlace (marca sin dominio en producción), lo dice sin enlace', () => {
+    const s = contrasenaCambiada(MARCAS.contabilidad, { cuando: 'hoy' })
+    expect(s.html).not.toContain('href=')
+    expect(s.text).toContain('desde la entrada con «He olvidado la contraseña»')
+  })
+
+  it('lo que llega se escapa', () => {
+    expect(contrasenaCambiada(MARCAS.contabilidad, { cuando: '<b>x</b>' }).html).toContain('&lt;b&gt;x&lt;/b&gt;')
+  })
+
+  it('está registrada como plantilla de marca, y no hay ninguna de Folvy nueva', () => {
+    expect(Object.keys(PLANTILLAS_MARCA).sort()).toEqual(['contrasena_cambiada_conta', 'contrasena_conta', 'invitacion_conta'])
   })
 })

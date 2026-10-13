@@ -151,7 +151,33 @@ export function contrasena(m: Marca, data: Record<string, unknown>): CorreoMarca
   };
 }
 
+/**
+ * Aviso de «contraseña cambiada», con la marca (Julio, C06 respuesta 2: lo
+ * normal en cualquier producto serio). Sin botón para entrar: quien la cambió
+ * ya está dentro. Si no fue la persona, el aviso le dice qué hacer.
+ * data: { cuando (texto ya en hora de Madrid), entrar? (la entrada de la marca) }
+ */
+export function contrasenaCambiada(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const cuando = String(data.cuando ?? '').trim();
+  const url = urlSegura(data.entrar);
+  const cuandoHtml = cuando ? ` el <strong>${esc(cuando)}</strong>` : '';
+  const siNo = url
+    ? `Si no has sido tú, entra en <a href="${url}" style="color:${AZUL};">${esc(m.nombre)}</a>, pulsa «He olvidado la contraseña» y pon otra cuanto antes.`
+    : `Si no has sido tú, pide una contraseña nueva desde la entrada de ${esc(m.nombre)} («He olvidado la contraseña») cuanto antes.`;
+  const cuerpo = `${h1('Tu contraseña ha cambiado')}${p(`La contraseña de tu cuenta de ${esc(m.nombre)} se ha cambiado${cuandoHtml}.`)}
+    ${p('Si has sido tú, no tienes que hacer nada.')}
+    ${nota(siNo)}`;
+  return {
+    subject: `${m.nombre} · Tu contraseña ha cambiado`,
+    html: marco(m, 'Tu contraseña ha cambiado', cuerpo, `Te llega porque se ha cambiado la contraseña de tu cuenta de ${m.nombre}. Lo avisamos siempre.`),
+    text: `La contraseña de tu cuenta de ${m.nombre} se ha cambiado${cuando ? ` el ${cuando}` : ''}.\n\n` +
+      `Si has sido tú, no tienes que hacer nada.\n\n` +
+      `Si no has sido tú, pide una contraseña nueva desde la entrada${url ? ` (${url})` : ''} con «He olvidado la contraseña», cuanto antes.\n\n${m.nombre}`,
+  };
+}
+
 export const PLANTILLAS_MARCA: Record<string, (m: Marca, d: Record<string, unknown>) => CorreoMarca> = {
   invitacion_conta: invitacion,
   contrasena_conta: contrasena,
+  contrasena_cambiada_conta: contrasenaCambiada,
 };

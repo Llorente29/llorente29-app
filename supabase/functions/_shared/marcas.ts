@@ -39,6 +39,20 @@ export interface Marca {
   remitente: string | null
   /** A dónde van las respuestas a sus correos. */
   responderA: string | null
+  /**
+   * El dominio que RECIBE correo (las facturas que el cliente reenvía): la
+   * dirección de cada empresa es `facturas-<empresa>@<este dominio>`
+   * (direccionDeFacturas). Null: la marca aún no recibe correo (sin MX).
+   */
+  dominioEntradaCorreo: string | null
+  /**
+   * Lo que enseña un enlace compartido (WhatsApp, correo, buscadores), que
+   * leen el HTML sin ejecutar nada: descripción e imagen de vista previa
+   * (1200 × 630, ruta del sitio). El título es el nombre.
+   */
+  descripcion: string
+  /** Null: sin imagen (Folvy hoy no tiene, y su index.html no se toca). */
+  imagenVistaPrevia: string | null
   /** Logo de los correos (URL absoluta). Null: se pinta el cuadrado con la inicial. */
   logoCorreo: string | null
   /** Enlaces legales. Null = hueco: los textos los redacta y aprueba Julio. */
@@ -67,6 +81,10 @@ export const MARCAS: Record<IdMarca, Marca> = {
     manifiesto: '/manifest.json',
     remitente: 'Folvy <no-reply@folvy.app>',
     responderA: 'jgcolon@idasal.com',
+    dominioEntradaCorreo: 'entrada.folvy.app',
+    // La de index.html, tal cual: el index de Folvy no cambia.
+    descripcion: 'Folvy - Hosteleria profesional. Software profesional.',
+    imagenVistaPrevia: null,
     logoCorreo: 'https://app.folvy.app/email/folvy-isotipo-email.png',
     avisoLegal: null,
     privacidad: null,
@@ -92,6 +110,9 @@ export const MARCAS: Record<IdMarca, Marca> = {
     manifiesto: '/marcas/contabilidad/manifest.json',
     remitente: null,
     responderA: null,
+    dominioEntradaCorreo: null,
+    descripcion: 'Tu contabilidad al día, sin saber de cuentas.',
+    imagenVistaPrevia: '/marcas/contabilidad/vista-previa.png',
     logoCorreo: null,
     avisoLegal: null,
     privacidad: null,
@@ -100,13 +121,18 @@ export const MARCAS: Record<IdMarca, Marca> = {
       subtitulo: 'Te ha invitado tu asesor o tu empresa. Entra con tu correo.',
       antetitulo: 'LO QUE TE ESPERA DENTRO',
       lema: 'Tu contabilidad al día, sin saber de cuentas.',
-      // Las cuatro frases de la maqueta N18, tal cual. Cada una promete algo
-      // que el producto tiene que cumplir el día que se venda (ver el informe).
+      // Cuatro frases CIERTAS hoy, con la forma y el sitio de la maqueta N18
+      // (Julio, C06 respuesta 2: no se enseña lo que no funciona). Las de la
+      // maqueta vuelven cuando exista lo que prometen:
+      //   «Subes una factura y se apunta sola.»               → facturas recibidas (frente A)
+      //   «El banco se casa solo; tú confirmas lo dudoso.»     → bancos (frente B)
+      //   «El IVA de cada trimestre, listo para presentar.»    → impuestos
+      //   «Trae tu contabilidad de Cegid Diez, Holded, Sage o A3.» → hoy solo Diez, y lo configura Folvy
       frases: [
-        'Subes una factura y se apunta sola.',
-        'El banco se casa solo; tú confirmas lo dudoso.',
-        'El IVA de cada trimestre, listo para presentar.',
-        'Trae tu contabilidad de Cegid Diez, Holded, Sage o A3.',
+        'Tus libros —diario, balance y resultados— en un solo sitio.',
+        'El IVA del trimestre a la vista, con su libro registro.',
+        'Cada mes se cierra con sus pasos, y lo cerrado no se toca.',
+        'Lo que hago yo, lo ves y lo puedes deshacer.',
       ],
     },
   },
@@ -183,4 +209,18 @@ export function enlaceDeMarca(m: Marca, ruta: string, params: Record<string, str
   const q = new URLSearchParams(params)
   if (!urlBaseDeMarca(m) && m.id !== MARCA_POR_DEFECTO) q.set('marca', m.id)
   return `${base.replace(/\/+$/, '')}${ruta}?${q.toString()}`
+}
+
+/**
+ * La dirección a la que una empresa reenvía sus facturas:
+ * `facturas-<empresa>@<dominio de entrada>` (Julio, C06 respuesta 2). <empresa>
+ * es el identificador corto que decida quien la use (frente A), pasado a
+ * minúsculas, sin acentos y solo con letras, cifras y guiones. Null si la marca
+ * aún no recibe correo o el identificador queda vacío.
+ */
+export function direccionDeFacturas(m: Marca, empresa: string): string | null {
+  if (!m.dominioEntradaCorreo) return null
+  const corto = empresa.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return corto ? `facturas-${corto}@${m.dominioEntradaCorreo}` : null
 }

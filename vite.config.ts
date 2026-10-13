@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import { folvyVersion } from './build/folvyVersionPlugin'
 import { guardaVistaPrevia } from './build/guardaVistaPrevia'
+import { indexDeMarcas } from './build/indexDeMarca'
 
 export default defineConfig({
   // folvyVersion sella la build: escribe dist/version.json y estampa el id en
@@ -10,7 +11,9 @@ export default defineConfig({
   // sin que nadie tenga que acordarse de subir una constante a mano.
   // guardaVistaPrevia para el build de una vista previa conta/** o reparto-**
   // que no vaya contra staging-conta (05/10, la del C02 iba contra producción).
-  plugins: [react(), folvyVersion(), guardaVistaPrevia()],
+  // indexDeMarcas escribe dist/marcas/<id>/index.html con las metas de cada
+  // marca (C06): lo que lee la vista previa de un enlace. El de Folvy no cambia.
+  plugins: [react(), folvyVersion(), guardaVistaPrevia(), indexDeMarcas()],
   base: '/',
   resolve: {
     alias: {

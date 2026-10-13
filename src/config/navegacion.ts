@@ -143,7 +143,7 @@ export function resolverRedireccion(hasta: string, params: Record<string, string
 /** Nombre de los iconos de línea fina de la maqueta (src/modules/conta/ui/Icono.tsx). */
 export type IconoConta =
   | 'inicio' | 'porHacer' | 'documentos' | 'bancos' | 'personas' | 'pagos'
-  | 'facturas' | 'impuestos' | 'negocio' | 'libros' | 'ajustes' | 'folvy'
+  | 'facturas' | 'impuestos' | 'negocio' | 'libros' | 'ajustes' | 'folvy' | 'mas'
 
 export const CONTA = {
   /** basePath del módulo en el Shell. */

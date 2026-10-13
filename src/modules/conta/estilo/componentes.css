@@ -257,6 +257,8 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
   align-items: center; justify-content: center; cursor: pointer; margin-top: -22px; box-shadow: var(--cx-sombra-ia);
 }
 .cx-barra-inferior .cx-muy-pronto { bottom: 84px; }
+.cx-barra-mas { background: none; border: none; font-family: inherit; cursor: pointer; padding: 0; }
+.cx-hoja-menu .cx-menu-item { padding: 12px 8px; }
 
 /* ── Lista de filas enlazadas (móvil) ──────────────────────────────── */
 .cx-lista {

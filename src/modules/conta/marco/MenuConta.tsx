@@ -11,7 +11,7 @@
 // sitio para la empresa: «Tu empresa» saca esta misma cabecera cuando la
 // cuenta lleva más de una (con una sola no hay nada que cambiar).
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   BARRA_CONTA, MENU_CONTA, entradaActiva, entradasVisibles, rutaAltaEmpresa, rutaConta,
@@ -122,6 +122,7 @@ export function MenuConta() {
 export function BarraInferiorConta() {
   const { pathname } = useLocation()
   const solo = useProductoSolo()
+  const [mas, setMas] = useState(false)
   const izquierda = entradasVisibles(BARRA_CONTA.izquierda, solo)
   const derecha = entradasVisibles(BARRA_CONTA.derecha, solo)
   const activa = entradaActiva(pathname, [...BARRA_CONTA.izquierda, ...BARRA_CONTA.derecha])
@@ -137,6 +138,51 @@ export function BarraInferiorConta() {
       )}
       {!solo && <BotonIAMovil />}
       {derecha.map(enlace)}
+      {/* C06, respuesta 2: en el producto solo, la barra no tiene sitio para
+          todo. «Más» abre el menú entero con lo que funciona; cuando Por hacer
+          y Bancos tengan ruta, entran en la barra solos y «Más» queda para el resto. */}
+      {solo && (
+        <button type="button" className="cx-barra-item cx-barra-mas" aria-haspopup="dialog" aria-expanded={mas} onClick={() => setMas(true)}>
+          <Icono nombre="mas" />Más
+        </button>
+      )}
+      {solo && mas && <HojaMenu cerrar={() => setMas(false)} />}
     </nav>
+  )
+}
+
+/** El menú entero en una hoja (móvil, producto solo): las mismas entradas que el menú del ordenador. */
+function HojaMenu({ cerrar }: { cerrar: () => void }) {
+  const { pathname } = useLocation()
+  const id = useId()
+  const grupos = MENU_CONTA.map((g) => entradasVisibles(g, true)).filter((g) => g.length > 0)
+  const activa = entradaActiva(pathname, MENU_CONTA.flat())
+  useEffect(() => {
+    const alPulsar = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrar() }
+    window.addEventListener('keydown', alPulsar)
+    return () => window.removeEventListener('keydown', alPulsar)
+  }, [cerrar])
+  return (
+    <div className="cx-hoja-velo" onClick={cerrar}>
+      <div className="cx-hoja cx-hoja-menu" role="dialog" aria-modal="true" aria-labelledby={id} onClick={(e) => e.stopPropagation()}>
+        <span className="cx-hoja-asa" aria-hidden="true" />
+        <span id={id} className="cx-llevamos-titulo">Menú</span>
+        {grupos.map((grupo, i) => (
+          <div key={grupo[0].id} style={{ display: 'contents' }}>
+            {i > 0 && <div className="cx-menu-separador" aria-hidden="true" />}
+            {grupo.map((e) => (
+              <Link key={e.id} to={rutaConta(e.ruta)} className="cx-menu-item" aria-current={activa === e.id ? 'page' : undefined} onClick={cerrar}>
+                <Icono nombre={e.icono} />
+                <span className="cx-menu-item-texto">{e.etiqueta}</span>
+              </Link>
+            ))}
+          </div>
+        ))}
+        <div className="cx-hoja-pie">
+          <span />
+          <button type="button" className="cx-boton-sec" onClick={cerrar}>Cerrar</button>
+        </div>
+      </div>
+    </div>
   )
 }

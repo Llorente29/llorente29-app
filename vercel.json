@@ -21,6 +21,15 @@
     },
     {
       "source": "/(.*)",
+      "has": [{ "type": "query", "key": "marca", "value": "contabilidad" }],
+      "missing": [
+        { "type": "host", "value": "(.*\\.)?folvy\\.app" },
+        { "type": "host", "value": "folvy-app\\.vercel\\.app" }
+      ],
+      "destination": "/marcas/contabilidad/index.html"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
