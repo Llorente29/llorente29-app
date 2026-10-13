@@ -220,8 +220,8 @@ solo toque esa función.
 
 ## 7. Lo que no me ha llegado
 
-- **`maqueta_B01.zip` (N17) no está** ni en el repositorio ni en la sesión.
-  Hasta la tarea 5 no hace falta, pero sin ella no hay fidelidad que comprobar.
+- ~~`maqueta_B01.zip` (N17)~~ **llegó el 13/10** y está guardada en
+  `docs/conta/maquetas/b01/`. Lo que dice frente a la base, en §9.
 - **`claude/folvy-contabilidad-benchmark.md` no está en el repositorio.** El
   contraste se apoya en su sección «Conciliación bancaria». Lo necesito antes de
   construir, porque el encargo dice que, si no estamos un escalón por encima,
@@ -229,6 +229,32 @@ solo toque esa función.
 - La norma (Norma 43 de Cajamar, CCom 25 y 29, PGC grupo 57, PSD2 y RDL 19/2018)
   la compruebo y cito literal con la tarea 2. El lector depende del cuaderno
   43.
+
+## 9. La maqueta N17 frente a lo que hay
+
+`docs/conta/maquetas/b01/N17Bancos.png` (1440, empresa A de staging, cifras
+inventadas). Lo que cada pieza necesita y si existe:
+
+| Pieza de N17 | Necesita | Hoy |
+|---|---|---|
+| «TUS BANCOS»: Norte ···4821, Sur ···0937, **Tarjeta ···1150** | Un banco por local (`treasury_account.location_id`, C04) y **la tarjeta como cuenta propia** | El modelo lo admite (`kind` ∈ bank/card/cash). En producción hay 1 `bank` y 0 `card`. **Pregunta P8:** ¿la tarjeta tiene extracto propio (y en qué formato: el de una tarjeta de crédito no es Norma 43) o sus cargos se ven en el banco como en la fila «Pago con tarjeta MERCADO CENTRAL»? |
+| «Por correo · activo» | La fuente `correo` | No existe (§4). Si P5 la deja preparada, el botón diría «preparado», no «activo»: **sería un cambio sobre la maqueta y lo digo antes** |
+| «Conectar · pronto» | Nada (interfaz del agregador) | Se puede tal cual |
+| Banda «He casado yo 142 de 158…» y las cinco cifras | Saldo del extracto (registro 33), saldo de la 572 a la fecha, recuentos por estado | Saldo contable: ya sale de `journal_ledger`. Lo demás, de las tablas nuevas (§5) |
+| Cobro de plataforma «cuadra con su liquidación (ventas − comisión)» | `channel_settlement` del periodo | Ninguna desde el 01/07 (§3, P7) |
+| Pago de factura «pendiente del 28/09» | Factura recibida pendiente, por la función de lectura | `supplier_invoice` de Foodint: 6, ninguna pagada (§3). Las anteriores al corte están en Diez como apuntes, no como facturas de Folvy: casarlas es contra la 400/410 del proveedor, no contra una factura |
+| Tarjeta «las 6 anteriores de este comercio fueron mercadería» | Historia por contraparte | En Diez la contraparte solo está en el texto (`external_counterpart`, 2.070 de 2.083 apuntes 572 de 2026), sin `party_id` |
+| Seguros sociales «cuadra con las nóminas (476 a pagar)» | Saldo de la 476 por el asiento de nóminas del mes | Folvy lo propone (`nomina`, serie 9, desde `payroll_cost`), pero en Foodint el último `payroll_cost` se creó el 04/08 (13 filas). **Pregunta P9:** las nóminas de octubre en adelante, ¿entran en Folvy? Si no, la TGSS de noviembre no tiene 476 con la que cuadrar y caería a «Por aclarar» |
+| Traspaso Norte → Sur «casado solo» | Dos cuentas propias en Folvy | Depende de P1 |
+| «Sí a los 11 que propongo» | Confirmación en lote | Regla 8 de `CLAUDE.md`: la confirmación dirá cuántos y a qué asientos pasaron |
+| Nombre de cuenta | El encargo pide «Luz y agua · 62800000»; la maqueta escribe «mercadería (60000000)» | **Sigo el encargo** (`nombre · código`) salvo que digas lo contrario |
+
+Lo que la maqueta no dibuja y haré en el mismo estilo, sin inventar piezas
+nuevas: las pestañas Reglas, Cuentas y extractos y Cierre del mes; «Subir
+extracto» (arrastrar, «He leído…», confirmar); «Lo que ha hecho Folvy»; y el
+**móvil**, para el que no hay maqueta: lo haré como pide el encargo (solo «Para
+confirmar» y «Por aclarar», una tarjeta por movimiento) con el patrón de
+`M4Proveedor`. Si quieres maqueta de alguno, la espero antes de la tarea 5.
 
 ## 8. Preguntas para Julio
 
@@ -254,3 +280,6 @@ solo toque esa función.
 - **P7 · Liquidaciones.** Las de Uber, Glovo y Just Eat acaban el 30/06. ¿Se
   van a importar las de julio en adelante (y quién), o el motor casa los cobros
   de plataforma contra las ventas del día mientras tanto?
+- **P8 · La tarjeta.** ¿Tiene extracto propio? ¿En qué formato?
+- **P9 · Nóminas desde octubre.** ¿Entran en Folvy (`payroll_cost` → asiento)?
+  Sin ellas, los seguros sociales no tienen con qué cuadrar.

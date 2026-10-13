@@ -1,7 +1,7 @@
 # Encargo B01 — Bancos y conciliación (frente B)
 
 > Copia de trabajo del encargo de Julio (13/10/2026), íntegra. La maqueta
-> `maqueta_B01.zip` (N17) no ha llegado todavía a la sesión. Comprobaciones
+> N17 (`maqueta_B01.zip`) está en `docs/conta/maquetas/b01/`. Comprobaciones
 > previas en `docs/conta/B01_comprobaciones_previas.md`.
 
 Sesión de Code: «B · Bancos y conciliación». Rama: `conta/b01-bancos`, sacada de `main`. Maqueta: `maqueta_B01.zip` (N17 «Bancos › Movimientos», estilo nuevo). Una cosa cada vez: haz la tarea 1 y para a informar.
