@@ -97,6 +97,10 @@ jobs:
           [ -s /tmp/asiento.json ] || { echo "::error::No se ha leído el asiento."; exit 1; }
           echo "Asiento leído ($(wc -c < /tmp/asiento.json) bytes; no se publica)."
 
+      - name: R14 · jspdf para el PDF del día (la versión del package-lock)
+        if: startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]')
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund jspdf@4.2.1
+
       - name: Factura (o subcuentas) de prueba en C0009
         env:
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
