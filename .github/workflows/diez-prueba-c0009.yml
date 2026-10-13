@@ -103,6 +103,8 @@ jobs:
             '[prueba-c0009:emitida-molde]'*) S=scripts/conta/diez/prueba-c0009-emitida-molde.ts ;;
             # R13: la primera venta de Folvy en Diez (C0009), del volcado del paso anterior.
             '[prueba-c0009:emitida]'*) S=scripts/conta/diez/prueba-c0009-emitida.ts ;;
+            # R14: qué dice el Swagger PÚBLICO de los adjuntos (sin credenciales).
+            '[prueba-c0009:adjunto-swagger]'*) S=scripts/conta/diez/adjuntos-swagger.mjs ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac
