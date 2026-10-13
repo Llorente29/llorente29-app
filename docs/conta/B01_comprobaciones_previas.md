@@ -283,3 +283,29 @@ confirmar» y «Por aclarar», una tarjeta por movimiento) con el patrón de
 - **P8 · La tarjeta.** ¿Tiene extracto propio? ¿En qué formato?
 - **P9 · Nóminas desde octubre.** ¿Entran en Folvy (`payroll_cost` → asiento)?
   Sin ellas, los seguros sociales no tienen con qué cuadrar.
+
+## 10. Respuesta 1, P3: qué pagos de Folvy están hoy en la serie 3
+
+```
+-- journal_entry con source_type <> 'migrated', TODA la tabla (producción)
+account_id     | serie | source_type | status    | n
+51ad1792-… (F) | 1     | sales_day   | propuesto | 50
+-- serie 3 de Folvy en producción: 0 asientos, en ninguna cuenta.
+-- staging-conta, serie 3: 1 (Taberna de Prueba Norte, channel_settlement, propuesto; semilla)
+```
+
+**No hay nada que mover en producción.** Lo que sí escribe en la 3 es código, al
+proponer (`asientosPropuestos.ts`): `pagoFactura` (l. 548), el cobro de una
+liquidación de plataforma (l. 295 y 354). Las compensaciones del socio van en
+la 4 (l. 628, 788 y 802).
+
+Propuesta, que hago en la tarea 3 y 4 sin tocar lo ya escrito:
+- Ajuste por empresa **«serie de tesorería»** (`bank_settings.treasury_series`,
+  3 por defecto como el C04; Foodint 4, por la respuesta).
+- Lo que nace del banco (B01) usa esa serie.
+- `pagoFactura` y el cobro de liquidación siguen en la 3 por ahora. Pasarlos a la
+  serie de tesorería es cambiar un fichero compartido con el frente A: el
+  cambio es de una línea cada uno (recibir la serie en vez del literal 3), pero
+  **no lo hago sin que lo coordines**. Mientras tanto no choca: con extracto del
+  periodo esos dos ya no proponen (P2), así que en Foodint todo el banco
+  desde el 01/10 sale en la 4.

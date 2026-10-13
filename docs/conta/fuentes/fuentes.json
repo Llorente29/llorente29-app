@@ -371,6 +371,35 @@
       "id": "BOE-A-2010-10544",
       "debeContener": "Sociedades de Capital",
       "nota": "C05: arts. 257–258 (límites del balance, el ECPN y la PyG abreviados) y 363.1.e (disolución por pérdidas, solo como aviso)."
+    },
+    {
+      "clave": "aeb-cuaderno-43-cajamar",
+      "nombre": "AEB · Cuaderno 43, Información normalizada de cuenta corriente (publicado por Cajamar)",
+      "tipo": "pdf",
+      "url": "https://www.cajamar.es/storage/documents/1733/cuaderno-43.pdf",
+      "debeContener": "normalizada"
+    },
+    {
+      "clave": "aeb-cuaderno-43-caixabank",
+      "nombre": "AEB · Cuaderno 43, Información normalizada de cuenta corriente, junio 2012 (publicado por CaixaBank)",
+      "tipo": "pdf",
+      "url": "https://www.caixabank.es/deployedfiles/empresas/Estaticos/pdf/Transferenciasyficheros/q43Junio2012.pdf",
+      "debeContener": "normalizada"
+    },
+    {
+      "clave": "aeb-cuaderno-43-bankinter",
+      "nombre": "AEB · Cuaderno 43, Información normalizada de cuenta corriente (publicado por Bankinter)",
+      "tipo": "pdf",
+      "url": "https://docs.bankinter.com/stf/plataformas/empresas/gestion/ficheros/formatos_fichero/norma_43_castellano.pdf",
+      "debeContener": "normalizada"
+    },
+    {
+      "clave": "psd2-directiva-2015-2366",
+      "nombre": "Directiva (UE) 2015/2366 sobre servicios de pago en el mercado interior (PSD2), EUR-Lex",
+      "tipo": "url",
+      "formato": "html",
+      "url": "https://eur-lex.europa.eu/legal-content/ES/TXT/HTML/?uri=CELEX:32015L2366",
+      "debeContener": "información sobre cuentas"
     }
   ]
 }
