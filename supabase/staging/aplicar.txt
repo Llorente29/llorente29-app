@@ -16,6 +16,8 @@
 #   caminos de siempre, con el freno del IBAN) y deshacer, sus contrarios.
 #   Vuelven 0100 (columna marked_by_bank; se puede repetir: todo «if not
 #   exists») y 0110 (mismas firmas), y entra 0130 (lecturas del motor).
+#   Run 163: el paso 4 se paró en el freno del IBAN (L-0431 trae otro y nadie
+#   lo ha decidido): bien parado. La prueba ahora lo comprueba y paga L-412.
 #   La prueba: 13 pasos como el administrador de A (y la RLS como B), todo en
 #   una transacción con ROLLBACK.
 supabase/migrations/20261101T0100_b01_bancos.sql

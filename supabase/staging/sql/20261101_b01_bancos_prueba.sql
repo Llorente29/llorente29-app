@@ -92,7 +92,8 @@ declare
     {"fecha":"2026-10-08","importe":-87.40,"concepto_banco":"TRANSFERENCIA A PANADERIA","concepto_limpio":"Transferencia a PANADERIA","comun":"04","huella":"n3","huella_suave":"s3"},
     {"fecha":"2026-10-09","importe":8693.20,"concepto_banco":"TRANSFERENCIA DE PLATAFORMA NORTE","concepto_limpio":"Transferencia de PLATAFORMA NORTE","comun":"04","huella":"n4","huella_suave":"s4"},
     {"fecha":"2026-10-11","importe":-2000.00,"concepto_banco":"TRASPASO A CUENTA SUR","concepto_limpio":"Traspaso a cuenta SUR","comun":"04","huella":"n5","huella_suave":"s5"},
-    {"fecha":"2026-10-12","importe":-3.10,"concepto_banco":"COMISION TRANSFERENCIA","concepto_limpio":"Comision transferencia","comun":"17","huella":"n6","huella_suave":"s6"}
+    {"fecha":"2026-10-12","importe":-3.10,"concepto_banco":"COMISION TRANSFERENCIA","concepto_limpio":"Comision transferencia","comun":"17","huella":"n6","huella_suave":"s6"},
+    {"fecha":"2026-10-13","importe":-87.40,"concepto_banco":"RECIBO PANADERIA L-412","concepto_limpio":"Recibo PANADERIA L-412","comun":"03","huella":"n7","huella_suave":"s7"}
   ]';
 begin
   -- No cuadra → no entra, y dice las cifras.
@@ -103,23 +104,23 @@ begin
   if not v_ok or exists (select 1 from public.bank_statement where treasury_account_id = norte) then
     raise exception 'PRUEBA B01 · 2: entró un extracto que no cuadra.';
   end if;
-  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'norte.n43', repeat('b', 64), '2026-10-01', '2026-10-13', 10000, 16437.90, null,
+  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'norte.n43', repeat('b', 64), '2026-10-01', '2026-10-13', 10000, 16350.50, null,
                               'ES9900000000000000000000', movs);
-  if (v_r->>'nuevos')::int <> 6 or (v_r->>'repetidos')::int <> 0 or v_r->>'continuidad' <> 'primero' then
+  if (v_r->>'nuevos')::int <> 7 or (v_r->>'repetidos')::int <> 0 or v_r->>'continuidad' <> 'primero' then
     raise exception 'PRUEBA B01 · 2: importación: %', v_r;
   end if;
   -- El mismo fichero: no cambia nada y lo dice.
-  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'norte.n43', repeat('b', 64), '2026-10-01', '2026-10-13', 10000, 16437.90, null, null, movs);
+  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'norte.n43', repeat('b', 64), '2026-10-01', '2026-10-13', 10000, 16350.50, null, null, movs);
   if not (v_r->>'repetido')::boolean or v_r->>'mensaje' not like 'Este fichero ya se subió el %' then raise exception 'PRUEBA B01 · 2: el mismo fichero dos veces: %', v_r; end if;
   -- Otro fichero que se solapa (los mismos movimientos): todos repetidos.
-  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'otra-vez.n43', repeat('c', 64), '2026-10-01', '2026-10-13', 10000, 16437.90, null, null, movs);
-  if (v_r->>'nuevos')::int <> 0 or (v_r->>'repetidos')::int <> 6 then raise exception 'PRUEBA B01 · 2: solapado: %', v_r; end if;
-  if (select count(*) from public.bank_movement where treasury_account_id = norte) <> 6 then raise exception 'PRUEBA B01 · 2: hay movimientos dos veces.'; end if;
+  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'otra-vez.n43', repeat('c', 64), '2026-10-01', '2026-10-13', 10000, 16350.50, null, null, movs);
+  if (v_r->>'nuevos')::int <> 0 or (v_r->>'repetidos')::int <> 7 then raise exception 'PRUEBA B01 · 2: solapado: %', v_r; end if;
+  if (select count(*) from public.bank_movement where treasury_account_id = norte) <> 7 then raise exception 'PRUEBA B01 · 2: hay movimientos dos veces.'; end if;
   -- Continuidad: el siguiente empieza donde acabó (sigue) o no (hueco, con cuánto).
-  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'n-sigue.n43', repeat('d', 64), '2026-10-14', '2026-10-14', 16437.90, 16437.90, null, null, '[]');
+  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'n-sigue.n43', repeat('d', 64), '2026-10-14', '2026-10-14', 16350.50, 16350.50, null, null, '[]');
   if v_r->>'continuidad' <> 'sigue' then raise exception 'PRUEBA B01 · 2: continuidad «sigue»: %', v_r; end if;
   v_r := public.bank_importar(norte, 'fichero', 'norma43', 'n-hueco.n43', repeat('e', 64), '2026-10-16', '2026-10-16', 16400.00, 16400.00, null, null, '[]');
-  if v_r->>'continuidad' <> 'hueco' or (v_r->>'hueco')::numeric <> -37.90 then raise exception 'PRUEBA B01 · 2: continuidad «hueco»: %', v_r; end if;
+  if v_r->>'continuidad' <> 'hueco' or (v_r->>'hueco')::numeric <> 49.50 then raise exception 'PRUEBA B01 · 2: continuidad «hueco»: %', v_r; end if;
   -- P1: el IBAN del fichero no era el de la cuenta → revisión propuesta, IBAN sin tocar.
   if (select iban from public.treasury_account where id = norte) <> 'ES7601829001020000000017'
      or (select iban_review->>'iban_propuesto' from public.treasury_account where id = norte) <> 'ES9900000000000000000000' then
@@ -136,7 +137,7 @@ begin
   v_r := public.bank_importar(sur, 'fichero', 'csv:bbva', 'sur.xlsx', repeat('f', 64), '2026-10-11', '2026-10-11', null, null,
     'El fichero no trae saldos.', null, '[{"fecha":"2026-10-11","importe":2000.00,"concepto_banco":"TRASPASO DE CUENTA NORTE","huella":"s1","huella_suave":"t1"}]');
   if v_r->>'continuidad' <> 'sin_saldo' then raise exception 'PRUEBA B01 · 2: Excel sin saldos: %', v_r; end if;
-  raise notice '2 · cuadre, mismo fichero, solapado, continuidad (sigue y hueco de −37,90), IBAN a revisar sin tocar, Excel sin saldos dicho';
+  raise notice '2 · cuadre, mismo fichero, solapado, continuidad (sigue y hueco de +49,50), IBAN a revisar sin tocar, Excel sin saldos dicho';
 end $$;
 
 -- ── 3 · Casar a una cuenta: propuesto en la serie de tesorería; seguro validado ──
@@ -177,6 +178,7 @@ do $$
 declare
   emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; norte uuid := (select id from _b where que = 'norte');
   f513 constant uuid := 'c1b0a000-0000-4000-8000-000000000513'; f511 constant uuid := 'c1b0a000-0000-4000-8000-000000000511';
+  f512 constant uuid := 'c1b0a000-0000-4000-8000-000000000512';
   m2 uuid; m3 uuid; v_r jsonb; v_prev jsonb; v_inv public.supplier_invoice; n_antes int;
 begin
   select id into m2 from public.bank_movement where treasury_account_id = norte and fingerprint = 'n2';
@@ -189,16 +191,29 @@ begin
   if not exists (select 1 from public.bank_asientos_sin_movimiento(emp, '2026-10-01', '2026-10-31') where entry_id = (select id from _b where que = 'pago511') and origen = 'pago_factura' and importe = -87.40) then
     raise exception 'PRUEBA B01 · 4: el pago apuntado no sale como asiento sin movimiento.';
   end if;
-  v_r := public.bank_casar(m2, jsonb_build_object('tipo', 'factura_recibida', 'facturas', jsonb_build_array(jsonb_build_object('id', f513, 'importe', 152.30)),
-                           'cuenta_tercero', '40000004', 'metodo', 'direct_debit'), 'probable', 'Mismo importe y proveedor que la factura L-0431', '[]', 'persona', null);
-  select * into v_inv from public.supplier_invoice where id = f513;
-  if v_inv.status <> 'pagada' or v_inv.paid_at <> '2026-10-07' or v_inv.paid_method <> 'direct_debit' or v_inv.payment_entry_id <> (v_r->>'asiento')::uuid
-     or not exists (select 1 from public.supplier_invoice_payment_log where invoice_id = f513 and action = 'paid' and paid_at = '2026-10-07') then
-    raise exception 'PRUEBA B01 · 4: la factura no quedó pagada por el banco: % %', v_inv.paid_at, v_inv.payment_entry_id;
+  -- El freno del IBAN de la factura (C01b) también para el banco: L-0431 trae otro IBAN y nadie lo ha decidido.
+  begin
+    perform public.bank_casar(m2, jsonb_build_object('tipo', 'factura_recibida', 'facturas', jsonb_build_array(jsonb_build_object('id', f513, 'importe', 152.30)),
+                              'cuenta_tercero', '40000004', 'metodo', 'direct_debit'), 'probable', 'Mismo importe y proveedor que L-0431', '[]', 'persona', null);
+    raise exception 'PRUEBA B01 · 4: el banco pagó una factura con el IBAN sin decidir.';
+  exception when others then
+    if sqlerrm not like 'IBAN distinto al de la ficha%' then raise; end if;
+  end;
+  if (select status from public.supplier_invoice where id = f513) <> 'aprobada' or exists (select 1 from public.bank_match where movement_id = m2) then
+    raise exception 'PRUEBA B01 · 4: el freno saltó pero quedó algo a medias.';
+  end if;
+  -- L-412, sin IBAN que decidir: pagada por el banco.
+  select id into m2 from public.bank_movement where treasury_account_id = norte and fingerprint = 'n7';
+  v_r := public.bank_casar(m2, jsonb_build_object('tipo', 'factura_recibida', 'facturas', jsonb_build_array(jsonb_build_object('id', f512, 'importe', 87.40)),
+                           'cuenta_tercero', '40000004', 'metodo', 'direct_debit'), 'seguro', 'Mismo importe y referencia que L-412', '[]', 'persona', null);
+  select * into v_inv from public.supplier_invoice where id = f512;
+  if v_inv.status <> 'pagada' or v_inv.paid_at <> '2026-10-13' or v_inv.paid_method <> 'direct_debit' or v_inv.payment_entry_id <> (v_r->>'asiento')::uuid
+     or not exists (select 1 from public.supplier_invoice_payment_log where invoice_id = f512 and action = 'paid' and paid_at = '2026-10-13') then
+    raise exception 'PRUEBA B01 · 4: la factura no quedó pagada por el banco: % %', v_inv.status, v_inv.payment_entry_id;
   end if;
   insert into _b values ('m2', m2), ('e2', (v_r->>'asiento')::uuid);
-  if exists (select 1 from public.bank_facturas_recibidas_pendientes(emp) where id = f513) then
-    raise exception 'PRUEBA B01 · 4: L-0431 sigue pendiente después de pagada.';
+  if exists (select 1 from public.bank_facturas_recibidas_pendientes(emp) where id = f512) then
+    raise exception 'PRUEBA B01 · 4: L-412 sigue pendiente después de pagada.';
   end if;
   if not exists (select 1 from public.bank_historial(emp, '2026-01-01') where cuenta = '40000004' and origen = 'banco') then
     raise exception 'PRUEBA B01 · 4: lo casado no entra en el historial del que aprende el motor.';
@@ -212,7 +227,7 @@ begin
      or (select count(*) from public.journal_entry where company_id = emp) <> n_antes then
     raise exception 'PRUEBA B01 · 5: el pago ya apuntado no se enlazó (o se creó otro asiento): %', v_r;
   end if;
-  raise notice '4 · L-0431 pagada por el banco el 07/10 por mark_supplier_invoice_paid (domiciliación, con su registro) y con su asiento · 5 · L-0412: el pago ya apuntado se enlaza; asientos antes % = después %', n_antes, n_antes;
+  raise notice '4 · L-0431 frenada por su IBAN sin decidir (nada a medias); L-412 pagada por el banco el 13/10 por mark_supplier_invoice_paid (domiciliación, con su registro) y con su asiento · 5 · L-0412: el pago ya apuntado se enlaza; asientos antes % = después %', n_antes, n_antes;
 end $$;
 
 -- ── 6 · Liquidación cobrada; 7 · traspaso; 8 · nada dos veces ───────────────
@@ -262,7 +277,7 @@ begin
     raise exception 'PRUEBA B01 · 9: lo validado no se anuló con su contraasiento.';
   end if;
   v_r := public.bank_deshacer((select id from public.bank_match where movement_id = m2 and status = 'vivo'), 'Era otra factura');
-  if (select status || coalesce(paid_at::text, '') || coalesce(payment_entry_id::text, '') from public.supplier_invoice where id = 'c1b0a000-0000-4000-8000-000000000513') <> 'aprobada' then
+  if (select status || coalesce(paid_at::text, '') || coalesce(payment_entry_id::text, '') from public.supplier_invoice where id = 'c1b0a000-0000-4000-8000-000000000512') <> 'aprobada' then
     raise exception 'PRUEBA B01 · 9: la factura sigue pagada tras deshacer.';
   end if;
   if (select count(*) from public.bank_match where status = 'deshecho' and undo_reason is not null and movement_id in (m1, m2)) <> 2 then
