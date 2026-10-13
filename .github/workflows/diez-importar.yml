@@ -364,8 +364,14 @@ jobs:
         run: |
           set -euo pipefail
           cd /tmp/carga
-          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=ensayo \
-            -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
+          # El error de la base, como anotación del run (regla 8: si falla, que diga por qué).
+          if ! "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=ensayo \
+               -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" > /tmp/salida.txt 2>&1; then
+            cat /tmp/salida.txt >> /tmp/informe.md
+            grep -E 'ERROR|error|CONTEXT' /tmp/salida.txt | head -5 | sed 's/^/::error::/'
+            exit 1
+          fi
+          tee -a /tmp/informe.md < /tmp/salida.txt
       - name: Informe
         if: always()
         run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'
