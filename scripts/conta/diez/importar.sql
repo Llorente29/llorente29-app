@@ -139,6 +139,11 @@ begin
   end loop;
 
   -- 3 · Verde: todo cuadra y nada pendiente de explicar. Entonces se cierra y se marca.
+  -- C06: sin testigo no hay con qué medir (otra empresa sin sus Excel): nunca verde.
+  if not exists (select 1 from carga_testigo) then
+    v_todos := false;
+    inf := inf || '**Sin testigo**: no hay sumas y saldos de esta base con los que medir lo traído; no puede salir en verde.'::text;
+  end if;
   v_verde := v_todos and jsonb_array_length(rech) = 0 and jsonb_array_length(dist) = 0
              and not exists (select 1 from carga_rechazo)
              and jsonb_array_length(v_sub -> 'rechazadas') = 0;

@@ -18,9 +18,26 @@
 #
 # Secretos: PROD_CONTA_DB_URL y DIEZ_LECTURA (producción), STAGING_CONTA_DB_URL
 # (simulado). Ninguno llega a la línea de órdenes que se ve.
+#
+# C06 · PARA CUALQUIER EMPRESA (encargo C06, tarea 5; freno autorizado por
+# Julio en la respuesta 1). Nada de una empresa escrito aquí:
+#   · empresa, desde, hasta y corte son entradas; la BASE de Diez no: sale de
+#     conta_diez_base (la que Folvy registró para esa empresa, con registro).
+#   · el secreto: DIEZ_LECTURA, o DIEZ_LECTURA_<secreto> si la empresa tiene
+#     el suyo (su propio acceso a apiCON).
+#   · el real lleva en «autorizo» «historico-diez» si la base es la C0008 (como
+#     hasta hoy) y «historico-diez-<base>» si es otra: el autorizo es por
+#     empresa. Y solo con un ensayo en verde del mismo commit Y de la misma
+#     empresa.
+#   · el testigo es el de la base (testigo-huellas.json para la C0008). Sin
+#     testigo, la tanda no sale en verde.
+#   · En staging, a mano: «simulado-staging» (el Diez de mentira contra la
+#     empresa que se diga, pasos 1 y 2 en ensayo) y «lectura-staging» (lee la
+#     C0009 de verdad, SOLO GET y solo el paso 1: nada se escribe en staging;
+#     la empresa tiene que tener registrada la C0009).
 
 name: 'Diez · tanda del histórico (C04b)'
-run-name: "Diez · histórico · ${{ github.event_name == 'workflow_dispatch' && inputs.modo || 'simulado en staging' }}"
+run-name: "Diez · histórico · ${{ github.event_name == 'workflow_dispatch' && format('{0} · {1}', inputs.modo, inputs.empresa) || 'simulado en staging' }}"
 
 on:
   push:
@@ -34,17 +51,37 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'ensayo (se deshace) o real (solo con un ensayo en verde del mismo commit)'
+        description: 'ensayo / real (producción) · simulado-staging / lectura-staging (staging)'
         required: true
         default: ensayo
         type: choice
-        options: [ensayo, real]
-      confirmo:
-        description: 'Escribe «produccion»'
+        options: [ensayo, real, simulado-staging, lectura-staging]
+      empresa:
+        description: 'Id de la empresa (company.id). Su base de Diez sale de conta_diez_base.'
         required: true
         type: string
+      desde:
+        description: 'Primer mes a leer (AAAAMM)'
+        required: true
+        type: string
+      hasta:
+        description: 'Último mes a leer (AAAAMM)'
+        required: true
+        type: string
+      corte:
+        description: 'Fecha de corte (AAAA-MM-DD): el imported_until de su ejercicio mixto de Diez'
+        required: true
+        type: string
+      secreto:
+        description: 'Vacío = DIEZ_LECTURA. Si la empresa tiene su acceso: el sufijo de DIEZ_LECTURA_<sufijo>'
+        required: false
+        type: string
+      confirmo:
+        description: 'En producción, escribe «produccion»'
+        required: false
+        type: string
       autorizo:
-        description: 'Solo para el real: escribe «historico-diez»'
+        description: 'Solo para el real: «historico-diez» (base C0008) o «historico-diez-<base>» (otra)'
         required: false
         type: string
 
@@ -128,12 +165,15 @@ jobs:
         run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'
 
   produccion:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.modo == 'ensayo' || inputs.modo == 'real')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
-      EMPRESA: 658728c0-fcd7-46ef-a860-d4e5e6eb21d9 # Foodint (Llorente29), la C0008 de Diez
+      EMPRESA: ${{ inputs.empresa }}
+      DIEZ_DESDE: ${{ inputs.desde }}
+      DIEZ_HASTA: ${{ inputs.hasta }}
+      DIEZ_CORTE: ${{ inputs.corte }}
+      SECRETO: ${{ inputs.secreto }}
       MODO: ${{ inputs.modo }}
     steps:
       - uses: actions/checkout@v4
@@ -147,7 +187,12 @@ jobs:
         run: |
           set -euo pipefail
           [ "$CONFIRMO" = "produccion" ] || { echo "::error::Hay que escribir «produccion» en «confirmo». No se hace nada."; exit 1; }
-          case "$MODO" in ensayo) ;; real) [ "$AUTORIZO" = "historico-diez" ] || { echo "::error::El real lleva «historico-diez» en «autorizo». No se hace nada."; exit 1; } ;; *) echo "::error::Modo desconocido."; exit 1 ;; esac
+          case "$MODO" in ensayo|real) ;; *) echo "::error::Modo desconocido."; exit 1 ;; esac
+          # Las entradas, con su forma (van a SQL y a la línea de órdenes).
+          [[ "$EMPRESA" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "::error::«empresa» tiene que ser un id (uuid)."; exit 1; }
+          [[ "$DIEZ_DESDE" =~ ^[0-9]{6}$ && "$DIEZ_HASTA" =~ ^[0-9]{6}$ && "$DIEZ_CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Fechas: desde y hasta AAAAMM, corte AAAA-MM-DD."; exit 1; }
+          [ -z "$SECRETO" ] || [[ "$SECRETO" =~ ^[A-Z0-9_]+$ ]] || { echo "::error::«secreto» solo lleva mayúsculas, cifras y _."; exit 1; }
+          echo "AUTORIZO_DADO=$AUTORIZO" >> "$GITHUB_ENV"
           echo "# Diez · tanda del histórico · **$MODO**" > /tmp/informe.md
           echo "" >> /tmp/informe.md
           echo "Commit \`${GITHUB_SHA}\` · lanzado por **${GITHUB_ACTOR}** · $(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M') de Madrid" >> /tmp/informe.md
@@ -159,9 +204,9 @@ jobs:
         run: |
           set -euo pipefail
           n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow diez-importar.yml --commit "$GITHUB_SHA" --status success --limit 50 \
-                --json displayTitle --jq '[.[] | select(.displayTitle == "Diez · histórico · ensayo")] | length')
+                --json displayTitle --jq "[.[] | select(.displayTitle == \"Diez · histórico · ensayo · ${EMPRESA}\")] | length")
           if [ "$n" -lt 1 ]; then
-            echo "::error::No hay un ensayo en verde de este commit (${GITHUB_SHA}). Primero el ensayo; el real, después y desde el mismo commit."
+            echo "::error::No hay un ensayo en verde de este commit (${GITHUB_SHA}) para esta empresa. Primero el ensayo; el real, después y desde el mismo commit."
             exit 1
           fi
           echo "Hay $n ensayo(s) en verde de este commit." | tee -a /tmp/informe.md
@@ -176,10 +221,10 @@ jobs:
           case "$DB_URL" in *"$PROD_REF"*) echo "Producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
       - name: Enmascarar el secreto de Diez
         env:
-          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          DIEZ_LECTURA: ${{ secrets[inputs.secreto != '' && format('DIEZ_LECTURA_{0}', inputs.secreto) || 'DIEZ_LECTURA'] }}
         run: |
           set -euo pipefail
-          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA${SECRETO:+_$SECRETO}."; exit 1; }
           jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
       - name: Instalar psql 17
         run: |
@@ -188,22 +233,38 @@ jobs:
           sudo apt-get install -y -qq postgresql-common >/dev/null
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
-      - name: Guarda · al otro lado está Foodint y su 2026 es mixto de Diez
+      - name: Guarda · la empresa, su base registrada y su ejercicio mixto de Diez hasta el corte
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -euo pipefail
-          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.company c join public.fiscal_year f on f.company_id = c.id where c.id = '$EMPRESA' and c.account_id = '$FOODINT' and f.code = '2026' and f.origin = 'mixed' and f.origin_program = 'diez' and f.imported_until = '2026-09-30'")
-          [ "$r" = "1" ] || { echo "::error::Al otro lado no está la empresa de Foodint con su 2026 mixto de Diez. Abortado sin escribir nada."; exit 1; }
-          echo "Foodint, con su 2026 mixto de Diez hasta el 30/09."
+          # La base NO la dice quien lanza: es la que Folvy registró para la
+          # empresa (conta_diez_base). Y el ejercicio del corte, mixto de Diez.
+          r=$("$PSQL" "$DB_URL" -X -A -t -F '|' -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v corte="$DIEZ_CORTE" <<'SQL'
+          select b.nombre_bd, c.legal_name
+            from public.company c
+            join public.conta_diez_base b on b.company_id = c.id and b.account_id = c.account_id
+            join public.fiscal_year f on f.company_id = c.id
+           where c.id = :'empresa'::uuid and c.account_id <> '00000000-0000-0000-0000-000000000001'
+             and b.nombre_bd <> 'C0001'
+             and f.code = left(:'corte', 4) and f.origin = 'mixed' and f.origin_program = 'diez' and f.imported_until = :'corte'::date;
+          SQL
+          )
+          [ "$(printf '%s\n' "$r" | grep -c .)" = "1" ] || { echo "::error::La empresa no tiene base de Diez registrada o su ejercicio $(echo "$DIEZ_CORTE" | cut -c1-4) no es mixto de Diez hasta el $DIEZ_CORTE. Abortado sin escribir nada."; exit 1; }
+          BD=${r%%|*}
+          echo "DIEZ_BD=$BD" >> "$GITHUB_ENV"
+          echo "Empresa con la base $BD de Diez y su ejercicio mixto hasta el $DIEZ_CORTE." | tee -a /tmp/informe.md
+      - name: El real lleva su autorizo, por empresa
+        if: inputs.modo == 'real'
+        run: |
+          set -euo pipefail
+          if [ "$DIEZ_BD" = "C0008" ]; then esperado="historico-diez"; else esperado="historico-diez-$(echo "$DIEZ_BD" | tr 'A-Z' 'a-z')"; fi
+          [ "$AUTORIZO_DADO" = "$esperado" ] || { echo "::error::El real de esta empresa (base $DIEZ_BD) lleva «$esperado» en «autorizo». No se hace nada."; exit 1; }
       - name: Paso 1 · leer de Diez y preparar (solo GET)
         env:
           DIEZ_FUENTE: real
-          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          DIEZ_LECTURA: ${{ secrets[inputs.secreto != '' && format('DIEZ_LECTURA_{0}', inputs.secreto) || 'DIEZ_LECTURA'] }}
           CARGA: /tmp/carga
-          DIEZ_DESDE: '202310'
-          DIEZ_HASTA: '202609'
-          DIEZ_CORTE: '2026-09-30'
         run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee -a /tmp/informe.md
       - name: Paso 2 · escribir, medir contra el testigo y decidir (una transacción)
         env:
@@ -218,6 +279,93 @@ jobs:
         run: |
           set -euo pipefail
           [ -f /tmp/carga/detalle.csv ] && npx --yes tsx@4.19.2 scripts/conta/diez/cifrar.ts /tmp/carga/detalle.csv 'DETALLE CIFRADO' || echo "Sin detalle."
+      - name: Informe
+        if: always()
+        run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'
+
+  # C06 · En staging, a mano, para cualquier empresa de staging con su base
+  # registrada. Nunca escribe nada real en staging.
+  staging:
+    if: github.event_name == 'workflow_dispatch' && (inputs.modo == 'simulado-staging' || inputs.modo == 'lectura-staging')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EMPRESA: ${{ inputs.empresa }}
+      DIEZ_DESDE: ${{ inputs.desde }}
+      DIEZ_HASTA: ${{ inputs.hasta }}
+      DIEZ_CORTE: ${{ inputs.corte }}
+      MODO: ${{ inputs.modo }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Entradas
+        run: |
+          set -euo pipefail
+          [[ "$EMPRESA" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "::error::«empresa» tiene que ser un id (uuid)."; exit 1; }
+          [[ "$DIEZ_DESDE" =~ ^[0-9]{6}$ && "$DIEZ_HASTA" =~ ^[0-9]{6}$ && "$DIEZ_CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Fechas: desde y hasta AAAAMM, corte AAAA-MM-DD."; exit 1; }
+          echo "# Diez · $MODO · empresa \`$EMPRESA\`" > /tmp/informe.md
+      - name: Guarda · el secreto apunta a STAGING
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta STAGING_CONTA_DB_URL."; exit 1; }
+          python3 -c 'import os,urllib.parse as u; p=u.urlsplit(os.environ["DB_URL"]); [print(f"::add-mask::{x}") for x in (os.environ["DB_URL"], p.password, p.username, p.hostname) if x]'
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "Staging." ;; *) echo "::error::La URL no es de staging."; exit 1 ;; esac
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Guarda · staging de verdad, y la base registrada de la empresa
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710','00000000-0000-0000-0000-000000000001')")
+          [ "$r" = "0" ] || { echo "::error::Al otro lado hay cuentas de producción. Abortado."; exit 1; }
+          BD=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" <<'SQL'
+          select b.nombre_bd from public.conta_diez_base b join public.company c on c.id = b.company_id and c.account_id = b.account_id where b.company_id = :'empresa'::uuid;
+          SQL
+          )
+          [ -n "$BD" ] || { echo "::error::La empresa no tiene base de Diez registrada en conta_diez_base. No se lee nada."; exit 1; }
+          # En staging solo se lee la copia de pruebas: lo real nunca va a staging.
+          if [ "$MODO" = "lectura-staging" ] && [ "$BD" != "C0009" ]; then echo "::error::En staging solo se lee la C0009; esta empresa tiene la $BD."; exit 1; fi
+          echo "DIEZ_BD=$BD" >> "$GITHUB_ENV"
+          echo "Base registrada para la empresa: **$BD** (conta_diez_base)." | tee -a /tmp/informe.md
+      - name: Lectura · leer la C0009 y preparar (SOLO GET; nada se escribe en staging)
+        if: inputs.modo == 'lectura-staging'
+        env:
+          DIEZ_FUENTE: real
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          CARGA: /tmp/carga
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+          npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee -a /tmp/informe.md
+          # Lo leído no sale del runner: ni a staging ni al informe (solo recuentos).
+          rm -rf /tmp/carga
+      - name: Simulado · leer y preparar (Diez de mentira, datos inventados)
+        if: inputs.modo == 'simulado-staging'
+        env:
+          DIEZ_FUENTE: simulado
+          CARGA: /tmp/carga
+        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee -a /tmp/informe.md
+      - name: Simulado · escribir, medir y deshacer (ensayo)
+        if: inputs.modo == 'simulado-staging'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          cd /tmp/carga
+          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=ensayo \
+            -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
       - name: Informe
         if: always()
         run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'
