@@ -1,11 +1,10 @@
-# D01 · Tarea 5 — el asiento de la factura recibida (sesión A; solo añade).
-# (2.ª vuelta: la subcuenta del proveedor se da de alta en la hoja 4000, no en la 400.)
-# La 0200 a la 0230 ya están en staging (la 0230, run 38432287604).
-#   ensayo: la 0240 y su prueba en una transacción con ROLLBACK.
-#   0240:   conta_gasto_aprendido (lo aprendido de Diez, con su porqué) y
-#           conta_documento_factura_guardar (el PDF de la recibida en conta-documentos).
-#   Su prueba, y la del R15 (el resumen de ventas sigue igual).
-supabase/staging/sql/20261021_d01_asiento_ensayo.sql
-supabase/migrations/20261021T0240_d01_asiento_recibida.sql
+# D01 R2 punto 3 — el origen de lo aprendido (sesión A; cambia una función con su misma firma).
+# La 0200 a la 0240 ya están en staging (la 0240, run 38435239940).
+#   ensayo: la 0250 y su prueba en una transacción con ROLLBACK.
+#   0250:   conta_gasto_aprendido dice «aprendido de Diez» o «aprendido de tus
+#           facturas», el de la más reciente.
+#   Su prueba, y la de la 0240 (sigue pasando).
+supabase/staging/sql/20261021_d01_aprendido_ensayo.sql
+supabase/migrations/20261021T0250_d01_aprendido_origen.sql
+supabase/staging/sql/20261021_d01_aprendido_prueba.sql
 supabase/staging/sql/20261021_d01_asiento_prueba.sql
-supabase/staging/sql/20261021_conta_documentos_prueba.sql
