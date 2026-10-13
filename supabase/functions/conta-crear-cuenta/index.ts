@@ -16,7 +16,8 @@
 //      el usuario.
 //   5. La invitación con la marca (send-email, plantilla invitacion_conta),
 //      con el enlace al dominio de la marca (o, fuera de producción y sin
-//      dominio, a APP_BASE_URL_PRUEBAS con ?marca=). Es «lo intento»: la cuenta
+//      dominio, a APP_BASE_URL_PRUEBAS —o, si no está, al origen de quien la
+//      pide— con ?marca=). Es «lo intento»: la cuenta
 //      ya está; la respuesta dice si se mandó y, si no, por qué (regla 8).
 //
 // Endpoint: POST /functions/v1/conta-crear-cuenta
@@ -26,7 +27,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
 import { enlaceDeMarca } from '../_shared/marcas.ts';
-import { baseDelEnlace, leerPedido, slugDe } from './pedido.ts';
+import { baseDelEnlace, basePruebas, leerPedido, slugDe } from './pedido.ts';
 
 const PRODUCCION = 'xzmpnchlguibclvxyynt';
 const DIAS_ENLACE = 7;
@@ -57,7 +58,7 @@ Deno.serve(async (req) => {
     if (!leido.ok) return json(400, { error: leido.error });
     const p = leido.pedido;
     const esProduccion = supabaseUrl.includes(PRODUCCION);
-    const base = baseDelEnlace(p.marca, esProduccion, Deno.env.get('APP_BASE_URL_PRUEBAS') ?? null);
+    const base = baseDelEnlace(p.marca, esProduccion, basePruebas(Deno.env.get('APP_BASE_URL_PRUEBAS'), req.headers.get('origin')));
     if (!base.ok) return json(400, { error: base.error });
 
     // --- 3. El usuario del cliente ---

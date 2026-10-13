@@ -1,0 +1,9 @@
+# Funciones a desplegar en STAGING-CONTA (oseymswjlzplqoxrfjzi), nunca en
+# producción. Una por línea. Lo aplica .github/workflows/desplegar-funciones-staging-conta.yml
+# al empujar un cambio de este fichero a una rama conta/**.
+#
+# C06 · tarea 6 (el recorrido entero de la cuenta del frente C): la invitación
+# de verdad. conta-crear-cuenta es nueva; send-email ya estaba (v63) y, sin
+# marca, envía lo mismo que antes (correoC06.test.ts).
+conta-crear-cuenta
+send-email

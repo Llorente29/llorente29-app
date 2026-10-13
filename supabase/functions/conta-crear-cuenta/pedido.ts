@@ -45,3 +45,21 @@ export function baseDelEnlace(m: Marca, esProduccion: boolean, basePruebas: stri
   if (!basePruebas) return { ok: false, error: `La marca «${m.nombre}» no tiene dominio y falta APP_BASE_URL_PRUEBAS en este proyecto.` };
   return { ok: true, base: basePruebas };
 }
+
+/**
+ * La base de pruebas, fuera de producción: APP_BASE_URL_PRUEBAS si está; si
+ * no, el ORIGEN de quien pide el alta (la app de pruebas que la pidió: el
+ * despliegue de vista previa o el servidor de las e2e). Solo http(s), sin
+ * ruta. En producción no se usa nunca (baseDelEnlace exige dominio propio).
+ */
+export function basePruebas(env: string | null | undefined, origen: string | null | undefined): string | null {
+  for (const v of [env, origen]) {
+    const t = String(v ?? '').trim();
+    if (!t) continue;
+    try {
+      const u = new URL(t);
+      if (u.protocol === 'https:' || u.protocol === 'http:') return u.origin;
+    } catch { /* no es una URL: la siguiente */ }
+  }
+  return null;
+}

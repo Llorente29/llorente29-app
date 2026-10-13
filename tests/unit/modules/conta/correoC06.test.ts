@@ -112,3 +112,14 @@ describe('send-email: aviso de «contraseña cambiada» con la marca (C06, respu
     expect(Object.keys(PLANTILLAS_MARCA).sort()).toEqual(['contrasena_cambiada_conta', 'contrasena_conta', 'invitacion_conta'])
   })
 })
+
+import { basePruebas } from '../../../../supabase/functions/conta-crear-cuenta/pedido'
+
+describe('conta-crear-cuenta: la base del enlace fuera de producción', () => {
+  it('APP_BASE_URL_PRUEBAS manda; sin ella, el origen de quien pide; solo http(s) y sin ruta', () => {
+    expect(basePruebas('https://vista.example/algo', 'http://127.0.0.1:4173')).toBe('https://vista.example')
+    expect(basePruebas(null, 'http://127.0.0.1:4173')).toBe('http://127.0.0.1:4173')
+    expect(basePruebas('', 'javascript:alert(1)')).toBeNull()
+    expect(basePruebas(undefined, undefined)).toBeNull()
+  })
+})
