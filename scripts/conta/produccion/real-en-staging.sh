@@ -33,6 +33,9 @@ export CUENTAS="$T/cuentas.txt" CUENTAS_ANTES="$T/cuentas-antes.csv" CUENTAS_DES
 export VUELTA_ATRAS_DIR="$T/vuelta-atras"; rm -rf "$VUELTA_ATRAS_DIR"; mkdir -p "$VUELTA_ATRAS_DIR"
 cp supabase/vuelta-atras/*.down.sql supabase/staging/vuelta-atras/*.down.sql "$VUELTA_ATRAS_DIR/"
 q() { "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 "$@"; }
+# El informe va al resumen del paso, que no siempre se puede leer de fuera: también al registro.
+inicio=$(wc -l < "$INFORME" 2>/dev/null || echo 0)
+trap 'echo "──── informe ────"; tail -n +$((inicio+1)) "$INFORME"' EXIT
 
 # Guarda: al otro lado NO hay producción (ni Foodint ni Folvy Interno), antes de tocar nada.
 if [ "$(q -c "select count(*) from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')")" != "0" ]; then
