@@ -2,6 +2,7 @@
 -- C06 · TRAER DE DIEZ: los pasos de antes y la subcuenta sin nombre
 -- ----------------------------------------------------------------------------
 -- cambia: public.conta_diez_subcuentas · prueba: supabase/staging/sql/20261111_c06_traer_listo_prueba.sql
+-- cambia: public.company_account · prueba: supabase/staging/sql/20261111_c06_traer_listo_prueba.sql
 --
 -- Respuesta 3 de Julio (13/10), punto 1.2. Una empresa nueva necesita, antes de
 -- traer de Diez, su plan y su cuenta de banco. Eso va en el alta y en este

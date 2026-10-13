@@ -5,25 +5,38 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C04b · Respuesta 15 — el documento de cada asiento de ventas, en Folvy.
-# La tanda anterior (la regla de ventas por plataforma, 0100–0140) ya está en
-# el historial de producción con su huella (real 38380236640, 13/10); su copia
-# queda en tests/conta/produccion/tanda-ventas-plataforma-20261013.txt.
+# C06 · Contabilidad sola con marca propia (frente C, rama conta/c06-sola).
+# PREPARADA, NO LANZADA: el orden entre las tres sesiones lo decide Julio.
+# La tanda anterior de este fichero (C04b R15, 20261021T0100) es de otra rama;
+# esta es la del C06 y no la incluye.
 #
-#   1. 20261021T0100 — todo NUEVO: el bucket privado conta-documentos (solo
-#      PDF), journal_entry_document (el PDF de un asiento validado, uno por
-#      asiento, no se cambia), conta_resumen_ventas, conta_documento_guardar
-#      y cuatro columnas que admiten nulos en external_send (document_*).
-#      Ningún dato cambia; nada del camino del pedido.
+#   1. 20261111T0100 — la cuenta solo de contabilidad: accounts.product_brand
+#      y business_type 'otra_actividad' (restricciones quitadas y puestas, 4
+#      filas), conta_crear_cuenta_sola, conta_contrasena_de_marca y los seis
+#      disparadores de siembra de una cuenta nueva, que no siembran Cocina si
+#      la cuenta lleva marca (misma firma; sin marca, igual que hoy).
+#   2. 20261111T0200 — conta_diez_base (una base de Diez por empresa, C0001
+#      vetada, con registro), sus funciones (solo service_role) y la fila de
+#      Foodint: C0008 con lo último usado (202310, 202609, corte 2026-09-30).
+#   3. 20261111T0300 — company_account.name_pending (no nula, false en todas)
+#      y su disparador, conta_diez_subcuentas (misma firma, el cuerpo de
+#      producción con un cambio: la subcuenta sin nombre entra marcada) y
+#      conta_diez_listo.
 #
-# Análisis contra producción, medido el 13/10 con la consulta de solo lectura
-# del workflow: «sigue». Sin «autorizo».
+# Análisis contra producción, medido el 13/10 a las 22:44 UTC con la consulta
+# de solo lectura del workflow: los TRES «sigue». Sin «autorizo». Nada en el
+# camino del pedido. Ver docs/conta/C06_informe_final.md, «La tanda».
 #
-# Lo que cuenta antes y después (R9): el bucket, sus ficheros y políticas, la
-# tabla y sus filas, las funciones, las columnas, los envíos y los asientos de
-# ventas por estado. Si el real se deshace solo, tiene que volver a lo de antes.
+# ORDEN con el front: esta tanda ANTES de fusionar el front del C06 (lee
+# name_pending y conta_diez_listo).
 #
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt. PARA si ya hay algún
-# documento guardado o algún fichero en el bucket.
-cuenta: scripts/conta/produccion/cuentas/documentos.sql
-supabase/migrations/20261021T0100_conta_documentos.sql
+# Lo que cuenta antes y después (R9): cuentas y su marca, restricciones de
+# accounts, interruptores conta, funciones de la tanda, subcuentas y las sin
+# nombre, disparadores de company_account, bases de Diez, el md5 de
+# conta_diez_subcuentas y las lecturas de Diez.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/contabilidad-sola.sql
+supabase/migrations/20261111T0100_c06_cuenta_sola.sql
+supabase/migrations/20261111T0200_c06_diez_base.sql
+supabase/migrations/20261111T0300_c06_traer_listo.sql
