@@ -60,7 +60,8 @@ for (const f of lista) {
     if (!r.ok) {
       // El porqué, como código (no su texto): la respuesta de la API dice qué no le gustó.
       const t = (await r.text()).toLowerCase()
-      di(`${clave(f.id)}.error_${/pdf/.test(t) ? 'pdf' : /image/.test(t) ? 'imagen' : /too large|size|exceed/.test(t) ? 'tamano' : /model/.test(t) ? 'modelo' : 'otro'}`, 1)
+      // Primero lo que no es del documento: el saldo o el límite de la cuenta de la API.
+      di(`${clave(f.id)}.error_${/credit|balance|billing|quota|rate.?limit/.test(t) ? 'saldo_o_limite' : /pdf/.test(t) ? 'pdf' : /image/.test(t) ? 'imagen' : /too large|size|exceed/.test(t) ? 'tamano' : /model/.test(t) ? 'modelo' : 'otro'}`, 1)
       di(`${clave(f.id)}.error_${/password|encrypt/.test(t) ? 'cifrado' : /pages?/.test(t) ? 'paginas' : /parse|process|invalid|corrupt/.test(t) ? 'no_se_procesa' : 'sin_detalle'}`, 1)
     }
     if (r.ok) {
