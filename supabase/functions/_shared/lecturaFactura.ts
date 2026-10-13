@@ -20,7 +20,7 @@
 //     cuota desglosada (RD 1619/2012, art. 6; Ley 37/1992, art. 97);
 //   · que no haya pasado el plazo de cuatro años para deducir (Ley 37/1992,
 //     art. 99.Tres);
-//   · el vencimiento a más de 60 días (Ley 3/2004, art. 4), como en el C01b.
+//   · el vencimiento a más de 60 días (Ley 3/2004, art. 4.3), como en el C01b.
 // La cita literal de cada artículo está en docs/conta/d01/norma.md.
 //
 // La confianza, como en todo el módulo:
@@ -221,7 +221,7 @@ export function leerFactura(m: LecturaModelo, o: { hoy: string; minConfianza?: n
   else if (!formaDeNif(nif) && !/^[A-Z]{2}/.test(nif)) add('nif_forma', false, false, `El NIF leído (${nif}) no tiene forma de NIF español: míralo.`)
   if (clase === 'simplificada' && cuota) add('simplificada', false, false, 'Es una factura simplificada (ticket): para deducir su IVA tiene que traer tu NIF y la cuota aparte (RD 1619/2012, art. 7.2).')
   if (clase === 'rectificativa' && !factura.rectificaA) add('rectifica', false, true, 'Es rectificativa y no dice qué factura rectifica.')
-  if (vencimiento && fecha && dias(fecha, vencimiento) > 60) add('morosidad', false, false, `Vence a ${dias(fecha, vencimiento)} días: supera los 60 días que permite la ley de morosidad entre empresas (Ley 3/2004, art. 4).`)
+  if (vencimiento && fecha && dias(fecha, vencimiento) > 60) add('morosidad', false, false, `Vence a ${dias(fecha, vencimiento)} días: supera los 60 días que permite la ley de morosidad entre empresas (Ley 3/2004, art. 4.3).`)
   if (vencimiento && fecha && vencimiento < fecha) add('vencimiento', false, true, 'Vence antes de la fecha de la factura.')
   if (d.handwritten) add('manuscrita', false, false, 'Está escrita a mano: la he leído con cuidado, pero mírala.')
 
